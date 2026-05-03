@@ -10,7 +10,9 @@ pub mod services;
 mod wal;
 
 pub use admission::*;
-pub use dispatch::{LocalDispatchPlan, LocalDispatchReceipt, LocalDispatcher};
+pub use dispatch::{
+    LocalDispatchPlan, LocalDispatchReceipt, LocalDispatcher, WalDurabilityEvidence,
+};
 pub use helpers::transaction_id_for_invocation;
 pub use invocation::*;
 pub use local::*;

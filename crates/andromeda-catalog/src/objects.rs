@@ -181,7 +181,18 @@ impl CatalogDefinition {
 }
 
 pub(crate) fn validate_columns(columns: &[ColumnDescriptor]) -> AndromedaResult<()> {
-    if columns.is_empty() {
+    validate_columns_with_min(columns, true)
+}
+
+pub(crate) fn validate_columns_allow_empty(columns: &[ColumnDescriptor]) -> AndromedaResult<()> {
+    validate_columns_with_min(columns, false)
+}
+
+fn validate_columns_with_min(
+    columns: &[ColumnDescriptor],
+    require_non_empty: bool,
+) -> AndromedaResult<()> {
+    if require_non_empty && columns.is_empty() {
         return Err(AndromedaError::new(
             AndromedaErrorKind::Catalog,
             "column list must not be empty",

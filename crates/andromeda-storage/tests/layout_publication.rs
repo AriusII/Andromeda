@@ -1,4 +1,3 @@
-use andromeda_storage::Lsn;
 use andromeda_storage::layout::cold::PublishedColdSegment;
 use andromeda_storage::layout::extent::ExtentId;
 use andromeda_storage::layout::page::{
@@ -12,6 +11,7 @@ use andromeda_storage::publication::{
     DatabaseManifest, DatabaseSnapshotPublication, SnapshotAvailabilityContract,
     SnapshotSegmentReference,
 };
+use andromeda_storage::Lsn;
 
 fn page_header() -> PageHeader {
     PageHeader {

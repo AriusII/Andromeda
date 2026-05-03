@@ -5,5 +5,5 @@
 
 pub use crate::ast::{FieldAst, ProcedureAst, ResultStreamAst, Spanned};
 pub use crate::cardinality::Cardinality;
-pub use crate::ir::{SrplProcedureIr, SrplResultStreamIr};
+pub use crate::ir::{SrplProcedureContractMetadata, SrplProcedureIr, SrplResultStreamIr};
 pub use crate::signature::{ProcedureSignature, ResultContract};

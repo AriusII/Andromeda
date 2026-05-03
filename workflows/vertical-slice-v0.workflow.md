@@ -16,9 +16,9 @@
 ## Required verification
 
 - Workspace commands:
-  - `cargo fmt --all -- --check`
-  - `cargo check --workspace`
-  - `cargo test --workspace`
+    - `cargo fmt --all -- --check`
+    - `cargo check --workspace`
+    - `cargo test --workspace`
 - Doctrine scans from `instructions\QUALITY_GATES.md`, including gRPC, SQL native surface, runtime JSON default, unsafe
   drift, and GPU critical-path drift checks.
 - Procedure contract identity, contract hash, and catalog version mismatch rejection before transaction creation.

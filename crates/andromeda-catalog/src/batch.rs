@@ -4,7 +4,7 @@ use andromeda_core::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::{CatalogObjectRef, ObjectKind, QualifiedName, objects::CatalogDefinition};
+use crate::{objects::CatalogDefinition, CatalogObjectRef, ObjectKind, QualifiedName};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct DefinitionBatchId(u64);
@@ -669,7 +669,7 @@ mod tests {
             CatalogVersion::new(11),
             vec![delta],
         )
-        .unwrap_err();
+            .unwrap_err();
 
         assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
         assert!(error.message().contains("operation ordered"));

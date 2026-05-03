@@ -12,6 +12,8 @@ impl PreTransactionValidationService {
         executable_contract: ProcedureContractRef,
         trace_id: TraceId,
     ) -> Result<DecisionTrace, InvocationReject> {
+        request.validate_admission(trace_id)?;
+
         executable_contract
             .validate()
             .map_err(|error| InvocationReject {

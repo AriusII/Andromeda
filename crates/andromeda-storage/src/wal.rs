@@ -365,7 +365,7 @@ impl InMemoryWal {
         }
     }
 
-    pub fn durable_records(&self) -> impl Iterator<Item = &WalRecord> {
+    pub fn durable_records(&self) -> impl Iterator<Item=&WalRecord> {
         let durable_lsn = self.durable_lsn;
         self.records
             .iter()
@@ -491,7 +491,7 @@ pub(crate) fn wal_record_kind_from_tag(tag: u64) -> Option<WalRecordKind> {
 
 pub fn summarize_transaction<'a>(
     transaction_id: TransactionId,
-    records: impl IntoIterator<Item = &'a WalRecord>,
+    records: impl IntoIterator<Item=&'a WalRecord>,
 ) -> Option<DurableTransactionResume> {
     let mut first_lsn = None;
     let mut last_lsn = None;
@@ -540,7 +540,7 @@ pub fn summarize_transaction<'a>(
 }
 
 pub fn summarize_transactions_from_records<'a>(
-    records: impl IntoIterator<Item = &'a WalRecord>,
+    records: impl IntoIterator<Item=&'a WalRecord>,
 ) -> Vec<DurableTransactionResume> {
     let mut grouped: BTreeMap<u64, Vec<&WalRecord>> = BTreeMap::new();
 
@@ -562,7 +562,7 @@ pub fn summarize_transactions_from_records<'a>(
 }
 
 pub fn incomplete_transactions_from_records<'a>(
-    records: impl IntoIterator<Item = &'a WalRecord>,
+    records: impl IntoIterator<Item=&'a WalRecord>,
 ) -> Vec<IncompleteDurableTransaction> {
     summarize_transactions_from_records(records)
         .into_iter()
@@ -698,7 +698,7 @@ mod tests {
             Some(transaction_id),
             Vec::new(),
         )
-        .unwrap();
+            .unwrap();
         invalid_payload_length.header.payload_length = 99;
 
         assert_eq!(
@@ -713,7 +713,7 @@ mod tests {
             Some(transaction_id),
             Vec::new(),
         )
-        .unwrap();
+            .unwrap();
 
         assert_eq!(
             wal.append(skipped_lsn).unwrap_err().kind(),
@@ -731,7 +731,7 @@ mod tests {
             Some(transaction_id),
             Vec::new(),
         )
-        .unwrap();
+            .unwrap();
         let mut wal = InMemoryWal {
             records: vec![max_record],
             durable_lsn: Lsn::ZERO,
@@ -743,7 +743,7 @@ mod tests {
             Some(transaction_id),
             Vec::new(),
         )
-        .unwrap();
+            .unwrap();
 
         assert_eq!(
             wal.try_next_lsn().unwrap_err().kind(),

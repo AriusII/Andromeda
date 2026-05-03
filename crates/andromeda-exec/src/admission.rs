@@ -1,6 +1,6 @@
 use andromeda_observe::TraceId;
 
-use crate::{InvocationReject, services::AdmissionService};
+use crate::{services::AdmissionService, InvocationReject};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InvocationContext {
@@ -33,7 +33,10 @@ impl InvocationContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_observe::CriticalDecisionKind;
+    use andromeda_core::{RequestId, SessionId};
+    use andromeda_observe::{
+        CriticalDecisionKind, EventCorrelation, EventEnvelope, EventId, TraceEvent,
+    };
 
     use crate::CompletionStatus;
 
@@ -62,5 +65,34 @@ mod tests {
 
         assert_eq!(reject.status, CompletionStatus::PermissionDenied);
         assert!(reject.reason.contains("Inventory.ReserveStock.Execute"));
+    }
+
+    #[test]
+    fn admission_denial_can_be_emitted_without_transaction_evidence() {
+        let permission = "Inventory.ReserveStock.Execute";
+        let context = InvocationContext::new(TraceId::new(10), Vec::new());
+
+        let reject = context.authorize(&[permission.to_string()]).unwrap_err();
+        let trace = reject
+            .authorization_denial_trace(context.trace_id, permission)
+            .expect("permission denial maps to authorization denial evidence");
+
+        let envelope = EventEnvelope::new(
+            EventId::new(11),
+            EventCorrelation {
+                request_id: Some(RequestId::new(12)),
+                session_id: Some(SessionId::new(13)),
+                contract_hash: None,
+                catalog_version: None,
+                catalog_object_id: None,
+                transaction_id: None,
+                durable_lsn: None,
+                protocol: None,
+            },
+            TraceEvent::AuthorizationDenied(trace),
+        )
+            .expect("authorization denial evidence is request/session correlated");
+
+        assert!(envelope.correlation.has_no_transaction_evidence());
     }
 }

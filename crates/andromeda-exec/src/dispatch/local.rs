@@ -17,10 +17,54 @@ impl LocalDispatchPlan {
     }
 
     pub fn validate(&self) -> AndromedaResult<()> {
+        if self.transaction_id.get() == 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Transaction,
+                "dispatch transaction id must not be zero",
+            ));
+        }
+
         if self.has_mutation() && self.mutation_payload.is_empty() {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Execution,
                 "mutation payload must exist when rows are affected",
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WalDurabilityEvidence {
+    pub begin_lsn: Lsn,
+    pub mutation_lsn: Option<Lsn>,
+    pub commit_lsn: Lsn,
+    pub durable_lsn: Lsn,
+}
+
+impl WalDurabilityEvidence {
+    pub fn validate(self) -> AndromedaResult<()> {
+        if self.durable_lsn < self.commit_lsn {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Storage,
+                "commit WAL flush did not reach commit LSN",
+            ));
+        }
+
+        if let Some(mutation_lsn) = self.mutation_lsn
+            && (mutation_lsn <= self.begin_lsn || mutation_lsn >= self.commit_lsn)
+        {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Storage,
+                "mutation WAL LSN must be between begin and commit",
+            ));
+        }
+
+        if self.begin_lsn >= self.commit_lsn {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Storage,
+                "begin WAL LSN must precede commit LSN",
             ));
         }
 
@@ -34,6 +78,7 @@ pub struct LocalDispatchReceipt {
     pub transaction_state: TransactionState,
     pub durable_lsn: Lsn,
     pub rows_affected: u64,
+    pub wal_evidence: WalDurabilityEvidence,
 }
 
 pub struct LocalDispatcher<'a, W> {
@@ -57,19 +102,21 @@ where
         let mut tx = TransactionStateMachine::new(plan.transaction_id);
         tx.apply(TransactionEvent::Begin)?;
 
-        self.wal.append(
+        let begin_lsn = self.wal.append(
             WalRecordKind::TxBegin,
             Some(plan.transaction_id),
             b"tx-begin",
         )?;
 
-        if plan.has_mutation() {
-            self.wal.append(
+        let mutation_lsn = if plan.has_mutation() {
+            Some(self.wal.append(
                 WalRecordKind::RowUpdate,
                 Some(plan.transaction_id),
                 &plan.mutation_payload,
-            )?;
-        }
+            )?)
+        } else {
+            None
+        };
 
         tx.apply(TransactionEvent::CommitRequested)?;
         let commit_lsn = self.wal.append(
@@ -78,6 +125,13 @@ where
             b"tx-commit",
         )?;
         let durable_lsn = self.wal.flush_through(commit_lsn)?;
+        let wal_evidence = WalDurabilityEvidence {
+            begin_lsn,
+            mutation_lsn,
+            commit_lsn,
+            durable_lsn,
+        };
+        wal_evidence.validate()?;
         tx.mark_durable_commit_lsn(durable_lsn.get())?;
         tx.apply(TransactionEvent::DurableWalFlushed)?;
 
@@ -86,6 +140,7 @@ where
             transaction_state: tx.state,
             durable_lsn,
             rows_affected: plan.rows_affected,
+            wal_evidence,
         })
     }
 }

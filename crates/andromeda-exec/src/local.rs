@@ -3,9 +3,9 @@ use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_observe::{DecisionTrace, TraceId};
 
 use crate::{
-    InvocationCompletion, InvocationContext, InvocationRequest, InvocationWal, LocalDispatchPlan,
-    LocalDispatcher, ResultStreamMetadata, services::CompletionMappingService,
-    transaction_id_for_invocation,
+    services::CompletionMappingService, transaction_id_for_invocation, InvocationCompletion, InvocationContext, InvocationRequest,
+    InvocationWal, LocalDispatchPlan, LocalDispatcher,
+    ResultStreamMetadata,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -45,6 +45,7 @@ impl LocalProcedure {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerticalInvocationOutcome {
     pub completion: InvocationCompletion,
+    pub admission_trace: DecisionTrace,
     pub contract_trace: DecisionTrace,
     pub authorization_trace: Option<DecisionTrace>,
     pub result_metadata: ResultStreamMetadata,
@@ -85,17 +86,7 @@ where
         procedure: &LocalProcedure,
         context: &InvocationContext,
     ) -> AndromedaResult<VerticalInvocationOutcome> {
-        procedure.validate()?;
-        let authorization_trace = context
-            .authorize(&procedure.required_permissions)
-            .map_err(|reject| AndromedaError::new(AndromedaErrorKind::Security, reject.reason))?;
-
-        self.execute_after_admission(
-            request,
-            procedure,
-            context.trace_id,
-            Some(authorization_trace),
-        )
+        self.execute_after_admission(request, procedure, context.trace_id, Some(context))
     }
 
     fn execute_after_admission(
@@ -103,12 +94,24 @@ where
         request: InvocationRequest,
         procedure: &LocalProcedure,
         trace_id: TraceId,
-        authorization_trace: Option<DecisionTrace>,
+        context: Option<&InvocationContext>,
     ) -> AndromedaResult<VerticalInvocationOutcome> {
         procedure.validate()?;
+        let admission_trace = request
+            .validate_admission(trace_id)
+            .map_err(|reject| AndromedaError::new(AndromedaErrorKind::Contract, reject.reason))?;
         let contract_trace = request
             .validate_before_transaction(procedure.contract, trace_id)
             .map_err(|reject| AndromedaError::new(AndromedaErrorKind::Contract, reject.reason))?;
+        let authorization_trace = context
+            .map(|context| {
+                context
+                    .authorize(&procedure.required_permissions)
+                    .map_err(|reject| {
+                        AndromedaError::new(AndromedaErrorKind::Security, reject.reason)
+                    })
+            })
+            .transpose()?;
 
         let dispatch_receipt =
             LocalDispatcher::new(&mut self.wal).dispatch_commit(LocalDispatchPlan {
@@ -125,6 +128,7 @@ where
                 dispatch_receipt.durable_lsn,
                 trace_id,
             ),
+            admission_trace,
             contract_trace,
             authorization_trace,
             result_metadata: procedure.result_metadata,
@@ -135,7 +139,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_catalog::{ProcedureContractRef, inventory_reserve_stock_contract};
+    use andromeda_catalog::{inventory_reserve_stock_contract, ProcedureContractRef};
     use andromeda_core::{CatalogVersion, ContractHash, InvocationId, ProcedureId, TransactionId};
     use andromeda_srpl::Cardinality;
     use andromeda_storage::{InMemoryWal, Lsn, WalRecordKind};

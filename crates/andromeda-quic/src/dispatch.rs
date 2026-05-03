@@ -1,7 +1,7 @@
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{
-    FrameBytes, FrameType, ResultStreamSequence, StreamRole, validate_single_frame_on_stream,
+    validate_single_frame_on_stream, FrameBytes, FrameType, ResultStreamSequence, StreamRole,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -106,7 +106,7 @@ mod tests {
     use super::*;
     use andromeda_core::{RequestId, SessionId};
 
-    use crate::{FRAME_HEADER_CRC_UNCHECKED, FrameHeader};
+    use crate::{FrameHeader, FRAME_HEADER_CRC_UNCHECKED};
 
     fn frame(frame_type: FrameType, payload: Vec<u8>) -> FrameBytes {
         FrameBytes {
@@ -179,8 +179,8 @@ mod tests {
                 &telemetry,
                 TransportSurface::ReliableStream(StreamRole::TelemetryDatagram),
             )
-            .unwrap_err()
-            .kind(),
+                .unwrap_err()
+                .kind(),
             AndromedaErrorKind::Protocol
         );
     }

@@ -36,7 +36,7 @@ impl FrameEnvelope {
             payload_kind: PayloadKind::RpcExecuteRequest,
             payload: payload.into(),
         }
-        .validated()
+            .validated()
     }
 
     pub fn to_completion_envelope(&self, payload: impl Into<Vec<u8>>) -> AndromedaResult<Self> {
@@ -210,7 +210,7 @@ impl FrameEnvelope {
             payload_kind,
             payload: payload.into(),
         }
-        .validated()
+            .validated()
     }
 }
 
@@ -264,7 +264,7 @@ mod tests {
             Some(TransactionId::new(30)),
             b"ProductId=42;Quantity=3".to_vec(),
         )
-        .unwrap();
+            .unwrap();
 
         assert_eq!(envelope.protocol_version, ProtocolVersion::V1);
         assert_eq!(envelope.payload_kind, PayloadKind::RpcExecuteRequest);
@@ -284,7 +284,7 @@ mod tests {
             None,
             Vec::new(),
         )
-        .unwrap_err();
+            .unwrap_err();
 
         assert_eq!(error.kind(), AndromedaErrorKind::Contract);
     }
@@ -299,7 +299,7 @@ mod tests {
             None,
             Vec::new(),
         )
-        .unwrap_err();
+            .unwrap_err();
 
         assert_eq!(execute_error.kind(), AndromedaErrorKind::Protocol);
 
@@ -320,7 +320,7 @@ mod tests {
             Some(TransactionId::new(30)),
             b"reserve".to_vec(),
         )
-        .unwrap();
+            .unwrap();
 
         let completion = request.to_completion_envelope(vec![1]).unwrap();
         let error = request
@@ -384,7 +384,7 @@ mod tests {
                 batch.clone(),
                 completion
             ])
-            .is_ok()
+                .is_ok()
         );
 
         assert_eq!(
@@ -420,8 +420,8 @@ mod tests {
                 completion.clone(),
                 completion
             ])
-            .unwrap_err()
-            .kind(),
+                .unwrap_err()
+                .kind(),
             AndromedaErrorKind::Protocol
         );
     }

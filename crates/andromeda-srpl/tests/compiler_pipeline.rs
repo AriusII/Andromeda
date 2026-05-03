@@ -1,11 +1,22 @@
-use andromeda_catalog::QualifiedName;
-use andromeda_core::{ColumnDescriptor, ScalarType, TypeDescriptor};
+use andromeda_catalog::{
+    AccessMode, CompatibilityPolicy, IsolationPolicy, ObjectKind, QualifiedName, TransactionPolicy,
+};
+use andromeda_core::{
+    AndromedaErrorKind, CatalogObjectId, CatalogVersion, ColumnDescriptor, ProcedureId, ScalarType,
+    TypeDescriptor,
+};
 use andromeda_srpl::{
-    SourceSpan,
-    compiler::{compile_narrow_procedure_signature, parse_procedure_signature},
+    compiler::{
+        compile_narrow_procedure_contract_candidate, compile_narrow_procedure_signature,
+        lower_ir_to_contract_candidate, parse_procedure_signature,
+    },
     diagnostics::DiagnosticPhase,
-    model::{Cardinality, ProcedureSignature, ResultContract, SrplProcedureIr},
+    model::{
+        Cardinality, ProcedureSignature, ResultContract, SrplProcedureContractMetadata,
+        SrplProcedureIr,
+    },
     source::SrplSource,
+    SourceSpan,
 };
 
 #[test]
@@ -13,7 +24,7 @@ fn successful_narrow_procedure_compiles_to_ir() {
     let ir = compile_narrow_procedure_signature(
         "procedure Inventory.ReserveStock accepts (ProductId i64) returns Reservation one (Reserved bool);",
     )
-    .unwrap();
+        .unwrap();
 
     assert_eq!(ir.name.as_catalog_path(), "Inventory.ReserveStock");
     assert_eq!(ir.inputs.len(), 1);
@@ -40,7 +51,7 @@ fn forbidden_constructs_reject_before_lowering() {
     let diagnostic = compile_narrow_procedure_signature(
         "procedure X accepts () returns R many (C bool); execute sql",
     )
-    .unwrap_err();
+        .unwrap_err();
 
     assert_eq!(diagnostic.phase, DiagnosticPhase::Binding);
     assert!(diagnostic.location.is_some());
@@ -52,7 +63,7 @@ fn duplicate_parameter_names_reject_with_binding_span() {
     let diagnostic = compile_narrow_procedure_signature(
         "procedure Inventory.ReserveStock accepts (ProductId i64, ProductId i64) returns Reservation one (Reserved bool);",
     )
-    .unwrap_err();
+        .unwrap_err();
 
     assert_eq!(diagnostic.phase, DiagnosticPhase::Binding);
     assert!(diagnostic.location.is_some());
@@ -109,4 +120,89 @@ fn public_api_is_consumable_from_outside_the_crate() {
         ir.result_streams[0].cardinality,
         andromeda_srpl::Cardinality::Many
     );
+}
+
+fn contract_metadata() -> SrplProcedureContractMetadata {
+    SrplProcedureContractMetadata {
+        object_id: CatalogObjectId::new(11),
+        procedure_id: ProcedureId::new(11),
+        catalog_version: CatalogVersion::new(3),
+        structured_inputs: vec![QualifiedName::parse("Inventory.StockRequest").unwrap()],
+        required_permissions: vec!["Inventory.ReserveStock.Execute".to_string()],
+        transaction_policy: TransactionPolicy {
+            access_mode: AccessMode::ReadWrite,
+            isolation: IsolationPolicy::Serializable,
+            retryable: false,
+        },
+        compatibility_policy: CompatibilityPolicy::ExactHash,
+    }
+}
+
+#[test]
+fn srpl_ir_lowers_to_catalog_contract_candidate_with_cardinality_mapping() {
+    let candidate = compile_narrow_procedure_contract_candidate(
+        "procedure Inventory.ReserveStock accepts (ProductId i64) returns Reservation optional_one (Reserved bool);",
+        contract_metadata(),
+    )
+        .unwrap();
+    let contract = candidate.materialize().unwrap();
+
+    assert_eq!(contract.object.kind, ObjectKind::Procedure);
+    assert_eq!(
+        contract.object.name.as_catalog_path(),
+        "Inventory.ReserveStock"
+    );
+    assert_eq!(contract.inputs[0].name, "ProductId");
+    assert_eq!(
+        contract.structured_inputs[0].as_catalog_path(),
+        "Inventory.StockRequest"
+    );
+    assert_eq!(contract.result_streams[0].name, "Reservation");
+    assert!(contract.result_streams[0].row_count_exact_required);
+    assert!(contract.validate_canonical_hash().is_ok());
+}
+
+#[test]
+fn contract_candidate_hash_is_stable_for_identical_srpl_and_metadata() {
+    let source = "procedure Inventory.ReserveStock accepts (ProductId i64) returns Reservation many (Reserved bool);";
+    let first = compile_narrow_procedure_contract_candidate(source, contract_metadata())
+        .unwrap()
+        .materialize()
+        .unwrap();
+    let second = compile_narrow_procedure_contract_candidate(source, contract_metadata())
+        .unwrap()
+        .materialize()
+        .unwrap();
+
+    assert_eq!(first.contract_hash, second.contract_hash);
+    assert!(!first.contract_hash.is_zero());
+    assert!(!first.result_streams[0].row_count_exact_required);
+}
+
+#[test]
+fn contract_candidate_rejects_invalid_metadata_before_catalog_publication() {
+    let mut metadata = contract_metadata();
+    metadata.required_permissions.clear();
+    let candidate = compile_narrow_procedure_contract_candidate(
+        "procedure Inventory.ReserveStock accepts () returns Reservation one (Reserved bool);",
+        metadata,
+    )
+        .unwrap();
+
+    let error = candidate.materialize().unwrap_err();
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Security);
+    assert!(error.message().contains("permissions"));
+}
+
+#[test]
+fn direct_ir_to_candidate_preserves_catalog_object_identity_inputs() {
+    let ir = compile_narrow_procedure_signature(
+        "procedure Inventory.ReserveStock accepts (ProductId i64) returns Reservation one (Reserved bool);",
+    )
+        .unwrap();
+    let candidate = lower_ir_to_contract_candidate(ir, contract_metadata()).unwrap();
+
+    assert_eq!(candidate.object.object_id, CatalogObjectId::new(11));
+    assert_eq!(candidate.procedure_id, ProcedureId::new(11));
 }

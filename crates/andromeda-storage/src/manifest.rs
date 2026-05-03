@@ -1,4 +1,5 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion};
+use andromeda_observe::{ManifestEventKind, ManifestTrace, TraceId};
 
 use crate::{Lsn, SegmentId};
 
@@ -49,6 +50,24 @@ impl DatabaseManifest {
         }
 
         Ok(())
+    }
+
+    pub fn validation_trace(
+        &self,
+        trace_id: TraceId,
+        catalog_version: CatalogVersion,
+        manifest_epoch: u64,
+    ) -> ManifestTrace {
+        ManifestTrace {
+            trace_id,
+            event: ManifestEventKind::Validation,
+            catalog_version,
+            manifest_epoch,
+            base_checkpoint_lsn: self.base_checkpoint_lsn.get(),
+            required_wal_start_lsn: self.required_wal_start_lsn.get(),
+            accepted: self.validate().is_ok(),
+            reason: "manifest validation checked identity, CRC, and WAL recovery floor".to_string(),
+        }
     }
 }
 
@@ -155,6 +174,7 @@ fn storage_error(message: impl Into<String>) -> AndromedaError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use andromeda_observe::{EventCorrelation, EventEnvelope, EventId, TraceEvent};
 
     fn valid_manifest() -> DatabaseManifest {
         DatabaseManifest {
@@ -186,6 +206,34 @@ mod tests {
         assert_eq!(
             manifest.validate().unwrap_err().kind(),
             AndromedaErrorKind::Storage
+        );
+    }
+
+    #[test]
+    fn manifest_validation_trace_carries_queryable_catalog_and_wal_floor() {
+        let manifest = valid_manifest();
+        let trace = manifest.validation_trace(TraceId::new(40), CatalogVersion::new(41), 42);
+
+        let envelope = EventEnvelope::new(
+            EventId::new(43),
+            EventCorrelation {
+                catalog_version: Some(CatalogVersion::new(41)),
+                ..EventCorrelation::empty()
+            },
+            TraceEvent::Manifest(trace),
+        )
+            .expect("manifest validation trace is acceptable forensic evidence");
+
+        assert_eq!(
+            envelope.correlation.catalog_version,
+            Some(CatalogVersion::new(41))
+        );
+        assert_eq!(
+            match envelope.event {
+                TraceEvent::Manifest(trace) => trace.required_wal_start_lsn,
+                _ => 0,
+            },
+            11
         );
     }
 

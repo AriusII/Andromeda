@@ -92,9 +92,9 @@ impl ErrorEnvelope {
         if self.retry_disposition == RetryDisposition::RetryAfter
             && self.retry_after_ms.is_none()
             && self
-                .backpressure
-                .and_then(|hint| hint.retry_after_ms)
-                .is_none()
+            .backpressure
+            .and_then(|hint| hint.retry_after_ms)
+            .is_none()
         {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Resource,

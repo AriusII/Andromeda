@@ -235,8 +235,8 @@ mod tests {
             table(1, "Inventory.Product", CatalogVersion::new(11)),
             CatalogVersion::new(10),
         )
-        .dry_run()
-        .unwrap();
+            .dry_run()
+            .unwrap();
 
         let report = snapshot.apply_mutation_plan(&plan.mutation_plan).unwrap();
 
@@ -260,16 +260,16 @@ mod tests {
             table(1, "Inventory.Product", CatalogVersion::new(11)),
             CatalogVersion::new(10),
         )
-        .dry_run()
-        .unwrap();
+            .dry_run()
+            .unwrap();
         snapshot.apply_mutation_plan(&first.mutation_plan).unwrap();
 
         let duplicate = batch(
             table(1, "Inventory.Stock", CatalogVersion::new(12)),
             CatalogVersion::new(11),
         )
-        .dry_run()
-        .unwrap();
+            .dry_run()
+            .unwrap();
         let error = snapshot
             .apply_mutation_plan(&duplicate.mutation_plan)
             .unwrap_err();
@@ -289,8 +289,8 @@ mod tests {
             table(1, "Inventory.Product", CatalogVersion::new(11)),
             CatalogVersion::new(10),
         )
-        .dry_run()
-        .unwrap();
+            .dry_run()
+            .unwrap();
 
         let error = snapshot
             .apply_mutation_plan(&plan.mutation_plan)
@@ -311,8 +311,8 @@ mod tests {
             table(1, "Inventory.Product", CatalogVersion::new(11)),
             CatalogVersion::new(10),
         )
-        .dry_run()
-        .unwrap();
+            .dry_run()
+            .unwrap();
 
         let report = snapshot.apply_mutation_plan(&plan.mutation_plan).unwrap();
 

@@ -6,7 +6,7 @@ pub struct QualifiedName {
 }
 
 impl QualifiedName {
-    pub fn new(parts: impl IntoIterator<Item = impl Into<String>>) -> AndromedaResult<Self> {
+    pub fn new(parts: impl IntoIterator<Item=impl Into<String>>) -> AndromedaResult<Self> {
         let parts = parts
             .into_iter()
             .map(Into::into)

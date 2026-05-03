@@ -174,17 +174,17 @@ mod tests {
                 precision: 9,
                 scale: 2,
             }
-            .validate()
-            .is_ok()
+                .validate()
+                .is_ok()
         );
         assert_eq!(
             DecimalType::Custom {
                 precision: 2,
                 scale: 3,
             }
-            .validate()
-            .unwrap_err()
-            .kind(),
+                .validate()
+                .unwrap_err()
+                .kind(),
             AndromedaErrorKind::Contract
         );
     }

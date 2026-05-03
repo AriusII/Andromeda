@@ -1,9 +1,9 @@
 use andromeda_core::{RequestId, SessionId};
 use andromeda_observe::{
-    BackpressureTrace, CompletionEmittedTrace, ContractRejectedTrace, EventCorrelation,
-    EventEnvelope, EventId, EventSink, FrameRejectionTrace, InMemoryEventSink, ProtocolCorrelation,
-    ProtocolEventScope, SchemaLayoutDecisionTrace, StreamRoleRejectionTrace, TraceEvent, TraceId,
-    UnsupportedVersionTrace,
+    AuthorizationDeniedTrace, BackpressureTrace, CompletionEmittedTrace, ContractRejectedTrace,
+    EventCorrelation, EventEnvelope, EventId, EventSink, FrameRejectionTrace, InMemoryEventSink,
+    ProtocolCorrelation, ProtocolEventScope, SchemaLayoutDecisionTrace, StreamRoleRejectionTrace,
+    TraceEvent, TraceId, UnsupportedVersionTrace,
 };
 
 fn request_correlation() -> EventCorrelation {
@@ -13,6 +13,8 @@ fn request_correlation() -> EventCorrelation {
         contract_hash: None,
         catalog_version: None,
         catalog_object_id: None,
+        transaction_id: None,
+        durable_lsn: None,
         protocol: Some(protocol_correlation()),
     }
 }
@@ -26,6 +28,53 @@ fn protocol_correlation() -> ProtocolCorrelation {
         payload_kind: Some(50),
         sequence: Some(60),
     }
+}
+
+#[test]
+fn denied_security_paths_are_auditable_without_transaction_evidence_or_secrets() {
+    let denial = EventEnvelope::new(
+        EventId::new(20),
+        request_correlation(),
+        TraceEvent::AuthorizationDenied(AuthorizationDeniedTrace {
+            trace_id: TraceId::new(120),
+            denied_permission: "Inventory.ReserveStock.Execute".to_string(),
+            reason: "required permission was not granted before transaction creation".to_string(),
+        }),
+    )
+        .expect("authorization denial is request/session correlated and pre-transaction");
+
+    assert!(denial.correlation.has_request_session());
+    assert!(denial.correlation.has_no_transaction_evidence());
+
+    let mut leaked = request_correlation();
+    leaked.transaction_id = Some(andromeda_core::TransactionId::new(88));
+    let tx_implied = EventEnvelope::new(
+        EventId::new(21),
+        leaked,
+        TraceEvent::AuthorizationDenied(AuthorizationDeniedTrace {
+            trace_id: TraceId::new(121),
+            denied_permission: "Inventory.ReserveStock.Execute".to_string(),
+            reason: "required permission was not granted before transaction creation".to_string(),
+        }),
+    )
+        .unwrap_err();
+    assert!(
+        tx_implied
+            .message()
+            .contains("must not include transaction")
+    );
+
+    let secret_leak = EventEnvelope::new(
+        EventId::new(22),
+        request_correlation(),
+        TraceEvent::AuthorizationDenied(AuthorizationDeniedTrace {
+            trace_id: TraceId::new(122),
+            denied_permission: "Inventory.ReserveStock.Execute".to_string(),
+            reason: "password=should-not-be-observed".to_string(),
+        }),
+    )
+        .unwrap_err();
+    assert!(secret_leak.message().contains("must not include secrets"));
 }
 
 fn valid_backpressure(event_id: u128, trace_id: u128) -> EventEnvelope {
@@ -42,7 +91,7 @@ fn valid_backpressure(event_id: u128, trace_id: u128) -> EventEnvelope {
             reason: "connection-level bounded protocol queue is full".to_string(),
         }),
     )
-    .expect("valid connection-scoped backpressure event")
+        .expect("valid connection-scoped backpressure event")
 }
 
 #[test]
@@ -85,7 +134,10 @@ fn protocol_events_validate_with_neutral_numeric_correlation() {
         ),
         EventEnvelope::new(
             EventId::new(4),
-            request_correlation(),
+            EventCorrelation {
+                durable_lsn: Some(900),
+                ..request_correlation()
+            },
             TraceEvent::CompletionEmitted(CompletionEmittedTrace {
                 trace_id: TraceId::new(104),
                 protocol: protocol_correlation(),
@@ -154,7 +206,7 @@ fn incomplete_protocol_evidence_rejects() {
             reason: "completion is request scoped".to_string(),
         }),
     )
-    .unwrap_err();
+        .unwrap_err();
     assert!(
         missing_request
             .message()
@@ -173,7 +225,7 @@ fn incomplete_protocol_evidence_rejects() {
             reason: "committed completion needs durable evidence".to_string(),
         }),
     )
-    .unwrap_err();
+        .unwrap_err();
     assert!(missing_durable_lsn.message().contains("durable LSN"));
 
     let missing_frame = EventEnvelope::new(
@@ -186,7 +238,7 @@ fn incomplete_protocol_evidence_rejects() {
             reason: "frame evidence must not be implicit".to_string(),
         }),
     )
-    .unwrap_err();
+        .unwrap_err();
     assert!(missing_frame.message().contains("stream_id and frame_type"));
 
     let missing_role = EventEnvelope::new(
@@ -201,7 +253,7 @@ fn incomplete_protocol_evidence_rejects() {
             reason: "role evidence must include expected role".to_string(),
         }),
     )
-    .unwrap_err();
+        .unwrap_err();
     assert!(missing_role.message().contains("expected_role"));
 
     let missing_backpressure = EventEnvelope::new(
@@ -217,7 +269,7 @@ fn incomplete_protocol_evidence_rejects() {
             reason: "pressure evidence must be explicit".to_string(),
         }),
     )
-    .unwrap_err();
+        .unwrap_err();
     assert!(missing_backpressure.message().contains("queue pressure"));
 
     let missing_contract = EventEnvelope::new(
@@ -231,7 +283,7 @@ fn incomplete_protocol_evidence_rejects() {
             reason: "contract rejection code must be explicit".to_string(),
         }),
     )
-    .unwrap_err();
+        .unwrap_err();
     assert!(missing_contract.message().contains("rejection code"));
 
     let missing_version = EventEnvelope::new(
@@ -246,7 +298,7 @@ fn incomplete_protocol_evidence_rejects() {
             reason: "version bounds must be explicit".to_string(),
         }),
     )
-    .unwrap_err();
+        .unwrap_err();
     assert!(missing_version.message().contains("version evidence"));
 
     let missing_schema_layout = EventEnvelope::new(
@@ -263,7 +315,7 @@ fn incomplete_protocol_evidence_rejects() {
             reason: "schema/layout decision evidence must be explicit".to_string(),
         }),
     )
-    .unwrap_err();
+        .unwrap_err();
     assert!(
         missing_schema_layout
             .message()

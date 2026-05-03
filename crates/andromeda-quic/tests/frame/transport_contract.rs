@@ -1,11 +1,11 @@
 use andromeda_core::{AndromedaErrorKind, RequestId, SessionId, TransactionId};
 use andromeda_quic::{
-    AUTH_FRAME_CODE, CONTRACT_REQUEST_FRAME_CODE, CONTRACT_RESPONSE_FRAME_CODE, ERROR_FRAME_CODE,
-    FRAME_HEADER_CRC_UNCHECKED, FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP, FrameBytes, FrameFamily,
-    FrameHeader, FrameType, HELLO_FRAME_CODE, MAX_FRAME_PAYLOAD_LENGTH, RPC_BATCH_FRAME_CODE,
-    RPC_COMPLETION_FRAME_CODE, RPC_EXECUTE_REQUEST_FRAME_CODE, RPC_METADATA_FRAME_CODE, StreamRole,
-    TELEMETRY_SOFT_SIGNAL_FRAME_CODE, validate_frame_sequence, validate_result_stream_sequence,
-    validate_single_frame_on_stream,
+    validate_frame_sequence, validate_result_stream_sequence, validate_single_frame_on_stream, FrameBytes,
+    FrameFamily, FrameHeader, FrameType, StreamRole,
+    AUTH_FRAME_CODE, CONTRACT_REQUEST_FRAME_CODE, CONTRACT_RESPONSE_FRAME_CODE, ERROR_FRAME_CODE, FRAME_HEADER_CRC_UNCHECKED,
+    FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP, HELLO_FRAME_CODE, MAX_FRAME_PAYLOAD_LENGTH, RPC_BATCH_FRAME_CODE,
+    RPC_COMPLETION_FRAME_CODE, RPC_EXECUTE_REQUEST_FRAME_CODE, RPC_METADATA_FRAME_CODE,
+    TELEMETRY_SOFT_SIGNAL_FRAME_CODE,
 };
 
 fn header(frame_type: FrameType, payload_length: u64) -> FrameHeader {
@@ -192,8 +192,8 @@ fn quic_datagram_is_telemetry_only_and_never_contract_bound_payload() {
                 &frame(frame_type, payload),
                 StreamRole::TelemetryDatagram
             )
-            .unwrap_err()
-            .kind(),
+                .unwrap_err()
+                .kind(),
             AndromedaErrorKind::Protocol
         );
     }
@@ -203,7 +203,7 @@ fn quic_datagram_is_telemetry_only_and_never_contract_bound_payload() {
             &frame(FrameType::TelemetrySoftSignal, b"telemetry".to_vec()),
             StreamRole::TelemetryDatagram,
         )
-        .is_ok()
+            .is_ok()
     );
 }
 
@@ -260,7 +260,7 @@ fn result_stream_sequence_requires_metadata_then_batch_then_completion() {
     let completion = frame(FrameType::RpcCompletion, Vec::new());
 
     assert!(
-        validate_result_stream_sequence(&[metadata.clone(), batch.clone(), completion.clone(),])
+        validate_result_stream_sequence(&[metadata.clone(), batch.clone(), completion.clone(), ])
             .is_ok()
     );
     assert!(
@@ -268,7 +268,7 @@ fn result_stream_sequence_requires_metadata_then_batch_then_completion() {
             &[metadata.clone(), batch.clone(), completion.clone()],
             StreamRole::ResultUnidirectional,
         )
-        .is_ok()
+            .is_ok()
     );
 
     assert_eq!(

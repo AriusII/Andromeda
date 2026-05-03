@@ -16,6 +16,10 @@ impl ResultStreamMetadata {
     pub fn validate_before_payload(self) -> AndromedaResult<()> {
         crate::services::ResultValidationService::validate_before_payload(self)
     }
+
+    pub fn validate_completed_stream(self, actual_row_count: u64) -> AndromedaResult<()> {
+        crate::services::ResultValidationService::validate_completed_stream(self, actual_row_count)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

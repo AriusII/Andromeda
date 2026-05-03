@@ -2,12 +2,12 @@ use andromeda_core::{
     AndromedaErrorKind, CatalogVersion, ContractHash, RequestId, SessionId, TransactionId,
 };
 use andromeda_proto::{
-    AUTH_WIRE_CODE, BackpressureMetadata, CONTRACT_REQUEST_WIRE_CODE, CONTRACT_RESPONSE_WIRE_CODE,
-    ERROR_WIRE_CODE, ErrorEnvelope, ErrorFamily, FrameEnvelope, HELLO_WIRE_CODE,
-    PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP, PayloadFrameFamily, PayloadKind, ProtocolVersion,
-    RPC_BATCH_WIRE_CODE, RPC_COMPLETION_WIRE_CODE, RPC_EXECUTE_REQUEST_WIRE_CODE,
-    RPC_METADATA_WIRE_CODE, ResultRowCountSummary, RetryDisposition, RpcCompletion,
-    RpcCompletionStatus, TransactionEffect, TransactionOutcome,
+    BackpressureMetadata, ErrorEnvelope, ErrorFamily, FrameEnvelope,
+    PayloadFrameFamily, PayloadKind, ProtocolVersion, ResultRowCountSummary, RetryDisposition,
+    RpcCompletion, RpcCompletionStatus, TransactionEffect, TransactionOutcome,
+    AUTH_WIRE_CODE, CONTRACT_REQUEST_WIRE_CODE, CONTRACT_RESPONSE_WIRE_CODE,
+    ERROR_WIRE_CODE, HELLO_WIRE_CODE, PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP, RPC_BATCH_WIRE_CODE,
+    RPC_COMPLETION_WIRE_CODE, RPC_EXECUTE_REQUEST_WIRE_CODE, RPC_METADATA_WIRE_CODE,
 };
 
 fn hash(byte: u8) -> ContractHash {
@@ -197,7 +197,7 @@ fn envelope_sequence_requires_metadata_batch_completion_in_one_context() {
             batch.clone(),
             completion.clone(),
         ])
-        .is_ok()
+            .is_ok()
     );
 
     assert_eq!(

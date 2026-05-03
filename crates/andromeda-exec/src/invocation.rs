@@ -1,9 +1,14 @@
 use andromeda_catalog::ProcedureContractRef;
 use andromeda_core::{AndromedaResult, CatalogVersion, ContractHash, InvocationId};
-use andromeda_observe::{DecisionTrace, TraceId};
+use andromeda_observe::{
+    AuthorizationDeniedTrace, ContractRejectedTrace, DecisionTrace, ProtocolCorrelation, TraceId,
+};
 use andromeda_proto::StructuredObjectHeader;
 
-use crate::{CompletionStatus, InvocationCompletion, services::PreTransactionValidationService};
+use crate::{
+    services::{AdmissionService, PreTransactionValidationService}, CompletionStatus,
+    InvocationCompletion,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InvocationRequest {
@@ -15,6 +20,10 @@ pub struct InvocationRequest {
 }
 
 impl InvocationRequest {
+    pub fn validate_admission(&self, trace_id: TraceId) -> Result<DecisionTrace, InvocationReject> {
+        AdmissionService::validate_invocation_request(self, trace_id)
+    }
+
     pub fn validate_before_transaction(
         &self,
         executable_contract: ProcedureContractRef,
@@ -34,6 +43,36 @@ pub struct InvocationReject {
     pub reason: String,
 }
 
+impl InvocationReject {
+    pub fn authorization_denial_trace(
+        &self,
+        trace_id: TraceId,
+        denied_permission: impl Into<String>,
+    ) -> Option<AuthorizationDeniedTrace> {
+        (self.status == CompletionStatus::PermissionDenied).then(|| AuthorizationDeniedTrace {
+            trace_id,
+            denied_permission: denied_permission.into(),
+            reason: self.reason.clone(),
+        })
+    }
+
+    pub fn contract_rejected_trace(
+        &self,
+        trace_id: TraceId,
+        protocol: ProtocolCorrelation,
+        contract_kind: u16,
+        rejection_code: u16,
+    ) -> Option<ContractRejectedTrace> {
+        (self.status == CompletionStatus::ContractRejected).then(|| ContractRejectedTrace {
+            trace_id,
+            protocol,
+            contract_kind: Some(contract_kind),
+            rejection_code: Some(rejection_code),
+            reason: self.reason.clone(),
+        })
+    }
+}
+
 pub trait ProcedureInvoker {
     fn invoke(&self, request: InvocationRequest) -> AndromedaResult<InvocationCompletion>;
 }
@@ -41,7 +80,8 @@ pub trait ProcedureInvoker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_core::{CatalogVersion, ProcedureId};
+    use andromeda_core::{CatalogVersion, ProcedureId, RequestId, SessionId};
+    use andromeda_observe::{EventCorrelation, EventEnvelope, EventId, TraceEvent};
 
     fn request(expected_contract_hash: ContractHash) -> InvocationRequest {
         InvocationRequest {
@@ -57,6 +97,19 @@ mod tests {
         }
     }
 
+    fn request_correlation() -> EventCorrelation {
+        EventCorrelation {
+            request_id: Some(RequestId::new(10)),
+            session_id: Some(SessionId::new(11)),
+            contract_hash: Some(ContractHash::test_vector(7)),
+            catalog_version: Some(CatalogVersion::new(3)),
+            catalog_object_id: None,
+            transaction_id: None,
+            durable_lsn: None,
+            protocol: None,
+        }
+    }
+
     #[test]
     fn invocation_rejects_contract_mismatch_before_transaction_creation() {
         let reject = request(ContractHash::test_vector(8))
@@ -67,6 +120,17 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(reject.status, CompletionStatus::ContractRejected);
+    }
+
+    #[test]
+    fn invocation_rejects_zero_id_during_admission_before_transaction_creation() {
+        let mut request = request(ContractHash::test_vector(7));
+        request.invocation_id = InvocationId::new(0);
+
+        let reject = request.validate_admission(TraceId::new(1)).unwrap_err();
+
+        assert_eq!(reject.status, CompletionStatus::ContractRejected);
+        assert!(reject.reason.contains("InvocationId"));
     }
 
     #[test]
@@ -92,5 +156,28 @@ mod tests {
 
         assert_eq!(reject.status, CompletionStatus::ContractRejected);
         assert!(reject.reason.contains("ProcedureId"));
+    }
+
+    #[test]
+    fn invocation_reject_can_be_emitted_as_pre_transaction_audit_evidence() {
+        let reject = request(ContractHash::test_vector(8))
+            .validate_before_transaction(
+                request(ContractHash::test_vector(7)).procedure,
+                TraceId::new(1),
+            )
+            .unwrap_err();
+        let trace = reject
+            .contract_rejected_trace(TraceId::new(55), ProtocolCorrelation::empty(), 1, 2)
+            .expect("contract reject produces contract evidence trace");
+
+        let envelope = EventEnvelope::new(
+            EventId::new(56),
+            request_correlation(),
+            TraceEvent::ContractRejected(trace),
+        )
+            .expect("contract rejection is auditable without transaction evidence");
+
+        assert!(envelope.correlation.has_contract_catalog());
+        assert!(envelope.correlation.has_no_transaction_evidence());
     }
 }

@@ -1,4 +1,4 @@
-use andromeda_catalog::{ProcedureContractRef, inventory_reserve_stock_contract};
+use andromeda_catalog::{inventory_reserve_stock_contract, ProcedureContractRef};
 use andromeda_core::{
     AndromedaResult, CatalogVersion, ContractHash, InvocationId, ProcedureId, TransactionId,
 };
@@ -34,6 +34,31 @@ impl InvocationWal for RecordingWal {
     fn flush_through(&mut self, lsn: Lsn) -> AndromedaResult<Lsn> {
         self.durable_lsn = lsn;
         Ok(lsn)
+    }
+}
+
+#[derive(Debug, Default)]
+struct LaggingFlushWal {
+    records: Vec<(Lsn, WalRecordKind, Option<TransactionId>, Vec<u8>)>,
+    durable_lsn: Lsn,
+}
+
+impl InvocationWal for LaggingFlushWal {
+    fn append(
+        &mut self,
+        kind: WalRecordKind,
+        transaction_id: Option<TransactionId>,
+        payload: &[u8],
+    ) -> AndromedaResult<Lsn> {
+        let lsn = Lsn::new(self.records.len() as u64 + 1);
+        self.records
+            .push((lsn, kind, transaction_id, payload.to_vec()));
+        Ok(lsn)
+    }
+
+    fn flush_through(&mut self, lsn: Lsn) -> AndromedaResult<Lsn> {
+        self.durable_lsn = Lsn::new(lsn.get() - 1);
+        Ok(self.durable_lsn)
     }
 }
 
@@ -140,6 +165,33 @@ fn result_cardinality_rules_are_enforced_by_result_service() {
         cardinality: Cardinality::Many,
     };
     assert!(ResultValidationService::validate_before_payload(unbounded_many).is_ok());
+
+    let zero_stream = ResultStreamMetadata {
+        stream_id: 0,
+        row_count_exact: Some(1),
+        column_count: 1,
+        cardinality: Cardinality::One,
+    };
+    assert_eq!(
+        ResultValidationService::validate_before_payload(zero_stream)
+            .unwrap_err()
+            .kind(),
+        andromeda_core::AndromedaErrorKind::Contract
+    );
+
+    let row_count_mismatch = ResultStreamMetadata {
+        stream_id: 1,
+        row_count_exact: Some(1),
+        column_count: 1,
+        cardinality: Cardinality::One,
+    };
+    assert_eq!(
+        row_count_mismatch
+            .validate_completed_stream(0)
+            .unwrap_err()
+            .kind(),
+        andromeda_core::AndromedaErrorKind::Contract
+    );
 }
 
 #[test]
@@ -192,6 +244,25 @@ fn local_vertical_happy_path_commits_only_with_durable_wal_evidence() {
 }
 
 #[test]
+fn local_vertical_rejects_visibility_when_flush_does_not_cover_commit_lsn() {
+    let mut runtime = LocalVerticalRuntime::new(LaggingFlushWal::default());
+    let procedure = procedure(request(ContractHash::test_vector(7)).procedure);
+
+    let err = runtime
+        .execute(
+            request(ContractHash::test_vector(7)),
+            &procedure,
+            TraceId::new(8000),
+        )
+        .unwrap_err();
+
+    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Storage);
+    assert_eq!(runtime.wal().records.len(), 3);
+    assert_eq!(runtime.wal().records[2].1, WalRecordKind::TxCommit);
+    assert!(runtime.wal().durable_lsn < runtime.wal().records[2].0);
+}
+
+#[test]
 fn service_and_dispatcher_api_is_usable_externally() {
     let request = request(ContractHash::test_vector(7));
     let trace = PreTransactionValidationService::validate_invocation_contract(
@@ -199,7 +270,7 @@ fn service_and_dispatcher_api_is_usable_externally() {
         request.procedure,
         TraceId::new(202),
     )
-    .unwrap();
+        .unwrap();
     assert!(trace.has_explanation());
 
     let auth_trace = AdmissionService::authorize(
@@ -209,7 +280,7 @@ fn service_and_dispatcher_api_is_usable_externally() {
         ),
         &["Inventory.ReserveStock.Execute".into()],
     )
-    .unwrap();
+        .unwrap();
     assert!(auth_trace.has_explanation());
 
     let mut wal = RecordingWal::default();
@@ -223,5 +294,7 @@ fn service_and_dispatcher_api_is_usable_externally() {
 
     assert_eq!(receipt.transaction_state, TransactionState::Committed);
     assert_eq!(receipt.durable_lsn, Lsn::new(3));
+    assert_eq!(receipt.wal_evidence.commit_lsn, Lsn::new(3));
+    assert_eq!(receipt.wal_evidence.durable_lsn, Lsn::new(3));
     assert_eq!(wal.durable_lsn, Lsn::new(3));
 }

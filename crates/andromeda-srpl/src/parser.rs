@@ -2,8 +2,8 @@ use andromeda_catalog::QualifiedName;
 use andromeda_core::{ScalarType, TypeDescriptor};
 
 use crate::{
-    Cardinality, DiagnosticPhase, FieldAst, ProcedureAst, ResultStreamAst, SourceSpan, Spanned,
-    SrplDiagnostic, Token, TokenKind, lex,
+    lex, Cardinality, DiagnosticPhase, FieldAst, ProcedureAst, ResultStreamAst, SourceSpan,
+    Spanned, SrplDiagnostic, Token, TokenKind,
 };
 
 pub fn parse_procedure_signature(input: &str) -> Result<ProcedureAst, SrplDiagnostic> {
@@ -212,7 +212,7 @@ mod tests {
         let ast = parse_procedure_signature(
             "procedure Inventory.ReserveStock accepts (ProductId i64) returns Reservation one (Reserved bool);",
         )
-        .unwrap();
+            .unwrap();
 
         assert_eq!(ast.name.value.as_catalog_path(), "Inventory.ReserveStock");
         assert_eq!(ast.parameters.len(), 1);

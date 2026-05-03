@@ -1,7 +1,13 @@
+use andromeda_catalog::{
+    CatalogObjectRef, ObjectKind, ProcedureContractCandidate, ResultStreamContract,
+};
 use andromeda_core::AndromedaResult;
 use std::collections::BTreeSet;
 
-use crate::{BoundProcedure, ProcedureAst, SrplProcedureIr, SrplResultStreamIr};
+use crate::{
+    BoundProcedure, ProcedureAst, SrplProcedureContractMetadata, SrplProcedureIr,
+    SrplResultStreamIr,
+};
 
 pub fn lower_bound_procedure(bound: BoundProcedure) -> AndromedaResult<SrplProcedureIr> {
     bound.signature.validate()?;
@@ -39,6 +45,60 @@ pub fn compile_narrow_procedure_signature(
         crate::SrplDiagnostic::new(crate::DiagnosticPhase::Binding, None, error.to_string())
     })?;
     lower_bound_procedure(bound).map_err(|error| {
+        crate::SrplDiagnostic::new(crate::DiagnosticPhase::IrLowering, None, error.to_string())
+    })
+}
+
+pub fn lower_ir_to_contract_candidate(
+    ir: SrplProcedureIr,
+    metadata: SrplProcedureContractMetadata,
+) -> AndromedaResult<ProcedureContractCandidate> {
+    let signature = crate::ProcedureSignature {
+        name: ir.name.clone(),
+        accepts: ir.inputs.clone(),
+        returns: ir
+            .result_streams
+            .iter()
+            .map(|result| crate::ResultContract {
+                name: result.name.clone(),
+                cardinality: result.cardinality,
+                columns: result.columns.clone(),
+            })
+            .collect(),
+    };
+    signature.validate()?;
+
+    Ok(ProcedureContractCandidate {
+        object: CatalogObjectRef {
+            object_id: metadata.object_id,
+            name: ir.name,
+            kind: ObjectKind::Procedure,
+            catalog_version: metadata.catalog_version,
+        },
+        procedure_id: metadata.procedure_id,
+        inputs: ir.inputs,
+        structured_inputs: metadata.structured_inputs,
+        result_streams: ir
+            .result_streams
+            .into_iter()
+            .map(|result| ResultStreamContract {
+                name: result.name,
+                columns: result.columns,
+                row_count_exact_required: result.cardinality.requires_exact_row_count(),
+            })
+            .collect(),
+        required_permissions: metadata.required_permissions,
+        transaction_policy: metadata.transaction_policy,
+        compatibility_policy: metadata.compatibility_policy,
+    })
+}
+
+pub fn compile_narrow_procedure_contract_candidate(
+    source: &str,
+    metadata: SrplProcedureContractMetadata,
+) -> Result<ProcedureContractCandidate, crate::SrplDiagnostic> {
+    let ir = compile_narrow_procedure_signature(source)?;
+    lower_ir_to_contract_candidate(ir, metadata).map_err(|error| {
         crate::SrplDiagnostic::new(crate::DiagnosticPhase::IrLowering, None, error.to_string())
     })
 }
@@ -90,7 +150,7 @@ mod tests {
         let ir = compile_narrow_procedure_signature(
             "procedure Inventory.ReserveStock accepts (ProductId i64) returns Reservation one (Reserved bool);",
         )
-        .unwrap();
+            .unwrap();
 
         assert_eq!(ir.name.as_catalog_path(), "Inventory.ReserveStock");
         assert_eq!(ir.inputs.len(), 1);
@@ -102,7 +162,7 @@ mod tests {
         let diagnostic = compile_narrow_procedure_signature(
             "procedure X accepts () returns R many (C bool); execute sql",
         )
-        .unwrap_err();
+            .unwrap_err();
 
         assert_eq!(diagnostic.phase, DiagnosticPhase::Binding);
         assert!(diagnostic.location.is_some());
@@ -113,7 +173,7 @@ mod tests {
         let diagnostic = compile_narrow_procedure_signature(
             "procedure Inventory.ReserveStock accepts (ProductId i64, ProductId i64) returns Reservation one (Reserved bool);",
         )
-        .unwrap_err();
+            .unwrap_err();
 
         assert_eq!(diagnostic.phase, DiagnosticPhase::Binding);
         assert!(diagnostic.location.is_some());

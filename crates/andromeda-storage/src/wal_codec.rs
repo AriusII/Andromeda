@@ -1,6 +1,6 @@
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
 
-use crate::{Lsn, WalRecord, WalRecordHeader, wal_record_kind_from_tag, wal_record_kind_tag};
+use crate::{wal_record_kind_from_tag, wal_record_kind_tag, Lsn, WalRecord, WalRecordHeader};
 
 pub const WAL_FORMAT_VERSION: u16 = 0;
 pub const WAL_RECORD_MAGIC: u64 = 0x414e_4452_4f57_414c;
@@ -441,7 +441,7 @@ mod tests {
             Some(TransactionId::new(7)),
             payload,
         )
-        .unwrap()
+            .unwrap()
     }
 
     fn encode_records(records: &[WalRecord]) -> Vec<u8> {
