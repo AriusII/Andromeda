@@ -2,7 +2,8 @@ use andromeda_catalog::{
     AccessMode, CatalogDefinition, CatalogMutationRecordKind, CatalogObjectRef,
     CatalogPublicationSemantics, CatalogSnapshotPublication, CatalogSystemStore,
     CompatibilityPolicy, DefinitionBatch, DefinitionBatchId, DefinitionOperation, IsolationPolicy,
-    ObjectKind, ProcedureContract, QualifiedName, StructuredObjectDefinition, TableDefinition,
+    MultiResultPolicy, ObjectKind, ProcedureContract, ProcedureErrorPolicy, ProtocolLayoutRef,
+    QualifiedName, ResultMetadataPolicy, StatsVersion, StructuredObjectDefinition, TableDefinition,
     TransactionPolicy,
 };
 use andromeda_core::{
@@ -55,6 +56,11 @@ fn procedure(
         object: object(id, name, ObjectKind::Procedure, version),
         procedure_id: ProcedureId::new(id),
         contract_hash: ContractHash::test_vector(id as u8),
+        stats_version: StatsVersion::new(1),
+        protocol_layout: ProtocolLayoutRef {
+            descriptor_set_hash: ContractHash::test_vector(0xA1),
+            frame_envelope_hash: ContractHash::test_vector(0xA2),
+        },
         inputs: vec![column("ProductId", 0)],
         structured_inputs,
         result_streams: Vec::new(),
@@ -65,6 +71,12 @@ fn procedure(
             retryable: false,
         },
         compatibility_policy: CompatibilityPolicy::ExactHash,
+        result_metadata_policy: ResultMetadataPolicy::RequireBeforePayload,
+        error_policy: ProcedureErrorPolicy {
+            rollback_on_error: true,
+            allowed_error_codes: vec!["InsufficientStock".to_string()],
+        },
+        multi_result_policy: MultiResultPolicy::SingleResultOnly,
     }
 }
 

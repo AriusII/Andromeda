@@ -47,6 +47,8 @@ pub enum CriticalDecisionKind {
     SchemaLayoutDecision,
     CorruptionBoundary,
     SecurityAuthorization,
+    SecurityAudit,
+    AdminOperation,
     ResourceGovernance,
     BusinessRuleDecision,
     IoPlacementDecision,
@@ -99,6 +101,363 @@ pub enum ProtocolEventScope {
     Connection,
     Session,
     Request,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct EventSchemaVersion(u16);
+
+impl EventSchemaVersion {
+    pub const V0: Self = Self(1);
+
+    pub const fn new(value: u16) -> Self {
+        Self(value)
+    }
+
+    pub const fn get(self) -> u16 {
+        self.0
+    }
+
+    pub const fn is_v0(self) -> bool {
+        self.0 == Self::V0.0
+    }
+}
+
+pub const V0_EVENT_SCHEMA_VERSION: EventSchemaVersion = EventSchemaVersion::V0;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SurfaceScope {
+    Application,
+    Administration,
+    Cluster,
+    BackupAgent,
+    MonitoringAgent,
+}
+
+impl SurfaceScope {
+    pub const fn permits_admin_operation(self) -> bool {
+        !matches!(self, Self::Application)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PermissionFamily {
+    Application,
+    Definition,
+    Diagnostics,
+    Security,
+    Recovery,
+    Cluster,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Permission {
+    ExecuteProcedure,
+    ReadContract,
+    CreateTable,
+    CreateMap,
+    CreateProcedure,
+    ImportDefinitionBatch,
+    DebugProcedure,
+    ReadProcedureStore,
+    InspectPlans,
+    ManageSecurity,
+    RotateCertificate,
+    RevokeCertificateIdentity,
+    Backup,
+    Restore,
+    ForensicStart,
+    ClusterPromote,
+    FenceNode,
+    UpdateClusterManifest,
+}
+
+impl Permission {
+    pub const fn family(self) -> PermissionFamily {
+        match self {
+            Self::ExecuteProcedure | Self::ReadContract => PermissionFamily::Application,
+            Self::CreateTable
+            | Self::CreateMap
+            | Self::CreateProcedure
+            | Self::ImportDefinitionBatch => PermissionFamily::Definition,
+            Self::DebugProcedure | Self::ReadProcedureStore | Self::InspectPlans => {
+                PermissionFamily::Diagnostics
+            }
+            Self::ManageSecurity | Self::RotateCertificate | Self::RevokeCertificateIdentity => {
+                PermissionFamily::Security
+            }
+            Self::Backup | Self::Restore | Self::ForensicStart => PermissionFamily::Recovery,
+            Self::ClusterPromote | Self::FenceNode | Self::UpdateClusterManifest => {
+                PermissionFamily::Cluster
+            }
+        }
+    }
+
+    pub const fn is_admin_operation_permission(self) -> bool {
+        matches!(
+            self,
+            Self::DebugProcedure
+                | Self::ReadProcedureStore
+                | Self::InspectPlans
+                | Self::ManageSecurity
+                | Self::RotateCertificate
+                | Self::RevokeCertificateIdentity
+                | Self::Backup
+                | Self::Restore
+                | Self::ForensicStart
+                | Self::ClusterPromote
+                | Self::FenceNode
+                | Self::UpdateClusterManifest
+        )
+    }
+
+    pub const fn authorizes_admin_operation(self, operation: AdminOperation) -> bool {
+        matches!(
+            (self, operation),
+            (Self::DebugProcedure, AdminOperation::DebugProcedure)
+                | (Self::ReadProcedureStore, AdminOperation::ReadProcedureStore,)
+                | (Self::InspectPlans, AdminOperation::InspectPlans)
+                | (Self::ManageSecurity, AdminOperation::ManageSecurity)
+                | (Self::RotateCertificate, AdminOperation::RotateCertificate)
+                | (
+                    Self::RevokeCertificateIdentity,
+                    AdminOperation::RevokeCertificateIdentity,
+                )
+                | (Self::Backup, AdminOperation::Backup)
+                | (Self::Restore, AdminOperation::Restore)
+                | (Self::ForensicStart, AdminOperation::ForensicStart)
+                | (Self::ClusterPromote, AdminOperation::ClusterPromote)
+                | (Self::FenceNode, AdminOperation::FenceNode)
+                | (
+                    Self::UpdateClusterManifest,
+                    AdminOperation::UpdateClusterManifest,
+                )
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AdminOperation {
+    DebugProcedure,
+    ReadProcedureStore,
+    InspectPlans,
+    ManageSecurity,
+    RotateCertificate,
+    RevokeCertificateIdentity,
+    Backup,
+    Restore,
+    ForensicStart,
+    ClusterPromote,
+    FenceNode,
+    UpdateClusterManifest,
+}
+
+impl AdminOperation {
+    pub const fn required_permission(self) -> Permission {
+        match self {
+            Self::DebugProcedure => Permission::DebugProcedure,
+            Self::ReadProcedureStore => Permission::ReadProcedureStore,
+            Self::InspectPlans => Permission::InspectPlans,
+            Self::ManageSecurity => Permission::ManageSecurity,
+            Self::RotateCertificate => Permission::RotateCertificate,
+            Self::RevokeCertificateIdentity => Permission::RevokeCertificateIdentity,
+            Self::Backup => Permission::Backup,
+            Self::Restore => Permission::Restore,
+            Self::ForensicStart => Permission::ForensicStart,
+            Self::ClusterPromote => Permission::ClusterPromote,
+            Self::FenceNode => Permission::FenceNode,
+            Self::UpdateClusterManifest => Permission::UpdateClusterManifest,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CertificateIdentity {
+    pub fingerprint: String,
+    pub subject: String,
+    pub surface: SurfaceScope,
+}
+
+impl CertificateIdentity {
+    pub fn new(
+        fingerprint: impl Into<String>,
+        subject: impl Into<String>,
+        surface: SurfaceScope,
+    ) -> AndromedaResult<Self> {
+        Ok(Self {
+            fingerprint: non_empty_evidence("certificate fingerprint", fingerprint)?,
+            subject: non_empty_evidence("certificate subject", subject)?,
+            surface,
+        })
+    }
+
+    pub fn has_identity_evidence(&self) -> bool {
+        !self.fingerprint.trim().is_empty() && !self.subject.trim().is_empty()
+    }
+
+    pub fn contains_sensitive_evidence(&self) -> bool {
+        contains_sensitive_marker(&self.fingerprint) || contains_sensitive_marker(&self.subject)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum UserPrincipalKind {
+    Human,
+    Service,
+    BreakGlass,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserPrincipal {
+    pub principal_id: String,
+    pub kind: UserPrincipalKind,
+}
+
+impl UserPrincipal {
+    pub fn new(principal_id: impl Into<String>, kind: UserPrincipalKind) -> AndromedaResult<Self> {
+        Ok(Self {
+            principal_id: non_empty_evidence("principal id", principal_id)?,
+            kind,
+        })
+    }
+
+    pub fn has_identity_evidence(&self) -> bool {
+        !self.principal_id.trim().is_empty()
+    }
+
+    pub fn contains_sensitive_evidence(&self) -> bool {
+        contains_sensitive_marker(&self.principal_id)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SecurityAuditOutcome {
+    Allowed,
+    Denied,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SecurityAuditTrace {
+    pub trace_id: TraceId,
+    pub schema_version: EventSchemaVersion,
+    pub surface: SurfaceScope,
+    pub certificate: CertificateIdentity,
+    pub principal: UserPrincipal,
+    pub permission: Permission,
+    pub outcome: SecurityAuditOutcome,
+    pub reason: String,
+}
+
+impl SecurityAuditTrace {
+    pub fn new(
+        trace_id: TraceId,
+        surface: SurfaceScope,
+        certificate: CertificateIdentity,
+        principal: UserPrincipal,
+        permission: Permission,
+        outcome: SecurityAuditOutcome,
+        reason: impl Into<String>,
+    ) -> AndromedaResult<Self> {
+        Ok(Self {
+            trace_id,
+            schema_version: EventSchemaVersion::V0,
+            surface,
+            certificate,
+            principal,
+            permission,
+            outcome,
+            reason: non_empty_reason(reason)?,
+        })
+    }
+
+    pub fn has_reason(&self) -> bool {
+        !self.reason.trim().is_empty()
+    }
+
+    pub const fn has_supported_schema_version(&self) -> bool {
+        self.schema_version.is_v0()
+    }
+
+    pub fn has_identity_evidence(&self) -> bool {
+        self.certificate.has_identity_evidence() && self.principal.has_identity_evidence()
+    }
+
+    pub const fn surface_matches_certificate(&self) -> bool {
+        self.surface as u8 == self.certificate.surface as u8
+    }
+
+    pub fn contains_sensitive_evidence(&self) -> bool {
+        self.certificate.contains_sensitive_evidence()
+            || self.principal.contains_sensitive_evidence()
+            || contains_sensitive_marker(&self.reason)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AdminOperationTrace {
+    pub trace_id: TraceId,
+    pub schema_version: EventSchemaVersion,
+    pub surface: SurfaceScope,
+    pub certificate: CertificateIdentity,
+    pub principal: UserPrincipal,
+    pub operation: AdminOperation,
+    pub permission: Permission,
+    pub accepted: bool,
+    pub reason: String,
+}
+
+impl AdminOperationTrace {
+    pub fn new(
+        trace_id: TraceId,
+        surface: SurfaceScope,
+        certificate: CertificateIdentity,
+        principal: UserPrincipal,
+        operation: AdminOperation,
+        permission: Permission,
+        accepted: bool,
+        reason: impl Into<String>,
+    ) -> AndromedaResult<Self> {
+        Ok(Self {
+            trace_id,
+            schema_version: EventSchemaVersion::V0,
+            surface,
+            certificate,
+            principal,
+            operation,
+            permission,
+            accepted,
+            reason: non_empty_reason(reason)?,
+        })
+    }
+
+    pub fn has_reason(&self) -> bool {
+        !self.reason.trim().is_empty()
+    }
+
+    pub const fn has_supported_schema_version(&self) -> bool {
+        self.schema_version.is_v0()
+    }
+
+    pub const fn surface_permits_operation(&self) -> bool {
+        self.surface.permits_admin_operation()
+    }
+
+    pub fn has_identity_evidence(&self) -> bool {
+        self.certificate.has_identity_evidence() && self.principal.has_identity_evidence()
+    }
+
+    pub const fn surface_matches_certificate(&self) -> bool {
+        self.surface as u8 == self.certificate.surface as u8
+    }
+
+    pub const fn permission_matches_operation(&self) -> bool {
+        self.permission.authorizes_admin_operation(self.operation)
+    }
+
+    pub fn contains_sensitive_evidence(&self) -> bool {
+        self.certificate.contains_sensitive_evidence()
+            || self.principal.contains_sensitive_evidence()
+            || contains_sensitive_marker(&self.reason)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -712,6 +1071,8 @@ pub enum TraceEvent {
     CompletionEmitted(CompletionEmittedTrace),
     ContractRejected(ContractRejectedTrace),
     AuthorizationDenied(AuthorizationDeniedTrace),
+    SecurityAudit(SecurityAuditTrace),
+    AdminOperation(AdminOperationTrace),
     UnsupportedVersion(UnsupportedVersionTrace),
     SchemaLayoutDecision(SchemaLayoutDecisionTrace),
     CorruptionBoundary(CorruptionBoundaryTrace),
@@ -741,6 +1102,8 @@ impl TraceEvent {
             Self::CompletionEmitted(trace) => trace.trace_id,
             Self::ContractRejected(trace) => trace.trace_id,
             Self::AuthorizationDenied(trace) => trace.trace_id,
+            Self::SecurityAudit(trace) => trace.trace_id,
+            Self::AdminOperation(trace) => trace.trace_id,
             Self::UnsupportedVersion(trace) => trace.trace_id,
             Self::SchemaLayoutDecision(trace) => trace.trace_id,
             Self::CorruptionBoundary(trace) => trace.trace_id,
@@ -776,6 +1139,8 @@ impl TraceEvent {
             Self::CompletionEmitted(_) => CriticalDecisionKind::CompletionEmitted,
             Self::ContractRejected(_) => CriticalDecisionKind::ContractRejected,
             Self::AuthorizationDenied(_) => CriticalDecisionKind::AuthorizationDenial,
+            Self::SecurityAudit(_) => CriticalDecisionKind::SecurityAudit,
+            Self::AdminOperation(_) => CriticalDecisionKind::AdminOperation,
             Self::UnsupportedVersion(_) => CriticalDecisionKind::UnsupportedVersion,
             Self::SchemaLayoutDecision(_) => CriticalDecisionKind::SchemaLayoutDecision,
             Self::CorruptionBoundary(_) => CriticalDecisionKind::CorruptionBoundary,
@@ -807,6 +1172,8 @@ impl TraceEvent {
             Self::CompletionEmitted(_)
                 | Self::ContractRejected(_)
                 | Self::AuthorizationDenied(_)
+                | Self::SecurityAudit(_)
+                | Self::AdminOperation(_)
                 | Self::SchemaLayoutDecision(SchemaLayoutDecisionTrace {
                     scope: ProtocolEventScope::Request,
                     ..
@@ -825,7 +1192,12 @@ impl TraceEvent {
     pub const fn must_not_have_transaction_correlation(&self) -> bool {
         matches!(
             self,
-            Self::ContractRejected(_) | Self::AuthorizationDenied(_)
+            Self::ContractRejected(_)
+                | Self::AuthorizationDenied(_)
+                | Self::SecurityAudit(SecurityAuditTrace {
+                    outcome: SecurityAuditOutcome::Denied,
+                    ..
+                })
         )
     }
 }
@@ -940,6 +1312,42 @@ impl EventEnvelope {
             TraceEvent::AuthorizationDenied(trace) if !trace.has_permission_evidence() => Err(
                 observe_error("authorization denial traces require denied permission evidence"),
             ),
+            TraceEvent::SecurityAudit(trace) if !trace.has_supported_schema_version() => Err(
+                observe_error("security audit traces require the V0 event schema version"),
+            ),
+            TraceEvent::SecurityAudit(trace) if !trace.has_identity_evidence() => {
+                Err(observe_error(
+                    "security audit traces require certificate and principal identity evidence",
+                ))
+            }
+            TraceEvent::SecurityAudit(trace) if !trace.surface_matches_certificate() => Err(
+                observe_error("security audit trace surface must match certificate surface scope"),
+            ),
+            TraceEvent::SecurityAudit(trace) if !trace.has_reason() => Err(observe_error(
+                "security audit traces require a non-empty reason",
+            )),
+            TraceEvent::AdminOperation(trace) if !trace.has_supported_schema_version() => Err(
+                observe_error("admin operation traces require the V0 event schema version"),
+            ),
+            TraceEvent::AdminOperation(trace) if !trace.surface_permits_operation() => Err(
+                observe_error("application surface cannot carry admin operation traces"),
+            ),
+            TraceEvent::AdminOperation(trace) if !trace.has_identity_evidence() => {
+                Err(observe_error(
+                    "admin operation traces require certificate and principal identity evidence",
+                ))
+            }
+            TraceEvent::AdminOperation(trace) if !trace.surface_matches_certificate() => Err(
+                observe_error("admin operation trace surface must match certificate surface scope"),
+            ),
+            TraceEvent::AdminOperation(trace) if !trace.permission_matches_operation() => {
+                Err(observe_error(
+                    "admin operation traces require permission evidence matching the operation",
+                ))
+            }
+            TraceEvent::AdminOperation(trace) if !trace.has_reason() => Err(observe_error(
+                "admin operation traces require a non-empty reason",
+            )),
             TraceEvent::UnsupportedVersion(trace) if !trace.has_reason() => Err(observe_error(
                 "unsupported version traces require a non-empty reason",
             )),
@@ -1179,6 +1587,8 @@ impl EventEnvelope {
                 contains_sensitive_marker(&trace.reason)
                     || contains_sensitive_marker(&trace.denied_permission)
             }
+            TraceEvent::SecurityAudit(trace) => trace.contains_sensitive_evidence(),
+            TraceEvent::AdminOperation(trace) => trace.contains_sensitive_evidence(),
             TraceEvent::UnsupportedVersion(trace) => contains_sensitive_marker(&trace.reason),
             TraceEvent::SchemaLayoutDecision(trace) => contains_sensitive_marker(&trace.reason),
             TraceEvent::CorruptionBoundary(trace) => contains_sensitive_marker(&trace.reason),
@@ -1472,10 +1882,7 @@ impl InMemoryEventSequence {
         Ok(())
     }
 
-    fn validate_stable_procedure_correlation(
-        &self,
-        event: &EventEnvelope,
-    ) -> AndromedaResult<()> {
+    fn validate_stable_procedure_correlation(&self, event: &EventEnvelope) -> AndromedaResult<()> {
         let correlation = event.correlation;
         if !correlation.has_request_session()
             || !correlation.has_contract_catalog()
@@ -1529,22 +1936,19 @@ impl InMemoryEventSequence {
         event: &EventEnvelope,
     ) -> AndromedaResult<ProcedureLifecycleCursor> {
         match (self.cursor, step) {
-            (
-                ProcedureLifecycleCursor::Empty,
-                ProcedureLifecycleStep::AdmissionAccepted,
-            ) => self.require_no_transaction_evidence(
-                event,
-                ProcedureLifecycleCursor::AdmissionAccepted,
-                "admission evidence",
-            ),
-            (
-                ProcedureLifecycleCursor::AdmissionAccepted,
-                ProcedureLifecycleStep::Authorized,
-            ) => self.require_no_transaction_evidence(
-                event,
-                ProcedureLifecycleCursor::Authorized,
-                "authorization evidence",
-            ),
+            (ProcedureLifecycleCursor::Empty, ProcedureLifecycleStep::AdmissionAccepted) => self
+                .require_no_transaction_evidence(
+                    event,
+                    ProcedureLifecycleCursor::AdmissionAccepted,
+                    "admission evidence",
+                ),
+            (ProcedureLifecycleCursor::AdmissionAccepted, ProcedureLifecycleStep::Authorized) => {
+                self.require_no_transaction_evidence(
+                    event,
+                    ProcedureLifecycleCursor::Authorized,
+                    "authorization evidence",
+                )
+            }
             (ProcedureLifecycleCursor::Authorized, ProcedureLifecycleStep::IoAdmitted) => self
                 .require_no_transaction_evidence(
                     event,
@@ -1746,6 +2150,9 @@ impl ProcedureLifecycleStep {
             {
                 Ok(Self::Authorized)
             }
+            TraceEvent::SecurityAudit(trace) if trace.outcome == SecurityAuditOutcome::Allowed => {
+                Ok(Self::Authorized)
+            }
             TraceEvent::Decision(trace)
                 if matches!(
                     trace.decision,
@@ -1784,9 +2191,12 @@ impl ProcedureLifecycleStep {
             TraceEvent::RecoveryStartup(trace) => Ok(Self::RecoveryStarted {
                 last_durable_lsn: trace.last_durable_lsn,
             }),
-            TraceEvent::ContractRejected(_) | TraceEvent::AuthorizationDenied(_) => {
-                Ok(Self::PreTransactionRejected)
-            }
+            TraceEvent::ContractRejected(_)
+            | TraceEvent::AuthorizationDenied(_)
+            | TraceEvent::SecurityAudit(SecurityAuditTrace {
+                outcome: SecurityAuditOutcome::Denied,
+                ..
+            }) => Ok(Self::PreTransactionRejected),
             _ => Err(observe_error(
                 "event is not accepted as procedure lifecycle sequence evidence",
             )),
@@ -1813,6 +2223,17 @@ fn non_empty_reason(reason: impl Into<String>) -> AndromedaResult<String> {
     }
 
     Ok(reason)
+}
+
+fn non_empty_evidence(label: &str, value: impl Into<String>) -> AndromedaResult<String> {
+    let value = value.into();
+    if value.trim().is_empty() {
+        return Err(observe_error(format!(
+            "observability {label} evidence requires a non-empty value",
+        )));
+    }
+
+    Ok(value)
 }
 
 fn contains_sensitive_marker(text: &str) -> bool {

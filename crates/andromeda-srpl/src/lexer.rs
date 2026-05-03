@@ -12,11 +12,15 @@ pub enum TokenKind {
     Identifier,
     Dot,
     Comma,
+    Equal,
+    GreaterEqual,
+    Minus,
     LParen,
     RParen,
     LBrace,
     RBrace,
     Semicolon,
+    Number,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,6 +52,18 @@ pub fn lex(input: &str) -> Result<Vec<Token>, SrplDiagnostic> {
                 index += 1;
                 TokenKind::Comma
             }
+            '=' => {
+                index += 1;
+                TokenKind::Equal
+            }
+            '>' if bytes.get(index + 1) == Some(&b'=') => {
+                index += 2;
+                TokenKind::GreaterEqual
+            }
+            '-' => {
+                index += 1;
+                TokenKind::Minus
+            }
             '(' => {
                 index += 1;
                 TokenKind::LParen
@@ -74,6 +90,13 @@ pub fn lex(input: &str) -> Result<Vec<Token>, SrplDiagnostic> {
                     index += 1;
                 }
                 keyword_kind(&input[start..index])
+            }
+            _ if ch.is_ascii_digit() => {
+                index += 1;
+                while index < bytes.len() && (bytes[index] as char).is_ascii_digit() {
+                    index += 1;
+                }
+                TokenKind::Number
             }
             _ => {
                 return Err(SrplDiagnostic::new(

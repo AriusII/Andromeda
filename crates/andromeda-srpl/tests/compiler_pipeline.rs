@@ -1,11 +1,12 @@
 use andromeda_catalog::{
     AccessMode, CatalogSnapshot, CompatibilityPolicy, INVENTORY_DATABASE_ID,
-    INVENTORY_NAMESPACE_ID, IsolationPolicy, ObjectKind, QualifiedName, TransactionPolicy,
+    INVENTORY_NAMESPACE_ID, IsolationPolicy, MultiResultPolicy, ObjectKind, ProcedureErrorPolicy,
+    ProtocolLayoutRef, QualifiedName, ResultMetadataPolicy, StatsVersion, TransactionPolicy,
     inventory_domain_definition_batch,
 };
 use andromeda_core::{
-    AndromedaErrorKind, CatalogObjectId, CatalogVersion, ColumnDescriptor, ProcedureId, ScalarType,
-    TypeDescriptor,
+    AndromedaErrorKind, CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash,
+    ProcedureId, ScalarType, TypeDescriptor,
 };
 use andromeda_srpl::{
     SourceSpan,
@@ -170,6 +171,11 @@ fn contract_metadata() -> SrplProcedureContractMetadata {
         object_id: CatalogObjectId::new(11),
         procedure_id: ProcedureId::new(11),
         catalog_version: CatalogVersion::new(3),
+        stats_version: StatsVersion::new(1),
+        protocol_layout: ProtocolLayoutRef {
+            descriptor_set_hash: ContractHash::test_vector(0xA1),
+            frame_envelope_hash: ContractHash::test_vector(0xA2),
+        },
         structured_inputs: vec![QualifiedName::parse("Inventory.StockRequest").unwrap()],
         required_permissions: vec!["Inventory.ReserveStock.Execute".to_string()],
         transaction_policy: TransactionPolicy {
@@ -178,6 +184,12 @@ fn contract_metadata() -> SrplProcedureContractMetadata {
             retryable: false,
         },
         compatibility_policy: CompatibilityPolicy::ExactHash,
+        result_metadata_policy: ResultMetadataPolicy::RequireBeforePayload,
+        error_policy: ProcedureErrorPolicy {
+            rollback_on_error: true,
+            allowed_error_codes: vec!["InsufficientStock".to_string()],
+        },
+        multi_result_policy: MultiResultPolicy::SingleResultOnly,
     }
 }
 
@@ -220,6 +232,31 @@ fn contract_candidate_hash_is_stable_for_identical_srpl_and_metadata() {
     assert_eq!(first.contract_hash, second.contract_hash);
     assert!(!first.contract_hash.is_zero());
     assert!(!first.result_streams[0].row_count_exact_required);
+}
+
+#[test]
+fn contract_candidate_preserves_v0_metadata_and_error_policy() {
+    let source = "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool) begin ensure Inventory.ProductStock Stock where ProductId = Stock.ProductId and Stock.AvailableQuantity >= Quantity else fail InsufficientStock; update Inventory.ProductStock set AvailableQuantity = Stock.AvailableQuantity - Quantity where ProductId = Stock.ProductId affected rows 1; return Reservation (Reserved); end;";
+    let contract = compile_narrow_procedure_contract_candidate(source, contract_metadata())
+        .unwrap()
+        .materialize()
+        .unwrap();
+
+    assert_eq!(contract.stats_version, StatsVersion::new(1));
+    assert_eq!(
+        contract.result_metadata_policy,
+        ResultMetadataPolicy::RequireBeforePayload
+    );
+    assert_eq!(
+        contract.error_policy.allowed_error_codes,
+        vec!["InsufficientStock".to_string()]
+    );
+    assert_eq!(
+        contract.multi_result_policy,
+        MultiResultPolicy::SingleResultOnly
+    );
+    assert_eq!(contract.result_streams[0].stream_id, 1);
+    assert!(contract.validate_canonical_hash().is_ok());
 }
 
 #[test]
@@ -327,6 +364,25 @@ fn inventory_reserve_stock_body_binds_to_deterministic_executable_plan() {
         "Inventory.Reservation"
     );
     assert!(first.validate().is_ok());
+}
+
+#[test]
+fn pdf_style_inventory_source_binds_to_deterministic_executable_plan() {
+    let source = "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool) begin ensure Inventory.ProductStock Stock where ProductId = Stock.ProductId and Stock.AvailableQuantity >= Quantity else fail InsufficientStock; update Inventory.ProductStock set AvailableQuantity = Stock.AvailableQuantity - Quantity where ProductId = Stock.ProductId affected rows 1; return Reservation (Reserved); end;";
+    let ir = compile_narrow_procedure_signature(source).unwrap();
+    let snapshot = inventory_catalog_snapshot();
+
+    let plan = bind_executable_procedure_plan(&ir, &snapshot).unwrap();
+
+    assert_eq!(plan.body.operations.len(), 4);
+    assert!(matches!(
+        &plan.body.operations[2],
+        andromeda_srpl::model::BoundSrplOperationPlan::UpdateTable {
+            affected_rows_exact: Some(1),
+            ..
+        }
+    ));
+    assert!(plan.validate().is_ok());
 }
 
 #[test]

@@ -9,6 +9,26 @@ pub struct ProtocolLayout {
     pub frame_envelope_hash: ContractHash,
 }
 
+impl ProtocolLayout {
+    pub fn validate(&self) -> AndromedaResult<()> {
+        if self.descriptor_set_hash.is_zero() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "protocol layout descriptor set hash must not be zero",
+            ));
+        }
+
+        if self.frame_envelope_hash.is_zero() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "protocol layout frame envelope hash must not be zero",
+            ));
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcedureManifest {
     pub procedure_id: ProcedureId,
@@ -33,6 +53,8 @@ impl ProcedureManifest {
                 "procedure manifest contract hash must not be zero",
             ));
         }
+
+        self.protocol_layout.validate()?;
 
         Ok(())
     }

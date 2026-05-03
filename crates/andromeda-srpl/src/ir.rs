@@ -1,5 +1,7 @@
 use andromeda_catalog::{
-    CatalogObjectRef, CompatibilityPolicy, ProcedureContractRef, QualifiedName, TransactionPolicy,
+    CatalogObjectRef, CompatibilityPolicy, MultiResultPolicy, ProcedureContractRef,
+    ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName, ResultMetadataPolicy, StatsVersion,
+    TransactionPolicy,
 };
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogObjectId, CatalogVersion,
@@ -81,6 +83,7 @@ pub enum SrplBusinessOperationKindIr {
         target: QualifiedName,
         predicates: Vec<SrplPredicateIr>,
         assignments: Vec<SrplAssignmentIr>,
+        affected_rows_exact: Option<u64>,
     },
     Emit {
         stream: String,
@@ -117,6 +120,7 @@ impl SrplBusinessOperationKindIr {
                 target,
                 predicates,
                 assignments,
+                affected_rows_exact,
             } => {
                 validate_qualified_name(target, "SRPL update target")?;
                 if assignments.is_empty() {
@@ -130,6 +134,12 @@ impl SrplBusinessOperationKindIr {
                 }
                 for assignment in assignments {
                     assignment.validate()?;
+                }
+                if matches!(affected_rows_exact, Some(0)) {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Srpl,
+                        "SRPL update affected rows must be greater than zero",
+                    ));
                 }
             }
             Self::Emit { stream, values } => {
@@ -260,10 +270,15 @@ pub struct SrplProcedureContractMetadata {
     pub object_id: CatalogObjectId,
     pub procedure_id: ProcedureId,
     pub catalog_version: CatalogVersion,
+    pub stats_version: StatsVersion,
+    pub protocol_layout: ProtocolLayoutRef,
     pub structured_inputs: Vec<QualifiedName>,
     pub required_permissions: Vec<String>,
     pub transaction_policy: TransactionPolicy,
     pub compatibility_policy: CompatibilityPolicy,
+    pub result_metadata_policy: ResultMetadataPolicy,
+    pub error_policy: ProcedureErrorPolicy,
+    pub multi_result_policy: MultiResultPolicy,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -340,6 +355,7 @@ pub enum BoundSrplOperationPlan {
         target: CatalogObjectRef,
         predicates: Vec<SrplPredicateIr>,
         assignments: Vec<SrplAssignmentIr>,
+        affected_rows_exact: Option<u64>,
     },
     Emit {
         ordinal: u32,

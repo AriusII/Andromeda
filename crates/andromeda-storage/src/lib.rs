@@ -2,6 +2,7 @@
 
 mod cold_store;
 mod extent;
+mod file_wal;
 mod io_budget;
 mod lsn;
 mod manifest;
@@ -20,6 +21,7 @@ pub mod write_ahead_log;
 
 pub use cold_store::*;
 pub use extent::*;
+pub use file_wal::*;
 pub use io_budget::*;
 pub use lsn::*;
 pub use manifest::*;

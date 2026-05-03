@@ -93,6 +93,7 @@ impl ContractCompatibilityDiagnostic {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResultStreamContract {
+    pub stream_id: u64,
     pub name: String,
     pub columns: Vec<ColumnDescriptor>,
     pub row_count_exact_required: bool,
@@ -100,6 +101,13 @@ pub struct ResultStreamContract {
 
 impl ResultStreamContract {
     pub fn validate(&self) -> AndromedaResult<()> {
+        if self.stream_id == 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "result stream id must not be zero",
+            ));
+        }
+
         if self.name.trim().is_empty() {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Contract,
@@ -111,17 +119,108 @@ impl ResultStreamContract {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct StatsVersion(u64);
+
+impl StatsVersion {
+    pub const fn new(value: u64) -> Self {
+        Self(value)
+    }
+
+    pub const fn get(self) -> u64 {
+        self.0
+    }
+}
+
+impl From<u64> for StatsVersion {
+    fn from(value: u64) -> Self {
+        Self::new(value)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProtocolLayoutRef {
+    pub descriptor_set_hash: ContractHash,
+    pub frame_envelope_hash: ContractHash,
+}
+
+impl ProtocolLayoutRef {
+    pub fn validate(&self) -> AndromedaResult<()> {
+        if self.descriptor_set_hash.is_zero() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "procedure protocol descriptor set hash must not be zero",
+            ));
+        }
+
+        if self.frame_envelope_hash.is_zero() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "procedure protocol frame envelope hash must not be zero",
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResultMetadataPolicy {
+    RequireBeforePayload,
+    AllowStreamingUnknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProcedureErrorPolicy {
+    pub rollback_on_error: bool,
+    pub allowed_error_codes: Vec<String>,
+}
+
+impl ProcedureErrorPolicy {
+    pub fn validate(&self) -> AndromedaResult<()> {
+        let mut codes = std::collections::BTreeSet::new();
+        for code in &self.allowed_error_codes {
+            if code.trim().is_empty() {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Contract,
+                    "procedure error codes must not be empty",
+                ));
+            }
+
+            if !codes.insert(code.as_str()) {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Contract,
+                    "procedure error codes must be unique",
+                ));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MultiResultPolicy {
+    SingleResultOnly,
+    MultipleResultStreamsAllowed,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcedureContract {
     pub object: CatalogObjectRef,
     pub procedure_id: ProcedureId,
     pub contract_hash: ContractHash,
+    pub stats_version: StatsVersion,
+    pub protocol_layout: ProtocolLayoutRef,
     pub inputs: Vec<ColumnDescriptor>,
     pub structured_inputs: Vec<QualifiedName>,
     pub result_streams: Vec<ResultStreamContract>,
     pub required_permissions: Vec<String>,
     pub transaction_policy: TransactionPolicy,
     pub compatibility_policy: CompatibilityPolicy,
+    pub result_metadata_policy: ResultMetadataPolicy,
+    pub error_policy: ProcedureErrorPolicy,
+    pub multi_result_policy: MultiResultPolicy,
 }
 
 impl ProcedureContract {
@@ -137,6 +236,14 @@ impl ProcedureContract {
         self.object.validate_for_definition(ObjectKind::Procedure)?;
         self.as_ref().validate()?;
         validate_columns_allow_empty(&self.inputs)?;
+        if self.stats_version.get() == 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "procedure stats version must not be zero",
+            ));
+        }
+        self.protocol_layout.validate()?;
+        self.error_policy.validate()?;
 
         if self.required_permissions.is_empty() {
             return Err(AndromedaError::new(
@@ -171,14 +278,30 @@ impl ProcedureContract {
         }
 
         let mut result_stream_names = std::collections::BTreeSet::new();
+        let mut result_stream_ids = std::collections::BTreeSet::new();
         for stream in &self.result_streams {
             stream.validate()?;
+            if !result_stream_ids.insert(stream.stream_id) {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Contract,
+                    "procedure result stream ids must be unique",
+                ));
+            }
             if !result_stream_names.insert(stream.name.as_str()) {
                 return Err(AndromedaError::new(
                     AndromedaErrorKind::Contract,
                     "procedure result stream names must be unique",
                 ));
             }
+        }
+
+        if self.multi_result_policy == MultiResultPolicy::SingleResultOnly
+            && self.result_streams.len() > 1
+        {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "procedure multi-result policy allows only one result stream",
+            ));
         }
 
         Ok(())
@@ -217,35 +340,50 @@ impl ProcedureContract {
 pub struct ProcedureContractCandidate {
     pub object: CatalogObjectRef,
     pub procedure_id: ProcedureId,
+    pub stats_version: StatsVersion,
+    pub protocol_layout: ProtocolLayoutRef,
     pub inputs: Vec<ColumnDescriptor>,
     pub structured_inputs: Vec<QualifiedName>,
     pub result_streams: Vec<ResultStreamContract>,
     pub required_permissions: Vec<String>,
     pub transaction_policy: TransactionPolicy,
     pub compatibility_policy: CompatibilityPolicy,
+    pub result_metadata_policy: ResultMetadataPolicy,
+    pub error_policy: ProcedureErrorPolicy,
+    pub multi_result_policy: MultiResultPolicy,
 }
 
 impl ProcedureContractCandidate {
     pub fn materialize(self) -> AndromedaResult<ProcedureContract> {
         let contract_hash = canonical_procedure_contract_hash_parts(
             &self.object.name,
+            self.stats_version,
+            self.protocol_layout,
             &self.inputs,
             &self.structured_inputs,
             &self.result_streams,
             &self.required_permissions,
             self.transaction_policy,
             self.compatibility_policy,
+            self.result_metadata_policy,
+            &self.error_policy,
+            self.multi_result_policy,
         );
         let contract = ProcedureContract {
             object: self.object,
             procedure_id: self.procedure_id,
             contract_hash,
+            stats_version: self.stats_version,
+            protocol_layout: self.protocol_layout,
             inputs: self.inputs,
             structured_inputs: self.structured_inputs,
             result_streams: self.result_streams,
             required_permissions: self.required_permissions,
             transaction_policy: self.transaction_policy,
             compatibility_policy: self.compatibility_policy,
+            result_metadata_policy: self.result_metadata_policy,
+            error_policy: self.error_policy,
+            multi_result_policy: self.multi_result_policy,
         };
         contract.validate_canonical_hash()?;
         Ok(contract)
@@ -293,9 +431,36 @@ pub fn diagnose_procedure_contract_compatibility(
                 messages
                     .push("additive compatibility does not permit permission changes".to_string());
             }
+            if previous.stats_version != next.stats_version {
+                messages.push(
+                    "additive compatibility does not permit stats version changes".to_string(),
+                );
+            }
+            if previous.protocol_layout != next.protocol_layout {
+                messages.push(
+                    "additive compatibility does not permit protocol layout changes".to_string(),
+                );
+            }
             if previous.transaction_policy != next.transaction_policy {
                 messages.push(
                     "additive compatibility does not permit transaction policy changes".to_string(),
+                );
+            }
+            if previous.result_metadata_policy != next.result_metadata_policy {
+                messages.push(
+                    "additive compatibility does not permit result metadata policy changes"
+                        .to_string(),
+                );
+            }
+            if previous.error_policy != next.error_policy {
+                messages.push(
+                    "additive compatibility does not permit error policy changes".to_string(),
+                );
+            }
+            if previous.multi_result_policy != next.multi_result_policy {
+                messages.push(
+                    "additive compatibility does not permit multi-result policy changes"
+                        .to_string(),
                 );
             }
             for previous_stream in &previous.result_streams {
@@ -310,6 +475,13 @@ pub fn diagnose_procedure_contract_compatibility(
                     ));
                     continue;
                 };
+
+                if previous_stream.stream_id != next_stream.stream_id {
+                    messages.push(format!(
+                        "additive compatibility does not permit changing result stream id for result stream {}",
+                        previous_stream.name
+                    ));
+                }
 
                 if previous_stream.row_count_exact_required != next_stream.row_count_exact_required
                 {
@@ -345,27 +517,40 @@ pub fn diagnose_procedure_contract_compatibility(
 fn canonical_procedure_contract_hash(contract: &ProcedureContract) -> ContractHash {
     canonical_procedure_contract_hash_parts(
         &contract.object.name,
+        contract.stats_version,
+        contract.protocol_layout,
         &contract.inputs,
         &contract.structured_inputs,
         &contract.result_streams,
         &contract.required_permissions,
         contract.transaction_policy,
         contract.compatibility_policy,
+        contract.result_metadata_policy,
+        &contract.error_policy,
+        contract.multi_result_policy,
     )
 }
 
 fn canonical_procedure_contract_hash_parts(
     name: &QualifiedName,
+    stats_version: StatsVersion,
+    protocol_layout: ProtocolLayoutRef,
     inputs: &[ColumnDescriptor],
     structured_inputs: &[QualifiedName],
     result_streams: &[ResultStreamContract],
     required_permissions: &[String],
     transaction_policy: TransactionPolicy,
     compatibility_policy: CompatibilityPolicy,
+    result_metadata_policy: ResultMetadataPolicy,
+    error_policy: &ProcedureErrorPolicy,
+    multi_result_policy: MultiResultPolicy,
 ) -> ContractHash {
     let mut sink = StableHashSink::new();
-    sink.str("andromeda.catalog.procedure-contract.v1");
+    sink.str("andromeda.catalog.procedure-contract.v2");
     sink.qualified_name(name);
+    sink.u64(stats_version.get());
+    sink.contract_hash(protocol_layout.descriptor_set_hash);
+    sink.contract_hash(protocol_layout.frame_envelope_hash);
     sink.columns(inputs);
     sink.u64(structured_inputs.len() as u64);
     for structured_input in structured_inputs {
@@ -373,6 +558,7 @@ fn canonical_procedure_contract_hash_parts(
     }
     sink.u64(result_streams.len() as u64);
     for stream in result_streams {
+        sink.u64(stream.stream_id);
         sink.str(&stream.name);
         sink.bool(stream.row_count_exact_required);
         sink.columns(&stream.columns);
@@ -393,6 +579,19 @@ fn canonical_procedure_contract_hash_parts(
     sink.u8(match compatibility_policy {
         CompatibilityPolicy::AdditiveOnly => 0,
         CompatibilityPolicy::ExactHash => 1,
+    });
+    sink.u8(match result_metadata_policy {
+        ResultMetadataPolicy::RequireBeforePayload => 0,
+        ResultMetadataPolicy::AllowStreamingUnknown => 1,
+    });
+    sink.bool(error_policy.rollback_on_error);
+    sink.u64(error_policy.allowed_error_codes.len() as u64);
+    for code in &error_policy.allowed_error_codes {
+        sink.str(code);
+    }
+    sink.u8(match multi_result_policy {
+        MultiResultPolicy::SingleResultOnly => 0,
+        MultiResultPolicy::MultipleResultStreamsAllowed => 1,
     });
     sink.finish()
 }
@@ -454,6 +653,10 @@ impl StableHashSink {
 
     fn str(&mut self, value: &str) {
         self.bytes(value.as_bytes());
+    }
+
+    fn contract_hash(&mut self, value: ContractHash) {
+        self.raw_bytes(&value.as_bytes());
     }
 
     fn qualified_name(&mut self, name: &QualifiedName) {
@@ -590,11 +793,44 @@ mod tests {
         }
     }
 
+    fn protocol_layout() -> ProtocolLayoutRef {
+        ProtocolLayoutRef {
+            descriptor_set_hash: ContractHash::test_vector(0xA1),
+            frame_envelope_hash: ContractHash::test_vector(0xA2),
+        }
+    }
+
+    fn error_policy() -> ProcedureErrorPolicy {
+        ProcedureErrorPolicy {
+            rollback_on_error: true,
+            allowed_error_codes: vec!["InsufficientStock".to_string()],
+        }
+    }
+
     fn result_stream(columns: Vec<ColumnDescriptor>) -> ResultStreamContract {
         ResultStreamContract {
+            stream_id: 1,
             name: "Reservation".to_string(),
             columns,
             row_count_exact_required: true,
+        }
+    }
+
+    fn candidate() -> ProcedureContractCandidate {
+        ProcedureContractCandidate {
+            object: object(ObjectKind::Procedure),
+            procedure_id: ProcedureId::new(99),
+            stats_version: StatsVersion::new(1),
+            protocol_layout: protocol_layout(),
+            inputs: vec![column("ProductId", 0)],
+            structured_inputs: Vec::new(),
+            result_streams: vec![result_stream(vec![column("Reserved", 0)])],
+            required_permissions: vec!["Inventory.ReserveStock.Execute".to_string()],
+            transaction_policy: transaction_policy(),
+            compatibility_policy: CompatibilityPolicy::ExactHash,
+            result_metadata_policy: ResultMetadataPolicy::RequireBeforePayload,
+            error_policy: error_policy(),
+            multi_result_policy: MultiResultPolicy::SingleResultOnly,
         }
     }
 
@@ -604,12 +840,17 @@ mod tests {
             object: object(ObjectKind::Procedure),
             procedure_id: ProcedureId::new(99),
             contract_hash: ContractHash::zero(),
+            stats_version: StatsVersion::new(1),
+            protocol_layout: protocol_layout(),
             inputs: vec![column("ProductId", 0)],
             structured_inputs: Vec::new(),
             result_streams: Vec::new(),
             required_permissions: vec!["ExecuteProcedure".to_string()],
             transaction_policy: transaction_policy(),
             compatibility_policy: CompatibilityPolicy::ExactHash,
+            result_metadata_policy: ResultMetadataPolicy::RequireBeforePayload,
+            error_policy: error_policy(),
+            multi_result_policy: MultiResultPolicy::SingleResultOnly,
         };
 
         assert_eq!(
@@ -624,9 +865,12 @@ mod tests {
             object: object(ObjectKind::Procedure),
             procedure_id: ProcedureId::new(99),
             contract_hash: ContractHash::test_vector(1),
+            stats_version: StatsVersion::new(1),
+            protocol_layout: protocol_layout(),
             inputs: vec![column("ProductId", 0), column("ProductId", 1)],
             structured_inputs: Vec::new(),
             result_streams: vec![ResultStreamContract {
+                stream_id: 1,
                 name: "Reservation".to_string(),
                 columns: vec![column("Reserved", 0)],
                 row_count_exact_required: true,
@@ -634,6 +878,9 @@ mod tests {
             required_permissions: vec!["ExecuteProcedure".to_string()],
             transaction_policy: transaction_policy(),
             compatibility_policy: CompatibilityPolicy::ExactHash,
+            result_metadata_policy: ResultMetadataPolicy::RequireBeforePayload,
+            error_policy: error_policy(),
+            multi_result_policy: MultiResultPolicy::SingleResultOnly,
         };
 
         let error = duplicate_inputs.validate().unwrap_err();
@@ -644,11 +891,13 @@ mod tests {
             inputs: vec![column("ProductId", 0)],
             result_streams: vec![
                 ResultStreamContract {
+                    stream_id: 1,
                     name: "Reservation".to_string(),
                     columns: vec![column("Reserved", 0)],
                     row_count_exact_required: true,
                 },
                 ResultStreamContract {
+                    stream_id: 2,
                     name: "Reservation".to_string(),
                     columns: vec![column("ReservedAgain", 0)],
                     row_count_exact_required: true,
@@ -668,6 +917,8 @@ mod tests {
             object: object(ObjectKind::Procedure),
             procedure_id: ProcedureId::new(99),
             contract_hash: ContractHash::test_vector(1),
+            stats_version: StatsVersion::new(1),
+            protocol_layout: protocol_layout(),
             inputs: vec![column("ProductId", 0)],
             structured_inputs: vec![
                 QualifiedName::parse("Inventory.StockRequest").unwrap(),
@@ -677,6 +928,9 @@ mod tests {
             required_permissions: vec!["Inventory.ReserveStock.Execute".to_string()],
             transaction_policy: transaction_policy(),
             compatibility_policy: CompatibilityPolicy::ExactHash,
+            result_metadata_policy: ResultMetadataPolicy::RequireBeforePayload,
+            error_policy: error_policy(),
+            multi_result_policy: MultiResultPolicy::SingleResultOnly,
         };
 
         let error = duplicate_dependency.validate().unwrap_err();
@@ -698,16 +952,56 @@ mod tests {
     }
 
     #[test]
+    fn procedure_contract_rejects_invalid_v0_metadata_and_policy() {
+        let mut zero_stats = candidate().materialize().unwrap();
+        zero_stats.stats_version = StatsVersion::new(0);
+        let error = zero_stats.validate().unwrap_err();
+        assert_eq!(error.kind(), AndromedaErrorKind::Contract);
+        assert!(error.message().contains("stats version"));
+
+        let mut zero_protocol = candidate().materialize().unwrap();
+        zero_protocol.protocol_layout.frame_envelope_hash = ContractHash::zero();
+        let error = zero_protocol.validate().unwrap_err();
+        assert_eq!(error.kind(), AndromedaErrorKind::Contract);
+        assert!(error.message().contains("frame envelope"));
+
+        let mut duplicate_error = candidate().materialize().unwrap();
+        duplicate_error.error_policy.allowed_error_codes = vec![
+            "InsufficientStock".to_string(),
+            "InsufficientStock".to_string(),
+        ];
+        let error = duplicate_error.validate().unwrap_err();
+        assert_eq!(error.kind(), AndromedaErrorKind::Contract);
+        assert!(error.message().contains("error codes"));
+
+        let mut multi_result = candidate().materialize().unwrap();
+        multi_result.result_streams.push(ResultStreamContract {
+            stream_id: 2,
+            name: "Audit".to_string(),
+            columns: vec![column("Reserved", 0)],
+            row_count_exact_required: true,
+        });
+        let error = multi_result.validate().unwrap_err();
+        assert_eq!(error.kind(), AndromedaErrorKind::Contract);
+        assert!(error.message().contains("multi-result"));
+    }
+
+    #[test]
     fn procedure_contract_candidate_materializes_stable_canonical_hash() {
         let candidate = ProcedureContractCandidate {
             object: object(ObjectKind::Procedure),
             procedure_id: ProcedureId::new(99),
+            stats_version: StatsVersion::new(1),
+            protocol_layout: protocol_layout(),
             inputs: vec![column("ProductId", 0)],
             structured_inputs: Vec::new(),
             result_streams: vec![result_stream(vec![column("Reserved", 0)])],
             required_permissions: vec!["Inventory.ReserveStock.Execute".to_string()],
             transaction_policy: transaction_policy(),
             compatibility_policy: CompatibilityPolicy::ExactHash,
+            result_metadata_policy: ResultMetadataPolicy::RequireBeforePayload,
+            error_policy: error_policy(),
+            multi_result_policy: MultiResultPolicy::SingleResultOnly,
         };
 
         let first = candidate.clone().materialize().unwrap();
@@ -725,12 +1019,17 @@ mod tests {
             ..ProcedureContractCandidate {
                 object: object(ObjectKind::Procedure),
                 procedure_id: ProcedureId::new(99),
+                stats_version: StatsVersion::new(1),
+                protocol_layout: protocol_layout(),
                 inputs: vec![column("ProductId", 0)],
                 structured_inputs: Vec::new(),
                 result_streams: Vec::new(),
                 required_permissions: vec!["Inventory.ReserveStock.Execute".to_string()],
                 transaction_policy: transaction_policy(),
                 compatibility_policy: CompatibilityPolicy::ExactHash,
+                result_metadata_policy: ResultMetadataPolicy::RequireBeforePayload,
+                error_policy: error_policy(),
+                multi_result_policy: MultiResultPolicy::SingleResultOnly,
             }
         }
         .materialize()
@@ -740,16 +1039,54 @@ mod tests {
     }
 
     #[test]
+    fn procedure_contract_hash_includes_v0_metadata_and_policies() {
+        let baseline = candidate().materialize().unwrap();
+
+        let stats_changed = ProcedureContractCandidate {
+            stats_version: StatsVersion::new(2),
+            ..candidate()
+        }
+        .materialize()
+        .unwrap();
+        assert_ne!(baseline.contract_hash, stats_changed.contract_hash);
+
+        let protocol_changed = ProcedureContractCandidate {
+            protocol_layout: ProtocolLayoutRef {
+                descriptor_set_hash: ContractHash::test_vector(0xB1),
+                frame_envelope_hash: ContractHash::test_vector(0xB2),
+            },
+            ..candidate()
+        }
+        .materialize()
+        .unwrap();
+        assert_ne!(baseline.contract_hash, protocol_changed.contract_hash);
+
+        let policy_changed = ProcedureContractCandidate {
+            result_metadata_policy: ResultMetadataPolicy::AllowStreamingUnknown,
+            multi_result_policy: MultiResultPolicy::MultipleResultStreamsAllowed,
+            ..candidate()
+        }
+        .materialize()
+        .unwrap();
+        assert_ne!(baseline.contract_hash, policy_changed.contract_hash);
+    }
+
+    #[test]
     fn compatibility_diagnostics_distinguish_exact_and_additive_changes() {
         let previous = ProcedureContractCandidate {
             object: object(ObjectKind::Procedure),
             procedure_id: ProcedureId::new(99),
+            stats_version: StatsVersion::new(1),
+            protocol_layout: protocol_layout(),
             inputs: vec![column("ProductId", 0)],
             structured_inputs: Vec::new(),
             result_streams: vec![result_stream(vec![column("Reserved", 0)])],
             required_permissions: vec!["Inventory.ReserveStock.Execute".to_string()],
             transaction_policy: transaction_policy(),
             compatibility_policy: CompatibilityPolicy::ExactHash,
+            result_metadata_policy: ResultMetadataPolicy::RequireBeforePayload,
+            error_policy: error_policy(),
+            multi_result_policy: MultiResultPolicy::SingleResultOnly,
         }
         .materialize()
         .unwrap();
@@ -763,12 +1100,17 @@ mod tests {
             ..ProcedureContractCandidate {
                 object: object(ObjectKind::Procedure),
                 procedure_id: ProcedureId::new(99),
+                stats_version: StatsVersion::new(1),
+                protocol_layout: protocol_layout(),
                 inputs: vec![column("ProductId", 0)],
                 structured_inputs: Vec::new(),
                 result_streams: Vec::new(),
                 required_permissions: vec!["Inventory.ReserveStock.Execute".to_string()],
                 transaction_policy: transaction_policy(),
                 compatibility_policy: CompatibilityPolicy::AdditiveOnly,
+                result_metadata_policy: ResultMetadataPolicy::RequireBeforePayload,
+                error_policy: error_policy(),
+                multi_result_policy: MultiResultPolicy::SingleResultOnly,
             }
         }
         .materialize()

@@ -5,6 +5,19 @@ use andromeda_core::{
 
 use crate::{PayloadKind, ProtocolVersion};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RpcResultStreamMetadataPolicy {
+    RowBatchRequired,
+    ZeroRowCompletionAllowed,
+    MutationOnly,
+}
+
+impl RpcResultStreamMetadataPolicy {
+    pub const fn allows_completion_without_batch(self) -> bool {
+        matches!(self, Self::ZeroRowCompletionAllowed | Self::MutationOnly)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FrameEnvelope {
     pub protocol_version: ProtocolVersion,
@@ -79,6 +92,16 @@ impl FrameEnvelope {
     }
 
     pub fn validate_rpc_stream_sequence(sequence: &[Self]) -> AndromedaResult<()> {
+        Self::validate_rpc_stream_sequence_with_metadata_policy(
+            sequence,
+            RpcResultStreamMetadataPolicy::RowBatchRequired,
+        )
+    }
+
+    pub fn validate_rpc_stream_sequence_with_metadata_policy(
+        sequence: &[Self],
+        metadata_policy: RpcResultStreamMetadataPolicy,
+    ) -> AndromedaResult<()> {
         let mut saw_metadata = false;
         let mut saw_batch = false;
         let mut saw_completion = false;
@@ -153,10 +176,17 @@ impl FrameEnvelope {
                     saw_batch = true;
                 }
                 PayloadKind::RpcCompletion => {
-                    if !saw_metadata || !saw_batch {
+                    if !saw_metadata {
                         return Err(AndromedaError::new(
                             AndromedaErrorKind::Protocol,
-                            "RPC completion requires prior metadata and batch payloads",
+                            "RPC completion requires prior metadata",
+                        ));
+                    }
+
+                    if !saw_batch && !metadata_policy.allows_completion_without_batch() {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Protocol,
+                            "RPC completion without a batch requires explicit metadata policy",
                         ));
                     }
 
@@ -178,7 +208,10 @@ impl FrameEnvelope {
             }
         }
 
-        if !saw_metadata || !saw_batch || !saw_completion {
+        if !saw_metadata
+            || !saw_completion
+            || (!saw_batch && !metadata_policy.allows_completion_without_batch())
+        {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Protocol,
                 "RPC stream sequence is incomplete",
@@ -378,14 +411,12 @@ mod tests {
         let batch = envelope(PayloadKind::RpcBatch, b"row".to_vec());
         let completion = envelope(PayloadKind::RpcCompletion, Vec::new());
 
-        assert!(
-            FrameEnvelope::validate_rpc_stream_sequence(&[
-                metadata.clone(),
-                batch.clone(),
-                completion
-            ])
-            .is_ok()
-        );
+        assert!(FrameEnvelope::validate_rpc_stream_sequence(&[
+            metadata.clone(),
+            batch.clone(),
+            completion
+        ])
+        .is_ok());
 
         assert_eq!(
             FrameEnvelope::validate_rpc_stream_sequence(&[batch, metadata])

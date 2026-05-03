@@ -215,7 +215,21 @@ impl FrameBytes {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResultStreamMetadataPolicy {
+    RowBatchRequired,
+    ZeroRowCompletionAllowed,
+    MutationOnly,
+}
+
+impl ResultStreamMetadataPolicy {
+    pub const fn allows_completion_without_batch(self) -> bool {
+        matches!(self, Self::ZeroRowCompletionAllowed | Self::MutationOnly)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ResultStreamSequence {
+    metadata_policy: ResultStreamMetadataPolicy,
     request_context: Option<(RequestId, SessionId, Option<TransactionId>)>,
     saw_metadata: bool,
     saw_batch: bool,
@@ -224,7 +238,12 @@ pub struct ResultStreamSequence {
 
 impl ResultStreamSequence {
     pub const fn new() -> Self {
+        Self::new_with_metadata_policy(ResultStreamMetadataPolicy::RowBatchRequired)
+    }
+
+    pub const fn new_with_metadata_policy(metadata_policy: ResultStreamMetadataPolicy) -> Self {
         Self {
+            metadata_policy,
             request_context: None,
             saw_metadata: false,
             saw_batch: false,
@@ -265,10 +284,17 @@ impl ResultStreamSequence {
                 self.saw_batch = true;
             }
             FrameType::RpcCompletion => {
-                if !self.saw_metadata || !self.saw_batch {
+                if !self.saw_metadata {
                     return Err(AndromedaError::new(
                         AndromedaErrorKind::Protocol,
-                        "RPC completion requires prior metadata and batch frames",
+                        "RPC completion requires prior metadata",
+                    ));
+                }
+
+                if !self.saw_batch && !self.metadata_policy.allows_completion_without_batch() {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Protocol,
+                        "RPC completion without a batch requires explicit metadata policy",
                     ));
                 }
 
@@ -293,7 +319,9 @@ impl ResultStreamSequence {
     }
 
     pub fn is_complete(self) -> bool {
-        self.saw_metadata && self.saw_batch && self.completed
+        self.saw_metadata
+            && self.completed
+            && (self.saw_batch || self.metadata_policy.allows_completion_without_batch())
     }
 
     fn validate_context(&mut self, header: FrameHeader) -> AndromedaResult<()> {
@@ -322,7 +350,17 @@ impl Default for ResultStreamSequence {
 }
 
 pub fn validate_result_stream_sequence(frames: &[FrameBytes]) -> AndromedaResult<()> {
-    let mut sequence = ResultStreamSequence::new();
+    validate_result_stream_sequence_with_metadata_policy(
+        frames,
+        ResultStreamMetadataPolicy::RowBatchRequired,
+    )
+}
+
+pub fn validate_result_stream_sequence_with_metadata_policy(
+    frames: &[FrameBytes],
+    metadata_policy: ResultStreamMetadataPolicy,
+) -> AndromedaResult<()> {
+    let mut sequence = ResultStreamSequence::new_with_metadata_policy(metadata_policy);
 
     for frame in frames {
         sequence.accept(frame)?;
@@ -460,11 +498,9 @@ mod tests {
         }
 
         assert_eq!(FrameType::TelemetrySoftSignal.wire_code(), 100);
-        assert!(
-            !FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP
-                .iter()
-                .any(|(_, code)| *code == TELEMETRY_SOFT_SIGNAL_FRAME_CODE)
-        );
+        assert!(!FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP
+            .iter()
+            .any(|(_, code)| *code == TELEMETRY_SOFT_SIGNAL_FRAME_CODE));
     }
 
     #[test]
@@ -478,11 +514,9 @@ mod tests {
                 .kind(),
             AndromedaErrorKind::Protocol
         );
-        assert!(
-            header
-                .validate_transport_policy(StreamRole::ResultUnidirectional)
-                .is_ok()
-        );
+        assert!(header
+            .validate_transport_policy(StreamRole::ResultUnidirectional)
+            .is_ok());
     }
 
     #[test]

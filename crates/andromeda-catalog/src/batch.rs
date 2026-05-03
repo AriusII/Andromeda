@@ -559,8 +559,10 @@ fn validate_dependency_order(
 mod tests {
     use super::*;
     use crate::{
-        AccessMode, CatalogObjectRef, CompatibilityPolicy, IsolationPolicy, ProcedureContract,
-        QualifiedName, StructuredObjectDefinition, TableDefinition, TransactionPolicy,
+        AccessMode, CatalogObjectRef, CompatibilityPolicy, IsolationPolicy, MultiResultPolicy,
+        ProcedureContract, ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName,
+        ResultMetadataPolicy, StatsVersion, StructuredObjectDefinition, TableDefinition,
+        TransactionPolicy,
     };
     use andromeda_core::{
         CatalogObjectId, ColumnDescriptor, ContractHash, ProcedureId, ScalarType, TypeDescriptor,
@@ -788,6 +790,11 @@ mod tests {
             object: object_with(2, "Inventory.ReserveStock", ObjectKind::Procedure),
             procedure_id: ProcedureId::new(2),
             contract_hash: ContractHash::test_vector(2),
+            stats_version: StatsVersion::new(1),
+            protocol_layout: ProtocolLayoutRef {
+                descriptor_set_hash: ContractHash::test_vector(0xA1),
+                frame_envelope_hash: ContractHash::test_vector(0xA2),
+            },
             inputs: vec![column("ProductId", 0)],
             structured_inputs: vec![QualifiedName::parse("Inventory.StockRequest").unwrap()],
             result_streams: Vec::new(),
@@ -798,6 +805,12 @@ mod tests {
                 retryable: false,
             },
             compatibility_policy: CompatibilityPolicy::ExactHash,
+            result_metadata_policy: ResultMetadataPolicy::RequireBeforePayload,
+            error_policy: ProcedureErrorPolicy {
+                rollback_on_error: true,
+                allowed_error_codes: vec!["InsufficientStock".to_string()],
+            },
+            multi_result_policy: MultiResultPolicy::SingleResultOnly,
         };
         let structured = StructuredObjectDefinition {
             object: object_with(1, "Inventory.StockRequest", ObjectKind::StructuredObject),

@@ -66,6 +66,7 @@ pub enum BusinessOperationKindAst {
     Update {
         target: Spanned<QualifiedName>,
         mutation: Spanned<String>,
+        affected_rows_exact: Option<Spanned<u64>>,
     },
     Emit {
         stream: Spanned<String>,
@@ -73,5 +74,29 @@ pub enum BusinessOperationKindAst {
     },
     Raise {
         code: Spanned<String>,
+    },
+    Ensure {
+        source: Spanned<QualifiedName>,
+        binding: Spanned<String>,
+        lookup_input: Spanned<String>,
+        lookup_field: Spanned<String>,
+        quantity_field: Spanned<String>,
+        quantity_input: Spanned<String>,
+        failure_code: Spanned<String>,
+    },
+    UpdateSet {
+        target: Spanned<QualifiedName>,
+        field: Spanned<String>,
+        value_binding: Spanned<String>,
+        value_field: Spanned<String>,
+        value_input: Spanned<String>,
+        where_input: Spanned<String>,
+        where_binding: Spanned<String>,
+        where_field: Spanned<String>,
+        affected_rows_exact: Spanned<u64>,
+    },
+    Return {
+        stream: Spanned<String>,
+        values: Vec<Spanned<String>>,
     },
 }

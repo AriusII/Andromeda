@@ -1,11 +1,13 @@
 syntax = "proto3";
 
-package andromeda.v1;
+package andromeda.protocol.v1;
 
-// Schema governance sketch only. This file is intentionally not wired into
-// code generation, RPC stubs, build.rs, or generated-code flows.
+import "andromeda/contract/v1/contract.proto";
+
+// Governed wire schema for Andromeda V0 reliable QUIC streams.
 //
-// Andromeda uses QUIC with custom reliable-stream frames. QUIC DATAGRAM is
+// This package is intentionally message-only. Andromeda does not generate
+// gRPC, tonic, service, or rpc bindings from these schemas. QUIC DATAGRAM is
 // reserved for telemetry-only soft signals and must not carry contract-bound
 // RPC payloads.
 
@@ -26,8 +28,15 @@ enum PayloadKind {
   reserved 100 to 199; // QUIC telemetry frame-code range, not payload kind.
 }
 
+message ProtocolVersion {
+  uint32 major = 1;
+  uint32 minor = 2;
+
+  reserved 3 to 15;
+}
+
 message FrameEnvelope {
-  uint32 protocol_version = 1;
+  ProtocolVersion protocol_version = 1;
   bytes contract_hash = 2; // Required for contract-bound RPC payload kinds.
   uint64 catalog_version = 3;
   uint64 request_id = 4;
@@ -37,6 +46,27 @@ message FrameEnvelope {
   bytes payload = 8; // Binary StructuredObject/protocol payload.
 
   reserved 9 to 31;
+}
+
+message RpcMetadata {
+  repeated andromeda.contract.v1.ResultStreamDescriptor result_streams = 1;
+  ResultCompletionPolicy completion_policy = 2;
+
+  reserved 3 to 31;
+}
+
+message ResultCompletionPolicy {
+  enum CompletionShape {
+    COMPLETION_SHAPE_UNSPECIFIED = 0;
+    COMPLETION_SHAPE_REQUIRES_ROW_BATCH = 1;
+    COMPLETION_SHAPE_ALLOWS_ZERO_ROW_COMPLETION = 2;
+    COMPLETION_SHAPE_MUTATION_ONLY = 3;
+  }
+
+  CompletionShape completion_shape = 1;
+  string reason = 2;
+
+  reserved 3 to 15;
 }
 
 message RpcCompletion {
@@ -134,58 +164,4 @@ message ErrorEnvelope {
   optional BackpressureMetadata backpressure = 10;
 
   reserved 11 to 31;
-}
-
-message ResultStreamDescriptor {
-  enum Cardinality {
-    CARDINALITY_UNSPECIFIED = 0;
-    CARDINALITY_ZERO_OR_MORE = 1;
-    CARDINALITY_ZERO_OR_ONE = 2;
-    CARDINALITY_ONE_OR_MORE = 3;
-    CARDINALITY_EXACTLY_ONE = 4;
-  }
-
-  enum RowCountRequirement {
-    ROW_COUNT_REQUIREMENT_UNSPECIFIED = 0;
-    ROW_COUNT_REQUIREMENT_UNKNOWN_ALLOWED = 1;
-    ROW_COUNT_REQUIREMENT_EXACT_IF_KNOWN = 2;
-    ROW_COUNT_REQUIREMENT_EXACT_REQUIRED = 3;
-  }
-
-  string stream_name = 1;
-  repeated ColumnDescriptor columns = 2;
-  Cardinality cardinality = 3;
-  RowCountRequirement row_count_requirement = 4;
-  optional uint64 row_count_exact = 5;
-
-  reserved 6 to 31;
-}
-
-message ColumnDescriptor {
-  string name = 1;
-  uint32 ordinal = 2;
-  string type_name = 3;
-
-  reserved 4 to 15;
-}
-
-message StructuredObjectHeader {
-  enum Layout {
-    LAYOUT_UNSPECIFIED = 0;
-    LAYOUT_ROW_MAJOR = 1;
-    LAYOUT_COLUMN_MAJOR = 2;
-    LAYOUT_HYBRID = 3;
-  }
-
-  string name = 1;
-  bytes contract_hash = 2; // 32 bytes.
-  bytes shape_hash = 3; // 32 bytes, nonzero.
-  uint64 row_count_exact = 4;
-  uint32 column_count = 5;
-  Layout layout = 6;
-  uint64 payload_length = 7;
-  optional uint64 payload_checksum = 8;
-  optional uint64 max_payload_length = 9;
-
-  reserved 10 to 31;
 }

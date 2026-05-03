@@ -6,8 +6,10 @@ use andromeda_core::{
 use crate::{
     AccessMode, CatalogBindingKind, CatalogDefinition, CatalogObjectBinding, CatalogObjectRef,
     CompatibilityPolicy, DefinitionBatch, DefinitionBatchId, DefinitionOperation, IsolationPolicy,
-    ObjectKind, ProcedureContract, ProcedureContractCandidate, QualifiedName, ResultStreamContract,
-    StructuredObjectDefinition, TableDefinition, TransactionPolicy,
+    MultiResultPolicy, ObjectKind, ProcedureContract, ProcedureContractCandidate,
+    ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName, ResultMetadataPolicy,
+    ResultStreamContract, StatsVersion, StructuredObjectDefinition, TableDefinition,
+    TransactionPolicy,
 };
 
 pub const INVENTORY_RESERVE_STOCK_PERMISSION: &str = "Inventory.ReserveStock.Execute";
@@ -35,12 +37,15 @@ pub fn inventory_reserve_stock_contract_candidate(
             catalog_version,
         },
         procedure_id: INVENTORY_RESERVE_STOCK_PROCEDURE_ID,
+        stats_version: StatsVersion::new(1),
+        protocol_layout: inventory_protocol_layout_ref(),
         inputs: vec![
             phase1_column("ProductId", ScalarType::I64, 0),
             phase1_column("Quantity", ScalarType::I64, 1),
         ],
         structured_inputs: Vec::new(),
         result_streams: vec![ResultStreamContract {
+            stream_id: 1,
             name: "Reservation".to_string(),
             columns: vec![phase1_column("Reserved", ScalarType::Bool, 0)],
             row_count_exact_required: true,
@@ -52,6 +57,19 @@ pub fn inventory_reserve_stock_contract_candidate(
             retryable: false,
         },
         compatibility_policy: CompatibilityPolicy::ExactHash,
+        result_metadata_policy: ResultMetadataPolicy::RequireBeforePayload,
+        error_policy: ProcedureErrorPolicy {
+            rollback_on_error: true,
+            allowed_error_codes: vec!["InsufficientStock".to_string()],
+        },
+        multi_result_policy: MultiResultPolicy::SingleResultOnly,
+    }
+}
+
+pub fn inventory_protocol_layout_ref() -> ProtocolLayoutRef {
+    ProtocolLayoutRef {
+        descriptor_set_hash: andromeda_core::ContractHash::test_vector(0x51),
+        frame_envelope_hash: andromeda_core::ContractHash::test_vector(0x52),
     }
 }
 
@@ -209,9 +227,15 @@ mod tests {
         assert_eq!(contract.procedure_id, INVENTORY_RESERVE_STOCK_PROCEDURE_ID);
         assert!(!contract.contract_hash.is_zero());
         assert_eq!(contract.contract_hash, contract.canonical_hash());
+        assert_eq!(contract.stats_version, StatsVersion::new(1));
+        assert_eq!(contract.protocol_layout, inventory_protocol_layout_ref());
         assert_eq!(
             contract.required_permissions,
             vec![INVENTORY_RESERVE_STOCK_PERMISSION.to_string()]
+        );
+        assert_eq!(
+            contract.error_policy.allowed_error_codes,
+            vec!["InsufficientStock".to_string()]
         );
         assert!(contract.as_ref().validate().is_ok());
         assert!(contract.validate().is_ok());

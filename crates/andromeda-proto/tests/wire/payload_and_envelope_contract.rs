@@ -2,12 +2,12 @@ use andromeda_core::{
     AndromedaErrorKind, CatalogVersion, ContractHash, RequestId, SessionId, TransactionId,
 };
 use andromeda_proto::{
-    AUTH_WIRE_CODE, BackpressureMetadata, CONTRACT_REQUEST_WIRE_CODE, CONTRACT_RESPONSE_WIRE_CODE,
-    ERROR_WIRE_CODE, ErrorEnvelope, ErrorFamily, FrameEnvelope, HELLO_WIRE_CODE,
-    PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP, PayloadFrameFamily, PayloadKind, ProtocolVersion,
-    RPC_BATCH_WIRE_CODE, RPC_COMPLETION_WIRE_CODE, RPC_EXECUTE_REQUEST_WIRE_CODE,
-    RPC_METADATA_WIRE_CODE, ResultRowCountSummary, RetryDisposition, RpcCompletion,
-    RpcCompletionStatus, TransactionEffect, TransactionOutcome,
+    BackpressureMetadata, ErrorEnvelope, ErrorFamily, FrameEnvelope, PayloadFrameFamily,
+    PayloadKind, ProtocolVersion, ResultRowCountSummary, RetryDisposition, RpcCompletion,
+    RpcCompletionStatus, RpcResultStreamMetadataPolicy, TransactionEffect, TransactionOutcome,
+    AUTH_WIRE_CODE, CONTRACT_REQUEST_WIRE_CODE, CONTRACT_RESPONSE_WIRE_CODE, ERROR_WIRE_CODE,
+    HELLO_WIRE_CODE, PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP, RPC_BATCH_WIRE_CODE,
+    RPC_COMPLETION_WIRE_CODE, RPC_EXECUTE_REQUEST_WIRE_CODE, RPC_METADATA_WIRE_CODE,
 };
 
 fn hash(byte: u8) -> ContractHash {
@@ -84,11 +84,9 @@ fn payload_kind_wire_codes_are_contract_locked() {
         assert_eq!(PayloadKind::try_from(code).unwrap(), kind);
         assert_eq!(kind.frame_mapping().transport_frame_code, code);
         assert_eq!(kind.frame_mapping().family, family);
-        assert!(
-            PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP
-                .iter()
-                .any(|(locked_kind, locked_code)| *locked_kind == kind && *locked_code == code)
-        );
+        assert!(PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP
+            .iter()
+            .any(|(locked_kind, locked_code)| *locked_kind == kind && *locked_code == code));
     }
 
     assert_eq!(
@@ -103,6 +101,39 @@ fn payload_kind_wire_codes_are_contract_locked() {
         PayloadKind::try_from(100).unwrap_err().kind(),
         AndromedaErrorKind::Protocol
     );
+}
+
+#[test]
+fn generated_payload_kind_codes_match_custom_contract_codes() {
+    use andromeda_proto::generated::protocol::v1::PayloadKind as GeneratedPayloadKind;
+
+    let expected = [
+        (GeneratedPayloadKind::Hello, HELLO_WIRE_CODE),
+        (GeneratedPayloadKind::Auth, AUTH_WIRE_CODE),
+        (
+            GeneratedPayloadKind::ContractRequest,
+            CONTRACT_REQUEST_WIRE_CODE,
+        ),
+        (
+            GeneratedPayloadKind::ContractResponse,
+            CONTRACT_RESPONSE_WIRE_CODE,
+        ),
+        (
+            GeneratedPayloadKind::RpcExecuteRequest,
+            RPC_EXECUTE_REQUEST_WIRE_CODE,
+        ),
+        (GeneratedPayloadKind::RpcMetadata, RPC_METADATA_WIRE_CODE),
+        (GeneratedPayloadKind::RpcBatch, RPC_BATCH_WIRE_CODE),
+        (
+            GeneratedPayloadKind::RpcCompletion,
+            RPC_COMPLETION_WIRE_CODE,
+        ),
+        (GeneratedPayloadKind::Error, ERROR_WIRE_CODE),
+    ];
+
+    for (generated_kind, code) in expected {
+        assert_eq!(generated_kind as u32, code);
+    }
 }
 
 #[test]
@@ -173,16 +204,12 @@ fn rpc_execute_and_batch_payload_bodies_are_required() {
         AndromedaErrorKind::Protocol
     );
 
-    assert!(
-        envelope(PayloadKind::RpcMetadata, Vec::new())
-            .validate()
-            .is_ok()
-    );
-    assert!(
-        envelope(PayloadKind::RpcCompletion, Vec::new())
-            .validate()
-            .is_ok()
-    );
+    assert!(envelope(PayloadKind::RpcMetadata, Vec::new())
+        .validate()
+        .is_ok());
+    assert!(envelope(PayloadKind::RpcCompletion, Vec::new())
+        .validate()
+        .is_ok());
 }
 
 #[test]
@@ -191,14 +218,12 @@ fn envelope_sequence_requires_metadata_batch_completion_in_one_context() {
     let batch = envelope(PayloadKind::RpcBatch, b"row".to_vec());
     let completion = envelope(PayloadKind::RpcCompletion, Vec::new());
 
-    assert!(
-        FrameEnvelope::validate_rpc_stream_sequence(&[
-            metadata.clone(),
-            batch.clone(),
-            completion.clone(),
-        ])
-        .is_ok()
-    );
+    assert!(FrameEnvelope::validate_rpc_stream_sequence(&[
+        metadata.clone(),
+        batch.clone(),
+        completion.clone(),
+    ])
+    .is_ok());
 
     assert_eq!(
         FrameEnvelope::validate_rpc_stream_sequence(&[metadata.clone(), completion.clone()])
@@ -228,6 +253,43 @@ fn envelope_sequence_requires_metadata_batch_completion_in_one_context() {
             .unwrap_err()
             .kind(),
         AndromedaErrorKind::Protocol
+    );
+}
+
+#[test]
+fn zero_row_or_mutation_only_completion_requires_explicit_metadata_policy() {
+    let metadata = envelope(PayloadKind::RpcMetadata, b"zero-row-policy".to_vec());
+    let completion = envelope(PayloadKind::RpcCompletion, Vec::new());
+    let sequence = [metadata, completion];
+
+    assert_eq!(
+        FrameEnvelope::validate_rpc_stream_sequence(&sequence)
+            .unwrap_err()
+            .kind(),
+        AndromedaErrorKind::Protocol
+    );
+    assert_eq!(
+        FrameEnvelope::validate_rpc_stream_sequence_with_metadata_policy(
+            &sequence,
+            RpcResultStreamMetadataPolicy::RowBatchRequired,
+        )
+        .unwrap_err()
+        .kind(),
+        AndromedaErrorKind::Protocol
+    );
+    assert!(
+        FrameEnvelope::validate_rpc_stream_sequence_with_metadata_policy(
+            &sequence,
+            RpcResultStreamMetadataPolicy::ZeroRowCompletionAllowed,
+        )
+        .is_ok()
+    );
+    assert!(
+        FrameEnvelope::validate_rpc_stream_sequence_with_metadata_policy(
+            &sequence,
+            RpcResultStreamMetadataPolicy::MutationOnly,
+        )
+        .is_ok()
     );
 }
 

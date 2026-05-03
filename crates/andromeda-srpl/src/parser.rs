@@ -46,6 +46,13 @@ impl Parser {
                 end = self.previous_end();
             }
             body
+        } else if self.peek_identifier_keyword("begin") {
+            let body = self.parse_begin_end_body()?;
+            end = body.span.end;
+            if self.match_kind(TokenKind::Semicolon).is_some() {
+                end = self.previous_end();
+            }
+            body
         } else {
             ProcedureBodyAst {
                 operations: Vec::new(),
@@ -132,7 +139,11 @@ impl Parser {
             "update" => {
                 let target = self.parse_qualified_name()?;
                 let mutation = self.parse_identifier_spanned()?;
-                BusinessOperationKindAst::Update { target, mutation }
+                BusinessOperationKindAst::Update {
+                    target,
+                    mutation,
+                    affected_rows_exact: None,
+                }
             }
             "emit" => {
                 let stream = self.parse_identifier_spanned()?;
@@ -155,6 +166,145 @@ impl Parser {
             ordinal,
             kind,
             span: SourceSpan::new(operation_start, self.previous_end()),
+        })
+    }
+
+    fn parse_begin_end_body(&mut self) -> Result<ProcedureBodyAst, SrplDiagnostic> {
+        let start = self.expect_identifier_keyword("begin")?.span.start;
+        let mut operations = Vec::new();
+
+        loop {
+            if self.peek_identifier_keyword("end") {
+                self.advance();
+                break;
+            }
+
+            let Some(token) = self.peek() else {
+                return Err(self.error_at(
+                    SourceSpan::new(self.source_len, self.source_len),
+                    "expected SRPL begin/end operation or end",
+                ));
+            };
+
+            if operations.len() >= MAX_SRPL_BODY_OPERATIONS {
+                return Err(self.error_at(
+                    token.span,
+                    "SRPL procedure body exceeds the bounded operation limit",
+                ));
+            }
+
+            let operation = self.parse_begin_end_operation(operations.len() as u32)?;
+            operations.push(operation);
+            if self.match_kind(TokenKind::Semicolon).is_none()
+                && !self.peek_identifier_keyword("end")
+            {
+                let span = self
+                    .peek()
+                    .map(|token| token.span)
+                    .unwrap_or_else(|| SourceSpan::new(self.source_len, self.source_len));
+                return Err(self.error_at(span, "expected token Semicolon"));
+            }
+        }
+
+        Ok(ProcedureBodyAst {
+            operations,
+            span: SourceSpan::new(start, self.previous_end()),
+        })
+    }
+
+    fn parse_begin_end_operation(
+        &mut self,
+        ordinal: u32,
+    ) -> Result<BusinessOperationAst, SrplDiagnostic> {
+        let operator = self.expect(TokenKind::Identifier)?;
+        let operation_start = operator.span.start;
+        let kind = match operator.lexeme.to_ascii_lowercase().as_str() {
+            "ensure" => self.parse_ensure_operation()?,
+            "update" => self.parse_update_set_operation()?,
+            "return" => {
+                let stream = self.parse_identifier_spanned()?;
+                let values = self.parse_identifier_list(true)?;
+                BusinessOperationKindAst::Return { stream, values }
+            }
+            _ => {
+                return Err(self.error_at(
+                    operator.span,
+                    "unsupported SRPL begin/end operation in bounded compiler slice",
+                ));
+            }
+        };
+
+        Ok(BusinessOperationAst {
+            ordinal,
+            kind,
+            span: SourceSpan::new(operation_start, self.previous_end()),
+        })
+    }
+
+    fn parse_ensure_operation(&mut self) -> Result<BusinessOperationKindAst, SrplDiagnostic> {
+        let source = self.parse_qualified_name()?;
+        let binding = self.parse_identifier_spanned()?;
+        self.expect_identifier_keyword("where")?;
+        let lookup_input = self.parse_identifier_spanned()?;
+        self.expect(TokenKind::Equal)?;
+        let (lookup_binding, lookup_field) = self.parse_scoped_field()?;
+        if lookup_binding.value != binding.value {
+            return Err(self.error_at(
+                lookup_binding.span,
+                "SRPL ensure lookup binding must match the ensure binding",
+            ));
+        }
+        self.expect_identifier_keyword("and")?;
+        let (quantity_binding, quantity_field) = self.parse_scoped_field()?;
+        if quantity_binding.value != binding.value {
+            return Err(self.error_at(
+                quantity_binding.span,
+                "SRPL ensure quantity binding must match the ensure binding",
+            ));
+        }
+        self.expect(TokenKind::GreaterEqual)?;
+        let quantity_input = self.parse_identifier_spanned()?;
+        self.expect_identifier_keyword("else")?;
+        self.expect_identifier_keyword("fail")?;
+        let failure_code = self.parse_identifier_spanned()?;
+
+        Ok(BusinessOperationKindAst::Ensure {
+            source,
+            binding,
+            lookup_input,
+            lookup_field,
+            quantity_field,
+            quantity_input,
+            failure_code,
+        })
+    }
+
+    fn parse_update_set_operation(&mut self) -> Result<BusinessOperationKindAst, SrplDiagnostic> {
+        let target = self.parse_qualified_name()?;
+        self.expect_identifier_keyword("set")?;
+        let field = self.parse_identifier_spanned()?;
+        self.expect(TokenKind::Equal)?;
+        let (value_binding, value_field) = self.parse_scoped_field()?;
+        self.expect(TokenKind::Minus)?;
+        let value_input = self.parse_identifier_spanned()?;
+        self.expect_identifier_keyword("where")?;
+        let where_input = self.parse_identifier_spanned()?;
+        self.expect(TokenKind::Equal)?;
+        let (where_binding, where_field) = self.parse_scoped_field()?;
+        self.expect_identifier_keyword("affected")?;
+        self.expect_identifier_keyword("rows")?;
+        let affected_rows_exact = self.parse_number_spanned()?;
+
+        Ok(BusinessOperationKindAst::UpdateSet {
+            target,
+            field,
+            value_binding,
+            value_field,
+            value_input,
+            where_input,
+            where_binding,
+            where_field,
+            affected_rows_exact,
         })
     }
 
@@ -256,6 +406,24 @@ impl Parser {
     fn parse_identifier_spanned(&mut self) -> Result<Spanned<String>, SrplDiagnostic> {
         let token = self.expect(TokenKind::Identifier)?;
         Ok(Spanned::new(token.lexeme, token.span))
+    }
+
+    fn parse_number_spanned(&mut self) -> Result<Spanned<u64>, SrplDiagnostic> {
+        let token = self.expect(TokenKind::Number)?;
+        let value = token.lexeme.parse::<u64>().map_err(|_| {
+            self.error_at(
+                token.span,
+                "SRPL numeric literal is outside the supported range",
+            )
+        })?;
+        Ok(Spanned::new(value, token.span))
+    }
+
+    fn parse_scoped_field(&mut self) -> Result<(Spanned<String>, Spanned<String>), SrplDiagnostic> {
+        let binding = self.parse_identifier_spanned()?;
+        self.expect(TokenKind::Dot)?;
+        let field = self.parse_identifier_spanned()?;
+        Ok((binding, field))
     }
 
     fn expect_identifier_keyword(&mut self, keyword: &str) -> Result<Token, SrplDiagnostic> {
@@ -407,6 +575,33 @@ mod tests {
             BusinessOperationKindAst::Emit { .. }
         ));
         assert!(ast.body.span.is_valid());
+    }
+
+    #[test]
+    fn parses_begin_end_inventory_operations() {
+        let ast = parse_procedure_signature(
+            "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool) begin ensure Inventory.ProductStock Stock where ProductId = Stock.ProductId and Stock.AvailableQuantity >= Quantity else fail InsufficientStock; update Inventory.ProductStock set AvailableQuantity = Stock.AvailableQuantity - Quantity where ProductId = Stock.ProductId affected rows 1; return Reservation (Reserved); end;",
+        )
+        .unwrap();
+
+        assert_eq!(ast.body.operations.len(), 3);
+        assert!(matches!(
+            &ast.body.operations[0].kind,
+            BusinessOperationKindAst::Ensure { failure_code, .. }
+                if failure_code.value.as_str() == "InsufficientStock"
+        ));
+        assert!(matches!(
+            &ast.body.operations[1].kind,
+            BusinessOperationKindAst::UpdateSet {
+                affected_rows_exact,
+                ..
+            } if affected_rows_exact.value == 1
+        ));
+        assert!(matches!(
+            &ast.body.operations[2].kind,
+            BusinessOperationKindAst::Return { stream, .. }
+                if stream.value.as_str() == "Reservation"
+        ));
     }
 
     #[test]

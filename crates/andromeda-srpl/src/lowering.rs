@@ -36,26 +36,28 @@ pub fn lower_bound_procedure(bound: BoundProcedure) -> AndromedaResult<SrplProce
 }
 
 pub fn lower_body_ast(body: ProcedureBodyAst) -> AndromedaResult<SrplProcedureBodyIr> {
-    let operations = body
-        .operations
-        .into_iter()
-        .map(|operation| SrplBusinessOperationIr {
-            ordinal: operation.ordinal,
-            kind: match operation.kind {
-                BusinessOperationKindAst::Read {
-                    source,
-                    binding,
-                    cardinality,
-                } => SrplBusinessOperationKindIr::Read {
+    let mut operations = Vec::new();
+    for operation in body.operations {
+        match operation.kind {
+            BusinessOperationKindAst::Read {
+                source,
+                binding,
+                cardinality,
+            } => operations.push(SrplBusinessOperationIr {
+                ordinal: operations.len() as u32,
+                kind: SrplBusinessOperationKindIr::Read {
                     source: source.value,
                     binding: binding.value,
                     cardinality: cardinality.value,
                     predicates: Vec::new(),
                 },
-                BusinessOperationKindAst::Assert {
-                    predicate,
-                    failure_code,
-                } => SrplBusinessOperationKindIr::Assert {
+            }),
+            BusinessOperationKindAst::Assert {
+                predicate,
+                failure_code,
+            } => operations.push(SrplBusinessOperationIr {
+                ordinal: operations.len() as u32,
+                kind: SrplBusinessOperationKindIr::Assert {
                     predicate: SrplPredicateIr::InputEqualsField {
                         input: predicate.value,
                         binding: "scope".to_string(),
@@ -63,18 +65,27 @@ pub fn lower_body_ast(body: ProcedureBodyAst) -> AndromedaResult<SrplProcedureBo
                     },
                     failure_code: failure_code.value,
                 },
-                BusinessOperationKindAst::Update { target, mutation } => {
-                    SrplBusinessOperationKindIr::Update {
-                        target: target.value,
-                        predicates: Vec::new(),
-                        assignments: vec![SrplAssignmentIr {
-                            field: mutation.value,
-                            value: SrplValueIr::Input("value".to_string()),
-                        }],
-                    }
-                }
-                BusinessOperationKindAst::Emit { stream, values } => {
-                    SrplBusinessOperationKindIr::Emit {
+            }),
+            BusinessOperationKindAst::Update {
+                target,
+                mutation,
+                affected_rows_exact,
+            } => operations.push(SrplBusinessOperationIr {
+                ordinal: operations.len() as u32,
+                kind: SrplBusinessOperationKindIr::Update {
+                    target: target.value,
+                    predicates: Vec::new(),
+                    assignments: vec![SrplAssignmentIr {
+                        field: mutation.value,
+                        value: SrplValueIr::Input("value".to_string()),
+                    }],
+                    affected_rows_exact: affected_rows_exact.map(|rows| rows.value),
+                },
+            }),
+            BusinessOperationKindAst::Emit { stream, values } => {
+                operations.push(SrplBusinessOperationIr {
+                    ordinal: operations.len() as u32,
+                    kind: SrplBusinessOperationKindIr::Emit {
                         stream: stream.value,
                         values: values
                             .into_iter()
@@ -83,14 +94,94 @@ pub fn lower_body_ast(body: ProcedureBodyAst) -> AndromedaResult<SrplProcedureBo
                                 value: SrplValueIr::Bool(true),
                             })
                             .collect(),
-                    }
-                }
-                BusinessOperationKindAst::Raise { code } => {
-                    SrplBusinessOperationKindIr::Raise { code: code.value }
-                }
-            },
-        })
-        .collect();
+                    },
+                })
+            }
+            BusinessOperationKindAst::Raise { code } => operations.push(SrplBusinessOperationIr {
+                ordinal: operations.len() as u32,
+                kind: SrplBusinessOperationKindIr::Raise { code: code.value },
+            }),
+            BusinessOperationKindAst::Ensure {
+                source,
+                binding,
+                lookup_input,
+                lookup_field,
+                quantity_field,
+                quantity_input,
+                failure_code,
+            } => {
+                operations.push(SrplBusinessOperationIr {
+                    ordinal: operations.len() as u32,
+                    kind: SrplBusinessOperationKindIr::Read {
+                        source: source.value,
+                        binding: binding.value.clone(),
+                        cardinality: crate::Cardinality::One,
+                        predicates: vec![SrplPredicateIr::InputEqualsField {
+                            input: lookup_input.value,
+                            binding: binding.value.clone(),
+                            field: lookup_field.value,
+                        }],
+                    },
+                });
+                operations.push(SrplBusinessOperationIr {
+                    ordinal: operations.len() as u32,
+                    kind: SrplBusinessOperationKindIr::Assert {
+                        predicate: SrplPredicateIr::FieldGreaterThanOrEqualInput {
+                            binding: binding.value,
+                            field: quantity_field.value,
+                            input: quantity_input.value,
+                        },
+                        failure_code: failure_code.value,
+                    },
+                });
+            }
+            BusinessOperationKindAst::UpdateSet {
+                target,
+                field,
+                value_binding,
+                value_field,
+                value_input,
+                where_input,
+                where_binding,
+                where_field,
+                affected_rows_exact,
+            } => operations.push(SrplBusinessOperationIr {
+                ordinal: operations.len() as u32,
+                kind: SrplBusinessOperationKindIr::Update {
+                    target: target.value,
+                    predicates: vec![SrplPredicateIr::InputEqualsField {
+                        input: where_input.value,
+                        binding: where_binding.value,
+                        field: where_field.value,
+                    }],
+                    assignments: vec![SrplAssignmentIr {
+                        field: field.value,
+                        value: SrplValueIr::SubtractInput {
+                            binding: value_binding.value,
+                            field: value_field.value,
+                            input: value_input.value,
+                        },
+                    }],
+                    affected_rows_exact: Some(affected_rows_exact.value),
+                },
+            }),
+            BusinessOperationKindAst::Return { stream, values } => {
+                operations.push(SrplBusinessOperationIr {
+                    ordinal: operations.len() as u32,
+                    kind: SrplBusinessOperationKindIr::Emit {
+                        stream: stream.value,
+                        values: values
+                            .into_iter()
+                            .map(|value| SrplEmitValueIr {
+                                column: value.value,
+                                value: SrplValueIr::Bool(true),
+                            })
+                            .collect(),
+                    },
+                })
+            }
+        }
+    }
     let ir = SrplProcedureBodyIr { operations };
     ir.validate_bounded()?;
     Ok(ir)
@@ -137,6 +228,7 @@ pub fn lower_ir_to_contract_candidate(
     };
     signature.validate()?;
     ir.body.validate_bounded()?;
+    validate_declared_error_codes(&ir.body, &metadata.error_policy.allowed_error_codes)?;
 
     Ok(ProcedureContractCandidate {
         object: CatalogObjectRef {
@@ -146,12 +238,16 @@ pub fn lower_ir_to_contract_candidate(
             catalog_version: metadata.catalog_version,
         },
         procedure_id: metadata.procedure_id,
+        stats_version: metadata.stats_version,
+        protocol_layout: metadata.protocol_layout,
         inputs: ir.inputs,
         structured_inputs: metadata.structured_inputs,
         result_streams: ir
             .result_streams
             .into_iter()
-            .map(|result| ResultStreamContract {
+            .enumerate()
+            .map(|(index, result)| ResultStreamContract {
+                stream_id: (index as u64) + 1,
                 name: result.name,
                 columns: result.columns,
                 row_count_exact_required: result.cardinality.requires_exact_row_count(),
@@ -160,6 +256,9 @@ pub fn lower_ir_to_contract_candidate(
         required_permissions: metadata.required_permissions,
         transaction_policy: metadata.transaction_policy,
         compatibility_policy: metadata.compatibility_policy,
+        result_metadata_policy: metadata.result_metadata_policy,
+        error_policy: metadata.error_policy,
+        multi_result_policy: metadata.multi_result_policy,
     })
 }
 
@@ -171,6 +270,32 @@ pub fn compile_narrow_procedure_contract_candidate(
     lower_ir_to_contract_candidate(ir, metadata).map_err(|error| {
         crate::SrplDiagnostic::new(crate::DiagnosticPhase::IrLowering, None, error.to_string())
     })
+}
+
+fn validate_declared_error_codes(
+    body: &SrplProcedureBodyIr,
+    declared_error_codes: &[String],
+) -> AndromedaResult<()> {
+    let declared = declared_error_codes
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    for operation in &body.operations {
+        let failure_code = match &operation.kind {
+            SrplBusinessOperationKindIr::Assert { failure_code, .. } => failure_code,
+            SrplBusinessOperationKindIr::Raise { code } => code,
+            _ => continue,
+        };
+
+        if !declared.contains(failure_code.as_str()) {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "SRPL body error code is not declared by the procedure error policy",
+            ));
+        }
+    }
+
+    Ok(())
 }
 
 pub fn bind_executable_procedure_plan(
@@ -281,6 +406,7 @@ pub fn inventory_reserve_stock_body_ir() -> Result<SrplProcedureBodyIr, SrplDiag
                             input: "Quantity".to_string(),
                         },
                     }],
+                    affected_rows_exact: Some(1),
                 },
             },
             SrplBusinessOperationIr {
@@ -492,6 +618,7 @@ fn bind_body_operations(
                 target,
                 predicates,
                 assignments,
+                affected_rows_exact,
             } => {
                 if target != &stock.object.name {
                     return Err(AndromedaError::new(
@@ -504,11 +631,18 @@ fn bind_body_operations(
                     require_column(&stock.columns, &assignment.field, "SRPL update assignment")?;
                     validate_value(&assignment.value, &ir.inputs, &binding_sources)?;
                 }
+                if affected_rows_exact != &Some(1) {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Srpl,
+                        "Inventory.ReserveStock update must declare exactly one affected row",
+                    ));
+                }
                 bound.push(BoundSrplOperationPlan::UpdateTable {
                     ordinal: operation.ordinal,
                     target: stock.object.clone(),
                     predicates: predicates.clone(),
                     assignments: assignments.clone(),
+                    affected_rows_exact: *affected_rows_exact,
                 });
             }
             SrplBusinessOperationKindIr::Emit { stream, values } => {
@@ -695,6 +829,7 @@ fn validate_no_sql_like_symbols(ir: &SrplProcedureIr) -> AndromedaResult<()> {
             SrplBusinessOperationKindIr::Update {
                 predicates,
                 assignments,
+                affected_rows_exact: _,
                 ..
             } => {
                 for predicate in predicates {
@@ -923,8 +1058,17 @@ mod tests {
                     && matches!(
                         values.first(),
                         Some(value) if value.column.as_str() == "Reserved"
-                    )
+            )
         ));
+    }
+
+    #[test]
+    fn compiles_begin_end_reserve_stock_source_to_inventory_ir() {
+        let source = "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool) begin ensure Inventory.ProductStock Stock where ProductId = Stock.ProductId and Stock.AvailableQuantity >= Quantity else fail InsufficientStock; update Inventory.ProductStock set AvailableQuantity = Stock.AvailableQuantity - Quantity where ProductId = Stock.ProductId affected rows 1; return Reservation (Reserved); end;";
+        let ir = compile_narrow_procedure_signature(source).unwrap();
+        let expected = inventory_reserve_stock_body_ir().unwrap();
+
+        assert_eq!(ir.body, expected);
     }
 
     #[test]

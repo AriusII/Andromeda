@@ -2,7 +2,9 @@ use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, Transa
 
 use crate::{Lsn, WalRecord, WalRecordHeader, wal_record_kind_from_tag, wal_record_kind_tag};
 
-pub const WAL_FORMAT_VERSION: u16 = 0;
+pub const WAL_FORMAT_VERSION_V1: u16 = 1;
+pub const WAL_FORMAT_VERSION: u16 = WAL_FORMAT_VERSION_V1;
+pub const WAL_BYTE_ORDER_LITTLE_ENDIAN: u16 = 0x0102;
 pub const WAL_RECORD_MAGIC: u64 = 0x414e_4452_4f57_414c;
 pub const WAL_RECORD_HEADER_LEN: usize = 72;
 

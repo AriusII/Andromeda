@@ -1,0 +1,69 @@
+version: 1
+source:
+  document: docs/Andromeda_SGBDRT_SRPL_Master_Consolidation_2026.pdf
+  section: Appendix B - Risk register
+  page: 50
+risks:
+  - id: RISK-001
+    title: Scope explosion
+    severity: very_high
+    summary: V0 can lose recoverability focus if advanced analytics, GPU, or HA/DR work enters the vertical slice too early.
+    mitigation: Keep a strict recoverable vertical prototype and defer GPU, advanced HA/DR, and complex analytics until the kernel is recoverable.
+    owner: risk-decision-manager
+    status: open
+  - id: RISK-002
+    title: Custom QUIC protocol complexity
+    severity: high
+    summary: A bespoke QUIC protocol can expand the implementation and compatibility surface beyond what V0 can safely absorb.
+    mitigation: Keep the V0 envelope small, define explicit stream taxonomy, and benchmark Quinn, s2n-quic, and MsQuic before committing.
+    owner: network-protocol-lead
+    status: open
+  - id: RISK-003
+    title: Protobuf schema drift
+    severity: high
+    summary: Uncontrolled Protobuf evolution can break compatibility between clients, storage, recovery, and network envelopes.
+    mitigation: Use stable packages, reserved tags, reserved names, explicit presence, semantic versioning, and compatibility tests.
+    owner: protobuf-schema-review
+    status: open
+  - id: RISK-004
+    title: Unsafe Rust defects
+    severity: very_high
+    summary: Unsafe code in critical paths can compromise memory safety and recoverability if invariants are implicit or untested.
+    mitigation: Encapsulate unsafe code, expose safe public APIs, require fuzz and property tests, run Miri or sanitizer campaigns where applicable, and assign code ownership.
+    owner: rust-memory-safety-auditor
+    status: open
+  - id: RISK-005
+    title: Recovery under-tested
+    severity: critical
+    summary: Recovery bugs can silently publish partial state or fail to restore committed state after crashes.
+    mitigation: Run crash tests from Phase 1 and treat recovery bugs as release-blocking.
+    owner: storage-recovery-lead
+    status: open
+  - id: RISK-006
+    title: Plan instability
+    severity: high
+    summary: Plan churn can make execution unpredictable and difficult to explain when catalog or statistics evidence changes.
+    mitigation: Use bounded plan classes, hysteresis, plan evidence scores, and controlled invalidation on CatalogVersion or StatsVersion changes.
+    owner: optimizer-lead
+    status: open
+  - id: RISK-007
+    title: Map maintenance cost
+    severity: high
+    summary: Maps can become expensive to refresh or maintain if policies, budgets, and criticality are not explicit.
+    mitigation: Require explicit refresh policy, complexity score, maintenance budget, and criticality classification.
+    owner: catalog-storage-lead
+    status: open
+  - id: RISK-008
+    title: Statistics overconfidence
+    severity: high
+    summary: Predictive or statistical evidence can mislead planning if confidence is treated as truth.
+    mitigation: Separate confidence, criticality, freshness, realism, and stability scores; never let predictive evidence force a plan alone.
+    owner: optimizer-lead
+    status: open
+  - id: RISK-009
+    title: Security bypass through surfaces
+    severity: critical
+    summary: Blurring Application, Administration, and HA/DR surfaces can allow powerful commands to bypass IAM, quotas, or audit.
+    mitigation: Keep Application, Administration, and HA/DR surfaces separate with different certificates, endpoints, permissions, quotas, and audits.
+    owner: security-iam-auditor
+    status: open

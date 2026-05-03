@@ -1,7 +1,8 @@
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{
-    FrameBytes, FrameType, ResultStreamSequence, StreamRole, validate_single_frame_on_stream,
+    validate_single_frame_on_stream, FrameBytes, FrameType, ResultStreamMetadataPolicy,
+    ResultStreamSequence, StreamRole,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,9 +25,19 @@ pub struct DispatchPolicy {
 
 impl DispatchPolicy {
     pub const fn new(stream_role: StreamRole) -> Self {
+        Self::new_with_result_metadata_policy(
+            stream_role,
+            ResultStreamMetadataPolicy::RowBatchRequired,
+        )
+    }
+
+    pub const fn new_with_result_metadata_policy(
+        stream_role: StreamRole,
+        metadata_policy: ResultStreamMetadataPolicy,
+    ) -> Self {
         Self {
             stream_role,
-            result_sequence: ResultStreamSequence::new(),
+            result_sequence: ResultStreamSequence::new_with_metadata_policy(metadata_policy),
         }
     }
 
@@ -106,7 +117,7 @@ mod tests {
     use super::*;
     use andromeda_core::{RequestId, SessionId};
 
-    use crate::{FRAME_HEADER_CRC_UNCHECKED, FrameHeader};
+    use crate::{FrameHeader, FRAME_HEADER_CRC_UNCHECKED};
 
     fn frame(frame_type: FrameType, payload: Vec<u8>) -> FrameBytes {
         FrameBytes {

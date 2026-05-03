@@ -1,9 +1,9 @@
 use andromeda_core::{AndromedaErrorKind, RequestId, SessionId, TransactionId};
 use andromeda_quic::{
-    BackpressureReason, BackpressureSignal, DispatchPolicy, FRAME_CODEC_CRC_OFFSET,
-    FRAME_CODEC_HEADER_LEN, FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader,
-    FrameType, StreamRole, TransportSurface, dispatch_frame, expected_stream_role,
-    validate_transport_surface,
+    dispatch_frame, expected_stream_role, validate_transport_surface, BackpressureReason,
+    BackpressureSignal, DispatchPolicy, FrameBytes, FrameCodec, FrameHeader, FrameType,
+    ResultStreamMetadataPolicy, StreamRole, TransportSurface, FRAME_CODEC_CRC_OFFSET,
+    FRAME_CODEC_HEADER_LEN, FRAME_HEADER_CRC_UNCHECKED,
 };
 
 fn header(frame_type: FrameType, payload_length: u64) -> FrameHeader {
@@ -133,6 +133,33 @@ fn dispatcher_validates_result_stream_sequence() {
             .kind(),
         AndromedaErrorKind::Protocol
     );
+}
+
+#[test]
+fn dispatcher_allows_metadata_only_completion_only_with_explicit_policy() {
+    let mut strict = DispatchPolicy::new(StreamRole::ResultUnidirectional);
+    strict
+        .dispatch(&frame(FrameType::RpcMetadata, b"zero-row-policy".to_vec()))
+        .unwrap();
+    assert_eq!(
+        strict
+            .dispatch(&frame(FrameType::RpcCompletion, Vec::new()))
+            .unwrap_err()
+            .kind(),
+        AndromedaErrorKind::Protocol
+    );
+
+    let mut zero_row = DispatchPolicy::new_with_result_metadata_policy(
+        StreamRole::ResultUnidirectional,
+        ResultStreamMetadataPolicy::ZeroRowCompletionAllowed,
+    );
+    zero_row
+        .dispatch(&frame(FrameType::RpcMetadata, b"zero-row-policy".to_vec()))
+        .unwrap();
+    zero_row
+        .dispatch(&frame(FrameType::RpcCompletion, Vec::new()))
+        .unwrap();
+    assert!(zero_row.finish().is_ok());
 }
 
 #[test]
