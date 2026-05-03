@@ -118,8 +118,15 @@ impl ProcedureContract {
             ));
         }
 
+        let mut result_stream_names = std::collections::BTreeSet::new();
         for stream in &self.result_streams {
             stream.validate()?;
+            if !result_stream_names.insert(stream.name.as_str()) {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Contract,
+                    "procedure result stream names must be unique",
+                ));
+            }
         }
 
         Ok(())
@@ -176,5 +183,53 @@ mod tests {
             contract.validate().unwrap_err().kind(),
             AndromedaErrorKind::Contract
         );
+    }
+
+    #[test]
+    fn procedure_contract_rejects_duplicate_input_and_result_names() {
+        let duplicate_inputs = ProcedureContract {
+            object: object(ObjectKind::Procedure),
+            procedure_id: ProcedureId::new(99),
+            contract_hash: ContractHash::test_vector(1),
+            inputs: vec![column("ProductId", 0), column("ProductId", 1)],
+            structured_inputs: Vec::new(),
+            result_streams: vec![ResultStreamContract {
+                name: "Reservation".to_string(),
+                columns: vec![column("Reserved", 0)],
+                row_count_exact_required: true,
+            }],
+            required_permissions: vec!["ExecuteProcedure".to_string()],
+            transaction_policy: TransactionPolicy {
+                access_mode: AccessMode::ReadWrite,
+                isolation: IsolationPolicy::Serializable,
+                retryable: false,
+            },
+            compatibility_policy: CompatibilityPolicy::ExactHash,
+        };
+
+        let error = duplicate_inputs.validate().unwrap_err();
+        assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+        assert!(error.message().contains("unique"));
+
+        let duplicate_results = ProcedureContract {
+            inputs: vec![column("ProductId", 0)],
+            result_streams: vec![
+                ResultStreamContract {
+                    name: "Reservation".to_string(),
+                    columns: vec![column("Reserved", 0)],
+                    row_count_exact_required: true,
+                },
+                ResultStreamContract {
+                    name: "Reservation".to_string(),
+                    columns: vec![column("ReservedAgain", 0)],
+                    row_count_exact_required: true,
+                },
+            ],
+            ..duplicate_inputs
+        };
+
+        let error = duplicate_results.validate().unwrap_err();
+        assert_eq!(error.kind(), AndromedaErrorKind::Contract);
+        assert!(error.message().contains("result stream names"));
     }
 }

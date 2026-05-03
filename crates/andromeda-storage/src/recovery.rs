@@ -1,4 +1,4 @@
-use andromeda_core::AndromedaResult;
+use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_observe::TraceId;
 
 use crate::{
@@ -51,6 +51,7 @@ impl RecoveryPlan {
         for record in durable_records {
             record.validate()?;
         }
+        validate_wal_coverage(self.redo_from_lsn, durable_records)?;
 
         let durable_lsn = durable_records
             .iter()
@@ -79,6 +80,65 @@ impl RecoveryPlan {
             records,
         })
     }
+}
+
+fn validate_wal_coverage(redo_from_lsn: Lsn, durable_records: &[WalRecord]) -> AndromedaResult<()> {
+    if redo_from_lsn.is_zero() {
+        return Ok(());
+    }
+
+    let mut expected_lsn = None;
+    let mut previous_in_redo_range = None;
+    let mut saw_redo_start = false;
+
+    let mut records_in_redo_range = durable_records
+        .iter()
+        .filter(|record| record.header.lsn >= redo_from_lsn)
+        .peekable();
+
+    while let Some(record) = records_in_redo_range.next() {
+        if let Some(expected) = expected_lsn {
+            if record.header.lsn < expected {
+                return Err(storage_error(
+                    "recovery WAL coverage contains duplicate or reordered LSN",
+                ));
+            }
+            if record.header.lsn > expected {
+                return Err(storage_error("recovery WAL coverage contains an LSN gap"));
+            }
+            if record.header.previous_lsn != previous_in_redo_range {
+                return Err(storage_error(
+                    "recovery WAL coverage previous LSN chain mismatch",
+                ));
+            }
+        } else {
+            if record.header.lsn != redo_from_lsn {
+                return Err(storage_error(
+                    "recovery WAL coverage does not start at required WAL start LSN",
+                ));
+            }
+            saw_redo_start = true;
+        }
+
+        previous_in_redo_range = Some(record.header.lsn);
+        expected_lsn = if records_in_redo_range.peek().is_some() {
+            Some(record.header.lsn.try_next()?)
+        } else {
+            record.header.lsn.checked_next()
+        };
+    }
+
+    if !saw_redo_start {
+        return Err(storage_error(
+            "recovery WAL coverage is missing the required WAL start LSN",
+        ));
+    }
+
+    Ok(())
+}
+
+fn storage_error(message: impl Into<String>) -> AndromedaError {
+    AndromedaError::new(AndromedaErrorKind::Storage, message)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -237,6 +297,123 @@ mod tests {
                 .unwrap()
                 .decision,
             RedoRecordDecision::SkipIncompleteTransaction
+        );
+    }
+
+    #[test]
+    fn redo_plan_rejects_skipped_lsn_after_required_start() {
+        let transaction_id = TransactionId::new(31);
+        let records = vec![
+            WalRecord::from_parts(
+                WalRecordKind::TxBegin,
+                Lsn::new(1),
+                None,
+                Some(transaction_id),
+                Vec::new(),
+            )
+            .unwrap(),
+            WalRecord::from_parts(
+                WalRecordKind::RowInsert,
+                Lsn::new(3),
+                Some(Lsn::new(1)),
+                Some(transaction_id),
+                b"gap".to_vec(),
+            )
+            .unwrap(),
+        ];
+        let manifest = DatabaseManifest {
+            database_id: 1,
+            manifest_version: 2,
+            snapshot_id: 3,
+            base_checkpoint_lsn: Lsn::new(1),
+            required_wal_start_lsn: Lsn::new(1),
+            previous_manifest_hash: [0; 32],
+            manifest_crc: 99,
+        };
+
+        assert_eq!(
+            RecoveryPlan::from_manifest_and_wal(&manifest, StartupMode::SafeStart, &records)
+                .unwrap_err()
+                .kind(),
+            AndromedaErrorKind::Storage
+        );
+    }
+
+    #[test]
+    fn redo_plan_rejects_duplicate_lsn_after_required_start() {
+        let transaction_id = TransactionId::new(32);
+        let records = vec![
+            WalRecord::from_parts(
+                WalRecordKind::TxBegin,
+                Lsn::new(1),
+                None,
+                Some(transaction_id),
+                Vec::new(),
+            )
+            .unwrap(),
+            WalRecord::from_parts(
+                WalRecordKind::TxCommit,
+                Lsn::new(1),
+                None,
+                Some(transaction_id),
+                Vec::new(),
+            )
+            .unwrap(),
+        ];
+        let manifest = DatabaseManifest {
+            database_id: 1,
+            manifest_version: 2,
+            snapshot_id: 3,
+            base_checkpoint_lsn: Lsn::new(1),
+            required_wal_start_lsn: Lsn::new(1),
+            previous_manifest_hash: [0; 32],
+            manifest_crc: 99,
+        };
+
+        assert_eq!(
+            RecoveryPlan::from_manifest_and_wal(&manifest, StartupMode::SafeStart, &records)
+                .unwrap_err()
+                .kind(),
+            AndromedaErrorKind::Storage
+        );
+    }
+
+    #[test]
+    fn redo_plan_rejects_previous_lsn_mismatch_after_required_start() {
+        let transaction_id = TransactionId::new(33);
+        let records = vec![
+            WalRecord::from_parts(
+                WalRecordKind::TxBegin,
+                Lsn::new(1),
+                None,
+                Some(transaction_id),
+                Vec::new(),
+            )
+            .unwrap(),
+            WalRecord::from_parts(
+                WalRecordKind::TxCommit,
+                Lsn::new(2),
+                None,
+                Some(transaction_id),
+                Vec::new(),
+            )
+            .unwrap(),
+        ];
+        let manifest = DatabaseManifest {
+            database_id: 1,
+            manifest_version: 2,
+            snapshot_id: 3,
+            base_checkpoint_lsn: Lsn::new(1),
+            required_wal_start_lsn: Lsn::new(1),
+            previous_manifest_hash: [0; 32],
+            manifest_crc: 99,
+        };
+
+        assert_eq!(
+            RecoveryPlan::from_manifest_and_wal(&manifest, StartupMode::SafeStart, &records)
+                .unwrap_err()
+                .kind(),
+            AndromedaErrorKind::Storage
         );
     }
 }

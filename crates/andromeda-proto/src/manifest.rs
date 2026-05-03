@@ -42,7 +42,24 @@ impl ProcedureManifest {
 pub struct ResultStreamDescriptor {
     pub stream_name: String,
     pub columns: Vec<ColumnDescriptor>,
+    pub cardinality: ResultCardinality,
+    pub row_count_requirement: RowCountRequirement,
     pub row_count_exact: Option<u64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResultCardinality {
+    ZeroOrMore,
+    ZeroOrOne,
+    OneOrMore,
+    ExactlyOne,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RowCountRequirement {
+    UnknownAllowed,
+    ExactIfKnown,
+    ExactRequired,
 }
 
 impl ResultStreamDescriptor {
@@ -56,6 +73,30 @@ impl ResultStreamDescriptor {
 
         for column in &self.columns {
             column.validate()?;
+        }
+
+        if self.row_count_requirement == RowCountRequirement::ExactRequired
+            && self.row_count_exact.is_none()
+        {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "result stream requires an exact row count",
+            ));
+        }
+
+        if let Some(row_count_exact) = self.row_count_exact {
+            match self.cardinality {
+                ResultCardinality::ZeroOrMore => {}
+                ResultCardinality::ZeroOrOne if row_count_exact <= 1 => {}
+                ResultCardinality::OneOrMore if row_count_exact >= 1 => {}
+                ResultCardinality::ExactlyOne if row_count_exact == 1 => {}
+                _ => {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Contract,
+                        "exact row count violates result stream cardinality",
+                    ));
+                }
+            }
         }
 
         Ok(())
@@ -76,6 +117,8 @@ mod tests {
                 data_type: TypeDescriptor::required(ScalarType::I64),
                 ordinal: 0,
             }],
+            cardinality: ResultCardinality::ExactlyOne,
+            row_count_requirement: RowCountRequirement::ExactRequired,
             row_count_exact: Some(1),
         };
 

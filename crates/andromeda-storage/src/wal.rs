@@ -266,7 +266,14 @@ impl InMemoryWal {
     }
 
     pub fn next_lsn(&self) -> Lsn {
-        self.last_lsn().map_or(Lsn::new(1), Lsn::next)
+        self.try_next_lsn().unwrap_or(Lsn::ZERO)
+    }
+
+    pub fn try_next_lsn(&self) -> AndromedaResult<Lsn> {
+        match self.last_lsn() {
+            Some(last_lsn) => last_lsn.try_next(),
+            None => Ok(Lsn::new(1)),
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -284,7 +291,7 @@ impl InMemoryWal {
     pub fn append(&mut self, record: WalRecord) -> AndromedaResult<Lsn> {
         record.validate()?;
 
-        let expected_lsn = self.next_lsn();
+        let expected_lsn = self.try_next_lsn()?;
         if record.header.lsn != expected_lsn {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Storage,
@@ -305,7 +312,7 @@ impl InMemoryWal {
     ) -> AndromedaResult<Lsn> {
         let record = WalRecord::from_parts(
             kind,
-            self.next_lsn(),
+            self.try_next_lsn()?,
             self.last_lsn(),
             transaction_id,
             payload,
@@ -395,7 +402,7 @@ impl InMemoryWal {
 
 pub type MemoryWal = InMemoryWal;
 
-fn wal_record_checksum(
+pub(crate) fn wal_record_checksum(
     kind: WalRecordKind,
     lsn: Lsn,
     previous_lsn: Option<Lsn>,
@@ -427,7 +434,7 @@ fn wal_record_checksum(
     if state == 0 { 1 } else { state }
 }
 
-fn wal_record_kind_tag(kind: WalRecordKind) -> u64 {
+pub(crate) fn wal_record_kind_tag(kind: WalRecordKind) -> u64 {
     match kind {
         WalRecordKind::TxBegin => 1,
         WalRecordKind::TxCommit => 2,
@@ -451,6 +458,34 @@ fn wal_record_kind_tag(kind: WalRecordKind) -> u64 {
         WalRecordKind::CatalogChangeApply => 20,
         WalRecordKind::CatalogChangeCommit => 21,
         WalRecordKind::SecurityAuditAppend => 22,
+    }
+}
+
+pub(crate) fn wal_record_kind_from_tag(tag: u64) -> Option<WalRecordKind> {
+    match tag {
+        1 => Some(WalRecordKind::TxBegin),
+        2 => Some(WalRecordKind::TxCommit),
+        3 => Some(WalRecordKind::TxRollback),
+        4 => Some(WalRecordKind::PageAllocate),
+        5 => Some(WalRecordKind::PageFormat),
+        6 => Some(WalRecordKind::RowInsert),
+        7 => Some(WalRecordKind::RowUpdate),
+        8 => Some(WalRecordKind::RowDelete),
+        9 => Some(WalRecordKind::IndexInsert),
+        10 => Some(WalRecordKind::IndexDelete),
+        11 => Some(WalRecordKind::MvccVersionCreate),
+        12 => Some(WalRecordKind::MvccVersionClose),
+        13 => Some(WalRecordKind::MapDeltaAppend),
+        14 => Some(WalRecordKind::CheckpointBegin),
+        15 => Some(WalRecordKind::CheckpointEnd),
+        16 => Some(WalRecordKind::SnapshotBegin),
+        17 => Some(WalRecordKind::SnapshotEnd),
+        18 => Some(WalRecordKind::ManifestSwitch),
+        19 => Some(WalRecordKind::CatalogChangeBegin),
+        20 => Some(WalRecordKind::CatalogChangeApply),
+        21 => Some(WalRecordKind::CatalogChangeCommit),
+        22 => Some(WalRecordKind::SecurityAuditAppend),
+        _ => None,
     }
 }
 
@@ -682,6 +717,40 @@ mod tests {
 
         assert_eq!(
             wal.append(skipped_lsn).unwrap_err().kind(),
+            AndromedaErrorKind::Storage
+        );
+    }
+
+    #[test]
+    fn in_memory_wal_rejects_lsn_overflow() {
+        let transaction_id = TransactionId::new(13);
+        let max_record = WalRecord::from_parts(
+            WalRecordKind::TxBegin,
+            Lsn::MAX,
+            Some(Lsn::new(u64::MAX - 1)),
+            Some(transaction_id),
+            Vec::new(),
+        )
+        .unwrap();
+        let mut wal = InMemoryWal {
+            records: vec![max_record],
+            durable_lsn: Lsn::ZERO,
+        };
+        let next_record = WalRecord::from_parts(
+            WalRecordKind::TxCommit,
+            Lsn::MAX,
+            Some(Lsn::new(u64::MAX - 1)),
+            Some(transaction_id),
+            Vec::new(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            wal.try_next_lsn().unwrap_err().kind(),
+            AndromedaErrorKind::Storage
+        );
+        assert_eq!(
+            wal.append(next_record).unwrap_err().kind(),
             AndromedaErrorKind::Storage
         );
     }

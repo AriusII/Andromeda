@@ -4,20 +4,47 @@ use andromeda_core::{
 
 use crate::{FrameFamily, StreamRole};
 
+pub const HELLO_FRAME_CODE: u32 = 1;
+pub const AUTH_FRAME_CODE: u32 = 2;
+pub const CONTRACT_REQUEST_FRAME_CODE: u32 = 3;
+pub const CONTRACT_RESPONSE_FRAME_CODE: u32 = 4;
+pub const RPC_EXECUTE_REQUEST_FRAME_CODE: u32 = 5;
+pub const RPC_METADATA_FRAME_CODE: u32 = 6;
+pub const RPC_BATCH_FRAME_CODE: u32 = 7;
+pub const RPC_COMPLETION_FRAME_CODE: u32 = 8;
+pub const ERROR_FRAME_CODE: u32 = 9;
+pub const TELEMETRY_SOFT_SIGNAL_FRAME_CODE: u32 = 100;
+
+pub const MAX_FRAME_PAYLOAD_LENGTH: u64 = 16 * 1024 * 1024;
+pub const RESERVED_FRAME_FLAGS_MASK: u32 = u32::MAX;
+pub const FRAME_HEADER_CRC_UNCHECKED: u32 = 0;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
 pub enum FrameType {
-    Hello = 1,
-    Auth = 2,
-    ContractRequest = 3,
-    ContractResponse = 4,
-    RpcExecuteRequest = 5,
-    RpcMetadata = 6,
-    RpcBatch = 7,
-    RpcCompletion = 8,
-    Error = 9,
-    TelemetrySoftSignal = 100,
+    Hello = HELLO_FRAME_CODE,
+    Auth = AUTH_FRAME_CODE,
+    ContractRequest = CONTRACT_REQUEST_FRAME_CODE,
+    ContractResponse = CONTRACT_RESPONSE_FRAME_CODE,
+    RpcExecuteRequest = RPC_EXECUTE_REQUEST_FRAME_CODE,
+    RpcMetadata = RPC_METADATA_FRAME_CODE,
+    RpcBatch = RPC_BATCH_FRAME_CODE,
+    RpcCompletion = RPC_COMPLETION_FRAME_CODE,
+    Error = ERROR_FRAME_CODE,
+    TelemetrySoftSignal = TELEMETRY_SOFT_SIGNAL_FRAME_CODE,
 }
+
+pub const FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP: &[(FrameType, u32)] = &[
+    (FrameType::Hello, HELLO_FRAME_CODE),
+    (FrameType::Auth, AUTH_FRAME_CODE),
+    (FrameType::ContractRequest, CONTRACT_REQUEST_FRAME_CODE),
+    (FrameType::ContractResponse, CONTRACT_RESPONSE_FRAME_CODE),
+    (FrameType::RpcExecuteRequest, RPC_EXECUTE_REQUEST_FRAME_CODE),
+    (FrameType::RpcMetadata, RPC_METADATA_FRAME_CODE),
+    (FrameType::RpcBatch, RPC_BATCH_FRAME_CODE),
+    (FrameType::RpcCompletion, RPC_COMPLETION_FRAME_CODE),
+    (FrameType::Error, ERROR_FRAME_CODE),
+];
 
 impl FrameType {
     pub const fn wire_code(self) -> u32 {
@@ -103,6 +130,44 @@ pub struct FrameHeader {
 }
 
 impl FrameHeader {
+    pub fn validate_reserved_flags(&self) -> AndromedaResult<()> {
+        if self.flags & RESERVED_FRAME_FLAGS_MASK == 0 {
+            return Ok(());
+        }
+
+        Err(AndromedaError::new(
+            AndromedaErrorKind::Protocol,
+            "frame header contains reserved flags",
+        ))
+    }
+
+    pub fn validate_max_payload_length(&self) -> AndromedaResult<()> {
+        if self.payload_length <= MAX_FRAME_PAYLOAD_LENGTH {
+            return Ok(());
+        }
+
+        Err(AndromedaError::new(
+            AndromedaErrorKind::Protocol,
+            "frame payload length exceeds maximum",
+        ))
+    }
+
+    pub fn validate_header_crc(&self, expected_crc: u32) -> AndromedaResult<()> {
+        if self.header_crc == expected_crc {
+            return Ok(());
+        }
+
+        Err(AndromedaError::new(
+            AndromedaErrorKind::Protocol,
+            "frame header CRC mismatch",
+        ))
+    }
+
+    pub fn validate_static_fields(&self) -> AndromedaResult<()> {
+        self.validate_reserved_flags()?;
+        self.validate_max_payload_length()
+    }
+
     pub fn validate_payload_length(&self, actual_length: usize) -> AndromedaResult<()> {
         if self.payload_length == actual_length as u64 {
             return Ok(());
@@ -134,6 +199,7 @@ pub struct FrameBytes {
 
 impl FrameBytes {
     pub fn validate(&self, stream_role: StreamRole) -> AndromedaResult<()> {
+        self.header.validate_static_fields()?;
         self.header.validate_payload_length(self.payload.len())?;
         self.header.validate_transport_policy(stream_role)?;
 
@@ -327,6 +393,41 @@ mod tests {
     }
 
     #[test]
+    fn frame_header_rejects_reserved_flags_and_oversized_payloads() {
+        let mut reserved_flags_header = header(FrameType::RpcExecuteRequest);
+        reserved_flags_header.flags = 1;
+        assert_eq!(
+            reserved_flags_header
+                .validate_static_fields()
+                .unwrap_err()
+                .kind(),
+            AndromedaErrorKind::Protocol
+        );
+
+        let mut oversized_header = header(FrameType::RpcExecuteRequest);
+        oversized_header.payload_length = MAX_FRAME_PAYLOAD_LENGTH + 1;
+        assert_eq!(
+            oversized_header
+                .validate_static_fields()
+                .unwrap_err()
+                .kind(),
+            AndromedaErrorKind::Protocol
+        );
+    }
+
+    #[test]
+    fn frame_header_crc_helper_rejects_mismatch() {
+        let mut header = header(FrameType::RpcExecuteRequest);
+        header.header_crc = 0xAABB_CCDD;
+
+        assert!(header.validate_header_crc(0xAABB_CCDD).is_ok());
+        assert_eq!(
+            header.validate_header_crc(0xDEAD_BEEF).unwrap_err().kind(),
+            AndromedaErrorKind::Protocol
+        );
+    }
+
+    #[test]
     fn datagram_is_only_for_soft_telemetry() {
         assert!(FrameType::TelemetrySoftSignal.allows_datagram());
         assert!(!FrameType::RpcBatch.allows_datagram());
@@ -348,6 +449,21 @@ mod tests {
         assert_eq!(
             FrameType::try_from(10).unwrap_err().kind(),
             AndromedaErrorKind::Protocol
+        );
+    }
+
+    #[test]
+    fn frame_type_payload_codes_are_locked_for_proto_payload_kinds() {
+        for (frame_type, payload_code) in FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP {
+            assert_eq!(frame_type.wire_code(), *payload_code);
+            assert_eq!(FrameType::try_from(*payload_code).unwrap(), *frame_type);
+        }
+
+        assert_eq!(FrameType::TelemetrySoftSignal.wire_code(), 100);
+        assert!(
+            !FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP
+                .iter()
+                .any(|(_, code)| *code == TELEMETRY_SOFT_SIGNAL_FRAME_CODE)
         );
     }
 
@@ -438,6 +554,25 @@ mod tests {
 
         assert!(validate_result_stream_sequence(&frames).is_ok());
         assert!(validate_frame_sequence(&frames, StreamRole::ResultUnidirectional).is_ok());
+    }
+
+    #[test]
+    fn result_stream_sequence_rejects_metadata_completion_without_batch() {
+        let frames = vec![
+            FrameBytes {
+                header: header_with_len(FrameType::RpcMetadata, 4),
+                payload: b"meta".to_vec(),
+            },
+            FrameBytes {
+                header: header_with_len(FrameType::RpcCompletion, 0),
+                payload: Vec::new(),
+            },
+        ];
+
+        assert_eq!(
+            validate_result_stream_sequence(&frames).unwrap_err().kind(),
+            AndromedaErrorKind::Protocol
+        );
     }
 
     #[test]

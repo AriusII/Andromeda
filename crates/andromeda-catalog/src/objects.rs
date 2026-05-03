@@ -188,8 +188,15 @@ pub(crate) fn validate_columns(columns: &[ColumnDescriptor]) -> AndromedaResult<
         ));
     }
 
+    let mut column_names = BTreeSet::new();
     for (expected_ordinal, column) in columns.iter().enumerate() {
         column.validate()?;
+        if !column_names.insert(column.name.as_str()) {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "column names must be unique",
+            ));
+        }
         if column.ordinal != expected_ordinal as u32 {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Catalog,

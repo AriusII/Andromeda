@@ -1,5 +1,6 @@
 use andromeda_catalog::{ProcedureContractRef, QualifiedName};
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, ColumnDescriptor};
+use std::collections::BTreeSet;
 
 use crate::Cardinality;
 
@@ -14,7 +15,14 @@ impl ProcedureSignature {
     pub fn validate(&self) -> AndromedaResult<()> {
         validate_dense_columns(&self.accepts, false, "SRPL parameter ordinals")?;
 
+        let mut result_names = BTreeSet::new();
         for result in &self.returns {
+            if !result_names.insert(result.name.as_str()) {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Srpl,
+                    "SRPL result stream names must be unique",
+                ));
+            }
             result.validate()?;
         }
 
@@ -54,18 +62,6 @@ impl ResultContract {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AstNodePlaceholder {
-    pub concept: String,
-    pub cardinality: Cardinality,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SemanticIrPlaceholder {
-    pub procedure: ProcedureContractRef,
-    pub result_cardinality: Cardinality,
-}
-
 fn validate_dense_columns(
     columns: &[ColumnDescriptor],
     require_non_empty: bool,
@@ -78,8 +74,15 @@ fn validate_dense_columns(
         ));
     }
 
+    let mut column_names = BTreeSet::new();
     for (expected_ordinal, column) in columns.iter().enumerate() {
         column.validate()?;
+        if !column_names.insert(column.name.as_str()) {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Srpl,
+                format!("{context} names must be unique"),
+            ));
+        }
         if column.ordinal != expected_ordinal as u32 {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Srpl,
@@ -176,6 +179,39 @@ mod tests {
 
         assert_eq!(error.kind(), AndromedaErrorKind::Srpl);
         assert!(error.message().contains("dense"));
+    }
+
+    #[test]
+    fn procedure_signature_rejects_duplicate_parameter_names() {
+        let signature = ProcedureSignature {
+            name: QualifiedName::parse("Inventory.ReserveStock").unwrap(),
+            accepts: vec![
+                ColumnDescriptor {
+                    name: "ProductId".to_string(),
+                    data_type: TypeDescriptor::required(ScalarType::I64),
+                    ordinal: 0,
+                },
+                ColumnDescriptor {
+                    name: "ProductId".to_string(),
+                    data_type: TypeDescriptor::required(ScalarType::I64),
+                    ordinal: 1,
+                },
+            ],
+            returns: vec![ResultContract {
+                name: "Reservation".to_string(),
+                cardinality: Cardinality::One,
+                columns: vec![ColumnDescriptor {
+                    name: "Reserved".to_string(),
+                    data_type: TypeDescriptor::required(ScalarType::Bool),
+                    ordinal: 0,
+                }],
+            }],
+        };
+
+        let error = signature.validate().unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Srpl);
+        assert!(error.message().contains("unique"));
     }
 
     #[test]

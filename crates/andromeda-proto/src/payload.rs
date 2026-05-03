@@ -15,19 +15,44 @@ pub struct PayloadFrameMapping {
     pub transport_frame_code: u32,
 }
 
+pub const HELLO_WIRE_CODE: u32 = 1;
+pub const AUTH_WIRE_CODE: u32 = 2;
+pub const CONTRACT_REQUEST_WIRE_CODE: u32 = 3;
+pub const CONTRACT_RESPONSE_WIRE_CODE: u32 = 4;
+pub const RPC_EXECUTE_REQUEST_WIRE_CODE: u32 = 5;
+pub const RPC_METADATA_WIRE_CODE: u32 = 6;
+pub const RPC_BATCH_WIRE_CODE: u32 = 7;
+pub const RPC_COMPLETION_WIRE_CODE: u32 = 8;
+pub const ERROR_WIRE_CODE: u32 = 9;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
 pub enum PayloadKind {
-    Hello = 1,
-    Auth = 2,
-    ContractRequest = 3,
-    ContractResponse = 4,
-    RpcExecuteRequest = 5,
-    RpcMetadata = 6,
-    RpcBatch = 7,
-    RpcCompletion = 8,
-    Error = 9,
+    Hello = HELLO_WIRE_CODE,
+    Auth = AUTH_WIRE_CODE,
+    ContractRequest = CONTRACT_REQUEST_WIRE_CODE,
+    ContractResponse = CONTRACT_RESPONSE_WIRE_CODE,
+    RpcExecuteRequest = RPC_EXECUTE_REQUEST_WIRE_CODE,
+    RpcMetadata = RPC_METADATA_WIRE_CODE,
+    RpcBatch = RPC_BATCH_WIRE_CODE,
+    RpcCompletion = RPC_COMPLETION_WIRE_CODE,
+    Error = ERROR_WIRE_CODE,
 }
+
+pub const PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP: &[(PayloadKind, u32)] = &[
+    (PayloadKind::Hello, HELLO_WIRE_CODE),
+    (PayloadKind::Auth, AUTH_WIRE_CODE),
+    (PayloadKind::ContractRequest, CONTRACT_REQUEST_WIRE_CODE),
+    (PayloadKind::ContractResponse, CONTRACT_RESPONSE_WIRE_CODE),
+    (
+        PayloadKind::RpcExecuteRequest,
+        RPC_EXECUTE_REQUEST_WIRE_CODE,
+    ),
+    (PayloadKind::RpcMetadata, RPC_METADATA_WIRE_CODE),
+    (PayloadKind::RpcBatch, RPC_BATCH_WIRE_CODE),
+    (PayloadKind::RpcCompletion, RPC_COMPLETION_WIRE_CODE),
+    (PayloadKind::Error, ERROR_WIRE_CODE),
+];
 
 impl PayloadKind {
     pub const fn wire_code(self) -> u32 {
@@ -97,16 +122,37 @@ mod tests {
 
     #[test]
     fn payload_kind_uses_locked_v0_family_values() {
-        assert_eq!(PayloadKind::try_from(1).unwrap(), PayloadKind::Hello);
         assert_eq!(
-            PayloadKind::try_from(5).unwrap(),
+            PayloadKind::try_from(HELLO_WIRE_CODE).unwrap(),
+            PayloadKind::Hello
+        );
+        assert_eq!(
+            PayloadKind::try_from(RPC_EXECUTE_REQUEST_WIRE_CODE).unwrap(),
             PayloadKind::RpcExecuteRequest
         );
-        assert_eq!(PayloadKind::try_from(9).unwrap(), PayloadKind::Error);
+        assert_eq!(
+            PayloadKind::try_from(ERROR_WIRE_CODE).unwrap(),
+            PayloadKind::Error
+        );
         assert_eq!(
             PayloadKind::try_from(10).unwrap_err().kind(),
             AndromedaErrorKind::Protocol
         );
+    }
+
+    #[test]
+    fn payload_kind_transport_codes_are_locked_for_quic_frame_types() {
+        for (payload_kind, transport_frame_code) in PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP {
+            assert_eq!(payload_kind.wire_code(), *transport_frame_code);
+            assert_eq!(
+                PayloadKind::try_from(*transport_frame_code).unwrap(),
+                *payload_kind
+            );
+            assert_eq!(
+                payload_kind.frame_mapping().transport_frame_code,
+                *transport_frame_code
+            );
+        }
     }
 
     #[test]

@@ -1,0 +1,189 @@
+syntax = "proto3";
+
+package andromeda.v1;
+
+// Schema governance sketch only. This file is intentionally not wired into
+// code generation, RPC stubs, build.rs, or generated-code flows.
+//
+// Andromeda uses QUIC with custom reliable-stream frames. QUIC DATAGRAM is
+// reserved for telemetry-only soft signals and must not carry contract-bound
+// RPC payloads.
+
+enum PayloadKind {
+  PAYLOAD_KIND_UNSPECIFIED = 0;
+
+  PAYLOAD_KIND_HELLO = 1;
+  PAYLOAD_KIND_AUTH = 2;
+  PAYLOAD_KIND_CONTRACT_REQUEST = 3;
+  PAYLOAD_KIND_CONTRACT_RESPONSE = 4;
+  PAYLOAD_KIND_RPC_EXECUTE_REQUEST = 5;
+  PAYLOAD_KIND_RPC_METADATA = 6;
+  PAYLOAD_KIND_RPC_BATCH = 7;
+  PAYLOAD_KIND_RPC_COMPLETION = 8;
+  PAYLOAD_KIND_ERROR = 9;
+
+  reserved 10 to 99;
+  reserved 100 to 199; // QUIC telemetry frame-code range, not payload kind.
+}
+
+message FrameEnvelope {
+  uint32 protocol_version = 1;
+  bytes contract_hash = 2; // Required for contract-bound RPC payload kinds.
+  uint64 catalog_version = 3;
+  uint64 request_id = 4;
+  uint64 session_id = 5;
+  optional uint64 tx_id = 6;
+  PayloadKind payload_kind = 7;
+  bytes payload = 8; // Binary StructuredObject/protocol payload.
+
+  reserved 9 to 31;
+}
+
+message RpcCompletion {
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_COMMITTED = 1;
+    STATUS_ROLLED_BACK = 2;
+    STATUS_FAILED_BEFORE_TRANSACTION = 3;
+    STATUS_CANCELLED = 4;
+    STATUS_POISONED = 5;
+    STATUS_PERMISSION_DENIED = 6;
+    STATUS_CONTRACT_REJECTED = 7;
+    STATUS_SYSTEM_UNAVAILABLE = 8;
+  }
+
+  enum TransactionOutcome {
+    TRANSACTION_OUTCOME_UNSPECIFIED = 0;
+    TRANSACTION_OUTCOME_NOT_STARTED = 1;
+    TRANSACTION_OUTCOME_COMMITTED = 2;
+    TRANSACTION_OUTCOME_ROLLED_BACK = 3;
+    TRANSACTION_OUTCOME_FAILED = 4;
+    TRANSACTION_OUTCOME_CANCELLED = 5;
+  }
+
+  message ResultRowCountSummary {
+    string result_name = 1;
+    uint64 rows_emitted = 2;
+    optional uint64 row_count_exact = 3;
+
+    reserved 4 to 15;
+  }
+
+  Status status = 1;
+  optional uint64 rows_affected = 2;
+  optional uint64 tx_id = 3;
+  optional uint64 request_id = 32;
+  optional uint64 session_id = 33;
+  optional string trace_id = 34;
+  TransactionOutcome transaction_outcome = 35;
+  optional uint64 durable_lsn = 36; // Required and nonzero when status is COMMITTED.
+  repeated ResultRowCountSummary result_row_counts = 37;
+
+  reserved 4 to 31;
+  reserved 38 to 63;
+}
+
+message ErrorEnvelope {
+  enum ErrorFamily {
+    ERROR_FAMILY_UNSPECIFIED = 0;
+    ERROR_FAMILY_PROTOCOL = 1;
+    ERROR_FAMILY_AUTHENTICATION = 2;
+    ERROR_FAMILY_AUTHORIZATION = 3;
+    ERROR_FAMILY_CONTRACT = 4;
+    ERROR_FAMILY_SEMANTIC = 5;
+    ERROR_FAMILY_EXECUTION = 6;
+    ERROR_FAMILY_TRANSACTION = 7;
+    ERROR_FAMILY_STORAGE = 8;
+    ERROR_FAMILY_RESOURCE = 9;
+  }
+
+  enum TransactionEffect {
+    TRANSACTION_EFFECT_UNSPECIFIED = 0;
+    TRANSACTION_EFFECT_NO_TRANSACTION = 1;
+    TRANSACTION_EFFECT_ROLLBACK_REQUIRED = 2;
+    TRANSACTION_EFFECT_FAIL_STOP = 3;
+  }
+
+  enum RetryDisposition {
+    RETRY_DISPOSITION_UNSPECIFIED = 0;
+    RETRY_DISPOSITION_NOT_RETRYABLE = 1;
+    RETRY_DISPOSITION_RETRYABLE = 2;
+    RETRY_DISPOSITION_RETRY_AFTER = 3;
+    RETRY_DISPOSITION_BACKPRESSURE = 4;
+  }
+
+  message BackpressureMetadata {
+    optional uint64 retry_after_ms = 1;
+    optional uint32 capacity_percent = 2; // 0..100 when present.
+    bool shed_load = 3;
+
+    reserved 4 to 15;
+  }
+
+  optional uint64 request_id = 1;
+  optional uint64 session_id = 2;
+  optional string trace_id = 3;
+  ErrorFamily family = 4;
+  string code = 5;
+  string message = 6;
+  TransactionEffect transaction_effect = 7;
+  RetryDisposition retry_disposition = 8;
+  optional uint64 retry_after_ms = 9;
+  optional BackpressureMetadata backpressure = 10;
+
+  reserved 11 to 31;
+}
+
+message ResultStreamDescriptor {
+  enum Cardinality {
+    CARDINALITY_UNSPECIFIED = 0;
+    CARDINALITY_ZERO_OR_MORE = 1;
+    CARDINALITY_ZERO_OR_ONE = 2;
+    CARDINALITY_ONE_OR_MORE = 3;
+    CARDINALITY_EXACTLY_ONE = 4;
+  }
+
+  enum RowCountRequirement {
+    ROW_COUNT_REQUIREMENT_UNSPECIFIED = 0;
+    ROW_COUNT_REQUIREMENT_UNKNOWN_ALLOWED = 1;
+    ROW_COUNT_REQUIREMENT_EXACT_IF_KNOWN = 2;
+    ROW_COUNT_REQUIREMENT_EXACT_REQUIRED = 3;
+  }
+
+  string stream_name = 1;
+  repeated ColumnDescriptor columns = 2;
+  Cardinality cardinality = 3;
+  RowCountRequirement row_count_requirement = 4;
+  optional uint64 row_count_exact = 5;
+
+  reserved 6 to 31;
+}
+
+message ColumnDescriptor {
+  string name = 1;
+  uint32 ordinal = 2;
+  string type_name = 3;
+
+  reserved 4 to 15;
+}
+
+message StructuredObjectHeader {
+  enum Layout {
+    LAYOUT_UNSPECIFIED = 0;
+    LAYOUT_ROW_MAJOR = 1;
+    LAYOUT_COLUMN_MAJOR = 2;
+    LAYOUT_HYBRID = 3;
+  }
+
+  string name = 1;
+  bytes contract_hash = 2; // 32 bytes.
+  bytes shape_hash = 3; // 32 bytes, nonzero.
+  uint64 row_count_exact = 4;
+  uint32 column_count = 5;
+  Layout layout = 6;
+  uint64 payload_length = 7;
+  optional uint64 payload_checksum = 8;
+  optional uint64 max_payload_length = 9;
+
+  reserved 10 to 31;
+}

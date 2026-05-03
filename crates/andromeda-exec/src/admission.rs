@@ -1,6 +1,6 @@
-use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
+use andromeda_observe::TraceId;
 
-use crate::{CompletionStatus, InvocationReject};
+use crate::{InvocationReject, services::AdmissionService};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InvocationContext {
@@ -25,30 +25,17 @@ impl InvocationContext {
     pub fn authorize(
         &self,
         required_permissions: &[String],
-    ) -> Result<DecisionTrace, InvocationReject> {
-        for permission in required_permissions {
-            if !self.grants(permission) {
-                return Err(InvocationReject {
-                    status: CompletionStatus::PermissionDenied,
-                    reason: format!("missing required permission: {permission}"),
-                });
-            }
-        }
-
-        Ok(DecisionTrace {
-            trace_id: self.trace_id,
-            decision: CriticalDecisionKind::SecurityAuthorization,
-            reason: format!(
-                "{} required permissions accepted before transaction creation",
-                required_permissions.len()
-            ),
-        })
+    ) -> Result<andromeda_observe::DecisionTrace, InvocationReject> {
+        AdmissionService::authorize(self, required_permissions)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use andromeda_observe::CriticalDecisionKind;
+
+    use crate::CompletionStatus;
 
     #[test]
     fn admission_accepts_all_required_permissions() {

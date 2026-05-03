@@ -1,9 +1,9 @@
 use andromeda_catalog::ProcedureContractRef;
 use andromeda_core::{AndromedaResult, CatalogVersion, ContractHash, InvocationId};
-use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
+use andromeda_observe::{DecisionTrace, TraceId};
 use andromeda_proto::StructuredObjectHeader;
 
-use crate::{CompletionStatus, InvocationCompletion};
+use crate::{CompletionStatus, InvocationCompletion, services::PreTransactionValidationService};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InvocationRequest {
@@ -17,35 +17,14 @@ pub struct InvocationRequest {
 impl InvocationRequest {
     pub fn validate_before_transaction(
         &self,
+        executable_contract: ProcedureContractRef,
         trace_id: TraceId,
     ) -> Result<DecisionTrace, InvocationReject> {
-        if self.procedure.contract_hash != self.expected_contract_hash {
-            return Err(InvocationReject {
-                status: CompletionStatus::ContractRejected,
-                reason: "ContractHash mismatch before transaction creation".to_string(),
-            });
-        }
-
-        if self.procedure.catalog_version != self.catalog_version {
-            return Err(InvocationReject {
-                status: CompletionStatus::ContractRejected,
-                reason: "CatalogVersion mismatch before transaction creation".to_string(),
-            });
-        }
-
-        for parameter in &self.structured_parameters {
-            parameter.validate().map_err(|error| InvocationReject {
-                status: CompletionStatus::ContractRejected,
-                reason: error.to_string(),
-            })?;
-        }
-
-        Ok(DecisionTrace {
+        PreTransactionValidationService::validate_invocation_contract(
+            self,
+            executable_contract,
             trace_id,
-            decision: CriticalDecisionKind::ContractValidation,
-            reason: "contract hash, catalog version, and structured parameter shapes accepted"
-                .to_string(),
-        })
+        )
     }
 }
 
@@ -81,7 +60,10 @@ mod tests {
     #[test]
     fn invocation_rejects_contract_mismatch_before_transaction_creation() {
         let reject = request(ContractHash::test_vector(8))
-            .validate_before_transaction(TraceId::new(1))
+            .validate_before_transaction(
+                request(ContractHash::test_vector(7)).procedure,
+                TraceId::new(1),
+            )
             .unwrap_err();
 
         assert_eq!(reject.status, CompletionStatus::ContractRejected);
@@ -90,9 +72,25 @@ mod tests {
     #[test]
     fn invocation_accepts_contract_before_transaction_creation() {
         let trace = request(ContractHash::test_vector(7))
-            .validate_before_transaction(TraceId::new(1))
+            .validate_before_transaction(
+                request(ContractHash::test_vector(7)).procedure,
+                TraceId::new(1),
+            )
             .unwrap();
 
         assert!(trace.has_explanation());
+    }
+
+    #[test]
+    fn invocation_rejects_procedure_id_mismatch_before_transaction_creation() {
+        let mut executable = request(ContractHash::test_vector(7)).procedure;
+        executable.procedure_id = ProcedureId::new(99);
+
+        let reject = request(ContractHash::test_vector(7))
+            .validate_before_transaction(executable, TraceId::new(1))
+            .unwrap_err();
+
+        assert_eq!(reject.status, CompletionStatus::ContractRejected);
+        assert!(reject.reason.contains("ProcedureId"));
     }
 }

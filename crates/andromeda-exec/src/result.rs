@@ -1,4 +1,4 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, InvocationId};
+use andromeda_core::{AndromedaResult, InvocationId};
 use andromeda_observe::TraceId;
 use andromeda_srpl::Cardinality;
 use andromeda_storage::Lsn;
@@ -14,21 +14,7 @@ pub struct ResultStreamMetadata {
 
 impl ResultStreamMetadata {
     pub fn validate_before_payload(self) -> AndromedaResult<()> {
-        if self.column_count == 0 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
-                "result stream metadata must declare at least one column",
-            ));
-        }
-
-        if self.cardinality.requires_exact_row_count() && self.row_count_exact.is_none() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
-                "result stream requires RowCountExact before payload",
-            ));
-        }
-
-        Ok(())
+        crate::services::ResultValidationService::validate_before_payload(self)
     }
 }
 
@@ -57,6 +43,7 @@ pub struct InvocationCompletion {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use andromeda_core::AndromedaErrorKind;
 
     #[test]
     fn result_metadata_keeps_shape_before_payload_contract() {
@@ -83,5 +70,35 @@ mod tests {
             metadata.validate_before_payload().unwrap_err().kind(),
             AndromedaErrorKind::Contract
         );
+    }
+
+    #[test]
+    fn result_metadata_enforces_declared_cardinality_bounds() {
+        for (cardinality, row_count) in [
+            (Cardinality::One, 0),
+            (Cardinality::One, 2),
+            (Cardinality::OptionalOne, 2),
+            (Cardinality::NonEmptyMany, 0),
+        ] {
+            let metadata = ResultStreamMetadata {
+                stream_id: 1,
+                row_count_exact: Some(row_count),
+                column_count: 2,
+                cardinality,
+            };
+
+            assert_eq!(
+                metadata.validate_before_payload().unwrap_err().kind(),
+                AndromedaErrorKind::Contract
+            );
+        }
+
+        let many = ResultStreamMetadata {
+            stream_id: 1,
+            row_count_exact: None,
+            column_count: 2,
+            cardinality: Cardinality::Many,
+        };
+        assert!(many.validate_before_payload().is_ok());
     }
 }

@@ -1,12 +1,11 @@
 use andromeda_catalog::ProcedureContractRef;
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
+use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_observe::{DecisionTrace, TraceId};
-use andromeda_storage::WalRecordKind;
-use andromeda_tx::{TransactionEvent, TransactionStateMachine};
 
 use crate::{
-    CompletionStatus, InvocationCompletion, InvocationContext, InvocationRequest, InvocationWal,
-    ResultStreamMetadata,
+    InvocationCompletion, InvocationContext, InvocationRequest, InvocationWal, LocalDispatchPlan,
+    LocalDispatcher, ResultStreamMetadata, services::CompletionMappingService,
+    transaction_id_for_invocation,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -108,41 +107,24 @@ where
     ) -> AndromedaResult<VerticalInvocationOutcome> {
         procedure.validate()?;
         let contract_trace = request
-            .validate_before_transaction(trace_id)
+            .validate_before_transaction(procedure.contract, trace_id)
             .map_err(|reject| AndromedaError::new(AndromedaErrorKind::Contract, reject.reason))?;
 
-        let tx_id = TransactionId::new(request.invocation_id.get());
-        let mut tx = TransactionStateMachine::new(tx_id);
-        tx.apply(TransactionEvent::Begin)?;
-
-        self.wal
-            .append(WalRecordKind::TxBegin, Some(tx_id), b"tx-begin")?;
-
-        if procedure.rows_affected > 0 {
-            self.wal.append(
-                WalRecordKind::RowUpdate,
-                Some(tx_id),
-                &procedure.mutation_payload,
-            )?;
-        }
-
-        tx.apply(TransactionEvent::CommitRequested)?;
-        let commit_lsn = self
-            .wal
-            .append(WalRecordKind::TxCommit, Some(tx_id), b"tx-commit")?;
-        let durable_lsn = self.wal.flush_through(commit_lsn)?;
-        tx.mark_durable_commit_lsn(durable_lsn.get())?;
-        tx.apply(TransactionEvent::DurableWalFlushed)?;
+        let dispatch_receipt =
+            LocalDispatcher::new(&mut self.wal).dispatch_commit(LocalDispatchPlan {
+                transaction_id: transaction_id_for_invocation(request.invocation_id),
+                mutation_payload: procedure.mutation_payload.clone(),
+                rows_affected: procedure.rows_affected,
+            })?;
 
         Ok(VerticalInvocationOutcome {
-            completion: InvocationCompletion {
-                invocation_id: request.invocation_id,
-                status: CompletionStatus::Committed,
-                rows_affected: Some(procedure.rows_affected),
-                transaction_state: Some(tx.state),
-                durable_lsn: Some(durable_lsn),
+            completion: CompletionMappingService::committed(
+                request.invocation_id,
+                dispatch_receipt.rows_affected,
+                dispatch_receipt.transaction_state,
+                dispatch_receipt.durable_lsn,
                 trace_id,
-            },
+            ),
             contract_trace,
             authorization_trace,
             result_metadata: procedure.result_metadata,
@@ -154,10 +136,12 @@ where
 mod tests {
     use super::*;
     use andromeda_catalog::{ProcedureContractRef, inventory_reserve_stock_contract};
-    use andromeda_core::{CatalogVersion, ContractHash, InvocationId, ProcedureId};
+    use andromeda_core::{CatalogVersion, ContractHash, InvocationId, ProcedureId, TransactionId};
     use andromeda_srpl::Cardinality;
     use andromeda_storage::{InMemoryWal, Lsn, WalRecordKind};
     use andromeda_tx::TransactionState;
+
+    use crate::CompletionStatus;
 
     #[derive(Debug, Default)]
     struct TestWal {
@@ -251,6 +235,37 @@ mod tests {
         let err = runtime
             .execute(
                 request(ContractHash::test_vector(8)),
+                &procedure,
+                TraceId::new(99),
+            )
+            .unwrap_err();
+
+        assert_eq!(err.kind(), AndromedaErrorKind::Contract);
+        assert!(runtime.wal().records.is_empty());
+    }
+
+    #[test]
+    fn local_vertical_runtime_rejects_executable_contract_mismatch_before_begin() {
+        let mut runtime = LocalVerticalRuntime::new(TestWal::default());
+        let procedure = LocalProcedure {
+            contract: ProcedureContractRef {
+                procedure_id: ProcedureId::new(99),
+                ..request(ContractHash::test_vector(7)).procedure
+            },
+            required_permissions: Vec::new(),
+            result_metadata: ResultStreamMetadata {
+                stream_id: 1,
+                row_count_exact: Some(1),
+                column_count: 1,
+                cardinality: Cardinality::One,
+            },
+            mutation_payload: b"reserve-stock".to_vec(),
+            rows_affected: 1,
+        };
+
+        let err = runtime
+            .execute(
+                request(ContractHash::test_vector(7)),
                 &procedure,
                 TraceId::new(99),
             )

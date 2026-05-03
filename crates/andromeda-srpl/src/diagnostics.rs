@@ -27,6 +27,10 @@ impl SourceSpan {
     pub const fn len(self) -> usize {
         self.end.saturating_sub(self.start)
     }
+
+    pub const fn is_empty(self) -> bool {
+        self.len() == 0
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
