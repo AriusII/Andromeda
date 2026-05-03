@@ -3,7 +3,7 @@ use andromeda_core::{
     ContractHash, ProcedureId,
 };
 
-use crate::{names::QualifiedName, objects::validate_columns, CatalogObjectRef};
+use crate::{CatalogObjectRef, ObjectKind, names::QualifiedName, objects::validate_columns};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ProcedureContractRef {
@@ -14,6 +14,20 @@ pub struct ProcedureContractRef {
 
 impl ProcedureContractRef {
     pub fn validate(&self) -> AndromedaResult<()> {
+        if self.procedure_id.get() == 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "procedure id must not be zero",
+            ));
+        }
+
+        if self.catalog_version.get() == 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "procedure catalog version must not be zero",
+            ));
+        }
+
         if self.contract_hash.is_zero() {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Contract,
@@ -93,6 +107,7 @@ impl ProcedureContract {
     }
 
     pub fn validate(&self) -> AndromedaResult<()> {
+        self.object.validate_for_definition(ObjectKind::Procedure)?;
         self.as_ref().validate()?;
         validate_columns(&self.inputs)?;
 

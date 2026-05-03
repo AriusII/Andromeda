@@ -1,8 +1,10 @@
 use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, DatabaseId, NamespaceId,
+    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogObjectId, CatalogVersion,
+    DatabaseId, NamespaceId,
 };
+use std::collections::BTreeSet;
 
-use crate::objects::CatalogDefinition;
+use crate::{ObjectKind, QualifiedName, objects::CatalogDefinition};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct DefinitionBatchId(u64);
@@ -40,27 +42,70 @@ impl DefinitionBatch {
             ));
         }
 
+        let mut object_ids = BTreeSet::new();
+        let mut object_names = BTreeSet::new();
+        let mut created_objects = Vec::with_capacity(self.operations.len());
+
         for operation in &self.operations {
             match operation {
-                DefinitionOperation::Create(definition) => definition.validate()?,
+                DefinitionOperation::Create(definition) => {
+                    definition.validate()?;
+
+                    let object = definition.object_ref();
+                    if !object_ids.insert(object.object_id) {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Catalog,
+                            "definition batch must not create the same object id twice",
+                        ));
+                    }
+
+                    if !object_names.insert(object.name.clone()) {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Catalog,
+                            "definition batch must not create the same object name twice",
+                        ));
+                    }
+
+                    created_objects.push(PlannedDefinition {
+                        object_id: object.object_id,
+                        name: object.name.clone(),
+                        kind: object.kind,
+                    });
+                }
             }
         }
+
+        let next_version = self.base_version.get().checked_add(1).ok_or_else(|| {
+            AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "catalog version overflow during definition batch planning",
+            )
+        })?;
 
         Ok(DefinitionBatchPlan {
             batch_id: self.batch_id,
             operation_count: self.operations.len(),
             previous_version: self.base_version,
-            next_version: CatalogVersion::new(self.base_version.get() + 1),
+            next_version: CatalogVersion::new(next_version),
+            created_objects,
         })
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlannedDefinition {
+    pub object_id: CatalogObjectId,
+    pub name: QualifiedName,
+    pub kind: ObjectKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DefinitionBatchPlan {
     pub batch_id: DefinitionBatchId,
     pub operation_count: usize,
     pub previous_version: CatalogVersion,
     pub next_version: CatalogVersion,
+    pub created_objects: Vec<PlannedDefinition>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -83,9 +128,13 @@ mod tests {
     use andromeda_core::{CatalogObjectId, ColumnDescriptor, ScalarType, TypeDescriptor};
 
     fn object(kind: ObjectKind) -> CatalogObjectRef {
+        object_with(1, "Inventory.Product", kind)
+    }
+
+    fn object_with(id: u64, name: &str, kind: ObjectKind) -> CatalogObjectRef {
         CatalogObjectRef {
-            object_id: CatalogObjectId::new(1),
-            name: QualifiedName::parse("Inventory.Product").unwrap(),
+            object_id: CatalogObjectId::new(id),
+            name: QualifiedName::parse(name).unwrap(),
             kind,
             catalog_version: CatalogVersion::new(7),
         }
@@ -117,6 +166,82 @@ mod tests {
 
         assert_eq!(plan.operation_count, 1);
         assert_eq!(plan.next_version, CatalogVersion::new(11));
+        assert_eq!(plan.created_objects.len(), 1);
+        assert_eq!(plan.created_objects[0].kind, ObjectKind::Table);
+    }
+
+    #[test]
+    fn definition_batch_dry_run_rejects_duplicate_creation_ids() {
+        let first = TableDefinition {
+            object: object_with(1, "Inventory.Product", ObjectKind::Table),
+            columns: vec![column("ProductId", 0)],
+        };
+        let second = TableDefinition {
+            object: object_with(1, "Inventory.Stock", ObjectKind::Table),
+            columns: vec![column("StockId", 0)],
+        };
+        let batch = DefinitionBatch {
+            batch_id: DefinitionBatchId::new(4),
+            database_id: DatabaseId::new(1),
+            namespace_id: NamespaceId::new(2),
+            base_version: CatalogVersion::new(10),
+            operations: vec![
+                DefinitionOperation::Create(CatalogDefinition::Table(first)),
+                DefinitionOperation::Create(CatalogDefinition::Table(second)),
+            ],
+        };
+
+        let error = batch.dry_run().unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+        assert!(error.message().contains("object id"));
+    }
+
+    #[test]
+    fn definition_batch_dry_run_rejects_duplicate_creation_names() {
+        let first = TableDefinition {
+            object: object_with(1, "Inventory.Product", ObjectKind::Table),
+            columns: vec![column("ProductId", 0)],
+        };
+        let second = TableDefinition {
+            object: object_with(2, "Inventory.Product", ObjectKind::Table),
+            columns: vec![column("StockId", 0)],
+        };
+        let batch = DefinitionBatch {
+            batch_id: DefinitionBatchId::new(4),
+            database_id: DatabaseId::new(1),
+            namespace_id: NamespaceId::new(2),
+            base_version: CatalogVersion::new(10),
+            operations: vec![
+                DefinitionOperation::Create(CatalogDefinition::Table(first)),
+                DefinitionOperation::Create(CatalogDefinition::Table(second)),
+            ],
+        };
+
+        let error = batch.dry_run().unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+        assert!(error.message().contains("object name"));
+    }
+
+    #[test]
+    fn definition_batch_dry_run_rejects_mismatched_definition_kind() {
+        let table = TableDefinition {
+            object: object(ObjectKind::Procedure),
+            columns: vec![column("ProductId", 0)],
+        };
+        let batch = DefinitionBatch {
+            batch_id: DefinitionBatchId::new(4),
+            database_id: DatabaseId::new(1),
+            namespace_id: NamespaceId::new(2),
+            base_version: CatalogVersion::new(10),
+            operations: vec![DefinitionOperation::Create(CatalogDefinition::Table(table))],
+        };
+
+        let error = batch.dry_run().unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+        assert!(error.message().contains("kind"));
     }
 
     #[test]

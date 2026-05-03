@@ -1,6 +1,21 @@
 use andromeda_core::{AndromedaError, AndromedaErrorKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PayloadFrameFamily {
+    SessionControl,
+    ContractControl,
+    RpcCommand,
+    RpcResultStream,
+    Diagnostic,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PayloadFrameMapping {
+    pub family: PayloadFrameFamily,
+    pub transport_frame_code: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
 pub enum PayloadKind {
     Hello = 1,
@@ -15,11 +30,38 @@ pub enum PayloadKind {
 }
 
 impl PayloadKind {
+    pub const fn wire_code(self) -> u32 {
+        self as u32
+    }
+
+    pub const fn frame_family(self) -> PayloadFrameFamily {
+        match self {
+            Self::Hello | Self::Auth => PayloadFrameFamily::SessionControl,
+            Self::ContractRequest | Self::ContractResponse => PayloadFrameFamily::ContractControl,
+            Self::RpcExecuteRequest => PayloadFrameFamily::RpcCommand,
+            Self::RpcMetadata | Self::RpcBatch | Self::RpcCompletion => {
+                PayloadFrameFamily::RpcResultStream
+            }
+            Self::Error => PayloadFrameFamily::Diagnostic,
+        }
+    }
+
+    pub const fn frame_mapping(self) -> PayloadFrameMapping {
+        PayloadFrameMapping {
+            family: self.frame_family(),
+            transport_frame_code: self.wire_code(),
+        }
+    }
+
     pub const fn requires_contract_hash(self) -> bool {
         matches!(
             self,
             Self::RpcExecuteRequest | Self::RpcMetadata | Self::RpcBatch | Self::RpcCompletion
         )
+    }
+
+    pub const fn requires_non_empty_payload(self) -> bool {
+        matches!(self, Self::RpcExecuteRequest | Self::RpcBatch)
     }
 
     pub const fn metadata_must_precede_payload(self) -> bool {
@@ -65,5 +107,38 @@ mod tests {
             PayloadKind::try_from(10).unwrap_err().kind(),
             AndromedaErrorKind::Protocol
         );
+    }
+
+    #[test]
+    fn payload_kind_declares_transport_mapping_without_quic_dependency() {
+        assert_eq!(
+            PayloadKind::Hello.frame_mapping(),
+            PayloadFrameMapping {
+                family: PayloadFrameFamily::SessionControl,
+                transport_frame_code: 1,
+            }
+        );
+        assert_eq!(
+            PayloadKind::RpcBatch.frame_mapping(),
+            PayloadFrameMapping {
+                family: PayloadFrameFamily::RpcResultStream,
+                transport_frame_code: 7,
+            }
+        );
+        assert_eq!(
+            PayloadKind::Error.frame_mapping().family,
+            PayloadFrameFamily::Diagnostic
+        );
+    }
+
+    #[test]
+    fn payload_contract_and_body_requirements_are_explicit() {
+        assert!(PayloadKind::RpcExecuteRequest.requires_contract_hash());
+        assert!(PayloadKind::RpcBatch.requires_contract_hash());
+        assert!(PayloadKind::RpcExecuteRequest.requires_non_empty_payload());
+        assert!(PayloadKind::RpcBatch.requires_non_empty_payload());
+
+        assert!(!PayloadKind::Error.requires_contract_hash());
+        assert!(!PayloadKind::Error.requires_non_empty_payload());
     }
 }

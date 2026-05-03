@@ -2,23 +2,41 @@ use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId, SessionId, TransactionId,
 };
 
-use crate::StreamRole;
+use crate::{FrameFamily, StreamRole};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u32)]
 pub enum FrameType {
-    Hello,
-    Auth,
-    ContractRequest,
-    ContractResponse,
-    RpcExecuteRequest,
-    RpcMetadata,
-    RpcBatch,
-    RpcCompletion,
-    Error,
-    TelemetrySoftSignal,
+    Hello = 1,
+    Auth = 2,
+    ContractRequest = 3,
+    ContractResponse = 4,
+    RpcExecuteRequest = 5,
+    RpcMetadata = 6,
+    RpcBatch = 7,
+    RpcCompletion = 8,
+    Error = 9,
+    TelemetrySoftSignal = 100,
 }
 
 impl FrameType {
+    pub const fn wire_code(self) -> u32 {
+        self as u32
+    }
+
+    pub const fn frame_family(self) -> FrameFamily {
+        match self {
+            Self::Hello | Self::Auth => FrameFamily::SessionControl,
+            Self::ContractRequest | Self::ContractResponse => FrameFamily::ContractControl,
+            Self::RpcExecuteRequest => FrameFamily::RpcCommand,
+            Self::RpcMetadata | Self::RpcBatch | Self::RpcCompletion => {
+                FrameFamily::RpcResultStream
+            }
+            Self::Error => FrameFamily::Diagnostic,
+            Self::TelemetrySoftSignal => FrameFamily::Telemetry,
+        }
+    }
+
     pub const fn stream_role(self) -> StreamRole {
         match self {
             Self::Hello | Self::Auth => StreamRole::SessionControl,
@@ -41,8 +59,35 @@ impl FrameType {
         !self.allows_datagram()
     }
 
+    pub const fn requires_non_empty_payload(self) -> bool {
+        matches!(self, Self::RpcExecuteRequest | Self::RpcBatch)
+    }
+
     pub const fn metadata_must_precede(self) -> bool {
         matches!(self, Self::RpcBatch)
+    }
+}
+
+impl TryFrom<u32> for FrameType {
+    type Error = AndromedaError;
+
+    fn try_from(value: u32) -> Result<Self, AndromedaError> {
+        match value {
+            1 => Ok(Self::Hello),
+            2 => Ok(Self::Auth),
+            3 => Ok(Self::ContractRequest),
+            4 => Ok(Self::ContractResponse),
+            5 => Ok(Self::RpcExecuteRequest),
+            6 => Ok(Self::RpcMetadata),
+            7 => Ok(Self::RpcBatch),
+            8 => Ok(Self::RpcCompletion),
+            9 => Ok(Self::Error),
+            100 => Ok(Self::TelemetrySoftSignal),
+            _ => Err(AndromedaError::new(
+                AndromedaErrorKind::Protocol,
+                "unknown QUIC frame type code",
+            )),
+        }
     }
 }
 
@@ -70,7 +115,7 @@ impl FrameHeader {
     }
 
     pub fn validate_transport_policy(&self, stream_role: StreamRole) -> AndromedaResult<()> {
-        if self.frame_type.stream_role() == stream_role {
+        if stream_role.permits_family(self.frame_type.frame_family()) {
             return Ok(());
         }
 
@@ -90,7 +135,163 @@ pub struct FrameBytes {
 impl FrameBytes {
     pub fn validate(&self, stream_role: StreamRole) -> AndromedaResult<()> {
         self.header.validate_payload_length(self.payload.len())?;
-        self.header.validate_transport_policy(stream_role)
+        self.header.validate_transport_policy(stream_role)?;
+
+        if self.header.frame_type.requires_non_empty_payload() && self.payload.is_empty() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Protocol,
+                "frame type requires a non-empty payload",
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ResultStreamSequence {
+    request_context: Option<(RequestId, SessionId, Option<TransactionId>)>,
+    saw_metadata: bool,
+    saw_batch: bool,
+    completed: bool,
+}
+
+impl ResultStreamSequence {
+    pub const fn new() -> Self {
+        Self {
+            request_context: None,
+            saw_metadata: false,
+            saw_batch: false,
+            completed: false,
+        }
+    }
+
+    pub fn accept(&mut self, frame: &FrameBytes) -> AndromedaResult<()> {
+        frame.validate(StreamRole::ResultUnidirectional)?;
+        self.validate_context(frame.header)?;
+
+        match frame.header.frame_type {
+            FrameType::RpcMetadata => {
+                if self.saw_metadata || self.saw_batch || self.completed {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Protocol,
+                        "RPC metadata must be the first result-stream frame",
+                    ));
+                }
+
+                self.saw_metadata = true;
+            }
+            FrameType::RpcBatch => {
+                if !self.saw_metadata {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Protocol,
+                        "RPC metadata must precede RPC batch frames",
+                    ));
+                }
+
+                if self.completed {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Protocol,
+                        "RPC batch must not follow completion",
+                    ));
+                }
+
+                self.saw_batch = true;
+            }
+            FrameType::RpcCompletion => {
+                if !self.saw_metadata || !self.saw_batch {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Protocol,
+                        "RPC completion requires prior metadata and batch frames",
+                    ));
+                }
+
+                if self.completed {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Protocol,
+                        "RPC completion must appear once",
+                    ));
+                }
+
+                self.completed = true;
+            }
+            _ => {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Protocol,
+                    "result-stream sequence accepts only RPC metadata, batch, and completion",
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn is_complete(self) -> bool {
+        self.saw_metadata && self.saw_batch && self.completed
+    }
+
+    fn validate_context(&mut self, header: FrameHeader) -> AndromedaResult<()> {
+        let current_context = (header.request_id, header.session_id, header.tx_id);
+
+        match self.request_context {
+            Some(expected_context) if expected_context != current_context => {
+                Err(AndromedaError::new(
+                    AndromedaErrorKind::Protocol,
+                    "result-stream sequence changed request context",
+                ))
+            }
+            None => {
+                self.request_context = Some(current_context);
+                Ok(())
+            }
+            _ => Ok(()),
+        }
+    }
+}
+
+impl Default for ResultStreamSequence {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub fn validate_result_stream_sequence(frames: &[FrameBytes]) -> AndromedaResult<()> {
+    let mut sequence = ResultStreamSequence::new();
+
+    for frame in frames {
+        sequence.accept(frame)?;
+    }
+
+    if !sequence.is_complete() {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Protocol,
+            "result-stream sequence is incomplete",
+        ));
+    }
+
+    Ok(())
+}
+
+pub fn validate_single_frame_on_stream(
+    frame: &FrameBytes,
+    stream_role: StreamRole,
+) -> AndromedaResult<()> {
+    frame.validate(stream_role)
+}
+
+pub fn validate_frame_sequence(
+    frames: &[FrameBytes],
+    stream_role: StreamRole,
+) -> AndromedaResult<()> {
+    match stream_role {
+        StreamRole::ResultUnidirectional => validate_result_stream_sequence(frames),
+        _ => {
+            for frame in frames {
+                validate_single_frame_on_stream(frame, stream_role)?;
+            }
+
+            Ok(())
+        }
     }
 }
 
@@ -99,12 +300,16 @@ mod tests {
     use super::*;
 
     fn header(frame_type: FrameType) -> FrameHeader {
+        header_with_len(frame_type, 8)
+    }
+
+    fn header_with_len(frame_type: FrameType, payload_length: u64) -> FrameHeader {
         FrameHeader {
             frame_type,
             request_id: RequestId::new(1),
             session_id: SessionId::new(2),
             tx_id: None,
-            payload_length: 8,
+            payload_length,
             flags: 0,
             header_crc: 0,
         }
@@ -126,6 +331,24 @@ mod tests {
         assert!(FrameType::TelemetrySoftSignal.allows_datagram());
         assert!(!FrameType::RpcBatch.allows_datagram());
         assert!(FrameType::RpcBatch.requires_reliable_stream());
+    }
+
+    #[test]
+    fn frame_type_declares_locked_wire_codes_and_families() {
+        assert_eq!(FrameType::RpcBatch.wire_code(), 7);
+        assert_eq!(FrameType::try_from(7).unwrap(), FrameType::RpcBatch);
+        assert_eq!(
+            FrameType::RpcBatch.frame_family(),
+            FrameFamily::RpcResultStream
+        );
+        assert_eq!(
+            FrameType::TelemetrySoftSignal.frame_family(),
+            FrameFamily::Telemetry
+        );
+        assert_eq!(
+            FrameType::try_from(10).unwrap_err().kind(),
+            AndromedaErrorKind::Protocol
+        );
     }
 
     #[test]
@@ -174,6 +397,76 @@ mod tests {
         assert_eq!(
             frame
                 .validate(StreamRole::CommandBidirectional)
+                .unwrap_err()
+                .kind(),
+            AndromedaErrorKind::Protocol
+        );
+    }
+
+    #[test]
+    fn frame_bytes_rejects_empty_required_payloads() {
+        let frame = FrameBytes {
+            header: header_with_len(FrameType::RpcBatch, 0),
+            payload: Vec::new(),
+        };
+
+        assert_eq!(
+            frame
+                .validate(StreamRole::ResultUnidirectional)
+                .unwrap_err()
+                .kind(),
+            AndromedaErrorKind::Protocol
+        );
+    }
+
+    #[test]
+    fn result_stream_sequence_accepts_metadata_batch_completion() {
+        let frames = vec![
+            FrameBytes {
+                header: header_with_len(FrameType::RpcMetadata, 4),
+                payload: b"meta".to_vec(),
+            },
+            FrameBytes {
+                header: header_with_len(FrameType::RpcBatch, 3),
+                payload: b"row".to_vec(),
+            },
+            FrameBytes {
+                header: header_with_len(FrameType::RpcCompletion, 0),
+                payload: Vec::new(),
+            },
+        ];
+
+        assert!(validate_result_stream_sequence(&frames).is_ok());
+        assert!(validate_frame_sequence(&frames, StreamRole::ResultUnidirectional).is_ok());
+    }
+
+    #[test]
+    fn result_stream_sequence_rejects_batch_before_metadata() {
+        let frames = vec![FrameBytes {
+            header: header_with_len(FrameType::RpcBatch, 3),
+            payload: b"row".to_vec(),
+        }];
+
+        assert_eq!(
+            validate_result_stream_sequence(&frames).unwrap_err().kind(),
+            AndromedaErrorKind::Protocol
+        );
+    }
+
+    #[test]
+    fn result_stream_sequence_rejects_context_changes() {
+        let metadata = FrameBytes {
+            header: header_with_len(FrameType::RpcMetadata, 4),
+            payload: b"meta".to_vec(),
+        };
+        let mut batch = FrameBytes {
+            header: header_with_len(FrameType::RpcBatch, 3),
+            payload: b"row".to_vec(),
+        };
+        batch.header.request_id = RequestId::new(99);
+
+        assert_eq!(
+            validate_result_stream_sequence(&[metadata, batch])
                 .unwrap_err()
                 .kind(),
             AndromedaErrorKind::Protocol

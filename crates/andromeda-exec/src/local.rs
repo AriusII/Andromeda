@@ -5,12 +5,14 @@ use andromeda_storage::WalRecordKind;
 use andromeda_tx::{TransactionEvent, TransactionStateMachine};
 
 use crate::{
-    CompletionStatus, InvocationCompletion, InvocationRequest, InvocationWal, ResultStreamMetadata,
+    CompletionStatus, InvocationCompletion, InvocationContext, InvocationRequest, InvocationWal,
+    ResultStreamMetadata,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalProcedure {
     pub contract: ProcedureContractRef,
+    pub required_permissions: Vec<String>,
     pub result_metadata: ResultStreamMetadata,
     pub mutation_payload: Vec<u8>,
     pub rows_affected: u64,
@@ -20,6 +22,15 @@ impl LocalProcedure {
     pub fn validate(&self) -> AndromedaResult<()> {
         self.contract.validate()?;
         self.result_metadata.validate_before_payload()?;
+
+        for permission in &self.required_permissions {
+            if permission.trim().is_empty() {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Security,
+                    "required permission must not be empty",
+                ));
+            }
+        }
 
         if self.mutation_payload.is_empty() && self.rows_affected != 0 {
             return Err(AndromedaError::new(
@@ -36,6 +47,7 @@ impl LocalProcedure {
 pub struct VerticalInvocationOutcome {
     pub completion: InvocationCompletion,
     pub contract_trace: DecisionTrace,
+    pub authorization_trace: Option<DecisionTrace>,
     pub result_metadata: ResultStreamMetadata,
 }
 
@@ -64,6 +76,35 @@ where
         request: InvocationRequest,
         procedure: &LocalProcedure,
         trace_id: TraceId,
+    ) -> AndromedaResult<VerticalInvocationOutcome> {
+        self.execute_after_admission(request, procedure, trace_id, None)
+    }
+
+    pub fn execute_authorized(
+        &mut self,
+        request: InvocationRequest,
+        procedure: &LocalProcedure,
+        context: &InvocationContext,
+    ) -> AndromedaResult<VerticalInvocationOutcome> {
+        procedure.validate()?;
+        let authorization_trace = context
+            .authorize(&procedure.required_permissions)
+            .map_err(|reject| AndromedaError::new(AndromedaErrorKind::Security, reject.reason))?;
+
+        self.execute_after_admission(
+            request,
+            procedure,
+            context.trace_id,
+            Some(authorization_trace),
+        )
+    }
+
+    fn execute_after_admission(
+        &mut self,
+        request: InvocationRequest,
+        procedure: &LocalProcedure,
+        trace_id: TraceId,
+        authorization_trace: Option<DecisionTrace>,
     ) -> AndromedaResult<VerticalInvocationOutcome> {
         procedure.validate()?;
         let contract_trace = request
@@ -103,6 +144,7 @@ where
                 trace_id,
             },
             contract_trace,
+            authorization_trace,
             result_metadata: procedure.result_metadata,
         })
     }
@@ -111,7 +153,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_catalog::{inventory_reserve_stock_contract, ProcedureContractRef};
+    use andromeda_catalog::{ProcedureContractRef, inventory_reserve_stock_contract};
     use andromeda_core::{CatalogVersion, ContractHash, InvocationId, ProcedureId};
     use andromeda_srpl::Cardinality;
     use andromeda_storage::{InMemoryWal, Lsn, WalRecordKind};
@@ -161,6 +203,7 @@ mod tests {
         let mut runtime = LocalVerticalRuntime::new(TestWal::default());
         let procedure = LocalProcedure {
             contract: request(ContractHash::test_vector(7)).procedure,
+            required_permissions: Vec::new(),
             result_metadata: ResultStreamMetadata {
                 stream_id: 1,
                 row_count_exact: Some(1),
@@ -194,6 +237,7 @@ mod tests {
         let mut runtime = LocalVerticalRuntime::new(TestWal::default());
         let procedure = LocalProcedure {
             contract: request(ContractHash::test_vector(7)).procedure,
+            required_permissions: Vec::new(),
             result_metadata: ResultStreamMetadata {
                 stream_id: 1,
                 row_count_exact: Some(1),
@@ -228,6 +272,7 @@ mod tests {
         };
         let procedure = LocalProcedure {
             contract: contract.as_ref(),
+            required_permissions: contract.required_permissions.clone(),
             result_metadata: ResultStreamMetadata {
                 stream_id: 1,
                 row_count_exact: Some(1),
@@ -240,12 +285,53 @@ mod tests {
         let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
 
         let outcome = runtime
-            .execute(request, &procedure, TraceId::new(7000))
+            .execute_authorized(
+                request,
+                &procedure,
+                &InvocationContext::new(TraceId::new(7000), contract.required_permissions.clone()),
+            )
             .unwrap();
 
         assert_eq!(outcome.completion.status, CompletionStatus::Committed);
+        assert!(outcome.authorization_trace.is_some());
         assert_eq!(outcome.completion.durable_lsn, Some(Lsn::new(3)));
         assert_eq!(runtime.wal().durable_lsn(), Lsn::new(3));
         assert_eq!(runtime.wal().replay_durable().len(), 3);
+    }
+
+    #[test]
+    fn local_vertical_runtime_rejects_missing_permission_before_begin() {
+        let contract = inventory_reserve_stock_contract().unwrap();
+        let request = InvocationRequest {
+            invocation_id: InvocationId::new(701),
+            procedure: contract.as_ref(),
+            expected_contract_hash: contract.contract_hash,
+            catalog_version: contract.object.catalog_version,
+            structured_parameters: Vec::new(),
+        };
+        let procedure = LocalProcedure {
+            contract: contract.as_ref(),
+            required_permissions: contract.required_permissions.clone(),
+            result_metadata: ResultStreamMetadata {
+                stream_id: 1,
+                row_count_exact: Some(1),
+                column_count: contract.result_streams[0].columns.len() as u32,
+                cardinality: Cardinality::One,
+            },
+            mutation_payload: b"Inventory.ReserveStock".to_vec(),
+            rows_affected: 1,
+        };
+        let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
+
+        let err = runtime
+            .execute_authorized(
+                request,
+                &procedure,
+                &InvocationContext::new(TraceId::new(7001), Vec::new()),
+            )
+            .unwrap_err();
+
+        assert_eq!(err.kind(), AndromedaErrorKind::Security);
+        assert!(runtime.wal().is_empty());
     }
 }

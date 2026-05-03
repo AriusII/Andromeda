@@ -1,4 +1,5 @@
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
+use std::collections::BTreeMap;
 
 use crate::Lsn;
 
@@ -49,6 +50,26 @@ impl WalRecordKind {
                 | Self::CatalogChangeBegin
                 | Self::CatalogChangeApply
                 | Self::CatalogChangeCommit
+        )
+    }
+
+    pub const fn is_redo_relevant(self) -> bool {
+        matches!(
+            self,
+            Self::PageAllocate
+                | Self::PageFormat
+                | Self::RowInsert
+                | Self::RowUpdate
+                | Self::RowDelete
+                | Self::IndexInsert
+                | Self::IndexDelete
+                | Self::MvccVersionCreate
+                | Self::MvccVersionClose
+                | Self::MapDeltaAppend
+                | Self::ManifestSwitch
+                | Self::CatalogChangeApply
+                | Self::CatalogChangeCommit
+                | Self::SecurityAuditAppend
         )
     }
 }
@@ -164,6 +185,65 @@ impl WalRecord {
     pub fn payload(&self) -> &[u8] {
         &self.payload
     }
+
+    pub const fn transaction_id(&self) -> Option<TransactionId> {
+        self.header.transaction_id
+    }
+
+    pub fn is_for_transaction(&self, transaction_id: TransactionId) -> bool {
+        matches!(self.header.transaction_id, Some(id) if id.get() == transaction_id.get())
+    }
+
+    pub const fn is_transaction_terminal(&self) -> bool {
+        matches!(
+            self.header.kind,
+            WalRecordKind::TxCommit | WalRecordKind::TxRollback
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DurableTransactionState {
+    Open,
+    Committed,
+    RolledBack,
+    Incomplete,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DurableTransactionResume {
+    pub transaction_id: TransactionId,
+    pub state: DurableTransactionState,
+    pub first_lsn: Lsn,
+    pub last_lsn: Lsn,
+    pub begin_lsn: Option<Lsn>,
+    pub commit_lsn: Option<Lsn>,
+    pub rollback_lsn: Option<Lsn>,
+    pub record_count: usize,
+}
+
+impl DurableTransactionResume {
+    pub const fn is_complete(self) -> bool {
+        matches!(
+            self.state,
+            DurableTransactionState::Committed | DurableTransactionState::RolledBack
+        )
+    }
+
+    pub const fn is_incomplete(self) -> bool {
+        matches!(
+            self.state,
+            DurableTransactionState::Open | DurableTransactionState::Incomplete
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IncompleteDurableTransaction {
+    pub transaction_id: TransactionId,
+    pub first_lsn: Lsn,
+    pub last_lsn: Lsn,
+    pub record_count: usize,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -278,7 +358,7 @@ impl InMemoryWal {
         }
     }
 
-    pub fn durable_records(&self) -> impl Iterator<Item=&WalRecord> {
+    pub fn durable_records(&self) -> impl Iterator<Item = &WalRecord> {
         let durable_lsn = self.durable_lsn;
         self.records
             .iter()
@@ -287,6 +367,29 @@ impl InMemoryWal {
 
     pub fn replay_durable(&self) -> Vec<WalRecord> {
         self.durable_records().cloned().collect()
+    }
+
+    pub fn durable_records_for_transaction(
+        &self,
+        transaction_id: TransactionId,
+    ) -> Vec<&WalRecord> {
+        self.durable_records()
+            .filter(|record| record.is_for_transaction(transaction_id))
+            .collect()
+    }
+
+    pub fn resume_transaction(
+        &self,
+        transaction_id: TransactionId,
+    ) -> Option<DurableTransactionResume> {
+        summarize_transaction(
+            transaction_id,
+            self.durable_records_for_transaction(transaction_id),
+        )
+    }
+
+    pub fn incomplete_durable_transactions(&self) -> Vec<IncompleteDurableTransaction> {
+        incomplete_transactions_from_records(self.durable_records())
     }
 }
 
@@ -349,6 +452,93 @@ fn wal_record_kind_tag(kind: WalRecordKind) -> u64 {
         WalRecordKind::CatalogChangeCommit => 21,
         WalRecordKind::SecurityAuditAppend => 22,
     }
+}
+
+pub fn summarize_transaction<'a>(
+    transaction_id: TransactionId,
+    records: impl IntoIterator<Item = &'a WalRecord>,
+) -> Option<DurableTransactionResume> {
+    let mut first_lsn = None;
+    let mut last_lsn = None;
+    let mut begin_lsn = None;
+    let mut commit_lsn = None;
+    let mut rollback_lsn = None;
+    let mut record_count = 0;
+
+    for record in records {
+        if !record.is_for_transaction(transaction_id) {
+            continue;
+        }
+
+        let lsn = record.header.lsn;
+        first_lsn = Some(first_lsn.map_or(lsn, |current: Lsn| current.min(lsn)));
+        last_lsn = Some(last_lsn.map_or(lsn, |current: Lsn| current.max(lsn)));
+        record_count += 1;
+
+        match record.header.kind {
+            WalRecordKind::TxBegin => begin_lsn = Some(lsn),
+            WalRecordKind::TxCommit => commit_lsn = Some(lsn),
+            WalRecordKind::TxRollback => rollback_lsn = Some(lsn),
+            _ => {}
+        }
+    }
+
+    let first_lsn = first_lsn?;
+    let last_lsn = last_lsn?;
+    let state = match (begin_lsn, commit_lsn, rollback_lsn) {
+        (_, Some(_), _) => DurableTransactionState::Committed,
+        (_, _, Some(_)) => DurableTransactionState::RolledBack,
+        (Some(_), None, None) => DurableTransactionState::Open,
+        (None, None, None) => DurableTransactionState::Incomplete,
+    };
+
+    Some(DurableTransactionResume {
+        transaction_id,
+        state,
+        first_lsn,
+        last_lsn,
+        begin_lsn,
+        commit_lsn,
+        rollback_lsn,
+        record_count,
+    })
+}
+
+pub fn summarize_transactions_from_records<'a>(
+    records: impl IntoIterator<Item = &'a WalRecord>,
+) -> Vec<DurableTransactionResume> {
+    let mut grouped: BTreeMap<u64, Vec<&WalRecord>> = BTreeMap::new();
+
+    for record in records {
+        if let Some(transaction_id) = record.transaction_id() {
+            grouped
+                .entry(transaction_id.get())
+                .or_default()
+                .push(record);
+        }
+    }
+
+    grouped
+        .into_iter()
+        .filter_map(|(transaction_id, records)| {
+            summarize_transaction(TransactionId::new(transaction_id), records)
+        })
+        .collect()
+}
+
+pub fn incomplete_transactions_from_records<'a>(
+    records: impl IntoIterator<Item = &'a WalRecord>,
+) -> Vec<IncompleteDurableTransaction> {
+    summarize_transactions_from_records(records)
+        .into_iter()
+        .filter(|summary| summary.is_incomplete())
+        .map(|summary| IncompleteDurableTransaction {
+            transaction_id: summary.transaction_id,
+            first_lsn: summary.first_lsn,
+            last_lsn: summary.last_lsn,
+            record_count: summary.record_count,
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -428,6 +618,33 @@ mod tests {
     }
 
     #[test]
+    fn durable_resume_summarizes_transaction_records() {
+        let mut wal = InMemoryWal::new();
+        let committed_tx = TransactionId::new(11);
+        let open_tx = TransactionId::new(12);
+
+        wal.append_tx_begin(committed_tx).unwrap();
+        wal.append_payload(WalRecordKind::RowUpdate, Some(committed_tx), b"row-1")
+            .unwrap();
+        let commit_lsn = wal.append_tx_commit(committed_tx).unwrap();
+        wal.append_tx_begin(open_tx).unwrap();
+        wal.append_payload(WalRecordKind::RowInsert, Some(open_tx), b"row-2")
+            .unwrap();
+        wal.flush_all().unwrap();
+
+        let resume = wal.resume_transaction(committed_tx).unwrap();
+        assert_eq!(resume.state, DurableTransactionState::Committed);
+        assert_eq!(resume.commit_lsn, Some(commit_lsn));
+        assert_eq!(resume.record_count, 3);
+        assert!(resume.is_complete());
+
+        let incomplete = wal.incomplete_durable_transactions();
+        assert_eq!(incomplete.len(), 1);
+        assert_eq!(incomplete[0].transaction_id, open_tx);
+        assert_eq!(incomplete[0].record_count, 2);
+    }
+
+    #[test]
     fn in_memory_wal_rejects_invalid_records() {
         let mut wal = InMemoryWal::new();
         let transaction_id = TransactionId::new(10);
@@ -446,7 +663,7 @@ mod tests {
             Some(transaction_id),
             Vec::new(),
         )
-            .unwrap();
+        .unwrap();
         invalid_payload_length.header.payload_length = 99;
 
         assert_eq!(
@@ -461,7 +678,7 @@ mod tests {
             Some(transaction_id),
             Vec::new(),
         )
-            .unwrap();
+        .unwrap();
 
         assert_eq!(
             wal.append(skipped_lsn).unwrap_err().kind(),

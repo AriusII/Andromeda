@@ -36,7 +36,7 @@ impl FrameEnvelope {
             payload_kind: PayloadKind::RpcExecuteRequest,
             payload: payload.into(),
         }
-            .validated()
+        .validated()
     }
 
     pub fn to_completion_envelope(&self, payload: impl Into<Vec<u8>>) -> AndromedaResult<Self> {
@@ -59,18 +59,107 @@ impl FrameEnvelope {
     }
 
     pub fn validate(&self) -> AndromedaResult<()> {
-        if !self.protocol_version.is_supported() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Protocol,
-                "unsupported protocol major version",
-            ));
-        }
+        self.protocol_version.validate()?;
 
         if self.payload_kind.requires_contract_hash() && self.contract_hash.is_zero() {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Contract,
                 "payload kind requires a nonzero ContractHash",
             ));
+        }
+
+        if self.payload_kind.requires_non_empty_payload() && self.payload.is_empty() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Protocol,
+                "payload kind requires a non-empty payload",
+            ));
+        }
+
+        Ok(())
+    }
+
+    pub fn validate_rpc_stream_sequence(sequence: &[Self]) -> AndromedaResult<()> {
+        let mut saw_metadata = false;
+        let mut saw_completion = false;
+        let mut request_context: Option<(
+            RequestId,
+            SessionId,
+            Option<TransactionId>,
+            ContractHash,
+            CatalogVersion,
+        )> = None;
+
+        for envelope in sequence {
+            envelope.validate()?;
+
+            if matches!(
+                envelope.payload_kind,
+                PayloadKind::RpcMetadata | PayloadKind::RpcBatch | PayloadKind::RpcCompletion
+            ) {
+                let current_context = (
+                    envelope.request_id,
+                    envelope.session_id,
+                    envelope.tx_id,
+                    envelope.contract_hash,
+                    envelope.catalog_version,
+                );
+
+                match request_context {
+                    Some(expected_context) if expected_context != current_context => {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Protocol,
+                            "RPC stream sequence changed request context",
+                        ));
+                    }
+                    None => request_context = Some(current_context),
+                    _ => {}
+                }
+            }
+
+            match envelope.payload_kind {
+                PayloadKind::RpcMetadata => {
+                    if saw_completion {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Protocol,
+                            "RPC metadata must not follow completion",
+                        ));
+                    }
+
+                    saw_metadata = true;
+                }
+                PayloadKind::RpcBatch => {
+                    if !saw_metadata {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Protocol,
+                            "RPC metadata must precede RPC batch payloads",
+                        ));
+                    }
+
+                    if saw_completion {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Protocol,
+                            "RPC batch must not follow completion",
+                        ));
+                    }
+                }
+                PayloadKind::RpcCompletion => {
+                    if !saw_metadata {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Protocol,
+                            "RPC completion requires prior metadata",
+                        ));
+                    }
+
+                    saw_completion = true;
+                }
+                PayloadKind::Error => {}
+                _ => {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Protocol,
+                        "RPC stream sequence accepts only metadata, batch, completion, or error",
+                    ));
+                }
+            }
         }
 
         Ok(())
@@ -98,7 +187,7 @@ impl FrameEnvelope {
             payload_kind,
             payload: payload.into(),
         }
-            .validated()
+        .validated()
     }
 }
 
@@ -108,6 +197,19 @@ mod tests {
 
     fn hash(byte: u8) -> ContractHash {
         ContractHash::test_vector(byte)
+    }
+
+    fn envelope(payload_kind: PayloadKind, payload: Vec<u8>) -> FrameEnvelope {
+        FrameEnvelope {
+            protocol_version: ProtocolVersion::V1,
+            contract_hash: hash(7),
+            catalog_version: CatalogVersion::new(1),
+            request_id: RequestId::new(10),
+            session_id: SessionId::new(20),
+            tx_id: Some(TransactionId::new(30)),
+            payload_kind,
+            payload,
+        }
     }
 
     #[test]
@@ -139,7 +241,7 @@ mod tests {
             Some(TransactionId::new(30)),
             b"ProductId=42;Quantity=3".to_vec(),
         )
-            .unwrap();
+        .unwrap();
 
         assert_eq!(envelope.protocol_version, ProtocolVersion::V1);
         assert_eq!(envelope.payload_kind, PayloadKind::RpcExecuteRequest);
@@ -159,9 +261,30 @@ mod tests {
             None,
             Vec::new(),
         )
-            .unwrap_err();
+        .unwrap_err();
 
         assert_eq!(error.kind(), AndromedaErrorKind::Contract);
+    }
+
+    #[test]
+    fn rpc_execute_and_batch_require_non_empty_payloads() {
+        let execute_error = FrameEnvelope::rpc_execute_request(
+            hash(7),
+            CatalogVersion::new(3),
+            RequestId::new(10),
+            SessionId::new(20),
+            None,
+            Vec::new(),
+        )
+        .unwrap_err();
+
+        assert_eq!(execute_error.kind(), AndromedaErrorKind::Protocol);
+
+        let batch = envelope(PayloadKind::RpcBatch, Vec::new());
+        assert_eq!(
+            batch.validate().unwrap_err().kind(),
+            AndromedaErrorKind::Protocol
+        );
     }
 
     #[test]
@@ -174,7 +297,7 @@ mod tests {
             Some(TransactionId::new(30)),
             b"reserve".to_vec(),
         )
-            .unwrap();
+        .unwrap();
 
         let completion = request.to_completion_envelope(vec![1]).unwrap();
         let error = request
@@ -208,6 +331,59 @@ mod tests {
         };
 
         assert!(envelope.validate().is_ok());
+    }
+
+    #[test]
+    fn error_payload_is_allowed_without_contract_hash() {
+        let envelope = FrameEnvelope {
+            protocol_version: ProtocolVersion::V1,
+            contract_hash: ContractHash::zero(),
+            catalog_version: CatalogVersion::new(0),
+            request_id: RequestId::new(10),
+            session_id: SessionId::new(20),
+            tx_id: None,
+            payload_kind: PayloadKind::Error,
+            payload: b"protocol failure".to_vec(),
+        };
+
+        assert!(envelope.validate().is_ok());
+    }
+
+    #[test]
+    fn rpc_stream_sequence_requires_metadata_before_batch() {
+        let metadata = envelope(PayloadKind::RpcMetadata, b"columns".to_vec());
+        let batch = envelope(PayloadKind::RpcBatch, b"row".to_vec());
+        let completion = envelope(PayloadKind::RpcCompletion, Vec::new());
+
+        assert!(
+            FrameEnvelope::validate_rpc_stream_sequence(&[
+                metadata.clone(),
+                batch.clone(),
+                completion
+            ])
+            .is_ok()
+        );
+
+        assert_eq!(
+            FrameEnvelope::validate_rpc_stream_sequence(&[batch, metadata])
+                .unwrap_err()
+                .kind(),
+            AndromedaErrorKind::Protocol
+        );
+    }
+
+    #[test]
+    fn rpc_stream_sequence_rejects_context_changes() {
+        let metadata = envelope(PayloadKind::RpcMetadata, b"columns".to_vec());
+        let mut batch = envelope(PayloadKind::RpcBatch, b"row".to_vec());
+        batch.request_id = RequestId::new(11);
+
+        assert_eq!(
+            FrameEnvelope::validate_rpc_stream_sequence(&[metadata, batch])
+                .unwrap_err()
+                .kind(),
+            AndromedaErrorKind::Protocol
+        );
     }
 
     #[test]

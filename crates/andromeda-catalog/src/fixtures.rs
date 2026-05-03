@@ -41,7 +41,7 @@ pub fn inventory_reserve_stock_contract() -> AndromedaResult<ProcedureContract> 
         },
         compatibility_policy: CompatibilityPolicy::ExactHash,
     }
-        .validated()
+    .validated()
 }
 
 fn phase1_column(name: &str, scalar: ScalarType, ordinal: u32) -> ColumnDescriptor {

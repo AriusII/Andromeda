@@ -2,6 +2,7 @@ use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogObjectId, CatalogVersion,
     ColumnDescriptor,
 };
+use std::collections::BTreeSet;
 
 use crate::{contracts::ProcedureContract, names::QualifiedName};
 
@@ -24,6 +25,33 @@ pub struct CatalogObjectRef {
     pub catalog_version: CatalogVersion,
 }
 
+impl CatalogObjectRef {
+    pub fn validate_for_definition(&self, expected_kind: ObjectKind) -> AndromedaResult<()> {
+        if self.object_id.get() == 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "catalog object id must not be zero",
+            ));
+        }
+
+        if self.catalog_version.get() == 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "catalog object version must not be zero",
+            ));
+        }
+
+        if self.kind != expected_kind {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "catalog object kind must match its definition",
+            ));
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TableDefinition {
     pub object: CatalogObjectRef,
@@ -32,6 +60,7 @@ pub struct TableDefinition {
 
 impl TableDefinition {
     pub fn validate(&self) -> AndromedaResult<()> {
+        self.object.validate_for_definition(ObjectKind::Table)?;
         validate_columns(&self.columns)
     }
 }
@@ -45,6 +74,8 @@ pub struct StructuredObjectDefinition {
 
 impl StructuredObjectDefinition {
     pub fn validate(&self) -> AndromedaResult<()> {
+        self.object
+            .validate_for_definition(ObjectKind::StructuredObject)?;
         validate_columns(&self.fields)?;
 
         for unique_field in &self.unique_by {
@@ -74,11 +105,38 @@ pub struct EnumDefinition {
 
 impl EnumDefinition {
     pub fn validate(&self) -> AndromedaResult<()> {
+        self.object.validate_for_definition(ObjectKind::Enum)?;
+
         if self.variants.is_empty() {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Catalog,
                 "enum definition must contain at least one variant",
             ));
+        }
+
+        let mut variant_names = BTreeSet::new();
+        let mut variant_values = BTreeSet::new();
+        for variant in &self.variants {
+            if variant.name.trim().is_empty() {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Catalog,
+                    "enum variant name must not be empty",
+                ));
+            }
+
+            if !variant_names.insert(variant.name.as_str()) {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Catalog,
+                    "enum variant names must be unique",
+                ));
+            }
+
+            if !variant_values.insert(variant.value) {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Catalog,
+                    "enum variant values must be unique",
+                ));
+            }
         }
 
         Ok(())
@@ -94,6 +152,15 @@ pub enum CatalogDefinition {
 }
 
 impl CatalogDefinition {
+    pub fn object_ref(&self) -> &CatalogObjectRef {
+        match self {
+            Self::Table(definition) => &definition.object,
+            Self::StructuredObject(definition) => &definition.object,
+            Self::Enum(definition) => &definition.object,
+            Self::Procedure(definition) => &definition.object,
+        }
+    }
+
     pub fn kind(&self) -> ObjectKind {
         match self {
             Self::Table(_) => ObjectKind::Table,

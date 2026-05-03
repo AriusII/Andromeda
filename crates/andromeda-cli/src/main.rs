@@ -3,7 +3,8 @@
 use andromeda_catalog::inventory_reserve_stock_contract;
 use andromeda_core::{AndromedaResult, HardwareProfile, InvocationId};
 use andromeda_exec::{
-    CompletionStatus, InvocationRequest, LocalProcedure, LocalVerticalRuntime, ResultStreamMetadata,
+    CompletionStatus, InvocationContext, InvocationRequest, LocalProcedure, LocalVerticalRuntime,
+    ResultStreamMetadata,
 };
 use andromeda_observe::TraceId;
 use andromeda_srpl::Cardinality;
@@ -53,6 +54,7 @@ fn run_vertical_demo() -> AndromedaResult<()> {
     };
     let procedure = LocalProcedure {
         contract: contract.as_ref(),
+        required_permissions: contract.required_permissions.clone(),
         result_metadata: ResultStreamMetadata {
             stream_id: 1,
             row_count_exact: Some(1),
@@ -63,7 +65,8 @@ fn run_vertical_demo() -> AndromedaResult<()> {
         rows_affected: 1,
     };
     let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
-    let outcome = runtime.execute(request, &procedure, TraceId::new(1))?;
+    let context = InvocationContext::new(TraceId::new(1), contract.required_permissions.clone());
+    let outcome = runtime.execute_authorized(request, &procedure, &context)?;
     let durable_lsn = outcome
         .completion
         .durable_lsn
@@ -82,6 +85,12 @@ fn run_vertical_demo() -> AndromedaResult<()> {
         "contract trace: {:?} ({})",
         outcome.contract_trace.decision, outcome.contract_trace.reason
     );
+    if let Some(trace) = &outcome.authorization_trace {
+        println!(
+            "authorization trace: {:?} ({})",
+            trace.decision, trace.reason
+        );
+    }
 
     debug_assert_eq!(outcome.completion.status, CompletionStatus::Committed);
     Ok(())

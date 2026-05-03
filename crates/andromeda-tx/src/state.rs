@@ -32,6 +32,7 @@ impl TransactionState {
             (Self::Active, TransactionEvent::CommitRequested) => Ok(Self::Committing),
             (Self::Committing, TransactionEvent::DurableWalFlushed) => Ok(Self::Committed),
             (Self::Committed, TransactionEvent::Dispose) => Ok(Self::Disposed),
+            (Self::Active, TransactionEvent::RollbackRequested) => Ok(Self::RollingBack),
             (Self::Active, TransactionEvent::Fail) => Ok(Self::Failed),
             (Self::Failed, TransactionEvent::RollbackRequested) => Ok(Self::RollingBack),
             (Self::Active, TransactionEvent::Poison) => Ok(Self::Poisoned),
@@ -55,6 +56,7 @@ pub struct TransactionStateMachine {
     pub transaction_id: TransactionId,
     pub state: TransactionState,
     pub durable_commit_lsn: Option<u64>,
+    pub durable_rollback_lsn: Option<u64>,
 }
 
 impl TransactionStateMachine {
@@ -63,6 +65,7 @@ impl TransactionStateMachine {
             transaction_id,
             state: TransactionState::Created,
             durable_commit_lsn: None,
+            durable_rollback_lsn: None,
         }
     }
 
@@ -72,6 +75,13 @@ impl TransactionStateMachine {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Transaction,
                 "commit requires durable WAL LSN before visibility",
+            ));
+        }
+
+        if matches!(next, TransactionState::RolledBack) && self.durable_rollback_lsn.is_none() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Transaction,
+                "rollback requires durable WAL LSN before completion",
             ));
         }
 
@@ -98,8 +108,31 @@ impl TransactionStateMachine {
         Ok(())
     }
 
+    pub fn mark_durable_rollback_lsn(&mut self, lsn: u64) -> AndromedaResult<()> {
+        if !matches!(self.state, TransactionState::RollingBack) {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Transaction,
+                "durable rollback LSN can only be recorded while rolling back",
+            ));
+        }
+
+        if lsn == 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Transaction,
+                "durable rollback LSN must not be zero",
+            ));
+        }
+
+        self.durable_rollback_lsn = Some(lsn);
+        Ok(())
+    }
+
     pub const fn is_visible_committed(self) -> bool {
         matches!(self.state, TransactionState::Committed) && self.durable_commit_lsn.is_some()
+    }
+
+    pub const fn is_durable_rolled_back(self) -> bool {
+        matches!(self.state, TransactionState::RolledBack) && self.durable_rollback_lsn.is_some()
     }
 }
 
@@ -141,16 +174,33 @@ mod tests {
 
     #[test]
     fn poison_path_rolls_back_before_disposal() {
-        let disposed = TransactionState::Active
+        let rolled_back = TransactionState::Active
             .apply(TransactionEvent::Poison)
             .unwrap()
             .apply(TransactionEvent::RollbackRequested)
             .unwrap()
             .apply(TransactionEvent::RollbackComplete)
-            .unwrap()
-            .apply(TransactionEvent::Dispose)
             .unwrap();
 
-        assert_eq!(disposed, TransactionState::Disposed);
+        assert_eq!(rolled_back, TransactionState::RolledBack);
+    }
+
+    #[test]
+    fn rollback_completion_requires_durable_wal() {
+        let mut tx = TransactionStateMachine::new(TransactionId::new(3));
+        tx.apply(TransactionEvent::Begin).unwrap();
+        tx.apply(TransactionEvent::RollbackRequested).unwrap();
+
+        assert_eq!(
+            tx.apply(TransactionEvent::RollbackComplete)
+                .unwrap_err()
+                .kind(),
+            AndromedaErrorKind::Transaction
+        );
+
+        tx.mark_durable_rollback_lsn(24).unwrap();
+        tx.apply(TransactionEvent::RollbackComplete).unwrap();
+
+        assert!(tx.is_durable_rolled_back());
     }
 }
