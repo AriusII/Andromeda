@@ -90,6 +90,12 @@ impl CatalogSnapshot {
         self.objects_by_id.get(&object_id)
     }
 
+    pub fn get_by_name(&self, name: &QualifiedName) -> Option<&CatalogDefinition> {
+        self.object_names
+            .get(name)
+            .and_then(|object_id| self.objects_by_id.get(object_id))
+    }
+
     pub fn lifecycle_by_id(&self, object_id: CatalogObjectId) -> Option<CatalogObjectLifecycle> {
         self.object_lifecycle.get(&object_id).copied()
     }

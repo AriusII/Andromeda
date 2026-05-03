@@ -1,5 +1,7 @@
 use andromeda_catalog::{
-    AccessMode, CompatibilityPolicy, IsolationPolicy, ObjectKind, QualifiedName, TransactionPolicy,
+    AccessMode, CatalogSnapshot, CompatibilityPolicy, INVENTORY_DATABASE_ID,
+    INVENTORY_NAMESPACE_ID, IsolationPolicy, ObjectKind, QualifiedName, TransactionPolicy,
+    inventory_domain_definition_batch,
 };
 use andromeda_core::{
     AndromedaErrorKind, CatalogObjectId, CatalogVersion, ColumnDescriptor, ProcedureId, ScalarType,
@@ -8,8 +10,9 @@ use andromeda_core::{
 use andromeda_srpl::{
     SourceSpan,
     compiler::{
-        compile_narrow_procedure_contract_candidate, compile_narrow_procedure_signature,
-        inventory_reserve_stock_body_ir, lower_ir_to_contract_candidate, parse_procedure_signature,
+        bind_executable_procedure_plan, compile_narrow_procedure_contract_candidate,
+        compile_narrow_procedure_signature, inventory_reserve_stock_body_ir,
+        lower_ir_to_contract_candidate, parse_procedure_signature,
     },
     diagnostics::DiagnosticPhase,
     model::{
@@ -275,4 +278,106 @@ fn reserve_stock_body_skeleton_is_typed_and_deterministic() {
         &first.operations[3].kind,
         SrplBusinessOperationKindIr::Emit { .. }
     ));
+}
+
+fn inventory_catalog_snapshot() -> CatalogSnapshot {
+    let batch = inventory_domain_definition_batch().unwrap();
+    let plan = batch.dry_run().unwrap();
+    let mut snapshot = CatalogSnapshot::empty(
+        INVENTORY_DATABASE_ID,
+        INVENTORY_NAMESPACE_ID,
+        batch.base_version,
+    );
+    snapshot.apply_mutation_plan(&plan.mutation_plan).unwrap();
+    snapshot
+}
+
+#[test]
+fn inventory_reserve_stock_body_binds_to_deterministic_executable_plan() {
+    let mut ir = compile_narrow_procedure_signature(
+        "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool);",
+    )
+    .unwrap();
+    ir.body = inventory_reserve_stock_body_ir().unwrap();
+    let snapshot = inventory_catalog_snapshot();
+
+    let first = bind_executable_procedure_plan(&ir, &snapshot).unwrap();
+    let second = bind_executable_procedure_plan(&ir, &snapshot).unwrap();
+
+    assert_eq!(first, second);
+    assert_eq!(first.body.operations.len(), 4);
+    assert_eq!(first.evidence.catalog_version, snapshot.version);
+    assert_eq!(
+        first.evidence.procedure_object.name.as_catalog_path(),
+        "Inventory.ReserveStock"
+    );
+    assert!(!first.evidence.procedure_contract.contract_hash.is_zero());
+    assert_eq!(
+        first.evidence.stock_object.object.name.as_catalog_path(),
+        "Inventory.ProductStock"
+    );
+    assert!(!first.evidence.stock_object.shape_hash.is_zero());
+    assert_eq!(
+        first
+            .evidence
+            .reservation_object
+            .object
+            .name
+            .as_catalog_path(),
+        "Inventory.Reservation"
+    );
+    assert!(first.validate().is_ok());
+}
+
+#[test]
+fn executable_plan_rejects_unbound_inventory_catalog_objects() {
+    let mut ir = compile_narrow_procedure_signature(
+        "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool);",
+    )
+    .unwrap();
+    ir.body = inventory_reserve_stock_body_ir().unwrap();
+    let snapshot = CatalogSnapshot::empty(
+        INVENTORY_DATABASE_ID,
+        INVENTORY_NAMESPACE_ID,
+        CatalogVersion::new(1),
+    );
+
+    let error = bind_executable_procedure_plan(&ir, &snapshot).unwrap_err();
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+    assert!(error.message().contains("missing procedure contract"));
+}
+
+#[test]
+fn executable_plan_rejects_stale_catalog_version_evidence() {
+    let mut ir = compile_narrow_procedure_signature(
+        "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool);",
+    )
+    .unwrap();
+    ir.body = inventory_reserve_stock_body_ir().unwrap();
+    let mut snapshot = inventory_catalog_snapshot();
+    snapshot.version = CatalogVersion::new(2);
+
+    let error = bind_executable_procedure_plan(&ir, &snapshot).unwrap_err();
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+    assert!(error.message().contains("active catalog version"));
+}
+
+#[test]
+fn executable_plan_rejects_unsupported_operation_order_and_cardinality() {
+    let mut ir = compile_narrow_procedure_signature(
+        "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool);",
+    )
+    .unwrap();
+    ir.body = inventory_reserve_stock_body_ir().unwrap();
+    ir.body.operations.swap(1, 2);
+    ir.body.operations[1].ordinal = 1;
+    ir.body.operations[2].ordinal = 2;
+    let snapshot = inventory_catalog_snapshot();
+
+    let error = bind_executable_procedure_plan(&ir, &snapshot).unwrap_err();
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Srpl);
+    assert!(error.message().contains("operation order"));
 }

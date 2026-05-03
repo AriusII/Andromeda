@@ -1,14 +1,18 @@
 use andromeda_catalog::{
-    CatalogObjectRef, ObjectKind, ProcedureContractCandidate, ResultStreamContract,
+    CatalogDefinition, CatalogObjectRef, CatalogSnapshot, ObjectKind, ProcedureContract,
+    ProcedureContractCandidate, QualifiedName, ResultStreamContract, StructuredObjectDefinition,
+    TableDefinition,
 };
-use andromeda_core::AndromedaResult;
-use std::collections::BTreeSet;
+use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, ColumnDescriptor};
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    BoundProcedure, BusinessOperationKindAst, ProcedureAst, ProcedureBodyAst, SrplAssignmentIr,
-    SrplBusinessOperationIr, SrplBusinessOperationKindIr, SrplDiagnostic, SrplEmitValueIr,
-    SrplPredicateIr, SrplProcedureBodyIr, SrplProcedureContractMetadata, SrplProcedureIr,
-    SrplResultStreamIr, SrplValueIr,
+    BoundProcedure, BoundSrplBodyPlan, BoundSrplOperationPlan, BusinessOperationKindAst,
+    ExecutableProcedurePlan, ProcedureAst, ProcedureBodyAst, SrplAssignmentIr,
+    SrplBusinessOperationIr, SrplBusinessOperationKindIr, SrplCatalogBindingEvidence,
+    SrplDiagnostic, SrplEmitValueIr, SrplObjectBindingEvidence, SrplPredicateIr,
+    SrplProcedureBodyIr, SrplProcedureContractMetadata, SrplProcedureIr, SrplResultStreamIr,
+    SrplValueIr,
 };
 
 pub fn lower_bound_procedure(bound: BoundProcedure) -> AndromedaResult<SrplProcedureIr> {
@@ -169,6 +173,56 @@ pub fn compile_narrow_procedure_contract_candidate(
     })
 }
 
+pub fn bind_executable_procedure_plan(
+    ir: &SrplProcedureIr,
+    catalog: &CatalogSnapshot,
+) -> AndromedaResult<ExecutableProcedurePlan> {
+    ir.body.validate_bounded()?;
+    validate_no_sql_like_symbols(ir)?;
+
+    let procedure = lookup_procedure_contract(catalog, &ir.name)?;
+    procedure.validate_canonical_hash()?;
+    validate_signature_matches_contract(ir, procedure)?;
+
+    if procedure.object.catalog_version != catalog.version {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Catalog,
+            "SRPL executable plan requires procedure contract at the active catalog version",
+        ));
+    }
+
+    let product_stock_name = QualifiedName::parse("Inventory.ProductStock")?;
+    let reservation_name = QualifiedName::parse("Inventory.Reservation")?;
+    let stock_definition = lookup_table(catalog, &product_stock_name)?;
+    let reservation_definition = lookup_structured_object(catalog, &reservation_name)?;
+
+    validate_inventory_operation_order(&ir.body)?;
+    let bound_operations = bind_body_operations(ir, stock_definition, reservation_definition)?;
+    validate_result_emission(ir, &bound_operations)?;
+
+    let plan = ExecutableProcedurePlan {
+        procedure_name: ir.name.clone(),
+        body: BoundSrplBodyPlan {
+            operations: bound_operations,
+        },
+        evidence: SrplCatalogBindingEvidence {
+            catalog_version: catalog.version,
+            procedure_object: procedure.object.clone(),
+            procedure_contract: procedure.as_ref(),
+            stock_object: SrplObjectBindingEvidence {
+                object: stock_definition.object.clone(),
+                shape_hash: stock_definition.shape_hash(),
+            },
+            reservation_object: SrplObjectBindingEvidence {
+                object: reservation_definition.object.clone(),
+                shape_hash: reservation_definition.shape_hash(),
+            },
+        },
+    };
+    plan.validate()?;
+    Ok(plan)
+}
+
 pub fn inventory_reserve_stock_body_ir() -> Result<SrplProcedureBodyIr, SrplDiagnostic> {
     let body = SrplProcedureBodyIr {
         operations: vec![
@@ -245,6 +299,479 @@ pub fn inventory_reserve_stock_body_ir() -> Result<SrplProcedureBodyIr, SrplDiag
         SrplDiagnostic::new(crate::DiagnosticPhase::IrLowering, None, error.to_string())
     })?;
     Ok(body)
+}
+
+fn lookup_procedure_contract<'a>(
+    catalog: &'a CatalogSnapshot,
+    name: &QualifiedName,
+) -> AndromedaResult<&'a ProcedureContract> {
+    match catalog.get_by_name(name) {
+        Some(CatalogDefinition::Procedure(contract))
+            if catalog.is_active_object(contract.object.object_id) =>
+        {
+            Ok(contract)
+        }
+        Some(CatalogDefinition::Procedure(_)) => Err(AndromedaError::new(
+            AndromedaErrorKind::Catalog,
+            "SRPL executable plan cannot bind a deprecated procedure contract",
+        )),
+        Some(_) => Err(AndromedaError::new(
+            AndromedaErrorKind::Catalog,
+            "SRPL executable plan procedure name resolved to a non-procedure object",
+        )),
+        None => Err(AndromedaError::new(
+            AndromedaErrorKind::Catalog,
+            "SRPL executable plan cannot bind missing procedure contract",
+        )),
+    }
+}
+
+fn lookup_table<'a>(
+    catalog: &'a CatalogSnapshot,
+    name: &QualifiedName,
+) -> AndromedaResult<&'a TableDefinition> {
+    match catalog.get_by_name(name) {
+        Some(CatalogDefinition::Table(table))
+            if catalog.is_active_object(table.object.object_id) =>
+        {
+            Ok(table)
+        }
+        Some(CatalogDefinition::Table(_)) => Err(AndromedaError::new(
+            AndromedaErrorKind::Catalog,
+            "SRPL executable plan cannot bind a deprecated table",
+        )),
+        Some(_) => Err(AndromedaError::new(
+            AndromedaErrorKind::Catalog,
+            "SRPL body table name resolved to a non-table object",
+        )),
+        None => Err(AndromedaError::new(
+            AndromedaErrorKind::Catalog,
+            "SRPL body references an unbound table/object name",
+        )),
+    }
+}
+
+fn lookup_structured_object<'a>(
+    catalog: &'a CatalogSnapshot,
+    name: &QualifiedName,
+) -> AndromedaResult<&'a StructuredObjectDefinition> {
+    match catalog.get_by_name(name) {
+        Some(CatalogDefinition::StructuredObject(object))
+            if catalog.is_active_object(object.object.object_id) =>
+        {
+            Ok(object)
+        }
+        Some(CatalogDefinition::StructuredObject(_)) => Err(AndromedaError::new(
+            AndromedaErrorKind::Catalog,
+            "SRPL executable plan cannot bind a deprecated structured object",
+        )),
+        Some(_) => Err(AndromedaError::new(
+            AndromedaErrorKind::Catalog,
+            "SRPL result object name resolved to a non-structured object",
+        )),
+        None => Err(AndromedaError::new(
+            AndromedaErrorKind::Catalog,
+            "SRPL executable plan cannot bind missing result object",
+        )),
+    }
+}
+
+fn validate_signature_matches_contract(
+    ir: &SrplProcedureIr,
+    contract: &ProcedureContract,
+) -> AndromedaResult<()> {
+    if ir.inputs != contract.inputs {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Contract,
+            "SRPL procedure inputs do not match the bound procedure contract",
+        ));
+    }
+
+    if ir.result_streams.len() != contract.result_streams.len()
+        || !ir
+            .result_streams
+            .iter()
+            .zip(contract.result_streams.iter())
+            .all(|(ir_stream, contract_stream)| {
+                ir_stream.name == contract_stream.name
+                    && ir_stream.columns == contract_stream.columns
+                    && ir_stream.cardinality.requires_exact_row_count()
+                        == contract_stream.row_count_exact_required
+            })
+    {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Contract,
+            "SRPL procedure results do not match the bound procedure contract",
+        ));
+    }
+
+    Ok(())
+}
+
+fn validate_inventory_operation_order(body: &SrplProcedureBodyIr) -> AndromedaResult<()> {
+    if body.operations.len() != 4 {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Srpl,
+            "Inventory.ReserveStock executable plan requires exactly read/assert/update/emit",
+        ));
+    }
+
+    let valid_order = matches!(
+        &body.operations[0].kind,
+        SrplBusinessOperationKindIr::Read { .. }
+    ) && matches!(
+        &body.operations[1].kind,
+        SrplBusinessOperationKindIr::Assert { .. }
+    ) && matches!(
+        &body.operations[2].kind,
+        SrplBusinessOperationKindIr::Update { .. }
+    ) && matches!(
+        &body.operations[3].kind,
+        SrplBusinessOperationKindIr::Emit { .. }
+    );
+    if !valid_order {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Srpl,
+            "unsupported SRPL executable operation order for Inventory.ReserveStock",
+        ));
+    }
+
+    Ok(())
+}
+
+fn bind_body_operations(
+    ir: &SrplProcedureIr,
+    stock: &TableDefinition,
+    reservation: &StructuredObjectDefinition,
+) -> AndromedaResult<Vec<BoundSrplOperationPlan>> {
+    let mut binding_sources: BTreeMap<String, Vec<ColumnDescriptor>> = BTreeMap::new();
+    let mut bound = Vec::with_capacity(ir.body.operations.len());
+
+    for operation in &ir.body.operations {
+        match &operation.kind {
+            SrplBusinessOperationKindIr::Read {
+                source,
+                binding,
+                cardinality,
+                predicates,
+            } => {
+                if source != &stock.object.name {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Catalog,
+                        "SRPL read source is not bound to Inventory.ProductStock",
+                    ));
+                }
+                if binding_sources.contains_key(binding) {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Srpl,
+                        "SRPL read binding names must be unique",
+                    ));
+                }
+                binding_sources.insert(binding.clone(), stock.columns.clone());
+                validate_predicates(predicates, &ir.inputs, &binding_sources)?;
+                bound.push(BoundSrplOperationPlan::ReadTable {
+                    ordinal: operation.ordinal,
+                    source: stock.object.clone(),
+                    binding: binding.clone(),
+                    cardinality: *cardinality,
+                    predicates: predicates.clone(),
+                });
+            }
+            SrplBusinessOperationKindIr::Assert {
+                predicate,
+                failure_code,
+            } => {
+                validate_predicate(predicate, &ir.inputs, &binding_sources)?;
+                bound.push(BoundSrplOperationPlan::Assert {
+                    ordinal: operation.ordinal,
+                    predicate: predicate.clone(),
+                    failure_code: failure_code.clone(),
+                });
+            }
+            SrplBusinessOperationKindIr::Update {
+                target,
+                predicates,
+                assignments,
+            } => {
+                if target != &stock.object.name {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Catalog,
+                        "SRPL update target is not bound to Inventory.ProductStock",
+                    ));
+                }
+                validate_predicates(predicates, &ir.inputs, &binding_sources)?;
+                for assignment in assignments {
+                    require_column(&stock.columns, &assignment.field, "SRPL update assignment")?;
+                    validate_value(&assignment.value, &ir.inputs, &binding_sources)?;
+                }
+                bound.push(BoundSrplOperationPlan::UpdateTable {
+                    ordinal: operation.ordinal,
+                    target: stock.object.clone(),
+                    predicates: predicates.clone(),
+                    assignments: assignments.clone(),
+                });
+            }
+            SrplBusinessOperationKindIr::Emit { stream, values } => {
+                let result = ir
+                    .result_streams
+                    .iter()
+                    .find(|result| result.name == *stream)
+                    .ok_or_else(|| {
+                        AndromedaError::new(
+                            AndromedaErrorKind::Srpl,
+                            "SRPL emit references an unknown result stream",
+                        )
+                    })?;
+                if values.len() != result.columns.len()
+                    || !values
+                        .iter()
+                        .zip(result.columns.iter())
+                        .all(|(value, column)| value.column == column.name)
+                {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Srpl,
+                        "SRPL emit values must match result columns exactly and in order",
+                    ));
+                }
+                for value in values {
+                    require_column(&result.columns, &value.column, "SRPL emit value")?;
+                    require_column(
+                        &reservation.fields,
+                        &value.column,
+                        "SRPL reservation result",
+                    )?;
+                    validate_value(&value.value, &ir.inputs, &binding_sources)?;
+                }
+                bound.push(BoundSrplOperationPlan::Emit {
+                    ordinal: operation.ordinal,
+                    stream: stream.clone(),
+                    values: values.clone(),
+                });
+            }
+            SrplBusinessOperationKindIr::Raise { code } => {
+                bound.push(BoundSrplOperationPlan::Raise {
+                    ordinal: operation.ordinal,
+                    code: code.clone(),
+                });
+            }
+        }
+    }
+
+    Ok(bound)
+}
+
+fn validate_result_emission(
+    ir: &SrplProcedureIr,
+    operations: &[BoundSrplOperationPlan],
+) -> AndromedaResult<()> {
+    for result in &ir.result_streams {
+        let emits = operations
+            .iter()
+            .filter(|operation| {
+                matches!(
+                    operation,
+                    BoundSrplOperationPlan::Emit { stream, .. } if stream == &result.name
+                )
+            })
+            .count();
+        if result.cardinality.requires_exact_row_count() && emits != 1 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Srpl,
+                "SRPL exact-cardinality result stream must have exactly one emit operation",
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_predicates(
+    predicates: &[SrplPredicateIr],
+    inputs: &[ColumnDescriptor],
+    binding_sources: &BTreeMap<String, Vec<ColumnDescriptor>>,
+) -> AndromedaResult<()> {
+    for predicate in predicates {
+        validate_predicate(predicate, inputs, binding_sources)?;
+    }
+    Ok(())
+}
+
+fn validate_predicate(
+    predicate: &SrplPredicateIr,
+    inputs: &[ColumnDescriptor],
+    binding_sources: &BTreeMap<String, Vec<ColumnDescriptor>>,
+) -> AndromedaResult<()> {
+    match predicate {
+        SrplPredicateIr::InputEqualsField {
+            input,
+            binding,
+            field,
+        }
+        | SrplPredicateIr::FieldGreaterThanOrEqualInput {
+            binding,
+            field,
+            input,
+        } => {
+            require_input(inputs, input)?;
+            let columns = binding_sources.get(binding).ok_or_else(|| {
+                AndromedaError::new(
+                    AndromedaErrorKind::Srpl,
+                    "SRPL predicate references an unbound read binding",
+                )
+            })?;
+            require_column(columns, field, "SRPL predicate field")?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_value(
+    value: &SrplValueIr,
+    inputs: &[ColumnDescriptor],
+    binding_sources: &BTreeMap<String, Vec<ColumnDescriptor>>,
+) -> AndromedaResult<()> {
+    match value {
+        SrplValueIr::Input(input) => require_input(inputs, input)?,
+        SrplValueIr::Field { binding, field }
+        | SrplValueIr::SubtractInput { binding, field, .. } => {
+            let columns = binding_sources.get(binding).ok_or_else(|| {
+                AndromedaError::new(
+                    AndromedaErrorKind::Srpl,
+                    "SRPL value references an unbound read binding",
+                )
+            })?;
+            require_column(columns, field, "SRPL value field")?;
+            if let SrplValueIr::SubtractInput { input, .. } = value {
+                require_input(inputs, input)?;
+            }
+        }
+        SrplValueIr::Bool(_) => {}
+    }
+    Ok(())
+}
+
+fn require_input(inputs: &[ColumnDescriptor], name: &str) -> AndromedaResult<()> {
+    if inputs.iter().any(|input| input.name == name) {
+        Ok(())
+    } else {
+        Err(AndromedaError::new(
+            AndromedaErrorKind::Srpl,
+            "SRPL body references an unknown procedure input",
+        ))
+    }
+}
+
+fn require_column(columns: &[ColumnDescriptor], name: &str, context: &str) -> AndromedaResult<()> {
+    if columns.iter().any(|column| column.name == name) {
+        Ok(())
+    } else {
+        Err(AndromedaError::new(
+            AndromedaErrorKind::Srpl,
+            format!("{context} references an unknown field"),
+        ))
+    }
+}
+
+fn validate_no_sql_like_symbols(ir: &SrplProcedureIr) -> AndromedaResult<()> {
+    for operation in &ir.body.operations {
+        match &operation.kind {
+            SrplBusinessOperationKindIr::Read {
+                binding,
+                predicates,
+                ..
+            } => {
+                reject_sql_like_symbol(binding)?;
+                for predicate in predicates {
+                    validate_predicate_symbols(predicate)?;
+                }
+            }
+            SrplBusinessOperationKindIr::Assert {
+                predicate,
+                failure_code,
+            } => {
+                validate_predicate_symbols(predicate)?;
+                reject_sql_like_symbol(failure_code)?;
+            }
+            SrplBusinessOperationKindIr::Update {
+                predicates,
+                assignments,
+                ..
+            } => {
+                for predicate in predicates {
+                    validate_predicate_symbols(predicate)?;
+                }
+                for assignment in assignments {
+                    reject_sql_like_symbol(&assignment.field)?;
+                    validate_value_symbols(&assignment.value)?;
+                }
+            }
+            SrplBusinessOperationKindIr::Emit { stream, values } => {
+                reject_sql_like_symbol(stream)?;
+                for value in values {
+                    reject_sql_like_symbol(&value.column)?;
+                    validate_value_symbols(&value.value)?;
+                }
+            }
+            SrplBusinessOperationKindIr::Raise { code } => reject_sql_like_symbol(code)?,
+        }
+    }
+    Ok(())
+}
+
+fn validate_predicate_symbols(predicate: &SrplPredicateIr) -> AndromedaResult<()> {
+    match predicate {
+        SrplPredicateIr::InputEqualsField {
+            input,
+            binding,
+            field,
+        }
+        | SrplPredicateIr::FieldGreaterThanOrEqualInput {
+            binding,
+            field,
+            input,
+        } => {
+            reject_sql_like_symbol(input)?;
+            reject_sql_like_symbol(binding)?;
+            reject_sql_like_symbol(field)?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_value_symbols(value: &SrplValueIr) -> AndromedaResult<()> {
+    match value {
+        SrplValueIr::Input(input) => reject_sql_like_symbol(input)?,
+        SrplValueIr::Field { binding, field } => {
+            reject_sql_like_symbol(binding)?;
+            reject_sql_like_symbol(field)?;
+        }
+        SrplValueIr::Bool(_) => {}
+        SrplValueIr::SubtractInput {
+            binding,
+            field,
+            input,
+        } => {
+            reject_sql_like_symbol(binding)?;
+            reject_sql_like_symbol(field)?;
+            reject_sql_like_symbol(input)?;
+        }
+    }
+    Ok(())
+}
+
+fn reject_sql_like_symbol(symbol: &str) -> AndromedaResult<()> {
+    let lower = symbol.to_ascii_lowercase();
+    if matches!(
+        lower.as_str(),
+        "select" | "update" | "insert" | "delete" | "merge" | "from" | "where" | "join" | "sql"
+    ) {
+        Err(AndromedaError::new(
+            AndromedaErrorKind::Srpl,
+            "SRPL executable plan rejects SQL-like free-form symbols",
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 fn validate_ast_names_for_diagnostics(ast: &ProcedureAst) -> Result<(), crate::SrplDiagnostic> {
