@@ -43,6 +43,7 @@ name = "andromeda-observe"
 version = "0.1.0"
 dependencies = [
  "andromeda-core",
+ "andromeda-storage",
 ]
 
 [[package]]
@@ -57,6 +58,7 @@ name = "andromeda-quic"
 version = "0.1.0"
 dependencies = [
  "andromeda-core",
+ "andromeda-proto",
 ]
 
 [[package]]

@@ -1,16 +1,65 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
+use andromeda_core::{
+    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, TransactionId,
+};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MvccIsolationPolicy {
+    ReadCommitted,
+    RepeatableRead,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Snapshot {
     pub timestamp: u64,
+    pub catalog_version: Option<CatalogVersion>,
+    pub isolation_policy: MvccIsolationPolicy,
+    pub transaction_id: Option<TransactionId>,
+    pub active_tx_ids: Vec<TransactionId>,
 }
 
 impl Snapshot {
-    pub const fn new(timestamp: u64) -> Self {
-        Self { timestamp }
+    pub fn new(timestamp: u64) -> Self {
+        Self {
+            timestamp,
+            catalog_version: None,
+            isolation_policy: MvccIsolationPolicy::ReadCommitted,
+            transaction_id: None,
+            active_tx_ids: Vec::new(),
+        }
     }
 
-    pub fn validate(self) -> AndromedaResult<()> {
+    pub fn with_context(
+        timestamp: u64,
+        catalog_version: CatalogVersion,
+        isolation_policy: MvccIsolationPolicy,
+        transaction_id: Option<TransactionId>,
+        active_tx_ids: impl IntoIterator<Item = TransactionId>,
+    ) -> AndromedaResult<Self> {
+        let mut active_tx_ids: Vec<_> = active_tx_ids.into_iter().collect();
+        active_tx_ids.sort_unstable();
+        active_tx_ids.dedup();
+
+        let snapshot = Self {
+            timestamp,
+            catalog_version: Some(catalog_version),
+            isolation_policy,
+            transaction_id,
+            active_tx_ids,
+        };
+        snapshot.validate()?;
+        Ok(snapshot)
+    }
+
+    pub fn is_current_transaction(&self, transaction_id: TransactionId) -> bool {
+        self.transaction_id == Some(transaction_id)
+    }
+
+    pub fn is_transaction_active(&self, transaction_id: TransactionId) -> bool {
+        self.active_tx_ids.binary_search(&transaction_id).is_ok()
+    }
+
+    pub fn validate(&self) -> AndromedaResult<()> {
         if self.timestamp == 0 {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Transaction,
@@ -18,7 +67,89 @@ impl Snapshot {
             ));
         }
 
+        if matches!(self.catalog_version, Some(catalog_version) if catalog_version.get() == 0) {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Transaction,
+                "snapshot catalog version must not be zero",
+            ));
+        }
+
+        if matches!(self.transaction_id, Some(transaction_id) if transaction_id.get() == 0) {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Transaction,
+                "snapshot transaction id must not be zero",
+            ));
+        }
+
+        let mut previous = None;
+        for transaction_id in &self.active_tx_ids {
+            if transaction_id.get() == 0 {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Transaction,
+                    "snapshot active transaction id must not be zero",
+                ));
+            }
+
+            if previous.is_some_and(|previous| previous >= *transaction_id) {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Transaction,
+                    "snapshot active transaction ids must be sorted and unique",
+                ));
+            }
+
+            previous = Some(*transaction_id);
+        }
+
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransactionStatus {
+    InFlight,
+    Committed,
+    RolledBack,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TransactionStatusTable {
+    statuses: BTreeMap<TransactionId, TransactionStatus>,
+}
+
+impl TransactionStatusTable {
+    pub fn new() -> Self {
+        Self {
+            statuses: BTreeMap::new(),
+        }
+    }
+
+    pub fn record(
+        &mut self,
+        transaction_id: TransactionId,
+        status: TransactionStatus,
+    ) -> AndromedaResult<()> {
+        validate_transaction_id(transaction_id, "transaction status id must not be zero")?;
+        self.statuses.insert(transaction_id, status);
+        Ok(())
+    }
+
+    pub fn status(&self, transaction_id: TransactionId) -> Option<TransactionStatus> {
+        self.statuses.get(&transaction_id).copied()
+    }
+
+    fn status_for_snapshot(
+        &self,
+        transaction_id: TransactionId,
+        version_ts: u64,
+        snapshot: &Snapshot,
+    ) -> TransactionStatus {
+        self.status(transaction_id).unwrap_or_else(|| {
+            if snapshot.is_transaction_active(transaction_id) || version_ts > snapshot.timestamp {
+                TransactionStatus::InFlight
+            } else {
+                TransactionStatus::Committed
+            }
+        })
     }
 }
 
@@ -55,9 +186,47 @@ impl MvccRowHeader {
     }
 
     pub fn visible_in(self, snapshot: Snapshot) -> AndromedaResult<bool> {
+        self.visible_in_snapshot(&snapshot, &TransactionStatusTable::new())
+    }
+
+    pub fn visible_in_snapshot(
+        self,
+        snapshot: &Snapshot,
+        statuses: &TransactionStatusTable,
+    ) -> AndromedaResult<bool> {
         snapshot.validate()?;
         self.validate()?;
-        Ok(self.visible_at(snapshot.timestamp))
+
+        let creator_status =
+            statuses.status_for_snapshot(self.creator_tx_id, self.begin_ts, snapshot);
+        if !creator_is_visible(self.creator_tx_id, creator_status, snapshot) {
+            return Ok(false);
+        }
+
+        if self.begin_ts > snapshot.timestamp
+            && !snapshot.is_current_transaction(self.creator_tx_id)
+        {
+            return Ok(false);
+        }
+
+        let Some(end_ts) = self.end_ts else {
+            return Ok(true);
+        };
+
+        let Some(deleter_tx_id) = self.deleter_tx_id else {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Transaction,
+                "closed MVCC version requires deleter transaction id",
+            ));
+        };
+
+        let deleter_status = statuses.status_for_snapshot(deleter_tx_id, end_ts, snapshot);
+        Ok(!delete_is_visible(
+            deleter_tx_id,
+            end_ts,
+            deleter_status,
+            snapshot,
+        ))
     }
 
     pub const fn is_open_version(self) -> bool {
@@ -125,6 +294,52 @@ impl MvccRowHeader {
     }
 }
 
+fn creator_is_visible(
+    transaction_id: TransactionId,
+    status: TransactionStatus,
+    snapshot: &Snapshot,
+) -> bool {
+    match status {
+        TransactionStatus::Committed => {
+            !snapshot.is_transaction_active(transaction_id)
+                || snapshot.is_current_transaction(transaction_id)
+        }
+        TransactionStatus::InFlight => snapshot.is_current_transaction(transaction_id),
+        TransactionStatus::RolledBack => false,
+    }
+}
+
+fn delete_is_visible(
+    transaction_id: TransactionId,
+    end_ts: u64,
+    status: TransactionStatus,
+    snapshot: &Snapshot,
+) -> bool {
+    match status {
+        TransactionStatus::Committed => {
+            end_ts <= snapshot.timestamp
+                && (!snapshot.is_transaction_active(transaction_id)
+                    || snapshot.is_current_transaction(transaction_id))
+        }
+        TransactionStatus::InFlight => snapshot.is_current_transaction(transaction_id),
+        TransactionStatus::RolledBack => false,
+    }
+}
+
+fn validate_transaction_id(
+    transaction_id: TransactionId,
+    message: &'static str,
+) -> AndromedaResult<()> {
+    if transaction_id.get() == 0 {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Transaction,
+            message,
+        ));
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -176,5 +391,127 @@ mod tests {
                 .kind(),
             AndromedaErrorKind::Transaction
         );
+    }
+
+    #[test]
+    fn snapshot_context_normalizes_active_transactions() {
+        let snapshot = Snapshot::with_context(
+            50,
+            CatalogVersion::new(7),
+            MvccIsolationPolicy::RepeatableRead,
+            Some(TransactionId::new(1)),
+            [
+                TransactionId::new(9),
+                TransactionId::new(3),
+                TransactionId::new(9),
+            ],
+        )
+        .unwrap();
+
+        assert_eq!(
+            snapshot.active_tx_ids,
+            vec![TransactionId::new(3), TransactionId::new(9)]
+        );
+        assert!(snapshot.is_transaction_active(TransactionId::new(3)));
+    }
+
+    #[test]
+    fn status_visibility_rejects_uncommitted_and_rolled_back_creators() {
+        let creator = TransactionId::new(21);
+        let row = MvccRowHeader::open_version(40, creator, None).unwrap();
+        let snapshot = Snapshot::with_context(
+            50,
+            CatalogVersion::new(2),
+            MvccIsolationPolicy::RepeatableRead,
+            Some(TransactionId::new(99)),
+            [creator],
+        )
+        .unwrap();
+        let mut statuses = TransactionStatusTable::new();
+
+        statuses
+            .record(creator, TransactionStatus::InFlight)
+            .unwrap();
+        assert!(!row.visible_in_snapshot(&snapshot, &statuses).unwrap());
+
+        statuses
+            .record(creator, TransactionStatus::RolledBack)
+            .unwrap();
+        assert!(!row.visible_in_snapshot(&snapshot, &statuses).unwrap());
+
+        statuses
+            .record(creator, TransactionStatus::Committed)
+            .unwrap();
+        assert!(!row.visible_in_snapshot(&snapshot, &statuses).unwrap());
+    }
+
+    #[test]
+    fn status_visibility_ignores_uncommitted_and_rolled_back_deletes() {
+        let creator = TransactionId::new(31);
+        let deleter = TransactionId::new(32);
+        let row = MvccRowHeader::open_version(10, creator, None)
+            .unwrap()
+            .close_version(40, deleter)
+            .unwrap();
+        let snapshot = Snapshot::with_context(
+            50,
+            CatalogVersion::new(4),
+            MvccIsolationPolicy::ReadCommitted,
+            Some(TransactionId::new(99)),
+            [deleter],
+        )
+        .unwrap();
+        let mut statuses = TransactionStatusTable::new();
+        statuses
+            .record(creator, TransactionStatus::Committed)
+            .unwrap();
+
+        statuses
+            .record(deleter, TransactionStatus::InFlight)
+            .unwrap();
+        assert!(row.visible_in_snapshot(&snapshot, &statuses).unwrap());
+
+        statuses
+            .record(deleter, TransactionStatus::RolledBack)
+            .unwrap();
+        assert!(row.visible_in_snapshot(&snapshot, &statuses).unwrap());
+
+        statuses
+            .record(deleter, TransactionStatus::Committed)
+            .unwrap();
+        assert!(row.visible_in_snapshot(&snapshot, &statuses).unwrap());
+
+        let snapshot_after_delete = Snapshot::with_context(
+            50,
+            CatalogVersion::new(4),
+            MvccIsolationPolicy::ReadCommitted,
+            Some(TransactionId::new(99)),
+            Vec::<TransactionId>::new(),
+        )
+        .unwrap();
+        assert!(
+            !row.visible_in_snapshot(&snapshot_after_delete, &statuses)
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn current_transaction_reads_own_writes_and_hides_own_deletes() {
+        let tx_id = TransactionId::new(41);
+        let inserted = MvccRowHeader::open_version(70, tx_id, None).unwrap();
+        let deleted = inserted.close_version(80, tx_id).unwrap();
+        let snapshot = Snapshot::with_context(
+            60,
+            CatalogVersion::new(5),
+            MvccIsolationPolicy::ReadCommitted,
+            Some(tx_id),
+            [tx_id],
+        )
+        .unwrap();
+        let mut statuses = TransactionStatusTable::new();
+        statuses.record(tx_id, TransactionStatus::InFlight).unwrap();
+
+        assert!(inserted.visible_in_snapshot(&snapshot, &statuses).unwrap());
+        assert!(!deleted.visible_in_snapshot(&snapshot, &statuses).unwrap());
     }
 }

@@ -246,6 +246,33 @@ pub struct IncompleteDurableTransaction {
     pub record_count: usize,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct DurableTransactionClassifications {
+    pub committed: Vec<DurableTransactionResume>,
+    pub rolled_back: Vec<DurableTransactionResume>,
+    pub incomplete: Vec<DurableTransactionResume>,
+}
+
+impl DurableTransactionClassifications {
+    pub fn is_empty(&self) -> bool {
+        self.committed.is_empty() && self.rolled_back.is_empty() && self.incomplete.is_empty()
+    }
+
+    pub fn committed_transaction_ids(&self) -> impl Iterator<Item = TransactionId> + '_ {
+        self.committed.iter().map(|summary| summary.transaction_id)
+    }
+
+    pub fn rolled_back_transaction_ids(&self) -> impl Iterator<Item = TransactionId> + '_ {
+        self.rolled_back
+            .iter()
+            .map(|summary| summary.transaction_id)
+    }
+
+    pub fn incomplete_transaction_ids(&self) -> impl Iterator<Item = TransactionId> + '_ {
+        self.incomplete.iter().map(|summary| summary.transaction_id)
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct InMemoryWal {
     records: Vec<WalRecord>,
@@ -365,7 +392,7 @@ impl InMemoryWal {
         }
     }
 
-    pub fn durable_records(&self) -> impl Iterator<Item=&WalRecord> {
+    pub fn durable_records(&self) -> impl Iterator<Item = &WalRecord> {
         let durable_lsn = self.durable_lsn;
         self.records
             .iter()
@@ -397,6 +424,10 @@ impl InMemoryWal {
 
     pub fn incomplete_durable_transactions(&self) -> Vec<IncompleteDurableTransaction> {
         incomplete_transactions_from_records(self.durable_records())
+    }
+
+    pub fn classify_durable_transactions(&self) -> DurableTransactionClassifications {
+        classify_durable_transactions(self.durable_records())
     }
 }
 
@@ -491,7 +522,7 @@ pub(crate) fn wal_record_kind_from_tag(tag: u64) -> Option<WalRecordKind> {
 
 pub fn summarize_transaction<'a>(
     transaction_id: TransactionId,
-    records: impl IntoIterator<Item=&'a WalRecord>,
+    records: impl IntoIterator<Item = &'a WalRecord>,
 ) -> Option<DurableTransactionResume> {
     let mut first_lsn = None;
     let mut last_lsn = None;
@@ -540,7 +571,7 @@ pub fn summarize_transaction<'a>(
 }
 
 pub fn summarize_transactions_from_records<'a>(
-    records: impl IntoIterator<Item=&'a WalRecord>,
+    records: impl IntoIterator<Item = &'a WalRecord>,
 ) -> Vec<DurableTransactionResume> {
     let mut grouped: BTreeMap<u64, Vec<&WalRecord>> = BTreeMap::new();
 
@@ -561,8 +592,26 @@ pub fn summarize_transactions_from_records<'a>(
         .collect()
 }
 
+pub fn classify_durable_transactions<'a>(
+    records: impl IntoIterator<Item = &'a WalRecord>,
+) -> DurableTransactionClassifications {
+    let mut classifications = DurableTransactionClassifications::default();
+
+    for summary in summarize_transactions_from_records(records) {
+        match summary.state {
+            DurableTransactionState::Committed => classifications.committed.push(summary),
+            DurableTransactionState::RolledBack => classifications.rolled_back.push(summary),
+            DurableTransactionState::Open | DurableTransactionState::Incomplete => {
+                classifications.incomplete.push(summary);
+            }
+        }
+    }
+
+    classifications
+}
+
 pub fn incomplete_transactions_from_records<'a>(
-    records: impl IntoIterator<Item=&'a WalRecord>,
+    records: impl IntoIterator<Item = &'a WalRecord>,
 ) -> Vec<IncompleteDurableTransaction> {
     summarize_transactions_from_records(records)
         .into_iter()
@@ -680,6 +729,55 @@ mod tests {
     }
 
     #[test]
+    fn durable_transaction_classification_partitions_terminal_and_incomplete_states() {
+        let mut wal = InMemoryWal::new();
+        let committed_tx = TransactionId::new(14);
+        let rolled_back_tx = TransactionId::new(15);
+        let open_tx = TransactionId::new(16);
+        let incomplete_tx = TransactionId::new(17);
+
+        wal.append_tx_begin(committed_tx).unwrap();
+        wal.append_payload(WalRecordKind::RowInsert, Some(committed_tx), b"commit")
+            .unwrap();
+        wal.append_tx_commit(committed_tx).unwrap();
+        wal.append_tx_begin(rolled_back_tx).unwrap();
+        wal.append_payload(WalRecordKind::RowDelete, Some(rolled_back_tx), b"rollback")
+            .unwrap();
+        wal.append_tx_rollback(rolled_back_tx).unwrap();
+        wal.append_tx_begin(open_tx).unwrap();
+        wal.append_payload(WalRecordKind::RowUpdate, Some(open_tx), b"open")
+            .unwrap();
+        wal.append_payload(
+            WalRecordKind::RowInsert,
+            Some(incomplete_tx),
+            b"missing-begin",
+        )
+        .unwrap();
+        wal.flush_all().unwrap();
+
+        let classifications = wal.classify_durable_transactions();
+
+        assert_eq!(
+            classifications
+                .committed_transaction_ids()
+                .collect::<Vec<_>>(),
+            vec![committed_tx]
+        );
+        assert_eq!(
+            classifications
+                .rolled_back_transaction_ids()
+                .collect::<Vec<_>>(),
+            vec![rolled_back_tx]
+        );
+        assert_eq!(
+            classifications
+                .incomplete_transaction_ids()
+                .collect::<Vec<_>>(),
+            vec![open_tx, incomplete_tx]
+        );
+    }
+
+    #[test]
     fn in_memory_wal_rejects_invalid_records() {
         let mut wal = InMemoryWal::new();
         let transaction_id = TransactionId::new(10);
@@ -698,7 +796,7 @@ mod tests {
             Some(transaction_id),
             Vec::new(),
         )
-            .unwrap();
+        .unwrap();
         invalid_payload_length.header.payload_length = 99;
 
         assert_eq!(
@@ -713,7 +811,7 @@ mod tests {
             Some(transaction_id),
             Vec::new(),
         )
-            .unwrap();
+        .unwrap();
 
         assert_eq!(
             wal.append(skipped_lsn).unwrap_err().kind(),
@@ -731,7 +829,7 @@ mod tests {
             Some(transaction_id),
             Vec::new(),
         )
-            .unwrap();
+        .unwrap();
         let mut wal = InMemoryWal {
             records: vec![max_record],
             durable_lsn: Lsn::ZERO,
@@ -743,7 +841,7 @@ mod tests {
             Some(transaction_id),
             Vec::new(),
         )
-            .unwrap();
+        .unwrap();
 
         assert_eq!(
             wal.try_next_lsn().unwrap_err().kind(),

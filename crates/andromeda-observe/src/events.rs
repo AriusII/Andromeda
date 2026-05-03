@@ -1,6 +1,7 @@
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogObjectId, CatalogVersion,
-    ContractHash, InvocationId, RequestId, SessionId, TransactionId,
+    ContractHash, GpuExecutionPolicy, GpuProfile, InvocationId, PipelineClass, RequestId,
+    ResourceBudget, SessionId, TransactionId,
 };
 
 use crate::TraceId;
@@ -47,6 +48,10 @@ pub enum CriticalDecisionKind {
     CorruptionBoundary,
     SecurityAuthorization,
     ResourceGovernance,
+    BusinessRuleDecision,
+    IoPlacementDecision,
+    IoBudgetValidation,
+    GpuPolicyDecision,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -126,16 +131,16 @@ impl EventCorrelation {
         self.request_id
             .is_some_and(|request_id| request_id.get() != 0)
             && self
-            .session_id
-            .is_some_and(|session_id| session_id.get() != 0)
+                .session_id
+                .is_some_and(|session_id| session_id.get() != 0)
     }
 
     pub fn has_contract_catalog(self) -> bool {
         self.contract_hash
             .is_some_and(|contract_hash| !contract_hash.is_zero())
             && self
-            .catalog_version
-            .is_some_and(|catalog_version| catalog_version.get() != 0)
+                .catalog_version
+                .is_some_and(|catalog_version| catalog_version.get() != 0)
     }
 
     pub fn has_no_transaction_evidence(self) -> bool {
@@ -190,12 +195,12 @@ impl WalEventTrace {
     pub const fn has_lsn_evidence(self) -> bool {
         self.appended_lsn != 0
             && match self.operation {
-            WalOperation::Append => true,
-            WalOperation::Flush => match self.durable_lsn {
-                Some(durable_lsn) => durable_lsn != 0,
-                None => false,
-            },
-        }
+                WalOperation::Append => true,
+                WalOperation::Flush => match self.durable_lsn {
+                    Some(durable_lsn) => durable_lsn != 0,
+                    None => false,
+                },
+            }
     }
 }
 
@@ -364,9 +369,9 @@ impl CompletionEmittedTrace {
     pub const fn proves_committed_completion(&self) -> bool {
         !self.committed
             || match self.durable_lsn {
-            Some(durable_lsn) => durable_lsn != 0,
-            None => false,
-        }
+                Some(durable_lsn) => durable_lsn != 0,
+                None => false,
+            }
     }
 }
 
@@ -501,6 +506,195 @@ pub struct ResourceTrace {
     pub temp_bytes: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IoStorageTier {
+    Ram,
+    Hot,
+    Cold,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IoPipelineStage {
+    Ram,
+    Hot,
+    Cold,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IoPlacementDecisionTrace {
+    pub trace_id: TraceId,
+    pub pipeline: PipelineClass,
+    pub stage: IoPipelineStage,
+    pub selected_tier: IoStorageTier,
+    pub accepted: bool,
+    pub reason: String,
+}
+
+impl IoPlacementDecisionTrace {
+    pub fn accepted(
+        trace_id: TraceId,
+        pipeline: PipelineClass,
+        stage: IoPipelineStage,
+        selected_tier: IoStorageTier,
+        reason: impl Into<String>,
+    ) -> AndromedaResult<Self> {
+        Self::new(trace_id, pipeline, stage, selected_tier, true, reason)
+    }
+
+    pub fn rejected(
+        trace_id: TraceId,
+        pipeline: PipelineClass,
+        stage: IoPipelineStage,
+        selected_tier: IoStorageTier,
+        reason: impl Into<String>,
+    ) -> AndromedaResult<Self> {
+        Self::new(trace_id, pipeline, stage, selected_tier, false, reason)
+    }
+
+    pub fn new(
+        trace_id: TraceId,
+        pipeline: PipelineClass,
+        stage: IoPipelineStage,
+        selected_tier: IoStorageTier,
+        accepted: bool,
+        reason: impl Into<String>,
+    ) -> AndromedaResult<Self> {
+        let reason = non_empty_reason(reason)?;
+        Ok(Self {
+            trace_id,
+            pipeline,
+            stage,
+            selected_tier,
+            accepted,
+            reason,
+        })
+    }
+
+    pub fn has_reason(&self) -> bool {
+        !self.reason.trim().is_empty()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IoBudgetDecisionTrace {
+    pub trace_id: TraceId,
+    pub pipeline: PipelineClass,
+    pub stage: IoPipelineStage,
+    pub budget: ResourceBudget,
+    pub requested_memory_bytes: u64,
+    pub requested_temp_bytes: u64,
+    pub requested_streams: u32,
+    pub accepted: bool,
+    pub reason: String,
+}
+
+impl IoBudgetDecisionTrace {
+    pub fn from_budget_request(
+        trace_id: TraceId,
+        pipeline: PipelineClass,
+        stage: IoPipelineStage,
+        budget: ResourceBudget,
+        requested_memory_bytes: u64,
+        requested_temp_bytes: u64,
+        requested_streams: u32,
+        reason: impl Into<String>,
+    ) -> AndromedaResult<Self> {
+        let reason = non_empty_reason(reason)?;
+        let accepted = requested_memory_bytes <= budget.max_memory_bytes
+            && requested_temp_bytes <= budget.max_temp_bytes
+            && requested_streams <= budget.max_streams;
+
+        Ok(Self {
+            trace_id,
+            pipeline,
+            stage,
+            budget,
+            requested_memory_bytes,
+            requested_temp_bytes,
+            requested_streams,
+            accepted,
+            reason,
+        })
+    }
+
+    pub fn has_reason(&self) -> bool {
+        !self.reason.trim().is_empty()
+    }
+
+    pub const fn has_budget_evidence(&self) -> bool {
+        self.budget.max_memory_bytes != 0
+            || self.budget.max_temp_bytes != 0
+            || self.budget.max_streams != 0
+    }
+
+    pub const fn requested_within_budget(&self) -> bool {
+        self.requested_memory_bytes <= self.budget.max_memory_bytes
+            && self.requested_temp_bytes <= self.budget.max_temp_bytes
+            && self.requested_streams <= self.budget.max_streams
+    }
+
+    pub const fn outcome_matches_budget(&self) -> bool {
+        self.accepted == self.requested_within_budget()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GpuPolicyDecisionTrace {
+    pub trace_id: TraceId,
+    pub pipeline: PipelineClass,
+    pub policy: GpuExecutionPolicy,
+    pub gpu_declared_available: bool,
+    pub accepted: bool,
+    pub reason: String,
+}
+
+impl GpuPolicyDecisionTrace {
+    pub fn from_policy(
+        trace_id: TraceId,
+        pipeline: PipelineClass,
+        policy: GpuExecutionPolicy,
+        gpu_declared_available: bool,
+        reason: impl Into<String>,
+    ) -> AndromedaResult<Self> {
+        let reason = non_empty_reason(reason)?;
+        Ok(Self {
+            trace_id,
+            pipeline,
+            policy,
+            gpu_declared_available,
+            accepted: gpu_declared_available && policy.permits_pipeline(pipeline),
+            reason,
+        })
+    }
+
+    pub fn from_profile(
+        trace_id: TraceId,
+        pipeline: PipelineClass,
+        profile: GpuProfile,
+        reason: impl Into<String>,
+    ) -> AndromedaResult<Self> {
+        Self::from_policy(
+            trace_id,
+            pipeline,
+            profile.execution_policy,
+            profile.available,
+            reason,
+        )
+    }
+
+    pub fn has_reason(&self) -> bool {
+        !self.reason.trim().is_empty()
+    }
+
+    pub const fn permitted_by_policy(&self) -> bool {
+        self.gpu_declared_available && self.policy.permits_pipeline(self.pipeline)
+    }
+
+    pub const fn outcome_matches_policy(&self) -> bool {
+        self.accepted == self.permitted_by_policy()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TraceEvent {
     Decision(DecisionTrace),
@@ -524,6 +718,9 @@ pub enum TraceEvent {
     Mvcc(MvccTrace),
     Audit(AuditTrace),
     Resource(ResourceTrace),
+    IoPlacementDecision(IoPlacementDecisionTrace),
+    IoBudgetDecision(IoBudgetDecisionTrace),
+    GpuPolicyDecision(GpuPolicyDecisionTrace),
 }
 
 impl TraceEvent {
@@ -550,6 +747,9 @@ impl TraceEvent {
             Self::Mvcc(trace) => trace.trace_id,
             Self::Audit(trace) => trace.trace_id,
             Self::Resource(trace) => trace.trace_id,
+            Self::IoPlacementDecision(trace) => trace.trace_id,
+            Self::IoBudgetDecision(trace) => trace.trace_id,
+            Self::GpuPolicyDecision(trace) => trace.trace_id,
         }
     }
 
@@ -582,6 +782,9 @@ impl TraceEvent {
             Self::Mvcc(_) => CriticalDecisionKind::MvccVisibility,
             Self::Audit(_) => CriticalDecisionKind::SecurityAuthorization,
             Self::Resource(_) => CriticalDecisionKind::ResourceGovernance,
+            Self::IoPlacementDecision(_) => CriticalDecisionKind::IoPlacementDecision,
+            Self::IoBudgetDecision(_) => CriticalDecisionKind::IoBudgetValidation,
+            Self::GpuPolicyDecision(_) => CriticalDecisionKind::GpuPolicyDecision,
         }
     }
 
@@ -759,6 +962,28 @@ impl EventEnvelope {
             TraceEvent::Audit(trace) if !trace.is_complete() => Err(observe_error(
                 "audit traces require actor, object, and action evidence",
             )),
+            TraceEvent::IoPlacementDecision(trace) if !trace.has_reason() => Err(observe_error(
+                "IO placement decision traces require a non-empty reason",
+            )),
+            TraceEvent::IoBudgetDecision(trace) if !trace.has_reason() => Err(observe_error(
+                "IO budget decision traces require a non-empty reason",
+            )),
+            TraceEvent::IoBudgetDecision(trace) if !trace.has_budget_evidence() => Err(
+                observe_error("IO budget decision traces require explicit budget limit evidence"),
+            ),
+            TraceEvent::IoBudgetDecision(trace) if !trace.outcome_matches_budget() => {
+                Err(observe_error(
+                    "IO budget decision outcome must match requested usage and budget limits",
+                ))
+            }
+            TraceEvent::GpuPolicyDecision(trace) if !trace.has_reason() => Err(observe_error(
+                "GPU policy decision traces require a non-empty reason",
+            )),
+            TraceEvent::GpuPolicyDecision(trace) if !trace.outcome_matches_policy() => {
+                Err(observe_error(
+                    "GPU policy decision outcome must match availability, policy, and pipeline",
+                ))
+            }
             _ => {
                 self.validate_text_safety()?;
                 self.validate_correlation()?;
@@ -894,35 +1119,35 @@ impl EventEnvelope {
                 }
             }
             TraceEvent::CommitVisible(trace)
-            if self.correlation.transaction_id != Some(trace.transaction_id)
-                || self.correlation.durable_lsn != Some(trace.durable_commit_lsn) =>
-                {
-                    return Err(observe_error(
-                        "commit-visible traces require matching transaction_id and durable_lsn correlation",
-                    ));
-                }
+                if self.correlation.transaction_id != Some(trace.transaction_id)
+                    || self.correlation.durable_lsn != Some(trace.durable_commit_lsn) =>
+            {
+                return Err(observe_error(
+                    "commit-visible traces require matching transaction_id and durable_lsn correlation",
+                ));
+            }
             TraceEvent::RollbackDurable(trace)
-            if self.correlation.transaction_id != Some(trace.transaction_id)
-                || self.correlation.durable_lsn != Some(trace.durable_rollback_lsn) =>
-                {
-                    return Err(observe_error(
-                        "rollback-durable traces require matching transaction_id and durable_lsn correlation",
-                    ));
-                }
+                if self.correlation.transaction_id != Some(trace.transaction_id)
+                    || self.correlation.durable_lsn != Some(trace.durable_rollback_lsn) =>
+            {
+                return Err(observe_error(
+                    "rollback-durable traces require matching transaction_id and durable_lsn correlation",
+                ));
+            }
             TraceEvent::RecoveryStartup(trace)
-            if self.correlation.durable_lsn != Some(trace.last_durable_lsn) =>
-                {
-                    return Err(observe_error(
-                        "recovery startup traces require matching durable_lsn correlation",
-                    ));
-                }
+                if self.correlation.durable_lsn != Some(trace.last_durable_lsn) =>
+            {
+                return Err(observe_error(
+                    "recovery startup traces require matching durable_lsn correlation",
+                ));
+            }
             TraceEvent::CompletionEmitted(trace)
-            if trace.committed && self.correlation.durable_lsn != trace.durable_lsn =>
-                {
-                    return Err(observe_error(
-                        "committed completion traces require matching durable_lsn correlation",
-                    ));
-                }
+                if trace.committed && self.correlation.durable_lsn != trace.durable_lsn =>
+            {
+                return Err(observe_error(
+                    "committed completion traces require matching durable_lsn correlation",
+                ));
+            }
             _ => {}
         }
 
@@ -958,6 +1183,9 @@ impl EventEnvelope {
             TraceEvent::SchemaLayoutDecision(trace) => contains_sensitive_marker(&trace.reason),
             TraceEvent::CorruptionBoundary(trace) => contains_sensitive_marker(&trace.reason),
             TraceEvent::Manifest(trace) => contains_sensitive_marker(&trace.reason),
+            TraceEvent::IoPlacementDecision(trace) => contains_sensitive_marker(&trace.reason),
+            TraceEvent::IoBudgetDecision(trace) => contains_sensitive_marker(&trace.reason),
+            TraceEvent::GpuPolicyDecision(trace) => contains_sensitive_marker(&trace.reason),
             TraceEvent::Audit(trace) => {
                 contains_sensitive_marker(&trace.actor)
                     || contains_sensitive_marker(&trace.object)
@@ -1077,6 +1305,17 @@ fn observe_error(message: impl Into<String>) -> AndromedaError {
     AndromedaError::new(AndromedaErrorKind::Internal, message)
 }
 
+fn non_empty_reason(reason: impl Into<String>) -> AndromedaResult<String> {
+    let reason = reason.into();
+    if reason.trim().is_empty() {
+        return Err(observe_error(
+            "observability decision evidence requires a non-empty reason",
+        ));
+    }
+
+    Ok(reason)
+}
+
 fn contains_sensitive_marker(text: &str) -> bool {
     let lowered = text.to_ascii_lowercase();
     [
@@ -1090,8 +1329,8 @@ fn contains_sensitive_marker(text: &str) -> bool {
         "payload:",
         "payload body",
     ]
-        .iter()
-        .any(|marker| lowered.contains(marker))
+    .iter()
+    .any(|marker| lowered.contains(marker))
 }
 
 #[cfg(test)]
@@ -1147,7 +1386,7 @@ mod tests {
                 reason: "contract hash and catalog version matched request".to_string(),
             }),
         )
-            .expect("valid correlated decision envelope");
+        .expect("valid correlated decision envelope");
 
         assert_eq!(envelope.event_id.get(), 10);
         assert_eq!(envelope.trace_id, TraceId::new(9));
@@ -1161,7 +1400,7 @@ mod tests {
                 reason: "valid reason".to_string(),
             }),
         )
-            .unwrap_err();
+        .unwrap_err();
         assert_eq!(err.kind(), AndromedaErrorKind::Internal);
 
         let forged = EventEnvelope {
@@ -1189,7 +1428,7 @@ mod tests {
                 reason: "   ".to_string(),
             }),
         )
-            .unwrap_err();
+        .unwrap_err();
 
         assert!(err.message().contains("non-empty reason"));
     }
@@ -1205,7 +1444,7 @@ mod tests {
                 durable_commit_lsn: 0,
             }),
         )
-            .unwrap_err();
+        .unwrap_err();
         assert!(commit_without_lsn.message().contains("durable commit LSN"));
 
         let recovery_without_lsn = EventEnvelope::new(
@@ -1217,7 +1456,7 @@ mod tests {
                 corruption_boundary_lsn: None,
             }),
         )
-            .unwrap_err();
+        .unwrap_err();
         assert!(
             recovery_without_lsn
                 .message()
@@ -1238,7 +1477,7 @@ mod tests {
                     durable_commit_lsn: 9,
                 }),
             )
-                .is_ok()
+            .is_ok()
         );
 
         assert!(
@@ -1254,7 +1493,7 @@ mod tests {
                     corruption_boundary_lsn: Some(13),
                 }),
             )
-                .is_ok()
+            .is_ok()
         );
     }
 
@@ -1271,7 +1510,7 @@ mod tests {
                 durable_lsn: None,
             }),
         )
-            .unwrap_err();
+        .unwrap_err();
         assert!(
             append_without_transaction_correlation
                 .message()
@@ -1293,7 +1532,7 @@ mod tests {
                 durable_lsn: Some(25),
             }),
         )
-            .expect("WAL flush has matching transaction and durable LSN evidence");
+        .expect("WAL flush has matching transaction and durable LSN evidence");
         assert!(flush.correlation.has_transaction_evidence());
         assert!(flush.correlation.has_durable_lsn());
 
@@ -1310,7 +1549,7 @@ mod tests {
                 durable_commit_lsn: 25,
             }),
         )
-            .expect("visible commit points at the durable commit LSN");
+        .expect("visible commit points at the durable commit LSN");
         assert_eq!(commit_visible.correlation.durable_lsn, Some(25));
     }
 
@@ -1333,7 +1572,7 @@ mod tests {
                 reason: "manifest identity and WAL recovery floor accepted".to_string(),
             }),
         )
-            .expect("manifest validation evidence has catalog and WAL anchors");
+        .expect("manifest validation evidence has catalog and WAL anchors");
         assert_eq!(
             manifest.correlation.catalog_version,
             Some(CatalogVersion::new(31))
@@ -1356,7 +1595,7 @@ mod tests {
                 reason: "payload: raw manifest body".to_string(),
             }),
         )
-            .unwrap_err();
+        .unwrap_err();
         assert!(leak.message().contains("payload bodies"));
     }
 
@@ -1372,7 +1611,7 @@ mod tests {
                 reason: "reserved frame flag set".to_string(),
             }),
         )
-            .unwrap_err();
+        .unwrap_err();
 
         assert!(err.message().contains("trace_id must be non-zero"));
     }
@@ -1401,7 +1640,7 @@ mod tests {
                 reason: "bounded queue is full".to_string(),
             }),
         )
-            .expect("valid backpressure event");
+        .expect("valid backpressure event");
 
         let err = sink.emit(envelope).unwrap_err();
         assert_eq!(err.message(), "sink unavailable");

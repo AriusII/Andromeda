@@ -6,17 +6,17 @@ use andromeda_core::{
     TypeDescriptor,
 };
 use andromeda_srpl::{
+    SourceSpan,
     compiler::{
         compile_narrow_procedure_contract_candidate, compile_narrow_procedure_signature,
-        lower_ir_to_contract_candidate, parse_procedure_signature,
+        inventory_reserve_stock_body_ir, lower_ir_to_contract_candidate, parse_procedure_signature,
     },
     diagnostics::DiagnosticPhase,
     model::{
-        Cardinality, ProcedureSignature, ResultContract, SrplProcedureContractMetadata,
-        SrplProcedureIr,
+        Cardinality, ProcedureSignature, ResultContract, SrplBusinessOperationKindIr,
+        SrplProcedureContractMetadata, SrplProcedureIr, SrplValueIr,
     },
     source::SrplSource,
-    SourceSpan,
 };
 
 #[test]
@@ -33,6 +33,46 @@ fn successful_narrow_procedure_compiles_to_ir() {
     assert_eq!(ir.result_streams[0].name, "Reservation");
     assert_eq!(ir.result_streams[0].cardinality, Cardinality::One);
     assert_eq!(ir.result_streams[0].columns[0].name, "Reserved");
+    assert!(ir.body.operations.is_empty());
+}
+
+#[test]
+fn tiny_body_syntax_compiles_to_bounded_operation_ir() {
+    let ir = compile_narrow_procedure_signature(
+        "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool) body { read Inventory.ProductStock Stock one; assert Quantity InsufficientStock; update Inventory.ProductStock AvailableQuantity; emit Reservation (Reserved); }",
+    )
+    .unwrap();
+
+    assert_eq!(ir.body.operations.len(), 4);
+    assert!(ir.body.validate_bounded().is_ok());
+    assert!(matches!(
+        &ir.body.operations[0].kind,
+        SrplBusinessOperationKindIr::Read { binding, .. } if binding.as_str() == "Stock"
+    ));
+    assert!(matches!(
+        &ir.body.operations[1].kind,
+        SrplBusinessOperationKindIr::Assert {
+            failure_code,
+            ..
+        } if failure_code.as_str() == "InsufficientStock"
+    ));
+    assert!(matches!(
+        &ir.body.operations[2].kind,
+        SrplBusinessOperationKindIr::Update { assignments, .. }
+            if matches!(
+                assignments.first(),
+                Some(assignment) if assignment.field.as_str() == "AvailableQuantity"
+            )
+    ));
+    assert!(matches!(
+        &ir.body.operations[3].kind,
+        SrplBusinessOperationKindIr::Emit { stream, values }
+            if stream.as_str() == "Reservation"
+                && matches!(
+                    values.first(),
+                    Some(value) if value.column.as_str() == "Reserved"
+                )
+    ));
 }
 
 #[test]
@@ -51,7 +91,7 @@ fn forbidden_constructs_reject_before_lowering() {
     let diagnostic = compile_narrow_procedure_signature(
         "procedure X accepts () returns R many (C bool); execute sql",
     )
-        .unwrap_err();
+    .unwrap_err();
 
     assert_eq!(diagnostic.phase, DiagnosticPhase::Binding);
     assert!(diagnostic.location.is_some());
@@ -187,7 +227,7 @@ fn contract_candidate_rejects_invalid_metadata_before_catalog_publication() {
         "procedure Inventory.ReserveStock accepts () returns Reservation one (Reserved bool);",
         metadata,
     )
-        .unwrap();
+    .unwrap();
 
     let error = candidate.materialize().unwrap_err();
 
@@ -205,4 +245,34 @@ fn direct_ir_to_candidate_preserves_catalog_object_identity_inputs() {
 
     assert_eq!(candidate.object.object_id, CatalogObjectId::new(11));
     assert_eq!(candidate.procedure_id, ProcedureId::new(11));
+}
+
+#[test]
+fn reserve_stock_body_skeleton_is_typed_and_deterministic() {
+    let first = inventory_reserve_stock_body_ir().unwrap();
+    let second = inventory_reserve_stock_body_ir().unwrap();
+
+    assert_eq!(first, second);
+    assert_eq!(first.operations.len(), 4);
+    assert!(first.validate_bounded().is_ok());
+
+    assert!(matches!(
+        &first.operations[0].kind,
+        SrplBusinessOperationKindIr::Read { .. }
+    ));
+    assert!(matches!(
+        &first.operations[1].kind,
+        SrplBusinessOperationKindIr::Assert { .. }
+    ));
+    let SrplBusinessOperationKindIr::Update { assignments, .. } = &first.operations[2].kind else {
+        panic!("ReserveStock operation 2 should be a typed update");
+    };
+    assert!(matches!(
+        &assignments[0].value,
+        SrplValueIr::SubtractInput { .. }
+    ));
+    assert!(matches!(
+        &first.operations[3].kind,
+        SrplBusinessOperationKindIr::Emit { .. }
+    ));
 }

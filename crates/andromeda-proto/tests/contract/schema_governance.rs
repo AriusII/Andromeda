@@ -1,5 +1,8 @@
 const WIRE_SCHEMA: &str =
     include_str!("../../../../schemas/proto/andromeda/v1/andromeda_wire.proto");
+const PROTO_MANIFEST: &str = include_str!("../../Cargo.toml");
+const QUIC_MANIFEST: &str = include_str!("../../../andromeda-quic/Cargo.toml");
+const EXEC_MANIFEST: &str = include_str!("../../../andromeda-exec/Cargo.toml");
 
 use andromeda_core::{
     AndromedaErrorKind, ColumnDescriptor, ContractHash, ScalarType, TypeDescriptor,
@@ -27,6 +30,23 @@ fn schema_sketch_stays_message_only_without_service_definitions() {
         WIRE_SCHEMA.contains("QUIC DATAGRAM is"),
         "schema sketch should preserve the telemetry-only DATAGRAM governance note"
     );
+}
+
+#[test]
+fn protocol_result_surface_does_not_add_grpc_or_runtime_json_dependencies() {
+    for (name, manifest) in [
+        ("andromeda-proto", PROTO_MANIFEST),
+        ("andromeda-quic", QUIC_MANIFEST),
+        ("andromeda-exec", EXEC_MANIFEST),
+    ] {
+        let lower = manifest.to_ascii_lowercase();
+        for forbidden in ["grpc", "tonic", "serde_json"] {
+            assert!(
+                !lower.contains(forbidden),
+                "{name} manifest must not expose {forbidden} on protocol/result surface"
+            );
+        }
+    }
 }
 
 #[test]

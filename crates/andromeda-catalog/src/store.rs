@@ -4,7 +4,7 @@ use andromeda_core::{
 
 use crate::{
     CatalogMutationPlan, CatalogSnapshot, CatalogSnapshotApplyReport, DefinitionBatch,
-    DefinitionBatchPlan,
+    DefinitionBatchPlan, DefinitionOperation,
 };
 
 /// In-memory catalog system facade for definition planning and snapshot mutation.
@@ -68,7 +68,35 @@ impl CatalogSystemStore {
             ));
         }
 
-        batch.dry_run()
+        let plan = batch.dry_run()?;
+
+        for operation in &batch.operations {
+            let DefinitionOperation::Deprecate(target) = operation else {
+                continue;
+            };
+
+            let Some(existing) = self.snapshot.get_by_id(target.object.object_id) else {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Catalog,
+                    "definition batch cannot deprecate unknown object id",
+                ));
+            };
+            let existing_object = existing.object_ref();
+            if existing_object != &target.object {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Catalog,
+                    "definition batch lifecycle target must match the current catalog object",
+                ));
+            }
+            if !self.snapshot.is_active_object(target.object.object_id) {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Catalog,
+                    "definition batch cannot deprecate an inactive catalog object",
+                ));
+            }
+        }
+
+        Ok(plan)
     }
 
     pub fn apply_mutation_plan(

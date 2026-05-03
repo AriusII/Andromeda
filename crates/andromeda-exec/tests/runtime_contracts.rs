@@ -1,15 +1,28 @@
-use andromeda_catalog::{inventory_reserve_stock_contract, ProcedureContractRef};
+use andromeda_catalog::{
+    CatalogBindingKind, INVENTORY_RESERVE_STOCK_PERMISSION, ProcedureContractRef,
+    inventory_reserve_stock_catalog_bindings, inventory_reserve_stock_contract,
+};
 use andromeda_core::{
-    AndromedaResult, CatalogVersion, ContractHash, InvocationId, ProcedureId, TransactionId,
+    AndromedaResult, CatalogVersion, ContractHash, InvocationId, PipelineClass, ProcedureId,
+    ResourceBudget, TransactionId,
 };
 use andromeda_exec::{
-    AdmissionService, CompletionStatus, InvocationContext, InvocationRequest, InvocationWal,
-    LocalDispatchPlan, LocalDispatcher, LocalProcedure, LocalVerticalRuntime,
-    PreTransactionValidationService, ResultStreamMetadata, ResultValidationService,
+    AdmissionService, CompletionMappingService, CompletionStatus, ExecutionIoAdmissionDecision,
+    ExecutionIoAdmissionRequest, InventoryReserveStockExecutor, InventoryStock, InvocationContext,
+    InvocationReject, InvocationRequest, InvocationWal, LocalDispatchPlan, LocalDispatcher,
+    LocalProcedure, LocalRollbackPlan, LocalVerticalRuntime, PreTransactionValidationService,
+    ReserveStockCommand, ResultStreamMetadata, ResultValidationService,
 };
 use andromeda_observe::TraceId;
-use andromeda_srpl::Cardinality;
-use andromeda_storage::{InMemoryWal, Lsn, WalRecordKind};
+use andromeda_srpl::{
+    Cardinality,
+    compiler::{compile_narrow_procedure_signature, inventory_reserve_stock_body_ir},
+    model::{SrplBusinessOperationKindIr, SrplPredicateIr, SrplValueIr},
+};
+use andromeda_storage::{
+    CoreIoPlacementRequest, InMemoryWal, Lsn, OperationalProfile, PageSize, StorageIoBudgetScope,
+    StorageWorkloadClass, WalRecordKind,
+};
 use andromeda_tx::TransactionState;
 
 #[derive(Debug, Default)]
@@ -89,6 +102,88 @@ fn procedure(contract: ProcedureContractRef) -> LocalProcedure {
         mutation_payload: b"reserve-stock".to_vec(),
         rows_affected: 1,
     }
+}
+
+fn foreground_io_admission(
+    trace_id: TraceId,
+) -> Result<ExecutionIoAdmissionDecision, InvocationReject> {
+    let profile = OperationalProfile::hot_write();
+    ExecutionIoAdmissionRequest::new(
+        profile.clone(),
+        PipelineClass::ForegroundExecution,
+        ResourceBudget::new(8 * 1024 * 1024, 1024 * 1024, 2),
+        CoreIoPlacementRequest::new(
+            StorageWorkloadClass::HotAppend,
+            StorageIoBudgetScope::Page(PageSize::KiB16),
+            profile.workflow.page_budget.path_budget,
+            false,
+        ),
+    )
+    .validate_admission(trace_id)
+}
+
+fn rejected_io_admission(
+    trace_id: TraceId,
+) -> Result<ExecutionIoAdmissionDecision, InvocationReject> {
+    let profile = OperationalProfile::hot_write();
+    ExecutionIoAdmissionRequest::new(
+        profile.clone(),
+        PipelineClass::ForegroundExecution,
+        ResourceBudget::new(0, 1024 * 1024, 2),
+        CoreIoPlacementRequest::new(
+            StorageWorkloadClass::HotAppend,
+            StorageIoBudgetScope::Page(PageSize::KiB16),
+            profile.workflow.page_budget.path_budget,
+            false,
+        ),
+    )
+    .validate_admission(trace_id)
+}
+
+fn inventory_reserve_stock_srpl_source() -> &'static str {
+    "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool) body { read Inventory.ProductStock Stock one; assert Quantity InsufficientStock; update Inventory.ProductStock AvailableQuantity; emit Reservation (Reserved); }"
+}
+
+#[test]
+fn local_vertical_runtime_can_require_io_admission_before_tx_begin() {
+    let mut runtime = LocalVerticalRuntime::new(RecordingWal::default());
+    let procedure = procedure(request(ContractHash::test_vector(7)).procedure);
+
+    let outcome = runtime
+        .execute_io_admitted(
+            request(ContractHash::test_vector(7)),
+            &procedure,
+            TraceId::new(103),
+            foreground_io_admission(TraceId::new(104)),
+        )
+        .unwrap();
+
+    assert_eq!(outcome.completion.status, CompletionStatus::Committed);
+    assert_eq!(
+        outcome.completion.transaction_state,
+        Some(TransactionState::Committed)
+    );
+    assert_eq!(runtime.wal().records.len(), 3);
+}
+
+#[test]
+fn local_vertical_runtime_blocks_core_io_guarded_execution_when_io_admission_rejects() {
+    let mut runtime = LocalVerticalRuntime::new(RecordingWal::default());
+    let procedure = procedure(request(ContractHash::test_vector(7)).procedure);
+
+    let err = runtime
+        .execute_io_admitted(
+            request(ContractHash::test_vector(7)),
+            &procedure,
+            TraceId::new(105),
+            rejected_io_admission(TraceId::new(106)),
+        )
+        .unwrap_err();
+
+    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Resource);
+    assert!(err.message().contains("execution IO admission rejected"));
+    assert!(err.message().contains("memory budget must not be zero"));
+    assert!(runtime.wal().records.is_empty());
 }
 
 #[test]
@@ -204,18 +299,19 @@ fn local_vertical_happy_path_commits_only_with_durable_wal_evidence() {
         catalog_version: contract.object.catalog_version,
         structured_parameters: Vec::new(),
     };
-    let procedure = LocalProcedure {
-        contract: contract.as_ref(),
-        required_permissions: contract.required_permissions.clone(),
-        result_metadata: ResultStreamMetadata {
-            stream_id: 1,
-            row_count_exact: Some(1),
-            column_count: contract.result_streams[0].columns.len() as u32,
-            cardinality: Cardinality::One,
+    let effect = InventoryReserveStockExecutor::reserve(
+        ReserveStockCommand {
+            product_id: 42,
+            quantity: 3,
         },
-        mutation_payload: b"Inventory.ReserveStock".to_vec(),
-        rows_affected: 1,
-    };
+        InventoryStock {
+            product_id: 42,
+            available_quantity: 10,
+            version: 7,
+        },
+    )
+    .unwrap();
+    let procedure = effect.to_local_procedure(&contract).unwrap();
     let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
 
     let outcome = runtime
@@ -237,9 +333,204 @@ fn local_vertical_happy_path_commits_only_with_durable_wal_evidence() {
     );
     assert_eq!(runtime.wal().durable_lsn(), Lsn::new(3));
     assert_eq!(runtime.wal().replay_durable().len(), 3);
+    assert_eq!(outcome.completion.rows_affected, Some(2));
+    assert!(
+        effect
+            .result_evidence()
+            .matches_committed_completion(&outcome.completion)
+    );
     assert_eq!(
         runtime.wal().records()[2].header.kind,
         WalRecordKind::TxCommit
+    );
+}
+
+#[test]
+fn inventory_reserve_stock_e2e_stitches_catalog_srpl_business_effect_and_authorized_commit() {
+    let contract = inventory_reserve_stock_contract().unwrap();
+    let bindings =
+        inventory_reserve_stock_catalog_bindings(contract.object.catalog_version).unwrap();
+    bindings.validate().unwrap();
+    assert_eq!(
+        bindings.product_stock_table_binding.kind,
+        CatalogBindingKind::WritesTable
+    );
+    assert_eq!(
+        bindings.reservation_result_binding.kind,
+        CatalogBindingKind::EmitsStructuredObject
+    );
+
+    let srpl_ir =
+        compile_narrow_procedure_signature(inventory_reserve_stock_srpl_source()).unwrap();
+    assert_eq!(srpl_ir.name, contract.object.name);
+    assert_eq!(srpl_ir.inputs, contract.inputs);
+    assert_eq!(
+        srpl_ir.result_streams[0].name,
+        contract.result_streams[0].name
+    );
+    assert_eq!(
+        srpl_ir.result_streams[0].columns,
+        contract.result_streams[0].columns
+    );
+    assert_eq!(srpl_ir.body.operations.len(), 4);
+    assert!(srpl_ir.body.validate_bounded().is_ok());
+
+    assert!(matches!(
+        &srpl_ir.body.operations[0].kind,
+        SrplBusinessOperationKindIr::Read {
+            source,
+            binding,
+            cardinality,
+            ..
+        } if source == &bindings.product_stock_table.name
+            && binding == "Stock"
+            && *cardinality == Cardinality::One
+    ));
+    assert!(matches!(
+        &srpl_ir.body.operations[2].kind,
+        SrplBusinessOperationKindIr::Update {
+            target,
+            assignments,
+            ..
+        } if target == &bindings.product_stock_table.name
+            && assignments.len() == 1
+            && assignments[0].field == "AvailableQuantity"
+    ));
+    assert!(matches!(
+        &srpl_ir.body.operations[3].kind,
+        SrplBusinessOperationKindIr::Emit { stream, values }
+            if stream == "Reservation"
+                && values.len() == 1
+                && values[0].column == "Reserved"
+    ));
+
+    let canonical_body = inventory_reserve_stock_body_ir().unwrap();
+    assert!(matches!(
+        &canonical_body.operations[0].kind,
+        SrplBusinessOperationKindIr::Read { predicates, .. }
+            if matches!(
+                predicates.first(),
+                Some(SrplPredicateIr::InputEqualsField {
+                    input,
+                    binding,
+                    field,
+                }) if input == "ProductId" && binding == "Stock" && field == "ProductId"
+            )
+    ));
+    assert!(matches!(
+        &canonical_body.operations[1].kind,
+        SrplBusinessOperationKindIr::Assert {
+            predicate:
+                SrplPredicateIr::FieldGreaterThanOrEqualInput {
+                    binding,
+                    field,
+                    input,
+                },
+            failure_code,
+        } if binding == "Stock"
+            && field == "AvailableQuantity"
+            && input == "Quantity"
+            && failure_code == "InsufficientStock"
+    ));
+    assert!(matches!(
+        &canonical_body.operations[2].kind,
+        SrplBusinessOperationKindIr::Update { assignments, .. }
+            if matches!(
+                assignments.first(),
+                Some(assignment)
+                    if assignment.field == "AvailableQuantity"
+                        && matches!(
+                            &assignment.value,
+                            SrplValueIr::SubtractInput {
+                                binding,
+                                field,
+                                input,
+                            } if binding == "Stock"
+                                && field == "AvailableQuantity"
+                                && input == "Quantity"
+                        )
+            )
+    ));
+
+    let command = ReserveStockCommand {
+        product_id: 42,
+        quantity: 3,
+    };
+    let stock = InventoryStock {
+        product_id: 42,
+        available_quantity: 10,
+        version: 7,
+    };
+    let effect = InventoryReserveStockExecutor::reserve(command, stock).unwrap();
+    assert_eq!(effect.next_stock.available_quantity, 7);
+    assert_eq!(effect.next_stock.version, 8);
+    assert!(effect.result.reserved);
+
+    let procedure = effect.to_local_procedure(&contract).unwrap();
+    assert_eq!(
+        procedure.required_permissions,
+        vec![INVENTORY_RESERVE_STOCK_PERMISSION.to_string()]
+    );
+    assert_eq!(procedure.rows_affected, 2);
+    assert_ne!(
+        procedure.mutation_payload.as_slice(),
+        inventory_reserve_stock_srpl_source().as_bytes()
+    );
+
+    let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
+    let request = InvocationRequest {
+        invocation_id: InvocationId::new(710),
+        procedure: contract.as_ref(),
+        expected_contract_hash: contract.contract_hash,
+        catalog_version: contract.object.catalog_version,
+        structured_parameters: Vec::new(),
+    };
+
+    let outcome = runtime
+        .execute_authorized(
+            request,
+            &procedure,
+            &InvocationContext::new(
+                TraceId::new(7100),
+                vec![INVENTORY_RESERVE_STOCK_PERMISSION.to_string()],
+            ),
+        )
+        .unwrap();
+
+    assert_eq!(outcome.completion.status, CompletionStatus::Committed);
+    assert_eq!(
+        outcome.completion.transaction_state,
+        Some(TransactionState::Committed)
+    );
+    assert_eq!(outcome.completion.rows_affected, Some(2));
+    assert_eq!(
+        outcome.completion.durable_lsn,
+        Some(runtime.wal().durable_lsn())
+    );
+    assert_eq!(runtime.wal().records().len(), 3);
+    assert_eq!(
+        runtime.wal().records()[0].header.kind,
+        WalRecordKind::TxBegin
+    );
+    assert_eq!(
+        runtime.wal().records()[1].header.kind,
+        WalRecordKind::RowUpdate
+    );
+    assert_eq!(
+        runtime.wal().records()[2].header.kind,
+        WalRecordKind::TxCommit
+    );
+    assert_eq!(runtime.wal().replay_durable().len(), 3);
+    assert!(outcome.authorization_trace.is_some());
+    assert!(
+        effect
+            .result_evidence()
+            .proves_exact_result_and_remaining_stock()
+    );
+    assert!(
+        effect
+            .result_evidence()
+            .matches_committed_completion(&outcome.completion)
     );
 }
 
@@ -263,6 +554,272 @@ fn local_vertical_rejects_visibility_when_flush_does_not_cover_commit_lsn() {
 }
 
 #[test]
+fn local_dispatcher_rolls_back_only_with_durable_wal_evidence() {
+    let mut wal = RecordingWal::default();
+    let receipt = LocalDispatcher::new(&mut wal)
+        .dispatch_rollback(LocalRollbackPlan {
+            transaction_id: TransactionId::new(900),
+            rollback_payload: b"business-validation-failed".to_vec(),
+        })
+        .unwrap();
+
+    assert_eq!(receipt.transaction_state, TransactionState::RolledBack);
+    assert_eq!(receipt.durable_lsn, Lsn::new(2));
+    assert_eq!(receipt.wal_evidence.begin_lsn, Lsn::new(1));
+    assert_eq!(receipt.wal_evidence.rollback_lsn, Lsn::new(2));
+    assert_eq!(receipt.wal_evidence.durable_lsn, Lsn::new(2));
+    assert_eq!(wal.records.len(), 2);
+    assert_eq!(wal.records[0].1, WalRecordKind::TxBegin);
+    assert_eq!(wal.records[1].1, WalRecordKind::TxRollback);
+    assert_eq!(wal.durable_lsn, wal.records[1].0);
+}
+
+#[test]
+fn local_dispatcher_rejects_rolled_back_completion_when_flush_lags_rollback_lsn() {
+    let mut wal = LaggingFlushWal::default();
+
+    let err = LocalDispatcher::new(&mut wal)
+        .dispatch_rollback(LocalRollbackPlan {
+            transaction_id: TransactionId::new(901),
+            rollback_payload: b"business-validation-failed".to_vec(),
+        })
+        .unwrap_err();
+
+    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Storage);
+    assert_eq!(wal.records.len(), 2);
+    assert_eq!(wal.records[1].1, WalRecordKind::TxRollback);
+    assert!(wal.durable_lsn < wal.records[1].0);
+}
+
+#[test]
+fn local_vertical_runtime_rolls_back_business_validation_failure_after_begin() {
+    let mut runtime = LocalVerticalRuntime::new(RecordingWal::default());
+    let procedure = procedure(request(ContractHash::test_vector(7)).procedure);
+
+    let outcome = runtime
+        .rollback_business_validation_failure_after_begin(
+            request(ContractHash::test_vector(7)),
+            &procedure,
+            TraceId::new(8100),
+            "insufficient inventory stock for reservation",
+        )
+        .unwrap();
+
+    assert_eq!(outcome.completion.status, CompletionStatus::RolledBack);
+    assert_eq!(
+        outcome.completion.transaction_state,
+        Some(TransactionState::RolledBack)
+    );
+    assert_eq!(outcome.completion.rows_affected, Some(0));
+    assert_eq!(outcome.completion.durable_lsn, Some(Lsn::new(2)));
+    assert_eq!(runtime.wal().records.len(), 2);
+    assert_eq!(runtime.wal().records[0].1, WalRecordKind::TxBegin);
+    assert_eq!(runtime.wal().records[1].1, WalRecordKind::TxRollback);
+    assert!(
+        runtime.wal().records[1]
+            .3
+            .starts_with(b"andromeda.exec.business-validation-failed.v1\0")
+    );
+    assert_eq!(runtime.wal().durable_lsn, runtime.wal().records[1].0);
+}
+
+#[test]
+fn inventory_reserve_stock_business_failure_rolls_back_after_authorized_begin_without_commit() {
+    let contract = inventory_reserve_stock_contract().unwrap();
+    let valid_effect = InventoryReserveStockExecutor::reserve(
+        ReserveStockCommand {
+            product_id: 42,
+            quantity: 1,
+        },
+        InventoryStock {
+            product_id: 42,
+            available_quantity: 10,
+            version: 7,
+        },
+    )
+    .unwrap();
+    let procedure = valid_effect.to_local_procedure(&contract).unwrap();
+
+    let rejected_command = ReserveStockCommand {
+        product_id: 42,
+        quantity: 11,
+    };
+    let observed_stock = InventoryStock {
+        product_id: 42,
+        available_quantity: 10,
+        version: 7,
+    };
+    let error =
+        InventoryReserveStockExecutor::reserve(rejected_command, observed_stock).unwrap_err();
+    assert_eq!(error.kind(), andromeda_core::AndromedaErrorKind::Execution);
+    assert!(error.message().contains("insufficient inventory stock"));
+
+    let rejection_evidence = InventoryReserveStockExecutor::rejection_evidence(
+        rejected_command,
+        observed_stock,
+        error.message(),
+    );
+    assert!(rejection_evidence.has_business_rule_evidence());
+    assert!(
+        rejection_evidence
+            .decision_trace(TraceId::new(8200))
+            .has_explanation()
+    );
+
+    let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
+    let request = InvocationRequest {
+        invocation_id: InvocationId::new(820),
+        procedure: contract.as_ref(),
+        expected_contract_hash: contract.contract_hash,
+        catalog_version: contract.object.catalog_version,
+        structured_parameters: Vec::new(),
+    };
+
+    let outcome = runtime
+        .rollback_authorized_business_validation_failure_after_begin(
+            request,
+            &procedure,
+            &InvocationContext::new(
+                TraceId::new(8200),
+                vec![INVENTORY_RESERVE_STOCK_PERMISSION.to_string()],
+            ),
+            rejection_evidence.reason.as_str(),
+        )
+        .unwrap();
+
+    assert_eq!(outcome.completion.status, CompletionStatus::RolledBack);
+    assert_eq!(
+        outcome.completion.transaction_state,
+        Some(TransactionState::RolledBack)
+    );
+    assert_eq!(outcome.completion.rows_affected, Some(0));
+    assert_eq!(
+        outcome.completion.durable_lsn,
+        Some(runtime.wal().durable_lsn())
+    );
+    assert_eq!(runtime.wal().durable_lsn(), Lsn::new(2));
+    assert_eq!(runtime.wal().records().len(), 2);
+    assert_eq!(
+        runtime.wal().records()[0].header.kind,
+        WalRecordKind::TxBegin
+    );
+    assert_eq!(
+        runtime.wal().records()[1].header.kind,
+        WalRecordKind::TxRollback
+    );
+    assert!(
+        runtime.wal().records()[1]
+            .payload
+            .starts_with(b"andromeda.exec.business-validation-failed.v1\0")
+    );
+    assert!(
+        std::str::from_utf8(&runtime.wal().records()[1].payload)
+            .unwrap()
+            .contains("insufficient inventory stock")
+    );
+    assert!(
+        !runtime
+            .wal()
+            .records()
+            .iter()
+            .any(|record| record.header.kind == WalRecordKind::TxCommit)
+    );
+    assert!(outcome.authorization_trace.is_some());
+}
+
+#[test]
+fn completion_mapping_rejects_commit_or_rollback_outcome_mismatches() {
+    assert_eq!(
+        CompletionMappingService::committed(
+            InvocationId::new(8200),
+            2,
+            TransactionState::RolledBack,
+            Lsn::new(10),
+            TraceId::new(8200),
+        )
+        .unwrap_err()
+        .kind(),
+        andromeda_core::AndromedaErrorKind::Transaction
+    );
+
+    assert_eq!(
+        CompletionMappingService::committed(
+            InvocationId::new(8201),
+            2,
+            TransactionState::Committed,
+            Lsn::ZERO,
+            TraceId::new(8201),
+        )
+        .unwrap_err()
+        .kind(),
+        andromeda_core::AndromedaErrorKind::Storage
+    );
+
+    assert_eq!(
+        CompletionMappingService::rolled_back(
+            InvocationId::new(8202),
+            TransactionState::Committed,
+            Lsn::new(11),
+            TraceId::new(8202),
+        )
+        .unwrap_err()
+        .kind(),
+        andromeda_core::AndromedaErrorKind::Transaction
+    );
+
+    let rolled_back = CompletionMappingService::rolled_back(
+        InvocationId::new(8203),
+        TransactionState::RolledBack,
+        Lsn::new(12),
+        TraceId::new(8203),
+    )
+    .unwrap();
+    assert_eq!(rolled_back.status, CompletionStatus::RolledBack);
+    assert_eq!(rolled_back.rows_affected, Some(0));
+    assert_eq!(
+        rolled_back.transaction_state,
+        Some(TransactionState::RolledBack)
+    );
+}
+
+#[test]
+fn local_vertical_runtime_preserves_contract_check_before_rollback_begin() {
+    let mut runtime = LocalVerticalRuntime::new(RecordingWal::default());
+    let procedure = procedure(request(ContractHash::test_vector(7)).procedure);
+
+    let err = runtime
+        .rollback_business_validation_failure_after_begin(
+            request(ContractHash::test_vector(8)),
+            &procedure,
+            TraceId::new(8101),
+            "insufficient inventory stock for reservation",
+        )
+        .unwrap_err();
+
+    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Contract);
+    assert!(runtime.wal().records.is_empty());
+}
+
+#[test]
+fn local_vertical_runtime_preserves_authorization_check_before_rollback_begin() {
+    let mut runtime = LocalVerticalRuntime::new(RecordingWal::default());
+    let mut procedure = procedure(request(ContractHash::test_vector(7)).procedure);
+    procedure.required_permissions = vec!["Inventory.ReserveStock.Execute".to_string()];
+
+    let err = runtime
+        .rollback_authorized_business_validation_failure_after_begin(
+            request(ContractHash::test_vector(7)),
+            &procedure,
+            &InvocationContext::new(TraceId::new(8102), Vec::new()),
+            "insufficient inventory stock for reservation",
+        )
+        .unwrap_err();
+
+    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Security);
+    assert!(runtime.wal().records.is_empty());
+}
+
+#[test]
 fn service_and_dispatcher_api_is_usable_externally() {
     let request = request(ContractHash::test_vector(7));
     let trace = PreTransactionValidationService::validate_invocation_contract(
@@ -270,7 +827,7 @@ fn service_and_dispatcher_api_is_usable_externally() {
         request.procedure,
         TraceId::new(202),
     )
-        .unwrap();
+    .unwrap();
     assert!(trace.has_explanation());
 
     let auth_trace = AdmissionService::authorize(
@@ -280,7 +837,7 @@ fn service_and_dispatcher_api_is_usable_externally() {
         ),
         &["Inventory.ReserveStock.Execute".into()],
     )
-        .unwrap();
+    .unwrap();
     assert!(auth_trace.has_explanation());
 
     let mut wal = RecordingWal::default();
@@ -297,4 +854,18 @@ fn service_and_dispatcher_api_is_usable_externally() {
     assert_eq!(receipt.wal_evidence.commit_lsn, Lsn::new(3));
     assert_eq!(receipt.wal_evidence.durable_lsn, Lsn::new(3));
     assert_eq!(wal.durable_lsn, Lsn::new(3));
+
+    let rollback_receipt = LocalDispatcher::new(&mut wal)
+        .dispatch_rollback(LocalRollbackPlan {
+            transaction_id: TransactionId::new(request.invocation_id.get() + 1),
+            rollback_payload: b"business-validation-failed".to_vec(),
+        })
+        .unwrap();
+
+    assert_eq!(
+        rollback_receipt.transaction_state,
+        TransactionState::RolledBack
+    );
+    assert_eq!(rollback_receipt.durable_lsn, Lsn::new(5));
+    assert_eq!(rollback_receipt.wal_evidence.rollback_lsn, Lsn::new(5));
 }

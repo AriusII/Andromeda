@@ -6,10 +6,14 @@
 
 pub mod cold;
 pub mod extent;
+pub mod io_budget;
 pub mod page;
+pub mod placement;
 pub mod segment;
 
 pub use cold::*;
 pub use extent::*;
+pub use io_budget::*;
 pub use page::*;
+pub use placement::*;
 pub use segment::*;

@@ -23,6 +23,38 @@ pub struct CatalogSnapshot {
     pub publication: CatalogSnapshotPublication,
     objects_by_id: BTreeMap<CatalogObjectId, CatalogDefinition>,
     object_names: BTreeMap<QualifiedName, CatalogObjectId>,
+    object_lifecycle: BTreeMap<CatalogObjectId, CatalogObjectLifecycle>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CatalogObjectLifecycleStatus {
+    Active,
+    Deprecated,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CatalogObjectLifecycle {
+    pub status: CatalogObjectLifecycleStatus,
+    pub created_version: CatalogVersion,
+    pub last_changed_version: CatalogVersion,
+}
+
+impl CatalogObjectLifecycle {
+    pub fn active(created_version: CatalogVersion) -> Self {
+        Self {
+            status: CatalogObjectLifecycleStatus::Active,
+            created_version,
+            last_changed_version: created_version,
+        }
+    }
+
+    pub fn deprecated(self, changed_version: CatalogVersion) -> Self {
+        Self {
+            status: CatalogObjectLifecycleStatus::Deprecated,
+            created_version: self.created_version,
+            last_changed_version: changed_version,
+        }
+    }
 }
 
 impl CatalogSnapshot {
@@ -38,6 +70,7 @@ impl CatalogSnapshot {
             publication: CatalogSnapshotPublication::InMemoryOnly,
             objects_by_id: BTreeMap::new(),
             object_names: BTreeMap::new(),
+            object_lifecycle: BTreeMap::new(),
         }
     }
 
@@ -55,6 +88,15 @@ impl CatalogSnapshot {
 
     pub fn get_by_id(&self, object_id: CatalogObjectId) -> Option<&CatalogDefinition> {
         self.objects_by_id.get(&object_id)
+    }
+
+    pub fn lifecycle_by_id(&self, object_id: CatalogObjectId) -> Option<CatalogObjectLifecycle> {
+        self.object_lifecycle.get(&object_id).copied()
+    }
+
+    pub fn is_active_object(&self, object_id: CatalogObjectId) -> bool {
+        self.lifecycle_by_id(object_id)
+            .is_some_and(|lifecycle| lifecycle.status == CatalogObjectLifecycleStatus::Active)
     }
 
     pub fn apply_mutation_plan(
@@ -127,7 +169,7 @@ impl CatalogSnapshot {
                     if !pending_object_ids.insert(object.object_id) {
                         return Err(AndromedaError::new(
                             AndromedaErrorKind::Catalog,
-                            "catalog mutation plan must not create the same object id twice",
+                            "catalog mutation plan must not change the same object id twice",
                         ));
                     }
 
@@ -141,7 +183,75 @@ impl CatalogSnapshot {
                     if !pending_object_names.insert(object.name.clone()) {
                         return Err(AndromedaError::new(
                             AndromedaErrorKind::Catalog,
-                            "catalog mutation plan must not create the same object name twice",
+                            "catalog mutation plan must not change the same object name twice",
+                        ));
+                    }
+                }
+                CatalogMutationOperation::DeprecateObject { target } => {
+                    target.validate()?;
+
+                    if target.object.catalog_version > plan.previous_version {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Catalog,
+                            "catalog lifecycle target version must not be newer than the previous catalog version",
+                        ));
+                    }
+
+                    if !pending_object_ids.insert(target.object.object_id) {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Catalog,
+                            "catalog mutation plan must not change the same object id twice",
+                        ));
+                    }
+
+                    if !pending_object_names.insert(target.object.name.clone()) {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Catalog,
+                            "catalog mutation plan must not change the same object name twice",
+                        ));
+                    }
+
+                    let Some(existing) = self.objects_by_id.get(&target.object.object_id) else {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Catalog,
+                            "catalog snapshot cannot deprecate unknown object id",
+                        ));
+                    };
+                    let existing_object = existing.object_ref();
+                    if existing_object.name != target.object.name {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Catalog,
+                            "catalog lifecycle target name must match the existing object",
+                        ));
+                    }
+                    if existing_object.kind != target.object.kind {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Catalog,
+                            "catalog lifecycle target kind must match the existing object",
+                        ));
+                    }
+                    if existing_object.catalog_version != target.object.catalog_version {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Catalog,
+                            "catalog lifecycle target version must match the existing object version",
+                        ));
+                    }
+                    if self.object_names.get(&target.object.name) != Some(&target.object.object_id)
+                    {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Catalog,
+                            "catalog lifecycle target name index must match the existing object id",
+                        ));
+                    }
+                    if self
+                        .lifecycle_by_id(target.object.object_id)
+                        .is_some_and(|lifecycle| {
+                            lifecycle.status == CatalogObjectLifecycleStatus::Deprecated
+                        })
+                    {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Catalog,
+                            "catalog snapshot object is already deprecated",
                         ));
                     }
                 }
@@ -155,6 +265,21 @@ impl CatalogSnapshot {
                         .insert(object.object_id, definition.clone());
                     self.object_names
                         .insert(object.name.clone(), object.object_id);
+                    self.object_lifecycle.insert(
+                        object.object_id,
+                        CatalogObjectLifecycle::active(object.catalog_version),
+                    );
+                }
+                CatalogMutationOperation::DeprecateObject { target } => {
+                    let lifecycle = self
+                        .lifecycle_by_id(target.object.object_id)
+                        .unwrap_or_else(|| {
+                            CatalogObjectLifecycle::active(target.object.catalog_version)
+                        });
+                    self.object_lifecycle.insert(
+                        target.object.object_id,
+                        lifecycle.deprecated(plan.next_version),
+                    );
                 }
             }
         }
@@ -185,8 +310,8 @@ pub struct CatalogSnapshotApplyReport {
 mod tests {
     use super::*;
     use crate::{
-        CatalogDefinition, CatalogObjectRef, DefinitionBatch, DefinitionBatchId,
-        DefinitionOperation, ObjectKind, TableDefinition,
+        CatalogDefinition, CatalogLifecycleTarget, CatalogObjectRef, DefinitionBatch,
+        DefinitionBatchId, DefinitionOperation, ObjectKind, TableDefinition,
     };
     use andromeda_core::{ColumnDescriptor, ScalarType, TypeDescriptor};
 
@@ -235,8 +360,8 @@ mod tests {
             table(1, "Inventory.Product", CatalogVersion::new(11)),
             CatalogVersion::new(10),
         )
-            .dry_run()
-            .unwrap();
+        .dry_run()
+        .unwrap();
 
         let report = snapshot.apply_mutation_plan(&plan.mutation_plan).unwrap();
 
@@ -260,16 +385,16 @@ mod tests {
             table(1, "Inventory.Product", CatalogVersion::new(11)),
             CatalogVersion::new(10),
         )
-            .dry_run()
-            .unwrap();
+        .dry_run()
+        .unwrap();
         snapshot.apply_mutation_plan(&first.mutation_plan).unwrap();
 
         let duplicate = batch(
             table(1, "Inventory.Stock", CatalogVersion::new(12)),
             CatalogVersion::new(11),
         )
-            .dry_run()
-            .unwrap();
+        .dry_run()
+        .unwrap();
         let error = snapshot
             .apply_mutation_plan(&duplicate.mutation_plan)
             .unwrap_err();
@@ -289,8 +414,8 @@ mod tests {
             table(1, "Inventory.Product", CatalogVersion::new(11)),
             CatalogVersion::new(10),
         )
-            .dry_run()
-            .unwrap();
+        .dry_run()
+        .unwrap();
 
         let error = snapshot
             .apply_mutation_plan(&plan.mutation_plan)
@@ -311,8 +436,8 @@ mod tests {
             table(1, "Inventory.Product", CatalogVersion::new(11)),
             CatalogVersion::new(10),
         )
-            .dry_run()
-            .unwrap();
+        .dry_run()
+        .unwrap();
 
         let report = snapshot.apply_mutation_plan(&plan.mutation_plan).unwrap();
 
@@ -325,5 +450,78 @@ mod tests {
             snapshot.publication,
             CatalogSnapshotPublication::InMemoryOnly
         );
+    }
+
+    #[test]
+    fn catalog_snapshot_applies_deprecation_without_removing_definition() {
+        let mut snapshot = CatalogSnapshot::empty(
+            DatabaseId::new(1),
+            NamespaceId::new(2),
+            CatalogVersion::new(10),
+        );
+        let create_plan = batch(
+            table(1, "Inventory.Product", CatalogVersion::new(11)),
+            CatalogVersion::new(10),
+        )
+        .dry_run()
+        .unwrap();
+        snapshot
+            .apply_mutation_plan(&create_plan.mutation_plan)
+            .unwrap();
+
+        let deprecate = DefinitionBatch {
+            batch_id: DefinitionBatchId::new(8),
+            database_id: DatabaseId::new(1),
+            namespace_id: NamespaceId::new(2),
+            base_version: CatalogVersion::new(11),
+            operations: vec![DefinitionOperation::Deprecate(CatalogLifecycleTarget {
+                object: object(1, "Inventory.Product", CatalogVersion::new(11)),
+            })],
+        }
+        .dry_run()
+        .unwrap();
+        let report = snapshot
+            .apply_mutation_plan(&deprecate.mutation_plan)
+            .unwrap();
+
+        assert_eq!(report.next_version, CatalogVersion::new(12));
+        assert_eq!(snapshot.version, CatalogVersion::new(12));
+        assert!(snapshot.contains_object_id(CatalogObjectId::new(1)));
+        assert!(snapshot.contains_name(&QualifiedName::parse("Inventory.Product").unwrap()));
+        assert!(!snapshot.is_active_object(CatalogObjectId::new(1)));
+        assert_eq!(
+            snapshot
+                .lifecycle_by_id(CatalogObjectId::new(1))
+                .unwrap()
+                .status,
+            CatalogObjectLifecycleStatus::Deprecated
+        );
+    }
+
+    #[test]
+    fn catalog_snapshot_rejects_deprecating_unknown_object() {
+        let mut snapshot = CatalogSnapshot::empty(
+            DatabaseId::new(1),
+            NamespaceId::new(2),
+            CatalogVersion::new(10),
+        );
+        let deprecate = DefinitionBatch {
+            batch_id: DefinitionBatchId::new(8),
+            database_id: DatabaseId::new(1),
+            namespace_id: NamespaceId::new(2),
+            base_version: CatalogVersion::new(10),
+            operations: vec![DefinitionOperation::Deprecate(CatalogLifecycleTarget {
+                object: object(1, "Inventory.Product", CatalogVersion::new(10)),
+            })],
+        }
+        .dry_run()
+        .unwrap();
+
+        let error = snapshot
+            .apply_mutation_plan(&deprecate.mutation_plan)
+            .unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+        assert!(error.message().contains("unknown object id"));
     }
 }

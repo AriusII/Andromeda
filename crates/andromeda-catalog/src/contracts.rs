@@ -5,9 +5,9 @@ use andromeda_core::{
 };
 
 use crate::{
-    names::QualifiedName, objects::{validate_columns, validate_columns_allow_empty},
-    CatalogObjectRef,
-    ObjectKind,
+    CatalogObjectRef, ObjectKind,
+    names::QualifiedName,
+    objects::{validate_columns, validate_columns_allow_empty},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -321,10 +321,10 @@ pub fn diagnose_procedure_contract_compatibility(
 
                 if next_stream.columns.len() < previous_stream.columns.len()
                     || !next_stream
-                    .columns
-                    .iter()
-                    .zip(previous_stream.columns.iter())
-                    .all(|(next_column, previous_column)| next_column == previous_column)
+                        .columns
+                        .iter()
+                        .zip(previous_stream.columns.iter())
+                        .all(|(next_column, previous_column)| next_column == previous_column)
                 {
                     messages.push(format!(
                         "additive compatibility requires existing columns to remain an unchanged prefix for result stream {}",
@@ -733,8 +733,8 @@ mod tests {
                 compatibility_policy: CompatibilityPolicy::ExactHash,
             }
         }
-            .materialize()
-            .unwrap();
+        .materialize()
+        .unwrap();
 
         assert_ne!(first.contract_hash, changed.contract_hash);
     }
@@ -751,8 +751,8 @@ mod tests {
             transaction_policy: transaction_policy(),
             compatibility_policy: CompatibilityPolicy::ExactHash,
         }
-            .materialize()
-            .unwrap();
+        .materialize()
+        .unwrap();
 
         let additive = ProcedureContractCandidate {
             compatibility_policy: CompatibilityPolicy::AdditiveOnly,
@@ -771,8 +771,8 @@ mod tests {
                 compatibility_policy: CompatibilityPolicy::AdditiveOnly,
             }
         }
-            .materialize()
-            .unwrap();
+        .materialize()
+        .unwrap();
 
         let exact_changed = ProcedureContract {
             compatibility_policy: CompatibilityPolicy::ExactHash,

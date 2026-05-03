@@ -41,7 +41,7 @@ fn denied_security_paths_are_auditable_without_transaction_evidence_or_secrets()
             reason: "required permission was not granted before transaction creation".to_string(),
         }),
     )
-        .expect("authorization denial is request/session correlated and pre-transaction");
+    .expect("authorization denial is request/session correlated and pre-transaction");
 
     assert!(denial.correlation.has_request_session());
     assert!(denial.correlation.has_no_transaction_evidence());
@@ -57,7 +57,7 @@ fn denied_security_paths_are_auditable_without_transaction_evidence_or_secrets()
             reason: "required permission was not granted before transaction creation".to_string(),
         }),
     )
-        .unwrap_err();
+    .unwrap_err();
     assert!(
         tx_implied
             .message()
@@ -73,7 +73,7 @@ fn denied_security_paths_are_auditable_without_transaction_evidence_or_secrets()
             reason: "password=should-not-be-observed".to_string(),
         }),
     )
-        .unwrap_err();
+    .unwrap_err();
     assert!(secret_leak.message().contains("must not include secrets"));
 }
 
@@ -91,7 +91,7 @@ fn valid_backpressure(event_id: u128, trace_id: u128) -> EventEnvelope {
             reason: "connection-level bounded protocol queue is full".to_string(),
         }),
     )
-        .expect("valid connection-scoped backpressure event")
+    .expect("valid connection-scoped backpressure event")
 }
 
 #[test]
@@ -206,7 +206,7 @@ fn incomplete_protocol_evidence_rejects() {
             reason: "completion is request scoped".to_string(),
         }),
     )
-        .unwrap_err();
+    .unwrap_err();
     assert!(
         missing_request
             .message()
@@ -225,7 +225,7 @@ fn incomplete_protocol_evidence_rejects() {
             reason: "committed completion needs durable evidence".to_string(),
         }),
     )
-        .unwrap_err();
+    .unwrap_err();
     assert!(missing_durable_lsn.message().contains("durable LSN"));
 
     let missing_frame = EventEnvelope::new(
@@ -238,7 +238,7 @@ fn incomplete_protocol_evidence_rejects() {
             reason: "frame evidence must not be implicit".to_string(),
         }),
     )
-        .unwrap_err();
+    .unwrap_err();
     assert!(missing_frame.message().contains("stream_id and frame_type"));
 
     let missing_role = EventEnvelope::new(
@@ -253,7 +253,7 @@ fn incomplete_protocol_evidence_rejects() {
             reason: "role evidence must include expected role".to_string(),
         }),
     )
-        .unwrap_err();
+    .unwrap_err();
     assert!(missing_role.message().contains("expected_role"));
 
     let missing_backpressure = EventEnvelope::new(
@@ -269,7 +269,7 @@ fn incomplete_protocol_evidence_rejects() {
             reason: "pressure evidence must be explicit".to_string(),
         }),
     )
-        .unwrap_err();
+    .unwrap_err();
     assert!(missing_backpressure.message().contains("queue pressure"));
 
     let missing_contract = EventEnvelope::new(
@@ -283,7 +283,7 @@ fn incomplete_protocol_evidence_rejects() {
             reason: "contract rejection code must be explicit".to_string(),
         }),
     )
-        .unwrap_err();
+    .unwrap_err();
     assert!(missing_contract.message().contains("rejection code"));
 
     let missing_version = EventEnvelope::new(
@@ -298,7 +298,7 @@ fn incomplete_protocol_evidence_rejects() {
             reason: "version bounds must be explicit".to_string(),
         }),
     )
-        .unwrap_err();
+    .unwrap_err();
     assert!(missing_version.message().contains("version evidence"));
 
     let missing_schema_layout = EventEnvelope::new(
@@ -315,7 +315,7 @@ fn incomplete_protocol_evidence_rejects() {
             reason: "schema/layout decision evidence must be explicit".to_string(),
         }),
     )
-        .unwrap_err();
+    .unwrap_err();
     assert!(
         missing_schema_layout
             .message()

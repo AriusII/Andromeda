@@ -4,7 +4,7 @@ use andromeda_core::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::{objects::CatalogDefinition, CatalogObjectRef, ObjectKind, QualifiedName};
+use crate::{CatalogObjectRef, ObjectKind, QualifiedName, objects::CatalogDefinition};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct DefinitionBatchId(u64);
@@ -22,6 +22,18 @@ impl DefinitionBatchId {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DefinitionOperation {
     Create(CatalogDefinition),
+    Deprecate(CatalogLifecycleTarget),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatalogLifecycleTarget {
+    pub object: CatalogObjectRef,
+}
+
+impl CatalogLifecycleTarget {
+    pub fn validate(&self) -> AndromedaResult<()> {
+        self.object.validate_for_definition(self.object.kind)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -73,9 +85,12 @@ impl DefinitionBatch {
 
         let mut object_ids = BTreeSet::new();
         let mut object_names = BTreeSet::new();
+        let mut lifecycle_target_ids = BTreeSet::new();
+        let mut lifecycle_target_names = BTreeSet::new();
         let mut created_name_positions = BTreeMap::new();
         let mut created_name_kinds = BTreeMap::new();
         let mut created_objects = Vec::with_capacity(self.operations.len());
+        let mut deprecated_objects = Vec::new();
         let mut deltas = Vec::with_capacity(self.operations.len());
 
         for (operation_index, operation) in self.operations.iter().enumerate() {
@@ -91,17 +106,21 @@ impl DefinitionBatch {
                         ));
                     }
 
-                    if !object_ids.insert(object.object_id) {
+                    if lifecycle_target_ids.contains(&object.object_id)
+                        || !object_ids.insert(object.object_id)
+                    {
                         return Err(AndromedaError::new(
                             AndromedaErrorKind::Catalog,
-                            "definition batch must not create the same object id twice",
+                            "definition batch must not change the same lifecycle object id twice",
                         ));
                     }
 
-                    if !object_names.insert(object.name.clone()) {
+                    if lifecycle_target_names.contains(&object.name)
+                        || !object_names.insert(object.name.clone())
+                    {
                         return Err(AndromedaError::new(
                             AndromedaErrorKind::Catalog,
-                            "definition batch must not create the same object name twice",
+                            "definition batch must not change the same lifecycle object name twice",
                         ));
                     }
 
@@ -117,6 +136,47 @@ impl DefinitionBatch {
                         operation_index,
                         next_version,
                         definition.clone(),
+                    ));
+                }
+                DefinitionOperation::Deprecate(target) => {
+                    target.validate()?;
+
+                    if target.object.catalog_version > self.base_version {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Catalog,
+                            "deprecated object version must not be newer than the definition batch base version",
+                        ));
+                    }
+
+                    if object_ids.contains(&target.object.object_id)
+                        || !lifecycle_target_ids.insert(target.object.object_id)
+                    {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Catalog,
+                            "definition batch must not change the same lifecycle object id twice",
+                        ));
+                    }
+
+                    if object_names.contains(&target.object.name)
+                        || !lifecycle_target_names.insert(target.object.name.clone())
+                    {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Catalog,
+                            "definition batch must not change the same lifecycle object name twice",
+                        ));
+                    }
+
+                    deprecated_objects.push(PlannedLifecycleTransition {
+                        object_id: target.object.object_id,
+                        name: target.object.name.clone(),
+                        kind: target.object.kind,
+                        action: CatalogLifecycleAction::Deprecate,
+                        planned_version: next_version,
+                    });
+                    deltas.push(CatalogMutationDelta::deprecate(
+                        operation_index,
+                        next_version,
+                        target.clone(),
                     ));
                 }
             }
@@ -157,6 +217,7 @@ impl DefinitionBatch {
             previous_version: self.base_version,
             next_version,
             created_objects,
+            deprecated_objects,
             mutation_plan,
         })
     }
@@ -179,7 +240,22 @@ pub struct DefinitionBatchPlan {
     pub previous_version: CatalogVersion,
     pub next_version: CatalogVersion,
     pub created_objects: Vec<PlannedDefinition>,
+    pub deprecated_objects: Vec<PlannedLifecycleTransition>,
     pub mutation_plan: CatalogMutationPlan,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CatalogLifecycleAction {
+    Deprecate,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlannedLifecycleTransition {
+    pub object_id: CatalogObjectId,
+    pub name: QualifiedName,
+    pub kind: ObjectKind,
+    pub action: CatalogLifecycleAction,
+    pub planned_version: CatalogVersion,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -264,27 +340,53 @@ impl CatalogMutationPlan {
                 ));
             }
 
-            delta.definition().validate()?;
-            let object = delta.object();
-            if object.catalog_version != next_version {
-                return Err(AndromedaError::new(
-                    AndromedaErrorKind::Catalog,
-                    "catalog mutation object version must match the planned next catalog version",
-                ));
-            }
+            match &delta.operation {
+                CatalogMutationOperation::CreateObject { object, definition } => {
+                    definition.validate()?;
+                    if object.catalog_version != next_version {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Catalog,
+                            "catalog mutation object version must match the planned next catalog version",
+                        ));
+                    }
 
-            if !object_ids.insert(object.object_id) {
-                return Err(AndromedaError::new(
-                    AndromedaErrorKind::Catalog,
-                    "catalog mutation plan must not create the same object id twice",
-                ));
-            }
+                    if !object_ids.insert(object.object_id) {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Catalog,
+                            "catalog mutation plan must not change the same object id twice",
+                        ));
+                    }
 
-            if !object_names.insert(object.name.clone()) {
-                return Err(AndromedaError::new(
-                    AndromedaErrorKind::Catalog,
-                    "catalog mutation plan must not create the same object name twice",
-                ));
+                    if !object_names.insert(object.name.clone()) {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Catalog,
+                            "catalog mutation plan must not change the same object name twice",
+                        ));
+                    }
+                }
+                CatalogMutationOperation::DeprecateObject { target } => {
+                    target.validate()?;
+                    if target.object.catalog_version > previous_version {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Catalog,
+                            "catalog mutation lifecycle target version must not be newer than the previous catalog version",
+                        ));
+                    }
+
+                    if !object_ids.insert(target.object.object_id) {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Catalog,
+                            "catalog mutation plan must not change the same object id twice",
+                        ));
+                    }
+
+                    if !object_names.insert(target.object.name.clone()) {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Catalog,
+                            "catalog mutation plan must not change the same object name twice",
+                        ));
+                    }
+                }
             }
         }
 
@@ -361,15 +463,29 @@ impl CatalogMutationDelta {
         }
     }
 
-    pub fn object(&self) -> &CatalogObjectRef {
-        match &self.operation {
-            CatalogMutationOperation::CreateObject { object, .. } => object,
+    pub fn deprecate(
+        operation_index: usize,
+        planned_version: CatalogVersion,
+        target: CatalogLifecycleTarget,
+    ) -> Self {
+        Self {
+            operation_index,
+            planned_version,
+            operation: CatalogMutationOperation::DeprecateObject { target },
         }
     }
 
-    pub fn definition(&self) -> &CatalogDefinition {
+    pub fn object(&self) -> &CatalogObjectRef {
         match &self.operation {
-            CatalogMutationOperation::CreateObject { definition, .. } => definition,
+            CatalogMutationOperation::CreateObject { object, .. } => object,
+            CatalogMutationOperation::DeprecateObject { target } => &target.object,
+        }
+    }
+
+    pub fn definition(&self) -> Option<&CatalogDefinition> {
+        match &self.operation {
+            CatalogMutationOperation::CreateObject { definition, .. } => Some(definition),
+            CatalogMutationOperation::DeprecateObject { .. } => None,
         }
     }
 }
@@ -379,6 +495,9 @@ pub enum CatalogMutationOperation {
     CreateObject {
         object: CatalogObjectRef,
         definition: CatalogDefinition,
+    },
+    DeprecateObject {
+        target: CatalogLifecycleTarget,
     },
 }
 
@@ -405,7 +524,9 @@ fn validate_dependency_order(
     created_name_kinds: &BTreeMap<QualifiedName, ObjectKind>,
 ) -> AndromedaResult<()> {
     for (operation_index, operation) in operations.iter().enumerate() {
-        let DefinitionOperation::Create(definition) = operation;
+        let DefinitionOperation::Create(definition) = operation else {
+            continue;
+        };
         let CatalogDefinition::Procedure(procedure) = definition else {
             continue;
         };
@@ -617,6 +738,51 @@ mod tests {
     }
 
     #[test]
+    fn definition_batch_dry_run_plans_deprecation_lifecycle_transition() {
+        let target = CatalogLifecycleTarget {
+            object: CatalogObjectRef {
+                object_id: CatalogObjectId::new(1),
+                name: QualifiedName::parse("Inventory.Product").unwrap(),
+                kind: ObjectKind::Table,
+                catalog_version: CatalogVersion::new(10),
+            },
+        };
+        let batch = batch_with(vec![DefinitionOperation::Deprecate(target)]);
+
+        let plan = batch.dry_run().unwrap();
+
+        assert_eq!(plan.operation_count, 1);
+        assert_eq!(plan.next_version, CatalogVersion::new(11));
+        assert!(plan.created_objects.is_empty());
+        assert_eq!(plan.deprecated_objects.len(), 1);
+        assert_eq!(
+            plan.deprecated_objects[0].action,
+            CatalogLifecycleAction::Deprecate
+        );
+        assert_eq!(
+            plan.deprecated_objects[0].planned_version,
+            CatalogVersion::new(11)
+        );
+        assert!(matches!(
+            &plan.mutation_plan.deltas[0].operation,
+            CatalogMutationOperation::DeprecateObject { .. }
+        ));
+    }
+
+    #[test]
+    fn definition_batch_dry_run_rejects_future_deprecation_target_version() {
+        let target = CatalogLifecycleTarget {
+            object: object(ObjectKind::Table),
+        };
+        let batch = batch_with(vec![DefinitionOperation::Deprecate(target)]);
+
+        let error = batch.dry_run().unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+        assert!(error.message().contains("base version"));
+    }
+
+    #[test]
     fn definition_batch_requires_dependency_friendly_order() {
         let procedure = ProcedureContract {
             object: object_with(2, "Inventory.ReserveStock", ObjectKind::Procedure),
@@ -669,7 +835,7 @@ mod tests {
             CatalogVersion::new(11),
             vec![delta],
         )
-            .unwrap_err();
+        .unwrap_err();
 
         assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
         assert!(error.message().contains("operation ordered"));

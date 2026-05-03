@@ -44,8 +44,8 @@ impl AdmissionService {
             trace_id,
             decision: CriticalDecisionKind::ResourceGovernance,
             reason:
-            "invocation id and declared contract identity admitted before transaction creation"
-                .to_string(),
+                "invocation id and declared contract identity admitted before transaction creation"
+                    .to_string(),
         })
     }
 

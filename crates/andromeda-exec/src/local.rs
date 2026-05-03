@@ -1,11 +1,12 @@
 use andromeda_catalog::ProcedureContractRef;
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, PipelineClass};
 use andromeda_observe::{DecisionTrace, TraceId};
 
 use crate::{
-    services::CompletionMappingService, transaction_id_for_invocation, InvocationCompletion, InvocationContext, InvocationRequest,
-    InvocationWal, LocalDispatchPlan, LocalDispatcher,
-    ResultStreamMetadata,
+    CompletionStatus, ExecutionIoAdmissionDecision, InvocationCompletion, InvocationContext,
+    InvocationReject, InvocationRequest, InvocationWal, LocalDispatchPlan, LocalDispatcher,
+    LocalRollbackPlan, ResultStreamMetadata, services::CompletionMappingService,
+    transaction_id_for_invocation,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -89,6 +90,60 @@ where
         self.execute_after_admission(request, procedure, context.trace_id, Some(context))
     }
 
+    pub fn execute_io_admitted(
+        &mut self,
+        request: InvocationRequest,
+        procedure: &LocalProcedure,
+        trace_id: TraceId,
+        io_admission: Result<ExecutionIoAdmissionDecision, InvocationReject>,
+    ) -> AndromedaResult<VerticalInvocationOutcome> {
+        let _io_admission = require_local_procedure_execution_io_admission(io_admission)?;
+        self.execute_after_admission(request, procedure, trace_id, None)
+    }
+
+    pub fn execute_authorized_io_admitted(
+        &mut self,
+        request: InvocationRequest,
+        procedure: &LocalProcedure,
+        context: &InvocationContext,
+        io_admission: Result<ExecutionIoAdmissionDecision, InvocationReject>,
+    ) -> AndromedaResult<VerticalInvocationOutcome> {
+        let _io_admission = require_local_procedure_execution_io_admission(io_admission)?;
+        self.execute_after_admission(request, procedure, context.trace_id, Some(context))
+    }
+
+    pub fn rollback_business_validation_failure_after_begin(
+        &mut self,
+        request: InvocationRequest,
+        procedure: &LocalProcedure,
+        trace_id: TraceId,
+        failure_reason: impl Into<String>,
+    ) -> AndromedaResult<VerticalInvocationOutcome> {
+        self.rollback_business_validation_failure_after_admission(
+            request,
+            procedure,
+            trace_id,
+            None,
+            failure_reason.into(),
+        )
+    }
+
+    pub fn rollback_authorized_business_validation_failure_after_begin(
+        &mut self,
+        request: InvocationRequest,
+        procedure: &LocalProcedure,
+        context: &InvocationContext,
+        failure_reason: impl Into<String>,
+    ) -> AndromedaResult<VerticalInvocationOutcome> {
+        self.rollback_business_validation_failure_after_admission(
+            request,
+            procedure,
+            context.trace_id,
+            Some(context),
+            failure_reason.into(),
+        )
+    }
+
     fn execute_after_admission(
         &mut self,
         request: InvocationRequest,
@@ -120,14 +175,64 @@ where
                 rows_affected: procedure.rows_affected,
             })?;
 
+        let completion = CompletionMappingService::committed(
+            request.invocation_id,
+            dispatch_receipt.rows_affected,
+            dispatch_receipt.transaction_state,
+            dispatch_receipt.durable_lsn,
+            trace_id,
+        )?;
+
         Ok(VerticalInvocationOutcome {
-            completion: CompletionMappingService::committed(
-                request.invocation_id,
-                dispatch_receipt.rows_affected,
-                dispatch_receipt.transaction_state,
-                dispatch_receipt.durable_lsn,
-                trace_id,
-            ),
+            completion,
+            admission_trace,
+            contract_trace,
+            authorization_trace,
+            result_metadata: procedure.result_metadata,
+        })
+    }
+
+    fn rollback_business_validation_failure_after_admission(
+        &mut self,
+        request: InvocationRequest,
+        procedure: &LocalProcedure,
+        trace_id: TraceId,
+        context: Option<&InvocationContext>,
+        failure_reason: String,
+    ) -> AndromedaResult<VerticalInvocationOutcome> {
+        procedure.validate()?;
+        let admission_trace = request
+            .validate_admission(trace_id)
+            .map_err(|reject| AndromedaError::new(AndromedaErrorKind::Contract, reject.reason))?;
+        let contract_trace = request
+            .validate_before_transaction(procedure.contract, trace_id)
+            .map_err(|reject| AndromedaError::new(AndromedaErrorKind::Contract, reject.reason))?;
+        let authorization_trace = context
+            .map(|context| {
+                context
+                    .authorize(&procedure.required_permissions)
+                    .map_err(|reject| {
+                        AndromedaError::new(AndromedaErrorKind::Security, reject.reason)
+                    })
+            })
+            .transpose()?;
+
+        let rollback_payload = rollback_payload_for_business_validation_failure(&failure_reason)?;
+        let rollback_receipt =
+            LocalDispatcher::new(&mut self.wal).dispatch_rollback(LocalRollbackPlan {
+                transaction_id: transaction_id_for_invocation(request.invocation_id),
+                rollback_payload,
+            })?;
+
+        let completion = CompletionMappingService::rolled_back(
+            request.invocation_id,
+            rollback_receipt.transaction_state,
+            rollback_receipt.durable_lsn,
+            trace_id,
+        )?;
+
+        Ok(VerticalInvocationOutcome {
+            completion,
             admission_trace,
             contract_trace,
             authorization_trace,
@@ -136,10 +241,74 @@ where
     }
 }
 
+pub fn require_local_procedure_execution_io_admission(
+    io_admission: Result<ExecutionIoAdmissionDecision, InvocationReject>,
+) -> AndromedaResult<ExecutionIoAdmissionDecision> {
+    let decision = io_admission.map_err(|reject| {
+        AndromedaError::new(
+            io_admission_error_kind(reject.status),
+            format!(
+                "execution IO admission rejected before local procedure execution: {}",
+                reject.reason
+            ),
+        )
+    })?;
+
+    if decision.pipeline_class != PipelineClass::ForegroundExecution {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Contract,
+            format!(
+                "execution IO admission decision for local procedure execution must target {} pipeline, got {}",
+                PipelineClass::ForegroundExecution.name(),
+                decision.pipeline_class.name()
+            ),
+        ));
+    }
+
+    if !decision.trace.has_explanation() {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Contract,
+            "execution IO admission decision for local procedure execution must include an explicit reason",
+        ));
+    }
+
+    Ok(decision)
+}
+
+fn io_admission_error_kind(status: CompletionStatus) -> AndromedaErrorKind {
+    match status {
+        CompletionStatus::PermissionDenied => AndromedaErrorKind::Security,
+        CompletionStatus::ContractRejected => AndromedaErrorKind::Contract,
+        CompletionStatus::SystemUnavailable => AndromedaErrorKind::Resource,
+        CompletionStatus::Committed
+        | CompletionStatus::RolledBack
+        | CompletionStatus::FailedBeforeTransaction
+        | CompletionStatus::Cancelled
+        | CompletionStatus::Poisoned => AndromedaErrorKind::Execution,
+    }
+}
+
+fn rollback_payload_for_business_validation_failure(reason: &str) -> AndromedaResult<Vec<u8>> {
+    let trimmed_reason = reason.trim();
+    if trimmed_reason.is_empty() {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Execution,
+            "business validation rollback reason must not be empty",
+        ));
+    }
+
+    let domain = b"andromeda.exec.business-validation-failed.v1";
+    let mut payload = Vec::with_capacity(domain.len() + 1 + trimmed_reason.len());
+    payload.extend_from_slice(domain);
+    payload.push(0);
+    payload.extend_from_slice(trimmed_reason.as_bytes());
+    Ok(payload)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_catalog::{inventory_reserve_stock_contract, ProcedureContractRef};
+    use andromeda_catalog::{ProcedureContractRef, inventory_reserve_stock_contract};
     use andromeda_core::{CatalogVersion, ContractHash, InvocationId, ProcedureId, TransactionId};
     use andromeda_srpl::Cardinality;
     use andromeda_storage::{InMemoryWal, Lsn, WalRecordKind};

@@ -6,3 +6,6 @@ publish = false
 
 [dependencies]
 andromeda-core.workspace = true
+
+[dev-dependencies]
+andromeda-proto.workspace = true

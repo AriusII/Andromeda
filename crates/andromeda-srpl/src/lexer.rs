@@ -14,6 +14,8 @@ pub enum TokenKind {
     Comma,
     LParen,
     RParen,
+    LBrace,
+    RBrace,
     Semicolon,
 }
 
@@ -53,6 +55,14 @@ pub fn lex(input: &str) -> Result<Vec<Token>, SrplDiagnostic> {
             ')' => {
                 index += 1;
                 TokenKind::RParen
+            }
+            '{' => {
+                index += 1;
+                TokenKind::LBrace
+            }
+            '}' => {
+                index += 1;
+                TokenKind::RBrace
             }
             ';' => {
                 index += 1;

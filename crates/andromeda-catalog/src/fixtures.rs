@@ -1,28 +1,40 @@
 use andromeda_core::{
-    AndromedaResult, CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId,
-    ScalarType, TypeDescriptor,
+    AndromedaResult, CatalogObjectId, CatalogVersion, ColumnDescriptor, DatabaseId, NamespaceId,
+    ProcedureId, ScalarType, TypeDescriptor,
 };
 
 use crate::{
-    AccessMode, CatalogObjectRef, CompatibilityPolicy, IsolationPolicy, ObjectKind,
-    ProcedureContract, QualifiedName, ResultStreamContract, TransactionPolicy,
+    AccessMode, CatalogBindingKind, CatalogDefinition, CatalogObjectBinding, CatalogObjectRef,
+    CompatibilityPolicy, DefinitionBatch, DefinitionBatchId, DefinitionOperation, IsolationPolicy,
+    ObjectKind, ProcedureContract, ProcedureContractCandidate, QualifiedName, ResultStreamContract,
+    StructuredObjectDefinition, TableDefinition, TransactionPolicy,
 };
 
 pub const INVENTORY_RESERVE_STOCK_PERMISSION: &str = "Inventory.ReserveStock.Execute";
-pub const INVENTORY_RESERVE_STOCK_CONTRACT_HASH: ContractHash = ContractHash::test_vector(0x52);
 pub const INVENTORY_RESERVE_STOCK_PROCEDURE_ID: ProcedureId = ProcedureId::new(0x5253);
 pub const INVENTORY_RESERVE_STOCK_OBJECT_ID: CatalogObjectId = CatalogObjectId::new(0x5253);
+pub const INVENTORY_PRODUCT_STOCK_OBJECT_ID: CatalogObjectId = CatalogObjectId::new(0x5001);
+pub const INVENTORY_RESERVATION_OBJECT_ID: CatalogObjectId = CatalogObjectId::new(0x5002);
+pub const INVENTORY_DATABASE_ID: DatabaseId = DatabaseId::new(0x1000);
+pub const INVENTORY_NAMESPACE_ID: NamespaceId = NamespaceId::new(0x1001);
+pub const INVENTORY_DEFINITION_BATCH_ID: DefinitionBatchId = DefinitionBatchId::new(0x1002);
 
 pub fn inventory_reserve_stock_contract() -> AndromedaResult<ProcedureContract> {
-    ProcedureContract {
+    inventory_reserve_stock_contract_candidate(CatalogVersion::new(1)).materialize()
+}
+
+pub fn inventory_reserve_stock_contract_candidate(
+    catalog_version: CatalogVersion,
+) -> ProcedureContractCandidate {
+    ProcedureContractCandidate {
         object: CatalogObjectRef {
             object_id: INVENTORY_RESERVE_STOCK_OBJECT_ID,
-            name: QualifiedName::parse("Inventory.ReserveStock")?,
+            name: QualifiedName::parse("Inventory.ReserveStock")
+                .expect("fixture procedure name is valid"),
             kind: ObjectKind::Procedure,
-            catalog_version: CatalogVersion::new(1),
+            catalog_version,
         },
         procedure_id: INVENTORY_RESERVE_STOCK_PROCEDURE_ID,
-        contract_hash: INVENTORY_RESERVE_STOCK_CONTRACT_HASH,
         inputs: vec![
             phase1_column("ProductId", ScalarType::I64, 0),
             phase1_column("Quantity", ScalarType::I64, 1),
@@ -41,7 +53,136 @@ pub fn inventory_reserve_stock_contract() -> AndromedaResult<ProcedureContract> 
         },
         compatibility_policy: CompatibilityPolicy::ExactHash,
     }
-        .validated()
+}
+
+pub fn inventory_product_stock_table(
+    catalog_version: CatalogVersion,
+) -> AndromedaResult<TableDefinition> {
+    Ok(TableDefinition {
+        object: CatalogObjectRef {
+            object_id: INVENTORY_PRODUCT_STOCK_OBJECT_ID,
+            name: QualifiedName::parse("Inventory.ProductStock")?,
+            kind: ObjectKind::Table,
+            catalog_version,
+        },
+        columns: vec![
+            phase1_column("ProductId", ScalarType::I64, 0),
+            phase1_column("AvailableQuantity", ScalarType::I64, 1),
+            phase1_column("Version", ScalarType::I64, 2),
+        ],
+    })
+}
+
+pub fn inventory_reservation_structured_object(
+    catalog_version: CatalogVersion,
+) -> AndromedaResult<StructuredObjectDefinition> {
+    Ok(StructuredObjectDefinition {
+        object: CatalogObjectRef {
+            object_id: INVENTORY_RESERVATION_OBJECT_ID,
+            name: QualifiedName::parse("Inventory.Reservation")?,
+            kind: ObjectKind::StructuredObject,
+            catalog_version,
+        },
+        fields: vec![
+            phase1_column("ProductId", ScalarType::I64, 0),
+            phase1_column("Quantity", ScalarType::I64, 1),
+            phase1_column("RemainingQuantity", ScalarType::I64, 2),
+            phase1_column("Reserved", ScalarType::Bool, 3),
+        ],
+        unique_by: vec!["ProductId".to_string()],
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InventoryReserveStockCatalogBindings {
+    pub procedure: CatalogObjectRef,
+    pub product_stock_table: CatalogObjectRef,
+    pub reservation_structured_object: CatalogObjectRef,
+    pub product_stock_table_binding: CatalogObjectBinding,
+    pub reservation_result_binding: CatalogObjectBinding,
+}
+
+impl InventoryReserveStockCatalogBindings {
+    pub fn validate(&self) -> AndromedaResult<()> {
+        self.product_stock_table_binding.validate()?;
+        self.reservation_result_binding.validate()?;
+
+        if self.product_stock_table_binding.dependent != self.procedure
+            || self.reservation_result_binding.dependent != self.procedure
+        {
+            return Err(andromeda_core::AndromedaError::new(
+                andromeda_core::AndromedaErrorKind::Catalog,
+                "Inventory.ReserveStock bindings must use the ReserveStock procedure as dependent",
+            ));
+        }
+
+        if self.product_stock_table_binding.dependency != self.product_stock_table {
+            return Err(andromeda_core::AndromedaError::new(
+                andromeda_core::AndromedaErrorKind::Catalog,
+                "Inventory.ReserveStock table binding must target Inventory.ProductStock",
+            ));
+        }
+
+        if self.reservation_result_binding.dependency != self.reservation_structured_object {
+            return Err(andromeda_core::AndromedaError::new(
+                andromeda_core::AndromedaErrorKind::Catalog,
+                "Inventory.ReserveStock result binding must target Inventory.Reservation",
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+pub fn inventory_reserve_stock_catalog_bindings(
+    catalog_version: CatalogVersion,
+) -> AndromedaResult<InventoryReserveStockCatalogBindings> {
+    let procedure = inventory_reserve_stock_contract_candidate(catalog_version)
+        .materialize()?
+        .object;
+    let product_stock_table = inventory_product_stock_table(catalog_version)?.object;
+    let reservation_structured_object =
+        inventory_reservation_structured_object(catalog_version)?.object;
+
+    let bindings = InventoryReserveStockCatalogBindings {
+        procedure: procedure.clone(),
+        product_stock_table: product_stock_table.clone(),
+        reservation_structured_object: reservation_structured_object.clone(),
+        product_stock_table_binding: CatalogObjectBinding {
+            dependent: procedure.clone(),
+            dependency: product_stock_table,
+            kind: CatalogBindingKind::WritesTable,
+        },
+        reservation_result_binding: CatalogObjectBinding {
+            dependent: procedure,
+            dependency: reservation_structured_object,
+            kind: CatalogBindingKind::EmitsStructuredObject,
+        },
+    };
+    bindings.validate()?;
+    Ok(bindings)
+}
+
+pub fn inventory_domain_definition_batch() -> AndromedaResult<DefinitionBatch> {
+    let base_version = CatalogVersion::new(0);
+    let next_version = CatalogVersion::new(1);
+    Ok(DefinitionBatch {
+        batch_id: INVENTORY_DEFINITION_BATCH_ID,
+        database_id: INVENTORY_DATABASE_ID,
+        namespace_id: INVENTORY_NAMESPACE_ID,
+        base_version,
+        operations: vec![
+            DefinitionOperation::Create(CatalogDefinition::Table(inventory_product_stock_table(
+                next_version,
+            )?)),
+            DefinitionOperation::Create(CatalogDefinition::StructuredObject(
+                inventory_reservation_structured_object(next_version)?,
+            )),
+            DefinitionOperation::Create(CatalogDefinition::Procedure(
+                inventory_reserve_stock_contract_candidate(next_version).materialize()?,
+            )),
+        ],
+    })
 }
 
 fn phase1_column(name: &str, scalar: ScalarType, ordinal: u32) -> ColumnDescriptor {
@@ -66,11 +207,8 @@ mod tests {
             "Inventory.ReserveStock"
         );
         assert_eq!(contract.procedure_id, INVENTORY_RESERVE_STOCK_PROCEDURE_ID);
-        assert_eq!(
-            contract.contract_hash,
-            INVENTORY_RESERVE_STOCK_CONTRACT_HASH
-        );
         assert!(!contract.contract_hash.is_zero());
+        assert_eq!(contract.contract_hash, contract.canonical_hash());
         assert_eq!(
             contract.required_permissions,
             vec![INVENTORY_RESERVE_STOCK_PERMISSION.to_string()]
@@ -88,5 +226,74 @@ mod tests {
 
         assert_eq!(error.kind(), AndromedaErrorKind::Security);
         assert!(error.message().contains("required permissions"));
+    }
+
+    #[test]
+    fn inventory_domain_definition_batch_plans_catalog_objects_together() {
+        let batch = inventory_domain_definition_batch().unwrap();
+        let plan = batch.dry_run().unwrap();
+
+        assert_eq!(plan.next_version, CatalogVersion::new(1));
+        assert_eq!(plan.created_objects.len(), 3);
+        assert!(
+            plan.created_objects
+                .iter()
+                .any(|object| object.object_id == INVENTORY_PRODUCT_STOCK_OBJECT_ID)
+        );
+        assert!(
+            plan.created_objects
+                .iter()
+                .any(|object| object.object_id == INVENTORY_RESERVATION_OBJECT_ID)
+        );
+        assert!(
+            plan.created_objects
+                .iter()
+                .any(|object| object.object_id == INVENTORY_RESERVE_STOCK_OBJECT_ID)
+        );
+    }
+
+    #[test]
+    fn inventory_reserve_stock_catalog_bindings_are_exact_fixture_evidence() {
+        let bindings = inventory_reserve_stock_catalog_bindings(CatalogVersion::new(1)).unwrap();
+
+        assert_eq!(
+            bindings.procedure.object_id,
+            INVENTORY_RESERVE_STOCK_OBJECT_ID
+        );
+        assert_eq!(
+            bindings.product_stock_table.object_id,
+            INVENTORY_PRODUCT_STOCK_OBJECT_ID
+        );
+        assert_eq!(
+            bindings.reservation_structured_object.object_id,
+            INVENTORY_RESERVATION_OBJECT_ID
+        );
+        assert_eq!(
+            bindings.product_stock_table_binding.kind,
+            CatalogBindingKind::WritesTable
+        );
+        assert_eq!(
+            bindings.reservation_result_binding.kind,
+            CatalogBindingKind::EmitsStructuredObject
+        );
+        assert!(bindings.validate().is_ok());
+    }
+
+    #[test]
+    fn inventory_domain_batch_contains_objects_named_by_catalog_bindings() {
+        let batch = inventory_domain_definition_batch().unwrap();
+        let bindings = inventory_reserve_stock_catalog_bindings(CatalogVersion::new(1)).unwrap();
+        let created_objects = batch
+            .operations
+            .iter()
+            .map(|operation| match operation {
+                DefinitionOperation::Create(definition) => definition.object_ref(),
+                DefinitionOperation::Deprecate(target) => &target.object,
+            })
+            .collect::<Vec<_>>();
+
+        assert!(created_objects.contains(&&bindings.product_stock_table));
+        assert!(created_objects.contains(&&bindings.reservation_structured_object));
+        assert!(created_objects.contains(&&bindings.procedure));
     }
 }

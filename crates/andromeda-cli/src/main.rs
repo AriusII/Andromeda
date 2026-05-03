@@ -5,11 +5,10 @@ use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, HardwareProfile, InvocationId,
 };
 use andromeda_exec::{
-    CompletionStatus, InvocationContext, InvocationRequest, LocalProcedure, LocalVerticalRuntime,
-    ResultStreamMetadata,
+    CompletionStatus, InventoryReserveStockExecutor, InventoryStock, InvocationContext,
+    InvocationRequest, LocalVerticalRuntime, ReserveStockCommand,
 };
 use andromeda_observe::TraceId;
-use andromeda_srpl::Cardinality;
 use andromeda_storage::{InMemoryWal, Lsn};
 
 const PROTO_PAYLOAD_SOURCE: &str = include_str!("../../andromeda-proto/src/payload.rs");
@@ -120,18 +119,18 @@ fn run_vertical_demo() -> AndromedaResult<()> {
         catalog_version: contract.object.catalog_version,
         structured_parameters: Vec::new(),
     };
-    let procedure = LocalProcedure {
-        contract: contract.as_ref(),
-        required_permissions: contract.required_permissions.clone(),
-        result_metadata: ResultStreamMetadata {
-            stream_id: 1,
-            row_count_exact: Some(1),
-            column_count: contract.result_streams[0].columns.len() as u32,
-            cardinality: Cardinality::One,
+    let effect = InventoryReserveStockExecutor::reserve(
+        ReserveStockCommand {
+            product_id: 42,
+            quantity: 3,
         },
-        mutation_payload: b"Inventory.ReserveStock demo mutation".to_vec(),
-        rows_affected: 1,
-    };
+        InventoryStock {
+            product_id: 42,
+            available_quantity: 10,
+            version: 1,
+        },
+    )?;
+    let procedure = effect.to_local_procedure(&contract)?;
     let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
     let context = InvocationContext::new(TraceId::new(1), contract.required_permissions.clone());
     let outcome = runtime.execute_authorized(request, &procedure, &context)?;
@@ -144,6 +143,7 @@ fn run_vertical_demo() -> AndromedaResult<()> {
     println!("procedure: {}", contract.object.name.as_catalog_path());
     println!("status: {:?}", outcome.completion.status);
     println!("rows affected: {:?}", outcome.completion.rows_affected);
+    println!("remaining stock: {}", effect.result.remaining_quantity);
     println!("durable WAL LSN: {}", durable_lsn.get());
     println!(
         "durable WAL records: {}",
@@ -362,18 +362,18 @@ fn validate_completion_error_structured_contract() -> AndromedaResult<String> {
     };
     let structured_parameter_count = request.structured_parameters.len();
 
-    let procedure = LocalProcedure {
-        contract: contract.as_ref(),
-        required_permissions: contract.required_permissions.clone(),
-        result_metadata: ResultStreamMetadata {
-            stream_id: 1,
-            row_count_exact: Some(1),
-            column_count: contract.result_streams[0].columns.len() as u32,
-            cardinality: Cardinality::One,
+    let effect = InventoryReserveStockExecutor::reserve(
+        ReserveStockCommand {
+            product_id: 42,
+            quantity: 1,
         },
-        mutation_payload: b"protocol smoke mutation".to_vec(),
-        rows_affected: 1,
-    };
+        InventoryStock {
+            product_id: 42,
+            available_quantity: 10,
+            version: 1,
+        },
+    )?;
+    let procedure = effect.to_local_procedure(&contract)?;
 
     let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
     let context = InvocationContext::new(TraceId::new(19), contract.required_permissions.clone());

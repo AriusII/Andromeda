@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod admission;
+mod business;
 pub mod dispatch;
 pub mod helpers;
 mod invocation;
@@ -10,8 +11,10 @@ pub mod services;
 mod wal;
 
 pub use admission::*;
+pub use business::*;
 pub use dispatch::{
-    LocalDispatchPlan, LocalDispatchReceipt, LocalDispatcher, WalDurabilityEvidence,
+    LocalDispatchPlan, LocalDispatchReceipt, LocalDispatcher, LocalRollbackPlan,
+    LocalRollbackReceipt, RollbackWalDurabilityEvidence, WalDurabilityEvidence,
 };
 pub use helpers::transaction_id_for_invocation;
 pub use invocation::*;

@@ -2,9 +2,9 @@ use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_observe::TraceId;
 
 use crate::{
-    summarize_transactions_from_records, DatabaseManifest, DurableTransactionResume,
-    DurableTransactionState, IncompleteDurableTransaction, Lsn, WalRecord, WalRecordKind, WalScanResult,
-    WalScanStop, WalScanStopReason,
+    DatabaseManifest, DurableTransactionResume, DurableTransactionState,
+    IncompleteDurableTransaction, Lsn, WalRecord, WalRecordKind, WalScanResult, WalScanStop,
+    WalScanStopReason, summarize_transactions_from_records,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -266,28 +266,29 @@ pub struct ConceptualRedoPlan {
 }
 
 impl ConceptualRedoPlan {
-    pub fn replay_lsns(&self) -> impl Iterator<Item=Lsn> + '_ {
+    pub fn replay_lsns(&self) -> impl Iterator<Item = Lsn> + '_ {
         self.records
             .iter()
             .filter(|record| record.should_replay())
             .map(|record| record.lsn)
     }
 
+    pub fn committed_redo_records(&self) -> impl Iterator<Item = &RedoRecordPlan> + '_ {
+        self.records.iter().filter(|record| {
+            record.should_replay()
+                && match record.transaction_state {
+                    Some(state) => state == DurableTransactionState::Committed,
+                    None => true,
+                }
+        })
+    }
+
     pub fn has_incomplete_transactions(&self) -> bool {
         !self.incomplete_transactions.is_empty()
     }
 
-    pub fn committed_replay_lsns(&self) -> impl Iterator<Item=Lsn> + '_ {
-        self.records
-            .iter()
-            .filter(|record| {
-                record.should_replay()
-                    && match record.transaction_state {
-                    Some(state) => state == DurableTransactionState::Committed,
-                    None => true,
-                }
-            })
-            .map(|record| record.lsn)
+    pub fn committed_replay_lsns(&self) -> impl Iterator<Item = Lsn> + '_ {
+        self.committed_redo_records().map(|record| record.lsn)
     }
 
     pub const fn wal_scan_stop(&self) -> Option<WalScanStop> {
@@ -408,7 +409,7 @@ mod tests {
             StartupMode::SafeStart,
             &durable_records,
         )
-            .unwrap();
+        .unwrap();
 
         assert!(plan.has_incomplete_transactions());
         assert_eq!(
@@ -455,7 +456,7 @@ mod tests {
             StartupMode::SafeStart,
             &durable_records,
         )
-            .unwrap();
+        .unwrap();
         let trace = plan.observe_recovery_trace(TraceId::new(50));
 
         let envelope = EventEnvelope::new(
@@ -466,7 +467,7 @@ mod tests {
             },
             TraceEvent::RecoveryStartup(trace),
         )
-            .expect("recovery trace is correlated to the last durable WAL boundary");
+        .expect("recovery trace is correlated to the last durable WAL boundary");
 
         assert_eq!(
             envelope.correlation.durable_lsn,
@@ -485,7 +486,7 @@ mod tests {
                 Some(transaction_id),
                 Vec::new(),
             )
-                .unwrap(),
+            .unwrap(),
             WalRecord::from_parts(
                 WalRecordKind::RowInsert,
                 Lsn::new(3),
@@ -493,7 +494,7 @@ mod tests {
                 Some(transaction_id),
                 b"gap".to_vec(),
             )
-                .unwrap(),
+            .unwrap(),
         ];
         let manifest = DatabaseManifest {
             database_id: 1,
@@ -524,7 +525,7 @@ mod tests {
                 Some(transaction_id),
                 Vec::new(),
             )
-                .unwrap(),
+            .unwrap(),
             WalRecord::from_parts(
                 WalRecordKind::TxCommit,
                 Lsn::new(1),
@@ -532,7 +533,7 @@ mod tests {
                 Some(transaction_id),
                 Vec::new(),
             )
-                .unwrap(),
+            .unwrap(),
         ];
         let manifest = DatabaseManifest {
             database_id: 1,
@@ -563,7 +564,7 @@ mod tests {
                 Some(transaction_id),
                 Vec::new(),
             )
-                .unwrap(),
+            .unwrap(),
             WalRecord::from_parts(
                 WalRecordKind::TxCommit,
                 Lsn::new(2),
@@ -571,7 +572,7 @@ mod tests {
                 Some(transaction_id),
                 Vec::new(),
             )
-                .unwrap(),
+            .unwrap(),
         ];
         let manifest = DatabaseManifest {
             database_id: 1,

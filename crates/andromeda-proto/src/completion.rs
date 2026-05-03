@@ -78,27 +78,44 @@ impl RpcCompletion {
             summary.validate()?;
         }
 
-        if self.status == RpcCompletionStatus::Committed {
-            if self.transaction_outcome != TransactionOutcome::Committed {
-                return Err(AndromedaError::new(
-                    AndromedaErrorKind::Transaction,
-                    "committed RPC completion must declare committed transaction outcome",
-                ));
+        match self.status {
+            RpcCompletionStatus::Committed => {
+                self.validate_transactional_completion(
+                    TransactionOutcome::Committed,
+                    "committed RPC completion",
+                )?;
             }
+            RpcCompletionStatus::RolledBack => {
+                self.validate_transactional_completion(
+                    TransactionOutcome::RolledBack,
+                    "rolled-back RPC completion",
+                )?;
 
-            if self.tx_id.is_none() {
-                return Err(AndromedaError::new(
-                    AndromedaErrorKind::Transaction,
-                    "committed RPC completion must include transaction id",
-                ));
-            }
-
-            match self.durable_lsn {
-                Some(lsn) if lsn > 0 => {}
-                _ => {
+                if self.rows_affected != Some(0) {
                     return Err(AndromedaError::new(
-                        AndromedaErrorKind::Storage,
-                        "committed RPC completion must include nonzero durable LSN evidence",
+                        AndromedaErrorKind::Transaction,
+                        "rolled-back RPC completion must report zero rows affected",
+                    ));
+                }
+            }
+            RpcCompletionStatus::FailedBeforeTransaction
+            | RpcCompletionStatus::PermissionDenied
+            | RpcCompletionStatus::ContractRejected => {
+                self.validate_not_started_completion("pre-transaction RPC completion")?;
+            }
+            RpcCompletionStatus::Cancelled => {
+                if self.transaction_outcome == TransactionOutcome::Committed {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Transaction,
+                        "cancelled RPC completion must not declare committed transaction outcome",
+                    ));
+                }
+            }
+            RpcCompletionStatus::Poisoned | RpcCompletionStatus::SystemUnavailable => {
+                if self.transaction_outcome == TransactionOutcome::Committed {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Transaction,
+                        "failed RPC completion must not declare committed transaction outcome",
                     ));
                 }
             }
@@ -110,6 +127,52 @@ impl RpcCompletion {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Transaction,
                 "committed transaction outcome requires committed RPC status",
+            ));
+        }
+
+        Ok(())
+    }
+
+    fn validate_transactional_completion(
+        &self,
+        expected_outcome: TransactionOutcome,
+        label: &str,
+    ) -> AndromedaResult<()> {
+        if self.transaction_outcome != expected_outcome {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Transaction,
+                format!("{label} must declare matching transaction outcome"),
+            ));
+        }
+
+        if self.tx_id.is_none() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Transaction,
+                format!("{label} must include transaction id"),
+            ));
+        }
+
+        match self.durable_lsn {
+            Some(lsn) if lsn > 0 => Ok(()),
+            _ => Err(AndromedaError::new(
+                AndromedaErrorKind::Storage,
+                format!("{label} must include nonzero durable LSN evidence"),
+            )),
+        }
+    }
+
+    fn validate_not_started_completion(&self, label: &str) -> AndromedaResult<()> {
+        if self.transaction_outcome != TransactionOutcome::NotStarted {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Transaction,
+                format!("{label} must declare transaction not started"),
+            ));
+        }
+
+        if self.tx_id.is_some() || self.durable_lsn.is_some() || self.rows_affected.is_some() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Transaction,
+                format!("{label} must not carry transaction result evidence"),
             ));
         }
 

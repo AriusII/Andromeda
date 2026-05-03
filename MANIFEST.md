@@ -163,6 +163,7 @@
 - `docs/decisions/DEC-012-phase0-contract-baselines.md`
 - `docs/decisions/DEC-013-local-vertical-prototype.md`
 - `docs/decisions/DEC-014-rust-crate-module-structure.md`
+- `docs/decisions/DEC-015-inventory-business-procedure-slice.md`
 - `docs/test-vectors/phase0-contract-vectors.md`
 - `hooks/scripts/andromeda_artifact_gate.py`
 - `hooks/scripts/andromeda_common.py`

@@ -6,8 +6,8 @@ use andromeda_observe::{
 use andromeda_proto::StructuredObjectHeader;
 
 use crate::{
-    services::{AdmissionService, PreTransactionValidationService}, CompletionStatus,
-    InvocationCompletion,
+    CompletionStatus, InvocationCompletion,
+    services::{AdmissionService, PreTransactionValidationService},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -175,7 +175,7 @@ mod tests {
             request_correlation(),
             TraceEvent::ContractRejected(trace),
         )
-            .expect("contract rejection is auditable without transaction evidence");
+        .expect("contract rejection is auditable without transaction evidence");
 
         assert!(envelope.correlation.has_contract_catalog());
         assert!(envelope.correlation.has_no_transaction_evidence());

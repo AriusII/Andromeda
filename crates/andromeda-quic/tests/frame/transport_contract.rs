@@ -1,11 +1,11 @@
 use andromeda_core::{AndromedaErrorKind, RequestId, SessionId, TransactionId};
 use andromeda_quic::{
-    validate_frame_sequence, validate_result_stream_sequence, validate_single_frame_on_stream, FrameBytes,
-    FrameFamily, FrameHeader, FrameType, StreamRole,
-    AUTH_FRAME_CODE, CONTRACT_REQUEST_FRAME_CODE, CONTRACT_RESPONSE_FRAME_CODE, ERROR_FRAME_CODE, FRAME_HEADER_CRC_UNCHECKED,
-    FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP, HELLO_FRAME_CODE, MAX_FRAME_PAYLOAD_LENGTH, RPC_BATCH_FRAME_CODE,
-    RPC_COMPLETION_FRAME_CODE, RPC_EXECUTE_REQUEST_FRAME_CODE, RPC_METADATA_FRAME_CODE,
-    TELEMETRY_SOFT_SIGNAL_FRAME_CODE,
+    AUTH_FRAME_CODE, CONTRACT_REQUEST_FRAME_CODE, CONTRACT_RESPONSE_FRAME_CODE, ERROR_FRAME_CODE,
+    FRAME_HEADER_CRC_UNCHECKED, FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP, FrameBytes, FrameFamily,
+    FrameHeader, FrameType, HELLO_FRAME_CODE, MAX_FRAME_PAYLOAD_LENGTH, RPC_BATCH_FRAME_CODE,
+    RPC_COMPLETION_FRAME_CODE, RPC_EXECUTE_REQUEST_FRAME_CODE, RPC_METADATA_FRAME_CODE, StreamRole,
+    TELEMETRY_SOFT_SIGNAL_FRAME_CODE, validate_frame_sequence, validate_result_stream_sequence,
+    validate_single_frame_on_stream,
 };
 
 fn header(frame_type: FrameType, payload_length: u64) -> FrameHeader {
@@ -113,6 +113,30 @@ fn frame_type_wire_codes_lockstep_with_payload_contract_codes() {
 }
 
 #[test]
+fn quic_frame_codes_match_proto_payload_kind_contract_without_runtime_translation() {
+    assert_eq!(
+        FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP.len(),
+        andromeda_proto::PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP.len()
+    );
+
+    for ((frame_type, frame_code), (payload_kind, payload_code)) in FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP
+        .iter()
+        .zip(andromeda_proto::PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP)
+    {
+        assert_eq!(
+            *frame_code,
+            payload_kind.wire_code(),
+            "{frame_type:?} must retain its proto payload-kind code"
+        );
+        assert_eq!(
+            *payload_code,
+            frame_type.wire_code(),
+            "{payload_kind:?} must retain its QUIC frame code"
+        );
+    }
+}
+
+#[test]
 fn stream_roles_enforce_frame_family_boundaries() {
     let cases = [
         (
@@ -192,8 +216,8 @@ fn quic_datagram_is_telemetry_only_and_never_contract_bound_payload() {
                 &frame(frame_type, payload),
                 StreamRole::TelemetryDatagram
             )
-                .unwrap_err()
-                .kind(),
+            .unwrap_err()
+            .kind(),
             AndromedaErrorKind::Protocol
         );
     }
@@ -203,7 +227,7 @@ fn quic_datagram_is_telemetry_only_and_never_contract_bound_payload() {
             &frame(FrameType::TelemetrySoftSignal, b"telemetry".to_vec()),
             StreamRole::TelemetryDatagram,
         )
-            .is_ok()
+        .is_ok()
     );
 }
 
@@ -260,7 +284,7 @@ fn result_stream_sequence_requires_metadata_then_batch_then_completion() {
     let completion = frame(FrameType::RpcCompletion, Vec::new());
 
     assert!(
-        validate_result_stream_sequence(&[metadata.clone(), batch.clone(), completion.clone(), ])
+        validate_result_stream_sequence(&[metadata.clone(), batch.clone(), completion.clone(),])
             .is_ok()
     );
     assert!(
@@ -268,7 +292,7 @@ fn result_stream_sequence_requires_metadata_then_batch_then_completion() {
             &[metadata.clone(), batch.clone(), completion.clone()],
             StreamRole::ResultUnidirectional,
         )
-            .is_ok()
+        .is_ok()
     );
 
     assert_eq!(

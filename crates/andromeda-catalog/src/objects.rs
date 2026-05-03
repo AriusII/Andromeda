@@ -52,6 +52,62 @@ impl CatalogObjectRef {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CatalogBindingKind {
+    ReadsTable,
+    WritesTable,
+    UsesStructuredInput,
+    EmitsStructuredObject,
+}
+
+impl CatalogBindingKind {
+    pub fn dependency_kind(self) -> ObjectKind {
+        match self {
+            Self::ReadsTable | Self::WritesTable => ObjectKind::Table,
+            Self::UsesStructuredInput | Self::EmitsStructuredObject => ObjectKind::StructuredObject,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatalogObjectBinding {
+    pub dependent: CatalogObjectRef,
+    pub dependency: CatalogObjectRef,
+    pub kind: CatalogBindingKind,
+}
+
+impl CatalogObjectBinding {
+    pub fn validate(&self) -> AndromedaResult<()> {
+        self.dependent
+            .validate_for_definition(ObjectKind::Procedure)?;
+        self.dependency
+            .validate_for_definition(self.kind.dependency_kind())?;
+
+        if self.dependent.object_id == self.dependency.object_id {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "catalog binding dependent and dependency object ids must differ",
+            ));
+        }
+
+        if self.dependent.name == self.dependency.name {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "catalog binding dependent and dependency names must differ",
+            ));
+        }
+
+        if self.dependent.catalog_version != self.dependency.catalog_version {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "catalog binding evidence requires exact catalog version match",
+            ));
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TableDefinition {
     pub object: CatalogObjectRef,
@@ -217,4 +273,78 @@ fn validate_columns_with_min(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use andromeda_core::{CatalogObjectId, ScalarType, TypeDescriptor};
+
+    fn object(id: u64, name: &str, kind: ObjectKind, version: u64) -> CatalogObjectRef {
+        CatalogObjectRef {
+            object_id: CatalogObjectId::new(id),
+            name: QualifiedName::parse(name).unwrap(),
+            kind,
+            catalog_version: CatalogVersion::new(version),
+        }
+    }
+
+    #[test]
+    fn catalog_object_binding_requires_exact_versioned_catalog_objects() {
+        let binding = CatalogObjectBinding {
+            dependent: object(1, "Inventory.ReserveStock", ObjectKind::Procedure, 7),
+            dependency: object(2, "Inventory.ProductStock", ObjectKind::Table, 7),
+            kind: CatalogBindingKind::WritesTable,
+        };
+
+        assert!(binding.validate().is_ok());
+    }
+
+    #[test]
+    fn catalog_object_binding_rejects_wrong_dependency_kind() {
+        let binding = CatalogObjectBinding {
+            dependent: object(1, "Inventory.ReserveStock", ObjectKind::Procedure, 7),
+            dependency: object(2, "Inventory.Reservation", ObjectKind::Table, 7),
+            kind: CatalogBindingKind::EmitsStructuredObject,
+        };
+
+        let error = binding.validate().unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+        assert!(error.message().contains("kind"));
+    }
+
+    #[test]
+    fn catalog_object_binding_rejects_version_skew() {
+        let binding = CatalogObjectBinding {
+            dependent: object(1, "Inventory.ReserveStock", ObjectKind::Procedure, 7),
+            dependency: object(2, "Inventory.ProductStock", ObjectKind::Table, 8),
+            kind: CatalogBindingKind::ReadsTable,
+        };
+
+        let error = binding.validate().unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+        assert!(error.message().contains("exact catalog version"));
+    }
+
+    #[test]
+    fn table_and_structured_definition_validation_still_checks_columns() {
+        let table = TableDefinition {
+            object: object(2, "Inventory.ProductStock", ObjectKind::Table, 7),
+            columns: vec![ColumnDescriptor {
+                name: "ProductId".to_string(),
+                data_type: TypeDescriptor::required(ScalarType::I64),
+                ordinal: 0,
+            }],
+        };
+        let structured = StructuredObjectDefinition {
+            object: object(3, "Inventory.Reservation", ObjectKind::StructuredObject, 7),
+            fields: table.columns.clone(),
+            unique_by: vec!["ProductId".to_string()],
+        };
+
+        assert!(table.validate().is_ok());
+        assert!(structured.validate().is_ok());
+    }
 }

@@ -1,6 +1,6 @@
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
-use crate::{Lsn, WalRecord, WAL_FORMAT_VERSION};
+use crate::{Lsn, WAL_FORMAT_VERSION, WalRecord};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WalSegmentDescriptor {
@@ -145,7 +145,7 @@ mod tests {
             Some(TransactionId::new(9)),
             b"row".to_vec(),
         )
-            .unwrap()
+        .unwrap()
     }
 
     #[test]

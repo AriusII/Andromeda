@@ -2,11 +2,12 @@ use std::collections::BTreeSet;
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, ColumnDescriptor};
 
-use crate::{ProcedureAst, ProcedureSignature, ResultContract};
+use crate::{ProcedureAst, ProcedureBodyAst, ProcedureSignature, ResultContract};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BoundProcedure {
     pub signature: ProcedureSignature,
+    pub body: ProcedureBodyAst,
 }
 
 pub fn bind_procedure(ast: ProcedureAst) -> AndromedaResult<BoundProcedure> {
@@ -44,6 +45,7 @@ pub fn bind_procedure(ast: ProcedureAst) -> AndromedaResult<BoundProcedure> {
             accepts,
             returns,
         },
+        body: ast.body,
     };
 
     validate_unique_names(&bound)?;

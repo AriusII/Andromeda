@@ -1,17 +1,26 @@
+use andromeda_core::PipelineClass;
+use andromeda_storage::Lsn;
 use andromeda_storage::layout::cold::PublishedColdSegment;
 use andromeda_storage::layout::extent::ExtentId;
+use andromeda_storage::layout::io_budget::{
+    HotColdIoThresholds, IoLatencyBudget, IoPathBudget, IoPathClass, IoThroughputBudget, IoUseClass,
+};
 use andromeda_storage::layout::page::{
     AllocationId, ObjectId, PageFlags, PageHeader, PageId, PageLayoutContract, PageSize,
     PageTrailer, PageType,
+};
+use andromeda_storage::layout::placement::{
+    CoreIoPlacementDecision, CoreIoPlacementPolicy, PipelineStage, StorageTier,
+    StorageWorkloadClass,
 };
 use andromeda_storage::layout::segment::{
     SegmentDescriptor, SegmentHeader, SegmentId, SegmentMutation, SegmentState, SegmentTrailer,
 };
 use andromeda_storage::publication::{
-    DatabaseManifest, DatabaseSnapshotPublication, SnapshotAvailabilityContract,
-    SnapshotSegmentReference,
+    ColdSegmentPublicationPlan, DatabaseManifest, DatabaseSnapshotPublication,
+    SnapshotAvailabilityContract, SnapshotSegmentReference,
+    validate_cold_segment_publication_boundary,
 };
-use andromeda_storage::Lsn;
 
 fn page_header() -> PageHeader {
     PageHeader {
@@ -60,6 +69,14 @@ fn manifest(snapshot_id: u64) -> DatabaseManifest {
 }
 
 fn cold_segment_descriptor(snapshot_id: u64) -> SegmentDescriptor {
+    segment_descriptor(SegmentState::PublishedCold, snapshot_id, 8)
+}
+
+fn sealed_segment_descriptor(snapshot_id: u64) -> SegmentDescriptor {
+    segment_descriptor(SegmentState::Sealed, snapshot_id, 4_096)
+}
+
+fn segment_descriptor(state: SegmentState, snapshot_id: u64, page_count: u32) -> SegmentDescriptor {
     let header = SegmentHeader {
         magic: SegmentHeader::MAGIC,
         format_version: SegmentHeader::FORMAT_VERSION_V0,
@@ -67,7 +84,7 @@ fn cold_segment_descriptor(snapshot_id: u64) -> SegmentDescriptor {
         object_id: ObjectId::new(51),
         allocation_id: AllocationId::new(52),
         first_page_id: PageId::new(1_000),
-        page_count: 8,
+        page_count,
         min_page_lsn: Lsn::new(20),
         max_page_lsn: Lsn::new(30),
         header_crc: 53,
@@ -85,7 +102,7 @@ fn cold_segment_descriptor(snapshot_id: u64) -> SegmentDescriptor {
         min_page_lsn: header.min_page_lsn,
         max_page_lsn: header.max_page_lsn,
         snapshot_id: Some(snapshot_id),
-        state: SegmentState::PublishedCold,
+        state,
         header,
         trailer: SegmentTrailer {
             segment_payload_crc64: 55,
@@ -93,6 +110,14 @@ fn cold_segment_descriptor(snapshot_id: u64) -> SegmentDescriptor {
             trailer_crc: 57,
         },
     }
+}
+
+fn cold_budget() -> IoPathBudget {
+    IoPathBudget::new(
+        IoPathClass::ColdPathHdd,
+        IoLatencyBudget::new(5_000_000, 5_000_000, 5_000_000),
+        IoThroughputBudget::new(128 * 1024 * 1024, 128 * 1024 * 1024),
+    )
 }
 
 #[test]
@@ -161,4 +186,60 @@ fn snapshot_publication_keeps_available_manifest_references() {
         available_snapshot_ids: vec![6],
     };
     assert!(unavailable.validate().is_err());
+}
+
+#[test]
+fn cold_segment_publication_plan_requires_cold_publication_policy() {
+    let policy = CoreIoPlacementPolicy::new(
+        andromeda_core::HardwareProfile::conservative(),
+        HotColdIoThresholds::conservative(),
+    );
+    let sealed = sealed_segment_descriptor(7);
+
+    let plan = ColdSegmentPublicationPlan::new(sealed, &policy, cold_budget()).unwrap();
+
+    assert!(plan.validate().is_ok());
+    assert_eq!(
+        plan.decision.workload,
+        StorageWorkloadClass::ColdPublication
+    );
+    assert_eq!(
+        plan.decision.placement.pipeline_stage,
+        PipelineStage::PublishColdStore
+    );
+    assert_eq!(plan.decision.placement.target_tier, StorageTier::ColdStore);
+    assert_eq!(plan.decision.io_use_class, IoUseClass::ColdSegmentPath);
+    assert!(!plan.decision.placement.mutation_allowed);
+    assert!(!plan.decision.gpu_enabled);
+}
+
+#[test]
+fn cold_segment_publication_rejects_mutable_and_commit_critical_boundaries() {
+    let policy = CoreIoPlacementPolicy::new(
+        andromeda_core::HardwareProfile::conservative(),
+        HotColdIoThresholds::conservative(),
+    );
+    let mutable = segment_descriptor(SegmentState::BuildingHotSnapshot, 7, 4_096);
+
+    assert!(ColdSegmentPublicationPlan::new(mutable, &policy, cold_budget()).is_err());
+
+    let sealed = sealed_segment_descriptor(7);
+    let valid = ColdSegmentPublicationPlan::new(sealed, &policy, cold_budget()).unwrap();
+
+    let mut mutable_decision = valid.decision;
+    mutable_decision.placement.mutation_allowed = true;
+    assert!(validate_cold_segment_publication_boundary(&sealed, &mutable_decision).is_err());
+
+    let commit_critical_cold_publication = CoreIoPlacementDecision {
+        workload: StorageWorkloadClass::Commit,
+        placement: valid.decision.placement,
+        pipeline_class: PipelineClass::Commit,
+        io_use_class: IoUseClass::CommitCriticalHotPath,
+        path_budget: cold_budget(),
+        gpu_enabled: false,
+    };
+    assert!(
+        validate_cold_segment_publication_boundary(&sealed, &commit_critical_cold_publication)
+            .is_err()
+    );
 }

@@ -30,8 +30,8 @@ impl ResultValidationService {
 
         if let Some(row_count_exact) = metadata.row_count_exact
             && !metadata
-            .cardinality
-            .permits_exact_row_count(row_count_exact)
+                .cardinality
+                .permits_exact_row_count(row_count_exact)
         {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Contract,

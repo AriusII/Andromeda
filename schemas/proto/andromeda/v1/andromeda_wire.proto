@@ -76,7 +76,9 @@ message RpcCompletion {
   optional uint64 session_id = 33;
   optional string trace_id = 34;
   TransactionOutcome transaction_outcome = 35;
-  optional uint64 durable_lsn = 36; // Required and nonzero when status is COMMITTED.
+  // Required and nonzero when status is COMMITTED or ROLLED_BACK; absent for
+  // pre-transaction rejections where transaction_outcome is NOT_STARTED.
+  optional uint64 durable_lsn = 36;
   repeated ResultRowCountSummary result_row_counts = 37;
 
   reserved 4 to 31;

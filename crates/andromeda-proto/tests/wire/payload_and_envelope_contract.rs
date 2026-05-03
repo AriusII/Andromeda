@@ -2,12 +2,12 @@ use andromeda_core::{
     AndromedaErrorKind, CatalogVersion, ContractHash, RequestId, SessionId, TransactionId,
 };
 use andromeda_proto::{
-    BackpressureMetadata, ErrorEnvelope, ErrorFamily, FrameEnvelope,
-    PayloadFrameFamily, PayloadKind, ProtocolVersion, ResultRowCountSummary, RetryDisposition,
-    RpcCompletion, RpcCompletionStatus, TransactionEffect, TransactionOutcome,
-    AUTH_WIRE_CODE, CONTRACT_REQUEST_WIRE_CODE, CONTRACT_RESPONSE_WIRE_CODE,
-    ERROR_WIRE_CODE, HELLO_WIRE_CODE, PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP, RPC_BATCH_WIRE_CODE,
-    RPC_COMPLETION_WIRE_CODE, RPC_EXECUTE_REQUEST_WIRE_CODE, RPC_METADATA_WIRE_CODE,
+    AUTH_WIRE_CODE, BackpressureMetadata, CONTRACT_REQUEST_WIRE_CODE, CONTRACT_RESPONSE_WIRE_CODE,
+    ERROR_WIRE_CODE, ErrorEnvelope, ErrorFamily, FrameEnvelope, HELLO_WIRE_CODE,
+    PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP, PayloadFrameFamily, PayloadKind, ProtocolVersion,
+    RPC_BATCH_WIRE_CODE, RPC_COMPLETION_WIRE_CODE, RPC_EXECUTE_REQUEST_WIRE_CODE,
+    RPC_METADATA_WIRE_CODE, ResultRowCountSummary, RetryDisposition, RpcCompletion,
+    RpcCompletionStatus, TransactionEffect, TransactionOutcome,
 };
 
 fn hash(byte: u8) -> ContractHash {
@@ -197,7 +197,7 @@ fn envelope_sequence_requires_metadata_batch_completion_in_one_context() {
             batch.clone(),
             completion.clone(),
         ])
-            .is_ok()
+        .is_ok()
     );
 
     assert_eq!(
@@ -315,6 +315,80 @@ fn committed_completion_requires_durable_lsn_evidence() {
 
     assert_eq!(
         wrong_outcome.validate().unwrap_err().kind(),
+        AndromedaErrorKind::Transaction
+    );
+}
+
+#[test]
+fn reserve_stock_completion_requires_exact_row_count_and_transaction_outcome_evidence() {
+    let committed = RpcCompletion {
+        request_id: Some(RequestId::new(701)),
+        session_id: Some(SessionId::new(702)),
+        trace_id: Some("reserve-stock-trace".to_string()),
+        status: RpcCompletionStatus::Committed,
+        transaction_outcome: TransactionOutcome::Committed,
+        rows_affected: Some(2),
+        result_row_counts: vec![ResultRowCountSummary {
+            result_name: "Inventory.ReserveStock.Reservation".to_string(),
+            rows_emitted: 1,
+            row_count_exact: Some(1),
+        }],
+        tx_id: Some(TransactionId::new(703)),
+        durable_lsn: Some(704),
+    };
+    assert!(committed.validate().is_ok());
+
+    let wrong_exact_row_count = RpcCompletion {
+        result_row_counts: vec![ResultRowCountSummary {
+            result_name: "Inventory.ReserveStock.Reservation".to_string(),
+            rows_emitted: 1,
+            row_count_exact: Some(0),
+        }],
+        ..committed.clone()
+    };
+    assert_eq!(
+        wrong_exact_row_count.validate().unwrap_err().kind(),
+        AndromedaErrorKind::Contract
+    );
+
+    let rolled_back = RpcCompletion {
+        status: RpcCompletionStatus::RolledBack,
+        transaction_outcome: TransactionOutcome::RolledBack,
+        rows_affected: Some(0),
+        result_row_counts: Vec::new(),
+        ..committed.clone()
+    };
+    assert!(rolled_back.validate().is_ok());
+
+    let rolled_back_with_rows = RpcCompletion {
+        rows_affected: Some(1),
+        ..rolled_back
+    };
+    assert_eq!(
+        rolled_back_with_rows.validate().unwrap_err().kind(),
+        AndromedaErrorKind::Transaction
+    );
+
+    let contract_rejected = RpcCompletion {
+        status: RpcCompletionStatus::ContractRejected,
+        transaction_outcome: TransactionOutcome::NotStarted,
+        rows_affected: None,
+        result_row_counts: Vec::new(),
+        tx_id: None,
+        durable_lsn: None,
+        ..committed
+    };
+    assert!(contract_rejected.validate().is_ok());
+
+    let contract_rejected_with_tx_evidence = RpcCompletion {
+        tx_id: Some(TransactionId::new(703)),
+        ..contract_rejected
+    };
+    assert_eq!(
+        contract_rejected_with_tx_evidence
+            .validate()
+            .unwrap_err()
+            .kind(),
         AndromedaErrorKind::Transaction
     );
 }
