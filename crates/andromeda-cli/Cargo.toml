@@ -1,0 +1,13 @@
+[package]
+name = "andromeda-cli"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+andromeda-catalog.workspace = true
+andromeda-core.workspace = true
+andromeda-exec.workspace = true
+andromeda-observe.workspace = true
+andromeda-srpl.workspace = true
+andromeda-storage.workspace = true

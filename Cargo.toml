@@ -1,0 +1,29 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/andromeda-cli",
+    "crates/andromeda-catalog",
+    "crates/andromeda-core",
+    "crates/andromeda-exec",
+    "crates/andromeda-observe",
+    "crates/andromeda-proto",
+    "crates/andromeda-quic",
+    "crates/andromeda-srpl",
+    "crates/andromeda-storage",
+    "crates/andromeda-tx",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
+[workspace.dependencies]
+andromeda-catalog = { path = "crates/andromeda-catalog" }
+andromeda-core = { path = "crates/andromeda-core" }
+andromeda-exec = { path = "crates/andromeda-exec" }
+andromeda-observe = { path = "crates/andromeda-observe" }
+andromeda-proto = { path = "crates/andromeda-proto" }
+andromeda-quic = { path = "crates/andromeda-quic" }
+andromeda-srpl = { path = "crates/andromeda-srpl" }
+andromeda-storage = { path = "crates/andromeda-storage" }
+andromeda-tx = { path = "crates/andromeda-tx" }

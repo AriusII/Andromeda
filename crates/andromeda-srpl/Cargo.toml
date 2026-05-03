@@ -1,0 +1,9 @@
+[package]
+name = "andromeda-srpl"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+andromeda-catalog.workspace = true
+andromeda-core.workspace = true

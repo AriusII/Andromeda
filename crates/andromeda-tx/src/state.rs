@@ -1,0 +1,156 @@
+use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransactionState {
+    Created,
+    Active,
+    Committing,
+    Committed,
+    Failed,
+    RollingBack,
+    RolledBack,
+    Poisoned,
+    Disposed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransactionEvent {
+    Begin,
+    CommitRequested,
+    DurableWalFlushed,
+    Fail,
+    Poison,
+    RollbackRequested,
+    RollbackComplete,
+    Dispose,
+}
+
+impl TransactionState {
+    pub fn apply(self, event: TransactionEvent) -> AndromedaResult<Self> {
+        match (self, event) {
+            (Self::Created, TransactionEvent::Begin) => Ok(Self::Active),
+            (Self::Active, TransactionEvent::CommitRequested) => Ok(Self::Committing),
+            (Self::Committing, TransactionEvent::DurableWalFlushed) => Ok(Self::Committed),
+            (Self::Committed, TransactionEvent::Dispose) => Ok(Self::Disposed),
+            (Self::Active, TransactionEvent::Fail) => Ok(Self::Failed),
+            (Self::Failed, TransactionEvent::RollbackRequested) => Ok(Self::RollingBack),
+            (Self::Active, TransactionEvent::Poison) => Ok(Self::Poisoned),
+            (Self::Poisoned, TransactionEvent::RollbackRequested) => Ok(Self::RollingBack),
+            (Self::RollingBack, TransactionEvent::RollbackComplete) => Ok(Self::RolledBack),
+            (Self::RolledBack, TransactionEvent::Dispose) => Ok(Self::Disposed),
+            _ => Err(AndromedaError::new(
+                AndromedaErrorKind::Transaction,
+                "illegal transaction state transition",
+            )),
+        }
+    }
+
+    pub const fn is_terminal(self) -> bool {
+        matches!(self, Self::Committed | Self::RolledBack | Self::Disposed)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TransactionStateMachine {
+    pub transaction_id: TransactionId,
+    pub state: TransactionState,
+    pub durable_commit_lsn: Option<u64>,
+}
+
+impl TransactionStateMachine {
+    pub const fn new(transaction_id: TransactionId) -> Self {
+        Self {
+            transaction_id,
+            state: TransactionState::Created,
+            durable_commit_lsn: None,
+        }
+    }
+
+    pub fn apply(&mut self, event: TransactionEvent) -> AndromedaResult<()> {
+        let next = self.state.apply(event)?;
+        if matches!(next, TransactionState::Committed) && self.durable_commit_lsn.is_none() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Transaction,
+                "commit requires durable WAL LSN before visibility",
+            ));
+        }
+
+        self.state = next;
+        Ok(())
+    }
+
+    pub fn mark_durable_commit_lsn(&mut self, lsn: u64) -> AndromedaResult<()> {
+        if !matches!(self.state, TransactionState::Committing) {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Transaction,
+                "durable commit LSN can only be recorded while committing",
+            ));
+        }
+
+        if lsn == 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Transaction,
+                "durable commit LSN must not be zero",
+            ));
+        }
+
+        self.durable_commit_lsn = Some(lsn);
+        Ok(())
+    }
+
+    pub const fn is_visible_committed(self) -> bool {
+        matches!(self.state, TransactionState::Committed) && self.durable_commit_lsn.is_some()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legal_commit_path_requires_durable_wal_before_committed() {
+        let mut tx = TransactionStateMachine::new(TransactionId::new(1));
+
+        tx.apply(TransactionEvent::Begin).unwrap();
+        tx.apply(TransactionEvent::CommitRequested).unwrap();
+        assert_eq!(tx.state, TransactionState::Committing);
+        assert_eq!(
+            tx.apply(TransactionEvent::DurableWalFlushed)
+                .unwrap_err()
+                .kind(),
+            AndromedaErrorKind::Transaction
+        );
+
+        tx.mark_durable_commit_lsn(42).unwrap();
+        tx.apply(TransactionEvent::DurableWalFlushed).unwrap();
+
+        assert!(tx.is_visible_committed());
+    }
+
+    #[test]
+    fn illegal_commit_visibility_is_rejected_before_wal_flush() {
+        let state = TransactionState::Active;
+        assert_eq!(
+            state
+                .apply(TransactionEvent::DurableWalFlushed)
+                .unwrap_err()
+                .kind(),
+            AndromedaErrorKind::Transaction
+        );
+    }
+
+    #[test]
+    fn poison_path_rolls_back_before_disposal() {
+        let disposed = TransactionState::Active
+            .apply(TransactionEvent::Poison)
+            .unwrap()
+            .apply(TransactionEvent::RollbackRequested)
+            .unwrap()
+            .apply(TransactionEvent::RollbackComplete)
+            .unwrap()
+            .apply(TransactionEvent::Dispose)
+            .unwrap();
+
+        assert_eq!(disposed, TransactionState::Disposed);
+    }
+}

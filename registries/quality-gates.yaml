@@ -1,0 +1,21 @@
+doctrine_gate:
+  - no_gRPC
+  - no_ad_hoc_SQL_surface
+  - procedure_only
+  - contract_versioned
+  - observable_decision
+documentation_gate:
+  - American_English
+  - Microsoft_style
+  - terms_normalized
+  - risks_and_tests_present
+recovery_gate:
+  - WAL_before_visibility
+  - crash_recovery_test
+  - rollback_defined
+  - forensic_trace
+security_gate:
+  - least_privilege
+  - no_secret_exposure
+  - prompt_injection_considered
+  - audit_trace_defined

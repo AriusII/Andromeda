@@ -1,0 +1,8 @@
+[package]
+name = "andromeda-observe"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+andromeda-core.workspace = true
