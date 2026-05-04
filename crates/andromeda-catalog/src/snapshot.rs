@@ -9,19 +9,21 @@
 
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogObjectId, CatalogVersion,
-    DatabaseId, NamespaceId,
+    DatabaseId, NamespaceId, ProcedureId,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    CatalogDefinition, CatalogMutationOperation, CatalogMutationPlan, CatalogPublicationSemantics,
-    QualifiedName,
+    CatalogDefinition, CatalogMutationCommitEvidence, CatalogMutationOperation,
+    CatalogMutationPlan, CatalogPublicationReceipt, CatalogPublicationSemantics, DefinitionBatch,
+    DefinitionBatchPlan, DefinitionOperation, PlannedDefinition, PlannedLifecycleTransition,
+    ProcedureContract, QualifiedName,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CatalogSnapshotPublication {
     InMemoryOnly,
-    DurablePublicationExternal,
+    Durable(CatalogPublicationReceipt),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -105,6 +107,17 @@ impl CatalogSnapshot {
             .and_then(|object_id| self.objects_by_id.get(object_id))
     }
 
+    pub fn get_procedure_by_id(&self, procedure_id: ProcedureId) -> Option<&ProcedureContract> {
+        self.objects_by_id
+            .values()
+            .find_map(|definition| match definition {
+                CatalogDefinition::Procedure(contract) if contract.procedure_id == procedure_id => {
+                    Some(contract)
+                }
+                _ => None,
+            })
+    }
+
     pub fn lifecycle_by_id(&self, object_id: CatalogObjectId) -> Option<CatalogObjectLifecycle> {
         self.object_lifecycle.get(&object_id).copied()
     }
@@ -114,9 +127,217 @@ impl CatalogSnapshot {
             .is_some_and(|lifecycle| lifecycle.status == CatalogObjectLifecycleStatus::Active)
     }
 
+    /// Plan a definition batch against this snapshot's real catalog state.
+    ///
+    /// [`DefinitionBatch::dry_run`] remains the local/in-batch validator: it checks
+    /// operation shape, intra-batch conflicts, planned versions, dependency order for
+    /// objects created by the batch, and mutation-record construction. This snapshot
+    /// API adds the stateful checks that require the currently visible catalog:
+    /// stale-base rejection, catalog identity matching, create collisions with
+    /// existing objects, lifecycle target existence, snapshot-visible catalog
+    /// dependencies, and active dependent checks for deprecation.
+    pub fn plan_definition_batch(
+        &self,
+        batch: &DefinitionBatch,
+    ) -> AndromedaResult<DefinitionBatchPlan> {
+        if batch.database_id != self.database_id {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "definition batch database id must match catalog snapshot database id",
+            ));
+        }
+
+        if batch.namespace_id != self.namespace_id {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "definition batch namespace id must match catalog snapshot namespace id",
+            ));
+        }
+
+        if batch.base_version != self.version {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "definition batch base version must match catalog snapshot version",
+            ));
+        }
+
+        let plan = batch.dry_run()?;
+
+        for operation in &batch.operations {
+            match operation {
+                DefinitionOperation::Create(definition) => {
+                    let object = definition.object_ref();
+
+                    if self.objects_by_id.contains_key(&object.object_id) {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Catalog,
+                            "definition batch cannot create object id already present in catalog snapshot",
+                        ));
+                    }
+
+                    if self.object_names.contains_key(&object.name) {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Catalog,
+                            "definition batch cannot create object name already present in catalog snapshot",
+                        ));
+                    }
+
+                    self.validate_definition_dependencies(
+                        definition,
+                        &plan.created_objects,
+                        &plan.deprecated_objects,
+                    )?;
+                }
+                DefinitionOperation::Deprecate(target) => {
+                    let Some(existing) = self.get_by_id(target.object.object_id) else {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Catalog,
+                            "definition batch cannot deprecate unknown object id",
+                        ));
+                    };
+                    let existing_object = existing.object_ref();
+                    if existing_object != &target.object {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Catalog,
+                            "definition batch lifecycle target must match the current catalog object",
+                        ));
+                    }
+                    if self.object_names.get(&target.object.name) != Some(&target.object.object_id)
+                    {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Catalog,
+                            "definition batch lifecycle target name index must match the existing object id",
+                        ));
+                    }
+                    if !self.is_active_object(target.object.object_id) {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Catalog,
+                            "definition batch cannot deprecate an inactive catalog object",
+                        ));
+                    }
+                }
+            }
+        }
+
+        self.validate_no_active_dependents_for_deprecations(&plan.deprecated_objects)?;
+
+        Ok(plan)
+    }
+
+    fn validate_definition_dependencies(
+        &self,
+        definition: &CatalogDefinition,
+        created_objects: &[PlannedDefinition],
+        deprecated_objects: &[PlannedLifecycleTransition],
+    ) -> AndromedaResult<()> {
+        for dependency in definition.dependencies() {
+            dependency.validate()?;
+
+            if deprecated_objects.iter().any(|target| {
+                target.name == dependency.dependency_name
+                    && target.kind == dependency.dependency_kind
+            }) {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Catalog,
+                    "definition batch cannot create active dependents of a deprecated catalog dependency",
+                ));
+            }
+
+            if let Some(created_dependency) = created_objects
+                .iter()
+                .find(|created| created.name == dependency.dependency_name)
+            {
+                if created_dependency.kind != dependency.dependency_kind {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Catalog,
+                        "definition batch catalog dependency must reference an object of the expected kind",
+                    ));
+                }
+                continue;
+            }
+
+            let Some(existing_dependency) = self.get_by_name(&dependency.dependency_name) else {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Catalog,
+                    "definition batch procedure structured input dependency catalog edge is missing from catalog snapshot",
+                ));
+            };
+            let existing_dependency_object = existing_dependency.object_ref();
+            if existing_dependency_object.kind != dependency.dependency_kind {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Catalog,
+                    "definition batch catalog dependency must reference an object of the expected kind",
+                ));
+            }
+            if !self.is_active_object(existing_dependency_object.object_id) {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Catalog,
+                    "definition batch catalog dependency must reference an active catalog object",
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn validate_no_active_dependents_for_deprecations(
+        &self,
+        deprecated_objects: &[PlannedLifecycleTransition],
+    ) -> AndromedaResult<()> {
+        if deprecated_objects.is_empty() {
+            return Ok(());
+        }
+
+        let deprecated_ids: BTreeSet<_> = deprecated_objects
+            .iter()
+            .map(|target| target.object_id)
+            .collect();
+
+        for definition in self.objects_by_id.values() {
+            let dependent_object = definition.object_ref();
+            if !self.is_active_object(dependent_object.object_id)
+                || deprecated_ids.contains(&dependent_object.object_id)
+            {
+                continue;
+            }
+
+            for dependency in definition.dependencies() {
+                if deprecated_objects.iter().any(|target| {
+                    target.name == dependency.dependency_name
+                        && target.kind == dependency.dependency_kind
+                }) {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Catalog,
+                        "definition batch cannot deprecate a catalog object with active dependents",
+                    ));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn apply_mutation_plan(
         &mut self,
         plan: &CatalogMutationPlan,
+    ) -> AndromedaResult<CatalogSnapshotApplyReport> {
+        self.apply_mutation_plan_internal(plan, None)
+    }
+
+    pub fn publish_durable_mutation_plan(
+        &mut self,
+        plan: &CatalogMutationPlan,
+        evidence: CatalogMutationCommitEvidence,
+    ) -> AndromedaResult<CatalogPublicationReceipt> {
+        let receipt = CatalogPublicationReceipt::from_plan_and_evidence(plan, evidence)?;
+        self.apply_mutation_plan_internal(plan, Some(receipt))?;
+        Ok(receipt)
+    }
+
+    fn apply_mutation_plan_internal(
+        &mut self,
+        plan: &CatalogMutationPlan,
+        durable_publication_receipt: Option<CatalogPublicationReceipt>,
     ) -> AndromedaResult<CatalogSnapshotApplyReport> {
         if self.database_id != plan.database_id {
             return Err(AndromedaError::new(
@@ -146,6 +367,34 @@ impl CatalogSnapshot {
             ));
         }
 
+        let mut planned_created = Vec::new();
+        let mut planned_deprecated = Vec::new();
+        let mut planned_operations = Vec::new();
+        for delta in &plan.deltas {
+            match &delta.operation {
+                CatalogMutationOperation::CreateObject { object, definition } => {
+                    planned_created.push(PlannedDefinition {
+                        object_id: object.object_id,
+                        name: object.name.clone(),
+                        kind: object.kind,
+                        planned_version: plan.next_version,
+                    });
+                    planned_operations.push(DefinitionOperation::Create(definition.clone()));
+                }
+                CatalogMutationOperation::DeprecateObject { target } => {
+                    planned_deprecated.push(PlannedLifecycleTransition {
+                        object_id: target.object.object_id,
+                        name: target.object.name.clone(),
+                        kind: target.object.kind,
+                        action: crate::CatalogLifecycleAction::Deprecate,
+                        planned_version: plan.next_version,
+                    });
+                    planned_operations.push(DefinitionOperation::Deprecate(target.clone()));
+                }
+            }
+        }
+        crate::dependencies::validate_in_batch_dependencies(&planned_operations)?;
+
         let mut pending_object_ids = BTreeSet::new();
         let mut pending_object_names = BTreeSet::new();
         for (expected_index, delta) in plan.deltas.iter().enumerate() {
@@ -166,6 +415,11 @@ impl CatalogSnapshot {
             match &delta.operation {
                 CatalogMutationOperation::CreateObject { object, definition } => {
                     definition.validate()?;
+                    self.validate_definition_dependencies(
+                        definition,
+                        &planned_created,
+                        &planned_deprecated,
+                    )?;
 
                     if object.catalog_version != plan.next_version {
                         return Err(AndromedaError::new(
@@ -273,6 +527,8 @@ impl CatalogSnapshot {
             }
         }
 
+        self.validate_no_active_dependents_for_deprecations(&planned_deprecated)?;
+
         for delta in &plan.deltas {
             match &delta.operation {
                 CatalogMutationOperation::CreateObject { object, definition } => {
@@ -301,13 +557,18 @@ impl CatalogSnapshot {
 
         let previous_version = self.version;
         self.version = plan.next_version;
+        if let Some(receipt) = durable_publication_receipt {
+            self.publication = CatalogSnapshotPublication::Durable(receipt);
+        } else {
+            self.publication = CatalogSnapshotPublication::InMemoryOnly;
+        }
 
         Ok(CatalogSnapshotApplyReport {
             previous_version,
             next_version: self.version,
             applied_delta_count: plan.deltas.len(),
             publication_semantics: plan.publication_semantics,
-            durable_publication_performed: false,
+            durable_publication_performed: durable_publication_receipt.is_some(),
         })
     }
 }

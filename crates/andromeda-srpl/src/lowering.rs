@@ -1,10 +1,12 @@
 use andromeda_catalog::{
     inventory_reserve_stock_contract_candidate, CatalogDefinition, CatalogObjectRef,
-    CatalogSnapshot, ObjectKind, ProcedureContract, ProcedureContractCandidate, QualifiedName,
-    ResultStreamContract, StructuredObjectDefinition, TableDefinition,
+    CatalogSnapshot, DefinitionBatch, DefinitionBatchId, DefinitionOperation, ObjectKind,
+    ProcedureContract, ProcedureContractCandidate, QualifiedName, ResultStreamContract,
+    StructuredObjectDefinition, TableDefinition,
 };
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, ColumnDescriptor,
+    DatabaseId, NamespaceId,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -273,6 +275,42 @@ pub fn compile_narrow_procedure_contract_candidate(
     let ir = compile_narrow_procedure_signature(source)?;
     lower_ir_to_contract_candidate(ir, metadata).map_err(|error| {
         crate::SrplDiagnostic::new(crate::DiagnosticPhase::IrLowering, None, error.to_string())
+    })
+}
+
+pub fn lower_ir_to_catalog_definition(
+    ir: SrplProcedureIr,
+    metadata: SrplProcedureContractMetadata,
+) -> AndromedaResult<CatalogDefinition> {
+    let contract = lower_ir_to_contract_candidate(ir, metadata)?.materialize()?;
+    Ok(CatalogDefinition::Procedure(contract))
+}
+
+pub fn compile_narrow_procedure_definition(
+    source: &str,
+    metadata: SrplProcedureContractMetadata,
+) -> Result<CatalogDefinition, crate::SrplDiagnostic> {
+    let ir = compile_narrow_procedure_signature(source)?;
+    lower_ir_to_catalog_definition(ir, metadata).map_err(|error| {
+        crate::SrplDiagnostic::new(crate::DiagnosticPhase::IrLowering, None, error.to_string())
+    })
+}
+
+pub fn compile_narrow_procedure_definition_batch(
+    source: &str,
+    metadata: SrplProcedureContractMetadata,
+    batch_id: DefinitionBatchId,
+    database_id: DatabaseId,
+    namespace_id: NamespaceId,
+    base_version: CatalogVersion,
+) -> Result<DefinitionBatch, crate::SrplDiagnostic> {
+    let definition = compile_narrow_procedure_definition(source, metadata)?;
+    Ok(DefinitionBatch {
+        batch_id,
+        database_id,
+        namespace_id,
+        base_version,
+        operations: vec![DefinitionOperation::Create(definition)],
     })
 }
 

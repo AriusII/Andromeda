@@ -1,24 +1,24 @@
 //! Catalog system store and mutation planning.
 //!
 //! This module provides the `CatalogSystemStore` facade which validates definition batches
-//! against the current catalog snapshot and plans mutations. The store is intentionally
-//! stateless regarding durable publication - persistence is delegated to callers.
+//! against the current catalog snapshot and plans mutations. Durable persistence is
+//! still delegated to callers, but callers can now provide committed durable evidence
+//! to publish the next visible snapshot with a catalog-local receipt.
 
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, DatabaseId, NamespaceId,
-};
+use andromeda_core::{AndromedaResult, CatalogVersion, DatabaseId, NamespaceId};
 
 use crate::{
-    CatalogMutationPlan, CatalogSnapshot, CatalogSnapshotApplyReport, DefinitionBatch,
-    DefinitionBatchPlan, DefinitionOperation,
+    CatalogMutationCommitEvidence, CatalogMutationPlan, CatalogPublicationReceipt, CatalogSnapshot,
+    CatalogSnapshotApplyReport, DefinitionBatch, DefinitionBatchPlan,
 };
 
 /// In-memory catalog system facade for definition planning and snapshot mutation.
 ///
-/// This type intentionally owns no durable publication mechanism. It validates that a
-/// [`DefinitionBatch`] is planned against the currently visible snapshot and delegates
-/// persistence/publication of [`crate::CatalogMutationRecord`] values to callers that
-/// own a storage engine.
+/// This type intentionally owns no WAL or storage engine. It validates that a
+/// [`DefinitionBatch`] is planned against the currently visible snapshot, delegates
+/// persistence of [`crate::CatalogMutationRecord`] values to callers that own storage,
+/// and only performs durable publication after callers provide committed durable
+/// mutation evidence.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CatalogSystemStore {
     snapshot: CatalogSnapshot,
@@ -53,56 +53,7 @@ impl CatalogSystemStore {
         &self,
         batch: &DefinitionBatch,
     ) -> AndromedaResult<DefinitionBatchPlan> {
-        if batch.database_id != self.snapshot.database_id {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Catalog,
-                "definition batch database id must match catalog snapshot database id",
-            ));
-        }
-
-        if batch.namespace_id != self.snapshot.namespace_id {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Catalog,
-                "definition batch namespace id must match catalog snapshot namespace id",
-            ));
-        }
-
-        if batch.base_version != self.snapshot.version {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Catalog,
-                "definition batch base version must match catalog snapshot version",
-            ));
-        }
-
-        let plan = batch.dry_run()?;
-
-        for operation in &batch.operations {
-            let DefinitionOperation::Deprecate(target) = operation else {
-                continue;
-            };
-
-            let Some(existing) = self.snapshot.get_by_id(target.object.object_id) else {
-                return Err(AndromedaError::new(
-                    AndromedaErrorKind::Catalog,
-                    "definition batch cannot deprecate unknown object id",
-                ));
-            };
-            let existing_object = existing.object_ref();
-            if existing_object != &target.object {
-                return Err(AndromedaError::new(
-                    AndromedaErrorKind::Catalog,
-                    "definition batch lifecycle target must match the current catalog object",
-                ));
-            }
-            if !self.snapshot.is_active_object(target.object.object_id) {
-                return Err(AndromedaError::new(
-                    AndromedaErrorKind::Catalog,
-                    "definition batch cannot deprecate an inactive catalog object",
-                ));
-            }
-        }
-
-        Ok(plan)
+        self.snapshot.plan_definition_batch(batch)
     }
 
     pub fn apply_mutation_plan(
@@ -110,6 +61,14 @@ impl CatalogSystemStore {
         plan: &CatalogMutationPlan,
     ) -> AndromedaResult<CatalogSnapshotApplyReport> {
         self.snapshot.apply_mutation_plan(plan)
+    }
+
+    pub fn publish_durable_mutation_plan(
+        &mut self,
+        plan: &CatalogMutationPlan,
+        evidence: CatalogMutationCommitEvidence,
+    ) -> AndromedaResult<CatalogPublicationReceipt> {
+        self.snapshot.publish_durable_mutation_plan(plan, evidence)
     }
 
     pub fn apply_definition_batch(
@@ -139,7 +98,9 @@ mod tests {
         CatalogDefinition, CatalogObjectRef, DefinitionBatchId, DefinitionOperation, ObjectKind,
         QualifiedName, TableDefinition,
     };
-    use andromeda_core::{CatalogObjectId, ColumnDescriptor, ScalarType, TypeDescriptor};
+    use andromeda_core::{
+        AndromedaErrorKind, CatalogObjectId, ColumnDescriptor, ScalarType, TypeDescriptor,
+    };
 
     fn column(name: &str, ordinal: u32) -> ColumnDescriptor {
         ColumnDescriptor {

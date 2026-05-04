@@ -1,15 +1,26 @@
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
 use std::{
     fs::{File, OpenOptions},
-    io::{Read, Seek, SeekFrom, Write},
+    io::{Seek, SeekFrom, Write},
     path::{Path, PathBuf},
 };
 
 use crate::{
-    encode_wal_record, scan_wal_records, summarize_transactions_from_records, ConceptualRedoPlan,
-    DatabaseManifest, DurableTransactionState, Lsn, RecoveryPlan, RedoRecordDecision,
-    RedoRecordPlan, StartupMode, WalRecord, WalRecordKind, WalScanResult, WalScanStop,
-    WalScanStopReason, WAL_BYTE_ORDER_LITTLE_ENDIAN, WAL_FORMAT_VERSION,
+    encode_wal_record, ConceptualRedoPlan, DatabaseManifest, Lsn, RecoveryPlan, StartupMode,
+    WalRecord, WalRecordKind, WalScanResult, WalScanStop, WAL_BYTE_ORDER_LITTLE_ENDIAN,
+    WAL_FORMAT_VERSION,
+};
+
+mod format;
+mod report;
+mod scan;
+
+use format::{
+    file_offset_for_wal_bytes, file_wal_header_checksum_without_checksum, write_file_wal_header,
+    FILE_WAL_DATA_OFFSET,
+};
+use scan::{
+    is_forensic_scan_stop, record_boundaries_for, scan_open_file_wal, FileWalRecordBoundary,
 };
 
 pub const FILE_WAL_MAGIC: u64 = 0x314c_4157_5244_4e41;
@@ -17,7 +28,6 @@ pub const FILE_WAL_HEADER_LEN: usize = 80;
 pub const FILE_WAL_MONO_SEGMENT_ID: u64 = 1;
 
 const FILE_WAL_HEADER_LEN_U32: u32 = FILE_WAL_HEADER_LEN as u32;
-const FILE_WAL_DATA_OFFSET: u64 = FILE_WAL_HEADER_LEN as u64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FileWalHeader {
@@ -428,8 +438,7 @@ impl FileWal {
 }
 
 pub fn scan_file_wal(path: impl AsRef<Path>) -> AndromedaResult<FileWalDiskScan> {
-    let mut file = File::open(path.as_ref()).map_err(|error| io_error("open file WAL", error))?;
-    scan_open_file_wal(&mut file)
+    scan::scan_file_wal(path)
 }
 
 pub fn recover_from_file_wal(
@@ -446,347 +455,7 @@ pub fn report_file_wal_recovery_v0(
     startup_mode: StartupMode,
     path: impl AsRef<Path>,
 ) -> AndromedaResult<FileWalRecoveryReportV0> {
-    manifest.validate()?;
-    let disk_scan = scan_file_wal(path)?;
-    let boundary_kind = recovery_boundary_kind(disk_scan.scan.stopped);
-    let forensic_required = matches!(
-        boundary_kind,
-        FileWalRecoveryBoundaryKind::ForensicChainBreak
-    );
-
-    let (replay_records, ignored_transactions, ignored_record_count) = if forensic_required {
-        (
-            Vec::new(),
-            ignored_transactions_from_prefix(&disk_scan.scan.records),
-            0,
-        )
-    } else {
-        let plan =
-            RecoveryPlan::from_manifest_and_wal_scan(manifest, startup_mode, &disk_scan.scan)?;
-        (
-            recovery_report_replay_records(&plan),
-            recovery_report_ignored_transactions(&plan),
-            recovery_report_ignored_record_count(&plan),
-        )
-    };
-
-    Ok(FileWalRecoveryReportV0 {
-        startup_mode,
-        header: disk_scan.header,
-        physical_wal_bytes: disk_scan.physical_wal_bytes,
-        scanned_bytes: disk_scan.scanned_bytes,
-        durable_prefix_bytes: disk_scan.durable_bytes,
-        durable_prefix_record_count: disk_scan.scan.records.len(),
-        durable_lsn: disk_scan.durable_lsn,
-        scan_stop: disk_scan.scan.stopped,
-        boundary_kind,
-        replay_records,
-        ignored_transactions,
-        ignored_record_count,
-        forensic_required,
-    })
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct FileWalRecordBoundary {
-    lsn: Lsn,
-    end_bytes: u64,
-}
-
-fn scan_open_file_wal(file: &mut File) -> AndromedaResult<FileWalDiskScan> {
-    let physical_len = file
-        .metadata()
-        .map_err(|error| io_error("read file WAL metadata", error))?
-        .len();
-    if physical_len < FILE_WAL_DATA_OFFSET {
-        return Err(storage_error("file WAL header is truncated"));
-    }
-
-    let header = read_file_wal_header(file)?;
-    header.validate()?;
-
-    let physical_wal_bytes = physical_len - FILE_WAL_DATA_OFFSET;
-    let scanned_bytes = header.durable_bytes.min(physical_wal_bytes);
-    let scanned_len = usize::try_from(scanned_bytes)
-        .map_err(|_| storage_error("file WAL scan byte count does not fit usize"))?;
-    let mut bytes = vec![0; scanned_len];
-    file.seek(SeekFrom::Start(FILE_WAL_DATA_OFFSET))
-        .map_err(|error| io_error("seek file WAL data", error))?;
-    file.read_exact(&mut bytes)
-        .map_err(|error| io_error("read file WAL durable bytes", error))?;
-
-    let scan = scan_wal_records(&bytes);
-    let durable_bytes = u64::try_from(scan.valid_bytes)
-        .map_err(|_| storage_error("file WAL valid byte count does not fit u64"))?;
-    let durable_lsn = scan.last_valid_lsn.unwrap_or(Lsn::ZERO);
-
-    Ok(FileWalDiskScan {
-        header,
-        physical_wal_bytes,
-        scanned_bytes,
-        durable_bytes,
-        durable_lsn,
-        scan,
-    })
-}
-
-fn read_file_wal_header(file: &mut File) -> AndromedaResult<FileWalHeader> {
-    let mut bytes = [0; FILE_WAL_HEADER_LEN];
-    file.seek(SeekFrom::Start(0))
-        .map_err(|error| io_error("seek file WAL header", error))?;
-    file.read_exact(&mut bytes)
-        .map_err(|error| io_error("read file WAL header", error))?;
-    decode_file_wal_header(&bytes)
-}
-
-fn write_file_wal_header(file: &mut File, header: &FileWalHeader) -> AndromedaResult<()> {
-    header.validate()?;
-    file.seek(SeekFrom::Start(0))
-        .map_err(|error| io_error("seek file WAL header", error))?;
-    file.write_all(&encode_file_wal_header(header))
-        .map_err(|error| io_error("write file WAL header", error))
-}
-
-fn encode_file_wal_header(header: &FileWalHeader) -> [u8; FILE_WAL_HEADER_LEN] {
-    let mut bytes = [0; FILE_WAL_HEADER_LEN];
-    write_u64(&mut bytes, 0, header.magic);
-    write_u16(&mut bytes, 8, header.format_version);
-    write_u16(&mut bytes, 10, header.byte_order);
-    write_u32(&mut bytes, 12, header.header_length);
-    write_u64(&mut bytes, 16, header.segment_id);
-    write_u64(&mut bytes, 24, header.first_lsn.get());
-    write_u64(&mut bytes, 32, header.base_previous_lsn.map_or(0, Lsn::get));
-    write_u64(&mut bytes, 40, header.durable_lsn.get());
-    write_u64(&mut bytes, 48, header.durable_bytes);
-    write_u64(&mut bytes, 56, header.durable_record_count);
-    write_u64(&mut bytes, 64, header.header_checksum);
-    write_u64(&mut bytes, 72, header.reserved);
-    bytes
-}
-
-fn decode_file_wal_header(bytes: &[u8; FILE_WAL_HEADER_LEN]) -> AndromedaResult<FileWalHeader> {
-    let base_previous_lsn = read_u64(bytes, 32);
-    let header = FileWalHeader {
-        magic: read_u64(bytes, 0),
-        format_version: read_u16(bytes, 8),
-        byte_order: read_u16(bytes, 10),
-        header_length: read_u32(bytes, 12),
-        segment_id: read_u64(bytes, 16),
-        first_lsn: Lsn::new(read_u64(bytes, 24)),
-        base_previous_lsn: (base_previous_lsn != 0).then_some(Lsn::new(base_previous_lsn)),
-        durable_lsn: Lsn::new(read_u64(bytes, 40)),
-        durable_bytes: read_u64(bytes, 48),
-        durable_record_count: read_u64(bytes, 56),
-        header_checksum: read_u64(bytes, 64),
-        reserved: read_u64(bytes, 72),
-    };
-    header.validate()?;
-    Ok(header)
-}
-
-fn file_wal_header_checksum_without_checksum(header: &FileWalHeader) -> u64 {
-    let mut bytes = Vec::with_capacity(FILE_WAL_HEADER_LEN - 8);
-    push_u64(&mut bytes, header.magic);
-    push_u16(&mut bytes, header.format_version);
-    push_u16(&mut bytes, header.byte_order);
-    push_u32(&mut bytes, header.header_length);
-    push_u64(&mut bytes, header.segment_id);
-    push_u64(&mut bytes, header.first_lsn.get());
-    push_u64(&mut bytes, header.base_previous_lsn.map_or(0, Lsn::get));
-    push_u64(&mut bytes, header.durable_lsn.get());
-    push_u64(&mut bytes, header.durable_bytes);
-    push_u64(&mut bytes, header.durable_record_count);
-    push_u64(&mut bytes, header.reserved);
-    fnv64_nonzero(&bytes)
-}
-
-fn record_boundaries_for(records: &[WalRecord]) -> AndromedaResult<Vec<FileWalRecordBoundary>> {
-    let mut offset = 0u64;
-    let mut boundaries = Vec::with_capacity(records.len());
-    for record in records {
-        let encoded_len = encode_wal_record(record)?.len() as u64;
-        offset = offset
-            .checked_add(encoded_len)
-            .ok_or_else(|| storage_error("file WAL record boundary would overflow u64"))?;
-        boundaries.push(FileWalRecordBoundary {
-            lsn: record.header.lsn,
-            end_bytes: offset,
-        });
-    }
-    Ok(boundaries)
-}
-
-fn file_offset_for_wal_bytes(wal_bytes: u64) -> AndromedaResult<u64> {
-    FILE_WAL_DATA_OFFSET
-        .checked_add(wal_bytes)
-        .ok_or_else(|| storage_error("file WAL offset would overflow u64"))
-}
-
-fn is_forensic_scan_stop(stop: Option<WalScanStop>) -> bool {
-    matches!(
-        stop.map(|stop| stop.reason),
-        Some(
-            WalScanStopReason::LsnGap
-                | WalScanStopReason::DuplicateOrReorderedLsn
-                | WalScanStopReason::PreviousLsnMismatch
-        )
-    )
-}
-
-fn recovery_boundary_kind(stop: Option<WalScanStop>) -> FileWalRecoveryBoundaryKind {
-    if is_forensic_scan_stop(stop) {
-        FileWalRecoveryBoundaryKind::ForensicChainBreak
-    } else if stop.is_some() {
-        FileWalRecoveryBoundaryKind::RecoverableTail
-    } else {
-        FileWalRecoveryBoundaryKind::Clean
-    }
-}
-
-fn recovery_report_replay_records(plan: &ConceptualRedoPlan) -> Vec<FileWalRecoveryReplayRecord> {
-    plan.records
-        .iter()
-        .filter(|record| record.should_replay())
-        .map(report_replay_record_from_redo_record)
-        .collect()
-}
-
-fn report_replay_record_from_redo_record(record: &RedoRecordPlan) -> FileWalRecoveryReplayRecord {
-    FileWalRecoveryReplayRecord {
-        lsn: record.lsn,
-        kind: record.kind,
-        transaction_id: record.transaction_id,
-    }
-}
-
-fn recovery_report_ignored_transactions(
-    plan: &ConceptualRedoPlan,
-) -> Vec<FileWalRecoveryIgnoredTransaction> {
-    plan.transaction_evidence
-        .iter()
-        .filter_map(|summary| match summary.state {
-            DurableTransactionState::RolledBack => Some(FileWalRecoveryIgnoredTransaction {
-                transaction_id: summary.transaction_id,
-                reason: FileWalRecoveryIgnoredTransactionReason::RolledBack,
-                first_lsn: summary.first_lsn,
-                last_lsn: summary.last_lsn,
-                record_count: summary.record_count,
-            }),
-            DurableTransactionState::Open | DurableTransactionState::Incomplete => {
-                Some(FileWalRecoveryIgnoredTransaction {
-                    transaction_id: summary.transaction_id,
-                    reason: FileWalRecoveryIgnoredTransactionReason::Incomplete,
-                    first_lsn: summary.first_lsn,
-                    last_lsn: summary.last_lsn,
-                    record_count: summary.record_count,
-                })
-            }
-            DurableTransactionState::Committed => None,
-        })
-        .collect()
-}
-
-fn recovery_report_ignored_record_count(plan: &ConceptualRedoPlan) -> usize {
-    plan.records
-        .iter()
-        .filter(|record| {
-            matches!(
-                record.decision,
-                RedoRecordDecision::SkipIncompleteTransaction
-                    | RedoRecordDecision::SkipRolledBackTransaction
-            )
-        })
-        .count()
-}
-
-fn ignored_transactions_from_prefix(
-    records: &[WalRecord],
-) -> Vec<FileWalRecoveryIgnoredTransaction> {
-    summarize_transactions_from_records(records)
-        .into_iter()
-        .filter_map(|summary| match summary.state {
-            DurableTransactionState::RolledBack => Some(FileWalRecoveryIgnoredTransaction {
-                transaction_id: summary.transaction_id,
-                reason: FileWalRecoveryIgnoredTransactionReason::RolledBack,
-                first_lsn: summary.first_lsn,
-                last_lsn: summary.last_lsn,
-                record_count: summary.record_count,
-            }),
-            DurableTransactionState::Open | DurableTransactionState::Incomplete => {
-                Some(FileWalRecoveryIgnoredTransaction {
-                    transaction_id: summary.transaction_id,
-                    reason: FileWalRecoveryIgnoredTransactionReason::Incomplete,
-                    first_lsn: summary.first_lsn,
-                    last_lsn: summary.last_lsn,
-                    record_count: summary.record_count,
-                })
-            }
-            DurableTransactionState::Committed => None,
-        })
-        .collect()
-}
-
-fn push_u16(bytes: &mut Vec<u8>, value: u16) {
-    bytes.extend_from_slice(&value.to_le_bytes());
-}
-
-fn push_u32(bytes: &mut Vec<u8>, value: u32) {
-    bytes.extend_from_slice(&value.to_le_bytes());
-}
-
-fn push_u64(bytes: &mut Vec<u8>, value: u64) {
-    bytes.extend_from_slice(&value.to_le_bytes());
-}
-
-fn write_u16(bytes: &mut [u8], offset: usize, value: u16) {
-    bytes[offset..offset + 2].copy_from_slice(&value.to_le_bytes());
-}
-
-fn write_u32(bytes: &mut [u8], offset: usize, value: u32) {
-    bytes[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
-}
-
-fn write_u64(bytes: &mut [u8], offset: usize, value: u64) {
-    bytes[offset..offset + 8].copy_from_slice(&value.to_le_bytes());
-}
-
-fn read_u16(bytes: &[u8], offset: usize) -> u16 {
-    u16::from_le_bytes(
-        bytes[offset..offset + 2]
-            .try_into()
-            .expect("file WAL u16 slice"),
-    )
-}
-
-fn read_u32(bytes: &[u8], offset: usize) -> u32 {
-    u32::from_le_bytes(
-        bytes[offset..offset + 4]
-            .try_into()
-            .expect("file WAL u32 slice"),
-    )
-}
-
-fn read_u64(bytes: &[u8], offset: usize) -> u64 {
-    u64::from_le_bytes(
-        bytes[offset..offset + 8]
-            .try_into()
-            .expect("file WAL u64 slice"),
-    )
-}
-
-fn fnv64_nonzero(bytes: &[u8]) -> u64 {
-    const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
-    const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
-    let mut state = FNV_OFFSET;
-    for byte in bytes {
-        state ^= u64::from(*byte);
-        state = state.wrapping_mul(FNV_PRIME);
-    }
-    if state == 0 {
-        1
-    } else {
-        state
-    }
+    report::report_file_wal_recovery_v0(manifest, startup_mode, path)
 }
 
 fn io_error(action: &str, error: std::io::Error) -> AndromedaError {
@@ -795,4 +464,137 @@ fn io_error(action: &str, error: std::io::Error) -> AndromedaError {
 
 fn storage_error(message: impl Into<String>) -> AndromedaError {
     AndromedaError::new(AndromedaErrorKind::Storage, message)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{RedoRecordDecision, WalScanStopReason};
+    use std::fs::{metadata, remove_file, OpenOptions};
+
+    fn test_wal_path(test_name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "andromeda-storage-{test_name}-{}.wal",
+            std::process::id()
+        ))
+    }
+
+    fn recovery_manifest() -> DatabaseManifest {
+        DatabaseManifest {
+            database_id: 1,
+            manifest_version: 2,
+            snapshot_id: 3,
+            base_checkpoint_lsn: Lsn::new(1),
+            required_wal_start_lsn: Lsn::new(1),
+            previous_manifest_hash: [0; 32],
+            manifest_crc: 99,
+        }
+    }
+
+    #[test]
+    fn file_wal_open_truncates_unflushed_physical_tail_before_replay() {
+        let path = test_wal_path("truncates-unflushed-tail");
+        remove_file(&path).ok();
+        let committed_tx = TransactionId::new(101);
+        let unflushed_tx = TransactionId::new(102);
+
+        {
+            let mut wal = FileWal::open(&path).unwrap();
+            wal.append_tx_begin(committed_tx).unwrap();
+            let committed_row_lsn = wal
+                .append_payload(WalRecordKind::RowInsert, Some(committed_tx), b"complete")
+                .unwrap();
+            wal.append_tx_commit(committed_tx).unwrap();
+            wal.flush_all().unwrap();
+
+            wal.append_tx_begin(unflushed_tx).unwrap();
+            wal.append_payload(WalRecordKind::RowUpdate, Some(unflushed_tx), b"not-durable")
+                .unwrap();
+            assert_eq!(committed_row_lsn, Lsn::new(2));
+            assert_eq!(wal.last_lsn(), Some(Lsn::new(5)));
+            assert_eq!(wal.durable_lsn(), Lsn::new(3));
+        }
+
+        let wal = FileWal::open(&path).unwrap();
+        let expected_len = FILE_WAL_DATA_OFFSET + wal.durable_bytes();
+        assert_eq!(wal.last_lsn(), Some(Lsn::new(3)));
+        assert_eq!(wal.durable_lsn(), Lsn::new(3));
+        assert_eq!(metadata(&path).unwrap().len(), expected_len);
+        drop(wal);
+
+        let plan =
+            recover_from_file_wal(&recovery_manifest(), StartupMode::SafeStart, &path).unwrap();
+        assert_eq!(plan.replay_lsns().collect::<Vec<_>>(), vec![Lsn::new(2)]);
+        assert!(!plan
+            .incomplete_transactions
+            .iter()
+            .any(|transaction| transaction.transaction_id == unflushed_tx));
+
+        remove_file(&path).ok();
+    }
+
+    #[test]
+    fn file_wal_recovery_skips_transaction_with_truncated_durable_commit() {
+        let path = test_wal_path("truncated-durable-commit");
+        remove_file(&path).ok();
+        let committed_tx = TransactionId::new(103);
+        let tail_tx = TransactionId::new(104);
+
+        {
+            let mut wal = FileWal::open(&path).unwrap();
+            wal.append_tx_begin(committed_tx).unwrap();
+            wal.append_payload(WalRecordKind::RowInsert, Some(committed_tx), b"complete")
+                .unwrap();
+            wal.append_tx_commit(committed_tx).unwrap();
+            wal.append_tx_begin(tail_tx).unwrap();
+            wal.append_payload(WalRecordKind::RowUpdate, Some(tail_tx), b"tail")
+                .unwrap();
+            wal.append_tx_commit(tail_tx).unwrap();
+            wal.flush_all().unwrap();
+            assert_eq!(wal.durable_lsn(), Lsn::new(6));
+        }
+        let original_len = metadata(&path).unwrap().len();
+        OpenOptions::new()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_len(original_len - 1)
+            .unwrap();
+
+        let report =
+            report_file_wal_recovery_v0(&recovery_manifest(), StartupMode::SafeStart, &path)
+                .unwrap();
+
+        assert_eq!(
+            report.scan_stop.unwrap().reason,
+            WalScanStopReason::TruncatedHeader
+        );
+        assert_eq!(
+            report.boundary_kind,
+            FileWalRecoveryBoundaryKind::RecoverableTail
+        );
+        assert_eq!(report.replay_lsns().collect::<Vec<_>>(), vec![Lsn::new(2)]);
+        assert_eq!(report.ignored_transactions.len(), 1);
+        assert_eq!(report.ignored_transactions[0].transaction_id, tail_tx);
+        assert_eq!(
+            report.ignored_transactions[0].reason,
+            FileWalRecoveryIgnoredTransactionReason::Incomplete
+        );
+        assert_eq!(report.ignored_record_count, 1);
+
+        let plan =
+            recover_from_file_wal(&recovery_manifest(), StartupMode::SafeStart, &path).unwrap();
+        assert_eq!(plan.replay_lsns().collect::<Vec<_>>(), vec![Lsn::new(2)]);
+        assert_eq!(plan.incomplete_transactions.len(), 1);
+        assert_eq!(
+            plan.records
+                .iter()
+                .find(|record| record.lsn == Lsn::new(5))
+                .unwrap()
+                .decision,
+            RedoRecordDecision::SkipIncompleteTransaction
+        );
+
+        remove_file(&path).ok();
+    }
 }

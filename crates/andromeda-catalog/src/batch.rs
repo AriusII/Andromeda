@@ -8,9 +8,12 @@ use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogObjectId, CatalogVersion,
     DatabaseId, NamespaceId,
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
-use crate::{objects::CatalogDefinition, CatalogObjectRef, ObjectKind, QualifiedName};
+use crate::{
+    dependencies::validate_in_batch_dependencies, objects::CatalogDefinition, CatalogObjectRef,
+    ObjectKind, QualifiedName,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct DefinitionBatchId(u64);
@@ -93,8 +96,6 @@ impl DefinitionBatch {
         let mut object_names = BTreeSet::new();
         let mut lifecycle_target_ids = BTreeSet::new();
         let mut lifecycle_target_names = BTreeSet::new();
-        let mut created_name_positions = BTreeMap::new();
-        let mut created_name_kinds = BTreeMap::new();
         let mut created_objects = Vec::with_capacity(self.operations.len());
         let mut deprecated_objects = Vec::new();
         let mut deltas = Vec::with_capacity(self.operations.len());
@@ -130,8 +131,6 @@ impl DefinitionBatch {
                         ));
                     }
 
-                    created_name_positions.insert(object.name.clone(), operation_index);
-                    created_name_kinds.insert(object.name.clone(), object.kind);
                     created_objects.push(PlannedDefinition {
                         object_id: object.object_id,
                         name: object.name.clone(),
@@ -188,11 +187,7 @@ impl DefinitionBatch {
             }
         }
 
-        validate_dependency_order(
-            &self.operations,
-            &created_name_positions,
-            &created_name_kinds,
-        )?;
+        validate_in_batch_dependencies(&self.operations)?;
 
         let mutation = CatalogMutation {
             definition_batch_id: self.batch_id,
@@ -429,6 +424,10 @@ impl CatalogMutationPlan {
         records
     }
 
+    pub fn record_count(&self) -> usize {
+        self.deltas.len() + 2
+    }
+
     pub fn mutation(&self) -> CatalogMutation {
         CatalogMutation {
             definition_batch_id: self.batch_id,
@@ -524,41 +523,176 @@ impl CatalogMutationRecord {
     }
 }
 
-fn validate_dependency_order(
-    operations: &[DefinitionOperation],
-    created_name_positions: &BTreeMap<QualifiedName, usize>,
-    created_name_kinds: &BTreeMap<QualifiedName, ObjectKind>,
-) -> AndromedaResult<()> {
-    for (operation_index, operation) in operations.iter().enumerate() {
-        let DefinitionOperation::Create(definition) = operation else {
-            continue;
-        };
-        let CatalogDefinition::Procedure(procedure) = definition else {
-            continue;
-        };
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CatalogDurabilityMarker(u64);
 
-        for structured_input in &procedure.structured_inputs {
-            let Some(dependency_index) = created_name_positions.get(structured_input) else {
-                continue;
-            };
+impl CatalogDurabilityMarker {
+    pub const fn new(value: u64) -> Self {
+        Self(value)
+    }
 
-            if *dependency_index >= operation_index {
-                return Err(AndromedaError::new(
-                    AndromedaErrorKind::Catalog,
-                    "definition batch must create intra-batch dependencies before dependent objects",
-                ));
+    pub const fn get(self) -> u64 {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CatalogMutationDurability {
+    StorageWal { commit_lsn: u64, durable_lsn: u64 },
+    ExternalMarker(CatalogDurabilityMarker),
+}
+
+impl CatalogMutationDurability {
+    pub fn validate(self) -> AndromedaResult<()> {
+        match self {
+            Self::StorageWal {
+                commit_lsn,
+                durable_lsn,
+            } => {
+                if commit_lsn == 0 {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Catalog,
+                        "catalog publication commit LSN must not be zero",
+                    ));
+                }
+                if durable_lsn < commit_lsn {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Catalog,
+                        "catalog publication durable LSN must reach the commit LSN",
+                    ));
+                }
             }
+            Self::ExternalMarker(marker) => {
+                if marker.get() == 0 {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Catalog,
+                        "catalog publication durable evidence marker must not be zero",
+                    ));
+                }
+            }
+        }
 
-            if created_name_kinds.get(structured_input) != Some(&ObjectKind::StructuredObject) {
-                return Err(AndromedaError::new(
+        Ok(())
+    }
+
+    pub const fn durable_lsn(self) -> Option<u64> {
+        match self {
+            Self::StorageWal { durable_lsn, .. } => Some(durable_lsn),
+            Self::ExternalMarker(_) => None,
+        }
+    }
+
+    pub const fn durable_marker(self) -> Option<CatalogDurabilityMarker> {
+        match self {
+            Self::StorageWal { .. } => None,
+            Self::ExternalMarker(marker) => Some(marker),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CatalogMutationCommitEvidence {
+    commit_boundary: CatalogMutationBoundary,
+    record_count: usize,
+    durability: CatalogMutationDurability,
+}
+
+impl CatalogMutationCommitEvidence {
+    pub fn from_durable_commit_record(
+        record: &CatalogMutationRecord,
+        record_count: usize,
+        durability: CatalogMutationDurability,
+    ) -> AndromedaResult<Self> {
+        match record {
+            CatalogMutationRecord::Commit(commit_boundary) => Ok(Self {
+                commit_boundary: *commit_boundary,
+                record_count,
+                durability,
+            }),
+            CatalogMutationRecord::Begin(_) | CatalogMutationRecord::Apply(_) => {
+                Err(AndromedaError::new(
                     AndromedaErrorKind::Catalog,
-                    "procedure structured input dependency must reference a structured object",
-                ));
+                    "catalog publication requires committed mutation evidence",
+                ))
             }
         }
     }
 
-    Ok(())
+    pub fn validate_for_plan(self, plan: &CatalogMutationPlan) -> AndromedaResult<()> {
+        self.durability.validate()?;
+
+        if !plan.mutation().is_monotonic() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "catalog publication mutation plan must advance the catalog version",
+            ));
+        }
+
+        if self.record_count != plan.record_count() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "catalog publication record count must match the mutation plan",
+            ));
+        }
+
+        if self.commit_boundary.batch_id != plan.batch_id
+            || self.commit_boundary.database_id != plan.database_id
+            || self.commit_boundary.namespace_id != plan.namespace_id
+            || self.commit_boundary.previous_version != plan.previous_version
+            || self.commit_boundary.next_version != plan.next_version
+            || self.commit_boundary.publication_semantics != plan.publication_semantics
+        {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "catalog publication commit evidence must match the mutation plan boundary",
+            ));
+        }
+
+        if self.commit_boundary.publication_semantics
+            != CatalogPublicationSemantics::DurablePublicationExternal
+        {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "catalog publication requires durable publication semantics",
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CatalogPublicationReceipt {
+    pub batch_id: DefinitionBatchId,
+    pub database_id: DatabaseId,
+    pub namespace_id: NamespaceId,
+    pub previous_version: CatalogVersion,
+    pub next_version: CatalogVersion,
+    pub durable_lsn: Option<u64>,
+    pub durable_evidence_marker: Option<CatalogDurabilityMarker>,
+    pub record_count: usize,
+    pub publication_semantics: CatalogPublicationSemantics,
+}
+
+impl CatalogPublicationReceipt {
+    pub fn from_plan_and_evidence(
+        plan: &CatalogMutationPlan,
+        evidence: CatalogMutationCommitEvidence,
+    ) -> AndromedaResult<Self> {
+        evidence.validate_for_plan(plan)?;
+
+        Ok(Self {
+            batch_id: plan.batch_id,
+            database_id: plan.database_id,
+            namespace_id: plan.namespace_id,
+            previous_version: plan.previous_version,
+            next_version: plan.next_version,
+            durable_lsn: evidence.durability.durable_lsn(),
+            durable_evidence_marker: evidence.durability.durable_marker(),
+            record_count: evidence.record_count,
+            publication_semantics: plan.publication_semantics,
+        })
+    }
 }
 
 #[cfg(test)]

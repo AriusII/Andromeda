@@ -6,7 +6,8 @@ use super::transaction::{
     classify_durable_transactions, incomplete_transactions_from_records, summarize_transaction,
     DurableTransactionClassifications, DurableTransactionResume, IncompleteDurableTransaction,
 };
-use crate::{Lsn, WalRecord, WalRecordKind};
+use super::{WalRecord, WalRecordKind};
+use crate::Lsn;
 
 /// In-memory WAL accumulator with durable LSN tracking.
 #[derive(Debug, Clone, Default)]

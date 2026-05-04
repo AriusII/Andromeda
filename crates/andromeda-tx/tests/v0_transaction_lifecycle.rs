@@ -150,3 +150,23 @@ fn mvcc_v0_ignores_inflight_and_rolled_back_delete_intents() {
         .visible_in_snapshot(&snapshot_after_delete, &statuses)
         .unwrap());
 }
+
+#[test]
+fn mvcc_compatibility_module_reexports_focused_types() {
+    let tx_id = TransactionId::new(401);
+    let row = andromeda_tx::mvcc::MvccRowHeader::open_version(10, tx_id, None).unwrap();
+    let snapshot = andromeda_tx::mvcc::Snapshot::with_context(
+        10,
+        CatalogVersion::new(3),
+        andromeda_tx::mvcc::MvccIsolationPolicy::ReadCommitted,
+        Some(tx_id),
+        [tx_id],
+    )
+    .unwrap();
+    let mut statuses = andromeda_tx::mvcc::TransactionStatusTable::new();
+    statuses
+        .record(tx_id, andromeda_tx::mvcc::TransactionStatus::InFlight)
+        .unwrap();
+
+    assert!(row.visible_in_snapshot(&snapshot, &statuses).unwrap());
+}

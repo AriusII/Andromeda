@@ -3,8 +3,8 @@
 use andromeda_core::TransactionId;
 use std::collections::BTreeMap;
 
+use super::WalRecord;
 use crate::Lsn;
-use crate::WalRecord;
 
 /// Terminal state of a durable transaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -86,7 +86,7 @@ pub fn summarize_transaction<'a>(
     transaction_id: TransactionId,
     records: impl IntoIterator<Item = &'a WalRecord>,
 ) -> Option<DurableTransactionResume> {
-    use crate::WalRecordKind;
+    use super::WalRecordKind;
 
     let mut first_lsn = None;
     let mut last_lsn = None;
@@ -116,10 +116,10 @@ pub fn summarize_transaction<'a>(
     let first_lsn = first_lsn?;
     let last_lsn = last_lsn?;
     let state = match (begin_lsn, commit_lsn, rollback_lsn) {
-        (_, Some(_), _) => DurableTransactionState::Committed,
-        (_, _, Some(_)) => DurableTransactionState::RolledBack,
+        (Some(_), Some(_), None) => DurableTransactionState::Committed,
+        (Some(_), None, Some(_)) => DurableTransactionState::RolledBack,
         (Some(_), None, None) => DurableTransactionState::Open,
-        (None, None, None) => DurableTransactionState::Incomplete,
+        _ => DurableTransactionState::Incomplete,
     };
 
     Some(DurableTransactionResume {
@@ -261,5 +261,71 @@ mod tests {
         let classifications = classify_durable_transactions(&records);
         assert_eq!(classifications.committed.len(), 1);
         assert_eq!(classifications.incomplete.len(), 1);
+    }
+
+    #[test]
+    fn durable_resume_requires_begin_before_terminal_commit() {
+        let transaction_id = TransactionId::new(13);
+        let records = vec![
+            WalRecord::from_parts(
+                WalRecordKind::RowUpdate,
+                Lsn::new(1),
+                None,
+                Some(transaction_id),
+                b"row-without-begin".to_vec(),
+            )
+            .unwrap(),
+            WalRecord::from_parts(
+                WalRecordKind::TxCommit,
+                Lsn::new(2),
+                Some(Lsn::new(1)),
+                Some(transaction_id),
+                Vec::new(),
+            )
+            .unwrap(),
+        ];
+
+        let summary = summarize_transaction(transaction_id, &records).unwrap();
+
+        assert_eq!(summary.state, DurableTransactionState::Incomplete);
+        assert!(summary.begin_lsn.is_none());
+        assert_eq!(summary.commit_lsn, Some(Lsn::new(2)));
+    }
+
+    #[test]
+    fn durable_resume_treats_conflicting_terminals_as_incomplete() {
+        let transaction_id = TransactionId::new(14);
+        let records = vec![
+            WalRecord::from_parts(
+                WalRecordKind::TxBegin,
+                Lsn::new(1),
+                None,
+                Some(transaction_id),
+                Vec::new(),
+            )
+            .unwrap(),
+            WalRecord::from_parts(
+                WalRecordKind::TxCommit,
+                Lsn::new(2),
+                Some(Lsn::new(1)),
+                Some(transaction_id),
+                Vec::new(),
+            )
+            .unwrap(),
+            WalRecord::from_parts(
+                WalRecordKind::TxRollback,
+                Lsn::new(3),
+                Some(Lsn::new(2)),
+                Some(transaction_id),
+                Vec::new(),
+            )
+            .unwrap(),
+        ];
+
+        let summary = summarize_transaction(transaction_id, &records).unwrap();
+
+        assert_eq!(summary.state, DurableTransactionState::Incomplete);
+        assert_eq!(summary.commit_lsn, Some(Lsn::new(2)));
+        assert_eq!(summary.rollback_lsn, Some(Lsn::new(3)));
     }
 }

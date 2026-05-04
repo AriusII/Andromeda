@@ -1,8 +1,10 @@
 use andromeda_catalog::{
     inventory_domain_definition_batch, inventory_reserve_stock_contract,
-    inventory_reserve_stock_contract_candidate, AccessMode, CatalogSnapshot, CompatibilityPolicy,
+    inventory_reserve_stock_contract_candidate, AccessMode, CatalogDefinition, CatalogObjectRef,
+    CatalogSnapshot, CompatibilityPolicy, DefinitionBatch, DefinitionBatchId, DefinitionOperation,
     IsolationPolicy, MultiResultPolicy, ObjectKind, ProcedureErrorPolicy, ProtocolLayoutRef,
-    QualifiedName, ResultMetadataPolicy, StatsVersion, TransactionPolicy, INVENTORY_DATABASE_ID,
+    QualifiedName, ResultMetadataPolicy, StatsVersion, StructuredObjectDefinition,
+    TransactionPolicy, INVENTORY_DATABASE_ID, INVENTORY_DEFINITION_BATCH_ID,
     INVENTORY_NAMESPACE_ID,
 };
 use andromeda_core::{
@@ -13,9 +15,10 @@ use andromeda_srpl::{
     compiler::{
         bind_executable_procedure_plan, compile_inventory_reserve_stock_contract,
         compile_inventory_reserve_stock_contract_candidate,
-        compile_narrow_procedure_contract_candidate, compile_narrow_procedure_signature,
+        compile_narrow_procedure_contract_candidate, compile_narrow_procedure_definition,
+        compile_narrow_procedure_definition_batch, compile_narrow_procedure_signature,
         inventory_reserve_stock_body_ir, inventory_reserve_stock_contract_metadata,
-        lower_ir_to_contract_candidate, parse_procedure_signature,
+        lower_ir_to_catalog_definition, lower_ir_to_contract_candidate, parse_procedure_signature,
         INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE,
     },
     diagnostics::DiagnosticPhase,
@@ -347,6 +350,145 @@ fn direct_ir_to_candidate_preserves_catalog_object_identity_inputs() {
 
     assert_eq!(candidate.object.object_id, CatalogObjectId::new(11));
     assert_eq!(candidate.procedure_id, ProcedureId::new(11));
+}
+
+#[test]
+fn direct_ir_to_catalog_definition_materializes_procedure_contract() {
+    let ir = compile_narrow_procedure_signature(
+        "procedure Inventory.ReserveStock accepts (ProductId i64) returns Reservation one (Reserved bool);",
+    )
+    .unwrap();
+    let definition = lower_ir_to_catalog_definition(ir, contract_metadata()).unwrap();
+
+    let CatalogDefinition::Procedure(contract) = definition else {
+        panic!("SRPL procedure IR should lower to a catalog procedure definition");
+    };
+    assert_eq!(contract.object.kind, ObjectKind::Procedure);
+    assert_eq!(
+        contract.object.name.as_catalog_path(),
+        "Inventory.ReserveStock"
+    );
+    assert_eq!(contract.procedure_id, ProcedureId::new(11));
+    assert_eq!(
+        contract.structured_inputs[0].as_catalog_path(),
+        "Inventory.StockRequest"
+    );
+    assert!(contract.validate_canonical_hash().is_ok());
+}
+
+#[test]
+fn reserve_stock_srpl_source_can_build_catalog_definition_batch() {
+    let batch = compile_narrow_procedure_definition_batch(
+        INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE,
+        inventory_reserve_stock_contract_metadata(CatalogVersion::new(1)),
+        INVENTORY_DEFINITION_BATCH_ID,
+        INVENTORY_DATABASE_ID,
+        INVENTORY_NAMESPACE_ID,
+        CatalogVersion::new(0),
+    )
+    .unwrap();
+
+    let plan = batch.dry_run().unwrap();
+
+    assert_eq!(batch.operations.len(), 1);
+    assert_eq!(plan.next_version, CatalogVersion::new(1));
+    assert_eq!(plan.created_objects[0].kind, ObjectKind::Procedure);
+    let DefinitionOperation::Create(CatalogDefinition::Procedure(contract)) = &batch.operations[0]
+    else {
+        panic!("SRPL definition batch should create a catalog procedure");
+    };
+    assert_eq!(
+        contract.object.name.as_catalog_path(),
+        "Inventory.ReserveStock"
+    );
+    assert_eq!(
+        contract.contract_hash,
+        inventory_reserve_stock_contract().unwrap().contract_hash
+    );
+}
+
+fn stock_request_structured_object(catalog_version: CatalogVersion) -> StructuredObjectDefinition {
+    StructuredObjectDefinition {
+        object: CatalogObjectRef {
+            object_id: CatalogObjectId::new(0x51_00),
+            name: QualifiedName::parse("Inventory.StockRequest").unwrap(),
+            kind: ObjectKind::StructuredObject,
+            catalog_version,
+        },
+        fields: vec![
+            ColumnDescriptor {
+                name: "ProductId".to_string(),
+                data_type: TypeDescriptor::required(ScalarType::I64),
+                ordinal: 0,
+            },
+            ColumnDescriptor {
+                name: "Quantity".to_string(),
+                data_type: TypeDescriptor::required(ScalarType::I64),
+                ordinal: 1,
+            },
+        ],
+        unique_by: vec!["ProductId".to_string()],
+    }
+}
+
+#[test]
+fn srpl_catalog_definition_batch_validates_structured_input_dependencies() {
+    let base_version = CatalogVersion::new(0);
+    let next_version = CatalogVersion::new(1);
+    let mut metadata = inventory_reserve_stock_contract_metadata(next_version);
+    metadata.structured_inputs = vec![QualifiedName::parse("Inventory.StockRequest").unwrap()];
+    let procedure_definition =
+        compile_narrow_procedure_definition(INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, metadata)
+            .unwrap();
+    let structured_definition =
+        CatalogDefinition::StructuredObject(stock_request_structured_object(next_version));
+    let missing_dependency_batch = DefinitionBatch {
+        batch_id: DefinitionBatchId::new(0x51_00),
+        database_id: INVENTORY_DATABASE_ID,
+        namespace_id: INVENTORY_NAMESPACE_ID,
+        base_version,
+        operations: vec![DefinitionOperation::Create(procedure_definition.clone())],
+    };
+    let snapshot =
+        CatalogSnapshot::empty(INVENTORY_DATABASE_ID, INVENTORY_NAMESPACE_ID, base_version);
+    let missing_dependency_error = snapshot
+        .plan_definition_batch(&missing_dependency_batch)
+        .unwrap_err();
+
+    assert_eq!(missing_dependency_error.kind(), AndromedaErrorKind::Catalog);
+    assert!(missing_dependency_error.message().contains("dependency"));
+    assert!(missing_dependency_error.message().contains("missing"));
+
+    let batch = DefinitionBatch {
+        batch_id: DefinitionBatchId::new(0x51_01),
+        database_id: INVENTORY_DATABASE_ID,
+        namespace_id: INVENTORY_NAMESPACE_ID,
+        base_version,
+        operations: vec![
+            DefinitionOperation::Create(structured_definition.clone()),
+            DefinitionOperation::Create(procedure_definition.clone()),
+        ],
+    };
+    let plan = batch.dry_run().unwrap();
+
+    assert_eq!(plan.created_objects.len(), 2);
+    assert_eq!(plan.created_objects[0].kind, ObjectKind::StructuredObject);
+    assert_eq!(plan.created_objects[1].kind, ObjectKind::Procedure);
+
+    let reversed = DefinitionBatch {
+        batch_id: DefinitionBatchId::new(0x51_02),
+        database_id: INVENTORY_DATABASE_ID,
+        namespace_id: INVENTORY_NAMESPACE_ID,
+        base_version,
+        operations: vec![
+            DefinitionOperation::Create(procedure_definition),
+            DefinitionOperation::Create(structured_definition),
+        ],
+    };
+    let error = reversed.dry_run().unwrap_err();
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+    assert!(error.message().contains("dependencies before dependent"));
 }
 
 #[test]

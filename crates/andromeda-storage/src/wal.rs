@@ -1,15 +1,11 @@
-//! WAL domain re-exports for backward compatibility.
+//! WAL public compatibility surface.
 //!
-//! All implementations have moved to the write_ahead_log module.
-//! This file maintains backward compatibility through re-exports.
+//! The implementation lives under [`crate::write_ahead_log`].  Keep the public
+//! WAL items available at the crate root for legacy imports, but do not re-export
+//! the domain modules themselves. Re-exporting the modules via a glob would make
+//! `write_ahead_log::segment` collide with the crate's storage `segment` module.
 
-pub use crate::write_ahead_log::{
-    classify_durable_transactions, incomplete_transactions_from_records, summarize_transaction,
-    summarize_transactions_from_records, wal_record_checksum, wal_record_kind_from_tag,
-    wal_record_kind_tag, DurableTransactionClassifications, DurableTransactionResume,
-    DurableTransactionState, InMemoryWal, IncompleteDurableTransaction, WalRecord, WalRecordHeader,
-    WalRecordKind,
-};
+pub use crate::write_ahead_log::{manager::*, record::*, transaction::*};
 
 #[cfg(test)]
 mod tests {

@@ -1,4 +1,4 @@
-use andromeda_catalog::ProcedureContractRef;
+use andromeda_catalog::{CatalogSnapshot, ProcedureContractRef};
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, PipelineClass};
 use andromeda_observe::{DecisionTrace, TraceId};
 
@@ -87,6 +87,28 @@ where
         procedure: &LocalProcedure,
         context: &InvocationContext,
     ) -> AndromedaResult<VerticalInvocationOutcome> {
+        self.execute_after_admission(request, procedure, context.trace_id, Some(context))
+    }
+
+    pub fn execute_catalog_resolved(
+        &mut self,
+        request: InvocationRequest,
+        procedure: &LocalProcedure,
+        catalog: &CatalogSnapshot,
+        trace_id: TraceId,
+    ) -> AndromedaResult<VerticalInvocationOutcome> {
+        self.validate_catalog_resolved_procedure(&request, procedure, catalog, trace_id)?;
+        self.execute_after_admission(request, procedure, trace_id, None)
+    }
+
+    pub fn execute_authorized_catalog_resolved(
+        &mut self,
+        request: InvocationRequest,
+        procedure: &LocalProcedure,
+        catalog: &CatalogSnapshot,
+        context: &InvocationContext,
+    ) -> AndromedaResult<VerticalInvocationOutcome> {
+        self.validate_catalog_resolved_procedure(&request, procedure, catalog, context.trace_id)?;
         self.execute_after_admission(request, procedure, context.trace_id, Some(context))
     }
 
@@ -190,6 +212,54 @@ where
             authorization_trace,
             result_metadata: procedure.result_metadata,
         })
+    }
+
+    fn validate_catalog_resolved_procedure(
+        &self,
+        request: &InvocationRequest,
+        procedure: &LocalProcedure,
+        catalog: &CatalogSnapshot,
+        trace_id: TraceId,
+    ) -> AndromedaResult<()> {
+        request
+            .validate_admission(trace_id)
+            .map_err(|reject| AndromedaError::new(AndromedaErrorKind::Contract, reject.reason))?;
+
+        if request.catalog_version != catalog.version {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "CatalogVersion mismatch against visible catalog snapshot before transaction creation",
+            ));
+        }
+
+        let published_contract = catalog
+            .get_procedure_by_id(request.procedure.procedure_id)
+            .ok_or_else(|| {
+                AndromedaError::new(
+                    AndromedaErrorKind::Contract,
+                    "procedure is absent from visible catalog snapshot before transaction creation",
+                )
+            })?;
+
+        if !catalog.is_active_object(published_contract.object.object_id) {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "procedure is not active in visible catalog snapshot before transaction creation",
+            ));
+        }
+
+        request
+            .validate_before_transaction(published_contract.as_ref(), trace_id)
+            .map_err(|reject| AndromedaError::new(AndromedaErrorKind::Contract, reject.reason))?;
+
+        if procedure.contract != published_contract.as_ref() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "local executable procedure does not match visible catalog contract before transaction creation",
+            ));
+        }
+
+        Ok(())
     }
 
     fn rollback_business_validation_failure_after_admission(
@@ -308,8 +378,15 @@ fn rollback_payload_for_business_validation_failure(reason: &str) -> AndromedaRe
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_catalog::{inventory_reserve_stock_contract, ProcedureContractRef};
-    use andromeda_core::{CatalogVersion, ContractHash, InvocationId, ProcedureId, TransactionId};
+    use andromeda_catalog::{
+        inventory_domain_definition_batch, inventory_reserve_stock_contract,
+        CatalogLifecycleTarget, CatalogSystemStore, DefinitionBatch, DefinitionBatchId,
+        DefinitionOperation, ProcedureContract, ProcedureContractRef,
+    };
+    use andromeda_core::{
+        CatalogVersion, ContractHash, DatabaseId, InvocationId, NamespaceId, ProcedureId,
+        TransactionId,
+    };
     use andromeda_srpl::Cardinality;
     use andromeda_storage::{InMemoryWal, Lsn, WalRecordKind};
     use andromeda_tx::TransactionState;
@@ -353,6 +430,43 @@ mod tests {
             catalog_version: CatalogVersion::new(3),
             structured_parameters: Vec::new(),
         }
+    }
+
+    fn inventory_request(contract: &ProcedureContract) -> InvocationRequest {
+        InvocationRequest {
+            invocation_id: InvocationId::new(700),
+            procedure: contract.as_ref(),
+            expected_contract_hash: contract.contract_hash,
+            catalog_version: contract.object.catalog_version,
+            structured_parameters: Vec::new(),
+        }
+    }
+
+    fn inventory_local_procedure(contract: &ProcedureContract) -> LocalProcedure {
+        LocalProcedure {
+            contract: contract.as_ref(),
+            required_permissions: contract.required_permissions.clone(),
+            result_metadata: ResultStreamMetadata {
+                stream_id: 1,
+                row_count_exact: Some(1),
+                column_count: contract.result_streams[0].columns.len() as u32,
+                cardinality: Cardinality::One,
+            },
+            mutation_payload: b"Inventory.ReserveStock".to_vec(),
+            rows_affected: 1,
+        }
+    }
+
+    fn inventory_catalog_store() -> CatalogSystemStore {
+        let mut store = CatalogSystemStore::empty(
+            DatabaseId::new(0x1000),
+            NamespaceId::new(0x1001),
+            CatalogVersion::new(0),
+        );
+        store
+            .apply_definition_batch(&inventory_domain_definition_batch().unwrap())
+            .unwrap();
+        store
     }
 
     #[test]
@@ -520,6 +634,118 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(err.kind(), AndromedaErrorKind::Security);
+        assert!(runtime.wal().is_empty());
+    }
+
+    #[test]
+    fn catalog_backed_runtime_resolves_visible_procedure_before_begin() {
+        let store = inventory_catalog_store();
+        let contract = inventory_reserve_stock_contract().unwrap();
+        let procedure = inventory_local_procedure(&contract);
+        let context =
+            InvocationContext::new(TraceId::new(7100), contract.required_permissions.clone());
+        let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
+
+        let outcome = runtime
+            .execute_authorized_catalog_resolved(
+                inventory_request(&contract),
+                &procedure,
+                store.snapshot(),
+                &context,
+            )
+            .unwrap();
+
+        assert_eq!(outcome.completion.status, CompletionStatus::Committed);
+        assert_eq!(runtime.wal().replay_durable().len(), 3);
+    }
+
+    #[test]
+    fn catalog_backed_runtime_rejects_absent_procedure_before_begin() {
+        let contract = inventory_reserve_stock_contract().unwrap();
+        let procedure = inventory_local_procedure(&contract);
+        let catalog = CatalogSnapshot::empty(
+            DatabaseId::new(0x1000),
+            NamespaceId::new(0x1001),
+            CatalogVersion::new(1),
+        );
+        let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
+
+        let error = runtime
+            .execute_catalog_resolved(
+                inventory_request(&contract),
+                &procedure,
+                &catalog,
+                TraceId::new(7101),
+            )
+            .unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Contract);
+        assert!(error.message().contains("absent"));
+        assert!(runtime.wal().is_empty());
+    }
+
+    #[test]
+    fn catalog_backed_runtime_rejects_inactive_procedure_before_begin() {
+        let mut store = inventory_catalog_store();
+        let contract = inventory_reserve_stock_contract().unwrap();
+        let procedure = inventory_local_procedure(&contract);
+        store
+            .apply_definition_batch(&DefinitionBatch {
+                batch_id: DefinitionBatchId::new(0x7102),
+                database_id: DatabaseId::new(0x1000),
+                namespace_id: NamespaceId::new(0x1001),
+                base_version: CatalogVersion::new(1),
+                operations: vec![DefinitionOperation::Deprecate(CatalogLifecycleTarget {
+                    object: contract.object.clone(),
+                })],
+            })
+            .unwrap();
+        let mut request = inventory_request(&contract);
+        request.catalog_version = store.snapshot().version;
+        let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
+
+        let error = runtime
+            .execute_catalog_resolved(request, &procedure, store.snapshot(), TraceId::new(7102))
+            .unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Contract);
+        assert!(error.message().contains("not active"));
+        assert!(runtime.wal().is_empty());
+    }
+
+    #[test]
+    fn catalog_backed_runtime_rejects_stale_catalog_version_before_begin() {
+        let store = inventory_catalog_store();
+        let contract = inventory_reserve_stock_contract().unwrap();
+        let procedure = inventory_local_procedure(&contract);
+        let mut request = inventory_request(&contract);
+        request.catalog_version = CatalogVersion::new(2);
+        let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
+
+        let error = runtime
+            .execute_catalog_resolved(request, &procedure, store.snapshot(), TraceId::new(7103))
+            .unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Contract);
+        assert!(error.message().contains("CatalogVersion mismatch"));
+        assert!(runtime.wal().is_empty());
+    }
+
+    #[test]
+    fn catalog_backed_runtime_rejects_contract_hash_mismatch_before_begin() {
+        let store = inventory_catalog_store();
+        let contract = inventory_reserve_stock_contract().unwrap();
+        let procedure = inventory_local_procedure(&contract);
+        let mut request = inventory_request(&contract);
+        request.expected_contract_hash = ContractHash::test_vector(0x99);
+        let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
+
+        let error = runtime
+            .execute_catalog_resolved(request, &procedure, store.snapshot(), TraceId::new(7104))
+            .unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Contract);
+        assert!(error.message().contains("ContractHash mismatch"));
         assert!(runtime.wal().is_empty());
     }
 }

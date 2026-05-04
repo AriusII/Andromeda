@@ -71,16 +71,22 @@ This crate forbids unsafe code (`#![forbid(unsafe_code)]`).
 
 mod batch;
 mod contracts;
+mod dependencies;
 mod fixtures;
 mod names;
 mod objects;
+mod recovery;
 mod snapshot;
 mod store;
+mod wal_record;
 
 pub use batch::*;
 pub use contracts::*;
+pub use dependencies::*;
 pub use fixtures::*;
 pub use names::*;
 pub use objects::*;
+pub use recovery::*;
 pub use snapshot::*;
 pub use store::*;
+pub use wal_record::*;
