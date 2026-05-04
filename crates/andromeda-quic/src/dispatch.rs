@@ -1,8 +1,8 @@
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{
-    validate_single_frame_on_stream, FrameBytes, FrameType, ResultStreamMetadataPolicy,
-    ResultStreamSequence, StreamRole,
+    FrameBytes, FrameType, ResultStreamMetadataPolicy, ResultStreamSequence, StreamRole,
+    validate_single_frame_on_stream,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -117,7 +117,7 @@ mod tests {
     use super::*;
     use andromeda_core::{RequestId, SessionId};
 
-    use crate::{FrameHeader, FRAME_HEADER_CRC_UNCHECKED};
+    use crate::{FRAME_HEADER_CRC_UNCHECKED, FrameHeader};
 
     fn frame(frame_type: FrameType, payload: Vec<u8>) -> FrameBytes {
         FrameBytes {

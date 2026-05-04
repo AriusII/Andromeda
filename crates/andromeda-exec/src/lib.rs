@@ -8,6 +8,7 @@ mod invocation;
 mod local;
 mod result;
 pub mod services;
+mod v0;
 mod wal;
 
 pub use admission::*;
@@ -24,4 +25,5 @@ pub use services::{
     AdmissionService, CompletionMappingService, PreTransactionValidationService,
     ResultValidationService,
 };
+pub use v0::*;
 pub use wal::*;

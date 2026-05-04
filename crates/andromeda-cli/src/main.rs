@@ -1,15 +1,23 @@
 #![forbid(unsafe_code)]
 
-use andromeda_catalog::inventory_reserve_stock_contract;
+use andromeda_catalog::{
+    CatalogSnapshot, INVENTORY_DATABASE_ID, INVENTORY_NAMESPACE_ID,
+    inventory_domain_definition_batch, inventory_reserve_stock_contract,
+};
 use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, HardwareProfile, InvocationId,
+    AndromedaError, AndromedaErrorKind, AndromedaResult, HardwareProfile, InvocationId, RequestId,
+    SessionId,
 };
 use andromeda_exec::{
     CompletionStatus, InventoryReserveStockExecutor, InventoryStock, InvocationContext,
-    InvocationRequest, LocalVerticalRuntime, ReserveStockCommand,
+    InvocationRequest, LocalVerticalRuntime, ReserveStockCommand, V0InventoryRecoverableRuntime,
+    V0InventoryReserveStockRpcPayload, encode_inventory_reserve_stock_v0_execute_frame,
+    inventory_reserve_stock_v0_pdf_srpl_source,
 };
 use andromeda_observe::TraceId;
-use andromeda_storage::{InMemoryWal, Lsn};
+use andromeda_storage::{
+    DatabaseManifest, FileWal, InMemoryWal, Lsn, StartupMode, recover_from_file_wal,
+};
 
 const PROTO_PAYLOAD_SOURCE: &str = include_str!("../../andromeda-proto/src/payload.rs");
 const QUIC_FRAME_SOURCE: &str = include_str!("../../andromeda-quic/src/frame.rs");
@@ -89,6 +97,10 @@ fn main() -> AndromedaResult<()> {
         return run_vertical_demo();
     }
 
+    if args.get(1).is_some_and(|arg| arg == "vertical-v0") {
+        return run_vertical_v0_demo();
+    }
+
     if args.get(1).is_some_and(|arg| arg == "protocol-smoke") {
         print!("{}", protocol_smoke_report()?);
         return Ok(());
@@ -106,6 +118,7 @@ fn main() -> AndromedaResult<()> {
     }
 
     println!("run `andromeda-cli vertical` for the local Phase 1 prototype");
+    println!("run `andromeda-cli vertical-v0` for the recoverable V0 vertical prototype");
     println!("run `andromeda-cli protocol-smoke` for local protocol contract inspection");
     Ok(())
 }
@@ -162,6 +175,93 @@ fn run_vertical_demo() -> AndromedaResult<()> {
 
     debug_assert_eq!(outcome.completion.status, CompletionStatus::Committed);
     Ok(())
+}
+
+fn run_vertical_v0_demo() -> AndromedaResult<()> {
+    let contract = inventory_reserve_stock_contract()?;
+    let catalog = inventory_catalog_snapshot()?;
+    let request = InvocationRequest {
+        invocation_id: InvocationId::new(2),
+        procedure: contract.as_ref(),
+        expected_contract_hash: contract.contract_hash,
+        catalog_version: contract.object.catalog_version,
+        structured_parameters: Vec::new(),
+    };
+    let wal_path = std::env::temp_dir().join("andromeda-v0-vertical.wal");
+    std::fs::remove_file(&wal_path).ok();
+    let encoded_frame = encode_inventory_reserve_stock_v0_execute_frame(
+        RequestId::new(2),
+        SessionId::new(2),
+        V0InventoryReserveStockRpcPayload::new(42, 3)?,
+    )?;
+    let mut runtime = V0InventoryRecoverableRuntime::new(FileWal::open(&wal_path)?);
+    let context = InvocationContext::new(TraceId::new(2), contract.required_permissions.clone());
+    let outcome = runtime.execute_encoded_inventory_reserve_stock(
+        &encoded_frame,
+        inventory_reserve_stock_v0_pdf_srpl_source(),
+        &catalog,
+        &contract,
+        request,
+        &context,
+        InventoryStock {
+            product_id: 42,
+            available_quantity: 10,
+            version: 1,
+        },
+    )?;
+    drop(runtime);
+
+    let manifest = DatabaseManifest {
+        database_id: 1,
+        manifest_version: 1,
+        snapshot_id: 1,
+        base_checkpoint_lsn: Lsn::new(1),
+        required_wal_start_lsn: Lsn::new(1),
+        previous_manifest_hash: [0; 32],
+        manifest_crc: 1,
+    };
+    let redo = recover_from_file_wal(&manifest, StartupMode::SafeStart, &wal_path)?;
+    let replay_lsns = redo
+        .committed_replay_lsns()
+        .map(|lsn| lsn.get())
+        .collect::<Vec<_>>();
+
+    println!("Andromeda V0 recoverable vertical prototype");
+    println!("procedure: {}", contract.object.name.as_catalog_path());
+    println!("status: {:?}", outcome.vertical.completion.status);
+    println!(
+        "rows affected: {:?}",
+        outcome.vertical.completion.rows_affected
+    );
+    println!(
+        "remaining stock: {}",
+        outcome.effect.result.remaining_quantity
+    );
+    println!(
+        "durable WAL LSN: {}",
+        outcome.durable_lsn().unwrap_or_else(|| Lsn::new(0)).get()
+    );
+    println!("WAL path: {}", wal_path.display());
+    println!("recovery replay LSNs: {:?}", replay_lsns);
+    println!("result frames: {}", outcome.result_frames.len());
+
+    debug_assert_eq!(
+        outcome.vertical.completion.status,
+        CompletionStatus::Committed
+    );
+    Ok(())
+}
+
+fn inventory_catalog_snapshot() -> AndromedaResult<CatalogSnapshot> {
+    let batch = inventory_domain_definition_batch()?;
+    let plan = batch.dry_run()?;
+    let mut snapshot = CatalogSnapshot::empty(
+        INVENTORY_DATABASE_ID,
+        INVENTORY_NAMESPACE_ID,
+        batch.base_version,
+    );
+    snapshot.apply_mutation_plan(&plan.mutation_plan)?;
+    Ok(snapshot)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -42,6 +42,7 @@ dependencies = [
  "andromeda-core",
  "andromeda-observe",
  "andromeda-proto",
+ "andromeda-quic",
  "andromeda-srpl",
  "andromeda-storage",
  "andromeda-tx",

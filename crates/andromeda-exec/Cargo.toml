@@ -9,6 +9,7 @@ andromeda-catalog.workspace = true
 andromeda-core.workspace = true
 andromeda-observe.workspace = true
 andromeda-proto.workspace = true
+andromeda-quic.workspace = true
 andromeda-srpl.workspace = true
 andromeda-storage.workspace = true
 andromeda-tx.workspace = true
