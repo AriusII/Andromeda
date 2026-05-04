@@ -1,4 +1,4 @@
-use andromeda_core::ContractHash;
+use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, ContractHash};
 
 use crate::ProtocolLayout;
 
@@ -49,6 +49,25 @@ pub fn protocol_layout() -> ProtocolLayout {
         descriptor_set_hash: descriptor_set_hash(),
         frame_envelope_hash: frame_envelope_hash(),
     }
+}
+
+pub fn encode_generated_message<M>(message: &M) -> Vec<u8>
+where
+    M: prost::Message,
+{
+    message.encode_to_vec()
+}
+
+pub fn decode_generated_message<M>(bytes: &[u8]) -> AndromedaResult<M>
+where
+    M: prost::Message + Default,
+{
+    M::decode(bytes).map_err(|error| {
+        AndromedaError::new(
+            AndromedaErrorKind::Protocol,
+            format!("generated protobuf decode failed: {error}"),
+        )
+    })
 }
 
 fn stable_hash_256(domain: &[u8], bytes: &[u8]) -> [u8; ContractHash::LEN] {

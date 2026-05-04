@@ -2,7 +2,8 @@ use andromeda_catalog::{
     AccessMode, CatalogSnapshot, CompatibilityPolicy, INVENTORY_DATABASE_ID,
     INVENTORY_NAMESPACE_ID, IsolationPolicy, MultiResultPolicy, ObjectKind, ProcedureErrorPolicy,
     ProtocolLayoutRef, QualifiedName, ResultMetadataPolicy, StatsVersion, TransactionPolicy,
-    inventory_domain_definition_batch,
+    inventory_domain_definition_batch, inventory_reserve_stock_contract,
+    inventory_reserve_stock_contract_candidate,
 };
 use andromeda_core::{
     AndromedaErrorKind, CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash,
@@ -11,8 +12,11 @@ use andromeda_core::{
 use andromeda_srpl::{
     SourceSpan,
     compiler::{
-        bind_executable_procedure_plan, compile_narrow_procedure_contract_candidate,
-        compile_narrow_procedure_signature, inventory_reserve_stock_body_ir,
+        INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, bind_executable_procedure_plan,
+        compile_inventory_reserve_stock_contract,
+        compile_inventory_reserve_stock_contract_candidate,
+        compile_narrow_procedure_contract_candidate, compile_narrow_procedure_signature,
+        inventory_reserve_stock_body_ir, inventory_reserve_stock_contract_metadata,
         lower_ir_to_contract_candidate, parse_procedure_signature,
     },
     diagnostics::DiagnosticPhase,
@@ -194,6 +198,50 @@ fn contract_metadata() -> SrplProcedureContractMetadata {
 }
 
 #[test]
+fn inventory_contract_metadata_is_derived_from_catalog_fixture() {
+    let metadata = inventory_reserve_stock_contract_metadata(CatalogVersion::new(1));
+    let fixture = inventory_reserve_stock_contract_candidate(CatalogVersion::new(1));
+
+    assert_eq!(metadata.object_id, fixture.object.object_id);
+    assert_eq!(metadata.procedure_id, fixture.procedure_id);
+    assert_eq!(metadata.catalog_version, fixture.object.catalog_version);
+    assert_eq!(metadata.stats_version, fixture.stats_version);
+    assert_eq!(metadata.protocol_layout, fixture.protocol_layout);
+    assert_eq!(metadata.structured_inputs, fixture.structured_inputs);
+    assert_eq!(metadata.required_permissions, fixture.required_permissions);
+    assert_eq!(metadata.transaction_policy, fixture.transaction_policy);
+    assert_eq!(metadata.compatibility_policy, fixture.compatibility_policy);
+    assert_eq!(
+        metadata.result_metadata_policy,
+        fixture.result_metadata_policy
+    );
+    assert_eq!(metadata.error_policy, fixture.error_policy);
+    assert_eq!(metadata.multi_result_policy, fixture.multi_result_policy);
+}
+
+#[test]
+fn pdf_style_inventory_source_materializes_catalog_fixture_contract() {
+    let from_srpl = compile_inventory_reserve_stock_contract(CatalogVersion::new(1)).unwrap();
+    let fixture = inventory_reserve_stock_contract().unwrap();
+
+    assert_eq!(from_srpl, fixture);
+    assert_eq!(from_srpl.contract_hash, fixture.contract_hash);
+    assert_eq!(from_srpl.contract_hash, from_srpl.canonical_hash());
+}
+
+#[test]
+fn pdf_style_inventory_candidate_matches_fixture_hash_golden() {
+    let from_srpl = compile_inventory_reserve_stock_contract_candidate(CatalogVersion::new(1))
+        .unwrap()
+        .materialize()
+        .unwrap();
+    let fixture = inventory_reserve_stock_contract().unwrap();
+
+    assert_eq!(from_srpl.as_ref(), fixture.as_ref());
+    assert_eq!(from_srpl.contract_hash, fixture.contract_hash);
+}
+
+#[test]
 fn srpl_ir_lowers_to_catalog_contract_candidate_with_cardinality_mapping() {
     let candidate = compile_narrow_procedure_contract_candidate(
         "procedure Inventory.ReserveStock accepts (ProductId i64) returns Reservation optional_one (Reserved bool);",
@@ -236,11 +284,13 @@ fn contract_candidate_hash_is_stable_for_identical_srpl_and_metadata() {
 
 #[test]
 fn contract_candidate_preserves_v0_metadata_and_error_policy() {
-    let source = "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool) begin ensure Inventory.ProductStock Stock where ProductId = Stock.ProductId and Stock.AvailableQuantity >= Quantity else fail InsufficientStock; update Inventory.ProductStock set AvailableQuantity = Stock.AvailableQuantity - Quantity where ProductId = Stock.ProductId affected rows 1; return Reservation (Reserved); end;";
-    let contract = compile_narrow_procedure_contract_candidate(source, contract_metadata())
-        .unwrap()
-        .materialize()
-        .unwrap();
+    let contract = compile_narrow_procedure_contract_candidate(
+        INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE,
+        contract_metadata(),
+    )
+    .unwrap()
+    .materialize()
+    .unwrap();
 
     assert_eq!(contract.stats_version, StatsVersion::new(1));
     assert_eq!(
@@ -263,16 +313,30 @@ fn contract_candidate_preserves_v0_metadata_and_error_policy() {
 fn contract_candidate_rejects_invalid_metadata_before_catalog_publication() {
     let mut metadata = contract_metadata();
     metadata.required_permissions.clear();
-    let candidate = compile_narrow_procedure_contract_candidate(
+    let diagnostic = compile_narrow_procedure_contract_candidate(
         "procedure Inventory.ReserveStock accepts () returns Reservation one (Reserved bool);",
         metadata,
     )
-    .unwrap();
+    .unwrap_err();
 
-    let error = candidate.materialize().unwrap_err();
+    assert_eq!(diagnostic.phase, DiagnosticPhase::IrLowering);
+    assert!(diagnostic.message.contains("permissions"));
+}
 
-    assert_eq!(error.kind(), AndromedaErrorKind::Security);
-    assert!(error.message().contains("permissions"));
+#[test]
+fn contract_candidate_rejects_undeclared_srpl_error_policy_before_publication() {
+    let mut metadata = inventory_reserve_stock_contract_metadata(CatalogVersion::new(1));
+    metadata.error_policy.allowed_error_codes.clear();
+
+    let diagnostic = compile_narrow_procedure_contract_candidate(
+        INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE,
+        metadata,
+    )
+    .unwrap_err();
+
+    assert_eq!(diagnostic.phase, DiagnosticPhase::IrLowering);
+    assert!(diagnostic.message.contains("error code"));
+    assert!(diagnostic.message.contains("not declared"));
 }
 
 #[test]
@@ -368,8 +432,7 @@ fn inventory_reserve_stock_body_binds_to_deterministic_executable_plan() {
 
 #[test]
 fn pdf_style_inventory_source_binds_to_deterministic_executable_plan() {
-    let source = "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool) begin ensure Inventory.ProductStock Stock where ProductId = Stock.ProductId and Stock.AvailableQuantity >= Quantity else fail InsufficientStock; update Inventory.ProductStock set AvailableQuantity = Stock.AvailableQuantity - Quantity where ProductId = Stock.ProductId affected rows 1; return Reservation (Reserved); end;";
-    let ir = compile_narrow_procedure_signature(source).unwrap();
+    let ir = compile_narrow_procedure_signature(INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE).unwrap();
     let snapshot = inventory_catalog_snapshot();
 
     let plan = bind_executable_procedure_plan(&ir, &snapshot).unwrap();

@@ -33,6 +33,22 @@ The pack is intentionally strict. It exists to keep AI-assisted work aligned wit
 6. Use `prompts/` for task briefs and repeatable review requests.
 7. Use `registries/` to understand which agents consume which skills and which hooks guard which workflows.
 
+## Local V0 Rust commands
+
+The Rust workspace includes a local V0 recoverable vertical prototype. It is not a production database runtime, network
+server, or full storage engine.
+
+```powershell
+cargo run -p andromeda-cli -- vertical-v0 --wal "$env:TEMP\andromeda-v0-vertical.wal"
+cargo run -p andromeda-cli -- recovery-inspect "$env:TEMP\andromeda-v0-vertical.wal"
+cargo run -p andromeda-cli -- protocol-smoke --detail
+```
+
+`vertical-v0` executes the current `Inventory.ReserveStock` path through the local V0 SRPL/FileWal flow and writes a
+mono-segment WAL file. `recovery-inspect` prints the durable prefix, replay LSNs, ignored transactions, and forensic
+boundary status for that WAL. `protocol-smoke --detail` checks local payload/frame lockstep and result-stream ordering
+without opening network sockets.
+
 ## Design rule
 
 Do not copy a full agent prompt into a skill. Agents orchestrate work. Skills provide narrow repeatable procedures.

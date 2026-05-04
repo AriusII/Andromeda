@@ -6,9 +6,10 @@ use std::{
 };
 
 use crate::{
-    ConceptualRedoPlan, DatabaseManifest, Lsn, RecoveryPlan, StartupMode,
-    WAL_BYTE_ORDER_LITTLE_ENDIAN, WAL_FORMAT_VERSION, WalRecord, WalRecordKind, WalScanResult,
-    WalScanStop, WalScanStopReason, encode_wal_record, scan_wal_records,
+    ConceptualRedoPlan, DatabaseManifest, DurableTransactionState, Lsn, RecoveryPlan,
+    RedoRecordDecision, RedoRecordPlan, StartupMode, WAL_BYTE_ORDER_LITTLE_ENDIAN,
+    WAL_FORMAT_VERSION, WalRecord, WalRecordKind, WalScanResult, WalScanStop, WalScanStopReason,
+    encode_wal_record, scan_wal_records, summarize_transactions_from_records,
 };
 
 pub const FILE_WAL_MAGIC: u64 = 0x314c_4157_5244_4e41;
@@ -107,6 +108,71 @@ pub struct FileWalDiskScan {
     pub durable_bytes: u64,
     pub durable_lsn: Lsn,
     pub scan: WalScanResult,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileWalRecoveryBoundaryKind {
+    Clean,
+    RecoverableTail,
+    ForensicChainBreak,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileWalRecoveryIgnoredTransactionReason {
+    Incomplete,
+    RolledBack,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FileWalRecoveryReplayRecord {
+    pub lsn: Lsn,
+    pub kind: WalRecordKind,
+    pub transaction_id: Option<TransactionId>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FileWalRecoveryIgnoredTransaction {
+    pub transaction_id: TransactionId,
+    pub reason: FileWalRecoveryIgnoredTransactionReason,
+    pub first_lsn: Lsn,
+    pub last_lsn: Lsn,
+    pub record_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileWalRecoveryReportV0 {
+    pub startup_mode: StartupMode,
+    pub header: FileWalHeader,
+    pub physical_wal_bytes: u64,
+    pub scanned_bytes: u64,
+    pub durable_prefix_bytes: u64,
+    pub durable_prefix_record_count: usize,
+    pub durable_lsn: Lsn,
+    pub scan_stop: Option<WalScanStop>,
+    pub boundary_kind: FileWalRecoveryBoundaryKind,
+    pub replay_records: Vec<FileWalRecoveryReplayRecord>,
+    pub ignored_transactions: Vec<FileWalRecoveryIgnoredTransaction>,
+    pub ignored_record_count: usize,
+    pub forensic_required: bool,
+}
+
+impl FileWalRecoveryReportV0 {
+    pub fn replay_lsns(&self) -> impl Iterator<Item = Lsn> + '_ {
+        self.replay_records.iter().map(|record| record.lsn)
+    }
+
+    pub fn ignored_transaction_ids(&self) -> impl Iterator<Item = TransactionId> + '_ {
+        self.ignored_transactions
+            .iter()
+            .map(|transaction| transaction.transaction_id)
+    }
+
+    pub const fn has_recoverable_tail_boundary(&self) -> bool {
+        matches!(
+            self.boundary_kind,
+            FileWalRecoveryBoundaryKind::RecoverableTail
+        )
+    }
 }
 
 #[derive(Debug)]
@@ -375,6 +441,52 @@ pub fn recover_from_file_wal(
     RecoveryPlan::from_manifest_and_wal_scan(manifest, startup_mode, &disk_scan.scan)
 }
 
+pub fn report_file_wal_recovery_v0(
+    manifest: &DatabaseManifest,
+    startup_mode: StartupMode,
+    path: impl AsRef<Path>,
+) -> AndromedaResult<FileWalRecoveryReportV0> {
+    manifest.validate()?;
+    let disk_scan = scan_file_wal(path)?;
+    let boundary_kind = recovery_boundary_kind(disk_scan.scan.stopped);
+    let forensic_required = matches!(
+        boundary_kind,
+        FileWalRecoveryBoundaryKind::ForensicChainBreak
+    );
+
+    let (replay_records, ignored_transactions, ignored_record_count) = if forensic_required {
+        (
+            Vec::new(),
+            ignored_transactions_from_prefix(&disk_scan.scan.records),
+            0,
+        )
+    } else {
+        let plan =
+            RecoveryPlan::from_manifest_and_wal_scan(manifest, startup_mode, &disk_scan.scan)?;
+        (
+            recovery_report_replay_records(&plan),
+            recovery_report_ignored_transactions(&plan),
+            recovery_report_ignored_record_count(&plan),
+        )
+    };
+
+    Ok(FileWalRecoveryReportV0 {
+        startup_mode,
+        header: disk_scan.header,
+        physical_wal_bytes: disk_scan.physical_wal_bytes,
+        scanned_bytes: disk_scan.scanned_bytes,
+        durable_prefix_bytes: disk_scan.durable_bytes,
+        durable_prefix_record_count: disk_scan.scan.records.len(),
+        durable_lsn: disk_scan.durable_lsn,
+        scan_stop: disk_scan.scan.stopped,
+        boundary_kind,
+        replay_records,
+        ignored_transactions,
+        ignored_record_count,
+        forensic_required,
+    })
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct FileWalRecordBoundary {
     lsn: Lsn,
@@ -519,6 +631,99 @@ fn is_forensic_scan_stop(stop: Option<WalScanStop>) -> bool {
                 | WalScanStopReason::PreviousLsnMismatch
         )
     )
+}
+
+fn recovery_boundary_kind(stop: Option<WalScanStop>) -> FileWalRecoveryBoundaryKind {
+    if is_forensic_scan_stop(stop) {
+        FileWalRecoveryBoundaryKind::ForensicChainBreak
+    } else if stop.is_some() {
+        FileWalRecoveryBoundaryKind::RecoverableTail
+    } else {
+        FileWalRecoveryBoundaryKind::Clean
+    }
+}
+
+fn recovery_report_replay_records(plan: &ConceptualRedoPlan) -> Vec<FileWalRecoveryReplayRecord> {
+    plan.records
+        .iter()
+        .filter(|record| record.should_replay())
+        .map(report_replay_record_from_redo_record)
+        .collect()
+}
+
+fn report_replay_record_from_redo_record(record: &RedoRecordPlan) -> FileWalRecoveryReplayRecord {
+    FileWalRecoveryReplayRecord {
+        lsn: record.lsn,
+        kind: record.kind,
+        transaction_id: record.transaction_id,
+    }
+}
+
+fn recovery_report_ignored_transactions(
+    plan: &ConceptualRedoPlan,
+) -> Vec<FileWalRecoveryIgnoredTransaction> {
+    plan.transaction_evidence
+        .iter()
+        .filter_map(|summary| match summary.state {
+            DurableTransactionState::RolledBack => Some(FileWalRecoveryIgnoredTransaction {
+                transaction_id: summary.transaction_id,
+                reason: FileWalRecoveryIgnoredTransactionReason::RolledBack,
+                first_lsn: summary.first_lsn,
+                last_lsn: summary.last_lsn,
+                record_count: summary.record_count,
+            }),
+            DurableTransactionState::Open | DurableTransactionState::Incomplete => {
+                Some(FileWalRecoveryIgnoredTransaction {
+                    transaction_id: summary.transaction_id,
+                    reason: FileWalRecoveryIgnoredTransactionReason::Incomplete,
+                    first_lsn: summary.first_lsn,
+                    last_lsn: summary.last_lsn,
+                    record_count: summary.record_count,
+                })
+            }
+            DurableTransactionState::Committed => None,
+        })
+        .collect()
+}
+
+fn recovery_report_ignored_record_count(plan: &ConceptualRedoPlan) -> usize {
+    plan.records
+        .iter()
+        .filter(|record| {
+            matches!(
+                record.decision,
+                RedoRecordDecision::SkipIncompleteTransaction
+                    | RedoRecordDecision::SkipRolledBackTransaction
+            )
+        })
+        .count()
+}
+
+fn ignored_transactions_from_prefix(
+    records: &[WalRecord],
+) -> Vec<FileWalRecoveryIgnoredTransaction> {
+    summarize_transactions_from_records(records)
+        .into_iter()
+        .filter_map(|summary| match summary.state {
+            DurableTransactionState::RolledBack => Some(FileWalRecoveryIgnoredTransaction {
+                transaction_id: summary.transaction_id,
+                reason: FileWalRecoveryIgnoredTransactionReason::RolledBack,
+                first_lsn: summary.first_lsn,
+                last_lsn: summary.last_lsn,
+                record_count: summary.record_count,
+            }),
+            DurableTransactionState::Open | DurableTransactionState::Incomplete => {
+                Some(FileWalRecoveryIgnoredTransaction {
+                    transaction_id: summary.transaction_id,
+                    reason: FileWalRecoveryIgnoredTransactionReason::Incomplete,
+                    first_lsn: summary.first_lsn,
+                    last_lsn: summary.last_lsn,
+                    record_count: summary.record_count,
+                })
+            }
+            DurableTransactionState::Committed => None,
+        })
+        .collect()
 }
 
 fn push_u16(bytes: &mut Vec<u8>, value: u16) {

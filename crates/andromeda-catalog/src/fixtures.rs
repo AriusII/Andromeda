@@ -242,6 +242,35 @@ mod tests {
     }
 
     #[test]
+    fn inventory_contract_drift_rejects_catalog_publication_before_dry_run_plan() {
+        let base_version = CatalogVersion::new(0);
+        let next_version = CatalogVersion::new(1);
+        let mut drifted_contract = inventory_reserve_stock_contract().unwrap();
+        drifted_contract.stats_version = StatsVersion::new(2);
+
+        let batch = DefinitionBatch {
+            batch_id: INVENTORY_DEFINITION_BATCH_ID,
+            database_id: INVENTORY_DATABASE_ID,
+            namespace_id: INVENTORY_NAMESPACE_ID,
+            base_version,
+            operations: vec![
+                DefinitionOperation::Create(CatalogDefinition::Table(
+                    inventory_product_stock_table(next_version).unwrap(),
+                )),
+                DefinitionOperation::Create(CatalogDefinition::StructuredObject(
+                    inventory_reservation_structured_object(next_version).unwrap(),
+                )),
+                DefinitionOperation::Create(CatalogDefinition::Procedure(drifted_contract)),
+            ],
+        };
+
+        let error = batch.dry_run().unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Contract);
+        assert!(error.message().contains("canonical contract shape"));
+    }
+
+    #[test]
     fn validated_contract_helper_surfaces_missing_permissions() {
         let mut contract = inventory_reserve_stock_contract().unwrap();
         contract.required_permissions.clear();

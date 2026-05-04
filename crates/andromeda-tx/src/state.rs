@@ -89,6 +89,28 @@ impl TransactionStateMachine {
         Ok(())
     }
 
+    pub fn begin(&mut self) -> AndromedaResult<()> {
+        self.apply(TransactionEvent::Begin)
+    }
+
+    pub fn request_commit(&mut self) -> AndromedaResult<()> {
+        self.apply(TransactionEvent::CommitRequested)
+    }
+
+    pub fn publish_visible_commit_after_durable_flush(&mut self, lsn: u64) -> AndromedaResult<()> {
+        self.mark_durable_commit_lsn(lsn)?;
+        self.apply(TransactionEvent::DurableWalFlushed)
+    }
+
+    pub fn request_rollback(&mut self) -> AndromedaResult<()> {
+        self.apply(TransactionEvent::RollbackRequested)
+    }
+
+    pub fn complete_rollback_after_durable_flush(&mut self, lsn: u64) -> AndromedaResult<()> {
+        self.mark_durable_rollback_lsn(lsn)?;
+        self.apply(TransactionEvent::RollbackComplete)
+    }
+
     pub fn mark_durable_commit_lsn(&mut self, lsn: u64) -> AndromedaResult<()> {
         if !matches!(self.state, TransactionState::Committing) {
             return Err(AndromedaError::new(

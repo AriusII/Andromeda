@@ -252,7 +252,7 @@ impl CatalogDefinition {
             Self::Table(definition) => definition.validate(),
             Self::StructuredObject(definition) => definition.validate(),
             Self::Enum(definition) => definition.validate(),
-            Self::Procedure(definition) => definition.validate(),
+            Self::Procedure(definition) => definition.validate_canonical_hash(),
         }
     }
 

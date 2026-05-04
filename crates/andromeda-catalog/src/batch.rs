@@ -560,7 +560,7 @@ mod tests {
     use super::*;
     use crate::{
         AccessMode, CatalogObjectRef, CompatibilityPolicy, IsolationPolicy, MultiResultPolicy,
-        ProcedureContract, ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName,
+        ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName,
         ResultMetadataPolicy, StatsVersion, StructuredObjectDefinition, TableDefinition,
         TransactionPolicy,
     };
@@ -786,10 +786,9 @@ mod tests {
 
     #[test]
     fn definition_batch_requires_dependency_friendly_order() {
-        let procedure = ProcedureContract {
+        let procedure = ProcedureContractCandidate {
             object: object_with(2, "Inventory.ReserveStock", ObjectKind::Procedure),
             procedure_id: ProcedureId::new(2),
-            contract_hash: ContractHash::test_vector(2),
             stats_version: StatsVersion::new(1),
             protocol_layout: ProtocolLayoutRef {
                 descriptor_set_hash: ContractHash::test_vector(0xA1),
@@ -811,7 +810,9 @@ mod tests {
                 allowed_error_codes: vec!["InsufficientStock".to_string()],
             },
             multi_result_policy: MultiResultPolicy::SingleResultOnly,
-        };
+        }
+        .materialize()
+        .unwrap();
         let structured = StructuredObjectDefinition {
             object: object_with(1, "Inventory.StockRequest", ObjectKind::StructuredObject),
             fields: vec![column("ProductId", 0)],

@@ -8,7 +8,9 @@ pub mod codec;
 pub mod file {
     pub use crate::{
         FILE_WAL_HEADER_LEN, FILE_WAL_MAGIC, FILE_WAL_MONO_SEGMENT_ID, FileWal, FileWalDiskScan,
-        FileWalHeader, recover_from_file_wal, scan_file_wal,
+        FileWalHeader, FileWalRecoveryBoundaryKind, FileWalRecoveryIgnoredTransaction,
+        FileWalRecoveryIgnoredTransactionReason, FileWalRecoveryReplayRecord,
+        FileWalRecoveryReportV0, recover_from_file_wal, report_file_wal_recovery_v0, scan_file_wal,
     };
 }
 pub mod record;

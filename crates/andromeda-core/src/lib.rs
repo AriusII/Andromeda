@@ -15,7 +15,7 @@ pub use policy::{
     CpuCapabilityClass, CpuProfile, GpuExecutionPolicy, GpuProfile, HardwareArchitecture,
     HardwareProfile, PipelineClass, RamProfile, RamSectionBudget, RamSectionRole, ResourceBudget,
 };
-pub use time::{Clock, EngineTimestamp, SystemClock};
+pub use time::{Clock, EngineTimestamp, ManualClock, SystemClock};
 pub use types::{
     AbsencePolicy, ColumnDescriptor, DecimalType, FloatMode, FloatType, ScalarType, TextEncoding,
     TextType, TimestampType, TypeDescriptor,

@@ -16,11 +16,14 @@ use andromeda_exec::{
 };
 use andromeda_observe::TraceId;
 use andromeda_storage::{
-    DatabaseManifest, FileWal, InMemoryWal, Lsn, StartupMode, recover_from_file_wal,
+    DatabaseManifest, FileWal, FileWalRecoveryReportV0, InMemoryWal, Lsn, StartupMode,
+    report_file_wal_recovery_v0,
 };
+use std::path::{Path, PathBuf};
 
 const PROTO_PAYLOAD_SOURCE: &str = include_str!("../../andromeda-proto/src/payload.rs");
 const QUIC_FRAME_SOURCE: &str = include_str!("../../andromeda-quic/src/frame.rs");
+const DEFAULT_V0_WAL_FILE: &str = "andromeda-v0-vertical.wal";
 
 const WORKSPACE_CRATES: &[&str] = &[
     "andromeda-core",
@@ -93,17 +96,25 @@ const PROTOCOL_CODE_LOCKSTEP: &[ProtocolCode] = &[
 
 fn main() -> AndromedaResult<()> {
     let args = std::env::args().collect::<Vec<String>>();
-    if args.get(1).is_some_and(|arg| arg == "vertical") {
-        return run_vertical_demo();
-    }
-
-    if args.get(1).is_some_and(|arg| arg == "vertical-v0") {
-        return run_vertical_v0_demo();
-    }
-
-    if args.get(1).is_some_and(|arg| arg == "protocol-smoke") {
-        print!("{}", protocol_smoke_report()?);
-        return Ok(());
+    match args.get(1).map(String::as_str) {
+        Some("vertical") => return run_vertical_demo(),
+        Some("vertical-v0") => {
+            return run_vertical_v0_demo(vertical_v0_wal_path_from_args(&args[2..])?);
+        }
+        Some("protocol-smoke") => {
+            print!(
+                "{}",
+                protocol_smoke_report(args[2..].iter().any(|arg| arg == "--detail"))?
+            );
+            return Ok(());
+        }
+        Some("recovery-inspect") => return run_recovery_inspect(&args[2..]),
+        Some("-h" | "--help" | "help") | None => {}
+        Some(command) => {
+            return Err(cli_error(format!(
+                "unknown command `{command}`; run `andromeda-cli --help`"
+            )));
+        }
     }
 
     let profile = HardwareProfile::conservative();
@@ -118,8 +129,13 @@ fn main() -> AndromedaResult<()> {
     }
 
     println!("run `andromeda-cli vertical` for the local Phase 1 prototype");
-    println!("run `andromeda-cli vertical-v0` for the recoverable V0 vertical prototype");
-    println!("run `andromeda-cli protocol-smoke` for local protocol contract inspection");
+    println!(
+        "run `andromeda-cli vertical-v0 [--wal <path>]` for the recoverable V0 vertical prototype"
+    );
+    println!("run `andromeda-cli recovery-inspect <wal-path>` for a V0 FileWal recovery report");
+    println!(
+        "run `andromeda-cli protocol-smoke [--detail]` for local protocol contract inspection"
+    );
     Ok(())
 }
 
@@ -177,7 +193,7 @@ fn run_vertical_demo() -> AndromedaResult<()> {
     Ok(())
 }
 
-fn run_vertical_v0_demo() -> AndromedaResult<()> {
+fn run_vertical_v0_demo(wal_path: PathBuf) -> AndromedaResult<()> {
     let contract = inventory_reserve_stock_contract()?;
     let catalog = inventory_catalog_snapshot()?;
     let request = InvocationRequest {
@@ -187,7 +203,6 @@ fn run_vertical_v0_demo() -> AndromedaResult<()> {
         catalog_version: contract.object.catalog_version,
         structured_parameters: Vec::new(),
     };
-    let wal_path = std::env::temp_dir().join("andromeda-v0-vertical.wal");
     std::fs::remove_file(&wal_path).ok();
     let encoded_frame = encode_inventory_reserve_stock_v0_execute_frame(
         RequestId::new(2),
@@ -211,18 +226,9 @@ fn run_vertical_v0_demo() -> AndromedaResult<()> {
     )?;
     drop(runtime);
 
-    let manifest = DatabaseManifest {
-        database_id: 1,
-        manifest_version: 1,
-        snapshot_id: 1,
-        base_checkpoint_lsn: Lsn::new(1),
-        required_wal_start_lsn: Lsn::new(1),
-        previous_manifest_hash: [0; 32],
-        manifest_crc: 1,
-    };
-    let redo = recover_from_file_wal(&manifest, StartupMode::SafeStart, &wal_path)?;
-    let replay_lsns = redo
-        .committed_replay_lsns()
+    let report = recovery_report_for_path(&wal_path, Lsn::new(1))?;
+    let replay_lsns = report
+        .replay_lsns()
         .map(|lsn| lsn.get())
         .collect::<Vec<_>>();
 
@@ -243,6 +249,8 @@ fn run_vertical_v0_demo() -> AndromedaResult<()> {
     );
     println!("WAL path: {}", wal_path.display());
     println!("recovery replay LSNs: {:?}", replay_lsns);
+    println!("recovery boundary: {:?}", report.boundary_kind);
+    println!("forensic required: {}", report.forensic_required);
     println!("result frames: {}", outcome.result_frames.len());
 
     debug_assert_eq!(
@@ -250,6 +258,172 @@ fn run_vertical_v0_demo() -> AndromedaResult<()> {
         CompletionStatus::Committed
     );
     Ok(())
+}
+
+fn run_recovery_inspect(args: &[String]) -> AndromedaResult<()> {
+    let options = recovery_inspect_options_from_args(args)?;
+    let report = recovery_report_for_path(&options.wal_path, options.required_wal_start_lsn)?;
+    print!("{}", recovery_inspect_report(&options.wal_path, &report));
+    Ok(())
+}
+
+fn recovery_report_for_path(
+    wal_path: &Path,
+    required_wal_start_lsn: Lsn,
+) -> AndromedaResult<FileWalRecoveryReportV0> {
+    let manifest = v0_demo_manifest(required_wal_start_lsn);
+    report_file_wal_recovery_v0(&manifest, StartupMode::SafeStart, wal_path)
+}
+
+fn recovery_inspect_report(wal_path: &Path, report: &FileWalRecoveryReportV0) -> String {
+    let replay_lsns = report
+        .replay_lsns()
+        .map(|lsn| lsn.get())
+        .collect::<Vec<_>>();
+    let ignored_transactions = report
+        .ignored_transaction_ids()
+        .map(|id| id.get())
+        .collect::<Vec<_>>();
+    let scan_stop = report
+        .scan_stop
+        .map(|stop| format!("{:?} at byte {}", stop.reason, stop.offset))
+        .unwrap_or_else(|| "none".to_string());
+
+    let mut output = String::new();
+    output.push_str("Andromeda V0 WAL recovery inspect\n");
+    output.push_str(&format!("WAL path: {}\n", wal_path.display()));
+    output.push_str(&format!("startup mode: {:?}\n", report.startup_mode));
+    output.push_str(&format!(
+        "format version: {}\n",
+        report.header.format_version
+    ));
+    output.push_str("byte order: little-endian\n");
+    output.push_str(&format!("segment id: {}\n", report.header.segment_id));
+    output.push_str(&format!(
+        "physical WAL bytes: {}\n",
+        report.physical_wal_bytes
+    ));
+    output.push_str(&format!("scanned bytes: {}\n", report.scanned_bytes));
+    output.push_str(&format!(
+        "durable prefix bytes: {}\n",
+        report.durable_prefix_bytes
+    ));
+    output.push_str(&format!(
+        "durable prefix records: {}\n",
+        report.durable_prefix_record_count
+    ));
+    output.push_str(&format!("durable LSN: {}\n", report.durable_lsn.get()));
+    output.push_str(&format!("boundary: {:?}\n", report.boundary_kind));
+    output.push_str(&format!("scan stop: {scan_stop}\n"));
+    output.push_str(&format!(
+        "forensic required: {}\n",
+        report.forensic_required
+    ));
+    output.push_str(&format!("replay LSNs: {:?}\n", replay_lsns));
+    output.push_str(&format!(
+        "ignored transactions: {:?}\n",
+        ignored_transactions
+    ));
+    output.push_str(&format!(
+        "ignored records: {}\n",
+        report.ignored_record_count
+    ));
+    output
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RecoveryInspectOptions {
+    wal_path: PathBuf,
+    required_wal_start_lsn: Lsn,
+}
+
+fn vertical_v0_wal_path_from_args(args: &[String]) -> AndromedaResult<PathBuf> {
+    let mut wal_path = None;
+    let mut index = 0;
+
+    while index < args.len() {
+        match args[index].as_str() {
+            "--wal" => {
+                index += 1;
+                let Some(path) = args.get(index) else {
+                    return Err(cli_error("missing path after --wal"));
+                };
+                wal_path = Some(PathBuf::from(path));
+            }
+            unknown => {
+                return Err(cli_error(format!(
+                    "unknown vertical-v0 option `{unknown}`; expected `--wal <path>`"
+                )));
+            }
+        }
+        index += 1;
+    }
+
+    Ok(wal_path.unwrap_or_else(default_v0_wal_path))
+}
+
+fn recovery_inspect_options_from_args(args: &[String]) -> AndromedaResult<RecoveryInspectOptions> {
+    let mut wal_path = None;
+    let mut required_wal_start_lsn = Lsn::new(1);
+    let mut index = 0;
+
+    while index < args.len() {
+        match args[index].as_str() {
+            "--required-wal-start-lsn" => {
+                index += 1;
+                let Some(value) = args.get(index) else {
+                    return Err(cli_error("missing value after --required-wal-start-lsn"));
+                };
+                required_wal_start_lsn =
+                    Lsn::new(parse_u64_option(value, "--required-wal-start-lsn")?);
+            }
+            option if option.starts_with("--") => {
+                return Err(cli_error(format!(
+                    "unknown recovery-inspect option `{option}`"
+                )));
+            }
+            path => {
+                if wal_path.is_some() {
+                    return Err(cli_error("recovery-inspect accepts exactly one WAL path"));
+                }
+                wal_path = Some(PathBuf::from(path));
+            }
+        }
+        index += 1;
+    }
+
+    let Some(wal_path) = wal_path else {
+        return Err(cli_error(
+            "usage: andromeda-cli recovery-inspect <wal-path> [--required-wal-start-lsn <lsn>]",
+        ));
+    };
+
+    Ok(RecoveryInspectOptions {
+        wal_path,
+        required_wal_start_lsn,
+    })
+}
+
+fn parse_u64_option(value: &str, option: &str) -> AndromedaResult<u64> {
+    value
+        .parse::<u64>()
+        .map_err(|_| cli_error(format!("{option} expects an unsigned integer")))
+}
+
+fn default_v0_wal_path() -> PathBuf {
+    std::env::temp_dir().join(DEFAULT_V0_WAL_FILE)
+}
+
+fn v0_demo_manifest(required_wal_start_lsn: Lsn) -> DatabaseManifest {
+    DatabaseManifest {
+        database_id: 1,
+        manifest_version: 1,
+        snapshot_id: 1,
+        base_checkpoint_lsn: Lsn::new(1),
+        required_wal_start_lsn,
+        previous_manifest_hash: [0; 32],
+        manifest_crc: 1,
+    }
 }
 
 fn inventory_catalog_snapshot() -> AndromedaResult<CatalogSnapshot> {
@@ -288,7 +462,7 @@ struct SmokeFrame {
     payload_len: usize,
 }
 
-fn protocol_smoke_report() -> AndromedaResult<String> {
+fn protocol_smoke_report(detailed: bool) -> AndromedaResult<String> {
     let lockstep_count = validate_payload_frame_code_lockstep()?;
     validate_telemetry_datagram_policy()?;
 
@@ -307,6 +481,22 @@ fn protocol_smoke_report() -> AndromedaResult<String> {
     report.push_str(&format!(
         "completion/error/structured contract: ok ({contract_summary})\n"
     ));
+    if detailed {
+        report.push_str("payload/frame codes:\n");
+        for expected in PROTOCOL_CODE_LOCKSTEP {
+            report.push_str(&format!(
+                "  - {}: payload={}, frame={}, code={}\n",
+                expected.name, expected.payload_const, expected.frame_const, expected.code
+            ));
+        }
+        report.push_str("representative result frames:\n");
+        for frame in result_frames {
+            report.push_str(&format!(
+                "  - {:?}: request={}, session={}, tx={:?}, payload_len={}\n",
+                frame.kind, frame.request_id, frame.session_id, frame.tx_id, frame.payload_len
+            ));
+        }
+    }
     report.push_str("network sockets: not opened\n");
 
     Ok(report)
@@ -527,14 +717,18 @@ fn protocol_error(message: impl Into<String>) -> AndromedaError {
     AndromedaError::new(AndromedaErrorKind::Protocol, message)
 }
 
+fn cli_error(message: impl Into<String>) -> AndromedaError {
+    AndromedaError::new(AndromedaErrorKind::Protocol, message)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn protocol_smoke_report_is_deterministic_and_concise() {
-        let first = protocol_smoke_report().unwrap();
-        let second = protocol_smoke_report().unwrap();
+        let first = protocol_smoke_report(false).unwrap();
+        let second = protocol_smoke_report(false).unwrap();
 
         assert_eq!(first, second);
         assert!(first.contains("payload/frame lockstep: ok (9 codes)"));
@@ -544,12 +738,57 @@ mod tests {
     }
 
     #[test]
+    fn protocol_smoke_detail_lists_stable_codes() {
+        let report = protocol_smoke_report(true).unwrap();
+
+        assert!(report.contains("payload/frame codes:"));
+        assert!(report.contains("RpcExecuteRequest: payload=RPC_EXECUTE_REQUEST_WIRE_CODE"));
+        assert!(report.contains("representative result frames:"));
+    }
+
+    #[test]
     fn protocol_smoke_sequence_rejects_batch_before_metadata() {
         let frames = representative_result_frames();
         let invalid = [frames[1], frames[0], frames[2]];
 
         assert_eq!(
             validate_result_frame_sequence(&invalid).unwrap_err().kind(),
+            AndromedaErrorKind::Protocol
+        );
+    }
+
+    #[test]
+    fn vertical_v0_defaults_to_temp_wal_and_accepts_explicit_path() {
+        let explicit = vertical_v0_wal_path_from_args(&[
+            "--wal".to_string(),
+            "target/andromeda-cli-test.wal".to_string(),
+        ])
+        .unwrap();
+
+        assert_eq!(explicit, PathBuf::from("target/andromeda-cli-test.wal"));
+        assert!(
+            vertical_v0_wal_path_from_args(&[])
+                .unwrap()
+                .ends_with(DEFAULT_V0_WAL_FILE)
+        );
+    }
+
+    #[test]
+    fn recovery_inspect_requires_one_path() {
+        let options = recovery_inspect_options_from_args(&[
+            "target/andromeda-cli-test.wal".to_string(),
+            "--required-wal-start-lsn".to_string(),
+            "2".to_string(),
+        ])
+        .unwrap();
+
+        assert_eq!(
+            options.wal_path,
+            PathBuf::from("target/andromeda-cli-test.wal")
+        );
+        assert_eq!(options.required_wal_start_lsn, Lsn::new(2));
+        assert_eq!(
+            recovery_inspect_options_from_args(&[]).unwrap_err().kind(),
             AndromedaErrorKind::Protocol
         );
     }

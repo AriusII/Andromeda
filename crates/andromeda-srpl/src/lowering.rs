@@ -1,9 +1,11 @@
 use andromeda_catalog::{
     CatalogDefinition, CatalogObjectRef, CatalogSnapshot, ObjectKind, ProcedureContract,
     ProcedureContractCandidate, QualifiedName, ResultStreamContract, StructuredObjectDefinition,
-    TableDefinition,
+    TableDefinition, inventory_reserve_stock_contract_candidate,
 };
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, ColumnDescriptor};
+use andromeda_core::{
+    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, ColumnDescriptor,
+};
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
@@ -230,7 +232,7 @@ pub fn lower_ir_to_contract_candidate(
     ir.body.validate_bounded()?;
     validate_declared_error_codes(&ir.body, &metadata.error_policy.allowed_error_codes)?;
 
-    Ok(ProcedureContractCandidate {
+    let candidate = ProcedureContractCandidate {
         object: CatalogObjectRef {
             object_id: metadata.object_id,
             name: ir.name,
@@ -259,7 +261,9 @@ pub fn lower_ir_to_contract_candidate(
         result_metadata_policy: metadata.result_metadata_policy,
         error_policy: metadata.error_policy,
         multi_result_policy: metadata.multi_result_policy,
-    })
+    };
+    candidate.clone().materialize()?;
+    Ok(candidate)
 }
 
 pub fn compile_narrow_procedure_contract_candidate(
@@ -270,6 +274,47 @@ pub fn compile_narrow_procedure_contract_candidate(
     lower_ir_to_contract_candidate(ir, metadata).map_err(|error| {
         crate::SrplDiagnostic::new(crate::DiagnosticPhase::IrLowering, None, error.to_string())
     })
+}
+
+pub const INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE: &str = "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool) begin ensure Inventory.ProductStock Stock where ProductId = Stock.ProductId and Stock.AvailableQuantity >= Quantity else fail InsufficientStock; update Inventory.ProductStock set AvailableQuantity = Stock.AvailableQuantity - Quantity where ProductId = Stock.ProductId affected rows 1; return Reservation (Reserved); end;";
+
+pub fn inventory_reserve_stock_contract_metadata(
+    catalog_version: CatalogVersion,
+) -> SrplProcedureContractMetadata {
+    let fixture = inventory_reserve_stock_contract_candidate(catalog_version);
+    SrplProcedureContractMetadata {
+        object_id: fixture.object.object_id,
+        procedure_id: fixture.procedure_id,
+        catalog_version: fixture.object.catalog_version,
+        stats_version: fixture.stats_version,
+        protocol_layout: fixture.protocol_layout,
+        structured_inputs: fixture.structured_inputs,
+        required_permissions: fixture.required_permissions,
+        transaction_policy: fixture.transaction_policy,
+        compatibility_policy: fixture.compatibility_policy,
+        result_metadata_policy: fixture.result_metadata_policy,
+        error_policy: fixture.error_policy,
+        multi_result_policy: fixture.multi_result_policy,
+    }
+}
+
+pub fn compile_inventory_reserve_stock_contract_candidate(
+    catalog_version: CatalogVersion,
+) -> Result<ProcedureContractCandidate, crate::SrplDiagnostic> {
+    compile_narrow_procedure_contract_candidate(
+        INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE,
+        inventory_reserve_stock_contract_metadata(catalog_version),
+    )
+}
+
+pub fn compile_inventory_reserve_stock_contract(
+    catalog_version: CatalogVersion,
+) -> Result<ProcedureContract, crate::SrplDiagnostic> {
+    compile_inventory_reserve_stock_contract_candidate(catalog_version)?
+        .materialize()
+        .map_err(|error| {
+            crate::SrplDiagnostic::new(crate::DiagnosticPhase::IrLowering, None, error.to_string())
+        })
 }
 
 fn validate_declared_error_codes(

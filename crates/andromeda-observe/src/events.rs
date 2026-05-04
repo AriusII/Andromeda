@@ -137,6 +137,18 @@ impl SurfaceScope {
     pub const fn permits_admin_operation(self) -> bool {
         !matches!(self, Self::Application)
     }
+
+    pub const fn permits_permission(self, permission: Permission) -> bool {
+        match self {
+            Self::Application => !permission.is_admin_operation_permission(),
+            Self::BackupAgent => matches!(
+                permission.family(),
+                PermissionFamily::Recovery | PermissionFamily::Diagnostics
+            ),
+            Self::MonitoringAgent => matches!(permission.family(), PermissionFamily::Diagnostics),
+            Self::Administration | Self::Cluster => true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -383,6 +395,10 @@ impl SecurityAuditTrace {
 
     pub const fn surface_matches_certificate(&self) -> bool {
         self.surface as u8 == self.certificate.surface as u8
+    }
+
+    pub const fn surface_permits_permission(&self) -> bool {
+        self.surface.permits_permission(self.permission)
     }
 
     pub fn contains_sensitive_evidence(&self) -> bool {
@@ -1323,6 +1339,11 @@ impl EventEnvelope {
             TraceEvent::SecurityAudit(trace) if !trace.surface_matches_certificate() => Err(
                 observe_error("security audit trace surface must match certificate surface scope"),
             ),
+            TraceEvent::SecurityAudit(trace) if !trace.surface_permits_permission() => {
+                Err(observe_error(
+                    "security audit traces require surface scope matching permission family",
+                ))
+            }
             TraceEvent::SecurityAudit(trace) if !trace.has_reason() => Err(observe_error(
                 "security audit traces require a non-empty reason",
             )),
@@ -1773,6 +1794,7 @@ pub struct InMemoryEventSequence {
     max_events: Option<usize>,
     cursor: ProcedureLifecycleCursor,
     last_event_id: Option<EventId>,
+    security_audit_seen: bool,
     request_id: Option<RequestId>,
     session_id: Option<SessionId>,
     contract_hash: Option<ContractHash>,
@@ -1798,6 +1820,7 @@ impl InMemoryEventSequence {
             max_events: None,
             cursor: ProcedureLifecycleCursor::Empty,
             last_event_id: None,
+            security_audit_seen: false,
             request_id: None,
             session_id: None,
             contract_hash: None,
@@ -1814,6 +1837,7 @@ impl InMemoryEventSequence {
             max_events: Some(max_events),
             cursor: ProcedureLifecycleCursor::Empty,
             last_event_id: None,
+            security_audit_seen: false,
             request_id: None,
             session_id: None,
             contract_hash: None,
@@ -1866,6 +1890,19 @@ impl InMemoryEventSequence {
             self.cursor,
             ProcedureLifecycleCursor::PreTransactionRejected
                 | ProcedureLifecycleCursor::PreTransactionCompletionEmitted
+        )
+    }
+
+    pub fn has_mandatory_security_audit(&self) -> bool {
+        self.security_audit_seen
+    }
+
+    pub fn has_terminal_completion(&self) -> bool {
+        matches!(
+            self.cursor,
+            ProcedureLifecycleCursor::CompletionEmitted
+                | ProcedureLifecycleCursor::PreTransactionCompletionEmitted
+                | ProcedureLifecycleCursor::RecoveryStarted
         )
     }
 
@@ -1943,6 +1980,18 @@ impl InMemoryEventSequence {
                     "admission evidence",
                 ),
             (ProcedureLifecycleCursor::AdmissionAccepted, ProcedureLifecycleStep::Authorized) => {
+                if !matches!(
+                    &event.event,
+                    TraceEvent::SecurityAudit(SecurityAuditTrace {
+                        outcome: SecurityAuditOutcome::Allowed,
+                        ..
+                    })
+                ) {
+                    return Err(observe_error(
+                        "procedure lifecycle authorization requires a V0 security audit event",
+                    ));
+                }
+
                 self.require_no_transaction_evidence(
                     event,
                     ProcedureLifecycleCursor::Authorized,
@@ -2026,7 +2075,16 @@ impl InMemoryEventSequence {
                 event,
                 ProcedureLifecycleCursor::PreTransactionRejected,
                 "pre-transaction rejection evidence",
-            ),
+            )
+            .and_then(|cursor| {
+                if matches!(&event.event, TraceEvent::AuthorizationDenied(_)) {
+                    return Err(observe_error(
+                        "procedure lifecycle authorization denial requires a V0 security audit event",
+                    ));
+                }
+
+                Ok(cursor)
+            }),
             (
                 ProcedureLifecycleCursor::PreTransactionRejected,
                 ProcedureLifecycleStep::CompletionEmitted {
@@ -2103,6 +2161,10 @@ impl InMemoryEventSequence {
     }
 
     fn apply_step(&mut self, step: ProcedureLifecycleStep, event: &EventEnvelope) {
+        if matches!(&event.event, TraceEvent::SecurityAudit(_)) {
+            self.security_audit_seen = true;
+        }
+
         self.request_id = event.correlation.request_id;
         self.session_id = event.correlation.session_id;
         self.contract_hash = event.correlation.contract_hash;

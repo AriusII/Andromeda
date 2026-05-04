@@ -48,11 +48,50 @@ message FrameEnvelope {
   reserved 9 to 31;
 }
 
+message RpcExecuteRequest {
+  message Argument {
+    string name = 1;
+    string type_name = 2;
+    bytes value = 3; // Binary StructuredObject scalar encoding, never JSON.
+
+    reserved 4 to 15;
+  }
+
+  message RequestBudget {
+    optional uint64 cpu_micros = 1;
+    optional uint64 memory_bytes = 2;
+    optional uint64 io_bytes = 3;
+    optional uint32 priority_class = 4;
+
+    reserved 5 to 15;
+  }
+
+  string procedure_name = 1;
+  bytes expected_contract_hash = 2; // 32 bytes, nonzero for contract-bound calls.
+  uint64 expected_catalog_version = 3;
+  string surface_scope = 4;
+  repeated Argument arguments = 5;
+  RequestBudget budget = 6;
+
+  reserved 7 to 31;
+}
+
 message RpcMetadata {
   repeated andromeda.contract.v1.ResultStreamDescriptor result_streams = 1;
   ResultCompletionPolicy completion_policy = 2;
 
   reserved 3 to 31;
+}
+
+message RpcBatch {
+  string result_name = 1;
+  uint64 batch_index = 2;
+  uint64 rows_emitted = 3;
+  bytes structured_payload = 4; // Binary StructuredObject row batch.
+  optional uint64 row_count_exact = 5;
+  bool terminal_batch = 6;
+
+  reserved 7 to 31;
 }
 
 message ResultCompletionPolicy {

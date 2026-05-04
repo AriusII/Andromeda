@@ -324,7 +324,7 @@ impl ProcedureContract {
     }
 
     pub fn validated(self) -> AndromedaResult<Self> {
-        self.validate()?;
+        self.validate_canonical_hash()?;
         Ok(self)
     }
 

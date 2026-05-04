@@ -102,6 +102,7 @@
 - `crates/andromeda-catalog/src/objects.rs`
 - `crates/andromeda-cli/Cargo.toml`
 - `crates/andromeda-cli/src/main.rs`
+- `crates/andromeda-cli/tests/cli_v0_gates.rs`
 - `crates/andromeda-core/Cargo.toml`
 - `crates/andromeda-core/src/error.rs`
 - `crates/andromeda-core/src/ids.rs`

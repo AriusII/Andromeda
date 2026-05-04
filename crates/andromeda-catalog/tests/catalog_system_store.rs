@@ -2,9 +2,9 @@ use andromeda_catalog::{
     AccessMode, CatalogDefinition, CatalogMutationRecordKind, CatalogObjectRef,
     CatalogPublicationSemantics, CatalogSnapshotPublication, CatalogSystemStore,
     CompatibilityPolicy, DefinitionBatch, DefinitionBatchId, DefinitionOperation, IsolationPolicy,
-    MultiResultPolicy, ObjectKind, ProcedureContract, ProcedureErrorPolicy, ProtocolLayoutRef,
-    QualifiedName, ResultMetadataPolicy, StatsVersion, StructuredObjectDefinition, TableDefinition,
-    TransactionPolicy,
+    MultiResultPolicy, ObjectKind, ProcedureContract, ProcedureContractCandidate,
+    ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName, ResultMetadataPolicy, StatsVersion,
+    StructuredObjectDefinition, TableDefinition, TransactionPolicy,
 };
 use andromeda_core::{
     AndromedaErrorKind, CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash,
@@ -52,10 +52,9 @@ fn procedure(
     version: CatalogVersion,
     structured_inputs: Vec<QualifiedName>,
 ) -> ProcedureContract {
-    ProcedureContract {
+    ProcedureContractCandidate {
         object: object(id, name, ObjectKind::Procedure, version),
         procedure_id: ProcedureId::new(id),
-        contract_hash: ContractHash::test_vector(id as u8),
         stats_version: StatsVersion::new(1),
         protocol_layout: ProtocolLayoutRef {
             descriptor_set_hash: ContractHash::test_vector(0xA1),
@@ -78,6 +77,8 @@ fn procedure(
         },
         multi_result_policy: MultiResultPolicy::SingleResultOnly,
     }
+    .materialize()
+    .unwrap()
 }
 
 fn batch(base_version: CatalogVersion, operations: Vec<DefinitionOperation>) -> DefinitionBatch {
