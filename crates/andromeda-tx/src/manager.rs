@@ -180,10 +180,10 @@ impl TransactionManager {
         f(machine)
     }
 
-    fn machine_mut<'a>(
-        live: &'a mut HashMap<TransactionId, TransactionStateMachine>,
+    fn machine_mut(
+        live: &mut HashMap<TransactionId, TransactionStateMachine>,
         id: TransactionId,
-    ) -> AndromedaResult<&'a mut TransactionStateMachine> {
+    ) -> AndromedaResult<&mut TransactionStateMachine> {
         live.get_mut(&id).ok_or_else(|| {
             AndromedaError::new(
                 AndromedaErrorKind::Transaction,

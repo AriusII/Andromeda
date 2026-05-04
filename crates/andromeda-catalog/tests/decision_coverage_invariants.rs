@@ -26,4 +26,3 @@ fn decision_coverage_dec_022_covers_alter_procedure_lifecycle_before_operation_s
         );
     }
 }
-

@@ -199,9 +199,9 @@ impl InMemoryEventSequence {
         let correlation = event.correlation;
         if !correlation.has_request_session()
             || !correlation.has_contract_catalog()
-            || !correlation
+            || correlation
                 .catalog_object_id
-                .is_some_and(|catalog_object_id| catalog_object_id.get() != 0)
+                .is_none_or(|catalog_object_id| catalog_object_id.get() == 0)
         {
             return Err(observe_error(
                 "procedure lifecycle events require non-zero request_id, session_id, contract_hash, catalog_version, and catalog_object_id correlation",

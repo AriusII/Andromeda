@@ -96,11 +96,7 @@ fn dependency_guard_enforces_workspace_doctrine() {
     }
     let workspace_manifest = fs::read_to_string(workspace.join("Cargo.toml"))
         .expect("read workspace Cargo.toml for dependency guard");
-    violations.extend(
-        parse_manifest("workspace", &workspace_manifest)
-            .forbidden_wire_deps
-            .into_iter(),
-    );
+    violations.extend(parse_manifest("workspace", &workspace_manifest).forbidden_wire_deps);
 
     assert!(
         violations.is_empty(),

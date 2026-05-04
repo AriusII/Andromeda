@@ -573,7 +573,7 @@ fn coldstore_publication_remains_read_only_after_recovery() {
     assert!(publication.validate().is_ok());
 
     let published = segment(SegmentState::PublishedCold, Lsn::new(2));
-    let cold_segment = PublishedColdSegment::new(published.clone()).unwrap();
+    let cold_segment = PublishedColdSegment::new(published).unwrap();
     for mutation in [
         SegmentMutation::AppendExtent,
         SegmentMutation::UpdatePageInPlace,

@@ -56,12 +56,12 @@ const CANONICAL_OWNERSHIP: &[(&str, &str, &str)] = &[
     (
         "struct",
         "FileWal",
-        "crates/andromeda-storage/src/file_wal.rs",
+        "crates/andromeda-storage/src/file_wal/wal.rs",
     ),
     (
         "struct",
         "FileWalHeader",
-        "crates/andromeda-storage/src/file_wal.rs",
+        "crates/andromeda-storage/src/file_wal/header.rs",
     ),
 ];
 

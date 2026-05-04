@@ -42,70 +42,63 @@ impl<'a> SrplSource<'a> {
         //    matches, so identifiers like `whileCount`, `myRandom`, `brand`,
         //    `BackupFilesystem`, or `executeSqlBuilder` do not false-positive.
         for (i, lex) in lexemes.iter().enumerate() {
-            match lex.kind {
-                LexKind::Word => {
-                    let lower = lex.text.to_ascii_lowercase();
-                    let next = lexemes.get(i + 1);
-                    let next_word = next.and_then(|n| {
-                        if n.kind == LexKind::Word {
-                            Some(n.text.to_ascii_lowercase())
-                        } else {
-                            None
-                        }
-                    });
-                    let next_is_lparen = matches!(next, Some(n) if n.kind == LexKind::LParen);
-                    let next_is_star = matches!(next, Some(n) if n.kind == LexKind::Star);
-
-                    match lower.as_str() {
-                        // UnboundedWhile: any standalone `while` keyword. SRPL
-                        // core has no legitimate `while` usage; identifiers
-                        // such as `whileCount` are *not* the bare word `while`
-                        // and therefore do not match here.
-                        "while" => {
-                            push_hit(&mut hits, ForbiddenConstruct::UnboundedWhile, lex.span)
-                        }
-                        // FreeRecursion: standalone `recursive` keyword, or the
-                        // adjacent word pair `call self`.
-                        "recursive" => {
-                            push_hit(&mut hits, ForbiddenConstruct::FreeRecursion, lex.span)
-                        }
-                        "call" if next_word.as_deref() == Some("self") => push_hit(
-                            &mut hits,
-                            ForbiddenConstruct::FreeRecursion,
-                            SourceSpan::new(lex.span.start, next.unwrap().span.end),
-                        ),
-                        // NondeterministicRandom: `random(` / `rand(` as a
-                        // call. The call form is required so identifiers like
-                        // `RandomSeed` or `brand` never trip the rule.
-                        "random" | "rand" if next_is_lparen => push_hit(
-                            &mut hits,
-                            ForbiddenConstruct::NondeterministicRandom,
-                            SourceSpan::new(lex.span.start, next.unwrap().span.end),
-                        ),
-                        // SelectStar: `select` keyword followed by `*` (any
-                        // amount of whitespace between).
-                        "select" if next_is_star => push_hit(
-                            &mut hits,
-                            ForbiddenConstruct::SelectStar,
-                            SourceSpan::new(lex.span.start, next.unwrap().span.end),
-                        ),
-                        // DynamicTextSql: `dynamic sql` or `execute sql` as
-                        // adjacent words (case- and whitespace-insensitive).
-                        "dynamic" | "execute" if next_word.as_deref() == Some("sql") => push_hit(
-                            &mut hits,
-                            ForbiddenConstruct::DynamicTextSql,
-                            SourceSpan::new(lex.span.start, next.unwrap().span.end),
-                        ),
-                        // ExternalFilesystem: adjacent words `external filesystem`.
-                        "external" if next_word.as_deref() == Some("filesystem") => push_hit(
-                            &mut hits,
-                            ForbiddenConstruct::ExternalFilesystem,
-                            SourceSpan::new(lex.span.start, next.unwrap().span.end),
-                        ),
-                        _ => {}
+            if lex.kind == LexKind::Word {
+                let lower = lex.text.to_ascii_lowercase();
+                let next = lexemes.get(i + 1);
+                let next_word = next.and_then(|n| {
+                    if n.kind == LexKind::Word {
+                        Some(n.text.to_ascii_lowercase())
+                    } else {
+                        None
                     }
+                });
+                let next_is_lparen = matches!(next, Some(n) if n.kind == LexKind::LParen);
+                let next_is_star = matches!(next, Some(n) if n.kind == LexKind::Star);
+
+                match lower.as_str() {
+                    // UnboundedWhile: any standalone `while` keyword. SRPL
+                    // core has no legitimate `while` usage; identifiers
+                    // such as `whileCount` are *not* the bare word `while`
+                    // and therefore do not match here.
+                    "while" => push_hit(&mut hits, ForbiddenConstruct::UnboundedWhile, lex.span),
+                    // FreeRecursion: standalone `recursive` keyword, or the
+                    // adjacent word pair `call self`.
+                    "recursive" => push_hit(&mut hits, ForbiddenConstruct::FreeRecursion, lex.span),
+                    "call" if next_word.as_deref() == Some("self") => push_hit(
+                        &mut hits,
+                        ForbiddenConstruct::FreeRecursion,
+                        SourceSpan::new(lex.span.start, next.unwrap().span.end),
+                    ),
+                    // NondeterministicRandom: `random(` / `rand(` as a
+                    // call. The call form is required so identifiers like
+                    // `RandomSeed` or `brand` never trip the rule.
+                    "random" | "rand" if next_is_lparen => push_hit(
+                        &mut hits,
+                        ForbiddenConstruct::NondeterministicRandom,
+                        SourceSpan::new(lex.span.start, next.unwrap().span.end),
+                    ),
+                    // SelectStar: `select` keyword followed by `*` (any
+                    // amount of whitespace between).
+                    "select" if next_is_star => push_hit(
+                        &mut hits,
+                        ForbiddenConstruct::SelectStar,
+                        SourceSpan::new(lex.span.start, next.unwrap().span.end),
+                    ),
+                    // DynamicTextSql: `dynamic sql` or `execute sql` as
+                    // adjacent words (case- and whitespace-insensitive).
+                    "dynamic" | "execute" if next_word.as_deref() == Some("sql") => push_hit(
+                        &mut hits,
+                        ForbiddenConstruct::DynamicTextSql,
+                        SourceSpan::new(lex.span.start, next.unwrap().span.end),
+                    ),
+                    // ExternalFilesystem: adjacent words `external filesystem`.
+                    "external" if next_word.as_deref() == Some("filesystem") => push_hit(
+                        &mut hits,
+                        ForbiddenConstruct::ExternalFilesystem,
+                        SourceSpan::new(lex.span.start, next.unwrap().span.end),
+                    ),
+                    _ => {}
                 }
-                _ => {}
             }
         }
 

@@ -607,7 +607,7 @@ mod tests {
         assert!(outcome.is_denied());
         if let AuthorizationOutcome::Denied { reason, audit } = outcome {
             assert_eq!(reason, AuthorizationDenialReason::SurfaceScopeMismatch);
-            assert!(audit.surface_matches_certificate() == false);
+            assert!(!audit.surface_matches_certificate());
         }
     }
 

@@ -8,7 +8,7 @@ pub use crate::cmd_vertical::{print_help, run_vertical_demo, run_vertical_v0_dem
 
 /// Dispatches a CLI command based on the first argument.
 pub fn dispatch_command(args: &[String]) -> AndromedaResult<()> {
-    match args.get(0).map(String::as_str) {
+    match args.first().map(String::as_str) {
         Some("vertical") => run_vertical_demo(),
         Some("vertical-v0") => run_vertical_v0_demo(parse_vertical_v0_wal_path(&args[1..])?),
         Some("protocol-smoke") => {

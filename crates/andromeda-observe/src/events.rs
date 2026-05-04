@@ -1,17 +1,24 @@
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogObjectId, CatalogVersion,
-    ContractHash, GpuExecutionPolicy, GpuProfile, InvocationId, PipelineClass, RequestId,
-    ResourceBudget, SessionId, TransactionId,
+    ContractHash, InvocationId, TransactionId,
 };
+#[cfg(test)]
+use andromeda_core::{RequestId, SessionId};
 
 use crate::TraceId;
 
+mod correlation;
+mod decision;
 mod protocol_rejection;
 mod sequence;
+mod sink;
 mod transition;
 
+pub use correlation::*;
+pub use decision::*;
 pub use protocol_rejection::*;
 pub use sequence::*;
+pub use sink::*;
 pub use transition::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -29,88 +36,6 @@ impl EventId {
     pub const fn is_zero(self) -> bool {
         self.0 == 0
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CriticalDecisionKind {
-    ContractValidation,
-    AuthorizationDenial,
-    PlanSelection,
-    WalAppend,
-    TransactionCommit,
-    WalFlush,
-    CommitVisible,
-    RollbackDurable,
-    MvccVisibility,
-    RecoveryStartup,
-    ManifestValidation,
-    ManifestSwitch,
-    CatalogMutation,
-    FrameRejection,
-    StreamRoleRejection,
-    Backpressure,
-    CompletionEmitted,
-    ContractRejected,
-    UnsupportedVersion,
-    SchemaLayoutDecision,
-    CorruptionBoundary,
-    SecurityAuthorization,
-    SecurityAudit,
-    AdminOperation,
-    ResourceGovernance,
-    BusinessRuleDecision,
-    IoPlacementDecision,
-    IoBudgetValidation,
-    GpuPolicyDecision,
-    TransactionTransition,
-    ExecutionTransition,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DecisionTrace {
-    pub trace_id: TraceId,
-    pub decision: CriticalDecisionKind,
-    pub reason: String,
-}
-
-impl DecisionTrace {
-    pub fn has_explanation(&self) -> bool {
-        !self.reason.trim().is_empty()
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ProtocolCorrelation {
-    pub protocol_version: Option<u16>,
-    pub stream_id: Option<u64>,
-    pub stream_role: Option<u16>,
-    pub frame_type: Option<u16>,
-    pub payload_kind: Option<u16>,
-    pub sequence: Option<u64>,
-}
-
-impl ProtocolCorrelation {
-    pub const fn empty() -> Self {
-        Self {
-            protocol_version: None,
-            stream_id: None,
-            stream_role: None,
-            frame_type: None,
-            payload_kind: None,
-            sequence: None,
-        }
-    }
-
-    pub const fn has_frame_evidence(self) -> bool {
-        self.stream_id.is_some() && self.frame_type.is_some()
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ProtocolEventScope {
-    Connection,
-    Session,
-    Request,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -432,6 +357,10 @@ pub struct AdminOperationTrace {
 }
 
 impl AdminOperationTrace {
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "Audit trace construction keeps certificate, principal, permission, and decision fields explicit."
+    )]
     pub fn new(
         trace_id: TraceId,
         surface: SurfaceScope,
@@ -483,62 +412,6 @@ impl AdminOperationTrace {
         self.certificate.contains_sensitive_evidence()
             || self.principal.contains_sensitive_evidence()
             || contains_sensitive_marker(&self.reason)
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct EventCorrelation {
-    pub request_id: Option<RequestId>,
-    pub session_id: Option<SessionId>,
-    pub contract_hash: Option<ContractHash>,
-    pub catalog_version: Option<CatalogVersion>,
-    pub catalog_object_id: Option<CatalogObjectId>,
-    pub transaction_id: Option<TransactionId>,
-    pub durable_lsn: Option<u64>,
-    pub protocol: Option<ProtocolCorrelation>,
-}
-
-impl EventCorrelation {
-    pub const fn empty() -> Self {
-        Self {
-            request_id: None,
-            session_id: None,
-            contract_hash: None,
-            catalog_version: None,
-            catalog_object_id: None,
-            transaction_id: None,
-            durable_lsn: None,
-            protocol: None,
-        }
-    }
-
-    pub fn has_request_session(self) -> bool {
-        self.request_id
-            .is_some_and(|request_id| request_id.get() != 0)
-            && self
-                .session_id
-                .is_some_and(|session_id| session_id.get() != 0)
-    }
-
-    pub fn has_contract_catalog(self) -> bool {
-        self.contract_hash
-            .is_some_and(|contract_hash| !contract_hash.is_zero())
-            && self
-                .catalog_version
-                .is_some_and(|catalog_version| catalog_version.get() != 0)
-    }
-
-    pub fn has_no_transaction_evidence(self) -> bool {
-        self.transaction_id.is_none() && self.durable_lsn.is_none()
-    }
-
-    pub fn has_transaction_evidence(self) -> bool {
-        self.transaction_id
-            .is_some_and(|transaction_id| transaction_id.get() != 0)
-    }
-
-    pub fn has_durable_lsn(self) -> bool {
-        self.durable_lsn.is_some_and(|durable_lsn| durable_lsn != 0)
     }
 }
 
@@ -824,31 +697,6 @@ impl UnsupportedVersionTrace {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SchemaLayoutDecisionTrace {
-    pub trace_id: TraceId,
-    pub scope: ProtocolEventScope,
-    pub schema_id: Option<u64>,
-    pub schema_version: Option<u64>,
-    pub layout_id: Option<u64>,
-    pub layout_version: Option<u64>,
-    pub accepted: bool,
-    pub reason: String,
-}
-
-impl SchemaLayoutDecisionTrace {
-    pub fn has_reason(&self) -> bool {
-        !self.reason.trim().is_empty()
-    }
-
-    pub const fn has_schema_layout_evidence(&self) -> bool {
-        self.schema_id.is_some()
-            && self.schema_version.is_some()
-            && self.layout_id.is_some()
-            && self.layout_version.is_some()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CorruptionBoundaryTrace {
     pub trace_id: TraceId,
     pub boundary_lsn: u64,
@@ -889,195 +737,6 @@ pub struct ResourceTrace {
     pub trace_id: TraceId,
     pub memory_bytes: u64,
     pub temp_bytes: u64,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IoStorageTier {
-    Ram,
-    Hot,
-    Cold,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IoPipelineStage {
-    Ram,
-    Hot,
-    Cold,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IoPlacementDecisionTrace {
-    pub trace_id: TraceId,
-    pub pipeline: PipelineClass,
-    pub stage: IoPipelineStage,
-    pub selected_tier: IoStorageTier,
-    pub accepted: bool,
-    pub reason: String,
-}
-
-impl IoPlacementDecisionTrace {
-    pub fn accepted(
-        trace_id: TraceId,
-        pipeline: PipelineClass,
-        stage: IoPipelineStage,
-        selected_tier: IoStorageTier,
-        reason: impl Into<String>,
-    ) -> AndromedaResult<Self> {
-        Self::new(trace_id, pipeline, stage, selected_tier, true, reason)
-    }
-
-    pub fn rejected(
-        trace_id: TraceId,
-        pipeline: PipelineClass,
-        stage: IoPipelineStage,
-        selected_tier: IoStorageTier,
-        reason: impl Into<String>,
-    ) -> AndromedaResult<Self> {
-        Self::new(trace_id, pipeline, stage, selected_tier, false, reason)
-    }
-
-    pub fn new(
-        trace_id: TraceId,
-        pipeline: PipelineClass,
-        stage: IoPipelineStage,
-        selected_tier: IoStorageTier,
-        accepted: bool,
-        reason: impl Into<String>,
-    ) -> AndromedaResult<Self> {
-        let reason = non_empty_reason(reason)?;
-        Ok(Self {
-            trace_id,
-            pipeline,
-            stage,
-            selected_tier,
-            accepted,
-            reason,
-        })
-    }
-
-    pub fn has_reason(&self) -> bool {
-        !self.reason.trim().is_empty()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IoBudgetDecisionTrace {
-    pub trace_id: TraceId,
-    pub pipeline: PipelineClass,
-    pub stage: IoPipelineStage,
-    pub budget: ResourceBudget,
-    pub requested_memory_bytes: u64,
-    pub requested_temp_bytes: u64,
-    pub requested_streams: u32,
-    pub accepted: bool,
-    pub reason: String,
-}
-
-impl IoBudgetDecisionTrace {
-    pub fn from_budget_request(
-        trace_id: TraceId,
-        pipeline: PipelineClass,
-        stage: IoPipelineStage,
-        budget: ResourceBudget,
-        requested_memory_bytes: u64,
-        requested_temp_bytes: u64,
-        requested_streams: u32,
-        reason: impl Into<String>,
-    ) -> AndromedaResult<Self> {
-        let reason = non_empty_reason(reason)?;
-        let accepted = requested_memory_bytes <= budget.max_memory_bytes
-            && requested_temp_bytes <= budget.max_temp_bytes
-            && requested_streams <= budget.max_streams;
-
-        Ok(Self {
-            trace_id,
-            pipeline,
-            stage,
-            budget,
-            requested_memory_bytes,
-            requested_temp_bytes,
-            requested_streams,
-            accepted,
-            reason,
-        })
-    }
-
-    pub fn has_reason(&self) -> bool {
-        !self.reason.trim().is_empty()
-    }
-
-    pub const fn has_budget_evidence(&self) -> bool {
-        self.budget.max_memory_bytes != 0
-            || self.budget.max_temp_bytes != 0
-            || self.budget.max_streams != 0
-    }
-
-    pub const fn requested_within_budget(&self) -> bool {
-        self.requested_memory_bytes <= self.budget.max_memory_bytes
-            && self.requested_temp_bytes <= self.budget.max_temp_bytes
-            && self.requested_streams <= self.budget.max_streams
-    }
-
-    pub const fn outcome_matches_budget(&self) -> bool {
-        self.accepted == self.requested_within_budget()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GpuPolicyDecisionTrace {
-    pub trace_id: TraceId,
-    pub pipeline: PipelineClass,
-    pub policy: GpuExecutionPolicy,
-    pub gpu_declared_available: bool,
-    pub accepted: bool,
-    pub reason: String,
-}
-
-impl GpuPolicyDecisionTrace {
-    pub fn from_policy(
-        trace_id: TraceId,
-        pipeline: PipelineClass,
-        policy: GpuExecutionPolicy,
-        gpu_declared_available: bool,
-        reason: impl Into<String>,
-    ) -> AndromedaResult<Self> {
-        let reason = non_empty_reason(reason)?;
-        Ok(Self {
-            trace_id,
-            pipeline,
-            policy,
-            gpu_declared_available,
-            accepted: gpu_declared_available && policy.permits_pipeline(pipeline),
-            reason,
-        })
-    }
-
-    pub fn from_profile(
-        trace_id: TraceId,
-        pipeline: PipelineClass,
-        profile: GpuProfile,
-        reason: impl Into<String>,
-    ) -> AndromedaResult<Self> {
-        Self::from_policy(
-            trace_id,
-            pipeline,
-            profile.execution_policy,
-            profile.available,
-            reason,
-        )
-    }
-
-    pub fn has_reason(&self) -> bool {
-        !self.reason.trim().is_empty()
-    }
-
-    pub const fn permitted_by_policy(&self) -> bool {
-        self.gpu_declared_available && self.policy.permits_pipeline(self.pipeline)
-    }
-
-    pub const fn outcome_matches_policy(&self) -> bool {
-        self.accepted == self.permitted_by_policy()
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1789,69 +1448,11 @@ impl EventEnvelope {
     }
 }
 
-pub trait EventSink {
-    fn emit(&mut self, event: EventEnvelope) -> AndromedaResult<()>;
-}
-
-impl<T: EventSink + ?Sized> EventSink for &mut T {
-    fn emit(&mut self, event: EventEnvelope) -> AndromedaResult<()> {
-        (**self).emit(event)
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct InMemoryEventSink {
-    events: Vec<EventEnvelope>,
-    max_events: Option<usize>,
-}
-
-impl InMemoryEventSink {
-    pub const fn new() -> Self {
-        Self {
-            events: Vec::new(),
-            max_events: None,
-        }
-    }
-
-    pub const fn with_capacity_limit(max_events: usize) -> Self {
-        Self {
-            events: Vec::new(),
-            max_events: Some(max_events),
-        }
-    }
-
-    pub fn events(&self) -> &[EventEnvelope] {
-        &self.events
-    }
-
-    pub fn into_events(self) -> Vec<EventEnvelope> {
-        self.events
-    }
-}
-
-impl EventSink for InMemoryEventSink {
-    fn emit(&mut self, event: EventEnvelope) -> AndromedaResult<()> {
-        event.validate()?;
-
-        if self
-            .max_events
-            .is_some_and(|max_events| self.events.len() >= max_events)
-        {
-            return Err(observe_error(
-                "in-memory event sink capacity exhausted; event was not recorded",
-            ));
-        }
-
-        self.events.push(event);
-        Ok(())
-    }
-}
-
 pub(crate) fn observe_error(message: impl Into<String>) -> AndromedaError {
     AndromedaError::new(AndromedaErrorKind::Internal, message)
 }
 
-fn non_empty_reason(reason: impl Into<String>) -> AndromedaResult<String> {
+pub(super) fn non_empty_reason(reason: impl Into<String>) -> AndromedaResult<String> {
     let reason = reason.into();
     if reason.trim().is_empty() {
         return Err(observe_error(

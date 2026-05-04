@@ -211,7 +211,8 @@ fn governed_schemas_declare_enriched_message_contracts_and_reserved_ranges() {
         );
     }
 
-    for message in ["message RequiredPermission"] {
+    {
+        let message = "message RequiredPermission";
         assert!(
             CONTRACT_SCHEMA.contains(message),
             "contract schema must include {message}"

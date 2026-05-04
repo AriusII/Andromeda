@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use std::{env, error::Error, path::PathBuf};
 
 fn main() -> Result<(), Box<dyn Error>> {

@@ -85,7 +85,7 @@ fn sealed_segment_blocks_in_place_drift_but_allows_append_extent() {
 #[test]
 fn cold_store_rejects_all_mutations_after_publication() {
     let descriptor = descriptor(SegmentState::PublishedCold);
-    let cold_segment = PublishedColdSegment::new(descriptor.clone()).unwrap();
+    let cold_segment = PublishedColdSegment::new(descriptor).unwrap();
 
     assert!(cold_segment.validate_immutable().is_ok());
     for mutation in [

@@ -3,6 +3,8 @@
 //! This library provides the command-line interface for Andromeda, with modular
 //! command, argument parsing, output formatting, and error handling.
 
+#![forbid(unsafe_code)]
+
 // Module files
 mod args_parser;
 mod cmd_protocol;

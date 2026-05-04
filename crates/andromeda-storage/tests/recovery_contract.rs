@@ -54,12 +54,9 @@ fn redo_plan_replays_only_manifest_range_and_complete_transactions() {
         manifest_crc: 99,
     };
     let durable_records = wal.replay_durable();
-    let plan = RecoveryPlan::from_manifest_and_wal(
-        &manifest,
-        StartupMode::SafeStart,
-        &durable_records,
-    )
-    .unwrap();
+    let plan =
+        RecoveryPlan::from_manifest_and_wal(&manifest, StartupMode::SafeStart, &durable_records)
+            .unwrap();
 
     assert!(plan.has_incomplete_transactions());
     assert_eq!(
@@ -106,12 +103,9 @@ fn redo_plan_skips_transaction_when_commit_is_not_durable() {
         manifest_crc: 99,
     };
     let durable_records = wal.replay_durable();
-    let plan = RecoveryPlan::from_manifest_and_wal(
-        &manifest,
-        StartupMode::SafeStart,
-        &durable_records,
-    )
-    .unwrap();
+    let plan =
+        RecoveryPlan::from_manifest_and_wal(&manifest, StartupMode::SafeStart, &durable_records)
+            .unwrap();
 
     assert_eq!(commit_lsn, Lsn::new(3));
     assert_eq!(plan.replay_lsns().collect::<Vec<_>>(), Vec::<Lsn>::new());
@@ -157,8 +151,8 @@ fn redo_plan_skips_transaction_with_commit_but_missing_begin_evidence() {
         manifest_crc: 99,
     };
 
-    let plan = RecoveryPlan::from_manifest_and_wal(&manifest, StartupMode::SafeStart, &records)
-        .unwrap();
+    let plan =
+        RecoveryPlan::from_manifest_and_wal(&manifest, StartupMode::SafeStart, &records).unwrap();
 
     assert_eq!(plan.replay_lsns().collect::<Vec<_>>(), Vec::<Lsn>::new());
     assert_eq!(
@@ -246,8 +240,7 @@ fn redo_plan_from_truncated_wal_scan_replays_only_complete_prefix_transactions()
     };
 
     let plan =
-        RecoveryPlan::from_manifest_and_wal_scan(&manifest, StartupMode::SafeStart, &scan)
-            .unwrap();
+        RecoveryPlan::from_manifest_and_wal_scan(&manifest, StartupMode::SafeStart, &scan).unwrap();
 
     assert_eq!(
         plan.wal_scan_stop().unwrap().reason,
@@ -287,12 +280,9 @@ fn redo_plan_exports_recovery_trace_with_durable_lsn_correlation() {
         manifest_crc: 99,
     };
     let durable_records = wal.replay_durable();
-    let plan = RecoveryPlan::from_manifest_and_wal(
-        &manifest,
-        StartupMode::SafeStart,
-        &durable_records,
-    )
-    .unwrap();
+    let plan =
+        RecoveryPlan::from_manifest_and_wal(&manifest, StartupMode::SafeStart, &durable_records)
+            .unwrap();
     let trace = plan.observe_recovery_trace(TraceId::new(50));
 
     let envelope = EventEnvelope::new(
@@ -449,12 +439,9 @@ fn redo_plan_distinguishes_snapshot_replay_range_and_corruption_boundary() {
         manifest_crc: 99,
     };
     let durable_records = wal.replay_durable();
-    let clean_plan = RecoveryPlan::from_manifest_and_wal(
-        &manifest,
-        StartupMode::SafeStart,
-        &durable_records,
-    )
-    .unwrap();
+    let clean_plan =
+        RecoveryPlan::from_manifest_and_wal(&manifest, StartupMode::SafeStart, &durable_records)
+            .unwrap();
 
     assert_eq!(clean_plan.mounted_snapshot_id, manifest.snapshot_id);
     assert_eq!(clean_plan.redo_from_lsn, manifest.required_wal_start_lsn);
@@ -560,11 +547,8 @@ fn redo_plan_does_not_treat_non_durable_ram_records_as_truth() {
         "non-flushed appends must not appear in the durable replay slice"
     );
 
-    let result = RecoveryPlan::from_manifest_and_wal(
-        &manifest,
-        StartupMode::SafeStart,
-        &durable_records,
-    );
+    let result =
+        RecoveryPlan::from_manifest_and_wal(&manifest, StartupMode::SafeStart, &durable_records);
     assert_eq!(
         result.unwrap_err().kind(),
         AndromedaErrorKind::Storage,

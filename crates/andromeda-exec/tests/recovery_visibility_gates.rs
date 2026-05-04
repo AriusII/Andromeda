@@ -384,7 +384,7 @@ fn crash_after_durable_rollback_keeps_writes_invisible_and_seeds_allocator_above
         "rolled-back writer must not be promoted to committed visibility"
     );
 
-    let reader = TransactionId::new(0xC0_DE_32);
+    let reader = TransactionId::new(12_639_794);
     let mut peer_statuses = statuses.clone();
     peer_statuses
         .record(reader, TransactionStatus::InFlight)

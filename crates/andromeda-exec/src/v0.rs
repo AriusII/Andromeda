@@ -139,6 +139,10 @@ where
         self.local
     }
 
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "V0 vertical slice keeps each contractual input explicit at the RPC boundary."
+    )]
     pub fn execute_encoded_inventory_reserve_stock(
         &mut self,
         encoded_execute_frame: &[u8],
@@ -196,6 +200,10 @@ where
         })
     }
 
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "Observed V0 path keeps transport, catalog, contract, request, and stock evidence separate."
+    )]
     pub fn execute_encoded_inventory_reserve_stock_observed(
         &mut self,
         encoded_execute_frame: &[u8],
@@ -220,6 +228,10 @@ where
         )
     }
 
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "Observed V0 path keeps transport, catalog, contract, request, and emitter evidence separate."
+    )]
     pub fn execute_encoded_inventory_reserve_stock_observed_with_emitter<S: EventSink>(
         &mut self,
         encoded_execute_frame: &[u8],

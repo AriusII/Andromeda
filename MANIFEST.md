@@ -123,7 +123,8 @@
 - `crates/andromeda-observe/src/trace_id.rs`
 - `crates/andromeda-proto/Cargo.toml`
 - `crates/andromeda-proto/src/completion.rs`
-- `crates/andromeda-proto/src/envelope.rs`
+- `crates/andromeda-proto/src/envelope_frame.rs`
+- `crates/andromeda-proto/src/envelope_validation.rs`
 - `crates/andromeda-proto/src/errors.rs`
 - `crates/andromeda-proto/src/lib.rs`
 - `crates/andromeda-proto/src/manifest.rs`
@@ -133,8 +134,15 @@
 - `crates/andromeda-quic/Cargo.toml`
 - `crates/andromeda-quic/src/backpressure.rs`
 - `crates/andromeda-quic/src/frame.rs`
+- `crates/andromeda-quic/src/frame_code.rs`
+- `crates/andromeda-quic/src/frame_codec.rs`
+- `crates/andromeda-quic/src/frame_sequence.rs`
+- `crates/andromeda-quic/src/frame_struct.rs`
 - `crates/andromeda-quic/src/lib.rs`
+- `crates/andromeda-quic/src/rpc.rs`
+- `crates/andromeda-quic/src/session.rs`
 - `crates/andromeda-quic/src/stream.rs`
+- `crates/andromeda-quic/src/stream_types.rs`
 - `crates/andromeda-srpl/Cargo.toml`
 - `crates/andromeda-srpl/src/cardinality.rs`
 - `crates/andromeda-srpl/src/diagnostics.rs`

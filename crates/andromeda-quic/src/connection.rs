@@ -79,23 +79,24 @@ impl SurfacePlane {
     /// Session control and diagnostic frames are allowed on every plane so
     /// that handshake and error reporting always remain reachable.
     pub const fn permits_family(self, family: FrameFamily) -> bool {
-        match (self, family) {
-            (_, FrameFamily::SessionControl) | (_, FrameFamily::Diagnostic) => true,
-            (Self::Application, FrameFamily::ContractControl)
-            | (Self::Application, FrameFamily::RpcCommand)
-            | (Self::Application, FrameFamily::RpcResultStream)
-            | (Self::Application, FrameFamily::Telemetry) => true,
-            (Self::Administration, FrameFamily::ContractControl)
-            | (Self::Administration, FrameFamily::RpcCommand)
-            | (Self::Administration, FrameFamily::RpcResultStream)
-            | (Self::Administration, FrameFamily::Telemetry) => true,
-            (Self::HighAvailability, FrameFamily::ContractControl)
-            | (Self::HighAvailability, FrameFamily::RpcCommand)
-            | (Self::HighAvailability, FrameFamily::RpcResultStream)
-            | (Self::HighAvailability, FrameFamily::Telemetry) => true,
-            (Self::Monitoring, FrameFamily::Telemetry) => true,
-            _ => false,
-        }
+        matches!(
+            (self, family),
+            (_, FrameFamily::SessionControl)
+                | (_, FrameFamily::Diagnostic)
+                | (Self::Application, FrameFamily::ContractControl)
+                | (Self::Application, FrameFamily::RpcCommand)
+                | (Self::Application, FrameFamily::RpcResultStream)
+                | (Self::Application, FrameFamily::Telemetry)
+                | (Self::Administration, FrameFamily::ContractControl)
+                | (Self::Administration, FrameFamily::RpcCommand)
+                | (Self::Administration, FrameFamily::RpcResultStream)
+                | (Self::Administration, FrameFamily::Telemetry)
+                | (Self::HighAvailability, FrameFamily::ContractControl)
+                | (Self::HighAvailability, FrameFamily::RpcCommand)
+                | (Self::HighAvailability, FrameFamily::RpcResultStream)
+                | (Self::HighAvailability, FrameFamily::Telemetry)
+                | (Self::Monitoring, FrameFamily::Telemetry)
+        )
     }
 }
 
