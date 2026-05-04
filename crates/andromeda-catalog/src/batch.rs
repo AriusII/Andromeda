@@ -1,10 +1,16 @@
+//! Definition batches for atomic multi-object catalog updates.
+//!
+//! This module provides the infrastructure for transactional catalog changes,
+//! grouping multiple object definition operations (creates, deprecations) into
+//! an atomic batch that maintains consistency.
+
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogObjectId, CatalogVersion,
     DatabaseId, NamespaceId,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::{CatalogObjectRef, ObjectKind, QualifiedName, objects::CatalogDefinition};
+use crate::{objects::CatalogDefinition, CatalogObjectRef, ObjectKind, QualifiedName};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct DefinitionBatchId(u64);

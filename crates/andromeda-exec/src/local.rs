@@ -3,10 +3,10 @@ use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, Pipeli
 use andromeda_observe::{DecisionTrace, TraceId};
 
 use crate::{
-    CompletionStatus, ExecutionIoAdmissionDecision, InvocationCompletion, InvocationContext,
-    InvocationReject, InvocationRequest, InvocationWal, LocalDispatchPlan, LocalDispatcher,
-    LocalRollbackPlan, ResultStreamMetadata, services::CompletionMappingService,
-    transaction_id_for_invocation,
+    services::CompletionMappingService, transaction_id_for_invocation, CompletionStatus,
+    ExecutionIoAdmissionDecision, InvocationCompletion, InvocationContext, InvocationReject,
+    InvocationRequest, InvocationWal, LocalDispatchPlan, LocalDispatcher, LocalRollbackPlan,
+    ResultStreamMetadata,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -308,7 +308,7 @@ fn rollback_payload_for_business_validation_failure(reason: &str) -> AndromedaRe
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_catalog::{ProcedureContractRef, inventory_reserve_stock_contract};
+    use andromeda_catalog::{inventory_reserve_stock_contract, ProcedureContractRef};
     use andromeda_core::{CatalogVersion, ContractHash, InvocationId, ProcedureId, TransactionId};
     use andromeda_srpl::Cardinality;
     use andromeda_storage::{InMemoryWal, Lsn, WalRecordKind};

@@ -1,5 +1,4 @@
 use andromeda_core::PipelineClass;
-use andromeda_storage::Lsn;
 use andromeda_storage::layout::cold::PublishedColdSegment;
 use andromeda_storage::layout::extent::ExtentId;
 use andromeda_storage::layout::io_budget::{
@@ -17,10 +16,10 @@ use andromeda_storage::layout::segment::{
     SegmentDescriptor, SegmentHeader, SegmentId, SegmentMutation, SegmentState, SegmentTrailer,
 };
 use andromeda_storage::publication::{
-    ColdSegmentPublicationPlan, DatabaseManifest, DatabaseSnapshotPublication,
-    SnapshotAvailabilityContract, SnapshotSegmentReference,
-    validate_cold_segment_publication_boundary,
+    validate_cold_segment_publication_boundary, ColdSegmentPublicationPlan, DatabaseManifest,
+    DatabaseSnapshotPublication, SnapshotAvailabilityContract, SnapshotSegmentReference,
 };
+use andromeda_storage::Lsn;
 
 fn page_header() -> PageHeader {
     PageHeader {
@@ -143,16 +142,12 @@ fn cold_segments_are_immutable_after_publication() {
     let published = PublishedColdSegment::new(descriptor).unwrap();
 
     assert!(published.validate_immutable().is_ok());
-    assert!(
-        published
-            .reject_mutation(SegmentMutation::AppendExtent)
-            .is_err()
-    );
-    assert!(
-        descriptor
-            .validate_mutation(SegmentMutation::UpdatePageInPlace)
-            .is_err()
-    );
+    assert!(published
+        .reject_mutation(SegmentMutation::AppendExtent)
+        .is_err());
+    assert!(descriptor
+        .validate_mutation(SegmentMutation::UpdatePageInPlace)
+        .is_err());
 }
 
 #[test]

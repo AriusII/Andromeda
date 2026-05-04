@@ -1,6 +1,6 @@
 use andromeda_catalog::{
-    CatalogBindingKind, INVENTORY_RESERVE_STOCK_PERMISSION, ProcedureContractRef,
-    inventory_reserve_stock_catalog_bindings, inventory_reserve_stock_contract,
+    inventory_reserve_stock_catalog_bindings, inventory_reserve_stock_contract, CatalogBindingKind,
+    ProcedureContractRef, INVENTORY_RESERVE_STOCK_PERMISSION,
 };
 use andromeda_core::{
     AndromedaResult, CatalogVersion, ContractHash, InvocationId, PipelineClass, ProcedureId,
@@ -16,9 +16,9 @@ use andromeda_exec::{
 };
 use andromeda_observe::TraceId;
 use andromeda_srpl::{
-    Cardinality,
     compiler::{compile_narrow_procedure_signature, inventory_reserve_stock_body_ir},
     model::{SrplBusinessOperationKindIr, SrplPredicateIr, SrplValueIr},
+    Cardinality,
 };
 use andromeda_storage::{
     CoreIoPlacementRequest, InMemoryWal, Lsn, OperationalProfile, PageSize, StorageIoBudgetScope,
@@ -350,11 +350,9 @@ fn local_vertical_happy_path_commits_only_with_durable_wal_evidence() {
     assert_eq!(runtime.wal().durable_lsn(), Lsn::new(3));
     assert_eq!(runtime.wal().replay_durable().len(), 3);
     assert_eq!(outcome.completion.rows_affected, Some(2));
-    assert!(
-        effect
-            .result_evidence()
-            .matches_committed_completion(&outcome.completion)
-    );
+    assert!(effect
+        .result_evidence()
+        .matches_committed_completion(&outcome.completion));
     assert_eq!(
         runtime.wal().records()[2].header.kind,
         WalRecordKind::TxCommit
@@ -538,16 +536,12 @@ fn inventory_reserve_stock_e2e_stitches_catalog_srpl_business_effect_and_authori
     );
     assert_eq!(runtime.wal().replay_durable().len(), 3);
     assert!(outcome.authorization_trace.is_some());
-    assert!(
-        effect
-            .result_evidence()
-            .proves_exact_result_and_remaining_stock()
-    );
-    assert!(
-        effect
-            .result_evidence()
-            .matches_committed_completion(&outcome.completion)
-    );
+    assert!(effect
+        .result_evidence()
+        .proves_exact_result_and_remaining_stock());
+    assert!(effect
+        .result_evidence()
+        .matches_committed_completion(&outcome.completion));
 }
 
 #[test]
@@ -580,11 +574,9 @@ fn inventory_mvcc_store_exposes_only_committed_business_stock_and_reservations()
             },
         )
         .unwrap();
-    assert!(
-        decision
-            .evidence
-            .proves_reserve_stock_write(&decision.effect)
-    );
+    assert!(decision
+        .evidence
+        .proves_reserve_stock_write(&decision.effect));
     assert_eq!(decision.effect.next_stock.available_quantity, 7);
 
     let reader_snapshot_while_writer_active = tx_snapshot(22, reader, [writer]);
@@ -593,12 +585,10 @@ fn inventory_mvcc_store_exposes_only_committed_business_stock_and_reservations()
         .unwrap()
         .unwrap();
     assert_eq!(visible_before_commit.observed_quantity, 10);
-    assert!(
-        store
-            .read_reservations(42, &reader_snapshot_while_writer_active)
-            .unwrap()
-            .is_empty()
-    );
+    assert!(store
+        .read_reservations(42, &reader_snapshot_while_writer_active)
+        .unwrap()
+        .is_empty());
 
     store
         .commit_transaction_after_durable_wal(writer, 3)
@@ -652,12 +642,10 @@ fn inventory_mvcc_store_hides_rolled_back_and_incomplete_business_effects() {
     let visible = store.read_stock(42, &reader_snapshot).unwrap().unwrap();
     assert_eq!(visible.observed_quantity, 10);
     assert_eq!(visible.stock_version, 1);
-    assert!(
-        store
-            .read_reservations(42, &reader_snapshot)
-            .unwrap()
-            .is_empty()
-    );
+    assert!(store
+        .read_reservations(42, &reader_snapshot)
+        .unwrap()
+        .is_empty());
 
     let second_writer = TransactionId::new(113);
     let second_snapshot = tx_snapshot(31, second_writer, [second_writer]);
@@ -768,11 +756,9 @@ fn inventory_mvcc_store_rejects_stale_or_concurrent_reservations_with_evidence()
         insufficient_err.kind(),
         andromeda_core::AndromedaErrorKind::Execution
     );
-    assert!(
-        insufficient_err
-            .message()
-            .contains("insufficient inventory stock")
-    );
+    assert!(insufficient_err
+        .message()
+        .contains("insufficient inventory stock"));
 }
 
 #[test]
@@ -856,11 +842,9 @@ fn local_vertical_runtime_rolls_back_business_validation_failure_after_begin() {
     assert_eq!(runtime.wal().records.len(), 2);
     assert_eq!(runtime.wal().records[0].1, WalRecordKind::TxBegin);
     assert_eq!(runtime.wal().records[1].1, WalRecordKind::TxRollback);
-    assert!(
-        runtime.wal().records[1]
-            .3
-            .starts_with(b"andromeda.exec.business-validation-failed.v1\0")
-    );
+    assert!(runtime.wal().records[1]
+        .3
+        .starts_with(b"andromeda.exec.business-validation-failed.v1\0"));
     assert_eq!(runtime.wal().durable_lsn, runtime.wal().records[1].0);
 }
 
@@ -901,11 +885,9 @@ fn inventory_reserve_stock_business_failure_rolls_back_after_authorized_begin_wi
         error.message(),
     );
     assert!(rejection_evidence.has_business_rule_evidence());
-    assert!(
-        rejection_evidence
-            .decision_trace(TraceId::new(8200))
-            .has_explanation()
-    );
+    assert!(rejection_evidence
+        .decision_trace(TraceId::new(8200))
+        .has_explanation());
 
     let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
     let request = InvocationRequest {
@@ -948,23 +930,17 @@ fn inventory_reserve_stock_business_failure_rolls_back_after_authorized_begin_wi
         runtime.wal().records()[1].header.kind,
         WalRecordKind::TxRollback
     );
-    assert!(
-        runtime.wal().records()[1]
-            .payload
-            .starts_with(b"andromeda.exec.business-validation-failed.v1\0")
-    );
-    assert!(
-        std::str::from_utf8(&runtime.wal().records()[1].payload)
-            .unwrap()
-            .contains("insufficient inventory stock")
-    );
-    assert!(
-        !runtime
-            .wal()
-            .records()
-            .iter()
-            .any(|record| record.header.kind == WalRecordKind::TxCommit)
-    );
+    assert!(runtime.wal().records()[1]
+        .payload
+        .starts_with(b"andromeda.exec.business-validation-failed.v1\0"));
+    assert!(std::str::from_utf8(&runtime.wal().records()[1].payload)
+        .unwrap()
+        .contains("insufficient inventory stock"));
+    assert!(!runtime
+        .wal()
+        .records()
+        .iter()
+        .any(|record| record.header.kind == WalRecordKind::TxCommit));
     assert!(outcome.authorization_trace.is_some());
 }
 

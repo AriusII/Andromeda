@@ -1,7 +1,106 @@
 #![forbid(unsafe_code)]
+#![doc = r#"
+# Andromeda Protocol
+
+Wire protocol types and codec utilities for RPC communication.
+
+## Overview
+
+The protocol module defines the on-the-wire message types used for client-server
+communication with the Andromeda database engine. It provides:
+- **Frame Envelopes**: Protocol wrappers with contract binding and identifiers
+- **RPC Streams**: Validated sequences of metadata, batches, and completions
+- **Error Messages**: Structured error responses with retry hints
+- **Payload Types**: Discriminator types for different message categories
+
+## Core Concepts
+
+### Frame Envelopes
+
+`FrameEnvelope` wraps a serialized payload with essential metadata:
+- `protocol_version`: Locks protocol version for compatibility
+- `contract_hash`: Binds message to a procedure contract
+- `catalog_version`: References the catalog version at request time
+- `request_id`, `session_id`, `tx_id`: Correlation and transaction IDs
+- `payload_kind`: Indicates the message type
+- `payload`: Serialized data (typically protobuf)
+
+### RPC Streams
+
+A complete RPC result stream consists of:
+1. **RpcMetadata**: Result schema and streaming mode
+2. **RpcBatch*** : Zero or more data batches
+3. **RpcCompletion**: Summary and transaction outcome
+
+`FrameEnvelope::validate_rpc_stream_sequence()` enforces ordering constraints.
+
+### Error Handling
+
+`ErrorEnvelope` provides:
+- Error family classification (Protocol, Authentication, Transaction, etc.)
+- Transaction effect (NoTransaction, RollbackRequired, FailStop)
+- Retry disposition (NotRetryable, Retryable, RetryAfter, Backpressure)
+- Backpressure hints for load shedding
+
+### Protocol Versions
+
+Protocol version locking ensures:
+- Client and server speak the same wire format
+- No mid-stream format changes
+- Clean upgrade paths between versions
+
+## Modules
+
+| Module | Purpose |
+|--------|---------|
+| `envelope_frame` | Frame envelope and basic operations |
+| `envelope_validation` | RPC stream sequence validation |
+| `errors` | Error types and retry policies |
+| `completion` | RPC completion and transaction outcome |
+| `version` | Protocol version management |
+| `generated` | Generated protobuf code and descriptors |
+| `payload` | Payload kind discriminators |
+| `structured` | Structured data types |
+| `manifest` | Protocol manifest and metadata |
+
+## Safety
+
+This crate forbids unsafe code (`#![forbid(unsafe_code)]`).
+
+## Examples
+
+### Creating an Execute Request
+
+```ignore
+use andromeda_proto::FrameEnvelope;
+use andromeda_core::{ContractHash, CatalogVersion, RequestId, SessionId};
+
+let envelope = FrameEnvelope::rpc_execute_request(
+    ContractHash::test_vector(1),
+    CatalogVersion::new(1),
+    RequestId::new(100),
+    SessionId::new(200),
+    None,
+    b"parameter_data".to_vec(),
+)?;
+```
+
+### Validating an RPC Stream
+
+```ignore
+use andromeda_proto::{FrameEnvelope, RpcResultStreamMetadataPolicy};
+
+FrameEnvelope::validate_rpc_stream_sequence_with_metadata_policy(
+    &[metadata, batch, completion],
+    RpcResultStreamMetadataPolicy::RowBatchRequired,
+)?;
+```
+
+"#]
 
 mod completion;
-mod envelope;
+mod envelope_frame;
+mod envelope_validation;
 mod errors;
 pub mod generated;
 mod manifest;
@@ -10,12 +109,13 @@ mod structured;
 mod version;
 
 pub use completion::*;
-pub use envelope::*;
+pub use envelope_frame::FrameEnvelope;
+pub use envelope_validation::RpcResultStreamMetadataPolicy;
 pub use errors::*;
 pub use generated::{
-    CONTRACT_PACKAGE, DESCRIPTOR_SET_HASH_ALGORITHM, PROTOCOL_FRAME_ENVELOPE_TYPE,
-    PROTOCOL_PACKAGE, decode_generated_message, descriptor_set_bytes, descriptor_set_hash,
-    encode_generated_message, frame_envelope_hash, protocol_layout,
+    decode_generated_message, descriptor_set_bytes, descriptor_set_hash, encode_generated_message,
+    frame_envelope_hash, protocol_layout, CONTRACT_PACKAGE, DESCRIPTOR_SET_HASH_ALGORITHM,
+    PROTOCOL_FRAME_ENVELOPE_TYPE, PROTOCOL_PACKAGE,
 };
 pub use manifest::*;
 pub use payload::*;

@@ -1,3 +1,8 @@
+//! Protocol version management and validation.
+//!
+//! This module manages protocol version compatibility, ensuring that client and server
+//! communicate using compatible versions of the wire format.
+
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -63,18 +63,16 @@ fn mvcc_v0_hides_inflight_and_rolled_back_creators_until_durable_commit_is_visib
     statuses
         .record(creator, TransactionStatus::InFlight)
         .unwrap();
-    assert!(
-        !row.visible_in_snapshot(&repeatable_snapshot, &statuses)
-            .unwrap()
-    );
+    assert!(!row
+        .visible_in_snapshot(&repeatable_snapshot, &statuses)
+        .unwrap());
 
     statuses
         .record(creator, TransactionStatus::RolledBack)
         .unwrap();
-    assert!(
-        !row.visible_in_snapshot(&repeatable_snapshot, &statuses)
-            .unwrap()
-    );
+    assert!(!row
+        .visible_in_snapshot(&repeatable_snapshot, &statuses)
+        .unwrap());
 
     statuses
         .record(creator, TransactionStatus::Committed)
@@ -120,18 +118,16 @@ fn mvcc_v0_ignores_inflight_and_rolled_back_delete_intents() {
     statuses
         .record(deleter, TransactionStatus::InFlight)
         .unwrap();
-    assert!(
-        row.visible_in_snapshot(&snapshot_with_delete_in_flight, &statuses)
-            .unwrap()
-    );
+    assert!(row
+        .visible_in_snapshot(&snapshot_with_delete_in_flight, &statuses)
+        .unwrap());
 
     statuses
         .record(deleter, TransactionStatus::RolledBack)
         .unwrap();
-    assert!(
-        row.visible_in_snapshot(&snapshot_with_delete_in_flight, &statuses)
-            .unwrap()
-    );
+    assert!(row
+        .visible_in_snapshot(&snapshot_with_delete_in_flight, &statuses)
+        .unwrap());
 
     statuses
         .record(deleter, TransactionStatus::Committed)
@@ -150,8 +146,7 @@ fn mvcc_v0_ignores_inflight_and_rolled_back_delete_intents() {
         Vec::<TransactionId>::new(),
     )
     .unwrap();
-    assert!(
-        !row.visible_in_snapshot(&snapshot_after_delete, &statuses)
-            .unwrap()
-    );
+    assert!(!row
+        .visible_in_snapshot(&snapshot_after_delete, &statuses)
+        .unwrap());
 }

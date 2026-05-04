@@ -489,10 +489,9 @@ mod tests {
             Vec::<TransactionId>::new(),
         )
         .unwrap();
-        assert!(
-            !row.visible_in_snapshot(&snapshot_after_delete, &statuses)
-                .unwrap()
-        );
+        assert!(!row
+            .visible_in_snapshot(&snapshot_after_delete, &statuses)
+            .unwrap());
     }
 
     #[test]

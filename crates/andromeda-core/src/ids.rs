@@ -1,3 +1,33 @@
+//! Unique identifier types for routing and correlation.
+//!
+//! This module defines stable, comparable identifier types used throughout
+//! the Andromeda system for tracking requests, sessions, transactions, and
+//! catalog objects.
+//!
+//! ## ID Types
+//!
+//! All regular ID types (`*Id`) wrap `u64`:
+//! - **RequestId**: Correlates related messages for a single RPC call
+//! - **SessionId**: Groups requests from a single client connection
+//! - **TransactionId**: Unique reference for a transaction
+//! - **CatalogObjectId**: References objects in the system catalog
+//! - **CatalogVersion**: Increments when catalog objects change
+//! - **DatabaseId**: References a database instance
+//! - **InvocationId**: References a single invocation/execution
+//! - **NamespaceId**: References a schema or namespace
+//! - **ProcedureId**: References a procedure in the catalog
+//!
+//! ## ContractHash
+//!
+//! `ContractHash` is a 32-byte stable hash of a procedure's contract,
+//! computed deterministically from the schema and policies.
+//! Zero hash is reserved and indicates "no contract binding".
+//!
+//! Contract hashes enable:
+//! - Protocol caching by hash
+//! - Contract evolution tracking
+//! - Change impact analysis
+
 use crate::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use std::fmt;
 

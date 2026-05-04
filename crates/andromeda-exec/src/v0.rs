@@ -7,18 +7,18 @@ use andromeda_observe::{
     ProtocolCorrelation, TraceEvent,
 };
 use andromeda_quic::{
-    FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader, FrameType,
-    ResultStreamMetadataPolicy, StreamRole, validate_result_stream_sequence_with_metadata_policy,
+    validate_result_stream_sequence_with_metadata_policy, FrameBytes, FrameCodec, FrameHeader,
+    FrameType, ResultStreamMetadataPolicy, StreamRole, FRAME_HEADER_CRC_UNCHECKED,
 };
 use andromeda_srpl::{
-    ExecutableProcedurePlan, bind_executable_procedure_plan, compile_narrow_procedure_signature,
+    bind_executable_procedure_plan, compile_narrow_procedure_signature, ExecutableProcedurePlan,
 };
 use andromeda_storage::Lsn;
 
 use crate::{
-    InventoryReserveStockExecutor, InventoryStock, InvocationContext, InvocationRequest,
-    InvocationWal, LocalVerticalRuntime, ReserveStockCommand, ReserveStockEffect,
-    VerticalInvocationOutcome, transaction_id_for_invocation,
+    transaction_id_for_invocation, InventoryReserveStockExecutor, InventoryStock,
+    InvocationContext, InvocationRequest, InvocationWal, LocalVerticalRuntime, ReserveStockCommand,
+    ReserveStockEffect, VerticalInvocationOutcome,
 };
 
 const V0_RPC_EXECUTE_PAYLOAD_DOMAIN: &[u8] = b"andromeda.exec.v0.inventory-reserve-stock-rpc.v1";

@@ -1,3 +1,12 @@
+//! Point-in-time catalog snapshots.
+//!
+//! This module provides catalog snapshots - consistent views of all object definitions
+//! at a specific catalog version. Snapshots enable:
+//! - Consistent reads across related objects
+//! - Transaction isolation
+//! - Cache invalidation tracking
+//! - Definition rollback support
+
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogObjectId, CatalogVersion,
     DatabaseId, NamespaceId,

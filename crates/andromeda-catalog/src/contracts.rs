@@ -1,3 +1,39 @@
+//! Procedure contracts and contract compatibility checking.
+//!
+//! This module defines procedure contracts, which specify the callable interface
+//! and protocol requirements for procedures in the catalog.
+//!
+//! ## Contract Structure
+//!
+//! A `ProcedureContract` includes:
+//! - Input and result stream schemas (columns)
+//! - Protocol layout (protobuf descriptors)
+//! - Access mode and isolation policy
+//! - Error handling policy
+//! - Compatibility policy (how changes are allowed)
+//! - Multi-result policy (single vs. multiple streams)
+//!
+//! ## Contract Stability
+//!
+//! Contract hashes provide deterministic fingerprints computed from:
+//! - Procedure name
+//! - Input/output schemas
+//! - Transaction policies
+//! - Error policies
+//! - All other contract details
+//!
+//! The canonical hash ensures that compatible procedure versions
+//! have identical hashes, enabling protocol-level caching.
+//!
+//! ## Compatibility Checking
+//!
+//! Two compatibility policies are available:
+//! - **ExactHash**: Procedure contracts must be identical
+//! - **AdditiveOnly**: Contracts may add result streams but not modify existing ones
+//!
+//! Use `diagnose_procedure_contract_compatibility()` to check whether
+//! a procedure update is compatible with existing versions.
+
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, ColumnDescriptor,
     ContractHash, DecimalType, FloatMode, FloatType, ProcedureId, ScalarType, TextEncoding,
@@ -5,9 +41,9 @@ use andromeda_core::{
 };
 
 use crate::{
-    CatalogObjectRef, ObjectKind,
     names::QualifiedName,
     objects::{validate_columns, validate_columns_allow_empty},
+    CatalogObjectRef, ObjectKind,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

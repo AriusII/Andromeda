@@ -4,16 +4,16 @@ use andromeda_observe::{
 };
 use andromeda_storage::publication::DatabaseManifest;
 use andromeda_storage::write_ahead_log::codec::{
-    WalScanStopReason, encode_wal_record, scan_wal_records, scan_wal_records_from,
+    encode_wal_record, scan_wal_records, scan_wal_records_from, WalScanStopReason,
 };
 use andromeda_storage::write_ahead_log::record::{WalRecord, WalRecordKind};
 use andromeda_storage::{
-    AllocationId, CoreIoPlacementPolicy, CoreIoPlacementRequest, DurableTransactionState, ExtentId,
-    InMemoryWal, IoPathClass, IoUseClass, Lsn, ObjectId, OperationalProfile, PageId, PageSize,
-    PipelineStage, PlacementDecision, PublishedColdSegment, RecoveryPlan, RedoRecordDecision,
-    SegmentDescriptor, SegmentHeader, SegmentId, SegmentMutation, SegmentState, SegmentTrailer,
-    StartupMode, StorageIoBudgetScope, StorageTier, StorageWorkloadClass,
-    classify_durable_transactions,
+    classify_durable_transactions, AllocationId, CoreIoPlacementPolicy, CoreIoPlacementRequest,
+    DurableTransactionState, ExtentId, InMemoryWal, IoPathClass, IoUseClass, Lsn, ObjectId,
+    OperationalProfile, PageId, PageSize, PipelineStage, PlacementDecision, PublishedColdSegment,
+    RecoveryPlan, RedoRecordDecision, SegmentDescriptor, SegmentHeader, SegmentId, SegmentMutation,
+    SegmentState, SegmentTrailer, StartupMode, StorageIoBudgetScope, StorageTier,
+    StorageWorkloadClass,
 };
 
 fn tx_record(lsn: u64, previous_lsn: Option<u64>, payload: &[u8]) -> WalRecord {
@@ -400,11 +400,9 @@ fn recovery_continuity_respects_in_memory_flush_boundary() {
         durable_records.last().map(|record| record.header.lsn),
         Some(rollback_row_lsn)
     );
-    assert!(
-        durable_records
-            .iter()
-            .all(|record| record.header.lsn < unflushed_rollback_terminal)
-    );
+    assert!(durable_records
+        .iter()
+        .all(|record| record.header.lsn < unflushed_rollback_terminal));
 
     let plan = RecoveryPlan::from_manifest_and_wal(
         &manifest(Lsn::new(1)),
@@ -595,24 +593,20 @@ fn recovery_requires_manifest_start_to_be_covered_and_anchored() {
         None,
         b"page",
     )];
-    assert!(
-        RecoveryPlan::from_manifest_and_wal(
-            &manifest(Lsn::new(5)),
-            StartupMode::SafeStart,
-            &missing_start,
-        )
-        .is_err()
-    );
+    assert!(RecoveryPlan::from_manifest_and_wal(
+        &manifest(Lsn::new(5)),
+        StartupMode::SafeStart,
+        &missing_start,
+    )
+    .is_err());
 
     let unanchored_start = vec![record(WalRecordKind::PageAllocate, 5, None, None, b"page")];
-    assert!(
-        RecoveryPlan::from_manifest_and_wal(
-            &manifest(Lsn::new(5)),
-            StartupMode::SafeStart,
-            &unanchored_start,
-        )
-        .is_err()
-    );
+    assert!(RecoveryPlan::from_manifest_and_wal(
+        &manifest(Lsn::new(5)),
+        StartupMode::SafeStart,
+        &unanchored_start,
+    )
+    .is_err());
 
     let anchored_start = vec![record(
         WalRecordKind::PageAllocate,
@@ -710,14 +704,12 @@ fn recovery_from_scan_rejects_non_recoverable_chain_boundaries() {
     let scan = scan_wal_records(&encode_records(&records));
 
     assert_eq!(scan.stopped.unwrap().reason, WalScanStopReason::LsnGap);
-    assert!(
-        RecoveryPlan::from_manifest_and_wal_scan(
-            &manifest(Lsn::new(1)),
-            StartupMode::SafeStart,
-            &scan,
-        )
-        .is_err()
-    );
+    assert!(RecoveryPlan::from_manifest_and_wal_scan(
+        &manifest(Lsn::new(1)),
+        StartupMode::SafeStart,
+        &scan,
+    )
+    .is_err());
 }
 
 #[test]

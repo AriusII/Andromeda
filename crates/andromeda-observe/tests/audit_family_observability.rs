@@ -119,11 +119,9 @@ fn admin_operation_family_rejects_application_surface_and_permission_drift() {
         ),
     )
     .unwrap_err();
-    assert!(
-        application_surface
-            .message()
-            .contains("application surface cannot carry admin operation")
-    );
+    assert!(application_surface
+        .message()
+        .contains("application surface cannot carry admin operation"));
 
     let permission_drift = EventEnvelope::new(
         EventId::new(4),
@@ -143,11 +141,9 @@ fn admin_operation_family_rejects_application_surface_and_permission_drift() {
         ),
     )
     .unwrap_err();
-    assert!(
-        permission_drift
-            .message()
-            .contains("permission evidence matching")
-    );
+    assert!(permission_drift
+        .message()
+        .contains("permission evidence matching"));
 }
 
 #[test]
@@ -208,11 +204,9 @@ fn audit_families_reject_missing_schema_identity_transaction_and_secret_evidence
         ),
     )
     .unwrap_err();
-    assert!(
-        denied_with_transaction
-            .message()
-            .contains("must not include transaction")
-    );
+    assert!(denied_with_transaction
+        .message()
+        .contains("must not include transaction"));
 
     let secret_text = EventEnvelope::new(
         EventId::new(8),

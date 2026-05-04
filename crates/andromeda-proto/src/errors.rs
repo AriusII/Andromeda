@@ -1,3 +1,7 @@
+//! Protocol error types and retry policies.
+//!
+//! This module defines error envelopes and retry disposition logic for protocol-level errors.
+
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId, SessionId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

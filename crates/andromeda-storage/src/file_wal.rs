@@ -6,10 +6,10 @@ use std::{
 };
 
 use crate::{
-    ConceptualRedoPlan, DatabaseManifest, DurableTransactionState, Lsn, RecoveryPlan,
-    RedoRecordDecision, RedoRecordPlan, StartupMode, WAL_BYTE_ORDER_LITTLE_ENDIAN,
-    WAL_FORMAT_VERSION, WalRecord, WalRecordKind, WalScanResult, WalScanStop, WalScanStopReason,
-    encode_wal_record, scan_wal_records, summarize_transactions_from_records,
+    encode_wal_record, scan_wal_records, summarize_transactions_from_records, ConceptualRedoPlan,
+    DatabaseManifest, DurableTransactionState, Lsn, RecoveryPlan, RedoRecordDecision,
+    RedoRecordPlan, StartupMode, WalRecord, WalRecordKind, WalScanResult, WalScanStop,
+    WalScanStopReason, WAL_BYTE_ORDER_LITTLE_ENDIAN, WAL_FORMAT_VERSION,
 };
 
 pub const FILE_WAL_MAGIC: u64 = 0x314c_4157_5244_4e41;
@@ -782,7 +782,11 @@ fn fnv64_nonzero(bytes: &[u8]) -> u64 {
         state ^= u64::from(*byte);
         state = state.wrapping_mul(FNV_PRIME);
     }
-    if state == 0 { 1 } else { state }
+    if state == 0 {
+        1
+    } else {
+        state
+    }
 }
 
 fn io_error(action: &str, error: std::io::Error) -> AndromedaError {

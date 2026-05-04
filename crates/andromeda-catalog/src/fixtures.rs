@@ -1,3 +1,9 @@
+//! Test fixtures and example data.
+//!
+//! This module provides convenient test data and fixtures for unit and integration tests.
+//! It includes example catalog objects, procedures, and contracts that can be used
+//! consistently across the test suite.
+
 use andromeda_core::{
     AndromedaResult, CatalogObjectId, CatalogVersion, ColumnDescriptor, DatabaseId, NamespaceId,
     ProcedureId, ScalarType, TypeDescriptor,
@@ -288,21 +294,18 @@ mod tests {
 
         assert_eq!(plan.next_version, CatalogVersion::new(1));
         assert_eq!(plan.created_objects.len(), 3);
-        assert!(
-            plan.created_objects
-                .iter()
-                .any(|object| object.object_id == INVENTORY_PRODUCT_STOCK_OBJECT_ID)
-        );
-        assert!(
-            plan.created_objects
-                .iter()
-                .any(|object| object.object_id == INVENTORY_RESERVATION_OBJECT_ID)
-        );
-        assert!(
-            plan.created_objects
-                .iter()
-                .any(|object| object.object_id == INVENTORY_RESERVE_STOCK_OBJECT_ID)
-        );
+        assert!(plan
+            .created_objects
+            .iter()
+            .any(|object| object.object_id == INVENTORY_PRODUCT_STOCK_OBJECT_ID));
+        assert!(plan
+            .created_objects
+            .iter()
+            .any(|object| object.object_id == INVENTORY_RESERVATION_OBJECT_ID));
+        assert!(plan
+            .created_objects
+            .iter()
+            .any(|object| object.object_id == INVENTORY_RESERVE_STOCK_OBJECT_ID));
     }
 
     #[test]

@@ -1531,12 +1531,12 @@ impl EventEnvelope {
     fn validate_transaction_correlation(&self) -> AndromedaResult<()> {
         match &self.event {
             TraceEvent::WalEvent(trace) => {
-                if let Some(transaction_id) = trace.transaction_id
-                    && self.correlation.transaction_id != Some(transaction_id)
-                {
-                    return Err(observe_error(
-                        "WAL event transaction_id correlation must match WAL trace payload",
-                    ));
+                if let Some(transaction_id) = trace.transaction_id {
+                    if self.correlation.transaction_id != Some(transaction_id) {
+                        return Err(observe_error(
+                            "WAL event transaction_id correlation must match WAL trace payload",
+                        ));
+                    }
                 }
 
                 if trace.operation == WalOperation::Flush
@@ -1584,12 +1584,12 @@ impl EventEnvelope {
     }
 
     fn validate_catalog_correlation(&self) -> AndromedaResult<()> {
-        if let TraceEvent::Manifest(trace) = &self.event
-            && self.correlation.catalog_version != Some(trace.catalog_version)
-        {
-            return Err(observe_error(
-                "manifest traces require matching catalog_version correlation",
-            ));
+        if let TraceEvent::Manifest(trace) = &self.event {
+            if self.correlation.catalog_version != Some(trace.catalog_version) {
+                return Err(observe_error(
+                    "manifest traces require matching catalog_version correlation",
+                ));
+            }
         }
 
         Ok(())
@@ -1956,12 +1956,12 @@ impl InMemoryEventSequence {
         expected: Option<T>,
         observed: Option<T>,
     ) -> AndromedaResult<()> {
-        if let Some(expected) = expected
-            && observed != Some(expected)
-        {
-            return Err(observe_error(format!(
-                "procedure lifecycle {label} correlation must remain stable across the sequence",
-            )));
+        if let Some(expected) = expected {
+            if observed != Some(expected) {
+                return Err(observe_error(format!(
+                    "procedure lifecycle {label} correlation must remain stable across the sequence",
+                )));
+            }
         }
 
         Ok(())
@@ -2439,44 +2439,38 @@ mod tests {
             }),
         )
         .unwrap_err();
-        assert!(
-            recovery_without_lsn
-                .message()
-                .contains("recovery startup traces")
-        );
+        assert!(recovery_without_lsn
+            .message()
+            .contains("recovery startup traces"));
 
-        assert!(
-            EventEnvelope::new(
-                EventId::new(6),
-                EventCorrelation {
-                    transaction_id: Some(TransactionId::new(8)),
-                    durable_lsn: Some(9),
-                    ..EventCorrelation::empty()
-                },
-                TraceEvent::CommitVisible(CommitVisibleTrace {
-                    trace_id: TraceId::new(7),
-                    transaction_id: TransactionId::new(8),
-                    durable_commit_lsn: 9,
-                }),
-            )
-            .is_ok()
-        );
+        assert!(EventEnvelope::new(
+            EventId::new(6),
+            EventCorrelation {
+                transaction_id: Some(TransactionId::new(8)),
+                durable_lsn: Some(9),
+                ..EventCorrelation::empty()
+            },
+            TraceEvent::CommitVisible(CommitVisibleTrace {
+                trace_id: TraceId::new(7),
+                transaction_id: TransactionId::new(8),
+                durable_commit_lsn: 9,
+            }),
+        )
+        .is_ok());
 
-        assert!(
-            EventEnvelope::new(
-                EventId::new(10),
-                EventCorrelation {
-                    durable_lsn: Some(12),
-                    ..EventCorrelation::empty()
-                },
-                TraceEvent::RecoveryStartup(RecoveryTrace {
-                    trace_id: TraceId::new(11),
-                    last_durable_lsn: 12,
-                    corruption_boundary_lsn: Some(13),
-                }),
-            )
-            .is_ok()
-        );
+        assert!(EventEnvelope::new(
+            EventId::new(10),
+            EventCorrelation {
+                durable_lsn: Some(12),
+                ..EventCorrelation::empty()
+            },
+            TraceEvent::RecoveryStartup(RecoveryTrace {
+                trace_id: TraceId::new(11),
+                last_durable_lsn: 12,
+                corruption_boundary_lsn: Some(13),
+            }),
+        )
+        .is_ok());
     }
 
     #[test]
@@ -2493,11 +2487,9 @@ mod tests {
             }),
         )
         .unwrap_err();
-        assert!(
-            append_without_transaction_correlation
-                .message()
-                .contains("transaction_id correlation")
-        );
+        assert!(append_without_transaction_correlation
+            .message()
+            .contains("transaction_id correlation"));
 
         let flush = EventEnvelope::new(
             EventId::new(24),

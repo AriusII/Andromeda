@@ -1,3 +1,8 @@
+//! RPC completion and transaction outcome types.
+//!
+//! This module defines the completion envelope which concludes an RPC stream,
+//! including transaction outcome, row counts, and durability evidence.
+
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId, SessionId, TransactionId,
 };
@@ -39,13 +44,13 @@ impl ResultRowCountSummary {
             ));
         }
 
-        if let Some(exact) = self.row_count_exact
-            && exact != self.rows_emitted
-        {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
-                "exact result row count must match emitted rows",
-            ));
+        if let Some(exact) = self.row_count_exact {
+            if exact != self.rows_emitted {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Contract,
+                    "exact result row count must match emitted rows",
+                ));
+            }
         }
 
         Ok(())

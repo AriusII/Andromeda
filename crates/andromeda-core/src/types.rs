@@ -1,3 +1,32 @@
+//! SQL type system with validation rules.
+//!
+//! This module defines the SQL type descriptors used to describe database values.
+//! Each type combines a `ScalarType` with an `AbsencePolicy` to indicate
+//! whether null values are permitted.
+//!
+//! ## Scalar Types
+//!
+//! - **Integer**: I8, I16, I32, I64, I128 (signed) or U8, U16, U32, U64, U128 (unsigned)
+//! - **Decimal**: Fixed-precision decimal numbers with precision and scale
+//! - **Float**: IEEE floating-point with determinism mode options
+//! - **Bool**: True/false values
+//! - **Text**: Variable-length strings with encoding and collation
+//! - **Timestamp**: Database timestamps with different derivation methods
+//!
+//! ## Absence Policy
+//!
+//! - **Required**: NULL values are not permitted
+//! - **ExplicitOptional**: NULL values are explicitly allowed
+//!
+//! ## Validation
+//!
+//! Types validate:
+//! - Decimal precision/scale relationships
+//! - Float determinism constraints
+//! - Text encoding and length constraints
+//! - Column name non-emptiness
+//! - Column ordinal density and zero-basedness
+
 use crate::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -169,14 +198,12 @@ mod tests {
 
     #[test]
     fn decimal_custom_shape_is_checked() {
-        assert!(
-            DecimalType::Custom {
-                precision: 9,
-                scale: 2,
-            }
-            .validate()
-            .is_ok()
-        );
+        assert!(DecimalType::Custom {
+            precision: 9,
+            scale: 2,
+        }
+        .validate()
+        .is_ok());
         assert_eq!(
             DecimalType::Custom {
                 precision: 2,

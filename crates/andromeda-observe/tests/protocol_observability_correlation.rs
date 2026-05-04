@@ -58,11 +58,9 @@ fn denied_security_paths_are_auditable_without_transaction_evidence_or_secrets()
         }),
     )
     .unwrap_err();
-    assert!(
-        tx_implied
-            .message()
-            .contains("must not include transaction")
-    );
+    assert!(tx_implied
+        .message()
+        .contains("must not include transaction"));
 
     let secret_leak = EventEnvelope::new(
         EventId::new(22),
@@ -207,11 +205,9 @@ fn incomplete_protocol_evidence_rejects() {
         }),
     )
     .unwrap_err();
-    assert!(
-        missing_request
-            .message()
-            .contains("request_id and session_id")
-    );
+    assert!(missing_request
+        .message()
+        .contains("request_id and session_id"));
 
     let missing_durable_lsn = EventEnvelope::new(
         EventId::new(2),
@@ -316,11 +312,9 @@ fn incomplete_protocol_evidence_rejects() {
         }),
     )
     .unwrap_err();
-    assert!(
-        missing_schema_layout
-            .message()
-            .contains("schema and layout")
-    );
+    assert!(missing_schema_layout
+        .message()
+        .contains("schema and layout"));
 }
 
 #[test]
@@ -348,10 +342,8 @@ fn in_memory_event_sink_returns_explicit_errors_instead_of_silent_drops() {
     };
 
     let validation_err = validating_sink.emit(invalid_event).unwrap_err();
-    assert!(
-        validation_err
-            .message()
-            .contains("stream_id and frame_type")
-    );
+    assert!(validation_err
+        .message()
+        .contains("stream_id and frame_type"));
     assert!(validating_sink.events().is_empty());
 }

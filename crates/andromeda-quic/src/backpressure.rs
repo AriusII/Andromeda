@@ -1,17 +1,29 @@
+//! Backpressure signaling for flow control and resource management.
+
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId};
 
+/// Reason for backpressure signal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BackpressureReason {
+    /// Receive buffer is saturated.
     ReceiveBufferSaturated,
+    /// Client is processing slowly.
     SlowClient,
+    /// Execution queue is saturated.
     ExecutionQueueSaturated,
+    /// WAL flush is lagging.
     WalFlushLag,
+    /// Hot store pressure.
     HotStorePressure,
+    /// Temporary store quota exceeded.
     TempStoreQuota,
+    /// Result spool is growing.
     ResultSpoolGrowth,
+    /// Catalog lock contention.
     CatalogLockContention,
 }
 
+/// Backpressure signal with retry guidance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BackpressureSignal {
     pub reason: BackpressureReason,
@@ -20,6 +32,7 @@ pub struct BackpressureSignal {
 }
 
 impl BackpressureReason {
+    /// Returns true if this reason is scoped to a specific request.
     pub const fn is_request_scoped(self) -> bool {
         matches!(
             self,
@@ -29,9 +42,12 @@ impl BackpressureReason {
 }
 
 impl BackpressureSignal {
+    /// Minimum retry delay in milliseconds.
     pub const MIN_RETRY_AFTER_MILLIS: u64 = 1;
+    /// Maximum retry delay in milliseconds.
     pub const MAX_RETRY_AFTER_MILLIS: u64 = 60_000;
 
+    /// Validates retry policy constraints.
     pub fn validate_retry_policy(&self) -> AndromedaResult<()> {
         let Some(retry_after_millis) = self.retry_after_millis else {
             return Err(AndromedaError::new(

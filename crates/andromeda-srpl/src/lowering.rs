@@ -1,7 +1,7 @@
 use andromeda_catalog::{
-    CatalogDefinition, CatalogObjectRef, CatalogSnapshot, ObjectKind, ProcedureContract,
-    ProcedureContractCandidate, QualifiedName, ResultStreamContract, StructuredObjectDefinition,
-    TableDefinition, inventory_reserve_stock_contract_candidate,
+    inventory_reserve_stock_contract_candidate, CatalogDefinition, CatalogObjectRef,
+    CatalogSnapshot, ObjectKind, ProcedureContract, ProcedureContractCandidate, QualifiedName,
+    ResultStreamContract, StructuredObjectDefinition, TableDefinition,
 };
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, ColumnDescriptor,

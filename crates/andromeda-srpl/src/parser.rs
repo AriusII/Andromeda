@@ -2,9 +2,9 @@ use andromeda_catalog::QualifiedName;
 use andromeda_core::{ScalarType, TypeDescriptor};
 
 use crate::{
-    BusinessOperationAst, BusinessOperationKindAst, Cardinality, DiagnosticPhase, FieldAst,
-    MAX_SRPL_BODY_OPERATIONS, ProcedureAst, ProcedureBodyAst, ResultStreamAst, SourceSpan, Spanned,
-    SrplDiagnostic, Token, TokenKind, lex,
+    lex, BusinessOperationAst, BusinessOperationKindAst, Cardinality, DiagnosticPhase, FieldAst,
+    ProcedureAst, ProcedureBodyAst, ResultStreamAst, SourceSpan, Spanned, SrplDiagnostic, Token,
+    TokenKind, MAX_SRPL_BODY_OPERATIONS,
 };
 
 pub fn parse_procedure_signature(input: &str) -> Result<ProcedureAst, SrplDiagnostic> {
@@ -613,10 +613,8 @@ mod tests {
 
         assert_eq!(diagnostic.phase, DiagnosticPhase::Parsing);
         assert!(diagnostic.location.is_some());
-        assert!(
-            diagnostic
-                .message
-                .contains("unsupported SRPL body operation")
-        );
+        assert!(diagnostic
+            .message
+            .contains("unsupported SRPL body operation"));
     }
 }

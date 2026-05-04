@@ -1,3 +1,9 @@
+//! Qualified names for catalog objects.
+//!
+//! This module provides `QualifiedName` for hierarchical naming of catalog objects.
+//! Names are typically schema-qualified (e.g., "Inventory.Product") and are normalized
+//! to prevent ambiguity.
+
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]

@@ -1,12 +1,12 @@
 use andromeda_core::{AndromedaErrorKind, RequestId, SessionId, TransactionId};
 use andromeda_quic::{
-    AUTH_FRAME_CODE, CONTRACT_REQUEST_FRAME_CODE, CONTRACT_RESPONSE_FRAME_CODE, ERROR_FRAME_CODE,
-    FRAME_HEADER_CRC_UNCHECKED, FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP, FrameBytes, FrameFamily,
-    FrameHeader, FrameType, HELLO_FRAME_CODE, MAX_FRAME_PAYLOAD_LENGTH, RPC_BATCH_FRAME_CODE,
-    RPC_COMPLETION_FRAME_CODE, RPC_EXECUTE_REQUEST_FRAME_CODE, RPC_METADATA_FRAME_CODE,
-    ResultStreamMetadataPolicy, StreamRole, TELEMETRY_SOFT_SIGNAL_FRAME_CODE,
     validate_frame_sequence, validate_result_stream_sequence,
     validate_result_stream_sequence_with_metadata_policy, validate_single_frame_on_stream,
+    FrameBytes, FrameFamily, FrameHeader, FrameType, ResultStreamMetadataPolicy, StreamRole,
+    AUTH_FRAME_CODE, CONTRACT_REQUEST_FRAME_CODE, CONTRACT_RESPONSE_FRAME_CODE, ERROR_FRAME_CODE,
+    FRAME_HEADER_CRC_UNCHECKED, FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP, HELLO_FRAME_CODE,
+    MAX_FRAME_PAYLOAD_LENGTH, RPC_BATCH_FRAME_CODE, RPC_COMPLETION_FRAME_CODE,
+    RPC_EXECUTE_REQUEST_FRAME_CODE, RPC_METADATA_FRAME_CODE, TELEMETRY_SOFT_SIGNAL_FRAME_CODE,
 };
 
 fn header(frame_type: FrameType, payload_length: u64) -> FrameHeader {
@@ -81,13 +81,9 @@ fn frame_type_wire_codes_lockstep_with_payload_contract_codes() {
         assert_eq!(frame_type.wire_code(), code);
         assert_eq!(FrameType::try_from(code).unwrap(), frame_type);
         assert_eq!(frame_type.frame_family(), family);
-        assert!(
-            FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP
-                .iter()
-                .any(
-                    |(locked_type, locked_code)| *locked_type == frame_type && *locked_code == code
-                )
-        );
+        assert!(FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP
+            .iter()
+            .any(|(locked_type, locked_code)| *locked_type == frame_type && *locked_code == code));
     }
 
     assert_eq!(
@@ -98,11 +94,9 @@ fn frame_type_wire_codes_lockstep_with_payload_contract_codes() {
         FrameType::TelemetrySoftSignal.frame_family(),
         FrameFamily::Telemetry
     );
-    assert!(
-        FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP
-            .iter()
-            .all(|(_, code)| *code != TELEMETRY_SOFT_SIGNAL_FRAME_CODE)
-    );
+    assert!(FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP
+        .iter()
+        .all(|(_, code)| *code != TELEMETRY_SOFT_SIGNAL_FRAME_CODE));
     assert_eq!(
         FrameType::try_from(0).unwrap_err().kind(),
         AndromedaErrorKind::Protocol
@@ -223,13 +217,11 @@ fn quic_datagram_is_telemetry_only_and_never_contract_bound_payload() {
         );
     }
 
-    assert!(
-        validate_single_frame_on_stream(
-            &frame(FrameType::TelemetrySoftSignal, b"telemetry".to_vec()),
-            StreamRole::TelemetryDatagram,
-        )
-        .is_ok()
-    );
+    assert!(validate_single_frame_on_stream(
+        &frame(FrameType::TelemetrySoftSignal, b"telemetry".to_vec()),
+        StreamRole::TelemetryDatagram,
+    )
+    .is_ok());
 }
 
 #[test]
@@ -284,17 +276,17 @@ fn result_stream_sequence_requires_metadata_then_batch_then_completion() {
     let batch = frame(FrameType::RpcBatch, b"row".to_vec());
     let completion = frame(FrameType::RpcCompletion, Vec::new());
 
-    assert!(
-        validate_result_stream_sequence(&[metadata.clone(), batch.clone(), completion.clone(),])
-            .is_ok()
-    );
-    assert!(
-        validate_frame_sequence(
-            &[metadata.clone(), batch.clone(), completion.clone()],
-            StreamRole::ResultUnidirectional,
-        )
-        .is_ok()
-    );
+    assert!(validate_result_stream_sequence(&[
+        metadata.clone(),
+        batch.clone(),
+        completion.clone(),
+    ])
+    .is_ok());
+    assert!(validate_frame_sequence(
+        &[metadata.clone(), batch.clone(), completion.clone()],
+        StreamRole::ResultUnidirectional,
+    )
+    .is_ok());
 
     assert_eq!(
         validate_result_stream_sequence(&[metadata.clone(), completion.clone()])
@@ -348,18 +340,14 @@ fn zero_row_or_mutation_only_result_completion_requires_explicit_metadata_policy
         .kind(),
         AndromedaErrorKind::Protocol
     );
-    assert!(
-        validate_result_stream_sequence_with_metadata_policy(
-            &sequence,
-            ResultStreamMetadataPolicy::ZeroRowCompletionAllowed,
-        )
-        .is_ok()
-    );
-    assert!(
-        validate_result_stream_sequence_with_metadata_policy(
-            &sequence,
-            ResultStreamMetadataPolicy::MutationOnly,
-        )
-        .is_ok()
-    );
+    assert!(validate_result_stream_sequence_with_metadata_policy(
+        &sequence,
+        ResultStreamMetadataPolicy::ZeroRowCompletionAllowed,
+    )
+    .is_ok());
+    assert!(validate_result_stream_sequence_with_metadata_policy(
+        &sequence,
+        ResultStreamMetadataPolicy::MutationOnly,
+    )
+    .is_ok());
 }

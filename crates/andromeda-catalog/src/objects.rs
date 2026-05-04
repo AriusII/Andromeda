@@ -1,3 +1,31 @@
+//! Catalog object definitions and schema validation.
+//!
+//! This module defines the types for database objects stored in the catalog,
+//! including tables, procedures, structured objects, and enums.
+//!
+//! ## Object Kinds
+//!
+//! - **Table**: A named relation with columns and constraints
+//! - **Procedure**: A callable operation with versioned contract
+//! - **StructuredObject**: A named tuple type with fields
+//! - **Enum**: A named enumeration with discrete values
+//!
+//! Each object is identified by a `CatalogObjectId` and versioned by a `CatalogVersion`.
+//!
+//! ## Object References and Bindings
+//!
+//! `CatalogObjectRef` provides a snapshot view of an object at a specific catalog version.
+//! `CatalogObjectBinding` represents a dependency relationship between objects.
+//!
+//! ## Schema Validation
+//!
+//! All object definitions validate:
+//! - Column schemas (types, names, ordering)
+//! - Constraint consistency
+//! - Uniqueness requirements
+//!
+//! Shape hashing provides stable fingerprints for schema evolution tracking.
+
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogObjectId, CatalogVersion,
     ColumnDescriptor, ContractHash, DecimalType, FloatMode, FloatType, ScalarType, TextEncoding,

@@ -1,3 +1,7 @@
+//! Payload kind discrimination and frame family classification.
+//!
+//! This module defines payload types and their wire representation codes.
+
 use andromeda_core::{AndromedaError, AndromedaErrorKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

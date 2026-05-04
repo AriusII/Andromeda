@@ -1,3 +1,42 @@
+//! Clock abstraction and timestamp types.
+//!
+//! This module provides clock abstractions for deterministic time management
+//! in distributed systems and testing.
+//!
+//! ## Timestamps
+//!
+//! `EngineTimestamp` represents time as milliseconds since Unix epoch (u64).
+//! It supports:
+//! - Checked and saturating arithmetic
+//! - Comparison and ordering
+//! - Conversion to/from u64
+//!
+//! ## Clocks
+//!
+//! The `Clock` trait abstracts time sources for:
+//! - **SystemClock**: Real time via `std::time::SystemTime`
+//! - **ManualClock**: Controllable time for testing (deterministic execution)
+//!
+//! Injection of clock implementations allows:
+//! - Deterministic reproducibility
+//! - Fast test execution (no real delays)
+//! - Replication of specific timing scenarios
+//!
+//! ## Usage
+//!
+//! ```ignore
+//! use andromeda_core::{Clock, SystemClock, ManualClock, EngineTimestamp};
+//!
+//! // Production: use real time
+//! let clock = SystemClock;
+//! let now = clock.now();
+//!
+//! // Testing: use controllable time
+//! let mut clock = ManualClock::new();
+//! clock.advance_millis(1000);
+//! let later = clock.now();
+//! ```
+
 use crate::error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -99,10 +138,7 @@ mod tests {
             timestamp.checked_add_millis(23),
             Some(EngineTimestamp::from_unix_millis(123))
         );
-        assert_eq!(
-            EngineTimestamp::MAX.checked_add_millis(1),
-            None
-        );
+        assert_eq!(EngineTimestamp::MAX.checked_add_millis(1), None);
         assert_eq!(
             EngineTimestamp::MAX.saturating_add_millis(1),
             EngineTimestamp::MAX

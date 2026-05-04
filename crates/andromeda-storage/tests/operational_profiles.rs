@@ -30,21 +30,15 @@ fn analytics_operational_profile_keeps_gpu_off_critical_path() {
         profile.mode,
         OperationalProfileMode::AnalyticsOffCriticalPath
     );
-    assert!(
-        profile
-            .validate_gpu_pipeline(PipelineClass::BatchAnalytics)
-            .is_ok()
-    );
-    assert!(
-        profile
-            .validate_gpu_pipeline(PipelineClass::StatisticsRefresh)
-            .is_ok()
-    );
-    assert!(
-        profile
-            .validate_gpu_pipeline(PipelineClass::MapRefresh)
-            .is_ok()
-    );
+    assert!(profile
+        .validate_gpu_pipeline(PipelineClass::BatchAnalytics)
+        .is_ok());
+    assert!(profile
+        .validate_gpu_pipeline(PipelineClass::StatisticsRefresh)
+        .is_ok());
+    assert!(profile
+        .validate_gpu_pipeline(PipelineClass::MapRefresh)
+        .is_ok());
 
     for pipeline in [
         PipelineClass::Commit,

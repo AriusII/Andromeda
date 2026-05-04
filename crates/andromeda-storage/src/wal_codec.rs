@@ -1,6 +1,6 @@
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
 
-use crate::{Lsn, WalRecord, WalRecordHeader, wal_record_kind_from_tag, wal_record_kind_tag};
+use crate::{wal_record_kind_from_tag, wal_record_kind_tag, Lsn, WalRecord, WalRecordHeader};
 
 pub const WAL_FORMAT_VERSION_V1: u16 = 1;
 pub const WAL_FORMAT_VERSION: u16 = WAL_FORMAT_VERSION_V1;
@@ -399,7 +399,11 @@ fn fnv64_nonzero(bytes: &[u8]) -> u64 {
         state ^= u64::from(*byte);
         state = state.wrapping_mul(FNV_PRIME);
     }
-    if state == 0 { 1 } else { state }
+    if state == 0 {
+        1
+    } else {
+        state
+    }
 }
 
 fn push_u16(bytes: &mut Vec<u8>, value: u16) {

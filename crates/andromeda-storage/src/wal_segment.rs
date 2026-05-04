@@ -1,6 +1,6 @@
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
-use crate::{Lsn, WAL_FORMAT_VERSION, WalRecord};
+use crate::{Lsn, WalRecord, WAL_FORMAT_VERSION};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WalSegmentDescriptor {

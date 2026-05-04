@@ -28,15 +28,16 @@ impl ResultValidationService {
             ));
         }
 
-        if let Some(row_count_exact) = metadata.row_count_exact
-            && !metadata
+        if let Some(row_count_exact) = metadata.row_count_exact {
+            if !metadata
                 .cardinality
                 .permits_exact_row_count(row_count_exact)
-        {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
-                "result stream exact row count violates cardinality",
-            ));
+            {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Contract,
+                    "result stream exact row count violates cardinality",
+                ));
+            }
         }
 
         Ok(())
@@ -48,13 +49,13 @@ impl ResultValidationService {
     ) -> AndromedaResult<()> {
         Self::validate_before_payload(metadata)?;
 
-        if let Some(row_count_exact) = metadata.row_count_exact
-            && row_count_exact != actual_row_count
-        {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
-                "result stream actual row count does not match RowCountExact",
-            ));
+        if let Some(row_count_exact) = metadata.row_count_exact {
+            if row_count_exact != actual_row_count {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Contract,
+                    "result stream actual row count does not match RowCountExact",
+                ));
+            }
         }
 
         if !metadata

@@ -1,23 +1,22 @@
 use andromeda_catalog::{
-    AccessMode, CatalogSnapshot, CompatibilityPolicy, INVENTORY_DATABASE_ID,
-    INVENTORY_NAMESPACE_ID, IsolationPolicy, MultiResultPolicy, ObjectKind, ProcedureErrorPolicy,
-    ProtocolLayoutRef, QualifiedName, ResultMetadataPolicy, StatsVersion, TransactionPolicy,
     inventory_domain_definition_batch, inventory_reserve_stock_contract,
-    inventory_reserve_stock_contract_candidate,
+    inventory_reserve_stock_contract_candidate, AccessMode, CatalogSnapshot, CompatibilityPolicy,
+    IsolationPolicy, MultiResultPolicy, ObjectKind, ProcedureErrorPolicy, ProtocolLayoutRef,
+    QualifiedName, ResultMetadataPolicy, StatsVersion, TransactionPolicy, INVENTORY_DATABASE_ID,
+    INVENTORY_NAMESPACE_ID,
 };
 use andromeda_core::{
     AndromedaErrorKind, CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash,
     ProcedureId, ScalarType, TypeDescriptor,
 };
 use andromeda_srpl::{
-    SourceSpan,
     compiler::{
-        INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, bind_executable_procedure_plan,
-        compile_inventory_reserve_stock_contract,
+        bind_executable_procedure_plan, compile_inventory_reserve_stock_contract,
         compile_inventory_reserve_stock_contract_candidate,
         compile_narrow_procedure_contract_candidate, compile_narrow_procedure_signature,
         inventory_reserve_stock_body_ir, inventory_reserve_stock_contract_metadata,
         lower_ir_to_contract_candidate, parse_procedure_signature,
+        INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE,
     },
     diagnostics::DiagnosticPhase,
     model::{
@@ -25,6 +24,7 @@ use andromeda_srpl::{
         SrplProcedureContractMetadata, SrplProcedureIr, SrplValueIr,
     },
     source::SrplSource,
+    SourceSpan,
 };
 
 #[test]
@@ -147,11 +147,9 @@ fn duplicate_result_names_reject_in_public_contract_model() {
 
     let error = signature.validate().unwrap_err();
 
-    assert!(
-        error
-            .message()
-            .contains("result stream names must be unique")
-    );
+    assert!(error
+        .message()
+        .contains("result stream names must be unique"));
 }
 
 #[test]

@@ -411,14 +411,12 @@ mod tests {
         let batch = envelope(PayloadKind::RpcBatch, b"row".to_vec());
         let completion = envelope(PayloadKind::RpcCompletion, Vec::new());
 
-        assert!(
-            FrameEnvelope::validate_rpc_stream_sequence(&[
-                metadata.clone(),
-                batch.clone(),
-                completion
-            ])
-            .is_ok()
-        );
+        assert!(FrameEnvelope::validate_rpc_stream_sequence(&[
+            metadata.clone(),
+            batch.clone(),
+            completion
+        ])
+        .is_ok());
 
         assert_eq!(
             FrameEnvelope::validate_rpc_stream_sequence(&[batch, metadata])

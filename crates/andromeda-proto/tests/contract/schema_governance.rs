@@ -10,9 +10,9 @@ use andromeda_core::{
     AndromedaErrorKind, ColumnDescriptor, ContractHash, ScalarType, TypeDescriptor,
 };
 use andromeda_proto::{
-    CONTRACT_PACKAGE, PROTOCOL_FRAME_ENVELOPE_TYPE, PROTOCOL_PACKAGE, ResultCardinality,
-    ResultStreamDescriptor, RowCountRequirement, StructuredObjectHeader, StructuredObjectLayout,
     descriptor_set_bytes, descriptor_set_hash, frame_envelope_hash, generated, protocol_layout,
+    ResultCardinality, ResultStreamDescriptor, RowCountRequirement, StructuredObjectHeader,
+    StructuredObjectLayout, CONTRACT_PACKAGE, PROTOCOL_FRAME_ENVELOPE_TYPE, PROTOCOL_PACKAGE,
 };
 
 #[test]

@@ -235,11 +235,9 @@ mod tests {
             catalog_version: CatalogVersion::new(3),
         };
 
-        assert!(
-            signature
-                .validate_against_contract_ref(&contract_ref)
-                .is_ok()
-        );
+        assert!(signature
+            .validate_against_contract_ref(&contract_ref)
+            .is_ok());
 
         let invalid_ref = ProcedureContractRef {
             contract_hash: ContractHash::zero(),

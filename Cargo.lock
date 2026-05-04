@@ -26,6 +26,7 @@ dependencies = [
  "andromeda-core",
  "andromeda-exec",
  "andromeda-observe",
+ "andromeda-quic",
  "andromeda-srpl",
  "andromeda-storage",
 ]

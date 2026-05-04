@@ -4,7 +4,6 @@
 //! existing root-level public API.
 
 pub use crate::{
-    ColdSegmentPublicationPlan, DatabaseManifest, DatabaseSnapshotPublication,
-    SnapshotAvailabilityContract, SnapshotSegmentReference,
-    validate_cold_segment_publication_boundary,
+    validate_cold_segment_publication_boundary, ColdSegmentPublicationPlan, DatabaseManifest,
+    DatabaseSnapshotPublication, SnapshotAvailabilityContract, SnapshotSegmentReference,
 };

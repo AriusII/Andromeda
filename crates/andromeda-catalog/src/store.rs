@@ -1,3 +1,9 @@
+//! Catalog system store and mutation planning.
+//!
+//! This module provides the `CatalogSystemStore` facade which validates definition batches
+//! against the current catalog snapshot and plans mutations. The store is intentionally
+//! stateless regarding durable publication - persistence is delegated to callers.
+
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, DatabaseId, NamespaceId,
 };
