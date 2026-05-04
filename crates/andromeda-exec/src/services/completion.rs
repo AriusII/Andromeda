@@ -89,6 +89,60 @@ impl CompletionMappingService {
             trace_id,
         }
     }
+
+    /// Build a `Poisoned` completion that has been routed through a durable
+    /// rollback. Mirrors the executor invariant that poison failures must
+    /// transit `TransactionState::Poisoned` before reaching durable
+    /// `RolledBack`. Callers MUST supply the rolled-back transaction state
+    /// and the durable WAL LSN proving the rollback is durable. Use
+    /// `rejected` instead for poison failures detected before any
+    /// transaction begin.
+    pub fn poisoned_after_rollback(
+        invocation_id: InvocationId,
+        transaction_state: TransactionState,
+        durable_lsn: Lsn,
+        trace_id: TraceId,
+    ) -> AndromedaResult<InvocationCompletion> {
+        if transaction_state != TransactionState::RolledBack {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Transaction,
+                "poisoned-after-rollback completion requires rolled-back transaction state",
+            ));
+        }
+        if durable_lsn.is_zero() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Storage,
+                "poisoned-after-rollback completion requires nonzero durable LSN evidence",
+            ));
+        }
+        Ok(InvocationCompletion {
+            invocation_id,
+            status: CompletionStatus::Poisoned,
+            rows_affected: Some(0),
+            transaction_state: Some(transaction_state),
+            durable_lsn: Some(durable_lsn),
+            trace_id,
+        })
+    }
+
+    /// Build a `FailedBeforeTransaction` completion with no transaction
+    /// evidence. This is the only legal projection of a runtime failure that
+    /// occurred prior to `Begin`; failures observed after `Begin` MUST be
+    /// routed through the rolled-back path so the transaction terminal
+    /// invariant is preserved.
+    pub fn failed_before_transaction(
+        invocation_id: InvocationId,
+        trace_id: TraceId,
+    ) -> InvocationCompletion {
+        InvocationCompletion {
+            invocation_id,
+            status: CompletionStatus::FailedBeforeTransaction,
+            rows_affected: None,
+            transaction_state: None,
+            durable_lsn: None,
+            trace_id,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -320,14 +374,39 @@ pub struct CompletionRecoveryExpectation {
 }
 
 impl CompletionRecoveryExpectation {
-    pub fn for_invocation(invocation_id: InvocationId) -> Self {
+    /// Construct a recovery expectation from an explicit recovery-safe
+    /// `TransactionId`. This is the preferred constructor for production
+    /// recovery code: the caller is expected to feed in the id observed in
+    /// the durable WAL (or allocated through
+    /// [`andromeda_tx::TransactionManager`]) so the expectation matches the
+    /// id the dispatcher actually stamped on each record.
+    pub fn for_invocation_with_transaction(
+        invocation_id: InvocationId,
+        transaction_id: TransactionId,
+    ) -> Self {
         Self {
             invocation_id,
-            transaction_id: crate::transaction_id_for_invocation(invocation_id),
+            transaction_id,
             expected_rows_affected: None,
             expected_result_row_count_exact: None,
             journal_record: None,
         }
+    }
+
+    /// Legacy constructor that derives the expected `TransactionId` from the
+    /// `InvocationId` via the deprecated
+    /// [`crate::transaction_id_for_invocation`] shim.
+    ///
+    /// **Test/compatibility only.** Production recovery callers must use
+    /// [`Self::for_invocation_with_transaction`]: deriving the id from the
+    /// invocation namespace breaks monotonicity across restarts and is
+    /// incompatible with [`andromeda_tx::TransactionManager`] allocation.
+    #[allow(deprecated)]
+    pub fn for_invocation(invocation_id: InvocationId) -> Self {
+        Self::for_invocation_with_transaction(
+            invocation_id,
+            crate::transaction_id_for_invocation(invocation_id),
+        )
     }
 
     pub fn with_expected_metadata(
@@ -674,6 +753,16 @@ fn completion_journal_error(message: impl Into<String>) -> AndromedaError {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
+// The tests below intentionally exercise the deprecated
+// `transaction_id_for_invocation` shim and the
+// `CompletionRecoveryExpectation::for_invocation` legacy constructor: they
+// hand-craft WAL records keyed by InvocationId-derived TransactionIds to
+// exercise reconciliation without spinning up a TransactionManager. These
+// suites stay pinned to that shape so the recovery proofs remain
+// byte-stable; production paths must continue to use
+// `TransactionManager::begin` and
+// `CompletionRecoveryExpectation::for_invocation_with_transaction`.
 mod tests {
     use super::*;
     use andromeda_core::InvocationId;
@@ -902,6 +991,73 @@ mod tests {
         assert_eq!(report.records[0].terminal_lsn, Some(commit_lsn));
         assert_eq!(report.records[0].rows_affected, Some(0));
         assert_eq!(report.completed().count(), 1);
+    }
+
+    #[test]
+    fn poisoned_after_rollback_requires_rolled_back_state_and_durable_lsn() {
+        let invocation_id = InvocationId::new(50);
+        let trace_id = TraceId::new(500);
+
+        // Active transaction state cannot back a poisoned completion.
+        let err = CompletionMappingService::poisoned_after_rollback(
+            invocation_id,
+            TransactionState::Active,
+            Lsn::new(7),
+            trace_id,
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), AndromedaErrorKind::Transaction);
+
+        // Committed state cannot back a poisoned completion either.
+        let err = CompletionMappingService::poisoned_after_rollback(
+            invocation_id,
+            TransactionState::Committed,
+            Lsn::new(7),
+            trace_id,
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), AndromedaErrorKind::Transaction);
+
+        // Zero LSN must be rejected.
+        let err = CompletionMappingService::poisoned_after_rollback(
+            invocation_id,
+            TransactionState::RolledBack,
+            Lsn::ZERO,
+            trace_id,
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), AndromedaErrorKind::Storage);
+
+        // Valid combination: rolled-back + nonzero durable LSN.
+        let completion = CompletionMappingService::poisoned_after_rollback(
+            invocation_id,
+            TransactionState::RolledBack,
+            Lsn::new(11),
+            trace_id,
+        )
+        .unwrap();
+        assert_eq!(completion.status, CompletionStatus::Poisoned);
+        assert_eq!(completion.rows_affected, Some(0));
+        assert_eq!(
+            completion.transaction_state,
+            Some(TransactionState::RolledBack)
+        );
+        assert_eq!(completion.durable_lsn, Some(Lsn::new(11)));
+        // Stable terminal code is wire-aligned with proto STATUS_POISONED = 5.
+        assert_eq!(completion.status.terminal_code(), 5);
+    }
+
+    #[test]
+    fn failed_before_transaction_carries_no_transaction_evidence() {
+        let completion = CompletionMappingService::failed_before_transaction(
+            InvocationId::new(51),
+            TraceId::new(510),
+        );
+        assert_eq!(completion.status, CompletionStatus::FailedBeforeTransaction);
+        assert!(completion.transaction_state.is_none());
+        assert!(completion.durable_lsn.is_none());
+        assert!(completion.rows_affected.is_none());
+        assert_eq!(completion.status.terminal_code(), 3);
     }
 
     #[test]

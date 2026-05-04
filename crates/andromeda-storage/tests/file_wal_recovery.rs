@@ -8,7 +8,8 @@ use andromeda_storage::write_ahead_log::file::{
 };
 use andromeda_storage::write_ahead_log::record::{WalRecord, WalRecordKind};
 use andromeda_storage::{
-    DatabaseManifest, DurableTransactionState, Lsn, RedoRecordDecision, StartupMode,
+    plan_file_wal_startup_recovery_v0, DatabaseManifest, DurableTransactionState, Lsn,
+    ObservedBoundary, RedoRecordDecision, StartupMode, StartupRejectionReason,
 };
 use std::{
     fs::OpenOptions,
@@ -425,6 +426,43 @@ fn file_wal_previous_lsn_mismatch_is_forensic_report_and_rejection() {
     assert_eq!(
         FileWal::open(&temp.path).unwrap_err().kind(),
         AndromedaErrorKind::Storage
+    );
+
+    let safe_start = plan_file_wal_startup_recovery_v0(
+        &manifest(Lsn::new(1)),
+        StartupMode::SafeStart,
+        &temp.path,
+        false,
+    )
+    .unwrap();
+    assert_eq!(
+        safe_start.evidence.observed_boundary(),
+        ObservedBoundary::ForensicChainBreak
+    );
+    assert_eq!(
+        safe_start.decision.rejection(),
+        Some(StartupRejectionReason::ForensicHandlingRequired)
+    );
+    assert!(
+        safe_start.redo_plan.is_none(),
+        "SafeStart must not produce a replay plan across a durable chain break"
+    );
+
+    let forensic_start = plan_file_wal_startup_recovery_v0(
+        &manifest(Lsn::new(1)),
+        StartupMode::ForensicStart,
+        &temp.path,
+        true,
+    )
+    .unwrap();
+    assert!(forensic_start.decision.is_accepted());
+    assert!(
+        !forensic_start.replay_allowed(),
+        "ForensicStart is inspect-only and must not replay/mutate durable truth"
+    );
+    assert!(
+        forensic_start.redo_plan.is_none(),
+        "ForensicStart must not produce a replay plan for a chain break"
     );
 }
 

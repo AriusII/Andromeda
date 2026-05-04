@@ -22,8 +22,29 @@ message ProcedureManifest {
   uint64 catalog_version = 4;
   ProtocolLayout protocol_layout = 5;
   repeated ResultStreamDescriptor result_streams = 6;
+  // 32-byte governance digest of the policy bundle backing this manifest.
+  // Distinct from contract / descriptor / frame envelope hashes by domain
+  // separation; never confuse with `contract_hash`.
+  bytes policy_version = 7;
+  // Required permissions a caller must hold to invoke the procedure. Order
+  // is informational; uniqueness is enforced by the Rust contract layer.
+  repeated RequiredPermission required_permissions = 8;
 
-  reserved 7 to 31;
+  reserved 9 to 31;
+}
+
+// Stable identifier for a permission required to invoke a procedure. The
+// canonical id is a non-empty, lower-case dot-separated string emitted by the
+// catalog policy bundle (e.g. `andromeda.execute_procedure`). Family is the
+// permission family (e.g. `application`, `security`). The protobuf surface
+// keeps these as strings on purpose so that source generators can map them
+// onto each language's permission catalogue without re-coupling the wire
+// schema to the security crate.
+message RequiredPermission {
+  string id = 1;
+  string family = 2;
+
+  reserved 3 to 15;
 }
 
 message ResultStreamDescriptor {
@@ -47,8 +68,14 @@ message ResultStreamDescriptor {
   Cardinality cardinality = 3;
   RowCountRequirement row_count_requirement = 4;
   optional uint64 row_count_exact = 5;
+  // Optional inclusive upper bound on rows the stream may emit. Used to
+  // declare a *bounded* `ZeroOrMore` / `OneOrMore` stream without inventing a
+  // streaming engine. When present must respect the declared cardinality and
+  // be `>= row_count_exact` when both are declared. Validation is enforced by
+  // the Rust contract layer.
+  optional uint64 row_count_max = 6;
 
-  reserved 6 to 31;
+  reserved 7 to 31;
 }
 
 message ColumnDescriptor {
@@ -69,13 +96,23 @@ message StructuredObjectHeader {
 
   string name = 1;
   bytes contract_hash = 2; // 32 bytes.
-  bytes shape_hash = 3; // 32 bytes, nonzero.
+  // 32-byte deterministic descriptor identity computed from `fields + layout`.
+  // Field name was renamed from `shape_hash` for consistency with the Rust
+  // surface; the on-the-wire field number (3) and type (bytes) are unchanged
+  // so this rename is wire-compatible.
+  bytes descriptor_hash = 3; // 32 bytes, nonzero.
   uint64 row_count_exact = 4;
   uint32 column_count = 5;
   Layout layout = 6;
   uint64 payload_length = 7;
   optional uint64 payload_checksum = 8;
   optional uint64 max_payload_length = 9;
+  // Ordered descriptor fields. Dense, zero-based ordinals, unique names.
+  repeated ColumnDescriptor fields = 10;
+  // Row-count policy in metadata-before-payload form. `EXACT_REQUIRED`
+  // forces `row_count_exact` to be set so the RowCountExact invariant is
+  // verifiable purely from metadata.
+  ResultStreamDescriptor.RowCountRequirement row_count_policy = 11;
 
-  reserved 10 to 31;
+  reserved 12 to 31;
 }

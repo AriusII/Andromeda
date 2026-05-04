@@ -188,6 +188,22 @@ pub fn validate_result_stream_sequence_with_metadata_policy(
     Ok(())
 }
 
+/// Validates frame sequences based on stream role.
+pub fn validate_frame_sequence(
+    frames: &[FrameBytes],
+    stream_role: StreamRole,
+) -> AndromedaResult<()> {
+    match stream_role {
+        StreamRole::ResultUnidirectional => validate_result_stream_sequence(frames),
+        _ => {
+            for frame in frames {
+                frame.validate(stream_role)?;
+            }
+            Ok(())
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,8 +1,35 @@
 //! MVCC row versioning with begin/end timestamps and transaction tracking.
+//!
+//! # V0 visibility doctrine
+//!
+//! A row version becomes visible to a snapshot **only** when:
+//!
+//! 1. The creator transaction has durable commit evidence recorded in the
+//!    [`TransactionStatusTable`] (i.e. status == `Committed`), *or* the
+//!    snapshot belongs to the creator itself (read-your-writes), and
+//! 2. Under `RepeatableRead`, the creator was not active at the moment the
+//!    snapshot was taken, and
+//! 3. The version's `begin_ts` is `<= snapshot.timestamp` (writes by other
+//!    transactions that landed after the snapshot are invisible).
+//!
+//! A delete intent is observed (the row becomes invisible) **only** when
+//! the deleter has the same durable evidence and isolation gating.
+//!
+//! # `begin_ts` / `end_ts` semantics
+//!
+//! `begin_ts` and `end_ts` are *logical commit-order timestamps* assigned
+//! by the transaction layer. They are required to be monotonic with
+//! transaction ordering but are intentionally decoupled from any specific
+//! WAL LSN: visibility uses the [`TransactionStatusTable`] (which is the
+//! sole source of durable-commit truth) for the commit/rollback decision
+//! and uses `begin_ts` only for *snapshot ordering* — i.e. "did this write
+//! happen before my snapshot was taken?". V0 does not promise that
+//! `begin_ts == LSN`; future versions may bind them, but no caller may
+//! rely on the equality today.
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
 
-use crate::mvcc_snapshot::Snapshot;
+use crate::mvcc_snapshot::{MvccIsolationPolicy, Snapshot};
 use crate::mvcc_status::{TransactionStatus, TransactionStatusTable};
 
 /// Header metadata for a versioned row in MVCC storage.
@@ -153,10 +180,23 @@ pub fn creator_is_visible(
     snapshot: &Snapshot,
 ) -> bool {
     match status {
-        TransactionStatus::Committed => {
-            !snapshot.is_transaction_active(transaction_id)
-                || snapshot.is_current_transaction(transaction_id)
-        }
+        TransactionStatus::Committed => match snapshot.isolation_policy {
+            // Read-committed: any durably committed writer is visible,
+            // regardless of whether it was active when the snapshot
+            // was first taken. Callers achieve RC semantics by either
+            // refreshing the snapshot per statement or simply omitting
+            // the writer from `active_tx_ids`.
+            MvccIsolationPolicy::ReadCommitted => true,
+            // Repeatable-read / snapshot isolation: writers that were
+            // active at snapshot creation remain invisible even after
+            // their durable commit, except for the snapshot's own
+            // transaction (read-your-writes).
+            MvccIsolationPolicy::RepeatableRead => {
+                snapshot.is_current_transaction(transaction_id)
+                    || !snapshot.is_transaction_active(transaction_id)
+            }
+        },
+        // No durable evidence ⇒ only the writer itself sees its writes.
         TransactionStatus::InFlight => snapshot.is_current_transaction(transaction_id),
         TransactionStatus::RolledBack => false,
     }
@@ -170,9 +210,18 @@ pub fn delete_is_visible(
 ) -> bool {
     match status {
         TransactionStatus::Committed => {
-            end_ts <= snapshot.timestamp
-                && (!snapshot.is_transaction_active(transaction_id)
-                    || snapshot.is_current_transaction(transaction_id))
+            if end_ts > snapshot.timestamp {
+                // Delete landed strictly after the snapshot was taken.
+                // Snapshot must continue to see the row.
+                return false;
+            }
+            match snapshot.isolation_policy {
+                MvccIsolationPolicy::ReadCommitted => true,
+                MvccIsolationPolicy::RepeatableRead => {
+                    snapshot.is_current_transaction(transaction_id)
+                        || !snapshot.is_transaction_active(transaction_id)
+                }
+            }
         }
         TransactionStatus::InFlight => snapshot.is_current_transaction(transaction_id),
         TransactionStatus::RolledBack => false,

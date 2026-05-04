@@ -40,6 +40,30 @@ impl ResultValidationService {
             }
         }
 
+        // Enforce row_count_max consistency with the declared cardinality
+        // and any declared exact row count. This is the V0 *bounded
+        // cardinality* gate: One/OptionalOne are intrinsically bounded at
+        // 1, and Many/NonEmptyMany may only declare a bound that is
+        // consistent with their minimum row count. When both `row_count_exact`
+        // and `row_count_max` are present the bound must dominate the exact
+        // count.
+        if let Some(row_count_max) = metadata.row_count_max {
+            if !metadata.cardinality.permits_row_count_max(row_count_max) {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Contract,
+                    "result stream row_count_max violates cardinality bounds",
+                ));
+            }
+            if let Some(row_count_exact) = metadata.row_count_exact {
+                if row_count_exact > row_count_max {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Contract,
+                        "result stream row_count_exact exceeds declared row_count_max",
+                    ));
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -66,6 +90,15 @@ impl ResultValidationService {
                 AndromedaErrorKind::Contract,
                 "result stream actual row count violates cardinality",
             ));
+        }
+
+        if let Some(row_count_max) = metadata.row_count_max {
+            if actual_row_count > row_count_max {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Contract,
+                    "result stream actual row count exceeds declared row_count_max",
+                ));
+            }
         }
 
         Ok(())

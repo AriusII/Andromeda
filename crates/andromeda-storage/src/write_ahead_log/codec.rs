@@ -1,4 +1,5 @@
-//! WAL frame codec and scan contracts.
+//! Facade re-export of the canonical WAL frame codec defined in
+//! [`crate::wal_codec`]. Do not define encode/decode/scan items here.
 
 pub use crate::{
     decode_frame_header, decode_wal_record_frame, encode_wal_record, scan_wal_records,

@@ -156,6 +156,23 @@ impl RedoRecordPlan {
     }
 }
 
+/// A conceptual redo plan derived from a manifest plus the durable WAL prefix.
+///
+/// The plan exposes three explicit boundary slots that the recovery executor
+/// must keep distinct:
+///
+/// 1. **Mounted cold snapshot** — `mounted_snapshot_id` identifies the
+///    durable, on-disk snapshot that anchors recovery. This is the only
+///    source of pre-WAL truth; RAM/hot state never participates here.
+/// 2. **WAL replay range** — `redo_from_lsn` (inclusive) up to `durable_lsn`
+///    (inclusive) describes which durable WAL records are eligible for
+///    consideration. `coverage` proves the LSN chain is contiguous and
+///    anchored to the manifest start.
+/// 3. **Unavailable / corrupt WAL segment boundary** — `wal_scan_stop` is
+///    `Some` when the durable WAL had a recoverable tail boundary
+///    (truncated/corrupt suffix) at exactly `durable_lsn`. Forensic chain
+///    breaks (gap / duplicate / previous-LSN mismatch) are rejected before
+///    a plan is constructed and never surface here.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConceptualRedoPlan {
     pub startup_mode: StartupMode,
@@ -196,10 +213,33 @@ impl ConceptualRedoPlan {
         self.committed_redo_records().map(|record| record.lsn)
     }
 
+    /// Highest transaction id observed in durable WAL evidence.
+    ///
+    /// Recovery drivers should seed the transaction-id allocator at this floor
+    /// (for example via `andromeda_tx::TransactionManager::with_recovered_floor`)
+    /// before serving post-restart traffic. This is not RAM truth: it is a
+    /// projection of transaction ids present in the durable WAL prefix.
+    pub fn recovered_transaction_id_floor(&self) -> u64 {
+        self.transaction_evidence
+            .iter()
+            .map(|summary| summary.transaction_id.get())
+            .max()
+            .unwrap_or(0)
+    }
+
     pub const fn wal_scan_stop(&self) -> Option<WalScanStop> {
         self.wal_scan_stop
     }
 
+    /// Project the plan's durable boundary into an [`andromeda_observe::RecoveryTrace`]
+    /// for emission as a `RecoveryStartup` critical decision.
+    ///
+    /// The trace carries:
+    /// * `last_durable_lsn` — the highest LSN that survived the WAL scan and
+    ///   is therefore eligible for replay (cold snapshot + durable WAL truth).
+    /// * `corruption_boundary_lsn` — `Some(last_durable_lsn)` iff the WAL
+    ///   scan stopped at a recoverable tail boundary (truncated / corrupt
+    ///   suffix). `None` indicates a clean scan with no observed boundary.
     pub fn observe_recovery_trace(&self, trace_id: TraceId) -> andromeda_observe::RecoveryTrace {
         andromeda_observe::RecoveryTrace {
             trace_id,

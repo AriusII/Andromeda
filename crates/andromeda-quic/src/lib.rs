@@ -22,13 +22,12 @@
 //! - Flow control windows prevent buffer saturation and enable backpressure signaling
 //! - Connection lifecycle enforces handshake, active, and close states
 
-use andromeda_core::AndromedaResult;
-
 // ============================================================================
 // Module files for frame layer
 // ============================================================================
 
 mod backpressure;
+mod connection;
 mod frame_code;
 mod frame_codec;
 mod frame_sequence;
@@ -60,8 +59,9 @@ pub mod frame {
     };
 
     pub use crate::frame_sequence::{
-        validate_result_stream_sequence, validate_result_stream_sequence_with_metadata_policy,
-        ResultStreamMetadataPolicy, ResultStreamSequence,
+        validate_frame_sequence, validate_result_stream_sequence,
+        validate_result_stream_sequence_with_metadata_policy, ResultStreamMetadataPolicy,
+        ResultStreamSequence,
     };
 
     /// Validates a single frame on a stream.
@@ -74,8 +74,9 @@ pub mod frame {
 }
 
 pub use frame::{
-    validate_result_stream_sequence, validate_result_stream_sequence_with_metadata_policy,
-    validate_single_frame_on_stream, FrameBytes, FrameCodec, FrameCodecEndian, FrameFamily,
+    validate_frame_sequence, validate_result_stream_sequence,
+    validate_result_stream_sequence_with_metadata_policy, validate_single_frame_on_stream,
+    FrameBytes, FrameCodec, FrameCodecEndian, FrameFamily,
     FrameHeader, FrameType, ResultStreamMetadataPolicy, ResultStreamSequence, StreamRole,
     AUTH_FRAME_CODE, CONTRACT_REQUEST_FRAME_CODE, CONTRACT_RESPONSE_FRAME_CODE, ERROR_FRAME_CODE,
     FRAME_CODEC_CRC_OFFSET, FRAME_CODEC_HEADER_LEN, FRAME_HEADER_CRC_UNCHECKED,
@@ -99,29 +100,24 @@ pub mod stream {
 // Connection Protocol Layer
 // ============================================================================
 
-pub mod connection {
-    //! Connection protocol layer: session management and lifecycle.
+pub mod session {
+    //! Connection protocol layer: session lifecycle and surface-plane gating.
+    //!
+    //! Re-exports the canonical [`crate::connection`] state machine. The
+    //! module is named `session` to avoid colliding with the private
+    //! implementation file while keeping the public concept (a QUIC session)
+    //! discoverable.
 
-    /// Placeholder for connection lifecycle management.
-    pub struct Connection {
-        // Future: session state, handshake state, flow control windows
-    }
-
-    impl Connection {
-        /// Creates a new connection.
-        pub fn new() -> Self {
-            Self {}
-        }
-    }
-
-    impl Default for Connection {
-        fn default() -> Self {
-            Self::new()
-        }
-    }
+    pub use crate::connection::{
+        CancellationCause, CancellationOutcome, CancellationSignal, Connection, DatagramPolicy,
+        EarlyDataPolicy, LifecycleState, SurfaceListenerConfig, SurfaceListenerSet, SurfacePlane,
+    };
 }
 
-pub use connection::Connection;
+pub use session::{
+    CancellationCause, CancellationOutcome, CancellationSignal, Connection, DatagramPolicy,
+    EarlyDataPolicy, LifecycleState, SurfaceListenerConfig, SurfaceListenerSet, SurfacePlane,
+};
 
 // ============================================================================
 // RPC Dispatch Layer
@@ -145,44 +141,5 @@ pub use rpc::{
 // Backpressure
 // ============================================================================
 
-pub use backpressure::{BackpressureReason, BackpressureSignal};
+pub use backpressure::{BackpressureReason, BackpressureSignal, BackpressureTransport};
 
-// ============================================================================
-// Frame Validation Helpers
-// ============================================================================
-
-/// Validates frame sequences based on stream role.
-pub fn validate_frame_sequence(
-    frames: &[FrameBytes],
-    stream_role: StreamRole,
-) -> AndromedaResult<()> {
-    match stream_role {
-        StreamRole::ResultUnidirectional => frame::validate_result_stream_sequence(frames),
-        _ => {
-            for frame in frames {
-                frame::validate_single_frame_on_stream(frame, stream_role)?;
-            }
-
-            Ok(())
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn frame_type_codes_are_locked() {
-        assert_eq!(HELLO_FRAME_CODE, 1);
-        assert_eq!(AUTH_FRAME_CODE, 2);
-        assert_eq!(RPC_EXECUTE_REQUEST_FRAME_CODE, 5);
-        assert_eq!(RPC_BATCH_FRAME_CODE, 7);
-        assert_eq!(TELEMETRY_SOFT_SIGNAL_FRAME_CODE, 100);
-    }
-
-    #[test]
-    fn max_frame_payload_is_16_mib() {
-        assert_eq!(MAX_FRAME_PAYLOAD_LENGTH, 16 * 1024 * 1024);
-    }
-}

@@ -134,12 +134,46 @@ pub struct LocalDispatchReceipt {
     pub wal_evidence: WalDurabilityEvidence,
 }
 
+/// Reason a transaction is being rolled back.
+///
+/// Routes the dispatcher through the correct intermediate state on the
+/// transaction state machine before the durable rollback record is appended.
+///
+/// * `Direct` — caller-driven rollback: `Active -> RollingBack`.
+/// * `BusinessFailure` — runtime business/procedure failure that did not
+///   poison the transaction: `Active -> Failed -> RollingBack`.
+/// * `Poison` — the transaction must be quarantined before rollback because
+///   continued use would violate engine invariants: `Active -> Poisoned ->
+///   RollingBack`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RollbackCause {
+    Direct,
+    BusinessFailure,
+    Poison,
+}
+
+impl RollbackCause {
+    pub const fn intermediate_state(self) -> Option<TransactionState> {
+        match self {
+            Self::Direct => None,
+            Self::BusinessFailure => Some(TransactionState::Failed),
+            Self::Poison => Some(TransactionState::Poisoned),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LocalRollbackReceipt {
     pub transaction_id: TransactionId,
     pub transaction_state: TransactionState,
     pub durable_lsn: Lsn,
     pub wal_evidence: RollbackWalDurabilityEvidence,
+    /// State machine transition that preceded `RollingBack`, when the
+    /// rollback was driven by an explicit `Failed`/`Poisoned` route. `None`
+    /// for direct rollbacks that move straight from `Active` into
+    /// `RollingBack`.
+    pub intermediate_state: Option<TransactionState>,
+    pub cause: RollbackCause,
 }
 
 pub struct LocalDispatcher<'a, W> {
@@ -209,6 +243,22 @@ where
         &mut self,
         plan: LocalRollbackPlan,
     ) -> AndromedaResult<LocalRollbackReceipt> {
+        self.dispatch_rollback_with_cause(plan, RollbackCause::Direct)
+    }
+
+    /// Drive a durable rollback while routing the transaction state machine
+    /// through the failure/poison intermediate state implied by `cause`.
+    ///
+    /// The same WAL record sequence is appended for every cause
+    /// (`TxBegin` followed by `TxRollback`); the difference is purely the
+    /// transaction state machine path so that downstream evidence can prove
+    /// runtime failures did not skip the failed/poisoned states before a
+    /// `RolledBack` completion is emitted.
+    pub fn dispatch_rollback_with_cause(
+        &mut self,
+        plan: LocalRollbackPlan,
+        cause: RollbackCause,
+    ) -> AndromedaResult<LocalRollbackReceipt> {
         plan.validate()?;
 
         let mut tx = TransactionStateMachine::new(plan.transaction_id);
@@ -219,6 +269,18 @@ where
             Some(plan.transaction_id),
             b"tx-begin",
         )?;
+
+        let intermediate_state = match cause {
+            RollbackCause::Direct => None,
+            RollbackCause::BusinessFailure => {
+                tx.apply(TransactionEvent::Fail)?;
+                Some(TransactionState::Failed)
+            }
+            RollbackCause::Poison => {
+                tx.apply(TransactionEvent::Poison)?;
+                Some(TransactionState::Poisoned)
+            }
+        };
 
         tx.apply(TransactionEvent::RollbackRequested)?;
         let rollback_lsn = self.wal.append(
@@ -241,6 +303,8 @@ where
             transaction_state: tx.state,
             durable_lsn,
             wal_evidence,
+            intermediate_state,
+            cause,
         })
     }
 }

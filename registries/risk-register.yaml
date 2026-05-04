@@ -5,65 +5,98 @@ source:
   page: 50
 risks:
   - id: RISK-001
-    title: Scope explosion
+    title: Scope explosion across V0.5 and V1
     severity: very_high
-    summary: V0 can lose recoverability focus if advanced analytics, GPU, or HA/DR work enters the vertical slice too early.
-    mitigation: Keep a strict recoverable vertical prototype and defer GPU, advanced HA/DR, and complex analytics until the kernel is recoverable.
+    likelihood: high
+    summary: V0.5 and V1 can lose recoverability focus if advanced analytics, GPU, complex HA/DR, or broad governance work enters the vertical slice before the kernel is recoverable.
+    mitigation: "Proposed: Keep a strict recoverable vertical prototype, gate V0.5/V1 scope through explicit decision records, and defer GPU, advanced HA/DR, and complex analytics until recovery invariants are demonstrated."
     owner: risk-decision-manager
     status: open
   - id: RISK-002
     title: Custom QUIC protocol complexity
     severity: high
+    likelihood: medium
     summary: A bespoke QUIC protocol can expand the implementation and compatibility surface beyond what V0 can safely absorb.
-    mitigation: Keep the V0 envelope small, define explicit stream taxonomy, and benchmark Quinn, s2n-quic, and MsQuic before committing.
+    mitigation: "Proposed: Keep the V0 envelope small, define explicit stream taxonomy, and benchmark Quinn, s2n-quic, and MsQuic before committing."
     owner: network-protocol-lead
     status: open
   - id: RISK-003
     title: Protobuf schema drift
     severity: high
+    likelihood: medium
     summary: Uncontrolled Protobuf evolution can break compatibility between clients, storage, recovery, and network envelopes.
-    mitigation: Use stable packages, reserved tags, reserved names, explicit presence, semantic versioning, and compatibility tests.
+    mitigation: "Proposed: Use stable packages, reserved tags, reserved names, explicit presence, semantic versioning, and compatibility tests."
     owner: protobuf-schema-review
     status: open
   - id: RISK-004
     title: Unsafe Rust defects
     severity: very_high
+    likelihood: medium
     summary: Unsafe code in critical paths can compromise memory safety and recoverability if invariants are implicit or untested.
-    mitigation: Encapsulate unsafe code, expose safe public APIs, require fuzz and property tests, run Miri or sanitizer campaigns where applicable, and assign code ownership.
+    mitigation: "Proposed: Encapsulate unsafe code, expose safe public APIs, require fuzz and property tests, run Miri or sanitizer campaigns where applicable, and assign code ownership."
     owner: rust-memory-safety-auditor
     status: open
   - id: RISK-005
-    title: Recovery under-tested
+    title: Recovery orchestration and dependency inversion gaps
     severity: critical
-    summary: Recovery bugs can silently publish partial state or fail to restore committed state after crashes.
-    mitigation: Run crash tests from Phase 1 and treat recovery bugs as release-blocking.
+    likelihood: high
+    summary: Recovery bugs, inverted dependencies between recovery/storage/transaction components, or allocator reuse before replay safety can silently publish partial state or fail to restore committed state after crashes.
+    mitigation: "Proposed: Treat recovery bugs as release-blocking, run crash tests from Phase 1, require recovery orchestration ownership, document dependency direction, and gate allocator reuse on replay-safe invariants and crash-recovery tests."
     owner: storage-recovery-lead
     status: open
   - id: RISK-006
     title: Plan instability
     severity: high
+    likelihood: medium
     summary: Plan churn can make execution unpredictable and difficult to explain when catalog or statistics evidence changes.
-    mitigation: Use bounded plan classes, hysteresis, plan evidence scores, and controlled invalidation on CatalogVersion or StatsVersion changes.
+    mitigation: "Proposed: Use bounded plan classes, hysteresis, plan evidence scores, and controlled invalidation on CatalogVersion or StatsVersion changes."
     owner: optimizer-lead
     status: open
   - id: RISK-007
     title: Map maintenance cost
     severity: high
+    likelihood: medium
     summary: Maps can become expensive to refresh or maintain if policies, budgets, and criticality are not explicit.
-    mitigation: Require explicit refresh policy, complexity score, maintenance budget, and criticality classification.
+    mitigation: "Proposed: Require explicit refresh policy, complexity score, maintenance budget, and criticality classification."
     owner: catalog-storage-lead
     status: open
   - id: RISK-008
     title: Statistics overconfidence
     severity: high
+    likelihood: medium
     summary: Predictive or statistical evidence can mislead planning if confidence is treated as truth.
-    mitigation: Separate confidence, criticality, freshness, realism, and stability scores; never let predictive evidence force a plan alone.
+    mitigation: "Proposed: Separate confidence, criticality, freshness, realism, and stability scores; never let predictive evidence force a plan alone."
     owner: optimizer-lead
     status: open
   - id: RISK-009
-    title: Security bypass through surfaces
+    title: Security surface bypass before transaction creation
     severity: critical
-    summary: Blurring Application, Administration, and HA/DR surfaces can allow powerful commands to bypass IAM, quotas, or audit.
-    mitigation: Keep Application, Administration, and HA/DR surfaces separate with different certificates, endpoints, permissions, quotas, and audits.
+    likelihood: medium
+    summary: Blurring Application, Administration, and HA/DR surfaces, especially before transaction creation, can allow powerful commands to bypass IAM, quotas, policy evaluation, or audit.
+    mitigation: "Proposed: Keep Application, Administration, and HA/DR surfaces separate with different certificates, endpoints, permissions, quotas, and audits; require pre-transaction authorization and audit decisions before a transaction object or recovery-visible intent is created."
     owner: security-iam-auditor
+    status: open
+  - id: RISK-010
+    title: HADR split-brain and missing fencing
+    severity: critical
+    likelihood: medium
+    summary: HA/DR failover without explicit quorum, lease, and fencing semantics can permit split-brain writers or divergent recovery histories.
+    mitigation: "Proposed: Require a HA/DR decision record before implementation, define quorum and fencing invariants, prove single-writer authority during failover, and test partition, clock-skew, and stale-primary scenarios."
+    owner: hadr-architect
+    status: open
+  - id: RISK-011
+    title: Schema and catalog lifecycle drift
+    severity: high
+    likelihood: high
+    summary: CatalogVersion, schema evolution, migrations, and generated contract artifacts can drift independently, causing incompatible plans, replay errors, or inconsistent recovery metadata.
+    mitigation: "Proposed: Define catalog lifecycle ownership, require compatibility checks for schema and catalog changes, reserve breaking changes behind decision records, and test upgrade, downgrade, replay, and mixed-version catalog access paths."
+    owner: catalog-storage-lead
+    status: open
+  - id: RISK-012
+    title: Backup and PITR corruption or incomplete replay
+    severity: critical
+    likelihood: medium
+    summary: Backups, manifests, checkpoints, or PITR logs can be corrupt, incomplete, or inconsistent with WAL/catalog state, producing unrecoverable or silently divergent restores.
+    mitigation: "Proposed: Treat restore verification as mandatory, checksum and version backup artifacts, test PITR from base backup through WAL replay, validate catalog compatibility during restore, and keep incomplete replay from publishing recovered state."
+    owner: storage-recovery-lead
     status: open

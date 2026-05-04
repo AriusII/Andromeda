@@ -120,6 +120,7 @@ col_type.validate()?;
 "#]
 
 // Core infrastructure modules
+pub mod digest;
 mod error;
 mod ids;
 mod time;

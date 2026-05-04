@@ -5,6 +5,23 @@ use andromeda_core::{
 };
 
 /// MVCC isolation policy for determining visibility rules.
+///
+/// **V0 supports both variants** with distinct semantics:
+///
+/// * [`MvccIsolationPolicy::ReadCommitted`] — any durably committed
+///   writer is visible. Callers achieve "fresh" RC behavior by either
+///   constructing a new snapshot per statement or omitting the writer
+///   from `active_tx_ids`. The `active_tx_ids` field is *ignored* by
+///   visibility under RC; it is retained only for diagnostics.
+///
+/// * [`MvccIsolationPolicy::RepeatableRead`] — snapshot isolation. A
+///   writer that was active at snapshot creation remains invisible even
+///   after its durable commit, except for the snapshot's own owner
+///   (read-your-writes).
+///
+/// In both modes, "visible" requires durable commit evidence in the
+/// [`crate::TransactionStatusTable`]; no inference from timestamps is
+/// performed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MvccIsolationPolicy {
     ReadCommitted,
@@ -52,6 +69,78 @@ impl Snapshot {
         };
         snapshot.validate()?;
         Ok(snapshot)
+    }
+
+    /// Construct a snapshot and verify it against the live transaction
+    /// status table.
+    ///
+    /// Enforces:
+    ///
+    /// * If the snapshot belongs to a transaction (`transaction_id` is
+    ///   `Some`), that transaction must be recorded as `InFlight`. A
+    ///   terminal transaction (`Committed` / `RolledBack`) cannot open a
+    ///   new snapshot — that would let it observe writes that postdate
+    ///   its own outcome.
+    /// * Every id in `active_tx_ids` must be either unknown to the table
+    ///   (treated as in-flight by V0 doctrine) or recorded as `InFlight`.
+    ///   A transaction that already reached a terminal state must not be
+    ///   listed as concurrently active.
+    pub fn with_context_validated(
+        timestamp: u64,
+        catalog_version: CatalogVersion,
+        isolation_policy: MvccIsolationPolicy,
+        transaction_id: Option<TransactionId>,
+        active_tx_ids: impl IntoIterator<Item = TransactionId>,
+        statuses: &crate::mvcc_status::TransactionStatusTable,
+    ) -> AndromedaResult<Self> {
+        let snapshot = Self::with_context(
+            timestamp,
+            catalog_version,
+            isolation_policy,
+            transaction_id,
+            active_tx_ids,
+        )?;
+        snapshot.validate_against_statuses(statuses)?;
+        Ok(snapshot)
+    }
+
+    /// Validate an already-constructed snapshot against a status table.
+    /// See [`Self::with_context_validated`] for the rules enforced.
+    pub fn validate_against_statuses(
+        &self,
+        statuses: &crate::mvcc_status::TransactionStatusTable,
+    ) -> AndromedaResult<()> {
+        if let Some(tx_id) = self.transaction_id {
+            match statuses.status(tx_id) {
+                Some(crate::mvcc_status::TransactionStatus::InFlight) => {}
+                Some(_) => {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Transaction,
+                        "snapshot owner transaction is not in flight",
+                    ));
+                }
+                None => {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Transaction,
+                        "snapshot owner transaction is not registered with the manager",
+                    ));
+                }
+            }
+        }
+
+        for tx_id in &self.active_tx_ids {
+            match statuses.status(*tx_id) {
+                None | Some(crate::mvcc_status::TransactionStatus::InFlight) => {}
+                Some(_) => {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Transaction,
+                        "snapshot active transaction list contains a terminal transaction",
+                    ));
+                }
+            }
+        }
+
+        Ok(())
     }
 
     pub fn is_current_transaction(&self, transaction_id: TransactionId) -> bool {

@@ -3,8 +3,8 @@ use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId, SessionId, TransactionId,
 };
 use andromeda_observe::{
-    CompletionEmittedTrace, EventCorrelation, EventEnvelope, EventId, EventSink,
-    ProtocolCorrelation, TraceEvent,
+    CompletionEmittedTrace, EventCorrelation, EventEmitter, EventSink, ProtocolCorrelation,
+    TraceEvent,
 };
 use andromeda_quic::{
     validate_result_stream_sequence_with_metadata_policy, FrameBytes, FrameCodec, FrameHeader,
@@ -16,8 +16,8 @@ use andromeda_srpl::{
 use andromeda_storage::Lsn;
 
 use crate::{
-    transaction_id_for_invocation, InventoryReserveStockExecutor, InventoryStock,
-    InvocationContext, InvocationRequest, InvocationWal, LocalVerticalRuntime, ReserveStockCommand,
+    CompletionStatus, InventoryReserveStockExecutor, InventoryStock, InvocationContext,
+    InvocationReject, InvocationRequest, InvocationWal, LocalVerticalRuntime, ReserveStockCommand,
     ReserveStockEffect, VerticalInvocationOutcome,
 };
 
@@ -25,6 +25,7 @@ const V0_RPC_EXECUTE_PAYLOAD_DOMAIN: &[u8] = b"andromeda.exec.v0.inventory-reser
 const V0_METADATA_PAYLOAD_DOMAIN: &[u8] = b"andromeda.exec.v0.result-metadata.v1";
 const V0_BATCH_PAYLOAD_DOMAIN: &[u8] = b"andromeda.exec.v0.inventory-reservation-batch.v1";
 const V0_COMPLETION_PAYLOAD_DOMAIN: &[u8] = b"andromeda.exec.v0.completion.v1";
+const V0_INVENTORY_RESERVE_STOCK_CONTRACT_KIND: u16 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct V0InventoryReserveStockRpcPayload {
@@ -113,10 +114,17 @@ impl<W> V0InventoryRecoverableRuntime<W>
 where
     W: InvocationWal,
 {
-    pub const fn new(wal: W) -> Self {
+    pub fn new(wal: W) -> Self {
         Self {
             local: LocalVerticalRuntime::new(wal),
         }
+    }
+
+    /// Wrap an externally constructed [`LocalVerticalRuntime`] so callers can
+    /// inject a recovery-seeded [`andromeda_tx::TransactionManager`] before
+    /// the V0 path begins serving traffic.
+    pub fn from_local_runtime(local: LocalVerticalRuntime<W>) -> Self {
+        Self { local }
     }
 
     pub fn wal(&self) -> &W {
@@ -170,7 +178,7 @@ where
         let tx_id = vertical
             .completion
             .transaction_state
-            .map(|_| transaction_id_for_invocation(vertical.completion.invocation_id));
+            .map(|_| vertical.transaction_id);
         let result_frames = encode_v0_result_frames(
             command_frame.header.request_id,
             command_frame.header.session_id,
@@ -199,7 +207,8 @@ where
         observed_stock: InventoryStock,
         sink: &mut impl EventSink,
     ) -> AndromedaResult<V0InventoryRecoverableOutcome> {
-        let outcome = self.execute_encoded_inventory_reserve_stock(
+        let mut emitter = EventEmitter::new(sink);
+        self.execute_encoded_inventory_reserve_stock_observed_with_emitter(
             encoded_execute_frame,
             srpl_source,
             catalog,
@@ -207,9 +216,51 @@ where
             request,
             context,
             observed_stock,
-        )?;
+            &mut emitter,
+        )
+    }
 
-        emit_v0_outcome_events(&outcome, sink)?;
+    pub fn execute_encoded_inventory_reserve_stock_observed_with_emitter<S: EventSink>(
+        &mut self,
+        encoded_execute_frame: &[u8],
+        srpl_source: &str,
+        catalog: &CatalogSnapshot,
+        contract: &ProcedureContract,
+        request: InvocationRequest,
+        context: &InvocationContext,
+        observed_stock: InventoryStock,
+        emitter: &mut EventEmitter<S>,
+    ) -> AndromedaResult<V0InventoryRecoverableOutcome> {
+        let rejection_request = request.clone();
+        let rejection_context = context.clone();
+        let outcome = match self.execute_encoded_inventory_reserve_stock(
+            encoded_execute_frame,
+            srpl_source,
+            catalog,
+            contract,
+            request,
+            context,
+            observed_stock,
+        ) {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                if let Some(reject) = v0_pre_transaction_reject_from_error(&error) {
+                    let command_frame = decode_v0_execute_frame(encoded_execute_frame)?;
+                    emit_v0_inventory_reserve_stock_pre_transaction_refusal(
+                        &rejection_request,
+                        &rejection_context,
+                        command_frame.header.request_id,
+                        command_frame.header.session_id,
+                        contract,
+                        &reject,
+                        emitter,
+                    )?;
+                }
+                return Err(error);
+            }
+        };
+
+        emit_v0_outcome_events(&outcome, emitter)?;
         Ok(outcome)
     }
 }
@@ -356,9 +407,9 @@ fn encode_v0_completion_payload(rows_affected: u64, durable_lsn: Lsn) -> Vec<u8>
     bytes
 }
 
-fn emit_v0_outcome_events(
+fn emit_v0_outcome_events<S: EventSink>(
     outcome: &V0InventoryRecoverableOutcome,
-    sink: &mut impl EventSink,
+    emitter: &mut EventEmitter<S>,
 ) -> AndromedaResult<()> {
     let protocol = ProtocolCorrelation {
         protocol_version: Some(1),
@@ -378,7 +429,7 @@ fn emit_v0_outcome_events(
         durable_lsn: None,
         protocol: Some(protocol),
     };
-    let transaction_id = transaction_id_for_invocation(outcome.vertical.completion.invocation_id);
+    let transaction_id = outcome.vertical.transaction_id;
     let durable_lsn = outcome.vertical.completion.durable_lsn.ok_or_else(|| {
         AndromedaError::new(
             AndromedaErrorKind::Transaction,
@@ -390,20 +441,21 @@ fn emit_v0_outcome_events(
         durable_lsn: Some(durable_lsn.get()),
         ..pre_transaction_correlation
     };
-    sink.emit(EventEnvelope::new(
-        v0_event_id(outcome, 1),
+    emitter.emit(
+        pre_transaction_correlation,
+        TraceEvent::Decision(outcome.vertical.admission_trace.clone()),
+    )?;
+    emitter.emit(
         pre_transaction_correlation,
         TraceEvent::Decision(outcome.vertical.contract_trace.clone()),
-    )?)?;
+    )?;
     if let Some(authorization_trace) = &outcome.vertical.authorization_trace {
-        sink.emit(EventEnvelope::new(
-            v0_event_id(outcome, 2),
+        emitter.emit(
             pre_transaction_correlation,
             TraceEvent::Decision(authorization_trace.clone()),
-        )?)?;
+        )?;
     }
-    sink.emit(EventEnvelope::new(
-        v0_event_id(outcome, 3),
+    emitter.emit(
         completion_correlation,
         TraceEvent::CompletionEmitted(CompletionEmittedTrace {
             trace_id: outcome.vertical.completion.trace_id,
@@ -414,20 +466,113 @@ fn emit_v0_outcome_events(
             reason: "V0 Inventory.ReserveStock emitted committed completion after durable WAL"
                 .to_string(),
         }),
-    )?)?;
+    )?;
     Ok(())
 }
 
-fn v0_event_id(outcome: &V0InventoryRecoverableOutcome, suffix: u64) -> EventId {
-    EventId::new(u128::from(
-        outcome
-            .vertical
-            .completion
-            .invocation_id
-            .get()
-            .saturating_mul(10)
-            .saturating_add(suffix),
-    ))
+/// Emit typed evidence for V0 invocation refusals that happen before a
+/// transaction exists.
+///
+/// This helper is intentionally limited to the C4 pre-transaction surface:
+/// contract/admission rejections and authorization denials. It never fabricates
+/// transaction or durable-LSN correlation, and it lets [`EventEmitter`] surface
+/// sink/envelope failures to the caller.
+pub fn emit_v0_inventory_reserve_stock_pre_transaction_refusal<S: EventSink>(
+    request: &InvocationRequest,
+    context: &InvocationContext,
+    request_id: RequestId,
+    session_id: SessionId,
+    contract: &ProcedureContract,
+    reject: &InvocationReject,
+    emitter: &mut EventEmitter<S>,
+) -> AndromedaResult<()> {
+    let protocol = v0_execute_request_protocol();
+    let correlation = EventCorrelation {
+        request_id: Some(request_id),
+        session_id: Some(session_id),
+        contract_hash: Some(request.expected_contract_hash),
+        catalog_version: Some(request.catalog_version),
+        catalog_object_id: Some(contract.object.object_id),
+        transaction_id: None,
+        durable_lsn: None,
+        protocol: Some(protocol),
+    };
+
+    match reject.status {
+        CompletionStatus::ContractRejected | CompletionStatus::FailedBeforeTransaction => {
+            if let Some(trace) = reject.contract_rejected_trace(
+                context.trace_id,
+                protocol,
+                V0_INVENTORY_RESERVE_STOCK_CONTRACT_KIND,
+                reject.status.terminal_code() as u16,
+            ) {
+                emitter.emit(correlation, TraceEvent::ContractRejected(trace))?;
+            }
+        }
+        CompletionStatus::PermissionDenied => {
+            if let Some(trace) = reject.authorization_denial_trace(
+                context.trace_id,
+                denied_permission_for_context(contract, context),
+            ) {
+                emitter.emit(correlation, TraceEvent::AuthorizationDenied(trace))?;
+            }
+        }
+        CompletionStatus::SystemUnavailable
+        | CompletionStatus::Cancelled
+        | CompletionStatus::Poisoned
+        | CompletionStatus::Committed
+        | CompletionStatus::RolledBack => {}
+    }
+
+    if request.invocation_id.get() != 0 {
+        emitter.emit(
+            correlation,
+            TraceEvent::ExecutionTransition(reject.project_transition(
+                request.invocation_id,
+                context.trace_id,
+                Some(request_id),
+                Some(session_id),
+            )),
+        )?;
+    }
+
+    Ok(())
+}
+
+fn v0_pre_transaction_reject_from_error(error: &AndromedaError) -> Option<InvocationReject> {
+    let status = match error.kind() {
+        AndromedaErrorKind::Contract => CompletionStatus::ContractRejected,
+        AndromedaErrorKind::Security => CompletionStatus::PermissionDenied,
+        _ => return None,
+    };
+
+    Some(InvocationReject {
+        status,
+        reason: error.message().to_string(),
+    })
+}
+
+fn v0_execute_request_protocol() -> ProtocolCorrelation {
+    ProtocolCorrelation {
+        protocol_version: Some(1),
+        stream_id: None,
+        stream_role: Some(StreamRole::CommandBidirectional as u16),
+        frame_type: Some(FrameType::RpcExecuteRequest.wire_code() as u16),
+        payload_kind: Some(FrameType::RpcExecuteRequest.wire_code() as u16),
+        sequence: Some(1),
+    }
+}
+
+fn denied_permission_for_context(
+    contract: &ProcedureContract,
+    context: &InvocationContext,
+) -> String {
+    contract
+        .required_permissions
+        .iter()
+        .find(|permission| !context.grants(permission))
+        .cloned()
+        .unwrap_or_else(|| "unknown required permission".to_string())
 }
 
 fn v0_protocol_error(message: &'static str) -> AndromedaError {

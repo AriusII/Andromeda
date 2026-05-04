@@ -7,9 +7,8 @@ use andromeda_core::{
     ResourceBudget, SessionId, TransactionId,
 };
 use andromeda_exec::{
-    transaction_id_for_invocation, CompletionStatus, ExecutionIoAdmissionRequest,
-    InventoryReserveStockExecutor, InventoryStock, InvocationContext, InvocationRequest,
-    LocalVerticalRuntime, ReserveStockCommand,
+    CompletionStatus, ExecutionIoAdmissionRequest, InventoryReserveStockExecutor, InventoryStock,
+    InvocationContext, InvocationRequest, LocalVerticalRuntime, ReserveStockCommand,
 };
 use andromeda_observe::{
     CommitVisibleTrace, CompletionEmittedTrace, CriticalDecisionKind, EventCorrelation,
@@ -216,7 +215,6 @@ fn reserve_stock_commit_gate_links_catalog_srpl_business_runtime_wal_recovery_ob
     );
 
     let invocation_id = 9100;
-    let tx_id = transaction_id_for_invocation(InvocationId::new(invocation_id));
     let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
     let outcome = runtime
         .execute_authorized_io_admitted(
@@ -230,6 +228,7 @@ fn reserve_stock_commit_gate_links_catalog_srpl_business_runtime_wal_recovery_ob
         )
         .unwrap();
 
+    let tx_id = outcome.transaction_id;
     assert_eq!(outcome.completion.status, CompletionStatus::Committed);
     assert_eq!(
         outcome.completion.transaction_state,
@@ -415,7 +414,6 @@ fn insufficient_stock_rolls_back_with_typed_rejection_and_committed_only_recover
     );
 
     let invocation_id = 9200;
-    let tx_id = transaction_id_for_invocation(InvocationId::new(invocation_id));
     let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
     let outcome = runtime
         .rollback_authorized_business_validation_failure_after_begin(
@@ -429,6 +427,7 @@ fn insufficient_stock_rolls_back_with_typed_rejection_and_committed_only_recover
         )
         .unwrap();
 
+    let tx_id = outcome.transaction_id;
     assert_eq!(outcome.completion.status, CompletionStatus::RolledBack);
     assert_eq!(
         outcome.completion.transaction_state,

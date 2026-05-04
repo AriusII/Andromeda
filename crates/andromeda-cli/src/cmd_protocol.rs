@@ -11,7 +11,7 @@ use andromeda_observe::TraceId;
 use andromeda_storage::InMemoryWal;
 
 const PROTO_PAYLOAD_SOURCE: &str = include_str!("../../andromeda-proto/src/payload.rs");
-const QUIC_FRAME_SOURCE: &str = include_str!("../../andromeda-quic/src/frame.rs");
+const QUIC_FRAME_SOURCE: &str = include_str!("../../andromeda-quic/src/frame_code.rs");
 
 const PROTOCOL_CODE_LOCKSTEP: &[ProtocolCode] = &[
     ProtocolCode {

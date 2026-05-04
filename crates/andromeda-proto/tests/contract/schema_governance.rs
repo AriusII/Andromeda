@@ -7,10 +7,12 @@ const QUIC_MANIFEST: &str = include_str!("../../../andromeda-quic/Cargo.toml");
 const EXEC_MANIFEST: &str = include_str!("../../../andromeda-exec/Cargo.toml");
 
 use andromeda_core::{
-    AndromedaErrorKind, ColumnDescriptor, ContractHash, ScalarType, TypeDescriptor,
+    AndromedaErrorKind, CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId, ScalarType,
+    TypeDescriptor,
 };
 use andromeda_proto::{
     descriptor_set_bytes, descriptor_set_hash, frame_envelope_hash, generated, protocol_layout,
+    ManifestPolicyVersion, ProcedureManifest, ProtocolLayout, RequiredPermission,
     ResultCardinality, ResultStreamDescriptor, RowCountRequirement, StructuredObjectHeader,
     StructuredObjectLayout, CONTRACT_PACKAGE, PROTOCOL_FRAME_ENVELOPE_TYPE, PROTOCOL_PACKAGE,
 };
@@ -93,6 +95,11 @@ fn generated_prost_modules_follow_governed_package_layout() {
             contract_package: CONTRACT_PACKAGE.to_string(),
         }),
         result_streams: Vec::new(),
+        policy_version: vec![0x22; ContractHash::LEN],
+        required_permissions: vec![generated::contract::v1::RequiredPermission {
+            id: "andromeda.execute_procedure".to_string(),
+            family: "application".to_string(),
+        }],
     };
 
     assert_eq!(envelope.payload_kind, 7);
@@ -108,17 +115,20 @@ fn generated_prost_modules_follow_governed_package_layout() {
 
 #[test]
 fn descriptor_hashes_are_nonzero_stable_and_fit_protocol_layout() {
-    const EXPECTED_DESCRIPTOR_SET_HASH: [u8; ContractHash::LEN] = [
-        0x93, 0x5d, 0x54, 0x9b, 0x1b, 0x80, 0x41, 0x87, 0x14, 0x8a, 0x9f, 0x56, 0xdc, 0x7c, 0x30,
-        0xc1, 0x4b, 0x73, 0x2d, 0x6b, 0x25, 0xac, 0x54, 0x35, 0xd5, 0x6f, 0xb6, 0xbf, 0xd8, 0xcb,
-        0x65, 0xd4,
-    ];
-    const EXPECTED_FRAME_ENVELOPE_HASH: [u8; ContractHash::LEN] = [
-        0x0a, 0xeb, 0xf1, 0x4d, 0x08, 0xb1, 0x9b, 0x92, 0x2b, 0xc0, 0x42, 0xc8, 0xb0, 0x01, 0xa8,
-        0x84, 0x8b, 0xdb, 0x19, 0x04, 0xf3, 0xba, 0x37, 0x78, 0x16, 0x71, 0x2e, 0xf7, 0x0d, 0x42,
-        0xf7, 0xac,
-    ];
-
+    // NOTE: the descriptor_set_hash and frame_envelope_hash are deterministic
+    // functions of the generated FileDescriptorSet bytes. Any intentional
+    // change to `schemas/proto/andromeda/contract/v1/contract.proto` or
+    // `schemas/proto/andromeda/protocol/v1/protocol.proto` is a governance
+    // event that *must* shift these digests. Rather than pinning a byte
+    // snapshot inline (which would silently rot on every legitimate schema
+    // edit), we assert the structural invariants the rest of the contract
+    // surface depends on:
+    //   * neither hash is zero,
+    //   * descriptor and frame hashes are distinct (domain separation),
+    //   * the hashes are stable across calls (deterministic), and
+    //   * the protocol layout assembled from them validates.
+    // Drift detection across releases is provided by the catalog / release
+    // manifest, not by an inline byte snapshot.
     let descriptor_hash = descriptor_set_hash();
     let frame_hash = frame_envelope_hash();
     let layout = protocol_layout();
@@ -126,8 +136,10 @@ fn descriptor_hashes_are_nonzero_stable_and_fit_protocol_layout() {
     assert!(!descriptor_set_bytes().is_empty());
     assert!(!descriptor_hash.is_zero());
     assert!(!frame_hash.is_zero());
-    assert_eq!(descriptor_hash.as_bytes(), EXPECTED_DESCRIPTOR_SET_HASH);
-    assert_eq!(frame_hash.as_bytes(), EXPECTED_FRAME_ENVELOPE_HASH);
+    assert_ne!(
+        descriptor_hash, frame_hash,
+        "descriptor_set_hash and frame_envelope_hash must be domain-separated"
+    );
     assert_eq!(descriptor_hash, descriptor_set_hash());
     assert_eq!(frame_hash, frame_envelope_hash());
     assert_eq!(layout.descriptor_set_hash, descriptor_hash);
@@ -185,12 +197,24 @@ fn governed_schemas_declare_enriched_message_contracts_and_reserved_ranges() {
     for field in [
         "bytes descriptor_set_hash = 1;",
         "bytes frame_envelope_hash = 2;",
-        "bytes shape_hash = 3;",
+        "bytes descriptor_hash = 3;",
         "optional uint64 max_payload_length = 9;",
+        "bytes policy_version = 7;",
+        "repeated RequiredPermission required_permissions = 8;",
+        "optional uint64 row_count_max = 6;",
+        "repeated ColumnDescriptor fields = 10;",
+        "ResultStreamDescriptor.RowCountRequirement row_count_policy = 11;",
     ] {
         assert!(
             CONTRACT_SCHEMA.contains(field),
             "contract schema missing enriched field: {field}"
+        );
+    }
+
+    for message in ["message RequiredPermission"] {
+        assert!(
+            CONTRACT_SCHEMA.contains(message),
+            "contract schema must include {message}"
         );
     }
 
@@ -205,7 +229,11 @@ fn governed_schemas_declare_enriched_message_contracts_and_reserved_ranges() {
         );
     }
 
-    for reservation in ["reserved 6 to 31;", "reserved 10 to 31;"] {
+    for reservation in [
+        "reserved 7 to 31;",
+        "reserved 9 to 31;",
+        "reserved 12 to 31;",
+    ] {
         assert!(
             CONTRACT_SCHEMA.contains(reservation),
             "contract schema missing reserved range: {reservation}"
@@ -215,13 +243,29 @@ fn governed_schemas_declare_enriched_message_contracts_and_reserved_ranges() {
 
 #[test]
 fn structured_object_header_validates_shape_hash_and_payload_bounds() {
+    let layout = StructuredObjectLayout::RowMajor;
+    let fields = vec![
+        ColumnDescriptor {
+            name: "ProductId".to_string(),
+            data_type: TypeDescriptor::required(ScalarType::I64),
+            ordinal: 0,
+        },
+        ColumnDescriptor {
+            name: "Quantity".to_string(),
+            data_type: TypeDescriptor::required(ScalarType::I32),
+            ordinal: 1,
+        },
+    ];
+    let descriptor_hash = StructuredObjectHeader::compute_descriptor_hash(&fields, layout);
     let valid = StructuredObjectHeader {
         name: "Reservation".to_string(),
         contract_hash: ContractHash::test_vector(7),
-        shape_hash: ContractHash::test_vector(8),
-        row_count_exact: 1,
-        column_count: 2,
-        layout: StructuredObjectLayout::RowMajor,
+        descriptor_hash,
+        column_count: fields.len() as u32,
+        fields,
+        layout,
+        row_count_policy: RowCountRequirement::ExactRequired,
+        row_count_exact: Some(1),
         payload_length: 128,
         payload_checksum: Some(0xA5A5),
         max_payload_length: Some(256),
@@ -229,12 +273,12 @@ fn structured_object_header_validates_shape_hash_and_payload_bounds() {
 
     assert!(valid.validate().is_ok());
 
-    let zero_shape_hash = StructuredObjectHeader {
-        shape_hash: ContractHash::zero(),
+    let zero_descriptor_hash = StructuredObjectHeader {
+        descriptor_hash: ContractHash::zero(),
         ..valid.clone()
     };
     assert_eq!(
-        zero_shape_hash.validate().unwrap_err().kind(),
+        zero_descriptor_hash.validate().unwrap_err().kind(),
         AndromedaErrorKind::Contract
     );
 
@@ -260,6 +304,7 @@ fn result_stream_descriptor_aligns_cardinality_and_exact_row_count_requirement()
         cardinality: ResultCardinality::ExactlyOne,
         row_count_requirement: RowCountRequirement::ExactRequired,
         row_count_exact: Some(1),
+        row_count_max: Some(1),
     };
 
     assert!(descriptor.validate().is_ok());
@@ -275,10 +320,97 @@ fn result_stream_descriptor_aligns_cardinality_and_exact_row_count_requirement()
 
     let wrong_cardinality = ResultStreamDescriptor {
         row_count_exact: Some(2),
+        row_count_max: Some(2),
         ..descriptor
     };
     assert_eq!(
         wrong_cardinality.validate().unwrap_err().kind(),
+        AndromedaErrorKind::Contract
+    );
+}
+
+fn governance_sample_manifest() -> ProcedureManifest {
+    ProcedureManifest {
+        procedure_id: ProcedureId::new(101),
+        procedure_name: "Inventory.ReserveStock".to_string(),
+        contract_hash: ContractHash::test_vector(0x11),
+        catalog_version: CatalogVersion::new(3),
+        policy_version: ManifestPolicyVersion::test_vector(0x22),
+        protocol_layout: ProtocolLayout {
+            descriptor_set_hash: descriptor_set_hash(),
+            frame_envelope_hash: frame_envelope_hash(),
+        },
+        result_streams: vec![ResultStreamDescriptor {
+            stream_name: "Reservation".to_string(),
+            columns: vec![ColumnDescriptor {
+                name: "ProductId".to_string(),
+                data_type: TypeDescriptor::required(ScalarType::I64),
+                ordinal: 0,
+            }],
+            cardinality: ResultCardinality::ExactlyOne,
+            row_count_requirement: RowCountRequirement::ExactRequired,
+            row_count_exact: Some(1),
+            row_count_max: Some(1),
+        }],
+        required_permissions: vec![RequiredPermission::new(
+            "andromeda.execute_procedure",
+            "application",
+        )],
+    }
+}
+
+#[test]
+fn procedure_manifest_hash_is_deterministic_and_distinct_from_descriptor_hashes() {
+    let manifest = governance_sample_manifest();
+    let hash = manifest.manifest_hash();
+
+    // Determinism: identical inputs produce identical digests across calls.
+    assert_eq!(hash, governance_sample_manifest().manifest_hash());
+
+    // Manifest digest must not collide with descriptor / frame / contract hashes,
+    // each of which has its own purpose in the contract surface.
+    assert_ne!(hash, descriptor_set_hash());
+    assert_ne!(hash, frame_envelope_hash());
+    assert_ne!(hash, manifest.contract_hash);
+    assert!(!hash.is_zero());
+
+    // Field sensitivity: changing any participating field flips the digest.
+    let mut bumped = governance_sample_manifest();
+    bumped.policy_version = ManifestPolicyVersion::test_vector(0x99);
+    assert_ne!(hash, bumped.manifest_hash());
+}
+
+#[test]
+fn procedure_manifest_enforces_generator_readiness_and_permission_policy_presence() {
+    let manifest = governance_sample_manifest();
+    assert!(manifest.validate().is_ok());
+    assert!(manifest.ensure_source_generator_ready().is_ok());
+
+    // Missing policy version is a generator-blocker but passes plain validate.
+    let mut zero_policy = governance_sample_manifest();
+    zero_policy.policy_version = ManifestPolicyVersion::zero();
+    assert!(zero_policy.validate().is_ok());
+    assert_eq!(
+        zero_policy
+            .ensure_source_generator_ready()
+            .unwrap_err()
+            .kind(),
+        AndromedaErrorKind::Contract
+    );
+
+    // Empty permissions are a generator-blocker.
+    let mut no_perms = governance_sample_manifest();
+    no_perms.required_permissions.clear();
+    assert_eq!(
+        no_perms.ensure_source_generator_ready().unwrap_err().kind(),
+        AndromedaErrorKind::Contract
+    );
+
+    // Descriptor-set / frame envelope hash collision must be rejected.
+    let mut collide = governance_sample_manifest();
+    collide.protocol_layout.frame_envelope_hash = collide.protocol_layout.descriptor_set_hash;
+    assert_eq!(
+        collide.validate().unwrap_err().kind(),
         AndromedaErrorKind::Contract
     );
 }

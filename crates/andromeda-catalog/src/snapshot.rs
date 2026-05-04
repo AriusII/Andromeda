@@ -30,8 +30,30 @@ pub enum CatalogSnapshotPublication {
 pub struct CatalogSnapshot {
     pub database_id: DatabaseId,
     pub namespace_id: NamespaceId,
+    /// Internal applied catalog version. May advance through in-memory apply,
+    /// but external callers must treat [`Self::visible_version`] as the
+    /// durable, externally observable catalog version.
+    ///
+    /// **Doctrine:** RAM is never truth. This field reflects staged in-memory
+    /// state and may be ahead of [`Self::visible_version`] whenever
+    /// [`Self::publication`] is [`CatalogSnapshotPublication::InMemoryOnly`].
+    /// Downstream readers building visible answers (planner, executor,
+    /// publication observers) must gate on [`Self::is_durably_published`] /
+    /// [`Self::visible_publication_receipt`] and never expose this value as
+    /// durable truth.
     pub version: CatalogVersion,
+    /// Publication tag for the *currently applied* snapshot state.
+    ///
+    /// `Durable(receipt)` only when the most recent mutation plan was applied
+    /// via [`Self::publish_durable_mutation_plan`] (or restored from durable
+    /// WAL recovery). Any subsequent in-memory apply resets this to
+    /// `InMemoryOnly`, intentionally dropping the prior receipt so it cannot
+    /// be misread as evidence for staged state.
     pub publication: CatalogSnapshotPublication,
+    /// Highest catalog version for which durable publication evidence has
+    /// been observed. Only [`Self::publish_durable_mutation_plan`] (or
+    /// recovery from durable WAL evidence) advances this field.
+    last_durable_version: CatalogVersion,
     objects_by_id: BTreeMap<CatalogObjectId, CatalogDefinition>,
     object_names: BTreeMap<QualifiedName, CatalogObjectId>,
     object_lifecycle: BTreeMap<CatalogObjectId, CatalogObjectLifecycle>,
@@ -79,6 +101,7 @@ impl CatalogSnapshot {
             namespace_id,
             version,
             publication: CatalogSnapshotPublication::InMemoryOnly,
+            last_durable_version: version,
             objects_by_id: BTreeMap::new(),
             object_names: BTreeMap::new(),
             object_lifecycle: BTreeMap::new(),
@@ -87,6 +110,67 @@ impl CatalogSnapshot {
 
     pub fn object_count(&self) -> usize {
         self.objects_by_id.len()
+    }
+
+    /// Returns the highest catalog version that has been published with
+    /// durable evidence. This is the externally visible catalog version
+    /// observed by clients; in-memory-only mutations do not advance it.
+    pub fn visible_version(&self) -> CatalogVersion {
+        self.last_durable_version
+    }
+
+    /// Returns `true` only when the *currently applied* snapshot state has
+    /// durable publication evidence and no further in-memory mutation has
+    /// been staged on top of it. This is the canonical predicate downstream
+    /// readers must use before treating snapshot contents as externally
+    /// publishable truth.
+    pub fn is_durably_published(&self) -> bool {
+        matches!(self.publication, CatalogSnapshotPublication::Durable(_))
+            && self.version == self.last_durable_version
+    }
+
+    /// Returns the publication receipt covering the *currently applied*
+    /// state, but only when that state is itself durable. Returns `None`
+    /// for `InMemoryOnly` publication and also `None` defensively if a
+    /// caller ever mutates the snapshot in a way that desynchronises
+    /// `version` from `last_durable_version`.
+    ///
+    /// Doctrine: a receipt witnesses durable evidence for *exactly* one
+    /// catalog version; it must never be returned alongside staged state.
+    pub fn visible_publication_receipt(&self) -> Option<CatalogPublicationReceipt> {
+        match self.publication {
+            CatalogSnapshotPublication::Durable(receipt)
+                if self.version == self.last_durable_version
+                    && receipt.next_version == self.last_durable_version =>
+            {
+                Some(receipt)
+            }
+            _ => None,
+        }
+    }
+
+    /// If the snapshot has staged in-memory mutation state ahead of the
+    /// visible/durable version, returns that staged version. Returns `None`
+    /// when the applied state matches the durable visible version.
+    ///
+    /// Intended for diagnostics and for readers that explicitly want to
+    /// observe the staging gap (never as a substitute for
+    /// [`Self::visible_version`]).
+    pub fn staged_in_memory_version(&self) -> Option<CatalogVersion> {
+        if self.version.get() > self.last_durable_version.get() {
+            Some(self.version)
+        } else {
+            None
+        }
+    }
+
+    /// Recovery-time entry point: mark a catalog version as durably
+    /// published because its committed mutation records were observed
+    /// during durable WAL replay.
+    pub(crate) fn mark_durable_version_from_recovery(&mut self, version: CatalogVersion) {
+        if version.get() > self.last_durable_version.get() {
+            self.last_durable_version = version;
+        }
     }
 
     pub fn contains_object_id(&self, object_id: CatalogObjectId) -> bool {
@@ -559,8 +643,12 @@ impl CatalogSnapshot {
         self.version = plan.next_version;
         if let Some(receipt) = durable_publication_receipt {
             self.publication = CatalogSnapshotPublication::Durable(receipt);
+            // Visible/durable catalog version only advances after durable evidence.
+            self.last_durable_version = plan.next_version;
         } else {
             self.publication = CatalogSnapshotPublication::InMemoryOnly;
+            // last_durable_version intentionally unchanged: in-memory apply
+            // must not advance the externally visible catalog version.
         }
 
         Ok(CatalogSnapshotApplyReport {
@@ -799,5 +887,307 @@ mod tests {
 
         assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
         assert!(error.message().contains("unknown object id"));
+    }
+
+    // -----------------------------------------------------------------
+    // Visible-version (durable evidence) invariants
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn dry_run_does_not_mutate_snapshot_state_or_visible_version() {
+        let snapshot = CatalogSnapshot::empty(
+            DatabaseId::new(1),
+            NamespaceId::new(2),
+            CatalogVersion::new(10),
+        );
+        let snapshot_before = snapshot.clone();
+
+        // Plan against an immutable borrow; this is the catalog dry-run path.
+        let plan = snapshot
+            .plan_definition_batch(&batch(
+                table(1, "Inventory.Product", CatalogVersion::new(11)),
+                CatalogVersion::new(10),
+            ))
+            .unwrap();
+
+        // Plan must be derivable but the snapshot must be byte-for-byte unchanged.
+        assert_eq!(plan.next_version, CatalogVersion::new(11));
+        assert_eq!(snapshot, snapshot_before);
+        assert_eq!(snapshot.version, CatalogVersion::new(10));
+        assert_eq!(snapshot.visible_version(), CatalogVersion::new(10));
+        assert_eq!(snapshot.object_count(), 0);
+    }
+
+    #[test]
+    fn in_memory_apply_does_not_advance_visible_catalog_version() {
+        let mut snapshot = CatalogSnapshot::empty(
+            DatabaseId::new(1),
+            NamespaceId::new(2),
+            CatalogVersion::new(10),
+        );
+        let plan = batch(
+            table(1, "Inventory.Product", CatalogVersion::new(11)),
+            CatalogVersion::new(10),
+        )
+        .dry_run()
+        .unwrap();
+
+        let report = snapshot.apply_mutation_plan(&plan.mutation_plan).unwrap();
+
+        // Internal applied version advances...
+        assert_eq!(snapshot.version, CatalogVersion::new(11));
+        assert!(!report.durable_publication_performed);
+        // ...but visible/durable version must not move without durable evidence.
+        assert_eq!(snapshot.visible_version(), CatalogVersion::new(10));
+        assert_eq!(
+            snapshot.publication,
+            CatalogSnapshotPublication::InMemoryOnly
+        );
+    }
+
+    #[test]
+    fn durable_publication_advances_visible_catalog_version() {
+        use crate::{CatalogMutationDurability, CatalogMutationRecord};
+
+        let mut snapshot = CatalogSnapshot::empty(
+            DatabaseId::new(1),
+            NamespaceId::new(2),
+            CatalogVersion::new(10),
+        );
+        let plan = batch(
+            table(1, "Inventory.Product", CatalogVersion::new(11)),
+            CatalogVersion::new(10),
+        )
+        .dry_run()
+        .unwrap();
+
+        // Build a Commit record matching the plan boundary.
+        let commit = CatalogMutationRecord::Commit(plan.mutation_plan.commit_boundary());
+        let durability = CatalogMutationDurability::StorageWal {
+            commit_lsn: 100,
+            durable_lsn: 100,
+        };
+        let evidence = CatalogMutationCommitEvidence::from_durable_commit_record(
+            &commit,
+            plan.mutation_plan.record_count(),
+            durability,
+        )
+        .unwrap();
+
+        let receipt = snapshot
+            .publish_durable_mutation_plan(&plan.mutation_plan, evidence)
+            .unwrap();
+
+        assert_eq!(receipt.next_version, CatalogVersion::new(11));
+        assert_eq!(snapshot.version, CatalogVersion::new(11));
+        assert_eq!(snapshot.visible_version(), CatalogVersion::new(11));
+        assert!(matches!(
+            snapshot.publication,
+            CatalogSnapshotPublication::Durable(_)
+        ));
+    }
+
+    #[test]
+    fn failed_apply_does_not_advance_visible_or_internal_version() {
+        let mut snapshot = CatalogSnapshot::empty(
+            DatabaseId::new(1),
+            NamespaceId::new(2),
+            CatalogVersion::new(12),
+        );
+        // Stale plan: previous_version 10 != snapshot.version 12.
+        let plan = batch(
+            table(1, "Inventory.Product", CatalogVersion::new(11)),
+            CatalogVersion::new(10),
+        )
+        .dry_run()
+        .unwrap();
+
+        let error = snapshot
+            .apply_mutation_plan(&plan.mutation_plan)
+            .unwrap_err();
+        assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+
+        // Neither internal nor visible version moved.
+        assert_eq!(snapshot.version, CatalogVersion::new(12));
+        assert_eq!(snapshot.visible_version(), CatalogVersion::new(12));
+        assert_eq!(snapshot.object_count(), 0);
+    }
+
+    // -----------------------------------------------------------------
+    // Visible-publication accessor guards
+    //
+    // These regression tests prove that the public accessors used by
+    // downstream readers (`is_durably_published`,
+    // `visible_publication_receipt`, `staged_in_memory_version`) cannot
+    // mistake `InMemoryOnly` staged state for durable visible truth, even
+    // when staged work is layered on top of a previously-durable snapshot.
+    // -----------------------------------------------------------------
+
+    fn build_evidence(
+        plan: &CatalogMutationPlan,
+        commit_lsn: u64,
+    ) -> CatalogMutationCommitEvidence {
+        use crate::{CatalogMutationDurability, CatalogMutationRecord};
+        let commit = CatalogMutationRecord::Commit(plan.commit_boundary());
+        let durability = CatalogMutationDurability::StorageWal {
+            commit_lsn,
+            durable_lsn: commit_lsn,
+        };
+        CatalogMutationCommitEvidence::from_durable_commit_record(
+            &commit,
+            plan.record_count(),
+            durability,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn empty_snapshot_is_not_durably_published_and_exposes_no_receipt() {
+        let snapshot = CatalogSnapshot::empty(
+            DatabaseId::new(1),
+            NamespaceId::new(2),
+            CatalogVersion::new(10),
+        );
+
+        assert!(!snapshot.is_durably_published());
+        assert!(snapshot.visible_publication_receipt().is_none());
+        assert!(snapshot.staged_in_memory_version().is_none());
+    }
+
+    #[test]
+    fn in_memory_apply_exposes_staged_version_but_no_durable_receipt() {
+        let mut snapshot = CatalogSnapshot::empty(
+            DatabaseId::new(1),
+            NamespaceId::new(2),
+            CatalogVersion::new(10),
+        );
+        let plan = batch(
+            table(1, "Inventory.Product", CatalogVersion::new(11)),
+            CatalogVersion::new(10),
+        )
+        .dry_run()
+        .unwrap();
+
+        snapshot.apply_mutation_plan(&plan.mutation_plan).unwrap();
+
+        // Visible truth must remain at the pre-apply durable version.
+        assert_eq!(snapshot.visible_version(), CatalogVersion::new(10));
+        assert!(!snapshot.is_durably_published());
+        assert!(
+            snapshot.visible_publication_receipt().is_none(),
+            "InMemoryOnly state must never expose a durable publication receipt"
+        );
+        assert_eq!(
+            snapshot.staged_in_memory_version(),
+            Some(CatalogVersion::new(11))
+        );
+    }
+
+    #[test]
+    fn durable_publication_exposes_matching_receipt_and_no_staging_gap() {
+        let mut snapshot = CatalogSnapshot::empty(
+            DatabaseId::new(1),
+            NamespaceId::new(2),
+            CatalogVersion::new(10),
+        );
+        let plan = batch(
+            table(1, "Inventory.Product", CatalogVersion::new(11)),
+            CatalogVersion::new(10),
+        )
+        .dry_run()
+        .unwrap();
+        let evidence = build_evidence(&plan.mutation_plan, 100);
+
+        let receipt = snapshot
+            .publish_durable_mutation_plan(&plan.mutation_plan, evidence)
+            .unwrap();
+
+        assert!(snapshot.is_durably_published());
+        assert_eq!(snapshot.visible_version(), CatalogVersion::new(11));
+        assert_eq!(snapshot.visible_publication_receipt(), Some(receipt));
+        assert_eq!(receipt.next_version, snapshot.visible_version());
+        assert!(snapshot.staged_in_memory_version().is_none());
+    }
+
+    #[test]
+    fn in_memory_apply_on_top_of_durable_drops_prior_receipt_and_freezes_visible_version() {
+        // This is the doctrinal regression: once staged in-memory work is
+        // layered on top of a previously-durable snapshot, the prior
+        // durable receipt must NOT be returned, the visible version must
+        // freeze at the prior durable version, and `is_durably_published`
+        // must report `false` even though `version` advanced.
+        let mut snapshot = CatalogSnapshot::empty(
+            DatabaseId::new(1),
+            NamespaceId::new(2),
+            CatalogVersion::new(10),
+        );
+        let first = batch(
+            table(1, "Inventory.Product", CatalogVersion::new(11)),
+            CatalogVersion::new(10),
+        )
+        .dry_run()
+        .unwrap();
+        let evidence = build_evidence(&first.mutation_plan, 100);
+        let durable_receipt = snapshot
+            .publish_durable_mutation_plan(&first.mutation_plan, evidence)
+            .unwrap();
+        assert!(snapshot.is_durably_published());
+        assert_eq!(
+            snapshot.visible_publication_receipt(),
+            Some(durable_receipt)
+        );
+
+        // Stage a second mutation in-memory only (no durable evidence).
+        let staged = batch(
+            table(2, "Inventory.Stock", CatalogVersion::new(12)),
+            CatalogVersion::new(11),
+        )
+        .dry_run()
+        .unwrap();
+        snapshot.apply_mutation_plan(&staged.mutation_plan).unwrap();
+
+        // Internal applied version moves; visible/durable version freezes.
+        assert_eq!(snapshot.version, CatalogVersion::new(12));
+        assert_eq!(snapshot.visible_version(), CatalogVersion::new(11));
+        assert_eq!(
+            snapshot.staged_in_memory_version(),
+            Some(CatalogVersion::new(12))
+        );
+
+        // The prior durable receipt must NOT be exposed: it does not
+        // witness the staged state, and surfacing it would let downstream
+        // readers misattribute durability.
+        assert!(
+            !snapshot.is_durably_published(),
+            "snapshot with staged work on top of a durable base must not report durable"
+        );
+        assert!(
+            snapshot.visible_publication_receipt().is_none(),
+            "prior durable receipt must be dropped once any in-memory mutation stages on top"
+        );
+        assert_eq!(
+            snapshot.publication,
+            CatalogSnapshotPublication::InMemoryOnly
+        );
+    }
+
+    #[test]
+    fn recovery_marker_advances_visible_without_publishing_receipt() {
+        // Recovery replays durable evidence and may mark a higher durable
+        // version, but it does not synthesise a receipt out of thin air;
+        // until the snapshot is itself republished durably, the receipt
+        // accessor must remain `None` to avoid forging audit evidence.
+        let mut snapshot = CatalogSnapshot::empty(
+            DatabaseId::new(1),
+            NamespaceId::new(2),
+            CatalogVersion::new(10),
+        );
+        snapshot.mark_durable_version_from_recovery(CatalogVersion::new(15));
+
+        assert_eq!(snapshot.visible_version(), CatalogVersion::new(15));
+        assert!(
+            snapshot.visible_publication_receipt().is_none(),
+            "recovery marker must not fabricate a publication receipt"
+        );
     }
 }

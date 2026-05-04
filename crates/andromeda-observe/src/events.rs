@@ -6,6 +6,14 @@ use andromeda_core::{
 
 use crate::TraceId;
 
+mod protocol_rejection;
+mod sequence;
+mod transition;
+
+pub use protocol_rejection::*;
+pub use sequence::*;
+pub use transition::*;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct EventId(u128);
 
@@ -54,6 +62,8 @@ pub enum CriticalDecisionKind {
     IoPlacementDecision,
     IoBudgetValidation,
     GpuPolicyDecision,
+    TransactionTransition,
+    ExecutionTransition,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1098,6 +1108,8 @@ pub enum TraceEvent {
     IoPlacementDecision(IoPlacementDecisionTrace),
     IoBudgetDecision(IoBudgetDecisionTrace),
     GpuPolicyDecision(GpuPolicyDecisionTrace),
+    TransactionTransition(TransactionTransitionTrace),
+    ExecutionTransition(ExecutionTransitionTrace),
 }
 
 impl TraceEvent {
@@ -1129,6 +1141,8 @@ impl TraceEvent {
             Self::IoPlacementDecision(trace) => trace.trace_id,
             Self::IoBudgetDecision(trace) => trace.trace_id,
             Self::GpuPolicyDecision(trace) => trace.trace_id,
+            Self::TransactionTransition(trace) => trace.trace_id,
+            Self::ExecutionTransition(trace) => trace.trace_id,
         }
     }
 
@@ -1166,6 +1180,8 @@ impl TraceEvent {
             Self::IoPlacementDecision(_) => CriticalDecisionKind::IoPlacementDecision,
             Self::IoBudgetDecision(_) => CriticalDecisionKind::IoBudgetValidation,
             Self::GpuPolicyDecision(_) => CriticalDecisionKind::GpuPolicyDecision,
+            Self::TransactionTransition(_) => CriticalDecisionKind::TransactionTransition,
+            Self::ExecutionTransition(_) => CriticalDecisionKind::ExecutionTransition,
         }
     }
 
@@ -1255,6 +1271,16 @@ impl EventEnvelope {
             return Err(observe_error(
                 "observability envelope trace_id must match payload trace_id",
             ));
+        }
+
+        // Transition traces own their own structural validation surface
+        // (phase/reason/durable-LSN/sensitive-marker checks). Run it before the
+        // envelope-level fall-through so payload defects are surfaced with the
+        // same diagnostic the standalone validators emit.
+        match &self.event {
+            TraceEvent::TransactionTransition(trace) => trace.validate()?,
+            TraceEvent::ExecutionTransition(trace) => trace.validate()?,
+            _ => {}
         }
 
         match &self.event {
@@ -1552,16 +1578,16 @@ impl EventEnvelope {
                     || self.correlation.durable_lsn != Some(trace.durable_commit_lsn) =>
             {
                 return Err(observe_error(
-                    "commit-visible traces require matching transaction_id and durable_lsn correlation",
-                ));
+                        "commit-visible traces require matching transaction_id and durable_lsn correlation",
+                    ));
             }
             TraceEvent::RollbackDurable(trace)
                 if self.correlation.transaction_id != Some(trace.transaction_id)
                     || self.correlation.durable_lsn != Some(trace.durable_rollback_lsn) =>
             {
                 return Err(observe_error(
-                    "rollback-durable traces require matching transaction_id and durable_lsn correlation",
-                ));
+                        "rollback-durable traces require matching transaction_id and durable_lsn correlation",
+                    ));
             }
             TraceEvent::RecoveryStartup(trace)
                 if self.correlation.durable_lsn != Some(trace.last_durable_lsn) =>
@@ -1576,6 +1602,87 @@ impl EventEnvelope {
                 return Err(observe_error(
                     "committed completion traces require matching durable_lsn correlation",
                 ));
+            }
+            TraceEvent::TransactionTransition(trace) => {
+                if self.correlation.transaction_id != Some(trace.transaction_id) {
+                    return Err(observe_error(
+                        "transaction transition traces require matching transaction_id correlation",
+                    ));
+                }
+                if let Some(payload_lsn) = trace.durable_lsn {
+                    if self.correlation.durable_lsn != Some(payload_lsn) {
+                        return Err(observe_error(
+                            "transaction transition traces require matching durable_lsn correlation when payload carries one",
+                        ));
+                    }
+                } else if trace.next_phase.requires_durable_evidence() {
+                    // payload validate() already guards this, but keep the
+                    // envelope-level diagnostic explicit.
+                    return Err(observe_error(
+                        "terminal transaction transition traces require durable_lsn correlation",
+                    ));
+                }
+                if let Some(req) = trace.request_id {
+                    if self.correlation.request_id != Some(req) {
+                        return Err(observe_error(
+                            "transaction transition traces require matching request_id correlation when payload carries one",
+                        ));
+                    }
+                }
+                if let Some(sess) = trace.session_id {
+                    if self.correlation.session_id != Some(sess) {
+                        return Err(observe_error(
+                            "transaction transition traces require matching session_id correlation when payload carries one",
+                        ));
+                    }
+                }
+            }
+            TraceEvent::ExecutionTransition(trace) => {
+                if let Some(payload_tx) = trace.transaction_id {
+                    if self.correlation.transaction_id != Some(payload_tx) {
+                        return Err(observe_error(
+                            "execution transition traces require matching transaction_id correlation when payload carries one",
+                        ));
+                    }
+                }
+                if let Some(payload_lsn) = trace.durable_lsn {
+                    if self.correlation.durable_lsn != Some(payload_lsn) {
+                        return Err(observe_error(
+                            "execution transition traces require matching durable_lsn correlation when payload carries one",
+                        ));
+                    }
+                } else if trace
+                    .next_phase
+                    .is_some_and(TransactionPhaseCode::requires_durable_evidence)
+                {
+                    return Err(observe_error(
+                        "terminal execution transition traces require durable_lsn correlation",
+                    ));
+                }
+                let denied = matches!(
+                    trace.reason_code,
+                    TransitionReasonCode::PERMISSION_DENIED
+                        | TransitionReasonCode::PRE_TRANSACTION_REJECTION
+                );
+                if denied && !self.correlation.has_no_transaction_evidence() {
+                    return Err(observe_error(
+                        "execution transition traces with a pre-transaction rejection reason must not carry transaction or durable_lsn correlation",
+                    ));
+                }
+                if let Some(req) = trace.request_id {
+                    if self.correlation.request_id != Some(req) {
+                        return Err(observe_error(
+                            "execution transition traces require matching request_id correlation when payload carries one",
+                        ));
+                    }
+                }
+                if let Some(sess) = trace.session_id {
+                    if self.correlation.session_id != Some(sess) {
+                        return Err(observe_error(
+                            "execution transition traces require matching session_id correlation when payload carries one",
+                        ));
+                    }
+                }
             }
             _ => {}
         }
@@ -1629,7 +1736,9 @@ impl EventEnvelope {
             | TraceEvent::RollbackDurable(_)
             | TraceEvent::RecoveryStartup(_)
             | TraceEvent::Mvcc(_)
-            | TraceEvent::Resource(_) => false,
+            | TraceEvent::Resource(_)
+            | TraceEvent::TransactionTransition(_)
+            | TraceEvent::ExecutionTransition(_) => false,
         };
 
         if text_has_sensitive_marker {
@@ -1684,6 +1793,12 @@ pub trait EventSink {
     fn emit(&mut self, event: EventEnvelope) -> AndromedaResult<()>;
 }
 
+impl<T: EventSink + ?Sized> EventSink for &mut T {
+    fn emit(&mut self, event: EventEnvelope) -> AndromedaResult<()> {
+        (**self).emit(event)
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct InMemoryEventSink {
     events: Vec<EventEnvelope>,
@@ -1732,547 +1847,7 @@ impl EventSink for InMemoryEventSink {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ProcedureLifecycleCursor {
-    Empty,
-    AdmissionAccepted,
-    Authorized,
-    IoAdmitted,
-    WalFlushed,
-    CommitVisible,
-    RollbackDurable,
-    CompletionEmitted,
-    RecoveryStarted,
-    PreTransactionRejected,
-    PreTransactionCompletionEmitted,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ProcedureLifecycleStep {
-    AdmissionAccepted,
-    Authorized,
-    IoAdmitted,
-    WalFlushed {
-        transaction_id: TransactionId,
-        durable_lsn: u64,
-    },
-    CommitVisible {
-        transaction_id: TransactionId,
-        durable_lsn: u64,
-    },
-    RollbackDurable {
-        transaction_id: TransactionId,
-        durable_lsn: u64,
-    },
-    CompletionEmitted {
-        committed: bool,
-        durable_lsn: Option<u64>,
-    },
-    RecoveryStarted {
-        last_durable_lsn: u64,
-    },
-    PreTransactionRejected,
-}
-
-/// In-memory sequence validator for procedure lifecycle evidence.
-///
-/// This is not a filesystem, network, or external audit sink. It is a bounded
-/// in-process evidence foundation for tests and local validation. Each appended
-/// [`EventEnvelope`] is validated before it is stored, then checked against
-/// procedure lifecycle ordering and correlation gates:
-///
-/// * request/session/contract/catalog identity is required before a transaction
-///   can be observed and must remain stable for the sequence;
-/// * transaction id and durable LSN are introduced only by a WAL flush;
-/// * commit, rollback, completion, and recovery evidence must follow the
-///   durable boundary they claim;
-/// * pre-transaction rejection paths must not carry transaction or durable LSN
-///   evidence.
-#[derive(Debug, Clone)]
-pub struct InMemoryEventSequence {
-    events: Vec<EventEnvelope>,
-    max_events: Option<usize>,
-    cursor: ProcedureLifecycleCursor,
-    last_event_id: Option<EventId>,
-    security_audit_seen: bool,
-    request_id: Option<RequestId>,
-    session_id: Option<SessionId>,
-    contract_hash: Option<ContractHash>,
-    catalog_version: Option<CatalogVersion>,
-    catalog_object_id: Option<CatalogObjectId>,
-    transaction_id: Option<TransactionId>,
-    durable_lsn: Option<u64>,
-}
-
-/// Procedure lifecycle trace helper backed by an in-memory validated sequence.
-pub type ProcedureLifecycleTrace = InMemoryEventSequence;
-
-impl Default for InMemoryEventSequence {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl InMemoryEventSequence {
-    pub const fn new() -> Self {
-        Self {
-            events: Vec::new(),
-            max_events: None,
-            cursor: ProcedureLifecycleCursor::Empty,
-            last_event_id: None,
-            security_audit_seen: false,
-            request_id: None,
-            session_id: None,
-            contract_hash: None,
-            catalog_version: None,
-            catalog_object_id: None,
-            transaction_id: None,
-            durable_lsn: None,
-        }
-    }
-
-    pub const fn with_capacity_limit(max_events: usize) -> Self {
-        Self {
-            events: Vec::new(),
-            max_events: Some(max_events),
-            cursor: ProcedureLifecycleCursor::Empty,
-            last_event_id: None,
-            security_audit_seen: false,
-            request_id: None,
-            session_id: None,
-            contract_hash: None,
-            catalog_version: None,
-            catalog_object_id: None,
-            transaction_id: None,
-            durable_lsn: None,
-        }
-    }
-
-    pub fn events(&self) -> &[EventEnvelope] {
-        &self.events
-    }
-
-    pub fn into_events(self) -> Vec<EventEnvelope> {
-        self.events
-    }
-
-    pub fn append(&mut self, event: EventEnvelope) -> AndromedaResult<()> {
-        event.validate()?;
-
-        if self
-            .max_events
-            .is_some_and(|max_events| self.events.len() >= max_events)
-        {
-            return Err(observe_error(
-                "in-memory event sequence capacity exhausted; event was not recorded",
-            ));
-        }
-
-        self.validate_event_id_order(event.event_id)?;
-        self.validate_stable_procedure_correlation(&event)?;
-
-        let step = ProcedureLifecycleStep::from_event(&event)?;
-        let next = self.validate_transition(step, &event)?;
-
-        self.apply_step(step, &event);
-        self.cursor = next;
-        self.last_event_id = Some(event.event_id);
-        self.events.push(event);
-        Ok(())
-    }
-
-    pub fn is_recovery_started(&self) -> bool {
-        self.cursor == ProcedureLifecycleCursor::RecoveryStarted
-    }
-
-    pub fn has_terminal_pre_transaction_rejection(&self) -> bool {
-        matches!(
-            self.cursor,
-            ProcedureLifecycleCursor::PreTransactionRejected
-                | ProcedureLifecycleCursor::PreTransactionCompletionEmitted
-        )
-    }
-
-    pub fn has_mandatory_security_audit(&self) -> bool {
-        self.security_audit_seen
-    }
-
-    pub fn has_terminal_completion(&self) -> bool {
-        matches!(
-            self.cursor,
-            ProcedureLifecycleCursor::CompletionEmitted
-                | ProcedureLifecycleCursor::PreTransactionCompletionEmitted
-                | ProcedureLifecycleCursor::RecoveryStarted
-        )
-    }
-
-    fn validate_event_id_order(&self, event_id: EventId) -> AndromedaResult<()> {
-        if self
-            .last_event_id
-            .is_some_and(|last_event_id| event_id <= last_event_id)
-        {
-            return Err(observe_error(
-                "procedure lifecycle event sequence requires strictly increasing event_id values",
-            ));
-        }
-
-        Ok(())
-    }
-
-    fn validate_stable_procedure_correlation(&self, event: &EventEnvelope) -> AndromedaResult<()> {
-        let correlation = event.correlation;
-        if !correlation.has_request_session()
-            || !correlation.has_contract_catalog()
-            || !correlation
-                .catalog_object_id
-                .is_some_and(|catalog_object_id| catalog_object_id.get() != 0)
-        {
-            return Err(observe_error(
-                "procedure lifecycle events require non-zero request_id, session_id, contract_hash, catalog_version, and catalog_object_id correlation",
-            ));
-        }
-
-        Self::validate_anchor("request_id", self.request_id, correlation.request_id)?;
-        Self::validate_anchor("session_id", self.session_id, correlation.session_id)?;
-        Self::validate_anchor(
-            "contract_hash",
-            self.contract_hash,
-            correlation.contract_hash,
-        )?;
-        Self::validate_anchor(
-            "catalog_version",
-            self.catalog_version,
-            correlation.catalog_version,
-        )?;
-        Self::validate_anchor(
-            "catalog_object_id",
-            self.catalog_object_id,
-            correlation.catalog_object_id,
-        )
-    }
-
-    fn validate_anchor<T: Copy + Eq>(
-        label: &str,
-        expected: Option<T>,
-        observed: Option<T>,
-    ) -> AndromedaResult<()> {
-        if let Some(expected) = expected {
-            if observed != Some(expected) {
-                return Err(observe_error(format!(
-                    "procedure lifecycle {label} correlation must remain stable across the sequence",
-                )));
-            }
-        }
-
-        Ok(())
-    }
-
-    fn validate_transition(
-        &self,
-        step: ProcedureLifecycleStep,
-        event: &EventEnvelope,
-    ) -> AndromedaResult<ProcedureLifecycleCursor> {
-        match (self.cursor, step) {
-            (ProcedureLifecycleCursor::Empty, ProcedureLifecycleStep::AdmissionAccepted) => self
-                .require_no_transaction_evidence(
-                    event,
-                    ProcedureLifecycleCursor::AdmissionAccepted,
-                    "admission evidence",
-                ),
-            (ProcedureLifecycleCursor::AdmissionAccepted, ProcedureLifecycleStep::Authorized) => {
-                if !matches!(
-                    &event.event,
-                    TraceEvent::SecurityAudit(SecurityAuditTrace {
-                        outcome: SecurityAuditOutcome::Allowed,
-                        ..
-                    })
-                ) {
-                    return Err(observe_error(
-                        "procedure lifecycle authorization requires a V0 security audit event",
-                    ));
-                }
-
-                self.require_no_transaction_evidence(
-                    event,
-                    ProcedureLifecycleCursor::Authorized,
-                    "authorization evidence",
-                )
-            }
-            (ProcedureLifecycleCursor::Authorized, ProcedureLifecycleStep::IoAdmitted) => self
-                .require_no_transaction_evidence(
-                    event,
-                    ProcedureLifecycleCursor::IoAdmitted,
-                    "IO admission evidence",
-                ),
-            (
-                ProcedureLifecycleCursor::IoAdmitted,
-                ProcedureLifecycleStep::WalFlushed {
-                    transaction_id,
-                    durable_lsn,
-                },
-            ) => {
-                self.require_transaction_boundary(event, transaction_id, durable_lsn)?;
-                Ok(ProcedureLifecycleCursor::WalFlushed)
-            }
-            (
-                ProcedureLifecycleCursor::WalFlushed,
-                ProcedureLifecycleStep::CommitVisible {
-                    transaction_id,
-                    durable_lsn,
-                },
-            ) => {
-                self.require_same_transaction_boundary(transaction_id, durable_lsn)?;
-                Ok(ProcedureLifecycleCursor::CommitVisible)
-            }
-            (
-                ProcedureLifecycleCursor::WalFlushed,
-                ProcedureLifecycleStep::RollbackDurable {
-                    transaction_id,
-                    durable_lsn,
-                },
-            ) => {
-                self.require_same_transaction_boundary(transaction_id, durable_lsn)?;
-                Ok(ProcedureLifecycleCursor::RollbackDurable)
-            }
-            (
-                ProcedureLifecycleCursor::CommitVisible,
-                ProcedureLifecycleStep::CompletionEmitted {
-                    committed: true,
-                    durable_lsn: Some(durable_lsn),
-                },
-            ) => {
-                self.require_same_durable_lsn(durable_lsn)?;
-                Ok(ProcedureLifecycleCursor::CompletionEmitted)
-            }
-            (
-                ProcedureLifecycleCursor::RollbackDurable,
-                ProcedureLifecycleStep::CompletionEmitted {
-                    committed: false,
-                    durable_lsn: Some(durable_lsn),
-                },
-            ) => {
-                self.require_same_durable_lsn(durable_lsn)?;
-                Ok(ProcedureLifecycleCursor::CompletionEmitted)
-            }
-            (
-                ProcedureLifecycleCursor::CompletionEmitted,
-                ProcedureLifecycleStep::RecoveryStarted { last_durable_lsn },
-            ) => {
-                let durable_lsn = self.durable_lsn.ok_or_else(|| {
-                    observe_error("recovery startup requires prior durable transaction evidence")
-                })?;
-                if last_durable_lsn < durable_lsn {
-                    return Err(observe_error(
-                        "recovery startup last durable LSN must not precede procedure durable LSN",
-                    ));
-                }
-                Ok(ProcedureLifecycleCursor::RecoveryStarted)
-            }
-            (
-                ProcedureLifecycleCursor::Empty | ProcedureLifecycleCursor::AdmissionAccepted,
-                ProcedureLifecycleStep::PreTransactionRejected,
-            ) => self.require_no_transaction_evidence(
-                event,
-                ProcedureLifecycleCursor::PreTransactionRejected,
-                "pre-transaction rejection evidence",
-            )
-            .and_then(|cursor| {
-                if matches!(&event.event, TraceEvent::AuthorizationDenied(_)) {
-                    return Err(observe_error(
-                        "procedure lifecycle authorization denial requires a V0 security audit event",
-                    ));
-                }
-
-                Ok(cursor)
-            }),
-            (
-                ProcedureLifecycleCursor::PreTransactionRejected,
-                ProcedureLifecycleStep::CompletionEmitted {
-                    committed: false,
-                    durable_lsn: None,
-                },
-            ) => self.require_no_transaction_evidence(
-                event,
-                ProcedureLifecycleCursor::PreTransactionCompletionEmitted,
-                "pre-transaction completion evidence",
-            ),
-            _ => Err(observe_error(format!(
-                "invalid procedure lifecycle transition from {:?} using {:?}",
-                self.cursor,
-                event.event.kind()
-            ))),
-        }
-    }
-
-    fn require_no_transaction_evidence(
-        &self,
-        event: &EventEnvelope,
-        next: ProcedureLifecycleCursor,
-        label: &str,
-    ) -> AndromedaResult<ProcedureLifecycleCursor> {
-        if !event.correlation.has_no_transaction_evidence() {
-            return Err(observe_error(format!(
-                "{label} must not include transaction_id or durable_lsn correlation before WAL flush",
-            )));
-        }
-
-        Ok(next)
-    }
-
-    fn require_transaction_boundary(
-        &self,
-        event: &EventEnvelope,
-        transaction_id: TransactionId,
-        durable_lsn: u64,
-    ) -> AndromedaResult<()> {
-        if event.correlation.transaction_id != Some(transaction_id)
-            || event.correlation.durable_lsn != Some(durable_lsn)
-        {
-            return Err(observe_error(
-                "WAL flush must introduce matching transaction_id and durable_lsn correlation",
-            ));
-        }
-
-        Ok(())
-    }
-
-    fn require_same_transaction_boundary(
-        &self,
-        transaction_id: TransactionId,
-        durable_lsn: u64,
-    ) -> AndromedaResult<()> {
-        if self.transaction_id != Some(transaction_id) || self.durable_lsn != Some(durable_lsn) {
-            return Err(observe_error(
-                "transaction terminal evidence must match the WAL flush transaction_id and durable_lsn",
-            ));
-        }
-
-        Ok(())
-    }
-
-    fn require_same_durable_lsn(&self, durable_lsn: u64) -> AndromedaResult<()> {
-        if self.durable_lsn != Some(durable_lsn) {
-            return Err(observe_error(
-                "completion evidence must match the durable LSN established by WAL flush",
-            ));
-        }
-
-        Ok(())
-    }
-
-    fn apply_step(&mut self, step: ProcedureLifecycleStep, event: &EventEnvelope) {
-        if matches!(&event.event, TraceEvent::SecurityAudit(_)) {
-            self.security_audit_seen = true;
-        }
-
-        self.request_id = event.correlation.request_id;
-        self.session_id = event.correlation.session_id;
-        self.contract_hash = event.correlation.contract_hash;
-        self.catalog_version = event.correlation.catalog_version;
-        self.catalog_object_id = event.correlation.catalog_object_id;
-
-        match step {
-            ProcedureLifecycleStep::WalFlushed {
-                transaction_id,
-                durable_lsn,
-            }
-            | ProcedureLifecycleStep::CommitVisible {
-                transaction_id,
-                durable_lsn,
-            }
-            | ProcedureLifecycleStep::RollbackDurable {
-                transaction_id,
-                durable_lsn,
-            } => {
-                self.transaction_id = Some(transaction_id);
-                self.durable_lsn = Some(durable_lsn);
-            }
-            ProcedureLifecycleStep::RecoveryStarted { last_durable_lsn } => {
-                self.durable_lsn = Some(last_durable_lsn);
-            }
-            ProcedureLifecycleStep::AdmissionAccepted
-            | ProcedureLifecycleStep::Authorized
-            | ProcedureLifecycleStep::IoAdmitted
-            | ProcedureLifecycleStep::CompletionEmitted { .. }
-            | ProcedureLifecycleStep::PreTransactionRejected => {}
-        }
-    }
-}
-
-impl ProcedureLifecycleStep {
-    fn from_event(event: &EventEnvelope) -> AndromedaResult<Self> {
-        match &event.event {
-            TraceEvent::Decision(trace)
-                if trace.decision == CriticalDecisionKind::ContractValidation =>
-            {
-                Ok(Self::AdmissionAccepted)
-            }
-            TraceEvent::Decision(trace)
-                if trace.decision == CriticalDecisionKind::SecurityAuthorization =>
-            {
-                Ok(Self::Authorized)
-            }
-            TraceEvent::SecurityAudit(trace) if trace.outcome == SecurityAuditOutcome::Allowed => {
-                Ok(Self::Authorized)
-            }
-            TraceEvent::Decision(trace)
-                if matches!(
-                    trace.decision,
-                    CriticalDecisionKind::IoBudgetValidation
-                        | CriticalDecisionKind::IoPlacementDecision
-                ) =>
-            {
-                Ok(Self::IoAdmitted)
-            }
-            TraceEvent::IoBudgetDecision(trace) if trace.accepted => Ok(Self::IoAdmitted),
-            TraceEvent::IoPlacementDecision(trace) if trace.accepted => Ok(Self::IoAdmitted),
-            TraceEvent::WalEvent(trace) if trace.operation == WalOperation::Flush => {
-                let transaction_id = trace.transaction_id.ok_or_else(|| {
-                    observe_error("procedure lifecycle WAL flush requires transaction_id evidence")
-                })?;
-                let durable_lsn = trace.durable_lsn.ok_or_else(|| {
-                    observe_error("procedure lifecycle WAL flush requires durable_lsn evidence")
-                })?;
-                Ok(Self::WalFlushed {
-                    transaction_id,
-                    durable_lsn,
-                })
-            }
-            TraceEvent::CommitVisible(trace) => Ok(Self::CommitVisible {
-                transaction_id: trace.transaction_id,
-                durable_lsn: trace.durable_commit_lsn,
-            }),
-            TraceEvent::RollbackDurable(trace) => Ok(Self::RollbackDurable {
-                transaction_id: trace.transaction_id,
-                durable_lsn: trace.durable_rollback_lsn,
-            }),
-            TraceEvent::CompletionEmitted(trace) => Ok(Self::CompletionEmitted {
-                committed: trace.committed,
-                durable_lsn: trace.durable_lsn,
-            }),
-            TraceEvent::RecoveryStartup(trace) => Ok(Self::RecoveryStarted {
-                last_durable_lsn: trace.last_durable_lsn,
-            }),
-            TraceEvent::ContractRejected(_)
-            | TraceEvent::AuthorizationDenied(_)
-            | TraceEvent::SecurityAudit(SecurityAuditTrace {
-                outcome: SecurityAuditOutcome::Denied,
-                ..
-            }) => Ok(Self::PreTransactionRejected),
-            _ => Err(observe_error(
-                "event is not accepted as procedure lifecycle sequence evidence",
-            )),
-        }
-    }
-}
-
-impl EventSink for InMemoryEventSequence {
-    fn emit(&mut self, event: EventEnvelope) -> AndromedaResult<()> {
-        self.append(event)
-    }
-}
-
-fn observe_error(message: impl Into<String>) -> AndromedaError {
+pub(crate) fn observe_error(message: impl Into<String>) -> AndromedaError {
     AndromedaError::new(AndromedaErrorKind::Internal, message)
 }
 
@@ -2298,7 +1873,7 @@ fn non_empty_evidence(label: &str, value: impl Into<String>) -> AndromedaResult<
     Ok(value)
 }
 
-fn contains_sensitive_marker(text: &str) -> bool {
+pub(super) fn contains_sensitive_marker(text: &str) -> bool {
     let lowered = text.to_ascii_lowercase();
     [
         "-----begin",
@@ -2314,7 +1889,6 @@ fn contains_sensitive_marker(text: &str) -> bool {
     .iter()
     .any(|marker| lowered.contains(marker))
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2618,5 +2192,418 @@ mod tests {
 
         let err = sink.emit(envelope).unwrap_err();
         assert_eq!(err.message(), "sink unavailable");
+    }
+
+    // ------------------------------------------------------------------
+    // ProtocolRejectionTrace shape tests (Wave 5 protocol observability)
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn protocol_rejection_crc_constructor_carries_pre_auth_evidence() {
+        let trace = ProtocolRejectionTrace::header_crc_mismatch(
+            TraceId::new(1),
+            Some(7),
+            Some(ProtocolSurfacePlane::Application),
+            true,
+            "frame header CRC mismatch on Hello",
+        );
+        assert_eq!(trace.reason, ProtocolRejectionReason::HeaderCrcMismatch);
+        assert!(trace.pre_auth);
+        assert_eq!(trace.scope, ProtocolEventScope::Connection);
+        assert!(trace.has_minimum_evidence());
+        assert!(trace.reason.is_safety_critical());
+    }
+
+    #[test]
+    fn protocol_rejection_unsupported_version_requires_version_evidence() {
+        let trace = ProtocolRejectionTrace::unsupported_version(
+            TraceId::new(2),
+            Some(11),
+            42,
+            true,
+            "unsupported QUIC frame codec version",
+        );
+        assert_eq!(trace.protocol_version, Some(42));
+        assert_eq!(trace.reason, ProtocolRejectionReason::UnsupportedVersion);
+        assert!(trace.has_minimum_evidence());
+        let projected = trace.as_decision_trace();
+        assert_eq!(projected.decision, CriticalDecisionKind::UnsupportedVersion);
+    }
+
+    #[test]
+    fn protocol_rejection_surface_mismatch_records_both_planes() {
+        let trace = ProtocolRejectionTrace::surface_plane_mismatch(
+            TraceId::new(3),
+            Some(99),
+            Some(123),
+            ProtocolSurfacePlane::Application,
+            ProtocolSurfacePlane::Administration,
+            Some(5),
+            false,
+        );
+        assert_eq!(trace.reason, ProtocolRejectionReason::SurfacePlaneMismatch);
+        assert!(trace.detail.contains("plane code 1"));
+        assert!(trace.detail.contains("plane code 2"));
+        assert!(trace.has_minimum_evidence());
+    }
+
+    #[test]
+    fn protocol_rejection_family_blocked_records_frame_type() {
+        let trace = ProtocolRejectionTrace::frame_family_blocked(
+            TraceId::new(4),
+            Some(1),
+            Some(2),
+            ProtocolSurfacePlane::Monitoring,
+            5,
+            false,
+            "RpcExecuteRequest not permitted on Monitoring plane",
+        );
+        assert_eq!(
+            trace.reason,
+            ProtocolRejectionReason::FrameFamilyNotPermitted
+        );
+        assert_eq!(trace.frame_type_code, Some(5));
+        assert!(trace.has_minimum_evidence());
+    }
+
+    #[test]
+    fn protocol_rejection_sequence_violation_carries_position() {
+        let trace = ProtocolRejectionTrace::result_stream_sequence_violation(
+            TraceId::new(5),
+            Some(101),
+            Some(202),
+            7,
+            Some(3),
+            "RpcBatch frame received before RpcMetadata",
+        );
+        assert_eq!(
+            trace.reason,
+            ProtocolRejectionReason::ResultStreamSequenceViolation
+        );
+        assert_eq!(trace.sequence_position, Some(3));
+        assert_eq!(trace.scope, ProtocolEventScope::Request);
+        assert!(trace.has_minimum_evidence());
+    }
+
+    #[test]
+    fn protocol_rejection_oversized_payload_records_length_and_scope() {
+        let pre = ProtocolRejectionTrace::oversized_payload(
+            TraceId::new(6),
+            None,
+            None,
+            None,
+            16 * 1024 * 1024 + 1,
+            true,
+            "frame payload length exceeds maximum during Hello",
+        );
+        assert_eq!(pre.scope, ProtocolEventScope::Connection);
+        assert_eq!(pre.payload_length, Some(16 * 1024 * 1024 + 1));
+        assert!(pre.has_minimum_evidence());
+
+        let post = ProtocolRejectionTrace::oversized_payload(
+            TraceId::new(7),
+            Some(1),
+            Some(2),
+            Some(5),
+            16 * 1024 * 1024 + 1,
+            false,
+            "frame payload length exceeds maximum",
+        );
+        assert_eq!(post.scope, ProtocolEventScope::Request);
+        assert!(post.has_minimum_evidence());
+    }
+
+    #[test]
+    fn protocol_rejection_pre_auth_command_marks_pre_auth_true() {
+        let trace = ProtocolRejectionTrace::pre_auth_command(
+            TraceId::new(8),
+            Some(1),
+            Some(2),
+            5,
+            Some(ProtocolSurfacePlane::Application),
+            "RPC dispatch attempted before session handshake completed",
+        );
+        assert!(trace.pre_auth);
+        assert_eq!(
+            trace.reason,
+            ProtocolRejectionReason::PreAuthCommandRejected
+        );
+        assert!(trace.has_minimum_evidence());
+        assert!(trace.reason.is_safety_critical());
+    }
+
+    #[test]
+    fn protocol_rejection_minimum_evidence_rejects_zero_trace_or_empty_detail() {
+        let zero_trace = ProtocolRejectionTrace::header_crc_mismatch(
+            TraceId::new(0),
+            Some(1),
+            None,
+            true,
+            "crc mismatch",
+        );
+        assert!(!zero_trace.has_minimum_evidence());
+
+        let empty_detail = ProtocolRejectionTrace::header_crc_mismatch(
+            TraceId::new(1),
+            Some(1),
+            None,
+            true,
+            "   ",
+        );
+        assert!(!empty_detail.has_minimum_evidence());
+    }
+
+    // --- transition trace envelope integration ------------------------------
+
+    fn transition_correlation(
+        request_id: u64,
+        session_id: u64,
+        transaction_id: Option<u64>,
+        durable_lsn: Option<u64>,
+    ) -> EventCorrelation {
+        EventCorrelation {
+            request_id: Some(RequestId::new(request_id)),
+            session_id: Some(SessionId::new(session_id)),
+            contract_hash: None,
+            catalog_version: None,
+            catalog_object_id: None,
+            transaction_id: transaction_id.map(TransactionId::new),
+            durable_lsn,
+            protocol: None,
+        }
+    }
+
+    #[test]
+    fn envelope_accepts_terminal_transaction_transition_with_durable_lsn() {
+        let trace = TransactionTransitionTrace {
+            trace_id: TraceId::new(70),
+            transaction_id: TransactionId::new(901),
+            invocation_id: Some(InvocationId::new(11)),
+            request_id: Some(RequestId::new(3)),
+            session_id: Some(SessionId::new(4)),
+            prev_phase: TransactionPhaseCode::COMMITTING,
+            next_phase: TransactionPhaseCode::COMMITTED,
+            durable_lsn: Some(4242),
+            reason_code: TransitionReasonCode::DURABLE_WAL_FLUSH,
+            reason: "WAL flush proved durable commit boundary".to_string(),
+        };
+
+        let envelope = EventEnvelope::new(
+            EventId::new(1),
+            transition_correlation(3, 4, Some(901), Some(4242)),
+            TraceEvent::TransactionTransition(trace),
+        )
+        .expect("terminal transaction transition envelope must validate");
+
+        assert_eq!(
+            envelope.event.kind(),
+            CriticalDecisionKind::TransactionTransition
+        );
+        assert_eq!(envelope.event.trace_id(), TraceId::new(70));
+    }
+
+    #[test]
+    fn envelope_rejects_terminal_transaction_transition_without_durable_lsn() {
+        let trace = TransactionTransitionTrace {
+            trace_id: TraceId::new(71),
+            transaction_id: TransactionId::new(902),
+            invocation_id: None,
+            request_id: None,
+            session_id: None,
+            prev_phase: TransactionPhaseCode::COMMITTING,
+            next_phase: TransactionPhaseCode::COMMITTED,
+            durable_lsn: None,
+            reason_code: TransitionReasonCode::DURABLE_WAL_FLUSH,
+            reason: "claims terminal commit without durable LSN".to_string(),
+        };
+
+        let err = EventEnvelope::new(
+            EventId::new(2),
+            transition_correlation(0, 0, Some(902), None),
+            TraceEvent::TransactionTransition(trace),
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), AndromedaErrorKind::Internal);
+    }
+
+    #[test]
+    fn envelope_rejects_transaction_transition_correlation_mismatch() {
+        let trace = TransactionTransitionTrace {
+            trace_id: TraceId::new(72),
+            transaction_id: TransactionId::new(903),
+            invocation_id: None,
+            request_id: Some(RequestId::new(5)),
+            session_id: Some(SessionId::new(6)),
+            prev_phase: TransactionPhaseCode::ACTIVE,
+            next_phase: TransactionPhaseCode::COMMITTING,
+            durable_lsn: None,
+            reason_code: TransitionReasonCode::NORMAL_PROGRESS,
+            reason: "caller requested commit".to_string(),
+        };
+
+        // Envelope correlation transaction_id deliberately does not match
+        // payload transaction_id.
+        let err = EventEnvelope::new(
+            EventId::new(3),
+            transition_correlation(5, 6, Some(999), None),
+            TraceEvent::TransactionTransition(trace),
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), AndromedaErrorKind::Internal);
+    }
+
+    #[test]
+    fn envelope_accepts_execution_transition_committed_with_durable_lsn() {
+        let trace = ExecutionTransitionTrace {
+            trace_id: TraceId::new(80),
+            invocation_id: InvocationId::new(31),
+            request_id: Some(RequestId::new(9)),
+            session_id: Some(SessionId::new(10)),
+            transaction_id: Some(TransactionId::new(555)),
+            completion_code: Some(1),
+            prev_phase: Some(TransactionPhaseCode::COMMITTING),
+            next_phase: Some(TransactionPhaseCode::COMMITTED),
+            durable_lsn: Some(7777),
+            reason_code: TransitionReasonCode::DURABLE_WAL_FLUSH,
+            reason: "execution observed durable commit".to_string(),
+        };
+
+        let envelope = EventEnvelope::new(
+            EventId::new(4),
+            transition_correlation(9, 10, Some(555), Some(7777)),
+            TraceEvent::ExecutionTransition(trace),
+        )
+        .expect("committed execution transition envelope must validate");
+
+        assert_eq!(
+            envelope.event.kind(),
+            CriticalDecisionKind::ExecutionTransition
+        );
+    }
+
+    #[test]
+    fn envelope_rejects_execution_transition_terminal_without_durable_lsn() {
+        let trace = ExecutionTransitionTrace {
+            trace_id: TraceId::new(81),
+            invocation_id: InvocationId::new(32),
+            request_id: Some(RequestId::new(9)),
+            session_id: Some(SessionId::new(10)),
+            transaction_id: Some(TransactionId::new(556)),
+            completion_code: Some(2),
+            prev_phase: Some(TransactionPhaseCode::ROLLING_BACK),
+            next_phase: Some(TransactionPhaseCode::ROLLED_BACK),
+            durable_lsn: None,
+            reason_code: TransitionReasonCode::DURABLE_WAL_FLUSH,
+            reason: "claims rollback durable without LSN".to_string(),
+        };
+
+        let err = EventEnvelope::new(
+            EventId::new(5),
+            transition_correlation(9, 10, Some(556), None),
+            TraceEvent::ExecutionTransition(trace),
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), AndromedaErrorKind::Internal);
+    }
+
+    #[test]
+    fn envelope_rejects_pre_transaction_rejection_carrying_transaction_or_lsn() {
+        // Payload-level forging is already blocked by the trace's own
+        // validate(); this test exercises the envelope-level guard against
+        // smuggling transaction/durable_lsn evidence through the correlation
+        // header on a pre-transaction rejection path.
+        let trace = ExecutionTransitionTrace {
+            trace_id: TraceId::new(82),
+            invocation_id: InvocationId::new(33),
+            request_id: Some(RequestId::new(9)),
+            session_id: Some(SessionId::new(10)),
+            transaction_id: None,
+            completion_code: Some(8),
+            prev_phase: None,
+            next_phase: None,
+            durable_lsn: None,
+            reason_code: TransitionReasonCode::PRE_TRANSACTION_REJECTION,
+            reason: "contract validation failed before any transaction".to_string(),
+        };
+
+        let envelope_with_tx = EventEnvelope::new(
+            EventId::new(6),
+            transition_correlation(9, 10, Some(123), None),
+            TraceEvent::ExecutionTransition(trace.clone()),
+        );
+        assert!(envelope_with_tx.is_err());
+
+        let envelope_with_lsn = EventEnvelope::new(
+            EventId::new(7),
+            transition_correlation(9, 10, None, Some(42)),
+            TraceEvent::ExecutionTransition(trace.clone()),
+        );
+        assert!(envelope_with_lsn.is_err());
+
+        let envelope_clean = EventEnvelope::new(
+            EventId::new(8),
+            transition_correlation(9, 10, None, None),
+            TraceEvent::ExecutionTransition(trace),
+        )
+        .expect("clean pre-transaction rejection envelope must validate");
+        assert_eq!(
+            envelope_clean.event.kind(),
+            CriticalDecisionKind::ExecutionTransition
+        );
+    }
+
+    #[test]
+    fn in_memory_event_sink_records_and_queries_transition_events() {
+        let mut sink = InMemoryEventSink::new();
+
+        let tx_trace = TransactionTransitionTrace {
+            trace_id: TraceId::new(90),
+            transaction_id: TransactionId::new(700),
+            invocation_id: None,
+            request_id: Some(RequestId::new(2)),
+            session_id: Some(SessionId::new(3)),
+            prev_phase: TransactionPhaseCode::ACTIVE,
+            next_phase: TransactionPhaseCode::COMMITTING,
+            durable_lsn: None,
+            reason_code: TransitionReasonCode::NORMAL_PROGRESS,
+            reason: "caller requested commit".to_string(),
+        };
+        let tx_envelope = EventEnvelope::new(
+            EventId::new(1),
+            transition_correlation(2, 3, Some(700), None),
+            TraceEvent::TransactionTransition(tx_trace),
+        )
+        .expect("tx transition envelope valid");
+
+        let exec_trace = ExecutionTransitionTrace {
+            trace_id: TraceId::new(91),
+            invocation_id: InvocationId::new(40),
+            request_id: Some(RequestId::new(2)),
+            session_id: Some(SessionId::new(3)),
+            transaction_id: Some(TransactionId::new(700)),
+            completion_code: Some(1),
+            prev_phase: Some(TransactionPhaseCode::COMMITTING),
+            next_phase: Some(TransactionPhaseCode::COMMITTED),
+            durable_lsn: Some(8181),
+            reason_code: TransitionReasonCode::DURABLE_WAL_FLUSH,
+            reason: "exec observed durable commit".to_string(),
+        };
+        let exec_envelope = EventEnvelope::new(
+            EventId::new(2),
+            transition_correlation(2, 3, Some(700), Some(8181)),
+            TraceEvent::ExecutionTransition(exec_trace),
+        )
+        .expect("exec transition envelope valid");
+
+        sink.emit(tx_envelope).expect("sink accepts tx transition");
+        sink.emit(exec_envelope)
+            .expect("sink accepts exec transition");
+
+        assert_eq!(sink.transaction_transition_events().len(), 1);
+        assert_eq!(sink.execution_transition_events().len(), 1);
+        assert_eq!(
+            sink.events_for_transaction(TransactionId::new(700)).len(),
+            2
+        );
     }
 }

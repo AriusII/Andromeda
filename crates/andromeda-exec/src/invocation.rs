@@ -1,7 +1,10 @@
 use andromeda_catalog::ProcedureContractRef;
-use andromeda_core::{AndromedaResult, CatalogVersion, ContractHash, InvocationId};
+use andromeda_core::{
+    AndromedaResult, CatalogVersion, ContractHash, InvocationId, RequestId, SessionId,
+};
 use andromeda_observe::{
-    AuthorizationDeniedTrace, ContractRejectedTrace, DecisionTrace, ProtocolCorrelation, TraceId,
+    AuthorizationDeniedTrace, ContractRejectedTrace, DecisionTrace, ExecutionTransitionTrace,
+    ProtocolCorrelation, TraceId, TransitionReasonCode,
 };
 use andromeda_proto::StructuredObjectHeader;
 
@@ -70,6 +73,49 @@ impl InvocationReject {
             rejection_code: Some(rejection_code),
             reason: self.reason.clone(),
         })
+    }
+
+    /// Project a pre-transaction rejection into an
+    /// [`ExecutionTransitionTrace`] so admission/contract rejections produce
+    /// the same shape of audit evidence as terminal completions. Pre-
+    /// transaction rejections must never carry transaction or durable LSN
+    /// evidence (no transaction was ever created), and `validate()` enforces
+    /// that contract.
+    pub fn project_transition(
+        &self,
+        invocation_id: InvocationId,
+        trace_id: TraceId,
+        request_id: Option<RequestId>,
+        session_id: Option<SessionId>,
+    ) -> ExecutionTransitionTrace {
+        let reason_code = match self.status {
+            CompletionStatus::PermissionDenied => TransitionReasonCode::PERMISSION_DENIED,
+            CompletionStatus::ContractRejected | CompletionStatus::FailedBeforeTransaction => {
+                TransitionReasonCode::PRE_TRANSACTION_REJECTION
+            }
+            CompletionStatus::Cancelled => TransitionReasonCode::CANCELLED,
+            CompletionStatus::SystemUnavailable => TransitionReasonCode::SYSTEM_UNAVAILABLE,
+            CompletionStatus::Poisoned => TransitionReasonCode::POISON,
+            CompletionStatus::Committed | CompletionStatus::RolledBack => {
+                // A reject that claims a transactional terminal status is
+                // a misuse upstream; we fall back to a non-terminal reason
+                // so the trace cannot fabricate a durable claim.
+                TransitionReasonCode::EXECUTOR_FAILURE
+            }
+        };
+        ExecutionTransitionTrace {
+            trace_id,
+            invocation_id,
+            request_id,
+            session_id,
+            transaction_id: None,
+            completion_code: Some(self.status.terminal_code()),
+            prev_phase: None,
+            next_phase: None,
+            durable_lsn: None,
+            reason_code,
+            reason: self.reason.clone(),
+        }
     }
 }
 

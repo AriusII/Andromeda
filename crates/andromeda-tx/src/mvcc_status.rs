@@ -38,19 +38,51 @@ impl TransactionStatusTable {
         self.statuses.get(&transaction_id).copied()
     }
 
+    /// Returns `true` only when the manager has explicitly recorded the
+    /// transaction as `Committed`. Used by snapshot validation and tests
+    /// to assert the durable-commit doctrine.
+    pub fn is_durable_committed(&self, transaction_id: TransactionId) -> bool {
+        matches!(
+            self.status(transaction_id),
+            Some(TransactionStatus::Committed)
+        )
+    }
+
+    /// Returns `true` if the transaction is recorded as `InFlight`.
+    pub fn is_in_flight(&self, transaction_id: TransactionId) -> bool {
+        matches!(
+            self.status(transaction_id),
+            Some(TransactionStatus::InFlight)
+        )
+    }
+
+    /// Resolve the visibility status of `transaction_id` for an MVCC version
+    /// authored at `version_ts`.
+    ///
+    /// **V0 doctrine:** a transaction is *only* considered `Committed` when
+    /// the manager has durably recorded that outcome (see
+    /// [`crate::TransactionManager::commit_durable`]). If no entry exists,
+    /// the writer is treated as `InFlight` — i.e. invisible to any other
+    /// snapshot — even if its `version_ts` precedes `snapshot.timestamp`.
+    ///
+    /// This eliminates the previous heuristic "no record + version older
+    /// than snapshot ⇒ assume committed", which violated the rule
+    /// `visible commit ≡ durable WAL`. Callers that need to observe a
+    /// transaction's writes must therefore arrange for that transaction's
+    /// durable commit to be mirrored into this table before issuing reads.
+    ///
+    /// `version_ts` and `snapshot` are kept in the signature to preserve
+    /// the call shape and to allow future refinements (e.g. distinguishing
+    /// "writer started after snapshot" from "writer is still in flight"
+    /// for diagnostics) without another breaking change.
     pub fn status_for_snapshot(
         &self,
         transaction_id: TransactionId,
-        version_ts: u64,
-        snapshot: &crate::mvcc_snapshot::Snapshot,
+        _version_ts: u64,
+        _snapshot: &crate::mvcc_snapshot::Snapshot,
     ) -> TransactionStatus {
-        self.status(transaction_id).unwrap_or_else(|| {
-            if snapshot.is_transaction_active(transaction_id) || version_ts > snapshot.timestamp {
-                TransactionStatus::InFlight
-            } else {
-                TransactionStatus::Committed
-            }
-        })
+        self.status(transaction_id)
+            .unwrap_or(TransactionStatus::InFlight)
     }
 }
 

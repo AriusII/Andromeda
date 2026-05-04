@@ -1,5 +1,5 @@
 use andromeda_catalog::{
-    CatalogObjectRef, CompatibilityPolicy, MultiResultPolicy, ProcedureContractRef,
+    CatalogObjectRef, CompatibilityPolicy, MultiResultPolicy, ObjectKind, ProcedureContractRef,
     ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName, ResultMetadataPolicy, StatsVersion,
     TransactionPolicy,
 };
@@ -385,8 +385,11 @@ pub struct SrplCatalogBindingEvidence {
     pub catalog_version: CatalogVersion,
     pub procedure_object: CatalogObjectRef,
     pub procedure_contract: ProcedureContractRef,
-    pub stock_object: SrplObjectBindingEvidence,
-    pub reservation_object: SrplObjectBindingEvidence,
+    /// Catalog objects referenced by the procedure body (tables read or
+    /// updated, structured objects emitted as result streams). The list is
+    /// ordered by the binder so the evidence is deterministic across
+    /// equivalent SRPL inputs.
+    pub bound_objects: Vec<SrplObjectBindingEvidence>,
 }
 
 impl SrplCatalogBindingEvidence {
@@ -394,15 +397,9 @@ impl SrplCatalogBindingEvidence {
         self.procedure_object
             .validate_for_definition(andromeda_catalog::ObjectKind::Procedure)?;
         self.procedure_contract.validate()?;
-        self.stock_object
-            .validate(andromeda_catalog::ObjectKind::Table)?;
-        self.reservation_object
-            .validate(andromeda_catalog::ObjectKind::StructuredObject)?;
 
         if self.procedure_object.catalog_version != self.catalog_version
             || self.procedure_contract.catalog_version != self.catalog_version
-            || self.stock_object.object.catalog_version != self.catalog_version
-            || self.reservation_object.object.catalog_version != self.catalog_version
         {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Catalog,
@@ -410,17 +407,31 @@ impl SrplCatalogBindingEvidence {
             ));
         }
 
-        if self.procedure_contract.contract_hash.is_zero()
-            || self.stock_object.shape_hash.is_zero()
-            || self.reservation_object.shape_hash.is_zero()
-        {
+        if self.procedure_contract.contract_hash.is_zero() {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Contract,
                 "SRPL executable plan binding hashes must not be zero",
             ));
         }
 
+        for bound in &self.bound_objects {
+            bound.validate(bound.kind)?;
+            if bound.object.catalog_version != self.catalog_version {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Catalog,
+                    "SRPL executable plan evidence requires exact catalog version match",
+                ));
+            }
+        }
+
         Ok(())
+    }
+
+    /// Returns evidence for the first bound object whose qualified name matches.
+    pub fn find_bound_object(&self, name: &QualifiedName) -> Option<&SrplObjectBindingEvidence> {
+        self.bound_objects
+            .iter()
+            .find(|bound| &bound.object.name == name)
     }
 }
 
@@ -428,11 +439,18 @@ impl SrplCatalogBindingEvidence {
 pub struct SrplObjectBindingEvidence {
     pub object: CatalogObjectRef,
     pub shape_hash: ContractHash,
+    pub kind: ObjectKind,
 }
 
 impl SrplObjectBindingEvidence {
-    pub fn validate(&self, expected_kind: andromeda_catalog::ObjectKind) -> AndromedaResult<()> {
+    pub fn validate(&self, expected_kind: ObjectKind) -> AndromedaResult<()> {
         self.object.validate_for_definition(expected_kind)?;
+        if self.kind != expected_kind {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "SRPL object binding kind must match the bound catalog object",
+            ));
+        }
         if self.shape_hash.is_zero() {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Contract,

@@ -3,8 +3,8 @@ use andromeda_catalog::{
     ProcedureContractRef, INVENTORY_RESERVE_STOCK_PERMISSION,
 };
 use andromeda_core::{
-    AndromedaResult, CatalogVersion, ContractHash, InvocationId, PipelineClass, ProcedureId,
-    ResourceBudget, TransactionId,
+    AndromedaError, AndromedaResult, CatalogVersion, ContractHash, InvocationId, PipelineClass,
+    ProcedureId, ResourceBudget, TransactionId,
 };
 use andromeda_exec::{
     AdmissionService, CompletionMappingService, CompletionStatus, ExecutionIoAdmissionDecision,
@@ -24,7 +24,7 @@ use andromeda_storage::{
     CoreIoPlacementRequest, InMemoryWal, Lsn, OperationalProfile, PageSize, StorageIoBudgetScope,
     StorageWorkloadClass, WalRecordKind,
 };
-use andromeda_tx::{MvccIsolationPolicy, Snapshot, TransactionState};
+use andromeda_tx::{MvccIsolationPolicy, Snapshot, TransactionState, TransactionStatus};
 
 #[derive(Debug, Default)]
 struct RecordingWal {
@@ -76,6 +76,62 @@ impl InvocationWal for LaggingFlushWal {
     }
 }
 
+#[derive(Debug, Default)]
+struct CommitAppendErrorWal {
+    records: Vec<(Lsn, WalRecordKind, Option<TransactionId>, Vec<u8>)>,
+}
+
+impl InvocationWal for CommitAppendErrorWal {
+    fn append(
+        &mut self,
+        kind: WalRecordKind,
+        transaction_id: Option<TransactionId>,
+        payload: &[u8],
+    ) -> AndromedaResult<Lsn> {
+        if kind == WalRecordKind::TxCommit {
+            return Err(AndromedaError::new(
+                andromeda_core::AndromedaErrorKind::Storage,
+                "injected commit append failure",
+            ));
+        }
+
+        let lsn = Lsn::new(self.records.len() as u64 + 1);
+        self.records
+            .push((lsn, kind, transaction_id, payload.to_vec()));
+        Ok(lsn)
+    }
+
+    fn flush_through(&mut self, _lsn: Lsn) -> AndromedaResult<Lsn> {
+        unreachable!("commit append failure must prevent flush");
+    }
+}
+
+#[derive(Debug, Default)]
+struct FlushErrorWal {
+    records: Vec<(Lsn, WalRecordKind, Option<TransactionId>, Vec<u8>)>,
+}
+
+impl InvocationWal for FlushErrorWal {
+    fn append(
+        &mut self,
+        kind: WalRecordKind,
+        transaction_id: Option<TransactionId>,
+        payload: &[u8],
+    ) -> AndromedaResult<Lsn> {
+        let lsn = Lsn::new(self.records.len() as u64 + 1);
+        self.records
+            .push((lsn, kind, transaction_id, payload.to_vec()));
+        Ok(lsn)
+    }
+
+    fn flush_through(&mut self, _lsn: Lsn) -> AndromedaResult<Lsn> {
+        Err(AndromedaError::new(
+            andromeda_core::AndromedaErrorKind::Storage,
+            "injected WAL flush failure",
+        ))
+    }
+}
+
 fn request(expected_contract_hash: ContractHash) -> InvocationRequest {
     InvocationRequest {
         invocation_id: InvocationId::new(11),
@@ -97,6 +153,7 @@ fn procedure(contract: ProcedureContractRef) -> LocalProcedure {
         result_metadata: ResultStreamMetadata {
             stream_id: 1,
             row_count_exact: Some(1),
+            row_count_max: Some(1),
             column_count: 1,
             cardinality: Cardinality::One,
         },
@@ -245,6 +302,7 @@ fn result_cardinality_rules_are_enforced_by_result_service() {
     let missing_exact_count = ResultStreamMetadata {
         stream_id: 1,
         row_count_exact: None,
+        row_count_max: None,
         column_count: 1,
         cardinality: Cardinality::One,
     };
@@ -258,6 +316,7 @@ fn result_cardinality_rules_are_enforced_by_result_service() {
     let wrong_exact_count = ResultStreamMetadata {
         stream_id: 1,
         row_count_exact: Some(0),
+        row_count_max: None,
         column_count: 1,
         cardinality: Cardinality::NonEmptyMany,
     };
@@ -272,6 +331,7 @@ fn result_cardinality_rules_are_enforced_by_result_service() {
     let unbounded_many = ResultStreamMetadata {
         stream_id: 1,
         row_count_exact: None,
+        row_count_max: None,
         column_count: 1,
         cardinality: Cardinality::Many,
     };
@@ -280,6 +340,7 @@ fn result_cardinality_rules_are_enforced_by_result_service() {
     let zero_stream = ResultStreamMetadata {
         stream_id: 0,
         row_count_exact: Some(1),
+        row_count_max: Some(1),
         column_count: 1,
         cardinality: Cardinality::One,
     };
@@ -293,12 +354,40 @@ fn result_cardinality_rules_are_enforced_by_result_service() {
     let row_count_mismatch = ResultStreamMetadata {
         stream_id: 1,
         row_count_exact: Some(1),
+        row_count_max: Some(1),
         column_count: 1,
         cardinality: Cardinality::One,
     };
     assert_eq!(
         row_count_mismatch
             .validate_completed_stream(0)
+            .unwrap_err()
+            .kind(),
+        andromeda_core::AndromedaErrorKind::Contract
+    );
+
+    // Bounded Many: actual row count exceeding declared row_count_max must
+    // be rejected before completion is admitted.
+    let bounded_many = ResultStreamMetadata::bounded(1, 1, Cardinality::Many, 2);
+    assert!(ResultValidationService::validate_before_payload(bounded_many).is_ok());
+    assert_eq!(
+        ResultValidationService::validate_completed_stream(bounded_many, 3)
+            .unwrap_err()
+            .kind(),
+        andromeda_core::AndromedaErrorKind::Contract
+    );
+
+    // Inconsistent metadata: declared row_count_max contradicts the
+    // intrinsic max of `One`.
+    let inconsistent_one = ResultStreamMetadata {
+        stream_id: 1,
+        row_count_exact: Some(1),
+        row_count_max: Some(2),
+        column_count: 1,
+        cardinality: Cardinality::One,
+    };
+    assert_eq!(
+        ResultValidationService::validate_before_payload(inconsistent_one)
             .unwrap_err()
             .kind(),
         andromeda_core::AndromedaErrorKind::Contract
@@ -781,6 +870,71 @@ fn local_vertical_rejects_visibility_when_flush_does_not_cover_commit_lsn() {
 }
 
 #[test]
+fn local_vertical_commit_append_failure_does_not_publish_terminal_status() {
+    let mut runtime = LocalVerticalRuntime::new(CommitAppendErrorWal::default());
+    let procedure = procedure(request(ContractHash::test_vector(7)).procedure);
+
+    let err = runtime
+        .execute(
+            request(ContractHash::test_vector(7)),
+            &procedure,
+            TraceId::new(8001),
+        )
+        .unwrap_err();
+
+    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Storage);
+    assert_eq!(runtime.wal().records.len(), 2);
+    assert_eq!(runtime.wal().records[0].1, WalRecordKind::TxBegin);
+    assert_eq!(runtime.wal().records[1].1, WalRecordKind::RowUpdate);
+    assert_eq!(
+        runtime.transactions().status(TransactionId::new(1)),
+        Some(TransactionStatus::InFlight),
+        "commit append failure occurs before request_commit/commit_durable, so status must not become Committed"
+    );
+    assert_eq!(
+        runtime
+            .transactions()
+            .snapshot(TransactionId::new(1))
+            .unwrap()
+            .state_machine
+            .state,
+        TransactionState::Active
+    );
+}
+
+#[test]
+fn local_vertical_flush_error_does_not_publish_terminal_status() {
+    let mut runtime = LocalVerticalRuntime::new(FlushErrorWal::default());
+    let procedure = procedure(request(ContractHash::test_vector(7)).procedure);
+
+    let err = runtime
+        .execute(
+            request(ContractHash::test_vector(7)),
+            &procedure,
+            TraceId::new(8002),
+        )
+        .unwrap_err();
+
+    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Storage);
+    assert_eq!(runtime.wal().records.len(), 3);
+    assert_eq!(runtime.wal().records[2].1, WalRecordKind::TxCommit);
+    assert_eq!(
+        runtime.transactions().status(TransactionId::new(1)),
+        Some(TransactionStatus::InFlight),
+        "flush failure occurs before commit_durable, so visible commit status must not be published"
+    );
+    assert_eq!(
+        runtime
+            .transactions()
+            .snapshot(TransactionId::new(1))
+            .unwrap()
+            .state_machine
+            .state,
+        TransactionState::Active
+    );
+}
+
+#[test]
 fn local_dispatcher_rolls_back_only_with_durable_wal_evidence() {
     let mut wal = RecordingWal::default();
     let receipt = LocalDispatcher::new(&mut wal)
@@ -1085,4 +1239,103 @@ fn service_and_dispatcher_api_is_usable_externally() {
     );
     assert_eq!(rollback_receipt.durable_lsn, Lsn::new(5));
     assert_eq!(rollback_receipt.wal_evidence.rollback_lsn, Lsn::new(5));
+    // Direct rollback (no cause routing) keeps `intermediate_state` empty so
+    // tooling can distinguish it from a Failed/Poisoned rollback.
+    assert!(rollback_receipt.intermediate_state.is_none());
+    assert_eq!(
+        rollback_receipt.cause,
+        andromeda_exec::RollbackCause::Direct
+    );
+}
+
+#[test]
+fn poison_rollback_routes_through_poisoned_state_with_durable_evidence() {
+    use andromeda_exec::RollbackCause;
+
+    let contract = inventory_reserve_stock_contract().unwrap();
+    let valid_effect = InventoryReserveStockExecutor::reserve(
+        ReserveStockCommand {
+            product_id: 42,
+            quantity: 1,
+        },
+        InventoryStock {
+            product_id: 42,
+            available_quantity: 10,
+            version: 7,
+        },
+    )
+    .unwrap();
+    let procedure = valid_effect.to_local_procedure(&contract).unwrap();
+
+    let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
+    let request = InvocationRequest {
+        invocation_id: InvocationId::new(821),
+        procedure: contract.as_ref(),
+        expected_contract_hash: contract.contract_hash,
+        catalog_version: contract.object.catalog_version,
+        structured_parameters: Vec::new(),
+    };
+
+    let outcome = runtime
+        .rollback_authorized_poison_after_begin(
+            request,
+            &procedure,
+            &InvocationContext::new(
+                TraceId::new(8210),
+                vec![INVENTORY_RESERVE_STOCK_PERMISSION.to_string()],
+            ),
+            "post-begin runtime witness contradicted MVCC snapshot",
+        )
+        .unwrap();
+
+    // Visible completion: RolledBack only after durable rollback evidence.
+    assert_eq!(outcome.completion.status, CompletionStatus::RolledBack);
+    assert_eq!(
+        outcome.completion.transaction_state,
+        Some(TransactionState::RolledBack)
+    );
+    assert_eq!(outcome.completion.rows_affected, Some(0));
+    assert_eq!(
+        outcome.completion.durable_lsn,
+        Some(runtime.wal().durable_lsn())
+    );
+
+    // WAL evidence: TxBegin then TxRollback only (never TxCommit).
+    assert_eq!(runtime.wal().records().len(), 2);
+    assert_eq!(
+        runtime.wal().records()[0].header.kind,
+        WalRecordKind::TxBegin
+    );
+    assert_eq!(
+        runtime.wal().records()[1].header.kind,
+        WalRecordKind::TxRollback
+    );
+    assert!(!runtime
+        .wal()
+        .records()
+        .iter()
+        .any(|record| record.header.kind == WalRecordKind::TxCommit));
+    // Rollback payload uses the poisoned-rollback domain tag, distinct from
+    // ordinary business validation failure rollback payloads.
+    assert!(runtime.wal().records()[1]
+        .payload
+        .starts_with(b"andromeda.exec.poisoned-rollback.v1\0"));
+    assert!(outcome.authorization_trace.is_some());
+
+    // Dispatcher level: poison cause must record the Poisoned intermediate
+    // state on the receipt so audit/recovery can prove the routing.
+    let mut wal = RecordingWal::default();
+    let receipt = LocalDispatcher::new(&mut wal)
+        .dispatch_rollback_with_cause(
+            LocalRollbackPlan {
+                transaction_id: TransactionId::new(0xCAFEBABE),
+                rollback_payload: b"engine invariant breach".to_vec(),
+            },
+            RollbackCause::Poison,
+        )
+        .unwrap();
+    assert_eq!(receipt.cause, RollbackCause::Poison);
+    assert_eq!(receipt.intermediate_state, Some(TransactionState::Poisoned));
+    assert_eq!(receipt.transaction_state, TransactionState::RolledBack);
+    assert!(receipt.durable_lsn >= receipt.wal_evidence.rollback_lsn);
 }

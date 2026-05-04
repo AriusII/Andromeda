@@ -1,8 +1,10 @@
 #![forbid(unsafe_code)]
 
+mod backup;
 mod cold_store;
 mod extent;
 mod file_wal;
+mod hadr;
 mod io_budget;
 mod lsn;
 mod manifest;
@@ -19,9 +21,11 @@ pub mod layout;
 pub mod publication;
 pub mod write_ahead_log;
 
+pub use backup::*;
 pub use cold_store::*;
 pub use extent::*;
 pub use file_wal::*;
+pub use hadr::*;
 pub use io_budget::*;
 pub use lsn::*;
 pub use manifest::*;

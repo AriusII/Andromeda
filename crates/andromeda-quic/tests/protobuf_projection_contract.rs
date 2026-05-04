@@ -134,9 +134,10 @@ fn result_stream_frames_carry_generated_metadata_batch_completion_payloads() {
             cardinality: generated::contract::v1::result_stream_descriptor::Cardinality::ExactlyOne
                 as i32,
             row_count_requirement:
-                generated::contract::v1::result_stream_descriptor::RowCountRequirement::ExactRequired
-                    as i32,
+            generated::contract::v1::result_stream_descriptor::RowCountRequirement::ExactRequired
+                as i32,
             row_count_exact: Some(1),
+            row_count_max: None,
         }],
         completion_policy: Some(generated::protocol::v1::ResultCompletionPolicy {
             completion_shape:

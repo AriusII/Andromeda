@@ -314,7 +314,7 @@ fn replay_indexed_catalog_mutation_records(
             .push(open.skipped(CatalogSkippedBatchReason::EndOfLogBeforeCommit));
     }
 
-    let final_visible_catalog_version = snapshot.version;
+    let final_visible_catalog_version = snapshot.visible_version();
     CatalogRecoveryOutcome {
         snapshot,
         report: CatalogRecoveryReport {
@@ -464,6 +464,12 @@ fn replay_committed_batch(
         skipped_anomalous_batches.push(open.skipped(CatalogSkippedBatchReason::ReplayRejected));
         return;
     }
+
+    // The replayed batch was observed via a Begin/Apply*/Commit triple in
+    // the durable catalog mutation log, so its next_version is durably
+    // published evidence even though `apply_mutation_plan` itself does not
+    // advance the visible/durable version.
+    snapshot.mark_durable_version_from_recovery(open.boundary.next_version);
 
     replayed_batches.push(CatalogRecoveredBatch {
         batch_id: open.boundary.batch_id,

@@ -41,6 +41,7 @@ use andromeda_core::{
 };
 
 use crate::{
+    digest::Sha256,
     names::QualifiedName,
     objects::{validate_columns, validate_columns_allow_empty},
     CatalogObjectRef, ObjectKind,
@@ -171,6 +172,109 @@ impl StatsVersion {
 impl From<u64> for StatsVersion {
     fn from(value: u64) -> Self {
         Self::new(value)
+    }
+}
+
+/// Digest-derived identity of the policy surface bound to a procedure contract.
+///
+/// `PolicyVersion` is computed from the canonical SHA-256 digest of every
+/// policy field that governs how an invocation may execute (transaction,
+/// compatibility, error, multi-result, result-metadata, required permissions,
+/// stats version).  Two contracts that differ only in non-policy fields share
+/// the same `PolicyVersion`; any change to a policy-relevant field changes it.
+///
+/// Bindings (see [`ProcedureContractBinding`]) carry `PolicyVersion` alongside
+/// `ContractHash`, `CatalogVersion`, and `StatsVersion` so consumers can
+/// validate policy-aware compatibility independently of the full contract
+/// shape hash.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PolicyVersion([u8; ContractHash::LEN]);
+
+impl PolicyVersion {
+    pub const LEN: usize = ContractHash::LEN;
+
+    pub const fn new(bytes: [u8; Self::LEN]) -> Self {
+        Self(bytes)
+    }
+
+    pub const fn zero() -> Self {
+        Self([0; Self::LEN])
+    }
+
+    pub const fn as_bytes(self) -> [u8; Self::LEN] {
+        self.0
+    }
+
+    pub fn is_zero(self) -> bool {
+        self.0.iter().all(|byte| *byte == 0)
+    }
+}
+
+impl Default for PolicyVersion {
+    fn default() -> Self {
+        Self::zero()
+    }
+}
+
+/// Full procedure binding evidence: the four identities that the SRPL
+/// specification requires every procedure invocation to bind against.
+///
+/// Unlike [`ProcedureContractRef`] (which is the legacy 3-tuple kept for
+/// backward compatibility with the exec engine), `ProcedureContractBinding`
+/// also carries the `StatsVersion` and `PolicyVersion` so binders can detect
+/// policy or statistics drift even when the canonical contract hash is
+/// otherwise unchanged.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProcedureContractBinding {
+    pub procedure_id: ProcedureId,
+    pub catalog_version: CatalogVersion,
+    pub contract_hash: ContractHash,
+    pub stats_version: StatsVersion,
+    pub policy_version: PolicyVersion,
+}
+
+impl ProcedureContractBinding {
+    pub fn validate(&self) -> AndromedaResult<()> {
+        if self.procedure_id.get() == 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "procedure binding id must not be zero",
+            ));
+        }
+        if self.catalog_version.get() == 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "procedure binding catalog version must not be zero",
+            ));
+        }
+        if self.contract_hash.is_zero() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "procedure binding contract hash must not be zero",
+            ));
+        }
+        if self.stats_version.get() == 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "procedure binding stats version must not be zero",
+            ));
+        }
+        if self.policy_version.is_zero() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "procedure binding policy version must not be zero",
+            ));
+        }
+
+        Ok(())
+    }
+
+    pub fn as_legacy_ref(&self) -> ProcedureContractRef {
+        ProcedureContractRef {
+            procedure_id: self.procedure_id,
+            contract_hash: self.contract_hash,
+            catalog_version: self.catalog_version,
+        }
     }
 }
 
@@ -345,6 +449,39 @@ impl ProcedureContract {
 
     pub fn canonical_hash(&self) -> ContractHash {
         canonical_procedure_contract_hash(self)
+    }
+
+    /// Compute the policy-only digest for this contract.
+    ///
+    /// Includes only the policy surface — required permissions, transaction
+    /// policy, compatibility policy, result-metadata policy, error policy,
+    /// multi-result policy, and stats version — so two contracts with
+    /// different shapes but identical policies produce identical
+    /// `PolicyVersion` values.  Schema changes (inputs, structured inputs,
+    /// result stream columns, protocol layout, name) do **not** influence it.
+    pub fn policy_version(&self) -> PolicyVersion {
+        canonical_policy_version(
+            self.stats_version,
+            &self.required_permissions,
+            self.transaction_policy,
+            self.compatibility_policy,
+            self.result_metadata_policy,
+            &self.error_policy,
+            self.multi_result_policy,
+        )
+    }
+
+    /// Build the four-identity binding evidence
+    /// (`ContractHash` / `CatalogVersion` / `StatsVersion` / `PolicyVersion`)
+    /// required by the SRPL specification for every procedure invocation.
+    pub fn binding(&self) -> ProcedureContractBinding {
+        ProcedureContractBinding {
+            procedure_id: self.procedure_id,
+            catalog_version: self.object.catalog_version,
+            contract_hash: self.contract_hash,
+            stats_version: self.stats_version,
+            policy_version: self.policy_version(),
+        }
     }
 
     pub fn validate_canonical_hash(&self) -> AndromedaResult<()> {
@@ -582,7 +719,7 @@ fn canonical_procedure_contract_hash_parts(
     multi_result_policy: MultiResultPolicy,
 ) -> ContractHash {
     let mut sink = StableHashSink::new();
-    sink.str("andromeda.catalog.procedure-contract.v2");
+    sink.str("andromeda.catalog.procedure-contract.v3.sha256");
     sink.qualified_name(name);
     sink.u64(stats_version.get());
     sink.contract_hash(protocol_layout.descriptor_set_hash);
@@ -632,28 +769,64 @@ fn canonical_procedure_contract_hash_parts(
     sink.finish()
 }
 
+fn canonical_policy_version(
+    stats_version: StatsVersion,
+    required_permissions: &[String],
+    transaction_policy: TransactionPolicy,
+    compatibility_policy: CompatibilityPolicy,
+    result_metadata_policy: ResultMetadataPolicy,
+    error_policy: &ProcedureErrorPolicy,
+    multi_result_policy: MultiResultPolicy,
+) -> PolicyVersion {
+    let mut sink = StableHashSink::new();
+    sink.str("andromeda.catalog.policy-version.v1.sha256");
+    sink.u64(stats_version.get());
+    sink.u64(required_permissions.len() as u64);
+    for permission in required_permissions {
+        sink.str(permission);
+    }
+    sink.u8(match transaction_policy.access_mode {
+        AccessMode::ReadOnly => 0,
+        AccessMode::ReadWrite => 1,
+    });
+    sink.u8(match transaction_policy.isolation {
+        IsolationPolicy::Snapshot => 0,
+        IsolationPolicy::Serializable => 1,
+    });
+    sink.bool(transaction_policy.retryable);
+    sink.u8(match compatibility_policy {
+        CompatibilityPolicy::AdditiveOnly => 0,
+        CompatibilityPolicy::ExactHash => 1,
+    });
+    sink.u8(match result_metadata_policy {
+        ResultMetadataPolicy::RequireBeforePayload => 0,
+        ResultMetadataPolicy::AllowStreamingUnknown => 1,
+    });
+    sink.bool(error_policy.rollback_on_error);
+    sink.u64(error_policy.allowed_error_codes.len() as u64);
+    for code in &error_policy.allowed_error_codes {
+        sink.str(code);
+    }
+    sink.u8(match multi_result_policy {
+        MultiResultPolicy::SingleResultOnly => 0,
+        MultiResultPolicy::MultipleResultStreamsAllowed => 1,
+    });
+    PolicyVersion::new(sink.finish().as_bytes())
+}
+
 struct StableHashSink {
-    lanes: [u64; 4],
+    hasher: Sha256,
 }
 
 impl StableHashSink {
     fn new() -> Self {
         Self {
-            lanes: [
-                0xcbf29ce484222325,
-                0x9e3779b97f4a7c15,
-                0x517cc1b727220a95,
-                0x6a09e667f3bcc909,
-            ],
+            hasher: Sha256::new(),
         }
     }
 
     fn finish(self) -> ContractHash {
-        let mut bytes = [0u8; ContractHash::LEN];
-        for (lane_index, lane) in self.lanes.into_iter().enumerate() {
-            bytes[lane_index * 8..(lane_index + 1) * 8].copy_from_slice(&lane.to_le_bytes());
-        }
-        ContractHash::new(bytes)
+        ContractHash::new(self.hasher.finalize())
     }
 
     fn bytes(&mut self, bytes: &[u8]) {
@@ -662,17 +835,11 @@ impl StableHashSink {
     }
 
     fn raw_bytes(&mut self, bytes: &[u8]) {
-        for byte in bytes {
-            self.u8(*byte);
-        }
+        self.hasher.update(bytes);
     }
 
     fn u8(&mut self, value: u8) {
-        for (lane_index, lane) in self.lanes.iter_mut().enumerate() {
-            *lane ^= u64::from(value).wrapping_add((lane_index as u64) << 8);
-            *lane = lane.wrapping_mul(0x100000001b3 + (lane_index as u64 * 0x1000003d));
-            *lane ^= lane.rotate_left(17 + lane_index as u32);
-        }
+        self.hasher.update(&[value]);
     }
 
     fn bool(&mut self, value: bool) {

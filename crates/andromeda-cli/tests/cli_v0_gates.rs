@@ -8,6 +8,30 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+const FORBIDDEN_SQL_CLIENT_DEPS: &[&str] = &[
+    "diesel",
+    "mysql",
+    "mysql_async",
+    "odbc-api",
+    "postgres",
+    "rusqlite",
+    "sea-orm",
+    "sqlx",
+    "tiberius",
+    "tokio-postgres",
+];
+
+const FORBIDDEN_APPLICATION_SQL_SURFACE_TOKENS: &[&str] = &[
+    "--sql",
+    "execute_sql",
+    "raw_sql",
+    "query_text",
+    "statement_text",
+    "sql_text",
+    "SqlCommand",
+    "SqlQuery",
+];
+
 #[test]
 fn protocol_smoke_detail_output_is_deterministic() {
     let first = run_cli(["protocol-smoke", "--detail"]);
@@ -79,6 +103,13 @@ fn workspace_policy_gates_do_not_drift_through_cli_scope() {
             "{} must not introduce serde_json runtime dependency",
             path.display()
         );
+        for dep in FORBIDDEN_SQL_CLIENT_DEPS {
+            assert!(
+                !contains_dependency_name(&text, dep),
+                "{} must not introduce SQL client/runtime dependency `{dep}`; application traffic must stay Procedure-only",
+                path.display()
+            );
+        }
     }
 
     let production_sources = collect_files(&crate_sources, |path| {
@@ -96,6 +127,9 @@ fn workspace_policy_gates_do_not_drift_through_cli_scope() {
         assert_no_source_token(&path, &text, "unsafe {");
         assert_no_source_token(&path, &text, "unsafe fn");
         assert_no_source_token(&path, &text, "unsafe impl");
+        for token in FORBIDDEN_APPLICATION_SQL_SURFACE_TOKENS {
+            assert_no_source_token(&path, &text, token);
+        }
     }
 
     let proto_files = collect_files(&proto_schemas, |path| {
@@ -199,4 +233,19 @@ fn assert_no_source_token(path: &Path, text: &str, token: &str) {
 fn contains_word(text: &str, word: &str) -> bool {
     text.split(|character: char| !character.is_ascii_alphanumeric() && character != '_')
         .any(|token| token.eq_ignore_ascii_case(word))
+}
+
+fn contains_dependency_name(text: &str, dependency: &str) -> bool {
+    text.lines().any(|line| {
+        let line = line.split('#').next().unwrap_or_default().trim();
+        if line.is_empty() {
+            return false;
+        }
+        let normalized = line.replace('_', "-").to_ascii_lowercase();
+        let dependency = dependency.replace('_', "-").to_ascii_lowercase();
+        normalized.starts_with(&format!("{dependency} "))
+            || normalized.starts_with(&format!("{dependency}="))
+            || normalized.contains(&format!("package = \"{dependency}\""))
+            || normalized.contains(&format!("package='{dependency}'"))
+    })
 }

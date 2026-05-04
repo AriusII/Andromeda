@@ -208,6 +208,7 @@ impl ReserveStockEffect {
             result_metadata: ResultStreamMetadata {
                 stream_id: INVENTORY_RESERVE_STOCK_RESULT_STREAM_ID,
                 row_count_exact: Some(1),
+                row_count_max: Some(1),
                 column_count: result_stream.columns.len() as u32,
                 cardinality: Cardinality::One,
             },

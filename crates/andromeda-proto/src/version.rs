@@ -20,6 +20,14 @@ impl ProtocolVersion {
         self.major == Self::SUPPORTED_MAJOR && self.minor == Self::SUPPORTED_MINOR
     }
 
+    /// Returns true when `other` declares the same major version and a minor
+    /// version no greater than `self`'s. Used by completion envelopes to
+    /// detect version drift between the executor that built the envelope and
+    /// the negotiated wire protocol version.
+    pub const fn is_compatible_with(self, other: Self) -> bool {
+        self.major == other.major && other.minor <= self.minor
+    }
+
     pub fn validate(self) -> AndromedaResult<()> {
         if self.major == 0 {
             return Err(AndromedaError::new(

@@ -33,7 +33,7 @@ use andromeda_core::{
 };
 use std::collections::BTreeSet;
 
-use crate::{contracts::ProcedureContract, names::QualifiedName};
+use crate::{contracts::ProcedureContract, digest::Sha256, names::QualifiedName};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ObjectKind {
@@ -151,7 +151,7 @@ impl TableDefinition {
 
     pub fn shape_hash(&self) -> ContractHash {
         let mut sink = ObjectShapeHashSink::new();
-        sink.str("andromeda.catalog.table-shape.v1");
+        sink.str("andromeda.catalog.table-shape.v2.sha256");
         sink.object_ref(&self.object);
         sink.columns(&self.columns);
         sink.finish()
@@ -185,7 +185,7 @@ impl StructuredObjectDefinition {
 
     pub fn shape_hash(&self) -> ContractHash {
         let mut sink = ObjectShapeHashSink::new();
-        sink.str("andromeda.catalog.structured-object-shape.v1");
+        sink.str("andromeda.catalog.structured-object-shape.v2.sha256");
         sink.object_ref(&self.object);
         sink.columns(&self.fields);
         sink.u64(self.unique_by.len() as u64);
@@ -290,7 +290,7 @@ impl CatalogDefinition {
             Self::StructuredObject(definition) => definition.shape_hash(),
             Self::Enum(definition) => {
                 let mut sink = ObjectShapeHashSink::new();
-                sink.str("andromeda.catalog.enum-shape.v1");
+                sink.str("andromeda.catalog.enum-shape.v2.sha256");
                 sink.object_ref(&definition.object);
                 sink.u64(definition.variants.len() as u64);
                 for variant in &definition.variants {
@@ -305,27 +305,18 @@ impl CatalogDefinition {
 }
 
 struct ObjectShapeHashSink {
-    lanes: [u64; 4],
+    hasher: Sha256,
 }
 
 impl ObjectShapeHashSink {
     fn new() -> Self {
         Self {
-            lanes: [
-                0xcbf29ce484222325,
-                0x9e3779b97f4a7c15,
-                0x517cc1b727220a95,
-                0x6a09e667f3bcc909,
-            ],
+            hasher: Sha256::new(),
         }
     }
 
     fn finish(self) -> ContractHash {
-        let mut bytes = [0u8; ContractHash::LEN];
-        for (lane_index, lane) in self.lanes.into_iter().enumerate() {
-            bytes[lane_index * 8..(lane_index + 1) * 8].copy_from_slice(&lane.to_le_bytes());
-        }
-        ContractHash::new(bytes)
+        ContractHash::new(self.hasher.finalize())
     }
 
     fn bytes(&mut self, bytes: &[u8]) {
@@ -334,17 +325,11 @@ impl ObjectShapeHashSink {
     }
 
     fn raw_bytes(&mut self, bytes: &[u8]) {
-        for byte in bytes {
-            self.u8(*byte);
-        }
+        self.hasher.update(bytes);
     }
 
     fn u8(&mut self, value: u8) {
-        for (lane_index, lane) in self.lanes.iter_mut().enumerate() {
-            *lane ^= u64::from(value).wrapping_add((lane_index as u64) << 8);
-            *lane = lane.wrapping_mul(0x100000001b3 + (lane_index as u64 * 0x1000003d));
-            *lane ^= lane.rotate_left(17 + lane_index as u32);
-        }
+        self.hasher.update(&[value]);
     }
 
     fn bool(&mut self, value: bool) {

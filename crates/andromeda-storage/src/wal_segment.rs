@@ -1,3 +1,8 @@
+//! Canonical WAL segment descriptor and bundled segment value type.
+//!
+//! [`WalSegmentDescriptor`] and [`WalSegment`] are defined here and only here.
+//! The [`crate::write_ahead_log::segment`] module re-exports them as part of
+//! the WAL domain facade and must not redefine them.
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{Lsn, WalRecord, WAL_FORMAT_VERSION};

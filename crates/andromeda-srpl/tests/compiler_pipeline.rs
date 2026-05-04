@@ -52,7 +52,7 @@ fn tiny_body_syntax_compiles_to_bounded_operation_ir() {
     let ir = compile_narrow_procedure_signature(
         "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool) body { read Inventory.ProductStock Stock one; assert Quantity InsufficientStock; update Inventory.ProductStock AvailableQuantity; emit Reservation (Reserved); }",
     )
-    .unwrap();
+        .unwrap();
 
     assert_eq!(ir.body.operations.len(), 4);
     assert!(ir.body.validate_bounded().is_ok());
@@ -357,7 +357,7 @@ fn direct_ir_to_catalog_definition_materializes_procedure_contract() {
     let ir = compile_narrow_procedure_signature(
         "procedure Inventory.ReserveStock accepts (ProductId i64) returns Reservation one (Reserved bool);",
     )
-    .unwrap();
+        .unwrap();
     let definition = lower_ir_to_catalog_definition(ir, contract_metadata()).unwrap();
 
     let CatalogDefinition::Procedure(contract) = definition else {
@@ -538,7 +538,7 @@ fn inventory_reserve_stock_body_binds_to_deterministic_executable_plan() {
     let mut ir = compile_narrow_procedure_signature(
         "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool);",
     )
-    .unwrap();
+        .unwrap();
     ir.body = inventory_reserve_stock_body_ir().unwrap();
     let snapshot = inventory_catalog_snapshot();
 
@@ -553,18 +553,23 @@ fn inventory_reserve_stock_body_binds_to_deterministic_executable_plan() {
         "Inventory.ReserveStock"
     );
     assert!(!first.evidence.procedure_contract.contract_hash.is_zero());
+    let stock_name = QualifiedName::parse("Inventory.ProductStock").unwrap();
+    let reservation_name = QualifiedName::parse("Inventory.Reservation").unwrap();
+    let stock_evidence = first
+        .evidence
+        .find_bound_object(&stock_name)
+        .expect("inventory ProductStock table is bound by SRPL evidence");
     assert_eq!(
-        first.evidence.stock_object.object.name.as_catalog_path(),
+        stock_evidence.object.name.as_catalog_path(),
         "Inventory.ProductStock"
     );
-    assert!(!first.evidence.stock_object.shape_hash.is_zero());
+    assert!(!stock_evidence.shape_hash.is_zero());
+    let reservation_evidence = first
+        .evidence
+        .find_bound_object(&reservation_name)
+        .expect("inventory Reservation structured object is bound by SRPL evidence");
     assert_eq!(
-        first
-            .evidence
-            .reservation_object
-            .object
-            .name
-            .as_catalog_path(),
+        reservation_evidence.object.name.as_catalog_path(),
         "Inventory.Reservation"
     );
     assert!(first.validate().is_ok());
@@ -593,7 +598,7 @@ fn executable_plan_rejects_unbound_inventory_catalog_objects() {
     let mut ir = compile_narrow_procedure_signature(
         "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool);",
     )
-    .unwrap();
+        .unwrap();
     ir.body = inventory_reserve_stock_body_ir().unwrap();
     let snapshot = CatalogSnapshot::empty(
         INVENTORY_DATABASE_ID,
@@ -612,7 +617,7 @@ fn executable_plan_rejects_stale_catalog_version_evidence() {
     let mut ir = compile_narrow_procedure_signature(
         "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool);",
     )
-    .unwrap();
+        .unwrap();
     ir.body = inventory_reserve_stock_body_ir().unwrap();
     let mut snapshot = inventory_catalog_snapshot();
     snapshot.version = CatalogVersion::new(2);
@@ -624,19 +629,167 @@ fn executable_plan_rejects_stale_catalog_version_evidence() {
 }
 
 #[test]
-fn executable_plan_rejects_unsupported_operation_order_and_cardinality() {
+fn executable_plan_rejects_assert_referencing_unbound_read_binding() {
     let mut ir = compile_narrow_procedure_signature(
         "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool);",
     )
-    .unwrap();
+        .unwrap();
     ir.body = inventory_reserve_stock_body_ir().unwrap();
-    ir.body.operations.swap(1, 2);
+    // Move Assert before Read so the assertion's binding reference is unbound.
+    ir.body.operations.swap(0, 1);
+    ir.body.operations[0].ordinal = 0;
     ir.body.operations[1].ordinal = 1;
-    ir.body.operations[2].ordinal = 2;
     let snapshot = inventory_catalog_snapshot();
 
     let error = bind_executable_procedure_plan(&ir, &snapshot).unwrap_err();
 
     assert_eq!(error.kind(), AndromedaErrorKind::Srpl);
-    assert!(error.message().contains("operation order"));
+    assert!(error.message().contains("unbound read binding"));
+}
+
+#[test]
+fn binder_supports_a_distinct_read_only_procedure_shape() {
+    use andromeda_catalog::{
+        inventory_product_stock_table, inventory_protocol_layout_ref, ProcedureContractCandidate,
+        ResultStreamContract,
+    };
+    use andromeda_srpl::model::{
+        SrplBusinessOperationIr, SrplEmitValueIr, SrplPredicateIr, SrplProcedureBodyIr,
+        SrplResultStreamIr,
+    };
+
+    let next_version = CatalogVersion::new(1);
+
+    // Distinct procedure: read-only multi-row query of ProductStock, no
+    // structured-object binding, Many cardinality.
+    let candidate = ProcedureContractCandidate {
+        object: CatalogObjectRef {
+            object_id: CatalogObjectId::new(0x6001),
+            name: QualifiedName::parse("Inventory.QueryProductStock").unwrap(),
+            kind: ObjectKind::Procedure,
+            catalog_version: next_version,
+        },
+        procedure_id: ProcedureId::new(0x6001),
+        stats_version: StatsVersion::new(1),
+        protocol_layout: inventory_protocol_layout_ref(),
+        inputs: vec![ColumnDescriptor {
+            name: "ProductId".to_string(),
+            data_type: TypeDescriptor::required(ScalarType::I64),
+            ordinal: 0,
+        }],
+        structured_inputs: Vec::new(),
+        result_streams: vec![ResultStreamContract {
+            stream_id: 1,
+            name: "Snapshot".to_string(),
+            columns: vec![ColumnDescriptor {
+                name: "AvailableQuantity".to_string(),
+                data_type: TypeDescriptor::required(ScalarType::I64),
+                ordinal: 0,
+            }],
+            row_count_exact_required: false,
+        }],
+        required_permissions: vec!["Inventory.QueryProductStock.Execute".to_string()],
+        transaction_policy: TransactionPolicy {
+            access_mode: AccessMode::ReadOnly,
+            isolation: IsolationPolicy::Serializable,
+            retryable: true,
+        },
+        compatibility_policy: CompatibilityPolicy::ExactHash,
+        result_metadata_policy: ResultMetadataPolicy::RequireBeforePayload,
+        error_policy: ProcedureErrorPolicy {
+            rollback_on_error: false,
+            allowed_error_codes: Vec::new(),
+        },
+        multi_result_policy: MultiResultPolicy::SingleResultOnly,
+    };
+    let contract = candidate.materialize().unwrap();
+
+    let batch = DefinitionBatch {
+        batch_id: DefinitionBatchId::new(0x6001),
+        database_id: INVENTORY_DATABASE_ID,
+        namespace_id: INVENTORY_NAMESPACE_ID,
+        base_version: CatalogVersion::new(0),
+        operations: vec![
+            DefinitionOperation::Create(CatalogDefinition::Table(
+                inventory_product_stock_table(next_version).unwrap(),
+            )),
+            DefinitionOperation::Create(CatalogDefinition::Procedure(contract)),
+        ],
+    };
+    let plan = batch.dry_run().unwrap();
+    let mut snapshot = CatalogSnapshot::empty(
+        INVENTORY_DATABASE_ID,
+        INVENTORY_NAMESPACE_ID,
+        batch.base_version,
+    );
+    snapshot.apply_mutation_plan(&plan.mutation_plan).unwrap();
+
+    let ir = SrplProcedureIr {
+        name: QualifiedName::parse("Inventory.QueryProductStock").unwrap(),
+        inputs: vec![ColumnDescriptor {
+            name: "ProductId".to_string(),
+            data_type: TypeDescriptor::required(ScalarType::I64),
+            ordinal: 0,
+        }],
+        result_streams: vec![SrplResultStreamIr {
+            name: "Snapshot".to_string(),
+            cardinality: Cardinality::Many,
+            columns: vec![ColumnDescriptor {
+                name: "AvailableQuantity".to_string(),
+                data_type: TypeDescriptor::required(ScalarType::I64),
+                ordinal: 0,
+            }],
+        }],
+        body: SrplProcedureBodyIr {
+            operations: vec![
+                SrplBusinessOperationIr {
+                    ordinal: 0,
+                    kind: SrplBusinessOperationKindIr::Read {
+                        source: QualifiedName::parse("Inventory.ProductStock").unwrap(),
+                        binding: "Stock".to_string(),
+                        cardinality: Cardinality::Many,
+                        predicates: vec![SrplPredicateIr::InputEqualsField {
+                            input: "ProductId".to_string(),
+                            binding: "Stock".to_string(),
+                            field: "ProductId".to_string(),
+                        }],
+                    },
+                },
+                SrplBusinessOperationIr {
+                    ordinal: 1,
+                    kind: SrplBusinessOperationKindIr::Emit {
+                        stream: "Snapshot".to_string(),
+                        values: vec![SrplEmitValueIr {
+                            column: "AvailableQuantity".to_string(),
+                            value: SrplValueIr::Field {
+                                binding: "Stock".to_string(),
+                                field: "AvailableQuantity".to_string(),
+                            },
+                        }],
+                    },
+                },
+            ],
+        },
+    };
+
+    let executable = bind_executable_procedure_plan(&ir, &snapshot).unwrap();
+    assert_eq!(executable.body.operations.len(), 2);
+    assert_eq!(
+        executable.evidence.procedure_object.name.as_catalog_path(),
+        "Inventory.QueryProductStock"
+    );
+    let stock_name = QualifiedName::parse("Inventory.ProductStock").unwrap();
+    assert!(executable.evidence.find_bound_object(&stock_name).is_some());
+    // No `Inventory.Snapshot` structured object exists; the optional
+    // discovery must NOT require one.
+    let snapshot_name = QualifiedName::parse("Inventory.Snapshot").unwrap();
+    assert!(executable
+        .evidence
+        .find_bound_object(&snapshot_name)
+        .is_none());
+    assert!(executable.validate().is_ok());
+
+    // Lowering and binding are deterministic across invocations.
+    let again = bind_executable_procedure_plan(&ir, &snapshot).unwrap();
+    assert_eq!(executable, again);
 }

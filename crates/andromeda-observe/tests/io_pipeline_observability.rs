@@ -443,10 +443,10 @@ fn core_io_workflow_correlates_placement_budget_and_gpu_policy_traces() {
                 policy.hardware.gpu,
                 "GPU policy accepted analytics off-critical-path workflow because batch analytics is not commit critical",
             )
-            .expect("GPU helper requires explicit reason evidence"),
+                .expect("GPU helper requires explicit reason evidence"),
         ),
     )
-    .expect("GPU acceptance trace carries explicit off-critical-path reason evidence");
+        .expect("GPU acceptance trace carries explicit off-critical-path reason evidence");
 
     assert_eq!(
         analytics_gpu_acceptance.event.kind(),
@@ -536,10 +536,10 @@ fn trace_storage_decision(
                     "{scenario} budget accepted because requested IO resources are within declared workflow limits"
                 ),
             )
-            .expect("budget helper requires explicit reason evidence"),
+                .expect("budget helper requires explicit reason evidence"),
         ),
     )
-    .expect("budget trace must include requested resources, limits, and reason");
+        .expect("budget trace must include requested resources, limits, and reason");
 
     [placement, budget]
 }

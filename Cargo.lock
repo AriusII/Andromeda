@@ -16,6 +16,7 @@ name = "andromeda-catalog"
 version = "0.1.0"
 dependencies = [
  "andromeda-core",
+ "andromeda-observe",
  "andromeda-storage",
 ]
 

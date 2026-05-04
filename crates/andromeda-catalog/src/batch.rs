@@ -404,14 +404,7 @@ impl CatalogMutationPlan {
 
     pub fn records(&self) -> Vec<CatalogMutationRecord> {
         let mut records = Vec::with_capacity(self.deltas.len() + 2);
-        let boundary = CatalogMutationBoundary {
-            batch_id: self.batch_id,
-            database_id: self.database_id,
-            namespace_id: self.namespace_id,
-            previous_version: self.previous_version,
-            next_version: self.next_version,
-            publication_semantics: self.publication_semantics,
-        };
+        let boundary = self.commit_boundary();
 
         records.push(CatalogMutationRecord::Begin(boundary));
         records.extend(
@@ -426,6 +419,17 @@ impl CatalogMutationPlan {
 
     pub fn record_count(&self) -> usize {
         self.deltas.len() + 2
+    }
+
+    pub fn commit_boundary(&self) -> CatalogMutationBoundary {
+        CatalogMutationBoundary {
+            batch_id: self.batch_id,
+            database_id: self.database_id,
+            namespace_id: self.namespace_id,
+            previous_version: self.previous_version,
+            next_version: self.next_version,
+            publication_semantics: self.publication_semantics,
+        }
     }
 
     pub fn mutation(&self) -> CatalogMutation {
@@ -842,6 +846,41 @@ mod tests {
 
         assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
         assert!(error.message().contains("kind"));
+    }
+
+    #[test]
+    fn definition_operation_surface_is_create_and_deprecate_until_lifecycle_extension() {
+        // DEC-022 specifies Alter Procedure lifecycle semantics, but the mutation
+        // surface is still intentionally guarded until implementation adds the
+        // corresponding dry-run/apply/recovery coverage. Keep this match
+        // exhaustive so a future enum extension is forced to update lifecycle
+        // tests explicitly.
+        let table = TableDefinition {
+            object: object(ObjectKind::Table),
+            columns: vec![column("ProductId", 0)],
+        };
+        let target = CatalogLifecycleTarget {
+            object: CatalogObjectRef {
+                object_id: CatalogObjectId::new(2),
+                name: QualifiedName::parse("Inventory.LegacyProduct").unwrap(),
+                kind: ObjectKind::Table,
+                catalog_version: CatalogVersion::new(10),
+            },
+        };
+        let operations = [
+            DefinitionOperation::Create(CatalogDefinition::Table(table)),
+            DefinitionOperation::Deprecate(target),
+        ];
+
+        let operation_labels: Vec<&'static str> = operations
+            .iter()
+            .map(|operation| match operation {
+                DefinitionOperation::Create(_) => "create",
+                DefinitionOperation::Deprecate(_) => "deprecate",
+            })
+            .collect();
+
+        assert_eq!(operation_labels, vec!["create", "deprecate"]);
     }
 
     #[test]
