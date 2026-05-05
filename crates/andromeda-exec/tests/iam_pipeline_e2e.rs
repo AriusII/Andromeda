@@ -17,7 +17,7 @@
 
 #[cfg(test)]
 mod iam_pipeline_tests {
-    use andromeda_core::{Permission, PrincipalRole, ProcedureId};
+    use andromeda_core::{Permission, PermissionSet, PrincipalRole, ProcedureId};
     use andromeda_exec::services::{
         ConcretePermissionEvaluator, DenialReason, LocalPrincipalResolver, PermissionDecision,
         PermissionEvaluator, PrincipalResolver,
@@ -551,6 +551,32 @@ mod iam_pipeline_tests {
 
         // Act & Assert: Wildcard matches any procedure
         assert!(perm.matches(&required));
+    }
+
+    #[test]
+    fn test_permission_matching_specific_does_not_satisfy_required_wildcard() {
+        // Arrange
+        let granted = Permission::ExecuteProcedure(ProcedureId::new(42));
+        let required_wildcard = Permission::ExecuteProcedure(ProcedureId::new(u64::MAX));
+
+        // Act & Assert: A specific procedure grant does not authorize an
+        // operation that requires the caller to hold the wildcard grant.
+        assert!(!granted.matches(&required_wildcard));
+    }
+
+    #[test]
+    fn test_permission_set_matching_is_directional_for_wildcard() {
+        let wildcard_grant = PermissionSet::from_vec(vec![Permission::ExecuteProcedure(
+            ProcedureId::new(u64::MAX),
+        )]);
+        let specific_grant =
+            PermissionSet::from_vec(vec![Permission::ExecuteProcedure(ProcedureId::new(42))]);
+
+        assert!(wildcard_grant.has_permission(&Permission::ExecuteProcedure(ProcedureId::new(42))));
+        assert!(
+            !specific_grant
+                .has_permission(&Permission::ExecuteProcedure(ProcedureId::new(u64::MAX)))
+        );
     }
 
     #[test]

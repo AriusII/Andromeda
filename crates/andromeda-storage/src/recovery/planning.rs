@@ -1,11 +1,12 @@
 use andromeda_core::AndromedaResult;
 use andromeda_observe::TraceId;
 
+pub use crate::format_version::StorageFormatFingerprint;
 use crate::format_version::{CompatibilityMatrix, FormatVersion, StorageFormatKind};
 use crate::{
     DatabaseManifest, DurableTransactionResume, DurableTransactionState,
-    IncompleteDurableTransaction, Lsn, WalRecord, WalRecordKind, WalScanResult, WalScanStop,
-    WalScanStopReason, summarize_transactions_from_records,
+    IncompleteDurableTransaction, Lsn, StorageFormatManifest, WalRecord, WalRecordKind,
+    WalScanResult, WalScanStop, WalScanStopReason, summarize_transactions_from_records,
 };
 
 use super::{
@@ -35,18 +36,6 @@ pub const RECOVERY_REQUIRED_STORAGE_FORMATS: &[StorageFormatKind] = &[
     StorageFormatKind::BTreeNode,
     StorageFormatKind::WalPayload,
 ];
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct StorageFormatFingerprint {
-    pub kind: StorageFormatKind,
-    pub version: FormatVersion,
-}
-
-impl StorageFormatFingerprint {
-    pub const fn new(kind: StorageFormatKind, version: FormatVersion) -> Self {
-        Self { kind, version }
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PreRedoStorageFormatRejection {
@@ -143,6 +132,19 @@ impl PreRedoStorageFormatGate {
             }
         }
     }
+
+    pub fn validate_replay_from_manifest(
+        startup_mode: StartupMode,
+        required_formats: &[StorageFormatKind],
+        storage_format_manifest: &StorageFormatManifest,
+    ) -> AndromedaResult<()> {
+        storage_format_manifest.validate()?;
+        Self::validate_replay(
+            startup_mode,
+            required_formats,
+            storage_format_manifest.fingerprints(),
+        )
+    }
 }
 
 fn first_format_rejection(
@@ -209,6 +211,26 @@ impl RecoveryPlan {
         startup_mode: StartupMode,
         durable_records: &[WalRecord],
     ) -> AndromedaResult<ConceptualRedoPlan> {
+        let storage_format_manifest = manifest.storage_format_manifest()?;
+        PreRedoStorageFormatGate::validate_replay_from_manifest(
+            startup_mode,
+            RECOVERY_REQUIRED_STORAGE_FORMATS,
+            &storage_format_manifest,
+        )?;
+        Self::from_manifest(manifest, startup_mode)?.build_redo_plan(durable_records)
+    }
+
+    pub fn from_manifest_wal_and_storage_format_manifest(
+        manifest: &DatabaseManifest,
+        startup_mode: StartupMode,
+        durable_records: &[WalRecord],
+        storage_format_manifest: &StorageFormatManifest,
+    ) -> AndromedaResult<ConceptualRedoPlan> {
+        PreRedoStorageFormatGate::validate_replay_from_manifest(
+            startup_mode,
+            RECOVERY_REQUIRED_STORAGE_FORMATS,
+            storage_format_manifest,
+        )?;
         Self::from_manifest(manifest, startup_mode)?.build_redo_plan(durable_records)
     }
 
@@ -231,6 +253,13 @@ impl RecoveryPlan {
         startup_mode: StartupMode,
         scan: &WalScanResult,
     ) -> AndromedaResult<ConceptualRedoPlan> {
+        let storage_format_manifest = manifest.storage_format_manifest()?;
+        PreRedoStorageFormatGate::validate_replay_from_manifest(
+            startup_mode,
+            RECOVERY_REQUIRED_STORAGE_FORMATS,
+            &storage_format_manifest,
+        )?;
+
         if matches!(
             scan.stopped.map(|stop| stop.reason),
             Some(

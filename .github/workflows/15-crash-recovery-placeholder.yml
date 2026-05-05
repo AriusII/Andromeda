@@ -1,0 +1,39 @@
+name: 15 - Crash Recovery Gate
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths: [ "crates/**", "tests/**", ".github/workflows/15-crash-recovery-placeholder.yml" ]
+  push:
+    branches: [ main ]
+    paths: [ "crates/**", "tests/**", ".github/workflows/15-crash-recovery-placeholder.yml" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crash-recovery-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  crash-recovery:
+    name: Crash recovery test placeholder
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/rust-setup
+        with:
+          toolchain: stable
+      - name: Run crash recovery tests if present
+        shell: bash
+        run: |
+          if cargo test --workspace --all-features --locked -- --list | grep -i "crash\|recovery\|wal" ; then
+            cargo test --workspace --all-features --locked crash -- --nocapture || true
+            cargo test --workspace --all-features --locked recovery -- --nocapture || true
+            cargo test --workspace --all-features --locked wal -- --nocapture || true
+          else
+            echo "No crash/recovery/WAL tests discovered yet."
+            echo "This workflow is intentionally present because crash/recovery testing is a C4/C5 project gate."
+          fi

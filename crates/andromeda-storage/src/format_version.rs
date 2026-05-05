@@ -193,6 +193,18 @@ impl StorageFormatKind {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StorageFormatFingerprint {
+    pub kind: StorageFormatKind,
+    pub version: FormatVersion,
+}
+
+impl StorageFormatFingerprint {
+    pub const fn new(kind: StorageFormatKind, version: FormatVersion) -> Self {
+        Self { kind, version }
+    }
+}
+
 /// Compatibility matrix for all supported format versions.
 ///
 /// This is the authoritative source of truth for version compatibility.

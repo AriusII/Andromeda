@@ -30,14 +30,23 @@
 //! - **Idempotency**: Calling twice with same tx_id returns same LSN (no double-write)
 //! - **Postcondition**: `is_durably_committed(tx_id)` returns true
 //!
-//! ## Rollback Contract (`record_rollback`)
+//! ## Legacy Rollback Contract (`record_rollback`)
+//!
+//! This trait predates the durable rollback record used by
+//! [`crate::CommitLogManager::record_rollback`] and does not receive a
+//! [`WalManager`] handle in `record_rollback`, so it cannot append or flush a
+//! TxRollback record by itself.
 //!
 //! - **Precondition**: Transaction is in Rolling Back state
-//! - **Asynchronicity**: Rollback is fire-and-forget; no durability guarantee required
+//! - **Asynchronicity**: Rollback is best-effort in this legacy adapter path
 //! - **Atomicity**: Rollback marks tx_id as rolled back to prevent visibility
 //! - **Visibility**: Transaction never becomes visible to snapshots
 //! - **Idempotency**: Multiple rollbacks for same tx_id are safe (no-op after first)
 //! - **Postcondition**: `is_durably_committed(tx_id)` returns false
+//!
+//! New production code that needs crash-recoverable rollback evidence should use
+//! `CommitLogManager::record_rollback`, which appends `TxRollback`, flushes it,
+//! then marks the transaction `RolledBack`.
 //!
 //! ## Durability Check Contract (`is_durably_committed`)
 //!
@@ -181,11 +190,13 @@ pub trait TxWalAdapterTrait: Send + Sync {
         wal_manager: Arc<dyn WalManager>,
     ) -> AndromedaResult<Lsn>;
 
-    /// Record a transaction rollback without WAL durability requirement.
+    /// Record a transaction rollback through the legacy best-effort adapter path.
     ///
     /// Rollbacks are best-effort operations that mark a transaction as rolled back
-    /// to prevent it from becoming visible to snapshots. Unlike commits, rollbacks
-    /// do not require durability guarantees (rolled-back transactions never execute).
+    /// to prevent it from becoming visible to snapshots. This trait method cannot
+    /// create durable rollback evidence because it has no WAL manager argument;
+    /// use [`crate::CommitLogManager::record_rollback`] for durable TxRollback
+    /// append+flush semantics.
     ///
     /// # Arguments
     ///
@@ -199,9 +210,9 @@ pub trait TxWalAdapterTrait: Send + Sync {
     ///   - Transaction is already committed (cannot rollback committed tx)
     ///   - Status table update fails (AndromedaErrorKind::Internal)
     ///
-    /// # Asynchronicity Contract
+    /// # Legacy Asynchronicity Contract
     ///
-    /// Rollback is fire-and-forget. After this method returns:
+    /// Rollback is fire-and-forget in this adapter shape. After this method returns:
     /// - The transaction is marked rolled back
     /// - No new snapshots will see the transaction
     /// - The transaction may be garbage collected

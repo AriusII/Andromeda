@@ -5,6 +5,7 @@
 //! - Monitoring backup progress
 //! - Listing recent backups with metadata
 
+use crate::diagnostic_json::{JSON_FLAG, json_option_string, json_string, parse_json_flag};
 use crate::error::cli_error;
 use andromeda_core::AndromedaResult;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -102,7 +103,7 @@ fn run_backup_start(args: &[String]) -> AndromedaResult<()> {
                 }
                 destination = Some(args[i].clone());
             }
-            "--json" => json_output = true,
+            JSON_FLAG => json_output = true,
             opt if opt.starts_with("--") => {
                 return Err(cli_error(format!("unknown backup start option: {}", opt)));
             }
@@ -158,7 +159,7 @@ fn run_backup_status(args: &[String]) -> AndromedaResult<()> {
         .parse()
         .map_err(|_| cli_error("backup-id must be an unsigned integer"))?;
 
-    let json_output = has_json_option(&args[1..]);
+    let json_output = parse_json_flag(&args[1..], "backup status")?;
 
     // MOCK: In a real implementation, this would query the backup scheduler.
     let report = BackupStatusReport {
@@ -197,7 +198,7 @@ fn run_backup_list(args: &[String]) -> AndromedaResult<()> {
                     .parse()
                     .map_err(|_| cli_error("--limit expects an unsigned integer"))?;
             }
-            "--json" => json_output = true,
+            JSON_FLAG => json_output = true,
             opt if opt.starts_with("--") => {
                 return Err(cli_error(format!("unknown backup list option: {}", opt)));
             }
@@ -270,10 +271,6 @@ fn print_backup_help() {
             .collect::<Vec<_>>()
             .join(", ")
     );
-}
-
-fn has_json_option(args: &[String]) -> bool {
-    args.iter().any(|arg| arg == "--json")
 }
 
 fn print_backup_status_human(report: &BackupStatusReport) {
@@ -366,30 +363,6 @@ fn format_bytes(bytes: u64) -> String {
         size /= 1024.0;
     }
     format!("{:.2} TiB", size)
-}
-
-fn json_option_string(value: Option<&str>) -> String {
-    value.map(json_string).unwrap_or_else(|| "null".to_string())
-}
-
-fn json_string(value: &str) -> String {
-    format!("\"{}\"", escape_json_str(value))
-}
-
-fn escape_json_str(value: &str) -> String {
-    let mut escaped = String::new();
-    for ch in value.chars() {
-        match ch {
-            '"' => escaped.push_str("\\\""),
-            '\\' => escaped.push_str("\\\\"),
-            '\n' => escaped.push_str("\\n"),
-            '\r' => escaped.push_str("\\r"),
-            '\t' => escaped.push_str("\\t"),
-            ch if ch.is_control() => escaped.push_str(&format!("\\u{:04x}", ch as u32)),
-            ch => escaped.push(ch),
-        }
-    }
-    escaped
 }
 
 fn unix_timestamp() -> u64 {

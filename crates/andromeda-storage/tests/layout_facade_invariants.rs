@@ -58,6 +58,16 @@ fn layout_extent_module_is_pure_facade_over_root() {
     assert_facade_alias!(root::ExtentId, layout::extent::ExtentId);
     assert_facade_alias!(root::ExtentState, layout::extent::ExtentState);
     assert_facade_alias!(root::ExtentDescriptor, layout::extent::ExtentDescriptor);
+    assert_facade_alias!(root::ExtentFreeRange, layout::extent::ExtentFreeRange);
+    assert_facade_alias!(
+        root::ColdExtentReclaimEvidence,
+        layout::extent::ColdExtentReclaimEvidence
+    );
+    assert_facade_alias!(root::ExtentManager, layout::extent::ExtentManager);
+    assert_facade_alias!(
+        root::ExtentManagerReplayRecord,
+        layout::extent::ExtentManagerReplayRecord
+    );
 }
 
 #[test]

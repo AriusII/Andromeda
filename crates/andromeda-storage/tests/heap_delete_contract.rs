@@ -5,7 +5,7 @@
 
 #![forbid(unsafe_code)]
 
-use andromeda_storage::{HeapPage, PageSize};
+use andromeda_storage::{HeapPage, HeapVacuumMode, PageSize};
 
 // ============================================================================
 // Single Tuple Deletion Tests (5 tests)
@@ -459,4 +459,105 @@ fn test_heap_compact_idempotent() {
     let reclaimed2 = page.compact_deleted().expect("compact 2");
 
     assert_eq!(reclaimed1, reclaimed2);
+}
+
+#[test]
+fn test_heap_compact_preserves_slot_ids_and_scan_ids() {
+    let mut page = HeapPage::new(PageSize::KiB16);
+
+    let slot0 = page.insert_tuple(b"row-0").expect("insert 0");
+    let slot1 = page.insert_tuple(b"row-1-deleted").expect("insert 1");
+    let slot2 = page.insert_tuple(b"row-2").expect("insert 2");
+    let slot3 = page.insert_tuple(b"row-3-deleted").expect("insert 3");
+    let slot4 = page.insert_tuple(b"row-4").expect("insert 4");
+
+    page.delete_tuple(slot1).expect("delete 1");
+    page.delete_tuple(slot3).expect("delete 3");
+
+    let reclaimed = page.compact_deleted().expect("compact");
+
+    assert_eq!((slot0, slot1, slot2, slot3, slot4), (0, 1, 2, 3, 4));
+    assert_eq!(page.slot_count(), 5, "compaction must not renumber slots");
+    assert_eq!(
+        reclaimed,
+        b"row-1-deleted".len() as u16 + b"row-3-deleted".len() as u16
+    );
+    assert_eq!(page.read_tuple(slot0).expect("read 0"), b"row-0");
+    assert!(page.read_tuple(slot1).is_err());
+    assert_eq!(page.read_tuple(slot2).expect("read 2"), b"row-2");
+    assert!(page.read_tuple(slot3).is_err());
+    assert_eq!(page.read_tuple(slot4).expect("read 4"), b"row-4");
+
+    let scanned_ids: Vec<u16> = page
+        .scan()
+        .collect::<Result<Vec<_>, _>>()
+        .expect("scan")
+        .into_iter()
+        .map(|(slot_id, _)| slot_id)
+        .collect();
+    assert_eq!(scanned_ids, vec![slot0, slot2, slot4]);
+}
+
+// ============================================================================
+// Heap Physical Vacuum Planning Contract
+// ============================================================================
+
+#[test]
+fn test_heap_vacuum_plan_empty_page_has_no_apply_requirements() {
+    let page = HeapPage::new(PageSize::KiB16);
+
+    let plan = page.vacuum_plan(HeapVacuumMode::OnlineStableRowIds);
+
+    assert!(plan.is_empty());
+    assert!(plan.preserves_row_ids);
+    assert!(!plan.row_id_remap_allowed);
+    assert!(!plan.requires_mvcc_gc_proof);
+    assert!(!plan.requires_wal_redo);
+    assert!(!plan.durable_format_change);
+}
+
+#[test]
+fn test_heap_vacuum_plan_stable_rowids_identifies_deleted_and_moved_live_slots() {
+    let mut page = HeapPage::new(PageSize::KiB16);
+    let slot0 = page.insert_tuple(b"aaaaa").expect("insert 0");
+    let slot1 = page.insert_tuple(b"bbb").expect("insert 1");
+    let slot2 = page.insert_tuple(b"cccc").expect("insert 2");
+    let slot3 = page.insert_tuple(b"d").expect("insert 3");
+
+    page.delete_tuple(slot1).expect("delete middle slot");
+
+    let plan = page.vacuum_plan(HeapVacuumMode::OnlineStableRowIds);
+
+    assert_eq!(slot0, 0);
+    assert_eq!(slot1, 1);
+    assert_eq!(slot2, 2);
+    assert_eq!(slot3, 3);
+    assert_eq!(plan.candidate_deleted_slots, vec![slot1]);
+    assert_eq!(plan.live_slots_rewritten, vec![slot2, slot3]);
+    assert_eq!(plan.bytes_reclaimable, 3);
+    assert!(plan.preserves_row_ids);
+    assert!(!plan.row_id_remap_allowed);
+    assert!(plan.requires_mvcc_gc_proof);
+    assert!(plan.requires_wal_redo);
+    assert!(!plan.durable_format_change);
+}
+
+#[test]
+fn test_heap_vacuum_plan_offline_mode_advertises_remap_requirement_not_format_change() {
+    let mut page = HeapPage::new(PageSize::KiB16);
+    let slot0 = page.insert_tuple(b"live").expect("insert 0");
+    let slot1 = page.insert_tuple(b"dead").expect("insert 1");
+    page.delete_tuple(slot0).expect("delete first slot");
+
+    let plan = page.vacuum_plan(HeapVacuumMode::OfflineRewriteAllowRowIdRemap);
+
+    assert_eq!(slot1, 1);
+    assert_eq!(plan.candidate_deleted_slots, vec![slot0]);
+    assert_eq!(plan.live_slots_rewritten, vec![slot1]);
+    assert_eq!(plan.bytes_reclaimable, 4);
+    assert!(!plan.preserves_row_ids);
+    assert!(plan.row_id_remap_allowed);
+    assert!(plan.requires_mvcc_gc_proof);
+    assert!(plan.requires_wal_redo);
+    assert!(!plan.durable_format_change);
 }

@@ -45,7 +45,9 @@
 //! [`StatsPublicationBuilder`] so the digest, ordering, and validation
 //! invariants remain a single source of truth.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogObjectId};
+use andromeda_core::{
+    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogObjectId, CatalogVersion,
+};
 
 use crate::contracts::StatsVersion;
 use crate::digest::Sha256;
@@ -60,8 +62,24 @@ pub const MAX_HISTOGRAMS_PER_PUBLICATION: usize = 4_096;
 /// Maximum number of buckets in a single [`HistogramPlaceholder`].
 pub const MAX_BUCKETS_PER_HISTOGRAM: usize = 256;
 
+/// Maximum number of column references in a single correlation evidence item.
+///
+/// Correlation metadata is optimizer evidence, not a runtime override.  Keeping
+/// the arity small prevents an unbounded "join graph" payload from entering a
+/// statistics publication.
+pub const MAX_COLUMNS_PER_CORRELATION: usize = 8;
+
+/// Maximum number of correlation entries in a single publication.
+pub const MAX_CORRELATIONS_PER_PUBLICATION: usize = 1_024;
+
 /// Domain tag absorbed at the start of every publication digest.
 const STATS_PUBLICATION_DOMAIN: &[u8] = b"andromeda.stats.publication.v0";
+
+/// Domain tag absorbed at the start of every correlation-evidence digest.
+const STATS_CORRELATION_DOMAIN: &[u8] = b"andromeda.stats.correlation.v0";
+
+/// Domain tag absorbed at the start of every correlation-publication digest.
+const STATS_CORRELATION_PUBLICATION_DOMAIN: &[u8] = b"andromeda.stats.correlation_publication.v0";
 
 /// Bounded skew marker placeholder.
 ///
@@ -211,6 +229,397 @@ impl StatsColumnTarget {
         Self {
             object_id,
             column_index,
+        }
+    }
+}
+
+/// Stable identity of one bounded correlation evidence item.
+///
+/// Zero is reserved so "no correlation evidence" cannot accidentally collide
+/// with a real entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct StatsCorrelationId(u64);
+
+impl StatsCorrelationId {
+    pub const fn new(value: u64) -> Option<Self> {
+        if value == 0 { None } else { Some(Self(value)) }
+    }
+
+    pub const fn get(self) -> u64 {
+        self.0
+    }
+}
+
+/// Closed taxonomy of optimizer-visible correlation evidence.
+///
+/// Variants are deliberately qualitative.  They inform future cost/evidence
+/// scoring only; they do not authorize a policy/catalog decision and do not
+/// override procedure contracts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum StatsCorrelationKind {
+    /// Columns move together positively enough to affect combined selectivity.
+    Positive,
+    /// Columns move inversely enough to affect combined selectivity.
+    Negative,
+    /// One column set functionally narrows another column set.
+    FunctionalDependency,
+    /// Columns are candidate join-key equivalents across one or more objects.
+    JoinKeyEquivalence,
+    /// Values co-occur often enough to affect semi-join or existence estimates.
+    CoOccurrence,
+}
+
+impl StatsCorrelationKind {
+    pub const VARIANT_COUNT: usize = 5;
+
+    /// Stable tag byte folded into correlation digests.  Reordering or reusing
+    /// tag bytes is a doctrine change.
+    pub const fn as_tag(self) -> u8 {
+        match self {
+            StatsCorrelationKind::Positive => 0x41,
+            StatsCorrelationKind::Negative => 0x42,
+            StatsCorrelationKind::FunctionalDependency => 0x43,
+            StatsCorrelationKind::JoinKeyEquivalence => 0x44,
+            StatsCorrelationKind::CoOccurrence => 0x45,
+        }
+    }
+}
+
+/// Bounded correlation strength on a deterministic `0..=1000` permille scale.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct CorrelationStrengthPermille(u16);
+
+impl CorrelationStrengthPermille {
+    pub const MAX_RAW: u16 = 1_000;
+
+    pub const fn from_permille(value: u16) -> Result<Self, StatsValidationError> {
+        if value > Self::MAX_RAW {
+            Err(StatsValidationError::CorrelationStrengthOutOfRange)
+        } else {
+            Ok(Self(value))
+        }
+    }
+
+    pub const fn permille(self) -> u16 {
+        self.0
+    }
+}
+
+/// Bounded sampling/evidence envelope for a correlation item.
+///
+/// The bounds are evidence metadata only.  Consumers may down-weight or ignore
+/// low-confidence/stale evidence, but they must not treat it as authoritative.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CorrelationEvidenceBounds {
+    /// Number of sampled/observed rows or row-pairs contributing evidence.
+    pub sample_rows: u64,
+    /// Lower bound for the population the sample is intended to represent.
+    pub population_lower_bound: u64,
+    /// Upper bound for the population the sample is intended to represent.
+    pub population_upper_bound: u64,
+    /// Confidence on the same deterministic `0..=1000` permille scale.
+    pub confidence_permille: u16,
+}
+
+impl CorrelationEvidenceBounds {
+    pub fn validate(self) -> Result<(), StatsValidationError> {
+        if self.sample_rows == 0 {
+            return Err(StatsValidationError::CorrelationSampleRowsZero);
+        }
+        if self.population_lower_bound > self.population_upper_bound {
+            return Err(StatsValidationError::CorrelationPopulationBoundsInverted);
+        }
+        if self.sample_rows > self.population_upper_bound {
+            return Err(StatsValidationError::CorrelationSampleExceedsPopulationUpper);
+        }
+        if self.confidence_permille > CorrelationStrengthPermille::MAX_RAW {
+            return Err(StatsValidationError::CorrelationConfidenceOutOfRange);
+        }
+        Ok(())
+    }
+
+    fn absorb(self, hasher: &mut Sha256) {
+        hasher.update(&[0xE8]);
+        hasher.update(&self.sample_rows.to_le_bytes());
+        hasher.update(&self.population_lower_bound.to_le_bytes());
+        hasher.update(&self.population_upper_bound.to_le_bytes());
+        hasher.update(&self.confidence_permille.to_le_bytes());
+    }
+}
+
+/// Deterministic digest over a single [`StatsCorrelation`] item.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct StatsCorrelationDigest([u8; Self::LEN]);
+
+impl StatsCorrelationDigest {
+    pub const LEN: usize = 32;
+
+    pub const fn from_bytes(bytes: [u8; Self::LEN]) -> Self {
+        Self(bytes)
+    }
+
+    pub const fn as_bytes(self) -> [u8; Self::LEN] {
+        self.0
+    }
+}
+
+/// Bounded inter-table / inter-column statistics correlation metadata.
+///
+/// This is internal optimizer evidence.  It is version-bound by both
+/// [`CatalogVersion`] and [`StatsVersion`]; any catalog or statistics bump must
+/// make consumers reject reuse or produce a distinct plan-cache key via the
+/// existing `PlanCacheKey` version fields.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StatsCorrelation {
+    id: StatsCorrelationId,
+    catalog_version: CatalogVersion,
+    stats_version: StatsVersion,
+    kind: StatsCorrelationKind,
+    strength: CorrelationStrengthPermille,
+    columns: Vec<StatsColumnTarget>,
+    evidence_bounds: CorrelationEvidenceBounds,
+    digest: StatsCorrelationDigest,
+}
+
+impl StatsCorrelation {
+    pub fn new(
+        id: StatsCorrelationId,
+        catalog_version: CatalogVersion,
+        stats_version: StatsVersion,
+        kind: StatsCorrelationKind,
+        strength: CorrelationStrengthPermille,
+        columns: Vec<StatsColumnTarget>,
+        evidence_bounds: CorrelationEvidenceBounds,
+    ) -> Result<Self, StatsValidationError> {
+        if catalog_version.get() == 0 {
+            return Err(StatsValidationError::CatalogVersionZero);
+        }
+        if stats_version.get() == 0 {
+            return Err(StatsValidationError::StatsVersionZero);
+        }
+        if columns.len() < 2 {
+            return Err(StatsValidationError::CorrelationTooFewColumns);
+        }
+        if columns.len() > MAX_COLUMNS_PER_CORRELATION {
+            return Err(StatsValidationError::CorrelationExceedsColumnCap);
+        }
+
+        let mut columns = columns;
+        columns.sort_by(|a, b| {
+            (a.object_id.get(), a.column_index).cmp(&(b.object_id.get(), b.column_index))
+        });
+
+        let mut previous: Option<StatsColumnTarget> = None;
+        for column in &columns {
+            if column.object_id.get() == 0 {
+                return Err(StatsValidationError::ZeroObjectId);
+            }
+            if let Some(prev) = previous
+                && prev == *column
+            {
+                return Err(StatsValidationError::CorrelationDuplicateColumn);
+            }
+            previous = Some(*column);
+        }
+        evidence_bounds.validate()?;
+
+        let digest = Self::compute_digest(
+            id,
+            catalog_version,
+            stats_version,
+            kind,
+            strength,
+            &columns,
+            evidence_bounds,
+        );
+
+        Ok(Self {
+            id,
+            catalog_version,
+            stats_version,
+            kind,
+            strength,
+            columns,
+            evidence_bounds,
+            digest,
+        })
+    }
+
+    pub const fn id(&self) -> StatsCorrelationId {
+        self.id
+    }
+
+    pub const fn catalog_version(&self) -> CatalogVersion {
+        self.catalog_version
+    }
+
+    pub const fn stats_version(&self) -> StatsVersion {
+        self.stats_version
+    }
+
+    pub const fn kind(&self) -> StatsCorrelationKind {
+        self.kind
+    }
+
+    pub const fn strength(&self) -> CorrelationStrengthPermille {
+        self.strength
+    }
+
+    pub fn columns(&self) -> &[StatsColumnTarget] {
+        &self.columns
+    }
+
+    pub const fn evidence_bounds(&self) -> CorrelationEvidenceBounds {
+        self.evidence_bounds
+    }
+
+    pub const fn digest(&self) -> StatsCorrelationDigest {
+        self.digest
+    }
+
+    /// Correlation evidence is advisory by doctrine.
+    pub const fn is_authoritative(&self) -> bool {
+        false
+    }
+
+    /// Validate version binding before optimizer use.
+    pub fn is_valid_for(
+        &self,
+        catalog_version: CatalogVersion,
+        stats_version: StatsVersion,
+    ) -> bool {
+        self.catalog_version == catalog_version && self.stats_version == stats_version
+    }
+
+    fn compute_digest(
+        id: StatsCorrelationId,
+        catalog_version: CatalogVersion,
+        stats_version: StatsVersion,
+        kind: StatsCorrelationKind,
+        strength: CorrelationStrengthPermille,
+        columns: &[StatsColumnTarget],
+        evidence_bounds: CorrelationEvidenceBounds,
+    ) -> StatsCorrelationDigest {
+        let mut hasher = Sha256::new();
+        hasher.update(STATS_CORRELATION_DOMAIN);
+        hasher.update(&[0xE0]);
+        hasher.update(&id.get().to_le_bytes());
+        hasher.update(&[0xE1]);
+        hasher.update(&catalog_version.get().to_le_bytes());
+        hasher.update(&[0xE2]);
+        hasher.update(&stats_version.get().to_le_bytes());
+        hasher.update(&[0xE3]);
+        hasher.update(&[kind.as_tag()]);
+        hasher.update(&[0xE4]);
+        hasher.update(&strength.permille().to_le_bytes());
+        hasher.update(&[0xE5]);
+        hasher.update(&(columns.len() as u32).to_le_bytes());
+        for column in columns {
+            hasher.update(&[0xE6]);
+            hasher.update(&column.object_id.get().to_le_bytes());
+            hasher.update(&column.column_index.to_le_bytes());
+        }
+        evidence_bounds.absorb(&mut hasher);
+        StatsCorrelationDigest::from_bytes(hasher.finalize())
+    }
+}
+
+/// Finalized, immutable correlation metadata publication.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StatsCorrelationPublication {
+    catalog_version: CatalogVersion,
+    stats_version: StatsVersion,
+    entries: Vec<StatsCorrelation>,
+    digest: StatsPublicationDigest,
+}
+
+impl StatsCorrelationPublication {
+    pub const fn catalog_version(&self) -> CatalogVersion {
+        self.catalog_version
+    }
+
+    pub const fn stats_version(&self) -> StatsVersion {
+        self.stats_version
+    }
+
+    pub fn entries(&self) -> &[StatsCorrelation] {
+        &self.entries
+    }
+
+    pub const fn digest(&self) -> StatsPublicationDigest {
+        self.digest
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+}
+
+/// Builder for bounded, version-bound correlation publications.
+#[derive(Debug, Clone)]
+pub struct StatsCorrelationPublicationBuilder {
+    catalog_version: CatalogVersion,
+    stats_version: StatsVersion,
+    entries: Vec<StatsCorrelation>,
+}
+
+impl StatsCorrelationPublicationBuilder {
+    pub fn new(
+        catalog_version: CatalogVersion,
+        stats_version: StatsVersion,
+    ) -> Result<Self, StatsValidationError> {
+        if catalog_version.get() == 0 {
+            return Err(StatsValidationError::CatalogVersionZero);
+        }
+        if stats_version.get() == 0 {
+            return Err(StatsValidationError::StatsVersionZero);
+        }
+        Ok(Self {
+            catalog_version,
+            stats_version,
+            entries: Vec::new(),
+        })
+    }
+
+    pub fn push(mut self, entry: StatsCorrelation) -> Result<Self, StatsValidationError> {
+        if !entry.is_valid_for(self.catalog_version, self.stats_version) {
+            return Err(StatsValidationError::CorrelationVersionMismatch);
+        }
+        if self.entries.len() >= MAX_CORRELATIONS_PER_PUBLICATION {
+            return Err(StatsValidationError::CorrelationPublicationExceedsCap);
+        }
+        if self
+            .entries
+            .iter()
+            .any(|existing| existing.id() == entry.id())
+        {
+            return Err(StatsValidationError::DuplicateCorrelationId);
+        }
+        self.entries.push(entry);
+        Ok(self)
+    }
+
+    pub fn finish(mut self) -> StatsCorrelationPublication {
+        self.entries.sort_by_key(|entry| entry.id());
+
+        let mut hasher = Sha256::new();
+        hasher.update(STATS_CORRELATION_PUBLICATION_DOMAIN);
+        hasher.update(&[0xEA]);
+        hasher.update(&self.catalog_version.get().to_le_bytes());
+        hasher.update(&[0xEB]);
+        hasher.update(&self.stats_version.get().to_le_bytes());
+        hasher.update(&[0xEC]);
+        hasher.update(&(self.entries.len() as u32).to_le_bytes());
+        for entry in &self.entries {
+            hasher.update(&[0xED]);
+            hasher.update(&entry.digest().as_bytes());
+        }
+
+        StatsCorrelationPublication {
+            catalog_version: self.catalog_version,
+            stats_version: self.stats_version,
+            entries: self.entries,
+            digest: StatsPublicationDigest::from_bytes(hasher.finalize()),
         }
     }
 }
@@ -379,6 +788,30 @@ pub enum StatsValidationError {
     BucketDistinctExceedsRows,
     /// Buckets are not strictly increasing or overlap their neighbours.
     BucketsNotMonotonic,
+    /// `CatalogVersion(0)` is reserved and cannot bind correlation metadata.
+    CatalogVersionZero,
+    /// Correlation metadata must reference at least two columns.
+    CorrelationTooFewColumns,
+    /// Correlation metadata exceeds `MAX_COLUMNS_PER_CORRELATION`.
+    CorrelationExceedsColumnCap,
+    /// Correlation metadata repeats the same `(object, column)` reference.
+    CorrelationDuplicateColumn,
+    /// Correlation strength exceeds the `0..=1000` permille scale.
+    CorrelationStrengthOutOfRange,
+    /// Correlation evidence confidence exceeds the `0..=1000` permille scale.
+    CorrelationConfidenceOutOfRange,
+    /// Correlation evidence has zero sampled/observed rows.
+    CorrelationSampleRowsZero,
+    /// Correlation evidence population lower bound exceeds upper bound.
+    CorrelationPopulationBoundsInverted,
+    /// Correlation evidence sample rows exceeds the declared population upper bound.
+    CorrelationSampleExceedsPopulationUpper,
+    /// Correlation entry does not match the publication's version tuple.
+    CorrelationVersionMismatch,
+    /// More than `MAX_CORRELATIONS_PER_PUBLICATION` entries were pushed.
+    CorrelationPublicationExceedsCap,
+    /// Two correlation entries use the same identity.
+    DuplicateCorrelationId,
 }
 
 impl core::fmt::Display for StatsValidationError {
@@ -408,6 +841,42 @@ impl core::fmt::Display for StatsValidationError {
             }
             StatsValidationError::BucketsNotMonotonic => {
                 "histogram buckets must be strictly increasing and non-overlapping"
+            }
+            StatsValidationError::CatalogVersionZero => {
+                "CatalogVersion 0 cannot bind statistics correlation metadata"
+            }
+            StatsValidationError::CorrelationTooFewColumns => {
+                "statistics correlation metadata must reference at least two columns"
+            }
+            StatsValidationError::CorrelationExceedsColumnCap => {
+                "statistics correlation metadata exceeds MAX_COLUMNS_PER_CORRELATION"
+            }
+            StatsValidationError::CorrelationDuplicateColumn => {
+                "statistics correlation metadata repeats an (object, column) reference"
+            }
+            StatsValidationError::CorrelationStrengthOutOfRange => {
+                "statistics correlation strength exceeds the 0..=1000 permille scale"
+            }
+            StatsValidationError::CorrelationConfidenceOutOfRange => {
+                "statistics correlation confidence exceeds the 0..=1000 permille scale"
+            }
+            StatsValidationError::CorrelationSampleRowsZero => {
+                "statistics correlation evidence sample_rows must be non-zero"
+            }
+            StatsValidationError::CorrelationPopulationBoundsInverted => {
+                "statistics correlation population lower bound exceeds upper bound"
+            }
+            StatsValidationError::CorrelationSampleExceedsPopulationUpper => {
+                "statistics correlation sample_rows exceeds population upper bound"
+            }
+            StatsValidationError::CorrelationVersionMismatch => {
+                "statistics correlation entry does not match publication versions"
+            }
+            StatsValidationError::CorrelationPublicationExceedsCap => {
+                "statistics correlation publication exceeds MAX_CORRELATIONS_PER_PUBLICATION"
+            }
+            StatsValidationError::DuplicateCorrelationId => {
+                "duplicate statistics correlation id in publication"
             }
         })
     }
@@ -442,6 +911,33 @@ mod tests {
         .expect("sample histogram is valid")
     }
 
+    fn sample_bounds() -> CorrelationEvidenceBounds {
+        CorrelationEvidenceBounds {
+            sample_rows: 100,
+            population_lower_bound: 100,
+            population_upper_bound: 1_000,
+            confidence_permille: 900,
+        }
+    }
+
+    fn correlation(
+        id: u64,
+        catalog: u64,
+        stats: u64,
+        columns: Vec<StatsColumnTarget>,
+    ) -> StatsCorrelation {
+        StatsCorrelation::new(
+            StatsCorrelationId::new(id).expect("non-zero correlation id"),
+            CatalogVersion::new(catalog),
+            StatsVersion::new(stats),
+            StatsCorrelationKind::JoinKeyEquivalence,
+            CorrelationStrengthPermille::from_permille(800).unwrap(),
+            columns,
+            sample_bounds(),
+        )
+        .expect("sample correlation is valid")
+    }
+
     #[test]
     fn skew_marker_variant_count_is_bounded() {
         assert_eq!(SkewMarker::VARIANT_COUNT, 6);
@@ -458,6 +954,24 @@ mod tests {
         assert!(
             sorted.windows(2).all(|pair| pair[0] != pair[1]),
             "SkewMarker tags must be unique"
+        );
+    }
+
+    #[test]
+    fn correlation_kind_variant_count_is_bounded() {
+        assert_eq!(StatsCorrelationKind::VARIANT_COUNT, 5);
+        let tags = [
+            StatsCorrelationKind::Positive.as_tag(),
+            StatsCorrelationKind::Negative.as_tag(),
+            StatsCorrelationKind::FunctionalDependency.as_tag(),
+            StatsCorrelationKind::JoinKeyEquivalence.as_tag(),
+            StatsCorrelationKind::CoOccurrence.as_tag(),
+        ];
+        let mut sorted = tags;
+        sorted.sort_unstable();
+        assert!(
+            sorted.windows(2).all(|pair| pair[0] != pair[1]),
+            "StatsCorrelationKind tags must be unique"
         );
     }
 
@@ -671,6 +1185,94 @@ mod tests {
             .unwrap()
             .finish();
         assert_ne!(v1.digest(), v2.digest());
+    }
+
+    #[test]
+    fn correlation_canonicalizes_column_order_for_digest_stability() {
+        let lhs = correlation(1, 7, 3, vec![target(20, 2), target(10, 1)]);
+        let rhs = correlation(1, 7, 3, vec![target(10, 1), target(20, 2)]);
+
+        assert_eq!(lhs.columns(), rhs.columns());
+        assert_eq!(lhs.digest(), rhs.digest());
+        assert!(!lhs.is_authoritative());
+    }
+
+    #[test]
+    fn correlation_rejects_invalid_bounds_and_duplicate_columns() {
+        let duplicate_err = StatsCorrelation::new(
+            StatsCorrelationId::new(1).unwrap(),
+            CatalogVersion::new(1),
+            StatsVersion::new(1),
+            StatsCorrelationKind::Positive,
+            CorrelationStrengthPermille::from_permille(100).unwrap(),
+            vec![target(1, 0), target(1, 0)],
+            sample_bounds(),
+        )
+        .unwrap_err();
+        assert_eq!(
+            duplicate_err,
+            StatsValidationError::CorrelationDuplicateColumn
+        );
+
+        let bounds_err = CorrelationEvidenceBounds {
+            sample_rows: 0,
+            population_lower_bound: 0,
+            population_upper_bound: 10,
+            confidence_permille: 1,
+        }
+        .validate()
+        .unwrap_err();
+        assert_eq!(bounds_err, StatsValidationError::CorrelationSampleRowsZero);
+    }
+
+    #[test]
+    fn correlation_invalidates_on_catalog_or_stats_version() {
+        let entry = correlation(1, 7, 3, vec![target(10, 1), target(20, 2)]);
+
+        assert!(entry.is_valid_for(CatalogVersion::new(7), StatsVersion::new(3)));
+        assert!(!entry.is_valid_for(CatalogVersion::new(8), StatsVersion::new(3)));
+        assert!(!entry.is_valid_for(CatalogVersion::new(7), StatsVersion::new(4)));
+
+        let catalog_bump = correlation(1, 8, 3, vec![target(10, 1), target(20, 2)]);
+        let stats_bump = correlation(1, 7, 4, vec![target(10, 1), target(20, 2)]);
+        assert_ne!(entry.digest(), catalog_bump.digest());
+        assert_ne!(entry.digest(), stats_bump.digest());
+    }
+
+    #[test]
+    fn correlation_publication_is_deterministic_and_version_bound() {
+        let first = correlation(1, 7, 3, vec![target(10, 1), target(20, 2)]);
+        let second = correlation(2, 7, 3, vec![target(30, 1), target(40, 2)]);
+
+        let lhs =
+            StatsCorrelationPublicationBuilder::new(CatalogVersion::new(7), StatsVersion::new(3))
+                .unwrap()
+                .push(second.clone())
+                .unwrap()
+                .push(first.clone())
+                .unwrap()
+                .finish();
+
+        let rhs =
+            StatsCorrelationPublicationBuilder::new(CatalogVersion::new(7), StatsVersion::new(3))
+                .unwrap()
+                .push(first)
+                .unwrap()
+                .push(second)
+                .unwrap()
+                .finish();
+
+        assert_eq!(lhs.digest(), rhs.digest());
+        assert_eq!(lhs.entries()[0].id().get(), 1);
+        assert_eq!(lhs.entries()[1].id().get(), 2);
+
+        let mismatched = correlation(3, 8, 3, vec![target(10, 1), target(20, 2)]);
+        let err =
+            StatsCorrelationPublicationBuilder::new(CatalogVersion::new(7), StatsVersion::new(3))
+                .unwrap()
+                .push(mismatched)
+                .unwrap_err();
+        assert_eq!(err, StatsValidationError::CorrelationVersionMismatch);
     }
 }
 

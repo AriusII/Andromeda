@@ -23,6 +23,9 @@ use crate::lock_manager::{
 };
 use crate::locking_protocol::{TwoPhaseLocksValidator, TwoPhaseOperation};
 use crate::mvcc_status::{TransactionStatus, TransactionStatusTable};
+use crate::savepoint::{
+    Savepoint, SavepointReleaseEvidence, SavepointRollbackEvidence, SavepointStack,
+};
 use crate::state::{TransactionState, TransactionStateMachine};
 
 /// Snapshot of a transaction known to the manager.
@@ -30,6 +33,7 @@ use crate::state::{TransactionState, TransactionStateMachine};
 pub struct TransactionRecord {
     pub state_machine: TransactionStateMachine,
     pub status: TransactionStatus,
+    pub savepoint_depth: usize,
 }
 
 /// Boundary-safe lock facade tied to a transaction manager.
@@ -170,6 +174,7 @@ pub struct TransactionManager {
 #[derive(Debug, Default)]
 struct TransactionManagerInner {
     live: HashMap<TransactionId, TransactionStateMachine>,
+    savepoints: HashMap<TransactionId, SavepointStack>,
     status: TransactionStatusTable,
 }
 
@@ -211,6 +216,7 @@ impl TransactionManager {
         let mut machine = TransactionStateMachine::new(id);
         machine.begin()?;
         inner.live.insert(id, machine);
+        inner.savepoints.insert(id, SavepointStack::new());
         inner.status.record(id, TransactionStatus::InFlight)?;
         Ok(id)
     }
@@ -218,7 +224,13 @@ impl TransactionManager {
     /// Move an active transaction into the `Committing` state. The status
     /// table is *not* updated yet because the commit is not durable.
     pub fn request_commit(&self, id: TransactionId) -> AndromedaResult<()> {
-        self.with_machine(id, |machine| machine.request_commit())
+        let mut inner = self.lock()?;
+        let machine = Self::machine_mut(&mut inner.live, id)?;
+        machine.request_commit()?;
+        if let Some(stack) = inner.savepoints.get_mut(&id) {
+            stack.clear();
+        }
+        Ok(())
     }
 
     /// Publish a durable commit. The state machine validates that the
@@ -236,7 +248,13 @@ impl TransactionManager {
     /// Move an active or failed transaction into `RollingBack`. Status stays
     /// `InFlight` until the rollback is durable.
     pub fn request_rollback(&self, id: TransactionId) -> AndromedaResult<()> {
-        self.with_machine(id, |machine| machine.request_rollback())
+        let mut inner = self.lock()?;
+        let machine = Self::machine_mut(&mut inner.live, id)?;
+        machine.request_rollback()?;
+        if let Some(stack) = inner.savepoints.get_mut(&id) {
+            stack.clear();
+        }
+        Ok(())
     }
 
     /// Complete a rollback once the corresponding WAL record is durable.
@@ -274,7 +292,61 @@ impl TransactionManager {
         // Only remove once Dispose succeeds (i.e. machine reached Disposed).
         debug_assert_eq!(machine.state, TransactionState::Disposed);
         inner.live.remove(&id);
+        inner.savepoints.remove(&id);
         Ok(())
+    }
+
+    /// Create a transaction-local savepoint.
+    ///
+    /// Savepoints are permitted only while the transaction is `Active` and
+    /// `InFlight`. They do not write WAL, publish MVCC visibility, or release
+    /// locks. The returned marker is a local rollback contract for the storage
+    /// write set.
+    pub fn create_savepoint(
+        &self,
+        id: TransactionId,
+        name: impl Into<String>,
+    ) -> AndromedaResult<Savepoint> {
+        let mut inner = self.lock()?;
+        Self::require_active_in_flight(&inner, id, "savepoint creation")?;
+        Self::savepoints_mut(&mut inner.savepoints, id)?.create(name)
+    }
+
+    /// Release the named savepoint and its nested descendants.
+    ///
+    /// This is metadata-only. It does not undo writes, does not release locks,
+    /// and does not alter WAL/MVCC status.
+    pub fn release_savepoint(
+        &self,
+        id: TransactionId,
+        name: &str,
+    ) -> AndromedaResult<SavepointReleaseEvidence> {
+        let mut inner = self.lock()?;
+        Self::require_active_in_flight(&inner, id, "savepoint release")?;
+        Self::savepoints_mut(&mut inner.savepoints, id)?.release(name)
+    }
+
+    /// Roll back to the named savepoint and discard nested descendants.
+    ///
+    /// The target savepoint remains active. Callers must use the returned
+    /// rollback marker to undo storage-local writes with ordinal greater than
+    /// `target.rollback_marker.rollback_ordinal`; locks remain held until the
+    /// outer transaction reaches a durable terminal state.
+    pub fn rollback_to_savepoint(
+        &self,
+        id: TransactionId,
+        name: &str,
+    ) -> AndromedaResult<SavepointRollbackEvidence> {
+        let mut inner = self.lock()?;
+        Self::require_active_in_flight(&inner, id, "savepoint rollback")?;
+        Self::savepoints_mut(&mut inner.savepoints, id)?.rollback_to(name)
+    }
+
+    /// Current number of active savepoints for a live transaction.
+    pub fn savepoint_depth(&self, id: TransactionId) -> AndromedaResult<usize> {
+        let inner = self.lock()?;
+        Self::require_known_transaction_in_inner(&inner, id)?;
+        Ok(inner.savepoints.get(&id).map_or(0, SavepointStack::depth))
     }
 
     /// Inspect a transaction's current state-machine and mirrored status.
@@ -289,6 +361,7 @@ impl TransactionManager {
         Ok(Some(TransactionRecord {
             state_machine: machine,
             status,
+            savepoint_depth: inner.savepoints.get(&id).map_or(0, SavepointStack::depth),
         }))
     }
 
@@ -435,6 +508,50 @@ impl TransactionManager {
         Ok(())
     }
 
+    fn require_known_transaction_in_inner(
+        inner: &TransactionManagerInner,
+        id: TransactionId,
+    ) -> AndromedaResult<()> {
+        Self::validate_non_zero_transaction_id(id)?;
+
+        if inner.status.status(id).is_none() {
+            return Err(Self::unknown_transaction());
+        }
+
+        Ok(())
+    }
+
+    fn require_active_in_flight(
+        inner: &TransactionManagerInner,
+        id: TransactionId,
+        operation: &'static str,
+    ) -> AndromedaResult<()> {
+        Self::validate_non_zero_transaction_id(id)?;
+        let machine = inner.live.get(&id).ok_or_else(Self::unknown_transaction)?;
+        let status = inner
+            .status
+            .status(id)
+            .ok_or_else(Self::unknown_transaction)?;
+
+        if machine.state != TransactionState::Active || status != TransactionStatus::InFlight {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Transaction,
+                format!("{operation} requires an active in-flight transaction"),
+            ));
+        }
+
+        Ok(())
+    }
+
+    fn savepoints_mut(
+        savepoints: &mut HashMap<TransactionId, SavepointStack>,
+        id: TransactionId,
+    ) -> AndromedaResult<&mut SavepointStack> {
+        savepoints
+            .get_mut(&id)
+            .ok_or_else(Self::unknown_transaction)
+    }
+
     fn require_terminal_cleanup_transaction(&self, id: TransactionId) -> AndromedaResult<()> {
         Self::validate_non_zero_transaction_id(id)?;
 
@@ -499,7 +616,78 @@ mod tests {
             let snap = mgr.snapshot(id).unwrap().unwrap();
             assert_eq!(snap.state_machine.state, TransactionState::Active);
             assert_eq!(snap.status, TransactionStatus::InFlight);
+            assert_eq!(snap.savepoint_depth, 0);
         }
+    }
+
+    #[test]
+    fn savepoint_stack_is_transaction_local_and_nested() {
+        let mgr = TransactionManager::new();
+        let id = mgr.begin().unwrap();
+
+        let outer = mgr.create_savepoint(id, "outer").unwrap();
+        let inner = mgr.create_savepoint(id, "inner").unwrap();
+        assert_eq!(outer.id.get(), 1);
+        assert_eq!(inner.id.get(), 2);
+        assert_eq!(mgr.savepoint_depth(id).unwrap(), 2);
+        assert_eq!(mgr.snapshot(id).unwrap().unwrap().savepoint_depth, 2);
+
+        let rollback = mgr.rollback_to_savepoint(id, "outer").unwrap();
+        assert_eq!(rollback.target.name.as_str(), "outer");
+        assert_eq!(rollback.discarded_descendants.len(), 1);
+        assert_eq!(rollback.discarded_descendants[0].name.as_str(), "inner");
+        assert_eq!(mgr.savepoint_depth(id).unwrap(), 1);
+
+        let release = mgr.release_savepoint(id, "outer").unwrap();
+        assert_eq!(release.released.len(), 1);
+        assert_eq!(release.released[0].name.as_str(), "outer");
+        assert_eq!(mgr.savepoint_depth(id).unwrap(), 0);
+    }
+
+    #[test]
+    fn savepoint_names_are_unique_within_transaction_but_not_across_transactions() {
+        let mgr = TransactionManager::new();
+        let a = mgr.begin().unwrap();
+        let b = mgr.begin().unwrap();
+
+        mgr.create_savepoint(a, "sp").unwrap();
+        assert_eq!(
+            mgr.create_savepoint(a, "sp").unwrap_err().kind(),
+            AndromedaErrorKind::Transaction
+        );
+        mgr.create_savepoint(b, "sp").unwrap();
+    }
+
+    #[test]
+    fn savepoint_operations_require_active_in_flight_transaction() {
+        let mgr = TransactionManager::new();
+        let id = mgr.begin().unwrap();
+        mgr.create_savepoint(id, "sp").unwrap();
+
+        mgr.request_commit(id).unwrap();
+        assert_eq!(mgr.savepoint_depth(id).unwrap(), 0);
+        assert_eq!(
+            mgr.create_savepoint(id, "late").unwrap_err().kind(),
+            AndromedaErrorKind::Transaction
+        );
+        assert_eq!(
+            mgr.rollback_to_savepoint(id, "sp").unwrap_err().kind(),
+            AndromedaErrorKind::Transaction
+        );
+        assert_eq!(mgr.status(id).unwrap(), Some(TransactionStatus::InFlight));
+    }
+
+    #[test]
+    fn full_rollback_clears_savepoints_before_durable_terminal_status() {
+        let mgr = TransactionManager::new();
+        let id = mgr.begin().unwrap();
+        mgr.create_savepoint(id, "sp").unwrap();
+
+        mgr.request_rollback(id).unwrap();
+        assert_eq!(mgr.savepoint_depth(id).unwrap(), 0);
+        assert_eq!(mgr.status(id).unwrap(), Some(TransactionStatus::InFlight));
+        mgr.rollback_durable(id, 11).unwrap();
+        assert_eq!(mgr.status(id).unwrap(), Some(TransactionStatus::RolledBack));
     }
 
     #[test]

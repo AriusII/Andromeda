@@ -2,7 +2,7 @@
 name: storage-page-layout
 description: Design page header, payload, slot directory, and trailer layouts. Use when working on storage tasks for the Andromeda SGBDRT project.
 allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+version: 0.2.0
 ---
 
 # storage-page-layout
@@ -10,6 +10,12 @@ version: 0.1.0
 ## Purpose
 
 Design page header, payload, slot directory, and trailer layouts.
+
+## Policy (DEC-032)
+
+- **Page Size:** 16 KiB or 32 KiB (Candidate V1).
+- **Endianness:** Big-endian for keys (order-preserving); mixed LE/BE for headers.
+- **Verification:** Every page MUST start with a `PageHeader` (containing `LSN`, `Checksum`, `MagicNumber`) and MUST end with a `PageTrailer` (repeating the `Checksum`).
 
 ## Use when
 
@@ -53,4 +59,5 @@ Return:
 
 ## Version history
 
+- 0.2.0 (2026-05-05): Updated with DEC-032 (V1 Candidate format: 16/32 KiB, BE keys, header/trailer checksums).
 - 0.1.0 (2026-05-03): Initial project-specific skill.

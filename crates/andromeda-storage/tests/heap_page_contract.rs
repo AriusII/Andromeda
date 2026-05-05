@@ -36,6 +36,15 @@ fn write_heap_v1_slot(
     length: u16,
 ) {
     let slot = SlotEntry::new(offset, length).to_bytes();
+    write_heap_v1_slot_bytes(image, page_size, slot_id, slot);
+}
+
+fn write_heap_v1_slot_bytes(
+    image: &mut [u8],
+    page_size: PageSize,
+    slot_id: usize,
+    slot: [u8; SLOT_ENTRY_SIZE],
+) {
     let offset = slot_offset(page_size, slot_id);
     image[offset..offset + SLOT_ENTRY_SIZE].copy_from_slice(&slot);
 }
@@ -101,6 +110,64 @@ fn test_heap_page_v1_tuple_payload_starts_at_96_and_grows_upward() {
 }
 
 #[test]
+fn test_heap_page_v1_golden_bytes_16kib_two_tuple_layout() {
+    let page_size = PageSize::KiB16;
+    let mut page = HeapPageInsert::new(andromeda_storage::PageId::new(8), page_size)
+        .expect("create heap page insert context");
+
+    page.insert_raw_tuple(b"abc").expect("insert slot 0");
+    page.insert_raw_tuple(b"defgh").expect("insert slot 1");
+
+    let image = page.serialize().expect("serialize heap page");
+
+    assert_eq!(&image[HEADER_SIZE..HEADER_SIZE + 8], b"abcdefgh");
+    assert_eq!(
+        &image[metadata_offset(page_size)..metadata_offset(page_size) + SLOT_METADATA_SIZE],
+        &[0x02, 0x00, 0x68, 0x00],
+        "footer metadata is [slot_count:LE=2][free_offset:LE=104]"
+    );
+    assert_eq!(
+        &image[slot_offset(page_size, 0)..slot_offset(page_size, 0) + SLOT_ENTRY_SIZE],
+        &[0x60, 0x00, 0x03, 0x00, 0x00],
+        "slot 0 is offset 96, len 3, live"
+    );
+    assert_eq!(
+        &image[slot_offset(page_size, 1)..slot_offset(page_size, 1) + SLOT_ENTRY_SIZE],
+        &[0x63, 0x00, 0x05, 0x00, 0x00],
+        "slot 1 is offset 99, len 5, live"
+    );
+    assert_eq!(
+        metadata_offset(page_size) + SLOT_METADATA_SIZE,
+        page_size.bytes_usize() - TRAILER_SIZE,
+        "heap footer metadata ends exactly where PageTrailerV1 starts"
+    );
+}
+
+#[test]
+fn test_heap_page_v1_golden_bytes_32kib_slot_directory_placement() {
+    let page_size = PageSize::KiB32;
+    let mut page = HeapPageInsert::new(andromeda_storage::PageId::new(9), page_size)
+        .expect("create heap page insert context");
+
+    page.insert_raw_tuple(b"z").expect("insert slot 0");
+
+    let image = page.serialize().expect("serialize heap page");
+
+    assert_eq!(metadata_offset(page_size), 32716);
+    assert_eq!(slot_offset(page_size, 0), 32711);
+    assert_eq!(&image[HEADER_SIZE..HEADER_SIZE + 1], b"z");
+    assert_eq!(
+        &image[metadata_offset(page_size)..metadata_offset(page_size) + SLOT_METADATA_SIZE],
+        &[0x01, 0x00, 0x61, 0x00],
+        "footer metadata is [slot_count:LE=1][free_offset:LE=97]"
+    );
+    assert_eq!(
+        &image[slot_offset(page_size, 0)..slot_offset(page_size, 0) + SLOT_ENTRY_SIZE],
+        &[0x60, 0x00, 0x01, 0x00, 0x00]
+    );
+}
+
+#[test]
 fn test_heap_page_from_image_reads_footer_metadata_layout() {
     let page_size = PageSize::KiB16;
     let mut image = vec![0u8; page_size.bytes_usize()];
@@ -111,6 +178,98 @@ fn test_heap_page_from_image_reads_footer_metadata_layout() {
     let page = HeapPage::from_image(page_size, &image).expect("footer metadata image is valid");
     assert_eq!(page.slot_count(), 1);
     assert_eq!(page.read_tuple(0).expect("read tuple"), b"abc");
+}
+
+#[test]
+fn test_heap_page_from_image_rejects_footer_slot_count_over_limit() {
+    let page_size = PageSize::KiB16;
+    let mut image = vec![0u8; page_size.bytes_usize()];
+    write_heap_v1_slot_metadata(&mut image, page_size, 257, HEADER_SIZE as u16);
+
+    let err = HeapPage::from_image(page_size, &image).expect_err("slot count limit rejected");
+    assert!(
+        err.message().contains("slot count 257 exceeds limit 256"),
+        "unexpected error: {}",
+        err.message()
+    );
+}
+
+#[test]
+fn test_heap_page_from_image_rejects_footer_free_offset_before_live_tuple_end() {
+    let page_size = PageSize::KiB16;
+    let mut image = vec![0u8; page_size.bytes_usize()];
+    image[HEADER_SIZE..HEADER_SIZE + 3].copy_from_slice(b"abc");
+    write_heap_v1_slot(&mut image, page_size, 0, HEADER_SIZE as u16, 3);
+    write_heap_v1_slot_metadata(&mut image, page_size, 1, (HEADER_SIZE + 2) as u16);
+
+    let err = HeapPage::from_image(page_size, &image).expect_err("free offset bounds rejected");
+    assert!(
+        err.message().contains("exceeds footer free offset"),
+        "unexpected error: {}",
+        err.message()
+    );
+}
+
+#[test]
+fn test_heap_page_from_image_rejects_live_slot_before_header() {
+    let page_size = PageSize::KiB16;
+    let mut image = vec![0u8; page_size.bytes_usize()];
+    write_heap_v1_slot(&mut image, page_size, 0, (HEADER_SIZE - 1) as u16, 1);
+    write_heap_v1_slot_metadata(&mut image, page_size, 1, HEADER_SIZE as u16);
+
+    let err = HeapPage::from_image(page_size, &image).expect_err("header overlap rejected");
+    assert!(
+        err.message().contains("outside payload region"),
+        "unexpected error: {}",
+        err.message()
+    );
+}
+
+#[test]
+fn test_heap_page_from_image_rejects_slot_tuple_overlap() {
+    let page_size = PageSize::KiB16;
+    let mut image = vec![0u8; page_size.bytes_usize()];
+    image[HEADER_SIZE..HEADER_SIZE + 6].copy_from_slice(b"abcdef");
+    write_heap_v1_slot(&mut image, page_size, 0, HEADER_SIZE as u16, 4);
+    write_heap_v1_slot(&mut image, page_size, 1, (HEADER_SIZE + 2) as u16, 4);
+    write_heap_v1_slot_metadata(&mut image, page_size, 2, (HEADER_SIZE + 6) as u16);
+
+    let err = HeapPage::from_image(page_size, &image).expect_err("overlap rejected");
+    assert!(
+        err.message().contains("tuple overlap"),
+        "unexpected error: {}",
+        err.message()
+    );
+}
+
+#[test]
+fn test_heap_page_from_image_rejects_deleted_slot_with_nonzero_offset() {
+    let page_size = PageSize::KiB16;
+    let mut image = vec![0u8; page_size.bytes_usize()];
+    write_heap_v1_slot_bytes(&mut image, page_size, 0, [0x60, 0x00, 0x03, 0x00, 0x01]);
+    write_heap_v1_slot_metadata(&mut image, page_size, 1, HEADER_SIZE as u16);
+
+    let err = HeapPage::from_image(page_size, &image).expect_err("deleted offset rejected");
+    assert!(
+        err.message().contains("deleted flag requires zero offset"),
+        "unexpected error: {}",
+        err.message()
+    );
+}
+
+#[test]
+fn test_heap_page_from_image_rejects_unknown_slot_flags() {
+    let page_size = PageSize::KiB16;
+    let mut image = vec![0u8; page_size.bytes_usize()];
+    write_heap_v1_slot_bytes(&mut image, page_size, 0, [0x60, 0x00, 0x03, 0x00, 0x02]);
+    write_heap_v1_slot_metadata(&mut image, page_size, 1, (HEADER_SIZE + 3) as u16);
+
+    let err = HeapPage::from_image(page_size, &image).expect_err("unknown flags rejected");
+    assert!(
+        err.message().contains("unknown flags"),
+        "unexpected error: {}",
+        err.message()
+    );
 }
 
 #[test]

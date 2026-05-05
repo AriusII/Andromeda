@@ -4,6 +4,7 @@
 //! - Restoring from backup (with optional PITR to LSN)
 //! - Monitoring restore progress
 
+use crate::diagnostic_json::{JSON_FLAG, json_option_u64, json_string, parse_json_flag};
 use crate::error::cli_error;
 use andromeda_core::AndromedaResult;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -111,7 +112,7 @@ fn run_restore_start(args: &[String]) -> AndromedaResult<()> {
                         .map_err(|_| cli_error("--pitr-lsn expects an unsigned integer (LSN)"))?,
                 );
             }
-            "--json" => json_output = true,
+            JSON_FLAG => json_output = true,
             opt if opt.starts_with("--") => {
                 return Err(cli_error(format!("unknown restore option: {}", opt)));
             }
@@ -163,7 +164,7 @@ fn run_restore_status(args: &[String]) -> AndromedaResult<()> {
         .parse()
         .map_err(|_| cli_error("restore-id must be an unsigned integer"))?;
 
-    let json_output = has_json_option(&args[1..]);
+    let json_output = parse_json_flag(&args[1..], "restore status")?;
 
     // MOCK: In a real implementation, this would query the restore coordinator.
     let report = RestoreStatusReport {
@@ -213,10 +214,6 @@ fn print_restore_help() {
     );
 }
 
-fn has_json_option(args: &[String]) -> bool {
-    args.iter().any(|arg| arg == "--json")
-}
-
 fn print_restore_status_human(report: &RestoreStatusReport) {
     println!("Restore Status Report");
     println!("====================");
@@ -258,32 +255,6 @@ fn print_restore_status_json(report: &RestoreStatusReport) {
         report.start_time,
         report.elapsed_seconds,
     );
-}
-
-fn json_option_u64(value: Option<u64>) -> String {
-    value
-        .map(|value| value.to_string())
-        .unwrap_or_else(|| "null".to_string())
-}
-
-fn json_string(value: &str) -> String {
-    format!("\"{}\"", escape_json_str(value))
-}
-
-fn escape_json_str(value: &str) -> String {
-    let mut escaped = String::new();
-    for ch in value.chars() {
-        match ch {
-            '"' => escaped.push_str("\\\""),
-            '\\' => escaped.push_str("\\\\"),
-            '\n' => escaped.push_str("\\n"),
-            '\r' => escaped.push_str("\\r"),
-            '\t' => escaped.push_str("\\t"),
-            ch if ch.is_control() => escaped.push_str(&format!("\\u{:04x}", ch as u32)),
-            ch => escaped.push(ch),
-        }
-    }
-    escaped
 }
 
 fn unix_timestamp() -> u64 {

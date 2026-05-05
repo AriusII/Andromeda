@@ -16,7 +16,10 @@
 //! Transactions acquire locks on resources as needed for reads and writes:
 //! - Row reads: acquire Shared locks on row resources
 //! - Row writes: acquire Exclusive locks on row resources
-//! - Catalog DefinitionBatch changes: acquire SchemaExclusive locks on table resources
+//! - Catalog DefinitionBatch changes: acquire IntentExclusive on schema and SchemaExclusive
+//!   on changed object resources, or SchemaExclusive on the schema for whole-schema mutation
+//! - Procedure invocations: after admission and before execution, acquire IntentShared on
+//!   schema and SchemaShared on the invoked/referenced object resources
 //! - Table scans: acquire IntentShared on table, then Shared on rows
 //!
 //! Locks can be upgraded (Shared → Exclusive, IntentShared → IntentExclusive)
@@ -43,8 +46,8 @@
 //! | **X** | Exclusive | Exclusive write access | Exclusive access only |
 //! | **IS** | Intent Shared | Intent to read sub-resources | Compatible with IS, IX, S, SS |
 //! | **IX** | Intent Exclusive | Intent to write sub-resources | Compatible with IS, IX, SS |
-//! | **SS** | Schema Shared | Schema stability (DefinitionBatch blocked) | Compatible with S, IS, IX, SS |
-//! | **SX** | Schema Exclusive | Exclusive catalog access (DefinitionBatch) | Exclusive access only |
+//! | **SS** | Schema Shared | Schema/object stability (DefinitionBatch blocked) | Compatible with S, IS, IX, SS |
+//! | **SX** | Schema Exclusive | Exclusive catalog/object mutation (DefinitionBatch) | Exclusive access only |
 //!
 //! ## Full Compatibility Matrix
 //!
@@ -71,20 +74,24 @@
 //! ```text
 //! Schema
 //!   │
-//!   ├─→ Table (requires intent lock on schema)
-//!   │     │
-//!   │     ├─→ Page (requires intent lock on table and schema)
-//!   │     │     │
-//!   │     │     └─→ Row (requires intent lock on page, table, and schema)
+//!   ├─→ Object (requires intent lock on schema; used for catalog procedures/tables)
+//!   └─→ Table (requires intent lock on schema)
+//!         │
+//!         ├─→ Page (requires intent lock on table and schema)
+//!         │     │
+//!         │     └─→ Row (requires intent lock on page, table, and schema)
 //! ```
 //!
 //! ### Hierarchical Locking Rules
 //!
 //! 1. **Ancestor Intent Requirement:** To acquire a lock at a finer granularity,
 //!    the transaction must hold an intent lock (IS or IX) on all coarser ancestors.
-//!    - To lock a row: must hold IX on table and schema
-//!    - To lock a page: must hold IX on table and schema
-//!    - To lock a table: must hold IX on schema
+//!    - To invoke or reference a catalog object: hold IS on schema and SS on object
+//!    - To mutate a catalog object via DefinitionBatch: hold IX on schema and SX on object
+//!    - To mutate a whole schema via DefinitionBatch: hold SX on schema
+//!    - To lock a row for data mutation: must hold IX on table and schema
+//!    - To lock a page for data mutation: must hold IX on table and schema
+//!    - To lock a table for data mutation: must hold IX on schema
 //!
 //! 2. **Intent Lock Promotion:** Intent locks coordinate multi-granularity:
 //!    - IS (Intent Shared) signals intent to read sub-resources

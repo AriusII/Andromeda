@@ -1,0 +1,42 @@
+name: "Andromeda Release Package"
+description: "Package Rust release output for a target triple."
+inputs:
+  target:
+    required: true
+    description: "Rust target triple"
+  artifact-suffix:
+    required: true
+    description: "Artifact suffix"
+outputs:
+  archive_path:
+    value: ${{ steps.package.outputs.archive_path }}
+    description: "Archive path"
+  checksum_path:
+    value: ${{ steps.package.outputs.checksum_path }}
+    description: "Checksum file path"
+runs:
+  using: "composite"
+  steps:
+    - id: package
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p dist/staging
+        TARGET="${{ inputs.target }}"
+        SUFFIX="${{ inputs.artifact-suffix }}"
+        VERSION="${GITHUB_REF_NAME:-manual}"
+        ARCHIVE="dist/andromeda-${VERSION}-${SUFFIX}.tar.gz"
+        CHECKSUM="${ARCHIVE}.sha256"
+        if [ -d "target/${TARGET}/release" ]; then
+          find "target/${TARGET}/release" -maxdepth 1 -type f -perm -111 -exec cp {} dist/staging/ \;
+        fi
+        cp -f README.md dist/staging/ 2>/dev/null || true
+        cp -f LICENSE dist/staging/ 2>/dev/null || true
+        cp -f SECURITY.md dist/staging/ 2>/dev/null || true
+        if [ -z "$(ls -A dist/staging 2>/dev/null)" ]; then
+          echo "Andromeda release package placeholder for ${TARGET}" > dist/staging/README.release.txt
+        fi
+        tar -czf "${ARCHIVE}" -C dist/staging .
+        sha256sum "${ARCHIVE}" > "${CHECKSUM}"
+        echo "archive_path=${ARCHIVE}" >> "$GITHUB_OUTPUT"
+        echo "checksum_path=${CHECKSUM}" >> "$GITHUB_OUTPUT"

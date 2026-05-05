@@ -1,0 +1,26 @@
+name: 13 - Copilot Governance
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths: [ ".github/copilot-instructions.md", ".github/instructions/**/*.md", "AGENTS.md", ".github/workflows/13-copilot-governance.yml" ]
+  push:
+    branches: [ main ]
+    paths: [ ".github/copilot-instructions.md", ".github/instructions/**/*.md", "AGENTS.md", ".github/workflows/13-copilot-governance.yml" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: copilot-governance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-ai-instructions:
+    name: Validate AI instruction files
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: python .github/scripts/ai_instruction_policy.py

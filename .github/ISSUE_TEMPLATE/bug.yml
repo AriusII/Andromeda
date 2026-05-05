@@ -1,0 +1,25 @@
+name: Bug Report
+description: Report a correctness, safety, build, or documentation defect.
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Describe the defect.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [ Catalog, SRPL, Transaction Kernel, WAL, MVCC, Recovery, Storage, QUIC RPC, Protobuf Contracts, Security, CI/CD, Documentation ]
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+    validations:
+      required: true

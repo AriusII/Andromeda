@@ -103,6 +103,31 @@ impl CommitProtocol {
         Ok(())
     }
 
+    /// Execute the complete durable rollback protocol for a transaction.
+    ///
+    /// Rollback is terminal only after its TxRollback record has been appended
+    /// and flushed. The status table is marked `RolledBack` after that
+    /// durability boundary, and repeated calls return the original rollback
+    /// evidence through the underlying commit log.
+    pub async fn execute_rollback(
+        &self,
+        tx_id: TransactionId,
+        current_state: TransactionState,
+    ) -> AndromedaResult<()> {
+        if current_state != TransactionState::RollingBack {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Transaction,
+                format!(
+                    "Cannot rollback transaction in state {:?}; expected RollingBack",
+                    current_state
+                ),
+            ));
+        }
+
+        self.commit_log.record_rollback(tx_id, 0).await?;
+        Ok(())
+    }
+
     /// Verify that a transaction commit is durable after recovery.
     ///
     /// Used during crash recovery to validate that all transactions
@@ -114,6 +139,11 @@ impl CommitProtocol {
     /// Get the commit LSN for a transaction (if committed).
     pub fn get_commit_lsn(&self, tx_id: TransactionId) -> Option<Lsn> {
         self.commit_log.get_commit_lsn(tx_id)
+    }
+
+    /// Get the rollback LSN for a transaction (if rolled back).
+    pub fn get_rollback_lsn(&self, tx_id: TransactionId) -> Option<Lsn> {
+        self.commit_log.get_rollback_lsn(tx_id)
     }
 }
 
@@ -212,5 +242,37 @@ mod tests {
             .await;
 
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_protocol_executes_rollback_in_rolling_back_state() {
+        let wal = TestWal::new();
+        let status_table = Arc::new(crate::mvcc_status::TransactionStatusTable::new());
+        let commit_log = Arc::new(CommitLogManager::new(wal, status_table));
+        let protocol = CommitProtocol::new(commit_log.clone());
+
+        let tx_id = TransactionId::new(7);
+        protocol
+            .execute_rollback(tx_id, TransactionState::RollingBack)
+            .await
+            .unwrap();
+
+        assert!(commit_log.is_rolled_back(tx_id));
+        assert_eq!(protocol.get_rollback_lsn(tx_id), Some(Lsn::new(1)));
+    }
+
+    #[tokio::test]
+    async fn test_protocol_rejects_rollback_in_active_state() {
+        let wal = TestWal::new();
+        let status_table = Arc::new(crate::mvcc_status::TransactionStatusTable::new());
+        let commit_log = Arc::new(CommitLogManager::new(wal, status_table));
+        let protocol = CommitProtocol::new(commit_log);
+
+        let result = protocol
+            .execute_rollback(TransactionId::new(7), TransactionState::Active)
+            .await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), AndromedaErrorKind::Transaction);
     }
 }

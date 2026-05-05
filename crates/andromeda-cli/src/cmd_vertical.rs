@@ -171,6 +171,9 @@ pub fn print_help() {
     println!();
     println!("ADMIN COMMANDS:");
     println!("run `andromeda-cli hadr [status|promote|demote|quorum]` for HADR administration");
+    println!(
+        "run `andromeda-cli benchmark [workloads|contract|run]` for bounded diagnostic benchmark orchestration"
+    );
     println!("run `andromeda-cli backup [start|status|list]` for backup operations");
     println!("run `andromeda-cli restore <backup-id> [--pitr-lsn <lsn>]` for restore operations");
     println!(

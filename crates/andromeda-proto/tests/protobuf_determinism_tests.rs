@@ -242,6 +242,63 @@ fn test_catalog_manifest_resolution_messages_roundtrip_without_json_or_grpc() {
         .expect("manifest resolution response must satisfy boundary validation");
 }
 
+#[test]
+fn catalog_manifest_resolution_status_policy_accepts_governed_error_statuses() {
+    let governed_error_statuses = [
+        (2, "STATUS_NOT_FOUND"),
+        (3, "STATUS_CATALOG_VERSION_MISMATCH"),
+        (4, "STATUS_CONTRACT_HASH_MISMATCH"),
+        (5, "STATUS_NOT_SOURCE_GENERATOR_READY"),
+        (6, "STATUS_PERMISSION_DENIED"),
+        (7, "STATUS_UNSUPPORTED"),
+        (8, "STATUS_MALFORMED"),
+        (9, "STATUS_INTERNAL"),
+        (10, "STATUS_CATALOG_NOT_READY"),
+        (11, "STATUS_AUTH_REQUIRED"),
+    ];
+
+    for (status, name) in governed_error_statuses {
+        let response = CatalogProcedureManifestResolutionResponse {
+            protocol_major: 1,
+            protocol_minor: 0,
+            request_id: 78,
+            trace_id: Some(format!("trace-{name}")),
+            status,
+            manifest: None,
+            resolved_contract_hash: None,
+            resolved_catalog_version: None,
+            current_catalog_version: Some(9),
+            diagnostic_code: Some(name.to_string()),
+        };
+
+        validate_catalog_procedure_manifest_resolution_response(&response)
+            .unwrap_or_else(|error| panic!("{name} should satisfy response validation: {error}"));
+    }
+}
+
+#[test]
+fn catalog_manifest_resolution_status_policy_rejects_unspecified_and_unknown_statuses() {
+    for (status, name) in [(0, "STATUS_UNSPECIFIED"), (12, "future unknown status")] {
+        let response = CatalogProcedureManifestResolutionResponse {
+            protocol_major: 1,
+            protocol_minor: 0,
+            request_id: 79,
+            trace_id: None,
+            status,
+            manifest: None,
+            resolved_contract_hash: None,
+            resolved_catalog_version: None,
+            current_catalog_version: Some(9),
+            diagnostic_code: Some(name.to_string()),
+        };
+
+        assert!(
+            validate_catalog_procedure_manifest_resolution_response(&response).is_err(),
+            "{name} must not satisfy response validation"
+        );
+    }
+}
+
 proptest! {
     #[test]
     fn prop_protocol_version_roundtrip(major in 0u32..=1000, minor in 0u32..=1000) {

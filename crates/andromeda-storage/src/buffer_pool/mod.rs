@@ -55,8 +55,9 @@
 //! // Mark as dirty and unpin
 //! buffer_pool.unpin_page(frame_id, Some(Lsn::new(42)))?;
 //!
-//! // Flush dirty pages to storage
-//! buffer_pool.flush_all_dirty()?;
+//! // Flush dirty pages to storage once WAL durability is observable
+//! let observer = wal_durability_observer;
+//! buffer_pool.flush_all_dirty_with_report(&observer)?;
 //! ```
 //!
 //! ## Error Handling

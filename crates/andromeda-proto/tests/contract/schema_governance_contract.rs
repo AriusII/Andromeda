@@ -301,6 +301,35 @@ fn v1_migration_policy_keeps_generated_wrapper_in_descriptor_lockstep() {
 }
 
 #[test]
+fn v1_migration_policy_locks_catalog_manifest_resolution_status_values() {
+    let catalog_schema = CONTRACT_SCHEMAS
+        .iter()
+        .find(|(name, _)| *name == "catalog")
+        .map(|(_, source)| *source)
+        .expect("catalog contract schema must be governed");
+
+    for required_status in [
+        "STATUS_UNSPECIFIED = 0;",
+        "STATUS_RESOLVED = 1;",
+        "STATUS_NOT_FOUND = 2;",
+        "STATUS_CATALOG_VERSION_MISMATCH = 3;",
+        "STATUS_CONTRACT_HASH_MISMATCH = 4;",
+        "STATUS_NOT_SOURCE_GENERATOR_READY = 5;",
+        "STATUS_PERMISSION_DENIED = 6;",
+        "STATUS_UNSUPPORTED = 7;",
+        "STATUS_MALFORMED = 8;",
+        "STATUS_INTERNAL = 9;",
+        "STATUS_CATALOG_NOT_READY = 10;",
+        "STATUS_AUTH_REQUIRED = 11;",
+    ] {
+        assert!(
+            catalog_schema.contains(required_status),
+            "catalog manifest resolution status migration policy missing: {required_status}"
+        );
+    }
+}
+
+#[test]
 fn v1_migration_policy_has_no_unrecorded_deprecated_fields_or_json_mapping_options() {
     for schema in CRATE_LOCAL_PROTO_SCHEMAS {
         let active_schema = active_schema_text(schema.source);
@@ -860,11 +889,7 @@ fn assert_descriptor_messages_have_no_deprecated_fields(
             );
         }
 
-        assert_descriptor_messages_have_no_deprecated_fields(
-            file_name,
-            &message.nested_type,
-            path,
-        );
+        assert_descriptor_messages_have_no_deprecated_fields(file_name, &message.nested_type, path);
         path.pop();
     }
 }

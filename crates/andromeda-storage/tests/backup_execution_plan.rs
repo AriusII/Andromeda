@@ -37,6 +37,8 @@ fn test_extent(
         page_size: PageSize::KiB16,
         state,
         segment_id: Some(SegmentId::new(100 + extent_id)),
+        file_offset: extent_id * 16384,
+        allocated_on_disk: true,
     }
 }
 

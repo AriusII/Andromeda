@@ -462,6 +462,8 @@ mod tests {
             page_size: PageSize::KiB16,
             state: ExtentState::PublishedCold,
             segment_id: Some(crate::SegmentId::new(extent_id)),
+            file_offset: 0,
+            allocated_on_disk: false,
         }
     }
 

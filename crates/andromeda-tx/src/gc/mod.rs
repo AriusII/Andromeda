@@ -35,7 +35,10 @@ pub use mvcc_eligibility::{
 pub use reclamation::{
     ReclamationCommand, ReclamationEligibility, ReclamationMark, ReclamationStats,
 };
-pub use scheduler::GcSchedulerTask;
+pub use scheduler::{
+    GcSchedulerExit, GcSchedulerExitReason, GcSchedulerHandle, GcSchedulerStats, GcSchedulerTask,
+    MIN_GC_SCHEDULER_INTERVAL,
+};
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};

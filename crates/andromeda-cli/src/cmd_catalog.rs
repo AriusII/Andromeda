@@ -5,6 +5,7 @@
 //! - Clearing plan cache (all or specific procedures)
 //! - Displaying procedure contract information
 
+use crate::diagnostic_json::{JSON_FLAG, json_option_string, json_string, parse_json_flag};
 use crate::error::cli_error;
 use andromeda_core::AndromedaResult;
 
@@ -80,7 +81,7 @@ fn run_list_procedures(args: &[String]) -> AndromedaResult<()> {
                 }
                 namespace = Some(args[i].clone());
             }
-            "--json" => json_output = true,
+            JSON_FLAG => json_output = true,
             opt if opt.starts_with("--") => {
                 return Err(cli_error(format!(
                     "unknown list-procedures option: {}",
@@ -154,7 +155,7 @@ fn run_invalidate_cache(args: &[String]) -> AndromedaResult<()> {
                         .map_err(|_| cli_error("procedure-id must be an unsigned integer"))?,
                 );
             }
-            "--json" => json_output = true,
+            JSON_FLAG => json_output = true,
             opt if opt.starts_with("--") => {
                 return Err(cli_error(format!(
                     "unknown invalidate-cache option: {}",
@@ -209,7 +210,7 @@ fn run_show_contract(args: &[String]) -> AndromedaResult<()> {
         .parse()
         .map_err(|_| cli_error("procedure-id must be an unsigned integer"))?;
 
-    let json_output = has_json_option(&args[1..]);
+    let json_output = parse_json_flag(&args[1..], "catalog show-contract")?;
 
     // MOCK: In a real implementation, this would query the catalog store for contract details.
     let contract = ProcedureContractInfo {
@@ -268,10 +269,6 @@ fn print_catalog_help() {
     println!("  --procedure-id <id>     Target specific procedure for cache invalidation");
     println!("  --json                  Emit diagnostic machine-readable JSON output");
     println!("  -h, --help              Show this help message");
-}
-
-fn has_json_option(args: &[String]) -> bool {
-    args.iter().any(|arg| arg == "--json")
 }
 
 fn print_procedures_human(procedures: &[ProcedureMetadata]) {
@@ -376,30 +373,6 @@ fn columns_json(columns: &[ColumnInfo]) -> String {
         .collect::<Vec<_>>()
         .join(",");
     format!("[{}]", entries)
-}
-
-fn json_option_string(value: Option<&str>) -> String {
-    value.map(json_string).unwrap_or_else(|| "null".to_string())
-}
-
-fn json_string(value: &str) -> String {
-    format!("\"{}\"", escape_json_str(value))
-}
-
-fn escape_json_str(value: &str) -> String {
-    let mut escaped = String::new();
-    for ch in value.chars() {
-        match ch {
-            '"' => escaped.push_str("\\\""),
-            '\\' => escaped.push_str("\\\\"),
-            '\n' => escaped.push_str("\\n"),
-            '\r' => escaped.push_str("\\r"),
-            '\t' => escaped.push_str("\\t"),
-            ch if ch.is_control() => escaped.push_str(&format!("\\u{:04x}", ch as u32)),
-            ch => escaped.push(ch),
-        }
-    }
-    escaped
 }
 
 #[cfg(test)]

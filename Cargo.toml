@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "crates/andromeda-bench",
     "crates/andromeda-cli",
     "crates/andromeda-catalog",
     "crates/andromeda-core",
@@ -19,6 +20,7 @@ edition = "2024"
 
 [workspace.dependencies]
 andromeda-catalog = { path = "crates/andromeda-catalog" }
+andromeda-bench = { path = "crates/andromeda-bench" }
 andromeda-core = { path = "crates/andromeda-core" }
 andromeda-exec = { path = "crates/andromeda-exec" }
 andromeda-observe = { path = "crates/andromeda-observe" }

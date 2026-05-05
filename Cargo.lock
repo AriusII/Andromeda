@@ -12,6 +12,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-bench"
+version = "0.1.0"
+dependencies = [
+ "andromeda-core",
+]
+
+[[package]]
 name = "andromeda-catalog"
 version = "0.1.0"
 dependencies = [
@@ -24,6 +31,7 @@ dependencies = [
 name = "andromeda-cli"
 version = "0.1.0"
 dependencies = [
+ "andromeda-bench",
  "andromeda-catalog",
  "andromeda-core",
  "andromeda-exec",
@@ -104,6 +112,7 @@ dependencies = [
  "dashmap",
  "proptest",
  "sha2",
+ "tempfile",
 ]
 
 [[package]]

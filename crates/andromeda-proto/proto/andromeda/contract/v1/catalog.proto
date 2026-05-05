@@ -83,6 +83,11 @@ message CatalogProcedureManifestResolutionResponse {
     STATUS_CONTRACT_HASH_MISMATCH = 4;
     STATUS_NOT_SOURCE_GENERATOR_READY = 5;
     STATUS_PERMISSION_DENIED = 6;
+    STATUS_UNSUPPORTED = 7;
+    STATUS_MALFORMED = 8;
+    STATUS_INTERNAL = 9;
+    STATUS_CATALOG_NOT_READY = 10;
+    STATUS_AUTH_REQUIRED = 11;
   }
 
   uint32 protocol_major = 1;          // Echoed negotiated protocol major.

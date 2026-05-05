@@ -6,6 +6,7 @@ pub mod btree_key_codec;
 pub mod buffer_pool;
 mod catalog_wal_bridge;
 mod cold_store;
+pub mod disk_manager;
 mod extent;
 mod file_wal;
 pub mod format_version;
@@ -31,8 +32,11 @@ pub mod write_ahead_log;
 
 pub use backup::*;
 pub use btree::{
-    BTreeConfig, BTreeError, BTreeIndex, BTreeIndexEngine, BTreeIndexMetadata, BTreeIndexNode,
-    BTreeNodeImpl, BTreeRangeCursor, BTreeStatistics, ColumnId, IndexId, KeyValuePair, RowId,
+    BTREE_DURABLE_FORMAT_PROMOTED, BTreeConcurrencyPolicy, BTreeConfig, BTreeError, BTreeIndex,
+    BTreeIndexEngine, BTreeIndexMetadata, BTreeIndexNode, BTreeLatchLevel, BTreeLatchMode,
+    BTreeLatchTarget, BTreeMvccInteraction, BTreeNodeImpl, BTreeOperationKind,
+    BTreePanicPoisonBehavior, BTreeRangeCursor, BTreeRestartReason, BTreeScanConsistency,
+    BTreeStatistics, ColumnId, IndexId, KeyValuePair, RowId,
 };
 pub use btree_key_codec::{Key, KeyCodec, KeyComparator, KeyType};
 pub use buffer_pool::{
@@ -43,10 +47,14 @@ pub use buffer_pool::{
 };
 pub use catalog_wal_bridge::*;
 pub use cold_store::*;
+pub use disk_manager::{DiskManager, DiskManagerError, DiskPageStore, FileDiskManager};
 pub use extent::*;
 pub use file_wal::*;
 pub use hadr::*;
-pub use heap::{HeapPage, HeapPageInsert, HeapScanIter, SlotEntry, slot_directory};
+pub use heap::{
+    HeapPage, HeapPageInsert, HeapScanIter, HeapVacuumMode, HeapVacuumPlan, HeapVacuumReport,
+    SlotEntry, slot_directory,
+};
 pub use heap_row_encoder::{ColumnDef, Datum, RowEncoder, RowSchema, ScalarType};
 pub use lsn::*;
 pub use manifest::*;

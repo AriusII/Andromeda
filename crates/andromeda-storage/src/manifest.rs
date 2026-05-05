@@ -3,11 +3,20 @@ use andromeda_core::{
 };
 use andromeda_observe::{ManifestEventKind, ManifestTrace, TraceId};
 
+use crate::format_version::{FormatVersion, StorageFormatFingerprint, StorageFormatKind};
 use crate::{
     CoreIoPlacementDecision, CoreIoPlacementPolicy, CoreIoPlacementRequest, IoPathBudget,
     IoPathClass, IoUseClass, Lsn, PipelineStage, PlacementDecision, SegmentDescriptor, SegmentId,
     StorageIoBudgetScope, StorageTier, StorageWorkloadClass,
 };
+
+pub const DATABASE_MANIFEST_STORAGE_FORMAT_FINGERPRINTS: [StorageFormatFingerprint; 5] = [
+    StorageFormatFingerprint::new(StorageFormatKind::Page, FormatVersion::V1_0),
+    StorageFormatFingerprint::new(StorageFormatKind::HeapPage, FormatVersion::V1_0),
+    StorageFormatFingerprint::new(StorageFormatKind::BTreeKey, FormatVersion::V1_0),
+    StorageFormatFingerprint::new(StorageFormatKind::BTreeNode, FormatVersion::V1_0),
+    StorageFormatFingerprint::new(StorageFormatKind::WalPayload, FormatVersion::V1_0),
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DatabaseManifest {
@@ -58,6 +67,10 @@ impl DatabaseManifest {
         Ok(())
     }
 
+    pub fn storage_format_manifest(&self) -> AndromedaResult<StorageFormatManifest> {
+        StorageFormatManifest::from_database_manifest(self)
+    }
+
     pub fn validation_trace(
         &self,
         trace_id: TraceId,
@@ -74,6 +87,96 @@ impl DatabaseManifest {
             accepted: self.validate().is_ok(),
             reason: "manifest validation checked identity, CRC, and WAL recovery floor".to_string(),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StorageFormatManifest {
+    pub database_id: u64,
+    pub manifest_version: u64,
+    pub snapshot_id: u64,
+    pub fingerprints: Vec<StorageFormatFingerprint>,
+    pub fingerprint_hash: [u8; 32],
+}
+
+impl StorageFormatManifest {
+    pub fn new(
+        database_id: u64,
+        manifest_version: u64,
+        snapshot_id: u64,
+        fingerprints: Vec<StorageFormatFingerprint>,
+    ) -> Self {
+        let fingerprint_hash =
+            storage_format_manifest_hash(database_id, manifest_version, snapshot_id, &fingerprints);
+        Self {
+            database_id,
+            manifest_version,
+            snapshot_id,
+            fingerprints,
+            fingerprint_hash,
+        }
+    }
+
+    pub fn from_database_manifest(manifest: &DatabaseManifest) -> AndromedaResult<Self> {
+        manifest.validate()?;
+        Ok(Self::new(
+            manifest.database_id,
+            manifest.manifest_version,
+            manifest.snapshot_id,
+            DATABASE_MANIFEST_STORAGE_FORMAT_FINGERPRINTS.to_vec(),
+        ))
+    }
+
+    pub fn fingerprints(&self) -> &[StorageFormatFingerprint] {
+        &self.fingerprints
+    }
+
+    pub fn validate(&self) -> AndromedaResult<()> {
+        if self.database_id == 0 || self.manifest_version == 0 || self.snapshot_id == 0 {
+            return Err(storage_error(
+                "storage format manifest identity fields must not be zero",
+            ));
+        }
+        if self.fingerprints.is_empty() {
+            return Err(storage_error(
+                "storage format manifest must carry durable format fingerprints",
+            ));
+        }
+        if self.fingerprint_hash == [0; 32] {
+            return Err(storage_error(
+                "storage format manifest fingerprint hash must not be zero",
+            ));
+        }
+
+        for (index, fingerprint) in self.fingerprints.iter().enumerate() {
+            if fingerprint.version.major == 0 && fingerprint.version.minor == 0 {
+                return Err(storage_error(
+                    "storage format manifest fingerprint version must not be zero",
+                ));
+            }
+            if self.fingerprints[..index]
+                .iter()
+                .any(|previous| previous.kind == fingerprint.kind)
+            {
+                return Err(storage_error(
+                    "storage format manifest must not duplicate format fingerprints",
+                ));
+            }
+        }
+
+        let expected_hash = storage_format_manifest_hash(
+            self.database_id,
+            self.manifest_version,
+            self.snapshot_id,
+            &self.fingerprints,
+        );
+        if self.fingerprint_hash != expected_hash {
+            return Err(storage_error(
+                "storage format manifest fingerprint hash mismatch",
+            ));
+        }
+
+        Ok(())
     }
 }
 
@@ -237,6 +340,64 @@ fn cold_publication_segment_bytes(sealed_segment: &SegmentDescriptor) -> Androme
         .ok_or_else(|| storage_error("cold publication segment byte size overflows u64"))
 }
 
+fn storage_format_manifest_hash(
+    database_id: u64,
+    manifest_version: u64,
+    snapshot_id: u64,
+    fingerprints: &[StorageFormatFingerprint],
+) -> [u8; 32] {
+    let mut lanes = [
+        0x9e37_79b9_7f4a_7c15,
+        0xc2b2_ae3d_27d4_eb4f,
+        0x1656_67b1_9e37_79f9,
+        0x85eb_ca77_c2b2_ae63,
+    ];
+
+    mix_hash_lane(&mut lanes, 0, database_id);
+    mix_hash_lane(&mut lanes, 1, manifest_version);
+    mix_hash_lane(&mut lanes, 2, snapshot_id);
+    mix_hash_lane(&mut lanes, 3, fingerprints.len() as u64);
+    for fingerprint in fingerprints {
+        mix_hash_lane(&mut lanes, 0, storage_format_kind_tag(fingerprint.kind));
+        mix_hash_lane(&mut lanes, 1, u64::from(fingerprint.version.major));
+        mix_hash_lane(&mut lanes, 2, u64::from(fingerprint.version.minor));
+        mix_hash_lane(
+            &mut lanes,
+            3,
+            storage_format_kind_tag(fingerprint.kind)
+                ^ (u64::from(fingerprint.version.major) << 32)
+                ^ u64::from(fingerprint.version.minor),
+        );
+    }
+
+    let mut hash = [0; 32];
+    for (index, lane) in lanes.into_iter().enumerate() {
+        hash[index * 8..(index + 1) * 8].copy_from_slice(&lane.to_le_bytes());
+    }
+    hash
+}
+
+fn mix_hash_lane(lanes: &mut [u64; 4], index: usize, value: u64) {
+    lanes[index] ^= value.wrapping_mul(0x9e37_79b9_7f4a_7c15);
+    lanes[index] = lanes[index]
+        .rotate_left(27)
+        .wrapping_mul(0x94d0_49bb_1331_11eb);
+}
+
+fn storage_format_kind_tag(kind: StorageFormatKind) -> u64 {
+    match kind {
+        StorageFormatKind::Page => 1,
+        StorageFormatKind::HeapPage => 2,
+        StorageFormatKind::BTreeKey => 3,
+        StorageFormatKind::BTreeNode => 4,
+        StorageFormatKind::WalRecord => 5,
+        StorageFormatKind::WalPayload => 6,
+        StorageFormatKind::Manifest => 7,
+        StorageFormatKind::Segment => 8,
+        StorageFormatKind::Checkpoint => 9,
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SnapshotAvailabilityContract {
     pub published_snapshot_id: u64,
@@ -297,6 +458,48 @@ mod tests {
         assert_eq!(manifest.recovery_floor_lsn(), Lsn::new(11));
         assert!(!manifest.can_start_recovery_at(Lsn::new(10)));
         assert!(manifest.can_start_recovery_at(Lsn::new(11)));
+    }
+
+    #[test]
+    fn manifest_exposes_hashed_storage_format_manifest() {
+        let manifest = valid_manifest();
+        let storage_manifest = manifest.storage_format_manifest().unwrap();
+
+        assert_eq!(storage_manifest.database_id, manifest.database_id);
+        assert_eq!(storage_manifest.manifest_version, manifest.manifest_version);
+        assert_eq!(storage_manifest.snapshot_id, manifest.snapshot_id);
+        assert_eq!(
+            storage_manifest.fingerprints(),
+            DATABASE_MANIFEST_STORAGE_FORMAT_FINGERPRINTS
+        );
+        assert_ne!(storage_manifest.fingerprint_hash, [0; 32]);
+        assert!(storage_manifest.validate().is_ok());
+    }
+
+    #[test]
+    fn storage_format_manifest_rejects_hash_mismatch_and_duplicates() {
+        let manifest = valid_manifest();
+        let mut storage_manifest = manifest.storage_format_manifest().unwrap();
+        storage_manifest.fingerprints[0].version = FormatVersion::V1_5;
+
+        assert_eq!(
+            storage_manifest.validate().unwrap_err().kind(),
+            AndromedaErrorKind::Storage
+        );
+
+        let duplicate = StorageFormatManifest::new(
+            manifest.database_id,
+            manifest.manifest_version,
+            manifest.snapshot_id,
+            vec![
+                StorageFormatFingerprint::new(StorageFormatKind::Page, FormatVersion::V1_0),
+                StorageFormatFingerprint::new(StorageFormatKind::Page, FormatVersion::V1_0),
+            ],
+        );
+        assert_eq!(
+            duplicate.validate().unwrap_err().kind(),
+            AndromedaErrorKind::Storage
+        );
     }
 
     #[test]

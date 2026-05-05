@@ -8,12 +8,15 @@
 // Module files
 mod args_parser;
 mod cmd_backup;
+mod cmd_benchmark;
 mod cmd_catalog;
 mod cmd_hadr;
+mod cmd_machine_output;
 mod cmd_protocol;
 mod cmd_recovery;
 mod cmd_restore;
 mod cmd_vertical;
+mod diagnostic_json;
 mod error_mod;
 mod proto_helpers;
 

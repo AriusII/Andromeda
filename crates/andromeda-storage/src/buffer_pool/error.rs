@@ -24,6 +24,7 @@ pub enum BufferPoolError {
         page_id: u64,
     },
     PageSizeMismatch,
+    WalDurabilityRequired,
     PageTableConflict {
         page_id: u64,
     },
@@ -71,6 +72,9 @@ impl BufferPoolError {
             }
             Self::PageSizeMismatch => {
                 "buffer pool page size does not match the page store or image".to_string()
+            }
+            Self::WalDurabilityRequired => {
+                "WAL durability observer is required before flushing dirty buffer pages".to_string()
             }
             Self::PageTableConflict { page_id } => {
                 format!("buffer pool frame table already contains resident page {page_id}")

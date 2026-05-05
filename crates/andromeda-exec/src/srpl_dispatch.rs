@@ -5,13 +5,17 @@
 
 use std::sync::Arc;
 
+use andromeda_catalog::ResultStreamContract;
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_srpl::{
     interpreter::SrplIrInterpreter,
     procedure_resolver::{ProcedureResolveError, ProcedureResolver},
 };
 
-use crate::{InvocationRequest, ResultStreamMetadata};
+use crate::{
+    DefaultResultMetadataExtractor, InvocationRequest, ResultMetadataExtractor,
+    ResultStreamMetadata,
+};
 
 /// SRPL procedure dispatcher: resolves procedure name to IR plan and executes deterministically.
 ///
@@ -83,24 +87,21 @@ impl SrplProcedureDispatcher {
 
     /// Extract result metadata from a resolved procedure plan.
     ///
-    /// Used to construct the `LocalProcedure` result shape that the runtime
-    /// expects. Result metadata comes from the catalog contract and is fixed
-    /// at resolution time.
+    /// Converts plan evidence and result stream contracts into `ResultStreamMetadata`
+    /// that the runtime uses for result framing and validation.
     ///
-    /// TODO: The implementation will extract:
-    /// - Stream ID from the result stream contract
-    /// - Row count bounds from the manifest policy  
-    /// - Column count from the result stream definition
-    /// - Cardinality from the procedure contract
-    /// And construct a valid ResultStreamMetadata for the runtime.
+    /// # Arguments
+    /// * `plan` - The executable SRPL procedure plan
+    /// * `result_streams` - Result stream contracts from the procedure manifest
+    ///
+    /// # Returns
+    /// Valid `ResultStreamMetadata` ready for emission before payload, or an error
+    /// if metadata cannot be deterministically extracted.
     pub fn result_metadata_for_plan(
-        _plan: &andromeda_srpl::procedure_model::ExecutableProcedurePlan,
+        plan: &andromeda_srpl::procedure_model::ExecutableProcedurePlan,
+        result_streams: &[ResultStreamContract],
     ) -> AndromedaResult<ResultStreamMetadata> {
-        // TODO: Implement full metadata extraction from plan evidence and manifest
-        Err(AndromedaError::new(
-            AndromedaErrorKind::Execution,
-            "SRPL result metadata extraction not yet implemented - pending wave 17",
-        ))
+        DefaultResultMetadataExtractor::extract_metadata(plan, result_streams)
     }
 }
 

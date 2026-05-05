@@ -2,7 +2,7 @@
 name: protobuf-schema-review
 description: Review Protobuf schemas for Andromeda contract compatibility. Use when working on protocol tasks for the Andromeda SGBDRT project.
 allowed-tools: Read, Grep, Glob, Edit
-version: 0.1.0
+version: 0.2.0
 ---
 
 # protobuf-schema-review
@@ -10,6 +10,12 @@ version: 0.1.0
 ## Purpose
 
 Review Protobuf schemas for Andromeda contract compatibility.
+
+## Policy (DEC-021)
+
+- **Versioning:** Every frame envelope MUST carry `ProtocolVersion`. Current locked version: **V1.0**.
+- **Metadata:** Metadata MUST precede payload. Result streams MUST declare shapes and `row_count_exact` before batches.
+- **Tooling:** Use `prost` 0.14+ (Protobuf Edition 2024).
 
 ## Use when
 
@@ -53,4 +59,5 @@ Return:
 
 ## Version history
 
+- 0.2.0 (2026-05-05): Updated with DEC-021 (Protocol V1.0, Metadata-Before-Payload, prost 0.14+).
 - 0.1.0 (2026-05-03): Initial project-specific skill.

@@ -266,25 +266,8 @@ impl<S: PageStore> BufferPoolManager for BufferPool<S> {
     }
 
     fn flush_all_dirty(&mut self) -> AndromedaResult<()> {
-        let candidates = self.dirty_tracker.flush_candidates();
-        for candidate in candidates {
-            let page_id = candidate.page_id();
-            let index = *self
-                .page_table
-                .get(&page_id)
-                .ok_or_else(|| BufferPoolError::InvalidFrameState.into_andromeda_error())?;
-            if self.frames[index].pin_count() != 0 {
-                return Err(BufferPoolError::AllFramesPinned.into_andromeda_error());
-            }
-
-            let image = self.frames[index]
-                .image()
-                .cloned()
-                .ok_or_else(|| BufferPoolError::InvalidPageImage.into_andromeda_error())?;
-            self.frames[index].begin_flush()?;
-            self.store.write_page(image, candidate.first_dirty_lsn())?;
-            self.frames[index].finish_flush(candidate.first_dirty_lsn())?;
-            self.dirty_tracker.mark_clean(page_id)?;
+        if !self.dirty_tracker.is_empty() {
+            return Err(BufferPoolError::WalDurabilityRequired.into_andromeda_error());
         }
         Ok(())
     }

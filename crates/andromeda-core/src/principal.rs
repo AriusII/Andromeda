@@ -689,7 +689,6 @@ impl Principal {
             )
         })
     }
-
 }
 
 #[cfg(test)]
@@ -753,10 +752,7 @@ mod tests {
 
         let token = SessionToken::from_certificate_fingerprint(&fp);
 
-        assert_eq!(
-            token.as_str(),
-            "mtls:a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
-        );
+        assert_eq!(token.as_str(), "mtls:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4");
         assert!(
             !token.as_str().contains(&fp.as_str()[32..]),
             "derived token must not embed the full fingerprint"
@@ -852,13 +848,9 @@ mod tests {
         let fp = CertificateFingerprint::new("test_user_fingerprint").unwrap();
 
         let id = PrincipalId::from_certificate_fingerprint(&fp).unwrap();
-        let expected =
-            fp.as_str()
-                .as_bytes()
-                .iter()
-                .fold(0u64, |acc, &byte| {
-                    acc.wrapping_mul(31).wrapping_add(byte as u64)
-                });
+        let expected = fp.as_str().as_bytes().iter().fold(0u64, |acc, &byte| {
+            acc.wrapping_mul(31).wrapping_add(byte as u64)
+        });
 
         assert_eq!(id.get(), expected);
     }

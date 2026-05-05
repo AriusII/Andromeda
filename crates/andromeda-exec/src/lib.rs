@@ -12,6 +12,7 @@ mod invocation;
 mod local;
 mod registry;
 mod result;
+pub mod result_metadata_extractor;
 pub mod services;
 mod srpl_dispatch;
 mod surface_gate;
@@ -33,6 +34,7 @@ pub use invocation::*;
 pub use local::*;
 pub use registry::{ProcedureHandler, ProcedureRegistry, ReserveStockProcedureHandler};
 pub use result::*;
+pub use result_metadata_extractor::{DefaultResultMetadataExtractor, ResultMetadataExtractor};
 pub use services::{
     AdmissionService, CompletionMappingService, PreTransactionValidationService,
     ResultValidationService,

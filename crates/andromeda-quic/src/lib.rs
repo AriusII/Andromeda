@@ -33,6 +33,7 @@ mod frame_codec;
 mod frame_sequence;
 mod frame_struct;
 mod procedure_gateway;
+mod reconnect;
 mod rpc_dispatch;
 mod stream_types;
 
@@ -104,6 +105,17 @@ pub use rpc::{
 // ============================================================================
 
 pub use procedure_gateway::ProcedureGateway;
+
+// ============================================================================
+// Reconnection Policy
+// ============================================================================
+
+pub use reconnect::{
+    ConnectionPool, ConnectionPoolKey, ConnectionPoolPolicy, MAX_POOL_CONNECTIONS_PER_KEY,
+    MAX_POOL_IDLE_TIMEOUT_MS, PoolAdmission, PoolAdmissionKind, PoolConnectionId, PooledConnection,
+    PooledConnectionHealth, ReconnectDecision, ReconnectPolicy, ReconnectState,
+    RetryAdmissionDecision, RetryAdmissionPolicy, RetryIdempotency, RetryRejectionReason,
+};
 
 // ============================================================================
 // Backpressure

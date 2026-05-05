@@ -56,7 +56,7 @@
 //! | `ProcedureId` | Procedure identity changes | Different procedure, never share cached plan |
 //! | `ContractHash` | Procedure contract is altered (ALTER PROCEDURE) | Signature, result schema, or policy change invalidates all old keys |
 //! | `CatalogVersion` | Catalog schema evolves | New catalog version = new key entry; old plans not reused |
-//! | `StatsVersion` | Statistics histogram is updated | New stats version = new key entry; old cardinality assumptions void |
+//! | `StatsVersion` | Statistics histogram or correlation evidence is updated | New stats version = new key entry; old cardinality assumptions void |
 //! | `PolicyVersion` | Policy surface mutates | New transaction policy or permissions = new key; strict isolation |
 //! | `PlanClass` | Specialization strategy changes | Singleton → ParameterShape: different key space; no cross-class reuse |
 //! | `PlanShapeFingerprint` | Parameter shape or cardinality evidence changes | Different bound parameters = different fingerprint = different key |

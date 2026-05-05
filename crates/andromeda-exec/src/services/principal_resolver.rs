@@ -303,8 +303,7 @@ mod tests {
     #[test]
     fn test_register_uses_core_certificate_derivation_helpers() {
         let resolver = LocalPrincipalResolver::new();
-        let fingerprint =
-            "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
+        let fingerprint = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
         let certificate = CertificateFingerprint::new(fingerprint).unwrap();
 
         let registered = resolver

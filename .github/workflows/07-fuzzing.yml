@@ -1,0 +1,64 @@
+name: 07 - Fuzzing
+
+on:
+  schedule:
+    - cron: "23 4 * * 3"
+  workflow_dispatch:
+    inputs:
+      fuzz_seconds:
+        description: "Seconds per fuzz target"
+        required: false
+        default: "60"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzzing-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  fuzz:
+    name: Cargo fuzz smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/rust-setup
+        with:
+          toolchain: nightly
+          components: rust-src
+      - run: cargo install cargo-fuzz --locked
+      - name: Discover fuzz targets
+        id: discover
+        shell: bash
+        run: |
+          if [ -d fuzz/fuzz_targets ]; then
+            ls fuzz/fuzz_targets/*.rs 2>/dev/null | sed 's#.*/##;s#\.rs$##' > /tmp/fuzz-targets.txt || true
+          else
+            touch /tmp/fuzz-targets.txt
+          fi
+          cat /tmp/fuzz-targets.txt
+          echo "count=$(wc -l < /tmp/fuzz-targets.txt)" >> "$GITHUB_OUTPUT"
+      - name: Run fuzz targets
+        if: steps.discover.outputs.count != '0'
+        shell: bash
+        run: |
+          while read -r target; do
+            echo "::group::fuzz $target"
+            cargo +nightly fuzz run "$target" -- -max_total_time=${{ github.event.inputs.fuzz_seconds || '60' }}
+            echo "::endgroup::"
+          done < /tmp/fuzz-targets.txt
+      - name: No fuzz targets yet
+        if: steps.discover.outputs.count == '0'
+        run: echo "No fuzz targets found. Add fuzz/fuzz_targets/*.rs to enable fuzzing."
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fuzz-artifacts
+          path: |
+            fuzz/artifacts
+            fuzz/corpus
+          if-no-files-found: ignore
+          retention-days: 14

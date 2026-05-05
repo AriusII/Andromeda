@@ -1,0 +1,43 @@
+name: 05 - Supply Chain
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths: [ "Cargo.toml", "Cargo.lock", "deny.toml", ".github/workflows/05-supply-chain.yml" ]
+  push:
+    branches: [ main ]
+    paths: [ "Cargo.toml", "Cargo.lock", "deny.toml", ".github/workflows/05-supply-chain.yml" ]
+  schedule:
+    - cron: "41 2 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supply-chain-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  cargo-audit:
+    name: cargo-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/rust-setup
+        with:
+          toolchain: stable
+      - run: cargo install cargo-audit --locked
+      - run: cargo audit --deny warnings
+
+  cargo-deny:
+    name: cargo-deny
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+          arguments: --all-features

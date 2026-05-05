@@ -259,27 +259,26 @@ must never self-promote without quorum. RPO and RTO are explicit contract parame
 
 ## V0 implementation roadmap
 
-| Phase                           | Scope                                                                                                                                                                   | Exit criterion                                                                   |
+| Phase                           | Scope                                                                                                                                                                   | Status                                                                           |
 |---------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------|
-| 0 — Specifications              | Lexicon, catalog object model, type system, Procedure contract, RPC frame, Protobuf schema, PageHeader, WalRecord, Manifest, transaction state machine                  | Specification artifacts exist with test vectors                                  |
-| 1 — Vertical prototype          | Create DB/namespace/table/enum/StructuredObject/Procedure; call Procedure over local QUIC/RPC; durable WAL; commit; ResultStream; Procedure Store trace; crash/recovery | Crash after commit recovers visible state; crash before commit publishes nothing |
-| 2 — Serious storage             | BufferPool, HotStore, cold snapshot publication, atomic manifest switch, WAL replay, basic MVCC, logical checkpoint                                                     | Recovery can mount snapshot + WAL and verify invariants                          |
-| 3 — Minimal optimizer           | Procedure Plan, plan cache, basic cost model, StatsVersion, Procedure Store feedback                                                                                    | Plan decisions are traceable and invalidated correctly                           |
-| 4 — Maps and StructuredObject   | Immediate/incremental Map, row/column layout, RowCountExact protocol                                                                                                    | StructuredObject batch path supports set-based execution                         |
-| 5 — Administration and security | mTLS, UserPrincipal, certificate registry, permissions, Admin surface, audit ledger, debug snapshot                                                                     | Denied command leaves trace; debug cannot mutate production                      |
-| 6 — Analytics, benchmark, GPU   | Optional GPU statistics, ScenarioEvidence, Predictive Evidence Engine                                                                                                   | Evidence informs optimizer without overriding policy                             |
+| 0 — Specifications              | Lexicon, catalog object model, type system, Procedure contract, RPC frame, Protobuf schema, PageHeader, WalRecord, Manifest, transaction state machine                  | ✓ Complete                                                                       |
+| 1 — Vertical prototype          | Create DB/namespace/table/enum/StructuredObject/Procedure; call Procedure over local QUIC/RPC; durable WAL; commit; ResultStream; Procedure Store trace; crash/recovery | ✓ Complete (Stable)                                                              |
+| 2 — Serious storage             | BufferPool, HotStore, cold snapshot publication, atomic manifest switch, WAL replay, basic MVCC, logical checkpoint                                                     | In Progress (Candidate V1 format defined in DEC-032)                             |
+| 3 — Minimal optimizer           | Procedure Plan, plan cache, basic cost model, StatsVersion, Procedure Store feedback                                                                                    | Identity scaffold complete; Runtime cache deferred (DEC-016)                     |
+| 4 — Maps and StructuredObject   | Immediate/incremental Map, row/column layout, RowCountExact protocol                                                                                                    | Deferred                                                                         |
+| 5 — Administration and security | mTLS, UserPrincipal, certificate registry, permissions, Admin surface, audit ledger, debug snapshot                                                                     | In Progress (mTLS DEC-018; Admission DEC-028)                                    |
+| 6 — Analytics, benchmark, GPU   | Optional GPU statistics, ScenarioEvidence, Predictive Evidence Engine                                                                                                   | Planned                                                                          |
 
-### Critical V0 regression gates
+### Critical V0 regression gates (DEC-026 Taxonomy)
 
-Release is blocked on any of the following:
+Release is blocked on any failure in these gate categories:
 
-- Recovery failure after a committed WAL flush
-- Visibility violation (partial-commit visible state)
-- `ContractHash` mismatch accepted without rejection
-- Audit omission on security or administration operations
-- Panic in a critical path
-- Silent data corruption
-- Non-reproducible crash test
+- **Protocol (PROT):** Any change to frozen frame headers, Protobuf schema, or discriminator reordering.
+- **Storage (STOR):** Recovery failure after committed WAL flush; manifest checksum mismatch; page layout drift.
+- **HA/DR (HADR):** Quorum membership tracking failure; leader election soundless; backup physical plan violation.
+- **Observability (OBS):** Audit omission on security/admin operations; trace durability failure.
+- **Execution (EXEC):** Visibility violation (partial-commit visible state); `ContractHash` mismatch accepted.
+- **General:** Panic in a critical path; silent data corruption; non-reproducible crash test.
 
 ---
 
@@ -302,11 +301,11 @@ untrusted or disk-recovered bytes is a fuzz target.
 | Area                         | Status                                                                           |
 |------------------------------|----------------------------------------------------------------------------------|
 | SRPL concrete syntax         | V0 syntax exists; grammar v0.1 freeze pending                                    |
-| `ContractHash` binary format | Descriptor-set canonicalization algorithm not yet locked                         |
-| Endianness                   | Open — wire and page encoding must be made explicit before cross-platform replay |
-| Page size                    | 16 KiB or 32 KiB — benchmark required                                            |
+| `ContractHash` binary format | Descriptor-set canonicalization algorithm locked (DEC-021)                       |
+| Endianness                   | Big-endian for keys, mixed LE/BE for headers (Candidate V1 format, DEC-032)      |
+| Page size                    | 16 KiB or 32 KiB (Candidate V1 format, DEC-032)                                  |
 | Decimal representation       | Precision/scale storage, overflow, and rounding rules not yet defined            |
-| QUIC implementation          | Quinn vs. s2n-quic vs. MsQuic — evaluation required                              |
-| Protobuf toolchain           | prost vs. official Rust Protobuf support for Edition 2024                        |
-| HA/DR quorum protocol        | Fencing, LSN comparison, witness behavior, and promotion rules not yet specified |
+| QUIC implementation          | `quinn` with `rustls` selected; dependencies deferred (DEC-017)                  |
+| Protobuf toolchain           | `prost` (Edition 2024)                                                           |
+| HA/DR quorum protocol        | Membership epoch + LSN-based ranking + Majority quorum (V0) (Locked, DEC-020)    |
 | Backup encryption and keys   | Key hierarchy and restore-time access policy not yet designed                    |

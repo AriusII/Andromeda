@@ -54,6 +54,7 @@ const HEAP_PAGE_V1_HEADER_SIZE: usize = 96;
 const HEAP_PAGE_V1_TRAILER_SIZE: usize = 48;
 const HEAP_PAGE_V1_SLOT_METADATA_SIZE: usize = 4;
 const HEAP_PAGE_V1_HEADER_SLOT_COUNT_OFFSET: usize = 40;
+const HEAP_PAGE_V1_SLOT_FLAGS_KNOWN_MASK: u8 = 0x01;
 
 /// A single slot directory entry (5 bytes).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -122,12 +123,91 @@ impl SlotEntry {
     }
 }
 
+/// Heap physical vacuum mode.
+///
+/// This is an in-memory planning contract only. It does not change the
+/// HeapPageV1 byte format and does not authorize callers to bypass MVCC or WAL
+/// safety gates before applying physical compaction to a durable page image.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HeapVacuumMode {
+    /// Rewrite live tuple payloads within the same page while preserving every
+    /// slot id. Deleted slots remain deleted in the slot directory, so external
+    /// RowIds of the form `(page_id, slot_id)` remain stable.
+    OnlineStableRowIds,
+    /// Offline rewrite may remove deleted slots and remap RowIds, but only while
+    /// the owning relation/indexes are offline and a durable remap protocol is in
+    /// force. HeapPageV1 does not implement this mutation path.
+    OfflineRewriteAllowRowIdRemap,
+}
+
+/// Read-only heap physical vacuum plan.
+///
+/// The planner can identify physically deleted slot candidates and live tuples
+/// that would move under stable-RowId compaction. It cannot prove MVCC
+/// eligibility because HeapPageV1 slots do not carry transaction visibility
+/// timestamps; callers must supply an external proof before applying compaction.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HeapVacuumPlan {
+    pub mode: HeapVacuumMode,
+    /// Deleted slots that are physical candidates for reclaim. These are not
+    /// MVCC-safe until the transaction layer proves their deleting versions are
+    /// older than the oldest active snapshot.
+    pub candidate_deleted_slots: Vec<u16>,
+    /// Live slots whose payload offsets would change under stable-RowId physical
+    /// compaction. Slot ids themselves are preserved in `OnlineStableRowIds`.
+    pub live_slots_rewritten: Vec<u16>,
+    /// Payload bytes occupied by deleted slots.
+    pub bytes_reclaimable: u32,
+    /// True when applying this plan would preserve `(page_id, slot_id)` RowIds.
+    pub preserves_row_ids: bool,
+    /// True only for offline relation rewrites with an explicit remap protocol.
+    pub row_id_remap_allowed: bool,
+    /// True when a non-empty plan requires transaction/MVCC proof before apply.
+    pub requires_mvcc_gc_proof: bool,
+    /// True when applying a non-empty physical rewrite requires durable WAL redo.
+    pub requires_wal_redo: bool,
+    /// Always false for this V1 planner: the plan must not alter HeapPageV1 bytes
+    /// beyond ordinary slot offsets, free metadata, and checksummed page content.
+    pub durable_format_change: bool,
+}
+
+impl HeapVacuumPlan {
+    /// Returns true when there is no physical heap work to apply.
+    pub fn is_empty(&self) -> bool {
+        self.candidate_deleted_slots.is_empty()
+            && self.live_slots_rewritten.is_empty()
+            && self.bytes_reclaimable == 0
+    }
+}
+
+/// Minimal report shape for future heap vacuum execution.
+///
+/// This type is intentionally not emitted by a mutating API in V1 until WAL
+/// payload/replay and MVCC eligibility contracts are wired at the engine level.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HeapVacuumReport {
+    pub mode: HeapVacuumMode,
+    pub applied: bool,
+    pub slots_deleted_considered: usize,
+    pub live_slots_rewritten: usize,
+    pub bytes_reclaimed: u32,
+    pub row_ids_preserved: bool,
+    pub wal_record_lsn_required: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct HeapPageV1SlotMetadata {
     slot_count: usize,
     free_offset: u16,
     metadata_offset: usize,
     slot_base: usize,
+}
+
+fn heap_page_v1_max_slots(page_size: PageSize) -> usize {
+    match page_size {
+        PageSize::KiB16 => 256,
+        PageSize::KiB32 => 512,
+    }
 }
 
 fn heap_page_v1_metadata_offset(page_size: PageSize) -> usize {
@@ -157,6 +237,13 @@ fn heap_page_v1_read_slot_metadata(
         page_data[metadata_offset + 2],
         page_data[metadata_offset + 3],
     ]);
+    let max_slots = heap_page_v1_max_slots(page_size);
+    if footer_slot_count > max_slots {
+        return Err(heap_error(format!(
+            "heap page v1 slot count {} exceeds limit {}",
+            footer_slot_count, max_slots
+        )));
+    }
 
     // DEC-032 blocks the legacy/header-only reader path. Header offset 40 is not
     // authoritative under HeapPageV1; if populated it is only accepted as a redundant
@@ -203,6 +290,78 @@ fn heap_page_v1_read_slot_metadata(
     })
 }
 
+fn heap_page_v1_read_and_validate_slots(
+    page_data: &[u8],
+    metadata: HeapPageV1SlotMetadata,
+) -> AndromedaResult<Vec<SlotEntry>> {
+    let mut slots = Vec::with_capacity(metadata.slot_count);
+    let mut live_ranges: Vec<(usize, usize, usize)> = Vec::new();
+    let free_offset = metadata.free_offset as usize;
+
+    for i in 0..metadata.slot_count {
+        let slot_offset = metadata.metadata_offset - ((i + 1) * SlotEntry::SIZE);
+        let mut slot_bytes = [0u8; 5];
+        slot_bytes.copy_from_slice(&page_data[slot_offset..slot_offset + 5]);
+        let entry = SlotEntry::from_bytes(slot_bytes);
+
+        if entry.flags & !HEAP_PAGE_V1_SLOT_FLAGS_KNOWN_MASK != 0 {
+            return Err(heap_error(format!(
+                "heap page v1 slot {} has unknown flags 0x{:02x}",
+                i, entry.flags
+            )));
+        }
+
+        if entry.is_deleted() {
+            if entry.offset != 0 {
+                return Err(heap_error(format!(
+                    "heap page v1 slot {} deleted flag requires zero offset",
+                    i
+                )));
+            }
+            slots.push(entry);
+            continue;
+        }
+
+        if entry.offset == 0 || entry.length == 0 {
+            return Err(heap_error(format!(
+                "heap page v1 live slot {} requires non-zero offset and length",
+                i
+            )));
+        }
+
+        let tuple_start = entry.offset as usize;
+        let tuple_end = tuple_start
+            .checked_add(entry.length as usize)
+            .ok_or_else(|| heap_error(format!("heap page v1 slot {} tuple bounds overflow", i)))?;
+        if tuple_start < HEAP_PAGE_V1_HEADER_SIZE || tuple_end > metadata.slot_base {
+            return Err(heap_error(format!(
+                "heap page v1 slot {} tuple bounds {}..{} outside payload region {}..{}",
+                i, tuple_start, tuple_end, HEAP_PAGE_V1_HEADER_SIZE, metadata.slot_base
+            )));
+        }
+        if tuple_end > free_offset {
+            return Err(heap_error(format!(
+                "heap page v1 slot {} tuple end {} exceeds footer free offset {}",
+                i, tuple_end, free_offset
+            )));
+        }
+
+        for (other_slot, other_start, other_end) in &live_ranges {
+            if tuple_start < *other_end && *other_start < tuple_end {
+                return Err(heap_error(format!(
+                    "heap page v1 tuple overlap: slot {} {}..{} overlaps slot {} {}..{}",
+                    i, tuple_start, tuple_end, other_slot, other_start, other_end
+                )));
+            }
+        }
+
+        live_ranges.push((i, tuple_start, tuple_end));
+        slots.push(entry);
+    }
+
+    Ok(slots)
+}
+
 /// A variadic-length heap page for tuple storage.
 ///
 /// Manages slot-based tuple storage with deletion via logical marking.
@@ -240,25 +399,7 @@ impl HeapPage {
 
         let data = bytes.to_vec();
         let metadata = heap_page_v1_read_slot_metadata(page_size, &data)?;
-        let mut slot_directory = Vec::with_capacity(metadata.slot_count);
-
-        for i in 0..metadata.slot_count {
-            let slot_offset = metadata.metadata_offset - ((i + 1) * SlotEntry::SIZE);
-            let mut slot_bytes = [0u8; 5];
-            slot_bytes.copy_from_slice(&data[slot_offset..slot_offset + 5]);
-            let entry = SlotEntry::from_bytes(slot_bytes);
-            if !entry.is_deleted() {
-                let tuple_start = entry.offset as usize;
-                let tuple_end = tuple_start.saturating_add(entry.length as usize);
-                if tuple_start < HEAP_PAGE_V1_HEADER_SIZE || tuple_end > metadata.slot_base {
-                    return Err(heap_error(format!(
-                        "heap page v1 slot {} tuple bounds {}..{} outside payload region {}..{}",
-                        i, tuple_start, tuple_end, HEAP_PAGE_V1_HEADER_SIZE, metadata.slot_base
-                    )));
-                }
-            }
-            slot_directory.push(entry);
-        }
+        let slot_directory = heap_page_v1_read_and_validate_slots(&data, metadata)?;
 
         Ok(Self {
             page_size,
@@ -453,6 +594,50 @@ impl HeapPage {
     /// Useful for deciding whether to compact.
     pub fn has_deleted_slots(&self) -> bool {
         self.slot_directory.iter().any(|e| e.is_deleted())
+    }
+
+    /// Build a read-only physical vacuum plan for this heap page.
+    ///
+    /// This method is safe to call online because it does not mutate the page.
+    /// It deliberately reports physical candidates only; the caller must prove:
+    ///
+    /// - the deleted slots are invisible to every active MVCC snapshot;
+    /// - the physical rewrite is protected by page latching/buffer-pool exclusion;
+    /// - a redo-capable WAL record or full-page image is durable before the dirty
+    ///   compacted page can be flushed.
+    pub fn vacuum_plan(&self, mode: HeapVacuumMode) -> HeapVacuumPlan {
+        let mut candidate_deleted_slots = Vec::new();
+        let mut live_slots_rewritten = Vec::new();
+        let mut bytes_reclaimable = 0u32;
+        let mut next_compacted_offset = HEAP_PAGE_V1_HEADER_SIZE as u16;
+
+        for (slot_id, entry) in self.slot_directory.iter().enumerate() {
+            if entry.is_deleted() {
+                candidate_deleted_slots.push(slot_id as u16);
+                bytes_reclaimable = bytes_reclaimable.saturating_add(u32::from(entry.length));
+                continue;
+            }
+
+            if entry.offset != next_compacted_offset {
+                live_slots_rewritten.push(slot_id as u16);
+            }
+            next_compacted_offset = next_compacted_offset.saturating_add(entry.length);
+        }
+
+        let has_work = !candidate_deleted_slots.is_empty() || !live_slots_rewritten.is_empty();
+        let preserves_row_ids = matches!(mode, HeapVacuumMode::OnlineStableRowIds);
+
+        HeapVacuumPlan {
+            mode,
+            candidate_deleted_slots,
+            live_slots_rewritten,
+            bytes_reclaimable,
+            preserves_row_ids,
+            row_id_remap_allowed: matches!(mode, HeapVacuumMode::OfflineRewriteAllowRowIdRemap),
+            requires_mvcc_gc_proof: has_work,
+            requires_wal_redo: has_work,
+            durable_format_change: false,
+        }
     }
 
     /// Compact the page by reclaiming space from deleted tuples.
@@ -779,25 +964,7 @@ pub mod slot_directory {
         /// Load slot directory from serialized page data.
         pub fn from_page_data(page_size: PageSize, page_data: &[u8]) -> AndromedaResult<Self> {
             let metadata = heap_page_v1_read_slot_metadata(page_size, page_data)?;
-
-            let mut slots = Vec::with_capacity(metadata.slot_count);
-            for i in 0..metadata.slot_count {
-                let slot_offset = metadata.metadata_offset - ((i + 1) * SlotEntry::SIZE);
-                let mut slot_bytes = [0u8; 5];
-                slot_bytes.copy_from_slice(&page_data[slot_offset..slot_offset + 5]);
-                let slot = SlotEntry::from_bytes(slot_bytes);
-                if !slot.is_deleted() {
-                    let tuple_start = slot.offset as usize;
-                    let tuple_end = tuple_start.saturating_add(slot.length as usize);
-                    if tuple_start < HEAP_PAGE_V1_HEADER_SIZE || tuple_end > metadata.slot_base {
-                        return Err(heap_error(format!(
-                            "heap page v1 slot {} tuple bounds {}..{} outside payload region {}..{}",
-                            i, tuple_start, tuple_end, HEAP_PAGE_V1_HEADER_SIZE, metadata.slot_base
-                        )));
-                    }
-                }
-                slots.push(slot);
-            }
+            let slots = heap_page_v1_read_and_validate_slots(page_data, metadata)?;
 
             Ok(Self {
                 page_size,

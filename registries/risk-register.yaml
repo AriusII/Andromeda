@@ -100,3 +100,43 @@ risks:
     mitigation: "Proposed: Treat restore verification as mandatory, checksum and version backup artifacts, test PITR from base backup through WAL replay, validate catalog compatibility during restore, and keep incomplete replay from publishing recovered state."
     owner: storage-recovery-lead
     status: open
+  - id: RISK-013
+    title: Audit ledger completeness omission
+    severity: critical
+    likelihood: medium
+    summary: Critical operation emits trace event but does not write to audit ledger, leaving recovery and forensics without complete record. Event classification drift as features are added causes audit records to be incomplete or misclassified.
+    mitigation: "Proposed: DEC-032/DEC-033 mandate all nine event families and immutable classification. Contract tests validate family assignment. Dry-run phase validates audit-eligibility before operation commits. audit-trace-specification skill governs future additions to prevent classification drift. Completeness audit tool (future) scans for gaps."
+    owner: observability-forensic-architect
+    status: open
+  - id: RISK-014
+    title: Audit ledger corruption or data loss
+    severity: critical
+    likelihood: medium
+    summary: WAL segment containing audit records is corrupted, truncated, or lost due to disk fault or operator error. Recovery cannot establish forensic timeline. Multiple simultaneous segment failures cause unrecoverable gaps.
+    mitigation: "Proposed: Audit ledger is part of WAL; subject to WAL durability model (DEC-029). Checksum validation on decode detects corruption. Backup includes audit ledger; restore validates. Crash recovery marks corruption boundary and preserves forensic hold. Multiple-segment loss remains unmitigated; requires distributed backup (future)."
+    owner: storage-recovery-lead
+    status: open
+  - id: RISK-015
+    title: Audit query performance regression
+    severity: high
+    likelihood: high
+    summary: Forensic queries over large audit ledger (months/years of operations) become prohibitively slow, making compliance and incident investigation impractical. Query scaling not addressed.
+    mitigation: "Proposed: Phase G establishes WAL-based ledger. Future Wave: Audit indexing (LSN-to-family map, principal index) built on-demand or during compaction. Retention policy enforcement prevents unbounded growth. Batch queries with explicit time windows. Query SLA: single-segment <100ms, multi-segment linear in count. Distributed query/sharding for years-scale retention (V2+)."
+    owner: query-engine-lead
+    status: open
+  - id: RISK-016
+    title: Audit append blocking critical path
+    severity: high
+    likelihood: medium
+    summary: Despite off-critical-path design intent, audit append becomes synchronous or on the transaction commit path, slowing every commit by audit I/O latency.
+    mitigation: "Proposed: gpu-off-commit-path-check skill (audit-trace-specification) verifies decoupling. Async sinks must not block commit. Durable evidence check (LSN >= record_lsn) happens before decision visibility, not before record creation. Performance test validates <5% commit latency degradation. Future changes to synchronous audit must be gated."
+    owner: observability-forensic-architect
+    status: open
+  - id: RISK-017
+    title: Audit event classification drift
+    severity: high
+    likelihood: high
+    summary: As features are added, events classified incorrectly or omitted entirely. Informal events bypass audit. Over time, audit ledger degrades in completeness and forensic value.
+    mitigation: "Proposed: audit-trace-specification skill governance: all new operational decisions must specify audit family before code change. New families require new decision record. Contract tests validate classification. Audit schema is versioned; evolution gated. Acceptance: PR must cite family assignment and pass contract tests. Informal events must have explicit inclusion/exclusion documentation."
+    owner: observability-forensic-architect
+    status: open

@@ -9,6 +9,7 @@
 //! - Catalog commands (list-procedures, invalidate-cache, show-contract)
 
 use andromeda_cli::cmd::dispatch_command;
+use std::process::{Command, Output};
 
 // ============================================================================
 // HADR Command Tests
@@ -67,6 +68,92 @@ fn hadr_demote_with_force_executes() {
 #[test]
 fn hadr_quorum_command_executes() {
     let args = vec!["hadr".to_string(), "quorum".to_string()];
+    let result = dispatch_command(&args);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn hadr_node_list_command_executes_as_contract_scaffold() {
+    let args = vec!["hadr".to_string(), "node".to_string(), "list".to_string()];
+    let result = dispatch_command(&args);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn hadr_node_status_requires_node_id() {
+    let args = vec!["hadr".to_string(), "node".to_string(), "status".to_string()];
+    let result = dispatch_command(&args);
+    assert!(result.is_err());
+}
+
+#[test]
+fn hadr_node_register_requires_dry_run() {
+    let args = vec![
+        "hadr".to_string(),
+        "node".to_string(),
+        "register".to_string(),
+        "4".to_string(),
+        "--role".to_string(),
+        "replica".to_string(),
+    ];
+    let result = dispatch_command(&args);
+    assert!(result.is_err());
+}
+
+#[test]
+fn hadr_node_register_dry_run_accepts_replica_only() {
+    let args = vec![
+        "hadr".to_string(),
+        "node".to_string(),
+        "register".to_string(),
+        "4".to_string(),
+        "--role".to_string(),
+        "replica".to_string(),
+        "--dry-run".to_string(),
+    ];
+    let result = dispatch_command(&args);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn hadr_node_register_rejects_primary_role() {
+    let args = vec![
+        "hadr".to_string(),
+        "node".to_string(),
+        "register".to_string(),
+        "4".to_string(),
+        "--role".to_string(),
+        "primary".to_string(),
+        "--dry-run".to_string(),
+    ];
+    let result = dispatch_command(&args);
+    assert!(result.is_err());
+}
+
+#[test]
+fn hadr_node_deregister_dry_run_requires_fencing_evidence() {
+    let args = vec![
+        "hadr".to_string(),
+        "node".to_string(),
+        "deregister".to_string(),
+        "4".to_string(),
+        "--dry-run".to_string(),
+    ];
+    let result = dispatch_command(&args);
+    assert!(result.is_err());
+}
+
+#[test]
+fn hadr_node_deregister_dry_run_accepts_fencing_evidence() {
+    let args = vec![
+        "hadr".to_string(),
+        "node".to_string(),
+        "deregister".to_string(),
+        "4".to_string(),
+        "--fencing-evidence".to_string(),
+        "operator-ticket-123".to_string(),
+        "--dry-run".to_string(),
+    ];
     let result = dispatch_command(&args);
     assert!(result.is_ok());
 }
@@ -272,6 +359,101 @@ fn catalog_help_command_executes() {
 }
 
 // ============================================================================
+// Benchmark Command Tests
+// ============================================================================
+
+#[test]
+fn benchmark_help_command_executes() {
+    let args = vec!["benchmark".to_string(), "--help".to_string()];
+    let result = dispatch_command(&args);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn benchmark_workloads_command_executes() {
+    let args = vec!["benchmark".to_string(), "workloads".to_string()];
+    let result = dispatch_command(&args);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn benchmark_contract_accepts_diagnostic_json() {
+    let args = vec![
+        "benchmark".to_string(),
+        "contract".to_string(),
+        "--diagnostic-json".to_string(),
+    ];
+    let result = dispatch_command(&args);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn benchmark_rejects_plain_json_alias() {
+    let args = vec![
+        "benchmark".to_string(),
+        "contract".to_string(),
+        "--json".to_string(),
+    ];
+    let result = dispatch_command(&args);
+    assert!(result.is_err());
+}
+
+#[test]
+fn benchmark_run_rejects_unbounded_samples() {
+    let args = vec![
+        "benchmark".to_string(),
+        "run".to_string(),
+        "vertical-v0-smoke".to_string(),
+        "--samples".to_string(),
+        "101".to_string(),
+    ];
+    let result = dispatch_command(&args);
+    assert!(result.is_err());
+}
+
+#[test]
+fn benchmark_run_executes_bounded_smoke_runner() {
+    let args = vec![
+        "benchmark".to_string(),
+        "run".to_string(),
+        "vertical-v0-smoke".to_string(),
+        "--duration-ms".to_string(),
+        "1000".to_string(),
+        "--samples".to_string(),
+        "1".to_string(),
+    ];
+    let result = dispatch_command(&args);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn benchmark_run_diagnostic_json_is_diagnostic_only() {
+    let output = run_cli([
+        "benchmark",
+        "run",
+        "protocol-smoke-contract",
+        "--duration-ms",
+        "1000",
+        "--samples",
+        "5",
+        "--diagnostic-json",
+    ]);
+    assert_success(&output);
+    let json = stdout(&output);
+    assert!(json.trim_start().starts_with('{'));
+    assert_contains_all(
+        &json,
+        &[
+            "\"schema\":\"andromeda.cli.benchmark.run.v1\"",
+            "\"diagnostic_only\":true",
+            "\"runner\":\"deterministic-smoke\"",
+            "\"workload_id\":\"protocol-smoke-contract\"",
+            "\"budget_status\":\"passed\"",
+        ],
+    );
+}
+
+// ============================================================================
 // Error Handling and Edge Cases
 // ============================================================================
 
@@ -396,4 +578,91 @@ fn catalog_show_contract_accepts_json_output() {
     ];
     let result = dispatch_command(&args);
     assert!(result.is_ok());
+}
+
+#[test]
+fn admin_json_output_is_opt_in_and_has_stable_backup_fields() {
+    let human = run_cli(["backup", "status", "100"]);
+    assert_success(&human);
+    let human_stdout = stdout(&human);
+    assert!(human_stdout.contains("Backup Status Report"));
+    assert!(!human_stdout.trim_start().starts_with('{'));
+
+    let machine = run_cli(["backup", "status", "100", "--json"]);
+    assert_success(&machine);
+    let json = stdout(&machine);
+    assert!(json.trim_start().starts_with('{'));
+    assert_contains_all(
+        &json,
+        &[
+            "\"backup_id\":100",
+            "\"state\":\"running\"",
+            "\"progress_percent\":65",
+            "\"bytes_processed\":1073741824",
+            "\"estimated_total_bytes\":1610612736",
+            "\"start_time\":",
+            "\"elapsed_seconds\":120",
+        ],
+    );
+}
+
+#[test]
+fn admin_json_output_escapes_operator_supplied_strings() {
+    let output = run_cli([
+        "backup",
+        "start",
+        "--destination",
+        "C:\\Backup\\\"hot\"",
+        "--json",
+    ]);
+    assert_success(&output);
+    let json = stdout(&output);
+    assert!(json.trim_start().starts_with('{'));
+    assert!(json.contains("\"destination\":\"C:\\\\Backup\\\\\\\"hot\\\"\""));
+}
+
+#[test]
+fn unsupported_machine_output_formats_are_rejected() {
+    for args in [
+        vec!["backup", "status", "100", "--csv"],
+        vec!["restore", "status", "200", "--csv"],
+        vec!["hadr", "status", "--csv"],
+        vec!["hadr", "demote", "--csv"],
+        vec!["catalog", "show-contract", "1", "--csv"],
+    ] {
+        let output = run_cli_vec(args);
+        assert!(
+            !output.status.success(),
+            "unsupported machine output format should fail"
+        );
+    }
+}
+
+fn run_cli<const N: usize>(args: [&str; N]) -> Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_andromeda-cli"));
+    command.args(args).output().expect("run andromeda-cli")
+}
+
+fn run_cli_vec(args: Vec<&str>) -> Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_andromeda-cli"));
+    command.args(args).output().expect("run andromeda-cli")
+}
+
+fn assert_success(output: &Output) {
+    assert!(
+        output.status.success(),
+        "expected success\nstdout:\n{}\nstderr:\n{}",
+        stdout(output),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn stdout(output: &Output) -> String {
+    String::from_utf8_lossy(&output.stdout).into_owned()
+}
+
+fn assert_contains_all(text: &str, expected: &[&str]) {
+    for item in expected {
+        assert!(text.contains(item), "expected `{item}` in `{text}`");
+    }
 }

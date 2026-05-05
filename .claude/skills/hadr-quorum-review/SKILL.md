@@ -2,7 +2,7 @@
 name: hadr-quorum-review
 description: Review HA/DR quorum, fencing, failover, and promotion rules. Use when working on ha/dr tasks for the Andromeda SGBDRT project.
 allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+version: 0.2.0
 ---
 
 # hadr-quorum-review
@@ -10,6 +10,12 @@ version: 0.1.0
 ## Purpose
 
 Review HA/DR quorum, fencing, failover, and promotion rules.
+
+## Policy (DEC-020)
+
+- **Quorum:** Majority quorum MUST be maintained for leader promotion and synchronous durability.
+- **Epoch:** `MembershipEpoch` MUST be tracked to prevent split-brain.
+- **Election:** Leader election uses LSN-based ranking; only nodes with the highest durable LSN in the quorum are eligible for promotion.
 
 ## Use when
 
@@ -52,4 +58,5 @@ Return:
 
 ## Version history
 
+- 0.2.0 (2026-05-05): Updated with DEC-020 (Majority quorum, MembershipEpoch, LSN ranking).
 - 0.1.0 (2026-05-03): Initial project-specific skill.

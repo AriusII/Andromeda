@@ -5,6 +5,7 @@ edition.workspace = true
 publish = false
 
 [dependencies]
+andromeda-bench.workspace = true
 andromeda-catalog.workspace = true
 andromeda-core.workspace = true
 andromeda-exec.workspace = true

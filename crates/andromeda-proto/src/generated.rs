@@ -91,9 +91,11 @@ pub fn validate_catalog_procedure_manifest_resolution_request(
     }
 
     match &request.selector {
-        Some(contract::v1::catalog_procedure_manifest_resolution_request::Selector::ProcedureId(
-            procedure_id,
-        )) if *procedure_id != 0 => {}
+        Some(
+            contract::v1::catalog_procedure_manifest_resolution_request::Selector::ProcedureId(
+                procedure_id,
+            ),
+        ) if *procedure_id != 0 => {}
         Some(
             contract::v1::catalog_procedure_manifest_resolution_request::Selector::ProcedureName(
                 procedure_name,
@@ -189,7 +191,7 @@ fn validate_generated_protocol_version(major: u32, minor: u32) -> AndromedaResul
 
 fn validate_resolution_status(status: i32) -> AndromedaResult<()> {
     match status {
-        1..=6 => Ok(()),
+        1..=11 => Ok(()),
         0 => Err(AndromedaError::new(
             AndromedaErrorKind::Protocol,
             "catalog manifest resolution status must be specified",

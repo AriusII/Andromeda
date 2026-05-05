@@ -3,6 +3,7 @@ use crate::error::cli_error;
 use andromeda_core::AndromedaResult;
 
 pub use crate::cmd_backup::run_backup_command;
+pub use crate::cmd_benchmark::run_benchmark_command;
 pub use crate::cmd_catalog::run_catalog_command;
 pub use crate::cmd_hadr::run_hadr_command;
 pub use crate::cmd_protocol::run_protocol_smoke;
@@ -26,6 +27,7 @@ pub fn dispatch_command(args: &[String]) -> AndromedaResult<()> {
             run_recovery_inspect(options)
         }
         Some("hadr") => run_hadr_command(&args[1..]),
+        Some("benchmark") => run_benchmark_command(&args[1..]),
         Some("backup") => run_backup_command(&args[1..]),
         Some("restore") => run_restore_command(&args[1..]),
         Some("catalog") => run_catalog_command(&args[1..]),

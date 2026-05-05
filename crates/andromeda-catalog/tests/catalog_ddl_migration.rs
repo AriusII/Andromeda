@@ -1,5 +1,5 @@
 use andromeda_catalog::{
-    CatalogDefinition, CatalogDdlMigrationAction, CatalogDdlMigrationClassification,
+    CatalogDdlMigrationAction, CatalogDdlMigrationClassification, CatalogDefinition,
     CatalogLifecycleTarget, CatalogObjectRef, CatalogPublicationSemantics, DefinitionBatch,
     DefinitionBatchId, DefinitionOperation, ObjectKind, QualifiedName, TableDefinition,
 };
@@ -49,11 +49,9 @@ fn batch(base_version: CatalogVersion, operations: Vec<DefinitionOperation>) -> 
 fn catalog_ddl_migration_report_tracks_wal_and_publication_doctrine() {
     let plan = batch(
         CatalogVersion::new(10),
-        vec![DefinitionOperation::Create(CatalogDefinition::Table(table(
-            1,
-            "Inventory.Product",
-            CatalogVersion::new(11),
-        )))],
+        vec![DefinitionOperation::Create(CatalogDefinition::Table(
+            table(1, "Inventory.Product", CatalogVersion::new(11)),
+        ))],
     )
     .dry_run()
     .unwrap();
