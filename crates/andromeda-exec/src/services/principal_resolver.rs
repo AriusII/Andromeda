@@ -215,13 +215,6 @@ impl PrincipalResolver for LocalPrincipalResolver {
             ));
         }
 
-        // Generate a deterministic principal ID from the fingerprint hash
-        let principal_id =
-            PrincipalId::new(cert_fingerprint.as_bytes().iter().fold(0u64, |acc, &byte| {
-                acc.wrapping_mul(31).wrapping_add(byte as u64)
-            }));
-
-        let session_token = SessionToken::new(format!("session_{}", cert_fingerprint));
         let principal_fingerprint = CertificateFingerprint::new(cert_fingerprint.clone())
             .ok_or_else(|| {
                 AndromedaError::new(
@@ -229,6 +222,10 @@ impl PrincipalResolver for LocalPrincipalResolver {
                     "certificate fingerprint must not be empty",
                 )
             })?;
+
+        // Centralized pure-core derivation: resolver remains only the store/lookup boundary.
+        let principal_id = PrincipalId::from_certificate_fingerprint(&principal_fingerprint)?;
+        let session_token = SessionToken::from_certificate_fingerprint(&principal_fingerprint);
         let principal = Principal::new(principal_id, role, session_token, principal_fingerprint)
             .ok_or_else(|| {
                 AndromedaError::new(
@@ -301,6 +298,27 @@ mod tests {
             .expect("resolve should succeed");
 
         assert_eq!(resolved, registered);
+    }
+
+    #[test]
+    fn test_register_uses_core_certificate_derivation_helpers() {
+        let resolver = LocalPrincipalResolver::new();
+        let fingerprint =
+            "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
+        let certificate = CertificateFingerprint::new(fingerprint).unwrap();
+
+        let registered = resolver
+            .register_principal(fingerprint.into(), PrincipalRole::User)
+            .expect("registration should succeed");
+
+        assert_eq!(
+            registered.id,
+            PrincipalId::from_certificate_fingerprint(&certificate).unwrap()
+        );
+        assert_eq!(
+            registered.session_token,
+            SessionToken::from_certificate_fingerprint(&certificate)
+        );
     }
 
     #[test]

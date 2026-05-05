@@ -333,7 +333,9 @@ Frame validation MUST reject:
 ### V1.0 to V1.1 (Future Minor)
 
 Example minor version bump:
-- Add optional field to RpcBatch: `transaction_id: optional uint64`
+- After an explicit decision-record update narrows the reserved quarantine for
+  the chosen tag, add optional field to RpcBatch:
+  `transaction_id: optional uint64`
 - V1.0 clients ignore unknown field (proto3 default behavior)
 - V1.1 clients use field if present, ignore if absent
 - Version negotiation accepts V1.1 client on V1.0 server (server ignores new field)
@@ -346,6 +348,97 @@ Example major version bump:
 - Change PayloadKind enum values
 - V1.x clients REJECT major == 2 at handshake
 - Requires explicit client upgrade and new connection
+
+---
+
+## V1 Proto Migration, Deprecation, and Reservation Policy
+
+This update closes the V1.0 schema-evolution gap for the crate-local authority
+`crates/andromeda-proto/proto/andromeda/**`.
+
+### Field Migration Rules
+
+1. V1.0 field numbers, wire types, cardinality (`optional`, singular,
+   `repeated`, `oneof` membership), enum numeric values, package names, and
+   message names are locked.
+2. A field number MUST NOT be reused for a different semantic meaning.
+3. A field type MUST NOT be changed in place, even when protobuf would encode it
+   with a compatible wire type. Semantic compatibility is part of the contract.
+4. Moving a field between messages, changing `oneof` membership, changing enum
+   numeric values, or changing metadata placement is a breaking change and
+   requires a new major protocol version.
+5. V1 additive fields are not opened by default. Existing `reserved` ranges are
+   governance quarantine ranges; assigning from them requires an explicit
+   decision-record update, a minor-version compatibility statement, generated
+   descriptor regeneration, and release/catalog manifest acknowledgment.
+
+### Deprecation Rules
+
+1. V1.0 has no active deprecated protobuf fields.
+2. A future V1.x deprecation MUST keep the field number, type, cardinality, and
+   decode behavior intact until the next major version.
+3. Deprecated fields MUST NOT be repurposed, aliased to a new semantic, or used
+   to smuggle JSON/ad-hoc payloads.
+4. A deprecation requires an explicit decision-record entry naming the message,
+   field name, field number, replacement, writer behavior, reader behavior, and
+   the first version that stops emitting the field.
+5. Governance tests MUST enumerate any approved deprecated fields. An
+   unenumerated `[deprecated = true]` option is treated as schema drift.
+
+### Reservation Rules
+
+1. Every message MUST declare a reserved field-number range to prevent accidental
+   ad-hoc extension.
+2. When a field is removed in a future major version, its field number and its
+   former field name MUST be reserved forever in the replacement schema.
+3. Reserved numbers and names MUST NOT be reused in the same package lineage.
+4. Reserved ranges may only be narrowed by an explicit decision-record update
+   that states why the new field is wire-compatible with all supported readers.
+
+### `generated.rs` Lockstep
+
+1. `src/generated.rs` remains the only public wrapper around prost output for
+   these contracts.
+2. The wrapper MUST include the generated `FileDescriptorSet` bytes from the
+   build output and the generated modules for
+   `andromeda.contract.v1` and `andromeda.protocol.v1`.
+3. Any proto-source change and any build-pipeline change that affects generated
+   prost output MUST be reviewed together. Schema source, descriptor set,
+   generated Rust module layout, and public hash helpers are one lockstep unit.
+4. The generated wrapper MUST preserve `descriptor_set_hash()`,
+   `frame_envelope_hash()`, `protocol_layout()`, and the declared
+   `DESCRIPTOR_SET_HASH_ALGORITHM` so manifests can bind to a stable protocol
+   layout without importing generated implementation details.
+
+### Descriptor Hash Governance
+
+1. `descriptor_set_hash` is a deterministic digest over the generated descriptor
+   set; `frame_envelope_hash` is a domain-separated digest over the same
+   descriptor bytes for the `FrameEnvelope` contract.
+2. Intentional schema changes MUST change the descriptor digest and therefore
+   require catalog/release manifest acknowledgement before peers rely on the new
+   layout.
+3. Governance tests assert structural invariants instead of pinning inline hash
+   bytes: nonzero digests, domain separation, call stability, descriptor/source
+   path equality, package equality, and service-free descriptors.
+4. Hash drift without a matching schema decision and manifest handoff is a
+   release blocker.
+
+### Compatibility Test Expectations
+
+The protobuf governance tests MUST continue to cover:
+
+- crate-local proto tree authority and descriptor/source equality;
+- message-only schemas with no `service`, `rpc`, gRPC, tonic, or generated
+  service surface;
+- no runtime JSON policy (`serde_json` dependencies and `json_name` mapping
+  options are forbidden on the protocol/result surface);
+- reserved ranges on every message;
+- no unrecorded deprecated fields in V1.0;
+- generated wrapper lockstep with descriptor bytes and split package modules;
+- deterministic serialization, round-trip preservation, malformed-input typed
+  errors, field presence semantics, payload-kind discriminator lockstep, and
+  metadata-before-payload row-count expectations.
 
 ---
 
@@ -438,6 +531,8 @@ Example major version bump:
 - ✅ Decision record specifies compatibility policy
 - ✅ Schema version tags queryable from frames
 - ✅ No gRPC, pure Protobuf + custom frame wrapper
+- ✅ V1 migration/deprecation/reservation policy defined and governed by tests
+- ✅ `generated.rs`, descriptor hash, and compatibility-test lockstep documented
 - ✅ No unsafe code in serialization paths
 - ✅ Error mapping documented (AndromedaErrorKind ↔ ErrorFamily)
 - ✅ Backward compatibility matrix in place (V0.5 ↔ V1.0 ↔ V2.0 plans)

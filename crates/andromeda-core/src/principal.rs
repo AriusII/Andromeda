@@ -72,6 +72,45 @@ impl PrincipalId {
     pub const fn is_zero(self) -> bool {
         self.0 == 0
     }
+
+    /// Derive a stable, non-zero principal id from a certificate fingerprint.
+    ///
+    /// This is intentionally pure core logic: it performs no store lookup,
+    /// resolver call, network operation, or persistence. SHA-256 fingerprints
+    /// retain the Wave 2/core derivation rule (first 8 hex chars parsed as a
+    /// number, with `0` remapped to `1`). Non-SHA fingerprints keep the
+    /// existing V0 dev/test resolver behavior (deterministic byte fold) so
+    /// centralization does not silently tighten fingerprint policy.
+    pub fn from_certificate_fingerprint(
+        fingerprint: &CertificateFingerprint,
+    ) -> crate::AndromedaResult<Self> {
+        if fingerprint.as_str().trim().is_empty() {
+            return Err(crate::AndromedaError::new(
+                crate::AndromedaErrorKind::Security,
+                "certificate fingerprint must not be empty",
+            ));
+        }
+
+        let value = if fingerprint.is_valid_sha256() {
+            let hex_part = &fingerprint.as_str()[..8];
+            u64::from_str_radix(hex_part, 16).map_err(|_| {
+                crate::AndromedaError::new(
+                    crate::AndromedaErrorKind::Security,
+                    "certificate fingerprint hex parsing failed",
+                )
+            })?
+        } else {
+            fingerprint
+                .as_str()
+                .as_bytes()
+                .iter()
+                .fold(0u64, |acc, &byte| {
+                    acc.wrapping_mul(31).wrapping_add(byte as u64)
+                })
+        };
+
+        Ok(Self::new(if value == 0 { 1 } else { value }))
+    }
 }
 
 impl From<u64> for PrincipalId {
@@ -108,6 +147,22 @@ impl SessionToken {
 
     pub fn is_empty(&self) -> bool {
         self.token.is_empty()
+    }
+
+    /// Derive a stable session token from a certificate fingerprint.
+    ///
+    /// The token uses a versioned mTLS prefix and only the first 32 characters
+    /// of the fingerprint evidence. This avoids embedding the complete
+    /// fingerprint in derived tokens while preserving deterministic
+    /// per-certificate correlation for V1.0 audit/trace joins.
+    pub fn from_certificate_fingerprint(fingerprint: &CertificateFingerprint) -> Self {
+        let fingerprint = fingerprint.as_str();
+        let truncated = if fingerprint.chars().count() > 32 {
+            fingerprint.chars().take(32).collect::<String>()
+        } else {
+            fingerprint.to_string()
+        };
+        Self::new(format!("mtls:{}", truncated))
     }
 }
 
@@ -534,8 +589,9 @@ impl Principal {
     /// Get a debug-safe representation of this principal (masks sensitive data).
     pub fn masked_display(&self) -> String {
         format!(
-            "Principal{{id: {}, role: {}, cert: {}***}}",
+            "Principal{{id: {}, role: {} ({:?}), cert: {}***}}",
             self.id,
+            self.role,
             self.role,
             if self.cert_fingerprint.len() > 6 {
                 &self.cert_fingerprint.as_str()[..6]
@@ -614,10 +670,10 @@ impl Principal {
         }
 
         // 3. Generate deterministic SessionToken from fingerprint
-        let session_token = Self::session_token_from_fingerprint(fingerprint_sha256);
+        let session_token = SessionToken::from_certificate_fingerprint(&fingerprint);
 
         // 4. Derive deterministic non-zero PrincipalId from fingerprint
-        let principal_id = Self::principal_id_from_fingerprint(fingerprint_sha256)?;
+        let principal_id = PrincipalId::from_certificate_fingerprint(&fingerprint)?;
 
         // 5. Create principal with default User role (escalation via registry)
         Self::new(
@@ -634,39 +690,6 @@ impl Principal {
         })
     }
 
-    /// Derive a stable SessionToken from a certificate fingerprint.
-    ///
-    /// Same fingerprint → Same session token (deterministic).
-    /// Uses first 32 hex characters + version marker.
-    fn session_token_from_fingerprint(fingerprint: &str) -> SessionToken {
-        let truncated = if fingerprint.len() >= 32 {
-            &fingerprint[..32]
-        } else {
-            fingerprint
-        };
-        SessionToken::new(format!("mtls:{}", truncated))
-    }
-
-    /// Derive a stable non-zero PrincipalId from certificate fingerprint.
-    ///
-    /// Parses first 8 hex characters as u64, then ensures non-zero by adding 1 if needed.
-    /// Same fingerprint → Same PrincipalId (deterministic).
-    fn principal_id_from_fingerprint(fingerprint: &str) -> crate::AndromedaResult<PrincipalId> {
-        let hex_part = if fingerprint.len() >= 8 {
-            &fingerprint[..8]
-        } else {
-            fingerprint
-        };
-        let id_val = u64::from_str_radix(hex_part, 16).map_err(|_| {
-            crate::AndromedaError::new(
-                crate::AndromedaErrorKind::Security,
-                "certificate fingerprint hex parsing failed",
-            )
-        })?;
-        // Ensure non-zero: if first 8 chars parse to 0, use 1 instead
-        let final_id = if id_val == 0 { 1 } else { id_val };
-        Ok(PrincipalId::new(final_id))
-    }
 }
 
 #[cfg(test)]
@@ -719,6 +742,25 @@ mod tests {
     fn test_session_token_display() {
         let token = SessionToken::new("my-session");
         assert_eq!(token.to_string(), "my-session");
+    }
+
+    #[test]
+    fn test_certificate_derived_session_token_is_truncated_and_prefixed() {
+        let fp = CertificateFingerprint::new(
+            "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+        )
+        .unwrap();
+
+        let token = SessionToken::from_certificate_fingerprint(&fp);
+
+        assert_eq!(
+            token.as_str(),
+            "mtls:a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+        );
+        assert!(
+            !token.as_str().contains(&fp.as_str()[32..]),
+            "derived token must not embed the full fingerprint"
+        );
     }
 
     // ========== CertificateFingerprint Tests ==========
@@ -791,6 +833,34 @@ mod tests {
         // Should not fail even with empty string
         let fp = CertificateFingerprint::new_unchecked("");
         assert!(fp.is_empty());
+    }
+
+    #[test]
+    fn test_principal_id_from_sha256_fingerprint_uses_core_rule() {
+        let fp = CertificateFingerprint::new(
+            "00000000e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+        )
+        .unwrap();
+
+        let id = PrincipalId::from_certificate_fingerprint(&fp).unwrap();
+
+        assert_eq!(id.get(), 1, "zero-derived ids must be remapped to one");
+    }
+
+    #[test]
+    fn test_principal_id_from_freeform_fingerprint_preserves_legacy_dev_derivation() {
+        let fp = CertificateFingerprint::new("test_user_fingerprint").unwrap();
+
+        let id = PrincipalId::from_certificate_fingerprint(&fp).unwrap();
+        let expected =
+            fp.as_str()
+                .as_bytes()
+                .iter()
+                .fold(0u64, |acc, &byte| {
+                    acc.wrapping_mul(31).wrapping_add(byte as u64)
+                });
+
+        assert_eq!(id.get(), expected);
     }
 
     // ========== PrincipalRole Tests ==========

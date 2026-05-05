@@ -9,7 +9,9 @@ use andromeda_core::{AndromedaError, AndromedaErrorKind};
 pub use catalog_replay::{CatalogSnapshot, replay_catalog_wal_records};
 pub use coverage::WalCoverageEvidence;
 pub use planning::{
-    ConceptualRedoPlan, RecoveryPlan, RedoRecordDecision, RedoRecordPlan, StartupMode,
+    ConceptualRedoPlan, PreRedoStorageFormatDecision, PreRedoStorageFormatGate,
+    PreRedoStorageFormatRejection, RECOVERY_REQUIRED_STORAGE_FORMATS, RecoveryPlan,
+    RedoRecordDecision, RedoRecordPlan, StartupMode, StorageFormatFingerprint,
 };
 pub use startup::{
     ObservedBoundary, StartupAcceptance, StartupAuditProjection, StartupDecision, StartupEvidence,

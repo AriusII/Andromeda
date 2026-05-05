@@ -234,7 +234,8 @@ fn test_security_audit_trail_covers_mtls_and_permission() {
         "authorization should succeed for known certificate with execute permission"
     );
 
-    if let Ok(Err(AuthorizationOutcome::Allowed { audit, .. })) = allowed_result {
+    if let Ok(Ok(token)) = allowed_result {
+        let audit = token.audit();
         assert_eq!(audit.trace_id, trace_id, "trace_id should match");
         assert_eq!(
             audit.outcome,

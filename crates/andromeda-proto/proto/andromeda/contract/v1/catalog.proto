@@ -41,6 +41,65 @@ message CatalogProcedure {
   reserved 32 to 63;
 }
 
+// Message-only catalog server request for resolving a procedure manifest.
+//
+// This is a payload contract for custom Andromeda transport paths, not a gRPC
+// surface: no service/rpc declarations are permitted. The request carries
+// protocol version fields inline to avoid introducing a contract -> protocol
+// import cycle. ContractHash and CatalogVersion values are optional match
+// constraints; when present, validation expects 32-byte nonzero hashes and
+// nonzero catalog versions.
+message CatalogProcedureManifestResolutionRequest {
+  uint32 protocol_major = 1;          // Validation-required: current major.
+  uint32 protocol_minor = 2;          // Validation-required: compatible minor.
+  uint64 request_id = 3;              // Validation-required for remote calls.
+  optional string trace_id = 4;       // Stable trace token when tracing enabled.
+
+  oneof selector {
+    uint64 procedure_id = 5;          // Validation-required: nonzero if selected.
+    string procedure_name = 6;        // Validation-required: non-empty if selected.
+  }
+
+  optional bytes expected_contract_hash = 7;     // 32 bytes, nonzero when present.
+  optional uint64 expected_catalog_version = 8;  // Nonzero when present.
+  bool require_source_generator_ready = 9;       // Enforce manifest generator gate.
+
+  reserved 10 to 31;
+  reserved 32 to 63;
+}
+
+// Message-only catalog server response for procedure manifest resolution.
+//
+// Successful responses carry the resolved ProcedureManifest plus explicit
+// ContractHash/CatalogVersion echoes so callers can bind caches without
+// inspecting opaque payloads. Error statuses intentionally remain typed metadata
+// and never use JSON.
+message CatalogProcedureManifestResolutionResponse {
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_RESOLVED = 1;
+    STATUS_NOT_FOUND = 2;
+    STATUS_CATALOG_VERSION_MISMATCH = 3;
+    STATUS_CONTRACT_HASH_MISMATCH = 4;
+    STATUS_NOT_SOURCE_GENERATOR_READY = 5;
+    STATUS_PERMISSION_DENIED = 6;
+  }
+
+  uint32 protocol_major = 1;          // Echoed negotiated protocol major.
+  uint32 protocol_minor = 2;          // Echoed negotiated protocol minor.
+  uint64 request_id = 3;              // Mirrors request_id from the request.
+  optional string trace_id = 4;       // Mirrors request trace token when present.
+  Status status = 5;                  // Typed resolution outcome.
+  ProcedureManifest manifest = 6;     // Present only when status is RESOLVED.
+  optional bytes resolved_contract_hash = 7;     // 32 bytes, nonzero when present.
+  optional uint64 resolved_catalog_version = 8;  // Nonzero when present.
+  optional uint64 current_catalog_version = 9;   // Server's visible catalog head.
+  optional string diagnostic_code = 10;          // Stable code; not free-form JSON.
+
+  reserved 11 to 31;
+  reserved 32 to 63;
+}
+
 // Table catalog object: represents a base table with heap storage.
 message CatalogTable {
   uint64 table_id = 1;               // Validation-required: nonzero.

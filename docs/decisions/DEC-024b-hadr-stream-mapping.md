@@ -1,4 +1,4 @@
-# DEC-024: HA/DR Stream Mapping Over QUIC
+# DEC-024b: HA/DR Stream Mapping Over QUIC
 
 **Date:** 2026-01-XX  
 **Status:** ACCEPTED  
@@ -437,7 +437,7 @@ let freed = cleanup.execute_cleanup(); // Returns HashSet with 3 IDs
 | **HadrStreamCleanup** | ✅ Done | hadr_streams.rs (lines 480-550) |
 | **Unit tests (8 embedded)** | ✅ Done | hadr_streams.rs (lines 555-700) |
 | **Contract tests (8+)** | ✅ Done | hadr_stream_mapping_contract.rs |
-| **This decision record** | ✅ Done | DEC-024-hadr-stream-mapping.md |
+| **This decision record** | ✅ Done | DEC-024b-hadr-stream-mapping.md |
 
 ---
 

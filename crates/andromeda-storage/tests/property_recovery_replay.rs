@@ -155,7 +155,6 @@ fn prop_recovery_always_decides() {
 
         // Must have a decision
         prop_assert!(result.success == true || result.success == false);
-        prop_assert!(result.records_processed >= 0);
     });
 }
 
@@ -253,7 +252,7 @@ fn prop_recovery_detects_out_of_order() {
 fn prop_recovery_empty_segment() {
     let empty_segment = WalSegment { records: vec![] };
 
-    let result = recover_from_wal_segment(&empty_segment);
+    let _result = recover_from_wal_segment(&empty_segment);
 
     // Empty segment might succeed (no errors) or fail, but shouldn't panic
     assert!(true);
@@ -473,10 +472,9 @@ fn integration_recovery_full_workflow() {
         segments in prop::collection::vec(arb_wal_segment(), 1..10),
     )| {
         for segment in segments.iter() {
-            let result = recover_from_wal_segment(segment);
+            let _result = recover_from_wal_segment(segment);
 
             // Each segment should produce a result
-            prop_assert!(result.records_processed >= 0);
         }
     });
 }

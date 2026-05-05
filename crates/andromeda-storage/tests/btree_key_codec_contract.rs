@@ -10,6 +10,206 @@ use andromeda_storage::btree_key_codec::{Key, KeyCodec, KeyComparator, KeyType};
 use andromeda_storage::{Datum, ScalarType};
 use std::cmp::Ordering;
 
+fn assert_golden(key: Key, expected: &[u8]) {
+    let encoded = KeyCodec::encode_key(&key).expect("encode golden key");
+    assert_eq!(encoded, expected, "golden encoding drift for {:?}", key);
+
+    let decoded = KeyCodec::decode_key(expected).expect("decode golden key");
+    assert_eq!(decoded, key, "golden decoding drift");
+}
+
+// ============================================================================
+// DEC-032 KeyV1 Golden Bytes and Gates
+// ============================================================================
+
+#[test]
+fn dec032_keyv1_golden_bytes_null() {
+    assert_golden(Key::Null, &[0x00, 0x00, 0x00]);
+}
+
+#[test]
+fn dec032_keyv1_golden_bytes_int32_boundaries() {
+    let cases = [
+        (i32::MIN, &[0x01, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00][..]),
+        (-1, &[0x01, 0x04, 0x00, 0x7f, 0xff, 0xff, 0xff][..]),
+        (0, &[0x01, 0x04, 0x00, 0x80, 0x00, 0x00, 0x00][..]),
+        (1, &[0x01, 0x04, 0x00, 0x80, 0x00, 0x00, 0x01][..]),
+        (i32::MAX, &[0x01, 0x04, 0x00, 0xff, 0xff, 0xff, 0xff][..]),
+    ];
+
+    for (value, expected) in cases {
+        assert_golden(Key::Int32(value), expected);
+    }
+}
+
+#[test]
+fn dec032_keyv1_golden_bytes_int64_examples() {
+    let cases = [
+        (
+            i64::MIN,
+            &[
+                0x02, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            ][..],
+        ),
+        (
+            -1,
+            &[
+                0x02, 0x08, 0x00, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+            ][..],
+        ),
+        (
+            0,
+            &[
+                0x02, 0x08, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            ][..],
+        ),
+        (
+            i64::MAX,
+            &[
+                0x02, 0x08, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+            ][..],
+        ),
+    ];
+
+    for (value, expected) in cases {
+        assert_golden(Key::Int64(value), expected);
+    }
+}
+
+#[test]
+fn dec032_keyv1_golden_bytes_text_examples() {
+    let cases = [
+        ("", vec![0x03, 0x00]),
+        ("a", vec![0x03, b'a', 0x00]),
+        ("aa", vec![0x03, b'a', b'a', 0x00]),
+        ("a\0b", vec![0x03, b'a', 0x00, 0xff, b'b', 0x00]),
+        ("é", vec![0x03, 0xc3, 0xa9, 0x00]),
+        ("世界", vec![0x03, 0xe4, 0xb8, 0x96, 0xe7, 0x95, 0x8c, 0x00]),
+    ];
+
+    for (value, expected) in cases {
+        assert_golden(Key::Text(value.to_string()), &expected);
+    }
+}
+
+#[test]
+fn dec032_keyv1_golden_bytes_bytes_examples() {
+    let cases = [
+        (Vec::new(), vec![0x04, 0x00, 0x00]),
+        (vec![0x00], vec![0x04, 0x01, 0x00, 0x00]),
+        (
+            vec![0x00, 0x01, 0xff],
+            vec![0x04, 0x03, 0x00, 0x00, 0x01, 0xff],
+        ),
+    ];
+
+    for (value, expected) in cases {
+        assert_golden(Key::Bytes(value), &expected);
+    }
+}
+
+#[test]
+fn dec032_keyv1_golden_bytes_composite_fixed_arity() {
+    let key = Key::Composite(vec![
+        Datum::Int32(7),
+        Datum::Text("a".to_string()),
+        Datum::Null,
+        Datum::Bool(true),
+    ]);
+
+    assert_golden(
+        key,
+        &[
+            0x05, 0x04, 0x00, // Composite, four columns.
+            0x01, 0x04, 0x00, 0x80, 0x00, 0x00, 0x07, // Int32(7).
+            0x03, b'a', 0x00, // Text("a").
+            0x00, 0x00, 0x00, // Null.
+            0x06, 0x01, // Bool(true), composite-only datum tag.
+        ],
+    );
+}
+
+#[test]
+fn dec032_text_ordering_adversarial_prefix_cases() {
+    let ordered = ["", "a", "aa", "aab", "ab", "az", "b", "z", "é", "世界"];
+
+    let encoded: Vec<_> = ordered
+        .iter()
+        .map(|value| KeyCodec::encode_key(&Key::Text((*value).to_string())).unwrap())
+        .collect();
+
+    for pair in encoded.windows(2) {
+        assert_eq!(KeyComparator::compare(&pair[0], &pair[1]), Ordering::Less);
+    }
+
+    let aa = KeyCodec::encode_key(&Key::Text("aa".to_string())).unwrap();
+    let z = KeyCodec::encode_key(&Key::Text("z".to_string())).unwrap();
+    assert_eq!(KeyComparator::compare(&aa, &z), Ordering::Less);
+
+    let a = KeyCodec::encode_key(&Key::Text("a".to_string())).unwrap();
+    let a_nul_b = KeyCodec::encode_key(&Key::Text("a\0b".to_string())).unwrap();
+    assert_eq!(KeyComparator::compare(&a, &a_nul_b), Ordering::Less);
+}
+
+#[test]
+fn dec032_unsupported_datum_variants_are_rejected_for_composite_index_keys() {
+    for datum in [
+        Datum::Int8(1),
+        Datum::Int16(1),
+        Datum::UInt8(1),
+        Datum::UInt16(1),
+        Datum::UInt32(1),
+        Datum::UInt64(1),
+        Datum::Float32(1.0),
+        Datum::Float64(1.0),
+    ] {
+        let result = KeyCodec::encode_composite_key(&[datum]);
+        assert!(
+            result.is_err(),
+            "unsupported datum must not debug-string fallback into durable key"
+        );
+    }
+}
+
+#[test]
+fn dec032_decode_composite_validates_schema_arity_and_fixed_types() {
+    let encoded =
+        KeyCodec::encode_composite_key(&[Datum::Int32(10), Datum::Int64(20), Datum::Bool(false)])
+            .expect("encode");
+
+    let decoded = KeyCodec::decode_composite(
+        &encoded,
+        &[ScalarType::Int32, ScalarType::Int64, ScalarType::Bool],
+    )
+    .expect("decode with matching schema");
+    assert_eq!(
+        decoded,
+        vec![Datum::Int32(10), Datum::Int64(20), Datum::Bool(false)]
+    );
+
+    assert!(
+        KeyCodec::decode_composite(&encoded, &[ScalarType::Int32, ScalarType::Int64]).is_err(),
+        "schema arity mismatch must reject"
+    );
+    assert!(
+        KeyCodec::decode_composite(
+            &encoded,
+            &[ScalarType::Int64, ScalarType::Int64, ScalarType::Bool],
+        )
+        .is_err(),
+        "schema type mismatch must reject"
+    );
+}
+
+#[test]
+fn dec032_decode_composite_rejects_variable_width_without_schema_type_identity() {
+    let encoded = KeyCodec::encode_composite_key(&[Datum::Text("a".to_string())]).expect("encode");
+    assert!(
+        KeyCodec::decode_composite(&encoded, &[ScalarType::Int32]).is_err(),
+        "Text/Bytes composite columns need explicit schema type identity before durable decode"
+    );
+}
+
 // ============================================================================
 // Test Groups Organization
 // ============================================================================
@@ -125,13 +325,9 @@ fn test_codec_encode_composite_key() {
 /// Test 10: Decode composite key to datums
 #[test]
 fn test_codec_decode_composite_datums() {
-    let cols = vec![
-        Datum::Int64(123),
-        Datum::Text("data".to_string()),
-        Datum::Bytes(vec![1, 2, 3]),
-    ];
+    let cols = vec![Datum::Int64(123), Datum::Int32(456), Datum::Bool(true)];
     let encoded = KeyCodec::encode_composite_key(&cols).expect("encode");
-    let schema = vec![ScalarType::Int64, ScalarType::Int64, ScalarType::Int64];
+    let schema = vec![ScalarType::Int64, ScalarType::Int32, ScalarType::Bool];
     let decoded = KeyCodec::decode_composite(&encoded, &schema).expect("decode");
     assert_eq!(decoded.len(), 3, "decoded composite should have 3 columns");
 }
@@ -139,11 +335,7 @@ fn test_codec_decode_composite_datums() {
 /// Test 11: Composite with null value
 #[test]
 fn test_codec_composite_with_null() {
-    let cols = vec![
-        Datum::Null,
-        Datum::Text("test".to_string()),
-        Datum::Int32(42),
-    ];
+    let cols = vec![Datum::Null, Datum::Int64(11), Datum::Int32(42)];
     let encoded = KeyCodec::encode_composite_key(&cols).expect("encode");
     let schema = vec![ScalarType::Int32, ScalarType::Int64, ScalarType::Int32];
     let decoded = KeyCodec::decode_composite(&encoded, &schema).expect("decode");
@@ -476,7 +668,7 @@ fn test_comparator_range_boundary() {
 /// Test 32: Order preservation stress test (100 random int32 values)
 #[test]
 fn test_stress_order_preservation_int32() {
-    let mut values = vec![
+    let values = vec![
         i32::MIN,
         -1000000,
         -100000,
@@ -499,6 +691,7 @@ fn test_stress_order_preservation_int32() {
     // Duplicate and shuffle slightly for stress
     let mut extended = values.clone();
     extended.extend(&values);
+    extended.sort_unstable();
 
     let keys: Vec<_> = extended.iter().map(|&v| Key::Int32(v)).collect();
     let encoded: Vec<_> = keys

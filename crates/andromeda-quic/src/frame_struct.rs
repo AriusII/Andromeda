@@ -7,7 +7,10 @@ use andromeda_core::{AndromedaError, AndromedaErrorKind, RequestId, SessionId, T
 use super::frame_code::{FrameType, MAX_FRAME_PAYLOAD_LENGTH, RESERVED_FRAME_FLAGS_MASK};
 use crate::StreamRole;
 
-/// Frame header (52 bytes fixed).
+/// Frame header domain model.
+///
+/// The encoded wire header is fixed at `FRAME_CODEC_HEADER_LEN` bytes. This
+/// Rust struct is not the wire layout because Rust may add padding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FrameHeader {
     pub frame_type: FrameType,

@@ -21,9 +21,6 @@ use andromeda_storage::{
     WalSegmentDescriptor,
 };
 
-/// Page size in bytes (KiB16)
-const PAGE_SIZE: u64 = 16 * 1024;
-
 /// Helper: Create a sample extent descriptor for testing.
 fn test_extent(
     extent_id: u64,

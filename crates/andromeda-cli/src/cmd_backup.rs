@@ -7,11 +7,10 @@
 
 use crate::error::cli_error;
 use andromeda_core::AndromedaResult;
-use serde::Serialize;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Serializable backup status.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub enum BackupState {
     Pending,
     Running,
@@ -34,17 +33,8 @@ impl BackupState {
     const ALL: [Self; 4] = [Self::Pending, Self::Running, Self::Completed, Self::Failed];
 }
 
-impl Serialize for BackupState {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_str(&self.to_string())
-    }
-}
-
-/// Serializable backup status report.
-#[derive(Debug, Clone, Serialize)]
+/// Backup status report.
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct BackupStatusReport {
     pub backup_id: u64,
     pub state: BackupState,
@@ -55,8 +45,8 @@ pub struct BackupStatusReport {
     pub elapsed_seconds: u64,
 }
 
-/// Serializable backup list entry.
-#[derive(Debug, Clone, Serialize)]
+/// Backup list entry.
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct BackupListEntry {
     pub backup_id: u64,
     pub state: BackupState,
@@ -66,8 +56,8 @@ pub struct BackupListEntry {
     pub end_lsn: u64,
 }
 
-/// Serializable backup start outcome.
-#[derive(Debug, Clone, Serialize)]
+/// Backup start outcome.
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct BackupStartOutcome {
     pub backup_id: u64,
     pub backup_type: String,
@@ -99,7 +89,7 @@ pub fn run_backup_command(args: &[String]) -> AndromedaResult<()> {
 fn run_backup_start(args: &[String]) -> AndromedaResult<()> {
     let mut incremental = false;
     let mut destination: Option<String> = None;
-    let mut json = false;
+    let mut json_output = false;
     let mut i = 0;
 
     while i < args.len() {
@@ -112,7 +102,7 @@ fn run_backup_start(args: &[String]) -> AndromedaResult<()> {
                 }
                 destination = Some(args[i].clone());
             }
-            "--json" => json = true,
+            "--json" => json_output = true,
             opt if opt.starts_with("--") => {
                 return Err(cli_error(format!("unknown backup start option: {}", opt)));
             }
@@ -142,13 +132,15 @@ fn run_backup_start(args: &[String]) -> AndromedaResult<()> {
         ),
     };
 
-    if json {
-        let json_str = serde_json::to_string_pretty(&outcome)
-            .map_err(|e| cli_error(format!("failed to serialize backup outcome: {}", e)))?;
-        println!("{}", json_str);
+    if json_output {
+        print_backup_start_json(&outcome);
     } else {
         println!("✓ {}", outcome.message);
         println!("Backup ID: {}", outcome.backup_id);
+        println!("Backup Type: {}", outcome.backup_type);
+        if let Some(destination) = &outcome.destination {
+            println!("Destination: {}", destination);
+        }
     }
 
     Ok(())
@@ -166,7 +158,7 @@ fn run_backup_status(args: &[String]) -> AndromedaResult<()> {
         .parse()
         .map_err(|_| cli_error("backup-id must be an unsigned integer"))?;
 
-    let json = args.iter().any(|arg| arg == "--json");
+    let json_output = has_json_option(&args[1..]);
 
     // MOCK: In a real implementation, this would query the backup scheduler.
     let report = BackupStatusReport {
@@ -179,10 +171,8 @@ fn run_backup_status(args: &[String]) -> AndromedaResult<()> {
         elapsed_seconds: 120,
     };
 
-    if json {
-        let json_str = serde_json::to_string_pretty(&report)
-            .map_err(|e| cli_error(format!("failed to serialize backup status: {}", e)))?;
-        println!("{}", json_str);
+    if json_output {
+        print_backup_status_json(&report);
     } else {
         print_backup_status_human(&report);
     }
@@ -193,7 +183,7 @@ fn run_backup_status(args: &[String]) -> AndromedaResult<()> {
 /// Lists recent backups with sizes and timestamps.
 fn run_backup_list(args: &[String]) -> AndromedaResult<()> {
     let mut limit = 10usize;
-    let mut json = false;
+    let mut json_output = false;
     let mut i = 0;
 
     while i < args.len() {
@@ -207,7 +197,7 @@ fn run_backup_list(args: &[String]) -> AndromedaResult<()> {
                     .parse()
                     .map_err(|_| cli_error("--limit expects an unsigned integer"))?;
             }
-            "--json" => json = true,
+            "--json" => json_output = true,
             opt if opt.starts_with("--") => {
                 return Err(cli_error(format!("unknown backup list option: {}", opt)));
             }
@@ -246,10 +236,8 @@ fn run_backup_list(args: &[String]) -> AndromedaResult<()> {
 
     let backups_to_show: Vec<_> = backups.iter().take(limit).collect();
 
-    if json {
-        let json_str = serde_json::to_string_pretty(&backups_to_show)
-            .map_err(|e| cli_error(format!("failed to serialize backup list: {}", e)))?;
-        println!("{}", json_str);
+    if json_output {
+        print_backup_list_json(&backups_to_show);
     } else {
         print_backup_list_human(&backups_to_show);
     }
@@ -271,7 +259,7 @@ fn print_backup_help() {
     println!("  --incremental       Perform incremental backup (default: full)");
     println!("  --destination <path> Backup destination directory");
     println!("  --limit <n>         Limit backup list to N entries (default: 10)");
-    println!("  --json              Output in JSON format (default: human-readable)");
+    println!("  --json              Emit diagnostic machine-readable JSON output");
     println!("  -h, --help          Show this help message");
     println!();
     println!(
@@ -284,12 +272,17 @@ fn print_backup_help() {
     );
 }
 
+fn has_json_option(args: &[String]) -> bool {
+    args.iter().any(|arg| arg == "--json")
+}
+
 fn print_backup_status_human(report: &BackupStatusReport) {
     println!("Backup Status Report");
     println!("====================");
     println!("Backup ID: {}", report.backup_id);
     println!("State: {}", report.state);
     println!("Progress: {}%", report.progress_percent);
+    println!("Start Time: {}", report.start_time);
     println!(
         "Bytes Processed: {} / {} ({:.2} MiB / {:.2} MiB)",
         report.bytes_processed,
@@ -304,20 +297,63 @@ fn print_backup_list_human(backups: &[&BackupListEntry]) {
     println!("Recent Backups");
     println!("==============");
     println!(
-        "{:<10} {:<12} {:<20} {:<15} {:<15}",
-        "Backup ID", "State", "Size", "Base LSN", "End LSN"
+        "{:<10} {:<12} {:<20} {:<15} {:<15} {:<15}",
+        "Backup ID", "State", "Size", "Created", "Base LSN", "End LSN"
     );
-    println!("{}", "-".repeat(82));
+    println!("{}", "-".repeat(98));
     for backup in backups {
         println!(
-            "{:<10} {:<12} {:<20} {:<15} {:<15}",
+            "{:<10} {:<12} {:<20} {:<15} {:<15} {:<15}",
             backup.backup_id,
             backup.state,
             format_bytes(backup.size_bytes),
+            backup.created_timestamp,
             backup.base_lsn,
             backup.end_lsn
         );
     }
+}
+
+fn print_backup_start_json(outcome: &BackupStartOutcome) {
+    println!(
+        "{{\"backup_id\":{},\"backup_type\":{},\"destination\":{},\"message\":{}}}",
+        outcome.backup_id,
+        json_string(&outcome.backup_type),
+        json_option_string(outcome.destination.as_deref()),
+        json_string(&outcome.message),
+    );
+}
+
+fn print_backup_status_json(report: &BackupStatusReport) {
+    println!(
+        "{{\"backup_id\":{},\"state\":{},\"progress_percent\":{},\"bytes_processed\":{},\"estimated_total_bytes\":{},\"start_time\":{},\"elapsed_seconds\":{}}}",
+        report.backup_id,
+        json_string(&report.state.to_string()),
+        report.progress_percent,
+        report.bytes_processed,
+        report.estimated_total_bytes,
+        report.start_time,
+        report.elapsed_seconds,
+    );
+}
+
+fn print_backup_list_json(backups: &[&BackupListEntry]) {
+    let entries = backups
+        .iter()
+        .map(|backup| {
+            format!(
+                "{{\"backup_id\":{},\"state\":{},\"size_bytes\":{},\"created_timestamp\":{},\"base_lsn\":{},\"end_lsn\":{}}}",
+                backup.backup_id,
+                json_string(&backup.state.to_string()),
+                backup.size_bytes,
+                backup.created_timestamp,
+                backup.base_lsn,
+                backup.end_lsn,
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    println!("[{}]", entries);
 }
 
 fn format_bytes(bytes: u64) -> String {
@@ -330,6 +366,30 @@ fn format_bytes(bytes: u64) -> String {
         size /= 1024.0;
     }
     format!("{:.2} TiB", size)
+}
+
+fn json_option_string(value: Option<&str>) -> String {
+    value.map(json_string).unwrap_or_else(|| "null".to_string())
+}
+
+fn json_string(value: &str) -> String {
+    format!("\"{}\"", escape_json_str(value))
+}
+
+fn escape_json_str(value: &str) -> String {
+    let mut escaped = String::new();
+    for ch in value.chars() {
+        match ch {
+            '"' => escaped.push_str("\\\""),
+            '\\' => escaped.push_str("\\\\"),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            ch if ch.is_control() => escaped.push_str(&format!("\\u{:04x}", ch as u32)),
+            ch => escaped.push(ch),
+        }
+    }
+    escaped
 }
 
 fn unix_timestamp() -> u64 {
@@ -392,9 +452,23 @@ mod tests {
     }
 
     #[test]
-    fn backup_list_with_json() {
+    fn backup_list_accepts_json_output() {
         let result = run_backup_list(&["--json".to_string()]);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn backup_status_accepts_json_output() {
+        let result = run_backup_status(&["100".to_string(), "--json".to_string()]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn backup_json_string_escapes_diagnostic_fields() {
+        assert_eq!(
+            json_string("path\\with\"quote"),
+            "\"path\\\\with\\\"quote\""
+        );
     }
 
     #[test]

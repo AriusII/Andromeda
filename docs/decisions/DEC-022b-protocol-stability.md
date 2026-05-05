@@ -1,4 +1,4 @@
-# DEC-022: Protocol Stability and Drift Detection
+# DEC-022b: Protocol Stability and Drift Detection
 
 **Status:** Accepted (D7 - Protocol Drift Scans)  
 **Date:** 2025 (Andromeda V0.5)  

@@ -53,7 +53,7 @@ pub struct PageTrailer {
 // Test Data Generators
 // ============================================================================
 
-fn arb_page_size() -> impl Strategy<Value = u32> {
+fn _arb_page_size() -> impl Strategy<Value = u32> {
     prop_oneof![
         Just(4096u32),
         Just(8192u32),
@@ -283,8 +283,8 @@ fn prop_page_trailer_corruption_detected() {
 
         // Trailer parsing should handle corruption
         match result {
-            PageTrailerResult::Valid(_) => prop_assert!(true),
-            PageTrailerResult::Invalid(_) => prop_assert!(true),
+            PageTrailerResult::Valid => prop_assert!(true),
+            PageTrailerResult::Invalid => prop_assert!(true),
         }
     });
 }
@@ -377,8 +377,8 @@ enum PageParseResult {
 
 #[derive(Debug, Clone)]
 enum PageTrailerResult {
-    Valid(PageTrailer),
-    Invalid(String),
+    Valid,
+    Invalid,
 }
 
 fn parse_page_header_safely(data: &[u8]) -> PageParseResult {
@@ -415,17 +415,18 @@ fn parse_page_header_safely(data: &[u8]) -> PageParseResult {
 
 fn parse_page_trailer_safely(data: &[u8]) -> PageTrailerResult {
     if data.len() < 16 {
-        return PageTrailerResult::Invalid("trailer too small".to_string());
+        return PageTrailerResult::Invalid;
     }
 
-    PageTrailerResult::Valid(PageTrailer {
+    let _trailer = PageTrailer {
         page_id: u64::from_le_bytes([
             data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
         ]),
         checksum: u64::from_le_bytes([
             data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15],
         ]),
-    })
+    };
+    PageTrailerResult::Valid
 }
 
 // ============================================================================

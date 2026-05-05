@@ -199,8 +199,12 @@ mod tests {
     #[test]
     fn rejects_dirty_only_no_eligible_frames_explicitly() {
         let mut frames = vec![frame(1, 101), frame(2, 102)];
+        frames[0].pin().expect("pin first for dirty mutation");
         frames[0].mark_dirty(Lsn::new(10)).expect("dirty first");
+        frames[0].unpin().expect("unpin first dirty frame");
+        frames[1].pin().expect("pin second for dirty mutation");
         frames[1].mark_dirty(Lsn::new(10)).expect("dirty second");
+        frames[1].unpin().expect("unpin second dirty frame");
 
         let mut clock = ClockEvictionPolicy::new();
         let error = clock

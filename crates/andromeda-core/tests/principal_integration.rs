@@ -284,7 +284,7 @@ mod tests {
 
         // SuperAdmin-style wildcard (u64::MAX)
         assert!(
-            perms.has_permission(&Permission::ExecuteProcedure(ProcedureId::new(u64::MAX))),
+            !perms.has_permission(&Permission::ExecuteProcedure(ProcedureId::new(u64::MAX))),
             "ExecuteProcedure(1) must not match ExecuteProcedure(u64::MAX) requirement"
         );
 

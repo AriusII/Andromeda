@@ -7,10 +7,9 @@
 
 use crate::error::cli_error;
 use andromeda_core::AndromedaResult;
-use serde::Serialize;
 
-/// Serializable procedure metadata.
-#[derive(Debug, Clone, Serialize)]
+/// Procedure metadata.
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct ProcedureMetadata {
     pub procedure_id: u64,
     pub name: String,
@@ -19,8 +18,8 @@ pub struct ProcedureMetadata {
     pub catalog_version: u64,
 }
 
-/// Serializable procedure contract.
-#[derive(Debug, Clone, Serialize)]
+/// Procedure contract.
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct ProcedureContractInfo {
     pub procedure_id: u64,
     pub name: String,
@@ -31,15 +30,15 @@ pub struct ProcedureContractInfo {
     pub access_mode: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct ColumnInfo {
     pub name: String,
     pub column_type: String,
     pub nullable: bool,
 }
 
-/// Serializable cache invalidation outcome.
-#[derive(Debug, Clone, Serialize)]
+/// Cache invalidation outcome.
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct CacheInvalidationOutcome {
     pub success: bool,
     pub entries_cleared: usize,
@@ -69,7 +68,7 @@ pub fn run_catalog_command(args: &[String]) -> AndromedaResult<()> {
 /// Lists procedures with IDs, names, and contract hashes.
 fn run_list_procedures(args: &[String]) -> AndromedaResult<()> {
     let mut namespace: Option<String> = None;
-    let mut json = false;
+    let mut json_output = false;
     let mut i = 0;
 
     while i < args.len() {
@@ -81,7 +80,7 @@ fn run_list_procedures(args: &[String]) -> AndromedaResult<()> {
                 }
                 namespace = Some(args[i].clone());
             }
-            "--json" => json = true,
+            "--json" => json_output = true,
             opt if opt.starts_with("--") => {
                 return Err(cli_error(format!(
                     "unknown list-procedures option: {}",
@@ -127,10 +126,8 @@ fn run_list_procedures(args: &[String]) -> AndromedaResult<()> {
         procedures
     };
 
-    if json {
-        let json_str = serde_json::to_string_pretty(&filtered)
-            .map_err(|e| cli_error(format!("failed to serialize procedure list: {}", e)))?;
-        println!("{}", json_str);
+    if json_output {
+        print_procedures_json(&filtered);
     } else {
         print_procedures_human(&filtered);
     }
@@ -141,7 +138,7 @@ fn run_list_procedures(args: &[String]) -> AndromedaResult<()> {
 /// Invalidates plan cache (all or specific procedure).
 fn run_invalidate_cache(args: &[String]) -> AndromedaResult<()> {
     let mut procedure_id: Option<u64> = None;
-    let mut json = false;
+    let mut json_output = false;
     let mut i = 0;
 
     while i < args.len() {
@@ -157,7 +154,7 @@ fn run_invalidate_cache(args: &[String]) -> AndromedaResult<()> {
                         .map_err(|_| cli_error("procedure-id must be an unsigned integer"))?,
                 );
             }
-            "--json" => json = true,
+            "--json" => json_output = true,
             opt if opt.starts_with("--") => {
                 return Err(cli_error(format!(
                     "unknown invalidate-cache option: {}",
@@ -183,20 +180,18 @@ fn run_invalidate_cache(args: &[String]) -> AndromedaResult<()> {
         message: format!("Cleared {} cache entries ({})", entries_cleared, scope),
     };
 
-    if json {
-        let json_str = serde_json::to_string_pretty(&outcome)
-            .map_err(|e| cli_error(format!("failed to serialize invalidation outcome: {}", e)))?;
-        println!("{}", json_str);
-    } else {
-        println!(
-            "✓ Cache invalidated: {} entries cleared",
-            outcome.entries_cleared
-        );
+    if json_output {
+        print_cache_invalidation_json(&outcome);
+    } else if outcome.success {
+        println!("✓ {}", outcome.message);
+        println!("Entries Cleared: {}", outcome.entries_cleared);
         if let Some(pid) = procedure_id {
             println!("  (procedure {})", pid);
         } else {
             println!("  (all procedures)");
         }
+    } else {
+        println!("✗ Cache invalidation failed: {}", outcome.message);
     }
 
     Ok(())
@@ -214,7 +209,7 @@ fn run_show_contract(args: &[String]) -> AndromedaResult<()> {
         .parse()
         .map_err(|_| cli_error("procedure-id must be an unsigned integer"))?;
 
-    let json = args.iter().any(|arg| arg == "--json");
+    let json_output = has_json_option(&args[1..]);
 
     // MOCK: In a real implementation, this would query the catalog store for contract details.
     let contract = ProcedureContractInfo {
@@ -249,10 +244,8 @@ fn run_show_contract(args: &[String]) -> AndromedaResult<()> {
         access_mode: "ReadWrite".to_string(),
     };
 
-    if json {
-        let json_str = serde_json::to_string_pretty(&contract)
-            .map_err(|e| cli_error(format!("failed to serialize contract: {}", e)))?;
-        println!("{}", json_str);
+    if json_output {
+        print_contract_json(&contract);
     } else {
         print_contract_human(&contract);
     }
@@ -273,18 +266,22 @@ fn print_catalog_help() {
     println!("OPTIONS:");
     println!("  --namespace <ns>        Filter procedures by namespace");
     println!("  --procedure-id <id>     Target specific procedure for cache invalidation");
-    println!("  --json                  Output in JSON format (default: human-readable)");
+    println!("  --json                  Emit diagnostic machine-readable JSON output");
     println!("  -h, --help              Show this help message");
+}
+
+fn has_json_option(args: &[String]) -> bool {
+    args.iter().any(|arg| arg == "--json")
 }
 
 fn print_procedures_human(procedures: &[ProcedureMetadata]) {
     println!("Procedures");
     println!("==========");
     println!(
-        "{:<6} {:<30} {:<20} {:<15}",
-        "ID", "Name", "Namespace", "Contract Hash"
+        "{:<6} {:<30} {:<20} {:<15} {:<15}",
+        "ID", "Name", "Namespace", "Contract Hash", "Catalog Version"
     );
-    println!("{}", "-".repeat(81));
+    println!("{}", "-".repeat(98));
     for proc in procedures {
         let ns = proc
             .namespace
@@ -292,11 +289,12 @@ fn print_procedures_human(procedures: &[ProcedureMetadata]) {
             .map(|s| s.as_str())
             .unwrap_or("(default)");
         println!(
-            "{:<6} {:<30} {:<20} {:<15}",
+            "{:<6} {:<30} {:<20} {:<15} {:<15}",
             proc.procedure_id,
             proc.name,
             ns,
-            &proc.contract_hash[..12]
+            &proc.contract_hash[..12],
+            proc.catalog_version
         );
     }
 }
@@ -324,6 +322,86 @@ fn print_contract_human(contract: &ProcedureContractInfo) {
     println!("Access Mode: {}", contract.access_mode);
 }
 
+fn print_procedures_json(procedures: &[ProcedureMetadata]) {
+    let entries = procedures
+        .iter()
+        .map(|proc| {
+            format!(
+                "{{\"procedure_id\":{},\"name\":{},\"namespace\":{},\"contract_hash\":{},\"catalog_version\":{}}}",
+                proc.procedure_id,
+                json_string(&proc.name),
+                json_option_string(proc.namespace.as_deref()),
+                json_string(&proc.contract_hash),
+                proc.catalog_version,
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    println!("[{}]", entries);
+}
+
+fn print_cache_invalidation_json(outcome: &CacheInvalidationOutcome) {
+    println!(
+        "{{\"success\":{},\"entries_cleared\":{},\"message\":{}}}",
+        outcome.success,
+        outcome.entries_cleared,
+        json_string(&outcome.message),
+    );
+}
+
+fn print_contract_json(contract: &ProcedureContractInfo) {
+    println!(
+        "{{\"procedure_id\":{},\"name\":{},\"contract_hash\":{},\"input_columns\":{},\"output_columns\":{},\"isolation_level\":{},\"access_mode\":{}}}",
+        contract.procedure_id,
+        json_string(&contract.name),
+        json_string(&contract.contract_hash),
+        columns_json(&contract.input_columns),
+        columns_json(&contract.output_columns),
+        json_string(&contract.isolation_level),
+        json_string(&contract.access_mode),
+    );
+}
+
+fn columns_json(columns: &[ColumnInfo]) -> String {
+    let entries = columns
+        .iter()
+        .map(|col| {
+            format!(
+                "{{\"name\":{},\"column_type\":{},\"nullable\":{}}}",
+                json_string(&col.name),
+                json_string(&col.column_type),
+                col.nullable,
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("[{}]", entries)
+}
+
+fn json_option_string(value: Option<&str>) -> String {
+    value.map(json_string).unwrap_or_else(|| "null".to_string())
+}
+
+fn json_string(value: &str) -> String {
+    format!("\"{}\"", escape_json_str(value))
+}
+
+fn escape_json_str(value: &str) -> String {
+    let mut escaped = String::new();
+    for ch in value.chars() {
+        match ch {
+            '"' => escaped.push_str("\\\""),
+            '\\' => escaped.push_str("\\\\"),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            ch if ch.is_control() => escaped.push_str(&format!("\\u{:04x}", ch as u32)),
+            ch => escaped.push(ch),
+        }
+    }
+    escaped
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -341,7 +419,7 @@ mod tests {
     }
 
     #[test]
-    fn catalog_list_procedures_with_json() {
+    fn catalog_list_procedures_accepts_json_output() {
         let result = run_list_procedures(&["--json".to_string()]);
         assert!(result.is_ok());
     }
@@ -384,9 +462,14 @@ mod tests {
     }
 
     #[test]
-    fn catalog_show_contract_with_json() {
+    fn catalog_show_contract_accepts_json_output() {
         let result = run_show_contract(&["1".to_string(), "--json".to_string()]);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn catalog_json_string_escapes_diagnostic_fields() {
+        assert_eq!(json_string("namespace\nname"), "\"namespace\\nname\"");
     }
 
     #[test]

@@ -59,7 +59,7 @@ use std::sync::Arc;
 ///
 /// # Usage Flow
 ///
-/// ```no_run
+/// ```ignore
 /// // 1. Record commit and write WAL
 /// facade.record_commit(tx_id, commit_lsn, visible_ts)?;
 ///

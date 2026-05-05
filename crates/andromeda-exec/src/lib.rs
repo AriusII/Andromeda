@@ -1,6 +1,8 @@
 #![forbid(unsafe_code)]
 #![allow(ambiguous_glob_imports)]
 
+extern crate andromeda_proto;
+
 mod admission;
 mod business;
 pub mod dispatch;

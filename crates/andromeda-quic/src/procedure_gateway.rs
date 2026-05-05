@@ -102,7 +102,7 @@ impl<'a> ProcedureGateway<'a> {
     /// # use andromeda_observe::SurfaceScope;
     ///
     /// # let mut conn = Connection::new(SurfacePlane::Application);
-    /// # let identity = CertificateIdentity::new("abc123", "svc-001".into(), SurfaceScope::Application).unwrap();
+    /// # let identity = CertificateIdentity::new("abc123", "svc-001", SurfaceScope::Application).unwrap();
     /// # conn.set_certificate_identity(identity.clone()).unwrap();
     /// let gateway = ProcedureGateway::new(&conn)?;
     /// # Ok::<(), andromeda_core::AndromedaError>(())
@@ -167,7 +167,10 @@ impl<'a> ProcedureGateway<'a> {
     /// ```no_run
     /// # use andromeda_quic::ProcedureGateway;
     /// # use andromeda_core::InvocationId;
-    /// # let conn = andromeda_quic::Connection::new(andromeda_quic::SurfacePlane::Application);
+    /// # use andromeda_observe::{CertificateIdentity, SurfaceScope};
+    /// # let mut conn = andromeda_quic::Connection::new(andromeda_quic::SurfacePlane::Application);
+    /// # let identity = CertificateIdentity::new("abc123", "svc-001", SurfaceScope::Application).unwrap();
+    /// # conn.set_certificate_identity(identity).unwrap();
     /// # let gateway = ProcedureGateway::new(&conn)?;
     ///
     /// let stream_id = 5u64;

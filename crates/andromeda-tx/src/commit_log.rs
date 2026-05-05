@@ -32,11 +32,18 @@ use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, Clock, EngineTimestamp, SystemClock,
     TransactionId,
 };
-use andromeda_storage::{Lsn, WalRecordKind};
 use dashmap::DashMap;
 use std::sync::Arc;
 
+use crate::Lsn;
 use crate::mvcc_status::{TransactionStatus, TransactionStatusTable};
+
+/// Transaction WAL record kinds required by the commit boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WalRecordKind {
+    /// Transaction commit record. Adapters map this to the storage WAL record kind.
+    TxCommit,
+}
 
 /// Isolation level for transaction commit classification.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -115,8 +115,8 @@
 
 use std::sync::Arc;
 
+use crate::Lsn;
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
-use andromeda_storage::Lsn;
 ///
 /// This trait defines the contract for recording transaction lifecycle events
 /// (commits, rollbacks) to the Write-Ahead Log (WAL) and querying durability status.

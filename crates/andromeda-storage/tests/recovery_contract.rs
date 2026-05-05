@@ -1,8 +1,11 @@
 use andromeda_core::{AndromedaErrorKind, TransactionId};
 use andromeda_observe::{EventCorrelation, EventEnvelope, EventId, TraceEvent, TraceId};
+use andromeda_storage::format_version::{FormatVersion, StorageFormatKind};
 use andromeda_storage::{
-    DatabaseManifest, DurableTransactionState, InMemoryWal, Lsn, RecoveryPlan, RedoRecordDecision,
-    StartupMode, WalRecord, WalRecordKind, WalScanStopReason, encode_wal_record, scan_wal_records,
+    DatabaseManifest, DurableTransactionState, InMemoryWal, Lsn, PreRedoStorageFormatDecision,
+    PreRedoStorageFormatGate, PreRedoStorageFormatRejection, RECOVERY_REQUIRED_STORAGE_FORMATS,
+    RecoveryPlan, RedoRecordDecision, StartupMode, StorageFormatFingerprint, WalRecord,
+    WalRecordKind, WalScanStopReason, encode_wal_record, scan_wal_records,
 };
 
 #[test]
@@ -553,4 +556,146 @@ fn redo_plan_does_not_treat_non_durable_ram_records_as_truth() {
         AndromedaErrorKind::Storage,
         "missing required WAL start LSN must surface as a storage error",
     );
+}
+
+#[test]
+fn pre_redo_format_gate_rejects_unknown_heap_layout_before_redo() {
+    let observed = [
+        StorageFormatFingerprint::new(StorageFormatKind::Page, FormatVersion::V1_0),
+        StorageFormatFingerprint::new(StorageFormatKind::BTreeKey, FormatVersion::V1_0),
+        StorageFormatFingerprint::new(StorageFormatKind::BTreeNode, FormatVersion::V1_0),
+        StorageFormatFingerprint::new(StorageFormatKind::WalPayload, FormatVersion::V1_0),
+    ];
+
+    assert_eq!(
+        PreRedoStorageFormatGate::decide(
+            StartupMode::SafeStart,
+            false,
+            RECOVERY_REQUIRED_STORAGE_FORMATS,
+            &observed,
+        ),
+        Err(PreRedoStorageFormatRejection::Unknown {
+            kind: StorageFormatKind::HeapPage
+        })
+    );
+}
+
+#[test]
+fn pre_redo_format_gate_rejects_unsupported_btree_key_version() {
+    let observed =
+        recovery_v1_format_fingerprints_with(StorageFormatKind::BTreeKey, FormatVersion::V1_5);
+
+    assert_eq!(
+        PreRedoStorageFormatGate::decide(
+            StartupMode::FastStart,
+            false,
+            RECOVERY_REQUIRED_STORAGE_FORMATS,
+            &observed,
+        ),
+        Err(PreRedoStorageFormatRejection::Unsupported {
+            kind: StorageFormatKind::BTreeKey,
+            observed: FormatVersion::V1_5,
+            reader: FormatVersion::V1_0,
+        })
+    );
+}
+
+#[test]
+fn forensic_start_opens_unknown_format_read_only_without_replay() {
+    let observed = [
+        StorageFormatFingerprint::new(StorageFormatKind::Page, FormatVersion::V1_0),
+        StorageFormatFingerprint::new(StorageFormatKind::BTreeKey, FormatVersion::V1_0),
+        StorageFormatFingerprint::new(StorageFormatKind::BTreeNode, FormatVersion::V1_0),
+        StorageFormatFingerprint::new(StorageFormatKind::WalPayload, FormatVersion::V1_0),
+    ];
+
+    let decision = PreRedoStorageFormatGate::decide(
+        StartupMode::ForensicStart,
+        true,
+        RECOVERY_REQUIRED_STORAGE_FORMATS,
+        &observed,
+    )
+    .unwrap();
+
+    assert_eq!(
+        decision,
+        PreRedoStorageFormatDecision::ForensicReadOnly {
+            reason: PreRedoStorageFormatRejection::Unknown {
+                kind: StorageFormatKind::HeapPage
+            }
+        }
+    );
+    assert!(
+        !decision.replay_allowed(),
+        "ForensicStart may inspect unknown storage formats only with replay disabled"
+    );
+}
+
+#[test]
+fn recovery_plan_format_fingerprint_api_fails_before_wal_redo_validation() {
+    let transaction_id = TransactionId::new(70);
+    let records = vec![
+        WalRecord::from_parts(
+            WalRecordKind::TxBegin,
+            Lsn::new(1),
+            None,
+            Some(transaction_id),
+            Vec::new(),
+        )
+        .unwrap(),
+        WalRecord::from_parts(
+            WalRecordKind::TxCommit,
+            Lsn::new(3),
+            Some(Lsn::new(1)),
+            Some(transaction_id),
+            Vec::new(),
+        )
+        .unwrap(),
+    ];
+    let manifest = DatabaseManifest {
+        database_id: 1,
+        manifest_version: 2,
+        snapshot_id: 3,
+        base_checkpoint_lsn: Lsn::new(1),
+        required_wal_start_lsn: Lsn::new(1),
+        previous_manifest_hash: [0; 32],
+        manifest_crc: 99,
+    };
+    let observed =
+        recovery_v1_format_fingerprints_with(StorageFormatKind::HeapPage, FormatVersion::V2_0);
+
+    let err = RecoveryPlan::from_manifest_wal_and_format_fingerprints(
+        &manifest,
+        StartupMode::SafeStart,
+        &records,
+        &observed,
+    )
+    .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Storage);
+    assert!(
+        err.message()
+            .contains("unsupported storage subformat `Heap Page`"),
+        "format gate must fail before WAL redo validation; got: {}",
+        err.message()
+    );
+}
+
+fn recovery_v1_format_fingerprints_with(
+    override_kind: StorageFormatKind,
+    override_version: FormatVersion,
+) -> Vec<StorageFormatFingerprint> {
+    RECOVERY_REQUIRED_STORAGE_FORMATS
+        .iter()
+        .map(|kind| {
+            StorageFormatFingerprint::new(
+                *kind,
+                if *kind == override_kind {
+                    override_version
+                } else {
+                    FormatVersion::V1_0
+                },
+            )
+        })
+        .collect()
 }

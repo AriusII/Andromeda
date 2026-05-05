@@ -1,4 +1,4 @@
-# DEC-020: Stream Concurrency, Cancellation, and Backpressure
+# DEC-020b: Stream Concurrency, Cancellation, and Backpressure
 
 ## Status
 

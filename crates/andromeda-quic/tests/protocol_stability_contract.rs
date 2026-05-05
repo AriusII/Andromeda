@@ -20,17 +20,17 @@ use std::mem;
 // Test 1: Frame Header Offset Stability
 // ============================================================================
 
-/// Validates that FrameHeader offsets remain constant.
+/// Validates that FrameHeader wire offsets remain constant.
 ///
-/// Frame header layout is wire-critical. Any accidental field reordering
-/// or size changes break backward compatibility.
+/// The encoded frame header is wire-critical. Rust struct padding may differ
+/// from the wire length and must not be treated as the protocol contract.
 #[test]
 fn test_frame_header_offset_stability() {
-    // Frame header size must be exactly 52 bytes
-    assert_eq!(
-        mem::size_of::<FrameHeader>(),
-        52,
-        "FrameHeader size changed! This breaks wire protocol compatibility."
+    // The Rust struct currently contains padding; only FRAME_CODEC_HEADER_LEN
+    // defines the stable wire contract.
+    assert!(
+        mem::size_of::<FrameHeader>() >= FRAME_CODEC_HEADER_LEN,
+        "FrameHeader memory layout must be large enough for the encoded header"
     );
 
     // Validate through the module function
@@ -39,10 +39,10 @@ fn test_frame_header_offset_stability() {
         "Frame header layout validation failed"
     );
 
-    // FRAME_CODEC_HEADER_LEN must match struct size
+    // FRAME_CODEC_HEADER_LEN is the stable encoded header size.
     assert_eq!(
         FRAME_CODEC_HEADER_LEN, 52,
-        "FRAME_CODEC_HEADER_LEN constant doesn't match FrameHeader size"
+        "FRAME_CODEC_HEADER_LEN changed! This breaks wire protocol compatibility."
     );
 
     // Verify all field sizes sum correctly

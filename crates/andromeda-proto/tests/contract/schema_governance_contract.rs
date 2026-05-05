@@ -52,6 +52,12 @@ const CRATE_LOCAL_PROTO_SCHEMAS: &[ProtoSchema] = &[
         source: include_str!("../../proto/andromeda/protocol/v1/invocation.proto"),
     },
     ProtoSchema {
+        logical_name: "protocol/wal",
+        relative_path: "proto/andromeda/protocol/v1/wal.proto",
+        expected_package: PROTOCOL_PACKAGE_DECLARATION,
+        source: include_str!("../../proto/andromeda/protocol/v1/wal.proto"),
+    },
+    ProtoSchema {
         logical_name: "contract/contract",
         relative_path: "proto/andromeda/contract/v1/contract.proto",
         expected_package: CONTRACT_PACKAGE_DECLARATION,
@@ -62,6 +68,12 @@ const CRATE_LOCAL_PROTO_SCHEMAS: &[ProtoSchema] = &[
         relative_path: "proto/andromeda/contract/v1/manifest.proto",
         expected_package: CONTRACT_PACKAGE_DECLARATION,
         source: include_str!("../../proto/andromeda/contract/v1/manifest.proto"),
+    },
+    ProtoSchema {
+        logical_name: "contract/catalog",
+        relative_path: "proto/andromeda/contract/v1/catalog.proto",
+        expected_package: CONTRACT_PACKAGE_DECLARATION,
+        source: include_str!("../../proto/andromeda/contract/v1/catalog.proto"),
     },
 ];
 
@@ -90,6 +102,10 @@ const PROTOCOL_SCHEMAS: &[(&str, &str)] = &[
         "invocation",
         include_str!("../../proto/andromeda/protocol/v1/invocation.proto"),
     ),
+    (
+        "wal",
+        include_str!("../../proto/andromeda/protocol/v1/wal.proto"),
+    ),
 ];
 const CONTRACT_SCHEMAS: &[(&str, &str)] = &[
     (
@@ -100,10 +116,15 @@ const CONTRACT_SCHEMAS: &[(&str, &str)] = &[
         "manifest",
         include_str!("../../proto/andromeda/contract/v1/manifest.proto"),
     ),
+    (
+        "catalog",
+        include_str!("../../proto/andromeda/contract/v1/catalog.proto"),
+    ),
 ];
 const PROTO_MANIFEST: &str = include_str!("../../Cargo.toml");
 const QUIC_MANIFEST: &str = include_str!("../../../andromeda-quic/Cargo.toml");
 const EXEC_MANIFEST: &str = include_str!("../../../andromeda-exec/Cargo.toml");
+const GENERATED_WRAPPER: &str = include_str!("../../src/generated.rs");
 
 use andromeda_core::{
     AndromedaErrorKind, CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId, ScalarType,
@@ -117,7 +138,7 @@ use andromeda_proto::{
     frame_envelope_hash, generated, protocol_layout,
 };
 use prost::Message;
-use prost_types::FileDescriptorSet;
+use prost_types::{DescriptorProto, FileDescriptorSet};
 
 #[test]
 fn governed_proto_registry_matches_crate_local_tree() {
@@ -257,6 +278,51 @@ fn generated_wrapper_preserves_constants_and_split_descriptor_paths() {
             bytes_contains(descriptor_set_bytes(), descriptor_path),
             "generated descriptor set must preserve crate-local proto path {}",
             String::from_utf8_lossy(descriptor_path)
+        );
+    }
+}
+
+#[test]
+fn v1_migration_policy_keeps_generated_wrapper_in_descriptor_lockstep() {
+    for required_snippet in [
+        "include_bytes!(concat!(env!(\"OUT_DIR\"), \"/andromeda_descriptor.bin\"))",
+        "include!(concat!(env!(\"OUT_DIR\"), \"/andromeda.contract.v1.rs\"))",
+        "include!(concat!(env!(\"OUT_DIR\"), \"/andromeda.protocol.v1.rs\"))",
+        "pub fn descriptor_set_hash() -> ContractHash",
+        "pub fn frame_envelope_hash() -> ContractHash",
+        "pub fn protocol_layout() -> ProtocolLayout",
+        "DESCRIPTOR_SET_HASH_ALGORITHM",
+    ] {
+        assert!(
+            GENERATED_WRAPPER.contains(required_snippet),
+            "generated.rs must preserve descriptor/module/hash lockstep snippet: {required_snippet}"
+        );
+    }
+}
+
+#[test]
+fn v1_migration_policy_has_no_unrecorded_deprecated_fields_or_json_mapping_options() {
+    for schema in CRATE_LOCAL_PROTO_SCHEMAS {
+        let active_schema = active_schema_text(schema.source);
+        assert!(
+            !active_schema.contains("[deprecated = true]"),
+            "{} must not introduce V1 deprecated fields without a decision-record allow-list",
+            schema.logical_name
+        );
+        assert!(
+            !active_schema.contains("json_name"),
+            "{} must not define protobuf JSON mapping options on the runtime contract surface",
+            schema.logical_name
+        );
+    }
+
+    let descriptor_set = FileDescriptorSet::decode(descriptor_set_bytes())
+        .expect("generated descriptor set bytes must decode as FileDescriptorSet");
+    for file in &descriptor_set.file {
+        assert_descriptor_messages_have_no_deprecated_fields(
+            file.name.as_deref().unwrap_or("<unnamed proto>"),
+            &file.message_type,
+            &mut Vec::new(),
         );
     }
 }
@@ -487,6 +553,14 @@ fn governed_schemas_declare_enriched_message_contracts_and_reserved_ranges() {
         "optional uint64 row_count_max = 6;",
         "repeated ColumnDescriptor fields = 10;",
         "ResultStreamDescriptor.RowCountRequirement row_count_policy = 11;",
+        "message CatalogProcedureManifestResolutionRequest",
+        "message CatalogProcedureManifestResolutionResponse",
+        "optional bytes expected_contract_hash = 7;",
+        "optional uint64 expected_catalog_version = 8;",
+        "bool require_source_generator_ready = 9;",
+        "ProcedureManifest manifest = 6;",
+        "optional bytes resolved_contract_hash = 7;",
+        "optional uint64 resolved_catalog_version = 8;",
     ] {
         assert!(
             schema_contains(CONTRACT_SCHEMAS, field),
@@ -762,6 +836,37 @@ fn declared_message_names() -> BTreeSet<String> {
     }
 
     names
+}
+
+fn assert_descriptor_messages_have_no_deprecated_fields(
+    file_name: &str,
+    messages: &[DescriptorProto],
+    path: &mut Vec<String>,
+) {
+    for message in messages {
+        let message_name = message.name.as_deref().unwrap_or("<unnamed message>");
+        path.push(message_name.to_string());
+        for field in &message.field {
+            let deprecated = field
+                .options
+                .as_ref()
+                .and_then(|options| options.deprecated)
+                .unwrap_or(false);
+            let message_path = path.join(".");
+            let field_name = field.name.as_deref().unwrap_or("<unnamed field>");
+            assert!(
+                !deprecated,
+                "{file_name}:{message_path}.{field_name} is deprecated without a V1 migration-policy allow-list"
+            );
+        }
+
+        assert_descriptor_messages_have_no_deprecated_fields(
+            file_name,
+            &message.nested_type,
+            path,
+        );
+        path.pop();
+    }
 }
 
 enum SchemaBlock {

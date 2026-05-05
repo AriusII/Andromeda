@@ -12,9 +12,9 @@
 #[cfg(test)]
 mod commit_log_gates {
     use andromeda_core::{AndromedaErrorKind, AndromedaResult, TransactionId};
-    use andromeda_storage::{Lsn, WalRecordKind};
     use andromeda_tx::{
-        CommitLogManager, IsolationLevel, TransactionStatus, TransactionStatusTable,
+        CommitLogManager, IsolationLevel, Lsn, TransactionStatus, TransactionStatusTable,
+        WalRecordKind,
     };
     use futures::future::join_all;
     use std::sync::Arc;

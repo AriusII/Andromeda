@@ -16,7 +16,6 @@
 
 #![forbid(unsafe_code)]
 
-use andromeda_core::{AndromedaResult, TransactionId};
 use proptest::prelude::*;
 
 // Mock or actual imports (adjust based on actual module structure)
@@ -45,8 +44,8 @@ fn arb_payload() -> impl Strategy<Value = Vec<u8>> {
 fn prop_wal_record_roundtrip_consistency() {
     proptest!(|(
         payload in arb_payload(),
-        lsn in arb_lsn(),
-        txn_id in arb_transaction_id(),
+        _lsn in arb_lsn(),
+        _txn_id in arb_transaction_id(),
     )| {
         // This test documents the roundtrip property.
         // In actual implementation, it would:
@@ -116,8 +115,8 @@ fn prop_wal_payload_integrity() {
 #[test]
 fn prop_wal_checksum_detects_corruption() {
     proptest!(|(
-        payload in arb_payload(),
-        lsn in arb_lsn(),
+        _payload in arb_payload(),
+        _lsn in arb_lsn(),
         corruption_bit in 0u8..8u8,
     )| {
         // When we corrupt a byte in the encoded record, checksum validation
@@ -170,7 +169,7 @@ fn prop_wal_large_payload_not_truncated() {
 
 #[test]
 fn prop_wal_encoding_deterministic() {
-    proptest!(|(payload in arb_payload(), lsn in arb_lsn())| {
+    proptest!(|(_payload in arb_payload(), lsn in arb_lsn())| {
         // Multiple encodes of the same record must produce identical bytes
         // (except for timestamp/checksum if those change)
         // Property: encode(r) == encode(r) for all r
@@ -185,7 +184,7 @@ fn prop_wal_encoding_deterministic() {
 
 #[test]
 fn prop_wal_frame_boundaries_preserved() {
-    proptest!(|(payload in arb_payload())| {
+    proptest!(|(_payload in arb_payload())| {
         // Decoding should correctly identify frame boundaries
         // Property: If we encode N records, we decode exactly N records
 

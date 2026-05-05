@@ -14,12 +14,12 @@
 //! |    PageHeader (96 bytes)         |  Fixed header with metadata
 //! +----------------------------------+
 //! |    Payload Data Region           |
-//! |    (grows downward)              |  Variable-length tuple data
+//! |    (grows upward from byte 96)   |  Variable-length tuple data
 //! |                                  |
 //! ~------ free space ------~
 //! |                                  |
-//! |    Slot Directory                |  Fixed-size slot entries (growing upward)
-//! |    (grows upward)                |
+//! |    Slot Directory                |  Fixed-size slot entries (growing downward)
+//! |    (slot 0 at page_size - 57)    |
 //! +----------------------------------+
 //! |    PageTrailer (48 bytes)        |  CRC and validation
 //! +----------------------------------+
@@ -49,6 +49,11 @@ use crate::PageSize;
 #[cfg(test)]
 use crate::heap_row_encoder::{ColumnDef, RowSchema, ScalarType};
 use crate::heap_row_encoder::{Datum, RowEncoder};
+
+const HEAP_PAGE_V1_HEADER_SIZE: usize = 96;
+const HEAP_PAGE_V1_TRAILER_SIZE: usize = 48;
+const HEAP_PAGE_V1_SLOT_METADATA_SIZE: usize = 4;
+const HEAP_PAGE_V1_HEADER_SLOT_COUNT_OFFSET: usize = 40;
 
 /// A single slot directory entry (5 bytes).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -117,6 +122,87 @@ impl SlotEntry {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct HeapPageV1SlotMetadata {
+    slot_count: usize,
+    free_offset: u16,
+    metadata_offset: usize,
+    slot_base: usize,
+}
+
+fn heap_page_v1_metadata_offset(page_size: PageSize) -> usize {
+    page_size.bytes_usize() - HEAP_PAGE_V1_TRAILER_SIZE - HEAP_PAGE_V1_SLOT_METADATA_SIZE
+}
+
+fn heap_page_v1_read_slot_metadata(
+    page_size: PageSize,
+    page_data: &[u8],
+) -> AndromedaResult<HeapPageV1SlotMetadata> {
+    if page_data.len() != page_size.bytes_usize() {
+        return Err(heap_error(format!(
+            "page size mismatch: expected {} bytes, got {}",
+            page_size.bytes_usize(),
+            page_data.len()
+        )));
+    }
+
+    let metadata_offset = heap_page_v1_metadata_offset(page_size);
+    if metadata_offset < HEAP_PAGE_V1_HEADER_SIZE {
+        return Err(heap_error("page too small for heap page v1 metadata"));
+    }
+
+    let footer_slot_count =
+        u16::from_le_bytes([page_data[metadata_offset], page_data[metadata_offset + 1]]) as usize;
+    let free_offset = u16::from_le_bytes([
+        page_data[metadata_offset + 2],
+        page_data[metadata_offset + 3],
+    ]);
+
+    // DEC-032 blocks the legacy/header-only reader path. Header offset 40 is not
+    // authoritative under HeapPageV1; if populated it is only accepted as a redundant
+    // copy that matches the footer metadata.
+    let header_slot_count = u16::from_le_bytes([
+        page_data[HEAP_PAGE_V1_HEADER_SLOT_COUNT_OFFSET],
+        page_data[HEAP_PAGE_V1_HEADER_SLOT_COUNT_OFFSET + 1],
+    ]) as usize;
+    if header_slot_count != 0 && header_slot_count != footer_slot_count {
+        return Err(heap_error(format!(
+            "heap page v1 slot count ambiguity: header slot count {} does not match footer slot count {}",
+            header_slot_count, footer_slot_count
+        )));
+    }
+
+    let slot_directory_size = footer_slot_count
+        .checked_mul(SlotEntry::SIZE)
+        .ok_or_else(|| heap_error("heap page v1 slot directory size overflow"))?;
+    if slot_directory_size > metadata_offset.saturating_sub(HEAP_PAGE_V1_HEADER_SIZE) {
+        return Err(heap_error("slot directory overlaps page header"));
+    }
+
+    let slot_base = metadata_offset - slot_directory_size;
+    let free_offset_usize = free_offset as usize;
+    if footer_slot_count > 0 && free_offset == 0 {
+        return Err(heap_error(
+            "heap page v1 free offset missing for non-empty slot directory",
+        ));
+    }
+    if free_offset != 0
+        && (free_offset_usize < HEAP_PAGE_V1_HEADER_SIZE || free_offset_usize > slot_base)
+    {
+        return Err(heap_error(format!(
+            "heap page v1 free offset {} outside payload/free-space bounds {}..={}",
+            free_offset, HEAP_PAGE_V1_HEADER_SIZE, slot_base
+        )));
+    }
+
+    Ok(HeapPageV1SlotMetadata {
+        slot_count: footer_slot_count,
+        free_offset,
+        metadata_offset,
+        slot_base,
+    })
+}
+
 /// A variadic-length heap page for tuple storage.
 ///
 /// Manages slot-based tuple storage with deletion via logical marking.
@@ -153,32 +239,25 @@ impl HeapPage {
         }
 
         let data = bytes.to_vec();
+        let metadata = heap_page_v1_read_slot_metadata(page_size, &data)?;
+        let mut slot_directory = Vec::with_capacity(metadata.slot_count);
 
-        // Extract slot directory from end of page
-        // Slot directory follows PageTrailer (48 bytes before end)
-        // We reconstruct it from PageHeader.slot_count
-        let trailer_len = 48;
-        let max_offset = size - trailer_len;
-
-        // Read slot count from header (at offset 40)
-        let slot_count = if data.len() >= 42 {
-            u16::from_le_bytes([data[40], data[41]]) as usize
-        } else {
-            return Err(heap_error("page too short to read slot count"));
-        };
-
-        let mut slot_directory = Vec::with_capacity(slot_count);
-
-        for i in 0..slot_count {
-            let slot_offset = max_offset - ((i + 1) * SlotEntry::SIZE);
-            if slot_offset < 96 {
-                // 96 bytes for header
-                return Err(heap_error("slot directory overlaps page header"));
-            }
-
+        for i in 0..metadata.slot_count {
+            let slot_offset = metadata.metadata_offset - ((i + 1) * SlotEntry::SIZE);
             let mut slot_bytes = [0u8; 5];
             slot_bytes.copy_from_slice(&data[slot_offset..slot_offset + 5]);
-            slot_directory.push(SlotEntry::from_bytes(slot_bytes));
+            let entry = SlotEntry::from_bytes(slot_bytes);
+            if !entry.is_deleted() {
+                let tuple_start = entry.offset as usize;
+                let tuple_end = tuple_start.saturating_add(entry.length as usize);
+                if tuple_start < HEAP_PAGE_V1_HEADER_SIZE || tuple_end > metadata.slot_base {
+                    return Err(heap_error(format!(
+                        "heap page v1 slot {} tuple bounds {}..{} outside payload region {}..{}",
+                        i, tuple_start, tuple_end, HEAP_PAGE_V1_HEADER_SIZE, metadata.slot_base
+                    )));
+                }
+            }
+            slot_directory.push(entry);
         }
 
         Ok(Self {
@@ -228,11 +307,21 @@ impl HeapPage {
             )));
         }
 
-        // Find insertion offset (allocate from end of data region, before slot directory)
-        let trailer_len = 48;
-        let slot_dir_start =
-            self.data.len() - trailer_len - (self.slot_directory.len() * SlotEntry::SIZE);
-        let insert_offset = (slot_dir_start - tuple_len as usize) as u16;
+        // Find insertion offset (allocate tuple payloads contiguously after the page header).
+        //
+        // Slot entries are serialized from the end of the page, before the trailer. Keeping
+        // tuple bytes growing upward from the header preserves a single free-space interval
+        // between tuple payloads and the slot directory and prevents later slot entries from
+        // overwriting earlier tuple bytes.
+        let header_size = HEAP_PAGE_V1_HEADER_SIZE;
+        let next_tuple_offset = self
+            .slot_directory
+            .iter()
+            .filter(|entry| !entry.is_deleted())
+            .map(|entry| entry.offset as usize + entry.length as usize)
+            .max()
+            .unwrap_or(header_size);
+        let insert_offset = next_tuple_offset as u16;
 
         // Write tuple data
         let offset_usize = insert_offset as usize;
@@ -398,8 +487,8 @@ impl HeapPage {
         }
 
         // Build new data layout with only live tuples
-        let header_size = 96usize;
-        let trailer_size = 48usize;
+        let header_size = HEAP_PAGE_V1_HEADER_SIZE;
+        let trailer_size = HEAP_PAGE_V1_TRAILER_SIZE;
         let mut new_data = vec![0u8; self.data.len()];
 
         // Copy header
@@ -410,24 +499,22 @@ impl HeapPage {
         new_data[trailer_start..].copy_from_slice(&self.data[trailer_start..]);
 
         let mut new_offset = header_size as u16;
-        let mut new_slot_directory = Vec::new();
+        let mut new_slot_directory = Vec::with_capacity(self.slot_directory.len());
 
-        // Rebuild slot directory: iterate through all slots and copy live tuples
+        // Rewrite live tuple payloads while preserving slot IDs. Deleted slots stay in
+        // the directory so external RowIds remain stable and continue to fail reads.
         for slot_entry in self.slot_directory.iter() {
             if !slot_entry.is_deleted() {
-                // Copy live tuple data
                 let old_offset = slot_entry.offset as usize;
                 let length = slot_entry.length as usize;
 
                 new_data[new_offset as usize..new_offset as usize + length]
                     .copy_from_slice(&self.data[old_offset..old_offset + length]);
 
-                // Create new slot entry with updated offset
                 new_slot_directory.push(SlotEntry::new(new_offset, slot_entry.length));
                 new_offset = new_offset.saturating_add(slot_entry.length);
             } else {
-                // Removed deleted slot from directory
-                // This effectively compacts the slot directory too
+                new_slot_directory.push(*slot_entry);
             }
         }
 
@@ -440,20 +527,20 @@ impl HeapPage {
 
     /// Get free space in bytes.
     fn compute_free_space_bytes(&self) -> usize {
-        let header_size = 96;
-        let trailer_size = 48;
+        let header_size = HEAP_PAGE_V1_HEADER_SIZE;
+        let trailer_size = HEAP_PAGE_V1_TRAILER_SIZE;
 
-        // Calculate used space by live tuples
-        let used_by_tuples: usize = self
+        let next_tuple_offset = self
             .slot_directory
             .iter()
             .filter(|e| !e.is_deleted())
-            .map(|e| e.length as usize)
-            .sum();
+            .map(|e| e.offset as usize + e.length as usize)
+            .max()
+            .unwrap_or(header_size);
+        let slot_directory_start =
+            self.data.len() - trailer_size - (self.slot_directory.len() * SlotEntry::SIZE);
 
-        let used_by_slots = self.slot_directory.len() * SlotEntry::SIZE;
-
-        self.data.len() - header_size - trailer_size - used_by_tuples - used_by_slots
+        slot_directory_start.saturating_sub(next_tuple_offset)
     }
 
     /// Serialize slot directory to bytes (for persisting to page image).
@@ -681,7 +768,7 @@ pub mod slot_directory {
     impl SlotDirectory {
         /// Create a new empty slot directory for the given page size.
         pub fn new(page_size: PageSize) -> Self {
-            let header_size = 96u16;
+            let header_size = HEAP_PAGE_V1_HEADER_SIZE as u16;
             Self {
                 page_size,
                 slots: Vec::new(),
@@ -691,46 +778,31 @@ pub mod slot_directory {
 
         /// Load slot directory from serialized page data.
         pub fn from_page_data(page_size: PageSize, page_data: &[u8]) -> AndromedaResult<Self> {
-            if page_data.len() != page_size.bytes_usize() {
-                return Err(heap_error(format!(
-                    "page size mismatch: expected {} bytes, got {}",
-                    page_size.bytes_usize(),
-                    page_data.len()
-                )));
-            }
+            let metadata = heap_page_v1_read_slot_metadata(page_size, page_data)?;
 
-            let page_bytes = page_size.bytes() as usize;
-            let trailer_size = 48usize;
-            let metadata_offset = page_bytes - trailer_size - 4;
-
-            if metadata_offset < 2 {
-                return Err(heap_error("page too small for slot directory metadata"));
-            }
-
-            let slot_count =
-                u16::from_le_bytes([page_data[metadata_offset], page_data[metadata_offset + 1]])
-                    as usize;
-            let free_offset = u16::from_le_bytes([
-                page_data[metadata_offset + 2],
-                page_data[metadata_offset + 3],
-            ]);
-
-            let mut slots = Vec::with_capacity(slot_count);
-            for i in 0..slot_count {
-                let slot_offset = metadata_offset - ((i + 1) * SlotEntry::SIZE);
-                if slot_offset < 96 {
-                    return Err(heap_error("slot directory overlaps page header"));
-                }
-
+            let mut slots = Vec::with_capacity(metadata.slot_count);
+            for i in 0..metadata.slot_count {
+                let slot_offset = metadata.metadata_offset - ((i + 1) * SlotEntry::SIZE);
                 let mut slot_bytes = [0u8; 5];
                 slot_bytes.copy_from_slice(&page_data[slot_offset..slot_offset + 5]);
-                slots.push(SlotEntry::from_bytes(slot_bytes));
+                let slot = SlotEntry::from_bytes(slot_bytes);
+                if !slot.is_deleted() {
+                    let tuple_start = slot.offset as usize;
+                    let tuple_end = tuple_start.saturating_add(slot.length as usize);
+                    if tuple_start < HEAP_PAGE_V1_HEADER_SIZE || tuple_end > metadata.slot_base {
+                        return Err(heap_error(format!(
+                            "heap page v1 slot {} tuple bounds {}..{} outside payload region {}..{}",
+                            i, tuple_start, tuple_end, HEAP_PAGE_V1_HEADER_SIZE, metadata.slot_base
+                        )));
+                    }
+                }
+                slots.push(slot);
             }
 
             Ok(Self {
                 page_size,
                 slots,
-                free_offset,
+                free_offset: metadata.free_offset,
             })
         }
 
@@ -740,8 +812,17 @@ pub mod slot_directory {
                 return Err(heap_error("tuple length must be > 0"));
             }
 
-            let required_space = self.free_offset.saturating_sub(96) as u32;
-            if (length as u32) > required_space {
+            let can_reuse_deleted_slot = self
+                .slots
+                .iter()
+                .any(|slot| slot.is_deleted() && slot.offset == 0);
+            let slot_entry_space = if can_reuse_deleted_slot {
+                0u16
+            } else {
+                SlotEntry::SIZE as u16
+            };
+            let required_space = length.saturating_add(slot_entry_space);
+            if required_space > self.free_space() {
                 return Err(heap_error("insufficient free space for tuple"));
             }
 
@@ -802,25 +883,19 @@ pub mod slot_directory {
 
         /// Compact the slot directory by removing gaps from deleted tuples.
         pub fn compact(&mut self) -> u16 {
-            let mut freed_bytes = 0u16;
-
-            for slot in &self.slots {
-                if slot.is_deleted() {
-                    freed_bytes = freed_bytes.saturating_add(slot.length);
-                }
+            if self.slots.last().is_some_and(|slot| slot.is_deleted()) {
+                let freed_bytes = self.slots.pop().map(|slot| slot.length).unwrap_or(0);
+                self.free_offset = self.free_offset.saturating_sub(freed_bytes);
+                return freed_bytes;
             }
-
-            while !self.slots.is_empty() && self.slots[self.slots.len() - 1].is_deleted() {
-                self.slots.pop();
-            }
-
-            freed_bytes
+            0
         }
 
         /// Calculate available free space in the page.
         pub fn free_space(&self) -> u16 {
-            let trailer_size = 48u16;
-            let slot_directory_size = (self.slots.len() as u16) * 5 + 4;
+            let trailer_size = HEAP_PAGE_V1_TRAILER_SIZE as u16;
+            let slot_directory_size = (self.slots.len() as u16) * SlotEntry::SIZE as u16
+                + HEAP_PAGE_V1_SLOT_METADATA_SIZE as u16;
             let page_end = self.page_size.bytes() as u16;
 
             let allocated_end = self.free_offset;
@@ -848,13 +923,11 @@ pub mod slot_directory {
                 return Err(heap_error("page size mismatch"));
             }
 
-            let page_bytes = self.page_size.bytes() as usize;
-            let trailer_size = 48usize;
-            let metadata_offset = page_bytes - trailer_size - 4;
+            let metadata_offset = heap_page_v1_metadata_offset(self.page_size);
 
             for (i, slot) in self.slots.iter().enumerate() {
-                let slot_offset = metadata_offset - ((i + 1) * 5);
-                if slot_offset < 96 {
+                let slot_offset = metadata_offset - ((i + 1) * SlotEntry::SIZE);
+                if slot_offset < HEAP_PAGE_V1_HEADER_SIZE {
                     return Err(heap_error("slot directory overlaps page header"));
                 }
                 let slot_bytes = slot.to_bytes();
@@ -982,7 +1055,7 @@ pub mod slot_directory {
             let after = dir.free_space();
 
             assert!(after < initial);
-            assert_eq!(initial - after, 1000);
+            assert_eq!(initial - after, 1000 + SlotEntry::SIZE as u16);
         }
 
         #[test]

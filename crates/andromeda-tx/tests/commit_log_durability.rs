@@ -11,10 +11,9 @@
 #[cfg(test)]
 mod tests {
     use andromeda_core::{AndromedaResult, EngineTimestamp, ManualClock, TransactionId};
-    use andromeda_storage::{Lsn, WalRecordKind};
     use andromeda_tx::{
-        CommitLogManager, CommitProtocol, IsolationLevel, TransactionState, TransactionStatus,
-        TransactionStatusTable,
+        CommitLogManager, CommitProtocol, IsolationLevel, Lsn, TransactionState, TransactionStatus,
+        TransactionStatusTable, WalRecordKind,
     };
     use std::sync::Arc;
 

@@ -58,7 +58,7 @@ impl CatalogSnapshot {
 ///
 /// # Postconditions
 ///
-/// - Returned snapshot has `catalog_version` exactly matching the last version-advancing record.
+/// - Returned snapshot has `catalog_version` exactly matching the last replayed catalog version.
 /// - All procedure IDs in `procedure_ids` correspond to procedures visible at the final version.
 /// - Version monotonicity is guaranteed (no version reordering).
 /// - Procedure existence is validated (all references exist).
@@ -74,6 +74,8 @@ pub fn replay_catalog_wal_records(
 ) -> AndromedaResult<CatalogSnapshot> {
     let mut snapshot = CatalogSnapshot::new(CatalogVersion::new(0));
     let mut last_version: Option<CatalogVersion> = None;
+    let mut pending_batch_version: Option<CatalogVersion> = None;
+    let mut pending_batch_objects = BTreeSet::new();
 
     for record in records {
         // Filter by target version if present
@@ -87,9 +89,21 @@ pub fn replay_catalog_wal_records(
             let is_checkpoint = matches!(record, CatalogWalRecord::CatalogCheckpoint { .. });
 
             if !is_checkpoint {
-                // Validate version monotonicity only for version-advancing records
+                // Validate catalog version ordering for mutation records. Normally every
+                // mutation advances CatalogVersion. The only equal-version case accepted during
+                // replay is a per-object detail record that belongs to the immediately preceding
+                // DefinitionBatchApplied summary for the same catalog transition.
                 if let Some(prev_version) = last_version {
-                    if record_version.get() <= prev_version.get() {
+                    let equal_version_batch_detail = record_version.get() == prev_version.get()
+                        && pending_batch_version == Some(record_version)
+                        && record
+                            .primary_procedure_id()
+                            .is_some_and(|id| pending_batch_objects.contains(&id));
+
+                    if record_version.get() < prev_version.get()
+                        || (record_version.get() == prev_version.get()
+                            && !equal_version_batch_detail)
+                    {
                         return Err(AndromedaError::new(
                             AndromedaErrorKind::Storage,
                             format!(
@@ -102,6 +116,21 @@ pub fn replay_catalog_wal_records(
                 }
                 last_version = Some(record_version);
                 snapshot.catalog_version = record_version;
+
+                if let CatalogWalRecord::DefinitionBatchApplied {
+                    affected_procedure_ids,
+                    ..
+                } = record
+                {
+                    pending_batch_version = Some(record_version);
+                    pending_batch_objects = affected_procedure_ids.iter().copied().collect();
+                } else if record
+                    .primary_procedure_id()
+                    .is_some_and(|id| pending_batch_objects.remove(&id))
+                    && pending_batch_objects.is_empty()
+                {
+                    pending_batch_version = None;
+                }
             }
         }
 
@@ -191,6 +220,23 @@ pub fn replay_catalog_wal_records(
     }
 
     Ok(snapshot)
+}
+
+trait CatalogWalRecordReplayExt {
+    fn primary_procedure_id(&self) -> Option<CatalogObjectId>;
+}
+
+impl CatalogWalRecordReplayExt for CatalogWalRecord {
+    fn primary_procedure_id(&self) -> Option<CatalogObjectId> {
+        match self {
+            CatalogWalRecord::ProcedureAdded { procedure_id, .. }
+            | CatalogWalRecord::ProcedureAltered { procedure_id, .. }
+            | CatalogWalRecord::ProcedureDropped { procedure_id, .. } => Some(*procedure_id),
+            CatalogWalRecord::DefinitionBatchApplied { .. }
+            | CatalogWalRecord::StatisticsUpdated { .. }
+            | CatalogWalRecord::CatalogCheckpoint { .. } => None,
+        }
+    }
 }
 
 #[cfg(test)]

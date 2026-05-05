@@ -36,7 +36,7 @@ fn test_acquire_only_in_active_state() {
 #[test]
 fn test_cannot_acquire_in_created_state() {
     // Create a transaction but do NOT begin it (stays in Created state)
-    let tx_mgr = TransactionManager::new();
+    let _tx_mgr = TransactionManager::new();
 
     // Try to validate state for Created state
     let state = TransactionState::Created;
@@ -309,7 +309,6 @@ fn test_cannot_acquire_after_entering_committing() {
     let tx_id = tx_mgr.begin().unwrap();
     let coordinator = tx_mgr.lock_coordinator(&lock_mgr);
     let resource1 = LockResource::row(1, 1, 1).unwrap();
-    let resource2 = LockResource::row(1, 1, 2).unwrap();
 
     // Acquire first lock in Active state
     let _ = coordinator

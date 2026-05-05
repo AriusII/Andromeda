@@ -10,6 +10,8 @@ use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, InvocationId, TransactionId,
 };
 use andromeda_proto::StructuredObjectHeader;
+#[cfg(test)]
+use andromeda_proto::{RowCountPolicy, StructuredObjectLayout};
 
 /// Represents the result of an invocation execution
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -308,8 +310,8 @@ mod tests {
             descriptor_hash: andromeda_core::ContractHash::test_vector(2),
             fields: vec![],
             column_count: 0,
-            layout: andromeda_proto::StructuredObjectLayout::RowMajor,
-            row_count_policy: andromeda_proto::RowCountPolicy::ExactRequired,
+            layout: StructuredObjectLayout::RowMajor,
+            row_count_policy: RowCountPolicy::ExactRequired,
             row_count_exact: Some(0),
             payload_length: 0,
             payload_checksum: None,

@@ -85,7 +85,6 @@ mod wal_gc_snapshot_protection_tests {
         archived_segments: HashMap<u64, ArchiveStatus>,
         snapshot_registry: Arc<MockSnapshotRegistry>,
         removed_segments: Arc<Mutex<Vec<u64>>>,
-        audit_events: Arc<Mutex<Vec<WalGcAuditEvent>>>,
         required_start_lsn: Lsn,
     }
 
@@ -96,7 +95,6 @@ mod wal_gc_snapshot_protection_tests {
                 archived_segments: HashMap::new(),
                 snapshot_registry,
                 removed_segments: Arc::new(Mutex::new(Vec::new())),
-                audit_events: Arc::new(Mutex::new(Vec::new())),
                 required_start_lsn: Lsn::new(100),
             }
         }
@@ -122,14 +120,10 @@ mod wal_gc_snapshot_protection_tests {
             min_snapshot_lsn: Option<Lsn>,
         ) -> bool {
             // Segment can be reclaimed iff:
-            // 1. Its sealing_lsn < min_snapshot_lsn (if snapshots exist)
+            // 1. Its sealing_lsn < min_snapshot_lsn (Lsn::MAX if no snapshots exist)
             // 2. Its creation_lsn > required_start_lsn (recovery safety)
-            if let Some(min_lsn) = min_snapshot_lsn {
-                candidate.sealing_lsn < min_lsn && candidate.creation_lsn > self.required_start_lsn
-            } else {
-                // No active snapshots - reclaim if safe for recovery
-                candidate.creation_lsn > self.required_start_lsn
-            }
+            let min_lsn = min_snapshot_lsn.unwrap_or(Lsn::MAX);
+            candidate.is_eligible(min_lsn, self.required_start_lsn)
         }
 
         /// Perform GC with snapshot protection
@@ -225,9 +219,9 @@ mod wal_gc_snapshot_protection_tests {
         gc_ctx.add_candidate(WalGcCandidate::new(1, Lsn::new(200), Lsn::new(400), 65536).unwrap());
         gc_ctx.mark_archived(1);
 
-        // Register snapshot at LSN 500 (blocks segment with sealing_lsn 400)
+        // Register snapshot at LSN 350 (blocks segment with sealing_lsn 400)
         snapshot_registry
-            .register_snapshot(Lsn::new(500), 1)
+            .register_snapshot(Lsn::new(350), 1)
             .unwrap();
 
         // Try GC - segment should be blocked
@@ -237,7 +231,7 @@ mod wal_gc_snapshot_protection_tests {
 
         // Release snapshot
         snapshot_registry
-            .release_snapshot(Lsn::new(500), 1)
+            .release_snapshot(Lsn::new(350), 1)
             .unwrap();
 
         // Try GC again - segment should now be reclaimed
@@ -273,10 +267,10 @@ mod wal_gc_snapshot_protection_tests {
         // Perform GC
         let summary = gc_ctx.collect_garbage().unwrap();
 
-        // Only segment 1 (sealing 300) should be reclaimed
-        // Segments 2-10 should all be protected
-        assert_eq!(summary.segments_removed, 1);
-        assert_eq!(summary.candidates_blocked, 9);
+        // Segments 1 and 2 (sealing 300 and 400) should be reclaimed.
+        // Segments 3-10 should all be protected.
+        assert_eq!(summary.segments_removed, 2);
+        assert_eq!(summary.candidates_blocked, 8);
     }
 
     // ============================================================
@@ -298,7 +292,7 @@ mod wal_gc_snapshot_protection_tests {
 
         // Simulate concurrent operations
         let registry1 = Arc::clone(&snapshot_registry);
-        let registry2 = Arc::clone(&snapshot_registry);
+        let _registry2 = Arc::clone(&snapshot_registry);
 
         // Thread 1: Create and release snapshots
         let h1 = std::thread::spawn(move || {
@@ -355,9 +349,9 @@ mod wal_gc_snapshot_protection_tests {
 
         // Verify stats
         assert_eq!(summary.candidates_identified, 5);
-        assert_eq!(summary.candidates_archived, 2); // Segments 1 (200-300) and 2 (300-400)
-        assert_eq!(summary.candidates_blocked, 3); // Segments 3, 4, 5 (all have sealing > 350)
-        assert_eq!(summary.segments_removed, 2);
+        assert_eq!(summary.candidates_archived, 1); // Segment 2 (200-300)
+        assert_eq!(summary.candidates_blocked, 4); // Segment 1 is recovery-protected; 3-5 are snapshot-protected
+        assert_eq!(summary.segments_removed, 1);
         assert!(summary.bytes_freed > 0);
     }
 
@@ -372,7 +366,7 @@ mod wal_gc_snapshot_protection_tests {
 
         // Create candidate with proper LSN ordering
         let candidate =
-            WalGcCandidate::new(1, Lsn::new(100), Lsn::new(200), 65536).expect("valid candidate");
+            WalGcCandidate::new(1, Lsn::new(101), Lsn::new(200), 65536).expect("valid candidate");
 
         gc_ctx.add_candidate(candidate.clone());
         gc_ctx.mark_archived(1);

@@ -409,7 +409,7 @@ mod heap_engine_tests {
         );
 
         // 32 KB page should have more free space
-        let schema_16 = RowSchema::new(vec![ColumnDef {
+        let _schema_16 = RowSchema::new(vec![ColumnDef {
             name: "data".to_string(),
             ordinal: 0,
             scalar_type: ScalarType::Bool,
@@ -417,7 +417,7 @@ mod heap_engine_tests {
         }])
         .expect("schema failed");
 
-        let schema_32 = RowSchema::new(vec![ColumnDef {
+        let _schema_32 = RowSchema::new(vec![ColumnDef {
             name: "data".to_string(),
             ordinal: 0,
             scalar_type: ScalarType::Bool,

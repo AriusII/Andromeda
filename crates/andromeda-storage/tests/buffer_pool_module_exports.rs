@@ -64,12 +64,12 @@ fn buffer_frame_uses_canonical_page_contracts() {
             slot_count: 1,
             row_count: 1,
             flags: PageFlags::NONE,
-            header_crc: 0,
+            header_crc: 5,
         },
         trailer: PageTrailer {
-            payload_crc64: 0,
-            page_hash: [0; 32],
-            torn_write_guard: 0,
+            payload_crc64: 1,
+            page_hash: [1; 32],
+            torn_write_guard: 2,
         },
     };
 

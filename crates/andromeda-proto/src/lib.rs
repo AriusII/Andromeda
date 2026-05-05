@@ -190,6 +190,8 @@ pub use generated::{
     CONTRACT_PACKAGE, DESCRIPTOR_SET_HASH_ALGORITHM, PROTOCOL_FRAME_ENVELOPE_TYPE,
     PROTOCOL_PACKAGE, decode_generated_message, descriptor_set_bytes, descriptor_set_hash,
     encode_generated_message, frame_envelope_hash, protocol_layout,
+    validate_catalog_procedure_manifest_resolution_request,
+    validate_catalog_procedure_manifest_resolution_response,
 };
 pub use manifest::*;
 pub use payload::*;

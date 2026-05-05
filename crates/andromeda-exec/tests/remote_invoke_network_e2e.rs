@@ -1,4 +1,9 @@
-//! H3-REMOTE-DISPATCH-005: Full End-to-End Remote Dispatch over Real QUIC Network
+//! H3-REMOTE-INVOKE-005: Full End-to-End Remote Invocation over Real QUIC Network
+//!
+//! Rename note: this file is the governance successor to the former
+//! `remote_dispatch_network_e2e.rs` test name. The test body still covers the
+//! same network request/response contract; "invoke" names the procedure-level
+//! behavior while dispatch remains an internal step.
 //!
 //! This integration test validates the complete request/response cycle:
 //! 1. Server startup with real QUIC and executor

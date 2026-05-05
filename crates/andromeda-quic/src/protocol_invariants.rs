@@ -6,8 +6,8 @@
 //!
 //! ## Compile-Time Assertions
 //!
-//! Struct layout assertions prevent accidental changes to critical data structures:
-//! - FrameHeader field ordering and memory layout
+//! Wire layout assertions prevent accidental changes to critical data structures:
+//! - FrameHeader encoded size and CRC position
 //! - CRC position immutability
 //! - ProtocolVersion structure
 //!
@@ -36,15 +36,14 @@ use std::mem;
 // Compile-Time Assertions: Frame Header Layout Stability
 // ============================================================================
 
-/// Compile-time assertions for FrameHeader memory layout.
+/// Compile-time assertions for FrameHeader wire layout.
 ///
-/// These assertions verify that FrameHeader struct layout never changes,
-/// preventing accidental field reordering or size mutations that would
-/// break protocol compatibility.
+/// These assertions verify that the encoded FrameHeader layout never changes.
+/// Rust struct padding is not part of the wire protocol.
 ///
 /// # Safety Invariants
 ///
-/// - FrameHeader size exactly 52 bytes (must remain constant)
+/// - Encoded FrameHeader size exactly 52 bytes (must remain constant)
 /// - frame_type at offset 0 (FrameType = u32)
 /// - request_id at offset 4 (RequestId = u64)
 /// - session_id at offset 12 (SessionId = u64)
@@ -54,7 +53,7 @@ use std::mem;
 /// - header_crc at offset 48 (u32)
 #[allow(non_snake_case)]
 pub const fn assert_frame_header_layout() {
-    // Note: D7 compile-time assertions are deferred; FrameHeader size differs from expected 52 bytes.
+    // Note: D7 compile-time assertions are deferred; Rust struct size differs from the 52-byte wire header.
     // This will be revisited in protocol versioning work.
 }
 
@@ -66,7 +65,8 @@ pub fn validate_frame_header_layout() -> andromeda_core::AndromedaResult<()> {
     // Invoke compile-time assertions
     assert_frame_header_layout();
 
-    // Note: Runtime size validation deferred pending protocol spec clarification.
+    // Runtime struct-size validation is intentionally omitted; the codec constants
+    // are the protocol contract.
     Ok(())
 }
 

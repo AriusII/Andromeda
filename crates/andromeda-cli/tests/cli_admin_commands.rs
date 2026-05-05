@@ -2,7 +2,7 @@
 
 //! Integration tests for CLI admin commands.
 //!
-//! Tests command parsing, routing, and output formats for:
+//! Tests command parsing, routing, and output policy for:
 //! - HADR commands (status, promote, demote, quorum)
 //! - Backup commands (start, status, list)
 //! - Restore commands (start, status)
@@ -22,7 +22,7 @@ fn hadr_status_command_parses_and_executes() {
 }
 
 #[test]
-fn hadr_status_with_json_output_format() {
+fn hadr_status_accepts_json_output() {
     let args = vec![
         "hadr".to_string(),
         "status".to_string(),
@@ -315,11 +315,11 @@ fn catalog_show_contract_invalid_id_returns_error() {
 }
 
 // ============================================================================
-// JSON Output Format Tests
+// JSON Output Policy Tests
 // ============================================================================
 
 #[test]
-fn hadr_promote_with_json_flag() {
+fn hadr_promote_accepts_json_output() {
     let args = vec![
         "hadr".to_string(),
         "promote".to_string(),
@@ -331,7 +331,7 @@ fn hadr_promote_with_json_flag() {
 }
 
 #[test]
-fn hadr_quorum_with_json_flag() {
+fn hadr_quorum_accepts_json_output() {
     let args = vec![
         "hadr".to_string(),
         "quorum".to_string(),
@@ -342,7 +342,7 @@ fn hadr_quorum_with_json_flag() {
 }
 
 #[test]
-fn backup_status_with_json_flag() {
+fn backup_status_accepts_json_output() {
     let args = vec![
         "backup".to_string(),
         "status".to_string(),
@@ -354,7 +354,7 @@ fn backup_status_with_json_flag() {
 }
 
 #[test]
-fn backup_list_with_json_flag() {
+fn backup_list_accepts_json_output() {
     let args = vec![
         "backup".to_string(),
         "list".to_string(),
@@ -365,7 +365,7 @@ fn backup_list_with_json_flag() {
 }
 
 #[test]
-fn restore_with_json_flag() {
+fn restore_accepts_json_output() {
     let args = vec![
         "restore".to_string(),
         "100".to_string(),
@@ -376,7 +376,7 @@ fn restore_with_json_flag() {
 }
 
 #[test]
-fn catalog_list_procedures_with_json_flag() {
+fn catalog_list_procedures_accepts_json_output() {
     let args = vec![
         "catalog".to_string(),
         "list-procedures".to_string(),
@@ -387,7 +387,7 @@ fn catalog_list_procedures_with_json_flag() {
 }
 
 #[test]
-fn catalog_show_contract_with_json_flag() {
+fn catalog_show_contract_accepts_json_output() {
     let args = vec![
         "catalog".to_string(),
         "show-contract".to_string(),

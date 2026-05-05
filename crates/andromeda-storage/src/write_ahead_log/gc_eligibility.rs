@@ -10,12 +10,12 @@
 //!
 //! A WAL segment is eligible for garbage collection if and only if:
 //!
-//! 1. **Visibility Rule**: All records in the segment are invisible to active snapshots
-//!    - Segment end LSN < minimum active snapshot LSN
-//!    - This ensures no snapshot can read from this segment
+//! 1. **Visibility Rule**: The segment is older than the oldest active snapshot
+//!    - Segment is blocked when `segment_end_lsn >= min_active_snapshot_lsn`
+//!    - Only segments wholly before the oldest active snapshot boundary are eligible.
 //!
 //! 2. **Recovery Rule**: The segment is not required by recovery
-//!    - Segment start LSN >= required recovery LSN (from manifest)
+//!    - Segment start LSN > required recovery LSN (from manifest)
 //!    - This ensures recovery doesn't need this segment to rebuild state
 //!
 //! Both rules must be satisfied for a segment to be eligible.
@@ -36,9 +36,9 @@
 //!
 //! ## Critical Invariants (violations = engine bugs)
 //!
-//! 1. **No Snapshot Data Loss**
-//!    - If snapshot_lsn < min_active_snapshot_lsn, segment is ineligible
-//!    - Ensures snapshots never see removed segments
+//! 1. **No Snapshot Boundary Loss**
+//!    - If a segment contains `min_active_snapshot_lsn`, it is ineligible
+//!    - Ensures the oldest active snapshot boundary is never removed
 //!
 //! 2. **No Recovery Data Loss**
 //!    - If segment_start_lsn <= required_recovery_lsn, segment is ineligible
@@ -46,7 +46,7 @@
 //!
 //! 3. **LSN Ordering**
 //!    - segment_lsn_start < segment_lsn_end (segment contains data)
-//!    - required_recovery_lsn < min_active_snapshot_lsn (recovery is older than snapshots)
+//!    - required_recovery_lsn <= min_active_snapshot_lsn (recovery is not newer than snapshots)
 //!    - These are enforced on construction
 //!
 //! ## Recovery Boundary Safety
@@ -63,22 +63,22 @@
 //!
 //! Segment A: [1, 40]    -> INELIGIBLE (needed for recovery, < 50)
 //! Segment B: [50, 99]   -> INELIGIBLE (overlaps recovery boundary at 50)
-//! Segment C: [100, 150] -> INELIGIBLE (visible to snapshots, < 200)
-//! Segment D: [200, 250] -> INELIGIBLE (visible to snapshots, == min)
-//! Segment E: [250, 350] -> ELIGIBLE (no snapshots can read it)
+//! Segment C: [100, 150] -> ELIGIBLE by visibility, subject to archive checks
+//! Segment D: [200, 250] -> INELIGIBLE (contains min active snapshot LSN)
+//! Segment E: [251, 350] -> INELIGIBLE (newer than min active snapshot LSN)
 //! ```
 //!
 //! # Proof of Invariant Preservation
 //!
-//! **Theorem**: If all eligible segments are removed, no snapshot loses data
-//! and recovery always has required records.
+//! **Theorem**: If all eligible segments are removed, the oldest active snapshot
+//! boundary remains observable and recovery always has required records.
 //!
 //! **Proof**:
 //! 1. For any segment S marked eligible: `S.end < min_active_snapshot_lsn`
-//! 2. For any segment S marked eligible: `S.start >= required_recovery_lsn`
-//! 3. By (1): No snapshot can read from S (all snapshot LSNs >= min_active_snapshot_lsn)
+//! 2. For any segment S marked eligible: `S.start > required_recovery_lsn`
+//! 3. By (1): The oldest active snapshot boundary record is retained
 //! 4. By (2): Recovery has all records before S (recovery starts at required_recovery_lsn)
-//! 5. Therefore: Removing S preserves snapshot visibility and recovery capability ∎
+//! 5. Therefore: Removing S preserves the checked snapshot boundary and recovery capability ∎
 //!
 //! # No Unsafe Code
 //!
@@ -94,7 +94,7 @@ use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 pub enum EligibilityResult {
     /// Segment is safe for garbage collection
     Eligible,
-    /// Segment contains data visible to active snapshots
+    /// Segment is not wholly older than the oldest active snapshot visibility boundary
     BlockedByVisibility {
         segment_end_lsn: Lsn,
         min_active_snapshot_lsn: Lsn,
@@ -115,9 +115,11 @@ impl EligibilityResult {
     /// Produce a human-readable description of the reason
     pub fn reason(self) -> &'static str {
         match self {
-            Self::Eligible => "segment is not visible to snapshots and not needed for recovery",
+            Self::Eligible => {
+                "segment is older than the oldest active snapshot and is not needed for recovery"
+            }
             Self::BlockedByVisibility { .. } => {
-                "segment contains records visible to active snapshots"
+                "segment is not older than the oldest active snapshot visibility boundary"
             }
             Self::BlockedByRecovery { .. } => "segment is required for crash recovery",
         }
@@ -147,7 +149,7 @@ pub struct GcEligibilityChecker {
     segment_lsn_start: Lsn,
     /// Last LSN in this segment (inclusive)
     segment_lsn_end: Lsn,
-    /// Oldest LSN that must remain visible to some active snapshot
+    /// Oldest active snapshot visibility boundary LSN
     min_active_snapshot_lsn: Lsn,
     /// Oldest LSN required by crash recovery (from manifest)
     required_recovery_lsn: Lsn,
@@ -221,36 +223,37 @@ impl GcEligibilityChecker {
     /// Check whether this segment is eligible for garbage collection.
     ///
     /// A segment is eligible if:
-    /// 1. Its end LSN is less than the minimum active snapshot LSN (visibility rule)
+    /// 1. Its end LSN is lower than the minimum active snapshot LSN (visibility rule)
     /// 2. Its start LSN is greater than the required recovery LSN (recovery rule)
     ///
     /// # Returns
     ///
     /// - `EligibilityResult::Eligible` if both rules are satisfied
-    /// - `EligibilityResult::BlockedByVisibility` if the segment contains visible data
+    /// - `EligibilityResult::BlockedByVisibility` if the segment is not older than the visibility boundary
     /// - `EligibilityResult::BlockedByRecovery` if the segment is needed for recovery
     ///
     /// # Examples
     ///
     /// ```ignore
-    /// // Segment in the safe zone (beyond both barriers)
+    /// // Segment in the safe zone (older than active snapshots, newer than recovery)
     /// let checker = GcEligibilityChecker::new(
-    ///     Lsn::new(300), Lsn::new(399),  // segment
+    ///     Lsn::new(101), Lsn::new(199),  // segment
     ///     Lsn::new(200),                 // min snapshot LSN
     ///     Lsn::new(100),                 // recovery LSN
     /// )?;
     /// assert_eq!(checker.is_eligible(), EligibilityResult::Eligible);
     ///
-    /// // Segment still visible to snapshots
+    /// // Segment containing the active snapshot boundary
     /// let checker = GcEligibilityChecker::new(
-    ///     Lsn::new(150), Lsn::new(199),  // segment
+    ///     Lsn::new(150), Lsn::new(200),  // segment
     ///     Lsn::new(200),                 // min snapshot LSN
     ///     Lsn::new(100),                 // recovery LSN
     /// )?;
     /// assert!(!checker.is_eligible().is_eligible());
     /// ```
     pub fn is_eligible(&self) -> EligibilityResult {
-        // Rule 1: Check visibility (no snapshot can see this segment)
+        // Rule 1: only segments wholly before the oldest active snapshot boundary
+        // are eligible for GC.
         if self.segment_lsn_end >= self.min_active_snapshot_lsn {
             return EligibilityResult::BlockedByVisibility {
                 segment_end_lsn: self.segment_lsn_end,
@@ -337,14 +340,15 @@ impl GcEligibilityChecker {
             return 0;
         }
 
-        // If blocked by visibility, gap is from end of segment to min snapshot LSN
+        // If blocked by visibility, report how far the active snapshot boundary must move
+        // forward to be strictly past this segment.
         if self.segment_lsn_end >= self.min_active_snapshot_lsn {
-            return self.segment_lsn_end.get() - self.min_active_snapshot_lsn.get();
+            return self.segment_lsn_end.get() - self.min_active_snapshot_lsn.get() + 1;
         }
 
         // If blocked by recovery, gap is from recovery LSN to start of segment
         if self.segment_lsn_start <= self.required_recovery_lsn {
-            return self.required_recovery_lsn.get() - self.segment_lsn_start.get();
+            return self.required_recovery_lsn.get() - self.segment_lsn_start.get() + 1;
         }
 
         // Shouldn't reach here if is_eligible() said we're ineligible
@@ -387,16 +391,27 @@ mod tests {
     #[test]
     fn test_eligible_segment_in_safe_zone() {
         let checker =
-            GcEligibilityChecker::new(Lsn::new(300), Lsn::new(399), Lsn::new(200), Lsn::new(100))
+            GcEligibilityChecker::new(Lsn::new(101), Lsn::new(199), Lsn::new(200), Lsn::new(100))
                 .unwrap();
 
         assert_eq!(checker.is_eligible(), EligibilityResult::Eligible);
     }
 
     #[test]
+    fn test_visibility_boundary_is_strictly_after_segment_end() {
+        let checker =
+            GcEligibilityChecker::new(Lsn::new(101), Lsn::new(199), Lsn::new(200), Lsn::new(100))
+                .unwrap();
+
+        // The active snapshot boundary is just past the segment end, so the
+        // segment is wholly older than every active snapshot.
+        assert_eq!(checker.is_eligible(), EligibilityResult::Eligible);
+    }
+
+    #[test]
     fn test_blocked_by_visibility_end_at_boundary() {
         let checker =
-            GcEligibilityChecker::new(Lsn::new(150), Lsn::new(199), Lsn::new(200), Lsn::new(100))
+            GcEligibilityChecker::new(Lsn::new(150), Lsn::new(200), Lsn::new(200), Lsn::new(100))
                 .unwrap();
 
         let result = checker.is_eligible();
@@ -407,9 +422,26 @@ mod tests {
     }
 
     #[test]
-    fn test_blocked_by_visibility_segment_before_snapshot() {
+    fn test_blocked_by_visibility_when_segment_is_newer_than_snapshot() {
         let checker =
-            GcEligibilityChecker::new(Lsn::new(150), Lsn::new(180), Lsn::new(200), Lsn::new(50))
+            GcEligibilityChecker::new(Lsn::new(201), Lsn::new(250), Lsn::new(200), Lsn::new(100))
+                .unwrap();
+
+        // A segment that begins after the oldest active snapshot is newer than
+        // that snapshot's visibility boundary and must not be reclaimed.
+        assert_eq!(
+            checker.is_eligible(),
+            EligibilityResult::BlockedByVisibility {
+                segment_end_lsn: Lsn::new(250),
+                min_active_snapshot_lsn: Lsn::new(200),
+            }
+        );
+    }
+
+    #[test]
+    fn test_blocked_by_visibility_segment_overlaps_snapshot() {
+        let checker =
+            GcEligibilityChecker::new(Lsn::new(150), Lsn::new(250), Lsn::new(200), Lsn::new(50))
                 .unwrap();
 
         assert!(matches!(
@@ -446,12 +478,11 @@ mod tests {
     fn test_both_blocked_by_visibility_first() {
         // Blocked by both rules, but visibility check comes first
         let checker =
-            GcEligibilityChecker::new(Lsn::new(100), Lsn::new(199), Lsn::new(200), Lsn::new(100))
+            GcEligibilityChecker::new(Lsn::new(100), Lsn::new(200), Lsn::new(200), Lsn::new(100))
                 .unwrap();
 
-        // Since segment_end (199) < min_snapshot (200) is false (199 < 200 is true),
-        // and segment_start (100) <= recovery (100) is true,
-        // we should check visibility first.
+        // The segment contains min_snapshot (200), and segment_start (100) <= recovery (100),
+        // so both predicates block. Visibility is reported first for deterministic observability.
         let result = checker.is_eligible();
         assert!(matches!(
             result,
@@ -462,7 +493,7 @@ mod tests {
     #[test]
     fn test_validate_passes_for_valid_checker() {
         let checker =
-            GcEligibilityChecker::new(Lsn::new(300), Lsn::new(399), Lsn::new(200), Lsn::new(100))
+            GcEligibilityChecker::new(Lsn::new(101), Lsn::new(199), Lsn::new(200), Lsn::new(100))
                 .unwrap();
 
         assert!(checker.validate().is_ok());
@@ -471,41 +502,39 @@ mod tests {
     #[test]
     fn test_lsn_distance_zero_when_eligible() {
         let checker =
-            GcEligibilityChecker::new(Lsn::new(300), Lsn::new(399), Lsn::new(200), Lsn::new(100))
+            GcEligibilityChecker::new(Lsn::new(101), Lsn::new(199), Lsn::new(200), Lsn::new(100))
                 .unwrap();
 
         assert_eq!(checker.lsn_distance_to_eligibility(), 0);
     }
 
     #[test]
-    fn test_lsn_distance_blocked_by_visibility() {
+    fn test_lsn_distance_zero_when_segment_before_snapshot_boundary() {
         let checker =
             GcEligibilityChecker::new(Lsn::new(150), Lsn::new(180), Lsn::new(200), Lsn::new(50))
                 .unwrap();
 
         let distance = checker.lsn_distance_to_eligibility();
-        // End (180) < Min snapshot (200), so no distance
-        // But blocked by visibility means segment_end >= min_snapshot... let me recalculate
-        // Actually 180 < 200, so NOT blocked by visibility
-        // So should be 0 or actually eligible
-        // Let me think: is_eligible checks if segment_end >= min_active, if so blocked
-        // 180 >= 200? No. So passes visibility check.
-        // Then checks if segment_start <= required_recovery
-        // 150 <= 50? No. So passes recovery check too.
-        // So should be eligible and distance = 0
+        // Segment is wholly before the active snapshot boundary and is not blocked by recovery.
         assert_eq!(distance, 0);
     }
 
     #[test]
     fn test_lsn_distance_blocked_by_visibility_correct() {
         let checker =
-            GcEligibilityChecker::new(Lsn::new(150), Lsn::new(199), Lsn::new(200), Lsn::new(50))
+            GcEligibilityChecker::new(Lsn::new(150), Lsn::new(205), Lsn::new(200), Lsn::new(50))
                 .unwrap();
 
-        // segment_end (199) >= min_snapshot (200)? 199 >= 200? No, so not blocked
-        // Hmm, I need to recalculate
-        // 199 < 200, so passes visibility. Should be eligible.
-        assert_eq!(checker.is_eligible(), EligibilityResult::Eligible);
+        // min_snapshot (200) is inside [150, 205], so visibility blocks until the
+        // snapshot boundary advances past 205.
+        assert_eq!(
+            checker.is_eligible(),
+            EligibilityResult::BlockedByVisibility {
+                segment_end_lsn: Lsn::new(205),
+                min_active_snapshot_lsn: Lsn::new(200),
+            }
+        );
+        assert_eq!(checker.lsn_distance_to_eligibility(), 6);
     }
 
     #[test]
@@ -514,7 +543,7 @@ mod tests {
             GcEligibilityChecker::new(Lsn::new(150), Lsn::new(200), Lsn::new(200), Lsn::new(50))
                 .unwrap();
 
-        // segment_end (200) >= min_snapshot (200)? Yes, so blocked
+        // min_snapshot (200) is the segment end boundary, so the segment overlaps visibility.
         assert!(matches!(
             checker.is_eligible(),
             EligibilityResult::BlockedByVisibility { .. }
@@ -537,7 +566,7 @@ mod tests {
     fn test_eligibility_result_reason() {
         assert_eq!(
             EligibilityResult::Eligible.reason(),
-            "segment is not visible to snapshots and not needed for recovery"
+            "segment is older than the oldest active snapshot and is not needed for recovery"
         );
     }
 
@@ -556,12 +585,12 @@ mod tests {
         assert!(!boundary_recovery.is_eligible().is_eligible());
 
         let ineligible_visibility =
-            GcEligibilityChecker::new(Lsn::new(200), Lsn::new(299), Lsn::new(300), Lsn::new(100))
+            GcEligibilityChecker::new(Lsn::new(200), Lsn::new(300), Lsn::new(300), Lsn::new(100))
                 .unwrap();
         assert!(!ineligible_visibility.is_eligible().is_eligible());
 
         let eligible =
-            GcEligibilityChecker::new(Lsn::new(300), Lsn::new(399), Lsn::new(300), Lsn::new(100))
+            GcEligibilityChecker::new(Lsn::new(101), Lsn::new(199), Lsn::new(300), Lsn::new(100))
                 .unwrap();
         assert!(eligible.is_eligible().is_eligible());
     }

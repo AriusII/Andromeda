@@ -150,7 +150,7 @@ fn test_commit_log_entry_decode_buffer_too_small() {
 
 #[test]
 fn test_commit_log_entry_decode_invalid_tx_id() {
-    let mut buffer = vec![0u8; 25];
+    let buffer = vec![0u8; 25];
     // All zeros would result in tx_id = 0, which is invalid
     let result = CommitLogEntry::decode(&buffer);
     assert!(result.is_err());
@@ -505,11 +505,8 @@ fn test_commit_log_concurrent_cleanup() {
     let log = Arc::clone(&commit_log);
     let handle2 = thread::spawn(move || log.cleanup_entries(Lsn::new(100)));
 
-    let removed1 = handle1.join().unwrap();
-    let removed2 = handle2.join().unwrap();
-
-    // Total removed should be consistent with state
-    assert!(removed1 + removed2 >= 0);
+    let _removed1 = handle1.join().unwrap();
+    let _removed2 = handle2.join().unwrap();
 }
 
 // ========================

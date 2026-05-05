@@ -8,10 +8,9 @@
 
 use crate::error::cli_error;
 use andromeda_core::AndromedaResult;
-use serde::Serialize;
 
-/// Serializable HADR status output.
-#[derive(Debug, Clone, Serialize)]
+/// HADR status output.
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct HadrStatusReport {
     pub cluster_role: String,
     pub epoch: u64,
@@ -21,7 +20,7 @@ pub struct HadrStatusReport {
     pub committed_lsn: u64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct ReplicaStatus {
     pub replica_id: u64,
     pub health_state: String,
@@ -30,8 +29,8 @@ pub struct ReplicaStatus {
     pub lag_bytes: i64,
 }
 
-/// Serializable quorum configuration output.
-#[derive(Debug, Clone, Serialize)]
+/// Quorum configuration output.
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct QuorumStatusReport {
     pub total_members: usize,
     pub quorum_size: usize,
@@ -40,8 +39,8 @@ pub struct QuorumStatusReport {
     pub fencing_status: String,
 }
 
-/// Serializable promotion outcome.
-#[derive(Debug, Clone, Serialize)]
+/// Promotion outcome.
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct PromotionOutcome {
     pub success: bool,
     pub new_epoch: u64,
@@ -49,8 +48,8 @@ pub struct PromotionOutcome {
     pub message: String,
 }
 
-/// Serializable demotion outcome.
-#[derive(Debug, Clone, Serialize)]
+/// Demotion outcome.
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct DemotionOutcome {
     pub success: bool,
     pub new_primary_id: Option<u64>,
@@ -80,7 +79,7 @@ pub fn run_hadr_command(args: &[String]) -> AndromedaResult<()> {
 
 /// Displays HADR status including quorum membership, LSN state, and replica lag.
 fn run_hadr_status(args: &[String]) -> AndromedaResult<()> {
-    let json = args.iter().any(|arg| arg == "--json");
+    let json_output = has_json_option(args);
 
     // MOCK: In a real implementation, this would query the HADR runtime.
     let report = HadrStatusReport {
@@ -107,10 +106,8 @@ fn run_hadr_status(args: &[String]) -> AndromedaResult<()> {
         committed_lsn: 1048576,
     };
 
-    if json {
-        let json_str = serde_json::to_string_pretty(&report)
-            .map_err(|e| cli_error(format!("failed to serialize status: {}", e)))?;
-        println!("{}", json_str);
+    if json_output {
+        print_hadr_status_json(&report);
     } else {
         print_hadr_status_human(&report);
     }
@@ -130,7 +127,7 @@ fn run_hadr_promote(args: &[String]) -> AndromedaResult<()> {
         .parse()
         .map_err(|_| cli_error("replica-id must be an unsigned integer"))?;
 
-    let json = args.iter().any(|arg| arg == "--json");
+    let json_output = has_json_option(&args[1..]);
 
     // MOCK: In a real implementation, this would invoke the promotion protocol.
     let outcome = PromotionOutcome {
@@ -140,19 +137,15 @@ fn run_hadr_promote(args: &[String]) -> AndromedaResult<()> {
         message: format!("Replica {} promoted to primary", replica_id),
     };
 
-    if json {
-        let json_str = serde_json::to_string_pretty(&outcome)
-            .map_err(|e| cli_error(format!("failed to serialize outcome: {}", e)))?;
-        println!("{}", json_str);
+    if json_output {
+        print_promotion_json(&outcome);
+    } else if outcome.success {
+        println!(
+            "✓ Replica {} promoted to primary (epoch {})",
+            outcome.promoted_replica_id, outcome.new_epoch
+        );
     } else {
-        if outcome.success {
-            println!(
-                "✓ Replica {} promoted to primary (epoch {})",
-                outcome.promoted_replica_id, outcome.new_epoch
-            );
-        } else {
-            println!("✗ Promotion failed: {}", outcome.message);
-        }
+        println!("✗ Promotion failed: {}", outcome.message);
     }
 
     Ok(())
@@ -160,12 +153,19 @@ fn run_hadr_promote(args: &[String]) -> AndromedaResult<()> {
 
 /// Demotes current primary to replica (planned failover).
 fn run_hadr_demote(args: &[String]) -> AndromedaResult<()> {
-    let json = args.iter().any(|arg| arg == "--json");
+    let json_output = has_json_option(args);
     let force = args.iter().any(|arg| arg == "--force");
 
     if !force {
-        println!("⚠ WARNING: Demoting primary will disrupt writes.");
-        println!("Use --force to confirm.");
+        if json_output {
+            println!(
+                "{{\"success\":false,\"new_primary_id\":null,\"message\":{}}}",
+                json_string("Demotion requires --force confirmation")
+            );
+        } else {
+            println!("⚠ WARNING: Demoting primary will disrupt writes.");
+            println!("Use --force to confirm.");
+        }
         return Ok(());
     }
 
@@ -176,20 +176,16 @@ fn run_hadr_demote(args: &[String]) -> AndromedaResult<()> {
         message: "Primary demoted successfully".to_string(),
     };
 
-    if json {
-        let json_str = serde_json::to_string_pretty(&outcome)
-            .map_err(|e| cli_error(format!("failed to serialize outcome: {}", e)))?;
-        println!("{}", json_str);
-    } else {
-        if outcome.success {
-            if let Some(new_primary) = outcome.new_primary_id {
-                println!("✓ Primary demoted; replica {} is new primary", new_primary);
-            } else {
-                println!("✓ Primary demoted (no suitable replica for immediate promotion)");
-            }
+    if json_output {
+        print_demotion_json(&outcome);
+    } else if outcome.success {
+        if let Some(new_primary) = outcome.new_primary_id {
+            println!("✓ Primary demoted; replica {} is new primary", new_primary);
         } else {
-            println!("✗ Demotion failed: {}", outcome.message);
+            println!("✓ Primary demoted (no suitable replica for immediate promotion)");
         }
+    } else {
+        println!("✗ Demotion failed: {}", outcome.message);
     }
 
     Ok(())
@@ -197,7 +193,7 @@ fn run_hadr_demote(args: &[String]) -> AndromedaResult<()> {
 
 /// Shows quorum configuration, member list, and fencing status.
 fn run_hadr_quorum(args: &[String]) -> AndromedaResult<()> {
-    let json = args.iter().any(|arg| arg == "--json");
+    let json_output = has_json_option(args);
 
     // MOCK: In a real implementation, this would query the quorum consensus engine.
     let report = QuorumStatusReport {
@@ -208,10 +204,8 @@ fn run_hadr_quorum(args: &[String]) -> AndromedaResult<()> {
         fencing_status: "Active".to_string(),
     };
 
-    if json {
-        let json_str = serde_json::to_string_pretty(&report)
-            .map_err(|e| cli_error(format!("failed to serialize quorum status: {}", e)))?;
-        println!("{}", json_str);
+    if json_output {
+        print_quorum_status_json(&report);
     } else {
         print_quorum_status_human(&report);
     }
@@ -231,9 +225,13 @@ fn print_hadr_help() {
     println!("  quorum              Show quorum configuration and fencing status");
     println!();
     println!("OPTIONS:");
-    println!("  --json              Output in JSON format (default: human-readable)");
     println!("  --force             Confirm destructive operations (e.g., demote)");
+    println!("  --json              Emit diagnostic machine-readable JSON output");
     println!("  -h, --help          Show this help message");
+}
+
+fn has_json_option(args: &[String]) -> bool {
+    args.iter().any(|arg| arg == "--json")
 }
 
 fn print_hadr_status_human(report: &HadrStatusReport) {
@@ -270,6 +268,97 @@ fn print_quorum_status_human(report: &QuorumStatusReport) {
     println!("Fencing Status: {}", report.fencing_status);
 }
 
+fn print_hadr_status_json(report: &HadrStatusReport) {
+    println!(
+        "{{\"cluster_role\":{},\"epoch\":{},\"current_primary\":{},\"replicas\":{},\"durable_lsn\":{},\"committed_lsn\":{}}}",
+        json_string(&report.cluster_role),
+        report.epoch,
+        json_option_u64(report.current_primary),
+        replicas_json(&report.replicas),
+        report.durable_lsn,
+        report.committed_lsn,
+    );
+}
+
+fn replicas_json(replicas: &[ReplicaStatus]) -> String {
+    let entries = replicas
+        .iter()
+        .map(|replica| {
+            format!(
+                "{{\"replica_id\":{},\"health_state\":{},\"received_lsn\":{},\"shipped_lsn\":{},\"lag_bytes\":{}}}",
+                replica.replica_id,
+                json_string(&replica.health_state),
+                replica.received_lsn,
+                replica.shipped_lsn,
+                replica.lag_bytes,
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("[{}]", entries)
+}
+
+fn print_quorum_status_json(report: &QuorumStatusReport) {
+    println!(
+        "{{\"total_members\":{},\"quorum_size\":{},\"member_ids\":[{}],\"fencing_policy\":{},\"fencing_status\":{}}}",
+        report.total_members,
+        report.quorum_size,
+        report
+            .member_ids
+            .iter()
+            .map(|id| id.to_string())
+            .collect::<Vec<_>>()
+            .join(","),
+        json_string(&report.fencing_policy),
+        json_string(&report.fencing_status),
+    );
+}
+
+fn print_promotion_json(outcome: &PromotionOutcome) {
+    println!(
+        "{{\"success\":{},\"new_epoch\":{},\"promoted_replica_id\":{},\"message\":{}}}",
+        outcome.success,
+        outcome.new_epoch,
+        outcome.promoted_replica_id,
+        json_string(&outcome.message),
+    );
+}
+
+fn print_demotion_json(outcome: &DemotionOutcome) {
+    println!(
+        "{{\"success\":{},\"new_primary_id\":{},\"message\":{}}}",
+        outcome.success,
+        json_option_u64(outcome.new_primary_id),
+        json_string(&outcome.message),
+    );
+}
+
+fn json_option_u64(value: Option<u64>) -> String {
+    value
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "null".to_string())
+}
+
+fn json_string(value: &str) -> String {
+    format!("\"{}\"", escape_json_str(value))
+}
+
+fn escape_json_str(value: &str) -> String {
+    let mut escaped = String::new();
+    for ch in value.chars() {
+        match ch {
+            '"' => escaped.push_str("\\\""),
+            '\\' => escaped.push_str("\\\\"),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            ch if ch.is_control() => escaped.push_str(&format!("\\u{:04x}", ch as u32)),
+            ch => escaped.push(ch),
+        }
+    }
+    escaped
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -281,7 +370,7 @@ mod tests {
     }
 
     #[test]
-    fn hadr_status_with_json_flag() {
+    fn hadr_status_accepts_json_output() {
         let result = run_hadr_status(&["--json".to_string()]);
         assert!(result.is_ok());
     }
@@ -323,9 +412,20 @@ mod tests {
     }
 
     #[test]
-    fn hadr_quorum_with_json_flag() {
+    fn hadr_quorum_accepts_json_output() {
         let result = run_hadr_quorum(&["--json".to_string()]);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn hadr_promote_accepts_json_output() {
+        let result = run_hadr_promote(&["2".to_string(), "--json".to_string()]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn hadr_json_string_escapes_diagnostic_fields() {
+        assert_eq!(json_string("primary\trole"), "\"primary\\trole\"");
     }
 
     #[test]

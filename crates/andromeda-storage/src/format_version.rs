@@ -51,9 +51,11 @@ impl FormatVersion {
     ///
     /// # Examples
     /// ```
-    /// assert!(V1_5.is_backward_compatible_with(V1_0));  // Reader 1.5 reads 1.0
-    /// assert!(!V1_0.is_backward_compatible_with(V1_5)); // Reader 1.0 cannot read 1.5
-    /// assert!(!V2_0.is_backward_compatible_with(V1_0)); // Major version mismatch
+    /// use andromeda_storage::format_version::FormatVersion;
+    ///
+    /// assert!(FormatVersion::V1_5.is_backward_compatible_with(FormatVersion::V1_0));  // Reader 1.5 reads 1.0
+    /// assert!(!FormatVersion::V1_0.is_backward_compatible_with(FormatVersion::V1_5)); // Reader 1.0 cannot read 1.5
+    /// assert!(!FormatVersion::V2_0.is_backward_compatible_with(FormatVersion::V1_0)); // Major version mismatch
     /// ```
     pub fn is_backward_compatible_with(&self, other: FormatVersion) -> bool {
         self.major == other.major && self.minor >= other.minor
@@ -70,9 +72,11 @@ impl FormatVersion {
     ///
     /// # Examples
     /// ```
-    /// assert!(V1_0.is_forward_compatible_with(V1_5));   // Writer 1.0 reads by 1.5
-    /// assert!(!V1_5.is_forward_compatible_with(V1_0));  // Writer 1.5 too new for 1.0
-    /// assert!(!V1_0.is_forward_compatible_with(V2_0));  // Major version mismatch
+    /// use andromeda_storage::format_version::FormatVersion;
+    ///
+    /// assert!(FormatVersion::V1_0.is_forward_compatible_with(FormatVersion::V1_5));   // Writer 1.0 read by 1.5
+    /// assert!(!FormatVersion::V1_5.is_forward_compatible_with(FormatVersion::V1_0));  // Writer 1.5 too new for 1.0
+    /// assert!(!FormatVersion::V1_0.is_forward_compatible_with(FormatVersion::V2_0));  // Major version mismatch
     /// ```
     pub fn is_forward_compatible_with(&self, other: FormatVersion) -> bool {
         self.major == other.major && self.minor <= other.minor
@@ -87,8 +91,10 @@ impl FormatVersion {
     ///
     /// # Examples
     /// ```
-    /// let writer = V1_0;
-    /// let reader = V1_5;
+    /// use andromeda_storage::format_version::{CompatibilityResult, FormatVersion};
+    ///
+    /// let writer = FormatVersion::V1_0;
+    /// let reader = FormatVersion::V1_5;
     /// assert_eq!(
     ///     reader.compatibility_with(writer),
     ///     CompatibilityResult::BackwardCompatible
@@ -149,7 +155,11 @@ impl CompatibilityResult {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StorageFormatKind {
     Page,
+    HeapPage,
+    BTreeKey,
+    BTreeNode,
     WalRecord,
+    WalPayload,
     Manifest,
     Segment,
     Checkpoint,
@@ -171,7 +181,11 @@ impl StorageFormatKind {
     pub fn name(&self) -> &'static str {
         match self {
             StorageFormatKind::Page => "Page",
+            StorageFormatKind::HeapPage => "Heap Page",
+            StorageFormatKind::BTreeKey => "B-Tree Key",
+            StorageFormatKind::BTreeNode => "B-Tree Node",
             StorageFormatKind::WalRecord => "WAL Record",
+            StorageFormatKind::WalPayload => "WAL Payload",
             StorageFormatKind::Manifest => "Backup Manifest",
             StorageFormatKind::Segment => "WAL Segment",
             StorageFormatKind::Checkpoint => "Checkpoint",
@@ -210,10 +224,12 @@ impl CompatibilityMatrix {
     ///
     /// # Examples
     /// ```
+    /// use andromeda_storage::format_version::{CompatibilityMatrix, FormatVersion};
+    ///
     /// let matrix = CompatibilityMatrix::production();
-    /// matrix.can_read(V1_0)?;  // OK
-    /// matrix.can_read(V1_5)?;  // OK (backward compatible)
-    /// matrix.can_read(V2_0)?;  // Err (too new)
+    /// assert!(matrix.can_read(FormatVersion::V1_0).is_ok());  // OK
+    /// assert!(matrix.can_read(FormatVersion::V1_5).is_err()); // Writer 1.5 too new for reader 1.0
+    /// assert!(matrix.can_read(FormatVersion::V2_0).is_err()); // Major version mismatch
     /// ```
     pub fn can_read(&self, writer_version: FormatVersion) -> Result<(), String> {
         let compat = self.reader_version.compatibility_with(writer_version);

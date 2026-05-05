@@ -23,6 +23,7 @@
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
 use std::sync::Arc;
 
+use crate::Lsn;
 use crate::commit_log::{CommitLogManager, IsolationLevel};
 use crate::state::TransactionState;
 
@@ -111,7 +112,7 @@ impl CommitProtocol {
     }
 
     /// Get the commit LSN for a transaction (if committed).
-    pub fn get_commit_lsn(&self, tx_id: TransactionId) -> Option<andromeda_storage::Lsn> {
+    pub fn get_commit_lsn(&self, tx_id: TransactionId) -> Option<Lsn> {
         self.commit_log.get_commit_lsn(tx_id)
     }
 }
@@ -119,9 +120,8 @@ impl CommitProtocol {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commit_log::{CommitLogManager, InvocationWal};
+    use crate::commit_log::{CommitLogManager, InvocationWal, WalRecordKind};
     use andromeda_core::TransactionId;
-    use andromeda_storage::{Lsn, WalRecordKind};
 
     struct TestWal {
         records: std::sync::Mutex<Vec<Lsn>>,

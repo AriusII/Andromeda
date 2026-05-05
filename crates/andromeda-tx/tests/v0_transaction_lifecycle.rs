@@ -58,7 +58,7 @@ fn mvcc_v0_hides_inflight_and_rolled_back_creators_until_durable_commit_is_visib
         [creator],
     )
     .unwrap();
-    let mut statuses = TransactionStatusTable::new();
+    let statuses = TransactionStatusTable::new();
 
     statuses
         .record(creator, TransactionStatus::InFlight)
@@ -114,7 +114,7 @@ fn mvcc_v0_ignores_inflight_and_rolled_back_delete_intents() {
         [deleter],
     )
     .unwrap();
-    let mut statuses = TransactionStatusTable::new();
+    let statuses = TransactionStatusTable::new();
     statuses
         .record(creator, TransactionStatus::Committed)
         .unwrap();
@@ -170,7 +170,7 @@ fn mvcc_compatibility_module_reexports_focused_types() {
         [tx_id],
     )
     .unwrap();
-    let mut statuses = andromeda_tx::mvcc::TransactionStatusTable::new();
+    let statuses = andromeda_tx::mvcc::TransactionStatusTable::new();
     statuses
         .record(tx_id, andromeda_tx::mvcc::TransactionStatus::InFlight)
         .unwrap();
@@ -215,7 +215,7 @@ fn mvcc_v0_unrecorded_creator_is_invisible_to_other_transactions() {
 fn mvcc_v0_creator_observes_its_own_uncommitted_writes() {
     let creator = TransactionId::new(601);
     let row = MvccRowHeader::open_version(10, creator, None).unwrap();
-    let mut statuses = TransactionStatusTable::new();
+    let statuses = TransactionStatusTable::new();
     statuses
         .record(creator, TransactionStatus::InFlight)
         .unwrap();
@@ -238,7 +238,7 @@ fn mvcc_v0_rolled_back_creator_never_visible() {
     let creator = TransactionId::new(701);
     let observer = TransactionId::new(702);
     let row = MvccRowHeader::open_version(10, creator, None).unwrap();
-    let mut statuses = TransactionStatusTable::new();
+    let statuses = TransactionStatusTable::new();
     statuses
         .record(creator, TransactionStatus::RolledBack)
         .unwrap();
@@ -266,7 +266,7 @@ fn mvcc_v0_isolation_policies_differ_on_concurrent_committer() {
     let creator = TransactionId::new(801);
     let observer = TransactionId::new(802);
     let row = MvccRowHeader::open_version(10, creator, None).unwrap();
-    let mut statuses = TransactionStatusTable::new();
+    let statuses = TransactionStatusTable::new();
     statuses
         .record(creator, TransactionStatus::Committed)
         .unwrap();
@@ -305,7 +305,7 @@ fn mvcc_v0_versions_after_snapshot_are_invisible() {
     let creator = TransactionId::new(901);
     let observer = TransactionId::new(902);
     let row = MvccRowHeader::open_version(100, creator, None).unwrap();
-    let mut statuses = TransactionStatusTable::new();
+    let statuses = TransactionStatusTable::new();
     statuses
         .record(creator, TransactionStatus::Committed)
         .unwrap();
@@ -333,7 +333,7 @@ fn mvcc_v0_delete_after_snapshot_is_not_observed() {
         .unwrap()
         .close_version(80, deleter)
         .unwrap();
-    let mut statuses = TransactionStatusTable::new();
+    let statuses = TransactionStatusTable::new();
     statuses
         .record(creator, TransactionStatus::Committed)
         .unwrap();
@@ -361,7 +361,7 @@ fn mvcc_v0_delete_after_snapshot_is_not_observed() {
 #[test]
 fn snapshot_validation_rejects_terminal_owner() {
     let owner = TransactionId::new(1101);
-    let mut statuses = TransactionStatusTable::new();
+    let statuses = TransactionStatusTable::new();
     statuses
         .record(owner, TransactionStatus::Committed)
         .unwrap();
@@ -403,7 +403,7 @@ fn snapshot_validation_rejects_unregistered_owner() {
 fn snapshot_validation_rejects_terminal_active_member() {
     let owner = TransactionId::new(1301);
     let stale = TransactionId::new(1302);
-    let mut statuses = TransactionStatusTable::new();
+    let statuses = TransactionStatusTable::new();
     statuses.record(owner, TransactionStatus::InFlight).unwrap();
     statuses
         .record(stale, TransactionStatus::RolledBack)
@@ -426,7 +426,7 @@ fn snapshot_validation_rejects_terminal_active_member() {
 fn snapshot_validation_accepts_in_flight_owner_and_peers() {
     let owner = TransactionId::new(1401);
     let peer = TransactionId::new(1402);
-    let mut statuses = TransactionStatusTable::new();
+    let statuses = TransactionStatusTable::new();
     statuses.record(owner, TransactionStatus::InFlight).unwrap();
     statuses.record(peer, TransactionStatus::InFlight).unwrap();
 
@@ -455,7 +455,7 @@ fn mvcc_v0_visibility_requires_manager_durable_commit() {
     let row = MvccRowHeader::open_version(10, writer, None).unwrap();
 
     // Build a status table that mirrors the manager's view at this point.
-    let mut statuses = TransactionStatusTable::new();
+    let statuses = TransactionStatusTable::new();
     statuses
         .record(writer, manager.status(writer).unwrap().unwrap())
         .unwrap();
@@ -512,7 +512,7 @@ fn mvcc_v0_manager_rollback_keeps_writes_invisible() {
     manager.request_rollback(writer).unwrap();
     manager.rollback_durable(writer, 7777).unwrap();
 
-    let mut statuses = TransactionStatusTable::new();
+    let statuses = TransactionStatusTable::new();
     statuses
         .record(writer, manager.status(writer).unwrap().unwrap())
         .unwrap();

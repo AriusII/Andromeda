@@ -284,13 +284,11 @@ fn test_backpressure_recovery_on_stream_completion() {
 #[test]
 fn test_cancellation_token_deterministic_and_replay_safe() {
     let mut mgr1 = StreamConcurrencyManager::new();
-    let mut mgr2 = StreamConcurrencyManager::new();
 
     let id = invocation_id(42);
 
     let token1 = mgr1.create_stream(id).unwrap();
-    // Note: We can't reuse the same InvocationId in mgr2 from the same mgr instance,
-    // but we can demonstrate determinism by creating the token directly
+    // Demonstrate determinism by creating the token directly.
     let token_direct = CancellationToken::from_invocation_id(id);
 
     // Tokens should match

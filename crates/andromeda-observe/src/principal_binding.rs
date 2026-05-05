@@ -482,7 +482,7 @@ fn fingerprint_for_audit(presented: &str) -> String {
 ///
 /// # Invariants
 /// - Principal ID must be non-zero
-/// - Session token is synthesized from observe principal_id
+/// - Session token is derived from the bound certificate fingerprint via core
 /// - All constituent fields must pass Principal validation
 pub fn observe_user_principal_to_core(
     ouser: &UserPrincipal,
@@ -508,12 +508,10 @@ pub fn observe_user_principal_to_core(
         ));
     }
 
-    // Synthesize session token from observe principal_id
-    let session_token = andromeda_core::SessionToken::new(format!(
-        "observe:{}:{}",
-        ouser.principal_id,
-        role.as_str()
-    ));
+    // Derive session evidence from the certificate through the centralized
+    // pure-core helper. The observe principal id remains the authoritative
+    // audit principal id for this bridge; stores/resolvers stay outside core.
+    let session_token = andromeda_core::SessionToken::from_certificate_fingerprint(fingerprint);
 
     andromeda_core::Principal::new(principal_id, role, session_token, fingerprint.clone())
         .ok_or_else(|| {
@@ -958,9 +956,9 @@ mod tests {
     }
 
     #[test]
-    fn bridge_preserves_role_in_session_token() {
+    fn bridge_uses_core_certificate_derived_session_token() {
         use crate::events::UserPrincipalKind;
-        use andromeda_core::CertificateFingerprint;
+        use andromeda_core::{CertificateFingerprint, SessionToken};
 
         let observe_principal = UserPrincipal::new("789", UserPrincipalKind::Service).unwrap();
         let fingerprint = CertificateFingerprint::new(
@@ -975,7 +973,17 @@ mod tests {
         )
         .unwrap();
 
-        // Session token should include role name for debugging
-        assert!(core.session_token.as_str().contains("superadmin"));
+        assert_eq!(
+            core.session_token,
+            SessionToken::from_certificate_fingerprint(&fingerprint)
+        );
+        assert!(
+            !core.session_token.as_str().contains("789"),
+            "session token must not embed the observe principal id"
+        );
+        assert!(
+            !core.session_token.as_str().contains("superadmin"),
+            "session token must not embed role names"
+        );
     }
 }

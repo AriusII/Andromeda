@@ -118,7 +118,7 @@ impl<'a> ExecutorDispatchBridge<'a> {
     /// # use andromeda_observe::SurfaceScope;
     ///
     /// # let mut conn = Connection::new(SurfacePlane::Application);
-    /// # let identity = CertificateIdentity::new("abc123", "svc-001".into(), SurfaceScope::Application).unwrap();
+    /// # let identity = CertificateIdentity::new("abc123", "svc-001", SurfaceScope::Application).unwrap();
     /// # conn.set_certificate_identity(identity.clone()).unwrap();
     /// let bridge = ExecutorDispatchBridge::new(&conn)?;
     /// # Ok::<(), andromeda_core::AndromedaError>(())
@@ -186,8 +186,12 @@ impl<'a> ExecutorDispatchBridge<'a> {
     /// # use andromeda_exec::ExecutorDispatchBridge;
     /// # use andromeda_observe::TraceId;
     /// # use andromeda_exec::SurfacePlaneAuthorizer;
+    /// # use andromeda_observe::{CertificateIdentity, SurfaceScope};
+    /// # let mut conn = andromeda_quic::Connection::new(andromeda_quic::SurfacePlane::Application);
+    /// # let identity = CertificateIdentity::new("abc123", "svc-001", SurfaceScope::Application).unwrap();
+    /// # conn.set_certificate_identity(identity).unwrap();
     /// # let registry = andromeda_observe::PrincipalRegistry::new();
-    /// # let bridge = ExecutorDispatchBridge::new(&andromeda_quic::Connection::new(andromeda_quic::SurfacePlane::Application))?;
+    /// # let bridge = ExecutorDispatchBridge::new(&conn)?;
     ///
     /// let authorizer = SurfacePlaneAuthorizer::new(&registry);
     /// let outcome = bridge.authorize_procedure_dispatch(
@@ -242,7 +246,11 @@ impl<'a> ExecutorDispatchBridge<'a> {
     /// ```no_run
     /// # use andromeda_exec::ExecutorDispatchBridge;
     /// # use andromeda_core::InvocationId;
-    /// # let bridge = ExecutorDispatchBridge::new(&andromeda_quic::Connection::new(andromeda_quic::SurfacePlane::Application))?;
+    /// # use andromeda_observe::{CertificateIdentity, SurfaceScope};
+    /// # let mut conn = andromeda_quic::Connection::new(andromeda_quic::SurfacePlane::Application);
+    /// # let identity = CertificateIdentity::new("abc123", "svc-001", SurfaceScope::Application).unwrap();
+    /// # conn.set_certificate_identity(identity).unwrap();
+    /// # let bridge = ExecutorDispatchBridge::new(&conn)?;
     ///
     /// let stream_id = 5u64;
     /// let invocation_id = bridge.map_stream_to_invocation_id(stream_id);

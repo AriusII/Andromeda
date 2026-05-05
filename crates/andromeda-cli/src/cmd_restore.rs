@@ -6,11 +6,10 @@
 
 use crate::error::cli_error;
 use andromeda_core::AndromedaResult;
-use serde::Serialize;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Serializable restore state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub enum RestoreState {
     Pending,
     ValidatingManifest,
@@ -41,17 +40,8 @@ impl RestoreState {
     ];
 }
 
-impl Serialize for RestoreState {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_str(&self.to_string())
-    }
-}
-
-/// Serializable restore status report.
-#[derive(Debug, Clone, Serialize)]
+/// Restore status report.
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct RestoreStatusReport {
     pub restore_id: u64,
     pub state: RestoreState,
@@ -64,8 +54,8 @@ pub struct RestoreStatusReport {
     pub elapsed_seconds: u64,
 }
 
-/// Serializable restore start outcome.
-#[derive(Debug, Clone, Serialize)]
+/// Restore start outcome.
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct RestoreStartOutcome {
     pub restore_id: u64,
     pub backup_id: u64,
@@ -105,7 +95,7 @@ fn run_restore_start(args: &[String]) -> AndromedaResult<()> {
         .map_err(|_| cli_error("backup-id must be an unsigned integer"))?;
 
     let mut pitr_target_lsn: Option<u64> = None;
-    let mut json = false;
+    let mut json_output = false;
     let mut i = 1;
 
     while i < args.len() {
@@ -121,7 +111,7 @@ fn run_restore_start(args: &[String]) -> AndromedaResult<()> {
                         .map_err(|_| cli_error("--pitr-lsn expects an unsigned integer (LSN)"))?,
                 );
             }
-            "--json" => json = true,
+            "--json" => json_output = true,
             opt if opt.starts_with("--") => {
                 return Err(cli_error(format!("unknown restore option: {}", opt)));
             }
@@ -147,13 +137,15 @@ fn run_restore_start(args: &[String]) -> AndromedaResult<()> {
         ),
     };
 
-    if json {
-        let json_str = serde_json::to_string_pretty(&outcome)
-            .map_err(|e| cli_error(format!("failed to serialize restore outcome: {}", e)))?;
-        println!("{}", json_str);
+    if json_output {
+        print_restore_start_json(&outcome);
     } else {
         println!("✓ {}", outcome.message);
         println!("Restore ID: {}", outcome.restore_id);
+        println!("Backup ID: {}", outcome.backup_id);
+        if let Some(lsn) = outcome.pitr_target_lsn {
+            println!("PITR Target LSN: {}", lsn);
+        }
     }
 
     Ok(())
@@ -171,7 +163,7 @@ fn run_restore_status(args: &[String]) -> AndromedaResult<()> {
         .parse()
         .map_err(|_| cli_error("restore-id must be an unsigned integer"))?;
 
-    let json = args.iter().any(|arg| arg == "--json");
+    let json_output = has_json_option(&args[1..]);
 
     // MOCK: In a real implementation, this would query the restore coordinator.
     let report = RestoreStatusReport {
@@ -186,10 +178,8 @@ fn run_restore_status(args: &[String]) -> AndromedaResult<()> {
         elapsed_seconds: 180,
     };
 
-    if json {
-        let json_str = serde_json::to_string_pretty(&report)
-            .map_err(|e| cli_error(format!("failed to serialize restore status: {}", e)))?;
-        println!("{}", json_str);
+    if json_output {
+        print_restore_status_json(&report);
     } else {
         print_restore_status_human(&report);
     }
@@ -210,9 +200,7 @@ fn print_restore_help() {
     println!();
     println!("OPTIONS:");
     println!("  --pitr-lsn <lsn>                   Target LSN for point-in-time recovery");
-    println!(
-        "  --json                             Output in JSON format (default: human-readable)"
-    );
+    println!("  --json                            Emit diagnostic machine-readable JSON output");
     println!("  -h, --help                         Show this help message");
     println!();
     println!(
@@ -225,6 +213,10 @@ fn print_restore_help() {
     );
 }
 
+fn has_json_option(args: &[String]) -> bool {
+    args.iter().any(|arg| arg == "--json")
+}
+
 fn print_restore_status_human(report: &RestoreStatusReport) {
     println!("Restore Status Report");
     println!("====================");
@@ -235,11 +227,63 @@ fn print_restore_status_human(report: &RestoreStatusReport) {
         println!("PITR Target LSN: {}", pitr_lsn);
     }
     println!("Progress: {}%", report.progress_percent);
+    println!("Start Time: {}", report.start_time);
     println!(
         "WAL Segments: {} / {}",
         report.wal_segments_replayed, report.estimated_total_segments
     );
     println!("Elapsed: {}s", report.elapsed_seconds);
+}
+
+fn print_restore_start_json(outcome: &RestoreStartOutcome) {
+    println!(
+        "{{\"restore_id\":{},\"backup_id\":{},\"pitr_target_lsn\":{},\"message\":{}}}",
+        outcome.restore_id,
+        outcome.backup_id,
+        json_option_u64(outcome.pitr_target_lsn),
+        json_string(&outcome.message),
+    );
+}
+
+fn print_restore_status_json(report: &RestoreStatusReport) {
+    println!(
+        "{{\"restore_id\":{},\"state\":{},\"backup_id\":{},\"pitr_target_lsn\":{},\"progress_percent\":{},\"wal_segments_replayed\":{},\"estimated_total_segments\":{},\"start_time\":{},\"elapsed_seconds\":{}}}",
+        report.restore_id,
+        json_string(&report.state.to_string()),
+        report.backup_id,
+        json_option_u64(report.pitr_target_lsn),
+        report.progress_percent,
+        report.wal_segments_replayed,
+        report.estimated_total_segments,
+        report.start_time,
+        report.elapsed_seconds,
+    );
+}
+
+fn json_option_u64(value: Option<u64>) -> String {
+    value
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "null".to_string())
+}
+
+fn json_string(value: &str) -> String {
+    format!("\"{}\"", escape_json_str(value))
+}
+
+fn escape_json_str(value: &str) -> String {
+    let mut escaped = String::new();
+    for ch in value.chars() {
+        match ch {
+            '"' => escaped.push_str("\\\""),
+            '\\' => escaped.push_str("\\\\"),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            ch if ch.is_control() => escaped.push_str(&format!("\\u{:04x}", ch as u32)),
+            ch => escaped.push(ch),
+        }
+    }
+    escaped
 }
 
 fn unix_timestamp() -> u64 {
@@ -310,9 +354,20 @@ mod tests {
     }
 
     #[test]
-    fn restore_status_with_json() {
+    fn restore_status_accepts_json_output() {
         let result = run_restore_status(&["200".to_string(), "--json".to_string()]);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn restore_start_accepts_json_output() {
+        let result = run_restore_start(&["100".to_string(), "--json".to_string()]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn restore_json_string_escapes_diagnostic_fields() {
+        assert_eq!(json_string("restore\rstate"), "\"restore\\rstate\"");
     }
 
     #[test]

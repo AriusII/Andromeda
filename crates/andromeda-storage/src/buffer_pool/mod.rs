@@ -191,12 +191,12 @@ mod tests {
         assert!(!frame.is_dirty());
         assert_eq!(frame.dirty_lsn(), None);
 
+        frame.pin().expect("pin frame for dirty mutation");
         frame.mark_dirty(Lsn::new(7)).expect("nonzero dirty lsn");
         assert!(frame.is_dirty());
         assert_eq!(frame.dirty_lsn(), Some(Lsn::new(7)));
         assert!(frame.validate().is_ok());
 
-        frame.pin().expect("pin frame");
         frame.unpin().expect("unpin frame");
         frame
             .mark_clean_after_flush(Lsn::new(7))
@@ -209,10 +209,12 @@ mod tests {
                 .kind(),
             AndromedaErrorKind::Storage
         );
+        frame.pin().expect("pin frame for invalid dirty lsn check");
         assert_eq!(
             frame.mark_dirty(Lsn::ZERO).unwrap_err().kind(),
             AndromedaErrorKind::Storage
         );
+        frame.unpin().expect("unpin after invalid dirty lsn check");
     }
 
     #[test]
@@ -274,7 +276,9 @@ mod tests {
         );
         frame.unpin().expect("unpin resident");
 
+        frame.pin().expect("pin for dirty mutation");
         frame.mark_dirty(Lsn::new(10)).expect("mark dirty");
+        frame.unpin().expect("unpin dirty frame");
         assert_eq!(
             frame.begin_eviction().unwrap_err().kind(),
             AndromedaErrorKind::Storage
@@ -308,6 +312,7 @@ mod tests {
         frame.set_clock_usage().expect("set usage");
         assert!(frame.clock_usage());
 
+        frame.pin().expect("pin for dirty mutation");
         assert_eq!(
             frame.mark_dirty(Lsn::new(19)).unwrap_err().kind(),
             AndromedaErrorKind::Storage
@@ -330,6 +335,7 @@ mod tests {
             .mark_clean_after_flush(Lsn::new(20))
             .expect("flush through first dirty lsn");
         assert_eq!(frame.first_dirty_lsn(), None);
+        frame.unpin().expect("unpin after dirty ordering checks");
 
         let mut free_frame =
             BufferFrame::free(BufferFrameId::new(7).expect("frame id"), PageSize::KiB16)

@@ -23,8 +23,6 @@ struct MockCompactionContext {
     live_lsns: HashSet<u64>,
     /// Records to discard (by LSN)
     dead_lsns: HashSet<u64>,
-    /// Track removed segments
-    removed_segments: Arc<Mutex<Vec<u64>>>,
     /// Track written segments (segment_id → (new_id, bytes))
     written_segments: Arc<Mutex<Vec<(u64, u64, u64)>>>,
     /// Track swaps
@@ -44,7 +42,6 @@ impl MockCompactionContext {
             segment_records: HashMap::new(),
             live_lsns: HashSet::new(),
             dead_lsns: HashSet::new(),
-            removed_segments: Arc::new(Mutex::new(Vec::new())),
             written_segments: Arc::new(Mutex::new(Vec::new())),
             swapped_segments: Arc::new(Mutex::new(Vec::new())),
             audit_events: Arc::new(Mutex::new(Vec::new())),
@@ -256,9 +253,9 @@ fn compaction_filters_dead_records() {
 
     let result = compact_segment(&context, 1).unwrap();
 
-    // Should keep 8 records (all but 4, 5, 6)
-    assert_eq!(result.compacted_record_count, 8);
-    assert_eq!(result.records_removed, 2); // Only 4, 5, 6 are marked dead; default keeps unknown
+    // Should keep 7 records (all but 4, 5, 6)
+    assert_eq!(result.compacted_record_count, 7);
+    assert_eq!(result.records_removed, 3); // Only 4, 5, 6 are marked dead; default keeps unknown
 
     // Verify written records count
     let written = context.get_written_segments();
@@ -368,8 +365,8 @@ fn scheduler_identifies_and_compacts_candidates() {
         .with_segment_records(2, records_set2);
 
     // Mark all records as live
-    for i in 1..=5 {
-        let context_iter = std::cell::Cell::new(());
+    for _i in 1..=5 {
+        let _context_iter = std::cell::Cell::new(());
         // Records are live by default
     }
 
@@ -378,8 +375,8 @@ fn scheduler_identifies_and_compacts_candidates() {
 
     let summary = scheduler.run(&context).unwrap();
 
-    // Should identify 2 candidates (segments 1 and 2)
-    assert_eq!(summary.candidates_identified, 2);
+    // Should identify only segment 1; segment 2 is below the 30% threshold.
+    assert_eq!(summary.candidates_identified, 1);
     // Should attempt to compact both
     assert!(summary.candidates_compacted > 0 || summary.compaction_skipped > 0);
     assert_eq!(summary.run_id, 0); // First run

@@ -1,7 +1,44 @@
 #![forbid(unsafe_code)]
 
-use andromeda_storage::PageSize;
 use andromeda_storage::slot_directory::{SlotDirectory, SlotId};
+use andromeda_storage::{HeapPage, HeapPageInsert, PageSize, SlotEntry};
+
+const HEADER_SIZE: usize = 96;
+const TRAILER_SIZE: usize = 48;
+const SLOT_ENTRY_SIZE: usize = 5;
+const SLOT_METADATA_SIZE: usize = 4;
+const HEADER_SLOT_COUNT_OFFSET: usize = 40;
+
+fn metadata_offset(page_size: PageSize) -> usize {
+    page_size.bytes_usize() - TRAILER_SIZE - SLOT_METADATA_SIZE
+}
+
+fn slot_offset(page_size: PageSize, slot_id: usize) -> usize {
+    metadata_offset(page_size) - ((slot_id + 1) * SLOT_ENTRY_SIZE)
+}
+
+fn write_heap_v1_slot_metadata(
+    image: &mut [u8],
+    page_size: PageSize,
+    slot_count: u16,
+    free_offset: u16,
+) {
+    let meta = metadata_offset(page_size);
+    image[meta..meta + 2].copy_from_slice(&slot_count.to_le_bytes());
+    image[meta + 2..meta + 4].copy_from_slice(&free_offset.to_le_bytes());
+}
+
+fn write_heap_v1_slot(
+    image: &mut [u8],
+    page_size: PageSize,
+    slot_id: usize,
+    offset: u16,
+    length: u16,
+) {
+    let slot = SlotEntry::new(offset, length).to_bytes();
+    let offset = slot_offset(page_size, slot_id);
+    image[offset..offset + SLOT_ENTRY_SIZE].copy_from_slice(&slot);
+}
 
 // ============================================================================
 // Wave 21 Batch 3 Task 1: N1-HEAP-003 — Heap Slot Directory Contract Tests
@@ -23,6 +60,124 @@ fn test_slot_directory_create_empty() {
     assert_eq!(dir.slot_count(), 0);
     assert_eq!(dir.active_slot_count(), 0);
     assert!(dir.free_space() > 0);
+}
+
+#[test]
+fn test_heap_page_v1_candidate_layout_constants() {
+    let page_size = PageSize::KiB16;
+    let page_bytes = page_size.bytes_usize();
+
+    assert_eq!(HEADER_SIZE, 96);
+    assert_eq!(TRAILER_SIZE, 48);
+    assert_eq!(
+        metadata_offset(page_size),
+        page_bytes - 52,
+        "HeapPageV1 metadata starts at page_size - 52"
+    );
+    assert_eq!(
+        slot_offset(page_size, 0),
+        page_bytes - 57,
+        "HeapPageV1 slot 0 starts at page_size - 57"
+    );
+}
+
+#[test]
+fn test_heap_page_v1_tuple_payload_starts_at_96_and_grows_upward() {
+    let mut page = HeapPageInsert::new(andromeda_storage::PageId::new(7), PageSize::KiB16)
+        .expect("create heap page insert context");
+
+    let slot0 = page.insert_raw_tuple(b"abc").expect("insert slot 0");
+    let slot1 = page.insert_raw_tuple(b"defgh").expect("insert slot 1");
+    assert_eq!((slot0, slot1), (0, 1));
+
+    let image = page.serialize().expect("serialize heap page");
+    assert_eq!(&image[HEADER_SIZE..HEADER_SIZE + 3], b"abc");
+    assert_eq!(&image[HEADER_SIZE + 3..HEADER_SIZE + 8], b"defgh");
+
+    let slot0_entry = &image[slot_offset(PageSize::KiB16, 0)..slot_offset(PageSize::KiB16, 0) + 5];
+    let slot1_entry = &image[slot_offset(PageSize::KiB16, 1)..slot_offset(PageSize::KiB16, 1) + 5];
+    assert_eq!(u16::from_le_bytes([slot0_entry[0], slot0_entry[1]]), 96);
+    assert_eq!(u16::from_le_bytes([slot1_entry[0], slot1_entry[1]]), 99);
+}
+
+#[test]
+fn test_heap_page_from_image_reads_footer_metadata_layout() {
+    let page_size = PageSize::KiB16;
+    let mut image = vec![0u8; page_size.bytes_usize()];
+    image[HEADER_SIZE..HEADER_SIZE + 3].copy_from_slice(b"abc");
+    write_heap_v1_slot(&mut image, page_size, 0, HEADER_SIZE as u16, 3);
+    write_heap_v1_slot_metadata(&mut image, page_size, 1, (HEADER_SIZE + 3) as u16);
+
+    let page = HeapPage::from_image(page_size, &image).expect("footer metadata image is valid");
+    assert_eq!(page.slot_count(), 1);
+    assert_eq!(page.read_tuple(0).expect("read tuple"), b"abc");
+}
+
+#[test]
+fn test_heap_page_from_image_rejects_header_footer_slot_count_mismatch() {
+    let page_size = PageSize::KiB16;
+    let mut image = vec![0u8; page_size.bytes_usize()];
+    image[HEADER_SLOT_COUNT_OFFSET..HEADER_SLOT_COUNT_OFFSET + 2]
+        .copy_from_slice(&2u16.to_le_bytes());
+    write_heap_v1_slot(&mut image, page_size, 0, HEADER_SIZE as u16, 3);
+    write_heap_v1_slot_metadata(&mut image, page_size, 1, (HEADER_SIZE + 3) as u16);
+
+    let err = HeapPage::from_image(page_size, &image).expect_err("mismatched counts rejected");
+    assert!(
+        err.message().contains("slot count ambiguity"),
+        "unexpected error: {}",
+        err.message()
+    );
+}
+
+#[test]
+fn test_heap_page_from_image_rejects_legacy_header_only_slot_count() {
+    let page_size = PageSize::KiB16;
+    let mut image = vec![0u8; page_size.bytes_usize()];
+    image[HEADER_SLOT_COUNT_OFFSET..HEADER_SLOT_COUNT_OFFSET + 2]
+        .copy_from_slice(&1u16.to_le_bytes());
+
+    let err =
+        HeapPage::from_image(page_size, &image).expect_err("legacy header-only page rejected");
+    assert!(
+        err.message().contains("slot count ambiguity"),
+        "unexpected error: {}",
+        err.message()
+    );
+}
+
+#[test]
+fn test_slot_directory_rejects_header_footer_slot_count_mismatch() {
+    let page_size = PageSize::KiB16;
+    let mut image = vec![0u8; page_size.bytes_usize()];
+    image[HEADER_SLOT_COUNT_OFFSET..HEADER_SLOT_COUNT_OFFSET + 2]
+        .copy_from_slice(&2u16.to_le_bytes());
+    write_heap_v1_slot(&mut image, page_size, 0, HEADER_SIZE as u16, 3);
+    write_heap_v1_slot_metadata(&mut image, page_size, 1, (HEADER_SIZE + 3) as u16);
+
+    let err =
+        SlotDirectory::from_page_data(page_size, &image).expect_err("mismatched counts rejected");
+    assert!(
+        err.message().contains("slot count ambiguity"),
+        "unexpected error: {}",
+        err.message()
+    );
+}
+
+#[test]
+fn test_slot_directory_rejects_legacy_header_only_slot_count() {
+    let page_size = PageSize::KiB16;
+    let mut image = vec![0u8; page_size.bytes_usize()];
+    image[HEADER_SLOT_COUNT_OFFSET..HEADER_SLOT_COUNT_OFFSET + 2]
+        .copy_from_slice(&1u16.to_le_bytes());
+
+    let err = SlotDirectory::from_page_data(page_size, &image)
+        .expect_err("legacy header-only page rejected");
+    assert!(
+        err.message().contains("slot count ambiguity"),
+        "unexpected error: {}",
+        err.message()
+    );
 }
 
 /// Test 2: Allocate single slot
@@ -162,7 +317,10 @@ fn test_slot_directory_free_space() {
 
     assert!(after_alloc < initial_free, "free space should decrease");
     let used = initial_free.saturating_sub(after_alloc);
-    assert_eq!(used, 1000, "should account for allocated bytes");
+    assert_eq!(
+        used, 1005,
+        "should account for tuple bytes and slot metadata"
+    );
 }
 
 /// Test 10: Allocate zero-length slot fails
@@ -325,9 +483,9 @@ fn test_slot_directory_fragmentation_pattern() {
 
     assert_eq!(dir.active_slot_count(), 2);
 
-    // Compact should remove nothing (gaps in middle)
+    // Compact removes only the deleted tail slot and leaves middle gaps intact.
     let freed = dir.compact();
-    assert_eq!(freed, 0, "should not remove middle gaps on compact");
+    assert_eq!(freed, 50, "should remove only the deleted tail slot");
 
     // Verify large slots still exist
     assert!(dir.get_slot(large1).expect("get").is_some());
@@ -345,7 +503,7 @@ fn test_slot_directory_no_tuple_overlap() {
 
     let (o1, l1) = dir.get_slot(slot1).expect("get").expect("slot 1");
     let (o2, l2) = dir.get_slot(slot2).expect("get").expect("slot 2");
-    let (o3, l3) = dir.get_slot(slot3).expect("get").expect("slot 3");
+    let (o3, _l3) = dir.get_slot(slot3).expect("get").expect("slot 3");
 
     // Verify no overlap
     let end1 = o1 as u32 + l1 as u32;

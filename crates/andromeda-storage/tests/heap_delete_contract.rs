@@ -113,7 +113,7 @@ fn test_heap_batch_delete_out_of_range() {
     let mut page = HeapPage::new(PageSize::KiB16);
 
     let slot1 = page.insert_tuple(b"data1").expect("insert");
-    let slot2 = page.insert_tuple(b"data2").expect("insert");
+    let _slot2 = page.insert_tuple(b"data2").expect("insert");
 
     let to_delete = vec![slot1, 999]; // 999 is out of range
     let result = page.mark_deleted_batch(&to_delete);
@@ -387,7 +387,7 @@ fn test_heap_delete_16kib() {
     let mut page = HeapPage::new(PageSize::KiB16);
 
     let ids: Vec<_> = (0..50)
-        .map(|i| page.insert_tuple(&vec![0u8; 100]).expect("insert"))
+        .map(|_i| page.insert_tuple(&vec![0u8; 100]).expect("insert"))
         .collect();
 
     for i in (0..ids.len()).step_by(2) {
@@ -404,7 +404,7 @@ fn test_heap_delete_32kib() {
     let mut page = HeapPage::new(PageSize::KiB32);
 
     let ids: Vec<_> = (0..100)
-        .map(|i| page.insert_tuple(&vec![0u8; 100]).expect("insert"))
+        .map(|_i| page.insert_tuple(&vec![0u8; 100]).expect("insert"))
         .collect();
 
     for i in (0..ids.len()).step_by(2) {
@@ -459,5 +459,4 @@ fn test_heap_compact_idempotent() {
     let reclaimed2 = page.compact_deleted().expect("compact 2");
 
     assert_eq!(reclaimed1, reclaimed2);
-    assert!(reclaimed2 == 0 || reclaimed2 > 0); // Second compact either frees 0 or same amount
 }

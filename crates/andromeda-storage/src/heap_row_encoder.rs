@@ -298,20 +298,27 @@ impl RowEncoder {
             .filter(|c| c.scalar_type.is_variable_width())
             .count();
 
-        // Write variable-length offsets (4 bytes each)
-        let mut var_offset = null_bitmap.len() + (var_col_count * 4);
-        let mut var_lengths = Vec::new();
+        let fixed_width_bytes: usize = self
+            .schema
+            .columns
+            .iter()
+            .filter(|c| !c.scalar_type.is_variable_width())
+            .map(|c| c.scalar_type.fixed_byte_length())
+            .sum();
+
+        // Write variable-length offsets (4 bytes each). Offsets are absolute within the
+        // encoded row, so variable data starts after the null bitmap, offset table, and
+        // fixed-width column area.
+        let mut var_offset = null_bitmap.len() + (var_col_count * 4) + fixed_width_bytes;
 
         for (i, col) in self.schema.columns.iter().enumerate() {
             if col.scalar_type.is_variable_width() {
                 if matches!(values[i], Datum::Null) {
                     buffer.extend_from_slice(&0u32.to_le_bytes());
-                    var_lengths.push(0);
                 } else {
                     let len = values[i].byte_length()?;
                     buffer.extend_from_slice(&(var_offset as u32).to_le_bytes());
                     var_offset += len;
-                    var_lengths.push(len);
                 }
             }
         }
@@ -367,6 +374,16 @@ impl RowEncoder {
         // Decode all columns
         for (i, col) in self.schema.columns.iter().enumerate() {
             if null_bitmap[i] {
+                if !col.scalar_type.is_variable_width() {
+                    let col_bytes = col.scalar_type.fixed_byte_length();
+                    if offset + col_bytes > bytes.len() {
+                        return Err(encoder_error(format!(
+                            "truncated fixed-length null placeholder at column {}",
+                            i
+                        )));
+                    }
+                    offset += col_bytes;
+                }
                 values.push(Datum::Null);
             } else if col.scalar_type.is_variable_width() {
                 let var_idx = self
@@ -378,11 +395,12 @@ impl RowEncoder {
                     .count();
                 let start = var_offsets[var_idx];
 
-                let end = if var_idx + 1 < var_offsets.len() {
-                    var_offsets[var_idx + 1]
-                } else {
-                    bytes.len()
-                };
+                let end = var_offsets
+                    .iter()
+                    .skip(var_idx + 1)
+                    .copied()
+                    .find(|off| *off != 0)
+                    .unwrap_or(bytes.len());
 
                 if start > end || end > bytes.len() {
                     return Err(encoder_error("invalid variable-length offset"));

@@ -32,7 +32,6 @@ dependencies = [
  "andromeda-srpl",
  "andromeda-storage",
  "serde",
- "serde_json",
 ]
 
 [[package]]
