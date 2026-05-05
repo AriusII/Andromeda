@@ -17,7 +17,7 @@ use proptest::prelude::*;
 use std::panic;
 
 /// Arbitrary UTF-8 string generator for SRPL-like syntax.
-fn arb_srpl_input() -> impl Strategy<Value=String> {
+fn arb_srpl_input() -> impl Strategy<Value = String> {
     // Generate strings that might look like SRPL procedures
     prop_oneof![
         // Valid-looking SRPL
