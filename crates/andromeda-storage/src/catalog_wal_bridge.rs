@@ -25,8 +25,8 @@ use andromeda_core::{
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
 
-use crate::wal_record_catalog::{CatalogWalRecord, CatalogWalRecordVersion};
 use crate::Lsn;
+use crate::wal_record_catalog::{CatalogWalRecord, CatalogWalRecordVersion};
 
 /// Helper to convert io::Error to AndromedaError for codec operations.
 fn io_error(e: std::io::Error) -> AndromedaError {

@@ -153,7 +153,7 @@ fn test_cache_invalidated_on_catalog_version_bump() {
 fn test_cache_invalidated_on_contract_hash_change() {
     let bind_old = binding(100, 8, 0x11, 4, 0x22); // contract_byte = 0x11
     let bind_new = binding(100, 8, 0x99, 4, 0x22); // same procedure, catalog, stats, policy
-                                                   // but contract_byte = 0x99
+    // but contract_byte = 0x99
 
     let fp = shaped_fingerprint();
 

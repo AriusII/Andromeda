@@ -3,9 +3,10 @@ use andromeda_core::{AndromedaResult, TransactionId};
 use crate::{WalRecord, WalRecordHeader};
 
 use super::{
+    WAL_RECORD_HEADER_LEN,
     binary::{push_u16, push_u64},
-    frame::{decode_frame_header, WalFrameHeader},
-    storage_error, WAL_RECORD_HEADER_LEN,
+    frame::{WalFrameHeader, decode_frame_header},
+    storage_error,
 };
 
 pub fn encode_wal_record(record: &WalRecord) -> AndromedaResult<Vec<u8>> {

@@ -1,6 +1,6 @@
 use andromeda_core::{
-    digest::Sha256, AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion,
-    ColumnDescriptor, ContractHash, ProcedureId,
+    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, ColumnDescriptor,
+    ContractHash, ProcedureId, digest::Sha256,
 };
 
 /// Domain separation tag for the canonical V0 client manifest digest.
@@ -787,14 +787,20 @@ mod tests {
                 .validate()
                 .is_ok()
         );
-        assert!(RequiredPermission::new("", "application")
-            .validate()
-            .is_err());
-        assert!(RequiredPermission::new("andromeda.execute_procedure", "")
-            .validate()
-            .is_err());
-        assert!(RequiredPermission::new("Andromeda.X", "application")
-            .validate()
-            .is_err());
+        assert!(
+            RequiredPermission::new("", "application")
+                .validate()
+                .is_err()
+        );
+        assert!(
+            RequiredPermission::new("andromeda.execute_procedure", "")
+                .validate()
+                .is_err()
+        );
+        assert!(
+            RequiredPermission::new("Andromeda.X", "application")
+                .validate()
+                .is_err()
+        );
     }
 }

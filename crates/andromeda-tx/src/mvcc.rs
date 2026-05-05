@@ -5,4 +5,4 @@
 
 pub use crate::mvcc_snapshot::{MvccIsolationPolicy, Snapshot};
 pub use crate::mvcc_status::{TransactionStatus, TransactionStatusTable};
-pub use crate::mvcc_version::{creator_is_visible, delete_is_visible, MvccRowHeader};
+pub use crate::mvcc_version::{MvccRowHeader, creator_is_visible, delete_is_visible};

@@ -1,5 +1,39 @@
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
 
+/// Strict Two-Phase Locking (2PL) Disciplined Transaction States.
+///
+/// # 2PL State Machine Overview
+///
+/// Andromeda enforces strict 2PL discipline to ensure serializability. This state
+/// machine models two distinct phases of transaction execution:
+///
+/// ## Growing Phase (Lock Acquisition)
+/// During the growing phase, the transaction acquires locks and performs reads/writes:
+/// - `Created` → `Active` (transaction begins, no locks yet)
+/// - `Active` (locks acquired, reads/writes performed)
+///
+/// ## Shrinking Phase (Lock Release)
+/// During the shrinking phase, the transaction releases all locks before becoming
+/// visible to other transactions:
+/// - `Active` → `Committing` (commit requested, shrinking phase begins)
+/// - `Committing` (locks released, no new acquisitions allowed)
+///
+/// Once ANY lock is released, the transaction enters the shrinking phase and may
+/// not acquire additional locks. This is the core 2PL invariant.
+///
+/// ## Terminal States
+/// After either commit or rollback completes durably, the transaction enters a
+/// terminal state and all lock records must be released:
+/// - `Committing` → `Committed` (all locks released, commit durable)
+/// - `Committed` → `Disposed` (final cleanup, no operations allowed)
+/// - (Rollback path): `Active` → `RollingBack` → `RolledBack` → `Disposed`
+///
+/// ## Invariants
+/// 1. **Lock acquisition only in Growing Phase**: Active or Committing
+/// 2. **Lock release only in Shrinking Phase**: Committing or RollingBack
+/// 3. **No acquire after release**: Once shrinking begins, only releases are allowed
+/// 4. **release_all only terminal**: Only after Committed or RolledBack
+/// 5. **No operations after Disposed**: Disposed transactions cannot acquire, release, or operate
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransactionState {
     Created,

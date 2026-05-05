@@ -28,10 +28,11 @@
 //! Application connection) are rejected with [`AndromedaErrorKind::Protocol`].
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId, SessionId};
+use andromeda_observe::CertificateIdentity;
 
 use crate::{
-    rpc_dispatch::{dispatch_frame, FrameDispatch},
     FrameBytes, FrameFamily, FrameType,
+    rpc_dispatch::{FrameDispatch, dispatch_frame},
 };
 
 /// QUIC/TLS early-data admission policy for a surface listener.
@@ -232,11 +233,19 @@ pub enum LifecycleState {
 /// This type is intentionally synchronous and side-effect free. It models the
 /// transport contract used by listeners and integration harnesses to assert
 /// correct gating without binding to a concrete I/O runtime.
+///
+/// ## D3: Certificate Identity Binding
+///
+/// A connection optionally carries a bound mTLS certificate identity extracted
+/// from the peer certificate during handshake. Once bound, the identity is
+/// immutable and used for dispatch authorization. The certificate's surface
+/// scope must match the connection's surface plane.
 #[derive(Debug)]
 pub struct Connection {
     plane: SurfacePlane,
     state: LifecycleState,
     session_id: Option<SessionId>,
+    certificate_identity: Option<CertificateIdentity>,
 }
 
 impl Connection {
@@ -246,6 +255,7 @@ impl Connection {
             plane,
             state: LifecycleState::Hello,
             session_id: None,
+            certificate_identity: None,
         }
     }
 
@@ -262,6 +272,49 @@ impl Connection {
     /// Returns the negotiated session id, if the handshake has reached `Auth`.
     pub const fn session_id(&self) -> Option<SessionId> {
         self.session_id
+    }
+
+    /// Returns the mTLS certificate identity bound to this session, if present.
+    ///
+    /// D3 establishes that certificate identity is extracted from the peer's
+    /// mTLS certificate and bound before dispatch authorization. This method
+    /// allows callers (listeners, authorization gates) to access the identity.
+    pub const fn certificate_identity(&self) -> Option<&CertificateIdentity> {
+        self.certificate_identity.as_ref()
+    }
+
+    /// Bind a mTLS certificate identity to this session.
+    ///
+    /// This method is called early in the handshake (before or after `accept_hello()`)
+    /// to attach the extracted peer certificate identity. The identity's surface
+    /// scope must match this connection's surface plane, or an error is returned.
+    ///
+    /// Once bound, the identity is immutable. Attempting to bind again returns an
+    /// error to prevent accidental identity replacement.
+    ///
+    /// Returns `Err` if:
+    /// - An identity is already bound to this session.
+    /// - The certificate's surface scope does not match the connection's plane.
+    pub fn set_certificate_identity(
+        &mut self,
+        identity: CertificateIdentity,
+    ) -> AndromedaResult<()> {
+        if self.certificate_identity.is_some() {
+            return Err(protocol_error(
+                "certificate identity is already bound to this session",
+            ));
+        }
+
+        // Validate that the certificate's surface scope matches the connection plane.
+        let required_scope = crate::mtls_identity::plane_to_required_surface_scope(self.plane);
+        if identity.surface as u8 != required_scope as u8 {
+            return Err(protocol_error(
+                "certificate surface scope does not match connection plane",
+            ));
+        }
+
+        self.certificate_identity = Some(identity);
+        Ok(())
     }
 
     /// Returns true if RPC dispatch is currently permitted (state == Active).
@@ -478,7 +531,7 @@ mod tests {
     use super::*;
     use andromeda_core::{RequestId, SessionId};
 
-    use crate::frame::{FrameHeader, FRAME_HEADER_CRC_UNCHECKED};
+    use crate::frame::{FRAME_HEADER_CRC_UNCHECKED, FrameHeader};
 
     fn frame(frame_type: FrameType, session: u64) -> FrameBytes {
         let payload = match frame_type {
@@ -714,5 +767,120 @@ mod tests {
             .route_cancellation(&cancel(9, CancellationCause::ClientRequested))
             .unwrap_err();
         assert_eq!(err.kind(), AndromedaErrorKind::Protocol);
+    }
+
+    // ========================================================================
+    // D3: Certificate Identity Binding Contract Tests
+    // ========================================================================
+
+    #[test]
+    fn certificate_identity_binding_succeeds_when_scope_matches() {
+        use andromeda_observe::SurfaceScope;
+
+        let mut conn = Connection::new(SurfacePlane::Application);
+        let identity = CertificateIdentity::new(
+            "a".repeat(64),            // SHA256 fingerprint
+            "test-service",            // CN
+            SurfaceScope::Application, // Must match Application plane
+        )
+        .unwrap();
+
+        assert!(conn.set_certificate_identity(identity).is_ok());
+        assert!(conn.certificate_identity().is_some());
+    }
+
+    #[test]
+    fn certificate_identity_binding_rejects_scope_mismatch() {
+        use andromeda_observe::SurfaceScope;
+
+        let mut conn = Connection::new(SurfacePlane::Application);
+        let identity = CertificateIdentity::new(
+            "a".repeat(64),
+            "test-admin",
+            SurfaceScope::Administration, // Mismatch: admin cert on app plane
+        )
+        .unwrap();
+
+        let err = conn.set_certificate_identity(identity).unwrap_err();
+        assert_eq!(err.kind(), AndromedaErrorKind::Protocol);
+        assert!(conn.certificate_identity().is_none());
+    }
+
+    #[test]
+    fn certificate_identity_binding_is_immutable() {
+        use andromeda_observe::SurfaceScope;
+
+        let mut conn = Connection::new(SurfacePlane::Application);
+        let identity1 =
+            CertificateIdentity::new("a".repeat(64), "svc1", SurfaceScope::Application).unwrap();
+        let identity2 =
+            CertificateIdentity::new("b".repeat(64), "svc2", SurfaceScope::Application).unwrap();
+
+        conn.set_certificate_identity(identity1).unwrap();
+        let err = conn.set_certificate_identity(identity2).unwrap_err();
+        assert_eq!(err.kind(), AndromedaErrorKind::Protocol);
+
+        // First identity remains.
+        assert_eq!(
+            conn.certificate_identity().unwrap().fingerprint,
+            "a".repeat(64)
+        );
+    }
+
+    #[test]
+    fn certificate_identity_persists_across_lifecycle() {
+        use andromeda_observe::SurfaceScope;
+
+        let mut conn = Connection::new(SurfacePlane::Administration);
+        let identity = CertificateIdentity::new(
+            "c".repeat(64),
+            "admin-operator",
+            SurfaceScope::Administration,
+        )
+        .unwrap();
+
+        conn.set_certificate_identity(identity.clone()).unwrap();
+        conn.accept_hello(&frame(FrameType::Hello, 1)).unwrap();
+        conn.accept_auth(&frame(FrameType::Auth, 1)).unwrap();
+
+        // Identity is still present and unchanged.
+        assert_eq!(conn.certificate_identity().unwrap(), &identity);
+        assert_eq!(conn.state(), LifecycleState::Active);
+    }
+
+    #[test]
+    fn ha_dr_plane_requires_cluster_scope() {
+        use andromeda_observe::SurfaceScope;
+
+        let mut conn = Connection::new(SurfacePlane::HighAvailability);
+        let identity = CertificateIdentity::new(
+            "d".repeat(64),
+            "cluster-node",
+            SurfaceScope::Cluster, // Correct for HA/DR
+        )
+        .unwrap();
+
+        assert!(conn.set_certificate_identity(identity).is_ok());
+
+        // Wrong scope should be rejected.
+        let mut conn2 = Connection::new(SurfacePlane::HighAvailability);
+        let wrong_identity =
+            CertificateIdentity::new("e".repeat(64), "app-svc", SurfaceScope::Application).unwrap();
+        assert!(conn2.set_certificate_identity(wrong_identity).is_err());
+    }
+
+    #[test]
+    fn monitoring_plane_requires_monitoring_agent_scope() {
+        use andromeda_observe::SurfaceScope;
+
+        let mut conn = Connection::new(SurfacePlane::Monitoring);
+        let identity = CertificateIdentity::new(
+            "f".repeat(64),
+            "telemetry-agent",
+            SurfaceScope::MonitoringAgent, // Correct for Monitoring
+        )
+        .unwrap();
+
+        assert!(conn.set_certificate_identity(identity).is_ok());
     }
 }

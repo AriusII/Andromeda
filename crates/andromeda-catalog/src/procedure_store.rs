@@ -465,9 +465,11 @@ mod tests {
             ProcedureRegistration::AlreadyRegistered
         );
         assert!(store.get(ProcedureId::new(1)).is_some());
-        assert!(store
-            .lookup_by_name(&QualifiedName::parse("Inventory.ReserveStock").unwrap())
-            .is_some());
+        assert!(
+            store
+                .lookup_by_name(&QualifiedName::parse("Inventory.ReserveStock").unwrap())
+                .is_some()
+        );
     }
 
     #[test]

@@ -14,8 +14,8 @@ use andromeda_core::{AndromedaErrorKind, InvocationId};
 use andromeda_exec::ExecutorDispatchBridge;
 use andromeda_observe::{CertificateIdentity, SurfaceScope, TraceId};
 use andromeda_quic::{
-    Connection, FrameBytes, FrameHeader, FrameType, LifecycleState, SurfacePlane,
-    FRAME_HEADER_CRC_UNCHECKED,
+    Connection, FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader, FrameType, LifecycleState,
+    SurfacePlane,
 };
 
 fn hello_frame(session_id: u64) -> FrameBytes {

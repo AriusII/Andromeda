@@ -230,9 +230,11 @@ mod tests {
         };
 
         assert!(signal.validate_routing(StreamRole::Diagnostic).is_ok());
-        assert!(signal
-            .validate_routing(StreamRole::TelemetryDatagram)
-            .is_ok());
+        assert!(
+            signal
+                .validate_routing(StreamRole::TelemetryDatagram)
+                .is_ok()
+        );
 
         for bad in [
             StreamRole::SessionControl,
@@ -262,9 +264,13 @@ mod tests {
             .unwrap_err();
         assert_eq!(err.kind(), AndromedaErrorKind::Resource);
 
-        assert!(signal
-            .validate_for_transport(BackpressureTransport::TelemetryDatagram { mtu_bytes: 1200 })
-            .is_ok());
+        assert!(
+            signal
+                .validate_for_transport(BackpressureTransport::TelemetryDatagram {
+                    mtu_bytes: 1200
+                })
+                .is_ok()
+        );
     }
 
     #[test]
@@ -278,17 +284,25 @@ mod tests {
         // The retry policy itself already rejects unaddressed request-scoped
         // signals; ensure the datagram path also surfaces a typed error and
         // that providing a RequestId fixes the routing.
-        assert!(signal
-            .validate_for_transport(BackpressureTransport::TelemetryDatagram { mtu_bytes: 1200 })
-            .is_err());
+        assert!(
+            signal
+                .validate_for_transport(BackpressureTransport::TelemetryDatagram {
+                    mtu_bytes: 1200
+                })
+                .is_err()
+        );
 
         let addressed = BackpressureSignal {
             request_id: Some(RequestId::new(7)),
             ..signal
         };
-        assert!(addressed
-            .validate_for_transport(BackpressureTransport::TelemetryDatagram { mtu_bytes: 1200 })
-            .is_ok());
+        assert!(
+            addressed
+                .validate_for_transport(BackpressureTransport::TelemetryDatagram {
+                    mtu_bytes: 1200
+                })
+                .is_ok()
+        );
     }
 
     #[test]
@@ -298,9 +312,11 @@ mod tests {
             request_id: None,
             retry_after_millis: Some(250),
         };
-        assert!(signal
-            .validate_for_transport(BackpressureTransport::DiagnosticStream)
-            .is_ok());
+        assert!(
+            signal
+                .validate_for_transport(BackpressureTransport::DiagnosticStream)
+                .is_ok()
+        );
 
         let bad = BackpressureSignal {
             retry_after_millis: Some(BackpressureSignal::MAX_RETRY_AFTER_MILLIS + 1),

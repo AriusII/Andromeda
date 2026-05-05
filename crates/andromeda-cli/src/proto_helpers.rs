@@ -1,8 +1,8 @@
 //! Protocol helpers and utilities.
 
 use andromeda_catalog::{
-    inventory_domain_definition_batch, CatalogSnapshot, INVENTORY_DATABASE_ID,
-    INVENTORY_NAMESPACE_ID,
+    CatalogSnapshot, INVENTORY_DATABASE_ID, INVENTORY_NAMESPACE_ID,
+    inventory_domain_definition_batch,
 };
 use andromeda_core::AndromedaResult;
 

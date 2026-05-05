@@ -1,11 +1,11 @@
 use andromeda_core::{AndromedaResult, InvocationId, TransactionId};
 use andromeda_storage::{
-    summarize_transactions_from_records, DurableTransactionState, Lsn, WalRecord,
+    DurableTransactionState, Lsn, WalRecord, summarize_transactions_from_records,
 };
 
 use crate::CompletionStatus;
 
-use super::journal::{completion_journal_error, CompletionJournalRecord};
+use super::journal::{CompletionJournalRecord, completion_journal_error};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CompletionRecoveryExpectation {

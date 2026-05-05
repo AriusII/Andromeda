@@ -73,7 +73,7 @@ impl SrplProcedureDispatcher {
     /// and other semantic issues that would prevent execution. This is distinct
     /// from plan execution and produces no side effects.
     pub fn validate_plan(
-        plan: &andromeda_srpl::model::ExecutableProcedurePlan,
+        plan: &andromeda_srpl::procedure_model::ExecutableProcedurePlan,
     ) -> AndromedaResult<()> {
         SrplIrInterpreter::validate_plan(plan).map_err(|e| {
             AndromedaError::new(
@@ -96,7 +96,7 @@ impl SrplProcedureDispatcher {
     /// - Cardinality from the procedure contract
     /// And construct a valid ResultStreamMetadata for the runtime.
     pub fn result_metadata_for_plan(
-        _plan: &andromeda_srpl::model::ExecutableProcedurePlan,
+        _plan: &andromeda_srpl::procedure_model::ExecutableProcedurePlan,
     ) -> AndromedaResult<ResultStreamMetadata> {
         // TODO: Implement full metadata extraction from plan evidence and manifest
         Err(AndromedaError::new(

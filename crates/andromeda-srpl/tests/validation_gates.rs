@@ -12,8 +12,8 @@
 //!
 //! Exit status: All gates must pass for production readiness.
 
-use andromeda_srpl::compiler::*;
-use andromeda_srpl::source::SrplSource;
+use andromeda_srpl::procedure_compiler::*;
+use andromeda_srpl::source_location::SrplSource;
 use std::time::Instant;
 use std::sync::Arc;
 

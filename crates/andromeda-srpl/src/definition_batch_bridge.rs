@@ -38,9 +38,9 @@ use andromeda_core::{
 };
 
 use crate::{
+    ProcedureAst, SrplProcedureIr,
     compiler::{bind_executable_procedure_plan, parse_procedure_signature},
     lowering::{lower_bound_procedure, lower_ir_to_contract_candidate},
-    ProcedureAst, SrplProcedureIr,
 };
 
 /// A staged SRPL procedure definition during compilation.
@@ -285,9 +285,11 @@ mod tests {
         );
 
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("before bind_and_lower"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("before bind_and_lower")
+        );
     }
 }

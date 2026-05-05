@@ -14,12 +14,12 @@ mod report;
 mod scan;
 mod wal;
 
-pub use header::{FileWalHeader, FILE_WAL_HEADER_LEN, FILE_WAL_MAGIC, FILE_WAL_MONO_SEGMENT_ID};
+pub use header::{FILE_WAL_HEADER_LEN, FILE_WAL_MAGIC, FILE_WAL_MONO_SEGMENT_ID, FileWalHeader};
 pub use recovery::{
-    plan_file_wal_startup_recovery_v0, recover_from_file_wal, report_file_wal_recovery_v0,
-    scan_file_wal, FileWalDiskScan, FileWalRecoveryBoundaryKind, FileWalRecoveryIgnoredTransaction,
+    FileWalDiskScan, FileWalRecoveryBoundaryKind, FileWalRecoveryIgnoredTransaction,
     FileWalRecoveryIgnoredTransactionReason, FileWalRecoveryReplayRecord, FileWalRecoveryReportV0,
-    FileWalStartupRecoveryV0,
+    FileWalStartupRecoveryV0, plan_file_wal_startup_recovery_v0, recover_from_file_wal,
+    report_file_wal_recovery_v0, scan_file_wal,
 };
 pub use wal::FileWal;
 
@@ -36,11 +36,11 @@ mod tests {
     use super::format::write_file_wal_header;
     use super::*;
     use crate::{
-        encode_wal_record, DatabaseManifest, Lsn, ObservedBoundary, RedoRecordDecision,
-        StartupMode, StartupRejectionReason, WalRecord, WalRecordKind, WalScanStopReason,
+        DatabaseManifest, Lsn, ObservedBoundary, RedoRecordDecision, StartupMode,
+        StartupRejectionReason, WalRecord, WalRecordKind, WalScanStopReason, encode_wal_record,
     };
     use andromeda_core::TransactionId;
-    use std::fs::{metadata, remove_file, File, OpenOptions};
+    use std::fs::{File, OpenOptions, metadata, remove_file};
     use std::io::Write;
     use std::path::{Path, PathBuf};
 
@@ -119,10 +119,12 @@ mod tests {
         let plan =
             recover_from_file_wal(&recovery_manifest(), StartupMode::SafeStart, &path).unwrap();
         assert_eq!(plan.replay_lsns().collect::<Vec<_>>(), vec![Lsn::new(2)]);
-        assert!(!plan
-            .incomplete_transactions
-            .iter()
-            .any(|transaction| transaction.transaction_id == unflushed_tx));
+        assert!(
+            !plan
+                .incomplete_transactions
+                .iter()
+                .any(|transaction| transaction.transaction_id == unflushed_tx)
+        );
 
         remove_file(&path).ok();
     }

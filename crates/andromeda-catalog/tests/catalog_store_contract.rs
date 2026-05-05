@@ -1,6 +1,5 @@
 use andromeda_catalog::{
-    recover_catalog_snapshot_from_durable_payloads, replay_catalog_mutation_records, AccessMode,
-    CatalogDefinition, CatalogDependencyKind, CatalogDurabilityMarker,
+    AccessMode, CatalogDefinition, CatalogDependencyKind, CatalogDurabilityMarker,
     CatalogDurableMutationPayload, CatalogLifecycleTarget, CatalogMutationCommitEvidence,
     CatalogMutationDurability, CatalogMutationRecord, CatalogMutationRecordKind, CatalogObjectRef,
     CatalogPublicationSemantics, CatalogRecoveryAnomalyKind, CatalogSkippedBatchReason,
@@ -8,14 +7,15 @@ use andromeda_catalog::{
     DefinitionBatchId, DefinitionOperation, IsolationPolicy, MultiResultPolicy, ObjectKind,
     ProcedureContract, ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef,
     QualifiedName, ResultMetadataPolicy, StatsVersion, StructuredObjectDefinition, TableDefinition,
-    TransactionPolicy,
+    TransactionPolicy, recover_catalog_snapshot_from_durable_payloads,
+    replay_catalog_mutation_records,
 };
 use andromeda_core::{
     AndromedaErrorKind, CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash,
     DatabaseId, NamespaceId, ProcedureId, ScalarType, TransactionId, TypeDescriptor,
 };
 use andromeda_storage::{
-    decode_wal_record_frame, encode_wal_record, Lsn, WalRecord, WalRecordKind,
+    Lsn, WalRecord, WalRecordKind, decode_wal_record_frame, encode_wal_record,
 };
 
 const DATABASE_ID: DatabaseId = DatabaseId::new(1);
@@ -309,9 +309,11 @@ fn durable_publication_rejects_uncommitted_or_non_durable_evidence() {
     )
     .unwrap_err();
     assert_eq!(begin_error.kind(), AndromedaErrorKind::Catalog);
-    assert!(begin_error
-        .message()
-        .contains("committed mutation evidence"));
+    assert!(
+        begin_error
+            .message()
+            .contains("committed mutation evidence")
+    );
 
     let non_durable_evidence = CatalogMutationCommitEvidence::from_durable_commit_record(
         records.last().unwrap(),
@@ -440,12 +442,16 @@ fn recovery_replays_committed_durable_catalog_batches_into_snapshot() {
         CatalogVersion::new(12)
     );
     assert_eq!(outcome.snapshot.version, CatalogVersion::new(12));
-    assert!(outcome
-        .snapshot
-        .contains_name(&QualifiedName::parse("Inventory.Product").unwrap()));
-    assert!(outcome
-        .snapshot
-        .contains_name(&QualifiedName::parse("Inventory.Stock").unwrap()));
+    assert!(
+        outcome
+            .snapshot
+            .contains_name(&QualifiedName::parse("Inventory.Product").unwrap())
+    );
+    assert!(
+        outcome
+            .snapshot
+            .contains_name(&QualifiedName::parse("Inventory.Stock").unwrap())
+    );
 }
 
 #[test]
@@ -503,16 +509,20 @@ fn recovery_reports_commit_and_apply_without_begin() {
     );
 
     assert_eq!(outcome.report.anomaly_count(), 2);
-    assert!(outcome
-        .report
-        .anomalies
-        .iter()
-        .any(|anomaly| anomaly.kind == CatalogRecoveryAnomalyKind::ApplyWithoutBegin));
-    assert!(outcome
-        .report
-        .anomalies
-        .iter()
-        .any(|anomaly| anomaly.kind == CatalogRecoveryAnomalyKind::CommitWithoutBegin));
+    assert!(
+        outcome
+            .report
+            .anomalies
+            .iter()
+            .any(|anomaly| anomaly.kind == CatalogRecoveryAnomalyKind::ApplyWithoutBegin)
+    );
+    assert!(
+        outcome
+            .report
+            .anomalies
+            .iter()
+            .any(|anomaly| anomaly.kind == CatalogRecoveryAnomalyKind::CommitWithoutBegin)
+    );
     assert_eq!(outcome.snapshot.version, CatalogVersion::new(10));
 }
 
@@ -546,11 +556,13 @@ fn recovery_reports_duplicate_and_sparse_apply_indexes() {
             .into_snapshot(),
         duplicate_records,
     );
-    assert!(duplicate_outcome
-        .report
-        .anomalies
-        .iter()
-        .any(|anomaly| anomaly.kind == CatalogRecoveryAnomalyKind::DuplicateApplyIndex));
+    assert!(
+        duplicate_outcome
+            .report
+            .anomalies
+            .iter()
+            .any(|anomaly| anomaly.kind == CatalogRecoveryAnomalyKind::DuplicateApplyIndex)
+    );
     assert_eq!(
         duplicate_outcome.report.skipped_anomalous_batches[0].reason,
         CatalogSkippedBatchReason::DuplicateApplyIndex
@@ -565,11 +577,13 @@ fn recovery_reports_duplicate_and_sparse_apply_indexes() {
             .into_snapshot(),
         sparse_records,
     );
-    assert!(sparse_outcome
-        .report
-        .anomalies
-        .iter()
-        .any(|anomaly| anomaly.kind == CatalogRecoveryAnomalyKind::SparseApplyIndexes));
+    assert!(
+        sparse_outcome
+            .report
+            .anomalies
+            .iter()
+            .any(|anomaly| anomaly.kind == CatalogRecoveryAnomalyKind::SparseApplyIndexes)
+    );
     assert_eq!(
         sparse_outcome.report.skipped_incomplete_batches[0].reason,
         CatalogSkippedBatchReason::SparseApplyIndexes
@@ -602,22 +616,26 @@ fn recovery_reports_wrong_identity_version_gap_outer_kind_and_payload_corruption
             .into_snapshot(),
         wrong_identity_records,
     );
-    assert!(wrong_identity_outcome
-        .report
-        .anomalies
-        .iter()
-        .any(|anomaly| anomaly.kind == CatalogRecoveryAnomalyKind::WrongCatalogIdentity));
+    assert!(
+        wrong_identity_outcome
+            .report
+            .anomalies
+            .iter()
+            .any(|anomaly| anomaly.kind == CatalogRecoveryAnomalyKind::WrongCatalogIdentity)
+    );
 
     let version_gap_outcome = replay_catalog_mutation_records(
         CatalogSystemStore::empty(DATABASE_ID, NAMESPACE_ID, CatalogVersion::new(9))
             .into_snapshot(),
         plan.mutation_plan.records(),
     );
-    assert!(version_gap_outcome
-        .report
-        .anomalies
-        .iter()
-        .any(|anomaly| anomaly.kind == CatalogRecoveryAnomalyKind::VersionGap));
+    assert!(
+        version_gap_outcome
+            .report
+            .anomalies
+            .iter()
+            .any(|anomaly| anomaly.kind == CatalogRecoveryAnomalyKind::VersionGap)
+    );
 
     let begin = plan.mutation_plan.records().into_iter().next().unwrap();
     let encoded_begin = begin.encode_durable_payload().unwrap();
@@ -629,11 +647,13 @@ fn recovery_reports_wrong_identity_version_gap_outer_kind_and_payload_corruption
             CatalogMutationRecordKind::CatalogChangeApply.storage_wal_kind_tag(),
         )],
     );
-    assert!(wrong_outer_kind
-        .report
-        .anomalies
-        .iter()
-        .any(|anomaly| anomaly.kind == CatalogRecoveryAnomalyKind::OuterStorageKindMismatch));
+    assert!(
+        wrong_outer_kind
+            .report
+            .anomalies
+            .iter()
+            .any(|anomaly| anomaly.kind == CatalogRecoveryAnomalyKind::OuterStorageKindMismatch)
+    );
 
     let mut corrupted_payload = encoded_begin.clone();
     let last = corrupted_payload.len() - 1;
@@ -643,11 +663,13 @@ fn recovery_reports_wrong_identity_version_gap_outer_kind_and_payload_corruption
             .into_snapshot(),
         vec![CatalogDurableMutationPayload::new(&corrupted_payload)],
     );
-    assert!(corrupt_outcome
-        .report
-        .anomalies
-        .iter()
-        .any(|anomaly| anomaly.kind == CatalogRecoveryAnomalyKind::PayloadCorruption));
+    assert!(
+        corrupt_outcome
+            .report
+            .anomalies
+            .iter()
+            .any(|anomaly| anomaly.kind == CatalogRecoveryAnomalyKind::PayloadCorruption)
+    );
 }
 
 #[test]

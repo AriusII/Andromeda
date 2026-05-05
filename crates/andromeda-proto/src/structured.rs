@@ -1,6 +1,6 @@
 use andromeda_core::{
-    digest::Sha256, AndromedaError, AndromedaErrorKind, AndromedaResult, ColumnDescriptor,
-    ContractHash, DecimalType, FloatMode, FloatType, ScalarType, TextEncoding, TimestampType,
+    AndromedaError, AndromedaErrorKind, AndromedaResult, ColumnDescriptor, ContractHash,
+    DecimalType, FloatMode, FloatType, ScalarType, TextEncoding, TimestampType, digest::Sha256,
 };
 
 use crate::manifest::RowCountRequirement;

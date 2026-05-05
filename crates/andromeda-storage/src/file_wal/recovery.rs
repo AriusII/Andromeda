@@ -2,12 +2,12 @@ use andromeda_core::{AndromedaResult, TransactionId};
 use std::path::Path;
 
 use crate::{
-    decide_startup, ConceptualRedoPlan, DatabaseManifest, Lsn, RecoveryPlan,
-    StartupAuditProjection, StartupDecision, StartupEvidence, StartupMode, WalRecord,
-    WalRecordKind, WalScanResult, WalScanStop,
+    ConceptualRedoPlan, DatabaseManifest, Lsn, RecoveryPlan, StartupAuditProjection,
+    StartupDecision, StartupEvidence, StartupMode, WalRecord, WalRecordKind, WalScanResult,
+    WalScanStop, decide_startup,
 };
 
-use super::{report, scan, FileWalHeader};
+use super::{FileWalHeader, report, scan};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileWalDiskScan {

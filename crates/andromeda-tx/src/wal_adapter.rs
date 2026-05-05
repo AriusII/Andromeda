@@ -117,8 +117,6 @@ use std::sync::Arc;
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
 use andromeda_storage::Lsn;
-
-/// Transaction-WAL binding adapter trait.
 ///
 /// This trait defines the contract for recording transaction lifecycle events
 /// (commits, rollbacks) to the Write-Ahead Log (WAL) and querying durability status.
@@ -128,6 +126,7 @@ use andromeda_storage::Lsn;
 /// When building a new transaction system, implement this trait once and reuse it
 /// across all WAL-dependent transaction operations. The trait's async methods allow
 /// blocking I/O without blocking the executor.
+#[async_trait::async_trait]
 pub trait TxWalAdapterTrait: Send + Sync {
     /// Record a transaction commit with full durability guarantee.
     ///
@@ -176,11 +175,11 @@ pub trait TxWalAdapterTrait: Send + Sync {
     /// let commit_lsn = adapter.record_commit(TransactionId::new(42), wal_mgr).await?;
     /// assert!(adapter.is_durably_committed(TransactionId::new(42)).await?);
     /// ```
-    fn record_commit(
+    async fn record_commit(
         &self,
         tx_id: TransactionId,
         wal_manager: Arc<dyn WalManager>,
-    ) -> impl std::future::Future<Output = AndromedaResult<Lsn>> + Send;
+    ) -> AndromedaResult<Lsn>;
 
     /// Record a transaction rollback without WAL durability requirement.
     ///
@@ -220,8 +219,7 @@ pub trait TxWalAdapterTrait: Send + Sync {
     /// adapter.record_rollback(TransactionId::new(42)).await?;
     /// assert!(!adapter.is_durably_committed(TransactionId::new(42)).await?);
     /// ```
-    fn record_rollback(&self, tx_id: TransactionId)
-        -> impl std::future::Future<Output = AndromedaResult<()>> + Send;
+    async fn record_rollback(&self, tx_id: TransactionId) -> AndromedaResult<()>;
 
     /// Check whether a transaction is durably committed.
     ///
@@ -253,10 +251,7 @@ pub trait TxWalAdapterTrait: Send + Sync {
     /// adapter.record_rollback(other_tx_id).await?;
     /// assert_eq!(adapter.is_durably_committed(other_tx_id).await?, false);
     /// ```
-    fn is_durably_committed(
-        &self,
-        tx_id: TransactionId,
-    ) -> impl std::future::Future<Output = AndromedaResult<bool>> + Send;
+    async fn is_durably_committed(&self, tx_id: TransactionId) -> AndromedaResult<bool>;
 
     /// Get the commit LSN for a transaction.
     ///
@@ -291,10 +286,10 @@ pub trait TxWalAdapterTrait: Send + Sync {
     /// adapter.record_rollback(other_tx_id).await?;
     /// assert_eq!(adapter.get_commit_lsn(other_tx_id).await?, None);
     /// ```
-    fn get_commit_lsn(
+    async fn get_commit_lsn(
         &self,
         tx_id: TransactionId,
-    ) -> impl std::future::Future<Output = AndromedaResult<Option<Lsn>>> + Send;
+    ) -> AndromedaResult<Option<Lsn>>;
 }
 
 /// WAL Manager interface expected by TxWalAdapterTrait.
@@ -302,6 +297,7 @@ pub trait TxWalAdapterTrait: Send + Sync {
 /// Provides the methods needed by the adapter to record and flush WAL entries.
 /// This is a subset of the full WAL API, allowing the adapter to remain decoupled
 /// from the complete WAL implementation.
+#[async_trait::async_trait]
 pub trait WalManager: Send + Sync {
     /// Append a transaction commit record to the WAL.
     ///
@@ -316,10 +312,7 @@ pub trait WalManager: Send + Sync {
     ///
     /// This is **non-blocking** in the sense that it adds the record to an in-memory
     /// buffer. Durability is achieved by calling `flush_through`.
-    fn append_commit(
-        &self,
-        tx_id: TransactionId,
-    ) -> impl std::future::Future<Output = AndromedaResult<Lsn>> + Send;
+    async fn append_commit(&self, tx_id: TransactionId) -> AndromedaResult<Lsn>;
 
     /// Flush the WAL through the specified LSN to durable storage.
     ///
@@ -339,7 +332,7 @@ pub trait WalManager: Send + Sync {
     ///
     /// This operation is typically **BLOCKING** (synchronous I/O). Callers must
     /// ensure they don't block the executor if using async/await.
-    fn flush_through(&self, lsn: Lsn) -> impl std::future::Future<Output = AndromedaResult<Lsn>> + Send;
+    async fn flush_through(&self, lsn: Lsn) -> AndromedaResult<Lsn>;
 }
 
 /// Error types specific to TxWalAdapterTrait failures.

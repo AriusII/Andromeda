@@ -4,8 +4,8 @@
 //! corresponds to one stage of the compiler pipeline described in CLAUDE.md.
 
 use andromeda_catalog::{
-    inventory_reserve_stock_contract_candidate, CatalogDefinition, DefinitionBatch,
-    DefinitionBatchId, DefinitionOperation, ProcedureContractCandidate, ResultStreamContract,
+    CatalogDefinition, DefinitionBatch, DefinitionBatchId, DefinitionOperation,
+    ProcedureContractCandidate, ResultStreamContract, inventory_reserve_stock_contract_candidate,
 };
 use andromeda_core::{AndromedaResult, CatalogVersion, DatabaseId, NamespaceId};
 

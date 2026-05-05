@@ -63,16 +63,18 @@ fn mvcc_v0_hides_inflight_and_rolled_back_creators_until_durable_commit_is_visib
     statuses
         .record(creator, TransactionStatus::InFlight)
         .unwrap();
-    assert!(!row
-        .visible_in_snapshot(&repeatable_snapshot, &statuses)
-        .unwrap());
+    assert!(
+        !row.visible_in_snapshot(&repeatable_snapshot, &statuses)
+            .unwrap()
+    );
 
     statuses
         .record(creator, TransactionStatus::RolledBack)
         .unwrap();
-    assert!(!row
-        .visible_in_snapshot(&repeatable_snapshot, &statuses)
-        .unwrap());
+    assert!(
+        !row.visible_in_snapshot(&repeatable_snapshot, &statuses)
+            .unwrap()
+    );
 
     statuses
         .record(creator, TransactionStatus::Committed)
@@ -120,16 +122,18 @@ fn mvcc_v0_ignores_inflight_and_rolled_back_delete_intents() {
     statuses
         .record(deleter, TransactionStatus::InFlight)
         .unwrap();
-    assert!(row
-        .visible_in_snapshot(&snapshot_with_delete_in_flight, &statuses)
-        .unwrap());
+    assert!(
+        row.visible_in_snapshot(&snapshot_with_delete_in_flight, &statuses)
+            .unwrap()
+    );
 
     statuses
         .record(deleter, TransactionStatus::RolledBack)
         .unwrap();
-    assert!(row
-        .visible_in_snapshot(&snapshot_with_delete_in_flight, &statuses)
-        .unwrap());
+    assert!(
+        row.visible_in_snapshot(&snapshot_with_delete_in_flight, &statuses)
+            .unwrap()
+    );
 
     statuses
         .record(deleter, TransactionStatus::Committed)
@@ -148,9 +152,10 @@ fn mvcc_v0_ignores_inflight_and_rolled_back_delete_intents() {
         Vec::<TransactionId>::new(),
     )
     .unwrap();
-    assert!(!row
-        .visible_in_snapshot(&snapshot_after_delete, &statuses)
-        .unwrap());
+    assert!(
+        !row.visible_in_snapshot(&snapshot_after_delete, &statuses)
+            .unwrap()
+    );
 }
 
 #[test]
@@ -452,10 +457,10 @@ fn mvcc_v0_visibility_requires_manager_durable_commit() {
     // Build a status table that mirrors the manager's view at this point.
     let mut statuses = TransactionStatusTable::new();
     statuses
-        .record(writer, manager.status(writer).unwrap())
+        .record(writer, manager.status(writer).unwrap().unwrap())
         .unwrap();
     statuses
-        .record(reader, manager.status(reader).unwrap())
+        .record(reader, manager.status(reader).unwrap().unwrap())
         .unwrap();
 
     let reader_snapshot = Snapshot::with_context_validated(
@@ -469,26 +474,28 @@ fn mvcc_v0_visibility_requires_manager_durable_commit() {
     .unwrap();
 
     // Writer still in flight ⇒ invisible to reader.
-    assert!(!row
-        .visible_in_snapshot(&reader_snapshot, &statuses)
-        .unwrap());
+    assert!(
+        !row.visible_in_snapshot(&reader_snapshot, &statuses)
+            .unwrap()
+    );
 
     // Drive writer through commit; mirror status table.
     manager.request_commit(writer).unwrap();
     manager.commit_durable(writer, 4242).unwrap();
     statuses
-        .record(writer, manager.status(writer).unwrap())
+        .record(writer, manager.status(writer).unwrap().unwrap())
         .unwrap();
     assert_eq!(
-        manager.status(writer),
+        manager.status(writer).unwrap(),
         Some(TransactionStatus::Committed),
         "manager must mirror Committed only after durable LSN flush"
     );
 
     // Under ReadCommitted (active list ignored), now visible.
-    assert!(row
-        .visible_in_snapshot(&reader_snapshot, &statuses)
-        .unwrap());
+    assert!(
+        row.visible_in_snapshot(&reader_snapshot, &statuses)
+            .unwrap()
+    );
 }
 
 /// A transaction rolled back through the manager remains invisible to
@@ -507,10 +514,10 @@ fn mvcc_v0_manager_rollback_keeps_writes_invisible() {
 
     let mut statuses = TransactionStatusTable::new();
     statuses
-        .record(writer, manager.status(writer).unwrap())
+        .record(writer, manager.status(writer).unwrap().unwrap())
         .unwrap();
     statuses
-        .record(reader, manager.status(reader).unwrap())
+        .record(reader, manager.status(reader).unwrap().unwrap())
         .unwrap();
 
     let reader_snapshot = Snapshot::with_context_validated(
@@ -523,7 +530,8 @@ fn mvcc_v0_manager_rollback_keeps_writes_invisible() {
     )
     .unwrap();
 
-    assert!(!row
-        .visible_in_snapshot(&reader_snapshot, &statuses)
-        .unwrap());
+    assert!(
+        !row.visible_in_snapshot(&reader_snapshot, &statuses)
+            .unwrap()
+    );
 }

@@ -4,6 +4,6 @@
 //! definitions here.
 
 pub use crate::{
-    AllocationId, ObjectId, PageFlags, PageHeader, PageId, PageLayoutContract, PageSize,
-    PageTrailer, PageType,
+    AllocationId, InMemoryPageStore, ObjectId, PageFlags, PageHeader, PageId, PageImage,
+    PageLayoutContract, PageSize, PageStore, PageTrailer, PageType,
 };

@@ -17,13 +17,13 @@
 
 use andromeda_core::{CatalogVersion, TransactionId};
 use andromeda_storage::write_ahead_log::file::{
-    recover_from_file_wal, report_file_wal_recovery_v0, FileWal, FileWalRecoveryBoundaryKind,
-    FileWalRecoveryIgnoredTransactionReason,
+    FileWal, FileWalRecoveryBoundaryKind, FileWalRecoveryIgnoredTransactionReason,
+    recover_from_file_wal, report_file_wal_recovery_v0,
 };
 use andromeda_storage::write_ahead_log::record::WalRecordKind;
 use andromeda_storage::{
-    plan_file_wal_startup_recovery_v0, DatabaseManifest, DurableTransactionResume,
-    DurableTransactionState, Lsn, RedoRecordDecision, StartupMode,
+    DatabaseManifest, DurableTransactionResume, DurableTransactionState, Lsn, RedoRecordDecision,
+    StartupMode, plan_file_wal_startup_recovery_v0,
 };
 use andromeda_tx::{
     MvccIsolationPolicy, MvccRowHeader, Snapshot, TransactionManager, TransactionStatus,
@@ -169,11 +169,13 @@ fn crash_before_durable_commit_keeps_writes_invisible_after_recovery() {
     assert_eq!(report.boundary_kind, FileWalRecoveryBoundaryKind::Clean);
     assert!(!report.forensic_required);
     assert!(report.replay_lsns().collect::<Vec<_>>().is_empty());
-    assert!(report
-        .ignored_transactions
-        .iter()
-        .any(|ignored| ignored.transaction_id == writer
-            && ignored.reason == FileWalRecoveryIgnoredTransactionReason::Incomplete));
+    assert!(
+        report
+            .ignored_transactions
+            .iter()
+            .any(|ignored| ignored.transaction_id == writer
+                && ignored.reason == FileWalRecoveryIgnoredTransactionReason::Incomplete)
+    );
 
     // Recovery → status table → MVCC visibility check.
     let statuses = status_table_from_recovery(&plan.transaction_evidence);

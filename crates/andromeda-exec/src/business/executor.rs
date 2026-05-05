@@ -1,5 +1,5 @@
 use andromeda_catalog::{
-    ProcedureContract, INVENTORY_RESERVE_STOCK_OBJECT_ID, INVENTORY_RESERVE_STOCK_PROCEDURE_ID,
+    INVENTORY_RESERVE_STOCK_OBJECT_ID, INVENTORY_RESERVE_STOCK_PROCEDURE_ID, ProcedureContract,
 };
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
 use andromeda_tx::{MvccRowHeader, Snapshot, TransactionStatus, TransactionStatusTable};
@@ -589,9 +589,11 @@ mod tests {
         );
         assert_eq!(procedure.result_metadata.row_count_exact, Some(1));
         assert_eq!(procedure.rows_affected, 2);
-        assert!(effect
-            .result_evidence()
-            .proves_exact_result_and_remaining_stock());
+        assert!(
+            effect
+                .result_evidence()
+                .proves_exact_result_and_remaining_stock()
+        );
         assert_eq!(procedure.mutation_payload, effect.mutation_payload());
     }
 }

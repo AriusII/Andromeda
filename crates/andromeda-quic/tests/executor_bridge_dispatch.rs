@@ -13,8 +13,8 @@
 use andromeda_core::{AndromedaErrorKind, InvocationId};
 use andromeda_observe::{CertificateIdentity, SurfaceScope, TraceId};
 use andromeda_quic::{
-    Connection, ExecutorDispatchBridge, FrameBytes, FrameHeader, FrameType, LifecycleState,
-    SurfacePlane, FRAME_HEADER_CRC_UNCHECKED,
+    Connection, ExecutorDispatchBridge, FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader,
+    FrameType, LifecycleState, SurfacePlane,
 };
 
 fn hello_frame(session_id: u64) -> FrameBytes {
@@ -125,7 +125,11 @@ fn test_bridge_accepts_authorized_invocation() {
     // Verify stream mapping.
     let stream_id = 42u64;
     let invocation_id = bridge.map_stream_to_invocation_id(stream_id);
-    assert_eq!(invocation_id, InvocationId::new(42), "stream mapping failed");
+    assert_eq!(
+        invocation_id,
+        InvocationId::new(42),
+        "stream mapping failed"
+    );
 
     // Verify preconditions check passes for active connection.
     bridge
@@ -158,10 +162,7 @@ fn test_bridge_rejects_cross_plane_invocation() {
     let result = conn.set_certificate_identity(admin_identity);
 
     // Connection rejects the bind because scope != plane.
-    assert!(
-        result.is_err(),
-        "connection should reject mismatched scope"
-    );
+    assert!(result.is_err(), "connection should reject mismatched scope");
     let err = result.unwrap_err();
     assert_eq!(
         err.kind(),
@@ -197,10 +198,7 @@ fn test_bridge_correlates_stream_id_to_invocation() {
     let stream_id = 12345u64;
     let inv_id_1 = bridge.map_stream_to_invocation_id(stream_id);
     let inv_id_2 = bridge.map_stream_to_invocation_id(stream_id);
-    assert_eq!(
-        inv_id_1, inv_id_2,
-        "mapping should be deterministic"
-    );
+    assert_eq!(inv_id_1, inv_id_2, "mapping should be deterministic");
 
     // Correctness: stream_id should map to InvocationId(stream_id).
     assert_eq!(
@@ -261,10 +259,7 @@ fn test_bridge_validates_preconditions() {
         "preconditions should fail for non-Active connection"
     );
     assert!(
-        precond_err
-            .unwrap_err()
-            .message()
-            .contains("Active"),
+        precond_err.unwrap_err().message().contains("Active"),
         "error should mention Active state"
     );
 
@@ -352,10 +347,7 @@ fn test_bridge_exposes_references() {
     // Verify that connection is accessible.
     let conn_ref = bridge.connection();
     assert_eq!(conn_ref.state(), LifecycleState::Active);
-    assert_eq!(
-        conn_ref.surface_plane(),
-        SurfacePlane::Application
-    );
+    assert_eq!(conn_ref.surface_plane(), SurfacePlane::Application);
 }
 
 /// Test 7: Bridge handles Monitoring plane correctly.
@@ -424,7 +416,10 @@ fn test_bridge_rejects_missing_certificate_identity() {
 
     // No identity bound.
     let result = ExecutorDispatchBridge::new(&conn);
-    assert!(result.is_err(), "bridge should reject connection without identity");
+    assert!(
+        result.is_err(),
+        "bridge should reject connection without identity"
+    );
 
     let err = result.unwrap_err();
     assert_eq!(err.kind(), AndromedaErrorKind::Security);

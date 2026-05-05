@@ -9,11 +9,11 @@
 /// - Membership epoch tracking
 /// - Atomic operations on concurrent join/promote
 use andromeda_storage::{
+    Lsn,
     hadr::{
         membership_transitions::{MembershipState, MembershipStateTracker, TransitionEvent},
         quorum_runtime::*,
     },
-    Lsn,
 };
 
 #[test]

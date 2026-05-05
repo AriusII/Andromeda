@@ -9,8 +9,8 @@ use andromeda_observe::{
 use andromeda_proto::StructuredObjectHeader;
 
 use crate::{
-    services::{AdmissionService, PreTransactionValidationService},
     CompletionStatus, InvocationCompletion,
+    services::{AdmissionService, PreTransactionValidationService},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]

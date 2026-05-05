@@ -3,6 +3,7 @@ syntax = "proto3";
 package andromeda.protocol.v1;
 
 import "andromeda/protocol/v1/completion.proto";
+import "andromeda/protocol/v1/error.proto";
 import "andromeda/protocol/v1/payload.proto";
 
 // Procedure invocation wire contracts for the crate-local protocol authority.

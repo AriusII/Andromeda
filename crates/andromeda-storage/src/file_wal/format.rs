@@ -6,7 +6,7 @@ use std::{
 
 use crate::Lsn;
 
-use super::{io_error, storage_error, FileWalHeader, FILE_WAL_HEADER_LEN};
+use super::{FILE_WAL_HEADER_LEN, FileWalHeader, io_error, storage_error};
 
 pub(super) const FILE_WAL_DATA_OFFSET: u64 = FILE_WAL_HEADER_LEN as u64;
 
@@ -145,9 +145,5 @@ fn fnv64_nonzero(bytes: &[u8]) -> u64 {
         state ^= u64::from(*byte);
         state = state.wrapping_mul(FNV_PRIME);
     }
-    if state == 0 {
-        1
-    } else {
-        state
-    }
+    if state == 0 { 1 } else { state }
 }

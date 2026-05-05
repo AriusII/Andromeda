@@ -306,6 +306,9 @@ impl BufferFrame {
         if self.state != BufferFrameState::Resident {
             return Err(BufferPoolError::InvalidFrameState.into_andromeda_error());
         }
+        if self.pin_count == 0 {
+            return Err(BufferPoolError::InvalidPinCount.into_andromeda_error());
+        }
         let page_lsn = self
             .page_lsn
             .ok_or_else(|| BufferPoolError::InvalidPageImage.into_andromeda_error())?;

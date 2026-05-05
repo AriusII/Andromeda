@@ -9,10 +9,10 @@ fn disposed_rolled_back_transaction_retains_status_history() {
     manager.rollback_durable(tx, 77).unwrap();
     manager.dispose(tx).unwrap();
 
-    assert_eq!(manager.live_count(), 0);
-    assert!(manager.snapshot(tx).is_none());
+    assert_eq!(manager.live_count().unwrap(), 0);
+    assert!(manager.snapshot(tx).unwrap().is_none());
     assert_eq!(
-        manager.status(tx),
+        manager.status(tx).unwrap(),
         Some(TransactionStatus::RolledBack),
         "dispose removes live state only; MVCC status history must retain the durable rollback"
     );

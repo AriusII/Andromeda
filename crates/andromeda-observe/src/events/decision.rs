@@ -4,7 +4,7 @@ use andromeda_core::{
 
 use crate::TraceId;
 
-use super::{non_empty_reason, ProtocolEventScope};
+use super::{ProtocolEventScope, non_empty_reason};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CriticalDecisionKind {

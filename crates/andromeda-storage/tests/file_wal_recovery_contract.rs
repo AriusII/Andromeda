@@ -1,15 +1,16 @@
 use andromeda_core::{AndromedaErrorKind, TransactionId};
 use andromeda_storage::write_ahead_log::codec::{
-    encode_wal_record, WalScanStopReason, WAL_BYTE_ORDER_LITTLE_ENDIAN, WAL_FORMAT_VERSION_V1,
+    WAL_BYTE_ORDER_LITTLE_ENDIAN, WAL_FORMAT_VERSION_V1, WalScanStopReason, encode_wal_record,
 };
 use andromeda_storage::write_ahead_log::file::{
-    recover_from_file_wal, report_file_wal_recovery_v0, scan_file_wal, FileWal,
-    FileWalRecoveryBoundaryKind, FileWalRecoveryIgnoredTransactionReason, FILE_WAL_HEADER_LEN,
+    FILE_WAL_HEADER_LEN, FileWal, FileWalRecoveryBoundaryKind,
+    FileWalRecoveryIgnoredTransactionReason, recover_from_file_wal, report_file_wal_recovery_v0,
+    scan_file_wal,
 };
 use andromeda_storage::write_ahead_log::record::{WalRecord, WalRecordKind};
 use andromeda_storage::{
-    plan_file_wal_startup_recovery_v0, DatabaseManifest, DurableTransactionState, Lsn,
-    ObservedBoundary, RedoRecordDecision, StartupMode, StartupRejectionReason,
+    DatabaseManifest, DurableTransactionState, Lsn, ObservedBoundary, RedoRecordDecision,
+    StartupMode, StartupRejectionReason, plan_file_wal_startup_recovery_v0,
 };
 use std::{
     fs::OpenOptions,
@@ -125,10 +126,12 @@ fn file_wal_commit_written_but_not_synced_is_hidden_on_reopen() {
 
     let reopened = FileWal::open(&temp.path).unwrap();
     assert_eq!(reopened.last_lsn(), Some(row_lsn));
-    assert!(reopened
-        .records()
-        .iter()
-        .all(|record| record.header.lsn < commit_lsn));
+    assert!(
+        reopened
+            .records()
+            .iter()
+            .all(|record| record.header.lsn < commit_lsn)
+    );
     assert_eq!(
         planned_decision(&temp.path, row_lsn),
         RedoRecordDecision::SkipIncompleteTransaction

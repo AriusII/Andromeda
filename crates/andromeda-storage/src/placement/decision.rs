@@ -2,7 +2,7 @@ use andromeda_core::AndromedaResult;
 
 use crate::{SegmentDescriptor, SegmentMutation, SegmentState};
 
-use super::{storage_error, DataTemperature, PipelineStage, ReadFallbackPolicy, StorageTier};
+use super::{DataTemperature, PipelineStage, ReadFallbackPolicy, StorageTier, storage_error};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlacementDecision {

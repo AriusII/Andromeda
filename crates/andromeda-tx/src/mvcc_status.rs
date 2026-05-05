@@ -2,6 +2,7 @@
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
 use std::collections::BTreeMap;
+use std::sync::Mutex;
 
 /// Status of a transaction in the execution lifecycle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -12,30 +13,45 @@ pub enum TransactionStatus {
 }
 
 /// Registry of transaction statuses for visibility determination.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct TransactionStatusTable {
-    statuses: BTreeMap<TransactionId, TransactionStatus>,
+    statuses: Mutex<BTreeMap<TransactionId, TransactionStatus>>,
 }
 
 impl TransactionStatusTable {
     pub fn new() -> Self {
         Self {
-            statuses: BTreeMap::new(),
+            statuses: Mutex::new(BTreeMap::new()),
         }
     }
 
     pub fn record(
-        &mut self,
+        &self,
         transaction_id: TransactionId,
         status: TransactionStatus,
     ) -> AndromedaResult<()> {
         validate_transaction_id(transaction_id, "transaction status id must not be zero")?;
-        self.statuses.insert(transaction_id, status);
+        let mut statuses = self.statuses.lock().unwrap();
+        statuses.insert(transaction_id, status);
         Ok(())
     }
 
     pub fn status(&self, transaction_id: TransactionId) -> Option<TransactionStatus> {
-        self.statuses.get(&transaction_id).copied()
+        let statuses = self.statuses.lock().unwrap();
+        statuses.get(&transaction_id).copied()
+    }
+
+    /// Set a transaction as committed (idempotent operation).
+    pub fn set_committed(&self, transaction_id: TransactionId) -> AndromedaResult<()> {
+        validate_transaction_id(transaction_id, "transaction status id must not be zero")?;
+        let mut statuses = self.statuses.lock().unwrap();
+        statuses.insert(transaction_id, TransactionStatus::Committed);
+        Ok(())
+    }
+
+    /// Get the status of a transaction.
+    pub fn get_status(&self, transaction_id: TransactionId) -> Option<TransactionStatus> {
+        self.status(transaction_id)
     }
 
     /// Returns `true` only when the manager has explicitly recorded the
@@ -86,6 +102,12 @@ impl TransactionStatusTable {
     }
 }
 
+impl Default for TransactionStatusTable {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 fn validate_transaction_id(
     transaction_id: TransactionId,
     message: &'static str,
@@ -106,7 +128,7 @@ mod tests {
 
     #[test]
     fn transaction_status_records_and_retrieves() {
-        let mut table = TransactionStatusTable::new();
+        let table = TransactionStatusTable::new();
         let tx_id = TransactionId::new(1);
 
         assert!(table.record(tx_id, TransactionStatus::InFlight).is_ok());
@@ -118,8 +140,17 @@ mod tests {
 
     #[test]
     fn transaction_status_rejects_zero_id() {
-        let mut table = TransactionStatusTable::new();
+        let table = TransactionStatusTable::new();
         let result = table.record(TransactionId::new(0), TransactionStatus::Committed);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn transaction_status_set_committed() {
+        let table = TransactionStatusTable::new();
+        let tx_id = TransactionId::new(42);
+
+        assert!(table.set_committed(tx_id).is_ok());
+        assert_eq!(table.status(tx_id), Some(TransactionStatus::Committed));
     }
 }

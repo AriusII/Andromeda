@@ -136,7 +136,7 @@ impl<'a> ExecutorDispatchBridge<'a> {
         let plane = connection.surface_plane();
 
         // Validate scope match.
-        let required_scope = andromeda_quic::identity::plane_to_required_surface_scope(plane);
+        let required_scope = andromeda_quic::mtls_identity::plane_to_required_surface_scope(plane);
         if certificate_identity.surface as u8 != required_scope as u8 {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Security,
@@ -290,7 +290,7 @@ impl<'a> ExecutorDispatchBridge<'a> {
 mod tests {
     use super::*;
     use andromeda_quic::{
-        FrameBytes, FrameHeader, FrameType, LifecycleState, FRAME_HEADER_CRC_UNCHECKED,
+        FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader, FrameType, LifecycleState,
     };
 
     fn hello_frame(session_id: u64) -> FrameBytes {

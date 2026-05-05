@@ -2,7 +2,7 @@ use andromeda_core::{AndromedaResult, InvocationId, RequestId, SessionId};
 use andromeda_observe::{ExecutionTransitionTrace, TraceId, TransitionReasonCode};
 use andromeda_srpl::Cardinality;
 use andromeda_storage::Lsn;
-use andromeda_tx::{transaction_phase_code, TransactionState};
+use andromeda_tx::{TransactionState, transaction_phase_code};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ResultStreamMetadata {
@@ -203,11 +203,7 @@ impl InvocationCompletion {
         let prev_phase = previous_state.map(transaction_phase_code);
         let durable_lsn = self.durable_lsn.and_then(|lsn| {
             let raw = lsn.get();
-            if raw == 0 {
-                None
-            } else {
-                Some(raw)
-            }
+            if raw == 0 { None } else { Some(raw) }
         });
         // Pre-transaction rejection paths must not carry transaction or
         // durable LSN evidence. We strip them here defensively so a misuse
@@ -331,9 +327,11 @@ mod tests {
             .unwrap_err();
         assert_eq!(err.kind(), AndromedaErrorKind::Contract);
 
-        assert!(metadata
-            .validate_terminal_completion(TransactionState::Committed, Lsn::new(7), 2)
-            .is_ok());
+        assert!(
+            metadata
+                .validate_terminal_completion(TransactionState::Committed, Lsn::new(7), 2)
+                .is_ok()
+        );
     }
 
     #[test]

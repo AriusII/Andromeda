@@ -252,9 +252,11 @@ fn pretransaction_security_rejection_requires_audit_and_never_tx_evidence() {
         ),
     )
     .unwrap_err();
-    assert!(denied_with_tx
-        .message()
-        .contains("must not include transaction"));
+    assert!(
+        denied_with_tx
+            .message()
+            .contains("must not include transaction")
+    );
 
     let mut unaudited_sequence = InMemoryEventSequence::new();
     unaudited_sequence.append(admission(10, 210)).unwrap();
@@ -310,9 +312,11 @@ fn security_audit_rejects_surface_permission_drift_and_secret_evidence() {
         ),
     )
     .unwrap_err();
-    assert!(certificate_surface_drift
-        .message()
-        .contains("certificate surface"));
+    assert!(
+        certificate_surface_drift
+            .message()
+            .contains("certificate surface")
+    );
 
     let secret_certificate = EventEnvelope::new(
         EventId::new(3),
@@ -333,7 +337,9 @@ fn security_audit_rejects_surface_permission_drift_and_secret_evidence() {
         }),
     )
     .unwrap_err();
-    assert!(secret_certificate
-        .message()
-        .contains("must not include secrets"));
+    assert!(
+        secret_certificate
+            .message()
+            .contains("must not include secrets")
+    );
 }

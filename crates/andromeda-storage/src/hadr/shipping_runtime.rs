@@ -42,7 +42,7 @@
 //! - ✗ Quorum consensus algorithm (designed in F3).
 //! - ✗ Compression/encryption (future scope).
 
-use crate::{write_ahead_log::*, Lsn};
+use crate::{Lsn, write_ahead_log::*};
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use std::collections::HashMap;
 
@@ -106,11 +106,7 @@ impl ShippingSegmentDescriptor {
             }
         }
 
-        if state == 0 {
-            1
-        } else {
-            state
-        }
+        if state == 0 { 1 } else { state }
     }
 }
 

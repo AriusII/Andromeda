@@ -1,6 +1,6 @@
 use andromeda_catalog::{
-    inventory_reserve_stock_catalog_bindings, inventory_reserve_stock_contract, ProcedureContract,
-    INVENTORY_RESERVE_STOCK_PERMISSION,
+    INVENTORY_RESERVE_STOCK_PERMISSION, ProcedureContract,
+    inventory_reserve_stock_catalog_bindings, inventory_reserve_stock_contract,
 };
 use andromeda_core::{
     AndromedaErrorKind, CatalogVersion, ContractHash, InvocationId, PipelineClass, RequestId,
@@ -16,16 +16,16 @@ use andromeda_observe::{
     TraceId, WalEventTrace, WalOperation,
 };
 use andromeda_srpl::{
+    Cardinality,
     compiler::{compile_narrow_procedure_signature, inventory_reserve_stock_body_ir},
     model::{SrplBusinessOperationKindIr, SrplPredicateIr, SrplValueIr},
-    Cardinality,
 };
 use andromeda_storage::publication::DatabaseManifest;
 use andromeda_storage::{
-    classify_durable_transactions, CoreIoPlacementPolicy, CoreIoPlacementRequest,
-    DurableTransactionState, InMemoryWal, Lsn, OperationalProfile, PageSize, RecoveryPlan,
-    RedoRecordDecision, StartupMode, StorageIoBudgetScope, StorageTier, StorageWorkloadClass,
-    WalRecordKind,
+    CoreIoPlacementPolicy, CoreIoPlacementRequest, DurableTransactionState, InMemoryWal, Lsn,
+    OperationalProfile, PageSize, RecoveryPlan, RedoRecordDecision, StartupMode,
+    StorageIoBudgetScope, StorageTier, StorageWorkloadClass, WalRecordKind,
+    classify_durable_transactions,
 };
 use andromeda_tx::TransactionState;
 
@@ -91,8 +91,8 @@ fn event_correlation(
 }
 
 #[test]
-fn reserve_stock_commit_gate_links_catalog_srpl_business_runtime_wal_recovery_observability_and_core_io(
-) {
+fn reserve_stock_commit_gate_links_catalog_srpl_business_runtime_wal_recovery_observability_and_core_io()
+ {
     let contract = inventory_reserve_stock_contract().unwrap();
     let bindings =
         inventory_reserve_stock_catalog_bindings(contract.object.catalog_version).unwrap();
@@ -196,9 +196,11 @@ fn reserve_stock_commit_gate_links_catalog_srpl_business_runtime_wal_recovery_ob
     assert_eq!(effect.next_stock.available_quantity, 7);
     assert_eq!(effect.next_stock.version, 8);
     assert!(effect.result.reserved);
-    assert!(effect
-        .result_evidence()
-        .proves_exact_result_and_remaining_stock());
+    assert!(
+        effect
+            .result_evidence()
+            .proves_exact_result_and_remaining_stock()
+    );
 
     let procedure = effect.to_local_procedure(&contract).unwrap();
     assert_eq!(
@@ -258,9 +260,11 @@ fn reserve_stock_commit_gate_links_catalog_srpl_business_runtime_wal_recovery_ob
         effect.mutation_payload()
     );
     assert!(outcome.result_metadata.validate_completed_stream(1).is_ok());
-    assert!(effect
-        .result_evidence()
-        .matches_committed_completion(&outcome.completion));
+    assert!(
+        effect
+            .result_evidence()
+            .matches_committed_completion(&outcome.completion)
+    );
 
     let durable_records = runtime.wal().replay_durable();
     let recovery_plan = RecoveryPlan::from_manifest_and_wal(
@@ -392,9 +396,11 @@ fn insufficient_stock_rolls_back_with_typed_rejection_and_committed_only_recover
     let business_error =
         InventoryReserveStockExecutor::reserve(rejected_command, observed_stock).unwrap_err();
     assert_eq!(business_error.kind(), AndromedaErrorKind::Execution);
-    assert!(business_error
-        .message()
-        .contains("insufficient inventory stock"));
+    assert!(
+        business_error
+            .message()
+            .contains("insufficient inventory stock")
+    );
 
     let rejection_evidence = InventoryReserveStockExecutor::rejection_evidence(
         rejected_command,

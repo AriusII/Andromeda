@@ -63,6 +63,80 @@ Protocol version locking ensures:
 | `structured` | Structured data types |
 | `manifest` | Protocol manifest and metadata |
 
+## Schema Evolution and Versioning
+
+### Version Locking (V1.0)
+
+The protocol is currently locked at **V1.0** (matching Andromeda V0.5 release).
+Future changes follow this policy:
+
+- **Major version bump:** Breaking wire format changes (e.g., field removal)
+  - V1.x clients REJECT responses with major > 1
+  - Requires explicit client upgrade
+- **Minor version bump:** Backward-compatible extensions (e.g., new optional field)
+  - V1.0 clients ignore unknown fields (proto3 default)
+  - V1.1 servers accept V1.0 clients (server ignores their lack of new field)
+
+**Invariant:** Every frame carries `protocol_version` in Field 1 (FrameEnvelope).
+Version MUST be extracted before payload deserialization.
+
+### Compatibility Matrix
+
+| Client | Server V1.0 | Server V2.0 | Outcome |
+|--------|---|---|---|
+| V1.0 (current) | ✅ | ✅ Backward-compatible | Accept |
+| V1.1 (future) | ✅ Backward-compatible | ✅ | Accept |
+| V2.0 (future) | ❌ | ✅ | Reject or upgrade |
+
+### Result Stream Metadata Contract
+
+**Doctrine: Metadata-Before-Payload**
+
+All row count information rides in frame headers (RpcMetadata, RpcBatch, RpcCompletion),
+never derived from payload inspection.
+
+- `RpcMetadata` declares schema and row count policy (EXACT_REQUIRED, EXACT_IF_KNOWN, etc.)
+- `RpcBatch` includes `row_count_exact` (total rows in stream, if known upfront)
+- `RpcCompletion.ResultRowCountSummary` confirms final row counts
+- `row_count_exact` is idempotent across all batches (same value or absent)
+
+### Error Classification
+
+Every error carries:
+- `family`: ErrorFamily (Protocol, Authentication, Authorization, Contract, etc.)
+- `retry_disposition`: RetryDisposition (NotRetryable, Retryable, RetryAfter, Backpressure)
+- `transaction_effect`: TransactionEffect (NoTransaction, RollbackRequired, FailStop)
+
+Example error mapping (AndromedaError → ErrorEnvelope):
+
+```ignore
+AndromedaErrorKind::Protocol
+  → ErrorFamily::Protocol + RetryDisposition::NotRetryable
+
+AndromedaErrorKind::Exhausted
+  → ErrorFamily::Resource + RetryDisposition::Backpressure
+  → includes BackpressureMetadata { shed_load: true, capacity_percent: 85 }
+
+AndromedaErrorKind::Unauthorized
+  → ErrorFamily::Authorization + RetryDisposition::NotRetryable
+```
+
+See `docs/decisions/DEC-021-protobuf-schema-contract.md` for complete error taxonomy.
+
+### Deterministic Serialization
+
+All Protobuf messages serialize deterministically via `prost`:
+- Identical input always produces identical bytes
+- Enables caching, deduplication, checksumming
+- No randomization or state-dependent encoding
+
+### Malformed Input Handling
+
+Codec functions NEVER panic:
+- Truncated bytes → `Err(AndromedaError::Protocol)`
+- Invalid field tags → `Err(AndromedaError::Protocol)`
+- Unknown enum codes → Type-safe rejection or default variant
+
 ## Safety
 
 This crate forbids unsafe code (`#![forbid(unsafe_code)]`).
@@ -113,9 +187,9 @@ pub use envelope_frame::FrameEnvelope;
 pub use envelope_validation::RpcResultStreamMetadataPolicy;
 pub use errors::*;
 pub use generated::{
-    decode_generated_message, descriptor_set_bytes, descriptor_set_hash, encode_generated_message,
-    frame_envelope_hash, protocol_layout, CONTRACT_PACKAGE, DESCRIPTOR_SET_HASH_ALGORITHM,
-    PROTOCOL_FRAME_ENVELOPE_TYPE, PROTOCOL_PACKAGE,
+    CONTRACT_PACKAGE, DESCRIPTOR_SET_HASH_ALGORITHM, PROTOCOL_FRAME_ENVELOPE_TYPE,
+    PROTOCOL_PACKAGE, decode_generated_message, descriptor_set_bytes, descriptor_set_hash,
+    encode_generated_message, frame_envelope_hash, protocol_layout,
 };
 pub use manifest::*;
 pub use payload::*;

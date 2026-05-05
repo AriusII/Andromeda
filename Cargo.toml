@@ -15,7 +15,7 @@ members = [
 
 [workspace.package]
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [workspace.dependencies]
 andromeda-catalog = { path = "crates/andromeda-catalog" }
@@ -27,3 +27,19 @@ andromeda-quic = { path = "crates/andromeda-quic" }
 andromeda-srpl = { path = "crates/andromeda-srpl" }
 andromeda-storage = { path = "crates/andromeda-storage" }
 andromeda-tx = { path = "crates/andromeda-tx" }
+
+quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls-ring"] }
+rcgen = { version = "0.14.7" }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+tokio = { version = "1", default-features = false, features = ["net", "rt", "time"] }
+
+# Fuzz and property testing
+proptest = "1.4"
+quickcheck = "1.0"
+
+[profile.fuzz]
+inherits = "release"
+lto = true
+strip = false
+debug = true
+# For libfuzzer: libFuzzer itself forces certain settings

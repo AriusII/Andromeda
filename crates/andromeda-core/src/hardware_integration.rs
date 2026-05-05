@@ -153,8 +153,10 @@ mod tests {
         );
         assert!(!profile.has_simd);
         assert_eq!(profile.gpu.execution_policy, GpuExecutionPolicy::Disabled);
-        assert!(profile
-            .validate_gpu_pipeline(PipelineClass::BatchAnalytics)
-            .is_err());
+        assert!(
+            profile
+                .validate_gpu_pipeline(PipelineClass::BatchAnalytics)
+                .is_err()
+        );
     }
 }

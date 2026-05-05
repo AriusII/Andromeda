@@ -6,7 +6,7 @@ use andromeda_core::{
 use std::collections::BTreeSet;
 
 use crate::{
-    dependencies::validate_in_batch_dependencies, objects::CatalogDefinition, CatalogObjectRef,
+    CatalogObjectRef, dependencies::validate_in_batch_dependencies, objects::CatalogDefinition,
 };
 
 use super::mutation::{CatalogMutation, CatalogMutationDelta, CatalogMutationPlan};

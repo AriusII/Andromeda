@@ -1,11 +1,12 @@
 use andromeda_core::{AndromedaResult, TransactionId};
 
-use crate::{wal_record_kind_from_tag, wal_record_kind_tag, Lsn, WalRecord};
+use crate::{Lsn, WalRecord, wal_record_kind_from_tag, wal_record_kind_tag};
 
 use super::{
+    WAL_FORMAT_VERSION, WAL_RECORD_HEADER_LEN, WAL_RECORD_MAGIC,
     binary::{read_u16, read_u64},
     checksum::header_checksum_without_checksum,
-    storage_error, WAL_FORMAT_VERSION, WAL_RECORD_HEADER_LEN, WAL_RECORD_MAGIC,
+    storage_error,
 };
 
 const FLAG_HAS_PREVIOUS_LSN: u16 = 0x0001;

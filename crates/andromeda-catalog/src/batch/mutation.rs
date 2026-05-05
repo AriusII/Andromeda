@@ -5,7 +5,7 @@ use andromeda_core::{
 };
 use std::collections::BTreeSet;
 
-use crate::{objects::CatalogDefinition, CatalogObjectRef};
+use crate::{CatalogObjectRef, objects::CatalogDefinition};
 
 use super::definition::{CatalogLifecycleTarget, DefinitionBatchId};
 

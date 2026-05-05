@@ -4,7 +4,7 @@
 //! `PolicyVersion` digests) and protocol-side descriptor hashes all derive
 //! from the same FIPS-180-4 implementation without duplication.
 
-pub use andromeda_core::digest::{sha256, Sha256};
+pub use andromeda_core::digest::{Sha256, sha256};
 
 #[cfg(test)]
 mod tests {

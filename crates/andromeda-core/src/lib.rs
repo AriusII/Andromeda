@@ -126,6 +126,9 @@ mod ids;
 mod time;
 mod types;
 
+// IAM and security modules (Wave 19+)
+pub mod principal;
+
 // Hardware capability modules (modular hardware definition)
 mod hardware_cpu;
 mod hardware_gpu;
@@ -139,6 +142,9 @@ pub use ids::{
     CatalogObjectId, CatalogVersion, ContractHash, DatabaseId, InvocationId, NamespaceId,
     ProcedureId, RequestId, SessionId, TransactionId,
 };
+
+// Re-export IAM types
+pub use principal::{CertificateFingerprint, Permission, PermissionSet, Principal, PrincipalId, PrincipalRole, SessionToken};
 
 // Re-export hardware capability types (CPU)
 pub use hardware_cpu::{CpuCapabilityClass, CpuProfile, HardwareArchitecture};

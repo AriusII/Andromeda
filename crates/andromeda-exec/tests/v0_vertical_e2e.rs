@@ -1,26 +1,26 @@
 use andromeda_catalog::{
-    inventory_domain_definition_batch, inventory_reserve_stock_contract, CatalogSnapshot,
-    ProcedureContract, INVENTORY_DATABASE_ID, INVENTORY_NAMESPACE_ID,
+    CatalogSnapshot, INVENTORY_DATABASE_ID, INVENTORY_NAMESPACE_ID, ProcedureContract,
+    inventory_domain_definition_batch, inventory_reserve_stock_contract,
 };
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, ContractHash, InvocationId, RequestId,
     SessionId,
 };
 use andromeda_exec::{
-    encode_inventory_reserve_stock_v0_execute_frame, inventory_reserve_stock_v0_pdf_srpl_source,
     CompletionStatus, InventoryStock, InvocationContext, InvocationRequest,
     V0InventoryRecoverableRuntime, V0InventoryReserveStockRpcPayload,
+    encode_inventory_reserve_stock_v0_execute_frame, inventory_reserve_stock_v0_pdf_srpl_source,
 };
 use andromeda_observe::{
     CriticalDecisionKind, EventEmitter, EventEnvelope, EventSink, InMemoryEventSink, TraceEvent,
     TraceId,
 };
 use andromeda_quic::{
-    validate_result_stream_sequence, validate_single_frame_on_stream, FrameType, StreamRole,
+    FrameType, StreamRole, validate_result_stream_sequence, validate_single_frame_on_stream,
 };
 use andromeda_storage::{
-    recover_from_file_wal, DatabaseManifest, FileWal, InMemoryWal, Lsn, RedoRecordDecision,
-    StartupMode,
+    DatabaseManifest, FileWal, InMemoryWal, Lsn, RedoRecordDecision, StartupMode,
+    recover_from_file_wal,
 };
 
 fn inventory_catalog_snapshot() -> CatalogSnapshot {
@@ -295,14 +295,16 @@ fn v0_inventory_observed_contract_rejection_emits_pre_transaction_evidence() {
     assert_eq!(err.kind(), AndromedaErrorKind::Contract);
     assert!(runtime.wal().is_empty());
     assert_eq!(sink.events().len(), 2);
-    assert!(sink
-        .events()
-        .iter()
-        .all(|event| event.correlation.has_no_transaction_evidence()));
-    assert!(sink
-        .events()
-        .iter()
-        .all(|event| event.correlation.has_request_session()));
+    assert!(
+        sink.events()
+            .iter()
+            .all(|event| event.correlation.has_no_transaction_evidence())
+    );
+    assert!(
+        sink.events()
+            .iter()
+            .all(|event| event.correlation.has_request_session())
+    );
     assert!(matches!(
         &sink.events()[0].event,
         TraceEvent::ContractRejected(trace)
@@ -340,10 +342,11 @@ fn v0_inventory_observed_authorization_denial_emits_pre_transaction_evidence() {
     assert_eq!(err.kind(), AndromedaErrorKind::Security);
     assert!(runtime.wal().is_empty());
     assert_eq!(sink.events().len(), 2);
-    assert!(sink
-        .events()
-        .iter()
-        .all(|event| event.correlation.has_no_transaction_evidence()));
+    assert!(
+        sink.events()
+            .iter()
+            .all(|event| event.correlation.has_no_transaction_evidence())
+    );
     assert!(matches!(
         &sink.events()[0].event,
         TraceEvent::AuthorizationDenied(trace)
@@ -487,9 +490,10 @@ fn v0_inventory_observed_rejection_surfaces_and_counts_emitter_failure_without_w
         .unwrap_err();
 
     assert_eq!(err.kind(), AndromedaErrorKind::Internal);
-    assert!(err
-        .message()
-        .contains("injected pre-transaction observe sink failure"));
+    assert!(
+        err.message()
+            .contains("injected pre-transaction observe sink failure")
+    );
     assert_eq!(emitter.accepted_count(), 0);
     assert_eq!(emitter.rejected_count(), 1);
     assert_eq!(emitter.sink().attempts, 1);

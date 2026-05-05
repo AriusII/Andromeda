@@ -71,15 +71,21 @@ fn building_hot_snapshot_remains_mutable_before_seal_or_publication() {
 fn sealed_segment_blocks_in_place_drift_but_allows_append_extent() {
     let descriptor = descriptor(SegmentState::Sealed);
 
-    assert!(descriptor
-        .validate_mutation(SegmentMutation::AppendExtent)
-        .is_ok());
-    assert!(descriptor
-        .validate_mutation(SegmentMutation::UpdatePageInPlace)
-        .is_err());
-    assert!(descriptor
-        .validate_mutation(SegmentMutation::SplitSegment)
-        .is_err());
+    assert!(
+        descriptor
+            .validate_mutation(SegmentMutation::AppendExtent)
+            .is_ok()
+    );
+    assert!(
+        descriptor
+            .validate_mutation(SegmentMutation::UpdatePageInPlace)
+            .is_err()
+    );
+    assert!(
+        descriptor
+            .validate_mutation(SegmentMutation::SplitSegment)
+            .is_err()
+    );
 }
 
 #[test]

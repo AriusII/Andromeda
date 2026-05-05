@@ -1,6 +1,6 @@
 use crate::{Lsn, WalRecord};
 
-use super::{frame::decode_frame_header, record::decode_wal_record_frame, WAL_RECORD_HEADER_LEN};
+use super::{WAL_RECORD_HEADER_LEN, frame::decode_frame_header, record::decode_wal_record_frame};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WalScanStopReason {

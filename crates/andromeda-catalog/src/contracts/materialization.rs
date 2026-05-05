@@ -2,18 +2,18 @@
 
 use andromeda_core::{AndromedaResult, ColumnDescriptor, ContractHash, ProcedureId};
 
-use crate::names::QualifiedName;
 use crate::CatalogObjectRef;
+use crate::names::QualifiedName;
 
 use super::{
+    CompatibilityPolicy, ContractCompatibilityDiagnostic, MultiResultPolicy, PolicyVersion,
+    ProcedureContract, ProcedureContractBinding, ProcedureErrorPolicy, ProtocolLayoutRef,
+    ResultMetadataPolicy, ResultStreamContract, StatsVersion, TransactionPolicy,
     hash::{
         canonical_policy_version, canonical_procedure_contract_hash,
         canonical_procedure_contract_hash_parts,
     },
     validation::diagnose_procedure_contract_compatibility,
-    CompatibilityPolicy, ContractCompatibilityDiagnostic, MultiResultPolicy, PolicyVersion,
-    ProcedureContract, ProcedureContractBinding, ProcedureErrorPolicy, ProtocolLayoutRef,
-    ResultMetadataPolicy, ResultStreamContract, StatsVersion, TransactionPolicy,
 };
 
 impl ProcedureContract {

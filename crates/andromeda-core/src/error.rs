@@ -47,6 +47,7 @@ pub enum AndromedaErrorKind {
     Srpl,
     Storage,
     Transaction,
+    Transport,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

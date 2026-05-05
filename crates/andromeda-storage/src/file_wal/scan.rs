@@ -5,11 +5,12 @@ use std::{
     path::Path,
 };
 
-use crate::{encode_wal_record, scan_wal_records, Lsn, WalRecord, WalScanStop, WalScanStopReason};
+use crate::{Lsn, WalRecord, WalScanStop, WalScanStopReason, encode_wal_record, scan_wal_records};
 
 use super::{
-    format::{read_file_wal_header, FILE_WAL_DATA_OFFSET},
-    io_error, storage_error, FileWalDiskScan,
+    FileWalDiskScan,
+    format::{FILE_WAL_DATA_OFFSET, read_file_wal_header},
+    io_error, storage_error,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

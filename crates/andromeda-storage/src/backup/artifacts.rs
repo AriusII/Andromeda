@@ -9,7 +9,7 @@ use andromeda_observe::TraceId;
 use crate::{Lsn, WAL_FORMAT_VERSION};
 
 use super::helpers::backup_error;
-use super::plan::{validate_wal_segment_chain, BackupManifest};
+use super::plan::{BackupManifest, validate_wal_segment_chain};
 use super::types::{BACKUP_PHYSICAL_PLAN_VERSION_V0, BACKUP_SUPPORTED_STORAGE_FORMAT_VERSION_V0};
 
 /// Digest/checksum identity for a durable physical backup artifact.

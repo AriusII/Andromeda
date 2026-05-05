@@ -82,7 +82,7 @@ fn assert_procedure_dispatch_denied_without_local_runtime_entry(
         "authorization denial must not create a WAL record"
     );
     assert_eq!(
-        runtime.transactions().live_count(),
+        runtime.transactions().live_count().unwrap(),
         0,
         "authorization denial must not create a local transaction"
     );
@@ -246,4 +246,181 @@ fn allowed_application_surface_dispatch_can_execute_with_token() {
     assert_eq!(token.audit().outcome, SecurityAuditOutcome::Allowed);
     assert_eq!(outcome.completion.status, CompletionStatus::Committed);
     assert!(!runtime.wal().is_empty());
+}
+
+// ============================================================================
+// D3: Certificate Identity Binding Contracts
+// ============================================================================
+
+/// Contract test: Verify that a Connection with bound certificate identity
+/// can provide the fingerprint to surface_gate for authorization.
+#[test]
+fn d3_certificate_identity_binding_to_surface_gate() {
+    use andromeda_quic::Connection;
+
+    // Create a connection bound to Application plane.
+    let mut conn = Connection::new(SurfacePlane::Application);
+
+    // Bind a certificate identity matching the plane scope.
+    let cert_identity = CertificateIdentity::new(
+        "a".repeat(64), // SHA256 fingerprint
+        "test-service",
+        SurfaceScope::Application,
+    )
+    .unwrap();
+
+    conn.set_certificate_identity(cert_identity.clone())
+        .unwrap();
+
+    // Create a registry with a binding for this fingerprint.
+    let registry = registry(vec![binding(
+        &"a".repeat(64),
+        SurfaceScope::Application,
+        "svc-app",
+        vec![Permission::ExecuteProcedure],
+    )]);
+
+    let gate = SurfacePlaneAuthorizer::new(&registry);
+
+    // Retrieve the fingerprint from the connection's certificate identity.
+    let fp = conn
+        .certificate_identity()
+        .map(|ci| ci.fingerprint.as_str())
+        .expect("connection should have certificate identity");
+
+    // Authorize dispatch using the bound identity.
+    let outcome = gate
+        .authorize_dispatch(
+            TraceId::new(100),
+            SurfacePlane::Application,
+            fp,
+            andromeda_observe::SurfaceAction::ExecuteProcedure,
+        )
+        .unwrap();
+
+    assert!(outcome.is_allowed());
+}
+
+/// Contract test: Verify that certificate identity mismatch at session construction
+/// prevents dispatch authorization (surface plane scope check).
+#[test]
+fn d3_certificate_scope_mismatch_prevents_dispatch() {
+    use andromeda_quic::Connection;
+
+    // Create a connection bound to Application plane.
+    let mut conn = Connection::new(SurfacePlane::Application);
+
+    // Try to bind an Administration certificate (wrong scope).
+    let admin_cert = CertificateIdentity::new(
+        "b".repeat(64),
+        "admin-service",
+        SurfaceScope::Administration, // Mismatch!
+    )
+    .unwrap();
+
+    // Binding should fail due to scope mismatch.
+    let err = conn.set_certificate_identity(admin_cert);
+    assert!(err.is_err());
+    assert_eq!(
+        err.unwrap_err().kind(),
+        andromeda_core::AndromedaErrorKind::Protocol
+    );
+
+    // Connection should have no identity bound.
+    assert!(conn.certificate_identity().is_none());
+}
+
+/// Contract test: Verify that once a certificate identity is bound,
+/// it cannot be replaced.
+#[test]
+fn d3_certificate_identity_immutability() {
+    use andromeda_quic::Connection;
+
+    let mut conn = Connection::new(SurfacePlane::Administration);
+
+    let cert1 =
+        CertificateIdentity::new("c".repeat(64), "admin-1", SurfaceScope::Administration).unwrap();
+    let cert2 =
+        CertificateIdentity::new("d".repeat(64), "admin-2", SurfaceScope::Administration).unwrap();
+
+    // First binding succeeds.
+    conn.set_certificate_identity(cert1.clone()).unwrap();
+    assert_eq!(
+        conn.certificate_identity().unwrap().fingerprint,
+        "c".repeat(64)
+    );
+
+    // Second binding fails.
+    let err = conn.set_certificate_identity(cert2);
+    assert!(err.is_err());
+
+    // First identity is preserved.
+    assert_eq!(
+        conn.certificate_identity().unwrap().fingerprint,
+        "c".repeat(64)
+    );
+}
+
+/// Contract test: Verify that all four surface planes enforce their
+/// required certificate scopes.
+#[test]
+fn d3_all_planes_enforce_certificate_scope_policy() {
+    use andromeda_quic::Connection;
+
+    let test_cases = vec![
+        (
+            SurfacePlane::Application,
+            SurfaceScope::Application,
+            true, // should succeed
+        ),
+        (
+            SurfacePlane::Application,
+            SurfaceScope::Administration,
+            false, // should fail
+        ),
+        (
+            SurfacePlane::Administration,
+            SurfaceScope::Administration,
+            true,
+        ),
+        (
+            SurfacePlane::Administration,
+            SurfaceScope::Application,
+            false,
+        ),
+        (SurfacePlane::HighAvailability, SurfaceScope::Cluster, true),
+        (
+            SurfacePlane::HighAvailability,
+            SurfaceScope::Application,
+            false,
+        ),
+        (
+            SurfacePlane::Monitoring,
+            SurfaceScope::MonitoringAgent,
+            true,
+        ),
+        (SurfacePlane::Monitoring, SurfaceScope::Application, false),
+    ];
+
+    for (plane, scope, should_succeed) in test_cases {
+        let mut conn = Connection::new(plane);
+        let identity = CertificateIdentity::new("e".repeat(64), "test", scope).unwrap();
+        let result = conn.set_certificate_identity(identity);
+
+        if should_succeed {
+            assert!(
+                result.is_ok(),
+                "plane {:?} with scope {:?} should succeed",
+                plane,
+                scope
+            );
+        } else {
+            assert!(
+                result.is_err(),
+                "plane {:?} with scope {:?} should fail",
+                plane,
+                scope
+            );
+        }
+    }
 }

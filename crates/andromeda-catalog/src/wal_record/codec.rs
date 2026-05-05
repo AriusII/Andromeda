@@ -862,11 +862,7 @@ pub(super) fn catalog_wal_payload_checksum(kind_tag: u16, body_len: u64, body: &
     fold_bytes(&mut state, &kind_tag.to_le_bytes());
     fold_bytes(&mut state, &body_len.to_le_bytes());
     fold_bytes(&mut state, body);
-    if state == 0 {
-        1
-    } else {
-        state
-    }
+    if state == 0 { 1 } else { state }
 }
 
 // ---------------------------------------------------------------------------

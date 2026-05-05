@@ -3,22 +3,95 @@
 //! This module owns transient buffer-pool metadata only. Durable page identity,
 //! layout, sizing, and recovery ordering are imported from the storage crate's
 //! canonical owners in accordance with DEC-032.
+//!
+//! ## Overview
+//!
+//! The buffer pool manages the transient in-memory residency of pages fetched from durable
+//! storage. It provides:
+//!
+//! - **Frame Management**: Fixed capacity pool of `BufferFrame` instances
+//! - **Eviction Policy**: Clock-based (`ClockEvictionPolicy`) page replacement
+//! - **Dirty Tracking**: Records which pages have been modified since last flush
+//! - **Pin/Unpin Lifecycle**: Prevents eviction of pages actively in use
+//! - **WAL Integration**: Enforces WAL-before-page-flush ordering via `WalDurabilityObserver`
+//!
+//! ## Architecture
+//!
+//! - **BufferPoolConfig**: Static configuration (frame count, page size)
+//! - **BufferPool<S>**: Generic pool implementation over a `PageStore`
+//! - **BufferPoolManager**: Trait for pluggable pool implementations
+//! - **BufferFrame**: Transient metadata (page ID, pin count, dirty LSN, state)
+//! - **ClockEvictionPolicy**: Circular buffer with reference bits for eviction
+//! - **DirtyTracker**: Maintains set of dirty pages with first-dirty LSN per page
+//! - **PageGuard**/**PageGuardMut**: RAII guards for pinned page access
+//!
+//! ## Contracts
+//!
+//! All frames must:
+//! - Use canonical `PageId`, `PageSize`, and `Lsn` types
+//! - Validate `PageLayoutContract` before resident admission
+//! - Maintain `BufferFrameState` invariants (Free → Resident → Pinned)
+//! - Preserve WAL-before-page-flush ordering
+//! - Never leak private implementation details
+//!
+//! ## Usage Example
+//!
+//! ```ignore
+//! use andromeda_storage::{
+//!     BufferPoolConfig, BufferPool, BufferPoolManager, PageSize, PageId, Lsn,
+//! };
+//!
+//! // Create a buffer pool with 128 frames of 16 KiB pages
+//! let config = BufferPoolConfig::new(128, PageSize::KiB16)?;
+//!
+//! // Pin a page (would normally come from page store)
+//! let frame_id = buffer_pool.pin_page(PageId::new(1))?;
+//!
+//! // Access the page (through a guard)
+//! let guard = buffer_pool.page_guard(frame_id)?;
+//! let page_bytes = guard.as_slice();
+//! drop(guard);
+//!
+//! // Mark as dirty and unpin
+//! buffer_pool.unpin_page(frame_id, Some(Lsn::new(42)))?;
+//!
+//! // Flush dirty pages to storage
+//! buffer_pool.flush_all_dirty()?;
+//! ```
+//!
+//! ## Error Handling
+//!
+//! Operations return `AndromedaResult<T>`:
+//! - `BufferPoolError::FrameNotResident`: Page not in buffer pool
+//! - `BufferPoolError::FrameAlreadyPinned`: Cannot evict pinned frame
+//! - `BufferPoolError::PageSizeMismatch`: Page size doesn't match config
+//! - `BufferPoolError::InvalidPageId`: Page ID violates invariants
+//! - General storage errors via `AndromedaError`
+//!
+//! ## Hot/Cold Agnostic
+//!
+//! This module is independent of HotStore/ColdStore placement decisions.
+//! Page placement is determined by the `PageStore` implementation, not the buffer pool.
 
 mod clock;
 mod config;
 mod dirty;
 mod error;
+mod flush_result;
 mod frame;
 mod guard;
 mod manager;
+mod wal_durability;
 
 pub use clock::{ClockEvictionCandidate, ClockEvictionPolicy};
 pub use config::BufferPoolConfig;
 pub use dirty::{DirtyEntry, DirtyFlushCandidate, DirtyTracker};
 pub use error::BufferPoolError;
+pub use flush_result::{FlushAllDirtyResult, FlushBlockedFrame, FlushError};
 pub use frame::{BufferFrame, BufferFrameId, BufferFrameState};
 pub use guard::{PageGuard, PageGuardMut};
 pub use manager::{BufferPool, BufferPoolManager};
+pub use wal_durability::{TestWalDurabilityObserver, WalDurabilityObserver};
 
 #[cfg(test)]
 mod tests {

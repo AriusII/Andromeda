@@ -5,15 +5,16 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{encode_wal_record, Lsn, WalRecord, WalRecordKind, WalScanStop};
+use crate::{Lsn, WalRecord, WalRecordKind, WalScanStop, encode_wal_record};
 
 use super::{
-    format::{file_offset_for_wal_bytes, write_file_wal_header, FILE_WAL_DATA_OFFSET},
-    recovery::{scan_file_wal, FileWalDiskScan},
+    FileWalHeader,
+    format::{FILE_WAL_DATA_OFFSET, file_offset_for_wal_bytes, write_file_wal_header},
+    recovery::{FileWalDiskScan, scan_file_wal},
     scan::{
-        is_forensic_scan_stop, record_boundaries_for, scan_open_file_wal, FileWalRecordBoundary,
+        FileWalRecordBoundary, is_forensic_scan_stop, record_boundaries_for, scan_open_file_wal,
     },
-    storage_error, FileWalHeader,
+    storage_error,
 };
 
 #[derive(Debug)]

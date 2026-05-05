@@ -42,7 +42,7 @@ use andromeda_core::{
     ContractHash, ProcedureId,
 };
 
-use crate::model::ExecutableProcedurePlan;
+use crate::procedure_model::ExecutableProcedurePlan;
 
 /// Address of a procedure to resolve before transaction creation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -451,7 +451,7 @@ mod tests {
     };
     use andromeda_core::{CatalogObjectId, ScalarType, TimestampType, TypeDescriptor};
 
-    use crate::model::{BoundSrplBodyPlan, BoundSrplOperationPlan, SrplCatalogBindingEvidence};
+    use crate::procedure_model::{BoundSrplBodyPlan, BoundSrplOperationPlan, SrplCatalogBindingEvidence};
 
     struct FakeResolver {
         response: ProcedureResolveResponse,

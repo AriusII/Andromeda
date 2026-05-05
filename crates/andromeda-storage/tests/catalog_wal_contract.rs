@@ -13,8 +13,8 @@
 mod tests {
     use andromeda_core::{CatalogObjectId, CatalogVersion, ContractHash};
     use andromeda_storage::{
-        decode_catalog_record, encode_catalog_record, replay_catalog_wal_records, CatalogWalRecord,
-        Lsn,
+        CatalogWalRecord, Lsn, decode_catalog_record, encode_catalog_record,
+        replay_catalog_wal_records,
     };
 
     // =========================================================================
@@ -270,10 +270,12 @@ mod tests {
 
         let result = replay_catalog_wal_records(&records, CatalogVersion::new(100));
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .message()
-            .contains("non-existent procedure"));
+        assert!(
+            result
+                .unwrap_err()
+                .message()
+                .contains("non-existent procedure")
+        );
     }
 
     #[test]
@@ -338,10 +340,12 @@ mod tests {
 
         let result = decode_catalog_record(&frame);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .message()
-            .contains("unsupported catalog WAL record version"));
+        assert!(
+            result
+                .unwrap_err()
+                .message()
+                .contains("unsupported catalog WAL record version")
+        );
     }
 
     // =========================================================================

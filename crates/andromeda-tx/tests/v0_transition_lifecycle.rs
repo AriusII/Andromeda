@@ -10,8 +10,8 @@ use andromeda_observe::{
     TraceId, TransactionPhaseCode, TransactionTransitionTrace, TransitionReasonCode,
 };
 use andromeda_tx::{
-    transaction_phase_code, TransactionState, TransactionStateMachine,
-    TransactionTransitionCorrelation,
+    TransactionState, TransactionStateMachine, TransactionTransitionCorrelation,
+    transaction_phase_code,
 };
 
 #[test]

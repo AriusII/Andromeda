@@ -18,6 +18,8 @@ use andromeda_core::{
     TransactionId,
 };
 use andromeda_proto::{
+    ErrorEnvelope, ErrorFamily, FrameEnvelope, PayloadKind, ProtocolVersion, RetryDisposition,
+    RpcCompletionStatus, TransactionEffect, TransactionOutcome,
     generated::{
         decode_generated_message, encode_generated_message,
         protocol::v1::{
@@ -26,8 +28,6 @@ use andromeda_proto::{
             RpcCompletion, RpcMetadata,
         },
     },
-    ErrorEnvelope, ErrorFamily, FrameEnvelope, PayloadKind, ProtocolVersion, RetryDisposition,
-    RpcCompletionStatus, TransactionEffect, TransactionOutcome,
 };
 use prost::Message;
 
@@ -148,8 +148,8 @@ fn test_frame_payload_serialization_deterministic() {
 #[test]
 fn test_result_stream_metadata_round_trip() {
     use andromeda_proto::generated::contract::v1::{
-        result_stream_descriptor::Cardinality, result_stream_descriptor::RowCountRequirement,
-        ColumnDescriptor, ResultStreamDescriptor,
+        ColumnDescriptor, ResultStreamDescriptor, result_stream_descriptor::Cardinality,
+        result_stream_descriptor::RowCountRequirement,
     };
 
     let descriptor = ResultStreamDescriptor {

@@ -5,7 +5,7 @@ mod helpers;
 mod statements;
 mod types;
 
-use crate::{lex, ProcedureAst, SrplDiagnostic};
+use crate::{ProcedureAst, SrplDiagnostic, lex};
 
 use self::core::Parser;
 

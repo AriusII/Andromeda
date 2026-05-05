@@ -316,7 +316,7 @@ fn gate_exec_06_error_handling_deterministic() {
 
 #[test]
 fn gate_exec_07_result_metadata_interface_available() {
-    use andromeda_srpl::model::{BoundSrplBodyPlan, ExecutableProcedurePlan, SrplCatalogBindingEvidence};
+    use andromeda_srpl::procedure_model::{BoundSrplBodyPlan, ExecutableProcedurePlan, SrplCatalogBindingEvidence};
     use andromeda_core::{CatalogObjectId, CatalogObjectRef};
 
     let minimal_plan = ExecutableProcedurePlan {
@@ -354,7 +354,7 @@ fn gate_exec_07_result_metadata_interface_available() {
 
 #[test]
 fn gate_exec_08_plan_validation_interface_available() {
-    use andromeda_srpl::model::{BoundSrplBodyPlan, ExecutableProcedurePlan, SrplCatalogBindingEvidence};
+    use andromeda_srpl::procedure_model::{BoundSrplBodyPlan, ExecutableProcedurePlan, SrplCatalogBindingEvidence};
     use andromeda_core::{CatalogObjectId, CatalogObjectRef};
 
     let minimal_plan = ExecutableProcedurePlan {

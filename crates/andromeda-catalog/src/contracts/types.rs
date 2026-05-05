@@ -6,9 +6,9 @@ use andromeda_core::{
 };
 
 use crate::{
+    CatalogObjectRef, ObjectKind,
     names::QualifiedName,
     objects::{validate_columns, validate_columns_allow_empty},
-    CatalogObjectRef, ObjectKind,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

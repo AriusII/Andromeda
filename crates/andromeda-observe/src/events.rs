@@ -1,3 +1,80 @@
+//! # Observability Event Types and Audit Trace Specifications
+//!
+//! This module defines all trace event types emitted by Andromeda. Each event
+//! is bound to a [`TraceId`] for forensic correlation and must be validated
+//! before emission via [`EventEnvelope::validate`]. No event is ever dropped
+//! silently by the [`EventEmitter`]; all rejections are counted and observable.
+//!
+//! ## Recovery Audit Trail (C6 spec)
+//!
+//! Recovery startup and WAL replay MUST emit the following sequences:
+//!
+//! ### Startup Phase
+//! - **RecoveryTrace** (`RecoveryStartup` variant): Emitted when recovery begins
+//!   - Captures: `trace_id`, `last_durable_lsn`, `corruption_boundary_lsn`
+//!   - Carries startup mode (FastStart/SafeStart/ForensicStart) implicitly from manifest
+//!   - Proves: Recovery boundary established with durable LSN
+//!
+//! ### WAL Replay Phase
+//! - **WalEventTrace** (per batch or operation): Emitted for each WAL append/flush
+//!   - Captures: `trace_id`, `transaction_id`, `appended_lsn`, `durable_lsn`
+//!   - Carries operation type: `WalOperation::Append` or `WalOperation::Flush`
+//!   - Incomplete transactions observed during replay are traced with `has_lsn_evidence()`
+//!   - Proves: Replay progress and LSN sequence integrity
+//!
+//! ### Manifest Publication Phase
+//! - **ManifestTrace** (`Switch` variant): Emitted when new snapshot becomes visible
+//!   - Captures: `trace_id`, `catalog_version`, `manifest_epoch`, `required_wal_start_lsn`
+//!   - Carries: `accepted=true` when publication succeeds
+//!   - Proves: Catalog version transition with WAL anchor evidence
+//!
+//! **Invariant**: Each phase emits at least one event with the same `trace_id`.
+//! Recovery completion is only visible when a `RecoveryTrace` is observable.
+//!
+//! ## Security Audit Trail (C6 spec)
+//!
+//! Authorization and admission decisions MUST emit the following:
+//!
+//! ### Authorization Phase
+//! - **SecurityAuditTrace** (allow path): Emitted after permission check succeeds
+//!   - Captures: `trace_id`, `surface`, `certificate`, `principal`, `permission`, `outcome`
+//!   - Outcome: `SecurityAuditOutcome::Allowed`
+//!   - Reason: Describes the authorization path (e.g., "execute_procedure on application surface")
+//!   - Proves: mTLS cert → principal binding → permission grant
+//!
+//! - **SecurityAuditTrace** (deny path): Emitted even when authorization fails
+//!   - Captures: Same fields as allowed path
+//!   - Outcome: `SecurityAuditOutcome::Denied`
+//!   - Reason: Typed denial reason (from `principal_binding` module)
+//!   - Proves: Decision was made and observable (not silent)
+//!
+//! ### Admission Gate Phase
+//! - **ContractRejectedTrace**: Emitted when contract validation fails before admission
+//!   - Carries rejection code and reason explaining the contract mismatch
+//!
+//! - **AuthorizationDeniedTrace**: Emitted as final step if gate rejects
+//!   - Reason documents why admission was denied (auth, budget, etc.)
+//!   - Proves: No transaction created, no WAL entry written
+//!
+//! **Invariant**: Every authorization and admission decision is observable.
+//! Denials carry machine-classifiable reasons for audit pipelines.
+//! No sensitive key material appears in audit trails (validated by `contains_sensitive_evidence`).
+//!
+//! ## Event Emission Guarantees
+//!
+//! The [`EventEmitter`] enforces:
+//! - **Monotonic EventId allocation**: IDs never repeat within a session
+//! - **Non-zero EventId**: All emitted events have EventId > 0
+//! - **Envelope validation**: All events validated before insertion (no silent drops)
+//! - **Rejection counting**: Failed emissions are counted in `rejected_count()`
+//! - **Exhaustion guard**: Emitter poisons itself when EventId space exhausted
+//!
+//! Tests verify all 4 C6 scenarios:
+//! 1. `test_recovery_audit_trace_covers_startup_and_replay`
+//! 2. `test_security_audit_trail_covers_mtls_and_permission`
+//! 3. `test_recovery_incomplete_transaction_rejection_traced`
+//! 4. `test_admission_gate_rejection_leaves_no_silent_drop`
+
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogObjectId, CatalogVersion,
     ContractHash, InvocationId, TransactionId,
@@ -7,15 +84,21 @@ use andromeda_core::{RequestId, SessionId};
 
 use crate::TraceId;
 
+mod admission_audit;
+mod backup_audit;
 mod correlation;
 mod decision;
+mod hadr_audit;
 mod protocol_rejection;
 mod sequence;
 mod sink;
 mod transition;
 
+pub use admission_audit::*;
+pub use backup_audit::*;
 pub use correlation::*;
 pub use decision::*;
+pub use hadr_audit::*;
 pub use protocol_rejection::*;
 pub use sequence::*;
 pub use sink::*;
@@ -1237,16 +1320,16 @@ impl EventEnvelope {
                     || self.correlation.durable_lsn != Some(trace.durable_commit_lsn) =>
             {
                 return Err(observe_error(
-                        "commit-visible traces require matching transaction_id and durable_lsn correlation",
-                    ));
+                    "commit-visible traces require matching transaction_id and durable_lsn correlation",
+                ));
             }
             TraceEvent::RollbackDurable(trace)
                 if self.correlation.transaction_id != Some(trace.transaction_id)
                     || self.correlation.durable_lsn != Some(trace.durable_rollback_lsn) =>
             {
                 return Err(observe_error(
-                        "rollback-durable traces require matching transaction_id and durable_lsn correlation",
-                    ));
+                    "rollback-durable traces require matching transaction_id and durable_lsn correlation",
+                ));
             }
             TraceEvent::RecoveryStartup(trace)
                 if self.correlation.durable_lsn != Some(trace.last_durable_lsn) =>
@@ -1614,38 +1697,44 @@ mod tests {
             }),
         )
         .unwrap_err();
-        assert!(recovery_without_lsn
-            .message()
-            .contains("recovery startup traces"));
+        assert!(
+            recovery_without_lsn
+                .message()
+                .contains("recovery startup traces")
+        );
 
-        assert!(EventEnvelope::new(
-            EventId::new(6),
-            EventCorrelation {
-                transaction_id: Some(TransactionId::new(8)),
-                durable_lsn: Some(9),
-                ..EventCorrelation::empty()
-            },
-            TraceEvent::CommitVisible(CommitVisibleTrace {
-                trace_id: TraceId::new(7),
-                transaction_id: TransactionId::new(8),
-                durable_commit_lsn: 9,
-            }),
-        )
-        .is_ok());
+        assert!(
+            EventEnvelope::new(
+                EventId::new(6),
+                EventCorrelation {
+                    transaction_id: Some(TransactionId::new(8)),
+                    durable_lsn: Some(9),
+                    ..EventCorrelation::empty()
+                },
+                TraceEvent::CommitVisible(CommitVisibleTrace {
+                    trace_id: TraceId::new(7),
+                    transaction_id: TransactionId::new(8),
+                    durable_commit_lsn: 9,
+                }),
+            )
+            .is_ok()
+        );
 
-        assert!(EventEnvelope::new(
-            EventId::new(10),
-            EventCorrelation {
-                durable_lsn: Some(12),
-                ..EventCorrelation::empty()
-            },
-            TraceEvent::RecoveryStartup(RecoveryTrace {
-                trace_id: TraceId::new(11),
-                last_durable_lsn: 12,
-                corruption_boundary_lsn: Some(13),
-            }),
-        )
-        .is_ok());
+        assert!(
+            EventEnvelope::new(
+                EventId::new(10),
+                EventCorrelation {
+                    durable_lsn: Some(12),
+                    ..EventCorrelation::empty()
+                },
+                TraceEvent::RecoveryStartup(RecoveryTrace {
+                    trace_id: TraceId::new(11),
+                    last_durable_lsn: 12,
+                    corruption_boundary_lsn: Some(13),
+                }),
+            )
+            .is_ok()
+        );
     }
 
     #[test]
@@ -1662,9 +1751,11 @@ mod tests {
             }),
         )
         .unwrap_err();
-        assert!(append_without_transaction_correlation
-            .message()
-            .contains("transaction_id correlation"));
+        assert!(
+            append_without_transaction_correlation
+                .message()
+                .contains("transaction_id correlation")
+        );
 
         let flush = EventEnvelope::new(
             EventId::new(24),

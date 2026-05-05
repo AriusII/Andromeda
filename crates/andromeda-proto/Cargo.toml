@@ -8,6 +8,10 @@ publish = false
 andromeda-core.workspace = true
 prost = "0.14.3"
 
+[dev-dependencies]
+prost-types = "0.14.3"
+proptest.workspace = true
+
 [build-dependencies]
 prost-build = "0.14.3"
 protoc-bin-vendored = "3.2.0"

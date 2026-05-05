@@ -4,13 +4,13 @@ use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::Lsn;
 
+use super::BackupCompatibility;
 use super::artifacts::{
     BackupAuditTraceFields, BackupIncompleteTransactionBoundary, BackupPhysicalArtifactSet,
     BackupResourceBounds, BackupWalSegmentArtifact,
 };
 use super::helpers::backup_error;
 use super::types::{BackupId, ColdSnapshotBoundary, WalArchiveRange};
-use super::BackupCompatibility;
 
 /// Durable backup manifest binding a cold snapshot to a contiguous WAL archive range.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

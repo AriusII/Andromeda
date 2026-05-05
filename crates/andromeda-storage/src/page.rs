@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::Lsn;
@@ -65,6 +67,10 @@ impl PageSize {
             Self::KiB16 => 16 * 1024,
             Self::KiB32 => 32 * 1024,
         }
+    }
+
+    pub const fn bytes_usize(self) -> usize {
+        self.bytes() as usize
     }
 }
 
@@ -263,6 +269,220 @@ impl PageLayoutContract {
     }
 }
 
+/// Full durable page byte image.
+///
+/// A `PageImage` is always exactly one canonical Andromeda page: either 16 KiB
+/// or 32 KiB as selected by [`PageSize`]. The raw constructor intentionally
+/// exposes no durable identity because binary header parsing is owned by the
+/// page-layout contract. Callers that need `page_id` or `page_lsn` must attach a
+/// validated [`PageLayoutContract`] with [`PageImage::with_layout`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PageImage {
+    page_size: PageSize,
+    bytes: Box<[u8]>,
+    layout_contract: Option<PageLayoutContract>,
+}
+
+impl PageImage {
+    pub fn new(page_size: PageSize, bytes: Vec<u8>) -> AndromedaResult<Self> {
+        Self::validate_len(page_size, bytes.len())?;
+        Ok(Self {
+            page_size,
+            bytes: bytes.into_boxed_slice(),
+            layout_contract: None,
+        })
+    }
+
+    pub fn with_layout(
+        layout_contract: PageLayoutContract,
+        bytes: Vec<u8>,
+    ) -> AndromedaResult<Self> {
+        layout_contract.validate()?;
+        let page_size = layout_contract.header.page_size;
+        Self::validate_len(page_size, bytes.len())?;
+        Ok(Self {
+            page_size,
+            bytes: bytes.into_boxed_slice(),
+            layout_contract: Some(layout_contract),
+        })
+    }
+
+    pub fn zeroed_with_layout(layout_contract: PageLayoutContract) -> AndromedaResult<Self> {
+        layout_contract.validate()?;
+        let bytes = vec![0; layout_contract.header.page_size.bytes_usize()];
+        Self::with_layout(layout_contract, bytes)
+    }
+
+    pub fn page_size(&self) -> PageSize {
+        self.page_size
+    }
+
+    pub fn len(&self) -> usize {
+        self.bytes.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.bytes.is_empty()
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.bytes.into_vec()
+    }
+
+    pub fn layout_contract(&self) -> Option<PageLayoutContract> {
+        self.layout_contract
+    }
+
+    pub fn page_id(&self) -> Option<PageId> {
+        self.layout_contract.map(|contract| contract.header.page_id)
+    }
+
+    pub fn page_lsn(&self) -> Option<Lsn> {
+        self.layout_contract
+            .map(|contract| contract.header.page_lsn)
+    }
+
+    fn validate_len(page_size: PageSize, len: usize) -> AndromedaResult<()> {
+        let expected = page_size.bytes_usize();
+        if len != expected {
+            return Err(storage_error(format!(
+                "page image length {len} does not match canonical page size {expected}"
+            )));
+        }
+        Ok(())
+    }
+}
+
+/// Deterministic page-store abstraction for buffer-pool foundation tests.
+///
+/// Implementations are responsible for validating page layout contracts before
+/// admitting images. `write_page` and `allocate_page` model the
+/// WAL-before-page-flush precondition by requiring the caller-provided durable
+/// WAL LSN to be greater than or equal to the image page LSN. Real disk IO,
+/// fsync policy, and WAL manager integration are deliberately deferred.
+pub trait PageStore {
+    fn page_size(&self) -> PageSize;
+
+    fn read_page(&self, page_id: PageId) -> AndromedaResult<Option<PageImage>>;
+
+    fn write_page(&mut self, image: PageImage, durable_lsn: Lsn) -> AndromedaResult<()>;
+
+    fn allocate_page(
+        &mut self,
+        layout_contract: PageLayoutContract,
+        durable_lsn: Lsn,
+    ) -> AndromedaResult<PageImage>;
+}
+
+/// Deterministic in-memory page store for unit and future buffer-pool tests.
+///
+/// This store is intentionally not a disk-IO implementation. It keeps pages in a
+/// `BTreeMap` so page order is stable across runs and rejects writes for pages
+/// that have not first been allocated.
+#[derive(Debug, Clone)]
+pub struct InMemoryPageStore {
+    page_size: PageSize,
+    pages: BTreeMap<PageId, PageImage>,
+}
+
+impl InMemoryPageStore {
+    pub fn new(page_size: PageSize) -> Self {
+        Self {
+            page_size,
+            pages: BTreeMap::new(),
+        }
+    }
+
+    pub fn page_count(&self) -> usize {
+        self.pages.len()
+    }
+
+    pub fn contains_page(&self, page_id: PageId) -> bool {
+        self.pages.contains_key(&page_id)
+    }
+
+    fn validate_page_id(page_id: PageId) -> AndromedaResult<()> {
+        if page_id.is_zero() {
+            return Err(storage_error("page store page id must not be zero"));
+        }
+        Ok(())
+    }
+
+    fn validate_image_for_store(&self, image: &PageImage) -> AndromedaResult<PageId> {
+        if image.page_size() != self.page_size {
+            return Err(storage_error(
+                "page image size does not match page store size",
+            ));
+        }
+        let layout_contract = image
+            .layout_contract()
+            .ok_or_else(|| storage_error("page image must include a validated layout contract"))?;
+        layout_contract.validate()?;
+        let page_id = layout_contract.header.page_id;
+        Self::validate_page_id(page_id)?;
+        Ok(page_id)
+    }
+
+    fn validate_wal_before_page_flush(image: &PageImage, durable_lsn: Lsn) -> AndromedaResult<()> {
+        let page_lsn = image
+            .page_lsn()
+            .ok_or_else(|| storage_error("page image must expose page LSN through its layout"))?;
+        if durable_lsn < page_lsn {
+            return Err(storage_error(
+                "WAL-before-page-flush precondition failed: durable WAL LSN is behind page LSN",
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl PageStore for InMemoryPageStore {
+    fn page_size(&self) -> PageSize {
+        self.page_size
+    }
+
+    fn read_page(&self, page_id: PageId) -> AndromedaResult<Option<PageImage>> {
+        Self::validate_page_id(page_id)?;
+        Ok(self.pages.get(&page_id).cloned())
+    }
+
+    fn write_page(&mut self, image: PageImage, durable_lsn: Lsn) -> AndromedaResult<()> {
+        let page_id = self.validate_image_for_store(&image)?;
+        Self::validate_wal_before_page_flush(&image, durable_lsn)?;
+        if !self.pages.contains_key(&page_id) {
+            return Err(storage_error("page store write requires prior allocation"));
+        }
+        self.pages.insert(page_id, image);
+        Ok(())
+    }
+
+    fn allocate_page(
+        &mut self,
+        layout_contract: PageLayoutContract,
+        durable_lsn: Lsn,
+    ) -> AndromedaResult<PageImage> {
+        if layout_contract.header.page_size != self.page_size {
+            return Err(storage_error(
+                "allocated page size does not match page store size",
+            ));
+        }
+        let image = PageImage::zeroed_with_layout(layout_contract)?;
+        let page_id = self.validate_image_for_store(&image)?;
+        Self::validate_wal_before_page_flush(&image, durable_lsn)?;
+        if self.pages.contains_key(&page_id) {
+            return Err(storage_error(
+                "page store allocation would overwrite existing page",
+            ));
+        }
+        self.pages.insert(page_id, image.clone());
+        Ok(image)
+    }
+}
+
 fn checked_add(lhs: u32, rhs: u32, context: &'static str) -> AndromedaResult<u32> {
     lhs.checked_add(rhs)
         .ok_or_else(|| storage_error(format!("{context} overflows u32")))
@@ -310,6 +530,18 @@ mod tests {
         }
     }
 
+    fn valid_contract(page_id: PageId, page_size: PageSize, page_lsn: Lsn) -> PageLayoutContract {
+        PageLayoutContract {
+            header: PageHeader {
+                page_id,
+                page_size,
+                page_lsn,
+                ..valid_header()
+            },
+            trailer: valid_trailer(),
+        }
+    }
+
     #[test]
     fn page_header_and_trailer_have_test_vectors() {
         assert!(valid_header().validate().is_ok());
@@ -353,5 +585,174 @@ mod tests {
             contract.validate().unwrap_err().kind(),
             AndromedaErrorKind::Storage
         );
+    }
+
+    #[test]
+    fn page_store_page_image_accepts_exact_16k_and_32k_lengths() {
+        let image_16k =
+            PageImage::new(PageSize::KiB16, vec![1; 16 * 1024]).expect("16KiB image is canonical");
+        assert_eq!(image_16k.page_size(), PageSize::KiB16);
+        assert_eq!(image_16k.len(), 16 * 1024);
+        assert_eq!(image_16k.page_id(), None);
+        assert_eq!(image_16k.page_lsn(), None);
+
+        let contract = valid_contract(PageId::new(202), PageSize::KiB32, Lsn::new(22));
+        let image_32k = PageImage::with_layout(contract, vec![2; 32 * 1024])
+            .expect("32KiB image with valid layout is canonical");
+        assert_eq!(image_32k.page_size(), PageSize::KiB32);
+        assert_eq!(image_32k.len(), 32 * 1024);
+        assert_eq!(image_32k.page_id(), Some(PageId::new(202)));
+        assert_eq!(image_32k.page_lsn(), Some(Lsn::new(22)));
+        assert_eq!(image_32k.layout_contract(), Some(contract));
+    }
+
+    #[test]
+    fn page_store_page_image_rejects_wrong_lengths_and_invalid_layout() {
+        assert_eq!(
+            PageImage::new(PageSize::KiB16, vec![0; (16 * 1024) - 1])
+                .unwrap_err()
+                .kind(),
+            AndromedaErrorKind::Storage
+        );
+        assert_eq!(
+            PageImage::new(PageSize::KiB32, vec![0; (32 * 1024) + 1])
+                .unwrap_err()
+                .kind(),
+            AndromedaErrorKind::Storage
+        );
+
+        let invalid_contract = valid_contract(PageId::new(0), PageSize::KiB16, Lsn::new(12));
+        assert_eq!(
+            PageImage::with_layout(invalid_contract, vec![0; 16 * 1024])
+                .unwrap_err()
+                .kind(),
+            AndromedaErrorKind::Storage
+        );
+
+        let mismatched_len_contract =
+            valid_contract(PageId::new(203), PageSize::KiB32, Lsn::new(23));
+        assert_eq!(
+            PageImage::with_layout(mismatched_len_contract, vec![0; 16 * 1024])
+                .unwrap_err()
+                .kind(),
+            AndromedaErrorKind::Storage
+        );
+    }
+
+    #[test]
+    fn page_store_in_memory_allocate_read_write_is_deterministic() {
+        let mut store = InMemoryPageStore::new(PageSize::KiB16);
+        let contract = valid_contract(PageId::new(301), PageSize::KiB16, Lsn::new(30));
+
+        assert_eq!(store.page_size(), PageSize::KiB16);
+        assert_eq!(store.page_count(), 0);
+        assert_eq!(
+            store.read_page(PageId::new(301)).expect("read succeeds"),
+            None
+        );
+
+        let allocated = store
+            .allocate_page(contract, Lsn::new(30))
+            .expect("allocation respects WAL precondition");
+        assert_eq!(allocated.page_id(), Some(PageId::new(301)));
+        assert_eq!(allocated.page_lsn(), Some(Lsn::new(30)));
+        assert_eq!(store.page_count(), 1);
+        assert!(store.contains_page(PageId::new(301)));
+        assert_eq!(
+            store.read_page(PageId::new(301)).expect("read allocated"),
+            Some(allocated.clone())
+        );
+
+        let updated_contract = valid_contract(PageId::new(301), PageSize::KiB16, Lsn::new(31));
+        let updated = PageImage::with_layout(updated_contract, vec![9; 16 * 1024])
+            .expect("updated full-page image");
+        store
+            .write_page(updated.clone(), Lsn::new(31))
+            .expect("write respects WAL precondition");
+        assert_eq!(
+            store.read_page(PageId::new(301)).expect("read updated"),
+            Some(updated)
+        );
+    }
+
+    #[test]
+    fn page_store_rejects_unallocated_writes_duplicate_allocations_and_size_mismatch() {
+        let mut store = InMemoryPageStore::new(PageSize::KiB16);
+        let first_contract = valid_contract(PageId::new(401), PageSize::KiB16, Lsn::new(40));
+        store
+            .allocate_page(first_contract, Lsn::new(40))
+            .expect("initial allocation");
+
+        assert_eq!(
+            store
+                .allocate_page(first_contract, Lsn::new(40))
+                .unwrap_err()
+                .kind(),
+            AndromedaErrorKind::Storage
+        );
+
+        let unallocated = PageImage::with_layout(
+            valid_contract(PageId::new(402), PageSize::KiB16, Lsn::new(41)),
+            vec![4; 16 * 1024],
+        )
+        .expect("unallocated page image");
+        assert_eq!(
+            store
+                .write_page(unallocated, Lsn::new(41))
+                .unwrap_err()
+                .kind(),
+            AndromedaErrorKind::Storage
+        );
+
+        let wrong_size_contract = valid_contract(PageId::new(403), PageSize::KiB32, Lsn::new(42));
+        assert_eq!(
+            store
+                .allocate_page(wrong_size_contract, Lsn::new(42))
+                .unwrap_err()
+                .kind(),
+            AndromedaErrorKind::Storage
+        );
+
+        assert_eq!(
+            store.read_page(PageId::new(0)).unwrap_err().kind(),
+            AndromedaErrorKind::Storage
+        );
+    }
+
+    #[test]
+    fn page_store_enforces_wal_before_page_flush_precondition() {
+        let mut store = InMemoryPageStore::new(PageSize::KiB16);
+        let contract = valid_contract(PageId::new(501), PageSize::KiB16, Lsn::new(50));
+
+        assert_eq!(
+            store
+                .allocate_page(contract, Lsn::new(49))
+                .unwrap_err()
+                .kind(),
+            AndromedaErrorKind::Storage
+        );
+        assert_eq!(store.page_count(), 0);
+
+        let allocated = store
+            .allocate_page(contract, Lsn::new(50))
+            .expect("allocation succeeds once WAL durable LSN reaches page LSN");
+        assert_eq!(allocated.page_lsn(), Some(Lsn::new(50)));
+
+        let updated = PageImage::with_layout(
+            valid_contract(PageId::new(501), PageSize::KiB16, Lsn::new(51)),
+            vec![5; 16 * 1024],
+        )
+        .expect("updated image");
+        assert_eq!(
+            store
+                .write_page(updated.clone(), Lsn::new(50))
+                .unwrap_err()
+                .kind(),
+            AndromedaErrorKind::Storage
+        );
+
+        store
+            .write_page(updated, Lsn::new(51))
+            .expect("write succeeds once WAL is durable through page LSN");
     }
 }

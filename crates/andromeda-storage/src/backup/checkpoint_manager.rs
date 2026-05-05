@@ -287,14 +287,18 @@ mod tests {
         let checksum = manager.compute_data_checksum(data);
 
         // Same data should validate
-        assert!(manager
-            .validate_checksum_after_resumption(checksum, data)
-            .is_ok());
+        assert!(
+            manager
+                .validate_checksum_after_resumption(checksum, data)
+                .is_ok()
+        );
 
         // Different data should fail
         let different_data = b"different data";
-        assert!(manager
-            .validate_checksum_after_resumption(checksum, different_data)
-            .is_err());
+        assert!(
+            manager
+                .validate_checksum_after_resumption(checksum, different_data)
+                .is_err()
+        );
     }
 }

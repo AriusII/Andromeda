@@ -3,8 +3,8 @@ use andromeda_core::{AndromedaResult, HardwareProfile, PipelineClass};
 use crate::{HotColdIoThresholds, IoPathBudget, IoPathClass};
 
 use super::{
-    resource_error, storage_error, PlacementDecision, StorageIoBudgetScope, StorageTier,
-    StorageWorkloadClass,
+    PlacementDecision, StorageIoBudgetScope, StorageTier, StorageWorkloadClass, resource_error,
+    storage_error,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

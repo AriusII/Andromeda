@@ -24,8 +24,8 @@ use andromeda_core::AndromedaResult;
 use andromeda_observe::TraceId;
 
 use crate::{
-    backup::{BackupId, BackupManifest},
     Lsn, WalSegmentDescriptor,
+    backup::{BackupId, BackupManifest},
 };
 
 // ============================================================================

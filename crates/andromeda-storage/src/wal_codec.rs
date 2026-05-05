@@ -21,10 +21,10 @@ mod scan;
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind};
 
-pub use frame::{decode_frame_header, WalFrameHeader};
+pub use frame::{WalFrameHeader, decode_frame_header};
 pub use record::{decode_wal_record_frame, encode_wal_record};
 pub use scan::{
-    scan_wal_records, scan_wal_records_from, WalScanResult, WalScanStop, WalScanStopReason,
+    WalScanResult, WalScanStop, WalScanStopReason, scan_wal_records, scan_wal_records_from,
 };
 
 pub const WAL_FORMAT_VERSION_V1: u16 = 1;

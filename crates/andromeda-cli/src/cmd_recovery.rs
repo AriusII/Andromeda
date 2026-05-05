@@ -3,7 +3,7 @@
 use crate::args::RecoveryInspectOptions;
 use andromeda_core::AndromedaResult;
 use andromeda_storage::{
-    report_file_wal_recovery_v0, DatabaseManifest, FileWalRecoveryReportV0, Lsn, StartupMode,
+    DatabaseManifest, FileWalRecoveryReportV0, Lsn, StartupMode, report_file_wal_recovery_v0,
 };
 use std::path::Path;
 

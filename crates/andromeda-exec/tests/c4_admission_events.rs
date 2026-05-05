@@ -11,13 +11,13 @@
 //! `TransactionManager` allocation must be observable and must leave no durability artifacts.
 
 use andromeda_catalog::{
-    inventory_domain_definition_batch, inventory_reserve_stock_contract, CatalogSnapshot,
-    ProcedureContract, INVENTORY_DATABASE_ID, INVENTORY_NAMESPACE_ID,
+    CatalogSnapshot, INVENTORY_DATABASE_ID, INVENTORY_NAMESPACE_ID, ProcedureContract,
+    inventory_domain_definition_batch, inventory_reserve_stock_contract,
 };
 use andromeda_core::{CatalogVersion, ContractHash, InvocationId};
 use andromeda_exec::{
-    services::AdmissionService, services::PreTransactionValidationService, CompletionStatus,
-    InvocationContext, InvocationRequest,
+    CompletionStatus, InvocationContext, InvocationRequest, services::AdmissionService,
+    services::PreTransactionValidationService,
 };
 use andromeda_observe::TraceId;
 

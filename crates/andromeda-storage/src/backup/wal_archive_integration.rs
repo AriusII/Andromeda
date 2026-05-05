@@ -256,7 +256,7 @@ impl WalArchiveIntegration {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::backup::{types::ColdSnapshotBoundary, BackupManifest};
+    use crate::backup::{BackupManifest, types::ColdSnapshotBoundary};
 
     #[test]
     fn test_wal_archive_validation() {

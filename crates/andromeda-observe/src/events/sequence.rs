@@ -4,8 +4,8 @@ use andromeda_core::{
 };
 
 use super::{
-    observe_error, CriticalDecisionKind, EventEnvelope, EventId, EventSink, SecurityAuditOutcome,
-    SecurityAuditTrace, TraceEvent, WalOperation,
+    CriticalDecisionKind, EventEnvelope, EventId, EventSink, SecurityAuditOutcome,
+    SecurityAuditTrace, TraceEvent, WalOperation, observe_error,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

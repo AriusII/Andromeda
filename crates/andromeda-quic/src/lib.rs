@@ -36,17 +36,38 @@ mod rpc_dispatch;
 mod stream_types;
 
 pub mod frame;
+pub mod stream_concurrency;
+pub mod transport;
+
+#[cfg(feature = "runtime-quinn")]
+mod runtime_quinn;
+
+#[cfg(feature = "runtime-quinn")]
+pub mod quinn_backend;
+
+#[cfg(feature = "runtime-quinn")]
+pub mod quinn_tls;
+
+pub use stream_concurrency::{
+    BackpressureRequest, CancellationReason, CancellationToken, StreamConcurrencyManager,
+    StreamState,
+};
+
+// ============================================================================
+// Identity Extraction (D3)
+// ============================================================================
+
+pub mod mtls_identity;
 
 pub use frame::{
-    validate_frame_sequence, validate_result_stream_sequence,
-    validate_result_stream_sequence_with_metadata_policy, validate_single_frame_on_stream,
-    FrameBytes, FrameCodec, FrameCodecEndian, FrameFamily, FrameHeader, FrameType,
-    ResultStreamMetadataPolicy, ResultStreamSequence, StreamRole, AUTH_FRAME_CODE,
-    CONTRACT_REQUEST_FRAME_CODE, CONTRACT_RESPONSE_FRAME_CODE, ERROR_FRAME_CODE,
+    AUTH_FRAME_CODE, CONTRACT_REQUEST_FRAME_CODE, CONTRACT_RESPONSE_FRAME_CODE, ERROR_FRAME_CODE,
     FRAME_CODEC_CRC_OFFSET, FRAME_CODEC_HEADER_LEN, FRAME_HEADER_CRC_UNCHECKED,
-    FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP, HELLO_FRAME_CODE, MAX_FRAME_PAYLOAD_LENGTH,
-    RESERVED_FRAME_FLAGS_MASK, RPC_BATCH_FRAME_CODE, RPC_COMPLETION_FRAME_CODE,
-    RPC_EXECUTE_REQUEST_FRAME_CODE, RPC_METADATA_FRAME_CODE, TELEMETRY_SOFT_SIGNAL_FRAME_CODE,
+    FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP, FrameBytes, FrameCodec, FrameCodecEndian, FrameFamily,
+    FrameHeader, FrameType, HELLO_FRAME_CODE, MAX_FRAME_PAYLOAD_LENGTH, RESERVED_FRAME_FLAGS_MASK,
+    RPC_BATCH_FRAME_CODE, RPC_COMPLETION_FRAME_CODE, RPC_EXECUTE_REQUEST_FRAME_CODE,
+    RPC_METADATA_FRAME_CODE, ResultStreamMetadataPolicy, ResultStreamSequence, StreamRole,
+    TELEMETRY_SOFT_SIGNAL_FRAME_CODE, validate_frame_sequence, validate_result_stream_sequence,
+    validate_result_stream_sequence_with_metadata_policy, validate_single_frame_on_stream,
 };
 
 // ============================================================================
@@ -73,8 +94,8 @@ pub use session::{
 pub mod rpc;
 
 pub use rpc::{
-    dispatch_frame, expected_stream_role, validate_transport_surface, DispatchPolicy,
-    FrameDispatch, TransportSurface,
+    DispatchPolicy, FrameDispatch, TransportSurface, dispatch_frame, expected_stream_role,
+    validate_transport_surface,
 };
 
 // ============================================================================
@@ -82,3 +103,37 @@ pub use rpc::{
 // ============================================================================
 
 pub use backpressure::{BackpressureReason, BackpressureSignal, BackpressureTransport};
+
+// ============================================================================
+// Runtime-free transport trait boundary
+// ============================================================================
+
+pub use transport::{
+    QuicClientTransport, QuicServerTransport, TransportBackpressureStatus,
+    TransportCancellationStatus, TransportEndpointMetadata, TransportMessage,
+    TransportShutdownMode, TransportShutdownState,
+};
+
+// ============================================================================
+// HA/DR Stream Mapping (F2)
+// ============================================================================
+
+pub mod hadr_streams;
+
+pub use hadr_streams::{
+    HADR_STREAM_MAX, HADR_STREAM_MIN, HEARTBEAT_STREAM_MAX, HEARTBEAT_STREAM_MIN,
+    HadrStreamCleanup, HadrStreamKind, RESERVED_STREAM_MAX, RESERVED_STREAM_MIN, StreamAllocation,
+    StreamMultiplexer, VOTE_STREAM_MAX, VOTE_STREAM_MIN, WAL_SHIPPING_STREAM_MAX,
+    WAL_SHIPPING_STREAM_MIN,
+};
+
+// ============================================================================
+// Protocol Invariants (D7)
+// ============================================================================
+
+pub mod protocol_invariants;
+
+pub use protocol_invariants::{
+    FrameTypeInvariants, PayloadKindInvariants, ProtocolInvariants, ProtocolVersionInvariants,
+    validate_frame_header_layout,
+};

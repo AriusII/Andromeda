@@ -10,7 +10,7 @@ use std::num::NonZeroU64;
 use andromeda_catalog::{CatalogObjectRef, ObjectKind, ProcedureContractRef};
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
-use crate::model::{
+use crate::procedure_model::{
     Cardinality, MAX_SRPL_BODY_OPERATIONS, SrplAssignmentIr, SrplEmitValueIr, SrplPredicateIr,
 };
 
@@ -560,7 +560,7 @@ mod tests {
             Vec::new(),
             vec![SrplAssignmentIr {
                 field: "Reserved".to_string(),
-                value: crate::model::SrplValueIr::Bool(true),
+                value: crate::procedure_model::SrplValueIr::Bool(true),
             }],
         )
         .unwrap();
@@ -595,7 +595,7 @@ mod tests {
             SrplRowBound::exact(1).unwrap(),
             vec![SrplEmitValueIr {
                 column: "Reserved".to_string(),
-                value: crate::model::SrplValueIr::Bool(true),
+                value: crate::procedure_model::SrplValueIr::Bool(true),
             }],
         )
         .unwrap();

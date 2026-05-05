@@ -4,8 +4,8 @@
 //! events with durable LSN correlation and proper event envelope validation.
 
 use andromeda_catalog::{
-    inventory_reserve_stock_catalog_bindings, inventory_reserve_stock_contract,
-    INVENTORY_RESERVE_STOCK_PERMISSION,
+    INVENTORY_RESERVE_STOCK_PERMISSION, inventory_reserve_stock_catalog_bindings,
+    inventory_reserve_stock_contract,
 };
 use andromeda_core::{InvocationId, PipelineClass, RequestId, ResourceBudget, TransactionId};
 use andromeda_exec::{
@@ -16,7 +16,7 @@ use andromeda_observe::{
     CommitVisibleTrace, CriticalDecisionKind, EventCorrelation, EventEmitter, EventEnvelope,
     EventId, EventSink, InMemoryEventSink, RollbackDurableTrace, TraceEvent, TraceId,
 };
-use andromeda_srpl::compiler::compile_narrow_procedure_signature;
+use andromeda_srpl::procedure_compiler::compile_narrow_procedure_signature;
 use andromeda_storage::{
     CoreIoPlacementRequest, InMemoryWal, Lsn, OperationalProfile, PageSize, StorageIoBudgetScope,
     StorageWorkloadClass, WalRecordKind,

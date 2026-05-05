@@ -62,6 +62,13 @@ pub fn decode_generated_message<M>(bytes: &[u8]) -> AndromedaResult<M>
 where
     M: prost::Message + Default,
 {
+    if bytes.is_empty() {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Protocol,
+            "generated protobuf decode failed: empty bytes are not valid protobuf",
+        ));
+    }
+
     M::decode(bytes).map_err(|error| {
         AndromedaError::new(
             AndromedaErrorKind::Protocol,

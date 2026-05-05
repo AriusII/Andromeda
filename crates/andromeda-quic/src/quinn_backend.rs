@@ -31,7 +31,7 @@ use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_observe::CertificateIdentity;
 use tokio::sync::Mutex;
 
-use crate::identity::ParsedCertificate;
+use crate::mtls_identity::ParsedCertificate;
 use crate::{FrameBytes, StreamRole, TransportEndpointMetadata, TransportMessage};
 
 /// Adapter wrapping `quinn::Connection` for Andromeda frame transport.

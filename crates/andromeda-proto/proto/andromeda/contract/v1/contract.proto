@@ -2,36 +2,10 @@ syntax = "proto3";
 
 package andromeda.contract.v1;
 
-// Governed contract schema for Andromeda V0 procedure manifests and payload
-// layouts. This package is message-only and must not define services or rpc
-// methods.
-
-message ProtocolLayout {
-  bytes descriptor_set_hash = 1; // 32 bytes, nonzero.
-  bytes frame_envelope_hash = 2; // 32 bytes, nonzero.
-  string protocol_package = 3;
-  string contract_package = 4;
-
-  reserved 5 to 31;
-}
-
-message ProcedureManifest {
-  uint64 procedure_id = 1;
-  string procedure_name = 2;
-  bytes contract_hash = 3; // 32 bytes, nonzero.
-  uint64 catalog_version = 4;
-  ProtocolLayout protocol_layout = 5;
-  repeated ResultStreamDescriptor result_streams = 6;
-  // 32-byte governance digest of the policy bundle backing this manifest.
-  // Distinct from contract / descriptor / frame envelope hashes by domain
-  // separation; never confuse with `contract_hash`.
-  bytes policy_version = 7;
-  // Required permissions a caller must hold to invoke the procedure. Order
-  // is informational; uniqueness is enforced by the Rust contract layer.
-  repeated RequiredPermission required_permissions = 8;
-
-  reserved 9 to 31;
-}
+// Governed contract schema for Andromeda V0 result descriptors and structured
+// object payload layouts. ProcedureManifest and ProtocolLayout live in
+// andromeda/contract/v1/manifest.proto under the same stable package. This
+// package is message-only and must not define services or rpc methods.
 
 // Stable identifier for a permission required to invoke a procedure. The
 // canonical id is a non-empty, lower-case dot-separated string emitted by the

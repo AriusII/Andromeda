@@ -7,8 +7,12 @@
 
 // Module files
 mod args_parser;
+mod cmd_backup;
+mod cmd_catalog;
+mod cmd_hadr;
 mod cmd_protocol;
 mod cmd_recovery;
+mod cmd_restore;
 mod cmd_vertical;
 mod error_mod;
 mod proto_helpers;

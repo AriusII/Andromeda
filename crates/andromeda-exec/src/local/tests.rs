@@ -1,9 +1,9 @@
 use super::runtime::LocalVerticalRuntime;
 use super::types::LocalProcedure;
 use andromeda_catalog::{
-    inventory_domain_definition_batch, inventory_reserve_stock_contract, CatalogLifecycleTarget,
-    CatalogSnapshot, CatalogSystemStore, DefinitionBatch, DefinitionBatchId, DefinitionOperation,
-    ProcedureContract, ProcedureContractRef,
+    CatalogLifecycleTarget, CatalogSnapshot, CatalogSystemStore, DefinitionBatch,
+    DefinitionBatchId, DefinitionOperation, ProcedureContract, ProcedureContractRef,
+    inventory_domain_definition_batch, inventory_reserve_stock_contract,
 };
 use andromeda_core::{
     AndromedaErrorKind, AndromedaResult, CatalogVersion, ContractHash, DatabaseId, InvocationId,
@@ -320,7 +320,7 @@ fn surface_dispatch_denial_stops_before_transaction_creation() {
         assert!(audit.has_identity_evidence());
     }
     assert!(runtime.wal().is_empty());
-    assert_eq!(runtime.transactions().live_count(), 0);
+    assert_eq!(runtime.transactions().live_count().unwrap(), 0);
 }
 
 #[test]
@@ -385,7 +385,7 @@ fn administration_surface_cannot_present_procedure_dispatch_as_external_runtime_
         assert!(audit.reason.contains("requires_application_surface"));
     }
     assert!(runtime.wal().is_empty());
-    assert_eq!(runtime.transactions().live_count(), 0);
+    assert_eq!(runtime.transactions().live_count().unwrap(), 0);
     assert!(contract.required_permissions.iter().all(|p| !p.is_empty()));
 }
 
@@ -551,14 +551,17 @@ fn business_failure_routes_through_failed_before_durable_rollback() {
     assert_eq!(wal.records.len(), 2);
     assert_eq!(wal.records[0].1, WalRecordKind::TxBegin);
     assert_eq!(wal.records[1].1, WalRecordKind::TxRollback);
-    assert!(!wal
-        .records
-        .iter()
-        .any(|(_, kind, _, _)| *kind == WalRecordKind::TxCommit));
+    assert!(
+        !wal.records
+            .iter()
+            .any(|(_, kind, _, _)| *kind == WalRecordKind::TxCommit)
+    );
     assert!(wal.durable_lsn >= wal.records[1].0);
-    assert!(wal.records[1]
-        .3
-        .starts_with(b"andromeda.exec.business-validation-failed.v1\0"));
+    assert!(
+        wal.records[1]
+            .3
+            .starts_with(b"andromeda.exec.business-validation-failed.v1\0")
+    );
 }
 
 #[test]
@@ -587,14 +590,17 @@ fn poison_failure_routes_through_poisoned_before_durable_rollback() {
     assert_eq!(wal.records.len(), 2);
     assert_eq!(wal.records[0].1, WalRecordKind::TxBegin);
     assert_eq!(wal.records[1].1, WalRecordKind::TxRollback);
-    assert!(!wal
-        .records
-        .iter()
-        .any(|(_, kind, _, _)| *kind == WalRecordKind::TxCommit));
+    assert!(
+        !wal.records
+            .iter()
+            .any(|(_, kind, _, _)| *kind == WalRecordKind::TxCommit)
+    );
     assert!(wal.durable_lsn >= wal.records[1].0);
-    assert!(wal.records[1]
-        .3
-        .starts_with(b"andromeda.exec.poisoned-rollback.v1\0"));
+    assert!(
+        wal.records[1]
+            .3
+            .starts_with(b"andromeda.exec.poisoned-rollback.v1\0")
+    );
 }
 
 #[test]

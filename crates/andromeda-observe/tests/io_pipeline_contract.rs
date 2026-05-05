@@ -198,9 +198,11 @@ fn io_and_gpu_observability_rejects_default_or_policy_inconsistent_evidence() {
     )
     .unwrap_err();
 
-    assert!(critical_path_gpu_acceptance
-        .message()
-        .contains("GPU policy decision outcome"));
+    assert!(
+        critical_path_gpu_acceptance
+            .message()
+            .contains("GPU policy decision outcome")
+    );
 }
 
 #[test]

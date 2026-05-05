@@ -126,7 +126,7 @@ impl<'a> ExecutorDispatchBridge<'a> {
         let plane = connection.surface_plane();
 
         // Validate scope match.
-        let required_scope = crate::identity::plane_to_required_surface_scope(plane);
+        let required_scope = crate::mtls_identity::plane_to_required_surface_scope(plane);
         if certificate_identity.surface as u8 != required_scope as u8 {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Security,

@@ -3,10 +3,10 @@
 use andromeda_catalog::inventory_reserve_stock_contract;
 use andromeda_core::{AndromedaResult, HardwareProfile, InvocationId, RequestId, SessionId};
 use andromeda_exec::{
-    encode_inventory_reserve_stock_v0_execute_frame, inventory_reserve_stock_v0_pdf_srpl_source,
     CompletionStatus, InventoryReserveStockExecutor, InventoryStock, InvocationContext,
     InvocationRequest, LocalVerticalRuntime, ReserveStockCommand, V0InventoryRecoverableRuntime,
-    V0InventoryReserveStockRpcPayload,
+    V0InventoryReserveStockRpcPayload, encode_inventory_reserve_stock_v0_execute_frame,
+    inventory_reserve_stock_v0_pdf_srpl_source,
 };
 use andromeda_observe::TraceId;
 use andromeda_storage::{FileWal, InMemoryWal, Lsn};
@@ -168,4 +168,10 @@ pub fn print_help() {
     println!(
         "run `andromeda-cli protocol-smoke [--detail]` for local protocol contract inspection"
     );
+    println!();
+    println!("ADMIN COMMANDS:");
+    println!("run `andromeda-cli hadr [status|promote|demote|quorum]` for HADR administration");
+    println!("run `andromeda-cli backup [start|status|list]` for backup operations");
+    println!("run `andromeda-cli restore <backup-id> [--pitr-lsn <lsn>]` for restore operations");
+    println!("run `andromeda-cli catalog [list-procedures|invalidate-cache|show-contract]` for catalog operations");
 }

@@ -1,25 +1,25 @@
 use andromeda_catalog::{
-    inventory_domain_definition_batch, inventory_reserve_stock_contract,
-    inventory_reserve_stock_contract_candidate, AccessMode, CatalogDefinition, CatalogObjectRef,
-    CatalogSnapshot, CompatibilityPolicy, DefinitionBatch, DefinitionBatchId, DefinitionOperation,
-    IsolationPolicy, MultiResultPolicy, ObjectKind, ProcedureErrorPolicy, ProtocolLayoutRef,
-    QualifiedName, ResultMetadataPolicy, StatsVersion, StructuredObjectDefinition,
-    TransactionPolicy, INVENTORY_DATABASE_ID, INVENTORY_DEFINITION_BATCH_ID,
-    INVENTORY_NAMESPACE_ID,
+    AccessMode, CatalogDefinition, CatalogObjectRef, CatalogSnapshot, CompatibilityPolicy,
+    DefinitionBatch, DefinitionBatchId, DefinitionOperation, INVENTORY_DATABASE_ID,
+    INVENTORY_DEFINITION_BATCH_ID, INVENTORY_NAMESPACE_ID, IsolationPolicy, MultiResultPolicy,
+    ObjectKind, ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName, ResultMetadataPolicy,
+    StatsVersion, StructuredObjectDefinition, TransactionPolicy, inventory_domain_definition_batch,
+    inventory_reserve_stock_contract, inventory_reserve_stock_contract_candidate,
 };
 use andromeda_core::{
     AndromedaErrorKind, CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash,
     ProcedureId, ScalarType, TypeDescriptor,
 };
 use andromeda_srpl::{
+    SourceSpan,
     compiler::{
-        bind_executable_procedure_plan, compile_inventory_reserve_stock_contract,
+        INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, bind_executable_procedure_plan,
+        compile_inventory_reserve_stock_contract,
         compile_inventory_reserve_stock_contract_candidate,
         compile_narrow_procedure_contract_candidate, compile_narrow_procedure_definition,
         compile_narrow_procedure_definition_batch, compile_narrow_procedure_signature,
         inventory_reserve_stock_body_ir, inventory_reserve_stock_contract_metadata,
         lower_ir_to_catalog_definition, lower_ir_to_contract_candidate, parse_procedure_signature,
-        INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE,
     },
     diagnostics::DiagnosticPhase,
     model::{
@@ -27,7 +27,6 @@ use andromeda_srpl::{
         SrplProcedureContractMetadata, SrplProcedureIr, SrplValueIr,
     },
     source::SrplSource,
-    SourceSpan,
 };
 
 #[test]
@@ -150,9 +149,11 @@ fn duplicate_result_names_reject_in_public_contract_model() {
 
     let error = signature.validate().unwrap_err();
 
-    assert!(error
-        .message()
-        .contains("result stream names must be unique"));
+    assert!(
+        error
+            .message()
+            .contains("result stream names must be unique")
+    );
 }
 
 #[test]
@@ -585,7 +586,7 @@ fn pdf_style_inventory_source_binds_to_deterministic_executable_plan() {
     assert_eq!(plan.body.operations.len(), 4);
     assert!(matches!(
         &plan.body.operations[2],
-        andromeda_srpl::model::BoundSrplOperationPlan::UpdateTable {
+        andromeda_srpl::procedure_model::BoundSrplOperationPlan::UpdateTable {
             affected_rows_exact: Some(1),
             ..
         }
@@ -650,10 +651,10 @@ fn executable_plan_rejects_assert_referencing_unbound_read_binding() {
 #[test]
 fn binder_supports_a_distinct_read_only_procedure_shape() {
     use andromeda_catalog::{
-        inventory_product_stock_table, inventory_protocol_layout_ref, ProcedureContractCandidate,
-        ResultStreamContract,
+        ProcedureContractCandidate, ResultStreamContract, inventory_product_stock_table,
+        inventory_protocol_layout_ref,
     };
-    use andromeda_srpl::model::{
+    use andromeda_srpl::procedure_model::{
         SrplBusinessOperationIr, SrplEmitValueIr, SrplPredicateIr, SrplProcedureBodyIr,
         SrplResultStreamIr,
     };
@@ -783,10 +784,12 @@ fn binder_supports_a_distinct_read_only_procedure_shape() {
     // No `Inventory.Snapshot` structured object exists; the optional
     // discovery must NOT require one.
     let snapshot_name = QualifiedName::parse("Inventory.Snapshot").unwrap();
-    assert!(executable
-        .evidence
-        .find_bound_object(&snapshot_name)
-        .is_none());
+    assert!(
+        executable
+            .evidence
+            .find_bound_object(&snapshot_name)
+            .is_none()
+    );
     assert!(executable.validate().is_ok());
 
     // Lowering and binding are deterministic across invocations.

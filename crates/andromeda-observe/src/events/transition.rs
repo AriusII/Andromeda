@@ -2,7 +2,7 @@ use andromeda_core::{AndromedaResult, InvocationId, RequestId, SessionId, Transa
 
 use crate::TraceId;
 
-use super::{contains_sensitive_marker, observe_error, CriticalDecisionKind, DecisionTrace};
+use super::{CriticalDecisionKind, DecisionTrace, contains_sensitive_marker, observe_error};
 
 /// Stable wire-aligned numeric code for a transaction lifecycle phase.
 ///

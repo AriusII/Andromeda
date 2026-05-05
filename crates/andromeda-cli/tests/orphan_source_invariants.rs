@@ -146,14 +146,18 @@ tonic-build = "0.12"
 
     assert!(manifest.production_deps.contains("andromeda-storage"));
     assert!(manifest.dev_deps.contains("andromeda-storage"));
-    assert!(manifest
-        .forbidden_wire_deps
-        .iter()
-        .any(|violation| violation.contains("tonic")));
-    assert!(manifest
-        .forbidden_wire_deps
-        .iter()
-        .any(|violation| violation.contains("serde_json")));
+    assert!(
+        manifest
+            .forbidden_wire_deps
+            .iter()
+            .any(|violation| violation.contains("tonic"))
+    );
+    assert!(
+        manifest
+            .forbidden_wire_deps
+            .iter()
+            .any(|violation| violation.contains("serde_json"))
+    );
 }
 
 #[test]

@@ -487,7 +487,7 @@ fn test_admission_gate_rejection_leaves_no_silent_drop() {
         "authorization denial must not create any WAL entry"
     );
     assert_eq!(
-        runtime.transactions().live_count(),
+        runtime.transactions().live_count().unwrap(),
         0,
         "authorization denial must not create a local transaction"
     );
@@ -495,7 +495,7 @@ fn test_admission_gate_rejection_leaves_no_silent_drop() {
     println!(
         "✓ Admission gate rejection leaves no silent drop: WAL={}, tx_count={}",
         runtime.wal().len(),
-        runtime.transactions().live_count()
+        runtime.transactions().live_count().unwrap()
     );
 }
 

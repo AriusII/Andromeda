@@ -14,8 +14,8 @@
 //! No additional file I/O is done here; the WAL manager owns the I/O contract.
 
 use andromeda_core::{AndromedaResult, CatalogObjectId, CatalogVersion};
-use andromeda_storage::wal_record_catalog::CatalogWalRecord;
 use andromeda_storage::Lsn;
+use andromeda_storage::wal_record_catalog::CatalogWalRecord;
 
 use crate::CatalogMutation;
 

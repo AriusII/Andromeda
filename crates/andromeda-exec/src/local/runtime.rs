@@ -1,13 +1,16 @@
 use andromeda_catalog::CatalogSnapshot;
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use andromeda_observe::TraceId;
+use andromeda_observe::{
+    CommitVisibleTrace, EventCorrelation, EventEmitter, EventSink, RollbackDurableTrace,
+    TraceEvent, TraceId,
+};
 use andromeda_quic::SurfacePlane;
 use andromeda_tx::TransactionManager;
 
 use crate::{
-    services::CompletionMappingService, AuthorizedProcedureDispatch, ExecutionIoAdmissionDecision,
-    InvocationContext, InvocationReject, InvocationRequest, InvocationWal, LocalDispatchPlan,
-    LocalDispatcher, LocalRollbackPlan, RollbackCause,
+    AuthorizedProcedureDispatch, ExecutionIoAdmissionDecision, InvocationContext, InvocationReject,
+    InvocationRequest, InvocationWal, LocalDispatchPlan, LocalDispatcher, LocalRollbackPlan,
+    RollbackCause, services::CompletionMappingService,
 };
 
 use super::helpers::{require_local_procedure_execution_io_admission, rollback_payload_for_cause};
@@ -148,6 +151,99 @@ where
     ) -> AndromedaResult<VerticalInvocationOutcome> {
         let _io_admission = require_local_procedure_execution_io_admission(io_admission)?;
         self.execute_after_admission(request, procedure, context.trace_id, Some(context))
+    }
+
+    /// Execute with observable event emission for commit lifecycle.
+    /// C5 feature: emits CommitVisible event after successful commit flush.
+    /// Event emission failures are NOT silently dropped and propagate to caller.
+    pub fn execute_authorized_observable<S: EventSink>(
+        &mut self,
+        request: InvocationRequest,
+        procedure: &LocalProcedure,
+        context: &InvocationContext,
+        emitter: &mut EventEmitter<S>,
+        correlation: EventCorrelation,
+    ) -> AndromedaResult<VerticalInvocationOutcome> {
+        let outcome = self.execute_authorized(request, procedure, context)?;
+
+        // Emit CommitVisible event after successful commit with durable LSN
+        if let Some(durable_lsn) = outcome.completion.durable_lsn {
+            Self::emit_commit_visible_event(
+                emitter,
+                outcome.completion.trace_id,
+                outcome.transaction_id,
+                durable_lsn,
+                correlation,
+            )?;
+        }
+
+        Ok(outcome)
+    }
+
+    /// Rollback with observable event emission for rollback lifecycle (business failure path).
+    /// C5 feature: emits RollbackDurable event after successful rollback flush.
+    /// Event emission failures are NOT silently dropped and propagate to caller.
+    pub fn rollback_authorized_business_validation_failure_after_begin_observable<S: EventSink>(
+        &mut self,
+        request: InvocationRequest,
+        procedure: &LocalProcedure,
+        context: &InvocationContext,
+        failure_reason: impl Into<String>,
+        emitter: &mut EventEmitter<S>,
+        correlation: EventCorrelation,
+    ) -> AndromedaResult<VerticalInvocationOutcome> {
+        let outcome = self.rollback_authorized_business_validation_failure_after_begin(
+            request,
+            procedure,
+            context,
+            failure_reason,
+        )?;
+
+        // Emit RollbackDurable event after successful rollback with durable LSN
+        if let Some(durable_lsn) = outcome.completion.durable_lsn {
+            Self::emit_rollback_durable_event(
+                emitter,
+                outcome.completion.trace_id,
+                outcome.transaction_id,
+                durable_lsn,
+                correlation,
+            )?;
+        }
+
+        Ok(outcome)
+    }
+
+    /// Rollback with observable event emission for rollback lifecycle (poison path).
+    /// C5 feature: emits RollbackDurable event after successful rollback flush.
+    /// Event emission failures are NOT silently dropped and propagate to caller.
+    pub fn rollback_authorized_poison_after_begin_observable<S: EventSink>(
+        &mut self,
+        request: InvocationRequest,
+        procedure: &LocalProcedure,
+        context: &InvocationContext,
+        poison_reason: impl Into<String>,
+        emitter: &mut EventEmitter<S>,
+        correlation: EventCorrelation,
+    ) -> AndromedaResult<VerticalInvocationOutcome> {
+        let outcome = self.rollback_authorized_poison_after_begin(
+            request,
+            procedure,
+            context,
+            poison_reason,
+        )?;
+
+        // Emit RollbackDurable event after successful rollback with durable LSN
+        if let Some(durable_lsn) = outcome.completion.durable_lsn {
+            Self::emit_rollback_durable_event(
+                emitter,
+                outcome.completion.trace_id,
+                outcome.transaction_id,
+                durable_lsn,
+                correlation,
+            )?;
+        }
+
+        Ok(outcome)
     }
 
     pub fn rollback_business_validation_failure_after_begin(
@@ -426,5 +522,50 @@ where
             authorization_trace,
             result_metadata: procedure.result_metadata,
         })
+    }
+
+    /// Emit a CommitVisible event for a successfully committed transaction.
+    /// This is a C5 observable coverage helper that emits the durable commit
+    /// decision into the event sink. Event emission failures propagate to the
+    /// caller (never silently dropped).
+    pub fn emit_commit_visible_event<S: EventSink>(
+        emitter: &mut EventEmitter<S>,
+        trace_id: TraceId,
+        transaction_id: andromeda_core::TransactionId,
+        durable_lsn: andromeda_storage::Lsn,
+        correlation: EventCorrelation,
+    ) -> AndromedaResult<()> {
+        emitter.emit(
+            correlation,
+            TraceEvent::CommitVisible(CommitVisibleTrace {
+                trace_id,
+                transaction_id,
+                durable_commit_lsn: durable_lsn.get(),
+            }),
+        )?;
+        Ok(())
+    }
+
+    /// Emit a RollbackDurable event for a successfully rolled-back transaction.
+    /// This is a C5 observable coverage helper that emits the durable rollback
+    /// decision into the event sink, capturing the allocator floor as visible
+    /// state for recovery. Event emission failures propagate to the caller
+    /// (never silently dropped).
+    pub fn emit_rollback_durable_event<S: EventSink>(
+        emitter: &mut EventEmitter<S>,
+        trace_id: TraceId,
+        transaction_id: andromeda_core::TransactionId,
+        durable_lsn: andromeda_storage::Lsn,
+        correlation: EventCorrelation,
+    ) -> AndromedaResult<()> {
+        emitter.emit(
+            correlation,
+            TraceEvent::RollbackDurable(RollbackDurableTrace {
+                trace_id,
+                transaction_id,
+                durable_rollback_lsn: durable_lsn.get(),
+            }),
+        )?;
+        Ok(())
     }
 }

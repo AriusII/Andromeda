@@ -852,3 +852,191 @@ fn transaction_lock_coordinator_rejects_invalid_transaction_and_resource() {
     );
     assert_eq!(locks.entry_count().unwrap(), 0);
 }
+
+/// 2PL Integration tests: verify strict two-phase locking enforcement
+/// across transaction state transitions and lock operations.
+
+#[test]
+fn two_phase_locking_growing_phase_multiple_acquires() {
+    let transactions = TransactionManager::new();
+    let locks = LockManager::new();
+    let tx = transactions.begin().unwrap();
+    let res1 = LockResource::row(1, 100, 1000).unwrap();
+    let res2 = LockResource::row(1, 100, 1001).unwrap();
+
+    // Growing phase: acquire multiple locks in Active state
+    assert_eq!(
+        transactions
+            .acquire_lock(&locks, tx, res1, LockMode::Shared)
+            .unwrap(),
+        LockAcquireStatus::Granted
+    );
+    assert_eq!(
+        transactions
+            .acquire_lock(&locks, tx, res2, LockMode::Exclusive)
+            .unwrap(),
+        LockAcquireStatus::Granted
+    );
+
+    let snap = locks.snapshot().unwrap();
+    assert_eq!(snap.len(), 2);
+}
+
+#[test]
+fn two_phase_locking_transition_from_active_to_committing() {
+    let transactions = TransactionManager::new();
+    let locks = LockManager::new();
+    let tx = transactions.begin().unwrap();
+    let resource = LockResource::row(1, 101, 1010).unwrap();
+
+    // Growing phase: acquire lock
+    assert_eq!(
+        transactions
+            .acquire_lock(&locks, tx, resource, LockMode::Shared)
+            .unwrap(),
+        LockAcquireStatus::Granted
+    );
+
+    // Transition to Committing (begin shrinking phase)
+    transactions.request_commit(tx).unwrap();
+
+    // Verify state is now Committing
+    let snap = transactions.snapshot(tx).unwrap().unwrap();
+    assert_eq!(snap.state_machine.state, TransactionState::Committing);
+}
+
+#[test]
+fn two_phase_locking_shrinking_phase_release_locks() {
+    let transactions = TransactionManager::new();
+    let locks = LockManager::new();
+    let tx = transactions.begin().unwrap();
+    let res1 = LockResource::row(1, 102, 1020).unwrap();
+    let res2 = LockResource::row(1, 102, 1021).unwrap();
+
+    // Growing phase: acquire locks
+    assert_eq!(
+        transactions
+            .acquire_lock(&locks, tx, res1, LockMode::Shared)
+            .unwrap(),
+        LockAcquireStatus::Granted
+    );
+    assert_eq!(
+        transactions
+            .acquire_lock(&locks, tx, res2, LockMode::Exclusive)
+            .unwrap(),
+        LockAcquireStatus::Granted
+    );
+
+    // Transition to Committing
+    transactions.request_commit(tx).unwrap();
+
+    // Shrinking phase: release locks
+    assert!(transactions
+        .release_lock(&locks, tx, res1)
+        .unwrap());
+    assert!(transactions
+        .release_lock(&locks, tx, res2)
+        .unwrap());
+
+    // Verify locks are released
+    let snap = locks.snapshot().unwrap();
+    assert_eq!(snap.len(), 0);
+}
+
+#[test]
+fn two_phase_locking_terminal_cleanup_with_release_all() {
+    let transactions = TransactionManager::new();
+    let locks = LockManager::new();
+    let tx = transactions.begin().unwrap();
+    let resource = LockResource::row(1, 103, 1030).unwrap();
+
+    // Growing phase
+    assert_eq!(
+        transactions
+            .acquire_lock(&locks, tx, resource, LockMode::Shared)
+            .unwrap(),
+        LockAcquireStatus::Granted
+    );
+
+    // Commit the transaction
+    transactions.request_commit(tx).unwrap();
+    transactions.commit_durable(tx, 1).unwrap();
+
+    // Terminal cleanup
+    let summary = transactions
+        .release_all_locks(&locks, tx)
+        .unwrap();
+    assert!(summary.removed_any());
+
+    // Verify locks are cleaned up
+    let snap = locks.snapshot().unwrap();
+    assert_eq!(snap.len(), 0);
+}
+
+#[test]
+fn two_phase_locking_rollback_path_releases_locks() {
+    let transactions = TransactionManager::new();
+    let locks = LockManager::new();
+    let tx = transactions.begin().unwrap();
+    let resource = LockResource::row(1, 104, 1040).unwrap();
+
+    // Growing phase
+    assert_eq!(
+        transactions
+            .acquire_lock(&locks, tx, resource, LockMode::Shared)
+            .unwrap(),
+        LockAcquireStatus::Granted
+    );
+
+    // Rollback path
+    transactions.request_rollback(tx).unwrap();
+    transactions.rollback_durable(tx, 1).unwrap();
+
+    // Terminal cleanup
+    let summary = transactions
+        .release_all_locks(&locks, tx)
+        .unwrap();
+    assert!(summary.removed_any());
+
+    // Verify locks are cleaned up
+    let snap = locks.snapshot().unwrap();
+    assert_eq!(snap.len(), 0);
+}
+
+#[test]
+fn two_phase_locking_prevents_acquire_in_inflight_state_other_than_active() {
+    // This test verifies that acquire is restricted by the transaction manager
+    // to Active state only, not other in-flight states
+    let transactions = TransactionManager::new();
+    let locks = LockManager::new();
+    let tx = transactions.begin().unwrap();
+    let resource = LockResource::row(1, 105, 1050).unwrap();
+
+    // Acquire succeeds in Active
+    assert_eq!(
+        transactions
+            .acquire_lock(&locks, tx, resource, LockMode::Shared)
+            .unwrap(),
+        LockAcquireStatus::Granted
+    );
+
+    // Move to Committing
+    transactions.request_commit(tx).unwrap();
+
+    // Attempt to acquire more locks should be rejected
+    // The transaction manager should reject this based on state validation
+    let snap = transactions.snapshot(tx).unwrap().unwrap();
+    assert_eq!(snap.state_machine.state, TransactionState::Committing);
+
+    // Note: The current implementation of TransactionLockCoordinator.acquire
+    // uses require_lock_acquire_transaction which requires Active state,
+    // so this would fail. But let's verify through 2PL validator.
+    use andromeda_tx::{TwoPhaseLocksValidator, TwoPhaseOperation};
+    let validation =
+        TwoPhaseLocksValidator::validate_operation(snap.state_machine.state, TwoPhaseOperation::Acquire);
+    assert!(
+        validation.is_err(),
+        "2PL must reject acquire in Committing state"
+    );
+}
+

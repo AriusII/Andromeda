@@ -15,8 +15,8 @@
 use andromeda_core::{AndromedaErrorKind, RequestId, SessionId};
 use andromeda_quic::{
     BackpressureReason, BackpressureSignal, BackpressureTransport, CancellationCause,
-    CancellationOutcome, CancellationSignal, Connection, FrameBytes, FrameHeader, FrameType,
-    StreamRole, SurfacePlane, FRAME_HEADER_CRC_UNCHECKED,
+    CancellationOutcome, CancellationSignal, Connection, FRAME_HEADER_CRC_UNCHECKED, FrameBytes,
+    FrameHeader, FrameType, StreamRole, SurfacePlane,
 };
 
 fn frame(frame_type: FrameType, session: u64) -> FrameBytes {
@@ -100,9 +100,11 @@ fn backpressure_is_sendable_on_diagnostic_and_datagram_only() {
     };
 
     assert!(signal.validate_routing(StreamRole::Diagnostic).is_ok());
-    assert!(signal
-        .validate_routing(StreamRole::TelemetryDatagram)
-        .is_ok());
+    assert!(
+        signal
+            .validate_routing(StreamRole::TelemetryDatagram)
+            .is_ok()
+    );
 
     for bad in [
         StreamRole::SessionControl,
@@ -130,9 +132,11 @@ fn backpressure_datagram_rejects_undersized_mtu() {
         .unwrap_err();
     assert_eq!(err.kind(), AndromedaErrorKind::Resource);
 
-    assert!(signal
-        .validate_for_transport(BackpressureTransport::TelemetryDatagram { mtu_bytes: 1200 })
-        .is_ok());
+    assert!(
+        signal
+            .validate_for_transport(BackpressureTransport::TelemetryDatagram { mtu_bytes: 1200 })
+            .is_ok()
+    );
 }
 
 #[test]
@@ -142,17 +146,21 @@ fn backpressure_datagram_rejects_unaddressed_request_scoped() {
         request_id: None,
         retry_after_millis: Some(50),
     };
-    assert!(signal
-        .validate_for_transport(BackpressureTransport::TelemetryDatagram { mtu_bytes: 1500 })
-        .is_err());
+    assert!(
+        signal
+            .validate_for_transport(BackpressureTransport::TelemetryDatagram { mtu_bytes: 1500 })
+            .is_err()
+    );
 
     let addressed = BackpressureSignal {
         request_id: Some(RequestId::new(3)),
         ..signal
     };
-    assert!(addressed
-        .validate_for_transport(BackpressureTransport::TelemetryDatagram { mtu_bytes: 1500 })
-        .is_ok());
+    assert!(
+        addressed
+            .validate_for_transport(BackpressureTransport::TelemetryDatagram { mtu_bytes: 1500 })
+            .is_ok()
+    );
 }
 
 #[test]
@@ -162,9 +170,11 @@ fn backpressure_diagnostic_stream_only_enforces_retry_policy() {
         request_id: None,
         retry_after_millis: Some(250),
     };
-    assert!(signal
-        .validate_for_transport(BackpressureTransport::DiagnosticStream)
-        .is_ok());
+    assert!(
+        signal
+            .validate_for_transport(BackpressureTransport::DiagnosticStream)
+            .is_ok()
+    );
 
     let bad = BackpressureSignal {
         retry_after_millis: Some(BackpressureSignal::MAX_RETRY_AFTER_MILLIS + 1),

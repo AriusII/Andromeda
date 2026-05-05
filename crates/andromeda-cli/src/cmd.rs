@@ -2,8 +2,12 @@ use crate::args::{parse_recovery_inspect_options, parse_vertical_v0_wal_path};
 use crate::error::cli_error;
 use andromeda_core::AndromedaResult;
 
+pub use crate::cmd_backup::run_backup_command;
+pub use crate::cmd_catalog::run_catalog_command;
+pub use crate::cmd_hadr::run_hadr_command;
 pub use crate::cmd_protocol::run_protocol_smoke;
 pub use crate::cmd_recovery::run_recovery_inspect;
+pub use crate::cmd_restore::run_restore_command;
 pub use crate::cmd_vertical::{print_help, run_vertical_demo, run_vertical_v0_demo};
 
 /// Dispatches a CLI command based on the first argument.
@@ -21,6 +25,10 @@ pub fn dispatch_command(args: &[String]) -> AndromedaResult<()> {
             let options = parse_recovery_inspect_options(&args[1..])?;
             run_recovery_inspect(options)
         }
+        Some("hadr") => run_hadr_command(&args[1..]),
+        Some("backup") => run_backup_command(&args[1..]),
+        Some("restore") => run_restore_command(&args[1..]),
+        Some("catalog") => run_catalog_command(&args[1..]),
         Some("-h" | "--help" | "help") | None => {
             print_help();
             Ok(())

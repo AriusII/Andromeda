@@ -91,11 +91,7 @@ impl FeedbackId {
     /// Construct a `FeedbackId`.  Returns `None` for the reserved zero
     /// value.
     pub const fn new(value: u64) -> Option<Self> {
-        if value == 0 {
-            None
-        } else {
-            Some(Self(value))
-        }
+        if value == 0 { None } else { Some(Self(value)) }
     }
 
     pub const fn get(self) -> u64 {

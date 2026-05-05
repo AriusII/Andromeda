@@ -4,8 +4,11 @@
 //! panic-free manager. C3-LM-002 defines the V0 lock-mode compatibility matrix;
 //! C3-LM-003 adds nonblocking acquire decisions. C3-LM-004 adds conservative
 //! same-transaction re-entry and nonblocking upgrade rules. C3-LM-005 adds
-//! deterministic FIFO waiter promotion on release. Deadlock detection remains
-//! deferred.
+//! deterministic FIFO waiter promotion on release. C3-LM-006 adds terminal
+//! transaction cleanup through strict 2PL `release_all`; it is only for the
+//! boundary after a durable commit decision or durable rollback decision is
+//! known, and must not be used for early lock release. Deadlock detection
+//! remains deferred.
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -214,6 +217,199 @@ pub enum LockAcquireStatus {
     },
 }
 
+/// Structured lock trace kind for transaction-local audit projection.
+///
+/// These values are observability evidence only. They do not emit globally and
+/// do not imply abort, rollback, commit, WAL, or durability state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LockTraceKind {
+    CriticalWait,
+    Promotion,
+    ReleaseAll,
+}
+
+/// Structured lock decision outcome for transaction-local audit projection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LockTraceOutcome {
+    Waiting,
+    WaitingUpgrade,
+    Promoted,
+    Released,
+    Noop,
+}
+
+/// Correlation-friendly lock decision evidence.
+///
+/// The evidence is deliberately local to `andromeda-tx`: callers may later map
+/// it into `andromeda-observe`, but no global emitter is required here. It
+/// carries lock-table facts only and intentionally has no durable LSN field.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LockDecisionEvidence {
+    pub kind: LockTraceKind,
+    pub tx_id: TransactionId,
+    pub resource: Option<LockResource>,
+    pub mode: Option<LockMode>,
+    pub blockers: Vec<LockHolder>,
+    pub waiters: Vec<LockWaiter>,
+    pub promoted_waiters: Vec<LockWaiter>,
+    pub outcome: LockTraceOutcome,
+    pub reason: &'static str,
+    pub affected_resource_count: usize,
+    pub released_holder_count: usize,
+    pub removed_waiter_count: usize,
+}
+
+impl LockDecisionEvidence {
+    fn critical_wait(
+        tx_id: TransactionId,
+        resource: LockResource,
+        mode: LockMode,
+        blockers: Vec<LockHolder>,
+        outcome: LockTraceOutcome,
+        reason: &'static str,
+    ) -> Self {
+        Self {
+            kind: LockTraceKind::CriticalWait,
+            tx_id,
+            resource: Some(resource),
+            mode: Some(mode),
+            blockers,
+            waiters: Vec::new(),
+            promoted_waiters: Vec::new(),
+            outcome,
+            reason,
+            affected_resource_count: 0,
+            released_holder_count: 0,
+            removed_waiter_count: 0,
+        }
+    }
+
+    fn promotion(resource: LockResource, waiter: LockWaiter) -> Self {
+        Self {
+            kind: LockTraceKind::Promotion,
+            tx_id: waiter.tx_id,
+            resource: Some(resource),
+            mode: Some(waiter.mode),
+            blockers: Vec::new(),
+            waiters: Vec::new(),
+            promoted_waiters: vec![waiter],
+            outcome: LockTraceOutcome::Promoted,
+            reason: "fifo_waiter_promoted_after_lock_release",
+            affected_resource_count: 0,
+            released_holder_count: 0,
+            removed_waiter_count: 0,
+        }
+    }
+}
+
+/// Non-breaking acquire hook result that carries the existing status plus any
+/// trace evidence for critical waits.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LockAcquireEvidence {
+    pub status: LockAcquireStatus,
+    pub evidence: Option<LockDecisionEvidence>,
+}
+
+/// Non-breaking release hook result that carries the existing boolean outcome
+/// plus promotion traces caused by the release.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LockReleaseEvidence {
+    pub released_any: bool,
+    pub evidence: Vec<LockDecisionEvidence>,
+}
+
+/// Non-breaking release-all hook result that carries the existing summary plus
+/// release-all and promotion traces caused by cleanup.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LockReleaseAllEvidence {
+    pub summary: LockReleaseAllSummary,
+    pub evidence: Vec<LockDecisionEvidence>,
+}
+
+impl LockAcquireStatus {
+    /// Project a critical-wait trace when this acquire status represents a wait.
+    ///
+    /// Non-waiting acquire outcomes return `None` to keep the hook focused on
+    /// the critical wait invariant.
+    pub fn critical_wait_evidence(
+        &self,
+        tx_id: TransactionId,
+        resource: LockResource,
+        mode: LockMode,
+    ) -> Option<LockDecisionEvidence> {
+        match self {
+            Self::Waiting { blockers, .. } => Some(LockDecisionEvidence::critical_wait(
+                tx_id,
+                resource,
+                mode,
+                blockers.clone(),
+                LockTraceOutcome::Waiting,
+                "lock_request_waiting_on_incompatible_holders_or_fifo_fairness",
+            )),
+            Self::WaitingUpgrade {
+                requested_mode,
+                blockers,
+                ..
+            } => Some(LockDecisionEvidence::critical_wait(
+                tx_id,
+                resource,
+                *requested_mode,
+                blockers.clone(),
+                LockTraceOutcome::WaitingUpgrade,
+                "lock_upgrade_waiting_on_incompatible_holders_or_fifo_fairness",
+            )),
+            Self::Granted | Self::AlreadyHeld { .. } | Self::Upgraded { .. } => None,
+        }
+    }
+}
+
+/// Deterministic evidence returned by [`LockManager::release_all`].
+///
+/// Counts are intentionally order-independent because the backing lock table is
+/// a hash map. `release_all` is a transaction-end cleanup primitive only; it is
+/// not evidence that a commit or rollback has become durable.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct LockReleaseAllSummary {
+    /// Number of resource entries where at least one holder or waiter belonging
+    /// to the transaction was removed.
+    pub affected_resource_count: usize,
+    /// Number of held lock records removed for the transaction.
+    pub released_holder_count: usize,
+    /// Number of waiter records removed for the transaction.
+    pub removed_waiter_count: usize,
+}
+
+impl LockReleaseAllSummary {
+    pub const fn removed_any(self) -> bool {
+        self.released_holder_count > 0 || self.removed_waiter_count > 0
+    }
+
+    /// Project this cleanup summary as trace evidence.
+    ///
+    /// The projection is cleanup evidence only and intentionally omits any
+    /// durable LSN or WAL/visibility outcome.
+    pub fn to_trace(self, tx_id: TransactionId) -> LockDecisionEvidence {
+        LockDecisionEvidence {
+            kind: LockTraceKind::ReleaseAll,
+            tx_id,
+            resource: None,
+            mode: None,
+            blockers: Vec::new(),
+            waiters: Vec::new(),
+            promoted_waiters: Vec::new(),
+            outcome: if self.removed_any() {
+                LockTraceOutcome::Released
+            } else {
+                LockTraceOutcome::Noop
+            },
+            reason: "terminal_lock_cleanup",
+            affected_resource_count: self.affected_resource_count,
+            released_holder_count: self.released_holder_count,
+            removed_waiter_count: self.removed_waiter_count,
+        }
+    }
+}
+
 /// Minimal lock manager.
 ///
 /// C3-LM-001 provides type-safe construction, queue storage, and non-panicking
@@ -221,8 +417,9 @@ pub enum LockAcquireStatus {
 /// waiter insertion. C3-LM-004 provides same-transaction re-entry, V0 upgrades,
 /// and conservative FIFO fairness for incompatible older waiters. C3-LM-005
 /// promotes compatible waiters after release while preserving FIFO order for the
-/// first incompatible waiter. Deadlock handling is deliberately deferred to
-/// later lock-manager TODOs.
+/// first incompatible waiter. C3-LM-006 provides transaction-end `release_all`
+/// cleanup after durable commit/rollback integration points. Deadlock handling
+/// is deliberately deferred to later lock-manager TODOs.
 #[derive(Debug)]
 pub struct LockManager {
     inner: Mutex<LockManagerInner>,
@@ -255,6 +452,24 @@ impl LockManager {
         validate_lock_resource(resource)?;
         let inner = self.lock_inner()?;
         Ok(inner.entries.get(&resource).cloned())
+    }
+
+    /// Return a deterministic cloned snapshot of the full lock table.
+    ///
+    /// The snapshot exposes owned copies only: callers can inspect holders and
+    /// waiters for evidence-building, including deadlock wait-for graph
+    /// derivation, without receiving mutable access to the lock manager's
+    /// internal table. Resource ordering is stable across runs even though the
+    /// backing table uses a hash map.
+    pub fn snapshot(&self) -> AndromedaResult<Vec<(LockResource, LockEntry)>> {
+        let inner = self.lock_inner()?;
+        let mut entries: Vec<(LockResource, LockEntry)> = inner
+            .entries
+            .iter()
+            .map(|(resource, entry)| (*resource, entry.clone()))
+            .collect();
+        entries.sort_by_key(|(resource, _)| *resource);
+        Ok(entries)
     }
 
     /// Try to acquire a lock without blocking an OS thread or assuming an async
@@ -386,6 +601,21 @@ impl LockManager {
         Ok(LockAcquireStatus::Waiting { sequence, blockers })
     }
 
+    /// Acquire with transaction-local trace projection for critical waits.
+    ///
+    /// This is a non-breaking hook around [`Self::acquire`]; the lock-table
+    /// mutation and returned status remain identical to the existing API.
+    pub fn acquire_with_evidence(
+        &self,
+        tx_id: TransactionId,
+        resource: LockResource,
+        mode: LockMode,
+    ) -> AndromedaResult<LockAcquireEvidence> {
+        let status = self.acquire(tx_id, resource, mode)?;
+        let evidence = status.critical_wait_evidence(tx_id, resource, mode);
+        Ok(LockAcquireEvidence { status, evidence })
+    }
+
     /// Queue a waiter without evaluating lock compatibility.
     ///
     /// This is a skeleton helper for tests and upcoming acquire work. It
@@ -440,12 +670,27 @@ impl LockManager {
     /// current holder set. Waiting upgrades update the transaction's existing
     /// holder in place and never create a duplicate holder.
     pub fn release(&self, tx_id: TransactionId, resource: LockResource) -> AndromedaResult<bool> {
+        Ok(self.release_with_evidence(tx_id, resource)?.released_any)
+    }
+
+    /// Release one resource with transaction-local promotion traces.
+    ///
+    /// The evidence reports FIFO waiter promotions caused by this release only.
+    /// It does not imply abort, rollback, commit, WAL, or durability state.
+    pub fn release_with_evidence(
+        &self,
+        tx_id: TransactionId,
+        resource: LockResource,
+    ) -> AndromedaResult<LockReleaseEvidence> {
         validate_transaction_id(tx_id)?;
         validate_lock_resource(resource)?;
         let mut inner = self.lock_inner()?;
-        let (removed_any, remove_empty_entry) = {
+        let (released_any, remove_empty_entry, evidence) = {
             let Some(entry) = inner.entries.get_mut(&resource) else {
-                return Ok(false);
+                return Ok(LockReleaseEvidence {
+                    released_any: false,
+                    evidence: Vec::new(),
+                });
             };
 
             let holder_count_before = entry.holders.len();
@@ -456,13 +701,19 @@ impl LockManager {
             let removed_any = holder_count_before != entry.holders.len()
                 || waiter_count_before != entry.waiters.len();
 
+            let mut evidence = Vec::new();
             if removed_any {
-                promote_compatible_waiters(entry);
+                evidence.extend(
+                    promote_compatible_waiters(entry)
+                        .into_iter()
+                        .map(|waiter| LockDecisionEvidence::promotion(resource, waiter)),
+                );
             }
 
             (
                 removed_any,
                 entry.holders.is_empty() && entry.waiters.is_empty(),
+                evidence,
             )
         };
 
@@ -470,7 +721,84 @@ impl LockManager {
             inner.entries.remove(&resource);
         }
 
-        Ok(removed_any)
+        Ok(LockReleaseEvidence {
+            released_any,
+            evidence,
+        })
+    }
+
+    /// Remove all holder and waiter records for `tx_id` across all resources.
+    ///
+    /// This is the strict 2PL terminal cleanup primitive. It is valid only at a
+    /// transaction-end boundary after the caller has durable evidence for either
+    /// a commit decision or a rollback decision. Calling this method must not be
+    /// interpreted as making commit/rollback durable, and it must not be used
+    /// for early release while a transaction can still perform work.
+    ///
+    /// For each affected resource, compatible waiters are promoted from the
+    /// front of that resource's FIFO queue after the transaction's records are
+    /// removed. Empty lock-table entries are removed. The returned summary is
+    /// deterministic count evidence and does not depend on hash-map iteration
+    /// order.
+    pub fn release_all(&self, tx_id: TransactionId) -> AndromedaResult<LockReleaseAllSummary> {
+        Ok(self.release_all_with_evidence(tx_id)?.summary)
+    }
+
+    /// Remove all lock records with transaction-local cleanup and promotion
+    /// traces.
+    ///
+    /// The first evidence item is always the release-all summary projection.
+    /// Subsequent items, if any, are FIFO waiter promotion traces.
+    pub fn release_all_with_evidence(
+        &self,
+        tx_id: TransactionId,
+    ) -> AndromedaResult<LockReleaseAllEvidence> {
+        validate_transaction_id(tx_id)?;
+        let mut inner = self.lock_inner()?;
+        let mut summary = LockReleaseAllSummary::default();
+        let mut evidence = Vec::new();
+        let mut empty_resources = Vec::new();
+        let mut resources: Vec<LockResource> = inner.entries.keys().copied().collect();
+        resources.sort();
+
+        for resource in resources {
+            let Some(entry) = inner.entries.get_mut(&resource) else {
+                continue;
+            };
+            let holder_count_before = entry.holders.len();
+            let waiter_count_before = entry.waiters.len();
+
+            entry.holders.retain(|holder| holder.tx_id != tx_id);
+            entry.waiters.retain(|waiter| waiter.tx_id != tx_id);
+
+            let released_holder_count = holder_count_before - entry.holders.len();
+            let removed_waiter_count = waiter_count_before - entry.waiters.len();
+            if released_holder_count == 0 && removed_waiter_count == 0 {
+                continue;
+            }
+
+            summary.affected_resource_count += 1;
+            summary.released_holder_count += released_holder_count;
+            summary.removed_waiter_count += removed_waiter_count;
+
+            evidence.extend(
+                promote_compatible_waiters(entry)
+                    .into_iter()
+                    .map(|waiter| LockDecisionEvidence::promotion(resource, waiter)),
+            );
+
+            if entry.holders.is_empty() && entry.waiters.is_empty() {
+                empty_resources.push(resource);
+            }
+        }
+
+        for resource in empty_resources {
+            inner.entries.remove(&resource);
+        }
+
+        evidence.insert(0, summary.to_trace(tx_id));
+
+        Ok(LockReleaseAllEvidence { summary, evidence })
     }
 
     /// Number of resource entries currently tracked.
@@ -574,7 +902,8 @@ fn is_v0_upgrade(held_mode: LockMode, requested_mode: LockMode) -> bool {
     )
 }
 
-fn promote_compatible_waiters(entry: &mut LockEntry) {
+fn promote_compatible_waiters(entry: &mut LockEntry) -> Vec<LockWaiter> {
+    let mut promoted = Vec::new();
     while let Some(waiter) = entry.waiters.front().copied() {
         if !waiter_is_compatible_with_holders(entry, waiter) {
             break;
@@ -582,7 +911,9 @@ fn promote_compatible_waiters(entry: &mut LockEntry) {
 
         entry.waiters.pop_front();
         promote_waiter_to_holder(entry, waiter);
+        promoted.push(waiter);
     }
+    promoted
 }
 
 fn waiter_is_compatible_with_holders(entry: &LockEntry, waiter: LockWaiter) -> bool {
@@ -1374,6 +1705,254 @@ mod tests {
         );
         assert_eq!(entry.holders[0].mode, LockMode::IntentExclusive);
         assert!(entry.waiters.is_empty());
+    }
+
+    #[test]
+    fn release_all_releases_multiple_resources_and_keeps_unaffected_holders() {
+        let manager = LockManager::new();
+        let table = LockResource::table(1, 2).unwrap();
+        let row = LockResource::row(1, 2, 3).unwrap();
+        let ending_tx = TransactionId::new(21);
+        let remaining_tx = TransactionId::new(22);
+
+        assert_eq!(
+            manager.acquire(ending_tx, table, LockMode::Shared).unwrap(),
+            LockAcquireStatus::Granted
+        );
+        assert_eq!(
+            manager.acquire(ending_tx, row, LockMode::Shared).unwrap(),
+            LockAcquireStatus::Granted
+        );
+        assert_eq!(
+            manager
+                .acquire(remaining_tx, table, LockMode::Shared)
+                .unwrap(),
+            LockAcquireStatus::Granted
+        );
+
+        let summary = manager.release_all(ending_tx).unwrap();
+
+        assert_eq!(
+            summary,
+            LockReleaseAllSummary {
+                affected_resource_count: 2,
+                released_holder_count: 2,
+                removed_waiter_count: 0,
+            }
+        );
+        assert!(summary.removed_any());
+        let table_entry = manager.entry(table).unwrap().unwrap();
+        assert_eq!(
+            table_entry.holders,
+            vec![LockHolder {
+                tx_id: remaining_tx,
+                mode: LockMode::Shared,
+            }]
+        );
+        assert!(table_entry.waiters.is_empty());
+        assert_eq!(manager.entry(row).unwrap(), None);
+        assert_eq!(manager.entry_count().unwrap(), 1);
+    }
+
+    #[test]
+    fn release_all_removes_waiters_for_ending_transaction() {
+        let manager = LockManager::new();
+        let resource = LockResource::table(1, 2).unwrap();
+        let holder_tx = TransactionId::new(31);
+        let waiting_tx = TransactionId::new(32);
+
+        assert_eq!(
+            manager
+                .acquire(holder_tx, resource, LockMode::Exclusive)
+                .unwrap(),
+            LockAcquireStatus::Granted
+        );
+        assert!(matches!(
+            manager
+                .acquire(waiting_tx, resource, LockMode::Shared)
+                .unwrap(),
+            LockAcquireStatus::Waiting { .. }
+        ));
+
+        let summary = manager.release_all(waiting_tx).unwrap();
+
+        assert_eq!(
+            summary,
+            LockReleaseAllSummary {
+                affected_resource_count: 1,
+                released_holder_count: 0,
+                removed_waiter_count: 1,
+            }
+        );
+        let entry = manager.entry(resource).unwrap().unwrap();
+        assert_eq!(
+            entry.holders,
+            vec![LockHolder {
+                tx_id: holder_tx,
+                mode: LockMode::Exclusive,
+            }]
+        );
+        assert!(entry.waiters.is_empty());
+    }
+
+    #[test]
+    fn release_all_promotes_waiters_per_resource_after_holder_removal() {
+        let manager = LockManager::new();
+        let table = LockResource::table(1, 2).unwrap();
+        let row = LockResource::row(1, 2, 3).unwrap();
+        let ending_tx = TransactionId::new(41);
+        let table_waiter = TransactionId::new(42);
+        let row_waiter = TransactionId::new(43);
+
+        assert_eq!(
+            manager
+                .acquire(ending_tx, table, LockMode::Exclusive)
+                .unwrap(),
+            LockAcquireStatus::Granted
+        );
+        assert_eq!(
+            manager
+                .acquire(ending_tx, row, LockMode::Exclusive)
+                .unwrap(),
+            LockAcquireStatus::Granted
+        );
+        assert!(matches!(
+            manager
+                .acquire(table_waiter, table, LockMode::Shared)
+                .unwrap(),
+            LockAcquireStatus::Waiting { .. }
+        ));
+        assert!(matches!(
+            manager.acquire(row_waiter, row, LockMode::Shared).unwrap(),
+            LockAcquireStatus::Waiting { .. }
+        ));
+
+        let summary = manager.release_all(ending_tx).unwrap();
+
+        assert_eq!(
+            summary,
+            LockReleaseAllSummary {
+                affected_resource_count: 2,
+                released_holder_count: 2,
+                removed_waiter_count: 0,
+            }
+        );
+        let table_entry = manager.entry(table).unwrap().unwrap();
+        assert_eq!(
+            table_entry.holders,
+            vec![LockHolder {
+                tx_id: table_waiter,
+                mode: LockMode::Shared,
+            }]
+        );
+        assert!(table_entry.waiters.is_empty());
+
+        let row_entry = manager.entry(row).unwrap().unwrap();
+        assert_eq!(
+            row_entry.holders,
+            vec![LockHolder {
+                tx_id: row_waiter,
+                mode: LockMode::Shared,
+            }]
+        );
+        assert!(row_entry.waiters.is_empty());
+    }
+
+    #[test]
+    fn release_all_removes_empty_entries_after_terminal_cleanup() {
+        let manager = LockManager::new();
+        let schema = LockResource::schema(1).unwrap();
+        let row = LockResource::row(1, 2, 3).unwrap();
+        let ending_tx = TransactionId::new(51);
+
+        assert_eq!(
+            manager
+                .acquire(ending_tx, schema, LockMode::SchemaShared)
+                .unwrap(),
+            LockAcquireStatus::Granted
+        );
+        manager
+            .enqueue_waiter(row, ending_tx, LockMode::Exclusive)
+            .unwrap();
+
+        let summary = manager.release_all(ending_tx).unwrap();
+
+        assert_eq!(
+            summary,
+            LockReleaseAllSummary {
+                affected_resource_count: 2,
+                released_holder_count: 1,
+                removed_waiter_count: 1,
+            }
+        );
+        assert_eq!(manager.entry(schema).unwrap(), None);
+        assert_eq!(manager.entry(row).unwrap(), None);
+        assert_eq!(manager.entry_count().unwrap(), 0);
+    }
+
+    #[test]
+    fn release_all_rejects_zero_transaction_id_without_mutation() {
+        let manager = LockManager::new();
+        let resource = LockResource::table(1, 2).unwrap();
+
+        assert_eq!(
+            manager
+                .acquire(TransactionId::new(61), resource, LockMode::Shared)
+                .unwrap(),
+            LockAcquireStatus::Granted
+        );
+
+        let err = manager.release_all(TransactionId::new(0)).unwrap_err();
+
+        assert_eq!(err.kind(), AndromedaErrorKind::Transaction);
+        assert_eq!(manager.entry_count().unwrap(), 1);
+        let entry = manager.entry(resource).unwrap().unwrap();
+        assert_eq!(entry.holders.len(), 1);
+        assert!(entry.waiters.is_empty());
+    }
+
+    #[test]
+    fn release_all_leaves_unaffected_resource_entries_unchanged() {
+        let manager = LockManager::new();
+        let ending_resource = LockResource::table(1, 2).unwrap();
+        let unaffected_resource = LockResource::row(1, 2, 3).unwrap();
+        let ending_tx = TransactionId::new(71);
+        let unaffected_tx = TransactionId::new(72);
+
+        assert_eq!(
+            manager
+                .acquire(ending_tx, ending_resource, LockMode::Shared)
+                .unwrap(),
+            LockAcquireStatus::Granted
+        );
+        assert_eq!(
+            manager
+                .acquire(unaffected_tx, unaffected_resource, LockMode::Exclusive)
+                .unwrap(),
+            LockAcquireStatus::Granted
+        );
+
+        let summary = manager.release_all(ending_tx).unwrap();
+
+        assert_eq!(
+            summary,
+            LockReleaseAllSummary {
+                affected_resource_count: 1,
+                released_holder_count: 1,
+                removed_waiter_count: 0,
+            }
+        );
+        assert_eq!(manager.entry(ending_resource).unwrap(), None);
+        let unaffected_entry = manager.entry(unaffected_resource).unwrap().unwrap();
+        assert_eq!(
+            unaffected_entry.holders,
+            vec![LockHolder {
+                tx_id: unaffected_tx,
+                mode: LockMode::Exclusive,
+            }]
+        );
+        assert!(unaffected_entry.waiters.is_empty());
+        assert_eq!(manager.entry_count().unwrap(), 1);
     }
 
     #[test]

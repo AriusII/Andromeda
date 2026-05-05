@@ -151,3 +151,58 @@ fn validate_decision(
 
     Ok(())
 }
+
+/// Adapter that integrates SRPL procedure resolution and IR interpretation
+/// with the dispatcher trait.
+///
+/// This adapter:
+/// 1. Takes an invocation request
+/// 2. Resolves the procedure name to an SRPL plan (pre-transaction)
+/// 3. Validates the plan
+/// 4. Returns a LocalProcedure ready for runtime execution
+///
+/// TODO: Once result metadata extraction is implemented, this adapter will
+/// produce complete LocalProcedure results suitable for the runtime pipeline.
+#[derive(Clone)]
+pub struct SrplDispatcherAdapter {
+    dispatcher: crate::SrplProcedureDispatcher,
+}
+
+impl SrplDispatcherAdapter {
+    pub fn new(dispatcher: crate::SrplProcedureDispatcher) -> Self {
+        Self { dispatcher }
+    }
+}
+
+impl ProcedureDispatcher for SrplDispatcherAdapter {
+    fn dispatch_procedure(
+        &self,
+        request: ProcedureDispatchRequest,
+    ) -> AndromedaResult<LocalProcedure> {
+        request.validate()?;
+
+        // Resolve procedure from name/id to executable plan
+        let _procedure = self
+            .dispatcher
+            .resolve_procedure(&crate::InvocationRequest {
+                invocation_id: request.context.invocation_id,
+                procedure: request.procedure,
+                expected_contract_hash: request.procedure.contract_hash,
+                catalog_version: request.procedure.catalog_version,
+                structured_parameters: Vec::new(),
+            })
+            .map_err(|resolve_err| {
+                AndromedaError::new(
+                    AndromedaErrorKind::Srpl,
+                    format!("SRPL procedure resolution failed: {:?}", resolve_err),
+                )
+            })?;
+
+        // TODO: Extract result metadata and construct LocalProcedure
+        Err(AndromedaError::new(
+            AndromedaErrorKind::Unimplemented,
+            "SRPL dispatch adapter execution not yet implemented - result metadata extraction needed",
+        ))
+    }
+}
+

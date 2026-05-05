@@ -5,7 +5,7 @@
 //! the WAL domain facade and must not redefine them.
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
-use crate::{Lsn, WalRecord, WAL_FORMAT_VERSION};
+use crate::{Lsn, WAL_FORMAT_VERSION, WalRecord};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WalSegmentDescriptor {
@@ -71,10 +71,10 @@ impl WalSegmentDescriptor {
                 }
             }
             None => {
-                if self.first_lsn != Lsn::new(1) {
-                    return Err(storage_error(
-                        "WAL segment without base previous LSN must start at LSN 1",
-                    ));
+                // First segment (no base_previous_lsn) can start at any LSN >= 1.
+                // This allows restore/PITR scenarios where segments begin at archive start, not global LSN 1.
+                if self.first_lsn.is_zero() {
+                    return Err(storage_error("WAL segment first LSN must not be zero"));
                 }
             }
         }

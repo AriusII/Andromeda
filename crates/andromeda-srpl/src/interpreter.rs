@@ -397,7 +397,7 @@ mod tests {
     use andromeda_catalog::{CatalogObjectRef, ProcedureContractRef, QualifiedName};
     use andromeda_core::{CatalogObjectId, CatalogVersion, ContractHash, ProcedureId};
 
-    use crate::model::{BoundSrplBodyPlan, SrplCatalogBindingEvidence, SrplObjectBindingEvidence};
+    use crate::procedure_model::{BoundSrplBodyPlan, SrplCatalogBindingEvidence, SrplObjectBindingEvidence};
 
     #[derive(Default)]
     struct FakeAdapter {

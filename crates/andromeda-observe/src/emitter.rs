@@ -23,11 +23,11 @@ use andromeda_core::{
 };
 
 use crate::{
-    events::{
-        observe_error, EventCorrelation, EventEnvelope, EventId, EventSink, InMemoryEventSink,
-        TraceEvent,
-    },
     TraceId,
+    events::{
+        EventCorrelation, EventEnvelope, EventId, EventSink, InMemoryEventSink, TraceEvent,
+        observe_error,
+    },
 };
 
 /// Runtime emitter that allocates monotonic `EventId`s and forwards validated

@@ -198,12 +198,14 @@ mod tests {
 
     #[test]
     fn decimal_custom_shape_is_checked() {
-        assert!(DecimalType::Custom {
-            precision: 9,
-            scale: 2,
-        }
-        .validate()
-        .is_ok());
+        assert!(
+            DecimalType::Custom {
+                precision: 9,
+                scale: 2,
+            }
+            .validate()
+            .is_ok()
+        );
         assert_eq!(
             DecimalType::Custom {
                 precision: 2,

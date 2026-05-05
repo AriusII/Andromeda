@@ -133,7 +133,7 @@ mod tests {
     use super::*;
     use andromeda_core::{RequestId, SessionId};
 
-    use crate::frame::{FrameHeader, FRAME_HEADER_CRC_UNCHECKED};
+    use crate::frame::{FRAME_HEADER_CRC_UNCHECKED, FrameHeader};
 
     fn frame(frame_type: FrameType, payload: Vec<u8>) -> FrameBytes {
         FrameBytes {

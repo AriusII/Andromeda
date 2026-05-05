@@ -1,7 +1,7 @@
 use super::{
+    WAL_RECORD_HEADER_LEN,
     binary::{push_u16, push_u64},
     frame::WalFrameHeader,
-    WAL_RECORD_HEADER_LEN,
 };
 
 pub(super) fn header_checksum_without_checksum(header: &WalFrameHeader) -> u64 {
@@ -33,9 +33,5 @@ fn fnv64_nonzero(bytes: &[u8]) -> u64 {
         state ^= u64::from(*byte);
         state = state.wrapping_mul(FNV_PRIME);
     }
-    if state == 0 {
-        1
-    } else {
-        state
-    }
+    if state == 0 { 1 } else { state }
 }

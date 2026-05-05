@@ -3,11 +3,11 @@
 //! Tests verify that promotion eligibility can be queried without I/O, that all
 //! requirements are enforced, and that eligibility rankings work correctly.
 
-use andromeda_storage::hadr::{
-    is_promotion_eligible, select_best_eligible_candidate, FailoverTrigger, PromotionCandidate,
-    PromotionEligibility, PromotionRequirements,
-};
 use andromeda_storage::Lsn;
+use andromeda_storage::hadr::{
+    FailoverTrigger, PromotionCandidate, PromotionEligibility, PromotionRequirements,
+    is_promotion_eligible, select_best_eligible_candidate,
+};
 
 /// Helper to construct promotion requirements for testing.
 fn make_requirements(
@@ -283,9 +283,11 @@ fn test_failover_trigger_descriptions_present() {
     // Verify all triggers have descriptions (for audit/operator logs)
 
     assert!(!FailoverTrigger::PrimaryUnreachable.as_str().is_empty());
-    assert!(!FailoverTrigger::PrimaryHealthCheckFailed
-        .as_str()
-        .is_empty());
+    assert!(
+        !FailoverTrigger::PrimaryHealthCheckFailed
+            .as_str()
+            .is_empty()
+    );
     assert!(!FailoverTrigger::ManualFailoverRequested.as_str().is_empty());
     assert!(!FailoverTrigger::FencingTokenExpired.as_str().is_empty());
     assert!(!FailoverTrigger::DataDivergenceDetected.as_str().is_empty());

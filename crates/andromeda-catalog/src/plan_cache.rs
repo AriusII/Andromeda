@@ -44,6 +44,45 @@
 //! Any later optimizer crate can depend on these types without re-deriving
 //! the key shape, ensuring decision traces remain reproducible across
 //! catalog / stats / policy upgrades.
+//!
+//! ## Plan Cache Invalidation Policy
+//!
+//! A future runtime cache must follow these invalidation rules **strictly**:
+//! any change to any component listed below must either create a new key entry
+//! or reject reuse of an old entry.  **Silent reuse is forbidden.**
+//!
+//! | Component | Invalidation Trigger | Example / Consequence |
+//! | --- | --- | --- |
+//! | `ProcedureId` | Procedure identity changes | Different procedure, never share cached plan |
+//! | `ContractHash` | Procedure contract is altered (ALTER PROCEDURE) | Signature, result schema, or policy change invalidates all old keys |
+//! | `CatalogVersion` | Catalog schema evolves | New catalog version = new key entry; old plans not reused |
+//! | `StatsVersion` | Statistics histogram is updated | New stats version = new key entry; old cardinality assumptions void |
+//! | `PolicyVersion` | Policy surface mutates | New transaction policy or permissions = new key; strict isolation |
+//! | `PlanClass` | Specialization strategy changes | Singleton → ParameterShape: different key space; no cross-class reuse |
+//! | `PlanShapeFingerprint` | Parameter shape or cardinality evidence changes | Different bound parameters = different fingerprint = different key |
+//!
+//! ### No-Silent-Drop Guarantee
+//!
+//! When any of these components changes:
+//! 1. The resulting `PlanCacheKey` is NOT equal to the old key (derived `PartialEq, Eq`).
+//! 2. The key's `digest()` is different (SHA-256 includes each component with a unique tag).
+//! 3. A runtime cache lookup with the old key will **not** retrieve a plan from a slot
+//!    that was written with the new key.
+//! 4. A runtime cache insertion with a new key will allocate a separate slot.
+//!
+//! This is enforced purely through Rust's type system and Eq/Hash derivation;
+//! no explicit eviction logic is required as long as the cache keys on the
+//! `PlanCacheKey` type itself.
+//!
+//! ### Evidence for Future Traces
+//!
+//! When a runtime cache is implemented, every cache operation must emit a
+//! [`crate::DecisionTrace`] record containing:
+//! - The key's digest (privacy-safe 32-byte hash)
+//! - The procedure ID, catalog version, stats version, policy version
+//! - The plan class and shape fingerprint digest
+//! - The operation type (hit, miss, insert, evict, invalidate, or reject)
+//! - The bounded reason code (if rejected)
 
 use andromeda_core::{CatalogVersion, ContractHash, ProcedureId};
 

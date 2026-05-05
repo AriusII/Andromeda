@@ -2,12 +2,13 @@ use andromeda_core::{
     AndromedaErrorKind, CatalogVersion, ContractHash, RequestId, SessionId, TransactionId,
 };
 use andromeda_proto::{
-    generated, BackpressureMetadata, ErrorEnvelope, ErrorFamily, FrameEnvelope, PayloadFrameFamily,
-    PayloadKind, ProtocolVersion, ResultRowCountSummary, RetryDisposition, RpcCompletion,
+    AUTH_WIRE_CODE, BackpressureMetadata, CONTRACT_REQUEST_WIRE_CODE, CONTRACT_RESPONSE_WIRE_CODE,
+    ERROR_WIRE_CODE, ErrorEnvelope, ErrorFamily, FrameEnvelope, HELLO_WIRE_CODE,
+    PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP, PayloadFrameFamily, PayloadKind, ProtocolVersion,
+    RPC_BATCH_WIRE_CODE, RPC_COMPLETION_WIRE_CODE, RPC_EXECUTE_REQUEST_WIRE_CODE,
+    RPC_METADATA_WIRE_CODE, ResultRowCountSummary, RetryDisposition, RpcCompletion,
     RpcCompletionStatus, RpcResultStreamMetadataPolicy, TransactionEffect, TransactionOutcome,
-    AUTH_WIRE_CODE, CONTRACT_REQUEST_WIRE_CODE, CONTRACT_RESPONSE_WIRE_CODE, ERROR_WIRE_CODE,
-    HELLO_WIRE_CODE, PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP, RPC_BATCH_WIRE_CODE,
-    RPC_COMPLETION_WIRE_CODE, RPC_EXECUTE_REQUEST_WIRE_CODE, RPC_METADATA_WIRE_CODE,
+    generated,
 };
 use prost::Message;
 
@@ -264,9 +265,11 @@ fn payload_kind_wire_codes_are_contract_locked() {
         assert_eq!(PayloadKind::try_from(code).unwrap(), kind);
         assert_eq!(kind.frame_mapping().transport_frame_code, code);
         assert_eq!(kind.frame_mapping().family, family);
-        assert!(PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP
-            .iter()
-            .any(|(locked_kind, locked_code)| *locked_kind == kind && *locked_code == code));
+        assert!(
+            PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP
+                .iter()
+                .any(|(locked_kind, locked_code)| *locked_kind == kind && *locked_code == code)
+        );
     }
 
     assert_eq!(
@@ -384,12 +387,16 @@ fn rpc_execute_and_batch_payload_bodies_are_required() {
         AndromedaErrorKind::Protocol
     );
 
-    assert!(envelope(PayloadKind::RpcMetadata, Vec::new())
-        .validate()
-        .is_ok());
-    assert!(envelope(PayloadKind::RpcCompletion, Vec::new())
-        .validate()
-        .is_ok());
+    assert!(
+        envelope(PayloadKind::RpcMetadata, Vec::new())
+            .validate()
+            .is_ok()
+    );
+    assert!(
+        envelope(PayloadKind::RpcCompletion, Vec::new())
+            .validate()
+            .is_ok()
+    );
 }
 
 #[test]
@@ -398,12 +405,14 @@ fn envelope_sequence_requires_metadata_batch_completion_in_one_context() {
     let batch = envelope(PayloadKind::RpcBatch, b"row".to_vec());
     let completion = envelope(PayloadKind::RpcCompletion, Vec::new());
 
-    assert!(FrameEnvelope::validate_rpc_stream_sequence(&[
-        metadata.clone(),
-        batch.clone(),
-        completion.clone(),
-    ])
-    .is_ok());
+    assert!(
+        FrameEnvelope::validate_rpc_stream_sequence(&[
+            metadata.clone(),
+            batch.clone(),
+            completion.clone(),
+        ])
+        .is_ok()
+    );
 
     assert_eq!(
         FrameEnvelope::validate_rpc_stream_sequence(&[metadata.clone(), completion.clone()])

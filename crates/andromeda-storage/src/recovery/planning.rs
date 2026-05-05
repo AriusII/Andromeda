@@ -2,13 +2,13 @@ use andromeda_core::AndromedaResult;
 use andromeda_observe::TraceId;
 
 use crate::{
-    summarize_transactions_from_records, DatabaseManifest, DurableTransactionResume,
-    DurableTransactionState, IncompleteDurableTransaction, Lsn, WalRecord, WalRecordKind,
-    WalScanResult, WalScanStop, WalScanStopReason,
+    DatabaseManifest, DurableTransactionResume, DurableTransactionState,
+    IncompleteDurableTransaction, Lsn, WalRecord, WalRecordKind, WalScanResult, WalScanStop,
+    WalScanStopReason, summarize_transactions_from_records,
 };
 
 use super::{
-    coverage::{validate_wal_coverage, WalCoverageEvidence},
+    coverage::{WalCoverageEvidence, validate_wal_coverage},
     storage_error,
 };
 

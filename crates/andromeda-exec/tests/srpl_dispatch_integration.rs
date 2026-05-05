@@ -305,7 +305,7 @@ impl ProcedureResolver for ErrorProducingResolver {
 
 // Helper: Create a minimal executable plan for testing validation interface
 fn make_minimal_plan() -> ExecutableProcedurePlan {
-    use andromeda_srpl::model::{BoundSrplBodyPlan, SrplCatalogBindingEvidence};
+    use andromeda_srpl::procedure_model::{BoundSrplBodyPlan, SrplCatalogBindingEvidence};
     use andromeda_catalog::ProcedureContractRef;
     use andromeda_core::{ProcedureId, ContractHash, CatalogVersion, DatabaseId, NamespaceId, CatalogObjectRef, CatalogObjectId};
 

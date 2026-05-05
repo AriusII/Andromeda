@@ -1,8 +1,8 @@
 //! Procedure and statement grammar for the bounded SRPL parser.
 
 use crate::{
-    BusinessOperationAst, BusinessOperationKindAst, ProcedureAst, ProcedureBodyAst, SourceSpan,
-    SrplDiagnostic, TokenKind, MAX_SRPL_BODY_OPERATIONS,
+    BusinessOperationAst, BusinessOperationKindAst, MAX_SRPL_BODY_OPERATIONS, ProcedureAst,
+    ProcedureBodyAst, SourceSpan, SrplDiagnostic, TokenKind,
 };
 
 use super::core::Parser;

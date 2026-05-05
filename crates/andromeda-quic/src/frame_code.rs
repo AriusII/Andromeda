@@ -183,9 +183,11 @@ mod tests {
         }
 
         assert_eq!(FrameType::TelemetrySoftSignal.wire_code(), 100);
-        assert!(!FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP
-            .iter()
-            .any(|(_, code)| *code == TELEMETRY_SOFT_SIGNAL_FRAME_CODE));
+        assert!(
+            !FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP
+                .iter()
+                .any(|(_, code)| *code == TELEMETRY_SOFT_SIGNAL_FRAME_CODE)
+        );
     }
 
     #[test]

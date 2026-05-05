@@ -12,8 +12,9 @@ use crate::ProtocolVersion;
 /// Stable wire-aligned terminal completion code for the in-memory
 /// `RpcCompletionStatus` enum. Values must match the generated
 /// `protocol::v1::rpc_completion::Status` integer codes 1..=8 declared in
-/// `schemas/proto/andromeda/protocol/v1/protocol.proto`. Code `0` is reserved
-/// for `STATUS_UNSPECIFIED` and is intentionally unreachable from this enum.
+/// `crates/andromeda-proto/proto/andromeda/protocol/v1/completion.proto`. Code
+/// `0` is reserved for `STATUS_UNSPECIFIED` and is intentionally unreachable
+/// from this enum.
 ///
 /// Consumers MUST use this code instead of relying on `Debug`/`Display`
 /// projections when emitting telemetry, journaling, or comparing statuses
@@ -386,9 +387,11 @@ mod tests {
     fn rpc_completion_validates_against_negotiated_protocol_version() {
         let completion = committed_template();
         // Compatible version validates.
-        assert!(completion
-            .validate_for_protocol_version(ProtocolVersion::V1)
-            .is_ok());
+        assert!(
+            completion
+                .validate_for_protocol_version(ProtocolVersion::V1)
+                .is_ok()
+        );
 
         // Major drift is rejected as a protocol-class error.
         let drift = ProtocolVersion { major: 2, minor: 0 };

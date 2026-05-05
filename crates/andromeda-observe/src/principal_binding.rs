@@ -462,6 +462,93 @@ fn fingerprint_for_audit(presented: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
+// Principal Bridge: observe ↔ core
+// ---------------------------------------------------------------------------
+
+/// Map observe::UserPrincipal → core::Principal
+///
+/// Converts the audit-traced UserPrincipal (String ID, Kind enum) to the internal
+/// core Principal (u64 ID, Role enum). Used during authorization enforcement to bridge
+/// observability data to permission evaluation.
+///
+/// # Arguments
+/// - `ouser`: The observe UserPrincipal from an audit trace
+/// - `fingerprint`: The certificate fingerprint bound to this principal
+/// - `role`: The core Principal role (derived from context or registry)
+///
+/// # Returns
+/// - `Ok(Principal)` if mapping succeeds
+/// - `Err` if observe principal_id is not parseable as u64 or principal creation fails
+///
+/// # Invariants
+/// - Principal ID must be non-zero
+/// - Session token is synthesized from observe principal_id
+/// - All constituent fields must pass Principal validation
+pub fn observe_user_principal_to_core(
+    ouser: &UserPrincipal,
+    fingerprint: &andromeda_core::CertificateFingerprint,
+    role: andromeda_core::PrincipalRole,
+) -> AndromedaResult<andromeda_core::Principal> {
+    // Parse observe principal_id (String) to core PrincipalId (u64)
+    let id_val: u64 = ouser.principal_id.parse().map_err(|_| {
+        AndromedaError::new(
+            AndromedaErrorKind::Security,
+            format!(
+                "observe principal_id '{}' must be parseable as u64",
+                ouser.principal_id
+            ),
+        )
+    })?;
+
+    let principal_id = andromeda_core::PrincipalId::new(id_val);
+    if principal_id.is_zero() {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Security,
+            "principal id must be non-zero",
+        ));
+    }
+
+    // Synthesize session token from observe principal_id
+    let session_token = andromeda_core::SessionToken::new(format!(
+        "observe:{}:{}",
+        ouser.principal_id, role.as_str()
+    ));
+
+    andromeda_core::Principal::new(principal_id, role, session_token, fingerprint.clone())
+        .ok_or_else(|| {
+            AndromedaError::new(
+                AndromedaErrorKind::Security,
+                "core principal creation from observe type failed: invariant violation",
+            )
+        })
+}
+
+/// Map core::Principal → observe::UserPrincipal
+///
+/// Converts the internal core Principal (u64 ID, Role enum) to audit-traced
+/// UserPrincipal (String ID, Kind enum). Used for logging and emitting SecurityAuditTrace
+/// events during authorization decisions.
+///
+/// # Arguments
+/// - `cp`: The core Principal to convert
+/// - `kind`: The UserPrincipalKind (Human, Service, BreakGlass)
+///
+/// # Returns
+/// - `Ok(UserPrincipal)` with principal ID as decimal string
+/// - `Err` if observe UserPrincipal creation fails (invalid evidence)
+///
+/// # Invariants
+/// - Principal ID is converted to decimal string (non-empty)
+/// - Kind is preserved from argument
+pub fn core_principal_to_observe_user_principal(
+    cp: &andromeda_core::Principal,
+    kind: crate::events::UserPrincipalKind,
+) -> AndromedaResult<UserPrincipal> {
+    let principal_id = format!("{}", cp.id.get());
+    UserPrincipal::new(principal_id, kind)
+}
+
+// ---------------------------------------------------------------------------
 // tests
 // ---------------------------------------------------------------------------
 
@@ -740,4 +827,129 @@ mod tests {
         assert!(audit.certificate.fingerprint.starts_with("fingerprint:"));
         assert!(!audit.contains_sensitive_evidence());
     }
-}
+
+    // ========== Principal Bridge Tests ==========
+
+    #[test]
+    fn observe_user_principal_to_core_maps_id_correctly() {
+        use crate::events::UserPrincipalKind;
+        use andromeda_core::{CertificateFingerprint, PrincipalRole};
+
+        let observe_principal = UserPrincipal::new("42", UserPrincipalKind::Service).unwrap();
+        let fingerprint =
+            CertificateFingerprint::new("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
+                .unwrap();
+
+        let core_principal =
+            super::observe_user_principal_to_core(&observe_principal, &fingerprint, PrincipalRole::User).unwrap();
+
+        assert_eq!(core_principal.id.get(), 42);
+        assert_eq!(core_principal.role, PrincipalRole::User);
+        assert!(!core_principal.session_token.is_empty());
+        assert_eq!(core_principal.cert_fingerprint.as_str(), fingerprint.as_str());
+    }
+
+    #[test]
+    fn observe_user_principal_to_core_rejects_non_numeric_id() {
+        use crate::events::UserPrincipalKind;
+        use andromeda_core::CertificateFingerprint;
+
+        let observe_principal =
+            UserPrincipal::new("not-a-number", UserPrincipalKind::Human).unwrap();
+        let fingerprint =
+            CertificateFingerprint::new("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
+                .unwrap();
+
+        let result =
+            super::observe_user_principal_to_core(&observe_principal, &fingerprint, andromeda_core::PrincipalRole::User);
+        assert!(result.is_err(), "non-numeric principal ID must be rejected");
+    }
+
+    #[test]
+    fn observe_user_principal_to_core_rejects_zero_id() {
+        use crate::events::UserPrincipalKind;
+        use andromeda_core::CertificateFingerprint;
+
+        let observe_principal = UserPrincipal::new("0", UserPrincipalKind::Service).unwrap();
+        let fingerprint =
+            CertificateFingerprint::new("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
+                .unwrap();
+
+        let result =
+            super::observe_user_principal_to_core(&observe_principal, &fingerprint, andromeda_core::PrincipalRole::User);
+        assert!(result.is_err(), "zero principal ID must be rejected");
+    }
+
+    #[test]
+    fn core_principal_to_observe_user_principal_maps_id_correctly() {
+        use crate::events::UserPrincipalKind;
+        use andromeda_core::{CertificateFingerprint, Principal, PrincipalId, PrincipalRole, SessionToken};
+
+        let fingerprint =
+            CertificateFingerprint::new("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
+                .unwrap();
+        let core_principal = Principal::new(
+            PrincipalId::new(123),
+            PrincipalRole::Operator,
+            SessionToken::new("session-test"),
+            fingerprint,
+        )
+        .unwrap();
+
+        let observe_principal =
+            super::core_principal_to_observe_user_principal(&core_principal, UserPrincipalKind::Service).unwrap();
+
+        assert_eq!(observe_principal.principal_id, "123");
+        assert_eq!(observe_principal.kind, UserPrincipalKind::Service);
+    }
+
+    #[test]
+    fn bridge_roundtrip_observe_to_core_to_observe() {
+        use crate::events::UserPrincipalKind;
+        use andromeda_core::{CertificateFingerprint, PrincipalRole};
+
+        let original_observe =
+            UserPrincipal::new("456", UserPrincipalKind::Human).unwrap();
+        let fingerprint =
+            CertificateFingerprint::new("b2b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
+                .unwrap();
+
+        // observe -> core
+        let core = super::observe_user_principal_to_core(&original_observe, &fingerprint, PrincipalRole::Admin)
+            .unwrap();
+        assert_eq!(core.id.get(), 456);
+        assert_eq!(core.role, PrincipalRole::Admin);
+
+        // core -> observe
+        let final_observe =
+            super::core_principal_to_observe_user_principal(&core, UserPrincipalKind::Human).unwrap();
+
+        // IDs must match (though kind is asserted separately)
+        assert_eq!(original_observe.principal_id, final_observe.principal_id);
+        assert_eq!(final_observe.kind, UserPrincipalKind::Human);
+    }
+
+    #[test]
+    fn bridge_preserves_role_in_session_token() {
+        use crate::events::UserPrincipalKind;
+        use andromeda_core::CertificateFingerprint;
+
+        let observe_principal = UserPrincipal::new("789", UserPrincipalKind::Service).unwrap();
+        let fingerprint =
+            CertificateFingerprint::new("c3c3c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
+                .unwrap();
+
+        let core = super::observe_user_principal_to_core(
+            &observe_principal,
+            &fingerprint,
+            andromeda_core::PrincipalRole::SuperAdmin,
+        )
+        .unwrap();
+
+        // Session token should include role name for debugging
+        assert!(core
+            .session_token
+            .as_str()
+            .contains("superadmin"));
+    }
+

@@ -258,10 +258,12 @@ mod tests {
 
         let result = replay_catalog_wal_records(&records, CatalogVersion::new(10));
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .message()
-            .contains("non-existent procedure"));
+        assert!(
+            result
+                .unwrap_err()
+                .message()
+                .contains("non-existent procedure")
+        );
     }
 
     #[test]
@@ -354,10 +356,12 @@ mod tests {
 
         let result = replay_catalog_wal_records(&records, CatalogVersion::new(10));
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .message()
-            .contains("visible_procedure_count mismatch"));
+        assert!(
+            result
+                .unwrap_err()
+                .message()
+                .contains("visible_procedure_count mismatch")
+        );
     }
 
     #[test]

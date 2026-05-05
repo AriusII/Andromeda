@@ -1,6 +1,6 @@
 use andromeda_core::AndromedaResult;
 
-use super::{observe_error, EventEnvelope};
+use super::{EventEnvelope, observe_error};
 
 pub trait EventSink {
     fn emit(&mut self, event: EventEnvelope) -> AndromedaResult<()>;

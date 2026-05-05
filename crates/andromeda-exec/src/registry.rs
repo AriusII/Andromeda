@@ -3,7 +3,10 @@ use std::{collections::HashMap, sync::Arc};
 use andromeda_catalog::{ProcedureContract, ProcedureContractRef};
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, ProcedureId};
 
-use crate::{InvocationContext, LocalProcedure, ReserveStockEffect, ResultStreamMetadata};
+use crate::{
+    InvocationContext, LocalProcedure, ProcedureDispatchRequest, ProcedureDispatcher,
+    ReserveStockEffect, ResultStreamMetadata,
+};
 
 /// Executable Procedure adapter used by future registry-backed local dispatch.
 ///
@@ -144,6 +147,31 @@ impl ProcedureRegistry {
     }
 }
 
+impl ProcedureDispatcher for ProcedureRegistry {
+    fn dispatch_procedure(
+        &self,
+        request: ProcedureDispatchRequest,
+    ) -> AndromedaResult<LocalProcedure> {
+        request.validate()?;
+
+        let procedure_id = request.procedure.procedure_id;
+        let handler = self
+            .lookup(procedure_id)
+            .ok_or_else(|| unknown_procedure_error(procedure_id))?;
+
+        if handler.contract() != request.procedure {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "dispatch request contract must match registered handler contract before execution",
+            ));
+        }
+
+        let procedure = handler.execute(request.context)?;
+        validate_dispatch_result(procedure_id, handler.as_ref(), &procedure)?;
+        Ok(procedure)
+    }
+}
+
 fn validate_handler_registration(
     handler: &(dyn ProcedureHandler + Send + Sync),
 ) -> AndromedaResult<()> {
@@ -217,16 +245,23 @@ fn unknown_procedure_error(procedure_id: ProcedureId) -> AndromedaError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{InventoryReserveStockExecutor, InventoryStock, ReserveStockCommand};
+    use crate::{
+        InventoryReserveStockExecutor, InventoryStock, PreTransactionDispatchEvidence,
+        RemoteProcedureDispatcherUnavailable, ReserveStockCommand,
+    };
     use andromeda_catalog::{ProcedureContractRef, inventory_reserve_stock_contract};
     use andromeda_core::{CatalogVersion, ContractHash, ProcedureId};
-    use andromeda_observe::TraceId;
+    use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
     use andromeda_srpl::Cardinality;
 
     const TEST_INVENTORY_QUERY_STOCK_PROCEDURE_ID: ProcedureId = ProcedureId::new(0x5153);
     const TEST_INVENTORY_QUERY_STOCK_PERMISSION: &str = "Inventory.QueryStock.Execute";
     const TEST_INVENTORY_QUERY_STOCK_STREAM_ID: u64 = 2;
     const TEST_INVENTORY_QUERY_STOCK_COLUMN_COUNT: u32 = 3;
+    const TEST_INVENTORY_RELEASE_STOCK_PROCEDURE_ID: ProcedureId = ProcedureId::new(0x524c);
+    const TEST_INVENTORY_RELEASE_STOCK_PERMISSION: &str = "Inventory.ReleaseStock.Execute";
+    const TEST_INVENTORY_RELEASE_STOCK_STREAM_ID: u64 = 3;
+    const TEST_INVENTORY_RELEASE_STOCK_COLUMN_COUNT: u32 = 4;
 
     #[derive(Debug, Clone, Copy)]
     struct FakeProcedureHandler {
@@ -318,10 +353,84 @@ mod tests {
         }
     }
 
+    #[derive(Debug, Clone, Copy)]
+    struct ReleaseStockFakeProcedureHandler {
+        contract: ProcedureContractRef,
+        previous_stock: InventoryStock,
+        released_quantity: i64,
+    }
+
+    impl ReleaseStockFakeProcedureHandler {
+        fn new(previous_stock: InventoryStock, released_quantity: i64) -> Self {
+            Self {
+                contract: test_inventory_release_stock_contract_ref(),
+                previous_stock,
+                released_quantity,
+            }
+        }
+
+        fn next_stock(self) -> InventoryStock {
+            InventoryStock {
+                product_id: self.previous_stock.product_id,
+                available_quantity: self.previous_stock.available_quantity + self.released_quantity,
+                version: self.previous_stock.version + 1,
+            }
+        }
+
+        fn payload(self) -> Vec<u8> {
+            let next_stock = self.next_stock();
+            let mut payload = Vec::with_capacity(64);
+            payload.extend_from_slice(b"test.Inventory.ReleaseStock");
+            payload.push(0);
+            payload.extend_from_slice(&self.previous_stock.product_id.to_le_bytes());
+            payload.extend_from_slice(&self.released_quantity.to_le_bytes());
+            payload.extend_from_slice(&next_stock.available_quantity.to_le_bytes());
+            payload.extend_from_slice(&next_stock.version.to_le_bytes());
+            payload
+        }
+    }
+
+    impl ProcedureHandler for ReleaseStockFakeProcedureHandler {
+        fn procedure_id(&self) -> ProcedureId {
+            self.contract.procedure_id
+        }
+
+        fn contract(&self) -> ProcedureContractRef {
+            self.contract
+        }
+
+        fn result_metadata(&self) -> ResultStreamMetadata {
+            ResultStreamMetadata::exact(
+                TEST_INVENTORY_RELEASE_STOCK_STREAM_ID,
+                TEST_INVENTORY_RELEASE_STOCK_COLUMN_COUNT,
+                Cardinality::One,
+                1,
+            )
+        }
+
+        fn execute(&self, _context: InvocationContext) -> AndromedaResult<LocalProcedure> {
+            Ok(LocalProcedure {
+                contract: self.contract,
+                required_permissions: vec![TEST_INVENTORY_RELEASE_STOCK_PERMISSION.to_string()],
+                result_metadata: self.result_metadata(),
+                mutation_payload: self.payload(),
+                rows_affected: 2,
+            })
+        }
+    }
+
     fn test_inventory_query_stock_contract_ref() -> ProcedureContractRef {
         ProcedureContractRef {
             procedure_id: TEST_INVENTORY_QUERY_STOCK_PROCEDURE_ID,
             contract_hash: ContractHash::test_vector(0x53),
+            catalog_version: CatalogVersion::new(1),
+        }
+    }
+
+    fn test_inventory_release_stock_contract_ref() -> ProcedureContractRef {
+        ProcedureContractRef {
+            procedure_id: TEST_INVENTORY_RELEASE_STOCK_PROCEDURE_ID,
+            contract_hash: ContractHash::test_vector(0x4c),
             catalog_version: CatalogVersion::new(1),
         }
     }
@@ -346,6 +455,34 @@ mod tests {
 
     fn context() -> InvocationContext {
         InvocationContext::new(TraceId::new(9), vec!["inventory.reserve".to_string()])
+    }
+
+    fn decision(trace_id: TraceId, decision: CriticalDecisionKind) -> DecisionTrace {
+        DecisionTrace {
+            trace_id,
+            decision,
+            reason: format!("{decision:?} accepted before transaction creation"),
+        }
+    }
+
+    fn pre_transaction_evidence(trace_id: TraceId) -> PreTransactionDispatchEvidence {
+        PreTransactionDispatchEvidence {
+            admission_trace: decision(trace_id, CriticalDecisionKind::ResourceGovernance),
+            contract_trace: decision(trace_id, CriticalDecisionKind::ContractValidation),
+            authorization_trace: Some(decision(
+                trace_id,
+                CriticalDecisionKind::SecurityAuthorization,
+            )),
+        }
+    }
+
+    fn dispatch_request(procedure: ProcedureContractRef) -> ProcedureDispatchRequest {
+        let context = context();
+        ProcedureDispatchRequest {
+            procedure,
+            pre_transaction: pre_transaction_evidence(context.trace_id),
+            context,
+        }
     }
 
     #[test]
@@ -385,6 +522,53 @@ mod tests {
         let procedure = registry.dispatch(ProcedureId::new(42), context()).unwrap();
         assert_eq!(procedure.contract.procedure_id, ProcedureId::new(42));
         assert_eq!(procedure.rows_affected, 1);
+    }
+
+    #[test]
+    fn procedure_dispatcher_invokes_registry_handler_after_pre_transaction_evidence() {
+        let mut registry = ProcedureRegistry::new();
+        let handler = handler(42);
+        let request = dispatch_request(handler.contract());
+        registry.register(handler).unwrap();
+
+        let procedure = ProcedureDispatcher::dispatch_procedure(&registry, request).unwrap();
+
+        assert_eq!(procedure.contract.procedure_id, ProcedureId::new(42));
+        assert_eq!(procedure.rows_affected, 1);
+    }
+
+    #[test]
+    fn procedure_dispatcher_rejects_invalid_evidence_before_registry_lookup() {
+        let registry = ProcedureRegistry::new();
+        let mut request = dispatch_request(contract(42));
+        request.pre_transaction.contract_trace.decision = CriticalDecisionKind::WalAppend;
+
+        let error = ProcedureDispatcher::dispatch_procedure(&registry, request).unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Contract);
+    }
+
+    #[test]
+    fn procedure_dispatcher_rejects_contract_mismatch_before_handler_execution() {
+        let mut registry = ProcedureRegistry::new();
+        registry.register(handler(42)).unwrap();
+        let mut mismatched_contract = contract(42);
+        mismatched_contract.contract_hash = ContractHash::test_vector(99);
+        let request = dispatch_request(mismatched_contract);
+
+        let error = ProcedureDispatcher::dispatch_procedure(&registry, request).unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Contract);
+    }
+
+    #[test]
+    fn remote_procedure_dispatcher_placeholder_returns_typed_transport_error() {
+        let dispatcher = RemoteProcedureDispatcherUnavailable::unsupported();
+        let request = dispatch_request(contract(42));
+
+        let error = dispatcher.dispatch_procedure(request).unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Transport);
     }
 
     #[test]
@@ -498,7 +682,7 @@ mod tests {
     }
 
     #[test]
-    fn registry_registers_and_dispatches_reserve_stock_plus_query_stock() {
+    fn registry_registers_and_dispatches_reserve_stock_query_stock_and_release_stock() {
         let reserve_contract = inventory_reserve_stock_contract().unwrap();
         let reserve_effect = InventoryReserveStockExecutor::reserve(
             ReserveStockCommand {
@@ -520,14 +704,25 @@ mod tests {
             version: 2,
         });
         let query_contract = query_handler.contract();
+        let release_handler = ReleaseStockFakeProcedureHandler::new(
+            InventoryStock {
+                product_id: 42,
+                available_quantity: 4,
+                version: 2,
+            },
+            1,
+        );
+        let release_contract = release_handler.contract();
 
         let mut registry = ProcedureRegistry::new();
         registry.register(reserve_handler).unwrap();
         registry.register(query_handler).unwrap();
+        registry.register(release_handler).unwrap();
 
-        assert_eq!(registry.len(), 2);
+        assert_eq!(registry.len(), 3);
         assert!(registry.contains(reserve_contract.procedure_id));
         assert!(registry.contains(query_contract.procedure_id));
+        assert!(registry.contains(release_contract.procedure_id));
 
         let reserve_procedure = registry
             .dispatch(reserve_contract.procedure_id, context())
@@ -565,5 +760,32 @@ mod tests {
         );
         assert_eq!(query_procedure.rows_affected, 0);
         assert!(!query_procedure.mutation_payload.is_empty());
+
+        let release_procedure = registry
+            .dispatch(release_contract.procedure_id, context())
+            .unwrap();
+        release_procedure.validate().unwrap();
+
+        assert_eq!(release_procedure.contract, release_contract);
+        assert_eq!(
+            release_procedure.required_permissions,
+            vec![TEST_INVENTORY_RELEASE_STOCK_PERMISSION.to_string()]
+        );
+        assert_eq!(
+            release_procedure.result_metadata.stream_id,
+            TEST_INVENTORY_RELEASE_STOCK_STREAM_ID
+        );
+        assert_eq!(
+            release_procedure.result_metadata.column_count,
+            TEST_INVENTORY_RELEASE_STOCK_COLUMN_COUNT
+        );
+        assert_eq!(release_procedure.result_metadata.row_count_exact, Some(1));
+        assert_eq!(release_procedure.result_metadata.row_count_max, Some(1));
+        assert_eq!(
+            release_procedure.result_metadata.cardinality,
+            Cardinality::One
+        );
+        assert_eq!(release_procedure.rows_affected, 2);
+        assert!(!release_procedure.mutation_payload.is_empty());
     }
 }

@@ -236,11 +236,7 @@ pub fn wal_record_checksum(
         state = state.wrapping_mul(FNV_PRIME);
     }
 
-    if state == 0 {
-        1
-    } else {
-        state
-    }
+    if state == 0 { 1 } else { state }
 }
 
 /// Map WalRecordKind to numeric tag for checksum computation.

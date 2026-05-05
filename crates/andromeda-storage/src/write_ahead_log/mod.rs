@@ -1,5 +1,5 @@
 //! Write-ahead log domain facade: records, transaction tracking, in-memory WAL,
-//! file-backed WAL, codec, and segment value types.
+//! file-backed WAL, codec, segment value types, garbage collection, and compaction.
 //!
 //! Canonical ownership lives in single-source modules:
 //!
@@ -11,6 +11,9 @@
 //! | `WalSegment`, `WalSegmentDescriptor`         | [`crate::wal_segment`]                      |
 //! | WAL frame codec, scanner, byte constants     | [`crate::wal_codec`]                        |
 //! | `FileWal`, `FileWalHeader`, recovery report  | [`crate::file_wal`]                         |
+//! | WAL GC: candidates, archive verification    | [`gc`]                                      |
+//! | WAL Compaction: fragmentation, scheduling   | [`compaction`]                              |
+//! | CommitLogEntry and CommitLog persistence    | [`commit_log_entry`]                        |
 //!
 //! The submodules below are thin re-export facades for the cross-domain types
 //! (segment, codec, file). They MUST NOT define types of their own. The legacy
@@ -24,19 +27,23 @@
 //!   gRPC/tonic transport.
 
 pub mod codec;
+pub mod commit_log_entry;
+pub mod commit_log_facade;
+pub mod compaction;
 pub mod file {
     //! Facade for the canonical [`crate::file_wal`] module.
     //!
     //! Do not define new types here; add them under `crate::file_wal` and
     //! re-export.
     pub use crate::{
-        recover_from_file_wal, report_file_wal_recovery_v0, scan_file_wal, FileWal,
-        FileWalDiskScan, FileWalHeader, FileWalRecoveryBoundaryKind,
-        FileWalRecoveryIgnoredTransaction, FileWalRecoveryIgnoredTransactionReason,
-        FileWalRecoveryReplayRecord, FileWalRecoveryReportV0, FILE_WAL_HEADER_LEN, FILE_WAL_MAGIC,
-        FILE_WAL_MONO_SEGMENT_ID,
+        FILE_WAL_HEADER_LEN, FILE_WAL_MAGIC, FILE_WAL_MONO_SEGMENT_ID, FileWal, FileWalDiskScan,
+        FileWalHeader, FileWalRecoveryBoundaryKind, FileWalRecoveryIgnoredTransaction,
+        FileWalRecoveryIgnoredTransactionReason, FileWalRecoveryReplayRecord,
+        FileWalRecoveryReportV0, recover_from_file_wal, report_file_wal_recovery_v0, scan_file_wal,
     };
 }
+pub mod gc;
+pub mod gc_eligibility;
 pub mod manager;
 pub mod record;
 pub mod segment;
@@ -44,7 +51,12 @@ pub mod shipping;
 pub mod transaction;
 
 pub use codec::*;
+pub use commit_log_entry::*;
+pub use commit_log_facade::*;
+pub use compaction::*;
 pub use file::*;
+pub use gc::*;
+pub use gc_eligibility::*;
 pub use manager::*;
 pub use record::*;
 pub use segment::*;

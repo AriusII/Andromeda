@@ -3,6 +3,17 @@
 //! This module implements the core garbage collection logic for MVCC versions.
 //! A row version is eligible for reclamation when:
 //!
+
+pub mod eligibility;
+pub mod mvcc_eligibility;
+pub mod reclamation;
+pub mod scheduler;
+
+pub use eligibility::GcEligibilityChecker;
+pub use mvcc_eligibility::{VersionEligibilityChecker, VersionEligibility, VersionRecord, VersionEligibilityStats};
+pub use reclamation::{ReclaimationMark, ReclaimationEligibility, ReclamationCommand};
+pub use scheduler::GcSchedulerTask;
+
 //! 1. Its creator transaction has been durably committed (per V0 doctrine), AND
 //! 2. Its `end_ts` is strictly less than the minimum visible timestamp (no active
 //!    snapshot can see it), AND

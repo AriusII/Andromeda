@@ -221,9 +221,11 @@ mod tests {
         let data = b"test backup data for checksum";
         let checksum = manager.compute_data_checksum(data);
 
-        assert!(manager
-            .validate_checksum_after_resumption(checksum, data)
-            .is_ok());
+        assert!(
+            manager
+                .validate_checksum_after_resumption(checksum, data)
+                .is_ok()
+        );
     }
 
     #[test]
@@ -235,9 +237,11 @@ mod tests {
 
         let checksum = manager.compute_data_checksum(original_data);
 
-        assert!(manager
-            .validate_checksum_after_resumption(checksum, corrupted_data)
-            .is_err());
+        assert!(
+            manager
+                .validate_checksum_after_resumption(checksum, corrupted_data)
+                .is_err()
+        );
     }
 
     // ============ Test Set 6: WAL Archive Validation (2 tests) ============

@@ -4,7 +4,7 @@
 
 use andromeda_core::TransactionId;
 use andromeda_tx::{
-    deadlock::{
+    deadlock_detection::{
         DeadlockDetectionDeadline, DeadlockDetector, DeadlockPolicy, DeadlockVictimPolicy,
         ManualDeadlockClock, WaitForGraph,
     },

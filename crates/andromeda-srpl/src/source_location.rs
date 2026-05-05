@@ -388,19 +388,24 @@ mod tests {
     #[test]
     fn external_filesystem_and_network_variants_are_caught() {
         let net = SrplSource::new("procedure X begin fetch HTTPS://example.com end;");
-        assert!(net
-            .forbidden_constructs()
-            .contains(&ForbiddenConstruct::ExternalNetwork));
+        assert!(
+            net.forbidden_constructs()
+                .contains(&ForbiddenConstruct::ExternalNetwork)
+        );
 
         let fs_url = SrplSource::new("procedure X begin open file:///etc/passwd end;");
-        assert!(fs_url
-            .forbidden_constructs()
-            .contains(&ForbiddenConstruct::ExternalFilesystem));
+        assert!(
+            fs_url
+                .forbidden_constructs()
+                .contains(&ForbiddenConstruct::ExternalFilesystem)
+        );
 
         let fs_words = SrplSource::new("procedure X begin call External\tFilesystem end;");
-        assert!(fs_words
-            .forbidden_constructs()
-            .contains(&ForbiddenConstruct::ExternalFilesystem));
+        assert!(
+            fs_words
+                .forbidden_constructs()
+                .contains(&ForbiddenConstruct::ExternalFilesystem)
+        );
     }
 
     #[test]
@@ -424,9 +429,11 @@ mod tests {
     #[test]
     fn free_recursion_word_pair_call_self_is_caught() {
         let source = SrplSource::new("procedure X begin Call   Self end;");
-        assert!(source
-            .forbidden_constructs()
-            .contains(&ForbiddenConstruct::FreeRecursion));
+        assert!(
+            source
+                .forbidden_constructs()
+                .contains(&ForbiddenConstruct::FreeRecursion)
+        );
     }
 
     #[test]

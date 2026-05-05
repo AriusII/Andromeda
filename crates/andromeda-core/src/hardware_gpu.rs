@@ -200,13 +200,17 @@ mod tests {
     fn gpu_batch_analytics_profile_rejects_foreground_and_critical_work() {
         let profile = GpuProfile::batch_analytics_only();
 
-        assert!(profile
-            .validate_pipeline(PipelineClass::StatisticsRefresh)
-            .is_ok());
+        assert!(
+            profile
+                .validate_pipeline(PipelineClass::StatisticsRefresh)
+                .is_ok()
+        );
         assert!(profile.validate_pipeline(PipelineClass::MapRefresh).is_ok());
-        assert!(profile
-            .validate_pipeline(PipelineClass::BatchAnalytics)
-            .is_ok());
+        assert!(
+            profile
+                .validate_pipeline(PipelineClass::BatchAnalytics)
+                .is_ok()
+        );
 
         for pipeline in [
             PipelineClass::Commit,

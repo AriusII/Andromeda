@@ -168,7 +168,7 @@ fn gate_3_certificate_cn_extraction() {
     ];
 
     // Test that raw certificate can be constructed
-    use andromeda_quic::identity::RawCertificate;
+    use andromeda_quic::mtls_identity::RawCertificate;
     let raw_cert = RawCertificate::new(cert_der.clone());
     
     assert_eq!(raw_cert.len(), cert_der.len());
@@ -177,7 +177,7 @@ fn gate_3_certificate_cn_extraction() {
 
 #[test]
 fn gate_3_fingerprint_deterministic() {
-    use andromeda_quic::identity::RawCertificate;
+    use andromeda_quic::mtls_identity::RawCertificate;
 
     let cert_der = vec![
         0x30, 0x82, 0x01, 0x00, 0x30, 0x81, 0xfd,
@@ -194,7 +194,7 @@ fn gate_3_fingerprint_deterministic() {
 
 #[test]
 fn gate_3_identity_extraction_surface_scope() {
-    use andromeda_quic::identity::plane_to_required_surface_scope;
+    use andromeda_quic::mtls_identity::plane_to_required_surface_scope;
     use andromeda_observe::SurfaceScope;
 
     // Verify plane-to-scope mapping

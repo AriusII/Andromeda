@@ -30,8 +30,8 @@ use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, InvocationId, RequestId,
 };
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime};
 
 /// Stream lifecycle state.
