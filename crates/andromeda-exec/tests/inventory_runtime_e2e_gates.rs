@@ -16,9 +16,8 @@ use andromeda_observe::{
     TraceId, WalEventTrace, WalOperation,
 };
 use andromeda_srpl::{
-    Cardinality,
-    compiler::{compile_narrow_procedure_signature, inventory_reserve_stock_body_ir},
-    model::{SrplBusinessOperationKindIr, SrplPredicateIr, SrplValueIr},
+    Cardinality, SrplBusinessOperationKindIr, SrplPredicateIr, SrplValueIr,
+    inventory_reserve_stock_body_ir, procedure_compiler::compile_narrow_procedure_signature,
 };
 use andromeda_storage::publication::DatabaseManifest;
 use andromeda_storage::{

@@ -42,12 +42,12 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
+use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
-use crate::{Lsn, WalRecord, WalRecordKind};
+use crate::WalRecord;
 
 /// Metrics for WAL segment fragmentation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FragmentationMetrics {
     /// Unique segment identifier
     pub segment_id: u64,
@@ -151,7 +151,7 @@ impl CompactionResult {
 }
 
 /// Audit event emitted during WAL compaction operations.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum WalCompactionAuditEvent {
     /// Candidate identified for compaction
     CandidateIdentified {
@@ -176,10 +176,7 @@ pub enum WalCompactionAuditEvent {
     },
 
     /// Compaction failed for segment (old segment remains)
-    CompactionFailed {
-        segment_id: u64,
-        reason: String,
-    },
+    CompactionFailed { segment_id: u64, reason: String },
 
     /// Compaction run summary with metrics
     Summary {
@@ -231,8 +228,7 @@ impl WalCompactionSummary {
         if self.candidates_compacted == 0 {
             0.0
         } else {
-            self.total_bytes_recovered as f64
-                / (self.total_bytes_recovered as f64 / 0.40) // Assume 40% avg recovery
+            self.total_bytes_recovered as f64 / (self.total_bytes_recovered as f64 / 0.40) // Assume 40% avg recovery
         }
     }
 
@@ -264,10 +260,7 @@ pub trait CompactionContext: Send + Sync {
     /// # Errors
     ///
     /// Returns `Storage` error if segment cannot be read or is corrupted.
-    fn read_segment_records(
-        &self,
-        segment_id: u64,
-    ) -> AndromedaResult<Vec<WalRecord>>;
+    fn read_segment_records(&self, segment_id: u64) -> AndromedaResult<Vec<WalRecord>>;
 
     /// Determine if a record should be kept during compaction.
     ///
@@ -301,11 +294,7 @@ pub trait CompactionContext: Send + Sync {
     ///
     /// Returns `Storage` error if swap fails. On error, caller should abandon
     /// the new segment and rely on old segment for recovery.
-    fn swap_segment(
-        &self,
-        old_segment_id: u64,
-        new_segment_id: u64,
-    ) -> AndromedaResult<()>;
+    fn swap_segment(&self, old_segment_id: u64, new_segment_id: u64) -> AndromedaResult<()>;
 
     /// Emit an audit event for observability.
     fn emit_audit_event(&self, event: WalCompactionAuditEvent) -> AndromedaResult<()>;
@@ -544,7 +533,8 @@ impl WalCompactionScheduler {
         let mut summary = WalCompactionSummary::new(run_id);
 
         // Step 1: Identify candidates
-        let candidates = identify_compaction_candidates(context, self.config.fragmentation_threshold)?;
+        let candidates =
+            identify_compaction_candidates(context, self.config.fragmentation_threshold)?;
         summary.candidates_identified = candidates.len() as u64;
 
         // Step 2: Compact up to max_segments_per_run
@@ -604,30 +594,21 @@ mod tests {
     fn fragmentation_metrics_creation_validates_segment_id() {
         let result = FragmentationMetrics::new(0, 1000, 100);
         assert!(result.is_err());
-        assert_eq!(
-            result.unwrap_err().kind(),
-            AndromedaErrorKind::Storage
-        );
+        assert_eq!(result.unwrap_err().kind(), AndromedaErrorKind::Storage);
     }
 
     #[test]
     fn fragmentation_metrics_creation_validates_total_bytes() {
         let result = FragmentationMetrics::new(1, 0, 0);
         assert!(result.is_err());
-        assert_eq!(
-            result.unwrap_err().kind(),
-            AndromedaErrorKind::Storage
-        );
+        assert_eq!(result.unwrap_err().kind(), AndromedaErrorKind::Storage);
     }
 
     #[test]
     fn fragmentation_metrics_creation_validates_dead_bytes_bound() {
         let result = FragmentationMetrics::new(1, 100, 101);
         assert!(result.is_err());
-        assert_eq!(
-            result.unwrap_err().kind(),
-            AndromedaErrorKind::Storage
-        );
+        assert_eq!(result.unwrap_err().kind(), AndromedaErrorKind::Storage);
     }
 
     #[test]

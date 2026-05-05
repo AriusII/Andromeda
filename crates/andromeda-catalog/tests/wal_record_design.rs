@@ -303,8 +303,9 @@ fn recovery_incomplete_batch_rejected_if_apply_record_missing() {
     assert!(alter_record.validate().is_ok());
 
     // But without the commit record, recovery marks this as incomplete
-    let incomplete_reason =
-        "batch missing ApplyCatalogVersion commit record after operation records";
+    let incomplete_reason = format!(
+        "{batch_id:?} at {version:?} missing ApplyCatalogVersion commit record after operation records"
+    );
     assert!(
         !incomplete_reason.is_empty(),
         "Incomplete batches must have a documented reason"
@@ -415,7 +416,7 @@ fn recovery_committed_catalog_applies_all_operations() {
     assert!(commit.validate().is_ok());
 
     // Recovery simulation: all 4 operations + commit are present and valid
-    let operations = vec![create1, create2, alter, deprecate];
+    let operations = [create1, create2, alter, deprecate];
     assert_eq!(
         operations.len(),
         4,
@@ -434,7 +435,7 @@ fn recovery_committed_catalog_applies_all_operations() {
         );
         assert_eq!(
             operations.len(),
-            claimed_count as usize,
+            claimed_count,
             "All claimed operations must be present for replay"
         );
     } else {

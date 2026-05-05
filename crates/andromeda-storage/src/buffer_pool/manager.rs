@@ -150,10 +150,12 @@ impl<S: PageStore> BufferPool<S> {
             return Ok(index);
         }
 
-        let image = self
-            .store
-            .read_page(page_id)?
-            .ok_or_else(|| BufferPoolError::PageNotFound { page_id: page_id.get() }.into_andromeda_error())?;
+        let image = self.store.read_page(page_id)?.ok_or_else(|| {
+            BufferPoolError::PageNotFound {
+                page_id: page_id.get(),
+            }
+            .into_andromeda_error()
+        })?;
         if image.page_id() != Some(page_id) {
             return Err(BufferPoolError::InvalidPageImage.into_andromeda_error());
         }
@@ -173,8 +175,10 @@ impl<S: PageStore> BufferPool<S> {
         let page_id = layout_contract.header.page_id;
         validate_page_id(page_id)?;
         if self.page_table.contains_key(&page_id) {
-            return Err(BufferPoolError::PageTableConflict { page_id: page_id.get() }
-                .into_andromeda_error());
+            return Err(BufferPoolError::PageTableConflict {
+                page_id: page_id.get(),
+            }
+            .into_andromeda_error());
         }
 
         let image = self
@@ -186,10 +190,10 @@ impl<S: PageStore> BufferPool<S> {
     fn admit_image(&mut self, image: PageImage) -> AndromedaResult<usize> {
         let page_id = validate_image_for_pool(&image, self.config.page_size())?;
         if self.page_table.contains_key(&page_id) {
-            return Err(
-                BufferPoolError::PageTableConflict { page_id: page_id.get() }
-                    .into_andromeda_error(),
-            );
+            return Err(BufferPoolError::PageTableConflict {
+                page_id: page_id.get(),
+            }
+            .into_andromeda_error());
         }
 
         let index = self.reusable_frame_index()?;
@@ -294,7 +298,9 @@ impl<S: PageStore> BufferPoolManager for BufferPool<S> {
         self.frames[index].pin()?;
         Ok((page_id, self.frames[index].id()))
     }
+}
 
+impl<S: PageStore> BufferPool<S> {
     /// Flush dirty frames that have LSNs durable in the WAL.
     ///
     /// This is the primary flush gate: before a page is written to disk,
@@ -380,11 +386,13 @@ impl<S: PageStore> BufferPoolManager for BufferPool<S> {
             // Gate 1: Check if this LSN is durable in the WAL
             if !observer.is_durable(first_dirty_lsn) {
                 // Frame is blocked: LSN not yet durable
-                result.blocked_by_wal_durability.push(FlushBlockedFrame::new(
-                    page_id,
-                    first_dirty_lsn,
-                    observer.max_durable_lsn(),
-                ));
+                result
+                    .blocked_by_wal_durability
+                    .push(FlushBlockedFrame::new(
+                        page_id,
+                        first_dirty_lsn,
+                        observer.max_durable_lsn(),
+                    ));
                 continue;
             }
 
@@ -400,7 +408,9 @@ impl<S: PageStore> BufferPoolManager for BufferPool<S> {
             // Gate 3: Ensure frame is not pinned
             let pin_count = self.frames[index].pin_count();
             if pin_count != 0 {
-                result.errors.push(FlushError::FramePinned { page_id, pin_count });
+                result
+                    .errors
+                    .push(FlushError::FramePinned { page_id, pin_count });
                 continue;
             }
 
@@ -415,25 +425,32 @@ impl<S: PageStore> BufferPoolManager for BufferPool<S> {
 
             // Attempt flush: begin_flush, write, finish_flush
             if let Err(_) = self.frames[index].begin_flush() {
-                result.errors.push(FlushError::InvalidFrameState { page_id });
+                result
+                    .errors
+                    .push(FlushError::InvalidFrameState { page_id });
                 continue;
             }
 
             if let Err(e) = self.store.write_page(image, first_dirty_lsn) {
-                result.errors.push(FlushError::StorageError(e.message().to_string()));
+                result
+                    .errors
+                    .push(FlushError::StorageError(e.message().to_string()));
                 continue;
             }
 
             if let Err(_) = self.frames[index].finish_flush(first_dirty_lsn) {
-                result.errors.push(FlushError::InvalidFrameState { page_id });
+                result
+                    .errors
+                    .push(FlushError::InvalidFrameState { page_id });
                 continue;
             }
 
             // Mark clean only on successful flush
             if let Err(_) = self.dirty_tracker.mark_clean(page_id) {
-                result.errors.push(FlushError::StorageError(
-                    format!("Failed to mark page {} clean after flush", page_id.get()),
-                ));
+                result.errors.push(FlushError::StorageError(format!(
+                    "Failed to mark page {} clean after flush",
+                    page_id.get()
+                )));
                 continue;
             }
 
@@ -451,7 +468,10 @@ fn validate_page_id(page_id: PageId) -> AndromedaResult<()> {
     Ok(())
 }
 
-fn validate_image_for_pool(image: &PageImage, page_size: crate::PageSize) -> AndromedaResult<PageId> {
+fn validate_image_for_pool(
+    image: &PageImage,
+    page_size: crate::PageSize,
+) -> AndromedaResult<PageId> {
     if image.page_size() != page_size {
         return Err(BufferPoolError::PageSizeMismatch.into_andromeda_error());
     }
@@ -606,9 +626,15 @@ mod tests {
     #[test]
     fn pinned_exhaustion_returns_explicit_storage_error() {
         let mut pool = pool(1);
-        let _pinned = pool
-            .new_page(valid_contract(PageId::new(30), Lsn::new(30)))
-            .expect("pinned first");
+        let frame_id = {
+            let (_page_id, guard) = pool
+                .new_page(valid_contract(PageId::new(30), Lsn::new(30)))
+                .expect("pinned first");
+            guard.frame_id()
+        };
+        pool.frames[frame_id.zero_based_index()]
+            .pin()
+            .expect("pin resident frame");
 
         let error = pool
             .new_page(valid_contract(PageId::new(31), Lsn::new(31)))

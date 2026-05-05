@@ -3,7 +3,7 @@
 //! This module provides the contract surface for extracting and binding mTLS
 //! certificate identities to QUIC sessions. It remains runtime-free in V0:
 //! types and validation functions are defined here; actual quinn connection
-//! integration is deferred to the D4 executor bridge under the `runtime-quinn`
+//! integration is deferred to the D4 Procedure Gateway under the `runtime-quinn`
 //! feature.
 //!
 //! ## Certificate Identity Flow
@@ -46,7 +46,7 @@ pub const fn plane_to_required_surface_scope(plane: crate::SurfacePlane) -> Surf
 /// Raw X.509 certificate bytes extracted from a QUIC connection.
 ///
 /// This is the entry point for the identity extraction pipeline.
-/// In D4 (executor bridge), `extract_peer_certificate()` will obtain
+/// In D4 (Procedure Gateway), `extract_peer_certificate()` will obtain
 /// this from a quinn connection; in D3 contract tests, it is constructed
 /// manually from known test vectors.
 #[derive(Debug, Clone, PartialEq, Eq)]

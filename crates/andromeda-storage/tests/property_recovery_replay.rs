@@ -61,13 +61,11 @@ fn arb_wal_payload() -> impl Strategy<Value = Vec<u8>> {
 }
 
 fn arb_wal_record() -> impl Strategy<Value = WalRecordData> {
-    (arb_lsn(), arb_wal_payload()).prop_map(|(lsn, payload)| {
-        WalRecordData {
-            lsn,
-            transaction_id: if lsn % 5 == 0 { Some(lsn / 5) } else { None },
-            payload,
-            checksum: calculate_mock_checksum(&[lsn.to_le_bytes().as_ref()].concat()),
-        }
+    (arb_lsn(), arb_wal_payload()).prop_map(|(lsn, payload)| WalRecordData {
+        lsn,
+        transaction_id: if lsn % 5 == 0 { Some(lsn / 5) } else { None },
+        payload,
+        checksum: calculate_mock_checksum(&[lsn.to_le_bytes().as_ref()].concat()),
     })
 }
 
@@ -80,7 +78,9 @@ fn calculate_mock_checksum(data: &[u8]) -> u64 {
     for chunk in data.chunks(8) {
         let mut bytes = [0u8; 8];
         bytes[..chunk.len()].copy_from_slice(chunk);
-        result = result.wrapping_mul(31).wrapping_add(u64::from_le_bytes(bytes));
+        result = result
+            .wrapping_mul(31)
+            .wrapping_add(u64::from_le_bytes(bytes));
     }
     result
 }
@@ -198,7 +198,7 @@ fn prop_recovery_valid_segment_succeeds() {
 fn prop_recovery_detects_checksum_corruption() {
     proptest!(|(
         mut segment in arb_wal_segment(),
-        record_idx in 0usize..prop::collection::vec(arb_wal_record(), 1..50).prop_map(|v| v.len()).prop_map(|len| len).unwrap_or(1),
+        record_idx in 0usize..50,
     )| {
         if record_idx < segment.records.len() {
             // Corrupt the checksum
@@ -229,7 +229,8 @@ fn prop_recovery_detects_out_of_order() {
     )| {
         if segment.records.len() >= 2 {
             // Reverse order of two records
-            segment.records.swap(0, segment.records.len() - 1);
+            let last_index = segment.records.len() - 1;
+            segment.records.swap(0, last_index);
         }
 
         let result = recover_from_wal_segment(&segment);

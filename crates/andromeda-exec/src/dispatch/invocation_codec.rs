@@ -7,8 +7,7 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, InvocationId, RequestId,
-    SessionId, TransactionId,
+    AndromedaError, AndromedaErrorKind, AndromedaResult, InvocationId, TransactionId,
 };
 use andromeda_proto::StructuredObjectHeader;
 
@@ -75,7 +74,7 @@ pub fn decode_invocation_response(
 
         Ok(ExecutionResult::Success {
             invocation_id,
-            transaction_id: transaction_id.unwrap_or(0),
+            transaction_id: transaction_id.unwrap_or(TransactionId::new(0)),
             output_payload: payload,
             row_count,
         })
@@ -164,8 +163,6 @@ struct ResultStreamDecoderInner {
     received_final: bool,
     /// Total rows expected (if known)
     expected_row_count: Option<u64>,
-    /// Received row count so far
-    received_row_count: u64,
 }
 
 impl ResultStreamDecoder {
@@ -176,14 +173,13 @@ impl ResultStreamDecoder {
                 frames: BTreeMap::new(),
                 received_final: false,
                 expected_row_count: None,
-                received_row_count: 0,
             })),
         }
     }
 
     /// Creates a new decoder with an expected row count
     pub fn with_expected_count(count: u64) -> Self {
-        let mut decoder = Self::new();
+        let decoder = Self::new();
         {
             let mut inner = decoder.inner.lock().unwrap();
             inner.expected_row_count = Some(count);
@@ -308,8 +304,8 @@ mod tests {
     fn make_test_payload() -> StructuredObjectHeader {
         StructuredObjectHeader {
             name: "test_result".to_string(),
-            contract_hash: 0x1234567890abcdef,
-            descriptor_hash: 0xfedcba0987654321,
+            contract_hash: andromeda_core::ContractHash::test_vector(1),
+            descriptor_hash: andromeda_core::ContractHash::test_vector(2),
             fields: vec![],
             column_count: 0,
             layout: andromeda_proto::StructuredObjectLayout::RowMajor,
@@ -326,8 +322,8 @@ mod tests {
         let payload = make_test_payload();
 
         let result = decode_invocation_response(
-            1,
-            Some(42),
+            InvocationId::new(1),
+            Some(TransactionId::new(42)),
             true,
             0,
             String::new(),
@@ -343,8 +339,8 @@ mod tests {
                 row_count,
                 ..
             } => {
-                assert_eq!(invocation_id, 1);
-                assert_eq!(transaction_id, 42);
+                assert_eq!(invocation_id, InvocationId::new(1));
+                assert_eq!(transaction_id, TransactionId::new(42));
                 assert_eq!(row_count, 100);
             }
             _ => panic!("expected success result"),
@@ -354,8 +350,8 @@ mod tests {
     #[test]
     fn test_decode_error_response() {
         let result = decode_invocation_response(
-            1,
-            Some(42),
+            InvocationId::new(1),
+            Some(TransactionId::new(42)),
             false,
             500,
             "execution failed".to_string(),
@@ -371,10 +367,10 @@ mod tests {
                 error_message,
                 transaction_id,
             } => {
-                assert_eq!(invocation_id, 1);
+                assert_eq!(invocation_id, InvocationId::new(1));
                 assert_eq!(error_code, 500);
                 assert_eq!(error_message, "execution failed");
-                assert_eq!(transaction_id, Some(42));
+                assert_eq!(transaction_id, Some(TransactionId::new(42)));
             }
             _ => panic!("expected error result"),
         }

@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+#![allow(ambiguous_glob_imports)]
 
 mod admission;
 mod business;
@@ -28,7 +29,7 @@ pub use executor_bridge::ExecutorDispatchBridge;
 pub use helpers::transaction_id_for_invocation;
 pub use invocation::*;
 pub use local::*;
-pub use registry::{ProcedureHandler, ProcedureRegistry};
+pub use registry::{ProcedureHandler, ProcedureRegistry, ReserveStockProcedureHandler};
 pub use result::*;
 pub use services::{
     AdmissionService, CompletionMappingService, PreTransactionValidationService,

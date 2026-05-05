@@ -6,7 +6,7 @@
 
 #![forbid(unsafe_code)]
 
-use andromeda_storage::btree_key_codec::{KeyCodec, KeyComparator, Key, KeyType};
+use andromeda_storage::btree_key_codec::{Key, KeyCodec, KeyComparator, KeyType};
 use andromeda_storage::{Datum, ScalarType};
 use std::cmp::Ordering;
 
@@ -147,7 +147,11 @@ fn test_codec_composite_with_null() {
     let encoded = KeyCodec::encode_composite_key(&cols).expect("encode");
     let schema = vec![ScalarType::Int32, ScalarType::Int64, ScalarType::Int32];
     let decoded = KeyCodec::decode_composite(&encoded, &schema).expect("decode");
-    assert_eq!(decoded.len(), 3, "composite with null should have 3 columns");
+    assert_eq!(
+        decoded.len(),
+        3,
+        "composite with null should have 3 columns"
+    );
 }
 
 /// Test 12: Empty composite key should error
@@ -155,10 +159,7 @@ fn test_codec_composite_with_null() {
 fn test_codec_empty_composite_key_error() {
     let cols: Vec<Datum> = vec![];
     let result = KeyCodec::encode_composite_key(&cols);
-    assert!(
-        result.is_err(),
-        "empty composite key should produce error"
-    );
+    assert!(result.is_err(), "empty composite key should produce error");
 }
 
 // ============================================================================
@@ -187,7 +188,8 @@ fn test_order_preservation_int32_sequence() {
     for i in 0..encoded.len() - 1 {
         let cmp = KeyComparator::compare(&encoded[i], &encoded[i + 1]);
         assert_eq!(
-            cmp, Ordering::Less,
+            cmp,
+            Ordering::Less,
             "order preservation violated at index {} for int32",
             i
         );
@@ -214,7 +216,12 @@ fn test_order_preservation_int64_extremes() {
 
     for i in 0..encoded.len() - 1 {
         let cmp = KeyComparator::compare(&encoded[i], &encoded[i + 1]);
-        assert_eq!(cmp, Ordering::Less, "int64 order preservation failed at {}", i);
+        assert_eq!(
+            cmp,
+            Ordering::Less,
+            "int64 order preservation failed at {}",
+            i
+        );
     }
 }
 
@@ -238,7 +245,12 @@ fn test_order_preservation_text_lexicographic() {
 
     for i in 0..encoded.len() - 1 {
         let cmp = KeyComparator::compare(&encoded[i], &encoded[i + 1]);
-        assert_eq!(cmp, Ordering::Less, "text order preservation failed at {}", i);
+        assert_eq!(
+            cmp,
+            Ordering::Less,
+            "text order preservation failed at {}",
+            i
+        );
     }
 }
 
@@ -260,7 +272,12 @@ fn test_order_preservation_bytes() {
 
     for i in 0..encoded.len() - 1 {
         let cmp = KeyComparator::compare(&encoded[i], &encoded[i + 1]);
-        assert_eq!(cmp, Ordering::Less, "bytes order preservation failed at {}", i);
+        assert_eq!(
+            cmp,
+            Ordering::Less,
+            "bytes order preservation failed at {}",
+            i
+        );
     }
 }
 
@@ -416,7 +433,10 @@ fn test_comparator_equal() {
     let key = Key::Int32(42);
     let encoded = KeyCodec::encode_key(&key).expect("encode");
 
-    assert!(KeyComparator::equal(&encoded, &encoded), "equal comparison failed");
+    assert!(
+        KeyComparator::equal(&encoded, &encoded),
+        "equal comparison failed"
+    );
 }
 
 /// Test 29: Comparator less than
@@ -446,10 +466,7 @@ fn test_comparator_range_boundary() {
     let upper = KeyCodec::encode_key(&Key::Int32(100)).expect("encode");
 
     let cmp = KeyComparator::compare_range(&key, &upper);
-    assert_eq!(
-        cmp, Ordering::Less,
-        "range boundary comparison failed"
-    );
+    assert_eq!(cmp, Ordering::Less, "range boundary comparison failed");
 }
 
 // ============================================================================
@@ -544,11 +561,7 @@ fn test_encoding_format_validation() {
 
     // Next 2 bytes should be length (little-endian)
     let length = u16::from_le_bytes([encoded[1], encoded[2]]) as usize;
-    assert_eq!(
-        length, 4,
-        "int32 should have length 4, got {}",
-        length
-    );
+    assert_eq!(length, 4, "int32 should have length 4, got {}", length);
 }
 
 /// Test 35: Null key ordering behavior

@@ -8,7 +8,6 @@
 use crate::error::cli_error;
 use andromeda_core::AndromedaResult;
 use serde::Serialize;
-use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Serializable backup status.
@@ -29,6 +28,10 @@ impl std::fmt::Display for BackupState {
             BackupState::Failed => write!(f, "failed"),
         }
     }
+}
+
+impl BackupState {
+    const ALL: [Self; 4] = [Self::Pending, Self::Running, Self::Completed, Self::Failed];
 }
 
 impl Serialize for BackupState {
@@ -170,7 +173,7 @@ fn run_backup_status(args: &[String]) -> AndromedaResult<()> {
         backup_id,
         state: BackupState::Running,
         progress_percent: 65,
-        bytes_processed: 1_073_741_824, // 1 GiB
+        bytes_processed: 1_073_741_824,       // 1 GiB
         estimated_total_bytes: 1_610_612_736, // 1.5 GiB
         start_time: unix_timestamp(),
         elapsed_seconds: 120,
@@ -270,6 +273,15 @@ fn print_backup_help() {
     println!("  --limit <n>         Limit backup list to N entries (default: 10)");
     println!("  --json              Output in JSON format (default: human-readable)");
     println!("  -h, --help          Show this help message");
+    println!();
+    println!(
+        "STATES: {}",
+        BackupState::ALL
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
 }
 
 fn print_backup_status_human(report: &BackupStatusReport) {
@@ -345,10 +357,7 @@ mod tests {
 
     #[test]
     fn backup_start_with_destination() {
-        let result = run_backup_start(&[
-            "--destination".to_string(),
-            "/backup/dest".to_string(),
-        ]);
+        let result = run_backup_start(&["--destination".to_string(), "/backup/dest".to_string()]);
         assert!(result.is_ok());
     }
 

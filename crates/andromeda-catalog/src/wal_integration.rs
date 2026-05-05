@@ -13,11 +13,9 @@
 //!
 //! No additional file I/O is done here; the WAL manager owns the I/O contract.
 
-use andromeda_core::{AndromedaResult, CatalogObjectId, CatalogVersion};
-use andromeda_storage::Lsn;
-use andromeda_storage::wal_record_catalog::CatalogWalRecord;
+use andromeda_core::{AndromedaResult, CatalogVersion};
 
-use crate::CatalogMutation;
+use crate::{CatalogMutation, CatalogWalRecord};
 
 /// Emits a CatalogWalRecord for a catalog mutation.
 ///
@@ -38,19 +36,15 @@ use crate::CatalogMutation;
 /// for physical durability.
 pub fn emit_catalog_mutation_record(
     mutation: &CatalogMutation,
-    operator_principal: String,
+    _operator_principal: String,
 ) -> AndromedaResult<CatalogWalRecord> {
-    // For now, emit a DefinitionBatchApplied record
-    // In a full implementation, this would correlate with the actual
-    // DefinitionBatch to populate affected_procedure_ids.
-
-    let record = CatalogWalRecord::DefinitionBatchApplied {
-        batch_id: mutation.definition_batch_id.get(),
-        new_catalog_version: mutation.next_version,
-        procedure_count: 1, // Placeholder; would come from DefinitionBatch
-        affected_procedure_ids: vec![CatalogObjectId::new(1)], // Placeholder
-        timestamp_secs: CatalogWalRecord::current_timestamp_secs(),
-        operator_principal,
+    // In a full implementation, record_count and lsn come from the durable
+    // DefinitionBatch write pipeline.
+    let record = CatalogWalRecord::ApplyCatalogVersion {
+        batch_id: mutation.definition_batch_id,
+        version: mutation.next_version,
+        record_count: 1,
+        lsn: 1,
     };
 
     Ok(record)
@@ -71,7 +65,7 @@ pub fn emit_catalog_mutation_record(
 /// - `catalog_version`: Current visible catalog version
 /// - `visible_procedure_count`: Count of visible procedures at this version
 pub fn emit_catalog_checkpoint_record(
-    current_lsn: Lsn,
+    current_lsn: u64,
     catalog_version: CatalogVersion,
     visible_procedure_count: usize,
 ) -> AndromedaResult<CatalogWalRecord> {
@@ -79,7 +73,6 @@ pub fn emit_catalog_checkpoint_record(
         checkpoint_lsn: current_lsn,
         catalog_version,
         visible_procedure_count,
-        timestamp_secs: CatalogWalRecord::current_timestamp_secs(),
     };
 
     Ok(record)
@@ -92,7 +85,7 @@ mod tests {
     #[test]
     fn emit_catalog_mutation_record_produces_valid_record() {
         let mutation = CatalogMutation {
-            definition_batch_id: Default::default(),
+            definition_batch_id: crate::DefinitionBatchId::new(1),
             previous_version: CatalogVersion::new(5),
             next_version: CatalogVersion::new(6),
         };
@@ -106,8 +99,8 @@ mod tests {
 
     #[test]
     fn emit_catalog_checkpoint_record_produces_valid_record() {
-        let record = emit_catalog_checkpoint_record(Lsn::new(1000), CatalogVersion::new(42), 5)
-            .expect("emit failed");
+        let record =
+            emit_catalog_checkpoint_record(1000, CatalogVersion::new(42), 5).expect("emit failed");
 
         assert_eq!(record.catalog_version(), Some(CatalogVersion::new(42)));
         assert!(record.validate().is_ok());

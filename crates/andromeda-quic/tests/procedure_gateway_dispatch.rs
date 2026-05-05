@@ -1,6 +1,6 @@
-//! D4 Executor Bridge Dispatch Tests
+//! D4 Procedure Gateway Dispatch Tests
 //!
-//! These tests validate the contract surface between QUIC transport and executor dispatch:
+//! These tests validate the QUIC-side contract surface before Procedure dispatch:
 //!
 //! 1. **Authorization Boundary**: Certificate identity → surface scope → authorization gate
 //! 2. **Cross-Plane Rejection**: Application cert attempting HA/DR operation → pre-transaction error
@@ -11,10 +11,10 @@
 //! These tests are runtime-free and do not depend on quinn or rustls.
 
 use andromeda_core::{AndromedaErrorKind, InvocationId};
-use andromeda_observe::{CertificateIdentity, SurfaceScope, TraceId};
+use andromeda_observe::{CertificateIdentity, SurfaceScope};
 use andromeda_quic::{
-    Connection, ExecutorDispatchBridge, FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader,
-    FrameType, LifecycleState, SurfacePlane,
+    Connection, FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader, FrameType, LifecycleState,
+    ProcedureGateway, SurfacePlane,
 };
 
 fn hello_frame(session_id: u64) -> FrameBytes {
@@ -92,39 +92,39 @@ fn setup_active_ha_connection() -> Connection {
     conn
 }
 
-/// Test 1: Bridge accepts a valid authorized invocation on Application plane.
+/// Test 1: Gateway accepts a valid authorized invocation on Application plane.
 ///
 /// This test validates that:
-/// - Bridge construction succeeds when cert identity is bound and scope matches plane.
-/// - Bridge exposes the certificate fingerprint, subject, and plane.
+/// - Gateway construction succeeds when cert identity is bound and scope matches plane.
+/// - Gateway exposes the certificate fingerprint, subject, and plane.
 /// - Stream-to-invocation mapping is deterministic.
 /// - No authorization error is raised for a properly set-up connection.
 #[test]
-fn test_bridge_accepts_authorized_invocation() {
+fn test_gateway_accepts_authorized_invocation() {
     let conn = setup_active_application_connection();
-    let bridge = ExecutorDispatchBridge::new(&conn).expect("bridge construction failed");
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
 
-    // Verify bridge state.
-    assert_eq!(bridge.surface_plane(), SurfacePlane::Application);
+    // Verify gateway state.
+    assert_eq!(gateway.surface_plane(), SurfacePlane::Application);
     assert_eq!(
-        bridge.certificate_identity().fingerprint,
+        gateway.certificate_identity().fingerprint,
         "a".repeat(64),
         "certificate fingerprint mismatch"
     );
     assert_eq!(
-        bridge.certificate_identity().subject,
+        gateway.certificate_identity().subject,
         "app-service",
         "certificate subject mismatch"
     );
     assert_eq!(
-        bridge.certificate_identity().surface,
+        gateway.certificate_identity().surface,
         SurfaceScope::Application,
         "certificate scope mismatch"
     );
 
     // Verify stream mapping.
     let stream_id = 42u64;
-    let invocation_id = bridge.map_stream_to_invocation_id(stream_id);
+    let invocation_id = gateway.map_stream_to_invocation_id(stream_id);
     assert_eq!(
         invocation_id,
         InvocationId::new(42),
@@ -132,23 +132,23 @@ fn test_bridge_accepts_authorized_invocation() {
     );
 
     // Verify preconditions check passes for active connection.
-    bridge
+    gateway
         .validate_dispatch_preconditions()
         .expect("dispatch preconditions validation failed");
 }
 
-/// Test 2: Bridge rejects cross-plane invocations before executor is reached.
+/// Test 2: Gateway rejects cross-plane invocations before executor is reached.
 ///
 /// Scenario: An Administration certificate is presented, but the connection
-/// is on the Application plane. The bridge must reject this with a security error
+/// is on the Application plane. The gateway must reject this with a security error
 /// *before* any executor invocation.
 ///
 /// This test validates that:
-/// - Bridge construction fails when scope does not match plane.
+/// - Gateway construction fails when scope does not match plane.
 /// - Connection-level validation prevents scope mismatches at set_certificate_identity time.
 /// - No transaction or executor invocation occurs as a result of the rejection.
 #[test]
-fn test_bridge_rejects_cross_plane_invocation() {
+fn test_gateway_rejects_cross_plane_invocation() {
     // Try to bind an Administration identity to an Application connection.
     let mut conn = Connection::new(SurfacePlane::Application);
 
@@ -174,15 +174,15 @@ fn test_bridge_rejects_cross_plane_invocation() {
         "error message should mention scope"
     );
 
-    // Verify that bridge construction would fail if we somehow got here.
-    let bridge_result = ExecutorDispatchBridge::new(&conn);
+    // Verify that gateway construction would fail if we somehow got here.
+    let gateway_result = ProcedureGateway::new(&conn);
     assert!(
-        bridge_result.is_err(),
-        "bridge should fail without certificate identity"
+        gateway_result.is_err(),
+        "gateway should fail without certificate identity"
     );
 }
 
-/// Test 3: Bridge correctly correlates stream ID to invocation.
+/// Test 3: Gateway correctly correlates stream ID to invocation.
 ///
 /// This test validates that:
 /// - Stream ID → InvocationId mapping is deterministic.
@@ -190,14 +190,14 @@ fn test_bridge_rejects_cross_plane_invocation() {
 /// - Different stream_ids produce different invocation_ids.
 /// - The mapping is injective (one-to-one).
 #[test]
-fn test_bridge_correlates_stream_id_to_invocation() {
+fn test_gateway_correlates_stream_id_to_invocation() {
     let conn = setup_active_application_connection();
-    let bridge = ExecutorDispatchBridge::new(&conn).expect("bridge construction failed");
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
 
     // Determinism: same stream_id → same invocation_id.
     let stream_id = 12345u64;
-    let inv_id_1 = bridge.map_stream_to_invocation_id(stream_id);
-    let inv_id_2 = bridge.map_stream_to_invocation_id(stream_id);
+    let inv_id_1 = gateway.map_stream_to_invocation_id(stream_id);
+    let inv_id_2 = gateway.map_stream_to_invocation_id(stream_id);
     assert_eq!(inv_id_1, inv_id_2, "mapping should be deterministic");
 
     // Correctness: stream_id should map to InvocationId(stream_id).
@@ -209,7 +209,7 @@ fn test_bridge_correlates_stream_id_to_invocation() {
 
     // Injectivity: different stream_ids → different invocation_ids.
     let stream_id_2 = 54321u64;
-    let inv_id_3 = bridge.map_stream_to_invocation_id(stream_id_2);
+    let inv_id_3 = gateway.map_stream_to_invocation_id(stream_id_2);
     assert_ne!(
         inv_id_1, inv_id_3,
         "different stream_ids should map to different invocation_ids"
@@ -217,7 +217,7 @@ fn test_bridge_correlates_stream_id_to_invocation() {
 
     // Multiple correlation roundtrips.
     for stream_id in 1..=10 {
-        let inv_id = bridge.map_stream_to_invocation_id(stream_id);
+        let inv_id = gateway.map_stream_to_invocation_id(stream_id);
         assert_eq!(
             inv_id,
             InvocationId::new(stream_id),
@@ -228,7 +228,7 @@ fn test_bridge_correlates_stream_id_to_invocation() {
     }
 }
 
-/// Test 4: Bridge validates preconditions before invocation.
+/// Test 4: Gateway validates preconditions before invocation.
 ///
 /// This test validates that:
 /// - Preconditions check fails if connection is not in Active state.
@@ -236,9 +236,9 @@ fn test_bridge_correlates_stream_id_to_invocation() {
 /// - Preconditions check succeeds if connection is Active and identity is bound.
 ///
 /// This is a contract test for the admission gate: before any executor invocation,
-/// the bridge must verify that the connection is ready to dispatch.
+/// the gateway must verify that the connection is ready to dispatch.
 #[test]
-fn test_bridge_validates_preconditions() {
+fn test_gateway_validates_preconditions() {
     // Scenario 1: Connection not yet authenticated (not Active).
     let mut conn = Connection::new(SurfacePlane::Application);
     let identity = CertificateIdentity::new(
@@ -252,8 +252,8 @@ fn test_bridge_validates_preconditions() {
     // Connection is in Hello state, not Active.
     assert_eq!(conn.state(), LifecycleState::Hello);
 
-    let bridge = ExecutorDispatchBridge::new(&conn).expect("bridge construction succeeded");
-    let precond_err = bridge.validate_dispatch_preconditions();
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction succeeded");
+    let precond_err = gateway.validate_dispatch_preconditions();
     assert!(
         precond_err.is_err(),
         "preconditions should fail for non-Active connection"
@@ -265,60 +265,59 @@ fn test_bridge_validates_preconditions() {
 
     // Scenario 2: Connection is Active.
     let conn_active = setup_active_application_connection();
-    let bridge_active =
-        ExecutorDispatchBridge::new(&conn_active).expect("bridge construction succeeded");
+    let gateway_active =
+        ProcedureGateway::new(&conn_active).expect("gateway construction succeeded");
 
-    let precond_ok = bridge_active.validate_dispatch_preconditions();
+    let precond_ok = gateway_active.validate_dispatch_preconditions();
     assert!(
         precond_ok.is_ok(),
         "preconditions should succeed for Active connection with identity"
     );
 }
 
-/// Test 5: Bridge enforces plane-specific authorization boundaries.
+/// Test 5: Gateway enforces plane-specific authorization boundaries.
 ///
 /// This test validates multi-plane scenarios:
-/// - Application bridge with Application identity → preconditions pass.
-/// - Administration bridge with Administration identity → preconditions pass.
-/// - HA bridge with Cluster identity → preconditions pass.
+/// - Application gateway with Application identity -> preconditions pass.
+/// - Administration gateway with Administration identity -> preconditions pass.
+/// - HA gateway with Cluster identity -> preconditions pass.
 ///
 /// Each plane must have its own authorization context and must not cross-dispatch.
 #[test]
-fn test_bridge_enforces_plane_specific_boundaries() {
+fn test_gateway_enforces_plane_specific_boundaries() {
     // Application plane.
     let app_conn = setup_active_application_connection();
-    let app_bridge =
-        ExecutorDispatchBridge::new(&app_conn).expect("app bridge construction failed");
-    assert_eq!(app_bridge.surface_plane(), SurfacePlane::Application);
+    let app_gateway = ProcedureGateway::new(&app_conn).expect("app gateway construction failed");
+    assert_eq!(app_gateway.surface_plane(), SurfacePlane::Application);
     assert!(
-        app_bridge.validate_dispatch_preconditions().is_ok(),
-        "app bridge should validate preconditions"
+        app_gateway.validate_dispatch_preconditions().is_ok(),
+        "app gateway should validate preconditions"
     );
 
     // Administration plane.
     let admin_conn = setup_active_administration_connection();
-    let admin_bridge =
-        ExecutorDispatchBridge::new(&admin_conn).expect("admin bridge construction failed");
-    assert_eq!(admin_bridge.surface_plane(), SurfacePlane::Administration);
+    let admin_gateway =
+        ProcedureGateway::new(&admin_conn).expect("admin gateway construction failed");
+    assert_eq!(admin_gateway.surface_plane(), SurfacePlane::Administration);
     assert!(
-        admin_bridge.validate_dispatch_preconditions().is_ok(),
-        "admin bridge should validate preconditions"
+        admin_gateway.validate_dispatch_preconditions().is_ok(),
+        "admin gateway should validate preconditions"
     );
 
     // HA plane.
     let ha_conn = setup_active_ha_connection();
-    let ha_bridge = ExecutorDispatchBridge::new(&ha_conn).expect("ha bridge construction failed");
-    assert_eq!(ha_bridge.surface_plane(), SurfacePlane::HighAvailability);
+    let ha_gateway = ProcedureGateway::new(&ha_conn).expect("ha gateway construction failed");
+    assert_eq!(ha_gateway.surface_plane(), SurfacePlane::HighAvailability);
     assert!(
-        ha_bridge.validate_dispatch_preconditions().is_ok(),
-        "ha bridge should validate preconditions"
+        ha_gateway.validate_dispatch_preconditions().is_ok(),
+        "ha gateway should validate preconditions"
     );
 
-    // Each bridge should correlate stream IDs independently.
+    // Each gateway should correlate stream IDs independently.
     let stream_id = 999u64;
-    let app_inv = app_bridge.map_stream_to_invocation_id(stream_id);
-    let admin_inv = admin_bridge.map_stream_to_invocation_id(stream_id);
-    let ha_inv = ha_bridge.map_stream_to_invocation_id(stream_id);
+    let app_inv = app_gateway.map_stream_to_invocation_id(stream_id);
+    let admin_inv = admin_gateway.map_stream_to_invocation_id(stream_id);
+    let ha_inv = ha_gateway.map_stream_to_invocation_id(stream_id);
 
     // All should map to the same InvocationId despite different planes.
     // (The mapping is stream_id-based, not plane-specific.)
@@ -327,35 +326,35 @@ fn test_bridge_enforces_plane_specific_boundaries() {
     assert_eq!(app_inv, InvocationId::new(stream_id));
 }
 
-/// Test 6: Bridge exposes immutable connection and identity references.
+/// Test 6: Gateway exposes immutable connection and identity references.
 ///
 /// This test validates that:
-/// - Bridge holds references, not ownership.
+/// - Gateway holds references, not ownership.
 /// - Certificate identity is accessible but not mutated.
-/// - Connection state is accessible through the bridge.
+/// - Connection state is accessible through the gateway.
 #[test]
-fn test_bridge_exposes_references() {
+fn test_gateway_exposes_references() {
     let conn = setup_active_application_connection();
-    let bridge = ExecutorDispatchBridge::new(&conn).expect("bridge construction failed");
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
 
-    // Verify that bridge references are consistent.
-    let id_1 = bridge.certificate_identity();
-    let id_2 = bridge.certificate_identity();
+    // Verify that gateway references are consistent.
+    let id_1 = gateway.certificate_identity();
+    let id_2 = gateway.certificate_identity();
     assert_eq!(id_1.fingerprint, id_2.fingerprint);
     assert_eq!(id_1.subject, id_2.subject);
 
     // Verify that connection is accessible.
-    let conn_ref = bridge.connection();
+    let conn_ref = gateway.connection();
     assert_eq!(conn_ref.state(), LifecycleState::Active);
     assert_eq!(conn_ref.surface_plane(), SurfacePlane::Application);
 }
 
-/// Test 7: Bridge handles Monitoring plane correctly.
+/// Test 7: Gateway handles Monitoring plane correctly.
 ///
 /// The Monitoring plane is read-only for diagnostics. This test validates
-/// that the bridge correctly constructs and routes on the Monitoring plane.
+/// that the gateway correctly constructs and routes on the Monitoring plane.
 #[test]
-fn test_bridge_supports_monitoring_plane() {
+fn test_gateway_supports_monitoring_plane() {
     let mut conn = Connection::new(SurfacePlane::Monitoring);
     let identity = CertificateIdentity::new(
         "e".repeat(64),
@@ -367,58 +366,58 @@ fn test_bridge_supports_monitoring_plane() {
     conn.accept_hello(&hello_frame(400)).unwrap();
     conn.accept_auth(&auth_frame(400)).unwrap();
 
-    let bridge = ExecutorDispatchBridge::new(&conn).expect("monitoring bridge construction failed");
+    let gateway = ProcedureGateway::new(&conn).expect("monitoring gateway construction failed");
 
-    assert_eq!(bridge.surface_plane(), SurfacePlane::Monitoring);
+    assert_eq!(gateway.surface_plane(), SurfacePlane::Monitoring);
     assert_eq!(
-        bridge.certificate_identity().surface,
+        gateway.certificate_identity().surface,
         SurfaceScope::MonitoringAgent
     );
     assert!(
-        bridge.validate_dispatch_preconditions().is_ok(),
-        "monitoring bridge should validate preconditions"
+        gateway.validate_dispatch_preconditions().is_ok(),
+        "monitoring gateway should validate preconditions"
     );
 }
 
-/// Test 8: Bridge stream correlation integrates with frame correlation.
+/// Test 8: Gateway stream correlation integrates with frame correlation.
 ///
 /// This test validates that stream ID → InvocationId → frame correlation
 /// produces consistent trace evidence. (This is a contract test; actual frame
 /// encoding is deferred to D5.)
 #[test]
-fn test_bridge_stream_correlation_enables_frame_tracing() {
+fn test_gateway_stream_correlation_enables_frame_tracing() {
     let conn = setup_active_application_connection();
-    let bridge = ExecutorDispatchBridge::new(&conn).expect("bridge construction failed");
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
 
     // Simulate QUIC frame arrival on stream 777.
     let stream_id = 777u64;
-    let invocation_id = bridge.map_stream_to_invocation_id(stream_id);
+    let invocation_id = gateway.map_stream_to_invocation_id(stream_id);
 
     // The invocation_id should be usable as a trace correlation point.
     assert_eq!(invocation_id, InvocationId::new(stream_id));
 
     // Frame-level correlation can now look up the invocation by stream_id → invocation_id.
     let stream_id_again = 777u64;
-    let invocation_id_again = bridge.map_stream_to_invocation_id(stream_id_again);
+    let invocation_id_again = gateway.map_stream_to_invocation_id(stream_id_again);
     assert_eq!(invocation_id, invocation_id_again);
 }
 
-/// Test 9: Bridge rejects missing certificate identity explicitly.
+/// Test 9: Gateway rejects missing certificate identity explicitly.
 ///
-/// This test validates that the bridge catches missing identity at construction time,
+/// This test validates that the gateway catches missing identity at construction time,
 /// not at dispatch time. This is important for fail-fast semantics.
 #[test]
-fn test_bridge_rejects_missing_certificate_identity() {
+fn test_gateway_rejects_missing_certificate_identity() {
     let mut conn = Connection::new(SurfacePlane::Application);
     conn.accept_hello(&hello_frame(500)).unwrap();
     conn.accept_auth(&auth_frame(500)).unwrap();
     assert_eq!(conn.state(), LifecycleState::Active);
 
     // No identity bound.
-    let result = ExecutorDispatchBridge::new(&conn);
+    let result = ProcedureGateway::new(&conn);
     assert!(
         result.is_err(),
-        "bridge should reject connection without identity"
+        "gateway should reject connection without identity"
     );
 
     let err = result.unwrap_err();
@@ -429,27 +428,27 @@ fn test_bridge_rejects_missing_certificate_identity() {
     );
 }
 
-/// Test 10: Bridge supports multiple bridges for the same connection.
+/// Test 10: Gateway supports multiple gateways for the same connection.
 ///
-/// This test validates that multiple bridges can be created from the same
+/// This test validates that multiple gateways can be created from the same
 /// connection (they hold immutable references and do not block each other).
 #[test]
-fn test_bridge_allows_multiple_instances_from_same_connection() {
+fn test_gateway_allows_multiple_instances_from_same_connection() {
     let conn = setup_active_application_connection();
 
-    let bridge_1 = ExecutorDispatchBridge::new(&conn).expect("first bridge construction failed");
-    let bridge_2 = ExecutorDispatchBridge::new(&conn).expect("second bridge construction failed");
+    let gateway_1 = ProcedureGateway::new(&conn).expect("first gateway construction failed");
+    let gateway_2 = ProcedureGateway::new(&conn).expect("second gateway construction failed");
 
-    // Both bridges should operate independently.
-    assert_eq!(bridge_1.surface_plane(), bridge_2.surface_plane());
+    // Both gateways should operate independently.
+    assert_eq!(gateway_1.surface_plane(), gateway_2.surface_plane());
     assert_eq!(
-        bridge_1.certificate_identity().fingerprint,
-        bridge_2.certificate_identity().fingerprint
+        gateway_1.certificate_identity().fingerprint,
+        gateway_2.certificate_identity().fingerprint
     );
 
-    // Stream mapping should be consistent across bridges.
+    // Stream mapping should be consistent across gateways.
     let stream_id = 888u64;
-    let inv_1 = bridge_1.map_stream_to_invocation_id(stream_id);
-    let inv_2 = bridge_2.map_stream_to_invocation_id(stream_id);
+    let inv_1 = gateway_1.map_stream_to_invocation_id(stream_id);
+    let inv_2 = gateway_2.map_stream_to_invocation_id(stream_id);
     assert_eq!(inv_1, inv_2);
 }

@@ -412,7 +412,7 @@ impl ProcedureResolveError {
 }
 
 /// Pre-transaction resolver for SRPL executable plans and manifests.
-pub trait ProcedureResolver {
+pub trait ProcedureResolver: Send + Sync {
     fn resolve_procedure(
         &self,
         request: ProcedureResolveRequest,
@@ -451,7 +451,9 @@ mod tests {
     };
     use andromeda_core::{CatalogObjectId, ScalarType, TimestampType, TypeDescriptor};
 
-    use crate::procedure_model::{BoundSrplBodyPlan, BoundSrplOperationPlan, SrplCatalogBindingEvidence};
+    use crate::procedure_model::{
+        BoundSrplBodyPlan, BoundSrplOperationPlan, SrplCatalogBindingEvidence,
+    };
 
     struct FakeResolver {
         response: ProcedureResolveResponse,

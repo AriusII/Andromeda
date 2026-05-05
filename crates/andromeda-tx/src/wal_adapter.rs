@@ -286,10 +286,7 @@ pub trait TxWalAdapterTrait: Send + Sync {
     /// adapter.record_rollback(other_tx_id).await?;
     /// assert_eq!(adapter.get_commit_lsn(other_tx_id).await?, None);
     /// ```
-    async fn get_commit_lsn(
-        &self,
-        tx_id: TransactionId,
-    ) -> AndromedaResult<Option<Lsn>>;
+    async fn get_commit_lsn(&self, tx_id: TransactionId) -> AndromedaResult<Option<Lsn>>;
 }
 
 /// WAL Manager interface expected by TxWalAdapterTrait.
@@ -361,14 +358,12 @@ impl TxWalAdapterError {
                 AndromedaErrorKind::Transaction,
                 "transaction is not in expected state for operation",
             ),
-            Self::WalAppendFailed => AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                "WAL append failed",
-            ),
-            Self::WalFlushFailed => AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                "WAL flush failed",
-            ),
+            Self::WalAppendFailed => {
+                AndromedaError::new(AndromedaErrorKind::Storage, "WAL append failed")
+            }
+            Self::WalFlushFailed => {
+                AndromedaError::new(AndromedaErrorKind::Storage, "WAL flush failed")
+            }
             Self::StatusTableError => AndromedaError::new(
                 AndromedaErrorKind::Internal,
                 "transaction status table error",
@@ -444,10 +439,11 @@ mod tests {
                 ));
             }
 
-            // Check for idempotency
-            let mut committed = self.committed_txs.lock().unwrap();
-            if let Some(existing_lsn) = committed.get(&tx_id) {
-                return Ok(*existing_lsn);
+            {
+                let committed = self.committed_txs.lock().unwrap();
+                if let Some(existing_lsn) = committed.get(&tx_id) {
+                    return Ok(*existing_lsn);
+                }
             }
 
             // Append to WAL
@@ -457,6 +453,7 @@ mod tests {
             wal_manager.flush_through(lsn).await?;
 
             // Record commitment
+            let mut committed = self.committed_txs.lock().unwrap();
             committed.insert(tx_id, lsn);
             Ok(lsn)
         }
@@ -471,10 +468,7 @@ mod tests {
             Ok(committed.contains_key(&tx_id))
         }
 
-        async fn get_commit_lsn(
-            &self,
-            tx_id: TransactionId,
-        ) -> AndromedaResult<Option<Lsn>> {
+        async fn get_commit_lsn(&self, tx_id: TransactionId) -> AndromedaResult<Option<Lsn>> {
             let committed = self.committed_txs.lock().unwrap();
             Ok(committed.get(&tx_id).copied())
         }
@@ -526,7 +520,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_rollback_prevents_durability_check() {
-        let wal = MockWalManager::new();
+        let _wal = MockWalManager::new();
         let adapter = MockTxWalAdapter::new();
         let tx_id = TransactionId::new(1);
 

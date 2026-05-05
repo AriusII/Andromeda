@@ -248,10 +248,10 @@ impl ScenarioTarget {
         if self.stats_version.get() == 0 {
             return Err(ScenarioEvidenceError::TargetStatsVersionZero);
         }
-        if let Some(hash) = self.contract_hash {
-            if hash.is_zero() {
-                return Err(ScenarioEvidenceError::TargetContractHashZero);
-            }
+        if let Some(hash) = self.contract_hash
+            && hash.is_zero()
+        {
+            return Err(ScenarioEvidenceError::TargetContractHashZero);
         }
         Ok(())
     }

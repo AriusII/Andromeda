@@ -5,7 +5,7 @@
 
 #[cfg(test)]
 mod btree_insert_no_split_tests {
-    use andromeda_storage::{BTreeNodeImpl, BTreeConfig, PageId, RowId, KeyValuePair};
+    use andromeda_storage::{BTreeConfig, BTreeNodeImpl, KeyValuePair, PageId, RowId};
     use std::sync::{Arc, Mutex};
     use std::thread;
 
@@ -15,7 +15,7 @@ mod btree_insert_no_split_tests {
 
     #[test]
     fn test_insert_into_empty_leaf_single_entry() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), None);
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
         let config = BTreeConfig::default();
 
         // Initially empty
@@ -39,7 +39,7 @@ mod btree_insert_no_split_tests {
 
     #[test]
     fn test_insert_maintains_key_order() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), None);
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
 
         // Insert in non-sequential order: 5, 2, 8, 1, 9
         let entries = vec![
@@ -52,7 +52,8 @@ mod btree_insert_no_split_tests {
 
         for (key, row_id) in entries {
             // Find correct position using binary search
-            let idx = node.key_value_pairs
+            let idx = node
+                .key_value_pairs
                 .binary_search_by(|kvp| kvp.key.cmp(&key))
                 .unwrap_or_else(|idx| idx);
 
@@ -80,7 +81,7 @@ mod btree_insert_no_split_tests {
 
     #[test]
     fn test_insert_100_entries_sequential() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), None);
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
         let config = BTreeConfig::default();
 
         // Insert 100 entries (much less than branching_factor-1 = 127)
@@ -88,7 +89,8 @@ mod btree_insert_no_split_tests {
             let key = vec![i];
             let row_id = (i as u64) * 10;
 
-            let idx = node.key_value_pairs
+            let idx = node
+                .key_value_pairs
                 .binary_search_by(|kvp| kvp.key.cmp(&key))
                 .unwrap_or_else(|idx| idx);
 
@@ -117,7 +119,7 @@ mod btree_insert_no_split_tests {
 
     #[test]
     fn test_insert_duplicate_key_detected() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), None);
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
 
         // Insert first entry
         let key = vec![42];
@@ -127,7 +129,8 @@ mod btree_insert_no_split_tests {
         });
 
         // Try to insert duplicate
-        let idx = node.key_value_pairs
+        let idx = node
+            .key_value_pairs
             .binary_search_by(|kvp| kvp.key.cmp(&key))
             .unwrap_or_else(|idx| idx);
 
@@ -144,7 +147,7 @@ mod btree_insert_no_split_tests {
 
     #[test]
     fn test_precondition_check_has_space() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), None);
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
         let config = BTreeConfig::default();
 
         // Fill to just below capacity
@@ -179,7 +182,7 @@ mod btree_insert_no_split_tests {
 
     #[test]
     fn test_order_preservation_range_scan() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), None);
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
 
         // Insert: 1, 2, 5, 3
         let inserts = vec![
@@ -190,7 +193,8 @@ mod btree_insert_no_split_tests {
         ];
 
         for (key, row_id) in inserts {
-            let idx = node.key_value_pairs
+            let idx = node
+                .key_value_pairs
                 .binary_search_by(|kvp| kvp.key.cmp(&key))
                 .unwrap_or_else(|idx| idx);
             node.key_value_pairs.insert(
@@ -218,8 +222,8 @@ mod btree_insert_no_split_tests {
 
     #[test]
     fn test_concurrent_inserts_different_leaves() {
-        let node1 = Arc::new(Mutex::new(BTreeNodeImpl::new_leaf(PageId(1), None)));
-        let node2 = Arc::new(Mutex::new(BTreeNodeImpl::new_leaf(PageId(2), None)));
+        let node1 = Arc::new(Mutex::new(BTreeNodeImpl::new_leaf(PageId::new(1), None)));
+        let node2 = Arc::new(Mutex::new(BTreeNodeImpl::new_leaf(PageId::new(2), None)));
 
         let mut handles = vec![];
 
@@ -229,7 +233,8 @@ mod btree_insert_no_split_tests {
             for i in 0..50u8 {
                 let mut node = node1_clone.lock().unwrap();
                 let key = vec![i];
-                let idx = node.key_value_pairs
+                let idx = node
+                    .key_value_pairs
                     .binary_search_by(|kvp| kvp.key.cmp(&key))
                     .unwrap_or_else(|idx| idx);
                 node.key_value_pairs.insert(
@@ -249,7 +254,8 @@ mod btree_insert_no_split_tests {
             for i in 50..100u8 {
                 let mut node = node2_clone.lock().unwrap();
                 let key = vec![i];
-                let idx = node.key_value_pairs
+                let idx = node
+                    .key_value_pairs
                     .binary_search_by(|kvp| kvp.key.cmp(&key))
                     .unwrap_or_else(|idx| idx);
                 node.key_value_pairs.insert(
@@ -290,11 +296,11 @@ mod btree_insert_no_split_tests {
 
     #[test]
     fn test_leaf_node_linkage() {
-        let mut leaf1 = BTreeNodeImpl::new_leaf(PageId(1), None);
-        let mut leaf2 = BTreeNodeImpl::new_leaf(PageId(2), None);
+        let mut leaf1 = BTreeNodeImpl::new_leaf(PageId::new(1), None);
+        let mut leaf2 = BTreeNodeImpl::new_leaf(PageId::new(2), None);
 
         // Link leaves
-        leaf1.next_sibling_page_id = Some(PageId(2));
+        leaf1.next_sibling_page_id = Some(PageId::new(2));
 
         // Insert data into both
         for i in 0..5u8 {
@@ -312,7 +318,7 @@ mod btree_insert_no_split_tests {
         }
 
         // Verify linkage
-        assert_eq!(leaf1.next_sibling_page_id, Some(PageId(2)));
+        assert_eq!(leaf1.next_sibling_page_id, Some(PageId::new(2)));
         assert_eq!(leaf2.next_sibling_page_id, None);
     }
 
@@ -322,7 +328,7 @@ mod btree_insert_no_split_tests {
 
     #[test]
     fn test_binary_search_insert_position() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), None);
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
 
         // Pre-populate with specific values
         let base_keys = vec![10, 30, 50, 70, 90];
@@ -335,14 +341,15 @@ mod btree_insert_no_split_tests {
 
         // Test insertion points
         let test_cases = vec![
-            (vec![5u8], 0),    // Before first
-            (vec![25u8], 1),   // Between 10 and 30
-            (vec![60u8], 3),   // Between 50 and 70
-            (vec![100u8], 5),  // After last
+            (vec![5u8], 0),   // Before first
+            (vec![25u8], 1),  // Between 10 and 30
+            (vec![60u8], 3),  // Between 50 and 70
+            (vec![100u8], 5), // After last
         ];
 
         for (key_to_insert, expected_idx) in test_cases {
-            let idx = node.key_value_pairs
+            let idx = node
+                .key_value_pairs
                 .binary_search_by(|kvp| kvp.key.cmp(&key_to_insert))
                 .unwrap_or_else(|idx| idx);
             assert_eq!(idx, expected_idx);
@@ -355,7 +362,7 @@ mod btree_insert_no_split_tests {
 
     #[test]
     fn test_serialization_after_insert() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(100), None);
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(100), None);
 
         // Insert 10 entries
         for i in 0..10u8 {
@@ -369,7 +376,7 @@ mod btree_insert_no_split_tests {
         let serialized = node.serialize();
 
         // Deserialize
-        let restored = BTreeNodeImpl::deserialize(PageId(100), &serialized)
+        let restored = BTreeNodeImpl::deserialize(PageId::new(100), &serialized)
             .expect("deserialization failed");
 
         // Verify
@@ -377,9 +384,12 @@ mod btree_insert_no_split_tests {
         assert_eq!(restored.is_leaf, node.is_leaf);
         assert_eq!(restored.key_value_pairs.len(), node.key_value_pairs.len());
 
-        for (idx, (orig, rest)) in node.key_value_pairs.iter()
+        for (idx, (orig, rest)) in node
+            .key_value_pairs
+            .iter()
             .zip(restored.key_value_pairs.iter())
-            .enumerate() {
+            .enumerate()
+        {
             assert_eq!(orig.key, rest.key, "key mismatch at index {}", idx);
             assert_eq!(orig.value, rest.value, "value mismatch at index {}", idx);
         }
@@ -391,15 +401,10 @@ mod btree_insert_no_split_tests {
 
     #[test]
     fn test_insert_variable_length_keys() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), None);
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
 
         // Insert keys of different lengths
-        let keys = vec![
-            vec![1],
-            vec![2, 3],
-            vec![4, 5, 6],
-            vec![7, 8, 9, 10],
-        ];
+        let keys = vec![vec![1], vec![2, 3], vec![4, 5, 6], vec![7, 8, 9, 10]];
 
         for (idx, key) in keys.iter().enumerate() {
             node.key_value_pairs.push(KeyValuePair {
@@ -409,9 +414,9 @@ mod btree_insert_no_split_tests {
         }
 
         assert_eq!(node.key_value_pairs.len(), 4);
-        for (idx, (stored_key, original_key)) in node.key_value_pairs.iter()
-            .zip(keys.iter())
-            .enumerate() {
+        for (idx, (stored_key, original_key)) in
+            node.key_value_pairs.iter().zip(keys.iter()).enumerate()
+        {
             assert_eq!(stored_key.key, *original_key, "key mismatch at {}", idx);
         }
     }
@@ -422,7 +427,7 @@ mod btree_insert_no_split_tests {
 
     #[test]
     fn test_at_max_capacity_boundary() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), None);
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
         let config = BTreeConfig::default();
 
         // Fill to exact maximum capacity

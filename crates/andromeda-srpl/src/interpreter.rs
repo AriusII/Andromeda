@@ -19,7 +19,7 @@ use crate::{
         SrplReadRequest, SrplReadResult, SrplRowBound, SrplTypedEmitAdapter, SrplTypedReadAdapter,
         SrplTypedUpdateAdapter, SrplUpdateRequest, SrplUpdateResult,
     },
-    model::{
+    procedure_model::{
         BoundSrplOperationPlan, ExecutableProcedurePlan, SrplAssignmentIr, SrplEmitValueIr,
         SrplPredicateIr, SrplValueIr,
     },
@@ -397,7 +397,9 @@ mod tests {
     use andromeda_catalog::{CatalogObjectRef, ProcedureContractRef, QualifiedName};
     use andromeda_core::{CatalogObjectId, CatalogVersion, ContractHash, ProcedureId};
 
-    use crate::procedure_model::{BoundSrplBodyPlan, SrplCatalogBindingEvidence, SrplObjectBindingEvidence};
+    use crate::procedure_model::{
+        BoundSrplBodyPlan, SrplCatalogBindingEvidence, SrplObjectBindingEvidence,
+    };
 
     #[derive(Default)]
     struct FakeAdapter {

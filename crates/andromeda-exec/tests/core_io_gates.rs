@@ -17,7 +17,7 @@ use andromeda_storage::{
 const EXEC_CRITICAL_PATH_SOURCES: &[(&str, &str)] = &[
     ("local_runtime", include_str!("../src/local.rs")),
     ("local_dispatch", include_str!("../src/dispatch/local.rs")),
-    ("wal_trait", include_str!("../src/wal.rs")),
+    ("wal_evidence", include_str!("../src/wal_evidence.rs")),
     ("admission", include_str!("../src/services/admission.rs")),
     (
         "pre_transaction",

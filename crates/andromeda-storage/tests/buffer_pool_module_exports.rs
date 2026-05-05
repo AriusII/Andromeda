@@ -8,16 +8,13 @@
 /// - All public types are exported
 /// - Only public contracts are exposed
 /// - Module-level documentation is present
-
 use andromeda_storage::buffer_pool::{
-    BufferFrame, BufferFrameId, BufferFrameState, BufferPool, BufferPoolConfig, BufferPoolError,
-    BufferPoolManager, ClockEvictionPolicy, ClockEvictionCandidate, DirtyEntry,
-    DirtyFlushCandidate, DirtyTracker, FlushAllDirtyResult, FlushBlockedFrame, FlushError,
-    PageGuard, PageGuardMut, WalDurabilityObserver,
+    BufferFrame, BufferFrameId, BufferFrameState, BufferPoolConfig, BufferPoolError,
+    ClockEvictionPolicy, DirtyTracker,
 };
 use andromeda_storage::{
-    PageId, PageSize, Lsn, PageLayoutContract, PageHeader, PageType, PageTrailer, ObjectId,
-    AllocationId, PageFlags,
+    AllocationId, Lsn, ObjectId, PageFlags, PageHeader, PageId, PageLayoutContract, PageSize,
+    PageTrailer, PageType,
 };
 
 /// Test 1: All buffer pool types are accessible via module path
@@ -36,8 +33,7 @@ fn buffer_pool_module_exports_all_public_types() {
 /// Test 2: Buffer pool manager trait can be instantiated and used
 #[test]
 fn buffer_pool_manager_trait_accessible_and_functional() {
-    let config = BufferPoolConfig::new(16, PageSize::KiB16)
-        .expect("valid config");
+    let config = BufferPoolConfig::new(16, PageSize::KiB16).expect("valid config");
     assert_eq!(config.frame_count(), 16);
     assert_eq!(config.page_size(), PageSize::KiB16);
 }
@@ -79,8 +75,7 @@ fn buffer_frame_uses_canonical_page_contracts() {
 
     let image = andromeda_storage::PageImage::zeroed_with_layout(contract.clone())
         .expect("valid page image");
-    let mut frame = BufferFrame::with_image(frame_id, image)
-        .expect("valid buffer frame");
+    let mut frame = BufferFrame::with_image(frame_id, image).expect("valid buffer frame");
 
     assert_eq!(frame.page_id(), Some(PageId::new(100)));
     assert_eq!(frame.page_size(), PageSize::KiB16);
@@ -88,9 +83,7 @@ fn buffer_frame_uses_canonical_page_contracts() {
 
     // Verify frame lifecycle
     frame.pin().expect("pin frame");
-    frame
-        .mark_dirty(Lsn::new(50))
-        .expect("mark dirty");
+    frame.mark_dirty(Lsn::new(50)).expect("mark dirty");
     assert!(frame.is_dirty());
     assert_eq!(frame.dirty_lsn(), Some(Lsn::new(50)));
 
@@ -137,12 +130,11 @@ fn buffer_pool_exports_only_public_interface() {
     // This test verifies that we cannot access private fields or methods
     // by attempting to construct public-only interface objects
 
-    let config = BufferPoolConfig::new(8, PageSize::KiB16)
-        .expect("valid config");
+    let config = BufferPoolConfig::new(8, PageSize::KiB16).expect("valid config");
     let _: &BufferPoolConfig = &config;
 
     let frame_id = BufferFrameId::new(1).expect("valid frame id");
-    let _: u16 = frame_id.get(); // Only public accessor
+    let _: usize = frame_id.get(); // Only public accessor
 
     let tracker = DirtyTracker::new();
     let _: usize = tracker.len(); // Only public accessor
@@ -177,6 +169,7 @@ fn buffer_pool_module_documentation_covers_contracts() {
         // Verify these types exist and are public
         let _ = BufferFrameState::Free;
         let _ = BufferFrameState::Resident;
-        let _ = BufferFrameState::Pinned;
+        let _ = BufferFrameState::Flushing;
+        let _ = BufferFrameState::Evicting;
     };
 }

@@ -55,7 +55,7 @@ mod tests {
     // ============================================================================
 
     /// Test 1: GC produces expected reclamation count
-    /// 
+    ///
     /// Validates that after running GC with a known set of versions,
     /// the stats report the exact count of reclaimed versions.
     #[test]
@@ -68,7 +68,9 @@ mod tests {
             if i <= 5 {
                 status_table.set_committed(tx_id).expect("set committed");
             } else {
-                status_table.set_rolled_back(tx_id).expect("set rolled back");
+                status_table
+                    .record(tx_id, TransactionStatus::RolledBack)
+                    .expect("set rolled back");
             }
         }
 
@@ -98,13 +100,17 @@ mod tests {
         status_table.set_committed(tx1).expect("set committed");
 
         // Rollback tx2 (always eligible)
-        status_table.set_rolled_back(tx2).expect("set rolled back");
+        status_table
+            .record(tx2, TransactionStatus::RolledBack)
+            .expect("set rolled back");
 
         // Leave tx3 as InFlight (NOT eligible)
 
         // Register snapshot at ts=500, from tx3
         let snapshot = SnapshotHandle::new(500, tx3).expect("create snapshot");
-        registry.register_snapshot(snapshot).expect("register snapshot");
+        registry
+            .register_snapshot(snapshot)
+            .expect("register snapshot");
 
         // Versions with old end_ts (< 500) are eligible if committed/rolled back
         assert!(
@@ -138,7 +144,9 @@ mod tests {
 
         // Register snapshot at ts=100
         let snapshot = SnapshotHandle::new(100, tx2).expect("create snapshot");
-        registry.register_snapshot(snapshot).expect("register snapshot");
+        registry
+            .register_snapshot(snapshot)
+            .expect("register snapshot");
 
         // Version with begin_ts=50, end_ts=150
         // Visible to snapshot at ts=100 because end_ts > ts
@@ -170,7 +178,10 @@ mod tests {
         collector.record_versions_reclaimed(0);
 
         let stats = collector.get_stats();
-        assert_eq!(stats.versions_scanned, 0, "Empty table should report 0 scanned");
+        assert_eq!(
+            stats.versions_scanned, 0,
+            "Empty table should report 0 scanned"
+        );
         assert_eq!(
             stats.versions_reclaimed, 0,
             "Empty table should report 0 reclaimed"
@@ -203,15 +214,16 @@ mod tests {
             .set_committed(tx_committed)
             .expect("set committed");
         status_table
-            .set_rolled_back(tx_rolled_back)
+            .record(tx_rolled_back, TransactionStatus::RolledBack)
             .expect("set rolled back");
 
         // tx_inflight stays InFlight by default
 
         // Register snapshot to establish min_visible_ts
-        let snapshot = SnapshotHandle::new(200, TransactionId::new(99))
-            .expect("create snapshot");
-        registry.register_snapshot(snapshot).expect("register snapshot");
+        let snapshot = SnapshotHandle::new(200, TransactionId::new(99)).expect("create snapshot");
+        registry
+            .register_snapshot(snapshot)
+            .expect("register snapshot");
 
         // Committed version with end_ts < min_visible_ts is reclaimable
         assert!(
@@ -298,7 +310,9 @@ mod tests {
 
         // Create and register a snapshot at ts=200
         let snapshot = SnapshotHandle::new(200, tx2).expect("create snapshot");
-        registry.register_snapshot(snapshot.clone()).expect("register");
+        registry
+            .register_snapshot(snapshot.clone())
+            .expect("register");
 
         // Version with end_ts=250 is blocked by the snapshot
         assert!(
@@ -308,13 +322,13 @@ mod tests {
 
         // Close the snapshot by releasing it
         registry
-            .release_snapshot(&snapshot)
+            .release_snapshot(snapshot)
             .expect("release snapshot");
 
         // Now version with end_ts=250 should become eligible
         // (assuming no other snapshots exist; min_visible_ts becomes u64::MAX)
         let is_reclaimable = collector.is_version_reclaimable(tx1, 250);
-        
+
         // This depends on whether there are other snapshots; we assume no others
         // In this case, minimum_visible_timestamp() returns u64::MAX, so all
         // closed versions are reclaimable.
@@ -374,7 +388,10 @@ mod tests {
         // 10 commits * 10 scanned per commit = 100 scanned
         assert_eq!(stats.versions_scanned, 100, "Should track scanned versions");
         // 10 commits * 5 reclaimed per commit = 50 reclaimed
-        assert_eq!(stats.versions_reclaimed, 50, "Should track reclaimed versions");
+        assert_eq!(
+            stats.versions_reclaimed, 50,
+            "Should track reclaimed versions"
+        );
     }
 
     /// Test 10: GC triggers on timeout
@@ -388,7 +405,9 @@ mod tests {
         // Set up one snapshot at ts=100
         let tx1 = TransactionId::new(1);
         let snapshot = SnapshotHandle::new(100, tx1).expect("create snapshot");
-        registry.register_snapshot(snapshot.clone()).expect("register");
+        registry
+            .register_snapshot(snapshot.clone())
+            .expect("register");
 
         // Commit a transaction
         status_table.set_committed(tx1).expect("set committed");
@@ -539,13 +558,14 @@ mod tests {
             if i % 2 == 0 {
                 status_table.set_committed(tx_id).unwrap();
             } else {
-                status_table.set_rolled_back(tx_id).unwrap();
+                status_table
+                    .record(tx_id, TransactionStatus::RolledBack)
+                    .unwrap();
             }
         }
 
         // Register a snapshot to establish min_visible_ts
-        let snapshot = SnapshotHandle::new(500, TransactionId::new(2000))
-            .expect("create snapshot");
+        let snapshot = SnapshotHandle::new(500, TransactionId::new(2000)).expect("create snapshot");
         registry.register_snapshot(snapshot).expect("register");
 
         // Test eligibility for a committed version
@@ -615,8 +635,7 @@ mod tests {
         );
 
         // Register first snapshot at ts=200
-        let snap1 = SnapshotHandle::new(200, TransactionId::new(100))
-            .expect("snapshot1");
+        let snap1 = SnapshotHandle::new(200, TransactionId::new(100)).expect("snapshot1");
         registry.register_snapshot(snap1.clone()).unwrap();
 
         // Now min_visible_ts = 200, so end_ts=100 is still reclaimable
@@ -626,8 +645,7 @@ mod tests {
         );
 
         // Register second snapshot at ts=150 (earlier)
-        let snap2 = SnapshotHandle::new(150, TransactionId::new(101))
-            .expect("snapshot2");
+        let snap2 = SnapshotHandle::new(150, TransactionId::new(101)).expect("snapshot2");
         registry.register_snapshot(snap2.clone()).unwrap();
 
         // Now min_visible_ts = 150, end_ts=100 is still reclaimable
@@ -637,7 +655,7 @@ mod tests {
         );
 
         // Release earlier snapshot
-        registry.release_snapshot(&snap2).unwrap();
+        registry.release_snapshot(snap2).unwrap();
 
         // min_visible_ts reverts to 200
         // end_ts=100 still < 200, so still reclaimable
@@ -672,17 +690,17 @@ mod tests {
 
             // Update snapshots periodically
             if cycle % 2 == 0 {
-                let snap = SnapshotHandle::new(100 * cycle as u64, TransactionId::new(9000 + cycle as u64))
-                    .expect("snapshot");
+                let snap = SnapshotHandle::new(
+                    100 * cycle as u64,
+                    TransactionId::new(9000 + cycle as u64),
+                )
+                .expect("snapshot");
                 registry.register_snapshot(snap).unwrap();
             }
         }
 
         let stats = collector.get_stats();
-        assert_eq!(
-            stats.versions_scanned, 500,
-            "All cycles scanned (5 * 100)"
-        );
+        assert_eq!(stats.versions_scanned, 500, "All cycles scanned (5 * 100)");
         assert_eq!(
             stats.versions_reclaimed, 400,
             "All cycles reclaimed (5 * 80)"
@@ -711,8 +729,8 @@ mod tests {
         let mut handles = Vec::new();
         for i in 1..=10 {
             let ts = 100 + (i as u64 * 10);
-            let snap = SnapshotHandle::new(ts, TransactionId::new(1000 + i as u64))
-                .expect("snapshot");
+            let snap =
+                SnapshotHandle::new(ts, TransactionId::new(1000 + i as u64)).expect("snapshot");
             registry.register_snapshot(snap.clone()).unwrap();
             handles.push(snap);
         }
@@ -734,7 +752,7 @@ mod tests {
         );
 
         // Release the earliest snapshot (ts=110)
-        registry.release_snapshot(&handles[0]).unwrap();
+        registry.release_snapshot(handles[0]).unwrap();
 
         // min_visible_ts should now be 120 (next earliest)
         let new_min_ts = collector.minimum_visible_timestamp();

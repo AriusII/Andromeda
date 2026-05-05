@@ -190,12 +190,7 @@ impl KeyCodec {
                 if pos + 4 > bytes.len() {
                     return Err(codec_error("truncated int32"));
                 }
-                let encoded = [
-                    bytes[pos],
-                    bytes[pos + 1],
-                    bytes[pos + 2],
-                    bytes[pos + 3],
-                ];
+                let encoded = [bytes[pos], bytes[pos + 1], bytes[pos + 2], bytes[pos + 3]];
                 let v = decode_int32_order_preserving(&encoded);
                 Ok(Key::Int32(v))
             }
@@ -249,8 +244,7 @@ impl KeyCodec {
                     if pos + 2 > bytes.len() {
                         return Err(codec_error("truncated composite: missing column length"));
                     }
-                    let col_len =
-                        u16::from_le_bytes([bytes[pos], bytes[pos + 1]]) as usize;
+                    let col_len = u16::from_le_bytes([bytes[pos], bytes[pos + 1]]) as usize;
                     pos += 2;
 
                     // Read and decode column
@@ -475,9 +469,8 @@ mod tests {
     fn test_encode_decode_composite_simple() {
         let datums = vec![Datum::Int32(42), Datum::Text("test".to_string())];
         let encoded = KeyCodec::encode_composite_key(&datums).expect("encode");
-        let decoded =
-            KeyCodec::decode_composite(&encoded, &[ScalarType::Int32, ScalarType::Int32])
-                .expect("decode");
+        let decoded = KeyCodec::decode_composite(&encoded, &[ScalarType::Int32, ScalarType::Int32])
+            .expect("decode");
         // Check structure preserved
         assert_eq!(decoded.len(), 2);
     }
@@ -514,7 +507,7 @@ mod tests {
             Key::Int32(i32::MAX),
         ];
 
-        let mut encoded: Vec<_> = keys
+        let encoded: Vec<_> = keys
             .iter()
             .map(|k| KeyCodec::encode_key(k).unwrap())
             .collect();
@@ -606,10 +599,7 @@ mod tests {
         ];
         let encoded1 = KeyCodec::encode_composite_key(&datums).expect("encode 1");
         let encoded2 = KeyCodec::encode_composite_key(&datums).expect("encode 2");
-        assert_eq!(
-            encoded1, encoded2,
-            "determinism violated for composite key"
-        );
+        assert_eq!(encoded1, encoded2, "determinism violated for composite key");
     }
 
     // ========================================================================

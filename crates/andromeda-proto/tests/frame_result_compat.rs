@@ -14,12 +14,10 @@
 //! - Multiple completion signals rejection
 
 use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, CatalogVersion, ContractHash, RequestId, SessionId,
-    TransactionId,
+    AndromedaErrorKind, CatalogVersion, ContractHash, RequestId, SessionId, TransactionId,
 };
 use andromeda_proto::{
-    ErrorEnvelope, ErrorFamily, FrameEnvelope, PayloadKind, ProtocolVersion, RetryDisposition,
-    RpcCompletionStatus, TransactionEffect, TransactionOutcome,
+    FrameEnvelope, PayloadKind, ProtocolVersion,
     generated::{
         decode_generated_message, encode_generated_message,
         protocol::v1::{
@@ -29,7 +27,6 @@ use andromeda_proto::{
         },
     },
 };
-use prost::Message;
 
 /// Test: Frame header round-trip serialization
 ///

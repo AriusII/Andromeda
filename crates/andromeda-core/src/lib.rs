@@ -144,7 +144,10 @@ pub use ids::{
 };
 
 // Re-export IAM types
-pub use principal::{CertificateFingerprint, Permission, PermissionSet, Principal, PrincipalId, PrincipalRole, SessionToken};
+pub use principal::{
+    CertificateFingerprint, Permission, PermissionSet, Principal, PrincipalId, PrincipalRole,
+    SessionToken,
+};
 
 // Re-export hardware capability types (CPU)
 pub use hardware_cpu::{CpuCapabilityClass, CpuProfile, HardwareArchitecture};

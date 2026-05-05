@@ -28,19 +28,17 @@
 
 use andromeda_catalog::{
     AccessMode, CatalogDefinition, CatalogObjectRef, CompatibilityPolicy, IsolationPolicy,
-    MultiResultPolicy, ObjectKind, ProcedureContract, ProcedureContractCandidate,
-    ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName, ResultMetadataPolicy,
-    ResultStreamContract, StatsVersion, TransactionPolicy,
+    MultiResultPolicy, ObjectKind, ProcedureContractCandidate, ProcedureErrorPolicy,
+    ProtocolLayoutRef, ResultMetadataPolicy, ResultStreamContract, StatsVersion, TransactionPolicy,
 };
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogObjectId, CatalogVersion,
-    ColumnDescriptor, ContractHash, ProcedureId, ScalarType, TypeDescriptor,
+    ColumnDescriptor, ContractHash, ProcedureId,
 };
 
 use crate::{
-    ProcedureAst, SrplProcedureIr,
-    compiler::{bind_executable_procedure_plan, parse_procedure_signature},
-    lowering::{lower_bound_procedure, lower_ir_to_contract_candidate},
+    ProcedureAst, SrplProcedureIr, lowering::lower_bound_procedure,
+    procedure_compiler::parse_procedure_signature,
 };
 
 /// A staged SRPL procedure definition during compilation.

@@ -44,9 +44,11 @@
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
-use crate::{PageSize};
+use crate::PageSize;
 
-pub use crate::heap_row_encoder::{RowEncoder, RowSchema, ScalarType, Datum, ColumnDef};
+#[cfg(test)]
+use crate::heap_row_encoder::{ColumnDef, RowSchema, ScalarType};
+use crate::heap_row_encoder::{Datum, RowEncoder};
 
 /// A single slot directory entry (5 bytes).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -228,7 +230,8 @@ impl HeapPage {
 
         // Find insertion offset (allocate from end of data region, before slot directory)
         let trailer_len = 48;
-        let slot_dir_start = self.data.len() - trailer_len - (self.slot_directory.len() * SlotEntry::SIZE);
+        let slot_dir_start =
+            self.data.len() - trailer_len - (self.slot_directory.len() * SlotEntry::SIZE);
         let insert_offset = (slot_dir_start - tuple_len as usize) as u16;
 
         // Write tuple data
@@ -237,7 +240,8 @@ impl HeapPage {
 
         // Create and append slot entry
         let slot_id = self.slot_directory.len() as u16;
-        self.slot_directory.push(SlotEntry::new(insert_offset, tuple_len));
+        self.slot_directory
+            .push(SlotEntry::new(insert_offset, tuple_len));
 
         Ok(slot_id)
     }
@@ -268,7 +272,10 @@ impl HeapPage {
         if offset + length > self.data.len() {
             return Err(heap_error(format!(
                 "slot {} has invalid offset/length: offset={}, len={}, page_size={}",
-                slot_id, offset, length, self.data.len()
+                slot_id,
+                offset,
+                length,
+                self.data.len()
             )));
         }
 
@@ -306,7 +313,7 @@ impl HeapPage {
     }
 
     /// Scan live tuples, yielding (slot_id, tuple_data) pairs.
-    pub fn scan(&self) -> HeapScanIter {
+    pub fn scan(&self) -> HeapScanIter<'_> {
         HeapScanIter {
             page: self,
             current_slot: 0,
@@ -578,9 +585,7 @@ mod tests {
     fn test_heap_update() {
         let mut page = HeapPage::new(PageSize::KiB16);
 
-        let slot_id = page
-            .insert_tuple(b"original_data")
-            .expect("insert failed");
+        let slot_id = page.insert_tuple(b"original_data").expect("insert failed");
         let new_slot = page
             .update_tuple(slot_id, b"updated_data")
             .expect("update failed");
@@ -699,15 +704,12 @@ pub mod slot_directory {
             let metadata_offset = page_bytes - trailer_size - 4;
 
             if metadata_offset < 2 {
-                return Err(heap_error(
-                    "page too small for slot directory metadata",
-                ));
+                return Err(heap_error("page too small for slot directory metadata"));
             }
 
-            let slot_count = u16::from_le_bytes([
-                page_data[metadata_offset],
-                page_data[metadata_offset + 1],
-            ]) as usize;
+            let slot_count =
+                u16::from_le_bytes([page_data[metadata_offset], page_data[metadata_offset + 1]])
+                    as usize;
             let free_offset = u16::from_le_bytes([
                 page_data[metadata_offset + 2],
                 page_data[metadata_offset + 3],
@@ -758,10 +760,7 @@ pub mod slot_directory {
             };
 
             if self.slots.len() >= max_slots {
-                return Err(heap_error(format!(
-                    "page slot limit {} reached",
-                    max_slots
-                )));
+                return Err(heap_error(format!("page slot limit {} reached", max_slots)));
             }
 
             let slot_id = self.slots.len() as u16;
@@ -837,7 +836,10 @@ pub mod slot_directory {
 
         /// Get the number of active (non-deleted) slots.
         pub fn active_slot_count(&self) -> usize {
-            self.slots.iter().filter(|s| !s.is_deleted() && s.offset > 0).count()
+            self.slots
+                .iter()
+                .filter(|s| !s.is_deleted() && s.offset > 0)
+                .count()
         }
 
         /// Serialize slot directory to page layout format.
@@ -959,8 +961,8 @@ pub mod slot_directory {
         #[test]
         fn test_compact() {
             let mut dir = SlotDirectory::new(PageSize::KiB16);
-            let slot1 = dir.allocate_slot(100).expect("alloc");
-            let slot2 = dir.allocate_slot(200).expect("alloc");
+            let _slot1 = dir.allocate_slot(100).expect("alloc");
+            let _slot2 = dir.allocate_slot(200).expect("alloc");
             let slot3 = dir.allocate_slot(150).expect("alloc");
 
             dir.mark_deleted(slot3).expect("delete");
@@ -1108,11 +1110,12 @@ impl HeapPageInsert {
         // Write tuple data at offset
         let offset_usize = offset as usize;
         if offset_usize + tuple_bytes.len() > self.data.len() {
-            return Err(heap_error("page layout violation: tuple exceeds page bounds"));
+            return Err(heap_error(
+                "page layout violation: tuple exceeds page bounds",
+            ));
         }
 
-        self.data[offset_usize..offset_usize + tuple_bytes.len()]
-            .copy_from_slice(tuple_bytes);
+        self.data[offset_usize..offset_usize + tuple_bytes.len()].copy_from_slice(tuple_bytes);
 
         Ok(slot_id.get())
     }
@@ -1150,8 +1153,7 @@ impl HeapPageInsert {
         let slot = slot_directory::SlotId::new(slot_id);
         let (offset, length) = self
             .slot_directory
-            .get_slot(slot)
-            .expect("valid query")?
+            .get_slot(slot)?
             .ok_or_else(|| heap_error("slot deleted or not found"))?;
 
         let offset_usize = offset as usize;
@@ -1417,11 +1419,7 @@ mod heap_insert_tests {
         let schema = create_test_schema();
         let encoder = RowEncoder::new(schema.clone());
 
-        let datums = vec![
-            Datum::Int64(12345),
-            Datum::Null,
-            Datum::Bool(false),
-        ];
+        let datums = vec![Datum::Int64(12345), Datum::Null, Datum::Bool(false)];
 
         // Encode, insert, read, decode
         let encoded = encoder.encode(&datums).expect("encode");
@@ -1489,4 +1487,3 @@ mod heap_insert_tests {
         assert!(after1 - after2 >= 1000);
     }
 }
-

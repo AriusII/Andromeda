@@ -53,11 +53,11 @@
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use std::fmt;
 
-/// A decision trace event for export.
+/// A decision trace record for export.
 ///
 /// Contains the execution decision and trace metadata needed for analysis.
 #[derive(Debug, Clone, PartialEq)]
-pub struct DecisionTrace {
+pub struct ExportDecisionTrace {
     /// Unique trace ID for correlation
     pub trace_id: String,
     /// Human-readable trace name or operation
@@ -72,7 +72,7 @@ pub struct DecisionTrace {
     pub attributes: std::collections::HashMap<String, String>,
 }
 
-impl DecisionTrace {
+impl ExportDecisionTrace {
     /// Validate the trace structure.
     pub fn validate(&self) -> AndromedaResult<()> {
         if self.trace_id.is_empty() {
@@ -192,10 +192,7 @@ pub enum RetryPolicy {
     /// No retry on failure
     NoRetry,
     /// Fixed delay between retries
-    FixedDelay {
-        max_retries: u32,
-        delay_ms: u32,
-    },
+    FixedDelay { max_retries: u32, delay_ms: u32 },
     /// Exponential backoff with jitter
     ExponentialBackoff {
         max_retries: u32,
@@ -350,7 +347,7 @@ pub trait ExporterTrait: Send + Sync {
     /// - The trace is invalid
     /// - The export operation times out
     /// - The backend is unreachable or returns an error
-    fn export_trace(&self, trace: DecisionTrace) -> AndromedaResult<()>;
+    fn export_trace(&self, trace: ExportDecisionTrace) -> AndromedaResult<()>;
 
     /// Export a single metric.
     ///
@@ -377,7 +374,7 @@ pub trait ExporterTrait: Send + Sync {
     /// - The backend is unreachable or returns an error
     fn batch_export(
         &self,
-        traces: Vec<DecisionTrace>,
+        traces: Vec<ExportDecisionTrace>,
         metrics: Vec<Metric>,
     ) -> AndromedaResult<()>;
 
@@ -398,7 +395,7 @@ pub trait ExporterTrait: Send + Sync {
 #[derive(Debug, Clone)]
 pub struct MockExporter {
     config: ExporterConfig,
-    traces: std::sync::Arc<std::sync::Mutex<Vec<DecisionTrace>>>,
+    traces: std::sync::Arc<std::sync::Mutex<Vec<ExportDecisionTrace>>>,
     metrics: std::sync::Arc<std::sync::Mutex<Vec<Metric>>>,
     successful_count: std::sync::Arc<std::sync::atomic::AtomicU64>,
     failed_count: std::sync::Arc<std::sync::atomic::AtomicU64>,
@@ -420,7 +417,7 @@ impl MockExporter {
     }
 
     /// Get a copy of all exported traces.
-    pub fn get_traces(&self) -> Vec<DecisionTrace> {
+    pub fn get_traces(&self) -> Vec<ExportDecisionTrace> {
         self.traces.lock().unwrap().clone()
     }
 
@@ -441,7 +438,7 @@ impl MockExporter {
 }
 
 impl ExporterTrait for MockExporter {
-    fn export_trace(&self, trace: DecisionTrace) -> AndromedaResult<()> {
+    fn export_trace(&self, trace: ExportDecisionTrace) -> AndromedaResult<()> {
         trace.validate()?;
 
         if !*self.healthy.lock().unwrap() {
@@ -479,7 +476,7 @@ impl ExporterTrait for MockExporter {
 
     fn batch_export(
         &self,
-        traces: Vec<DecisionTrace>,
+        traces: Vec<ExportDecisionTrace>,
         metrics: Vec<Metric>,
     ) -> AndromedaResult<()> {
         // Validate all inputs
@@ -536,7 +533,7 @@ mod tests {
     #[test]
     fn test_decision_trace_validation() {
         // Valid trace
-        let valid = DecisionTrace {
+        let valid = ExportDecisionTrace {
             trace_id: "trace-001".to_string(),
             operation: "execute_procedure".to_string(),
             decision: "allowed".to_string(),
@@ -547,28 +544,28 @@ mod tests {
         assert!(valid.validate().is_ok());
 
         // Invalid: empty trace_id
-        let invalid_id = DecisionTrace {
+        let invalid_id = ExportDecisionTrace {
             trace_id: String::new(),
             ..valid.clone()
         };
         assert!(invalid_id.validate().is_err());
 
         // Invalid: empty operation
-        let invalid_op = DecisionTrace {
+        let invalid_op = ExportDecisionTrace {
             operation: String::new(),
             ..valid.clone()
         };
         assert!(invalid_op.validate().is_err());
 
         // Invalid: empty decision
-        let invalid_decision = DecisionTrace {
+        let invalid_decision = ExportDecisionTrace {
             decision: String::new(),
             ..valid.clone()
         };
         assert!(invalid_decision.validate().is_err());
 
         // Invalid: zero timestamp
-        let invalid_ts = DecisionTrace {
+        let invalid_ts = ExportDecisionTrace {
             timestamp_ms: 0,
             ..valid.clone()
         };
@@ -728,7 +725,7 @@ mod tests {
         let exporter = MockExporter::new(config).unwrap();
         assert!(exporter.is_healthy());
 
-        let trace = DecisionTrace {
+        let trace = ExportDecisionTrace {
             trace_id: "trace-001".to_string(),
             operation: "test_op".to_string(),
             decision: "allowed".to_string(),
@@ -782,7 +779,7 @@ mod tests {
         let exporter = MockExporter::new(config).unwrap();
 
         let traces = vec![
-            DecisionTrace {
+            ExportDecisionTrace {
                 trace_id: "trace-001".to_string(),
                 operation: "op1".to_string(),
                 decision: "allowed".to_string(),
@@ -790,7 +787,7 @@ mod tests {
                 timestamp_ms: 1000,
                 attributes: std::collections::HashMap::new(),
             },
-            DecisionTrace {
+            ExportDecisionTrace {
                 trace_id: "trace-002".to_string(),
                 operation: "op2".to_string(),
                 decision: "denied".to_string(),
@@ -837,7 +834,7 @@ mod tests {
         let exporter = MockExporter::new(config).unwrap();
 
         // Export successfully
-        let trace = DecisionTrace {
+        let trace = ExportDecisionTrace {
             trace_id: "trace-001".to_string(),
             operation: "op".to_string(),
             decision: "allowed".to_string(),
@@ -852,7 +849,7 @@ mod tests {
         assert!(!exporter.is_healthy());
 
         // Try to export (should fail)
-        let trace2 = DecisionTrace {
+        let trace2 = ExportDecisionTrace {
             trace_id: "trace-002".to_string(),
             operation: "op".to_string(),
             decision: "allowed".to_string(),
@@ -870,7 +867,7 @@ mod tests {
         assert!(exporter.is_healthy());
 
         // Export again (should succeed)
-        let trace3 = DecisionTrace {
+        let trace3 = ExportDecisionTrace {
             trace_id: "trace-003".to_string(),
             operation: "op".to_string(),
             decision: "allowed".to_string(),

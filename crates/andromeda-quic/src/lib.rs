@@ -32,6 +32,7 @@ mod frame_code;
 mod frame_codec;
 mod frame_sequence;
 mod frame_struct;
+mod procedure_gateway;
 mod rpc_dispatch;
 mod stream_types;
 
@@ -97,6 +98,12 @@ pub use rpc::{
     DispatchPolicy, FrameDispatch, TransportSurface, dispatch_frame, expected_stream_role,
     validate_transport_surface,
 };
+
+// ============================================================================
+// Procedure Gateway
+// ============================================================================
+
+pub use procedure_gateway::ProcedureGateway;
 
 // ============================================================================
 // Backpressure

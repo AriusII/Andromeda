@@ -7,11 +7,11 @@
 //! - Error recovery (write failure, swap failure, data preservation)
 //! - Edge cases (empty segments, all-live records, all-dead records)
 
+use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
 use andromeda_storage::write_ahead_log::compaction::*;
 use andromeda_storage::{Lsn, WalRecord, WalRecordKind};
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
-use std::sync::{Arc, Mutex};
 use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
 
 /// Mock implementation of CompactionContext for testing.
 struct MockCompactionContext {
@@ -148,19 +148,16 @@ impl CompactionContext for MockCompactionContext {
         let new_segment_id = original_segment_id + 1000; // Simple ID scheme for testing
         let bytes_written = records.iter().map(|r| r.payload.len()).sum::<usize>() as u64;
 
-        self.written_segments
-            .lock()
-            .unwrap()
-            .push((original_segment_id, new_segment_id, bytes_written));
+        self.written_segments.lock().unwrap().push((
+            original_segment_id,
+            new_segment_id,
+            bytes_written,
+        ));
 
         Ok((new_segment_id, bytes_written))
     }
 
-    fn swap_segment(
-        &self,
-        old_segment_id: u64,
-        new_segment_id: u64,
-    ) -> AndromedaResult<()> {
+    fn swap_segment(&self, old_segment_id: u64, new_segment_id: u64) -> AndromedaResult<()> {
         if self.fail_swap {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Storage,
@@ -389,8 +386,16 @@ fn scheduler_identifies_and_compacts_candidates() {
 
     // Check audit events
     let events = context.get_audit_events();
-    assert!(events.iter().any(|e| matches!(e, WalCompactionAuditEvent::CandidateIdentified { .. })));
-    assert!(events.iter().any(|e| matches!(e, WalCompactionAuditEvent::Summary { .. })));
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, WalCompactionAuditEvent::CandidateIdentified { .. }))
+    );
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, WalCompactionAuditEvent::Summary { .. }))
+    );
 }
 
 #[test]
@@ -442,7 +447,11 @@ fn compaction_fails_gracefully_on_write_failure() {
 
     // Audit event for failure
     let events = context.get_audit_events();
-    assert!(events.iter().any(|e| matches!(e, WalCompactionAuditEvent::CompactionFailed { .. })));
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, WalCompactionAuditEvent::CompactionFailed { .. }))
+    );
 }
 
 #[test]
@@ -469,8 +478,16 @@ fn compaction_preserves_old_segment_on_swap_failure() {
 
     // Audit event for failure
     let events = context.get_audit_events();
-    assert!(events.iter().any(|e| matches!(e, WalCompactionAuditEvent::CompactionStarted { .. })));
-    assert!(events.iter().any(|e| matches!(e, WalCompactionAuditEvent::CompactionFailed { .. })));
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, WalCompactionAuditEvent::CompactionStarted { .. }))
+    );
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, WalCompactionAuditEvent::CompactionFailed { .. }))
+    );
 }
 
 // ============================================================================
@@ -518,8 +535,6 @@ fn compaction_handles_all_dead_records() {
 
 #[test]
 fn identify_compaction_candidates_sorts_by_fragmentation() {
-    use std::time::Duration;
-
     let context = MockCompactionContext::new()
         .with_fragmented_segment(FragmentationMetrics::new(1, 1000, 300).unwrap()) // 30%
         .with_fragmented_segment(FragmentationMetrics::new(2, 1000, 500).unwrap()) // 50%
@@ -559,18 +574,21 @@ fn audit_events_provide_complete_metadata() {
 
     // Verify CompactionStarted event
     assert!(events.iter().any(|e| {
-        matches!(e, WalCompactionAuditEvent::CompactionStarted {
-            segment_id: 9,
-            ..
-        })
+        matches!(
+            e,
+            WalCompactionAuditEvent::CompactionStarted { segment_id: 9, .. }
+        )
     }));
 
     // Verify CompactionCompleted event
     assert!(events.iter().any(|e| {
-        matches!(e, WalCompactionAuditEvent::CompactionCompleted {
-            original_segment_id: 9,
-            ..
-        })
+        matches!(
+            e,
+            WalCompactionAuditEvent::CompactionCompleted {
+                original_segment_id: 9,
+                ..
+            }
+        )
     }));
 }
 

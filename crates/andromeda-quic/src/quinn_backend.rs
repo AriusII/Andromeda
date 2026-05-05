@@ -29,10 +29,8 @@ use std::sync::Arc;
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_observe::CertificateIdentity;
-use tokio::sync::Mutex;
 
 use crate::mtls_identity::ParsedCertificate;
-use crate::{FrameBytes, StreamRole, TransportEndpointMetadata, TransportMessage};
 
 /// Adapter wrapping `quinn::Connection` for Andromeda frame transport.
 ///
@@ -86,10 +84,7 @@ impl QuinConnectionAdapter {
         self.inner
             .open_bi()
             .await
-            .map(|(s, r)| BidiStream {
-                send: s,
-                recv: r,
-            })
+            .map(|(s, r)| BidiStream { send: s, recv: r })
             .map_err(|e| {
                 AndromedaError::new(
                     AndromedaErrorKind::ConnectionError,
@@ -118,10 +113,7 @@ impl QuinConnectionAdapter {
     /// - `ConnectionError` if the connection is closed
     pub async fn accept_bidi_stream(&mut self) -> AndromedaResult<BidiStream> {
         match self.inner.accept_bi().await {
-            Ok((s, r)) => Ok(BidiStream {
-                send: s,
-                recv: r,
-            }),
+            Ok((s, r)) => Ok(BidiStream { send: s, recv: r }),
             Err(e) => Err(AndromedaError::new(
                 AndromedaErrorKind::ConnectionError,
                 format!("failed to accept bidirectional stream: {}", e),
@@ -131,10 +123,7 @@ impl QuinConnectionAdapter {
 
     /// Closes the connection with the given error code.
     pub fn close(&mut self, error_code: u32, reason: &[u8]) {
-        self.inner.close(
-            error_code.into(),
-            reason,
-        );
+        self.inner.close(error_code.into(), reason);
     }
 
     /// Waits for the connection to be fully closed.
@@ -272,18 +261,16 @@ impl QuicServer {
 
     /// Returns the local socket address the server is listening on.
     pub fn local_addr(&self) -> SocketAddr {
-        self.endpoint.local_addr().unwrap_or_else(|_| {
-            SocketAddr::from(([127, 0, 0, 1], 0))
-        })
+        self.endpoint
+            .local_addr()
+            .unwrap_or_else(|_| SocketAddr::from(([127, 0, 0, 1], 0)))
     }
 
     /// Accepts the next incoming connection.
     ///
     /// # Errors
     /// - `ConnectionError` if endpoint is closed
-    pub async fn accept_connection(
-        &self,
-    ) -> AndromedaResult<QuinConnectionAdapter> {
+    pub async fn accept_connection(&self) -> AndromedaResult<QuinConnectionAdapter> {
         if let Some(connecting) = self.endpoint.accept().await {
             let conn = connecting.await.map_err(|e| {
                 AndromedaError::new(

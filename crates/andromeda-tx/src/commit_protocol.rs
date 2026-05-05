@@ -111,10 +111,7 @@ impl CommitProtocol {
     }
 
     /// Get the commit LSN for a transaction (if committed).
-    pub fn get_commit_lsn(
-        &self,
-        tx_id: TransactionId,
-    ) -> Option<andromeda_storage::Lsn> {
+    pub fn get_commit_lsn(&self, tx_id: TransactionId) -> Option<andromeda_storage::Lsn> {
         self.commit_log.get_commit_lsn(tx_id)
     }
 }
@@ -123,8 +120,8 @@ impl CommitProtocol {
 mod tests {
     use super::*;
     use crate::commit_log::{CommitLogManager, InvocationWal};
-    use andromeda_storage::{Lsn, WalRecordKind};
     use andromeda_core::TransactionId;
+    use andromeda_storage::{Lsn, WalRecordKind};
 
     struct TestWal {
         records: std::sync::Mutex<Vec<Lsn>>,

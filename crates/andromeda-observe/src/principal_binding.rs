@@ -181,12 +181,12 @@ impl PrincipalRegistry {
     /// rejected to make rotation an explicit, observable workflow.
     pub fn register(&mut self, binding: PrincipalBinding) -> AndromedaResult<()> {
         let key = binding.certificate.fingerprint.clone();
-        if let Some(existing) = self.bindings.get(&key) {
-            if existing.principal.principal_id != binding.principal.principal_id {
-                return Err(security_error(
-                    "certificate fingerprint already bound to a different principal id; explicit rotation required",
-                ));
-            }
+        if let Some(existing) = self.bindings.get(&key)
+            && existing.principal.principal_id != binding.principal.principal_id
+        {
+            return Err(security_error(
+                "certificate fingerprint already bound to a different principal id; explicit rotation required",
+            ));
         }
         self.bindings.insert(key, binding);
         Ok(())
@@ -511,7 +511,8 @@ pub fn observe_user_principal_to_core(
     // Synthesize session token from observe principal_id
     let session_token = andromeda_core::SessionToken::new(format!(
         "observe:{}:{}",
-        ouser.principal_id, role.as_str()
+        ouser.principal_id,
+        role.as_str()
     ));
 
     andromeda_core::Principal::new(principal_id, role, session_token, fingerprint.clone())
@@ -836,17 +837,25 @@ mod tests {
         use andromeda_core::{CertificateFingerprint, PrincipalRole};
 
         let observe_principal = UserPrincipal::new("42", UserPrincipalKind::Service).unwrap();
-        let fingerprint =
-            CertificateFingerprint::new("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
-                .unwrap();
+        let fingerprint = CertificateFingerprint::new(
+            "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+        )
+        .unwrap();
 
-        let core_principal =
-            super::observe_user_principal_to_core(&observe_principal, &fingerprint, PrincipalRole::User).unwrap();
+        let core_principal = super::observe_user_principal_to_core(
+            &observe_principal,
+            &fingerprint,
+            PrincipalRole::User,
+        )
+        .unwrap();
 
         assert_eq!(core_principal.id.get(), 42);
         assert_eq!(core_principal.role, PrincipalRole::User);
         assert!(!core_principal.session_token.is_empty());
-        assert_eq!(core_principal.cert_fingerprint.as_str(), fingerprint.as_str());
+        assert_eq!(
+            core_principal.cert_fingerprint.as_str(),
+            fingerprint.as_str()
+        );
     }
 
     #[test]
@@ -856,12 +865,16 @@ mod tests {
 
         let observe_principal =
             UserPrincipal::new("not-a-number", UserPrincipalKind::Human).unwrap();
-        let fingerprint =
-            CertificateFingerprint::new("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
-                .unwrap();
+        let fingerprint = CertificateFingerprint::new(
+            "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+        )
+        .unwrap();
 
-        let result =
-            super::observe_user_principal_to_core(&observe_principal, &fingerprint, andromeda_core::PrincipalRole::User);
+        let result = super::observe_user_principal_to_core(
+            &observe_principal,
+            &fingerprint,
+            andromeda_core::PrincipalRole::User,
+        );
         assert!(result.is_err(), "non-numeric principal ID must be rejected");
     }
 
@@ -871,23 +884,30 @@ mod tests {
         use andromeda_core::CertificateFingerprint;
 
         let observe_principal = UserPrincipal::new("0", UserPrincipalKind::Service).unwrap();
-        let fingerprint =
-            CertificateFingerprint::new("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
-                .unwrap();
+        let fingerprint = CertificateFingerprint::new(
+            "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+        )
+        .unwrap();
 
-        let result =
-            super::observe_user_principal_to_core(&observe_principal, &fingerprint, andromeda_core::PrincipalRole::User);
+        let result = super::observe_user_principal_to_core(
+            &observe_principal,
+            &fingerprint,
+            andromeda_core::PrincipalRole::User,
+        );
         assert!(result.is_err(), "zero principal ID must be rejected");
     }
 
     #[test]
     fn core_principal_to_observe_user_principal_maps_id_correctly() {
         use crate::events::UserPrincipalKind;
-        use andromeda_core::{CertificateFingerprint, Principal, PrincipalId, PrincipalRole, SessionToken};
+        use andromeda_core::{
+            CertificateFingerprint, Principal, PrincipalId, PrincipalRole, SessionToken,
+        };
 
-        let fingerprint =
-            CertificateFingerprint::new("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
-                .unwrap();
+        let fingerprint = CertificateFingerprint::new(
+            "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+        )
+        .unwrap();
         let core_principal = Principal::new(
             PrincipalId::new(123),
             PrincipalRole::Operator,
@@ -896,8 +916,11 @@ mod tests {
         )
         .unwrap();
 
-        let observe_principal =
-            super::core_principal_to_observe_user_principal(&core_principal, UserPrincipalKind::Service).unwrap();
+        let observe_principal = super::core_principal_to_observe_user_principal(
+            &core_principal,
+            UserPrincipalKind::Service,
+        )
+        .unwrap();
 
         assert_eq!(observe_principal.principal_id, "123");
         assert_eq!(observe_principal.kind, UserPrincipalKind::Service);
@@ -908,21 +931,26 @@ mod tests {
         use crate::events::UserPrincipalKind;
         use andromeda_core::{CertificateFingerprint, PrincipalRole};
 
-        let original_observe =
-            UserPrincipal::new("456", UserPrincipalKind::Human).unwrap();
-        let fingerprint =
-            CertificateFingerprint::new("b2b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
-                .unwrap();
+        let original_observe = UserPrincipal::new("456", UserPrincipalKind::Human).unwrap();
+        let fingerprint = CertificateFingerprint::new(
+            "b2b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+        )
+        .unwrap();
 
         // observe -> core
-        let core = super::observe_user_principal_to_core(&original_observe, &fingerprint, PrincipalRole::Admin)
-            .unwrap();
+        let core = super::observe_user_principal_to_core(
+            &original_observe,
+            &fingerprint,
+            PrincipalRole::Admin,
+        )
+        .unwrap();
         assert_eq!(core.id.get(), 456);
         assert_eq!(core.role, PrincipalRole::Admin);
 
         // core -> observe
         let final_observe =
-            super::core_principal_to_observe_user_principal(&core, UserPrincipalKind::Human).unwrap();
+            super::core_principal_to_observe_user_principal(&core, UserPrincipalKind::Human)
+                .unwrap();
 
         // IDs must match (though kind is asserted separately)
         assert_eq!(original_observe.principal_id, final_observe.principal_id);
@@ -935,9 +963,10 @@ mod tests {
         use andromeda_core::CertificateFingerprint;
 
         let observe_principal = UserPrincipal::new("789", UserPrincipalKind::Service).unwrap();
-        let fingerprint =
-            CertificateFingerprint::new("c3c3c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
-                .unwrap();
+        let fingerprint = CertificateFingerprint::new(
+            "c3c3c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+        )
+        .unwrap();
 
         let core = super::observe_user_principal_to_core(
             &observe_principal,
@@ -947,9 +976,6 @@ mod tests {
         .unwrap();
 
         // Session token should include role name for debugging
-        assert!(core
-            .session_token
-            .as_str()
-            .contains("superadmin"));
+        assert!(core.session_token.as_str().contains("superadmin"));
     }
-
+}

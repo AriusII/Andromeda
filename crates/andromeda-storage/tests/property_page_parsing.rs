@@ -65,26 +65,29 @@ fn arb_page_size() -> impl Strategy<Value = u32> {
 
 fn arb_valid_page_header() -> impl Strategy<Value = Vec<u8>> {
     (
-        0u64..u64::MAX,      // page_size
-        0u8..8u8,            // page_type
-        0u64..u64::MAX,      // lsn
+        0u64..u64::MAX, // page_size
+        0u8..8u8,       // page_type
+        0u64..u64::MAX, // lsn
     )
         .prop_map(|(page_size, page_type, lsn)| {
             let mut header = vec![0u8; PAGE_HEADER_SIZE];
-            
+
             // Magic number
             header[0..8].copy_from_slice(&0x414e_4452_4f50_4147u64.to_le_bytes());
-            
+
             // Page size (at offset 8)
-            let ps = std::cmp::min(std::cmp::max(page_size, MIN_PAGE_SIZE), MAX_PAGE_SIZE);
+            let ps = std::cmp::min(
+                std::cmp::max(page_size, MIN_PAGE_SIZE as u64),
+                MAX_PAGE_SIZE as u64,
+            ) as u32;
             header[8..12].copy_from_slice(&ps.to_le_bytes());
-            
+
             // Page type (at offset 12)
             header[12] = page_type;
-            
+
             // LSN (at offset 16)
             header[16..24].copy_from_slice(&lsn.to_le_bytes());
-            
+
             header
         })
 }
@@ -107,9 +110,9 @@ fn prop_page_header_checksum_validation() {
         if corruption_pos < header.len() && corruption_pos != 24 { // Skip checksum field itself
             header[corruption_pos] ^= 0xFF;
         }
-        
+
         let result = parse_page_header_safely(&header);
-        
+
         // Should detect corruption or fail gracefully
         match result {
             PageParseResult::Valid(_) => {
@@ -134,7 +137,7 @@ fn prop_page_header_parse_never_panics() {
         let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
             parse_page_header_safely(&data)
         }));
-        
+
         match result {
             Ok(_) => prop_assert!(true, "parsing completed"),
             Err(_) => prop_assert!(false, "parsing panicked"),
@@ -150,15 +153,15 @@ fn prop_page_header_parse_never_panics() {
 fn prop_page_invalid_size_rejected() {
     proptest!(|(invalid_size in 0u32..4096u32)| {
         let mut header = vec![0u8; PAGE_HEADER_SIZE];
-        
+
         // Magic
         header[0..8].copy_from_slice(&0x414e_4452_4f50_4147u64.to_le_bytes());
-        
+
         // Invalid page size
         header[8..12].copy_from_slice(&invalid_size.to_le_bytes());
-        
+
         let result = parse_page_header_safely(&header);
-        
+
         // Should reject invalid size
         match result {
             PageParseResult::Valid(_) => {
@@ -181,15 +184,15 @@ fn prop_page_invalid_size_rejected() {
 fn prop_page_oversized_rejected() {
     proptest!(|(oversized in (MAX_PAGE_SIZE + 1)..u32::MAX)| {
         let mut header = vec![0u8; PAGE_HEADER_SIZE];
-        
+
         // Magic
         header[0..8].copy_from_slice(&0x414e_4452_4f50_4147u64.to_le_bytes());
-        
+
         // Oversized page size
         header[8..12].copy_from_slice(&oversized.to_le_bytes());
-        
+
         let result = parse_page_header_safely(&header);
-        
+
         // Should reject oversized pages
         match result {
             PageParseResult::Valid(_) => {
@@ -211,16 +214,16 @@ fn prop_page_oversized_rejected() {
 fn prop_page_truncated_header_safe() {
     proptest!(|(size in 0usize..PAGE_HEADER_SIZE)| {
         let mut header = vec![0u8; size];
-        
+
         // Try to populate what we can
         if header.len() >= 8 {
             header[0..8].copy_from_slice(&0x414e_4452_4f50_4147u64.to_le_bytes());
         }
-        
+
         let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
             parse_page_header_safely(&header)
         }));
-        
+
         // Must not panic, even on truncated header
         match result {
             Ok(_) => prop_assert!(true, "truncated header handled safely"),
@@ -237,18 +240,18 @@ fn prop_page_truncated_header_safe() {
 fn prop_page_lsn_preserved() {
     proptest!(|(lsn in 0u64..u64::MAX)| {
         let mut header = vec![0u8; PAGE_HEADER_SIZE];
-        
+
         // Magic
         header[0..8].copy_from_slice(&0x414e_4452_4f50_4147u64.to_le_bytes());
-        
+
         // Page size
         header[8..12].copy_from_slice(&(16384u32).to_le_bytes());
-        
+
         // LSN at offset 16
         header[16..24].copy_from_slice(&lsn.to_le_bytes());
-        
+
         let result = parse_page_header_safely(&header);
-        
+
         match result {
             PageParseResult::Valid(parsed) => {
                 // LSN should be preserved
@@ -275,9 +278,9 @@ fn prop_page_trailer_corruption_detected() {
         if corrupt_pos < trailer.len() {
             trailer[corrupt_pos] ^= 0xFF;
         }
-        
+
         let result = parse_page_trailer_safely(&trailer);
-        
+
         // Trailer parsing should handle corruption
         match result {
             PageTrailerResult::Valid(_) => prop_assert!(true),
@@ -294,7 +297,7 @@ fn prop_page_trailer_corruption_detected() {
 fn prop_page_empty_data_rejected() {
     let empty = vec![];
     let result = parse_page_header_safely(&empty);
-    
+
     match result {
         PageParseResult::Valid(_) => assert!(true),
         PageParseResult::Invalid(_) => assert!(true, "empty page correctly rejected"),
@@ -311,17 +314,17 @@ fn prop_page_magic_validation() {
         if wrong_magic == 0x414e_4452_4f50_4147 {
             return Ok(()); // Skip correct magic
         }
-        
+
         let mut header = vec![0u8; PAGE_HEADER_SIZE];
-        
+
         // Wrong magic
         header[0..8].copy_from_slice(&wrong_magic.to_le_bytes());
-        
+
         // Valid page size
         header[8..12].copy_from_slice(&(16384u32).to_le_bytes());
-        
+
         let result = parse_page_header_safely(&header);
-        
+
         // Should reject wrong magic
         match result {
             PageParseResult::Valid(_) => {
@@ -333,8 +336,7 @@ fn prop_page_magic_validation() {
                 prop_assert!(true);
             }
         }
-        
-        Ok(())
+
     });
 }
 
@@ -346,16 +348,16 @@ fn prop_page_magic_validation() {
 fn prop_page_large_corrupted_data() {
     proptest!(|(size in 16384usize..65536usize)| {
         let mut data = vec![0xFFu8; size];
-        
+
         // Try to set magic
         if data.len() >= 8 {
             data[0..8].copy_from_slice(&0x414e_4452_4f50_4147u64.to_le_bytes());
         }
-        
+
         let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
             parse_page_header_safely(&data)
         }));
-        
+
         match result {
             Ok(_) => prop_assert!(true, "large data handled"),
             Err(_) => prop_assert!(false, "large data caused panic"),
@@ -383,21 +385,21 @@ fn parse_page_header_safely(data: &[u8]) -> PageParseResult {
     if data.len() < 32 {
         return PageParseResult::Invalid("header too small".to_string());
     }
-    
+
     let magic = u64::from_le_bytes([
         data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
     ]);
-    
+
     if magic != 0x414e_4452_4f50_4147 {
         return PageParseResult::Invalid("invalid magic".to_string());
     }
-    
+
     let page_size = u32::from_le_bytes([data[8], data[9], data[10], data[11]]);
-    
+
     if page_size < MIN_PAGE_SIZE || page_size > MAX_PAGE_SIZE {
         return PageParseResult::Invalid("invalid page size".to_string());
     }
-    
+
     PageParseResult::Valid(PageHeader {
         magic,
         page_size,
@@ -415,7 +417,7 @@ fn parse_page_trailer_safely(data: &[u8]) -> PageTrailerResult {
     if data.len() < 16 {
         return PageTrailerResult::Invalid("trailer too small".to_string());
     }
-    
+
     PageTrailerResult::Valid(PageTrailer {
         page_id: u64::from_le_bytes([
             data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
@@ -463,7 +465,7 @@ fn integration_page_full_validation_cycle() {
     )| {
         for header_data in pages.iter() {
             let _result = parse_page_header_safely(header_data);
-            
+
             // Should not panic, should produce a result
             prop_assert!(true);
         }

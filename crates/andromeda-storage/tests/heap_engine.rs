@@ -11,7 +11,7 @@
 #[cfg(test)]
 mod heap_engine_tests {
     use andromeda_storage::{
-        HeapPage, SlotEntry, RowEncoder, RowSchema, ColumnDef, ScalarType, Datum, PageSize,
+        ColumnDef, Datum, HeapPage, PageSize, RowEncoder, RowSchema, ScalarType, SlotEntry,
     };
     use std::sync::Arc;
 
@@ -21,9 +21,7 @@ mod heap_engine_tests {
         let mut page = HeapPage::new(PageSize::KiB16);
         let tuple = b"test_data_123";
 
-        let slot_id = page
-            .insert_tuple(tuple)
-            .expect("insert_tuple failed");
+        let slot_id = page.insert_tuple(tuple).expect("insert_tuple failed");
         assert_eq!(slot_id, 0);
 
         let read_data = page.read_tuple(slot_id).expect("read_tuple failed");
@@ -36,12 +34,9 @@ mod heap_engine_tests {
         let mut page = HeapPage::new(PageSize::KiB16);
         let tuple = b"data_to_delete";
 
-        let slot_id = page
-            .insert_tuple(tuple)
-            .expect("insert_tuple failed");
+        let slot_id = page.insert_tuple(tuple).expect("insert_tuple failed");
 
-        page.delete_tuple(slot_id)
-            .expect("delete_tuple failed");
+        page.delete_tuple(slot_id).expect("delete_tuple failed");
 
         let result = page.read_tuple(slot_id);
         assert!(result.is_err());
@@ -70,9 +65,7 @@ mod heap_engine_tests {
         let mut slot_ids = Vec::new();
         for i in 0..10 {
             let tuple = format!("tuple_{:02}", i);
-            let slot_id = page
-                .insert_tuple(tuple.as_bytes())
-                .expect("insert failed");
+            let slot_id = page.insert_tuple(tuple.as_bytes()).expect("insert failed");
             slot_ids.push(slot_id);
 
             assert_eq!(slot_id, i as u16);
@@ -159,9 +152,7 @@ mod heap_engine_tests {
     fn test_heap_update() {
         let mut page = HeapPage::new(PageSize::KiB16);
 
-        let slot_id = page
-            .insert_tuple(b"original_value")
-            .expect("insert failed");
+        let slot_id = page.insert_tuple(b"original_value").expect("insert failed");
 
         // Update should delete old and insert new
         let new_slot = page
@@ -225,10 +216,9 @@ mod heap_engine_tests {
     /// Test invalid slot ID error
     #[test]
     fn test_heap_invalid_slot_id() {
-        let page = HeapPage::new(PageSize::KiB16);
+        let mut page = HeapPage::new(PageSize::KiB16);
 
-        page.insert_tuple(b"data")
-            .expect("insert failed");
+        page.insert_tuple(b"data").expect("insert failed");
 
         let result = page.read_tuple(999);
         assert!(result.is_err());
@@ -255,7 +245,7 @@ mod heap_engine_tests {
         entry.mark_deleted();
         assert!(entry.is_deleted());
         assert_eq!(entry.offset_if_live(), None);
-        assert_eq!(entry.offset, 0); // Offset cleared
+        assert_eq!(entry.offset_if_live(), None); // Offset cleared from public live view
     }
 
     /// Test tuple too large error
@@ -409,8 +399,14 @@ mod heap_engine_tests {
         let slot_16 = page_16k.insert_tuple(tuple).expect("16k insert failed");
         let slot_32 = page_32k.insert_tuple(tuple).expect("32k insert failed");
 
-        assert_eq!(page_16k.read_tuple(slot_16).expect("16k read failed"), tuple);
-        assert_eq!(page_32k.read_tuple(slot_32).expect("32k read failed"), tuple);
+        assert_eq!(
+            page_16k.read_tuple(slot_16).expect("16k read failed"),
+            tuple
+        );
+        assert_eq!(
+            page_32k.read_tuple(slot_32).expect("32k read failed"),
+            tuple
+        );
 
         // 32 KB page should have more free space
         let schema_16 = RowSchema::new(vec![ColumnDef {
@@ -420,7 +416,7 @@ mod heap_engine_tests {
             nullable: false,
         }])
         .expect("schema failed");
-        
+
         let schema_32 = RowSchema::new(vec![ColumnDef {
             name: "data".to_string(),
             ordinal: 0,

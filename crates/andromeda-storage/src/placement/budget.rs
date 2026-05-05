@@ -1,8 +1,8 @@
 use andromeda_core::AndromedaResult;
 
-use crate::{
-    HotColdIoThresholds, IoPathBudget, IoUseClass, PageIoBudget, PageSize, SegmentIoBudget,
-};
+use crate::PageSize;
+
+use super::{HotColdIoThresholds, IoPathBudget, IoUseClass, PageIoBudget, SegmentIoBudget};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StorageIoBudgetScope {

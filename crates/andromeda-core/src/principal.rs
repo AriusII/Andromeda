@@ -620,17 +620,22 @@ impl Principal {
         let principal_id = Self::principal_id_from_fingerprint(fingerprint_sha256)?;
 
         // 5. Create principal with default User role (escalation via registry)
-        Self::new(principal_id, PrincipalRole::User, session_token, fingerprint)
-            .ok_or_else(|| {
-                crate::AndromedaError::new(
-                    crate::AndromedaErrorKind::Security,
-                    "principal creation failed: invariant violation",
-                )
-            })
+        Self::new(
+            principal_id,
+            PrincipalRole::User,
+            session_token,
+            fingerprint,
+        )
+        .ok_or_else(|| {
+            crate::AndromedaError::new(
+                crate::AndromedaErrorKind::Security,
+                "principal creation failed: invariant violation",
+            )
+        })
     }
 
     /// Derive a stable SessionToken from a certificate fingerprint.
-    /// 
+    ///
     /// Same fingerprint → Same session token (deterministic).
     /// Uses first 32 hex characters + version marker.
     fn session_token_from_fingerprint(fingerprint: &str) -> SessionToken {
@@ -801,7 +806,10 @@ mod tests {
 
     #[test]
     fn test_principal_role_from_str() {
-        assert_eq!(PrincipalRole::from_str("superadmin"), Some(PrincipalRole::SuperAdmin));
+        assert_eq!(
+            PrincipalRole::from_str("superadmin"),
+            Some(PrincipalRole::SuperAdmin)
+        );
         assert_eq!(PrincipalRole::from_str("admin"), Some(PrincipalRole::Admin));
         assert_eq!(PrincipalRole::from_str("user"), Some(PrincipalRole::User));
         assert_eq!(PrincipalRole::from_str("invalid"), None);
@@ -889,9 +897,7 @@ mod tests {
         assert!(perms.has_permission(&Permission::AdminShutdown));
         assert!(perms.has_permission(&Permission::AdminRecovery));
         assert!(perms.has_permission(&Permission::AuditRead));
-        assert!(perms.has_permission(&Permission::ExecuteProcedure(
-            ProcedureId::new(42)
-        )));
+        assert!(perms.has_permission(&Permission::ExecuteProcedure(ProcedureId::new(42))));
     }
 
     #[test]
@@ -900,18 +906,14 @@ mod tests {
         // Guest can only execute procedure ID 0 (public procedures)
         assert!(perms.has_permission(&Permission::ExecuteProcedure(ProcedureId::new(0))));
         // Guest cannot execute other procedures
-        assert!(!perms.has_permission(&Permission::ExecuteProcedure(
-            ProcedureId::new(42)
-        )));
+        assert!(!perms.has_permission(&Permission::ExecuteProcedure(ProcedureId::new(42))));
     }
 
     #[test]
     fn test_operator_permissions() {
         let perms = PrincipalRole::Operator.permissions();
         // Operator can execute any procedure
-        assert!(perms.has_permission(&Permission::ExecuteProcedure(
-            ProcedureId::new(42)
-        )));
+        assert!(perms.has_permission(&Permission::ExecuteProcedure(ProcedureId::new(42))));
         // Operator can read audit
         assert!(perms.has_permission(&Permission::AuditRead));
         // Operator cannot shutdown
@@ -931,9 +933,7 @@ mod tests {
     fn test_user_permissions() {
         let perms = PrincipalRole::User.permissions();
         // User can execute any procedure
-        assert!(perms.has_permission(&Permission::ExecuteProcedure(
-            ProcedureId::new(42)
-        )));
+        assert!(perms.has_permission(&Permission::ExecuteProcedure(ProcedureId::new(42))));
         // User can read contracts
         assert!(perms.has_permission(&Permission::ReadContractMetadata));
         // User cannot manage roles
@@ -947,7 +947,7 @@ mod tests {
         let id = PrincipalId::new(1);
         let token = SessionToken::new("test-token");
         let fp = CertificateFingerprint::new("fingerprint-123").unwrap();
-        
+
         let principal = Principal::new(id, PrincipalRole::User, token, fp);
         assert!(principal.is_some());
 
@@ -981,7 +981,8 @@ mod tests {
     fn test_principal_creation_empty_fingerprint_rejected() {
         let id = PrincipalId::new(1);
         let token = SessionToken::new("test-token");
-        let fp = CertificateFingerprint::new("").unwrap_or(CertificateFingerprint::new_unchecked(""));
+        let fp =
+            CertificateFingerprint::new("").unwrap_or(CertificateFingerprint::new_unchecked(""));
 
         let principal = Principal::new(id, PrincipalRole::User, token, fp);
         assert!(principal.is_none());
@@ -992,7 +993,7 @@ mod tests {
         let id = PrincipalId::new(1);
         let token = SessionToken::new("test-token");
         let fp = CertificateFingerprint::new("fingerprint").unwrap();
-        
+
         let principal = Principal::new(id, PrincipalRole::Admin, token, fp)
             .expect("Principal creation should succeed");
 
@@ -1005,7 +1006,7 @@ mod tests {
         let id = PrincipalId::new(1);
         let token = SessionToken::new("test-token");
         let fp = CertificateFingerprint::new("fingerprint").unwrap();
-        
+
         let principal = Principal::new(id, PrincipalRole::User, token, fp)
             .expect("Principal creation should succeed");
 
@@ -1019,7 +1020,7 @@ mod tests {
         let id = PrincipalId::new(1);
         let token = SessionToken::new("test-token");
         let fp = CertificateFingerprint::new("abcdef1234567890").unwrap();
-        
+
         let principal = Principal::new(id, PrincipalRole::Admin, token, fp)
             .expect("Principal creation should succeed");
 
@@ -1031,15 +1032,16 @@ mod tests {
 
     #[test]
     fn test_principal_with_timestamp() {
-        use std::time::{SystemTime, UNIX_EPOCH};
+        use std::time::UNIX_EPOCH;
 
         let id = PrincipalId::new(1);
         let token = SessionToken::new("test-token");
         let fp = CertificateFingerprint::new("fingerprint").unwrap();
         let timestamp = UNIX_EPOCH;
 
-        let principal = Principal::new_with_timestamp(id, PrincipalRole::User, token, fp, timestamp)
-            .expect("Principal creation should succeed");
+        let principal =
+            Principal::new_with_timestamp(id, PrincipalRole::User, token, fp, timestamp)
+                .expect("Principal creation should succeed");
 
         assert_eq!(principal.created_at, timestamp);
     }
@@ -1057,9 +1059,7 @@ mod tests {
         assert!(principal.has_permission(&Permission::AdminShutdown));
         assert!(principal.has_permission(&Permission::AdminRecovery));
         assert!(principal.has_permission(&Permission::AdminCertificateRotate));
-        assert!(principal.has_permission(&Permission::ExecuteProcedure(
-            ProcedureId::new(42)
-        )));
+        assert!(principal.has_permission(&Permission::ExecuteProcedure(ProcedureId::new(42))));
     }
 
     #[test]
@@ -1069,14 +1069,16 @@ mod tests {
             PrincipalRole::User,
             SessionToken::new("token1"),
             CertificateFingerprint::new("fp1").unwrap(),
-        ).unwrap();
+        )
+        .unwrap();
 
         let user2 = Principal::new(
             PrincipalId::new(2),
             PrincipalRole::Guest,
             SessionToken::new("token2"),
             CertificateFingerprint::new("fp2").unwrap(),
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_ne!(user1.id, user2.id);
         assert_ne!(user1.role, user2.role);

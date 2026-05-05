@@ -9,16 +9,18 @@
 //!
 //! Exit status: All gates must pass for production readiness.
 
-use andromeda_catalog::ProcedureContractRef;
-use andromeda_core::{CatalogVersion, ContractHash, InvocationId, ProcedureId};
+use andromeda_catalog::{CatalogObjectRef, ObjectKind, ProcedureContractRef, QualifiedName};
+use andromeda_core::{CatalogObjectId, CatalogVersion, ContractHash, ProcedureId};
+use andromeda_exec::InvocationContext;
 use andromeda_exec::dispatch::{
     PreTransactionDispatchEvidence, ProcedureDispatchRequest, ProcedureDispatcher,
     SrplDispatcherAdapter,
 };
-use andromeda_exec::InvocationContext;
-use andromeda_observe::DecisionTrace;
+use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
 use andromeda_srpl::interpreter::SrplIrInterpreter;
-use andromeda_srpl::procedure_resolver::{ProcedureResolver, ProcedureResolveRequest, ProcedureResolveResponse, ProcedureResolveError};
+use andromeda_srpl::procedure_resolver::{
+    ProcedureResolveError, ProcedureResolveRequest, ProcedureResolveResponse, ProcedureResolver,
+};
 use std::sync::Arc;
 
 // ============================================================================
@@ -31,12 +33,28 @@ struct MockSuccessResolver;
 impl ProcedureResolver for MockSuccessResolver {
     fn resolve_procedure(
         &self,
-        _request: &ProcedureResolveRequest,
+        _request: ProcedureResolveRequest,
     ) -> Result<ProcedureResolveResponse, ProcedureResolveError> {
         Err(ProcedureResolveError::InvalidRequest {
             message: "mock resolver not implemented".to_string(),
         })
     }
+}
+
+fn decision_trace(trace_id: TraceId, decision: CriticalDecisionKind) -> DecisionTrace {
+    DecisionTrace {
+        trace_id,
+        decision,
+        reason: "test evidence accepted before transaction creation".to_string(),
+    }
+}
+
+fn invocation_context(trace_id: TraceId) -> InvocationContext {
+    InvocationContext::new(trace_id, Vec::new())
+}
+
+fn qualified_name(value: &str) -> QualifiedName {
+    QualifiedName::parse(value).expect("valid qualified name")
 }
 
 // ============================================================================
@@ -52,7 +70,7 @@ fn gate_exec_01_srpl_dispatcher_constructs_with_dependencies() {
 
     // Should construct successfully
     let _ = dispatcher.clone();
-    
+
     println!("✅ Exec Gate 01: Dispatcher constructs with dependencies");
 }
 
@@ -91,13 +109,16 @@ fn gate_exec_02_error_boundary_pre_transaction() {
             contract_hash: ContractHash::test_vector(7),
             catalog_version: CatalogVersion::new(1),
         },
-        context: InvocationContext {
-            invocation_id: InvocationId::new(1),
-            trace_id: andromeda_observe::TraceId::new(1),
-        },
+        context: invocation_context(TraceId::new(1)),
         pre_transaction: PreTransactionDispatchEvidence {
-            admission_trace: DecisionTrace::dummy(),
-            contract_trace: DecisionTrace::dummy(),
+            admission_trace: decision_trace(
+                TraceId::new(1),
+                CriticalDecisionKind::ResourceGovernance,
+            ),
+            contract_trace: decision_trace(
+                TraceId::new(1),
+                CriticalDecisionKind::ContractValidation,
+            ),
             authorization_trace: None,
         },
     };
@@ -108,11 +129,12 @@ fn gate_exec_02_error_boundary_pre_transaction() {
 
     // Should fail, but error should indicate pre-transaction failure
     assert!(result.is_err(), "Should fail at pre-transaction boundary");
-    
+
     let err = result.unwrap_err();
     assert!(
-        err.message().contains("SRPL") || err.message().contains("resolution") ||
-        err.message().contains("metadata"),
+        err.message().contains("SRPL")
+            || err.message().contains("resolution")
+            || err.message().contains("metadata"),
         "Error should come from SRPL layer, not transaction layer"
     );
 
@@ -133,13 +155,16 @@ fn gate_exec_02_invalid_request_rejected_before_dispatch() {
             contract_hash: ContractHash::test_vector(7),
             catalog_version: CatalogVersion::new(1),
         },
-        context: InvocationContext {
-            invocation_id: InvocationId::new(1),
-            trace_id: andromeda_observe::TraceId::new(999), // Different trace ID
-        },
+        context: invocation_context(TraceId::new(999)),
         pre_transaction: PreTransactionDispatchEvidence {
-            admission_trace: DecisionTrace::dummy(),
-            contract_trace: DecisionTrace::dummy(),
+            admission_trace: decision_trace(
+                TraceId::new(1),
+                CriticalDecisionKind::ResourceGovernance,
+            ),
+            contract_trace: decision_trace(
+                TraceId::new(1),
+                CriticalDecisionKind::ContractValidation,
+            ),
             authorization_trace: None,
         },
     };
@@ -167,9 +192,10 @@ fn gate_exec_03_both_dispatch_paths_available() {
         SrplInterpreted(andromeda_exec::SrplProcedureDispatcher),
     }
 
-    let srpl_path = DispatchPath::SrplInterpreted(
-        andromeda_exec::SrplProcedureDispatcher::new(resolver, interpreter),
-    );
+    let srpl_path = DispatchPath::SrplInterpreted(andromeda_exec::SrplProcedureDispatcher::new(
+        resolver,
+        interpreter,
+    ));
 
     // Both paths are constructible
     match srpl_path {
@@ -222,7 +248,10 @@ fn gate_exec_04_adapter_cloneable() {
 fn gate_exec_05_dispatcher_thread_safe() {
     let resolver = Arc::new(MockSuccessResolver);
     let interpreter = Arc::new(SrplIrInterpreter);
-    let dispatcher = Arc::new(andromeda_exec::SrplProcedureDispatcher::new(resolver, interpreter));
+    let dispatcher = Arc::new(andromeda_exec::SrplProcedureDispatcher::new(
+        resolver,
+        interpreter,
+    ));
 
     let mut handles = vec![];
 
@@ -286,13 +315,16 @@ fn gate_exec_06_error_handling_deterministic() {
             contract_hash: ContractHash::test_vector(7),
             catalog_version: CatalogVersion::new(1),
         },
-        context: InvocationContext {
-            invocation_id: InvocationId::new(1),
-            trace_id: andromeda_observe::TraceId::new(1),
-        },
+        context: invocation_context(TraceId::new(1)),
         pre_transaction: PreTransactionDispatchEvidence {
-            admission_trace: DecisionTrace::dummy(),
-            contract_trace: DecisionTrace::dummy(),
+            admission_trace: decision_trace(
+                TraceId::new(1),
+                CriticalDecisionKind::ResourceGovernance,
+            ),
+            contract_trace: decision_trace(
+                TraceId::new(1),
+                CriticalDecisionKind::ContractValidation,
+            ),
             authorization_trace: None,
         },
     };
@@ -316,16 +348,18 @@ fn gate_exec_06_error_handling_deterministic() {
 
 #[test]
 fn gate_exec_07_result_metadata_interface_available() {
-    use andromeda_srpl::procedure_model::{BoundSrplBodyPlan, ExecutableProcedurePlan, SrplCatalogBindingEvidence};
-    use andromeda_core::{CatalogObjectId, CatalogObjectRef};
+    use andromeda_srpl::procedure_model::{
+        BoundSrplBodyPlan, ExecutableProcedurePlan, SrplCatalogBindingEvidence,
+    };
 
     let minimal_plan = ExecutableProcedurePlan {
-        procedure_name: "test.procedure".parse().expect("valid qualified name"),
+        procedure_name: qualified_name("test.procedure"),
         evidence: SrplCatalogBindingEvidence {
             catalog_version: CatalogVersion::new(1),
             procedure_object: CatalogObjectRef {
                 object_id: CatalogObjectId::new(1),
-                name: "test.procedure".parse().expect("valid qualified name"),
+                name: qualified_name("test.procedure"),
+                kind: ObjectKind::Procedure,
                 catalog_version: CatalogVersion::new(1),
             },
             procedure_contract: ProcedureContractRef {
@@ -343,8 +377,11 @@ fn gate_exec_07_result_metadata_interface_available() {
     // Interface should be available (even if returning Unimplemented)
     let result = andromeda_exec::SrplProcedureDispatcher::result_metadata_for_plan(&minimal_plan);
 
-    assert!(result.is_err(), "Metadata extraction should return error (not yet implemented)");
-    
+    assert!(
+        result.is_err(),
+        "Metadata extraction should return error (not yet implemented)"
+    );
+
     println!("✅ Exec Gate 07: Result metadata interface available");
 }
 
@@ -354,16 +391,18 @@ fn gate_exec_07_result_metadata_interface_available() {
 
 #[test]
 fn gate_exec_08_plan_validation_interface_available() {
-    use andromeda_srpl::procedure_model::{BoundSrplBodyPlan, ExecutableProcedurePlan, SrplCatalogBindingEvidence};
-    use andromeda_core::{CatalogObjectId, CatalogObjectRef};
+    use andromeda_srpl::procedure_model::{
+        BoundSrplBodyPlan, ExecutableProcedurePlan, SrplCatalogBindingEvidence,
+    };
 
     let minimal_plan = ExecutableProcedurePlan {
-        procedure_name: "test.procedure".parse().expect("valid qualified name"),
+        procedure_name: qualified_name("test.procedure"),
         evidence: SrplCatalogBindingEvidence {
             catalog_version: CatalogVersion::new(1),
             procedure_object: CatalogObjectRef {
                 object_id: CatalogObjectId::new(1),
-                name: "test.procedure".parse().expect("valid qualified name"),
+                name: qualified_name("test.procedure"),
+                kind: ObjectKind::Procedure,
                 catalog_version: CatalogVersion::new(1),
             },
             procedure_contract: ProcedureContractRef {

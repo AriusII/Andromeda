@@ -43,15 +43,9 @@
 //! **Total: 18 tests**
 
 use andromeda_catalog::{
-    AccessMode, CatalogDefinition, CatalogObjectRef, CompatibilityPolicy, DefinitionBatch,
-    DefinitionBatchId, DefinitionOperation, IsolationPolicy, MultiResultPolicy, ObjectKind,
-    ProcedureContract, ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef,
-    QualifiedName, ResultMetadataPolicy, StatsVersion, TransactionPolicy,
+    CatalogDefinition, DefinitionBatch, DefinitionBatchId, DefinitionOperation,
 };
-use andromeda_core::{
-    CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, DatabaseId, NamespaceId,
-    ProcedureId, ScalarType, TypeDescriptor,
-};
+use andromeda_core::{CatalogObjectId, CatalogVersion, DatabaseId, NamespaceId, ProcedureId};
 use andromeda_srpl::definition_batch_bridge::SrplProcedureDefinition;
 
 // =============================================================================
@@ -69,10 +63,6 @@ fn test_batch(base_version: CatalogVersion, batch_id: u64) -> DefinitionBatch {
         base_version,
         operations: Vec::new(),
     }
-}
-
-fn reserve_stock_source() -> String {
-    "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool) begin ensure Inventory.ProductStock Stock where ProductId = Stock.ProductId and Stock.AvailableQuantity >= Quantity else fail InsufficientStock; update Inventory.ProductStock set AvailableQuantity = Stock.AvailableQuantity - Quantity where ProductId = Stock.ProductId affected rows 1; return Reservation (Reserved); end;".to_string()
 }
 
 fn signature_only_source() -> String {

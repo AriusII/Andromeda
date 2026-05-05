@@ -34,7 +34,9 @@
 //! }
 //! ```
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, ProcedureId};
+use andromeda_core::{
+    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, ProcedureId,
+};
 use std::sync::Arc;
 
 /// A procedure manifest providing metadata needed by remote clients.

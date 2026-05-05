@@ -16,8 +16,8 @@
 
 #![forbid(unsafe_code)]
 
+use andromeda_core::{AndromedaResult, TransactionId};
 use proptest::prelude::*;
-use andromeda_core::{TransactionId, AndromedaResult};
 
 // Mock or actual imports (adjust based on actual module structure)
 // Assuming WAL types are exported from andromeda_storage
@@ -29,10 +29,7 @@ fn arb_lsn() -> impl Strategy<Value = u64> {
 
 /// Generator for arbitrary transaction IDs.
 fn arb_transaction_id() -> impl Strategy<Value = Option<u64>> {
-    prop_oneof![
-        Just(None),
-        (1u64..u64::MAX).prop_map(Some),
-    ]
+    prop_oneof![Just(None), (1u64..u64::MAX).prop_map(Some),]
 }
 
 /// Generator for arbitrary payload data.
@@ -57,7 +54,7 @@ fn prop_wal_record_roundtrip_consistency() {
         // 2. Encode it: encoded = encode_wal_record(&record)?
         // 3. Decode it: (decoded, len) = decode_wal_record_frame(&encoded)?
         // 4. Verify: decoded == record
-        
+
         prop_assert!(
             payload.len() <= 1_000_000,
             "payload size within reasonable bounds"
@@ -74,7 +71,7 @@ fn prop_wal_lsn_preserved() {
     proptest!(|(lsn in arb_lsn())| {
         // When encoding and decoding, LSN must be identical
         // This test would verify: decoded.header.lsn == original_lsn
-        
+
         // Property: LSN is deterministic and preserved
         prop_assert!(lsn < u64::MAX, "LSN within valid range");
     });
@@ -89,7 +86,7 @@ fn prop_wal_txn_id_preserved() {
     proptest!(|(txn_id in arb_transaction_id())| {
         // When encoding and decoding, transaction ID must be preserved
         // Property: None stays None, Some(x) stays Some(x)
-        
+
         match txn_id {
             None => prop_assert!(true, "None transaction ID preserved"),
             Some(id) => prop_assert!(id > 0, "positive transaction ID"),
@@ -106,7 +103,7 @@ fn prop_wal_payload_integrity() {
     proptest!(|(payload in arb_payload())| {
         // Original payload must equal decoded payload
         // Property: decode(encode(payload)) == payload
-        
+
         let original_len = payload.len();
         prop_assert!(original_len <= 1_000_000, "payload within size bounds");
     });
@@ -126,13 +123,13 @@ fn prop_wal_checksum_detects_corruption() {
         // When we corrupt a byte in the encoded record, checksum validation
         // should detect it and return an error.
         // Property: corrupted_record → Err (not Ok)
-        
+
         // This test documents the property; actual test would:
         // 1. Encode a record
         // 2. Flip one bit in the encoded bytes
         // 3. Try to decode
         // 4. Expect Err (checksum mismatch)
-        
+
         prop_assert!(corruption_bit < 8, "valid bit position");
     });
 }
@@ -143,10 +140,10 @@ fn prop_wal_checksum_detects_corruption() {
 
 #[test]
 fn prop_wal_empty_payload() {
-    let empty_payload = vec![];
-    
+    let empty_payload: Vec<u8> = Vec::new();
+
     // Empty payload should encode and decode successfully
-    prop_assert!(empty_payload.is_empty());
+    assert!(empty_payload.is_empty());
     // Roundtrip: encode(empty) → decode() should return empty
 }
 
@@ -158,11 +155,11 @@ fn prop_wal_empty_payload() {
 fn prop_wal_large_payload_not_truncated() {
     proptest!(|(payload in prop::collection::vec(0u8..=255u8, 1000..10000))| {
         let original_len = payload.len();
-        
+
         // After roundtrip, payload length must be preserved
         prop_assert!(original_len >= 1000);
         prop_assert!(original_len <= 10000);
-        
+
         // Property: len(decode(encode(payload))) == len(payload)
     });
 }
@@ -177,7 +174,7 @@ fn prop_wal_encoding_deterministic() {
         // Multiple encodes of the same record must produce identical bytes
         // (except for timestamp/checksum if those change)
         // Property: encode(r) == encode(r) for all r
-        
+
         prop_assert!(lsn < u64::MAX);
     });
 }
@@ -191,10 +188,10 @@ fn prop_wal_frame_boundaries_preserved() {
     proptest!(|(payload in arb_payload())| {
         // Decoding should correctly identify frame boundaries
         // Property: If we encode N records, we decode exactly N records
-        
+
         // This would create multiple records, encode them sequentially,
         // then decode and verify count
-        
+
         prop_assert!(true);
     });
 }
@@ -211,7 +208,7 @@ fn prop_wal_header_invariants() {
     )| {
         // Header fields must satisfy invariants
         // Property: If prev_lsn is set, prev_lsn < lsn
-        
+
         if prev_lsn != 0 && lsn != 0 {
             // Typically prev_lsn < lsn, but this depends on implementation
             prop_assert!(true);
@@ -227,9 +224,9 @@ fn prop_wal_header_invariants() {
 fn prop_wal_format_version_recognized() {
     // When decoding, format version should be recognized
     // Property: Format version V1 → Ok, unknown version → Err
-    
+
     let v1_magic = 0x414e_4452_4f57_414c_u64; // "ANDROWAI"
-    prop_assert!(v1_magic > 0);
+    assert!(v1_magic > 0);
 }
 
 // ============================================================================
@@ -244,7 +241,7 @@ fn prop_wal_multiple_records_independent() {
         // When encoding multiple records and decoding sequentially,
         // each record should be independent
         // Property: N records → N decode calls, all succeed
-        
+
         prop_assert!(payloads.len() >= 2);
         prop_assert!(payloads.len() <= 100);
     });
@@ -293,7 +290,7 @@ fn integration_wal_codec_full_lifecycle() {
         // 3. Concatenate bytes
         // 4. Decode from concatenated buffer
         // 5. Verify all records match and in correct order
-        
+
         prop_assert!(records.len() >= 1);
         prop_assert!(records.len() <= 50);
     });

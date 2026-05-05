@@ -1,8 +1,8 @@
 use andromeda_core::{AndromedaErrorKind, TransactionId};
 use andromeda_tx::{
-    decide_deadlock_from_lock_manager, DeadlockDecisionTraceOutcome, DeadlockPolicy,
-    DeadlockVictimPolicy, LockAcquireStatus, LockHolder, LockManager, LockMode,
-    LockReleaseAllSummary, LockResource, LockTraceKind, LockTraceOutcome, TransactionManager,
+    DeadlockDecisionTraceOutcome, DeadlockPolicy, DeadlockVictimPolicy, LockAcquireStatus,
+    LockHolder, LockManager, LockMode, LockReleaseAllSummary, LockResource, LockTraceKind,
+    LockTraceOutcome, TransactionManager, TransactionState, decide_deadlock_from_lock_manager,
 };
 
 const ALL_LOCK_MODES: [LockMode; 6] = [
@@ -597,9 +597,7 @@ fn release_promotion_evidence_identifies_promoted_waiter() {
         LockAcquireStatus::Granted
     );
     assert!(matches!(
-        manager
-            .acquire(waiter, resource, LockMode::Shared)
-            .unwrap(),
+        manager.acquire(waiter, resource, LockMode::Shared).unwrap(),
         LockAcquireStatus::Waiting { sequence: 1, .. }
     ));
 
@@ -857,7 +855,7 @@ fn transaction_lock_coordinator_rejects_invalid_transaction_and_resource() {
 /// across transaction state transitions and lock operations.
 
 #[test]
-fn two_phase_locking_growing_phase_multiple_acquires() {
+fn locking_protocol_growing_phase_multiple_acquires() {
     let transactions = TransactionManager::new();
     let locks = LockManager::new();
     let tx = transactions.begin().unwrap();
@@ -883,7 +881,7 @@ fn two_phase_locking_growing_phase_multiple_acquires() {
 }
 
 #[test]
-fn two_phase_locking_transition_from_active_to_committing() {
+fn locking_protocol_transition_from_active_to_committing() {
     let transactions = TransactionManager::new();
     let locks = LockManager::new();
     let tx = transactions.begin().unwrap();
@@ -906,7 +904,7 @@ fn two_phase_locking_transition_from_active_to_committing() {
 }
 
 #[test]
-fn two_phase_locking_shrinking_phase_release_locks() {
+fn locking_protocol_shrinking_phase_release_locks() {
     let transactions = TransactionManager::new();
     let locks = LockManager::new();
     let tx = transactions.begin().unwrap();
@@ -931,12 +929,8 @@ fn two_phase_locking_shrinking_phase_release_locks() {
     transactions.request_commit(tx).unwrap();
 
     // Shrinking phase: release locks
-    assert!(transactions
-        .release_lock(&locks, tx, res1)
-        .unwrap());
-    assert!(transactions
-        .release_lock(&locks, tx, res2)
-        .unwrap());
+    assert!(transactions.release_lock(&locks, tx, res1).unwrap());
+    assert!(transactions.release_lock(&locks, tx, res2).unwrap());
 
     // Verify locks are released
     let snap = locks.snapshot().unwrap();
@@ -944,7 +938,7 @@ fn two_phase_locking_shrinking_phase_release_locks() {
 }
 
 #[test]
-fn two_phase_locking_terminal_cleanup_with_release_all() {
+fn locking_protocol_terminal_cleanup_with_release_all() {
     let transactions = TransactionManager::new();
     let locks = LockManager::new();
     let tx = transactions.begin().unwrap();
@@ -963,9 +957,7 @@ fn two_phase_locking_terminal_cleanup_with_release_all() {
     transactions.commit_durable(tx, 1).unwrap();
 
     // Terminal cleanup
-    let summary = transactions
-        .release_all_locks(&locks, tx)
-        .unwrap();
+    let summary = transactions.release_all_locks(&locks, tx).unwrap();
     assert!(summary.removed_any());
 
     // Verify locks are cleaned up
@@ -974,7 +966,7 @@ fn two_phase_locking_terminal_cleanup_with_release_all() {
 }
 
 #[test]
-fn two_phase_locking_rollback_path_releases_locks() {
+fn locking_protocol_rollback_path_releases_locks() {
     let transactions = TransactionManager::new();
     let locks = LockManager::new();
     let tx = transactions.begin().unwrap();
@@ -993,9 +985,7 @@ fn two_phase_locking_rollback_path_releases_locks() {
     transactions.rollback_durable(tx, 1).unwrap();
 
     // Terminal cleanup
-    let summary = transactions
-        .release_all_locks(&locks, tx)
-        .unwrap();
+    let summary = transactions.release_all_locks(&locks, tx).unwrap();
     assert!(summary.removed_any());
 
     // Verify locks are cleaned up
@@ -1004,7 +994,7 @@ fn two_phase_locking_rollback_path_releases_locks() {
 }
 
 #[test]
-fn two_phase_locking_prevents_acquire_in_inflight_state_other_than_active() {
+fn locking_protocol_prevents_acquire_in_inflight_state_other_than_active() {
     // This test verifies that acquire is restricted by the transaction manager
     // to Active state only, not other in-flight states
     let transactions = TransactionManager::new();
@@ -1032,11 +1022,12 @@ fn two_phase_locking_prevents_acquire_in_inflight_state_other_than_active() {
     // uses require_lock_acquire_transaction which requires Active state,
     // so this would fail. But let's verify through 2PL validator.
     use andromeda_tx::{TwoPhaseLocksValidator, TwoPhaseOperation};
-    let validation =
-        TwoPhaseLocksValidator::validate_operation(snap.state_machine.state, TwoPhaseOperation::Acquire);
+    let validation = TwoPhaseLocksValidator::validate_operation(
+        snap.state_machine.state,
+        TwoPhaseOperation::Acquire,
+    );
     assert!(
         validation.is_err(),
         "2PL must reject acquire in Committing state"
     );
 }
-

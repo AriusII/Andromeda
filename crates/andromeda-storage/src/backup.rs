@@ -27,5 +27,7 @@ pub use scheduler::*;
 pub use types::*;
 pub use wal_archive_integration::*;
 
-// Selective exports from plan to avoid ambiguity with physical_plan::BackupPhysicalPlan
-pub use plan::{BackupManifest, PitrTarget};
+pub use plan::{
+    BackupManifest, PitrAuditRecord, PitrTarget, PitrTargetRejection, PitrValidationAccepted,
+    validate_pitr_target, validate_pitr_target_with_audit,
+};

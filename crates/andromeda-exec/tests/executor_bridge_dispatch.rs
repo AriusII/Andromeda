@@ -12,7 +12,7 @@
 
 use andromeda_core::{AndromedaErrorKind, InvocationId};
 use andromeda_exec::ExecutorDispatchBridge;
-use andromeda_observe::{CertificateIdentity, SurfaceScope, TraceId};
+use andromeda_observe::{CertificateIdentity, SurfaceScope};
 use andromeda_quic::{
     Connection, FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader, FrameType, LifecycleState,
     SurfacePlane,

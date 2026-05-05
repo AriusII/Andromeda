@@ -9,7 +9,6 @@
 use crate::error::cli_error;
 use andromeda_core::AndromedaResult;
 use serde::Serialize;
-use std::collections::BTreeMap;
 
 /// Serializable HADR status output.
 #[derive(Debug, Clone, Serialize)]

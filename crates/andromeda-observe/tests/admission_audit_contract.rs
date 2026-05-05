@@ -609,7 +609,7 @@ fn admission_audit_event_type_labels_are_unique() {
         dispatch_timestamp: now(),
     };
 
-    let labels = vec![
+    let labels = [
         contract_validated.type_label(),
         admission_decision.type_label(),
         permission_failed.type_label(),

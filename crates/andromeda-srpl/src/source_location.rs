@@ -1,6 +1,32 @@
+//! SRPL source text and location primitives.
+
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
-use crate::{ForbiddenConstruct, ForbiddenConstructHit, SourceSpan, SrplDiagnostic};
+use crate::{ForbiddenConstruct, ForbiddenConstructHit, SrplDiagnostic};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SourceSpan {
+    pub start: usize,
+    pub end: usize,
+}
+
+impl SourceSpan {
+    pub const fn new(start: usize, end: usize) -> Self {
+        Self { start, end }
+    }
+
+    pub const fn is_valid(self) -> bool {
+        self.start <= self.end
+    }
+
+    pub const fn len(self) -> usize {
+        self.end.saturating_sub(self.start)
+    }
+
+    pub const fn is_empty(self) -> bool {
+        self.len() == 0
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SrplSource<'a> {

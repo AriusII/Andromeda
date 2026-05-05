@@ -112,11 +112,11 @@ impl FormatVersion {
 pub enum CompatibilityResult {
     /// Writer and reader versions are identical; full compatibility.
     FullyCompatible,
-    
+
     /// Reader is newer; has all writer features; can read safely.
     /// (e.g., reader 1.5 reading data written by 1.0)
     BackwardCompatible,
-    
+
     /// Incompatible; reader too old or major version mismatch.
     /// Must upgrade reader or downgrade writer.
     Incompatible,
@@ -221,14 +221,12 @@ impl CompatibilityMatrix {
             CompatibilityResult::FullyCompatible | CompatibilityResult::BackwardCompatible => {
                 Ok(())
             }
-            CompatibilityResult::Incompatible => {
-                Err(format!(
-                    "Format version mismatch: reader {} cannot read writer {} ({})",
-                    format_version_string(self.reader_version),
-                    format_version_string(writer_version),
-                    compat.description()
-                ))
-            }
+            CompatibilityResult::Incompatible => Err(format!(
+                "Format version mismatch: reader {} cannot read writer {} ({})",
+                format_version_string(self.reader_version),
+                format_version_string(writer_version),
+                compat.description()
+            )),
         }
     }
 
@@ -347,14 +345,16 @@ mod tests {
 
     #[test]
     fn test_compatibility_result_descriptions() {
-        assert!(!CompatibilityResult::FullyCompatible
-            .description()
-            .is_empty());
-        assert!(!CompatibilityResult::BackwardCompatible
-            .description()
-            .is_empty());
-        assert!(!CompatibilityResult::Incompatible
-            .description()
-            .is_empty());
+        assert!(
+            !CompatibilityResult::FullyCompatible
+                .description()
+                .is_empty()
+        );
+        assert!(
+            !CompatibilityResult::BackwardCompatible
+                .description()
+                .is_empty()
+        );
+        assert!(!CompatibilityResult::Incompatible.description().is_empty());
     }
 }

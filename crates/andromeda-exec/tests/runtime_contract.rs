@@ -16,9 +16,8 @@ use andromeda_exec::{
 };
 use andromeda_observe::TraceId;
 use andromeda_srpl::{
-    Cardinality,
-    compiler::{compile_narrow_procedure_signature, inventory_reserve_stock_body_ir},
-    model::{SrplBusinessOperationKindIr, SrplPredicateIr, SrplValueIr},
+    Cardinality, SrplBusinessOperationKindIr, SrplPredicateIr, SrplValueIr,
+    inventory_reserve_stock_body_ir, procedure_compiler::compile_narrow_procedure_signature,
 };
 use andromeda_storage::{
     CoreIoPlacementRequest, InMemoryWal, Lsn, OperationalProfile, PageSize, StorageIoBudgetScope,
@@ -901,7 +900,10 @@ fn local_vertical_commit_append_failure_does_not_publish_terminal_status() {
     assert_eq!(runtime.wal().records[0].1, WalRecordKind::TxBegin);
     assert_eq!(runtime.wal().records[1].1, WalRecordKind::RowUpdate);
     assert_eq!(
-        runtime.transactions().status(TransactionId::new(1)),
+        runtime
+            .transactions()
+            .status(TransactionId::new(1))
+            .expect("transaction status lookup must succeed"),
         Some(TransactionStatus::InFlight),
         "commit append failure occurs before request_commit/commit_durable, so status must not become Committed"
     );
@@ -909,7 +911,8 @@ fn local_vertical_commit_append_failure_does_not_publish_terminal_status() {
         runtime
             .transactions()
             .snapshot(TransactionId::new(1))
-            .unwrap()
+            .expect("transaction snapshot lookup must succeed")
+            .expect("transaction record must exist")
             .state_machine
             .state,
         TransactionState::Active
@@ -933,7 +936,10 @@ fn local_vertical_flush_error_does_not_publish_terminal_status() {
     assert_eq!(runtime.wal().records.len(), 3);
     assert_eq!(runtime.wal().records[2].1, WalRecordKind::TxCommit);
     assert_eq!(
-        runtime.transactions().status(TransactionId::new(1)),
+        runtime
+            .transactions()
+            .status(TransactionId::new(1))
+            .expect("transaction status lookup must succeed"),
         Some(TransactionStatus::InFlight),
         "flush failure occurs before commit_durable, so visible commit status must not be published"
     );
@@ -941,7 +947,8 @@ fn local_vertical_flush_error_does_not_publish_terminal_status() {
         runtime
             .transactions()
             .snapshot(TransactionId::new(1))
-            .unwrap()
+            .expect("transaction snapshot lookup must succeed")
+            .expect("transaction record must exist")
             .state_machine
             .state,
         TransactionState::Active

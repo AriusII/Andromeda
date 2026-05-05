@@ -173,5 +173,7 @@ pub fn print_help() {
     println!("run `andromeda-cli hadr [status|promote|demote|quorum]` for HADR administration");
     println!("run `andromeda-cli backup [start|status|list]` for backup operations");
     println!("run `andromeda-cli restore <backup-id> [--pitr-lsn <lsn>]` for restore operations");
-    println!("run `andromeda-cli catalog [list-procedures|invalidate-cache|show-contract]` for catalog operations");
+    println!(
+        "run `andromeda-cli catalog [list-procedures|invalidate-cache|show-contract]` for catalog operations"
+    );
 }

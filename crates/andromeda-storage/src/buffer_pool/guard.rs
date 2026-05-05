@@ -121,7 +121,8 @@ impl<'a> PageGuardMut<'a> {
 
     pub fn mark_dirty(&mut self, dirty_lsn: Lsn) -> AndromedaResult<()> {
         self.frame.mark_dirty(dirty_lsn)?;
-        if let (Some(page_id), Some(dirty_tracker)) = (self.frame.page_id(), &mut self.dirty_tracker)
+        if let (Some(page_id), Some(dirty_tracker)) =
+            (self.frame.page_id(), &mut self.dirty_tracker)
         {
             dirty_tracker.mark_dirty(page_id, dirty_lsn)?;
         }

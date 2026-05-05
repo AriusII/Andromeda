@@ -70,9 +70,7 @@
 
 use crate::surface_gate::{AuthorizedProcedureDispatch, SurfacePlaneAuthorizer};
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, InvocationId};
-use andromeda_observe::{
-    AuthorizationDenialReason, AuthorizationOutcome, CertificateIdentity, SurfaceScope, TraceId,
-};
+use andromeda_observe::{AuthorizationOutcome, CertificateIdentity, TraceId};
 use andromeda_quic::{Connection, SurfacePlane};
 
 /// Bridges a QUIC connection and certificate identity to executor dispatch.
@@ -289,6 +287,7 @@ impl<'a> ExecutorDispatchBridge<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use andromeda_observe::SurfaceScope;
     use andromeda_quic::{
         FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader, FrameType, LifecycleState,
     };

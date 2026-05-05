@@ -26,10 +26,12 @@
 //! - Principal lookup caching with TTL
 //! - Role-based scope filtering
 
-use crate::{AndromedaError, AndromedaErrorKind, AndromedaResult, Principal, PrincipalId, PrincipalRole, SessionToken};
+use andromeda_core::{
+    AndromedaError, AndromedaErrorKind, AndromedaResult, CertificateFingerprint, Principal,
+    PrincipalId, PrincipalRole, SessionToken,
+};
 use dashmap::DashMap;
 use std::sync::Arc;
-use std::time::SystemTime;
 
 /// PrincipalResolver trait: abstract interface for certificate fingerprint → Principal lookup.
 ///
@@ -139,22 +141,11 @@ impl LocalPrincipalResolver {
             "test_superadmin_fingerprint".into(),
             PrincipalRole::SuperAdmin,
         );
-        let _ = resolver.register_principal(
-            "test_admin_fingerprint".into(),
-            PrincipalRole::Admin,
-        );
-        let _ = resolver.register_principal(
-            "test_operator_fingerprint".into(),
-            PrincipalRole::Operator,
-        );
-        let _ = resolver.register_principal(
-            "test_user_fingerprint".into(),
-            PrincipalRole::User,
-        );
-        let _ = resolver.register_principal(
-            "test_guest_fingerprint".into(),
-            PrincipalRole::Guest,
-        );
+        let _ = resolver.register_principal("test_admin_fingerprint".into(), PrincipalRole::Admin);
+        let _ = resolver
+            .register_principal("test_operator_fingerprint".into(), PrincipalRole::Operator);
+        let _ = resolver.register_principal("test_user_fingerprint".into(), PrincipalRole::User);
+        let _ = resolver.register_principal("test_guest_fingerprint".into(), PrincipalRole::Guest);
 
         resolver
     }
@@ -225,20 +216,26 @@ impl PrincipalResolver for LocalPrincipalResolver {
         }
 
         // Generate a deterministic principal ID from the fingerprint hash
-        let principal_id = PrincipalId::new(
-            cert_fingerprint
-                .as_bytes()
-                .iter()
-                .fold(0u64, |acc, &byte| acc.wrapping_mul(31).wrapping_add(byte as u64))
-        );
+        let principal_id =
+            PrincipalId::new(cert_fingerprint.as_bytes().iter().fold(0u64, |acc, &byte| {
+                acc.wrapping_mul(31).wrapping_add(byte as u64)
+            }));
 
         let session_token = SessionToken::new(format!("session_{}", cert_fingerprint));
-        let principal = Principal::new(
-            principal_id,
-            role,
-            session_token,
-            cert_fingerprint.clone(),
-        );
+        let principal_fingerprint = CertificateFingerprint::new(cert_fingerprint.clone())
+            .ok_or_else(|| {
+                AndromedaError::new(
+                    AndromedaErrorKind::Security,
+                    "certificate fingerprint must not be empty",
+                )
+            })?;
+        let principal = Principal::new(principal_id, role, session_token, principal_fingerprint)
+            .ok_or_else(|| {
+                AndromedaError::new(
+                    AndromedaErrorKind::Security,
+                    "principal registration failed validation",
+                )
+            })?;
 
         self.principal_store
             .insert(cert_fingerprint, principal.clone());
@@ -292,13 +289,12 @@ mod tests {
     fn test_register_and_resolve_principal() {
         let resolver = LocalPrincipalResolver::new();
         let fingerprint = "test_fingerprint_123";
-
         let registered = resolver
             .register_principal(fingerprint.into(), PrincipalRole::Admin)
             .expect("registration should succeed");
 
         assert_eq!(registered.role, PrincipalRole::Admin);
-        assert_eq!(registered.cert_fingerprint, fingerprint);
+        assert_eq!(registered.cert_fingerprint.as_str(), fingerprint);
 
         let resolved = resolver
             .resolve(fingerprint)
@@ -447,7 +443,7 @@ mod tests {
             .expect("resolve should succeed");
 
         // Verify permissions are correctly loaded from role
-        assert!(principal.has_permission(&crate::Permission::AuditRead));
+        assert!(principal.has_permission(&andromeda_core::Permission::AuditRead));
     }
 
     #[test]

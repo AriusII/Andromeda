@@ -1,4 +1,4 @@
-//! Contract tests for lock audit trace infrastructure.
+//! Contract tests for lock history trace infrastructure.
 //!
 //! These tests verify that lock traces are emitted correctly for:
 //! - Lock waits (when a transaction waits for a lock)
@@ -9,9 +9,8 @@
 
 use andromeda_core::{EngineTimestamp, TransactionId};
 use andromeda_tx::{
-    DeadlockAuditTrace, DeadlockDecisionKind, LockAcquireStatus, LockHolder, LockManager,
-    LockMode, LockPromotionTrace, LockReleaseAllTrace, LockResource, LockWaitTrace,
-    TransactionManager, TransactionState,
+    DeadlockAuditTrace, DeadlockDecisionKind, LockAcquireStatus, LockManager, LockMode,
+    LockPromotionTrace, LockReleaseAllTrace, LockResource, LockWaitTrace, TransactionState,
 };
 
 #[test]
@@ -24,11 +23,15 @@ fn test_wait_trace_on_contention() {
     let ts = EngineTimestamp::from_unix_millis(1000);
 
     // Transaction 1 acquires exclusive lock
-    let status1 = lock_manager.acquire(tx1, resource, LockMode::Exclusive).unwrap();
+    let status1 = lock_manager
+        .acquire(tx1, resource, LockMode::Exclusive)
+        .unwrap();
     assert_eq!(status1, LockAcquireStatus::Granted);
 
     // Transaction 2 requests shared lock (incompatible, will wait)
-    let status2 = lock_manager.acquire(tx2, resource, LockMode::Shared).unwrap();
+    let status2 = lock_manager
+        .acquire(tx2, resource, LockMode::Shared)
+        .unwrap();
 
     // Verify transaction 2 is waiting
     match status2 {
@@ -37,13 +40,8 @@ fn test_wait_trace_on_contention() {
             sequence: _,
         } => {
             // Create wait trace from the acquire status
-            let wait_trace = LockWaitTrace::new(
-                tx2,
-                resource,
-                LockMode::Shared,
-                blockers.clone(),
-                ts,
-            );
+            let wait_trace =
+                LockWaitTrace::new(tx2, resource, LockMode::Shared, blockers.clone(), ts);
 
             // Verify wait trace captures the contention
             assert_eq!(wait_trace.tx_id, tx2);
@@ -63,14 +61,18 @@ fn test_promotion_trace_on_release() {
     let resource = LockResource::table(1, 10).unwrap();
     let tx1 = TransactionId::new(1);
     let tx2 = TransactionId::new(2);
-    let ts_release = EngineTimestamp::from_unix_millis(2000);
+    let _ts_release = EngineTimestamp::from_unix_millis(2000);
     let ts_promote = EngineTimestamp::from_unix_millis(2001);
 
     // Tx1 acquires exclusive lock
-    let _ = lock_manager.acquire(tx1, resource, LockMode::Exclusive).unwrap();
+    let _ = lock_manager
+        .acquire(tx1, resource, LockMode::Exclusive)
+        .unwrap();
 
     // Tx2 waits for shared lock
-    let _ = lock_manager.acquire(tx2, resource, LockMode::Shared).unwrap();
+    let _ = lock_manager
+        .acquire(tx2, resource, LockMode::Shared)
+        .unwrap();
 
     // Tx1 releases (this promotes tx2)
     let release_result = lock_manager.release_with_evidence(tx1, resource).unwrap();
@@ -133,7 +135,9 @@ fn test_release_all_trace_on_commit() {
     let ts = EngineTimestamp::from_unix_millis(4000);
 
     // Transaction acquires a lock
-    let _ = lock_manager.acquire(tx_id, resource, LockMode::Exclusive).unwrap();
+    let _ = lock_manager
+        .acquire(tx_id, resource, LockMode::Exclusive)
+        .unwrap();
 
     // Release all locks (terminal cleanup)
     let cleanup_result = lock_manager.release_all_with_evidence(tx_id).unwrap();
@@ -165,23 +169,25 @@ fn test_audit_trail_correlation() {
     let ts_release_all = EngineTimestamp::from_unix_millis(5200);
 
     // Step 1: Holder acquires lock
-    let _ = lock_manager.acquire(tx_holder, resource, LockMode::Exclusive).unwrap();
+    let _ = lock_manager
+        .acquire(tx_holder, resource, LockMode::Exclusive)
+        .unwrap();
 
     // Step 2: Waiter tries to acquire (creates wait trace)
-    let acquire_status = lock_manager.acquire(tx_waiter, resource, LockMode::Shared).unwrap();
+    let acquire_status = lock_manager
+        .acquire(tx_waiter, resource, LockMode::Shared)
+        .unwrap();
     let wait_trace = match acquire_status {
-        LockAcquireStatus::Waiting { blockers, .. } => LockWaitTrace::new(
-            tx_waiter,
-            resource,
-            LockMode::Shared,
-            blockers,
-            ts_wait,
-        ),
+        LockAcquireStatus::Waiting { blockers, .. } => {
+            LockWaitTrace::new(tx_waiter, resource, LockMode::Shared, blockers, ts_wait)
+        }
         _ => panic!("Expected Waiting status"),
     };
 
     // Step 3: Holder releases (creates promotion trace)
-    let release_result = lock_manager.release_with_evidence(tx_holder, resource).unwrap();
+    let release_result = lock_manager
+        .release_with_evidence(tx_holder, resource)
+        .unwrap();
     let promotion_trace = if !release_result.evidence.is_empty()
         && !release_result.evidence[0].promoted_waiters.is_empty()
     {
@@ -228,7 +234,9 @@ fn test_no_wait_trace_on_granted_acquire() {
     let resource = LockResource::table(1, 10).unwrap();
     let tx = TransactionId::new(1);
 
-    let status = lock_manager.acquire(tx, resource, LockMode::Shared).unwrap();
+    let status = lock_manager
+        .acquire(tx, resource, LockMode::Shared)
+        .unwrap();
 
     // Should be granted (not waiting)
     match status {
@@ -264,16 +272,24 @@ fn test_multiple_promotions_on_release() {
     let tx_wait2 = TransactionId::new(3);
 
     // Holder acquires exclusive lock
-    let _ = lock_manager.acquire(tx_holder, resource, LockMode::Exclusive).unwrap();
+    let _ = lock_manager
+        .acquire(tx_holder, resource, LockMode::Exclusive)
+        .unwrap();
 
     // First waiter queues for shared
-    let _ = lock_manager.acquire(tx_wait1, resource, LockMode::Shared).unwrap();
+    let _ = lock_manager
+        .acquire(tx_wait1, resource, LockMode::Shared)
+        .unwrap();
 
     // Second waiter queues for shared
-    let _ = lock_manager.acquire(tx_wait2, resource, LockMode::Shared).unwrap();
+    let _ = lock_manager
+        .acquire(tx_wait2, resource, LockMode::Shared)
+        .unwrap();
 
     // Holder releases (first compatible waiter promoted)
-    let release_result = lock_manager.release_with_evidence(tx_holder, resource).unwrap();
+    let release_result = lock_manager
+        .release_with_evidence(tx_holder, resource)
+        .unwrap();
 
     // At least one promotion should have occurred
     let promotions = release_result
@@ -298,8 +314,12 @@ fn test_release_all_cleanup_trace() {
     let ts = EngineTimestamp::from_unix_millis(7000);
 
     // Acquire locks on multiple resources
-    let _ = lock_manager.acquire(tx_id, resource1, LockMode::Exclusive).unwrap();
-    let _ = lock_manager.acquire(tx_id, resource2, LockMode::Shared).unwrap();
+    let _ = lock_manager
+        .acquire(tx_id, resource1, LockMode::Exclusive)
+        .unwrap();
+    let _ = lock_manager
+        .acquire(tx_id, resource2, LockMode::Shared)
+        .unwrap();
 
     // Release all locks
     let cleanup_result = lock_manager.release_all_with_evidence(tx_id).unwrap();

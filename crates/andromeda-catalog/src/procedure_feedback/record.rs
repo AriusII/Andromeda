@@ -143,10 +143,10 @@ impl ProcedureFeedback {
         if stats_version.get() == 0 {
             return Err(ProcedureFeedbackError::StatsVersionZero);
         }
-        if let Some(digest) = plan_cache_key_digest {
-            if digest == [0u8; 32] {
-                return Err(ProcedureFeedbackError::PlanCacheKeyDigestZero);
-            }
+        if let Some(digest) = plan_cache_key_digest
+            && digest == [0u8; 32]
+        {
+            return Err(ProcedureFeedbackError::PlanCacheKeyDigestZero);
         }
         completion.validate()?;
         Ok(Self {

@@ -1,10 +1,8 @@
 use andromeda_core::{AndromedaResult, HardwareProfile, PipelineClass};
 
-use crate::{HotColdIoThresholds, IoPathBudget, IoPathClass};
-
 use super::{
-    PlacementDecision, StorageIoBudgetScope, StorageTier, StorageWorkloadClass, resource_error,
-    storage_error,
+    HotColdIoThresholds, IoPathBudget, IoPathClass, PlacementDecision, StorageIoBudgetScope,
+    StorageTier, StorageWorkloadClass, resource_error, storage_error,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,7 +34,7 @@ pub struct CoreIoPlacementDecision {
     pub workload: StorageWorkloadClass,
     pub placement: PlacementDecision,
     pub pipeline_class: PipelineClass,
-    pub io_use_class: crate::IoUseClass,
+    pub io_use_class: super::IoUseClass,
     pub path_budget: IoPathBudget,
     pub gpu_enabled: bool,
 }

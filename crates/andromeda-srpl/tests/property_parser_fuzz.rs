@@ -17,35 +17,21 @@ use proptest::prelude::*;
 use std::panic;
 
 /// Arbitrary UTF-8 string generator for SRPL-like syntax.
-fn arb_srpl_input() -> impl Strategy<Value = String> {
+fn arb_srpl_input() -> impl Strategy<Value=String> {
     // Generate strings that might look like SRPL procedures
     prop_oneof![
         // Valid-looking SRPL
-        Just("PROCEDURE p() BEGIN SELECT 1; END".to_string()),
-        Just("PROCEDURE test(a INT) RETURNS INT BEGIN RETURN a + 1; END".to_string()),
+        Just("procedure Inventory.ReserveStock accepts (ProductId i64) returns Reservation one (Reserved bool);".to_string()),
+        Just("procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool) body { read Inventory.ProductStock Stock one; emit Reservation (Reserved); }".to_string()),
         // Partial/malformed SRPL
         Just("PROCEDURE p(".to_string()),
         Just("BEGIN SELECT".to_string()),
         Just("PROCEDURE p()".to_string()),
         // Random valid UTF-8
-        "\\PC{0,1000}".parse::<String>().unwrap().prop_map(|_| {
-            String::from_utf8_lossy(
-                &(0..256u8)
-                    .filter(|b| *b < 128)
-                    .cycle()
-                    .take(prop_rand::thread_rng().gen_range(0..1000))
-                    .collect::<Vec<_>>()
-            )
-            .into_owned()
-        }),
+        "\\PC{0,1000}".prop_map(|s| s),
         // Random ASCII printable
-        "[\\x20-\\x7E]{0,500}".parse().unwrap()
+        "[\\x20-\\x7E]{0,500}".prop_map(|s| s)
     ]
-}
-
-/// Arbitrary raw bytes (may not be valid UTF-8).
-fn arb_raw_bytes() -> impl Strategy<Value = Vec<u8>> {
-    prop::collection::vec(0u8..=255u8, 0..10000)
 }
 
 // ============================================================================
@@ -54,11 +40,11 @@ fn arb_raw_bytes() -> impl Strategy<Value = Vec<u8>> {
 
 #[test]
 fn prop_parser_never_panics_on_utf8_strings() {
-    proptest!(|(input in "[\\x00-\\x7F]{0,5000}")| {
+    proptest!(|(input in arb_srpl_input())| {
         let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
             andromeda_srpl::parse_procedure_signature(&input)
         }));
-        
+
         // Verify no panic occurred
         match result {
             Ok(_) => {
@@ -81,7 +67,7 @@ fn prop_parser_never_panics_on_utf8_strings() {
 fn prop_parser_returns_result() {
     proptest!(|(input in ".*")| {
         let result = andromeda_srpl::parse_procedure_signature(&input);
-        
+
         // Result must be either Ok or Err
         match result {
             Ok(_) => prop_assert!(true, "parser returned Ok"),
@@ -97,11 +83,11 @@ fn prop_parser_returns_result() {
 #[test]
 fn prop_valid_srpl_parses_successfully() {
     let valid_cases = vec![
-        "PROCEDURE test() BEGIN SELECT 1; END",
-        "PROCEDURE p(a INT) RETURNS INT BEGIN RETURN a; END",
-        "PROCEDURE f() BEGIN SELECT 1 AS col; END",
+        "procedure Inventory.ReserveStock accepts (ProductId i64) returns Reservation one (Reserved bool);",
+        "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool) body { read Inventory.ProductStock Stock one; emit Reservation (Reserved); }",
+        "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool) body { read Inventory.ProductStock Stock one; assert Quantity InsufficientStock; update Inventory.ProductStock AvailableQuantity; emit Reservation (Reserved); }",
     ];
-    
+
     for input in valid_cases {
         let result = andromeda_srpl::parse_procedure_signature(input);
         assert!(
@@ -120,13 +106,13 @@ fn prop_valid_srpl_parses_successfully() {
 #[test]
 fn prop_invalid_srpl_returns_error_with_message() {
     let invalid_cases = vec![
-        "PROCEDURE p(",           // Truncated
-        "BEGIN SELECT",            // No PROCEDURE
-        "SELECT 1;",              // Not a procedure
-        "PROCEDURE",              // Incomplete
-        "PROCEDURE p() BEGIN",    // Missing END
+        "PROCEDURE p(",        // Truncated
+        "BEGIN SELECT",        // No PROCEDURE
+        "SELECT 1;",           // Not a procedure
+        "PROCEDURE",           // Incomplete
+        "PROCEDURE p() BEGIN", // Missing END
     ];
-    
+
     for input in invalid_cases {
         let result = andromeda_srpl::parse_procedure_signature(input);
         if let Err(diag) = result {
@@ -152,7 +138,7 @@ fn prop_parser_deterministic() {
     proptest!(|(input in ".*")| {
         let result1 = andromeda_srpl::parse_procedure_signature(&input);
         let result2 = andromeda_srpl::parse_procedure_signature(&input);
-        
+
         // Results should be identical
         match (&result1, &result2) {
             (Ok(_), Ok(_)) => prop_assert!(true),
@@ -170,11 +156,11 @@ fn prop_parser_deterministic() {
 fn prop_parser_handles_large_inputs() {
     proptest!(|(size in 1000usize..100000)| {
         let large_input = "a".repeat(size);
-        
+
         let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
             andromeda_srpl::parse_procedure_signature(&large_input)
         }));
-        
+
         // Should not panic, even on very large input
         match result {
             Ok(_) => prop_assert!(true, "parser handled large input"),
@@ -193,7 +179,10 @@ fn prop_parser_handles_large_inputs() {
 #[test]
 fn prop_parser_handles_empty_input() {
     let result = andromeda_srpl::parse_procedure_signature("");
-    assert!(result.is_err(), "Empty input should produce error, not panic");
+    assert!(
+        result.is_err(),
+        "Empty input should produce error, not panic"
+    );
 }
 
 // ============================================================================
@@ -201,7 +190,7 @@ fn prop_parser_handles_empty_input() {
 // ============================================================================
 
 /// Test coverage checklist (20+ tests across 6 modules)
-/// 
+///
 /// SRPL Parser (7 tests):
 /// ✓ prop_parser_never_panics_on_utf8_strings
 /// ✓ prop_parser_returns_result

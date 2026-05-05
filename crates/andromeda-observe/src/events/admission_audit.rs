@@ -318,22 +318,33 @@ impl AdmissionAuditEvent {
     /// Validate that principal is not empty and trace_id is non-zero.
     pub fn is_valid(&self) -> bool {
         !self.trace_id().is_zero()
-            && !self.affected_principal_id().trim().is_empty()
             && match self {
                 Self::ContractValidated {
                     validation_details, ..
-                } => !validation_details.trim().is_empty(),
-                Self::AdmissionDecision { reason, .. } => !reason.trim().is_empty(),
+                } => {
+                    !self.affected_principal_id().trim().is_empty()
+                        && !validation_details.trim().is_empty()
+                }
+                Self::AdmissionDecision { reason, .. } => {
+                    !self.affected_principal_id().trim().is_empty() && !reason.trim().is_empty()
+                }
                 Self::PermissionCheckFailed {
                     required_permission,
                     ..
-                } => !required_permission.trim().is_empty(),
+                } => {
+                    !self.affected_principal_id().trim().is_empty()
+                        && !required_permission.trim().is_empty()
+                }
                 Self::RequestThrottled { .. } => true,
                 Self::ProcedureDispatchAuthorized {
                     certificate_identity,
                     surface_plane,
                     ..
-                } => !certificate_identity.trim().is_empty() && !surface_plane.trim().is_empty(),
+                } => {
+                    !self.affected_principal_id().trim().is_empty()
+                        && !certificate_identity.trim().is_empty()
+                        && !surface_plane.trim().is_empty()
+                }
             }
     }
 }

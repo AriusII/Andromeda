@@ -16,7 +16,7 @@
 //! Transactions acquire locks on resources as needed for reads and writes:
 //! - Row reads: acquire Shared locks on row resources
 //! - Row writes: acquire Exclusive locks on row resources
-//! - Table DDL: acquire SchemaExclusive locks on table resources
+//! - Catalog DefinitionBatch changes: acquire SchemaExclusive locks on table resources
 //! - Table scans: acquire IntentShared on table, then Shared on rows
 //!
 //! Locks can be upgraded (Shared → Exclusive, IntentShared → IntentExclusive)
@@ -43,8 +43,8 @@
 //! | **X** | Exclusive | Exclusive write access | Exclusive access only |
 //! | **IS** | Intent Shared | Intent to read sub-resources | Compatible with IS, IX, S, SS |
 //! | **IX** | Intent Exclusive | Intent to write sub-resources | Compatible with IS, IX, SS |
-//! | **SS** | Schema Shared | Schema stability (DDL blocked) | Compatible with S, IS, IX, SS |
-//! | **SX** | Schema Exclusive | Exclusive schema access (DDL) | Exclusive access only |
+//! | **SS** | Schema Shared | Schema stability (DefinitionBatch blocked) | Compatible with S, IS, IX, SS |
+//! | **SX** | Schema Exclusive | Exclusive catalog access (DefinitionBatch) | Exclusive access only |
 //!
 //! ## Full Compatibility Matrix
 //!

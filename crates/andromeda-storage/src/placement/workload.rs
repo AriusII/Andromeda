@@ -1,8 +1,8 @@
 use andromeda_core::{AndromedaResult, PipelineClass, RamSectionRole};
 
-use crate::IoUseClass;
-
-use super::{DataTemperature, PipelineStage, PlacementDecision, ReadFallbackPolicy, StorageTier};
+use super::{
+    DataTemperature, IoUseClass, PipelineStage, PlacementDecision, ReadFallbackPolicy, StorageTier,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StorageWorkloadClass {

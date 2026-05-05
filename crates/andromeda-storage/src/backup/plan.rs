@@ -4,11 +4,7 @@ use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::Lsn;
 
-use super::BackupCompatibility;
-use super::artifacts::{
-    BackupAuditTraceFields, BackupIncompleteTransactionBoundary, BackupPhysicalArtifactSet,
-    BackupResourceBounds, BackupWalSegmentArtifact,
-};
+use super::artifacts::BackupWalSegmentArtifact;
 use super::helpers::backup_error;
 use super::types::{BackupId, ColdSnapshotBoundary, WalArchiveRange};
 
@@ -55,35 +51,6 @@ impl BackupManifest {
 
     pub const fn latest_pitr_target(&self) -> Lsn {
         self.wal_archive.end_inclusive
-    }
-}
-
-/// F5 physical backup execution plan guard.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BackupPhysicalPlan {
-    pub manifest: BackupManifest,
-    pub compatibility: BackupCompatibility,
-    pub artifacts: BackupPhysicalArtifactSet,
-    pub resource_bounds: BackupResourceBounds,
-    pub incomplete_transaction_boundary: BackupIncompleteTransactionBoundary,
-    pub corruption_boundary_lsn: Option<Lsn>,
-    pub audit: BackupAuditTraceFields,
-}
-
-impl BackupPhysicalPlan {
-    pub fn validate(&self) -> AndromedaResult<()> {
-        self.manifest.validate()?;
-        self.compatibility.validate()?;
-        self.artifacts.validate_against(&self.manifest)?;
-        self.resource_bounds.validate_against(&self.artifacts)?;
-        self.incomplete_transaction_boundary
-            .validate_against(&self.manifest)?;
-        if self.corruption_boundary_lsn.is_some() {
-            return Err(backup_error(
-                "backup physical plan must reject corrupt WAL or snapshot artifacts",
-            ));
-        }
-        self.audit.validate()
     }
 }
 

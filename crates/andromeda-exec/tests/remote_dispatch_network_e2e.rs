@@ -21,20 +21,19 @@
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 use andromeda_core::{AndromedaErrorKind, AndromedaResult, InvocationId, RequestId, SessionId};
 use andromeda_quic::frame::FrameType;
 use andromeda_quic::{
-    FrameBytes, FrameCodec, FrameHeader, SurfacePlane,
+    FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader, SurfacePlane,
     quinn_backend::{QuicClient, QuicServer},
     quinn_tls::{ClientTlsConfig, ServerTlsConfig},
-    FRAME_HEADER_CRC_UNCHECKED,
 };
 use tokio::sync::RwLock;
-use tokio::time::{timeout, Duration};
+use tokio::time::{Duration, timeout};
 
 // ============================================================================
 // Mock Procedure Registry
@@ -118,7 +117,7 @@ impl MockRegistry {
 
             // 1. Metadata frame
             let metadata_payload = vec![
-                0x01,                                      // Metadata policy
+                0x01,                                       // Metadata policy
                 (proc.output_rows as u64).to_le_bytes()[0], // Row count
                 (proc.output_rows as u64).to_le_bytes()[1],
                 (proc.output_rows as u64).to_le_bytes()[2],
@@ -216,8 +215,8 @@ async fn test_single_invocation_e2e() -> AndromedaResult<()> {
         if let Ok(mut conn) = timeout(Duration::from_secs(10), server.accept_connection()).await {
             if let Ok(mut conn) = conn {
                 // Accept bidirectional stream for request
-                if let Ok(mut stream) = timeout(Duration::from_secs(10), conn.accept_bidi_stream())
-                    .await
+                if let Ok(mut stream) =
+                    timeout(Duration::from_secs(10), conn.accept_bidi_stream()).await
                 {
                     if let Ok(mut stream) = stream {
                         // Read request frame
@@ -262,8 +261,11 @@ async fn test_single_invocation_e2e() -> AndromedaResult<()> {
     // Client: connect and invoke procedure
     let client_tls = create_test_client_tls();
     let client = QuicClient::new(client_tls)?;
-    let mut conn = timeout(Duration::from_secs(10), client.connect(listen_addr, "localhost"))
-        .await??;
+    let mut conn = timeout(
+        Duration::from_secs(10),
+        client.connect(listen_addr, "localhost"),
+    )
+    .await??;
 
     let mut stream = conn.open_bidi_stream().await?;
 
@@ -344,8 +346,8 @@ async fn test_concurrent_invocations() -> AndromedaResult<()> {
 
     let server_handle = tokio::spawn(async move {
         for _ in 0..10 {
-            if let Ok(mut conn) = timeout(Duration::from_secs(30), server_clone.accept_connection())
-                .await
+            if let Ok(mut conn) =
+                timeout(Duration::from_secs(30), server_clone.accept_connection()).await
             {
                 if let Ok(mut conn) = conn {
                     // Spawn task to handle this connection
@@ -363,7 +365,8 @@ async fn test_concurrent_invocations() -> AndromedaResult<()> {
                                         if n > 0 {
                                             buf.truncate(n);
                                             if let Ok(frame) = FrameBytes::decode(&buf) {
-                                                let proc_name = String::from_utf8_lossy(&frame.payload);
+                                                let proc_name =
+                                                    String::from_utf8_lossy(&frame.payload);
                                                 if let Ok(response_frames) = registry_inner
                                                     .execute(
                                                         &proc_name,
@@ -375,7 +378,8 @@ async fn test_concurrent_invocations() -> AndromedaResult<()> {
                                                     for resp_frame in response_frames {
                                                         let mut encoded = Vec::new();
                                                         let _ = resp_frame.encode(&mut encoded);
-                                                        let _ = stream.send.write_all(&encoded).await;
+                                                        let _ =
+                                                            stream.send.write_all(&encoded).await;
                                                     }
                                                 }
                                             }
@@ -400,7 +404,12 @@ async fn test_concurrent_invocations() -> AndromedaResult<()> {
         let handle = tokio::spawn(async move {
             let client_tls = create_test_client_tls();
             if let Ok(client) = QuicClient::new(client_tls) {
-                if let Ok(mut conn) = timeout(Duration::from_secs(10), client.connect(listen_addr_copy, "localhost")).await {
+                if let Ok(mut conn) = timeout(
+                    Duration::from_secs(10),
+                    client.connect(listen_addr_copy, "localhost"),
+                )
+                .await
+                {
                     if let Ok(mut conn) = conn {
                         for req_id in 0..100 {
                             if let Ok(mut stream) = conn.open_bidi_stream().await {
@@ -486,8 +495,8 @@ async fn test_stress_rapid_procedures() -> AndromedaResult<()> {
         if let Ok(mut conn) = timeout(Duration::from_secs(30), server.accept_connection()).await {
             if let Ok(mut conn) = conn {
                 for _ in 0..1000 {
-                    if let Ok(mut stream) = timeout(Duration::from_secs(5), conn.accept_bidi_stream())
-                        .await
+                    if let Ok(mut stream) =
+                        timeout(Duration::from_secs(5), conn.accept_bidi_stream()).await
                     {
                         if let Ok(mut stream) = stream {
                             let mut buf = vec![0u8; 512];
@@ -525,8 +534,11 @@ async fn test_stress_rapid_procedures() -> AndromedaResult<()> {
     // Client: send 1000+ rapid requests
     let client_tls = create_test_client_tls();
     let client = QuicClient::new(client_tls)?;
-    let mut conn = timeout(Duration::from_secs(10), client.connect(listen_addr, "localhost"))
-        .await??;
+    let mut conn = timeout(
+        Duration::from_secs(10),
+        client.connect(listen_addr, "localhost"),
+    )
+    .await??;
 
     let procedures = [
         "inventory.ReserveStock",
@@ -603,8 +615,8 @@ async fn test_latency_measurements() -> AndromedaResult<()> {
         if let Ok(mut conn) = timeout(Duration::from_secs(30), server.accept_connection()).await {
             if let Ok(mut conn) = conn {
                 for _ in 0..100 {
-                    if let Ok(mut stream) = timeout(Duration::from_secs(5), conn.accept_bidi_stream())
-                        .await
+                    if let Ok(mut stream) =
+                        timeout(Duration::from_secs(5), conn.accept_bidi_stream()).await
                     {
                         if let Ok(mut stream) = stream {
                             let mut buf = vec![0u8; 512];
@@ -641,8 +653,11 @@ async fn test_latency_measurements() -> AndromedaResult<()> {
     // Client: measure latencies
     let client_tls = create_test_client_tls();
     let client = QuicClient::new(client_tls)?;
-    let mut conn = timeout(Duration::from_secs(10), client.connect(listen_addr, "localhost"))
-        .await??;
+    let mut conn = timeout(
+        Duration::from_secs(10),
+        client.connect(listen_addr, "localhost"),
+    )
+    .await??;
 
     let mut latencies = vec![];
 

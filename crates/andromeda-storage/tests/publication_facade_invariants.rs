@@ -1,7 +1,7 @@
 //! Regression tests pinning publication facade ownership.
 //!
 //! These tests are the enforcement mechanism for the doctrine documented in
-//! `crates/andromeda-storage/src/publication/mod.rs`:
+//! `crates/andromeda-storage/src/publication.rs`:
 //!
 //! 1. `crate::manifest` (re-exported at the crate root) is the **single
 //!    canonical owner** of every publication contract type and free function.

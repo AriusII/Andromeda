@@ -126,8 +126,10 @@ impl TwoPhaseLocksValidator {
         if matches!(
             state_at_release,
             TransactionState::Committing | TransactionState::RollingBack
-        ) && matches!(next_state, TransactionState::Active | TransactionState::Committing)
-        {
+        ) && matches!(
+            next_state,
+            TransactionState::Active | TransactionState::Committing
+        ) {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Transaction,
                 "2PL violated: cannot acquire locks after entering shrinking phase (post-release)",
@@ -217,7 +219,9 @@ mod tests {
 
     #[test]
     fn state_allows_acquire_in_active() {
-        assert!(TwoPhaseLocksValidator::state_allows_acquire(TransactionState::Active));
+        assert!(TwoPhaseLocksValidator::state_allows_acquire(
+            TransactionState::Active
+        ));
     }
 
     #[test]
@@ -307,55 +311,67 @@ mod tests {
 
     #[test]
     fn validate_operation_acquire_in_active() {
-        assert!(TwoPhaseLocksValidator::validate_operation(
-            TransactionState::Active,
-            TwoPhaseOperation::Acquire
-        )
-        .is_ok());
+        assert!(
+            TwoPhaseLocksValidator::validate_operation(
+                TransactionState::Active,
+                TwoPhaseOperation::Acquire
+            )
+            .is_ok()
+        );
     }
 
     #[test]
     fn validate_operation_acquire_in_disposed_fails() {
-        assert!(TwoPhaseLocksValidator::validate_operation(
-            TransactionState::Disposed,
-            TwoPhaseOperation::Acquire
-        )
-        .is_err());
+        assert!(
+            TwoPhaseLocksValidator::validate_operation(
+                TransactionState::Disposed,
+                TwoPhaseOperation::Acquire
+            )
+            .is_err()
+        );
     }
 
     #[test]
     fn validate_operation_release_in_committing() {
-        assert!(TwoPhaseLocksValidator::validate_operation(
-            TransactionState::Committing,
-            TwoPhaseOperation::Release
-        )
-        .is_ok());
+        assert!(
+            TwoPhaseLocksValidator::validate_operation(
+                TransactionState::Committing,
+                TwoPhaseOperation::Release
+            )
+            .is_ok()
+        );
     }
 
     #[test]
     fn validate_operation_release_in_active_fails() {
-        assert!(TwoPhaseLocksValidator::validate_operation(
-            TransactionState::Active,
-            TwoPhaseOperation::Release
-        )
-        .is_err());
+        assert!(
+            TwoPhaseLocksValidator::validate_operation(
+                TransactionState::Active,
+                TwoPhaseOperation::Release
+            )
+            .is_err()
+        );
     }
 
     #[test]
     fn validate_operation_release_all_in_committed() {
-        assert!(TwoPhaseLocksValidator::validate_operation(
-            TransactionState::Committed,
-            TwoPhaseOperation::ReleaseAll
-        )
-        .is_ok());
+        assert!(
+            TwoPhaseLocksValidator::validate_operation(
+                TransactionState::Committed,
+                TwoPhaseOperation::ReleaseAll
+            )
+            .is_ok()
+        );
     }
 
     #[test]
     fn validate_operation_release_all_in_committing_fails() {
-        assert!(TwoPhaseLocksValidator::validate_operation(
-            TransactionState::Committing,
-            TwoPhaseOperation::ReleaseAll
-        )
-        .is_err());
+        assert!(
+            TwoPhaseLocksValidator::validate_operation(
+                TransactionState::Committing,
+                TwoPhaseOperation::ReleaseAll
+            )
+            .is_err()
+        );
     }
 }

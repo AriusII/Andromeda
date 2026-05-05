@@ -178,7 +178,7 @@ fn crash_before_durable_commit_keeps_writes_invisible_after_recovery() {
     );
 
     // Recovery → status table → MVCC visibility check.
-    let statuses = status_table_from_recovery(&plan.transaction_evidence);
+    let mut statuses = status_table_from_recovery(&plan.transaction_evidence);
     assert_eq!(
         statuses.status(writer),
         None,
@@ -190,7 +190,7 @@ fn crash_before_durable_commit_keeps_writes_invisible_after_recovery() {
     );
 
     let reader = TransactionId::new(0xC0_DE_02);
-    let mut peer_statuses = statuses.clone();
+    let peer_statuses = &mut statuses;
     peer_statuses
         .record(reader, TransactionStatus::InFlight)
         .expect("reader registers as in-flight");
@@ -271,7 +271,7 @@ fn crash_after_durable_commit_keeps_writes_visible_and_replayable() {
     assert!(report.ignored_transactions.is_empty());
 
     // Recovery → status table → MVCC visibility check.
-    let statuses = status_table_from_recovery(&plan.transaction_evidence);
+    let mut statuses = status_table_from_recovery(&plan.transaction_evidence);
     assert_eq!(
         statuses.status(writer),
         Some(TransactionStatus::Committed),
@@ -280,7 +280,7 @@ fn crash_after_durable_commit_keeps_writes_visible_and_replayable() {
     assert!(statuses.is_durable_committed(writer));
 
     let reader = TransactionId::new(0xC0_DE_12);
-    let mut peer_statuses = statuses.clone();
+    let peer_statuses = &mut statuses;
     peer_statuses
         .record(reader, TransactionStatus::InFlight)
         .expect("reader registers as in-flight");
@@ -375,7 +375,7 @@ fn crash_after_durable_rollback_keeps_writes_invisible_and_seeds_allocator_above
         "writer evidence must reflect durable rollback state"
     );
 
-    let statuses = status_table_from_recovery(&plan.transaction_evidence);
+    let mut statuses = status_table_from_recovery(&plan.transaction_evidence);
     assert_eq!(
         statuses.status(writer),
         Some(TransactionStatus::RolledBack),
@@ -387,7 +387,7 @@ fn crash_after_durable_rollback_keeps_writes_invisible_and_seeds_allocator_above
     );
 
     let reader = TransactionId::new(12_639_794);
-    let mut peer_statuses = statuses.clone();
+    let peer_statuses = &mut statuses;
     peer_statuses
         .record(reader, TransactionStatus::InFlight)
         .expect("reader registers as in-flight");

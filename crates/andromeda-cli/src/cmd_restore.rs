@@ -31,6 +31,16 @@ impl std::fmt::Display for RestoreState {
     }
 }
 
+impl RestoreState {
+    const ALL: [Self; 5] = [
+        Self::Pending,
+        Self::ValidatingManifest,
+        Self::ReplayingWal,
+        Self::Completed,
+        Self::Failed,
+    ];
+}
+
 impl Serialize for RestoreState {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -67,9 +77,7 @@ pub struct RestoreStartOutcome {
 pub fn run_restore_command(args: &[String]) -> AndromedaResult<()> {
     match args.first().map(String::as_str) {
         Some("status") => run_restore_status(&args[1..]),
-        Some(backup_id_arg) if backup_id_arg.parse::<u64>().is_ok() => {
-            run_restore_start(args)
-        }
+        Some(backup_id_arg) if backup_id_arg.parse::<u64>().is_ok() => run_restore_start(args),
         Some("-h" | "--help" | "help") => {
             print_restore_help();
             Ok(())
@@ -107,9 +115,11 @@ fn run_restore_start(args: &[String]) -> AndromedaResult<()> {
                 if i >= args.len() {
                     return Err(cli_error("--pitr-lsn requires an LSN value"));
                 }
-                pitr_target_lsn = Some(args[i]
-                    .parse()
-                    .map_err(|_| cli_error("--pitr-lsn expects an unsigned integer (LSN)"))?);
+                pitr_target_lsn = Some(
+                    args[i]
+                        .parse()
+                        .map_err(|_| cli_error("--pitr-lsn expects an unsigned integer (LSN)"))?,
+                );
             }
             "--json" => json = true,
             opt if opt.starts_with("--") => {
@@ -200,8 +210,19 @@ fn print_restore_help() {
     println!();
     println!("OPTIONS:");
     println!("  --pitr-lsn <lsn>                   Target LSN for point-in-time recovery");
-    println!("  --json                             Output in JSON format (default: human-readable)");
+    println!(
+        "  --json                             Output in JSON format (default: human-readable)"
+    );
     println!("  -h, --help                         Show this help message");
+    println!();
+    println!(
+        "STATES: {}",
+        RestoreState::ALL
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
 }
 
 fn print_restore_status_human(report: &RestoreStatusReport) {

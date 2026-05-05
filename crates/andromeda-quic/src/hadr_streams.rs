@@ -69,7 +69,7 @@
 //!
 //! - **F1 (WAL Shipping Runtime)**: Uses WAL shipping stream; respects backpressure
 //! - **F3 (Quorum Runtime)**: Uses promotion vote stream for replica rankings
-//! - **D4 (Executor Bridge)**: Routes heartbeat frames from executor layer
+//! - **D4 (Procedure Gateway)**: Routes heartbeat frames from executor layer
 //! - **D5 (Backpressure Model)**: Implements flow control and credit management
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};

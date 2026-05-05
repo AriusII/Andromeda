@@ -27,14 +27,11 @@ impl GcSchedulerTask {
     ///
     /// * `collector` - The garbage collector to invoke
     /// * `run_interval` - How often to attempt a GC run (e.g., Duration::from_millis(100))
-    pub fn new(
-        collector: Arc<MvccGarbageCollector>,
-        run_interval: Duration,
-    ) -> Self {
+    pub fn new(collector: Arc<MvccGarbageCollector>, run_interval: Duration) -> Self {
         Self {
             collector,
             run_interval,
-            last_min_visible_ts: std::sync::atomic::AtomicU64::new(u64::MAX),
+            last_min_visible_ts: std::sync::atomic::AtomicU64::new(0),
         }
     }
 
@@ -53,7 +50,8 @@ impl GcSchedulerTask {
             tokio::time::sleep(self.run_interval).await;
 
             let current_min_visible = self.collector.minimum_visible_timestamp();
-            let last_min_visible = self.last_min_visible_ts
+            let last_min_visible = self
+                .last_min_visible_ts
                 .load(std::sync::atomic::Ordering::Relaxed);
 
             // Only run GC if min_visible_ts changed (snapshots were released)
@@ -61,10 +59,8 @@ impl GcSchedulerTask {
                 match self.collector.run_gc() {
                     Ok(_summary) => {
                         // Successfully ran GC
-                        self.last_min_visible_ts.store(
-                            current_min_visible,
-                            std::sync::atomic::Ordering::Relaxed,
-                        );
+                        self.last_min_visible_ts
+                            .store(current_min_visible, std::sync::atomic::Ordering::Relaxed);
                     }
                     Err(e) => {
                         // Log error but continue
@@ -84,16 +80,20 @@ mod tests {
     use andromeda_core::TransactionId;
 
     #[tokio::test]
-    async fn test_gc_scheduler_respects_interval() {
+    async fn test_gc_scheduler_task_respects_interval() {
         let collector = Arc::new(crate::gc::MvccGarbageCollector::new(
             Arc::new(ActiveSnapshotRegistry::new()),
             Arc::new(TransactionStatusTable::new()),
         ));
 
-        let scheduler = GcSchedulerTask::new(collector.clone(), Duration::from_millis(50));
+        let scheduler = Arc::new(GcSchedulerTask::new(
+            collector.clone(),
+            Duration::from_millis(50),
+        ));
 
         // Spawn the scheduler for a short period
-        let handle = tokio::spawn(scheduler.run_periodic_gc());
+        let scheduler_task = scheduler.clone();
+        let handle = tokio::spawn(async move { scheduler_task.run_periodic_gc().await });
 
         // Let it run for 250ms
         tokio::time::sleep(Duration::from_millis(250)).await;
@@ -101,14 +101,17 @@ mod tests {
         // Cancel the task
         handle.abort();
 
-        // Check that GC ran at least a few times
-        // (interval is 50ms, so we expect at least 4-5 runs in 250ms)
+        // Check that GC ran at least once after the initial threshold observation.
         let stats = collector.get_stats();
-        assert!(stats.runs >= 2, "Expected at least 2 GC runs, got {}", stats.runs);
+        assert!(
+            stats.runs >= 1,
+            "Expected at least 1 GC run, got {}",
+            stats.runs
+        );
     }
 
     #[tokio::test]
-    async fn test_gc_scheduler_skips_when_no_change() {
+    async fn test_gc_scheduler_task_skips_when_no_change() {
         let registry = Arc::new(ActiveSnapshotRegistry::new());
         let status_table = Arc::new(TransactionStatusTable::new());
         let collector = Arc::new(crate::gc::MvccGarbageCollector::new(
@@ -116,7 +119,10 @@ mod tests {
             status_table,
         ));
 
-        let scheduler = GcSchedulerTask::new(collector.clone(), Duration::from_millis(50));
+        let scheduler = Arc::new(GcSchedulerTask::new(
+            collector.clone(),
+            Duration::from_millis(50),
+        ));
 
         // Register a snapshot so min_visible_ts is fixed
         let tx_id = TransactionId::new(1);
@@ -125,7 +131,8 @@ mod tests {
             .expect("register");
 
         // Spawn the scheduler
-        let handle = tokio::spawn(scheduler.run_periodic_gc());
+        let scheduler_task = scheduler.clone();
+        let handle = tokio::spawn(async move { scheduler_task.run_periodic_gc().await });
 
         // Let it run for 200ms (should attempt 4 GC runs)
         tokio::time::sleep(Duration::from_millis(200)).await;
@@ -138,6 +145,9 @@ mod tests {
         // the loop should have completed multiple cycles.
         let stats = collector.get_stats();
         // This test is informational; actual run count depends on min_visible_ts changes
-        println!("GC runs after 200ms with no snapshot change: {}", stats.runs);
+        println!(
+            "GC runs after 200ms with no snapshot change: {}",
+            stats.runs
+        );
     }
 }

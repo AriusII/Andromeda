@@ -227,13 +227,13 @@ impl ProcedureStore {
             ));
         }
 
-        if let Some(existing_id) = self.by_name.get(&entry.name) {
-            if *existing_id != entry.procedure_id {
-                return Err(AndromedaError::new(
-                    AndromedaErrorKind::Catalog,
-                    "procedure store rejects qualified name collision across procedure ids",
-                ));
-            }
+        if let Some(existing_id) = self.by_name.get(&entry.name)
+            && *existing_id != entry.procedure_id
+        {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "procedure store rejects qualified name collision across procedure ids",
+            ));
         }
 
         self.by_name.insert(entry.name.clone(), entry.procedure_id);

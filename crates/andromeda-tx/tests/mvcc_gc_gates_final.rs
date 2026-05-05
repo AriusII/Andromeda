@@ -10,12 +10,11 @@
 
 #[cfg(test)]
 mod mvcc_gc_gates {
-    use andromeda_core::{TransactionId, TransactionIdGenerator};
+    use andromeda_core::TransactionId;
     use andromeda_tx::{
         ActiveSnapshotRegistry, GcSchedulerTask, MvccGarbageCollector, SnapshotHandle,
         TransactionStatus, TransactionStatusTable,
     };
-    use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::Arc;
     use std::time::Duration;
 
@@ -113,23 +112,26 @@ mod mvcc_gc_gates {
         status_table.set_committed(tx1).expect("commit tx1");
 
         // Register snapshot at ts=300
-        let snapshot_handle = registry
-            .register_snapshot(SnapshotHandle::new(300, reader_tx).expect("snapshot"))
+        let snapshot_handle = SnapshotHandle::new(300, reader_tx).expect("snapshot");
+        registry
+            .register_snapshot(snapshot_handle)
             .expect("register snapshot");
 
-        // Version with end_ts=200 not reclaimable (min_visible_ts=300)
+        // Version with end_ts=300 is at the visibility boundary and is not reclaimable.
         assert!(
-            !collector.is_version_reclaimable(tx1, 200),
+            !collector.is_version_reclaimable(tx1, 300),
             "Before snapshot release: version not reclaimable"
         );
 
         // Release the snapshot
-        drop(snapshot_handle);
+        registry
+            .release_snapshot(snapshot_handle)
+            .expect("release snapshot");
 
         // Now min_visible_ts should be u64::MAX (no active snapshots)
-        // Version with end_ts=200 IS reclaimable
+        // Version with end_ts=300 IS reclaimable
         assert!(
-            collector.is_version_reclaimable(tx1, 200),
+            collector.is_version_reclaimable(tx1, 300),
             "After snapshot release: version IS reclaimable"
         );
     }
@@ -192,14 +194,12 @@ mod mvcc_gc_gates {
         status_table.set_committed(tx1).expect("commit");
 
         // Register first snapshot at ts=100
-        let snap1 = registry
-            .register_snapshot(SnapshotHandle::new(100, reader_tx_1).expect("snap1"))
-            .expect("register snap1");
+        let snap1 = SnapshotHandle::new(100, reader_tx_1).expect("snap1");
+        registry.register_snapshot(snap1).expect("register snap1");
 
         // Register second snapshot at ts=200
-        let snap2 = registry
-            .register_snapshot(SnapshotHandle::new(200, reader_tx_2).expect("snap2"))
-            .expect("register snap2");
+        let snap2 = SnapshotHandle::new(200, reader_tx_2).expect("snap2");
+        registry.register_snapshot(snap2).expect("register snap2");
 
         // min_visible_ts = 100 (minimum of two snapshots)
         assert_eq!(
@@ -209,7 +209,7 @@ mod mvcc_gc_gates {
         );
 
         // Release first snapshot
-        drop(snap1);
+        registry.release_snapshot(snap1).expect("release snap1");
 
         // min_visible_ts should now be 200
         assert_eq!(
@@ -219,7 +219,7 @@ mod mvcc_gc_gates {
         );
 
         // Release second snapshot
-        drop(snap2);
+        registry.release_snapshot(snap2).expect("release snap2");
 
         // min_visible_ts should now be u64::MAX (no active snapshots)
         assert_eq!(
@@ -239,21 +239,24 @@ mod mvcc_gc_gates {
         status_table.set_committed(tx1).expect("commit");
 
         // Register initial snapshot at ts=100
-        let snap = registry
-            .register_snapshot(SnapshotHandle::new(100, reader_tx).expect("snapshot"))
-            .expect("register snapshot");
+        let snap = SnapshotHandle::new(100, reader_tx).expect("snapshot");
+        registry.register_snapshot(snap).expect("register snapshot");
 
         // Create scheduler with 100ms interval
-        let scheduler = GcSchedulerTask::new(collector.clone(), Duration::from_millis(100));
+        let scheduler = Arc::new(GcSchedulerTask::new(
+            collector.clone(),
+            Duration::from_millis(100),
+        ));
 
         // Spawn scheduler task
-        let handle = tokio::spawn(scheduler.run_periodic_gc());
+        let scheduler_task = scheduler.clone();
+        let handle = tokio::spawn(async move { scheduler_task.run_periodic_gc().await });
 
         // Let it run for 150ms (should trigger at least once)
         tokio::time::sleep(Duration::from_millis(150)).await;
 
         // Release snapshot to trigger GC
-        drop(snap);
+        registry.release_snapshot(snap).expect("release snapshot");
 
         // Wait for scheduler to detect change and run
         tokio::time::sleep(Duration::from_millis(150)).await;
@@ -273,7 +276,7 @@ mod mvcc_gc_gates {
     /// Test: Processed versions stats updated atomically
     #[test]
     fn test_scheduler_stats_updated_atomically() {
-        let (registry, status_table, collector) = setup_gc_system();
+        let (_registry, _status_table, collector) = setup_gc_system();
 
         // Simulate version recording
         collector.record_versions_scanned(1000);
@@ -308,9 +311,8 @@ mod mvcc_gc_gates {
         status_table.set_committed(tx2).expect("commit tx2");
 
         // Register snapshot at ts=500
-        let snap = registry
-            .register_snapshot(SnapshotHandle::new(500, reader_tx).expect("snapshot"))
-            .expect("register snapshot");
+        let snap = SnapshotHandle::new(500, reader_tx).expect("snapshot");
+        registry.register_snapshot(snap).expect("register snapshot");
 
         // Old version from tx1 (end_ts=100) should be reclaimable
         assert!(
@@ -331,13 +333,13 @@ mod mvcc_gc_gates {
             "Intermediate version eligible (300 < 500)"
         );
 
-        drop(snap);
+        registry.release_snapshot(snap).expect("release snapshot");
     }
 
     /// Test: Heap page space reclaimed after tuple delete + GC
     #[test]
     fn test_integration_reclamation_frees_space() {
-        let (registry, status_table, collector) = setup_gc_system();
+        let (_registry, _status_table, collector) = setup_gc_system();
 
         // Simulate version lifecycle
         collector.record_versions_scanned(100);
@@ -350,7 +352,10 @@ mod mvcc_gc_gates {
         collector.record_versions_reclaimed(5);
 
         let stats_after = collector.get_stats();
-        assert_eq!(stats_after.versions_reclaimed, 100, "All versions reclaimed");
+        assert_eq!(
+            stats_after.versions_reclaimed, 100,
+            "All versions reclaimed"
+        );
     }
 
     /// Test: Long-running transaction prevents GC of intermediate versions (correctness)
@@ -360,11 +365,14 @@ mod mvcc_gc_gates {
         let creator_tx = TransactionId::new(1);
         let long_running_reader = TransactionId::new(100);
 
-        status_table.set_committed(creator_tx).expect("commit creator");
+        status_table
+            .set_committed(creator_tx)
+            .expect("commit creator");
 
         // Register long-running transaction snapshot at ts=50
-        let long_snap = registry
-            .register_snapshot(SnapshotHandle::new(50, long_running_reader).expect("snap"))
+        let long_snap = SnapshotHandle::new(50, long_running_reader).expect("snap");
+        registry
+            .register_snapshot(long_snap)
             .expect("register snap");
 
         // Version with end_ts=60 is newer than snapshot (60 > 50)
@@ -382,7 +390,9 @@ mod mvcc_gc_gates {
             "Version with end_ts=49 IS reclaimable (older than snapshot)"
         );
 
-        drop(long_snap);
+        registry
+            .release_snapshot(long_snap)
+            .expect("release long snapshot");
     }
 
     // ====================================================================
@@ -391,17 +401,15 @@ mod mvcc_gc_gates {
 
     /// Test: 50 concurrent writers + 1 GC scheduler (no panics, no visibility violations)
     #[tokio::test]
-    async fn test_concurrency_50_writers_plus_gc_scheduler() {
-        let (registry, status_table, collector) = setup_gc_system();
+    async fn test_concurrency_50_writers_plus_gc_scheduler_task() {
+        let (_registry, status_table, collector) = setup_gc_system();
         let collector_clone = collector.clone();
         let status_table_clone = status_table.clone();
-        let registry_clone = registry.clone();
 
         // Spawn 50 concurrent writer tasks
         let mut writer_handles = vec![];
         for i in 0..50 {
             let status_table = status_table_clone.clone();
-            let registry = registry_clone.clone();
             let collector = collector_clone.clone();
 
             let handle = tokio::spawn(async move {
@@ -425,14 +433,20 @@ mod mvcc_gc_gates {
         }
 
         // Create and run GC scheduler concurrently
-        let scheduler = GcSchedulerTask::new(collector_clone.clone(), Duration::from_millis(50));
-        let gc_handle = tokio::spawn(scheduler.run_periodic_gc());
+        let scheduler = Arc::new(GcSchedulerTask::new(
+            collector_clone.clone(),
+            Duration::from_millis(50),
+        ));
+        let scheduler_task = scheduler.clone();
+        let gc_handle = tokio::spawn(async move { scheduler_task.run_periodic_gc().await });
 
         // Wait for all writers to complete (should not panic)
         let results: Vec<_> = futures::future::join_all(writer_handles).await;
         for result in results {
             assert!(result.is_ok(), "Writer task panicked");
         }
+
+        tokio::time::sleep(Duration::from_millis(75)).await;
 
         // Cancel GC scheduler
         gc_handle.abort();
@@ -456,9 +470,8 @@ mod mvcc_gc_gates {
         status_table.set_committed(tx1).expect("commit");
 
         // Register reader snapshot at ts=300
-        let snap = registry
-            .register_snapshot(SnapshotHandle::new(300, reader_tx).expect("snap"))
-            .expect("register snap");
+        let snap = SnapshotHandle::new(300, reader_tx).expect("snap");
+        registry.register_snapshot(snap).expect("register snap");
 
         // Spawn concurrent reader tasks
         let mut reader_handles = vec![];
@@ -488,7 +501,7 @@ mod mvcc_gc_gates {
         let _gc_result = gc_handle.await;
 
         // Release snapshot
-        drop(snap);
+        registry.release_snapshot(snap).expect("release snap");
 
         // Verify consistency: all GC decision checks should be coherent
         let stats = collector.get_stats();
@@ -576,11 +589,17 @@ mod mvcc_gc_gates {
 
         // Transition to Committed (now check eligibility)
         status_table.set_committed(tx).expect("commit");
-        assert!(collector.is_version_reclaimable(tx, 50), "Reclaimable after commit");
+        assert!(
+            collector.is_version_reclaimable(tx, 50),
+            "Reclaimable after commit"
+        );
 
         // Check idempotence: committing again should not affect result
         status_table.set_committed(tx).expect("commit again");
-        assert!(collector.is_version_reclaimable(tx, 50), "Still reclaimable");
+        assert!(
+            collector.is_version_reclaimable(tx, 50),
+            "Still reclaimable"
+        );
     }
 
     // ====================================================================
@@ -622,14 +641,15 @@ mod mvcc_gc_gates {
     /// Test: Reclamation rate calculation (>95% of candidates)
     #[test]
     fn test_metrics_reclamation_rate_high() {
-        let (registry, status_table, collector) = setup_gc_system();
+        let (_registry, _status_table, collector) = setup_gc_system();
 
         // Scan 1000 versions, reclaim 980 (98% success rate)
         collector.record_versions_scanned(1000);
         collector.record_versions_reclaimed(980);
 
         let stats = collector.get_stats();
-        let reclaim_rate = (stats.versions_reclaimed as f64 / stats.versions_scanned as f64) * 100.0;
+        let reclaim_rate =
+            (stats.versions_reclaimed as f64 / stats.versions_scanned as f64) * 100.0;
 
         assert!(
             reclaim_rate >= 95.0,

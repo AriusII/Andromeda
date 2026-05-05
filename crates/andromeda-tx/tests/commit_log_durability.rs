@@ -10,13 +10,11 @@
 
 #[cfg(test)]
 mod tests {
-    use andromeda_core::{
-        AndromedaResult, Clock, EngineTimestamp, ManualClock, TransactionId,
-    };
+    use andromeda_core::{AndromedaResult, EngineTimestamp, ManualClock, TransactionId};
     use andromeda_storage::{Lsn, WalRecordKind};
     use andromeda_tx::{
-        CommitLogEntry, CommitLogManager, CommitProtocol, IsolationLevel, TransactionState,
-        TransactionStatus, TransactionStatusTable,
+        CommitLogManager, CommitProtocol, IsolationLevel, TransactionState, TransactionStatus,
+        TransactionStatusTable,
     };
     use std::sync::Arc;
 
@@ -94,14 +92,17 @@ mod tests {
         let commit_log = CommitLogManager::new(wal, status_table.clone());
 
         let tx_id = TransactionId::new(1);
-        let entry = commit_log
+        let _entry = commit_log
             .record_commit(tx_id, IsolationLevel::Snapshot, 10, 0)
             .await
             .unwrap();
 
         // Verify commit is visible in status table (CRITICAL: after WAL flush)
         assert!(commit_log.is_committed(tx_id));
-        assert_eq!(status_table.status(tx_id), Some(TransactionStatus::Committed));
+        assert_eq!(
+            status_table.status(tx_id),
+            Some(TransactionStatus::Committed)
+        );
     }
 
     #[tokio::test]
@@ -182,25 +183,20 @@ mod tests {
         let status_table = Arc::new(TransactionStatusTable::new());
         let commit_log = CommitLogManager::new(wal, status_table);
 
-        let entries: Vec<_> = futures::stream::iter(1..=5)
-            .then(|i| {
-                let commit_log = &commit_log;
-                async move {
-                    commit_log
-                        .record_commit(
-                            TransactionId::new(i as u64),
-                            IsolationLevel::Snapshot,
-                            i as u64,
-                            0,
-                        )
-                        .await
-                }
-            })
-            .collect()
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
+        let mut entries = Vec::new();
+        for i in 1..=5 {
+            entries.push(
+                commit_log
+                    .record_commit(
+                        TransactionId::new(i as u64),
+                        IsolationLevel::Snapshot,
+                        i as u64,
+                        0,
+                    )
+                    .await
+                    .unwrap(),
+            );
+        }
 
         // LSNs should be incremental: 1, 2, 3, 4, 5
         for (i, entry) in entries.iter().enumerate() {
@@ -383,12 +379,7 @@ mod tests {
         let commit_log = CommitLogManager::new(wal, status_table);
 
         let result = commit_log
-            .record_commit(
-                TransactionId::new(0),
-                IsolationLevel::Snapshot,
-                5,
-                0,
-            )
+            .record_commit(TransactionId::new(0), IsolationLevel::Snapshot, 5, 0)
             .await;
 
         assert!(result.is_err());
@@ -433,11 +424,10 @@ mod tests {
     async fn test_commit_log_timestamps_with_manual_clock() {
         let wal = MockWal::new();
         let status_table = Arc::new(TransactionStatusTable::new());
-        let mut clock = ManualClock::from_unix_millis(1000);
+        let clock = ManualClock::from_unix_millis(1000);
         let clock_arc = Arc::new(clock.clone());
 
-        let commit_log =
-            CommitLogManager::with_clock(wal, status_table, clock_arc);
+        let commit_log = CommitLogManager::with_clock(wal, status_table, clock_arc);
 
         let tx_id = TransactionId::new(1);
         let entry = commit_log
@@ -461,21 +451,11 @@ mod tests {
         let commit_log = CommitLogManager::with_clock(wal, status_table, clock);
 
         let entry1 = commit_log
-            .record_commit(
-                TransactionId::new(1),
-                IsolationLevel::Snapshot,
-                10,
-                0,
-            )
+            .record_commit(TransactionId::new(1), IsolationLevel::Snapshot, 10, 0)
             .await
             .unwrap();
         let entry2 = commit_log
-            .record_commit(
-                TransactionId::new(2),
-                IsolationLevel::Snapshot,
-                20,
-                0,
-            )
+            .record_commit(TransactionId::new(2), IsolationLevel::Snapshot, 20, 0)
             .await
             .unwrap();
 

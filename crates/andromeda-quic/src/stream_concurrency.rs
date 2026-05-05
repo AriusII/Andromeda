@@ -149,8 +149,6 @@ impl CancellationToken {
 struct StreamMetadata {
     /// Stream state
     state: StreamState,
-    /// Invocation ID for this stream
-    invocation_id: InvocationId,
     /// Stream creation timestamp (for timeout tracking)
     created_at: SystemTime,
     /// Last frame received timestamp (for idle timeout tracking)
@@ -259,7 +257,6 @@ impl StreamConcurrencyManager {
 
         let metadata = StreamMetadata {
             state: StreamState::Created,
-            invocation_id,
             created_at: now,
             last_activity_at: now,
             cancellation_token,

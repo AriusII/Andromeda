@@ -1,3 +1,5 @@
+pub use crate::source_location::SourceSpan;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiagnosticPhase {
     Lexing,
@@ -7,30 +9,6 @@ pub enum DiagnosticPhase {
     IrLowering,
     PlanCandidateGeneration,
     RuntimeBinding,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SourceSpan {
-    pub start: usize,
-    pub end: usize,
-}
-
-impl SourceSpan {
-    pub const fn new(start: usize, end: usize) -> Self {
-        Self { start, end }
-    }
-
-    pub const fn is_valid(self) -> bool {
-        self.start <= self.end
-    }
-
-    pub const fn len(self) -> usize {
-        self.end.saturating_sub(self.start)
-    }
-
-    pub const fn is_empty(self) -> bool {
-        self.len() == 0
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

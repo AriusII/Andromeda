@@ -2,9 +2,23 @@
 //!
 //! Verifies correctness of WAL durability tracking, encoding/decoding, and lifecycle.
 
-use andromeda_storage::write_ahead_log::{CommitLogEntry, CommitLog};
+use andromeda_core::TransactionId;
 use andromeda_storage::Lsn;
-use andromeda_core::TransactionIdGenerator;
+use andromeda_storage::write_ahead_log::{CommitLog, CommitLogEntry};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+struct TransactionIdGenerator;
+
+impl TransactionIdGenerator {
+    fn new() -> Self {
+        Self
+    }
+
+    fn generate(&self) -> TransactionId {
+        static NEXT_TX_ID: AtomicU64 = AtomicU64::new(1);
+        TransactionId::new(NEXT_TX_ID.fetch_add(1, Ordering::Relaxed))
+    }
+}
 
 // ========================
 // CommitLogEntry Creation and Validation
@@ -26,9 +40,7 @@ fn test_commit_log_entry_creation_valid() {
 
 #[test]
 fn test_commit_log_entry_invalid_tx_id_zero() {
-    use andromeda_core::TransactionId;
-
-    let result = CommitLogEntry::new(TransactionId::new(0).unwrap(), Lsn::new(100), 500);
+    let result = CommitLogEntry::new(TransactionId::new(0), Lsn::new(100), 500);
     assert!(result.is_err());
 }
 
@@ -379,9 +391,9 @@ fn test_commit_log_all_tx_ids() {
     let commit_log = CommitLog::new();
 
     let tx_ids: Vec<_> = (0..5)
-        .map(|_| {
+        .map(|i| {
             let tx_id = TransactionIdGenerator::new().generate();
-            let entry = CommitLogEntry::new(tx_id, Lsn::new(100 + _ as u64), 500).unwrap();
+            let entry = CommitLogEntry::new(tx_id, Lsn::new(100 + i as u64), 500).unwrap();
             commit_log.record_commit(entry).unwrap();
             tx_id
         })
@@ -545,7 +557,12 @@ fn test_invariant_cleanup_only_removes_durable() {
     assert_eq!(removed, 1);
 
     // Non-durable entry should remain
-    assert!(commit_log.query_commit_status(tx_id_not_durable).unwrap().is_some());
+    assert!(
+        commit_log
+            .query_commit_status(tx_id_not_durable)
+            .unwrap()
+            .is_some()
+    );
 }
 
 // ========================

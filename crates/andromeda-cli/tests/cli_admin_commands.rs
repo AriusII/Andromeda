@@ -23,7 +23,11 @@ fn hadr_status_command_parses_and_executes() {
 
 #[test]
 fn hadr_status_with_json_output_format() {
-    let args = vec!["hadr".to_string(), "status".to_string(), "--json".to_string()];
+    let args = vec![
+        "hadr".to_string(),
+        "status".to_string(),
+        "--json".to_string(),
+    ];
     let result = dispatch_command(&args);
     assert!(result.is_ok());
 }
@@ -37,11 +41,7 @@ fn hadr_promote_requires_replica_id() {
 
 #[test]
 fn hadr_promote_accepts_replica_id() {
-    let args = vec![
-        "hadr".to_string(),
-        "promote".to_string(),
-        "2".to_string(),
-    ];
+    let args = vec!["hadr".to_string(), "promote".to_string(), "2".to_string()];
     let result = dispatch_command(&args);
     assert!(result.is_ok());
 }

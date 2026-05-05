@@ -117,6 +117,10 @@ impl BackupCheckpointManager {
         }
     }
 
+    pub fn checkpoint_path(&self) -> &str {
+        &self.checkpoint_path
+    }
+
     /// Persist a backup checkpoint durably.
     ///
     /// # Contract

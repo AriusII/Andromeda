@@ -1,12 +1,12 @@
-//! Lock audit trace structures for observability.
+//! Lock history trace structures for observability.
 //!
-//! This module defines structured audit evidence for lock management decisions:
+//! This module defines structured history evidence for lock management decisions:
 //! - **LockWaitTrace**: Emitted when a transaction waits for a lock
 //! - **LockPromotionTrace**: Emitted when a waiter is promoted to holder
 //! - **DeadlockDecisionTrace**: Emitted when deadlock detection runs
 //! - **LockReleaseAllTrace**: Emitted when a transaction cleans up all held locks
 //!
-//! These traces integrate with the `andromeda-observe` audit infrastructure and
+//! These traces integrate with the `andromeda-observe` history infrastructure and
 //! carry correlation evidence for forensic analysis.
 
 use andromeda_core::{EngineTimestamp, TransactionId};
@@ -217,8 +217,7 @@ mod tests {
         let blocker = LockHolder::new(TransactionId::new(2), LockMode::Exclusive).unwrap();
         let ts = EngineTimestamp::from_unix_millis(1000);
 
-        let trace =
-            LockWaitTrace::new(tx_id, resource, LockMode::Shared, vec![blocker], ts);
+        let trace = LockWaitTrace::new(tx_id, resource, LockMode::Shared, vec![blocker], ts);
 
         assert_eq!(trace.tx_id, tx_id);
         assert_eq!(trace.resource_id, resource);
@@ -234,7 +233,8 @@ mod tests {
         let resource = LockResource::table(1, 10).unwrap();
         let ts = EngineTimestamp::from_unix_millis(1000);
 
-        let trace = LockPromotionTrace::new(tx_id, resource, LockMode::Exclusive, released_by_tx, ts);
+        let trace =
+            LockPromotionTrace::new(tx_id, resource, LockMode::Exclusive, released_by_tx, ts);
 
         assert_eq!(trace.tx_id, tx_id);
         assert_eq!(trace.resource_id, resource);

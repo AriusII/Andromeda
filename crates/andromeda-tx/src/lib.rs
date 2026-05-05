@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
-mod allocator;
 pub mod active_snapshot_registry;
+mod allocator;
 pub mod commit_log;
 pub mod commit_protocol;
 pub mod deadlock_detection;
@@ -24,20 +24,24 @@ pub use mvcc_snapshot::{MvccIsolationPolicy, Snapshot};
 pub use mvcc_status::{TransactionStatus, TransactionStatusTable};
 pub use mvcc_version::{MvccRowHeader, creator_is_visible, delete_is_visible};
 
-pub use active_snapshot_registry::{
-    ActiveSnapshotRegistry, GcError, SnapshotHandle,
-};
+pub use active_snapshot_registry::{ActiveSnapshotRegistry, GcError, SnapshotHandle};
 pub use allocator::TransactionIdAllocator;
 pub use commit_log::{CommitLogEntry, CommitLogManager, IsolationLevel};
 pub use commit_protocol::CommitProtocol;
 pub use deadlock_detection::*;
-pub use gc::{GcStatSnapshot, MvccGarbageCollector, GcStats, GcSummary, GcEligibilityChecker, GcSchedulerTask};
-pub use gc::mvcc_eligibility::{VersionEligibilityChecker, VersionEligibility, VersionRecord, VersionEligibilityStats};
-pub use gc::reclamation::{ReclaimationMark, ReclaimationEligibility, ReclamationCommand};
+pub use gc::mvcc_eligibility::{
+    VersionEligibility, VersionEligibilityChecker, VersionEligibilityStats, VersionRecord,
+};
+pub use gc::reclamation::{
+    ReclamationCommand, ReclamationEligibility, ReclamationMark, ReclamationStats,
+};
+pub use gc::{
+    GcEligibilityChecker, GcSchedulerTask, GcStatSnapshot, GcStats, GcSummary, MvccGarbageCollector,
+};
 pub use lock_history::*;
 pub use lock_manager::*;
 pub use locking_protocol::{TwoPhaseLocksValidator, TwoPhaseOperation};
 pub use manager::{TransactionLockCoordinator, TransactionManager, TransactionRecord};
 pub use state::*;
 pub use trace::*;
-pub use wal_adapter::{TxWalAdapterTrait, WalManager, TxWalAdapterError};
+pub use wal_adapter::{TxWalAdapterError, TxWalAdapterTrait, WalManager};

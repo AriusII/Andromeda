@@ -1,7 +1,7 @@
 //! WAL Segment Garbage Collection with Archive Verification
 //!
 //! This module implements safe removal of obsolete WAL segments after backup integration.
-//! 
+//!
 //! # Overview
 //!
 //! WAL segments become candidates for garbage collection when:
@@ -111,11 +111,7 @@ impl WalGcCandidate {
     /// A segment is eligible if:
     /// - sealing_lsn < min_active_snapshot_lsn (all records committed and invisible)
     /// - creation_lsn > required_wal_start_lsn (not needed by recovery)
-    pub fn is_eligible(
-        &self,
-        min_active_snapshot_lsn: Lsn,
-        required_wal_start_lsn: Lsn,
-    ) -> bool {
+    pub fn is_eligible(&self, min_active_snapshot_lsn: Lsn, required_wal_start_lsn: Lsn) -> bool {
         self.sealing_lsn < min_active_snapshot_lsn && self.creation_lsn > required_wal_start_lsn
     }
 }
@@ -138,10 +134,7 @@ pub enum WalGcAuditEvent {
     },
 
     /// Segment successfully removed from HotStore
-    SegmentRemoved {
-        segment_id: u64,
-        bytes_freed: u64,
-    },
+    SegmentRemoved { segment_id: u64, bytes_freed: u64 },
 
     /// GC run summary with metrics
     Summary {
@@ -266,7 +259,10 @@ pub trait WalGcContext: Send + Sync {
     ///
     /// Returns a sorted list (oldest first) of segments eligible for GC
     /// based on LSN thresholds and visibility constraints.
-    fn identify_gc_candidates(&self, min_active_snapshot_lsn: Lsn) -> AndromedaResult<Vec<WalGcCandidate>>;
+    fn identify_gc_candidates(
+        &self,
+        min_active_snapshot_lsn: Lsn,
+    ) -> AndromedaResult<Vec<WalGcCandidate>>;
 
     /// Verify that a segment has been archived.
     ///
@@ -338,12 +334,13 @@ impl WalGarbageCollector {
 
         // Emit audit for each candidate
         for candidate in &candidates {
-            self.context.emit_audit_event(WalGcAuditEvent::CandidateIdentified {
-                segment_id: candidate.segment_id,
-                creation_lsn: candidate.creation_lsn,
-                sealing_lsn: candidate.sealing_lsn,
-                size_bytes: candidate.size_bytes,
-            })?;
+            self.context
+                .emit_audit_event(WalGcAuditEvent::CandidateIdentified {
+                    segment_id: candidate.segment_id,
+                    creation_lsn: candidate.creation_lsn,
+                    sealing_lsn: candidate.sealing_lsn,
+                    size_bytes: candidate.size_bytes,
+                })?;
         }
 
         Ok(candidates)
@@ -358,11 +355,12 @@ impl WalGarbageCollector {
     /// 4. Emit audit event on success
     pub fn remove_if_archived(&self, candidate: &WalGcCandidate) -> AndromedaResult<bool> {
         let status = self.context.verify_archived(candidate)?;
-        
-        self.context.emit_audit_event(WalGcAuditEvent::ArchiveVerifyRequested {
-            segment_id: candidate.segment_id,
-            archive_status: status,
-        })?;
+
+        self.context
+            .emit_audit_event(WalGcAuditEvent::ArchiveVerifyRequested {
+                segment_id: candidate.segment_id,
+                archive_status: status,
+            })?;
 
         if status != ArchiveStatus::Archived {
             return Ok(false); // Fail-safe: don't remove if not confirmed archived
@@ -370,10 +368,11 @@ impl WalGarbageCollector {
 
         self.context.safe_remove_segment(candidate)?;
 
-        self.context.emit_audit_event(WalGcAuditEvent::SegmentRemoved {
-            segment_id: candidate.segment_id,
-            bytes_freed: candidate.size_bytes,
-        })?;
+        self.context
+            .emit_audit_event(WalGcAuditEvent::SegmentRemoved {
+                segment_id: candidate.segment_id,
+                bytes_freed: candidate.size_bytes,
+            })?;
 
         Ok(true)
     }
@@ -391,7 +390,7 @@ impl WalGarbageCollector {
 
         let mut blocked = 0u64;
         for candidate in candidates {
-            match self.remove_if_archived(candidate)? {
+            match self.remove_if_archived(&candidate)? {
                 true => {
                     summary.segments_removed += 1;
                     summary.bytes_freed += candidate.size_bytes;
@@ -484,8 +483,8 @@ mod tests {
 
     #[test]
     fn wal_gc_candidate_eligibility_checks_lsn_thresholds() {
-        let candidate = WalGcCandidate::new(1, Lsn::new(100), Lsn::new(200), 4096)
-            .expect("valid candidate");
+        let candidate =
+            WalGcCandidate::new(1, Lsn::new(100), Lsn::new(200), 4096).expect("valid candidate");
 
         // Eligible: sealing < min_snapshot and creation > required_start
         let eligible = candidate.is_eligible(Lsn::new(300), Lsn::new(50));
@@ -584,8 +583,7 @@ mod tests {
 
     #[test]
     fn wal_gc_scheduler_config_with_max_segments() {
-        let config = WalGcSchedulerConfig::new(Duration::from_secs(60), 10)
-            .with_max_segments(100);
+        let config = WalGcSchedulerConfig::new(Duration::from_secs(60), 10).with_max_segments(100);
         assert_eq!(config.max_segments_per_run, 100);
     }
 }

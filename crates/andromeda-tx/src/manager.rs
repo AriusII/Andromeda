@@ -21,9 +21,9 @@ use crate::lock_manager::{
     LockAcquireEvidence, LockAcquireStatus, LockManager, LockMode, LockReleaseAllEvidence,
     LockReleaseAllSummary, LockReleaseEvidence, LockResource,
 };
+use crate::locking_protocol::{TwoPhaseLocksValidator, TwoPhaseOperation};
 use crate::mvcc_status::{TransactionStatus, TransactionStatusTable};
 use crate::state::{TransactionState, TransactionStateMachine};
-use crate::locking_protocol::{TwoPhaseLocksValidator, TwoPhaseOperation};
 
 /// Snapshot of a transaction known to the manager.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -446,22 +446,6 @@ impl TransactionManager {
             )),
             None => Err(Self::unknown_transaction()),
         }
-    }
-
-    /// Validate that a transaction state permits lock release per 2PL.
-    ///
-    /// 2PL allows lock release only in Committing or RollingBack states
-    /// (the shrinking phase). Release in other states violates 2PL.
-    fn require_lock_release_transaction(&self, id: TransactionId) -> AndromedaResult<()> {
-        Self::validate_non_zero_transaction_id(id)?;
-
-        let inner = self.lock()?;
-        let machine = inner.live.get(&id).ok_or_else(Self::unknown_transaction)?;
-
-        // 2PL validation: only Committing or RollingBack allow lock release (shrinking phase)
-        TwoPhaseLocksValidator::validate_operation(machine.state, TwoPhaseOperation::Release)?;
-
-        Ok(())
     }
 
     fn validate_non_zero_transaction_id(id: TransactionId) -> AndromedaResult<()> {

@@ -45,7 +45,7 @@
 //! [`StatsPublicationBuilder`] so the digest, ordering, and validation
 //! invariants remain a single source of truth.
 
-use andromeda_core::{CatalogObjectId, AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogObjectId};
 
 use crate::contracts::StatsVersion;
 use crate::digest::Sha256;
@@ -169,10 +169,10 @@ impl HistogramPlaceholder {
         let mut prev_upper: Option<u64> = None;
         for bucket in &buckets {
             bucket.validate()?;
-            if let Some(prev) = prev_upper {
-                if bucket.lower_inclusive <= prev {
-                    return Err(StatsValidationError::BucketsNotMonotonic);
-                }
+            if let Some(prev) = prev_upper
+                && bucket.lower_inclusive <= prev
+            {
+                return Err(StatsValidationError::BucketsNotMonotonic);
             }
             prev_upper = Some(bucket.upper_inclusive);
         }
@@ -1194,7 +1194,7 @@ impl HyperLogLog {
     /// - Initialize all to 0
     /// - Compute alpha: 0.7213 / (1 + 1.079 / (2^precision as f64))
     pub fn new(precision: u8) -> AndromedaResult<Self> {
-        if precision < 4 || precision > 16 {
+        if !(4..=16).contains(&precision) {
             return Err(andromeda_core::AndromedaError::new(
                 andromeda_core::AndromedaErrorKind::Catalog,
                 "HyperLogLog precision must be in range [4, 16]",
@@ -1257,8 +1257,26 @@ impl NdvEstimator for HyperLogLog {
 // HISTOGRAM BUILDER IMPLEMENTATIONS (Wave 19)
 // ============================================================================
 
-use andromeda_storage::heap_row_encoder::Datum;
 use std::collections::HashSet;
+
+/// Catalog-owned scalar sample value for histogram construction.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Datum {
+    Null,
+    Int8(i8),
+    Int16(i16),
+    Int32(i32),
+    Int64(i64),
+    UInt8(u8),
+    UInt16(u16),
+    UInt32(u32),
+    UInt64(u64),
+    Float32(f32),
+    Float64(f64),
+    Bool(bool),
+    Bytes(Vec<u8>),
+    Text(String),
+}
 
 /// Trait for histogram builders with different bucketing strategies.
 pub trait HistogramBuilderTrait: Send + Sync {
@@ -1304,6 +1322,10 @@ fn datum_to_key(value: &Datum) -> AndromedaResult<u64> {
     }
 }
 
+fn stats_validation_error(err: StatsValidationError) -> AndromedaError {
+    AndromedaError::new(AndromedaErrorKind::Catalog, err.to_string())
+}
+
 /// Equi-width histogram builder.
 /// Buckets have equal ranges in the key space.
 pub struct EquiWidthHistogramBuilder {
@@ -1328,6 +1350,11 @@ impl EquiWidthHistogramBuilder {
             values: Vec::new(),
             null_count: 0,
         })
+    }
+
+    /// Finalize this concrete builder into an immutable histogram.
+    pub fn finalize(self) -> AndromedaResult<HistogramPlaceholder> {
+        HistogramBuilderTrait::finalize(Box::new(self))
     }
 
     /// Estimate NDV using exact set semantics over observed non-null values.
@@ -1389,14 +1416,18 @@ impl HistogramBuilderTrait for EquiWidthHistogramBuilder {
                     distinct_estimate: 0,
                 }],
                 SkewMarker::Unknown,
-            );
+            )
+            .map_err(stats_validation_error);
         }
 
         // Sort values by datum (derived from Debug representation)
         self.values.sort_by(|a, b| {
-            let a_str = format!("{:?}", a);
-            let b_str = format!("{:?}", b);
-            a_str.cmp(&b_str)
+            let a_key = datum_to_key(a);
+            let b_key = datum_to_key(b);
+            match (a_key, b_key) {
+                (Ok(a), Ok(b)) => a.cmp(&b),
+                _ => format!("{:?}", a).cmp(&format!("{:?}", b)),
+            }
         });
 
         // Compute NDV over all values
@@ -1420,7 +1451,8 @@ impl HistogramBuilderTrait for EquiWidthHistogramBuilder {
                     distinct_estimate: ndv,
                 }],
                 SkewMarker::Unknown,
-            );
+            )
+            .map_err(stats_validation_error);
         }
 
         keys.sort_unstable();
@@ -1430,7 +1462,7 @@ impl HistogramBuilderTrait for EquiWidthHistogramBuilder {
 
         let bucket_count = (self.bucket_count as usize).min(self.values.len());
         let key_range = max_key.saturating_sub(min_key).saturating_add(1);
-        let bucket_width = key_range.max(1) / (bucket_count as u64);
+        let bucket_width = key_range.div_ceil(bucket_count as u64).max(1);
 
         let mut buckets = Vec::new();
 
@@ -1458,7 +1490,12 @@ impl HistogramBuilderTrait for EquiWidthHistogramBuilder {
                 .collect();
 
             if !bucket_values.is_empty() {
-                let bucket_ndv = Self::estimate_ndv(&bucket_values.iter().map(|v| (*v).clone()).collect::<Vec<_>>())?;
+                let bucket_ndv = Self::estimate_ndv(
+                    &bucket_values
+                        .iter()
+                        .map(|v| (*v).clone())
+                        .collect::<Vec<_>>(),
+                )?;
 
                 buckets.push(HistogramBucket {
                     lower_inclusive: lower_key,
@@ -1480,6 +1517,7 @@ impl HistogramBuilderTrait for EquiWidthHistogramBuilder {
         }
 
         HistogramPlaceholder::new(buckets, Self::infer_skew(&self.values))
+            .map_err(stats_validation_error)
     }
 
     fn estimated_memory_bytes(&self) -> u64 {
@@ -1511,6 +1549,11 @@ impl EquiDepthHistogramBuilder {
             values: Vec::new(),
             null_count: 0,
         })
+    }
+
+    /// Finalize this concrete builder into an immutable histogram.
+    pub fn finalize(self) -> AndromedaResult<HistogramPlaceholder> {
+        HistogramBuilderTrait::finalize(Box::new(self))
     }
 
     /// Estimate NDV using exact set semantics.
@@ -1571,14 +1614,18 @@ impl HistogramBuilderTrait for EquiDepthHistogramBuilder {
                     distinct_estimate: 0,
                 }],
                 SkewMarker::Unknown,
-            );
+            )
+            .map_err(stats_validation_error);
         }
 
         // Sort values
         self.values.sort_by(|a, b| {
-            let a_str = format!("{:?}", a);
-            let b_str = format!("{:?}", b);
-            a_str.cmp(&b_str)
+            let a_key = datum_to_key(a);
+            let b_key = datum_to_key(b);
+            match (a_key, b_key) {
+                (Ok(a), Ok(b)) => a.cmp(&b),
+                _ => format!("{:?}", a).cmp(&format!("{:?}", b)),
+            }
         });
 
         // Compute global NDV
@@ -1597,28 +1644,29 @@ impl HistogramBuilderTrait for EquiDepthHistogramBuilder {
                     distinct_estimate: 0,
                 }],
                 SkewMarker::Unknown,
-            );
+            )
+            .map_err(stats_validation_error);
         }
 
-        let rows_per_bucket = self.values.len() / bucket_count;
-        let mut remainder = self.values.len() % bucket_count;
+        let mut start_idx = 0usize;
 
-        for b in 0..bucket_count {
-            let bucket_size = rows_per_bucket + if remainder > 0 { 1 } else { 0 };
-            if remainder > 0 {
-                remainder -= 1;
-            }
+        while start_idx < self.values.len() && buckets.len() < bucket_count {
+            let remaining_rows = self.values.len() - start_idx;
+            let remaining_buckets = bucket_count - buckets.len();
+            let target_size = remaining_rows.div_ceil(remaining_buckets);
+            let mut end_idx = (start_idx + target_size).min(self.values.len());
 
-            let start_idx = b * rows_per_bucket + (self.values.len() % bucket_count).min(b);
-            let end_idx = start_idx + bucket_size;
-            let end_idx = end_idx.min(self.values.len());
-
-            if start_idx >= end_idx {
-                continue; // Skip empty bucket
+            if end_idx < self.values.len() {
+                let boundary_key = datum_to_key(&self.values[end_idx - 1]).ok();
+                while end_idx < self.values.len()
+                    && datum_to_key(&self.values[end_idx]).ok() == boundary_key
+                {
+                    end_idx += 1;
+                }
             }
 
             let bucket_values = &self.values[start_idx..end_idx];
-            let bucket_ndv = Self::estimate_ndv(&bucket_values.to_vec())?;
+            let bucket_ndv = Self::estimate_ndv(bucket_values)?;
 
             // Use sorted key bounds
             let lower_key = datum_to_key(bucket_values.first().unwrap()).unwrap_or(0);
@@ -1630,6 +1678,8 @@ impl HistogramBuilderTrait for EquiDepthHistogramBuilder {
                 row_estimate: bucket_values.len() as u64,
                 distinct_estimate: bucket_ndv,
             });
+
+            start_idx = end_idx;
         }
 
         // If no buckets created, fallback
@@ -1643,6 +1693,7 @@ impl HistogramBuilderTrait for EquiDepthHistogramBuilder {
         }
 
         HistogramPlaceholder::new(buckets, Self::infer_skew(&self.values))
+            .map_err(stats_validation_error)
     }
 
     fn estimated_memory_bytes(&self) -> u64 {
@@ -1660,7 +1711,7 @@ mod builder_tests {
         let result = builder.finalize();
         assert!(result.is_ok());
         let histo = result.unwrap();
-        assert!(histo.buckets().len() > 0);
+        assert!(!histo.buckets().is_empty());
     }
 
     #[test]
@@ -1672,7 +1723,7 @@ mod builder_tests {
         let result = builder.finalize();
         assert!(result.is_ok());
         let histo = result.unwrap();
-        assert!(histo.buckets().len() > 0);
+        assert!(!histo.buckets().is_empty());
         // At least one bucket should have row_estimate > 0
         assert!(histo.buckets().iter().any(|b| b.row_estimate > 0));
     }
@@ -1699,7 +1750,7 @@ mod builder_tests {
         let result = builder.finalize();
         assert!(result.is_ok());
         let histo = result.unwrap();
-        assert!(histo.buckets().len() > 0);
+        assert!(!histo.buckets().is_empty());
     }
 
     #[test]
@@ -1774,7 +1825,7 @@ mod builder_tests {
         let result = builder.finalize();
         assert!(result.is_ok());
         let histo = result.unwrap();
-        
+
         // Verify all buckets maintain invariants
         for bucket in histo.buckets() {
             // lower <= upper

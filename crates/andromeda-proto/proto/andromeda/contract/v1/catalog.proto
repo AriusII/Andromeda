@@ -3,6 +3,7 @@ syntax = "proto3";
 package andromeda.contract.v1;
 
 import "andromeda/contract/v1/manifest.proto";
+import "andromeda/contract/v1/contract.proto";
 
 // Catalog object schema for the crate-local contract authority.
 //

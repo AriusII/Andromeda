@@ -12,7 +12,6 @@
 //! - Re-acquisition violations
 //! - Poisoned and disposed transaction handling
 
-use andromeda_core::{AndromedaErrorKind, TransactionId};
 use andromeda_tx::{
     LockAcquireStatus, LockManager, LockMode, LockResource, TransactionManager, TransactionState,
     TwoPhaseLocksValidator, TwoPhaseOperation,
@@ -44,10 +43,7 @@ fn test_cannot_acquire_in_created_state() {
     assert!(!TwoPhaseLocksValidator::state_allows_acquire(state));
 
     // Validate operation also rejects
-    let result = TwoPhaseLocksValidator::validate_operation(
-        state,
-        TwoPhaseOperation::Acquire,
-    );
+    let result = TwoPhaseLocksValidator::validate_operation(state, TwoPhaseOperation::Acquire);
     assert!(result.is_err());
 }
 
@@ -61,7 +57,9 @@ fn test_cannot_acquire_in_committing_state() {
     let resource = LockResource::row(1, 1, 1).unwrap();
 
     // Acquire a lock in Active state (allowed)
-    let _ = coordinator.acquire(tx_id, resource, LockMode::Shared).unwrap();
+    let _ = coordinator
+        .acquire(tx_id, resource, LockMode::Shared)
+        .unwrap();
 
     // Move to Committing state
     tx_mgr.request_commit(tx_id).unwrap();
@@ -71,10 +69,7 @@ fn test_cannot_acquire_in_committing_state() {
     assert!(!TwoPhaseLocksValidator::state_allows_acquire(state));
 
     // Validation also rejects
-    let result = TwoPhaseLocksValidator::validate_operation(
-        state,
-        TwoPhaseOperation::Acquire,
-    );
+    let result = TwoPhaseLocksValidator::validate_operation(state, TwoPhaseOperation::Acquire);
     assert!(result.is_err());
 }
 
@@ -83,10 +78,7 @@ fn test_cannot_acquire_in_committed_state() {
     let state = TransactionState::Committed;
     assert!(!TwoPhaseLocksValidator::state_allows_acquire(state));
 
-    let result = TwoPhaseLocksValidator::validate_operation(
-        state,
-        TwoPhaseOperation::Acquire,
-    );
+    let result = TwoPhaseLocksValidator::validate_operation(state, TwoPhaseOperation::Acquire);
     assert!(result.is_err());
 }
 
@@ -95,10 +87,7 @@ fn test_cannot_acquire_in_rolled_back_state() {
     let state = TransactionState::RolledBack;
     assert!(!TwoPhaseLocksValidator::state_allows_acquire(state));
 
-    let result = TwoPhaseLocksValidator::validate_operation(
-        state,
-        TwoPhaseOperation::Acquire,
-    );
+    let result = TwoPhaseLocksValidator::validate_operation(state, TwoPhaseOperation::Acquire);
     assert!(result.is_err());
 }
 
@@ -107,10 +96,7 @@ fn test_cannot_acquire_in_disposed_state() {
     let state = TransactionState::Disposed;
     assert!(!TwoPhaseLocksValidator::state_allows_acquire(state));
 
-    let result = TwoPhaseLocksValidator::validate_operation(
-        state,
-        TwoPhaseOperation::Acquire,
-    );
+    let result = TwoPhaseLocksValidator::validate_operation(state, TwoPhaseOperation::Acquire);
     assert!(result.is_err());
 }
 
@@ -119,10 +105,7 @@ fn test_cannot_acquire_in_poisoned_state() {
     let state = TransactionState::Poisoned;
     assert!(!TwoPhaseLocksValidator::state_allows_acquire(state));
 
-    let result = TwoPhaseLocksValidator::validate_operation(
-        state,
-        TwoPhaseOperation::Acquire,
-    );
+    let result = TwoPhaseLocksValidator::validate_operation(state, TwoPhaseOperation::Acquire);
     assert!(result.is_err());
 }
 
@@ -131,10 +114,7 @@ fn test_release_only_in_committing_state() {
     let state = TransactionState::Committing;
     assert!(TwoPhaseLocksValidator::state_allows_release(state));
 
-    let result = TwoPhaseLocksValidator::validate_operation(
-        state,
-        TwoPhaseOperation::Release,
-    );
+    let result = TwoPhaseLocksValidator::validate_operation(state, TwoPhaseOperation::Release);
     assert!(result.is_ok());
 }
 
@@ -143,10 +123,7 @@ fn test_release_only_in_rolling_back_state() {
     let state = TransactionState::RollingBack;
     assert!(TwoPhaseLocksValidator::state_allows_release(state));
 
-    let result = TwoPhaseLocksValidator::validate_operation(
-        state,
-        TwoPhaseOperation::Release,
-    );
+    let result = TwoPhaseLocksValidator::validate_operation(state, TwoPhaseOperation::Release);
     assert!(result.is_ok());
 }
 
@@ -155,10 +132,7 @@ fn test_cannot_release_in_active_state() {
     let state = TransactionState::Active;
     assert!(!TwoPhaseLocksValidator::state_allows_release(state));
 
-    let result = TwoPhaseLocksValidator::validate_operation(
-        state,
-        TwoPhaseOperation::Release,
-    );
+    let result = TwoPhaseLocksValidator::validate_operation(state, TwoPhaseOperation::Release);
     assert!(result.is_err());
 }
 
@@ -167,10 +141,7 @@ fn test_cannot_release_in_created_state() {
     let state = TransactionState::Created;
     assert!(!TwoPhaseLocksValidator::state_allows_release(state));
 
-    let result = TwoPhaseLocksValidator::validate_operation(
-        state,
-        TwoPhaseOperation::Release,
-    );
+    let result = TwoPhaseLocksValidator::validate_operation(state, TwoPhaseOperation::Release);
     assert!(result.is_err());
 }
 
@@ -179,10 +150,7 @@ fn test_cannot_release_in_committed_state() {
     let state = TransactionState::Committed;
     assert!(!TwoPhaseLocksValidator::state_allows_release(state));
 
-    let result = TwoPhaseLocksValidator::validate_operation(
-        state,
-        TwoPhaseOperation::Release,
-    );
+    let result = TwoPhaseLocksValidator::validate_operation(state, TwoPhaseOperation::Release);
     assert!(result.is_err());
 }
 
@@ -191,10 +159,7 @@ fn test_cannot_release_in_disposed_state() {
     let state = TransactionState::Disposed;
     assert!(!TwoPhaseLocksValidator::state_allows_release(state));
 
-    let result = TwoPhaseLocksValidator::validate_operation(
-        state,
-        TwoPhaseOperation::Release,
-    );
+    let result = TwoPhaseLocksValidator::validate_operation(state, TwoPhaseOperation::Release);
     assert!(result.is_err());
 }
 
@@ -203,10 +168,7 @@ fn test_release_all_only_in_committed_state() {
     let state = TransactionState::Committed;
     assert!(TwoPhaseLocksValidator::state_allows_release_all(state));
 
-    let result = TwoPhaseLocksValidator::validate_operation(
-        state,
-        TwoPhaseOperation::ReleaseAll,
-    );
+    let result = TwoPhaseLocksValidator::validate_operation(state, TwoPhaseOperation::ReleaseAll);
     assert!(result.is_ok());
 }
 
@@ -215,10 +177,7 @@ fn test_release_all_only_in_rolled_back_state() {
     let state = TransactionState::RolledBack;
     assert!(TwoPhaseLocksValidator::state_allows_release_all(state));
 
-    let result = TwoPhaseLocksValidator::validate_operation(
-        state,
-        TwoPhaseOperation::ReleaseAll,
-    );
+    let result = TwoPhaseLocksValidator::validate_operation(state, TwoPhaseOperation::ReleaseAll);
     assert!(result.is_ok());
 }
 
@@ -227,10 +186,7 @@ fn test_cannot_release_all_in_committing_state() {
     let state = TransactionState::Committing;
     assert!(!TwoPhaseLocksValidator::state_allows_release_all(state));
 
-    let result = TwoPhaseLocksValidator::validate_operation(
-        state,
-        TwoPhaseOperation::ReleaseAll,
-    );
+    let result = TwoPhaseLocksValidator::validate_operation(state, TwoPhaseOperation::ReleaseAll);
     assert!(result.is_err());
 }
 
@@ -239,10 +195,7 @@ fn test_cannot_release_all_in_active_state() {
     let state = TransactionState::Active;
     assert!(!TwoPhaseLocksValidator::state_allows_release_all(state));
 
-    let result = TwoPhaseLocksValidator::validate_operation(
-        state,
-        TwoPhaseOperation::ReleaseAll,
-    );
+    let result = TwoPhaseLocksValidator::validate_operation(state, TwoPhaseOperation::ReleaseAll);
     assert!(result.is_err());
 }
 
@@ -251,10 +204,7 @@ fn test_cannot_release_all_in_inflight_state() {
     let state = TransactionState::Active; // Active is InFlight status
     assert!(!TwoPhaseLocksValidator::state_allows_release_all(state));
 
-    let result = TwoPhaseLocksValidator::validate_operation(
-        state,
-        TwoPhaseOperation::ReleaseAll,
-    );
+    let result = TwoPhaseLocksValidator::validate_operation(state, TwoPhaseOperation::ReleaseAll);
     assert!(result.is_err());
 }
 
@@ -263,10 +213,7 @@ fn test_cannot_release_all_in_disposed_state() {
     let state = TransactionState::Disposed;
     assert!(!TwoPhaseLocksValidator::state_allows_release_all(state));
 
-    let result = TwoPhaseLocksValidator::validate_operation(
-        state,
-        TwoPhaseOperation::ReleaseAll,
-    );
+    let result = TwoPhaseLocksValidator::validate_operation(state, TwoPhaseOperation::ReleaseAll);
     assert!(result.is_err());
 }
 
@@ -365,7 +312,9 @@ fn test_cannot_acquire_after_entering_committing() {
     let resource2 = LockResource::row(1, 1, 2).unwrap();
 
     // Acquire first lock in Active state
-    let _ = coordinator.acquire(tx_id, resource1, LockMode::Shared).unwrap();
+    let _ = coordinator
+        .acquire(tx_id, resource1, LockMode::Shared)
+        .unwrap();
 
     // Request commit (move to Committing)
     tx_mgr.request_commit(tx_id).unwrap();
@@ -391,7 +340,9 @@ fn test_poisoned_transaction_rejects_locks() {
     let resource = LockResource::row(1, 1, 1).unwrap();
 
     // Acquire lock in Active state
-    let _ = coordinator.acquire(tx_id, resource, LockMode::Shared).unwrap();
+    let _ = coordinator
+        .acquire(tx_id, resource, LockMode::Shared)
+        .unwrap();
 
     // Poison the transaction
     tx_mgr.poison(tx_id).unwrap();
@@ -401,7 +352,9 @@ fn test_poisoned_transaction_rejects_locks() {
     assert_eq!(snap.state_machine.state, TransactionState::Poisoned);
 
     // Verify Poisoned state disallows acquisition
-    assert!(!TwoPhaseLocksValidator::state_allows_acquire(TransactionState::Poisoned));
+    assert!(!TwoPhaseLocksValidator::state_allows_acquire(
+        TransactionState::Poisoned
+    ));
 
     let validation = TwoPhaseLocksValidator::validate_operation(
         TransactionState::Poisoned,
@@ -421,14 +374,29 @@ fn test_disposed_transaction_no_operations() {
 
     // Verify Disposed state disallows acquire, release, and release_all
     let disposed_state = TransactionState::Disposed;
-    
-    assert!(!TwoPhaseLocksValidator::state_allows_acquire(disposed_state));
-    assert!(!TwoPhaseLocksValidator::state_allows_release(disposed_state));
-    assert!(!TwoPhaseLocksValidator::state_allows_release_all(disposed_state));
 
-    assert!(TwoPhaseLocksValidator::validate_operation(disposed_state, TwoPhaseOperation::Acquire).is_err());
-    assert!(TwoPhaseLocksValidator::validate_operation(disposed_state, TwoPhaseOperation::Release).is_err());
-    assert!(TwoPhaseLocksValidator::validate_operation(disposed_state, TwoPhaseOperation::ReleaseAll).is_err());
+    assert!(!TwoPhaseLocksValidator::state_allows_acquire(
+        disposed_state
+    ));
+    assert!(!TwoPhaseLocksValidator::state_allows_release(
+        disposed_state
+    ));
+    assert!(!TwoPhaseLocksValidator::state_allows_release_all(
+        disposed_state
+    ));
+
+    assert!(
+        TwoPhaseLocksValidator::validate_operation(disposed_state, TwoPhaseOperation::Acquire)
+            .is_err()
+    );
+    assert!(
+        TwoPhaseLocksValidator::validate_operation(disposed_state, TwoPhaseOperation::Release)
+            .is_err()
+    );
+    assert!(
+        TwoPhaseLocksValidator::validate_operation(disposed_state, TwoPhaseOperation::ReleaseAll)
+            .is_err()
+    );
 }
 
 #[test]
@@ -445,7 +413,9 @@ fn test_failed_transaction_must_rollback() {
     assert_eq!(snap.state_machine.state, TransactionState::Failed);
 
     // Failed transactions cannot acquire locks
-    assert!(!TwoPhaseLocksValidator::state_allows_acquire(TransactionState::Failed));
+    assert!(!TwoPhaseLocksValidator::state_allows_acquire(
+        TransactionState::Failed
+    ));
 
     // But they CAN transition to RollingBack (managed by transaction manager)
     tx_mgr.request_rollback(tx_id).unwrap();
@@ -457,7 +427,7 @@ fn test_failed_transaction_must_rollback() {
 fn test_no_acquire_after_release_shrinking_phase() {
     // This test validates the core 2PL invariant:
     // once a lock is released, no new locks may be acquired.
-    
+
     let tx_mgr = TransactionManager::new();
     let lock_mgr = LockManager::new();
 
@@ -467,8 +437,12 @@ fn test_no_acquire_after_release_shrinking_phase() {
     let resource2 = LockResource::row(1, 1, 2).unwrap();
 
     // Growing phase: acquire both locks
-    let _ = coordinator.acquire(tx_id, resource1, LockMode::Shared).unwrap();
-    let _ = coordinator.acquire(tx_id, resource2, LockMode::Shared).unwrap();
+    let _ = coordinator
+        .acquire(tx_id, resource1, LockMode::Shared)
+        .unwrap();
+    let _ = coordinator
+        .acquire(tx_id, resource2, LockMode::Shared)
+        .unwrap();
 
     // Transition to shrinking phase (Committing)
     tx_mgr.request_commit(tx_id).unwrap();
@@ -479,7 +453,10 @@ fn test_no_acquire_after_release_shrinking_phase() {
     // Verify: Cannot acquire additional locks in Committing state
     let state = TransactionState::Committing;
     let validation = TwoPhaseLocksValidator::validate_operation(state, TwoPhaseOperation::Acquire);
-    assert!(validation.is_err(), "2PL violated: cannot acquire after release in shrinking phase");
+    assert!(
+        validation.is_err(),
+        "2PL violated: cannot acquire after release in shrinking phase"
+    );
 }
 
 #[test]
@@ -492,7 +469,9 @@ fn test_release_all_requires_terminal_status() {
     let resource = LockResource::row(1, 1, 1).unwrap();
 
     // Acquire a lock
-    let _ = coordinator.acquire(tx_id, resource, LockMode::Shared).unwrap();
+    let _ = coordinator
+        .acquire(tx_id, resource, LockMode::Shared)
+        .unwrap();
 
     // Try to release_all while transaction is still InFlight (should fail)
     let cleanup_early = coordinator.release_all(tx_id);
@@ -523,7 +502,7 @@ fn test_multiple_transactions_independent_2pl() {
     let tx1 = tx_mgr.begin().unwrap();
     let coord1 = tx_mgr.lock_coordinator(&lock_mgr);
     let res1 = LockResource::row(1, 1, 1).unwrap();
-    
+
     // Transaction 2
     let tx2 = tx_mgr.begin().unwrap();
     let coord2 = tx_mgr.lock_coordinator(&lock_mgr);
@@ -565,12 +544,18 @@ fn test_state_allows_acquire_committing_is_false() {
     // Verify that Committing (shrinking phase) correctly disallows new lock acquisitions
     // per strict 2PL theory
     let state = TransactionState::Committing;
-    
+
     // Strict 2PL: Committing is shrinking phase, no new acquires allowed
     let allows_acquire = TwoPhaseLocksValidator::state_allows_acquire(state);
-    assert!(!allows_acquire, "Committing state should NOT allow new lock acquisitions in strict 2PL");
-    
+    assert!(
+        !allows_acquire,
+        "Committing state should NOT allow new lock acquisitions in strict 2PL"
+    );
+
     // Validation should explicitly reject acquire in Committing state
     let validation = TwoPhaseLocksValidator::validate_operation(state, TwoPhaseOperation::Acquire);
-    assert!(validation.is_err(), "2PL should reject acquire in Committing state");
+    assert!(
+        validation.is_err(),
+        "2PL should reject acquire in Committing state"
+    );
 }

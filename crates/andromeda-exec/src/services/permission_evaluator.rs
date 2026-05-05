@@ -27,16 +27,10 @@
 //! - ABAC with runtime attribute predicates
 //! - Permission caching with TTL
 
-use crate::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, Permission, PermissionSet, Principal,
-    PrincipalId,
-};
+use andromeda_core::{AndromedaResult, Permission, Principal, PrincipalId};
 use std::sync::Arc;
 
-/// PrincipalResolver dependency trait (same as in principal_resolver.rs, re-imported here).
-pub trait PrincipalResolver: Send + Sync {
-    fn resolve(&self, cert_fingerprint: &str) -> AndromedaResult<Principal>;
-}
+use super::principal_resolver::PrincipalResolver;
 
 /// Result of a permission evaluation: allow or deny with reason.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,14 +38,14 @@ pub enum PermissionDecision {
     /// Permission granted; action may proceed.
     Allowed {
         /// Principal that was evaluated.
-        principal_id: crate::PrincipalId,
+        principal_id: PrincipalId,
         /// Permission that was granted.
         granted_permission: Permission,
     },
     /// Permission denied; action is blocked.
     Denied {
         /// Principal that was evaluated (if known).
-        principal_id: Option<crate::PrincipalId>,
+        principal_id: Option<PrincipalId>,
         /// Permission that was required but not held.
         required_permission: Permission,
         /// Machine-readable reason for denial.
@@ -118,16 +112,36 @@ impl std::fmt::Display for DenialReason {
 /// - **Deterministic**: Same principal + permission always produces same decision
 /// - **Stateless**: Multiple evaluations are independent
 /// - **Observable**: Every decision includes a reason for audit logging
-pub struct PermissionEvaluator<R: PrincipalResolver + ?Sized> {
+pub trait PermissionEvaluator: Send + Sync {
+    fn evaluate_permission(
+        &self,
+        cert_fingerprint: &str,
+        required_permission: &Permission,
+    ) -> PermissionDecision;
+
+    fn evaluate_all_permissions(
+        &self,
+        cert_fingerprint: &str,
+        required_permissions: &[Permission],
+    ) -> Result<(), PermissionDecision>;
+
+    fn get_principal(&self, cert_fingerprint: &str) -> AndromedaResult<Principal>;
+}
+
+pub struct PermissionEvaluatorImpl<R: PrincipalResolver + ?Sized> {
     resolver: Arc<R>,
 }
 
-impl<R: PrincipalResolver + ?Sized> PermissionEvaluator<R> {
+pub type ConcretePermissionEvaluator<R> = PermissionEvaluatorImpl<R>;
+
+impl<R: PrincipalResolver + ?Sized> PermissionEvaluatorImpl<R> {
     /// Create a new permission evaluator with a principal resolver.
     pub fn new(resolver: Arc<R>) -> Self {
         Self { resolver }
     }
+}
 
+impl<R: PrincipalResolver + ?Sized> PermissionEvaluator for PermissionEvaluatorImpl<R> {
     /// Evaluate whether a principal has a required permission.
     ///
     /// This is the core authorization decision: given a certificate fingerprint
@@ -148,7 +162,7 @@ impl<R: PrincipalResolver + ?Sized> PermissionEvaluator<R> {
     /// # Returns
     ///
     /// `PermissionDecision` (allow or deny with reason)
-    pub fn evaluate_permission(
+    fn evaluate_permission(
         &self,
         cert_fingerprint: &str,
         required_permission: &Permission,
@@ -207,7 +221,7 @@ impl<R: PrincipalResolver + ?Sized> PermissionEvaluator<R> {
     ///
     /// `Ok(())` if all permissions are granted
     /// `Err()` with first denied permission if any permission is denied
-    pub fn evaluate_all_permissions(
+    fn evaluate_all_permissions(
         &self,
         cert_fingerprint: &str,
         required_permissions: &[Permission],
@@ -224,7 +238,7 @@ impl<R: PrincipalResolver + ?Sized> PermissionEvaluator<R> {
     /// Get the principal associated with a certificate (for audit logging).
     ///
     /// This is useful for binding audit events to the correct principal.
-    pub fn get_principal(&self, cert_fingerprint: &str) -> AndromedaResult<Principal> {
+    fn get_principal(&self, cert_fingerprint: &str) -> AndromedaResult<Principal> {
         self.resolver.resolve(cert_fingerprint)
     }
 }
@@ -232,6 +246,10 @@ impl<R: PrincipalResolver + ?Sized> PermissionEvaluator<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use andromeda_core::{
+        AndromedaError, AndromedaErrorKind, CertificateFingerprint, PrincipalRole, ProcedureId,
+        SessionToken,
+    };
     use std::sync::Arc;
 
     /// Mock principal resolver for testing.
@@ -251,26 +269,60 @@ mod tests {
         }
     }
 
+    fn principal(role: PrincipalRole, cert_fingerprint: &str) -> Principal {
+        Principal::new(
+            PrincipalId::new(1),
+            role,
+            SessionToken::new("test-session"),
+            CertificateFingerprint::new(cert_fingerprint)
+                .expect("test certificate fingerprint should be valid"),
+        )
+        .expect("test principal should satisfy core invariants")
+    }
+
     impl PrincipalResolver for MockResolver {
         fn resolve(&self, cert_fingerprint: &str) -> AndromedaResult<Principal> {
             let principals = self.principals.lock().unwrap();
             principals
                 .iter()
-                .find(|p| p.cert_fingerprint == cert_fingerprint)
+                .find(|p| p.cert_fingerprint.as_str() == cert_fingerprint)
                 .cloned()
                 .ok_or_else(|| {
-                    AndromedaError::new(
-                        AndromedaErrorKind::Security,
-                        "principal not found",
-                    )
+                    AndromedaError::new(AndromedaErrorKind::Security, "principal not found")
                 })
+        }
+
+        fn register_principal(
+            &self,
+            cert_fingerprint: String,
+            role: PrincipalRole,
+        ) -> AndromedaResult<Principal> {
+            let principal = principal(role, &cert_fingerprint);
+            self.add_principal(principal.clone());
+            Ok(principal)
+        }
+
+        fn revoke_principal(&self, cert_fingerprint: &str) -> AndromedaResult<()> {
+            let mut principals = self.principals.lock().unwrap();
+            let position = principals
+                .iter()
+                .position(|principal| principal.cert_fingerprint.as_str() == cert_fingerprint)
+                .ok_or_else(|| {
+                    AndromedaError::new(AndromedaErrorKind::Security, "principal not found")
+                })?;
+            principals.remove(position);
+            Ok(())
+        }
+
+        fn list_principals(&self) -> AndromedaResult<Vec<Principal>> {
+            Ok(self.principals.lock().unwrap().clone())
         }
     }
 
     #[test]
     fn test_permission_decision_allowed() {
         let decision = PermissionDecision::Allowed {
-            principal_id: crate::PrincipalId::new(1),
+            principal_id: PrincipalId::new(1),
             granted_permission: Permission::AdminCatalogPublish,
         };
 
@@ -282,7 +334,7 @@ mod tests {
     #[test]
     fn test_permission_decision_denied() {
         let decision = PermissionDecision::Denied {
-            principal_id: Some(crate::PrincipalId::new(1)),
+            principal_id: Some(PrincipalId::new(1)),
             required_permission: Permission::AdminShutdown,
             reason: DenialReason::MissingPermission,
         };
@@ -294,8 +346,14 @@ mod tests {
 
     #[test]
     fn test_denial_reason_str() {
-        assert_eq!(DenialReason::PrincipalNotFound.as_str(), "principal_not_found");
-        assert_eq!(DenialReason::MissingPermission.as_str(), "missing_permission");
+        assert_eq!(
+            DenialReason::PrincipalNotFound.as_str(),
+            "principal_not_found"
+        );
+        assert_eq!(
+            DenialReason::MissingPermission.as_str(),
+            "missing_permission"
+        );
         assert_eq!(
             DenialReason::NoPermissionsGranted.as_str(),
             "no_permissions_granted"
@@ -305,21 +363,12 @@ mod tests {
     #[test]
     fn test_evaluate_permission_allowed() {
         let resolver = Arc::new(MockResolver::new());
-        let evaluator = PermissionEvaluator::new(resolver.clone());
+        let evaluator = PermissionEvaluatorImpl::new(resolver.clone());
 
-        let principal = Principal::new(
-            crate::PrincipalId::new(1),
-            crate::PrincipalRole::Admin,
-            crate::SessionToken::new("test-session"),
-            "test_admin_fingerprint".into(),
-        );
+        resolver.add_principal(principal(PrincipalRole::Admin, "test_admin_fingerprint"));
 
-        resolver.add_principal(principal);
-
-        let decision = evaluator.evaluate_permission(
-            "test_admin_fingerprint",
-            &Permission::AdminCatalogPublish,
-        );
+        let decision = evaluator
+            .evaluate_permission("test_admin_fingerprint", &Permission::AdminCatalogPublish);
 
         assert!(decision.is_allowed());
     }
@@ -327,21 +376,12 @@ mod tests {
     #[test]
     fn test_evaluate_permission_denied_missing_permission() {
         let resolver = Arc::new(MockResolver::new());
-        let evaluator = PermissionEvaluator::new(resolver.clone());
+        let evaluator = PermissionEvaluatorImpl::new(resolver.clone());
 
-        let principal = Principal::new(
-            crate::PrincipalId::new(1),
-            crate::PrincipalRole::User,
-            crate::SessionToken::new("test-session"),
-            "test_user_fingerprint".into(),
-        );
+        resolver.add_principal(principal(PrincipalRole::User, "test_user_fingerprint"));
 
-        resolver.add_principal(principal);
-
-        let decision = evaluator.evaluate_permission(
-            "test_user_fingerprint",
-            &Permission::AdminShutdown,
-        );
+        let decision =
+            evaluator.evaluate_permission("test_user_fingerprint", &Permission::AdminShutdown);
 
         assert!(decision.is_denied());
         if let PermissionDecision::Denied { reason, .. } = decision {
@@ -354,15 +394,18 @@ mod tests {
     #[test]
     fn test_evaluate_permission_denied_principal_not_found() {
         let resolver = Arc::new(MockResolver::new());
-        let evaluator = PermissionEvaluator::new(resolver);
+        let evaluator = PermissionEvaluatorImpl::new(resolver);
 
-        let decision = evaluator.evaluate_permission(
-            "unknown_fingerprint",
-            &Permission::AdminCatalogPublish,
-        );
+        let decision =
+            evaluator.evaluate_permission("unknown_fingerprint", &Permission::AdminCatalogPublish);
 
         assert!(decision.is_denied());
-        if let PermissionDecision::Denied { reason, principal_id, .. } = decision {
+        if let PermissionDecision::Denied {
+            reason,
+            principal_id,
+            ..
+        } = decision
+        {
             assert_eq!(reason, DenialReason::PrincipalNotFound);
             assert!(principal_id.is_none());
         } else {
@@ -373,16 +416,12 @@ mod tests {
     #[test]
     fn test_evaluate_all_permissions_allowed() {
         let resolver = Arc::new(MockResolver::new());
-        let evaluator = PermissionEvaluator::new(resolver.clone());
+        let evaluator = PermissionEvaluatorImpl::new(resolver.clone());
 
-        let principal = Principal::new(
-            crate::PrincipalId::new(1),
-            crate::PrincipalRole::SuperAdmin,
-            crate::SessionToken::new("test-session"),
-            "test_superadmin_fingerprint".into(),
-        );
-
-        resolver.add_principal(principal);
+        resolver.add_principal(principal(
+            PrincipalRole::SuperAdmin,
+            "test_superadmin_fingerprint",
+        ));
 
         let required_perms = vec![
             Permission::AdminCatalogPublish,
@@ -390,27 +429,21 @@ mod tests {
             Permission::AuditRead,
         ];
 
-        let result = evaluator.evaluate_all_permissions("test_superadmin_fingerprint", &required_perms);
+        let result =
+            evaluator.evaluate_all_permissions("test_superadmin_fingerprint", &required_perms);
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_evaluate_all_permissions_denied() {
         let resolver = Arc::new(MockResolver::new());
-        let evaluator = PermissionEvaluator::new(resolver.clone());
+        let evaluator = PermissionEvaluatorImpl::new(resolver.clone());
 
-        let principal = Principal::new(
-            crate::PrincipalId::new(1),
-            crate::PrincipalRole::User,
-            crate::SessionToken::new("test-session"),
-            "test_user_fingerprint".into(),
-        );
-
-        resolver.add_principal(principal);
+        resolver.add_principal(principal(PrincipalRole::User, "test_user_fingerprint"));
 
         let required_perms = vec![
             Permission::AdminCatalogPublish, // User doesn't have this
-            Permission::ExecuteProcedure(crate::ProcedureId::new(42)),
+            Permission::ExecuteProcedure(ProcedureId::new(42)),
         ];
 
         let result = evaluator.evaluate_all_permissions("test_user_fingerprint", &required_perms);
@@ -423,21 +456,17 @@ mod tests {
     #[test]
     fn test_evaluate_execute_procedure_wildcard() {
         let resolver = Arc::new(MockResolver::new());
-        let evaluator = PermissionEvaluator::new(resolver.clone());
+        let evaluator = PermissionEvaluatorImpl::new(resolver.clone());
 
-        let principal = Principal::new(
-            crate::PrincipalId::new(1),
-            crate::PrincipalRole::Operator,
-            crate::SessionToken::new("test-session"),
-            "test_operator_fingerprint".into(),
-        );
-
-        resolver.add_principal(principal);
+        resolver.add_principal(principal(
+            PrincipalRole::Operator,
+            "test_operator_fingerprint",
+        ));
 
         // Operator has ExecuteProcedure(u64::MAX), should match any procedure
         let decision = evaluator.evaluate_permission(
             "test_operator_fingerprint",
-            &Permission::ExecuteProcedure(crate::ProcedureId::new(42)),
+            &Permission::ExecuteProcedure(ProcedureId::new(42)),
         );
 
         assert!(decision.is_allowed());
@@ -446,14 +475,9 @@ mod tests {
     #[test]
     fn test_get_principal() {
         let resolver = Arc::new(MockResolver::new());
-        let evaluator = PermissionEvaluator::new(resolver.clone());
+        let evaluator = PermissionEvaluatorImpl::new(resolver.clone());
 
-        let principal = Principal::new(
-            crate::PrincipalId::new(1),
-            crate::PrincipalRole::Admin,
-            crate::SessionToken::new("test-session"),
-            "test_admin_fingerprint".into(),
-        );
+        let principal = principal(PrincipalRole::Admin, "test_admin_fingerprint");
 
         resolver.add_principal(principal.clone());
 
@@ -467,7 +491,7 @@ mod tests {
     #[test]
     fn test_get_principal_not_found() {
         let resolver = Arc::new(MockResolver::new());
-        let evaluator = PermissionEvaluator::new(resolver);
+        let evaluator = PermissionEvaluatorImpl::new(resolver);
 
         let result = evaluator.get_principal("unknown_fingerprint");
         assert!(result.is_err());

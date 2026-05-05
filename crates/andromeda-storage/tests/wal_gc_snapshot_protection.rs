@@ -5,9 +5,9 @@
 
 #[cfg(test)]
 mod wal_gc_snapshot_protection_tests {
-    use andromeda_storage::write_ahead_log::gc::*;
+    use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
     use andromeda_storage::Lsn;
-    use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
+    use andromeda_storage::write_ahead_log::gc::*;
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex, RwLock};
 
@@ -37,36 +37,40 @@ mod wal_gc_snapshot_protection_tests {
         }
 
         fn register_snapshot(&self, begin_lsn: Lsn, tx_id: u64) -> AndromedaResult<()> {
-            let mut snapshots = self.active_snapshots.write()
-                .map_err(|_| AndromedaError::new(
+            let mut snapshots = self.active_snapshots.write().map_err(|_| {
+                AndromedaError::new(
                     AndromedaErrorKind::Storage,
                     "failed to acquire write lock on snapshot registry",
-                ))?;
+                )
+            })?;
             snapshots.push(MockSnapshotHandle { begin_lsn, tx_id });
             Ok(())
         }
 
         fn release_snapshot(&self, begin_lsn: Lsn, tx_id: u64) -> AndromedaResult<()> {
-            let mut snapshots = self.active_snapshots.write()
-                .map_err(|_| AndromedaError::new(
+            let mut snapshots = self.active_snapshots.write().map_err(|_| {
+                AndromedaError::new(
                     AndromedaErrorKind::Storage,
                     "failed to acquire write lock on snapshot registry",
-                ))?;
+                )
+            })?;
             snapshots.retain(|s| !(s.begin_lsn == begin_lsn && s.tx_id == tx_id));
             Ok(())
         }
 
         fn min_required_lsn(&self) -> AndromedaResult<Option<Lsn>> {
-            let snapshots = self.active_snapshots.read()
-                .map_err(|_| AndromedaError::new(
+            let snapshots = self.active_snapshots.read().map_err(|_| {
+                AndromedaError::new(
                     AndromedaErrorKind::Storage,
                     "failed to acquire read lock on snapshot registry",
-                ))?;
+                )
+            })?;
             Ok(snapshots.iter().map(|s| s.begin_lsn).min())
         }
 
         fn has_active_snapshots(&self) -> bool {
-            self.active_snapshots.read()
+            self.active_snapshots
+                .read()
                 .map(|s| !s.is_empty())
                 .unwrap_or(false)
         }
@@ -102,7 +106,8 @@ mod wal_gc_snapshot_protection_tests {
         }
 
         fn mark_archived(&mut self, segment_id: u64) {
-            self.archived_segments.insert(segment_id, ArchiveStatus::Archived);
+            self.archived_segments
+                .insert(segment_id, ArchiveStatus::Archived);
         }
 
         /// Compute minimum LSN required to preserve (from active snapshots)
@@ -142,7 +147,9 @@ mod wal_gc_snapshot_protection_tests {
                 }
 
                 // Check archive status
-                let archived = self.archived_segments.get(&candidate.segment_id)
+                let archived = self
+                    .archived_segments
+                    .get(&candidate.segment_id)
                     .copied()
                     .unwrap_or(ArchiveStatus::Unknown);
 
@@ -152,7 +159,10 @@ mod wal_gc_snapshot_protection_tests {
                         summary.bytes_freed += candidate.size_bytes;
                         summary.segments_removed += 1;
 
-                        self.removed_segments.lock().unwrap().push(candidate.segment_id);
+                        self.removed_segments
+                            .lock()
+                            .unwrap()
+                            .push(candidate.segment_id);
                     }
                     _ => {
                         summary.candidates_blocked += 1;
@@ -178,18 +188,14 @@ mod wal_gc_snapshot_protection_tests {
         let mut gc_ctx = SnapshotAwareWalGcContext::new(snapshot_registry.clone());
 
         // Register a snapshot at LSN 500
-        snapshot_registry.register_snapshot(Lsn::new(500), 1).unwrap();
+        snapshot_registry
+            .register_snapshot(Lsn::new(500), 1)
+            .unwrap();
 
         // Create candidates (all with sealing_lsn > 500)
-        gc_ctx.add_candidate(
-            WalGcCandidate::new(1, Lsn::new(200), Lsn::new(400), 65536).unwrap(),
-        );
-        gc_ctx.add_candidate(
-            WalGcCandidate::new(2, Lsn::new(400), Lsn::new(600), 65536).unwrap(),
-        );
-        gc_ctx.add_candidate(
-            WalGcCandidate::new(3, Lsn::new(600), Lsn::new(800), 65536).unwrap(),
-        );
+        gc_ctx.add_candidate(WalGcCandidate::new(1, Lsn::new(200), Lsn::new(400), 65536).unwrap());
+        gc_ctx.add_candidate(WalGcCandidate::new(2, Lsn::new(400), Lsn::new(600), 65536).unwrap());
+        gc_ctx.add_candidate(WalGcCandidate::new(3, Lsn::new(600), Lsn::new(800), 65536).unwrap());
 
         // Mark all as archived
         gc_ctx.mark_archived(1);
@@ -216,13 +222,13 @@ mod wal_gc_snapshot_protection_tests {
         let mut gc_ctx = SnapshotAwareWalGcContext::new(snapshot_registry.clone());
 
         // Create candidate
-        gc_ctx.add_candidate(
-            WalGcCandidate::new(1, Lsn::new(200), Lsn::new(400), 65536).unwrap(),
-        );
+        gc_ctx.add_candidate(WalGcCandidate::new(1, Lsn::new(200), Lsn::new(400), 65536).unwrap());
         gc_ctx.mark_archived(1);
 
         // Register snapshot at LSN 500 (blocks segment with sealing_lsn 400)
-        snapshot_registry.register_snapshot(Lsn::new(500), 1).unwrap();
+        snapshot_registry
+            .register_snapshot(Lsn::new(500), 1)
+            .unwrap();
 
         // Try GC - segment should be blocked
         let summary1 = gc_ctx.collect_garbage().unwrap();
@@ -230,7 +236,9 @@ mod wal_gc_snapshot_protection_tests {
         assert_eq!(summary1.candidates_blocked, 1);
 
         // Release snapshot
-        snapshot_registry.release_snapshot(Lsn::new(500), 1).unwrap();
+        snapshot_registry
+            .release_snapshot(Lsn::new(500), 1)
+            .unwrap();
 
         // Try GC again - segment should now be reclaimed
         let summary2 = gc_ctx.collect_garbage().unwrap();
@@ -252,14 +260,15 @@ mod wal_gc_snapshot_protection_tests {
         for segment_id in 1..=10 {
             let creation = Lsn::new(100 + segment_id * 100);
             let sealing = Lsn::new(200 + segment_id * 100);
-            gc_ctx.add_candidate(
-                WalGcCandidate::new(segment_id, creation, sealing, 65536).unwrap(),
-            );
+            gc_ctx
+                .add_candidate(WalGcCandidate::new(segment_id, creation, sealing, 65536).unwrap());
             gc_ctx.mark_archived(segment_id);
         }
 
         // Register snapshot at LSN 500 (early in cascade)
-        snapshot_registry.register_snapshot(Lsn::new(500), 1).unwrap();
+        snapshot_registry
+            .register_snapshot(Lsn::new(500), 1)
+            .unwrap();
 
         // Perform GC
         let summary = gc_ctx.collect_garbage().unwrap();
@@ -337,7 +346,9 @@ mod wal_gc_snapshot_protection_tests {
         }
 
         // Register snapshot at LSN 350
-        snapshot_registry.register_snapshot(Lsn::new(350), 1).unwrap();
+        snapshot_registry
+            .register_snapshot(Lsn::new(350), 1)
+            .unwrap();
 
         // Perform GC
         let summary = gc_ctx.collect_garbage().unwrap();
@@ -345,7 +356,7 @@ mod wal_gc_snapshot_protection_tests {
         // Verify stats
         assert_eq!(summary.candidates_identified, 5);
         assert_eq!(summary.candidates_archived, 2); // Segments 1 (200-300) and 2 (300-400)
-        assert_eq!(summary.candidates_blocked, 3);  // Segments 3, 4, 5 (all have sealing > 350)
+        assert_eq!(summary.candidates_blocked, 3); // Segments 3, 4, 5 (all have sealing > 350)
         assert_eq!(summary.segments_removed, 2);
         assert!(summary.bytes_freed > 0);
     }
@@ -360,14 +371,16 @@ mod wal_gc_snapshot_protection_tests {
         let mut gc_ctx = SnapshotAwareWalGcContext::new(snapshot_registry.clone());
 
         // Create candidate with proper LSN ordering
-        let candidate = WalGcCandidate::new(1, Lsn::new(100), Lsn::new(200), 65536)
-            .expect("valid candidate");
+        let candidate =
+            WalGcCandidate::new(1, Lsn::new(100), Lsn::new(200), 65536).expect("valid candidate");
 
         gc_ctx.add_candidate(candidate.clone());
         gc_ctx.mark_archived(1);
 
         // Register snapshot at LSN 150
-        snapshot_registry.register_snapshot(Lsn::new(150), 1).unwrap();
+        snapshot_registry
+            .register_snapshot(Lsn::new(150), 1)
+            .unwrap();
 
         // Segment should be protected because sealing_lsn (200) > min_snapshot (150)
         let min_lsn = gc_ctx.min_required_lsn_from_snapshots().unwrap();
@@ -377,8 +390,12 @@ mod wal_gc_snapshot_protection_tests {
         assert!(!can_reclaim);
 
         // Move snapshot beyond segment
-        snapshot_registry.release_snapshot(Lsn::new(150), 1).unwrap();
-        snapshot_registry.register_snapshot(Lsn::new(250), 2).unwrap();
+        snapshot_registry
+            .release_snapshot(Lsn::new(150), 1)
+            .unwrap();
+        snapshot_registry
+            .register_snapshot(Lsn::new(250), 2)
+            .unwrap();
 
         let min_lsn = gc_ctx.min_required_lsn_from_snapshots().unwrap();
         let can_reclaim = gc_ctx.can_reclaim_segment(&candidate, min_lsn);
@@ -395,39 +412,39 @@ mod wal_gc_snapshot_protection_tests {
         let mut gc_ctx = SnapshotAwareWalGcContext::new(snapshot_registry.clone());
 
         // Create candidate at LSN range 300-400
-        gc_ctx.add_candidate(
-            WalGcCandidate::new(1, Lsn::new(300), Lsn::new(400), 65536).unwrap(),
-        );
+        gc_ctx.add_candidate(WalGcCandidate::new(1, Lsn::new(300), Lsn::new(400), 65536).unwrap());
         gc_ctx.mark_archived(1);
 
         // Register multiple snapshots at different LSNs
-        snapshot_registry.register_snapshot(Lsn::new(200), 1).unwrap(); // Earliest
-        snapshot_registry.register_snapshot(Lsn::new(350), 2).unwrap(); // Middle
-        snapshot_registry.register_snapshot(Lsn::new(500), 3).unwrap(); // Latest
+        snapshot_registry
+            .register_snapshot(Lsn::new(200), 1)
+            .unwrap(); // Earliest
+        snapshot_registry
+            .register_snapshot(Lsn::new(350), 2)
+            .unwrap(); // Middle
+        snapshot_registry
+            .register_snapshot(Lsn::new(500), 3)
+            .unwrap(); // Latest
 
         // Minimum should be 200
         let min_lsn = gc_ctx.min_required_lsn_from_snapshots().unwrap();
         assert_eq!(min_lsn, Some(Lsn::new(200)));
 
         // Segment at 300-400 should be protected (300-400 not < 200)
-        let can_reclaim = gc_ctx.can_reclaim_segment(
-            &gc_ctx.candidates[0],
-            min_lsn,
-        );
+        let can_reclaim = gc_ctx.can_reclaim_segment(&gc_ctx.candidates[0], min_lsn);
         assert!(!can_reclaim);
 
         // Release earliest snapshot
-        snapshot_registry.release_snapshot(Lsn::new(200), 1).unwrap();
+        snapshot_registry
+            .release_snapshot(Lsn::new(200), 1)
+            .unwrap();
 
         // Minimum should now be 350
         let min_lsn = gc_ctx.min_required_lsn_from_snapshots().unwrap();
         assert_eq!(min_lsn, Some(Lsn::new(350)));
 
         // Segment still protected (300-400 not < 350)
-        let can_reclaim = gc_ctx.can_reclaim_segment(
-            &gc_ctx.candidates[0],
-            min_lsn,
-        );
+        let can_reclaim = gc_ctx.can_reclaim_segment(&gc_ctx.candidates[0], min_lsn);
         assert!(!can_reclaim);
     }
 
@@ -444,9 +461,7 @@ mod wal_gc_snapshot_protection_tests {
         gc_ctx.required_start_lsn = Lsn::new(500);
 
         // Create candidate at 450-550 (overlaps recovery boundary)
-        gc_ctx.add_candidate(
-            WalGcCandidate::new(1, Lsn::new(450), Lsn::new(550), 65536).unwrap(),
-        );
+        gc_ctx.add_candidate(WalGcCandidate::new(1, Lsn::new(450), Lsn::new(550), 65536).unwrap());
         gc_ctx.mark_archived(1);
 
         // Even with no active snapshots, should not reclaim
@@ -454,9 +469,7 @@ mod wal_gc_snapshot_protection_tests {
         assert!(!can_reclaim); // creation_lsn (450) is not > required_start_lsn (500)
 
         // Create candidate at 550-650 (after recovery boundary)
-        gc_ctx.add_candidate(
-            WalGcCandidate::new(2, Lsn::new(550), Lsn::new(650), 65536).unwrap(),
-        );
+        gc_ctx.add_candidate(WalGcCandidate::new(2, Lsn::new(550), Lsn::new(650), 65536).unwrap());
         gc_ctx.mark_archived(2);
 
         // This one can be reclaimed
@@ -496,7 +509,9 @@ mod wal_gc_snapshot_protection_tests {
         gc_ctx.mark_archived(1);
 
         // Snapshot at exactly sealing_lsn (2000)
-        snapshot_registry.register_snapshot(Lsn::new(2000), 1).unwrap();
+        snapshot_registry
+            .register_snapshot(Lsn::new(2000), 1)
+            .unwrap();
         let min_lsn = gc_ctx.min_required_lsn_from_snapshots().unwrap();
 
         // Segment NOT reclaim-able: sealing (2000) is NOT < min_snapshot (2000)
@@ -504,8 +519,12 @@ mod wal_gc_snapshot_protection_tests {
         assert!(!can_reclaim);
 
         // Snapshot at sealing_lsn + 1
-        snapshot_registry.release_snapshot(Lsn::new(2000), 1).unwrap();
-        snapshot_registry.register_snapshot(Lsn::new(2001), 2).unwrap();
+        snapshot_registry
+            .release_snapshot(Lsn::new(2000), 1)
+            .unwrap();
+        snapshot_registry
+            .register_snapshot(Lsn::new(2001), 2)
+            .unwrap();
         let min_lsn = gc_ctx.min_required_lsn_from_snapshots().unwrap();
 
         // Segment IS reclaim-able: sealing (2000) < min_snapshot (2001)

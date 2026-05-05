@@ -3,17 +3,6 @@
 //! This module implements the core garbage collection logic for MVCC versions.
 //! A row version is eligible for reclamation when:
 //!
-
-pub mod eligibility;
-pub mod mvcc_eligibility;
-pub mod reclamation;
-pub mod scheduler;
-
-pub use eligibility::GcEligibilityChecker;
-pub use mvcc_eligibility::{VersionEligibilityChecker, VersionEligibility, VersionRecord, VersionEligibilityStats};
-pub use reclamation::{ReclaimationMark, ReclaimationEligibility, ReclamationCommand};
-pub use scheduler::GcSchedulerTask;
-
 //! 1. Its creator transaction has been durably committed (per V0 doctrine), AND
 //! 2. Its `end_ts` is strictly less than the minimum visible timestamp (no active
 //!    snapshot can see it), AND
@@ -34,21 +23,35 @@ pub use scheduler::GcSchedulerTask;
 //!   `InFlight` or `RolledBack` versions follow different rules (see logic below).
 //! - **Idempotent marking**: Calling `mark_version_reclaimed()` multiple times is safe.
 
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+pub mod eligibility;
+pub mod mvcc_eligibility;
+pub mod reclamation;
+pub mod scheduler;
 
-use andromeda_core::{AndromedaErrorKind, AndromedaResult, TransactionId};
+pub use eligibility::GcEligibilityChecker;
+pub use mvcc_eligibility::{
+    VersionEligibility, VersionEligibilityChecker, VersionEligibilityStats, VersionRecord,
+};
+pub use reclamation::{
+    ReclamationCommand, ReclamationEligibility, ReclamationMark, ReclamationStats,
+};
+pub use scheduler::GcSchedulerTask;
+
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+use andromeda_core::{AndromedaResult, TransactionId};
 
 use crate::active_snapshot_registry::ActiveSnapshotRegistry;
 use crate::mvcc_status::{TransactionStatus, TransactionStatusTable};
 
 /// Statistics for garbage collection runs.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct GcStats {
     versions_scanned: AtomicU64,
     versions_reclaimed: AtomicU64,
     runs: AtomicU64,
-    last_run_ms: AtomicU64,  // Wall-clock timestamp (ms) of last GC run
+    last_run_ms: AtomicU64, // Wall-clock timestamp (ms) of last GC run
 }
 
 impl GcStats {
@@ -138,18 +141,16 @@ impl MvccGarbageCollector {
     ///
     /// Special case: Rolled-back versions are always reclaimable (no visibility
     /// rule needed; they are never visible to any snapshot).
-    pub fn is_version_reclaimable(
-        &self,
-        creator_tx_id: TransactionId,
-        end_ts: u64,
-    ) -> bool {
+    pub fn is_version_reclaimable(&self, creator_tx_id: TransactionId, end_ts: u64) -> bool {
         // Step 1: Live versions (end_ts = u64::MAX) are never reclaimed
         if end_ts == u64::MAX {
             return false;
         }
 
         // Step 2: Get creator transaction status
-        let creator_status = self.status_table.status(creator_tx_id)
+        let creator_status = self
+            .status_table
+            .status(creator_tx_id)
             .unwrap_or(TransactionStatus::InFlight);
 
         // Step 3: Rolled-back versions are always reclaimable
@@ -233,7 +234,6 @@ impl MvccGarbageCollector {
     }
 
     fn current_time_ms(&self) -> u64 {
-        #[allow(unsafe_code)]  // Safety: system time call is safe
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_millis() as u64)
@@ -284,17 +284,16 @@ mod tests {
     #[test]
     fn test_rolled_back_version_always_reclaimed() {
         let status_table = TransactionStatusTable::new();
-        let mut status_table_mut = status_table.clone();
         let tx_id = TransactionId::new(1);
 
         // Record rollback
-        status_table_mut
+        status_table
             .record(tx_id, TransactionStatus::RolledBack)
             .expect("record rollback");
 
         let collector = MvccGarbageCollector::new(
             Arc::new(ActiveSnapshotRegistry::new()),
-            Arc::new(status_table_mut),
+            Arc::new(status_table),
         );
 
         // Rolled-back versions are always reclaimable
@@ -305,7 +304,7 @@ mod tests {
 
     #[test]
     fn test_committed_version_older_than_min_visible() {
-        let mut status_table = TransactionStatusTable::new();
+        let status_table = TransactionStatusTable::new();
         let registry = ActiveSnapshotRegistry::new();
         let tx_id = TransactionId::new(1);
         let other_tx = TransactionId::new(2);
@@ -320,10 +319,7 @@ mod tests {
             .register_snapshot(SnapshotHandle::new(200, other_tx).expect("snapshot"))
             .expect("register");
 
-        let collector = MvccGarbageCollector::new(
-            Arc::new(registry),
-            Arc::new(status_table),
-        );
+        let collector = MvccGarbageCollector::new(Arc::new(registry), Arc::new(status_table));
 
         // Version with end_ts < 200 should be reclaimable
         assert!(collector.is_version_reclaimable(tx_id, 199));
@@ -336,7 +332,7 @@ mod tests {
 
     #[test]
     fn test_committed_version_newer_than_min_visible() {
-        let mut status_table = TransactionStatusTable::new();
+        let status_table = TransactionStatusTable::new();
         let registry = ActiveSnapshotRegistry::new();
         let tx_id = TransactionId::new(1);
 
@@ -346,14 +342,11 @@ mod tests {
             .expect("record commit");
 
         // No snapshots registered → min_visible = u64::MAX
-        let collector = MvccGarbageCollector::new(
-            Arc::new(registry),
-            Arc::new(status_table),
-        );
+        let collector = MvccGarbageCollector::new(Arc::new(registry), Arc::new(status_table));
 
-        // Even very old versions are not reclaimable when min_visible = u64::MAX
-        assert!(!collector.is_version_reclaimable(tx_id, 1));
-        assert!(!collector.is_version_reclaimable(tx_id, 1_000_000));
+        // No active snapshots means the minimum visible timestamp is u64::MAX.
+        assert!(collector.is_version_reclaimable(tx_id, 1));
+        assert!(collector.is_version_reclaimable(tx_id, 1_000_000));
     }
 
     #[test]
@@ -370,9 +363,7 @@ mod tests {
         collector.record_versions_reclaimed(25);
         assert_eq!(collector.get_stats().versions_reclaimed, 25);
 
-        collector
-            .run_gc()
-            .expect("gc run");
+        collector.run_gc().expect("gc run");
         assert_eq!(collector.get_stats().runs, 1);
         assert!(collector.get_stats().last_run_ms > 0);
     }
@@ -386,10 +377,8 @@ mod tests {
             .register_snapshot(SnapshotHandle::new(500, tx_id).expect("snapshot"))
             .expect("register");
 
-        let collector = MvccGarbageCollector::new(
-            Arc::new(registry),
-            Arc::new(TransactionStatusTable::new()),
-        );
+        let collector =
+            MvccGarbageCollector::new(Arc::new(registry), Arc::new(TransactionStatusTable::new()));
 
         let summary = collector.run_gc().expect("gc");
         assert_eq!(summary.min_visible_ts, 500);
@@ -398,7 +387,7 @@ mod tests {
     #[test]
     fn test_multiple_snapshots_min_visible() {
         let registry = ActiveSnapshotRegistry::new();
-        let mut status_table = TransactionStatusTable::new();
+        let status_table = TransactionStatusTable::new();
 
         let tx1 = TransactionId::new(1);
         let tx2 = TransactionId::new(2);
@@ -419,10 +408,7 @@ mod tests {
             .record(tx1, TransactionStatus::Committed)
             .expect("record");
 
-        let collector = MvccGarbageCollector::new(
-            Arc::new(registry),
-            Arc::new(status_table),
-        );
+        let collector = MvccGarbageCollector::new(Arc::new(registry), Arc::new(status_table));
 
         // min_visible_ts should be the minimum: 200
         assert_eq!(collector.minimum_visible_timestamp(), 200);

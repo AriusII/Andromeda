@@ -1,9 +1,9 @@
+use andromeda_core::{Permission, ProcedureId};
 use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
-use andromeda_core::{Permission, ProcedureId, AndromedaErrorKind, AndromedaError};
 use std::sync::Arc;
 
+use super::permission_evaluator::{PermissionDecision, PermissionEvaluator};
 use crate::{CompletionStatus, InvocationContext, InvocationReject, InvocationRequest};
-use super::permission_evaluator::{PermissionEvaluator, PermissionDecision};
 
 /// Admission control service: contract validation + IAM authorization.
 ///
@@ -19,7 +19,7 @@ use super::permission_evaluator::{PermissionEvaluator, PermissionDecision};
 /// 5. Return decision (allow/deny) with audit trail
 /// 6. If allowed, proceed to transaction creation
 /// 7. If denied, emit PermissionCheckResult (denied) and reject request
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct AdmissionService {
     /// Permission evaluator for authorization checks.
     pub permission_evaluator: Option<Arc<dyn PermissionEvaluator>>,
@@ -148,7 +148,9 @@ impl AdmissionService {
         let decision = evaluator.evaluate_permission(cert_fingerprint, required_permission);
 
         match decision {
-            PermissionDecision::Allowed { principal_id, .. } => {
+            PermissionDecision::Allowed {
+                principal_id: _, ..
+            } => {
                 // TODO(Wave 19): Emit PermissionCheckResult(Allowed)
                 Ok(())
             }

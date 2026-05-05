@@ -325,10 +325,7 @@ fn test_heap_scan_skips_deleted() {
     page.delete_tuple(ids[1]).expect("delete 1");
     page.delete_tuple(ids[3]).expect("delete 3");
 
-    let scanned: Vec<_> = page
-        .scan()
-        .collect::<Result<Vec<_>, _>>()
-        .expect("scan");
+    let scanned: Vec<_> = page.scan().collect::<Result<Vec<_>, _>>().expect("scan");
 
     assert_eq!(scanned.len(), 3);
     // Verify scan contains only live tuples
@@ -390,10 +387,7 @@ fn test_heap_delete_16kib() {
     let mut page = HeapPage::new(PageSize::KiB16);
 
     let ids: Vec<_> = (0..50)
-        .map(|i| {
-            page.insert_tuple(&vec![0u8; 100])
-                .expect("insert")
-        })
+        .map(|i| page.insert_tuple(&vec![0u8; 100]).expect("insert"))
         .collect();
 
     for i in (0..ids.len()).step_by(2) {
@@ -410,10 +404,7 @@ fn test_heap_delete_32kib() {
     let mut page = HeapPage::new(PageSize::KiB32);
 
     let ids: Vec<_> = (0..100)
-        .map(|i| {
-            page.insert_tuple(&vec![0u8; 100])
-                .expect("insert")
-        })
+        .map(|i| page.insert_tuple(&vec![0u8; 100]).expect("insert"))
         .collect();
 
     for i in (0..ids.len()).step_by(2) {
@@ -434,10 +425,7 @@ fn test_heap_compact_no_gaps() {
     let mut page = HeapPage::new(PageSize::KiB16);
 
     let _ids: Vec<_> = (0..10)
-        .map(|i| {
-            page.insert_tuple(&vec![i as u8; 100])
-                .expect("insert")
-        })
+        .map(|i| page.insert_tuple(&vec![i as u8; 100]).expect("insert"))
         .collect();
 
     // Delete some

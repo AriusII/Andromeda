@@ -7,7 +7,7 @@ use andromeda_observe::TraceId;
 use andromeda_storage::{
     Lsn, WalSegmentDescriptor,
     backup::{BackupId, BackupManifest, ColdSnapshotBoundary, WalArchiveRange},
-    restore::{
+    restore_orchestration::{
         RecoveryStage, RestoreAuditTrace, RestoreCompletion, RestoreOrchestration,
         RestoreValidationPolicy, compute_restore_checksum, plan_replay_segments,
         validate_restore_prerequisites,

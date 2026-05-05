@@ -1,9 +1,9 @@
 #![forbid(unsafe_code)]
 
 pub mod backup;
-pub mod buffer_pool;
 mod btree;
 pub mod btree_key_codec;
+pub mod buffer_pool;
 mod catalog_wal_bridge;
 mod cold_store;
 mod extent;
@@ -12,7 +12,6 @@ pub mod format_version;
 pub mod hadr;
 mod heap;
 mod heap_row_encoder;
-mod io_budget;
 mod lsn;
 mod manifest;
 mod operational_profile;
@@ -31,25 +30,24 @@ pub mod publication;
 pub mod write_ahead_log;
 
 pub use backup::*;
+pub use btree::{
+    BTreeConfig, BTreeError, BTreeIndex, BTreeIndexEngine, BTreeIndexMetadata, BTreeIndexNode,
+    BTreeNodeImpl, BTreeRangeCursor, BTreeStatistics, ColumnId, IndexId, KeyValuePair, RowId,
+};
+pub use btree_key_codec::{Key, KeyCodec, KeyComparator, KeyType};
 pub use buffer_pool::{
-    BufferFrame, BufferFrameId, BufferFrameState, BufferPoolConfig, BufferPoolError,
-    BufferPool, BufferPoolManager, ClockEvictionCandidate, ClockEvictionPolicy, DirtyEntry,
+    BufferFrame, BufferFrameId, BufferFrameState, BufferPool, BufferPoolConfig, BufferPoolError,
+    BufferPoolManager, ClockEvictionCandidate, ClockEvictionPolicy, DirtyEntry,
     DirtyFlushCandidate, DirtyTracker, FlushAllDirtyResult, FlushBlockedFrame, FlushError,
     PageGuard, PageGuardMut, TestWalDurabilityObserver, WalDurabilityObserver,
 };
-pub use btree::{
-    BTreeConfig, BTreeError, BTreeIndex, BTreeIndexMetadata, BTreeIndexNode, BTreeRangeCursor,
-    BTreeStatistics, ColumnId, IndexId, RowId, BTreeNodeImpl, KeyValuePair, BTreeIndexEngine,
-};
-pub use btree_key_codec::{KeyCodec, KeyComparator, Key, KeyType};
 pub use catalog_wal_bridge::*;
 pub use cold_store::*;
 pub use extent::*;
 pub use file_wal::*;
 pub use hadr::*;
-pub use heap::{HeapPage, SlotEntry, HeapScanIter, slot_directory, HeapPageInsert};
-pub use heap_row_encoder::{RowEncoder, RowSchema, ScalarType, Datum, ColumnDef};
-pub use io_budget::*;
+pub use heap::{HeapPage, HeapPageInsert, HeapScanIter, SlotEntry, slot_directory};
+pub use heap_row_encoder::{ColumnDef, Datum, RowEncoder, RowSchema, ScalarType};
 pub use lsn::*;
 pub use manifest::*;
 pub use operational_profile::*;

@@ -13,8 +13,8 @@ use andromeda_exec::{
     InvocationContext, InvocationRequest, LocalVerticalRuntime, ReserveStockCommand,
 };
 use andromeda_observe::{
-    CommitVisibleTrace, CriticalDecisionKind, EventCorrelation, EventEmitter, EventEnvelope,
-    EventId, EventSink, InMemoryEventSink, RollbackDurableTrace, TraceEvent, TraceId,
+    CommitVisibleTrace, EventCorrelation, EventEmitter, EventEnvelope, EventId, InMemoryEventSink,
+    RollbackDurableTrace, TraceEvent, TraceId,
 };
 use andromeda_srpl::procedure_compiler::compile_narrow_procedure_signature;
 use andromeda_storage::{

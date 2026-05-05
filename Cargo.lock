@@ -51,6 +51,7 @@ dependencies = [
  "andromeda-srpl",
  "andromeda-storage",
  "andromeda-tx",
+ "dashmap",
 ]
 
 [[package]]
@@ -101,6 +102,7 @@ version = "0.1.0"
 dependencies = [
  "andromeda-core",
  "andromeda-observe",
+ "dashmap",
  "proptest",
  "sha2",
 ]

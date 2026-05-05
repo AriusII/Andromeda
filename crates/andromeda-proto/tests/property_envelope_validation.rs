@@ -51,7 +51,7 @@ fn prop_envelope_validation_never_panics() {
             // This is a placeholder; actual function name depends on API
             validate_envelope_safely(&data)
         }));
-        
+
         match result {
             Ok(_) => {
                 // Validation returned normally (Accept or Reject)
@@ -73,7 +73,7 @@ fn prop_envelope_validation_never_panics() {
 fn prop_envelope_validation_always_decides() {
     proptest!(|(data in arb_protobuf_bytes())| {
         let decision = validate_envelope_safely(&data);
-        
+
         // Must always be either Accept or Reject
         match decision {
             EnvelopeDecision::Accept => prop_assert!(true),
@@ -90,7 +90,7 @@ fn prop_envelope_validation_always_decides() {
 fn prop_envelope_empty_bytes_rejected() {
     let empty = vec![];
     let decision = validate_envelope_safely(&empty);
-    
+
     match decision {
         EnvelopeDecision::Reject(_) => {
             // Correctly rejected empty
@@ -114,19 +114,16 @@ fn prop_envelope_checksum_detects_corruption() {
         bit_position in 0usize..8192usize,
     )| {
         // Skip if data too small
-        if bit_position / 8 >= data.len() {
-            return Ok(());
-        }
-        
+        prop_assume!(bit_position / 8 < data.len());
+
         // Flip one bit in the data
         let mut corrupted = data.clone();
         let byte_idx = bit_position / 8;
         let bit_offset = bit_position % 8;
         corrupted[byte_idx] ^= 1u8 << bit_offset;
-        
-        let original_decision = validate_envelope_safely(&data);
+
         let corrupted_decision = validate_envelope_safely(&corrupted);
-        
+
         // Corrupted envelope should be rejected
         // (unless the bit flip was in unchecked data)
         match corrupted_decision {
@@ -138,8 +135,7 @@ fn prop_envelope_checksum_detects_corruption() {
                 prop_assert!(true);
             }
         }
-        
-        Ok(())
+
     });
 }
 
@@ -156,9 +152,9 @@ fn prop_envelope_truncation_handled() {
         // Truncate the data
         let max_idx = std::cmp::min(truncation_pos, data.len());
         let truncated = data[..max_idx].to_vec();
-        
+
         let decision = validate_envelope_safely(&truncated);
-        
+
         // Truncated envelope should be rejected or cause no panic
         match decision {
             EnvelopeDecision::Accept => {
@@ -179,11 +175,11 @@ fn prop_envelope_truncation_handled() {
 fn prop_envelope_large_data_no_overflow() {
     proptest!(|(size in 10000usize..50000usize)| {
         let large_data = vec![0x42u8; size];
-        
+
         let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
             validate_envelope_safely(&large_data)
         }));
-        
+
         match result {
             Ok(_) => {
                 prop_assert!(true, "large envelope handled");
@@ -202,14 +198,14 @@ fn prop_envelope_large_data_no_overflow() {
 #[test]
 fn prop_envelope_error_messages_descriptive() {
     let test_cases = vec![
-        vec![],                           // Empty
-        vec![0xFF; 1000],                 // Invalid data
-        vec![0x08, 0xFF, 0xFF, 0xFF],    // Truncated varint
+        vec![],                       // Empty
+        vec![0xFF; 1000],             // Invalid data
+        vec![0x08, 0xFF, 0xFF, 0xFF], // Truncated varint
     ];
-    
+
     for data in test_cases {
         let decision = validate_envelope_safely(&data);
-        
+
         if let EnvelopeDecision::Reject(msg) = decision {
             // Error message should not be empty
             assert!(!msg.is_empty(), "rejection reason should be provided");
@@ -228,9 +224,9 @@ fn prop_envelope_version_validation() {
         // Construct a minimal envelope with version byte
         let mut data = vec![0x08]; // field 1, wire type 0 (varint)
         data.push(version_byte);
-        
+
         let decision = validate_envelope_safely(&data);
-        
+
         // Decision might accept or reject depending on version
         match decision {
             EnvelopeDecision::Accept => prop_assert!(true),
@@ -250,9 +246,9 @@ fn prop_envelope_contract_hash_validated() {
         let mut data = vec![0x12]; // field 2, wire type 2 (length-delimited)
         data.push(hash_bytes.len() as u8);
         data.extend_from_slice(&hash_bytes);
-        
+
         let decision = validate_envelope_safely(&data);
-        
+
         // Should not panic, should make a decision
         match decision {
             EnvelopeDecision::Accept => prop_assert!(true),
@@ -270,7 +266,7 @@ fn prop_envelope_validation_deterministic() {
     proptest!(|(data in arb_protobuf_bytes())| {
         let decision1 = validate_envelope_safely(&data);
         let decision2 = validate_envelope_safely(&data);
-        
+
         // Same input must produce same decision
         match (&decision1, &decision2) {
             (EnvelopeDecision::Accept, EnvelopeDecision::Accept) => {
@@ -306,7 +302,7 @@ enum EnvelopeDecision {
 fn validate_envelope_safely(data: &[u8]) -> EnvelopeDecision {
     // This is a placeholder that mimics validation behavior
     // In actual tests, this would call andromeda_proto functions
-    
+
     // Always return a decision (never panic)
     if data.is_empty() {
         EnvelopeDecision::Reject("empty envelope".to_string())
@@ -352,13 +348,13 @@ fn integration_envelope_processing_pipeline() {
         // Process multiple envelopes in sequence
         for envelope in envelopes.iter() {
             let decision = validate_envelope_safely(envelope);
-            
+
             match decision {
                 EnvelopeDecision::Accept => {},
                 EnvelopeDecision::Reject(_) => {},
             }
         }
-        
+
         prop_assert!(true);
     });
 }
@@ -371,7 +367,7 @@ fn integration_envelope_processing_pipeline() {
 fn test_envelope_edge_case_single_byte() {
     let single_byte = vec![0xFF];
     let decision = validate_envelope_safely(&single_byte);
-    
+
     // Must not panic
     match decision {
         EnvelopeDecision::Accept => assert!(true),
@@ -383,7 +379,7 @@ fn test_envelope_edge_case_single_byte() {
 fn test_envelope_edge_case_all_zeros() {
     let all_zeros = vec![0x00; 1000];
     let decision = validate_envelope_safely(&all_zeros);
-    
+
     // Must not panic
     match decision {
         EnvelopeDecision::Accept => assert!(true),
@@ -395,7 +391,7 @@ fn test_envelope_edge_case_all_zeros() {
 fn test_envelope_edge_case_all_ones() {
     let all_ones = vec![0xFF; 1000];
     let decision = validate_envelope_safely(&all_ones);
-    
+
     // Must not panic
     match decision {
         EnvelopeDecision::Accept => assert!(true),

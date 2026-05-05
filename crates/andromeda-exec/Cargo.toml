@@ -13,3 +13,4 @@ andromeda-quic.workspace = true
 andromeda-srpl.workspace = true
 andromeda-storage.workspace = true
 andromeda-tx.workspace = true
+dashmap = "6.0"

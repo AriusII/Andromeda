@@ -1,32 +1,32 @@
 use andromeda_catalog::{
-    AccessMode, CatalogDefinition, CatalogObjectRef, CatalogSnapshot, CompatibilityPolicy,
-    DefinitionBatch, DefinitionBatchId, DefinitionOperation, INVENTORY_DATABASE_ID,
-    INVENTORY_DEFINITION_BATCH_ID, INVENTORY_NAMESPACE_ID, IsolationPolicy, MultiResultPolicy,
+    inventory_domain_definition_batch, inventory_reserve_stock_contract, inventory_reserve_stock_contract_candidate, AccessMode, CatalogDefinition,
+    CatalogObjectRef, CatalogSnapshot, CompatibilityPolicy, DefinitionBatch,
+    DefinitionBatchId, DefinitionOperation, IsolationPolicy, MultiResultPolicy,
     ObjectKind, ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName, ResultMetadataPolicy,
-    StatsVersion, StructuredObjectDefinition, TransactionPolicy, inventory_domain_definition_batch,
-    inventory_reserve_stock_contract, inventory_reserve_stock_contract_candidate,
+    StatsVersion, StructuredObjectDefinition, TransactionPolicy, INVENTORY_DATABASE_ID,
+    INVENTORY_DEFINITION_BATCH_ID, INVENTORY_NAMESPACE_ID,
 };
 use andromeda_core::{
     AndromedaErrorKind, CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash,
     ProcedureId, ScalarType, TypeDescriptor,
 };
 use andromeda_srpl::{
-    SourceSpan,
-    compiler::{
-        INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, bind_executable_procedure_plan,
-        compile_inventory_reserve_stock_contract,
-        compile_inventory_reserve_stock_contract_candidate,
-        compile_narrow_procedure_contract_candidate, compile_narrow_procedure_definition,
-        compile_narrow_procedure_definition_batch, compile_narrow_procedure_signature,
-        inventory_reserve_stock_body_ir, inventory_reserve_stock_contract_metadata,
-        lower_ir_to_catalog_definition, lower_ir_to_contract_candidate, parse_procedure_signature,
-    },
     diagnostics::DiagnosticPhase,
-    model::{
+    procedure_compiler::{
+        bind_executable_procedure_plan, compile_inventory_reserve_stock_contract,
+        compile_inventory_reserve_stock_contract_candidate,
+        compile_narrow_procedure_contract_candidate,
+        compile_narrow_procedure_definition, compile_narrow_procedure_definition_batch,
+        compile_narrow_procedure_signature, inventory_reserve_stock_body_ir,
+        inventory_reserve_stock_contract_metadata, lower_ir_to_catalog_definition,
+        lower_ir_to_contract_candidate, parse_procedure_signature, INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE,
+    },
+    procedure_model::{
         Cardinality, ProcedureSignature, ResultContract, SrplBusinessOperationKindIr,
         SrplProcedureContractMetadata, SrplProcedureIr, SrplValueIr,
     },
-    source::SrplSource,
+    source_location::SrplSource,
+    SourceSpan,
 };
 
 #[test]
@@ -101,7 +101,7 @@ fn forbidden_constructs_reject_before_lowering() {
     let diagnostic = compile_narrow_procedure_signature(
         "procedure X accepts () returns R many (C bool); execute sql",
     )
-    .unwrap_err();
+        .unwrap_err();
 
     assert_eq!(diagnostic.phase, DiagnosticPhase::Binding);
     assert!(diagnostic.location.is_some());
@@ -290,9 +290,9 @@ fn contract_candidate_preserves_v0_metadata_and_error_policy() {
         INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE,
         contract_metadata(),
     )
-    .unwrap()
-    .materialize()
-    .unwrap();
+        .unwrap()
+        .materialize()
+        .unwrap();
 
     assert_eq!(contract.stats_version, StatsVersion::new(1));
     assert_eq!(
@@ -319,7 +319,7 @@ fn contract_candidate_rejects_invalid_metadata_before_catalog_publication() {
         "procedure Inventory.ReserveStock accepts () returns Reservation one (Reserved bool);",
         metadata,
     )
-    .unwrap_err();
+        .unwrap_err();
 
     assert_eq!(diagnostic.phase, DiagnosticPhase::IrLowering);
     assert!(diagnostic.message.contains("permissions"));
@@ -334,7 +334,7 @@ fn contract_candidate_rejects_undeclared_srpl_error_policy_before_publication() 
         INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE,
         metadata,
     )
-    .unwrap_err();
+        .unwrap_err();
 
     assert_eq!(diagnostic.phase, DiagnosticPhase::IrLowering);
     assert!(diagnostic.message.contains("error code"));
@@ -387,7 +387,7 @@ fn reserve_stock_srpl_source_can_build_catalog_definition_batch() {
         INVENTORY_NAMESPACE_ID,
         CatalogVersion::new(0),
     )
-    .unwrap();
+        .unwrap();
 
     let plan = batch.dry_run().unwrap();
 
@@ -651,8 +651,8 @@ fn executable_plan_rejects_assert_referencing_unbound_read_binding() {
 #[test]
 fn binder_supports_a_distinct_read_only_procedure_shape() {
     use andromeda_catalog::{
-        ProcedureContractCandidate, ResultStreamContract, inventory_product_stock_table,
-        inventory_protocol_layout_ref,
+        inventory_product_stock_table, inventory_protocol_layout_ref, ProcedureContractCandidate,
+        ResultStreamContract,
     };
     use andromeda_srpl::procedure_model::{
         SrplBusinessOperationIr, SrplEmitValueIr, SrplPredicateIr, SrplProcedureBodyIr,

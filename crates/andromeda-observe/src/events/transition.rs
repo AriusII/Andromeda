@@ -241,19 +241,19 @@ impl ExecutionTransitionTrace {
                 "execution transition transaction_id must be non-zero when present",
             ));
         }
-        if let Some(prev) = self.prev_phase {
-            if !prev.is_known() {
-                return Err(observe_error(
-                    "execution transition prev_phase must reference a known phase",
-                ));
-            }
+        if let Some(prev) = self.prev_phase
+            && !prev.is_known()
+        {
+            return Err(observe_error(
+                "execution transition prev_phase must reference a known phase",
+            ));
         }
-        if let Some(next) = self.next_phase {
-            if !next.is_known() {
-                return Err(observe_error(
-                    "execution transition next_phase must reference a known phase",
-                ));
-            }
+        if let Some(next) = self.next_phase
+            && !next.is_known()
+        {
+            return Err(observe_error(
+                "execution transition next_phase must reference a known phase",
+            ));
         }
         if !self.has_reason() {
             return Err(observe_error(

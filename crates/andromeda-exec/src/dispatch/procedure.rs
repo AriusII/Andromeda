@@ -1,5 +1,5 @@
 use andromeda_catalog::ProcedureContractRef;
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, InvocationId};
 use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
 
 use crate::{InvocationContext, LocalProcedure};
@@ -185,7 +185,7 @@ impl ProcedureDispatcher for SrplDispatcherAdapter {
         let _procedure = self
             .dispatcher
             .resolve_procedure(&crate::InvocationRequest {
-                invocation_id: request.context.invocation_id,
+                invocation_id: InvocationId::new(1),
                 procedure: request.procedure,
                 expected_contract_hash: request.procedure.contract_hash,
                 catalog_version: request.procedure.catalog_version,
@@ -200,9 +200,8 @@ impl ProcedureDispatcher for SrplDispatcherAdapter {
 
         // TODO: Extract result metadata and construct LocalProcedure
         Err(AndromedaError::new(
-            AndromedaErrorKind::Unimplemented,
+            AndromedaErrorKind::Execution,
             "SRPL dispatch adapter execution not yet implemented - result metadata extraction needed",
         ))
     }
 }
-

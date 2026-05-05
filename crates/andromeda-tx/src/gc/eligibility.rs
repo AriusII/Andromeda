@@ -49,7 +49,10 @@ impl GcEligibilityChecker {
             return 0.0;
         }
 
-        let garbageable = versions.iter().filter(|&&end_ts| self.is_garbageable(end_ts)).count();
+        let garbageable = versions
+            .iter()
+            .filter(|&&end_ts| self.is_garbageable(end_ts))
+            .count();
         (garbageable as f32) / (versions.len() as f32) * 100.0
     }
 
@@ -89,8 +92,8 @@ mod tests {
         let registry = ActiveSnapshotRegistry::new();
         let checker = GcEligibilityChecker::new(registry);
 
-        // No snapshots: min is u64::MAX, nothing is garbageable
-        assert!(!checker.is_garbageable(u64::MAX - 1));
+        // No snapshots: min is u64::MAX, so closed versions are garbageable.
+        assert!(checker.is_garbageable(u64::MAX - 1));
 
         // Register snapshot at ts 100
         let h = SnapshotHandle::new(100, TransactionId::new(1)).unwrap();

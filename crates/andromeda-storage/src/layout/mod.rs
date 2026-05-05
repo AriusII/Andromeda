@@ -3,7 +3,7 @@
 //! # Canonical ownership
 //!
 //! The root modules `crate::page`, `crate::extent`, `crate::segment`,
-//! `crate::cold_store`, `crate::io_budget`, and `crate::placement` are the
+//! `crate::cold_store`, and `crate::placement` are the
 //! single source of truth for storage layout types. This `layout` module is a
 //! **documented facade** that groups those contracts by storage domain for
 //! external callers and integration tests.

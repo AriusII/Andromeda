@@ -19,7 +19,7 @@ use rustls::{
 
 use crate::{
     EarlyDataPolicy,
-    identity::{ParsedCertificate, RawCertificate},
+    mtls_identity::{ParsedCertificate, RawCertificate},
 };
 
 /// Returns `true` when the `runtime-quinn` feature is active and its dependency
@@ -426,8 +426,6 @@ fn security_error(message: impl Into<String>) -> AndromedaError {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn runtime_quinn_dependency_wiring_is_available() {
         assert!(runtime_quinn_dependencies_available());

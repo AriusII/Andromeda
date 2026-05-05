@@ -42,6 +42,7 @@ use crate::DefinitionBatchId;
 /// - **DeprecateProcedure**: A procedure is marked as deprecated but remains in history.
 /// - **DropProcedure**: A procedure is removed from the active catalog.
 /// - **ApplyCatalogVersion**: A batch of mutations has been applied; version is now visible.
+/// - **CatalogCheckpoint**: A recovery checkpoint records the visible catalog version.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CatalogWalRecord {
     /// Creation of a new procedure.
@@ -131,9 +132,30 @@ pub enum CatalogWalRecord {
         /// Log sequence number of this commit record (assigned by storage WAL).
         lsn: u64,
     },
+
+    /// Recovery checkpoint for the visible catalog state.
+    CatalogCheckpoint {
+        /// Log sequence number covered by this checkpoint.
+        checkpoint_lsn: u64,
+        /// Catalog version visible at the checkpoint.
+        catalog_version: CatalogVersion,
+        /// Number of visible procedures at this catalog version.
+        visible_procedure_count: usize,
+    },
 }
 
 impl CatalogWalRecord {
+    /// Return the catalog version carried by records that publish one.
+    pub fn catalog_version(&self) -> Option<CatalogVersion> {
+        match self {
+            Self::ApplyCatalogVersion { version, .. } => Some(*version),
+            Self::CatalogCheckpoint {
+                catalog_version, ..
+            } => Some(*catalog_version),
+            _ => None,
+        }
+    }
+
     /// Validates the record's internal invariants.
     ///
     /// This performs checks that can be done without external state:
@@ -267,6 +289,25 @@ impl CatalogWalRecord {
                     return Err(AndromedaError::new(
                         AndromedaErrorKind::Catalog,
                         "catalog WAL apply version record: lsn must not be zero",
+                    ));
+                }
+                Ok(())
+            }
+            Self::CatalogCheckpoint {
+                checkpoint_lsn,
+                catalog_version,
+                visible_procedure_count: _,
+            } => {
+                if *checkpoint_lsn == 0 {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Catalog,
+                        "catalog WAL checkpoint record: checkpoint_lsn must not be zero",
+                    ));
+                }
+                if catalog_version.get() == 0 {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Catalog,
+                        "catalog WAL checkpoint record: catalog_version must not be zero",
                     ));
                 }
                 Ok(())

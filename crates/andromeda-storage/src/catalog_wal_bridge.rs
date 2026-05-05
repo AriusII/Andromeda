@@ -1,10 +1,13 @@
-//! Codec for encoding/decoding catalog WAL records.
+//! Bridge for encoding and decoding catalog WAL records at the storage boundary.
 //!
 //! This module owns:
 //! - `encode_catalog_record`: Deterministic binary encoding to Vec<u8>
 //! - `decode_catalog_record`: Binary decoding with validation
 //! - Checksum validation (SHA256 digest of payload)
 //! - LSN-addressable record boundaries
+//!
+//! `wal_record_catalog` owns the semantic record types and invariants. This
+//! module owns the durable byte representation used by storage WAL replay.
 //!
 //! ## Encoding Format
 //!

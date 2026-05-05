@@ -1,15 +1,15 @@
-//! D4: QUIC Connection-to-Executor Dispatch Bridge
+//! D4: QUIC Procedure Gateway
 //!
-//! This module bridges the QUIC transport layer ([`Connection`], [`CertificateIdentity`],
-//! [`SurfacePlane`]) to the execution layer (executor admission, invocation context,
-//! result streams).
+//! This module exposes the QUIC-side gateway state needed before a Procedure
+//! invocation is handed to the execution layer: authenticated connection
+//! evidence, surface-plane binding, and stream-to-invocation correlation.
 //!
 //! ## Architecture
 //!
-//! The bridge enforces the authorization boundary:
+//! The gateway enforces transport-side dispatch preconditions:
 //!
 //! ```text
-//! QUIC Transport                    Executor
+//! QUIC Transport                    Executor-owned admission
 //! ─────────────────────────────────────────────────
 //! ┌─────────────────┐
 //! │ QuicConnection  │
@@ -19,35 +19,29 @@
 //!          │
 //!          ▼
 //! ┌──────────────────────────────────────────────┐
-//! │ ExecutorDispatchBridge                       │
+//! │ ProcedureGateway                             │
 //! │                                              │
-//! │ 1. Validate cert scope ≈ plane              │
-//! │ 2. Call SurfacePlaneAuthorizer               │
-//! │ 3. If denied: emit pre-tx event, return err  │
-//! │ 4. If allowed: create AuthorizedProcedureDispatch
-//! │ 5. Map QUIC stream → InvocationRequest       │
-//! │ 6. Pass to executor with token              │
-//! │ 7. Encode result to frames                   │
+//! │ 1. Require bound mTLS identity               │
+//! │ 2. Validate cert scope ≈ plane               │
+//! │ 3. Validate Active connection state          │
+//! │ 4. Map QUIC stream → InvocationId            │
 //! └──────────────────────────────────────────────┘
 //!          │
 //!          ▼
-//! ┌─────────────────┐
-//! │ LocalExecutor    │
-//! │ (admitted gate)  │
-//! └─────────────────┘
+//! andromeda-exec SurfacePlaneAuthorizer
 //! ```
 //!
-//! ## Authorization Flow
+//! ## Dispatch Flow
 //!
 //! - **Certificate Identity Required**: The QUIC connection must have a bound
 //!   certificate identity before dispatch. If absent, returns `AuthorizationError`.
 //! - **Plane Scope Match**: The certificate's `surface_scope` is derived from
 //!   the connection's [`SurfacePlane`] via `plane_to_required_surface_scope()`.
-//! - **Pre-Transaction Rejection**: If authorization is denied, no executor
-//!   invocation occurs. The bridge emits an `ExecutionTransitionTrace` with
-//!   terminal code but no transaction/LSN evidence.
 //! - **Stream Correlation**: QUIC stream ID is bound to [`InvocationId`] via
 //!   a stable, deterministic mapping.
+//! - **Authorization Ownership**: Permission evaluation remains in
+//!   `andromeda-exec`, which already depends on this crate and owns execution
+//!   admission. This avoids a reverse dependency from QUIC to executor.
 //!
 //! ## Exclusions (V0)
 //!
@@ -56,30 +50,28 @@
 //!   `runtime-quinn` feature in D4 listener integration.
 //! - No stream multiplexing: result-to-frame encoding is a contract surface,
 //!   not implemented here (D5 concern).
-//! - No gRPC: invocation is typed, not gRPC-mapped.
+//! - No gRPC: Procedure invocation is typed, not gRPC-mapped.
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, InvocationId};
-use andromeda_observe::{
-    AuthorizationDenialReason, AuthorizationOutcome, CertificateIdentity, PrincipalRegistry,
-    TraceId,
-};
+use andromeda_observe::CertificateIdentity;
 
 use crate::{Connection, SurfacePlane};
 
-/// Bridges a QUIC connection and certificate identity to executor dispatch.
+/// QUIC-side gateway for Procedure dispatch.
 ///
 /// This type holds the connection state, certificate identity, and surface plane,
-/// and provides a single method to authorize and route an invocation request to
-/// the executor layer.
+/// and exposes the transport evidence needed by the executor-owned admission
+/// gate.
 ///
 /// ## Type Invariants
 ///
 /// - The connection must be in [`LifecycleState::Active`] before dispatch.
 /// - The certificate identity must be bound to the connection.
 /// - The certificate scope must match the connection plane.
-/// - Authorization must succeed before any executor invocation.
+/// - Executor authorization must occur after this gateway validates transport
+///   preconditions and before transaction creation.
 #[derive(Debug)]
-pub struct ExecutorDispatchBridge<'a> {
+pub struct ProcedureGateway<'a> {
     /// The QUIC connection, bound to a surface plane.
     connection: &'a Connection,
 
@@ -95,8 +87,8 @@ pub struct ExecutorDispatchBridge<'a> {
     plane: SurfacePlane,
 }
 
-impl<'a> ExecutorDispatchBridge<'a> {
-    /// Constructs a new bridge from a connection and its bound certificate identity.
+impl<'a> ProcedureGateway<'a> {
+    /// Constructs a new gateway from a connection and its bound certificate identity.
     ///
     /// Returns `Err` if:
     /// - The connection has no bound certificate identity.
@@ -105,21 +97,21 @@ impl<'a> ExecutorDispatchBridge<'a> {
     /// # Example
     ///
     /// ```no_run
-    /// use andromeda_quic::{Connection, SurfacePlane, ExecutorDispatchBridge};
+    /// use andromeda_quic::{Connection, ProcedureGateway, SurfacePlane};
     /// # use andromeda_observe::CertificateIdentity;
     /// # use andromeda_observe::SurfaceScope;
     ///
     /// # let mut conn = Connection::new(SurfacePlane::Application);
     /// # let identity = CertificateIdentity::new("abc123", "svc-001".into(), SurfaceScope::Application).unwrap();
     /// # conn.set_certificate_identity(identity.clone()).unwrap();
-    /// let bridge = ExecutorDispatchBridge::new(&conn)?;
+    /// let gateway = ProcedureGateway::new(&conn)?;
     /// # Ok::<(), andromeda_core::AndromedaError>(())
     /// ```
     pub fn new(connection: &'a Connection) -> AndromedaResult<Self> {
         let certificate_identity = connection.certificate_identity().ok_or_else(|| {
             AndromedaError::new(
                 AndromedaErrorKind::Security,
-                "executor dispatch bridge requires bound certificate identity",
+                "procedure gateway requires bound certificate identity",
             )
         })?;
 
@@ -156,66 +148,6 @@ impl<'a> ExecutorDispatchBridge<'a> {
         self.connection
     }
 
-    /// Authorize procedure dispatch using the bound certificate and connection plane.
-    ///
-    /// This is the primary authorization gate. It calls `SurfacePlaneAuthorizer::authorize_procedure_dispatch()`
-    /// with the certificate fingerprint and plane. If authorization is denied, the denial is returned
-    /// as an [`AuthorizationOutcome`] so callers can emit the embedded security audit trace.
-    ///
-    /// If authorization succeeds, an [`AuthorizedProcedureDispatch`] token is returned.
-    /// This token proves that the dispatch was authorized before any executor invocation.
-    ///
-    /// # Security Properties
-    ///
-    /// - **Pre-transaction**: Authorization decisions are made *before* executor invocation.
-    /// - **Plane-aware**: The authorizer enforces that only Application plane permits ExecuteProcedure.
-    /// - **Auditable**: Both allow and deny outcomes carry security audit traces.
-    /// - **No side effects**: This method does not create transactions, emit invocations, or modify state.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// # use andromeda_quic::ExecutorDispatchBridge;
-    /// # use andromeda_observe::TraceId;
-    /// # use andromeda_exec::surface_gate::SurfacePlaneAuthorizer;
-    /// # let registry = andromeda_observe::PrincipalRegistry::new();
-    /// # let bridge = ExecutorDispatchBridge::new(&andromeda_quic::Connection::new(andromeda_quic::SurfacePlane::Application))?;
-    ///
-    /// let authorizer = SurfacePlaneAuthorizer::new(&registry);
-    /// let outcome = bridge.authorize_procedure_dispatch(
-    ///     &authorizer,
-    ///     TraceId::new(42),
-    /// );
-    ///
-    /// match outcome {
-    ///     Ok(Ok(token)) => {
-    ///         // Authorization succeeded; token can be passed to executor.
-    ///         println!("Authorized for plane: {:?}", token.plane());
-    ///     }
-    ///     Ok(Err(denial)) => {
-    ///         // Authorization denied; emit audit trace and return error.
-    ///         println!("Access denied: {:?}", denial);
-    ///     }
-    ///     Err(e) => {
-    ///         // System error (e.g., principal not found).
-    ///         println!("Authorization error: {}", e);
-    ///     }
-    /// }
-    /// # Ok::<(), andromeda_core::AndromedaError>(())
-    /// ```
-    pub fn authorize_procedure_dispatch(
-        &self,
-        authorizer: &andromeda_exec::surface_gate::SurfacePlaneAuthorizer,
-        trace_id: TraceId,
-    ) -> AndromedaResult<Result<andromeda_exec::surface_gate::AuthorizedProcedureDispatch, AuthorizationOutcome>>
-    {
-        authorizer.authorize_procedure_dispatch(
-            trace_id,
-            self.plane,
-            &self.certificate_identity.fingerprint,
-        )
-    }
-
     /// Map a QUIC stream ID to an InvocationId.
     ///
     /// This is a deterministic, stable mapping used to correlate QUIC streams
@@ -233,12 +165,13 @@ impl<'a> ExecutorDispatchBridge<'a> {
     /// # Example
     ///
     /// ```no_run
-    /// # use andromeda_quic::ExecutorDispatchBridge;
+    /// # use andromeda_quic::ProcedureGateway;
     /// # use andromeda_core::InvocationId;
-    /// # let bridge = ExecutorDispatchBridge::new(&andromeda_quic::Connection::new(andromeda_quic::SurfacePlane::Application))?;
+    /// # let conn = andromeda_quic::Connection::new(andromeda_quic::SurfacePlane::Application);
+    /// # let gateway = ProcedureGateway::new(&conn)?;
     ///
     /// let stream_id = 5u64;
-    /// let invocation_id = bridge.map_stream_to_invocation_id(stream_id);
+    /// let invocation_id = gateway.map_stream_to_invocation_id(stream_id);
     /// assert_eq!(invocation_id, InvocationId::new(stream_id));
     /// # Ok::<(), andromeda_core::AndromedaError>(())
     /// ```
@@ -246,7 +179,7 @@ impl<'a> ExecutorDispatchBridge<'a> {
         InvocationId::new(stream_id)
     }
 
-    /// Validate that the bridge is in a state suitable for dispatch.
+    /// Validate that the gateway is in a state suitable for dispatch.
     ///
     /// Returns `Ok(())` if the connection is active and the certificate identity is present.
     /// Returns `Err` with a descriptive error if either condition fails.
@@ -280,8 +213,8 @@ impl<'a> ExecutorDispatchBridge<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::LifecycleState;
     use andromeda_observe::SurfaceScope;
-    use crate::{LifecycleState, SurfaceListenerConfig};
 
     fn setup_application_connection() -> Connection {
         let mut conn = Connection::new(SurfacePlane::Application);
@@ -320,18 +253,20 @@ mod tests {
     }
 
     #[test]
-    fn bridge_rejects_connection_without_certificate_identity() {
+    fn gateway_rejects_connection_without_certificate_identity() {
         let conn = Connection::new(SurfacePlane::Application);
-        let result = ExecutorDispatchBridge::new(&conn);
+        let result = ProcedureGateway::new(&conn);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .message()
-            .contains("certificate identity"));
+        assert!(
+            result
+                .unwrap_err()
+                .message()
+                .contains("certificate identity")
+        );
     }
 
     #[test]
-    fn bridge_rejects_scope_mismatch() {
+    fn gateway_rejects_scope_mismatch() {
         let mut conn = Connection::new(SurfacePlane::Application);
         // Bind an Administration-scoped identity to an Application plane connection.
         let wrong_scope_identity = CertificateIdentity::new(
@@ -346,55 +281,46 @@ mod tests {
     }
 
     #[test]
-    fn bridge_accepts_valid_application_connection() {
+    fn gateway_accepts_valid_application_connection() {
         let conn = setup_application_connection();
-        let bridge = ExecutorDispatchBridge::new(&conn).unwrap();
+        let gateway = ProcedureGateway::new(&conn).unwrap();
 
-        assert_eq!(bridge.surface_plane(), SurfacePlane::Application);
+        assert_eq!(gateway.surface_plane(), SurfacePlane::Application);
+        assert_eq!(gateway.certificate_identity().fingerprint, "a".repeat(64));
+        assert_eq!(gateway.certificate_identity().subject, "test-service");
         assert_eq!(
-            bridge.certificate_identity().fingerprint,
-            "a".repeat(64)
-        );
-        assert_eq!(bridge.certificate_identity().subject, "test-service");
-        assert_eq!(
-            bridge.certificate_identity().surface,
+            gateway.certificate_identity().surface,
             SurfaceScope::Application
         );
     }
 
     #[test]
-    fn bridge_accepts_valid_administration_connection() {
+    fn gateway_accepts_valid_administration_connection() {
         let conn = setup_administration_connection();
-        let bridge = ExecutorDispatchBridge::new(&conn).unwrap();
+        let gateway = ProcedureGateway::new(&conn).unwrap();
 
-        assert_eq!(bridge.surface_plane(), SurfacePlane::Administration);
-        assert_eq!(
-            bridge.certificate_identity().fingerprint,
-            "b".repeat(64)
-        );
+        assert_eq!(gateway.surface_plane(), SurfacePlane::Administration);
+        assert_eq!(gateway.certificate_identity().fingerprint, "b".repeat(64));
     }
 
     #[test]
-    fn bridge_accepts_valid_ha_connection() {
+    fn gateway_accepts_valid_ha_connection() {
         let conn = setup_ha_connection();
-        let bridge = ExecutorDispatchBridge::new(&conn).unwrap();
+        let gateway = ProcedureGateway::new(&conn).unwrap();
 
-        assert_eq!(bridge.surface_plane(), SurfacePlane::HighAvailability);
-        assert_eq!(
-            bridge.certificate_identity().fingerprint,
-            "c".repeat(64)
-        );
+        assert_eq!(gateway.surface_plane(), SurfacePlane::HighAvailability);
+        assert_eq!(gateway.certificate_identity().fingerprint, "c".repeat(64));
     }
 
     #[test]
     fn stream_to_invocation_id_mapping_is_deterministic() {
         let conn = setup_application_connection();
-        let bridge = ExecutorDispatchBridge::new(&conn).unwrap();
+        let gateway = ProcedureGateway::new(&conn).unwrap();
 
         // Same stream_id should always map to same InvocationId.
         let stream_id = 42u64;
-        let inv_id_1 = bridge.map_stream_to_invocation_id(stream_id);
-        let inv_id_2 = bridge.map_stream_to_invocation_id(stream_id);
+        let inv_id_1 = gateway.map_stream_to_invocation_id(stream_id);
+        let inv_id_2 = gateway.map_stream_to_invocation_id(stream_id);
         assert_eq!(inv_id_1, inv_id_2);
         assert_eq!(inv_id_1, InvocationId::new(stream_id));
     }
@@ -402,10 +328,10 @@ mod tests {
     #[test]
     fn stream_to_invocation_id_mapping_is_injective() {
         let conn = setup_application_connection();
-        let bridge = ExecutorDispatchBridge::new(&conn).unwrap();
+        let gateway = ProcedureGateway::new(&conn).unwrap();
 
-        let inv_id_1 = bridge.map_stream_to_invocation_id(1);
-        let inv_id_2 = bridge.map_stream_to_invocation_id(2);
+        let inv_id_1 = gateway.map_stream_to_invocation_id(1);
+        let inv_id_2 = gateway.map_stream_to_invocation_id(2);
         assert_ne!(inv_id_1, inv_id_2);
     }
 
@@ -422,9 +348,9 @@ mod tests {
 
         // Connection is still in Hello state.
         assert_eq!(conn.state(), LifecycleState::Hello);
-        let bridge = ExecutorDispatchBridge::new(&conn).unwrap();
+        let gateway = ProcedureGateway::new(&conn).unwrap();
 
-        let result = bridge.validate_dispatch_preconditions();
+        let result = gateway.validate_dispatch_preconditions();
         assert!(result.is_err());
         assert!(result.unwrap_err().message().contains("Active"));
     }
@@ -432,35 +358,38 @@ mod tests {
     #[test]
     fn validate_dispatch_preconditions_accepts_active_authenticated_connection() {
         let conn = setup_application_connection();
-        let bridge = ExecutorDispatchBridge::new(&conn).unwrap();
+        let gateway = ProcedureGateway::new(&conn).unwrap();
 
         // Manually set connection to Active for this test (normally done by handshake).
         // Note: Connection doesn't expose a state setter for tests, so we construct
         // a new Connection with mocked state. For now, we test the identity binding.
 
-        // This test focuses on the happy path: bridge created successfully
+        // This test focuses on the happy path: gateway created successfully
         // from an authenticated connection means preconditions can be validated.
-        assert_eq!(bridge.certificate_identity().subject, "test-service");
-        assert_eq!(bridge.surface_plane(), SurfacePlane::Application);
+        assert_eq!(gateway.certificate_identity().subject, "test-service");
+        assert_eq!(gateway.surface_plane(), SurfacePlane::Application);
     }
 
     #[test]
-    fn bridge_exposes_underlying_connection() {
+    fn gateway_exposes_underlying_connection() {
         let conn = setup_application_connection();
-        let bridge = ExecutorDispatchBridge::new(&conn).unwrap();
+        let gateway = ProcedureGateway::new(&conn).unwrap();
 
-        assert_eq!(bridge.connection().surface_plane(), SurfacePlane::Application);
+        assert_eq!(
+            gateway.connection().surface_plane(),
+            SurfacePlane::Application
+        );
     }
 
     #[test]
-    fn bridge_holds_immutable_references() {
+    fn gateway_holds_immutable_references() {
         let conn = setup_application_connection();
-        let bridge = ExecutorDispatchBridge::new(&conn).unwrap();
+        let gateway = ProcedureGateway::new(&conn).unwrap();
 
-        // Verify that the bridge holds references and does not take ownership.
+        // Verify that the gateway holds references and does not take ownership.
         // (This is implicit in the type signature, but document it in the test.)
-        let identity_ref_1 = bridge.certificate_identity();
-        let identity_ref_2 = bridge.certificate_identity();
+        let identity_ref_1 = gateway.certificate_identity();
+        let identity_ref_2 = gateway.certificate_identity();
         assert_eq!(identity_ref_1.fingerprint, identity_ref_2.fingerprint);
     }
 }

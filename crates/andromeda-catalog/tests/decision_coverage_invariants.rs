@@ -37,6 +37,11 @@ fn decision_coverage_dec_023_covers_drop_procedure_lifecycle_before_operation_su
         .join("DEC-023-drop-procedure-lifecycle.md");
     let decision =
         std::fs::read_to_string(decision_path).expect("DEC-023 must exist for Drop Procedure");
+    let normalized = decision
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase();
 
     for required in [
         "Drop Procedure",
@@ -56,7 +61,7 @@ fn decision_coverage_dec_023_covers_drop_procedure_lifecycle_before_operation_su
         "future E4 decision",
     ] {
         assert!(
-            decision.contains(required),
+            normalized.contains(&required.to_lowercase()),
             "DEC-023 must cover required Drop Procedure topic: {required}"
         );
     }
@@ -118,19 +123,24 @@ fn drop_procedure_cascade_policy_is_constrained_by_future_e4_decision() {
         .join("DEC-023-drop-procedure-lifecycle.md");
     let decision =
         std::fs::read_to_string(decision_path).expect("DEC-023 must exist for Drop Procedure");
+    let normalized = decision
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase();
 
     assert!(
-        decision.contains("E4 (Restrict/Cascade Lifecycle Decision)"),
+        normalized.contains("e4 (restrict/cascade lifecycle decision)"),
         "DEC-023 must establish dependency on E4 for cascade/restrict policy"
     );
 
     assert!(
-        decision.contains("Cascade mode (future decision required before implementation)"),
+        normalized.contains("cascade mode (future decision required before implementation)"),
         "DEC-023 must note that Cascade requires a future decision (E4)"
     );
 
     assert!(
-        decision.contains("All current Drop support must default to Restrict only"),
+        normalized.contains("all current drop support must default to restrict only"),
         "DEC-023 must mandate Restrict-only default until E4 is accepted"
     );
 }

@@ -323,10 +323,7 @@ impl RowEncoder {
                     buffer.extend_from_slice(&values[i].encode()?);
                 } else {
                     // For fixed-width nulls, write zeros as placeholder
-                    buffer.resize(
-                        buffer.len() + col.scalar_type.fixed_byte_length(),
-                        0,
-                    );
+                    buffer.resize(buffer.len() + col.scalar_type.fixed_byte_length(), 0);
                 }
             }
         }
@@ -403,7 +400,8 @@ impl RowEncoder {
                     )));
                 }
 
-                let datum = Datum::decode_scalar(col.scalar_type, &bytes[offset..offset + col_bytes])?;
+                let datum =
+                    Datum::decode_scalar(col.scalar_type, &bytes[offset..offset + col_bytes])?;
                 values.push(datum);
                 offset += col_bytes;
             }
@@ -530,11 +528,7 @@ mod tests {
         let schema = create_test_schema();
         let encoder = RowEncoder::new(schema.clone());
 
-        let values = vec![
-            Datum::Int64(42),
-            Datum::Null,
-            Datum::Bool(true),
-        ];
+        let values = vec![Datum::Int64(42), Datum::Null, Datum::Bool(true)];
 
         let encoded = encoder.encode(&values).expect("encode failed");
         let decoded = encoder.decode(&encoded).expect("decode failed");

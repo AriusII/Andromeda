@@ -24,10 +24,10 @@
 //! - DEC-023: Drop Procedure Lifecycle Semantics (restrict rule, historical retention)
 
 use andromeda_catalog::{
-    AccessMode, CatalogDefinition, CatalogLifecycleTarget, CatalogObjectRef, CompatibilityPolicy,
-    DefinitionBatch, DefinitionBatchId, DefinitionOperation, IsolationPolicy, MultiResultPolicy,
-    ObjectKind, ProcedureContract, ProcedureContractCandidate, ProcedureErrorPolicy,
-    ProtocolLayoutRef, QualifiedName, ResultMetadataPolicy, StatsVersion, TransactionPolicy,
+    AccessMode, CatalogDefinition, CatalogObjectRef, CompatibilityPolicy, DefinitionBatch,
+    DefinitionBatchId, DefinitionOperation, IsolationPolicy, MultiResultPolicy, ObjectKind,
+    ProcedureContract, ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef,
+    QualifiedName, ResultMetadataPolicy, StatsVersion, TransactionPolicy,
 };
 use andromeda_core::{
     CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, DatabaseId, NamespaceId,
@@ -66,12 +66,12 @@ fn test_object_ref(
     }
 }
 
-/// Helper: Create a test ProcedureContract with customizable hash
+/// Helper: Create a test ProcedureContract with a canonical materialized hash.
 fn test_procedure_contract(
     id: u64,
     name: &str,
     version: CatalogVersion,
-    contract_hash: ContractHash,
+    _contract_hash: ContractHash,
 ) -> ProcedureContract {
     ProcedureContractCandidate {
         object: test_object_ref(id, name, ObjectKind::Procedure, version),
@@ -119,25 +119,6 @@ fn batch_with_create(
         operations: vec![DefinitionOperation::Create(CatalogDefinition::Procedure(
             contract,
         ))],
-    }
-}
-
-/// Helper: Create a DefinitionBatch with Deprecate operation
-fn batch_with_deprecate(
-    base_version: CatalogVersion,
-    object_id: u64,
-    name: &str,
-    object_kind: ObjectKind,
-) -> DefinitionBatch {
-    let target = CatalogLifecycleTarget {
-        object: test_object_ref(object_id, name, object_kind, base_version),
-    };
-    DefinitionBatch {
-        batch_id: DefinitionBatchId::new(TEST_BATCH_ID_BASE + base_version.get()),
-        database_id: TEST_DB_ID,
-        namespace_id: TEST_NS_ID,
-        base_version,
-        operations: vec![DefinitionOperation::Deprecate(target)],
     }
 }
 
@@ -195,7 +176,8 @@ fn test_batch_create_procedure_generates_correct_version() {
         .expect("create operation must have definition");
     if let CatalogDefinition::Procedure(contract) = definition {
         assert_eq!(contract.object.catalog_version, next_version);
-        assert_eq!(contract.contract_hash, contract_hash);
+        assert_eq!(contract.contract_hash, contract.canonical_hash());
+        assert!(!contract.contract_hash.is_zero());
         assert_eq!(contract.object.object_id, CatalogObjectId::new(100));
     } else {
         panic!("Expected Procedure definition");
@@ -223,7 +205,7 @@ fn test_batch_create_procedure_generates_correct_version() {
 /// Once Alter is implemented, this test will be replaced with actual Alter operations.
 #[test]
 fn test_batch_alter_procedure_semantics_preserves_id_increments_version() {
-    // First, create a procedure at version 1 with hash 0xAA
+    // First, create a procedure at version 1.
     let base_v1 = CatalogVersion::new(1);
     let v2 = CatalogVersion::new(2);
     let hash_v1 = ContractHash::test_vector(0xAA);
@@ -243,12 +225,12 @@ fn test_batch_alter_procedure_semantics_preserves_id_increments_version() {
     } else {
         panic!("expected procedure");
     };
-    assert_eq!(original_hash, hash_v1);
+    assert!(!original_hash.is_zero());
 
-    // Simulate an Alter by creating a "replacement" procedure at v3 with different hash
+    // Simulate an Alter by creating a "replacement" procedure at v3.
     // (In real implementation, this would be an Alter operation on the same ID)
     let v3 = CatalogVersion::new(3);
-    let hash_v2 = ContractHash::test_vector(0xBB); // Different hash simulates compatible change
+    let hash_v2 = ContractHash::test_vector(0xBB);
 
     // For this verification, we create a new batch as if v2 is now base
     let batch2 = batch_with_create(v2, 100, "test.ProcX", v3, hash_v2);
@@ -271,8 +253,8 @@ fn test_batch_alter_procedure_semantics_preserves_id_increments_version() {
         panic!("expected procedure");
     };
 
-    // Hashes may differ (compatible change) or stay same (exact-hash compatible)
-    assert_eq!(new_hash, hash_v2);
+    // The simulated replacement has the same shape, so the canonical hash remains stable.
+    assert_eq!(new_hash, original_hash);
 
     // Key verification: Both batches maintain version monotonicity
     // and each increments version by exactly 1
@@ -320,8 +302,6 @@ fn test_batch_drop_procedure_validates_restrict_rule() {
     // Now create a second procedure that structurally depends on the first
     // (has the first proc's name in structured_inputs)
     let v3 = CatalogVersion::new(3);
-    let dependent_hash = ContractHash::test_vector(0x02);
-
     // Create a procedure with a structured input dependency
     let dependent_contract = ProcedureContractCandidate {
         object: test_object_ref(102, "test.DepOnDropMe", ObjectKind::Procedure, v3),
@@ -371,7 +351,7 @@ fn test_batch_drop_procedure_validates_restrict_rule() {
     //
     // The fact that we can create a procedure with structured_inputs dependency
     // and have it pass dry_run verification proves the infrastructure is ready.
-    assert!(plan2.mutation_plan.deltas.len() > 0);
+    assert!(!plan2.mutation_plan.deltas.is_empty());
 }
 
 // =============================================================================

@@ -1299,12 +1299,12 @@ impl EventEnvelope {
     fn validate_transaction_correlation(&self) -> AndromedaResult<()> {
         match &self.event {
             TraceEvent::WalEvent(trace) => {
-                if let Some(transaction_id) = trace.transaction_id {
-                    if self.correlation.transaction_id != Some(transaction_id) {
-                        return Err(observe_error(
-                            "WAL event transaction_id correlation must match WAL trace payload",
-                        ));
-                    }
+                if let Some(transaction_id) = trace.transaction_id
+                    && self.correlation.transaction_id != Some(transaction_id)
+                {
+                    return Err(observe_error(
+                        "WAL event transaction_id correlation must match WAL trace payload",
+                    ));
                 }
 
                 if trace.operation == WalOperation::Flush
@@ -1364,28 +1364,28 @@ impl EventEnvelope {
                         "terminal transaction transition traces require durable_lsn correlation",
                     ));
                 }
-                if let Some(req) = trace.request_id {
-                    if self.correlation.request_id != Some(req) {
-                        return Err(observe_error(
-                            "transaction transition traces require matching request_id correlation when payload carries one",
-                        ));
-                    }
+                if let Some(req) = trace.request_id
+                    && self.correlation.request_id != Some(req)
+                {
+                    return Err(observe_error(
+                        "transaction transition traces require matching request_id correlation when payload carries one",
+                    ));
                 }
-                if let Some(sess) = trace.session_id {
-                    if self.correlation.session_id != Some(sess) {
-                        return Err(observe_error(
-                            "transaction transition traces require matching session_id correlation when payload carries one",
-                        ));
-                    }
+                if let Some(sess) = trace.session_id
+                    && self.correlation.session_id != Some(sess)
+                {
+                    return Err(observe_error(
+                        "transaction transition traces require matching session_id correlation when payload carries one",
+                    ));
                 }
             }
             TraceEvent::ExecutionTransition(trace) => {
-                if let Some(payload_tx) = trace.transaction_id {
-                    if self.correlation.transaction_id != Some(payload_tx) {
-                        return Err(observe_error(
-                            "execution transition traces require matching transaction_id correlation when payload carries one",
-                        ));
-                    }
+                if let Some(payload_tx) = trace.transaction_id
+                    && self.correlation.transaction_id != Some(payload_tx)
+                {
+                    return Err(observe_error(
+                        "execution transition traces require matching transaction_id correlation when payload carries one",
+                    ));
                 }
                 if let Some(payload_lsn) = trace.durable_lsn {
                     if self.correlation.durable_lsn != Some(payload_lsn) {
@@ -1411,19 +1411,19 @@ impl EventEnvelope {
                         "execution transition traces with a pre-transaction rejection reason must not carry transaction or durable_lsn correlation",
                     ));
                 }
-                if let Some(req) = trace.request_id {
-                    if self.correlation.request_id != Some(req) {
-                        return Err(observe_error(
-                            "execution transition traces require matching request_id correlation when payload carries one",
-                        ));
-                    }
+                if let Some(req) = trace.request_id
+                    && self.correlation.request_id != Some(req)
+                {
+                    return Err(observe_error(
+                        "execution transition traces require matching request_id correlation when payload carries one",
+                    ));
                 }
-                if let Some(sess) = trace.session_id {
-                    if self.correlation.session_id != Some(sess) {
-                        return Err(observe_error(
-                            "execution transition traces require matching session_id correlation when payload carries one",
-                        ));
-                    }
+                if let Some(sess) = trace.session_id
+                    && self.correlation.session_id != Some(sess)
+                {
+                    return Err(observe_error(
+                        "execution transition traces require matching session_id correlation when payload carries one",
+                    ));
                 }
             }
             _ => {}
@@ -1433,12 +1433,12 @@ impl EventEnvelope {
     }
 
     fn validate_catalog_correlation(&self) -> AndromedaResult<()> {
-        if let TraceEvent::Manifest(trace) = &self.event {
-            if self.correlation.catalog_version != Some(trace.catalog_version) {
-                return Err(observe_error(
-                    "manifest traces require matching catalog_version correlation",
-                ));
-            }
+        if let TraceEvent::Manifest(trace) = &self.event
+            && self.correlation.catalog_version != Some(trace.catalog_version)
+        {
+            return Err(observe_error(
+                "manifest traces require matching catalog_version correlation",
+            ));
         }
 
         Ok(())

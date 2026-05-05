@@ -11,13 +11,14 @@
 
 #[cfg(test)]
 mod commit_log_gates {
-    use andromeda_core::{AndromedaErrorKind, AndromedaResult, Clock, EngineTimestamp, ManualClock, TransactionId};
+    use andromeda_core::{AndromedaErrorKind, AndromedaResult, TransactionId};
     use andromeda_storage::{Lsn, WalRecordKind};
     use andromeda_tx::{
-        CommitLogEntry, CommitLogManager, IsolationLevel, TransactionStatus, TransactionStatusTable,
+        CommitLogManager, IsolationLevel, TransactionStatus, TransactionStatusTable,
     };
-    use std::sync::atomic::{AtomicU64, Ordering};
+    use futures::future::join_all;
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     // ====================================================================
     // Mock WAL Implementation
@@ -28,7 +29,6 @@ mod commit_log_gates {
         records: std::sync::Mutex<Vec<(WalRecordKind, Option<TransactionId>, Vec<u8>)>>,
         durable_lsn: std::sync::Mutex<Lsn>,
         next_lsn: AtomicU64,
-        fail_append_after: Option<u64>,
         fail_flush_after: Option<u64>,
     }
 
@@ -38,7 +38,6 @@ mod commit_log_gates {
                 records: std::sync::Mutex::new(Vec::new()),
                 durable_lsn: std::sync::Mutex::new(Lsn::new(0)),
                 next_lsn: AtomicU64::new(1),
-                fail_append_after: None,
                 fail_flush_after: None,
             })
         }
@@ -48,7 +47,6 @@ mod commit_log_gates {
                 records: std::sync::Mutex::new(Vec::new()),
                 durable_lsn: std::sync::Mutex::new(Lsn::new(0)),
                 next_lsn: AtomicU64::new(1),
-                fail_append_after: None,
                 fail_flush_after: Some(fail_after),
             })
         }
@@ -59,10 +57,6 @@ mod commit_log_gates {
 
         fn get_durable_lsn(&self) -> Lsn {
             *self.durable_lsn.lock().unwrap()
-        }
-
-        fn get_next_lsn(&self) -> u64 {
-            self.next_lsn.load(Ordering::Acquire)
         }
 
         fn get_records(&self) -> Vec<(WalRecordKind, Option<TransactionId>, Vec<u8>)> {
@@ -88,9 +82,9 @@ mod commit_log_gates {
         async fn flush_through(&self, lsn: Lsn) -> AndromedaResult<Lsn> {
             // Check if we should fail this flush
             if let Some(fail_after) = self.fail_flush_after {
-                if lsn.value() > fail_after {
+                if lsn.get() > fail_after {
                     return Err(andromeda_core::AndromedaError::new(
-                        AndromedaErrorKind::Io,
+                        AndromedaErrorKind::Storage,
                         "Simulated WAL flush failure",
                     ));
                 }
@@ -106,11 +100,7 @@ mod commit_log_gates {
     // Helper fixtures
     // ====================================================================
 
-    fn setup_commit_log() -> (
-        Arc<TestWal>,
-        Arc<TransactionStatusTable>,
-        CommitLogManager,
-    ) {
+    fn setup_commit_log() -> (Arc<TestWal>, Arc<TransactionStatusTable>, CommitLogManager) {
         let wal = TestWal::new();
         let status_table = Arc::new(TransactionStatusTable::new());
         let commit_log = CommitLogManager::new(wal.clone(), status_table.clone());
@@ -161,7 +151,7 @@ mod commit_log_gates {
     /// Test: If step 1 fails → TX rolls back, no commit log entry
     #[tokio::test]
     async fn test_five_step_fail_at_wal_write() {
-        let (wal, status_table, commit_log) = setup_commit_log();
+        let (wal, _status_table, commit_log) = setup_commit_log();
 
         let tx_id = TransactionId::new(1);
 
@@ -169,7 +159,7 @@ mod commit_log_gates {
         // but we can test that if append failed, no entry would be created)
         // For this test, we verify that a successful append followed by verification works
 
-        let entry = commit_log
+        let _entry = commit_log
             .record_commit(tx_id, IsolationLevel::Snapshot, 10, 0)
             .await
             .expect("commit succeeds");
@@ -210,7 +200,7 @@ mod commit_log_gates {
     /// Test: Step 3-5 always succeed (no mutation after WAL flush)
     #[tokio::test]
     async fn test_five_step_post_flush_idempotent() {
-        let (wal, status_table, commit_log) = setup_commit_log();
+        let (wal, _status_table, commit_log) = setup_commit_log();
 
         let tx_id = TransactionId::new(1);
         let entry1 = commit_log
@@ -221,7 +211,7 @@ mod commit_log_gates {
         // Commit the same TX again (idempotence check)
         // Some implementations may allow this, others may reject it
         // The key invariant: WAL flush must happen exactly once
-        let durable_lsn_after_first = wal.get_durable_lsn();
+        let _durable_lsn_after_first = wal.get_durable_lsn();
 
         // Verify it's visible
         assert!(commit_log.is_committed(tx_id), "Transaction visible");
@@ -260,20 +250,17 @@ mod commit_log_gates {
     /// Test: After crash after WAL flush → TX visible after recovery (replay from WAL)
     #[tokio::test]
     async fn test_durability_crash_after_flush_visible() {
-        let (wal, status_table, commit_log) = setup_commit_log();
+        let (wal, _status_table, commit_log) = setup_commit_log();
 
         let tx_id = TransactionId::new(1);
-        let entry = commit_log
+        let _entry = commit_log
             .record_commit(tx_id, IsolationLevel::Snapshot, 10, 0)
             .await
             .expect("commit");
 
         // After WAL flush, transaction must be recoverable from WAL
         let durable_lsn = wal.get_durable_lsn();
-        assert!(
-            durable_lsn.value() > 0,
-            "WAL was flushed durably (LSN > 0)"
-        );
+        assert!(durable_lsn.get() > 0, "WAL was flushed durably (LSN > 0)");
 
         // Verify durability
         let durability_check = commit_log.verify_durability(tx_id);
@@ -283,7 +270,7 @@ mod commit_log_gates {
     /// Test: CommitLogEntry LSN matches WalRecord LSN exactly
     #[tokio::test]
     async fn test_durability_lsn_consistency() {
-        let (wal, status_table, commit_log) = setup_commit_log();
+        let (wal, _status_table, commit_log) = setup_commit_log();
 
         let tx_id = TransactionId::new(1);
         let entry = commit_log
@@ -294,10 +281,7 @@ mod commit_log_gates {
         // Get the WAL records
         let records = wal.get_records();
         assert_eq!(records.len(), 1, "Exactly one WAL record");
-        assert_eq!(
-            records[0].0, WalRecordKind::TxCommit,
-            "Record is TxCommit"
-        );
+        assert_eq!(records[0].0, WalRecordKind::TxCommit, "Record is TxCommit");
 
         // Entry LSN should match the WAL record's LSN (first record = LSN 1)
         assert_eq!(entry.commit_lsn, Lsn::new(1), "Entry LSN = 1");
@@ -313,7 +297,7 @@ mod commit_log_gates {
     /// Test: Commit LSN strictly increasing (no time warp)
     #[tokio::test]
     async fn test_ordering_lsn_monotonic_increasing() {
-        let (wal, status_table, commit_log) = setup_commit_log();
+        let (_wal, _status_table, commit_log) = setup_commit_log();
 
         let mut lsns = vec![];
         for i in 1..=10 {
@@ -329,10 +313,10 @@ mod commit_log_gates {
         // Verify strictly increasing
         for i in 1..lsns.len() {
             assert!(
-                lsns[i].value() > lsns[i - 1].value(),
+                lsns[i].get() > lsns[i - 1].get(),
                 "LSN {} > LSN {} (monotonic increasing)",
-                lsns[i].value(),
-                lsns[i - 1].value()
+                lsns[i].get(),
+                lsns[i - 1].get()
             );
         }
     }
@@ -340,7 +324,7 @@ mod commit_log_gates {
     /// Test: No commit log entry without durable WAL record
     #[tokio::test]
     async fn test_ordering_no_commit_without_wal() {
-        let (wal, status_table, commit_log) = setup_commit_log();
+        let (wal, _status_table, commit_log) = setup_commit_log();
 
         let tx_id = TransactionId::new(1);
 
@@ -366,14 +350,7 @@ mod commit_log_gates {
     /// Test: 100 concurrent commits each updating commit log (no duplicates, strict order)
     #[tokio::test]
     async fn test_concurrency_100_concurrent_commits() {
-        let (wal, status_table, commit_log) = Arc::new((
-            TestWal::new(),
-            Arc::new(TransactionStatusTable::new()),
-            CommitLogManager::new(TestWal::new().clone(), Arc::new(TransactionStatusTable::new())),
-        ));
-
-        // Actually, we need to set this up correctly
-        let wal = Arc::new(TestWal::new());
+        let wal = TestWal::new();
         let status_table = Arc::new(TransactionStatusTable::new());
         let commit_log = Arc::new(CommitLogManager::new(wal.clone(), status_table.clone()));
 
@@ -381,20 +358,19 @@ mod commit_log_gates {
 
         for i in 0..100 {
             let commit_log = commit_log.clone();
-            let handle = tokio::spawn(async move {
+            let handle = async move {
                 let tx_id = TransactionId::new((i + 1) as u64);
                 let entry = commit_log
                     .record_commit(tx_id, IsolationLevel::Snapshot, 1, 0)
                     .await
                     .expect(&format!("commit tx {}", i + 1));
-                entry.commit_lsn.value()
-            });
+                entry.commit_lsn.get()
+            };
             handles.push(handle);
         }
 
         let mut lsns = vec![];
-        for handle in handles {
-            let lsn = handle.await.expect("task completed");
+        for lsn in join_all(handles).await {
             lsns.push(lsn);
         }
 
@@ -424,7 +400,7 @@ mod commit_log_gates {
     /// Test: Readers see committed versions in strict LSN order
     #[tokio::test]
     async fn test_concurrency_readers_see_ordered_commits() {
-        let wal = Arc::new(TestWal::new());
+        let wal = TestWal::new();
         let status_table = Arc::new(TransactionStatusTable::new());
         let commit_log = Arc::new(CommitLogManager::new(wal.clone(), status_table.clone()));
 
@@ -445,7 +421,7 @@ mod commit_log_gates {
             let commit_log = commit_log.clone();
             let commit_lsns = commit_lsns.clone();
 
-            let handle = tokio::spawn(async move {
+            let handle = async move {
                 // Each reader verifies all commits are visible and ordered
                 let mut prev_lsn = Lsn::new(0);
                 for (tx_id, expected_lsn) in &commit_lsns {
@@ -459,63 +435,62 @@ mod commit_log_gates {
 
                     // Verify strict increasing order
                     assert!(
-                        expected_lsn.value() > prev_lsn.value(),
+                        expected_lsn.get() > prev_lsn.get(),
                         "Reader {} sees strictly ordered LSNs",
                         reader_id
                     );
                     prev_lsn = *expected_lsn;
                 }
-            });
+            };
             reader_handles.push(handle);
         }
 
         // Wait for all readers
-        for handle in reader_handles {
-            handle.await.expect("reader task completed");
-        }
+        join_all(reader_handles).await;
     }
 
     /// Test: Concurrent commits + concurrent readers (no interference)
     #[tokio::test]
     async fn test_concurrency_commits_and_readers_no_interference() {
-        let wal = Arc::new(TestWal::new());
+        let wal = TestWal::new();
         let status_table = Arc::new(TransactionStatusTable::new());
         let commit_log = Arc::new(CommitLogManager::new(wal.clone(), status_table.clone()));
 
-        let mut handles = vec![];
+        let mut writer_handles = vec![];
 
         // Spawn 50 concurrent writers
         for writer_id in 0..50 {
             let commit_log = commit_log.clone();
-            let handle = tokio::spawn(async move {
+            let handle = async move {
                 let tx_id = TransactionId::new((1000 + writer_id) as u64);
                 let entry = commit_log
                     .record_commit(tx_id, IsolationLevel::Snapshot, 1, 0)
                     .await
                     .expect(&format!("writer {} commit", writer_id));
                 (tx_id, entry.commit_lsn)
-            });
-            handles.push(("writer", handle));
+            };
+            writer_handles.push(handle);
         }
 
+        let mut reader_handles = vec![];
+
         // Spawn 50 concurrent readers
-        for reader_id in 0..50 {
+        for _reader_id in 0..50 {
             let commit_log = commit_log.clone();
-            let handle = tokio::spawn(async move {
+            let handle = async move {
                 // Readers continuously check commit status
                 for check_id in 0..100 {
                     let tx_id = TransactionId::new((1000 + check_id % 50) as u64);
                     let _is_committed = commit_log.is_committed(tx_id);
                     // Transaction may or may not be committed yet (race)
                 }
-            });
-            handles.push(("reader", handle));
+            };
+            reader_handles.push(handle);
         }
 
         // Wait for all to complete
-        for (_role, handle) in handles {
-            handle.await.expect("task completed");
-        }
+        join_all(writer_handles).await;
+        join_all(reader_handles).await;
     }
 
     // ====================================================================
@@ -525,7 +500,7 @@ mod commit_log_gates {
     /// Test: Snapshot and Serializable isolation levels recorded correctly
     #[tokio::test]
     async fn test_isolation_snapshot_level_recorded() {
-        let (wal, status_table, commit_log) = setup_commit_log();
+        let (_wal, _status_table, commit_log) = setup_commit_log();
 
         let tx_id = TransactionId::new(1);
         let entry = commit_log
@@ -538,7 +513,7 @@ mod commit_log_gates {
 
     #[tokio::test]
     async fn test_isolation_serializable_level_recorded() {
-        let (wal, status_table, commit_log) = setup_commit_log();
+        let (_wal, _status_table, commit_log) = setup_commit_log();
 
         let tx_id = TransactionId::new(2);
         let entry = commit_log
@@ -556,7 +531,7 @@ mod commit_log_gates {
     /// Test: GC candidates identified correctly (before min_active_snapshot_lsn)
     #[tokio::test]
     async fn test_gc_candidates_identification() {
-        let (wal, status_table, commit_log) = setup_commit_log();
+        let (_wal, _status_table, commit_log) = setup_commit_log();
 
         // Commit 5 transactions
         let mut entries = vec![];
@@ -600,7 +575,7 @@ mod commit_log_gates {
     /// Test: Zero transaction ID is rejected
     #[tokio::test]
     async fn test_edge_case_zero_transaction_id() {
-        let (wal, status_table, commit_log) = setup_commit_log();
+        let (_wal, _status_table, commit_log) = setup_commit_log();
 
         let tx_id = TransactionId::new(0);
         let result = commit_log
@@ -614,7 +589,7 @@ mod commit_log_gates {
     /// Test: Very large transaction IDs work correctly
     #[tokio::test]
     async fn test_edge_case_large_transaction_id() {
-        let (wal, status_table, commit_log) = setup_commit_log();
+        let (_wal, _status_table, commit_log) = setup_commit_log();
 
         let tx_id = TransactionId::new(u64::MAX - 1);
         let entry = commit_log
@@ -629,7 +604,7 @@ mod commit_log_gates {
     /// Test: Multiple commits with same transaction ID (idempotence check)
     #[tokio::test]
     async fn test_edge_case_commit_idempotence() {
-        let (wal, status_table, commit_log) = setup_commit_log();
+        let (_wal, _status_table, commit_log) = setup_commit_log();
 
         let tx_id = TransactionId::new(100);
 
@@ -658,14 +633,19 @@ mod commit_log_gates {
     /// Test: Metadata (affected rows, parameter hash) preserved accurately
     #[tokio::test]
     async fn test_edge_case_metadata_preservation() {
-        let (wal, status_table, commit_log) = setup_commit_log();
+        let (_wal, _status_table, commit_log) = setup_commit_log();
 
         let tx_id = TransactionId::new(200);
         let affected_rows = 12345u64;
         let param_hash = 0xDEADBEEFu64;
 
         let entry = commit_log
-            .record_commit(tx_id, IsolationLevel::Serializable, affected_rows, param_hash)
+            .record_commit(
+                tx_id,
+                IsolationLevel::Serializable,
+                affected_rows,
+                param_hash,
+            )
             .await
             .expect("commit");
 
@@ -685,7 +665,7 @@ mod commit_log_gates {
     /// Test: Committed transactions are immediately visible
     #[tokio::test]
     async fn test_visibility_immediate_after_commit() {
-        let (wal, status_table, commit_log) = setup_commit_log();
+        let (_wal, _status_table, commit_log) = setup_commit_log();
 
         let tx_id = TransactionId::new(1);
 
@@ -705,7 +685,7 @@ mod commit_log_gates {
     /// Test: Multiple transactions have independent visibility
     #[tokio::test]
     async fn test_visibility_independent_transactions() {
-        let (wal, status_table, commit_log) = setup_commit_log();
+        let (_wal, _status_table, commit_log) = setup_commit_log();
 
         let tx1 = TransactionId::new(1);
         let tx2 = TransactionId::new(2);
@@ -734,17 +714,17 @@ mod commit_log_gates {
     /// Test: Timestamp accuracy (commit timestamp matches system time)
     #[tokio::test]
     async fn test_visibility_timestamp_accuracy() {
-        let (wal, status_table, commit_log) = setup_commit_log();
+        let (_wal, _status_table, commit_log) = setup_commit_log();
 
         let tx_id = TransactionId::new(1);
-        let before_time = std::time::SystemTime::now();
+        let _before_time = std::time::SystemTime::now();
 
-        let entry = commit_log
+        let _entry = commit_log
             .record_commit(tx_id, IsolationLevel::Snapshot, 10, 0)
             .await
             .expect("commit");
 
-        let after_time = std::time::SystemTime::now();
+        let _after_time = std::time::SystemTime::now();
 
         // Timestamp should be reasonable (not too far in past or future)
         // This is a sanity check; exact timestamp verification depends on Clock impl

@@ -12,7 +12,7 @@
 #[cfg(test)]
 mod btree_engine_tests {
     use andromeda_storage::{
-        BTreeIndexEngine, BTreeNodeImpl, KeyValuePair, RowId, IndexId, PageId, BTreeConfig,
+        BTreeConfig, BTreeIndexEngine, BTreeNodeImpl, IndexId, KeyValuePair, PageId, RowId,
     };
 
     // ========================================================================
@@ -21,7 +21,7 @@ mod btree_engine_tests {
 
     #[test]
     fn test_btree_node_creation_leaf() {
-        let page_id = PageId(100);
+        let page_id = PageId::new(100);
         let node = BTreeNodeImpl::new_leaf(page_id, None);
 
         assert!(node.is_leaf);
@@ -33,8 +33,8 @@ mod btree_engine_tests {
 
     #[test]
     fn test_btree_node_creation_internal() {
-        let page_id = PageId(200);
-        let parent_id = PageId(199);
+        let page_id = PageId::new(200);
+        let parent_id = PageId::new(199);
         let node = BTreeNodeImpl::new_internal(page_id, Some(parent_id));
 
         assert!(!node.is_leaf);
@@ -45,7 +45,7 @@ mod btree_engine_tests {
 
     #[test]
     fn test_node_occupancy_empty() {
-        let node = BTreeNodeImpl::new_leaf(PageId(1), None);
+        let node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
         let config = BTreeConfig::default();
 
         assert!(!node.is_full(config.branching_factor));
@@ -54,7 +54,7 @@ mod btree_engine_tests {
 
     #[test]
     fn test_node_occupancy_full() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), Some(PageId(0)));
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), Some(PageId::new(0)));
         let config = BTreeConfig::default();
 
         // Fill to capacity
@@ -71,7 +71,7 @@ mod btree_engine_tests {
 
     #[test]
     fn test_node_find_key_index_exact() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), None);
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
         node.key_value_pairs.push(KeyValuePair {
             key: vec![10],
             value: vec![],
@@ -92,7 +92,7 @@ mod btree_engine_tests {
 
     #[test]
     fn test_node_find_key_index_insertion() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), None);
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
         node.key_value_pairs.push(KeyValuePair {
             key: vec![10],
             value: vec![],
@@ -113,7 +113,7 @@ mod btree_engine_tests {
 
     #[test]
     fn test_insert_into_leaf_single() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), None);
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
         let row_id = RowId::new(42);
         let key = vec![5, 4, 3];
 
@@ -125,7 +125,7 @@ mod btree_engine_tests {
 
     #[test]
     fn test_insert_into_leaf_multiple_ordered() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), None);
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
 
         let keys = vec![
             (vec![10], RowId::new(100)),
@@ -151,7 +151,7 @@ mod btree_engine_tests {
 
     #[test]
     fn test_insert_into_leaf_duplicate_key_error() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), None);
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
         let key = vec![100];
         let row_id1 = RowId::new(1);
         let row_id2 = RowId::new(2);
@@ -164,7 +164,7 @@ mod btree_engine_tests {
 
     #[test]
     fn test_lookup_in_leaf_found() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), None);
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
         let key = vec![42, 43, 44];
         let row_id = RowId::new(999);
 
@@ -176,7 +176,7 @@ mod btree_engine_tests {
 
     #[test]
     fn test_lookup_in_leaf_not_found() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), None);
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
         let key1 = vec![10];
         let row_id = RowId::new(100);
 
@@ -190,7 +190,7 @@ mod btree_engine_tests {
 
     #[test]
     fn test_delete_from_leaf_success() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), None);
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
         let key = vec![77];
         let row_id = RowId::new(777);
 
@@ -203,7 +203,7 @@ mod btree_engine_tests {
 
     #[test]
     fn test_delete_from_leaf_key_not_found() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), None);
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
         let key_not_in_node = vec![99];
 
         let result = node.delete_from_leaf(&key_not_in_node);
@@ -212,11 +212,12 @@ mod btree_engine_tests {
 
     #[test]
     fn test_delete_from_leaf_multiple() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), None);
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
 
         let keys = vec![vec![10], vec![20], vec![30]];
         for (i, key) in keys.iter().enumerate() {
-            node.insert_into_leaf(key.clone(), RowId::new(i as u64)).unwrap();
+            node.insert_into_leaf(key.clone(), RowId::new(i as u64))
+                .unwrap();
         }
 
         assert_eq!(node.key_value_pairs.len(), 3);
@@ -234,7 +235,7 @@ mod btree_engine_tests {
 
     #[test]
     fn test_split_leaf_node() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), Some(PageId(0)));
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), Some(PageId::new(0)));
         let config = BTreeConfig::default();
 
         // Fill node to capacity
@@ -259,7 +260,7 @@ mod btree_engine_tests {
 
     #[test]
     fn test_split_leaf_preserves_data() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), Some(PageId(0)));
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), Some(PageId::new(0)));
         let config = BTreeConfig::default();
 
         let mut all_kvps = Vec::new();
@@ -289,18 +290,18 @@ mod btree_engine_tests {
 
     #[test]
     fn test_split_internal_node() {
-        let mut node = BTreeNodeImpl::new_internal(PageId(1), Some(PageId(0)));
+        let mut node = BTreeNodeImpl::new_internal(PageId::new(1), Some(PageId::new(0)));
         let config = BTreeConfig::default();
 
         // Build internal node with keys and child pointers
         for i in 0..(config.branching_factor - 1) {
             node.key_value_pairs.push(KeyValuePair {
-                key: vec![i as u8 * 10],
+                key: vec![i as u8],
                 value: vec![],
             });
         }
         for i in 0..config.branching_factor {
-            node.child_page_ids.push(PageId((i as u64) * 100));
+            node.child_page_ids.push(PageId::new((i as u64) * 100));
         }
 
         let (promoted_key, new_node) = node.split(config.branching_factor).unwrap();
@@ -311,7 +312,10 @@ mod btree_engine_tests {
 
         // Verify invariant: internal node has n+1 children for n keys
         assert_eq!(node.key_value_pairs.len() + 1, node.child_page_ids.len());
-        assert_eq!(new_node.key_value_pairs.len() + 1, new_node.child_page_ids.len());
+        assert_eq!(
+            new_node.key_value_pairs.len() + 1,
+            new_node.child_page_ids.len()
+        );
     }
 
     // ========================================================================
@@ -320,25 +324,25 @@ mod btree_engine_tests {
 
     #[test]
     fn test_serialize_deserialize_empty_leaf() {
-        let node = BTreeNodeImpl::new_leaf(PageId(42), None);
+        let node = BTreeNodeImpl::new_leaf(PageId::new(42), None);
         let serialized = node.serialize();
-        let deserialized = BTreeNodeImpl::deserialize(PageId(42), &serialized).unwrap();
+        let deserialized = BTreeNodeImpl::deserialize(PageId::new(42), &serialized).unwrap();
 
         assert!(deserialized.is_leaf);
-        assert_eq!(deserialized.page_id, PageId(42));
+        assert_eq!(deserialized.page_id, PageId::new(42));
         assert_eq!(deserialized.key_value_pairs.len(), 0);
     }
 
     #[test]
     fn test_serialize_deserialize_leaf_with_data() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), Some(PageId(0)));
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), Some(PageId::new(0)));
         let row_id = RowId::new(42);
         let key = vec![10, 20, 30];
 
         node.insert_into_leaf(key.clone(), row_id).unwrap();
 
         let serialized = node.serialize();
-        let deserialized = BTreeNodeImpl::deserialize(PageId(1), &serialized).unwrap();
+        let deserialized = BTreeNodeImpl::deserialize(PageId::new(1), &serialized).unwrap();
 
         assert!(deserialized.is_leaf);
         assert_eq!(deserialized.key_value_pairs.len(), 1);
@@ -347,27 +351,27 @@ mod btree_engine_tests {
 
     #[test]
     fn test_serialize_deserialize_preserves_sibling_links() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), None);
-        node.next_sibling_page_id = Some(PageId(2));
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
+        node.next_sibling_page_id = Some(PageId::new(2));
 
         let serialized = node.serialize();
-        let deserialized = BTreeNodeImpl::deserialize(PageId(1), &serialized).unwrap();
+        let deserialized = BTreeNodeImpl::deserialize(PageId::new(1), &serialized).unwrap();
 
-        assert_eq!(deserialized.next_sibling_page_id, Some(PageId(2)));
+        assert_eq!(deserialized.next_sibling_page_id, Some(PageId::new(2)));
     }
 
     #[test]
     fn test_serialize_deserialize_internal_node() {
-        let mut node = BTreeNodeImpl::new_internal(PageId(100), Some(PageId(99)));
+        let mut node = BTreeNodeImpl::new_internal(PageId::new(100), Some(PageId::new(99)));
         node.key_value_pairs.push(KeyValuePair {
             key: vec![50],
             value: vec![],
         });
-        node.child_page_ids.push(PageId(1));
-        node.child_page_ids.push(PageId(2));
+        node.child_page_ids.push(PageId::new(1));
+        node.child_page_ids.push(PageId::new(2));
 
         let serialized = node.serialize();
-        let deserialized = BTreeNodeImpl::deserialize(PageId(100), &serialized).unwrap();
+        let deserialized = BTreeNodeImpl::deserialize(PageId::new(100), &serialized).unwrap();
 
         assert!(!deserialized.is_leaf);
         assert_eq!(deserialized.key_value_pairs.len(), 1);
@@ -376,7 +380,7 @@ mod btree_engine_tests {
 
     #[test]
     fn test_serialize_deserialize_roundtrip_complex() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), Some(PageId(0)));
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), Some(PageId::new(0)));
 
         for i in 0..10 {
             let key = vec![i as u8];
@@ -385,7 +389,7 @@ mod btree_engine_tests {
         }
 
         let serialized1 = node.serialize();
-        let deserialized1 = BTreeNodeImpl::deserialize(PageId(1), &serialized1).unwrap();
+        let deserialized1 = BTreeNodeImpl::deserialize(PageId::new(1), &serialized1).unwrap();
         let serialized2 = deserialized1.serialize();
 
         assert_eq!(serialized1, serialized2);
@@ -397,7 +401,7 @@ mod btree_engine_tests {
 
     #[test]
     fn test_internal_node_find_child_index() {
-        let mut node = BTreeNodeImpl::new_internal(PageId(1), None);
+        let mut node = BTreeNodeImpl::new_internal(PageId::new(1), None);
 
         node.key_value_pairs.push(KeyValuePair {
             key: vec![50],
@@ -408,7 +412,7 @@ mod btree_engine_tests {
             value: vec![],
         });
 
-        node.child_page_ids = vec![PageId(1), PageId(2), PageId(3)];
+        node.child_page_ids = vec![PageId::new(1), PageId::new(2), PageId::new(3)];
 
         assert_eq!(node.find_child_index(&[25]), 0);
         assert_eq!(node.find_child_index(&[50]), 1);
@@ -419,14 +423,14 @@ mod btree_engine_tests {
 
     #[test]
     fn test_internal_node_get_child_page_id() {
-        let mut node = BTreeNodeImpl::new_internal(PageId(1), None);
-        node.child_page_ids.push(PageId(10));
-        node.child_page_ids.push(PageId(20));
-        node.child_page_ids.push(PageId(30));
+        let mut node = BTreeNodeImpl::new_internal(PageId::new(1), None);
+        node.child_page_ids.push(PageId::new(10));
+        node.child_page_ids.push(PageId::new(20));
+        node.child_page_ids.push(PageId::new(30));
 
-        assert_eq!(node.get_child_page_id(0), Some(PageId(10)));
-        assert_eq!(node.get_child_page_id(1), Some(PageId(20)));
-        assert_eq!(node.get_child_page_id(2), Some(PageId(30)));
+        assert_eq!(node.get_child_page_id(0), Some(PageId::new(10)));
+        assert_eq!(node.get_child_page_id(1), Some(PageId::new(20)));
+        assert_eq!(node.get_child_page_id(2), Some(PageId::new(30)));
         assert_eq!(node.get_child_page_id(3), None);
     }
 
@@ -436,11 +440,8 @@ mod btree_engine_tests {
 
     #[test]
     fn test_btree_engine_creation() {
-        let engine = BTreeIndexEngine::new(
-            IndexId::new(1),
-            PageId(10),
-            BTreeConfig::default(),
-        );
+        let engine =
+            BTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
 
         assert_eq!(engine.row_count(), 0);
         let stats = engine.statistics();
@@ -450,11 +451,8 @@ mod btree_engine_tests {
 
     #[test]
     fn test_btree_engine_search_empty() {
-        let engine = BTreeIndexEngine::new(
-            IndexId::new(1),
-            PageId(10),
-            BTreeConfig::default(),
-        );
+        let engine =
+            BTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
 
         let result = engine.search(&[42]).unwrap();
         assert_eq!(result, None);
@@ -462,11 +460,8 @@ mod btree_engine_tests {
 
     #[test]
     fn test_btree_engine_range_scan_empty() {
-        let engine = BTreeIndexEngine::new(
-            IndexId::new(1),
-            PageId(10),
-            BTreeConfig::default(),
-        );
+        let engine =
+            BTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
 
         let results = engine.range_scan(&[0], &[255]).unwrap();
         assert_eq!(results.len(), 0);
@@ -474,11 +469,8 @@ mod btree_engine_tests {
 
     #[test]
     fn test_btree_engine_insert() {
-        let mut engine = BTreeIndexEngine::new(
-            IndexId::new(1),
-            PageId(10),
-            BTreeConfig::default(),
-        );
+        let mut engine =
+            BTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
 
         let key = vec![1, 2, 3];
         let row_id = RowId::new(42);
@@ -489,11 +481,8 @@ mod btree_engine_tests {
 
     #[test]
     fn test_btree_engine_insert_oversized_key() {
-        let mut engine = BTreeIndexEngine::new(
-            IndexId::new(1),
-            PageId(10),
-            BTreeConfig::default(),
-        );
+        let mut engine =
+            BTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
 
         let oversized_key = vec![0u8; 10000];
         let row_id = RowId::new(42);
@@ -504,11 +493,8 @@ mod btree_engine_tests {
 
     #[test]
     fn test_btree_engine_delete() {
-        let mut engine = BTreeIndexEngine::new(
-            IndexId::new(1),
-            PageId(10),
-            BTreeConfig::default(),
-        );
+        let mut engine =
+            BTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
 
         let key = vec![5];
         let result = engine.delete(&key);
@@ -517,11 +503,8 @@ mod btree_engine_tests {
 
     #[test]
     fn test_btree_engine_delete_oversized_key() {
-        let mut engine = BTreeIndexEngine::new(
-            IndexId::new(1),
-            PageId(10),
-            BTreeConfig::default(),
-        );
+        let mut engine =
+            BTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
 
         let oversized_key = vec![0u8; 10000];
         let result = engine.delete(&oversized_key);
@@ -534,7 +517,7 @@ mod btree_engine_tests {
 
     #[test]
     fn test_leaf_node_key_ordering_invariant() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), None);
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
 
         // Insert in random order
         let keys = vec![50, 30, 70, 10, 90, 20, 60, 40, 80];
@@ -553,7 +536,7 @@ mod btree_engine_tests {
 
     #[test]
     fn test_child_pointer_invariant_internal_nodes() {
-        let mut node = BTreeNodeImpl::new_internal(PageId(1), None);
+        let mut node = BTreeNodeImpl::new_internal(PageId::new(1), None);
 
         for i in 0..5 {
             node.key_value_pairs.push(KeyValuePair {
@@ -563,7 +546,7 @@ mod btree_engine_tests {
         }
 
         for i in 0..6 {
-            node.child_page_ids.push(PageId(100 + i as u64));
+            node.child_page_ids.push(PageId::new(100 + i as u64));
         }
 
         assert_eq!(node.key_value_pairs.len() + 1, node.child_page_ids.len());
@@ -571,7 +554,7 @@ mod btree_engine_tests {
 
     #[test]
     fn test_node_fullness_invariant() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId(1), Some(PageId(0)));
+        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), Some(PageId::new(0)));
         let config = BTreeConfig::default();
         let max_keys = (config.branching_factor - 1) as usize;
 

@@ -11,19 +11,18 @@
 #[cfg(test)]
 mod tests {
     use andromeda_core::{
+        ProcedureId,
         principal::{
             CertificateFingerprint, Permission, PermissionSet, Principal, PrincipalId,
             PrincipalRole, SessionToken,
         },
-        AndromedaErrorKind, ProcedureId,
     };
 
     // ========== Test Helpers ==========
 
     /// Create a valid test certificate fingerprint (SHA-256 hex).
     fn test_fingerprint() -> String {
-        "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
-            .to_string()
+        "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2".to_string()
     }
 
     /// Create a test Principal with User role.
@@ -43,8 +42,7 @@ mod tests {
         let token = SessionToken::new("session-admin-001");
         let id = PrincipalId::new(100);
 
-        Principal::new(id, PrincipalRole::SuperAdmin, token, fingerprint)
-            .expect("valid principal")
+        Principal::new(id, PrincipalRole::SuperAdmin, token, fingerprint).expect("valid principal")
     }
 
     // ========== PrincipalId Tests ==========
@@ -83,7 +81,10 @@ mod tests {
         let token_str_2 = token.as_str();
 
         assert_eq!(token_str_1, token_str_2, "token string must be stable");
-        assert_eq!(token_str_1, "immutable-token-42", "token must preserve content");
+        assert_eq!(
+            token_str_1, "immutable-token-42",
+            "token must preserve content"
+        );
     }
 
     #[test]
@@ -107,7 +108,10 @@ mod tests {
         // Invalid: too short
         let short = "a1b2c3d4";
         let fp_short = CertificateFingerprint::new(short).expect("short fingerprint");
-        assert!(!fp_short.is_valid_sha256(), "short fingerprint must not validate");
+        assert!(
+            !fp_short.is_valid_sha256(),
+            "short fingerprint must not validate"
+        );
 
         // Invalid: non-hex characters
         let non_hex = "g1g2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
@@ -136,14 +140,21 @@ mod tests {
         let token = SessionToken::new("token");
 
         // Zero ID must be rejected
-        let zero_result =
-            Principal::new(PrincipalId::new(0), PrincipalRole::User, token.clone(), fingerprint.clone());
+        let zero_result = Principal::new(
+            PrincipalId::new(0),
+            PrincipalRole::User,
+            token.clone(),
+            fingerprint.clone(),
+        );
         assert!(zero_result.is_none(), "zero principal ID must be rejected");
 
         // Non-zero ID must be accepted
         let nonzero_result =
             Principal::new(PrincipalId::new(1), PrincipalRole::User, token, fingerprint);
-        assert!(nonzero_result.is_some(), "non-zero principal ID must be accepted");
+        assert!(
+            nonzero_result.is_some(),
+            "non-zero principal ID must be accepted"
+        );
     }
 
     #[test]
@@ -153,12 +164,24 @@ mod tests {
         let id = PrincipalId::new(42);
 
         // Empty token must be rejected
-        let empty_token_result =
-            Principal::new(id, PrincipalRole::User, SessionToken::new(""), fingerprint.clone());
-        assert!(empty_token_result.is_none(), "empty session token must be rejected");
+        let empty_token_result = Principal::new(
+            id,
+            PrincipalRole::User,
+            SessionToken::new(""),
+            fingerprint.clone(),
+        );
+        assert!(
+            empty_token_result.is_none(),
+            "empty session token must be rejected"
+        );
 
         // Non-empty token must be accepted
-        let nonempty_token_result = Principal::new(id, PrincipalRole::User, SessionToken::new("token"), fingerprint);
+        let nonempty_token_result = Principal::new(
+            id,
+            PrincipalRole::User,
+            SessionToken::new("token"),
+            fingerprint,
+        );
         assert!(
             nonempty_token_result.is_some(),
             "non-empty session token must be accepted"
@@ -198,7 +221,10 @@ mod tests {
             p1.session_token, p2.session_token,
             "session tokens must match"
         );
-        assert_eq!(p1.cert_fingerprint, p2.cert_fingerprint, "fingerprints must match");
+        assert_eq!(
+            p1.cert_fingerprint, p2.cert_fingerprint,
+            "fingerprints must match"
+        );
 
         // created_at may differ (microseconds), but both must be valid
         assert!(
@@ -292,7 +318,11 @@ mod tests {
         let token_2 = p.session_token.clone();
 
         assert_eq!(token_1, token_2, "session token must not change");
-        assert_eq!(token_1.as_str(), token_2.as_str(), "token string must be stable");
+        assert_eq!(
+            token_1.as_str(),
+            token_2.as_str(),
+            "token string must be stable"
+        );
     }
 
     #[test]
@@ -312,11 +342,11 @@ mod tests {
         let display = p.masked_display();
 
         // Should contain ID and role
-        assert!(display.contains(&format!("{}", p.id)), "display must include principal ID");
         assert!(
-            display.contains("User"),
-            "display must include role"
+            display.contains(&format!("{}", p.id)),
+            "display must include principal ID"
         );
+        assert!(display.contains("User"), "display must include role");
 
         // Should NOT contain full fingerprint
         assert!(
@@ -349,10 +379,7 @@ mod tests {
             PrincipalRole::from_str("superadmin"),
             Some(PrincipalRole::SuperAdmin)
         );
-        assert_eq!(
-            PrincipalRole::from_str("user"),
-            Some(PrincipalRole::User)
-        );
+        assert_eq!(PrincipalRole::from_str("user"), Some(PrincipalRole::User));
         assert_eq!(PrincipalRole::from_str("invalid"), None);
     }
 
@@ -360,10 +387,7 @@ mod tests {
     fn test_principal_role_permissions() {
         // SuperAdmin must have full permission set
         let super_perms = PrincipalRole::SuperAdmin.permissions();
-        assert!(
-            !super_perms.is_empty(),
-            "superadmin must have permissions"
-        );
+        assert!(!super_perms.is_empty(), "superadmin must have permissions");
         assert!(
             super_perms.has_permission(&Permission::AdminShutdown),
             "superadmin must have shutdown"
@@ -386,9 +410,13 @@ mod tests {
         let token = SessionToken::new("integration-test-001");
         let id = PrincipalId::new(999);
 
-        let principal =
-            Principal::new(id, PrincipalRole::Operator, token.clone(), fingerprint.clone())
-                .expect("principal created");
+        let principal = Principal::new(
+            id,
+            PrincipalRole::Operator,
+            token.clone(),
+            fingerprint.clone(),
+        )
+        .expect("principal created");
 
         // Verify all invariants
         assert!(!principal.id.is_zero());

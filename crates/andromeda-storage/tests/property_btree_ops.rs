@@ -26,6 +26,7 @@
 
 use proptest::prelude::*;
 use std::collections::{BTreeMap, HashSet};
+use std::panic;
 
 // ============================================================================
 // Mock B-Tree Implementation for Testing
@@ -102,8 +103,8 @@ fn arb_value() -> impl Strategy<Value = u64> {
 #[derive(Debug, Clone)]
 pub enum BTreeOp {
     Insert(u64, u64), // key, value
-    Delete(u64),       // key
-    Search(u64),       // key
+    Delete(u64),      // key
+    Search(u64),      // key
 }
 
 fn arb_operation() -> impl Strategy<Value = BTreeOp> {
@@ -124,16 +125,16 @@ fn prop_btree_insert_maintains_ordering() {
         keys in prop::collection::vec(arb_key(), 1..100),
     )| {
         let mut tree = MockBTree::new();
-        
+
         for key in keys.iter() {
             tree.insert(*key, 42);
         }
-        
+
         // All keys should be ordered
-        let stored_keys: Vec<_> = (0..tree.len())
+        let _stored_keys: Vec<_> = (0..tree.len())
             .filter_map(|_| tree.search(*tree.data.keys().next()?))
             .collect();
-        
+
         // Tree maintains invariants (checked during insert)
         prop_assert!(tree.invariant_checks() >= keys.len() as u64);
     });
@@ -149,21 +150,21 @@ fn prop_btree_delete_maintains_ordering() {
         keys in prop::collection::vec(arb_key(), 2..100),
     )| {
         let mut tree = MockBTree::new();
-        
+
         // Insert all
         for key in keys.iter() {
             tree.insert(*key, 42);
         }
-        
+
         let original_len = tree.len();
-        
+
         // Delete first half
         for (i, key) in keys.iter().enumerate() {
             if i < keys.len() / 2 {
                 tree.delete(*key);
             }
         }
-        
+
         // Remaining keys should be ordered
         // Tree maintains invariants (checked during delete)
         prop_assert!(tree.invariant_checks() >= keys.len() as u64);
@@ -185,13 +186,13 @@ fn prop_btree_search_finds_inserted_keys() {
     )| {
         let mut tree = MockBTree::new();
         let mut inserted: HashSet<u64> = HashSet::new();
-        
+
         // Insert all
         for (key, value) in operations.iter() {
             tree.insert(*key, *value);
             inserted.insert(*key);
         }
-        
+
         // Search should find all inserted keys
         for key in inserted.iter() {
             let result = tree.search(*key);
@@ -211,12 +212,12 @@ fn prop_btree_duplicate_keys_collected() {
         values in prop::collection::vec(arb_value(), 1..20),
     )| {
         let mut tree = MockBTree::new();
-        
+
         // Insert same key multiple times with different values
         for value in values.iter() {
             tree.insert(key, *value);
         }
-        
+
         // Search should return all values
         if let Some(found_values) = tree.search(key) {
             prop_assert_eq!(found_values.len(), values.len());
@@ -234,12 +235,12 @@ fn prop_btree_large_tree_bounded() {
         ops_count in 100usize..1000usize,
     )| {
         let mut tree = MockBTree::new();
-        
+
         for i in 0..ops_count {
             let key = (i as u64) % 100; // Reuse keys
             tree.insert(key, i as u64);
         }
-        
+
         // Tree size should be bounded by unique keys
         prop_assert!(tree.len() <= 100);
         // All operations should have checked invariants
@@ -258,7 +259,7 @@ fn prop_btree_random_operations() {
     )| {
         let mut tree = MockBTree::new();
         let mut expected: HashSet<u64> = HashSet::new();
-        
+
         for op in ops.iter() {
             match op {
                 BTreeOp::Insert(k, v) => {
@@ -297,7 +298,7 @@ fn prop_btree_deterministic() {
                 BTreeOp::Search(_) => {},
             }
         }
-        
+
         // Second run with same operations
         let mut tree2 = MockBTree::new();
         for op in ops.iter() {
@@ -307,7 +308,7 @@ fn prop_btree_deterministic() {
                 BTreeOp::Search(_) => {},
             }
         }
-        
+
         // Trees should be identical
         prop_assert_eq!(tree1.len(), tree2.len());
         prop_assert_eq!(tree1.is_empty(), tree2.is_empty());
@@ -321,11 +322,11 @@ fn prop_btree_deterministic() {
 #[test]
 fn prop_btree_empty_operations() {
     let mut tree = MockBTree::new();
-    
+
     // Delete from empty tree
     tree.delete(42);
     assert!(tree.is_empty());
-    
+
     // Search in empty tree
     let result = tree.search(42);
     assert!(result.is_none());
@@ -342,7 +343,7 @@ fn prop_btree_stress_test() {
     )| {
         let mut tree = MockBTree::new();
         let mut error_count = 0;
-        
+
         for op in ops.iter() {
             let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
                 match op {
@@ -353,12 +354,12 @@ fn prop_btree_stress_test() {
                     }
                 }
             }));
-            
+
             if result.is_err() {
                 error_count += 1;
             }
         }
-        
+
         // No panics should occur
         prop_assert_eq!(error_count, 0, "operations should not panic");
     });
@@ -374,7 +375,7 @@ fn prop_btree_final_invariants() {
         ops in prop::collection::vec(arb_operation(), 1..100),
     )| {
         let mut tree = MockBTree::new();
-        
+
         for op in ops {
             match op {
                 BTreeOp::Insert(k, v) => tree.insert(k, v),
@@ -382,14 +383,14 @@ fn prop_btree_final_invariants() {
                 BTreeOp::Search(_) => {},
             }
         }
-        
+
         // Final invariant check
         // Keys are ordered
         let keys: Vec<_> = tree.data.keys().copied().collect();
         for i in 1..keys.len() {
             prop_assert!(keys[i - 1] < keys[i], "keys not ordered at end");
         }
-        
+
         // No empty value vectors
         for (_, values) in tree.data.iter() {
             prop_assert!(!values.is_empty(), "empty value vector");
@@ -405,7 +406,7 @@ fn prop_btree_final_invariants() {
 fn test_btree_single_element() {
     let mut tree = MockBTree::new();
     tree.insert(42, 100);
-    
+
     assert_eq!(tree.len(), 1);
     assert!(tree.search(42).is_some());
 }
@@ -413,36 +414,36 @@ fn test_btree_single_element() {
 #[test]
 fn test_btree_ascending_keys() {
     let mut tree = MockBTree::new();
-    
+
     for i in 0..100u64 {
         tree.insert(i, i * 2);
     }
-    
+
     assert_eq!(tree.len(), 100);
 }
 
 #[test]
 fn test_btree_descending_keys() {
     let mut tree = MockBTree::new();
-    
+
     for i in (0..100u64).rev() {
         tree.insert(i, i * 2);
     }
-    
+
     assert_eq!(tree.len(), 100);
 }
 
 #[test]
 fn test_btree_alternating_insert_delete() {
     let mut tree = MockBTree::new();
-    
+
     for i in 0..100u64 {
         tree.insert(i, i);
         if i % 2 == 0 && i > 0 {
             tree.delete(i - 1);
         }
     }
-    
+
     // Some operations completed
     assert!(true);
 }
@@ -487,20 +488,20 @@ fn integration_btree_full_lifecycle() {
         delete_count in 0usize..50,
     )| {
         let mut tree = MockBTree::new();
-        
+
         // Insert phase
         for (i, key) in insert_ops.iter().enumerate() {
             tree.insert(*key, i as u64);
         }
-        
+
         let inserted_count = tree.len();
-        
+
         // Delete phase
         let keys_to_delete: Vec<_> = insert_ops.iter().take(delete_count).copied().collect();
         for key in keys_to_delete.iter() {
             tree.delete(*key);
         }
-        
+
         // Verify final state
         prop_assert!(tree.len() <= inserted_count);
         prop_assert!(tree.invariant_checks() > 0);

@@ -8,10 +8,10 @@ use std::sync::Arc;
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_srpl::{
     interpreter::SrplIrInterpreter,
-    procedure_resolver::{ProcedureResolver, ProcedureResolveError},
+    procedure_resolver::{ProcedureResolveError, ProcedureResolver},
 };
 
-use crate::{InvocationRequest, LocalProcedure, ResultStreamMetadata};
+use crate::{InvocationRequest, ResultStreamMetadata};
 
 /// SRPL procedure dispatcher: resolves procedure name to IR plan and executes deterministically.
 ///
@@ -27,7 +27,7 @@ use crate::{InvocationRequest, LocalProcedure, ResultStreamMetadata};
 #[derive(Clone)]
 pub struct SrplProcedureDispatcher {
     resolver: Arc<dyn ProcedureResolver>,
-    interpreter: Arc<SrplIrInterpreter>,
+    _interpreter: Arc<SrplIrInterpreter>,
 }
 
 impl SrplProcedureDispatcher {
@@ -35,13 +35,10 @@ impl SrplProcedureDispatcher {
     ///
     /// Both dependencies are shared (Arc) so the dispatcher can be cloned
     /// and safely shared across threads.
-    pub fn new(
-        resolver: Arc<dyn ProcedureResolver>,
-        interpreter: Arc<SrplIrInterpreter>,
-    ) -> Self {
+    pub fn new(resolver: Arc<dyn ProcedureResolver>, interpreter: Arc<SrplIrInterpreter>) -> Self {
         Self {
             resolver,
-            interpreter,
+            _interpreter: interpreter,
         }
     }
 
@@ -53,14 +50,15 @@ impl SrplProcedureDispatcher {
     pub fn resolve_procedure(
         &self,
         req: &InvocationRequest,
-    ) -> Result<
-        andromeda_srpl::procedure_resolver::ProcedureResolveResponse,
-        ProcedureResolveError,
-    > {
-        let resolve_request = andromeda_srpl::procedure_resolver::ProcedureResolveRequest::from_contract_ref(req.procedure)
+    ) -> Result<andromeda_srpl::procedure_resolver::ProcedureResolveResponse, ProcedureResolveError>
+    {
+        let resolve_request =
+            andromeda_srpl::procedure_resolver::ProcedureResolveRequest::from_contract_ref(
+                req.procedure,
+            )
             .map_err(|e| e)?;
 
-        let response = self.resolver.resolve_procedure(&resolve_request)?;
+        let response = self.resolver.resolve_procedure(resolve_request.clone())?;
 
         resolve_request.validate_response(&response)?;
 
@@ -100,7 +98,7 @@ impl SrplProcedureDispatcher {
     ) -> AndromedaResult<ResultStreamMetadata> {
         // TODO: Implement full metadata extraction from plan evidence and manifest
         Err(AndromedaError::new(
-            AndromedaErrorKind::Unimplemented,
+            AndromedaErrorKind::Execution,
             "SRPL result metadata extraction not yet implemented - pending wave 17",
         ))
     }
@@ -108,8 +106,6 @@ impl SrplProcedureDispatcher {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn dispatcher_constructs_with_arc_dependencies() {
         // This test verifies that the dispatcher can be constructed with shared dependencies

@@ -8,7 +8,6 @@
 use crate::error::cli_error;
 use andromeda_core::AndromedaResult;
 use serde::Serialize;
-use std::collections::BTreeMap;
 
 /// Serializable procedure metadata.
 #[derive(Debug, Clone, Serialize)]
@@ -84,7 +83,10 @@ fn run_list_procedures(args: &[String]) -> AndromedaResult<()> {
             }
             "--json" => json = true,
             opt if opt.starts_with("--") => {
-                return Err(cli_error(format!("unknown list-procedures option: {}", opt)));
+                return Err(cli_error(format!(
+                    "unknown list-procedures option: {}",
+                    opt
+                )));
             }
             _ => {}
         }
@@ -147,17 +149,20 @@ fn run_invalidate_cache(args: &[String]) -> AndromedaResult<()> {
             "--procedure-id" => {
                 i += 1;
                 if i >= args.len() {
-                    return Err(cli_error(
-                        "--procedure-id requires a procedure ID argument",
-                    ));
+                    return Err(cli_error("--procedure-id requires a procedure ID argument"));
                 }
-                procedure_id = Some(args[i]
-                    .parse()
-                    .map_err(|_| cli_error("procedure-id must be an unsigned integer"))?);
+                procedure_id = Some(
+                    args[i]
+                        .parse()
+                        .map_err(|_| cli_error("procedure-id must be an unsigned integer"))?,
+                );
             }
             "--json" => json = true,
             opt if opt.starts_with("--") => {
-                return Err(cli_error(format!("unknown invalidate-cache option: {}", opt)));
+                return Err(cli_error(format!(
+                    "unknown invalidate-cache option: {}",
+                    opt
+                )));
             }
             _ => {}
         }
@@ -175,10 +180,7 @@ fn run_invalidate_cache(args: &[String]) -> AndromedaResult<()> {
     let outcome = CacheInvalidationOutcome {
         success: true,
         entries_cleared,
-        message: format!(
-            "Cleared {} cache entries ({})",
-            entries_cleared, scope
-        ),
+        message: format!("Cleared {} cache entries ({})", entries_cleared, scope),
     };
 
     if json {
@@ -291,7 +293,10 @@ fn print_procedures_human(procedures: &[ProcedureMetadata]) {
             .unwrap_or("(default)");
         println!(
             "{:<6} {:<30} {:<20} {:<15}",
-            proc.procedure_id, proc.name, ns, &proc.contract_hash[..12]
+            proc.procedure_id,
+            proc.name,
+            ns,
+            &proc.contract_hash[..12]
         );
     }
 }
@@ -355,7 +360,8 @@ mod tests {
 
     #[test]
     fn catalog_invalidate_cache_rejects_invalid_id() {
-        let result = run_invalidate_cache(&["--procedure-id".to_string(), "not_a_number".to_string()]);
+        let result =
+            run_invalidate_cache(&["--procedure-id".to_string(), "not_a_number".to_string()]);
         assert!(result.is_err());
     }
 

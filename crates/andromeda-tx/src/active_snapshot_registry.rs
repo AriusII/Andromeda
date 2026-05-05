@@ -138,7 +138,9 @@ impl ActiveSnapshotRegistry {
     /// Returns `GcError::SnapshotAlreadyRegistered` if a snapshot with the same
     /// `begin_ts` and `tx_id` is already registered.
     pub fn register_snapshot(&self, handle: SnapshotHandle) -> Result<(), GcError> {
-        let mut active = self.active.write()
+        let mut active = self
+            .active
+            .write()
             .map_err(|_| GcError::SnapshotAlreadyRegistered)?;
 
         if active.contains(&handle) {
@@ -153,8 +155,10 @@ impl ActiveSnapshotRegistry {
             .map(|h| h.begin_ts)
             .min()
             .unwrap_or(MIN_TS_INF);
-        
-        let mut cached = self.cached_min_visible_ts.lock()
+
+        let mut cached = self
+            .cached_min_visible_ts
+            .lock()
             .map_err(|_| GcError::SnapshotAlreadyRegistered)?;
         *cached = new_min;
 
@@ -171,8 +175,7 @@ impl ActiveSnapshotRegistry {
     /// Returns `GcError::SnapshotNotFound` if the snapshot is not currently
     /// registered.
     pub fn release_snapshot(&self, handle: SnapshotHandle) -> Result<(), GcError> {
-        let mut active = self.active.write()
-            .map_err(|_| GcError::SnapshotNotFound)?;
+        let mut active = self.active.write().map_err(|_| GcError::SnapshotNotFound)?;
 
         if !active.remove(&handle) {
             return Err(GcError::SnapshotNotFound);
@@ -184,8 +187,10 @@ impl ActiveSnapshotRegistry {
             .map(|h| h.begin_ts)
             .min()
             .unwrap_or(MIN_TS_INF);
-        
-        let mut cached = self.cached_min_visible_ts.lock()
+
+        let mut cached = self
+            .cached_min_visible_ts
+            .lock()
             .map_err(|_| GcError::SnapshotNotFound)?;
         *cached = new_min;
 
@@ -199,7 +204,8 @@ impl ActiveSnapshotRegistry {
     /// `end_ts ≠ u64::MAX` are candidates for garbage collection.
     #[inline]
     pub fn minimum_visible_timestamp(&self) -> u64 {
-        self.cached_min_visible_ts.lock()
+        self.cached_min_visible_ts
+            .lock()
             .map(|guard| *guard)
             .unwrap_or(MIN_TS_INF)
     }
@@ -219,9 +225,7 @@ impl ActiveSnapshotRegistry {
     ///
     /// Useful for diagnostics and monitoring GC pressure.
     pub fn active_snapshot_count(&self) -> usize {
-        self.active.read()
-            .map(|guard| guard.len())
-            .unwrap_or(0)
+        self.active.read().map(|guard| guard.len()).unwrap_or(0)
     }
 
     /// List all active begin timestamps.
@@ -230,11 +234,9 @@ impl ActiveSnapshotRegistry {
     /// of active timestamps at the moment of the call; may be stale
     /// immediately after return due to concurrent operations.
     pub fn active_begin_timestamps(&self) -> Vec<u64> {
-        self.active.read()
-            .map(|guard| guard
-                .iter()
-                .map(|h| h.begin_ts)
-                .collect())
+        self.active
+            .read()
+            .map(|guard| guard.iter().map(|h| h.begin_ts).collect())
             .unwrap_or_default()
     }
 
@@ -243,7 +245,8 @@ impl ActiveSnapshotRegistry {
     /// Primarily useful for diagnostics. Returns a snapshot of active handles
     /// at the moment of the call.
     pub fn active_handles(&self) -> Vec<SnapshotHandle> {
-        self.active.read()
+        self.active
+            .read()
             .map(|guard| guard.iter().copied().collect())
             .unwrap_or_default()
     }
@@ -357,7 +360,7 @@ mod tests {
     }
 
     #[test]
-    fn test_gc_eligibility_version_garbageable() {
+    fn test_garbage_collection_version_garbageable() {
         let registry = ActiveSnapshotRegistry::new();
 
         let h = SnapshotHandle::new(100, TransactionId::new(1)).unwrap();
@@ -377,7 +380,7 @@ mod tests {
     }
 
     #[test]
-    fn test_gc_eligibility_with_multiple_snapshots() {
+    fn test_garbage_collection_with_multiple_snapshots() {
         let registry = ActiveSnapshotRegistry::new();
 
         let h1 = SnapshotHandle::new(100, TransactionId::new(1)).unwrap();

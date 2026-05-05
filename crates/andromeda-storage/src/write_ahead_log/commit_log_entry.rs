@@ -36,9 +36,10 @@
 //! - Byte 24:     `wal_durability_confirmed` (u8: 0 or 1)
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
-use andromeda_storage::Lsn;
 use dashmap::DashMap;
 use std::sync::Arc;
+
+use crate::Lsn;
 
 /// Unique identifier for a timestamp in the system.
 pub type Timestamp = u64;
@@ -132,7 +133,11 @@ impl CommitLogEntry {
         bytes.extend_from_slice(&self.tx_id.get().to_le_bytes());
         bytes.extend_from_slice(&self.commit_lsn.get().to_le_bytes());
         bytes.extend_from_slice(&self.visible_timestamp.to_le_bytes());
-        bytes.push(if self.wal_durability_confirmed { 1u8 } else { 0u8 });
+        bytes.push(if self.wal_durability_confirmed {
+            1u8
+        } else {
+            0u8
+        });
         bytes
     }
 
@@ -154,12 +159,13 @@ impl CommitLogEntry {
             bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
         ];
         let tx_id_raw = u64::from_le_bytes(tx_id_bytes);
-        let tx_id = TransactionId::new(tx_id_raw).map_err(|_| {
-            AndromedaError::new(
+        if tx_id_raw == 0 {
+            return Err(AndromedaError::new(
                 AndromedaErrorKind::Transaction,
                 "invalid transaction id in encoded entry",
-            )
-        })?;
+            ));
+        }
+        let tx_id = TransactionId::new(tx_id_raw);
 
         // Parse commit_lsn
         let commit_lsn_bytes = [
@@ -170,8 +176,7 @@ impl CommitLogEntry {
 
         // Parse visible_timestamp
         let visible_timestamp_bytes = [
-            bytes[16], bytes[17], bytes[18], bytes[19], bytes[20], bytes[21], bytes[22],
-            bytes[23],
+            bytes[16], bytes[17], bytes[18], bytes[19], bytes[20], bytes[21], bytes[22], bytes[23],
         ];
         let visible_timestamp = u64::from_le_bytes(visible_timestamp_bytes);
 
@@ -292,7 +297,10 @@ impl CommitLog {
     /// # Errors
     ///
     /// No errors: always returns successfully (entry may not exist).
-    pub fn query_commit_status(&self, tx_id: TransactionId) -> AndromedaResult<Option<CommitLogEntry>> {
+    pub fn query_commit_status(
+        &self,
+        tx_id: TransactionId,
+    ) -> AndromedaResult<Option<CommitLogEntry>> {
         Ok(self.entries.get(&tx_id).map(|ref_multi| ref_multi.clone()))
     }
 
@@ -359,7 +367,20 @@ impl Default for CommitLog {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_core::TransactionIdGenerator;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    struct TransactionIdGenerator;
+
+    impl TransactionIdGenerator {
+        fn new() -> Self {
+            Self
+        }
+
+        fn generate(&self) -> TransactionId {
+            static NEXT_TX_ID: AtomicU64 = AtomicU64::new(1);
+            TransactionId::new(NEXT_TX_ID.fetch_add(1, Ordering::Relaxed))
+        }
+    }
 
     #[test]
     fn test_commit_log_entry_creation() {
@@ -377,7 +398,7 @@ mod tests {
 
     #[test]
     fn test_commit_log_entry_invalid_tx_id() {
-        let result = CommitLogEntry::new(TransactionId::new(0).unwrap(), Lsn::new(100), 500);
+        let result = CommitLogEntry::new(TransactionId::new(0), Lsn::new(100), 500);
         assert!(result.is_err());
     }
 

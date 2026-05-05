@@ -164,11 +164,10 @@ impl CommitLogManager {
 
         // Step 3: Write to WAL buffer (non-blocking)
         // The WAL manager appends the record and assigns the LSN
-        let commit_lsn = self.wal_manager.append(
-            WalRecordKind::TxCommit,
-            Some(tx_id),
-            &payload,
-        ).await?;
+        let commit_lsn = self
+            .wal_manager
+            .append(WalRecordKind::TxCommit, Some(tx_id), &payload)
+            .await?;
 
         // Step 4: **CRITICAL DURABILITY BOUNDARY**: Flush WAL to disk
         // This is the synchronization point that ensures durability.
@@ -213,7 +212,9 @@ impl CommitLogManager {
 
     /// Retrieve the commit LSN for a transaction (if committed).
     pub fn get_commit_lsn(&self, tx_id: TransactionId) -> Option<Lsn> {
-        self.commit_entries.get(&tx_id).map(|entry| entry.commit_lsn)
+        self.commit_entries
+            .get(&tx_id)
+            .map(|entry| entry.commit_lsn)
     }
 
     /// Retrieve the commit timestamp for a transaction (if committed).
@@ -292,7 +293,7 @@ impl CommitLogManager {
                 // In production, this would read from the WAL file at entry.commit_lsn
                 // and verify that a TxCommit record exists. For now, presence in
                 // commit_entries is the verification.
-                drop(entry);
+                let _ = entry;
                 Ok(())
             }
             None => Err(AndromedaError::new(
@@ -312,7 +313,7 @@ impl CommitLogManager {
         // TODO: Integrate with ProcedureInvocationTrace subsystem
         // For now, this is a placeholder that allows future integration
         // without breaking the commit protocol.
-        drop(entry);
+        let _ = entry;
         Ok(())
     }
 }
@@ -399,12 +400,7 @@ mod tests {
         let commit_log = CommitLogManager::new(wal, status_table);
 
         let result = commit_log
-            .record_commit(
-                TransactionId::new(0),
-                IsolationLevel::Snapshot,
-                5,
-                0,
-            )
+            .record_commit(TransactionId::new(0), IsolationLevel::Snapshot, 5, 0)
             .await;
 
         assert!(result.is_err());
@@ -464,25 +460,18 @@ mod tests {
         let commit_log = CommitLogManager::new(wal, status_table);
 
         let snapshot_entry = commit_log
-            .record_commit(
-                TransactionId::new(1),
-                IsolationLevel::Snapshot,
-                10,
-                0,
-            )
+            .record_commit(TransactionId::new(1), IsolationLevel::Snapshot, 10, 0)
             .await
             .unwrap();
         assert_eq!(snapshot_entry.isolation_level, IsolationLevel::Snapshot);
 
         let serializable_entry = commit_log
-            .record_commit(
-                TransactionId::new(2),
-                IsolationLevel::Serializable,
-                20,
-                0,
-            )
+            .record_commit(TransactionId::new(2), IsolationLevel::Serializable, 20, 0)
             .await
             .unwrap();
-        assert_eq!(serializable_entry.isolation_level, IsolationLevel::Serializable);
+        assert_eq!(
+            serializable_entry.isolation_level,
+            IsolationLevel::Serializable
+        );
     }
 }

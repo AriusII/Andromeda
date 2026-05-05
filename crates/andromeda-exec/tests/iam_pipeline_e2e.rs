@@ -17,13 +17,10 @@
 
 #[cfg(test)]
 mod iam_pipeline_tests {
-    use andromeda_core::{
-        Permission, PermissionSet, Principal, PrincipalId, PrincipalRole, SessionToken,
-        ProcedureId,
-    };
+    use andromeda_core::{Permission, PrincipalRole, ProcedureId};
     use andromeda_exec::services::{
-        LocalPrincipalResolver, ConcretePermissionEvaluator, PermissionEvaluator, PrincipalResolver, DenialReason,
-        PermissionDecision,
+        ConcretePermissionEvaluator, DenialReason, LocalPrincipalResolver, PermissionDecision,
+        PermissionEvaluator, PrincipalResolver,
     };
     use std::sync::Arc;
 
@@ -46,7 +43,7 @@ mod iam_pipeline_tests {
         assert!(result.is_ok());
         let principal = result.unwrap();
         assert_eq!(principal.role, PrincipalRole::User);
-        assert_eq!(principal.cert_fingerprint, fingerprint);
+        assert_eq!(principal.cert_fingerprint.as_str(), fingerprint);
     }
 
     #[test]
@@ -160,10 +157,8 @@ mod iam_pipeline_tests {
             .unwrap();
 
         // Act
-        let decision = evaluator.evaluate_permission(
-            "test_admin",
-            &Permission::AdminCatalogPublish,
-        );
+        let decision =
+            evaluator.evaluate_permission("test_admin", &Permission::AdminCatalogPublish);
 
         // Assert
         assert!(decision.is_allowed());
@@ -186,15 +181,16 @@ mod iam_pipeline_tests {
             .unwrap();
 
         // Act
-        let decision = evaluator.evaluate_permission(
-            "test_user",
-            &Permission::AdminShutdown,
-        );
+        let decision = evaluator.evaluate_permission("test_user", &Permission::AdminShutdown);
 
         // Assert
         assert!(decision.is_denied());
         match decision {
-            PermissionDecision::Denied { reason, principal_id, .. } => {
+            PermissionDecision::Denied {
+                reason,
+                principal_id,
+                ..
+            } => {
                 assert_eq!(reason, DenialReason::MissingPermission);
                 assert!(principal_id.is_some());
             }
@@ -209,15 +205,17 @@ mod iam_pipeline_tests {
         let evaluator = ConcretePermissionEvaluator::new(resolver);
 
         // Act
-        let decision = evaluator.evaluate_permission(
-            "unknown_fingerprint",
-            &Permission::AdminCatalogPublish,
-        );
+        let decision =
+            evaluator.evaluate_permission("unknown_fingerprint", &Permission::AdminCatalogPublish);
 
         // Assert
         assert!(decision.is_denied());
         match decision {
-            PermissionDecision::Denied { reason, principal_id, .. } => {
+            PermissionDecision::Denied {
+                reason,
+                principal_id,
+                ..
+            } => {
                 assert_eq!(reason, DenialReason::PrincipalNotFound);
                 assert!(principal_id.is_none());
             }
@@ -291,7 +289,7 @@ mod iam_pipeline_tests {
         let principal = resolver.resolve("test_audit").unwrap();
 
         // Assert: Verify audit event can bind correct principal
-        assert_eq!(principal.cert_fingerprint, "test_audit");
+        assert_eq!(principal.cert_fingerprint.as_str(), "test_audit");
         assert_eq!(principal.role, PrincipalRole::Operator);
         assert!(!principal.session_token.as_str().is_empty());
     }
@@ -412,20 +410,16 @@ mod iam_pipeline_tests {
             .unwrap();
 
         // Verify principal can access before revocation
-        let decision_before = evaluator.evaluate_permission(
-            fingerprint,
-            &Permission::AdminCatalogPublish,
-        );
+        let decision_before =
+            evaluator.evaluate_permission(fingerprint, &Permission::AdminCatalogPublish);
         assert!(decision_before.is_allowed());
 
         // Act: Revoke principal
         resolver.revoke_principal(fingerprint).unwrap();
 
         // Assert: Revoked principal is denied access
-        let decision_after = evaluator.evaluate_permission(
-            fingerprint,
-            &Permission::AdminCatalogPublish,
-        );
+        let decision_after =
+            evaluator.evaluate_permission(fingerprint, &Permission::AdminCatalogPublish);
         assert!(decision_after.is_denied());
     }
 

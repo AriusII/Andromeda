@@ -22,10 +22,10 @@
 //!    - Has enough time passed since marking? (grace period)
 //!
 //! 4. **Reclamation Marking**: If all eligibility criteria are met:
-//!    - Emit `ReclaimationMark` with metadata
+//!    - Emit `ReclamationMark` with metadata
 //!    - Generate `ReclamationCommand` for executor
 //!
-//! 5. **Reclamation Execution**: Executor processes command:
+//! 5. **Reclamation Processing**: Executor processes command:
 //!    - Remove version tuple from storage
 //!    - Decrement row's version count
 //!    - Update statistics
@@ -39,8 +39,8 @@
 //!   no active snapshot can see `end_ts` (they all see timestamps >= min_visible_ts)
 //! - Uncommitted creators also cannot be reclaimed (reads must wait for durable commit)
 
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
 
@@ -59,7 +59,7 @@ pub type Timestamp = u64;
 /// 2. End timestamp must be strictly less than minimum visible timestamp
 /// 3. Grace period must have expired (marked_at + grace_period < now)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ReclaimationEligibility {
+pub struct ReclamationEligibility {
     /// True if creator transaction status is Committed (per V0 doctrine).
     pub is_creator_committed: bool,
     /// True if version's end_ts is strictly less than min_visible_ts
@@ -69,7 +69,7 @@ pub struct ReclaimationEligibility {
     pub gc_epoch_qualified: bool,
 }
 
-impl ReclaimationEligibility {
+impl ReclamationEligibility {
     /// Check if all eligibility criteria are met.
     pub fn is_fully_eligible(&self) -> bool {
         self.is_creator_committed && self.is_end_ts_invisible && self.gc_epoch_qualified
@@ -81,7 +81,7 @@ impl ReclaimationEligibility {
         is_end_ts_invisible: bool,
         gc_epoch_qualified: bool,
     ) -> Self {
-        ReclaimationEligibility {
+        ReclamationEligibility {
             is_creator_committed,
             is_end_ts_invisible,
             gc_epoch_qualified,
@@ -91,10 +91,10 @@ impl ReclaimationEligibility {
 
 /// Reclamation mark: formal metadata for a version eligible for cleanup.
 ///
-/// Once a version meets all eligibility criteria, a `ReclaimationMark` is created
+/// Once a version meets all eligibility criteria, a `ReclamationMark` is created
 /// to guide the GC executor in safe tuple removal.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReclaimationMark {
+pub struct ReclamationMark {
     /// The version being marked for reclamation.
     pub version_id: VersionId,
     /// Transaction that created this version (for audit trail).
@@ -107,7 +107,7 @@ pub struct ReclaimationMark {
     pub gc_epoch: u64,
 }
 
-impl ReclaimationMark {
+impl ReclamationMark {
     /// Create a new reclamation mark.
     ///
     /// This constructor does NOT validate eligibility. Use `from_version`
@@ -140,7 +140,7 @@ impl ReclaimationMark {
             ));
         }
 
-        Ok(ReclaimationMark {
+        Ok(ReclamationMark {
             version_id,
             creator_tx_id,
             end_ts,
@@ -218,12 +218,12 @@ impl ReclaimationMark {
         min_visible_ts: Timestamp,
         grace_period_epochs: u64,
         current_gc_epoch: u64,
-    ) -> ReclaimationEligibility {
+    ) -> ReclamationEligibility {
         let creator_status = status_table
             .status(self.creator_tx_id)
             .unwrap_or(TransactionStatus::InFlight);
 
-        ReclaimationEligibility {
+        ReclamationEligibility {
             is_creator_committed: matches!(creator_status, TransactionStatus::Committed),
             is_end_ts_invisible: self.end_ts < min_visible_ts,
             gc_epoch_qualified: current_gc_epoch >= self.gc_epoch + grace_period_epochs,
@@ -309,7 +309,7 @@ impl ReclamationCommand {
     }
 }
 
-/// Statistics for reclamation marking and execution.
+/// Statistics for reclamation marking and processing.
 #[derive(Debug, Clone)]
 pub struct ReclamationStats {
     marks_created: Arc<AtomicU64>,
@@ -338,15 +338,15 @@ impl ReclamationStats {
         self.versions_reclaimed.load(Ordering::Relaxed)
     }
 
-    pub(crate) fn record_mark(&self) {
+    pub fn record_mark(&self) {
         self.marks_created.fetch_add(1, Ordering::Relaxed);
     }
 
-    pub(crate) fn record_execution(&self) {
+    pub fn record_execution(&self) {
         self.commands_executed.fetch_add(1, Ordering::Relaxed);
     }
 
-    pub(crate) fn record_reclamation(&self) {
+    pub fn record_reclamation(&self) {
         self.versions_reclaimed.fetch_add(1, Ordering::Relaxed);
     }
 }
@@ -363,7 +363,7 @@ mod tests {
 
     #[test]
     fn reclamation_mark_creation() {
-        let mark = ReclaimationMark::new(
+        let mark = ReclamationMark::new(
             1, // version_id
             TransactionId::new(1),
             100, // end_ts
@@ -379,7 +379,7 @@ mod tests {
 
     #[test]
     fn reclamation_mark_rejects_zero_version_id() {
-        let mark = ReclaimationMark::new(
+        let mark = ReclamationMark::new(
             0, // Invalid: zero
             TransactionId::new(1),
             100,
@@ -392,7 +392,7 @@ mod tests {
 
     #[test]
     fn reclamation_mark_rejects_zero_creator_tx_id() {
-        let mark = ReclaimationMark::new(
+        let mark = ReclamationMark::new(
             1,
             TransactionId::new(0), // Invalid: zero
             100,
@@ -405,7 +405,7 @@ mod tests {
 
     #[test]
     fn reclamation_mark_rejects_live_version() {
-        let mark = ReclaimationMark::new(
+        let mark = ReclamationMark::new(
             1,
             TransactionId::new(1),
             u64::MAX, // Invalid: live version
@@ -418,25 +418,25 @@ mod tests {
 
     #[test]
     fn reclamation_eligibility_fully_eligible() {
-        let eligibility = ReclaimationEligibility::new(true, true, true);
+        let eligibility = ReclamationEligibility::new(true, true, true);
         assert!(eligibility.is_fully_eligible());
     }
 
     #[test]
     fn reclamation_eligibility_not_committed_creator() {
-        let eligibility = ReclaimationEligibility::new(false, true, true);
+        let eligibility = ReclamationEligibility::new(false, true, true);
         assert!(!eligibility.is_fully_eligible());
     }
 
     #[test]
     fn reclamation_eligibility_end_ts_still_visible() {
-        let eligibility = ReclaimationEligibility::new(true, false, true);
+        let eligibility = ReclamationEligibility::new(true, false, true);
         assert!(!eligibility.is_fully_eligible());
     }
 
     #[test]
     fn reclamation_eligibility_grace_period_not_met() {
-        let eligibility = ReclaimationEligibility::new(true, true, false);
+        let eligibility = ReclamationEligibility::new(true, true, false);
         assert!(!eligibility.is_fully_eligible());
     }
 
@@ -456,7 +456,7 @@ mod tests {
 
     #[test]
     fn reclamation_mark_emit_command() {
-        let mark = ReclaimationMark::new(1, TransactionId::new(1), 100, 50, 5).unwrap();
+        let mark = ReclamationMark::new(1, TransactionId::new(1), 100, 50, 5).unwrap();
         let cmd = mark.mark_for_reclamation();
 
         assert_eq!(cmd.version_id, mark.version_id);
@@ -466,7 +466,7 @@ mod tests {
 
     #[test]
     fn reclamation_mark_validate_success() {
-        let mark = ReclaimationMark::new(1, TransactionId::new(1), 100, 50, 5).unwrap();
+        let mark = ReclamationMark::new(1, TransactionId::new(1), 100, 50, 5).unwrap();
         assert!(mark.validate().is_ok());
     }
 
@@ -495,7 +495,7 @@ mod tests {
 
         status_table.set_committed(tx_id).unwrap();
 
-        let mark = ReclaimationMark::new(1, tx_id, 50, 20, 5).unwrap();
+        let mark = ReclamationMark::new(1, tx_id, 50, 20, 5).unwrap();
         let eligibility = mark.check_eligibility(&status_table, 100, 0, 10);
 
         assert!(eligibility.is_creator_committed);
@@ -510,7 +510,7 @@ mod tests {
 
         // Don't mark as committed - remains InFlight
 
-        let mark = ReclaimationMark::new(1, tx_id, 50, 20, 5).unwrap();
+        let mark = ReclamationMark::new(1, tx_id, 50, 20, 5).unwrap();
         let eligibility = mark.check_eligibility(&status_table, 100, 0, 10);
 
         assert!(!eligibility.is_creator_committed);
@@ -524,7 +524,7 @@ mod tests {
 
         status_table.set_committed(tx_id).unwrap();
 
-        let mark = ReclaimationMark::new(1, tx_id, 150, 20, 5).unwrap();
+        let mark = ReclamationMark::new(1, tx_id, 150, 20, 5).unwrap();
         // min_visible_ts is 100, but end_ts is 150
         let eligibility = mark.check_eligibility(&status_table, 100, 0, 10);
 
@@ -540,7 +540,7 @@ mod tests {
 
         status_table.set_committed(tx_id).unwrap();
 
-        let mark = ReclaimationMark::new(1, tx_id, 50, 20, 10).unwrap();
+        let mark = ReclamationMark::new(1, tx_id, 50, 20, 10).unwrap();
         // Grace period is 5 epochs, current is 10, marked_at epoch is 10
         // So 10 < 10 + 5 (not expired)
         let eligibility = mark.check_eligibility(&status_table, 100, 5, 10);
@@ -558,12 +558,12 @@ mod tests {
 
         status_table.set_committed(tx_id).unwrap();
 
-        let mark_opt = ReclaimationMark::from_version_if_eligible(
-            1,                 // version_id
-            tx_id,             // creator_tx_id
-            50,                // end_ts
-            20,                // marked_at
-            5,                 // gc_epoch
+        let mark_opt = ReclamationMark::from_version_if_eligible(
+            1,     // version_id
+            tx_id, // creator_tx_id
+            50,    // end_ts
+            20,    // marked_at
+            5,     // gc_epoch
             &status_table,
             100, // min_visible_ts
             0,   // grace_period_epochs
@@ -581,8 +581,16 @@ mod tests {
 
         // Don't mark as committed
 
-        let mark_opt = ReclaimationMark::from_version_if_eligible(
-            1, tx_id, 50, 20, 5, &status_table, 100, 0, 10,
+        let mark_opt = ReclamationMark::from_version_if_eligible(
+            1,
+            tx_id,
+            50,
+            20,
+            5,
+            &status_table,
+            100,
+            0,
+            10,
         );
 
         assert!(mark_opt.is_ok());
@@ -596,8 +604,16 @@ mod tests {
 
         status_table.set_committed(tx_id).unwrap();
 
-        let mark_opt = ReclaimationMark::from_version_if_eligible(
-            1, tx_id, 150, 20, 5, &status_table, 100, 0, 10,
+        let mark_opt = ReclamationMark::from_version_if_eligible(
+            1,
+            tx_id,
+            150,
+            20,
+            5,
+            &status_table,
+            100,
+            0,
+            10,
         );
 
         assert!(mark_opt.is_ok());
@@ -611,8 +627,16 @@ mod tests {
 
         status_table.set_committed(tx_id).unwrap();
 
-        let mark_opt = ReclaimationMark::from_version_if_eligible(
-            1, tx_id, 50, 20, 10, &status_table, 100, 5, 10,
+        let mark_opt = ReclamationMark::from_version_if_eligible(
+            1,
+            tx_id,
+            50,
+            20,
+            10,
+            &status_table,
+            100,
+            5,
+            10,
         );
 
         assert!(mark_opt.is_ok());
@@ -626,7 +650,7 @@ mod tests {
 
         status_table.set_committed(tx_id).unwrap();
 
-        let mark = ReclaimationMark::new(1, tx_id, 50, 20, 5).unwrap();
+        let mark = ReclamationMark::new(1, tx_id, 50, 20, 5).unwrap();
 
         assert!(mark.is_eligible(&status_table, 100, 0, 10));
     }
@@ -641,7 +665,7 @@ mod tests {
         status_table.set_committed(tx_id).unwrap();
 
         for i in 1..=10 {
-            let mark = ReclaimationMark::new(i, tx_id, 50, 20, 5).unwrap();
+            let mark = ReclamationMark::new(i, tx_id, 50, 20, 5).unwrap();
             marks.push(mark);
         }
 
@@ -663,7 +687,7 @@ mod tests {
         status_table.set_committed(tx_id).unwrap();
 
         // Version with end_ts = 50
-        let mark = ReclaimationMark::new(1, tx_id, 50, 20, 5).unwrap();
+        let mark = ReclamationMark::new(1, tx_id, 50, 20, 5).unwrap();
 
         // min_visible_ts = 100 means:
         // - The oldest active snapshot has timestamp >= 100

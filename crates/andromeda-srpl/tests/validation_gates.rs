@@ -14,8 +14,8 @@
 
 use andromeda_srpl::procedure_compiler::*;
 use andromeda_srpl::source_location::SrplSource;
-use std::time::Instant;
 use std::sync::Arc;
+use std::time::Instant;
 
 // ============================================================================
 // GATE 01: Lexer Token Type Coverage
@@ -32,8 +32,8 @@ fn gate_01_lexer_all_keyword_tokens() {
     ];
 
     for (keyword, desc) in keywords {
-        let source = SrplSource::new(keyword.to_string());
-        let result = lex(&source.content());
+        let source = SrplSource::new(keyword);
+        let result = lex(source.text);
         assert!(result.is_ok(), "{}: lex failed for '{}'", desc, keyword);
         let tokens = result.unwrap();
         assert!(!tokens.is_empty(), "{}: no tokens produced", desc);
@@ -74,7 +74,7 @@ fn gate_02_parser_simple_procedure_signature() {
     let srpl = "procedure Inventory.ReserveStock accepts (ProductId i64) returns Reservation one (Reserved bool);";
     let ir = compile_narrow_procedure_signature(srpl)
         .expect("should compile simple procedure signature");
-    
+
     assert_eq!(ir.name.as_catalog_path(), "Inventory.ReserveStock");
     assert_eq!(ir.inputs.len(), 1);
     assert_eq!(ir.result_streams.len(), 1);
@@ -93,8 +93,7 @@ fn gate_02_parser_procedure_with_body() {
             emit Reservation (Reserved); \
         }";
 
-    let ir = compile_narrow_procedure_signature(srpl)
-        .expect("should compile procedure with body");
+    let ir = compile_narrow_procedure_signature(srpl).expect("should compile procedure with body");
 
     assert_eq!(ir.body.operations.len(), 4);
     assert!(ir.body.validate_bounded().is_ok());
@@ -111,8 +110,7 @@ fn gate_03_type_binding_integer_literals() {
     let srpl = "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) \
         returns Reservation one (Reserved bool);";
 
-    let ir = compile_narrow_procedure_signature(srpl)
-        .expect("should bind i64 types");
+    let ir = compile_narrow_procedure_signature(srpl).expect("should bind i64 types");
 
     assert_eq!(ir.inputs[0].name, "ProductId");
     assert_eq!(ir.inputs[1].name, "Quantity");
@@ -124,16 +122,25 @@ fn gate_03_type_binding_integer_literals() {
 fn gate_03_type_binding_cardinality_coverage() {
     let cases = vec![
         ("procedure X accepts (P i64) returns R one (C bool);", "one"),
-        ("procedure X accepts (P i64) returns R optionalOne (C bool);", "optionalOne"),
-        ("procedure X accepts (P i64) returns R many (C bool);", "many"),
-        ("procedure X accepts (P i64) returns R nonEmptyMany (C bool);", "nonEmptyMany"),
+        (
+            "procedure X accepts (P i64) returns R optionalOne (C bool);",
+            "optionalOne",
+        ),
+        (
+            "procedure X accepts (P i64) returns R many (C bool);",
+            "many",
+        ),
+        (
+            "procedure X accepts (P i64) returns R nonEmptyMany (C bool);",
+            "nonEmptyMany",
+        ),
     ];
 
     for (srpl, card_name) in cases {
         let result = compile_narrow_procedure_signature(srpl);
         match result {
             Ok(_ir) => println!("  ✅ Cardinality {} binding verified", card_name),
-            Err(e) => println!("  ⚠️  Cardinality {} binding: {}", card_name, e.message()),
+            Err(e) => println!("  ⚠️  Cardinality {} binding: {}", card_name, e.message),
         }
     }
 
@@ -149,8 +156,7 @@ fn gate_04_ir_lowering_read_operation() {
     let srpl = "procedure Inventory.ReserveStock accepts (P i64) returns R one (C bool) \
         body { read Inventory.ProductStock Stock one; }";
 
-    let ir = compile_narrow_procedure_signature(srpl)
-        .expect("should lower read operation");
+    let ir = compile_narrow_procedure_signature(srpl).expect("should lower read operation");
 
     assert_eq!(ir.body.operations.len(), 1);
     println!("  ✅ IR lowering: ReadTable operation verified");
@@ -161,8 +167,7 @@ fn gate_04_ir_lowering_assert_operation() {
     let srpl = "procedure Inventory.ReserveStock accepts (P i64) returns R one (C bool) \
         body { assert Quantity InsufficientStock; }";
 
-    let ir = compile_narrow_procedure_signature(srpl)
-        .expect("should lower assert operation");
+    let ir = compile_narrow_procedure_signature(srpl).expect("should lower assert operation");
 
     assert_eq!(ir.body.operations.len(), 1);
     println!("  ✅ IR lowering: Assert operation verified");
@@ -173,8 +178,7 @@ fn gate_04_ir_lowering_update_operation() {
     let srpl = "procedure Inventory.ReserveStock accepts (P i64) returns R one (C bool) \
         body { update Inventory.ProductStock AvailableQuantity; }";
 
-    let ir = compile_narrow_procedure_signature(srpl)
-        .expect("should lower update operation");
+    let ir = compile_narrow_procedure_signature(srpl).expect("should lower update operation");
 
     assert_eq!(ir.body.operations.len(), 1);
     println!("  ✅ IR lowering: UpdateTable operation verified");
@@ -185,8 +189,7 @@ fn gate_04_ir_lowering_emit_operation() {
     let srpl = "procedure Inventory.ReserveStock accepts (P i64) returns R one (C bool) \
         body { emit R (C); }";
 
-    let ir = compile_narrow_procedure_signature(srpl)
-        .expect("should lower emit operation");
+    let ir = compile_narrow_procedure_signature(srpl).expect("should lower emit operation");
 
     assert_eq!(ir.body.operations.len(), 1);
     println!("  ✅ IR lowering: Emit operation verified");
@@ -220,8 +223,14 @@ fn gate_05_error_path_invalid_syntax_no_panic() {
 #[test]
 fn gate_05_error_path_semantic_errors_no_panic() {
     let semantic_errors = vec![
-        ("procedure X accepts (P i64) returns R many ();", "empty column list"),
-        ("procedure X accepts () returns R one (C bool) body { read Invalid.Table T one; }", "invalid table"),
+        (
+            "procedure X accepts (P i64) returns R many ();",
+            "empty column list",
+        ),
+        (
+            "procedure X accepts () returns R one (C bool) body { read Invalid.Table T one; }",
+            "invalid table",
+        ),
     ];
 
     for (srpl, desc) in semantic_errors {
@@ -229,7 +238,11 @@ fn gate_05_error_path_semantic_errors_no_panic() {
             let _ = compile_narrow_procedure_signature(srpl);
         }));
 
-        assert!(result.is_ok(), "Panic detected in semantic error case: {}", desc);
+        assert!(
+            result.is_ok(),
+            "Panic detected in semantic error case: {}",
+            desc
+        );
         println!("  ✅ {}: no panic", desc);
     }
 
@@ -284,7 +297,10 @@ fn gate_06_parser_performance_baseline() {
     }
     let elapsed = start.elapsed() / 100;
 
-    println!("  ⏱️  Full pipeline: {:.3}ms per call", elapsed.as_secs_f64() * 1000.0);
+    println!(
+        "  ⏱️  Full pipeline: {:.3}ms per call",
+        elapsed.as_secs_f64() * 1000.0
+    );
     assert!(
         elapsed.as_millis() < 50,
         "Full pipeline exceeded 50ms: {:.3}ms",
@@ -353,16 +369,11 @@ fn gate_07_concurrent_lexing() {
 fn gate_08_contract_hash_deterministic() {
     let srpl = "procedure Inventory.ReserveStock accepts (P i64) returns R one (C bool);";
 
-    let ir1 = compile_narrow_procedure_signature(srpl)
-        .expect("should compile first");
+    let ir1 = compile_narrow_procedure_signature(srpl).expect("should compile first");
 
-    let ir2 = compile_narrow_procedure_signature(srpl)
-        .expect("should compile second");
+    let ir2 = compile_narrow_procedure_signature(srpl).expect("should compile second");
 
-    assert_eq!(
-        ir1.name, ir2.name,
-        "Procedure names must be deterministic"
-    );
+    assert_eq!(ir1.name, ir2.name, "Procedure names must be deterministic");
     assert_eq!(
         ir1.inputs.len(),
         ir2.inputs.len(),

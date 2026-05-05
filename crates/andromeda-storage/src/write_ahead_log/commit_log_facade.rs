@@ -43,9 +43,9 @@
 //! - Entry lookup is O(1) average via DashMap
 //! - Cleanup batches old entries to amortize work
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
-use crate::Lsn;
 use super::commit_log_entry::{CommitLog, CommitLogEntry, Timestamp};
+use crate::Lsn;
+use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
 use std::sync::Arc;
 
 /// Facade coordinating CommitLog cache with WAL persistence.
@@ -281,7 +281,7 @@ impl CommitLogFacade {
     /// - Only removes entries known to be persisted
     /// - Does NOT remove entries with commit_lsn >= before_lsn (might still be needed)
     pub fn cleanup_before_lsn(&self, before_lsn: Lsn) -> usize {
-        self.commit_log.cleanup_before_lsn(before_lsn)
+        self.commit_log.cleanup_entries(before_lsn)
     }
 
     /// Get access to the underlying CommitLog for direct cache queries.
@@ -304,7 +304,20 @@ impl Default for CommitLogFacade {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_core::TransactionIdGenerator;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    struct TransactionIdGenerator;
+
+    impl TransactionIdGenerator {
+        fn new() -> Self {
+            Self
+        }
+
+        fn generate(&self) -> TransactionId {
+            static NEXT_TX_ID: AtomicU64 = AtomicU64::new(1);
+            TransactionId::new(NEXT_TX_ID.fetch_add(1, Ordering::Relaxed))
+        }
+    }
 
     fn make_facade() -> CommitLogFacade {
         CommitLogFacade::new()
@@ -646,7 +659,10 @@ mod tests {
 
         // After confirm_durable, make_visible should succeed
         let result = facade.make_visible(tx_id);
-        assert!(result.is_ok(), "make_visible should succeed after confirm_durable");
+        assert!(
+            result.is_ok(),
+            "make_visible should succeed after confirm_durable"
+        );
     }
 
     #[test]

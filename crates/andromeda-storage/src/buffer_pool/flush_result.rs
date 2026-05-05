@@ -60,7 +60,9 @@ impl FlushBlockedFrame {
 
     /// LSN gap that must close before this frame can flush.
     pub fn lsn_gap(&self) -> u64 {
-        self.first_dirty_lsn.get().saturating_sub(self.max_durable_lsn.get())
+        self.first_dirty_lsn
+            .get()
+            .saturating_sub(self.max_durable_lsn.get())
     }
 }
 
@@ -147,32 +149,31 @@ mod tests {
 
     #[test]
     fn blocked_frame_computes_lsn_gap() {
-        let blocked = FlushBlockedFrame::new(
-            PageId::new(42),
-            Lsn::new(100),
-            Lsn::new(50),
-        );
+        let blocked = FlushBlockedFrame::new(PageId::new(42), Lsn::new(100), Lsn::new(50));
         assert_eq!(blocked.lsn_gap(), 50);
     }
 
     #[test]
     fn blocked_frame_lsn_gap_saturates() {
-        let blocked = FlushBlockedFrame::new(
-            PageId::new(42),
-            Lsn::new(50),
-            Lsn::new(100),
-        );
+        let blocked = FlushBlockedFrame::new(PageId::new(42), Lsn::new(50), Lsn::new(100));
         assert_eq!(blocked.lsn_gap(), 0);
     }
 
     #[test]
     fn flush_error_extracts_page_id() {
         assert_eq!(
-            FlushError::FrameNotResident { page_id: PageId::new(10) }.page_id(),
+            FlushError::FrameNotResident {
+                page_id: PageId::new(10)
+            }
+            .page_id(),
             Some(PageId::new(10))
         );
         assert_eq!(
-            FlushError::FramePinned { page_id: PageId::new(11), pin_count: 2 }.page_id(),
+            FlushError::FramePinned {
+                page_id: PageId::new(11),
+                pin_count: 2
+            }
+            .page_id(),
             Some(PageId::new(11))
         );
         assert_eq!(
@@ -189,9 +190,10 @@ mod tests {
             FlushBlockedFrame::new(PageId::new(1), Lsn::new(10), Lsn::new(5)),
             FlushBlockedFrame::new(PageId::new(2), Lsn::new(20), Lsn::new(5)),
         ];
-        result.errors = vec![
-            FlushError::FramePinned { page_id: PageId::new(3), pin_count: 1 },
-        ];
+        result.errors = vec![FlushError::FramePinned {
+            page_id: PageId::new(3),
+            pin_count: 1,
+        }];
 
         assert_eq!(result.total_examined(), 6);
         assert!(!result.all_succeeded());

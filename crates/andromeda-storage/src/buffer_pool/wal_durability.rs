@@ -4,8 +4,8 @@
 //! Before flushing a dirty page, the buffer pool must verify that the page's
 //! first dirty LSN is durable in the WAL.
 
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::Lsn;
 

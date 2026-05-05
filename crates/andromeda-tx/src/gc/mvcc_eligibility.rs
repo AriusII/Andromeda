@@ -52,8 +52,8 @@
 //! Status table and snapshot registry queries may block temporarily but
 //! never deadlock due to careful ordering (no cyclic waiting).
 
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
 
@@ -78,7 +78,6 @@ pub struct VersionEligibility {
     /// True if grace period has elapsed since marking
     pub is_grace_period_met: bool,
 }
-
 impl VersionEligibility {
     /// Check if all three criteria are met (version is fully eligible for reclamation).
     pub fn is_fully_eligible(&self) -> bool {
@@ -273,11 +272,7 @@ impl VersionEligibilityChecker {
     ///
     /// * `version` - Version record to evaluate
     /// * `gc_epoch` - Current GC epoch for grace period comparison
-    pub fn is_eligible(
-        &self,
-        version: &VersionRecord,
-        gc_epoch: u64,
-    ) -> AndromedaResult<bool> {
+    pub fn is_eligible(&self, version: &VersionRecord, gc_epoch: u64) -> AndromedaResult<bool> {
         let eligibility = self.check_all_criteria(version, gc_epoch)?;
         Ok(eligibility.is_fully_eligible())
     }
@@ -354,14 +349,7 @@ impl VersionEligibilityChecker {
     ///
     /// Minimum visible timestamp, or u64::MAX if no active snapshots exist.
     pub fn min_visible_timestamp(&self) -> AndromedaResult<Timestamp> {
-        self.snapshot_registry
-            .minimum_visible_timestamp()
-            .map_err(|e| {
-                AndromedaError::new(
-                    AndromedaErrorKind::Transaction,
-                    format!("failed to query minimum visible timestamp: {:?}", e),
-                )
-            })
+        Ok(self.snapshot_registry.minimum_visible_timestamp())
     }
 
     /// Check if a version created by an aborted transaction is immediately eligible.
@@ -392,7 +380,7 @@ impl VersionEligibilityChecker {
             .status_table
             .status(version.creator_tx_id)
             .unwrap_or(TransactionStatus::InFlight);
-        
+
         // Only Aborted status qualifies for immediate eligibility
         matches!(creator_status, TransactionStatus::RolledBack)
     }
@@ -426,7 +414,7 @@ impl VersionEligibilityChecker {
             .status_table
             .status(version.creator_tx_id)
             .unwrap_or(TransactionStatus::InFlight);
-        
+
         // Safe only if NOT in-flight
         !matches!(creator_status, TransactionStatus::InFlight)
     }
@@ -491,14 +479,8 @@ impl VersionEligibilityChecker {
                 .stats
                 .ineligible_creator_not_committed
                 .load(Ordering::Relaxed),
-            ineligible_end_ts_visible: self
-                .stats
-                .ineligible_end_ts_visible
-                .load(Ordering::Relaxed),
-            ineligible_grace_period: self
-                .stats
-                .ineligible_grace_period
-                .load(Ordering::Relaxed),
+            ineligible_end_ts_visible: self.stats.ineligible_end_ts_visible.load(Ordering::Relaxed),
+            ineligible_grace_period: self.stats.ineligible_grace_period.load(Ordering::Relaxed),
         }
     }
 
@@ -522,7 +504,7 @@ impl VersionEligibilityChecker {
 mod tests {
     use super::*;
     use crate::mvcc_status::TransactionStatus;
-    use andromeda_core::TransactionIdGenerator;
+    use andromeda_core::TransactionId;
 
     fn make_status_table() -> Arc<TransactionStatusTable> {
         Arc::new(TransactionStatusTable::new())
@@ -530,6 +512,12 @@ mod tests {
 
     fn make_snapshot_registry() -> Arc<ActiveSnapshotRegistry> {
         Arc::new(ActiveSnapshotRegistry::new())
+    }
+    fn next_tx_id() -> TransactionId {
+        use std::sync::atomic::{AtomicU64, Ordering};
+
+        static NEXT_TX_ID: AtomicU64 = AtomicU64::new(1);
+        TransactionId::new(NEXT_TX_ID.fetch_add(1, Ordering::Relaxed))
     }
 
     #[test]
@@ -539,7 +527,7 @@ mod tests {
         let checker =
             VersionEligibilityChecker::new(status_table.clone(), snapshot_registry, 2).unwrap();
 
-        let tx_id = TransactionIdGenerator::new().generate();
+        let tx_id = next_tx_id();
         status_table.set_committed(tx_id).unwrap();
 
         let version = VersionRecord::new(1, tx_id, 100, 5).unwrap();
@@ -558,7 +546,7 @@ mod tests {
         let checker =
             VersionEligibilityChecker::new(status_table.clone(), snapshot_registry, 2).unwrap();
 
-        let tx_id = TransactionIdGenerator::new().generate();
+        let tx_id = next_tx_id();
         // Do NOT mark as committed
 
         let version = VersionRecord::new(1, tx_id, 100, 5).unwrap();
@@ -575,7 +563,7 @@ mod tests {
         let checker =
             VersionEligibilityChecker::new(status_table.clone(), snapshot_registry, 5).unwrap();
 
-        let tx_id = TransactionIdGenerator::new().generate();
+        let tx_id = next_tx_id();
         status_table.set_committed(tx_id).unwrap();
 
         let version = VersionRecord::new(1, tx_id, 100, 5).unwrap();
@@ -588,9 +576,9 @@ mod tests {
 
     #[test]
     fn test_version_record_validation() {
-        assert!(VersionRecord::new(0, TransactionIdGenerator::new().generate(), 100, 5).is_err());
+        assert!(VersionRecord::new(0, next_tx_id(), 100, 5).is_err());
 
-        let tx_id = TransactionIdGenerator::new().generate();
+        let tx_id = next_tx_id();
         assert!(VersionRecord::new(1, tx_id, 100, 5).is_ok());
     }
 
@@ -601,10 +589,7 @@ mod tests {
             is_end_ts_invisible: true,
             is_grace_period_met: true,
         };
-        assert_eq!(
-            elg1.first_failed_criterion(),
-            Some("creator not committed")
-        );
+        assert_eq!(elg1.first_failed_criterion(), Some("creator not committed"));
 
         let elg2 = VersionEligibility {
             is_creator_committed: true,
@@ -621,7 +606,10 @@ mod tests {
             is_end_ts_invisible: true,
             is_grace_period_met: false,
         };
-        assert_eq!(elg3.first_failed_criterion(), Some("grace period not elapsed"));
+        assert_eq!(
+            elg3.first_failed_criterion(),
+            Some("grace period not elapsed")
+        );
 
         let elg_all_pass = VersionEligibility {
             is_creator_committed: true,
@@ -638,10 +626,10 @@ mod tests {
         let checker =
             VersionEligibilityChecker::new(status_table.clone(), snapshot_registry, 2).unwrap();
 
-        let tx_id_1 = TransactionIdGenerator::new().generate();
+        let tx_id_1 = next_tx_id();
         status_table.set_committed(tx_id_1).unwrap();
 
-        let tx_id_2 = TransactionIdGenerator::new().generate();
+        let tx_id_2 = next_tx_id();
         // Do not commit tx_id_2
 
         let v1 = VersionRecord::new(1, tx_id_1, 100, 5).unwrap();
@@ -663,7 +651,7 @@ mod tests {
         let checker =
             VersionEligibilityChecker::new(status_table.clone(), snapshot_registry, 2).unwrap();
 
-        let tx_id = TransactionIdGenerator::new().generate();
+        let tx_id = next_tx_id();
         status_table.set_committed(tx_id).unwrap();
 
         let version = VersionRecord::new(1, tx_id, 100, 5).unwrap();
@@ -684,7 +672,7 @@ mod tests {
         let checker =
             VersionEligibilityChecker::new(status_table.clone(), snapshot_registry, 2).unwrap();
 
-        let tx_id = TransactionIdGenerator::new().generate();
+        let tx_id = next_tx_id();
         status_table.set_committed(tx_id).unwrap();
 
         let version = VersionRecord::new(1, tx_id, 100, 5).unwrap();
@@ -700,7 +688,7 @@ mod tests {
         let checker =
             VersionEligibilityChecker::new(status_table.clone(), snapshot_registry, 10).unwrap();
 
-        let tx_id = TransactionIdGenerator::new().generate();
+        let tx_id = next_tx_id();
         // Do NOT commit
 
         let version = VersionRecord::new(1, tx_id, 100, 0).unwrap();
@@ -726,7 +714,7 @@ mod tests {
             VersionEligibilityChecker::new(status_table.clone(), snapshot_registry, grace_period)
                 .unwrap();
 
-        let tx_id = TransactionIdGenerator::new().generate();
+        let tx_id = next_tx_id();
         status_table.set_committed(tx_id).unwrap();
 
         let marked_at = 10;
@@ -755,7 +743,7 @@ mod tests {
         let checker =
             VersionEligibilityChecker::new(status_table.clone(), snapshot_registry, 2).unwrap();
 
-        let tx_id = TransactionIdGenerator::new().generate();
+        let tx_id = next_tx_id();
         // Do NOT record this transaction
 
         let status = checker.creator_status(tx_id).unwrap();
@@ -766,8 +754,7 @@ mod tests {
     fn test_min_visible_timestamp_query() {
         let status_table = make_status_table();
         let snapshot_registry = make_snapshot_registry();
-        let checker =
-            VersionEligibilityChecker::new(status_table, snapshot_registry, 2).unwrap();
+        let checker = VersionEligibilityChecker::new(status_table, snapshot_registry, 2).unwrap();
 
         let min_ts = checker.min_visible_timestamp().unwrap();
         // Should succeed even with empty registry (returns u64::MAX or safe default)
@@ -781,7 +768,7 @@ mod tests {
         let checker =
             VersionEligibilityChecker::new(status_table.clone(), snapshot_registry, 2).unwrap();
 
-        let tx_id = TransactionIdGenerator::new().generate();
+        let tx_id = next_tx_id();
         status_table.set_committed(tx_id).unwrap();
 
         let version = VersionRecord::new(1, tx_id, 100, 0).unwrap();
@@ -805,7 +792,7 @@ mod tests {
         let checker =
             VersionEligibilityChecker::new(status_table.clone(), snapshot_registry, 2).unwrap();
 
-        let tx_id = TransactionIdGenerator::new().generate();
+        let tx_id = next_tx_id();
         status_table.set_committed(tx_id).unwrap();
 
         let version = VersionRecord::new(1, tx_id, 100, 5).unwrap();

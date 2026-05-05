@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
-use andromeda_storage::slot_directory::{SlotDirectory, SlotId};
 use andromeda_storage::PageSize;
+use andromeda_storage::slot_directory::{SlotDirectory, SlotId};
 
 // ============================================================================
 // Wave 21 Batch 3 Task 1: N1-HEAP-003 — Heap Slot Directory Contract Tests
@@ -35,7 +35,10 @@ fn test_slot_directory_allocate_single() {
     assert_eq!(dir.slot_count(), 1);
     assert_eq!(dir.active_slot_count(), 1);
 
-    let (offset, length) = dir.get_slot(slot_id).expect("get_slot").expect("slot exists");
+    let (offset, length) = dir
+        .get_slot(slot_id)
+        .expect("get_slot")
+        .expect("slot exists");
     assert_eq!(offset, 96); // After page header
     assert_eq!(length, 100);
 }
@@ -101,8 +104,8 @@ fn test_slot_directory_double_delete_error() {
 #[test]
 fn test_slot_directory_compact_removes_deleted_tail() {
     let mut dir = SlotDirectory::new(PageSize::KiB16);
-    let slot1 = dir.allocate_slot(100).expect("alloc 1");
-    let slot2 = dir.allocate_slot(200).expect("alloc 2");
+    let _slot1 = dir.allocate_slot(100).expect("alloc 1");
+    let _slot2 = dir.allocate_slot(200).expect("alloc 2");
     let slot3 = dir.allocate_slot(150).expect("alloc 3");
 
     assert_eq!(dir.slot_count(), 3);
@@ -124,9 +127,9 @@ fn test_slot_directory_compact_removes_deleted_tail() {
 #[test]
 fn test_slot_directory_compact_with_gaps() {
     let mut dir = SlotDirectory::new(PageSize::KiB16);
-    let slot1 = dir.allocate_slot(100).expect("alloc 1");
+    let _slot1 = dir.allocate_slot(100).expect("alloc 1");
     let slot2 = dir.allocate_slot(200).expect("alloc 2");
-    let slot3 = dir.allocate_slot(150).expect("alloc 3");
+    let _slot3 = dir.allocate_slot(150).expect("alloc 3");
     let slot4 = dir.allocate_slot(75).expect("alloc 4");
 
     // Delete middle slot (slot2)
@@ -154,7 +157,7 @@ fn test_slot_directory_free_space() {
     let initial_free = dir.free_space();
     assert!(initial_free > 0, "should have initial free space");
 
-    let slot = dir.allocate_slot(1000).expect("alloc 1000");
+    dir.allocate_slot(1000).expect("alloc 1000");
     let after_alloc = dir.free_space();
 
     assert!(after_alloc < initial_free, "free space should decrease");
@@ -276,8 +279,7 @@ fn test_slot_directory_serialize_deserialize() {
     dir.serialize_to_page(&mut page_data).expect("serialize");
 
     // Deserialize and verify
-    let restored = SlotDirectory::from_page_data(PageSize::KiB16, &page_data)
-        .expect("deserialize");
+    let restored = SlotDirectory::from_page_data(PageSize::KiB16, &page_data).expect("deserialize");
 
     assert_eq!(restored.slot_count(), dir.slot_count());
     assert_eq!(restored.active_slot_count(), dir.active_slot_count());
@@ -289,7 +291,7 @@ fn test_slot_directory_reuse_deleted_slot() {
     let mut dir = SlotDirectory::new(PageSize::KiB16);
 
     let slot1 = dir.allocate_slot(100).expect("alloc 1");
-    let slot2 = dir.allocate_slot(200).expect("alloc 2");
+    dir.allocate_slot(200).expect("alloc 2");
 
     assert_eq!(dir.slot_count(), 2);
 
@@ -348,7 +350,6 @@ fn test_slot_directory_no_tuple_overlap() {
     // Verify no overlap
     let end1 = o1 as u32 + l1 as u32;
     let end2 = o2 as u32 + l2 as u32;
-    let end3 = o3 as u32 + l3 as u32;
 
     assert!(end1 <= o2 as u32, "slot 1 should not overlap slot 2");
     assert!(end2 <= o3 as u32, "slot 2 should not overlap slot 3");
@@ -377,7 +378,11 @@ fn test_slot_directory_active_count_accuracy() {
 
     // Compact won't remove these (not tail)
     dir.compact();
-    assert_eq!(dir.active_slot_count(), 7, "active count unchanged after compact");
+    assert_eq!(
+        dir.active_slot_count(),
+        7,
+        "active count unchanged after compact"
+    );
 }
 
 /// Test 24: Valid large tuple allocation
@@ -401,7 +406,10 @@ fn test_slot_directory_header_boundary() {
     let slot1 = dir.allocate_slot(100).expect("alloc");
     let (offset1, _length1) = dir.get_slot(slot1).expect("get").expect("exists");
 
-    assert_eq!(offset1, 96, "first slot should start at offset 96 (after header)");
+    assert_eq!(
+        offset1, 96,
+        "first slot should start at offset 96 (after header)"
+    );
 }
 
 /// Test 26: Concurrent allocation patterns (simulated)
@@ -503,8 +511,7 @@ fn test_slot_directory_serialize_preserves_structure() {
     dir.serialize_to_page(&mut page_data).expect("serialize");
 
     // Deserialize
-    let restored = SlotDirectory::from_page_data(PageSize::KiB16, &page_data)
-        .expect("deserialize");
+    let restored = SlotDirectory::from_page_data(PageSize::KiB16, &page_data).expect("deserialize");
 
     // Verify structure matches
     assert_eq!(restored.slot_count(), dir.slot_count());

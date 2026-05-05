@@ -270,7 +270,6 @@ impl BackupIOScheduler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::backup::physical_plan::PhysicalPageScan;
     use andromeda_observe::TraceId;
 
     #[test]

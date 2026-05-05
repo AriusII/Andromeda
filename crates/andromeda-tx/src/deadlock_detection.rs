@@ -698,7 +698,7 @@ impl DeadlockDecision {
                 wait_for_edges: evidence.wait_for_edges.clone(),
                 cycle_participants: Vec::new(),
                 outcome: DeadlockDecisionTraceOutcome::NoCycle,
-                reason: "deadlock_detector_found_no_cycle",
+                reason: "deadlock_detection_found_no_cycle",
                 lock_snapshot_resource_count: evidence.lock_snapshot_resource_count,
             },
             Self::VictimSuggested {
@@ -710,7 +710,7 @@ impl DeadlockDecision {
                 wait_for_edges: evidence.wait_for_edges.clone(),
                 cycle_participants: cycle_participants.clone(),
                 outcome: DeadlockDecisionTraceOutcome::VictimSuggested,
-                reason: "deadlock_detector_suggested_victim",
+                reason: "deadlock_detection_suggested_victim",
                 lock_snapshot_resource_count: evidence.lock_snapshot_resource_count,
             },
             Self::Deferred { reason, evidence } => DeadlockDecisionTrace {
@@ -2003,7 +2003,7 @@ mod tests {
         let first_tx = TransactionId::new(1);
         let second_tx = TransactionId::new(2);
         let metadata = metadata_table(&[(1, 2), (2, 1)]);
-        let mut transaction_statuses = TransactionStatusTable::new();
+        let transaction_statuses = TransactionStatusTable::new();
         transaction_statuses
             .record(first_tx, TransactionStatus::InFlight)
             .unwrap();
@@ -2028,7 +2028,8 @@ mod tests {
         let graph = WaitForGraph::from_lock_manager(&manager).unwrap();
         let graph_before = graph.clone();
         let metadata_before = metadata.clone();
-        let transaction_statuses_before = transaction_statuses.clone();
+        let first_status_before = transaction_statuses.status(first_tx);
+        let second_status_before = transaction_statuses.status(second_tx);
 
         assert_cycle(
             detector
@@ -2042,7 +2043,8 @@ mod tests {
         assert_eq!(manager.snapshot().unwrap(), snapshot_before);
         assert_eq!(graph, graph_before);
         assert_eq!(metadata, metadata_before);
-        assert_eq!(transaction_statuses, transaction_statuses_before);
+        assert_eq!(transaction_statuses.status(first_tx), first_status_before);
+        assert_eq!(transaction_statuses.status(second_tx), second_status_before);
     }
 
     #[test]
@@ -2211,14 +2213,15 @@ mod tests {
         let first_tx = TransactionId::new(1);
         let second_tx = TransactionId::new(2);
         let metadata = metadata_table(&[(1, 1), (2, 2)]);
-        let mut transaction_statuses = TransactionStatusTable::new();
+        let transaction_statuses = TransactionStatusTable::new();
         transaction_statuses
             .record(first_tx, TransactionStatus::InFlight)
             .unwrap();
         transaction_statuses
             .record(second_tx, TransactionStatus::InFlight)
             .unwrap();
-        let statuses_before = transaction_statuses.clone();
+        let first_status_before = transaction_statuses.status(first_tx);
+        let second_status_before = transaction_statuses.status(second_tx);
 
         manager
             .acquire(first_tx, first_resource, LockMode::Exclusive)
@@ -2238,7 +2241,8 @@ mod tests {
                 .unwrap();
 
         assert_eq!(coordinator_pick_victim(&decision), Some(second_tx));
-        assert_eq!(transaction_statuses, statuses_before);
+        assert_eq!(transaction_statuses.status(first_tx), first_status_before);
+        assert_eq!(transaction_statuses.status(second_tx), second_status_before);
     }
 
     fn assert_cycle(

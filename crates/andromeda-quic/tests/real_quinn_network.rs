@@ -11,11 +11,11 @@
 #![cfg(feature = "runtime-quinn")]
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
-use andromeda_quic::frame::{FrameType, FRAME_HEADER_CRC_UNCHECKED};
+use andromeda_quic::frame::{FRAME_HEADER_CRC_UNCHECKED, FrameType};
 use andromeda_quic::{
     FrameBytes, FrameCodec, FrameHeader, SurfacePlane,
     quinn_backend::{QuicClient, QuicServer},
@@ -121,17 +121,17 @@ async fn test_server_startup_and_listen_address() -> andromeda_core::AndromedaRe
 // ============================================================================
 
 #[tokio::test]
-async fn test_client_connection_tls_negotiation(
-) -> andromeda_core::AndromedaResult<()> {
+async fn test_client_connection_tls_negotiation() -> andromeda_core::AndromedaResult<()> {
     let server_addr = allocate_test_address();
     let server_tls = create_test_server_tls()?;
     let server = QuicServer::new(server_addr, server_tls)?;
     let listen_addr = server.local_addr();
 
     // Spawn server to accept a single connection
-    let server_handle = tokio::spawn(async move {
-        timeout(Duration::from_secs(5), server.accept_connection()).await
-    });
+    let server_handle =
+        tokio::spawn(
+            async move { timeout(Duration::from_secs(5), server.accept_connection()).await },
+        );
 
     // Client connects
     let client_tls = create_test_client_tls();
@@ -270,8 +270,8 @@ async fn test_concurrent_connections() -> andromeda_core::AndromedaResult<()> {
     let count_clone = accepted_count.clone();
     let accept_handle = tokio::spawn(async move {
         for _ in 0..10 {
-            if let Ok(conn) = timeout(Duration::from_secs(10), server_clone.accept_connection())
-                .await
+            if let Ok(conn) =
+                timeout(Duration::from_secs(10), server_clone.accept_connection()).await
             {
                 if let Ok(_) = conn {
                     count_clone.fetch_add(1, Ordering::SeqCst);
@@ -329,8 +329,8 @@ async fn test_bidirectional_stream_communication() -> andromeda_core::AndromedaR
     let server_handle = tokio::spawn(async move {
         if let Ok(mut conn) = timeout(Duration::from_secs(5), server.accept_connection()).await {
             if let Ok(mut conn) = conn {
-                if let Ok(mut stream) = timeout(Duration::from_secs(5), conn.accept_bidi_stream())
-                    .await
+                if let Ok(mut stream) =
+                    timeout(Duration::from_secs(5), conn.accept_bidi_stream()).await
                 {
                     if let Ok(mut stream) = stream {
                         // Read frame from client
@@ -418,8 +418,8 @@ async fn test_multiple_sequential_frames() -> andromeda_core::AndromedaResult<()
     let server_handle = tokio::spawn(async move {
         if let Ok(mut conn) = timeout(Duration::from_secs(5), server.accept_connection()).await {
             if let Ok(mut conn) = conn {
-                if let Ok(mut stream) = timeout(Duration::from_secs(5), conn.accept_bidi_stream())
-                    .await
+                if let Ok(mut stream) =
+                    timeout(Duration::from_secs(5), conn.accept_bidi_stream()).await
                 {
                     if let Ok(mut stream) = stream {
                         let mut buf = vec![0u8; 4096];
@@ -502,8 +502,8 @@ async fn test_large_payload_frame() -> andromeda_core::AndromedaResult<()> {
     let server_handle = tokio::spawn(async move {
         if let Ok(mut conn) = timeout(Duration::from_secs(10), server.accept_connection()).await {
             if let Ok(mut conn) = conn {
-                if let Ok(mut stream) = timeout(Duration::from_secs(10), conn.accept_bidi_stream())
-                    .await
+                if let Ok(mut stream) =
+                    timeout(Duration::from_secs(10), conn.accept_bidi_stream()).await
                 {
                     if let Ok(mut stream) = stream {
                         let mut buf = vec![0u8; payload_size + 100];
@@ -563,7 +563,8 @@ async fn test_large_payload_frame() -> andromeda_core::AndromedaResult<()> {
 
     let bytes_received = timeout(Duration::from_secs(10), server_handle).await???;
     assert_eq!(
-        bytes_received, encoded.len(),
+        bytes_received,
+        encoded.len(),
         "Server should have received all bytes"
     );
 

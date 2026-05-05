@@ -6,8 +6,8 @@
 
 #[cfg(test)]
 mod tests {
-    use andromeda_tx::*;
     use andromeda_core::TransactionId;
+    use andromeda_tx::*;
 
     // ==================== Test 1: Mark Creation for Eligible Version ====================
 
@@ -19,20 +19,23 @@ mod tests {
         // Set creator as committed
         status_table.set_committed(tx_id).unwrap();
 
-        let mark_opt = ReclaimationMark::from_version_if_eligible(
-            1,    // version_id
+        let mark_opt = ReclamationMark::from_version_if_eligible(
+            1,     // version_id
             tx_id, // creator_tx_id
-            50,   // end_ts (closed version)
-            20,   // marked_at
-            5,    // gc_epoch
+            50,    // end_ts (closed version)
+            20,    // marked_at
+            5,     // gc_epoch
             &status_table,
-            100,  // min_visible_ts (end_ts < min_visible_ts)
-            0,    // grace_period_epochs (no grace period)
-            10,   // current_gc_epoch
+            100, // min_visible_ts (end_ts < min_visible_ts)
+            0,   // grace_period_epochs (no grace period)
+            10,  // current_gc_epoch
         );
 
         assert!(mark_opt.is_ok(), "Should create mark without error");
-        assert!(mark_opt.unwrap().is_some(), "Should return Some when fully eligible");
+        assert!(
+            mark_opt.unwrap().is_some(),
+            "Should return Some when fully eligible"
+        );
     }
 
     // ==================== Test 2: Mark Rejected for Ineligible Version (Uncommitted Creator) ====================
@@ -44,8 +47,16 @@ mod tests {
 
         // Don't mark as committed - remains InFlight
 
-        let mark_opt = ReclaimationMark::from_version_if_eligible(
-            1, tx_id, 50, 20, 5, &status_table, 100, 0, 10,
+        let mark_opt = ReclamationMark::from_version_if_eligible(
+            1,
+            tx_id,
+            50,
+            20,
+            5,
+            &status_table,
+            100,
+            0,
+            10,
         );
 
         assert!(mark_opt.is_ok());
@@ -69,8 +80,16 @@ mod tests {
         // This means an active snapshot at ts=100 can still see this version
         // (versions are visible if begin_ts <= snapshot_ts AND end_ts > snapshot_ts)
 
-        let mark_opt = ReclaimationMark::from_version_if_eligible(
-            1, tx_id, 150, 20, 5, &status_table, 100, 0, 10,
+        let mark_opt = ReclamationMark::from_version_if_eligible(
+            1,
+            tx_id,
+            150,
+            20,
+            5,
+            &status_table,
+            100,
+            0,
+            10,
         );
 
         assert!(mark_opt.is_ok());
@@ -94,8 +113,16 @@ mod tests {
         // Current gc_epoch=10
         // Not eligible: 10 < 10 + 5
 
-        let mark_opt = ReclaimationMark::from_version_if_eligible(
-            1, tx_id, 50, 20, 10, &status_table, 100, 5, 10,
+        let mark_opt = ReclamationMark::from_version_if_eligible(
+            1,
+            tx_id,
+            50,
+            20,
+            10,
+            &status_table,
+            100,
+            5,
+            10,
         );
 
         assert!(mark_opt.is_ok());
@@ -109,14 +136,7 @@ mod tests {
 
     #[test]
     fn test_mark_emits_reclamation_command() {
-        let mark = ReclaimationMark::new(
-            1,
-            TransactionId::new(1),
-            100,
-            50,
-            5,
-        )
-        .unwrap();
+        let mark = ReclamationMark::new(1, TransactionId::new(1), 100, 50, 5).unwrap();
 
         let cmd = mark.mark_for_reclamation();
 
@@ -138,7 +158,7 @@ mod tests {
 
         // Create 100 marks with different version_ids
         for i in 1..=100 {
-            let mark_opt = ReclaimationMark::from_version_if_eligible(
+            let mark_opt = ReclamationMark::from_version_if_eligible(
                 i,      // version_id
                 tx_id,  // creator_tx_id
                 i * 10, // end_ts (100, 110, 120, ...)
@@ -162,7 +182,11 @@ mod tests {
         let mut version_ids: Vec<u64> = marks.iter().map(|m| m.version_id).collect();
         version_ids.sort();
         version_ids.dedup();
-        assert_eq!(version_ids.len(), 100, "All marks should have distinct version_ids");
+        assert_eq!(
+            version_ids.len(),
+            100,
+            "All marks should have distinct version_ids"
+        );
     }
 
     // ==================== Test 7: Correctness - No Visible Version Reclaimed ====================
@@ -182,7 +206,7 @@ mod tests {
         // This version CANNOT be marked because end_ts (100) is NOT < min_visible_ts (100)
         // Therefore, active snapshots at ts=100 can potentially see it
 
-        let mark_opt = ReclaimationMark::from_version_if_eligible(
+        let mark_opt = ReclamationMark::from_version_if_eligible(
             1,
             creator_tx_id,
             100, // end_ts
@@ -195,10 +219,13 @@ mod tests {
         );
 
         assert!(mark_opt.is_ok());
-        assert!(mark_opt.unwrap().is_none(), "Version at boundary should not be reclaimed");
+        assert!(
+            mark_opt.unwrap().is_none(),
+            "Version at boundary should not be reclaimed"
+        );
 
         // But if min_visible_ts advances to 101, now it's safe
-        let mark_opt2 = ReclaimationMark::from_version_if_eligible(
+        let mark_opt2 = ReclamationMark::from_version_if_eligible(
             1,
             creator_tx_id,
             100,
@@ -211,7 +238,10 @@ mod tests {
         );
 
         assert!(mark_opt2.is_ok());
-        assert!(mark_opt2.unwrap().is_some(), "Version becomes reclaimable when end_ts < min_visible_ts");
+        assert!(
+            mark_opt2.unwrap().is_some(),
+            "Version becomes reclaimable when end_ts < min_visible_ts"
+        );
     }
 
     // ==================== Test 8: Eligibility Criteria Structure ====================
@@ -219,15 +249,15 @@ mod tests {
     #[test]
     fn test_eligibility_criteria_combinations() {
         let eligibility_scenarios = vec![
-            (true, true, true, true),   // All met
-            (false, true, true, false), // Creator not committed
-            (true, false, true, false), // Version still visible
-            (true, true, false, false), // Grace period not met
+            (true, true, true, true),     // All met
+            (false, true, true, false),   // Creator not committed
+            (true, false, true, false),   // Version still visible
+            (true, true, false, false),   // Grace period not met
             (false, false, false, false), // None met
         ];
 
         for (committed, invisible, grace_ok, expected_eligible) in eligibility_scenarios {
-            let eligibility = ReclaimationEligibility::new(committed, invisible, grace_ok);
+            let eligibility = ReclamationEligibility::new(committed, invisible, grace_ok);
             assert_eq!(
                 eligibility.is_fully_eligible(),
                 expected_eligible,
@@ -244,19 +274,19 @@ mod tests {
     #[test]
     fn test_mark_validation_rejects_invalid_inputs() {
         // Zero version_id
-        let result1 = ReclaimationMark::new(0, TransactionId::new(1), 100, 50, 5);
+        let result1 = ReclamationMark::new(0, TransactionId::new(1), 100, 50, 5);
         assert!(result1.is_err());
 
         // Zero creator_tx_id
-        let result2 = ReclaimationMark::new(1, TransactionId::new(0), 100, 50, 5);
+        let result2 = ReclamationMark::new(1, TransactionId::new(0), 100, 50, 5);
         assert!(result2.is_err());
 
         // Live version (end_ts == u64::MAX)
-        let result3 = ReclaimationMark::new(1, TransactionId::new(1), u64::MAX, 50, 5);
+        let result3 = ReclamationMark::new(1, TransactionId::new(1), u64::MAX, 50, 5);
         assert!(result3.is_err());
 
         // Valid
-        let result4 = ReclaimationMark::new(1, TransactionId::new(1), 100, 50, 5);
+        let result4 = ReclamationMark::new(1, TransactionId::new(1), 100, 50, 5);
         assert!(result4.is_ok());
     }
 
@@ -269,7 +299,7 @@ mod tests {
 
         status_table.set_committed(tx_id).unwrap();
 
-        let mark = ReclaimationMark::new(1, tx_id, 50, 20, 5).unwrap();
+        let mark = ReclamationMark::new(1, tx_id, 50, 20, 5).unwrap();
 
         // Initially eligible
         assert!(mark.is_eligible(&status_table, 100, 0, 10));
@@ -300,19 +330,25 @@ mod tests {
         status_table.set_committed(tx3).unwrap();
 
         // Try to create marks for all three
-        let mark1 = ReclaimationMark::from_version_if_eligible(
-            1, tx1, 50, 20, 5, &status_table, 100, 0, 10,
-        );
-        let mark2 = ReclaimationMark::from_version_if_eligible(
-            2, tx2, 50, 20, 5, &status_table, 100, 0, 10,
-        );
-        let mark3 = ReclaimationMark::from_version_if_eligible(
-            3, tx3, 50, 20, 5, &status_table, 100, 0, 10,
-        );
+        let mark1 =
+            ReclamationMark::from_version_if_eligible(1, tx1, 50, 20, 5, &status_table, 100, 0, 10);
+        let mark2 =
+            ReclamationMark::from_version_if_eligible(2, tx2, 50, 20, 5, &status_table, 100, 0, 10);
+        let mark3 =
+            ReclamationMark::from_version_if_eligible(3, tx3, 50, 20, 5, &status_table, 100, 0, 10);
 
-        assert!(mark1.unwrap().is_some(), "tx1 mark should exist (committed)");
-        assert!(mark2.unwrap().is_none(), "tx2 mark should not exist (uncommitted)");
-        assert!(mark3.unwrap().is_some(), "tx3 mark should exist (committed)");
+        assert!(
+            mark1.unwrap().is_some(),
+            "tx1 mark should exist (committed)"
+        );
+        assert!(
+            mark2.unwrap().is_none(),
+            "tx2 mark should not exist (uncommitted)"
+        );
+        assert!(
+            mark3.unwrap().is_some(),
+            "tx3 mark should exist (committed)"
+        );
     }
 
     // ==================== Test 12: Grace Period Scenarios ====================
@@ -327,7 +363,7 @@ mod tests {
         let grace_period_epochs = 10;
 
         // Mark created at epoch 5
-        let mark = ReclaimationMark::new(1, tx_id, 50, 20, 5).unwrap();
+        let mark = ReclamationMark::new(1, tx_id, 50, 20, 5).unwrap();
 
         // At epoch 10: 10 < 5 + 10 = not eligible
         let elig1 = mark.check_eligibility(&status_table, 100, grace_period_epochs, 10);
@@ -388,13 +424,23 @@ mod tests {
         // If end_ts = min_visible_ts, a snapshot at that exact timestamp could see it
         // So it must NOT be marked for reclamation
 
-        let mark_opt = ReclaimationMark::from_version_if_eligible(
-            1, tx_id, 100, 20, 5, &status_table, 100, // end_ts == min_visible_ts
-            0, 10,
+        let mark_opt = ReclamationMark::from_version_if_eligible(
+            1,
+            tx_id,
+            100,
+            20,
+            5,
+            &status_table,
+            100, // end_ts == min_visible_ts
+            0,
+            10,
         );
 
         assert!(mark_opt.is_ok());
-        assert!(mark_opt.unwrap().is_none(), "Version at boundary should not be marked");
+        assert!(
+            mark_opt.unwrap().is_none(),
+            "Version at boundary should not be marked"
+        );
     }
 
     // ==================== Test 15: Large Scale Scenario ====================
@@ -406,7 +452,7 @@ mod tests {
         // Create 100 transactions
         let mut tx_ids = Vec::new();
         for i in 1..=100 {
-            let tx_id = TransactionId::new(i as u32);
+            let tx_id = TransactionId::new(i as u64);
             // Only mark even-numbered transactions as committed
             if i % 2 == 0 {
                 status_table.set_committed(tx_id).unwrap();
@@ -420,7 +466,7 @@ mod tests {
             let tx_idx = (version_id - 1) % tx_ids.len();
             let tx_id = tx_ids[tx_idx];
 
-            let mark_opt = ReclaimationMark::from_version_if_eligible(
+            let mark_opt = ReclamationMark::from_version_if_eligible(
                 version_id as u64,
                 tx_id,
                 50,
@@ -454,8 +500,16 @@ mod tests {
 
         status_table.set_committed(tx_id).unwrap();
 
-        let mark_opt = ReclaimationMark::from_version_if_eligible(
-            42, tx_id, 500, 100, 10, &status_table, 1000, 0, 20,
+        let mark_opt = ReclamationMark::from_version_if_eligible(
+            42,
+            tx_id,
+            500,
+            100,
+            10,
+            &status_table,
+            1000,
+            0,
+            20,
         );
 
         assert!(mark_opt.is_ok());

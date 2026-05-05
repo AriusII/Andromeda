@@ -13,8 +13,7 @@
 
 use andromeda_core::{AndromedaErrorKind, InvocationId};
 use andromeda_quic::{
-    BackpressureRequest, CancellationReason, CancellationToken, StreamConcurrencyManager,
-    StreamState,
+    CancellationReason, CancellationToken, StreamConcurrencyManager, StreamState,
 };
 use std::thread;
 use std::time::Duration;

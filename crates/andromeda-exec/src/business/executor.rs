@@ -54,7 +54,7 @@ struct VersionedInventoryReservation {
 /// and transaction status table so business decisions can carry explicit
 /// read/write version evidence without introducing a SQL or JSON execution
 /// surface.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct InventoryBusinessMvccStore {
     stock_versions: BTreeMap<i64, Vec<VersionedInventoryStock>>,
     reservations: BTreeMap<u64, VersionedInventoryReservation>,

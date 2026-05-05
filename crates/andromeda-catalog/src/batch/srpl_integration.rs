@@ -120,8 +120,6 @@ pub fn drop_srpl_procedure(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn add_srpl_procedure_placeholder() {
         // Placeholder test; real tests in definitionbatch_compat.rs
