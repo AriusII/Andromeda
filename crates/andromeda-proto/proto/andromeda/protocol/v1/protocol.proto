@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package andromeda.protocol.v1;
+
+import "andromeda/protocol/v1/envelope.proto";
+import "andromeda/protocol/v1/completion.proto";
+import "andromeda/protocol/v1/invocation.proto";
+import "andromeda/protocol/v1/payload.proto";
+
+// Crate-local protocol schema assembly point.
+//
+// Durable transport envelope contracts live in envelope.proto. Procedure
+// payload, result metadata, row-batch, and error payload contracts live in
+// payload.proto. Invocation request/response containers live in
+// invocation.proto. Completion policy and RPC completion contracts live in
+// completion.proto. The split keeps envelope metadata ahead of opaque payload
+// bytes while preserving the package and field numbers of the existing
+// andromeda.protocol.v1 wire messages.

@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package andromeda.protocol.v1;
+
+// Protocol completion schemas for the crate-local authority.
+//
+// These message contracts preserve the package, field numbers, enum numeric
+// values, optionality, and reserved ranges from the pre-split payload schema.
+// The schemas are message-only and do not define JSON, gRPC, tonic, service, or
+// rpc surfaces.
+
+message ResultCompletionPolicy {
+  enum CompletionShape {
+    COMPLETION_SHAPE_UNSPECIFIED = 0;
+    COMPLETION_SHAPE_REQUIRES_ROW_BATCH = 1;
+    COMPLETION_SHAPE_ALLOWS_ZERO_ROW_COMPLETION = 2;
+    COMPLETION_SHAPE_MUTATION_ONLY = 3;
+  }
+
+  CompletionShape completion_shape = 1;
+  string reason = 2;
+
+  reserved 3 to 15;
+}
+
+message RpcCompletion {
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_COMMITTED = 1;
+    STATUS_ROLLED_BACK = 2;
+    STATUS_FAILED_BEFORE_TRANSACTION = 3;
+    STATUS_CANCELLED = 4;
+    STATUS_POISONED = 5;
+    STATUS_PERMISSION_DENIED = 6;
+    STATUS_CONTRACT_REJECTED = 7;
+    STATUS_SYSTEM_UNAVAILABLE = 8;
+  }
+
+  enum TransactionOutcome {
+    TRANSACTION_OUTCOME_UNSPECIFIED = 0;
+    TRANSACTION_OUTCOME_NOT_STARTED = 1;
+    TRANSACTION_OUTCOME_COMMITTED = 2;
+    TRANSACTION_OUTCOME_ROLLED_BACK = 3;
+    TRANSACTION_OUTCOME_FAILED = 4;
+    TRANSACTION_OUTCOME_CANCELLED = 5;
+  }
+
+  message ResultRowCountSummary {
+    string result_name = 1;
+    uint64 rows_emitted = 2;
+    optional uint64 row_count_exact = 3;
+
+    reserved 4 to 15;
+  }
+
+  Status status = 1;
+  optional uint64 rows_affected = 2;
+  optional uint64 tx_id = 3;
+  optional uint64 request_id = 32;
+  optional uint64 session_id = 33;
+  optional string trace_id = 34;
+  TransactionOutcome transaction_outcome = 35;
+  // Required and nonzero when status is COMMITTED or ROLLED_BACK; absent for
+  // pre-transaction rejections where transaction_outcome is NOT_STARTED.
+  optional uint64 durable_lsn = 36;
+  repeated ResultRowCountSummary result_row_counts = 37;
+
+  reserved 4 to 31;
+  reserved 38 to 63;
+}

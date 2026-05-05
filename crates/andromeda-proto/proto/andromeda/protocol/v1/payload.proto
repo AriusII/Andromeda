@@ -1,0 +1,118 @@
+syntax = "proto3";
+
+package andromeda.protocol.v1;
+
+import "andromeda/contract/v1/contract.proto";
+import "andromeda/protocol/v1/completion.proto";
+
+// Protocol payload schemas for the crate-local authority. The transport
+// envelope, payload kind registry, and envelope metadata live in envelope.proto.
+//
+// Metadata-before-payload invariant:
+//   * FrameEnvelope fields 4, 5, and 6 carry request/session/transaction
+//     metadata before the opaque payload bytes in field 8.
+//   * For result-producing procedure execution, an RpcMetadata payload must be
+//     emitted and accepted before the first RpcBatch for the same request.
+//   * RpcBatch.result_name must identify a result stream declared by the prior
+//     RpcMetadata.result_streams descriptor set.
+//   * StructuredObject row bytes remain binary-only; these schemas do not
+//     define JSON, gRPC, tonic, service, or rpc surfaces.
+
+message RpcExecuteRequest {
+  message Argument {
+    string name = 1;
+    string type_name = 2;
+    bytes value = 3; // Binary StructuredObject scalar encoding, never JSON.
+
+    reserved 4 to 15;
+  }
+
+  message RequestBudget {
+    optional uint64 cpu_micros = 1;
+    optional uint64 memory_bytes = 2;
+    optional uint64 io_bytes = 3;
+    optional uint32 priority_class = 4;
+
+    reserved 5 to 15;
+  }
+
+  string procedure_name = 1;
+  bytes expected_contract_hash = 2; // 32 bytes, nonzero for contract-bound calls.
+  uint64 expected_catalog_version = 3;
+  string surface_scope = 4;
+  repeated Argument arguments = 5;
+  RequestBudget budget = 6;
+
+  reserved 7 to 31;
+}
+
+message RpcMetadata {
+  // Result descriptors are metadata-before-batch declarations. They must be
+  // observed before any RpcBatch carrying a matching result_name.
+  repeated andromeda.contract.v1.ResultStreamDescriptor result_streams = 1;
+  ResultCompletionPolicy completion_policy = 2;
+
+  reserved 3 to 31;
+}
+
+message RpcBatch {
+  string result_name = 1;
+  uint64 batch_index = 2;
+  uint64 rows_emitted = 3;
+  bytes structured_payload = 4; // Binary StructuredObject row batch.
+  optional uint64 row_count_exact = 5;
+  bool terminal_batch = 6;
+
+  reserved 7 to 31;
+}
+
+message ErrorEnvelope {
+  enum ErrorFamily {
+    ERROR_FAMILY_UNSPECIFIED = 0;
+    ERROR_FAMILY_PROTOCOL = 1;
+    ERROR_FAMILY_AUTHENTICATION = 2;
+    ERROR_FAMILY_AUTHORIZATION = 3;
+    ERROR_FAMILY_CONTRACT = 4;
+    ERROR_FAMILY_SEMANTIC = 5;
+    ERROR_FAMILY_EXECUTION = 6;
+    ERROR_FAMILY_TRANSACTION = 7;
+    ERROR_FAMILY_STORAGE = 8;
+    ERROR_FAMILY_RESOURCE = 9;
+  }
+
+  enum TransactionEffect {
+    TRANSACTION_EFFECT_UNSPECIFIED = 0;
+    TRANSACTION_EFFECT_NO_TRANSACTION = 1;
+    TRANSACTION_EFFECT_ROLLBACK_REQUIRED = 2;
+    TRANSACTION_EFFECT_FAIL_STOP = 3;
+  }
+
+  enum RetryDisposition {
+    RETRY_DISPOSITION_UNSPECIFIED = 0;
+    RETRY_DISPOSITION_NOT_RETRYABLE = 1;
+    RETRY_DISPOSITION_RETRYABLE = 2;
+    RETRY_DISPOSITION_RETRY_AFTER = 3;
+    RETRY_DISPOSITION_BACKPRESSURE = 4;
+  }
+
+  message BackpressureMetadata {
+    optional uint64 retry_after_ms = 1;
+    optional uint32 capacity_percent = 2; // 0..100 when present.
+    bool shed_load = 3;
+
+    reserved 4 to 15;
+  }
+
+  optional uint64 request_id = 1;
+  optional uint64 session_id = 2;
+  optional string trace_id = 3;
+  ErrorFamily family = 4;
+  string code = 5;
+  string message = 6;
+  TransactionEffect transaction_effect = 7;
+  RetryDisposition retry_disposition = 8;
+  optional uint64 retry_after_ms = 9;
+  optional BackpressureMetadata backpressure = 10;
+
+  reserved 11 to 31;
+}

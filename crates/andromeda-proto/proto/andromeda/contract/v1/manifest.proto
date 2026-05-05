@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package andromeda.contract.v1;
+
+import "andromeda/contract/v1/contract.proto";
+
+// Governed procedure manifest schema for the crate-local contract authority.
+// These messages are split out of contract.proto without changing package,
+// message names, field numbers, field types, or reserved ranges. The schema is
+// message-only and must not define JSON, gRPC, tonic, service, or rpc surfaces.
+
+message ProtocolLayout {
+  bytes descriptor_set_hash = 1; // Validation-required: 32 bytes, nonzero.
+  bytes frame_envelope_hash = 2; // Validation-required: 32 bytes, nonzero.
+  string protocol_package = 3; // Validation-required stable protocol package.
+  string contract_package = 4; // Validation-required stable contract package.
+
+  reserved 5 to 31;
+  reserved 32 to 63;
+}
+
+message ProcedureManifest {
+  uint64 procedure_id = 1; // Validation-required: nonzero.
+  string procedure_name = 2; // Validation-required: non-empty canonical name.
+  bytes contract_hash = 3; // Validation-required: 32 bytes, nonzero.
+  uint64 catalog_version = 4; // Validation-required: nonzero.
+  ProtocolLayout protocol_layout = 5; // Validation-required message presence.
+  repeated ResultStreamDescriptor result_streams = 6;
+  // 32-byte governance digest of the policy bundle backing this manifest.
+  // Distinct from contract / descriptor / frame envelope hashes by domain
+  // separation; never confuse with `contract_hash`.
+  bytes policy_version = 7; // Validation-required: 32 bytes, nonzero.
+  // Required permissions a caller must hold to invoke the procedure. Order
+  // is informational; uniqueness is enforced by the Rust contract layer.
+  repeated RequiredPermission required_permissions = 8;
+
+  reserved 9 to 31;
+  reserved 32 to 63;
+}

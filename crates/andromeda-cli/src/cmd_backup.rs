@@ -1,0 +1,416 @@
+//! Backup administration commands.
+//!
+//! Provides CLI commands for:
+//! - Starting backup jobs (full or incremental)
+//! - Monitoring backup progress
+//! - Listing recent backups with metadata
+
+use crate::error::cli_error;
+use andromeda_core::AndromedaResult;
+use serde::Serialize;
+use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+/// Serializable backup status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackupState {
+    Pending,
+    Running,
+    Completed,
+    Failed,
+}
+
+impl std::fmt::Display for BackupState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BackupState::Pending => write!(f, "pending"),
+            BackupState::Running => write!(f, "running"),
+            BackupState::Completed => write!(f, "completed"),
+            BackupState::Failed => write!(f, "failed"),
+        }
+    }
+}
+
+impl Serialize for BackupState {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+/// Serializable backup status report.
+#[derive(Debug, Clone, Serialize)]
+pub struct BackupStatusReport {
+    pub backup_id: u64,
+    pub state: BackupState,
+    pub progress_percent: u32,
+    pub bytes_processed: u64,
+    pub estimated_total_bytes: u64,
+    pub start_time: u64,
+    pub elapsed_seconds: u64,
+}
+
+/// Serializable backup list entry.
+#[derive(Debug, Clone, Serialize)]
+pub struct BackupListEntry {
+    pub backup_id: u64,
+    pub state: BackupState,
+    pub size_bytes: u64,
+    pub created_timestamp: u64,
+    pub base_lsn: u64,
+    pub end_lsn: u64,
+}
+
+/// Serializable backup start outcome.
+#[derive(Debug, Clone, Serialize)]
+pub struct BackupStartOutcome {
+    pub backup_id: u64,
+    pub backup_type: String,
+    pub destination: Option<String>,
+    pub message: String,
+}
+
+/// Parses and executes backup subcommands.
+pub fn run_backup_command(args: &[String]) -> AndromedaResult<()> {
+    match args.first().map(String::as_str) {
+        Some("start") => run_backup_start(&args[1..]),
+        Some("status") => run_backup_status(&args[1..]),
+        Some("list") => run_backup_list(&args[1..]),
+        Some("-h" | "--help" | "help") => {
+            print_backup_help();
+            Ok(())
+        }
+        Some(cmd) => Err(cli_error(format!(
+            "unknown backup subcommand `{cmd}`; run `andromeda-cli backup --help`"
+        ))),
+        None => {
+            print_backup_help();
+            Ok(())
+        }
+    }
+}
+
+/// Starts a backup job (full or incremental).
+fn run_backup_start(args: &[String]) -> AndromedaResult<()> {
+    let mut incremental = false;
+    let mut destination: Option<String> = None;
+    let mut json = false;
+    let mut i = 0;
+
+    while i < args.len() {
+        match args[i].as_str() {
+            "--incremental" => incremental = true,
+            "--destination" => {
+                i += 1;
+                if i >= args.len() {
+                    return Err(cli_error("--destination requires a path argument"));
+                }
+                destination = Some(args[i].clone());
+            }
+            "--json" => json = true,
+            opt if opt.starts_with("--") => {
+                return Err(cli_error(format!("unknown backup start option: {}", opt)));
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+
+    // MOCK: In a real implementation, this would invoke the backup scheduler.
+    let backup_type = if incremental {
+        "incremental".to_string()
+    } else {
+        "full".to_string()
+    };
+
+    let backup_id = 100u64; // Mock ID
+    let outcome = BackupStartOutcome {
+        backup_id,
+        backup_type,
+        destination: destination.clone(),
+        message: format!(
+            "Backup {} started{}",
+            backup_id,
+            destination
+                .map(|d| format!(" (destination: {})", d))
+                .unwrap_or_default()
+        ),
+    };
+
+    if json {
+        let json_str = serde_json::to_string_pretty(&outcome)
+            .map_err(|e| cli_error(format!("failed to serialize backup outcome: {}", e)))?;
+        println!("{}", json_str);
+    } else {
+        println!("✓ {}", outcome.message);
+        println!("Backup ID: {}", outcome.backup_id);
+    }
+
+    Ok(())
+}
+
+/// Shows progress of a backup job.
+fn run_backup_status(args: &[String]) -> AndromedaResult<()> {
+    if args.is_empty() {
+        return Err(cli_error(
+            "backup status requires <backup-id>; usage: `backup status <backup-id>`",
+        ));
+    }
+
+    let backup_id: u64 = args[0]
+        .parse()
+        .map_err(|_| cli_error("backup-id must be an unsigned integer"))?;
+
+    let json = args.iter().any(|arg| arg == "--json");
+
+    // MOCK: In a real implementation, this would query the backup scheduler.
+    let report = BackupStatusReport {
+        backup_id,
+        state: BackupState::Running,
+        progress_percent: 65,
+        bytes_processed: 1_073_741_824, // 1 GiB
+        estimated_total_bytes: 1_610_612_736, // 1.5 GiB
+        start_time: unix_timestamp(),
+        elapsed_seconds: 120,
+    };
+
+    if json {
+        let json_str = serde_json::to_string_pretty(&report)
+            .map_err(|e| cli_error(format!("failed to serialize backup status: {}", e)))?;
+        println!("{}", json_str);
+    } else {
+        print_backup_status_human(&report);
+    }
+
+    Ok(())
+}
+
+/// Lists recent backups with sizes and timestamps.
+fn run_backup_list(args: &[String]) -> AndromedaResult<()> {
+    let mut limit = 10usize;
+    let mut json = false;
+    let mut i = 0;
+
+    while i < args.len() {
+        match args[i].as_str() {
+            "--limit" => {
+                i += 1;
+                if i >= args.len() {
+                    return Err(cli_error("--limit requires a numeric argument"));
+                }
+                limit = args[i]
+                    .parse()
+                    .map_err(|_| cli_error("--limit expects an unsigned integer"))?;
+            }
+            "--json" => json = true,
+            opt if opt.starts_with("--") => {
+                return Err(cli_error(format!("unknown backup list option: {}", opt)));
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+
+    // MOCK: In a real implementation, this would query the backup store.
+    let backups = vec![
+        BackupListEntry {
+            backup_id: 102,
+            state: BackupState::Completed,
+            size_bytes: 1_610_612_736, // 1.5 GiB
+            created_timestamp: unix_timestamp() - 3600,
+            base_lsn: 1048576,
+            end_lsn: 2097152,
+        },
+        BackupListEntry {
+            backup_id: 101,
+            state: BackupState::Completed,
+            size_bytes: 1_288_490_189, // ~1.2 GiB
+            created_timestamp: unix_timestamp() - 7200,
+            base_lsn: 524288,
+            end_lsn: 1048576,
+        },
+        BackupListEntry {
+            backup_id: 100,
+            state: BackupState::Completed,
+            size_bytes: 967_367_641, // ~900 MiB
+            created_timestamp: unix_timestamp() - 10800,
+            base_lsn: 0,
+            end_lsn: 524288,
+        },
+    ];
+
+    let backups_to_show: Vec<_> = backups.iter().take(limit).collect();
+
+    if json {
+        let json_str = serde_json::to_string_pretty(&backups_to_show)
+            .map_err(|e| cli_error(format!("failed to serialize backup list: {}", e)))?;
+        println!("{}", json_str);
+    } else {
+        print_backup_list_human(&backups_to_show);
+    }
+
+    Ok(())
+}
+
+fn print_backup_help() {
+    println!("Andromeda backup administration commands");
+    println!();
+    println!("USAGE: andromeda-cli backup <SUBCOMMAND> [OPTIONS]");
+    println!();
+    println!("SUBCOMMANDS:");
+    println!("  start               Start a new backup job");
+    println!("  status <backup-id>  Show backup progress and state");
+    println!("  list                List recent backups with metadata");
+    println!();
+    println!("OPTIONS:");
+    println!("  --incremental       Perform incremental backup (default: full)");
+    println!("  --destination <path> Backup destination directory");
+    println!("  --limit <n>         Limit backup list to N entries (default: 10)");
+    println!("  --json              Output in JSON format (default: human-readable)");
+    println!("  -h, --help          Show this help message");
+}
+
+fn print_backup_status_human(report: &BackupStatusReport) {
+    println!("Backup Status Report");
+    println!("====================");
+    println!("Backup ID: {}", report.backup_id);
+    println!("State: {}", report.state);
+    println!("Progress: {}%", report.progress_percent);
+    println!(
+        "Bytes Processed: {} / {} ({:.2} MiB / {:.2} MiB)",
+        report.bytes_processed,
+        report.estimated_total_bytes,
+        report.bytes_processed as f64 / 1_048_576.0,
+        report.estimated_total_bytes as f64 / 1_048_576.0
+    );
+    println!("Elapsed: {}s", report.elapsed_seconds);
+}
+
+fn print_backup_list_human(backups: &[&BackupListEntry]) {
+    println!("Recent Backups");
+    println!("==============");
+    println!(
+        "{:<10} {:<12} {:<20} {:<15} {:<15}",
+        "Backup ID", "State", "Size", "Base LSN", "End LSN"
+    );
+    println!("{}", "-".repeat(82));
+    for backup in backups {
+        println!(
+            "{:<10} {:<12} {:<20} {:<15} {:<15}",
+            backup.backup_id,
+            backup.state,
+            format_bytes(backup.size_bytes),
+            backup.base_lsn,
+            backup.end_lsn
+        );
+    }
+}
+
+fn format_bytes(bytes: u64) -> String {
+    const UNITS: &[&str] = &["B", "KiB", "MiB", "GiB"];
+    let mut size = bytes as f64;
+    for unit in UNITS {
+        if size < 1024.0 {
+            return format!("{:.2} {}", size, unit);
+        }
+        size /= 1024.0;
+    }
+    format!("{:.2} TiB", size)
+}
+
+fn unix_timestamp() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn backup_start_returns_ok() {
+        let result = run_backup_start(&[]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn backup_start_with_incremental_flag() {
+        let result = run_backup_start(&["--incremental".to_string()]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn backup_start_with_destination() {
+        let result = run_backup_start(&[
+            "--destination".to_string(),
+            "/backup/dest".to_string(),
+        ]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn backup_status_requires_backup_id() {
+        let result = run_backup_status(&[]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn backup_status_accepts_valid_id() {
+        let result = run_backup_status(&["100".to_string()]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn backup_status_rejects_invalid_id() {
+        let result = run_backup_status(&["not_a_number".to_string()]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn backup_list_returns_ok() {
+        let result = run_backup_list(&[]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn backup_list_with_limit() {
+        let result = run_backup_list(&["--limit".to_string(), "5".to_string()]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn backup_list_with_json() {
+        let result = run_backup_list(&["--json".to_string()]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn backup_command_unknown_subcommand() {
+        let result = run_backup_command(&["unknown".to_string()]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn backup_command_help() {
+        let result = run_backup_command(&["--help".to_string()]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn backup_command_no_args_shows_help() {
+        let result = run_backup_command(&[]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn format_bytes_displays_human_readable() {
+        assert_eq!(format_bytes(512), "512.00 B");
+        assert_eq!(format_bytes(1024), "1.00 KiB");
+        assert_eq!(format_bytes(1_048_576), "1.00 MiB");
+        assert_eq!(format_bytes(1_073_741_824), "1.00 GiB");
+    }
+}

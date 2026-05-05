@@ -1,0 +1,165 @@
+syntax = "proto3";
+
+package andromeda.protocol.v1;
+
+// WAL record schema for the crate-local authority.
+//
+// These message contracts govern the serialization of write-ahead log entries
+// and must not be modified without careful backward-compatibility analysis.
+// The schema is message-only and must not define JSON, gRPC, tonic, service,
+// or rpc surfaces.
+//
+// WAL records are serialized deterministically using prost codec to ensure
+// that identical records produce identical bytes across restarts and replicas.
+// Field numbers and types must not change in ways that break existing readers.
+
+// Wire frame code for WAL record container (distinct from protocol PayloadKind).
+// Reserved for future WAL protocol versioning if needed.
+message WalRecordEnvelope {
+  // LSN (Log Sequence Number) for this record; monotonically increasing.
+  uint64 lsn = 1;
+  
+  // Record timestamp (Unix milliseconds); may be used for retention policy.
+  optional uint64 timestamp_ms = 2;
+  
+  // WAL record type discriminator (wire code for oneof).
+  uint32 record_type = 3;
+  
+  // Serialized record payload (one of WalRecord* message types).
+  bytes payload = 4;
+  
+  // Optional CRC-32 checksum for record integrity validation.
+  optional uint32 checksum = 5;
+  
+  reserved 6 to 31;
+}
+
+// Heap page insert record: documents insertion of a row into a heap page.
+message WalHeapPageInsert {
+  uint64 page_id = 1;
+  bytes slot_entry = 2;  // Binary heap row encoding.
+  uint32 slot_index = 3;
+  
+  reserved 4 to 15;
+}
+
+// Heap page delete record: documents deletion of a row from a heap page.
+message WalHeapPageDelete {
+  uint64 page_id = 1;
+  uint32 slot_index = 2;
+  
+  reserved 3 to 15;
+}
+
+// Heap page update record: documents in-place or overflow update to a heap row.
+message WalHeapPageUpdate {
+  uint64 page_id = 1;
+  uint32 slot_index = 2;
+  bytes new_row_data = 3;  // Binary heap row encoding after update.
+  
+  reserved 4 to 15;
+}
+
+// Index insert record: documents insertion into a B-tree index.
+message WalIndexInsert {
+  uint64 index_id = 1;
+  bytes key = 2;           // Serialized index key.
+  bytes value = 3;         // Serialized index value (typically row ID).
+  
+  reserved 4 to 15;
+}
+
+// Index delete record: documents deletion from a B-tree index.
+message WalIndexDelete {
+  uint64 index_id = 1;
+  bytes key = 2;           // Serialized index key being deleted.
+  
+  reserved 3 to 15;
+}
+
+// Catalog insert record: documents creation of a new catalog object.
+message WalCatalogInsert {
+  uint64 catalog_object_id = 1;
+  string object_type = 2;  // "Procedure", "Table", "Index", etc.
+  bytes metadata = 3;      // Serialized catalog object (protobuf).
+  
+  reserved 4 to 15;
+}
+
+// Catalog update record: documents modification of an existing catalog object.
+message WalCatalogUpdate {
+  uint64 catalog_object_id = 1;
+  string object_type = 2;  // "Procedure", "Table", "Index", etc.
+  bytes metadata = 3;      // Updated serialized catalog object.
+  
+  reserved 4 to 15;
+}
+
+// Catalog delete record: documents removal of a catalog object.
+message WalCatalogDelete {
+  uint64 catalog_object_id = 1;
+  string object_type = 2;
+  
+  reserved 3 to 15;
+}
+
+// Transaction begin record: marks the start of a transaction in the WAL.
+message WalTransactionBegin {
+  uint64 tx_id = 1;
+  uint64 start_lsn = 2;
+  optional uint64 timestamp_ms = 3;
+  
+  reserved 4 to 15;
+}
+
+// Transaction commit record: marks successful commit with durable LSN binding.
+message WalTransactionCommit {
+  uint64 tx_id = 1;
+  uint64 commit_lsn = 2;
+  optional uint64 timestamp_ms = 3;
+  
+  reserved 4 to 15;
+}
+
+// Transaction rollback record: marks transaction abort.
+message WalTransactionRollback {
+  uint64 tx_id = 1;
+  uint64 rollback_lsn = 2;
+  optional uint64 timestamp_ms = 3;
+  
+  reserved 4 to 15;
+}
+
+// Checkpoint record: marks a durability checkpoint for recovery.
+// Includes metadata about page state, catalog version, and LSN binding.
+message WalCheckpoint {
+  uint64 checkpoint_id = 1;
+  uint64 checkpoint_lsn = 2;
+  uint64 catalog_version = 3;
+  optional uint64 timestamp_ms = 4;
+  optional uint64 page_count = 5;
+  optional bytes checkpoint_metadata = 6;  // Future extensibility.
+  
+  reserved 7 to 15;
+}
+
+// Segment rotation record: marks completion of a WAL segment and rotation.
+message WalSegmentRotation {
+  uint64 segment_id = 1;
+  uint64 segment_start_lsn = 2;
+  uint64 segment_end_lsn = 3;
+  optional uint64 timestamp_ms = 4;
+  optional uint32 checksum = 5;  // CRC-32 of entire segment.
+  
+  reserved 6 to 15;
+}
+
+// Compaction record: documents WAL compaction/reclamation operation.
+message WalCompaction {
+  uint64 compaction_id = 1;
+  uint64 compacted_to_lsn = 2;
+  uint64 reclaimed_bytes = 3;
+  optional uint64 timestamp_ms = 4;
+  
+  reserved 5 to 15;
+}

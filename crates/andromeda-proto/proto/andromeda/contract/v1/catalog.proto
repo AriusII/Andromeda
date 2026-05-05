@@ -1,0 +1,296 @@
+syntax = "proto3";
+
+package andromeda.contract.v1;
+
+import "andromeda/contract/v1/manifest.proto";
+
+// Catalog object schema for the crate-local contract authority.
+//
+// These message contracts govern serialization and durability of catalog
+// objects (Procedure, Table, Map, Index, etc.). They are message-only and
+// must not define JSON, gRPC, tonic, service, or rpc surfaces.
+//
+// All catalog objects are immutable once persisted and are identified by
+// a stable catalog_object_id. Updates are recorded as new versions in the
+// WAL; the in-memory catalog always reads the latest committed version.
+
+// Procedure catalog object: represents a callable procedure.
+message CatalogProcedure {
+  uint64 procedure_id = 1;           // Validation-required: nonzero.
+  string procedure_name = 2;         // Validation-required: non-empty.
+  bytes contract_hash = 3;           // Validation-required: 32 bytes, nonzero.
+  uint64 catalog_version = 4;        // Validation-required: nonzero.
+  
+  // Manifest carries protocol layout, result streams, and permissions.
+  ProcedureManifest manifest = 5;    // Validation-required.
+  
+  // Timestamp when this procedure was created (Unix milliseconds).
+  optional uint64 created_at_ms = 6;
+  
+  // Timestamp when this procedure was last modified.
+  optional uint64 updated_at_ms = 7;
+  
+  // Access control: optional owner/creator identifier.
+  optional string owner = 8;
+  
+  // Transient metadata (not persisted): procedure status flags.
+  optional string status = 9;        // "ACTIVE", "DEPRECATED", "ARCHIVED"
+  
+  reserved 10 to 31;
+  reserved 32 to 63;
+}
+
+// Table catalog object: represents a base table with heap storage.
+message CatalogTable {
+  uint64 table_id = 1;               // Validation-required: nonzero.
+  string table_name = 2;             // Validation-required: non-empty.
+  uint64 catalog_version = 3;        // Validation-required: nonzero.
+  
+  // Column definitions (same as result stream descriptor columns).
+  repeated ColumnDescriptor columns = 4;
+  
+  // Row count (approximate; updated asynchronously by stats).
+  optional uint64 row_count_approx = 5;
+  
+  // Heap storage configuration.
+  optional uint32 page_size_bytes = 6;  // Typically 16384 or 32768.
+  
+  // Created and updated timestamps.
+  optional uint64 created_at_ms = 7;
+  optional uint64 updated_at_ms = 8;
+  
+  // Owner/creator.
+  optional string owner = 9;
+  
+  // Access control and table-level permissions.
+  repeated RequiredPermission required_permissions = 10;
+  
+  reserved 11 to 31;
+  reserved 32 to 63;
+}
+
+// Index catalog object: represents a B-tree secondary index on a table.
+message CatalogIndex {
+  uint64 index_id = 1;               // Validation-required: nonzero.
+  string index_name = 2;             // Validation-required: non-empty.
+  uint64 table_id = 3;               // Validation-required: references table.
+  uint64 catalog_version = 4;        // Validation-required: nonzero.
+  
+  // Index columns (subset of table columns, in index key order).
+  repeated ColumnDescriptor key_columns = 5;
+  
+  // Whether this is a unique index.
+  bool is_unique = 6;
+  
+  // Whether this is a primary key index.
+  bool is_primary = 7;
+  
+  // Approximate entry count (updated asynchronously by stats).
+  optional uint64 entry_count_approx = 8;
+  
+  // B-tree configuration.
+  optional uint32 node_size_bytes = 9;   // Typically 4096 or 8192.
+  
+  // Created and updated timestamps.
+  optional uint64 created_at_ms = 10;
+  optional uint64 updated_at_ms = 11;
+  
+  reserved 12 to 31;
+  reserved 32 to 63;
+}
+
+// Map catalog object: represents a user-defined hash map or lookup table.
+message CatalogMap {
+  uint64 map_id = 1;                 // Validation-required: nonzero.
+  string map_name = 2;               // Validation-required: non-empty.
+  uint64 catalog_version = 3;        // Validation-required: nonzero.
+  
+  // Key and value schema.
+  repeated ColumnDescriptor key_columns = 4;
+  repeated ColumnDescriptor value_columns = 5;
+  
+  // Approximate entry count.
+  optional uint64 entry_count_approx = 6;
+  
+  // Hash map configuration.
+  optional uint32 initial_capacity = 7;    // Initial bucket count.
+  optional float load_factor = 8;          // Resize threshold (e.g., 0.75).
+  
+  // Created and updated timestamps.
+  optional uint64 created_at_ms = 9;
+  optional uint64 updated_at_ms = 10;
+  
+  // Owner/creator.
+  optional string owner = 11;
+  
+  reserved 12 to 31;
+  reserved 32 to 63;
+}
+
+// View catalog object: represents a logical view (query definition).
+message CatalogView {
+  uint64 view_id = 1;                // Validation-required: nonzero.
+  string view_name = 2;              // Validation-required: non-empty.
+  uint64 catalog_version = 3;        // Validation-required: nonzero.
+  
+  // View result columns.
+  repeated ColumnDescriptor result_columns = 4;
+  
+  // Serialized query definition (opaque to catalog; handled by query layer).
+  optional bytes query_definition = 5;
+  
+  // Dependent tables/views (for invalidation tracking).
+  repeated uint64 depends_on_table_ids = 6;
+  repeated uint64 depends_on_view_ids = 7;
+  
+  // Created and updated timestamps.
+  optional uint64 created_at_ms = 8;
+  optional uint64 updated_at_ms = 9;
+  
+  // Owner/creator.
+  optional string owner = 10;
+  
+  reserved 11 to 31;
+  reserved 32 to 63;
+}
+
+// Materialized view catalog object: represents a cached query result.
+message CatalogMaterializedView {
+  uint64 view_id = 1;                // Validation-required: nonzero.
+  string view_name = 2;              // Validation-required: non-empty.
+  uint64 catalog_version = 3;        // Validation-required: nonzero.
+  
+  // Result columns.
+  repeated ColumnDescriptor result_columns = 4;
+  
+  // Underlying table ID that stores the materialized data.
+  uint64 backing_table_id = 5;
+  
+  // Query definition.
+  optional bytes query_definition = 6;
+  
+  // Refresh policy (e.g., "ON_DEMAND", "SCHEDULED", "INCREMENTAL").
+  optional string refresh_policy = 7;
+  
+  // Last refresh timestamp.
+  optional uint64 last_refreshed_at_ms = 8;
+  
+  // Dependent tables/views.
+  repeated uint64 depends_on_table_ids = 9;
+  repeated uint64 depends_on_view_ids = 10;
+  
+  // Created and updated timestamps.
+  optional uint64 created_at_ms = 11;
+  optional uint64 updated_at_ms = 12;
+  
+  // Owner/creator.
+  optional string owner = 13;
+  
+  reserved 14 to 31;
+  reserved 32 to 63;
+}
+
+// Sequence catalog object: represents a sequence number generator.
+message CatalogSequence {
+  uint64 sequence_id = 1;            // Validation-required: nonzero.
+  string sequence_name = 2;          // Validation-required: non-empty.
+  uint64 catalog_version = 3;        // Validation-required: nonzero.
+  
+  // Current sequence value.
+  int64 current_value = 4;
+  
+  // Starting value.
+  int64 start_value = 5;
+  
+  // Increment (typically 1, may be negative for descending).
+  int64 increment = 6;
+  
+  // Min/max bounds (optional).
+  optional int64 min_value = 7;
+  optional int64 max_value = 8;
+  
+  // Cycle behavior when hitting min/max.
+  bool cycle = 9;
+  
+  // Created and updated timestamps.
+  optional uint64 created_at_ms = 10;
+  optional uint64 updated_at_ms = 11;
+  
+  // Owner/creator.
+  optional string owner = 12;
+  
+  reserved 13 to 31;
+  reserved 32 to 63;
+}
+
+// Partition catalog object: represents a partition scheme for table sharding.
+message CatalogPartition {
+  uint64 partition_id = 1;           // Validation-required: nonzero.
+  string partition_name = 2;         // Validation-required: non-empty.
+  uint64 table_id = 3;               // Parent table.
+  uint64 catalog_version = 4;        // Validation-required: nonzero.
+  
+  // Partition key columns.
+  repeated ColumnDescriptor key_columns = 5;
+  
+  // Partition type: RANGE, LIST, HASH, etc.
+  optional string partition_type = 6;
+  
+  // Partition bounds (opaque serialization).
+  optional bytes partition_bounds = 7;
+  
+  // Approximate row count in this partition.
+  optional uint64 row_count_approx = 8;
+  
+  // Created and updated timestamps.
+  optional uint64 created_at_ms = 9;
+  optional uint64 updated_at_ms = 10;
+  
+  reserved 11 to 31;
+  reserved 32 to 63;
+}
+
+// Generic catalog object container (oneof for polymorphic dispatch).
+// Used for WAL serialization and catalog snapshot export.
+message CatalogObject {
+  uint64 object_id = 1;              // Validation-required: nonzero.
+  uint64 catalog_version = 2;        // Validation-required: nonzero.
+  
+  // Timestamp of creation.
+  optional uint64 created_at_ms = 3;
+  
+  // Timestamp of last modification.
+  optional uint64 modified_at_ms = 4;
+  
+  // Object type discriminator (oneof variant).
+  oneof object {
+    CatalogProcedure procedure = 5;
+    CatalogTable table = 6;
+    CatalogIndex index = 7;
+    CatalogMap map = 8;
+    CatalogView view = 9;
+    CatalogMaterializedView materialized_view = 10;
+    CatalogSequence sequence = 11;
+    CatalogPartition partition = 12;
+  }
+  
+  reserved 13 to 31;
+  reserved 32 to 63;
+}
+
+// Catalog snapshot: frozen view of all catalog objects at a specific version.
+// Used for checkpoints, backup manifests, and recovery.
+message CatalogSnapshot {
+  uint64 catalog_version = 1;        // Validation-required: nonzero.
+  uint64 snapshot_lsn = 2;           // WAL LSN at which snapshot was taken.
+  optional uint64 created_at_ms = 3; // When snapshot was created.
+  
+  // All catalog objects in this snapshot (sorted by object_id).
+  repeated CatalogObject objects = 4;
+  
+  // Validation checksum of entire snapshot (CRC-32 or SHA256).
+  optional bytes snapshot_checksum = 5;
+  
+  reserved 6 to 31;
+  reserved 32 to 63;
+}

@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+package andromeda.protocol.v1;
+
+import "andromeda/protocol/v1/completion.proto";
+import "andromeda/protocol/v1/payload.proto";
+
+// Procedure invocation wire contracts for the crate-local protocol authority.
+//
+// These messages are payload containers for custom QUIC streams. They wrap the
+// existing execution, metadata, row-batch, completion, and error messages
+// without renumbering or moving any fields in those existing contracts. The
+// response contract preserves the metadata-before-row-payload invariant:
+// send InvocationResponse.metadata before the first InvocationResponse.batch for
+// the same request, and terminate with exactly one completion or error.
+
+message InvocationCorrelation {
+  // Mirrors FrameEnvelope.request_id when an enclosing envelope is present.
+  // Required for externally correlated procedure calls.
+  optional uint64 request_id = 1;
+  // Mirrors FrameEnvelope.session_id when the call is bound to a session.
+  optional uint64 session_id = 2;
+  // Stable trace correlation token; absent when tracing is not enabled.
+  optional string trace_id = 3;
+  // Governed contract digest for contract-bound calls; expected length is 32
+  // bytes when present.
+  optional bytes contract_hash = 4;
+  // Catalog version observed by the caller/server for this invocation.
+  optional uint64 catalog_version = 5;
+  // Executor invocation id; absent before dispatch assigns one.
+  optional uint64 invocation_id = 6;
+
+  reserved 7 to 31;
+  reserved 32 to 63;
+}
+
+message InvocationRequest {
+  // Typed request/session/trace/contract/catalog correlation. Validation must
+  // keep this in sync with execute_request.expected_contract_hash and
+  // execute_request.expected_catalog_version when both are present.
+  InvocationCorrelation correlation = 1;
+  // Existing execution request contract; field numbers inside RpcExecuteRequest
+  // remain owned by payload.proto.
+  RpcExecuteRequest execute_request = 2;
+
+  reserved 3 to 31;
+  reserved 32 to 63;
+}
+
+message InvocationResponse {
+  // Typed response correlation for matching metadata, batches, completion, and
+  // errors to the originating InvocationRequest.
+  InvocationCorrelation correlation = 1;
+  // Monotonic response ordinal within the request stream. Presence allows peers
+  // to detect gaps; absence is valid for single-response local dispatch paths.
+  optional uint64 response_index = 2;
+
+  oneof response {
+    // Must be emitted before the first batch for any declared result stream.
+    RpcMetadata metadata = 3;
+    // Carries binary StructuredObject row payload only; never JSON.
+    RpcBatch batch = 4;
+    // Terminal result signal; exactly one successful terminal per request.
+    RpcCompletion completion = 5;
+    // Terminal or pre-terminal typed error using the existing protocol taxonomy.
+    ErrorEnvelope error = 6;
+  }
+
+  reserved 7 to 31;
+  reserved 32 to 63;
+}

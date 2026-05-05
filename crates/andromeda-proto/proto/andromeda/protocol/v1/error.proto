@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package andromeda.protocol.v1;
+
+// Protocol error schemas for the crate-local authority.
+//
+// These message contracts preserve the package, field numbers, enum numeric
+// values, optionality, reserved ranges, and semantics from the pre-split
+// payload schema. Error correlation metadata remains on fields 1 through 3;
+// typed family/code/message classification remains on fields 4 through 6;
+// transaction effect and retryability metadata remain on fields 7 through 10.
+// The schemas are message-only and do not define JSON, gRPC, tonic, service, or
+// rpc surfaces.
+
+message ErrorEnvelope {
+  enum ErrorFamily {
+    ERROR_FAMILY_UNSPECIFIED = 0;
+    ERROR_FAMILY_PROTOCOL = 1;
+    ERROR_FAMILY_AUTHENTICATION = 2;
+    ERROR_FAMILY_AUTHORIZATION = 3;
+    ERROR_FAMILY_CONTRACT = 4;
+    ERROR_FAMILY_SEMANTIC = 5;
+    ERROR_FAMILY_EXECUTION = 6;
+    ERROR_FAMILY_TRANSACTION = 7;
+    ERROR_FAMILY_STORAGE = 8;
+    ERROR_FAMILY_RESOURCE = 9;
+  }
+
+  enum TransactionEffect {
+    TRANSACTION_EFFECT_UNSPECIFIED = 0;
+    TRANSACTION_EFFECT_NO_TRANSACTION = 1;
+    TRANSACTION_EFFECT_ROLLBACK_REQUIRED = 2;
+    TRANSACTION_EFFECT_FAIL_STOP = 3;
+  }
+
+  enum RetryDisposition {
+    RETRY_DISPOSITION_UNSPECIFIED = 0;
+    RETRY_DISPOSITION_NOT_RETRYABLE = 1;
+    RETRY_DISPOSITION_RETRYABLE = 2;
+    RETRY_DISPOSITION_RETRY_AFTER = 3;
+    RETRY_DISPOSITION_BACKPRESSURE = 4;
+  }
+
+  message BackpressureMetadata {
+    optional uint64 retry_after_ms = 1;
+    optional uint32 capacity_percent = 2; // 0..100 when present.
+    bool shed_load = 3;
+
+    reserved 4 to 15;
+  }
+
+  optional uint64 request_id = 1;
+  optional uint64 session_id = 2;
+  optional string trace_id = 3;
+  ErrorFamily family = 4;
+  string code = 5;
+  string message = 6;
+  TransactionEffect transaction_effect = 7;
+  RetryDisposition retry_disposition = 8;
+  optional uint64 retry_after_ms = 9;
+  optional BackpressureMetadata backpressure = 10;
+
+  reserved 11 to 31;
+}

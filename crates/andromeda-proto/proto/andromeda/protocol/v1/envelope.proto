@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package andromeda.protocol.v1;
+
+// Governed wire envelope schema for Andromeda V0 reliable QUIC streams.
+//
+// This package is intentionally message-only. Andromeda does not generate
+// gRPC, tonic, service, or rpc bindings from these schemas. QUIC DATAGRAM is
+// reserved for telemetry-only soft signals and must not carry contract-bound
+// RPC payloads.
+//
+// Envelope request/session/transaction metadata is carried by FrameEnvelope
+// fields 4, 5, and 6. These field numbers are part of the durable wire
+// contract and must not be renumbered during schema splits.
+
+enum PayloadKind {
+  PAYLOAD_KIND_UNSPECIFIED = 0;
+
+  PAYLOAD_KIND_HELLO = 1;
+  PAYLOAD_KIND_AUTH = 2;
+  PAYLOAD_KIND_CONTRACT_REQUEST = 3;
+  PAYLOAD_KIND_CONTRACT_RESPONSE = 4;
+  PAYLOAD_KIND_RPC_EXECUTE_REQUEST = 5;
+  PAYLOAD_KIND_RPC_METADATA = 6;
+  PAYLOAD_KIND_RPC_BATCH = 7;
+  PAYLOAD_KIND_RPC_COMPLETION = 8;
+  PAYLOAD_KIND_ERROR = 9;
+
+  reserved 10 to 99;
+  reserved 100 to 199; // QUIC telemetry frame-code range, not payload kind.
+}
+
+message ProtocolVersion {
+  uint32 major = 1;
+  uint32 minor = 2;
+
+  reserved 3 to 15;
+}
+
+message FrameEnvelope {
+  ProtocolVersion protocol_version = 1;
+  bytes contract_hash = 2; // Required for contract-bound RPC payload kinds.
+  uint64 catalog_version = 3;
+  uint64 request_id = 4;
+  uint64 session_id = 5;
+  optional uint64 tx_id = 6;
+  PayloadKind payload_kind = 7;
+  bytes payload = 8; // Binary StructuredObject/protocol payload.
+
+  reserved 9 to 31;
+}
