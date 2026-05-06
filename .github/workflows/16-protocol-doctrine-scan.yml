@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Run protocol doctrine scan tests
         run: python -m unittest discover -s .github/scripts/tests -p "test_protocol_doctrine_scan.py"
       - name: Validate protocol doctrine
