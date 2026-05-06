@@ -78,11 +78,12 @@ fn all_record_kinds_are_classified_exactly_once() {
     assert_eq!(FUTURE_WORK_KINDS.len(), 14);
 
     for kind in &ALL_WAL_RECORD_KINDS {
+        let kind_name = format!("{kind:?}");
         let handled = SKIPPED_OR_IMPLEMENTED_KINDS.contains(kind);
         let deferred = FUTURE_WORK_KINDS.contains(kind);
         assert_ne!(
             handled, deferred,
-            "{kind:?} must be classified as exactly one recovery category",
+            "{kind_name} must be classified as exactly one recovery category",
         );
     }
 }
