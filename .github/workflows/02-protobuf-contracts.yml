@@ -26,7 +26,7 @@ jobs:
       - uses: ./.github/actions/protobuf-governance
       - name: Generate contract manifest
         run: python .github/scripts/proto_manifest.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: protobuf-contract-manifest
           path: target/protobuf-contract-manifest.json
