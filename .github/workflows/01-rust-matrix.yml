@@ -49,7 +49,7 @@ jobs:
         with:
           toolchain: stable
       - run: mkdir -p target && cargo metadata --locked --format-version 1 > target/cargo-metadata.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: cargo-metadata
           path: target/cargo-metadata.json

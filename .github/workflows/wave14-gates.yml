@@ -140,7 +140,7 @@ jobs:
         with:
           toolchain: stable
       - run: python .github/scripts/perf_regression_gate.py --output-dir target/perf-regression
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wave14-performance-regression
           path: |

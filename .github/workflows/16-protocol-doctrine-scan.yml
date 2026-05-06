@@ -21,7 +21,7 @@ jobs:
         run: python -m unittest discover -s .github/scripts/tests -p "test_protocol_doctrine_scan.py"
       - name: Validate protocol doctrine
         run: python .github/scripts/protocol_doctrine_scan.py --output target/protocol-doctrine-scan/report.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: protocol-doctrine-scan

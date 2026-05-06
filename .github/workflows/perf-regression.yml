@@ -37,7 +37,7 @@ jobs:
       - run: cargo test -p andromeda-bench --locked --quiet
       - name: Compare against Wave 14 baseline
         run: python .github/scripts/perf_regression_gate.py --output-dir target/perf-regression
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: perf-regression-wave14
           path: |
