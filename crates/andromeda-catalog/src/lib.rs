@@ -99,6 +99,11 @@ pub use plan_cache::*;
 pub use procedure_feedback::*;
 pub use procedure_store::*;
 pub use publication_subscription::*;
+pub use publication_subscription::{
+    CatalogPublicationReplayTerminalOutcome, CatalogPublicationReplayTerminalRecord,
+    CatalogPublicationSubscriptionReplayRecord, CatalogVisibleChangeAuditEvidence,
+    replay_publication_subscription_changes,
+};
 pub use recovery::*;
 pub use scenario_evidence::*;
 pub use server::*;

@@ -20,12 +20,17 @@
 //! - **Audit Trail Binding**: Each restore is traced with immutable receipt
 //! - **Separation of Concerns**: Manifest validation (F5) vs restore planning (F6)
 
+use std::path::{Path, PathBuf};
+
 use andromeda_core::AndromedaResult;
 use andromeda_observe::TraceId;
 
 use crate::{
     Lsn, WalSegmentDescriptor,
-    backup::{BackupId, BackupManifest},
+    backup::{
+        BackupArtifactDigest, BackupId, BackupManifest, BackupWalArchiveEvidence,
+        FileBackedBackupArtifactStore,
+    },
 };
 
 // Helpers
@@ -115,6 +120,54 @@ pub enum RestoreValidationPolicy {
     /// Skip expensive verification (operator responsibility).
     /// Only checks LSN contiguity, not byte-level integrity.
     Minimal,
+}
+
+/// Durable preflight proof for a restore artifact directory.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RestoreArtifactPreflight {
+    pub backup_id: BackupId,
+    pub artifact_root: PathBuf,
+    pub validation_policy: RestoreValidationPolicy,
+    pub pitr_target_lsn: Lsn,
+    pub source_checkpoint_lsn: Lsn,
+    pub manifest_digest: BackupArtifactDigest,
+    pub snapshot_digest: BackupArtifactDigest,
+    pub wal_archive_evidence: BackupWalArchiveEvidence,
+    pub replay_segment_count: usize,
+}
+
+/// Validate a file-backed backup artifact before restore/PITR execution.
+///
+/// The preflight always validates durable manifest format, manifest checksum,
+/// snapshot artifact checksum, WAL segment artifact checksums, WAL chain
+/// contiguity, and the requested PITR target. `Minimal` is retained as a future
+/// replay-time policy; it does not skip artifact integrity at this boundary.
+pub fn validate_restore_artifact_preflight(
+    artifact_root: impl AsRef<Path>,
+    backup_id: BackupId,
+    pitr_target_lsn: Lsn,
+    validation_policy: RestoreValidationPolicy,
+) -> AndromedaResult<RestoreArtifactPreflight> {
+    let artifact_root = artifact_root.as_ref();
+    let store = FileBackedBackupArtifactStore::open_existing(artifact_root)?;
+    let record = store.validate_artifact_directory(backup_id)?;
+
+    validate_restore_prerequisites(&record.manifest, pitr_target_lsn)?;
+    let wal_descriptors = record.wal_segment_descriptors()?;
+    let replay_segments =
+        plan_replay_segments(&record.manifest, pitr_target_lsn, &wal_descriptors)?;
+
+    Ok(RestoreArtifactPreflight {
+        backup_id,
+        artifact_root: store.root().to_path_buf(),
+        validation_policy,
+        pitr_target_lsn,
+        source_checkpoint_lsn: record.source_checkpoint_lsn,
+        manifest_digest: record.artifact_set.backup_manifest,
+        snapshot_digest: record.artifact_set.cold_snapshot.artifact,
+        wal_archive_evidence: record.wal_archive_evidence,
+        replay_segment_count: replay_segments.len(),
+    })
 }
 
 /// Recovery startup stage selection.

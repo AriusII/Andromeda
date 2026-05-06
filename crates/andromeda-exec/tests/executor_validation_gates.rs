@@ -18,13 +18,12 @@ use andromeda_core::{
     CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId, ScalarType,
     TypeDescriptor,
 };
-use andromeda_exec::InvocationContext;
 use andromeda_exec::dispatch::{
     PreTransactionDispatchEvidence, ProcedureDispatchRequest, ProcedureDispatcher,
     SrplDispatcherAdapter,
 };
+use andromeda_exec::{InvocationContext, LocalProcedure, ResultStreamMetadata};
 use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
-use andromeda_srpl::interpreter::SrplIrInterpreter;
 use andromeda_srpl::procedure_model::{
     BoundSrplBodyPlan, BoundSrplOperationPlan, ExecutableProcedurePlan, SrplCatalogBindingEvidence,
 };
@@ -32,6 +31,7 @@ use andromeda_srpl::procedure_resolver::{
     ProcedureResolveError, ProcedureResolveRequest, ProcedureResolveResponse, ProcedureResolver,
     SrplProcedureManifest,
 };
+use andromeda_srpl::{Cardinality, interpreter::SrplIrInterpreter};
 use std::sync::Arc;
 
 // Mock Resolver for Testing
@@ -74,6 +74,27 @@ impl ProcedureResolver for MockValidResolver {
     ) -> Result<ProcedureResolveResponse, ProcedureResolveError> {
         request.validate_response(&self.response)?;
         Ok(self.response.clone())
+    }
+}
+
+#[derive(Clone)]
+struct MockLocalDispatcher {
+    procedure: LocalProcedure,
+}
+
+impl ProcedureDispatcher for MockLocalDispatcher {
+    fn dispatch_procedure(
+        &self,
+        request: ProcedureDispatchRequest,
+    ) -> andromeda_core::AndromedaResult<LocalProcedure> {
+        request.validate()?;
+        if request.procedure != self.procedure.contract {
+            return Err(andromeda_core::AndromedaError::new(
+                andromeda_core::AndromedaErrorKind::Contract,
+                "mock local dispatcher contract mismatch",
+            ));
+        }
+        Ok(self.procedure.clone())
     }
 }
 
@@ -202,6 +223,16 @@ fn valid_dispatch_request(trace_id: TraceId) -> ProcedureDispatchRequest {
     }
 }
 
+fn local_procedure() -> LocalProcedure {
+    LocalProcedure {
+        contract: contract_ref(),
+        required_permissions: vec!["Test.Procedure.Execute".to_string()],
+        result_metadata: ResultStreamMetadata::exact(1, 1, Cardinality::One, 1),
+        mutation_payload: b"local-handler-payload".to_vec(),
+        rows_affected: 1,
+    }
+}
+
 // GATE EXEC-01: Dispatcher Construction and Cloning
 
 #[test]
@@ -247,13 +278,39 @@ fn gate_exec_02_error_boundary_pre_transaction() {
     let result = adapter.dispatch_procedure(request);
 
     let err = result.unwrap_err();
-    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Execution);
+    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Contract);
     assert!(
-        err.message().contains("result metadata extraction needed"),
-        "adapter must fail at the current SRPL pre-transaction gap, not at transaction begin"
+        err.message().contains(
+            "SRPL dispatch boundary requires an explicit local handler for resolved ProcedureId 1"
+        ),
+        "adapter must expose the stable SRPL/local boundary contract"
     );
 
     println!("✅ Exec Gate 02: Error boundary enforced at pre-transaction");
+}
+
+#[test]
+fn gate_exec_02_srpl_adapter_dispatches_through_configured_local_handler_path() {
+    let resolver = Arc::new(MockValidResolver::new());
+    let dispatcher = srpl_dispatcher(resolver);
+    let adapter = SrplDispatcherAdapter::with_local_dispatcher(
+        dispatcher,
+        MockLocalDispatcher {
+            procedure: local_procedure(),
+        },
+    );
+
+    let procedure = adapter
+        .dispatch_procedure(valid_dispatch_request(TraceId::new(2)))
+        .expect("configured local handler path should execute after SRPL resolution");
+
+    assert_eq!(procedure.contract, contract_ref());
+    assert_eq!(procedure.rows_affected, 1);
+    assert_eq!(procedure.mutation_payload, b"local-handler-payload");
+    assert_eq!(
+        procedure.required_permissions,
+        vec!["Test.Procedure.Execute".to_string()]
+    );
 }
 
 #[test]

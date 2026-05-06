@@ -2,48 +2,430 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import pathlib
 import re
-from typing import List
+from typing import Dict, List
+
+
+@dataclass(frozen=True)
+class TargetSpec:
+    name: str
+    path: str
+    corpus_dir: str
+    generator: str
+
+
+@dataclass(frozen=True)
+class ManifestEntry:
+    target: str
+    corpus_dir: str
+    seed_files: List[str]
+    generator: str
+
+
+LEGACY_SEED1_PAYLOADS: Dict[str, bytes] = {
+    "frame_codec_no_panic": b"frame\r\n",
+    "result_sequence_state_machine": b"result-sequence\r\n",
+    "proto_frame_envelope_decode": b"proto-envelope\r\n",
+    "proto_rpc_completion_decode": b"completion\r\n",
+    "srpl_parser_signature_decode": b"PROC demo(a:int)->rows\r\n",
+    "storage_wal_record_roundtrip": b"wal\r\n",
+}
 
 
 def load_targets(path: pathlib.Path) -> List[str]:
+    return [target.name for target in load_target_specs(path)]
+
+
+def load_target_specs(path: pathlib.Path) -> List[TargetSpec]:
     text = path.read_text(encoding="utf-8")
-    targets: List[str] = []
-    for line in text.splitlines():
-        m = re.match(r'\s*name\s*=\s*"([^"]+)"', line)
-        if m:
-            targets.append(m.group(1))
+    targets: List[TargetSpec] = []
+    for block in parse_blocks(text, "[[target]]"):
+        targets.append(
+            TargetSpec(
+                name=parse_string(block, "name"),
+                path=parse_string(block, "path"),
+                corpus_dir=parse_string(block, "corpus_dir"),
+                generator=parse_string(block, "generator"),
+            )
+        )
     return targets
 
 
-def seed_payload(target: str) -> bytes:
-    return f"WAVE14-SEED::{target}::v1".encode("utf-8")
+def load_manifest_entries(path: pathlib.Path) -> List[ManifestEntry]:
+    text = path.read_text(encoding="utf-8")
+    entries: List[ManifestEntry] = []
+    for block in parse_blocks(text, "[[entry]]"):
+        entries.append(
+            ManifestEntry(
+                target=parse_string(block, "target"),
+                corpus_dir=parse_string(block, "corpus_dir"),
+                seed_files=parse_string_list(block, "seed_files"),
+                generator=parse_string(block, "generator"),
+            )
+        )
+    return entries
 
 
-def ensure_seed(root: pathlib.Path, target: str) -> pathlib.Path:
+def parse_blocks(text: str, marker: str) -> List[str]:
+    blocks: List[str] = []
+    current: List[str] = []
+    in_block = False
+    for line in text.splitlines():
+        if line.strip() == marker:
+            if current:
+                blocks.append("\n".join(current))
+            current = []
+            in_block = True
+            continue
+        if in_block:
+            current.append(line)
+    if current:
+        blocks.append("\n".join(current))
+    return blocks
+
+
+def parse_string(block: str, key: str) -> str:
+    match = re.search(rf'^\s*{re.escape(key)}\s*=\s*"([^"]*)"', block, re.MULTILINE)
+    if not match:
+        raise ValueError(f"missing {key} in block:\n{block}")
+    return match.group(1)
+
+
+def parse_string_list(block: str, key: str) -> List[str]:
+    match = re.search(rf"^\s*{re.escape(key)}\s*=\s*\[(.*)\]", block, re.MULTILINE)
+    if not match:
+        raise ValueError(f"missing {key} in block:\n{block}")
+    return re.findall(r'"([^"]*)"', match.group(1))
+
+
+def seed_payloads(target: str) -> Dict[str, bytes]:
+    if target == "btree_node_v1_decode":
+        return {
+            "seed-basic.bin": btree_node_v1_leaf_seed(),
+            "seed-internal.bin": btree_node_v1_internal_seed(),
+        }
+    if target == "heap_page_v1_decode":
+        return {
+            "seed-empty-16k.bin": heap_page_v1_empty_seed(16 * 1024),
+            "seed-single-32k.bin": heap_page_v1_tuple_seed(32 * 1024, [b"andromeda"]),
+            "seed-two-tuples-16k.bin": heap_page_v1_tuple_seed(
+                16 * 1024, [b"abc", b"defgh"]
+            ),
+        }
+    if target == "page_codec_v1_decode":
+        return {
+            "seed-fixed-row-16k.bin": page_codec_v1_seed(1, 1, 16 * 1024, b"fixed-row"),
+            "seed-manifest-32k.bin": page_codec_v1_seed(
+                3, 2, 32 * 1024, b"manifest-page-v1"
+            ),
+        }
+    if target == "quic_zero_rtt_admission":
+        return {
+            "seed-basic.bin": bytes(
+                [0, 1, 2, 3, 4, 5, 6, 7, 248, 249, 250, 251, 252, 253, 254, 255]
+            )
+        }
+    payloads = {"seed-basic.bin": f"WAVE14-SEED::{target}::v1".encode("utf-8")}
+    if target in LEGACY_SEED1_PAYLOADS:
+        payloads["seed1"] = LEGACY_SEED1_PAYLOADS[target]
+    return payloads
+
+
+def btree_node_v1_leaf_seed() -> bytes:
+    header_len = 64
+    page_size = 4096
+    page = bytearray(page_size)
+
+    def put_u16(offset: int, value: int) -> None:
+        page[offset : offset + 2] = value.to_bytes(2, "little")
+
+    def put_u32(offset: int, value: int) -> None:
+        page[offset : offset + 4] = value.to_bytes(4, "little")
+
+    def put_u64(offset: int, value: int) -> None:
+        page[offset : offset + 8] = value.to_bytes(8, "little")
+
+    put_u32(0, 0x5442_4E41)
+    put_u16(4, 1)
+    page[6] = 1
+    put_u64(8, 42)
+    put_u64(16, 7)
+    put_u16(24, 0)
+    put_u16(26, 0)
+    put_u16(28, header_len)
+    put_u16(30, page_size)
+    put_u64(32, 41)
+    put_u64(40, 43)
+    put_u16(48, 0)
+
+    crc = header_crc32(page[:header_len])
+    put_u32(52, crc if crc != 0 else 1)
+    return bytes(page)
+
+
+def btree_node_v1_internal_seed() -> bytes:
+    header_len = 64
+    page_size = 4096
+    page = bytearray(page_size)
+    keys = [b"k10", b"k20"]
+    children = [1001, 1002, 1003]
+    free_start = header_len + len(children) * 8 + sum(2 + len(key) for key in keys)
+    high_key_offset = header_len + len(children) * 8 + 2 + len(keys[0])
+
+    def put_u16(offset: int, value: int) -> None:
+        page[offset : offset + 2] = value.to_bytes(2, "little")
+
+    def put_u32(offset: int, value: int) -> None:
+        page[offset : offset + 4] = value.to_bytes(4, "little")
+
+    def put_u64(offset: int, value: int) -> None:
+        page[offset : offset + 8] = value.to_bytes(8, "little")
+
+    put_u32(0, 0x5442_4E41)
+    put_u16(4, 1)
+    page[6] = 2
+    put_u64(8, 84)
+    put_u64(16, 9)
+    put_u16(24, len(keys))
+    put_u16(26, len(children))
+    put_u16(28, free_start)
+    put_u16(30, page_size)
+    put_u16(48, high_key_offset)
+
+    crc = header_crc32(page[:header_len])
+    put_u32(52, crc if crc != 0 else 1)
+
+    offset = header_len
+    for child in children:
+        put_u64(offset, child)
+        offset += 8
+    for key in keys:
+        put_u16(offset, len(key))
+        offset += 2
+        page[offset : offset + len(key)] = key
+        offset += len(key)
+    assert offset == free_start
+    return bytes(page)
+
+
+def header_crc32(header: bytes) -> int:
+    state = 0x811C_9DC5
+    for idx, byte in enumerate(header):
+        if 52 <= idx < 56:
+            byte = 0
+        state ^= byte
+        state = (state * 0x0100_0193) & 0xFFFF_FFFF
+    return state
+
+
+def heap_page_v1_empty_seed(page_size: int) -> bytes:
+    return bytes(page_size)
+
+
+def heap_page_v1_tuple_seed(page_size: int, tuples: List[bytes]) -> bytes:
+    header_size = 96
+    trailer_size = 48
+    slot_entry_size = 5
+    metadata_size = 4
+    image = bytearray(page_size)
+    offset = header_size
+    slots = []
+
+    for item in tuples:
+        image[offset : offset + len(item)] = item
+        slots.append((offset, len(item), 0))
+        offset += len(item)
+
+    metadata_offset = page_size - trailer_size - metadata_size
+    for slot_id, (slot_offset, slot_len, flags) in enumerate(slots):
+        entry_offset = metadata_offset - ((slot_id + 1) * slot_entry_size)
+        image[entry_offset : entry_offset + 2] = slot_offset.to_bytes(2, "little")
+        image[entry_offset + 2 : entry_offset + 4] = slot_len.to_bytes(2, "little")
+        image[entry_offset + 4] = flags
+
+    image[metadata_offset : metadata_offset + 2] = len(slots).to_bytes(2, "little")
+    image[metadata_offset + 2 : metadata_offset + 4] = offset.to_bytes(2, "little")
+    return bytes(image)
+
+
+def page_codec_v1_seed(
+    page_type_tag: int, page_size_tag: int, page_size: int, payload: bytes
+) -> bytes:
+    header_len = 112
+    trailer_len = 48
+    header = bytearray(header_len)
+    trailer = bytearray(trailer_len)
+
+    def put_u16(target: bytearray, offset: int, value: int) -> None:
+        target[offset : offset + 2] = value.to_bytes(2, "little")
+
+    def put_u32(target: bytearray, offset: int, value: int) -> None:
+        target[offset : offset + 4] = value.to_bytes(4, "little")
+
+    def put_u64(target: bytearray, offset: int, value: int) -> None:
+        target[offset : offset + 8] = value.to_bytes(8, "little")
+
+    put_u32(header, 0, 0x414E4452)
+    put_u16(header, 4, 1)
+    put_u16(header, 6, page_size_tag)
+    put_u16(header, 8, page_type_tag)
+    put_u16(header, 10, 0)
+    put_u64(header, 12, 11)
+    put_u64(header, 20, 22)
+    put_u64(header, 28, 33)
+    put_u64(header, 36, 44)
+    put_u64(header, 44, 1)
+    put_u16(header, 68, header_len)
+    put_u32(header, 72, header_len)
+    put_u32(header, 76, len(payload))
+    put_u32(header, 80, header_len)
+    put_u32(header, 84, header_len + len(payload))
+    put_u32(header, 88, len(payload))
+    put_u16(header, 92, 1)
+    put_u32(header, 96, 1)
+    put_u32(header, 100, 0x01020304)
+
+    payload_crc = payload_crc64(payload)
+    put_u64(trailer, 0, payload_crc)
+    trailer[8:40] = bytes([0x5A]) * 32
+    put_u64(trailer, 40, 0xA5A5_A5A5_A5A5_A5A5)
+    assert header_len + len(payload) + trailer_len <= page_size
+    return bytes(header) + payload + bytes(trailer)
+
+
+def payload_crc64(payload: bytes) -> int:
+    state = 0xCBF2_9CE4_8422_2325
+    for byte in payload:
+        state ^= byte
+        state = (state * 0x0000_0100_0000_01B3) & 0xFFFF_FFFF_FFFF_FFFF
+    return state if state != 0 else 1
+
+
+def ensure_seed(root: pathlib.Path, target: str) -> List[pathlib.Path]:
     corpus_dir = root / "fuzz" / "corpus" / target
     corpus_dir.mkdir(parents=True, exist_ok=True)
-    seed_file = corpus_dir / "seed-basic.bin"
-    if not seed_file.exists():
-        seed_file.write_bytes(seed_payload(target))
-    return seed_file
+    written = []
+    for name, payload in seed_payloads(target).items():
+        seed_file = corpus_dir / name
+        if not seed_file.exists() or seed_file.read_bytes() != payload:
+            seed_file.write_bytes(payload)
+        written.append(seed_file)
+    return written
+
+
+def check_seed_corpus(root: pathlib.Path, targets_file: str) -> int:
+    target_specs = load_target_specs(root / targets_file)
+    manifest_path = root / "fuzz" / "corpus" / "manifest.toml"
+    manifest_entries = load_manifest_entries(manifest_path)
+    manifest_by_target = {entry.target: entry for entry in manifest_entries}
+    target_names = [target.name for target in target_specs]
+    errors: List[str] = []
+
+    if len(manifest_by_target) != len(manifest_entries):
+        errors.append("manifest contains duplicate target entries")
+    if len(set(target_names)) != len(target_names):
+        errors.append(f"{targets_file} contains duplicate target names")
+
+    actual_dirs = sorted(
+        path.name for path in (root / "fuzz" / "corpus").iterdir() if path.is_dir()
+    )
+    expected_dirs = sorted(target_names)
+    if actual_dirs != expected_dirs:
+        errors.append(
+            "corpus directory set mismatch: "
+            f"actual={actual_dirs} expected={expected_dirs}"
+        )
+
+    for spec in target_specs:
+        target_path = root / "fuzz" / spec.path
+        if not target_path.is_file():
+            errors.append(f"{spec.name}: target path missing: {target_path.as_posix()}")
+
+        corpus_dir = root / spec.corpus_dir
+        if not corpus_dir.is_dir():
+            errors.append(f"{spec.name}: corpus directory missing: {spec.corpus_dir}")
+            continue
+
+        entry = manifest_by_target.get(spec.name)
+        if entry is None:
+            errors.append(f"{spec.name}: missing manifest entry")
+            continue
+        if entry.corpus_dir != spec.corpus_dir:
+            errors.append(
+                f"{spec.name}: manifest corpus_dir {entry.corpus_dir!r} "
+                f"does not match targets.toml {spec.corpus_dir!r}"
+            )
+
+        actual_seed_files = sorted(path.name for path in corpus_dir.iterdir() if path.is_file())
+        manifest_seed_files = sorted(entry.seed_files)
+        if actual_seed_files != manifest_seed_files:
+            errors.append(
+                f"{spec.name}: manifest seed_files {manifest_seed_files} "
+                f"do not match actual files {actual_seed_files}"
+            )
+
+        expected_payloads = seed_payloads(spec.name)
+        generated_seed_files = sorted(expected_payloads)
+        if manifest_seed_files != generated_seed_files:
+            errors.append(
+                f"{spec.name}: manifest seed_files {manifest_seed_files} "
+                f"do not match generated seeds {generated_seed_files}"
+            )
+
+        for seed_name, expected_payload in expected_payloads.items():
+            if seed_name not in entry.seed_files:
+                errors.append(f"{spec.name}: generated seed {seed_name} missing from manifest")
+                continue
+            seed_path = corpus_dir / seed_name
+            if not seed_path.is_file():
+                errors.append(f"{spec.name}: generated seed {seed_name} missing on disk")
+                continue
+            actual_payload = seed_path.read_bytes()
+            if actual_payload != expected_payload:
+                errors.append(
+                    f"{spec.name}: generated seed {seed_name} is not deterministic "
+                    f"(actual {len(actual_payload)} bytes, expected {len(expected_payload)} bytes)"
+                )
+
+    manifest_targets = sorted(manifest_by_target)
+    if manifest_targets != expected_dirs:
+        errors.append(
+            f"manifest target set mismatch: actual={manifest_targets} expected={expected_dirs}"
+        )
+
+    if errors:
+        for error in errors:
+            print(f"ERROR: {error}")
+        return 1
+
+    print(
+        f"seed corpus check passed: {len(target_specs)} targets, "
+        f"{sum(len(entry.seed_files) for entry in manifest_entries)} manifest seeds"
+    )
+    return 0
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate deterministic fuzz seed corpus")
+    parser.add_argument("--check", action="store_true")
     parser.add_argument("--ensure-only", action="store_true")
     parser.add_argument("--targets-file", default="fuzz/targets.toml")
     args = parser.parse_args()
 
     root = pathlib.Path.cwd()
+
+    if args.check:
+        return check_seed_corpus(root, args.targets_file)
+
     targets = load_targets(root / args.targets_file)
     if not targets:
         raise SystemExit("No targets found in fuzz/targets.toml")
 
     created = []
     for target in targets:
-        created.append(ensure_seed(root, target))
+        created.extend(ensure_seed(root, target))
 
     if not args.ensure_only:
         for item in created:

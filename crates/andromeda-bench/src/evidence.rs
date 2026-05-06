@@ -1,5 +1,20 @@
 use crate::{BenchmarkHardwareProfile, BudgetStatus};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BenchmarkMeasurementMode {
+    SyntheticDiagnostic,
+    HarnessDiagnostic,
+}
+
+impl BenchmarkMeasurementMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::SyntheticDiagnostic => "synthetic-diagnostic",
+            Self::HarnessDiagnostic => "harness-diagnostic",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BenchmarkEvidence {
     pub workload_id: String,
@@ -15,6 +30,10 @@ pub struct BenchmarkEvidence {
     pub error_count: u32,
     pub budget_status: BudgetStatus,
     pub diagnostic_only: bool,
+    pub measurement_mode: BenchmarkMeasurementMode,
+    pub latency_source: &'static str,
+    pub engine_harness: Option<&'static str>,
+    pub synthetic_model_version: Option<&'static str>,
 }
 
 #[cfg(test)]
@@ -37,9 +56,19 @@ mod tests {
             error_count: 0,
             budget_status: BudgetStatus::Passed,
             diagnostic_only: true,
+            measurement_mode: BenchmarkMeasurementMode::SyntheticDiagnostic,
+            latency_source: "deterministic-latency-model",
+            engine_harness: None,
+            synthetic_model_version: Some("bounded-diagnostic-v1"),
         };
 
         assert!(evidence.diagnostic_only);
         assert_eq!(evidence.hardware_profile.as_str(), "conservative");
+        assert_eq!(evidence.measurement_mode.as_str(), "synthetic-diagnostic");
+        assert_eq!(evidence.engine_harness, None);
+        assert_eq!(
+            evidence.synthetic_model_version,
+            Some("bounded-diagnostic-v1")
+        );
     }
 }

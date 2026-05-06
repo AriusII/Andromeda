@@ -46,6 +46,34 @@ use crate::{Lsn, write_ahead_log::*};
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use std::collections::HashMap;
 
+/// Typed rejection reason for malformed WAL shipping envelopes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShippingSegmentRejection {
+    RecordCountMismatch,
+    EmptyLsnRange,
+    EmptyRecords,
+    FirstLsnMismatch,
+    LastLsnMismatch,
+    ChecksumMismatch,
+}
+
+impl ShippingSegmentRejection {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::RecordCountMismatch => "shipping segment record count mismatch",
+            Self::EmptyLsnRange => "shipping segment LSN range invalid",
+            Self::EmptyRecords => "shipping segment has no records",
+            Self::FirstLsnMismatch => "shipping segment first LSN mismatch",
+            Self::LastLsnMismatch => "shipping segment last LSN mismatch",
+            Self::ChecksumMismatch => "shipping segment checksum mismatch",
+        }
+    }
+
+    fn into_error(self) -> AndromedaError {
+        AndromedaError::new(AndromedaErrorKind::Storage, self.as_str())
+    }
+}
+
 /// Segment identity and metadata for shipping protocol.
 ///
 /// This struct describes a single WAL segment as it moves from primary to replicas.
@@ -133,40 +161,25 @@ impl<'a> ShippingSegmentEnvelope<'a> {
     pub fn validate_structure(&self) -> AndromedaResult<()> {
         // Check record count matches
         if self.descriptor.record_count != self.records.len() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                "shipping segment record count mismatch",
-            ));
+            return Err(ShippingSegmentRejection::RecordCountMismatch.into_error());
         }
 
         // Check LSN range is non-empty
         if self.descriptor.start_lsn > self.descriptor.end_lsn {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                "shipping segment LSN range invalid",
-            ));
+            return Err(ShippingSegmentRejection::EmptyLsnRange.into_error());
         }
 
         // Check records are non-empty
         if self.records.is_empty() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                "shipping segment has no records",
-            ));
+            return Err(ShippingSegmentRejection::EmptyRecords.into_error());
         }
 
         // Check first and last LSN match descriptor
         if self.records[0].header.lsn != self.descriptor.start_lsn {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                "shipping segment first LSN mismatch",
-            ));
+            return Err(ShippingSegmentRejection::FirstLsnMismatch.into_error());
         }
         if self.records[self.records.len() - 1].header.lsn != self.descriptor.end_lsn {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                "shipping segment last LSN mismatch",
-            ));
+            return Err(ShippingSegmentRejection::LastLsnMismatch.into_error());
         }
 
         Ok(())
@@ -176,10 +189,7 @@ impl<'a> ShippingSegmentEnvelope<'a> {
     pub fn validate_checksum(&self) -> AndromedaResult<()> {
         let computed = ShippingSegmentDescriptor::compute_checksum(self.records);
         if computed != self.descriptor.checksum {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                "shipping segment checksum mismatch",
-            ));
+            return Err(ShippingSegmentRejection::ChecksumMismatch.into_error());
         }
         Ok(())
     }
@@ -366,7 +376,7 @@ mod tests {
     use super::*;
     use crate::write_ahead_log::record::{WalRecord, WalRecordKind};
 
-    fn sample_record(lsn: u64, prev: Option<u64>) -> WalRecord {
+    fn sample_record(lsn: u64, prev: Option<u64>) -> AndromedaResult<WalRecord> {
         WalRecord::from_parts(
             WalRecordKind::PageAllocate,
             Lsn::new(lsn),
@@ -374,7 +384,6 @@ mod tests {
             None,
             vec![42u8; 64], // Dummy payload
         )
-        .expect("record builds")
     }
 
     /// Test 1: Segment committed → ShippingThread reads → sends via QUIC
@@ -386,14 +395,14 @@ mod tests {
     /// - Validates structure and checksum.
     /// - (Transport would send via QUIC; we validate the envelope here.)
     #[test]
-    fn test_shipping_thread_reads_committed_segments() {
+    fn test_shipping_thread_reads_committed_segments() -> AndromedaResult<()> {
         // Arrange: create a committed segment with 5 records
         let records = vec![
-            sample_record(1, None),
-            sample_record(2, Some(1)),
-            sample_record(3, Some(2)),
-            sample_record(4, Some(3)),
-            sample_record(5, Some(4)),
+            sample_record(1, None)?,
+            sample_record(2, Some(1))?,
+            sample_record(3, Some(2))?,
+            sample_record(4, Some(3))?,
+            sample_record(5, Some(4))?,
         ];
 
         let descriptor = ShippingSegmentDescriptor {
@@ -425,6 +434,7 @@ mod tests {
             segment_end_lsn: Lsn::new(5),
         };
         assert!(!condition_early.is_shippable(), "segment not yet durable");
+        Ok(())
     }
 
     /// Test 2: Replica receives segment → validates checksum → appends to local WAL
@@ -435,14 +445,14 @@ mod tests {
     /// - Validates checksum (should pass).
     /// - Appends records to local WAL via WalShipmentBatch validation.
     #[test]
-    fn test_replica_receives_validates_appends() {
+    fn test_replica_receives_validates_appends() -> AndromedaResult<()> {
         // Arrange: create a segment for LSN 6-10 (following LSN 5)
         let records = vec![
-            sample_record(6, Some(5)),
-            sample_record(7, Some(6)),
-            sample_record(8, Some(7)),
-            sample_record(9, Some(8)),
-            sample_record(10, Some(9)),
+            sample_record(6, Some(5))?,
+            sample_record(7, Some(6))?,
+            sample_record(8, Some(7))?,
+            sample_record(9, Some(8))?,
+            sample_record(10, Some(9))?,
         ];
 
         let descriptor = ShippingSegmentDescriptor {
@@ -470,11 +480,12 @@ mod tests {
             crate::write_ahead_log::WalReplicaExpectation::after(Lsn::new(5), Lsn::new(6));
 
         let batch = WalShipmentBatch::new(primary, replica, expectation, &records);
-        let accepted = batch.validate().expect("batch should be accepted");
+        let accepted = batch.validate()?;
 
         assert_eq!(accepted.range.first, Lsn::new(6));
         assert_eq!(accepted.range.last, Lsn::new(10));
         assert_eq!(accepted.next_expected_lsn, Lsn::new(11));
+        Ok(())
     }
 
     /// Test 3: Shipping backpressure — replica falls behind → requests earlier segment
@@ -622,17 +633,17 @@ mod tests {
 
     /// Bonus: Test segment checksum computation
     #[test]
-    fn test_segment_checksum_is_deterministic() {
+    fn test_segment_checksum_is_deterministic() -> AndromedaResult<()> {
         let records1 = vec![
-            sample_record(1, None),
-            sample_record(2, Some(1)),
-            sample_record(3, Some(2)),
+            sample_record(1, None)?,
+            sample_record(2, Some(1))?,
+            sample_record(3, Some(2))?,
         ];
 
         let records2 = vec![
-            sample_record(1, None),
-            sample_record(2, Some(1)),
-            sample_record(3, Some(2)),
+            sample_record(1, None)?,
+            sample_record(2, Some(1))?,
+            sample_record(3, Some(2))?,
         ];
 
         let checksum1 = ShippingSegmentDescriptor::compute_checksum(&records1);
@@ -642,15 +653,16 @@ mod tests {
             checksum1, checksum2,
             "same records should produce same checksum"
         );
+        Ok(())
     }
 
     /// Bonus: Test that corrupted segment fails validation
     #[test]
-    fn test_corrupted_segment_fails_validation() {
+    fn test_corrupted_segment_fails_validation() -> AndromedaResult<()> {
         let records = vec![
-            sample_record(1, None),
-            sample_record(2, Some(1)),
-            sample_record(3, Some(2)),
+            sample_record(1, None)?,
+            sample_record(2, Some(1))?,
+            sample_record(3, Some(2))?,
         ];
 
         let correct_checksum = ShippingSegmentDescriptor::compute_checksum(&records);
@@ -670,5 +682,6 @@ mod tests {
 
         // Assert: validation fails
         assert!(result.is_err(), "corrupted checksum should fail validation");
+        Ok(())
     }
 }

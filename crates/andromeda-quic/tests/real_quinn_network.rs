@@ -16,6 +16,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
 use andromeda_core::AndromedaResult;
+use andromeda_observe::SurfaceScope;
 use andromeda_quic::frame::{FRAME_HEADER_CRC_UNCHECKED, FrameType};
 use andromeda_quic::{
     FrameBytes, FrameCodec, FrameHeader,
@@ -27,11 +28,11 @@ use tokio::{sync::oneshot, task::JoinHandle, time::timeout};
 /// Creates an ephemeral server TLS configuration (self-signed cert for testing).
 fn create_test_server_tls() -> AndromedaResult<quinn::ServerConfig> {
     let tls_config = ServerTlsConfig::ephemeral(vec!["localhost".to_string()])?;
-    Ok(tls_config.into_quinn_config())
+    tls_config.into_quinn_config()
 }
 
 /// Creates an insecure client TLS configuration for testing.
-fn create_test_client_tls() -> quinn::ClientConfig {
+fn create_test_client_tls() -> AndromedaResult<quinn::ClientConfig> {
     ClientTlsConfig::insecure()
 }
 
@@ -110,7 +111,7 @@ async fn test_client_connection_tls_negotiation() -> AndromedaResult<()> {
         with_timeout(Duration::from_secs(5), server.accept_connection()).await
     });
 
-    let client_tls = create_test_client_tls();
+    let client_tls = create_test_client_tls()?;
     let client = QuicClient::new(client_tls)?;
 
     let conn = with_timeout(
@@ -140,7 +141,7 @@ async fn test_frame_echo_unidirectional() -> AndromedaResult<()> {
         Ok(())
     });
 
-    let client_tls = create_test_client_tls();
+    let client_tls = create_test_client_tls()?;
     let client = QuicClient::new(client_tls)?;
     let mut conn = with_timeout(
         Duration::from_secs(5),
@@ -185,7 +186,7 @@ async fn test_peer_certificate_chain_is_exposed() -> AndromedaResult<()> {
         Ok(conn.peer_certificate_chain().len())
     });
 
-    let client_tls = create_test_client_tls();
+    let client_tls = create_test_client_tls()?;
     let client = QuicClient::new(client_tls)?;
     let conn = with_timeout(
         Duration::from_secs(5),
@@ -196,7 +197,11 @@ async fn test_peer_certificate_chain_is_exposed() -> AndromedaResult<()> {
     let client_peer_certificates = conn.peer_certificate_chain();
     assert!(!client_peer_certificates.is_empty());
     assert!(!client_peer_certificates[0].is_empty());
-    assert!(conn.certificate_identity().is_none());
+    let client_identity = conn
+        .certificate_identity()
+        .expect("client should derive identity from server certificate");
+    assert_eq!(client_identity.fingerprint.len(), 64);
+    assert_eq!(client_identity.surface, SurfaceScope::Application);
 
     let server_peer_certificate_count =
         join_with_timeout(Duration::from_secs(5), server_handle).await?;
@@ -229,7 +234,7 @@ async fn test_concurrent_connections() -> AndromedaResult<()> {
     for _ in 0..10 {
         let listen_addr_copy = listen_addr;
         let handle = tokio::spawn(async move {
-            let client_tls = create_test_client_tls();
+            let client_tls = create_test_client_tls()?;
             let client = QuicClient::new(client_tls)?;
             let _conn = with_timeout(
                 Duration::from_secs(5),
@@ -277,7 +282,7 @@ async fn test_bidirectional_stream_communication() -> AndromedaResult<()> {
         Ok(bytes)
     });
 
-    let client_tls = create_test_client_tls();
+    let client_tls = create_test_client_tls()?;
     let client = QuicClient::new(client_tls)?;
     let mut conn = with_timeout(
         Duration::from_secs(5),
@@ -342,7 +347,7 @@ async fn test_multiple_sequential_frames() -> AndromedaResult<()> {
         Ok(())
     });
 
-    let client_tls = create_test_client_tls();
+    let client_tls = create_test_client_tls()?;
     let client = QuicClient::new(client_tls)?;
     let mut conn = with_timeout(
         Duration::from_secs(5),
@@ -408,7 +413,7 @@ async fn test_large_payload_frame() -> AndromedaResult<()> {
         Ok(n)
     });
 
-    let client_tls = create_test_client_tls();
+    let client_tls = create_test_client_tls()?;
     let client = QuicClient::new(client_tls)?;
     let mut conn = with_timeout(
         Duration::from_secs(10),

@@ -11,6 +11,8 @@ pub enum OptimizerPhase {
     ConstantFolding,
     /// Push scalar predicates toward their upstream `ReadTable` scan.
     PredicatePushdown,
+    /// Canonicalize predicates and ordinals after structural rewrites.
+    Normalize,
     /// Eliminate dead columns from `ReadTable` row-sets.
     ProjectionPushdown,
     /// Compute `CostEstimate` for the optimized IR.
@@ -21,7 +23,7 @@ pub enum OptimizerPhase {
 
 impl OptimizerPhase {
     /// Total number of phases. Asserted by tests to flag accidental growth.
-    pub const PHASE_COUNT: usize = 8;
+    pub const PHASE_COUNT: usize = 9;
 
     /// Stable ordinal for ordering checks. Must not be reordered.
     pub const fn as_ordinal(self) -> u8 {
@@ -31,9 +33,10 @@ impl OptimizerPhase {
             Self::IRLowering => 2,
             Self::ConstantFolding => 3,
             Self::PredicatePushdown => 4,
-            Self::ProjectionPushdown => 5,
-            Self::CostAnalysis => 6,
-            Self::PlanChoice => 7,
+            Self::Normalize => 5,
+            Self::ProjectionPushdown => 6,
+            Self::CostAnalysis => 7,
+            Self::PlanChoice => 8,
         }
     }
 
@@ -48,8 +51,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn phase_count_is_eight() {
-        assert_eq!(OptimizerPhase::PHASE_COUNT, 8);
+    fn phase_count_is_nine() {
+        assert_eq!(OptimizerPhase::PHASE_COUNT, 9);
     }
 
     #[test]
@@ -61,6 +64,7 @@ mod tests {
             IRLowering,
             ConstantFolding,
             PredicatePushdown,
+            Normalize,
             ProjectionPushdown,
             CostAnalysis,
             PlanChoice,

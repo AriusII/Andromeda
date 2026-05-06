@@ -1,5 +1,7 @@
 use super::*;
-use andromeda_core::{CatalogVersion, ContractHash, ProcedureId};
+use andromeda_core::{
+    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, ContractHash, ProcedureId,
+};
 
 fn contract_hash(byte: u8) -> Vec<u8> {
     vec![byte; ContractHash::LEN]
@@ -25,6 +27,39 @@ fn valid_manifest() -> ProcedureManifest {
         }],
         is_mutable: false,
         min_compatible_version: CatalogVersion::new(1),
+    }
+}
+
+struct DiagnosticOnlyCatalogServer {
+    diagnostic: CatalogServerRuntimeDiagnostic,
+}
+
+impl CatalogServerTrait for DiagnosticOnlyCatalogServer {
+    fn runtime_diagnostic(&self) -> CatalogServerRuntimeDiagnostic {
+        self.diagnostic
+    }
+
+    fn resolve_procedure(&self, procedure_id: ProcedureId) -> AndromedaResult<ProcedureManifest> {
+        Err(AndromedaError::new(
+            AndromedaErrorKind::Catalog,
+            format!(
+                "diagnostic-only catalog server cannot resolve procedure {}",
+                procedure_id.get()
+            ),
+        ))
+    }
+
+    fn get_catalog_version(&self) -> CatalogVersion {
+        self.diagnostic
+            .catalog_version
+            .unwrap_or_else(|| CatalogVersion::new(1))
+    }
+
+    fn subscribe_to_changes(&self) -> AndromedaResult<Box<dyn CatalogChangeSubscription>> {
+        Err(AndromedaError::new(
+            AndromedaErrorKind::Catalog,
+            "diagnostic-only catalog server does not support subscriptions",
+        ))
     }
 }
 
@@ -125,6 +160,79 @@ fn test_mock_catalog_server_procedure_resolution() {
 }
 
 #[test]
+fn test_mock_catalog_server_is_not_durable_runtime() {
+    let server = MockCatalogServer::new();
+
+    let diagnostic = server.runtime_diagnostic();
+    assert_eq!(diagnostic.kind, CatalogServerRuntimeKind::MockEphemeral);
+    assert!(!diagnostic.is_durable());
+    assert!(diagnostic.reason.contains("MockEphemeral"));
+    assert!(diagnostic.actionable_message.contains("reopen"));
+
+    let runtime_error = require_durable_catalog_runtime(&server).unwrap_err();
+    assert_eq!(runtime_error.kind(), AndromedaErrorKind::Catalog);
+    assert!(runtime_error.message().contains("MockEphemeral"));
+
+    let handle_error = DurableCatalogRuntimeHandle::validate(&server).unwrap_err();
+    assert_eq!(handle_error.kind(), AndromedaErrorKind::Catalog);
+    assert!(handle_error.message().contains("MockEphemeral"));
+}
+
+#[test]
+fn test_explicit_durable_runtime_evidence_is_accepted() {
+    let evidence = CatalogRuntimeEvidence::durable(
+        Some(CatalogVersion::new(7)),
+        Some(3),
+        CatalogRuntimeReopenEvidence::new(99, "unit-test-reopen"),
+    );
+
+    let handle = DurableCatalogRuntimeHandle::from_evidence(evidence).unwrap();
+    assert_eq!(
+        handle.evidence().catalog_version,
+        Some(CatalogVersion::new(7))
+    );
+    assert_eq!(handle.evidence().epoch, Some(3));
+
+    let server = DiagnosticOnlyCatalogServer {
+        diagnostic: evidence.diagnostic(),
+    };
+    let diagnostic = require_durable_catalog_runtime(&server).unwrap();
+    assert_eq!(diagnostic.kind, CatalogServerRuntimeKind::Durable);
+    assert!(diagnostic.is_durable());
+    assert!(diagnostic.reason.contains("validated"));
+}
+
+#[test]
+fn test_missing_reopen_evidence_is_rejected_for_durable_runtime() {
+    let evidence = CatalogRuntimeEvidence::durable_without_reopen_evidence(
+        Some(CatalogVersion::new(8)),
+        Some(4),
+    );
+    let diagnostic = evidence.diagnostic();
+
+    assert_eq!(diagnostic.kind, CatalogServerRuntimeKind::Durable);
+    assert_eq!(diagnostic.catalog_version, Some(CatalogVersion::new(8)));
+    assert_eq!(diagnostic.epoch, Some(4));
+    assert!(diagnostic.reopen_evidence.is_none());
+    assert!(!diagnostic.is_durable());
+    assert!(diagnostic.reason.contains("reopen evidence"));
+    assert!(diagnostic.actionable_message.contains("attach"));
+
+    let handle_error = DurableCatalogRuntimeHandle::from_evidence(evidence).unwrap_err();
+    assert_eq!(handle_error.kind(), AndromedaErrorKind::Catalog);
+    assert!(handle_error.message().contains("reopen evidence"));
+
+    let server = DiagnosticOnlyCatalogServer { diagnostic };
+    let runtime_error = require_durable_catalog_runtime(&server).unwrap_err();
+    assert_eq!(runtime_error.kind(), AndromedaErrorKind::Catalog);
+    assert!(
+        runtime_error
+            .message()
+            .contains("attach validated reopen evidence")
+    );
+}
+
+#[test]
 fn test_mock_catalog_server_version_tracking() {
     let server = MockCatalogServer::new();
 
@@ -177,6 +285,33 @@ fn test_mock_catalog_server_change_subscription() {
 
     subscription.close();
     assert!(!subscription.is_active());
+}
+
+#[test]
+fn test_catalog_subscription_registry_requires_ordered_version_changes() {
+    let registry = CatalogSubscriptionRegistry::new();
+    let first = CatalogChangeNotification {
+        new_version: CatalogVersion::new(2),
+        previous_version: CatalogVersion::new(1),
+        invalidation_boundary_lsn: 100,
+    };
+
+    registry.publish(first).unwrap();
+    registry.publish(first).unwrap();
+
+    let mut subscription = registry.subscribe().unwrap();
+    assert_eq!(subscription.next_change(), Some(first));
+    assert!(subscription.next_change().is_none());
+
+    let out_of_order = CatalogChangeNotification {
+        new_version: CatalogVersion::new(4),
+        previous_version: CatalogVersion::new(2),
+        invalidation_boundary_lsn: 200,
+    };
+    let error = registry.publish(out_of_order).unwrap_err();
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+    assert!(error.message().contains("version ordering"));
 }
 
 #[test]

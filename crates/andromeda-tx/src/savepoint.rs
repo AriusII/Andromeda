@@ -77,6 +77,20 @@ pub struct SavepointRollbackMarker {
     pub rollback_ordinal: u64,
 }
 
+impl SavepointRollbackMarker {
+    pub fn new(savepoint_id: SavepointId, rollback_ordinal: u64) -> AndromedaResult<Self> {
+        savepoint_id.validate()?;
+        Ok(Self {
+            savepoint_id,
+            rollback_ordinal,
+        })
+    }
+
+    pub fn validate(self) -> AndromedaResult<()> {
+        self.savepoint_id.validate()
+    }
+}
+
 /// Savepoint entry retained on the active transaction stack.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Savepoint {
@@ -116,6 +130,20 @@ impl SavepointStack {
     }
 
     pub fn create(&mut self, name: impl Into<String>) -> AndromedaResult<Savepoint> {
+        self.create_with_rollback_ordinal(name, self.next_id)
+    }
+
+    /// Create a savepoint whose rollback marker points at the caller's current
+    /// write-set ordinal.
+    ///
+    /// This keeps `SavepointStack` storage-agnostic while letting storage or
+    /// execution layers bind savepoints to their own transaction-local write
+    /// ordering.
+    pub fn create_with_rollback_ordinal(
+        &mut self,
+        name: impl Into<String>,
+        rollback_ordinal: u64,
+    ) -> AndromedaResult<Savepoint> {
         let name = name.into();
         validate_name(&name)?;
         if self.stack.iter().any(|savepoint| savepoint.name == name) {
@@ -136,10 +164,7 @@ impl SavepointStack {
         let savepoint = Savepoint {
             id,
             name,
-            rollback_marker: SavepointRollbackMarker {
-                savepoint_id: id,
-                rollback_ordinal: id.get(),
-            },
+            rollback_marker: SavepointRollbackMarker::new(id, rollback_ordinal)?,
         };
         self.stack.push(savepoint.clone());
         Ok(savepoint)
@@ -219,26 +244,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn create_requires_unique_non_empty_names_and_monotonic_ids() {
+    fn create_requires_unique_non_empty_names_and_monotonic_ids() -> AndromedaResult<()> {
         let mut stack = SavepointStack::new();
         assert!(stack.create("").is_err());
 
-        let a = stack.create("a").unwrap();
-        let b = stack.create("b").unwrap();
+        let a = stack.create("a")?;
+        let b = stack.create("b")?;
         assert_eq!(a.id.get(), 1);
         assert_eq!(b.id.get(), 2);
         assert_eq!(stack.depth(), 2);
         assert!(stack.create("a").is_err());
+        Ok(())
     }
 
     #[test]
-    fn rollback_to_discards_descendants_and_keeps_target_active() {
+    fn rollback_to_discards_descendants_and_keeps_target_active() -> AndromedaResult<()> {
         let mut stack = SavepointStack::new();
-        stack.create("a").unwrap();
-        stack.create("b").unwrap();
-        stack.create("c").unwrap();
+        stack.create("a")?;
+        stack.create("b")?;
+        stack.create("c")?;
 
-        let evidence = stack.rollback_to("b").unwrap();
+        let evidence = stack.rollback_to("b")?;
         assert_eq!(evidence.target.name.as_str(), "b");
         assert_eq!(evidence.discarded_descendants.len(), 1);
         assert_eq!(evidence.discarded_descendants[0].name.as_str(), "c");
@@ -250,16 +276,17 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["a", "b"]
         );
+        Ok(())
     }
 
     #[test]
-    fn release_discards_target_and_descendants() {
+    fn release_discards_target_and_descendants() -> AndromedaResult<()> {
         let mut stack = SavepointStack::new();
-        stack.create("a").unwrap();
-        stack.create("b").unwrap();
-        stack.create("c").unwrap();
+        stack.create("a")?;
+        stack.create("b")?;
+        stack.create("c")?;
 
-        let evidence = stack.release("b").unwrap();
+        let evidence = stack.release("b")?;
         assert_eq!(
             evidence
                 .released
@@ -276,20 +303,29 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["a"]
         );
+        Ok(())
     }
 
     #[test]
     fn try_new_rejects_zero_id() {
-        let err = SavepointId::try_new(0).unwrap_err();
+        let err = expect_transaction_error(SavepointId::try_new(0));
         assert_eq!(err.kind(), AndromedaErrorKind::Transaction);
     }
 
     #[test]
-    fn conversion_traits_preserve_validated_public_api() {
-        let id = SavepointId::try_from(7).unwrap();
+    fn conversion_traits_preserve_validated_public_api() -> AndromedaResult<()> {
+        let id = SavepointId::try_from(7)?;
         assert_eq!(u64::from(id), 7);
 
-        let err = SavepointId::try_from(0).unwrap_err();
+        let err = expect_transaction_error(SavepointId::try_from(0));
         assert_eq!(err.kind(), AndromedaErrorKind::Transaction);
+        Ok(())
+    }
+
+    fn expect_transaction_error<T>(result: AndromedaResult<T>) -> AndromedaError {
+        match result {
+            Ok(_) => panic!("expected transaction error"),
+            Err(err) => err,
+        }
     }
 }

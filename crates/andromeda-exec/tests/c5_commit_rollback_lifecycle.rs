@@ -120,13 +120,13 @@ fn c5_commit_lifecycle_emits_commit_visible_event_with_durable_lsn() {
     let tx_id = outcome.transaction_id;
     let durable_lsn = outcome
         .completion
-        .durable_lsn
+        .durable_lsn()
         .expect("committed must have durable LSN");
 
     // Verify completion status and WAL state
-    assert_eq!(outcome.completion.status, CompletionStatus::Committed);
+    assert_eq!(outcome.completion.status(), CompletionStatus::Committed);
     assert_eq!(
-        outcome.completion.transaction_state,
+        outcome.completion.transaction_state(),
         Some(TransactionState::Committed)
     );
     assert_eq!(runtime.wal().durable_lsn(), Lsn::new(3));
@@ -213,13 +213,13 @@ fn c5_rollback_lifecycle_emits_rollback_durable_event_with_durable_lsn() {
     let tx_id = outcome.transaction_id;
     let durable_lsn = outcome
         .completion
-        .durable_lsn
+        .durable_lsn()
         .expect("rolled back must have durable LSN");
 
     // Verify completion status
-    assert_eq!(outcome.completion.status, CompletionStatus::RolledBack);
+    assert_eq!(outcome.completion.status(), CompletionStatus::RolledBack);
     assert_eq!(
-        outcome.completion.transaction_state,
+        outcome.completion.transaction_state(),
         Some(TransactionState::RolledBack)
     );
     assert_eq!(runtime.wal().durable_lsn(), Lsn::new(2));

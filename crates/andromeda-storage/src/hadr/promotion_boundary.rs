@@ -57,8 +57,19 @@
 //! // This is still not promotion! F6 must decide when and how to execute.
 //! ```
 
-use crate::Lsn;
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+
+use crate::Lsn;
+
+use super::{
+    fencing::{HadrFencingContext, HadrFencingToken},
+    membership_store::{HadrMembershipSnapshot, HadrMembershipStore},
+    quorum::{
+        HadrAuditRecord, HadrPromotionOutcome, HadrPromotionRequest, HadrPromotionVote,
+        HadrQuorumMembership, evaluate_promotion, promotion_outcome_into_result,
+    },
+    types::{HadrEpoch, HadrNodeId, HadrNodeState},
+};
 
 /// Requirements for a replica to be promotion-eligible.
 ///
@@ -340,6 +351,219 @@ pub fn select_best_eligible_candidate(
     Err(promotion_error("no eligible promotion candidates found"))
 }
 
+/// Runtime promotion attempt gathered by storage orchestration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PromotionAttempt {
+    pub candidate_id: HadrNodeId,
+    pub candidate_observed_epoch: HadrEpoch,
+    pub candidate_safe_lsn: Lsn,
+    pub primary_durable_lsn: Lsn,
+    pub votes: Vec<HadrPromotionVote>,
+    pub fencing: HadrFencingContext,
+}
+
+impl PromotionAttempt {
+    pub fn new(
+        candidate_id: HadrNodeId,
+        candidate_observed_epoch: HadrEpoch,
+        candidate_safe_lsn: Lsn,
+        primary_durable_lsn: Lsn,
+        votes: Vec<HadrPromotionVote>,
+        fencing: HadrFencingContext,
+    ) -> Self {
+        Self {
+            candidate_id,
+            candidate_observed_epoch,
+            candidate_safe_lsn,
+            primary_durable_lsn,
+            votes,
+            fencing,
+        }
+    }
+}
+
+/// Durable audit marker that must be appended before a primary becomes visible.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HadrPromotionAuditMarker {
+    pub candidate_id: HadrNodeId,
+    pub proposed_epoch: HadrEpoch,
+    pub primary_durable_lsn: Lsn,
+    pub committed_safe_lsn: Lsn,
+    pub token: HadrFencingToken,
+    pub audit_record: HadrAuditRecord,
+}
+
+/// Audit sink used by the storage-side promotion boundary.
+pub trait HadrPromotionAuditLog {
+    fn append_primary_promotion_marker(
+        &self,
+        marker: &HadrPromotionAuditMarker,
+    ) -> AndromedaResult<()>;
+}
+
+/// No-op audit sink for callers that only need the membership-store records.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoopPromotionAuditLog;
+
+impl HadrPromotionAuditLog for NoopPromotionAuditLog {
+    fn append_primary_promotion_marker(
+        &self,
+        _marker: &HadrPromotionAuditMarker,
+    ) -> AndromedaResult<()> {
+        Ok(())
+    }
+}
+
+/// A fully validated promotion plan. Constructing this does not mutate storage.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PromotionPlan {
+    pub candidate_id: HadrNodeId,
+    pub proposed_epoch: HadrEpoch,
+    pub committed_safe_lsn: Lsn,
+    pub token: HadrFencingToken,
+    pub marker: HadrPromotionAuditMarker,
+}
+
+/// Pure planner for the storage-side durable promotion runtime.
+pub struct PromotionPlanner;
+
+impl PromotionPlanner {
+    pub fn plan(
+        membership_snapshot: &HadrMembershipSnapshot,
+        attempt: PromotionAttempt,
+    ) -> AndromedaResult<PromotionPlan> {
+        let member = membership_snapshot
+            .get(attempt.candidate_id)
+            .ok_or_else(|| {
+                promotion_error("promotion candidate is not registered in membership store")
+            })?;
+        if !member.role.is_promotion_eligible_role() {
+            return Err(promotion_error(
+                "promotion candidate membership role is not promotion eligible",
+            ));
+        }
+        if attempt.candidate_safe_lsn < attempt.primary_durable_lsn {
+            return Err(promotion_error(
+                "promotion candidate safe LSN is behind primary durable LSN",
+            ));
+        }
+
+        let membership = quorum_membership_from_snapshot(membership_snapshot)?;
+        let proposed_epoch = proposed_promotion_epoch(membership_snapshot, &attempt)?;
+        let candidate = HadrNodeState::new(
+            attempt.candidate_id,
+            member.role,
+            attempt.candidate_observed_epoch,
+            attempt.candidate_safe_lsn,
+        );
+        let request = HadrPromotionRequest::new(candidate, proposed_epoch, attempt.votes);
+        let audit_record = evaluate_promotion(&request, &membership, &attempt.fencing);
+        let token = promotion_outcome_into_result(&audit_record.outcome)?;
+        let committed_safe_lsn = match &audit_record.outcome {
+            HadrPromotionOutcome::Approved {
+                committed_safe_lsn, ..
+            } => *committed_safe_lsn,
+            HadrPromotionOutcome::Rejected(_) => unreachable!("rejected outcome returned error"),
+        };
+
+        let marker = HadrPromotionAuditMarker {
+            candidate_id: attempt.candidate_id,
+            proposed_epoch,
+            primary_durable_lsn: attempt.primary_durable_lsn,
+            committed_safe_lsn,
+            token,
+            audit_record,
+        };
+
+        Ok(PromotionPlan {
+            candidate_id: attempt.candidate_id,
+            proposed_epoch,
+            committed_safe_lsn,
+            token,
+            marker,
+        })
+    }
+}
+
+/// Storage-side durable promotion boundary.
+pub struct PromotionBoundary<'a, S, A> {
+    membership_store: &'a S,
+    audit_log: &'a A,
+}
+
+impl<'a, S, A> PromotionBoundary<'a, S, A>
+where
+    S: HadrMembershipStore,
+    A: HadrPromotionAuditLog,
+{
+    pub const fn new(membership_store: &'a S, audit_log: &'a A) -> Self {
+        Self {
+            membership_store,
+            audit_log,
+        }
+    }
+
+    pub fn promote(&self, attempt: PromotionAttempt) -> AndromedaResult<PromotionCommit> {
+        let membership_snapshot = self
+            .membership_store
+            .load()?
+            .ok_or_else(|| promotion_error("HADR membership snapshot is missing"))?;
+        let plan = PromotionPlanner::plan(&membership_snapshot, attempt)?;
+
+        self.audit_log
+            .append_primary_promotion_marker(&plan.marker)?;
+        let snapshot = self.membership_store.promote_primary(
+            plan.candidate_id,
+            plan.proposed_epoch,
+            plan.committed_safe_lsn,
+        )?;
+
+        Ok(PromotionCommit {
+            token: plan.token,
+            marker: plan.marker,
+            snapshot,
+        })
+    }
+}
+
+/// Result of a promotion made visible in the membership store.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PromotionCommit {
+    pub token: HadrFencingToken,
+    pub marker: HadrPromotionAuditMarker,
+    pub snapshot: HadrMembershipSnapshot,
+}
+
+fn quorum_membership_from_snapshot(
+    membership_snapshot: &HadrMembershipSnapshot,
+) -> AndromedaResult<HadrQuorumMembership> {
+    HadrQuorumMembership::new(
+        membership_snapshot
+            .nodes()
+            .iter()
+            .map(|node| node.id)
+            .collect(),
+    )
+}
+
+fn proposed_promotion_epoch(
+    membership_snapshot: &HadrMembershipSnapshot,
+    attempt: &PromotionAttempt,
+) -> AndromedaResult<HadrEpoch> {
+    let mut highest = membership_snapshot
+        .epoch()
+        .max(attempt.fencing.highest_observed_epoch)
+        .max(attempt.candidate_observed_epoch);
+
+    for vote in &attempt.votes {
+        highest = highest.max(vote.voter_observed_epoch);
+    }
+
+    highest
+        .checked_next()
+        .ok_or_else(|| promotion_error("HADR promotion epoch would overflow"))
+}
+
 // Helper function to construct promotion errors
 fn promotion_error(message: &str) -> AndromedaError {
     AndromedaError::new(AndromedaErrorKind::Storage, message)
@@ -438,7 +662,7 @@ mod tests {
     }
 
     #[test]
-    fn test_select_best_eligible_candidate() {
+    fn test_select_best_eligible_candidate() -> AndromedaResult<()> {
         let req_good = make_requirements(1000, 950, true, true);
         let req_bad = make_requirements(900, 950, true, true);
 
@@ -448,9 +672,9 @@ mod tests {
         ];
 
         // Should skip the bad one and select the good one
-        let selected = select_best_eligible_candidate(&candidates);
-        assert!(selected.is_ok());
-        assert_eq!(selected.unwrap().replica_id, 1);
+        let selected = select_best_eligible_candidate(&candidates)?;
+        assert_eq!(selected.replica_id, 1);
+        Ok(())
     }
 
     #[test]

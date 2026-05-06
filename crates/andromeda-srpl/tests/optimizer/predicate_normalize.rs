@@ -315,9 +315,9 @@ fn t_nr_05_normalize_empty_body_ok() {
     assert!(norm.body.operations.is_empty());
 }
 
-/// T-NR-06  normalize sorts Update assignments by field name.
+/// T-NR-06  normalize preserves Update assignment order.
 #[test]
-fn t_nr_06_normalize_sorts_update_assignments() {
+fn t_nr_06_normalize_preserves_update_assignment_order() {
     let ir = make_ir(vec![update_op(
         0,
         "db.ns.T",
@@ -330,8 +330,8 @@ fn t_nr_06_normalize_sorts_update_assignments() {
     let norm = normalize(ir).unwrap();
     match &norm.body.operations[0].kind {
         SrplBusinessOperationKindIr::Update { assignments, .. } => {
-            assert_eq!(assignments[0].field, "a_field");
-            assert_eq!(assignments[1].field, "z_field");
+            assert_eq!(assignments[0].field, "z_field");
+            assert_eq!(assignments[1].field, "a_field");
         }
         _ => panic!(),
     }

@@ -1,7 +1,12 @@
 //! Permission scope validation for Procedure dispatch.
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_observe::{DurableAuditSinkReport, TraceId};
 use std::collections::HashSet;
+
+use crate::services::permission_audit_emitter::{
+    AuditEmissionEvidence, AuditEmissionPolicy, AuditSinkAvailability,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PermissionScopeValidation {
@@ -78,6 +83,59 @@ pub fn validate_dispatch_permissions_or_error(
         Some(error) => Err(error),
         None => Ok(()),
     }
+}
+
+pub fn validate_dispatch_permissions_with_audit(
+    request_permissions: &[String],
+    handler_contract_permissions: &[String],
+    trace_id: TraceId,
+    policy: AuditEmissionPolicy,
+    sink: AuditSinkAvailability,
+) -> AndromedaResult<(PermissionScopeValidation, Option<AuditEmissionEvidence>)> {
+    let validation =
+        validate_dispatch_permissions(request_permissions, handler_contract_permissions);
+    let audit = match &validation {
+        PermissionScopeValidation::Allowed => None,
+        PermissionScopeValidation::Denied {
+            unauthorized_permission,
+        } => Some(AuditEmissionEvidence::contract_rejected(
+            policy,
+            trace_id,
+            format!(
+                "dispatch permission exceeds handler contract scope: {unauthorized_permission}"
+            ),
+            sink,
+        )?),
+    };
+
+    Ok((validation, audit))
+}
+
+pub fn validate_dispatch_permissions_with_durable_audit(
+    request_permissions: &[String],
+    handler_contract_permissions: &[String],
+    trace_id: TraceId,
+    policy: AuditEmissionPolicy,
+    report: DurableAuditSinkReport,
+) -> AndromedaResult<(PermissionScopeValidation, Option<AuditEmissionEvidence>)> {
+    let validation =
+        validate_dispatch_permissions(request_permissions, handler_contract_permissions);
+    let PermissionScopeValidation::Denied {
+        unauthorized_permission,
+    } = &validation
+    else {
+        return Ok((validation, None));
+    };
+
+    let sink = AuditSinkAvailability::durable_for_policy(policy, report)?;
+    let audit = AuditEmissionEvidence::contract_rejected(
+        policy,
+        trace_id,
+        format!("dispatch permission exceeds handler contract scope: {unauthorized_permission}"),
+        sink,
+    )?;
+
+    Ok((validation, Some(audit)))
 }
 
 #[cfg(test)]
@@ -224,15 +282,12 @@ mod tests {
             "inventory.reserve".to_string(),
         ];
         let result = validate_dispatch_permissions(&request, &handler);
-        assert!(result.is_denied());
-        if let PermissionScopeValidation::Denied {
-            unauthorized_permission,
-        } = result
-        {
-            assert_eq!(unauthorized_permission, "admin.global");
-        } else {
-            panic!("Expected denied result");
-        }
+        assert_eq!(
+            result,
+            PermissionScopeValidation::Denied {
+                unauthorized_permission: "admin.global".to_string()
+            }
+        );
     }
 
     #[test]
@@ -260,13 +315,19 @@ mod tests {
     }
 
     #[test]
-    fn validate_denied_produces_error_with_permission_name() {
+    fn validate_denied_produces_error_with_permission_name() -> AndromedaResult<()> {
         let request = vec!["admin.global".to_string()];
         let handler = vec!["inventory.query".to_string()];
         let result = validate_dispatch_permissions(&request, &handler);
-        let error = result.into_error().expect("Should produce error");
+        let Some(error) = result.into_error() else {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Security,
+                "permission denial should produce an error",
+            ));
+        };
         assert!(error.to_string().contains("admin.global"));
         assert!(error.to_string().contains("escalation"));
+        Ok(())
     }
 
     #[test]

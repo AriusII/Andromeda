@@ -46,9 +46,10 @@ impl OptimizerPlanKind {
         let mut has_read = false;
         let mut all_reads_have_equality = true;
 
-        for op in &ir.body.operations {
+        for (index, op) in ir.body.operations.iter().enumerate() {
             match &op.kind {
                 SrplBusinessOperationKindIr::Read {
+                    binding,
                     cardinality,
                     predicates,
                     ..
@@ -58,12 +59,16 @@ impl OptimizerPlanKind {
                         Cardinality::Many | Cardinality::NonEmptyMany => has_many = true,
                         _ => {}
                     }
-                    for pred in predicates {
+                    let assert_predicates =
+                        downstream_assert_predicates_for_binding(ir, index, binding);
+                    for pred in predicates.iter().chain(assert_predicates) {
                         if matches!(pred, SrplPredicateIr::FieldGreaterThanOrEqualInput { .. }) {
                             has_range = true;
                         }
                     }
-                    if predicates.is_empty() {
+                    if predicates.is_empty()
+                        && !has_downstream_assert_predicate_for_binding(ir, index, binding)
+                    {
                         all_reads_have_equality = false;
                     }
                 }
@@ -113,6 +118,54 @@ impl OptimizerPlanKind {
             Self::Join => 7,
             Self::WindowFunction => 8,
         }
+    }
+}
+
+fn downstream_assert_predicates_for_binding<'a>(
+    ir: &'a SrplProcedureIr,
+    read_index: usize,
+    binding: &'a str,
+) -> impl Iterator<Item = &'a SrplPredicateIr> {
+    ir.body.operations[read_index + 1..]
+        .iter()
+        .take_while(|operation| {
+            !matches!(
+                &operation.kind,
+                SrplBusinessOperationKindIr::Update { .. }
+                    | SrplBusinessOperationKindIr::Emit { .. }
+                    | SrplBusinessOperationKindIr::Raise { .. }
+            )
+        })
+        .filter_map(|operation| match &operation.kind {
+            SrplBusinessOperationKindIr::Assert { predicate, .. }
+                if predicate_references_binding(predicate, binding) =>
+            {
+                Some(predicate)
+            }
+            _ => None,
+        })
+}
+
+fn has_downstream_assert_predicate_for_binding(
+    ir: &SrplProcedureIr,
+    read_index: usize,
+    binding: &str,
+) -> bool {
+    downstream_assert_predicates_for_binding(ir, read_index, binding)
+        .next()
+        .is_some()
+}
+
+fn predicate_references_binding(predicate: &SrplPredicateIr, binding: &str) -> bool {
+    match predicate {
+        SrplPredicateIr::InputEqualsField {
+            binding: predicate_binding,
+            ..
+        }
+        | SrplPredicateIr::FieldGreaterThanOrEqualInput {
+            binding: predicate_binding,
+            ..
+        } => predicate_binding == binding,
     }
 }
 

@@ -6,6 +6,9 @@ publish = false
 
 [dependencies]
 andromeda-core.workspace = true
+andromeda-observe.workspace = true
+andromeda-srpl.workspace = true
+andromeda-storage.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]

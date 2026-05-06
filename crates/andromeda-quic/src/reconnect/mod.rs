@@ -1,3 +1,4 @@
+mod continuity;
 mod decision;
 mod error;
 mod policy;
@@ -8,6 +9,9 @@ mod pooled_connection;
 mod retry;
 mod state;
 
+pub use continuity::{
+    CertificateContinuityDecision, CertificateContinuityPolicy, CertificateRotationDeclaration,
+};
 pub use decision::ReconnectDecision;
 pub(crate) use error::{pool_error, reconnect_error};
 pub use policy::{ReconnectAttemptTrace, ReconnectPolicy};
@@ -33,6 +37,10 @@ mod tests {
     use andromeda_observe::{CertificateIdentity, SurfaceScope};
 
     use crate::SurfacePlane;
+
+    fn fp(ch: char) -> String {
+        ch.to_string().repeat(64)
+    }
 
     #[test]
     fn conservative_policy_is_bounded() {
@@ -104,19 +112,20 @@ mod tests {
     #[test]
     fn pool_key_requires_server_identity_and_matching_plane_scope() {
         let identity =
-            CertificateIdentity::new("server-fp", "server-a", SurfaceScope::Application).unwrap();
+            CertificateIdentity::new(fp('a'), "server-a", SurfaceScope::Application).unwrap();
 
         assert_eq!(
             ConnectionPoolKey::from_server_identity(&identity, SurfacePlane::Application)
                 .unwrap()
                 .server_fingerprint(),
-            "server-fp"
+            fp('a')
         );
         assert!(
             ConnectionPoolKey::from_server_identity(&identity, SurfacePlane::Administration)
                 .is_err()
         );
         assert!(ConnectionPoolKey::new("  ", SurfacePlane::Application).is_err());
+        assert!(ConnectionPoolKey::new("server-fp", SurfacePlane::Application).is_err());
     }
 
     #[test]
@@ -127,8 +136,8 @@ mod tests {
             evict_unhealthy: true,
         })
         .unwrap();
-        let app_key = ConnectionPoolKey::new("server-fp", SurfacePlane::Application).unwrap();
-        let admin_key = ConnectionPoolKey::new("server-fp", SurfacePlane::Administration).unwrap();
+        let app_key = ConnectionPoolKey::new(fp('a'), SurfacePlane::Application).unwrap();
+        let admin_key = ConnectionPoolKey::new(fp('a'), SurfacePlane::Administration).unwrap();
 
         let first = pool.admit_or_reuse(app_key.clone(), 0).unwrap();
         assert_eq!(first.kind, PoolAdmissionKind::Opened);
@@ -153,7 +162,7 @@ mod tests {
             evict_unhealthy: true,
         })
         .unwrap();
-        let key = ConnectionPoolKey::new("server-fp", SurfacePlane::Application).unwrap();
+        let key = ConnectionPoolKey::new(fp('a'), SurfacePlane::Application).unwrap();
 
         let first = pool.admit_or_reuse(key.clone(), 0).unwrap();
         pool.mark_unhealthy(first.connection_id).unwrap();
@@ -172,8 +181,8 @@ mod tests {
             evict_unhealthy: false,
         })
         .unwrap();
-        let app_key = ConnectionPoolKey::new("server-fp", SurfacePlane::Application).unwrap();
-        let admin_key = ConnectionPoolKey::new("server-fp", SurfacePlane::Administration).unwrap();
+        let app_key = ConnectionPoolKey::new(fp('a'), SurfacePlane::Application).unwrap();
+        let admin_key = ConnectionPoolKey::new(fp('a'), SurfacePlane::Administration).unwrap();
 
         let opened = pool.admit_or_reuse(app_key.clone(), 0).unwrap();
         pool.mark_unhealthy(opened.connection_id).unwrap();

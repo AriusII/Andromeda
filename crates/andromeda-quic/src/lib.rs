@@ -14,6 +14,7 @@
 //! - lifecycle state gates handshake, active dispatch, drain, and close.
 
 mod backpressure;
+mod catalog_manifest_resolution;
 mod connection;
 mod frame_code;
 mod frame_codec;
@@ -23,6 +24,7 @@ mod procedure_gateway;
 mod reconnect;
 mod rpc_dispatch;
 mod stream_types;
+mod zero_rtt;
 
 pub mod frame;
 pub mod stream_concurrency;
@@ -74,6 +76,7 @@ pub use rpc::{
 pub use procedure_gateway::ProcedureGateway;
 
 pub use reconnect::{
+    CertificateContinuityDecision, CertificateContinuityPolicy, CertificateRotationDeclaration,
     ConnectionPool, ConnectionPoolKey, ConnectionPoolPolicy, MAX_POOL_CONNECTIONS_PER_KEY,
     MAX_POOL_IDLE_TIMEOUT_MS, PoolAdmission, PoolAdmissionKind, PoolConnectionId, PooledConnection,
     PooledConnectionHealth, ReconnectAttemptTrace, ReconnectDecision, ReconnectPolicy,
@@ -82,6 +85,17 @@ pub use reconnect::{
 };
 
 pub use backpressure::{BackpressureReason, BackpressureSignal, BackpressureTransport};
+
+pub use catalog_manifest_resolution::{
+    CatalogColumnDescriptor, CatalogManifestResolutionContext, CatalogManifestResolutionGateway,
+    CatalogManifestResolutionRequest, CatalogManifestResolutionResponse,
+    CatalogManifestResolutionRuntime, CatalogManifestResolutionStatus, CatalogManifestSelector,
+    CatalogProcedureManifest, CatalogProcedureManifestResolutionRequest,
+    CatalogProcedureManifestResolutionResponse, CatalogProcedureProtocolLayout,
+    CatalogRequiredPermission, CatalogResultStreamDescriptor,
+    catalog_manifest_resolution_request_frame, decode_catalog_manifest_resolution_request_frame,
+    decode_catalog_manifest_resolution_response_frame,
+};
 
 pub use transport::{
     QuicClientTransport, QuicServerTransport, TransportBackpressureStatus,
@@ -103,4 +117,9 @@ mod protocol_invariants;
 pub use protocol_invariants::{
     FrameTypeInvariants, PayloadKindInvariants, ProtocolInvariants, ProtocolVersionInvariants,
     validate_frame_header_layout,
+};
+
+pub use zero_rtt::{
+    ZeroRttAdmissionDecision, ZeroRttAdmissionPolicy, ZeroRttAdmissionRejectionReason,
+    ZeroRttReplayClass,
 };

@@ -5,7 +5,8 @@ use andromeda_core::{
 };
 
 use super::{
-    CatalogChangeNotification, CatalogChangeSubscription, CatalogServerTrait,
+    CatalogChangeNotification, CatalogChangeSubscription, CatalogRuntimeEvidence,
+    CatalogRuntimeStore, CatalogServerRuntimeDiagnostic, CatalogServerTrait,
     MockCatalogChangeSubscription, ProcedureManifest,
 };
 
@@ -16,7 +17,7 @@ fn catalog_mock_lock_error(resource: &str) -> AndromedaError {
     )
 }
 
-/// Mock implementation of `CatalogServerTrait` for testing and development.
+/// Mock implementation of `CatalogServerTrait` for testing.
 ///
 /// This implementation maintains an in-memory store of procedure manifests
 /// and change notifications, suitable for unit testing and contract validation.
@@ -77,7 +78,17 @@ impl Default for MockCatalogServer {
     }
 }
 
+impl CatalogRuntimeStore for MockCatalogServer {
+    fn catalog_runtime_evidence(&self) -> CatalogRuntimeEvidence {
+        CatalogRuntimeEvidence::mock_ephemeral()
+    }
+}
+
 impl CatalogServerTrait for MockCatalogServer {
+    fn runtime_diagnostic(&self) -> CatalogServerRuntimeDiagnostic {
+        self.catalog_runtime_evidence().diagnostic()
+    }
+
     fn resolve_procedure(&self, procedure_id: ProcedureId) -> AndromedaResult<ProcedureManifest> {
         let procedures = self
             .procedures

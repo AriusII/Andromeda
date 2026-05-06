@@ -46,9 +46,10 @@ pub use result_stream::{
 };
 pub use retry::{ErrorRetryability, RetryAttempt, RetryDecision, RetryPolicy};
 pub use services::{
-    AdmissionService, CompletionMappingService, ErrorKind, PreTransactionValidationService,
-    ResultValidationService, RetryRouting, RoutedTransactionError, TerminalTxEvidence,
-    TerminalTxJournal, TerminalTxState, route_transaction_error,
+    AdmissionService, CompletionEmission, CompletionMappingService, ErrorKind,
+    InvocationCompletionEmitter, PreTransactionValidationService, ResultValidationService,
+    RetryRouting, RoutedTransactionError, TerminalTxEvidence, TerminalTxJournal, TerminalTxState,
+    route_transaction_error,
 };
 pub use srpl_adapters::{
     FieldValue, SrplExecutionAdapter, SrplStreamBackpressure, SrplTransactionContext,

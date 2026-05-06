@@ -1,6 +1,6 @@
 use crate::diagnostic_json::{DIAGNOSTIC_JSON_FLAG, JSON_FLAG, json_string};
 use crate::error::cli_error;
-use crate::parse::{next_option_value, parse_u64_option};
+use crate::parse::{next_option_value_rejecting_flag, parse_u64_option};
 use andromeda_bench::{
     CRUD_SCENARIOS, CrudDataGenerator, CrudOperationMetrics, CrudWorkloadResult, find_crud_scenario,
 };
@@ -22,8 +22,11 @@ pub(super) fn parse_crud_run_options(args: &[String]) -> AndromedaResult<CrudRun
     while index < args.len() {
         match args[index].as_str() {
             "--seed" => {
-                let value =
-                    next_option_value(args, &mut index, "--seed requires an unsigned integer")?;
+                let value = next_option_value_rejecting_flag(
+                    args,
+                    &mut index,
+                    "--seed requires an unsigned integer",
+                )?;
                 seed = parse_u64_option(value, "--seed")?;
             }
             DIAGNOSTIC_JSON_FLAG => diagnostic_json = true,
@@ -33,7 +36,9 @@ pub(super) fn parse_crud_run_options(args: &[String]) -> AndromedaResult<CrudRun
                 ));
             }
             opt if opt.starts_with("--") => {
-                return Err(cli_error(format!("unknown crud run option: {opt}")));
+                return Err(cli_error(
+                    "unknown crud run option; supported options are --seed and --diagnostic-json",
+                ));
             }
             value => {
                 if scenario_id.is_some() {
@@ -54,9 +59,9 @@ pub(super) fn parse_crud_run_options(args: &[String]) -> AndromedaResult<CrudRun
     };
 
     if find_crud_scenario(&scenario_id).is_none() {
-        return Err(cli_error(format!(
-            "unknown CRUD scenario `{scenario_id}`; run `andromeda-cli benchmark crud-scenarios`"
-        )));
+        return Err(cli_error(
+            "unknown CRUD scenario; run `andromeda-cli benchmark crud-scenarios`",
+        ));
     }
 
     Ok(CrudRunOptions {
@@ -281,7 +286,33 @@ mod tests {
 
     #[test]
     fn rejects_unknown_crud_scenario() {
-        let result = parse_crud_run_options(&strings(&["unknown-scenario"]));
-        assert!(result.is_err());
+        let err = parse_crud_run_options(&strings(&["super-secret"])).unwrap_err();
+
+        assert_eq!(
+            err.message(),
+            "unknown CRUD scenario; run `andromeda-cli benchmark crud-scenarios`"
+        );
+        assert!(!err.message().contains("super-secret"));
+    }
+
+    #[test]
+    fn rejects_flag_as_seed_value() {
+        let err =
+            parse_crud_run_options(&strings(&["crud-single-1", "--seed", "--diagnostic-json"]))
+                .unwrap_err();
+
+        assert_eq!(err.message(), "--seed requires an unsigned integer");
+    }
+
+    #[test]
+    fn crud_option_errors_do_not_echo_values() {
+        let err = parse_crud_run_options(&strings(&["crud-single-1", "--token=super-secret"]))
+            .unwrap_err();
+
+        assert_eq!(
+            err.message(),
+            "unknown crud run option; supported options are --seed and --diagnostic-json"
+        );
+        assert!(!err.message().contains("super-secret"));
     }
 }

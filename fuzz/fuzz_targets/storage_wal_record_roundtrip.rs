@@ -8,7 +8,7 @@ use libfuzzer_sys::fuzz_target;
 fuzz_target!(|data: &[u8]| {
     if let Ok(Some((record, consumed))) = decode_wal_record_frame(data) {
         let _ = record.validate();
-        let _ = consumed <= data.len();
+        assert!(consumed <= data.len());
         if let Ok(encoded) = encode_wal_record(&record) {
             let _ = decode_wal_record_frame(&encoded);
         }

@@ -12,6 +12,7 @@ pub enum BenchmarkError {
     DurationExceedsWorkloadLimit,
     SamplesExceedsWorkloadLimit,
     InsufficientSamplesForStatistics,
+    HarnessFailed,
 }
 
 impl fmt::Display for BenchmarkError {
@@ -31,6 +32,7 @@ impl fmt::Display for BenchmarkError {
             Self::InsufficientSamplesForStatistics => {
                 "benchmark statistics require at least one sample"
             }
+            Self::HarnessFailed => "benchmark harness failed to produce evidence",
         };
         f.write_str(message)
     }

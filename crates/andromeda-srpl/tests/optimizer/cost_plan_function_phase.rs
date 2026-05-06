@@ -413,10 +413,10 @@ fn t_fk_09_nondeterministic_functions_never_foldable() {
     }
 }
 
-/// T-PH-01  PHASE_COUNT is 8 (stable doctrine count).
+/// T-PH-01  PHASE_COUNT includes parse/bind/lower plus rewrite/evidence phases.
 #[test]
-fn t_ph_01_phase_count_is_eight() {
-    assert_eq!(OptimizerPhase::PHASE_COUNT, 8);
+fn t_ph_01_phase_count_is_nine() {
+    assert_eq!(OptimizerPhase::PHASE_COUNT, 9);
 }
 
 /// T-PH-02  All phases are strictly ordered by their ordinals.
@@ -428,6 +428,7 @@ fn t_ph_02_phases_are_strictly_ordered() {
         OptimizerPhase::IRLowering,
         OptimizerPhase::ConstantFolding,
         OptimizerPhase::PredicatePushdown,
+        OptimizerPhase::Normalize,
         OptimizerPhase::ProjectionPushdown,
         OptimizerPhase::CostAnalysis,
         OptimizerPhase::PlanChoice,
@@ -446,6 +447,7 @@ fn t_ph_02_phases_are_strictly_ordered() {
 #[test]
 fn t_ph_03_requires_phase_immediate_predecessor_only() {
     assert!(OptimizerPhase::ConstantFolding.requires_phase(OptimizerPhase::IRLowering));
+    assert!(OptimizerPhase::Normalize.requires_phase(OptimizerPhase::PredicatePushdown));
     assert!(!OptimizerPhase::ConstantFolding.requires_phase(OptimizerPhase::Binding));
     assert!(!OptimizerPhase::ConstantFolding.requires_phase(OptimizerPhase::PredicatePushdown));
 }

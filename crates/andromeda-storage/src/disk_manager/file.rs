@@ -3,11 +3,12 @@ use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_core::AndromedaResult;
 
 use crate::{ExtentDescriptor, ExtentId, Lsn, PageId, PageImage};
 
 use super::interface::DiskManager;
+use super::{DiskManagerError, PageIntegrityMode};
 
 /// File-backed disk manager implementation.
 #[derive(Debug)]
@@ -19,6 +20,7 @@ pub struct FileDiskManager {
     pub(crate) current_file_size: u64,
     pub(crate) temp_dir: PathBuf,
     pub(crate) allocated_page_ranges: Vec<(u64, u64)>, // (start, end) inclusive
+    pub(crate) page_integrity_mode: PageIntegrityMode,
 }
 
 impl FileDiskManager {
@@ -27,11 +29,9 @@ impl FileDiskManager {
         let file_path = file_path.as_ref().to_path_buf();
         let temp_dir = temp_dir.as_ref().to_path_buf();
 
-        std::fs::create_dir_all(&temp_dir).map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                format!("Failed to create temp directory: {}", e),
-            )
+        std::fs::create_dir_all(&temp_dir).map_err(|e| DiskManagerError::IoError {
+            operation: format!("create disk manager temp directory {}", temp_dir.display()),
+            reason: e.to_string(),
         })?;
 
         let file = OpenOptions::new()
@@ -40,24 +40,16 @@ impl FileDiskManager {
             .create(true)
             .truncate(false)
             .open(&file_path)
-            .map_err(|e| {
-                AndromedaError::new(
-                    AndromedaErrorKind::Storage,
-                    format!(
-                        "Failed to open disk manager file {}: {}",
-                        file_path.display(),
-                        e
-                    ),
-                )
+            .map_err(|e| DiskManagerError::IoError {
+                operation: format!("open disk manager file {}", file_path.display()),
+                reason: e.to_string(),
             })?;
 
         let current_file_size = file
             .metadata()
-            .map_err(|e| {
-                AndromedaError::new(
-                    AndromedaErrorKind::Storage,
-                    format!("Failed to read file metadata: {}", e),
-                )
+            .map_err(|e| DiskManagerError::IoError {
+                operation: format!("read disk manager metadata {}", file_path.display()),
+                reason: e.to_string(),
             })?
             .len();
 
@@ -69,17 +61,28 @@ impl FileDiskManager {
             current_file_size,
             temp_dir,
             allocated_page_ranges: Vec::new(),
+            page_integrity_mode: PageIntegrityMode::None,
         })
+    }
+
+    /// Open or create a file-backed disk manager with explicit page integrity.
+    pub fn open_with_integrity(
+        file_path: impl AsRef<Path>,
+        temp_dir: impl AsRef<Path>,
+        page_integrity_mode: PageIntegrityMode,
+    ) -> AndromedaResult<Self> {
+        let mut manager = Self::open(file_path, temp_dir)?;
+        manager.page_integrity_mode = page_integrity_mode;
+        Ok(manager)
     }
 
     /// Register an extent with this disk manager.
     pub fn register_extent(&mut self, descriptor: ExtentDescriptor) -> AndromedaResult<()> {
-        descriptor.validate().map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                format!("Invalid extent descriptor: {}", e.message()),
-            )
-        })?;
+        descriptor
+            .validate()
+            .map_err(|e| DiskManagerError::InvalidExtentDescriptor {
+                reason: e.message().to_string(),
+            })?;
 
         self.verify_extent_contiguity_impl(&descriptor)?;
 
@@ -91,11 +94,8 @@ impl FileDiskManager {
 
         let last_page_id = descriptor
             .last_page_id()
-            .map_err(|e| {
-                AndromedaError::new(
-                    AndromedaErrorKind::Storage,
-                    format!("Failed to compute extent last page: {}", e.message()),
-                )
+            .map_err(|e| DiskManagerError::InvalidExtentDescriptor {
+                reason: format!("failed to compute last page: {}", e.message()),
             })?
             .get();
 
@@ -119,42 +119,28 @@ impl DiskManager for FileDiskManager {
         let mut file = OpenOptions::new()
             .read(true)
             .open(&self.file_path)
-            .map_err(|e| {
-                AndromedaError::new(
-                    AndromedaErrorKind::Storage,
-                    format!("Failed to open data file for reading: {}", e),
-                )
+            .map_err(|e| DiskManagerError::IoError {
+                operation: format!("open data file {} for reading", self.file_path.display()),
+                reason: e.to_string(),
             })?;
 
-        file.seek(SeekFrom::Start(offset)).map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                format!(
-                    "Failed to seek to page {} (offset {}): {}",
-                    page_id.get(),
-                    offset,
-                    e
-                ),
-            )
-        })?;
+        file.seek(SeekFrom::Start(offset))
+            .map_err(|e| DiskManagerError::IoError {
+                operation: format!("seek to page {} at offset {}", page_id.get(), offset),
+                reason: e.to_string(),
+            })?;
 
-        file.read_exact(&mut buffer).map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                format!(
-                    "Failed to read page {} (offset {}): {}",
-                    page_id.get(),
-                    offset,
-                    e
-                ),
-            )
-        })?;
+        file.read_exact(&mut buffer)
+            .map_err(|e| DiskManagerError::IoError {
+                operation: format!("read page {} at offset {}", page_id.get(), offset),
+                reason: e.to_string(),
+            })?;
 
         let image = PageImage::new(extent.page_size, buffer).map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                format!("Failed to construct page image: {}", e.message()),
-            )
+            DiskManagerError::PageCorrupted {
+                page_id: page_id.get(),
+                reason: format!("failed to construct page image: {}", e.message()),
+            }
         })?;
 
         self.validate_page_integrity(&image)?;
@@ -163,19 +149,16 @@ impl DiskManager for FileDiskManager {
     }
 
     fn write_page(&mut self, image: PageImage, _durable_lsn: Lsn) -> AndromedaResult<()> {
-        let page_id = image.page_id().ok_or_else(|| {
-            AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                "Page image missing layout contract for page ID",
-            )
-        })?;
+        let page_id = image
+            .page_id()
+            .ok_or_else(|| DiskManagerError::PageLayoutInvalid {
+                reason: "page image missing layout contract for page ID".to_string(),
+            })?;
 
-        self.extent_for_page_impl(page_id)?.ok_or_else(|| {
-            AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                format!("Page {} is not allocated", page_id.get()),
-            )
-        })?;
+        self.extent_for_page_impl(page_id)?
+            .ok_or_else(|| DiskManagerError::PageNotAllocated {
+                page_id: page_id.get(),
+            })?;
 
         let mut image_for_write = image.clone();
         self.stamp_page_integrity_if_enabled(&mut image_for_write)?;
@@ -184,12 +167,11 @@ impl DiskManager for FileDiskManager {
     }
 
     fn allocate_extent(&mut self, descriptor: ExtentDescriptor) -> AndromedaResult<()> {
-        descriptor.validate().map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                format!("Invalid extent: {}", e.message()),
-            )
-        })?;
+        descriptor
+            .validate()
+            .map_err(|e| DiskManagerError::InvalidExtentDescriptor {
+                reason: e.message().to_string(),
+            })?;
 
         self.verify_extent_contiguity_impl(&descriptor)?;
 
@@ -198,26 +180,27 @@ impl DiskManager for FileDiskManager {
 
         let extent_size = u64::from(descriptor_with_offset.page_count)
             .checked_mul(u64::from(descriptor_with_offset.page_size.bytes()))
-            .ok_or_else(|| {
-                AndromedaError::new(
-                    AndromedaErrorKind::Storage,
-                    "Extent size computation overflowed",
-                )
+            .ok_or_else(|| DiskManagerError::OffsetOverflow {
+                page_id: descriptor_with_offset.first_page_id.get(),
+                reason: "extent size computation overflowed".to_string(),
             })?;
 
         self.current_file_size = descriptor_with_offset
             .file_offset
             .checked_add(extent_size)
-            .ok_or_else(|| {
-                AndromedaError::new(AndromedaErrorKind::Storage, "File size would overflow")
+            .ok_or_else(|| DiskManagerError::DiskSpaceExhausted {
+                reason: "file size would overflow".to_string(),
             })?;
 
-        self.file.set_len(self.current_file_size).map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                format!("Failed to pre-allocate file space: {}", e),
-            )
-        })?;
+        self.file
+            .set_len(self.current_file_size)
+            .map_err(|e| DiskManagerError::IoError {
+                operation: format!(
+                    "pre-allocate file space to {} bytes",
+                    self.current_file_size
+                ),
+                reason: e.to_string(),
+            })?;
 
         self.register_extent(descriptor_with_offset)
     }
@@ -238,14 +221,17 @@ impl DiskManager for FileDiskManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::disk_manager::DiskManager;
+    use crate::disk_manager::{DiskManager, DiskManagerError};
     use crate::{AllocationId, ExtentState, ObjectId, PageSize};
 
-    fn create_temp_disk_manager() -> (FileDiskManager, tempfile::TempDir) {
-        let temp_dir = tempfile::TempDir::new().unwrap();
+    fn create_temp_disk_manager() -> AndromedaResult<(FileDiskManager, tempfile::TempDir)> {
+        let temp_dir = tempfile::TempDir::new().map_err(|e| DiskManagerError::IoError {
+            operation: "create test temp directory".to_string(),
+            reason: e.to_string(),
+        })?;
         let data_file = temp_dir.path().join("test.bin");
-        let manager = FileDiskManager::open(&data_file, temp_dir.path()).unwrap();
-        (manager, temp_dir)
+        let manager = FileDiskManager::open(&data_file, temp_dir.path())?;
+        Ok((manager, temp_dir))
     }
 
     fn create_test_extent() -> ExtentDescriptor {
@@ -264,29 +250,36 @@ mod tests {
     }
 
     #[test]
-    fn test_disk_manager_open_creates_file() {
-        let temp_dir = tempfile::TempDir::new().unwrap();
+    fn test_disk_manager_open_creates_file() -> AndromedaResult<()> {
+        let temp_dir = tempfile::TempDir::new().map_err(|e| DiskManagerError::IoError {
+            operation: "create test temp directory".to_string(),
+            reason: e.to_string(),
+        })?;
         let data_file = temp_dir.path().join("test.bin");
 
         assert!(!data_file.exists());
-        let _manager = FileDiskManager::open(&data_file, temp_dir.path()).unwrap();
+        let _manager = FileDiskManager::open(&data_file, temp_dir.path())?;
         assert!(data_file.exists());
+        Ok(())
     }
 
     #[test]
-    fn test_extent_allocation_assigns_offset() {
-        let (mut manager, _temp) = create_temp_disk_manager();
+    fn test_extent_allocation_assigns_offset() -> AndromedaResult<()> {
+        let (mut manager, _temp) = create_temp_disk_manager()?;
         let extent = create_test_extent();
 
-        manager.allocate_extent(extent).unwrap();
+        manager.allocate_extent(extent)?;
 
-        let registered = manager.extent_for_page(PageId::new(1)).unwrap().unwrap();
+        let registered = manager
+            .extent_for_page(PageId::new(1))?
+            .ok_or(DiskManagerError::PageNotFound { page_id: 1 })?;
         assert_eq!(registered.file_offset, 0);
+        Ok(())
     }
 
     #[test]
-    fn test_sequential_extents_append_contiguously() {
-        let (mut manager, _temp) = create_temp_disk_manager();
+    fn test_sequential_extents_append_contiguously() -> AndromedaResult<()> {
+        let (mut manager, _temp) = create_temp_disk_manager()?;
 
         let extent1 = ExtentDescriptor {
             extent_id: ExtentId::new(1),
@@ -301,7 +294,7 @@ mod tests {
             allocated_on_disk: false,
         };
 
-        manager.allocate_extent(extent1).unwrap();
+        manager.allocate_extent(extent1)?;
 
         let extent2 = ExtentDescriptor {
             extent_id: ExtentId::new(2),
@@ -316,29 +309,30 @@ mod tests {
             allocated_on_disk: false,
         };
 
-        manager.allocate_extent(extent2).unwrap();
+        manager.allocate_extent(extent2)?;
 
-        let ext2 = manager.extent_for_page(PageId::new(11)).unwrap().unwrap();
+        let ext2 = manager
+            .extent_for_page(PageId::new(11))?
+            .ok_or(DiskManagerError::PageNotFound { page_id: 11 })?;
         assert_eq!(ext2.file_offset, 10 * 16 * 1024);
+        Ok(())
     }
 
     #[test]
-    fn test_page_to_file_offset_computation() {
-        let (mut manager, _temp) = create_temp_disk_manager();
+    fn test_page_to_file_offset_computation() -> AndromedaResult<()> {
+        let (mut manager, _temp) = create_temp_disk_manager()?;
         let extent = create_test_extent();
 
-        manager.allocate_extent(extent).unwrap();
+        manager.allocate_extent(extent)?;
 
-        assert_eq!(manager.page_to_file_offset(PageId::new(1)).unwrap(), 0);
-        assert_eq!(
-            manager.page_to_file_offset(PageId::new(2)).unwrap(),
-            16 * 1024
-        );
+        assert_eq!(manager.page_to_file_offset(PageId::new(1))?, 0);
+        assert_eq!(manager.page_to_file_offset(PageId::new(2))?, 16 * 1024);
+        Ok(())
     }
 
     #[test]
-    fn test_overlapping_extents_rejected() {
-        let (mut manager, _temp) = create_temp_disk_manager();
+    fn test_overlapping_extents_rejected() -> AndromedaResult<()> {
+        let (mut manager, _temp) = create_temp_disk_manager()?;
 
         let extent1 = ExtentDescriptor {
             extent_id: ExtentId::new(1),
@@ -353,7 +347,7 @@ mod tests {
             allocated_on_disk: false,
         };
 
-        manager.allocate_extent(extent1).unwrap();
+        manager.allocate_extent(extent1)?;
 
         let extent2 = ExtentDescriptor {
             extent_id: ExtentId::new(2),
@@ -370,5 +364,6 @@ mod tests {
 
         let result = manager.allocate_extent(extent2);
         assert!(result.is_err());
+        Ok(())
     }
 }

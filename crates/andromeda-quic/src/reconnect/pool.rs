@@ -68,10 +68,12 @@ impl ConnectionPool {
         }
 
         if let Some(connection_id) = self.reusable_connection_id(&key) {
-            let entry = self
-                .entries
-                .get_mut(&connection_id)
-                .expect("reusable connection id must still exist");
+            let entry = self.entries.get_mut(&connection_id).ok_or_else(|| {
+                pool_error(
+                    AndromedaErrorKind::Protocol,
+                    "reusable pooled connection id is not registered",
+                )
+            })?;
             entry.last_used_ms = now_ms;
             return Ok(PoolAdmission {
                 connection_id,

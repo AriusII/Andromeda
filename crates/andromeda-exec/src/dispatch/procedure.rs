@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use andromeda_catalog::ProcedureContractRef;
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, InvocationId};
 use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
@@ -148,11 +150,38 @@ fn validate_decision(
 #[derive(Clone)]
 pub struct SrplDispatcherAdapter {
     dispatcher: crate::SrplProcedureDispatcher,
+    local_dispatcher: Option<Arc<dyn ProcedureDispatcher + Send + Sync>>,
 }
 
 impl SrplDispatcherAdapter {
     pub fn new(dispatcher: crate::SrplProcedureDispatcher) -> Self {
-        Self { dispatcher }
+        Self {
+            dispatcher,
+            local_dispatcher: None,
+        }
+    }
+
+    pub fn with_local_dispatcher<D>(
+        dispatcher: crate::SrplProcedureDispatcher,
+        local_dispatcher: D,
+    ) -> Self
+    where
+        D: ProcedureDispatcher + Send + Sync + 'static,
+    {
+        Self {
+            dispatcher,
+            local_dispatcher: Some(Arc::new(local_dispatcher)),
+        }
+    }
+
+    pub fn with_shared_local_dispatcher(
+        dispatcher: crate::SrplProcedureDispatcher,
+        local_dispatcher: Arc<dyn ProcedureDispatcher + Send + Sync>,
+    ) -> Self {
+        Self {
+            dispatcher,
+            local_dispatcher: Some(local_dispatcher),
+        }
     }
 }
 
@@ -163,15 +192,17 @@ impl ProcedureDispatcher for SrplDispatcherAdapter {
     ) -> AndromedaResult<LocalProcedure> {
         request.validate()?;
 
+        let invocation_request = crate::InvocationRequest {
+            invocation_id: InvocationId::new(1),
+            procedure: request.procedure,
+            expected_contract_hash: request.procedure.contract_hash,
+            catalog_version: request.procedure.catalog_version,
+            structured_parameters: Vec::new(),
+        };
+
         let _procedure = self
             .dispatcher
-            .resolve_procedure(&crate::InvocationRequest {
-                invocation_id: InvocationId::new(1),
-                procedure: request.procedure,
-                expected_contract_hash: request.procedure.contract_hash,
-                catalog_version: request.procedure.catalog_version,
-                structured_parameters: Vec::new(),
-            })
+            .resolve_procedure(&invocation_request)
             .map_err(|resolve_err| {
                 AndromedaError::new(
                     AndromedaErrorKind::Srpl,
@@ -179,9 +210,22 @@ impl ProcedureDispatcher for SrplDispatcherAdapter {
                 )
             })?;
 
-        Err(AndromedaError::new(
-            AndromedaErrorKind::Execution,
-            "SRPL dispatch adapter execution not yet implemented - result metadata extraction needed",
+        if let Some(local_dispatcher) = &self.local_dispatcher {
+            return local_dispatcher.dispatch_procedure(request);
+        }
+
+        Err(srpl_local_boundary_contract_error(
+            invocation_request.procedure.procedure_id,
         ))
     }
+}
+
+fn srpl_local_boundary_contract_error(procedure_id: andromeda_core::ProcedureId) -> AndromedaError {
+    AndromedaError::new(
+        AndromedaErrorKind::Contract,
+        format!(
+            "SRPL dispatch boundary requires an explicit local handler for resolved ProcedureId {}; no local Procedure dispatcher is configured",
+            procedure_id.get()
+        ),
+    )
 }

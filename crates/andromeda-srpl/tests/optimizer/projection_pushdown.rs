@@ -264,24 +264,27 @@ fn t_pj_08_multiple_emitted_columns_all_in_projection() {
     assert!(live.contains(&"col3".to_string()));
 }
 
-/// T-PP-01  Basic push: Assert after Read → Assert absorbed, operation count -1.
+/// T-PP-01  Assert after Read is retained because it owns the failure code.
 #[test]
-fn t_pp_01_basic_assert_pushed_into_upstream_read() {
+fn t_pp_01_basic_assert_retained_after_upstream_read() {
     let pred = eq_pred("id", "T", "id");
     let ir = make_ir(vec![read_op(0, "T", vec![]), assert_op(1, pred.clone())]);
     let result = pushdown_apply(ir).unwrap();
     assert_eq!(
         result.body.operations.len(),
-        1,
-        "Assert must be removed after push"
+        2,
+        "Assert must stay until Read can carry its failure contract"
     );
     match &result.body.operations[0].kind {
         SrplBusinessOperationKindIr::Read { predicates, .. } => {
-            assert_eq!(predicates.len(), 1);
-            assert_eq!(predicates[0], pred);
+            assert!(predicates.is_empty());
         }
         _ => panic!("expected Read"),
     }
+    assert!(matches!(
+        &result.body.operations[1].kind,
+        SrplBusinessOperationKindIr::Assert { predicate, .. } if predicate == &pred
+    ));
 }
 
 /// T-PP-02  Assert without upstream Read stays in place.
@@ -305,9 +308,9 @@ fn t_pp_03_empty_body_noop() {
     assert!(result.body.operations.is_empty());
 }
 
-/// T-PP-04  Ordinals are dense and zero-based after push.
+/// T-PP-04  Ordinals are dense and zero-based after safe no-op pushdown.
 #[test]
-fn t_pp_04_ordinals_dense_after_push() {
+fn t_pp_04_ordinals_dense_after_safe_noop_pushdown() {
     let pred = eq_pred("id", "T", "id");
     let ir = make_ir(vec![read_op(0, "T", vec![]), assert_op(1, pred)]);
     let result = pushdown_apply(ir).unwrap();
@@ -319,19 +322,23 @@ fn t_pp_04_ordinals_dense_after_push() {
     }
 }
 
-/// T-PP-05  GTE assert pushed into upstream Read (range-predicate case).
+/// T-PP-05  GTE assert is retained in the range-predicate case.
 #[test]
-fn t_pp_05_gte_assert_pushed() {
+fn t_pp_05_gte_assert_retained() {
     let pred = gte_pred("T", "score", "min_score");
     let ir = make_ir(vec![read_op(0, "T", vec![]), assert_op(1, pred.clone())]);
     let result = pushdown_apply(ir).unwrap();
-    assert_eq!(result.body.operations.len(), 1);
+    assert_eq!(result.body.operations.len(), 2);
     match &result.body.operations[0].kind {
         SrplBusinessOperationKindIr::Read { predicates, .. } => {
-            assert_eq!(predicates[0], pred);
+            assert!(predicates.is_empty());
         }
         _ => panic!("expected Read"),
     }
+    assert!(matches!(
+        &result.body.operations[1].kind,
+        SrplBusinessOperationKindIr::Assert { predicate, .. } if predicate == &pred
+    ));
 }
 
 /// T-PP-06  Raise-only body is unaffected by pushdown.

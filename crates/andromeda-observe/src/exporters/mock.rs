@@ -36,26 +36,42 @@ impl MockExporter {
 
     /// Get a copy of all exported traces.
     pub fn get_traces(&self) -> Vec<ExportDecisionTrace> {
-        self.traces.lock().unwrap().clone()
+        self.traces
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
     }
 
     /// Get a copy of all exported metrics.
     pub fn get_metrics(&self) -> Vec<Metric> {
-        self.metrics.lock().unwrap().clone()
+        self.metrics
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
     }
 
     /// Simulate a failure (set health to false).
     pub fn simulate_failure(&self) {
-        *self.healthy.lock().unwrap() = false;
+        *self
+            .healthy
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = false;
     }
 
     /// Restore health.
     pub fn restore_health(&self) {
-        *self.healthy.lock().unwrap() = true;
+        *self
+            .healthy
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = true;
     }
 
     fn reject_if_unhealthy(&self, failed_count: u64) -> AndromedaResult<()> {
-        if *self.healthy.lock().unwrap() {
+        if *self
+            .healthy
+            .lock()
+            .map_err(|_| exporter_poisoned("health state"))?
+        {
             return Ok(());
         }
 
@@ -77,7 +93,10 @@ impl ExporterTrait for MockExporter {
 
         self.reject_if_unhealthy(1)?;
 
-        self.traces.lock().unwrap().push(trace);
+        self.traces
+            .lock()
+            .map_err(|_| exporter_poisoned("trace buffer"))?
+            .push(trace);
         self.record_successful(1);
         Ok(())
     }
@@ -87,7 +106,10 @@ impl ExporterTrait for MockExporter {
 
         self.reject_if_unhealthy(1)?;
 
-        self.metrics.lock().unwrap().push(metric);
+        self.metrics
+            .lock()
+            .map_err(|_| exporter_poisoned("metric buffer"))?
+            .push(metric);
         self.record_successful(1);
         Ok(())
     }
@@ -107,8 +129,14 @@ impl ExporterTrait for MockExporter {
         let count = (traces.len() + metrics.len()) as u64;
         self.reject_if_unhealthy(count)?;
 
-        self.traces.lock().unwrap().extend(traces);
-        self.metrics.lock().unwrap().extend(metrics);
+        self.traces
+            .lock()
+            .map_err(|_| exporter_poisoned("trace buffer"))?
+            .extend(traces);
+        self.metrics
+            .lock()
+            .map_err(|_| exporter_poisoned("metric buffer"))?
+            .extend(metrics);
         self.record_successful(count);
 
         Ok(())
@@ -119,7 +147,7 @@ impl ExporterTrait for MockExporter {
     }
 
     fn is_healthy(&self) -> bool {
-        *self.healthy.lock().unwrap()
+        self.healthy.lock().map(|healthy| *healthy).unwrap_or(false)
     }
 
     fn successful_exports(&self) -> u64 {
@@ -129,4 +157,11 @@ impl ExporterTrait for MockExporter {
     fn failed_exports(&self) -> u64 {
         self.failed_count.load(Ordering::SeqCst)
     }
+}
+
+fn exporter_poisoned(resource: &str) -> AndromedaError {
+    AndromedaError::new(
+        AndromedaErrorKind::Internal,
+        format!("mock exporter {resource} lock is poisoned"),
+    )
 }

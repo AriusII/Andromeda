@@ -5,6 +5,7 @@
 //!
 //! [`EventEnvelope`]: crate::EventEnvelope
 
+mod durable_audit;
 mod event_family;
 mod filtering;
 mod in_memory;
@@ -12,6 +13,9 @@ mod permission;
 mod result;
 mod spec;
 
+pub use durable_audit::{
+    DurableAuditTraceQueryResult, DurableAuditTraceQueryRow, DurableAuditTraceQuerySource,
+};
 pub use event_family::TraceEventFamily;
 pub use permission::TraceQueryPermissionMatrix;
 pub use result::{TraceQueryMetadata, TraceQueryResult, TraceQueryRow};

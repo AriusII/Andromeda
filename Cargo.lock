@@ -16,6 +16,9 @@ name = "andromeda-bench"
 version = "0.1.0"
 dependencies = [
  "andromeda-core",
+ "andromeda-observe",
+ "andromeda-srpl",
+ "andromeda-storage",
  "tempfile",
  "tokio",
 ]
@@ -26,6 +29,7 @@ version = "0.1.0"
 dependencies = [
  "andromeda-core",
  "andromeda-observe",
+ "andromeda-proto",
  "andromeda-storage",
 ]
 

@@ -13,7 +13,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let proto_sources = collect_proto_sources(&proto_root)?;
     let descriptor_set_path = PathBuf::from(env::var("OUT_DIR")?).join("andromeda_descriptor.bin");
 
-    reject_service_definitions(&proto_sources)?;
+    reject_forbidden_proto_boundary_identifiers(&proto_sources)?;
 
     for proto_source in &proto_sources {
         println!("cargo:rerun-if-changed={}", proto_source.display());
@@ -70,17 +70,19 @@ fn collect_proto_sources_from(
     Ok(())
 }
 
-fn reject_service_definitions(proto_sources: &[PathBuf]) -> Result<(), Box<dyn Error>> {
+fn reject_forbidden_proto_boundary_identifiers(
+    proto_sources: &[PathBuf],
+) -> Result<(), Box<dyn Error>> {
     for proto_source in proto_sources {
         let source = fs::read_to_string(proto_source)?;
         let active_source = active_proto_source(&source);
         for (line_index, line) in active_source.lines().enumerate() {
-            if line
+            if let Some(forbidden) = line
                 .split(|character: char| !(character.is_ascii_alphanumeric() || character == '_'))
-                .any(|token| token == "service" || token == "rpc")
+                .find_map(forbidden_proto_identifier)
             {
                 return Err(format!(
-                    "gRPC service/rpc declarations are forbidden in crate-local proto source {}:{}",
+                    "forbidden protobuf boundary identifier `{forbidden}` in crate-local proto source {}:{}",
                     proto_source.display(),
                     line_index + 1
                 )
@@ -90,6 +92,24 @@ fn reject_service_definitions(proto_sources: &[PathBuf]) -> Result<(), Box<dyn E
     }
 
     Ok(())
+}
+
+fn forbidden_proto_identifier(token: &str) -> Option<&'static str> {
+    let lower = token.to_ascii_lowercase();
+    if lower == "service" {
+        return Some("service");
+    }
+    if lower == "rpc" {
+        return Some("rpc");
+    }
+    if lower.contains("grpc") {
+        return Some("grpc");
+    }
+    if lower.contains("tonic") {
+        return Some("tonic");
+    }
+
+    None
 }
 
 fn active_proto_source(source: &str) -> String {

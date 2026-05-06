@@ -302,10 +302,10 @@ fn validate_completion_error_structured_contract() -> AndromedaResult<String> {
     let context = InvocationContext::new(TraceId::new(19), contract.required_permissions.clone());
     let outcome = runtime.execute_authorized(request, &procedure, &context)?;
 
-    if outcome.completion.status != CompletionStatus::Committed {
+    if outcome.completion.status() != CompletionStatus::Committed {
         return Err(protocol_error(format!(
             "unexpected completion status: {:?}",
-            outcome.completion.status
+            outcome.completion.status()
         )));
     }
 
@@ -322,7 +322,7 @@ fn validate_completion_error_structured_contract() -> AndromedaResult<String> {
 
     Ok(format!(
         "status={:?}, error={:?}, structured_parameters={}, result_columns={}",
-        outcome.completion.status,
+        outcome.completion.status(),
         error.kind(),
         structured_parameter_count,
         procedure.result_metadata.column_count

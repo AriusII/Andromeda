@@ -1,14 +1,15 @@
 //! B-Tree WAL record recovery promotion-gate tests.
 //!
-//! This module validates that B-Tree WAL record types are accepted as
-//! cataloged WAL variants and that recovery handlers fail-stop with a clear
-//! "not promoted" error while durable page-backed B-Tree replay is gated.
+//! This module validates that B-Tree WAL record types are accepted as cataloged
+//! WAL variants and that recovery handlers fail closed instead of applying
+//! inline durable B-Tree redo while that format is gated.
 //!
 //! # Scope
 //!
 //! - Verify BTreeInsert, BTreeDelete, BTreeSplit, BTreeMerge variants exist
 //! - Verify these variants are mapped to tags 23-26
-//! - Verify recovery handlers return promotion-gate errors with clear messages
+//! - Verify malformed recovery payloads return clear fail-closed errors
+//! - Verify valid recovery envelopes produce index-rebuild-required evidence
 //! - Verify B-Tree records require transaction IDs (like other mutations)
 //! - Verify non-B-Tree records are unaffected by B-Tree changes
 //! - Verify error messages include durable replay promotion context
@@ -18,6 +19,8 @@ use andromeda_storage::{
     Lsn, ReplayContext, ReplayOutcome, WalRecord, WalRecordKind, encode_wal_record,
     replay_wal_record, wal_record_kind_from_tag, wal_record_kind_tag,
 };
+
+const INDEX_REBUILD_PAYLOAD_MAGIC: &[u8; 8] = b"IDXRBV1\0";
 
 fn assert_btree_replay_stops_at_promotion_gate(kind: WalRecordKind, lsn: Lsn, payload: &[u8]) {
     let tx_id = TransactionId::new(1000 + lsn.get());
@@ -42,12 +45,24 @@ fn assert_btree_replay_stops_at_promotion_gate(kind: WalRecordKind, lsn: Lsn, pa
     assert_eq!(error.message(), stored_message);
     assert!(
         stored_message.contains(&format!("{kind:?}")),
-        "promotion-gate error should identify the record kind: {stored_message}"
+        "fail-closed error should identify the record kind: {stored_message}"
     );
     assert!(
-        stored_message.contains("not promoted") && stored_message.contains("idempotent"),
-        "promotion-gate error should explain why replay is gated: {stored_message}"
+        stored_message.contains("malformed"),
+        "fail-closed error should identify malformed B-Tree recovery payloads: {stored_message}"
     );
+}
+
+fn btree_rebuild_payload(operation_tag: u8, index_id: u64) -> Vec<u8> {
+    let mut payload = Vec::with_capacity(28);
+    payload.extend_from_slice(INDEX_REBUILD_PAYLOAD_MAGIC);
+    payload.extend_from_slice(&1u32.to_le_bytes());
+    payload.extend_from_slice(&0u32.to_le_bytes());
+    payload.push(1);
+    payload.push(operation_tag);
+    payload.extend_from_slice(&4096u16.to_le_bytes());
+    payload.extend_from_slice(&index_id.to_le_bytes());
+    payload
 }
 
 #[test]
@@ -203,7 +218,7 @@ fn btree_delete_record_survives_encoding_roundtrip() {
 }
 
 #[test]
-fn recovery_btree_insert_returns_promotion_gate_error() {
+fn recovery_btree_insert_malformed_payload_fails_closed() {
     assert_btree_replay_stops_at_promotion_gate(
         WalRecordKind::BTreeInsert,
         Lsn::new(1),
@@ -212,7 +227,7 @@ fn recovery_btree_insert_returns_promotion_gate_error() {
 }
 
 #[test]
-fn recovery_btree_delete_returns_promotion_gate_error() {
+fn recovery_btree_delete_malformed_payload_fails_closed() {
     assert_btree_replay_stops_at_promotion_gate(
         WalRecordKind::BTreeDelete,
         Lsn::new(2),
@@ -221,7 +236,7 @@ fn recovery_btree_delete_returns_promotion_gate_error() {
 }
 
 #[test]
-fn recovery_btree_split_returns_promotion_gate_error() {
+fn recovery_btree_split_malformed_payload_fails_closed() {
     assert_btree_replay_stops_at_promotion_gate(
         WalRecordKind::BTreeSplit,
         Lsn::new(3),
@@ -230,11 +245,44 @@ fn recovery_btree_split_returns_promotion_gate_error() {
 }
 
 #[test]
-fn recovery_btree_merge_returns_promotion_gate_error() {
+fn recovery_btree_merge_malformed_payload_fails_closed() {
     assert_btree_replay_stops_at_promotion_gate(
         WalRecordKind::BTreeMerge,
         Lsn::new(4),
         b"merge-data",
+    );
+}
+
+#[test]
+fn valid_btree_recovery_payload_records_rebuild_required_without_inline_redo() {
+    let tx_id = TransactionId::new(220);
+    let record = WalRecord::from_parts(
+        WalRecordKind::BTreeInsert,
+        Lsn::new(30),
+        None,
+        Some(tx_id),
+        btree_rebuild_payload(3, 55),
+    )
+    .expect("valid B-Tree WAL record");
+    let mut ctx = ReplayContext::new();
+
+    replay_wal_record(&mut ctx, &record).expect("valid B-Tree recovery payload should not apply");
+
+    assert_eq!(ctx.applied_count, 0);
+    assert_eq!(ctx.skipped_count, 1);
+    assert!(!ctx.has_errors());
+    assert_eq!(ctx.index_rebuild_required.len(), 1);
+
+    let evidence = &ctx.index_rebuild_required[0];
+    assert_eq!(evidence.kind, WalRecordKind::BTreeInsert);
+    assert_eq!(evidence.lsn, Lsn::new(30));
+    assert_eq!(evidence.transaction_id, Some(tx_id));
+    assert_eq!(evidence.index_id, 55);
+    assert!(
+        evidence.reason.contains("index rebuild required")
+            && evidence.reason.contains("instead of applying inline redo"),
+        "rebuild evidence must explain the gated durable redo path: {}",
+        evidence.reason
     );
 }
 
@@ -262,8 +310,8 @@ fn btree_error_messages_include_record_kind() {
         let error_record = &ctx.error_records[0];
         let error_msg = error_record.error.as_ref().unwrap();
         assert!(
-            error_msg.contains(&format!("{variant:?}")) && error_msg.contains("not promoted"),
-            "Error should mention the specific B-Tree gate: {}",
+            error_msg.contains(&format!("{variant:?}")) && error_msg.contains("malformed"),
+            "Error should mention the specific B-Tree fail-closed gate: {}",
             error_msg
         );
     }
@@ -330,8 +378,9 @@ fn btree_and_row_records_have_consistent_transaction_id_requirements() {
 
 #[test]
 fn gated_btree_replay_prevents_silent_data_loss() {
-    // This test documents the critical invariant: if B-Tree records exist in WAL,
-    // recovery MUST fail with a clear error, not silently ignore them.
+    // This test documents the critical invariant: if malformed B-Tree records
+    // exist in WAL, recovery MUST fail with a clear error, not silently ignore
+    // them or infer an unpromoted payload format.
 
     let tx_id = TransactionId::new(999);
     let btree_record = WalRecord::from_parts(
@@ -363,7 +412,7 @@ fn gated_btree_replay_prevents_silent_data_loss() {
 
     let error_msg = error.message();
     assert!(
-        error_msg.contains("BTreeInsert") && error_msg.contains("not promoted"),
+        error_msg.contains("BTreeInsert") && error_msg.contains("malformed"),
         "Error message must identify the gated B-Tree mutation: {error_msg}"
     );
 }

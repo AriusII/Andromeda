@@ -1,11 +1,14 @@
 #[derive(Debug, Clone)]
 pub(crate) struct HadrStatusReport {
+    pub(crate) contract_preview: bool,
+    pub(crate) durable_backend: bool,
     pub(crate) cluster_role: String,
     pub(crate) epoch: u64,
     pub(crate) current_primary: Option<u64>,
     pub(crate) replicas: Vec<ReplicaStatus>,
     pub(crate) durable_lsn: u64,
     pub(crate) committed_lsn: u64,
+    pub(crate) message: String,
 }
 
 #[derive(Debug, Clone)]
@@ -19,18 +22,25 @@ pub(crate) struct ReplicaStatus {
 
 #[derive(Debug, Clone)]
 pub(crate) struct QuorumStatusReport {
+    pub(crate) contract_preview: bool,
+    pub(crate) durable_backend: bool,
     pub(crate) total_members: usize,
     pub(crate) quorum_size: usize,
     pub(crate) member_ids: Vec<u64>,
     pub(crate) fencing_policy: String,
     pub(crate) fencing_status: String,
+    pub(crate) message: String,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct NodeManagementReport {
+    pub(crate) contract_preview: bool,
+    pub(crate) durable_backend: bool,
     pub(crate) action: String,
     pub(crate) node_id: Option<u64>,
     pub(crate) role: Option<String>,
+    pub(crate) membership_epoch: Option<u64>,
+    pub(crate) members: Vec<NodeMembershipMemberReport>,
     pub(crate) dry_run: bool,
     pub(crate) would_apply: bool,
     pub(crate) quorum_check: String,
@@ -42,22 +52,46 @@ pub(crate) struct NodeManagementReport {
 }
 
 #[derive(Debug, Clone)]
+pub(crate) struct NodeMembershipMemberReport {
+    pub(crate) node_id: u64,
+    pub(crate) role: String,
+    pub(crate) role_epoch: u64,
+}
+
+#[derive(Debug, Clone)]
 pub(crate) struct PromotionOutcome {
     pub(crate) success: bool,
+    pub(crate) dry_run: bool,
+    pub(crate) would_apply: bool,
+    pub(crate) contract_preview: bool,
+    pub(crate) durable_backend: bool,
     pub(crate) new_epoch: u64,
     pub(crate) promoted_replica_id: u64,
+    pub(crate) candidate_lsn: Option<u64>,
+    pub(crate) audit_lsn: Option<u64>,
+    pub(crate) committed_safe_lsn: Option<u64>,
+    pub(crate) quorum_size: Option<usize>,
+    pub(crate) granted_votes: Option<usize>,
+    pub(crate) fencing_primary_id: Option<u64>,
+    pub(crate) fencing_epoch: Option<u64>,
+    pub(crate) audit_log: Option<String>,
     pub(crate) message: String,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct DemotionOutcome {
     pub(crate) success: bool,
+    pub(crate) dry_run: bool,
+    pub(crate) would_apply: bool,
+    pub(crate) contract_preview: bool,
     pub(crate) new_primary_id: Option<u64>,
     pub(crate) message: String,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct FailoverPrepareReport {
+    pub(crate) dry_run: bool,
+    pub(crate) contract_preview: bool,
     pub(crate) ready_for_failover: bool,
     pub(crate) current_epoch: u64,
     pub(crate) quorum_size: usize,

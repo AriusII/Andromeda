@@ -49,10 +49,22 @@ pub fn decode_invocation_response(
                 "success response missing output_payload",
             )
         })?;
+        let transaction_id = transaction_id.ok_or_else(|| {
+            AndromedaError::new(
+                AndromedaErrorKind::Protocol,
+                "success response missing transaction_id",
+            )
+        })?;
+        if transaction_id.get() == 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Protocol,
+                "success response transaction_id must not be zero",
+            ));
+        }
 
         Ok(ExecutionResult::Success {
             invocation_id,
-            transaction_id: transaction_id.unwrap_or(TransactionId::new(0)),
+            transaction_id,
             output_payload: payload,
             row_count,
         })
@@ -101,7 +113,7 @@ fn validate_frame_sequence(frames: &[ResultFrame]) -> AndromedaResult<()> {
         }
     }
 
-    if !frames.last().map(|f| f.is_final).unwrap_or(false) {
+    if !matches!(frames.last(), Some(frame) if frame.is_final) {
         return Err(AndromedaError::new(
             AndromedaErrorKind::Protocol,
             "final frame not marked",
@@ -153,17 +165,16 @@ impl ResultStreamDecoder {
             ));
         }
 
-        if !inner.frames.is_empty() {
-            let max_seq = inner.frames.keys().max().copied().unwrap_or(0);
-            if frame.sequence_number > max_seq + 1 {
-                return Err(AndromedaError::new(
-                    AndromedaErrorKind::Protocol,
-                    format!(
-                        "frame sequence gap: max {} + 1, received {}",
-                        max_seq, frame.sequence_number
-                    ),
-                ));
-            }
+        if let Some(max_seq) = inner.frames.keys().max().copied()
+            && frame.sequence_number > max_seq + 1
+        {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Protocol,
+                format!(
+                    "frame sequence gap: max {} + 1, received {}",
+                    max_seq, frame.sequence_number
+                ),
+            ));
         }
 
         if frame.is_final {
@@ -265,7 +276,7 @@ mod tests {
     }
 
     #[test]
-    fn test_decode_success_response() {
+    fn test_decode_success_response() -> AndromedaResult<()> {
         let payload = make_test_payload();
 
         let result = decode_invocation_response(
@@ -276,26 +287,62 @@ mod tests {
             String::new(),
             Some(payload.clone()),
             100,
-        )
-        .expect("decode");
+        )?;
 
-        match result {
-            ExecutionResult::Success {
-                invocation_id,
-                transaction_id,
-                row_count,
-                ..
-            } => {
-                assert_eq!(invocation_id, InvocationId::new(1));
-                assert_eq!(transaction_id, TransactionId::new(42));
-                assert_eq!(row_count, 100);
-            }
-            _ => panic!("expected success result"),
-        }
+        let ExecutionResult::Success {
+            invocation_id,
+            transaction_id,
+            row_count,
+            ..
+        } = result
+        else {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Protocol,
+                "expected success result",
+            ));
+        };
+        assert_eq!(invocation_id, InvocationId::new(1));
+        assert_eq!(transaction_id, TransactionId::new(42));
+        assert_eq!(row_count, 100);
+        Ok(())
     }
 
     #[test]
-    fn test_decode_error_response() {
+    fn test_decode_success_response_rejects_missing_transaction_id() {
+        let payload = make_test_payload();
+
+        let result = decode_invocation_response(
+            InvocationId::new(1),
+            None,
+            true,
+            0,
+            String::new(),
+            Some(payload),
+            100,
+        );
+
+        assert!(matches!(result, Err(error) if error.kind() == AndromedaErrorKind::Protocol));
+    }
+
+    #[test]
+    fn test_decode_success_response_rejects_zero_transaction_id() {
+        let payload = make_test_payload();
+
+        let result = decode_invocation_response(
+            InvocationId::new(1),
+            Some(TransactionId::new(0)),
+            true,
+            0,
+            String::new(),
+            Some(payload),
+            100,
+        );
+
+        assert!(matches!(result, Err(error) if error.kind() == AndromedaErrorKind::Protocol));
+    }
+
+    #[test]
+    fn test_decode_error_response() -> AndromedaResult<()> {
         let result = decode_invocation_response(
             InvocationId::new(1),
             Some(TransactionId::new(42)),
@@ -304,27 +351,29 @@ mod tests {
             "execution failed".to_string(),
             None,
             0,
-        )
-        .expect("decode");
+        )?;
 
-        match result {
-            ExecutionResult::Error {
-                invocation_id,
-                error_code,
-                error_message,
-                transaction_id,
-            } => {
-                assert_eq!(invocation_id, InvocationId::new(1));
-                assert_eq!(error_code, 500);
-                assert_eq!(error_message, "execution failed");
-                assert_eq!(transaction_id, Some(TransactionId::new(42)));
-            }
-            _ => panic!("expected error result"),
-        }
+        let ExecutionResult::Error {
+            invocation_id,
+            error_code,
+            error_message,
+            transaction_id,
+        } = result
+        else {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Protocol,
+                "expected error result",
+            ));
+        };
+        assert_eq!(invocation_id, InvocationId::new(1));
+        assert_eq!(error_code, 500);
+        assert_eq!(error_message, "execution failed");
+        assert_eq!(transaction_id, Some(TransactionId::new(42)));
+        Ok(())
     }
 
     #[test]
-    fn test_result_stream_decoder_single_frame() {
+    fn test_result_stream_decoder_single_frame() -> AndromedaResult<()> {
         let decoder = ResultStreamDecoder::new();
         let frame = ResultFrame {
             sequence_number: 0,
@@ -332,15 +381,16 @@ mod tests {
             is_final: true,
         };
 
-        decoder.add_frame(frame).expect("add frame");
+        decoder.add_frame(frame)?;
         assert!(decoder.is_complete());
 
-        let data = decoder.finalize().expect("finalize");
+        let data = decoder.finalize()?;
         assert_eq!(data, vec![1, 2, 3, 4, 5]);
+        Ok(())
     }
 
     #[test]
-    fn test_result_stream_decoder_multiple_frames() {
+    fn test_result_stream_decoder_multiple_frames() -> AndromedaResult<()> {
         let decoder = ResultStreamDecoder::new();
 
         let frame1 = ResultFrame {
@@ -361,18 +411,19 @@ mod tests {
             is_final: true,
         };
 
-        decoder.add_frame(frame1).expect("add frame 1");
-        decoder.add_frame(frame2).expect("add frame 2");
-        decoder.add_frame(frame3).expect("add frame 3");
+        decoder.add_frame(frame1)?;
+        decoder.add_frame(frame2)?;
+        decoder.add_frame(frame3)?;
 
         assert!(decoder.is_complete());
 
-        let data = decoder.finalize().expect("finalize");
+        let data = decoder.finalize()?;
         assert_eq!(data, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        Ok(())
     }
 
     #[test]
-    fn test_result_stream_decoder_gap_detection() {
+    fn test_result_stream_decoder_gap_detection() -> AndromedaResult<()> {
         let decoder = ResultStreamDecoder::new();
 
         let frame1 = ResultFrame {
@@ -387,14 +438,15 @@ mod tests {
             is_final: true,
         };
 
-        decoder.add_frame(frame1).expect("add frame 1");
+        decoder.add_frame(frame1)?;
         let result = decoder.add_frame(frame2);
 
         assert!(result.is_err()); // Should detect gap
+        Ok(())
     }
 
     #[test]
-    fn test_result_stream_decoder_duplicate_detection() {
+    fn test_result_stream_decoder_duplicate_detection() -> AndromedaResult<()> {
         let decoder = ResultStreamDecoder::new();
 
         let frame1 = ResultFrame {
@@ -409,14 +461,15 @@ mod tests {
             is_final: true,
         };
 
-        decoder.add_frame(frame1).expect("add frame 1");
+        decoder.add_frame(frame1)?;
         let result = decoder.add_frame(frame2);
 
         assert!(result.is_err()); // Should detect duplicate
+        Ok(())
     }
 
     #[test]
-    fn test_result_stream_decoder_frame_count() {
+    fn test_result_stream_decoder_frame_count() -> AndromedaResult<()> {
         let decoder = ResultStreamDecoder::new();
 
         for i in 0..5 {
@@ -425,10 +478,11 @@ mod tests {
                 data: vec![i as u8; 10],
                 is_final: i == 4,
             };
-            decoder.add_frame(frame).expect("add frame");
+            decoder.add_frame(frame)?;
         }
 
         assert_eq!(decoder.frame_count(), 5);
         assert_eq!(decoder.reassembled_size(), 50);
+        Ok(())
     }
 }

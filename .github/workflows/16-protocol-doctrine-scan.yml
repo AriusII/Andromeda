@@ -11,71 +11,19 @@ permissions:
   contents: read
 
 jobs:
-  zero-rtt-lock:
-    name: zero-rtt-lock
+  protocol-doctrine-scan:
+    name: protocol-doctrine-scan
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/rust-setup
+      - name: Run protocol doctrine scan tests
+        run: python -m unittest discover -s .github/scripts/tests -p "test_protocol_doctrine_scan.py"
+      - name: Validate protocol doctrine
+        run: python .github/scripts/protocol_doctrine_scan.py --output target/protocol-doctrine-scan/report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          toolchain: stable
-      - name: Verify 0-RTT doctrine contract
-        run: cargo test -p andromeda-quic --test zero_rtt_doctrine_contract --locked
-
-  no-grpc-scan:
-    name: no-grpc-scan
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Scan for forbidden gRPC/tonic usage
-        shell: bash
-        run: |
-          set -euo pipefail
-          MATCHES="$(rg -n -i '\b(grpc|tonic)\b' crates/andromeda-proto crates/andromeda-quic crates/andromeda-exec | rg -v 'DOCTRINE_ALLOW' || true)"
-          if [ -n "$MATCHES" ]; then
-            echo "$MATCHES"
-            echo "::error::Doctrine breach: gRPC/tonic usage detected. Add DEC-XXX and DOCTRINE_ALLOW if intentional."
-            exit 1
-          fi
-          echo "no-grpc-scan passed"
-
-  no-runtime-json-scan:
-    name: no-runtime-json-scan
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Scan for runtime JSON doctrine breaches
-        shell: bash
-        run: |
-          set -euo pipefail
-          MATCHES="$(rg -n -i 'serde_json|runtime json' crates/andromeda-proto crates/andromeda-quic | rg -v 'DOCTRINE_ALLOW' || true)"
-          if [ -n "$MATCHES" ]; then
-            echo "$MATCHES"
-            echo "::error::Doctrine breach: runtime JSON default format detected. Add DEC-XXX and DOCTRINE_ALLOW if intentional."
-            exit 1
-          fi
-          echo "no-runtime-json-scan passed"
-
-  proto-schema-governance:
-    name: proto-schema-governance
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Validate proto schema governance
-        shell: bash
-        run: |
-          set -euo pipefail
-          PROTO_COUNT="$(find crates/andromeda-proto/proto -name '*.proto' | wc -l | tr -d ' ')"
-          if [ "${PROTO_COUNT}" = "0" ]; then
-            echo "::error::No .proto files found under crates/andromeda-proto/proto"
-            exit 1
-          fi
-
-          MATCHES="$(rg -n -i '^\s*(service|rpc)\s+' crates/andromeda-proto/proto | rg -v 'DOCTRINE_ALLOW' || true)"
-          if [ -n "$MATCHES" ]; then
-            echo "$MATCHES"
-            echo "::error::Doctrine breach: ad-hoc service/rpc definitions detected in .proto contracts."
-            exit 1
-          fi
-
-          echo "proto-schema-governance passed with ${PROTO_COUNT} proto files"
+          name: protocol-doctrine-scan
+          path: target/protocol-doctrine-scan/report.json
+          retention-days: 14

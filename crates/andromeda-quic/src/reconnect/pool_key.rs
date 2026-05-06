@@ -1,14 +1,18 @@
 use andromeda_core::{AndromedaErrorKind, AndromedaResult};
 use andromeda_observe::CertificateIdentity;
 
-use crate::{SurfacePlane, mtls_identity::plane_to_required_surface_scope};
+use crate::{
+    SurfacePlane,
+    mtls_identity::{plane_to_required_surface_scope, validate_fingerprint},
+};
 
 use super::pool_error;
 
-/// Connection pool key: a server certificate identity scoped to one surface plane.
+/// Connection pool key: a server certificate fingerprint scoped to one surface plane.
 ///
 /// The runtime may have different socket addresses for the same logical server,
-/// but pooling is keyed by authenticated server fingerprint and surface plane.
+/// but pooling is keyed by authenticated SHA-256 certificate fingerprint and
+/// surface plane.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ConnectionPoolKey {
     server_fingerprint: String,
@@ -43,13 +47,7 @@ impl ConnectionPoolKey {
     }
 
     pub fn validate(&self) -> AndromedaResult<()> {
-        if self.server_fingerprint.trim().is_empty() {
-            return Err(pool_error(
-                AndromedaErrorKind::Security,
-                "server identity fingerprint cannot be empty",
-            ));
-        }
-        Ok(())
+        validate_fingerprint(&self.server_fingerprint)
     }
 
     pub fn server_fingerprint(&self) -> &str {

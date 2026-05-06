@@ -15,9 +15,238 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use andromeda_observe::CertificateIdentity;
+use andromeda_observe::{CertificateIdentity, SurfaceScope};
 
-use crate::mtls_identity::RawCertificate;
+use crate::{
+    CertificateContinuityDecision, CertificateContinuityPolicy, CertificateRotationDeclaration,
+    ConnectionPool, ConnectionPoolKey, ConnectionPoolPolicy, PoolAdmission, PoolConnectionId,
+    ReconnectPolicy, ReconnectState, RetryAdmissionDecision, RetryAdmissionPolicy,
+    RetryIdempotency, SurfacePlane, ZeroRttAdmissionDecision, ZeroRttAdmissionPolicy,
+    ZeroRttReplayClass, mtls_identity::RawCertificate,
+};
+
+/// Runtime-free policy bundle used by Quinn admission wiring.
+///
+/// The concrete Quinn layer can build this once per client runtime and feed it
+/// handshake evidence, pool health, failure classification, and request
+/// replay class without exposing Quinn handles to the policy model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct QuinnRuntimeAdmissionPolicy {
+    pub pool: ConnectionPoolPolicy,
+    pub reconnect: ReconnectPolicy,
+    pub retry: RetryAdmissionPolicy,
+    pub continuity: CertificateContinuityPolicy,
+    pub zero_rtt: ZeroRttAdmissionPolicy,
+}
+
+impl QuinnRuntimeAdmissionPolicy {
+    pub const fn conservative() -> Self {
+        Self {
+            pool: ConnectionPoolPolicy::conservative(),
+            reconnect: ReconnectPolicy::conservative(),
+            retry: RetryAdmissionPolicy::idempotent_only(),
+            continuity: CertificateContinuityPolicy::strict(),
+            zero_rtt: ZeroRttAdmissionPolicy::doctrine_v1_disabled(),
+        }
+    }
+}
+
+impl Default for QuinnRuntimeAdmissionPolicy {
+    fn default() -> Self {
+        Self::conservative()
+    }
+}
+
+/// Deterministic Quinn admission planner.
+///
+/// The planner owns only pool metadata and policy decisions. It does not open
+/// sockets, spawn timers, hold `quinn::Connection`, or perform TLS I/O.
+#[derive(Debug, Clone)]
+pub struct QuinnAdmissionPlanner {
+    policy: QuinnRuntimeAdmissionPolicy,
+    pool: ConnectionPool,
+}
+
+impl QuinnAdmissionPlanner {
+    pub fn new(policy: QuinnRuntimeAdmissionPolicy) -> AndromedaResult<Self> {
+        Ok(Self {
+            pool: ConnectionPool::new(policy.pool)?,
+            policy,
+        })
+    }
+
+    pub fn conservative() -> AndromedaResult<Self> {
+        Self::new(QuinnRuntimeAdmissionPolicy::conservative())
+    }
+
+    pub const fn policy(&self) -> QuinnRuntimeAdmissionPolicy {
+        self.policy
+    }
+
+    pub const fn pool(&self) -> &ConnectionPool {
+        &self.pool
+    }
+
+    pub fn admit_request(
+        &mut self,
+        request: QuinnAdmissionRequest<'_>,
+    ) -> AndromedaResult<QuinnAdmissionDecision> {
+        let pool_key =
+            ConnectionPoolKey::from_server_identity(request.presented_identity, request.plane)?;
+
+        let continuity = if let Some(previous_key) = request.previous_pool_key {
+            Some(self.policy.continuity.validate_reconnect(
+                previous_key,
+                request.presented_identity,
+                request.plane,
+                request.declared_rotation,
+            )?)
+        } else {
+            None
+        };
+
+        let zero_rtt = self.policy.zero_rtt.evaluate(request.zero_rtt_class);
+        let retry = self.evaluate_retry(request.retry_after_failure)?;
+        let pool_admission = if retry.allows_pool_admission() {
+            Some(self.pool.admit_or_reuse(pool_key.clone(), request.now_ms)?)
+        } else {
+            None
+        };
+
+        Ok(QuinnAdmissionDecision {
+            pool_key,
+            pool_admission,
+            continuity,
+            zero_rtt,
+            retry,
+        })
+    }
+
+    fn evaluate_retry(
+        &mut self,
+        retry: Option<QuinnRetryRequest>,
+    ) -> AndromedaResult<QuinnRetryOutcome> {
+        let Some(retry) = retry else {
+            return Ok(QuinnRetryOutcome::NotEvaluated);
+        };
+
+        if let Some(connection_id) = retry.previous_connection_id {
+            self.pool.mark_unhealthy(connection_id)?;
+        }
+
+        if !retry.failure.is_retryable_by_transport() {
+            return Ok(QuinnRetryOutcome::TransportNotRetryable {
+                failure: retry.failure,
+            });
+        }
+
+        self.policy
+            .retry
+            .admit_after_failure(
+                retry.reconnect_state,
+                self.policy.reconnect,
+                retry.idempotency,
+                retry.failed_attempt,
+            )
+            .map(QuinnRetryOutcome::RetryPolicy)
+    }
+}
+
+/// Evidence available to the Quinn runtime before request dispatch.
+#[derive(Debug, Clone, Copy)]
+pub struct QuinnAdmissionRequest<'a> {
+    pub presented_identity: &'a CertificateIdentity,
+    pub plane: SurfacePlane,
+    pub now_ms: u64,
+    pub previous_pool_key: Option<&'a ConnectionPoolKey>,
+    pub declared_rotation: Option<&'a CertificateRotationDeclaration>,
+    pub zero_rtt_class: ZeroRttReplayClass,
+    pub retry_after_failure: Option<QuinnRetryRequest>,
+}
+
+impl<'a> QuinnAdmissionRequest<'a> {
+    pub const fn initial(
+        presented_identity: &'a CertificateIdentity,
+        plane: SurfacePlane,
+        now_ms: u64,
+        zero_rtt_class: ZeroRttReplayClass,
+    ) -> Self {
+        Self {
+            presented_identity,
+            plane,
+            now_ms,
+            previous_pool_key: None,
+            declared_rotation: None,
+            zero_rtt_class,
+            retry_after_failure: None,
+        }
+    }
+}
+
+/// Failure evidence projected from Quinn connection or stream errors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct QuinnRetryRequest {
+    pub previous_connection_id: Option<PoolConnectionId>,
+    pub failure: QuinnNetworkFailureKind,
+    pub reconnect_state: ReconnectState,
+    pub idempotency: RetryIdempotency,
+    pub failed_attempt: u32,
+}
+
+/// Runtime-independent QUIC failure classes used for retry admission.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum QuinnNetworkFailureKind {
+    ConnectionLost,
+    ConnectionReset,
+    StreamReset,
+    TimedOut,
+    EndpointClosed,
+    ApplicationClosed,
+    AuthenticationFailed,
+    ProtocolViolation,
+}
+
+impl QuinnNetworkFailureKind {
+    pub const fn is_retryable_by_transport(self) -> bool {
+        matches!(
+            self,
+            Self::ConnectionLost | Self::ConnectionReset | Self::StreamReset | Self::TimedOut
+        )
+    }
+}
+
+/// Unified decision the Quinn runtime can consume before opening/reusing a
+/// connection and before admitting 0-RTT or retrying a failed dispatch.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QuinnAdmissionDecision {
+    pub pool_key: ConnectionPoolKey,
+    pub pool_admission: Option<PoolAdmission>,
+    pub continuity: Option<CertificateContinuityDecision>,
+    pub zero_rtt: ZeroRttAdmissionDecision,
+    pub retry: QuinnRetryOutcome,
+}
+
+/// Retry decision after Quinn failures have been classified at the transport
+/// boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QuinnRetryOutcome {
+    NotEvaluated,
+    TransportNotRetryable { failure: QuinnNetworkFailureKind },
+    RetryPolicy(RetryAdmissionDecision),
+}
+
+impl QuinnRetryOutcome {
+    pub const fn allows_pool_admission(self) -> bool {
+        matches!(
+            self,
+            Self::NotEvaluated
+                | Self::RetryPolicy(RetryAdmissionDecision::Admit {
+                    next_attempt: _,
+                    delay_ms: _,
+                })
+        )
+    }
+}
 
 /// Adapter wrapping `quinn::Connection` for Andromeda frame transport.
 ///
@@ -54,6 +283,18 @@ impl QuinnConnectionAdapter {
     /// Returns the certificate identity of the peer, if present.
     pub fn certificate_identity(&self) -> Option<&CertificateIdentity> {
         self.identity.as_ref()
+    }
+
+    /// Builds the runtime-free connection pool key from the authenticated
+    /// server identity extracted from the Quinn handshake.
+    pub fn connection_pool_key(
+        &self,
+        plane: SurfacePlane,
+    ) -> AndromedaResult<Option<ConnectionPoolKey>> {
+        self.identity
+            .as_ref()
+            .map(|identity| ConnectionPoolKey::from_server_identity(identity, plane))
+            .transpose()
     }
 
     /// Returns the raw peer certificate chain exposed by Quinn.
@@ -245,6 +486,7 @@ impl BidiStream {
 /// extracting certificate identity for authorization.
 pub struct QuicServer {
     endpoint: quinn::Endpoint,
+    required_scope: SurfaceScope,
 }
 
 impl QuicServer {
@@ -257,6 +499,16 @@ impl QuicServer {
     /// # Errors
     /// - `Transport` if binding to the address fails
     pub fn new(addr: SocketAddr, server_config: quinn::ServerConfig) -> AndromedaResult<Self> {
+        Self::with_required_scope(addr, server_config, SurfaceScope::Application)
+    }
+
+    /// Creates a new QUIC server with the certificate surface scope to bind
+    /// to accepted peer identities.
+    pub fn with_required_scope(
+        addr: SocketAddr,
+        server_config: quinn::ServerConfig,
+        required_scope: SurfaceScope,
+    ) -> AndromedaResult<Self> {
         let socket = std::net::UdpSocket::bind(addr).map_err(|e| {
             AndromedaError::new(
                 AndromedaErrorKind::Transport,
@@ -277,7 +529,10 @@ impl QuicServer {
             )
         })?;
 
-        Ok(Self { endpoint })
+        Ok(Self {
+            endpoint,
+            required_scope,
+        })
     }
 
     /// Returns the local socket address the server is listening on.
@@ -301,7 +556,7 @@ impl QuicServer {
             })?;
 
             let peer_certificates = extract_peer_certificates(&conn);
-            let identity = None;
+            let identity = extract_certificate_identity(&peer_certificates, self.required_scope)?;
 
             Ok(QuinnConnectionAdapter::with_peer_certificates(
                 conn,
@@ -328,6 +583,7 @@ impl QuicServer {
 pub struct QuicClient {
     endpoint: quinn::Endpoint,
     client_config: quinn::ClientConfig,
+    required_scope: SurfaceScope,
 }
 
 impl QuicClient {
@@ -339,6 +595,15 @@ impl QuicClient {
     /// # Errors
     /// - `Transport` if endpoint creation fails
     pub fn new(client_config: quinn::ClientConfig) -> AndromedaResult<Self> {
+        Self::with_required_scope(client_config, SurfaceScope::Application)
+    }
+
+    /// Creates a new QUIC client with the certificate surface scope to bind
+    /// to the connected server identity.
+    pub fn with_required_scope(
+        client_config: quinn::ClientConfig,
+        required_scope: SurfaceScope,
+    ) -> AndromedaResult<Self> {
         let socket =
             std::net::UdpSocket::bind(SocketAddr::from(([0, 0, 0, 0], 0))).map_err(|e| {
                 AndromedaError::new(
@@ -363,6 +628,7 @@ impl QuicClient {
         Ok(Self {
             endpoint,
             client_config,
+            required_scope,
         })
     }
 
@@ -397,7 +663,7 @@ impl QuicClient {
         })?;
 
         let peer_certificates = extract_peer_certificates(&conn);
-        let identity = None;
+        let identity = extract_certificate_identity(&peer_certificates, self.required_scope)?;
 
         Ok(QuinnConnectionAdapter::with_peer_certificates(
             conn,
@@ -427,4 +693,14 @@ fn extract_peer_certificates(conn: &quinn::Connection) -> Vec<RawCertificate> {
         .iter()
         .map(|cert| RawCertificate::new(cert.as_ref().to_vec()))
         .collect()
+}
+
+fn extract_certificate_identity(
+    peer_certificates: &[RawCertificate],
+    required_scope: SurfaceScope,
+) -> AndromedaResult<Option<CertificateIdentity>> {
+    peer_certificates
+        .first()
+        .map(|cert| cert.to_certificate_identity(required_scope))
+        .transpose()
 }

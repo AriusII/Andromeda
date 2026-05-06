@@ -38,6 +38,13 @@ impl DurableAuditReplayQuery {
         Self::default()
     }
 
+    pub const fn has_filter(&self) -> bool {
+        self.family.is_some()
+            || self.trace_id.is_some()
+            || self.principal_id.is_some()
+            || self.lsn_range.is_some()
+    }
+
     pub fn validate(&self) -> AndromedaResult<()> {
         if let Some(trace_id) = self.trace_id
             && trace_id.is_zero()
@@ -67,4 +74,71 @@ impl DurableAuditReplayQuery {
         }
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DurableAuditReplayWindow {
+    pub limit: usize,
+    pub offset: usize,
+}
+
+impl DurableAuditReplayWindow {
+    pub const ALL: Self = Self {
+        limit: usize::MAX,
+        offset: 0,
+    };
+
+    pub const fn new(limit: usize, offset: usize) -> Self {
+        Self { limit, offset }
+    }
+
+    pub fn validate(self) -> AndromedaResult<()> {
+        if self.limit == 0 {
+            return Err(observe_error(
+                "durable audit replay window limit must be non-zero",
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl Default for DurableAuditReplayWindow {
+    fn default() -> Self {
+        Self::ALL
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DurableAuditReplayEvidence {
+    pub records_scanned: usize,
+    pub records_matched: usize,
+    pub records_returned: usize,
+    pub filter_applied: bool,
+    pub limit: usize,
+    pub offset: usize,
+    pub truncated: bool,
+    pub first_returned_lsn: Option<u64>,
+    pub last_returned_lsn: Option<u64>,
+}
+
+impl DurableAuditReplayEvidence {
+    pub const fn empty(query: &DurableAuditReplayQuery, window: DurableAuditReplayWindow) -> Self {
+        Self {
+            records_scanned: 0,
+            records_matched: 0,
+            records_returned: 0,
+            filter_applied: query.has_filter(),
+            limit: window.limit,
+            offset: window.offset,
+            truncated: false,
+            first_returned_lsn: None,
+            last_returned_lsn: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DurableAuditReplayResult {
+    pub evidence: DurableAuditReplayEvidence,
+    pub records: Vec<super::DurableAuditReplayRecord>,
 }

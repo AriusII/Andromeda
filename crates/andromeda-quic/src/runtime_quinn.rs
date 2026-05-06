@@ -18,7 +18,7 @@ use rustls::{
 };
 
 use crate::{
-    EarlyDataPolicy,
+    EarlyDataPolicy, ZeroRttAdmissionDecision, ZeroRttAdmissionPolicy, ZeroRttReplayClass,
     mtls_identity::{ParsedCertificate, RawCertificate},
 };
 
@@ -37,16 +37,6 @@ pub(crate) fn runtime_quinn_dependencies_available() -> bool {
     let _ = core::any::type_name::<tokio::runtime::Handle>();
 
     true
-}
-
-/// Replay class used by the TLS runtime adapter when evaluating 0-RTT policy.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
-pub(crate) enum RequestReplayClass {
-    /// Request may mutate durable or externally visible state.
-    Mutating,
-    /// Request is replay-safe under the caller's RPC contract.
-    ReplaySafe,
 }
 
 /// TLS early-data policy applied to rustls configs before any Quinn wiring.
@@ -69,11 +59,22 @@ impl TlsEarlyDataPolicy {
         self.early_data
     }
 
+    /// Returns the runtime-free 0-RTT admission policy represented here.
+    pub(crate) const fn zero_rtt_admission_policy(&self) -> ZeroRttAdmissionPolicy {
+        ZeroRttAdmissionPolicy::from_early_data_policy(self.early_data)
+    }
+
+    /// Returns the full 0-RTT admission decision for a request class.
+    pub(crate) const fn zero_rtt_decision_for(
+        &self,
+        class: ZeroRttReplayClass,
+    ) -> ZeroRttAdmissionDecision {
+        self.zero_rtt_admission_policy().evaluate(class)
+    }
+
     /// Returns whether TLS 0-RTT may be used for a request replay class.
-    pub(crate) const fn allows_early_data_for(&self, _class: RequestReplayClass) -> bool {
-        match self.early_data {
-            EarlyDataPolicy::Disabled => false,
-        }
+    pub(crate) const fn allows_early_data_for(&self, class: ZeroRttReplayClass) -> bool {
+        self.zero_rtt_decision_for(class).is_admitted()
     }
 
     fn apply_to_server_config(&self, config: &mut rustls::ServerConfig) {
@@ -135,7 +136,7 @@ impl RuntimeQuinnTlsConfig {
     pub(crate) const fn disables_zero_rtt_for_mutating_requests(&self) -> bool {
         !self
             .early_data_policy
-            .allows_early_data_for(RequestReplayClass::Mutating)
+            .allows_early_data_for(ZeroRttReplayClass::MutatingProcedure)
     }
 }
 
@@ -454,12 +455,12 @@ mod tests {
         assert!(
             !bundle
                 .early_data_policy()
-                .allows_early_data_for(RequestReplayClass::Mutating)
+                .allows_early_data_for(ZeroRttReplayClass::MutatingProcedure)
         );
         assert!(
             !bundle
                 .early_data_policy()
-                .allows_early_data_for(RequestReplayClass::ReplaySafe)
+                .allows_early_data_for(ZeroRttReplayClass::ReadOnlyManifest)
         );
         assert_eq!(bundle.server.max_early_data_size, 0);
         assert!(!bundle.server.send_half_rtt_data);

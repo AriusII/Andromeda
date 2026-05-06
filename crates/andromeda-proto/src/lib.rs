@@ -192,7 +192,7 @@ pub use generated::{
     PROTOCOL_PACKAGE, decode_generated_message, descriptor_set_bytes, descriptor_set_hash,
     encode_generated_message, frame_envelope_hash, protocol_layout,
     validate_catalog_procedure_manifest_resolution_request,
-    validate_catalog_procedure_manifest_resolution_response,
+    validate_catalog_procedure_manifest_resolution_response, validate_generated_rpc_completion,
 };
 pub use manifest::*;
 pub use payload::*;

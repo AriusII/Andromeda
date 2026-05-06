@@ -26,6 +26,8 @@ pub(super) fn run_hadr_failover_prepare(args: &[String]) -> AndromedaResult<()> 
 
     let ready = blocking_issues.is_empty();
     let report = FailoverPrepareReport {
+        dry_run: true,
+        contract_preview: true,
         ready_for_failover: ready,
         current_epoch: 42,
         quorum_size,
@@ -36,9 +38,9 @@ pub(super) fn run_hadr_failover_prepare(args: &[String]) -> AndromedaResult<()> 
         remediation_steps,
         fencing_policy: "QuorumEnforced".to_string(),
         message: if ready {
-            "Failover pre-validation passed: cluster is ready".to_string()
+            "contract preview dry-run: failover pre-validation passed, but no durable HADR backend is wired".to_string()
         } else {
-            "Failover pre-validation incomplete: additional checks required".to_string()
+            "contract preview dry-run: failover pre-validation incomplete and no durable HADR backend is wired".to_string()
         },
     };
 

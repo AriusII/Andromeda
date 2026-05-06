@@ -1,6 +1,6 @@
 use andromeda_core::{AndromedaResult, InvocationId, TransactionId};
 use andromeda_storage::{
-    DurableTransactionState, Lsn, WalRecord, summarize_transactions_from_records,
+    DurableTransactionState, Lsn, WalRecord, WalRecordKind, summarize_transactions_from_records,
 };
 
 use crate::CompletionStatus;
@@ -81,7 +81,7 @@ impl CompletionRecoveryExpectation {
         if let Some(journal_record) = self.journal_record {
             journal_record.validate()?;
             if journal_record.invocation_id != self.invocation_id
-                || journal_record.transaction_id != self.transaction_id
+                || journal_record.transaction_id != Some(self.transaction_id)
             {
                 return Err(completion_journal_error(
                     "completion recovery expectation journal identity mismatch",
@@ -171,21 +171,35 @@ pub fn reconcile_completion_recovery_from_wal(
                 .iter()
                 .find(|summary| summary.transaction_id == expectation.transaction_id);
 
+            let terminal_lsn = terminal_lsn_evidence(durable_records, expectation.transaction_id);
+
             match summary {
-                Some(summary) if summary.commit_lsn.is_some() && summary.rollback_lsn.is_some() => {
+                Some(summary)
+                    if terminal_lsn.commit.is_some() && terminal_lsn.rollback.is_some() =>
+                {
                     completion_recovery_ambiguous(
                         *expectation,
                         durable_lsn,
                         Some(DurableTransactionState::Incomplete),
-                        summary.last_lsn,
+                        terminal_lsn.latest().unwrap_or(summary.last_lsn),
                         CompletionRecoveryAmbiguity::ConflictingTerminalWalEvidence,
                     )
                 }
                 Some(summary) if summary.state == DurableTransactionState::Committed => {
-                    completion_recovery_committed(*expectation, durable_lsn, summary.commit_lsn)
+                    completion_recovery_committed(
+                        *expectation,
+                        durable_records,
+                        durable_lsn,
+                        terminal_lsn.commit,
+                    )
                 }
                 Some(summary) if summary.state == DurableTransactionState::RolledBack => {
-                    completion_recovery_rolled_back(*expectation, durable_lsn, summary.rollback_lsn)
+                    completion_recovery_rolled_back(
+                        *expectation,
+                        durable_records,
+                        durable_lsn,
+                        terminal_lsn.rollback,
+                    )
                 }
                 Some(summary) => {
                     if let Some(journal_record) = expectation.journal_record {
@@ -246,6 +260,7 @@ pub fn reconcile_completion_recovery_from_wal(
 
 fn completion_recovery_committed(
     expectation: CompletionRecoveryExpectation,
+    durable_records: &[WalRecord],
     durable_lsn: Lsn,
     commit_lsn: Option<Lsn>,
 ) -> CompletionRecoveryRecord {
@@ -261,8 +276,11 @@ fn completion_recovery_committed(
         );
     }
     if let Some(journal_record) = expectation.journal_record
-        && (journal_record.terminal_lsn != commit_lsn
-            || matches!(journal_record.durable_lsn, Some(journal_durable_lsn) if journal_durable_lsn > durable_lsn))
+        && (!journal_terminal_lsn_is_present(
+            journal_record,
+            durable_records,
+            WalRecordKind::TxCommit,
+        ) || matches!(journal_record.durable_lsn, Some(journal_durable_lsn) if journal_durable_lsn > durable_lsn))
     {
         return completion_recovery_ambiguous(
             expectation,
@@ -317,7 +335,7 @@ fn completion_recovery_committed(
         transaction_id: expectation.transaction_id,
         status: CompletionRecoveryStatus::Completed,
         transaction_state: Some(DurableTransactionState::Committed),
-        terminal_lsn: commit_lsn,
+        terminal_lsn: journal_or_canonical_terminal_lsn(expectation, commit_lsn),
         durable_lsn,
         rows_affected,
         result_row_count_exact,
@@ -327,6 +345,7 @@ fn completion_recovery_committed(
 
 fn completion_recovery_rolled_back(
     expectation: CompletionRecoveryExpectation,
+    durable_records: &[WalRecord],
     durable_lsn: Lsn,
     rollback_lsn: Option<Lsn>,
 ) -> CompletionRecoveryRecord {
@@ -342,8 +361,11 @@ fn completion_recovery_rolled_back(
         );
     }
     if let Some(journal_record) = expectation.journal_record
-        && (journal_record.terminal_lsn != rollback_lsn
-            || matches!(journal_record.durable_lsn, Some(journal_durable_lsn) if journal_durable_lsn > durable_lsn))
+        && (!journal_terminal_lsn_is_present(
+            journal_record,
+            durable_records,
+            WalRecordKind::TxRollback,
+        ) || matches!(journal_record.durable_lsn, Some(journal_durable_lsn) if journal_durable_lsn > durable_lsn))
     {
         return completion_recovery_ambiguous(
             expectation,
@@ -359,7 +381,7 @@ fn completion_recovery_rolled_back(
         transaction_id: expectation.transaction_id,
         status: CompletionRecoveryStatus::RolledBack,
         transaction_state: Some(DurableTransactionState::RolledBack),
-        terminal_lsn: rollback_lsn,
+        terminal_lsn: journal_or_canonical_terminal_lsn(expectation, rollback_lsn),
         durable_lsn,
         rows_affected: Some(0),
         result_row_count_exact: Some(0),
@@ -385,4 +407,74 @@ fn completion_recovery_ambiguous(
         result_row_count_exact: None,
         ambiguity: Some(ambiguity),
     }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct TerminalLsnEvidence {
+    commit: Option<Lsn>,
+    rollback: Option<Lsn>,
+}
+
+impl TerminalLsnEvidence {
+    fn latest(self) -> Option<Lsn> {
+        match (self.commit, self.rollback) {
+            (Some(commit), Some(rollback)) => Some(commit.max(rollback)),
+            (Some(commit), None) => Some(commit),
+            (None, Some(rollback)) => Some(rollback),
+            (None, None) => None,
+        }
+    }
+}
+
+fn terminal_lsn_evidence(
+    durable_records: &[WalRecord],
+    transaction_id: TransactionId,
+) -> TerminalLsnEvidence {
+    TerminalLsnEvidence {
+        commit: first_terminal_lsn(durable_records, transaction_id, WalRecordKind::TxCommit),
+        rollback: first_terminal_lsn(durable_records, transaction_id, WalRecordKind::TxRollback),
+    }
+}
+
+fn first_terminal_lsn(
+    durable_records: &[WalRecord],
+    transaction_id: TransactionId,
+    kind: WalRecordKind,
+) -> Option<Lsn> {
+    durable_records
+        .iter()
+        .filter(|record| {
+            record.header.kind == kind && record.header.transaction_id == Some(transaction_id)
+        })
+        .map(|record| record.header.lsn)
+        .min()
+}
+
+fn journal_terminal_lsn_is_present(
+    journal_record: CompletionJournalRecord,
+    durable_records: &[WalRecord],
+    kind: WalRecordKind,
+) -> bool {
+    let Some(transaction_id) = journal_record.transaction_id else {
+        return false;
+    };
+    let Some(terminal_lsn) = journal_record.terminal_lsn else {
+        return false;
+    };
+
+    durable_records.iter().any(|record| {
+        record.header.kind == kind
+            && record.header.transaction_id == Some(transaction_id)
+            && record.header.lsn == terminal_lsn
+    })
+}
+
+fn journal_or_canonical_terminal_lsn(
+    expectation: CompletionRecoveryExpectation,
+    canonical_lsn: Option<Lsn>,
+) -> Option<Lsn> {
+    expectation
+        .journal_record
+        .and_then(|record| record.terminal_lsn)
+        .or(canonical_lsn)
 }

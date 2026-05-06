@@ -4,8 +4,8 @@
 //! - Deterministic extent-to-file mapping.
 //! - WAL-before-page remains enforced by higher layers; `durable_lsn` is accepted but
 //!   not interpreted here.
-//! - Page-integrity checks are explicit about current capability. Header CRC stamping
-//!   is disabled until page-header fields are persisted by the page codec.
+//! - Page-integrity checks are opt-in per manager and validate persisted layout bytes
+//!   when `PageIntegrityMode::HeaderCrc32` is enabled.
 
 mod atomic_write;
 mod error;

@@ -12,28 +12,28 @@
 //!
 //! Every `WalRecordKind` variant must have an associated handler. Handlers
 //! may be:
-//! * **Implemented** - actively replay the operation (9 handlers, 34.6%)
+//! * **Implemented** - actively replay the operation (12 handlers, 46.1%)
 //! * **Deferred** - explicit fail-stop until payload and idempotency contracts
-//!   are promoted (17 handlers, 65.4%)
+//!   are promoted (14 handlers, 53.8%)
 //! * **Deprecated** - identified as obsolete with error messages (0 handlers, 0%)
 //!
-//! ## Implemented Handlers (9)
+//! ## Implemented Handlers (12)
 //! 1. TxBegin - skipped (transaction context pre-exists)
 //! 2. TxCommit - skipped (commit determined by WAL presence)
 //! 3. TxRollback - skipped (deferred to explicit undo phase)
-//! 4. CheckpointBegin - skipped (informational boundary)
-//! 5. CheckpointEnd - skipped (informational boundary)
-//! 6. SnapshotBegin - skipped (informational boundary)
-//! 7. SnapshotEnd - skipped (informational boundary)
-//! 8. ManifestSwitch - applied when manifest validation succeeds
-//! 9. SecurityAuditAppend - skipped (audit is write-only in recovery)
+//! 4. RowInsert - HREDOV1 heap row redo
+//! 5. RowUpdate - HREDOV1 close old slot + insert new slot redo
+//! 6. RowDelete - HREDOV1 heap tombstone redo
+//! 7. CheckpointBegin - skipped (informational boundary)
+//! 8. CheckpointEnd - skipped (informational boundary)
+//! 9. SnapshotBegin - skipped (informational boundary)
+//! 10. SnapshotEnd - skipped (informational boundary)
+//! 11. ManifestSwitch - applied when manifest validation succeeds
+//! 12. SecurityAuditAppend - skipped (audit is write-only in recovery)
 //!
-//! ## Deferred Handlers (17)
+//! ## Deferred Handlers (14)
 //! 10. PageAllocate - page inventory
 //! 11. PageFormat - page format version
-//! 12. RowInsert - heap page replay
-//! 13. RowUpdate - heap page updates
-//! 14. RowDelete - deletion markers
 //! 15. IndexInsert - secondary index replay
 //! 16. IndexDelete - secondary index replay
 //! 17. MvccVersionCreate - MVCC version store
@@ -84,11 +84,13 @@ use super::storage_error;
 mod boundary;
 mod context;
 mod deferred;
+mod heap_redo;
 mod result;
 
 use boundary::*;
-pub use context::{ManifestSwitchRecoveryTrace, ReplayContext};
+pub use context::{IndexRebuildRequiredEvidence, ManifestSwitchRecoveryTrace, ReplayContext};
 use deferred::*;
+pub use heap_redo::{HeapRedoPageState, HeapRedoSlotState};
 pub use result::{ReplayOutcome, ReplayResult};
 
 /// Replay a single WAL record in recovery context.
@@ -301,8 +303,8 @@ impl HandlerCoverageMetrics {
     pub const fn current() -> Self {
         Self {
             total_kinds: 26,
-            implemented_count: 9,
-            future_work_count: 17,
+            implemented_count: 12,
+            future_work_count: 14,
             missing_count: 0,
         }
     }
@@ -374,12 +376,12 @@ mod tests {
         let metrics = HandlerCoverageMetrics::current();
 
         assert_eq!(metrics.total_kinds, 26);
-        assert_eq!(metrics.implemented_count, 9);
-        assert_eq!(metrics.future_work_count, 17);
+        assert_eq!(metrics.implemented_count, 12);
+        assert_eq!(metrics.future_work_count, 14);
         assert_eq!(metrics.missing_count, 0);
         assert!(metrics.is_complete());
         assert!(!metrics.has_missing_handlers());
-        assert_eq!(metrics.coverage_percent(), 34);
+        assert_eq!(metrics.coverage_percent(), 46);
     }
 
     #[test]
@@ -422,6 +424,9 @@ mod tests {
             WalRecordKind::TxBegin,
             WalRecordKind::TxCommit,
             WalRecordKind::TxRollback,
+            WalRecordKind::RowInsert,
+            WalRecordKind::RowUpdate,
+            WalRecordKind::RowDelete,
             WalRecordKind::CheckpointBegin,
             WalRecordKind::CheckpointEnd,
             WalRecordKind::SnapshotBegin,
@@ -429,14 +434,11 @@ mod tests {
             WalRecordKind::ManifestSwitch,
             WalRecordKind::SecurityAuditAppend,
         ];
-        assert_eq!(implemented.len(), 9);
+        assert_eq!(implemented.len(), 12);
 
         let future_work = [
             WalRecordKind::PageAllocate,
             WalRecordKind::PageFormat,
-            WalRecordKind::RowInsert,
-            WalRecordKind::RowUpdate,
-            WalRecordKind::RowDelete,
             WalRecordKind::IndexInsert,
             WalRecordKind::IndexDelete,
             WalRecordKind::MvccVersionCreate,
@@ -450,7 +452,7 @@ mod tests {
             WalRecordKind::BTreeSplit,
             WalRecordKind::BTreeMerge,
         ];
-        assert_eq!(future_work.len(), 17);
+        assert_eq!(future_work.len(), 14);
         assert_eq!(implemented.len() + future_work.len(), all_kinds.len());
 
         for kind in &all_kinds {

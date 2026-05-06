@@ -9,13 +9,94 @@
 //! - PITR window is [catalog_snapshot_lsn, shipped_wal_lsn]
 //! - BackupManifest must be finalized before use in restore
 
-use andromeda_core::AndromedaResult;
+use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
-use super::helpers::backup_error;
 use super::physical_plan::BackupPhysicalPlan;
 use super::plan::BackupManifest;
 use super::types::{BackupId, WalArchiveRange};
 use crate::Lsn;
+
+/// Typed rejection reason for WAL archive and PITR window validation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WalArchiveRejection {
+    ValidationFailed,
+    ArchiveStartLsnZero,
+    ArchiveEndLsnZero,
+    ArchiveEndBeforeStart,
+    SegmentCountZero,
+    FinalizedEventBackupIdZero,
+    FinalizedEventEpochZero,
+    PitrWindowLsnZero,
+    PitrWindowEndBeforeStart,
+    CatalogSnapshotLsnZero,
+    ShippedStartLsnZero,
+    ShippedEndLsnZero,
+    ShippedEndBeforeStart,
+    ShippedEndBeforeCatalogSnapshot,
+    PitrTargetLsnZero,
+    PitrTargetBeforeWindow { target_lsn: Lsn, earliest_lsn: Lsn },
+    PitrTargetAfterWindow { target_lsn: Lsn, latest_lsn: Lsn },
+}
+
+impl WalArchiveRejection {
+    fn into_error(self) -> AndromedaError {
+        AndromedaError::new(AndromedaErrorKind::Storage, self.to_string())
+    }
+}
+
+impl std::fmt::Display for WalArchiveRejection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ValidationFailed => f.write_str("WAL archive validation failed"),
+            Self::ArchiveStartLsnZero => f.write_str("WAL archive start LSN must not be zero"),
+            Self::ArchiveEndLsnZero => f.write_str("WAL archive end LSN must not be zero"),
+            Self::ArchiveEndBeforeStart => f.write_str("WAL archive end must not precede start"),
+            Self::SegmentCountZero => f.write_str("WAL archive segment count must not be zero"),
+            Self::FinalizedEventBackupIdZero => {
+                f.write_str("backup manifest finalized event backup id must not be zero")
+            }
+            Self::FinalizedEventEpochZero => {
+                f.write_str("backup manifest finalized event finalized epoch must not be zero")
+            }
+            Self::PitrWindowLsnZero => f.write_str("PITR window LSNs must not be zero"),
+            Self::PitrWindowEndBeforeStart => f.write_str("PITR window end must not precede start"),
+            Self::CatalogSnapshotLsnZero => {
+                f.write_str("WAL archive validation requires non-zero catalog snapshot LSN")
+            }
+            Self::ShippedStartLsnZero => {
+                f.write_str("WAL archive shipped start LSN must not be zero")
+            }
+            Self::ShippedEndLsnZero => f.write_str("WAL archive shipped end LSN must not be zero"),
+            Self::ShippedEndBeforeStart => {
+                f.write_str("WAL archive shipped end must not precede shipped start")
+            }
+            Self::ShippedEndBeforeCatalogSnapshot => {
+                f.write_str("WAL archive shipped end must cover catalog snapshot LSN")
+            }
+            Self::PitrTargetLsnZero => f.write_str("PITR target LSN must not be zero"),
+            Self::PitrTargetBeforeWindow {
+                target_lsn,
+                earliest_lsn,
+            } => write!(
+                f,
+                "PITR target LSN {} precedes earliest restorable LSN {}",
+                target_lsn.get(),
+                earliest_lsn.get()
+            ),
+            Self::PitrTargetAfterWindow {
+                target_lsn,
+                latest_lsn,
+            } => write!(
+                f,
+                "PITR target LSN {} exceeds latest restorable LSN {}",
+                target_lsn.get(),
+                latest_lsn.get()
+            ),
+        }
+    }
+}
+
+impl std::error::Error for WalArchiveRejection {}
 
 /// WAL archive validation result.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -33,19 +114,19 @@ pub struct WalArchiveValidationResult {
 impl WalArchiveValidationResult {
     pub fn validate(&self) -> AndromedaResult<()> {
         if !self.is_valid {
-            return Err(backup_error("WAL archive validation failed"));
+            return Err(WalArchiveRejection::ValidationFailed.into_error());
         }
         if self.archive_start_lsn.is_zero() {
-            return Err(backup_error("WAL archive start LSN must not be zero"));
+            return Err(WalArchiveRejection::ArchiveStartLsnZero.into_error());
         }
         if self.archive_end_lsn.is_zero() {
-            return Err(backup_error("WAL archive end LSN must not be zero"));
+            return Err(WalArchiveRejection::ArchiveEndLsnZero.into_error());
         }
         if self.archive_end_lsn < self.archive_start_lsn {
-            return Err(backup_error("WAL archive end must not precede start"));
+            return Err(WalArchiveRejection::ArchiveEndBeforeStart.into_error());
         }
         if self.segment_count == 0 {
-            return Err(backup_error("WAL archive segment count must not be zero"));
+            return Err(WalArchiveRejection::SegmentCountZero.into_error());
         }
         Ok(())
     }
@@ -70,22 +151,16 @@ pub struct BackupManifestFinalizedEvent {
 impl BackupManifestFinalizedEvent {
     pub fn validate(&self) -> AndromedaResult<()> {
         if self.backup_id.is_zero() {
-            return Err(backup_error(
-                "backup manifest finalized event backup id must not be zero",
-            ));
+            return Err(WalArchiveRejection::FinalizedEventBackupIdZero.into_error());
         }
         if self.finalized_epoch == 0 {
-            return Err(backup_error(
-                "backup manifest finalized event finalized epoch must not be zero",
-            ));
+            return Err(WalArchiveRejection::FinalizedEventEpochZero.into_error());
         }
         if self.pitr_start_lsn.is_zero() || self.pitr_end_lsn.is_zero() {
-            return Err(backup_error("PITR window LSNs must not be zero"));
+            return Err(WalArchiveRejection::PitrWindowLsnZero.into_error());
         }
         if self.pitr_end_lsn < self.pitr_start_lsn {
-            return Err(backup_error(
-                "backup manifest PITR end must not precede PITR start",
-            ));
+            return Err(WalArchiveRejection::PitrWindowEndBeforeStart.into_error());
         }
         Ok(())
     }
@@ -109,36 +184,28 @@ impl WalArchiveIntegration {
         segment_count: u64,
     ) -> AndromedaResult<WalArchiveValidationResult> {
         if catalog_snapshot_lsn.is_zero() {
-            return Err(backup_error(
-                "WAL archive validation requires non-zero catalog snapshot LSN",
-            ));
+            return Err(WalArchiveRejection::CatalogSnapshotLsnZero.into_error());
         }
 
         if shipped_wal_start_lsn.is_zero() {
-            return Err(backup_error(
-                "WAL archive shipped start LSN must not be zero",
-            ));
+            return Err(WalArchiveRejection::ShippedStartLsnZero.into_error());
         }
 
         if shipped_wal_end_lsn.is_zero() {
-            return Err(backup_error("WAL archive shipped end LSN must not be zero"));
+            return Err(WalArchiveRejection::ShippedEndLsnZero.into_error());
         }
 
         if shipped_wal_end_lsn < shipped_wal_start_lsn {
-            return Err(backup_error(
-                "WAL archive shipped end must not precede shipped start",
-            ));
+            return Err(WalArchiveRejection::ShippedEndBeforeStart.into_error());
         }
 
         // Key invariant: WAL must cover catalog snapshot
         if shipped_wal_end_lsn < catalog_snapshot_lsn {
-            return Err(backup_error(
-                "WAL archive shipped end must cover catalog snapshot LSN",
-            ));
+            return Err(WalArchiveRejection::ShippedEndBeforeCatalogSnapshot.into_error());
         }
 
         if segment_count == 0 {
-            return Err(backup_error("WAL archive segment count must not be zero"));
+            return Err(WalArchiveRejection::SegmentCountZero.into_error());
         }
 
         Ok(WalArchiveValidationResult {
@@ -215,11 +282,11 @@ impl WalArchiveIntegration {
         let latest = manifest.latest_pitr_target();
 
         if earliest.is_zero() || latest.is_zero() {
-            return Err(backup_error("PITR window LSNs must not be zero"));
+            return Err(WalArchiveRejection::PitrWindowLsnZero.into_error());
         }
 
         if latest < earliest {
-            return Err(backup_error("PITR window end must not precede start"));
+            return Err(WalArchiveRejection::PitrWindowEndBeforeStart.into_error());
         }
 
         Ok((earliest, latest))
@@ -230,23 +297,25 @@ impl WalArchiveIntegration {
         manifest.validate()?;
 
         if target_lsn.is_zero() {
-            return Err(backup_error("PITR target LSN must not be zero"));
+            return Err(WalArchiveRejection::PitrTargetLsnZero.into_error());
         }
 
         let (earliest, latest) = Self::compute_pitr_window(manifest)?;
 
         if target_lsn < earliest {
-            return Err(backup_error(format!(
-                "PITR target LSN {:?} precedes earliest restorable LSN {:?}",
-                target_lsn, earliest
-            )));
+            return Err(WalArchiveRejection::PitrTargetBeforeWindow {
+                target_lsn,
+                earliest_lsn: earliest,
+            }
+            .into_error());
         }
 
         if target_lsn > latest {
-            return Err(backup_error(format!(
-                "PITR target LSN {:?} exceeds latest restorable LSN {:?}",
-                target_lsn, latest
-            )));
+            return Err(WalArchiveRejection::PitrTargetAfterWindow {
+                target_lsn,
+                latest_lsn: latest,
+            }
+            .into_error());
         }
 
         Ok(())
@@ -259,18 +328,15 @@ mod tests {
     use crate::backup::{BackupManifest, types::ColdSnapshotBoundary};
 
     #[test]
-    fn test_wal_archive_validation() {
+    fn test_wal_archive_validation() -> AndromedaResult<()> {
         let catalog_lsn = Lsn::new(1000);
         let wal_start = Lsn::new(900);
         let wal_end = Lsn::new(2000);
 
-        let result =
-            WalArchiveIntegration::validate_wal_archive(catalog_lsn, wal_start, wal_end, 5);
-
-        assert!(result.is_ok());
-        let val = result.unwrap();
+        let val = WalArchiveIntegration::validate_wal_archive(catalog_lsn, wal_start, wal_end, 5)?;
         assert!(val.is_valid);
         assert_eq!(val.segment_count, 5);
+        Ok(())
     }
 
     #[test]
@@ -286,7 +352,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pitr_window_computation() {
+    fn test_pitr_window_computation() -> AndromedaResult<()> {
         let snapshot = ColdSnapshotBoundary {
             snapshot_id: 1,
             snapshot_descriptor_hash: [0xAB; 32],
@@ -303,10 +369,11 @@ mod tests {
             manifest_crc: 0xDEADBEEF,
         };
 
-        let (earliest, latest) = WalArchiveIntegration::compute_pitr_window(&manifest).unwrap();
+        let (earliest, latest) = WalArchiveIntegration::compute_pitr_window(&manifest)?;
 
         assert_eq!(earliest, Lsn::new(1000));
         assert_eq!(latest, Lsn::new(2000));
+        Ok(())
     }
 
     #[test]

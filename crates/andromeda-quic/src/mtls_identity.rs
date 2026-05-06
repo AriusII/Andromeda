@@ -5,7 +5,7 @@
 //! runtime-free; concrete Quinn extraction is available only behind the
 //! `runtime-quinn` feature.
 
-use andromeda_core::AndromedaResult;
+use andromeda_core::{AndromedaResult, digest};
 use andromeda_observe::SurfaceScope;
 
 /// Convert a QUIC `SurfacePlane` to its required [`SurfaceScope`].
@@ -48,6 +48,33 @@ impl RawCertificate {
     /// True if no certificate is present.
     pub fn is_empty(&self) -> bool {
         self.der_bytes.is_empty()
+    }
+
+    /// SHA-256 fingerprint of the DER-encoded certificate as lowercase hex.
+    pub fn fingerprint_sha256_hex(&self) -> String {
+        hex_sha256(&self.der_bytes)
+    }
+
+    /// Build identity evidence directly from a raw DER certificate.
+    ///
+    /// This is the Quinn fallback path used when the transport exposes the
+    /// peer certificate bytes but no X.509 parser hook is available. The
+    /// fingerprint is the authorization key; the subject remains stable,
+    /// non-secret evidence derived from that fingerprint.
+    pub fn to_certificate_identity(
+        &self,
+        required_scope: SurfaceScope,
+    ) -> AndromedaResult<andromeda_observe::CertificateIdentity> {
+        if self.is_empty() {
+            return Err(andromeda_core::AndromedaError::new(
+                andromeda_core::AndromedaErrorKind::Security,
+                "peer certificate cannot be empty",
+            ));
+        }
+
+        let fingerprint = self.fingerprint_sha256_hex();
+        let subject = format!("sha256:{}", &fingerprint[..16]);
+        andromeda_observe::CertificateIdentity::new(fingerprint, subject, required_scope)
     }
 }
 
@@ -148,6 +175,15 @@ pub fn validate_fingerprint(fp: &str) -> AndromedaResult<()> {
     Ok(())
 }
 
+fn hex_sha256(bytes: &[u8]) -> String {
+    let digest = digest::sha256(bytes);
+    let mut out = String::with_capacity(64);
+    for byte in digest {
+        out.push_str(&format!("{byte:02x}"));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -160,6 +196,33 @@ mod tests {
 
         let empty = RawCertificate::new(vec![]);
         assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn raw_certificate_builds_fingerprint_identity() {
+        let raw = RawCertificate::new(vec![0x30, 0x82]);
+
+        let identity = raw
+            .to_certificate_identity(SurfaceScope::Application)
+            .unwrap();
+
+        assert_eq!(identity.fingerprint.len(), 64);
+        assert!(identity.fingerprint.chars().all(|c| c.is_ascii_hexdigit()));
+        assert_eq!(
+            identity.subject,
+            format!("sha256:{}", &identity.fingerprint[..16])
+        );
+        assert_eq!(identity.surface, SurfaceScope::Application);
+    }
+
+    #[test]
+    fn raw_certificate_identity_rejects_empty_der() {
+        let error = RawCertificate::new(Vec::new())
+            .to_certificate_identity(SurfaceScope::Application)
+            .unwrap_err();
+
+        assert_eq!(error.kind(), andromeda_core::AndromedaErrorKind::Security);
+        assert!(error.message().contains("cannot be empty"));
     }
 
     #[test]

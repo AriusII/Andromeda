@@ -88,11 +88,11 @@ fn v0_inventory_executes_from_bound_pdf_style_srpl_and_emits_ordered_result_fram
         .unwrap();
 
     assert_eq!(
-        outcome.vertical.completion.status,
+        outcome.vertical.completion.status(),
         CompletionStatus::Committed
     );
-    assert_eq!(outcome.vertical.completion.rows_affected, Some(2));
-    assert_eq!(outcome.vertical.completion.durable_lsn, Some(Lsn::new(3)));
+    assert_eq!(outcome.vertical.completion.rows_affected(), Some(2));
+    assert_eq!(outcome.vertical.completion.durable_lsn(), Some(Lsn::new(3)));
     assert_eq!(
         outcome.srpl_plan.evidence.procedure_contract,
         contract.as_ref()

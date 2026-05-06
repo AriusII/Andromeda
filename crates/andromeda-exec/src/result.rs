@@ -164,15 +164,177 @@ pub const COMPLETION_ENVELOPE_VERSION: (u32, u32) = (1, 0);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InvocationCompletion {
-    pub invocation_id: InvocationId,
-    pub status: CompletionStatus,
-    pub rows_affected: Option<u64>,
-    pub transaction_state: Option<TransactionState>,
-    pub durable_lsn: Option<Lsn>,
-    pub trace_id: TraceId,
+    pub(crate) invocation_id: InvocationId,
+    pub(crate) status: CompletionStatus,
+    pub(crate) rows_affected: Option<u64>,
+    pub(crate) transaction_state: Option<TransactionState>,
+    pub(crate) durable_lsn: Option<Lsn>,
+    pub(crate) trace_id: TraceId,
 }
 
 impl InvocationCompletion {
+    pub fn committed(
+        invocation_id: InvocationId,
+        rows_affected: u64,
+        transaction_state: TransactionState,
+        durable_lsn: Lsn,
+        trace_id: TraceId,
+    ) -> AndromedaResult<Self> {
+        let completion = Self {
+            invocation_id,
+            status: CompletionStatus::Committed,
+            rows_affected: Some(rows_affected),
+            transaction_state: Some(transaction_state),
+            durable_lsn: Some(durable_lsn),
+            trace_id,
+        };
+        completion.validate()?;
+        Ok(completion)
+    }
+
+    pub fn rolled_back(
+        invocation_id: InvocationId,
+        transaction_state: TransactionState,
+        durable_lsn: Lsn,
+        trace_id: TraceId,
+    ) -> AndromedaResult<Self> {
+        let completion = Self {
+            invocation_id,
+            status: CompletionStatus::RolledBack,
+            rows_affected: Some(0),
+            transaction_state: Some(transaction_state),
+            durable_lsn: Some(durable_lsn),
+            trace_id,
+        };
+        completion.validate()?;
+        Ok(completion)
+    }
+
+    pub fn pre_transaction(
+        invocation_id: InvocationId,
+        status: CompletionStatus,
+        trace_id: TraceId,
+    ) -> AndromedaResult<Self> {
+        let completion = Self {
+            invocation_id,
+            status,
+            rows_affected: None,
+            transaction_state: None,
+            durable_lsn: None,
+            trace_id,
+        };
+        completion.validate()?;
+        Ok(completion)
+    }
+
+    pub const fn invocation_id(&self) -> InvocationId {
+        self.invocation_id
+    }
+
+    pub const fn status(&self) -> CompletionStatus {
+        self.status
+    }
+
+    pub const fn rows_affected(&self) -> Option<u64> {
+        self.rows_affected
+    }
+
+    pub const fn transaction_state(&self) -> Option<TransactionState> {
+        self.transaction_state
+    }
+
+    pub const fn durable_lsn(&self) -> Option<Lsn> {
+        self.durable_lsn
+    }
+
+    pub const fn trace_id(&self) -> TraceId {
+        self.trace_id
+    }
+
+    pub fn validate(self) -> AndromedaResult<()> {
+        use andromeda_core::{AndromedaError, AndromedaErrorKind};
+
+        if self.invocation_id.get() == 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Execution,
+                "invocation completion id must not be zero",
+            ));
+        }
+
+        match self.status {
+            CompletionStatus::Committed => {
+                if self.transaction_state != Some(TransactionState::Committed) {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Transaction,
+                        "committed completion requires committed transaction state",
+                    ));
+                }
+                if self.rows_affected.is_none() {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Execution,
+                        "committed completion requires rows affected metadata",
+                    ));
+                }
+                let Some(durable_lsn) = self.durable_lsn else {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Storage,
+                        "committed completion requires durable WAL LSN evidence",
+                    ));
+                };
+                if durable_lsn.is_zero() {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Storage,
+                        "committed completion requires nonzero durable WAL LSN evidence",
+                    ));
+                }
+            }
+            CompletionStatus::RolledBack => {
+                if self.transaction_state != Some(TransactionState::RolledBack) {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Transaction,
+                        "rolled-back completion requires rolled-back transaction state",
+                    ));
+                }
+                if self.rows_affected != Some(0) {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Execution,
+                        "rolled-back completion must report zero rows affected",
+                    ));
+                }
+                let Some(durable_lsn) = self.durable_lsn else {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Storage,
+                        "rolled-back completion requires durable WAL LSN evidence",
+                    ));
+                };
+                if durable_lsn.is_zero() {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Storage,
+                        "rolled-back completion requires nonzero durable WAL LSN evidence",
+                    ));
+                }
+            }
+            CompletionStatus::FailedBeforeTransaction
+            | CompletionStatus::Cancelled
+            | CompletionStatus::Poisoned
+            | CompletionStatus::PermissionDenied
+            | CompletionStatus::ContractRejected
+            | CompletionStatus::SystemUnavailable => {
+                if self.transaction_state.is_some()
+                    || self.rows_affected.is_some()
+                    || self.durable_lsn.is_some()
+                {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Execution,
+                        "non-transactional completion must not carry transaction evidence",
+                    ));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     /// Project a terminal `InvocationCompletion` into an
     /// [`ExecutionTransitionTrace`] carrying stable invocation/request/
     /// session/transaction correlation. Use this at the completion-emission
@@ -232,7 +394,20 @@ impl InvocationCompletion {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_core::AndromedaErrorKind;
+    use andromeda_core::{AndromedaError, AndromedaErrorKind};
+
+    fn require_error_kind(
+        result: AndromedaResult<()>,
+        context: impl Into<String>,
+    ) -> AndromedaResult<AndromedaErrorKind> {
+        match result {
+            Ok(()) => Err(AndromedaError::new(
+                AndromedaErrorKind::Execution,
+                format!("expected validation error: {}", context.into()),
+            )),
+            Err(error) => Ok(error.kind()),
+        }
+    }
 
     #[test]
     fn result_metadata_keeps_shape_before_payload_contract() {
@@ -248,7 +423,7 @@ mod tests {
     }
 
     #[test]
-    fn exact_cardinality_requires_row_count_before_payload() {
+    fn exact_cardinality_requires_row_count_before_payload() -> AndromedaResult<()> {
         let metadata = ResultStreamMetadata {
             stream_id: 1,
             row_count_exact: None,
@@ -258,9 +433,13 @@ mod tests {
         };
 
         assert_eq!(
-            metadata.validate_before_payload().unwrap_err().kind(),
+            require_error_kind(
+                metadata.validate_before_payload(),
+                "exact cardinality requires row count before payload"
+            )?,
             AndromedaErrorKind::Contract
         );
+        Ok(())
     }
 
     #[test]
@@ -284,7 +463,7 @@ mod tests {
     }
 
     #[test]
-    fn result_stream_completion_requires_terminal_transaction_state_and_durable_lsn() {
+    fn result_stream_completion_requires_terminal_state_and_durable_lsn() -> AndromedaResult<()> {
         use andromeda_storage::Lsn;
         use andromeda_tx::TransactionState;
 
@@ -297,38 +476,51 @@ mod tests {
         };
 
         // Non-terminal transaction state cannot bind a result-stream completion.
-        let err = metadata
-            .validate_terminal_completion(TransactionState::Active, Lsn::new(7), 2)
-            .unwrap_err();
-        assert_eq!(err.kind(), AndromedaErrorKind::Transaction);
+        assert_eq!(
+            require_error_kind(
+                metadata.validate_terminal_completion(TransactionState::Active, Lsn::new(7), 2),
+                "active transaction cannot complete a result stream"
+            )?,
+            AndromedaErrorKind::Transaction
+        );
 
         // Zero durable LSN cannot bind a result-stream completion.
-        let err = metadata
-            .validate_terminal_completion(TransactionState::Committed, Lsn::ZERO, 2)
-            .unwrap_err();
-        assert_eq!(err.kind(), AndromedaErrorKind::Storage);
+        assert_eq!(
+            require_error_kind(
+                metadata.validate_terminal_completion(TransactionState::Committed, Lsn::ZERO, 2),
+                "zero durable LSN cannot complete a result stream"
+            )?,
+            AndromedaErrorKind::Storage
+        );
 
         // Rolled-back terminal must report zero rows.
-        let err = metadata
-            .validate_terminal_completion(TransactionState::RolledBack, Lsn::new(7), 2)
-            .unwrap_err();
-        assert_eq!(err.kind(), AndromedaErrorKind::Transaction);
+        assert_eq!(
+            require_error_kind(
+                metadata.validate_terminal_completion(TransactionState::RolledBack, Lsn::new(7), 2),
+                "rolled-back completion must report zero rows"
+            )?,
+            AndromedaErrorKind::Transaction
+        );
 
         // Row count must match exact contract.
-        let err = metadata
-            .validate_terminal_completion(TransactionState::Committed, Lsn::new(7), 3)
-            .unwrap_err();
-        assert_eq!(err.kind(), AndromedaErrorKind::Contract);
+        assert_eq!(
+            require_error_kind(
+                metadata.validate_terminal_completion(TransactionState::Committed, Lsn::new(7), 3),
+                "exact row count must match actual completion count"
+            )?,
+            AndromedaErrorKind::Contract
+        );
 
         assert!(
             metadata
                 .validate_terminal_completion(TransactionState::Committed, Lsn::new(7), 2)
                 .is_ok()
         );
+        Ok(())
     }
 
     #[test]
-    fn result_metadata_enforces_declared_cardinality_bounds() {
+    fn result_metadata_enforces_declared_cardinality_bounds() -> AndromedaResult<()> {
         for (cardinality, row_count) in [
             (Cardinality::One, 0),
             (Cardinality::One, 2),
@@ -344,7 +536,10 @@ mod tests {
             };
 
             assert_eq!(
-                metadata.validate_before_payload().unwrap_err().kind(),
+                require_error_kind(
+                    metadata.validate_before_payload(),
+                    format!("cardinality {cardinality:?} rejects row count {row_count}")
+                )?,
                 AndromedaErrorKind::Contract
             );
         }
@@ -357,10 +552,11 @@ mod tests {
             cardinality: Cardinality::Many,
         };
         assert!(many.validate_before_payload().is_ok());
+        Ok(())
     }
 
     #[test]
-    fn result_metadata_enforces_v0_cardinality_zero_one_many_contracts() {
+    fn result_metadata_enforces_v0_cardinality_zero_one_many_contracts() -> AndromedaResult<()> {
         // V0 cardinality contract — exhaustive 0/1/>1 behaviour per kind.
         // Each row encodes (cardinality, declared_exact, actual_at_completion,
         // expected_outcome) where outcome is Ok or the AndromedaErrorKind it
@@ -397,34 +593,31 @@ mod tests {
             };
             match expected_err {
                 None => {
-                    metadata.validate_before_payload().unwrap_or_else(|e| {
-                        panic!("pre-payload {:?} {:?}: {e:?}", cardinality, exact)
-                    });
-                    metadata
-                        .validate_completed_stream(actual)
-                        .unwrap_or_else(|e| {
-                            panic!(
-                                "completed {:?} {:?} actual={actual}: {e:?}",
-                                cardinality, exact
-                            )
-                        });
+                    metadata.validate_before_payload()?;
+                    metadata.validate_completed_stream(actual)?;
                 }
                 Some(kind) => {
-                    let err = metadata
-                        .validate_before_payload()
-                        .err()
-                        .or_else(|| metadata.validate_completed_stream(actual).err())
-                        .unwrap_or_else(|| {
-                            panic!("expected error {kind:?} for {:?} {:?}", cardinality, exact)
-                        });
-                    assert_eq!(err.kind(), kind);
+                    let validation_error = match metadata.validate_before_payload() {
+                        Err(error) => Some(error),
+                        Ok(()) => metadata.validate_completed_stream(actual).err(),
+                    };
+                    let Some(error) = validation_error else {
+                        return Err(AndromedaError::new(
+                            AndromedaErrorKind::Execution,
+                            format!(
+                                "expected {kind:?} for {cardinality:?} exact={exact:?} actual={actual}"
+                            ),
+                        ));
+                    };
+                    assert_eq!(error.kind(), kind);
                 }
             }
         }
+        Ok(())
     }
 
     #[test]
-    fn bounded_many_and_nonempty_many_enforce_row_count_max() {
+    fn bounded_many_and_nonempty_many_enforce_row_count_max() -> AndromedaResult<()> {
         // Bounded Many: declared upper bound is enforced before payload and
         // at completion. The bound dominates `row_count_exact` when both are
         // declared.
@@ -433,10 +626,10 @@ mod tests {
         assert!(bounded_many.validate_completed_stream(0).is_ok());
         assert!(bounded_many.validate_completed_stream(4).is_ok());
         assert_eq!(
-            bounded_many
-                .validate_completed_stream(5)
-                .unwrap_err()
-                .kind(),
+            require_error_kind(
+                bounded_many.validate_completed_stream(5),
+                "bounded many rejects row count over maximum"
+            )?,
             AndromedaErrorKind::Contract
         );
 
@@ -451,7 +644,10 @@ mod tests {
             cardinality: Cardinality::NonEmptyMany,
         };
         assert_eq!(
-            bounded_nem.validate_before_payload().unwrap_err().kind(),
+            require_error_kind(
+                bounded_nem.validate_before_payload(),
+                "nonempty many bound without exact row count"
+            )?,
             AndromedaErrorKind::Contract
         );
 
@@ -474,7 +670,10 @@ mod tests {
             cardinality: Cardinality::NonEmptyMany,
         };
         assert_eq!(
-            bad_bound.validate_before_payload().unwrap_err().kind(),
+            require_error_kind(
+                bad_bound.validate_before_payload(),
+                "nonempty many rejects zero maximum"
+            )?,
             AndromedaErrorKind::Contract
         );
 
@@ -488,7 +687,10 @@ mod tests {
             cardinality: Cardinality::One,
         };
         assert_eq!(
-            lying_one.validate_before_payload().unwrap_err().kind(),
+            require_error_kind(
+                lying_one.validate_before_payload(),
+                "one rejects declared maximum over one"
+            )?,
             AndromedaErrorKind::Contract
         );
 
@@ -501,9 +703,13 @@ mod tests {
             cardinality: Cardinality::Many,
         };
         assert_eq!(
-            exact_over_max.validate_before_payload().unwrap_err().kind(),
+            require_error_kind(
+                exact_over_max.validate_before_payload(),
+                "exact row count cannot exceed declared maximum"
+            )?,
             AndromedaErrorKind::Contract
         );
+        Ok(())
     }
 
     #[test]

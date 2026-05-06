@@ -280,11 +280,13 @@ impl Default for BTreeConfig {
     }
 }
 
-/// DEC-032 guardrail for the current B-Tree page image.
+/// DEC-032/DEC-038 guardrail for page-backed B-Tree durability.
 ///
-/// The concurrency policy below is a transient/runtime contract only. It must
-/// not be interpreted as promotion of the current [`BTreeNodeImpl::serialize`]
-/// byte layout to a durable B-Tree format.
+/// This remains `false` until the node image, WAL mutation payloads, recovery
+/// replay, crash tests, golden vectors, and fuzz coverage are promoted as one
+/// contract. Validating `BTreeNodeV1` decode is necessary but not sufficient:
+/// visible durable mutation still requires WAL-covered split/merge/insert/delete
+/// semantics and idempotent recovery before this gate can open.
 pub const BTREE_DURABLE_FORMAT_PROMOTED: bool = false;
 
 /// Logical operation class for B-Tree latch-coupling decisions.
@@ -511,6 +513,7 @@ fn non_root_min_keys(branching_factor: u16) -> usize {
 // Page-backed adapters remain fail-stop until durable B-Tree promotion.
 
 pub mod node;
+pub mod node_format_v1;
 
 #[allow(dead_code)]
 pub mod leaf;

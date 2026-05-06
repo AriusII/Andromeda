@@ -7,21 +7,21 @@
 //! durable LSN evidence.
 
 use andromeda_core::{InvocationId, RequestId, SessionId, TransactionId};
-use andromeda_exec::{CompletionStatus, InvocationCompletion, InvocationReject};
+use andromeda_exec::{CompletionMappingService, CompletionStatus, InvocationReject};
 use andromeda_observe::{TraceId, TransactionPhaseCode, TransitionReasonCode};
 use andromeda_storage::Lsn;
 use andromeda_tx::TransactionState;
 
 #[test]
 fn committed_invocation_projects_terminal_transition_with_durable_lsn() {
-    let completion = InvocationCompletion {
-        invocation_id: InvocationId::new(11),
-        status: CompletionStatus::Committed,
-        rows_affected: Some(2),
-        transaction_state: Some(TransactionState::Committed),
-        durable_lsn: Some(Lsn::new(900)),
-        trace_id: TraceId::new(7),
-    };
+    let completion = CompletionMappingService::committed(
+        InvocationId::new(11),
+        2,
+        TransactionState::Committed,
+        Lsn::new(900),
+        TraceId::new(7),
+    )
+    .expect("committed completion has durable WAL evidence");
 
     let trace = completion.project_transition(
         Some(TransactionState::Committing),
@@ -49,17 +49,15 @@ fn committed_invocation_projects_terminal_transition_with_durable_lsn() {
 
 #[test]
 fn permission_denied_completion_strips_transaction_and_lsn_correlation() {
-    // Even if the caller mistakenly passes transaction/LSN evidence, the
+    // Even if the caller mistakenly passes transaction evidence, the
     // projection must defensively drop it for pre-transaction rejection
-    // statuses, and the trace's own validate() must reject any leakage.
-    let completion = InvocationCompletion {
-        invocation_id: InvocationId::new(22),
-        status: CompletionStatus::PermissionDenied,
-        rows_affected: None,
-        transaction_state: None,
-        durable_lsn: Some(Lsn::new(900)),
-        trace_id: TraceId::new(8),
-    };
+    // statuses.
+    let completion = CompletionMappingService::rejected(
+        InvocationId::new(22),
+        CompletionStatus::PermissionDenied,
+        TraceId::new(8),
+    )
+    .expect("permission denied completion has no transaction evidence");
 
     let trace = completion.project_transition(
         None,
@@ -114,29 +112,15 @@ fn invocation_reject_projects_pre_transaction_transition_without_evidence() {
 
 #[test]
 fn rolled_back_completion_requires_durable_rollback_lsn() {
-    let completion = InvocationCompletion {
-        invocation_id: InvocationId::new(44),
-        status: CompletionStatus::RolledBack,
-        rows_affected: Some(0),
-        transaction_state: Some(TransactionState::RolledBack),
-        durable_lsn: None,
-        trace_id: TraceId::new(10),
-    };
+    let err = CompletionMappingService::rolled_back(
+        InvocationId::new(44),
+        TransactionState::RolledBack,
+        Lsn::ZERO,
+        TraceId::new(10),
+    )
+    .expect_err("rolled-back completion requires durable WAL evidence");
 
-    let trace = completion.project_transition(
-        Some(TransactionState::RollingBack),
-        None,
-        None,
-        Some(TransactionId::new(303)),
-        "rollback durable",
-    );
-
-    // No durable LSN supplied => terminal claim cannot be proved.
-    assert_eq!(trace.next_phase, Some(TransactionPhaseCode::ROLLED_BACK));
-    assert!(trace.durable_lsn.is_none());
-    assert!(!trace.proves_terminal_evidence());
-    let err = trace.validate().unwrap_err();
-    assert!(err.message().contains("durable_lsn evidence"));
+    assert!(err.message().contains("durable WAL LSN evidence"));
 }
 
 #[test]

@@ -7,6 +7,9 @@ pub enum ReplayOutcome {
     Applied,
     /// Record was skipped in this recovery context.
     Skipped,
+    /// Record was validated, but durable inline index redo is not promoted.
+    /// Recovery must rebuild the affected index before normal writes resume.
+    IndexRebuildRequired,
     /// Record handler is not promoted; recovery must fail-stop if records of
     /// this type require redo.
     NotYetImplemented,
@@ -49,6 +52,19 @@ impl ReplayResult {
             kind,
             outcome: ReplayOutcome::Skipped,
             error: None,
+        }
+    }
+
+    pub fn index_rebuild_required(
+        lsn: Lsn,
+        kind: WalRecordKind,
+        message: impl Into<String>,
+    ) -> Self {
+        Self {
+            lsn,
+            kind,
+            outcome: ReplayOutcome::IndexRebuildRequired,
+            error: Some(message.into()),
         }
     }
 

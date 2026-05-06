@@ -11,10 +11,9 @@ pub(super) fn benchmark_error_to_cli_error(
         BenchmarkError::EmptyWorkloadId => {
             "benchmark workload identifier must not be empty".to_string()
         }
-        BenchmarkError::UnknownWorkload => format!(
-            "unknown benchmark workload `{}`; run `andromeda-cli benchmark workloads`",
-            request.workload_id
-        ),
+        BenchmarkError::UnknownWorkload => {
+            "unknown benchmark workload; run `andromeda-cli benchmark workloads`".to_string()
+        }
         BenchmarkError::ZeroDuration => "--duration-ms must be greater than zero".to_string(),
         BenchmarkError::ZeroSamples => "--samples must be greater than zero".to_string(),
         BenchmarkError::DurationExceedsGlobalLimit => {
@@ -32,10 +31,7 @@ pub(super) fn benchmark_error_to_cli_error(
                     "workload `{}` duration must be <= {} ms",
                     workload.id, workload.max_duration_ms
                 ),
-                None => format!(
-                    "workload `{}` duration exceeds its bounded limit",
-                    request.workload_id
-                ),
+                None => "benchmark workload duration exceeds its bounded limit".to_string(),
             }
         }
         BenchmarkError::SamplesExceedsWorkloadLimit => {
@@ -44,15 +40,13 @@ pub(super) fn benchmark_error_to_cli_error(
                     "workload `{}` samples must be <= {}",
                     workload.id, workload.max_samples
                 ),
-                None => format!(
-                    "workload `{}` samples exceed its bounded limit",
-                    request.workload_id
-                ),
+                None => "benchmark workload samples exceed its bounded limit".to_string(),
             }
         }
         BenchmarkError::InsufficientSamplesForStatistics => {
             "benchmark runner produced no samples".to_string()
         }
+        BenchmarkError::HarnessFailed => "benchmark workload harness failed".to_string(),
     };
     cli_error(message)
 }

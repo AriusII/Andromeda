@@ -1,4 +1,5 @@
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use sha2::{Digest, Sha256};
 
 use crate::{
     AllocationId, Lsn, ObjectId, PageFlags, PageHeader, PageId, PageLayoutContract, PageSize,
@@ -7,6 +8,10 @@ use crate::{
 
 pub const PAGE_CODEC_V1_HEADER_LEN: usize = 112;
 pub const PAGE_CODEC_V1_TRAILER_LEN: usize = 48;
+const PAGE_CODEC_V1_HEADER_INTEGRITY_OFFSET: usize = 104;
+const PAGE_CODEC_V1_HEADER_INTEGRITY_LEN: usize = 4;
+const PAGE_CODEC_V1_HEADER_LEN_U16: u16 = PAGE_CODEC_V1_HEADER_LEN as u16;
+const PAGE_CODEC_V1_HEADER_LEN_U32: u32 = PAGE_CODEC_V1_HEADER_LEN as u32;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DecodedPageV1 {
@@ -20,6 +25,7 @@ pub struct PageCodecV1;
 impl PageCodecV1 {
     pub fn encode_header(header: &PageHeader) -> AndromedaResult<[u8; PAGE_CODEC_V1_HEADER_LEN]> {
         header.validate()?;
+        validate_v1_fixed_header_layout(header)?;
         let mut bytes = [0u8; PAGE_CODEC_V1_HEADER_LEN];
         write_u32(&mut bytes, 0, header.magic);
         write_u16(&mut bytes, 4, header.format_version);
@@ -46,6 +52,12 @@ impl PageCodecV1 {
         write_u16(&mut bytes, 92, header.slot_count);
         write_u32(&mut bytes, 96, header.row_count);
         write_u32(&mut bytes, 100, header.header_crc);
+        let integrity_crc = header_integrity_crc32(&bytes);
+        write_u32(
+            &mut bytes,
+            PAGE_CODEC_V1_HEADER_INTEGRITY_OFFSET,
+            integrity_crc,
+        );
         Ok(bytes)
     }
 
@@ -53,11 +65,31 @@ impl PageCodecV1 {
         if bytes.len() < PAGE_CODEC_V1_HEADER_LEN {
             return Err(storage_error("page codec v1 header is truncated"));
         }
+        let magic = read_u32(bytes, 0)?;
+        if magic != PageHeader::MAGIC {
+            return Err(storage_error("page codec v1 little-endian magic mismatch"));
+        }
+        let format_version = read_u16(bytes, 4)?;
+        if format_version != PageHeader::FORMAT_VERSION_V0 {
+            return Err(storage_error("unsupported page codec v1 format version"));
+        }
+        let header_len = read_u16(bytes, 68)?;
+        if header_len != PAGE_CODEC_V1_HEADER_LEN_U16 {
+            return Err(storage_error(
+                "page codec v1 header_len must match fixed header length",
+            ));
+        }
+        let payload_offset = read_u32(bytes, 72)?;
+        if payload_offset != PAGE_CODEC_V1_HEADER_LEN_U32 {
+            return Err(storage_error(
+                "page codec v1 payload_offset must match fixed header length",
+            ));
+        }
         let page_size = page_size_from_tag(read_u16(bytes, 6)?)?;
         let page_type = page_type_from_tag(read_u16(bytes, 8)?)?;
         let header = PageHeader {
-            magic: read_u32(bytes, 0)?,
-            format_version: read_u16(bytes, 4)?,
+            magic,
+            format_version,
             page_size,
             page_type,
             page_id: PageId::new(read_u64(bytes, 12)?),
@@ -73,8 +105,8 @@ impl PageCodecV1 {
                 0 => None,
                 value => Some(PageId::new(value)),
             },
-            header_len: read_u16(bytes, 68)?,
-            payload_offset: read_u32(bytes, 72)?,
+            header_len,
+            payload_offset,
             payload_len: read_u32(bytes, 76)?,
             free_start: read_u32(bytes, 80)?,
             free_end: read_u32(bytes, 84)?,
@@ -85,6 +117,14 @@ impl PageCodecV1 {
             header_crc: read_u32(bytes, 100)?,
         };
         header.validate()?;
+        let expected = read_u32(bytes, PAGE_CODEC_V1_HEADER_INTEGRITY_OFFSET)?;
+        if expected == 0 {
+            return Err(storage_error("page codec v1 header integrity CRC is zero"));
+        }
+        let actual = header_integrity_crc32(&bytes[..PAGE_CODEC_V1_HEADER_LEN]);
+        if expected != actual {
+            return Err(storage_error("page codec v1 header integrity CRC mismatch"));
+        }
         Ok(header)
     }
 
@@ -148,8 +188,15 @@ impl PageCodecV1 {
             ));
         }
         let header = Self::decode_header(&bytes[..PAGE_CODEC_V1_HEADER_LEN])?;
-        let payload_end = PAGE_CODEC_V1_HEADER_LEN + header.payload_len as usize;
-        if bytes.len() != payload_end + PAGE_CODEC_V1_TRAILER_LEN {
+        let payload_len = usize::try_from(header.payload_len)
+            .map_err(|_| storage_error("page payload_len does not fit usize"))?;
+        let payload_end = PAGE_CODEC_V1_HEADER_LEN
+            .checked_add(payload_len)
+            .ok_or_else(|| storage_error("page payload length overflows image offset"))?;
+        let expected_len = payload_end
+            .checked_add(PAGE_CODEC_V1_TRAILER_LEN)
+            .ok_or_else(|| storage_error("page image length overflows usize"))?;
+        if bytes.len() != expected_len {
             return Err(storage_error(
                 "page image length does not match header payload_len",
             ));
@@ -239,6 +286,41 @@ fn read_u64(source: &[u8], offset: usize) -> AndromedaResult<u64> {
     Ok(u64::from_le_bytes(bytes))
 }
 
+fn validate_v1_fixed_header_layout(header: &PageHeader) -> AndromedaResult<()> {
+    if header.header_len != PAGE_CODEC_V1_HEADER_LEN_U16 {
+        return Err(storage_error(
+            "page codec v1 header_len must match fixed header length",
+        ));
+    }
+    if header.payload_offset != PAGE_CODEC_V1_HEADER_LEN_U32 {
+        return Err(storage_error(
+            "page codec v1 payload_offset must match fixed header length",
+        ));
+    }
+    Ok(())
+}
+
+fn header_integrity_crc32(header_bytes: &[u8]) -> u32 {
+    let mut crc = 0xFFFF_FFFFu32;
+    for (offset, byte) in header_bytes.iter().copied().enumerate() {
+        let byte = if (PAGE_CODEC_V1_HEADER_INTEGRITY_OFFSET
+            ..PAGE_CODEC_V1_HEADER_INTEGRITY_OFFSET + PAGE_CODEC_V1_HEADER_INTEGRITY_LEN)
+            .contains(&offset)
+        {
+            0
+        } else {
+            byte
+        };
+        crc ^= u32::from(byte);
+        for _ in 0..8 {
+            let mask = 0u32.wrapping_sub(crc & 1);
+            crc = (crc >> 1) ^ (0xEDB8_8320 & mask);
+        }
+    }
+    let crc = !crc;
+    if crc == 0 { 1 } else { crc }
+}
+
 pub fn payload_crc64(payload: &[u8]) -> u64 {
     const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
     const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
@@ -248,6 +330,68 @@ pub fn payload_crc64(payload: &[u8]) -> u64 {
         state = state.wrapping_mul(FNV_PRIME);
     }
     if state == 0 { 1 } else { state }
+}
+
+pub fn payload_hash(payload: &[u8]) -> [u8; 32] {
+    let hash: [u8; 32] = Sha256::digest(payload).into();
+    if hash == [0; 32] { [1; 32] } else { hash }
+}
+
+pub fn torn_write_guard(header: &PageHeader, payload_crc64: u64) -> u64 {
+    const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+    const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
+
+    let mut state = FNV_OFFSET;
+    for value in [
+        u64::from(header.magic),
+        u64::from(header.format_version),
+        header.page_id.get(),
+        header.object_id.get(),
+        header.allocation_id.get(),
+        header.page_lsn.get(),
+        header.page_epoch,
+        payload_crc64,
+        u64::from(header.payload_offset),
+        u64::from(header.payload_len),
+    ] {
+        for byte in value.to_le_bytes() {
+            state ^= u64::from(byte);
+            state = state.wrapping_mul(FNV_PRIME);
+        }
+    }
+
+    if state == 0 || state == header.page_id.get() {
+        state ^ 0xA9D3_78B5_4C2F_6101
+    } else {
+        state
+    }
+}
+
+pub fn integrity_trailer_for_payload(header: &PageHeader, payload: &[u8]) -> PageTrailer {
+    let payload_crc64 = payload_crc64(payload);
+    PageTrailer {
+        payload_crc64,
+        page_hash: payload_hash(payload),
+        torn_write_guard: torn_write_guard(header, payload_crc64),
+    }
+}
+
+pub fn validate_payload_integrity(
+    header: &PageHeader,
+    payload: &[u8],
+    trailer: &PageTrailer,
+) -> AndromedaResult<()> {
+    let expected = integrity_trailer_for_payload(header, payload);
+    if trailer.payload_crc64 != expected.payload_crc64 {
+        return Err(storage_error("page payload CRC mismatch"));
+    }
+    if trailer.page_hash != expected.page_hash {
+        return Err(storage_error("page payload hash mismatch"));
+    }
+    if trailer.torn_write_guard != expected.torn_write_guard {
+        return Err(storage_error("page torn-write guard mismatch"));
+    }
+    Ok(())
 }
 
 fn storage_error(message: impl Into<String>) -> AndromedaError {
@@ -298,6 +442,10 @@ mod tests {
         let trailer = sample_trailer(&[1; 32]);
         let encoded_h = PageCodecV1::encode_header(&header).unwrap();
         let encoded_t = PageCodecV1::encode_trailer(&trailer).unwrap();
+        assert_ne!(
+            read_u32(&encoded_h, PAGE_CODEC_V1_HEADER_INTEGRITY_OFFSET).unwrap(),
+            0
+        );
         assert_eq!(PageCodecV1::decode_header(&encoded_h).unwrap(), header);
         assert_eq!(PageCodecV1::decode_trailer(&encoded_t).unwrap(), trailer);
     }
@@ -334,6 +482,16 @@ mod tests {
             AndromedaErrorKind::Storage
         );
 
+        let mut header_bytes =
+            PageCodecV1::encode_header(&sample_header(PageSize::KiB16, 8)).unwrap();
+        header_bytes[96] ^= 0x01;
+        assert_eq!(
+            PageCodecV1::decode_header(&header_bytes)
+                .unwrap_err()
+                .kind(),
+            AndromedaErrorKind::Storage
+        );
+
         let payload = vec![1u8; 8];
         let header = sample_header(PageSize::KiB16, payload.len() as u32);
         let mut trailer = sample_trailer(&payload);
@@ -348,6 +506,34 @@ mod tests {
             PageCodecV1::decode_page(&encoded).unwrap_err().kind(),
             AndromedaErrorKind::Storage
         );
+    }
+
+    #[test]
+    fn header_decode_checks_magic_version_and_fixed_lengths_first() {
+        let mut header_bytes =
+            PageCodecV1::encode_header(&sample_header(PageSize::KiB16, 8)).unwrap();
+        header_bytes[0..4].copy_from_slice(&0u32.to_le_bytes());
+        header_bytes[6] = 0xFF;
+        let error = PageCodecV1::decode_header(&header_bytes).unwrap_err();
+        assert!(error.message().contains("magic"));
+
+        let mut header_bytes =
+            PageCodecV1::encode_header(&sample_header(PageSize::KiB16, 8)).unwrap();
+        header_bytes[4..6].copy_from_slice(&2u16.to_le_bytes());
+        let error = PageCodecV1::decode_header(&header_bytes).unwrap_err();
+        assert!(error.message().contains("format version"));
+
+        let mut header_bytes =
+            PageCodecV1::encode_header(&sample_header(PageSize::KiB16, 8)).unwrap();
+        write_u16(&mut header_bytes, 68, PageHeader::MIN_HEADER_LEN_V0);
+        let error = PageCodecV1::decode_header(&header_bytes).unwrap_err();
+        assert!(error.message().contains("header_len"));
+
+        let mut header_bytes =
+            PageCodecV1::encode_header(&sample_header(PageSize::KiB16, 8)).unwrap();
+        write_u32(&mut header_bytes, 72, PAGE_CODEC_V1_HEADER_LEN_U32 + 1);
+        let error = PageCodecV1::decode_header(&header_bytes).unwrap_err();
+        assert!(error.message().contains("payload_offset"));
     }
 
     #[test]

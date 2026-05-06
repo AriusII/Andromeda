@@ -11,7 +11,7 @@ use crate::{CompletionStatus, InvocationCompletion};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CompletionJournalRecord {
     pub invocation_id: InvocationId,
-    pub transaction_id: TransactionId,
+    pub transaction_id: Option<TransactionId>,
     pub status: CompletionStatus,
     pub transaction_state: Option<TransactionState>,
     pub rows_affected: Option<u64>,
@@ -36,7 +36,7 @@ impl CompletionJournalRecord {
 
         let record = Self {
             invocation_id: completion.invocation_id,
-            transaction_id,
+            transaction_id: Some(transaction_id),
             status: completion.status,
             transaction_state: completion.transaction_state,
             rows_affected: completion.rows_affected,
@@ -62,7 +62,7 @@ impl CompletionJournalRecord {
 
         let record = Self {
             invocation_id: completion.invocation_id,
-            transaction_id,
+            transaction_id: Some(transaction_id),
             status: completion.status,
             transaction_state: completion.transaction_state,
             rows_affected: completion.rows_affected,
@@ -82,14 +82,21 @@ impl CompletionJournalRecord {
             ));
         }
 
-        if self.transaction_id.get() == 0 {
+        if let Some(transaction_id) = self.transaction_id
+            && transaction_id.get() == 0
+        {
             return Err(completion_journal_error(
-                "completion journal transaction id must not be zero",
+                "completion journal transaction id must not be zero when present",
             ));
         }
 
         match self.status {
             CompletionStatus::Committed => {
+                if self.transaction_id.is_none() {
+                    return Err(completion_journal_error(
+                        "committed journal record requires transaction id",
+                    ));
+                }
                 if self.transaction_state != Some(TransactionState::Committed) {
                     return Err(completion_journal_error(
                         "committed journal record requires committed transaction state",
@@ -103,6 +110,11 @@ impl CompletionJournalRecord {
                 self.validate_terminal_lsn("committed journal record")?;
             }
             CompletionStatus::RolledBack => {
+                if self.transaction_id.is_none() {
+                    return Err(completion_journal_error(
+                        "rolled-back journal record requires transaction id",
+                    ));
+                }
                 if self.transaction_state != Some(TransactionState::RolledBack) {
                     return Err(completion_journal_error(
                         "rolled-back journal record requires rolled-back transaction state",
@@ -121,13 +133,15 @@ impl CompletionJournalRecord {
             | CompletionStatus::PermissionDenied
             | CompletionStatus::ContractRejected
             | CompletionStatus::SystemUnavailable => {
-                if self.transaction_state.is_some()
+                if self.transaction_id.is_some()
+                    || self.transaction_state.is_some()
                     || self.rows_affected.is_some()
+                    || self.result_row_count_exact.is_some()
                     || self.terminal_lsn.is_some()
                     || self.durable_lsn.is_some()
                 {
                     return Err(completion_journal_error(
-                        "non-transactional journal record must not carry transaction evidence",
+                        "non-transactional journal record must not carry transaction or result evidence",
                     ));
                 }
             }
@@ -189,7 +203,9 @@ impl InvocationCompletionJournal {
             ));
         }
 
-        if self.invocation_by_transaction.contains_key(&transaction_id) {
+        if transaction_id.is_some_and(|transaction_id| {
+            self.invocation_by_transaction.contains_key(&transaction_id)
+        }) {
             return Err(completion_journal_error(
                 "completion journal already contains transaction completion",
             ));
@@ -200,8 +216,10 @@ impl InvocationCompletionJournal {
                 "completion journal already contains invocation completion",
             )),
             Entry::Vacant(entry) => {
-                self.invocation_by_transaction
-                    .insert(transaction_id, invocation_id);
+                if let Some(transaction_id) = transaction_id {
+                    self.invocation_by_transaction
+                        .insert(transaction_id, invocation_id);
+                }
                 Ok(entry.insert(record))
             }
         }

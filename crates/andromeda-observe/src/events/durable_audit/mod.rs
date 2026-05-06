@@ -5,6 +5,7 @@ use std::{
 };
 
 mod checksum;
+mod decision_gate;
 mod error;
 mod event_mapping;
 mod failure;
@@ -23,6 +24,7 @@ mod sink_report;
 mod wal_evidence;
 
 use checksum::checksum64;
+pub use decision_gate::{DurableAuditDecisionGate, DurableAuditVisibleDecisionProof};
 pub use error::{DurableAuditSinkFailure, DurableAuditSinkResult};
 pub use event_mapping::durable_audit_family;
 pub use failure::DurableAuditFailureKind;
@@ -31,13 +33,21 @@ pub use file_sink::FileDurableAuditWalSink;
 pub use identity::DurableAuditRecordIdentity;
 use journal_format::{
     journal_line, journal_payload, next_record_lsn, replay_durable_audit_journal,
+    replay_durable_audit_journal_with_evidence,
 };
 pub use pending_record::PendingDurableAuditRecord;
 pub use principal_binding::DurableAuditPrincipalBinding;
 pub use replay_behavior::DurableAuditReplayBehavior;
-pub use replay_query::{DurableAuditReplayLsnRange, DurableAuditReplayQuery};
+pub use replay_query::{
+    DurableAuditReplayEvidence, DurableAuditReplayLsnRange, DurableAuditReplayQuery,
+    DurableAuditReplayResult, DurableAuditReplayWindow,
+};
 pub use replay_record::DurableAuditReplayRecord;
-pub use retention::DurableAuditRetentionBoundary;
+pub use retention::{
+    DurableAuditCompactionReport, DurableAuditPruneBlockReason, DurableAuditPruneEvidence,
+    DurableAuditRetentionBoundary, DurableAuditRetentionManager, DurableAuditRetentionPolicy,
+    DurableAuditWalSegmentArchiveProof,
+};
 pub use sink::DurableAuditWalSink;
 pub use sink_report::DurableAuditSinkReport;
 pub use wal_evidence::DurableAuditWalEvidence;
@@ -217,4 +227,199 @@ pub(crate) fn replay_records(
     query: &DurableAuditReplayQuery,
 ) -> DurableAuditSinkResult<Vec<DurableAuditReplayRecord>> {
     replay_durable_audit_journal(path, query)
+}
+
+pub(crate) fn replay_records_with_evidence(
+    path: &Path,
+    query: &DurableAuditReplayQuery,
+    window: DurableAuditReplayWindow,
+) -> DurableAuditSinkResult<DurableAuditReplayResult> {
+    replay_durable_audit_journal_with_evidence(path, query, window)
+}
+
+pub(crate) fn compact_records(
+    path: &Path,
+    policy: &DurableAuditRetentionPolicy,
+) -> DurableAuditSinkResult<DurableAuditCompactionReport> {
+    compact_records_with_archive_proofs(path, policy, &[])
+}
+
+pub(crate) fn compact_records_with_archive_proofs(
+    path: &Path,
+    policy: &DurableAuditRetentionPolicy,
+    archive_proofs: &[DurableAuditWalSegmentArchiveProof],
+) -> DurableAuditSinkResult<DurableAuditCompactionReport> {
+    policy.validate().map_err(|error| {
+        sink_failure(
+            DurableAuditFailureKind::RetentionRejected,
+            None,
+            error.message().to_string(),
+        )
+    })?;
+    for proof in archive_proofs {
+        proof.validate().map_err(|error| {
+            sink_failure(
+                DurableAuditFailureKind::RetentionRejected,
+                None,
+                error.message().to_string(),
+            )
+        })?;
+    }
+
+    let records = replay_durable_audit_journal(path, &DurableAuditReplayQuery::all())?;
+    let records_scanned = records.len();
+    let high_water_record_lsn = records
+        .last()
+        .map(|record| record.report.evidence.record_lsn);
+    let manager = DurableAuditRetentionManager::new(policy.clone()).map_err(|error| {
+        sink_failure(
+            DurableAuditFailureKind::RetentionRejected,
+            None,
+            error.message().to_string(),
+        )
+    })?;
+    let retained = records
+        .into_iter()
+        .filter_map(|record| {
+            if Some(record.report.evidence.record_lsn) == high_water_record_lsn {
+                return Some(Ok(record));
+            }
+            retain_record_after_prune_evaluation(&manager, archive_proofs, record).transpose()
+        })
+        .collect::<DurableAuditSinkResult<Vec<_>>>()?;
+    let report = DurableAuditCompactionReport::from_records(records_scanned, &retained).map_err(
+        |error| {
+            sink_failure(
+                DurableAuditFailureKind::RetentionRejected,
+                None,
+                error.message().to_string(),
+            )
+        },
+    )?;
+
+    rewrite_compacted_journal(path, &retained)?;
+    replay_durable_audit_journal(path, &DurableAuditReplayQuery::all())?;
+    Ok(report)
+}
+
+fn retain_record_after_prune_evaluation(
+    manager: &DurableAuditRetentionManager,
+    archive_proofs: &[DurableAuditWalSegmentArchiveProof],
+    record: DurableAuditReplayRecord,
+) -> DurableAuditSinkResult<Option<DurableAuditReplayRecord>> {
+    let archive_proof = archive_proof_for_record(&record, archive_proofs);
+    let evidence = manager
+        .evaluate_prune(&record, archive_proof)
+        .map_err(|error| {
+            sink_failure(
+                DurableAuditFailureKind::RetentionRejected,
+                Some(record.report.identity),
+                error.message().to_string(),
+            )
+        })?;
+    Ok((!evidence.prune_allowed).then_some(record))
+}
+
+fn archive_proof_for_record(
+    record: &DurableAuditReplayRecord,
+    archive_proofs: &[DurableAuditWalSegmentArchiveProof],
+) -> Option<DurableAuditWalSegmentArchiveProof> {
+    archive_proofs
+        .iter()
+        .find(|proof| {
+            proof.covers(record.report.evidence)
+                && proof.checksum == record.report.evidence.checksum
+        })
+        .or_else(|| {
+            archive_proofs
+                .iter()
+                .find(|proof| proof.covers(record.report.evidence))
+        })
+        .cloned()
+}
+
+fn rewrite_compacted_journal(
+    path: &Path,
+    retained: &[DurableAuditReplayRecord],
+) -> DurableAuditSinkResult<()> {
+    let tmp_path = path.with_extension(format!(
+        "{}.compact.tmp",
+        path.extension()
+            .and_then(|extension| extension.to_str())
+            .unwrap_or("audit")
+    ));
+    let _ = fs::remove_file(&tmp_path);
+
+    let mut tmp = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&tmp_path)
+        .map_err(|error| {
+            sink_failure(
+                DurableAuditFailureKind::RetentionRejected,
+                None,
+                format!("failed to open durable audit compaction temporary journal: {error}"),
+            )
+        })?;
+    for record in retained {
+        let line = journal_line(record).map_err(|error| {
+            sink_failure(
+                DurableAuditFailureKind::RetentionRejected,
+                Some(record.report.identity),
+                error.message().to_string(),
+            )
+        })?;
+        tmp.write_all(line.as_bytes()).map_err(|error| {
+            sink_failure(
+                DurableAuditFailureKind::RetentionRejected,
+                Some(record.report.identity),
+                format!("failed to write durable audit compaction temporary journal: {error}"),
+            )
+        })?;
+    }
+    tmp.sync_all().map_err(|error| {
+        sink_failure(
+            DurableAuditFailureKind::RetentionRejected,
+            None,
+            format!("failed to flush durable audit compaction temporary journal: {error}"),
+        )
+    })?;
+    drop(tmp);
+
+    let compacted = fs::read(&tmp_path).map_err(|error| {
+        sink_failure(
+            DurableAuditFailureKind::RetentionRejected,
+            None,
+            format!("failed to read durable audit compaction temporary journal: {error}"),
+        )
+    })?;
+    let mut target = OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(path)
+        .map_err(|error| {
+            sink_failure(
+                DurableAuditFailureKind::RetentionRejected,
+                None,
+                format!("failed to rewrite durable audit compacted journal: {error}"),
+            )
+        })?;
+    target.write_all(&compacted).map_err(|error| {
+        sink_failure(
+            DurableAuditFailureKind::RetentionRejected,
+            None,
+            format!("failed to persist durable audit compacted journal: {error}"),
+        )
+    })?;
+    target.sync_all().map_err(|error| {
+        sink_failure(
+            DurableAuditFailureKind::RetentionRejected,
+            None,
+            format!("failed to flush durable audit compacted journal: {error}"),
+        )
+    })?;
+    drop(target);
+    let _ = fs::remove_file(tmp_path);
+
+    Ok(())
 }

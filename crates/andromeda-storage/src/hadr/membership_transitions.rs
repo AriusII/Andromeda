@@ -357,35 +357,26 @@ mod tests {
     }
 
     #[test]
-    fn state_tracker_records_history() {
+    fn state_tracker_records_history() -> Result<(), TransitionError> {
         let mut tracker = MembershipStateTracker::new(42);
         assert_eq!(tracker.current(), MembershipState::Initial);
 
-        let _ = tracker
-            .try_transition(TransitionEvent::HeartbeatReceived, 0)
-            .unwrap();
+        let _ = tracker.try_transition(TransitionEvent::HeartbeatReceived, 0)?;
         assert_eq!(tracker.current(), MembershipState::Active);
         assert_eq!(tracker.history().len(), 1);
 
-        let _ = tracker
-            .try_transition(TransitionEvent::HeartbeatMissed, 1)
-            .unwrap();
+        let _ = tracker.try_transition(TransitionEvent::HeartbeatMissed, 1)?;
         assert_eq!(tracker.current(), MembershipState::Suspect);
         assert_eq!(tracker.history().len(), 2);
+        Ok(())
     }
 
     #[test]
-    fn state_tracker_transition_count() {
+    fn state_tracker_transition_count() -> Result<(), TransitionError> {
         let mut tracker = MembershipStateTracker::new(42);
-        let _ = tracker
-            .try_transition(TransitionEvent::HeartbeatReceived, 0)
-            .unwrap();
-        let _ = tracker
-            .try_transition(TransitionEvent::HeartbeatMissed, 1)
-            .unwrap();
-        let _ = tracker
-            .try_transition(TransitionEvent::HeartbeatReceived, 2)
-            .unwrap();
+        let _ = tracker.try_transition(TransitionEvent::HeartbeatReceived, 0)?;
+        let _ = tracker.try_transition(TransitionEvent::HeartbeatMissed, 1)?;
+        let _ = tracker.try_transition(TransitionEvent::HeartbeatReceived, 2)?;
 
         assert_eq!(
             tracker.transition_count(TransitionEvent::HeartbeatReceived),
@@ -395,5 +386,6 @@ mod tests {
             tracker.transition_count(TransitionEvent::HeartbeatMissed),
             1
         );
+        Ok(())
     }
 }

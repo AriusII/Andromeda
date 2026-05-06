@@ -147,19 +147,15 @@ impl BackupWalSegmentArtifact {
             ));
         }
         match self.base_previous_lsn {
-            Some(previous) => {
-                if previous.try_next()? != self.first_lsn {
-                    return Err(backup_error(
-                        "backup WAL segment base previous LSN must chain to first LSN",
-                    ));
-                }
+            Some(previous) if previous.try_next()? != self.first_lsn => {
+                return Err(backup_error(
+                    "backup WAL segment base previous LSN must chain to first LSN",
+                ));
             }
+            Some(_) => {}
             None => {
-                if self.first_lsn != Lsn::new(1) {
-                    return Err(backup_error(
-                        "backup WAL segment without base previous LSN must start at LSN 1",
-                    ));
-                }
+                // First segment in a backup archive starts at the manifest's
+                // archive start, which may be later than global LSN 1 for PITR.
             }
         }
         self.artifact.validate("backup WAL segment artifact")

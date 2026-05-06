@@ -1,6 +1,6 @@
-use crate::diagnostic_json::{DIAGNOSTIC_JSON_FLAG, JSON_FLAG, parse_diagnostic_json_flag};
+use crate::diagnostic_json::{DIAGNOSTIC_JSON_FLAG, JSON_FLAG};
 use crate::error::cli_error;
-use crate::parse::{next_option_value, parse_u32_option, parse_u64_option};
+use crate::parse::{next_option_value_rejecting_flag, parse_u32_option, parse_u64_option};
 use andromeda_bench::{
     BenchmarkHardwareProfile, BenchmarkRunRequest, DEFAULT_DURATION_MS, DEFAULT_SAMPLES,
     DEFAULT_WARMUPS,
@@ -25,7 +25,7 @@ pub(super) fn parse_benchmark_run_options(args: &[String]) -> AndromedaResult<Be
     while index < args.len() {
         match args[index].as_str() {
             "--duration-ms" => {
-                let value = next_option_value(
+                let value = next_option_value_rejecting_flag(
                     args,
                     &mut index,
                     "--duration-ms requires an unsigned integer",
@@ -33,17 +33,23 @@ pub(super) fn parse_benchmark_run_options(args: &[String]) -> AndromedaResult<Be
                 duration_ms = parse_u64_option(value, "--duration-ms")?;
             }
             "--samples" => {
-                let value =
-                    next_option_value(args, &mut index, "--samples requires an unsigned integer")?;
+                let value = next_option_value_rejecting_flag(
+                    args,
+                    &mut index,
+                    "--samples requires an unsigned integer",
+                )?;
                 samples = parse_u32_option(value, "--samples")?;
             }
             "--warmups" => {
-                let value =
-                    next_option_value(args, &mut index, "--warmups requires an unsigned integer")?;
+                let value = next_option_value_rejecting_flag(
+                    args,
+                    &mut index,
+                    "--warmups requires an unsigned integer",
+                )?;
                 warmups = parse_u32_option(value, "--warmups")?;
             }
             "--hardware-profile" => {
-                let value = next_option_value(
+                let value = next_option_value_rejecting_flag(
                     args,
                     &mut index,
                     "--hardware-profile requires a profile name",
@@ -57,7 +63,9 @@ pub(super) fn parse_benchmark_run_options(args: &[String]) -> AndromedaResult<Be
                 ));
             }
             opt if opt.starts_with("--") => {
-                return Err(cli_error(format!("unknown benchmark run option: {opt}")));
+                return Err(cli_error(
+                    "unknown benchmark run option; supported options are --duration-ms, --samples, --warmups, --hardware-profile, and --diagnostic-json",
+                ));
             }
             value => {
                 if workload_id.is_some() {
@@ -91,16 +99,37 @@ pub(super) fn parse_benchmark_run_options(args: &[String]) -> AndromedaResult<Be
 }
 
 pub(super) fn has_diagnostic_json_option(args: &[String]) -> AndromedaResult<bool> {
-    parse_diagnostic_json_flag(args, "benchmark")
+    let mut diagnostic_json = false;
+    for arg in args {
+        match arg.as_str() {
+            DIAGNOSTIC_JSON_FLAG => diagnostic_json = true,
+            JSON_FLAG => {
+                return Err(cli_error(
+                    "benchmark uses --diagnostic-json to make JSON diagnostic-only explicit",
+                ));
+            }
+            opt if opt.starts_with("--") => {
+                return Err(cli_error(
+                    "unknown benchmark option; supported output option is --diagnostic-json",
+                ));
+            }
+            _ => {
+                return Err(cli_error(
+                    "unexpected benchmark argument; supported output option is --diagnostic-json",
+                ));
+            }
+        }
+    }
+    Ok(diagnostic_json)
 }
 
 fn parse_hardware_profile(value: &str) -> AndromedaResult<BenchmarkHardwareProfile> {
     match value {
         "conservative" => Ok(BenchmarkHardwareProfile::Conservative),
         "declared-local" => Ok(BenchmarkHardwareProfile::DeclaredLocal),
-        other => Err(cli_error(format!(
-            "unknown benchmark hardware profile `{other}`; expected conservative or declared-local"
-        ))),
+        _ => Err(cli_error(
+            "unknown benchmark hardware profile; expected conservative or declared-local",
+        )),
     }
 }
 
@@ -187,6 +216,42 @@ mod tests {
     fn rejects_plain_json_alias() {
         assert!(parse_benchmark_run_options(&strings(&["vertical-v0-smoke", "--json"])).is_err());
         assert!(has_diagnostic_json_option(&strings(&["--json"])).is_err());
+    }
+
+    #[test]
+    fn rejects_flag_as_numeric_option_value() {
+        let err = parse_benchmark_run_options(&strings(&[
+            "vertical-v0-smoke",
+            "--duration-ms",
+            "--samples",
+        ]))
+        .unwrap_err();
+
+        assert_eq!(err.message(), "--duration-ms requires an unsigned integer");
+    }
+
+    #[test]
+    fn benchmark_option_errors_do_not_echo_values() {
+        let err =
+            parse_benchmark_run_options(&strings(&["vertical-v0-smoke", "--token=super-secret"]))
+                .unwrap_err();
+        assert_eq!(
+            err.message(),
+            "unknown benchmark run option; supported options are --duration-ms, --samples, --warmups, --hardware-profile, and --diagnostic-json"
+        );
+        assert!(!err.message().contains("super-secret"));
+
+        let err = parse_benchmark_run_options(&strings(&[
+            "vertical-v0-smoke",
+            "--hardware-profile",
+            "super-secret",
+        ]))
+        .unwrap_err();
+        assert_eq!(
+            err.message(),
+            "unknown benchmark hardware profile; expected conservative or declared-local"
+        );
+        assert!(!err.message().contains("super-secret"));
     }
 
     #[test]

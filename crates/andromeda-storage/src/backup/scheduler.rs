@@ -273,7 +273,7 @@ mod tests {
     use andromeda_observe::TraceId;
 
     #[test]
-    fn test_backup_io_scheduler_creates_schedule() {
+    fn test_backup_io_scheduler_creates_schedule() -> AndromedaResult<()> {
         let scheduler = BackupIOScheduler::new(4096, 1000, 100); // 1000 MB/s NVMe, 100 MB/s HDD
 
         let plan = BackupPhysicalPlan::new(
@@ -288,14 +288,15 @@ mod tests {
             1,
         );
 
-        let schedule = scheduler.schedule_page_scan(&plan).unwrap();
+        let schedule = scheduler.schedule_page_scan(&plan)?;
         assert!(!schedule.tasks.is_empty());
         assert!(schedule.total_estimated_duration_ms > 0);
         assert_eq!(schedule.peak_throughput_mbps, 1000);
+        Ok(())
     }
 
     #[test]
-    fn test_backup_io_schedule_respects_budget() {
+    fn test_backup_io_schedule_respects_budget() -> AndromedaResult<()> {
         let scheduler = BackupIOScheduler::new(4096, 500, 100);
 
         let plan = BackupPhysicalPlan::new(
@@ -310,12 +311,13 @@ mod tests {
             1,
         );
 
-        let schedule = scheduler.schedule_page_scan(&plan).unwrap();
+        let schedule = scheduler.schedule_page_scan(&plan)?;
 
         // Should respect combined budget
         assert!(schedule.respects_budget(500, 100).is_ok());
 
         // Should fail if budget is too tight
         assert!(schedule.respects_budget(50, 10).is_err());
+        Ok(())
     }
 }

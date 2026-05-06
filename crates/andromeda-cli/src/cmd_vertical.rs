@@ -39,13 +39,13 @@ pub fn run_vertical_demo() -> AndromedaResult<()> {
     let outcome = runtime.execute_authorized(request, &procedure, &context)?;
     let durable_lsn = outcome
         .completion
-        .durable_lsn
+        .durable_lsn()
         .unwrap_or_else(|| Lsn::new(0));
 
     println!("Andromeda Phase 1 local vertical prototype");
     println!("procedure: {}", contract.object.name.as_catalog_path());
-    println!("status: {:?}", outcome.completion.status);
-    println!("rows affected: {:?}", outcome.completion.rows_affected);
+    println!("status: {:?}", outcome.completion.status());
+    println!("rows affected: {:?}", outcome.completion.rows_affected());
     println!("remaining stock: {}", effect.result.remaining_quantity);
     println!("durable WAL LSN: {}", durable_lsn.get());
     println!(
@@ -63,7 +63,7 @@ pub fn run_vertical_demo() -> AndromedaResult<()> {
         );
     }
 
-    debug_assert_eq!(outcome.completion.status, CompletionStatus::Committed);
+    debug_assert_eq!(outcome.completion.status(), CompletionStatus::Committed);
     Ok(())
 }
 
@@ -109,10 +109,10 @@ pub fn run_vertical_v0_demo(wal_path: PathBuf) -> AndromedaResult<()> {
 
     println!("Andromeda V0 recoverable vertical prototype");
     println!("procedure: {}", contract.object.name.as_catalog_path());
-    println!("status: {:?}", outcome.vertical.completion.status);
+    println!("status: {:?}", outcome.vertical.completion.status());
     println!(
         "rows affected: {:?}",
-        outcome.vertical.completion.rows_affected
+        outcome.vertical.completion.rows_affected()
     );
     println!(
         "remaining stock: {}",
@@ -129,7 +129,7 @@ pub fn run_vertical_v0_demo(wal_path: PathBuf) -> AndromedaResult<()> {
     println!("result frames: {}", outcome.result_frames.len());
 
     debug_assert_eq!(
-        outcome.vertical.completion.status,
+        outcome.vertical.completion.status(),
         CompletionStatus::Committed
     );
     Ok(())
@@ -171,6 +171,9 @@ pub fn print_help() {
     println!();
     println!("ADMIN COMMANDS:");
     println!("run `andromeda-cli hadr [status|promote|demote|quorum]` for HADR administration");
+    println!(
+        "run `andromeda-cli audit query [--journal <path>] [--json]` for durable audit trace queries"
+    );
     println!(
         "run `andromeda-cli benchmark [workloads|contract|run]` for bounded diagnostic benchmark orchestration"
     );

@@ -7,6 +7,10 @@ use andromeda_quic::{
     RetryRejectionReason, SurfacePlane,
 };
 
+fn fp(ch: char) -> String {
+    ch.to_string().repeat(64)
+}
+
 #[test]
 fn pool_key_separates_same_server_identity_by_surface_plane() {
     let mut pool = ConnectionPool::new(ConnectionPoolPolicy {
@@ -16,8 +20,8 @@ fn pool_key_separates_same_server_identity_by_surface_plane() {
     })
     .unwrap();
 
-    let app_key = ConnectionPoolKey::new("server-a", SurfacePlane::Application).unwrap();
-    let hadr_key = ConnectionPoolKey::new("server-a", SurfacePlane::HighAvailability).unwrap();
+    let app_key = ConnectionPoolKey::new(fp('a'), SurfacePlane::Application).unwrap();
+    let hadr_key = ConnectionPoolKey::new(fp('a'), SurfacePlane::HighAvailability).unwrap();
 
     let app = pool.admit_or_reuse(app_key.clone(), 0).unwrap();
     let app_reused = pool.admit_or_reuse(app_key, 10).unwrap();
@@ -38,7 +42,7 @@ fn pool_capacity_blocks_new_connection_until_unhealthy_eviction() {
         evict_unhealthy: false,
     })
     .unwrap();
-    let key = ConnectionPoolKey::new("server-a", SurfacePlane::Application).unwrap();
+    let key = ConnectionPoolKey::new(fp('a'), SurfacePlane::Application).unwrap();
 
     let admitted = pool.admit_or_reuse(key.clone(), 0).unwrap();
     pool.mark_unhealthy(admitted.connection_id).unwrap();
@@ -60,7 +64,7 @@ fn idle_timeout_evicts_only_connections_past_policy_boundary() {
         evict_unhealthy: true,
     })
     .unwrap();
-    let key = ConnectionPoolKey::new("server-a", SurfacePlane::Monitoring).unwrap();
+    let key = ConnectionPoolKey::new(fp('a'), SurfacePlane::Monitoring).unwrap();
 
     let admitted = pool.admit_or_reuse(key, 5).unwrap();
 

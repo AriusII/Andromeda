@@ -244,7 +244,7 @@ fn allowed_application_surface_dispatch_can_execute_with_token() {
 
     assert_eq!(token.plane(), SurfacePlane::Application);
     assert_eq!(token.audit().outcome, SecurityAuditOutcome::Allowed);
-    assert_eq!(outcome.completion.status, CompletionStatus::Committed);
+    assert_eq!(outcome.completion.status(), CompletionStatus::Committed);
     assert!(!runtime.wal().is_empty());
 }
 

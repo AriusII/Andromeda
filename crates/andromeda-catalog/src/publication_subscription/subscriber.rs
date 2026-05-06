@@ -19,3 +19,33 @@ impl CatalogSubscriberId {
         &self.0
     }
 }
+
+/// Runtime class for administrative catalog subscribers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CatalogSubscriberKind {
+    Administration,
+    HadrReplica,
+}
+
+/// Subscriber registration tracked by the publication/subscription runtime.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatalogSubscriberRegistration {
+    pub subscriber_id: CatalogSubscriberId,
+    pub kind: CatalogSubscriberKind,
+}
+
+impl CatalogSubscriberRegistration {
+    pub fn administration(subscriber_id: CatalogSubscriberId) -> Self {
+        Self {
+            subscriber_id,
+            kind: CatalogSubscriberKind::Administration,
+        }
+    }
+
+    pub fn hadr_replica(subscriber_id: CatalogSubscriberId) -> Self {
+        Self {
+            subscriber_id,
+            kind: CatalogSubscriberKind::HadrReplica,
+        }
+    }
+}

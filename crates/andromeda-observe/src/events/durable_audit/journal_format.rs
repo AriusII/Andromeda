@@ -8,8 +8,9 @@ use andromeda_core::{AndromedaResult, RequestId, SessionId};
 
 use super::{
     DurableAuditEventFamily, DurableAuditFailureKind, DurableAuditPrincipalBinding,
-    DurableAuditRecordIdentity, DurableAuditReplayBehavior, DurableAuditReplayQuery,
-    DurableAuditReplayRecord, DurableAuditRetentionBoundary, DurableAuditSinkReport,
+    DurableAuditRecordIdentity, DurableAuditReplayBehavior, DurableAuditReplayEvidence,
+    DurableAuditReplayQuery, DurableAuditReplayRecord, DurableAuditReplayResult,
+    DurableAuditReplayWindow, DurableAuditRetentionBoundary, DurableAuditSinkReport,
     DurableAuditSinkResult, DurableAuditWalEvidence, checksum64, sink_failure,
 };
 use crate::{
@@ -24,7 +25,25 @@ pub(super) fn replay_durable_audit_journal(
     path: &Path,
     query: &DurableAuditReplayQuery,
 ) -> DurableAuditSinkResult<Vec<DurableAuditReplayRecord>> {
+    Ok(
+        replay_durable_audit_journal_with_evidence(path, query, DurableAuditReplayWindow::ALL)?
+            .records,
+    )
+}
+
+pub(super) fn replay_durable_audit_journal_with_evidence(
+    path: &Path,
+    query: &DurableAuditReplayQuery,
+    window: DurableAuditReplayWindow,
+) -> DurableAuditSinkResult<DurableAuditReplayResult> {
     query.validate().map_err(|error| {
+        sink_failure(
+            DurableAuditFailureKind::ValidationRejected,
+            None,
+            error.message().to_string(),
+        )
+    })?;
+    window.validate().map_err(|error| {
         sink_failure(
             DurableAuditFailureKind::ValidationRejected,
             None,
@@ -33,7 +52,10 @@ pub(super) fn replay_durable_audit_journal(
     })?;
 
     if !path.exists() {
-        return Ok(Vec::new());
+        return Ok(DurableAuditReplayResult {
+            evidence: DurableAuditReplayEvidence::empty(query, window),
+            records: Vec::new(),
+        });
     }
 
     let file = File::open(path).map_err(|error| {
@@ -46,6 +68,11 @@ pub(super) fn replay_durable_audit_journal(
     let reader = BufReader::new(file);
     let mut records = Vec::new();
     let mut previous_lsn = 0u64;
+    let mut records_scanned = 0usize;
+    let mut records_matched = 0usize;
+    let mut skipped = 0usize;
+    let mut first_returned_lsn = None;
+    let mut last_returned_lsn = None;
 
     for (line_index, line) in reader.lines().enumerate() {
         let line = line.map_err(|error| {
@@ -65,6 +92,7 @@ pub(super) fn replay_durable_audit_journal(
                 ),
             )
         })?;
+        records_scanned = records_scanned.saturating_add(1);
         if record.report.evidence.record_lsn <= previous_lsn {
             return Err(sink_failure(
                 DurableAuditFailureKind::CorruptionDetected,
@@ -75,11 +103,35 @@ pub(super) fn replay_durable_audit_journal(
         previous_lsn = record.report.evidence.record_lsn;
 
         if record.matches_query(query) {
-            records.push(record);
+            records_matched = records_matched.saturating_add(1);
+            if skipped < window.offset {
+                skipped = skipped.saturating_add(1);
+                continue;
+            }
+            if records.len() < window.limit {
+                let record_lsn = record.report.evidence.record_lsn;
+                first_returned_lsn.get_or_insert(record_lsn);
+                last_returned_lsn = Some(record_lsn);
+                records.push(record);
+            }
         }
     }
 
-    Ok(records)
+    let records_returned = records.len();
+    Ok(DurableAuditReplayResult {
+        evidence: DurableAuditReplayEvidence {
+            records_scanned,
+            records_matched,
+            records_returned,
+            filter_applied: query.has_filter(),
+            limit: window.limit,
+            offset: window.offset,
+            truncated: records_matched.saturating_sub(window.offset) > records_returned,
+            first_returned_lsn,
+            last_returned_lsn,
+        },
+        records,
+    })
 }
 
 pub(super) fn next_record_lsn(
@@ -95,7 +147,20 @@ pub(super) fn next_record_lsn(
             )
         })?
         .len();
-    Ok(len.saturating_add(1))
+    if len == 0 {
+        return Ok(1);
+    }
+
+    replay_durable_audit_journal(path, &DurableAuditReplayQuery::all())?
+        .last()
+        .map(|record| record.report.evidence.record_lsn.saturating_add(1))
+        .ok_or_else(|| {
+            sink_failure(
+                DurableAuditFailureKind::CorruptionDetected,
+                identity,
+                "durable audit journal contains bytes but no replayable records",
+            )
+        })
 }
 
 pub(super) fn journal_line(record: &DurableAuditReplayRecord) -> AndromedaResult<String> {
@@ -146,6 +211,12 @@ fn parse_journal_line(line: &str) -> Result<DurableAuditReplayRecord, String> {
     let (payload, checksum_field) = line
         .rsplit_once("|checksum=")
         .ok_or_else(|| "missing checksum field".to_string())?;
+    if !payload.is_ascii() {
+        return Err("durable audit journal payload must be ASCII".to_string());
+    }
+    if checksum_field.len() != 16 || !checksum_field.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err("checksum field must be 16 ASCII hex characters".to_string());
+    }
     let expected_checksum = u64::from_str_radix(checksum_field, 16)
         .map_err(|_| "checksum field is not valid hex".to_string())?;
     let actual_checksum = checksum64(payload.as_bytes());
@@ -260,12 +331,21 @@ fn decode_string(value: &str) -> Result<String, String> {
         return Err("hex string has odd length".to_string());
     }
     let mut bytes = Vec::with_capacity(value.len() / 2);
-    for offset in (0..value.len()).step_by(2) {
-        let byte = u8::from_str_radix(&value[offset..offset + 2], 16)
-            .map_err(|_| "hex string contains non-hex bytes".to_string())?;
-        bytes.push(byte);
+    for pair in value.as_bytes().chunks_exact(2) {
+        let high = decode_hex_nibble(pair[0])?;
+        let low = decode_hex_nibble(pair[1])?;
+        bytes.push((high << 4) | low);
     }
     String::from_utf8(bytes).map_err(|_| "hex string is not valid UTF-8".to_string())
+}
+
+fn decode_hex_nibble(byte: u8) -> Result<u8, String> {
+    match byte {
+        b'0'..=b'9' => Ok(byte - b'0'),
+        b'a'..=b'f' => Ok(byte - b'a' + 10),
+        b'A'..=b'F' => Ok(byte - b'A' + 10),
+        _ => Err("hex string contains non-hex bytes".to_string()),
+    }
 }
 
 fn decode_optional_string(value: &str) -> Result<Option<String>, String> {
@@ -281,6 +361,10 @@ fn format_family(value: DurableAuditEventFamily) -> &'static str {
         DurableAuditEventFamily::AdminDecision => "AdminDecision",
         DurableAuditEventFamily::AdmissionDecision => "AdmissionDecision",
         DurableAuditEventFamily::CatalogDecision => "CatalogDecision",
+        DurableAuditEventFamily::HadrDecision => "HadrDecision",
+        DurableAuditEventFamily::BackupDecision => "BackupDecision",
+        DurableAuditEventFamily::RestoreDecision => "RestoreDecision",
+        DurableAuditEventFamily::ForensicDecision => "ForensicDecision",
         DurableAuditEventFamily::RecoveryDecision => "RecoveryDecision",
         DurableAuditEventFamily::GenericAudit => "GenericAudit",
     }
@@ -292,6 +376,10 @@ fn parse_family(value: &str) -> Result<DurableAuditEventFamily, String> {
         "AdminDecision" => Ok(DurableAuditEventFamily::AdminDecision),
         "AdmissionDecision" => Ok(DurableAuditEventFamily::AdmissionDecision),
         "CatalogDecision" => Ok(DurableAuditEventFamily::CatalogDecision),
+        "HadrDecision" => Ok(DurableAuditEventFamily::HadrDecision),
+        "BackupDecision" => Ok(DurableAuditEventFamily::BackupDecision),
+        "RestoreDecision" => Ok(DurableAuditEventFamily::RestoreDecision),
+        "ForensicDecision" => Ok(DurableAuditEventFamily::ForensicDecision),
         "RecoveryDecision" => Ok(DurableAuditEventFamily::RecoveryDecision),
         "GenericAudit" => Ok(DurableAuditEventFamily::GenericAudit),
         _ => Err("unknown durable audit family".to_string()),

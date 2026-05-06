@@ -2,10 +2,10 @@
 
 //! Cross-commit benchmark history integration tests.
 
-use crate::{BenchmarkHistoryRecord, BenchmarkHistoryStore, HistoryQuery, TimeRange};
+use andromeda_bench::{BenchmarkHistoryRecord, BenchmarkHistoryStore, HistoryQuery, TimeRange};
 
 #[test]
-fn test_detect_regression_onset() {
+fn detects_regression_onset_across_commits() {
     let mut store = BenchmarkHistoryStore::new(".andromeda/benchmark-history".to_string());
 
     let commits = [
@@ -49,7 +49,7 @@ fn test_detect_regression_onset() {
 }
 
 #[test]
-fn test_track_performance_improvement() {
+fn tracks_performance_improvement_across_commits() {
     let mut store = BenchmarkHistoryStore::new(".andromeda/benchmark-history".to_string());
 
     let commits = [
@@ -84,7 +84,7 @@ fn test_track_performance_improvement() {
 }
 
 #[test]
-fn test_error_rate_regression_tracking() {
+fn tracks_error_rate_regression_across_commits() {
     let mut store = BenchmarkHistoryStore::new(".andromeda/benchmark-history".to_string());
 
     let commits = [
@@ -122,7 +122,7 @@ fn test_error_rate_regression_tracking() {
 }
 
 #[test]
-fn test_multi_workload_history() {
+fn stores_history_for_multiple_workloads() {
     let mut store = BenchmarkHistoryStore::new(".andromeda/benchmark-history".to_string());
 
     let workloads = [
@@ -157,7 +157,7 @@ fn test_multi_workload_history() {
 }
 
 #[test]
-fn test_json_serialization_round_trip() {
+fn serializes_history_to_json_lines_and_imports_it() {
     let mut store = BenchmarkHistoryStore::new(".andromeda/benchmark-history".to_string());
 
     let records = vec![
@@ -208,7 +208,7 @@ fn test_json_serialization_round_trip() {
 }
 
 #[test]
-fn test_time_range_queries() {
+fn filters_history_by_time_range() {
     let mut store = BenchmarkHistoryStore::new(".andromeda/benchmark-history".to_string());
 
     let records = [
@@ -245,7 +245,7 @@ fn test_time_range_queries() {
 }
 
 #[test]
-fn test_query_specific_commit() {
+fn filters_history_by_commit_id() {
     let mut store = BenchmarkHistoryStore::new(".andromeda/benchmark-history".to_string());
 
     for i in 1..=5 {
@@ -271,7 +271,7 @@ fn test_query_specific_commit() {
 }
 
 #[test]
-fn test_stable_performance_no_regression() {
+fn stable_performance_does_not_create_regression_point() {
     let mut store = BenchmarkHistoryStore::new(".andromeda/benchmark-history".to_string());
 
     let commits = [
@@ -305,7 +305,7 @@ fn test_stable_performance_no_regression() {
 }
 
 #[test]
-fn test_store_clear() {
+fn clearing_store_removes_history_records() {
     let mut store = BenchmarkHistoryStore::new(".andromeda/benchmark-history".to_string());
 
     for i in 1..=5 {
@@ -330,7 +330,7 @@ fn test_store_clear() {
 }
 
 #[test]
-fn test_regression_gate_workflow() {
+fn regression_gate_workflow_updates_history_and_finds_regression() {
     let mut history_store = BenchmarkHistoryStore::new(".andromeda/benchmark-history".to_string());
 
     let historical_json_lines = r#"{"workload_id":"protocol-smoke-contract","commit_id":"abc001","timestamp":"2026-01-15T10:00:00Z","p50_latency_us":10000,"p95_latency_us":50000,"error_count":0,"sample_count":20,"branch":"main","pr_number":null}
@@ -374,7 +374,7 @@ fn test_regression_gate_workflow() {
 }
 
 #[test]
-fn test_empty_store() {
+fn empty_store_reports_no_history() {
     let store = BenchmarkHistoryStore::new(".andromeda/benchmark-history".to_string());
 
     assert_eq!(store.total_records(), 0);
@@ -385,7 +385,7 @@ fn test_empty_store() {
 }
 
 #[test]
-fn test_record_metadata_preservation() {
+fn preserves_branch_and_pr_metadata() {
     let mut store = BenchmarkHistoryStore::new(".andromeda/benchmark-history".to_string());
 
     let record = BenchmarkHistoryRecord::new(

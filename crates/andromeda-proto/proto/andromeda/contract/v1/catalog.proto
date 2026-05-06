@@ -192,21 +192,21 @@ message CatalogMap {
   reserved 32 to 63;
 }
 
-// View catalog object: represents a logical view (query definition).
-message CatalogView {
-  uint64 view_id = 1;                // Validation-required: nonzero.
-  string view_name = 2;              // Validation-required: non-empty.
+// Immediate Map catalog object: represents a projection evaluated at Invocation time.
+message CatalogImmediateMap {
+  uint64 map_id = 1;                 // Validation-required: nonzero.
+  string map_name = 2;               // Validation-required: non-empty.
   uint64 catalog_version = 3;        // Validation-required: nonzero.
   
-  // View result columns.
+  // Map result columns.
   repeated ColumnDescriptor result_columns = 4;
   
-  // Serialized query definition (opaque to catalog; handled by query layer).
-  optional bytes query_definition = 5;
+  // Serialized SRPL Map definition, opaque to catalog and validated by the SRPL layer.
+  optional bytes map_definition = 5;
   
-  // Dependent tables/views (for invalidation tracking).
+  // Dependent tables and Maps for invalidation tracking.
   repeated uint64 depends_on_table_ids = 6;
-  repeated uint64 depends_on_view_ids = 7;
+  repeated uint64 depends_on_map_ids = 7;
   
   // Created and updated timestamps.
   optional uint64 created_at_ms = 8;
@@ -219,20 +219,20 @@ message CatalogView {
   reserved 32 to 63;
 }
 
-// Materialized view catalog object: represents a cached query result.
-message CatalogMaterializedView {
-  uint64 view_id = 1;                // Validation-required: nonzero.
-  string view_name = 2;              // Validation-required: non-empty.
+// Incremental Map catalog object: represents a maintained projection with persisted state.
+message CatalogIncrementalMap {
+  uint64 map_id = 1;                 // Validation-required: nonzero.
+  string map_name = 2;               // Validation-required: non-empty.
   uint64 catalog_version = 3;        // Validation-required: nonzero.
   
-  // Result columns.
+  // Map result columns.
   repeated ColumnDescriptor result_columns = 4;
   
-  // Underlying table ID that stores the materialized data.
+  // Underlying table ID that stores the maintained Map state.
   uint64 backing_table_id = 5;
   
-  // Query definition.
-  optional bytes query_definition = 6;
+  // Serialized SRPL Map definition, opaque to catalog and validated by the SRPL layer.
+  optional bytes map_definition = 6;
   
   // Refresh policy (e.g., "ON_DEMAND", "SCHEDULED", "INCREMENTAL").
   optional string refresh_policy = 7;
@@ -240,9 +240,9 @@ message CatalogMaterializedView {
   // Last refresh timestamp.
   optional uint64 last_refreshed_at_ms = 8;
   
-  // Dependent tables/views.
+  // Dependent tables and Maps.
   repeated uint64 depends_on_table_ids = 9;
-  repeated uint64 depends_on_view_ids = 10;
+  repeated uint64 depends_on_map_ids = 10;
   
   // Created and updated timestamps.
   optional uint64 created_at_ms = 11;
@@ -333,8 +333,8 @@ message CatalogObject {
     CatalogTable table = 6;
     CatalogIndex index = 7;
     CatalogMap map = 8;
-    CatalogView view = 9;
-    CatalogMaterializedView materialized_view = 10;
+    CatalogImmediateMap immediate_map = 9;
+    CatalogIncrementalMap incremental_map = 10;
     CatalogSequence sequence = 11;
     CatalogPartition partition = 12;
   }
@@ -343,7 +343,7 @@ message CatalogObject {
   reserved 32 to 63;
 }
 
-// Catalog snapshot: frozen view of all catalog objects at a specific version.
+// Catalog snapshot: frozen representation of all catalog objects at a specific version.
 // Used for checkpoints, backup manifests, and recovery.
 message CatalogSnapshot {
   uint64 catalog_version = 1;        // Validation-required: nonzero.

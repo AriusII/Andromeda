@@ -37,7 +37,7 @@ use crate::Lsn;
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use std::fmt;
 
-use super::WalGcCandidate;
+use super::{WalGcCandidate, WalReplicaSafeLsnTracker};
 
 fn storage_error(message: impl Into<String>) -> AndromedaError {
     AndromedaError::new(AndromedaErrorKind::Storage, message)
@@ -284,6 +284,22 @@ impl DefaultReclaimabilityPolicy {
         )?;
         Ok(Self { boundaries })
     }
+
+    /// Create a policy whose replication boundary is derived from required
+    /// replica shipping ACKs.
+    pub fn with_replica_safe_lsn_tracker(
+        required_recovery_lsn: Lsn,
+        min_active_snapshot_lsn: Lsn,
+        replica_safe_lsn_tracker: &WalReplicaSafeLsnTracker,
+        pitr_retention_lsn: Lsn,
+    ) -> AndromedaResult<Self> {
+        Self::with_lsns(
+            required_recovery_lsn,
+            min_active_snapshot_lsn,
+            replica_safe_lsn_tracker.retention_boundary_lsn(),
+            pitr_retention_lsn,
+        )
+    }
 }
 
 impl WalSegmentReclaimability for DefaultReclaimabilityPolicy {
@@ -305,7 +321,7 @@ impl WalSegmentReclaimability for DefaultReclaimabilityPolicy {
         }
 
         // Rule 3: Check replication boundary
-        if segment.sealing_lsn >= self.boundaries.min_standby_received_lsn {
+        if segment.sealing_lsn > self.boundaries.min_standby_received_lsn {
             return ReclaimabilityDecision::BlockedByReplication {
                 segment_end_lsn: segment.sealing_lsn,
                 min_standby_received_lsn: self.boundaries.min_standby_received_lsn,

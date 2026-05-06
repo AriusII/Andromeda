@@ -20,6 +20,10 @@ use andromeda_storage::format_version::FormatVersion;
 
 #[test]
 fn test_dec038_durable_btree_format_is_not_promoted() {
+    // BTreeNodeV1 decode validation and golden vectors are necessary promotion
+    // evidence, but the durable gate must stay closed until mutation payloads,
+    // WAL replay, split/merge recovery, crash tests, and fuzz coverage are
+    // accepted together under DEC-038.
     const {
         assert!(
             !BTREE_DURABLE_FORMAT_PROMOTED,

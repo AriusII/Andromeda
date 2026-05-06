@@ -40,6 +40,10 @@ pub use btree::{
     BTreeLatchTarget, BTreeMvccInteraction, BTreeNodeImpl, BTreeOperationKind,
     BTreePanicPoisonBehavior, BTreeRangeCursor, BTreeRestartReason, BTreeScanConsistency,
     BTreeStatistics, ColumnId, InMemoryBTreeIndexEngine, IndexId, KeyValuePair, RowId,
+    node_format_v1::{
+        BTREE_NODE_V1_FORMAT_VERSION, BTREE_NODE_V1_HEADER_LEN, BTREE_NODE_V1_MAGIC,
+        BTreeNodeHeaderV1, BTreeNodeKindV1, BTreeNodeV1,
+    },
 };
 pub use btree_format_validation::{
     BTreeKeyFormatIdentity, BTreeOperationType, KeyV1FormatValidator,

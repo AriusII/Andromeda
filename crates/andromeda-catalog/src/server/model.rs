@@ -79,11 +79,11 @@ impl ProcedureManifest {
 pub struct ColumnSchema {
     /// Column name
     pub name: String,
-    /// SQL type descriptor (e.g., "int64", "text", "decimal(18,2)")
+    /// Type descriptor, for example "int64", "text", or "decimal(18,2)"
     pub type_descriptor: String,
     /// Column ordinal (0-based)
     pub ordinal: u32,
-    /// Whether NULL values are permitted
+    /// Whether explicit optional absence values are permitted
     pub nullable: bool,
 }
 
@@ -134,6 +134,34 @@ pub struct CatalogChangeNotification {
 }
 
 impl CatalogChangeNotification {
+    pub fn validate_version_order(&self) -> AndromedaResult<()> {
+        if self.previous_version.get() == 0 || self.new_version.get() == 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "catalog change notification versions must not be zero",
+            ));
+        }
+        if self.new_version <= self.previous_version {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "catalog change notification must advance catalog version ordering",
+            ));
+        }
+        let expected_next = self.previous_version.get().checked_add(1).ok_or_else(|| {
+            AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "catalog change notification version ordering overflowed",
+            )
+        })?;
+        if self.new_version.get() != expected_next {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "catalog change notification version ordering must advance by one catalog version",
+            ));
+        }
+        Ok(())
+    }
+
     /// Determine if the change affected a specific procedure.
     pub fn affects_procedure(&self, _procedure_id: ProcedureId) -> bool {
         self.new_version != self.previous_version

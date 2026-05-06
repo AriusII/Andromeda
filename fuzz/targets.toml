@@ -35,3 +35,27 @@ name = "storage_wal_record_roundtrip"
 path = "fuzz_targets/storage_wal_record_roundtrip.rs"
 corpus_dir = "fuzz/corpus/storage_wal_record_roundtrip"
 generator = "fuzz/generators/generate_seed_corpus.py"
+
+[[target]]
+name = "btree_node_v1_decode"
+path = "fuzz_targets/btree_node_v1_decode.rs"
+corpus_dir = "fuzz/corpus/btree_node_v1_decode"
+generator = "fuzz/generators/generate_seed_corpus.py"
+
+[[target]]
+name = "heap_page_v1_decode"
+path = "fuzz_targets/heap_page_v1_decode.rs"
+corpus_dir = "fuzz/corpus/heap_page_v1_decode"
+generator = "fuzz/generators/generate_seed_corpus.py"
+
+[[target]]
+name = "page_codec_v1_decode"
+path = "fuzz_targets/page_codec_v1_decode.rs"
+corpus_dir = "fuzz/corpus/page_codec_v1_decode"
+generator = "fuzz/generators/generate_seed_corpus.py"
+
+[[target]]
+name = "quic_zero_rtt_admission"
+path = "fuzz_targets/quic_zero_rtt_admission.rs"
+corpus_dir = "fuzz/corpus/quic_zero_rtt_admission"
+generator = "fuzz/generators/generate_seed_corpus.py"

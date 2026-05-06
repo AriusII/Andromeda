@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod args_parser;
+mod audit;
 mod benchmark;
 mod cmd_backup;
 mod cmd_catalog;

@@ -39,10 +39,13 @@ const ALL_WAL_RECORD_KINDS: [WalRecordKind; 26] = [
     WalRecordKind::BTreeMerge,
 ];
 
-const SKIPPED_OR_IMPLEMENTED_KINDS: [WalRecordKind; 9] = [
+const SKIPPED_OR_IMPLEMENTED_KINDS: [WalRecordKind; 12] = [
     WalRecordKind::TxBegin,
     WalRecordKind::TxCommit,
     WalRecordKind::TxRollback,
+    WalRecordKind::RowInsert,
+    WalRecordKind::RowUpdate,
+    WalRecordKind::RowDelete,
     WalRecordKind::CheckpointBegin,
     WalRecordKind::CheckpointEnd,
     WalRecordKind::SnapshotBegin,
@@ -51,12 +54,9 @@ const SKIPPED_OR_IMPLEMENTED_KINDS: [WalRecordKind; 9] = [
     WalRecordKind::SecurityAuditAppend,
 ];
 
-const FUTURE_WORK_KINDS: [WalRecordKind; 17] = [
+const FUTURE_WORK_KINDS: [WalRecordKind; 14] = [
     WalRecordKind::PageAllocate,
     WalRecordKind::PageFormat,
-    WalRecordKind::RowInsert,
-    WalRecordKind::RowUpdate,
-    WalRecordKind::RowDelete,
     WalRecordKind::IndexInsert,
     WalRecordKind::IndexDelete,
     WalRecordKind::MvccVersionCreate,
@@ -74,8 +74,8 @@ const FUTURE_WORK_KINDS: [WalRecordKind; 17] = [
 #[test]
 fn all_record_kinds_are_classified_exactly_once() {
     assert_eq!(ALL_WAL_RECORD_KINDS.len(), 26);
-    assert_eq!(SKIPPED_OR_IMPLEMENTED_KINDS.len(), 9);
-    assert_eq!(FUTURE_WORK_KINDS.len(), 17);
+    assert_eq!(SKIPPED_OR_IMPLEMENTED_KINDS.len(), 12);
+    assert_eq!(FUTURE_WORK_KINDS.len(), 14);
 
     for kind in ALL_WAL_RECORD_KINDS {
         let handled = SKIPPED_OR_IMPLEMENTED_KINDS.contains(&kind);
@@ -124,10 +124,17 @@ fn future_work_records_fail_stop_with_clear_error_and_context() {
             replay_wal_record(&mut ctx, &record).expect_err("future work handlers must fail-stop");
         let message = err.message();
 
-        assert!(
-            message.contains("not promoted"),
-            "{kind:?} error must identify the recovery promotion gate"
-        );
+        if is_index_btree_recovery_kind(kind) {
+            assert!(
+                message.contains("malformed"),
+                "{kind:?} error must identify malformed rebuild evidence payloads"
+            );
+        } else {
+            assert!(
+                message.contains("not promoted"),
+                "{kind:?} error must identify the recovery promotion gate"
+            );
+        }
         assert!(
             message.contains(&format!("{kind:?}")),
             "{kind:?} error must include record kind"
@@ -140,6 +147,18 @@ fn future_work_records_fail_stop_with_clear_error_and_context() {
             ReplayOutcome::NotYetImplemented
         );
     }
+}
+
+fn is_index_btree_recovery_kind(kind: WalRecordKind) -> bool {
+    matches!(
+        kind,
+        WalRecordKind::IndexInsert
+            | WalRecordKind::IndexDelete
+            | WalRecordKind::BTreeInsert
+            | WalRecordKind::BTreeDelete
+            | WalRecordKind::BTreeSplit
+            | WalRecordKind::BTreeMerge
+    )
 }
 
 #[test]

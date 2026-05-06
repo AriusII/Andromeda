@@ -19,13 +19,29 @@ use andromeda_proto::generated::andromeda::protocol::v1::{
 
 use andromeda_proto::generated::andromeda::contract::v1::{
     CatalogProcedureManifestResolutionRequest, CatalogProcedureManifestResolutionResponse,
-    ProcedureManifest, ProtocolLayout as GeneratedProtocolLayout, RequiredPermission,
-    StructuredObjectHeader, catalog_procedure_manifest_resolution_request,
+    ColumnDescriptor, ProcedureManifest, ProtocolLayout as GeneratedProtocolLayout,
+    RequiredPermission, ResultStreamDescriptor, StructuredObjectHeader,
+    catalog_procedure_manifest_resolution_request, result_stream_descriptor,
 };
 use andromeda_proto::{
-    validate_catalog_procedure_manifest_resolution_request,
-    validate_catalog_procedure_manifest_resolution_response,
+    RpcCompletionStatus, validate_catalog_procedure_manifest_resolution_request,
+    validate_catalog_procedure_manifest_resolution_response, validate_generated_rpc_completion,
 };
+
+fn valid_generated_result_stream() -> ResultStreamDescriptor {
+    ResultStreamDescriptor {
+        stream_name: "Reservation".to_string(),
+        columns: vec![ColumnDescriptor {
+            name: "Reserved".to_string(),
+            ordinal: 0,
+            type_name: "bool".to_string(),
+        }],
+        cardinality: result_stream_descriptor::Cardinality::ExactlyOne as i32,
+        row_count_requirement: result_stream_descriptor::RowCountRequirement::ExactRequired as i32,
+        row_count_exact: Some(1),
+        row_count_max: Some(1),
+    }
+}
 
 fn valid_generated_manifest() -> ProcedureManifest {
     ProcedureManifest {
@@ -39,12 +55,29 @@ fn valid_generated_manifest() -> ProcedureManifest {
             protocol_package: "andromeda.protocol.v1".to_string(),
             contract_package: "andromeda.contract.v1".to_string(),
         }),
-        result_streams: vec![],
+        result_streams: vec![valid_generated_result_stream()],
         policy_version: vec![0x44; 32],
         required_permissions: vec![RequiredPermission {
             id: "andromeda.execute_procedure".to_string(),
             family: "application".to_string(),
         }],
+    }
+}
+
+fn resolved_response_with_manifest(
+    manifest: ProcedureManifest,
+) -> CatalogProcedureManifestResolutionResponse {
+    CatalogProcedureManifestResolutionResponse {
+        protocol_major: 1,
+        protocol_minor: 0,
+        request_id: 77,
+        trace_id: Some("trace-manifest-77".to_string()),
+        status: 1,
+        manifest: Some(manifest),
+        resolved_contract_hash: Some(vec![0x11; 32]),
+        resolved_catalog_version: Some(9),
+        current_catalog_version: Some(9),
+        diagnostic_code: None,
     }
 }
 
@@ -148,6 +181,122 @@ fn test_rpc_completion_all_fields() {
 }
 
 #[test]
+fn rpc_completion_status_policy_rejects_unspecified_and_unknown_wire_codes() {
+    use andromeda_proto::generated::andromeda::protocol::v1::rpc_completion::Status;
+
+    assert_eq!(Status::Unspecified as i32, 0);
+    assert!(RpcCompletionStatus::from_terminal_code(Status::Unspecified as u32).is_none());
+
+    for status in [
+        Status::Committed,
+        Status::RolledBack,
+        Status::FailedBeforeTransaction,
+        Status::Cancelled,
+        Status::Poisoned,
+        Status::PermissionDenied,
+        Status::ContractRejected,
+        Status::SystemUnavailable,
+    ] {
+        assert!(
+            RpcCompletionStatus::from_terminal_code(status as u32).is_some(),
+            "{status:?} must remain an accepted governed completion status"
+        );
+    }
+
+    for unknown_code in [9_u32, 12, u32::MAX] {
+        let completion = RpcCompletion {
+            status: unknown_code as i32,
+            rows_affected: None,
+            tx_id: None,
+            request_id: Some(10),
+            session_id: Some(20),
+            trace_id: Some(format!("trace-unknown-status-{unknown_code}")),
+            transaction_outcome: 1,
+            durable_lsn: None,
+            result_row_counts: vec![],
+        };
+
+        let decoded = RpcCompletion::decode(completion.encode_to_vec().as_slice())
+            .expect("unknown enum value must decode as raw protobuf integer");
+
+        assert_eq!(decoded.status, unknown_code as i32);
+        assert!(
+            RpcCompletionStatus::from_terminal_code(unknown_code).is_none(),
+            "unknown protobuf completion status {unknown_code} must not map to a domain status"
+        );
+    }
+}
+
+#[test]
+fn generated_rpc_completion_boundary_validation_rejects_unknown_codes_without_panic() {
+    let valid = RpcCompletion {
+        status: 1,
+        rows_affected: Some(50),
+        tx_id: Some(99),
+        request_id: Some(10),
+        session_id: Some(20),
+        trace_id: Some("trace-001".to_string()),
+        transaction_outcome: 2,
+        durable_lsn: Some(5000),
+        result_row_counts: vec![],
+    };
+    validate_generated_rpc_completion(&valid)
+        .expect("valid generated completion must satisfy boundary validation");
+
+    for (field, invalid) in [
+        (
+            "status unspecified",
+            RpcCompletion {
+                status: 0,
+                ..valid.clone()
+            },
+        ),
+        (
+            "status unknown",
+            RpcCompletion {
+                status: 12,
+                ..valid.clone()
+            },
+        ),
+        (
+            "status negative",
+            RpcCompletion {
+                status: -1,
+                ..valid.clone()
+            },
+        ),
+        (
+            "transaction outcome unspecified",
+            RpcCompletion {
+                transaction_outcome: 0,
+                ..valid.clone()
+            },
+        ),
+        (
+            "transaction outcome unknown",
+            RpcCompletion {
+                transaction_outcome: 99,
+                ..valid.clone()
+            },
+        ),
+    ] {
+        assert!(
+            validate_generated_rpc_completion(&invalid).is_err(),
+            "{field} must be rejected by generated completion boundary validation"
+        );
+    }
+
+    let missing_lsn = RpcCompletion {
+        durable_lsn: None,
+        ..valid
+    };
+    assert!(
+        validate_generated_rpc_completion(&missing_lsn).is_err(),
+        "committed completion requires durable LSN evidence"
+    );
+}
+
+#[test]
 fn test_error_envelope_deterministic_serialization() {
     let error = ErrorEnvelope {
         request_id: Some(10),
@@ -244,6 +393,82 @@ fn test_catalog_manifest_resolution_messages_roundtrip_without_json_or_grpc() {
     assert_eq!(response, decoded_response);
     validate_catalog_procedure_manifest_resolution_response(&response)
         .expect("manifest resolution response must satisfy boundary validation");
+}
+
+#[test]
+fn generated_manifest_boundary_validation_rejects_invalid_result_stream_metadata() {
+    let mut missing_exact = valid_generated_manifest();
+    missing_exact.result_streams[0].row_count_exact = None;
+    assert!(
+        validate_catalog_procedure_manifest_resolution_response(&resolved_response_with_manifest(
+            missing_exact
+        ))
+        .is_err(),
+        "exact-required result streams must carry row_count_exact"
+    );
+
+    let mut unknown_cardinality = valid_generated_manifest();
+    unknown_cardinality.result_streams[0].cardinality = 99;
+    assert!(
+        validate_catalog_procedure_manifest_resolution_response(&resolved_response_with_manifest(
+            unknown_cardinality
+        ))
+        .is_err(),
+        "unknown generated cardinality codes must be rejected"
+    );
+
+    let mut empty_column_type = valid_generated_manifest();
+    empty_column_type.result_streams[0].columns[0].type_name = " ".to_string();
+    assert!(
+        validate_catalog_procedure_manifest_resolution_response(&resolved_response_with_manifest(
+            empty_column_type
+        ))
+        .is_err(),
+        "generated column descriptors must not use empty type names"
+    );
+
+    let mut contradictory_max = valid_generated_manifest();
+    contradictory_max.result_streams[0].row_count_max = Some(2);
+    assert!(
+        validate_catalog_procedure_manifest_resolution_response(&resolved_response_with_manifest(
+            contradictory_max
+        ))
+        .is_err(),
+        "exactly-one result streams must not declare row_count_max above one"
+    );
+}
+
+#[test]
+fn generated_manifest_boundary_validation_rejects_invalid_permission_policy() {
+    let mut missing_permissions = valid_generated_manifest();
+    missing_permissions.required_permissions.clear();
+    assert!(
+        validate_catalog_procedure_manifest_resolution_response(&resolved_response_with_manifest(
+            missing_permissions
+        ))
+        .is_err(),
+        "resolved manifests must carry explicit required permissions"
+    );
+
+    let mut uppercase_permission = valid_generated_manifest();
+    uppercase_permission.required_permissions[0].id = "Andromeda.Execute".to_string();
+    assert!(
+        validate_catalog_procedure_manifest_resolution_response(&resolved_response_with_manifest(
+            uppercase_permission
+        ))
+        .is_err(),
+        "permission ids must stay canonical lower-case boundary metadata"
+    );
+
+    let mut policy_hash_collision = valid_generated_manifest();
+    policy_hash_collision.policy_version = policy_hash_collision.contract_hash.clone();
+    assert!(
+        validate_catalog_procedure_manifest_resolution_response(&resolved_response_with_manifest(
+            policy_hash_collision
+        ))
+        .is_err(),
+        "policy_version must remain distinct from contract_hash"
+    );
 }
 
 #[test]
@@ -348,6 +573,48 @@ fn catalog_manifest_resolution_status_policy_rejects_unspecified_and_unknown_sta
             "{name} must not satisfy response validation"
         );
     }
+}
+
+#[test]
+fn catalog_resolution_rejects_unspecified_status() {
+    let response = CatalogProcedureManifestResolutionResponse {
+        protocol_major: 1,
+        protocol_minor: 0,
+        request_id: 81,
+        trace_id: None,
+        status: 0,
+        manifest: None,
+        resolved_contract_hash: None,
+        resolved_catalog_version: None,
+        current_catalog_version: Some(9),
+        diagnostic_code: Some("STATUS_UNSPECIFIED".to_string()),
+    };
+
+    assert!(
+        validate_catalog_procedure_manifest_resolution_response(&response).is_err(),
+        "STATUS_UNSPECIFIED must not satisfy catalog resolution response validation"
+    );
+}
+
+#[test]
+fn catalog_resolution_rejects_protobuf_unknown_status() {
+    let response = CatalogProcedureManifestResolutionResponse {
+        protocol_major: 1,
+        protocol_minor: 0,
+        request_id: 82,
+        trace_id: None,
+        status: 12,
+        manifest: None,
+        resolved_contract_hash: None,
+        resolved_catalog_version: None,
+        current_catalog_version: Some(9),
+        diagnostic_code: Some("STATUS_UNKNOWN_FUTURE".to_string()),
+    };
+
+    assert!(
+        validate_catalog_procedure_manifest_resolution_response(&response).is_err(),
+        "unknown protobuf status values must not satisfy catalog resolution response validation"
+    );
 }
 
 proptest! {

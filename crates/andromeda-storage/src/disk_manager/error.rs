@@ -1,3 +1,5 @@
+use andromeda_core::{AndromedaError, AndromedaErrorKind};
+
 /// Error types for disk manager operations.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DiskManagerError {
@@ -7,6 +9,8 @@ pub enum DiskManagerError {
     PageNotFound { page_id: u64 },
     /// Page read from disk has corrupted checksum.
     PageCorrupted { page_id: u64, reason: String },
+    /// Page image or persisted layout is structurally invalid.
+    PageLayoutInvalid { reason: String },
     /// Invalid extent descriptor (overlapping, invalid bounds, etc.).
     InvalidExtentDescriptor { reason: String },
     /// File offset computation overflowed.
@@ -21,6 +25,8 @@ pub enum DiskManagerError {
     ExtentOverlap { reason: String },
     /// Disk space exhausted.
     DiskSpaceExhausted { reason: String },
+    /// A page flush was attempted before the page LSN was durable in WAL.
+    WalFenceViolation { page_lsn: u64, durable_lsn: u64 },
 }
 
 impl std::fmt::Display for DiskManagerError {
@@ -31,6 +37,7 @@ impl std::fmt::Display for DiskManagerError {
             Self::PageCorrupted { page_id, reason } => {
                 write!(f, "page {} corrupted: {}", page_id, reason)
             }
+            Self::PageLayoutInvalid { reason } => write!(f, "page layout invalid: {}", reason),
             Self::InvalidExtentDescriptor { reason } => {
                 write!(f, "invalid extent descriptor: {}", reason)
             }
@@ -44,8 +51,22 @@ impl std::fmt::Display for DiskManagerError {
             }
             Self::ExtentOverlap { reason } => write!(f, "extent overlap: {}", reason),
             Self::DiskSpaceExhausted { reason } => write!(f, "disk space exhausted: {}", reason),
+            Self::WalFenceViolation {
+                page_lsn,
+                durable_lsn,
+            } => write!(
+                f,
+                "WAL-before-page flush violated: page LSN {} exceeds durable WAL LSN {}",
+                page_lsn, durable_lsn
+            ),
         }
     }
 }
 
 impl std::error::Error for DiskManagerError {}
+
+impl From<DiskManagerError> for AndromedaError {
+    fn from(value: DiskManagerError) -> Self {
+        Self::new(AndromedaErrorKind::Storage, value.to_string())
+    }
+}

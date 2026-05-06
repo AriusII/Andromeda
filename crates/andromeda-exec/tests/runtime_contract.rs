@@ -230,9 +230,9 @@ fn local_vertical_runtime_can_require_io_admission_before_tx_begin() {
         )
         .unwrap();
 
-    assert_eq!(outcome.completion.status, CompletionStatus::Committed);
+    assert_eq!(outcome.completion.status(), CompletionStatus::Committed);
     assert_eq!(
-        outcome.completion.transaction_state,
+        outcome.completion.transaction_state(),
         Some(TransactionState::Committed)
     );
     assert_eq!(runtime.wal().records.len(), 3);
@@ -426,18 +426,18 @@ fn local_vertical_happy_path_commits_only_with_durable_wal_evidence() {
         )
         .unwrap();
 
-    assert_eq!(outcome.completion.status, CompletionStatus::Committed);
+    assert_eq!(outcome.completion.status(), CompletionStatus::Committed);
     assert_eq!(
-        outcome.completion.transaction_state,
+        outcome.completion.transaction_state(),
         Some(TransactionState::Committed)
     );
     assert_eq!(
-        outcome.completion.durable_lsn,
+        outcome.completion.durable_lsn(),
         Some(runtime.wal().durable_lsn())
     );
     assert_eq!(runtime.wal().durable_lsn(), Lsn::new(3));
     assert_eq!(runtime.wal().replay_durable().len(), 3);
-    assert_eq!(outcome.completion.rows_affected, Some(2));
+    assert_eq!(outcome.completion.rows_affected(), Some(2));
     assert!(
         effect
             .result_evidence()
@@ -601,14 +601,14 @@ fn inventory_reserve_stock_e2e_stitches_catalog_srpl_business_effect_and_authori
         )
         .unwrap();
 
-    assert_eq!(outcome.completion.status, CompletionStatus::Committed);
+    assert_eq!(outcome.completion.status(), CompletionStatus::Committed);
     assert_eq!(
-        outcome.completion.transaction_state,
+        outcome.completion.transaction_state(),
         Some(TransactionState::Committed)
     );
-    assert_eq!(outcome.completion.rows_affected, Some(2));
+    assert_eq!(outcome.completion.rows_affected(), Some(2));
     assert_eq!(
-        outcome.completion.durable_lsn,
+        outcome.completion.durable_lsn(),
         Some(runtime.wal().durable_lsn())
     );
     assert_eq!(runtime.wal().records().len(), 3);
@@ -1007,13 +1007,13 @@ fn local_vertical_runtime_rolls_back_business_validation_failure_after_begin() {
         )
         .unwrap();
 
-    assert_eq!(outcome.completion.status, CompletionStatus::RolledBack);
+    assert_eq!(outcome.completion.status(), CompletionStatus::RolledBack);
     assert_eq!(
-        outcome.completion.transaction_state,
+        outcome.completion.transaction_state(),
         Some(TransactionState::RolledBack)
     );
-    assert_eq!(outcome.completion.rows_affected, Some(0));
-    assert_eq!(outcome.completion.durable_lsn, Some(Lsn::new(2)));
+    assert_eq!(outcome.completion.rows_affected(), Some(0));
+    assert_eq!(outcome.completion.durable_lsn(), Some(Lsn::new(2)));
     assert_eq!(runtime.wal().records.len(), 2);
     assert_eq!(runtime.wal().records[0].1, WalRecordKind::TxBegin);
     assert_eq!(runtime.wal().records[1].1, WalRecordKind::TxRollback);
@@ -1089,14 +1089,14 @@ fn inventory_reserve_stock_business_failure_rolls_back_after_authorized_begin_wi
         )
         .unwrap();
 
-    assert_eq!(outcome.completion.status, CompletionStatus::RolledBack);
+    assert_eq!(outcome.completion.status(), CompletionStatus::RolledBack);
     assert_eq!(
-        outcome.completion.transaction_state,
+        outcome.completion.transaction_state(),
         Some(TransactionState::RolledBack)
     );
-    assert_eq!(outcome.completion.rows_affected, Some(0));
+    assert_eq!(outcome.completion.rows_affected(), Some(0));
     assert_eq!(
-        outcome.completion.durable_lsn,
+        outcome.completion.durable_lsn(),
         Some(runtime.wal().durable_lsn())
     );
     assert_eq!(runtime.wal().durable_lsn(), Lsn::new(2));
@@ -1176,10 +1176,10 @@ fn completion_mapping_rejects_commit_or_rollback_outcome_mismatches() {
         TraceId::new(8203),
     )
     .unwrap();
-    assert_eq!(rolled_back.status, CompletionStatus::RolledBack);
-    assert_eq!(rolled_back.rows_affected, Some(0));
+    assert_eq!(rolled_back.status(), CompletionStatus::RolledBack);
+    assert_eq!(rolled_back.rows_affected(), Some(0));
     assert_eq!(
-        rolled_back.transaction_state,
+        rolled_back.transaction_state(),
         Some(TransactionState::RolledBack)
     );
 }
@@ -1320,14 +1320,14 @@ fn poison_rollback_routes_through_poisoned_state_with_durable_evidence() {
         .unwrap();
 
     // Visible completion: RolledBack only after durable rollback evidence.
-    assert_eq!(outcome.completion.status, CompletionStatus::RolledBack);
+    assert_eq!(outcome.completion.status(), CompletionStatus::RolledBack);
     assert_eq!(
-        outcome.completion.transaction_state,
+        outcome.completion.transaction_state(),
         Some(TransactionState::RolledBack)
     );
-    assert_eq!(outcome.completion.rows_affected, Some(0));
+    assert_eq!(outcome.completion.rows_affected(), Some(0));
     assert_eq!(
-        outcome.completion.durable_lsn,
+        outcome.completion.durable_lsn(),
         Some(runtime.wal().durable_lsn())
     );
 

@@ -17,6 +17,7 @@ version = "0.1.0"
 dependencies = [
  "andromeda-core",
  "andromeda-observe",
+ "andromeda-proto",
 ]
 
 [[package]]
@@ -58,6 +59,7 @@ version = "0.1.0"
 dependencies = [
  "andromeda-core",
  "andromeda-observe",
+ "andromeda-proto",
 ]
 
 [[package]]

@@ -1,6 +1,7 @@
 //! V0 HA/DR quorum, fencing, and shipping runtime decision model.
 
 mod fencing;
+mod membership_store;
 pub mod membership_transitions;
 mod promotion_boundary;
 mod quorum;
@@ -9,6 +10,7 @@ pub mod shipping_runtime;
 mod types;
 
 pub use fencing::*;
+pub use membership_store::*;
 pub use membership_transitions::*;
 pub use promotion_boundary::*;
 pub use quorum::*;

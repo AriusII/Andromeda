@@ -7,6 +7,7 @@ publish = false
 [dependencies]
 andromeda-core.workspace = true
 andromeda-observe.workspace = true
+andromeda-proto.workspace = true
 quinn = { workspace = true, optional = true }
 rcgen = { workspace = true, optional = true }
 rustls = { workspace = true, optional = true }
@@ -25,5 +26,4 @@ runtime-quinn = [
 ]
 
 [dev-dependencies]
-andromeda-proto.workspace = true
 proptest.workspace = true

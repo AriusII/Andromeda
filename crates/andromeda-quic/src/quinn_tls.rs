@@ -107,12 +107,17 @@ impl ServerTlsConfig {
         Ok(Self { config })
     }
 
-    /// Returns the configured rustls ServerConfig.
-    pub fn into_quinn_config(self) -> quinn::ServerConfig {
-        quinn::ServerConfig::with_crypto(Arc::new(
-            quinn::crypto::rustls::QuicServerConfig::try_from(self.config)
-                .expect("failed to create Quinn server config"),
-        ))
+    /// Returns the configured Quinn server config.
+    pub fn into_quinn_config(self) -> AndromedaResult<quinn::ServerConfig> {
+        let quic_config =
+            quinn::crypto::rustls::QuicServerConfig::try_from(self.config).map_err(|e| {
+                AndromedaError::new(
+                    AndromedaErrorKind::Transport,
+                    format!("failed to create Quinn server config: {e}"),
+                )
+            })?;
+
+        Ok(quinn::ServerConfig::with_crypto(Arc::new(quic_config)))
     }
 }
 
@@ -123,7 +128,7 @@ impl ClientTlsConfig {
     /// Creates a client TLS config that accepts all server certificates (for testing).
     ///
     /// **WARNING**: This disables certificate verification. Use only in tests!
-    pub fn insecure() -> quinn::ClientConfig {
+    pub fn insecure() -> AndromedaResult<quinn::ClientConfig> {
         // For testing with self-signed certs, we create a client config
         // that will accept any certificate
         let cfg = rustls::ClientConfig::builder()
@@ -131,10 +136,14 @@ impl ClientTlsConfig {
             .with_custom_certificate_verifier(Arc::new(InsecureVerifier))
             .with_no_client_auth();
 
-        quinn::ClientConfig::new(Arc::new(
-            quinn::crypto::rustls::QuicClientConfig::try_from(cfg)
-                .expect("failed to create Quinn client config"),
-        ))
+        let quic_config = quinn::crypto::rustls::QuicClientConfig::try_from(cfg).map_err(|e| {
+            AndromedaError::new(
+                AndromedaErrorKind::Transport,
+                format!("failed to create Quinn client config: {e}"),
+            )
+        })?;
+
+        Ok(quinn::ClientConfig::new(Arc::new(quic_config)))
     }
 }
 

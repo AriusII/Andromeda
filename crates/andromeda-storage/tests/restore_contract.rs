@@ -5,10 +5,13 @@
 
 use andromeda_observe::TraceId;
 use andromeda_storage::{
-    Lsn, RecoveryStage, RestoreAuditTrace, RestoreCompletion, RestoreOrchestration,
-    RestoreValidationPolicy, WalSegmentDescriptor,
+    AllocationId, BackupExecutionPlan, BackupResourceLimits, ExtentCopyTask, ExtentDescriptor,
+    ExtentId, ExtentState, FileBackedBackupArtifactStore, Lsn, ObjectId, PageId, PageSize,
+    RecoveryStage, RestoreAuditTrace, RestoreCompletion, RestoreOrchestration,
+    RestoreValidationPolicy, SegmentId, StorageTier, WalSegmentCopyTask, WalSegmentDescriptor,
     backup::{BackupId, BackupManifest, ColdSnapshotBoundary, WalArchiveRange},
-    compute_restore_checksum, plan_replay_segments, validate_restore_prerequisites,
+    compute_restore_checksum, plan_replay_segments, validate_restore_artifact_preflight,
+    validate_restore_prerequisites,
 };
 
 // Test Fixtures
@@ -42,6 +45,64 @@ fn make_wal_segment(
         base_previous_lsn: base_previous_lsn.map(Lsn::new),
         record_count: (last_lsn - first_lsn + 1) as usize,
     }
+}
+
+fn make_extent() -> ExtentDescriptor {
+    ExtentDescriptor {
+        extent_id: ExtentId::new(1),
+        object_id: ObjectId::new(10),
+        allocation_id: AllocationId::new(20),
+        first_page_id: PageId::new(100),
+        page_count: 1,
+        page_size: PageSize::KiB16,
+        state: ExtentState::PublishedCold,
+        segment_id: Some(SegmentId::new(1)),
+        file_offset: 0,
+        allocated_on_disk: true,
+    }
+}
+
+fn make_resource_limits() -> BackupResourceLimits {
+    BackupResourceLimits {
+        max_total_extent_bytes: 1_000_000,
+        max_total_wal_bytes: 1_000_000,
+        max_parallel_extent_tasks: 8,
+        max_wal_segment_count: 16,
+    }
+}
+
+fn write_test_artifact(
+    temp: &tempfile::TempDir,
+    backup_id: BackupId,
+) -> andromeda_storage::BackupArtifactWriteReport {
+    let store = FileBackedBackupArtifactStore::open(temp.path()).unwrap();
+    let snapshot_bytes = b"restore preflight snapshot artifact";
+    let wal_bytes = b"restore preflight wal segment";
+    let mut manifest = make_test_manifest();
+    manifest.backup_id = backup_id;
+    let wal_segment = make_wal_segment(1001, 2000, None);
+
+    let plan = BackupExecutionPlan {
+        manifest,
+        extent_copy_plan: vec![ExtentCopyTask {
+            extent_descriptor: make_extent(),
+            source_tier: StorageTier::ColdStore,
+            byte_count: snapshot_bytes.len() as u64,
+        }],
+        wal_segment_copy_plan: vec![WalSegmentCopyTask {
+            segment_descriptor: wal_segment,
+            byte_count: wal_bytes.len() as u64,
+            sequence_index: 0,
+        }],
+        validate_checksum_on_copy: true,
+        resource_limits: make_resource_limits(),
+        total_extent_bytes: snapshot_bytes.len() as u64,
+        total_wal_bytes: wal_bytes.len() as u64,
+    };
+
+    store
+        .write_execution_plan_artifact(&plan, snapshot_bytes, &[wal_bytes.as_slice()])
+        .unwrap()
 }
 
 // Test Suite: PITR LSN Validation
@@ -447,4 +508,73 @@ fn test_pitr_checkpoint_preserves_segment_chain() {
     let seg1_end = plan[0].segment_descriptor.last_lsn;
     let seg2_start = plan[1].segment_descriptor.first_lsn;
     assert_eq!(seg1_end.get() + 1, seg2_start.get());
+}
+
+#[test]
+fn restore_preflight_accepts_file_backed_artifact_directory() {
+    let temp = tempfile::TempDir::new().unwrap();
+    let backup_id = BackupId::new(77);
+    let report = write_test_artifact(&temp, backup_id);
+
+    let preflight = validate_restore_artifact_preflight(
+        temp.path(),
+        backup_id,
+        Lsn::new(1500),
+        RestoreValidationPolicy::Full,
+    )
+    .unwrap();
+
+    assert_eq!(preflight.backup_id, backup_id);
+    assert_eq!(preflight.source_checkpoint_lsn, Lsn::new(1000));
+    assert_eq!(preflight.replay_segment_count, 1);
+    assert_eq!(
+        preflight.manifest_digest,
+        report.artifact_set.backup_manifest
+    );
+    assert_eq!(preflight.wal_archive_evidence.end_lsn, Lsn::new(2000));
+}
+
+#[test]
+fn restore_preflight_rejects_missing_wal_file() {
+    let temp = tempfile::TempDir::new().unwrap();
+    let backup_id = BackupId::new(78);
+    let report = write_test_artifact(&temp, backup_id);
+    std::fs::remove_file(&report.wal_segment_paths[0]).unwrap();
+
+    let err = validate_restore_artifact_preflight(
+        temp.path(),
+        backup_id,
+        Lsn::new(1500),
+        RestoreValidationPolicy::Full,
+    )
+    .unwrap_err();
+
+    assert!(
+        err.message().contains("read backup WAL segment"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn restore_preflight_rejects_corrupted_manifest_payload() {
+    let temp = tempfile::TempDir::new().unwrap();
+    let backup_id = BackupId::new(79);
+    let report = write_test_artifact(&temp, backup_id);
+    let mut bytes = std::fs::read(&report.manifest_path).unwrap();
+    let last = bytes.last_mut().unwrap();
+    *last ^= 0x01;
+    std::fs::write(&report.manifest_path, bytes).unwrap();
+
+    let err = validate_restore_artifact_preflight(
+        temp.path(),
+        backup_id,
+        Lsn::new(1500),
+        RestoreValidationPolicy::Full,
+    )
+    .unwrap_err();
+
+    assert!(
+        err.message().contains("manifest payload checksum mismatch"),
+        "unexpected error: {err}"
+    );
 }

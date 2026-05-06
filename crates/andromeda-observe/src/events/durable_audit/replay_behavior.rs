@@ -5,3 +5,9 @@ pub enum DurableAuditReplayBehavior {
     RebuildDecisionIndex,
     CorruptionBoundary,
 }
+
+impl DurableAuditReplayBehavior {
+    pub const fn is_visible_decision_evidence(self) -> bool {
+        matches!(self, Self::ForensicOnly | Self::RebuildDecisionIndex)
+    }
+}

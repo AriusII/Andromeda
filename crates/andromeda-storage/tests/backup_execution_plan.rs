@@ -16,9 +16,9 @@
 
 use andromeda_storage::{
     AllocationId, BackupExecutionPlan, BackupId, BackupManifest, BackupResourceLimits,
-    ColdSnapshotBoundary, ExtentCopyTask, ExtentDescriptor, ExtentId, ExtentState, Lsn, ObjectId,
-    PageId, PageSize, SegmentId, StorageTier, WalArchiveRange, WalSegmentCopyTask,
-    WalSegmentDescriptor,
+    ColdSnapshotBoundary, ExtentCopyTask, ExtentDescriptor, ExtentId, ExtentState,
+    FileBackedBackupArtifactStore, Lsn, ObjectId, PageId, PageSize, SegmentId, StorageTier,
+    WalArchiveRange, WalSegmentCopyTask, WalSegmentDescriptor,
 };
 
 /// Helper: Create a sample extent descriptor for testing.
@@ -563,5 +563,119 @@ fn test_backup_rejects_incomplete_wal() {
     assert!(
         good_plan.validate().is_ok(),
         "backup plan with complete WAL coverage should pass validation"
+    );
+}
+
+#[test]
+fn file_backed_artifact_store_writes_manifest_snapshot_and_wal() {
+    let temp = tempfile::TempDir::new().unwrap();
+    let store = FileBackedBackupArtifactStore::open(temp.path()).unwrap();
+
+    let snapshot_bytes = b"durable snapshot bytes for backup artifact";
+    let wal1_bytes = b"durable wal segment one";
+    let wal2_bytes = b"durable wal segment two";
+    let manifest = test_manifest(55, 101, 300);
+    let extent = test_extent(1, 1000, 1, ExtentState::PublishedCold);
+    let wal_seg1 = test_wal_segment(10, 101, 200, None);
+    let wal_seg2 = test_wal_segment(11, 201, 300, Some(200));
+
+    let plan = BackupExecutionPlan {
+        manifest,
+        extent_copy_plan: vec![ExtentCopyTask {
+            extent_descriptor: extent,
+            source_tier: StorageTier::ColdStore,
+            byte_count: snapshot_bytes.len() as u64,
+        }],
+        wal_segment_copy_plan: vec![
+            WalSegmentCopyTask {
+                segment_descriptor: wal_seg1,
+                byte_count: wal1_bytes.len() as u64,
+                sequence_index: 0,
+            },
+            WalSegmentCopyTask {
+                segment_descriptor: wal_seg2,
+                byte_count: wal2_bytes.len() as u64,
+                sequence_index: 1,
+            },
+        ],
+        validate_checksum_on_copy: true,
+        resource_limits: test_resource_limits(),
+        total_extent_bytes: snapshot_bytes.len() as u64,
+        total_wal_bytes: (wal1_bytes.len() + wal2_bytes.len()) as u64,
+    };
+
+    let report = store
+        .write_execution_plan_artifact(
+            &plan,
+            snapshot_bytes,
+            &[wal1_bytes.as_slice(), wal2_bytes.as_slice()],
+        )
+        .unwrap();
+
+    assert!(report.manifest_path.exists());
+    assert!(report.snapshot_path.exists());
+    assert_eq!(report.wal_segment_paths.len(), 2);
+    assert_eq!(
+        report.source_checkpoint_lsn,
+        manifest.snapshot.base_checkpoint_lsn
+    );
+    assert_eq!(
+        report.wal_archive_evidence.total_bytes,
+        (wal1_bytes.len() + wal2_bytes.len()) as u64
+    );
+
+    let reopened = FileBackedBackupArtifactStore::open_existing(temp.path()).unwrap();
+    let record = reopened
+        .validate_artifact_directory(BackupId::new(55))
+        .unwrap();
+    assert_eq!(record.manifest, manifest);
+    assert_eq!(
+        record.artifact_set.cold_snapshot.artifact.byte_len,
+        snapshot_bytes.len() as u64
+    );
+    assert_eq!(record.artifact_set.wal_segments.len(), 2);
+}
+
+#[test]
+fn file_backed_artifact_store_rejects_corrupted_snapshot() {
+    let temp = tempfile::TempDir::new().unwrap();
+    let store = FileBackedBackupArtifactStore::open(temp.path()).unwrap();
+
+    let snapshot_bytes = b"snapshot before corruption";
+    let wal_bytes = b"durable wal segment";
+    let manifest = test_manifest(56, 101, 200);
+    let extent = test_extent(1, 1000, 1, ExtentState::PublishedCold);
+    let wal_seg = test_wal_segment(10, 101, 200, None);
+
+    let plan = BackupExecutionPlan {
+        manifest,
+        extent_copy_plan: vec![ExtentCopyTask {
+            extent_descriptor: extent,
+            source_tier: StorageTier::ColdStore,
+            byte_count: snapshot_bytes.len() as u64,
+        }],
+        wal_segment_copy_plan: vec![WalSegmentCopyTask {
+            segment_descriptor: wal_seg,
+            byte_count: wal_bytes.len() as u64,
+            sequence_index: 0,
+        }],
+        validate_checksum_on_copy: true,
+        resource_limits: test_resource_limits(),
+        total_extent_bytes: snapshot_bytes.len() as u64,
+        total_wal_bytes: wal_bytes.len() as u64,
+    };
+
+    let report = store
+        .write_execution_plan_artifact(&plan, snapshot_bytes, &[wal_bytes.as_slice()])
+        .unwrap();
+    std::fs::write(&report.snapshot_path, b"corrupted snapshot bytes").unwrap();
+
+    let err = store
+        .validate_artifact_directory(BackupId::new(56))
+        .unwrap_err();
+    assert!(
+        err.message()
+            .contains("snapshot artifact checksum mismatch"),
+        "unexpected error: {err}"
     );
 }

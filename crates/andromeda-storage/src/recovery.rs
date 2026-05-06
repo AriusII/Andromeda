@@ -27,7 +27,10 @@ pub use planning::{
     PreRedoStorageFormatRejection, RECOVERY_REQUIRED_STORAGE_FORMATS, RecoveryPlan,
     RedoRecordDecision, RedoRecordPlan, StartupMode, StorageFormatFingerprint,
 };
-pub use replay::{ReplayContext, ReplayOutcome, ReplayResult, replay_wal_record};
+pub use replay::{
+    HeapRedoPageState, HeapRedoSlotState, IndexRebuildRequiredEvidence, ReplayContext,
+    ReplayOutcome, ReplayResult, replay_wal_record,
+};
 pub use safe_start::{
     SafeStartAcceptance, SafeStartInvariantReport, SafeStartTailDiscard,
     safe_start_from_manifest_and_scan, verify_safe_start_invariants,

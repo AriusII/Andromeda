@@ -230,14 +230,14 @@ fn reserve_stock_commit_gate_links_catalog_srpl_business_runtime_wal_recovery_ob
         .unwrap();
 
     let tx_id = outcome.transaction_id;
-    assert_eq!(outcome.completion.status, CompletionStatus::Committed);
+    assert_eq!(outcome.completion.status(), CompletionStatus::Committed);
     assert_eq!(
-        outcome.completion.transaction_state,
+        outcome.completion.transaction_state(),
         Some(TransactionState::Committed)
     );
-    assert_eq!(outcome.completion.rows_affected, Some(2));
+    assert_eq!(outcome.completion.rows_affected(), Some(2));
     assert_eq!(
-        outcome.completion.durable_lsn,
+        outcome.completion.durable_lsn(),
         Some(runtime.wal().durable_lsn())
     );
     assert_eq!(runtime.wal().durable_lsn(), Lsn::new(3));
@@ -433,12 +433,12 @@ fn insufficient_stock_rolls_back_with_typed_rejection_and_committed_only_recover
         .unwrap();
 
     let tx_id = outcome.transaction_id;
-    assert_eq!(outcome.completion.status, CompletionStatus::RolledBack);
+    assert_eq!(outcome.completion.status(), CompletionStatus::RolledBack);
     assert_eq!(
-        outcome.completion.transaction_state,
+        outcome.completion.transaction_state(),
         Some(TransactionState::RolledBack)
     );
-    assert_eq!(outcome.completion.rows_affected, Some(0));
+    assert_eq!(outcome.completion.rows_affected(), Some(0));
     assert_eq!(
         runtime
             .wal()

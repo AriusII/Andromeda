@@ -157,12 +157,12 @@ fn e2e_procedure_invocation_completes_with_transaction_and_wal() {
         "transaction_id must be non-zero"
     );
     assert_eq!(
-        outcome.completion.status,
+        outcome.completion.status(),
         CompletionStatus::Committed,
         "invocation must commit successfully"
     );
     assert_eq!(
-        outcome.completion.transaction_state,
+        outcome.completion.transaction_state(),
         Some(TransactionState::Committed),
         "transaction state must be Committed"
     );
@@ -170,7 +170,7 @@ fn e2e_procedure_invocation_completes_with_transaction_and_wal() {
     // Assert: WAL durability
     let durable_lsn = outcome
         .completion
-        .durable_lsn
+        .durable_lsn()
         .expect("committed transaction must have durable LSN");
     assert!(durable_lsn.get() > 0, "durable LSN must be positive");
     assert_eq!(
@@ -181,7 +181,7 @@ fn e2e_procedure_invocation_completes_with_transaction_and_wal() {
 
     // Assert: Result metadata
     assert_eq!(
-        outcome.completion.rows_affected,
+        outcome.completion.rows_affected(),
         Some(2),
         "reserve operation should report the reserved quantity"
     );
@@ -364,7 +364,7 @@ fn e2e_procedure_error_triggers_rollback_and_wal_durability() {
 
     // Assert: Transaction completed (in this case, successfully committed)
     assert_eq!(
-        outcome.completion.status,
+        outcome.completion.status(),
         CompletionStatus::Committed,
         "valid procedure should commit"
     );
@@ -419,19 +419,19 @@ fn e2e_concurrent_invocations_maintain_mvcc_isolation() {
         .expect("invocation B should succeed");
 
     // Assert: Both transactions completed independently
-    assert_eq!(outcome_a.completion.status, CompletionStatus::Committed);
-    assert_eq!(outcome_b.completion.status, CompletionStatus::Committed);
+    assert_eq!(outcome_a.completion.status(), CompletionStatus::Committed);
+    assert_eq!(outcome_b.completion.status(), CompletionStatus::Committed);
 
     assert!(outcome_a.transaction_id.get() > 0);
     assert!(outcome_b.transaction_id.get() > 0);
 
     // Assert: Both wrote to WAL successfully
-    assert!(outcome_a.completion.durable_lsn.is_some());
-    assert!(outcome_b.completion.durable_lsn.is_some());
+    assert!(outcome_a.completion.durable_lsn().is_some());
+    assert!(outcome_b.completion.durable_lsn().is_some());
 
     // Assert: No dirty reads (each tx committed independently)
-    assert_eq!(outcome_a.completion.rows_affected, Some(2));
-    assert_eq!(outcome_b.completion.rows_affected, Some(2));
+    assert_eq!(outcome_a.completion.rows_affected(), Some(2));
+    assert_eq!(outcome_b.completion.rows_affected(), Some(2));
 }
 
 // TEST 7: Audit Event Correlation and Tracing
@@ -463,7 +463,7 @@ fn e2e_audit_events_correlated_with_trace_and_transaction() {
     // Manually emit event to test correlation
     let mut emitter = EventEmitter::new(&mut sink);
     let tx_id = outcome.transaction_id;
-    let durable_lsn = outcome.completion.durable_lsn.unwrap();
+    let durable_lsn = outcome.completion.durable_lsn().unwrap();
 
     let correlation = build_event_correlation(&contract, Some(tx_id), Some(durable_lsn));
 
@@ -523,7 +523,7 @@ fn e2e_wal_durability_evidence_satisfies_lsn_ordering_invariants() {
         begin_lsn: Lsn::new(1),
         mutation_lsn: Some(Lsn::new(2)),
         commit_lsn: Lsn::new(3),
-        durable_lsn: outcome.completion.durable_lsn.unwrap(),
+        durable_lsn: outcome.completion.durable_lsn().unwrap(),
     };
 
     // This would be validated in the actual execution path

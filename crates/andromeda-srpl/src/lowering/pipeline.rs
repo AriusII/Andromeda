@@ -14,6 +14,9 @@ use crate::{
     SrplBusinessOperationIr, SrplBusinessOperationKindIr, SrplEmitValueIr, SrplPredicateIr,
     SrplProcedureBodyIr, SrplProcedureContractMetadata, SrplProcedureIr, SrplResultStreamIr,
     SrplValueIr,
+    optimizer::{
+        OptimizerPipelineConfig, OptimizerPipelineResult, optimize_procedure_ir_with_config,
+    },
 };
 
 use super::validation::{validate_ast_names_for_diagnostics, validate_declared_error_codes};
@@ -207,17 +210,89 @@ pub fn compile_narrow_procedure_signature(
         .into_iter()
         .next()
     {
-        return Err(diagnostic);
+        return Err(enrich_source_diagnostic(source, diagnostic, None));
     }
 
-    let ast = crate::parse_procedure_signature(source)?;
-    validate_ast_names_for_diagnostics(&ast)?;
+    let ast = crate::parse_procedure_signature(source)
+        .map_err(|diagnostic| enrich_source_diagnostic(source, diagnostic, None))?;
+    let procedure_name = ast.name.value.as_catalog_path();
+    validate_ast_names_for_diagnostics(&ast, source)?;
     let bound = crate::bind_procedure(ast).map_err(|error| {
-        crate::SrplDiagnostic::new(crate::DiagnosticPhase::Binding, None, error.to_string())
+        crate::SrplDiagnostic::new(
+            crate::DiagnosticPhase::Binding,
+            None,
+            format!("{}; procedure {}", error, procedure_name),
+        )
     })?;
+    let procedure_name = bound.signature.name.as_catalog_path();
     lower_bound_procedure(bound).map_err(|error| {
-        crate::SrplDiagnostic::new(crate::DiagnosticPhase::IrLowering, None, error.to_string())
+        crate::SrplDiagnostic::new(
+            crate::DiagnosticPhase::IrLowering,
+            None,
+            format!("{}; procedure {}", error, procedure_name),
+        )
     })
+}
+
+/// Parses, binds, lowers, and optimizes a narrow SRPL procedure source.
+///
+/// Source diagnostics from parse/bind/lower phases are returned before the
+/// optimizer is invoked, preserving their original source spans.
+pub fn compile_narrow_procedure_signature_with_optimizer(
+    source: &str,
+    optimizer_config: OptimizerPipelineConfig,
+) -> Result<OptimizerPipelineResult, crate::SrplDiagnostic> {
+    let ir = compile_narrow_procedure_signature(source)?;
+    let procedure_name = ir.name.as_catalog_path();
+    let mut result = optimize_procedure_ir_with_config(ir, optimizer_config).map_err(|error| {
+        crate::SrplDiagnostic::new(
+            crate::DiagnosticPhase::IrLowering,
+            None,
+            format!("{}; procedure {}", error, procedure_name),
+        )
+    })?;
+    let mut phases = vec![
+        crate::optimizer::phase::OptimizerPhase::Parsing,
+        crate::optimizer::phase::OptimizerPhase::Binding,
+        crate::optimizer::phase::OptimizerPhase::IRLowering,
+    ];
+    phases.extend(std::mem::take(&mut result.phases));
+    result.phases = phases;
+    Ok(result)
+}
+
+fn enrich_source_diagnostic(
+    source: &str,
+    diagnostic: crate::SrplDiagnostic,
+    procedure_name: Option<&str>,
+) -> crate::SrplDiagnostic {
+    let Some(span) = diagnostic.location else {
+        return diagnostic;
+    };
+    let (line, column) = line_column(source, span.start);
+    let mut message = diagnostic.message;
+    if let Some(name) = procedure_name {
+        message.push_str(&format!("; procedure {name}"));
+    }
+    message.push_str(&format!("; line {line}, column {column}"));
+    crate::SrplDiagnostic::new(diagnostic.phase, Some(span), message)
+}
+
+fn line_column(source: &str, offset: usize) -> (usize, usize) {
+    let mut line = 1;
+    let mut column = 1;
+    for (index, ch) in source.char_indices() {
+        if index >= offset {
+            break;
+        }
+        if ch == '\n' {
+            line += 1;
+            column = 1;
+        } else {
+            column += 1;
+        }
+    }
+    (line, column)
 }
 
 /// Lowers a [`SrplProcedureIr`] and its [`SrplProcedureContractMetadata`] to a

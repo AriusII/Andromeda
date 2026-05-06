@@ -52,3 +52,27 @@ name = "storage_wal_record_roundtrip"
 path = "fuzz_targets/storage_wal_record_roundtrip.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "btree_node_v1_decode"
+path = "fuzz_targets/btree_node_v1_decode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "heap_page_v1_decode"
+path = "fuzz_targets/heap_page_v1_decode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "page_codec_v1_decode"
+path = "fuzz_targets/page_codec_v1_decode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "quic_zero_rtt_admission"
+path = "fuzz_targets/quic_zero_rtt_admission.rs"
+test = false
+doc = false

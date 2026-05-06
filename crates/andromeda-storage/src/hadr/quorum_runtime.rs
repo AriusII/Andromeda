@@ -63,6 +63,34 @@ pub struct ReplicaMember {
     pub shipped_lsn: Lsn,
 }
 
+/// Typed rejection reason for malformed quorum membership snapshots.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QuorumMembershipRejection {
+    EmptyReplicaSet,
+    DuplicateReplicaId,
+    ReplicaMatchesPrimary,
+}
+
+impl QuorumMembershipRejection {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::EmptyReplicaSet => "HADR quorum membership must contain at least one replica",
+            Self::DuplicateReplicaId => "HADR quorum membership contains duplicate replica ids",
+            Self::ReplicaMatchesPrimary => {
+                "HADR quorum membership replica id must not match primary id"
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for QuorumMembershipRejection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::error::Error for QuorumMembershipRejection {}
+
 impl ReplicaMember {
     pub fn new(replica_id: u64, received_lsn: Lsn, shipped_lsn: Lsn) -> Self {
         Self {
@@ -111,18 +139,21 @@ pub struct QuorumMembership {
 impl QuorumMembership {
     /// Create a new membership with a primary and an optional set of replicas.
     /// Rejects empty replica sets or duplicates.
-    pub fn new(primary_id: u64, replicas: Vec<ReplicaMember>) -> Result<Self, &'static str> {
+    pub fn new(
+        primary_id: u64,
+        replicas: Vec<ReplicaMember>,
+    ) -> Result<Self, QuorumMembershipRejection> {
         if replicas.is_empty() {
-            return Err("Membership must contain at least one replica");
+            return Err(QuorumMembershipRejection::EmptyReplicaSet);
         }
 
         let mut members = HashMap::new();
         for replica in replicas {
             if members.contains_key(&replica.replica_id) {
-                return Err("Duplicate replica IDs in membership");
+                return Err(QuorumMembershipRejection::DuplicateReplicaId);
             }
             if replica.replica_id == primary_id {
-                return Err("Replica ID cannot match primary ID");
+                return Err(QuorumMembershipRejection::ReplicaMatchesPrimary);
             }
             members.insert(replica.replica_id, replica);
         }
@@ -492,23 +523,24 @@ mod tests {
     }
 
     #[test]
-    fn membership_quorum_size_majority() {
+    fn membership_quorum_size_majority() -> Result<(), QuorumMembershipRejection> {
         let replicas = vec![
             ReplicaMember::new(2, Lsn::new(0), Lsn::new(0)),
             ReplicaMember::new(3, Lsn::new(0), Lsn::new(0)),
             ReplicaMember::new(4, Lsn::new(0), Lsn::new(0)),
         ];
-        let membership = QuorumMembership::new(1, replicas).unwrap();
+        let membership = QuorumMembership::new(1, replicas)?;
 
         // 3 replicas => quorum_size = 3/2 + 1 = 2
         assert_eq!(membership.quorum_size(), 2);
         assert_eq!(membership.size(), 3);
+        Ok(())
     }
 
     #[test]
-    fn fencing_decision_async_always_allows() {
+    fn fencing_decision_async_always_allows() -> Result<(), QuorumMembershipRejection> {
         let replicas = vec![ReplicaMember::new(2, Lsn::new(0), Lsn::new(0))];
-        let membership = QuorumMembership::new(1, replicas).unwrap();
+        let membership = QuorumMembership::new(1, replicas)?;
 
         let decision = decide_fencing(
             &membership,
@@ -518,15 +550,16 @@ mod tests {
         );
 
         assert_eq!(decision, FencingDecision::Allow);
+        Ok(())
     }
 
     #[test]
-    fn fencing_decision_quorum_blocks_on_lost_quorum() {
+    fn fencing_decision_quorum_blocks_on_lost_quorum() -> Result<(), QuorumMembershipRejection> {
         let replicas = vec![
             ReplicaMember::new(2, Lsn::new(0), Lsn::new(0)),
             ReplicaMember::new(3, Lsn::new(0), Lsn::new(0)),
         ];
-        let mut membership = QuorumMembership::new(1, replicas).unwrap();
+        let mut membership = QuorumMembership::new(1, replicas)?;
 
         // Mark both replicas dead => lost quorum (need 2 alive, have 0).
         membership.mark_dead(2);
@@ -540,6 +573,7 @@ mod tests {
         );
 
         assert_eq!(decision, FencingDecision::Block);
+        Ok(())
     }
 
     #[test]
@@ -556,7 +590,7 @@ mod tests {
     }
 
     #[test]
-    fn promotion_best_candidate_by_lsn_distance() {
+    fn promotion_best_candidate_by_lsn_distance() -> Result<(), QuorumMembershipRejection> {
         let ranks = vec![
             PromotionRank {
                 replica_id: 1,
@@ -570,12 +604,14 @@ mod tests {
             },
         ];
 
-        let best = PromotionRank::best_candidate(&ranks).unwrap();
+        let best = PromotionRank::best_candidate(&ranks)
+            .ok_or(QuorumMembershipRejection::EmptyReplicaSet)?;
         assert_eq!(best.replica_id, 2);
+        Ok(())
     }
 
     #[test]
-    fn promotion_best_candidate_tie_break_by_id() {
+    fn promotion_best_candidate_tie_break_by_id() -> Result<(), QuorumMembershipRejection> {
         let ranks = vec![
             PromotionRank {
                 replica_id: 5,
@@ -589,17 +625,19 @@ mod tests {
             },
         ];
 
-        let best = PromotionRank::best_candidate(&ranks).unwrap();
+        let best = PromotionRank::best_candidate(&ranks)
+            .ok_or(QuorumMembershipRejection::EmptyReplicaSet)?;
         assert_eq!(best.replica_id, 2);
+        Ok(())
     }
 
     #[test]
-    fn membership_epoch_increments_on_topology_change() {
+    fn membership_epoch_increments_on_topology_change() -> Result<(), QuorumMembershipRejection> {
         let replicas = vec![
             ReplicaMember::new(2, Lsn::new(0), Lsn::new(0)),
             ReplicaMember::new(3, Lsn::new(0), Lsn::new(0)),
         ];
-        let mut membership = QuorumMembership::new(1, replicas).unwrap();
+        let mut membership = QuorumMembership::new(1, replicas)?;
 
         let initial_epoch = membership.epoch();
         membership.mark_suspect(2);
@@ -607,5 +645,6 @@ mod tests {
 
         membership.mark_dead(3);
         assert_eq!(membership.epoch(), initial_epoch + 2);
+        Ok(())
     }
 }

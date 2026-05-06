@@ -45,6 +45,7 @@ pub mod file {
 }
 pub mod gc;
 pub mod gc_eligibility;
+pub mod heap_redo;
 pub mod manager;
 pub mod record;
 pub mod record_bounds;
@@ -61,6 +62,7 @@ pub use durability_fence::*;
 pub use file::*;
 pub use gc::*;
 pub use gc_eligibility::*;
+pub use heap_redo::*;
 pub use manager::*;
 pub use record::*;
 pub use record_bounds::*;

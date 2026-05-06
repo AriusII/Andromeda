@@ -3,47 +3,8 @@
 //! This module is intentionally scoped to command-line diagnostic output. It is
 //! not a runtime protocol, QUIC wire format, or stable storage encoding.
 
-use crate::error::cli_error;
-use andromeda_core::AndromedaResult;
-
 pub const JSON_FLAG: &str = "--json";
 pub const DIAGNOSTIC_JSON_FLAG: &str = "--diagnostic-json";
-
-pub fn parse_json_flag(args: &[String], context: &str) -> AndromedaResult<bool> {
-    let mut json_output = false;
-    for arg in args {
-        match arg.as_str() {
-            JSON_FLAG => json_output = true,
-            opt if opt.starts_with("--") => {
-                return Err(cli_error(format!(
-                    "unknown {context} option: {opt}; supported machine-readable output option is --json"
-                )));
-            }
-            value => {
-                return Err(cli_error(format!(
-                    "unexpected {context} argument: {value}; supported machine-readable output option is --json"
-                )));
-            }
-        }
-    }
-    Ok(json_output)
-}
-
-pub fn parse_diagnostic_json_flag(args: &[String], context: &str) -> AndromedaResult<bool> {
-    let mut diagnostic_json = false;
-    for arg in args {
-        match arg.as_str() {
-            DIAGNOSTIC_JSON_FLAG => diagnostic_json = true,
-            JSON_FLAG => {
-                return Err(cli_error(format!(
-                    "{context} uses --diagnostic-json to make JSON diagnostic-only explicit"
-                )));
-            }
-            opt => return Err(cli_error(format!("unknown {context} option: {opt}"))),
-        }
-    }
-    Ok(diagnostic_json)
-}
 
 pub fn json_option_u64(value: Option<u64>) -> String {
     value
@@ -117,21 +78,5 @@ mod tests {
     fn arrays_render_compact_json_literals() {
         assert_eq!(json_string_array(&["a", "b\\c"]), "[\"a\",\"b\\\\c\"]");
         assert_eq!(json_u64_array(&[1, 2, 3]), "[1,2,3]");
-    }
-
-    #[test]
-    fn parse_json_flag_accepts_only_json() {
-        assert!(parse_json_flag(&["--json".to_string()], "test").unwrap());
-        assert!(!parse_json_flag(&[], "test").unwrap());
-        assert!(parse_json_flag(&["--csv".to_string()], "test").is_err());
-        assert!(parse_json_flag(&["extra".to_string()], "test").is_err());
-    }
-
-    #[test]
-    fn parse_diagnostic_json_flag_rejects_plain_json_alias() {
-        assert!(parse_diagnostic_json_flag(&["--diagnostic-json".to_string()], "test").unwrap());
-        assert!(!parse_diagnostic_json_flag(&[], "test").unwrap());
-        assert!(parse_diagnostic_json_flag(&["--json".to_string()], "test").is_err());
-        assert!(parse_diagnostic_json_flag(&["--csv".to_string()], "test").is_err());
     }
 }

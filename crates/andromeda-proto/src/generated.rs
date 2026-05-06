@@ -3,7 +3,7 @@ use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, Contra
 use crate::ProtocolLayout;
 pub use crate::generated_validation::{
     validate_catalog_procedure_manifest_resolution_request,
-    validate_catalog_procedure_manifest_resolution_response,
+    validate_catalog_procedure_manifest_resolution_response, validate_generated_rpc_completion,
 };
 
 pub const PROTOCOL_PACKAGE: &str = "andromeda.protocol.v1";

@@ -8,6 +8,7 @@ mod invalidation;
 mod published_object;
 mod recovery_replay;
 mod report;
+mod runtime;
 mod subscriber;
 
 pub use acknowledgement::*;
@@ -17,6 +18,7 @@ pub use invalidation::*;
 pub use published_object::*;
 pub use recovery_replay::*;
 pub use report::*;
+pub use runtime::*;
 pub use subscriber::*;
 
 use helpers::{catalog_publication_error, require_equal, validate_receipt};

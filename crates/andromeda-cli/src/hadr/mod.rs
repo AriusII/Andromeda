@@ -5,6 +5,7 @@ mod output;
 mod parsing;
 mod promote;
 mod quorum;
+mod runtime;
 mod status;
 mod types;
 
@@ -23,9 +24,9 @@ pub fn run_hadr_command(args: &[String]) -> AndromedaResult<()> {
             output::print_hadr_help();
             Ok(())
         }
-        Some(cmd) => Err(cli_error(format!(
-            "unknown hadr subcommand `{cmd}`; run `andromeda-cli hadr --help`"
-        ))),
+        Some(_) => Err(cli_error(
+            "unknown hadr subcommand; run `andromeda-cli hadr --help`",
+        )),
         None => {
             output::print_hadr_help();
             Ok(())

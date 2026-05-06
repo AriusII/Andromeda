@@ -9,5 +9,4 @@ andromeda-catalog.workspace = true
 andromeda-core.workspace = true
 
 [dev-dependencies]
-andromeda-core.workspace = true
 proptest.workspace = true

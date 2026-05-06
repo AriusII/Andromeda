@@ -37,9 +37,9 @@ pub fn run_benchmark_command(args: &[String]) -> AndromedaResult<()> {
             super::output::print_benchmark_help();
             Ok(())
         }
-        Some(cmd) => Err(cli_error(format!(
-            "unknown benchmark subcommand `{cmd}`; run `andromeda-cli benchmark --help`"
-        ))),
+        Some(_) => Err(cli_error(
+            "unknown benchmark subcommand; run `andromeda-cli benchmark --help`",
+        )),
     }
 }
 
@@ -88,5 +88,16 @@ mod tests {
         ]));
 
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn unknown_workload_error_does_not_echo_value() {
+        let err = run_benchmark_command(&strings(&["run", "super-secret"])).unwrap_err();
+
+        assert_eq!(
+            err.message(),
+            "unknown benchmark workload; run `andromeda-cli benchmark workloads`"
+        );
+        assert!(!err.message().contains("super-secret"));
     }
 }

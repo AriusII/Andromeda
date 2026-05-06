@@ -1,6 +1,6 @@
 use andromeda_core::AndromedaResult;
 
-use crate::ir::{SrplAssignmentIr, SrplPredicateIr};
+use crate::ir::SrplPredicateIr;
 use crate::{
     SrplBusinessOperationIr, SrplBusinessOperationKindIr, SrplProcedureBodyIr, SrplProcedureIr,
 };
@@ -20,10 +20,6 @@ fn predicate_sort_key(p: &SrplPredicateIr) -> String {
             input,
         } => format!("GTE:{}:{}:{}", binding, field, input),
     }
-}
-
-fn assignment_sort_key(a: &SrplAssignmentIr) -> &str {
-    &a.field
 }
 
 /// Normalize a `SrplProcedureIr` body into canonical form.
@@ -69,13 +65,11 @@ fn normalize_operation(mut op: SrplBusinessOperationIr) -> Option<SrplBusinessOp
         }
         SrplBusinessOperationKindIr::Update {
             predicates,
-            assignments,
+            assignments: _,
             ..
         } => {
             // N2.
             predicates.sort_by_key(predicate_sort_key);
-            // N3.
-            assignments.sort_by(|a, b| assignment_sort_key(a).cmp(assignment_sort_key(b)));
             Some(op)
         }
         // N5: Assert with an empty predicate slot — remove.

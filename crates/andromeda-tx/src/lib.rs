@@ -17,6 +17,7 @@ mod mvcc_snapshot;
 mod mvcc_status;
 mod mvcc_version;
 mod savepoint;
+mod savepoint_write_set;
 mod state;
 mod trace;
 pub mod wal_adapter;
@@ -68,6 +69,13 @@ pub use savepoint::{
     Savepoint, SavepointId, SavepointReleaseEvidence, SavepointRollbackEvidence,
     SavepointRollbackMarker, SavepointStack,
 };
+pub use savepoint_write_set::{
+    MAX_WRITE_SET_IMAGE_BYTES, MAX_WRITE_SET_RESOURCE_ID_BYTES, TxWriteSet, WriteSetEntry,
+    WriteSetImage, WriteSetOperationKind, WriteSetOrdinal, WriteSetResourceId,
+};
 pub use state::*;
 pub use trace::*;
-pub use wal_adapter::{TxWalAdapterError, TxWalAdapterTrait, WalManager};
+pub use wal_adapter::{
+    TxWalAdapterError, TxWalAdapterReplayKind, TxWalAdapterReplayRecord, TxWalAdapterTrait,
+    WalManager, append_commit_and_flush, map_tx_wal_replay_records,
+};

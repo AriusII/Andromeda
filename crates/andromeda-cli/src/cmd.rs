@@ -2,6 +2,7 @@ use crate::args::{parse_recovery_inspect_options, parse_vertical_v0_wal_path};
 use crate::error::cli_error;
 use andromeda_core::AndromedaResult;
 
+pub use crate::audit::run_audit_command;
 pub use crate::benchmark::run_benchmark_command;
 pub use crate::cmd_backup::run_backup_command;
 pub use crate::cmd_catalog::run_catalog_command;
@@ -27,6 +28,7 @@ pub fn dispatch_command(args: &[String]) -> AndromedaResult<()> {
             run_recovery_inspect(options)
         }
         Some("hadr") => run_hadr_command(&args[1..]),
+        Some("audit") => run_audit_command(&args[1..]),
         Some("benchmark") => run_benchmark_command(&args[1..]),
         Some("backup") => run_backup_command(&args[1..]),
         Some("restore") => run_restore_command(&args[1..]),
@@ -35,9 +37,7 @@ pub fn dispatch_command(args: &[String]) -> AndromedaResult<()> {
             print_help();
             Ok(())
         }
-        Some(command) => Err(cli_error(format!(
-            "unknown command `{command}`; run `andromeda-cli --help`"
-        ))),
+        Some(_) => Err(cli_error("unknown command; run `andromeda-cli --help`")),
     }
 }
 

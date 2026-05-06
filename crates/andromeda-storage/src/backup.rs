@@ -6,6 +6,7 @@
 //! - `checkpoint_manager`: BackupCheckpointManager — crash-safe resumption
 //! - `wal_archive_integration`: WAL archive integration with manifest finalization
 
+mod artifact_store;
 mod artifacts;
 mod checkpoint_manager;
 mod execution_plan;
@@ -19,6 +20,7 @@ mod wal_archive_integration;
 // Re-export from parent crate for convenience
 pub use crate::Lsn;
 
+pub use artifact_store::*;
 pub use artifacts::*;
 pub use checkpoint_manager::*;
 pub use execution_plan::*;

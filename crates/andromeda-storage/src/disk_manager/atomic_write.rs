@@ -1,11 +1,11 @@
 use std::fs::OpenOptions;
 use std::io::{Seek, SeekFrom, Write};
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_core::AndromedaResult;
 
 use crate::{PageId, PageImage};
 
-use super::FileDiskManager;
+use super::{DiskManagerError, FileDiskManager};
 
 impl FileDiskManager {
     /// Durable write protocol:
@@ -24,52 +24,50 @@ impl FileDiskManager {
             .create(true)
             .truncate(true)
             .open(&temp_path)
-            .map_err(|e| {
-                AndromedaError::new(
-                    AndromedaErrorKind::Storage,
-                    format!("Failed to create temp file {}: {}", temp_path.display(), e),
-                )
+            .map_err(|e| DiskManagerError::IoError {
+                operation: format!("create temp page file {}", temp_path.display()),
+                reason: e.to_string(),
             })?;
 
-        temp_file.write_all(image.as_bytes()).map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                format!("Failed to write temp file: {}", e),
-            )
-        })?;
+        temp_file
+            .write_all(image.as_bytes())
+            .map_err(|e| DiskManagerError::IoError {
+                operation: format!("write temp page file {}", temp_path.display()),
+                reason: e.to_string(),
+            })?;
 
-        temp_file.sync_all().map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                format!("Failed to fsync temp file: {}", e),
-            )
-        })?;
+        temp_file
+            .sync_all()
+            .map_err(|e| DiskManagerError::IoError {
+                operation: format!("fsync temp page file {}", temp_path.display()),
+                reason: e.to_string(),
+            })?;
         drop(temp_file);
 
-        self.file.seek(SeekFrom::Start(offset)).map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                format!("Failed to seek in main file to offset {}: {}", offset, e),
-            )
-        })?;
-
-        self.file.write_all(image.as_bytes()).map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                format!("Failed to write page {} to main file: {}", page_id.get(), e),
-            )
-        })?;
-
-        self.file.sync_all().map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                format!(
-                    "Failed to fsync main file after writing page {}: {}",
+        self.file
+            .seek(SeekFrom::Start(offset))
+            .map_err(|e| DiskManagerError::IoError {
+                operation: format!(
+                    "seek main file to page {} at offset {}",
                     page_id.get(),
-                    e
+                    offset
                 ),
-            )
-        })?;
+                reason: e.to_string(),
+            })?;
+
+        self.file
+            .write_all(image.as_bytes())
+            .map_err(|e| DiskManagerError::IoError {
+                operation: format!("write page {} to main file", page_id.get()),
+                reason: e.to_string(),
+            })?;
+
+        self.file
+            .sync_all()
+            .map_err(|e| DiskManagerError::IoError {
+                operation: format!("fsync main file after writing page {}", page_id.get()),
+                reason: e.to_string(),
+            })?;
 
         let _ = std::fs::remove_file(&temp_path);
         Ok(())
