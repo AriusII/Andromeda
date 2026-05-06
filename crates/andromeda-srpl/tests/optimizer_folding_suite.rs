@@ -2,8 +2,6 @@
 
 #![forbid(unsafe_code)]
 
-use proptest::prelude::*;
-
 use andromeda_catalog::{PlanClass, QualifiedName};
 use andromeda_core::ScalarType;
 use andromeda_srpl::{
@@ -177,10 +175,17 @@ fn empty_ir() -> SrplProcedureIr {
     make_ir(vec![])
 }
 
-include!("optimizer/constant_folding.rs");
-include!("optimizer/predicate_normalize.rs");
-include!("optimizer/projection_pushdown.rs");
-include!("optimizer/cost_plan_function_phase.rs");
-include!("optimizer/property_fuzz.rs");
-include!("optimizer/crash_determinism.rs");
-include!("optimizer/integration_performance.rs");
+#[path = "optimizer/constant_folding.rs"]
+mod constant_folding;
+#[path = "optimizer/cost_plan_function_phase.rs"]
+mod cost_plan_function_phase;
+#[path = "optimizer/crash_determinism.rs"]
+mod crash_determinism;
+#[path = "optimizer/integration_performance.rs"]
+mod integration_performance;
+#[path = "optimizer/predicate_normalize.rs"]
+mod predicate_normalize;
+#[path = "optimizer/projection_pushdown.rs"]
+mod projection_pushdown;
+#[path = "optimizer/property_fuzz.rs"]
+mod property_fuzz;

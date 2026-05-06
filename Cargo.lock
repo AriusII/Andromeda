@@ -19,8 +19,6 @@ dependencies = [
  "andromeda-observe",
  "andromeda-srpl",
  "andromeda-storage",
- "tempfile",
- "tokio",
 ]
 
 [[package]]
@@ -128,7 +126,6 @@ version = "0.1.0"
 dependencies = [
  "andromeda-core",
  "andromeda-observe",
- "andromeda-storage",
  "async-trait",
  "dashmap",
  "futures",

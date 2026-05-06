@@ -1,3 +1,7 @@
+use proptest::prelude::*;
+
+use super::*;
+
 /// Property: fold_value never panics on any syntactically valid SrplValueIr.
 ///
 /// Generates arbitrary BinaryArith trees from Int64 constants and verifies that
@@ -7,10 +11,12 @@ fn t_pr_01_fold_value_never_panics_on_int64_arith() {
     proptest!(|(
         left_val in any::<i64>(),
         right_val in any::<i64>(),
-        op in prop_oneof![
-            Just(ArithOp::Add), Just(ArithOp::Subtract),
-            Just(ArithOp::Multiply), Just(ArithOp::Divide)
-        ]
+        op in prop::sample::select(vec![
+            ArithOp::Add,
+            ArithOp::Subtract,
+            ArithOp::Multiply,
+            ArithOp::Divide,
+        ])
     )| {
         let expr = arith(
             op,
@@ -28,10 +34,12 @@ fn t_pr_02_fold_idempotent_for_any_int64_arith() {
     proptest!(|(
         left_val in any::<i64>(),
         right_val in any::<i64>(),
-        op in prop_oneof![
-            Just(ArithOp::Add), Just(ArithOp::Subtract),
-            Just(ArithOp::Multiply), Just(ArithOp::Divide)
-        ]
+        op in prop::sample::select(vec![
+            ArithOp::Add,
+            ArithOp::Subtract,
+            ArithOp::Multiply,
+            ArithOp::Divide,
+        ])
     )| {
         let expr = arith(
             op,

@@ -1,3 +1,5 @@
+use super::*;
+
 /// T-IT-01  Full pipeline: normalize → pushdown → liveness → proj_apply
 ///          on a representative ReserveStock-like body.
 #[test]
@@ -225,4 +227,3 @@ fn t_bm_05_proj_apply_max_body() {
         assert!(live.is_empty(), "no downstream use → empty projection");
     }
 }
-

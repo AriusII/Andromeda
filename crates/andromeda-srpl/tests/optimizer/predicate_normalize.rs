@@ -1,3 +1,5 @@
+use super::*;
+
 /// T-PF-01  Empty predicate list → Predicates([])
 #[test]
 fn t_pf_01_empty_list_yields_empty_predicates() {

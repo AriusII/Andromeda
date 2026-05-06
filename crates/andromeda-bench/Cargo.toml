@@ -9,7 +9,3 @@ andromeda-core.workspace = true
 andromeda-observe.workspace = true
 andromeda-srpl.workspace = true
 andromeda-storage.workspace = true
-tokio.workspace = true
-
-[dev-dependencies]
-tempfile = "3.8"

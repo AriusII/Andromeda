@@ -1,3 +1,5 @@
+use super::*;
+
 /// T-CM-01  Empty body → zero cost.
 #[test]
 fn t_cm_01_empty_body_zero_cost() {

@@ -1,3 +1,5 @@
+use super::*;
+
 /// T-LV-01  Column used only in Emit is live after its Read.
 #[test]
 fn t_lv_01_emitted_column_live_after_read() {

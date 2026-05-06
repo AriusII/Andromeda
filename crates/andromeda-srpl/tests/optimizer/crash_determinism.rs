@@ -1,3 +1,5 @@
+use super::*;
+
 /// T-DT-01  Same IR input always produces the same fold result (determinism).
 #[test]
 fn t_dt_01_fold_deterministic_on_identical_input() {

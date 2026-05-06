@@ -124,11 +124,11 @@ impl CertificateRotationDeclaration {
             && self.to_fingerprint == presented_key.server_fingerprint()
     }
 
-    pub fn from_fingerprint(&self) -> &str {
+    pub fn source_fingerprint(&self) -> &str {
         &self.from_fingerprint
     }
 
-    pub fn to_fingerprint(&self) -> &str {
+    pub fn target_fingerprint(&self) -> &str {
         &self.to_fingerprint
     }
 

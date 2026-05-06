@@ -1,8 +1,8 @@
 use andromeda_core::AndromedaResult;
 
 use crate::{
-    BTREE_DURABLE_FORMAT_PROMOTED, BTreeKeyFormatIdentity, BTreeOperationType,
-    KeyV1FormatValidator, WalRecord, WalRecordKind, format_version::FormatVersion,
+    BTreeKeyFormatIdentity, BTreeOperationType, KeyV1FormatValidator, WalRecord, WalRecordKind,
+    format_version::FormatVersion,
 };
 
 use super::heap_redo::replay_heap_row_record;
@@ -65,15 +65,9 @@ fn index_rebuild_handler(
         return Ok(ReplayResult::error(record.header.lsn, kind, err.message()));
     }
 
-    let reason = if BTREE_DURABLE_FORMAT_PROMOTED {
-        format!(
-            "{kind:?} recovery payload validated, but inline durable B-Tree redo is not wired; index rebuild is required before normal writes resume"
-        )
-    } else {
-        format!(
-            "{kind:?} recovery payload validated; durable B-Tree mutation format is not promoted, so recovery records index rebuild required instead of applying inline redo"
-        )
-    };
+    let reason = format!(
+        "{kind:?} recovery payload validated; durable B-Tree mutation format is not promoted, so recovery records index rebuild required instead of applying inline redo"
+    );
 
     ctx.record_index_rebuild_required(IndexRebuildRequiredEvidence {
         lsn: record.header.lsn,
