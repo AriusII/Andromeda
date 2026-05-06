@@ -62,7 +62,7 @@ jobs:
         with:
           target: ${{ matrix.target }}
           artifact-suffix: ${{ matrix.artifact_suffix }}
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@v4
         with:
           subject-path: ${{ steps.package.outputs.archive_path }}
       - uses: actions/upload-artifact@v7
