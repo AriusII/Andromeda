@@ -12,7 +12,7 @@
 #[cfg(test)]
 mod btree_engine_tests {
     use andromeda_storage::{
-        BTreeConfig, BTreeIndexEngine, BTreeNodeImpl, IndexId, KeyValuePair, PageId, RowId,
+        BTreeConfig, BTreeNodeImpl, InMemoryBTreeIndexEngine, IndexId, KeyValuePair, PageId, RowId,
     };
 
     // ========================================================================
@@ -435,13 +435,13 @@ mod btree_engine_tests {
     }
 
     // ========================================================================
-    // Integration Tests: BTreeIndexEngine
+    // Integration Tests: InMemoryBTreeIndexEngine
     // ========================================================================
 
     #[test]
     fn test_btree_engine_creation() {
         let engine =
-            BTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
+            InMemoryBTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
 
         assert_eq!(engine.row_count(), 0);
         let stats = engine.statistics();
@@ -450,9 +450,17 @@ mod btree_engine_tests {
     }
 
     #[test]
+    #[allow(deprecated)]
+    fn test_btree_engine_deprecated_alias_remains_compatible() {
+        let engine_alias: andromeda_storage::BTreeIndexEngine =
+            InMemoryBTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
+        assert_eq!(engine_alias.row_count(), 0);
+    }
+
+    #[test]
     fn test_btree_engine_search_empty() {
         let engine =
-            BTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
+            InMemoryBTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
 
         let result = engine.search(&[42]).unwrap();
         assert_eq!(result, None);
@@ -461,7 +469,7 @@ mod btree_engine_tests {
     #[test]
     fn test_btree_engine_range_scan_empty() {
         let engine =
-            BTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
+            InMemoryBTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
 
         let results = engine.range_scan(&[0], &[255]).unwrap();
         assert_eq!(results.len(), 0);
@@ -470,7 +478,7 @@ mod btree_engine_tests {
     #[test]
     fn test_btree_engine_insert() {
         let mut engine =
-            BTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
+            InMemoryBTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
 
         let key = vec![1, 2, 3];
         let row_id = RowId::new(42);
@@ -482,7 +490,7 @@ mod btree_engine_tests {
     #[test]
     fn test_btree_engine_insert_oversized_key() {
         let mut engine =
-            BTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
+            InMemoryBTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
 
         let oversized_key = vec![0u8; 10000];
         let row_id = RowId::new(42);
@@ -494,7 +502,7 @@ mod btree_engine_tests {
     #[test]
     fn test_btree_engine_delete() {
         let mut engine =
-            BTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
+            InMemoryBTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
 
         let key = vec![5];
         let result = engine.delete(&key);
@@ -504,7 +512,7 @@ mod btree_engine_tests {
     #[test]
     fn test_btree_engine_delete_oversized_key() {
         let mut engine =
-            BTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
+            InMemoryBTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
 
         let oversized_key = vec![0u8; 10000];
         let result = engine.delete(&oversized_key);

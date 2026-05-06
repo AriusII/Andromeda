@@ -1,3 +1,5 @@
 /target
 .idea/
 /docs/decisions/*
+/fuzz/target
+/.claude/worktrees

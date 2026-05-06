@@ -1,8 +1,8 @@
 #![forbid(unsafe_code)]
 
 use andromeda_storage::{
-    BTreeConcurrencyPolicy, BTreeConfig, BTreeIndexEngine, BTreeLatchLevel, BTreeLatchTarget,
-    BTreeNodeImpl, IndexId, KeyValuePair, PageId, RowId,
+    BTreeConcurrencyPolicy, BTreeConfig, BTreeLatchLevel, BTreeLatchTarget, BTreeNodeImpl,
+    InMemoryBTreeIndexEngine, IndexId, KeyValuePair, PageId, RowId,
 };
 
 fn row_id_value(kvp: &KeyValuePair) -> u64 {
@@ -29,7 +29,7 @@ fn assert_leaf_keys_strictly_ordered(node: &BTreeNodeImpl) {
 #[test]
 fn engine_insert_lookup_delete_and_range_are_ordered_e2e() {
     let mut engine =
-        BTreeIndexEngine::new(IndexId::new(7), PageId::new(700), BTreeConfig::default());
+        InMemoryBTreeIndexEngine::new(IndexId::new(7), PageId::new(700), BTreeConfig::default());
 
     for key in [40u8, 10, 30, 20, 50] {
         engine

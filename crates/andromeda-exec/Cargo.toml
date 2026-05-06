@@ -14,3 +14,32 @@ andromeda-srpl.workspace = true
 andromeda-storage.workspace = true
 andromeda-tx.workspace = true
 dashmap = "6.0"
+tokio.workspace = true
+
+[[test]]
+name = "c4_admission_events"
+path = "tests/c4_admission_events.rs"
+
+[[test]]
+name = "c5_commit_rollback_lifecycle"
+path = "tests/c5_commit_rollback_lifecycle.rs"
+
+[[test]]
+name = "c6_recovery_security_audit"
+path = "tests/c6_recovery_security_audit.rs"
+
+[[test]]
+name = "core_io_gates"
+path = "tests/core_io_gates.rs"
+
+[[test]]
+name = "executor_validation_gates"
+path = "tests/executor_validation_gates.rs"
+
+[[test]]
+name = "runtime_contract"
+path = "tests/runtime_contract.rs"
+
+[[test]]
+name = "v0_vertical_e2e"
+path = "tests/v0_vertical_e2e.rs"

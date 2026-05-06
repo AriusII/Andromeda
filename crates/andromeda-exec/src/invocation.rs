@@ -8,10 +8,7 @@ use andromeda_observe::{
 };
 use andromeda_proto::StructuredObjectHeader;
 
-use crate::{
-    CompletionStatus, InvocationCompletion,
-    services::{AdmissionService, PreTransactionValidationService},
-};
+use crate::{CompletionStatus, InvocationCompletion, services::PreTransactionValidationService};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InvocationRequest {
@@ -23,8 +20,34 @@ pub struct InvocationRequest {
 }
 
 impl InvocationRequest {
+    /// Validate the invocation request at the admission gate before a transaction is created.
+    ///
+    /// The current implementation enforces structural invariants that can be checked
+    /// without resource or permission context: the `InvocationId` must be nonzero so
+    /// that every invocation carries an observable, auditable identity.
+    ///
+    /// TECH-DEBT: Full admission control — resource budgets, rate limits, and execution
+    /// IO placement decisions — belongs to `ExecutionIoAdmissionRequest::validate_admission`
+    /// in `admission.rs`. The two paths should be composed into a unified pre-transaction
+    /// gate once the admission service is wired to the runtime dispatcher. Risk: until
+    /// then, callers that bypass the IO admission path receive only structural checks.
+    /// Closure: wire `AdmissionService` into `LocalVerticalRuntime::execute_after_admission`.
     pub fn validate_admission(&self, trace_id: TraceId) -> Result<DecisionTrace, InvocationReject> {
-        AdmissionService::validate_invocation_request(self, trace_id)
+        use andromeda_observe::CriticalDecisionKind;
+
+        if self.invocation_id.get() == 0 {
+            return Err(InvocationReject {
+                status: CompletionStatus::ContractRejected,
+                reason: "InvocationId must not be zero".to_string(),
+            });
+        }
+
+        Ok(DecisionTrace {
+            trace_id,
+            decision: CriticalDecisionKind::ContractValidation,
+            reason: "invocation structural admission accepted before transaction creation"
+                .to_string(),
+        })
     }
 
     pub fn validate_before_transaction(
@@ -97,9 +120,9 @@ impl InvocationReject {
             CompletionStatus::SystemUnavailable => TransitionReasonCode::SYSTEM_UNAVAILABLE,
             CompletionStatus::Poisoned => TransitionReasonCode::POISON,
             CompletionStatus::Committed | CompletionStatus::RolledBack => {
-                // A reject that claims a transactional terminal status is
-                // a misuse upstream; we fall back to a non-terminal reason
-                // so the trace cannot fabricate a durable claim.
+                // A reject that claims a transactional terminal status is a misuse upstream;
+                // fall back to a non-terminal reason so the trace cannot fabricate a durable
+                // claim.
                 TransitionReasonCode::EXECUTOR_FAILURE
             }
         };

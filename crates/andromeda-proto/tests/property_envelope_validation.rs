@@ -28,6 +28,7 @@ fn arb_protobuf_bytes() -> impl Strategy<Value = Vec<u8>> {
 }
 
 /// Generator for valid-looking envelope prefixes.
+#[allow(dead_code)]
 fn arb_envelope_prefix() -> impl Strategy<Value = Vec<u8>> {
     prop_oneof![
         // Protobuf field tag 1, wire type 2 (length-delimited)

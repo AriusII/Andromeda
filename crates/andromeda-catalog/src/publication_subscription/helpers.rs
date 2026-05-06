@@ -1,0 +1,32 @@
+use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+
+use crate::{CatalogPublicationReceipt, CatalogPublicationSemantics};
+
+pub(super) fn validate_receipt(receipt: &CatalogPublicationReceipt) -> AndromedaResult<()> {
+    if receipt.database_id.get() == 0 || receipt.namespace_id.get() == 0 {
+        return catalog_publication_error("catalog publication receipt identity fields must not be zero");
+    }
+    if receipt.previous_version.get() == 0 || receipt.next_version <= receipt.previous_version {
+        return catalog_publication_error(
+            "catalog publication receipt must advance a nonzero catalog version",
+        );
+    }
+    if receipt.record_count == 0 {
+        return catalog_publication_error("catalog publication receipt record count must not be zero");
+    }
+    if receipt.publication_semantics != CatalogPublicationSemantics::DurablePublicationExternal {
+        return catalog_publication_error(
+            "catalog publication report requires durable publication semantics",
+        );
+    }
+    if receipt.durable_lsn.is_none() && receipt.durable_evidence_marker.is_none() {
+        return catalog_publication_error(
+            "catalog publication receipt must carry durable WAL LSN or durable marker evidence",
+        );
+    }
+    Ok(())
+}
+
+pub(super) fn catalog_publication_error<T>(message: &'static str) -> AndromedaResult<T> {
+    Err(AndromedaError::new(AndromedaErrorKind::Catalog, message))
+}

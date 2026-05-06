@@ -12,12 +12,44 @@ use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 pub struct SavepointId(u64);
 
 impl SavepointId {
+    pub const MIN_VALID: u64 = 1;
+
+    /// Build a savepoint id without validation.
+    ///
+    /// This remains available for compatibility with existing callers that
+    /// round-trip persisted ids. New savepoint ids should be allocated through
+    /// `SavepointStack` or checked with `try_new`.
     pub const fn new(value: u64) -> Self {
         Self(value)
     }
 
+    pub fn try_new(value: u64) -> AndromedaResult<Self> {
+        let id = Self::new(value);
+        id.validate()?;
+        Ok(id)
+    }
+
     pub const fn get(self) -> u64 {
         self.0
+    }
+
+    pub const fn is_zero(self) -> bool {
+        self.0 == 0
+    }
+
+    pub const fn is_valid(self) -> bool {
+        !self.is_zero() && self.0 >= Self::MIN_VALID
+    }
+
+    pub fn validate(self) -> AndromedaResult<()> {
+        if !self.is_valid() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Transaction,
+                "savepoint id must be non-zero",
+            ));
+        }
+
+        Ok(())
     }
 }
 
@@ -79,7 +111,7 @@ impl SavepointStack {
             ));
         }
 
-        let id = SavepointId::new(self.next_id);
+        let id = SavepointId::try_new(self.next_id)?;
         self.next_id = self.next_id.checked_add(1).ok_or_else(|| {
             AndromedaError::new(
                 AndromedaErrorKind::Transaction,
@@ -230,5 +262,11 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["a"]
         );
+    }
+
+    #[test]
+    fn try_new_rejects_zero_id() {
+        let err = SavepointId::try_new(0).unwrap_err();
+        assert_eq!(err.kind(), AndromedaErrorKind::Transaction);
     }
 }

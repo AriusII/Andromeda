@@ -1,0 +1,48 @@
+name: Perf Regression
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "crates/**/*.rs"
+      - ".github/perf/**"
+      - ".github/scripts/perf_regression_gate.py"
+      - ".github/workflows/perf-regression.yml"
+  push:
+    branches: [ main ]
+    paths:
+      - "crates/**/*.rs"
+      - ".github/perf/**"
+      - ".github/scripts/perf_regression_gate.py"
+      - ".github/workflows/perf-regression.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: perf-regression-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  performance-regression:
+    name: performance-regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/rust-setup
+        with:
+          toolchain: stable
+      - run: cargo test -p andromeda-bench --locked --quiet
+      - name: Compare against Wave 14 baseline
+        run: python .github/scripts/perf_regression_gate.py --output-dir target/perf-regression
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perf-regression-wave14
+          path: |
+            .github/perf/baseline.wave14.json
+            .github/perf/thresholds.wave14.json
+            target/perf-regression/performance-report.json
+            target/perf-regression/performance-report.md
+          retention-days: 30

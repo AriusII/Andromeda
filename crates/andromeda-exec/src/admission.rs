@@ -8,6 +8,16 @@ use andromeda_storage::{
 use crate::{InvocationReject, services::AdmissionService};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecutionIoAdmissionDecision {
+    pub trace: DecisionTrace,
+    pub profile_mode: OperationalProfileMode,
+    pub pipeline_class: PipelineClass,
+    pub workload: StorageWorkloadClass,
+    pub resource_budget: ResourceBudget,
+    pub placement: CoreIoPlacementDecision,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutionIoAdmissionRequest {
     pub operational_profile: OperationalProfile,
     pub pipeline_class: PipelineClass,
@@ -98,16 +108,6 @@ impl ExecutionIoAdmissionRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExecutionIoAdmissionDecision {
-    pub trace: DecisionTrace,
-    pub profile_mode: OperationalProfileMode,
-    pub pipeline_class: PipelineClass,
-    pub workload: StorageWorkloadClass,
-    pub resource_budget: ResourceBudget,
-    pub placement: CoreIoPlacementDecision,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InvocationContext {
     pub trace_id: TraceId,
     pub granted_permissions: Vec<String>,
@@ -130,7 +130,7 @@ impl InvocationContext {
     pub fn authorize(
         &self,
         required_permissions: &[String],
-    ) -> Result<andromeda_observe::DecisionTrace, InvocationReject> {
+    ) -> Result<DecisionTrace, InvocationReject> {
         AdmissionService::authorize(self, required_permissions)
     }
 }

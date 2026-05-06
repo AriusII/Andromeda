@@ -7,11 +7,12 @@
 
 // Module files
 mod args_parser;
+mod benchmark;
+mod hadr;
 mod cmd_backup;
 mod cmd_benchmark;
 mod cmd_catalog;
 mod cmd_hadr;
-mod cmd_machine_output;
 mod cmd_protocol;
 mod cmd_recovery;
 mod cmd_restore;
@@ -31,9 +32,7 @@ pub mod args {
 
 pub mod cmd;
 
-pub mod output {
-    // Placeholder for output formatting
-}
+pub mod output {}
 
 pub use cmd::dispatch_command;
 pub use error::{cli_error, protocol_error};

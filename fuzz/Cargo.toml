@@ -1,0 +1,53 @@
+[package]
+name = "andromeda-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+andromeda-proto = { path = "../crates/andromeda-proto" }
+andromeda-quic = { path = "../crates/andromeda-quic" }
+andromeda-srpl = { path = "../crates/andromeda-srpl" }
+andromeda-storage = { path = "../crates/andromeda-storage" }
+
+[[bin]]
+name = "frame_codec_no_panic"
+path = "fuzz_targets/frame_codec_no_panic.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "result_sequence_state_machine"
+path = "fuzz_targets/result_sequence_state_machine.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "proto_frame_envelope_decode"
+path = "fuzz_targets/proto_frame_envelope_decode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "proto_rpc_completion_decode"
+path = "fuzz_targets/proto_rpc_completion_decode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "srpl_parser_signature_decode"
+path = "fuzz_targets/srpl_parser_signature_decode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "storage_wal_record_roundtrip"
+path = "fuzz_targets/storage_wal_record_roundtrip.rs"
+test = false
+doc = false

@@ -5,7 +5,8 @@ use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, Proced
 
 use crate::{
     InvocationContext, LocalProcedure, ProcedureDispatchRequest, ProcedureDispatcher,
-    ReserveStockEffect, ResultStreamMetadata,
+    QueryStockEffect, ReleaseStockEffect, ReserveStockEffect, ResultStreamMetadata,
+    dispatch::validate_dispatch_permissions_or_error,
 };
 
 /// Executable Procedure adapter used by future registry-backed local dispatch.
@@ -54,6 +55,99 @@ impl ReserveStockProcedureHandler {
 }
 
 impl ProcedureHandler for ReserveStockProcedureHandler {
+    fn procedure_id(&self) -> ProcedureId {
+        self.contract.procedure_id
+    }
+
+    fn contract(&self) -> ProcedureContractRef {
+        self.contract
+    }
+
+    fn result_metadata(&self) -> ResultStreamMetadata {
+        self.local_procedure.result_metadata
+    }
+
+    fn execute(&self, _context: InvocationContext) -> AndromedaResult<LocalProcedure> {
+        Ok(self.local_procedure.clone())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Inventory.QueryStock handler (Wave 13, Batch 18)
+// ---------------------------------------------------------------------------
+
+/// Post-gate adapter for the V0 `Inventory.QueryStock` read-only Procedure.
+///
+/// Accepts a pre-computed [`QueryStockEffect`] and converts it through
+/// `QueryStockEffect::to_local_procedure`. It does **not** perform admission,
+/// authorization, transaction allocation, WAL dispatch, or production registry
+/// integration.
+///
+/// The handler preserves the read-only guarantee: `mutation_payload` in the
+/// resulting `LocalProcedure` is always empty and `rows_affected` is always 0.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InventoryQueryStockProcedureHandler {
+    contract: ProcedureContractRef,
+    local_procedure: LocalProcedure,
+}
+
+impl InventoryQueryStockProcedureHandler {
+    pub fn new(contract: &ProcedureContract, effect: &QueryStockEffect) -> AndromedaResult<Self> {
+        let local_procedure = effect.to_local_procedure(contract)?;
+        local_procedure.validate()?;
+        Ok(Self {
+            contract: contract.as_ref(),
+            local_procedure,
+        })
+    }
+}
+
+impl ProcedureHandler for InventoryQueryStockProcedureHandler {
+    fn procedure_id(&self) -> ProcedureId {
+        self.contract.procedure_id
+    }
+
+    fn contract(&self) -> ProcedureContractRef {
+        self.contract
+    }
+
+    fn result_metadata(&self) -> ResultStreamMetadata {
+        self.local_procedure.result_metadata
+    }
+
+    fn execute(&self, _context: InvocationContext) -> AndromedaResult<LocalProcedure> {
+        Ok(self.local_procedure.clone())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Inventory.ReleaseStock handler (Wave 13, Batch 18)
+// ---------------------------------------------------------------------------
+
+/// Post-gate adapter for the V0 `Inventory.ReleaseStock` write Procedure.
+///
+/// Accepts a pre-computed [`ReleaseStockEffect`] and converts it through
+/// `ReleaseStockEffect::to_local_procedure`. It does **not** perform admission,
+/// authorization, transaction allocation, WAL dispatch, or production registry
+/// integration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InventoryReleaseStockProcedureHandler {
+    contract: ProcedureContractRef,
+    local_procedure: LocalProcedure,
+}
+
+impl InventoryReleaseStockProcedureHandler {
+    pub fn new(contract: &ProcedureContract, effect: &ReleaseStockEffect) -> AndromedaResult<Self> {
+        let local_procedure = effect.to_local_procedure(contract)?;
+        local_procedure.validate()?;
+        Ok(Self {
+            contract: contract.as_ref(),
+            local_procedure,
+        })
+    }
+}
+
+impl ProcedureHandler for InventoryReleaseStockProcedureHandler {
     fn procedure_id(&self) -> ProcedureId {
         self.contract.procedure_id
     }
@@ -133,6 +227,9 @@ impl ProcedureRegistry {
     /// This method accepts only a canonical [`ProcedureId`]. It does not perform
     /// remote dispatch, transaction allocation, WAL emission, or terminal
     /// completion mapping.
+    ///
+    /// **Security:** Validates that invocation permissions do not exceed handler contract
+    /// permissions before execution, preventing privilege escalation.
     pub fn dispatch(
         &self,
         procedure_id: ProcedureId,
@@ -141,8 +238,8 @@ impl ProcedureRegistry {
         let handler = self
             .lookup(procedure_id)
             .ok_or_else(|| unknown_procedure_error(procedure_id))?;
-        let procedure = handler.execute(context)?;
-        validate_dispatch_result(procedure_id, handler.as_ref(), &procedure)?;
+        let procedure = handler.execute(context.clone())?;
+        validate_dispatch_result(procedure_id, handler.as_ref(), &procedure, &context)?;
         Ok(procedure)
     }
 }
@@ -166,8 +263,8 @@ impl ProcedureDispatcher for ProcedureRegistry {
             ));
         }
 
-        let procedure = handler.execute(request.context)?;
-        validate_dispatch_result(procedure_id, handler.as_ref(), &procedure)?;
+        let procedure = handler.execute(request.context.clone())?;
+        validate_dispatch_result(procedure_id, handler.as_ref(), &procedure, &request.context)?;
         Ok(procedure)
     }
 }
@@ -202,6 +299,7 @@ fn validate_dispatch_result(
     procedure_id: ProcedureId,
     handler: &(dyn ProcedureHandler + Send + Sync),
     procedure: &LocalProcedure,
+    context: &InvocationContext,
 ) -> AndromedaResult<()> {
     procedure.validate()?;
 
@@ -218,6 +316,12 @@ fn validate_dispatch_result(
             "dispatched Procedure id must match requested Procedure id",
         ));
     }
+
+    // Validate that invocation permissions do not exceed handler contract permissions
+    validate_dispatch_permissions_or_error(
+        &context.granted_permissions,
+        &procedure.required_permissions,
+    )?;
 
     Ok(())
 }
@@ -249,7 +353,9 @@ mod tests {
         InventoryReserveStockExecutor, InventoryStock, PreTransactionDispatchEvidence,
         RemoteProcedureDispatcherUnavailable, ReserveStockCommand,
     };
-    use andromeda_catalog::{ProcedureContractRef, inventory_reserve_stock_contract};
+    use andromeda_catalog::{
+        INVENTORY_RESERVE_STOCK_PERMISSION, ProcedureContractRef, inventory_reserve_stock_contract,
+    };
     use andromeda_core::{CatalogVersion, ContractHash, ProcedureId};
     use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
     use andromeda_srpl::Cardinality;
@@ -455,6 +561,27 @@ mod tests {
 
     fn context() -> InvocationContext {
         InvocationContext::new(TraceId::new(9), vec!["inventory.reserve".to_string()])
+    }
+
+    fn reserve_context() -> InvocationContext {
+        InvocationContext::new(
+            TraceId::new(9),
+            vec![INVENTORY_RESERVE_STOCK_PERMISSION.to_string()],
+        )
+    }
+
+    fn query_context() -> InvocationContext {
+        InvocationContext::new(
+            TraceId::new(9),
+            vec![TEST_INVENTORY_QUERY_STOCK_PERMISSION.to_string()],
+        )
+    }
+
+    fn release_context() -> InvocationContext {
+        InvocationContext::new(
+            TraceId::new(9),
+            vec![TEST_INVENTORY_RELEASE_STOCK_PERMISSION.to_string()],
+        )
     }
 
     fn decision(trace_id: TraceId, decision: CriticalDecisionKind) -> DecisionTrace {
@@ -676,7 +803,9 @@ mod tests {
         let mut registry = ProcedureRegistry::new();
         registry.register(handler).unwrap();
 
-        let procedure = registry.dispatch(contract.procedure_id, context()).unwrap();
+        let procedure = registry
+            .dispatch(contract.procedure_id, reserve_context())
+            .unwrap();
         assert_eq!(procedure.contract, contract.as_ref());
         assert_eq!(procedure.rows_affected, effect.rows_affected);
     }
@@ -725,7 +854,7 @@ mod tests {
         assert!(registry.contains(release_contract.procedure_id));
 
         let reserve_procedure = registry
-            .dispatch(reserve_contract.procedure_id, context())
+            .dispatch(reserve_contract.procedure_id, reserve_context())
             .unwrap();
         reserve_procedure.validate().unwrap();
         assert_eq!(reserve_procedure.contract, reserve_contract.as_ref());
@@ -735,7 +864,7 @@ mod tests {
         );
 
         let query_procedure = registry
-            .dispatch(query_contract.procedure_id, context())
+            .dispatch(query_contract.procedure_id, query_context())
             .unwrap();
         query_procedure.validate().unwrap();
 
@@ -762,7 +891,7 @@ mod tests {
         assert!(!query_procedure.mutation_payload.is_empty());
 
         let release_procedure = registry
-            .dispatch(release_contract.procedure_id, context())
+            .dispatch(release_contract.procedure_id, release_context())
             .unwrap();
         release_procedure.validate().unwrap();
 

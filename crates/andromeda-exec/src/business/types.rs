@@ -7,11 +7,15 @@ use andromeda_tx::Snapshot;
 use crate::{CompletionStatus, InvocationCompletion, LocalProcedure, ResultStreamMetadata};
 
 use super::constants::{
-    INVENTORY_RESERVE_STOCK_EXACT_RESULT_ROWS, INVENTORY_RESERVE_STOCK_RESERVATION_ROWS_AFFECTED,
-    INVENTORY_RESERVE_STOCK_RESULT_STREAM_ID, INVENTORY_RESERVE_STOCK_STOCK_ROWS_AFFECTED,
-    RESERVE_STOCK_PAYLOAD_DOMAIN,
+    INVENTORY_QUERY_STOCK_COLUMN_COUNT, INVENTORY_QUERY_STOCK_RESULT_STREAM_ID,
+    INVENTORY_RELEASE_STOCK_EXACT_RESULT_ROWS, INVENTORY_RELEASE_STOCK_RESULT_STREAM_ID,
+    INVENTORY_RESERVE_STOCK_EXACT_RESULT_ROWS, INVENTORY_RESERVE_STOCK_RESULT_STREAM_ID,
+    RELEASE_STOCK_PAYLOAD_DOMAIN, RESERVE_STOCK_PAYLOAD_DOMAIN,
 };
-use super::executor::validate_inventory_reserve_stock_contract;
+use super::executor::{
+    validate_inventory_query_stock_contract, validate_inventory_release_stock_contract,
+    validate_inventory_reserve_stock_contract,
+};
 
 // ---------------------------------------------------------------------------
 // Domain value types
@@ -146,14 +150,14 @@ impl InventoryReserveStockResultEvidence {
             && self.reserved_quantity > 0
             && self.remaining_quantity >= 0
             && self.exact_result_row_count == INVENTORY_RESERVE_STOCK_EXACT_RESULT_ROWS
-            && self.stock_rows_affected == INVENTORY_RESERVE_STOCK_STOCK_ROWS_AFFECTED
-            && self.reservation_rows_affected == INVENTORY_RESERVE_STOCK_RESERVATION_ROWS_AFFECTED
+            && self.stock_rows_affected == 1
+            && self.reservation_rows_affected == 1
     }
 
     pub fn matches_committed_completion(&self, completion: &InvocationCompletion) -> bool {
         completion.status == CompletionStatus::Committed
             && completion.rows_affected == Some(self.rows_affected())
-            && completion.durable_lsn.is_some_and(|lsn| lsn.get() != 0)
+            && completion.durable_lsn.is_some_and(|lsn| !lsn.is_zero())
     }
 
     pub fn decision_trace(self, trace_id: TraceId) -> DecisionTrace {
@@ -250,8 +254,8 @@ impl ReserveStockEffect {
             reserved_quantity: self.result.quantity,
             remaining_quantity: self.result.remaining_quantity,
             exact_result_row_count: INVENTORY_RESERVE_STOCK_EXACT_RESULT_ROWS,
-            stock_rows_affected: INVENTORY_RESERVE_STOCK_STOCK_ROWS_AFFECTED,
-            reservation_rows_affected: INVENTORY_RESERVE_STOCK_RESERVATION_ROWS_AFFECTED,
+            stock_rows_affected: 1,
+            reservation_rows_affected: 1,
         }
     }
 
@@ -287,6 +291,190 @@ impl ReserveStockEffect {
                 stream_id: INVENTORY_RESERVE_STOCK_RESULT_STREAM_ID,
                 row_count_exact: Some(1),
                 row_count_max: Some(1),
+                column_count: result_stream.columns.len() as u32,
+                cardinality: Cardinality::One,
+            },
+            mutation_payload: self.mutation_payload(),
+            rows_affected: self.rows_affected,
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Inventory.QueryStock domain types (Wave 13, Batch 18)
+// ---------------------------------------------------------------------------
+
+/// Command to query stock visibility for a single product.
+///
+/// This is a read-only command: it carries no mutation intent and does not
+/// require a write transaction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct QueryStockCommand {
+    pub product_id: i64,
+}
+
+impl QueryStockCommand {
+    pub fn validate(self) -> AndromedaResult<()> {
+        if self.product_id <= 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Execution,
+                "query stock product id must be positive",
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// Effect produced by a successful `Inventory.QueryStock` read Procedure.
+///
+/// - `stock`: The visible stock snapshot, or `None` if the product does not
+///   exist or has no committed version visible to the reading snapshot.
+/// - `rows_returned`: 1 when a row is visible, 0 when the product is absent.
+///   This value drives `ResultStreamMetadata::row_count_exact` on the wire.
+///
+/// ## Read-only contract
+///
+/// `mutation_payload` is always empty and `rows_affected` is always 0.
+/// `LocalProcedure::validate()` allows an empty payload when rows_affected is 0.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QueryStockEffect {
+    pub stock: Option<InventoryStock>,
+    pub rows_returned: u64,
+}
+
+impl QueryStockEffect {
+    /// Build a "found" effect for a visible stock record.
+    pub fn found(stock: InventoryStock) -> AndromedaResult<Self> {
+        stock.validate()?;
+        Ok(Self {
+            stock: Some(stock),
+            rows_returned: 1,
+        })
+    }
+
+    /// Build a "not found" effect when the product has no visible committed version.
+    pub fn not_found() -> Self {
+        Self {
+            stock: None,
+            rows_returned: 0,
+        }
+    }
+
+    /// Convert this effect into a [`LocalProcedure`] bound to a validated
+    /// `Inventory.QueryStock` contract.
+    ///
+    /// The resulting `LocalProcedure` has:
+    /// - `mutation_payload = []` (read-only; no WAL record needed)
+    /// - `rows_affected = 0`
+    /// - `cardinality = OptionalOne` (0 or 1 rows)
+    pub fn to_local_procedure(
+        &self,
+        contract: &ProcedureContract,
+    ) -> AndromedaResult<LocalProcedure> {
+        validate_inventory_query_stock_contract(contract)?;
+
+        Ok(LocalProcedure {
+            contract: contract.as_ref(),
+            required_permissions: contract.required_permissions.clone(),
+            result_metadata: ResultStreamMetadata {
+                stream_id: INVENTORY_QUERY_STOCK_RESULT_STREAM_ID,
+                row_count_exact: Some(self.rows_returned),
+                row_count_max: Some(1),
+                column_count: INVENTORY_QUERY_STOCK_COLUMN_COUNT,
+                cardinality: Cardinality::OptionalOne,
+            },
+            // Read-only: no WAL mutation payload.
+            mutation_payload: Vec::new(),
+            rows_affected: 0,
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Inventory.ReleaseStock domain types (Wave 13, Batch 18)
+// ---------------------------------------------------------------------------
+
+/// Command to release previously reserved stock, restoring available quantity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReleaseStockCommand {
+    pub product_id: i64,
+    pub quantity: i64,
+}
+
+impl ReleaseStockCommand {
+    pub fn validate(self) -> AndromedaResult<()> {
+        if self.product_id <= 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Execution,
+                "release stock product id must be positive",
+            ));
+        }
+        if self.quantity <= 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Execution,
+                "release stock quantity must be positive",
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// Effect produced by a successful `Inventory.ReleaseStock` write Procedure.
+///
+/// Models the restoration of previously reserved stock: `previous_stock` is
+/// the reduced-quantity version committed by the matching `ReserveStock`
+/// invocation; `next_stock` is the restored version after release.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseStockEffect {
+    pub previous_stock: InventoryStock,
+    pub next_stock: InventoryStock,
+    pub rows_affected: u64,
+}
+
+impl ReleaseStockEffect {
+    /// Encode a deterministic mutation payload for WAL durability.
+    ///
+    /// Layout:
+    /// ```text
+    /// [domain_tag] [NUL] [prev_product_id:8] [prev_quantity:8] [prev_version:8]
+    ///                    [next_quantity:8]    [next_version:8]  [released_qty:8]
+    /// ```
+    pub fn mutation_payload(&self) -> Vec<u8> {
+        let released_qty =
+            self.next_stock.available_quantity - self.previous_stock.available_quantity;
+        let mut payload = Vec::with_capacity(RELEASE_STOCK_PAYLOAD_DOMAIN.len() + 1 + 48);
+        payload.extend_from_slice(RELEASE_STOCK_PAYLOAD_DOMAIN);
+        payload.push(0);
+        payload.extend_from_slice(&self.previous_stock.product_id.to_le_bytes());
+        payload.extend_from_slice(&self.previous_stock.available_quantity.to_le_bytes());
+        payload.extend_from_slice(&self.previous_stock.version.to_le_bytes());
+        payload.extend_from_slice(&self.next_stock.available_quantity.to_le_bytes());
+        payload.extend_from_slice(&self.next_stock.version.to_le_bytes());
+        payload.extend_from_slice(&released_qty.to_le_bytes());
+        payload
+    }
+
+    /// Convert this effect into a [`LocalProcedure`] bound to a validated
+    /// `Inventory.ReleaseStock` contract.
+    pub fn to_local_procedure(
+        &self,
+        contract: &ProcedureContract,
+    ) -> AndromedaResult<LocalProcedure> {
+        validate_inventory_release_stock_contract(contract)?;
+        let result_stream = contract.result_streams.first().ok_or_else(|| {
+            AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "Inventory.ReleaseStock contract must declare a result stream",
+            )
+        })?;
+
+        Ok(LocalProcedure {
+            contract: contract.as_ref(),
+            required_permissions: contract.required_permissions.clone(),
+            result_metadata: ResultStreamMetadata {
+                stream_id: INVENTORY_RELEASE_STOCK_RESULT_STREAM_ID,
+                row_count_exact: Some(INVENTORY_RELEASE_STOCK_EXACT_RESULT_ROWS),
+                row_count_max: Some(INVENTORY_RELEASE_STOCK_EXACT_RESULT_ROWS),
                 column_count: result_stream.columns.len() as u32,
                 cardinality: Cardinality::One,
             },

@@ -9,10 +9,10 @@ pub use crate::ast::{
 };
 pub use crate::cardinality::Cardinality;
 pub use crate::ir::{
-    BoundSrplBodyPlan, BoundSrplOperationPlan, ExecutableProcedurePlan, MAX_SRPL_BODY_OPERATIONS,
-    SrplAssignmentIr, SrplBusinessOperationIr, SrplBusinessOperationKindIr,
-    SrplCatalogBindingEvidence, SrplEmitValueIr, SrplObjectBindingEvidence, SrplPredicateIr,
-    SrplProcedureBodyIr, SrplProcedureContractMetadata, SrplProcedureIr, SrplResultStreamIr,
-    SrplValueIr,
+    ArithOp, BoundSrplBodyPlan, BoundSrplOperationPlan, ConstantLiteral, ExecutableProcedurePlan,
+    MAX_EXPR_DEPTH, MAX_SRPL_BODY_OPERATIONS, SrplAssignmentIr, SrplBusinessOperationIr,
+    SrplBusinessOperationKindIr, SrplCatalogBindingEvidence, SrplEmitValueIr,
+    SrplObjectBindingEvidence, SrplPredicateIr, SrplProcedureBodyIr, SrplProcedureContractMetadata,
+    SrplProcedureIr, SrplResultStreamIr, SrplValueIr,
 };
 pub use crate::signature::{ProcedureSignature, ResultContract};

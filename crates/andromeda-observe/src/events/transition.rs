@@ -63,6 +63,8 @@ impl TransitionReasonCode {
     pub const PERMISSION_DENIED: Self = Self(7);
     pub const SYSTEM_UNAVAILABLE: Self = Self(8);
     pub const CANCELLED: Self = Self(9);
+    pub const TRANSACTION_TIMEOUT: Self = Self(10);
+    pub const DEADLOCK_VICTIM: Self = Self(11);
 
     pub const fn new(code: u16) -> Self {
         Self(code)

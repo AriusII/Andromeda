@@ -14,10 +14,11 @@ use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use crate::{
     Cardinality,
     execution_adapter::{
-        SrplAssertRequest, SrplAssertResult, SrplAssertionAdapter, SrplEmitRequest, SrplEmitResult,
-        SrplExecutionFailure, SrplFailureAdapter, SrplFailureRequest, SrplOperationContext,
-        SrplReadRequest, SrplReadResult, SrplRowBound, SrplTypedEmitAdapter, SrplTypedReadAdapter,
-        SrplTypedUpdateAdapter, SrplUpdateRequest, SrplUpdateResult,
+        SrplAssertRequest, SrplAssertResult, SrplAssertionAdapter, SrplBindingEnvironment,
+        SrplBoundValue, SrplEmitRequest, SrplEmitResult, SrplExecutionFailure, SrplFailureAdapter,
+        SrplFailureRequest, SrplOperationContext, SrplReadRequest, SrplReadResult, SrplRowBound,
+        SrplTypedEmitAdapter, SrplTypedReadAdapter, SrplTypedUpdateAdapter, SrplUpdateRequest,
+        SrplUpdateResult,
     },
     procedure_model::{
         BoundSrplOperationPlan, ExecutableProcedurePlan, SrplAssignmentIr, SrplEmitValueIr,
@@ -33,6 +34,32 @@ pub struct SrplInterpreterReport {
     pub assertions: usize,
     pub updates: usize,
     pub emits: usize,
+}
+
+/// Empty binding environment used by the deterministic interpreter.
+///
+/// The current narrow SRPL operation set validates symbol shapes and bounded
+/// contracts but does not require dynamic input/binding value lookup at this
+/// layer.
+struct MinimalBindingEnvironment;
+
+impl SrplBindingEnvironment for MinimalBindingEnvironment {
+    fn get_input(&self, _name: &str) -> Option<crate::execution_adapter::SrplBoundValue> {
+        None
+    }
+
+    fn get_field_from_binding(
+        &self,
+        _binding: &str,
+        _row_index: usize,
+        _field: &str,
+    ) -> Option<crate::execution_adapter::SrplBoundValue> {
+        None
+    }
+
+    fn binding_row_count(&self, _binding: &str) -> Option<usize> {
+        None
+    }
 }
 
 /// Stateless interpreter for a catalog-bound executable SRPL plan.
@@ -161,7 +188,7 @@ impl SrplIrInterpreter {
                         predicates.clone(),
                     )
                     .map_err(SrplExecutionFailure::from)?;
-                    let result = adapter.read_typed(request)?;
+                    let result = adapter.read_typed(request, &MinimalBindingEnvironment)?;
                     SrplReadResult::new(result.rows, *cardinality, bound)?;
                     report.reads += 1;
                 }
@@ -176,7 +203,8 @@ impl SrplIrInterpreter {
                         failure_code.clone(),
                     )
                     .map_err(SrplExecutionFailure::from)?;
-                    let SrplAssertResult { passed } = adapter.assert_typed(request)?;
+                    let SrplAssertResult { passed } =
+                        adapter.assert_typed(request, &MinimalBindingEnvironment)?;
                     report.assertions += 1;
                     if !passed {
                         let failure = SrplExecutionFailure::SemanticViolation(format!(
@@ -189,6 +217,7 @@ impl SrplIrInterpreter {
                                 failure.clone(),
                             )
                             .map_err(SrplExecutionFailure::from)?,
+                            &MinimalBindingEnvironment,
                         )?;
                         return Err(failure);
                     }
@@ -215,7 +244,7 @@ impl SrplIrInterpreter {
                         assignments.clone(),
                     )
                     .map_err(SrplExecutionFailure::from)?;
-                    let result = adapter.update_typed(request)?;
+                    let result = adapter.update_typed(request, &MinimalBindingEnvironment)?;
                     SrplUpdateResult::new(result.affected_rows, bound)?;
                     report.updates += 1;
                 }
@@ -233,7 +262,7 @@ impl SrplIrInterpreter {
                         values.clone(),
                     )
                     .map_err(SrplExecutionFailure::from)?;
-                    let result = adapter.emit_typed(request)?;
+                    let result = adapter.emit_typed(request, &MinimalBindingEnvironment)?;
                     SrplEmitResult::new(result.emitted_rows, Cardinality::One, bound)?;
                     report.emits += 1;
                 }
@@ -247,6 +276,7 @@ impl SrplIrInterpreter {
                             failure.clone(),
                         )
                         .map_err(SrplExecutionFailure::from)?,
+                        &MinimalBindingEnvironment,
                     )?;
                     return Err(failure);
                 }
@@ -366,6 +396,11 @@ fn validate_value(value: &SrplValueIr) -> AndromedaResult<()> {
             validate_symbol(binding, "SRPL subtract binding")?;
             validate_symbol(field, "SRPL subtract field")?;
             validate_symbol(input, "SRPL subtract input")
+        }
+        SrplValueIr::Constant(literal) => literal.validate(),
+        SrplValueIr::BinaryArith { left, right, .. } => {
+            validate_value(left)?;
+            validate_value(right)
         }
     }
 }

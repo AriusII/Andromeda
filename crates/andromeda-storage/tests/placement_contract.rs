@@ -2,6 +2,10 @@ use andromeda_core::{
     AndromedaErrorKind, GpuExecutionPolicy, GpuProfile, HardwareProfile, RamProfile,
     RamSectionBudget, RamSectionRole,
 };
+use andromeda_observe::{
+    CriticalDecisionKind, EventCorrelation, EventEnvelope, EventId, PlacementAuditTransition,
+    TraceEvent, TraceId,
+};
 use andromeda_storage::{
     AllocationId, CoreIoPlacementPolicy, CoreIoPlacementRequest, DataTemperature, ExtentId,
     HotColdIoThresholds, IoLatencyBudget, IoPathBudget, IoPathClass, IoThroughputBudget,
@@ -264,4 +268,74 @@ fn core_io_policy_validates_ram_and_segment_io_budgets() {
         cold_publication.placement.target_tier,
         StorageTier::ColdStore
     );
+}
+
+#[test]
+fn placement_fsm_emits_all_five_transition_audit_events() {
+    let placement = PlacementDecision::append(DataTemperature::Hot).unwrap();
+    let placement_audit = placement
+        .audit_placement_decision(TraceId::new(801))
+        .unwrap();
+    assert_eq!(
+        placement_audit.transition,
+        PlacementAuditTransition::PlacementDecisionMade
+    );
+    assert!(placement_audit.accepted);
+
+    let building = descriptor(SegmentState::BuildingHotSnapshot);
+    let (_, sealed_audit) =
+        PlacementDecision::seal_hot_segment_with_audit(&building, TraceId::new(802)).unwrap();
+    assert_eq!(
+        sealed_audit.transition,
+        PlacementAuditTransition::SegmentSealed
+    );
+    assert_eq!(sealed_audit.segment_id, Some(building.segment_id.get()));
+
+    let sealed = descriptor(SegmentState::Sealed);
+    let (_, published_audit) =
+        PlacementDecision::publish_cold_segment_with_audit(&sealed, TraceId::new(803)).unwrap();
+    assert_eq!(
+        published_audit.transition,
+        PlacementAuditTransition::SegmentPublishedCold
+    );
+    assert_eq!(published_audit.segment_id, Some(sealed.segment_id.get()));
+
+    let reclaimed =
+        PlacementDecision::extent_reclaimed_audit(TraceId::new(804), 96, "extent reclaimed")
+            .unwrap();
+    assert_eq!(
+        reclaimed.transition,
+        PlacementAuditTransition::ExtentReclaimed
+    );
+    assert_eq!(reclaimed.extent_id, Some(96));
+
+    let published = descriptor(SegmentState::PublishedCold);
+    assert!(
+        PlacementDecision::mutation(
+            &published,
+            SegmentMutation::AppendExtent,
+            DataTemperature::Hot
+        )
+        .is_err()
+    );
+    let rejected = PlacementDecision::cold_mutation_rejected_audit(
+        TraceId::new(805),
+        &published,
+        SegmentMutation::AppendExtent,
+    )
+    .unwrap();
+    assert_eq!(
+        rejected.transition,
+        PlacementAuditTransition::ColdMutationRejected
+    );
+    assert!(!rejected.accepted);
+    assert_eq!(rejected.segment_id, Some(published.segment_id.get()));
+
+    let envelope = EventEnvelope::new(
+        EventId::new(806),
+        EventCorrelation::empty(),
+        TraceEvent::PlacementAudit(rejected),
+    )
+    .expect("placement audit events must be envelope-valid and roundtrippable");
+    assert_eq!(envelope.event.kind(), CriticalDecisionKind::PlacementAudit);
 }

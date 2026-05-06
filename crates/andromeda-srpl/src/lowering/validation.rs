@@ -159,6 +159,11 @@ pub(super) fn validate_value(
             }
         }
         SrplValueIr::Bool(_) => {}
+        SrplValueIr::Constant(literal) => literal.validate()?,
+        SrplValueIr::BinaryArith { left, right, .. } => {
+            validate_value(left, inputs, binding_sources)?;
+            validate_value(right, inputs, binding_sources)?;
+        }
     }
     Ok(())
 }
@@ -280,6 +285,11 @@ fn validate_value_symbols(value: &SrplValueIr) -> AndromedaResult<()> {
             reject_sql_like_symbol(binding)?;
             reject_sql_like_symbol(field)?;
             reject_sql_like_symbol(input)?;
+        }
+        SrplValueIr::Constant(_) => {}
+        SrplValueIr::BinaryArith { left, right, .. } => {
+            validate_value_symbols(left)?;
+            validate_value_symbols(right)?;
         }
     }
     Ok(())

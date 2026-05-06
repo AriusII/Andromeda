@@ -46,6 +46,16 @@ pub enum AndromedaErrorKind {
     Security,
     Srpl,
     Storage,
+    /// A deadline was exceeded at the QUIC stream or lock-wait layer.
+    ///
+    /// Classified as `Persistent` in `ErrorRetryability`: a timeout indicates
+    /// the invocation budget has been consumed and must not be retried by the
+    /// standard `RetryPolicy`. Lock-wait retries are handled internally before
+    /// a `Timeout` error surfaces to the caller.
+    ///
+    /// Added in Wave 13, Batch 18. Full invocation deadline enforcement
+    /// (admission → WAL commit) is Wave 14+; see `SCOPED_INVOCATION_TIMEOUT.md`.
+    Timeout,
     Transaction,
     Transport,
 }

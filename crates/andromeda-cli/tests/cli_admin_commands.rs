@@ -159,6 +159,47 @@ fn hadr_node_deregister_dry_run_accepts_fencing_evidence() {
 }
 
 #[test]
+fn hadr_failover_prepare_command_executes() {
+    let args = vec!["hadr".to_string(), "failover-prepare".to_string()];
+    let result = dispatch_command(&args);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn hadr_failover_prepare_accepts_json_output() {
+    let args = vec![
+        "hadr".to_string(),
+        "failover-prepare".to_string(),
+        "--json".to_string(),
+    ];
+    let result = dispatch_command(&args);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn hadr_failover_prepare_with_witness_check() {
+    let args = vec![
+        "hadr".to_string(),
+        "failover-prepare".to_string(),
+        "--witness-check".to_string(),
+    ];
+    let result = dispatch_command(&args);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn hadr_failover_prepare_json_with_witness_check() {
+    let args = vec![
+        "hadr".to_string(),
+        "failover-prepare".to_string(),
+        "--json".to_string(),
+        "--witness-check".to_string(),
+    ];
+    let result = dispatch_command(&args);
+    assert!(result.is_ok());
+}
+
+#[test]
 fn hadr_help_command_executes() {
     let args = vec!["hadr".to_string(), "--help".to_string()];
     let result = dispatch_command(&args);

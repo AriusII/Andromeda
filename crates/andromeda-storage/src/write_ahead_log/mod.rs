@@ -30,6 +30,7 @@ pub mod codec;
 pub mod commit_log_entry;
 pub mod commit_log_facade;
 pub mod compaction;
+pub mod durability_fence;
 pub mod file {
     //! Facade for the canonical [`crate::file_wal`] module.
     //!
@@ -46,7 +47,9 @@ pub mod gc;
 pub mod gc_eligibility;
 pub mod manager;
 pub mod record;
+pub mod record_bounds;
 pub mod segment;
+pub mod segment_reclaimability;
 pub mod shipping;
 pub mod transaction;
 
@@ -54,11 +57,14 @@ pub use codec::*;
 pub use commit_log_entry::*;
 pub use commit_log_facade::*;
 pub use compaction::*;
+pub use durability_fence::*;
 pub use file::*;
 pub use gc::*;
 pub use gc_eligibility::*;
 pub use manager::*;
 pub use record::*;
+pub use record_bounds::*;
 pub use segment::*;
+pub use segment_reclaimability::*;
 pub use shipping::*;
 pub use transaction::*;

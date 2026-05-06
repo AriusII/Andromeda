@@ -1,0 +1,37 @@
+schema_version = "wave14-v1"
+
+[[target]]
+name = "frame_codec_no_panic"
+path = "fuzz_targets/frame_codec_no_panic.rs"
+corpus_dir = "fuzz/corpus/frame_codec_no_panic"
+generator = "fuzz/generators/generate_seed_corpus.py"
+
+[[target]]
+name = "result_sequence_state_machine"
+path = "fuzz_targets/result_sequence_state_machine.rs"
+corpus_dir = "fuzz/corpus/result_sequence_state_machine"
+generator = "fuzz/generators/generate_seed_corpus.py"
+
+[[target]]
+name = "proto_frame_envelope_decode"
+path = "fuzz_targets/proto_frame_envelope_decode.rs"
+corpus_dir = "fuzz/corpus/proto_frame_envelope_decode"
+generator = "fuzz/generators/generate_seed_corpus.py"
+
+[[target]]
+name = "proto_rpc_completion_decode"
+path = "fuzz_targets/proto_rpc_completion_decode.rs"
+corpus_dir = "fuzz/corpus/proto_rpc_completion_decode"
+generator = "fuzz/generators/generate_seed_corpus.py"
+
+[[target]]
+name = "srpl_parser_signature_decode"
+path = "fuzz_targets/srpl_parser_signature_decode.rs"
+corpus_dir = "fuzz/corpus/srpl_parser_signature_decode"
+generator = "fuzz/generators/generate_seed_corpus.py"
+
+[[target]]
+name = "storage_wal_record_roundtrip"
+path = "fuzz_targets/storage_wal_record_roundtrip.rs"
+corpus_dir = "fuzz/corpus/storage_wal_record_roundtrip"
+generator = "fuzz/generators/generate_seed_corpus.py"

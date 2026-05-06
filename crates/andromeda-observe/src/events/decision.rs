@@ -35,6 +35,7 @@ pub enum CriticalDecisionKind {
     ResourceGovernance,
     BusinessRuleDecision,
     IoPlacementDecision,
+    PlacementAudit,
     IoBudgetValidation,
     GpuPolicyDecision,
     TransactionTransition,
@@ -269,5 +270,147 @@ impl GpuPolicyDecisionTrace {
 
     pub const fn outcome_matches_policy(&self) -> bool {
         self.accepted == self.permitted_by_policy()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlacementAuditTransition {
+    PlacementDecisionMade,
+    SegmentSealed,
+    SegmentPublishedCold,
+    ExtentReclaimed,
+    ColdMutationRejected,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlacementAuditEvent {
+    pub trace_id: TraceId,
+    pub transition: PlacementAuditTransition,
+    pub segment_id: Option<u64>,
+    pub extent_id: Option<u64>,
+    pub accepted: bool,
+    pub reason: String,
+}
+
+impl PlacementAuditEvent {
+    pub fn placement_decision_made(
+        trace_id: TraceId,
+        reason: impl Into<String>,
+    ) -> AndromedaResult<Self> {
+        Self::new(
+            trace_id,
+            PlacementAuditTransition::PlacementDecisionMade,
+            None,
+            None,
+            true,
+            reason,
+        )
+    }
+
+    pub fn segment_sealed(
+        trace_id: TraceId,
+        segment_id: u64,
+        reason: impl Into<String>,
+    ) -> AndromedaResult<Self> {
+        Self::new(
+            trace_id,
+            PlacementAuditTransition::SegmentSealed,
+            Some(segment_id),
+            None,
+            true,
+            reason,
+        )
+    }
+
+    pub fn segment_published_cold(
+        trace_id: TraceId,
+        segment_id: u64,
+        reason: impl Into<String>,
+    ) -> AndromedaResult<Self> {
+        Self::new(
+            trace_id,
+            PlacementAuditTransition::SegmentPublishedCold,
+            Some(segment_id),
+            None,
+            true,
+            reason,
+        )
+    }
+
+    pub fn extent_reclaimed(
+        trace_id: TraceId,
+        extent_id: u64,
+        reason: impl Into<String>,
+    ) -> AndromedaResult<Self> {
+        Self::new(
+            trace_id,
+            PlacementAuditTransition::ExtentReclaimed,
+            None,
+            Some(extent_id),
+            true,
+            reason,
+        )
+    }
+
+    pub fn cold_mutation_rejected(
+        trace_id: TraceId,
+        segment_id: u64,
+        reason: impl Into<String>,
+    ) -> AndromedaResult<Self> {
+        Self::new(
+            trace_id,
+            PlacementAuditTransition::ColdMutationRejected,
+            Some(segment_id),
+            None,
+            false,
+            reason,
+        )
+    }
+
+    pub fn new(
+        trace_id: TraceId,
+        transition: PlacementAuditTransition,
+        segment_id: Option<u64>,
+        extent_id: Option<u64>,
+        accepted: bool,
+        reason: impl Into<String>,
+    ) -> AndromedaResult<Self> {
+        let reason = non_empty_reason(reason)?;
+        Ok(Self {
+            trace_id,
+            transition,
+            segment_id,
+            extent_id,
+            accepted,
+            reason,
+        })
+    }
+
+    pub fn has_reason(&self) -> bool {
+        !self.reason.trim().is_empty()
+    }
+
+    pub const fn has_transition_evidence(&self) -> bool {
+        match self.transition {
+            PlacementAuditTransition::PlacementDecisionMade => true,
+            PlacementAuditTransition::SegmentSealed
+            | PlacementAuditTransition::SegmentPublishedCold
+            | PlacementAuditTransition::ColdMutationRejected => {
+                self.segment_id.is_some() && self.extent_id.is_none()
+            }
+            PlacementAuditTransition::ExtentReclaimed => {
+                self.segment_id.is_none() && self.extent_id.is_some()
+            }
+        }
+    }
+
+    pub const fn outcome_matches_transition(&self) -> bool {
+        match self.transition {
+            PlacementAuditTransition::ColdMutationRejected => !self.accepted,
+            PlacementAuditTransition::PlacementDecisionMade
+            | PlacementAuditTransition::SegmentSealed
+            | PlacementAuditTransition::SegmentPublishedCold
+            | PlacementAuditTransition::ExtentReclaimed => self.accepted,
+        }
     }
 }

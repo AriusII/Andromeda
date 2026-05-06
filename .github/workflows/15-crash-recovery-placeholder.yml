@@ -1,4 +1,4 @@
-name: 15 - Crash Recovery Gate
+name: 15 - RTO Test
 
 on:
   pull_request:
@@ -17,8 +17,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  crash-recovery:
-    name: Crash recovery test placeholder
+  rto-test:
+    name: Recovery RTO and replay gate
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -26,14 +26,8 @@ jobs:
       - uses: ./.github/actions/rust-setup
         with:
           toolchain: stable
-      - name: Run crash recovery tests if present
+      - name: Run deterministic recovery replay contracts
         shell: bash
         run: |
-          if cargo test --workspace --all-features --locked -- --list | grep -i "crash\|recovery\|wal" ; then
-            cargo test --workspace --all-features --locked crash -- --nocapture || true
-            cargo test --workspace --all-features --locked recovery -- --nocapture || true
-            cargo test --workspace --all-features --locked wal -- --nocapture || true
-          else
-            echo "No crash/recovery/WAL tests discovered yet."
-            echo "This workflow is intentionally present because crash/recovery testing is a C4/C5 project gate."
-          fi
+          cargo test -p andromeda-storage --test property_recovery_replay --locked -- --nocapture
+          cargo test -p andromeda-storage --test recovery_completeness_contract --locked -- --nocapture

@@ -10,7 +10,7 @@ use crate::error::cli_error;
 use andromeda_core::AndromedaResult;
 
 /// Procedure metadata.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
 pub struct ProcedureMetadata {
     pub procedure_id: u64,
     pub name: String,
@@ -20,7 +20,7 @@ pub struct ProcedureMetadata {
 }
 
 /// Procedure contract.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
 pub struct ProcedureContractInfo {
     pub procedure_id: u64,
     pub name: String,
@@ -31,7 +31,7 @@ pub struct ProcedureContractInfo {
     pub access_mode: String,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
 pub struct ColumnInfo {
     pub name: String,
     pub column_type: String,
@@ -39,7 +39,7 @@ pub struct ColumnInfo {
 }
 
 /// Cache invalidation outcome.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
 pub struct CacheInvalidationOutcome {
     pub success: bool,
     pub entries_cleared: usize,

@@ -9,8 +9,8 @@ use crate::error::cli_error;
 use andromeda_core::AndromedaResult;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// Serializable restore state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+/// Restore state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RestoreState {
     Pending,
     ValidatingManifest,
@@ -42,7 +42,7 @@ impl RestoreState {
 }
 
 /// Restore status report.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
 pub struct RestoreStatusReport {
     pub restore_id: u64,
     pub state: RestoreState,
@@ -56,7 +56,7 @@ pub struct RestoreStatusReport {
 }
 
 /// Restore start outcome.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
 pub struct RestoreStartOutcome {
     pub restore_id: u64,
     pub backup_id: u64,

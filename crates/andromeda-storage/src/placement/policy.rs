@@ -1,4 +1,5 @@
 use andromeda_core::{AndromedaResult, HardwareProfile, PipelineClass};
+use andromeda_observe::{PlacementAuditEvent, TraceId};
 
 use super::{
     HotColdIoThresholds, IoPathBudget, IoPathClass, PlacementDecision, StorageIoBudgetScope,
@@ -37,6 +38,12 @@ pub struct CoreIoPlacementDecision {
     pub io_use_class: super::IoUseClass,
     pub path_budget: IoPathBudget,
     pub gpu_enabled: bool,
+}
+
+impl CoreIoPlacementDecision {
+    pub fn placement_audit_event(&self, trace_id: TraceId) -> AndromedaResult<PlacementAuditEvent> {
+        self.placement.audit_placement_decision(trace_id)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

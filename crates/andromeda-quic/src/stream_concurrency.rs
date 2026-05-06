@@ -484,6 +484,65 @@ impl StreamConcurrencyManager {
         Ok(elapsed > self.idle_timeout)
     }
 
+    /// Enforces timeout policy by transitioning all streams that have exceeded
+    /// their idle or overall deadline into the `Cancelling` state.
+    ///
+    /// Returns a vector of `(InvocationId, CancellationReason)` pairs for every
+    /// stream that was successfully transitioned. Callers must observe each returned
+    /// pair and emit a `TimeoutExceeded` trace event to the durable audit ledger
+    /// before calling `mark_complete` + `cleanup_stream` on that stream.
+    ///
+    /// ## Invariants
+    ///
+    /// - Idle-timeout is checked first; if a stream qualifies for both idle and
+    ///   overall timeout, `IdleTimeout` takes precedence in the returned reason.
+    /// - Streams already in `Cancelling` or `Terminal` are skipped (no double-cancel).
+    /// - The caller owns the timer context; this method reads `SystemTime::now()` only
+    ///   once per call (both detection passes use the `detect_*` snapshot, which reads
+    ///   the clock internally but is already consistent because no mutation occurs
+    ///   between the two snapshot calls within this enforcer).
+    ///
+    /// ## Wave scope
+    ///
+    /// Wires the existing `detect_idle_timeouts()` / `detect_overall_timeouts()`
+    /// detection into actual state-machine enforcement. The broader per-invocation
+    /// deadline (admission → WAL commit) is Wave 14+;
+    /// see `SCOPED_INVOCATION_TIMEOUT.md §7`.
+    pub fn enforce_timeouts(&mut self) -> Vec<(InvocationId, CancellationReason)> {
+        // Snapshot both detection lists before mutating any state.
+        let idle_ids = self.detect_idle_timeouts();
+        let overall_ids = self.detect_overall_timeouts();
+
+        let mut cancelled: Vec<(InvocationId, CancellationReason)> = Vec::new();
+
+        // Apply idle-timeout cancellations first.
+        for id in idle_ids {
+            if self
+                .cancel_stream(id, CancellationReason::IdleTimeout)
+                .is_ok()
+            {
+                cancelled.push((id, CancellationReason::IdleTimeout));
+            }
+        }
+
+        // Apply overall-timeout cancellations, skipping streams already cancelled.
+        let already_cancelled: std::collections::HashSet<InvocationId> =
+            cancelled.iter().map(|(id, _)| *id).collect();
+        for id in overall_ids {
+            if already_cancelled.contains(&id) {
+                continue;
+            }
+            if self
+                .cancel_stream(id, CancellationReason::OverallTimeout)
+                .is_ok()
+            {
+                cancelled.push((id, CancellationReason::OverallTimeout));
+            }
+        }
+
+        cancelled
+    }
+
     /// Returns the cancellation reason if the stream was cancelled.
     pub fn get_cancellation_reason(
         &self,

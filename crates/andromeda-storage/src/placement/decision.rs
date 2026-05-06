@@ -1,4 +1,5 @@
 use andromeda_core::AndromedaResult;
+use andromeda_observe::{PlacementAuditEvent, TraceId};
 
 use crate::{SegmentDescriptor, SegmentMutation, SegmentState};
 
@@ -41,6 +42,13 @@ impl PlacementDecision {
             mutation_allowed: true,
             reason: "append enters the RAM to HotStore pipeline and never appends to ColdStore",
         })
+    }
+
+    pub fn audit_placement_decision(
+        &self,
+        trace_id: TraceId,
+    ) -> AndromedaResult<PlacementAuditEvent> {
+        PlacementAuditEvent::placement_decision_made(trace_id, self.reason)
     }
 
     pub fn mutation(
@@ -87,6 +95,19 @@ impl PlacementDecision {
         })
     }
 
+    pub fn seal_hot_segment_with_audit(
+        descriptor: &SegmentDescriptor,
+        trace_id: TraceId,
+    ) -> AndromedaResult<(Self, PlacementAuditEvent)> {
+        let decision = Self::seal_hot_segment(descriptor)?;
+        let audit = PlacementAuditEvent::segment_sealed(
+            trace_id,
+            descriptor.segment_id.get(),
+            decision.reason,
+        )?;
+        Ok((decision, audit))
+    }
+
     pub fn publish_cold_segment(descriptor: &SegmentDescriptor) -> AndromedaResult<Self> {
         descriptor.validate()?;
         if descriptor.state != SegmentState::Sealed {
@@ -108,6 +129,39 @@ impl PlacementDecision {
             mutation_allowed: false,
             reason: "ColdStore publication is immutable and only follows HotStore sealing",
         })
+    }
+
+    pub fn publish_cold_segment_with_audit(
+        descriptor: &SegmentDescriptor,
+        trace_id: TraceId,
+    ) -> AndromedaResult<(Self, PlacementAuditEvent)> {
+        let decision = Self::publish_cold_segment(descriptor)?;
+        let audit = PlacementAuditEvent::segment_published_cold(
+            trace_id,
+            descriptor.segment_id.get(),
+            decision.reason,
+        )?;
+        Ok((decision, audit))
+    }
+
+    pub fn extent_reclaimed_audit(
+        trace_id: TraceId,
+        extent_id: u64,
+        reason: impl Into<String>,
+    ) -> AndromedaResult<PlacementAuditEvent> {
+        PlacementAuditEvent::extent_reclaimed(trace_id, extent_id, reason)
+    }
+
+    pub fn cold_mutation_rejected_audit(
+        trace_id: TraceId,
+        descriptor: &SegmentDescriptor,
+        mutation: SegmentMutation,
+    ) -> AndromedaResult<PlacementAuditEvent> {
+        PlacementAuditEvent::cold_mutation_rejected(
+            trace_id,
+            descriptor.segment_id.get(),
+            format!("ColdStore rejects {mutation:?}; segment is immutable after publication"),
+        )
     }
 
     pub fn validate(&self) -> AndromedaResult<()> {

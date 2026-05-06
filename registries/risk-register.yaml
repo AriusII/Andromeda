@@ -140,3 +140,27 @@ risks:
     mitigation: "Proposed: audit-trace-specification skill governance: all new operational decisions must specify audit family before code change. New families require new decision record. Contract tests validate classification. Audit schema is versioned; evolution gated. Acceptance: PR must cite family assignment and pass contract tests. Informal events must have explicit inclusion/exclusion documentation."
     owner: observability-forensic-architect
     status: open
+  - id: RISK-018
+    title: Registry permission validation gap
+    severity: high
+    likelihood: medium
+    summary: Registry write operations (catalog mutations, schema updates, procedure registration) may be executed without sufficient permission validation. A caller with low-privilege access could potentially escalate to higher-privilege operations if permission checks are insufficient or bypassed.
+    mitigation: "Wave 13 Batch 4 implementation: Centralized PermissionValidator enforces capability-based access control. All registry writes validate principal identity, operation type, resource scope, and capability token before WAL write. Three-tier hierarchy (Application/Administration/Recovery). 20 unit tests validate no escape paths. Permission denials logged to audit ledger. DEC-037."
+    owner: security-iam-auditor
+    status: mitigated
+  - id: RISK-019
+    title: Metadata extraction determinism
+    severity: medium
+    likelihood: low
+    summary: SRPL metadata extraction may be non-deterministic across compilation runs, causing same source to yield different metadata and plans, with silent cardinality mismatches. Protobuf descriptor ordering undefined; floating-point rounding non-deterministic; parallel extraction interleaves.
+    mitigation: "Wave 13 implementation: Deterministic extraction using sorted tree traversal and stable key ordering. Seeded PRNG from schema hash for cardinality. Pre-emission validation checks against schema contracts. Metadata cache includes determinism fingerprint. 21+ unit tests cover paths; 1000+ fuzz runs all deterministic. DEC-037."
+    owner: srpl-compiler-ir-architect
+    status: mitigated
+  - id: RISK-020
+    title: WAL cardinality exhaustion
+    severity: medium
+    likelihood: low
+    summary: WAL segments buffer uncommitted records in memory. During large batch operations, in-memory cardinality may grow unbounded, exhausting heap and triggering OOM. Disk size cap (1MB) insufficient to prevent heap overflow.
+    mitigation: "Wave 13 implementation: Hard cardinality bounds (256 rows, 1MB heap) enforced at append time. Segment rotation triggered before overflow. Cardinality check before every append. Backpressure rejects oversized batches. Early rotation at 90% threshold. 11 tests validate bounds; 100M row stress test completes without OOM. DEC-037."
+    owner: wal-recovery-specialist
+    status: mitigated

@@ -187,6 +187,134 @@ pub fn inventory_reserve_stock_catalog_bindings(
     Ok(bindings)
 }
 
+// ---------------------------------------------------------------------------
+// Inventory.QueryStock fixture (Wave 13, Batch 18)
+// ---------------------------------------------------------------------------
+
+/// Catalog identifier for the `Inventory.QueryStock` read-only Procedure.
+pub const INVENTORY_QUERY_STOCK_PERMISSION: &str = "Inventory.QueryStock.Execute";
+/// Stable `ProcedureId` for `Inventory.QueryStock`.
+pub const INVENTORY_QUERY_STOCK_PROCEDURE_ID: ProcedureId = ProcedureId::new(0x5153);
+/// Stable `CatalogObjectId` for `Inventory.QueryStock`.
+pub const INVENTORY_QUERY_STOCK_OBJECT_ID: CatalogObjectId = CatalogObjectId::new(0x5153);
+
+// ---------------------------------------------------------------------------
+// Inventory.ReleaseStock fixture (Wave 13, Batch 18)
+// ---------------------------------------------------------------------------
+
+/// Catalog identifier for the `Inventory.ReleaseStock` write Procedure.
+pub const INVENTORY_RELEASE_STOCK_PERMISSION: &str = "Inventory.ReleaseStock.Execute";
+/// Stable `ProcedureId` for `Inventory.ReleaseStock`.
+pub const INVENTORY_RELEASE_STOCK_PROCEDURE_ID: ProcedureId = ProcedureId::new(0x524c);
+/// Stable `CatalogObjectId` for `Inventory.ReleaseStock`.
+pub const INVENTORY_RELEASE_STOCK_OBJECT_ID: CatalogObjectId = CatalogObjectId::new(0x524c);
+
+/// Returns a valid `ProcedureContract` for `Inventory.QueryStock` at
+/// `CatalogVersion(1)`.
+///
+/// This read-only Procedure accepts a `ProductId` parameter and returns
+/// an `OptionalOne` result stream with (`ProductId`, `AvailableQuantity`,
+/// `Version`) columns. A missing product is represented by zero rows, not an
+/// error, which is why `row_count_exact_required` is `false`.
+pub fn inventory_query_stock_contract() -> AndromedaResult<ProcedureContract> {
+    inventory_query_stock_contract_candidate(CatalogVersion::new(1)).materialize()
+}
+
+pub fn inventory_query_stock_contract_candidate(
+    catalog_version: CatalogVersion,
+) -> ProcedureContractCandidate {
+    ProcedureContractCandidate {
+        object: CatalogObjectRef {
+            object_id: INVENTORY_QUERY_STOCK_OBJECT_ID,
+            name: QualifiedName::parse("Inventory.QueryStock")
+                .expect("fixture procedure name is valid"),
+            kind: ObjectKind::Procedure,
+            catalog_version,
+        },
+        procedure_id: INVENTORY_QUERY_STOCK_PROCEDURE_ID,
+        stats_version: StatsVersion::new(1),
+        protocol_layout: inventory_protocol_layout_ref(),
+        inputs: vec![phase1_column("ProductId", ScalarType::I64, 0)],
+        structured_inputs: Vec::new(),
+        result_streams: vec![ResultStreamContract {
+            stream_id: 2,
+            name: "Stock".to_string(),
+            columns: vec![
+                phase1_column("ProductId", ScalarType::I64, 0),
+                phase1_column("AvailableQuantity", ScalarType::I64, 1),
+                phase1_column("Version", ScalarType::I64, 2),
+            ],
+            // OptionalOne: row count is 0 (not found) or 1 (found); not fixed at
+            // declaration time, so exact count is not required in the contract.
+            row_count_exact_required: false,
+        }],
+        required_permissions: vec![INVENTORY_QUERY_STOCK_PERMISSION.to_string()],
+        transaction_policy: TransactionPolicy {
+            access_mode: AccessMode::ReadOnly,
+            isolation: IsolationPolicy::Serializable,
+            retryable: true,
+        },
+        compatibility_policy: CompatibilityPolicy::ExactHash,
+        result_metadata_policy: ResultMetadataPolicy::RequireBeforePayload,
+        error_policy: ProcedureErrorPolicy {
+            rollback_on_error: false,
+            allowed_error_codes: vec![],
+        },
+        multi_result_policy: MultiResultPolicy::SingleResultOnly,
+    }
+}
+
+/// Returns a valid `ProcedureContract` for `Inventory.ReleaseStock` at
+/// `CatalogVersion(1)`.
+///
+/// This write Procedure accepts (`ProductId`, `Quantity`) parameters and
+/// returns an `One` result stream with a single `Released` boolean column
+/// that confirms the stock was successfully restored.
+pub fn inventory_release_stock_contract() -> AndromedaResult<ProcedureContract> {
+    inventory_release_stock_contract_candidate(CatalogVersion::new(1)).materialize()
+}
+
+pub fn inventory_release_stock_contract_candidate(
+    catalog_version: CatalogVersion,
+) -> ProcedureContractCandidate {
+    ProcedureContractCandidate {
+        object: CatalogObjectRef {
+            object_id: INVENTORY_RELEASE_STOCK_OBJECT_ID,
+            name: QualifiedName::parse("Inventory.ReleaseStock")
+                .expect("fixture procedure name is valid"),
+            kind: ObjectKind::Procedure,
+            catalog_version,
+        },
+        procedure_id: INVENTORY_RELEASE_STOCK_PROCEDURE_ID,
+        stats_version: StatsVersion::new(1),
+        protocol_layout: inventory_protocol_layout_ref(),
+        inputs: vec![
+            phase1_column("ProductId", ScalarType::I64, 0),
+            phase1_column("Quantity", ScalarType::I64, 1),
+        ],
+        structured_inputs: Vec::new(),
+        result_streams: vec![ResultStreamContract {
+            stream_id: 3,
+            name: "Release".to_string(),
+            columns: vec![phase1_column("Released", ScalarType::Bool, 0)],
+            row_count_exact_required: true,
+        }],
+        required_permissions: vec![INVENTORY_RELEASE_STOCK_PERMISSION.to_string()],
+        transaction_policy: TransactionPolicy {
+            access_mode: AccessMode::ReadWrite,
+            isolation: IsolationPolicy::Serializable,
+            retryable: false,
+        },
+        compatibility_policy: CompatibilityPolicy::ExactHash,
+        result_metadata_policy: ResultMetadataPolicy::RequireBeforePayload,
+        error_policy: ProcedureErrorPolicy {
+            rollback_on_error: true,
+            allowed_error_codes: vec!["StockNotReserved".to_string()],
+        },
+        multi_result_policy: MultiResultPolicy::SingleResultOnly,
+    }
+}
+
 pub fn inventory_domain_definition_batch() -> AndromedaResult<DefinitionBatch> {
     let base_version = CatalogVersion::new(0);
     let next_version = CatalogVersion::new(1);

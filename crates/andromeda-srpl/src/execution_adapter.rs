@@ -14,6 +14,47 @@ use crate::procedure_model::{
     Cardinality, MAX_SRPL_BODY_OPERATIONS, SrplAssignmentIr, SrplEmitValueIr, SrplPredicateIr,
 };
 
+/// Trait defining the binding environment contract for SRPL predicate evaluation.
+///
+/// The binding environment provides deterministic, bounded access to:
+/// - Input parameters (from procedure inputs)
+/// - Read bindings (from prior READ operations)
+/// - Local variables (future extension)
+///
+/// Adapters receive a read-only reference to this environment to evaluate
+/// predicates without side effects or non-determinism.
+pub trait SrplBindingEnvironment: Send + Sync {
+    /// Retrieve an input parameter value by name.
+    /// Returns None if the input is not bound.
+    fn get_input(&self, name: &str) -> Option<SrplBoundValue>;
+
+    /// Retrieve a field value from a bound row.
+    /// Returns None if the binding or field does not exist.
+    fn get_field_from_binding(
+        &self,
+        binding: &str,
+        row_index: usize,
+        field: &str,
+    ) -> Option<SrplBoundValue>;
+
+    /// Retrieve the number of rows in a binding.
+    /// Returns None if the binding does not exist.
+    fn binding_row_count(&self, binding: &str) -> Option<usize>;
+}
+
+/// Type alias for field values in the binding environment.
+/// Implements equality and comparison for predicate evaluation.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum SrplBoundValue {
+    Integer(i64),
+    String(String),
+    Bool(bool),
+    Null,
+}
+
+/// Empty trait for future extensibility (row types handled via binding environment)
+pub trait SrplBoundRow: Send + Sync {}
+
 /// Bounded row-count contract for SRPL adapter operations.
 ///
 /// There is deliberately no unbounded variant.  Construction accepts plain
@@ -422,42 +463,70 @@ impl SrplEmitResult {
 }
 
 /// Adapter trait for bounded typed reads/scans.
+///
+/// The read adapter receives a binding context that includes:
+/// - Input parameter values (from procedure inputs)
+/// - Previously bound read results (from prior Read operations)
+/// - Local variable bindings
+///
+/// Predicates in the request are evaluated against this environment to filter rows.
 pub trait SrplTypedReadAdapter {
     type Row;
 
     fn read_typed(
         &mut self,
         request: SrplReadRequest,
+        environment: &dyn SrplBindingEnvironment,
     ) -> Result<SrplReadResult<Self::Row>, SrplExecutionFailure>;
 }
 
 /// Adapter trait for lowered SRPL assertion predicates.
+///
+/// The assertion adapter receives a binding context to evaluate predicates
+/// against the current runtime state (inputs and bindings).
 pub trait SrplAssertionAdapter {
     fn assert_typed(
         &mut self,
         request: SrplAssertRequest,
+        environment: &dyn SrplBindingEnvironment,
     ) -> Result<SrplAssertResult, SrplExecutionFailure>;
 }
 
 /// Adapter trait for bounded typed updates.
+///
+/// The update adapter receives a binding context to:
+/// - Validate that predicates can bind to the environment
+/// - In production: filter rows before applying assignments
+/// - Maintain deterministic, all-or-nothing semantics
 pub trait SrplTypedUpdateAdapter {
     fn update_typed(
         &mut self,
         request: SrplUpdateRequest,
+        environment: &dyn SrplBindingEnvironment,
     ) -> Result<SrplUpdateResult, SrplExecutionFailure>;
 }
 
 /// Adapter trait for bounded typed result emission.
+///
+/// The emit adapter receives a binding context for consistency,
+/// though it primarily uses the context for diagnostic/tracing purposes.
 pub trait SrplTypedEmitAdapter {
     fn emit_typed(
         &mut self,
         request: SrplEmitRequest,
+        environment: &dyn SrplBindingEnvironment,
     ) -> Result<SrplEmitResult, SrplExecutionFailure>;
 }
 
 /// Adapter trait for reporting typed SRPL semantic/execution failures.
+///
+/// The failure adapter receives a binding context for recovery purposes.
 pub trait SrplFailureAdapter {
-    fn fail_typed(&mut self, request: SrplFailureRequest) -> Result<(), SrplExecutionFailure>;
+    fn fail_typed(
+        &mut self,
+        request: SrplFailureRequest,
+        environment: &dyn SrplBindingEnvironment,
+    ) -> Result<(), SrplExecutionFailure>;
 }
 
 fn validate_actual_rows(

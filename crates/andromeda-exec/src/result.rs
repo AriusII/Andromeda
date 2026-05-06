@@ -8,11 +8,7 @@ use andromeda_tx::{TransactionState, transaction_phase_code};
 pub struct ResultStreamMetadata {
     pub stream_id: u64,
     pub row_count_exact: Option<u64>,
-    /// Optional inclusive upper bound on the number of rows the stream may
-    /// emit. Combined with `cardinality`, this is the V0 mechanism for
-    /// declaring a *bounded* `Many` or `NonEmptyMany` result without
-    /// inventing a streaming engine. For `One`/`OptionalOne` the bound, when
-    /// declared, must agree with the intrinsic max of 1.
+    /// Optional inclusive upper bound on the number of rows the stream may emit.
     pub row_count_max: Option<u64>,
     pub column_count: u32,
     pub cardinality: Cardinality,
@@ -20,8 +16,7 @@ pub struct ResultStreamMetadata {
 
 impl ResultStreamMetadata {
     /// Construct a metadata header for a stream whose row count is known
-    /// exactly before payload emission. The `row_count_max` is set to the
-    /// exact count so downstream framers can treat the bound uniformly.
+    /// exactly before payload emission.
     pub const fn exact(
         stream_id: u64,
         column_count: u32,
@@ -37,9 +32,7 @@ impl ResultStreamMetadata {
         }
     }
 
-    /// Construct a metadata header for a `Many` / `NonEmptyMany` stream
-    /// whose exact row count is not known up front but whose upper bound
-    /// is contractual.
+    /// Construct a metadata header for a bounded stream.
     pub const fn bounded(
         stream_id: u64,
         column_count: u32,
@@ -72,7 +65,7 @@ impl ResultStreamMetadata {
     pub fn validate_terminal_completion(
         self,
         transaction_state: andromeda_tx::TransactionState,
-        durable_lsn: andromeda_storage::Lsn,
+        durable_lsn: Lsn,
         actual_row_count: u64,
     ) -> AndromedaResult<()> {
         use andromeda_core::{AndromedaError, AndromedaErrorKind};

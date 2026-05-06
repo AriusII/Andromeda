@@ -18,6 +18,7 @@ pub mod interpreter;
 mod ir;
 mod lexer;
 mod lowering;
+pub mod optimizer;
 mod parser;
 pub mod procedure_compiler;
 pub mod procedure_model;

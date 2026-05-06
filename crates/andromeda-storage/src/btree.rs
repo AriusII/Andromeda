@@ -995,15 +995,17 @@ impl BTreeNodeImpl {
     }
 }
 
-/// Concrete B+ Tree Index implementation
-pub struct BTreeIndexEngine {
+/// In-memory B-Tree index prototype backed by [`BTreeMap`].
+///
+/// This type is intentionally **not** a durable/page-backed B-Tree engine.
+pub struct InMemoryBTreeIndexEngine {
     index_id: IndexId,
     root_page_id: PageId,
     config: BTreeConfig,
     entries: BTreeMap<Vec<u8>, RowId>,
 }
 
-impl BTreeIndexEngine {
+impl InMemoryBTreeIndexEngine {
     /// Create a new B+ tree index with given root page
     pub fn new(index_id: IndexId, root_page_id: PageId, config: BTreeConfig) -> Self {
         Self {
@@ -1125,6 +1127,12 @@ impl BTreeIndexEngine {
         }
     }
 }
+
+#[deprecated(
+    since = "0.1.0",
+    note = "Use InMemoryBTreeIndexEngine. BTreeIndexEngine is an in-memory BTreeMap-backed prototype and not a durable B-Tree format."
+)]
+pub type BTreeIndexEngine = InMemoryBTreeIndexEngine;
 
 // ============================================================================
 // Tests
@@ -1252,14 +1260,16 @@ mod tests {
 
     #[test]
     fn test_btree_index_creation() {
-        let index = BTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
+        let index =
+            InMemoryBTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
 
         assert_eq!(index.row_count(), 0);
     }
 
     #[test]
     fn test_statistics_default() {
-        let index = BTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
+        let index =
+            InMemoryBTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
 
         let stats = index.statistics();
         assert_eq!(stats.tree_height, 1);

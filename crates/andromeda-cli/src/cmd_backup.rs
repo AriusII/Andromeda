@@ -10,8 +10,8 @@ use crate::error::cli_error;
 use andromeda_core::AndromedaResult;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// Serializable backup status.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+/// Backup status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BackupState {
     Pending,
     Running,
@@ -35,7 +35,7 @@ impl BackupState {
 }
 
 /// Backup status report.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
 pub struct BackupStatusReport {
     pub backup_id: u64,
     pub state: BackupState,
@@ -47,7 +47,7 @@ pub struct BackupStatusReport {
 }
 
 /// Backup list entry.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
 pub struct BackupListEntry {
     pub backup_id: u64,
     pub state: BackupState,
@@ -58,7 +58,7 @@ pub struct BackupListEntry {
 }
 
 /// Backup start outcome.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
 pub struct BackupStartOutcome {
     pub backup_id: u64,
     pub backup_type: String,

@@ -29,6 +29,14 @@ pub enum WalRecordKind {
     CatalogChangeApply,
     CatalogChangeCommit,
     SecurityAuditAppend,
+    /// B-Tree record insert mutation. Deferred to Wave 18. Placeholder only.
+    BTreeInsert,
+    /// B-Tree record delete mutation. Deferred to Wave 18. Placeholder only.
+    BTreeDelete,
+    /// B-Tree node split operation. Deferred to Wave 18. Placeholder only.
+    BTreeSplit,
+    /// B-Tree node merge operation. Deferred to Wave 18. Placeholder only.
+    BTreeMerge,
 }
 
 impl WalRecordKind {
@@ -52,6 +60,10 @@ impl WalRecordKind {
                 | Self::CatalogChangeBegin
                 | Self::CatalogChangeApply
                 | Self::CatalogChangeCommit
+                | Self::BTreeInsert
+                | Self::BTreeDelete
+                | Self::BTreeSplit
+                | Self::BTreeMerge
         )
     }
 
@@ -71,7 +83,8 @@ impl WalRecordKind {
                 | Self::ManifestSwitch
                 | Self::CatalogChangeApply
                 | Self::CatalogChangeCommit
-                | Self::SecurityAuditAppend
+                | Self::SecurityAuditAppend // Note: BTreeInsert, BTreeDelete, BTreeSplit, BTreeMerge are NOT redo-relevant
+                                            // in Wave 13; recovery handlers are deferred to Wave 18.
         )
     }
 }
@@ -264,6 +277,10 @@ pub fn wal_record_kind_tag(kind: WalRecordKind) -> u64 {
         WalRecordKind::CatalogChangeApply => 20,
         WalRecordKind::CatalogChangeCommit => 21,
         WalRecordKind::SecurityAuditAppend => 22,
+        WalRecordKind::BTreeInsert => 23,
+        WalRecordKind::BTreeDelete => 24,
+        WalRecordKind::BTreeSplit => 25,
+        WalRecordKind::BTreeMerge => 26,
     }
 }
 
@@ -292,6 +309,10 @@ pub fn wal_record_kind_from_tag(tag: u64) -> Option<WalRecordKind> {
         20 => Some(WalRecordKind::CatalogChangeApply),
         21 => Some(WalRecordKind::CatalogChangeCommit),
         22 => Some(WalRecordKind::SecurityAuditAppend),
+        23 => Some(WalRecordKind::BTreeInsert),
+        24 => Some(WalRecordKind::BTreeDelete),
+        25 => Some(WalRecordKind::BTreeSplit),
+        26 => Some(WalRecordKind::BTreeMerge),
         _ => None,
     }
 }
@@ -306,6 +327,7 @@ mod tests {
         assert!(WalRecordKind::TxCommit.is_transaction_boundary());
         assert!(WalRecordKind::TxRollback.is_transaction_boundary());
         assert!(!WalRecordKind::RowInsert.is_transaction_boundary());
+        assert!(!WalRecordKind::BTreeInsert.is_transaction_boundary());
     }
 
     #[test]

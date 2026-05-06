@@ -177,6 +177,7 @@ mod envelope_frame;
 mod envelope_validation;
 mod errors;
 pub mod generated;
+mod generated_validation;
 mod manifest;
 mod payload;
 mod structured;

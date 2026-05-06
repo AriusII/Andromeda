@@ -850,6 +850,7 @@ pub enum TraceEvent {
     Audit(AuditTrace),
     Resource(ResourceTrace),
     IoPlacementDecision(IoPlacementDecisionTrace),
+    PlacementAudit(PlacementAuditEvent),
     IoBudgetDecision(IoBudgetDecisionTrace),
     GpuPolicyDecision(GpuPolicyDecisionTrace),
     TransactionTransition(TransactionTransitionTrace),
@@ -883,6 +884,7 @@ impl TraceEvent {
             Self::Audit(trace) => trace.trace_id,
             Self::Resource(trace) => trace.trace_id,
             Self::IoPlacementDecision(trace) => trace.trace_id,
+            Self::PlacementAudit(trace) => trace.trace_id,
             Self::IoBudgetDecision(trace) => trace.trace_id,
             Self::GpuPolicyDecision(trace) => trace.trace_id,
             Self::TransactionTransition(trace) => trace.trace_id,
@@ -922,6 +924,7 @@ impl TraceEvent {
             Self::Audit(_) => CriticalDecisionKind::SecurityAuthorization,
             Self::Resource(_) => CriticalDecisionKind::ResourceGovernance,
             Self::IoPlacementDecision(_) => CriticalDecisionKind::IoPlacementDecision,
+            Self::PlacementAudit(_) => CriticalDecisionKind::PlacementAudit,
             Self::IoBudgetDecision(_) => CriticalDecisionKind::IoBudgetValidation,
             Self::GpuPolicyDecision(_) => CriticalDecisionKind::GpuPolicyDecision,
             Self::TransactionTransition(_) => CriticalDecisionKind::TransactionTransition,
@@ -1164,6 +1167,17 @@ impl EventEnvelope {
             TraceEvent::IoPlacementDecision(trace) if !trace.has_reason() => Err(observe_error(
                 "IO placement decision traces require a non-empty reason",
             )),
+            TraceEvent::PlacementAudit(trace) if !trace.has_reason() => Err(observe_error(
+                "placement audit events require a non-empty reason",
+            )),
+            TraceEvent::PlacementAudit(trace) if !trace.has_transition_evidence() => {
+                Err(observe_error(
+                    "placement audit events require transition-specific segment/extent evidence",
+                ))
+            }
+            TraceEvent::PlacementAudit(trace) if !trace.outcome_matches_transition() => Err(
+                observe_error("placement audit event acceptance must match transition semantics"),
+            ),
             TraceEvent::IoBudgetDecision(trace) if !trace.has_reason() => Err(observe_error(
                 "IO budget decision traces require a non-empty reason",
             )),
@@ -1466,6 +1480,7 @@ impl EventEnvelope {
             TraceEvent::CorruptionBoundary(trace) => contains_sensitive_marker(&trace.reason),
             TraceEvent::Manifest(trace) => contains_sensitive_marker(&trace.reason),
             TraceEvent::IoPlacementDecision(trace) => contains_sensitive_marker(&trace.reason),
+            TraceEvent::PlacementAudit(trace) => contains_sensitive_marker(&trace.reason),
             TraceEvent::IoBudgetDecision(trace) => contains_sensitive_marker(&trace.reason),
             TraceEvent::GpuPolicyDecision(trace) => contains_sensitive_marker(&trace.reason),
             TraceEvent::Audit(trace) => {

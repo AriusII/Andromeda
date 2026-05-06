@@ -54,7 +54,7 @@ fn admission_to_core_io_hotstore_plan_emits_observable_budget_and_placement_evid
     let admission = request
         .validate_admission(TraceId::new(100))
         .expect("valid invocation contract identity must be admitted before core IO planning");
-    assert_eq!(admission.decision, CriticalDecisionKind::ResourceGovernance);
+    assert_eq!(admission.decision, CriticalDecisionKind::ContractValidation);
     assert!(admission.has_explanation());
 
     let correlation = request_correlation();

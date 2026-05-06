@@ -20,6 +20,7 @@ use andromeda_core::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::Lsn;
 use crate::wal_record_catalog::CatalogWalRecord;
 
 /// In-memory snapshot of catalog state at a point in recovery.
@@ -237,6 +238,115 @@ impl CatalogWalRecordReplayExt for CatalogWalRecord {
             | CatalogWalRecord::CatalogCheckpoint { .. } => None,
         }
     }
+}
+
+// ─── LSN-Anchored Catalog Replay ───────────────────────────────────────────
+
+/// A catalog WAL record paired with its storage-WAL LSN for LSN-based
+/// filtering during crash recovery.
+///
+/// The storage WAL LSN is the LSN of the outer storage WAL record that
+/// carried this catalog WAL record as its payload
+/// (e.g. `CatalogChangeApply` or `CatalogChangeCommit`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LsnBoundCatalogRecord {
+    /// LSN of the outer storage WAL record that carried this catalog record.
+    pub storage_lsn: Lsn,
+    /// The catalog WAL record itself.
+    pub record: CatalogWalRecord,
+}
+
+impl LsnBoundCatalogRecord {
+    pub fn new(storage_lsn: Lsn, record: CatalogWalRecord) -> Self {
+        Self {
+            storage_lsn,
+            record,
+        }
+    }
+}
+
+/// Report from an LSN-anchored catalog replay session.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatalogReplayFromLsnReport {
+    /// The catalog WAL start LSN used as the replay floor.
+    pub catalog_wal_start_lsn: Lsn,
+    /// Highest LSN of the replayed records, or `None` if nothing was replayed.
+    pub end_lsn: Option<Lsn>,
+    /// Total records provided (before floor filtering).
+    pub total_records: usize,
+    /// Records whose storage LSN was below the replay floor (filtered out).
+    pub records_below_floor: usize,
+    /// Records whose storage LSN was at or above the replay floor (replayed).
+    pub records_replayed: usize,
+    /// Catalog snapshot after replay.
+    pub snapshot: CatalogSnapshot,
+}
+
+impl CatalogReplayFromLsnReport {
+    /// Returns `true` when all provided records were replayed (none filtered).
+    pub fn all_records_replayed(&self) -> bool {
+        self.records_below_floor == 0
+    }
+}
+
+/// Replay catalog WAL records starting from a manifest-required LSN.
+///
+/// This function extends [`replay_catalog_wal_records`] with LSN-based
+/// filtering so that only records at or after `catalog_wal_start_lsn`
+/// participate in replay.
+///
+/// # Recovery Protocol
+///
+/// 1. Filter `lsn_records` to those with `storage_lsn >= catalog_wal_start_lsn`.
+/// 2. Extract the `CatalogWalRecord` slice from the eligible entries (order preserved).
+/// 3. Call [`replay_catalog_wal_records`] on the filtered slice.
+/// 4. Return [`CatalogReplayFromLsnReport`] with replay statistics.
+///
+/// # Preconditions
+///
+/// * `lsn_records` must be in ascending `storage_lsn` order.
+/// * `catalog_wal_start_lsn` must match the manifest's
+///   `CatalogWalStartLsn` (or equivalent anchor).
+///
+/// # Errors
+///
+/// Propagates any error from [`replay_catalog_wal_records`]:
+/// - Catalog version reordering.
+/// - Procedure reference to non-existent ID.
+/// - `CatalogCheckpoint` visible-count mismatch.
+pub fn replay_catalog_from_lsn(
+    lsn_records: &[LsnBoundCatalogRecord],
+    catalog_wal_start_lsn: Lsn,
+    target_catalog_version: CatalogVersion,
+) -> AndromedaResult<CatalogReplayFromLsnReport> {
+    let records_below_floor = lsn_records
+        .iter()
+        .filter(|r| r.storage_lsn < catalog_wal_start_lsn)
+        .count();
+
+    let eligible: Vec<CatalogWalRecord> = lsn_records
+        .iter()
+        .filter(|r| r.storage_lsn >= catalog_wal_start_lsn)
+        .map(|r| r.record.clone())
+        .collect();
+
+    let end_lsn = lsn_records
+        .iter()
+        .filter(|r| r.storage_lsn >= catalog_wal_start_lsn)
+        .map(|r| r.storage_lsn)
+        .max();
+
+    let records_replayed = eligible.len();
+    let snapshot = replay_catalog_wal_records(&eligible, target_catalog_version)?;
+
+    Ok(CatalogReplayFromLsnReport {
+        catalog_wal_start_lsn,
+        end_lsn,
+        total_records: lsn_records.len(),
+        records_below_floor,
+        records_replayed,
+        snapshot,
+    })
 }
 
 #[cfg(test)]
@@ -480,5 +590,155 @@ mod tests {
         assert!(snapshot.procedure_ids.contains(&CatalogObjectId::new(1)));
         assert!(!snapshot.procedure_ids.contains(&CatalogObjectId::new(2)));
         assert!(snapshot.procedure_ids.contains(&CatalogObjectId::new(3)));
+    }
+
+    // ── LSN-anchored catalog replay tests ────────────────────────────────────
+
+    #[test]
+    fn replay_catalog_from_lsn_empty_records_ok() {
+        let report = replay_catalog_from_lsn(&[], crate::Lsn::new(1), CatalogVersion::new(99))
+            .expect("empty replay must succeed");
+        assert_eq!(report.total_records, 0);
+        assert_eq!(report.records_replayed, 0);
+        assert_eq!(report.records_below_floor, 0);
+        assert!(report.end_lsn.is_none());
+    }
+
+    #[test]
+    fn replay_catalog_from_lsn_filters_records_below_floor() {
+        let lsn_records = vec![
+            LsnBoundCatalogRecord::new(
+                crate::Lsn::new(5),
+                CatalogWalRecord::ProcedureAdded {
+                    procedure_id: CatalogObjectId::new(1),
+                    signature_hash: andromeda_core::ContractHash::test_vector(0xAA),
+                    new_catalog_version: CatalogVersion::new(1),
+                    timestamp_secs: 1000,
+                },
+            ),
+            LsnBoundCatalogRecord::new(
+                crate::Lsn::new(15),
+                CatalogWalRecord::ProcedureAdded {
+                    procedure_id: CatalogObjectId::new(2),
+                    signature_hash: andromeda_core::ContractHash::test_vector(0xBB),
+                    new_catalog_version: CatalogVersion::new(2),
+                    timestamp_secs: 2000,
+                },
+            ),
+        ];
+
+        // Start from LSN 10: only the second record (LSN 15) is replayed.
+        let report =
+            replay_catalog_from_lsn(&lsn_records, crate::Lsn::new(10), CatalogVersion::new(99))
+                .expect("replay must succeed");
+
+        assert_eq!(report.total_records, 2);
+        assert_eq!(report.records_below_floor, 1);
+        assert_eq!(report.records_replayed, 1);
+        assert_eq!(report.end_lsn, Some(crate::Lsn::new(15)));
+        // Only procedure 2 should be visible (procedure 1 was below the floor)
+        assert_eq!(report.snapshot.visible_procedure_count(), 1);
+        assert!(
+            report
+                .snapshot
+                .procedure_ids
+                .contains(&CatalogObjectId::new(2))
+        );
+        assert!(
+            !report
+                .snapshot
+                .procedure_ids
+                .contains(&CatalogObjectId::new(1))
+        );
+    }
+
+    #[test]
+    fn replay_catalog_from_lsn_replays_all_when_floor_is_zero() {
+        let lsn_records = vec![
+            LsnBoundCatalogRecord::new(
+                crate::Lsn::new(1),
+                CatalogWalRecord::ProcedureAdded {
+                    procedure_id: CatalogObjectId::new(10),
+                    signature_hash: andromeda_core::ContractHash::test_vector(0xCC),
+                    new_catalog_version: CatalogVersion::new(1),
+                    timestamp_secs: 1000,
+                },
+            ),
+            LsnBoundCatalogRecord::new(
+                crate::Lsn::new(2),
+                CatalogWalRecord::ProcedureAdded {
+                    procedure_id: CatalogObjectId::new(11),
+                    signature_hash: andromeda_core::ContractHash::test_vector(0xDD),
+                    new_catalog_version: CatalogVersion::new(2),
+                    timestamp_secs: 2000,
+                },
+            ),
+        ];
+
+        // Floor = ZERO → all records are eligible (0 >= 0 is true for all).
+        let report =
+            replay_catalog_from_lsn(&lsn_records, crate::Lsn::ZERO, CatalogVersion::new(99))
+                .expect("replay must succeed");
+        assert_eq!(report.records_replayed, 2);
+        assert_eq!(report.records_below_floor, 0);
+        assert!(report.all_records_replayed());
+    }
+
+    #[test]
+    fn replay_catalog_from_lsn_tracks_end_lsn_correctly() {
+        let lsn_records = vec![
+            LsnBoundCatalogRecord::new(
+                crate::Lsn::new(100),
+                CatalogWalRecord::ProcedureAdded {
+                    procedure_id: CatalogObjectId::new(1),
+                    signature_hash: andromeda_core::ContractHash::test_vector(0xAA),
+                    new_catalog_version: CatalogVersion::new(1),
+                    timestamp_secs: 1000,
+                },
+            ),
+            LsnBoundCatalogRecord::new(
+                crate::Lsn::new(200),
+                CatalogWalRecord::ProcedureAdded {
+                    procedure_id: CatalogObjectId::new(2),
+                    signature_hash: andromeda_core::ContractHash::test_vector(0xBB),
+                    new_catalog_version: CatalogVersion::new(2),
+                    timestamp_secs: 2000,
+                },
+            ),
+        ];
+
+        let report =
+            replay_catalog_from_lsn(&lsn_records, crate::Lsn::new(100), CatalogVersion::new(99))
+                .expect("replay must succeed");
+        assert_eq!(report.end_lsn, Some(crate::Lsn::new(200)));
+    }
+
+    #[test]
+    fn replay_catalog_from_lsn_propagates_version_reorder_error() {
+        let lsn_records = vec![
+            LsnBoundCatalogRecord::new(
+                crate::Lsn::new(10),
+                CatalogWalRecord::ProcedureAdded {
+                    procedure_id: CatalogObjectId::new(1),
+                    signature_hash: andromeda_core::ContractHash::test_vector(0xAA),
+                    new_catalog_version: CatalogVersion::new(5),
+                    timestamp_secs: 1000,
+                },
+            ),
+            LsnBoundCatalogRecord::new(
+                crate::Lsn::new(20),
+                CatalogWalRecord::ProcedureAdded {
+                    procedure_id: CatalogObjectId::new(2),
+                    signature_hash: andromeda_core::ContractHash::test_vector(0xBB),
+                    new_catalog_version: CatalogVersion::new(3), // reorder!
+                    timestamp_secs: 2000,
+                },
+            ),
+        ];
+
+        let result =
+            replay_catalog_from_lsn(&lsn_records, crate::Lsn::new(10), CatalogVersion::new(99));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().message().contains("version reordering"));
     }
 }

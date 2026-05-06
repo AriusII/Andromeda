@@ -6,7 +6,7 @@ use super::transaction::{
     DurableTransactionClassifications, DurableTransactionResume, IncompleteDurableTransaction,
     classify_durable_transactions, incomplete_transactions_from_records, summarize_transaction,
 };
-use super::{WalRecord, WalRecordKind};
+use super::{WalRecord, WalRecordKind, validate_wal_record_bounds};
 use crate::Lsn;
 
 /// In-memory WAL accumulator with durable LSN tracking.
@@ -54,6 +54,9 @@ impl InMemoryWal {
 
     pub fn append(&mut self, record: WalRecord) -> AndromedaResult<Lsn> {
         record.validate()?;
+
+        // Enforce WAL record bounds (size limits, structure validation).
+        validate_wal_record_bounds(&record)?;
 
         let expected_lsn = self.try_next_lsn()?;
         if record.header.lsn != expected_lsn {

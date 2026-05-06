@@ -6,390 +6,40 @@
 //! SQL, does not define an application `Procedure` surface, and does not make
 //! JSON a runtime wire format. Operators may render returned rows as diagnostic
 //! CLI JSON outside this contract.
+//!
+//! [`EventEnvelope`]: crate::EventEnvelope
 
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogObjectId, CatalogVersion,
-    ProcedureId,
+mod event_family;
+mod filtering;
+mod in_memory;
+mod permission;
+mod result;
+mod spec;
+
+pub use event_family::TraceEventFamily;
+pub use permission::TraceQueryPermissionMatrix;
+pub use result::{TraceQueryMetadata, TraceQueryResult, TraceQueryRow};
+pub use spec::{
+    TRACE_QUERY_DEFAULT_LIMIT, TRACE_QUERY_MAX_LIMIT, TraceQueryFilter, TraceQueryLsnRange,
+    TraceQuerySpec,
 };
-
-use crate::{
-    AdminOperation, EventEnvelope, InMemoryEventSink, Permission, SurfaceScope, TraceEvent, TraceId,
-};
-
-/// Maximum rows a V1 operator trace query may return.
-pub const TRACE_QUERY_MAX_LIMIT: usize = 1_000;
-
-/// Default bounded row limit when a caller does not request one explicitly.
-pub const TRACE_QUERY_DEFAULT_LIMIT: usize = 100;
-
-/// Inclusive LSN interval for trace event filtering.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TraceQueryLsnRange {
-    pub start_lsn: u64,
-    pub end_lsn: u64,
-}
-
-impl TraceQueryLsnRange {
-    pub const fn new(start_lsn: u64, end_lsn: u64) -> Self {
-        Self { start_lsn, end_lsn }
-    }
-
-    pub const fn contains(self, lsn: u64) -> bool {
-        self.start_lsn <= lsn && lsn <= self.end_lsn
-    }
-
-    pub const fn is_valid(self) -> bool {
-        self.start_lsn != 0 && self.end_lsn != 0 && self.start_lsn <= self.end_lsn
-    }
-}
-
-/// Closed event-family taxonomy used by the administration trace query surface.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum TraceEventFamily {
-    Decision,
-    ProcedureInvocation,
-    Wal,
-    Recovery,
-    ManifestCatalog,
-    Protocol,
-    SecurityAudit,
-    AdminAudit,
-    Resource,
-    Io,
-    Gpu,
-    Transaction,
-}
-
-impl TraceEventFamily {
-    pub fn of(event: &TraceEvent) -> Self {
-        match event {
-            TraceEvent::Decision(_) => Self::Decision,
-            TraceEvent::Invocation(_) | TraceEvent::ExecutionTransition(_) => {
-                Self::ProcedureInvocation
-            }
-            TraceEvent::Wal(_)
-            | TraceEvent::WalEvent(_)
-            | TraceEvent::CommitVisible(_)
-            | TraceEvent::RollbackDurable(_)
-            | TraceEvent::CorruptionBoundary(_) => Self::Wal,
-            TraceEvent::RecoveryStartup(_) => Self::Recovery,
-            TraceEvent::Manifest(_) | TraceEvent::CatalogMutation(_) => Self::ManifestCatalog,
-            TraceEvent::FrameRejection(_)
-            | TraceEvent::StreamRoleRejection(_)
-            | TraceEvent::Backpressure(_)
-            | TraceEvent::CompletionEmitted(_)
-            | TraceEvent::ContractRejected(_)
-            | TraceEvent::UnsupportedVersion(_)
-            | TraceEvent::SchemaLayoutDecision(_) => Self::Protocol,
-            TraceEvent::AuthorizationDenied(_) | TraceEvent::SecurityAudit(_) => {
-                Self::SecurityAudit
-            }
-            TraceEvent::AdminOperation(_) | TraceEvent::Audit(_) => Self::AdminAudit,
-            TraceEvent::Resource(_) => Self::Resource,
-            TraceEvent::IoPlacementDecision(_) | TraceEvent::IoBudgetDecision(_) => Self::Io,
-            TraceEvent::GpuPolicyDecision(_) => Self::Gpu,
-            TraceEvent::Mvcc(_) | TraceEvent::TransactionTransition(_) => Self::Transaction,
-        }
-    }
-}
-
-/// Allowed typed filters for V1 operator trace queries.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct TraceQueryFilter {
-    pub trace_id: Option<TraceId>,
-    pub family: Option<TraceEventFamily>,
-    pub lsn_range: Option<TraceQueryLsnRange>,
-    pub catalog_version: Option<CatalogVersion>,
-    /// Procedure identity is matched through `EventCorrelation.catalog_object_id`
-    /// because V1 trace envelopes do not yet carry a dedicated procedure id
-    /// field. Producers that want this filter to match must set the procedure's
-    /// catalog object id in the envelope correlation.
-    pub procedure_id: Option<ProcedureId>,
-    /// Principal identity is matched only against audit payloads that explicitly
-    /// carry a `UserPrincipal` or legacy `AuditTrace.actor` evidence.
-    pub principal: Option<String>,
-}
-
-impl TraceQueryFilter {
-    pub fn is_unbounded(&self) -> bool {
-        self.trace_id.is_none()
-            && self.family.is_none()
-            && self.lsn_range.is_none()
-            && self.catalog_version.is_none()
-            && self.procedure_id.is_none()
-            && self
-                .principal
-                .as_ref()
-                .map_or(true, |principal| principal.trim().is_empty())
-    }
-}
-
-/// Fully bounded V1 trace query request.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TraceQuerySpec {
-    pub filter: TraceQueryFilter,
-    /// Maximum rows to return after filtering. Must be 1..=TRACE_QUERY_MAX_LIMIT.
-    pub limit: usize,
-    /// Number of matching rows to skip before collection. This is deterministic
-    /// over ascending `EventId` order and is bounded by the in-memory source size.
-    pub offset: usize,
-    /// Whether the query should compute the full matching count. If false,
-    /// `total_matching_rows` is `None` and only returned row count is reported.
-    pub include_total_count: bool,
-}
-
-impl TraceQuerySpec {
-    pub fn new(filter: TraceQueryFilter) -> Self {
-        Self {
-            filter,
-            limit: TRACE_QUERY_DEFAULT_LIMIT,
-            offset: 0,
-            include_total_count: false,
-        }
-    }
-
-    pub fn validate(&self) -> AndromedaResult<()> {
-        if self.limit == 0 {
-            return Err(trace_query_error("trace query limit must be non-zero"));
-        }
-        if self.limit > TRACE_QUERY_MAX_LIMIT {
-            return Err(trace_query_error(
-                "trace query limit exceeds TRACE_QUERY_MAX_LIMIT",
-            ));
-        }
-        if let Some(trace_id) = self.filter.trace_id
-            && trace_id.is_zero()
-        {
-            return Err(trace_query_error(
-                "trace query trace_id filter must be non-zero when present",
-            ));
-        }
-        if let Some(range) = self.filter.lsn_range
-            && !range.is_valid()
-        {
-            return Err(trace_query_error(
-                "trace query LSN range must be non-zero and start_lsn <= end_lsn",
-            ));
-        }
-        if let Some(catalog_version) = self.filter.catalog_version
-            && catalog_version.get() == 0
-        {
-            return Err(trace_query_error(
-                "trace query catalog_version filter must be non-zero when present",
-            ));
-        }
-        if let Some(procedure_id) = self.filter.procedure_id
-            && procedure_id.get() == 0
-        {
-            return Err(trace_query_error(
-                "trace query procedure_id filter must be non-zero when present",
-            ));
-        }
-        if let Some(principal) = &self.filter.principal
-            && principal.trim().is_empty()
-        {
-            return Err(trace_query_error(
-                "trace query principal filter must be non-empty when present",
-            ));
-        }
-        Ok(())
-    }
-}
-
-/// Permission/audit matrix for V1 administration trace access.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TraceQueryPermissionMatrix {
-    pub surface: SurfaceScope,
-    pub required_permission: Permission,
-    pub audit_operation: AdminOperation,
-    pub audit_required: bool,
-}
-
-impl TraceQueryPermissionMatrix {
-    /// V1 trace query is administration-only and uses the existing diagnostics
-    /// permission until IAM adds a dedicated trace-read permission.
-    pub const V1_ADMIN: Self = Self {
-        surface: SurfaceScope::Administration,
-        required_permission: Permission::InspectPlans,
-        audit_operation: AdminOperation::InspectPlans,
-        audit_required: true,
-    };
-
-    pub const fn permits(self, surface: SurfaceScope, permission: Permission) -> bool {
-        surface as u8 == self.surface as u8
-            && matches!(
-                permission,
-                Permission::InspectPlans | Permission::ManageSecurity
-            )
-    }
-}
-
-/// Metadata returned with every trace query result.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TraceQueryMetadata {
-    pub limit: usize,
-    pub offset: usize,
-    pub returned_rows: usize,
-    pub total_matching_rows: Option<usize>,
-    pub truncated: bool,
-    pub ordered_by_event_id_ascending: bool,
-    pub permission_matrix: TraceQueryPermissionMatrix,
-}
-
-/// Single result row. The row preserves the typed envelope; callers must choose
-/// any diagnostic formatting explicitly at the CLI/export layer.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TraceQueryRow {
-    pub envelope: EventEnvelope,
-    pub family: TraceEventFamily,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TraceQueryResult {
-    pub metadata: TraceQueryMetadata,
-    pub rows: Vec<TraceQueryRow>,
-}
-
-impl InMemoryEventSink {
-    /// Run a deterministic, bounded administration trace query over recorded
-    /// in-memory envelopes.
-    pub fn query_trace_events(&self, spec: &TraceQuerySpec) -> AndromedaResult<TraceQueryResult> {
-        spec.validate()?;
-
-        let mut skipped = 0usize;
-        let mut total_matching = 0usize;
-        let mut rows = Vec::new();
-
-        for envelope in self
-            .events()
-            .iter()
-            .filter(|event| matches_filter(event, spec))
-        {
-            total_matching = total_matching.saturating_add(1);
-            if skipped < spec.offset {
-                skipped = skipped.saturating_add(1);
-                continue;
-            }
-            if rows.len() < spec.limit {
-                rows.push(TraceQueryRow {
-                    envelope: envelope.clone(),
-                    family: TraceEventFamily::of(&envelope.event),
-                });
-            }
-        }
-
-        let returned_rows = rows.len();
-        Ok(TraceQueryResult {
-            metadata: TraceQueryMetadata {
-                limit: spec.limit,
-                offset: spec.offset,
-                returned_rows,
-                total_matching_rows: spec.include_total_count.then_some(total_matching),
-                truncated: total_matching.saturating_sub(spec.offset) > returned_rows,
-                ordered_by_event_id_ascending: true,
-                permission_matrix: TraceQueryPermissionMatrix::V1_ADMIN,
-            },
-            rows,
-        })
-    }
-}
-
-fn matches_filter(envelope: &EventEnvelope, spec: &TraceQuerySpec) -> bool {
-    let filter = &spec.filter;
-    if let Some(trace_id) = filter.trace_id
-        && envelope.trace_id != trace_id
-    {
-        return false;
-    }
-    if let Some(family) = filter.family
-        && TraceEventFamily::of(&envelope.event) != family
-    {
-        return false;
-    }
-    if let Some(range) = filter.lsn_range
-        && !event_lsns(envelope)
-            .into_iter()
-            .any(|lsn| range.contains(lsn))
-    {
-        return false;
-    }
-    if let Some(catalog_version) = filter.catalog_version
-        && envelope.correlation.catalog_version != Some(catalog_version)
-    {
-        return false;
-    }
-    if let Some(procedure_id) = filter.procedure_id {
-        let expected = CatalogObjectId::new(procedure_id.get());
-        if envelope.correlation.catalog_object_id != Some(expected) {
-            return false;
-        }
-    }
-    if let Some(principal) = &filter.principal
-        && principal_of(&envelope.event) != Some(principal.as_str())
-    {
-        return false;
-    }
-    true
-}
-
-fn event_lsns(envelope: &EventEnvelope) -> Vec<u64> {
-    let mut lsns = Vec::new();
-    if let Some(lsn) = envelope.correlation.durable_lsn {
-        lsns.push(lsn);
-    }
-    match &envelope.event {
-        TraceEvent::Wal(trace) => lsns.push(trace.durable_lsn),
-        TraceEvent::WalEvent(trace) => {
-            lsns.push(trace.appended_lsn);
-            if let Some(lsn) = trace.durable_lsn {
-                lsns.push(lsn);
-            }
-        }
-        TraceEvent::CommitVisible(trace) => lsns.push(trace.durable_commit_lsn),
-        TraceEvent::RollbackDurable(trace) => lsns.push(trace.durable_rollback_lsn),
-        TraceEvent::RecoveryStartup(trace) => {
-            lsns.push(trace.last_durable_lsn);
-            if let Some(lsn) = trace.corruption_boundary_lsn {
-                lsns.push(lsn);
-            }
-        }
-        TraceEvent::Manifest(trace) => {
-            lsns.push(trace.base_checkpoint_lsn);
-            lsns.push(trace.required_wal_start_lsn);
-        }
-        TraceEvent::CompletionEmitted(trace) => {
-            if let Some(lsn) = trace.durable_lsn {
-                lsns.push(lsn);
-            }
-        }
-        TraceEvent::CorruptionBoundary(trace) => lsns.push(trace.boundary_lsn),
-        _ => {}
-    }
-    lsns
-}
-
-fn principal_of(event: &TraceEvent) -> Option<&str> {
-    match event {
-        TraceEvent::SecurityAudit(trace) => Some(trace.principal.principal_id.as_str()),
-        TraceEvent::AdminOperation(trace) => Some(trace.principal.principal_id.as_str()),
-        TraceEvent::Audit(trace) => Some(trace.actor.as_str()),
-        _ => None,
-    }
-}
-
-fn trace_query_error(message: impl Into<String>) -> AndromedaError {
-    AndromedaError::new(AndromedaErrorKind::Protocol, message)
-}
 
 #[cfg(test)]
 mod tests {
-    use andromeda_core::{CatalogObjectId, CatalogVersion, ProcedureId, RequestId, SessionId};
+    use andromeda_core::{
+        CatalogObjectId, CatalogVersion, GpuExecutionPolicy, InvocationId, PipelineClass,
+        ProcedureId, RequestId, ResourceBudget, SessionId,
+    };
 
     use super::*;
     use crate::{
-        BackpressureTrace, CertificateIdentity, EventCorrelation, EventEmitter, InMemoryEventSink,
-        ProtocolCorrelation, ProtocolEventScope, SecurityAuditOutcome, SecurityAuditTrace,
-        UserPrincipal, UserPrincipalKind, WalEventTrace, WalOperation,
+        AdminOperation, AdminOperationTrace, AuditTrace, AuthorizationDeniedTrace,
+        BackpressureTrace, CatalogMutationTrace, CertificateIdentity, CorruptionBoundaryTrace,
+        CriticalDecisionKind, DecisionTrace, EventCorrelation, EventEmitter, ExecutionTransitionTrace,
+        InMemoryEventSink, IoBudgetDecisionTrace, IoPipelineStage, MvccTrace, Permission,
+        ProtocolCorrelation, ProtocolEventScope, RecoveryTrace, SecurityAuditOutcome,
+        SecurityAuditTrace, TraceEvent, TraceId, TransitionReasonCode, UserPrincipal,
+        UserPrincipalKind, WalEventTrace, WalOperation, SurfaceScope,
     };
 
     fn protocol_event(trace_id: u128) -> TraceEvent {
@@ -531,5 +181,151 @@ mod tests {
         assert!(matrix.permits(SurfaceScope::Administration, Permission::ManageSecurity));
         assert!(!matrix.permits(SurfaceScope::Application, Permission::InspectPlans));
         assert!(!matrix.permits(SurfaceScope::MonitoringAgent, Permission::InspectPlans));
+    }
+
+    #[test]
+    fn trace_event_family_mapping_covers_boundary_variants() {
+        let trace_id = TraceId::new(9001);
+        let cert = CertificateIdentity::new(
+            "fingerprint-for-family-mapping",
+            "CN=trace-query-admin",
+            SurfaceScope::Administration,
+        )
+        .unwrap();
+        let principal = UserPrincipal::new("principal:family", UserPrincipalKind::Human).unwrap();
+
+        let execution_transition = TraceEvent::ExecutionTransition(ExecutionTransitionTrace {
+            trace_id,
+            invocation_id: InvocationId::new(1),
+            request_id: Some(RequestId::new(2)),
+            session_id: Some(SessionId::new(3)),
+            transaction_id: None,
+            completion_code: None,
+            prev_phase: None,
+            next_phase: None,
+            durable_lsn: None,
+            reason_code: TransitionReasonCode::NORMAL_PROGRESS,
+            reason: "execution progressed".to_string(),
+        });
+        assert_eq!(
+            TraceEventFamily::of(&execution_transition),
+            TraceEventFamily::ProcedureInvocation
+        );
+
+        assert_eq!(
+            TraceEventFamily::of(&TraceEvent::CorruptionBoundary(CorruptionBoundaryTrace {
+                trace_id,
+                boundary_lsn: 42,
+                reason: "detected corruption fence".to_string(),
+            })),
+            TraceEventFamily::Wal
+        );
+        assert_eq!(
+            TraceEventFamily::of(&TraceEvent::RecoveryStartup(RecoveryTrace {
+                trace_id,
+                last_durable_lsn: 101,
+                corruption_boundary_lsn: Some(100),
+            })),
+            TraceEventFamily::Recovery
+        );
+        assert_eq!(
+            TraceEventFamily::of(&TraceEvent::CatalogMutation(CatalogMutationTrace {
+                trace_id,
+                catalog_version: CatalogVersion::new(7),
+                object_id: Some(CatalogObjectId::new(77)),
+                action: "create proc".to_string(),
+            })),
+            TraceEventFamily::ManifestCatalog
+        );
+        assert_eq!(
+            TraceEventFamily::of(&TraceEvent::AuthorizationDenied(AuthorizationDeniedTrace {
+                trace_id,
+                denied_permission: "inspect_plans".to_string(),
+                reason: "permission denied".to_string(),
+            })),
+            TraceEventFamily::SecurityAudit
+        );
+        assert_eq!(
+            TraceEventFamily::of(&TraceEvent::AdminOperation(
+                AdminOperationTrace::new(
+                    trace_id,
+                    SurfaceScope::Administration,
+                    cert,
+                    principal,
+                    AdminOperation::InspectPlans,
+                    Permission::InspectPlans,
+                    true,
+                    "authorized admin action",
+                )
+                .unwrap()
+            )),
+            TraceEventFamily::AdminAudit
+        );
+        assert_eq!(
+            TraceEventFamily::of(&TraceEvent::Audit(AuditTrace {
+                trace_id,
+                actor: "principal:family".to_string(),
+                object: "trace.query".to_string(),
+                action: "inspect".to_string(),
+            })),
+            TraceEventFamily::AdminAudit
+        );
+        assert_eq!(
+            TraceEventFamily::of(&TraceEvent::Resource(crate::ResourceTrace {
+                trace_id,
+                memory_bytes: 1,
+                temp_bytes: 0,
+            })),
+            TraceEventFamily::Resource
+        );
+        assert_eq!(
+            TraceEventFamily::of(
+                &TraceEvent::IoBudgetDecision(
+                    IoBudgetDecisionTrace::from_budget_request(
+                        trace_id,
+                        PipelineClass::WalAppend,
+                        IoPipelineStage::Hot,
+                        ResourceBudget::new(1024, 1024, 4),
+                        100,
+                        100,
+                        1,
+                        "io budget accepted",
+                    )
+                    .unwrap()
+                )
+            ),
+            TraceEventFamily::Io
+        );
+        assert_eq!(
+            TraceEventFamily::of(
+                &TraceEvent::GpuPolicyDecision(
+                    crate::GpuPolicyDecisionTrace::from_policy(
+                        trace_id,
+                        PipelineClass::BatchAnalytics,
+                        GpuExecutionPolicy::BatchAnalyticsOnly,
+                        true,
+                        "gpu policy accepted",
+                    )
+                    .unwrap()
+                )
+            ),
+            TraceEventFamily::Gpu
+        );
+        assert_eq!(
+            TraceEventFamily::of(&TraceEvent::Mvcc(MvccTrace {
+                trace_id,
+                snapshot_ts: 1,
+                visible: true,
+            })),
+            TraceEventFamily::Transaction
+        );
+        assert_eq!(
+            TraceEventFamily::of(&TraceEvent::Decision(DecisionTrace {
+                trace_id,
+                decision: CriticalDecisionKind::PlanSelection,
+                reason: "selected deterministic plan".to_string(),
+            })),
+            TraceEventFamily::Decision
+        );
     }
 }

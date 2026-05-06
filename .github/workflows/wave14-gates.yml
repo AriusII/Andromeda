@@ -1,0 +1,196 @@
+name: Wave 14 Gate Chain
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wave14-gates-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  format:
+    name: format
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/rust-setup
+        with:
+          toolchain: stable
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  compile:
+    name: compile
+    needs: format
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/rust-setup
+        with:
+          toolchain: stable
+      - run: cargo check --workspace --locked
+
+  clippy:
+    name: clippy
+    needs: compile
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/rust-setup
+        with:
+          toolchain: stable
+          components: clippy
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  unit-tests:
+    name: unit-tests
+    needs: clippy
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/rust-setup
+        with:
+          toolchain: stable
+      - run: cargo test --workspace --lib --locked -- --nocapture
+
+  integration-tests:
+    name: integration-tests
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/rust-setup
+        with:
+          toolchain: stable
+      - run: cargo test --workspace --tests --locked -- --nocapture
+
+  fuzz-smoke:
+    name: fuzz-smoke-15s
+    needs: integration-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/rust-setup
+        with:
+          toolchain: nightly
+          components: rust-src
+      - run: cargo install cargo-fuzz --locked
+      - name: Run 15s smoke fuzz over manifest targets
+        shell: bash
+        run: |
+          python fuzz/generators/generate_seed_corpus.py --ensure-only
+          python - <<'PY'
+          import pathlib, re, subprocess
+          names = []
+          for line in pathlib.Path("fuzz/targets.toml").read_text(encoding="utf-8").splitlines():
+              m = re.match(r'\s*name\s*=\s*"([^"]+)"', line)
+              if m:
+                  names.append(m.group(1))
+          if not names:
+              raise SystemExit("no fuzz targets declared")
+          for name in names:
+              print(f"::group::fuzz {name}")
+              subprocess.run(
+                  ["cargo", "+nightly", "fuzz", "run", name, "--", "-max_total_time=15"],
+                  check=True,
+              )
+              print("::endgroup::")
+          PY
+
+  property-tests:
+    name: property-tests-3min
+    needs: fuzz-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/rust-setup
+        with:
+          toolchain: stable
+      - run: cargo test --workspace --test property_parser_fuzz --locked -- --nocapture
+      - run: cargo test -p andromeda-storage --test property_wal_roundtrip --locked -- --nocapture
+      - run: cargo test -p andromeda-storage --test property_recovery_replay --locked -- --nocapture
+      - run: cargo test -p andromeda-proto --test property_envelope_validation --locked -- --nocapture
+
+  performance-regression:
+    name: performance-regression
+    needs: property-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/rust-setup
+        with:
+          toolchain: stable
+      - run: python .github/scripts/perf_regression_gate.py --output-dir target/perf-regression
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wave14-performance-regression
+          path: |
+            .github/perf/baseline.wave14.json
+            .github/perf/thresholds.wave14.json
+            target/perf-regression/performance-report.json
+            target/perf-regression/performance-report.md
+          retention-days: 30
+
+  protocol-doctrine-scan:
+    name: protocol-doctrine-scan
+    needs: performance-regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/rust-setup
+        with:
+          toolchain: stable
+      - run: cargo test -p andromeda-quic --test zero_rtt_doctrine_contract --locked
+      - name: Scan for forbidden gRPC/tonic usage
+        shell: bash
+        run: |
+          set -euo pipefail
+          MATCHES="$(rg -n -i '\b(grpc|tonic)\b' crates/andromeda-proto crates/andromeda-quic crates/andromeda-exec | rg -v 'DOCTRINE_ALLOW' || true)"
+          if [ -n "$MATCHES" ]; then
+            echo "$MATCHES"
+            echo "::error::Doctrine breach: gRPC/tonic usage detected."
+            exit 1
+          fi
+      - name: Scan for runtime JSON doctrine breaches
+        shell: bash
+        run: |
+          set -euo pipefail
+          MATCHES="$(rg -n -i 'serde_json|runtime json' crates/andromeda-proto crates/andromeda-quic | rg -v 'DOCTRINE_ALLOW' || true)"
+          if [ -n "$MATCHES" ]; then
+            echo "$MATCHES"
+            echo "::error::Doctrine breach: runtime JSON default format detected."
+            exit 1
+          fi
+
+  rto-test:
+    name: rto-test
+    needs: protocol-doctrine-scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/rust-setup
+        with:
+          toolchain: stable
+      - run: cargo test -p andromeda-storage --test property_recovery_replay --locked -- --nocapture
+      - run: cargo test -p andromeda-storage --test recovery_completeness_contract --locked -- --nocapture
