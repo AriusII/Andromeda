@@ -15,11 +15,12 @@ use crate::{
     Cardinality,
     execution_adapter::{
         SrplAssertRequest, SrplAssertResult, SrplAssertionAdapter, SrplBindingEnvironment,
-        SrplBoundValue, SrplEmitRequest, SrplEmitResult, SrplExecutionFailure, SrplFailureAdapter,
+        SrplEmitRequest, SrplEmitResult, SrplExecutionFailure, SrplFailureAdapter,
         SrplFailureRequest, SrplOperationContext, SrplReadRequest, SrplReadResult, SrplRowBound,
         SrplTypedEmitAdapter, SrplTypedReadAdapter, SrplTypedUpdateAdapter, SrplUpdateRequest,
         SrplUpdateResult,
     },
+    identifier::validate_srpl_identifier as validate_symbol,
     procedure_model::{
         BoundSrplOperationPlan, ExecutableProcedurePlan, SrplAssignmentIr, SrplEmitValueIr,
         SrplPredicateIr, SrplValueIr,
@@ -405,27 +406,6 @@ fn validate_value(value: &SrplValueIr) -> AndromedaResult<()> {
     }
 }
 
-fn validate_symbol(value: &str, context: &str) -> AndromedaResult<()> {
-    let mut chars = value.chars();
-    let Some(first) = chars.next() else {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Srpl,
-            format!("{context} must not be empty"),
-        ));
-    };
-
-    if !(first.is_ascii_alphabetic() || first == '_')
-        || chars.any(|ch| !(ch.is_ascii_alphanumeric() || ch == '_'))
-    {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Srpl,
-            format!("{context} must be an ASCII identifier"),
-        ));
-    }
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -463,6 +443,7 @@ mod tests {
         fn read_typed(
             &mut self,
             request: SrplReadRequest,
+            _environment: &dyn SrplBindingEnvironment,
         ) -> Result<SrplReadResult<Self::Row>, SrplExecutionFailure> {
             self.events
                 .push(format!("read:{}", request.context.ordinal));
@@ -478,6 +459,7 @@ mod tests {
         fn assert_typed(
             &mut self,
             request: SrplAssertRequest,
+            _environment: &dyn SrplBindingEnvironment,
         ) -> Result<SrplAssertResult, SrplExecutionFailure> {
             self.events
                 .push(format!("assert:{}", request.context.ordinal));
@@ -489,6 +471,7 @@ mod tests {
         fn update_typed(
             &mut self,
             request: SrplUpdateRequest,
+            _environment: &dyn SrplBindingEnvironment,
         ) -> Result<SrplUpdateResult, SrplExecutionFailure> {
             self.events
                 .push(format!("update:{}", request.context.ordinal));
@@ -500,6 +483,7 @@ mod tests {
         fn emit_typed(
             &mut self,
             request: SrplEmitRequest,
+            _environment: &dyn SrplBindingEnvironment,
         ) -> Result<SrplEmitResult, SrplExecutionFailure> {
             self.events
                 .push(format!("emit:{}", request.context.ordinal));
@@ -508,7 +492,11 @@ mod tests {
     }
 
     impl SrplFailureAdapter for FakeAdapter {
-        fn fail_typed(&mut self, request: SrplFailureRequest) -> Result<(), SrplExecutionFailure> {
+        fn fail_typed(
+            &mut self,
+            request: SrplFailureRequest,
+            _environment: &dyn SrplBindingEnvironment,
+        ) -> Result<(), SrplExecutionFailure> {
             self.events
                 .push(format!("fail:{}", request.context.ordinal));
             Ok(())

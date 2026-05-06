@@ -11,8 +11,8 @@ use super::pool_error;
 /// but pooling is keyed by authenticated server fingerprint and surface plane.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ConnectionPoolKey {
-    pub server_fingerprint: String,
-    pub plane: SurfacePlane,
+    server_fingerprint: String,
+    plane: SurfacePlane,
 }
 
 impl ConnectionPoolKey {
@@ -50,5 +50,13 @@ impl ConnectionPoolKey {
             ));
         }
         Ok(())
+    }
+
+    pub fn server_fingerprint(&self) -> &str {
+        &self.server_fingerprint
+    }
+
+    pub const fn plane(&self) -> SurfacePlane {
+        self.plane
     }
 }

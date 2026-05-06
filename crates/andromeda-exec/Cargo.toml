@@ -16,6 +16,9 @@ andromeda-tx.workspace = true
 dashmap = "6.0"
 tokio.workspace = true
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("runtime-quinn"))'] }
+
 [[test]]
 name = "c4_admission_events"
 path = "tests/c4_admission_events.rs"

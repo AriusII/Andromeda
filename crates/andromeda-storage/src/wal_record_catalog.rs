@@ -73,7 +73,7 @@ impl CatalogWalRecordVersion {
 pub enum CatalogWalRecord {
     /// A batch of procedure definitions has been applied to the catalog.
     ///
-    /// This record represents a [`DefinitionBatch`] that was successfully
+    /// This record represents a `DefinitionBatch` that was successfully
     /// planned, applied, and committed to the WAL.
     ///
     /// Invariants:

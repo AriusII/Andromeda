@@ -78,13 +78,13 @@ impl WalDurabilityEvidence {
             ));
         }
 
-        if let Some(mutation_lsn) = self.mutation_lsn {
-            if mutation_lsn <= self.begin_lsn || mutation_lsn >= self.commit_lsn {
-                return Err(AndromedaError::new(
-                    AndromedaErrorKind::Storage,
-                    "mutation WAL LSN must be between begin and commit",
-                ));
-            }
+        if let Some(mutation_lsn) = self.mutation_lsn
+            && (mutation_lsn <= self.begin_lsn || mutation_lsn >= self.commit_lsn)
+        {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Storage,
+                "mutation WAL LSN must be between begin and commit",
+            ));
         }
 
         if self.begin_lsn >= self.commit_lsn {

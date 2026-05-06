@@ -248,9 +248,7 @@ fn allowed_application_surface_dispatch_can_execute_with_token() {
     assert!(!runtime.wal().is_empty());
 }
 
-// ============================================================================
 // D3: Certificate Identity Binding Contracts
-// ============================================================================
 
 /// Contract test: Verify that a Connection with bound certificate identity
 /// can provide the fingerprint to surface_gate for authorization.

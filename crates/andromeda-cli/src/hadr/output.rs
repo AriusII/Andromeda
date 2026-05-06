@@ -3,8 +3,8 @@ use crate::diagnostic_json::{
 };
 
 use super::types::{
-    DemotionOutcome, FailoverPrepareReport, HadrStatusReport, NodeManagementReport, PromotionOutcome,
-    QuorumStatusReport, ReplicaStatus,
+    DemotionOutcome, FailoverPrepareReport, HadrStatusReport, NodeManagementReport,
+    PromotionOutcome, QuorumStatusReport, ReplicaStatus,
 };
 
 pub(super) fn print_hadr_help() {

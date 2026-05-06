@@ -202,13 +202,13 @@ impl StructuredObjectHeader {
             }
         }
 
-        if let Some(max_payload_length) = self.max_payload_length {
-            if self.payload_length > max_payload_length {
-                return Err(AndromedaError::new(
-                    AndromedaErrorKind::Protocol,
-                    "StructuredObject payload length exceeds declared bound",
-                ));
-            }
+        if let Some(max_payload_length) = self.max_payload_length
+            && self.payload_length > max_payload_length
+        {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Protocol,
+                "StructuredObject payload length exceeds declared bound",
+            ));
         }
 
         Ok(())

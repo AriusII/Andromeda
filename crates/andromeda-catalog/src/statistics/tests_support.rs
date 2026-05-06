@@ -377,6 +377,8 @@ fn correlation_publication_is_deterministic_and_version_bound() {
         .finish();
 
     assert_eq!(lhs.digest(), rhs.digest());
+    assert!(!lhs.digest().is_zero());
+    assert_eq!(lhs.len(), 2);
     assert_eq!(lhs.entries()[0].id().get(), 1);
     assert_eq!(lhs.entries()[1].id().get(), 2);
 

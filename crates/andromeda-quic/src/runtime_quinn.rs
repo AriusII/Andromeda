@@ -5,8 +5,8 @@
 //! exposing `quinn`, `rustls`, `rcgen`, or executor types through the public
 //! transport trait boundary.
 //!
-//! H2-QUIC-003 adds TLS configuration construction only. Real sockets,
-//! listeners, stream management, and handshake execution remain deferred.
+//! TLS configuration is constructed here; socket/listener wiring lives in the
+//! Quinn backend module.
 
 use std::{path::Path, sync::Arc};
 
@@ -41,10 +41,11 @@ pub(crate) fn runtime_quinn_dependencies_available() -> bool {
 
 /// Replay class used by the TLS runtime adapter when evaluating 0-RTT policy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub(crate) enum RequestReplayClass {
     /// Request may mutate durable or externally visible state.
     Mutating,
-    /// Request has been proven replay-safe by a future higher-level contract.
+    /// Request is replay-safe under the caller's RPC contract.
     ReplaySafe,
 }
 
@@ -54,9 +55,9 @@ pub(crate) struct TlsEarlyDataPolicy {
     early_data: EarlyDataPolicy,
 }
 
+#[allow(dead_code)]
 impl TlsEarlyDataPolicy {
-    /// Canonical Andromeda policy: TLS 0-RTT is disabled for every request
-    /// class until a later doctrine decision scopes replay-safe semantics.
+    /// Canonical Andromeda policy: TLS 0-RTT is disabled for every request class.
     pub(crate) const fn disabled() -> Self {
         Self {
             early_data: EarlyDataPolicy::Disabled,
@@ -99,11 +100,12 @@ impl Default for TlsEarlyDataPolicy {
     }
 }
 
-/// Private rustls config bundle used by future Quinn listener/client adapters.
+/// Private rustls config bundle used by Quinn listener/client adapters.
 ///
 /// The concrete rustls types are intentionally contained in this private,
 /// feature-gated module; the default public transport API remains runtime-free.
 #[derive(Clone)]
+#[allow(dead_code)]
 pub(crate) struct RuntimeQuinnTlsConfig {
     pub(crate) server: Arc<rustls::ServerConfig>,
     pub(crate) client: Arc<rustls::ClientConfig>,
@@ -122,6 +124,7 @@ impl core::fmt::Debug for RuntimeQuinnTlsConfig {
     }
 }
 
+#[allow(dead_code)]
 impl RuntimeQuinnTlsConfig {
     /// Returns the 0-RTT policy encoded into this bundle.
     pub(crate) const fn early_data_policy(&self) -> TlsEarlyDataPolicy {
@@ -160,9 +163,10 @@ impl core::fmt::Debug for CertificateIdentityExtraction {
     }
 }
 
+#[allow(dead_code)]
 impl CertificateIdentityExtraction {
-    /// Creates an extraction hook for a required surface scope.
-    pub(crate) const fn deferred(required_scope: SurfaceScope) -> Self {
+    /// Creates an extraction hook that requires an explicit parser before use.
+    pub(crate) const fn without_parser(required_scope: SurfaceScope) -> Self {
         Self {
             required_scope,
             parser: None,
@@ -199,7 +203,7 @@ impl CertificateIdentityExtraction {
     ///
     /// Returning `Ok(None)` means no certificate was available. Returning a
     /// security error for a present certificate with no parser keeps X.509
-    /// parsing explicitly deferred rather than using ad hoc parsing.
+    /// parsing behind an explicit hook instead of using ad hoc parsing.
     pub(crate) fn extract_identity(
         &self,
         peer_chain: &[CertificateDer<'_>],
@@ -224,12 +228,12 @@ impl CertificateIdentityExtraction {
 ///
 /// A self-signed rcgen certificate is trusted by both sides and installed as
 /// both the server certificate and the client-auth identity certificate. This
-/// function performs no network I/O and starts no executor.
+/// helper performs no network I/O and starts no executor.
 #[allow(dead_code)]
 pub(crate) fn ephemeral_test_tls_config(
     required_scope: SurfaceScope,
 ) -> AndromedaResult<RuntimeQuinnTlsConfig> {
-    let rcgen::CertifiedKey { cert, key_pair } =
+    let rcgen::CertifiedKey { cert, signing_key } =
         rcgen::generate_simple_self_signed(["localhost".to_string()]).map_err(|err| {
             security_error(format!(
                 "failed to generate ephemeral test certificate: {err}"
@@ -237,7 +241,7 @@ pub(crate) fn ephemeral_test_tls_config(
         })?;
 
     let cert_chain = vec![cert.der().clone()];
-    let key_der = key_pair.serialize_der();
+    let key_der = signing_key.serialize_der();
     let trust_roots = cert_chain.clone();
 
     build_mtls_configs_from_der(
@@ -246,7 +250,7 @@ pub(crate) fn ephemeral_test_tls_config(
         cert_chain,
         private_key_from_pkcs8_der(key_der),
         trust_roots,
-        CertificateIdentityExtraction::deferred(required_scope),
+        CertificateIdentityExtraction::without_parser(required_scope),
         TlsEarlyDataPolicy::disabled(),
     )
 }
@@ -255,8 +259,8 @@ pub(crate) fn ephemeral_test_tls_config(
 ///
 /// No additional PEM parser dependency is introduced: this uses the PEM support
 /// re-exported by `rustls::pki_types`. The same identity cert/key is installed
-/// on the server and client sides as a narrow H2-QUIC-003 scaffold; real socket
-/// backends and separate deployment identities are deferred.
+/// on both sides for local test/runtime wiring; deployment code can pass
+/// distinct DER chains to the lower-level builder.
 #[allow(dead_code)]
 pub(crate) fn file_backed_mtls_config_from_pem_files(
     identity_cert_chain_pem: impl AsRef<Path>,
@@ -273,7 +277,7 @@ pub(crate) fn file_backed_mtls_config_from_pem_files(
         identity_cert_chain,
         load_private_key_pem(identity_private_key_pem.as_ref())?,
         trust_roots,
-        CertificateIdentityExtraction::deferred(required_scope),
+        CertificateIdentityExtraction::without_parser(required_scope),
         TlsEarlyDataPolicy::disabled(),
     )
 }
@@ -304,7 +308,7 @@ pub(crate) fn file_backed_mtls_config_from_der_files(
         identity_cert_chain,
         private_key_from_pkcs8_der(key_bytes),
         trust_roots,
-        CertificateIdentityExtraction::deferred(required_scope),
+        CertificateIdentityExtraction::without_parser(required_scope),
         TlsEarlyDataPolicy::disabled(),
     )
 }
@@ -426,6 +430,13 @@ fn security_error(message: impl Into<String>) -> AndromedaError {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use andromeda_core::AndromedaErrorKind;
+    use andromeda_observe::SurfaceScope;
+    use rustls::pki_types::CertificateDer;
+
+    use crate::{mtls_identity::ParsedCertificate, session::EarlyDataPolicy};
+
     #[test]
     fn runtime_quinn_dependency_wiring_is_available() {
         assert!(runtime_quinn_dependencies_available());
@@ -457,7 +468,7 @@ mod tests {
 
     #[test]
     fn identity_hook_extracts_first_raw_certificate() {
-        let hook = CertificateIdentityExtraction::deferred(SurfaceScope::Cluster);
+        let hook = CertificateIdentityExtraction::without_parser(SurfaceScope::Cluster);
         let cert = CertificateDer::from(vec![0x30, 0x82, 0x01, 0x02]);
 
         let raw = hook.first_raw_certificate(&[cert]).unwrap();
@@ -467,8 +478,8 @@ mod tests {
     }
 
     #[test]
-    fn identity_hook_without_parser_defers_x509_parsing() {
-        let hook = CertificateIdentityExtraction::deferred(SurfaceScope::Application);
+    fn identity_hook_without_parser_rejects_present_certificate() {
+        let hook = CertificateIdentityExtraction::without_parser(SurfaceScope::Application);
         let cert = CertificateDer::from(vec![0x30, 0x82, 0x01, 0x02]);
 
         let error = hook.extract_identity(&[cert]).unwrap_err();

@@ -16,8 +16,6 @@ use std::collections::HashMap;
 
 use crate::benchmark_history::{BenchmarkHistoryRecord, HistoryQuery, HistoryQueryResult};
 
-/// Benchmark history store keyed by workload ID.
-///
 /// TECH-DEBT: Context: `from_file` and `save` operate on in-memory state only.
 /// A file-backed or artifact-store-backed variant requires async I/O that is out of scope
 /// for the current bounded benchmark contracts.
@@ -37,9 +35,11 @@ impl BenchmarkHistoryStore {
         }
     }
 
-    /// Create a store associated with the given path.
-    ///
-    /// No I/O is performed; the path is recorded for future serialization use.
+    pub fn storage_path(&self) -> &str {
+        &self.storage_path
+    }
+
+    /// Create a store associated with the given path without performing I/O.
     pub fn from_file(path: &str) -> Result<Self, String> {
         Ok(Self::new(path.to_string()))
     }
@@ -48,7 +48,7 @@ impl BenchmarkHistoryStore {
     pub fn append(&mut self, record: BenchmarkHistoryRecord) -> Result<(), String> {
         self.records_by_workload
             .entry(record.workload_id.clone())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(record);
         Ok(())
     }
@@ -78,11 +78,7 @@ impl BenchmarkHistoryStore {
 
         let filtered = match query {
             HistoryQuery::LastNCommits(n) => {
-                let start = if all_records.len() > n {
-                    all_records.len() - n
-                } else {
-                    0
-                };
+                let start = all_records.len().saturating_sub(n);
                 all_records[start..].to_vec()
             }
 
@@ -110,10 +106,18 @@ impl BenchmarkHistoryStore {
 
     /// Serialize all records to a JSON Lines string.
     ///
-    /// The output is suitable for passing back to `import_json_lines`.
+    /// The output is suitable for passing back to `import_json_lines` and is ordered
+    /// by stable workload ID, then by each workload's append order.
     pub fn save(&self) -> Result<String, String> {
         let mut output = String::new();
-        for records in self.records_by_workload.values() {
+        let mut workload_ids: Vec<_> = self.records_by_workload.keys().collect();
+        workload_ids.sort();
+
+        for workload_id in workload_ids {
+            let records = self
+                .records_by_workload
+                .get(workload_id)
+                .ok_or_else(|| format!("workload disappeared during save: {}", workload_id))?;
             for record in records {
                 output.push_str(&record.to_json_line());
                 output.push('\n');
@@ -173,6 +177,7 @@ mod tests {
         let store = BenchmarkHistoryStore::new(".andromeda/benchmark-history".to_string());
         assert_eq!(store.total_records(), 0);
         assert!(store.workload_ids().is_empty());
+        assert_eq!(store.storage_path(), ".andromeda/benchmark-history");
     }
 
     #[test]
@@ -358,6 +363,58 @@ mod tests {
         let json = store.save().unwrap();
         assert!(json.contains("\"workload_id\":\"test\""));
         assert!(json.contains("\"commit_id\":\"c1\""));
+    }
+
+    #[test]
+    fn test_save_json_lines_orders_workloads_deterministically() {
+        let mut store = BenchmarkHistoryStore::new(".andromeda/benchmark-history".to_string());
+
+        store
+            .append(BenchmarkHistoryRecord::new(
+                "workload-b".to_string(),
+                "c1".to_string(),
+                "2026-01-15T12:00:00Z".to_string(),
+                100,
+                500,
+                0,
+                10,
+            ))
+            .unwrap();
+
+        store
+            .append(BenchmarkHistoryRecord::new(
+                "workload-a".to_string(),
+                "c2".to_string(),
+                "2026-01-15T13:00:00Z".to_string(),
+                110,
+                510,
+                0,
+                10,
+            ))
+            .unwrap();
+
+        store
+            .append(BenchmarkHistoryRecord::new(
+                "workload-b".to_string(),
+                "c3".to_string(),
+                "2026-01-15T14:00:00Z".to_string(),
+                120,
+                520,
+                0,
+                10,
+            ))
+            .unwrap();
+
+        let json = store.save().unwrap();
+        let lines: Vec<_> = json.lines().collect();
+
+        assert_eq!(lines.len(), 3);
+        assert!(lines[0].contains("\"workload_id\":\"workload-a\""));
+        assert!(lines[0].contains("\"commit_id\":\"c2\""));
+        assert!(lines[1].contains("\"workload_id\":\"workload-b\""));
+        assert!(lines[1].contains("\"commit_id\":\"c1\""));
+        assert!(lines[2].contains("\"workload_id\":\"workload-b\""));
+        assert!(lines[2].contains("\"commit_id\":\"c3\""));
     }
 
     #[test]

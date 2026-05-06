@@ -49,10 +49,6 @@ fn write_heap_v1_slot_bytes(
     image[offset..offset + SLOT_ENTRY_SIZE].copy_from_slice(&slot);
 }
 
-// ============================================================================
-// Wave 21 Batch 3 Task 1: N1-HEAP-003 — Heap Slot Directory Contract Tests
-// ============================================================================
-//
 // This test suite validates the heap slot directory implementation with
 // comprehensive test coverage including:
 // - Basic allocation and retrieval
@@ -62,7 +58,6 @@ fn write_heap_v1_slot_bytes(
 // - Page size variants
 // - Fragmentation patterns
 
-/// Test 1: Create empty slot directory
 #[test]
 fn test_slot_directory_create_empty() {
     let dir = SlotDirectory::new(PageSize::KiB16);
@@ -339,7 +334,6 @@ fn test_slot_directory_rejects_legacy_header_only_slot_count() {
     );
 }
 
-/// Test 2: Allocate single slot
 #[test]
 fn test_slot_directory_allocate_single() {
     let mut dir = SlotDirectory::new(PageSize::KiB16);
@@ -357,7 +351,6 @@ fn test_slot_directory_allocate_single() {
     assert_eq!(length, 100);
 }
 
-/// Test 3: Allocate multiple slots in sequence
 #[test]
 fn test_slot_directory_allocate_sequence() {
     let mut dir = SlotDirectory::new(PageSize::KiB16);
@@ -379,7 +372,6 @@ fn test_slot_directory_allocate_sequence() {
     assert_eq!((o3, l3), (396, 150));
 }
 
-/// Test 4: Get non-existent slot returns None
 #[test]
 fn test_slot_directory_get_nonexistent() {
     let dir = SlotDirectory::new(PageSize::KiB16);
@@ -387,7 +379,6 @@ fn test_slot_directory_get_nonexistent() {
     assert!(result.is_none());
 }
 
-/// Test 5: Mark slot deleted
 #[test]
 fn test_slot_directory_mark_deleted() {
     let mut dir = SlotDirectory::new(PageSize::KiB16);
@@ -402,7 +393,6 @@ fn test_slot_directory_mark_deleted() {
     assert!(dir.get_slot(slot).expect("get_slot").is_none()); // Returns None
 }
 
-/// Test 6: Cannot mark already-deleted slot
 #[test]
 fn test_slot_directory_double_delete_error() {
     let mut dir = SlotDirectory::new(PageSize::KiB16);
@@ -414,7 +404,6 @@ fn test_slot_directory_double_delete_error() {
     assert!(result.is_err(), "second delete should fail");
 }
 
-/// Test 7: Compact removes deleted tail slots
 #[test]
 fn test_slot_directory_compact_removes_deleted_tail() {
     let mut dir = SlotDirectory::new(PageSize::KiB16);
@@ -437,7 +426,6 @@ fn test_slot_directory_compact_removes_deleted_tail() {
     assert!(dir.get_slot(slot3).expect("get_slot").is_none());
 }
 
-/// Test 8: Compact with gaps in middle
 #[test]
 fn test_slot_directory_compact_with_gaps() {
     let mut dir = SlotDirectory::new(PageSize::KiB16);
@@ -464,7 +452,6 @@ fn test_slot_directory_compact_with_gaps() {
     assert_eq!(dir.slot_count(), 3, "should remove tail slot 4");
 }
 
-/// Test 9: Free space calculation
 #[test]
 fn test_slot_directory_free_space() {
     let mut dir = SlotDirectory::new(PageSize::KiB16);
@@ -482,7 +469,6 @@ fn test_slot_directory_free_space() {
     );
 }
 
-/// Test 10: Allocate zero-length slot fails
 #[test]
 fn test_slot_directory_allocate_zero_length_fails() {
     let mut dir = SlotDirectory::new(PageSize::KiB16);
@@ -490,7 +476,6 @@ fn test_slot_directory_allocate_zero_length_fails() {
     assert!(result.is_err(), "zero-length allocation should fail");
 }
 
-/// Test 11: Allocate excessive length fails
 #[test]
 fn test_slot_directory_allocate_exceeds_capacity() {
     let mut dir = SlotDirectory::new(PageSize::KiB16);
@@ -499,7 +484,6 @@ fn test_slot_directory_allocate_exceeds_capacity() {
     assert!(result.is_err(), "excessive allocation should fail");
 }
 
-/// Test 12: Mark invalid slot ID fails
 #[test]
 fn test_slot_directory_mark_deleted_invalid_slot() {
     let mut dir = SlotDirectory::new(PageSize::KiB16);
@@ -507,7 +491,6 @@ fn test_slot_directory_mark_deleted_invalid_slot() {
     assert!(result.is_err(), "invalid slot ID should fail");
 }
 
-/// Test 13: Get slot by ID returns correct offset/length
 #[test]
 fn test_slot_directory_get_slot_accuracy() {
     let mut dir = SlotDirectory::new(PageSize::KiB16);
@@ -518,7 +501,6 @@ fn test_slot_directory_get_slot_accuracy() {
     assert_eq!(result.1, 512, "length should match");
 }
 
-/// Test 14: Slot ID type operations
 #[test]
 fn test_slot_id_operations() {
     let slot_id = SlotId::new(42);
@@ -532,14 +514,12 @@ fn test_slot_id_operations() {
     assert!(slot_id > slot_id3);
 }
 
-/// Test 15: Validate empty directory
 #[test]
 fn test_slot_directory_validate_empty() {
     let dir = SlotDirectory::new(PageSize::KiB16);
     dir.validate().expect("empty directory should validate");
 }
 
-/// Test 16: Validate directory with slots
 #[test]
 fn test_slot_directory_validate_with_slots() {
     let mut dir = SlotDirectory::new(PageSize::KiB16);
@@ -550,7 +530,6 @@ fn test_slot_directory_validate_with_slots() {
     dir.validate().expect("should validate with no overlaps");
 }
 
-/// Test 17: Page size 32KB variant
 #[test]
 fn test_slot_directory_page_size_32kb() {
     let mut dir = SlotDirectory::new(PageSize::KiB32);
@@ -566,7 +545,6 @@ fn test_slot_directory_page_size_32kb() {
     assert_eq!(dir.active_slot_count(), 5);
 }
 
-/// Test 18: Max slots for 16KB page
 #[test]
 fn test_slot_directory_16kb_max_slots() {
     let mut dir = SlotDirectory::new(PageSize::KiB16);
@@ -584,7 +562,6 @@ fn test_slot_directory_16kb_max_slots() {
     assert!(count <= 256, "should not exceed max slots");
 }
 
-/// Test 19: Serialize and deserialize
 #[test]
 fn test_slot_directory_serialize_deserialize() {
     let mut dir = SlotDirectory::new(PageSize::KiB16);
@@ -602,7 +579,6 @@ fn test_slot_directory_serialize_deserialize() {
     assert_eq!(restored.active_slot_count(), dir.active_slot_count());
 }
 
-/// Test 20: Reuse deleted slot on reallocation
 #[test]
 fn test_slot_directory_reuse_deleted_slot() {
     let mut dir = SlotDirectory::new(PageSize::KiB16);
@@ -623,7 +599,6 @@ fn test_slot_directory_reuse_deleted_slot() {
     assert_eq!(dir.active_slot_count(), 2, "active slots restored");
 }
 
-/// Test 21: Fragmentation pattern stress test
 #[test]
 fn test_slot_directory_fragmentation_pattern() {
     let mut dir = SlotDirectory::new(PageSize::KiB16);
@@ -651,7 +626,6 @@ fn test_slot_directory_fragmentation_pattern() {
     assert!(dir.get_slot(large2).expect("get").is_some());
 }
 
-/// Test 22: Cross-check slot offsets don't overlap
 #[test]
 fn test_slot_directory_no_tuple_overlap() {
     let mut dir = SlotDirectory::new(PageSize::KiB16);
@@ -675,7 +649,6 @@ fn test_slot_directory_no_tuple_overlap() {
     dir.validate().expect("should validate");
 }
 
-/// Test 23: Active count accuracy
 #[test]
 fn test_slot_directory_active_count_accuracy() {
     let mut dir = SlotDirectory::new(PageSize::KiB16);
@@ -702,7 +675,6 @@ fn test_slot_directory_active_count_accuracy() {
     );
 }
 
-/// Test 24: Valid large tuple allocation
 #[test]
 fn test_slot_directory_large_tuple() {
     let mut dir = SlotDirectory::new(PageSize::KiB32); // Use 32KB page
@@ -714,7 +686,6 @@ fn test_slot_directory_large_tuple() {
     assert!(offset > 0);
 }
 
-/// Test 25: Boundary between header and data region
 #[test]
 fn test_slot_directory_header_boundary() {
     let mut dir = SlotDirectory::new(PageSize::KiB16);
@@ -729,7 +700,6 @@ fn test_slot_directory_header_boundary() {
     );
 }
 
-/// Test 26: Concurrent allocation patterns (simulated)
 #[test]
 fn test_slot_directory_allocation_patterns() {
     let mut dir = SlotDirectory::new(PageSize::KiB16);
@@ -751,7 +721,6 @@ fn test_slot_directory_allocation_patterns() {
     }
 }
 
-/// Test 27: Compact with all deleted slots
 #[test]
 fn test_slot_directory_compact_all_deleted() {
     let mut dir = SlotDirectory::new(PageSize::KiB16);
@@ -773,7 +742,6 @@ fn test_slot_directory_compact_all_deleted() {
     assert_eq!(dir.slot_count(), 0, "should be empty");
 }
 
-/// Test 28: Free space decreases with allocations
 #[test]
 fn test_slot_directory_free_space_monotonic() {
     let mut dir = SlotDirectory::new(PageSize::KiB16);
@@ -791,7 +759,6 @@ fn test_slot_directory_free_space_monotonic() {
     assert!(free3 > free4);
 }
 
-/// Test 29: Page size 16KB vs 32KB capacity
 #[test]
 fn test_slot_directory_page_size_capacity() {
     let mut dir16 = SlotDirectory::new(PageSize::KiB16);
@@ -810,7 +777,6 @@ fn test_slot_directory_page_size_capacity() {
     assert!(free32 > free16 || (result16.is_err() && result32.is_ok()));
 }
 
-/// Test 30: Serialize preserves structure
 #[test]
 fn test_slot_directory_serialize_preserves_structure() {
     let mut dir = SlotDirectory::new(PageSize::KiB16);

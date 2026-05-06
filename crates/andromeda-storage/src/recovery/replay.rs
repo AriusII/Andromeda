@@ -12,39 +12,40 @@
 //!
 //! Every `WalRecordKind` variant must have an associated handler. Handlers
 //! may be:
-//! * **Implemented** — actively replay the operation (8 handlers, 30.8%)
-//! * **Future work** — documented with clear error messages (18 handlers, 69.2%)
-//! * **Deprecated** — identified as obsolete with error messages (0 handlers, 0%)
+//! * **Implemented** - actively replay the operation (9 handlers, 34.6%)
+//! * **Deferred** - explicit fail-stop until payload and idempotency contracts
+//!   are promoted (17 handlers, 65.4%)
+//! * **Deprecated** - identified as obsolete with error messages (0 handlers, 0%)
 //!
-//! ## Implemented Handlers (8)
-//! 1. ✅ TxBegin — Skipped (transaction context pre-exists)
-//! 2. ✅ TxCommit — Skipped (commit determined by WAL presence)
-//! 3. ✅ TxRollback — Skipped (deferred to explicit undo phase)
-//! 4. ✅ CheckpointBegin — Skipped (informational boundary)
-//! 5. ✅ CheckpointEnd — Skipped (informational boundary)
-//! 6. ✅ SnapshotBegin — Skipped (informational boundary)
-//! 7. ✅ SnapshotEnd — Skipped (informational boundary)
-//! 8. ✅ SecurityAuditAppend — Skipped (audit is write-only in recovery)
+//! ## Implemented Handlers (9)
+//! 1. TxBegin - skipped (transaction context pre-exists)
+//! 2. TxCommit - skipped (commit determined by WAL presence)
+//! 3. TxRollback - skipped (deferred to explicit undo phase)
+//! 4. CheckpointBegin - skipped (informational boundary)
+//! 5. CheckpointEnd - skipped (informational boundary)
+//! 6. SnapshotBegin - skipped (informational boundary)
+//! 7. SnapshotEnd - skipped (informational boundary)
+//! 8. ManifestSwitch - applied when manifest validation succeeds
+//! 9. SecurityAuditAppend - skipped (audit is write-only in recovery)
 //!
-//! ## Future Work Handlers (18)
-//! 9. 📋 PageAllocate — Wave 18 (page inventory)
-//! 10. 📋 PageFormat — Wave 18 (page format version)
-//! 11. 📋 RowInsert — Wave 19 (heap page replay)
-//! 12. 📋 RowUpdate — Wave 19 (heap page updates)
-//! 13. 📋 RowDelete — Wave 19 (deletion markers)
-//! 14. 📋 IndexInsert — Wave 19 (index B-tree)
-//! 15. 📋 IndexDelete — Wave 19 (index B-tree)
-//! 16. 📋 MvccVersionCreate — Wave 17 (MVCC version store)
-//! 17. 📋 MvccVersionClose — Wave 17 (MVCC version visibility)
-//! 18. 📋 MapDeltaAppend — Wave 20 (map data structures)
-//! 19. 📋 ManifestSwitch — Wave 21 (storage manifest)
-//! 20. 📋 CatalogChangeBegin — Wave 22 (catalog transactions)
-//! 21. 📋 CatalogChangeApply — Wave 22 (catalog mutations)
-//! 22. 📋 CatalogChangeCommit — Wave 22 (catalog commits)
-//! 23. 📋 BTreeInsert — Wave 18 (B-Tree record insertion, deferred)
-//! 24. 📋 BTreeDelete — Wave 18 (B-Tree record deletion, deferred)
-//! 25. 📋 BTreeSplit — Wave 18 (B-Tree node split, deferred)
-//! 26. 📋 BTreeMerge — Wave 18 (B-Tree node merge, deferred)
+//! ## Deferred Handlers (17)
+//! 10. PageAllocate - page inventory
+//! 11. PageFormat - page format version
+//! 12. RowInsert - heap page replay
+//! 13. RowUpdate - heap page updates
+//! 14. RowDelete - deletion markers
+//! 15. IndexInsert - secondary index replay
+//! 16. IndexDelete - secondary index replay
+//! 17. MvccVersionCreate - MVCC version store
+//! 18. MvccVersionClose - MVCC version visibility
+//! 19. MapDeltaAppend - map data structures
+//! 20. CatalogChangeBegin - catalog transactions
+//! 21. CatalogChangeApply - catalog mutations
+//! 22. CatalogChangeCommit - catalog commits
+//! 23. BTreeInsert - B-Tree record insertion
+//! 24. BTreeDelete - B-Tree record deletion
+//! 25. BTreeSplit - B-Tree node split
+//! 26. BTreeMerge - B-Tree node merge
 //!
 //! # Idempotency Contract
 //!
@@ -74,180 +75,21 @@
 //! - CheckpointBegin/End: Informational boundaries (skipped)
 //! - SnapshotBegin/End: Informational boundaries (skipped)
 
-use std::collections::HashMap;
-
 use andromeda_core::AndromedaResult;
 
 use crate::{DatabaseManifest, Lsn, WalRecord, WalRecordKind};
 
 use super::storage_error;
 
-/// Handler result for a single WAL record replay.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ReplayOutcome {
-    /// Record was successfully applied to the database state.
-    Applied,
-    /// Record was skipped (not applicable to this recovery context).
-    Skipped,
-    /// Record is not yet implemented; database may be corrupted if
-    /// records of this type are present.
-    NotYetImplemented,
-    /// Record is deprecated and should not appear in new WAL files.
-    Deprecated,
-}
+mod boundary;
+mod context;
+mod deferred;
+mod result;
 
-impl ReplayOutcome {
-    pub const fn is_applied(self) -> bool {
-        matches!(self, Self::Applied)
-    }
-
-    pub const fn is_error(self) -> bool {
-        matches!(self, Self::NotYetImplemented | Self::Deprecated)
-    }
-}
-
-/// Result of replaying a single WAL record with metadata.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReplayResult {
-    pub lsn: Lsn,
-    pub kind: WalRecordKind,
-    pub outcome: ReplayOutcome,
-    pub error: Option<String>,
-}
-
-impl ReplayResult {
-    pub fn applied(lsn: Lsn, kind: WalRecordKind) -> Self {
-        Self {
-            lsn,
-            kind,
-            outcome: ReplayOutcome::Applied,
-            error: None,
-        }
-    }
-
-    pub fn skipped(lsn: Lsn, kind: WalRecordKind) -> Self {
-        Self {
-            lsn,
-            kind,
-            outcome: ReplayOutcome::Skipped,
-            error: None,
-        }
-    }
-
-    pub fn not_yet_implemented(lsn: Lsn, kind: WalRecordKind) -> Self {
-        Self {
-            lsn,
-            kind,
-            outcome: ReplayOutcome::NotYetImplemented,
-            error: Some(format!(
-                "{:?} recovery not yet implemented; database may be corrupted if records of this type are present.",
-                kind
-            )),
-        }
-    }
-
-    pub fn deprecated(lsn: Lsn, kind: WalRecordKind) -> Self {
-        Self {
-            lsn,
-            kind,
-            outcome: ReplayOutcome::Deprecated,
-            error: Some(format!(
-                "{:?} is deprecated and should not appear in new WAL files.",
-                kind
-            )),
-        }
-    }
-
-    pub fn error(lsn: Lsn, kind: WalRecordKind, error_msg: impl Into<String>) -> Self {
-        Self {
-            lsn,
-            kind,
-            outcome: ReplayOutcome::NotYetImplemented,
-            error: Some(error_msg.into()),
-        }
-    }
-}
-
-/// Replay context for database recovery.
-///
-/// This context is passed to all replay handlers and carries the state
-/// needed to apply WAL records to the database.
-pub struct ReplayContext {
-    // TECH-DEBT(recovery-replay-context): Replay state is intentionally minimal until
-    // heap/index/catalog/MVCC redo handlers stop fail-stopping.
-    /// Highest LSN replayed so far in this recovery session.
-    pub last_replayed_lsn: Option<Lsn>,
-
-    /// Count of successfully applied records.
-    pub applied_count: usize,
-
-    /// Count of skipped records.
-    pub skipped_count: usize,
-
-    /// Records that failed to apply.
-    pub error_records: Vec<ReplayResult>,
-
-    /// Active manifest anchor after replay.
-    pub active_manifest: Option<DatabaseManifest>,
-
-    /// CRC catalog for persisted manifests keyed by manifest version.
-    pub known_manifest_crc_by_version: HashMap<u64, u32>,
-
-    /// Observable manifest-switch trace events from replay.
-    pub manifest_switch_traces: Vec<ManifestSwitchRecoveryTrace>,
-}
-
-impl ReplayContext {
-    pub fn new() -> Self {
-        Self {
-            last_replayed_lsn: None,
-            applied_count: 0,
-            skipped_count: 0,
-            error_records: Vec::new(),
-            active_manifest: None,
-            known_manifest_crc_by_version: HashMap::new(),
-            manifest_switch_traces: Vec::new(),
-        }
-    }
-
-    pub fn record_result(&mut self, result: ReplayResult) {
-        self.last_replayed_lsn = Some(result.lsn);
-
-        match result.outcome {
-            ReplayOutcome::Applied => self.applied_count += 1,
-            ReplayOutcome::Skipped => self.skipped_count += 1,
-            ReplayOutcome::NotYetImplemented | ReplayOutcome::Deprecated => {
-                self.error_records.push(result);
-            }
-        }
-    }
-
-    pub fn has_errors(&self) -> bool {
-        !self.error_records.is_empty()
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ManifestSwitchRecoveryTrace {
-    ManifestSwitchApplied {
-        lsn: Lsn,
-        manifest_version: u64,
-        snapshot_id: u64,
-        base_checkpoint_lsn: Lsn,
-        required_wal_start_lsn: Lsn,
-    },
-    ManifestSwitchValidationFailed {
-        lsn: Lsn,
-        manifest_version: u64,
-        reason: &'static str,
-    },
-}
-
-impl Default for ReplayContext {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+use boundary::*;
+pub use context::{ManifestSwitchRecoveryTrace, ReplayContext};
+use deferred::*;
+pub use result::{ReplayOutcome, ReplayResult};
 
 /// Replay a single WAL record in recovery context.
 ///
@@ -260,7 +102,7 @@ impl Default for ReplayContext {
 /// # Error Handling
 ///
 /// Missing handlers return a clear error message indicating whether the
-/// record type is future work or deprecated. Handler errors are propagated
+/// record type is deferred or deprecated. Handler errors are propagated
 /// as `AndromedaError`.
 ///
 /// # Idempotency
@@ -269,153 +111,34 @@ impl Default for ReplayContext {
 /// times must produce the same result as replaying it once.
 pub fn replay_wal_record(ctx: &mut ReplayContext, record: &WalRecord) -> AndromedaResult<()> {
     let result = match record.header.kind {
-        // === Transaction Boundary Records ===
-        WalRecordKind::TxBegin => {
-            // Create transaction context in recovery state.
-            // This is a no-op in recovery; the transaction already exists.
-            ReplayResult::skipped(record.header.lsn, WalRecordKind::TxBegin)
-        }
-
-        WalRecordKind::TxCommit => {
-            // Add transaction to commit set and skip undo.
-            // This is a no-op in recovery; commit is determined by presence in WAL.
-            ReplayResult::skipped(record.header.lsn, WalRecordKind::TxCommit)
-        }
-
-        WalRecordKind::TxRollback => {
-            // Add transaction to rollback set and perform undo.
-            // Rollback handling is deferred to explicit undo phase.
-            ReplayResult::skipped(record.header.lsn, WalRecordKind::TxRollback)
-        }
-
-        // === Page Management Records ===
-        WalRecordKind::PageAllocate => {
-            // Mark page as allocated in the page inventory.
-            replay_page_allocate(ctx, record)?
-        }
-
-        WalRecordKind::PageFormat => {
-            // Validate and apply page format version.
-            replay_page_format(ctx, record)?
-        }
-
-        // === Row-Level Mutation Records ===
-        WalRecordKind::RowInsert => {
-            // Replay inserted row into heap page.
-            replay_row_insert(ctx, record)?
-        }
-
-        WalRecordKind::RowUpdate => {
-            // Replay updated row in heap page.
-            replay_row_update(ctx, record)?
-        }
-
-        WalRecordKind::RowDelete => {
-            // Replay deletion marker on heap page slot.
-            replay_row_delete(ctx, record)?
-        }
-
-        // === Index Mutation Records ===
-        WalRecordKind::IndexInsert => {
-            // Replay index entry insertion.
-            replay_index_insert(ctx, record)?
-        }
-
-        WalRecordKind::IndexDelete => {
-            // Replay index entry deletion.
-            replay_index_delete(ctx, record)?
-        }
-
-        // === MVCC Version Management Records ===
-        WalRecordKind::MvccVersionCreate => {
-            // Create row version header in MVCC store.
-            replay_mvcc_version_create(ctx, record)?
-        }
-
-        WalRecordKind::MvccVersionClose => {
-            // Close row version on transaction commit.
-            replay_mvcc_version_close(ctx, record)?
-        }
-
-        // === Map / Delta Records ===
-        WalRecordKind::MapDeltaAppend => {
-            // Append delta to map-based structure (future work).
-            ReplayResult::not_yet_implemented(record.header.lsn, WalRecordKind::MapDeltaAppend)
-        }
-
-        // === Checkpoint Boundary Records ===
-        WalRecordKind::CheckpointBegin => {
-            // Mark checkpoint begin boundary.
-            replay_checkpoint_begin(ctx, record)?
-        }
-
-        WalRecordKind::CheckpointEnd => {
-            // Mark checkpoint end boundary.
-            replay_checkpoint_end(ctx, record)?
-        }
-
-        // === Cold Snapshot Boundary Records ===
-        WalRecordKind::SnapshotBegin => {
-            // Mark cold snapshot begin boundary.
-            replay_snapshot_begin(ctx, record)?
-        }
-
-        WalRecordKind::SnapshotEnd => {
-            // Mark cold snapshot end boundary.
-            replay_snapshot_end(ctx, record)?
-        }
-
-        // === Manifest and Storage Records ===
-        WalRecordKind::ManifestSwitch => {
-            // Apply manifest switch to storage engine.
-            replay_manifest_switch(ctx, record)?
-        }
-
-        // === Catalog Change Records ===
-        WalRecordKind::CatalogChangeBegin => {
-            // Mark catalog change transaction begin.
-            ReplayResult::not_yet_implemented(record.header.lsn, WalRecordKind::CatalogChangeBegin)
-        }
-
-        WalRecordKind::CatalogChangeApply => {
-            // Apply catalog mutation (create/alter/drop).
-            ReplayResult::not_yet_implemented(record.header.lsn, WalRecordKind::CatalogChangeApply)
-        }
-
-        WalRecordKind::CatalogChangeCommit => {
-            // Commit catalog changes.
-            ReplayResult::not_yet_implemented(record.header.lsn, WalRecordKind::CatalogChangeCommit)
-        }
-
-        // === Security and Audit Records ===
-        WalRecordKind::SecurityAuditAppend => {
-            // Append audit entry (may be write-only in recovery).
-            ReplayResult::skipped(record.header.lsn, WalRecordKind::SecurityAuditAppend)
-        }
-
-        // === B-Tree Mutation Records (Wave 18 Placeholders) ===
-        WalRecordKind::BTreeInsert => {
-            // B-Tree record insertion. Deferred to Wave 18.
-            replay_btree_insert(ctx, record)?
-        }
-
-        WalRecordKind::BTreeDelete => {
-            // B-Tree record deletion. Deferred to Wave 18.
-            replay_btree_delete(ctx, record)?
-        }
-
-        WalRecordKind::BTreeSplit => {
-            // B-Tree node split. Deferred to Wave 18.
-            replay_btree_split(ctx, record)?
-        }
-
-        WalRecordKind::BTreeMerge => {
-            // B-Tree node merge. Deferred to Wave 18.
-            replay_btree_merge(ctx, record)?
-        }
+        WalRecordKind::TxBegin => replay_tx_begin(ctx, record)?,
+        WalRecordKind::TxCommit => replay_tx_commit(ctx, record)?,
+        WalRecordKind::TxRollback => replay_tx_rollback(ctx, record)?,
+        WalRecordKind::PageAllocate => replay_page_allocate(ctx, record)?,
+        WalRecordKind::PageFormat => replay_page_format(ctx, record)?,
+        WalRecordKind::RowInsert => replay_row_insert(ctx, record)?,
+        WalRecordKind::RowUpdate => replay_row_update(ctx, record)?,
+        WalRecordKind::RowDelete => replay_row_delete(ctx, record)?,
+        WalRecordKind::IndexInsert => replay_index_insert(ctx, record)?,
+        WalRecordKind::IndexDelete => replay_index_delete(ctx, record)?,
+        WalRecordKind::MvccVersionCreate => replay_mvcc_version_create(ctx, record)?,
+        WalRecordKind::MvccVersionClose => replay_mvcc_version_close(ctx, record)?,
+        WalRecordKind::MapDeltaAppend => replay_map_delta_append(ctx, record)?,
+        WalRecordKind::CheckpointBegin => replay_checkpoint_begin(ctx, record)?,
+        WalRecordKind::CheckpointEnd => replay_checkpoint_end(ctx, record)?,
+        WalRecordKind::SnapshotBegin => replay_snapshot_begin(ctx, record)?,
+        WalRecordKind::SnapshotEnd => replay_snapshot_end(ctx, record)?,
+        WalRecordKind::ManifestSwitch => replay_manifest_switch(ctx, record)?,
+        WalRecordKind::CatalogChangeBegin => replay_catalog_change_begin(ctx, record)?,
+        WalRecordKind::CatalogChangeApply => replay_catalog_change_apply(ctx, record)?,
+        WalRecordKind::CatalogChangeCommit => replay_catalog_change_commit(ctx, record)?,
+        WalRecordKind::SecurityAuditAppend => replay_security_audit_append(ctx, record)?,
+        WalRecordKind::BTreeInsert => replay_btree_insert(ctx, record)?,
+        WalRecordKind::BTreeDelete => replay_btree_delete(ctx, record)?,
+        WalRecordKind::BTreeSplit => replay_btree_split(ctx, record)?,
+        WalRecordKind::BTreeMerge => replay_btree_merge(ctx, record)?,
     };
 
-    // Check for unimplemented handlers and fail-stop with clear error.
     if result.outcome.is_error() {
         let error_msg = result.error.clone();
         ctx.record_result(result.clone());
@@ -426,206 +149,6 @@ pub fn replay_wal_record(ctx: &mut ReplayContext, record: &WalRecord) -> Androme
 
     ctx.record_result(result);
     Ok(())
-}
-
-// === Handler Implementations ===
-
-/// Replay page allocation record.
-///
-/// **Idempotency:** Allocating the same page twice is a no-op.
-fn replay_page_allocate(
-    _ctx: &mut ReplayContext,
-    _record: &WalRecord,
-) -> AndromedaResult<ReplayResult> {
-    // TECH-DEBT(recovery-page-allocate): Fail-stop until page inventory payload
-    // decoding and idempotent allocation-bit updates are implemented.
-    Ok(ReplayResult::not_yet_implemented(
-        _record.header.lsn,
-        WalRecordKind::PageAllocate,
-    ))
-}
-
-/// Replay page format initialization record.
-///
-/// **Idempotency:** Formatting the same page twice is a no-op.
-/// **Invariant:** PageFormat must precede any mutation on the page.
-fn replay_page_format(
-    _ctx: &mut ReplayContext,
-    _record: &WalRecord,
-) -> AndromedaResult<ReplayResult> {
-    // TECH-DEBT(recovery-page-format): Fail-stop until page-format payload parsing
-    // and format compatibility checks are wired to page initialization.
-    Ok(ReplayResult::not_yet_implemented(
-        _record.header.lsn,
-        WalRecordKind::PageFormat,
-    ))
-}
-
-/// Replay row insert record.
-///
-/// **Idempotency:** Inserting into the same slot twice is a no-op if the
-/// slot is already visible and contains the same row data.
-/// **Undo:** RowInsert undo is implemented as RowDelete (mark slot as deleted).
-fn replay_row_insert(
-    _ctx: &mut ReplayContext,
-    _record: &WalRecord,
-) -> AndromedaResult<ReplayResult> {
-    // TECH-DEBT(recovery-row-insert): Fail-stop until heap WAL payload decoding
-    // and idempotent slot visibility application are implemented.
-    Ok(ReplayResult::not_yet_implemented(
-        _record.header.lsn,
-        WalRecordKind::RowInsert,
-    ))
-}
-
-/// Replay row update record.
-///
-/// **Idempotency:** Updating the same row twice is a no-op if the row is
-/// already at the target version.
-/// **Undo:** RowUpdate undo is implemented as restoring the previous version.
-fn replay_row_update(
-    _ctx: &mut ReplayContext,
-    _record: &WalRecord,
-) -> AndromedaResult<ReplayResult> {
-    // TECH-DEBT(recovery-row-update): Fail-stop until heap WAL payload decoding
-    // and idempotent in-place/versioned row updates are implemented.
-    Ok(ReplayResult::not_yet_implemented(
-        _record.header.lsn,
-        WalRecordKind::RowUpdate,
-    ))
-}
-
-/// Replay row deletion record.
-///
-/// **Idempotency:** Deleting the same slot twice is a no-op.
-/// **Undo:** RowDelete undo is implemented by clearing the deletion marker.
-fn replay_row_delete(
-    _ctx: &mut ReplayContext,
-    _record: &WalRecord,
-) -> AndromedaResult<ReplayResult> {
-    // TECH-DEBT(recovery-row-delete): Fail-stop until heap slot tombstone replay
-    // is idempotent and MVCC-consistent for already-applied deletes.
-    Ok(ReplayResult::not_yet_implemented(
-        _record.header.lsn,
-        WalRecordKind::RowDelete,
-    ))
-}
-
-/// Replay index entry insertion record.
-///
-/// **Idempotency:** Inserting the same index entry twice is a no-op.
-/// **Undo:** IndexInsert undo is implemented as IndexDelete.
-/// **Note:** Index insertion may be deferred to post-recovery index rebuild.
-fn replay_index_insert(
-    _ctx: &mut ReplayContext,
-    _record: &WalRecord,
-) -> AndromedaResult<ReplayResult> {
-    // TECH-DEBT(recovery-index-insert): Fail-stop until index WAL payload decoding
-    // and idempotent insertion against recovered index state are implemented.
-    Ok(ReplayResult::not_yet_implemented(
-        _record.header.lsn,
-        WalRecordKind::IndexInsert,
-    ))
-}
-
-/// Replay index entry deletion record.
-///
-/// **Idempotency:** Deleting the same index entry twice is a no-op.
-/// **Undo:** IndexDelete undo is implemented as IndexInsert.
-fn replay_index_delete(
-    _ctx: &mut ReplayContext,
-    _record: &WalRecord,
-) -> AndromedaResult<ReplayResult> {
-    // TECH-DEBT(recovery-index-delete): Fail-stop until index WAL payload decoding
-    // and idempotent delete semantics across retries are implemented.
-    Ok(ReplayResult::not_yet_implemented(
-        _record.header.lsn,
-        WalRecordKind::IndexDelete,
-    ))
-}
-
-/// Replay MVCC version creation record.
-///
-/// **Idempotency:** Creating the same version twice is a no-op.
-/// **Invariant:** MvccVersionCreate must precede corresponding row mutations.
-fn replay_mvcc_version_create(
-    _ctx: &mut ReplayContext,
-    _record: &WalRecord,
-) -> AndromedaResult<ReplayResult> {
-    // TECH-DEBT(recovery-mvcc-create): Fail-stop until MVCC version header replay
-    // and transaction-visibility reconstruction are implemented.
-    Ok(ReplayResult::not_yet_implemented(
-        _record.header.lsn,
-        WalRecordKind::MvccVersionCreate,
-    ))
-}
-
-/// Replay MVCC version close record.
-///
-/// **Idempotency:** Closing the same version twice is a no-op.
-/// **Invariant:** MvccVersionClose records when a version becomes immutable.
-fn replay_mvcc_version_close(
-    _ctx: &mut ReplayContext,
-    _record: &WalRecord,
-) -> AndromedaResult<ReplayResult> {
-    // TECH-DEBT(recovery-mvcc-close): Fail-stop until MVCC close replay
-    // preserves commit visibility and idempotent close semantics.
-    Ok(ReplayResult::not_yet_implemented(
-        _record.header.lsn,
-        WalRecordKind::MvccVersionClose,
-    ))
-}
-
-/// Replay checkpoint begin marker.
-///
-/// **Idempotency:** Begin markers are idempotent; replay is a no-op.
-fn replay_checkpoint_begin(
-    _ctx: &mut ReplayContext,
-    _record: &WalRecord,
-) -> AndromedaResult<ReplayResult> {
-    Ok(ReplayResult::skipped(
-        _record.header.lsn,
-        WalRecordKind::CheckpointBegin,
-    ))
-}
-
-/// Replay checkpoint end marker.
-///
-/// **Idempotency:** End markers are idempotent; replay is a no-op.
-fn replay_checkpoint_end(
-    _ctx: &mut ReplayContext,
-    _record: &WalRecord,
-) -> AndromedaResult<ReplayResult> {
-    Ok(ReplayResult::skipped(
-        _record.header.lsn,
-        WalRecordKind::CheckpointEnd,
-    ))
-}
-
-/// Replay cold snapshot begin marker.
-///
-/// **Idempotency:** Begin markers are idempotent; replay is a no-op.
-fn replay_snapshot_begin(
-    _ctx: &mut ReplayContext,
-    _record: &WalRecord,
-) -> AndromedaResult<ReplayResult> {
-    Ok(ReplayResult::skipped(
-        _record.header.lsn,
-        WalRecordKind::SnapshotBegin,
-    ))
-}
-
-/// Replay cold snapshot end marker.
-///
-/// **Idempotency:** End markers are idempotent; replay is a no-op.
-fn replay_snapshot_end(
-    _ctx: &mut ReplayContext,
-    _record: &WalRecord,
-) -> AndromedaResult<ReplayResult> {
-    Ok(ReplayResult::skipped(
-        _record.header.lsn,
-        WalRecordKind::SnapshotEnd,
-    ))
 }
 
 /// Replay manifest switch record.
@@ -760,84 +283,6 @@ fn parse_manifest_switch_payload(bytes: &[u8]) -> AndromedaResult<ManifestSwitch
     })
 }
 
-/// Replay B-Tree record insertion.
-///
-/// **Status:** Deferred with fail-stop semantics (not yet implemented).
-/// **Idempotency:** Inserting the same B-Tree entry twice is a no-op.
-/// **Invariant:** B-Tree insertion must maintain index structure invariants.
-/// **Note:** If this record is present in WAL, the database may be corrupted
-/// without Wave 18 B-Tree recovery implementation.
-fn replay_btree_insert(
-    _ctx: &mut ReplayContext,
-    _record: &WalRecord,
-) -> AndromedaResult<ReplayResult> {
-    // TECH-DEBT(recovery-btree-insert): Fail-stop until B-Tree insert redo can
-    // apply key/value payloads idempotently while preserving tree invariants.
-    Ok(ReplayResult::not_yet_implemented(
-        _record.header.lsn,
-        WalRecordKind::BTreeInsert,
-    ))
-}
-
-/// Replay B-Tree record deletion.
-///
-/// **Status:** Deferred with fail-stop semantics (not yet implemented).
-/// **Idempotency:** Deleting the same B-Tree entry twice is a no-op.
-/// **Invariant:** B-Tree deletion must maintain index structure invariants.
-/// **Note:** If this record is present in WAL, the database may be corrupted
-/// without Wave 18 B-Tree recovery implementation.
-fn replay_btree_delete(
-    _ctx: &mut ReplayContext,
-    _record: &WalRecord,
-) -> AndromedaResult<ReplayResult> {
-    // TECH-DEBT(recovery-btree-delete): Fail-stop until B-Tree delete redo can
-    // remove keys idempotently while preserving structural invariants.
-    Ok(ReplayResult::not_yet_implemented(
-        _record.header.lsn,
-        WalRecordKind::BTreeDelete,
-    ))
-}
-
-/// Replay B-Tree node split.
-///
-/// **Status:** Deferred with fail-stop semantics (not yet implemented).
-/// **Idempotency:** Splitting the same node twice is a no-op.
-/// **Invariant:** B-Tree split must maintain all entries and tree structure.
-/// **Note:** If this record is present in WAL, the database may be corrupted
-/// without Wave 18 B-Tree recovery implementation.
-fn replay_btree_split(
-    _ctx: &mut ReplayContext,
-    _record: &WalRecord,
-) -> AndromedaResult<ReplayResult> {
-    // TECH-DEBT(recovery-btree-split): Fail-stop until B-Tree split redo can
-    // replay parent/sibling linkage updates deterministically.
-    Ok(ReplayResult::not_yet_implemented(
-        _record.header.lsn,
-        WalRecordKind::BTreeSplit,
-    ))
-}
-
-/// Replay B-Tree node merge.
-///
-/// **Status:** Deferred with fail-stop semantics (not yet implemented).
-/// **Idempotency:** Merging the same node pair twice is a no-op.
-/// **Invariant:** B-Tree merge must preserve all entries and maintain structure.
-/// **Note:** If this record is present in WAL, the database may be corrupted
-/// without Wave 18 B-Tree recovery implementation.
-fn replay_btree_merge(
-    _ctx: &mut ReplayContext,
-    _record: &WalRecord,
-) -> AndromedaResult<ReplayResult> {
-    // TECH-DEBT(recovery-btree-merge): Fail-stop until B-Tree merge redo can
-    // replay node consolidation and parent updates idempotently.
-    Ok(ReplayResult::not_yet_implemented(
-        _record.header.lsn,
-        WalRecordKind::BTreeMerge,
-    ))
-}
-
-// === Handler Coverage Metrics ===
-
 /// Handler coverage statistics for WAL recovery.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HandlerCoverageMetrics {
@@ -852,7 +297,7 @@ pub struct HandlerCoverageMetrics {
 }
 
 impl HandlerCoverageMetrics {
-    /// Get current handler coverage metrics (as of Wave 13, Batch 10).
+    /// Get current handler coverage metrics.
     pub const fn current() -> Self {
         Self {
             total_kinds: 26,
@@ -890,8 +335,8 @@ mod tests {
     }
 
     #[test]
-    fn replay_result_not_yet_implemented_has_error() {
-        let result = ReplayResult::not_yet_implemented(Lsn::new(1), WalRecordKind::MapDeltaAppend);
+    fn replay_result_deferred_has_error() {
+        let result = ReplayResult::deferred(Lsn::new(1), WalRecordKind::MapDeltaAppend);
         assert!(result.outcome.is_error());
         assert!(result.error.is_some());
     }
@@ -916,7 +361,7 @@ mod tests {
         let mut ctx = ReplayContext::new();
         assert!(!ctx.has_errors());
 
-        ctx.record_result(ReplayResult::not_yet_implemented(
+        ctx.record_result(ReplayResult::deferred(
             Lsn::new(1),
             WalRecordKind::MapDeltaAppend,
         ));
@@ -928,20 +373,13 @@ mod tests {
     fn handler_coverage_metrics_validation() {
         let metrics = HandlerCoverageMetrics::current();
 
-        // Verify coverage statistics
         assert_eq!(metrics.total_kinds, 26);
         assert_eq!(metrics.implemented_count, 9);
         assert_eq!(metrics.future_work_count, 17);
         assert_eq!(metrics.missing_count, 0);
-
-        // Verify all kinds are accounted for
         assert!(metrics.is_complete());
-
-        // Verify no missing handlers
         assert!(!metrics.has_missing_handlers());
-
-        // Verify coverage percentage
-        assert_eq!(metrics.coverage_percent(), 34); // 9/26 = 34%
+        assert_eq!(metrics.coverage_percent(), 34);
     }
 
     #[test]
@@ -978,10 +416,8 @@ mod tests {
             WalRecordKind::BTreeMerge,
         ];
 
-        // Verify all kinds are accounted for (26 total)
         assert_eq!(all_kinds.len(), 26);
 
-        // Implemented/skipped handlers (9)
         let implemented = [
             WalRecordKind::TxBegin,
             WalRecordKind::TxCommit,
@@ -995,7 +431,6 @@ mod tests {
         ];
         assert_eq!(implemented.len(), 9);
 
-        // Future work handlers (17: 13 original + 4 B-Tree)
         let future_work = [
             WalRecordKind::PageAllocate,
             WalRecordKind::PageFormat,
@@ -1016,11 +451,8 @@ mod tests {
             WalRecordKind::BTreeMerge,
         ];
         assert_eq!(future_work.len(), 17);
-
-        // Verify total coverage
         assert_eq!(implemented.len() + future_work.len(), all_kinds.len());
 
-        // Verify each kind has a handler
         for kind in &all_kinds {
             let is_handled = implemented.contains(kind) || future_work.contains(kind);
             assert!(

@@ -17,9 +17,7 @@ use andromeda_srpl::source_location::SrplSource;
 use std::sync::Arc;
 use std::time::Instant;
 
-// ============================================================================
 // GATE 01: Lexer Token Type Coverage
-// ============================================================================
 
 #[test]
 fn gate_01_lexer_all_keyword_tokens() {
@@ -65,9 +63,7 @@ fn gate_01_lexer_all_punctuation_tokens() {
     println!("✅ Gate 01: All punctuation tokens covered");
 }
 
-// ============================================================================
 // GATE 02: Parser Grammar Coverage
-// ============================================================================
 
 #[test]
 fn gate_02_parser_simple_procedure_signature() {
@@ -101,9 +97,7 @@ fn gate_02_parser_procedure_with_body() {
     println!("✅ Gate 02: Procedure body grammar verified");
 }
 
-// ============================================================================
 // GATE 03: Type Binding Coverage
-// ============================================================================
 
 #[test]
 fn gate_03_type_binding_integer_literals() {
@@ -147,9 +141,7 @@ fn gate_03_type_binding_cardinality_coverage() {
     println!("✅ Gate 03: Cardinality binding verified");
 }
 
-// ============================================================================
 // GATE 04: IR Lowering Node Coverage
-// ============================================================================
 
 #[test]
 fn gate_04_ir_lowering_read_operation() {
@@ -196,9 +188,7 @@ fn gate_04_ir_lowering_emit_operation() {
     println!("✅ Gate 04: All IR node types exercised");
 }
 
-// ============================================================================
 // GATE 05: Error Path Coverage (No Panics)
-// ============================================================================
 
 #[test]
 fn gate_05_error_path_invalid_syntax_no_panic() {
@@ -249,9 +239,7 @@ fn gate_05_error_path_semantic_errors_no_panic() {
     println!("✅ Gate 05: No panics in semantic error paths");
 }
 
-// ============================================================================
 // GATE 06: Performance Baselines
-// ============================================================================
 
 #[test]
 fn gate_06_lexer_performance_baseline() {
@@ -310,9 +298,7 @@ fn gate_06_parser_performance_baseline() {
     println!("✅ Gate 06: Parser performance baseline met");
 }
 
-// ============================================================================
 // GATE 07: Thread Safety
-// ============================================================================
 
 #[test]
 fn gate_07_concurrent_parsing() {
@@ -361,9 +347,7 @@ fn gate_07_concurrent_lexing() {
     println!("✅ Gate 07: Concurrent lexing thread-safe");
 }
 
-// ============================================================================
 // GATE 08: Contract Validation Consistency
-// ============================================================================
 
 #[test]
 fn gate_08_contract_hash_deterministic() {
@@ -388,9 +372,7 @@ fn gate_08_contract_hash_deterministic() {
     println!("✅ Gate 08: Contract validation deterministic");
 }
 
-// ============================================================================
 // Summary
-// ============================================================================
 
 #[test]
 fn gate_summary_all_validations() {
@@ -399,7 +381,7 @@ fn gate_summary_all_validations() {
     println!("║         SRPL Execution Validation Gates Summary            ║");
     println!("║                   H1-SRPL-EXEC-007                          ║");
     println!("╚════════════════════════════════════════════════════════════╝");
-    println!("");
+    println!();
     println!("✅ Gate 01: Lexer token type coverage");
     println!("✅ Gate 02: Parser grammar coverage");
     println!("✅ Gate 03: Type binding coverage");
@@ -408,8 +390,8 @@ fn gate_summary_all_validations() {
     println!("✅ Gate 06: Performance baselines");
     println!("✅ Gate 07: Thread safety");
     println!("✅ Gate 08: Contract determinism");
-    println!("");
+    println!();
     println!("Status: ALL GATES PASSED ✅");
     println!("Ready for production deployment.");
-    println!("");
+    println!();
 }

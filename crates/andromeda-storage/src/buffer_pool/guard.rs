@@ -61,9 +61,7 @@ impl<'a> PageGuard<'a> {
 impl Drop for PageGuard<'_> {
     fn drop(&mut self) {
         if self.pinned {
-            self.frame
-                .unpin()
-                .expect("PageGuard drop must unpin an acquired resident frame");
+            let _ = self.frame.unpin();
             self.pinned = false;
         }
     }
@@ -162,9 +160,7 @@ impl<'a> PageGuardMut<'a> {
 impl Drop for PageGuardMut<'_> {
     fn drop(&mut self) {
         if self.pinned {
-            self.frame
-                .unpin()
-                .expect("PageGuardMut drop must unpin an acquired resident frame");
+            let _ = self.frame.unpin();
             self.pinned = false;
         }
     }

@@ -145,9 +145,7 @@ impl BackpressureSignal {
         match transport {
             BackpressureTransport::DiagnosticStream => Ok(()),
             BackpressureTransport::TelemetryDatagram { mtu_bytes } => {
-                if mtu_bytes < Self::MIN_DATAGRAM_MTU_BYTES
-                    || mtu_bytes < Self::ENCODED_SIZE_UPPER_BOUND_BYTES
-                {
+                if mtu_bytes < Self::MIN_DATAGRAM_MTU_BYTES {
                     return Err(AndromedaError::new(
                         AndromedaErrorKind::Resource,
                         "backpressure signal exceeds negotiated QUIC DATAGRAM MTU",

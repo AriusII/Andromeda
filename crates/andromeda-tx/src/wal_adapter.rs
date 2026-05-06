@@ -413,7 +413,7 @@ mod tests {
             let mut next = self.next_lsn.lock().unwrap();
             let current = *next;
             *next += 1;
-            Ok(Lsn::new(current as u64))
+            Ok(Lsn::new(current))
         }
 
         async fn flush_through(&self, lsn: Lsn) -> AndromedaResult<Lsn> {

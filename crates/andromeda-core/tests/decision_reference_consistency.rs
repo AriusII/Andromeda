@@ -1,165 +1,104 @@
-/// Decision Record Reference Consistency Test
-///
-/// This test validates that all cross-references in decision records
-/// (docs/decisions/DEC-*.md) point to existing files.
-///
-/// Fails if any referenced DEC-XXX cannot be found.
-/// Used to prevent reference drift and maintain decision hygiene.
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[test]
-fn test_decision_record_references_valid() {
-    // Path to decisions directory
+fn decision_record_references_point_to_existing_decisions() {
     let decisions_dir = PathBuf::from("docs/decisions");
-
     if !decisions_dir.exists() {
-        eprintln!("Warning: docs/decisions directory not found, skipping reference validation");
         return;
     }
 
-    // Scan all DEC files and collect available DEC IDs
+    let (available_decs, dec_files) = collect_decision_files(&decisions_dir);
+    let missing_targets = collect_missing_references(&available_decs, &dec_files);
+
+    assert!(
+        missing_targets.is_empty(),
+        "broken decision references: {missing_targets:?}"
+    );
+    assert_bidirectional_pairs(&available_decs);
+}
+
+fn collect_decision_files(decisions_dir: &Path) -> (HashSet<String>, Vec<PathBuf>) {
     let mut available_decs = HashSet::new();
     let mut dec_files = Vec::new();
 
-    match fs::read_dir(&decisions_dir) {
-        Ok(entries) => {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().map(|e| e == "md") == Some(true) {
-                    if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-                        if filename.starts_with("DEC-") {
-                            dec_files.push(path.clone());
-
-                            // Extract DEC ID from filename (e.g., "DEC-020" from "DEC-020-quorum-runtime.md")
-                            if let Some(dec_id) = extract_dec_id(filename) {
-                                available_decs.insert(dec_id.to_string());
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        Err(e) => {
-            eprintln!("Error reading decisions directory: {}", e);
-            panic!("Cannot read docs/decisions directory");
-        }
-    }
-
-    println!("\n📋 Decision Record Reference Audit\n");
-    println!("Found {} DEC files:", dec_files.len());
-    let mut sorted_decs: Vec<_> = available_decs.iter().cloned().collect();
-    sorted_decs.sort();
-    for dec_id in sorted_decs {
-        println!("  ✓ {}", dec_id);
-    }
-
-    // Now scan all DEC files for references
-    let mut all_references: Vec<(String, String)> = Vec::new();
-    let mut reference_counts: HashMap<String, usize> = HashMap::new();
-    let mut missing_targets = Vec::new();
-
-    for path in &dec_files {
-        match fs::read_to_string(path) {
-            Ok(content) => {
-                for dec_ref in extract_dec_references(&content) {
-                    let filename = path
-                        .file_name()
-                        .and_then(|n| n.to_str())
-                        .unwrap_or("unknown");
-
-                    all_references.push((filename.to_string(), dec_ref.clone()));
-                    *reference_counts.entry(dec_ref.clone()).or_insert(0) += 1;
-
-                    // Verify target exists
-                    if !available_decs.contains(dec_ref.as_str()) {
-                        missing_targets.push((filename.to_string(), dec_ref));
-                    }
-                }
-            }
-            Err(e) => {
-                eprintln!("Error reading {}: {}", path.display(), e);
-                panic!("Cannot read decision file: {}", path.display());
+    let entries = fs::read_dir(decisions_dir).expect("docs/decisions must be readable");
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().is_some_and(|ext| ext == "md")
+            && let Some(filename) = path.file_name().and_then(|name| name.to_str())
+            && filename.starts_with("DEC-")
+        {
+            dec_files.push(path.clone());
+            if let Some(dec_id) = extract_dec_id(filename) {
+                available_decs.insert(dec_id.to_string());
             }
         }
     }
 
-    println!("\n📊 Reference Summary\n");
-    println!("Total references found: {}", all_references.len());
-    println!("Unique DECs referenced: {}", reference_counts.len());
-
-    // Print top referenced DECs
-    println!("\n🔗 Most Referenced DECs:");
-    let mut sorted_refs: Vec<_> = reference_counts.iter().collect();
-    sorted_refs.sort_by_key(|&(_, count)| std::cmp::Reverse(*count));
-    for (dec_id, count) in sorted_refs.iter().take(10) {
-        println!("  {} — cited {} times", dec_id, count);
-    }
-
-    // Report missing targets
-    if !missing_targets.is_empty() {
-        println!("\n❌ Missing Target References:\n");
-        for (source, target) in &missing_targets {
-            println!("  {} references {} (NOT FOUND)", source, target);
-        }
-        panic!("Found {} broken references", missing_targets.len());
-    } else {
-        println!(
-            "\n✅ All {} references are valid — no missing targets!",
-            all_references.len()
-        );
-    }
-
-    // Additional validation: check for bidirectional consistency in known pairs
-    validate_bidirectional_pairs(&available_decs);
+    (available_decs, dec_files)
 }
 
-/// Validates known DEC pairs have explicit governance notes
-fn validate_bidirectional_pairs(available_decs: &HashSet<String>) {
-    let known_pairs = vec![
+fn collect_missing_references(
+    available_decs: &HashSet<String>,
+    dec_files: &[PathBuf],
+) -> Vec<(String, String)> {
+    let mut missing_targets = Vec::new();
+
+    for path in dec_files {
+        let content = fs::read_to_string(path)
+            .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
+        for dec_ref in extract_dec_references(&content) {
+            if !available_decs.contains(dec_ref.as_str()) {
+                let filename = path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("unknown")
+                    .to_string();
+                missing_targets.push((filename, dec_ref));
+            }
+        }
+    }
+
+    missing_targets
+}
+
+fn assert_bidirectional_pairs(available_decs: &HashSet<String>) {
+    let known_pairs = [
         (
-            "DEC-020a",
+            "DEC-020",
             "DEC-020b",
-            "Stream Concurrency ↔ Quorum Runtime",
+            "quorum runtime and stream concurrency",
         ),
         (
-            "DEC-022a",
+            "DEC-022",
             "DEC-022b",
-            "Protocol Stability ↔ Procedure Lifecycle",
+            "procedure lifecycle and protocol stability",
         ),
         (
-            "DEC-024a",
+            "DEC-024",
             "DEC-024b",
-            "Promotion Boundary ↔ Stream Mapping",
+            "promotion boundary and stream mapping",
         ),
     ];
 
-    println!("\n🔄 Bidirectional Consistency Check\n");
-
-    for (dec_a, dec_b, description) in &known_pairs {
-        let has_a = available_decs.contains(*dec_a);
-        let has_b = available_decs.contains(*dec_b);
-
-        if has_a && has_b {
-            println!("  ✓ {} pair complete ({})", description, dec_a);
-        } else if has_a || has_b {
-            eprintln!(
-                "  ⚠️  {} incomplete (only {} found)",
-                description,
-                if has_a { dec_a } else { dec_b }
-            );
-        }
+    for (dec_a, dec_b, description) in known_pairs {
+        let has_a = available_decs.contains(dec_a);
+        let has_b = available_decs.contains(dec_b);
+        assert_eq!(
+            has_a, has_b,
+            "decision pair for {description} must be complete: {dec_a}={has_a}, {dec_b}={has_b}"
+        );
     }
 }
 
-/// Extract DEC ID from filename (e.g., "DEC-020-stream-concurrency.md" → "DEC-020")
 fn extract_dec_id(filename: &str) -> Option<&str> {
     if filename.starts_with("DEC-") && filename.ends_with(".md") {
         let end = filename[4..]
             .find('-')
             .or_else(|| filename[4..].find('_'))
-            .unwrap_or(filename[4..].len() - 3); // Account for .md
+            .unwrap_or(filename[4..].len() - 3);
 
         return Some(&filename[..4 + end]);
     }
@@ -208,7 +147,6 @@ mod tests {
 
     #[test]
     fn test_reference_pattern() {
-        // Should match
         assert_eq!(
             extract_dec_references("See DEC-020 for details"),
             vec!["DEC-020"]
@@ -219,7 +157,6 @@ mod tests {
         );
         assert_eq!(extract_dec_references("(DEC-019)"), vec!["DEC-019"]);
 
-        // Should not match incomplete patterns
         assert!(extract_dec_references("DEC-20").is_empty());
         assert!(extract_dec_references("DEC-A20").is_empty());
     }

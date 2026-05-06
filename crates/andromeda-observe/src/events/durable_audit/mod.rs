@@ -93,15 +93,25 @@ pub(crate) fn append_record(
     record: PendingDurableAuditRecord,
 ) -> DurableAuditSinkResult<DurableAuditSinkReport> {
     let identity = record.identity;
-    if let Err(error) = record.validate() {
-        return Err(sink_failure(
-            DurableAuditFailureKind::ValidationRejected,
-            Some(identity),
-            error.message().to_string(),
-        ));
-    }
+    record
+        .validate()
+        .map_err(|error| validation_failure(identity, error.message().to_string()))?;
 
     let record_lsn = next_record_lsn(path, Some(identity))?;
+    let replay_record = replay_record_from_pending(record, record_lsn)?;
+    let line = journal_line(&replay_record)
+        .map_err(|error| validation_failure(identity, error.message().to_string()))?;
+
+    write_journal_line(path, identity, &line)?;
+
+    Ok(replay_record.report)
+}
+
+fn replay_record_from_pending(
+    record: PendingDurableAuditRecord,
+    record_lsn: u64,
+) -> DurableAuditSinkResult<DurableAuditReplayRecord> {
+    let identity = record.identity;
     let event_kind = format!("{:?}", record.envelope.event.kind());
     let mut replay_record = DurableAuditReplayRecord {
         report: DurableAuditSinkReport {
@@ -117,33 +127,22 @@ pub(crate) fn append_record(
         principal_binding: record.principal_binding,
         event_kind,
     };
-    replay_record.report.evidence.checksum = checksum64(
-        journal_payload(&replay_record)
-            .map_err(|error| {
-                sink_failure(
-                    DurableAuditFailureKind::ValidationRejected,
-                    Some(identity),
-                    error.message().to_string(),
-                )
-            })?
-            .as_bytes(),
-    );
-    replay_record.validate().map_err(|error| {
-        sink_failure(
-            DurableAuditFailureKind::ValidationRejected,
-            Some(identity),
-            error.message().to_string(),
-        )
-    })?;
 
-    let line = journal_line(&replay_record).map_err(|error| {
-        sink_failure(
-            DurableAuditFailureKind::ValidationRejected,
-            Some(identity),
-            error.message().to_string(),
-        )
-    })?;
+    let payload = journal_payload(&replay_record)
+        .map_err(|error| validation_failure(identity, error.message().to_string()))?;
+    replay_record.report.evidence.checksum = checksum64(payload.as_bytes());
+    replay_record
+        .validate()
+        .map_err(|error| validation_failure(identity, error.message().to_string()))?;
 
+    Ok(replay_record)
+}
+
+fn write_journal_line(
+    path: &Path,
+    identity: DurableAuditRecordIdentity,
+    line: &str,
+) -> DurableAuditSinkResult<()> {
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
@@ -170,7 +169,18 @@ pub(crate) fn append_record(
         )
     })?;
 
-    Ok(replay_record.report)
+    Ok(())
+}
+
+fn validation_failure(
+    identity: DurableAuditRecordIdentity,
+    message: impl Into<String>,
+) -> DurableAuditSinkFailure {
+    sink_failure(
+        DurableAuditFailureKind::ValidationRejected,
+        Some(identity),
+        message,
+    )
 }
 
 pub(crate) fn open_sink(path: impl AsRef<Path>) -> DurableAuditSinkResult<PathBuf> {

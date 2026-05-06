@@ -4,7 +4,7 @@ use andromeda_core::{
 use andromeda_observe::TraceId;
 use andromeda_storage::Lsn;
 use andromeda_tx::TransactionState;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, btree_map::Entry};
 
 use crate::{CompletionStatus, InvocationCompletion};
 
@@ -180,29 +180,31 @@ impl InvocationCompletionJournal {
         record: CompletionJournalRecord,
     ) -> AndromedaResult<&CompletionJournalRecord> {
         record.validate()?;
+        let invocation_id = record.invocation_id;
+        let transaction_id = record.transaction_id;
 
-        if self.by_invocation.contains_key(&record.invocation_id) {
+        if self.by_invocation.contains_key(&invocation_id) {
             return Err(completion_journal_error(
                 "completion journal already contains invocation completion",
             ));
         }
 
-        if self
-            .invocation_by_transaction
-            .contains_key(&record.transaction_id)
-        {
+        if self.invocation_by_transaction.contains_key(&transaction_id) {
             return Err(completion_journal_error(
                 "completion journal already contains transaction completion",
             ));
         }
 
-        self.invocation_by_transaction
-            .insert(record.transaction_id, record.invocation_id);
-        self.by_invocation.insert(record.invocation_id, record);
-        Ok(self
-            .by_invocation
-            .get(&record.invocation_id)
-            .expect("inserted completion journal record must be visible"))
+        match self.by_invocation.entry(invocation_id) {
+            Entry::Occupied(_) => Err(completion_journal_error(
+                "completion journal already contains invocation completion",
+            )),
+            Entry::Vacant(entry) => {
+                self.invocation_by_transaction
+                    .insert(transaction_id, invocation_id);
+                Ok(entry.insert(record))
+            }
+        }
     }
 
     pub fn get(&self, invocation_id: InvocationId) -> Option<&CompletionJournalRecord> {

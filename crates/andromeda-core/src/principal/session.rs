@@ -3,7 +3,12 @@ use super::CertificateFingerprint;
 const MTLS_SESSION_PREFIX: &str = "mtls:";
 const FINGERPRINT_EVIDENCE_LEN: usize = 32;
 
-/// Session token bound to a principal for request tracing.
+/// Non-secret evidence token bound to a principal for request tracing.
+///
+/// `SessionToken` is persisted and displayed as audit evidence. It must never
+/// contain a bearer credential, shared secret, private key material, or any
+/// other value whose disclosure would grant access. mTLS-derived tokens are
+/// deterministic projections of certificate fingerprint evidence.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SessionToken {
     token: String,
@@ -24,7 +29,7 @@ impl SessionToken {
         self.token.is_empty()
     }
 
-    /// Derive a deterministic token from certificate fingerprint evidence.
+    /// Derive deterministic, non-secret token evidence from certificate fingerprint evidence.
     ///
     /// Format: `mtls:{first_32_chars_of_fingerprint_or_full_if_shorter}`.
     /// This is an audit-correlation token, not a cryptographic bearer token.

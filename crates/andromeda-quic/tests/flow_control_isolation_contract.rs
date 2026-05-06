@@ -50,10 +50,12 @@ fn application_backpressure_does_not_block_hadr_stream_availability() {
         "both planes must sustain measurable concurrent throughput"
     );
 
-    assert!(HEARTBEAT_STREAM_MAX < WAL_SHIPPING_STREAM_MIN);
-    assert!(WAL_SHIPPING_STREAM_MAX < VOTE_STREAM_MIN);
-    assert!(VOTE_STREAM_MAX < HADR_STREAM_MAX);
-    assert_eq!(HADR_STREAM_MIN, HEARTBEAT_STREAM_MIN);
+    const {
+        assert!(HEARTBEAT_STREAM_MAX < WAL_SHIPPING_STREAM_MIN);
+        assert!(WAL_SHIPPING_STREAM_MAX < VOTE_STREAM_MIN);
+        assert!(VOTE_STREAM_MAX < HADR_STREAM_MAX);
+        assert!(HADR_STREAM_MIN == HEARTBEAT_STREAM_MIN);
+    };
 
     assert_eq!(hadr.open_stream_count(), (replica_count as usize) * 3);
 }

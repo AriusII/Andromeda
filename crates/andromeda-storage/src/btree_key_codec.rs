@@ -83,6 +83,7 @@ pub enum Key {
 }
 
 const DATUM_BOOL_TAG: u8 = 6;
+const SIGN_BIT_MASK: u8 = 0x80;
 
 /// B-Tree key encoder — Encodes keys to order-preserving byte sequences.
 ///
@@ -98,9 +99,9 @@ impl KeyCodec {
     /// Encode a key into a deterministic byte sequence.
     ///
     /// Format:
-    /// - Fixed-width/bytes/null: [type_tag: 1B] [length: 2B LE] [value_bytes: N bytes]
-    /// - Text: [type_tag: 1B] [escaped_utf8_bytes] [terminator: 0x00]
-    /// - Composite: [type_tag: 1B] [column_count: 2B LE] [encoded_column ...]
+    /// - Fixed-width/bytes/null: `[type_tag: 1B] [length: 2B LE] [value_bytes: N bytes]`
+    /// - Text: `[type_tag: 1B] [escaped_utf8_bytes] [terminator: 0x00]`
+    /// - Composite: `[type_tag: 1B] [column_count: 2B LE] [encoded_column ...]`
     ///
     /// # Errors
     ///
@@ -108,60 +109,38 @@ impl KeyCodec {
     /// - Key too large (> 65535 bytes)
     pub fn encode_key(key: &Key) -> AndromedaResult<Vec<u8>> {
         match key {
-            Key::Null => {
-                let mut result = vec![KeyType::Null.tag()];
-                result.extend_from_slice(&0u16.to_le_bytes());
-                Ok(result)
-            }
+            Key::Null => encode_len_prefixed_key(KeyType::Null, &[], "null key too large"),
             Key::Int32(v) => {
-                let mut result = vec![KeyType::Int32.tag()];
-                result.extend_from_slice(&4u16.to_le_bytes());
                 // Encode as big-endian for order preservation:
                 // Bit 0 (sign bit) flipped to maintain sort order
                 let encoded = encode_int32_order_preserving(*v);
-                result.extend_from_slice(&encoded);
-                Ok(result)
+                encode_len_prefixed_key(KeyType::Int32, &encoded, "int32 key too large")
             }
             Key::Int64(v) => {
-                let mut result = vec![KeyType::Int64.tag()];
-                result.extend_from_slice(&8u16.to_le_bytes());
                 // Encode for order preservation
                 let encoded = encode_int64_order_preserving(*v);
-                result.extend_from_slice(&encoded);
-                Ok(result)
+                encode_len_prefixed_key(KeyType::Int64, &encoded, "int64 key too large")
             }
             Key::Text(s) => {
                 let encoded_text = encode_text_order_preserving(s);
-                if encoded_text.len() > u16::MAX as usize {
-                    return Err(codec_error("text too large for encoding"));
-                }
+                checked_u16_len(encoded_text.len(), "text too large for encoding")?;
                 let mut result = vec![KeyType::Text.tag()];
                 result.extend_from_slice(&encoded_text);
                 Ok(result)
             }
             Key::Bytes(b) => {
-                if b.len() > u16::MAX as usize {
-                    return Err(codec_error("byte sequence too large for encoding"));
-                }
-                let mut result = vec![KeyType::Bytes.tag()];
-                result.extend_from_slice(&(b.len() as u16).to_le_bytes());
-                result.extend_from_slice(b);
-                Ok(result)
+                encode_len_prefixed_key(KeyType::Bytes, b, "byte sequence too large for encoding")
             }
             Key::Composite(datums) => {
                 let mut result = vec![KeyType::Composite.tag()];
                 // Encode number of columns
-                if datums.len() > u16::MAX as usize {
-                    return Err(codec_error("too many columns in composite key"));
-                }
-                result.extend_from_slice(&(datums.len() as u16).to_le_bytes());
+                let col_count = checked_u16_len(datums.len(), "too many columns in composite key")?;
+                result.extend_from_slice(&col_count.to_le_bytes());
 
                 // Encode each column
                 for datum in datums {
                     let encoded = KeyCodec::encode_datum(datum)?;
-                    if encoded.len() > u16::MAX as usize {
-                        return Err(codec_error("encoded column too large"));
-                    }
+                    checked_u16_len(encoded.len(), "encoded column too large")?;
                     result.extend_from_slice(&encoded);
                 }
 
@@ -215,33 +194,24 @@ impl KeyCodec {
                 Ok((Key::Null, pos))
             }
             KeyType::Int32 => {
-                if length != 4 {
-                    return Err(codec_error("invalid int32 length"));
-                }
-                if pos + 4 > bytes.len() {
-                    return Err(codec_error("truncated int32"));
-                }
-                let encoded = [bytes[pos], bytes[pos + 1], bytes[pos + 2], bytes[pos + 3]];
+                let encoded = read_fixed_payload::<4>(
+                    bytes,
+                    pos,
+                    length,
+                    "invalid int32 length",
+                    "truncated int32",
+                )?;
                 let v = decode_int32_order_preserving(&encoded);
                 Ok((Key::Int32(v), pos + 4))
             }
             KeyType::Int64 => {
-                if length != 8 {
-                    return Err(codec_error("invalid int64 length"));
-                }
-                if pos + 8 > bytes.len() {
-                    return Err(codec_error("truncated int64"));
-                }
-                let encoded = [
-                    bytes[pos],
-                    bytes[pos + 1],
-                    bytes[pos + 2],
-                    bytes[pos + 3],
-                    bytes[pos + 4],
-                    bytes[pos + 5],
-                    bytes[pos + 6],
-                    bytes[pos + 7],
-                ];
+                let encoded = read_fixed_payload::<8>(
+                    bytes,
+                    pos,
+                    length,
+                    "invalid int64 length",
+                    "truncated int64",
+                )?;
                 let v = decode_int64_order_preserving(&encoded);
                 Ok((Key::Int64(v), pos + 8))
             }
@@ -400,37 +370,77 @@ fn validate_composite_datum_type(
     }
 }
 
+fn checked_u16_len(len: usize, err_msg: &'static str) -> AndromedaResult<u16> {
+    if len > u16::MAX as usize {
+        return Err(codec_error(err_msg));
+    }
+    Ok(len as u16)
+}
+
+fn encode_len_prefixed_key(
+    key_type: KeyType,
+    payload: &[u8],
+    too_large_msg: &'static str,
+) -> AndromedaResult<Vec<u8>> {
+    let payload_len = checked_u16_len(payload.len(), too_large_msg)?;
+    let mut result = Vec::with_capacity(1 + 2 + payload.len());
+    result.push(key_type.tag());
+    result.extend_from_slice(&payload_len.to_le_bytes());
+    result.extend_from_slice(payload);
+    Ok(result)
+}
+
+fn read_fixed_payload<const N: usize>(
+    bytes: &[u8],
+    pos: usize,
+    length: usize,
+    invalid_length_msg: &'static str,
+    truncated_msg: &'static str,
+) -> AndromedaResult<[u8; N]> {
+    if length != N {
+        return Err(codec_error(invalid_length_msg));
+    }
+    read_array_at(bytes, pos, truncated_msg)
+}
+
+fn read_array_at<const N: usize>(
+    bytes: &[u8],
+    pos: usize,
+    truncated_msg: &'static str,
+) -> AndromedaResult<[u8; N]> {
+    if pos + N > bytes.len() {
+        return Err(codec_error(truncated_msg));
+    }
+    let mut result = [0; N];
+    result.copy_from_slice(&bytes[pos..pos + N]);
+    Ok(result)
+}
+
 /// Order-preserving encoding for i32.
 ///
 /// Converts to big-endian with sign bit flipped to maintain sort order.
 fn encode_int32_order_preserving(v: i32) -> [u8; 4] {
-    let bits = v.to_be_bytes();
-    // Flip sign bit to maintain sort order
-    let mut result = bits;
-    result[0] ^= 0x80;
-    result
+    flip_sign_bit(v.to_be_bytes())
 }
 
 /// Order-preserving decoding for i32.
 fn decode_int32_order_preserving(bytes: &[u8; 4]) -> i32 {
-    let mut bits = *bytes;
-    bits[0] ^= 0x80;
-    i32::from_be_bytes(bits)
+    i32::from_be_bytes(flip_sign_bit(*bytes))
 }
 
 /// Order-preserving encoding for i64.
 fn encode_int64_order_preserving(v: i64) -> [u8; 8] {
-    let bits = v.to_be_bytes();
-    let mut result = bits;
-    result[0] ^= 0x80;
-    result
+    flip_sign_bit(v.to_be_bytes())
 }
 
 /// Order-preserving decoding for i64.
 fn decode_int64_order_preserving(bytes: &[u8; 8]) -> i64 {
-    let mut bits = *bytes;
-    bits[0] ^= 0x80;
-    i64::from_be_bytes(bits)
+    i64::from_be_bytes(flip_sign_bit(*bytes))
+}
+
+fn flip_sign_bit<const N: usize>(mut bytes: [u8; N]) -> [u8; N] {
+    bytes[0] ^= SIGN_BIT_MASK;
+    bytes
 }
 
 /// Order-preserving, self-delimiting UTF-8 payload encoding.
@@ -520,9 +530,7 @@ fn codec_error(msg: impl Into<String>) -> AndromedaError {
 mod tests {
     use super::*;
 
-    // ========================================================================
     // Single Key Type Tests
-    // ========================================================================
 
     #[test]
     fn test_encode_decode_null() {
@@ -588,9 +596,7 @@ mod tests {
         assert_eq!(key, decoded);
     }
 
-    // ========================================================================
     // Composite Key Tests
-    // ========================================================================
 
     #[test]
     fn test_encode_decode_composite_simple() {
@@ -614,13 +620,11 @@ mod tests {
         assert_eq!(decoded.len(), 3);
     }
 
-    // ========================================================================
     // Order Preservation Tests
-    // ========================================================================
 
     #[test]
     fn test_order_preservation_int32() {
-        let keys = vec![
+        let keys = [
             Key::Int32(i32::MIN),
             Key::Int32(-1000),
             Key::Int32(-1),
@@ -651,7 +655,7 @@ mod tests {
 
     #[test]
     fn test_order_preservation_int64() {
-        let keys = vec![
+        let keys = [
             Key::Int64(i64::MIN),
             Key::Int64(-1000000000000i64),
             Key::Int64(-1),
@@ -674,7 +678,7 @@ mod tests {
 
     #[test]
     fn test_order_preservation_text() {
-        let keys = vec![
+        let keys = [
             Key::Text("apple".to_string()),
             Key::Text("banana".to_string()),
             Key::Text("cherry".to_string()),
@@ -693,9 +697,7 @@ mod tests {
         }
     }
 
-    // ========================================================================
     // Determinism Tests
-    // ========================================================================
 
     #[test]
     fn test_determinism_int32() {
@@ -725,9 +727,7 @@ mod tests {
         assert_eq!(encoded1, encoded2, "determinism violated for composite key");
     }
 
-    // ========================================================================
     // Edge Cases
-    // ========================================================================
 
     #[test]
     fn test_edge_case_empty_text() {
@@ -774,9 +774,7 @@ mod tests {
         }
     }
 
-    // ========================================================================
     // Comparator Tests
-    // ========================================================================
 
     #[test]
     fn test_comparator_equal() {
@@ -799,9 +797,7 @@ mod tests {
         assert_eq!(KeyComparator::compare(&k1, &k2), Ordering::Greater);
     }
 
-    // ========================================================================
     // Performance / Latency Checks (Informal)
-    // ========================================================================
 
     #[test]
     fn test_encode_latency_int32() {

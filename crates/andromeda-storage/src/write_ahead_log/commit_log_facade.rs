@@ -4,8 +4,6 @@
 //! the in-memory commit log cache and the write-ahead log (WAL) persistence
 //! layer. It ensures strict ordering invariants for durability and visibility.
 //!
-//! # Wave 21 Batch 4 Task 4 — CommitLog Facade Implementation
-//!
 //! **Responsibility:** Orchestrate commit recording, durability confirmation,
 //! and visibility publishing with coordinated WAL integration.
 //!
@@ -96,8 +94,6 @@ impl CommitLogFacade {
 
     /// Record a transaction commit: create entry and prepare for WAL integration.
     ///
-    /// **Wave 21 Batch 4 Task 4 — Commit Recording**
-    ///
     /// This method performs the following steps:
     /// 1. Create CommitLogEntry with tx_id, commit_lsn, and visible_timestamp
     /// 2. Store entry in cache with `is_durable() == false`
@@ -131,33 +127,14 @@ impl CommitLogFacade {
         commit_lsn: Lsn,
         visible_ts: Timestamp,
     ) -> AndromedaResult<()> {
-        // Validate inputs
-        if tx_id.get() == 0 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Transaction,
-                "transaction id must not be zero",
-            ));
-        }
-
-        if visible_ts == 0 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Transaction,
-                "visible_timestamp must not be zero",
-            ));
-        }
-
         // Create entry (initially not durable)
         let entry = CommitLogEntry::new(tx_id, commit_lsn, visible_ts)?;
 
         // Record in commit log cache
-        self.commit_log.record_commit(entry)?;
-
-        Ok(())
+        self.commit_log.record_commit(entry)
     }
 
     /// Confirm that the WAL record for a commit is durable (flushed to disk).
-    ///
-    /// **Wave 21 Batch 4 Task 4 — Durability Confirmation**
     ///
     /// This method atomically sets the `is_durable()` flag to true.
     ///
@@ -181,13 +158,10 @@ impl CommitLogFacade {
     ///
     /// - `AndromedaErrorKind::Transaction` if no entry exists for tx_id
     pub fn confirm_durable(&self, tx_id: TransactionId) -> AndromedaResult<()> {
-        self.commit_log.confirm_durable(tx_id)?;
-        Ok(())
+        self.commit_log.confirm_durable(tx_id)
     }
 
     /// Publish transaction as visible to all readers.
-    ///
-    /// **Wave 21 Batch 4 Task 4 — Visibility Publishing**
     ///
     /// This method marks the transaction as ready for snapshot visibility.
     /// Callers should update TransactionStatusTable after this call returns.
@@ -216,27 +190,22 @@ impl CommitLogFacade {
         match self.commit_log.query_commit_status(tx_id)? {
             Some(entry) => {
                 if !entry.is_durable() {
-                    return Err(AndromedaError::new(
-                        AndromedaErrorKind::Transaction,
-                        format!(
-                            "cannot make visible: transaction {} is not durable yet",
-                            tx_id.get()
-                        ),
-                    ));
+                    return Err(transaction_error(format!(
+                        "cannot make visible: transaction {} is not durable yet",
+                        tx_id.get()
+                    )));
                 }
                 // Entry is durable; caller will update visibility via TransactionStatusTable
                 Ok(())
             }
-            None => Err(AndromedaError::new(
-                AndromedaErrorKind::Transaction,
-                format!("commit log entry not found for transaction {}", tx_id.get()),
-            )),
+            None => Err(transaction_error(format!(
+                "commit log entry not found for transaction {}",
+                tx_id.get()
+            ))),
         }
     }
 
     /// Query the commit status for a transaction.
-    ///
-    /// **Wave 21 Batch 4 Task 4 — Status Query**
     ///
     /// Returns the commit log entry if it exists, allowing caller to inspect:
     /// - `is_durable()`: whether WAL flush has confirmed
@@ -260,8 +229,6 @@ impl CommitLogFacade {
     }
 
     /// Clean up entries that are persisted and no longer needed.
-    ///
-    /// **Wave 21 Batch 4 Task 4 — GC-Aware Cleanup**
     ///
     /// Removes entries from the in-memory cache where:
     /// - Entry's commit_lsn < before_lsn
@@ -301,6 +268,10 @@ impl Default for CommitLogFacade {
     }
 }
 
+fn transaction_error(msg: impl Into<String>) -> AndromedaError {
+    AndromedaError::new(AndromedaErrorKind::Transaction, msg)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -323,9 +294,7 @@ mod tests {
         CommitLogFacade::new()
     }
 
-    // ========================
     // Happy Path Tests
-    // ========================
 
     #[test]
     fn test_record_commit_creates_entry() {
@@ -401,9 +370,7 @@ mod tests {
         facade.make_visible(tx_id).unwrap();
     }
 
-    // ========================
     // Error Path Tests
-    // ========================
 
     #[test]
     fn test_record_commit_rejects_zero_tx_id() {
@@ -462,9 +429,7 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // ========================
     // Query Tests
-    // ========================
 
     #[test]
     fn test_query_status_nonexistent_returns_none() {
@@ -489,9 +454,7 @@ mod tests {
         assert_eq!(entry.visible_timestamp(), ts);
     }
 
-    // ========================
     // Cleanup Tests
-    // ========================
 
     #[test]
     fn test_cleanup_before_lsn_removes_old_entries() {
@@ -565,9 +528,7 @@ mod tests {
         assert!(facade.query_status(tx2).unwrap().is_none());
     }
 
-    // ========================
     // Concurrency Tests
-    // ========================
 
     #[test]
     fn test_concurrent_record_commit() {
@@ -634,9 +595,7 @@ mod tests {
         }
     }
 
-    // ========================
     // Invariant Tests
-    // ========================
 
     #[test]
     fn test_invariant_entry_not_durable_initially() {
@@ -680,9 +639,7 @@ mod tests {
         );
     }
 
-    // ========================
     // Stress Tests
-    // ========================
 
     #[test]
     fn test_stress_100_concurrent_full_flow() {

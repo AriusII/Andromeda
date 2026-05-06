@@ -6,14 +6,15 @@
 //! while also exposing professionalized module boundaries:
 //! - [`procedure_compiler`] owns source-to-AST binding and IR lowering entry points.
 //! - [`procedure_model`] owns AST, contract, cardinality, and IR data shapes.
-//! - [`diagnostics`] and [`source_location`] own source spans and validation diagnostics.
+//! - [`SrplDiagnostic`] and [`source_location`] own source spans and validation diagnostics.
 
 mod ast;
 mod binder;
 mod cardinality;
 pub mod definition_batch_bridge;
-pub mod diagnostics;
+mod diagnostics;
 pub mod execution_adapter;
+mod identifier;
 pub mod interpreter;
 mod ir;
 mod lexer;

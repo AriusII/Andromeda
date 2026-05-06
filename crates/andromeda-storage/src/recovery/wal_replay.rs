@@ -11,8 +11,8 @@
 //!    `Replay`, `SkipIncompleteTransaction`, `SkipNonRedoRecord`, etc.
 //! 3. **Redo pass** — apply every `Replay`-classified record in ascending LSN
 //!    order (guaranteed by `InMemoryWal` and the durable WAL scan).
-//! 4. **Tolerate `NotYetImplemented` handlers** — Wave 18-22 placeholder
-//!    handlers are tracked as soft errors; other errors propagate.
+//! 4. **Tolerate explicit deferrals** — records whose handlers are not
+//!    promoted yet are tracked as soft errors; other errors propagate.
 //! 5. **Return [`WalReplayReport`]** — counters, LSN bounds, error status.
 //!
 //! # Idempotency Invariant
@@ -43,8 +43,6 @@ use crate::{DatabaseManifest, Lsn, WalRecord};
 use super::planning::{ConceptualRedoPlan, RecoveryPlan, RedoRecordDecision, StartupMode};
 use super::replay::{ReplayContext, replay_wal_record};
 
-// ─── Public Report Type ────────────────────────────────────────────────────
-
 /// Summary report produced at the end of a single WAL replay session.
 ///
 /// All counters are derived exclusively from the durable WAL prefix and the
@@ -68,21 +66,21 @@ pub struct WalReplayReport {
     /// Records whose redo decision was anything other than `Replay`
     /// (`SkipIncompleteTransaction`, `SkipNonRedoRecord`, `SkipBeforeRedoStart`, etc.).
     pub plan_skipped_count: usize,
-    /// Records whose handler returned `NotYetImplemented`
-    /// (Wave 18-22 placeholder handlers).
+    /// Records whose handler returned `NotYetImplemented`.
     pub not_yet_implemented_count: usize,
     /// Incomplete (crash-survivor) transactions identified and discarded by the plan.
     pub incomplete_transaction_count: usize,
     /// Transactions whose `TxCommit` record was found in the durable WAL.
     pub committed_transaction_count: usize,
     /// `true` if any handler returned `NotYetImplemented` or `Deprecated`.
-    /// Does **not** count NVI as a fatal failure; it is expected for Wave 14.
+    /// Deferred handlers remain fail-stop at the handler layer and are
+    /// reported here rather than treated as fatal driver errors.
     pub has_replay_errors: bool,
 }
 
 impl WalReplayReport {
     /// Returns `true` when the replay completed with no incomplete
-    /// transactions and no replay errors (NVI counts as an error here).
+    /// transactions and no replay errors.
     pub fn is_clean_recovery(&self) -> bool {
         self.incomplete_transaction_count == 0 && !self.has_replay_errors
     }
@@ -97,8 +95,6 @@ impl WalReplayReport {
         self.applied_count > 0 || self.not_yet_implemented_count > 0
     }
 }
-
-// ─── Public Entry Points ───────────────────────────────────────────────────
 
 /// Replay all eligible WAL records starting from the manifest-required LSN.
 ///
@@ -162,7 +158,6 @@ pub fn execute_redo_plan(
                 };
 
                 let applied_before = ctx.applied_count;
-                // Tolerate NVI errors (Wave 18-22 placeholders).
                 // `replay_wal_record` pushes to `ctx.error_records` before
                 // returning Err, so we can safely ignore the returned Err
                 // and interrogate ctx afterwards.
@@ -199,16 +194,12 @@ pub fn execute_redo_plan(
     })
 }
 
-// ─── Unit Tests ────────────────────────────────────────────────────────────
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use andromeda_core::TransactionId;
 
     use crate::{DatabaseManifest, InMemoryWal, WalRecordKind};
-
-    // ── Helper ──────────────────────────────────────────────────────────────
 
     fn test_manifest(required_wal_start_lsn: Lsn) -> DatabaseManifest {
         DatabaseManifest {
@@ -222,8 +213,6 @@ mod tests {
         }
     }
 
-    // ── Test 1: Empty WAL, zero LSN anchor ──────────────────────────────────
-
     #[test]
     fn test_replay_empty_wal_zero_lsn_anchor() {
         let manifest = test_manifest(Lsn::ZERO);
@@ -235,8 +224,6 @@ mod tests {
         assert!(!report.has_replay_errors);
         assert!(report.replay_end_lsn.is_none());
     }
-
-    // ── Test 2: Committed tx — RowInsert classified as Replay ───────────────
 
     #[test]
     fn test_replay_committed_tx_row_insert_classified_replay() {
@@ -261,8 +248,6 @@ mod tests {
         assert_eq!(row_rec.decision, RedoRecordDecision::Replay);
         assert!(!plan.has_incomplete_transactions());
     }
-
-    // ── Test 3: Incomplete tx — RowInsert classified as SkipIncomplete ───────
 
     #[test]
     fn test_replay_incomplete_tx_row_insert_skip_incomplete() {
@@ -291,8 +276,6 @@ mod tests {
         );
     }
 
-    // ── Test 4: Rolled-back tx — RowInsert classified as SkipRolledBack ──────
-
     #[test]
     fn test_replay_rolled_back_tx_row_insert_skip_rolled_back() {
         let tx = TransactionId::new(10);
@@ -319,10 +302,8 @@ mod tests {
         );
     }
 
-    // ── Test 5: NVI handlers tolerated, report counts them ──────────────────
-
     #[test]
-    fn test_replay_nvi_handlers_are_soft_errors_not_fatal() {
+    fn test_replay_deferred_handlers_are_soft_errors_not_fatal() {
         let tx = TransactionId::new(10);
         let mut wal = InMemoryWal::new();
         wal.append_tx_begin(tx).unwrap();
@@ -333,19 +314,14 @@ mod tests {
 
         let records = wal.replay_durable();
         let manifest = test_manifest(Lsn::new(1));
-        // RowInsert handler is NVI → not applied, but also not a fatal error
         let report = replay_wal_from_lsn(&manifest, StartupMode::SafeStart, &records).unwrap();
         assert_eq!(report.not_yet_implemented_count, 1);
         assert_eq!(report.applied_count, 0);
         assert_eq!(report.committed_transaction_count, 1);
         assert_eq!(report.incomplete_transaction_count, 0);
-        // has_replay_errors is true because NVI was encountered
         assert!(report.has_replay_errors);
-        // But is_clean_recovery is false because of NVI
         assert!(!report.is_clean_recovery());
     }
-
-    // ── Test 6: Multiple committed txns — all redo-relevant records replayed ─
 
     #[test]
     fn test_replay_multiple_committed_txns_all_replayed() {
@@ -381,8 +357,6 @@ mod tests {
         );
     }
 
-    // ── Test 7: BTreeInsert is not redo-relevant → SkipNonRedoRecord ─────────
-
     #[test]
     fn test_replay_btree_insert_always_skip_non_redo() {
         let tx = TransactionId::new(10);
@@ -405,8 +379,6 @@ mod tests {
             .expect("BTreeInsert must be in plan");
         assert_eq!(btree_rec.decision, RedoRecordDecision::SkipNonRedoRecord);
     }
-
-    // ── Test 8: Recovered tx-ID floor matches highest durable tx ID ──────────
 
     #[test]
     fn test_replay_recovered_transaction_id_floor() {

@@ -1,33 +1,17 @@
-//! GPU execution capabilities and policies.
-//!
-//! This module defines GPU availability, execution policies, and validation
-//! of which pipeline classes are permitted to use GPU resources.
+//! GPU availability and pipeline eligibility policy.
 
 use super::hardware_pipeline::PipelineClass;
 use crate::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 /// Policy for GPU execution availability and restrictions.
-///
-/// Determines whether GPU can be used and on which pipeline types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GpuExecutionPolicy {
-    /// GPU is not available for any use
     Disabled,
-    /// GPU may be used for off-critical-path work (background, analytics)
     OffCriticalPathOnly,
-    /// GPU may only be used for batch analytics work
     BatchAnalyticsOnly,
 }
 
 impl GpuExecutionPolicy {
-    /// Returns true if the GPU execution policy permits the given pipeline.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// let policy = GpuExecutionPolicy::OffCriticalPathOnly;
-    /// assert!(!policy.permits_pipeline(PipelineClass::Commit));
-    /// ```
     pub const fn permits_pipeline(self, pipeline: PipelineClass) -> bool {
         match self {
             Self::Disabled => false,
@@ -41,18 +25,6 @@ impl GpuExecutionPolicy {
         }
     }
 
-    /// Validates that GPU execution is permitted for the given pipeline.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if GPU execution is not permitted for this pipeline.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// let policy = GpuExecutionPolicy::BatchAnalyticsOnly;
-    /// policy.validate_pipeline(PipelineClass::Commit)?;
-    /// ```
     pub fn validate_pipeline(self, pipeline: PipelineClass) -> AndromedaResult<()> {
         if self.permits_pipeline(pipeline) {
             return Ok(());
@@ -69,24 +41,13 @@ impl GpuExecutionPolicy {
 }
 
 /// GPU profile describing GPU availability and constraints.
-///
-/// Specifies whether GPU is available and what execution policies are in effect.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GpuProfile {
-    /// Whether GPU hardware is available
     pub available: bool,
-    /// Execution policy for available GPU
     pub execution_policy: GpuExecutionPolicy,
 }
 
 impl GpuProfile {
-    /// Creates a GPU profile with GPU disabled.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// let profile = GpuProfile::disabled();
-    /// ```
     pub const fn disabled() -> Self {
         Self {
             available: false,
@@ -94,13 +55,7 @@ impl GpuProfile {
         }
     }
 
-    /// Creates a GPU profile with GPU available for off-critical-path work.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// let profile = GpuProfile::off_critical_path();
-    /// ```
+    /// Allows GPU only outside critical commit/recovery paths.
     pub const fn off_critical_path() -> Self {
         Self {
             available: true,
@@ -108,13 +63,7 @@ impl GpuProfile {
         }
     }
 
-    /// Creates a GPU profile restricted to batch analytics operations.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// let profile = GpuProfile::batch_analytics_only();
-    /// ```
+    /// Allows GPU only for analytical batch-style pipelines.
     pub const fn batch_analytics_only() -> Self {
         Self {
             available: true,
@@ -122,18 +71,6 @@ impl GpuProfile {
         }
     }
 
-    /// Validates that GPU execution is available and permitted for the pipeline.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if GPU is not available or the pipeline is not permitted.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// let profile = GpuProfile::disabled();
-    /// assert!(profile.validate_pipeline(PipelineClass::BatchAnalytics).is_err());
-    /// ```
     pub fn validate_pipeline(&self, pipeline: PipelineClass) -> AndromedaResult<()> {
         if !self.available {
             return Err(AndromedaError::new(

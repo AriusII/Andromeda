@@ -16,10 +16,6 @@ use andromeda_observe::{
     ReplicaHealthState, RestoreCompletion, TraceId,
 };
 
-// ============================================================================
-// HadrAuditEvent Contract Tests
-// ============================================================================
-
 #[test]
 fn hadr_audit_event_replica_health_transition_is_constructible() {
     let event = HadrAuditEvent::ReplicaHealthTransition {
@@ -230,10 +226,6 @@ fn hadr_audit_trace_sequence_numbers_establish_ordering() {
 
     assert!(trace1.sequence_number < trace2.sequence_number);
 }
-
-// ============================================================================
-// BackupAuditEvent Contract Tests
-// ============================================================================
 
 #[test]
 fn backup_audit_event_backup_started_is_constructible() {
@@ -462,10 +454,6 @@ fn backup_audit_trace_validation_accepts_valid_trace() {
     assert!(trace.validate());
 }
 
-// ============================================================================
-// Event Lifecycle and Sequence Tests
-// ============================================================================
-
 #[test]
 fn hadr_trace_lifecycle_replica_health_progresses_through_states() {
     let trace1 = HadrAuditTrace::new(
@@ -621,10 +609,6 @@ fn timestamp_milliseconds_are_monotonically_increasing() {
 
     assert!(trace1.timestamp_ms <= trace2.timestamp_ms);
 }
-
-// ============================================================================
-// Immutability Contract Tests
-// ============================================================================
 
 #[test]
 fn hadr_audit_trace_is_immutable_after_construction() {

@@ -1,30 +1,17 @@
 #![forbid(unsafe_code)]
 
-//! # Andromeda QUIC Transport Layer
+//! Andromeda QUIC transport contracts.
 //!
-//! This crate provides the QUIC transport layer for Andromeda, implementing frame encoding,
-//! stream management, flow control, connection lifecycle, and RPC dispatch.
+//! The default API is runtime-free: frame encoding, stream role validation,
+//! lifecycle gating, backpressure, RPC dispatch, and HA/DR stream allocation are
+//! modelled without exposing a concrete QUIC backend. The optional
+//! `runtime-quinn` feature adds Quinn-backed TLS and network adapters.
 //!
-//! ## Architecture
-//!
-//! The transport layer is organized into four protocol layers:
-//!
-//! - **Frame Layer** (`frame`): Frame type codes, encoding, and decoding
-//! - **Stream Layer** (`stream`): Stream state machines and flow control
-//! - **Connection Layer** (`connection`): Session management and connection lifecycle
-//! - **RPC Layer** (`rpc`): Stream-to-RPC mapping and dispatch
-//!
-//! ## Key Invariants
-//!
-//! - Frame type codes are locked to protobuf payload layer codes
-//! - Stream roles enforce transport surface separation (bidirectional, unidirectional, datagram)
-//! - Result streams follow strict sequencing: metadata → batch* → completion
-//! - Flow control windows prevent buffer saturation and enable backpressure signaling
-//! - Connection lifecycle enforces handshake, active, and close states
-
-// ============================================================================
-// Module files for frame layer
-// ============================================================================
+//! Critical invariants:
+//! - frame type codes stay locked to protobuf payload layer codes;
+//! - stream roles enforce surface separation;
+//! - result streams are ordered as metadata, zero or more batches, completion;
+//! - lifecycle state gates handshake, active dispatch, drain, and close.
 
 mod backpressure;
 mod connection;
@@ -39,7 +26,7 @@ mod stream_types;
 
 pub mod frame;
 pub mod stream_concurrency;
-pub mod transport;
+mod transport;
 
 #[cfg(feature = "runtime-quinn")]
 mod runtime_quinn;
@@ -55,10 +42,6 @@ pub use stream_concurrency::{
     StreamState,
 };
 
-// ============================================================================
-// Identity Extraction (D3)
-// ============================================================================
-
 pub mod mtls_identity;
 
 pub use frame::{
@@ -72,43 +55,23 @@ pub use frame::{
     validate_result_stream_sequence_with_metadata_policy, validate_single_frame_on_stream,
 };
 
-// ============================================================================
-// Stream Protocol Layer
-// ============================================================================
-
 pub mod stream;
 
-// ============================================================================
-// Connection Protocol Layer
-// ============================================================================
-
-pub mod session;
+mod session;
 
 pub use session::{
     CancellationCause, CancellationOutcome, CancellationSignal, Connection, DatagramPolicy,
     EarlyDataPolicy, LifecycleState, SurfaceListenerConfig, SurfaceListenerSet, SurfacePlane,
 };
 
-// ============================================================================
-// RPC Dispatch Layer
-// ============================================================================
-
-pub mod rpc;
+mod rpc;
 
 pub use rpc::{
     DispatchPolicy, FrameDispatch, TransportSurface, dispatch_frame, expected_stream_role,
     validate_transport_surface,
 };
 
-// ============================================================================
-// Procedure Gateway
-// ============================================================================
-
 pub use procedure_gateway::ProcedureGateway;
-
-// ============================================================================
-// Reconnection Policy
-// ============================================================================
 
 pub use reconnect::{
     ConnectionPool, ConnectionPoolKey, ConnectionPoolPolicy, MAX_POOL_CONNECTIONS_PER_KEY,
@@ -118,25 +81,13 @@ pub use reconnect::{
     RetryRejectionReason,
 };
 
-// ============================================================================
-// Backpressure
-// ============================================================================
-
 pub use backpressure::{BackpressureReason, BackpressureSignal, BackpressureTransport};
-
-// ============================================================================
-// Runtime-free transport trait boundary
-// ============================================================================
 
 pub use transport::{
     QuicClientTransport, QuicServerTransport, TransportBackpressureStatus,
     TransportCancellationStatus, TransportEndpointMetadata, TransportMessage,
     TransportShutdownMode, TransportShutdownState,
 };
-
-// ============================================================================
-// HA/DR Stream Mapping (F2)
-// ============================================================================
 
 pub mod hadr_streams;
 
@@ -147,11 +98,7 @@ pub use hadr_streams::{
     WAL_SHIPPING_STREAM_MIN,
 };
 
-// ============================================================================
-// Protocol Invariants (D7)
-// ============================================================================
-
-pub mod protocol_invariants;
+mod protocol_invariants;
 
 pub use protocol_invariants::{
     FrameTypeInvariants, PayloadKindInvariants, ProtocolInvariants, ProtocolVersionInvariants,

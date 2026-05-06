@@ -17,9 +17,11 @@ mod tests {
     };
     use std::sync::Arc;
 
+    type MockWalRecord = (WalRecordKind, Option<TransactionId>, Vec<u8>);
+
     /// Mock WAL implementation for testing without filesystem I/O.
     struct MockWal {
-        records: std::sync::Mutex<Vec<(WalRecordKind, Option<TransactionId>, Vec<u8>)>>,
+        records: std::sync::Mutex<Vec<MockWalRecord>>,
         durable_lsn: std::sync::Mutex<Lsn>,
     }
 
@@ -60,8 +62,6 @@ mod tests {
             Ok(lsn)
         }
     }
-
-    // ===== Basic Functionality Tests =====
 
     #[tokio::test]
     async fn test_commit_log_records_wal_entry() {
@@ -124,8 +124,6 @@ mod tests {
         assert!(commit_log.is_committed(tx_id));
     }
 
-    // ===== Isolation Level Tests =====
-
     #[tokio::test]
     async fn test_commit_log_snapshot_isolation_level() {
         let wal = MockWal::new();
@@ -157,8 +155,6 @@ mod tests {
         assert_eq!(entry.isolation_level, IsolationLevel::Serializable);
         assert_eq!(commit_log.get_affected_rows(tx_id), Some(20));
     }
-
-    // ===== LSN Tracking Tests =====
 
     #[tokio::test]
     async fn test_commit_log_get_commit_lsn() {
@@ -202,8 +198,6 @@ mod tests {
             assert_eq!(entry.commit_lsn, Lsn::new((i + 1) as u64));
         }
     }
-
-    // ===== Garbage Collection Tests =====
 
     #[tokio::test]
     async fn test_commit_log_gc_candidates() {
@@ -281,8 +275,6 @@ mod tests {
         assert_eq!(candidates.len(), 0);
     }
 
-    // ===== Durability Verification Tests =====
-
     #[tokio::test]
     async fn test_commit_log_verify_durability() {
         let wal = MockWal::new();
@@ -302,8 +294,6 @@ mod tests {
         let result = commit_log.verify_durability(TransactionId::new(999));
         assert!(result.is_err());
     }
-
-    // ===== Commit Protocol Tests =====
 
     #[tokio::test]
     async fn test_commit_protocol_executes_commit_in_committing_state() {
@@ -369,8 +359,6 @@ mod tests {
         assert_eq!(lsn, Some(Lsn::new(1)));
     }
 
-    // ===== Edge Case Tests =====
-
     #[tokio::test]
     async fn test_commit_log_rejects_zero_tx_id() {
         let wal = MockWal::new();
@@ -417,14 +405,12 @@ mod tests {
         assert_eq!(commit_log.get_affected_rows(tx_id), Some(large_row_count));
     }
 
-    // ===== Timestamp Tests =====
-
     #[tokio::test]
     async fn test_commit_log_timestamps_with_manual_clock() {
         let wal = MockWal::new();
         let status_table = Arc::new(TransactionStatusTable::new());
         let clock = ManualClock::from_unix_millis(1000);
-        let clock_arc = Arc::new(clock.clone());
+        let clock_arc = Arc::new(clock);
 
         let commit_log = CommitLogManager::with_clock(wal, status_table, clock_arc);
 

@@ -26,9 +26,7 @@ use super::constants::{
     CATALOG_WAL_PAYLOAD_HEADER_LEN, CATALOG_WAL_PAYLOAD_MAGIC, CATALOG_WAL_PAYLOAD_VERSION_V1,
 };
 
-// ---------------------------------------------------------------------------
 // CatalogMutationRecord public encode / decode / validate
-// ---------------------------------------------------------------------------
 
 impl CatalogMutationRecord {
     /// Encode this catalog mutation record as a durable storage-WAL payload.
@@ -122,9 +120,7 @@ impl CatalogMutationRecord {
     }
 }
 
-// ---------------------------------------------------------------------------
 // Validation
-// ---------------------------------------------------------------------------
 
 fn validate_boundary(boundary: &CatalogMutationBoundary) -> AndromedaResult<()> {
     if boundary.batch_id.get() == 0 {
@@ -177,9 +173,7 @@ fn validate_delta(delta: &CatalogMutationDelta) -> AndromedaResult<()> {
     Ok(())
 }
 
-// ---------------------------------------------------------------------------
 // Boundary encode / decode
-// ---------------------------------------------------------------------------
 
 fn encode_boundary(out: &mut Vec<u8>, boundary: &CatalogMutationBoundary) {
     push_u64(out, boundary.batch_id.get());
@@ -213,9 +207,7 @@ fn decode_boundary(decoder: &mut Decoder<'_>) -> AndromedaResult<CatalogMutation
     Ok(boundary)
 }
 
-// ---------------------------------------------------------------------------
 // Delta encode / decode
-// ---------------------------------------------------------------------------
 
 fn encode_delta(out: &mut Vec<u8>, delta: &CatalogMutationDelta) {
     push_u64(out, delta.operation_index as u64);
@@ -256,9 +248,7 @@ fn decode_delta(decoder: &mut Decoder<'_>) -> AndromedaResult<CatalogMutationDel
     Ok(delta)
 }
 
-// ---------------------------------------------------------------------------
 // Lifecycle target encode / decode
-// ---------------------------------------------------------------------------
 
 fn encode_lifecycle_target(out: &mut Vec<u8>, target: &CatalogLifecycleTarget) {
     encode_object_ref(out, &target.object);
@@ -270,9 +260,7 @@ fn decode_lifecycle_target(decoder: &mut Decoder<'_>) -> AndromedaResult<Catalog
     })
 }
 
-// ---------------------------------------------------------------------------
 // Definition encode / decode
-// ---------------------------------------------------------------------------
 
 fn encode_definition(out: &mut Vec<u8>, definition: &CatalogDefinition) {
     match definition {
@@ -357,9 +345,7 @@ fn decode_enum(decoder: &mut Decoder<'_>) -> AndromedaResult<EnumDefinition> {
     Ok(EnumDefinition { object, variants })
 }
 
-// ---------------------------------------------------------------------------
 // Procedure encode / decode
-// ---------------------------------------------------------------------------
 
 fn encode_procedure(out: &mut Vec<u8>, procedure: &ProcedureContract) {
     encode_object_ref(out, &procedure.object);
@@ -450,9 +436,7 @@ fn decode_procedure(decoder: &mut Decoder<'_>) -> AndromedaResult<ProcedureContr
     })
 }
 
-// ---------------------------------------------------------------------------
 // Result stream encode / decode
-// ---------------------------------------------------------------------------
 
 fn encode_result_streams(out: &mut Vec<u8>, streams: &[ResultStreamContract]) {
     push_u64(out, streams.len() as u64);
@@ -478,9 +462,7 @@ fn decode_result_streams(decoder: &mut Decoder<'_>) -> AndromedaResult<Vec<Resul
     Ok(streams)
 }
 
-// ---------------------------------------------------------------------------
 // Transaction policy encode / decode
-// ---------------------------------------------------------------------------
 
 fn encode_transaction_policy(out: &mut Vec<u8>, policy: TransactionPolicy) {
     push_u8(
@@ -518,9 +500,7 @@ fn decode_transaction_policy(decoder: &mut Decoder<'_>) -> AndromedaResult<Trans
     })
 }
 
-// ---------------------------------------------------------------------------
 // Object reference encode / decode
-// ---------------------------------------------------------------------------
 
 fn encode_object_ref(out: &mut Vec<u8>, object: &CatalogObjectRef) {
     push_u64(out, object.object_id.get());
@@ -563,9 +543,7 @@ fn object_kind_from_tag(tag: u8) -> AndromedaResult<ObjectKind> {
     }
 }
 
-// ---------------------------------------------------------------------------
 // Column and type descriptor encode / decode
-// ---------------------------------------------------------------------------
 
 fn encode_columns(out: &mut Vec<u8>, columns: &[ColumnDescriptor]) {
     push_u64(out, columns.len() as u64);
@@ -784,9 +762,7 @@ fn decode_float_type(decoder: &mut Decoder<'_>) -> AndromedaResult<FloatType> {
     }
 }
 
-// ---------------------------------------------------------------------------
 // Qualified name and string encode / decode
-// ---------------------------------------------------------------------------
 
 fn encode_qualified_names(out: &mut Vec<u8>, names: &[QualifiedName]) {
     push_u64(out, names.len() as u64);
@@ -841,9 +817,7 @@ fn encode_string(out: &mut Vec<u8>, value: &str) {
     out.extend_from_slice(value.as_bytes());
 }
 
-// ---------------------------------------------------------------------------
 // FNV-1a checksum
-// ---------------------------------------------------------------------------
 
 pub(super) fn catalog_wal_payload_checksum(kind_tag: u16, body_len: u64, body: &[u8]) -> u64 {
     const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
@@ -865,9 +839,7 @@ pub(super) fn catalog_wal_payload_checksum(kind_tag: u16, body_len: u64, body: &
     if state == 0 { 1 } else { state }
 }
 
-// ---------------------------------------------------------------------------
 // Primitive push helpers
-// ---------------------------------------------------------------------------
 
 fn push_bool(out: &mut Vec<u8>, value: bool) {
     push_u8(out, u8::from(value));
@@ -893,9 +865,7 @@ fn push_i64(out: &mut Vec<u8>, value: i64) {
     out.extend_from_slice(&value.to_le_bytes());
 }
 
-// ---------------------------------------------------------------------------
 // Decoder cursor
-// ---------------------------------------------------------------------------
 
 pub(super) struct Decoder<'a> {
     bytes: &'a [u8],
@@ -941,19 +911,35 @@ impl<'a> Decoder<'a> {
     }
 
     pub(super) fn u16(&mut self) -> AndromedaResult<u16> {
-        Ok(u16::from_le_bytes(self.bytes(2)?.try_into().unwrap()))
+        let bytes = self
+            .bytes(2)?
+            .try_into()
+            .map_err(|_| catalog_error("catalog WAL u16 field has invalid width"))?;
+        Ok(u16::from_le_bytes(bytes))
     }
 
     pub(super) fn u32(&mut self) -> AndromedaResult<u32> {
-        Ok(u32::from_le_bytes(self.bytes(4)?.try_into().unwrap()))
+        let bytes = self
+            .bytes(4)?
+            .try_into()
+            .map_err(|_| catalog_error("catalog WAL u32 field has invalid width"))?;
+        Ok(u32::from_le_bytes(bytes))
     }
 
     pub(super) fn u64(&mut self) -> AndromedaResult<u64> {
-        Ok(u64::from_le_bytes(self.bytes(8)?.try_into().unwrap()))
+        let bytes = self
+            .bytes(8)?
+            .try_into()
+            .map_err(|_| catalog_error("catalog WAL u64 field has invalid width"))?;
+        Ok(u64::from_le_bytes(bytes))
     }
 
     pub(super) fn i64(&mut self) -> AndromedaResult<i64> {
-        Ok(i64::from_le_bytes(self.bytes(8)?.try_into().unwrap()))
+        let bytes = self
+            .bytes(8)?
+            .try_into()
+            .map_err(|_| catalog_error("catalog WAL i64 field has invalid width"))?;
+        Ok(i64::from_le_bytes(bytes))
     }
 
     pub(super) fn len(&mut self) -> AndromedaResult<usize> {
@@ -969,9 +955,7 @@ impl<'a> Decoder<'a> {
     }
 }
 
-// ---------------------------------------------------------------------------
 // Error helper
-// ---------------------------------------------------------------------------
 
 pub(super) fn catalog_error(message: &str) -> AndromedaError {
     AndromedaError::new(AndromedaErrorKind::Catalog, message)

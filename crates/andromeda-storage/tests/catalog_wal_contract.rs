@@ -17,10 +17,6 @@ mod tests {
         replay_catalog_wal_records,
     };
 
-    // =========================================================================
-    // ENCODE/DECODE ROUND-TRIP TESTS (8 tests)
-    // =========================================================================
-
     #[test]
     fn test_encode_decode_definition_batch_applied_preserves_all_fields() {
         let original = CatalogWalRecord::DefinitionBatchApplied {
@@ -158,10 +154,6 @@ mod tests {
         assert_eq!(original, decoded);
     }
 
-    // =========================================================================
-    // VERSION MONOTONICITY AND ORDERING TESTS (3 tests)
-    // =========================================================================
-
     #[test]
     fn test_replay_rejects_version_going_backward() {
         let records = vec![
@@ -238,10 +230,6 @@ mod tests {
         assert_eq!(snapshot.catalog_version, CatalogVersion::new(5));
     }
 
-    // =========================================================================
-    // PROCEDURE ID VALIDATION TESTS (3 tests)
-    // =========================================================================
-
     #[test]
     fn test_replay_rejects_alter_on_non_existent_procedure() {
         let records = vec![CatalogWalRecord::ProcedureAltered {
@@ -298,10 +286,6 @@ mod tests {
         assert!(snapshot.procedure_ids.contains(&CatalogObjectId::new(2)));
     }
 
-    // =========================================================================
-    // CHECKSUM AND CORRUPTION TESTS (3 tests)
-    // =========================================================================
-
     #[test]
     fn test_decode_rejects_corrupted_checksum() {
         let original = CatalogWalRecord::ProcedureAdded {
@@ -347,10 +331,6 @@ mod tests {
                 .contains("unsupported catalog WAL record version")
         );
     }
-
-    // =========================================================================
-    // RECOVERY REPLAY TESTS (4 tests)
-    // =========================================================================
 
     #[test]
     fn test_replay_complete_procedure_lifecycle_add_alter_drop() {

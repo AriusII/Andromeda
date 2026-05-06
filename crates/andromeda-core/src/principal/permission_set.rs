@@ -1,3 +1,4 @@
+use super::permission::ALL_PROCEDURES;
 use super::{Permission, PrincipalRole};
 use crate::ProcedureId;
 use std::collections::HashSet;
@@ -54,7 +55,7 @@ impl PermissionSet {
 
     fn super_admin_permissions() -> Self {
         Self::new()
-            .with_permission(Permission::ExecuteProcedure(ProcedureId::new(u64::MAX)))
+            .with_permission(Permission::ExecuteProcedure(ALL_PROCEDURES))
             .with_permission(Permission::ReadContractMetadata)
             .with_permission(Permission::AdminRoleManagement)
             .with_permission(Permission::AdminCatalogPublish)
@@ -76,7 +77,7 @@ impl PermissionSet {
 
     fn operator_permissions() -> Self {
         Self::new()
-            .with_permission(Permission::ExecuteProcedure(ProcedureId::new(u64::MAX)))
+            .with_permission(Permission::ExecuteProcedure(ALL_PROCEDURES))
             .with_permission(Permission::ReadContractMetadata)
             .with_permission(Permission::AuditRead)
             .with_permission(Permission::AdminRecovery)
@@ -84,7 +85,7 @@ impl PermissionSet {
 
     fn user_permissions() -> Self {
         Self::new()
-            .with_permission(Permission::ExecuteProcedure(ProcedureId::new(u64::MAX)))
+            .with_permission(Permission::ExecuteProcedure(ALL_PROCEDURES))
             .with_permission(Permission::ReadContractMetadata)
     }
 

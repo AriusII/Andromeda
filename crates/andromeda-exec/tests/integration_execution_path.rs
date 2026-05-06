@@ -23,37 +23,23 @@
 //! └─────────────────────────────────────────────────────────────────────────┘
 
 use andromeda_catalog::{
-    CatalogSnapshot, INVENTORY_DATABASE_ID, INVENTORY_NAMESPACE_ID,
-    INVENTORY_RESERVE_STOCK_PERMISSION, ProcedureContract,
-    inventory_reserve_stock_catalog_bindings, inventory_reserve_stock_contract,
+    INVENTORY_RESERVE_STOCK_PERMISSION, ProcedureContract, inventory_reserve_stock_contract,
 };
 use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, ContractHash, InvocationId, PipelineClass, RequestId,
-    ResourceBudget, TransactionId,
+    ContractHash, InvocationId, PipelineClass, RequestId, ResourceBudget, TransactionId,
 };
 use andromeda_exec::{
     CompletionStatus, ExecutionIoAdmissionRequest, InventoryReserveStockExecutor, InventoryStock,
     InvocationContext, InvocationRequest, LocalVerticalRuntime, ReserveStockCommand,
 };
-use andromeda_observe::{
-    EventCorrelation, EventEmitter, EventId, InMemoryEventSink, TraceEvent, TraceId,
-};
-use andromeda_srpl::procedure_compiler::compile_narrow_procedure_signature;
+use andromeda_observe::{EventCorrelation, EventEmitter, EventId, InMemoryEventSink, TraceId};
 use andromeda_storage::{
     CoreIoPlacementRequest, InMemoryWal, Lsn, OperationalProfile, PageSize, StorageIoBudgetScope,
-    StorageWorkloadClass, WalRecordKind,
+    StorageWorkloadClass,
 };
 use andromeda_tx::TransactionState;
-use std::sync::{Arc, Mutex};
 
-// ============================================================================
 // SHARED FIXTURES
-// ============================================================================
-
-/// SRPL source for Inventory.ReserveStock procedure
-fn inventory_reserve_stock_srpl_source() -> &'static str {
-    "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool) body { read Inventory.ProductStock Stock one; assert Quantity InsufficientStock; update Inventory.ProductStock AvailableQuantity; emit Reservation (Reserved); }"
-}
 
 /// Inventory contract reference
 fn valid_contract() -> ProcedureContract {
@@ -140,9 +126,7 @@ fn build_event_correlation(
     }
 }
 
-// ============================================================================
 // TEST 1: End-to-End Procedure Invocation
-// ============================================================================
 
 /// E2E.1: Single procedure call with real transaction completes successfully
 /// Validates: admission → dispatch → commit path with WAL durability
@@ -203,9 +187,7 @@ fn e2e_procedure_invocation_completes_with_transaction_and_wal() {
     );
 }
 
-// ============================================================================
 // TEST 2: Permission Enforcement with Audit Traces
-// ============================================================================
 
 /// E2E.2: Denied invocations produce audit traces and block execution
 /// Validates: permission denials create observable audit events without WAL entry
@@ -254,9 +236,7 @@ fn e2e_permission_denied_blocks_execution_and_emits_audit_trace() {
     );
 }
 
-// ============================================================================
 // TEST 3: Contract Validation (Hash Mismatch)
-// ============================================================================
 
 /// E2E.3: Mismatched contract hash is rejected before transaction allocation
 /// Validates: contract validation invariant before dispatch
@@ -303,16 +283,13 @@ fn e2e_contract_hash_mismatch_rejected_at_admission() {
     );
 }
 
-// ============================================================================
 // TEST 4: Result Streaming with Metadata
-// ============================================================================
 
 /// E2E.4: Result batches emitted with correct metadata
 /// Validates: LocalProcedure result_metadata contains accurate schema and row count
 #[test]
 fn e2e_result_streaming_emits_metadata_with_correct_schema() {
     // Arrange
-    let contract = valid_contract();
     let procedure = execute_reserve_stock(10, 5);
 
     // Assert: Procedure has valid result metadata
@@ -337,9 +314,7 @@ fn e2e_result_streaming_emits_metadata_with_correct_schema() {
     );
 }
 
-// ============================================================================
 // TEST 5: Rollback on Error (Procedure Failure)
-// ============================================================================
 
 /// E2E.5: Procedure failure triggers controlled rollback
 /// Validates: rollback state machine transitions and WAL rollback record
@@ -401,9 +376,7 @@ fn e2e_procedure_error_triggers_rollback_and_wal_durability() {
     // This is covered in c5_commit_rollback_lifecycle.rs tests
 }
 
-// ============================================================================
 // TEST 6: Concurrent Invocations (MVCC Isolation)
-// ============================================================================
 
 /// E2E.6: Multiple concurrent procedures maintain MVCC isolation
 /// Validates: No dirty reads between concurrent transactions
@@ -461,9 +434,7 @@ fn e2e_concurrent_invocations_maintain_mvcc_isolation() {
     assert_eq!(outcome_b.completion.rows_affected, Some(2));
 }
 
-// ============================================================================
 // TEST 7: Audit Event Correlation and Tracing
-// ============================================================================
 
 /// E2E.7: Execution events are properly correlated with trace IDs and transactions
 /// Validates: EventEmitter produces events with correct correlation context
@@ -522,9 +493,7 @@ fn e2e_audit_events_correlated_with_trace_and_transaction() {
     assert_eq!(corr.durable_lsn, Some(durable_lsn.get()));
 }
 
-// ============================================================================
 // TEST 8: WAL Durability Evidence Validation
-// ============================================================================
 
 /// E2E.8: WAL durability evidence passes validation invariants
 /// Validates: LSN ordering constraints (begin < mutation < commit <= durable)
@@ -579,9 +548,7 @@ fn e2e_wal_durability_evidence_satisfies_lsn_ordering_invariants() {
     );
 }
 
-// ============================================================================
 // INTEGRATION TEST MATRIX VALIDATOR
-// ============================================================================
 
 /// Validates that all required test paths have been exercised
 #[test]

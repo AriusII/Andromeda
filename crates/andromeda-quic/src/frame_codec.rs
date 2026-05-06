@@ -1,6 +1,4 @@
-//! Frame encoding and decoding.
-//!
-//! This module handles serialization and deserialization of QUIC frames to/from wire format.
+//! Frame wire encoding and decoding.
 
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId, SessionId, TransactionId,
@@ -13,7 +11,6 @@ pub const FRAME_CODEC_HEADER_LEN: usize = 52;
 pub const FRAME_CODEC_HEADER_LEN_U16: u16 = FRAME_CODEC_HEADER_LEN as u16;
 pub const FRAME_CODEC_CRC_OFFSET: usize = 48;
 
-/// Frame codec endianness specification.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FrameCodecEndian {
     NetworkBigEndian,
@@ -21,17 +18,13 @@ pub enum FrameCodecEndian {
 
 pub const FRAME_CODEC_ENDIAN: FrameCodecEndian = FrameCodecEndian::NetworkBigEndian;
 
-/// QUIC frame codec for encoding/decoding wire format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FrameCodec;
 
 impl FrameCodec {
-    /// Fixed frame header length in bytes.
     pub const HEADER_LEN: usize = FRAME_CODEC_HEADER_LEN;
-    /// Endianness used for encoding.
     pub const ENDIAN: FrameCodecEndian = FRAME_CODEC_ENDIAN;
 
-    /// Encodes a frame to wire format with CRC.
     pub fn encode(frame: &FrameBytes) -> AndromedaResult<Vec<u8>> {
         let mut header = frame.header;
         header.payload_length = frame.payload.len() as u64;
@@ -45,7 +38,6 @@ impl FrameCodec {
         Ok(encoded)
     }
 
-    /// Decodes a complete frame from wire format.
     pub fn decode(bytes: &[u8]) -> AndromedaResult<FrameBytes> {
         let (frame, consumed) = Self::scan_one(bytes)?;
         if consumed != bytes.len() {
@@ -55,7 +47,6 @@ impl FrameCodec {
         Ok(frame)
     }
 
-    /// Scans a single frame from a buffer, returning bytes consumed.
     pub fn scan_one(bytes: &[u8]) -> AndromedaResult<(FrameBytes, usize)> {
         if bytes.len() < Self::HEADER_LEN {
             return Err(protocol_error(
@@ -82,7 +73,6 @@ impl FrameCodec {
         Ok((FrameBytes { header, payload }, frame_length))
     }
 
-    /// Scans all frames from a buffer.
     pub fn scan_all(bytes: &[u8]) -> AndromedaResult<Vec<FrameBytes>> {
         let mut frames = Vec::new();
         let mut offset = 0;
@@ -98,7 +88,6 @@ impl FrameCodec {
         Ok(frames)
     }
 
-    /// Computes the CRC32 for a frame header.
     pub fn header_crc(header: &FrameHeader) -> AndromedaResult<u32> {
         header.validate_static_fields()?;
         let encoded = encode_header_with_crc(&FrameHeader {

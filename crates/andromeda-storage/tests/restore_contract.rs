@@ -5,18 +5,13 @@
 
 use andromeda_observe::TraceId;
 use andromeda_storage::{
-    Lsn, WalSegmentDescriptor,
+    Lsn, RecoveryStage, RestoreAuditTrace, RestoreCompletion, RestoreOrchestration,
+    RestoreValidationPolicy, WalSegmentDescriptor,
     backup::{BackupId, BackupManifest, ColdSnapshotBoundary, WalArchiveRange},
-    restore_orchestration::{
-        RecoveryStage, RestoreAuditTrace, RestoreCompletion, RestoreOrchestration,
-        RestoreValidationPolicy, compute_restore_checksum, plan_replay_segments,
-        validate_restore_prerequisites,
-    },
+    compute_restore_checksum, plan_replay_segments, validate_restore_prerequisites,
 };
 
-// ============================================================================
 // Test Fixtures
-// ============================================================================
 
 fn make_test_manifest() -> BackupManifest {
     BackupManifest {
@@ -49,9 +44,7 @@ fn make_wal_segment(
     }
 }
 
-// ============================================================================
 // Test Suite: PITR LSN Validation
-// ============================================================================
 
 #[test]
 fn test_pitr_lsn_within_range() {
@@ -93,9 +86,7 @@ fn test_pitr_lsn_above_range() {
     assert!(validate_restore_prerequisites(&manifest, pitr_lsn).is_err());
 }
 
-// ============================================================================
 // Test Suite: WAL Segment Replay Planning
-// ============================================================================
 
 #[test]
 fn test_plan_replay_single_segment_containing_pitr() {
@@ -181,9 +172,7 @@ fn test_plan_replay_validates_first_segment_no_previous_lsn() {
     assert!(plan.is_err());
 }
 
-// ============================================================================
 // Test Suite: Restore Checksum Computation
-// ============================================================================
 
 #[test]
 fn test_restore_checksum_deterministic() {
@@ -221,9 +210,7 @@ fn test_restore_checksum_varies_with_wal_range() {
     assert_ne!(checksum1, checksum2);
 }
 
-// ============================================================================
 // Test Suite: Audit Trace Validation
-// ============================================================================
 
 #[test]
 fn test_audit_trace_accepts_valid_inputs() {
@@ -311,9 +298,7 @@ fn test_audit_trace_binds_completion_failed() {
     }
 }
 
-// ============================================================================
 // Test Suite: RestoreOrchestration
-// ============================================================================
 
 #[test]
 fn test_restore_orchestration_constructs_successfully() {
@@ -428,9 +413,7 @@ fn test_restore_orchestration_supports_minimal_validation() {
     assert_eq!(orch.validation_policy, RestoreValidationPolicy::Minimal);
 }
 
-// ============================================================================
 // Integration Tests: PITR Checkpoint Reconstruction
-// ============================================================================
 
 #[test]
 fn test_pitr_checkpoint_after_single_segment_replay() {

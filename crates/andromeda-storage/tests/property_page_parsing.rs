@@ -2,13 +2,12 @@
 //!
 //! # Goal
 //! Verify that page structure parsing:
-//! - Detects corruption via checksum validation
 //! - Never corrupts heap or stack memory
 //! - Maintains invariants (bounds checking, size validation)
 //! - Handles malformed headers gracefully
 //!
 //! # Properties Tested
-//! 1. Parser detects invalid checksums → Reject
+//! 1. Parser rejects invalid magic and page-size fields
 //! 2. Parser never reads/writes out of bounds
 //! 3. Parser rejects pages with invalid sizes
 //! 4. Parser validates page type correctly
@@ -21,18 +20,14 @@
 use proptest::prelude::*;
 use std::panic;
 
-// ============================================================================
 // Constants
-// ============================================================================
 
 const PAGE_HEADER_SIZE: usize = 128;
 const PAGE_TRAILER_SIZE: usize = 64;
 const MIN_PAGE_SIZE: u32 = 4096;
 const MAX_PAGE_SIZE: u32 = 65536;
 
-// ============================================================================
 // Mock Page Structures (actual would come from andromeda_storage)
-// ============================================================================
 
 #[derive(Debug, Clone)]
 pub struct PageHeader {
@@ -49,9 +44,7 @@ pub struct PageTrailer {
     pub checksum: u64,
 }
 
-// ============================================================================
 // Test Data Generators
-// ============================================================================
 
 fn _arb_page_size() -> impl Strategy<Value = u32> {
     prop_oneof![
@@ -96,40 +89,28 @@ fn arb_corrupted_byte_position() -> impl Strategy<Value = usize> {
     0usize..PAGE_HEADER_SIZE
 }
 
-// ============================================================================
-// Test 1: Parser detects checksum mismatches
-// ============================================================================
-
 #[test]
-fn prop_page_header_checksum_validation() {
+fn prop_page_header_validated_field_corruption() {
     proptest!(|(
         mut header in arb_valid_page_header(),
         corruption_pos in arb_corrupted_byte_position(),
     )| {
-        // Corrupt one byte
-        if corruption_pos < header.len() && corruption_pos != 24 { // Skip checksum field itself
+        if corruption_pos < header.len() {
             header[corruption_pos] ^= 0xFF;
         }
 
         let result = parse_page_header_safely(&header);
 
-        // Should detect corruption or fail gracefully
-        match result {
-            PageParseResult::Valid(_) => {
-                // If accepted, corruption byte was in non-validated field
-                prop_assert!(true);
-            }
-            PageParseResult::Invalid(_) => {
-                // Correctly detected corruption
-                prop_assert!(true);
-            }
+        if corruption_pos < 8 {
+            prop_assert!(
+                matches!(result, PageParseResult::Invalid(_)),
+                "magic corruption must be rejected"
+            );
+        } else if let PageParseResult::Invalid(message) = result {
+            prop_assert!(!message.is_empty());
         }
     });
 }
-
-// ============================================================================
-// Test 2: Parser never panics on arbitrary bytes
-// ============================================================================
 
 #[test]
 fn prop_page_header_parse_never_panics() {
@@ -138,16 +119,9 @@ fn prop_page_header_parse_never_panics() {
             parse_page_header_safely(&data)
         }));
 
-        match result {
-            Ok(_) => prop_assert!(true, "parsing completed"),
-            Err(_) => prop_assert!(false, "parsing panicked"),
-        }
+        prop_assert!(result.is_ok(), "parsing panicked");
     });
 }
-
-// ============================================================================
-// Test 3: Invalid page sizes rejected
-// ============================================================================
 
 #[test]
 fn prop_page_invalid_size_rejected() {
@@ -162,23 +136,14 @@ fn prop_page_invalid_size_rejected() {
 
         let result = parse_page_header_safely(&header);
 
-        // Should reject invalid size
         match result {
-            PageParseResult::Valid(_) => {
-                // Might accept 0 or very small sizes
-                prop_assert!(true);
+            PageParseResult::Valid(parsed) => {
+                prop_assert!(parsed.page_size >= MIN_PAGE_SIZE);
             }
-            PageParseResult::Invalid(msg) => {
-                // Correctly rejected
-                prop_assert!(!msg.is_empty());
-            }
+            PageParseResult::Invalid(msg) => prop_assert!(!msg.is_empty()),
         }
     });
 }
-
-// ============================================================================
-// Test 4: Oversized pages rejected
-// ============================================================================
 
 #[test]
 fn prop_page_oversized_rejected() {
@@ -193,22 +158,12 @@ fn prop_page_oversized_rejected() {
 
         let result = parse_page_header_safely(&header);
 
-        // Should reject oversized pages
-        match result {
-            PageParseResult::Valid(_) => {
-                // Implementation might allow it
-                prop_assert!(true);
-            }
-            PageParseResult::Invalid(_) => {
-                prop_assert!(true, "oversized page rejected");
-            }
-        }
+        prop_assert!(
+            matches!(result, PageParseResult::Invalid(_)),
+            "oversized page was accepted"
+        );
     });
 }
-
-// ============================================================================
-// Test 5: Truncated headers handled (no buffer overrun)
-// ============================================================================
 
 #[test]
 fn prop_page_truncated_header_safe() {
@@ -224,17 +179,15 @@ fn prop_page_truncated_header_safe() {
             parse_page_header_safely(&header)
         }));
 
-        // Must not panic, even on truncated header
         match result {
-            Ok(_) => prop_assert!(true, "truncated header handled safely"),
+            Ok(PageParseResult::Invalid(message)) if size < 32 => {
+                prop_assert!(!message.is_empty());
+            }
+            Ok(_) => {}
             Err(_) => prop_assert!(false, "truncated header caused panic"),
         }
     });
 }
-
-// ============================================================================
-// Test 6: LSN field preserved correctly
-// ============================================================================
 
 #[test]
 fn prop_page_lsn_preserved() {
@@ -245,7 +198,7 @@ fn prop_page_lsn_preserved() {
         header[0..8].copy_from_slice(&0x414e_4452_4f50_4147u64.to_le_bytes());
 
         // Page size
-        header[8..12].copy_from_slice(&(16384u32).to_le_bytes());
+        header[8..12].copy_from_slice(&16384u32.to_le_bytes());
 
         // LSN at offset 16
         header[16..24].copy_from_slice(&lsn.to_le_bytes());
@@ -254,23 +207,15 @@ fn prop_page_lsn_preserved() {
 
         match result {
             PageParseResult::Valid(parsed) => {
-                // LSN should be preserved
                 prop_assert_eq!(parsed.lsn, lsn);
             }
-            PageParseResult::Invalid(_) => {
-                // OK if validation failed
-                prop_assert!(true);
-            }
+            PageParseResult::Invalid(message) => prop_assert!(!message.is_empty()),
         }
     });
 }
 
-// ============================================================================
-// Test 7: Page trailer corruption detected
-// ============================================================================
-
 #[test]
-fn prop_page_trailer_corruption_detected() {
+fn prop_page_trailer_parse_is_bounded() {
     proptest!(|(
         mut trailer in prop::collection::vec(0u8..=255u8, PAGE_TRAILER_SIZE..PAGE_TRAILER_SIZE + 1),
         corrupt_pos in 0usize..PAGE_TRAILER_SIZE,
@@ -281,32 +226,17 @@ fn prop_page_trailer_corruption_detected() {
 
         let result = parse_page_trailer_safely(&trailer);
 
-        // Trailer parsing should handle corruption
-        match result {
-            PageTrailerResult::Valid => prop_assert!(true),
-            PageTrailerResult::Invalid => prop_assert!(true),
-        }
+        prop_assert!(matches!(result, PageTrailerResult::Valid));
     });
 }
-
-// ============================================================================
-// Test 8: Empty page data rejected
-// ============================================================================
 
 #[test]
 fn prop_page_empty_data_rejected() {
     let empty = vec![];
     let result = parse_page_header_safely(&empty);
 
-    match result {
-        PageParseResult::Valid(_) => assert!(true),
-        PageParseResult::Invalid(_) => assert!(true, "empty page correctly rejected"),
-    }
+    assert!(matches!(result, PageParseResult::Invalid(_)));
 }
-
-// ============================================================================
-// Test 9: Magic number validation
-// ============================================================================
 
 #[test]
 fn prop_page_magic_validation() {
@@ -321,28 +251,17 @@ fn prop_page_magic_validation() {
         header[0..8].copy_from_slice(&wrong_magic.to_le_bytes());
 
         // Valid page size
-        header[8..12].copy_from_slice(&(16384u32).to_le_bytes());
+        header[8..12].copy_from_slice(&16384u32.to_le_bytes());
 
         let result = parse_page_header_safely(&header);
 
-        // Should reject wrong magic
-        match result {
-            PageParseResult::Valid(_) => {
-                // Parser might not validate magic strictly
-                prop_assert!(true);
-            }
-            PageParseResult::Invalid(_) => {
-                // Correctly rejected
-                prop_assert!(true);
-            }
-        }
+        prop_assert!(
+            matches!(result, PageParseResult::Invalid(_)),
+            "wrong magic was accepted"
+        );
 
     });
 }
-
-// ============================================================================
-// Test 10: Large corrupted page data handled
-// ============================================================================
 
 #[test]
 fn prop_page_large_corrupted_data() {
@@ -359,15 +278,17 @@ fn prop_page_large_corrupted_data() {
         }));
 
         match result {
-            Ok(_) => prop_assert!(true, "large data handled"),
+            Ok(PageParseResult::Valid(parsed)) => {
+                prop_assert_eq!(parsed.magic, 0x414e_4452_4f50_4147);
+                prop_assert!((MIN_PAGE_SIZE..=MAX_PAGE_SIZE).contains(&parsed.page_size));
+            }
+            Ok(PageParseResult::Invalid(message)) => prop_assert!(!message.is_empty()),
             Err(_) => prop_assert!(false, "large data caused panic"),
         }
     });
 }
 
-// ============================================================================
 // Mock Parser Implementation
-// ============================================================================
 
 #[derive(Debug, Clone)]
 enum PageParseResult {
@@ -396,7 +317,7 @@ fn parse_page_header_safely(data: &[u8]) -> PageParseResult {
 
     let page_size = u32::from_le_bytes([data[8], data[9], data[10], data[11]]);
 
-    if page_size < MIN_PAGE_SIZE || page_size > MAX_PAGE_SIZE {
+    if !(MIN_PAGE_SIZE..=MAX_PAGE_SIZE).contains(&page_size) {
         return PageParseResult::Invalid("invalid page size".to_string());
     }
 
@@ -429,33 +350,6 @@ fn parse_page_trailer_safely(data: &[u8]) -> PageTrailerResult {
     PageTrailerResult::Valid
 }
 
-// ============================================================================
-// Coverage Matrix for Page Parsing Tests
-// ============================================================================
-
-#[test]
-fn page_parsing_test_coverage_verified() {
-    println!("Page Header/Trailer Parsing Tests (10):");
-    println!("  - checksum validation: ✓");
-    println!("  - panic detection: ✓");
-    println!("  - invalid size rejection: ✓");
-    println!("  - oversized page rejection: ✓");
-    println!("  - truncated header handling: ✓");
-    println!("  - LSN preservation: ✓");
-    println!("  - trailer corruption detection: ✓");
-    println!("  - empty data handling: ✓");
-    println!("  - magic number validation: ✓");
-    println!("  - large data handling: ✓");
-    println!();
-    println!("Total: 10 property-based tests");
-    println!("Iterations: 1000+ per property");
-    println!("Coverage: Bounds checking, corruption detection, invariant preservation");
-}
-
-// ============================================================================
-// Integration Test: Page read/parse/validate cycle
-// ============================================================================
-
 #[test]
 fn integration_page_full_validation_cycle() {
     proptest!(|(
@@ -465,10 +359,14 @@ fn integration_page_full_validation_cycle() {
         ),
     )| {
         for header_data in pages.iter() {
-            let _result = parse_page_header_safely(header_data);
-
-            // Should not panic, should produce a result
-            prop_assert!(true);
+            let result = parse_page_header_safely(header_data);
+            match result {
+                PageParseResult::Valid(parsed) => {
+                    prop_assert_eq!(parsed.magic, 0x414e_4452_4f50_4147);
+                    prop_assert!((MIN_PAGE_SIZE..=MAX_PAGE_SIZE).contains(&parsed.page_size));
+                }
+                PageParseResult::Invalid(message) => prop_assert!(!message.is_empty()),
+            }
         }
     });
 }

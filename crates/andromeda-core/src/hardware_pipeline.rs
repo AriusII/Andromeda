@@ -1,48 +1,21 @@
-//! Pipeline classification for different execution contexts.
-//!
-//! This module categorizes different types of database operations into pipeline classes
-//! that determine which resources and policies apply to their execution.
+//! Pipeline classification for resource and GPU policy checks.
 
 /// Classification of operational pipelines by execution context and criticality.
-///
-/// Different pipeline types have different resource and GPU constraints,
-/// prioritization, and failure recovery requirements.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PipelineClass {
-    /// Transaction commit operations (critical path)
     Commit,
-    /// Write-ahead log (WAL) append (critical path)
     WalAppend,
-    /// Transaction rollback (critical path)
     Rollback,
-    /// Recovery from crash or interruption (critical path)
     Recovery,
-    /// User-facing query execution (foreground)
     ForegroundExecution,
-    /// Background maintenance operations
     BackgroundMaintenance,
-    /// Statistics and histogram collection
     StatisticsRefresh,
-    /// Bloom filter or index map refresh
     MapRefresh,
-    /// Batch analytics and reporting queries
     BatchAnalytics,
 }
 
 impl PipelineClass {
-    /// Returns true if this pipeline is part of the critical path.
-    ///
-    /// Critical path pipelines must complete successfully to maintain
-    /// database consistency and durability. They have strict constraints:
-    /// - GPU is never allowed
-    /// - Must not be preempted or delayed
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// assert!(PipelineClass::Commit.is_critical_path());
-    /// assert!(!PipelineClass::BatchAnalytics.is_critical_path());
-    /// ```
+    /// Commit, WAL, rollback, and recovery stay off accelerated paths.
     pub const fn is_critical_path(self) -> bool {
         matches!(
             self,
@@ -51,14 +24,6 @@ impl PipelineClass {
     }
 
     /// Returns the stable string name for this pipeline class.
-    ///
-    /// Used in logging, metrics, and error messages.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// assert_eq!(PipelineClass::BatchAnalytics.name(), "batch_analytics");
-    /// ```
     pub const fn name(self) -> &'static str {
         match self {
             Self::Commit => "commit",

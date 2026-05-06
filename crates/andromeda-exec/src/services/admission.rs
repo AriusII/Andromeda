@@ -5,32 +5,9 @@ use std::sync::Arc;
 use super::permission_evaluator::{PermissionDecision, PermissionEvaluator};
 use crate::{CompletionStatus, InvocationContext, InvocationReject, InvocationRequest};
 
-/// Admission control service: contract validation + IAM authorization.
-///
-/// This service validates invocation requests and enforces RBAC permissions
-/// before transaction creation and execution.
-///
-/// ## Authorization Flow
-///
-/// 1. Validate invocation request (InvocationId, contract hash, etc.)
-/// 2. Extract certificate fingerprint from QUIC connection context
-/// 3. Evaluate principal's permissions using PermissionEvaluator
-/// 4. Emit audit event (PermissionCheckInitiated)
-/// 5. Return decision (allow/deny) with audit trail
-/// 6. If allowed, proceed to transaction creation
-/// 7. If denied, emit PermissionCheckResult (denied) and reject request
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct AdmissionService {
-    /// Permission evaluator for authorization checks.
     pub permission_evaluator: Option<Arc<dyn PermissionEvaluator>>,
-}
-
-impl Default for AdmissionService {
-    fn default() -> Self {
-        Self {
-            permission_evaluator: None,
-        }
-    }
 }
 
 impl AdmissionService {
@@ -106,25 +83,6 @@ impl AdmissionService {
         })
     }
 
-    /// Evaluate IAM permission for a principal (Wave 19 integration point).
-    ///
-    /// This method is called by the admission control pipeline to enforce RBAC
-    /// permissions before transaction creation. It:
-    /// 1. Resolves the principal from certificate fingerprint
-    /// 2. Checks if the principal has the required permission
-    /// 3. Returns decision for audit logging
-    ///
-    /// # Arguments
-    ///
-    /// * `cert_fingerprint` - X.509 certificate fingerprint from QUIC connection
-    /// * `required_permission` - Permission required for the action
-    /// * `procedure_id` - Procedure being invoked (for audit trail)
-    /// * `trace_id` - Trace ID for audit event correlation
-    ///
-    /// # Returns
-    ///
-    /// `Ok(())` if permission is granted
-    /// `Err(InvocationReject)` if permission is denied
     pub fn evaluate_permission(
         &self,
         cert_fingerprint: &str,
@@ -132,44 +90,32 @@ impl AdmissionService {
         _procedure_id: ProcedureId,
         _trace_id: TraceId,
     ) -> Result<(), InvocationReject> {
-        // If no evaluator is configured, allow all access (development mode)
         let evaluator = match &self.permission_evaluator {
             Some(e) => e,
             None => {
-                // No permission evaluator configured; default allow
                 return Ok(());
             }
         };
 
-        // TODO(Wave 19): Implement audit event emission (PermissionCheckInitiated)
-        // This will be integrated with andromeda-observe::admission_audit
-
-        // Evaluate permission
         let decision = evaluator.evaluate_permission(cert_fingerprint, required_permission);
 
         match decision {
             PermissionDecision::Allowed {
                 principal_id: _, ..
-            } => {
-                // TODO(Wave 19): Emit PermissionCheckResult(Allowed)
-                Ok(())
-            }
+            } => Ok(()),
             PermissionDecision::Denied {
                 principal_id,
                 reason,
                 ..
-            } => {
-                // TODO(Wave 19): Emit PermissionCheckResult(Denied)
-                Err(InvocationReject {
-                    status: CompletionStatus::PermissionDenied,
-                    reason: format!(
-                        "access denied: {} [principal: {:?}, reason: {}]",
-                        required_permission,
-                        principal_id.map(|id| id.get()),
-                        reason
-                    ),
-                })
-            }
+            } => Err(InvocationReject {
+                status: CompletionStatus::PermissionDenied,
+                reason: format!(
+                    "access denied: {} [principal: {:?}, reason: {}]",
+                    required_permission,
+                    principal_id.map(|id| id.get()),
+                    reason
+                ),
+            }),
         }
     }
 }

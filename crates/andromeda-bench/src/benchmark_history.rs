@@ -89,10 +89,10 @@ impl BenchmarkHistoryRecord {
             self.branch
                 .as_ref()
                 .map(|b| format!(r#""{}""#, escape_json_string(b)))
-                .unwrap_or("null".to_string()),
+                .unwrap_or_else(|| "null".to_string()),
             self.pr_number
                 .map(|p| p.to_string())
-                .unwrap_or("null".to_string())
+                .unwrap_or_else(|| "null".to_string())
         )
     }
 
@@ -136,14 +136,23 @@ impl BenchmarkHistoryRecord {
         baseline_p95_us: u64,
         threshold_pct: f64,
     ) -> bool {
-        let p50_pct = ((self.p50_latency_us as f64 - baseline_p50_us as f64)
-            / baseline_p50_us as f64)
-            * 100.0;
-        let p95_pct = ((self.p95_latency_us as f64 - baseline_p95_us as f64)
-            / baseline_p95_us as f64)
-            * 100.0;
+        let p50_pct = percent_change(self.p50_latency_us, baseline_p50_us);
+        let p95_pct = percent_change(self.p95_latency_us, baseline_p95_us);
 
         p50_pct > threshold_pct || p95_pct > threshold_pct
+    }
+}
+
+/// Compute a finite percentage change from `baseline` to `current`.
+///
+/// A zero baseline has no mathematically meaningful percentage delta, but benchmark
+/// histories still need deterministic regression/trend behavior. Treat a move from
+/// zero to a positive value as a full finite regression and zero to zero as unchanged.
+fn percent_change(current: u64, baseline: u64) -> f64 {
+    match (current, baseline) {
+        (0, 0) => 0.0,
+        (_, 0) => 100.0,
+        _ => ((current as f64 - baseline as f64) / baseline as f64) * 100.0,
     }
 }
 
@@ -204,9 +213,9 @@ impl HistoryQueryResult {
         if self.records.len() < 2 {
             return None;
         }
-        let first = self.records.first().unwrap().p50_latency_us as f64;
-        let last = self.records.last().unwrap().p50_latency_us as f64;
-        Some(((last - first) / first) * 100.0)
+        let first = self.records.first()?.p50_latency_us;
+        let last = self.records.last()?.p50_latency_us;
+        Some(percent_change(last, first))
     }
 
     /// Returns overall P95 trend as a percentage.
@@ -216,9 +225,9 @@ impl HistoryQueryResult {
         if self.records.len() < 2 {
             return None;
         }
-        let first = self.records.first().unwrap().p95_latency_us as f64;
-        let last = self.records.last().unwrap().p95_latency_us as f64;
-        Some(((last - first) / first) * 100.0)
+        let first = self.records.first()?.p95_latency_us;
+        let last = self.records.last()?.p95_latency_us;
+        Some(percent_change(last, first))
     }
 
     /// Returns the commit ID and regression percentage of the single largest P50 degradation step
@@ -231,13 +240,11 @@ impl HistoryQueryResult {
         let mut max_regression = 0.0;
         let mut regression_commit = None;
 
-        for i in 0..self.records.len() - 1 {
-            let current = &self.records[i];
-            let next = &self.records[i + 1];
+        for pair in self.records.windows(2) {
+            let current = &pair[0];
+            let next = &pair[1];
 
-            let p50_regression = ((next.p50_latency_us as f64 - current.p50_latency_us as f64)
-                / current.p50_latency_us as f64)
-                * 100.0;
+            let p50_regression = percent_change(next.p50_latency_us, current.p50_latency_us);
 
             if p50_regression > threshold_pct && p50_regression > max_regression {
                 max_regression = p50_regression;
@@ -254,13 +261,11 @@ impl HistoryQueryResult {
             return false;
         }
 
-        for i in 0..self.records.len() - 1 {
-            let current = &self.records[i];
-            let next = &self.records[i + 1];
+        for pair in self.records.windows(2) {
+            let current = &pair[0];
+            let next = &pair[1];
 
-            let p50_change = ((next.p50_latency_us as f64 - current.p50_latency_us as f64)
-                / current.p50_latency_us as f64)
-                * 100.0;
+            let p50_change = percent_change(next.p50_latency_us, current.p50_latency_us);
 
             if p50_change > -threshold_pct {
                 return false;
@@ -332,6 +337,33 @@ mod tests {
     }
 
     #[test]
+    fn test_regression_detection_with_zero_baseline_is_finite() {
+        let unchanged_zero = BenchmarkHistoryRecord::new(
+            "test".to_string(),
+            "commit".to_string(),
+            "2026-01-15T12:00:00Z".to_string(),
+            0,
+            0,
+            0,
+            10,
+        );
+
+        assert!(!unchanged_zero.is_regressed_vs_baseline(0, 0, 2.5));
+
+        let nonzero_current = BenchmarkHistoryRecord::new(
+            "test".to_string(),
+            "commit".to_string(),
+            "2026-01-15T12:00:00Z".to_string(),
+            1,
+            0,
+            0,
+            10,
+        );
+
+        assert!(nonzero_current.is_regressed_vs_baseline(0, 0, 2.5));
+    }
+
+    #[test]
     fn test_time_range() {
         let range = TimeRange::new(
             "2026-01-15T00:00:00Z".to_string(),
@@ -388,6 +420,44 @@ mod tests {
     }
 
     #[test]
+    fn test_query_result_zero_baseline_trends_are_finite() {
+        let records = vec![
+            BenchmarkHistoryRecord::new(
+                "test".to_string(),
+                "c1".to_string(),
+                "2026-01-15T12:00:00Z".to_string(),
+                0,
+                0,
+                0,
+                10,
+            ),
+            BenchmarkHistoryRecord::new(
+                "test".to_string(),
+                "c2".to_string(),
+                "2026-01-15T13:00:00Z".to_string(),
+                10,
+                0,
+                0,
+                10,
+            ),
+        ];
+
+        let result = HistoryQueryResult {
+            workload_id: "test".to_string(),
+            records,
+            total_in_store: 2,
+        };
+
+        let trend_p50 = result.trend_p50().unwrap();
+        let trend_p95 = result.trend_p95().unwrap();
+
+        assert!(trend_p50.is_finite());
+        assert!(trend_p95.is_finite());
+        assert_eq!(trend_p50, 100.0);
+        assert_eq!(trend_p95, 0.0);
+    }
+
+    #[test]
     fn test_find_regression_point() {
         let records = vec![
             BenchmarkHistoryRecord::new(
@@ -428,6 +498,41 @@ mod tests {
         let regression = result.find_regression_point(5.0).unwrap();
         assert_eq!(regression.0, "c3");
         assert!(regression.1 > 25.0);
+    }
+
+    #[test]
+    fn test_find_regression_point_with_zero_previous_value_is_finite() {
+        let records = vec![
+            BenchmarkHistoryRecord::new(
+                "test".to_string(),
+                "c1".to_string(),
+                "2026-01-15T12:00:00Z".to_string(),
+                0,
+                500,
+                0,
+                10,
+            ),
+            BenchmarkHistoryRecord::new(
+                "test".to_string(),
+                "c2".to_string(),
+                "2026-01-15T13:00:00Z".to_string(),
+                1,
+                510,
+                0,
+                10,
+            ),
+        ];
+
+        let result = HistoryQueryResult {
+            workload_id: "test".to_string(),
+            records,
+            total_in_store: 2,
+        };
+
+        let regression = result.find_regression_point(5.0).unwrap();
+        assert_eq!(regression.0, "c2");
+        assert_eq!(regression.1, 100.0);
+        assert!(regression.1.is_finite());
     }
 
     #[test]

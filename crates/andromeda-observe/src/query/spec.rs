@@ -5,10 +5,10 @@ use andromeda_core::{
 use super::TraceEventFamily;
 use crate::TraceId;
 
-/// Maximum rows a V1 operator trace query may return.
+/// Maximum rows per trace query.
 pub const TRACE_QUERY_MAX_LIMIT: usize = 1_000;
 
-/// Default bounded row limit when a caller does not request one explicitly.
+/// Default trace query row limit.
 pub const TRACE_QUERY_DEFAULT_LIMIT: usize = 100;
 
 /// Inclusive LSN interval for trace event filtering.
@@ -32,20 +32,16 @@ impl TraceQueryLsnRange {
     }
 }
 
-/// Allowed typed filters for V1 operator trace queries.
+/// Typed trace query filters.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct TraceQueryFilter {
     pub trace_id: Option<TraceId>,
     pub family: Option<TraceEventFamily>,
     pub lsn_range: Option<TraceQueryLsnRange>,
     pub catalog_version: Option<CatalogVersion>,
-    /// Procedure identity is matched through `EventCorrelation.catalog_object_id`
-    /// because V1 trace envelopes do not yet carry a dedicated procedure id
-    /// field. Producers that want this filter to match must set the procedure's
-    /// catalog object id in the envelope correlation.
+    /// Matched through `EventCorrelation.catalog_object_id`.
     pub procedure_id: Option<ProcedureId>,
-    /// Principal identity is matched only against audit payloads that explicitly
-    /// carry a `UserPrincipal` or legacy `AuditTrace.actor` evidence.
+    /// Matched against audit payload principal evidence.
     pub principal: Option<String>,
 }
 
@@ -59,21 +55,19 @@ impl TraceQueryFilter {
             && self
                 .principal
                 .as_ref()
-                .map_or(true, |principal| principal.trim().is_empty())
+                .is_none_or(|principal| principal.trim().is_empty())
     }
 }
 
-/// Fully bounded V1 trace query request.
+/// Bounded trace query request.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TraceQuerySpec {
     pub filter: TraceQueryFilter,
-    /// Maximum rows to return after filtering. Must be 1..=TRACE_QUERY_MAX_LIMIT.
+    /// Maximum rows to return after filtering.
     pub limit: usize,
-    /// Number of matching rows to skip before collection. This is deterministic
-    /// over ascending `EventId` order and is bounded by the in-memory source size.
+    /// Matching rows to skip before collection.
     pub offset: usize,
-    /// Whether the query should compute the full matching count. If false,
-    /// `total_matching_rows` is `None` and only returned row count is reported.
+    /// Whether to compute the full matching count.
     pub include_total_count: bool,
 }
 

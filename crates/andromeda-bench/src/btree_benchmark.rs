@@ -2,9 +2,7 @@
 
 //! B-Tree benchmark harness for read-only lookup and range scan operations.
 //!
-//! Uses an in-memory mock tree with deterministic keys. Mutation benchmarks
-//! (insert, delete, split, merge) and the real `BTreeIndexEngine` substitution
-//! are deferred per DEC-038.
+//! Uses an in-memory mock tree with deterministic keys.
 //!
 //! ## Invariants
 //!
@@ -15,19 +13,15 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-/// Configuration for B-Tree benchmark runs.
 #[derive(Debug, Clone)]
 pub struct BTreeBenchmarkConfig {
-    /// Number of keys in the initial dataset.
     pub dataset_size: usize,
-    /// Percentage of lookups that hit existing keys (0–100).
     pub hit_rate_percent: u8,
-    /// Range scan key count distribution (min, typical, max).
     pub range_scan_distribution: (usize, usize, usize),
 }
 
-impl BTreeBenchmarkConfig {
-    pub fn default() -> Self {
+impl Default for BTreeBenchmarkConfig {
+    fn default() -> Self {
         Self {
             dataset_size: 10_000,
             hit_rate_percent: 80,
@@ -37,11 +31,8 @@ impl BTreeBenchmarkConfig {
 }
 
 /// In-memory B-Tree mock that models read-only performance of a sorted key set.
-///
-/// Mutation methods are intentionally absent; this type cannot be misused at compile time.
 #[derive(Debug)]
 struct MockBTreeIndex {
-    /// Sorted keys for binary search simulation.
     keys: Vec<Vec<u8>>,
 }
 
@@ -55,9 +46,6 @@ impl MockBTreeIndex {
         Self { keys }
     }
 
-    /// Simulate a single-key lookup via binary search (O(log N) comparisons).
-    ///
-    /// Returns the number of comparisons examined, which models realistic traversal cost.
     fn lookup(&self, key: &[u8]) -> usize {
         let mut comparisons = 0;
         let mut left = 0;
@@ -75,10 +63,6 @@ impl MockBTreeIndex {
         comparisons
     }
 
-    /// Simulate a range scan: O(log N) to locate the start, then O(K) for K keys in range.
-    ///
-    /// Returns the total comparisons, which models traversal cost across root-to-leaf
-    /// and leaf-node sibling links.
     fn range_scan(&self, start_key: &[u8], end_key: &[u8]) -> usize {
         let mut comparisons = 0;
 
@@ -107,8 +91,6 @@ impl MockBTreeIndex {
     }
 }
 
-/// Benchmark context holding the in-memory mock tree and configuration.
-///
 /// TECH-DEBT: Context: Replace `MockBTreeIndex` with `BTreeIndexEngine` once the real engine
 /// exists with buffer pool, WAL, and catalog wiring.
 /// Risk: Until replaced, benchmark latencies do not include page IO or WAL append cost.
@@ -119,20 +101,19 @@ pub struct BTreeBenchmarkContext {
     config: BTreeBenchmarkConfig,
 }
 
-/// Error type for benchmark harness operations.
+impl BTreeBenchmarkContext {
+    pub fn config(&self) -> &BTreeBenchmarkConfig {
+        &self.config
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BTreeBenchmarkError {
-    /// Benchmark setup failed (e.g., zero-size dataset).
     SetupFailed,
-    /// Invalid benchmark configuration.
     InvalidConfig,
-    /// Latency measurement overflowed u64 microseconds.
     LatencyOverflow,
 }
 
-/// Initialize a B-Tree lookup benchmark context.
-///
-/// Creates an in-memory mock tree with `config.dataset_size` deterministic keys.
 pub fn setup_btree_lookup_harness(
     config: BTreeBenchmarkConfig,
 ) -> Result<BTreeBenchmarkContext, BTreeBenchmarkError> {
@@ -144,9 +125,6 @@ pub fn setup_btree_lookup_harness(
     Ok(BTreeBenchmarkContext { tree, config })
 }
 
-/// Initialize a B-Tree range scan benchmark context.
-///
-/// Creates an in-memory mock tree with `config.dataset_size` deterministic keys.
 pub fn setup_btree_range_scan_harness(
     config: BTreeBenchmarkConfig,
 ) -> Result<BTreeBenchmarkContext, BTreeBenchmarkError> {
@@ -158,9 +136,6 @@ pub fn setup_btree_range_scan_harness(
     Ok(BTreeBenchmarkContext { tree, config })
 }
 
-/// Benchmark a single B-Tree lookup operation.
-///
-/// Returns elapsed time in microseconds (minimum 1 µs due to timer clamping).
 pub fn benchmark_btree_lookup(
     ctx: &BTreeBenchmarkContext,
     key: &[u8],
@@ -175,9 +150,6 @@ pub fn benchmark_btree_lookup(
         .map_err(|_| BTreeBenchmarkError::LatencyOverflow)
 }
 
-/// Benchmark a single B-Tree range scan operation.
-///
-/// Returns elapsed time in microseconds (minimum 1 µs due to timer clamping).
 pub fn benchmark_btree_range_scan(
     ctx: &BTreeBenchmarkContext,
     start_key: &[u8],
@@ -200,7 +172,8 @@ mod tests {
     #[test]
     fn test_btree_harness_setup_lookup() {
         let config = BTreeBenchmarkConfig::default();
-        assert!(setup_btree_lookup_harness(config).is_ok());
+        let ctx = setup_btree_lookup_harness(config).unwrap();
+        assert_eq!(ctx.config().dataset_size, 10_000);
     }
 
     #[test]

@@ -178,25 +178,19 @@ fn test_commit_log_rebuilds_missing_status_from_local_records() {
 
     let status_table = Arc::new(TransactionStatusTable::new());
     let recovered = CommitLogManager::new(MockWal::new(), status_table.clone());
-    recovered.commit_entries.insert(
-        committed,
-        CommitLogEntry {
-            tx_id: committed,
-            commit_lsn: Lsn::new(21),
-            timestamp: EngineTimestamp::from_unix_millis(1),
-            row_count_affected: 2,
-            isolation_level: IsolationLevel::Serializable,
-        },
-    );
-    recovered.rollback_entries.insert(
-        rolled_back,
-        RollbackLogEntry {
-            tx_id: rolled_back,
-            rollback_lsn: Lsn::new(22),
-            timestamp: EngineTimestamp::from_unix_millis(2),
-            parameter_hash: 3,
-        },
-    );
+    recovered.seed_commit_entry_without_status(CommitLogEntry {
+        tx_id: committed,
+        commit_lsn: Lsn::new(21),
+        timestamp: EngineTimestamp::from_unix_millis(1),
+        row_count_affected: 2,
+        isolation_level: IsolationLevel::Serializable,
+    });
+    recovered.seed_rollback_entry_without_status(RollbackLogEntry {
+        tx_id: rolled_back,
+        rollback_lsn: Lsn::new(22),
+        timestamp: EngineTimestamp::from_unix_millis(2),
+        parameter_hash: 3,
+    });
 
     let summary = recovered.rebuild_status_from_records().unwrap();
     assert_eq!(summary.committed_restored, 1);

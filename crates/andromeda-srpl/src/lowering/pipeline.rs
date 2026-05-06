@@ -18,16 +18,8 @@ use crate::{
 
 use super::validation::{validate_ast_names_for_diagnostics, validate_declared_error_codes};
 
-// ---------------------------------------------------------------------------
-// Source constant
-// ---------------------------------------------------------------------------
-
 /// Canonical PDF-style SRPL source for `Inventory.ReserveStock`.
 pub const INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE: &str = "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool) begin ensure Inventory.ProductStock Stock where ProductId = Stock.ProductId and Stock.AvailableQuantity >= Quantity else fail InsufficientStock; update Inventory.ProductStock set AvailableQuantity = Stock.AvailableQuantity - Quantity where ProductId = Stock.ProductId affected rows 1; return Reservation (Reserved); end;";
-
-// ---------------------------------------------------------------------------
-// Stage 1: bound procedure → SrplProcedureIr
-// ---------------------------------------------------------------------------
 
 /// Lowers a [`BoundProcedure`] to a [`SrplProcedureIr`].
 pub fn lower_bound_procedure(bound: BoundProcedure) -> AndromedaResult<SrplProcedureIr> {
@@ -203,10 +195,6 @@ pub fn lower_body_ast(body: ProcedureBodyAst) -> AndromedaResult<SrplProcedureBo
     Ok(ir)
 }
 
-// ---------------------------------------------------------------------------
-// Stage 2: source → SrplProcedureIr (narrow compile)
-// ---------------------------------------------------------------------------
-
 /// Parses, binds, and lowers a narrow SRPL procedure source to [`SrplProcedureIr`].
 ///
 /// Returns a [`crate::SrplDiagnostic`] on the first detected violation.
@@ -231,10 +219,6 @@ pub fn compile_narrow_procedure_signature(
         crate::SrplDiagnostic::new(crate::DiagnosticPhase::IrLowering, None, error.to_string())
     })
 }
-
-// ---------------------------------------------------------------------------
-// Stage 3: SrplProcedureIr → ProcedureContractCandidate
-// ---------------------------------------------------------------------------
 
 /// Lowers a [`SrplProcedureIr`] and its [`SrplProcedureContractMetadata`] to a
 /// [`ProcedureContractCandidate`] ready for catalog insertion.
@@ -306,10 +290,6 @@ pub fn compile_narrow_procedure_contract_candidate(
     })
 }
 
-// ---------------------------------------------------------------------------
-// Stage 4: SrplProcedureIr → CatalogDefinition
-// ---------------------------------------------------------------------------
-
 /// Lowers a [`SrplProcedureIr`] to a [`CatalogDefinition`] ready for a
 /// [`DefinitionBatch`].
 pub fn lower_ir_to_catalog_definition(
@@ -349,10 +329,6 @@ pub fn compile_narrow_procedure_definition_batch(
         operations: vec![DefinitionOperation::Create(definition)],
     })
 }
-
-// ---------------------------------------------------------------------------
-// Inventory.ReserveStock helpers
-// ---------------------------------------------------------------------------
 
 /// Builds the [`SrplProcedureContractMetadata`] for `Inventory.ReserveStock`
 /// from the catalog fixture.

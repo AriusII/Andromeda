@@ -13,10 +13,6 @@ use crate::{
     SrplProcedureIr, SrplValueIr,
 };
 
-// ---------------------------------------------------------------------------
-// Error-code validation
-// ---------------------------------------------------------------------------
-
 /// Verifies that every `Assert` and `Raise` operation in `body` uses a code
 /// that appears in `declared_error_codes`.
 pub(super) fn validate_declared_error_codes(
@@ -44,10 +40,6 @@ pub(super) fn validate_declared_error_codes(
 
     Ok(())
 }
-
-// ---------------------------------------------------------------------------
-// AST name uniqueness — produces diagnostics rather than raw errors
-// ---------------------------------------------------------------------------
 
 /// Validates that parameter names, result stream names, and column names inside
 /// each result stream are all unique. Returns a [`crate::SrplDiagnostic`] on
@@ -90,10 +82,6 @@ pub(super) fn validate_ast_names_for_diagnostics(
 
     Ok(())
 }
-
-// ---------------------------------------------------------------------------
-// Predicate and value validation against catalog bindings
-// ---------------------------------------------------------------------------
 
 /// Validates every predicate in the slice.
 pub(super) fn validate_predicates(
@@ -195,10 +183,6 @@ pub(super) fn require_column(
         ))
     }
 }
-
-// ---------------------------------------------------------------------------
-// SQL-surface rejection
-// ---------------------------------------------------------------------------
 
 /// Walks the entire IR body and rejects any symbol that resembles an SQL
 /// keyword, enforcing the no-ad-hoc-SQL doctrine at the IR layer.

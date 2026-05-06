@@ -240,8 +240,6 @@ impl CatalogWalRecordReplayExt for CatalogWalRecord {
     }
 }
 
-// ─── LSN-Anchored Catalog Replay ───────────────────────────────────────────
-
 /// A catalog WAL record paired with its storage-WAL LSN for LSN-based
 /// filtering during crash recovery.
 ///

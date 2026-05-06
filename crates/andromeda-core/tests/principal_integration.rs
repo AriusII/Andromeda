@@ -1,31 +1,14 @@
-//! Principal integration tests: certificate extraction → Principal → permission evaluation.
-//!
-//! This test suite validates the full IAM pipeline:
-//! 1. X.509 certificate → ParsedCertificate
-//! 2. ParsedCertificate → core::Principal
-//! 3. Principal session binding & immutability
-//! 4. observe::UserPrincipal ↔ core::Principal mapping
-//! 5. Permission evaluation against Principal role
-//! 6. Integration with admission control (SecurityAuditTrace emission)
-
 #[cfg(test)]
 mod tests {
     use andromeda_core::{
-        ProcedureId,
-        principal::{
-            CertificateFingerprint, Permission, PermissionSet, Principal, PrincipalId,
-            PrincipalRole, SessionToken,
-        },
+        CertificateFingerprint, Permission, PermissionSet, Principal, PrincipalId, PrincipalRole,
+        ProcedureId, SessionToken,
     };
 
-    // ========== Test Helpers ==========
-
-    /// Create a valid test certificate fingerprint (SHA-256 hex).
     fn test_fingerprint() -> String {
         "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2".to_string()
     }
 
-    /// Create a test Principal with User role.
     fn test_principal() -> Principal {
         let fingerprint =
             CertificateFingerprint::new(test_fingerprint()).expect("valid fingerprint");
@@ -35,7 +18,6 @@ mod tests {
         Principal::new(id, PrincipalRole::User, token, fingerprint).expect("valid principal")
     }
 
-    /// Create a test Principal with SuperAdmin role.
     fn test_superadmin_principal() -> Principal {
         let fingerprint =
             CertificateFingerprint::new(test_fingerprint()).expect("valid fingerprint");
@@ -44,8 +26,6 @@ mod tests {
 
         Principal::new(id, PrincipalRole::SuperAdmin, token, fingerprint).expect("valid principal")
     }
-
-    // ========== PrincipalId Tests ==========
 
     #[test]
     fn test_principal_id_non_zero_required() {
@@ -72,8 +52,6 @@ mod tests {
         assert_eq!(ids.len(), 1, "duplicate IDs must deduplicate in set");
     }
 
-    // ========== SessionToken Tests ==========
-
     #[test]
     fn test_session_token_immutability() {
         let token = SessionToken::new("immutable-token-42");
@@ -95,8 +73,6 @@ mod tests {
         assert!(empty.is_empty(), "empty token must be detected");
         assert!(!nonempty.is_empty(), "non-empty token must be valid");
     }
-
-    // ========== CertificateFingerprint Tests ==========
 
     #[test]
     fn test_certificate_fingerprint_sha256_validation() {
@@ -130,8 +106,6 @@ mod tests {
             "whitespace-only fingerprint must be rejected"
         );
     }
-
-    // ========== Principal Creation Tests ==========
 
     #[test]
     fn test_principal_creation_validates_non_zero_id() {
@@ -189,19 +163,17 @@ mod tests {
     }
 
     #[test]
-    fn test_principal_creation_validates_non_empty_fingerprint() {
-        let empty_fp = CertificateFingerprint::new_unchecked("");
+    fn test_principal_creation_uses_checked_certificate_fingerprint() {
+        assert!(CertificateFingerprint::new("").is_none());
+        assert!(CertificateFingerprint::new("   ").is_none());
+
+        let fingerprint =
+            CertificateFingerprint::new(test_fingerprint()).expect("valid fingerprint");
         let token = SessionToken::new("token");
         let id = PrincipalId::new(42);
 
-        let result = Principal::new(id, PrincipalRole::User, token, empty_fp);
-        assert!(
-            result.is_none(),
-            "empty fingerprint must cause principal creation to fail"
-        );
+        assert!(Principal::new(id, PrincipalRole::User, token, fingerprint).is_some());
     }
-
-    // ========== Principal Determinism Tests ==========
 
     #[test]
     fn test_principal_deterministic_creation() {
@@ -236,8 +208,6 @@ mod tests {
             "created_at must not be in future"
         );
     }
-
-    // ========== Principal Permission Tests ==========
 
     #[test]
     fn test_principal_permissions_by_role() {
@@ -309,8 +279,6 @@ mod tests {
         );
     }
 
-    // ========== Session Immutability Tests ==========
-
     #[test]
     fn test_session_token_immutable_during_principal_lifetime() {
         let p = test_principal();
@@ -333,8 +301,6 @@ mod tests {
 
         assert_eq!(role_1, role_2, "role must not change");
     }
-
-    // ========== Principal Masking Tests ==========
 
     #[test]
     fn test_masked_display_hides_fingerprint() {
@@ -362,8 +328,6 @@ mod tests {
         );
     }
 
-    // ========== Role Tests ==========
-
     #[test]
     fn test_principal_role_string_conversion() {
         assert_eq!(PrincipalRole::SuperAdmin.as_str(), "superadmin");
@@ -376,11 +340,14 @@ mod tests {
     #[test]
     fn test_principal_role_from_string() {
         assert_eq!(
-            PrincipalRole::from_str("superadmin"),
+            "superadmin".parse::<PrincipalRole>().ok(),
             Some(PrincipalRole::SuperAdmin)
         );
-        assert_eq!(PrincipalRole::from_str("user"), Some(PrincipalRole::User));
-        assert_eq!(PrincipalRole::from_str("invalid"), None);
+        assert_eq!(
+            "user".parse::<PrincipalRole>().ok(),
+            Some(PrincipalRole::User)
+        );
+        assert_eq!("invalid".parse::<PrincipalRole>().ok(), None);
     }
 
     #[test]
@@ -400,8 +367,6 @@ mod tests {
             "guest must have public procedure access"
         );
     }
-
-    // ========== Integration Tests ==========
 
     #[test]
     fn test_full_principal_creation_and_permission_check() {

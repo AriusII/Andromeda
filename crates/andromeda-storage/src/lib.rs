@@ -18,14 +18,14 @@ mod lsn;
 mod manifest;
 mod operational_profile;
 mod page;
-pub mod page_codec_v1;
+mod page_codec_v1;
 mod placement;
 mod recovery;
-pub mod restore_orchestration;
+mod restore_orchestration;
 mod segment;
 mod wal;
 mod wal_codec;
-pub mod wal_record_catalog;
+mod wal_record_catalog;
 mod wal_segment;
 
 pub mod layout;
@@ -33,6 +33,7 @@ pub mod publication;
 pub mod write_ahead_log;
 
 pub use backup::*;
+#[allow(deprecated)]
 pub use btree::{
     BTREE_DURABLE_FORMAT_PROMOTED, BTreeConcurrencyPolicy, BTreeConfig, BTreeError, BTreeIndex,
     BTreeIndexEngine, BTreeIndexMetadata, BTreeIndexNode, BTreeLatchLevel, BTreeLatchMode,

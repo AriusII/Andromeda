@@ -133,9 +133,7 @@ impl StatsCorrelation {
         }
 
         let mut columns = columns;
-        columns.sort_by(|a, b| {
-            (a.object_id.get(), a.column_index).cmp(&(b.object_id.get(), b.column_index))
-        });
+        columns.sort_by_key(|column| column.canonical_key());
 
         let mut previous: Option<StatsColumnTarget> = None;
         for column in &columns {

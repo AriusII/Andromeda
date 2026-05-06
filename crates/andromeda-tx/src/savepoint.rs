@@ -53,6 +53,20 @@ impl SavepointId {
     }
 }
 
+impl From<SavepointId> for u64 {
+    fn from(id: SavepointId) -> Self {
+        id.get()
+    }
+}
+
+impl TryFrom<u64> for SavepointId {
+    type Error = AndromedaError;
+
+    fn try_from(value: u64) -> Result<Self, Self::Error> {
+        Self::try_new(value)
+    }
+}
+
 /// Stable marker used by a storage/MVCC write set to undo to a savepoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SavepointRollbackMarker {
@@ -267,6 +281,15 @@ mod tests {
     #[test]
     fn try_new_rejects_zero_id() {
         let err = SavepointId::try_new(0).unwrap_err();
+        assert_eq!(err.kind(), AndromedaErrorKind::Transaction);
+    }
+
+    #[test]
+    fn conversion_traits_preserve_validated_public_api() {
+        let id = SavepointId::try_from(7).unwrap();
+        assert_eq!(u64::from(id), 7);
+
+        let err = SavepointId::try_from(0).unwrap_err();
         assert_eq!(err.kind(), AndromedaErrorKind::Transaction);
     }
 }

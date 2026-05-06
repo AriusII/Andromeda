@@ -20,9 +20,7 @@ impl TransactionIdGenerator {
     }
 }
 
-// ========================
 // CommitLogEntry Creation and Validation
-// ========================
 
 #[test]
 fn test_commit_log_entry_creation_valid() {
@@ -51,9 +49,7 @@ fn test_commit_log_entry_invalid_visible_timestamp_zero() {
     assert!(result.is_err());
 }
 
-// ========================
 // Durability Flag Lifecycle
-// ========================
 
 #[test]
 fn test_commit_log_entry_initially_not_durable() {
@@ -85,9 +81,7 @@ fn test_commit_log_entry_mark_durable_idempotent() {
     assert!(entry.is_durable()); // Should remain durable
 }
 
-// ========================
 // Encoding and Decoding
-// ========================
 
 #[test]
 fn test_commit_log_entry_encode_size() {
@@ -156,9 +150,7 @@ fn test_commit_log_entry_decode_invalid_tx_id() {
     assert!(result.is_err());
 }
 
-// ========================
 // CommitLog Basic Operations
-// ========================
 
 #[test]
 fn test_commit_log_new_empty() {
@@ -202,9 +194,7 @@ fn test_commit_log_record_ensures_not_durable() {
     assert!(!queried.is_durable());
 }
 
-// ========================
 // Query Operations
-// ========================
 
 #[test]
 fn test_commit_log_query_found() {
@@ -243,9 +233,7 @@ fn test_commit_log_query_returns_copy() {
     assert_eq!(queried1.tx_id(), queried2.tx_id());
 }
 
-// ========================
 // Durability Confirmation
-// ========================
 
 #[test]
 fn test_commit_log_confirm_durable() {
@@ -287,9 +275,7 @@ fn test_commit_log_confirm_durable_idempotent() {
     assert!(result.is_durable());
 }
 
-// ========================
 // Cleanup Operations
-// ========================
 
 #[test]
 fn test_commit_log_cleanup_entries() {
@@ -382,9 +368,7 @@ fn test_commit_log_cleanup_boundary() {
     assert_eq!(commit_log.entry_count(), 0);
 }
 
-// ========================
 // Utility Operations
-// ========================
 
 #[test]
 fn test_commit_log_all_tx_ids() {
@@ -432,9 +416,7 @@ fn test_commit_log_default_construction() {
     assert_eq!(log2.entry_count(), 0);
 }
 
-// ========================
 // Clone and Copy Semantics
-// ========================
 
 #[test]
 fn test_commit_log_entry_clone() {
@@ -449,9 +431,7 @@ fn test_commit_log_entry_clone() {
     assert_eq!(entry1.is_durable(), entry2.is_durable());
 }
 
-// ========================
 // Concurrent Operations (Thread Safety)
-// ========================
 
 #[test]
 fn test_commit_log_concurrent_record_and_query() {
@@ -509,9 +489,7 @@ fn test_commit_log_concurrent_cleanup() {
     let _removed2 = handle2.join().unwrap();
 }
 
-// ========================
 // Durability Invariant Tests
-// ========================
 
 #[test]
 fn test_invariant_entry_never_committed_until_durable() {
@@ -561,10 +539,6 @@ fn test_invariant_cleanup_only_removes_durable() {
             .is_some()
     );
 }
-
-// ========================
-// Integration Tests
-// ========================
 
 #[test]
 fn test_commit_workflow_happy_path() {

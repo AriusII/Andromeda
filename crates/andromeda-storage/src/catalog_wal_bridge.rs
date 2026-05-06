@@ -1,7 +1,7 @@
 //! Bridge for encoding and decoding catalog WAL records at the storage boundary.
 //!
 //! This module owns:
-//! - `encode_catalog_record`: Deterministic binary encoding to Vec<u8>
+//! - `encode_catalog_record`: Deterministic binary encoding to `Vec<u8>`
 //! - `decode_catalog_record`: Binary decoding with validation
 //! - Checksum validation (SHA256 digest of payload)
 //! - LSN-addressable record boundaries

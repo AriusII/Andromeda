@@ -8,16 +8,16 @@
 //! | `WalRecord`, `WalRecordHeader`, `WalRecordKind`, checksum/tag helpers | [`record`] |
 //! | `InMemoryWal` and durable-LSN tracking       | [`manager`]                                 |
 //! | Transaction classification helpers           | [`transaction`]                             |
-//! | `WalSegment`, `WalSegmentDescriptor`         | [`crate::wal_segment`]                      |
-//! | WAL frame codec, scanner, byte constants     | [`crate::wal_codec`]                        |
-//! | `FileWal`, `FileWalHeader`, recovery report  | [`crate::file_wal`]                         |
+//! | `WalSegment`, `WalSegmentDescriptor`         | `crate::wal_segment`                        |
+//! | WAL frame codec, scanner, byte constants     | `crate::wal_codec`                          |
+//! | `FileWal`, `FileWalHeader`, recovery report  | `crate::file_wal`                           |
 //! | WAL GC: candidates, archive verification    | [`gc`]                                      |
 //! | WAL Compaction: fragmentation, scheduling   | [`compaction`]                              |
 //! | CommitLogEntry and CommitLog persistence    | [`commit_log_entry`]                        |
 //!
 //! The submodules below are thin re-export facades for the cross-domain types
 //! (segment, codec, file). They MUST NOT define types of their own. The legacy
-//! [`crate::wal`] root facade is preserved for compatibility with older imports.
+//! `crate::wal` root facade is preserved for compatibility with older imports.
 //!
 //! Doctrine reminders enforced by the items re-exported here:
 //! * `visible commit == durable WAL` — frames are flushed before commit
@@ -32,7 +32,7 @@ pub mod commit_log_facade;
 pub mod compaction;
 pub mod durability_fence;
 pub mod file {
-    //! Facade for the canonical [`crate::file_wal`] module.
+    //! Facade for the canonical `crate::file_wal` module.
     //!
     //! Do not define new types here; add them under `crate::file_wal` and
     //! re-export.

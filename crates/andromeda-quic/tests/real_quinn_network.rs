@@ -1,4 +1,4 @@
-//! H2-QUIC: Real Quinn Network Integration Tests
+//! Real Quinn network integration tests.
 //!
 //! This test suite validates real QUIC transport with:
 //! - Server listening and accepting connections
@@ -15,20 +15,17 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
+use andromeda_core::AndromedaResult;
 use andromeda_quic::frame::{FRAME_HEADER_CRC_UNCHECKED, FrameType};
 use andromeda_quic::{
-    FrameBytes, FrameCodec, FrameHeader, SurfacePlane,
-    quinn_backend::{QuicClient, QuicServer},
+    FrameBytes, FrameCodec, FrameHeader,
+    quinn_backend::{BidiStream, QuicClient, QuicServer},
     quinn_tls::{ClientTlsConfig, ServerTlsConfig},
 };
-use tokio::time::timeout;
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
+use tokio::{sync::oneshot, task::JoinHandle, time::timeout};
 
 /// Creates an ephemeral server TLS configuration (self-signed cert for testing).
-fn create_test_server_tls() -> andromeda_core::AndromedaResult<quinn::ServerConfig> {
+fn create_test_server_tls() -> AndromedaResult<quinn::ServerConfig> {
     let tls_config = ServerTlsConfig::ephemeral(vec!["localhost".to_string()])?;
     Ok(tls_config.into_quinn_config())
 }
@@ -43,72 +40,58 @@ fn allocate_test_address() -> SocketAddr {
     SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0)
 }
 
-/// Writes a frame to a stream.
-async fn write_frame(
-    stream: &mut (impl tokio::io::AsyncWriteExt + Unpin),
-    frame: &FrameBytes,
-) -> andromeda_core::AndromedaResult<()> {
-    use tokio::io::AsyncWriteExt;
-
-    let encoded = FrameCodec::encode(frame)?;
-    stream.write_all(&encoded).await.map_err(|e| {
-        andromeda_core::AndromedaError::new(
-            andromeda_core::AndromedaErrorKind::IoError,
-            format!("failed to write frame: {}", e),
-        )
-    })?;
-    Ok(())
+fn transport_error(message: impl Into<String>) -> andromeda_core::AndromedaError {
+    andromeda_core::AndromedaError::new(
+        andromeda_core::AndromedaErrorKind::Transport,
+        message.into(),
+    )
 }
 
-/// Reads a frame from a stream.
-async fn read_frame(
-    stream: &mut (impl tokio::io::AsyncReadExt + Unpin),
-) -> andromeda_core::AndromedaResult<FrameBytes> {
-    use tokio::io::AsyncReadExt;
+async fn with_timeout<T>(
+    duration: Duration,
+    future: impl std::future::Future<Output = AndromedaResult<T>>,
+) -> AndromedaResult<T> {
+    timeout(duration, future)
+        .await
+        .map_err(|_| transport_error("operation timed out"))?
+}
 
-    let mut header_buf = [0u8; 52]; // Frame header is 52 bytes (based on FRAME_CODEC_HEADER_LEN)
-    stream.read_exact(&mut header_buf).await.map_err(|e| {
-        andromeda_core::AndromedaError::new(
-            andromeda_core::AndromedaErrorKind::IoError,
-            format!("failed to read frame header: {}", e),
-        )
-    })?;
+async fn join_with_timeout<T>(
+    duration: Duration,
+    handle: JoinHandle<AndromedaResult<T>>,
+) -> AndromedaResult<T> {
+    timeout(duration, handle)
+        .await
+        .map_err(|_| transport_error("join timed out"))?
+        .map_err(|err| transport_error(format!("task join failed: {err}")))?
+}
 
-    // Parse header to get payload length
-    let (frame, _consumed) = FrameCodec::scan_one(&header_buf)?;
-    let payload_len = frame.header.payload_length as usize;
+async fn read_bidi_to_end(stream: &mut BidiStream, max_bytes: usize) -> AndromedaResult<Vec<u8>> {
+    let mut bytes = Vec::new();
+    let mut buffer = vec![0_u8; 8_192.min(max_bytes.max(1))];
 
-    // Read payload if needed
-    if payload_len > 0 {
-        let mut payload = vec![0u8; payload_len];
-        stream.read_exact(&mut payload).await.map_err(|e| {
-            andromeda_core::AndromedaError::new(
-                andromeda_core::AndromedaErrorKind::IoError,
-                format!("failed to read frame payload: {}", e),
-            )
-        })?;
-
-        let mut full_frame = header_buf.to_vec();
-        full_frame.extend_from_slice(&payload);
-        FrameCodec::decode(&full_frame)
-    } else {
-        FrameCodec::decode(&header_buf)
+    loop {
+        let n = stream.read(&mut buffer).await?;
+        if n == 0 {
+            break;
+        }
+        if bytes.len().saturating_add(n) > max_bytes {
+            return Err(transport_error("test stream exceeded read limit"));
+        }
+        bytes.extend_from_slice(&buffer[..n]);
     }
-}
 
-// ============================================================================
-// Test: Server Startup and Address
-// ============================================================================
+    Ok(bytes)
+}
 
 #[tokio::test]
-async fn test_server_startup_and_listen_address() -> andromeda_core::AndromedaResult<()> {
+async fn test_server_startup_and_listen_address() -> AndromedaResult<()> {
     let addr = allocate_test_address();
     let server_tls = create_test_server_tls()?;
 
     let server = QuicServer::new(addr, server_tls)?;
     let local_addr = server.local_addr();
 
-    // Verify server has a valid address
     assert_eq!(local_addr.ip(), std::net::IpAddr::V4(Ipv4Addr::LOCALHOST));
     assert_ne!(local_addr.port(), 0, "Port should be allocated");
 
@@ -116,83 +99,63 @@ async fn test_server_startup_and_listen_address() -> andromeda_core::AndromedaRe
     Ok(())
 }
 
-// ============================================================================
-// Test: Client Connection Establishment with TLS Handshake
-// ============================================================================
-
 #[tokio::test]
-async fn test_client_connection_tls_negotiation() -> andromeda_core::AndromedaResult<()> {
+async fn test_client_connection_tls_negotiation() -> AndromedaResult<()> {
     let server_addr = allocate_test_address();
     let server_tls = create_test_server_tls()?;
     let server = QuicServer::new(server_addr, server_tls)?;
     let listen_addr = server.local_addr();
 
-    // Spawn server to accept a single connection
-    let server_handle =
-        tokio::spawn(
-            async move { timeout(Duration::from_secs(5), server.accept_connection()).await },
-        );
+    let server_handle = tokio::spawn(async move {
+        with_timeout(Duration::from_secs(5), server.accept_connection()).await
+    });
 
-    // Client connects
     let client_tls = create_test_client_tls();
     let client = QuicClient::new(client_tls)?;
 
-    let conn = timeout(
+    let conn = with_timeout(
         Duration::from_secs(5),
         client.connect(listen_addr, "localhost"),
     )
-    .await??;
+    .await?;
 
     assert!(conn.is_open());
     assert_eq!(conn.remote_addr(), listen_addr);
 
-    // Verify server accepted the connection
-    let server_conn = timeout(Duration::from_secs(5), server_handle).await???;
+    let server_conn = join_with_timeout(Duration::from_secs(5), server_handle).await?;
     assert!(server_conn.is_open());
 
     Ok(())
 }
 
-// ============================================================================
-// Test: Echo Frame Exchange (Unidirectional Stream)
-// ============================================================================
-
 #[tokio::test]
-async fn test_frame_echo_unidirectional() -> andromeda_core::AndromedaResult<()> {
+async fn test_frame_echo_unidirectional() -> AndromedaResult<()> {
     let server_addr = allocate_test_address();
     let server_tls = create_test_server_tls()?;
     let server = QuicServer::new(server_addr, server_tls)?;
     let listen_addr = server.local_addr();
 
-    // Server task: accept connection, read frame, ignore (echo happens via client send)
     let server_handle = tokio::spawn(async move {
-        if let Ok(mut conn) = timeout(Duration::from_secs(5), server.accept_connection()).await {
-            if let Ok(result) = conn.await {
-                // Just accept the connection; client will send frame
-                return Ok::<_, Box<dyn std::error::Error>>(());
-            }
-        }
-        Err("server timeout".into())
+        let _conn = with_timeout(Duration::from_secs(5), server.accept_connection()).await?;
+        Ok(())
     });
 
-    // Client connects and sends a frame
     let client_tls = create_test_client_tls();
     let client = QuicClient::new(client_tls)?;
-    let mut conn = timeout(
+    let mut conn = with_timeout(
         Duration::from_secs(5),
         client.connect(listen_addr, "localhost"),
     )
-    .await??;
+    .await?;
 
-    // Open unidirectional stream and send a frame
     let mut stream = conn.open_uni_stream().await?;
 
     let test_payload = b"Hello, QUIC!".to_vec();
     let frame = FrameBytes {
         header: FrameHeader {
             frame_type: FrameType::RpcMetadata,
-            request_id: 42,
-            session_id: 100,
+            request_id: 42.into(),
+            session_id: 100.into(),
             tx_id: None,
             payload_length: test_payload.len() as u64,
             flags: 0,
@@ -205,59 +168,45 @@ async fn test_frame_echo_unidirectional() -> andromeda_core::AndromedaResult<()>
     stream.write_all(&encoded).await?;
     stream.finish().await?;
 
-    // Wait for server to complete
-    timeout(Duration::from_secs(5), server_handle).await???;
+    join_with_timeout(Duration::from_secs(5), server_handle).await?;
 
     Ok(())
 }
 
-// ============================================================================
-// Test: Certificate Identity Extraction
-// ============================================================================
-
 #[tokio::test]
-async fn test_certificate_identity_extraction() -> andromeda_core::AndromedaResult<()> {
+async fn test_peer_certificate_chain_is_exposed() -> AndromedaResult<()> {
     let server_addr = allocate_test_address();
     let server_tls = create_test_server_tls()?;
     let server = QuicServer::new(server_addr, server_tls)?;
     let listen_addr = server.local_addr();
 
-    // Server task: accept and verify certificate identity
     let server_handle = tokio::spawn(async move {
-        if let Ok(conn) = timeout(Duration::from_secs(5), server.accept_connection()).await {
-            if let Ok(conn) = conn {
-                // Certificate should be extracted (self-signed for testing)
-                let identity = conn.certificate_identity();
-                return Ok::<_, Box<dyn std::error::Error>>(identity.is_some());
-            }
-        }
-        Err("server timeout".into())
+        let conn = with_timeout(Duration::from_secs(5), server.accept_connection()).await?;
+        Ok(conn.peer_certificate_chain().len())
     });
 
-    // Client connects
     let client_tls = create_test_client_tls();
     let client = QuicClient::new(client_tls)?;
-    let _conn = timeout(
+    let conn = with_timeout(
         Duration::from_secs(5),
         client.connect(listen_addr, "localhost"),
     )
-    .await??;
+    .await?;
 
-    let has_identity = timeout(Duration::from_secs(5), server_handle).await???;
-    assert!(
-        has_identity,
-        "Server should extract certificate identity from connection"
-    );
+    let client_peer_certificates = conn.peer_certificate_chain();
+    assert!(!client_peer_certificates.is_empty());
+    assert!(!client_peer_certificates[0].is_empty());
+    assert!(conn.certificate_identity().is_none());
+
+    let server_peer_certificate_count =
+        join_with_timeout(Duration::from_secs(5), server_handle).await?;
+    assert_eq!(server_peer_certificate_count, 0);
 
     Ok(())
 }
 
-// ============================================================================
-// Test: Concurrent Connections
-// ============================================================================
-
 #[tokio::test]
-async fn test_concurrent_connections() -> andromeda_core::AndromedaResult<()> {
+async fn test_concurrent_connections() -> AndromedaResult<()> {
     let server_addr = allocate_test_address();
     let server_tls = create_test_server_tls()?;
     let server = Arc::new(QuicServer::new(server_addr, server_tls)?);
@@ -265,45 +214,38 @@ async fn test_concurrent_connections() -> andromeda_core::AndromedaResult<()> {
 
     let accepted_count = Arc::new(AtomicU32::new(0));
 
-    // Spawn server task to accept 10 connections
     let server_clone = server.clone();
     let count_clone = accepted_count.clone();
     let accept_handle = tokio::spawn(async move {
         for _ in 0..10 {
-            if let Ok(conn) =
-                timeout(Duration::from_secs(10), server_clone.accept_connection()).await
-            {
-                if let Ok(_) = conn {
-                    count_clone.fetch_add(1, Ordering::SeqCst);
-                }
-            }
+            let _conn =
+                with_timeout(Duration::from_secs(10), server_clone.accept_connection()).await?;
+            count_clone.fetch_add(1, Ordering::SeqCst);
         }
+        Ok(())
     });
 
-    // Spawn 10 clients connecting concurrently
     let mut client_handles = vec![];
     for _ in 0..10 {
         let listen_addr_copy = listen_addr;
         let handle = tokio::spawn(async move {
             let client_tls = create_test_client_tls();
-            if let Ok(client) = QuicClient::new(client_tls) {
-                let _conn = timeout(
-                    Duration::from_secs(5),
-                    client.connect(listen_addr_copy, "localhost"),
-                )
-                .await;
-            }
+            let client = QuicClient::new(client_tls)?;
+            let _conn = with_timeout(
+                Duration::from_secs(5),
+                client.connect(listen_addr_copy, "localhost"),
+            )
+            .await?;
+            Ok(())
         });
         client_handles.push(handle);
     }
 
-    // Wait for all clients
     for handle in client_handles {
-        let _ = timeout(Duration::from_secs(10), handle).await;
+        join_with_timeout(Duration::from_secs(10), handle).await?;
     }
 
-    // Wait for server to accept all
-    let _ = timeout(Duration::from_secs(10), accept_handle).await;
+    join_with_timeout(Duration::from_secs(10), accept_handle).await?;
 
     assert_eq!(
         accepted_count.load(Ordering::SeqCst),
@@ -314,51 +256,34 @@ async fn test_concurrent_connections() -> andromeda_core::AndromedaResult<()> {
     Ok(())
 }
 
-// ============================================================================
-// Test: Bidirectional Stream Communication
-// ============================================================================
-
 #[tokio::test]
-async fn test_bidirectional_stream_communication() -> andromeda_core::AndromedaResult<()> {
+async fn test_bidirectional_stream_communication() -> AndromedaResult<()> {
     let server_addr = allocate_test_address();
     let server_tls = create_test_server_tls()?;
     let server = QuicServer::new(server_addr, server_tls)?;
     let listen_addr = server.local_addr();
+    let (release_server, keep_server_alive) = oneshot::channel();
 
-    // Server: accept connection and bidirectional stream
     let server_handle = tokio::spawn(async move {
-        if let Ok(mut conn) = timeout(Duration::from_secs(5), server.accept_connection()).await {
-            if let Ok(mut conn) = conn {
-                if let Ok(mut stream) =
-                    timeout(Duration::from_secs(5), conn.accept_bidi_stream()).await
-                {
-                    if let Ok(mut stream) = stream {
-                        // Read frame from client
-                        let mut buf = vec![0u8; 1024];
-                        if let Ok(n) = stream.recv.read(&mut buf).await {
-                            if n > 0 {
-                                buf.truncate(n);
-                                // Send echo back
-                                let _ = stream.send.write_all(&buf).await;
-                                let _ = stream.send.finish().await;
-                                return Ok::<_, Box<dyn std::error::Error>>(buf);
-                            }
-                        }
-                    }
-                }
-            }
+        let mut conn = with_timeout(Duration::from_secs(5), server.accept_connection()).await?;
+        let mut stream = with_timeout(Duration::from_secs(5), conn.accept_bidi_stream()).await?;
+        let bytes = read_bidi_to_end(&mut stream, 16 * 1024).await?;
+        if bytes.is_empty() {
+            return Err(transport_error("server received empty stream"));
         }
-        Err("server timeout".into())
+        stream.write_all(&bytes).await?;
+        stream.finish().await?;
+        let _ = keep_server_alive.await;
+        Ok(bytes)
     });
 
-    // Client: connect and send frame on bidirectional stream
     let client_tls = create_test_client_tls();
     let client = QuicClient::new(client_tls)?;
-    let mut conn = timeout(
+    let mut conn = with_timeout(
         Duration::from_secs(5),
         client.connect(listen_addr, "localhost"),
     )
-    .await??;
+    .await?;
 
     let mut stream = conn.open_bidi_stream().await?;
 
@@ -366,8 +291,8 @@ async fn test_bidirectional_stream_communication() -> andromeda_core::AndromedaR
     let frame = FrameBytes {
         header: FrameHeader {
             frame_type: FrameType::RpcMetadata,
-            request_id: 99,
-            session_id: 200,
+            request_id: 99.into(),
+            session_id: 200.into(),
             tx_id: None,
             payload_length: test_payload.len() as u64,
             flags: 0,
@@ -380,18 +305,15 @@ async fn test_bidirectional_stream_communication() -> andromeda_core::AndromedaR
     stream.write_all(&encoded).await?;
     stream.finish().await?;
 
-    // Read echo response
-    let mut response_buf = vec![0u8; 1024];
-    let n = stream.recv.read(&mut response_buf).await?;
-    response_buf.truncate(n);
+    let response_buf = read_bidi_to_end(&mut stream, 16 * 1024).await?;
 
     assert_eq!(
         response_buf, encoded,
         "Server should echo back exact frame bytes"
     );
+    let _ = release_server.send(());
 
-    // Wait for server
-    let echo_result = timeout(Duration::from_secs(5), server_handle).await???;
+    let echo_result = join_with_timeout(Duration::from_secs(5), server_handle).await?;
     assert_eq!(
         echo_result, encoded,
         "Server should have received frame bytes"
@@ -400,12 +322,8 @@ async fn test_bidirectional_stream_communication() -> andromeda_core::AndromedaR
     Ok(())
 }
 
-// ============================================================================
-// Test: Multiple Sequential Frames on Single Stream
-// ============================================================================
-
 #[tokio::test]
-async fn test_multiple_sequential_frames() -> andromeda_core::AndromedaResult<()> {
+async fn test_multiple_sequential_frames() -> AndromedaResult<()> {
     let server_addr = allocate_test_address();
     let server_tls = create_test_server_tls()?;
     let server = QuicServer::new(server_addr, server_tls)?;
@@ -414,41 +332,23 @@ async fn test_multiple_sequential_frames() -> andromeda_core::AndromedaResult<()
     let frame_count = Arc::new(AtomicU32::new(0));
     let frame_count_clone = frame_count.clone();
 
-    // Server: accept and read frames
     let server_handle = tokio::spawn(async move {
-        if let Ok(mut conn) = timeout(Duration::from_secs(5), server.accept_connection()).await {
-            if let Ok(mut conn) = conn {
-                if let Ok(mut stream) =
-                    timeout(Duration::from_secs(5), conn.accept_bidi_stream()).await
-                {
-                    if let Ok(mut stream) = stream {
-                        let mut buf = vec![0u8; 4096];
-                        loop {
-                            match stream.recv.read(&mut buf).await {
-                                Ok(0) => break, // EOF
-                                Ok(n) => {
-                                    frame_count_clone.fetch_add(1, Ordering::SeqCst);
-                                    buf.truncate(n);
-                                    // Echo back
-                                    let _ = stream.send.write_all(&buf).await;
-                                }
-                                Err(_) => break,
-                            }
-                        }
-                    }
-                }
-            }
+        let mut conn = with_timeout(Duration::from_secs(5), server.accept_connection()).await?;
+        let mut stream = with_timeout(Duration::from_secs(5), conn.accept_bidi_stream()).await?;
+        let bytes = read_bidi_to_end(&mut stream, 64 * 1024).await?;
+        for _frame in FrameCodec::scan_all(&bytes)? {
+            frame_count_clone.fetch_add(1, Ordering::SeqCst);
         }
+        Ok(())
     });
 
-    // Client: send multiple frames
     let client_tls = create_test_client_tls();
     let client = QuicClient::new(client_tls)?;
-    let mut conn = timeout(
+    let mut conn = with_timeout(
         Duration::from_secs(5),
         client.connect(listen_addr, "localhost"),
     )
-    .await??;
+    .await?;
 
     let mut stream = conn.open_bidi_stream().await?;
 
@@ -457,8 +357,8 @@ async fn test_multiple_sequential_frames() -> andromeda_core::AndromedaResult<()
         let frame = FrameBytes {
             header: FrameHeader {
                 frame_type: FrameType::RpcMetadata,
-                request_id: (i as u64) + 1,
-                session_id: 300,
+                request_id: ((i as u64) + 1).into(),
+                session_id: 300.into(),
                 tx_id: None,
                 payload_length: payload.len() as u64,
                 flags: 0,
@@ -473,8 +373,7 @@ async fn test_multiple_sequential_frames() -> andromeda_core::AndromedaResult<()
 
     stream.finish().await?;
 
-    // Wait for server processing
-    timeout(Duration::from_secs(5), server_handle).await?;
+    join_with_timeout(Duration::from_secs(5), server_handle).await?;
 
     assert_eq!(
         frame_count.load(Ordering::SeqCst),
@@ -485,51 +384,37 @@ async fn test_multiple_sequential_frames() -> andromeda_core::AndromedaResult<()
     Ok(())
 }
 
-// ============================================================================
-// Test: Large Payload Frame
-// ============================================================================
-
 #[tokio::test]
-async fn test_large_payload_frame() -> andromeda_core::AndromedaResult<()> {
+async fn test_large_payload_frame() -> AndromedaResult<()> {
     let server_addr = allocate_test_address();
     let server_tls = create_test_server_tls()?;
     let server = QuicServer::new(server_addr, server_tls)?;
     let listen_addr = server.local_addr();
 
-    let payload_size = 65536; // 64KB payload
+    let payload_size = 65_536;
+    let (release_server, keep_server_alive) = oneshot::channel();
 
-    // Server: accept and echo
     let server_handle = tokio::spawn(async move {
-        if let Ok(mut conn) = timeout(Duration::from_secs(10), server.accept_connection()).await {
-            if let Ok(mut conn) = conn {
-                if let Ok(mut stream) =
-                    timeout(Duration::from_secs(10), conn.accept_bidi_stream()).await
-                {
-                    if let Ok(mut stream) = stream {
-                        let mut buf = vec![0u8; payload_size + 100];
-                        if let Ok(n) = stream.recv.read(&mut buf).await {
-                            if n > 0 {
-                                buf.truncate(n);
-                                let _ = stream.send.write_all(&buf).await;
-                                let _ = stream.send.finish().await;
-                                return Ok::<_, Box<dyn std::error::Error>>(n);
-                            }
-                        }
-                    }
-                }
-            }
+        let mut conn = with_timeout(Duration::from_secs(10), server.accept_connection()).await?;
+        let mut stream = with_timeout(Duration::from_secs(10), conn.accept_bidi_stream()).await?;
+        let bytes = read_bidi_to_end(&mut stream, payload_size + 1_024).await?;
+        if bytes.is_empty() {
+            return Err(transport_error("server received empty large payload"));
         }
-        Err("server timeout".into())
+        let n = bytes.len();
+        stream.write_all(&bytes).await?;
+        stream.finish().await?;
+        let _ = keep_server_alive.await;
+        Ok(n)
     });
 
-    // Client: send large frame
     let client_tls = create_test_client_tls();
     let client = QuicClient::new(client_tls)?;
-    let mut conn = timeout(
+    let mut conn = with_timeout(
         Duration::from_secs(10),
         client.connect(listen_addr, "localhost"),
     )
-    .await??;
+    .await?;
 
     let mut stream = conn.open_bidi_stream().await?;
 
@@ -537,8 +422,8 @@ async fn test_large_payload_frame() -> andromeda_core::AndromedaResult<()> {
     let frame = FrameBytes {
         header: FrameHeader {
             frame_type: FrameType::RpcMetadata,
-            request_id: 500,
-            session_id: 400,
+            request_id: 500.into(),
+            session_id: 400.into(),
             tx_id: None,
             payload_length: large_payload.len() as u64,
             flags: 0,
@@ -551,17 +436,15 @@ async fn test_large_payload_frame() -> andromeda_core::AndromedaResult<()> {
     stream.write_all(&encoded).await?;
     stream.finish().await?;
 
-    // Read echo
-    let mut response_buf = vec![0u8; encoded.len() + 100];
-    let n = stream.recv.read(&mut response_buf).await?;
-    response_buf.truncate(n);
+    let response_buf = read_bidi_to_end(&mut stream, encoded.len() + 1_024).await?;
 
     assert_eq!(
         response_buf, encoded,
         "Server should echo back large frame exactly"
     );
+    let _ = release_server.send(());
 
-    let bytes_received = timeout(Duration::from_secs(10), server_handle).await???;
+    let bytes_received = join_with_timeout(Duration::from_secs(10), server_handle).await?;
     assert_eq!(
         bytes_received,
         encoded.len(),

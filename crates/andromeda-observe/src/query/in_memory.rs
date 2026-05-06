@@ -7,8 +7,7 @@ use super::{
 use crate::InMemoryEventSink;
 
 impl InMemoryEventSink {
-    /// Run a deterministic, bounded administration trace query over recorded
-    /// in-memory envelopes.
+    /// Run a bounded trace query over recorded in-memory envelopes.
     pub fn query_trace_events(&self, spec: &TraceQuerySpec) -> AndromedaResult<TraceQueryResult> {
         spec.validate()?;
 

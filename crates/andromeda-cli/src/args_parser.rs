@@ -1,12 +1,8 @@
-//! CLI argument parsing.
-//!
-//! Parses and validates command-line arguments for CLI commands.
-
 use crate::error::cli_error;
+use crate::parse;
 use andromeda_core::AndromedaResult;
 use std::path::PathBuf;
 
-/// Vertical v0 WAL path parser.
 pub fn parse_vertical_v0_wal_path(args: &[String]) -> AndromedaResult<PathBuf> {
     let mut wal_path = None;
     let mut index = 0;
@@ -32,7 +28,6 @@ pub fn parse_vertical_v0_wal_path(args: &[String]) -> AndromedaResult<PathBuf> {
     Ok(wal_path.unwrap_or_else(default_v0_wal_path))
 }
 
-/// Recovery inspect options parser.
 pub struct RecoveryInspectOptions {
     pub wal_path: PathBuf,
     pub required_wal_start_lsn: andromeda_storage::Lsn,
@@ -82,14 +77,10 @@ pub fn parse_recovery_inspect_options(args: &[String]) -> AndromedaResult<Recove
     })
 }
 
-/// Parse u64 option values.
 pub fn parse_u64_option(value: &str, option: &str) -> AndromedaResult<u64> {
-    value
-        .parse::<u64>()
-        .map_err(|_| cli_error(format!("{option} expects an unsigned integer")))
+    parse::parse_u64_option(value, option)
 }
 
-/// Default V0 WAL file name.
 const DEFAULT_V0_WAL_FILE: &str = "andromeda-v0-vertical.wal";
 
 fn default_v0_wal_path() -> PathBuf {

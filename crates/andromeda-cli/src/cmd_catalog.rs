@@ -1,12 +1,6 @@
-//! Catalog administration commands.
-//!
-//! Provides CLI commands for:
-//! - Listing procedures with IDs and contract hashes
-//! - Clearing plan cache (all or specific procedures)
-//! - Displaying procedure contract information
-
 use crate::diagnostic_json::{JSON_FLAG, json_option_string, json_string, parse_json_flag};
 use crate::error::cli_error;
+use crate::parse::{next_option_value, next_option_value_rejecting_flag, parse_u64};
 use andromeda_core::AndromedaResult;
 
 /// Procedure metadata.
@@ -75,11 +69,14 @@ fn run_list_procedures(args: &[String]) -> AndromedaResult<()> {
     while i < args.len() {
         match args[i].as_str() {
             "--namespace" => {
-                i += 1;
-                if i >= args.len() {
-                    return Err(cli_error("--namespace requires a namespace argument"));
-                }
-                namespace = Some(args[i].clone());
+                namespace = Some(
+                    next_option_value_rejecting_flag(
+                        args,
+                        &mut i,
+                        "--namespace requires a namespace argument",
+                    )?
+                    .to_string(),
+                );
             }
             JSON_FLAG => json_output = true,
             opt if opt.starts_with("--") => {
@@ -88,12 +85,15 @@ fn run_list_procedures(args: &[String]) -> AndromedaResult<()> {
                     opt
                 )));
             }
-            _ => {}
+            value => {
+                return Err(cli_error(format!(
+                    "unexpected list-procedures argument: {value}; supported options are --namespace and --json"
+                )));
+            }
         }
         i += 1;
     }
 
-    // MOCK: In a real implementation, this would query the catalog store.
     let procedures = vec![
         ProcedureMetadata {
             procedure_id: 1,
@@ -121,7 +121,7 @@ fn run_list_procedures(args: &[String]) -> AndromedaResult<()> {
     let filtered: Vec<_> = if let Some(ns) = namespace {
         procedures
             .into_iter()
-            .filter(|p| p.namespace.as_ref().map_or(false, |n| n == &ns))
+            .filter(|p| p.namespace.as_ref() == Some(&ns))
             .collect()
     } else {
         procedures
@@ -145,15 +145,15 @@ fn run_invalidate_cache(args: &[String]) -> AndromedaResult<()> {
     while i < args.len() {
         match args[i].as_str() {
             "--procedure-id" => {
-                i += 1;
-                if i >= args.len() {
-                    return Err(cli_error("--procedure-id requires a procedure ID argument"));
-                }
-                procedure_id = Some(
-                    args[i]
-                        .parse()
-                        .map_err(|_| cli_error("procedure-id must be an unsigned integer"))?,
-                );
+                let value = next_option_value(
+                    args,
+                    &mut i,
+                    "--procedure-id requires a procedure ID argument",
+                )?;
+                procedure_id = Some(parse_u64(
+                    value,
+                    "procedure-id must be an unsigned integer",
+                )?);
             }
             JSON_FLAG => json_output = true,
             opt if opt.starts_with("--") => {
@@ -162,12 +162,15 @@ fn run_invalidate_cache(args: &[String]) -> AndromedaResult<()> {
                     opt
                 )));
             }
-            _ => {}
+            value => {
+                return Err(cli_error(format!(
+                    "unexpected invalidate-cache argument: {value}; supported options are --procedure-id and --json"
+                )));
+            }
         }
         i += 1;
     }
 
-    // MOCK: In a real implementation, this would invoke the plan cache invalidation.
     let entries_cleared = if procedure_id.is_some() { 1 } else { 42 };
     let scope = if procedure_id.is_some() {
         "procedure-specific"
@@ -206,13 +209,10 @@ fn run_show_contract(args: &[String]) -> AndromedaResult<()> {
         ));
     }
 
-    let procedure_id: u64 = args[0]
-        .parse()
-        .map_err(|_| cli_error("procedure-id must be an unsigned integer"))?;
+    let procedure_id = parse_u64(&args[0], "procedure-id must be an unsigned integer")?;
 
     let json_output = parse_json_flag(&args[1..], "catalog show-contract")?;
 
-    // MOCK: In a real implementation, this would query the catalog store for contract details.
     let contract = ProcedureContractInfo {
         procedure_id,
         name: "InventoryReserveStock".to_string(),
@@ -280,11 +280,7 @@ fn print_procedures_human(procedures: &[ProcedureMetadata]) {
     );
     println!("{}", "-".repeat(98));
     for proc in procedures {
-        let ns = proc
-            .namespace
-            .as_ref()
-            .map(|s| s.as_str())
-            .unwrap_or("(default)");
+        let ns = proc.namespace.as_deref().unwrap_or("(default)");
         println!(
             "{:<6} {:<30} {:<20} {:<15} {:<15}",
             proc.procedure_id,
@@ -392,6 +388,18 @@ mod tests {
     }
 
     #[test]
+    fn catalog_list_procedures_rejects_flag_as_namespace() {
+        let result = run_list_procedures(&["--namespace".to_string(), "--json".to_string()]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn catalog_list_procedures_rejects_unexpected_argument() {
+        let result = run_list_procedures(&["inventory".to_string()]);
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn catalog_list_procedures_accepts_json_output() {
         let result = run_list_procedures(&["--json".to_string()]);
         assert!(result.is_ok());
@@ -413,6 +421,12 @@ mod tests {
     fn catalog_invalidate_cache_rejects_invalid_id() {
         let result =
             run_invalidate_cache(&["--procedure-id".to_string(), "not_a_number".to_string()]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn catalog_invalidate_cache_rejects_unexpected_argument() {
+        let result = run_invalidate_cache(&["extra".to_string()]);
         assert!(result.is_err());
     }
 

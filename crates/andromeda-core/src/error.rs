@@ -1,35 +1,4 @@
-//! Error types and result type alias.
-//!
-//! This module defines the error handling system for Andromeda.
-//!
-//! ## Error Kinds
-//!
-//! Errors are categorized by `AndromedaErrorKind`:
-//! - **Catalog**: Object definition or versioning errors
-//! - **Contract**: Procedure contract mismatch or incompatibility
-//! - **Execution**: Runtime execution errors
-//! - **Internal**: Unexpected internal state (bugs)
-//! - **Protocol**: Wire protocol violations
-//! - **Resource**: Resource exhaustion or limit violations
-//! - **Security**: Authentication or authorization failures
-//! - **Srpl**: SRPL program errors
-//! - **Storage**: Database storage or persistence errors
-//! - **Transaction**: Transaction management errors
-//!
-//! ## Usage
-//!
-//! Create errors with `AndromedaError::new()`:
-//!
-//! ```ignore
-//! use andromeda_core::{AndromedaError, AndromedaErrorKind};
-//!
-//! let err = AndromedaError::new(
-//!     AndromedaErrorKind::Contract,
-//!     "procedure contract hash mismatch"
-//! );
-//! ```
-//!
-//! Errors implement `std::error::Error` and format with `Display`.
+//! Core error categories and result alias.
 
 use std::fmt;
 
@@ -53,11 +22,36 @@ pub enum AndromedaErrorKind {
     /// standard `RetryPolicy`. Lock-wait retries are handled internally before
     /// a `Timeout` error surfaces to the caller.
     ///
-    /// Added in Wave 13, Batch 18. Full invocation deadline enforcement
-    /// (admission → WAL commit) is Wave 14+; see `SCOPED_INVOCATION_TIMEOUT.md`.
+    /// End-to-end invocation deadline enforcement is layered above this error
+    /// kind; callers should treat a surfaced timeout as the final budget result.
     Timeout,
     Transaction,
     Transport,
+}
+
+impl AndromedaErrorKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Catalog => "catalog",
+            Self::Contract => "contract",
+            Self::Execution => "execution",
+            Self::Internal => "internal",
+            Self::Protocol => "protocol",
+            Self::Resource => "resource",
+            Self::Security => "security",
+            Self::Srpl => "srpl",
+            Self::Storage => "storage",
+            Self::Timeout => "timeout",
+            Self::Transaction => "transaction",
+            Self::Transport => "transport",
+        }
+    }
+}
+
+impl fmt::Display for AndromedaErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -85,8 +79,28 @@ impl AndromedaError {
 
 impl fmt::Display for AndromedaError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}: {}", self.kind, self.message)
+        write!(f, "{}: {}", self.kind, self.message)
     }
 }
 
 impl std::error::Error for AndromedaError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn error_kind_has_stable_label() {
+        assert_eq!(AndromedaErrorKind::Security.as_str(), "security");
+        assert_eq!(AndromedaErrorKind::Timeout.to_string(), "timeout");
+    }
+
+    #[test]
+    fn error_display_preserves_kind_and_message() {
+        let error = AndromedaError::new(AndromedaErrorKind::Contract, "hash mismatch");
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Contract);
+        assert_eq!(error.message(), "hash mismatch");
+        assert_eq!(error.to_string(), "contract: hash mismatch");
+    }
+}

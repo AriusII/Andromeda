@@ -3,7 +3,7 @@
 //! # Canonical ownership
 //!
 //! All publication contract types and free functions are owned by the root
-//! module [`crate::manifest`] (re-exported at the crate root via
+//! module `crate::manifest` (re-exported at the crate root via
 //! `pub use manifest::*`). This `publication` module is a **documented
 //! facade** that groups the publication-domain contracts under a stable,
 //! discoverable path for callers, integration tests, and downstream crates.
@@ -22,7 +22,7 @@
 //! These contracts encode the cold-snapshot + WAL publication boundary that
 //! makes ColdStore + durable WAL the only sources of truth. They MUST NOT
 //! widen to expose RAM-resident or hot-only state; new publication-domain
-//! contracts must first be defined in [`crate::manifest`] and only then
+//! contracts must first be defined in `crate::manifest` and only then
 //! surfaced here.
 //!
 //! Canonical mappings:

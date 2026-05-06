@@ -9,17 +9,17 @@
 //!   were observed rather than swallowed,
 //! * an exhaustion guard once the `u128` event-id space is consumed.
 //!
-//! This is a V0 in-process scaffold. It is not a durable log, not a fan-out
-//! bus, and intentionally has no async surface. Durability claims must come
-//! from the storage/WAL layers, never from a sink that lives in RAM.
+//! This sink is in-process only. It is not a durable log, not a fan-out bus,
+//! and intentionally has no async surface. Durability claims must come from
+//! the storage/WAL layers, never from a sink that lives in RAM.
 //!
 //! In-memory query helpers on [`InMemoryEventSink`] are colocated here so
 //! tests can pivot recorded envelopes by trace, request, session, transaction,
 //! contract, catalog, or correlation slice without re-implementing the index.
 
 use andromeda_core::{
-    AndromedaResult, CatalogObjectId, CatalogVersion, ContractHash, RequestId, SessionId,
-    TransactionId,
+    AndromedaError, AndromedaResult, CatalogObjectId, CatalogVersion, ContractHash, RequestId,
+    SessionId, TransactionId,
 };
 
 use crate::{
@@ -126,6 +126,41 @@ impl<S: EventSink> EventEmitter<S> {
         self.next_event_id.is_none()
     }
 
+    fn record_rejection(&mut self) {
+        self.rejected_count = self.rejected_count.saturating_add(1);
+    }
+
+    fn reject<T>(&mut self, err: AndromedaError) -> AndromedaResult<T> {
+        self.record_rejection();
+        Err(err)
+    }
+
+    fn next_raw_event_id(&mut self) -> AndromedaResult<u128> {
+        match self.next_event_id {
+            Some(raw_id) => Ok(raw_id),
+            None => self.reject(observe_error(
+                "EventEmitter event_id allocator is exhausted; refusing to emit",
+            )),
+        }
+    }
+
+    fn record_acceptance(&mut self, event_id: EventId, raw_id: u128) {
+        self.accepted_count = self.accepted_count.saturating_add(1);
+        self.last_event_id = Some(event_id);
+        self.next_event_id = raw_id.checked_add(1);
+    }
+
+    fn emit_to_sink(&mut self, envelope: EventEnvelope, raw_id: u128) -> AndromedaResult<EventId> {
+        let event_id = envelope.event_id;
+        match self.sink.emit(envelope) {
+            Ok(()) => {
+                self.record_acceptance(event_id, raw_id);
+                Ok(event_id)
+            }
+            Err(err) => self.reject(err),
+        }
+    }
+
     /// Build an envelope from `(correlation, event)`, validate it, and forward
     /// it to the sink. On success returns the freshly assigned `EventId`.
     ///
@@ -137,50 +172,25 @@ impl<S: EventSink> EventEmitter<S> {
         correlation: EventCorrelation,
         event: TraceEvent,
     ) -> AndromedaResult<EventId> {
-        let Some(raw_id) = self.next_event_id else {
-            self.rejected_count = self.rejected_count.saturating_add(1);
-            return Err(observe_error(
-                "EventEmitter event_id allocator is exhausted; refusing to emit",
-            ));
-        };
+        let raw_id = self.next_raw_event_id()?;
         let event_id = EventId::new(raw_id);
 
         let envelope = match EventEnvelope::new(event_id, correlation, event) {
             Ok(envelope) => envelope,
-            Err(err) => {
-                self.rejected_count = self.rejected_count.saturating_add(1);
-                return Err(err);
-            }
+            Err(err) => return self.reject(err),
         };
 
-        match self.sink.emit(envelope) {
-            Ok(()) => {
-                self.accepted_count = self.accepted_count.saturating_add(1);
-                self.last_event_id = Some(event_id);
-                self.next_event_id = raw_id.checked_add(1);
-                Ok(event_id)
-            }
-            Err(err) => {
-                self.rejected_count = self.rejected_count.saturating_add(1);
-                Err(err)
-            }
-        }
+        self.emit_to_sink(envelope, raw_id)
     }
 
     /// Emit a pre-built envelope. The envelope's `event_id` must match the
     /// emitter's next allocation slot; the emitter refuses to forward
     /// out-of-band ids so monotonic ordering remains observable.
     pub fn emit_envelope(&mut self, envelope: EventEnvelope) -> AndromedaResult<EventId> {
-        let Some(raw_id) = self.next_event_id else {
-            self.rejected_count = self.rejected_count.saturating_add(1);
-            return Err(observe_error(
-                "EventEmitter event_id allocator is exhausted; refusing to emit",
-            ));
-        };
+        let raw_id = self.next_raw_event_id()?;
 
         if envelope.event_id.get() != raw_id {
-            self.rejected_count = self.rejected_count.saturating_add(1);
-            return Err(observe_error(
+            return self.reject(observe_error(
                 "EventEmitter envelope event_id does not match the emitter's next allocation slot",
             ));
         }
@@ -189,31 +199,24 @@ impl<S: EventSink> EventEmitter<S> {
         // validated; the envelope may have been constructed elsewhere and we
         // refuse to trust its prior validation.
         if let Err(err) = envelope.validate() {
-            self.rejected_count = self.rejected_count.saturating_add(1);
-            return Err(err);
+            return self.reject(err);
         }
 
-        let event_id = envelope.event_id;
-        match self.sink.emit(envelope) {
-            Ok(()) => {
-                self.accepted_count = self.accepted_count.saturating_add(1);
-                self.last_event_id = Some(event_id);
-                self.next_event_id = raw_id.checked_add(1);
-                Ok(event_id)
-            }
-            Err(err) => {
-                self.rejected_count = self.rejected_count.saturating_add(1);
-                Err(err)
-            }
-        }
+        self.emit_to_sink(envelope, raw_id)
     }
 }
 
-// ---------------------------------------------------------------------------
-// In-memory query helpers
-// ---------------------------------------------------------------------------
-
 impl InMemoryEventSink {
+    fn events_matching(
+        &self,
+        mut predicate: impl FnMut(&EventEnvelope) -> bool,
+    ) -> Vec<&EventEnvelope> {
+        self.events()
+            .iter()
+            .filter(|envelope| predicate(envelope))
+            .collect()
+    }
+
     /// Number of recorded envelopes.
     pub fn len(&self) -> usize {
         self.events().len()
@@ -226,44 +229,29 @@ impl InMemoryEventSink {
 
     /// All recorded envelopes whose `trace_id` matches `trace_id`.
     pub fn events_for_trace(&self, trace_id: TraceId) -> Vec<&EventEnvelope> {
-        self.events()
-            .iter()
-            .filter(|envelope| envelope.trace_id == trace_id)
-            .collect()
+        self.events_matching(|envelope| envelope.trace_id == trace_id)
     }
 
     /// All recorded envelopes whose correlation carries the given request id.
     pub fn events_for_request(&self, request_id: RequestId) -> Vec<&EventEnvelope> {
-        self.events()
-            .iter()
-            .filter(|envelope| envelope.correlation.request_id == Some(request_id))
-            .collect()
+        self.events_matching(|envelope| envelope.correlation.request_id == Some(request_id))
     }
 
     /// All recorded envelopes whose correlation carries the given session id.
     pub fn events_for_session(&self, session_id: SessionId) -> Vec<&EventEnvelope> {
-        self.events()
-            .iter()
-            .filter(|envelope| envelope.correlation.session_id == Some(session_id))
-            .collect()
+        self.events_matching(|envelope| envelope.correlation.session_id == Some(session_id))
     }
 
     /// All recorded envelopes whose correlation carries the given transaction
     /// id.
     pub fn events_for_transaction(&self, transaction_id: TransactionId) -> Vec<&EventEnvelope> {
-        self.events()
-            .iter()
-            .filter(|envelope| envelope.correlation.transaction_id == Some(transaction_id))
-            .collect()
+        self.events_matching(|envelope| envelope.correlation.transaction_id == Some(transaction_id))
     }
 
     /// All recorded envelopes whose correlation carries the given contract
     /// hash.
     pub fn events_for_contract(&self, contract_hash: ContractHash) -> Vec<&EventEnvelope> {
-        self.events()
-            .iter()
-            .filter(|envelope| envelope.correlation.contract_hash == Some(contract_hash))
-            .collect()
+        self.events_matching(|envelope| envelope.correlation.contract_hash == Some(contract_hash))
     }
 
     /// All recorded envelopes whose correlation carries the given catalog
@@ -272,10 +260,9 @@ impl InMemoryEventSink {
         &self,
         catalog_version: CatalogVersion,
     ) -> Vec<&EventEnvelope> {
-        self.events()
-            .iter()
-            .filter(|envelope| envelope.correlation.catalog_version == Some(catalog_version))
-            .collect()
+        self.events_matching(|envelope| {
+            envelope.correlation.catalog_version == Some(catalog_version)
+        })
     }
 
     /// All recorded envelopes whose correlation carries the given catalog
@@ -284,10 +271,9 @@ impl InMemoryEventSink {
         &self,
         catalog_object_id: CatalogObjectId,
     ) -> Vec<&EventEnvelope> {
-        self.events()
-            .iter()
-            .filter(|envelope| envelope.correlation.catalog_object_id == Some(catalog_object_id))
-            .collect()
+        self.events_matching(|envelope| {
+            envelope.correlation.catalog_object_id == Some(catalog_object_id)
+        })
     }
 
     /// Locate a single recorded envelope by `EventId`.
@@ -301,20 +287,18 @@ impl InMemoryEventSink {
     /// trace. Useful for forensic timelines that need every observed phase
     /// crossing for a transaction without filtering on `kind()` separately.
     pub fn transaction_transition_events(&self) -> Vec<&EventEnvelope> {
-        self.events()
-            .iter()
-            .filter(|envelope| matches!(envelope.event, TraceEvent::TransactionTransition(_)))
-            .collect()
+        self.events_matching(|envelope| {
+            matches!(envelope.event, TraceEvent::TransactionTransition(_))
+        })
     }
 
     /// All recorded envelopes whose payload is an `ExecutionTransition`
     /// trace. Mirrors [`Self::transaction_transition_events`] for the
     /// invocation-side projection.
     pub fn execution_transition_events(&self) -> Vec<&EventEnvelope> {
-        self.events()
-            .iter()
-            .filter(|envelope| matches!(envelope.event, TraceEvent::ExecutionTransition(_)))
-            .collect()
+        self.events_matching(|envelope| {
+            matches!(envelope.event, TraceEvent::ExecutionTransition(_))
+        })
     }
 }
 

@@ -34,9 +34,7 @@ use andromeda_srpl::procedure_resolver::{
 };
 use std::sync::Arc;
 
-// ============================================================================
 // Mock Resolver for Testing
-// ============================================================================
 
 #[derive(Clone)]
 struct MockRejectResolver;
@@ -204,9 +202,7 @@ fn valid_dispatch_request(trace_id: TraceId) -> ProcedureDispatchRequest {
     }
 }
 
-// ============================================================================
 // GATE EXEC-01: Dispatcher Construction and Cloning
-// ============================================================================
 
 #[test]
 fn gate_exec_01_srpl_dispatcher_constructs_with_dependencies() {
@@ -238,9 +234,7 @@ fn gate_exec_01_srpl_dispatcher_cloneable_for_sharing() {
     println!("✅ Exec Gate 01: Dispatcher cloneable for thread sharing");
 }
 
-// ============================================================================
 // GATE EXEC-02: Error Boundary Enforcement
-// ============================================================================
 
 #[test]
 fn gate_exec_02_error_boundary_pre_transaction() {
@@ -296,9 +290,7 @@ fn gate_exec_02_invalid_request_rejected_before_dispatch() {
     println!("✅ Exec Gate 02: Invalid requests rejected before dispatch");
 }
 
-// ============================================================================
 // GATE EXEC-03: Dispatch Path Coexistence
-// ============================================================================
 
 #[test]
 fn gate_exec_03_both_dispatch_paths_available() {
@@ -330,9 +322,7 @@ fn gate_exec_03_both_dispatch_paths_available() {
     println!("✅ Exec Gate 03: Both V0 and SRPL dispatch paths available");
 }
 
-// ============================================================================
 // GATE EXEC-04: Adapter Interface Compliance
-// ============================================================================
 
 #[test]
 fn gate_exec_04_adapter_implements_dispatcher_trait() {
@@ -358,9 +348,7 @@ fn gate_exec_04_adapter_cloneable() {
     println!("✅ Exec Gate 04: Adapter cloneable for runtime sharing");
 }
 
-// ============================================================================
 // GATE EXEC-05: Thread Safety
-// ============================================================================
 
 #[test]
 fn gate_exec_05_dispatcher_thread_safe() {
@@ -411,9 +399,7 @@ fn gate_exec_05_adapter_thread_safe() {
     println!("✅ Exec Gate 05: Adapter is Send + Sync");
 }
 
-// ============================================================================
 // GATE EXEC-06: Deterministic Error Handling
-// ============================================================================
 
 #[test]
 fn gate_exec_06_error_handling_deterministic() {
@@ -440,9 +426,7 @@ fn gate_exec_06_error_handling_deterministic() {
     println!("✅ Exec Gate 06: Error handling is deterministic");
 }
 
-// ============================================================================
 // GATE EXEC-07: Result Metadata Interface
-// ============================================================================
 
 #[test]
 fn gate_exec_07_result_metadata_extraction_documents_current_pre_tx_gap() {
@@ -527,9 +511,7 @@ fn gate_exec_07_multi_result_manifest_rejected_before_dispatch() {
     );
 }
 
-// ============================================================================
 // GATE EXEC-08: Plan Validation Interface
-// ============================================================================
 
 #[test]
 fn gate_exec_08_plan_validation_interface_available() {
@@ -540,9 +522,7 @@ fn gate_exec_08_plan_validation_interface_available() {
     println!("✅ Exec Gate 08: Plan validation exercises a real valid plan");
 }
 
-// ============================================================================
 // Summary
-// ============================================================================
 
 #[test]
 fn gate_exec_summary_all_validations() {
@@ -551,7 +531,7 @@ fn gate_exec_summary_all_validations() {
     println!("║      Executor Validation Gates Summary                     ║");
     println!("║                   H1-SRPL-EXEC-007                          ║");
     println!("╚════════════════════════════════════════════════════════════╝");
-    println!("");
+    println!();
     println!("✅ Exec Gate 01: Dispatcher construction and cloning");
     println!("✅ Exec Gate 02: Error boundary enforcement");
     println!("✅ Exec Gate 03: Dispatch path coexistence");
@@ -560,8 +540,8 @@ fn gate_exec_summary_all_validations() {
     println!("✅ Exec Gate 06: Deterministic error handling");
     println!("✅ Exec Gate 07: Result metadata interface");
     println!("✅ Exec Gate 08: Plan validation interface");
-    println!("");
+    println!();
     println!("Status: ALL EXECUTOR GATES PASSED ✅");
     println!("Ready for production deployment.");
-    println!("");
+    println!();
 }

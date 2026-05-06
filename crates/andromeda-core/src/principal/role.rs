@@ -21,7 +21,11 @@ impl PrincipalRole {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn permissions(self) -> PermissionSet {
+        PermissionSet::for_role(self)
+    }
+
+    fn parse_str(s: &str) -> Option<Self> {
         match s {
             "superadmin" => Some(Self::SuperAdmin),
             "admin" => Some(Self::Admin),
@@ -31,9 +35,13 @@ impl PrincipalRole {
             _ => None,
         }
     }
+}
 
-    pub fn permissions(self) -> PermissionSet {
-        PermissionSet::for_role(self)
+impl std::str::FromStr for PrincipalRole {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::parse_str(s).ok_or(())
     }
 }
 

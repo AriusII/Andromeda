@@ -9,6 +9,13 @@ use super::{
     MockCatalogChangeSubscription, ProcedureManifest,
 };
 
+fn catalog_mock_lock_error(resource: &str) -> AndromedaError {
+    AndromedaError::new(
+        AndromedaErrorKind::Catalog,
+        format!("mock catalog server {resource} lock is poisoned"),
+    )
+}
+
 /// Mock implementation of `CatalogServerTrait` for testing and development.
 ///
 /// This implementation maintains an in-memory store of procedure manifests
@@ -33,18 +40,27 @@ impl MockCatalogServer {
     /// Register a procedure manifest in the mock server.
     pub fn register_procedure(&self, manifest: ProcedureManifest) -> AndromedaResult<()> {
         manifest.validate()?;
-        let mut procedures = self.procedures.lock().unwrap();
+        let mut procedures = self
+            .procedures
+            .lock()
+            .map_err(|_| catalog_mock_lock_error("procedures"))?;
         procedures.insert(manifest.procedure_id, manifest);
         Ok(())
     }
 
     /// Advance the catalog version and emit a change notification.
     pub fn advance_catalog_version(&self, invalidation_lsn: u64) -> AndromedaResult<()> {
-        let mut version = self.current_version.lock().unwrap();
+        let mut version = self
+            .current_version
+            .lock()
+            .map_err(|_| catalog_mock_lock_error("current version"))?;
+        let mut changes = self
+            .changes
+            .lock()
+            .map_err(|_| catalog_mock_lock_error("changes"))?;
         let previous = *version;
         *version = CatalogVersion::new(version.get() + 1);
 
-        let mut changes = self.changes.lock().unwrap();
         changes.push(CatalogChangeNotification {
             new_version: *version,
             previous_version: previous,
@@ -63,7 +79,10 @@ impl Default for MockCatalogServer {
 
 impl CatalogServerTrait for MockCatalogServer {
     fn resolve_procedure(&self, procedure_id: ProcedureId) -> AndromedaResult<ProcedureManifest> {
-        let procedures = self.procedures.lock().unwrap();
+        let procedures = self
+            .procedures
+            .lock()
+            .map_err(|_| catalog_mock_lock_error("procedures"))?;
         procedures.get(&procedure_id).cloned().ok_or_else(|| {
             AndromedaError::new(
                 AndromedaErrorKind::Catalog,
@@ -73,11 +92,18 @@ impl CatalogServerTrait for MockCatalogServer {
     }
 
     fn get_catalog_version(&self) -> CatalogVersion {
-        *self.current_version.lock().unwrap()
+        match self.current_version.lock() {
+            Ok(version) => *version,
+            Err(poisoned) => *poisoned.into_inner(),
+        }
     }
 
     fn subscribe_to_changes(&self) -> AndromedaResult<Box<dyn CatalogChangeSubscription>> {
-        let changes = self.changes.lock().unwrap().clone();
+        let changes = self
+            .changes
+            .lock()
+            .map_err(|_| catalog_mock_lock_error("changes"))?
+            .clone();
         Ok(Box::new(MockCatalogChangeSubscription::new(changes)))
     }
 }

@@ -27,6 +27,7 @@ version = "0.1.0"
 name = "andromeda-fuzz"
 version = "0.0.0"
 dependencies = [
+ "andromeda-core",
  "andromeda-proto",
  "andromeda-quic",
  "andromeda-srpl",
@@ -632,9 +633,9 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
 name = "semver"
-version = "1.0.28"
+version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
+checksum = "e25dfac463d778e353db5be2449d1cce89bd6fd23c9f1ea21310ce6e5a1b29c4"
 
 [[package]]
 name = "serde"

@@ -1,8 +1,10 @@
-//! B+ Tree Index Engine (N2-BTREE-010 Implementation)
+//! B+ Tree index contracts and the current in-memory engine.
 //!
-//! This module implements a functional B+ tree index with insert, search, delete,
-//! and range scan operations. All operations maintain balanced tree invariants and
-//! integrate with BufferPool and WAL for durability.
+//! The promoted implementation in this module is `InMemoryBTreeIndexEngine`, a
+//! bounded `BTreeMap`-backed engine used for contract tests and non-durable
+//! execution paths. Page-backed durable B-Tree node mutation remains explicitly
+//! fail-stop until the on-page node format, WAL payloads, and recovery handlers
+//! are promoted together.
 //!
 //! ## Invariants
 //!
@@ -18,8 +20,7 @@ use crate::page::PageId;
 use andromeda_core::{AndromedaError, AndromedaResult};
 use std::collections::BTreeMap;
 
-/// Unique identifier for a row, comprising (page_id, slot_id) or similar heap locator.
-/// This is a placeholder; the actual RowId type should be defined in the catalog/storage domain.
+/// Unique identifier for a row, comprising a compact heap locator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RowId(u64);
 
@@ -61,10 +62,7 @@ impl ColumnId {
     }
 }
 
-/// B+ Tree index trait — core operations for key-value lookup, insert, delete, range scan.
-///
-/// **Wave 18+ Implementation Note:**
-/// All methods are design signatures only. Implementations deferred to Wave 18.
+/// B+ Tree index trait: key-value lookup, mutation, and range scan operations.
 pub trait BTreeIndex: Send + Sync {
     /// Lookup a single key and return all matching row IDs.
     ///
@@ -164,10 +162,11 @@ pub struct BTreeStatistics {
     pub max_occupancy: f64,
 }
 
-/// In-memory B+ Tree node (design only; implementation deferred).
+/// Page-backed B+ Tree node shape.
 ///
-/// Represents either an internal or leaf node. Deserialized from page buffer.
-/// Wave 18: Implement serialization/deserialization to/from page images.
+/// The structure is available for invariant checks and tests. Durable
+/// serialization/mutation functions below fail-stop until the format is
+/// promoted.
 #[derive(Debug)]
 pub struct BTreeIndexNode {
     pub node_id: PageId,
@@ -177,57 +176,6 @@ pub struct BTreeIndexNode {
     pub keys: Vec<Vec<u8>>, // Serialized keys (variable-length with prefix)
     pub children: Vec<PageId>, // For internal nodes only; count = key_count + 1
     pub values: Vec<Vec<RowId>>, // For leaf nodes only; count = key_count (or more for non-unique)
-}
-
-impl BTreeIndexNode {
-    /// Create a new internal node (leaf=false).
-    pub fn new_internal(_node_id: PageId, _parent_id: PageId) -> Self {
-        todo!("Wave 18: Implement internal node creation")
-    }
-
-    /// Create a new leaf node (leaf=true).
-    pub fn new_leaf(_node_id: PageId, _parent_id: PageId) -> Self {
-        todo!("Wave 18: Implement leaf node creation")
-    }
-
-    /// Check if node is at capacity (branching_factor keys).
-    pub fn is_full(&self, _branching_factor: u16) -> bool {
-        todo!("Wave 18: Check if key_count == branching_factor - 1")
-    }
-
-    /// Check if node is below minimum occupancy threshold.
-    pub fn is_underfull(&self, _branching_factor: u16) -> bool {
-        todo!("Wave 18: Check if key_count < branching_factor / 2")
-    }
-
-    /// Find child pointer for a given key using binary search.
-    /// Returns the index of the child pointer that should contain the key.
-    pub fn find_child(&self, _key: &[u8]) -> PageId {
-        todo!("Wave 18: Binary search on self.keys, return self.children[idx]")
-    }
-
-    /// Split this node and return the promoted key and new right sibling ID.
-    ///
-    /// For leaf: moves right half of keys/values to new node, promotes middle key.
-    /// For internal: moves right half of keys/children to new node, promotes middle key.
-    pub fn split(&mut self, _branching_factor: u16) -> AndromedaResult<(Vec<u8>, PageId)> {
-        todo!("Wave 18: Perform node split and return (promoted_key, new_sibling_id)")
-    }
-
-    /// Merge this node with a sibling (assumes both underfull).
-    pub fn merge(&mut self, _sibling: &BTreeIndexNode) -> AndromedaResult<()> {
-        todo!("Wave 18: Merge this node with sibling")
-    }
-
-    /// Serialize node to page buffer (Wave 18+).
-    pub fn serialize_to_page(&self, _page_buffer: &mut [u8]) -> AndromedaResult<()> {
-        todo!("Wave 18: Serialize BTreeIndexNode to page image with PageHeader/PageTrailer")
-    }
-
-    /// Deserialize node from page buffer (Wave 18+).
-    pub fn deserialize_from_page(_page_buffer: &[u8]) -> AndromedaResult<Self> {
-        todo!("Wave 18: Deserialize BTreeIndexNode from page image")
-    }
 }
 
 /// B+ Tree index metadata (design only; implementation deferred).
@@ -256,30 +204,6 @@ pub struct BTreeRangeCursor {
     pub end_key: Vec<u8>,
     pub inclusive_end: bool,
     pub exhausted: bool,
-}
-
-impl BTreeRangeCursor {
-    /// Create a new range cursor for [start_key, end_key).
-    pub fn new(
-        _start_leaf: PageId,
-        _start_key: Vec<u8>,
-        _end_key: Vec<u8>,
-        _inclusive_end: bool,
-    ) -> Self {
-        todo!("Wave 18: Create range cursor positioned at start_key")
-    }
-
-    /// Fetch next key-value pair; returns None at end of range.
-    ///
-    /// Uses leaf-node sibling links to traverse sequentially.
-    pub fn next(&mut self) -> AndromedaResult<Option<(Vec<u8>, RowId)>> {
-        todo!("Wave 18: Return next (key, row_id) pair in range, or None at end")
-    }
-
-    /// Seek cursor to a specific key position (for range start optimization).
-    pub fn seek_to_key(&mut self, _key: &[u8]) -> AndromedaResult<()> {
-        todo!("Wave 18: Position cursor at key >= given key")
-    }
 }
 
 /// B+ Tree index errors (design only; to be extended).
@@ -325,6 +249,17 @@ impl From<BTreeError> for AndromedaError {
         use andromeda_core::AndromedaErrorKind;
         AndromedaError::new(AndromedaErrorKind::Storage, err.to_string())
     }
+}
+
+fn deferred_btree_result<T>(operation: &'static str) -> AndromedaResult<T> {
+    use andromeda_core::AndromedaErrorKind;
+
+    Err(AndromedaError::new(
+        AndromedaErrorKind::Storage,
+        format!(
+            "B-Tree durable operation '{operation}' is not promoted; page-backed node format, WAL payload decoding, and idempotent recovery must be implemented before this path can run"
+        ),
+    ))
 }
 
 /// Configuration for B+ Tree index operations.
@@ -573,87 +508,14 @@ fn non_root_min_keys(branching_factor: u16) -> usize {
     (branching_factor / 2).saturating_sub(1) as usize
 }
 
-// Sub-modules (design only; implementations deferred to Wave 18+)
+// Page-backed adapters remain fail-stop until durable B-Tree promotion.
 
-pub mod node {
-    //! B+ Tree node management — load, create, serialize, deserialize.
-    //! Wave 18: Implement node lifecycle.
-    use super::*;
-
-    /// Node lifecycle operations (design only).
-    impl BTreeIndexNode {
-        /// Load a node from a page in the buffer pool.
-        pub fn load_from_buffer_pool(_page_id: PageId) -> AndromedaResult<Self> {
-            todo!("Wave 18: Load node from BufferPool via PageGuard")
-        }
-
-        /// Flush node changes back to buffer pool.
-        pub fn flush_to_buffer_pool(&self, _page_id: PageId) -> AndromedaResult<()> {
-            todo!("Wave 18: Flush node to BufferPool, mark page dirty")
-        }
-
-        /// Validate node structure invariants (for recovery/debugging).
-        pub fn validate(&self, _branching_factor: u16) -> AndromedaResult<()> {
-            todo!("Wave 18: Validate occupancy, key ordering, child pointers")
-        }
-    }
-}
+pub mod node;
 
 #[allow(dead_code)]
-pub mod leaf {
-    //! B+ Tree leaf node operations — key insertion, deletion, value lookup.
-    //! Wave 18: Implement leaf-specific logic.
-    use super::*;
+pub mod leaf;
 
-    /// Leaf node lookup — find row IDs for a given key.
-    pub fn lookup_in_leaf<'a>(_node: &'a BTreeIndexNode, _key: &[u8]) -> Option<&'a [RowId]> {
-        todo!("Wave 18: Binary search for key in leaf node, return row IDs")
-    }
-
-    /// Leaf node insert — add key and row ID, handle splits.
-    pub fn insert_into_leaf(
-        _node: &mut BTreeIndexNode,
-        _key: Vec<u8>,
-        _row_id: RowId,
-        _branching_factor: u16,
-        _is_unique: bool,
-    ) -> AndromedaResult<Option<(Vec<u8>, PageId)>> {
-        // Returns Some((promoted_key, new_sibling_id)) if split occurred
-        todo!("Wave 18: Insert into leaf, trigger split if full")
-    }
-
-    /// Leaf node delete — remove key/row ID, handle merges.
-    pub fn delete_from_leaf(
-        _node: &mut BTreeIndexNode,
-        _key: &[u8],
-        _row_id: Option<RowId>,
-        _branching_factor: u16,
-    ) -> AndromedaResult<()> {
-        todo!("Wave 18: Delete from leaf, trigger merge if underfull")
-    }
-}
-
-pub mod cursor {
-    //! B+ Tree range scan cursor — sequential iteration via linked leaves.
-    //! Wave 18: Implement cursor state machine.
-    use super::*;
-
-    impl BTreeRangeCursor {
-        /// Advance cursor to next leaf in the chain.
-        pub fn advance_to_next_leaf(&mut self) -> AndromedaResult<()> {
-            todo!("Wave 18: Move cursor to next_leaf sibling, reset key_idx to 0")
-        }
-
-        /// Check if current key is within range bounds.
-        pub fn is_in_range(&self, _key: &[u8]) -> bool {
-            todo!("Wave 18: Compare key against [start_key, end_key] bounds")
-        }
-    }
-}
-
-// ============================================================================
-// N2-BTREE-010 IMPLEMENTATION: Core Engine
-// ============================================================================
+pub mod cursor;
 
 /// Key-value pair for internal tree representation
 #[derive(Debug, Clone)]
@@ -671,328 +533,6 @@ pub struct BTreeNodeImpl {
     pub next_sibling_page_id: Option<PageId>, // For leaves: linked list
     pub key_value_pairs: Vec<KeyValuePair>,
     pub child_page_ids: Vec<PageId>, // For internal nodes: len = keys.len() + 1
-}
-
-impl BTreeNodeImpl {
-    /// Create a new leaf node
-    pub fn new_leaf(page_id: PageId, parent_page_id: Option<PageId>) -> Self {
-        Self {
-            page_id,
-            is_leaf: true,
-            parent_page_id,
-            next_sibling_page_id: None,
-            key_value_pairs: Vec::new(),
-            child_page_ids: Vec::new(),
-        }
-    }
-
-    /// Create a new internal node
-    pub fn new_internal(page_id: PageId, parent_page_id: Option<PageId>) -> Self {
-        Self {
-            page_id,
-            is_leaf: false,
-            parent_page_id,
-            next_sibling_page_id: None,
-            key_value_pairs: Vec::new(),
-            child_page_ids: Vec::new(),
-        }
-    }
-
-    /// Check if node is at capacity
-    pub fn is_full(&self, branching_factor: u16) -> bool {
-        self.key_value_pairs.len() >= (branching_factor - 1) as usize
-    }
-
-    /// Check if node is below minimum occupancy (except root)
-    pub fn is_underfull(&self, branching_factor: u16) -> bool {
-        let min_keys = if self.parent_page_id.is_some() {
-            (branching_factor / 2 - 1) as usize
-        } else {
-            1 // Root can have just 1 key
-        };
-        self.key_value_pairs.len() < min_keys
-    }
-
-    /// Binary search for a key; returns index where key should be inserted
-    pub fn find_key_index(&self, key: &[u8]) -> usize {
-        self.key_value_pairs
-            .binary_search_by(|kvp| kvp.key.as_slice().cmp(key))
-            .unwrap_or_else(|idx| idx)
-    }
-
-    /// Find the child pointer index for a given key (internal nodes only)
-    pub fn find_child_index(&self, key: &[u8]) -> usize {
-        if self.is_leaf {
-            return 0;
-        }
-
-        let idx = self
-            .key_value_pairs
-            .binary_search_by(|kvp| kvp.key.as_slice().cmp(key))
-            .unwrap_or_else(|idx| idx);
-
-        // If key matches a key in this node, go to right child
-        if idx < self.key_value_pairs.len() && self.key_value_pairs[idx].key == key {
-            idx + 1
-        } else {
-            idx
-        }
-    }
-
-    /// Get the child page ID at given index
-    pub fn get_child_page_id(&self, index: usize) -> Option<PageId> {
-        if index < self.child_page_ids.len() {
-            Some(self.child_page_ids[index])
-        } else {
-            None
-        }
-    }
-
-    /// Insert a key-value pair into leaf node (maintaining sorted order)
-    pub fn insert_into_leaf(&mut self, key: Vec<u8>, row_id: RowId) -> AndromedaResult<()> {
-        if !self.is_leaf {
-            return Err(BTreeError::CorruptedNode {
-                node_id: self.page_id,
-                reason: "attempted insert_into_leaf on internal node".to_string(),
-            }
-            .into());
-        }
-
-        let idx = self
-            .key_value_pairs
-            .binary_search_by(|kvp| kvp.key.as_slice().cmp(key.as_slice()))
-            .unwrap_or_else(|idx| idx);
-
-        // Check for duplicate
-        if idx < self.key_value_pairs.len() && self.key_value_pairs[idx].key == key {
-            return Err(BTreeError::DuplicateKey { key }.into());
-        }
-
-        let row_id_bytes = row_id.get().to_le_bytes().to_vec();
-        self.key_value_pairs.insert(
-            idx,
-            KeyValuePair {
-                key,
-                value: row_id_bytes,
-            },
-        );
-
-        Ok(())
-    }
-
-    /// Look up a key in leaf node; returns RowId if found
-    pub fn lookup_in_leaf(&self, key: &[u8]) -> Option<RowId> {
-        if !self.is_leaf {
-            return None;
-        }
-
-        self.key_value_pairs
-            .binary_search_by(|kvp| kvp.key.as_slice().cmp(key))
-            .ok()
-            .and_then(|idx| {
-                if let Ok(row_id_value) = <[u8; 8]>::try_from(&self.key_value_pairs[idx].value[..])
-                {
-                    Some(RowId::new(u64::from_le_bytes(row_id_value)))
-                } else {
-                    None
-                }
-            })
-    }
-
-    /// Split this node and return (promoted_key, new_node_data)
-    pub fn split(&mut self, branching_factor: u16) -> AndromedaResult<(Vec<u8>, BTreeNodeImpl)> {
-        if !self.is_full(branching_factor) {
-            return Err(BTreeError::CorruptedNode {
-                node_id: self.page_id,
-                reason: "split called on non-full node".to_string(),
-            }
-            .into());
-        }
-
-        let mid_idx = self.key_value_pairs.len() / 2;
-        let promoted_key = self.key_value_pairs[mid_idx].key.clone();
-
-        // Create new right sibling
-        let mut new_node = if self.is_leaf {
-            BTreeNodeImpl::new_leaf(
-                PageId::new(self.page_id.get().wrapping_add(1000)),
-                self.parent_page_id,
-            )
-        } else {
-            BTreeNodeImpl::new_internal(
-                PageId::new(self.page_id.get().wrapping_add(1000)),
-                self.parent_page_id,
-            )
-        };
-
-        if self.is_leaf {
-            // Split leaf: move right half to new node
-            new_node.key_value_pairs = self.key_value_pairs[mid_idx..].to_vec();
-            self.key_value_pairs.truncate(mid_idx);
-
-            // Update leaf linking
-            new_node.next_sibling_page_id = self.next_sibling_page_id;
-            self.next_sibling_page_id = Some(new_node.page_id);
-        } else {
-            // Split internal: move right half of keys and all right children
-            new_node.key_value_pairs = self.key_value_pairs[mid_idx + 1..].to_vec();
-            self.key_value_pairs.truncate(mid_idx);
-
-            new_node.child_page_ids = self.child_page_ids[mid_idx + 1..].to_vec();
-            self.child_page_ids.truncate(mid_idx + 1);
-        }
-
-        Ok((promoted_key, new_node))
-    }
-
-    /// Delete a key from leaf node
-    pub fn delete_from_leaf(&mut self, key: &[u8]) -> AndromedaResult<()> {
-        if !self.is_leaf {
-            return Err(BTreeError::CorruptedNode {
-                node_id: self.page_id,
-                reason: "delete_from_leaf called on internal node".to_string(),
-            }
-            .into());
-        }
-
-        if let Ok(idx) = self
-            .key_value_pairs
-            .binary_search_by(|kvp| kvp.key.as_slice().cmp(key))
-        {
-            self.key_value_pairs.remove(idx);
-            Ok(())
-        } else {
-            Err(BTreeError::KeyNotFound { key: key.to_vec() }.into())
-        }
-    }
-
-    /// Serialize node to bytes for page storage
-    pub fn serialize(&self) -> Vec<u8> {
-        let mut bytes = Vec::new();
-
-        // Header: is_leaf, key_count, child_count
-        bytes.push(if self.is_leaf { 1 } else { 0 });
-        let key_count = self.key_value_pairs.len() as u16;
-        bytes.extend_from_slice(&key_count.to_le_bytes());
-        let child_count = self.child_page_ids.len() as u16;
-        bytes.extend_from_slice(&child_count.to_le_bytes());
-
-        // Parent and next sibling page IDs
-        let parent_id = self.parent_page_id.map(PageId::get).unwrap_or(u64::MAX);
-        bytes.extend_from_slice(&parent_id.to_le_bytes());
-        let next_sibling = self
-            .next_sibling_page_id
-            .map(PageId::get)
-            .unwrap_or(u64::MAX);
-        bytes.extend_from_slice(&next_sibling.to_le_bytes());
-
-        // Key-value pairs
-        for kvp in &self.key_value_pairs {
-            let key_len = kvp.key.len() as u16;
-            bytes.extend_from_slice(&key_len.to_le_bytes());
-            bytes.extend_from_slice(&kvp.key);
-
-            let val_len = kvp.value.len() as u16;
-            bytes.extend_from_slice(&val_len.to_le_bytes());
-            bytes.extend_from_slice(&kvp.value);
-        }
-
-        // Child page IDs
-        for child_id in &self.child_page_ids {
-            bytes.extend_from_slice(&child_id.get().to_le_bytes());
-        }
-
-        bytes
-    }
-
-    /// Deserialize node from bytes
-    pub fn deserialize(page_id: PageId, data: &[u8]) -> AndromedaResult<Self> {
-        if data.len() < 21 {
-            return Err(BTreeError::InvalidNodeFormat { page_id }.into());
-        }
-
-        let mut offset = 0;
-        let is_leaf = data[offset] != 0;
-        offset += 1;
-
-        let key_count = u16::from_le_bytes([data[offset], data[offset + 1]]) as usize;
-        offset += 2;
-
-        let child_count = u16::from_le_bytes([data[offset], data[offset + 1]]) as usize;
-        offset += 2;
-
-        let parent_id_raw =
-            u64::from_le_bytes(data[offset..offset + 8].try_into().unwrap_or([255; 8]));
-        let parent_page_id = if parent_id_raw == u64::MAX {
-            None
-        } else {
-            Some(PageId::new(parent_id_raw))
-        };
-        offset += 8;
-
-        let next_sibling_raw =
-            u64::from_le_bytes(data[offset..offset + 8].try_into().unwrap_or([255; 8]));
-        let next_sibling_page_id = if next_sibling_raw == u64::MAX {
-            None
-        } else {
-            Some(PageId::new(next_sibling_raw))
-        };
-        offset += 8;
-
-        let mut key_value_pairs = Vec::new();
-        for _ in 0..key_count {
-            if offset + 2 > data.len() {
-                return Err(BTreeError::InvalidNodeFormat { page_id }.into());
-            }
-
-            let key_len = u16::from_le_bytes([data[offset], data[offset + 1]]) as usize;
-            offset += 2;
-
-            if offset + key_len > data.len() {
-                return Err(BTreeError::InvalidNodeFormat { page_id }.into());
-            }
-
-            let key = data[offset..offset + key_len].to_vec();
-            offset += key_len;
-
-            if offset + 2 > data.len() {
-                return Err(BTreeError::InvalidNodeFormat { page_id }.into());
-            }
-
-            let val_len = u16::from_le_bytes([data[offset], data[offset + 1]]) as usize;
-            offset += 2;
-
-            if offset + val_len > data.len() {
-                return Err(BTreeError::InvalidNodeFormat { page_id }.into());
-            }
-
-            let value = data[offset..offset + val_len].to_vec();
-            offset += val_len;
-
-            key_value_pairs.push(KeyValuePair { key, value });
-        }
-
-        let mut child_page_ids = Vec::new();
-        for _ in 0..child_count {
-            if offset + 8 > data.len() {
-                return Err(BTreeError::InvalidNodeFormat { page_id }.into());
-            }
-
-            let child_id =
-                u64::from_le_bytes(data[offset..offset + 8].try_into().unwrap_or([0; 8]));
-            child_page_ids.push(PageId::new(child_id));
-            offset += 8;
-        }
-
-        Ok(BTreeNodeImpl {
-            page_id,
-            is_leaf,
-            parent_page_id,
-            next_sibling_page_id,
-            key_value_pairs,
-            child_page_ids,
-        })
-    }
 }
 
 /// In-memory B-Tree index prototype backed by [`BTreeMap`].
@@ -1134,212 +674,5 @@ impl InMemoryBTreeIndexEngine {
 )]
 pub type BTreeIndexEngine = InMemoryBTreeIndexEngine;
 
-// ============================================================================
-// Tests
-// ============================================================================
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_node_impl_new_leaf() {
-        let page_id = PageId::new(1);
-        let node = BTreeNodeImpl::new_leaf(page_id, None);
-        assert!(node.is_leaf);
-        assert_eq!(node.page_id, page_id);
-        assert_eq!(node.key_value_pairs.len(), 0);
-    }
-
-    #[test]
-    fn test_node_impl_new_internal() {
-        let page_id = PageId::new(2);
-        let node = BTreeNodeImpl::new_internal(page_id, None);
-        assert!(!node.is_leaf);
-        assert_eq!(node.page_id, page_id);
-    }
-
-    #[test]
-    fn test_node_is_full() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
-        let config = BTreeConfig::default();
-
-        for i in 0..(config.branching_factor - 1) {
-            node.key_value_pairs.push(KeyValuePair {
-                key: vec![i as u8],
-                value: vec![],
-            });
-        }
-
-        assert!(node.is_full(config.branching_factor));
-    }
-
-    #[test]
-    fn test_find_key_index() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
-        node.key_value_pairs.push(KeyValuePair {
-            key: vec![1, 2, 3],
-            value: vec![],
-        });
-        node.key_value_pairs.push(KeyValuePair {
-            key: vec![5, 6, 7],
-            value: vec![],
-        });
-
-        assert_eq!(node.find_key_index(&[1, 2, 3]), 0);
-        assert_eq!(node.find_key_index(&[5, 6, 7]), 1);
-        assert_eq!(node.find_key_index(&[3, 4, 5]), 1);
-        assert_eq!(node.find_key_index(&[8, 9]), 2);
-    }
-
-    #[test]
-    fn test_insert_into_leaf() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
-        let row_id = RowId::new(100);
-
-        node.insert_into_leaf(vec![42, 43], row_id).unwrap();
-        assert_eq!(node.key_value_pairs.len(), 1);
-        assert_eq!(node.key_value_pairs[0].key, vec![42, 43]);
-    }
-
-    #[test]
-    fn test_lookup_in_leaf() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
-        let row_id = RowId::new(42);
-        let key = vec![5, 4, 3];
-
-        node.insert_into_leaf(key.clone(), row_id).unwrap();
-        let found = node.lookup_in_leaf(&key);
-        assert_eq!(found, Some(row_id));
-    }
-
-    #[test]
-    fn test_serialize_deserialize_leaf() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
-        let row_id = RowId::new(99);
-        node.insert_into_leaf(vec![10, 11], row_id).unwrap();
-
-        let serialized = node.serialize();
-        let deserialized = BTreeNodeImpl::deserialize(PageId::new(1), &serialized).unwrap();
-
-        assert!(deserialized.is_leaf);
-        assert_eq!(deserialized.key_value_pairs.len(), 1);
-        assert_eq!(deserialized.key_value_pairs[0].key, vec![10, 11]);
-    }
-
-    #[test]
-    fn test_split_leaf_node() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
-        let config = BTreeConfig::default();
-
-        // Fill node to capacity
-        for i in 0..(config.branching_factor - 1) {
-            let row_id = RowId::new(i as u64);
-            node.insert_into_leaf(vec![i as u8], row_id).ok();
-        }
-
-        assert!(node.is_full(config.branching_factor));
-
-        let (promoted_key, new_node) = node.split(config.branching_factor).unwrap();
-        assert!(!promoted_key.is_empty());
-        assert!(!new_node.key_value_pairs.is_empty());
-    }
-
-    #[test]
-    fn test_delete_from_leaf() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
-        let row_id = RowId::new(50);
-        let key = vec![7, 8, 9];
-
-        node.insert_into_leaf(key.clone(), row_id).unwrap();
-        assert_eq!(node.key_value_pairs.len(), 1);
-
-        node.delete_from_leaf(&key).unwrap();
-        assert_eq!(node.key_value_pairs.len(), 0);
-    }
-
-    #[test]
-    fn test_btree_index_creation() {
-        let index =
-            InMemoryBTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
-
-        assert_eq!(index.row_count(), 0);
-    }
-
-    #[test]
-    fn test_statistics_default() {
-        let index =
-            InMemoryBTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
-
-        let stats = index.statistics();
-        assert_eq!(stats.tree_height, 1);
-        assert_eq!(stats.leaf_node_count, 1);
-    }
-
-    #[test]
-    fn test_insert_multiple_ordered_keys() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
-
-        for i in 0..5 {
-            let row_id = RowId::new(i as u64 * 10);
-            node.insert_into_leaf(vec![i as u8], row_id).unwrap();
-        }
-
-        assert_eq!(node.key_value_pairs.len(), 5);
-        assert_eq!(node.key_value_pairs[0].key, vec![0]);
-        assert_eq!(node.key_value_pairs[4].key, vec![4]);
-    }
-
-    #[test]
-    fn test_duplicate_key_error() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
-        let row_id1 = RowId::new(10);
-        let row_id2 = RowId::new(20);
-        let key = vec![42];
-
-        node.insert_into_leaf(key.clone(), row_id1).unwrap();
-        let result = node.insert_into_leaf(key.clone(), row_id2);
-
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_node_sibling_linking() {
-        let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
-        let sibling_id = PageId::new(2);
-
-        node.next_sibling_page_id = Some(sibling_id);
-        assert_eq!(node.next_sibling_page_id, Some(sibling_id));
-    }
-
-    #[test]
-    fn test_internal_node_child_pointer() {
-        let mut node = BTreeNodeImpl::new_internal(PageId::new(1), None);
-        node.child_page_ids.push(PageId::new(10));
-        node.child_page_ids.push(PageId::new(20));
-
-        assert_eq!(node.get_child_page_id(0), Some(PageId::new(10)));
-        assert_eq!(node.get_child_page_id(1), Some(PageId::new(20)));
-        assert_eq!(node.get_child_page_id(2), None);
-    }
-
-    #[test]
-    fn test_find_child_index() {
-        let mut node = BTreeNodeImpl::new_internal(PageId::new(1), None);
-        node.key_value_pairs.push(KeyValuePair {
-            key: vec![50],
-            value: vec![],
-        });
-        node.key_value_pairs.push(KeyValuePair {
-            key: vec![100],
-            value: vec![],
-        });
-        node.child_page_ids = vec![PageId::new(1), PageId::new(2), PageId::new(3)];
-
-        assert_eq!(node.find_child_index(&[30]), 0);
-        assert_eq!(node.find_child_index(&[50]), 1);
-        assert_eq!(node.find_child_index(&[75]), 1);
-        assert_eq!(node.find_child_index(&[100]), 2);
-        assert_eq!(node.find_child_index(&[150]), 2);
-    }
-}
+mod tests;

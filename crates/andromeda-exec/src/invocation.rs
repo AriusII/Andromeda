@@ -44,7 +44,7 @@ impl InvocationRequest {
 
         Ok(DecisionTrace {
             trace_id,
-            decision: CriticalDecisionKind::ContractValidation,
+            decision: CriticalDecisionKind::ResourceGovernance,
             reason: "invocation structural admission accepted before transaction creation"
                 .to_string(),
         })

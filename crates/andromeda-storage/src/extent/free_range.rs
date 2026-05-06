@@ -2,7 +2,7 @@ use andromeda_core::AndromedaResult;
 
 use crate::{Lsn, PageId, PageSize};
 
-use super::{error::storage_error, ExtentDescriptor};
+use super::{ExtentDescriptor, error::storage_error};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ExtentFreeRange {
@@ -40,7 +40,10 @@ impl ExtentFreeRange {
         ))
     }
 
-    pub(crate) fn contains_descriptor(&self, descriptor: &ExtentDescriptor) -> AndromedaResult<bool> {
+    pub(crate) fn contains_descriptor(
+        &self,
+        descriptor: &ExtentDescriptor,
+    ) -> AndromedaResult<bool> {
         self.validate()?;
         descriptor.validate()?;
         let range_end = self.last_page_id()?.get();
@@ -50,7 +53,10 @@ impl ExtentFreeRange {
             && descriptor_end <= range_end)
     }
 
-    pub(crate) fn overlaps_descriptor(&self, descriptor: &ExtentDescriptor) -> AndromedaResult<bool> {
+    pub(crate) fn overlaps_descriptor(
+        &self,
+        descriptor: &ExtentDescriptor,
+    ) -> AndromedaResult<bool> {
         self.validate()?;
         descriptor.validate()?;
         let start = self.first_page_id.get();

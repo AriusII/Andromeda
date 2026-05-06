@@ -140,7 +140,7 @@ impl BufferFrame {
 
     pub fn validate(&self) -> AndromedaResult<()> {
         self.id.validate()?;
-        if self.is_dirty && self.first_dirty_lsn.map_or(true, Lsn::is_zero) {
+        if self.is_dirty && self.first_dirty_lsn.is_none_or(Lsn::is_zero) {
             return Err(BufferPoolError::InvalidDirtyLsn.into_andromeda_error());
         }
         if !self.is_dirty && self.first_dirty_lsn.is_some() {
@@ -211,10 +211,10 @@ impl BufferFrame {
         if image_page_lsn != page_lsn {
             return Err(BufferPoolError::InvalidPageImage.into_andromeda_error());
         }
-        if let Some(first_dirty_lsn) = self.first_dirty_lsn {
-            if first_dirty_lsn.is_zero() || first_dirty_lsn < page_lsn {
-                return Err(BufferPoolError::InvalidDirtyLsn.into_andromeda_error());
-            }
+        if let Some(first_dirty_lsn) = self.first_dirty_lsn
+            && (first_dirty_lsn.is_zero() || first_dirty_lsn < page_lsn)
+        {
+            return Err(BufferPoolError::InvalidDirtyLsn.into_andromeda_error());
         }
         Ok(())
     }

@@ -1,4 +1,4 @@
-//! Invocation Trace Contract Tests — Wave 13 Batch 3
+//! Invocation trace contract tests.
 //!
 //! Tests verify the 4 critical tracing points and durable audit ledger guarantees:
 //!

@@ -73,9 +73,7 @@ use andromeda_observe::{
 use andromeda_quic::SurfacePlane;
 use andromeda_storage::InMemoryWal;
 
-// ============================================================================
 // Test 1: Recovery Audit Trace Covers Startup and Replay
-// ============================================================================
 
 /// Verifies that recovery startup with FastStart mode emits a complete audit
 /// trail covering manifest loading, WAL replay, and completion.
@@ -92,8 +90,7 @@ fn test_recovery_audit_trace_covers_startup_and_replay() {
 
     let trace_id = TraceId::new(100);
 
-    // Simulate recovery startup event
-    // (In production, this would be emitted from the storage recovery layer)
+    // Simulate the recovery startup event emitted by the storage recovery layer.
     let startup_trace = TraceEvent::RecoveryStartup(andromeda_observe::RecoveryTrace {
         trace_id,
         last_durable_lsn: 1000u64,
@@ -114,7 +111,7 @@ fn test_recovery_audit_trace_covers_startup_and_replay() {
 
     let envelope = EventEnvelope::new(
         andromeda_observe::EventId::new(1),
-        correlation.clone(),
+        correlation,
         startup_trace,
     )
     .expect("startup trace envelope should be valid");
@@ -136,8 +133,7 @@ fn test_recovery_audit_trace_covers_startup_and_replay() {
         "emitter should have no rejections"
     );
 
-    // Simulate WAL replay batch event
-    // (In production, this would be emitted for each batch of records replayed)
+    // Simulate a WAL replay batch event for the same recovery trace.
     let wal_replay_trace = TraceEvent::Wal(andromeda_observe::WalTrace {
         trace_id,
         transaction_id: None,
@@ -146,7 +142,7 @@ fn test_recovery_audit_trace_covers_startup_and_replay() {
 
     let envelope = EventEnvelope::new(
         andromeda_observe::EventId::new(2),
-        correlation.clone(),
+        correlation,
         wal_replay_trace,
     )
     .expect("wal replay trace envelope should be valid");
@@ -179,9 +175,7 @@ fn test_recovery_audit_trace_covers_startup_and_replay() {
     );
 }
 
-// ============================================================================
 // Test 2: Security Audit Trail Covers mTLS and Permission Check
-// ============================================================================
 
 /// Verifies that authorization checks emit SecurityAuditTrace events for both
 /// allowed and denied outcomes, capturing mTLS identity extraction, permission
@@ -334,9 +328,7 @@ fn test_security_audit_trail_covers_mtls_and_permission() {
     println!("✓ Security audit trail test passed: both allow and deny paths traced");
 }
 
-// ============================================================================
 // Test 3: Recovery Incomplete Transaction Rejection Traced
-// ============================================================================
 
 /// Verifies that when recovery encounters incomplete transactions, those
 /// skips are observable via trace events and do not silently disappear.
@@ -414,9 +406,7 @@ fn test_recovery_incomplete_transaction_rejection_traced() {
     );
 }
 
-// ============================================================================
 // Test 4: Admission Gate Rejection Leaves No Silent Drop
-// ============================================================================
 
 /// Verifies that when an admission gate rejects a request (due to auth denial,
 /// budget exceeded, or contract mismatch), no transaction is created, no WAL
@@ -500,9 +490,7 @@ fn test_admission_gate_rejection_leaves_no_silent_drop() {
     );
 }
 
-// ============================================================================
 // Additional integration test: Emitter no-silent-drop invariant
-// ============================================================================
 
 /// Verifies that the EventEmitter never drops events silently and that all
 /// rejection reasons are counted and observable.

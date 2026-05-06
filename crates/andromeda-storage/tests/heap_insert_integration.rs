@@ -1,14 +1,9 @@
 #![forbid(unsafe_code)]
 
-/// Wave 21 Batch 4 Task 3: N1-HEAP-005
-/// Heap Page Insert Implementation — Integration Tests
-///
-/// Validates end-to-end heap tuple insertion with:
-/// - Row encoding via RowEncoder
-/// - Slot directory management
-/// - Buffer pool coordination (simulation)
-/// - Invariant verification
-/// - Performance characteristics
+// Heap page insert integration tests.
+//
+// These tests cover row encoding, slot directory management, heap invariants,
+// and the insertion latency budget.
 use andromeda_storage::{
     ColumnDef, Datum, HeapPageInsert, PageId, PageSize, RowEncoder, RowSchema, ScalarType,
 };
@@ -41,7 +36,6 @@ fn create_test_schema() -> Arc<RowSchema> {
     )
 }
 
-/// Test 1: HeapPageInsert can be instantiated with canonical types
 #[test]
 fn heap_page_insert_creation_with_canonical_types() {
     let insert =
@@ -54,7 +48,6 @@ fn heap_page_insert_creation_with_canonical_types() {
     assert!(insert.free_space() > 0);
 }
 
-/// Test 2: Insert single raw tuple and verify retrieval
 #[test]
 fn heap_page_insert_single_raw_tuple() {
     let mut insert =
@@ -71,7 +64,6 @@ fn heap_page_insert_single_raw_tuple() {
     assert_eq!(read_data, tuple_data);
 }
 
-/// Test 3: Insert multiple tuples and verify independent retrieval
 #[test]
 fn heap_page_insert_multiple_tuples() {
     let mut insert =
@@ -94,7 +86,6 @@ fn heap_page_insert_multiple_tuples() {
     }
 }
 
-/// Test 4: Fill page to near-capacity
 #[test]
 fn heap_page_insert_fill_to_capacity() {
     let mut insert =
@@ -128,19 +119,21 @@ fn heap_page_insert_fill_to_capacity() {
     );
 }
 
-/// Test 5: Page full error has appropriate error message
 #[test]
 fn heap_page_insert_page_full_error_message() {
     let mut insert =
         HeapPageInsert::new(PageId::new(4), PageSize::KiB16).expect("create insert context");
 
-    // Fill page with maximum-size tuples
-    let mut free_space = insert.free_space() as usize;
-    while free_space >= 100 {
-        let chunk = vec![0u8; 100];
-        let _ = insert.insert_raw_tuple(&chunk);
-        free_space = insert.free_space() as usize;
+    let chunk = vec![0u8; 100];
+    let mut inserted_count = 0;
+    loop {
+        match insert.insert_raw_tuple(&chunk) {
+            Ok(_) => inserted_count += 1,
+            Err(e) if e.message().contains("full") => break,
+            Err(e) => panic!("unexpected heap insert error: {}", e.message()),
+        }
     }
+    assert!(inserted_count > 0, "page fill setup should insert tuples");
 
     // Try to insert when full
     let oversized = vec![0u8; 1000];
@@ -152,7 +145,6 @@ fn heap_page_insert_page_full_error_message() {
     assert!(err_msg.contains("full") || err_msg.contains("free"));
 }
 
-/// Test 6: Encoding round-trip with row encoder
 #[test]
 fn heap_page_insert_encoding_roundtrip() {
     let schema = create_test_schema();
@@ -176,7 +168,6 @@ fn heap_page_insert_encoding_roundtrip() {
     assert_eq!(encoded, read_encoded);
 }
 
-/// Test 7: Insert structured row with encoder
 #[test]
 fn heap_page_insert_structured_row_with_encoder() {
     let schema = create_test_schema();
@@ -202,7 +193,6 @@ fn heap_page_insert_structured_row_with_encoder() {
     assert_eq!(insert.active_slot_count(), 3);
 }
 
-/// Test 8: Multiple rows with various data types
 #[test]
 fn heap_page_insert_diverse_data_types() {
     let schema = create_test_schema();
@@ -220,13 +210,12 @@ fn heap_page_insert_diverse_data_types() {
     ];
 
     for row in test_rows {
-        let _ = insert.insert_tuple(&row).expect("insert");
+        insert.insert_tuple(&row).expect("insert");
     }
 
     assert_eq!(insert.active_slot_count(), 4);
 }
 
-/// Test 9: RowId uniqueness within page
 #[test]
 fn heap_page_insert_rowid_uniqueness() {
     let schema = create_test_schema();
@@ -252,7 +241,6 @@ fn heap_page_insert_rowid_uniqueness() {
     assert_eq!(unique_count, 5, "all slot IDs should be unique");
 }
 
-/// Test 10: Delete tuple and verify cannot be read
 #[test]
 fn heap_page_insert_delete_tuple_logical() {
     let mut insert =
@@ -278,7 +266,6 @@ fn heap_page_insert_delete_tuple_logical() {
     assert!(result.is_err(), "deleted tuple should not be readable");
 }
 
-/// Test 11: No tuple loss guarantee
 #[test]
 fn heap_page_insert_no_tuple_loss() {
     let mut insert =
@@ -302,7 +289,7 @@ fn heap_page_insert_no_tuple_loss() {
         .filter(|(i, _)| i % 2 == 0)
         .map(|(_, s)| s)
     {
-        let _ = insert.delete_tuple(*slot_id);
+        insert.delete_tuple(*slot_id).expect("delete even slot");
     }
 
     // All non-deleted tuples should still be readable
@@ -322,7 +309,6 @@ fn heap_page_insert_no_tuple_loss() {
     }
 }
 
-/// Test 12: Free space tracking with insertions
 #[test]
 fn heap_page_insert_free_space_tracking() {
     let mut insert =
@@ -356,7 +342,6 @@ fn heap_page_insert_free_space_tracking() {
     );
 }
 
-/// Test 13: Large tuple insertion
 #[test]
 fn heap_page_insert_large_tuple() {
     let mut insert =
@@ -369,7 +354,6 @@ fn heap_page_insert_large_tuple() {
     assert_eq!(read, large_data);
 }
 
-/// Test 14: Page size variants (16 KiB and 32 KiB)
 #[test]
 fn heap_page_insert_page_size_variants() {
     // Test with 16 KiB page
@@ -386,7 +370,6 @@ fn heap_page_insert_page_size_variants() {
     assert!(insert32.free_space() > insert16.free_space());
 }
 
-/// Test 15: Serialization produces valid page image
 #[test]
 fn heap_page_insert_serialize_produces_valid_image() {
     let mut insert =
@@ -411,22 +394,26 @@ fn heap_page_insert_invariant_no_overlap() {
         HeapPageInsert::new(PageId::new(16), PageSize::KiB16).expect("create insert context");
 
     // Insert varied-size tuples
+    let mut inserted = Vec::new();
     for i in 0..30 {
         let size = ((i * 17) % 200) + 50; // Varied sizes
         let data = vec![i as u8; size];
-        let _ = insert.insert_raw_tuple(&data);
+        let slot_id = insert.insert_raw_tuple(&data).expect("insert varied tuple");
+        inserted.push((slot_id, data));
     }
 
-    // All live tuples should be readable
     let active_count = insert.active_slot_count();
-    for slot_id in 0..(insert.slot_count() as u16) {
-        let _ = insert.read_tuple(slot_id);
+    for (slot_id, expected_data) in inserted {
+        assert_eq!(
+            insert.read_tuple(slot_id).expect("read inserted tuple"),
+            expected_data
+        );
     }
 
-    assert!(active_count > 0, "should have inserted some tuples");
+    assert_eq!(active_count, 30);
+    assert_eq!(insert.slot_count(), 30);
 }
 
-/// Test 17: Integration - encoder, insert, and read cycle
 #[test]
 fn heap_page_insert_full_integration_cycle() {
     let schema = create_test_schema();
@@ -454,7 +441,6 @@ fn heap_page_insert_full_integration_cycle() {
     }
 }
 
-/// Test 18: Performance characteristic - insertion latency
 #[test]
 fn heap_page_insert_performance_insertion_latency() {
     let mut insert =
@@ -464,14 +450,15 @@ fn heap_page_insert_performance_insertion_latency() {
 
     let start = std::time::Instant::now();
     for _ in 0..100 {
-        let _ = insert.insert_raw_tuple(&data);
+        insert
+            .insert_raw_tuple(&data)
+            .expect("100 byte tuple should fit during latency test");
     }
     let elapsed = start.elapsed();
 
     let avg_micros = elapsed.as_micros() as f64 / 100.0;
-    println!("Average insertion latency: {:.2} μs", avg_micros);
 
-    // Expected: < 10 microseconds per insertion
+    assert_eq!(insert.active_slot_count(), 100);
     assert!(
         avg_micros < 10.0,
         "insertion should average < 10μs (got {:.2}μs)",
@@ -479,7 +466,6 @@ fn heap_page_insert_performance_insertion_latency() {
     );
 }
 
-/// Test 19: Rejection of invalid inputs
 #[test]
 fn heap_page_insert_rejects_invalid_inputs() {
     let mut insert =
@@ -499,7 +485,6 @@ fn heap_page_insert_rejects_invalid_inputs() {
     );
 }
 
-/// Test 20: Deterministic slot assignment for same data
 #[test]
 fn heap_page_insert_deterministic_slot_assignment() {
     let mut insert1 =

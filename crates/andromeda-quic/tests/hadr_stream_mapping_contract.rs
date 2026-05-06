@@ -52,7 +52,7 @@ fn test_heartbeat_stream_bidirectional() {
 
     // Assert: Heartbeat stream is in the correct range
     assert!(
-        heartbeat_id >= HEARTBEAT_STREAM_MIN && heartbeat_id <= HEARTBEAT_STREAM_MAX,
+        (HEARTBEAT_STREAM_MIN..=HEARTBEAT_STREAM_MAX).contains(&heartbeat_id),
         "Heartbeat stream ID must be in reserved range"
     );
 }
@@ -274,7 +274,7 @@ fn test_stream_allocation_complete_lifecycle() {
     let allocations: Vec<_> = (0..3)
         .map(|i| {
             mux.allocate_replica_streams(i)
-                .expect(&format!("allocation for replica {} should succeed", i))
+                .unwrap_or_else(|_| panic!("allocation for replica {} should succeed", i))
         })
         .collect();
 

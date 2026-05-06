@@ -1,7 +1,7 @@
 //! Regression guard: `andromeda_storage::layout::*` must remain a pure
 //! facade over the root storage modules.
 //!
-//! The plan/Wave 1 doctrine pins the root modules (`page`, `extent`,
+//! The layout facade doctrine pins the root modules (`page`, `extent`,
 //! `segment`, `cold_store`, `io_budget`, `placement`) as the single source of
 //! truth for storage layout types. Any future attempt to re-define a layout
 //! type inside `src/layout/*` (instead of `pub use`-ing it from the root)

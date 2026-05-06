@@ -12,9 +12,7 @@ use andromeda_core::{AndromedaErrorKind, InvocationId};
 use andromeda_exec::retry::{ErrorRetryability, RetryDecision, RetryPolicy};
 use andromeda_exec::traces::{AuditLedger, InMemoryAuditLedger};
 
-// ============================================================================
 // Tests: Error Classification
-// ============================================================================
 
 #[test]
 fn test_error_classification_transient_transport() {
@@ -78,9 +76,7 @@ fn test_error_classification_persistent_transaction() {
     assert_eq!(retryability, ErrorRetryability::Persistent);
 }
 
-// ============================================================================
 // Tests: Retry Policy
-// ============================================================================
 
 #[test]
 fn test_retry_policy_conservative_defaults() {
@@ -210,9 +206,7 @@ fn test_retry_policy_validation_jitter_exceeds_limit() {
     assert!(policy.validate().is_err());
 }
 
-// ============================================================================
 // Tests: Audit Ledger Integration
-// ============================================================================
 
 #[test]
 fn test_audit_ledger_append_and_retrieve() {
@@ -286,9 +280,7 @@ fn test_audit_ledger_query_by_trace_id() {
     assert_eq!(results[0], event1);
 }
 
-// ============================================================================
 // Tests: Persistent Error Handling (Fail Immediately)
-// ============================================================================
 
 #[test]
 fn test_persistent_error_security_fails_immediately() {
@@ -328,9 +320,7 @@ fn test_persistent_error_all_types() {
     }
 }
 
-// ============================================================================
 // Tests: Transient Error Handling (Retry with Backoff)
-// ============================================================================
 
 #[test]
 fn test_transient_error_transport_is_retryable() {
@@ -351,9 +341,7 @@ fn test_transient_error_protocol_is_retryable() {
     assert_eq!(retryability, ErrorRetryability::Transient);
 }
 
-// ============================================================================
 // Tests: Exponential Backoff Timing
-// ============================================================================
 
 #[test]
 fn test_backoff_timing_100ms_initial() {
@@ -400,12 +388,10 @@ fn test_backoff_timing_cumulative_sequence() {
 
     // Verify cumulative is within expected bounds
     // Total: 100 + 200 + 400 + 800 + 1600 + 3200 + 5000 + 5000 = 16300ms
-    assert!(cumulative_ms >= 16_000 && cumulative_ms <= 17_000);
+    assert!((16_000..=17_000).contains(&cumulative_ms));
 }
 
-// ============================================================================
 // Tests: Max Retries Enforcement
-// ============================================================================
 
 #[test]
 fn test_max_retries_enforcement_attempt_1() {
@@ -449,9 +435,7 @@ fn test_max_retries_enforcement_custom_policy() {
     assert!(policy.decision_after_failure(3).unwrap().is_give_up());
 }
 
-// ============================================================================
 // Tests: Retry Decision Tree
-// ============================================================================
 
 #[test]
 fn test_retry_decision_after_first_failure() {
@@ -510,9 +494,7 @@ fn test_retry_decision_boundary_max_attempts() {
     assert!(d3.is_give_up());
 }
 
-// ============================================================================
 // Tests: Integration Scenarios
-// ============================================================================
 
 #[test]
 fn test_scenario_persistent_error_fails_immediately() {

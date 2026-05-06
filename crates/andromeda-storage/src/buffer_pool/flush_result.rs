@@ -8,7 +8,7 @@ use crate::{Lsn, PageId};
 
 /// Complete flush result with blocked state reporting.
 ///
-/// Returned by [`BufferPool::flush_all_dirty_with_report`], this result provides
+/// Returned by `BufferPool::flush_all_dirty_with_report`, this result provides
 /// the caller with explicit visibility into the outcome of a full dirty flush cycle:
 ///
 /// - `flushed`: Count of pages successfully written to durable storage

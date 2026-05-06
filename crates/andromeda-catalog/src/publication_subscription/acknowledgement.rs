@@ -1,6 +1,8 @@
 use andromeda_core::{AndromedaResult, CatalogVersion, DatabaseId, NamespaceId};
 
-use super::{catalog_publication_error, CatalogPublicationReport, CatalogSubscriberId};
+use super::{
+    CatalogPublicationReport, CatalogSubscriberId, catalog_publication_error, require_equal,
+};
 use crate::CatalogDurabilityMarker;
 
 /// A subscriber acknowledgement for a durable catalog publication.
@@ -29,31 +31,31 @@ impl CatalogSubscriptionAcknowledgement {
                 "catalog subscription acknowledgement identity must match publication",
             );
         }
-        if self.acknowledged_version != publication.receipt.next_version {
-            return catalog_publication_error(
-                "catalog subscription acknowledgement version must match publication",
-            );
-        }
-        if self.durable_lsn_seen != publication.receipt.durable_lsn {
-            return catalog_publication_error(
-                "catalog subscription acknowledgement durable LSN must match publication",
-            );
-        }
-        if self.durable_evidence_marker_seen != publication.receipt.durable_evidence_marker {
-            return catalog_publication_error(
-                "catalog subscription acknowledgement durable marker must match publication",
-            );
-        }
-        if self.replayed_record_count != publication.receipt.record_count {
-            return catalog_publication_error(
-                "catalog subscription acknowledgement replayed record count must match publication",
-            );
-        }
-        if self.audit_trace_id != publication.audit_trace.trace_id {
-            return catalog_publication_error(
-                "catalog subscription acknowledgement audit trace id must match publication",
-            );
-        }
+        require_equal(
+            &self.acknowledged_version,
+            &publication.receipt.next_version,
+            "catalog subscription acknowledgement version must match publication",
+        )?;
+        require_equal(
+            &self.durable_lsn_seen,
+            &publication.receipt.durable_lsn,
+            "catalog subscription acknowledgement durable LSN must match publication",
+        )?;
+        require_equal(
+            &self.durable_evidence_marker_seen,
+            &publication.receipt.durable_evidence_marker,
+            "catalog subscription acknowledgement durable marker must match publication",
+        )?;
+        require_equal(
+            &self.replayed_record_count,
+            &publication.receipt.record_count,
+            "catalog subscription acknowledgement replayed record count must match publication",
+        )?;
+        require_equal(
+            &self.audit_trace_id,
+            &publication.audit_trace.trace_id,
+            "catalog subscription acknowledgement audit trace id must match publication",
+        )?;
         Ok(())
     }
 }

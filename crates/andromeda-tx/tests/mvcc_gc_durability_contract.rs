@@ -32,9 +32,7 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    // ============================================================================
     // SHARED TEST FIXTURES
-    // ============================================================================
 
     fn setup_gc() -> (
         Arc<ActiveSnapshotRegistry>,
@@ -50,11 +48,8 @@ mod tests {
         (registry, status_table, collector)
     }
 
-    // ============================================================================
     // GROUP 1: GC CORRECTNESS TESTS (8 tests)
-    // ============================================================================
 
-    /// Test 1: GC produces expected reclamation count
     ///
     /// Validates that after running GC with a known set of versions,
     /// the stats report the exact count of reclaimed versions.
@@ -84,7 +79,6 @@ mod tests {
         assert_eq!(stats.versions_reclaimed, 8, "Reclaimed count mismatch");
     }
 
-    /// Test 2: Only eligible versions are marked for reclamation
     ///
     /// Proves that GC does not claim any version unless the creator
     /// is committed or rolled back AND end_ts is old enough.
@@ -165,7 +159,6 @@ mod tests {
         );
     }
 
-    /// Test 4: GC correctly handles empty version table
     ///
     /// Verifies that GC gracefully handles the case where there are
     /// no versions to scan (no panics, correct stats).
@@ -198,7 +191,6 @@ mod tests {
         );
     }
 
-    /// Test 5: GC correctly handles mixed committed/aborted versions
     ///
     /// Ensures that GC reclaims rolled-back versions (always safe) and
     /// committed versions (conditional on end_ts), but never InFlight.
@@ -244,7 +236,6 @@ mod tests {
         );
     }
 
-    /// Test 6: GC with active snapshots prevents reclamation of otherwise-eligible versions
     ///
     /// Proves that snapshots block GC of versions that fall within the snapshot's
     /// visible timestamp range.
@@ -295,7 +286,6 @@ mod tests {
         );
     }
 
-    /// Test 7: After snapshot closes, versions become eligible for GC
     ///
     /// Demonstrates that releasing a snapshot increases min_visible_ts,
     /// allowing previously-blocked versions to be reclaimed.
@@ -310,9 +300,7 @@ mod tests {
 
         // Create and register a snapshot at ts=200
         let snapshot = SnapshotHandle::new(200, tx2).expect("create snapshot");
-        registry
-            .register_snapshot(snapshot.clone())
-            .expect("register");
+        registry.register_snapshot(snapshot).expect("register");
 
         // Version with end_ts=250 is blocked by the snapshot
         assert!(
@@ -338,7 +326,6 @@ mod tests {
         );
     }
 
-    /// Test 8: Live versions (end_ts = u64::MAX) are never reclaimed
     ///
     /// Proves that versions still open for writes (end_ts not yet set)
     /// are never marked for reclamation, even if creator is old.
@@ -364,11 +351,8 @@ mod tests {
         );
     }
 
-    // ============================================================================
     // GROUP 2: MANAGER HOOK INTEGRATION TESTS (6 tests)
-    // ============================================================================
 
-    /// Test 9: GC triggers after configured commit threshold
     ///
     /// Validates that the manager hook system invokes GC after
     /// N commits as configured.
@@ -394,7 +378,6 @@ mod tests {
         );
     }
 
-    /// Test 10: GC triggers on timeout
     ///
     /// Confirms that GC scheduler wakes up at configured intervals
     /// and attempts a collection run.
@@ -405,9 +388,7 @@ mod tests {
         // Set up one snapshot at ts=100
         let tx1 = TransactionId::new(1);
         let snapshot = SnapshotHandle::new(100, tx1).expect("create snapshot");
-        registry
-            .register_snapshot(snapshot.clone())
-            .expect("register");
+        registry.register_snapshot(snapshot).expect("register");
 
         // Commit a transaction
         status_table.set_committed(tx1).expect("set committed");
@@ -434,7 +415,6 @@ mod tests {
         );
     }
 
-    /// Test 11: GC stats are tracked correctly across multiple runs
     ///
     /// Ensures that cumulative statistics (runs, scanned, reclaimed)
     /// are accurately maintained.
@@ -475,7 +455,6 @@ mod tests {
         );
     }
 
-    /// Test 12: Concurrent commits + GC has no races
     ///
     /// Proves that concurrent commit recording and GC stat updates
     /// do not corrupt counts or cause data races.
@@ -513,7 +492,6 @@ mod tests {
         assert_eq!(stats.versions_reclaimed, 250, "Should have 50*5 reclaimed");
     }
 
-    /// Test 13: Trace emissions on start/complete (observability validation)
     ///
     /// Confirms that GC runs are observable via stats and that
     /// last_run_ms is updated.
@@ -540,11 +518,8 @@ mod tests {
         );
     }
 
-    // ============================================================================
     // GROUP 3: STRESS TESTS (4 tests)
-    // ============================================================================
 
-    /// Test 14: 1000 versions with 50% committed, 50% aborted → correct reclamation
     ///
     /// High-volume test ensuring GC scales and maintains correctness
     /// with large version sets.
@@ -594,7 +569,6 @@ mod tests {
         );
     }
 
-    /// Test 15: Rapid-fire commits with constant GC
     ///
     /// Validates that rapid commit+GC cycles don't corrupt state
     /// or lose stats.
@@ -616,7 +590,6 @@ mod tests {
         assert_eq!(stats.versions_reclaimed, 750, "All bursts reclaimed");
     }
 
-    /// Test 16: Long-running GC with new snapshots arriving
     ///
     /// Simulates ongoing GC while new snapshots are registered,
     /// ensuring reclamation thresholds are updated correctly.
@@ -636,7 +609,7 @@ mod tests {
 
         // Register first snapshot at ts=200
         let snap1 = SnapshotHandle::new(200, TransactionId::new(100)).expect("snapshot1");
-        registry.register_snapshot(snap1.clone()).unwrap();
+        registry.register_snapshot(snap1).unwrap();
 
         // Now min_visible_ts = 200, so end_ts=100 is still reclaimable
         assert!(
@@ -646,7 +619,7 @@ mod tests {
 
         // Register second snapshot at ts=150 (earlier)
         let snap2 = SnapshotHandle::new(150, TransactionId::new(101)).expect("snapshot2");
-        registry.register_snapshot(snap2.clone()).unwrap();
+        registry.register_snapshot(snap2).unwrap();
 
         // Now min_visible_ts = 150, end_ts=100 is still reclaimable
         assert!(
@@ -665,7 +638,6 @@ mod tests {
         );
     }
 
-    /// Test 17: High churn (creates/deletes) with GC
     ///
     /// Simulates a high-throughput workload with many version creations
     /// and deletions, verifying GC stability.
@@ -714,7 +686,6 @@ mod tests {
         );
     }
 
-    /// Test 18: Multiple concurrent snapshots with overlapping visibility windows
     ///
     /// Ensures GC correctly computes min_visible_ts across overlapping
     /// snapshot ranges.
@@ -731,7 +702,7 @@ mod tests {
             let ts = 100 + (i as u64 * 10);
             let snap =
                 SnapshotHandle::new(ts, TransactionId::new(1000 + i as u64)).expect("snapshot");
-            registry.register_snapshot(snap.clone()).unwrap();
+            registry.register_snapshot(snap).unwrap();
             handles.push(snap);
         }
 

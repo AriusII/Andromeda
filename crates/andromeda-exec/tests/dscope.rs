@@ -263,7 +263,10 @@ fn prevent_query_escalation_when_handler_only_allows_reserve() {
 
 #[test]
 fn prevent_escalation_by_adding_extra_permissions() {
-    let request = vec![RESERVE_PERMISSION.to_string(), CONTROL_PERMISSION.to_string()];
+    let request = vec![
+        RESERVE_PERMISSION.to_string(),
+        CONTROL_PERMISSION.to_string(),
+    ];
     let handler_perms = vec![RESERVE_PERMISSION.to_string()];
     let validation = validate_dispatch_permissions(&request, &handler_perms);
     assert!(validation.is_denied());

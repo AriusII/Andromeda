@@ -144,11 +144,7 @@ impl PromotionRequirements {
     pub const fn lsn_gap(&self) -> u64 {
         let replica_pos = self.replica_safe_lsn.get();
         let primary_pos = self.primary_durable_lsn.get();
-        if replica_pos >= primary_pos {
-            0
-        } else {
-            primary_pos - replica_pos
-        }
+        primary_pos.saturating_sub(replica_pos)
     }
 }
 

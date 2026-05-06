@@ -9,10 +9,6 @@ mod btree_insert_no_split_tests {
     use std::sync::{Arc, Mutex};
     use std::thread;
 
-    // ============================================================
-    // Test: Insert into empty leaf
-    // ============================================================
-
     #[test]
     fn test_insert_into_empty_leaf_single_entry() {
         let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
@@ -32,10 +28,6 @@ mod btree_insert_no_split_tests {
         assert_eq!(node.key_value_pairs[0].key, vec![1, 2, 3]);
         assert!(!node.is_full(config.branching_factor));
     }
-
-    // ============================================================
-    // Test: Insert into partially full leaf (maintains order)
-    // ============================================================
 
     #[test]
     fn test_insert_maintains_key_order() {
@@ -75,10 +67,6 @@ mod btree_insert_no_split_tests {
         assert_eq!(node.key_value_pairs[4].key, vec![9]);
     }
 
-    // ============================================================
-    // Test: Insert 100 entries sequentially (maintains order, no splits)
-    // ============================================================
-
     #[test]
     fn test_insert_100_entries_sequential() {
         let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
@@ -113,10 +101,6 @@ mod btree_insert_no_split_tests {
         }
     }
 
-    // ============================================================
-    // Test: Insert with duplicate key (error handling)
-    // ============================================================
-
     #[test]
     fn test_insert_duplicate_key_detected() {
         let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
@@ -140,10 +124,6 @@ mod btree_insert_no_split_tests {
             assert_eq!(node.key_value_pairs.len(), 1);
         }
     }
-
-    // ============================================================
-    // Test: Verify precondition check (must have space)
-    // ============================================================
 
     #[test]
     fn test_precondition_check_has_space() {
@@ -175,10 +155,6 @@ mod btree_insert_no_split_tests {
         // Now check if full
         assert!(node.is_full(config.branching_factor));
     }
-
-    // ============================================================
-    // Test: Order preservation with range scan simulation
-    // ============================================================
 
     #[test]
     fn test_order_preservation_range_scan() {
@@ -215,10 +191,6 @@ mod btree_insert_no_split_tests {
         // Should be [1, 2, 3, 5]
         assert_eq!(found_keys, vec![1, 2, 3, 5]);
     }
-
-    // ============================================================
-    // Test: Concurrent inserts to different leaves (no interference)
-    // ============================================================
 
     #[test]
     fn test_concurrent_inserts_different_leaves() {
@@ -290,10 +262,6 @@ mod btree_insert_no_split_tests {
         }
     }
 
-    // ============================================================
-    // Test: Leaf node linkage preservation
-    // ============================================================
-
     #[test]
     fn test_leaf_node_linkage() {
         let mut leaf1 = BTreeNodeImpl::new_leaf(PageId::new(1), None);
@@ -322,16 +290,12 @@ mod btree_insert_no_split_tests {
         assert_eq!(leaf2.next_sibling_page_id, None);
     }
 
-    // ============================================================
-    // Test: Insert position calculation using binary search
-    // ============================================================
-
     #[test]
     fn test_binary_search_insert_position() {
         let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
 
         // Pre-populate with specific values
-        let base_keys = vec![10, 30, 50, 70, 90];
+        let base_keys = [10, 30, 50, 70, 90];
         for (idx, base_key) in base_keys.iter().enumerate() {
             node.key_value_pairs.push(KeyValuePair {
                 key: vec![*base_key as u8],
@@ -355,10 +319,6 @@ mod btree_insert_no_split_tests {
             assert_eq!(idx, expected_idx);
         }
     }
-
-    // ============================================================
-    // Test: Serialization roundtrip after no-split insert
-    // ============================================================
 
     #[test]
     fn test_serialization_after_insert() {
@@ -395,16 +355,12 @@ mod btree_insert_no_split_tests {
         }
     }
 
-    // ============================================================
-    // Test: Insert with variable-length keys
-    // ============================================================
-
     #[test]
     fn test_insert_variable_length_keys() {
         let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
 
         // Insert keys of different lengths
-        let keys = vec![vec![1], vec![2, 3], vec![4, 5, 6], vec![7, 8, 9, 10]];
+        let keys = [vec![1], vec![2, 3], vec![4, 5, 6], vec![7, 8, 9, 10]];
 
         for (idx, key) in keys.iter().enumerate() {
             node.key_value_pairs.push(KeyValuePair {
@@ -420,10 +376,6 @@ mod btree_insert_no_split_tests {
             assert_eq!(stored_key.key, *original_key, "key mismatch at {}", idx);
         }
     }
-
-    // ============================================================
-    // Test: Maximum capacity boundary (precondition violation detection)
-    // ============================================================
 
     #[test]
     fn test_at_max_capacity_boundary() {

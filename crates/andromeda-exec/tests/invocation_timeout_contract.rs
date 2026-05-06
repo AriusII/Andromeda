@@ -1,6 +1,6 @@
-//! Invocation Timeout Contract Tests — Wave 13, Batch 18, Agent 2/4
+//! Invocation timeout contract tests.
 //!
-//! Validates the Wave 13 invocation-timeout surface additions:
+//! Validates the invocation-timeout surface:
 //!
 //! 1. `AndromedaErrorKind::Timeout` exists and is classified as `Persistent`.
 //! 2. `ErrorRetryability::Persistent` → `RetryDecision::GiveUp` on first attempt.
@@ -11,11 +11,10 @@
 //! 6. Deadlock retry (`Transaction` kind) is still `Persistent` and does not
 //!    conflict with the new `Timeout` kind.
 //!
-//! ## Wave scope note
+//! ## Current scope
 //!
 //! Full invocation deadline (admission → WAL commit), `LockManager` deadline
-//! support, and `TransactionManager` timeout are Wave 14+.
-//! See `SCOPED_INVOCATION_TIMEOUT.md §7`.
+//! support, and `TransactionManager` timeout are outside this contract.
 
 use andromeda_core::{AndromedaErrorKind, InvocationId};
 use andromeda_exec::retry::{ErrorRetryability, RetryDecision, RetryPolicy};
@@ -29,9 +28,7 @@ const T3: TraceId = TraceId::new(0x_0001_0000_0000_0003);
 const T4: TraceId = TraceId::new(0x_0001_0000_0000_0004);
 const T5: TraceId = TraceId::new(0x_0001_0000_0000_0005);
 
-// ============================================================================
 // 1 — Error kind existence and persistence classification
-// ============================================================================
 
 #[test]
 fn timeout_error_kind_is_classified_persistent() {
@@ -56,9 +53,7 @@ fn timeout_retryability_is_not_transient() {
     );
 }
 
-// ============================================================================
 // 2 — Retry policy gives up immediately on Timeout (no retry loop)
-// ============================================================================
 
 #[test]
 fn retry_policy_gives_up_on_first_timeout_attempt() {
@@ -95,9 +90,7 @@ fn deadlock_transaction_error_is_also_persistent() {
     );
 }
 
-// ============================================================================
 // 3 — TimeoutExceeded trace event lifecycle in InMemoryAuditLedger
-// ============================================================================
 
 #[test]
 fn timeout_exceeded_event_appends_and_queries_by_trace_id() {
@@ -195,9 +188,7 @@ fn timeout_exceeded_trace_is_independent_of_execution_failed_trace() {
     assert_eq!(timeout_event.invocation_id(), failed_event.invocation_id());
 }
 
-// ============================================================================
 // 4 — Timeout × Transient boundary: transport errors remain Transient
-// ============================================================================
 
 #[test]
 fn transport_error_is_transient_and_timeout_is_persistent_independently() {
@@ -213,9 +204,7 @@ fn transport_error_is_transient_and_timeout_is_persistent_independently() {
     );
 }
 
-// ============================================================================
 // 5 — Audit ledger does not drop or conflate multiple event types per invocation
-// ============================================================================
 
 #[test]
 fn audit_ledger_accepts_all_event_types_including_timeout() {

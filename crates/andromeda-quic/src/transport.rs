@@ -96,12 +96,12 @@ impl TransportMessage {
             ));
         }
 
-        if let Some(session_id) = metadata.session_id {
-            if session_id != frame.header.session_id {
-                return Err(transport_protocol_error(
-                    "frame session id does not match endpoint metadata",
-                ));
-            }
+        if let Some(session_id) = metadata.session_id
+            && session_id != frame.header.session_id
+        {
+            return Err(transport_protocol_error(
+                "frame session id does not match endpoint metadata",
+            ));
         }
 
         Ok(Self {
@@ -212,8 +212,8 @@ pub trait QuicClientTransport {
 /// Server-side transport trait for custom QUIC RPC frame exchange.
 ///
 /// This is the backend-neutral accept/dispatch boundary.  It does not define a
-/// listener loop; H2-QUIC-002 and later runtime work can adapt concrete QUIC
-/// streams into this trait without leaking backend types.
+/// listener loop; concrete QUIC streams can adapt into this trait without
+/// leaking backend types.
 pub trait QuicServerTransport {
     /// Metadata for the server listener/session endpoint.
     fn endpoint_metadata(&self) -> &TransportEndpointMetadata;
@@ -243,7 +243,7 @@ mod tests {
     use super::*;
     use andromeda_core::{RequestId, SessionId};
 
-    use crate::{FRAME_HEADER_CRC_UNCHECKED, FrameHeader, FrameType};
+    use crate::{CancellationCause, FRAME_HEADER_CRC_UNCHECKED, FrameHeader, FrameType};
 
     fn metadata() -> TransportEndpointMetadata {
         TransportEndpointMetadata::new(SurfacePlane::Application, Some(SessionId::new(7)), None)
@@ -444,7 +444,7 @@ mod tests {
         let cancellation = CancellationSignal {
             request_id: RequestId::new(11),
             session_id: SessionId::new(7),
-            cause: crate::CancellationCause::ClientRequested,
+            cause: CancellationCause::ClientRequested,
         };
 
         assert_eq!(

@@ -1,19 +1,7 @@
 #![forbid(unsafe_code)]
 
-//! Integration tests for CLI admin commands.
-//!
-//! Tests command parsing, routing, and output policy for:
-//! - HADR commands (status, promote, demote, quorum)
-//! - Backup commands (start, status, list)
-//! - Restore commands (start, status)
-//! - Catalog commands (list-procedures, invalidate-cache, show-contract)
-
 use andromeda_cli::cmd::dispatch_command;
 use std::process::{Command, Output};
-
-// ============================================================================
-// HADR Command Tests
-// ============================================================================
 
 #[test]
 fn hadr_status_command_parses_and_executes() {
@@ -51,7 +39,7 @@ fn hadr_promote_accepts_replica_id() {
 fn hadr_demote_command_requires_force_flag() {
     let args = vec!["hadr".to_string(), "demote".to_string()];
     let result = dispatch_command(&args);
-    assert!(result.is_ok()); // Returns OK, prints warning
+    assert!(result.is_ok());
 }
 
 #[test]
@@ -73,7 +61,7 @@ fn hadr_quorum_command_executes() {
 }
 
 #[test]
-fn hadr_node_list_command_executes_as_contract_scaffold() {
+fn hadr_node_list_command_executes_as_contract_preview() {
     let args = vec!["hadr".to_string(), "node".to_string(), "list".to_string()];
     let result = dispatch_command(&args);
     assert!(result.is_ok());
@@ -206,10 +194,6 @@ fn hadr_help_command_executes() {
     assert!(result.is_ok());
 }
 
-// ============================================================================
-// Backup Command Tests
-// ============================================================================
-
 #[test]
 fn backup_start_command_parses_and_executes() {
     let args = vec!["backup".to_string(), "start".to_string()];
@@ -284,10 +268,6 @@ fn backup_help_command_executes() {
     assert!(result.is_ok());
 }
 
-// ============================================================================
-// Restore Command Tests
-// ============================================================================
-
 #[test]
 fn restore_from_backup_id_executes() {
     let args = vec!["restore".to_string(), "100".to_string()];
@@ -331,10 +311,6 @@ fn restore_help_command_executes() {
     let result = dispatch_command(&args);
     assert!(result.is_ok());
 }
-
-// ============================================================================
-// Catalog Command Tests
-// ============================================================================
 
 #[test]
 fn catalog_list_procedures_command_executes() {
@@ -398,10 +374,6 @@ fn catalog_help_command_executes() {
     let result = dispatch_command(&args);
     assert!(result.is_ok());
 }
-
-// ============================================================================
-// Benchmark Command Tests
-// ============================================================================
 
 #[test]
 fn benchmark_help_command_executes() {
@@ -494,10 +466,6 @@ fn benchmark_run_diagnostic_json_is_diagnostic_only() {
     );
 }
 
-// ============================================================================
-// Error Handling and Edge Cases
-// ============================================================================
-
 #[test]
 fn unknown_command_returns_error() {
     let args = vec!["unknown-command".to_string()];
@@ -536,10 +504,6 @@ fn catalog_show_contract_invalid_id_returns_error() {
     let result = dispatch_command(&args);
     assert!(result.is_err());
 }
-
-// ============================================================================
-// JSON Output Policy Tests
-// ============================================================================
 
 #[test]
 fn hadr_promote_accepts_json_output() {
@@ -669,6 +633,18 @@ fn unsupported_machine_output_formats_are_rejected() {
         vec!["restore", "status", "200", "--csv"],
         vec!["hadr", "status", "--csv"],
         vec!["hadr", "demote", "--csv"],
+        vec!["hadr", "node", "list", "--csv"],
+        vec!["hadr", "node", "status", "4", "--csv"],
+        vec![
+            "hadr",
+            "node",
+            "register",
+            "4",
+            "--role",
+            "replica",
+            "--dry-run",
+            "--csv",
+        ],
         vec!["catalog", "show-contract", "1", "--csv"],
     ] {
         let output = run_cli_vec(args);

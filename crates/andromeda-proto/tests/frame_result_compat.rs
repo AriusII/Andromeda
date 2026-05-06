@@ -46,7 +46,7 @@ fn test_frame_header_protobuf_round_trip() {
     // Create envelope
     let envelope = FrameEnvelope {
         protocol_version: ProtocolVersion::V1,
-        contract_hash: contract_hash.clone(),
+        contract_hash,
         catalog_version,
         request_id,
         session_id,

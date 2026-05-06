@@ -1,8 +1,8 @@
-//! Frame header and payload structures.
-//!
-//! This module defines the core frame data structures and validation logic.
+//! Frame header and payload validation.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, RequestId, SessionId, TransactionId};
+use andromeda_core::{
+    AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId, SessionId, TransactionId,
+};
 
 use super::frame_code::{FrameType, MAX_FRAME_PAYLOAD_LENGTH, RESERVED_FRAME_FLAGS_MASK};
 use crate::StreamRole;
@@ -23,8 +23,7 @@ pub struct FrameHeader {
 }
 
 impl FrameHeader {
-    /// Validates reserved flags are zero.
-    pub fn validate_reserved_flags(&self) -> andromeda_core::AndromedaResult<()> {
+    pub fn validate_reserved_flags(&self) -> AndromedaResult<()> {
         if self.flags & RESERVED_FRAME_FLAGS_MASK == 0 {
             return Ok(());
         }
@@ -35,8 +34,7 @@ impl FrameHeader {
         ))
     }
 
-    /// Validates payload length does not exceed maximum.
-    pub fn validate_max_payload_length(&self) -> andromeda_core::AndromedaResult<()> {
+    pub fn validate_max_payload_length(&self) -> AndromedaResult<()> {
         if self.payload_length <= MAX_FRAME_PAYLOAD_LENGTH {
             return Ok(());
         }
@@ -47,8 +45,7 @@ impl FrameHeader {
         ))
     }
 
-    /// Validates header CRC matches expected value.
-    pub fn validate_header_crc(&self, expected_crc: u32) -> andromeda_core::AndromedaResult<()> {
+    pub fn validate_header_crc(&self, expected_crc: u32) -> AndromedaResult<()> {
         if self.header_crc == expected_crc {
             return Ok(());
         }
@@ -59,17 +56,12 @@ impl FrameHeader {
         ))
     }
 
-    /// Validates all static header fields.
-    pub fn validate_static_fields(&self) -> andromeda_core::AndromedaResult<()> {
+    pub fn validate_static_fields(&self) -> AndromedaResult<()> {
         self.validate_reserved_flags()?;
         self.validate_max_payload_length()
     }
 
-    /// Validates payload length matches actual length.
-    pub fn validate_payload_length(
-        &self,
-        actual_length: usize,
-    ) -> andromeda_core::AndromedaResult<()> {
+    pub fn validate_payload_length(&self, actual_length: usize) -> AndromedaResult<()> {
         if self.payload_length == actual_length as u64 {
             return Ok(());
         }
@@ -80,11 +72,7 @@ impl FrameHeader {
         ))
     }
 
-    /// Validates frame type is allowed on stream role.
-    pub fn validate_transport_policy(
-        &self,
-        stream_role: StreamRole,
-    ) -> andromeda_core::AndromedaResult<()> {
+    pub fn validate_transport_policy(&self, stream_role: StreamRole) -> AndromedaResult<()> {
         if stream_role.permits_family(self.frame_type.frame_family()) {
             return Ok(());
         }
@@ -96,7 +84,6 @@ impl FrameHeader {
     }
 }
 
-/// Frame with header and payload.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FrameBytes {
     pub header: FrameHeader,
@@ -104,8 +91,7 @@ pub struct FrameBytes {
 }
 
 impl FrameBytes {
-    /// Validates frame for a specific stream role.
-    pub fn validate(&self, stream_role: StreamRole) -> andromeda_core::AndromedaResult<()> {
+    pub fn validate(&self, stream_role: StreamRole) -> AndromedaResult<()> {
         self.header.validate_static_fields()?;
         self.header.validate_payload_length(self.payload.len())?;
         self.header.validate_transport_policy(stream_role)?;

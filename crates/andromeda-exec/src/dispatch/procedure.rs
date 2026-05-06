@@ -4,8 +4,6 @@ use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
 
 use crate::{InvocationContext, LocalProcedure};
 
-/// Pre-transaction evidence required before any local or remote Procedure
-/// dispatch. This type intentionally carries no transaction or WAL evidence.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreTransactionDispatchEvidence {
     pub admission_trace: DecisionTrace,
@@ -41,7 +39,6 @@ impl PreTransactionDispatchEvidence {
     }
 }
 
-/// Storage- and network-neutral Procedure dispatch request.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcedureDispatchRequest {
     pub procedure: ProcedureContractRef,
@@ -57,9 +54,6 @@ impl ProcedureDispatchRequest {
     }
 }
 
-/// Execution boundary for local registry-backed dispatch and future remote
-/// dispatch. Implementors must validate pre-transaction evidence before they
-/// allocate transactions, append WAL, or perform transport I/O.
 pub trait ProcedureDispatcher {
     fn dispatch_procedure(
         &self,
@@ -74,7 +68,7 @@ pub enum ProcedureDispatchUnavailableReason {
 }
 
 impl ProcedureDispatchUnavailableReason {
-    pub fn as_error(self) -> AndromedaError {
+    pub fn into_error(self) -> AndromedaError {
         match self {
             Self::RemoteDispatchUnsupported => AndromedaError::new(
                 AndromedaErrorKind::Transport,
@@ -88,7 +82,6 @@ impl ProcedureDispatchUnavailableReason {
     }
 }
 
-/// Explicit no-I/O placeholder for the future H3 remote dispatcher.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RemoteProcedureDispatcherUnavailable {
     reason: ProcedureDispatchUnavailableReason,
@@ -118,7 +111,7 @@ impl ProcedureDispatcher for RemoteProcedureDispatcherUnavailable {
         request: ProcedureDispatchRequest,
     ) -> AndromedaResult<LocalProcedure> {
         request.validate()?;
-        Err(self.reason.as_error())
+        Err(self.reason.into_error())
     }
 }
 
@@ -152,17 +145,6 @@ fn validate_decision(
     Ok(())
 }
 
-/// Adapter that integrates SRPL procedure resolution and IR interpretation
-/// with the dispatcher trait.
-///
-/// This adapter:
-/// 1. Takes an invocation request
-/// 2. Resolves the procedure name to an SRPL plan (pre-transaction)
-/// 3. Validates the plan
-/// 4. Returns a LocalProcedure ready for runtime execution
-///
-/// TODO: Once result metadata extraction is implemented, this adapter will
-/// produce complete LocalProcedure results suitable for the runtime pipeline.
 #[derive(Clone)]
 pub struct SrplDispatcherAdapter {
     dispatcher: crate::SrplProcedureDispatcher,
@@ -181,7 +163,6 @@ impl ProcedureDispatcher for SrplDispatcherAdapter {
     ) -> AndromedaResult<LocalProcedure> {
         request.validate()?;
 
-        // Resolve procedure from name/id to executable plan
         let _procedure = self
             .dispatcher
             .resolve_procedure(&crate::InvocationRequest {
@@ -198,7 +179,6 @@ impl ProcedureDispatcher for SrplDispatcherAdapter {
                 )
             })?;
 
-        // TODO: Extract result metadata and construct LocalProcedure
         Err(AndromedaError::new(
             AndromedaErrorKind::Execution,
             "SRPL dispatch adapter execution not yet implemented - result metadata extraction needed",

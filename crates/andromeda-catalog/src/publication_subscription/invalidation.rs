@@ -2,10 +2,10 @@ use std::collections::BTreeSet;
 
 use andromeda_core::{AndromedaResult, CatalogVersion};
 
-use super::{catalog_publication_error, CatalogPublishedContract};
+use super::{CatalogPublishedContract, catalog_publication_error};
 use crate::CatalogPublicationReceipt;
 
-/// Bounded invalidation report for future plan-cache subscribers.
+/// Bounded invalidation report for plan-cache subscribers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CatalogPlanInvalidationReport {
     pub catalog_version: CatalogVersion,

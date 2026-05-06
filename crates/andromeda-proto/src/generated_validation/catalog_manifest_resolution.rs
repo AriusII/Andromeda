@@ -1,42 +1,41 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_core::AndromedaResult;
 
 use crate::generated::contract;
+use crate::generated::contract::v1::catalog_procedure_manifest_resolution_response::Status as ResolutionStatus;
 
 use super::{
-    validate_generated_procedure_manifest, validate_generated_protocol_version,
-    validate_optional_catalog_version, validate_optional_contract_hash,
+    contract_error, protocol_error, validate_generated_procedure_manifest,
+    validate_generated_protocol_version, validate_optional_catalog_version,
+    validate_optional_contract_hash,
 };
 
-pub(crate) fn validate_catalog_procedure_manifest_resolution_request(
+pub fn validate_catalog_procedure_manifest_resolution_request(
     request: &contract::v1::CatalogProcedureManifestResolutionRequest,
 ) -> AndromedaResult<()> {
     validate_generated_protocol_version(request.protocol_major, request.protocol_minor)?;
 
     if request.request_id == 0 {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Protocol,
-            "catalog manifest resolution request_id must be nonzero",
-        ));
+        return protocol_error("catalog manifest resolution request_id must be nonzero");
     }
 
     match &request.selector {
-        Some(contract::v1::catalog_procedure_manifest_resolution_request::Selector::ProcedureId(
-            procedure_id,
-        )) if *procedure_id != 0 => {}
-        Some(contract::v1::catalog_procedure_manifest_resolution_request::Selector::ProcedureName(
-            procedure_name,
-        )) if !procedure_name.trim().is_empty() => {}
+        Some(
+            contract::v1::catalog_procedure_manifest_resolution_request::Selector::ProcedureId(
+                procedure_id,
+            ),
+        ) if *procedure_id != 0 => {}
+        Some(
+            contract::v1::catalog_procedure_manifest_resolution_request::Selector::ProcedureName(
+                procedure_name,
+            ),
+        ) if !procedure_name.trim().is_empty() => {}
         Some(_) => {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
+            return contract_error(
                 "catalog manifest resolution selector must be nonzero/non-empty",
-            ));
+            );
         }
         None => {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
-                "catalog manifest resolution request requires a selector",
-            ));
+            return contract_error("catalog manifest resolution request requires a selector");
         }
     }
 
@@ -52,19 +51,16 @@ pub(crate) fn validate_catalog_procedure_manifest_resolution_request(
     Ok(())
 }
 
-pub(crate) fn validate_catalog_procedure_manifest_resolution_response(
+pub fn validate_catalog_procedure_manifest_resolution_response(
     response: &contract::v1::CatalogProcedureManifestResolutionResponse,
 ) -> AndromedaResult<()> {
     validate_generated_protocol_version(response.protocol_major, response.protocol_minor)?;
 
     if response.request_id == 0 {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Protocol,
-            "catalog manifest resolution response request_id must be nonzero",
-        ));
+        return protocol_error("catalog manifest resolution response request_id must be nonzero");
     }
 
-    validate_resolution_status(response.status)?;
+    let status = validate_resolution_status(response.status)?;
     validate_optional_contract_hash(
         "catalog manifest resolution resolved_contract_hash",
         response.resolved_contract_hash.as_deref(),
@@ -78,48 +74,76 @@ pub(crate) fn validate_catalog_procedure_manifest_resolution_response(
         response.current_catalog_version,
     )?;
 
-    if response.status == 1 {
-        let manifest = response.manifest.as_ref().ok_or_else(|| {
-            AndromedaError::new(
-                AndromedaErrorKind::Contract,
-                "resolved catalog manifest response requires a manifest",
-            )
-        })?;
+    if status == ResolutionStatus::Resolved {
+        let Some(manifest) = response.manifest.as_ref() else {
+            return contract_error("resolved catalog manifest response requires a manifest");
+        };
         validate_generated_procedure_manifest(manifest)?;
 
         if response.resolved_contract_hash.as_deref() != Some(manifest.contract_hash.as_slice()) {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
-                "resolved contract hash must match manifest contract_hash",
-            ));
+            return contract_error("resolved contract hash must match manifest contract_hash");
         }
 
         if response.resolved_catalog_version != Some(manifest.catalog_version) {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
-                "resolved catalog version must match manifest catalog_version",
-            ));
+            return contract_error("resolved catalog version must match manifest catalog_version");
         }
-    } else if response.manifest.is_some() {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Contract,
-            "non-resolved catalog manifest response must not carry a manifest",
-        ));
+    } else {
+        validate_unresolved_response_fields(response)?;
     }
 
     Ok(())
 }
 
-fn validate_resolution_status(status: i32) -> AndromedaResult<()> {
+fn validate_unresolved_response_fields(
+    response: &contract::v1::CatalogProcedureManifestResolutionResponse,
+) -> AndromedaResult<()> {
+    if response.manifest.is_some() {
+        return contract_error("non-resolved catalog manifest response must not carry a manifest");
+    }
+
+    if response.resolved_contract_hash.is_some() {
+        return contract_error(
+            "non-resolved catalog manifest response must not carry resolved_contract_hash",
+        );
+    }
+
+    if response.resolved_catalog_version.is_some() {
+        return contract_error(
+            "non-resolved catalog manifest response must not carry resolved_catalog_version",
+        );
+    }
+
+    Ok(())
+}
+
+fn validate_resolution_status(status: i32) -> AndromedaResult<ResolutionStatus> {
     match status {
-        1..=11 => Ok(()),
-        0 => Err(AndromedaError::new(
-            AndromedaErrorKind::Protocol,
-            "catalog manifest resolution status must be specified",
-        )),
-        _ => Err(AndromedaError::new(
-            AndromedaErrorKind::Protocol,
-            "unknown catalog manifest resolution status",
-        )),
+        value if value == ResolutionStatus::Resolved as i32 => Ok(ResolutionStatus::Resolved),
+        value if value == ResolutionStatus::NotFound as i32 => Ok(ResolutionStatus::NotFound),
+        value if value == ResolutionStatus::CatalogVersionMismatch as i32 => {
+            Ok(ResolutionStatus::CatalogVersionMismatch)
+        }
+        value if value == ResolutionStatus::ContractHashMismatch as i32 => {
+            Ok(ResolutionStatus::ContractHashMismatch)
+        }
+        value if value == ResolutionStatus::NotSourceGeneratorReady as i32 => {
+            Ok(ResolutionStatus::NotSourceGeneratorReady)
+        }
+        value if value == ResolutionStatus::PermissionDenied as i32 => {
+            Ok(ResolutionStatus::PermissionDenied)
+        }
+        value if value == ResolutionStatus::Unsupported as i32 => Ok(ResolutionStatus::Unsupported),
+        value if value == ResolutionStatus::Malformed as i32 => Ok(ResolutionStatus::Malformed),
+        value if value == ResolutionStatus::Internal as i32 => Ok(ResolutionStatus::Internal),
+        value if value == ResolutionStatus::CatalogNotReady as i32 => {
+            Ok(ResolutionStatus::CatalogNotReady)
+        }
+        value if value == ResolutionStatus::AuthRequired as i32 => {
+            Ok(ResolutionStatus::AuthRequired)
+        }
+        value if value == ResolutionStatus::Unspecified as i32 => {
+            protocol_error("catalog manifest resolution status must be specified")
+        }
+        _ => protocol_error("unknown catalog manifest resolution status"),
     }
 }

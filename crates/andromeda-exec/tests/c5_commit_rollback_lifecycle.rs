@@ -78,7 +78,7 @@ fn event_correlation(
 #[test]
 fn c5_commit_lifecycle_emits_commit_visible_event_with_durable_lsn() {
     let contract = inventory_reserve_stock_contract().unwrap();
-    let srpl_ir =
+    let _srpl_ir =
         compile_narrow_procedure_signature(inventory_reserve_stock_srpl_source()).unwrap();
     let bindings =
         inventory_reserve_stock_catalog_bindings(contract.object.catalog_version).unwrap();
@@ -278,7 +278,7 @@ fn c5_rollback_lifecycle_emits_rollback_durable_event_with_durable_lsn() {
 fn c5_event_emission_failure_propagates_to_caller() {
     let contract = inventory_reserve_stock_contract().unwrap();
 
-    let procedure = InventoryReserveStockExecutor::reserve(
+    let _procedure = InventoryReserveStockExecutor::reserve(
         ReserveStockCommand {
             product_id: 42,
             quantity: 1,
@@ -347,7 +347,7 @@ fn c5_rollback_durable_event_proves_wal_durability() {
     let correlation = event_correlation(&contract, Some(trace.transaction_id), Some(durable_lsn));
     let valid_envelope = EventEnvelope::new(
         EventId::new(1),
-        correlation.clone(),
+        correlation,
         TraceEvent::RollbackDurable(trace),
     );
 
@@ -398,7 +398,7 @@ fn c5_commit_visible_event_proves_wal_durability() {
     let correlation = event_correlation(&contract, Some(trace.transaction_id), Some(durable_lsn));
     let valid_envelope = EventEnvelope::new(
         EventId::new(1),
-        correlation.clone(),
+        correlation,
         TraceEvent::CommitVisible(trace),
     );
 

@@ -28,10 +28,28 @@ impl PooledConnectionHealth {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PooledConnection {
-    pub id: PoolConnectionId,
-    pub key: ConnectionPoolKey,
-    pub health: PooledConnectionHealth,
-    pub last_used_ms: u64,
+    pub(super) id: PoolConnectionId,
+    pub(super) key: ConnectionPoolKey,
+    pub(super) health: PooledConnectionHealth,
+    pub(super) last_used_ms: u64,
+}
+
+impl PooledConnection {
+    pub const fn id(&self) -> PoolConnectionId {
+        self.id
+    }
+
+    pub const fn key(&self) -> &ConnectionPoolKey {
+        &self.key
+    }
+
+    pub const fn health(&self) -> PooledConnectionHealth {
+        self.health
+    }
+
+    pub const fn last_used_ms(&self) -> u64 {
+        self.last_used_ms
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

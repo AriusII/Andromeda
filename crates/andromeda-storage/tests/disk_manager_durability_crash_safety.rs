@@ -63,16 +63,8 @@ fn create_test_page_with_content(page_id: u64, page_size: PageSize, content_byte
     let trailer = create_valid_page_trailer();
     let layout = PageLayoutContract { header, trailer };
 
-    let mut bytes = vec![content_byte; page_size.bytes_usize()];
+    let bytes = vec![content_byte; page_size.bytes_usize()];
     PageImage::with_layout(layout, bytes).unwrap()
-}
-
-/// Helper: Set up a temporary disk manager.
-fn setup_disk_manager() -> (FileDiskManager, TempDir) {
-    let temp_dir = TempDir::new().unwrap();
-    let data_file = temp_dir.path().join("store.bin");
-    let manager = FileDiskManager::open(&data_file, temp_dir.path()).unwrap();
-    (manager, temp_dir)
 }
 
 /// Helper: Allocate a test extent covering pages 1-100.
@@ -92,10 +84,6 @@ fn allocate_test_extent(manager: &mut FileDiskManager, page_size: PageSize) {
     manager.allocate_extent(extent).unwrap();
 }
 
-// ============================================================================
-// Test 1: Pages Survive Process Termination (Cross-Process Durability)
-// ============================================================================
-
 #[test]
 fn test_page_survives_disk_manager_close_and_reopen() {
     let temp_dir = TempDir::new().unwrap();
@@ -106,10 +94,12 @@ fn test_page_survives_disk_manager_close_and_reopen() {
         let mut manager = FileDiskManager::open(&data_file, temp_dir.path()).unwrap();
         allocate_test_extent(&mut manager, PageSize::KiB16);
 
-        let page = create_test_page_with_content(1, PageSize::KiB16, 0xAB);
-        let expected_bytes = page.as_bytes().to_vec();
-
-        manager.write_page(page, Lsn::new(100)).unwrap();
+        manager
+            .write_page(
+                create_test_page_with_content(1, PageSize::KiB16, 0xAB),
+                Lsn::new(100),
+            )
+            .unwrap();
         // manager dropped here; file should be closed and flushed
     }
 
@@ -143,16 +133,13 @@ fn test_page_survives_disk_manager_close_and_reopen() {
     }
 }
 
-// ============================================================================
-// Test 2: Corrupted Page Read Behavior Is Explicit
-// ============================================================================
-
 #[test]
-fn test_crc_mismatch_detected_on_corrupted_page() {
+fn corrupted_page_read_behavior_matches_integrity_mode() {
     let temp_dir = TempDir::new().unwrap();
     let data_file = temp_dir.path().join("corrupted.bin");
+    let original_byte;
+    let corrupted_byte;
 
-    // Phase 1: Write a page with valid CRC
     {
         let mut manager = FileDiskManager::open(&data_file, temp_dir.path()).unwrap();
         allocate_test_extent(&mut manager, PageSize::KiB16);
@@ -172,9 +159,10 @@ fn test_crc_mismatch_detected_on_corrupted_page() {
         let mut buffer = [0u8; 1];
         file.seek(SeekFrom::Start(100)).unwrap(); // Seek to middle of page
         file.read_exact(&mut buffer).unwrap();
+        original_byte = buffer[0];
 
-        // Flip a bit to simulate disk corruption
         buffer[0] ^= 0x01;
+        corrupted_byte = buffer[0];
 
         file.seek(SeekFrom::Start(100)).unwrap();
         file.write_all(&buffer).unwrap();
@@ -199,23 +187,24 @@ fn test_crc_mismatch_detected_on_corrupted_page() {
         };
         manager.register_extent(extent).unwrap();
 
-        // Read should either:
-        // - Succeed with corrupted data (if CRC not validated)
-        // - Fail with PageCorrupted error (if CRC validates)
-        // In production, we expect the latter
         let result = manager.read_page(PageId::new(1));
 
-        // For MVP, CRC validation is partial, so we document expected behavior
         match result {
-            Ok(Some(_)) => {
-                // MVP: CRC not fully integrated; corrupted page read
-                println!("WARNING: Corrupted page was read (CRC validation MVP)");
+            Ok(Some(image)) => {
+                let bytes = image.as_bytes();
+                assert_eq!(bytes.len(), PageSize::KiB16.bytes_usize());
+                assert_eq!(
+                    bytes[100], corrupted_byte,
+                    "default integrity mode should make corruption visible if it is not rejected"
+                );
+                assert_ne!(bytes[100], original_byte);
             }
             Err(e) => {
-                // Production: CRC detected corruption
                 assert!(
-                    e.message().contains("CRC") || e.message().contains("corrupted"),
-                    "Expected CRC error, got: {}",
+                    e.message().contains("integrity")
+                        || e.message().contains("corrupted")
+                        || e.message().contains("CRC"),
+                    "expected page-integrity error, got: {}",
                     e.message()
                 );
             }
@@ -224,16 +213,12 @@ fn test_crc_mismatch_detected_on_corrupted_page() {
     }
 }
 
-// ============================================================================
-// Test 3: Multiple Pages Durability with Extent Spanning
-// ============================================================================
-
 #[test]
 fn test_multiple_pages_written_sequentially_survive_recovery() {
     let temp_dir = TempDir::new().unwrap();
     let data_file = temp_dir.path().join("multi.bin");
 
-    let expected_pages = vec![0xAA, 0xBB, 0xCC, 0xDD, 0xEE];
+    let expected_pages = [0xAA, 0xBB, 0xCC, 0xDD, 0xEE];
 
     // Phase 1: Write multiple pages
     {
@@ -294,10 +279,6 @@ fn test_multiple_pages_written_sequentially_survive_recovery() {
         }
     }
 }
-
-// ============================================================================
-// Test 4: Extent Boundary Durability
-// ============================================================================
 
 #[test]
 fn test_pages_at_extent_boundary_durable() {
@@ -386,10 +367,6 @@ fn test_pages_at_extent_boundary_durable() {
     }
 }
 
-// ============================================================================
-// Test 5: File Pre-allocation Guarantees
-// ============================================================================
-
 #[test]
 fn test_file_preallocation_space_reserved() {
     let temp_dir = TempDir::new().unwrap();
@@ -421,10 +398,6 @@ fn test_file_preallocation_space_reserved() {
         "File not pre-allocated to full extent size"
     );
 }
-
-// ============================================================================
-// Test 6: Large Page (32 KiB) Durability
-// ============================================================================
 
 #[test]
 fn test_large_page_32kib_survives_recovery() {

@@ -12,6 +12,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 andromeda-proto = { path = "../crates/andromeda-proto" }
+andromeda-core = { path = "../crates/andromeda-core" }
 andromeda-quic = { path = "../crates/andromeda-quic" }
 andromeda-srpl = { path = "../crates/andromeda-srpl" }
 andromeda-storage = { path = "../crates/andromeda-storage" }

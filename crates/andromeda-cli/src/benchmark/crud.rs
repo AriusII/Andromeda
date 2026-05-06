@@ -1,6 +1,6 @@
-use crate::args::parse_u64_option;
 use crate::diagnostic_json::{DIAGNOSTIC_JSON_FLAG, JSON_FLAG, json_string};
 use crate::error::cli_error;
+use crate::parse::{next_option_value, parse_u64_option};
 use andromeda_bench::{
     CRUD_SCENARIOS, CrudDataGenerator, CrudOperationMetrics, CrudWorkloadResult, find_crud_scenario,
 };
@@ -22,10 +22,8 @@ pub(super) fn parse_crud_run_options(args: &[String]) -> AndromedaResult<CrudRun
     while index < args.len() {
         match args[index].as_str() {
             "--seed" => {
-                index += 1;
-                let Some(value) = args.get(index) else {
-                    return Err(cli_error("--seed requires an unsigned integer"));
-                };
+                let value =
+                    next_option_value(args, &mut index, "--seed requires an unsigned integer")?;
                 seed = parse_u64_option(value, "--seed")?;
             }
             DIAGNOSTIC_JSON_FLAG => diagnostic_json = true,

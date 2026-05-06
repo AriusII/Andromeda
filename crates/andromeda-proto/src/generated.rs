@@ -1,7 +1,10 @@
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, ContractHash};
 
 use crate::ProtocolLayout;
-use crate::generated_validation;
+pub use crate::generated_validation::{
+    validate_catalog_procedure_manifest_resolution_request,
+    validate_catalog_procedure_manifest_resolution_response,
+};
 
 pub const PROTOCOL_PACKAGE: &str = "andromeda.protocol.v1";
 pub const CONTRACT_PACKAGE: &str = "andromeda.contract.v1";
@@ -76,18 +79,6 @@ where
             format!("generated protobuf decode failed: {error}"),
         )
     })
-}
-
-pub fn validate_catalog_procedure_manifest_resolution_request(
-    request: &contract::v1::CatalogProcedureManifestResolutionRequest,
-) -> AndromedaResult<()> {
-    generated_validation::validate_catalog_procedure_manifest_resolution_request(request)
-}
-
-pub fn validate_catalog_procedure_manifest_resolution_response(
-    response: &contract::v1::CatalogProcedureManifestResolutionResponse,
-) -> AndromedaResult<()> {
-    generated_validation::validate_catalog_procedure_manifest_resolution_response(response)
 }
 
 fn stable_hash_256(domain: &[u8], bytes: &[u8]) -> [u8; ContractHash::LEN] {

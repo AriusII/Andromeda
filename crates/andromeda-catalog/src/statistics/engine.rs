@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogObjectId};
+use andromeda_core::CatalogObjectId;
 
 use crate::contracts::StatsVersion;
 
@@ -9,11 +9,9 @@ use super::HistogramBucket;
 pub const STATS_FULL_SCAN_THRESHOLD: u64 = 100_000;
 pub const STATS_SAMPLE_SIZE: usize = 100_000;
 pub const DEFAULT_BUCKET_COUNT: u32 = 32;
-pub const DEFAULT_HLL_PRECISION: u8 = 12;
 pub const STATS_INVALIDATION_MUTATION_PCT: f64 = 10.0;
 pub const STATS_MAX_AGE_HOURS: u64 = 168;
 pub const STATS_LSN_DELTA_THRESHOLD: u64 = 1_000_000;
-pub const NDV_EXACT_THRESHOLD: u64 = 10_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HistogramAlgorithm {
@@ -203,183 +201,5 @@ impl Default for StatsInvalidationPolicy {
             max_age_hours: STATS_MAX_AGE_HOURS,
             lsn_delta_threshold: STATS_LSN_DELTA_THRESHOLD,
         }
-    }
-}
-
-pub trait HistogramBuilder: Send + Sync {
-    fn add_value(&mut self, value: u64) -> andromeda_core::AndromedaResult<()>;
-    fn finalize(self: Box<Self>) -> andromeda_core::AndromedaResult<Histogram>;
-    fn estimated_memory_bytes(&self) -> usize;
-}
-
-pub trait NdvEstimator: Send + Sync {
-    fn observe(&mut self, value: u64);
-    fn estimate(&self) -> u64;
-    fn memory_bytes(&self) -> usize;
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PlanFeedback {
-    pub estimated_rows: u64,
-    pub actual_rows: u64,
-}
-
-impl PlanFeedback {
-    pub fn new(estimated_rows: u64, actual_rows: u64) -> (Self, f64) {
-        let max_rows = estimated_rows.max(actual_rows);
-        let error_ratio = if max_rows > 0 {
-            ((estimated_rows as i64 - actual_rows as i64).abs() as f64) / max_rows as f64
-        } else {
-            0.0
-        };
-
-        (
-            Self {
-                estimated_rows,
-                actual_rows,
-            },
-            error_ratio,
-        )
-    }
-
-    pub fn is_high_error(&self, threshold: f64) -> bool {
-        let max_rows = self.estimated_rows.max(self.actual_rows);
-        let error_ratio = if max_rows > 0 {
-            ((self.estimated_rows as i64 - self.actual_rows as i64).abs() as f64) / max_rows as f64
-        } else {
-            0.0
-        };
-        error_ratio > threshold
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct FeedbackStatistics {
-    pub total_observations: u64,
-    pub sum_errors: f64,
-    pub max_error: f64,
-    pub high_error_threshold: f64,
-}
-
-impl FeedbackStatistics {
-    pub fn new(high_error_threshold: f64) -> Self {
-        Self {
-            total_observations: 0,
-            sum_errors: 0.0,
-            max_error: 0.0,
-            high_error_threshold,
-        }
-    }
-
-    pub fn record(&mut self, error_ratio: f64) {
-        self.total_observations += 1;
-        self.sum_errors += error_ratio;
-        self.max_error = self.max_error.max(error_ratio);
-    }
-
-    pub fn average_error(&self) -> f64 {
-        if self.total_observations > 0 {
-            self.sum_errors / self.total_observations as f64
-        } else {
-            0.0
-        }
-    }
-
-    pub fn should_recollect(&self) -> bool {
-        self.max_error > self.high_error_threshold
-            || self.average_error() > self.high_error_threshold
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ExactNdvCounter {
-    seen: std::collections::HashSet<u64>,
-}
-
-impl ExactNdvCounter {
-    pub fn new() -> Self {
-        Self {
-            seen: std::collections::HashSet::new(),
-        }
-    }
-
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self {
-            seen: std::collections::HashSet::with_capacity(capacity),
-        }
-    }
-}
-
-impl Default for ExactNdvCounter {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl NdvEstimator for ExactNdvCounter {
-    fn observe(&mut self, value: u64) {
-        self.seen.insert(value);
-    }
-
-    fn estimate(&self) -> u64 {
-        self.seen.len() as u64
-    }
-
-    fn memory_bytes(&self) -> usize {
-        self.seen.capacity() * std::mem::size_of::<u64>()
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct HyperLogLog {
-    pub precision: u8,
-    pub registers: Vec<u8>,
-    pub alpha: f64,
-}
-
-impl HyperLogLog {
-    pub fn new(precision: u8) -> AndromedaResult<Self> {
-        if !(4..=16).contains(&precision) {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Catalog,
-                "HyperLogLog precision must be in range [4, 16]",
-            ));
-        }
-
-        let m = (1u64 << precision) as f64;
-        let alpha = 0.7213 / (1.0 + 1.079 / m);
-        let registers = vec![0u8; 1 << precision];
-
-        Ok(Self {
-            precision,
-            registers,
-            alpha,
-        })
-    }
-
-    pub fn with_default_precision() -> AndromedaResult<Self> {
-        Self::new(DEFAULT_HLL_PRECISION)
-    }
-
-    pub fn register_count(&self) -> usize {
-        1 << self.precision
-    }
-
-    pub fn error_percent(&self) -> f64 {
-        (1.04 / (1u64 << self.precision) as f64).sqrt() * 100.0
-    }
-}
-
-impl NdvEstimator for HyperLogLog {
-    fn observe(&mut self, value: u64) {
-        let _ = value;
-    }
-
-    fn estimate(&self) -> u64 {
-        1
-    }
-
-    fn memory_bytes(&self) -> usize {
-        self.registers.capacity()
     }
 }

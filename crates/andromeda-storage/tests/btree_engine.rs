@@ -1,4 +1,4 @@
-//! Comprehensive tests for the B+ Tree Index Engine (N2-BTREE-010)
+//! Comprehensive tests for the B+ Tree Index Engine
 //!
 //! Tests cover:
 //! - Basic insert/search/delete operations
@@ -11,13 +11,11 @@
 
 #[cfg(test)]
 mod btree_engine_tests {
+    use andromeda_core::AndromedaErrorKind;
     use andromeda_storage::{
-        BTreeConfig, BTreeNodeImpl, InMemoryBTreeIndexEngine, IndexId, KeyValuePair, PageId, RowId,
+        BTREE_DURABLE_FORMAT_PROMOTED, BTreeConfig, BTreeNodeImpl, InMemoryBTreeIndexEngine,
+        IndexId, KeyValuePair, PageId, RowId,
     };
-
-    // ========================================================================
-    // Unit Tests: Node Operations
-    // ========================================================================
 
     #[test]
     fn test_btree_node_creation_leaf() {
@@ -107,10 +105,6 @@ mod btree_engine_tests {
         assert_eq!(node.find_key_index(&[60]), 2);
     }
 
-    // ========================================================================
-    // Unit Tests: Leaf Node Operations
-    // ========================================================================
-
     #[test]
     fn test_insert_into_leaf_single() {
         let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
@@ -159,7 +153,11 @@ mod btree_engine_tests {
         node.insert_into_leaf(key.clone(), row_id1).unwrap();
         let result = node.insert_into_leaf(key, row_id2);
 
-        assert!(result.is_err());
+        let error = result.expect_err("duplicate leaf key should fail");
+        assert_eq!(error.kind(), AndromedaErrorKind::Storage);
+        assert!(error.message().contains("duplicate key"));
+        assert_eq!(node.key_value_pairs.len(), 1);
+        assert_eq!(node.lookup_in_leaf(&[100]), Some(row_id1));
     }
 
     #[test]
@@ -207,14 +205,17 @@ mod btree_engine_tests {
         let key_not_in_node = vec![99];
 
         let result = node.delete_from_leaf(&key_not_in_node);
-        assert!(result.is_err());
+        let error = result.expect_err("missing key delete should fail");
+        assert_eq!(error.kind(), AndromedaErrorKind::Storage);
+        assert!(error.message().contains("key not found"));
+        assert!(node.key_value_pairs.is_empty());
     }
 
     #[test]
     fn test_delete_from_leaf_multiple() {
         let mut node = BTreeNodeImpl::new_leaf(PageId::new(1), None);
 
-        let keys = vec![vec![10], vec![20], vec![30]];
+        let keys = [vec![10], vec![20], vec![30]];
         for (i, key) in keys.iter().enumerate() {
             node.insert_into_leaf(key.clone(), RowId::new(i as u64))
                 .unwrap();
@@ -222,16 +223,12 @@ mod btree_engine_tests {
 
         assert_eq!(node.key_value_pairs.len(), 3);
 
-        node.delete_from_leaf(&vec![20]).unwrap();
+        node.delete_from_leaf(&[20]).unwrap();
         assert_eq!(node.key_value_pairs.len(), 2);
 
         assert_eq!(node.key_value_pairs[0].key, vec![10]);
         assert_eq!(node.key_value_pairs[1].key, vec![30]);
     }
-
-    // ========================================================================
-    // Unit Tests: Node Splitting
-    // ========================================================================
 
     #[test]
     fn test_split_leaf_node() {
@@ -318,10 +315,6 @@ mod btree_engine_tests {
         );
     }
 
-    // ========================================================================
-    // Unit Tests: Serialization/Deserialization
-    // ========================================================================
-
     #[test]
     fn test_serialize_deserialize_empty_leaf() {
         let node = BTreeNodeImpl::new_leaf(PageId::new(42), None);
@@ -395,10 +388,6 @@ mod btree_engine_tests {
         assert_eq!(serialized1, serialized2);
     }
 
-    // ========================================================================
-    // Unit Tests: Internal Node Operations
-    // ========================================================================
-
     #[test]
     fn test_internal_node_find_child_index() {
         let mut node = BTreeNodeImpl::new_internal(PageId::new(1), None);
@@ -434,15 +423,12 @@ mod btree_engine_tests {
         assert_eq!(node.get_child_page_id(3), None);
     }
 
-    // ========================================================================
-    // Integration Tests: InMemoryBTreeIndexEngine
-    // ========================================================================
-
     #[test]
     fn test_btree_engine_creation() {
         let engine =
             InMemoryBTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
 
+        const _: () = assert!(!BTREE_DURABLE_FORMAT_PROMOTED);
         assert_eq!(engine.row_count(), 0);
         let stats = engine.statistics();
         assert_eq!(stats.tree_height, 1);
@@ -484,7 +470,12 @@ mod btree_engine_tests {
         let row_id = RowId::new(42);
 
         let result = engine.insert(&key, row_id);
-        assert!(result.is_ok());
+        result.expect("insert should succeed");
+        assert_eq!(engine.row_count(), 1);
+        assert_eq!(
+            engine.search(&key).expect("search inserted key"),
+            Some(row_id)
+        );
     }
 
     #[test]
@@ -496,7 +487,10 @@ mod btree_engine_tests {
         let row_id = RowId::new(42);
 
         let result = engine.insert(&oversized_key, row_id);
-        assert!(result.is_err());
+        let error = result.expect_err("oversized key should fail");
+        assert_eq!(error.kind(), AndromedaErrorKind::Storage);
+        assert!(error.message().contains("key size"));
+        assert_eq!(engine.row_count(), 0);
     }
 
     #[test]
@@ -505,8 +499,17 @@ mod btree_engine_tests {
             InMemoryBTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default());
 
         let key = vec![5];
+        let row_id = RowId::new(50);
+        engine.insert(&key, row_id).expect("insert before delete");
+        assert_eq!(
+            engine.search(&key).expect("search before delete"),
+            Some(row_id)
+        );
+
         let result = engine.delete(&key);
-        assert!(result.is_ok());
+        result.expect("delete should succeed");
+        assert_eq!(engine.row_count(), 0);
+        assert_eq!(engine.search(&key).expect("search deleted key"), None);
     }
 
     #[test]
@@ -516,12 +519,10 @@ mod btree_engine_tests {
 
         let oversized_key = vec![0u8; 10000];
         let result = engine.delete(&oversized_key);
-        assert!(result.is_err());
+        let error = result.expect_err("oversized delete key should fail");
+        assert_eq!(error.kind(), AndromedaErrorKind::Storage);
+        assert!(error.message().contains("key size"));
     }
-
-    // ========================================================================
-    // Invariant Tests
-    // ========================================================================
 
     #[test]
     fn test_leaf_node_key_ordering_invariant() {

@@ -81,8 +81,8 @@ impl V0InventoryReserveStockRpcPayload {
         }
 
         let data = &bytes[V0_RPC_EXECUTE_PAYLOAD_DOMAIN.len() + 1..];
-        let product_id = i64::from_le_bytes(data[..8].try_into().expect("fixed product id"));
-        let quantity = i64::from_le_bytes(data[8..16].try_into().expect("fixed quantity"));
+        let product_id = decode_v0_i64_field(data, 0, "product id")?;
+        let quantity = decode_v0_i64_field(data, 8, "quantity")?;
         Self::new(product_id, quantity)
     }
 
@@ -587,6 +587,18 @@ fn denied_permission_for_context(
         .unwrap_or_else(|| "unknown required permission".to_string())
 }
 
-fn v0_protocol_error(message: &'static str) -> AndromedaError {
+fn decode_v0_i64_field(data: &[u8], offset: usize, field: &str) -> AndromedaResult<i64> {
+    let end = offset
+        .checked_add(8)
+        .ok_or_else(|| v0_protocol_error(format!("V0 payload {field} offset overflow")))?;
+    let bytes = data
+        .get(offset..end)
+        .ok_or_else(|| v0_protocol_error(format!("V0 payload {field} is truncated")))?;
+    let mut value = [0_u8; 8];
+    value.copy_from_slice(bytes);
+    Ok(i64::from_le_bytes(value))
+}
+
+fn v0_protocol_error(message: impl Into<String>) -> AndromedaError {
     AndromedaError::new(AndromedaErrorKind::Protocol, message)
 }

@@ -28,17 +28,13 @@ use crate::{
     backup::{BackupId, BackupManifest},
 };
 
-// ============================================================================
 // Helpers
-// ============================================================================
 
 fn restore_error(message: impl Into<String>) -> andromeda_core::AndromedaError {
     andromeda_core::AndromedaError::new(andromeda_core::AndromedaErrorKind::Storage, message)
 }
 
-// ============================================================================
 // Types and Orchestration
-// ============================================================================
 
 /// Immutable decision snapshot for a restore attempt.
 ///
@@ -214,9 +210,7 @@ pub enum RestoreCompletion {
     Failed { reason: String },
 }
 
-// ============================================================================
 // Pure Functions (RestorePipeline)
-// ============================================================================
 
 /// WAL segment identified for replay during PITR.
 #[derive(Debug, Clone, PartialEq, Eq)]

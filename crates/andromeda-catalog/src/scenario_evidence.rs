@@ -58,6 +58,20 @@ use crate::plan_cache::PlanClass;
 /// Domain tag absorbed at the start of every scenario-evidence digest.
 const SCENARIO_EVIDENCE_DOMAIN: &[u8] = b"andromeda.scenario_evidence.v0";
 
+/// Maximum admissible score/confidence value on the fixed permille scale.
+const EVIDENCE_PERMILLE_MAX: u16 = 1_000;
+
+const fn validate_evidence_permille(
+    value: u16,
+    error: ScenarioEvidenceError,
+) -> Result<u16, ScenarioEvidenceError> {
+    if value > EVIDENCE_PERMILLE_MAX {
+        Err(error)
+    } else {
+        Ok(value)
+    }
+}
+
 /// Bounded scenario-kind taxonomy.
 ///
 /// The variants are closed.  Adding a variant is a doctrine change
@@ -125,7 +139,7 @@ pub struct EvidenceScore(u16);
 
 impl EvidenceScore {
     /// Maximum admissible raw value.  `1000` corresponds to "1.000".
-    pub const MAX_RAW: u16 = 1_000;
+    pub const MAX_RAW: u16 = EVIDENCE_PERMILLE_MAX;
 
     /// The zero score.  Always valid.
     pub const ZERO: Self = Self(0);
@@ -134,10 +148,9 @@ impl EvidenceScore {
     /// greater than [`Self::MAX_RAW`].  No clamping: out-of-range
     /// callers are bugs and must be reported as such.
     pub const fn from_permille(value: u16) -> Result<Self, ScenarioEvidenceError> {
-        if value > Self::MAX_RAW {
-            Err(ScenarioEvidenceError::ScoreOutOfRange)
-        } else {
-            Ok(Self(value))
+        match validate_evidence_permille(value, ScenarioEvidenceError::ScoreOutOfRange) {
+            Ok(value) => Ok(Self(value)),
+            Err(error) => Err(error),
         }
     }
 
@@ -154,15 +167,14 @@ impl EvidenceScore {
 pub struct EvidenceConfidence(u16);
 
 impl EvidenceConfidence {
-    pub const MAX_RAW: u16 = 1_000;
+    pub const MAX_RAW: u16 = EVIDENCE_PERMILLE_MAX;
 
     pub const ZERO: Self = Self(0);
 
     pub const fn from_permille(value: u16) -> Result<Self, ScenarioEvidenceError> {
-        if value > Self::MAX_RAW {
-            Err(ScenarioEvidenceError::ConfidenceOutOfRange)
-        } else {
-            Ok(Self(value))
+        match validate_evidence_permille(value, ScenarioEvidenceError::ConfidenceOutOfRange) {
+            Ok(value) => Ok(Self(value)),
+            Err(error) => Err(error),
         }
     }
 
@@ -490,19 +502,39 @@ mod tests {
         }
     }
 
-    fn evidence_at(
+    fn evidence_with(
+        scenario_id: u64,
+        kind: ScenarioKind,
+        target: ScenarioTarget,
         score: u16,
         confidence: u16,
         issued: u64,
         expires: u64,
     ) -> Result<ScenarioEvidence, ScenarioEvidenceError> {
         ScenarioEvidence::new(
-            ScenarioId::new(42).expect("non-zero"),
-            ScenarioKind::Microbenchmark,
-            target(),
+            ScenarioId::new(scenario_id).expect("non-zero"),
+            kind,
+            target,
             EvidenceScore::from_permille(score)?,
             EvidenceConfidence::from_permille(confidence)?,
             ValidityWindow::new(ts(issued), ts(expires))?,
+        )
+    }
+
+    fn evidence_at(
+        score: u16,
+        confidence: u16,
+        issued: u64,
+        expires: u64,
+    ) -> Result<ScenarioEvidence, ScenarioEvidenceError> {
+        evidence_with(
+            42,
+            ScenarioKind::Microbenchmark,
+            target(),
+            score,
+            confidence,
+            issued,
+            expires,
         )
     }
 
@@ -568,42 +600,21 @@ mod tests {
         let mut t = target();
         t.procedure_id = ProcedureId::new(0);
         assert_eq!(
-            ScenarioEvidence::new(
-                ScenarioId::new(1).unwrap(),
-                ScenarioKind::Microbenchmark,
-                t,
-                EvidenceScore::ZERO,
-                EvidenceConfidence::ZERO,
-                ValidityWindow::new(ts(1), ts(2)).unwrap(),
-            ),
+            evidence_with(1, ScenarioKind::Microbenchmark, t, 0, 0, 1, 2,),
             Err(ScenarioEvidenceError::TargetProcedureIdZero)
         );
 
         let mut t = target();
         t.stats_version = StatsVersion::new(0);
         assert_eq!(
-            ScenarioEvidence::new(
-                ScenarioId::new(1).unwrap(),
-                ScenarioKind::Microbenchmark,
-                t,
-                EvidenceScore::ZERO,
-                EvidenceConfidence::ZERO,
-                ValidityWindow::new(ts(1), ts(2)).unwrap(),
-            ),
+            evidence_with(1, ScenarioKind::Microbenchmark, t, 0, 0, 1, 2,),
             Err(ScenarioEvidenceError::TargetStatsVersionZero)
         );
 
         let mut t = target();
         t.contract_hash = Some(ContractHash::new([0u8; ContractHash::LEN]));
         assert_eq!(
-            ScenarioEvidence::new(
-                ScenarioId::new(1).unwrap(),
-                ScenarioKind::Microbenchmark,
-                t,
-                EvidenceScore::ZERO,
-                EvidenceConfidence::ZERO,
-                ValidityWindow::new(ts(1), ts(2)).unwrap(),
-            ),
+            evidence_with(1, ScenarioKind::Microbenchmark, t, 0, 0, 1, 2,),
             Err(ScenarioEvidenceError::TargetContractHashZero)
         );
     }
@@ -674,49 +685,53 @@ mod tests {
 
         let mut other_stats_target = target();
         other_stats_target.stats_version = StatsVersion::new(4);
-        let other_stats = ScenarioEvidence::new(
-            ScenarioId::new(42).unwrap(),
+        let other_stats = evidence_with(
+            42,
             ScenarioKind::Microbenchmark,
             other_stats_target,
-            EvidenceScore::from_permille(500).unwrap(),
-            EvidenceConfidence::from_permille(800).unwrap(),
-            ValidityWindow::new(ts(100), ts(200)).unwrap(),
+            500,
+            800,
+            100,
+            200,
         )
         .unwrap();
 
         let mut other_class_target = target();
         other_class_target.plan_class = Some(PlanClass::Cardinality);
-        let other_class = ScenarioEvidence::new(
-            ScenarioId::new(42).unwrap(),
+        let other_class = evidence_with(
+            42,
             ScenarioKind::Microbenchmark,
             other_class_target,
-            EvidenceScore::from_permille(500).unwrap(),
-            EvidenceConfidence::from_permille(800).unwrap(),
-            ValidityWindow::new(ts(100), ts(200)).unwrap(),
+            500,
+            800,
+            100,
+            200,
         )
         .unwrap();
 
         let mut absent_class_target = target();
         absent_class_target.plan_class = None;
-        let absent_class = ScenarioEvidence::new(
-            ScenarioId::new(42).unwrap(),
+        let absent_class = evidence_with(
+            42,
             ScenarioKind::Microbenchmark,
             absent_class_target,
-            EvidenceScore::from_permille(500).unwrap(),
-            EvidenceConfidence::from_permille(800).unwrap(),
-            ValidityWindow::new(ts(100), ts(200)).unwrap(),
+            500,
+            800,
+            100,
+            200,
         )
         .unwrap();
 
         let mut absent_hash_target = target();
         absent_hash_target.contract_hash = None;
-        let absent_hash = ScenarioEvidence::new(
-            ScenarioId::new(42).unwrap(),
+        let absent_hash = evidence_with(
+            42,
             ScenarioKind::Microbenchmark,
             absent_hash_target,
-            EvidenceScore::from_permille(500).unwrap(),
-            EvidenceConfidence::from_permille(800).unwrap(),
-            ValidityWindow::new(ts(100), ts(200)).unwrap(),
+            500,
+            800,
+            100,
+            200,
         )
         .unwrap();
 
@@ -733,23 +748,25 @@ mod tests {
     fn digest_separates_by_scenario_kind_and_id() {
         let base = evidence_at(500, 800, 100, 200).unwrap();
 
-        let other_kind = ScenarioEvidence::new(
-            ScenarioId::new(42).unwrap(),
+        let other_kind = evidence_with(
+            42,
             ScenarioKind::RegressionProbe,
             target(),
-            EvidenceScore::from_permille(500).unwrap(),
-            EvidenceConfidence::from_permille(800).unwrap(),
-            ValidityWindow::new(ts(100), ts(200)).unwrap(),
+            500,
+            800,
+            100,
+            200,
         )
         .unwrap();
 
-        let other_id = ScenarioEvidence::new(
-            ScenarioId::new(43).unwrap(),
+        let other_id = evidence_with(
+            43,
             ScenarioKind::Microbenchmark,
             target(),
-            EvidenceScore::from_permille(500).unwrap(),
-            EvidenceConfidence::from_permille(800).unwrap(),
-            ValidityWindow::new(ts(100), ts(200)).unwrap(),
+            500,
+            800,
+            100,
+            200,
         )
         .unwrap();
 

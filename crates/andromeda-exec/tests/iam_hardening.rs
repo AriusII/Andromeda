@@ -1,4 +1,4 @@
-//! Wave 13 Batch 9: IAM Permission Flow Hardening Integration Tests
+//! IAM permission flow hardening integration tests.
 //!
 //! These tests verify the hardened permission enforcement flow with explicit
 //! audit logging for every decision. They enforce the doctrine:
@@ -22,20 +22,16 @@
 
 #[cfg(test)]
 mod iam_hardening_tests {
-    use andromeda_core::{
-        AndromedaErrorKind, Permission, PermissionSet, PrincipalId, PrincipalRole, ProcedureId,
-    };
+    use andromeda_core::{AndromedaErrorKind, Permission, PrincipalId, PrincipalRole, ProcedureId};
     use andromeda_exec::services::{
         ConcretePermissionEvaluator, DenialAuditReason, DenialReason, LocalPrincipalResolver,
         NoOpPermissionAuditEmitter, PermissionAuditEmitter, PermissionDecision,
-        PermissionDecisionAudit, PermissionEvaluator, PrincipalResolver,
+        PermissionEvaluator, PrincipalResolver,
     };
     use andromeda_observe::TraceId;
     use std::sync::Arc;
 
-    // ========================================================================
     // Test 1: Principal WITHOUT Permission → DENIED
-    // ========================================================================
 
     #[test]
     fn test_iam_hardening_1_user_without_admin_permission_denied() {
@@ -72,9 +68,7 @@ mod iam_hardening_tests {
         assert!(result.is_ok());
     }
 
-    // ========================================================================
     // Test 2: Principal WITH Permission → APPROVED
-    // ========================================================================
 
     #[test]
     fn test_iam_hardening_2_admin_with_admin_permission_approved() {
@@ -100,9 +94,7 @@ mod iam_hardening_tests {
         }
     }
 
-    // ========================================================================
     // Test 3: Wildcard Procedure Permission Enforcement
-    // ========================================================================
 
     #[test]
     fn test_iam_hardening_3_operator_with_wildcard_procedure_permission() {
@@ -124,9 +116,7 @@ mod iam_hardening_tests {
         assert!(decision.is_allowed());
     }
 
-    // ========================================================================
     // Test 4: Super-Admin Isolation (Has All Permissions)
-    // ========================================================================
 
     #[test]
     fn test_iam_hardening_4_superadmin_has_all_permissions() {
@@ -159,9 +149,7 @@ mod iam_hardening_tests {
         }
     }
 
-    // ========================================================================
     // Test 5: Principal-less Request → DENIED
-    // ========================================================================
 
     #[test]
     fn test_iam_hardening_5_empty_fingerprint_denied() {
@@ -188,9 +176,7 @@ mod iam_hardening_tests {
         }
     }
 
-    // ========================================================================
     // Test 6: Empty Permission Set → DENIED
-    // ========================================================================
 
     #[test]
     fn test_iam_hardening_6_guest_with_restricted_procedure_denied() {
@@ -218,9 +204,7 @@ mod iam_hardening_tests {
         }
     }
 
-    // ========================================================================
     // Test 7: Unknown Principal → DENIED
-    // ========================================================================
 
     #[test]
     fn test_iam_hardening_7_unknown_principal_denied() {
@@ -249,9 +233,7 @@ mod iam_hardening_tests {
         }
     }
 
-    // ========================================================================
     // Test 8: Permission Mismatch → DENIED
-    // ========================================================================
 
     #[test]
     fn test_iam_hardening_8_user_without_audit_read_denied() {
@@ -276,9 +258,7 @@ mod iam_hardening_tests {
         }
     }
 
-    // ========================================================================
     // Test 9: Audit Event Emission Verification
-    // ========================================================================
 
     #[test]
     fn test_iam_hardening_9_audit_event_emission_for_all_decisions() {
@@ -316,9 +296,7 @@ mod iam_hardening_tests {
         );
     }
 
-    // ========================================================================
     // Test 10: Multi-Permission Evaluation (All Required Permissions)
-    // ========================================================================
 
     #[test]
     fn test_iam_hardening_10_multi_permission_admin_allowed() {
@@ -343,9 +321,7 @@ mod iam_hardening_tests {
         assert!(result.is_ok());
     }
 
-    // ========================================================================
     // Test 11: Multi-Permission Evaluation (One Missing Permission)
-    // ========================================================================
 
     #[test]
     fn test_iam_hardening_11_multi_permission_user_missing_admin_denied() {
@@ -376,9 +352,7 @@ mod iam_hardening_tests {
         }
     }
 
-    // ========================================================================
     // Test 12: Wildcard NOT Applied to Non-ExecuteProcedure Permissions
-    // ========================================================================
 
     #[test]
     fn test_iam_hardening_12_wildcard_not_applied_to_admin_permissions() {
@@ -398,9 +372,7 @@ mod iam_hardening_tests {
         assert!(decision.is_denied());
     }
 
-    // ========================================================================
     // Test 13: Deny-by-Default at Admission Gate (Zero Principal ID Handled)
-    // ========================================================================
 
     #[test]
     fn test_iam_hardening_13_zero_principal_id_safely_handled() {
@@ -411,9 +383,7 @@ mod iam_hardening_tests {
         assert!(zero_id.is_zero());
     }
 
-    // ========================================================================
     // Test 14: Audit Decision Trace Conversion
-    // ========================================================================
 
     #[test]
     fn test_iam_hardening_14_audit_event_to_decision_trace_conversion() {
@@ -434,9 +404,7 @@ mod iam_hardening_tests {
         assert!(trace.reason.contains("PrincipalId(100)"));
     }
 
-    // ========================================================================
     // Helper: Verify Permission Set Behavior
-    // ========================================================================
 
     #[test]
     fn test_iam_hardening_permission_set_has_permission() {
@@ -455,9 +423,7 @@ mod iam_hardening_tests {
         );
     }
 
-    // ========================================================================
     // Helper: Verify Principal Resolution Error Handling
-    // ========================================================================
 
     #[test]
     fn test_iam_hardening_principal_resolution_error_handling() {
@@ -473,9 +439,7 @@ mod iam_hardening_tests {
         assert_eq!(error.kind(), AndromedaErrorKind::Security);
     }
 
-    // ========================================================================
     // Helper: Verify Role Permission Boundaries
-    // ========================================================================
 
     #[test]
     fn test_iam_hardening_role_permission_boundaries() {

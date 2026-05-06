@@ -1,6 +1,6 @@
 use andromeda_core::AndromedaResult;
 
-use super::{catalog_publication_error, CatalogPublicationReasonCode};
+use super::{CatalogPublicationReasonCode, catalog_publication_error};
 
 /// Minimal audit fields required to correlate a catalog publication decision.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -13,7 +13,9 @@ pub struct CatalogPublicationAuditTrace {
 impl CatalogPublicationAuditTrace {
     pub fn validate(&self) -> AndromedaResult<()> {
         if self.trace_id.trim().is_empty() {
-            return catalog_publication_error("catalog publication audit trace id must not be empty");
+            return catalog_publication_error(
+                "catalog publication audit trace id must not be empty",
+            );
         }
         if self.operator_principal.trim().is_empty() {
             return catalog_publication_error(

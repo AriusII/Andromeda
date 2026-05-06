@@ -4,7 +4,9 @@ use crate::{CatalogPublicationReceipt, CatalogPublicationSemantics};
 
 pub(super) fn validate_receipt(receipt: &CatalogPublicationReceipt) -> AndromedaResult<()> {
     if receipt.database_id.get() == 0 || receipt.namespace_id.get() == 0 {
-        return catalog_publication_error("catalog publication receipt identity fields must not be zero");
+        return catalog_publication_error(
+            "catalog publication receipt identity fields must not be zero",
+        );
     }
     if receipt.previous_version.get() == 0 || receipt.next_version <= receipt.previous_version {
         return catalog_publication_error(
@@ -12,7 +14,9 @@ pub(super) fn validate_receipt(receipt: &CatalogPublicationReceipt) -> Andromeda
         );
     }
     if receipt.record_count == 0 {
-        return catalog_publication_error("catalog publication receipt record count must not be zero");
+        return catalog_publication_error(
+            "catalog publication receipt record count must not be zero",
+        );
     }
     if receipt.publication_semantics != CatalogPublicationSemantics::DurablePublicationExternal {
         return catalog_publication_error(
@@ -25,6 +29,18 @@ pub(super) fn validate_receipt(receipt: &CatalogPublicationReceipt) -> Andromeda
         );
     }
     Ok(())
+}
+
+pub(super) fn require_equal<T: PartialEq>(
+    observed: &T,
+    expected: &T,
+    message: &'static str,
+) -> AndromedaResult<()> {
+    if observed == expected {
+        Ok(())
+    } else {
+        catalog_publication_error(message)
+    }
 }
 
 pub(super) fn catalog_publication_error<T>(message: &'static str) -> AndromedaResult<T> {

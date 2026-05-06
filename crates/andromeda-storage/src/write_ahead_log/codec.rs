@@ -1,5 +1,5 @@
 //! Facade re-export of the canonical WAL frame codec defined in
-//! [`crate::wal_codec`]. Do not define encode/decode/scan items here.
+//! `crate::wal_codec`. Do not define encode/decode/scan items here.
 
 pub use crate::{
     WAL_BYTE_ORDER_LITTLE_ENDIAN, WAL_FORMAT_VERSION, WAL_FORMAT_VERSION_V1, WAL_RECORD_HEADER_LEN,

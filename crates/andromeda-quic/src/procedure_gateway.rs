@@ -1,35 +1,8 @@
-//! D4: QUIC Procedure Gateway
+//! QUIC procedure gateway.
 //!
 //! This module exposes the QUIC-side gateway state needed before a Procedure
 //! invocation is handed to the execution layer: authenticated connection
 //! evidence, surface-plane binding, and stream-to-invocation correlation.
-//!
-//! ## Architecture
-//!
-//! The gateway enforces transport-side dispatch preconditions:
-//!
-//! ```text
-//! QUIC Transport                    Executor-owned admission
-//! ─────────────────────────────────────────────────
-//! ┌─────────────────┐
-//! │ QuicConnection  │
-//! │ + plane         │
-//! │ + cert_identity │
-//! └────────┬────────┘
-//!          │
-//!          ▼
-//! ┌──────────────────────────────────────────────┐
-//! │ ProcedureGateway                             │
-//! │                                              │
-//! │ 1. Require bound mTLS identity               │
-//! │ 2. Validate cert scope ≈ plane               │
-//! │ 3. Validate Active connection state          │
-//! │ 4. Map QUIC stream → InvocationId            │
-//! └──────────────────────────────────────────────┘
-//!          │
-//!          ▼
-//! andromeda-exec SurfacePlaneAuthorizer
-//! ```
 //!
 //! ## Dispatch Flow
 //!
@@ -43,14 +16,9 @@
 //!   `andromeda-exec`, which already depends on this crate and owns execution
 //!   admission. This avoids a reverse dependency from QUIC to executor.
 //!
-//! ## Exclusions (V0)
 //!
-//! - No quinn connection types: this module uses the abstract [`Connection`].
-//! - No actual TLS/mTLS wiring: certificate extraction is deferred to the
-//!   `runtime-quinn` feature in D4 listener integration.
-//! - No stream multiplexing: result-to-frame encoding is a contract surface,
-//!   not implemented here (D5 concern).
-//! - No gRPC: Procedure invocation is typed, not gRPC-mapped.
+//! The module is backend-neutral: it uses the abstract [`Connection`] state
+//! machine and leaves Quinn/TLS details to the optional runtime adapter.
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, InvocationId};
 use andromeda_observe::CertificateIdentity;
@@ -65,7 +33,7 @@ use crate::{Connection, SurfacePlane};
 ///
 /// ## Type Invariants
 ///
-/// - The connection must be in [`LifecycleState::Active`] before dispatch.
+/// - The connection must be in `LifecycleState::Active` before dispatch.
 /// - The certificate identity must be bound to the connection.
 /// - The certificate scope must match the connection plane.
 /// - Executor authorization must occur after this gateway validates transport
@@ -75,7 +43,7 @@ pub struct ProcedureGateway<'a> {
     /// The QUIC connection, bound to a surface plane.
     connection: &'a Connection,
 
-    /// The certificate identity extracted and bound during handshake (D3).
+    /// The certificate identity extracted and bound during handshake.
     ///
     /// This is the principal presented to the authorizer. Must not be None.
     certificate_identity: &'a CertificateIdentity,

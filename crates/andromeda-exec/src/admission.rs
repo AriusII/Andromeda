@@ -193,20 +193,20 @@ fn validate_resource_budget(
         }
     }
 
-    if let Some(max_execution_bytes) = ram.section_budget_bytes(RamSectionRole::Execution) {
-        if budget.max_memory_bytes > max_execution_bytes {
-            return Err(resource_reject(
-                "execution memory budget exceeds operational profile execution RAM section",
-            ));
-        }
+    if let Some(max_execution_bytes) = ram.section_budget_bytes(RamSectionRole::Execution)
+        && budget.max_memory_bytes > max_execution_bytes
+    {
+        return Err(resource_reject(
+            "execution memory budget exceeds operational profile execution RAM section",
+        ));
     }
 
-    if let Some(max_temp_bytes) = ram.section_budget_bytes(RamSectionRole::Temp) {
-        if budget.max_temp_bytes > max_temp_bytes {
-            return Err(resource_reject(
-                "execution temp budget exceeds operational profile temp RAM section",
-            ));
-        }
+    if let Some(max_temp_bytes) = ram.section_budget_bytes(RamSectionRole::Temp)
+        && budget.max_temp_bytes > max_temp_bytes
+    {
+        return Err(resource_reject(
+            "execution temp budget exceeds operational profile temp RAM section",
+        ));
     }
 
     Ok(())

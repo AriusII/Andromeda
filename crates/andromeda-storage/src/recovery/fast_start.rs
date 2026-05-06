@@ -37,8 +37,6 @@ use super::startup::{
     decide_startup,
 };
 
-// ─── FastStart guard ───────────────────────────────────────────────────────
-
 /// Acceptance proof produced by a successful `FastStart`.
 ///
 /// Carries the manifest recovery floor and the observed clean boundary.
@@ -143,8 +141,6 @@ impl FastStartRejection {
         }
     }
 }
-
-// ─── Unit Tests ────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {

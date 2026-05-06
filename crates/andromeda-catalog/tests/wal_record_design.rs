@@ -16,18 +16,86 @@ fn test_hash(byte: u8) -> ContractHash {
     ContractHash::test_vector(byte)
 }
 
-// ============================================================================
+fn object_id(value: u64) -> CatalogObjectId {
+    CatalogObjectId::new(value)
+}
+
+fn create_procedure_record(
+    procedure_id: u64,
+    name: &str,
+    contract_hash: ContractHash,
+    dependencies: Vec<CatalogObjectId>,
+) -> CatalogWalRecord {
+    CatalogWalRecord::CreateProcedure {
+        procedure_id: object_id(procedure_id),
+        name: name.to_string(),
+        contract_hash,
+        dependencies,
+    }
+}
+
+fn alter_procedure_record(
+    procedure_id: u64,
+    old_contract_hash: ContractHash,
+    new_contract_hash: ContractHash,
+    compatibility: AlterCompatibilityPolicy,
+) -> CatalogWalRecord {
+    CatalogWalRecord::AlterProcedure {
+        procedure_id: object_id(procedure_id),
+        old_contract_hash,
+        new_contract_hash,
+        compatibility,
+    }
+}
+
+fn deprecate_procedure_record(procedure_id: u64, reason: &str) -> CatalogWalRecord {
+    CatalogWalRecord::DeprecateProcedure {
+        procedure_id: object_id(procedure_id),
+        reason: reason.to_string(),
+    }
+}
+
+fn drop_procedure_record(
+    procedure_id: u64,
+    restrict_failure_reason: Option<DropFailureReason>,
+) -> CatalogWalRecord {
+    CatalogWalRecord::DropProcedure {
+        procedure_id: object_id(procedure_id),
+        restrict_failure_reason,
+    }
+}
+
+fn apply_catalog_version_record(
+    batch_id: u64,
+    version: u64,
+    record_count: usize,
+    lsn: u64,
+) -> CatalogWalRecord {
+    CatalogWalRecord::ApplyCatalogVersion {
+        batch_id: DefinitionBatchId::new(batch_id),
+        version: CatalogVersion::new(version),
+        record_count,
+        lsn,
+    }
+}
+
+fn drop_failure_reason(blocker_count: usize, description: &str) -> DropFailureReason {
+    DropFailureReason {
+        blocker_count,
+        description: description.to_string(),
+    }
+}
+
 // Test 1: WAL Record Roundtrip (Create, Alter, Deprecate, Drop)
-// ============================================================================
 
 #[test]
 fn wal_record_roundtrip_create_procedure() {
-    let record = CatalogWalRecord::CreateProcedure {
-        procedure_id: CatalogObjectId::new(1001),
-        name: "my_procedure".to_string(),
-        contract_hash: test_hash(0xAA),
-        dependencies: vec![CatalogObjectId::new(2001), CatalogObjectId::new(2002)],
-    };
+    let record = create_procedure_record(
+        1001,
+        "my_procedure",
+        test_hash(0xAA),
+        vec![object_id(2001), object_id(2002)],
+    );
 
     // Validate internal invariants
     assert!(
@@ -43,7 +111,7 @@ fn wal_record_roundtrip_create_procedure() {
         dependencies,
     } = &record
     {
-        assert_eq!(*procedure_id, CatalogObjectId::new(1001));
+        assert_eq!(*procedure_id, object_id(1001));
         assert_eq!(name, "my_procedure");
         assert_eq!(*contract_hash, test_hash(0xAA));
         assert_eq!(dependencies.len(), 2);
@@ -54,12 +122,12 @@ fn wal_record_roundtrip_create_procedure() {
 
 #[test]
 fn wal_record_roundtrip_alter_procedure() {
-    let record = CatalogWalRecord::AlterProcedure {
-        procedure_id: CatalogObjectId::new(1001),
-        old_contract_hash: test_hash(0x01),
-        new_contract_hash: test_hash(0x02),
-        compatibility: AlterCompatibilityPolicy::AdditiveOnly,
-    };
+    let record = alter_procedure_record(
+        1001,
+        test_hash(0x01),
+        test_hash(0x02),
+        AlterCompatibilityPolicy::AdditiveOnly,
+    );
 
     assert!(
         record.validate().is_ok(),
@@ -73,7 +141,7 @@ fn wal_record_roundtrip_alter_procedure() {
         compatibility,
     } = &record
     {
-        assert_eq!(*procedure_id, CatalogObjectId::new(1001));
+        assert_eq!(*procedure_id, object_id(1001));
         assert_eq!(*old_contract_hash, test_hash(0x01));
         assert_eq!(*new_contract_hash, test_hash(0x02));
         assert_eq!(*compatibility, AlterCompatibilityPolicy::AdditiveOnly);
@@ -84,10 +152,7 @@ fn wal_record_roundtrip_alter_procedure() {
 
 #[test]
 fn wal_record_roundtrip_deprecate_procedure() {
-    let record = CatalogWalRecord::DeprecateProcedure {
-        procedure_id: CatalogObjectId::new(1001),
-        reason: "replaced by v2.0".to_string(),
-    };
+    let record = deprecate_procedure_record(1001, "replaced by v2.0");
 
     assert!(
         record.validate().is_ok(),
@@ -99,7 +164,7 @@ fn wal_record_roundtrip_deprecate_procedure() {
         reason,
     } = &record
     {
-        assert_eq!(*procedure_id, CatalogObjectId::new(1001));
+        assert_eq!(*procedure_id, object_id(1001));
         assert_eq!(reason, "replaced by v2.0");
     } else {
         panic!("Expected DeprecateProcedure variant");
@@ -108,10 +173,7 @@ fn wal_record_roundtrip_deprecate_procedure() {
 
 #[test]
 fn wal_record_roundtrip_drop_procedure_success() {
-    let record = CatalogWalRecord::DropProcedure {
-        procedure_id: CatalogObjectId::new(1001),
-        restrict_failure_reason: None,
-    };
+    let record = drop_procedure_record(1001, None);
 
     assert!(
         record.validate().is_ok(),
@@ -123,7 +185,7 @@ fn wal_record_roundtrip_drop_procedure_success() {
         restrict_failure_reason,
     } = &record
     {
-        assert_eq!(*procedure_id, CatalogObjectId::new(1001));
+        assert_eq!(*procedure_id, object_id(1001));
         assert!(restrict_failure_reason.is_none());
     } else {
         panic!("Expected DropProcedure variant");
@@ -132,13 +194,13 @@ fn wal_record_roundtrip_drop_procedure_success() {
 
 #[test]
 fn wal_record_roundtrip_drop_procedure_restricted() {
-    let record = CatalogWalRecord::DropProcedure {
-        procedure_id: CatalogObjectId::new(1001),
-        restrict_failure_reason: Some(DropFailureReason {
-            blocker_count: 2,
-            description: "procedures p_a and p_b depend on this procedure".to_string(),
-        }),
-    };
+    let record = drop_procedure_record(
+        1001,
+        Some(drop_failure_reason(
+            2,
+            "procedures p_a and p_b depend on this procedure",
+        )),
+    );
 
     assert!(
         record.validate().is_ok(),
@@ -150,7 +212,7 @@ fn wal_record_roundtrip_drop_procedure_restricted() {
         restrict_failure_reason,
     } = &record
     {
-        assert_eq!(*procedure_id, CatalogObjectId::new(1001));
+        assert_eq!(*procedure_id, object_id(1001));
         assert!(restrict_failure_reason.is_some());
         if let Some(reason) = restrict_failure_reason {
             assert_eq!(reason.blocker_count, 2);
@@ -163,12 +225,7 @@ fn wal_record_roundtrip_drop_procedure_restricted() {
 
 #[test]
 fn wal_record_roundtrip_apply_catalog_version() {
-    let record = CatalogWalRecord::ApplyCatalogVersion {
-        batch_id: DefinitionBatchId::new(100),
-        version: CatalogVersion::new(42),
-        record_count: 3,
-        lsn: 99999,
-    };
+    let record = apply_catalog_version_record(100, 42, 3, 99999);
 
     assert!(
         record.validate().is_ok(),
@@ -191,9 +248,7 @@ fn wal_record_roundtrip_apply_catalog_version() {
     }
 }
 
-// ============================================================================
 // Test 2: Batch WAL Correlation
-// ============================================================================
 
 #[test]
 fn batch_wal_correlation_preserves_identities() {
@@ -201,12 +256,7 @@ fn batch_wal_correlation_preserves_identities() {
     let version = CatalogVersion::new(88);
 
     // Simulate a batch apply record
-    let apply_record = CatalogWalRecord::ApplyCatalogVersion {
-        batch_id,
-        version,
-        record_count: 2,
-        lsn: 5000,
-    };
+    let apply_record = apply_catalog_version_record(batch_id.get(), version.get(), 2, 5000);
 
     // Verify that batch_id and version are preserved for correlation
     if let CatalogWalRecord::ApplyCatalogVersion {
@@ -231,20 +281,10 @@ fn batch_wal_correlation_preserves_identities() {
 #[test]
 fn batch_wal_correlation_lsn_monotonic_check() {
     // First batch at LSN 1000
-    let batch1 = CatalogWalRecord::ApplyCatalogVersion {
-        batch_id: DefinitionBatchId::new(1),
-        version: CatalogVersion::new(1),
-        record_count: 1,
-        lsn: 1000,
-    };
+    let batch1 = apply_catalog_version_record(1, 1, 1, 1000);
 
     // Second batch at LSN 2000 (higher, as expected)
-    let batch2 = CatalogWalRecord::ApplyCatalogVersion {
-        batch_id: DefinitionBatchId::new(2),
-        version: CatalogVersion::new(2),
-        record_count: 1,
-        lsn: 2000,
-    };
+    let batch2 = apply_catalog_version_record(2, 2, 1, 2000);
 
     // Both should validate
     assert!(batch1.validate().is_ok());
@@ -263,9 +303,7 @@ fn batch_wal_correlation_lsn_monotonic_check() {
     }
 }
 
-// ============================================================================
 // Test 3: Recovery Incomplete Batch Semantics
-// ============================================================================
 
 #[test]
 fn recovery_incomplete_batch_rejected_if_apply_record_missing() {
@@ -276,19 +314,14 @@ fn recovery_incomplete_batch_rejected_if_apply_record_missing() {
     let version = CatalogVersion::new(50);
 
     // Create operation records (Create, Alter, Deprecate, Drop)
-    let create_record = CatalogWalRecord::CreateProcedure {
-        procedure_id: CatalogObjectId::new(5001),
-        name: "incomplete_proc_1".to_string(),
-        contract_hash: test_hash(0x11),
-        dependencies: vec![],
-    };
+    let create_record = create_procedure_record(5001, "incomplete_proc_1", test_hash(0x11), vec![]);
 
-    let alter_record = CatalogWalRecord::AlterProcedure {
-        procedure_id: CatalogObjectId::new(5002),
-        old_contract_hash: test_hash(0x22),
-        new_contract_hash: test_hash(0x33),
-        compatibility: AlterCompatibilityPolicy::ExactHash,
-    };
+    let alter_record = alter_procedure_record(
+        5002,
+        test_hash(0x22),
+        test_hash(0x33),
+        AlterCompatibilityPolicy::ExactHash,
+    );
 
     // Simulate recovery: we have 2 operation records but NO ApplyCatalogVersion
     // Recovery must detect this as incomplete and reject the batch
@@ -320,27 +353,12 @@ fn recovery_incomplete_batch_detected_via_record_count() {
     let version = CatalogVersion::new(51);
 
     // Only 2 operations in WAL
-    let _op1 = CatalogWalRecord::CreateProcedure {
-        procedure_id: CatalogObjectId::new(6001),
-        name: "op1".to_string(),
-        contract_hash: test_hash(0x44),
-        dependencies: vec![],
-    };
+    let _op1 = create_procedure_record(6001, "op1", test_hash(0x44), vec![]);
 
-    let _op2 = CatalogWalRecord::CreateProcedure {
-        procedure_id: CatalogObjectId::new(6002),
-        name: "op2".to_string(),
-        contract_hash: test_hash(0x55),
-        dependencies: vec![],
-    };
+    let _op2 = create_procedure_record(6002, "op2", test_hash(0x55), vec![]);
 
     // But ApplyCatalogVersion claims 3 operations
-    let apply_record = CatalogWalRecord::ApplyCatalogVersion {
-        batch_id,
-        version,
-        record_count: 3, // Mismatch: 3 claimed but only 2 present
-        lsn: 7000,
-    };
+    let apply_record = apply_catalog_version_record(batch_id.get(), version.get(), 3, 7000);
 
     assert!(
         apply_record.validate().is_ok(),
@@ -363,9 +381,7 @@ fn recovery_incomplete_batch_detected_via_record_count() {
     );
 }
 
-// ============================================================================
 // Test 4: Recovery Committed Catalog Rebuild
-// ============================================================================
 
 #[test]
 fn recovery_committed_catalog_applies_all_operations() {
@@ -374,39 +390,21 @@ fn recovery_committed_catalog_applies_all_operations() {
     let version = CatalogVersion::new(99);
 
     // Operation records (4 total)
-    let create1 = CatalogWalRecord::CreateProcedure {
-        procedure_id: CatalogObjectId::new(8001),
-        name: "proc_a".to_string(),
-        contract_hash: test_hash(0xAA),
-        dependencies: vec![],
-    };
+    let create1 = create_procedure_record(8001, "proc_a", test_hash(0xAA), vec![]);
 
-    let create2 = CatalogWalRecord::CreateProcedure {
-        procedure_id: CatalogObjectId::new(8002),
-        name: "proc_b".to_string(),
-        contract_hash: test_hash(0xBB),
-        dependencies: vec![CatalogObjectId::new(8001)],
-    };
+    let create2 = create_procedure_record(8002, "proc_b", test_hash(0xBB), vec![object_id(8001)]);
 
-    let alter = CatalogWalRecord::AlterProcedure {
-        procedure_id: CatalogObjectId::new(8001),
-        old_contract_hash: test_hash(0xAA),
-        new_contract_hash: test_hash(0xCC),
-        compatibility: AlterCompatibilityPolicy::AdditiveOnly,
-    };
+    let alter = alter_procedure_record(
+        8001,
+        test_hash(0xAA),
+        test_hash(0xCC),
+        AlterCompatibilityPolicy::AdditiveOnly,
+    );
 
-    let deprecate = CatalogWalRecord::DeprecateProcedure {
-        procedure_id: CatalogObjectId::new(8002),
-        reason: "deprecated".to_string(),
-    };
+    let deprecate = deprecate_procedure_record(8002, "deprecated");
 
     // Commit record
-    let commit = CatalogWalRecord::ApplyCatalogVersion {
-        batch_id,
-        version,
-        record_count: 4,
-        lsn: 9999,
-    };
+    let commit = apply_catalog_version_record(batch_id.get(), version.get(), 4, 9999);
 
     // All records validate
     assert!(create1.validate().is_ok());
@@ -449,12 +447,7 @@ fn recovery_committed_catalog_version_is_visible() {
     let batch_id = DefinitionBatchId::new(900);
     let version = CatalogVersion::new(150);
 
-    let commit_record = CatalogWalRecord::ApplyCatalogVersion {
-        batch_id,
-        version,
-        record_count: 1,
-        lsn: 20000,
-    };
+    let commit_record = apply_catalog_version_record(batch_id.get(), version.get(), 1, 20000);
 
     assert!(commit_record.validate().is_ok());
 
@@ -478,18 +471,11 @@ fn recovery_committed_catalog_version_is_visible() {
     }
 }
 
-// ============================================================================
 // Test 5: Field Validation and Error Cases
-// ============================================================================
 
 #[test]
 fn validation_rejects_zero_procedure_id_in_create() {
-    let record = CatalogWalRecord::CreateProcedure {
-        procedure_id: CatalogObjectId::new(0), // Invalid
-        name: "proc".to_string(),
-        contract_hash: test_hash(1),
-        dependencies: vec![],
-    };
+    let record = create_procedure_record(0, "proc", test_hash(1), vec![]);
 
     assert!(
         record.validate().is_err(),
@@ -503,12 +489,7 @@ fn validation_rejects_zero_procedure_id_in_create() {
 
 #[test]
 fn validation_rejects_empty_name_in_create() {
-    let record = CatalogWalRecord::CreateProcedure {
-        procedure_id: CatalogObjectId::new(1),
-        name: "".to_string(), // Invalid
-        contract_hash: test_hash(1),
-        dependencies: vec![],
-    };
+    let record = create_procedure_record(1, "", test_hash(1), vec![]);
 
     assert!(
         record.validate().is_err(),
@@ -518,12 +499,7 @@ fn validation_rejects_empty_name_in_create() {
 
 #[test]
 fn validation_rejects_zero_contract_hash_in_create() {
-    let record = CatalogWalRecord::CreateProcedure {
-        procedure_id: CatalogObjectId::new(1),
-        name: "proc".to_string(),
-        contract_hash: ContractHash::zero(), // Invalid
-        dependencies: vec![],
-    };
+    let record = create_procedure_record(1, "proc", ContractHash::zero(), vec![]);
 
     assert!(
         record.validate().is_err(),
@@ -533,12 +509,7 @@ fn validation_rejects_zero_contract_hash_in_create() {
 
 #[test]
 fn validation_rejects_zero_dependency_id_in_create() {
-    let record = CatalogWalRecord::CreateProcedure {
-        procedure_id: CatalogObjectId::new(1),
-        name: "proc".to_string(),
-        contract_hash: test_hash(1),
-        dependencies: vec![CatalogObjectId::new(0)], // Invalid
-    };
+    let record = create_procedure_record(1, "proc", test_hash(1), vec![object_id(0)]);
 
     assert!(
         record.validate().is_err(),
@@ -548,12 +519,7 @@ fn validation_rejects_zero_dependency_id_in_create() {
 
 #[test]
 fn validation_rejects_zero_batch_id_in_apply() {
-    let record = CatalogWalRecord::ApplyCatalogVersion {
-        batch_id: DefinitionBatchId::new(0), // Invalid
-        version: CatalogVersion::new(1),
-        record_count: 1,
-        lsn: 100,
-    };
+    let record = apply_catalog_version_record(0, 1, 1, 100);
 
     assert!(
         record.validate().is_err(),
@@ -563,12 +529,7 @@ fn validation_rejects_zero_batch_id_in_apply() {
 
 #[test]
 fn validation_rejects_zero_version_in_apply() {
-    let record = CatalogWalRecord::ApplyCatalogVersion {
-        batch_id: DefinitionBatchId::new(1),
-        version: CatalogVersion::new(0), // Invalid
-        record_count: 1,
-        lsn: 100,
-    };
+    let record = apply_catalog_version_record(1, 0, 1, 100);
 
     assert!(
         record.validate().is_err(),
@@ -578,12 +539,7 @@ fn validation_rejects_zero_version_in_apply() {
 
 #[test]
 fn validation_rejects_zero_record_count_in_apply() {
-    let record = CatalogWalRecord::ApplyCatalogVersion {
-        batch_id: DefinitionBatchId::new(1),
-        version: CatalogVersion::new(1),
-        record_count: 0, // Invalid
-        lsn: 100,
-    };
+    let record = apply_catalog_version_record(1, 1, 0, 100);
 
     assert!(
         record.validate().is_err(),
@@ -593,12 +549,7 @@ fn validation_rejects_zero_record_count_in_apply() {
 
 #[test]
 fn validation_rejects_zero_lsn_in_apply() {
-    let record = CatalogWalRecord::ApplyCatalogVersion {
-        batch_id: DefinitionBatchId::new(1),
-        version: CatalogVersion::new(1),
-        record_count: 1,
-        lsn: 0, // Invalid
-    };
+    let record = apply_catalog_version_record(1, 1, 1, 0);
 
     assert!(
         record.validate().is_err(),
@@ -608,10 +559,7 @@ fn validation_rejects_zero_lsn_in_apply() {
 
 #[test]
 fn validation_rejects_zero_blocker_count_in_drop_failure() {
-    let reason = DropFailureReason {
-        blocker_count: 0, // Invalid
-        description: "some reason".to_string(),
-    };
+    let reason = drop_failure_reason(0, "some reason");
 
     assert!(
         reason.validate().is_err(),
@@ -621,10 +569,7 @@ fn validation_rejects_zero_blocker_count_in_drop_failure() {
 
 #[test]
 fn validation_rejects_empty_description_in_drop_failure() {
-    let reason = DropFailureReason {
-        blocker_count: 1,
-        description: "".to_string(), // Invalid
-    };
+    let reason = drop_failure_reason(1, "");
 
     assert!(
         reason.validate().is_err(),
@@ -635,12 +580,7 @@ fn validation_rejects_empty_description_in_drop_failure() {
 #[test]
 fn validation_accepts_empty_dependencies_in_create() {
     // Empty dependencies are valid (procedure may have no dependencies)
-    let record = CatalogWalRecord::CreateProcedure {
-        procedure_id: CatalogObjectId::new(1),
-        name: "proc".to_string(),
-        contract_hash: test_hash(1),
-        dependencies: vec![], // Valid: empty dependencies allowed
-    };
+    let record = create_procedure_record(1, "proc", test_hash(1), vec![]);
 
     assert!(record.validate().is_ok());
 }

@@ -1,21 +1,8 @@
-//! H2-QUIC: Quinn backend for real QUIC transport
+//! Quinn backend for real QUIC transport.
 //!
 //! This module implements the concrete QUIC transport using the quinn library,
 //! adapting `quinn::Connection` and `quinn::Endpoint` to the abstract transport
 //! trait boundary defined in `transport.rs`.
-//!
-//! ## Architecture
-//!
-//! ```text
-//! quinn::Connection         Andromeda QUIC Layer
-//! ─────────────────────────────────────────────────
-//! open_uni_stream()  ────▶  open_uni_stream()
-//! open_bidi_stream() ────▶  open_bidi_stream()
-//! accept_uni()       ────▶  accept_uni()
-//! accept_bidi()      ────▶  accept_bidi()
-//! read_exact()       ────▶  frame codec
-//! write_all()        ────▶  frame codec
-//! ```
 //!
 //! ## Invariants
 //!
@@ -30,22 +17,32 @@ use std::sync::Arc;
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_observe::CertificateIdentity;
 
-use crate::mtls_identity::ParsedCertificate;
+use crate::mtls_identity::RawCertificate;
 
 /// Adapter wrapping `quinn::Connection` for Andromeda frame transport.
 ///
 /// This type bridges the quinn API to the abstract transport boundary.
-pub struct QuinConnectionAdapter {
+pub struct QuinnConnectionAdapter {
     inner: quinn::Connection,
     identity: Option<CertificateIdentity>,
+    peer_certificates: Vec<RawCertificate>,
 }
 
-impl QuinConnectionAdapter {
+impl QuinnConnectionAdapter {
     /// Creates a new adapter for a quinn connection.
     pub fn new(conn: quinn::Connection, identity: Option<CertificateIdentity>) -> Self {
+        Self::with_peer_certificates(conn, identity, Vec::new())
+    }
+
+    fn with_peer_certificates(
+        conn: quinn::Connection,
+        identity: Option<CertificateIdentity>,
+        peer_certificates: Vec<RawCertificate>,
+    ) -> Self {
         Self {
             inner: conn,
             identity,
+            peer_certificates,
         }
     }
 
@@ -59,18 +56,25 @@ impl QuinConnectionAdapter {
         self.identity.as_ref()
     }
 
+    /// Returns the raw peer certificate chain exposed by Quinn.
+    pub fn peer_certificate_chain(&self) -> &[RawCertificate] {
+        &self.peer_certificates
+    }
+
     /// Opens a unidirectional stream for sending.
     ///
     /// # Errors
-    /// - `ConnectionError` if the connection is closed or stream limit exceeded
+    /// - `Transport` if the connection is closed or stream limit exceeded
     pub async fn open_uni_stream(&mut self) -> AndromedaResult<UniStream> {
         self.inner
             .open_uni()
             .await
-            .map(|s| UniStream { inner: s })
+            .map(|s| UniStream {
+                inner: UniStreamInner::Send(s),
+            })
             .map_err(|e| {
                 AndromedaError::new(
-                    AndromedaErrorKind::ConnectionError,
+                    AndromedaErrorKind::Transport,
                     format!("failed to open unidirectional stream: {}", e),
                 )
             })
@@ -79,7 +83,7 @@ impl QuinConnectionAdapter {
     /// Opens a bidirectional stream.
     ///
     /// # Errors
-    /// - `ConnectionError` if the connection is closed or stream limit exceeded
+    /// - `Transport` if the connection is closed or stream limit exceeded
     pub async fn open_bidi_stream(&mut self) -> AndromedaResult<BidiStream> {
         self.inner
             .open_bi()
@@ -87,7 +91,7 @@ impl QuinConnectionAdapter {
             .map(|(s, r)| BidiStream { send: s, recv: r })
             .map_err(|e| {
                 AndromedaError::new(
-                    AndromedaErrorKind::ConnectionError,
+                    AndromedaErrorKind::Transport,
                     format!("failed to open bidirectional stream: {}", e),
                 )
             })
@@ -96,12 +100,14 @@ impl QuinConnectionAdapter {
     /// Accepts the next incoming unidirectional stream.
     ///
     /// # Errors
-    /// - `ConnectionError` if the connection is closed
+    /// - `Transport` if the connection is closed
     pub async fn accept_uni_stream(&mut self) -> AndromedaResult<UniStream> {
         match self.inner.accept_uni().await {
-            Ok(s) => Ok(UniStream { inner: s }),
+            Ok(s) => Ok(UniStream {
+                inner: UniStreamInner::Recv(s),
+            }),
             Err(e) => Err(AndromedaError::new(
-                AndromedaErrorKind::ConnectionError,
+                AndromedaErrorKind::Transport,
                 format!("failed to accept unidirectional stream: {}", e),
             )),
         }
@@ -110,12 +116,12 @@ impl QuinConnectionAdapter {
     /// Accepts the next incoming bidirectional stream.
     ///
     /// # Errors
-    /// - `ConnectionError` if the connection is closed
+    /// - `Transport` if the connection is closed
     pub async fn accept_bidi_stream(&mut self) -> AndromedaResult<BidiStream> {
         match self.inner.accept_bi().await {
             Ok((s, r)) => Ok(BidiStream { send: s, recv: r }),
             Err(e) => Err(AndromedaError::new(
-                AndromedaErrorKind::ConnectionError,
+                AndromedaErrorKind::Transport,
                 format!("failed to accept bidirectional stream: {}", e),
             )),
         }
@@ -133,13 +139,19 @@ impl QuinConnectionAdapter {
 
     /// Returns true if the connection is still open.
     pub fn is_open(&self) -> bool {
-        !self.inner.is_closed()
+        self.inner.close_reason().is_none()
     }
 }
 
 /// Adapter for a quinn unidirectional send stream.
 pub struct UniStream {
-    inner: quinn::SendStream,
+    inner: UniStreamInner,
+}
+
+enum UniStreamInner {
+    Send(quinn::SendStream),
+    #[allow(dead_code)]
+    Recv(quinn::RecvStream),
 }
 
 impl UniStream {
@@ -148,22 +160,34 @@ impl UniStream {
     /// # Errors
     /// - `WriteError` if the stream is closed or reset
     pub async fn write_all(&mut self, buf: &[u8]) -> AndromedaResult<()> {
-        self.inner.write_all(buf).await.map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::IoError,
-                format!("failed to write to unidirectional stream: {}", e),
-            )
-        })
+        match &mut self.inner {
+            UniStreamInner::Send(stream) => stream.write_all(buf).await.map_err(|e| {
+                AndromedaError::new(
+                    AndromedaErrorKind::Transport,
+                    format!("failed to write to unidirectional stream: {}", e),
+                )
+            }),
+            UniStreamInner::Recv(_) => Err(AndromedaError::new(
+                AndromedaErrorKind::Transport,
+                "cannot write to incoming unidirectional receive stream",
+            )),
+        }
     }
 
     /// Finishes writing to the stream.
     pub async fn finish(&mut self) -> AndromedaResult<()> {
-        self.inner.finish().await.map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::IoError,
-                format!("failed to finish unidirectional stream: {}", e),
-            )
-        })
+        match &mut self.inner {
+            UniStreamInner::Send(stream) => stream.finish().map_err(|e| {
+                AndromedaError::new(
+                    AndromedaErrorKind::Transport,
+                    format!("failed to finish unidirectional stream: {}", e),
+                )
+            }),
+            UniStreamInner::Recv(_) => Err(AndromedaError::new(
+                AndromedaErrorKind::Transport,
+                "cannot finish incoming unidirectional receive stream",
+            )),
+        }
     }
 }
 
@@ -179,12 +203,16 @@ impl BidiStream {
     /// # Errors
     /// - `ReadError` if the stream is closed or reset
     pub async fn read(&mut self, buf: &mut [u8]) -> AndromedaResult<usize> {
-        self.recv.read(buf).await.map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::IoError,
-                format!("failed to read from bidirectional stream: {}", e),
-            )
-        })
+        self.recv
+            .read(buf)
+            .await
+            .map(|n| n.unwrap_or(0))
+            .map_err(|e| {
+                AndromedaError::new(
+                    AndromedaErrorKind::Transport,
+                    format!("failed to read from bidirectional stream: {}", e),
+                )
+            })
     }
 
     /// Writes data to the stream.
@@ -194,7 +222,7 @@ impl BidiStream {
     pub async fn write_all(&mut self, buf: &[u8]) -> AndromedaResult<()> {
         self.send.write_all(buf).await.map_err(|e| {
             AndromedaError::new(
-                AndromedaErrorKind::IoError,
+                AndromedaErrorKind::Transport,
                 format!("failed to write to bidirectional stream: {}", e),
             )
         })
@@ -202,9 +230,9 @@ impl BidiStream {
 
     /// Finishes writing to the stream.
     pub async fn finish(&mut self) -> AndromedaResult<()> {
-        self.send.finish().await.map_err(|e| {
+        self.send.finish().map_err(|e| {
             AndromedaError::new(
-                AndromedaErrorKind::IoError,
+                AndromedaErrorKind::Transport,
                 format!("failed to finish bidirectional stream: {}", e),
             )
         })
@@ -227,31 +255,24 @@ impl QuicServer {
     /// - `server_config`: Quinn server configuration with TLS certificates
     ///
     /// # Errors
-    /// - `ConnectionError` if binding to the address fails
+    /// - `Transport` if binding to the address fails
     pub fn new(addr: SocketAddr, server_config: quinn::ServerConfig) -> AndromedaResult<Self> {
         let socket = std::net::UdpSocket::bind(addr).map_err(|e| {
             AndromedaError::new(
-                AndromedaErrorKind::ConnectionError,
+                AndromedaErrorKind::Transport,
                 format!("failed to bind to {}: {}", addr, e),
             )
         })?;
 
-        let local_addr = socket.local_addr().map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::ConnectionError,
-                format!("failed to get local address: {}", e),
-            )
-        })?;
-
-        let endpoint = quinn::Endpoint::new_with_abstract_socket(
+        let endpoint = quinn::Endpoint::new(
             Default::default(),
             Some(server_config),
-            socket.into(),
+            socket,
             Arc::new(quinn::TokioRuntime),
         )
         .map_err(|e| {
             AndromedaError::new(
-                AndromedaErrorKind::ConnectionError,
+                AndromedaErrorKind::Transport,
                 format!("failed to create Quinn endpoint: {}", e),
             )
         })?;
@@ -269,32 +290,27 @@ impl QuicServer {
     /// Accepts the next incoming connection.
     ///
     /// # Errors
-    /// - `ConnectionError` if endpoint is closed
-    pub async fn accept_connection(&self) -> AndromedaResult<QuinConnectionAdapter> {
+    /// - `Transport` if endpoint is closed
+    pub async fn accept_connection(&self) -> AndromedaResult<QuinnConnectionAdapter> {
         if let Some(connecting) = self.endpoint.accept().await {
             let conn = connecting.await.map_err(|e| {
                 AndromedaError::new(
-                    AndromedaErrorKind::ConnectionError,
+                    AndromedaErrorKind::Transport,
                     format!("connection handshake failed: {}", e),
                 )
             })?;
 
-            // Extract certificate identity from peer certificates
-            let identity = conn
-                .peer_identity()
-                .and_then(|cert_chain| {
-                    cert_chain.iter().next().map(|cert_der| {
-                        ParsedCertificate::parse(cert_der)
-                            .ok()
-                            .and_then(|pc| pc.certificate_identity())
-                    })
-                })
-                .flatten();
+            let peer_certificates = extract_peer_certificates(&conn);
+            let identity = None;
 
-            Ok(QuinConnectionAdapter::new(conn, identity))
+            Ok(QuinnConnectionAdapter::with_peer_certificates(
+                conn,
+                identity,
+                peer_certificates,
+            ))
         } else {
             Err(AndromedaError::new(
-                AndromedaErrorKind::ConnectionError,
+                AndromedaErrorKind::Transport,
                 "endpoint closed".to_string(),
             ))
         }
@@ -321,24 +337,25 @@ impl QuicClient {
     /// - `client_config`: Quinn client configuration with TLS settings
     ///
     /// # Errors
-    /// - `ConnectionError` if endpoint creation fails
+    /// - `Transport` if endpoint creation fails
     pub fn new(client_config: quinn::ClientConfig) -> AndromedaResult<Self> {
-        let socket = std::net::UdpSocket::bind("[::]:0").map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::ConnectionError,
-                format!("failed to bind UDP socket: {}", e),
-            )
-        })?;
+        let socket =
+            std::net::UdpSocket::bind(SocketAddr::from(([0, 0, 0, 0], 0))).map_err(|e| {
+                AndromedaError::new(
+                    AndromedaErrorKind::Transport,
+                    format!("failed to bind UDP socket: {}", e),
+                )
+            })?;
 
-        let endpoint = quinn::Endpoint::new_with_abstract_socket(
+        let endpoint = quinn::Endpoint::new(
             Default::default(),
             None,
-            socket.into(),
+            socket,
             Arc::new(quinn::TokioRuntime),
         )
         .map_err(|e| {
             AndromedaError::new(
-                AndromedaErrorKind::ConnectionError,
+                AndromedaErrorKind::Transport,
                 format!("failed to create Quinn endpoint: {}", e),
             )
         })?;
@@ -356,46 +373,58 @@ impl QuicClient {
     /// - `server_name`: TLS server name for certificate verification
     ///
     /// # Errors
-    /// - `ConnectionError` if connection fails or TLS handshake fails
+    /// - `Transport` if connection fails or TLS handshake fails
     pub async fn connect(
         &self,
         addr: SocketAddr,
         server_name: &str,
-    ) -> AndromedaResult<QuinConnectionAdapter> {
+    ) -> AndromedaResult<QuinnConnectionAdapter> {
         let connecting = self
             .endpoint
             .connect_with(self.client_config.clone(), addr, server_name)
             .map_err(|e| {
                 AndromedaError::new(
-                    AndromedaErrorKind::ConnectionError,
+                    AndromedaErrorKind::Transport,
                     format!("failed to initiate connection to {}: {}", addr, e),
                 )
             })?;
 
         let conn = connecting.await.map_err(|e| {
             AndromedaError::new(
-                AndromedaErrorKind::ConnectionError,
+                AndromedaErrorKind::Transport,
                 format!("connection handshake failed: {}", e),
             )
         })?;
 
-        // Extract server certificate identity
-        let identity = conn
-            .peer_identity()
-            .and_then(|cert_chain| {
-                cert_chain.iter().next().map(|cert_der| {
-                    ParsedCertificate::parse(cert_der)
-                        .ok()
-                        .and_then(|pc| pc.certificate_identity())
-                })
-            })
-            .flatten();
+        let peer_certificates = extract_peer_certificates(&conn);
+        let identity = None;
 
-        Ok(QuinConnectionAdapter::new(conn, identity))
+        Ok(QuinnConnectionAdapter::with_peer_certificates(
+            conn,
+            identity,
+            peer_certificates,
+        ))
     }
 
     /// Closes the client endpoint.
     pub fn close(&self, error_code: u32, reason: &[u8]) {
         self.endpoint.close(error_code.into(), reason);
     }
+}
+
+fn extract_peer_certificates(conn: &quinn::Connection) -> Vec<RawCertificate> {
+    let Some(peer_identity) = conn.peer_identity() else {
+        return Vec::new();
+    };
+
+    let Ok(cert_chain) =
+        peer_identity.downcast::<Vec<rustls::pki_types::CertificateDer<'static>>>()
+    else {
+        return Vec::new();
+    };
+
+    cert_chain
+        .iter()
+        .map(|cert| RawCertificate::new(cert.as_ref().to_vec()))
+        .collect()
 }

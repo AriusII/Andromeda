@@ -1,14 +1,10 @@
-//! Backup administration commands.
-//!
-//! Provides CLI commands for:
-//! - Starting backup jobs (full or incremental)
-//! - Monitoring backup progress
-//! - Listing recent backups with metadata
-
 use crate::diagnostic_json::{JSON_FLAG, json_option_string, json_string, parse_json_flag};
 use crate::error::cli_error;
+use crate::parse::{next_option_value, next_option_value_rejecting_flag, parse_u64, parse_usize};
 use andromeda_core::AndromedaResult;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+const DIAGNOSTIC_BACKUP_ID: u64 = 100;
 
 /// Backup status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -97,40 +93,44 @@ fn run_backup_start(args: &[String]) -> AndromedaResult<()> {
         match args[i].as_str() {
             "--incremental" => incremental = true,
             "--destination" => {
-                i += 1;
-                if i >= args.len() {
-                    return Err(cli_error("--destination requires a path argument"));
-                }
-                destination = Some(args[i].clone());
+                destination = Some(
+                    next_option_value_rejecting_flag(
+                        args,
+                        &mut i,
+                        "--destination requires a path argument",
+                    )?
+                    .to_string(),
+                );
             }
             JSON_FLAG => json_output = true,
             opt if opt.starts_with("--") => {
                 return Err(cli_error(format!("unknown backup start option: {}", opt)));
             }
-            _ => {}
+            value => {
+                return Err(cli_error(format!(
+                    "unexpected backup start argument: {value}; supported options are --incremental, --destination, and --json"
+                )));
+            }
         }
         i += 1;
     }
 
-    // MOCK: In a real implementation, this would invoke the backup scheduler.
     let backup_type = if incremental {
         "incremental".to_string()
     } else {
         "full".to_string()
     };
 
-    let backup_id = 100u64; // Mock ID
+    let backup_id = DIAGNOSTIC_BACKUP_ID;
+    let destination_suffix = destination
+        .as_deref()
+        .map(|destination| format!(" (destination: {destination})"))
+        .unwrap_or_default();
     let outcome = BackupStartOutcome {
         backup_id,
         backup_type,
-        destination: destination.clone(),
-        message: format!(
-            "Backup {} started{}",
-            backup_id,
-            destination
-                .map(|d| format!(" (destination: {})", d))
-                .unwrap_or_default()
-        ),
+        destination,
+        message: format!("Backup {backup_id} started{destination_suffix}"),
     };
 
     if json_output {
@@ -155,13 +155,10 @@ fn run_backup_status(args: &[String]) -> AndromedaResult<()> {
         ));
     }
 
-    let backup_id: u64 = args[0]
-        .parse()
-        .map_err(|_| cli_error("backup-id must be an unsigned integer"))?;
+    let backup_id = parse_u64(&args[0], "backup-id must be an unsigned integer")?;
 
     let json_output = parse_json_flag(&args[1..], "backup status")?;
 
-    // MOCK: In a real implementation, this would query the backup scheduler.
     let report = BackupStatusReport {
         backup_id,
         state: BackupState::Running,
@@ -190,29 +187,27 @@ fn run_backup_list(args: &[String]) -> AndromedaResult<()> {
     while i < args.len() {
         match args[i].as_str() {
             "--limit" => {
-                i += 1;
-                if i >= args.len() {
-                    return Err(cli_error("--limit requires a numeric argument"));
-                }
-                limit = args[i]
-                    .parse()
-                    .map_err(|_| cli_error("--limit expects an unsigned integer"))?;
+                let value = next_option_value(args, &mut i, "--limit requires a numeric argument")?;
+                limit = parse_usize(value, "--limit expects an unsigned integer")?;
             }
             JSON_FLAG => json_output = true,
             opt if opt.starts_with("--") => {
                 return Err(cli_error(format!("unknown backup list option: {}", opt)));
             }
-            _ => {}
+            value => {
+                return Err(cli_error(format!(
+                    "unexpected backup list argument: {value}; supported options are --limit and --json"
+                )));
+            }
         }
         i += 1;
     }
 
-    // MOCK: In a real implementation, this would query the backup store.
-    let backups = vec![
+    let backups = [
         BackupListEntry {
             backup_id: 102,
             state: BackupState::Completed,
-            size_bytes: 1_610_612_736, // 1.5 GiB
+            size_bytes: 1_610_612_736,
             created_timestamp: unix_timestamp() - 3600,
             base_lsn: 1048576,
             end_lsn: 2097152,
@@ -220,7 +215,7 @@ fn run_backup_list(args: &[String]) -> AndromedaResult<()> {
         BackupListEntry {
             backup_id: 101,
             state: BackupState::Completed,
-            size_bytes: 1_288_490_189, // ~1.2 GiB
+            size_bytes: 1_288_490_189,
             created_timestamp: unix_timestamp() - 7200,
             base_lsn: 524288,
             end_lsn: 1048576,
@@ -228,7 +223,7 @@ fn run_backup_list(args: &[String]) -> AndromedaResult<()> {
         BackupListEntry {
             backup_id: 100,
             state: BackupState::Completed,
-            size_bytes: 967_367_641, // ~900 MiB
+            size_bytes: 967_367_641,
             created_timestamp: unix_timestamp() - 10800,
             base_lsn: 0,
             end_lsn: 524288,
@@ -395,6 +390,18 @@ mod tests {
     }
 
     #[test]
+    fn backup_start_rejects_flag_as_destination() {
+        let result = run_backup_start(&["--destination".to_string(), "--json".to_string()]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn backup_start_rejects_unexpected_argument() {
+        let result = run_backup_start(&["extra".to_string()]);
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn backup_status_requires_backup_id() {
         let result = run_backup_status(&[]);
         assert!(result.is_err());
@@ -422,6 +429,12 @@ mod tests {
     fn backup_list_with_limit() {
         let result = run_backup_list(&["--limit".to_string(), "5".to_string()]);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn backup_list_rejects_unexpected_argument() {
+        let result = run_backup_list(&["extra".to_string()]);
+        assert!(result.is_err());
     }
 
     #[test]

@@ -13,6 +13,9 @@ use std::sync::Arc;
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
+const BITS_PER_BITMAP_BYTE: usize = 8;
+const VAR_OFFSET_WIDTH_BYTES: usize = 4;
+
 /// Scalar data types supported by Andromeda storage engine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScalarType {
@@ -94,15 +97,25 @@ impl RowSchema {
 
     /// Calculate fixed overhead for this schema (null bitmap + variable-length offsets).
     pub fn fixed_overhead_bytes(&self) -> usize {
-        let null_bitmap_bytes = (self.columns.len() + 7) / 8;
-        let var_offset_bytes = self
-            .columns
+        let null_bitmap_bytes = bitmap_byte_len(self.columns.len());
+        let var_offset_bytes = self.variable_width_column_count() * VAR_OFFSET_WIDTH_BYTES;
+
+        null_bitmap_bytes + var_offset_bytes
+    }
+
+    fn variable_width_column_count(&self) -> usize {
+        self.columns
             .iter()
             .filter(|c| c.scalar_type.is_variable_width())
             .count()
-            * 4;
+    }
 
-        null_bitmap_bytes + var_offset_bytes
+    fn fixed_width_payload_bytes(&self) -> usize {
+        self.columns
+            .iter()
+            .filter(|c| !c.scalar_type.is_variable_width())
+            .map(|c| c.scalar_type.fixed_byte_length())
+            .sum()
     }
 }
 
@@ -181,83 +194,35 @@ impl Datum {
     pub fn decode_scalar(scalar_type: ScalarType, bytes: &[u8]) -> AndromedaResult<Self> {
         match scalar_type {
             ScalarType::Int8 => {
-                if bytes.len() < 1 {
-                    return Err(encoder_error("insufficient bytes for int8"));
-                }
-                Ok(Self::Int8(bytes[0] as i8))
+                let byte = read_scalar_byte(bytes, "int8")?;
+                Ok(Self::Int8(byte as i8))
             }
-            ScalarType::Int16 => {
-                if bytes.len() < 2 {
-                    return Err(encoder_error("insufficient bytes for int16"));
-                }
-                Ok(Self::Int16(i16::from_le_bytes([bytes[0], bytes[1]])))
-            }
-            ScalarType::Int32 => {
-                if bytes.len() < 4 {
-                    return Err(encoder_error("insufficient bytes for int32"));
-                }
-                Ok(Self::Int32(i32::from_le_bytes([
-                    bytes[0], bytes[1], bytes[2], bytes[3],
-                ])))
-            }
-            ScalarType::Int64 => {
-                if bytes.len() < 8 {
-                    return Err(encoder_error("insufficient bytes for int64"));
-                }
-                Ok(Self::Int64(i64::from_le_bytes([
-                    bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
-                ])))
-            }
-            ScalarType::UInt8 => {
-                if bytes.len() < 1 {
-                    return Err(encoder_error("insufficient bytes for uint8"));
-                }
-                Ok(Self::UInt8(bytes[0]))
-            }
-            ScalarType::UInt16 => {
-                if bytes.len() < 2 {
-                    return Err(encoder_error("insufficient bytes for uint16"));
-                }
-                Ok(Self::UInt16(u16::from_le_bytes([bytes[0], bytes[1]])))
-            }
-            ScalarType::UInt32 => {
-                if bytes.len() < 4 {
-                    return Err(encoder_error("insufficient bytes for uint32"));
-                }
-                Ok(Self::UInt32(u32::from_le_bytes([
-                    bytes[0], bytes[1], bytes[2], bytes[3],
-                ])))
-            }
-            ScalarType::UInt64 => {
-                if bytes.len() < 8 {
-                    return Err(encoder_error("insufficient bytes for uint64"));
-                }
-                Ok(Self::UInt64(u64::from_le_bytes([
-                    bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
-                ])))
-            }
-            ScalarType::Float32 => {
-                if bytes.len() < 4 {
-                    return Err(encoder_error("insufficient bytes for float32"));
-                }
-                Ok(Self::Float32(f32::from_le_bytes([
-                    bytes[0], bytes[1], bytes[2], bytes[3],
-                ])))
-            }
-            ScalarType::Float64 => {
-                if bytes.len() < 8 {
-                    return Err(encoder_error("insufficient bytes for float64"));
-                }
-                Ok(Self::Float64(f64::from_le_bytes([
-                    bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
-                ])))
-            }
-            ScalarType::Bool => {
-                if bytes.len() < 1 {
-                    return Err(encoder_error("insufficient bytes for bool"));
-                }
-                Ok(Self::Bool(bytes[0] != 0))
-            }
+            ScalarType::Int16 => Ok(Self::Int16(i16::from_le_bytes(read_scalar_array(
+                bytes, "int16",
+            )?))),
+            ScalarType::Int32 => Ok(Self::Int32(i32::from_le_bytes(read_scalar_array(
+                bytes, "int32",
+            )?))),
+            ScalarType::Int64 => Ok(Self::Int64(i64::from_le_bytes(read_scalar_array(
+                bytes, "int64",
+            )?))),
+            ScalarType::UInt8 => Ok(Self::UInt8(read_scalar_byte(bytes, "uint8")?)),
+            ScalarType::UInt16 => Ok(Self::UInt16(u16::from_le_bytes(read_scalar_array(
+                bytes, "uint16",
+            )?))),
+            ScalarType::UInt32 => Ok(Self::UInt32(u32::from_le_bytes(read_scalar_array(
+                bytes, "uint32",
+            )?))),
+            ScalarType::UInt64 => Ok(Self::UInt64(u64::from_le_bytes(read_scalar_array(
+                bytes, "uint64",
+            )?))),
+            ScalarType::Float32 => Ok(Self::Float32(f32::from_le_bytes(read_scalar_array(
+                bytes, "float32",
+            )?))),
+            ScalarType::Float64 => Ok(Self::Float64(f64::from_le_bytes(read_scalar_array(
+                bytes, "float64",
+            )?))),
+            ScalarType::Bool => Ok(Self::Bool(read_scalar_byte(bytes, "bool")? != 0)),
         }
     }
 }
@@ -291,25 +256,14 @@ impl RowEncoder {
         buffer.extend_from_slice(&null_bitmap);
 
         // Count variable-length columns
-        let var_col_count = self
-            .schema
-            .columns
-            .iter()
-            .filter(|c| c.scalar_type.is_variable_width())
-            .count();
-
-        let fixed_width_bytes: usize = self
-            .schema
-            .columns
-            .iter()
-            .filter(|c| !c.scalar_type.is_variable_width())
-            .map(|c| c.scalar_type.fixed_byte_length())
-            .sum();
+        let var_col_count = self.schema.variable_width_column_count();
+        let fixed_width_bytes = self.schema.fixed_width_payload_bytes();
 
         // Write variable-length offsets (4 bytes each). Offsets are absolute within the
         // encoded row, so variable data starts after the null bitmap, offset table, and
         // fixed-width column area.
-        let mut var_offset = null_bitmap.len() + (var_col_count * 4) + fixed_width_bytes;
+        let mut var_offset =
+            null_bitmap.len() + (var_col_count * VAR_OFFSET_WIDTH_BYTES) + fixed_width_bytes;
 
         for (i, col) in self.schema.columns.iter().enumerate() {
             if col.scalar_type.is_variable_width() {
@@ -329,7 +283,7 @@ impl RowEncoder {
                 if !matches!(values[i], Datum::Null) {
                     buffer.extend_from_slice(&values[i].encode()?);
                 } else {
-                    // For fixed-width nulls, write zeros as placeholder
+                    // Fixed-width NULLs reserve their encoded column width with zeros.
                     buffer.resize(buffer.len() + col.scalar_type.fixed_byte_length(), 0);
                 }
             }
@@ -357,17 +311,13 @@ impl RowEncoder {
         let mut var_offsets = Vec::new();
         for col in self.schema.columns.iter() {
             if col.scalar_type.is_variable_width() {
-                if offset + 4 > bytes.len() {
-                    return Err(encoder_error("truncated variable-length offset"));
-                }
-                let off = u32::from_le_bytes([
-                    bytes[offset],
-                    bytes[offset + 1],
-                    bytes[offset + 2],
-                    bytes[offset + 3],
-                ]) as usize;
+                let off = u32::from_le_bytes(read_array_at::<VAR_OFFSET_WIDTH_BYTES>(
+                    bytes,
+                    offset,
+                    "truncated variable-length offset",
+                )?) as usize;
                 var_offsets.push(off);
-                offset += 4;
+                offset += VAR_OFFSET_WIDTH_BYTES;
             }
         }
 
@@ -378,7 +328,7 @@ impl RowEncoder {
                     let col_bytes = col.scalar_type.fixed_byte_length();
                     if offset + col_bytes > bytes.len() {
                         return Err(encoder_error(format!(
-                            "truncated fixed-length null placeholder at column {}",
+                            "truncated fixed-length NULL storage at column {}",
                             i
                         )));
                     }
@@ -430,12 +380,12 @@ impl RowEncoder {
 
     /// Encode null bitmap (1 bit per column).
     fn encode_null_bitmap(values: &[Datum]) -> AndromedaResult<Vec<u8>> {
-        let bitmap_bytes = (values.len() + 7) / 8;
+        let bitmap_bytes = bitmap_byte_len(values.len());
         let mut bitmap = vec![0u8; bitmap_bytes];
 
         for (i, val) in values.iter().enumerate() {
             if matches!(val, Datum::Null) {
-                bitmap[i / 8] |= 1 << (i % 8);
+                bitmap[i / BITS_PER_BITMAP_BYTE] |= 1 << (i % BITS_PER_BITMAP_BYTE);
             }
         }
 
@@ -448,7 +398,7 @@ impl RowEncoder {
         col_count: usize,
         offset: &mut usize,
     ) -> AndromedaResult<Vec<bool>> {
-        let bitmap_bytes = (col_count + 7) / 8;
+        let bitmap_bytes = bitmap_byte_len(col_count);
 
         if *offset + bitmap_bytes > bytes.len() {
             return Err(encoder_error("truncated null bitmap"));
@@ -458,9 +408,50 @@ impl RowEncoder {
         *offset += bitmap_bytes;
 
         Ok((0..col_count)
-            .map(|i| (bitmap_slice[i / 8] & (1 << (i % 8))) != 0)
+            .map(|i| {
+                (bitmap_slice[i / BITS_PER_BITMAP_BYTE] & (1 << (i % BITS_PER_BITMAP_BYTE))) != 0
+            })
             .collect())
     }
+}
+
+fn bitmap_byte_len(bit_count: usize) -> usize {
+    bit_count.div_ceil(BITS_PER_BITMAP_BYTE)
+}
+
+fn read_scalar_byte(bytes: &[u8], scalar_name: &'static str) -> AndromedaResult<u8> {
+    bytes
+        .first()
+        .copied()
+        .ok_or_else(|| encoder_error(format!("insufficient bytes for {}", scalar_name)))
+}
+
+fn read_scalar_array<const N: usize>(
+    bytes: &[u8],
+    scalar_name: &'static str,
+) -> AndromedaResult<[u8; N]> {
+    if bytes.len() < N {
+        return Err(encoder_error(format!(
+            "insufficient bytes for {}",
+            scalar_name
+        )));
+    }
+    let mut result = [0; N];
+    result.copy_from_slice(&bytes[..N]);
+    Ok(result)
+}
+
+fn read_array_at<const N: usize>(
+    bytes: &[u8],
+    offset: usize,
+    err_msg: &str,
+) -> AndromedaResult<[u8; N]> {
+    if offset + N > bytes.len() {
+        return Err(encoder_error(err_msg));
+    }
+    let mut result = [0; N];
+    result.copy_from_slice(&bytes[offset..offset + N]);
+    Ok(result)
 }
 
 /// Helper to create encoder errors.
@@ -484,7 +475,7 @@ mod tests {
                 ColumnDef {
                     name: "name".to_string(),
                     ordinal: 1,
-                    scalar_type: ScalarType::UInt32, // Placeholder for variable-length
+                    scalar_type: ScalarType::UInt32,
                     nullable: true,
                 },
                 ColumnDef {

@@ -17,11 +17,12 @@
 //! 4. **Fail-Fast on Unknown**: Unknown formats rejected before any operation
 //! 5. **No Silent Corruption**: All validation failures are auditable errors
 //!
-//! ## Wave 18 Note
+//! ## Durable Mutation Gate
 //!
-//! B-Tree mutations are deferred to Wave 18. This gate ensures Wave 13 can safely
-//! defer mutations while preserving format safety. When Wave 18 implements mutations,
-//! it must:
+//! Page-backed B-Tree mutations are not promoted yet. This gate preserves format
+//! safety by allowing read-only access and rejecting mutation attempts before any
+//! page or WAL state can be changed. When durable mutations are promoted, the
+//! promotion must:
 //! - Replace `validate_mutation_allowed()` with actual mutation logic
 //! - Update WAL record apply() methods to execute mutations
 //! - Re-validate all format gates still hold after mutation implementation
@@ -49,7 +50,7 @@ pub struct BTreeKeyFormatIdentity {
     pub minor: u32,
     /// Codec version (1 = KeyV1 order-preserving encoding; see btree_key_codec.rs)
     pub codec_version: u8,
-    /// Maximum key size in bytes (enforced during insert, deferred to Wave 18)
+    /// Maximum key size in bytes for the persisted key format.
     pub max_key_size: u16,
 }
 
@@ -114,13 +115,13 @@ pub enum BTreeOperationType {
     Lookup,
     /// Read-only: Range scan with cursor. Allowed in all formats.
     RangeScan,
-    /// Mutation: Insert a key-value pair. Deferred to Wave 18.
+    /// Mutation: Insert a key-value pair.
     Insert,
-    /// Mutation: Delete a key-value pair. Deferred to Wave 18.
+    /// Mutation: Delete a key-value pair.
     Delete,
-    /// Internal: Split a node. Deferred to Wave 18.
+    /// Internal: Split a node.
     Split,
-    /// Internal: Merge two nodes. Deferred to Wave 18.
+    /// Internal: Merge two nodes.
     Merge,
 }
 
@@ -150,7 +151,8 @@ impl BTreeOperationType {
 ///
 /// This gate enforces format validation before B-Tree operations and rejects
 /// mutations with explicit deferral message. It is the primary mechanism
-/// preventing silent data loss or corruption during Wave 13.
+/// preventing silent data loss or corruption while durable mutation support is
+/// not promoted.
 ///
 /// # Validation Levels
 ///
@@ -173,7 +175,7 @@ impl BTreeOperationType {
 /// - **Auditable**: All rejections logged with format identity and reference to decision record
 #[derive(Debug, Clone)]
 pub struct KeyV1FormatValidator {
-    /// The FormatVersion of the storage system (V1.0 for Wave 13)
+    /// The FormatVersion of the storage system.
     storage_version: FormatVersion,
     /// The specific B-Tree key format used by this index
     key_format: BTreeKeyFormatIdentity,
@@ -183,7 +185,7 @@ impl KeyV1FormatValidator {
     /// Create a new validator for a B-Tree index.
     ///
     /// # Arguments
-    /// * `storage_version` - Storage system version (FormatVersion::V1_0 for Wave 13)
+    /// * `storage_version` - Storage system version.
     /// * `key_format` - Format identity of this specific index
     ///
     /// # Returns
@@ -219,7 +221,7 @@ impl KeyV1FormatValidator {
     /// // Mutations fail with deferral message
     /// let result = validator.validate_operation(BTreeOperationType::Insert);
     /// assert!(result.is_err());
-    /// assert!(result.unwrap_err().message().contains("Wave 18"));
+    /// assert!(result.unwrap_err().message().contains("not promoted"));
     /// ```
     pub fn validate_operation(&self, operation: BTreeOperationType) -> AndromedaResult<()> {
         // First: Validate format is supported
@@ -230,11 +232,10 @@ impl KeyV1FormatValidator {
             // Read-only operations always allowed
             Ok(())
         } else {
-            // Mutations deferred to Wave 18 (DEC-038)
             Err(AndromedaError::new(
                 AndromedaErrorKind::Storage,
                 format!(
-                    "B-Tree mutation '{}' deferred to Wave 18. \
+                    "B-Tree mutation '{}' is not promoted for durable page-backed indexes. \
                      See DEC-038 for rationale. Index format: {}. \
                      If you believe this is an error, escalate to Release Governance.",
                     operation.name(),
@@ -255,7 +256,6 @@ impl KeyV1FormatValidator {
     /// - `Ok(())` if format is supported
     /// - `Err(...)` if format is unknown or incompatible
     fn validate_format_supported(&self) -> AndromedaResult<()> {
-        // For Wave 13, we support only KeyV1 (v1.0 and later v1.x)
         if self.key_format.major != 1 {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Storage,
@@ -294,7 +294,6 @@ impl KeyV1FormatValidator {
     /// - Same major version required
     /// - Reader.minor >= writer.minor (reader has all writer's features)
     pub fn is_format_compatible(&self) -> bool {
-        // For Wave 13, storage is locked at V1.0
         // We support reading any v1.x format
         self.storage_version.major == 1 && self.key_format.major == 1
     }
@@ -308,13 +307,6 @@ impl KeyV1FormatValidator {
     pub fn storage_version(&self) -> FormatVersion {
         self.storage_version
     }
-}
-
-/// Helper function for validation errors that should appear in logs.
-fn log_validation_error(msg: &str) {
-    // In Wave 13, all format validation errors are critical and must be logged.
-    // In a real implementation, this would use the observability infrastructure.
-    eprintln!("[STORAGE] Format validation error: {}", msg);
 }
 
 #[cfg(test)]
@@ -372,7 +364,7 @@ mod tests {
         let result = validator.validate_operation(BTreeOperationType::Insert);
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(err.message().contains("Wave 18"));
+        assert!(err.message().contains("not promoted"));
         assert!(err.message().contains("DEC-038"));
     }
 
@@ -384,7 +376,7 @@ mod tests {
         let result = validator.validate_operation(BTreeOperationType::Delete);
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(err.message().contains("Wave 18"));
+        assert!(err.message().contains("not promoted"));
     }
 
     #[test]

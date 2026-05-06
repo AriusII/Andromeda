@@ -43,8 +43,6 @@ use super::startup::{
     decide_startup,
 };
 
-// ─── Forensic proof ────────────────────────────────────────────────────────
-
 /// Acceptance proof produced by a successful `ForensicStart`.
 ///
 /// `replay_allowed` is always `false` here: the engine may inspect but not mutate.
@@ -74,8 +72,6 @@ impl ForensicStartAcceptance {
         self.anomaly_report.has_chain_break()
     }
 }
-
-// ─── Anomaly classification ────────────────────────────────────────────────
 
 /// Classified anomalies found during the forensic WAL scan.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -152,8 +148,6 @@ impl ForensicAnomalyKind {
     }
 }
 
-// ─── Anomaly classification from WalScanStop ──────────────────────────────
-
 fn classify_scan_stop(stop: WalScanStop) -> ForensicAnomaly {
     let offset = stop.offset as u64;
     match stop.reason {
@@ -182,8 +176,6 @@ fn classify_scan_stop(stop: WalScanStop) -> ForensicAnomaly {
         },
     }
 }
-
-// ─── ForensicStart entry points ───────────────────────────────────────────
 
 /// Attempt a `ForensicStart` from manifest and WAL scan evidence.
 ///
@@ -241,8 +233,6 @@ pub fn forensic_start_from_decision(
         )),
     }
 }
-
-// ─── Unit Tests ────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {

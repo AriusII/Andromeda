@@ -19,16 +19,16 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace.dependencies]
-andromeda-catalog = { path = "crates/andromeda-catalog" }
-andromeda-bench = { path = "crates/andromeda-bench" }
-andromeda-core = { path = "crates/andromeda-core" }
-andromeda-exec = { path = "crates/andromeda-exec" }
-andromeda-observe = { path = "crates/andromeda-observe" }
-andromeda-proto = { path = "crates/andromeda-proto" }
-andromeda-quic = { path = "crates/andromeda-quic" }
-andromeda-srpl = { path = "crates/andromeda-srpl" }
-andromeda-storage = { path = "crates/andromeda-storage" }
-andromeda-tx = { path = "crates/andromeda-tx" }
+andromeda-catalog = { path = "crates/andromeda-catalog", version = "0.1.0" }
+andromeda-bench = { path = "crates/andromeda-bench", version = "0.1.0" }
+andromeda-core = { path = "crates/andromeda-core", version = "0.1.0" }
+andromeda-exec = { path = "crates/andromeda-exec", version = "0.1.0" }
+andromeda-observe = { path = "crates/andromeda-observe", version = "0.1.0" }
+andromeda-proto = { path = "crates/andromeda-proto", version = "0.1.0" }
+andromeda-quic = { path = "crates/andromeda-quic", version = "0.1.0" }
+andromeda-srpl = { path = "crates/andromeda-srpl", version = "0.1.0" }
+andromeda-storage = { path = "crates/andromeda-storage", version = "0.1.0" }
+andromeda-tx = { path = "crates/andromeda-tx", version = "0.1.0" }
 
 quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls-ring"] }
 rcgen = { version = "0.14.7" }
@@ -37,7 +37,6 @@ tokio = { version = "1", default-features = false, features = ["net", "rt", "tim
 
 # Fuzz and property testing
 proptest = "1.4"
-quickcheck = "1.0"
 
 [profile.fuzz]
 inherits = "release"

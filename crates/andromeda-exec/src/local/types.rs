@@ -42,7 +42,7 @@ impl LocalProcedure {
 pub struct VerticalInvocationOutcome {
     pub completion: InvocationCompletion,
     /// Recovery-safe transaction id allocated by the runtime's
-    /// [`TransactionManager`] for this invocation. This is the authoritative
+    /// `TransactionManager` for this invocation. This is the authoritative
     /// id stamped on every WAL record and result-stream frame; downstream
     /// emitters must read it from here rather than re-deriving it from
     /// [`InvocationCompletion::invocation_id`].

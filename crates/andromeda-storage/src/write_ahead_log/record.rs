@@ -29,13 +29,13 @@ pub enum WalRecordKind {
     CatalogChangeApply,
     CatalogChangeCommit,
     SecurityAuditAppend,
-    /// B-Tree record insert mutation. Deferred to Wave 18. Placeholder only.
+    /// B-Tree record insert mutation. Durable replay is fail-stop until promoted.
     BTreeInsert,
-    /// B-Tree record delete mutation. Deferred to Wave 18. Placeholder only.
+    /// B-Tree record delete mutation. Durable replay is fail-stop until promoted.
     BTreeDelete,
-    /// B-Tree node split operation. Deferred to Wave 18. Placeholder only.
+    /// B-Tree node split operation. Durable replay is fail-stop until promoted.
     BTreeSplit,
-    /// B-Tree node merge operation. Deferred to Wave 18. Placeholder only.
+    /// B-Tree node merge operation. Durable replay is fail-stop until promoted.
     BTreeMerge,
 }
 
@@ -83,8 +83,7 @@ impl WalRecordKind {
                 | Self::ManifestSwitch
                 | Self::CatalogChangeApply
                 | Self::CatalogChangeCommit
-                | Self::SecurityAuditAppend // Note: BTreeInsert, BTreeDelete, BTreeSplit, BTreeMerge are NOT redo-relevant
-                                            // in Wave 13; recovery handlers are deferred to Wave 18.
+                | Self::SecurityAuditAppend
         )
     }
 }

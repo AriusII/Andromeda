@@ -103,7 +103,7 @@ mod heap_engine_tests {
     fn test_heap_scan() {
         let mut page = HeapPage::new(PageSize::KiB16);
 
-        let tuples = vec!["row_0", "row_1", "row_2", "row_3", "row_4"];
+        let tuples = ["row_0", "row_1", "row_2", "row_3", "row_4"];
         for tuple_str in tuples.iter() {
             page.insert_tuple(tuple_str.as_bytes())
                 .expect("insert failed");
@@ -376,7 +376,7 @@ mod heap_engine_tests {
         assert_eq!(d2, decoded2);
 
         // Float64
-        let d3 = Datum::Float64(3.14159);
+        let d3 = Datum::Float64(std::f64::consts::PI);
         let encoded3 = d3.encode().expect("encode failed");
         let decoded3 = Datum::decode_scalar(ScalarType::Float64, &encoded3).expect("decode failed");
         assert_eq!(d3, decoded3);

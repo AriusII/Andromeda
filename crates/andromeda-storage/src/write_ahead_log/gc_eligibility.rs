@@ -22,7 +22,7 @@
 //!
 //! # Architecture
 //!
-//! ```ignore
+//! ```text
 //! GcEligibilityChecker
 //!   ├── check_eligibility(candidate) -> EligibilityResult
 //!   │   ├── ✓ Eligible (safe to remove)

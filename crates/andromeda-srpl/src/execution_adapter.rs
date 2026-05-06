@@ -10,8 +10,11 @@ use std::num::NonZeroU64;
 use andromeda_catalog::{CatalogObjectRef, ObjectKind, ProcedureContractRef};
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
-use crate::procedure_model::{
-    Cardinality, MAX_SRPL_BODY_OPERATIONS, SrplAssignmentIr, SrplEmitValueIr, SrplPredicateIr,
+use crate::{
+    identifier::validate_srpl_identifier as validate_symbol,
+    procedure_model::{
+        Cardinality, MAX_SRPL_BODY_OPERATIONS, SrplAssignmentIr, SrplEmitValueIr, SrplPredicateIr,
+    },
 };
 
 /// Trait defining the binding environment contract for SRPL predicate evaluation.
@@ -547,27 +550,6 @@ fn validate_actual_rows(
 
 fn invalid_bound(message: &'static str) -> AndromedaError {
     AndromedaError::new(AndromedaErrorKind::Srpl, message)
-}
-
-fn validate_symbol(value: &str, context: &str) -> AndromedaResult<()> {
-    let mut chars = value.chars();
-    let Some(first) = chars.next() else {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Srpl,
-            format!("{context} must not be empty"),
-        ));
-    };
-
-    if !(first.is_ascii_alphabetic() || first == '_')
-        || chars.any(|ch| !(ch.is_ascii_alphanumeric() || ch == '_'))
-    {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Srpl,
-            format!("{context} must be an ASCII identifier"),
-        ));
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]

@@ -1,22 +1,11 @@
 #![forbid(unsafe_code)]
 
-//! Benchmark Regression Detection — Wave 13 Implementation
+//! Benchmark regression detection.
 //!
 //! This module implements performance regression detection for benchmarks.
 //! It compares current evidence against baseline evidence and determines:
 //! 1. If any metric exceeded its budget (absolute failure)
 //! 2. If any metric degraded vs. baseline (relative regression)
-//!
-//! ## Wave 13 Scope
-//!
-//! ✅ Implemented:
-//! - Baseline storage and loading (JSON serialization)
-//! - Regression detection (latency, throughput, error rate)
-//! - Regression reasoning (why a workload regressed)
-//! - Deterministic regression decision
-//! - Unit tests for all scenarios
-//!
-//! ## CI Integration Status
 //!
 //! TECH-DEBT:
 //! - Context: this module can serialize/deserialize baselines, but CI artifact
@@ -27,23 +16,13 @@
 
 use crate::flat_json::{escape_json_string, parse_flat_json_object, required_string, required_u64};
 
-/// Baseline evidence for regression comparison.
-///
-/// A baseline captures the "good" performance of a workload for future regression detection.
-/// This structure is serialized to JSON and can be archived as a CI artifact.
 #[derive(Debug, Clone, PartialEq)]
 pub struct BenchmarkBaseline {
-    /// Workload identifier (must match current run)
     pub workload_id: String,
-    /// Baseline P50 latency in microseconds
     pub p50_latency_us: u64,
-    /// Baseline P95 latency in microseconds
     pub p95_latency_us: u64,
-    /// Baseline error count (typically 0)
     pub error_count: u32,
-    /// Baseline sample count
     pub sample_count: u32,
-    /// ISO 8601 timestamp when baseline was established
     pub established_at: String,
 }
 
@@ -159,7 +138,7 @@ pub struct RegressionAnalysis {
     pub primary_reason: RegressionReason,
     /// Is regressed (true if any metric degraded beyond threshold)
     pub is_regressed: bool,
-    /// Severity: 0 (none), 1 (minor <5%), 2 (moderate 5-20%), 3 (severe >20%)
+    /// Severity: 0 (none), 1 (minor <5%), 2 (moderate 5% to <20%), 3 (severe >=20%)
     pub severity: u8,
 }
 
@@ -181,11 +160,8 @@ impl RegressionAnalysis {
         // Calculate regression percentages
         let p50_regression_pct = compute_regression_percentage(current_p50_us, baseline_p50_us);
         let p95_regression_pct = compute_regression_percentage(current_p95_us, baseline_p95_us);
-        let error_rate_regression_pct = if baseline_error_count == 0 {
-            if current_error_count > 0 { 100.0 } else { 0.0 }
-        } else {
-            compute_regression_percentage(current_error_count as u64, baseline_error_count as u64)
-        };
+        let error_rate_regression_pct =
+            compute_regression_percentage(current_error_count as u64, baseline_error_count as u64);
 
         // Determine regression status
         const REGRESSION_THRESHOLD_PCT: f64 = 2.5;
@@ -225,7 +201,7 @@ impl RegressionAnalysis {
         let max_regression = p50_regression_pct
             .max(p95_regression_pct)
             .max(error_rate_regression_pct);
-        let severity = if max_regression == 0.0 {
+        let severity = if regressed_count == 0 {
             0
         } else if max_regression < 5.0 {
             1
@@ -345,6 +321,7 @@ mod tests {
 
         assert!(!analysis.is_regressed); // At threshold, not over
         assert_eq!(analysis.p50_regression_pct, 2.5);
+        assert_eq!(analysis.severity, 0);
     }
 
     #[test]
@@ -378,7 +355,7 @@ mod tests {
 
         assert!(analysis.is_regressed);
         assert_eq!(analysis.primary_reason, RegressionReason::P95Degradation);
-        assert_eq!(analysis.severity, 2); // Moderate (5-20%)
+        assert_eq!(analysis.severity, 2); // Moderate (5% to <20%)
     }
 
     #[test]
@@ -394,7 +371,24 @@ mod tests {
         );
 
         assert!(analysis.is_regressed);
-        assert_eq!(analysis.severity, 3); // Severe (>20%)
+        assert_eq!(analysis.severity, 3); // Severe (>=20%)
+    }
+
+    #[test]
+    fn regression_analysis_exact_twenty_percent_degradation_is_severe() {
+        let analysis = RegressionAnalysis::new(
+            "protocol-smoke-contract".to_string(),
+            10_000, // current P50
+            10_000, // baseline P50
+            60_000, // current P95 (20% degradation)
+            50_000, // baseline P95
+            0,
+            0,
+        );
+
+        assert!(analysis.is_regressed);
+        assert_eq!(analysis.primary_reason, RegressionReason::P95Degradation);
+        assert_eq!(analysis.severity, 3); // Severe (>=20%)
     }
 
     #[test]
@@ -474,5 +468,21 @@ mod tests {
         assert_eq!(compute_regression_percentage(50, 100), -50.0); // -50%
         assert_eq!(compute_regression_percentage(1, 0), 100.0); // Division by zero handled
         assert_eq!(compute_regression_percentage(0, 0), 0.0); // Both zero
+        assert_eq!(compute_regression_percentage(0, 1), -100.0); // Current zero
+        assert!(compute_regression_percentage(1, 0).is_finite());
+        assert!(compute_regression_percentage(0, 0).is_finite());
+        assert!(compute_regression_percentage(0, 1).is_finite());
+    }
+
+    #[test]
+    fn regression_analysis_zero_baselines_produce_finite_percentages() {
+        let analysis =
+            RegressionAnalysis::new("protocol-smoke-contract".to_string(), 0, 0, 1, 0, 0, 0);
+
+        assert!(analysis.p50_regression_pct.is_finite());
+        assert!(analysis.p95_regression_pct.is_finite());
+        assert!(analysis.error_rate_regression_pct.is_finite());
+        assert_eq!(analysis.p50_regression_pct, 0.0);
+        assert_eq!(analysis.p95_regression_pct, 100.0);
     }
 }

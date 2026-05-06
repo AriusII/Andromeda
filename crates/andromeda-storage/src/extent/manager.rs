@@ -5,8 +5,8 @@ use andromeda_core::AndromedaResult;
 use crate::{PageId, SegmentId};
 
 use super::{
-    ColdExtentReclaimEvidence, ExtentDescriptor, ExtentFreeRange, ExtentId, ExtentManagerReplayRecord,
-    ExtentState, error::storage_error,
+    ColdExtentReclaimEvidence, ExtentDescriptor, ExtentFreeRange, ExtentId,
+    ExtentManagerReplayRecord, ExtentState, error::storage_error,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -151,7 +151,10 @@ impl ExtentManager {
         })
     }
 
-    pub fn apply_replay_record(&mut self, record: ExtentManagerReplayRecord) -> AndromedaResult<()> {
+    pub fn apply_replay_record(
+        &mut self,
+        record: ExtentManagerReplayRecord,
+    ) -> AndromedaResult<()> {
         match record {
             ExtentManagerReplayRecord::AllocateHot(descriptor) => self.allocate_hot(descriptor),
             ExtentManagerReplayRecord::Seal { extent_id } => self.seal_extent(extent_id),
@@ -159,7 +162,9 @@ impl ExtentManager {
                 extent_id,
                 segment_id,
             } => self.publish_cold_extent(extent_id, segment_id),
-            ExtentManagerReplayRecord::FreeSealed { extent_id } => self.free_sealed_extent(extent_id),
+            ExtentManagerReplayRecord::FreeSealed { extent_id } => {
+                self.free_sealed_extent(extent_id)
+            }
             ExtentManagerReplayRecord::ReclaimPublishedCold {
                 extent_id,
                 evidence,

@@ -1,4 +1,4 @@
-//! Dry-run plan types produced by [`DefinitionBatch::dry_run`].
+//! Dry-run plan types produced by `DefinitionBatch::dry_run`.
 
 use andromeda_core::{CatalogObjectId, CatalogVersion, DatabaseId, NamespaceId};
 
@@ -32,7 +32,7 @@ pub struct PlannedLifecycleTransition {
     pub planned_version: CatalogVersion,
 }
 
-/// The validated, ready-to-apply result of [`DefinitionBatch::dry_run`].
+/// The validated, ready-to-apply result of `DefinitionBatch::dry_run`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DefinitionBatchPlan {
     pub batch_id: DefinitionBatchId,

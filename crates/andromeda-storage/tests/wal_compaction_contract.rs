@@ -192,10 +192,6 @@ fn test_record(lsn: u64) -> WalRecord {
     .unwrap()
 }
 
-// ============================================================================
-// FRAGMENTATION DETECTION TESTS (3 tests)
-// ============================================================================
-
 #[test]
 fn fragmentation_ratio_calculation_exact_threshold() {
     // Exactly 30% fragmentation
@@ -224,10 +220,6 @@ fn fragmentation_ratio_calculation_below_threshold() {
     assert!(metrics.fragmentation_ratio < 0.30);
     assert!(!metrics.is_compaction_candidate());
 }
-
-// ============================================================================
-// COMPACTION ALGORITHM TESTS (4 tests)
-// ============================================================================
 
 #[test]
 fn compaction_filters_dead_records() {
@@ -339,10 +331,6 @@ fn compaction_preserves_record_content() {
     assert_eq!(result.records_removed, 0);
 }
 
-// ============================================================================
-// SCHEDULER TESTS (2 tests)
-// ============================================================================
-
 #[test]
 fn scheduler_identifies_and_compacts_candidates() {
     use std::time::Duration;
@@ -419,10 +407,6 @@ fn scheduler_respects_max_segments_per_run() {
     assert!(summary.candidates_compacted <= 2);
 }
 
-// ============================================================================
-// ERROR RECOVERY TESTS (2 tests)
-// ============================================================================
-
 #[test]
 fn compaction_fails_gracefully_on_write_failure() {
     let records = vec![test_record(1), test_record(2)];
@@ -487,10 +471,6 @@ fn compaction_preserves_old_segment_on_swap_failure() {
     );
 }
 
-// ============================================================================
-// EDGE CASE TESTS (2 tests)
-// ============================================================================
-
 #[test]
 fn compaction_handles_all_live_records() {
     // Segment with all live records (0% fragmentation)
@@ -525,10 +505,6 @@ fn compaction_handles_all_dead_records() {
     assert_eq!(result.records_removed, 3);
     assert_eq!(result.bytes_recovered, result.original_bytes);
 }
-
-// ============================================================================
-// INTEGRATION TESTS (additional coverage)
-// ============================================================================
 
 #[test]
 fn identify_compaction_candidates_sorts_by_fragmentation() {

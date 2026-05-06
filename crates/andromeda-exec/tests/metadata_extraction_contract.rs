@@ -11,7 +11,7 @@
 //! - Validate cardinality inference from operation types
 //! - Validate stream_id and column_count pass-through
 //! - Validate row_count_exact and row_count_max are set correctly
-//! - Validate deterministic extraction (same input → same output)
+//! - Validate deterministic extraction (same input -> same output)
 //! - Validate error handling for invalid inputs
 
 use andromeda_catalog::CatalogObjectRef;
@@ -27,14 +27,12 @@ use andromeda_exec::{DefaultResultMetadataExtractor, ResultMetadataExtractor};
 use andromeda_srpl::{
     Cardinality,
     procedure_model::{
-        BoundSrplBodyPlan, BoundSrplOperationPlan, ExecutableProcedurePlan, SrplAssignmentIr,
+        BoundSrplBodyPlan, BoundSrplOperationPlan, ExecutableProcedurePlan,
         SrplCatalogBindingEvidence, SrplEmitValueIr, SrplPredicateIr, SrplValueIr,
     },
 };
 
-// ============================================================================
 // Test Helpers
-// ============================================================================
 
 fn make_catalog_version() -> CatalogVersion {
     CatalogVersion::new(1)
@@ -90,9 +88,7 @@ fn make_table_ref() -> CatalogObjectRef {
     }
 }
 
-// ============================================================================
 // Contract Test Cases: 20+ tests
-// ============================================================================
 
 #[test]
 fn ct_001_extract_from_single_value_emit() {
@@ -125,7 +121,7 @@ fn ct_001_extract_from_single_value_emit() {
 }
 
 #[test]
-fn ct_002_extract_from_multi_value_emit() {
+fn ct_002_extract_from_multi_column_emit_is_one_result_row() {
     let mut body = BoundSrplBodyPlan { operations: vec![] };
     let emit_values = (0..3)
         .map(|i| SrplEmitValueIr {
@@ -152,7 +148,8 @@ fn ct_002_extract_from_multi_value_emit() {
     )
     .expect("extraction should succeed");
 
-    assert_eq!(metadata.cardinality, Cardinality::Many);
+    assert_eq!(metadata.row_count_exact, Some(1));
+    assert_eq!(metadata.cardinality, Cardinality::One);
     assert_eq!(metadata.column_count, 3);
 }
 
@@ -553,10 +550,12 @@ fn ct_016_deterministic_extraction_same_input() {
     };
 
     let stream = make_result_stream_contract(1, 1);
-    let metadata1 = DefaultResultMetadataExtractor::extract_metadata(&plan1, &[stream.clone()])
-        .expect("extraction should succeed");
-    let metadata2 = DefaultResultMetadataExtractor::extract_metadata(&plan2, &[stream])
-        .expect("extraction should succeed");
+    let metadata1 =
+        DefaultResultMetadataExtractor::extract_metadata(&plan1, std::slice::from_ref(&stream))
+            .expect("extraction should succeed");
+    let metadata2 =
+        DefaultResultMetadataExtractor::extract_metadata(&plan2, std::slice::from_ref(&stream))
+            .expect("extraction should succeed");
 
     assert_eq!(
         metadata1, metadata2,
@@ -713,7 +712,83 @@ fn ct_020_emit_then_read_uses_first_operation() {
 }
 
 #[test]
-fn ct_021_metadata_includes_all_required_fields() {
+fn ct_021_read_then_emit_uses_named_emit_result_shape() {
+    let mut body = BoundSrplBodyPlan { operations: vec![] };
+
+    body.operations.push(BoundSrplOperationPlan::ReadTable {
+        ordinal: 0,
+        source: make_table_ref(),
+        binding: "t".to_string(),
+        cardinality: Cardinality::Many,
+        predicates: vec![],
+    });
+
+    body.operations.push(BoundSrplOperationPlan::Emit {
+        ordinal: 1,
+        stream: "result".to_string(),
+        values: vec![SrplEmitValueIr {
+            column: "col_0".to_string(),
+            value: SrplValueIr::Bool(true),
+        }],
+    });
+
+    let plan = ExecutableProcedurePlan {
+        procedure_name: QualifiedName::parse("test.proc").unwrap(),
+        body,
+        evidence: make_binding_evidence(),
+    };
+
+    let metadata = DefaultResultMetadataExtractor::extract_metadata(
+        &plan,
+        &[make_result_stream_contract(1, 1)],
+    )
+    .expect("extraction should use the named result emit");
+
+    assert_eq!(metadata.row_count_exact, Some(1));
+    assert_eq!(metadata.row_count_max, Some(1));
+    assert_eq!(metadata.cardinality, Cardinality::One);
+}
+
+#[test]
+fn ct_022_update_then_emit_does_not_use_affected_rows_as_result_rows() {
+    let mut body = BoundSrplBodyPlan { operations: vec![] };
+
+    body.operations.push(BoundSrplOperationPlan::UpdateTable {
+        ordinal: 0,
+        target: make_table_ref(),
+        predicates: vec![],
+        assignments: vec![],
+        affected_rows_exact: Some(42),
+    });
+
+    body.operations.push(BoundSrplOperationPlan::Emit {
+        ordinal: 1,
+        stream: "result".to_string(),
+        values: vec![SrplEmitValueIr {
+            column: "col_0".to_string(),
+            value: SrplValueIr::Bool(true),
+        }],
+    });
+
+    let plan = ExecutableProcedurePlan {
+        procedure_name: QualifiedName::parse("test.proc").unwrap(),
+        body,
+        evidence: make_binding_evidence(),
+    };
+
+    let metadata = DefaultResultMetadataExtractor::extract_metadata(
+        &plan,
+        &[make_result_stream_contract(1, 1)],
+    )
+    .expect("extraction should use the named result emit");
+
+    assert_eq!(metadata.row_count_exact, Some(1));
+    assert_eq!(metadata.row_count_max, Some(1));
+    assert_eq!(metadata.cardinality, Cardinality::One);
+}
+
+#[test]
+fn ct_023_metadata_includes_all_required_fields() {
     let mut body = BoundSrplBodyPlan { operations: vec![] };
     body.operations.push(BoundSrplOperationPlan::Emit {
         ordinal: 0,
@@ -740,5 +815,5 @@ fn ct_021_metadata_includes_all_required_fields() {
     assert_eq!(metadata.stream_id, 42);
     assert!(metadata.row_count_exact.is_some());
     assert_eq!(metadata.column_count, 5);
-    assert!(metadata.cardinality != Cardinality::Many); // Should be specific, not Many
+    assert_ne!(metadata.cardinality, Cardinality::Many); // Should be specific, not Many
 }

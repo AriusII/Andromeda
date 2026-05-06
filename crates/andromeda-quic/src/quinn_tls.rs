@@ -26,14 +26,14 @@ impl ServerTlsConfig {
     pub fn from_files(cert_path: &Path, key_path: &Path) -> AndromedaResult<Self> {
         let cert_pem = std::fs::read_to_string(cert_path).map_err(|e| {
             AndromedaError::new(
-                AndromedaErrorKind::IoError,
+                AndromedaErrorKind::Transport,
                 format!("failed to read certificate file: {}", e),
             )
         })?;
 
         let key_pem = std::fs::read_to_string(key_path).map_err(|e| {
             AndromedaError::new(
-                AndromedaErrorKind::IoError,
+                AndromedaErrorKind::Transport,
                 format!("failed to read private key file: {}", e),
             )
         })?;
@@ -42,30 +42,31 @@ impl ServerTlsConfig {
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
                 AndromedaError::new(
-                    AndromedaErrorKind::ProtocolError,
+                    AndromedaErrorKind::Protocol,
                     format!("failed to parse certificate PEM: {}", e),
                 )
             })?;
 
         if certs.is_empty() {
             return Err(AndromedaError::new(
-                AndromedaErrorKind::ProtocolError,
+                AndromedaErrorKind::Protocol,
                 "no certificates found in PEM file".to_string(),
             ));
         }
 
         let key = PrivatePkcs8KeyDer::from_pem_slice(key_pem.as_bytes()).map_err(|e| {
             AndromedaError::new(
-                AndromedaErrorKind::ProtocolError,
+                AndromedaErrorKind::Protocol,
                 format!("failed to parse private key PEM: {}", e),
             )
         })?;
 
         let config = ServerConfig::builder()
+            .with_no_client_auth()
             .with_single_cert(certs, PrivateKeyDer::Pkcs8(key))
             .map_err(|e| {
                 AndromedaError::new(
-                    AndromedaErrorKind::ProtocolError,
+                    AndromedaErrorKind::Protocol,
                     format!("failed to build server config: {}", e),
                 )
             })?;
@@ -77,32 +78,28 @@ impl ServerTlsConfig {
     ///
     /// Generates a new certificate valid for the given domain names.
     pub fn ephemeral(subject_alt_names: Vec<String>) -> AndromedaResult<Self> {
-        use rcgen::generate_simple_self_signed_cert;
+        use rcgen::generate_simple_self_signed;
 
-        let cert = generate_simple_self_signed_cert(subject_alt_names).map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::ProtocolError,
-                format!("failed to generate self-signed certificate: {}", e),
-            )
-        })?;
+        let rcgen::CertifiedKey { cert, signing_key } =
+            generate_simple_self_signed(subject_alt_names).map_err(|e| {
+                AndromedaError::new(
+                    AndromedaErrorKind::Protocol,
+                    format!("failed to generate self-signed certificate: {}", e),
+                )
+            })?;
 
-        let cert_der = cert.serialize_der().map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::ProtocolError,
-                format!("failed to serialize certificate: {}", e),
-            )
-        })?;
-
-        let key_der = cert.serialize_private_key_der();
+        let cert_der = cert.der().clone();
+        let key_der = signing_key.serialize_der();
 
         let config = ServerConfig::builder()
+            .with_no_client_auth()
             .with_single_cert(
-                vec![CertificateDer::from(cert_der)],
+                vec![cert_der],
                 PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(key_der)),
             )
             .map_err(|e| {
                 AndromedaError::new(
-                    AndromedaErrorKind::ProtocolError,
+                    AndromedaErrorKind::Protocol,
                     format!("failed to build server config: {}", e),
                 )
             })?;
@@ -142,6 +139,7 @@ impl ClientTlsConfig {
 }
 
 /// Insecure certificate verifier that accepts all certificates (for testing only).
+#[derive(Debug)]
 struct InsecureVerifier;
 
 impl rustls::client::danger::ServerCertVerifier for InsecureVerifier {

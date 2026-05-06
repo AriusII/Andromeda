@@ -1,30 +1,14 @@
-//! D3 mTLS certificate identity extraction and validation.
+//! mTLS certificate identity extraction and validation.
 //!
 //! This module provides the contract surface for extracting and binding mTLS
-//! certificate identities to QUIC sessions. It remains runtime-free in V0:
-//! types and validation functions are defined here; actual quinn connection
-//! integration is deferred to the D4 Procedure Gateway under the `runtime-quinn`
-//! feature.
-//!
-//! ## Certificate Identity Flow
-//!
-//! 1. Raw X.509 certificate is extracted from a QUIC connection.
-//! 2. Certificate is parsed to extract fingerprint, subject, and metadata.
-//! 3. Parsed identity is validated against the surface plane scope.
-//! 4. Identity is bound to the [`Connection`] state machine.
-//! 5. Dispatch authorization uses the bound certificate fingerprint.
-//!
-//! ## Out of Scope (V0)
-//!
-//! - Actual quinn connection types and cert extraction (deferred to D4).
-//! - X.509 parsing implementation (deferred; contract is defined here).
-//! - Certificate revocation and rotation choreography.
-//! - Hardware security modules or external PKI systems.
+//! certificate identities to QUIC sessions. The default crate remains
+//! runtime-free; concrete Quinn extraction is available only behind the
+//! `runtime-quinn` feature.
 
 use andromeda_core::AndromedaResult;
 use andromeda_observe::SurfaceScope;
 
-/// Convert a QUIC [`SurfacePlane`] to its required [`SurfaceScope`].
+/// Convert a QUIC `SurfacePlane` to its required [`SurfaceScope`].
 ///
 /// Each plane enforces a certificate scope policy:
 /// - Application plane → Application scope
@@ -44,11 +28,6 @@ pub const fn plane_to_required_surface_scope(plane: crate::SurfacePlane) -> Surf
 }
 
 /// Raw X.509 certificate bytes extracted from a QUIC connection.
-///
-/// This is the entry point for the identity extraction pipeline.
-/// In D4 (Procedure Gateway), `extract_peer_certificate()` will obtain
-/// this from a quinn connection; in D3 contract tests, it is constructed
-/// manually from known test vectors.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RawCertificate {
     /// DER-encoded X.509 certificate bytes.
@@ -74,14 +53,6 @@ impl RawCertificate {
 
 /// X.509 certificate fields extracted for identity and policy validation.
 ///
-/// This type represents the parsed and validated result of extracting
-/// identity evidence from a raw X.509 certificate. The fields are:
-///
-/// - `subject_cn`: CommonName from the Subject field (e.g., "mtls-service-001").
-/// - `san_dns_names`: DNS Subject Alternative Names (parsed but not expanded in V0).
-/// - `fingerprint_sha256`: SHA256 hash of the DER encoding (hex-encoded).
-/// - `issuer_cn`: CommonName from the Issuer field (optional, for audit).
-///
 /// ## Invariants
 ///
 /// - `subject_cn` is non-empty and trimmed.
@@ -100,10 +71,7 @@ pub struct ParsedCertificate {
 }
 
 impl ParsedCertificate {
-    /// Create a parsed certificate entry (test helper).
-    ///
-    /// In production (D4), this is populated by X.509 parser (rustls, x509-parser, etc).
-    /// In D3 tests, this is used directly.
+    /// Create a parsed certificate entry.
     pub fn new(
         subject_cn: String,
         fingerprint_sha256: String,
@@ -145,22 +113,14 @@ impl ParsedCertificate {
         self
     }
 
-    /// Extract identity for a surface scope.
-    ///
-    /// Validates that the certificate's surface scope requirement is met.
-    /// In V0, the subject CN is used directly; future decisions may expand
-    /// to use SAN or other fields for role expansion.
+    /// Converts the parsed certificate into the required surface scope.
     ///
     /// Returns `Err` if the certificate does not meet scope requirements.
     pub fn to_certificate_identity(
         self,
         required_scope: SurfaceScope,
     ) -> AndromedaResult<andromeda_observe::CertificateIdentity> {
-        // In V0, subject CN is the primary identity.
-        // Future: SAN/SPIFFE extraction may refine this.
         let subject = self.subject_cn.clone();
-
-        // Build the identity with the required scope.
         andromeda_observe::CertificateIdentity::new(
             self.fingerprint_sha256,
             subject,

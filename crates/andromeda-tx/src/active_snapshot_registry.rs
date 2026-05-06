@@ -12,7 +12,7 @@
 //!
 //! The registry is fully thread-safe:
 //! - Snapshot register/release operations use RwLock for mutation safety
-//! - Minimum visible timestamp is cached with Mutex for lock-free reads
+//! - Minimum visible timestamp is cached with AtomicU64 for lock-free reads
 //! - Arc-wrapped for shared ownership across threads
 //!
 //! # Invariants
@@ -25,8 +25,8 @@
 
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::sync::Mutex as StdMutex;
 use std::sync::RwLock as StdRwLock;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
 
@@ -103,8 +103,8 @@ pub struct ActiveSnapshotRegistry {
     active: Arc<StdRwLock<HashSet<SnapshotHandle>>>,
 
     /// Cached minimum visible timestamp, updated on register/release.
-    /// Uses Mutex (not RwLock) because we only cache a single u64.
-    cached_min_visible_ts: Arc<StdMutex<u64>>,
+    /// Stored atomically because we only cache a single u64.
+    cached_min_visible_ts: Arc<AtomicU64>,
 }
 
 impl Clone for ActiveSnapshotRegistry {
@@ -124,7 +124,7 @@ impl ActiveSnapshotRegistry {
     pub fn new() -> Self {
         ActiveSnapshotRegistry {
             active: Arc::new(StdRwLock::new(HashSet::new())),
-            cached_min_visible_ts: Arc::new(StdMutex::new(MIN_TS_INF)),
+            cached_min_visible_ts: Arc::new(AtomicU64::new(MIN_TS_INF)),
         }
     }
 
@@ -156,11 +156,7 @@ impl ActiveSnapshotRegistry {
             .min()
             .unwrap_or(MIN_TS_INF);
 
-        let mut cached = self
-            .cached_min_visible_ts
-            .lock()
-            .map_err(|_| GcError::SnapshotAlreadyRegistered)?;
-        *cached = new_min;
+        self.cached_min_visible_ts.store(new_min, Ordering::Release);
 
         Ok(())
     }
@@ -188,11 +184,7 @@ impl ActiveSnapshotRegistry {
             .min()
             .unwrap_or(MIN_TS_INF);
 
-        let mut cached = self
-            .cached_min_visible_ts
-            .lock()
-            .map_err(|_| GcError::SnapshotNotFound)?;
-        *cached = new_min;
+        self.cached_min_visible_ts.store(new_min, Ordering::Release);
 
         Ok(())
     }
@@ -204,10 +196,7 @@ impl ActiveSnapshotRegistry {
     /// `end_ts ≠ u64::MAX` are candidates for garbage collection.
     #[inline]
     pub fn minimum_visible_timestamp(&self) -> u64 {
-        self.cached_min_visible_ts
-            .lock()
-            .map(|guard| *guard)
-            .unwrap_or(MIN_TS_INF)
+        self.cached_min_visible_ts.load(Ordering::Acquire)
     }
 
     /// Check if a row version is garbageable.
@@ -452,7 +441,7 @@ mod tests {
 
         // Register many snapshots
         for i in 1..=1000 {
-            let h = SnapshotHandle::new(i as u64, TransactionId::new(i)).unwrap();
+            let h = SnapshotHandle::new(i, TransactionId::new(i)).unwrap();
             registry.register_snapshot(h).unwrap();
         }
 

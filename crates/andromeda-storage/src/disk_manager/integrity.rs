@@ -20,10 +20,10 @@ impl FileDiskManager {
         PageIntegrityMode::DisabledUntilPageHeaderCrcIntegrated
     }
 
-    /// Legacy helper retained for deterministic compatibility.
+    /// Deterministic integrity tag retained for compatibility with existing page images.
     ///
     /// Note: this is not CRC32. It is the first 32 bits of SHA-256.
-    fn compute_integrity_tag_placeholder(image: &PageImage) -> u32 {
+    fn compute_integrity_tag(image: &PageImage) -> u32 {
         let mut hasher = Sha256::new();
         hasher.update(image.as_bytes());
         let result = hasher.finalize();
@@ -46,7 +46,7 @@ impl FileDiskManager {
                         "HeaderCrc32 integrity mode requires page layout contract",
                     ));
                 };
-                let tag = Self::compute_integrity_tag_placeholder(image);
+                let tag = Self::compute_integrity_tag(image);
                 layout.header.header_crc = if tag == 0 { 1 } else { tag };
                 *image =
                     PageImage::with_layout(layout, image.as_bytes().to_vec()).map_err(|e| {
@@ -71,7 +71,7 @@ impl FileDiskManager {
                     ));
                 };
                 let expected = layout.header.header_crc;
-                let actual = Self::compute_integrity_tag_placeholder(image);
+                let actual = Self::compute_integrity_tag(image);
                 if expected != actual {
                     return Err(AndromedaError::new(
                         AndromedaErrorKind::Storage,

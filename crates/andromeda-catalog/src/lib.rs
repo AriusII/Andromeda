@@ -82,7 +82,7 @@ mod procedure_store;
 mod publication_subscription;
 mod recovery;
 mod scenario_evidence;
-pub mod server;
+mod server;
 mod snapshot;
 mod statistics;
 mod store;

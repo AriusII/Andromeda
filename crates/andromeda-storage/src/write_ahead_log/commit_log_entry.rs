@@ -25,7 +25,7 @@
 //! # Thread Safety
 //!
 //! `CommitLog` uses DashMap for concurrent access without locking entire table.
-//! Durability flag is stored in Arc<Mutex> to allow atomic transitions.
+//! Durability flag is stored in `Arc<Mutex>` to allow atomic transitions.
 //!
 //! # Encoding Format
 //!
@@ -40,6 +40,15 @@ use dashmap::DashMap;
 use std::sync::Arc;
 
 use crate::Lsn;
+
+const U64_FIELD_BYTES: usize = 8;
+const TX_ID_OFFSET: usize = 0;
+const COMMIT_LSN_OFFSET: usize = 8;
+const VISIBLE_TIMESTAMP_OFFSET: usize = 16;
+const DURABILITY_FLAG_OFFSET: usize = 24;
+const COMMIT_LOG_ENTRY_ENCODED_LEN: usize = 25;
+const WAL_DURABILITY_UNCONFIRMED: u8 = 0;
+const WAL_DURABILITY_CONFIRMED: u8 = 1;
 
 /// Unique identifier for a timestamp in the system.
 pub type Timestamp = u64;
@@ -82,17 +91,11 @@ impl CommitLogEntry {
         visible_timestamp: Timestamp,
     ) -> AndromedaResult<Self> {
         if tx_id.get() == 0 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Transaction,
-                "transaction id must not be zero",
-            ));
+            return Err(transaction_error("transaction id must not be zero"));
         }
 
         if visible_timestamp == 0 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Transaction,
-                "visible_timestamp must not be zero",
-            ));
+            return Err(transaction_error("visible_timestamp must not be zero"));
         }
 
         Ok(CommitLogEntry {
@@ -129,14 +132,14 @@ impl CommitLogEntry {
     /// - Bytes 16-23: `visible_timestamp` (u64 little-endian)
     /// - Byte 24:     `wal_durability_confirmed` (0 or 1)
     pub fn encode(&self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(25);
+        let mut bytes = Vec::with_capacity(COMMIT_LOG_ENTRY_ENCODED_LEN);
         bytes.extend_from_slice(&self.tx_id.get().to_le_bytes());
         bytes.extend_from_slice(&self.commit_lsn.get().to_le_bytes());
         bytes.extend_from_slice(&self.visible_timestamp.to_le_bytes());
         bytes.push(if self.wal_durability_confirmed {
-            1u8
+            WAL_DURABILITY_CONFIRMED
         } else {
-            0u8
+            WAL_DURABILITY_UNCONFIRMED
         });
         bytes
     }
@@ -147,41 +150,29 @@ impl CommitLogEntry {
     ///
     /// Returns error if buffer is too small or contains invalid data.
     pub fn decode(bytes: &[u8]) -> AndromedaResult<Self> {
-        if bytes.len() < 25 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                "CommitLogEntry buffer too small (need 25 bytes)",
-            ));
+        if bytes.len() < COMMIT_LOG_ENTRY_ENCODED_LEN {
+            return Err(storage_error(format!(
+                "CommitLogEntry buffer too small (need {} bytes)",
+                COMMIT_LOG_ENTRY_ENCODED_LEN
+            )));
         }
 
         // Parse tx_id
-        let tx_id_bytes = [
-            bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
-        ];
-        let tx_id_raw = u64::from_le_bytes(tx_id_bytes);
+        let tx_id_raw = read_u64_field(bytes, TX_ID_OFFSET);
         if tx_id_raw == 0 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Transaction,
-                "invalid transaction id in encoded entry",
-            ));
+            return Err(transaction_error("invalid transaction id in encoded entry"));
         }
         let tx_id = TransactionId::new(tx_id_raw);
 
         // Parse commit_lsn
-        let commit_lsn_bytes = [
-            bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
-        ];
-        let commit_lsn_raw = u64::from_le_bytes(commit_lsn_bytes);
+        let commit_lsn_raw = read_u64_field(bytes, COMMIT_LSN_OFFSET);
         let commit_lsn = Lsn::new(commit_lsn_raw);
 
         // Parse visible_timestamp
-        let visible_timestamp_bytes = [
-            bytes[16], bytes[17], bytes[18], bytes[19], bytes[20], bytes[21], bytes[22], bytes[23],
-        ];
-        let visible_timestamp = u64::from_le_bytes(visible_timestamp_bytes);
+        let visible_timestamp = read_u64_field(bytes, VISIBLE_TIMESTAMP_OFFSET);
 
         // Parse durability flag
-        let wal_durability_confirmed = bytes[24] != 0;
+        let wal_durability_confirmed = bytes[DURABILITY_FLAG_OFFSET] != WAL_DURABILITY_UNCONFIRMED;
 
         // Create entry with confirmation already set if decoding from disk
         Ok(CommitLogEntry {
@@ -245,13 +236,10 @@ impl CommitLog {
         entry.wal_durability_confirmed = false;
 
         if self.entries.contains_key(&entry.tx_id) {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Transaction,
-                format!(
-                    "commit log entry already exists for transaction {}",
-                    entry.tx_id.get()
-                ),
-            ));
+            return Err(transaction_error(format!(
+                "commit log entry already exists for transaction {}",
+                entry.tx_id.get()
+            )));
         }
 
         self.entries.insert(entry.tx_id, entry);
@@ -281,10 +269,10 @@ impl CommitLog {
                 entry.mark_durable();
                 Ok(())
             }
-            None => Err(AndromedaError::new(
-                AndromedaErrorKind::Transaction,
-                format!("commit log entry not found for transaction {}", tx_id.get()),
-            )),
+            None => Err(transaction_error(format!(
+                "commit log entry not found for transaction {}",
+                tx_id.get()
+            ))),
         }
     }
 
@@ -325,7 +313,7 @@ impl CommitLog {
                 let entry = ref_multi.value();
                 entry.commit_lsn < before_lsn && entry.is_durable()
             })
-            .map(|ref_multi| ref_multi.key().clone())
+            .map(|ref_multi| *ref_multi.key())
             .collect();
 
         for tx_id in to_remove {
@@ -356,6 +344,20 @@ impl CommitLog {
     pub fn clear(&self) {
         self.entries.clear();
     }
+}
+
+fn read_u64_field(bytes: &[u8], offset: usize) -> u64 {
+    let mut raw = [0; U64_FIELD_BYTES];
+    raw.copy_from_slice(&bytes[offset..offset + U64_FIELD_BYTES]);
+    u64::from_le_bytes(raw)
+}
+
+fn storage_error(msg: impl Into<String>) -> AndromedaError {
+    AndromedaError::new(AndromedaErrorKind::Storage, msg)
+}
+
+fn transaction_error(msg: impl Into<String>) -> AndromedaError {
+    AndromedaError::new(AndromedaErrorKind::Transaction, msg)
 }
 
 impl Default for CommitLog {
@@ -429,7 +431,7 @@ mod tests {
         entry.mark_durable();
 
         let encoded = entry.encode();
-        assert_eq!(encoded.len(), 25);
+        assert_eq!(encoded.len(), COMMIT_LOG_ENTRY_ENCODED_LEN);
 
         let decoded = CommitLogEntry::decode(&encoded).unwrap();
         assert_eq!(decoded.tx_id(), entry.tx_id());
@@ -450,7 +452,7 @@ mod tests {
         let entry = CommitLogEntry::new(tx_id, Lsn::new(100), 500).unwrap();
 
         let encoded = entry.encode();
-        assert_eq!(encoded[24], 0u8); // Durability flag is false
+        assert_eq!(encoded[DURABILITY_FLAG_OFFSET], WAL_DURABILITY_UNCONFIRMED);
 
         let decoded = CommitLogEntry::decode(&encoded).unwrap();
         assert!(!decoded.is_durable());
@@ -463,7 +465,7 @@ mod tests {
         entry.mark_durable();
 
         let encoded = entry.encode();
-        assert_eq!(encoded[24], 1u8); // Durability flag is true
+        assert_eq!(encoded[DURABILITY_FLAG_OFFSET], WAL_DURABILITY_CONFIRMED);
     }
 
     #[test]

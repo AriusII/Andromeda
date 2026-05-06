@@ -2,7 +2,7 @@ use andromeda_core::AndromedaResult;
 
 use crate::{AllocationId, ObjectId, PageId, PageSize, SegmentId};
 
-use super::{error::storage_error, ExtentId};
+use super::{ExtentId, error::storage_error};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExtentState {

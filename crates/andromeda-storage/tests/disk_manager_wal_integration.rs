@@ -57,13 +57,11 @@ fn create_page_with_pattern(page_id: u64, page_size: PageSize, lsn: u64, pattern
     let trailer = create_page_trailer();
     let layout = PageLayoutContract { header, trailer };
 
-    let mut bytes = vec![pattern; page_size.bytes_usize()];
+    let bytes = vec![pattern; page_size.bytes_usize()];
     PageImage::with_layout(layout, bytes).unwrap()
 }
 
-// ============================================================================
 // Test: WAL Recovery Can Read Pages Written by DiskManager
-// ============================================================================
 
 #[test]
 fn test_wal_recovery_reads_pages_written_by_disk_manager() {
@@ -96,7 +94,7 @@ fn test_wal_recovery_reads_pages_written_by_disk_manager() {
             let page = create_page_with_pattern(page_num as u64, PageSize::KiB16, 1000, 0xAA);
             manager
                 .write_page(page, Lsn::new(1000))
-                .expect(&format!("Failed to write page {}", page_num));
+                .unwrap_or_else(|_| panic!("Failed to write page {}", page_num));
         }
     }
 
@@ -125,8 +123,8 @@ fn test_wal_recovery_reads_pages_written_by_disk_manager() {
             let page_id = PageId::new(page_num as u64);
             let page = manager
                 .read_page(page_id)
-                .expect(&format!("Recovery read failed for page {}", page_num))
-                .expect(&format!("Page {} not found during recovery", page_num));
+                .unwrap_or_else(|_| panic!("Recovery read failed for page {}", page_num))
+                .unwrap_or_else(|| panic!("Page {} not found during recovery", page_num));
 
             // Verify page content is correct
             assert_eq!(
@@ -139,9 +137,7 @@ fn test_wal_recovery_reads_pages_written_by_disk_manager() {
     }
 }
 
-// ============================================================================
 // Test: Recovery Reads Multiple Extents Written by DiskManager
-// ============================================================================
 
 #[test]
 fn test_wal_recovery_reads_multiple_extents_from_disk_manager() {

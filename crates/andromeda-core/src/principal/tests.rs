@@ -62,6 +62,35 @@ fn test_certificate_derived_session_token_is_truncated_and_prefixed() {
 }
 
 #[test]
+fn test_certificate_derived_session_token_is_non_secret_evidence() {
+    let fp = CertificateFingerprint::new(
+        "ffffffffe5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+    )
+    .unwrap();
+
+    let token = SessionToken::from_certificate_fingerprint(&fp);
+
+    assert_eq!(
+        token.to_string(),
+        token.as_str(),
+        "session token display is intentionally unmasked audit evidence, not a bearer secret"
+    );
+}
+
+#[test]
+fn test_certificate_derived_session_token_from_zero_fingerprint_is_valid_evidence() {
+    let fp = CertificateFingerprint::new(
+        "0000000000000000000000000000000000000000000000000000000000000000",
+    )
+    .unwrap();
+
+    let token = SessionToken::from_certificate_fingerprint(&fp);
+
+    assert_eq!(token.as_str(), "mtls:00000000000000000000000000000000");
+    assert!(!token.is_empty());
+}
+
+#[test]
 fn test_certificate_fingerprint_creation() {
     let fp = CertificateFingerprint::new("a1b2c3d4").unwrap();
     assert_eq!(fp.as_str(), "a1b2c3d4");
@@ -77,6 +106,12 @@ fn test_certificate_fingerprint_empty_rejected() {
 fn test_certificate_fingerprint_whitespace_only_rejected() {
     let fp = CertificateFingerprint::new("   ");
     assert!(fp.is_none());
+}
+
+#[test]
+fn test_certificate_fingerprint_creation_trims_edges() {
+    let fp = CertificateFingerprint::new("  a1b2c3d4  ").unwrap();
+    assert_eq!(fp.as_str(), "a1b2c3d4");
 }
 
 #[test]
@@ -113,14 +148,14 @@ fn test_certificate_fingerprint_display() {
 }
 
 #[test]
-fn test_certificate_fingerprint_from_string() {
-    let fp = CertificateFingerprint::from("test".to_string());
+fn test_certificate_fingerprint_new_accepts_owned_string() {
+    let fp = CertificateFingerprint::new("test".to_string()).unwrap();
     assert_eq!(fp.as_str(), "test");
 }
 
 #[test]
-fn test_certificate_fingerprint_from_str() {
-    let fp = CertificateFingerprint::from("test");
+fn test_certificate_fingerprint_new_accepts_borrowed_str() {
+    let fp = CertificateFingerprint::new("test").unwrap();
     assert_eq!(fp.as_str(), "test");
 }
 
@@ -166,12 +201,18 @@ fn test_principal_role_str_conversion() {
 #[test]
 fn test_principal_role_from_str() {
     assert_eq!(
-        PrincipalRole::from_str("superadmin"),
+        "superadmin".parse::<PrincipalRole>().ok(),
         Some(PrincipalRole::SuperAdmin)
     );
-    assert_eq!(PrincipalRole::from_str("admin"), Some(PrincipalRole::Admin));
-    assert_eq!(PrincipalRole::from_str("user"), Some(PrincipalRole::User));
-    assert_eq!(PrincipalRole::from_str("invalid"), None);
+    assert_eq!(
+        "admin".parse::<PrincipalRole>().ok(),
+        Some(PrincipalRole::Admin)
+    );
+    assert_eq!(
+        "user".parse::<PrincipalRole>().ok(),
+        Some(PrincipalRole::User)
+    );
+    assert_eq!("invalid".parse::<PrincipalRole>().ok(), None);
 }
 
 #[test]
@@ -369,6 +410,20 @@ fn test_principal_masked_display() {
     assert!(masked.contains("PrincipalId(1)"));
     assert!(masked.contains("admin"));
     assert!(masked.contains("abcdef***"));
+}
+
+#[test]
+fn test_principal_masked_display_utf8_safe() {
+    let id = PrincipalId::new(1);
+    let token = SessionToken::new("test-token");
+    let fp = CertificateFingerprint::new("abcdeé123456").unwrap();
+
+    let principal = Principal::new(id, PrincipalRole::Admin, token, fp)
+        .expect("Principal creation should succeed");
+
+    let masked = principal.masked_display();
+    assert!(masked.contains("abcdeé***"));
+    assert!(!masked.contains("abcdeé123456"));
 }
 
 #[test]

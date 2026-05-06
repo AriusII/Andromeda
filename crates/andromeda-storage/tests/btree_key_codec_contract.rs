@@ -1,4 +1,4 @@
-//! N2-BTREE-003 Key Codec Contract Tests
+//! B-tree key codec contract tests.
 //!
 //! Comprehensive test suite for order-preserving key encoding/decoding
 //! and lexicographic comparison. Validates order preservation invariant
@@ -18,9 +18,7 @@ fn assert_golden(key: Key, expected: &[u8]) {
     assert_eq!(decoded, key, "golden decoding drift");
 }
 
-// ============================================================================
 // DEC-032 KeyV1 Golden Bytes and Gates
-// ============================================================================
 
 #[test]
 fn dec032_keyv1_golden_bytes_null() {
@@ -210,9 +208,7 @@ fn dec032_decode_composite_rejects_variable_width_without_schema_type_identity()
     );
 }
 
-// ============================================================================
 // Test Groups Organization
-// ============================================================================
 //
 // Group 1: Single Key Type Round-trips (8 tests)
 // Group 2: Composite Key Tests (4 tests)
@@ -220,13 +216,9 @@ fn dec032_decode_composite_rejects_variable_width_without_schema_type_identity()
 // Group 4: Determinism (4 tests)
 // Group 5: Edge Cases (6 tests)
 // Group 6: Comparator Operations (4 tests)
-// ============================================================================
 
-// ============================================================================
 // Group 1: Single Key Type Round-trips (Tests 1-8)
-// ============================================================================
 
-/// Test 1: Encode/decode null key
 #[test]
 fn test_codec_null_roundtrip() {
     let key = Key::Null;
@@ -235,7 +227,6 @@ fn test_codec_null_roundtrip() {
     assert_eq!(key, decoded, "null key roundtrip failed");
 }
 
-/// Test 2: Encode/decode int32 positive
 #[test]
 fn test_codec_int32_positive_roundtrip() {
     let key = Key::Int32(42);
@@ -244,7 +235,6 @@ fn test_codec_int32_positive_roundtrip() {
     assert_eq!(key, decoded, "int32 positive roundtrip failed");
 }
 
-/// Test 3: Encode/decode int32 negative
 #[test]
 fn test_codec_int32_negative_roundtrip() {
     let key = Key::Int32(-12345);
@@ -253,7 +243,6 @@ fn test_codec_int32_negative_roundtrip() {
     assert_eq!(key, decoded, "int32 negative roundtrip failed");
 }
 
-/// Test 4: Encode/decode int64 large positive
 #[test]
 fn test_codec_int64_large_positive_roundtrip() {
     let key = Key::Int64(9223372036854775807i64); // i64::MAX
@@ -262,7 +251,6 @@ fn test_codec_int64_large_positive_roundtrip() {
     assert_eq!(key, decoded, "int64 large positive roundtrip failed");
 }
 
-/// Test 5: Encode/decode int64 large negative
 #[test]
 fn test_codec_int64_large_negative_roundtrip() {
     let key = Key::Int64(-9223372036854775808i64); // i64::MIN
@@ -271,7 +259,6 @@ fn test_codec_int64_large_negative_roundtrip() {
     assert_eq!(key, decoded, "int64 large negative roundtrip failed");
 }
 
-/// Test 6: Encode/decode text UTF-8
 #[test]
 fn test_codec_text_utf8_roundtrip() {
     let key = Key::Text("Hello, 世界! 🌍 café".to_string());
@@ -280,7 +267,6 @@ fn test_codec_text_utf8_roundtrip() {
     assert_eq!(key, decoded, "text UTF-8 roundtrip failed");
 }
 
-/// Test 7: Encode/decode bytes
 #[test]
 fn test_codec_bytes_roundtrip() {
     let key = Key::Bytes(vec![0, 1, 255, 127, 128, 200, 50, 0]);
@@ -289,7 +275,6 @@ fn test_codec_bytes_roundtrip() {
     assert_eq!(key, decoded, "bytes roundtrip failed");
 }
 
-/// Test 8: Encode/decode composite (mixed types)
 #[test]
 fn test_codec_composite_mixed_roundtrip() {
     let datums = vec![
@@ -310,11 +295,8 @@ fn test_codec_composite_mixed_roundtrip() {
     }
 }
 
-// ============================================================================
 // Group 2: Composite Key Tests (Tests 9-12)
-// ============================================================================
 
-/// Test 9: Encode composite key from datums
 #[test]
 fn test_codec_encode_composite_key() {
     let cols = vec![Datum::Int32(42), Datum::Text("test".to_string())];
@@ -322,7 +304,6 @@ fn test_codec_encode_composite_key() {
     assert!(!encoded.is_empty(), "composite key should not be empty");
 }
 
-/// Test 10: Decode composite key to datums
 #[test]
 fn test_codec_decode_composite_datums() {
     let cols = vec![Datum::Int64(123), Datum::Int32(456), Datum::Bool(true)];
@@ -332,7 +313,6 @@ fn test_codec_decode_composite_datums() {
     assert_eq!(decoded.len(), 3, "decoded composite should have 3 columns");
 }
 
-/// Test 11: Composite with null value
 #[test]
 fn test_codec_composite_with_null() {
     let cols = vec![Datum::Null, Datum::Int64(11), Datum::Int32(42)];
@@ -346,7 +326,6 @@ fn test_codec_composite_with_null() {
     );
 }
 
-/// Test 12: Empty composite key should error
 #[test]
 fn test_codec_empty_composite_key_error() {
     let cols: Vec<Datum> = vec![];
@@ -354,14 +333,11 @@ fn test_codec_empty_composite_key_error() {
     assert!(result.is_err(), "empty composite key should produce error");
 }
 
-// ============================================================================
 // Group 3: Order Preservation Invariant (Tests 13-17)
-// ============================================================================
 
-/// Test 13: Order preservation for int32
 #[test]
 fn test_order_preservation_int32_sequence() {
-    let keys = vec![
+    let keys = [
         Key::Int32(i32::MIN),
         Key::Int32(-1000000),
         Key::Int32(-1),
@@ -388,10 +364,9 @@ fn test_order_preservation_int32_sequence() {
     }
 }
 
-/// Test 14: Order preservation for int64
 #[test]
 fn test_order_preservation_int64_extremes() {
-    let keys = vec![
+    let keys = [
         Key::Int64(i64::MIN),
         Key::Int64(-9223372036854775000i64),
         Key::Int64(-1),
@@ -417,10 +392,9 @@ fn test_order_preservation_int64_extremes() {
     }
 }
 
-/// Test 15: Order preservation for text
 #[test]
 fn test_order_preservation_text_lexicographic() {
-    let keys = vec![
+    let keys = [
         Key::Text("apple".to_string()),
         Key::Text("banana".to_string()),
         Key::Text("cherry".to_string()),
@@ -446,10 +420,9 @@ fn test_order_preservation_text_lexicographic() {
     }
 }
 
-/// Test 16: Order preservation for bytes
 #[test]
 fn test_order_preservation_bytes() {
-    let keys = vec![
+    let keys = [
         Key::Bytes(vec![0]),
         Key::Bytes(vec![1]),
         Key::Bytes(vec![100]),
@@ -473,11 +446,10 @@ fn test_order_preservation_bytes() {
     }
 }
 
-/// Test 17: Mixed type keys don't compare across types (each type separately)
 #[test]
 fn test_order_preservation_within_type() {
     // Verify that keys are ordered within their type, not across types
-    let int_keys = vec![Key::Int32(1), Key::Int32(2), Key::Int32(3)];
+    let int_keys = [Key::Int32(1), Key::Int32(2), Key::Int32(3)];
     let int_encoded: Vec<_> = int_keys
         .iter()
         .map(|k| KeyCodec::encode_key(k).unwrap())
@@ -490,11 +462,8 @@ fn test_order_preservation_within_type() {
     }
 }
 
-// ============================================================================
 // Group 4: Determinism Invariant (Tests 18-21)
-// ============================================================================
 
-/// Test 18: Determinism for int32
 #[test]
 fn test_determinism_int32() {
     let key = Key::Int32(42);
@@ -506,7 +475,6 @@ fn test_determinism_int32() {
     assert_eq!(enc2, enc3, "determinism failed: enc2 != enc3");
 }
 
-/// Test 19: Determinism for text
 #[test]
 fn test_determinism_text() {
     let key = Key::Text("hello world".to_string());
@@ -518,7 +486,6 @@ fn test_determinism_text() {
     assert_eq!(enc2, enc3, "text determinism failed");
 }
 
-/// Test 20: Determinism for bytes
 #[test]
 fn test_determinism_bytes() {
     let key = Key::Bytes(vec![1, 2, 255, 0, 127]);
@@ -528,7 +495,6 @@ fn test_determinism_bytes() {
     assert_eq!(enc1, enc2, "bytes determinism failed");
 }
 
-/// Test 21: Determinism for composite
 #[test]
 fn test_determinism_composite() {
     let cols = vec![
@@ -542,11 +508,8 @@ fn test_determinism_composite() {
     assert_eq!(enc1, enc2, "composite determinism failed");
 }
 
-// ============================================================================
 // Group 5: Edge Cases (Tests 22-27)
-// ============================================================================
 
-/// Test 22: Empty text key
 #[test]
 fn test_edge_case_empty_text() {
     let key = Key::Text("".to_string());
@@ -555,7 +518,6 @@ fn test_edge_case_empty_text() {
     assert_eq!(key, decoded, "empty text edge case failed");
 }
 
-/// Test 23: Empty bytes key
 #[test]
 fn test_edge_case_empty_bytes() {
     let key = Key::Bytes(vec![]);
@@ -564,7 +526,6 @@ fn test_edge_case_empty_bytes() {
     assert_eq!(key, decoded, "empty bytes edge case failed");
 }
 
-/// Test 24: Very large text key
 #[test]
 fn test_edge_case_large_text() {
     let large_text = "x".repeat(50000);
@@ -574,7 +535,6 @@ fn test_edge_case_large_text() {
     assert_eq!(key, decoded, "large text edge case failed");
 }
 
-/// Test 25: Zero int32 and int64
 #[test]
 fn test_edge_case_zero() {
     let key32 = Key::Int32(0);
@@ -589,7 +549,6 @@ fn test_edge_case_zero() {
     assert_eq!(key64, dec64, "zero int64 failed");
 }
 
-/// Test 26: Special UTF-8 characters
 #[test]
 fn test_edge_case_special_characters() {
     let key = Key::Text("🎉 emoji 中文 العربية".to_string());
@@ -598,7 +557,6 @@ fn test_edge_case_special_characters() {
     assert_eq!(key, decoded, "special characters edge case failed");
 }
 
-/// Test 27: Boundary values (min/max)
 #[test]
 fn test_edge_case_min_max_values() {
     let keys = vec![
@@ -615,11 +573,8 @@ fn test_edge_case_min_max_values() {
     }
 }
 
-// ============================================================================
 // Group 6: Comparator Operations (Tests 28-31)
-// ============================================================================
 
-/// Test 28: Comparator equality
 #[test]
 fn test_comparator_equal() {
     let key = Key::Int32(42);
@@ -631,7 +586,6 @@ fn test_comparator_equal() {
     );
 }
 
-/// Test 29: Comparator less than
 #[test]
 fn test_comparator_less_than() {
     let k1 = KeyCodec::encode_key(&Key::Int32(10)).expect("encode 10");
@@ -641,7 +595,6 @@ fn test_comparator_less_than() {
     assert_eq!(cmp, Ordering::Less, "less than comparison failed");
 }
 
-/// Test 30: Comparator greater than
 #[test]
 fn test_comparator_greater_than() {
     let k1 = KeyCodec::encode_key(&Key::Int32(20)).expect("encode 20");
@@ -651,7 +604,6 @@ fn test_comparator_greater_than() {
     assert_eq!(cmp, Ordering::Greater, "greater than comparison failed");
 }
 
-/// Test 31: Comparator range scan boundary
 #[test]
 fn test_comparator_range_boundary() {
     let key = KeyCodec::encode_key(&Key::Int32(50)).expect("encode");
@@ -661,11 +613,6 @@ fn test_comparator_range_boundary() {
     assert_eq!(cmp, Ordering::Less, "range boundary comparison failed");
 }
 
-// ============================================================================
-// Additional Stress Tests (Tests 32+)
-// ============================================================================
-
-/// Test 32: Order preservation stress test (100 random int32 values)
 #[test]
 fn test_stress_order_preservation_int32() {
     let values = vec![
@@ -713,13 +660,12 @@ fn test_stress_order_preservation_int32() {
     }
 }
 
-/// Test 33: Large composite key with many columns
 #[test]
 fn test_stress_large_composite_key() {
     let mut cols = vec![];
     for i in 0..20 {
         if i % 3 == 0 {
-            cols.push(Datum::Int32(i as i32));
+            cols.push(Datum::Int32(i));
         } else if i % 3 == 1 {
             cols.push(Datum::Text(format!("col_{}", i)));
         } else {
@@ -735,7 +681,6 @@ fn test_stress_large_composite_key() {
     assert_eq!(encoded, encoded2, "large composite determinism failed");
 }
 
-/// Test 34: Encoding format validation (format: [type_tag][length][value])
 #[test]
 fn test_encoding_format_validation() {
     let key = Key::Int32(42);
@@ -757,7 +702,6 @@ fn test_encoding_format_validation() {
     assert_eq!(length, 4, "int32 should have length 4, got {}", length);
 }
 
-/// Test 35: Null key ordering behavior
 #[test]
 fn test_null_key_ordering() {
     let null_key = Key::Null;

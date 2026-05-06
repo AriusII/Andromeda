@@ -1,10 +1,10 @@
-//! MVCC GC Production Gate Tests (Wave 21 Batch 7 Task 2)
+//! MVCC GC production gate tests.
 //!
-//! Comprehensive validation of MVCC garbage collection before Wave 21 Batch 8+ integration.
+//! Comprehensive validation of MVCC garbage collection before runtime integration.
 //!
 //! Tests validate:
 //! - Eligibility criteria: creator committed, end_ts invisible, closed versions
-//! - Scheduler behavior: triggering, waking on threshold, batch processing
+//! - Scheduler behavior: triggering, waking on threshold, reclamation work processing
 //! - Integration: table scans, heap space reclamation, long-running transaction blocking
 //! - Concurrency: 50 concurrent writers + GC scheduler, interference-free reads
 
@@ -18,9 +18,7 @@ mod mvcc_gc_gates {
     use std::sync::Arc;
     use std::time::Duration;
 
-    // ====================================================================
     // Helper fixtures
-    // ====================================================================
 
     fn setup_gc_system() -> (
         Arc<ActiveSnapshotRegistry>,
@@ -36,11 +34,6 @@ mod mvcc_gc_gates {
         (registry, status_table, collector)
     }
 
-    // ====================================================================
-    // ELIGIBILITY TESTS
-    // ====================================================================
-
-    /// Test: Version marked for reclamation iff creator_ts committed AND end_ts < min_active_snapshot_ts
     #[test]
     fn test_eligibility_criteria_creator_committed_and_end_ts_invisible() {
         let (registry, status_table, collector) = setup_gc_system();
@@ -68,7 +61,6 @@ mod mvcc_gc_gates {
         );
     }
 
-    /// Test: No version with active readers marked for reclamation
     #[test]
     fn test_eligibility_preserves_visible_versions() {
         let (registry, status_table, collector) = setup_gc_system();
@@ -102,7 +94,6 @@ mod mvcc_gc_gates {
         );
     }
 
-    /// Test: Committed version with end_ts = committed_ts is eligible after all snapshots close
     #[test]
     fn test_eligibility_snapshot_release_enables_reclamation() {
         let (registry, status_table, collector) = setup_gc_system();
@@ -136,7 +127,6 @@ mod mvcc_gc_gates {
         );
     }
 
-    /// Test: Live versions (end_ts = u64::MAX) are never marked for reclamation
     #[test]
     fn test_eligibility_live_versions_never_reclaimed() {
         let (registry, status_table, collector) = setup_gc_system();
@@ -157,7 +147,6 @@ mod mvcc_gc_gates {
         );
     }
 
-    /// Test: Rolled-back versions are always reclaimable
     #[test]
     fn test_eligibility_rolled_back_always_reclaimable() {
         let (_registry, status_table, collector) = setup_gc_system();
@@ -179,11 +168,6 @@ mod mvcc_gc_gates {
         );
     }
 
-    // ====================================================================
-    // SCHEDULER TESTS
-    // ====================================================================
-
-    /// Test: GC trigger on threshold (min_visible_ts movement)
     #[tokio::test]
     async fn test_scheduler_triggers_on_min_visible_ts_change() {
         let (registry, status_table, collector) = setup_gc_system();
@@ -229,7 +213,6 @@ mod mvcc_gc_gates {
         );
     }
 
-    /// Test: Background thread wakes on trigger and processes batch
     #[tokio::test]
     async fn test_scheduler_background_thread_processes_on_trigger() {
         let (registry, status_table, collector) = setup_gc_system();
@@ -273,7 +256,6 @@ mod mvcc_gc_gates {
         );
     }
 
-    /// Test: Processed versions stats updated atomically
     #[test]
     fn test_scheduler_stats_updated_atomically() {
         let (_registry, _status_table, collector) = setup_gc_system();
@@ -295,11 +277,6 @@ mod mvcc_gc_gates {
         assert_eq!(stats.versions_reclaimed, 1400, "Cumulative reclaimed count");
     }
 
-    // ====================================================================
-    // INTEGRATION TESTS
-    // ====================================================================
-
-    /// Test: After version reclamation, table scan still correct (new versions unaffected)
     #[test]
     fn test_integration_gc_preserves_scan_correctness() {
         let (registry, status_table, collector) = setup_gc_system();
@@ -336,7 +313,6 @@ mod mvcc_gc_gates {
         registry.release_snapshot(snap).expect("release snapshot");
     }
 
-    /// Test: Heap page space reclaimed after tuple delete + GC
     #[test]
     fn test_integration_reclamation_frees_space() {
         let (_registry, _status_table, collector) = setup_gc_system();
@@ -358,7 +334,6 @@ mod mvcc_gc_gates {
         );
     }
 
-    /// Test: Long-running transaction prevents GC of intermediate versions (correctness)
     #[tokio::test]
     async fn test_integration_long_running_tx_blocks_gc() {
         let (registry, status_table, collector) = setup_gc_system();
@@ -395,11 +370,6 @@ mod mvcc_gc_gates {
             .expect("release long snapshot");
     }
 
-    // ====================================================================
-    // CONCURRENCY TESTS
-    // ====================================================================
-
-    /// Test: 50 concurrent writers + 1 GC scheduler (no panics, no visibility violations)
     #[tokio::test]
     async fn test_concurrency_50_writers_plus_gc_scheduler_task() {
         let (_registry, status_table, collector) = setup_gc_system();
@@ -459,7 +429,6 @@ mod mvcc_gc_gates {
         );
     }
 
-    /// Test: GC doesn't interfere with active snapshot reads
     #[tokio::test]
     async fn test_concurrency_gc_safe_with_active_reads() {
         let (registry, status_table, collector) = setup_gc_system();
@@ -508,7 +477,6 @@ mod mvcc_gc_gates {
         assert!(stats.runs >= 1, "GC runs completed");
     }
 
-    /// Test: Concurrent GC eligibility checks don't deadlock or race
     #[test]
     fn test_concurrency_parallel_eligibility_checks() {
         let (registry, status_table, collector) = setup_gc_system();
@@ -539,11 +507,8 @@ mod mvcc_gc_gates {
         }
     }
 
-    // ====================================================================
     // EDGE CASES & ROBUSTNESS
-    // ====================================================================
 
-    /// Test: Eligibility checker handles zero transaction ID gracefully
     #[test]
     fn test_edge_case_zero_transaction_id() {
         let (_registry, _status_table, collector) = setup_gc_system();
@@ -555,7 +520,6 @@ mod mvcc_gc_gates {
         assert!(!result, "Zero tx_id not reclaimable (never committed)");
     }
 
-    /// Test: Eligibility checker handles very large timestamps
     #[test]
     fn test_edge_case_large_timestamps() {
         let (registry, status_table, collector) = setup_gc_system();
@@ -577,7 +541,6 @@ mod mvcc_gc_gates {
         );
     }
 
-    /// Test: Multiple status transitions don't corrupt GC state
     #[test]
     fn test_edge_case_status_transitions() {
         let (_registry, status_table, collector) = setup_gc_system();
@@ -602,11 +565,8 @@ mod mvcc_gc_gates {
         );
     }
 
-    // ====================================================================
     // METRICS & SUMMARY GENERATION
-    // ====================================================================
 
-    /// Test: GC stats generation includes all metrics
     #[test]
     fn test_metrics_gc_summary_complete() {
         let (registry, status_table, collector) = setup_gc_system();
@@ -638,7 +598,6 @@ mod mvcc_gc_gates {
         assert!(stats.runs >= 1);
     }
 
-    /// Test: Reclamation rate calculation (>95% of candidates)
     #[test]
     fn test_metrics_reclamation_rate_high() {
         let (_registry, _status_table, collector) = setup_gc_system();

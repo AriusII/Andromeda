@@ -1,4 +1,6 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, ContractHash};
+use andromeda_core::{AndromedaResult, ContractHash};
+
+use super::contract_error;
 
 pub(crate) fn validate_optional_contract_hash(
     label: &str,
@@ -13,17 +15,11 @@ pub(crate) fn validate_optional_contract_hash(
 
 pub(crate) fn validate_required_contract_hash(label: &str, bytes: &[u8]) -> AndromedaResult<()> {
     if bytes.len() != ContractHash::LEN {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Contract,
-            format!("{label} must be 32 bytes"),
-        ));
+        return contract_error(format!("{label} must be 32 bytes"));
     }
 
     if bytes.iter().all(|byte| *byte == 0) {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Contract,
-            format!("{label} must not be zero"),
-        ));
+        return contract_error(format!("{label} must not be zero"));
     }
 
     Ok(())

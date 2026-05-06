@@ -83,7 +83,7 @@ fn test_promotion_trace_on_release() {
 
     // Create promotion trace from the evidence
     for evidence in release_result.evidence {
-        if evidence.promoted_waiters.len() > 0 {
+        if !evidence.promoted_waiters.is_empty() {
             let promoted_waiter = &evidence.promoted_waiters[0];
             let promotion_trace = LockPromotionTrace::new(
                 promoted_waiter.tx_id,

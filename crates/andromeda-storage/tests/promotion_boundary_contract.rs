@@ -1,4 +1,4 @@
-//! F4 Promotion Boundary — Integration and Contract Tests
+//! Promotion boundary integration and contract tests.
 //!
 //! Tests verify that promotion eligibility can be queried without I/O, that all
 //! requirements are enforced, and that eligibility rankings work correctly.
@@ -23,10 +23,6 @@ fn make_requirements(
         has_conn,
     )
 }
-
-// ============================================================================
-// Core Eligibility Tests (6 required + extras)
-// ============================================================================
 
 #[test]
 fn test_replica_promoted_if_lsn_caught_up_and_member() {
@@ -126,10 +122,6 @@ fn test_promotion_eligibility_queryable_without_io() {
     assert!(result1.is_eligible());
 }
 
-// ============================================================================
-// Ranking and Selection Tests
-// ============================================================================
-
 #[test]
 fn test_multiple_eligible_replicas_ranked_by_lsn() {
     // Three replicas at different LSN positions
@@ -190,10 +182,6 @@ fn test_select_first_eligible_by_rank_order() {
     );
 }
 
-// ============================================================================
-// Requirement Validation Tests
-// ============================================================================
-
 #[test]
 fn test_requirements_lsn_gap_calculation() {
     let req_ahead = make_requirements(1500, 1000, true, true);
@@ -234,10 +222,6 @@ fn test_all_requirements_must_pass() {
     assert!(req4.validate().is_ok());
 }
 
-// ============================================================================
-// No Race Condition Tests
-// ============================================================================
-
 #[test]
 fn test_no_race_between_lsn_update_and_promotion_query() {
     // Simulates: LSN updates while eligibility is being checked
@@ -274,10 +258,6 @@ fn test_no_automatic_failover_eligibility_computation_only() {
     // (This test just verifies no side effects occurred in eligibility check)
 }
 
-// ============================================================================
-// Failover Trigger Documentation Tests
-// ============================================================================
-
 #[test]
 fn test_failover_trigger_descriptions_present() {
     // Verify all triggers have descriptions (for audit/operator logs)
@@ -299,7 +279,7 @@ fn test_failover_trigger_variants_are_documented_not_executed() {
     // Triggers are enum variants; they do NOT execute anything
     // They're for F6 orchestration layer to interpret
 
-    let triggers = vec![
+    let triggers = [
         FailoverTrigger::PrimaryUnreachable,
         FailoverTrigger::PrimaryHealthCheckFailed,
         FailoverTrigger::ManualFailoverRequested,
@@ -308,10 +288,6 @@ fn test_failover_trigger_variants_are_documented_not_executed() {
     // Just the act of creating triggers should be side-effect-free
     assert_eq!(triggers.len(), 3);
 }
-
-// ============================================================================
-// Promotion Candidate Tests
-// ============================================================================
 
 #[test]
 fn test_promotion_candidate_construction() {
@@ -343,10 +319,6 @@ fn test_promotion_eligibility_into_candidate_fails() {
     assert!(eligibility_bad.into_candidate().is_err());
 }
 
-// ============================================================================
-// Edge Cases
-// ============================================================================
-
 #[test]
 fn test_zero_lsn_values() {
     // Edge case: both at LSN 0 (fresh cluster)
@@ -358,7 +330,7 @@ fn test_zero_lsn_values() {
 #[test]
 fn test_large_lsn_values() {
     // Edge case: very large LSN values (near u64 max)
-    let max_safe = (u64::MAX / 2) as u64;
+    let max_safe = u64::MAX / 2;
     let req = make_requirements(max_safe, max_safe - 1000, true, true);
     let eligibility = is_promotion_eligible(10, &req, 100, 0);
     assert!(eligibility.is_eligible());
@@ -373,10 +345,6 @@ fn test_primary_ahead_way_ahead() {
     assert_eq!(req.lsn_gap(), 999000);
 }
 
-// ============================================================================
-// Integration with F3 Quorum State
-// ============================================================================
-
 #[test]
 fn test_promotion_candidate_with_quorum_epoch() {
     // Candidate has observed epoch from F3 quorum; F6 must ensure promoted epoch is higher
@@ -388,13 +356,9 @@ fn test_promotion_candidate_with_quorum_epoch() {
     // (This test just documents the contract)
 }
 
-// ============================================================================
-// Batch Validation Tests
-// ============================================================================
-
 #[test]
 fn test_batch_validate_candidates() {
-    let reqs = vec![
+    let reqs = [
         make_requirements(1000, 950, true, true),  // eligible
         make_requirements(900, 950, true, true),   // not eligible
         make_requirements(1000, 950, false, true), // not eligible
@@ -411,10 +375,6 @@ fn test_batch_validate_candidates() {
 
     assert_eq!(eligible_count, 2, "Should have 2 eligible candidates");
 }
-
-// ============================================================================
-// Documentation Tests (verify module is working as expected)
-// ============================================================================
 
 #[test]
 fn test_promotion_boundary_separates_f3_and_f6_concerns() {

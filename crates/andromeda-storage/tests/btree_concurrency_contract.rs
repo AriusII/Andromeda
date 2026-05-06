@@ -11,7 +11,7 @@ fn btree_concurrency_policy_is_transient_and_dec032_safe() {
     let policy = BTreeConcurrencyPolicy::default();
 
     assert!(policy.validate().is_ok());
-    assert!(!BTREE_DURABLE_FORMAT_PROMOTED);
+    const { assert!(!BTREE_DURABLE_FORMAT_PROMOTED) };
     assert!(!policy.durable_format_promoted());
     assert_eq!(
         policy.scan_consistency,

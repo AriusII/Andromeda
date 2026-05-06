@@ -290,8 +290,6 @@ pub fn validate_lsn_ordered(
 mod tests {
     use super::*;
 
-    // ===== Page Durability Fence Tests =====
-
     #[test]
     fn page_flush_allowed_when_lsn_equals_durable() {
         let page_lsn = Lsn::new(100);
@@ -330,8 +328,6 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // ===== Manifest Atomic Switch Tests =====
-
     #[test]
     fn manifest_switch_allowed_when_checkpoint_equals_wal_checkpoint() {
         let manifest_ckpt = Lsn::new(500);
@@ -367,8 +363,6 @@ mod tests {
         assert!(validate_manifest_atomic_switch(manifest_ckpt, wal_durable, wal_ckpt).is_ok());
     }
 
-    // ===== Recovery Floor Validation Tests =====
-
     #[test]
     fn recovery_allowed_when_floor_equals_required() {
         let floor = Lsn::new(300);
@@ -402,8 +396,6 @@ mod tests {
         assert!(validate_recovery_floor(recovery_floor, manifest_required_wal_start).is_ok());
     }
 
-    // ===== Strict LSN Ordering Tests =====
-
     #[test]
     fn strict_ordering_passes_when_earlier_strictly_less_than_later() {
         let earlier = Lsn::new(100);
@@ -428,8 +420,6 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // ===== Non-Decreasing LSN Ordering Tests =====
-
     #[test]
     fn non_decreasing_ordering_passes_when_earlier_less_than_later() {
         let earlier = Lsn::new(100);
@@ -451,8 +441,6 @@ mod tests {
         let result = validate_lsn_ordered(earlier, "old", later, "new");
         assert!(result.is_err());
     }
-
-    // ===== Combined Invariant Tests =====
 
     #[test]
     fn combined_page_flush_then_manifest_switch_is_safe() {
@@ -513,8 +501,6 @@ mod tests {
             .is_ok()
         );
     }
-
-    // ===== Edge Case Tests =====
 
     #[test]
     fn zero_lsn_comparisons_are_consistent() {

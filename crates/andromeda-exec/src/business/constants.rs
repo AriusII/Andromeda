@@ -14,20 +14,12 @@ pub const INVENTORY_RESERVE_STOCK_RESERVATION_ROWS_AFFECTED: u64 = 1;
 pub(super) const RESERVE_STOCK_PAYLOAD_DOMAIN: &[u8] =
     b"andromeda.business.inventory.reserve-stock.v1";
 
-// ---------------------------------------------------------------------------
-// Inventory.QueryStock constants (Wave 13, Batch 18)
-// ---------------------------------------------------------------------------
-
 /// Result stream id for `Inventory.QueryStock`.
 pub const INVENTORY_QUERY_STOCK_RESULT_STREAM_ID: u64 = 2;
 
 /// Column count in the `Inventory.QueryStock` result stream
 /// (ProductId, AvailableQuantity, Version).
 pub const INVENTORY_QUERY_STOCK_COLUMN_COUNT: u32 = 3;
-
-// ---------------------------------------------------------------------------
-// Inventory.ReleaseStock constants (Wave 13, Batch 18)
-// ---------------------------------------------------------------------------
 
 /// Result stream id for `Inventory.ReleaseStock`.
 pub const INVENTORY_RELEASE_STOCK_RESULT_STREAM_ID: u64 = 3;

@@ -2,7 +2,7 @@
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
 use std::collections::BTreeMap;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 /// Status of a transaction in the execution lifecycle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,20 +31,20 @@ impl TransactionStatusTable {
         status: TransactionStatus,
     ) -> AndromedaResult<()> {
         validate_transaction_id(transaction_id, "transaction status id must not be zero")?;
-        let mut statuses = self.statuses.lock().unwrap();
+        let mut statuses = self.lock_statuses();
         statuses.insert(transaction_id, status);
         Ok(())
     }
 
     pub fn status(&self, transaction_id: TransactionId) -> Option<TransactionStatus> {
-        let statuses = self.statuses.lock().unwrap();
+        let statuses = self.lock_statuses();
         statuses.get(&transaction_id).copied()
     }
 
     /// Set a transaction as committed (idempotent operation).
     pub fn set_committed(&self, transaction_id: TransactionId) -> AndromedaResult<()> {
         validate_transaction_id(transaction_id, "transaction status id must not be zero")?;
-        let mut statuses = self.statuses.lock().unwrap();
+        let mut statuses = self.lock_statuses();
         statuses.insert(transaction_id, TransactionStatus::Committed);
         Ok(())
     }
@@ -99,6 +99,12 @@ impl TransactionStatusTable {
     ) -> TransactionStatus {
         self.status(transaction_id)
             .unwrap_or(TransactionStatus::InFlight)
+    }
+
+    fn lock_statuses(&self) -> MutexGuard<'_, BTreeMap<TransactionId, TransactionStatus>> {
+        self.statuses
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 

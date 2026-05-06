@@ -12,7 +12,7 @@
 //!
 //! # Architecture
 //!
-//! ```ignore
+//! ```text
 //! RetentionBoundaryPolicy
 //!   ├── required_recovery_lsn (from manifest)
 //!   ├── min_active_snapshot_lsn (from snapshot registry)
@@ -174,9 +174,9 @@ impl RetentionBoundaryPolicy {
     ///
     /// - `required_recovery_lsn` must not exceed `min_active_snapshot_lsn`
     ///   (recovery boundary must be older than snapshots)
-    /// - `min_active_snapshot_lsn` must not exceed `pitr_retention_lsn`
-    ///   (snapshots must be older than PITR window)
     /// - `min_standby_received_lsn` is independent (HA may lag behind or ahead)
+    /// - `pitr_retention_lsn` is independent of active snapshots; PITR policy can retain an
+    ///   older range while active snapshots have already advanced beyond it.
     ///
     /// # Errors
     ///
@@ -187,15 +187,10 @@ impl RetentionBoundaryPolicy {
         min_standby_received_lsn: Lsn,
         pitr_retention_lsn: Lsn,
     ) -> AndromedaResult<Self> {
-        // Validate ordering: recovery <= snapshot <= pitr
+        // Validate ordering: recovery <= snapshot. Standby and PITR boundaries are independent.
         if required_recovery_lsn > min_active_snapshot_lsn {
             return Err(storage_error(
                 "required_recovery_lsn must not exceed min_active_snapshot_lsn",
-            ));
-        }
-        if min_active_snapshot_lsn > pitr_retention_lsn {
-            return Err(storage_error(
-                "min_active_snapshot_lsn must not exceed pitr_retention_lsn",
             ));
         }
 
@@ -226,11 +221,6 @@ impl RetentionBoundaryPolicy {
         if self.required_recovery_lsn > self.min_active_snapshot_lsn {
             return Err(storage_error(
                 "recovery LSN exceeds snapshot LSN (invariant violation)",
-            ));
-        }
-        if self.min_active_snapshot_lsn > self.pitr_retention_lsn {
-            return Err(storage_error(
-                "snapshot LSN exceeds PITR LSN (invariant violation)",
             ));
         }
         Ok(())
@@ -378,7 +368,7 @@ mod tests {
 
     #[test]
     fn retention_boundary_policy_validates_lsn_ordering() {
-        // Valid: recovery < snapshot < pitr
+        // Valid: recovery < snapshot. Standby and PITR boundaries are independent.
         let policy = RetentionBoundaryPolicy::new(
             Lsn::new(100),
             Lsn::new(200),
@@ -396,14 +386,14 @@ mod tests {
         );
         assert!(err.is_err());
 
-        // Invalid: snapshot > pitr
-        let err = RetentionBoundaryPolicy::new(
+        // Valid: snapshot may be ahead of PITR.
+        let policy = RetentionBoundaryPolicy::new(
             Lsn::new(100),
             Lsn::new(400),
             Lsn::new(150),
             Lsn::new(300),
         );
-        assert!(err.is_err());
+        assert!(policy.is_ok());
     }
 
     #[test]

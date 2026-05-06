@@ -132,7 +132,7 @@ impl SrplProcedureDefinition {
     /// # Returns
     ///
     /// A CatalogDefinition::Procedure with materialized contract.
-    pub fn into_catalog_procedure_def(
+    pub fn to_catalog_procedure_def(
         &self,
         object_id: CatalogObjectId,
         procedure_id: ProcedureId,
@@ -190,8 +190,8 @@ impl SrplProcedureDefinition {
             procedure_id,
             stats_version: StatsVersion::new(1), // Default stats version for new procedures
             protocol_layout: ProtocolLayoutRef {
-                descriptor_set_hash: ContractHash::test_vector(0xA1), // Placeholder
-                frame_envelope_hash: ContractHash::test_vector(0xA2), // Placeholder
+                descriptor_set_hash: ContractHash::test_vector(0xA1),
+                frame_envelope_hash: ContractHash::test_vector(0xA2),
             },
             inputs,
             structured_inputs: Vec::new(), // SRPL narrow procedures don't use structured inputs
@@ -276,7 +276,7 @@ mod tests {
         let source = "procedure Inventory.ReserveStock accepts (ProductId i64) returns Reservation one (Reserved bool);".to_string();
         let def = SrplProcedureDefinition::from_source(source);
 
-        let result = def.into_catalog_procedure_def(
+        let result = def.to_catalog_procedure_def(
             CatalogObjectId::new(1),
             ProcedureId::new(1),
             CatalogVersion::new(1),

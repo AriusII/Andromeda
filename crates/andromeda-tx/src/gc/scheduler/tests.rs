@@ -19,15 +19,13 @@ async fn test_gc_scheduler_task_respects_interval() {
         Duration::from_millis(50),
     ));
 
-    // Spawn the scheduler for a short period
-    let scheduler_task = scheduler.clone();
-    let handle = tokio::spawn(async move { scheduler_task.run_periodic_gc().await });
+    let handle = scheduler.clone().start();
 
-    // Let it run for 250ms
     tokio::time::sleep(Duration::from_millis(250)).await;
 
-    // Cancel the task
-    handle.abort();
+    let exit = handle.shutdown().await.expect("scheduler shutdown");
+    assert_eq!(exit.reason, GcSchedulerExitReason::ShutdownRequested);
+    assert!(exit.stats.ticks >= 1);
 
     // Check that GC ran at least once after the initial threshold observation.
     let stats = collector.get_stats();
@@ -38,8 +36,8 @@ async fn test_gc_scheduler_task_respects_interval() {
     );
 }
 
-#[tokio::test]
-async fn test_gc_scheduler_task_skips_when_no_change() {
+#[test]
+fn test_gc_scheduler_task_skips_when_no_change() {
     let registry = Arc::new(ActiveSnapshotRegistry::new());
     let status_table = Arc::new(TransactionStatusTable::new());
     let collector = Arc::new(crate::gc::MvccGarbageCollector::new(
@@ -47,10 +45,7 @@ async fn test_gc_scheduler_task_skips_when_no_change() {
         status_table,
     ));
 
-    let scheduler = Arc::new(GcSchedulerTask::new(
-        collector.clone(),
-        Duration::from_millis(50),
-    ));
+    let scheduler = GcSchedulerTask::new(collector.clone(), Duration::from_millis(50));
 
     // Register a snapshot so min_visible_ts is fixed
     let tx_id = TransactionId::new(1);
@@ -58,22 +53,14 @@ async fn test_gc_scheduler_task_skips_when_no_change() {
         .register_snapshot(SnapshotHandle::new(100, tx_id).expect("snapshot"))
         .expect("register");
 
-    // Spawn the scheduler
-    let scheduler_task = scheduler.clone();
-    let handle = tokio::spawn(async move { scheduler_task.run_periodic_gc().await });
+    let first = scheduler.tick_once().expect("initial tick");
+    let second = scheduler.tick_once().expect("stable tick");
 
-    // Let it run for 200ms (should attempt 4 GC runs)
-    tokio::time::sleep(Duration::from_millis(200)).await;
-
-    // Cancel the task
-    handle.abort();
-
-    // Since min_visible_ts didn't change, GC might not have actually
-    // executed the full scan (depends on implementation). At minimum,
-    // the loop should have completed multiple cycles.
-    let stats = collector.get_stats();
-    // This test is informational; actual run count depends on min_visible_ts changes
-    println!("GC runs after 200ms with no snapshot change: {}", stats.runs);
+    assert!(first.is_some());
+    assert!(second.is_none());
+    assert_eq!(collector.get_stats().runs, 1);
+    assert_eq!(scheduler.scheduler_stats().ticks, 2);
+    assert_eq!(scheduler.scheduler_stats().skipped_no_min_visible_change, 1);
 }
 
 #[test]
@@ -135,7 +122,10 @@ fn test_gc_scheduler_tick_advances_only_after_snapshot_frontier_moves() {
 
     let scheduler = GcSchedulerTask::new(collector.clone(), Duration::from_secs(1));
     assert!(scheduler.tick_once().expect("initial tick").is_some());
-    assert_eq!(scheduler.scheduler_stats().last_observed_min_visible_ts, 100);
+    assert_eq!(
+        scheduler.scheduler_stats().last_observed_min_visible_ts,
+        100
+    );
 
     assert!(scheduler.tick_once().expect("stable tick").is_none());
     assert_eq!(collector.get_stats().runs, 1);
@@ -160,7 +150,10 @@ fn test_gc_scheduler_detects_snapshot_cycle_after_empty_registry() {
 
     // Initial empty registry records u64::MAX.
     assert!(scheduler.tick_once().expect("initial empty tick").is_some());
-    assert_eq!(scheduler.scheduler_stats().last_observed_min_visible_ts, u64::MAX);
+    assert_eq!(
+        scheduler.scheduler_stats().last_observed_min_visible_ts,
+        u64::MAX
+    );
 
     // A new active snapshot moves the frontier backward. Running a bounded
     // evidence pass is safe and prevents starvation after the snapshot closes.

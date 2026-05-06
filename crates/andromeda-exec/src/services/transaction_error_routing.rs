@@ -71,6 +71,8 @@ pub struct RoutedTransactionError {
     pub audit: ExecutionTransitionTrace,
 }
 
+// Keep the evidence fields flat so callers pass the audited routing context explicitly.
+#[allow(clippy::too_many_arguments)]
 pub fn route_transaction_error(
     error_kind: ErrorKind,
     trace_id: TraceId,

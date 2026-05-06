@@ -124,4 +124,8 @@ impl StatsColumnTarget {
             column_index,
         }
     }
+
+    pub(crate) const fn canonical_key(self) -> (u64, u16) {
+        (self.object_id.get(), self.column_index)
+    }
 }

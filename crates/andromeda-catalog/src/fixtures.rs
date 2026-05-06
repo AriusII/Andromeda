@@ -187,20 +187,12 @@ pub fn inventory_reserve_stock_catalog_bindings(
     Ok(bindings)
 }
 
-// ---------------------------------------------------------------------------
-// Inventory.QueryStock fixture (Wave 13, Batch 18)
-// ---------------------------------------------------------------------------
-
 /// Catalog identifier for the `Inventory.QueryStock` read-only Procedure.
 pub const INVENTORY_QUERY_STOCK_PERMISSION: &str = "Inventory.QueryStock.Execute";
 /// Stable `ProcedureId` for `Inventory.QueryStock`.
 pub const INVENTORY_QUERY_STOCK_PROCEDURE_ID: ProcedureId = ProcedureId::new(0x5153);
 /// Stable `CatalogObjectId` for `Inventory.QueryStock`.
 pub const INVENTORY_QUERY_STOCK_OBJECT_ID: CatalogObjectId = CatalogObjectId::new(0x5153);
-
-// ---------------------------------------------------------------------------
-// Inventory.ReleaseStock fixture (Wave 13, Batch 18)
-// ---------------------------------------------------------------------------
 
 /// Catalog identifier for the `Inventory.ReleaseStock` write Procedure.
 pub const INVENTORY_RELEASE_STOCK_PERMISSION: &str = "Inventory.ReleaseStock.Execute";

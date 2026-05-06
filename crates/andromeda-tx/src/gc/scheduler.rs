@@ -5,7 +5,7 @@
 //!
 //! The scheduler deliberately does **not** own storage scanning, WAL, commit,
 //! or rollback critical paths. Each tick performs at most one synchronous
-//! [`MvccGarbageCollector::run_gc`] call, which currently records a GC pass and
+//! `MvccGarbageCollector::run_gc` call, which currently records a GC pass and
 //! returns visibility evidence. Actual version reclamation remains delegated to
 //! the storage/coordinator layer.
 

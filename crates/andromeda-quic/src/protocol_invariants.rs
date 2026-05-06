@@ -1,83 +1,27 @@
 //! Protocol drift detection and invariant validation.
-//!
-//! This module provides compile-time and runtime validation for protocol stability,
-//! ensuring QUIC frame format, Protobuf schema, and RPC contract discriminators
-//! remain stable across versions.
-//!
-//! ## Compile-Time Assertions
-//!
-//! Wire layout assertions prevent accidental changes to critical data structures:
-//! - FrameHeader encoded size and CRC position
-//! - CRC position immutability
-//! - ProtocolVersion structure
-//!
-//! ## Runtime Fingerprinting
-//!
-//! Fingerprints validate discriminator stability:
-//! - PayloadKind enum values locked to [1..8]
-//! - frame_type enum values locked to [1-8, 100]
-//! - Protocol version locked to V1.0
-//!
-//! ## Integration Points
-//!
-//! - D6 Protobuf Contract: Schema hash validation
-//! - Frame encoding/decoding: Ensure frame_type codes never mutate
-//! - RPC dispatch: Ensure PayloadKind discriminators stable
 
 use crate::{
     AUTH_FRAME_CODE, CONTRACT_REQUEST_FRAME_CODE, CONTRACT_RESPONSE_FRAME_CODE, ERROR_FRAME_CODE,
-    FrameHeader, HELLO_FRAME_CODE, RPC_BATCH_FRAME_CODE, RPC_COMPLETION_FRAME_CODE,
-    RPC_EXECUTE_REQUEST_FRAME_CODE, RPC_METADATA_FRAME_CODE, TELEMETRY_SOFT_SIGNAL_FRAME_CODE,
+    FRAME_CODEC_CRC_OFFSET, FRAME_CODEC_HEADER_LEN, FrameHeader, HELLO_FRAME_CODE,
+    RPC_BATCH_FRAME_CODE, RPC_COMPLETION_FRAME_CODE, RPC_EXECUTE_REQUEST_FRAME_CODE,
+    RPC_METADATA_FRAME_CODE, TELEMETRY_SOFT_SIGNAL_FRAME_CODE,
 };
-use andromeda_core::{AndromedaError, AndromedaErrorKind};
-use std::mem;
+use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use std::{mem, ops::RangeInclusive};
 
-// ============================================================================
-// Compile-Time Assertions: Frame Header Layout Stability
-// ============================================================================
+const _: () = assert!(FRAME_CODEC_HEADER_LEN == 52);
+const _: () = assert!(FRAME_CODEC_CRC_OFFSET == 48);
 
-/// Compile-time assertions for FrameHeader wire layout.
-///
-/// These assertions verify that the encoded FrameHeader layout never changes.
-/// Rust struct padding is not part of the wire protocol.
-///
-/// # Safety Invariants
-///
-/// - Encoded FrameHeader size exactly 52 bytes (must remain constant)
-/// - frame_type at offset 0 (FrameType = u32)
-/// - request_id at offset 4 (RequestId = u64)
-/// - session_id at offset 12 (SessionId = u64)
-/// - tx_id at offset 20 (Option<TransactionId> = Option<u64>, 16 bytes)
-/// - payload_length at offset 36 (u64)
-/// - flags at offset 44 (u32)
-/// - header_crc at offset 48 (u32)
-#[allow(non_snake_case)]
-pub const fn assert_frame_header_layout() {
-    // Note: D7 compile-time assertions are deferred; Rust struct size differs from the 52-byte wire header.
-    // This will be revisited in protocol versioning work.
-}
+pub const fn assert_frame_header_layout() {}
 
-/// Validates that FrameHeader maintains expected memory layout.
-///
-/// This function runs at initialization and validates struct layout
-/// using mem::offset_of where available, or delegates to assertions.
-pub fn validate_frame_header_layout() -> andromeda_core::AndromedaResult<()> {
-    // Invoke compile-time assertions
+/// Validates that the encoded frame header contract remains stable.
+pub fn validate_frame_header_layout() -> AndromedaResult<()> {
     assert_frame_header_layout();
-
-    // Runtime struct-size validation is intentionally omitted; the codec constants
-    // are the protocol contract.
-    Ok(())
+    ensure_usize(FRAME_CODEC_HEADER_LEN, 52, "FRAME_CODEC_HEADER_LEN")?;
+    ensure_usize(FRAME_CODEC_CRC_OFFSET, 48, "FRAME_CODEC_CRC_OFFSET")
 }
-
-// ============================================================================
-// Frame Type Discriminator Invariants (1-8, 100)
-// ============================================================================
 
 /// Frame type wire code invariants.
-///
-/// These constants lock frame type discriminators and prevent mutations
-/// that would break wire protocol compatibility.
 pub struct FrameTypeInvariants;
 
 impl FrameTypeInvariants {
@@ -109,136 +53,50 @@ impl FrameTypeInvariants {
         (TELEMETRY_SOFT_SIGNAL_FRAME_CODE, "TELEMETRY_SOFT_SIGNAL"),
     ];
 
+    const VALIDATION: &'static [(u32, u32, &'static str)] = &[
+        (HELLO_FRAME_CODE, 1, "HELLO_FRAME_CODE"),
+        (AUTH_FRAME_CODE, 2, "AUTH_FRAME_CODE"),
+        (
+            CONTRACT_REQUEST_FRAME_CODE,
+            3,
+            "CONTRACT_REQUEST_FRAME_CODE",
+        ),
+        (
+            CONTRACT_RESPONSE_FRAME_CODE,
+            4,
+            "CONTRACT_RESPONSE_FRAME_CODE",
+        ),
+        (
+            RPC_EXECUTE_REQUEST_FRAME_CODE,
+            5,
+            "RPC_EXECUTE_REQUEST_FRAME_CODE",
+        ),
+        (RPC_METADATA_FRAME_CODE, 6, "RPC_METADATA_FRAME_CODE"),
+        (RPC_BATCH_FRAME_CODE, 7, "RPC_BATCH_FRAME_CODE"),
+        (RPC_COMPLETION_FRAME_CODE, 8, "RPC_COMPLETION_FRAME_CODE"),
+        (ERROR_FRAME_CODE, 9, "ERROR_FRAME_CODE"),
+        (
+            TELEMETRY_SOFT_SIGNAL_FRAME_CODE,
+            100,
+            "TELEMETRY_SOFT_SIGNAL_FRAME_CODE",
+        ),
+    ];
+
     /// Validates that frame type codes remain locked.
-    pub fn validate() -> andromeda_core::AndromedaResult<()> {
-        // Validate Hello code
-        if HELLO_FRAME_CODE != 1 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Protocol,
-                format!(
-                    "HELLO_FRAME_CODE changed! Expected 1, got {}",
-                    HELLO_FRAME_CODE
-                ),
-            ));
+    pub fn validate() -> AndromedaResult<()> {
+        for (actual, expected, name) in Self::VALIDATION {
+            ensure_u32(*actual, *expected, name)?;
         }
-
-        // Validate Auth code
-        if AUTH_FRAME_CODE != 2 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Protocol,
-                format!(
-                    "AUTH_FRAME_CODE changed! Expected 2, got {}",
-                    AUTH_FRAME_CODE
-                ),
-            ));
-        }
-
-        // Validate Contract Request code
-        if CONTRACT_REQUEST_FRAME_CODE != 3 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Protocol,
-                format!(
-                    "CONTRACT_REQUEST_FRAME_CODE changed! Expected 3, got {}",
-                    CONTRACT_REQUEST_FRAME_CODE
-                ),
-            ));
-        }
-
-        // Validate Contract Response code
-        if CONTRACT_RESPONSE_FRAME_CODE != 4 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Protocol,
-                format!(
-                    "CONTRACT_RESPONSE_FRAME_CODE changed! Expected 4, got {}",
-                    CONTRACT_RESPONSE_FRAME_CODE
-                ),
-            ));
-        }
-
-        // Validate RPC Execute Request code
-        if RPC_EXECUTE_REQUEST_FRAME_CODE != 5 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Protocol,
-                format!(
-                    "RPC_EXECUTE_REQUEST_FRAME_CODE changed! Expected 5, got {}",
-                    RPC_EXECUTE_REQUEST_FRAME_CODE
-                ),
-            ));
-        }
-
-        // Validate RPC Metadata code
-        if RPC_METADATA_FRAME_CODE != 6 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Protocol,
-                format!(
-                    "RPC_METADATA_FRAME_CODE changed! Expected 6, got {}",
-                    RPC_METADATA_FRAME_CODE
-                ),
-            ));
-        }
-
-        // Validate RPC Batch code
-        if RPC_BATCH_FRAME_CODE != 7 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Protocol,
-                format!(
-                    "RPC_BATCH_FRAME_CODE changed! Expected 7, got {}",
-                    RPC_BATCH_FRAME_CODE
-                ),
-            ));
-        }
-
-        // Validate RPC Completion code
-        if RPC_COMPLETION_FRAME_CODE != 8 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Protocol,
-                format!(
-                    "RPC_COMPLETION_FRAME_CODE changed! Expected 8, got {}",
-                    RPC_COMPLETION_FRAME_CODE
-                ),
-            ));
-        }
-
-        // Validate Error code
-        if ERROR_FRAME_CODE != 9 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Protocol,
-                format!(
-                    "ERROR_FRAME_CODE changed! Expected 9, got {}",
-                    ERROR_FRAME_CODE
-                ),
-            ));
-        }
-
-        // Validate Telemetry Soft Signal code
-        if TELEMETRY_SOFT_SIGNAL_FRAME_CODE != 100 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Protocol,
-                format!(
-                    "TELEMETRY_SOFT_SIGNAL_FRAME_CODE changed! Expected 100, got {}",
-                    TELEMETRY_SOFT_SIGNAL_FRAME_CODE
-                ),
-            ));
-        }
-
         Ok(())
     }
 }
 
-// ============================================================================
-// Payload Kind Discriminator Invariants (1-8)
-// ============================================================================
-
 /// Payload kind wire code invariants.
-///
-/// PayloadKind discriminators form the RPC dispatch boundary and must
-/// remain locked to ensure backward compatibility with older clients/servers.
-/// (Validation deferred pending PayloadKind type availability.)
 pub struct PayloadKindInvariants;
 
 impl PayloadKindInvariants {
     /// Locked payload kind discriminator values.
-    pub const LOCKED_RANGE: std::ops::RangeInclusive<u32> = 1..=8;
+    pub const LOCKED_RANGE: RangeInclusive<u32> = 1..=8;
 
     /// Expected discriminator values for RPC contract binding.
     pub const PAYLOAD_HELLO: u32 = 1;
@@ -251,21 +109,50 @@ impl PayloadKindInvariants {
     pub const PAYLOAD_RPC_COMPLETION: u32 = 8;
     pub const PAYLOAD_ERROR: u32 = 9;
 
+    const VALIDATION: &'static [(u32, u32, &'static str)] = &[
+        (Self::PAYLOAD_HELLO, 1, "PAYLOAD_HELLO"),
+        (Self::PAYLOAD_AUTH, 2, "PAYLOAD_AUTH"),
+        (
+            Self::PAYLOAD_CONTRACT_REQUEST,
+            3,
+            "PAYLOAD_CONTRACT_REQUEST",
+        ),
+        (
+            Self::PAYLOAD_CONTRACT_RESPONSE,
+            4,
+            "PAYLOAD_CONTRACT_RESPONSE",
+        ),
+        (
+            Self::PAYLOAD_RPC_EXECUTE_REQUEST,
+            5,
+            "PAYLOAD_RPC_EXECUTE_REQUEST",
+        ),
+        (Self::PAYLOAD_RPC_METADATA, 6, "PAYLOAD_RPC_METADATA"),
+        (Self::PAYLOAD_RPC_BATCH, 7, "PAYLOAD_RPC_BATCH"),
+        (Self::PAYLOAD_RPC_COMPLETION, 8, "PAYLOAD_RPC_COMPLETION"),
+        (Self::PAYLOAD_ERROR, 9, "PAYLOAD_ERROR"),
+    ];
+
     /// Validates that PayloadKind discriminators remain locked in range [1..8].
-    /// (Deferred pending type availability.)
-    pub fn validate() -> andromeda_core::AndromedaResult<()> {
+    pub fn validate() -> AndromedaResult<()> {
+        ensure_u32(
+            *Self::LOCKED_RANGE.start(),
+            1,
+            "PAYLOAD_KIND_LOCKED_RANGE_START",
+        )?;
+        ensure_u32(
+            *Self::LOCKED_RANGE.end(),
+            8,
+            "PAYLOAD_KIND_LOCKED_RANGE_END",
+        )?;
+        for (actual, expected, name) in Self::VALIDATION {
+            ensure_u32(*actual, *expected, name)?;
+        }
         Ok(())
     }
 }
 
-// ============================================================================
-// Protocol Version Invariants (V1.0 Lock)
-// ============================================================================
-
 /// Protocol version invariants.
-///
-/// Ensures ProtocolVersion remains locked to V1.0 (major=1, minor=0)
-/// for all wire frames in Andromeda V0.5.
 pub struct ProtocolVersionInvariants;
 
 impl ProtocolVersionInvariants {
@@ -274,24 +161,13 @@ impl ProtocolVersionInvariants {
     pub const LOCKED_MINOR: u32 = 0;
 
     /// Validates that protocol version is locked at V1.0.
-    pub fn validate() -> andromeda_core::AndromedaResult<()> {
-        // Verify constants are set correctly (this is compile-time guaranteed)
-        const _: () = assert!(
-            ProtocolVersionInvariants::LOCKED_MAJOR == 1
-                && ProtocolVersionInvariants::LOCKED_MINOR == 0
-        );
-        Ok(())
+    pub fn validate() -> AndromedaResult<()> {
+        ensure_u32(Self::LOCKED_MAJOR, 1, "PROTOCOL_LOCKED_MAJOR")?;
+        ensure_u32(Self::LOCKED_MINOR, 0, "PROTOCOL_LOCKED_MINOR")
     }
 }
 
-// ============================================================================
-// Master Protocol Invariant Validation
-// ============================================================================
-
 /// Master validator for all protocol invariants.
-///
-/// This struct orchestrates compile-time and runtime checks to ensure
-/// protocol stability across frame format, discriminators, and versioning.
 pub struct ProtocolInvariants;
 
 impl ProtocolInvariants {
@@ -299,17 +175,10 @@ impl ProtocolInvariants {
     ///
     /// Should be called once at module initialization or during
     /// connection setup to catch any protocol drift early.
-    pub fn validate_all() -> andromeda_core::AndromedaResult<()> {
-        // Check frame header layout
+    pub fn validate_all() -> AndromedaResult<()> {
         validate_frame_header_layout()?;
-
-        // Check frame type codes locked
         FrameTypeInvariants::validate()?;
-
-        // Check payload kind discriminators locked
         PayloadKindInvariants::validate()?;
-
-        // Check protocol version locked to V1.0
         ProtocolVersionInvariants::validate()?;
 
         Ok(())
@@ -321,7 +190,6 @@ impl ProtocolInvariants {
 
         report.push_str("=== Protocol Invariants Diagnostic Report ===\n\n");
 
-        // Frame header layout
         report.push_str("Frame Header Layout:\n");
         report.push_str(&format!(
             "  Size: {} bytes (expected 52)\n",
@@ -332,13 +200,11 @@ impl ProtocolInvariants {
             FrameTypeInvariants::LOCKED_CODES.len()
         ));
 
-        // Frame type codes
         report.push_str("\nFrame Type Codes:\n");
         for (code, name) in FrameTypeInvariants::EXPECTED {
             report.push_str(&format!("  {}: {}\n", name, code));
         }
 
-        // Payload kind discriminators
         report.push_str("\nPayload Kind Discriminators:\n");
         report.push_str(&format!(
             "  Range: {}..{}\n",
@@ -346,7 +212,6 @@ impl ProtocolInvariants {
             PayloadKindInvariants::LOCKED_RANGE.end()
         ));
 
-        // Protocol version
         report.push_str("\nProtocol Version Lock:\n");
         report.push_str(&format!(
             "  V{}.{} (major={}, minor={})\n",
@@ -358,6 +223,28 @@ impl ProtocolInvariants {
 
         report
     }
+}
+
+fn ensure_u32(actual: u32, expected: u32, name: &'static str) -> AndromedaResult<()> {
+    if actual == expected {
+        return Ok(());
+    }
+
+    Err(AndromedaError::new(
+        AndromedaErrorKind::Protocol,
+        format!("{name} changed! Expected {expected}, got {actual}"),
+    ))
+}
+
+fn ensure_usize(actual: usize, expected: usize, name: &'static str) -> AndromedaResult<()> {
+    if actual == expected {
+        return Ok(());
+    }
+
+    Err(AndromedaError::new(
+        AndromedaErrorKind::Protocol,
+        format!("{name} changed! Expected {expected}, got {actual}"),
+    ))
 }
 
 #[cfg(test)]

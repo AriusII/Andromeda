@@ -24,9 +24,7 @@ fn make_snapshot_registry() -> Arc<ActiveSnapshotRegistry> {
     Arc::new(ActiveSnapshotRegistry::new())
 }
 
-// ========================
 // Criterion 1: Creator Committed
-// ========================
 
 #[test]
 fn test_creator_committed_true() {
@@ -78,9 +76,7 @@ fn test_creator_rolled_back_false() {
     assert!(!eligibility.is_creator_committed);
 }
 
-// ========================
 // Criterion 2: End Timestamp Invisible
-// ========================
 
 #[test]
 fn test_end_ts_strictly_less_than_min_visible() {
@@ -151,9 +147,7 @@ fn test_end_ts_greater_than_min_visible_not_invisible() {
     snapshot_registry.release_snapshot(snapshot_handle).unwrap();
 }
 
-// ========================
 // Criterion 3: Grace Period Met
-// ========================
 
 #[test]
 fn test_grace_period_not_met_below_threshold() {
@@ -224,9 +218,7 @@ fn test_grace_period_met_above_threshold() {
     assert!(eligibility.is_grace_period_met);
 }
 
-// ========================
 // Combination Tests: One Criterion Fails
-// ========================
 
 #[test]
 fn test_ineligible_only_creator_fails() {
@@ -293,9 +285,7 @@ fn test_ineligible_only_grace_period_fails() {
     assert!(!eligibility.is_fully_eligible());
 }
 
-// ========================
 // Combination Tests: Multiple Criteria Fail
-// ========================
 
 #[test]
 fn test_ineligible_creator_and_end_ts_fail() {
@@ -353,10 +343,6 @@ fn test_ineligible_all_three_criteria_fail() {
     snapshot_registry.release_snapshot(snapshot_handle).unwrap();
 }
 
-// ========================
-// Fully Eligible Tests
-// ========================
-
 #[test]
 fn test_fully_eligible_all_criteria_pass() {
     let status_table = make_status_table();
@@ -403,10 +389,6 @@ fn test_fully_eligible_with_multiple_snapshots() {
         snapshot_registry.release_snapshot(handle).unwrap();
     }
 }
-
-// ========================
-// Edge Cases and Boundary Tests
-// ========================
 
 #[test]
 fn test_version_at_min_visible_boundary() {
@@ -486,10 +468,6 @@ fn test_large_grace_period() {
     assert!(eligibility2.is_grace_period_met);
 }
 
-// ========================
-// Statistics Tests
-// ========================
-
 #[test]
 fn test_stats_accumulate_correctly() {
     let status_table = make_status_table();
@@ -542,9 +520,7 @@ fn test_stats_reset_works() {
     assert_eq!(stats_after.versions_eligible, 0);
 }
 
-// ========================
 // Invariant Validation Tests
-// ========================
 
 #[test]
 fn test_invariant_no_visible_version_eligible() {
@@ -597,9 +573,7 @@ fn test_is_eligible_method_consistency() {
     assert_eq!(is_eligible, eligibility.is_fully_eligible());
 }
 
-// ========================
-// Wave 21 Batch 4 Task 4: Aborted and In-Flight Version Handling
-// ========================
+// Aborted and in-flight version handling.
 // 18+ Tests for aborted and in-flight version edge cases
 
 #[test]

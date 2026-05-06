@@ -407,7 +407,7 @@ impl<S: PageStore> BufferPool<S> {
             };
 
             // Attempt flush: begin_flush, write, finish_flush
-            if let Err(_) = self.frames[index].begin_flush() {
+            if self.frames[index].begin_flush().is_err() {
                 result
                     .errors
                     .push(FlushError::InvalidFrameState { page_id });
@@ -421,7 +421,7 @@ impl<S: PageStore> BufferPool<S> {
                 continue;
             }
 
-            if let Err(_) = self.frames[index].finish_flush(first_dirty_lsn) {
+            if self.frames[index].finish_flush(first_dirty_lsn).is_err() {
                 result
                     .errors
                     .push(FlushError::InvalidFrameState { page_id });
@@ -429,7 +429,7 @@ impl<S: PageStore> BufferPool<S> {
             }
 
             // Mark clean only on successful flush
-            if let Err(_) = self.dirty_tracker.mark_clean(page_id) {
+            if self.dirty_tracker.mark_clean(page_id).is_err() {
                 result.errors.push(FlushError::StorageError(format!(
                     "Failed to mark page {} clean after flush",
                     page_id.get()

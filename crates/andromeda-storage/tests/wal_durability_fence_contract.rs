@@ -19,12 +19,6 @@ use andromeda_storage::{
     validate_wal_durability_before_page_flush,
 };
 
-// ============================================================================
-// PART 1: Page Durability Fence Tests (5 tests)
-// ============================================================================
-// These tests verify that pages cannot be flushed until their modification
-// LSN is durable in the WAL.
-
 #[test]
 fn page_can_flush_when_first_dirty_lsn_equals_wal_durable_lsn() {
     // Setup: Page dirtied at LSN 100, WAL durable through 100
@@ -104,13 +98,6 @@ fn page_zero_lsn_special_case() {
         "Zero LSN page should be flushable"
     );
 }
-
-// ============================================================================
-// PART 2: Manifest Atomic Switch Tests (5 tests)
-// ============================================================================
-// These tests verify that manifest versions can only advance once all changes
-// are durable in the WAL. This prevents crash scenarios where a manifest
-// refers to WAL records that don't exist.
 
 #[test]
 fn manifest_can_switch_when_checkpoint_equals_wal_checkpoint() {
@@ -215,13 +202,6 @@ fn manifest_atomic_switch_error_includes_lsn_details() {
     );
 }
 
-// ============================================================================
-// PART 3: Recovery Floor Validation Tests (3 tests)
-// ============================================================================
-// These tests verify that crash recovery can safely begin from the recovery
-// floor LSN. The floor must be ≥ manifest's required WAL start, or recovery
-// would miss necessary WAL records.
-
 #[test]
 fn recovery_allowed_when_floor_equals_required() {
     // Setup: Manifest requires recovery to start at LSN 300
@@ -272,11 +252,6 @@ fn recovery_blocked_when_floor_precedes_required() {
     );
 }
 
-// ============================================================================
-// PART 4: LSN Monotonicity Tests (2 tests)
-// ============================================================================
-// These tests verify strict LSN ordering across state transitions.
-
 #[test]
 fn lsn_monotonicity_enforced_across_checkpoint_versions() {
     // Setup: Checkpoint V1 at LSN 100, Checkpoint V2 at LSN 200
@@ -307,11 +282,6 @@ fn lsn_strict_ordering_rejects_equal_lsns() {
     assert!(result.is_err(), "Strict ordering should reject equal LSNs");
 }
 
-// ============================================================================
-// PART 5: Combined Scenario Tests (3+ tests)
-// ============================================================================
-// These tests simulate realistic system behaviors and crash scenarios.
-
 #[test]
 fn scenario_steady_state_all_pages_flushed() {
     // Scenario: Normal operation - multiple pages dirty, WAL durable, flush succeeds
@@ -340,7 +310,7 @@ fn scenario_crash_at_manifest_switch_requires_recovery_floor_check() {
 
     // Old manifest state:
     let old_manifest_checkpoint = Lsn::new(300);
-    let old_manifest_required_wal_start = Lsn::new(100); // Can start recovery here
+    let _old_manifest_required_wal_start = Lsn::new(100); // Can start recovery here
 
     // New manifest (being written):
     let new_manifest_checkpoint = Lsn::new(500);
@@ -420,11 +390,11 @@ fn scenario_burst_of_page_modifications_then_flush() {
     let wal_durable_step1 = Lsn::new(1005); // Partial drain
     let wal_durable_step2 = Lsn::new(1010); // Complete drain
 
-    // Step 1: Only first two pages flushable
-    for page_lsn in page_modifications.iter().take(2) {
+    // Step 1: Pages through LSN 1005 are flushable.
+    for page_lsn in page_modifications.iter().take(3) {
         assert!(validate_wal_durability_before_page_flush(*page_lsn, wal_durable_step1).is_ok());
     }
-    for page_lsn in page_modifications.iter().skip(2) {
+    for page_lsn in page_modifications.iter().skip(3) {
         assert!(validate_wal_durability_before_page_flush(*page_lsn, wal_durable_step1).is_err());
     }
 
@@ -433,10 +403,6 @@ fn scenario_burst_of_page_modifications_then_flush() {
         assert!(validate_wal_durability_before_page_flush(*page_lsn, wal_durable_step2).is_ok());
     }
 }
-
-// ============================================================================
-// PART 6: Edge Case Tests (2+ tests)
-// ============================================================================
 
 #[test]
 fn edge_case_max_lsn_comparisons() {
@@ -481,10 +447,6 @@ fn edge_case_error_messages_are_informative() {
     );
 }
 
-// ============================================================================
-// PART 7: Integration Tests (2+ tests)
-// ============================================================================
-
 #[test]
 fn integration_full_checkpoint_workflow() {
     // Simulate a complete checkpoint sequence:
@@ -527,7 +489,7 @@ fn integration_multiple_checkpoints_each_advances_recovery_floor() {
     // Simulate: System runs multiple checkpoints over time
     // Each advances the recovery floor forward
 
-    let checkpoints = vec![
+    let checkpoints = [
         (Lsn::new(100), Lsn::new(100)),
         (Lsn::new(300), Lsn::new(300)),
         (Lsn::new(600), Lsn::new(600)),

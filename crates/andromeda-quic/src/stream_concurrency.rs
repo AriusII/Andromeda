@@ -1,95 +1,39 @@
-//! Stream concurrency manager and cancellation semantics for QUIC streams carrying
-//! Andromeda procedure invocations.
-//!
-//! This module provides:
-//!
-//! 1. **Stream Lifecycle Model** — Maps stream states to invocation states:
-//!    - Created: Stream allocated but not yet active
-//!    - Active: Stream accepting frames
-//!    - Cancelling: Client or server initiated cancellation in progress
-//!    - Terminal: Stream completed (success or error)
-//!
-//! 2. **Backpressure Protocol** — Signals between client and server:
-//!    - Backpressure Request: Server signals that it cannot accept new streams
-//!    - Backpressure Response: Client acknowledges and may retry after delay
-//!
-//! 3. **Cancellation Semantics** — Three cancellation paths:
-//!    - Client-initiated cancellation (explicit request)
-//!    - Server graceful shutdown (all streams drained)
-//!    - Orphan stream cleanup (timeout or connection loss)
-//!
-//! 4. **Concurrency Bounds** — Prevents resource exhaustion:
-//!    - Max concurrent streams per connection (V0: 128, tunable)
-//!    - Timeout: 30s idle timeout, 5min overall request timeout
-//!
-//! 5. **Race Condition Safety** — Atomic state transitions ensure:
-//!    - Simultaneous cancel + completion resolved deterministically
-//!    - No double-completion or lost events
+//! Stream concurrency, cancellation, timeout, and backpressure state for QUIC
+//! streams carrying Andromeda procedure invocations.
 
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, InvocationId, RequestId,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet, hash_map::Entry};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime};
 
 /// Stream lifecycle state.
-///
-/// Transitions follow the state machine:
-/// ```text
-///              ┌──────────┐
-///   new() ────▶│ Created  │
-///              └────┬─────┘
-///                   │ accept_first_frame()
-///                   ▼
-///              ┌──────────┐
-///              │ Active   │◀─────────┐
-///              └────┬─────┘          │
-///                   │                │ (processing frames)
-///                   ├─────────────────┘
-///                   │
-///          ┌────────┼────────┐
-///          │                 │
-///   client_cancel()   mark_complete()
-///    or timeout()        or error()
-///          │                 │
-///          ▼                 ▼
-///     ┌──────────┐     ┌──────────┐
-///     │Cancelling│     │ Terminal │
-///     └────┬─────┘     └──────────┘
-///          │
-///   wait_graceful()
-///          │
-///          ▼
-///     ┌──────────┐
-///     │ Terminal │
-///     └──────────┘
-/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StreamState {
-    /// Stream created, awaiting first frame
+    /// Stream created, awaiting first frame.
     Created,
-    /// Stream active, accepting frames
+    /// Stream active, accepting frames.
     Active,
-    /// Cancellation in progress
+    /// Cancellation in progress.
     Cancelling,
-    /// Stream terminal (completed or failed)
+    /// Stream terminal (completed or failed).
     Terminal,
 }
 
 /// Reason for stream cancellation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CancellationReason {
-    /// Client explicitly requested cancellation
+    /// Client explicitly requested cancellation.
     ClientRequested,
-    /// Server initiated graceful shutdown
+    /// Server initiated graceful shutdown.
     ServerGracefulShutdown,
-    /// Stream exceeded idle timeout (30s)
+    /// Stream exceeded idle timeout.
     IdleTimeout,
-    /// Stream exceeded overall timeout (5min)
+    /// Stream exceeded overall timeout.
     OverallTimeout,
-    /// Connection lost while stream active
+    /// Connection lost while stream active.
     ConnectionLost,
 }
 
@@ -99,26 +43,26 @@ pub enum CancellationReason {
 /// new stream creation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BackpressureRequest {
-    /// Server-reported reason for backpressure
+    /// Server-reported reason for backpressure.
     pub reason: BackpressureReason,
-    /// Recommended delay before retry in milliseconds
+    /// Recommended delay before retry in milliseconds.
     pub retry_after_millis: u64,
-    /// Optional request ID if backpressure is tied to a specific request
+    /// Optional request ID if backpressure is tied to a specific request.
     pub request_id: Option<RequestId>,
 }
 
 /// Server-side backpressure reason.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BackpressureReason {
-    /// Receive buffer saturated
+    /// Receive buffer saturated.
     ReceiveBufferSaturated,
-    /// Execution queue saturated
+    /// Execution queue saturated.
     ExecutionQueueSaturated,
-    /// WAL flush lagging
+    /// WAL flush lagging.
     WalFlushLag,
-    /// Hot store pressure
+    /// Hot store pressure.
     HotStorePressure,
-    /// Result spool growing
+    /// Result spool growing.
     ResultSpoolGrowth,
 }
 
@@ -139,7 +83,7 @@ impl CancellationToken {
     }
 
     /// Returns the raw token value.
-    pub fn get(&self) -> u64 {
+    pub const fn get(self) -> u64 {
         self.0
     }
 }
@@ -147,15 +91,10 @@ impl CancellationToken {
 /// Stream metadata bound to a single concurrent procedure invocation.
 #[derive(Debug)]
 struct StreamMetadata {
-    /// Stream state
     state: StreamState,
-    /// Stream creation timestamp (for timeout tracking)
     created_at: SystemTime,
-    /// Last frame received timestamp (for idle timeout tracking)
     last_activity_at: SystemTime,
-    /// Cancellation token (deterministic, set at creation)
     cancellation_token: CancellationToken,
-    /// Cancellation reason, if stream was cancelled
     cancellation_reason: Option<CancellationReason>,
 }
 
@@ -175,15 +114,10 @@ struct StreamMetadata {
 /// 3. Cancellation tokens are deterministic and never reused within a connection.
 /// 4. Timeouts are detected on observation, not enforced by background tasks.
 pub struct StreamConcurrencyManager {
-    /// Map of invocation ID → stream metadata
     streams: HashMap<InvocationId, StreamMetadata>,
-    /// Maximum concurrent streams (configurable)
     max_concurrent: usize,
-    /// Idle timeout duration
     idle_timeout: Duration,
-    /// Overall request timeout duration
     overall_timeout: Duration,
-    /// Global stream counter for total created streams
     total_streams_created: Arc<AtomicU64>,
 }
 
@@ -225,18 +159,11 @@ impl StreamConcurrencyManager {
         }
     }
 
-    /// Creates a new stream, allocating an invocation ID.
-    ///
-    /// Returns `Err` if:
-    /// - The concurrency limit is reached (returns `BackpressureRequest`)
-    /// - The invocation ID is already in use
-    ///
-    /// Returns `Ok` with the cancellation token on success.
+    /// Creates a new stream and returns its cancellation token.
     pub fn create_stream(
         &mut self,
         invocation_id: InvocationId,
     ) -> AndromedaResult<CancellationToken> {
-        // Check concurrency limit
         if self.streams.len() >= self.max_concurrent {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Resource,
@@ -244,17 +171,8 @@ impl StreamConcurrencyManager {
             ));
         }
 
-        // Ensure no duplicate invocation IDs
-        if self.streams.contains_key(&invocation_id) {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Transport,
-                "stream already exists for this invocation ID",
-            ));
-        }
-
         let now = SystemTime::now();
         let cancellation_token = CancellationToken::from_invocation_id(invocation_id);
-
         let metadata = StreamMetadata {
             state: StreamState::Created,
             created_at: now,
@@ -263,19 +181,24 @@ impl StreamConcurrencyManager {
             cancellation_reason: None,
         };
 
-        self.streams.insert(invocation_id, metadata);
-        self.total_streams_created.fetch_add(1, Ordering::SeqCst);
-
-        Ok(cancellation_token)
+        match self.streams.entry(invocation_id) {
+            Entry::Occupied(_) => Err(AndromedaError::new(
+                AndromedaErrorKind::Transport,
+                "stream already exists for this invocation ID",
+            )),
+            Entry::Vacant(entry) => {
+                entry.insert(metadata);
+                self.total_streams_created.fetch_add(1, Ordering::SeqCst);
+                Ok(cancellation_token)
+            }
+        }
     }
 
     /// Marks a stream as active (first frame accepted).
     ///
     /// Returns `Err` if the stream does not exist or is not in `Created` state.
     pub fn accept_first_frame(&mut self, invocation_id: InvocationId) -> AndromedaResult<()> {
-        let stream = self.streams.get_mut(&invocation_id).ok_or_else(|| {
-            AndromedaError::new(AndromedaErrorKind::Transport, "stream not found")
-        })?;
+        let stream = self.stream_mut(invocation_id)?;
 
         if stream.state != StreamState::Created {
             return Err(AndromedaError::new(
@@ -293,11 +216,7 @@ impl StreamConcurrencyManager {
     ///
     /// Called whenever a frame is received on the stream. Used for idle timeout tracking.
     pub fn record_activity(&mut self, invocation_id: InvocationId) -> AndromedaResult<()> {
-        let stream = self.streams.get_mut(&invocation_id).ok_or_else(|| {
-            AndromedaError::new(AndromedaErrorKind::Transport, "stream not found")
-        })?;
-
-        stream.last_activity_at = SystemTime::now();
+        self.stream_mut(invocation_id)?.last_activity_at = SystemTime::now();
         Ok(())
     }
 
@@ -311,11 +230,8 @@ impl StreamConcurrencyManager {
         invocation_id: InvocationId,
         reason: CancellationReason,
     ) -> AndromedaResult<()> {
-        let stream = self.streams.get_mut(&invocation_id).ok_or_else(|| {
-            AndromedaError::new(AndromedaErrorKind::Transport, "stream not found")
-        })?;
+        let stream = self.stream_mut(invocation_id)?;
 
-        // If already terminal, return error to indicate too-late cancellation
         if stream.state == StreamState::Terminal {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Transport,
@@ -332,9 +248,7 @@ impl StreamConcurrencyManager {
     ///
     /// Returns `Err` if the stream does not exist or is already terminal.
     pub fn mark_complete(&mut self, invocation_id: InvocationId) -> AndromedaResult<()> {
-        let stream = self.streams.get_mut(&invocation_id).ok_or_else(|| {
-            AndromedaError::new(AndromedaErrorKind::Transport, "stream not found")
-        })?;
+        let stream = self.stream_mut(invocation_id)?;
 
         if stream.state == StreamState::Terminal {
             return Err(AndromedaError::new(
@@ -352,18 +266,15 @@ impl StreamConcurrencyManager {
     /// Should only be called after `mark_complete()` for a stream.
     /// This allows the manager's internal map to remain bounded.
     pub fn cleanup_stream(&mut self, invocation_id: InvocationId) -> AndromedaResult<()> {
-        self.streams.remove(&invocation_id).ok_or_else(|| {
-            AndromedaError::new(AndromedaErrorKind::Transport, "stream not found")
-        })?;
+        self.streams
+            .remove(&invocation_id)
+            .ok_or_else(stream_not_found_error)?;
         Ok(())
     }
 
     /// Gets the current state of a stream.
     pub fn get_state(&self, invocation_id: InvocationId) -> AndromedaResult<StreamState> {
-        self.streams
-            .get(&invocation_id)
-            .map(|m| m.state)
-            .ok_or_else(|| AndromedaError::new(AndromedaErrorKind::Transport, "stream not found"))
+        self.stream(invocation_id).map(|metadata| metadata.state)
     }
 
     /// Gets the cancellation token for a stream.
@@ -371,10 +282,8 @@ impl StreamConcurrencyManager {
         &self,
         invocation_id: InvocationId,
     ) -> AndromedaResult<CancellationToken> {
-        self.streams
-            .get(&invocation_id)
-            .map(|m| m.cancellation_token)
-            .ok_or_else(|| AndromedaError::new(AndromedaErrorKind::Transport, "stream not found"))
+        self.stream(invocation_id)
+            .map(|metadata| metadata.cancellation_token)
     }
 
     /// Detects and returns streams that have exceeded their idle timeout.
@@ -407,7 +316,7 @@ impl StreamConcurrencyManager {
             .collect()
     }
 
-    /// Detects all orphaned streams (idle + overall timeout) and returns them for cleanup.
+    /// Detects all orphaned streams and returns them for cleanup.
     pub fn detect_orphaned_streams(&self) -> Vec<InvocationId> {
         let idle = self.detect_idle_timeouts();
         let overall = self.detect_overall_timeouts();
@@ -436,9 +345,6 @@ impl StreamConcurrencyManager {
     }
 
     /// Returns the backpressure status for the connection.
-    ///
-    /// If the manager is at capacity, returns `Some(BackpressureRequest)`.
-    /// Otherwise, returns `None`.
     pub fn backpressure_status(&self) -> Option<BackpressureRequest> {
         if self.is_at_capacity() {
             Some(BackpressureRequest {
@@ -473,9 +379,7 @@ impl StreamConcurrencyManager {
 
     /// Checks if a stream is idle (no activity for idle_timeout duration).
     pub fn is_idle(&self, invocation_id: InvocationId) -> AndromedaResult<bool> {
-        let stream = self.streams.get(&invocation_id).ok_or_else(|| {
-            AndromedaError::new(AndromedaErrorKind::Transport, "stream not found")
-        })?;
+        let stream = self.stream(invocation_id)?;
 
         let elapsed = SystemTime::now()
             .duration_since(stream.last_activity_at)
@@ -502,20 +406,14 @@ impl StreamConcurrencyManager {
     ///   the clock internally but is already consistent because no mutation occurs
     ///   between the two snapshot calls within this enforcer).
     ///
-    /// ## Wave scope
-    ///
-    /// Wires the existing `detect_idle_timeouts()` / `detect_overall_timeouts()`
-    /// detection into actual state-machine enforcement. The broader per-invocation
-    /// deadline (admission → WAL commit) is Wave 14+;
-    /// see `SCOPED_INVOCATION_TIMEOUT.md §7`.
+    /// This enforces only stream-local idle and overall deadlines. Broader
+    /// invocation deadlines are owned by admission/runtime layers.
     pub fn enforce_timeouts(&mut self) -> Vec<(InvocationId, CancellationReason)> {
-        // Snapshot both detection lists before mutating any state.
         let idle_ids = self.detect_idle_timeouts();
         let overall_ids = self.detect_overall_timeouts();
 
         let mut cancelled: Vec<(InvocationId, CancellationReason)> = Vec::new();
 
-        // Apply idle-timeout cancellations first.
         for id in idle_ids {
             if self
                 .cancel_stream(id, CancellationReason::IdleTimeout)
@@ -525,8 +423,7 @@ impl StreamConcurrencyManager {
             }
         }
 
-        // Apply overall-timeout cancellations, skipping streams already cancelled.
-        let already_cancelled: std::collections::HashSet<InvocationId> =
+        let already_cancelled: HashSet<InvocationId> =
             cancelled.iter().map(|(id, _)| *id).collect();
         for id in overall_ids {
             if already_cancelled.contains(&id) {
@@ -548,11 +445,25 @@ impl StreamConcurrencyManager {
         &self,
         invocation_id: InvocationId,
     ) -> AndromedaResult<Option<CancellationReason>> {
+        self.stream(invocation_id)
+            .map(|metadata| metadata.cancellation_reason)
+    }
+
+    fn stream(&self, invocation_id: InvocationId) -> AndromedaResult<&StreamMetadata> {
         self.streams
             .get(&invocation_id)
-            .map(|m| m.cancellation_reason)
-            .ok_or_else(|| AndromedaError::new(AndromedaErrorKind::Transport, "stream not found"))
+            .ok_or_else(stream_not_found_error)
     }
+
+    fn stream_mut(&mut self, invocation_id: InvocationId) -> AndromedaResult<&mut StreamMetadata> {
+        self.streams
+            .get_mut(&invocation_id)
+            .ok_or_else(stream_not_found_error)
+    }
+}
+
+fn stream_not_found_error() -> AndromedaError {
+    AndromedaError::new(AndromedaErrorKind::Transport, "stream not found")
 }
 
 impl Default for StreamConcurrencyManager {

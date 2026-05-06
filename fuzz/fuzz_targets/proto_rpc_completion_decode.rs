@@ -1,19 +1,19 @@
 #![no_main]
 
+use andromeda_proto::{
+    decode_generated_message, generated::protocol::v1::RpcCompletion as ProtoRpcCompletion,
+};
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
-    let _ = data.len();
-    let completion = andromeda_proto::RpcCompletion {
-        request_id: None,
-        session_id: None,
-        trace_id: None,
-        status: andromeda_proto::RpcCompletionStatus::FailedBeforeTransaction,
-        transaction_outcome: andromeda_proto::TransactionOutcome::NotStarted,
-        rows_affected: None,
-        result_row_counts: Vec::new(),
-        tx_id: None,
-        durable_lsn: None,
-    };
-    let _ = completion.validate();
+    let decoded: andromeda_core::AndromedaResult<ProtoRpcCompletion> =
+        decode_generated_message(data);
+
+    if let Ok(completion) = decoded {
+        let _ = andromeda_proto::RpcCompletionStatus::from_terminal_code(completion.status as u32);
+        let _ = completion
+            .result_row_counts
+            .iter()
+            .all(|summary| !summary.result_name.trim().is_empty());
+    }
 });

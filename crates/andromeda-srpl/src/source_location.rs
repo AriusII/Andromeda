@@ -4,6 +4,8 @@ use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{ForbiddenConstruct, ForbiddenConstructHit, SrplDiagnostic};
 
+const URL_SCHEME_SEPARATOR: &str = "://";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SourceSpan {
     pub start: usize,
@@ -49,13 +51,11 @@ impl<'a> SrplSource<'a> {
         let lexemes = tokenize_for_forbidden_scan(self.text);
         let mut hits: Vec<ForbiddenConstructHit> = Vec::new();
 
-        // 1. Substring-anchored constructs whose markers cannot appear inside
-        //    a SRPL identifier (they contain `:` or `/`). Word-boundary safe.
-        push_substring(
+        push_url_scheme_substring(
             self.text,
             &mut hits,
             ForbiddenConstruct::ExternalNetwork,
-            &["http://", "https://"],
+            &["http", "https"],
         );
         push_substring(
             self.text,
@@ -64,9 +64,6 @@ impl<'a> SrplSource<'a> {
             &["file://"],
         );
 
-        // 2. Word/punctuation-structural constructs. We require *whole-word*
-        //    matches, so identifiers like `whileCount`, `myRandom`, `brand`,
-        //    `BackupFilesystem`, or `executeSqlBuilder` do not false-positive.
         for (i, lex) in lexemes.iter().enumerate() {
             if lex.kind == LexKind::Word {
                 let lower = lex.text.to_ascii_lowercase();
@@ -80,56 +77,42 @@ impl<'a> SrplSource<'a> {
                 });
                 let next_is_lparen = matches!(next, Some(n) if n.kind == LexKind::LParen);
                 let next_is_star = matches!(next, Some(n) if n.kind == LexKind::Star);
+                let span_with_next =
+                    next.map(|next| SourceSpan::new(lex.span.start, next.span.end));
 
                 match lower.as_str() {
-                    // UnboundedWhile: any standalone `while` keyword. SRPL
-                    // core has no legitimate `while` usage; identifiers
-                    // such as `whileCount` are *not* the bare word `while`
-                    // and therefore do not match here.
                     "while" => push_hit(&mut hits, ForbiddenConstruct::UnboundedWhile, lex.span),
-                    // FreeRecursion: standalone `recursive` keyword, or the
-                    // adjacent word pair `call self`.
                     "recursive" => push_hit(&mut hits, ForbiddenConstruct::FreeRecursion, lex.span),
                     "call" if next_word.as_deref() == Some("self") => push_hit(
                         &mut hits,
                         ForbiddenConstruct::FreeRecursion,
-                        SourceSpan::new(lex.span.start, next.unwrap().span.end),
+                        span_with_next.unwrap_or(lex.span),
                     ),
-                    // NondeterministicRandom: `random(` / `rand(` as a
-                    // call. The call form is required so identifiers like
-                    // `RandomSeed` or `brand` never trip the rule.
                     "random" | "rand" if next_is_lparen => push_hit(
                         &mut hits,
                         ForbiddenConstruct::NondeterministicRandom,
-                        SourceSpan::new(lex.span.start, next.unwrap().span.end),
+                        span_with_next.unwrap_or(lex.span),
                     ),
-                    // SelectStar: `select` keyword followed by `*` (any
-                    // amount of whitespace between).
                     "select" if next_is_star => push_hit(
                         &mut hits,
                         ForbiddenConstruct::SelectStar,
-                        SourceSpan::new(lex.span.start, next.unwrap().span.end),
+                        span_with_next.unwrap_or(lex.span),
                     ),
-                    // DynamicTextSql: `dynamic sql` or `execute sql` as
-                    // adjacent words (case- and whitespace-insensitive).
                     "dynamic" | "execute" if next_word.as_deref() == Some("sql") => push_hit(
                         &mut hits,
                         ForbiddenConstruct::DynamicTextSql,
-                        SourceSpan::new(lex.span.start, next.unwrap().span.end),
+                        span_with_next.unwrap_or(lex.span),
                     ),
-                    // ExternalFilesystem: adjacent words `external filesystem`.
                     "external" if next_word.as_deref() == Some("filesystem") => push_hit(
                         &mut hits,
                         ForbiddenConstruct::ExternalFilesystem,
-                        SourceSpan::new(lex.span.start, next.unwrap().span.end),
+                        span_with_next.unwrap_or(lex.span),
                     ),
                     _ => {}
                 }
             }
         }
 
-        // Stable order: by source span start so callers receive deterministic
-        // diagnostics regardless of the rule that produced them.
         hits.sort_by_key(|hit| (hit.span.start, hit.span.end));
         hits
     }
@@ -158,6 +141,32 @@ impl<'a> SrplSource<'a> {
             format!("{}{}", first.message, location),
         ))
     }
+}
+
+fn push_url_scheme_substring(
+    source: &str,
+    hits: &mut Vec<ForbiddenConstructHit>,
+    construct: ForbiddenConstruct,
+    schemes: &[&str],
+) {
+    let lowered = source.to_ascii_lowercase();
+    let Some((start, scheme)) = schemes
+        .iter()
+        .filter_map(|scheme| find_url_scheme_prefix(&lowered, scheme).map(|start| (start, *scheme)))
+        .min_by_key(|(start, _)| *start)
+    else {
+        return;
+    };
+    push_hit(
+        hits,
+        construct,
+        SourceSpan::new(start, start + scheme.len() + URL_SCHEME_SEPARATOR.len()),
+    );
+}
+
+fn find_url_scheme_prefix(source: &str, scheme: &str) -> Option<usize> {
+    let pattern = format!("{scheme}{URL_SCHEME_SEPARATOR}");
+    source.find(&pattern)
 }
 
 fn push_substring(
@@ -286,9 +295,6 @@ mod tests {
         assert!(diagnostics[0].message.contains("select star"));
     }
 
-    // ---- False-positive guards -------------------------------------------
-    // Identifiers that *contain* a forbidden substring must not be flagged.
-
     #[test]
     fn identifier_starting_with_while_is_not_unbounded_loop() {
         // `whileCount` and `WhileLimit` are legitimate identifier names; the
@@ -346,9 +352,6 @@ mod tests {
             );
         }
     }
-
-    // ---- Bypass / variant detection --------------------------------------
-    // Whitespace and case variations of forbidden constructs must still match.
 
     #[test]
     fn case_variants_of_dynamic_sql_are_caught() {

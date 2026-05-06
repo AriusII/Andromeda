@@ -1,60 +1,21 @@
-//! Permission decision audit event emission for IAM hardening.
-//!
-//! This module implements hardened permission enforcement with explicit audit logging
-//! for every authorization decision (approved and denied). It enforces the doctrine:
-//! - Deny by default at every gate
-//! - All permission denials logged to audit trace
-//! - No silent privilege escalation
-//! - Super-admin operations require explicit audit consent
-//! - Wildcard permissions do not bypass explicit deny
-//!
-//! ## Audit Event Flow
-//!
-//! 1. Permission check requested (principal + required_permission)
-//! 2. Decision made (allow or deny with reason)
-//! 3. **Audit event emitted** (decision trace binding to principal)
-//! 4. Result returned to caller
-//!
-//! ## Deny-by-Default Enforcement
-//!
-//! Every gate enforces:
-//! - Unknown principal → DENY + audit
-//! - Missing permission → DENY + audit
-//! - Empty permission set → DENY + audit
-//! - Wildcard not granted → DENY + audit
-//! - Procedure ID mismatch → DENY + audit
+//! Permission decision audit events for IAM admission.
 
 use andromeda_core::{AndromedaResult, Permission, PrincipalId};
 use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
 use std::fmt;
 
-/// Machine-parseable audit event for permission decisions.
-///
-/// Each event is immutable and fully specified:
-/// - No optional fields (all fields required)
-/// - Principal binding is immutable at emission time
-/// - Decision is deterministic (same inputs → same decision)
-/// - Reason is machine-parseable (not free-form strings)
+const UNKNOWN_PRINCIPAL_ID: PrincipalId = PrincipalId::new(0);
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PermissionAuditEvent {
-    /// Trace correlation ID from invocation.
     pub trace_id: TraceId,
-
-    /// Principal that was evaluated.
     pub principal_id: PrincipalId,
-
-    /// Permission that was required.
     pub required_permission: Permission,
-
-    /// Decision: allowed or denied with reason.
     pub decision: PermissionDecisionAudit,
-
-    /// Timestamp of decision (for timeline correlation).
     pub timestamp: std::time::SystemTime,
 }
 
 impl PermissionAuditEvent {
-    /// Create a new permission audit event for an allowed decision.
     pub fn allowed(
         trace_id: TraceId,
         principal_id: PrincipalId,
@@ -69,7 +30,6 @@ impl PermissionAuditEvent {
         }
     }
 
-    /// Create a new permission audit event for a denied decision.
     pub fn denied(
         trace_id: TraceId,
         principal_id: PrincipalId,
@@ -85,18 +45,16 @@ impl PermissionAuditEvent {
         }
     }
 
-    /// Create a new permission audit event for a denied decision (unknown principal).
     pub fn denied_unknown_principal(trace_id: TraceId, required_permission: Permission) -> Self {
         Self {
             trace_id,
-            principal_id: PrincipalId::new(0), // Placeholder for unknown
+            principal_id: UNKNOWN_PRINCIPAL_ID,
             required_permission,
             decision: PermissionDecisionAudit::DeniedUnknownPrincipal,
             timestamp: std::time::SystemTime::now(),
         }
     }
 
-    /// Convert to decision trace for critical decision logging.
     pub fn to_decision_trace(&self) -> DecisionTrace {
         let reason = match &self.decision {
             PermissionDecisionAudit::Allowed => {
@@ -139,49 +97,22 @@ impl PermissionAuditEvent {
     }
 }
 
-/// Permission decision for audit logging (allowed or denied).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PermissionDecisionAudit {
-    /// Permission was granted.
     Allowed,
-
-    /// Permission was denied with machine-parseable reason.
     Denied(DenialAuditReason),
-
-    /// Permission was denied because principal is unknown.
     DeniedUnknownPrincipal,
 }
 
-/// Machine-parseable denial reason for audit logging.
-///
-/// Each reason is deterministic and machine-parseable:
-/// - Used for forensic analysis of permission denials
-/// - Enables automated alerting on specific denial types
-/// - Supports compliance auditing and privilege escalation detection
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DenialAuditReason {
-    /// Principal has no permissions granted (empty permission set).
     NoPermissionsGranted,
-
-    /// Required permission is not in principal's permission set.
     PermissionNotGranted,
-
-    /// Requested procedure ID does not match granted procedure (wildcard not applicable).
     ProcedureIdMismatch,
-
-    /// Super-admin operation attempted without explicit authorization audit record.
     SuperAdminOperationNotAudited,
-
-    /// Wildcard permission was explicitly denied by policy.
     WildcardDeniedByPolicy,
-
-    /// Principal's session has expired (Wave 21+).
     SessionExpired,
-
-    /// Certificate revocation check failed (Wave 21+).
     CertificateRevoked,
-
-    /// Internal error during permission evaluation.
     InternalError,
 }
 
@@ -228,46 +159,14 @@ impl fmt::Display for DenialAuditReason {
     }
 }
 
-/// Audit event emitter trait for permission decisions.
-///
-/// Implementations must guarantee:
-/// - Every permission check emits an audit event (no silent denials)
-/// - Events are immutable (no modification after emission)
-/// - Events carry complete context (principal, permission, decision, reason)
-/// - Events are durable (persist to audit trace before returning to caller)
 pub trait PermissionAuditEmitter: Send + Sync {
-    /// Emit a permission decision audit event.
-    ///
-    /// This must be called for every permission evaluation, both allowed and denied.
-    /// Implementations must ensure the event is durably stored before returning.
-    ///
-    /// # Arguments
-    ///
-    /// * `event` - Permission audit event with complete decision context
-    ///
-    /// # Returns
-    ///
-    /// `Ok(())` if event was successfully emitted and durable
-    /// `Err(AndromedaError)` if event emission failed (e.g., audit log full, I/O error)
     fn emit_permission_decision(&self, event: PermissionAuditEvent) -> AndromedaResult<()>;
 }
 
-/// No-op audit emitter for development and testing (Wave 19).
-///
-/// This implementation accepts all audit events without error,
-/// but does not persist them. It is intended for development and testing only.
-///
-/// ## Wave 21+ Migration
-///
-/// Replace with PersistentPermissionAuditEmitter backed by:
-/// - WAL-replicated audit table
-/// - Immutable append-only audit log
-/// - Cryptographic log sealing
 pub struct NoOpPermissionAuditEmitter;
 
 impl PermissionAuditEmitter for NoOpPermissionAuditEmitter {
     fn emit_permission_decision(&self, _event: PermissionAuditEvent) -> AndromedaResult<()> {
-        // Accept all events without error; do not persist (Wave 19 development mode)
         Ok(())
     }
 }

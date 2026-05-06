@@ -38,6 +38,7 @@ impl FileDiskManager {
             .read(true)
             .write(true)
             .create(true)
+            .truncate(false)
             .open(&file_path)
             .map_err(|e| {
                 AndromedaError::new(
@@ -249,7 +250,7 @@ mod tests {
 
     fn create_test_extent() -> ExtentDescriptor {
         ExtentDescriptor {
-            extent_id: crate::ExtentId::new(1),
+            extent_id: ExtentId::new(1),
             object_id: ObjectId::new(1),
             allocation_id: AllocationId::new(1),
             first_page_id: PageId::new(1),
@@ -288,7 +289,7 @@ mod tests {
         let (mut manager, _temp) = create_temp_disk_manager();
 
         let extent1 = ExtentDescriptor {
-            extent_id: crate::ExtentId::new(1),
+            extent_id: ExtentId::new(1),
             object_id: ObjectId::new(1),
             allocation_id: AllocationId::new(1),
             first_page_id: PageId::new(1),
@@ -303,7 +304,7 @@ mod tests {
         manager.allocate_extent(extent1).unwrap();
 
         let extent2 = ExtentDescriptor {
-            extent_id: crate::ExtentId::new(2),
+            extent_id: ExtentId::new(2),
             object_id: ObjectId::new(2),
             allocation_id: AllocationId::new(2),
             first_page_id: PageId::new(11),
@@ -340,7 +341,7 @@ mod tests {
         let (mut manager, _temp) = create_temp_disk_manager();
 
         let extent1 = ExtentDescriptor {
-            extent_id: crate::ExtentId::new(1),
+            extent_id: ExtentId::new(1),
             object_id: ObjectId::new(1),
             allocation_id: AllocationId::new(1),
             first_page_id: PageId::new(1),
@@ -355,7 +356,7 @@ mod tests {
         manager.allocate_extent(extent1).unwrap();
 
         let extent2 = ExtentDescriptor {
-            extent_id: crate::ExtentId::new(2),
+            extent_id: ExtentId::new(2),
             object_id: ObjectId::new(2),
             allocation_id: AllocationId::new(2),
             first_page_id: PageId::new(5),

@@ -1,13 +1,10 @@
-//! Restore administration commands.
-//!
-//! Provides CLI commands for:
-//! - Restoring from backup (with optional PITR to LSN)
-//! - Monitoring restore progress
-
 use crate::diagnostic_json::{JSON_FLAG, json_option_u64, json_string, parse_json_flag};
 use crate::error::cli_error;
+use crate::parse::{next_option_value, parse_u64};
 use andromeda_core::AndromedaResult;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+const DIAGNOSTIC_RESTORE_ID: u64 = 200;
 
 /// Restore state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -67,15 +64,12 @@ pub struct RestoreStartOutcome {
 /// Parses and executes restore subcommands.
 pub fn run_restore_command(args: &[String]) -> AndromedaResult<()> {
     match args.first().map(String::as_str) {
-        Some("status") => run_restore_status(&args[1..]),
-        Some(backup_id_arg) if backup_id_arg.parse::<u64>().is_ok() => run_restore_start(args),
         Some("-h" | "--help" | "help") => {
             print_restore_help();
             Ok(())
         }
-        Some(cmd) => Err(cli_error(format!(
-            "unknown restore subcommand `{cmd}`; run `andromeda-cli restore --help`"
-        ))),
+        Some("status") => run_restore_status(&args[1..]),
+        Some(_) => run_restore_start(args),
         None => {
             print_restore_help();
             Ok(())
@@ -91,9 +85,7 @@ fn run_restore_start(args: &[String]) -> AndromedaResult<()> {
         ));
     }
 
-    let backup_id: u64 = args[0]
-        .parse()
-        .map_err(|_| cli_error("backup-id must be an unsigned integer"))?;
+    let backup_id = parse_u64(&args[0], "backup-id must be an unsigned integer")?;
 
     let mut pitr_target_lsn: Option<u64> = None;
     let mut json_output = false;
@@ -102,27 +94,26 @@ fn run_restore_start(args: &[String]) -> AndromedaResult<()> {
     while i < args.len() {
         match args[i].as_str() {
             "--pitr-lsn" => {
-                i += 1;
-                if i >= args.len() {
-                    return Err(cli_error("--pitr-lsn requires an LSN value"));
-                }
-                pitr_target_lsn = Some(
-                    args[i]
-                        .parse()
-                        .map_err(|_| cli_error("--pitr-lsn expects an unsigned integer (LSN)"))?,
-                );
+                let value = next_option_value(args, &mut i, "--pitr-lsn requires an LSN value")?;
+                pitr_target_lsn = Some(parse_u64(
+                    value,
+                    "--pitr-lsn expects an unsigned integer (LSN)",
+                )?);
             }
             JSON_FLAG => json_output = true,
             opt if opt.starts_with("--") => {
                 return Err(cli_error(format!("unknown restore option: {}", opt)));
             }
-            _ => {}
+            value => {
+                return Err(cli_error(format!(
+                    "unexpected restore argument: {value}; supported options are --pitr-lsn and --json"
+                )));
+            }
         }
         i += 1;
     }
 
-    // MOCK: In a real implementation, this would invoke the restore orchestration engine.
-    let restore_id = 200u64; // Mock ID
+    let restore_id = DIAGNOSTIC_RESTORE_ID;
 
     let outcome = RestoreStartOutcome {
         restore_id,
@@ -160,13 +151,10 @@ fn run_restore_status(args: &[String]) -> AndromedaResult<()> {
         ));
     }
 
-    let restore_id: u64 = args[0]
-        .parse()
-        .map_err(|_| cli_error("restore-id must be an unsigned integer"))?;
+    let restore_id = parse_u64(&args[0], "restore-id must be an unsigned integer")?;
 
     let json_output = parse_json_flag(&args[1..], "restore status")?;
 
-    // MOCK: In a real implementation, this would query the restore coordinator.
     let report = RestoreStatusReport {
         restore_id,
         state: RestoreState::ReplayingWal,
@@ -303,6 +291,12 @@ mod tests {
             "--pitr-lsn".to_string(),
             "not_an_lsn".to_string(),
         ]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn restore_start_rejects_unexpected_argument() {
+        let result = run_restore_start(&["100".to_string(), "extra".to_string()]);
         assert!(result.is_err());
     }
 

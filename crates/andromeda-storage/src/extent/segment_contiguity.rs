@@ -49,14 +49,13 @@ pub fn validate_segment_extent_contiguity(
         if extent.last_page_id()?.get() > segment_last_page {
             return Err(storage_error("segment extent page range exceeds segment"));
         }
-        if segment.state == SegmentState::PublishedCold {
-            if extent.state != ExtentState::PublishedCold
-                || extent.segment_id != Some(segment.segment_id)
-            {
-                return Err(storage_error(
-                    "published cold segment requires all extents to be published and segment-bound",
-                ));
-            }
+        if segment.state == SegmentState::PublishedCold
+            && (extent.state != ExtentState::PublishedCold
+                || extent.segment_id != Some(segment.segment_id))
+        {
+            return Err(storage_error(
+                "published cold segment requires all extents to be published and segment-bound",
+            ));
         }
         expected_extent_id = expected_extent_id
             .checked_add(1)

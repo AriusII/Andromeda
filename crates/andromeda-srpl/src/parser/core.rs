@@ -22,8 +22,6 @@ impl Parser {
         }
     }
 
-    // ---- Token-stream primitives ----------------------------------------
-
     pub(super) fn expect(&mut self, kind: TokenKind) -> Result<Token, SrplDiagnostic> {
         let token = self.advance().ok_or_else(|| {
             self.error_at(

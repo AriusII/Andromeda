@@ -1,4 +1,4 @@
-//! Multi-Procedure Handler Contract Tests — Wave 13, Batch 18, Agent 2/4
+//! Multi-procedure handler contract tests.
 //!
 //! Validates the three concrete `ProcedureHandler` implementations:
 //!
@@ -34,9 +34,7 @@ use andromeda_exec::{
 use andromeda_observe::TraceId;
 use andromeda_srpl::Cardinality;
 
-// ============================================================================
 // Helper constructors
-// ============================================================================
 
 fn reserve_stock_effect() -> ReserveStockEffect {
     InventoryReserveStockExecutor::reserve(
@@ -87,9 +85,7 @@ fn test_invocation_context(permissions: Vec<String>) -> InvocationContext {
     InvocationContext::new(TraceId::new(0x0001_0000), permissions)
 }
 
-// ============================================================================
 // ReserveStockProcedureHandler — regression coverage
-// ============================================================================
 
 #[test]
 fn reserve_stock_handler_constructs_from_valid_contract_and_effect() {
@@ -138,9 +134,7 @@ fn reserve_stock_handler_result_metadata_matches_one_cardinality() {
     assert_eq!(meta.row_count_max, Some(1));
 }
 
-// ============================================================================
 // InventoryQueryStockProcedureHandler — stock found path
-// ============================================================================
 
 #[test]
 fn query_stock_handler_constructs_from_valid_contract_and_found_effect() {
@@ -191,9 +185,7 @@ fn query_stock_handler_result_metadata_found_has_optional_one_with_one_row() {
     assert_eq!(meta.column_count, 3);
 }
 
-// ============================================================================
 // InventoryQueryStockProcedureHandler — stock not found path
-// ============================================================================
 
 #[test]
 fn query_stock_handler_constructs_from_not_found_effect() {
@@ -232,9 +224,7 @@ fn query_stock_handler_result_metadata_not_found_has_optional_one_with_zero_rows
     assert_eq!(meta.row_count_max, Some(1));
 }
 
-// ============================================================================
 // InventoryReleaseStockProcedureHandler
-// ============================================================================
 
 #[test]
 fn release_stock_handler_constructs_from_valid_contract_and_effect() {
@@ -283,9 +273,7 @@ fn release_stock_handler_result_metadata_has_one_cardinality() {
     assert_eq!(meta.column_count, 1);
 }
 
-// ============================================================================
 // Handler contract validation: wrong procedure id is rejected
-// ============================================================================
 
 #[test]
 fn query_stock_handler_rejects_reserve_stock_contract() {
@@ -323,9 +311,7 @@ fn reserve_stock_handler_rejects_query_stock_contract() {
     );
 }
 
-// ============================================================================
 // ProcedureRegistry — multi-handler registration
-// ============================================================================
 
 #[test]
 fn procedure_registry_accepts_all_three_handlers_without_conflict() {
@@ -378,9 +364,7 @@ fn procedure_registry_rejects_duplicate_registration() {
     );
 }
 
-// ============================================================================
 // Query effect construction validation
-// ============================================================================
 
 #[test]
 fn query_stock_effect_found_validates_positive_product_id() {

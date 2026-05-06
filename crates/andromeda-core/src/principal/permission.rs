@@ -1,5 +1,7 @@
 use crate::ProcedureId;
 
+pub(crate) const ALL_PROCEDURES: ProcedureId = ProcedureId::new(u64::MAX);
+
 /// Atomic permission in the RBAC model.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Permission {
@@ -31,7 +33,7 @@ impl Permission {
     pub fn matches(&self, required: &Permission) -> bool {
         match (self, required) {
             (Self::ExecuteProcedure(granted_id), Self::ExecuteProcedure(required_id)) => {
-                granted_id.get() == u64::MAX || granted_id == required_id
+                *granted_id == ALL_PROCEDURES || granted_id == required_id
             }
             (a, b) => a == b,
         }

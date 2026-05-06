@@ -1,10 +1,10 @@
-//! Protocol Stability Contract Tests (D7)
+//! Protocol stability contract tests.
 //!
 //! Validates that protocol invariants remain stable across commits.
 //! These tests detect regressions in frame format, Protobuf schema,
 //! and RPC contract discriminators.
 
-use andromeda_core::{RequestId, SessionId};
+use andromeda_core::{RequestId, SessionId, TransactionId};
 use andromeda_proto::{PayloadKind, ProtocolVersion};
 use andromeda_quic::{
     AUTH_FRAME_CODE, CONTRACT_REQUEST_FRAME_CODE, CONTRACT_RESPONSE_FRAME_CODE, ERROR_FRAME_CODE,
@@ -15,10 +15,6 @@ use andromeda_quic::{
     validate_frame_header_layout,
 };
 use std::mem;
-
-// ============================================================================
-// Test 1: Frame Header Offset Stability
-// ============================================================================
 
 /// Validates that FrameHeader wire offsets remain constant.
 ///
@@ -61,10 +57,6 @@ fn test_frame_header_offset_stability() {
         expected_total
     );
 }
-
-// ============================================================================
-// Test 2: Payload Kind Enum Values Locked
-// ============================================================================
 
 /// Validates that PayloadKind discriminators remain in range [1..8].
 ///
@@ -149,10 +141,6 @@ fn test_payload_kind_enum_values_locked() {
     );
 }
 
-// ============================================================================
-// Test 3: Protobuf Field Ordering Stability
-// ============================================================================
-
 /// Validates that Protobuf message field ordering remains deterministic.
 ///
 /// Field ordering affects serialization. Any reordering breaks
@@ -193,10 +181,6 @@ fn test_protobuf_field_ordering_stable() {
         "Envelope hash not deterministic!"
     );
 }
-
-// ============================================================================
-// Test 4: Protocol Version Locked at V1.0
-// ============================================================================
 
 /// Validates that ProtocolVersion is locked at V1.0.
 ///
@@ -249,10 +233,6 @@ fn test_protocol_version_locked_at_1_0() {
         "V2.0 should be rejected in locked protocol"
     );
 }
-
-// ============================================================================
-// Test 5: Frame Type Discriminator Unchanged
-// ============================================================================
 
 /// Validates that FrameType enum values remain constant [1-8, 100].
 ///
@@ -337,10 +317,6 @@ fn test_frame_type_discriminator_unchanged() {
     );
 }
 
-// ============================================================================
-// Test 6: CRC Position Stable
-// ============================================================================
-
 /// Validates that CRC position in frame header remains constant.
 ///
 /// The CRC is positioned at a fixed offset for fast validation.
@@ -376,10 +352,6 @@ fn test_crc_position_stable() {
     assert_eq!(header.header_crc, 0xDEADBEEF, "CRC field not accessible");
 }
 
-// ============================================================================
-// Test 7: Frame Payload Size Maximum Locked
-// ============================================================================
-
 /// Validates that MAX_FRAME_PAYLOAD_LENGTH remains 16 MiB.
 ///
 /// The maximum payload size is a hard constraint for buffer management.
@@ -397,10 +369,6 @@ fn test_frame_payload_max_size_locked() {
     let sixteen_mib = 16 * 1024 * 1024;
     assert_eq!(MAX_FRAME_PAYLOAD_LENGTH, sixteen_mib as u64);
 }
-
-// ============================================================================
-// Test 8: Regression Detection - Field Reordering Would Fail
-// ============================================================================
 
 /// Demonstrates that field reordering would be caught by layout validation.
 ///
@@ -423,7 +391,7 @@ fn test_regression_detect_field_reordering() {
         frame_type: FrameType::RpcBatch,
         request_id: RequestId::new(101),
         session_id: SessionId::new(201),
-        tx_id: Some(andromeda_core::TransactionId::new(500)),
+        tx_id: Some(TransactionId::new(500)),
         payload_length: 1024,
         flags: 0,
         header_crc: 0x87654321,
@@ -448,9 +416,7 @@ fn test_regression_detect_field_reordering() {
     assert_eq!(h2.header_crc, 0x87654321);
 }
 
-// ============================================================================
 // Test 9: Master Protocol Invariant Validation
-// ============================================================================
 
 /// Comprehensive validation of all protocol invariants.
 ///
@@ -488,10 +454,6 @@ fn test_master_protocol_invariant_validation() {
     );
 }
 
-// ============================================================================
-// Test 10: Payload-to-Frame Type Mapping Consistency
-// ============================================================================
-
 /// Validates that PayloadKind and FrameType discriminators stay synchronized.
 ///
 /// The QUIC frame layer and Protobuf payload layer must maintain
@@ -503,8 +465,8 @@ fn test_payload_to_frame_type_mapping_consistency() {
 
     // Each payload kind must have matching frame type
     for (payload_kind, code) in PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP {
-        let frame_type =
-            FrameType::try_from(*code).expect(&format!("Frame type code {} not mapped", code));
+        let frame_type = FrameType::try_from(*code)
+            .unwrap_or_else(|_| panic!("Frame type code {} not mapped", code));
 
         // Codes must match
         assert_eq!(
@@ -529,10 +491,6 @@ fn test_payload_to_frame_type_mapping_consistency() {
         );
     }
 }
-
-// ============================================================================
-// Test 11: Frame Family Mapping Preserved
-// ============================================================================
 
 /// Validates that frame family mappings remain stable.
 ///
@@ -585,10 +543,6 @@ fn test_frame_family_mapping_preserved() {
         FrameFamily::Telemetry
     );
 }
-
-// ============================================================================
-// Test 12: Payload Requirements Preserved
-// ============================================================================
 
 /// Validates that payload requirement rules remain stable.
 ///

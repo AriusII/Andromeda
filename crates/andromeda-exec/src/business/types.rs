@@ -17,10 +17,6 @@ use super::executor::{
     validate_inventory_reserve_stock_contract,
 };
 
-// ---------------------------------------------------------------------------
-// Domain value types
-// ---------------------------------------------------------------------------
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InventoryStock {
     pub product_id: i64,
@@ -97,10 +93,6 @@ pub struct InventoryReservation {
     pub stock_version: u64,
     pub transaction_id: TransactionId,
 }
-
-// ---------------------------------------------------------------------------
-// Evidence and decision-trace types
-// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InventoryReserveStockRejectionEvidence {
@@ -235,10 +227,6 @@ pub struct InventoryReserveStockMvccDecision {
     pub reservation: InventoryReservation,
 }
 
-// ---------------------------------------------------------------------------
-// Effect type
-// ---------------------------------------------------------------------------
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReserveStockEffect {
     pub previous_stock: InventoryStock,
@@ -299,10 +287,6 @@ impl ReserveStockEffect {
         })
     }
 }
-
-// ---------------------------------------------------------------------------
-// Inventory.QueryStock domain types (Wave 13, Batch 18)
-// ---------------------------------------------------------------------------
 
 /// Command to query stock visibility for a single product.
 ///
@@ -389,10 +373,6 @@ impl QueryStockEffect {
         })
     }
 }
-
-// ---------------------------------------------------------------------------
-// Inventory.ReleaseStock domain types (Wave 13, Batch 18)
-// ---------------------------------------------------------------------------
 
 /// Command to release previously reserved stock, restoring available quantity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

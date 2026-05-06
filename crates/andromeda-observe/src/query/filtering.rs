@@ -1,6 +1,6 @@
 use andromeda_core::CatalogObjectId;
 
-use super::{TraceEventFamily, TraceQuerySpec};
+use super::{TraceEventFamily, TraceQueryLsnRange, TraceQuerySpec};
 use crate::{EventEnvelope, TraceEvent};
 
 pub(super) fn matches_filter(envelope: &EventEnvelope, spec: &TraceQuerySpec) -> bool {
@@ -16,9 +16,7 @@ pub(super) fn matches_filter(envelope: &EventEnvelope, spec: &TraceQuerySpec) ->
         return false;
     }
     if let Some(range) = filter.lsn_range
-        && !event_lsns(envelope)
-            .into_iter()
-            .any(|lsn| range.contains(lsn))
+        && !matches_lsn_range(envelope, range)
     {
         return false;
     }
@@ -41,40 +39,38 @@ pub(super) fn matches_filter(envelope: &EventEnvelope, spec: &TraceQuerySpec) ->
     true
 }
 
-fn event_lsns(envelope: &EventEnvelope) -> Vec<u64> {
-    let mut lsns = Vec::new();
-    if let Some(lsn) = envelope.correlation.durable_lsn {
-        lsns.push(lsn);
+fn matches_lsn_range(envelope: &EventEnvelope, range: TraceQueryLsnRange) -> bool {
+    if envelope
+        .correlation
+        .durable_lsn
+        .is_some_and(|lsn| range.contains(lsn))
+    {
+        return true;
     }
+
     match &envelope.event {
-        TraceEvent::Wal(trace) => lsns.push(trace.durable_lsn),
+        TraceEvent::Wal(trace) => range.contains(trace.durable_lsn),
         TraceEvent::WalEvent(trace) => {
-            lsns.push(trace.appended_lsn);
-            if let Some(lsn) = trace.durable_lsn {
-                lsns.push(lsn);
-            }
+            range.contains(trace.appended_lsn) || matches_optional_lsn(trace.durable_lsn, range)
         }
-        TraceEvent::CommitVisible(trace) => lsns.push(trace.durable_commit_lsn),
-        TraceEvent::RollbackDurable(trace) => lsns.push(trace.durable_rollback_lsn),
+        TraceEvent::CommitVisible(trace) => range.contains(trace.durable_commit_lsn),
+        TraceEvent::RollbackDurable(trace) => range.contains(trace.durable_rollback_lsn),
         TraceEvent::RecoveryStartup(trace) => {
-            lsns.push(trace.last_durable_lsn);
-            if let Some(lsn) = trace.corruption_boundary_lsn {
-                lsns.push(lsn);
-            }
+            range.contains(trace.last_durable_lsn)
+                || matches_optional_lsn(trace.corruption_boundary_lsn, range)
         }
         TraceEvent::Manifest(trace) => {
-            lsns.push(trace.base_checkpoint_lsn);
-            lsns.push(trace.required_wal_start_lsn);
+            range.contains(trace.base_checkpoint_lsn)
+                || range.contains(trace.required_wal_start_lsn)
         }
-        TraceEvent::CompletionEmitted(trace) => {
-            if let Some(lsn) = trace.durable_lsn {
-                lsns.push(lsn);
-            }
-        }
-        TraceEvent::CorruptionBoundary(trace) => lsns.push(trace.boundary_lsn),
-        _ => {}
+        TraceEvent::CompletionEmitted(trace) => matches_optional_lsn(trace.durable_lsn, range),
+        TraceEvent::CorruptionBoundary(trace) => range.contains(trace.boundary_lsn),
+        _ => false,
     }
-    lsns
+}
+
+fn matches_optional_lsn(lsn: Option<u64>, range: TraceQueryLsnRange) -> bool {
+    lsn.is_some_and(|lsn| range.contains(lsn))
 }
 
 fn principal_of(event: &TraceEvent) -> Option<&str> {

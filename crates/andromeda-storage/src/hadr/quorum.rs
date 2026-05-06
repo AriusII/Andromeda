@@ -321,10 +321,10 @@ fn decide_promotion(
 
     // 5. Split-brain: if there's an active token whose epoch is at or above
     //    the proposed epoch, the candidate cannot supersede it.
-    if let Some(token) = fencing.active_token {
-        if token.epoch >= request.proposed_epoch {
-            return HadrPromotionOutcome::Rejected(HadrPromotionRejection::SplitBrainActiveToken);
-        }
+    if let Some(token) = fencing.active_token
+        && token.epoch >= request.proposed_epoch
+    {
+        return HadrPromotionOutcome::Rejected(HadrPromotionRejection::SplitBrainActiveToken);
     }
 
     // 6. Quorum count.
@@ -341,16 +341,16 @@ fn decide_promotion(
     // 8. Divergence: candidate's own divergence evidence at or below its
     //    safe LSN, or any voter's divergence evidence within the candidate's
     //    safe range, blocks promotion.
-    if let Some(div) = candidate.divergence_lsn {
-        if div <= candidate.safe_lsn {
-            return HadrPromotionOutcome::Rejected(HadrPromotionRejection::DivergentCandidate);
-        }
+    if let Some(div) = candidate.divergence_lsn
+        && div <= candidate.safe_lsn
+    {
+        return HadrPromotionOutcome::Rejected(HadrPromotionRejection::DivergentCandidate);
     }
     for vote in &request.votes {
-        if let Some(div) = vote.voter_observed_divergence {
-            if div <= candidate.safe_lsn {
-                return HadrPromotionOutcome::Rejected(HadrPromotionRejection::DivergentCandidate);
-            }
+        if let Some(div) = vote.voter_observed_divergence
+            && div <= candidate.safe_lsn
+        {
+            return HadrPromotionOutcome::Rejected(HadrPromotionRejection::DivergentCandidate);
         }
     }
 

@@ -108,12 +108,12 @@ impl UndoChain {
     pub fn add_undo_record(&mut self, record: UndoRecord) -> AndromedaResult<()> {
         // Verify LSN ordering: new record LSN should be less than or equal to
         // the previous record LSN (descending order).
-        if let Some(last) = self.records.last() {
-            if record.original_redo_lsn > last.original_redo_lsn {
-                return Err(storage_error(
-                    "undo chain LSN ordering violated: undo records must be in descending LSN order",
-                ));
-            }
+        if let Some(last) = self.records.last()
+            && record.original_redo_lsn > last.original_redo_lsn
+        {
+            return Err(storage_error(
+                "undo chain LSN ordering violated: undo records must be in descending LSN order",
+            ));
         }
 
         // Verify transaction consistency.
@@ -200,7 +200,7 @@ impl UndoChainsBuilder {
 
             self.pending_records
                 .entry(transaction_id)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(record);
         }
 

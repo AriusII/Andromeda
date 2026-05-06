@@ -1,4 +1,5 @@
 use crate::error::cli_error;
+use crate::parse::parse_u64;
 use andromeda_core::AndromedaResult;
 
 use super::output::print_promotion_outcome;
@@ -12,9 +13,7 @@ pub(super) fn run_hadr_promote(args: &[String]) -> AndromedaResult<()> {
         ));
     }
 
-    let replica_id: u64 = args[0]
-        .parse()
-        .map_err(|_| cli_error("replica-id must be an unsigned integer"))?;
+    let replica_id = parse_u64(&args[0], "replica-id must be an unsigned integer")?;
 
     let json_output = parse_promote_json_option(&args[1..])?;
 

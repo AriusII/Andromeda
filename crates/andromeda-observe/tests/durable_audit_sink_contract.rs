@@ -1,11 +1,12 @@
 use andromeda_core::{RequestId, SessionId};
 use andromeda_observe::{
     CertificateIdentity, DurableAuditEventFamily, DurableAuditFailureKind,
-    DurableAuditPrincipalBinding, DurableAuditReplayBehavior, DurableAuditReplayQuery,
-    DurableAuditRetentionBoundary, DurableAuditSinkFailure, DurableAuditSinkReport,
-    DurableAuditWalEvidence, DurableAuditWalSink, EventCorrelation, EventEnvelope, EventId,
-    FileDurableAuditWalSink, PendingDurableAuditRecord, Permission, SecurityAuditOutcome,
-    SecurityAuditTrace, SurfaceScope, TraceEvent, TraceId, UserPrincipal, UserPrincipalKind,
+    DurableAuditPrincipalBinding, DurableAuditReplayBehavior, DurableAuditReplayLsnRange,
+    DurableAuditReplayQuery, DurableAuditRetentionBoundary, DurableAuditSinkFailure,
+    DurableAuditSinkReport, DurableAuditWalEvidence, DurableAuditWalSink, EventCorrelation,
+    EventEnvelope, EventId, FileDurableAuditWalSink, PendingDurableAuditRecord, Permission,
+    SecurityAuditOutcome, SecurityAuditTrace, SurfaceScope, TraceEvent, TraceId, UserPrincipal,
+    UserPrincipalKind,
 };
 use std::{
     fs,
@@ -197,6 +198,57 @@ fn durable_audit_failure_kinds_fail_closed_without_global_disable_mode() {
 }
 
 #[test]
+fn durable_audit_replay_query_rejects_unsafe_filters() {
+    let zero_trace = DurableAuditReplayQuery {
+        trace_id: Some(TraceId::new(0)),
+        ..DurableAuditReplayQuery::all()
+    };
+    assert!(
+        zero_trace
+            .validate()
+            .unwrap_err()
+            .message()
+            .contains("trace_id")
+    );
+
+    let empty_principal = DurableAuditReplayQuery {
+        principal_id: Some(" \t".to_string()),
+        ..DurableAuditReplayQuery::all()
+    };
+    assert!(
+        empty_principal
+            .validate()
+            .unwrap_err()
+            .message()
+            .contains("principal filter")
+    );
+
+    let secret_principal = DurableAuditReplayQuery {
+        principal_id: Some("token=must-not-be-queryable".to_string()),
+        ..DurableAuditReplayQuery::all()
+    };
+    assert!(
+        secret_principal
+            .validate()
+            .unwrap_err()
+            .message()
+            .contains("secret evidence")
+    );
+
+    let invalid_lsn = DurableAuditReplayQuery {
+        lsn_range: Some(DurableAuditReplayLsnRange::new(20, 10)),
+        ..DurableAuditReplayQuery::all()
+    };
+    assert!(
+        invalid_lsn
+            .validate()
+            .unwrap_err()
+            .message()
+            .contains("LSN range")
+    );
+}
+
+#[test]
 fn file_backed_durable_audit_sink_survives_restart_and_replays_targeted_index() {
     let path = temp_journal_path("restart-replay");
     let mut sink = FileDurableAuditWalSink::open(&path).expect("journal opens");
@@ -213,9 +265,9 @@ fn file_backed_durable_audit_sink_survives_restart_and_replays_targeted_index() 
         .append_durable_audit_record(record)
         .expect("append is flushed before success");
     report.validate().expect("report proves durable audit WAL");
-    assert!(report.evidence.record_lsn != 0);
+    assert_ne!(report.evidence.record_lsn, 0);
     assert_eq!(report.evidence.record_lsn, report.evidence.durable_lsn);
-    assert!(report.evidence.checksum != 0);
+    assert_ne!(report.evidence.checksum, 0);
 
     drop(sink);
     let reopened = FileDurableAuditWalSink::open(&path).expect("journal reopens after restart");

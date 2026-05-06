@@ -7,10 +7,6 @@ use andromeda_core::CatalogVersion;
 
 use crate::{CatalogPublicationReceipt, CatalogPublicationSemantics};
 
-// ---------------------------------------------------------------------------
-// Publication tag
-// ---------------------------------------------------------------------------
-
 /// Indicates whether the most recently applied mutation plan is backed by
 /// durable WAL evidence or is staged in memory only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,10 +16,6 @@ pub enum CatalogSnapshotPublication {
     /// The applied state is covered by a durable publication receipt.
     Durable(CatalogPublicationReceipt),
 }
-
-// ---------------------------------------------------------------------------
-// Object lifecycle
-// ---------------------------------------------------------------------------
 
 /// Coarse lifecycle state of a catalog object within a snapshot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,10 +52,6 @@ impl CatalogObjectLifecycle {
         }
     }
 }
-
-// ---------------------------------------------------------------------------
-// Apply report
-// ---------------------------------------------------------------------------
 
 /// Describes the outcome of applying a mutation plan to a catalog snapshot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

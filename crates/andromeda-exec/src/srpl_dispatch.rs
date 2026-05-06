@@ -59,8 +59,7 @@ impl SrplProcedureDispatcher {
         let resolve_request =
             andromeda_srpl::procedure_resolver::ProcedureResolveRequest::from_contract_ref(
                 req.procedure,
-            )
-            .map_err(|e| e)?;
+            )?;
 
         let response = self.resolver.resolve_procedure(resolve_request.clone())?;
 

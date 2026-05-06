@@ -13,8 +13,7 @@ pub struct TraceQueryMetadata {
     pub permission_matrix: TraceQueryPermissionMatrix,
 }
 
-/// Single result row. The row preserves the typed envelope; callers must choose
-/// any diagnostic formatting explicitly at the CLI/export layer.
+/// Single typed result row.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TraceQueryRow {
     pub envelope: EventEnvelope,

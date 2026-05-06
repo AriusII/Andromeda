@@ -13,9 +13,7 @@ use andromeda_observe::{
     ContractValidationResult, ProcedureId, TraceId,
 };
 
-// ============================================================================
 // Helper Functions
-// ============================================================================
 
 fn test_trace_id() -> TraceId {
     TraceId::new(12345)
@@ -32,10 +30,6 @@ fn test_principal(name: &str) -> AffectedPrincipal {
 fn now() -> SystemTime {
     SystemTime::now()
 }
-
-// ============================================================================
-// ContractValidated Event Tests (3 tests)
-// ============================================================================
 
 #[test]
 fn contract_validated_event_valid_contract_carries_all_evidence() {
@@ -117,10 +111,6 @@ fn contract_validated_event_deprecated_contract_still_valid_for_admission() {
     // Deprecated is considered valid for admission purposes
     assert!(event.is_valid());
 }
-
-// ============================================================================
-// AdmissionDecision Event Tests (5 tests)
-// ============================================================================
 
 #[test]
 fn admission_decision_event_accepted_decision_admits_procedure() {
@@ -238,10 +228,6 @@ fn admission_decision_kind_classification_is_consistent() {
     assert!(rejected_quota.is_rejected());
 }
 
-// ============================================================================
-// PermissionCheckFailed Event Tests (3 tests)
-// ============================================================================
-
 #[test]
 fn permission_check_failed_event_records_missing_permission() {
     let trace_id = test_trace_id();
@@ -318,10 +304,6 @@ fn permission_check_failed_event_immutably_binds_principal() {
     assert!(event.is_valid());
 }
 
-// ============================================================================
-// RequestThrottled Event Tests (3 tests)
-// ============================================================================
-
 #[test]
 fn request_throttled_event_buffer_pool_full_provides_retry_delay() {
     let trace_id = test_trace_id();
@@ -397,10 +379,6 @@ fn request_throttled_event_queue_overload_variant_distinct_from_others() {
     ));
     assert!(event.is_valid());
 }
-
-// ============================================================================
-// ProcedureDispatchAuthorized Event Tests (3 tests)
-// ============================================================================
 
 #[test]
 fn procedure_dispatch_authorized_event_binds_mtls_certificate_identity() {
@@ -490,10 +468,6 @@ fn procedure_dispatch_authorized_event_records_all_surface_planes() {
         assert!(event.is_valid());
     }
 }
-
-// ============================================================================
-// Cross-Cutting Contract Tests
-// ============================================================================
 
 #[test]
 fn all_admission_events_carry_non_zero_trace_ids() {

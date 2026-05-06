@@ -85,18 +85,18 @@ pub const HADR_STREAM_MAX: u64 = 255;
 /// Heartbeat stream subrange: [128-159].
 pub const HEARTBEAT_STREAM_MIN: u64 = 128;
 pub const HEARTBEAT_STREAM_MAX: u64 = 159;
-pub const HEARTBEAT_MAX_REPLICAS: u64 = (HEARTBEAT_STREAM_MAX - HEARTBEAT_STREAM_MIN + 1) / 2;
+pub const HEARTBEAT_MAX_REPLICAS: u64 = (HEARTBEAT_STREAM_MAX - HEARTBEAT_STREAM_MIN).div_ceil(2);
 
 /// WAL shipping stream subrange: [160-191].
 pub const WAL_SHIPPING_STREAM_MIN: u64 = 160;
 pub const WAL_SHIPPING_STREAM_MAX: u64 = 191;
 pub const WAL_SHIPPING_MAX_REPLICAS: u64 =
-    (WAL_SHIPPING_STREAM_MAX - WAL_SHIPPING_STREAM_MIN + 1) / 2;
+    (WAL_SHIPPING_STREAM_MAX - WAL_SHIPPING_STREAM_MIN).div_ceil(2);
 
 /// Promotion vote stream subrange: [192-223].
 pub const VOTE_STREAM_MIN: u64 = 192;
 pub const VOTE_STREAM_MAX: u64 = 223;
-pub const VOTE_MAX_REPLICAS: u64 = (VOTE_STREAM_MAX - VOTE_STREAM_MIN + 1) / 2;
+pub const VOTE_MAX_REPLICAS: u64 = (VOTE_STREAM_MAX - VOTE_STREAM_MIN).div_ceil(2);
 
 /// Reserved/future stream subrange: [224-255].
 pub const RESERVED_STREAM_MIN: u64 = 224;

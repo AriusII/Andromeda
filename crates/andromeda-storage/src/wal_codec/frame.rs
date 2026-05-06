@@ -102,18 +102,18 @@ pub fn decode_frame_header(buffer: &[u8]) -> AndromedaResult<WalFrameHeader> {
         return Err(storage_error("truncated WAL frame header"));
     }
 
-    let magic = read_u64(buffer, 0);
-    let format_version = read_u16(buffer, 8);
-    let header_length = read_u16(buffer, 10);
-    let total_length = read_u64(buffer, 12);
-    let kind_tag = read_u16(buffer, 20);
-    let flags = read_u16(buffer, 22);
-    let lsn = Lsn::new(read_u64(buffer, 24));
-    let previous_lsn_value = read_u64(buffer, 32);
-    let transaction_id_value = read_u64(buffer, 40);
-    let payload_length = read_u64(buffer, 48);
-    let record_checksum = read_u64(buffer, 56);
-    let header_checksum = read_u64(buffer, 64);
+    let magic = read_u64(buffer, 0)?;
+    let format_version = read_u16(buffer, 8)?;
+    let header_length = read_u16(buffer, 10)?;
+    let total_length = read_u64(buffer, 12)?;
+    let kind_tag = read_u16(buffer, 20)?;
+    let flags = read_u16(buffer, 22)?;
+    let lsn = Lsn::new(read_u64(buffer, 24)?);
+    let previous_lsn_value = read_u64(buffer, 32)?;
+    let transaction_id_value = read_u64(buffer, 40)?;
+    let payload_length = read_u64(buffer, 48)?;
+    let record_checksum = read_u64(buffer, 56)?;
+    let header_checksum = read_u64(buffer, 64)?;
 
     if flags & FLAG_HAS_PREVIOUS_LSN == 0 && previous_lsn_value != 0 {
         return Err(storage_error("WAL frame has unflagged previous LSN bytes"));

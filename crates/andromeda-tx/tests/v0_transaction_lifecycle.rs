@@ -178,9 +178,7 @@ fn mvcc_compatibility_module_reexports_focused_types() {
     assert!(row.visible_in_snapshot(&snapshot, &statuses).unwrap());
 }
 
-// ---------------------------------------------------------------------------
 // V0 doctrine: visible commit ≡ durable WAL evidence in the status table.
-// ---------------------------------------------------------------------------
 
 /// A version whose creator has *no* status entry must be invisible to every
 /// other transaction, regardless of how old `begin_ts` is. This locks in

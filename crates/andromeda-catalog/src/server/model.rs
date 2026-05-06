@@ -1,28 +1,17 @@
 use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, ProcedureId,
+    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, ContractHash, ProcedureId,
 };
 
 /// A procedure manifest providing metadata needed by remote clients.
-///
-/// Contains the essential information for resolving and executing procedures
-/// without requiring ad hoc SQL queries.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcedureManifest {
-    /// The procedure ID
     pub procedure_id: ProcedureId,
-    /// The qualified name (e.g., "schema.procedure_name")
     pub qualified_name: String,
-    /// The catalog version at which this procedure is defined
     pub catalog_version: CatalogVersion,
-    /// Stable hash of the procedure contract for compatibility checking
     pub contract_hash: Vec<u8>,
-    /// Input parameter names and types (schema)
     pub input_schema: Vec<ColumnSchema>,
-    /// Output column names and types
     pub output_schema: Vec<ColumnSchema>,
-    /// Whether this procedure may modify data
     pub is_mutable: bool,
-    /// Minimum catalog version required for compatibility
     pub min_compatible_version: CatalogVersion,
 }
 
@@ -36,7 +25,7 @@ impl ProcedureManifest {
             ));
         }
 
-        if self.qualified_name.is_empty() {
+        if self.qualified_name.trim().is_empty() {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Catalog,
                 "procedure qualified name must not be empty",
@@ -50,12 +39,36 @@ impl ProcedureManifest {
             ));
         }
 
-        if self.contract_hash.is_empty() {
+        if self.contract_hash.len() != ContractHash::LEN {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Catalog,
-                "contract hash must not be empty",
+                "procedure contract hash must be 32 bytes",
             ));
         }
+
+        if self.contract_hash.iter().all(|byte| *byte == 0) {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "procedure contract hash must not be zero",
+            ));
+        }
+
+        if self.min_compatible_version.get() == 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "minimum compatible catalog version must not be zero",
+            ));
+        }
+
+        if self.min_compatible_version.get() > self.catalog_version.get() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "minimum compatible catalog version must not exceed catalog version",
+            ));
+        }
+
+        validate_schema_columns("input", &self.input_schema)?;
+        validate_schema_columns("output", &self.output_schema)?;
 
         Ok(())
     }
@@ -77,14 +90,14 @@ pub struct ColumnSchema {
 impl ColumnSchema {
     /// Validate the column schema.
     pub fn validate(&self) -> AndromedaResult<()> {
-        if self.name.is_empty() {
+        if self.name.trim().is_empty() {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Catalog,
                 "column name must not be empty",
             ));
         }
 
-        if self.type_descriptor.is_empty() {
+        if self.type_descriptor.trim().is_empty() {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Catalog,
                 "column type descriptor must not be empty",
@@ -95,10 +108,21 @@ impl ColumnSchema {
     }
 }
 
+fn validate_schema_columns(label: &'static str, columns: &[ColumnSchema]) -> AndromedaResult<()> {
+    for (expected_ordinal, column) in columns.iter().enumerate() {
+        column.validate()?;
+        if column.ordinal as usize != expected_ordinal {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                format!("{label} schema column ordinals must be contiguous from zero"),
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 /// A change notification for catalog updates.
-///
-/// Emitted when a procedure or other catalog object changes,
-/// allowing clients to invalidate caches and revalidate procedure contracts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CatalogChangeNotification {
     /// The new catalog version after the change
@@ -111,10 +135,7 @@ pub struct CatalogChangeNotification {
 
 impl CatalogChangeNotification {
     /// Determine if the change affected a specific procedure.
-    /// In a real implementation, this would consult the change journal.
     pub fn affects_procedure(&self, _procedure_id: ProcedureId) -> bool {
-        // In mock implementation, any version change affects all procedures
-        // Real implementation would consult change tracking metadata
         self.new_version != self.previous_version
     }
 }

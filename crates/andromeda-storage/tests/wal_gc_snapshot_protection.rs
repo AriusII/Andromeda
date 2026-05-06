@@ -11,9 +11,7 @@ mod wal_gc_snapshot_protection_tests {
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex, RwLock};
 
-    // ============================================================
     // Mock Snapshot Handle (from transaction crate pattern)
-    // ============================================================
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     struct MockSnapshotHandle {
@@ -21,9 +19,7 @@ mod wal_gc_snapshot_protection_tests {
         tx_id: u64,
     }
 
-    // ============================================================
     // Mock Snapshot Registry
-    // ============================================================
 
     struct MockSnapshotRegistry {
         active_snapshots: Arc<RwLock<Vec<MockSnapshotHandle>>>,
@@ -76,9 +72,7 @@ mod wal_gc_snapshot_protection_tests {
         }
     }
 
-    // ============================================================
     // Mock GC Context with Snapshot Integration
-    // ============================================================
 
     struct SnapshotAwareWalGcContext {
         candidates: Vec<WalGcCandidate>,
@@ -172,9 +166,7 @@ mod wal_gc_snapshot_protection_tests {
         }
     }
 
-    // ============================================================
     // Test: No segments reclaimed while snapshot active
-    // ============================================================
 
     #[test]
     fn test_no_segments_reclaimed_while_snapshot_active() {
@@ -206,9 +198,7 @@ mod wal_gc_snapshot_protection_tests {
         assert_eq!(gc_ctx.get_removed_segments(), vec![1]);
     }
 
-    // ============================================================
     // Test: Segment reclaimed after all snapshots closed
-    // ============================================================
 
     #[test]
     fn test_segment_reclaimed_after_snapshots_closed() {
@@ -241,9 +231,7 @@ mod wal_gc_snapshot_protection_tests {
         assert_eq!(gc_ctx.get_removed_segments(), vec![1]);
     }
 
-    // ============================================================
     // Test: Long-running snapshot prevents GC cascade
-    // ============================================================
 
     #[test]
     fn test_long_running_snapshot_protects_cascade() {
@@ -273,9 +261,7 @@ mod wal_gc_snapshot_protection_tests {
         assert_eq!(summary.candidates_blocked, 8);
     }
 
-    // ============================================================
     // Test: Concurrent snapshot creation/destruction + GC
-    // ============================================================
 
     #[test]
     fn test_concurrent_snapshot_creation_destruction_gc() {
@@ -322,9 +308,7 @@ mod wal_gc_snapshot_protection_tests {
         assert!(!snapshot_registry.has_active_snapshots());
     }
 
-    // ============================================================
     // Test: GC stats correctly report protected segments
-    // ============================================================
 
     #[test]
     fn test_gc_stats_protected_segments() {
@@ -355,9 +339,7 @@ mod wal_gc_snapshot_protection_tests {
         assert!(summary.bytes_freed > 0);
     }
 
-    // ============================================================
     // Test: Segment LSN range validation
-    // ============================================================
 
     #[test]
     fn test_segment_lsn_range_validation() {
@@ -396,9 +378,7 @@ mod wal_gc_snapshot_protection_tests {
         assert!(can_reclaim); // Now sealing_lsn (200) < min_snapshot (250)
     }
 
-    // ============================================================
     // Test: Multiple overlapping snapshots protection
-    // ============================================================
 
     #[test]
     fn test_multiple_overlapping_snapshots() {
@@ -442,9 +422,7 @@ mod wal_gc_snapshot_protection_tests {
         assert!(!can_reclaim);
     }
 
-    // ============================================================
     // Test: Recovery safety (required_wal_start_lsn enforcement)
-    // ============================================================
 
     #[test]
     fn test_recovery_safety_boundary() {
@@ -471,9 +449,7 @@ mod wal_gc_snapshot_protection_tests {
         assert!(can_reclaim); // creation_lsn (550) > required_start_lsn (500)
     }
 
-    // ============================================================
     // Test: Empty snapshot registry (no active snapshots)
-    // ============================================================
 
     #[test]
     fn test_empty_snapshot_registry() {
@@ -488,9 +464,7 @@ mod wal_gc_snapshot_protection_tests {
         assert!(!snapshot_registry.has_active_snapshots());
     }
 
-    // ============================================================
     // Test: LSN boundary edge cases
-    // ============================================================
 
     #[test]
     fn test_lsn_boundary_edge_cases() {

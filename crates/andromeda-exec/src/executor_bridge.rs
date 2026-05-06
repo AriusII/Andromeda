@@ -81,7 +81,7 @@ use andromeda_quic::{Connection, SurfacePlane};
 ///
 /// ## Type Invariants
 ///
-/// - The connection must be in [`LifecycleState::Active`] before dispatch.
+/// - The connection must be in `LifecycleState::Active` before dispatch.
 /// - The certificate identity must be bound to the connection.
 /// - The certificate scope must match the connection plane.
 /// - Authorization must succeed before any executor invocation.
@@ -341,36 +341,6 @@ mod tests {
         conn.set_certificate_identity(identity).unwrap();
         conn.accept_hello(&hello_frame(100)).unwrap();
         conn.accept_auth(&auth_frame(100)).unwrap();
-        assert_eq!(conn.state(), LifecycleState::Active);
-        conn
-    }
-
-    fn setup_active_administration_connection() -> Connection {
-        let mut conn = Connection::new(SurfacePlane::Administration);
-        let identity = CertificateIdentity::new(
-            "b".repeat(64),
-            "admin-service".to_string(),
-            SurfaceScope::Administration,
-        )
-        .unwrap();
-        conn.set_certificate_identity(identity).unwrap();
-        conn.accept_hello(&hello_frame(200)).unwrap();
-        conn.accept_auth(&auth_frame(200)).unwrap();
-        assert_eq!(conn.state(), LifecycleState::Active);
-        conn
-    }
-
-    fn setup_active_ha_connection() -> Connection {
-        let mut conn = Connection::new(SurfacePlane::HighAvailability);
-        let identity = CertificateIdentity::new(
-            "c".repeat(64),
-            "ha-service".to_string(),
-            SurfaceScope::Cluster,
-        )
-        .unwrap();
-        conn.set_certificate_identity(identity).unwrap();
-        conn.accept_hello(&hello_frame(300)).unwrap();
-        conn.accept_auth(&auth_frame(300)).unwrap();
         assert_eq!(conn.state(), LifecycleState::Active);
         conn
     }

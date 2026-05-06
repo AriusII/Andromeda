@@ -369,8 +369,21 @@ impl HistogramBuilderTrait for EquiDepthHistogramBuilder {
             let bucket_values = &self.values[start_idx..end_idx];
             let bucket_ndv = Self::estimate_ndv(bucket_values)?;
 
-            let lower_key = datum_to_key(bucket_values.first().unwrap()).unwrap_or(0);
-            let upper_key = datum_to_key(bucket_values.last().unwrap()).unwrap_or(0);
+            let Some(first_value) = bucket_values.first() else {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Catalog,
+                    "EquiDepthHistogramBuilder: generated an empty bucket",
+                ));
+            };
+            let Some(last_value) = bucket_values.last() else {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Catalog,
+                    "EquiDepthHistogramBuilder: generated an empty bucket",
+                ));
+            };
+
+            let lower_key = datum_to_key(first_value).unwrap_or(0);
+            let upper_key = datum_to_key(last_value).unwrap_or(0);
 
             buckets.push(HistogramBucket {
                 lower_inclusive: lower_key,

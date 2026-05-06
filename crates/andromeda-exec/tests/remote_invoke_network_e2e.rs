@@ -40,9 +40,7 @@ use andromeda_quic::{
 use tokio::sync::RwLock;
 use tokio::time::{Duration, timeout};
 
-// ============================================================================
 // Mock Procedure Registry
-// ============================================================================
 
 /// Mock procedure for testing.
 #[derive(Debug, Clone)]
@@ -183,9 +181,7 @@ impl MockRegistry {
     }
 }
 
-// ============================================================================
 // Helper Functions
-// ============================================================================
 
 fn create_test_server_tls() -> AndromedaResult<quinn::ServerConfig> {
     let tls_config = ServerTlsConfig::ephemeral(vec!["localhost".to_string()])?;
@@ -201,9 +197,7 @@ fn allocate_test_address() -> SocketAddr {
     SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0)
 }
 
-// ============================================================================
 // Test: Single Request/Response Cycle
-// ============================================================================
 
 #[tokio::test]
 async fn test_single_invocation_e2e() -> AndromedaResult<()> {
@@ -329,9 +323,7 @@ async fn test_single_invocation_e2e() -> AndromedaResult<()> {
     Ok(())
 }
 
-// ============================================================================
 // Test: Concurrent Invocations
-// ============================================================================
 
 #[tokio::test]
 async fn test_concurrent_invocations() -> AndromedaResult<()> {
@@ -476,9 +468,7 @@ async fn test_concurrent_invocations() -> AndromedaResult<()> {
     Ok(())
 }
 
-// ============================================================================
 // Test: Stress Test - Rapid Succession Procedures
-// ============================================================================
 
 #[tokio::test]
 async fn test_stress_rapid_procedures() -> AndromedaResult<()> {
@@ -600,9 +590,7 @@ async fn test_stress_rapid_procedures() -> AndromedaResult<()> {
     Ok(())
 }
 
-// ============================================================================
 // Test: P50/P99 Latency Measurement
-// ============================================================================
 
 #[tokio::test]
 async fn test_latency_measurements() -> AndromedaResult<()> {

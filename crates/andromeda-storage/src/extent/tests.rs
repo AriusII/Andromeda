@@ -118,7 +118,10 @@ fn extent_manager_rejects_direct_free_after_cold_publication() {
     let mut manager = ExtentManager::from_descriptors(vec![extent()]).unwrap();
 
     assert_eq!(
-        manager.free_sealed_extent(ExtentId::new(1)).unwrap_err().kind(),
+        manager
+            .free_sealed_extent(ExtentId::new(1))
+            .unwrap_err()
+            .kind(),
         AndromedaErrorKind::Storage
     );
     assert!(manager.descriptor(ExtentId::new(1)).is_some());
@@ -140,7 +143,10 @@ fn extent_manager_reclaims_published_cold_only_with_manifest_evidence() {
         .unwrap();
 
     assert!(manager.descriptor(ExtentId::new(1)).is_none());
-    assert_eq!(manager.free_ranges()[0].recyclable_after_lsn, Some(Lsn::new(30)));
+    assert_eq!(
+        manager.free_ranges()[0].recyclable_after_lsn,
+        Some(Lsn::new(30))
+    );
 }
 
 #[test]

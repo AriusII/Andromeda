@@ -1,4 +1,4 @@
-//! Wire Execution Trace Infrastructure (Wave 13 Batch 3)
+//! Wire execution trace infrastructure.
 //!
 //! This module coordinates ProcedureInvocationTrace emission across all critical
 //! execution pipeline phases:
@@ -10,9 +10,9 @@
 //!
 //! ## Durable Audit Guarantees
 //!
-//! All traces are emitted to an append-only audit ledger (from Wave 12). The
-//! invariant is enforced: **Every procedure invocation produces a durable trace
-//! with no silent omissions.**
+//! All traces are emitted to an append-only audit ledger. The invariant is
+//! enforced: **Every procedure invocation produces a durable trace with no
+//! silent omissions.**
 //!
 //! Integration points:
 //! - `InvocationRequest::validate_admission` → `AdmissionDecisionTrace`
@@ -75,8 +75,8 @@ pub enum InvocationTraceEvent {
     /// Invocation was aborted because a timeout deadline was exceeded.
     ///
     /// Emitted at the QUIC stream layer for `IdleTimeout` and `OverallTimeout`,
-    /// and reserved for `LockWait` timeout once `LockManager::try_acquire_with_deadline`
-    /// is implemented in Wave 14 (see `SCOPED_INVOCATION_TIMEOUT.md §7`).
+    /// and reserved for `LockWait` once lock acquisition exposes a deadline-aware
+    /// API.
     ///
     /// This event is **always terminal**: no retry occurs after `TimeoutExceeded`
     /// (`ErrorRetryability::classify(Timeout) == Persistent`).
@@ -84,7 +84,7 @@ pub enum InvocationTraceEvent {
         trace_id: TraceId,
         invocation_id: InvocationId,
         /// Describes which deadline was exceeded: "IdleTimeout", "OverallTimeout",
-        /// or "LockWait" (Wave 14+).
+        /// or "LockWait".
         deadline_kind: String,
         /// Wall-clock milliseconds elapsed from stream creation to timeout detection.
         elapsed_ms: u64,

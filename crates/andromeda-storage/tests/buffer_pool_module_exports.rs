@@ -1,13 +1,5 @@
 #![forbid(unsafe_code)]
 
-/// Wave 21 Batch 4 Task 3: C2-BP-013
-/// Buffer Pool Module Exports & Integration Test
-///
-/// Validates that:
-/// - Buffer pool is publicly accessible as a module
-/// - All public types are exported
-/// - Only public contracts are exposed
-/// - Module-level documentation is present
 use andromeda_storage::buffer_pool::{
     BufferFrame, BufferFrameId, BufferFrameState, BufferPoolConfig, BufferPoolError,
     ClockEvictionPolicy, DirtyTracker,
@@ -17,7 +9,6 @@ use andromeda_storage::{
     PageTrailer, PageType,
 };
 
-/// Test 1: All buffer pool types are accessible via module path
 #[test]
 fn buffer_pool_module_exports_all_public_types() {
     let _: () = {
@@ -30,7 +21,6 @@ fn buffer_pool_module_exports_all_public_types() {
     };
 }
 
-/// Test 2: Buffer pool manager trait can be instantiated and used
 #[test]
 fn buffer_pool_manager_trait_accessible_and_functional() {
     let config = BufferPoolConfig::new(16, PageSize::KiB16).expect("valid config");
@@ -38,7 +28,6 @@ fn buffer_pool_manager_trait_accessible_and_functional() {
     assert_eq!(config.page_size(), PageSize::KiB16);
 }
 
-/// Test 3: Buffer frame construction with canonical page types
 #[test]
 fn buffer_frame_uses_canonical_page_contracts() {
     let frame_id = BufferFrameId::new(1).expect("valid frame id");
@@ -73,8 +62,8 @@ fn buffer_frame_uses_canonical_page_contracts() {
         },
     };
 
-    let image = andromeda_storage::PageImage::zeroed_with_layout(contract.clone())
-        .expect("valid page image");
+    let image =
+        andromeda_storage::PageImage::zeroed_with_layout(contract).expect("valid page image");
     let mut frame = BufferFrame::with_image(frame_id, image).expect("valid buffer frame");
 
     assert_eq!(frame.page_id(), Some(PageId::new(100)));
@@ -94,7 +83,6 @@ fn buffer_frame_uses_canonical_page_contracts() {
     assert!(!frame.is_dirty());
 }
 
-/// Test 4: Dirty tracker integration
 #[test]
 fn dirty_tracker_interface_functional() {
     let mut tracker = DirtyTracker::new();
@@ -116,7 +104,6 @@ fn dirty_tracker_interface_functional() {
     assert_eq!(candidates[1].first_dirty_lsn(), Lsn::new(20));
 }
 
-/// Test 5: Clock eviction policy accessible and configurable
 #[test]
 fn clock_eviction_policy_interface() {
     let policy = ClockEvictionPolicy::new();
@@ -124,7 +111,6 @@ fn clock_eviction_policy_interface() {
     // Policy is advanced internally; this test just verifies interface
 }
 
-/// Test 6: No private implementation details leak (interface check)
 #[test]
 fn buffer_pool_exports_only_public_interface() {
     // This test verifies that we cannot access private fields or methods
@@ -140,7 +126,6 @@ fn buffer_pool_exports_only_public_interface() {
     let _: usize = tracker.len(); // Only public accessor
 }
 
-/// Test 7: Module documentation confirms contract expectations
 #[test]
 fn buffer_pool_module_documentation_covers_contracts() {
     // This test documents the expected contracts for buffer pool users

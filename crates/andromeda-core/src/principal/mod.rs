@@ -2,17 +2,17 @@
 
 mod certificate;
 mod id;
+mod identity;
 mod permission;
 mod permission_set;
-mod principal;
 mod role;
 mod session;
 
 pub use certificate::CertificateFingerprint;
 pub use id::PrincipalId;
+pub use identity::Principal;
 pub use permission::Permission;
 pub use permission_set::PermissionSet;
-pub use principal::Principal;
 pub use role::PrincipalRole;
 pub use session::SessionToken;
 

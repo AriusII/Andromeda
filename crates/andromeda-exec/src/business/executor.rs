@@ -214,11 +214,21 @@ impl InventoryBusinessMvccStore {
         let stock_versions = self
             .stock_versions
             .get_mut(&command.product_id)
-            .expect("visible stock version must come from an existing product entry");
+            .ok_or_else(|| {
+                AndromedaError::new(
+                    AndromedaErrorKind::Internal,
+                    "visible inventory stock version lost its product entry before write",
+                )
+            })?;
         let observed_index = stock_versions
             .iter()
             .position(|version| version.version_id == previous_version_id)
-            .expect("visible stock version id must still be present");
+            .ok_or_else(|| {
+                AndromedaError::new(
+                    AndromedaErrorKind::Internal,
+                    "visible inventory stock version disappeared before write",
+                )
+            })?;
         stock_versions[observed_index].header = closed_observed_header;
         stock_versions.push(written_stock);
         self.reservations

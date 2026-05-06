@@ -54,9 +54,7 @@ fn shaped_fingerprint_alt() -> PlanShapeFingerprint {
         .finish()
 }
 
-// ============================================================================
 // TEST 1: Cache key stability with no changes
-// ============================================================================
 
 /// Verifies that a `PlanCacheKey` remains stable and equal to itself
 /// when created from the same binding, plan class, and fingerprint.
@@ -85,15 +83,13 @@ fn test_cache_key_stability_with_no_changes() {
 
     // A runtime cache lookup with key1 should match a stored entry for key2.
     // (We use key equality to simulate cache lookup.)
-    assert!(
-        key1 == key2,
+    assert_eq!(
+        key1, key2,
         "no-silent-drop: cache must recognize both keys as identical"
     );
 }
 
-// ============================================================================
 // TEST 2: Cache invalidated on catalog version bump
-// ============================================================================
 
 /// Verifies that advancing `CatalogVersion` creates a different cache key.
 ///
@@ -130,15 +126,13 @@ fn test_cache_invalidated_on_catalog_version_bump() {
 
     // A runtime cache must not reuse a plan stored under key_v1 when
     // looking up key_v2. We verify this by asserting they are distinct.
-    assert!(
-        key_v1 != key_v2,
+    assert_ne!(
+        key_v1, key_v2,
         "no-silent-drop: old catalog key must not match new key"
     );
 }
 
-// ============================================================================
 // TEST 3: Cache invalidated on contract hash change
-// ============================================================================
 
 /// Verifies that changing the contract hash (e.g., via ALTER PROCEDURE)
 /// creates a different cache key.
@@ -176,15 +170,13 @@ fn test_cache_invalidated_on_contract_hash_change() {
     );
 
     // No silent reuse: old contract's cached plan cannot be used under the new contract.
-    assert!(
-        key_old != key_new,
+    assert_ne!(
+        key_old, key_new,
         "no-silent-drop: old contract key must not match new contract key"
     );
 }
 
-// ============================================================================
 // TEST 4: Cache invalidated on stats version bump
-// ============================================================================
 
 /// Verifies that advancing `StatsVersion` creates a different cache key.
 ///
@@ -220,15 +212,13 @@ fn test_cache_invalidated_on_stats_version_bump() {
     );
 
     // No silent reuse: a plan optimized for old statistics cannot be trusted with new statistics.
-    assert!(
-        key_old != key_new,
+    assert_ne!(
+        key_old, key_new,
         "no-silent-drop: old stats key must not match new stats key"
     );
 }
 
-// ============================================================================
 // TEST 5: Cache key components are all required
-// ============================================================================
 
 /// Verifies that every component of the `PlanCacheKey` identity participates
 /// in invalidation by testing each component in isolation.
@@ -359,9 +349,7 @@ fn test_cache_key_components_all_required() {
     }
 }
 
-// ============================================================================
 // TEST 6: Plan cache rejects mismatched contract before use
-// ============================================================================
 
 /// Verifies that `PlanCacheKey::build` rejects contract mismatches and prevents
 /// accidental creation of a key from a misaligned binding.
@@ -397,8 +385,8 @@ fn test_plan_cache_rejects_mismatched_contract_before_use() {
 
     // This prevents silent reuse: even if the procedure ID matches, the contract
     // hash ensures the old plan is not retrieved.
-    assert!(
-        key_a != key_b,
+    assert_ne!(
+        key_a, key_b,
         "no-silent-drop: contract mismatch must result in different keys"
     );
 
@@ -416,9 +404,7 @@ fn test_plan_cache_rejects_mismatched_contract_before_use() {
     assert_err_is_catalog_version_zero(&err);
 }
 
-// ============================================================================
 // TEST 7: Plan cache no silent reuse across procedures
-// ============================================================================
 
 /// Verifies that two different procedures never share a cached plan key,
 /// even if all other components are identical.
@@ -466,8 +452,8 @@ fn test_plan_cache_no_silent_reuse_across_procedures() {
 
     // No silent reuse: a runtime cache lookup with proc1's key will never
     // retrieve a plan stored under proc2's key.
-    assert!(
-        key_proc1 != key_proc2,
+    assert_ne!(
+        key_proc1, key_proc2,
         "no-silent-drop: different procedures must not share keys"
     );
 
@@ -483,9 +469,7 @@ fn test_plan_cache_no_silent_reuse_across_procedures() {
     );
 }
 
-// ============================================================================
 // HELPER ASSERTIONS
-// ============================================================================
 
 fn assert_err_is_catalog_version_zero(err: &Result<PlanCacheKey, PlanCacheKeyError>) {
     match err {
@@ -496,9 +480,7 @@ fn assert_err_is_catalog_version_zero(err: &Result<PlanCacheKey, PlanCacheKeyErr
     }
 }
 
-// ============================================================================
 // ADDITIONAL ENFORCEMENT TESTS
-// ============================================================================
 
 /// Additional test: Verify that plan class enforcement is strict.
 /// PlanClass::Singleton rejects any non-empty fingerprint.

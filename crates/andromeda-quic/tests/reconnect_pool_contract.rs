@@ -118,3 +118,13 @@ fn retry_admission_is_idempotent_only_and_bounded_by_reconnect_policy() {
         RetryAdmissionDecision::Reject(RetryRejectionReason::AttemptsExhausted)
     );
 }
+
+#[test]
+fn reconnect_state_exposes_attempt_for_observability() {
+    assert_eq!(
+        ReconnectState::Reconnecting { attempt: 3 }.reconnect_attempt(),
+        Some(3)
+    );
+    assert_eq!(ReconnectState::Disconnected.reconnect_attempt(), None);
+    assert_eq!(ReconnectState::Failed.reconnect_attempt(), None);
+}

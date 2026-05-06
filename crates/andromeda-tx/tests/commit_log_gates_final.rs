@@ -1,7 +1,7 @@
-//! CommitLog Production Gate Tests (Wave 21 Batch 7 Task 2)
+//! Commit log production gate tests.
 //!
 //! Comprehensive validation of commit log durability and visibility guarantees
-//! before Wave 21 Batch 8+ integration.
+//! before runtime integration.
 //!
 //! Tests validate:
 //! - Five-step commit sequence: WAL write, flush, status update, visibility
@@ -20,13 +20,13 @@ mod commit_log_gates {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicU64, Ordering};
 
-    // ====================================================================
+    type TestWalRecord = (WalRecordKind, Option<TransactionId>, Vec<u8>);
+
     // Mock WAL Implementation
-    // ====================================================================
 
     /// Test WAL with configurable failure modes for crash scenario testing
     struct TestWal {
-        records: std::sync::Mutex<Vec<(WalRecordKind, Option<TransactionId>, Vec<u8>)>>,
+        records: std::sync::Mutex<Vec<TestWalRecord>>,
         durable_lsn: std::sync::Mutex<Lsn>,
         next_lsn: AtomicU64,
         fail_flush_after: Option<u64>,
@@ -59,7 +59,7 @@ mod commit_log_gates {
             *self.durable_lsn.lock().unwrap()
         }
 
-        fn get_records(&self) -> Vec<(WalRecordKind, Option<TransactionId>, Vec<u8>)> {
+        fn get_records(&self) -> Vec<TestWalRecord> {
             self.records.lock().unwrap().clone()
         }
     }
@@ -81,13 +81,13 @@ mod commit_log_gates {
 
         async fn flush_through(&self, lsn: Lsn) -> AndromedaResult<Lsn> {
             // Check if we should fail this flush
-            if let Some(fail_after) = self.fail_flush_after {
-                if lsn.get() > fail_after {
-                    return Err(andromeda_core::AndromedaError::new(
-                        AndromedaErrorKind::Storage,
-                        "Simulated WAL flush failure",
-                    ));
-                }
+            if let Some(fail_after) = self.fail_flush_after
+                && lsn.get() > fail_after
+            {
+                return Err(andromeda_core::AndromedaError::new(
+                    AndromedaErrorKind::Storage,
+                    "Simulated WAL flush failure",
+                ));
             }
 
             let mut durable = self.durable_lsn.lock().unwrap();
@@ -96,9 +96,7 @@ mod commit_log_gates {
         }
     }
 
-    // ====================================================================
     // Helper fixtures
-    // ====================================================================
 
     fn setup_commit_log() -> (Arc<TestWal>, Arc<TransactionStatusTable>, CommitLogManager) {
         let wal = TestWal::new();
@@ -107,11 +105,6 @@ mod commit_log_gates {
         (wal, status_table, commit_log)
     }
 
-    // ====================================================================
-    // FIVE-STEP SEQUENCE TESTS
-    // ====================================================================
-
-    /// Test: Commit sequence: (1) write WalRecord::TxCommit, (2) flush WAL,
     /// (3) update CommitLogEntry, (4) update status table, (5) broadcast visibility
     #[tokio::test]
     async fn test_five_step_sequence_complete() {
@@ -148,7 +141,6 @@ mod commit_log_gates {
         assert!(commit_log.is_committed(tx_id), "Transaction is visible");
     }
 
-    /// Test: If step 1 fails → TX rolls back, no commit log entry
     #[tokio::test]
     async fn test_five_step_fail_at_wal_write() {
         let (wal, _status_table, commit_log) = setup_commit_log();
@@ -172,7 +164,6 @@ mod commit_log_gates {
         assert_eq!(records[0].0, WalRecordKind::TxCommit, "Record is TxCommit");
     }
 
-    /// Test: If step 2 fails → TX blocks until WAL flush succeeds (or times out)
     #[tokio::test]
     async fn test_five_step_fail_at_wal_flush_blocks() {
         let wal = TestWal::with_fail_flush_after(0); // Fail flush after LSN 0
@@ -197,7 +188,6 @@ mod commit_log_gates {
         );
     }
 
-    /// Test: Step 3-5 always succeed (no mutation after WAL flush)
     #[tokio::test]
     async fn test_five_step_post_flush_idempotent() {
         let (wal, _status_table, commit_log) = setup_commit_log();
@@ -221,11 +211,6 @@ mod commit_log_gates {
         assert_eq!(retrieved_lsn, Some(entry1.commit_lsn), "LSN consistent");
     }
 
-    // ====================================================================
-    // DURABILITY TESTS
-    // ====================================================================
-
-    /// Test: After crash before WAL flush → TX invisible after recovery
     #[tokio::test]
     async fn test_durability_crash_before_flush_invisible() {
         let wal = TestWal::new();
@@ -247,7 +232,6 @@ mod commit_log_gates {
         assert!(commit_log.is_committed(tx_id));
     }
 
-    /// Test: After crash after WAL flush → TX visible after recovery (replay from WAL)
     #[tokio::test]
     async fn test_durability_crash_after_flush_visible() {
         let (wal, _status_table, commit_log) = setup_commit_log();
@@ -267,7 +251,6 @@ mod commit_log_gates {
         assert!(durability_check.is_ok(), "Transaction is durable");
     }
 
-    /// Test: CommitLogEntry LSN matches WalRecord LSN exactly
     #[tokio::test]
     async fn test_durability_lsn_consistency() {
         let (wal, _status_table, commit_log) = setup_commit_log();
@@ -290,11 +273,6 @@ mod commit_log_gates {
         assert_eq!(wal.get_durable_lsn(), Lsn::new(1), "Durable LSN = 1");
     }
 
-    // ====================================================================
-    // ORDERING TESTS
-    // ====================================================================
-
-    /// Test: Commit LSN strictly increasing (no time warp)
     #[tokio::test]
     async fn test_ordering_lsn_monotonic_increasing() {
         let (_wal, _status_table, commit_log) = setup_commit_log();
@@ -305,7 +283,7 @@ mod commit_log_gates {
             let entry = commit_log
                 .record_commit(tx_id, IsolationLevel::Snapshot, i as u64, 0)
                 .await
-                .expect(&format!("commit tx {}", i));
+                .unwrap_or_else(|_| panic!("commit tx {}", i));
 
             lsns.push(entry.commit_lsn);
         }
@@ -321,7 +299,6 @@ mod commit_log_gates {
         }
     }
 
-    /// Test: No commit log entry without durable WAL record
     #[tokio::test]
     async fn test_ordering_no_commit_without_wal() {
         let (wal, _status_table, commit_log) = setup_commit_log();
@@ -343,11 +320,6 @@ mod commit_log_gates {
         assert_eq!(entry.commit_lsn, Lsn::new(1), "Entry LSN matches WAL LSN");
     }
 
-    // ====================================================================
-    // CONCURRENCY TESTS
-    // ====================================================================
-
-    /// Test: 100 concurrent commits each updating commit log (no duplicates, strict order)
     #[tokio::test]
     async fn test_concurrency_100_concurrent_commits() {
         let wal = TestWal::new();
@@ -363,7 +335,7 @@ mod commit_log_gates {
                 let entry = commit_log
                     .record_commit(tx_id, IsolationLevel::Snapshot, 1, 0)
                     .await
-                    .expect(&format!("commit tx {}", i + 1));
+                    .unwrap_or_else(|_| panic!("commit tx {}", i + 1));
                 entry.commit_lsn.get()
             };
             handles.push(handle);
@@ -397,7 +369,6 @@ mod commit_log_gates {
         }
     }
 
-    /// Test: Readers see committed versions in strict LSN order
     #[tokio::test]
     async fn test_concurrency_readers_see_ordered_commits() {
         let wal = TestWal::new();
@@ -411,7 +382,7 @@ mod commit_log_gates {
             let entry = commit_log
                 .record_commit(tx_id, IsolationLevel::Snapshot, i as u64, 0)
                 .await
-                .expect(&format!("commit tx {}", i));
+                .unwrap_or_else(|_| panic!("commit tx {}", i));
             commit_lsns.push((tx_id, entry.commit_lsn));
         }
 
@@ -449,7 +420,6 @@ mod commit_log_gates {
         join_all(reader_handles).await;
     }
 
-    /// Test: Concurrent commits + concurrent readers (no interference)
     #[tokio::test]
     async fn test_concurrency_commits_and_readers_no_interference() {
         let wal = TestWal::new();
@@ -466,7 +436,7 @@ mod commit_log_gates {
                 let entry = commit_log
                     .record_commit(tx_id, IsolationLevel::Snapshot, 1, 0)
                     .await
-                    .expect(&format!("writer {} commit", writer_id));
+                    .unwrap_or_else(|_| panic!("writer {} commit", writer_id));
                 (tx_id, entry.commit_lsn)
             };
             writer_handles.push(handle);
@@ -493,11 +463,6 @@ mod commit_log_gates {
         join_all(reader_handles).await;
     }
 
-    // ====================================================================
-    // ISOLATION LEVEL TESTS
-    // ====================================================================
-
-    /// Test: Snapshot and Serializable isolation levels recorded correctly
     #[tokio::test]
     async fn test_isolation_snapshot_level_recorded() {
         let (_wal, _status_table, commit_log) = setup_commit_log();
@@ -524,11 +489,6 @@ mod commit_log_gates {
         assert_eq!(entry.isolation_level, IsolationLevel::Serializable);
     }
 
-    // ====================================================================
-    // GC CANDIDATE IDENTIFICATION TESTS
-    // ====================================================================
-
-    /// Test: GC candidates identified correctly (before min_active_snapshot_lsn)
     #[tokio::test]
     async fn test_gc_candidates_identification() {
         let (_wal, _status_table, commit_log) = setup_commit_log();
@@ -540,7 +500,7 @@ mod commit_log_gates {
             let entry = commit_log
                 .record_commit(tx_id, IsolationLevel::Snapshot, 1, 0)
                 .await
-                .expect(&format!("commit tx {}", i));
+                .unwrap_or_else(|_| panic!("commit tx {}", i));
             entries.push(entry);
         }
 
@@ -568,11 +528,8 @@ mod commit_log_gates {
         assert_eq!(removed, 2, "Two entries removed");
     }
 
-    // ====================================================================
     // EDGE CASES & ROBUSTNESS
-    // ====================================================================
 
-    /// Test: Zero transaction ID is rejected
     #[tokio::test]
     async fn test_edge_case_zero_transaction_id() {
         let (_wal, _status_table, commit_log) = setup_commit_log();
@@ -586,7 +543,6 @@ mod commit_log_gates {
         assert!(result.is_err());
     }
 
-    /// Test: Very large transaction IDs work correctly
     #[tokio::test]
     async fn test_edge_case_large_transaction_id() {
         let (_wal, _status_table, commit_log) = setup_commit_log();
@@ -601,7 +557,6 @@ mod commit_log_gates {
         assert!(commit_log.is_committed(tx_id));
     }
 
-    /// Test: Multiple commits with same transaction ID (idempotence check)
     #[tokio::test]
     async fn test_edge_case_commit_idempotence() {
         let (_wal, _status_table, commit_log) = setup_commit_log();
@@ -630,7 +585,6 @@ mod commit_log_gates {
         );
     }
 
-    /// Test: Metadata (affected rows, parameter hash) preserved accurately
     #[tokio::test]
     async fn test_edge_case_metadata_preservation() {
         let (_wal, _status_table, commit_log) = setup_commit_log();
@@ -658,11 +612,6 @@ mod commit_log_gates {
         );
     }
 
-    // ====================================================================
-    // VISIBILITY & CORRECTNESS TESTS
-    // ====================================================================
-
-    /// Test: Committed transactions are immediately visible
     #[tokio::test]
     async fn test_visibility_immediate_after_commit() {
         let (_wal, _status_table, commit_log) = setup_commit_log();
@@ -682,7 +631,6 @@ mod commit_log_gates {
         assert!(commit_log.is_committed(tx_id));
     }
 
-    /// Test: Multiple transactions have independent visibility
     #[tokio::test]
     async fn test_visibility_independent_transactions() {
         let (_wal, _status_table, commit_log) = setup_commit_log();
@@ -711,7 +659,6 @@ mod commit_log_gates {
         assert!(commit_log.is_committed(tx2));
     }
 
-    /// Test: Timestamp accuracy (commit timestamp matches system time)
     #[tokio::test]
     async fn test_visibility_timestamp_accuracy() {
         let (_wal, _status_table, commit_log) = setup_commit_log();

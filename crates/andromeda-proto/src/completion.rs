@@ -110,13 +110,13 @@ impl ResultRowCountSummary {
             ));
         }
 
-        if let Some(exact) = self.row_count_exact {
-            if exact != self.rows_emitted {
-                return Err(AndromedaError::new(
-                    AndromedaErrorKind::Contract,
-                    "exact result row count must match emitted rows",
-                ));
-            }
+        if let Some(exact) = self.row_count_exact
+            && exact != self.rows_emitted
+        {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "exact result row count must match emitted rows",
+            ));
         }
 
         Ok(())

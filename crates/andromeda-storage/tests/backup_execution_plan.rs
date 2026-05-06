@@ -1,4 +1,4 @@
-//! F5 Physical Backup Execution Plan — comprehensive contract tests.
+//! Physical backup execution plan contract tests.
 //!
 //! # Test Scenarios
 //!
@@ -88,7 +88,6 @@ fn test_resource_limits() -> BackupResourceLimits {
 
 #[test]
 fn test_backup_plan_validates_manifest() {
-    // Test 1: Valid manifest with cold snapshot extents should create a valid backup plan.
     let manifest = test_manifest(1, 101, 300);
 
     let extent1 = test_extent(1, 1000, 100, ExtentState::PublishedCold);
@@ -140,7 +139,6 @@ fn test_backup_plan_validates_manifest() {
         "valid backup execution plan should pass validation"
     );
 
-    // Test 2: Invalid manifest (zero backup_id) should fail.
     let bad_manifest = BackupManifest {
         backup_id: BackupId::new(0), // Invalid!
         ..manifest
@@ -156,7 +154,6 @@ fn test_backup_plan_validates_manifest() {
         "backup plan with zero backup_id should fail validation"
     );
 
-    // Test 3: Invalid manifest (invalid CRC) should fail.
     let bad_manifest = BackupManifest {
         manifest_crc: 0, // Invalid!
         ..manifest
@@ -172,7 +169,6 @@ fn test_backup_plan_validates_manifest() {
         "backup plan with zero manifest_crc should fail validation"
     );
 
-    // Test 4: Extent in AllocatingHot state should be rejected (not durable).
     let mutable_extent = test_extent(3, 1200, 25, ExtentState::AllocatingHot);
 
     let bad_plan = BackupExecutionPlan {
@@ -293,7 +289,6 @@ fn test_backup_plan_includes_wal_range() {
 
 #[test]
 fn test_backup_artifact_metadata_consistency() {
-    // Test 3: Backup artifact metadata fields must be consistent.
     // If we corrupt one field (e.g., change total_extent_bytes), validation should fail.
 
     let manifest = test_manifest(3, 101, 300);
@@ -384,12 +379,9 @@ fn test_backup_artifact_metadata_consistency() {
 
 #[test]
 fn test_backup_rejects_incomplete_wal() {
-    // Test 4: If a WAL segment is missing from the range, backup plan validation should fail.
-
     let manifest = test_manifest(4, 101, 500);
     let extent = test_extent(1, 1000, 100, ExtentState::PublishedCold);
 
-    // Scenario 1: WAL segments with a gap in LSN coverage.
     let wal_seg1 = test_wal_segment(1, 101, 200, None);
     // Missing segments from 201 to 299
     let wal_seg2 = test_wal_segment(2, 300, 500, None); // WRONG: should chain from 200
@@ -424,7 +416,6 @@ fn test_backup_rejects_incomplete_wal() {
         "backup plan with WAL LSN gap should fail validation"
     );
 
-    // Scenario 2: WAL archive doesn't start at manifest WAL start LSN.
     let late_start_seg = test_wal_segment(3, 150, 500, None); // Should start at 101, not 150
 
     let bad_plan_late_start = BackupExecutionPlan {
@@ -450,7 +441,6 @@ fn test_backup_rejects_incomplete_wal() {
         "backup plan with incorrect WAL start LSN should fail validation"
     );
 
-    // Scenario 3: WAL archive doesn't end at manifest WAL end LSN.
     let early_end_seg = test_wal_segment(4, 101, 400, None); // Should end at 500, not 400
 
     let bad_plan_early_end = BackupExecutionPlan {
@@ -476,7 +466,6 @@ fn test_backup_rejects_incomplete_wal() {
         "backup plan with incorrect WAL end LSN should fail validation"
     );
 
-    // Scenario 4: WAL segment with incorrect base_previous_lsn (chain breakage).
     let wal_seg_chain1 = test_wal_segment(10, 101, 250, None);
     let wal_seg_chain2 = test_wal_segment(11, 251, 500, Some(249)); // Wrong: should be Some(250)
 
@@ -510,7 +499,6 @@ fn test_backup_rejects_incomplete_wal() {
         "backup plan with WAL segment chain breakage should fail validation"
     );
 
-    // Scenario 5: Duplicate WAL segment IDs.
     let wal_seg_dup1 = test_wal_segment(20, 101, 250, None);
     let wal_seg_dup2 = test_wal_segment(20, 251, 500, Some(250)); // Same segment_id!
 
@@ -544,7 +532,6 @@ fn test_backup_rejects_incomplete_wal() {
         "backup plan with duplicate WAL segment IDs should fail validation"
     );
 
-    // Scenario 6: Valid backup plan with complete WAL coverage should pass.
     let wal_seg_good1 = test_wal_segment(30, 101, 250, None);
     let wal_seg_good2 = test_wal_segment(31, 251, 500, Some(250));
 

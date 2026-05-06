@@ -124,9 +124,4 @@ mod tests {
         assert_eq!(report.rejected_count, 2);
         assert_eq!(report.rejection_reasons, reasons);
     }
-
-    #[test]
-    fn validate_srpl_batch_dry_run_placeholder() {
-        // Placeholder test; real tests in definitionbatch_compat.rs
-    }
 }

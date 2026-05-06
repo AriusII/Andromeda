@@ -2,9 +2,6 @@
 
 //! # Heap Golden Byte Vectors
 //!
-//! Wave 21 Batch 5 Task 2: N1-HEAP-008
-//! Heap Storage Format Determinism via Golden Byte Snapshots
-//!
 //! This test suite establishes deterministic, reproducible heap page formats
 //! by capturing and validating golden byte vectors for canonical heap states:
 //!
@@ -178,10 +175,6 @@ fn golden_min_tuple() -> Vec<u8> {
     page
 }
 
-// ============================================================================
-// Test Suite: Golden Byte Vector Loading and Validation
-// ============================================================================
-
 #[test]
 fn test_golden_empty_page_loads_and_validates() {
     let golden = golden_empty_page();
@@ -321,10 +314,6 @@ fn test_golden_min_tuple_loads_correctly() {
     assert!(tuple.iter().all(|&b| b == 0xEE));
 }
 
-// ============================================================================
-// Test Suite: Mutation Determinism
-// ============================================================================
-
 #[test]
 fn test_mutation_determinism_single_insert() {
     // Create two pages and insert identical tuple
@@ -393,10 +382,6 @@ fn test_mutation_determinism_delete_then_compact() {
         "slot directories should match after identical compactions"
     );
 }
-
-// ============================================================================
-// Test Suite: Idempotency (Replay Mutations → Identical Bytes)
-// ============================================================================
 
 #[test]
 fn test_idempotency_replay_inserts() {
@@ -468,10 +453,6 @@ fn test_idempotency_replay_compaction() {
         "replay compaction should produce identical bytes"
     );
 }
-
-// ============================================================================
-// Test Suite: Format Stability and Consistency
-// ============================================================================
 
 #[test]
 fn test_empty_page_consistency() {

@@ -27,6 +27,27 @@ use andromeda_proto::{
     validate_catalog_procedure_manifest_resolution_response,
 };
 
+fn valid_generated_manifest() -> ProcedureManifest {
+    ProcedureManifest {
+        procedure_id: 42,
+        procedure_name: "Inventory.ReserveStock".to_string(),
+        contract_hash: vec![0x11; 32],
+        catalog_version: 9,
+        protocol_layout: Some(GeneratedProtocolLayout {
+            descriptor_set_hash: vec![0x22; 32],
+            frame_envelope_hash: vec![0x33; 32],
+            protocol_package: "andromeda.protocol.v1".to_string(),
+            contract_package: "andromeda.contract.v1".to_string(),
+        }),
+        result_streams: vec![],
+        policy_version: vec![0x44; 32],
+        required_permissions: vec![RequiredPermission {
+            id: "andromeda.execute_procedure".to_string(),
+            family: "application".to_string(),
+        }],
+    }
+}
+
 #[test]
 fn test_protocol_version_deterministic_serialization() {
     let version = ProtocolVersion { major: 1, minor: 0 };
@@ -203,24 +224,7 @@ fn test_catalog_manifest_resolution_messages_roundtrip_without_json_or_grpc() {
         request_id: 77,
         trace_id: Some("trace-manifest-77".to_string()),
         status: 1, // STATUS_RESOLVED
-        manifest: Some(ProcedureManifest {
-            procedure_id: 42,
-            procedure_name: "Inventory.ReserveStock".to_string(),
-            contract_hash: vec![0x11; 32],
-            catalog_version: 9,
-            protocol_layout: Some(GeneratedProtocolLayout {
-                descriptor_set_hash: vec![0x22; 32],
-                frame_envelope_hash: vec![0x33; 32],
-                protocol_package: "andromeda.protocol.v1".to_string(),
-                contract_package: "andromeda.contract.v1".to_string(),
-            }),
-            result_streams: vec![],
-            policy_version: vec![0x44; 32],
-            required_permissions: vec![RequiredPermission {
-                id: "andromeda.execute_procedure".to_string(),
-                family: "application".to_string(),
-            }],
-        }),
+        manifest: Some(valid_generated_manifest()),
         resolved_contract_hash: Some(vec![0x11; 32]),
         resolved_catalog_version: Some(9),
         current_catalog_version: Some(9),
@@ -273,6 +277,53 @@ fn catalog_manifest_resolution_status_policy_accepts_governed_error_statuses() {
 
         validate_catalog_procedure_manifest_resolution_response(&response)
             .unwrap_or_else(|error| panic!("{name} should satisfy response validation: {error}"));
+    }
+}
+
+#[test]
+fn catalog_manifest_resolution_error_statuses_reject_resolved_payload_fields() {
+    let base = CatalogProcedureManifestResolutionResponse {
+        protocol_major: 1,
+        protocol_minor: 0,
+        request_id: 80,
+        trace_id: Some("trace-error-status".to_string()),
+        status: 2,
+        manifest: None,
+        resolved_contract_hash: None,
+        resolved_catalog_version: None,
+        current_catalog_version: Some(9),
+        diagnostic_code: Some("STATUS_NOT_FOUND".to_string()),
+    };
+
+    let cases = vec![
+        (
+            "manifest",
+            CatalogProcedureManifestResolutionResponse {
+                manifest: Some(valid_generated_manifest()),
+                ..base.clone()
+            },
+        ),
+        (
+            "resolved_contract_hash",
+            CatalogProcedureManifestResolutionResponse {
+                resolved_contract_hash: Some(vec![0x11; 32]),
+                ..base.clone()
+            },
+        ),
+        (
+            "resolved_catalog_version",
+            CatalogProcedureManifestResolutionResponse {
+                resolved_catalog_version: Some(9),
+                ..base
+            },
+        ),
+    ];
+
+    for (field, response) in cases {
+        assert!(
+            validate_catalog_procedure_manifest_resolution_response(&response).is_err(),
+            "non-resolved response must reject {field}"
+        );
     }
 }
 

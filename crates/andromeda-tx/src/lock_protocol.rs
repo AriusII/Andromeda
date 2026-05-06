@@ -183,20 +183,22 @@
 //! - **Sequence Overflow:** Extremely rare; indicates transaction aged >2^64 waiter sequences.
 //! - **Mutex Poison:** Indicates internal bug; entire transaction may need rollback.
 //!
-//! # Deferred: Deadlock Detection
+//! # Deadlock Detection
 //!
-//! Deadlock detection (cycle detection in wait-for graph) is deferred to Wave 21 Batch 2 Task 4.
+//! Deadlock detection is implemented by [`crate::deadlock_detection`] using
+//! owned lock-table snapshots. The detector is evidence-only: it does not abort
+//! transactions, mutate the lock table, or publish rollback visibility.
 //!
-//! The lock manager provides inspection APIs for external deadlock detection:
-//! - [`crate::lock_manager::LockManager::snapshot`] — full lock table snapshot
-//! - [`crate::lock_manager::LockManager::entry`] — single resource entry
+//! The lock manager provides inspection APIs for wait-for graph construction:
+//! - [`crate::lock_manager::LockManager::snapshot`] - full lock table snapshot
+//! - [`crate::lock_manager::LockManager::entry`] - single resource entry
 //! - Embedded `holders` and `waiters` in lock entries enable wait-for graph construction
 //!
 //! # Trace and Audit Evidence
 //!
 //! The lock manager emits non-breaking trace evidence for:
 //! - **Critical waits:** [`crate::lock_manager::LockDecisionEvidence`] with blockers
-//! - **Waiter promotions:** [`crate::lock_manager::LockDecisionEvidence::promotion`]
+//! - **Waiter promotions:** `LockDecisionEvidence::promotion`
 //! - **Terminal cleanup:** [`crate::lock_manager::LockReleaseAllSummary`]
 //!
 //! Evidence is transaction-local and does not imply durability.

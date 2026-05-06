@@ -1,6 +1,6 @@
 use andromeda_core::{AndromedaResult, CatalogVersion};
 
-use super::catalog_publication_error;
+use super::{catalog_publication_error, require_equal};
 use crate::CatalogPublicationReceipt;
 
 /// Recovery/replay expectations attached to a durable publication.
@@ -23,17 +23,21 @@ impl CatalogRecoveryReplayExpectation {
     }
 
     pub fn validate_for_receipt(&self, receipt: &CatalogPublicationReceipt) -> AndromedaResult<()> {
-        if self.starting_version != receipt.previous_version || self.target_version != receipt.next_version
-        {
-            return catalog_publication_error(
-                "recovery replay expectation versions must match publication receipt",
-            );
-        }
-        if self.required_record_count != receipt.record_count {
-            return catalog_publication_error(
-                "recovery replay expectation record count must match publication receipt",
-            );
-        }
+        require_equal(
+            &self.starting_version,
+            &receipt.previous_version,
+            "recovery replay expectation starting version must match publication receipt",
+        )?;
+        require_equal(
+            &self.target_version,
+            &receipt.next_version,
+            "recovery replay expectation target version must match publication receipt",
+        )?;
+        require_equal(
+            &self.required_record_count,
+            &receipt.record_count,
+            "recovery replay expectation record count must match publication receipt",
+        )?;
         if !self.require_exact_commit_boundary {
             return catalog_publication_error(
                 "catalog recovery replay must require exact commit boundary matching",

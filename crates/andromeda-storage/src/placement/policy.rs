@@ -168,12 +168,12 @@ fn validate_ram_budget_for_workload(
                 "storage workload logical bytes exceed declared RAM total",
             ));
         }
-        if let Some(max_bytes) = hardware.ram.section_budget_bytes(role) {
-            if bytes > max_bytes {
-                return Err(resource_error(
-                    "storage workload logical bytes exceed RAM section budget",
-                ));
-            }
+        if let Some(max_bytes) = hardware.ram.section_budget_bytes(role)
+            && bytes > max_bytes
+        {
+            return Err(resource_error(
+                "storage workload logical bytes exceed RAM section budget",
+            ));
         }
     }
 

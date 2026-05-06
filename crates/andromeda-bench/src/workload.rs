@@ -1,4 +1,4 @@
-use crate::{MAX_DURATION_MS, MAX_SAMPLES, PerformanceBudget};
+use crate::PerformanceBudget;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BenchmarkWorkload {
@@ -45,7 +45,7 @@ pub const WORKLOADS: &[BenchmarkWorkload] = &[
     },
     BenchmarkWorkload {
         id: "btree-lookup-smoke",
-        description: "B-Tree single-key lookup in read-only mode (Wave 13 placeholder; mutations deferred to Wave 18 per DEC-038)",
+        description: "B-Tree single-key lookup over a deterministic read-only key set",
         max_duration_ms: 5_000,
         max_samples: 20,
         budget: PerformanceBudget {
@@ -56,7 +56,7 @@ pub const WORKLOADS: &[BenchmarkWorkload] = &[
     },
     BenchmarkWorkload {
         id: "btree-range-scan-smoke",
-        description: "B-Tree range scan over key subset in read-only mode (Wave 13 placeholder; concurrent mutations deferred to Wave 18 per DEC-038)",
+        description: "B-Tree range scan over a deterministic read-only key subset",
         max_duration_ms: 5_000,
         max_samples: 20,
         budget: PerformanceBudget {
@@ -74,6 +74,7 @@ pub fn find_workload(id: &str) -> Option<&'static BenchmarkWorkload> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{MAX_DURATION_MS, MAX_SAMPLES};
 
     #[test]
     fn workload_ids_are_unique_and_bounded() {

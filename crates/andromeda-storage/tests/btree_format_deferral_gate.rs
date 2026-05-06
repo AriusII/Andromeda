@@ -1,11 +1,11 @@
 #![forbid(unsafe_code)]
 
-//! B-Tree Format Deferral Gate Tests — DEC-038 Validation
+//! B-Tree durable format promotion gate tests — DEC-038 validation.
 //!
 //! This test suite validates that:
-//! 1. B-Tree mutations are properly deferred to Wave 18
+//! 1. Durable page-backed B-Tree mutations are rejected until promotion
 //! 2. KeyV1 format validation gate enforces constraints
-//! 3. Read-only operations remain available in Wave 13
+//! 3. Read-only operations remain available
 //! 4. Unknown formats are rejected fail-fast
 //! 5. Validation results are deterministic
 //! 6. Recovery can validate formats before replay
@@ -18,21 +18,15 @@ use andromeda_storage::btree_format_validation::{
 };
 use andromeda_storage::format_version::FormatVersion;
 
-// ============================================================================
-// Test 0: Durable B-Tree Format Must Remain Non-Promoted
-// ============================================================================
-
 #[test]
 fn test_dec038_durable_btree_format_is_not_promoted() {
-    assert!(
-        !BTREE_DURABLE_FORMAT_PROMOTED,
-        "durable B-Tree page format must remain non-promoted while engine is in-memory"
-    );
+    const {
+        assert!(
+            !BTREE_DURABLE_FORMAT_PROMOTED,
+            "durable B-Tree page format must remain non-promoted while engine is in-memory"
+        );
+    }
 }
-
-// ============================================================================
-// Test 1: KeyV1 Read Operations Are Allowed
-// ============================================================================
 
 #[test]
 fn test_dec038_read_operations_allowed_keyv1() {
@@ -54,28 +48,23 @@ fn test_dec038_read_operations_allowed_keyv1() {
     );
 }
 
-// ============================================================================
-// Test 2: Insert Mutation Rejected with Clear Deferral Message
-// ============================================================================
-
 #[test]
-fn test_dec038_insert_mutation_rejected_with_wave18_message() {
-    // GIVEN: KeyV1 format validator with Wave 13 storage version
+fn test_dec038_insert_mutation_rejected_with_promotion_gate_message() {
+    // GIVEN: KeyV1 format validator
     let validator = KeyV1FormatValidator::new(FormatVersion::V1_0, BTreeKeyFormatIdentity::V1_0);
 
     // WHEN: Insert operation is validated
     let result = validator.validate_operation(BTreeOperationType::Insert);
 
-    // THEN: Operation is rejected with explicit Wave 18 deferral message
+    // THEN: Operation is rejected with explicit promotion-gate message
     assert!(result.is_err(), "Insert must be rejected");
 
     let error = result.unwrap_err();
     let message = error.message();
 
-    // Verify error contains deferral references
     assert!(
-        message.contains("Wave 18"),
-        "Error must reference Wave 18 deferral: {}",
+        message.contains("not promoted"),
+        "Error must identify the durable B-Tree promotion gate: {}",
         message
     );
     assert!(
@@ -90,35 +79,30 @@ fn test_dec038_insert_mutation_rejected_with_wave18_message() {
     );
 }
 
-// ============================================================================
-// Test 3: Delete Mutation Rejected with Clear Deferral Message
-// ============================================================================
-
 #[test]
-fn test_dec038_delete_mutation_rejected_with_wave18_message() {
+fn test_dec038_delete_mutation_rejected_with_promotion_gate_message() {
     // GIVEN: KeyV1 format validator
     let validator = KeyV1FormatValidator::new(FormatVersion::V1_0, BTreeKeyFormatIdentity::V1_0);
 
     // WHEN: Delete operation is validated
     let result = validator.validate_operation(BTreeOperationType::Delete);
 
-    // THEN: Operation is rejected with deferral message
+    // THEN: Operation is rejected with promotion-gate message
     assert!(result.is_err(), "Delete must be rejected");
 
     let error = result.unwrap_err();
     let message = error.message();
 
-    assert!(message.contains("Wave 18"), "Error must reference Wave 18");
+    assert!(
+        message.contains("not promoted"),
+        "Error must identify the durable B-Tree promotion gate"
+    );
     assert!(message.contains("DEC-038"), "Error must reference DEC-038");
     assert!(
         message.contains("delete"),
         "Error must mention delete operation"
     );
 }
-
-// ============================================================================
-// Test 4: All Mutation Types Rejected
-// ============================================================================
 
 #[test]
 fn test_dec038_all_mutation_types_rejected() {
@@ -141,16 +125,12 @@ fn test_dec038_all_mutation_types_rejected() {
 
         let message = result.unwrap_err().message().to_string();
         assert!(
-            message.contains("Wave 18"),
-            "Mutation {:?} error must reference Wave 18",
+            message.contains("not promoted"),
+            "Mutation {:?} error must identify the durable B-Tree promotion gate",
             mutation
         );
     }
 }
-
-// ============================================================================
-// Test 5: Unknown Format Major Version Rejected Fail-Fast
-// ============================================================================
 
 #[test]
 fn test_dec038_unknown_major_version_rejected_failfast() {
@@ -182,10 +162,6 @@ fn test_dec038_unknown_major_version_rejected_failfast() {
     );
 }
 
-// ============================================================================
-// Test 6: Unknown Codec Version Rejected Fail-Fast
-// ============================================================================
-
 #[test]
 fn test_dec038_unknown_codec_version_rejected_failfast() {
     // GIVEN: Index with unknown codec version
@@ -212,10 +188,6 @@ fn test_dec038_unknown_codec_version_rejected_failfast() {
         message
     );
 }
-
-// ============================================================================
-// Test 7: Format Validation Results Are Deterministic
-// ============================================================================
 
 #[test]
 fn test_dec038_validation_deterministic_same_format_same_result() {
@@ -263,10 +235,6 @@ fn test_dec038_validation_deterministic_same_format_same_result() {
     }
 }
 
-// ============================================================================
-// Test 8: Format Identity Backward Compatibility Check
-// ============================================================================
-
 #[test]
 fn test_dec038_format_identity_backward_compatible() {
     // GIVEN: Two format versions (1.0 and 1.1)
@@ -285,10 +253,6 @@ fn test_dec038_format_identity_backward_compatible() {
     );
 }
 
-// ============================================================================
-// Test 9: Validator Preserves Format Identity
-// ============================================================================
-
 #[test]
 fn test_dec038_validator_preserves_format_identity() {
     // GIVEN: A validator with specific format identity
@@ -305,12 +269,8 @@ fn test_dec038_validator_preserves_format_identity() {
     assert_eq!(retrieved_fmt.max_key_size, fmt.max_key_size);
 }
 
-// ============================================================================
-// Test 10: Split and Merge Operations Deferred
-// ============================================================================
-
 #[test]
-fn test_dec038_split_merge_operations_deferred() {
+fn test_dec038_split_merge_operations_gated() {
     // GIVEN: KeyV1 format validator
     let validator = KeyV1FormatValidator::new(FormatVersion::V1_0, BTreeKeyFormatIdentity::V1_0);
 
@@ -318,26 +278,22 @@ fn test_dec038_split_merge_operations_deferred() {
     let split_result = validator.validate_operation(BTreeOperationType::Split);
     let merge_result = validator.validate_operation(BTreeOperationType::Merge);
 
-    // THEN: Both are rejected with Wave 18 deferral message
-    assert!(split_result.is_err(), "Split must be deferred");
-    assert!(merge_result.is_err(), "Merge must be deferred");
+    // THEN: Both are rejected by the durable mutation gate
+    assert!(split_result.is_err(), "Split must be gated");
+    assert!(merge_result.is_err(), "Merge must be gated");
 
     let split_msg = split_result.unwrap_err().message().to_string();
     let merge_msg = merge_result.unwrap_err().message().to_string();
 
     assert!(
-        split_msg.contains("Wave 18"),
-        "Split error must reference Wave 18"
+        split_msg.contains("not promoted"),
+        "Split error must identify the durable B-Tree promotion gate"
     );
     assert!(
-        merge_msg.contains("Wave 18"),
-        "Merge error must reference Wave 18"
+        merge_msg.contains("not promoted"),
+        "Merge error must identify the durable B-Tree promotion gate"
     );
 }
-
-// ============================================================================
-// Test 11: Format Compatibility Check
-// ============================================================================
 
 #[test]
 fn test_dec038_format_compatibility_check() {
@@ -354,10 +310,6 @@ fn test_dec038_format_compatibility_check() {
     );
 }
 
-// ============================================================================
-// Test 12: Incompatible Storage Version Rejected
-// ============================================================================
-
 #[test]
 fn test_dec038_incompatible_storage_version_rejected() {
     // GIVEN: Storage version V2.0 (future) with KeyV1 format
@@ -372,10 +324,6 @@ fn test_dec038_incompatible_storage_version_rejected() {
         "KeyV1 should not be compatible with V2.0 storage"
     );
 }
-
-// ============================================================================
-// Test 13: Error Message Contains Governance Escalation Note
-// ============================================================================
 
 #[test]
 fn test_dec038_error_contains_escalation_guidance() {
@@ -395,10 +343,6 @@ fn test_dec038_error_contains_escalation_guidance() {
         message
     );
 }
-
-// ============================================================================
-// Test 14: Operation Type Names Are Correct
-// ============================================================================
 
 #[test]
 fn test_dec038_operation_type_names() {
@@ -425,10 +369,6 @@ fn test_dec038_operation_type_names() {
     }
 }
 
-// ============================================================================
-// Test 15: Format Display Includes Version Information
-// ============================================================================
-
 #[test]
 fn test_dec038_format_display_includes_version() {
     // GIVEN: KeyV1 format
@@ -450,9 +390,7 @@ fn test_dec038_format_display_includes_version() {
     );
 }
 
-// ============================================================================
 // Summary Test: All Doctrine Checks Pass
-// ============================================================================
 
 #[test]
 fn test_dec038_all_doctrine_checks_pass() {

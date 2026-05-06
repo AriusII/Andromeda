@@ -1,56 +1,13 @@
-//! E7: SRPL-DefinitionBatch Compatibility Tests
-//!
-//! This test suite validates that:
-//! 1. SRPL source can be parsed, compiled, and lowered to IR
-//! 2. IR can be materialized into CatalogProcedureDefinition
-//! 3. Procedures can be embedded in DefinitionBatch operations
-//! 4. Batch dry-run validates SRPL procedures
-//! 5. E2 (Alter) and E3 (Drop) are compatible with batch infrastructure
-//! 6. Atomic batch semantics are maintained
-//!
-//! ## Test Categories
-//!
-//! **A. Pipeline Tests (3 tests)**
-//! - Parse → AST → IR → Manifest round-trip
-//!
-//! **B. Add Procedure Tests (2 tests)**
-//! - ADD in DefinitionBatch dry-run succeeds
-//! - ADD validates no duplicate names
-//!
-//! **C. Alter Procedure Tests (2 tests)**
-//! - ALTER in DefinitionBatch dry-run succeeds
-//! - ALTER validates procedure exists
-//!
-//! **D. Drop Procedure Tests (2 tests)**
-//! - DROP in DefinitionBatch dry-run succeeds
-//! - DROP validates procedure exists
-//!
-//! **E. Multi-Procedure Batch Tests (2 tests)**
-//! - ADD + ALTER in same batch
-//! - ADD + DROP preserves order
-//!
-//! **F. Error Cases (5 tests)**
-//! - Syntax errors reject batch
-//! - Name conflicts reject batch
-//! - Type mismatches reject batch
-//! - Duplicate procedure names reject batch
-//! - Unresolved references reject batch
-//!
-//! **G. Atomicity Tests (2 tests)**
-//! - One failed procedure rejects entire batch
-//! - Error diagnostic includes all failures
-//!
-//! **Total: 18 tests**
+//! SRPL catalog definition lifecycle compatibility tests.
 
 use andromeda_catalog::{
     CatalogDefinition, DefinitionBatch, DefinitionBatchId, DefinitionOperation,
 };
-use andromeda_core::{CatalogObjectId, CatalogVersion, DatabaseId, NamespaceId, ProcedureId};
+use andromeda_core::{
+    CatalogObjectId, CatalogVersion, DatabaseId, NamespaceId, ProcedureId, ScalarType,
+    TypeDescriptor,
+};
 use andromeda_srpl::definition_batch_bridge::SrplProcedureDefinition;
-
-// =============================================================================
-// Test Fixtures
-// =============================================================================
 
 const TEST_DB_ID: DatabaseId = DatabaseId::new(1);
 const TEST_NS_ID: NamespaceId = NamespaceId::new(1);
@@ -68,10 +25,6 @@ fn test_batch(base_version: CatalogVersion, batch_id: u64) -> DefinitionBatch {
 fn signature_only_source() -> String {
     "procedure Inventory.ReserveStock accepts (ProductId i64) returns Reservation one (Reserved bool);".to_string()
 }
-
-// =============================================================================
-// CATEGORY A: Pipeline Tests (3 tests)
-// =============================================================================
 
 #[test]
 fn a1_parse_to_ast_round_trip() {
@@ -108,7 +61,7 @@ fn a3_ir_to_catalog_definition_materialization() {
     assert!(def.parse().is_ok());
     assert!(def.bind_and_lower().is_ok());
 
-    let catalog_def = def.into_catalog_procedure_def(
+    let catalog_def = def.to_catalog_procedure_def(
         CatalogObjectId::new(1),
         ProcedureId::new(1),
         CatalogVersion::new(1),
@@ -128,10 +81,6 @@ fn a3_ir_to_catalog_definition_materialization() {
     }
 }
 
-// =============================================================================
-// CATEGORY B: Add Procedure Tests (2 tests)
-// =============================================================================
-
 #[test]
 fn b1_add_srpl_procedure_valid_signature() {
     let source = signature_only_source();
@@ -140,7 +89,7 @@ fn b1_add_srpl_procedure_valid_signature() {
     assert!(def.parse().is_ok());
     assert!(def.bind_and_lower().is_ok());
 
-    let result = def.into_catalog_procedure_def(
+    let result = def.to_catalog_procedure_def(
         CatalogObjectId::new(100),
         ProcedureId::new(100),
         CatalogVersion::new(1),
@@ -149,7 +98,7 @@ fn b1_add_srpl_procedure_valid_signature() {
     assert!(result.is_ok());
     let catalog_def = result.unwrap();
 
-    // Simulate adding to batch (would be done by add_srpl_procedure)
+    // Simulate adding to a definition batch.
     let mut batch = test_batch(CatalogVersion::new(0), 1);
     batch
         .operations
@@ -166,7 +115,7 @@ fn b2_add_duplicate_procedure_names_in_batch_should_fail() {
     assert!(def1.parse().is_ok());
     assert!(def1.bind_and_lower().is_ok());
     let catalog_def1 = def1
-        .into_catalog_procedure_def(
+        .to_catalog_procedure_def(
             CatalogObjectId::new(100),
             ProcedureId::new(100),
             CatalogVersion::new(1),
@@ -177,14 +126,14 @@ fn b2_add_duplicate_procedure_names_in_batch_should_fail() {
     assert!(def2.parse().is_ok());
     assert!(def2.bind_and_lower().is_ok());
     let catalog_def2 = def2
-        .into_catalog_procedure_def(
+        .to_catalog_procedure_def(
             CatalogObjectId::new(101),
             ProcedureId::new(101),
             CatalogVersion::new(1),
         )
         .unwrap();
 
-    // Both procedures have the same name; batch should detect this
+    // Both procedures have the same name; the definition batch should detect this.
     let mut batch = test_batch(CatalogVersion::new(0), 1);
     batch
         .operations
@@ -196,10 +145,6 @@ fn b2_add_duplicate_procedure_names_in_batch_should_fail() {
     // In real implementation, dry_run would detect duplicate names
     assert_eq!(batch.operations.len(), 2);
 }
-
-// =============================================================================
-// CATEGORY C: Alter Procedure Tests (2 tests)
-// =============================================================================
 
 #[test]
 fn c1_alter_srpl_procedure_compiles_new_source() {
@@ -230,17 +175,13 @@ fn c2_alter_preserves_procedure_id() {
 
     let proc_id = ProcedureId::new(42);
     let catalog_def = def
-        .into_catalog_procedure_def(CatalogObjectId::new(100), proc_id, CatalogVersion::new(1))
+        .to_catalog_procedure_def(CatalogObjectId::new(100), proc_id, CatalogVersion::new(1))
         .unwrap();
 
     if let CatalogDefinition::Procedure(contract) = catalog_def {
         assert_eq!(contract.procedure_id, proc_id);
     }
 }
-
-// =============================================================================
-// CATEGORY D: Drop Procedure Tests (2 tests)
-// =============================================================================
 
 #[test]
 fn d1_drop_srpl_procedure_validation() {
@@ -250,7 +191,7 @@ fn d1_drop_srpl_procedure_validation() {
     assert!(def.bind_and_lower().is_ok());
 
     let catalog_def = def
-        .into_catalog_procedure_def(
+        .to_catalog_procedure_def(
             CatalogObjectId::new(100),
             ProcedureId::new(100),
             CatalogVersion::new(1),
@@ -277,10 +218,6 @@ fn d2_drop_validates_procedure_exists() {
     assert_eq!(batch.operations.len(), 0);
 }
 
-// =============================================================================
-// CATEGORY E: Multi-Procedure Batch Tests (2 tests)
-// =============================================================================
-
 #[test]
 fn e1_batch_with_add_alter_mixed_operations() {
     let source = signature_only_source();
@@ -290,7 +227,7 @@ fn e1_batch_with_add_alter_mixed_operations() {
     assert!(def1.parse().is_ok());
     assert!(def1.bind_and_lower().is_ok());
     let catalog_def1 = def1
-        .into_catalog_procedure_def(
+        .to_catalog_procedure_def(
             CatalogObjectId::new(100),
             ProcedureId::new(100),
             CatalogVersion::new(1),
@@ -303,7 +240,7 @@ fn e1_batch_with_add_alter_mixed_operations() {
     assert!(def2.parse().is_ok());
     assert!(def2.bind_and_lower().is_ok());
     let catalog_def2 = def2
-        .into_catalog_procedure_def(
+        .to_catalog_procedure_def(
             CatalogObjectId::new(101),
             ProcedureId::new(101),
             CatalogVersion::new(1),
@@ -329,7 +266,7 @@ fn e2_batch_with_add_drop_preserves_order() {
     assert!(def.parse().is_ok());
     assert!(def.bind_and_lower().is_ok());
     let catalog_def = def
-        .into_catalog_procedure_def(
+        .to_catalog_procedure_def(
             CatalogObjectId::new(100),
             ProcedureId::new(100),
             CatalogVersion::new(1),
@@ -343,10 +280,6 @@ fn e2_batch_with_add_drop_preserves_order() {
 
     assert_eq!(batch.operations.len(), 1);
 }
-
-// =============================================================================
-// CATEGORY F: Error Cases (5 tests)
-// =============================================================================
 
 #[test]
 fn f1_syntax_error_in_srpl_source() {
@@ -369,40 +302,50 @@ fn f2_duplicate_input_names_syntax_error() {
 }
 
 #[test]
-fn f3_duplicate_result_stream_names() {
-    // This would require parsing result streams, which is complex for narrow procedures
-    // Placeholder for conceptual test
+fn f3_single_result_stream_survives_parse_and_lower() {
     let source = signature_only_source();
     let mut def = SrplProcedureDefinition::from_source(source);
 
     assert!(def.parse().is_ok());
     assert!(def.bind_and_lower().is_ok());
+
+    let ir = def.compiled_ir.unwrap();
+    assert_eq!(ir.result_streams.len(), 1);
+    assert_eq!(ir.result_streams[0].name, "Reservation");
+    assert_eq!(ir.result_streams[0].columns.len(), 1);
+    assert_eq!(ir.result_streams[0].columns[0].name, "Reserved");
 }
 
 #[test]
-fn f4_type_mismatch_in_procedure_definition() {
-    // Placeholder: would test type validation during binding
+fn f4_declared_scalar_types_survive_binding() {
     let source = signature_only_source();
     let mut def = SrplProcedureDefinition::from_source(source);
 
     assert!(def.parse().is_ok());
     assert!(def.bind_and_lower().is_ok());
+
+    let ir = def.compiled_ir.unwrap();
+    assert_eq!(
+        ir.inputs[0].data_type,
+        TypeDescriptor::required(ScalarType::I64)
+    );
+    assert_eq!(
+        ir.result_streams[0].columns[0].data_type,
+        TypeDescriptor::required(ScalarType::Bool)
+    );
 }
 
 #[test]
-fn f5_unresolved_table_reference() {
-    // This would require semantic analysis during lowering
-    // Current narrow procedures don't do table lookups in signature
-    let source = signature_only_source();
+fn f5_body_read_operation_lowers_without_catalog_lookup() {
+    let source = "procedure Inventory.ReserveStock accepts (ProductId i64) returns Reservation one (Reserved bool) body { read Inventory.ProductStock Stock one; emit Reservation (Reserved); }".to_string();
     let mut def = SrplProcedureDefinition::from_source(source);
 
     assert!(def.parse().is_ok());
     assert!(def.bind_and_lower().is_ok());
-}
 
-// =============================================================================
-// CATEGORY G: Atomicity Tests (2 tests)
-// =============================================================================
+    let ir = def.compiled_ir.unwrap();
+    assert_eq!(ir.body.operations.len(), 2);
+}
 
 #[test]
 fn g1_one_failed_procedure_rejects_entire_batch() {
@@ -417,12 +360,12 @@ fn g1_one_failed_procedure_rejects_entire_batch() {
     let mut bad_def = SrplProcedureDefinition::from_source(bad_source);
     assert!(bad_def.parse().is_err());
 
-    // In real implementation, batch dry-run would fail due to bad_def
+    // In real implementation, definition dry-run would fail due to bad_def.
 }
 
 #[test]
 fn g2_batch_error_includes_all_failures() {
-    // Multiple procedures with errors; batch should report all of them
+    // Multiple procedures with errors should report all failures.
     let source1 = "procedure X accepts () returns R many ();".to_string();
     let source2 = "procedure Y accepts () returns S many ();".to_string();
 
@@ -434,15 +377,3 @@ fn g2_batch_error_includes_all_failures() {
 
     // In real implementation, dry-run would accumulate both errors
 }
-
-// =============================================================================
-// Summary: 18 Tests
-// =============================================================================
-// A: 3 tests (parse, compile, materialize)
-// B: 2 tests (add valid, add duplicate names)
-// C: 2 tests (alter compile new source, alter preserve id)
-// D: 2 tests (drop validation, drop exists check)
-// E: 2 tests (add+alter mixed, add+drop order)
-// F: 5 tests (syntax error, duplicate inputs, duplicate results, type mismatch, unresolved refs)
-// G: 2 tests (one failure rejects batch, all failures reported)
-// Total: 18 tests ✓

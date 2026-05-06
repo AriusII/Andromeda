@@ -10,10 +10,7 @@
 //! These are C4 pre-transaction invariants: all failures that occur before
 //! `TransactionManager` allocation must be observable and must leave no durability artifacts.
 
-use andromeda_catalog::{
-    CatalogSnapshot, INVENTORY_DATABASE_ID, INVENTORY_NAMESPACE_ID, ProcedureContract,
-    inventory_domain_definition_batch, inventory_reserve_stock_contract,
-};
+use andromeda_catalog::{ProcedureContract, inventory_reserve_stock_contract};
 use andromeda_core::{CatalogVersion, ContractHash, InvocationId};
 use andromeda_exec::{
     CompletionStatus, InvocationContext, InvocationRequest, services::AdmissionService,
@@ -21,21 +18,7 @@ use andromeda_exec::{
 };
 use andromeda_observe::TraceId;
 
-// ============================================================================
 // Fixtures
-// ============================================================================
-
-fn inventory_catalog_snapshot() -> CatalogSnapshot {
-    let batch = inventory_domain_definition_batch().unwrap();
-    let plan = batch.dry_run().unwrap();
-    let mut snapshot = CatalogSnapshot::empty(
-        INVENTORY_DATABASE_ID,
-        INVENTORY_NAMESPACE_ID,
-        batch.base_version,
-    );
-    snapshot.apply_mutation_plan(&plan.mutation_plan).unwrap();
-    snapshot
-}
 
 fn valid_contract() -> ProcedureContract {
     inventory_reserve_stock_contract().unwrap()
@@ -51,16 +34,7 @@ fn valid_request(contract: &ProcedureContract, invocation_id: u64) -> Invocation
     }
 }
 
-fn valid_context(contract: &ProcedureContract, trace_id: u64) -> InvocationContext {
-    InvocationContext::new(
-        TraceId::new(trace_id.into()),
-        contract.required_permissions.clone(),
-    )
-}
-
-// ============================================================================
 // C4.1: Admission Rejections (Resource Budget)
-// ============================================================================
 
 /// C4.1.1: Zero InvocationId must be rejected at admission gate, with event emitted.
 #[test]
@@ -113,9 +87,7 @@ fn c4_admission_rejected_zero_catalog_version_emits_contract_rejected_event() {
     assert!(reject.reason.to_lowercase().contains("catalogversion"));
 }
 
-// ============================================================================
 // C4.2: Contract Validation (Contract Mismatch Before Transaction)
-// ============================================================================
 
 /// C4.2.1: ContractHash mismatch must be rejected before transaction creation.
 #[test]
@@ -160,9 +132,7 @@ fn c4_contract_rejected_catalog_version_mismatch_before_transaction() {
     assert!(reject.reason.to_lowercase().contains("catalogversion"));
 }
 
-// ============================================================================
 // C4.3: Authorization Denials (Security Before Transaction)
-// ============================================================================
 
 /// C4.3.1: Missing permission must be rejected before transaction creation.
 #[test]
@@ -175,7 +145,7 @@ fn c4_authorization_denied_missing_permission_before_transaction() {
 
     // The contract requires ExecuteProcedure permission (standard); context has none.
     let required_permission = &contract.required_permissions[0];
-    let result = AdmissionService::authorize(&context, &[required_permission.clone()]);
+    let result = AdmissionService::authorize(&context, std::slice::from_ref(required_permission));
 
     // Must reject at authorization gate.
     assert!(result.is_err());

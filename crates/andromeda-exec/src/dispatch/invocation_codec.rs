@@ -1,10 +1,7 @@
-//! H3-REMOTE-DISPATCH-004: InvocationResponse Deserialization and ResultStream Handling
-//!
-//! This module provides codec functions for decoding invocation responses and reassembling
-//! fragmented result streams across multiple QUIC frames.
+//! Invocation response decoding and result stream frame reassembly.
 
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, InvocationId, TransactionId,
@@ -13,17 +10,14 @@ use andromeda_proto::StructuredObjectHeader;
 #[cfg(test)]
 use andromeda_proto::{RowCountPolicy, StructuredObjectLayout};
 
-/// Represents the result of an invocation execution
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExecutionResult {
-    /// Successful execution with output payload
     Success {
         invocation_id: InvocationId,
         transaction_id: TransactionId,
         output_payload: StructuredObjectHeader,
         row_count: u64,
     },
-    /// Error during execution
     Error {
         invocation_id: InvocationId,
         error_code: u32,
@@ -32,7 +26,6 @@ pub enum ExecutionResult {
     },
 }
 
-/// Frame representing a fragment of a result stream
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResultFrame {
     pub sequence_number: u64,
@@ -40,23 +33,6 @@ pub struct ResultFrame {
     pub is_final: bool,
 }
 
-/// Decodes an invocation response into an ExecutionResult
-///
-/// This function reconstructs the execution result from an invocation response,
-/// handling both success and error cases.
-///
-/// # Arguments
-/// * `invocation_id` - The invocation ID for correlation
-/// * `transaction_id` - Optional transaction ID for audit
-/// * `success` - True if execution succeeded, false for error
-/// * `error_code` - Error code (if error)
-/// * `error_message` - Error message (if error)
-/// * `output_payload` - Output payload (if success)
-/// * `row_count` - Row count in result set
-///
-/// # Returns
-/// * `Ok(ExecutionResult)` - Successfully decoded result
-/// * `Err(AndromedaError)` - Decoding error or validation failure
 pub fn decode_invocation_response(
     invocation_id: InvocationId,
     transaction_id: Option<TransactionId>,
@@ -90,14 +66,6 @@ pub fn decode_invocation_response(
     }
 }
 
-/// Decodes a set of result frames into a complete result set
-///
-/// # Arguments
-/// * `frames` - Vector of ResultFrame objects (should be in sequence order)
-///
-/// # Returns
-/// * `Ok(Vec<StructuredObjectHeader>)` - Reassembled result rows
-/// * `Err(AndromedaError)` - If frames are incomplete or corrupted
 pub fn decode_result_stream(
     frames: Vec<ResultFrame>,
 ) -> AndromedaResult<Vec<StructuredObjectHeader>> {
@@ -105,21 +73,17 @@ pub fn decode_result_stream(
         return Ok(Vec::new());
     }
 
-    // Validate frame sequence completeness
     validate_frame_sequence(&frames)?;
 
-    // Reassemble frames into a single byte buffer
     let mut reassembled = Vec::new();
     for frame in frames {
         reassembled.extend_from_slice(&frame.data);
     }
 
-    // In a real implementation, deserialize from the reassembled buffer
-    // For now, we return an empty result set (placeholder)
+    // Row decoding is supplied by the typed result codec once it is wired in.
     Ok(Vec::new())
 }
 
-/// Validates that frames form a complete sequence with no gaps
 fn validate_frame_sequence(frames: &[ResultFrame]) -> AndromedaResult<()> {
     if frames.is_empty() {
         return Ok(());
@@ -137,7 +101,6 @@ fn validate_frame_sequence(frames: &[ResultFrame]) -> AndromedaResult<()> {
         }
     }
 
-    // Verify final frame is marked
     if !frames.last().map(|f| f.is_final).unwrap_or(false) {
         return Err(AndromedaError::new(
             AndromedaErrorKind::Protocol,
@@ -148,10 +111,6 @@ fn validate_frame_sequence(frames: &[ResultFrame]) -> AndromedaResult<()> {
     Ok(())
 }
 
-/// Thread-safe result stream decoder
-///
-/// Handles fragmented results across multiple QUIC frames and reassembles them
-/// into complete rows. Supports concurrent frame reception and decoding.
 #[derive(Debug, Clone)]
 pub struct ResultStreamDecoder {
     inner: Arc<Mutex<ResultStreamDecoderInner>>,
@@ -159,16 +118,12 @@ pub struct ResultStreamDecoder {
 
 #[derive(Debug)]
 struct ResultStreamDecoderInner {
-    /// Frames received so far, indexed by sequence number
     frames: BTreeMap<u64, ResultFrame>,
-    /// Whether we've received the final frame
     received_final: bool,
-    /// Total rows expected (if known)
     expected_row_count: Option<u64>,
 }
 
 impl ResultStreamDecoder {
-    /// Creates a new result stream decoder
     pub fn new() -> Self {
         Self {
             inner: Arc::new(Mutex::new(ResultStreamDecoderInner {
@@ -179,28 +134,18 @@ impl ResultStreamDecoder {
         }
     }
 
-    /// Creates a new decoder with an expected row count
     pub fn with_expected_count(count: u64) -> Self {
         let decoder = Self::new();
         {
-            let mut inner = decoder.inner.lock().unwrap();
+            let mut inner = decoder.lock_inner();
             inner.expected_row_count = Some(count);
         }
         decoder
     }
 
-    /// Adds a frame to the decoder
-    ///
-    /// # Arguments
-    /// * `frame` - The frame to add
-    ///
-    /// # Returns
-    /// * `Ok(())` - Frame added successfully
-    /// * `Err(AndromedaError)` - Invalid frame or duplicate sequence number
     pub fn add_frame(&self, frame: ResultFrame) -> AndromedaResult<()> {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.lock_inner();
 
-        // Check for duplicate
         if inner.frames.contains_key(&frame.sequence_number) {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Protocol,
@@ -208,7 +153,6 @@ impl ResultStreamDecoder {
             ));
         }
 
-        // Check for gap
         if !inner.frames.is_empty() {
             let max_seq = inner.frames.keys().max().copied().unwrap_or(0);
             if frame.sequence_number > max_seq + 1 {
@@ -230,15 +174,13 @@ impl ResultStreamDecoder {
         Ok(())
     }
 
-    /// Checks if the stream is complete (all frames received)
     pub fn is_complete(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
+        let inner = self.lock_inner();
         inner.received_final && inner.frames_are_contiguous()
     }
 
-    /// Returns the reassembled frame data if complete
     pub fn finalize(&self) -> AndromedaResult<Vec<u8>> {
-        let inner = self.inner.lock().unwrap();
+        let inner = self.lock_inner();
 
         if !inner.received_final {
             return Err(AndromedaError::new(
@@ -254,30 +196,33 @@ impl ResultStreamDecoder {
             ));
         }
 
-        // Concatenate all frame data in order
         let mut result = Vec::new();
-        for (_, frame) in &inner.frames {
+        for frame in inner.frames.values() {
             result.extend_from_slice(&frame.data);
         }
 
         Ok(result)
     }
 
-    /// Returns the number of frames received
     pub fn frame_count(&self) -> usize {
-        let inner = self.inner.lock().unwrap();
+        let inner = self.lock_inner();
         inner.frames.len()
     }
 
-    /// Returns the total reassembled size in bytes
     pub fn reassembled_size(&self) -> usize {
-        let inner = self.inner.lock().unwrap();
+        let inner = self.lock_inner();
         inner.frames.values().map(|f| f.data.len()).sum()
+    }
+
+    fn lock_inner(&self) -> MutexGuard<'_, ResultStreamDecoderInner> {
+        match self.inner.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        }
     }
 }
 
 impl ResultStreamDecoderInner {
-    /// Checks if frame sequence numbers are contiguous from 0
     fn frames_are_contiguous(&self) -> bool {
         if self.frames.is_empty() {
             return true;

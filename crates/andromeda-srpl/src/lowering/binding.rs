@@ -99,13 +99,13 @@ pub fn bind_executable_procedure_plan(
                     require_column(&table.columns, &assignment.field, "SRPL update assignment")?;
                     validate_value(&assignment.value, &ir.inputs, &binding_sources)?;
                 }
-                if let Some(rows) = affected_rows_exact {
-                    if *rows == 0 {
-                        return Err(AndromedaError::new(
-                            AndromedaErrorKind::Srpl,
-                            "SRPL update affected rows must be greater than zero",
-                        ));
-                    }
+                if let Some(rows) = affected_rows_exact
+                    && *rows == 0
+                {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Srpl,
+                        "SRPL update affected rows must be greater than zero",
+                    ));
                 }
                 bound_operations.push(BoundSrplOperationPlan::UpdateTable {
                     ordinal: operation.ordinal,
@@ -141,18 +141,17 @@ pub fn bind_executable_procedure_plan(
                 if let Some(namespace) = procedure_namespace.as_ref() {
                     let candidate_name =
                         QualifiedName::parse(&format!("{namespace}.{stream}")).ok();
-                    if let Some(name) = candidate_name {
-                        if !structured.contains_key(&name) {
-                            if let Some(object) = try_lookup_structured_object(catalog, &name)? {
-                                require_emit_columns_present_in_structured_object(values, object)?;
-                                structured.insert(name.clone(), object);
-                                bound_objects.push(SrplObjectBindingEvidence {
-                                    object: object.object.clone(),
-                                    shape_hash: object.shape_hash(),
-                                    kind: ObjectKind::StructuredObject,
-                                });
-                            }
-                        }
+                    if let Some(name) = candidate_name
+                        && !structured.contains_key(&name)
+                        && let Some(object) = try_lookup_structured_object(catalog, &name)?
+                    {
+                        require_emit_columns_present_in_structured_object(values, object)?;
+                        structured.insert(name.clone(), object);
+                        bound_objects.push(SrplObjectBindingEvidence {
+                            object: object.object.clone(),
+                            shape_hash: object.shape_hash(),
+                            kind: ObjectKind::StructuredObject,
+                        });
                     }
                 }
 

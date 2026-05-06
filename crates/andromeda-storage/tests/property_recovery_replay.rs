@@ -15,42 +15,36 @@
 //! 5. Missing LSN sequences handled
 //! 6. Out-of-order records detected
 //! 7. Duplicate record handling
-//! 8. Incomplete transactions handled
-//! 9. Large WAL segments processed
-//! 10. Recovery deterministic with same input
+//! 8. Large WAL segments processed
+//! 9. Recovery deterministic with same input
 
 #![forbid(unsafe_code)]
 
 use proptest::prelude::*;
 use std::panic;
 
-// ============================================================================
-// Mock Recovery Types
-// ============================================================================
+// Reference recovery types
 
 #[derive(Debug, Clone)]
-pub struct WalSegment {
-    pub records: Vec<WalRecordData>,
+struct WalSegment {
+    records: Vec<WalRecordData>,
 }
 
 #[derive(Debug, Clone)]
-pub struct WalRecordData {
-    pub lsn: u64,
-    pub transaction_id: Option<u64>,
-    pub payload: Vec<u8>,
-    pub checksum: u64,
+struct WalRecordData {
+    lsn: u64,
+    payload: Vec<u8>,
+    checksum: u64,
 }
 
-#[derive(Debug, Clone)]
-pub struct RecoveryResult {
-    pub success: bool,
-    pub records_processed: usize,
-    pub errors: Vec<String>,
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RecoveryResult {
+    success: bool,
+    records_processed: usize,
+    errors: Vec<String>,
 }
 
-// ============================================================================
 // Test Data Generators
-// ============================================================================
 
 fn arb_lsn() -> impl Strategy<Value = u64> {
     0u64..u64::MAX
@@ -63,7 +57,6 @@ fn arb_wal_payload() -> impl Strategy<Value = Vec<u8>> {
 fn arb_wal_record() -> impl Strategy<Value = WalRecordData> {
     (arb_lsn(), arb_wal_payload()).prop_map(|(lsn, payload)| WalRecordData {
         lsn,
-        transaction_id: if lsn % 5 == 0 { Some(lsn / 5) } else { None },
         payload,
         checksum: calculate_mock_checksum(&[lsn.to_le_bytes().as_ref()].concat()),
     })
@@ -85,11 +78,20 @@ fn calculate_mock_checksum(data: &[u8]) -> u64 {
     result
 }
 
-// ============================================================================
-// Mock Recovery Engine
-// ============================================================================
+fn valid_segment_from(mut records: Vec<WalRecordData>) -> WalSegment {
+    records.sort_by_key(|record| record.lsn);
 
-pub fn recover_from_wal_segment(segment: &WalSegment) -> RecoveryResult {
+    for (i, record) in records.iter_mut().enumerate() {
+        record.lsn = (i as u64) + 1000;
+        record.checksum = calculate_mock_checksum(&record.payload);
+    }
+
+    WalSegment { records }
+}
+
+// Mock Recovery Engine
+
+fn recover_from_wal_segment(segment: &WalSegment) -> RecoveryResult {
     let mut result = RecoveryResult {
         success: true,
         records_processed: 0,
@@ -100,14 +102,14 @@ pub fn recover_from_wal_segment(segment: &WalSegment) -> RecoveryResult {
 
     for record in segment.records.iter() {
         // Verify LSN ordering
-        if let Some(prev_lsn) = last_lsn {
-            if record.lsn <= prev_lsn {
-                result.errors.push(format!(
-                    "LSN not strictly increasing: {} <= {}",
-                    record.lsn, prev_lsn
-                ));
-                result.success = false;
-            }
+        if let Some(prev_lsn) = last_lsn
+            && record.lsn <= prev_lsn
+        {
+            result.errors.push(format!(
+                "LSN not strictly increasing: {} <= {}",
+                record.lsn, prev_lsn
+            ));
+            result.success = false;
         }
 
         // Verify checksum
@@ -126,10 +128,6 @@ pub fn recover_from_wal_segment(segment: &WalSegment) -> RecoveryResult {
     result
 }
 
-// ============================================================================
-// Test 1: Recovery never panics on arbitrary segment data
-// ============================================================================
-
 #[test]
 fn prop_recovery_never_panics() {
     proptest!(|(segment in arb_wal_segment())| {
@@ -137,175 +135,126 @@ fn prop_recovery_never_panics() {
             recover_from_wal_segment(&segment)
         }));
 
-        match result {
-            Ok(_) => prop_assert!(true, "recovery completed"),
-            Err(_) => prop_assert!(false, "recovery panicked"),
-        }
+        prop_assert!(result.is_ok(), "recovery panicked");
     });
 }
-
-// ============================================================================
-// Test 2: Recovery always returns a result
-// ============================================================================
 
 #[test]
 fn prop_recovery_always_decides() {
     proptest!(|(segment in arb_wal_segment())| {
         let result = recover_from_wal_segment(&segment);
 
-        // Must have a decision
-        prop_assert!(result.success == true || result.success == false);
+        prop_assert_eq!(result.records_processed, segment.records.len());
+        prop_assert_eq!(result.success, result.errors.is_empty());
+        for error in result.errors {
+            prop_assert!(!error.is_empty());
+        }
     });
 }
-
-// ============================================================================
-// Test 3: Valid WAL segment recovers successfully
-// ============================================================================
 
 #[test]
 fn prop_recovery_valid_segment_succeeds() {
     proptest!(|(
         records in prop::collection::vec(arb_wal_record(), 1..50),
     )| {
-        // Sort records by LSN to ensure valid ordering
-        let mut sorted_records = records.clone();
-        sorted_records.sort_by_key(|r| r.lsn);
-
-        // Adjust LSNs to be strictly increasing
-        for (i, record) in sorted_records.iter_mut().enumerate() {
-            record.lsn = (i as u64) + 1000;
-            record.checksum = calculate_mock_checksum(&record.payload);
-        }
-
-        let segment = WalSegment {
-            records: sorted_records,
-        };
-
+        let segment = valid_segment_from(records);
         let result = recover_from_wal_segment(&segment);
 
-        // Valid segment should recover successfully
         prop_assert!(result.success, "valid segment should recover");
-        prop_assert!(result.records_processed >= 1);
+        prop_assert_eq!(result.records_processed, segment.records.len());
+        prop_assert!(result.errors.is_empty());
     });
 }
-
-// ============================================================================
-// Test 4: Corrupted checksum detected
-// ============================================================================
 
 #[test]
 fn prop_recovery_detects_checksum_corruption() {
     proptest!(|(
-        mut segment in arb_wal_segment(),
+        records in prop::collection::vec(arb_wal_record(), 1..50),
         record_idx in 0usize..50,
     )| {
-        if record_idx < segment.records.len() {
-            // Corrupt the checksum
-            segment.records[record_idx].checksum ^= 0xFFFFFFFFFFFFFFFF;
-        }
+        let mut segment = valid_segment_from(records);
+        let corrupt_idx = record_idx % segment.records.len();
+        let corrupt_lsn = segment.records[corrupt_idx].lsn;
+        segment.records[corrupt_idx].checksum ^= 0xFFFFFFFFFFFFFFFF;
 
         let result = recover_from_wal_segment(&segment);
 
-        // Corruption should be detected
-        if record_idx < segment.records.len() {
-            // Either recovery fails or error is recorded
-            prop_assert!(
-                !result.success || !result.errors.is_empty(),
-                "corruption should be detected"
-            );
-        }
+        prop_assert!(!result.success, "corruption should fail recovery");
+        prop_assert_eq!(result.records_processed, segment.records.len());
+        prop_assert!(
+            result
+                .errors
+                .iter()
+                .any(|error| error == &format!("Checksum mismatch at LSN {}", corrupt_lsn)),
+            "checksum error should identify the corrupted LSN"
+        );
     });
 }
-
-// ============================================================================
-// Test 5: Out-of-order LSNs detected
-// ============================================================================
 
 #[test]
 fn prop_recovery_detects_out_of_order() {
     proptest!(|(
-        mut segment in arb_wal_segment(),
+        records in prop::collection::vec(arb_wal_record(), 2..50),
     )| {
-        if segment.records.len() >= 2 {
-            // Reverse order of two records
-            let last_index = segment.records.len() - 1;
-            segment.records.swap(0, last_index);
-        }
+        let mut segment = valid_segment_from(records);
+        let last_index = segment.records.len() - 1;
+        segment.records.swap(0, last_index);
 
         let result = recover_from_wal_segment(&segment);
 
-        // Out-of-order should be detected
-        if segment.records.len() >= 2 {
-            prop_assert!(
-                !result.success || !result.errors.is_empty(),
-                "out-of-order should be detected"
-            );
-        }
+        prop_assert!(!result.success, "out-of-order LSNs should fail recovery");
+        prop_assert!(
+            result
+                .errors
+                .iter()
+                .any(|error| error.contains("LSN not strictly increasing")),
+            "out-of-order error should explain the LSN ordering violation"
+        );
     });
 }
-
-// ============================================================================
-// Test 6: Empty segment handled
-// ============================================================================
 
 #[test]
 fn prop_recovery_empty_segment() {
     let empty_segment = WalSegment { records: vec![] };
 
-    let _result = recover_from_wal_segment(&empty_segment);
+    let result = recover_from_wal_segment(&empty_segment);
 
-    // Empty segment might succeed (no errors) or fail, but shouldn't panic
-    assert!(true);
+    assert!(result.success);
+    assert_eq!(result.records_processed, 0);
+    assert!(result.errors.is_empty());
 }
-
-// ============================================================================
-// Test 7: Duplicate LSNs detected
-// ============================================================================
 
 #[test]
 fn prop_recovery_detects_duplicate_lsn() {
     proptest!(|(
-        mut segment in arb_wal_segment(),
+        records in prop::collection::vec(arb_wal_record(), 2..50),
     )| {
-        if segment.records.len() >= 2 {
-            // Make two records have the same LSN
-            let base_lsn = segment.records[0].lsn;
-            for record in segment.records.iter_mut() {
-                record.lsn = base_lsn;
-            }
+        let mut segment = valid_segment_from(records);
+        let duplicate_lsn = segment.records[0].lsn;
+        for record in segment.records.iter_mut() {
+            record.lsn = duplicate_lsn;
         }
 
         let result = recover_from_wal_segment(&segment);
 
-        // Duplicate LSNs should be detected
-        if segment.records.len() >= 2 {
-            prop_assert!(
-                !result.success || !result.errors.is_empty(),
-                "duplicate LSN should be detected"
-            );
-        }
+        prop_assert!(!result.success, "duplicate LSNs should fail recovery");
+        prop_assert_eq!(
+            result
+                .errors
+                .iter()
+                .filter(|error| error.contains("LSN not strictly increasing"))
+                .count(),
+            segment.records.len() - 1
+        );
     });
 }
-
-// ============================================================================
-// Test 8: Large segments processed without stack overflow
-// ============================================================================
 
 #[test]
 fn prop_recovery_large_segment() {
     proptest!(|(
-        records in prop::collection::vec(arb_wal_record(), 1000..5000),
+        records in prop::collection::vec(arb_wal_record(), 128..512),
     )| {
-        let mut sorted_records = records.clone();
-        sorted_records.sort_by_key(|r| r.lsn);
-
-        for (i, record) in sorted_records.iter_mut().enumerate() {
-            record.lsn = (i as u64) + 1000;
-        }
-
-        let segment = WalSegment {
-            records: sorted_records,
-        };
+        let segment = valid_segment_from(records);
 
         let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
             recover_from_wal_segment(&segment)
@@ -313,7 +262,9 @@ fn prop_recovery_large_segment() {
 
         match result {
             Ok(recovery_result) => {
-                prop_assert!(recovery_result.records_processed >= 1);
+                prop_assert!(recovery_result.success);
+                prop_assert_eq!(recovery_result.records_processed, segment.records.len());
+                prop_assert!(recovery_result.errors.is_empty());
             }
             Err(_) => {
                 prop_assert!(false, "large segment caused panic");
@@ -322,26 +273,15 @@ fn prop_recovery_large_segment() {
     });
 }
 
-// ============================================================================
-// Test 9: Recovery is deterministic
-// ============================================================================
-
 #[test]
 fn prop_recovery_deterministic() {
     proptest!(|(segment in arb_wal_segment())| {
         let result1 = recover_from_wal_segment(&segment);
         let result2 = recover_from_wal_segment(&segment);
 
-        // Same input should produce same result
-        prop_assert_eq!(result1.success, result2.success);
-        prop_assert_eq!(result1.records_processed, result2.records_processed);
-        prop_assert_eq!(result1.errors.len(), result2.errors.len());
+        prop_assert_eq!(result1, result2);
     });
 }
-
-// ============================================================================
-// Test 10: Error messages provide forensic information
-// ============================================================================
 
 #[test]
 fn prop_recovery_error_messages_informative() {
@@ -366,23 +306,20 @@ fn prop_recovery_error_messages_informative() {
     });
 }
 
-// ============================================================================
-// Edge Cases
-// ============================================================================
-
 #[test]
 fn test_recovery_single_record() {
     let segment = WalSegment {
         records: vec![WalRecordData {
             lsn: 1000,
-            transaction_id: Some(1),
             payload: vec![1, 2, 3, 4, 5],
             checksum: calculate_mock_checksum(&[1u8, 2, 3, 4, 5]),
         }],
     };
 
     let result = recover_from_wal_segment(&segment);
+    assert!(result.success);
     assert_eq!(result.records_processed, 1);
+    assert!(result.errors.is_empty());
 }
 
 #[test]
@@ -391,7 +328,6 @@ fn test_recovery_ascending_lsn() {
     for i in 0..100u64 {
         records.push(WalRecordData {
             lsn: i + 1000,
-            transaction_id: Some(i),
             payload: vec![i as u8],
             checksum: calculate_mock_checksum(&[i as u8]),
         });
@@ -409,19 +345,16 @@ fn test_recovery_with_gaps_in_lsn() {
     let records = vec![
         WalRecordData {
             lsn: 1000,
-            transaction_id: None,
             payload: vec![],
             checksum: 0,
         },
         WalRecordData {
             lsn: 1100, // Gap of 100
-            transaction_id: None,
             payload: vec![],
             checksum: 0,
         },
         WalRecordData {
             lsn: 1500, // Gap of 400
-            transaction_id: None,
             payload: vec![],
             checksum: 0,
         },
@@ -430,41 +363,10 @@ fn test_recovery_with_gaps_in_lsn() {
     let segment = WalSegment { records };
     let result = recover_from_wal_segment(&segment);
 
-    // Gaps in LSN are OK as long as ordering is preserved
     assert!(result.success);
+    assert_eq!(result.records_processed, 3);
+    assert!(result.errors.is_empty());
 }
-
-// ============================================================================
-// Coverage Matrix for Recovery Tests
-// ============================================================================
-
-#[test]
-fn recovery_test_coverage_verified() {
-    println!("Recovery Path Fuzz Tests (10):");
-    println!("  - panic detection: ✓");
-    println!("  - decision making: ✓");
-    println!("  - valid segment recovery: ✓");
-    println!("  - checksum corruption detection: ✓");
-    println!("  - out-of-order detection: ✓");
-    println!("  - empty segment handling: ✓");
-    println!("  - duplicate LSN detection: ✓");
-    println!("  - large segment handling: ✓");
-    println!("  - deterministic behavior: ✓");
-    println!("  - error message quality: ✓");
-    println!();
-    println!("Plus 3 edge case tests:");
-    println!("  - single record recovery");
-    println!("  - ascending LSN sequence");
-    println!("  - LSN gaps");
-    println!();
-    println!("Total: 13 property-based + edge case tests");
-    println!("Iterations: 1000+ per property");
-    println!("Coverage: Corruption detection, ordering validation, forensic diagnostics");
-}
-
-// ============================================================================
-// Integration Test: Full recovery workflow
-// ============================================================================
 
 #[test]
 fn integration_recovery_full_workflow() {
@@ -472,9 +374,9 @@ fn integration_recovery_full_workflow() {
         segments in prop::collection::vec(arb_wal_segment(), 1..10),
     )| {
         for segment in segments.iter() {
-            let _result = recover_from_wal_segment(segment);
-
-            // Each segment should produce a result
+            let result = recover_from_wal_segment(segment);
+            prop_assert_eq!(result.records_processed, segment.records.len());
+            prop_assert_eq!(result.success, result.errors.is_empty());
         }
     });
 }

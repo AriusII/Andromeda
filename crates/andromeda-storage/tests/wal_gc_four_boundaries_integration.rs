@@ -18,13 +18,8 @@
 
 #[cfg(test)]
 mod wal_gc_four_boundaries_tests {
-    use andromeda_core::AndromedaResult;
     use andromeda_storage::{Lsn, write_ahead_log::*};
-    use std::sync::{Arc, Mutex};
-
-    // ============================================================
-    // Test 1: Segments Reclaimed After Backup
-    // ============================================================
+    use std::sync::Arc;
 
     #[test]
     fn test_segment_reclaimed_after_backup_and_snapshot_advancement() {
@@ -50,10 +45,6 @@ mod wal_gc_four_boundaries_tests {
         assert_eq!(decision, ReclaimabilityDecision::Reclaimable);
         assert!(decision.is_reclaimable());
     }
-
-    // ============================================================
-    // Test 2: Segments Retained for Standby Replication
-    // ============================================================
 
     #[test]
     fn test_segment_retained_until_standby_receives() {
@@ -82,10 +73,6 @@ mod wal_gc_four_boundaries_tests {
         assert!(!decision.is_reclaimable());
     }
 
-    // ============================================================
-    // Test 3: PITR Retention Window Respected
-    // ============================================================
-
     #[test]
     fn test_segment_retained_within_pitr_window() {
         // Scenario:
@@ -113,10 +100,6 @@ mod wal_gc_four_boundaries_tests {
         assert!(!decision.is_reclaimable());
     }
 
-    // ============================================================
-    // Test 4: Recovery Boundary Never Violated
-    // ============================================================
-
     #[test]
     fn test_segment_at_recovery_boundary_never_reclaimed() {
         // Scenario:
@@ -142,10 +125,6 @@ mod wal_gc_four_boundaries_tests {
             ReclaimabilityDecision::BlockedByRecovery { .. }
         ));
     }
-
-    // ============================================================
-    // Test 5: Active Snapshot Visibility Never Violated
-    // ============================================================
 
     #[test]
     fn test_segment_with_active_snapshot_never_reclaimed() {
@@ -173,16 +152,11 @@ mod wal_gc_four_boundaries_tests {
         ));
     }
 
-    // ============================================================
-    // Test 6: Concurrent GC Safety (Documented Behavior)
-    // ============================================================
-
     #[test]
     fn test_concurrent_policy_queries_return_consistent_results() {
         // Scenario:
         // - Multiple threads query the same policy simultaneously
-        // - Expected: Each query returns consistent decision for same segment
-        //   (Note: Full concurrency with boundary updates is Wave 14 scope)
+        // - Expected: Each query returns consistent decision for same segment.
 
         let policy = Arc::new(
             DefaultReclaimabilityPolicy::with_lsns(
@@ -212,10 +186,6 @@ mod wal_gc_four_boundaries_tests {
             assert_eq!(result, &results[0]);
         }
     }
-
-    // ============================================================
-    // Test 7: Multiple Boundary Overlaps (Edge Cases)
-    // ============================================================
 
     #[test]
     fn test_all_four_boundaries_blocking_same_segment() {
@@ -265,10 +235,6 @@ mod wal_gc_four_boundaries_tests {
         ));
     }
 
-    // ============================================================
-    // Test 8: GC Scheduler Integration with All Boundaries
-    // ============================================================
-
     #[test]
     fn test_gc_scheduler_respects_all_retention_boundaries() {
         // Scenario: Simulate a full GC run with multiple segments
@@ -279,16 +245,16 @@ mod wal_gc_four_boundaries_tests {
             WalGcCandidate::new(1, Lsn::new(10), Lsn::new(50), 65536).unwrap(), // Too old (recovery)
             WalGcCandidate::new(2, Lsn::new(51), Lsn::new(100), 65536).unwrap(), // OK for recovery
             WalGcCandidate::new(3, Lsn::new(101), Lsn::new(150), 65536).unwrap(), // OK for recovery
-            WalGcCandidate::new(4, Lsn::new(151), Lsn::new(200), 65536).unwrap(), // Snapshot boundary
-            WalGcCandidate::new(5, Lsn::new(201), Lsn::new(250), 65536).unwrap(), // After snapshot
-            WalGcCandidate::new(6, Lsn::new(251), Lsn::new(300), 65536).unwrap(), // PITR window
-            WalGcCandidate::new(7, Lsn::new(301), Lsn::new(350), 65536).unwrap(), // Standby lagging
+            WalGcCandidate::new(4, Lsn::new(351), Lsn::new(400), 65536).unwrap(), // Snapshot boundary
+            WalGcCandidate::new(5, Lsn::new(151), Lsn::new(250), 65536).unwrap(), // OK for all boundaries
+            WalGcCandidate::new(6, Lsn::new(301), Lsn::new(325), 65536).unwrap(), // PITR window
+            WalGcCandidate::new(7, Lsn::new(326), Lsn::new(375), 65536).unwrap(), // Standby lagging
         ];
 
         let policy = DefaultReclaimabilityPolicy::with_lsns(
             Lsn::new(50),  // recovery
-            Lsn::new(200), // snapshot
-            Lsn::new(250), // standby (lagging)
+            Lsn::new(400), // snapshot
+            Lsn::new(350), // standby (lagging)
             Lsn::new(300), // pitr
         )
         .unwrap();
@@ -312,15 +278,11 @@ mod wal_gc_four_boundaries_tests {
 
         // Verify expected blocking patterns
         assert_eq!(blocked_recovery, 1); // Segment 1
-        assert_eq!(reclaimable_count, 2); // Segments 2, 3
+        assert_eq!(reclaimable_count, 3); // Segments 2, 3, 5
         assert_eq!(blocked_visibility, 1); // Segment 4
         assert_eq!(blocked_replication, 1); // Segment 7
         assert_eq!(blocked_pitr, 1); // Segment 6
     }
-
-    // ============================================================
-    // Test 9: Boundary Policy Validation
-    // ============================================================
 
     #[test]
     fn test_retention_boundary_policy_invariant_validation() {
@@ -337,10 +299,6 @@ mod wal_gc_four_boundaries_tests {
         // Check ordering constraints
         assert_eq!(valid_policy.gc_boundary_lsn(), Lsn::new(150)); // min of all four
     }
-
-    // ============================================================
-    // Test 10: Reclaimability Decision Display and Diagnostics
-    // ============================================================
 
     #[test]
     fn test_reclaimability_decision_provides_diagnostic_info() {

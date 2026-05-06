@@ -11,12 +11,12 @@ mod atomic_write;
 mod error;
 mod extent_map;
 mod file;
-mod interface;
 mod integrity;
+mod interface;
 mod page_store;
 
 pub use error::DiskManagerError;
 pub use file::FileDiskManager;
-pub use interface::DiskManager;
 pub use integrity::PageIntegrityMode;
+pub use interface::DiskManager;
 pub use page_store::DiskPageStore;

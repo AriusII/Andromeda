@@ -37,6 +37,10 @@ impl StatsCorrelationPublication {
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
+
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
 }
 
 #[derive(Debug, Clone)]

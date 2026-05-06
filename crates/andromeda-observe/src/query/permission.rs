@@ -1,6 +1,6 @@
 use crate::{AdminOperation, Permission, SurfaceScope};
 
-/// Permission/audit matrix for V1 administration trace access.
+/// Permission matrix for trace query access.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TraceQueryPermissionMatrix {
     pub surface: SurfaceScope,
@@ -10,8 +10,7 @@ pub struct TraceQueryPermissionMatrix {
 }
 
 impl TraceQueryPermissionMatrix {
-    /// V1 trace query is administration-only and uses the existing diagnostics
-    /// permission until IAM adds a dedicated trace-read permission.
+    /// Administration-only trace query gate.
     pub const V1_ADMIN: Self = Self {
         surface: SurfaceScope::Administration,
         required_permission: Permission::InspectPlans,

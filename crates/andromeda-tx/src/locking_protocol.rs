@@ -29,7 +29,7 @@ use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 ///
 /// References:
 /// - C3-LM-006: Lock manager release_all semantics
-/// - Wave 14: Transaction state machine 2PL enforcement
+/// - Transaction state machine strict 2PL enforcement
 #[derive(Debug, Clone, Copy)]
 pub struct TwoPhaseLocksValidator;
 

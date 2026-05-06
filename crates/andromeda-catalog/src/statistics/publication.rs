@@ -71,9 +71,8 @@ impl StatsPublicationBuilder {
 
     // StatsVersion binding, canonical ordering, and digest byte compatibility are invariant.
     pub fn finish(mut self) -> StatsPublication {
-        self.entries.sort_by(|a, b| {
-            (a.0.object_id.get(), a.0.column_index).cmp(&(b.0.object_id.get(), b.0.column_index))
-        });
+        self.entries
+            .sort_by_key(|(target, _)| target.canonical_key());
 
         let mut hasher = Sha256::new();
         hasher.update(STATS_PUBLICATION_DOMAIN);

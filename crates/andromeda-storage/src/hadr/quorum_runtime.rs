@@ -17,7 +17,7 @@
 //! - [`ReplicaMember`] — Replica identity + health state (Alive, Suspect, Dead).
 //! - [`QuorumMembership`] — Set of active replicas + membership epoch.
 //! - [`QuorumConsensus`] — Write admission decision (require min ACKs).
-//! - [`PromotionEligibility`] — Replica rank by LSN distance.
+//! - `PromotionEligibility` — Replica rank by LSN distance.
 //! - [`FencingDecision`] — Allow/Block policy.
 //! - [`FencingPolicy`] — Async vs QuorumEnforced modes.
 //! - [`FencingEvent`] — Categorizes fencing triggers (disconnect, checksum, gap).
@@ -127,7 +127,7 @@ impl QuorumMembership {
             members.insert(replica.replica_id, replica);
         }
 
-        let quorum_size = (members.len() + 1) / 2;
+        let quorum_size = members.len().div_ceil(2);
 
         Ok(Self {
             members,
@@ -197,31 +197,31 @@ impl QuorumMembership {
 
     /// Mark a replica as suspect (due to missed heartbeat).
     pub fn mark_suspect(&mut self, replica_id: u64) {
-        if let Some(replica) = self.members.get_mut(&replica_id) {
-            if replica.health_state.is_alive() {
-                replica.health_state = ReplicaHealthState::Suspect;
-                self.increment_epoch();
-            }
+        if let Some(replica) = self.members.get_mut(&replica_id)
+            && replica.health_state.is_alive()
+        {
+            replica.health_state = ReplicaHealthState::Suspect;
+            self.increment_epoch();
         }
     }
 
     /// Mark a replica as dead (connection permanently lost).
     pub fn mark_dead(&mut self, replica_id: u64) {
-        if let Some(replica) = self.members.get_mut(&replica_id) {
-            if !replica.health_state.is_dead() {
-                replica.health_state = ReplicaHealthState::Dead;
-                self.increment_epoch();
-            }
+        if let Some(replica) = self.members.get_mut(&replica_id)
+            && !replica.health_state.is_dead()
+        {
+            replica.health_state = ReplicaHealthState::Dead;
+            self.increment_epoch();
         }
     }
 
     /// Mark a suspect replica as alive again (reconnected).
     pub fn mark_alive(&mut self, replica_id: u64) {
-        if let Some(replica) = self.members.get_mut(&replica_id) {
-            if replica.health_state.is_suspect() {
-                replica.health_state = ReplicaHealthState::Alive;
-                self.increment_epoch();
-            }
+        if let Some(replica) = self.members.get_mut(&replica_id)
+            && replica.health_state.is_suspect()
+        {
+            replica.health_state = ReplicaHealthState::Alive;
+            self.increment_epoch();
         }
     }
 
@@ -235,14 +235,14 @@ impl QuorumMembership {
 
     /// Remove a dead replica from membership entirely.
     pub fn remove_dead(&mut self, replica_id: u64) {
-        if let Some(replica) = self.members.remove(&replica_id) {
-            if replica.health_state.is_dead() {
-                // Recompute quorum size if we had replicas.
-                if !self.members.is_empty() {
-                    self.quorum_size = (self.members.len() + 1) / 2;
-                }
-                self.increment_epoch();
+        if let Some(replica) = self.members.remove(&replica_id)
+            && replica.health_state.is_dead()
+        {
+            // Recompute quorum size if we had replicas.
+            if !self.members.is_empty() {
+                self.quorum_size = self.members.len().div_ceil(2);
             }
+            self.increment_epoch();
         }
     }
 }

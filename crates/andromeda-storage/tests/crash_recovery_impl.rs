@@ -2,8 +2,7 @@
 //!
 //! # Coverage
 //!
-//! This file implements the complete crash recovery scenario matrix for Wave 14 / Batch 30.
-//! Tests are split into two groups:
+//! This file implements the complete crash recovery scenario matrix in two groups:
 //!
 //! ## Crash-Before-Commit (CBF) — tests 01–20
 //!
@@ -30,8 +29,6 @@ use andromeda_storage::{
     ConceptualRedoPlan, DatabaseManifest, Lsn, RecoveryPlan, RedoRecordDecision, StartupMode,
     WalRecord, WalRecordKind,
 };
-
-// ─── Shared manifest helper ───────────────────────────────────────────────
 
 /// Build a minimal valid manifest anchored at LSN 1.
 fn manifest_at_lsn1() -> DatabaseManifest {
@@ -73,9 +70,7 @@ fn decision_for(plan: &ConceptualRedoPlan, lsn: Lsn) -> RedoRecordDecision {
         .decision
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CBF-01  TxBegin only → SkipNonRedoRecord
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cbf_01_tx_begin_only_skipped() {
     let tx = TransactionId::new(1);
@@ -96,9 +91,7 @@ fn test_cbf_01_tx_begin_only_skipped() {
     );
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CBF-02  TxBegin + RowInsert (no commit) → SkipIncompleteTransaction
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cbf_02_row_insert_no_commit() {
     let tx = TransactionId::new(2);
@@ -127,9 +120,7 @@ fn test_cbf_02_row_insert_no_commit() {
     );
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CBF-03  TxBegin + RowUpdate (no commit) → SkipIncompleteTransaction
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cbf_03_row_update_no_commit() {
     let tx = TransactionId::new(3);
@@ -158,9 +149,7 @@ fn test_cbf_03_row_update_no_commit() {
     );
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CBF-04  TxBegin + RowDelete (no commit) → SkipIncompleteTransaction
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cbf_04_row_delete_no_commit() {
     let tx = TransactionId::new(4);
@@ -189,9 +178,7 @@ fn test_cbf_04_row_delete_no_commit() {
     );
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CBF-05  TxBegin + IndexInsert (no commit) → SkipIncompleteTransaction
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cbf_05_index_insert_no_commit() {
     let tx = TransactionId::new(5);
@@ -220,9 +207,7 @@ fn test_cbf_05_index_insert_no_commit() {
     );
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CBF-06  TxBegin + IndexDelete (no commit) → SkipIncompleteTransaction
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cbf_06_index_delete_no_commit() {
     let tx = TransactionId::new(6);
@@ -251,9 +236,7 @@ fn test_cbf_06_index_delete_no_commit() {
     );
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CBF-07  TxBegin + MvccVersionCreate (no commit) → SkipIncompleteTransaction
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cbf_07_mvcc_version_create_no_commit() {
     let tx = TransactionId::new(7);
@@ -282,9 +265,7 @@ fn test_cbf_07_mvcc_version_create_no_commit() {
     );
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CBF-08  TxBegin + MvccVersionClose (no commit) → SkipIncompleteTransaction
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cbf_08_mvcc_version_close_no_commit() {
     let tx = TransactionId::new(8);
@@ -313,9 +294,7 @@ fn test_cbf_08_mvcc_version_close_no_commit() {
     );
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CBF-09  TxBegin + CatalogChangeApply (no commit) → SkipIncompleteTransaction
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cbf_09_catalog_change_apply_no_commit() {
     let tx = TransactionId::new(9);
@@ -344,9 +323,7 @@ fn test_cbf_09_catalog_change_apply_no_commit() {
     );
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CBF-10  Multiple RowInserts in same incomplete tx → all SkipIncomplete
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cbf_10_multiple_row_inserts_incomplete() {
     let tx = TransactionId::new(10);
@@ -395,9 +372,7 @@ fn test_cbf_10_multiple_row_inserts_incomplete() {
     }
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CBF-11  Mixed RowInsert + RowUpdate (incomplete) → both SkipIncomplete
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cbf_11_mixed_row_ops_incomplete() {
     let tx = TransactionId::new(11);
@@ -438,9 +413,7 @@ fn test_cbf_11_mixed_row_ops_incomplete() {
     );
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CBF-12  Explicit rollback → SkipRolledBackTransaction
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cbf_12_explicit_rollback() {
     let tx = TransactionId::new(12);
@@ -477,9 +450,7 @@ fn test_cbf_12_explicit_rollback() {
     );
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CBF-13  TxBegin + TxRollback only → both SkipNonRedoRecord (not redo-relevant)
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cbf_13_tx_begin_rollback_both_non_redo() {
     let tx = TransactionId::new(13);
@@ -513,9 +484,7 @@ fn test_cbf_13_tx_begin_rollback_both_non_redo() {
     );
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CBF-14  Two independent incomplete transactions → all SkipIncomplete
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cbf_14_two_incomplete_transactions() {
     let tx_a = TransactionId::new(14);
@@ -566,9 +535,7 @@ fn test_cbf_14_two_incomplete_transactions() {
     assert_eq!(plan.incomplete_transactions.len(), 2);
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CBF-15  BTreeInsert (no tx boundary relevance) → SkipNonRedoRecord
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cbf_15_btree_insert_skip_non_redo() {
     let tx = TransactionId::new(20);
@@ -598,9 +565,7 @@ fn test_cbf_15_btree_insert_skip_non_redo() {
     );
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CBF-16  BTreeDelete → SkipNonRedoRecord
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cbf_16_btree_delete_skip_non_redo() {
     let tx = TransactionId::new(21);
@@ -629,9 +594,7 @@ fn test_cbf_16_btree_delete_skip_non_redo() {
     );
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CBF-17  BTreeSplit → SkipNonRedoRecord
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cbf_17_btree_split_skip_non_redo() {
     let tx = TransactionId::new(22);
@@ -660,9 +623,7 @@ fn test_cbf_17_btree_split_skip_non_redo() {
     );
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CBF-18  BTreeMerge → SkipNonRedoRecord
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cbf_18_btree_merge_skip_non_redo() {
     let tx = TransactionId::new(23);
@@ -691,9 +652,7 @@ fn test_cbf_18_btree_merge_skip_non_redo() {
     );
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CBF-19  Committed tx before crash + incomplete tx → committed=Replay, incomplete=Skip
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cbf_19_committed_then_incomplete() {
     let committed_tx = TransactionId::new(30);
@@ -753,9 +712,7 @@ fn test_cbf_19_committed_then_incomplete() {
     );
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CBF-20  Empty WAL (required_wal_start_lsn = ZERO) → no records, no plan errors
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cbf_20_empty_wal_zero_anchor() {
     let plan = make_plan(&manifest_zero_start(), &[]);
@@ -767,9 +724,7 @@ fn test_cbf_20_empty_wal_zero_anchor() {
     assert_eq!(plan.replay_lsns().count(), 0);
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CAC-21  Committed RowInsert → Replay
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cac_21_committed_row_insert_replayed() {
     let tx = TransactionId::new(41);
@@ -803,9 +758,7 @@ fn test_cac_21_committed_row_insert_replayed() {
     assert_eq!(decision_for(&plan, Lsn::new(2)), RedoRecordDecision::Replay);
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CAC-22  Committed RowUpdate → Replay
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cac_22_committed_row_update_replayed() {
     let tx = TransactionId::new(42);
@@ -839,9 +792,7 @@ fn test_cac_22_committed_row_update_replayed() {
     assert_eq!(decision_for(&plan, Lsn::new(2)), RedoRecordDecision::Replay);
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CAC-23  Committed RowDelete → Replay
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cac_23_committed_row_delete_replayed() {
     let tx = TransactionId::new(43);
@@ -875,9 +826,7 @@ fn test_cac_23_committed_row_delete_replayed() {
     assert_eq!(decision_for(&plan, Lsn::new(2)), RedoRecordDecision::Replay);
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CAC-24  Committed IndexInsert → Replay
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cac_24_committed_index_insert_replayed() {
     let tx = TransactionId::new(44);
@@ -911,9 +860,7 @@ fn test_cac_24_committed_index_insert_replayed() {
     assert_eq!(decision_for(&plan, Lsn::new(2)), RedoRecordDecision::Replay);
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CAC-25  Committed IndexDelete → Replay
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cac_25_committed_index_delete_replayed() {
     let tx = TransactionId::new(45);
@@ -947,9 +894,7 @@ fn test_cac_25_committed_index_delete_replayed() {
     assert_eq!(decision_for(&plan, Lsn::new(2)), RedoRecordDecision::Replay);
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CAC-26  Committed MvccVersionCreate → Replay
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cac_26_committed_mvcc_create_replayed() {
     let tx = TransactionId::new(46);
@@ -983,9 +928,7 @@ fn test_cac_26_committed_mvcc_create_replayed() {
     assert_eq!(decision_for(&plan, Lsn::new(2)), RedoRecordDecision::Replay);
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CAC-27  Committed MvccVersionClose → Replay
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cac_27_committed_mvcc_close_replayed() {
     let tx = TransactionId::new(47);
@@ -1019,9 +962,7 @@ fn test_cac_27_committed_mvcc_close_replayed() {
     assert_eq!(decision_for(&plan, Lsn::new(2)), RedoRecordDecision::Replay);
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CAC-28  Committed CatalogChangeApply → Replay
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cac_28_committed_catalog_apply_replayed() {
     let tx = TransactionId::new(48);
@@ -1055,9 +996,7 @@ fn test_cac_28_committed_catalog_apply_replayed() {
     assert_eq!(decision_for(&plan, Lsn::new(2)), RedoRecordDecision::Replay);
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CAC-29  Committed CatalogChangeCommit → Replay
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cac_29_committed_catalog_commit_replayed() {
     let tx = TransactionId::new(49);
@@ -1091,9 +1030,7 @@ fn test_cac_29_committed_catalog_commit_replayed() {
     assert_eq!(decision_for(&plan, Lsn::new(2)), RedoRecordDecision::Replay);
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CAC-30  Multiple committed transactions → all redo-relevant records Replay
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cac_30_multiple_committed_transactions_all_replay() {
     let tx_a = TransactionId::new(50);
@@ -1154,9 +1091,7 @@ fn test_cac_30_multiple_committed_transactions_all_replay() {
     assert_eq!(plan.replay_lsns().count(), 2);
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CAC-31  ManifestSwitch (non-transactional) → always Replay
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cac_31_manifest_switch_always_replay() {
     let records = vec![
@@ -1173,9 +1108,7 @@ fn test_cac_31_manifest_switch_always_replay() {
     assert_eq!(decision_for(&plan, Lsn::new(1)), RedoRecordDecision::Replay);
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CAC-32  PageAllocate (non-transactional) → always Replay
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cac_32_page_allocate_always_replay() {
     let records = vec![
@@ -1192,9 +1125,7 @@ fn test_cac_32_page_allocate_always_replay() {
     assert_eq!(decision_for(&plan, Lsn::new(1)), RedoRecordDecision::Replay);
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CAC-33  PageFormat (non-transactional) → always Replay
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cac_33_page_format_always_replay() {
     let records = vec![
@@ -1211,9 +1142,7 @@ fn test_cac_33_page_format_always_replay() {
     assert_eq!(decision_for(&plan, Lsn::new(1)), RedoRecordDecision::Replay);
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CAC-34  MapDeltaAppend (non-transactional) → always Replay
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cac_34_map_delta_append_always_replay() {
     let records = vec![
@@ -1230,9 +1159,7 @@ fn test_cac_34_map_delta_append_always_replay() {
     assert_eq!(decision_for(&plan, Lsn::new(1)), RedoRecordDecision::Replay);
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CAC-35  SecurityAuditAppend (non-transactional) → always Replay
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cac_35_security_audit_always_replay() {
     let records = vec![
@@ -1249,9 +1176,7 @@ fn test_cac_35_security_audit_always_replay() {
     assert_eq!(decision_for(&plan, Lsn::new(1)), RedoRecordDecision::Replay);
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CAC-36  Committed tx BELOW redo floor → SkipBeforeRedoStart
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cac_36_committed_tx_below_redo_floor_skipped() {
     let tx = TransactionId::new(60);
@@ -1333,7 +1258,7 @@ fn test_cac_36_committed_tx_below_redo_floor_skipped() {
         )
         .unwrap(),
     ];
-    let manifest = DatabaseManifest {
+    let _manifest = DatabaseManifest {
         database_id: 1,
         manifest_version: 1,
         snapshot_id: 1,
@@ -1368,9 +1293,7 @@ fn test_cac_36_committed_tx_below_redo_floor_skipped() {
     let _ = records; // suppress unused warning
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CAC-37  SkipBeforeRedoStart: committed RowInsert strictly BEFORE floor
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cac_37_skip_before_redo_start_strictly_before_floor() {
     let tx = TransactionId::new(61);
@@ -1489,9 +1412,7 @@ fn test_cac_37_skip_before_redo_start_strictly_before_floor() {
     let _ = records;
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CAC-38  Redo floor exactly at TxBegin LSN → subsequent RowInsert replayed
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cac_38_floor_at_tx_begin_row_insert_replayed() {
     let tx = TransactionId::new(70);
@@ -1527,9 +1448,7 @@ fn test_cac_38_floor_at_tx_begin_row_insert_replayed() {
     assert_eq!(decision_for(&plan, Lsn::new(2)), RedoRecordDecision::Replay);
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CAC-39  recovered_transaction_id_floor returns highest tx ID seen
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cac_39_recovered_transaction_id_floor_is_max() {
     let tx_low = TransactionId::new(100);
@@ -1592,9 +1511,7 @@ fn test_cac_39_recovered_transaction_id_floor_is_max() {
     );
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CAC-40  Committed tx + trailing incomplete → committed=Replay, trailing=Skip
-// ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_cac_40_committed_plus_trailing_incomplete() {
     let committed_tx = TransactionId::new(80);

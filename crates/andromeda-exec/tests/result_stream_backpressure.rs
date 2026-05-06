@@ -1,8 +1,3 @@
-//! Integration tests for BackpressuredResultStream.
-//!
-//! These tests validate the complete result stream lifecycle, backpressure engagement,
-//! metrics tracking, and no-silent-drops invariants.
-
 use andromeda_core::{ContractHash, RequestId};
 use andromeda_exec::{
     BackpressuredResultStream, CompletionStatus, DEFAULT_RESULT_STREAM_CAPACITY,
@@ -31,30 +26,23 @@ fn test_row() -> StructuredObjectHeader {
     }
 }
 
-// ============================================================================
-// Test: Metadata-Before-Payload Contract
-// ============================================================================
-
 #[tokio::test]
 async fn test_result_stream_metadata_before_payload_contract() {
     let mut stream = BackpressuredResultStream::new(10).unwrap();
 
-    // Metadata is initially absent.
     assert_eq!(stream.metadata(), None);
 
-    // Emit metadata.
     let metadata = ResultStreamMetadata {
         stream_id: 1,
         row_count_exact: Some(5),
         row_count_max: Some(5),
         column_count: 3,
-        cardinality: Cardinality::One,
+        cardinality: Cardinality::Many,
     };
 
     stream.emit_metadata(metadata).unwrap();
     assert_eq!(stream.metadata(), Some(&metadata));
 
-    // Duplicate metadata emission must fail.
     let metadata2 = ResultStreamMetadata {
         stream_id: 2,
         row_count_exact: Some(10),
@@ -68,41 +56,25 @@ async fn test_result_stream_metadata_before_payload_contract() {
     assert!(err.unwrap_err().to_string().contains("already emitted"));
 }
 
-// ============================================================================
-// Test: Slow Client Triggers Backpressure
-// ============================================================================
-
 #[tokio::test]
 async fn test_slow_client_backpressure_engaged() {
     let stream = Arc::new(BackpressuredResultStream::new(10).unwrap());
+    let row_count = 20;
 
-    // Metadata (not validated since it's just stored).
-    let metadata = ResultStreamMetadata {
-        stream_id: 1,
-        row_count_exact: None,
-        row_count_max: Some(1000),
-        column_count: 1,
-        cardinality: Cardinality::Many,
-    };
-    // Note: In real usage, validate_before_payload() would be called.
-
-    // Producer task: quickly pushes many rows.
     let stream_producer = stream.clone();
     let producer = tokio::spawn(async move {
-        for i in 0..100 {
+        for i in 0..row_count {
             let row = test_row();
             if let Err(e) = stream_producer.push_row(row).await {
                 eprintln!("Producer error at row {}: {}", i, e);
                 return i;
             }
         }
-        100
+        row_count
     });
 
-    // Give producer time to fill queue and engage backpressure.
     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
-    // Check backpressure state.
     let is_bp = stream.is_backpressured();
     let metrics = stream.metrics();
 
@@ -111,9 +83,8 @@ async fn test_slow_client_backpressure_engaged() {
         is_bp, metrics.total_rows_pushed, metrics.total_rows_consumed, metrics.queue_depth
     );
 
-    // Slowly consume some rows to drain queue.
-    for _ in 0..5 {
-        if let Some(_) = stream.next_row().await {
+    for _ in 0..row_count {
+        if stream.next_row().await.is_some() {
             tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
         }
     }
@@ -124,18 +95,13 @@ async fn test_slow_client_backpressure_engaged() {
         final_metrics.backpressure_count, final_metrics.queue_depth
     );
 
-    let _ = producer.await;
+    assert_eq!(producer.await.unwrap(), row_count);
 }
-
-// ============================================================================
-// Test: Fast Client No Backpressure
-// ============================================================================
 
 #[tokio::test]
 async fn test_fast_client_no_backpressure() {
     let stream = Arc::new(BackpressuredResultStream::new(100).unwrap());
 
-    // Producer: emit 50 rows quickly.
     let stream_producer = stream.clone();
     let producer = tokio::spawn(async move {
         for i in 0..50 {
@@ -144,14 +110,17 @@ async fn test_fast_client_no_backpressure() {
                 return i;
             }
         }
+        stream_producer
+            .complete(CompletionStatus::Committed, 50)
+            .await
+            .expect("completion should enqueue after all rows");
         50
     });
 
-    // Consumer: drain rows as fast as they arrive.
     let stream_consumer = stream.clone();
     let consumer = tokio::spawn(async move {
         let mut count = 0;
-        while let Some(_) = stream_consumer.next_row().await {
+        while stream_consumer.next_row().await.is_some() {
             count += 1;
         }
         count
@@ -176,55 +145,35 @@ async fn test_fast_client_no_backpressure() {
     );
 }
 
-// ============================================================================
-// Test: Queue Capacity Enforced
-// ============================================================================
-
 #[tokio::test]
 async fn test_queue_capacity_enforced() {
-    // Capacity 0 should be rejected.
     let result = BackpressuredResultStream::new(0);
     assert!(result.is_err());
 
-    // Capacity > MAX should be rejected.
     let result = BackpressuredResultStream::new(MAX_RESULT_STREAM_CAPACITY + 1);
     assert!(result.is_err());
 
-    // MIN_RESULT_STREAM_CAPACITY should be accepted.
     let result = BackpressuredResultStream::new(MIN_RESULT_STREAM_CAPACITY);
     assert!(result.is_ok());
 
-    // Default capacity should be accepted.
     let result = BackpressuredResultStream::new(DEFAULT_RESULT_STREAM_CAPACITY);
     assert!(result.is_ok());
 
-    // MAX_RESULT_STREAM_CAPACITY should be accepted.
     let result = BackpressuredResultStream::new(MAX_RESULT_STREAM_CAPACITY);
     assert!(result.is_ok());
 }
-
-// ============================================================================
-// Test: Completion Requires Valid LSN
-// ============================================================================
 
 #[tokio::test]
 async fn test_completion_requires_valid_lsn() {
     let stream = BackpressuredResultStream::new(10).unwrap();
 
-    // Try to complete with zero LSN (should fail).
-    let result = stream
-        .complete(CompletionStatus::Committed, 0)
-        .await;
+    let result = stream.complete(CompletionStatus::Committed, 0).await;
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("durable LSN"));
 
-    // Complete with nonzero LSN should succeed.
-    let result = stream
-        .complete(CompletionStatus::Committed, 42)
-        .await;
+    let result = stream.complete(CompletionStatus::Committed, 42).await;
     assert!(result.is_ok());
 
-    // Verify completion state is set.
     let completion = stream.completion().await;
     assert!(completion.is_some());
     let comp = completion.unwrap();
@@ -232,9 +181,33 @@ async fn test_completion_requires_valid_lsn() {
     assert_eq!(comp.lsn, 42);
 }
 
-// ============================================================================
-// Test: No Silent Drops (All Rows Accounted For)
-// ============================================================================
+#[tokio::test]
+async fn test_completion_is_single_terminal_signal() {
+    let stream = BackpressuredResultStream::new(10).unwrap();
+
+    stream
+        .complete(CompletionStatus::Committed, 42)
+        .await
+        .expect("first completion should succeed");
+
+    let duplicate = stream.complete(CompletionStatus::Committed, 43).await;
+    assert!(duplicate.is_err());
+    assert!(
+        duplicate
+            .unwrap_err()
+            .to_string()
+            .contains("already emitted")
+    );
+
+    let push_after_completion = stream.push_row(test_row()).await;
+    assert!(push_after_completion.is_err());
+    assert!(
+        push_after_completion
+            .unwrap_err()
+            .to_string()
+            .contains("already completed")
+    );
+}
 
 #[tokio::test]
 async fn test_no_silent_drops() {
@@ -242,7 +215,6 @@ async fn test_no_silent_drops() {
 
     let row_count = 100;
 
-    // Producer: emit rows and complete.
     let stream_producer = stream.clone();
     let producer = tokio::spawn(async move {
         for i in 0..row_count {
@@ -258,11 +230,10 @@ async fn test_no_silent_drops() {
         }
     });
 
-    // Consumer: drain all rows.
     let stream_consumer = stream.clone();
     let consumer = tokio::spawn(async move {
         let mut count = 0;
-        while let Some(_) = stream_consumer.next_row().await {
+        while stream_consumer.next_row().await.is_some() {
             count += 1;
         }
         count
@@ -289,22 +260,16 @@ async fn test_no_silent_drops() {
     );
 }
 
-// ============================================================================
-// Test: Concurrent Produce-Consume with Varying Speeds
-// ============================================================================
-
 #[tokio::test]
 async fn test_concurrent_produce_consume_varying_speed() {
     let stream = Arc::new(BackpressuredResultStream::new(30).unwrap());
 
-    // Barrier to synchronize start.
     let barrier = Arc::new(Barrier::new(2));
 
-    // Producer: emit 200 rows with occasional yield.
     let stream_producer = stream.clone();
     let barrier_producer = barrier.clone();
     let producer = tokio::spawn(async move {
-        let _ = barrier_producer.wait();
+        barrier_producer.wait().await;
         for i in 0..200 {
             let row = test_row();
             stream_producer.push_row(row).await.unwrap();
@@ -322,13 +287,12 @@ async fn test_concurrent_produce_consume_varying_speed() {
         }
     });
 
-    // Consumer: drain rows with variable latency.
     let stream_consumer = stream.clone();
     let barrier_consumer = barrier.clone();
     let consumer = tokio::spawn(async move {
-        let _ = barrier_consumer.wait();
+        barrier_consumer.wait().await;
         let mut count = 0;
-        while let Some(_) = stream_consumer.next_row().await {
+        while stream_consumer.next_row().await.is_some() {
             count += 1;
             if count % 25 == 0 {
                 tokio::time::sleep(tokio::time::Duration::from_micros(500)).await;
@@ -351,22 +315,16 @@ async fn test_concurrent_produce_consume_varying_speed() {
         metrics.backpressure_count, metrics.peak_queue_depth
     );
 
-    // With a 30-capacity queue and 200 rows, we should see backpressure.
     assert!(
         metrics.backpressure_count > 0,
         "Should experience backpressure with 200 rows in 30-capacity queue"
     );
 }
 
-// ============================================================================
-// Test: Backpressure Signal Generation
-// ============================================================================
-
 #[tokio::test]
 async fn test_backpressure_signal_generation() {
     let stream = Arc::new(BackpressuredResultStream::new(10).unwrap());
 
-    // Producer fills queue quickly.
     let stream_producer = stream.clone();
     let producer = tokio::spawn(async move {
         for _ in 0..50 {
@@ -375,10 +333,8 @@ async fn test_backpressure_signal_generation() {
         }
     });
 
-    // Let producer fill queue.
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-    // Check if backpressure signal can be generated.
     let is_bp = stream.is_backpressured();
     let signal = stream.backpressure_signal(Some(RequestId::new(42)));
 
@@ -392,26 +348,25 @@ async fn test_backpressure_signal_generation() {
         assert_eq!(sig.retry_after_millis, Some(10));
     }
 
+    for _ in 0..50 {
+        let _ = stream.next_row().await;
+    }
+
     let _ = producer.await;
 }
-
-// ============================================================================
-// Test: Metrics Peak Tracking
-// ============================================================================
 
 #[tokio::test]
 async fn test_metrics_peak_tracking() {
     let stream = Arc::new(BackpressuredResultStream::new(50).unwrap());
 
     let stream_producer = stream.clone();
-    let _producer = tokio::spawn(async move {
+    let producer = tokio::spawn(async move {
         for _ in 0..300 {
             let row = test_row();
             let _ = stream_producer.push_row(row).await;
         }
     });
 
-    // Let producer run and accumulate rows.
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
     let metrics = stream.metrics();
@@ -429,15 +384,16 @@ async fn test_metrics_peak_tracking() {
         metrics.peak_queue_depth <= 50,
         "Peak should not exceed queue capacity"
     );
-}
 
-// ============================================================================
-// Test: Completion State Persistence
-// ============================================================================
+    for _ in 0..300 {
+        let _ = stream.next_row().await;
+    }
+    producer.await.unwrap();
+}
 
 #[tokio::test]
 async fn test_completion_state_persistence() {
-    let stream = Arc::new(BackpressuredResultStream::new(5).unwrap());
+    let stream = Arc::new(BackpressuredResultStream::new(16).unwrap());
 
     let stream_clone = stream.clone();
     let producer = tokio::spawn(async move {
@@ -456,7 +412,6 @@ async fn test_completion_state_persistence() {
 
     producer.await.unwrap();
 
-    // Verify completion state is persisted and can be retrieved.
     let completion = stream.completion().await;
     assert!(completion.is_some());
     let comp = completion.unwrap();
@@ -465,15 +420,11 @@ async fn test_completion_state_persistence() {
     assert_eq!(comp.row_count, 10);
 }
 
-// ============================================================================
-// Test: Multiple Concurrent Streams
-// ============================================================================
-
 #[tokio::test]
 async fn test_multiple_concurrent_streams() {
-    let stream1 = Arc::new(BackpressuredResultStream::new(20).unwrap());
-    let stream2 = Arc::new(BackpressuredResultStream::new(20).unwrap());
-    let stream3 = Arc::new(BackpressuredResultStream::new(20).unwrap());
+    let stream1 = Arc::new(BackpressuredResultStream::new(128).unwrap());
+    let stream2 = Arc::new(BackpressuredResultStream::new(128).unwrap());
+    let stream3 = Arc::new(BackpressuredResultStream::new(128).unwrap());
 
     let s1_producer = stream1.clone();
     let task1 = tokio::spawn(async move {

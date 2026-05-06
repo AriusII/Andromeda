@@ -8,7 +8,7 @@ use andromeda_core::{
     ColumnDescriptor, ContractHash, ProcedureId,
 };
 
-use crate::Cardinality;
+use crate::{Cardinality, identifier::validate_srpl_identifier as validate_symbol};
 
 pub const MAX_SRPL_BODY_OPERATIONS: usize = 16;
 
@@ -278,32 +278,32 @@ impl ConstantLiteral {
     /// silent conversion.
     pub fn is_compatible_with(&self, scalar: &andromeda_core::ScalarType) -> bool {
         use andromeda_core::ScalarType;
-        match (self, scalar) {
-            (Self::Bool(_), ScalarType::Bool) => true,
-            (Self::Int64(_), ScalarType::I8)
-            | (Self::Int64(_), ScalarType::I16)
-            | (Self::Int64(_), ScalarType::I32)
-            | (Self::Int64(_), ScalarType::I64)
-            | (Self::Int64(_), ScalarType::I128) => true,
-            (Self::Uint64(_), ScalarType::U8)
-            | (Self::Uint64(_), ScalarType::U16)
-            | (Self::Uint64(_), ScalarType::U32)
-            | (Self::Uint64(_), ScalarType::U64)
-            | (Self::Uint64(_), ScalarType::U128) => true,
-            (Self::Decimal { .. }, ScalarType::Decimal(_)) => true,
-            _ => false,
-        }
+        matches!(
+            (self, scalar),
+            (Self::Bool(_), ScalarType::Bool)
+                | (Self::Int64(_), ScalarType::I8)
+                | (Self::Int64(_), ScalarType::I16)
+                | (Self::Int64(_), ScalarType::I32)
+                | (Self::Int64(_), ScalarType::I64)
+                | (Self::Int64(_), ScalarType::I128)
+                | (Self::Uint64(_), ScalarType::U8)
+                | (Self::Uint64(_), ScalarType::U16)
+                | (Self::Uint64(_), ScalarType::U32)
+                | (Self::Uint64(_), ScalarType::U64)
+                | (Self::Uint64(_), ScalarType::U128)
+                | (Self::Decimal { .. }, ScalarType::Decimal(_))
+        )
     }
 
     /// Validate that the decimal invariant `scale <= 18` holds.
     pub fn validate(&self) -> AndromedaResult<()> {
-        if let Self::Decimal { scale, .. } = self {
-            if *scale > 18 {
-                return Err(AndromedaError::new(
-                    AndromedaErrorKind::Srpl,
-                    "SRPL constant decimal scale must not exceed 18",
-                ));
-            }
+        if let Self::Decimal { scale, .. } = self
+            && *scale > 18
+        {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Srpl,
+                "SRPL constant decimal scale must not exceed 18",
+            ));
         }
         Ok(())
     }
@@ -338,12 +338,6 @@ impl ArithOp {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SrplValueIr {
-    // ------------------------------------------------------------------ //
-    // Existing variants — preserved for backward compatibility.            //
-    // The `Bool(b)` variant is deprecated in favour of                    //
-    // `Constant(ConstantLiteral::Bool(b))` but must not be removed until  //
-    // all call-sites have been migrated (Wave 14 task W14-1).             //
-    // ------------------------------------------------------------------ //
     /// Reference to a named procedure input parameter.
     Input(String),
 
@@ -361,9 +355,6 @@ pub enum SrplValueIr {
         input: String,
     },
 
-    // ------------------------------------------------------------------ //
-    // New variants added by v1-srpl-constant-folding-s03-design           //
-    // ------------------------------------------------------------------ //
     /// A compile-time constant that has been folded or directly parsed.
     Constant(ConstantLiteral),
 
@@ -630,27 +621,6 @@ fn validate_qualified_name(name: &QualifiedName, context: &str) -> AndromedaResu
         return Err(AndromedaError::new(
             AndromedaErrorKind::Srpl,
             format!("{context} must not be empty"),
-        ));
-    }
-
-    Ok(())
-}
-
-fn validate_symbol(value: &str, context: &str) -> AndromedaResult<()> {
-    let mut chars = value.chars();
-    let Some(first) = chars.next() else {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Srpl,
-            format!("{context} must not be empty"),
-        ));
-    };
-
-    if !(first.is_ascii_alphabetic() || first == '_')
-        || chars.any(|ch| !(ch.is_ascii_alphanumeric() || ch == '_'))
-    {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Srpl,
-            format!("{context} must be an ASCII identifier"),
         ));
     }
 

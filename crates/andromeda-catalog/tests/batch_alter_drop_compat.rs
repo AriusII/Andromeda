@@ -34,9 +34,7 @@ use andromeda_core::{
     ProcedureId, ScalarType, TypeDescriptor,
 };
 
-// =============================================================================
 // Test Fixtures and Helpers
-// =============================================================================
 
 const TEST_DB_ID: DatabaseId = DatabaseId::new(1);
 const TEST_NS_ID: NamespaceId = NamespaceId::new(1);
@@ -122,9 +120,7 @@ fn batch_with_create(
     }
 }
 
-// =============================================================================
 // TEST 1: Create Procedure generates correct version and contract hash
-// =============================================================================
 
 /// **Verification of Create semantics (prerequisite for Alter)**
 ///
@@ -184,9 +180,7 @@ fn test_batch_create_procedure_generates_correct_version() {
     }
 }
 
-// =============================================================================
 // TEST 2: Alter Procedure would preserve ID but increment version and update hash
-// =============================================================================
 
 /// **Verification of Alter infrastructure compatibility (DEC-022)**
 ///
@@ -265,9 +259,7 @@ fn test_batch_alter_procedure_semantics_preserves_id_increments_version() {
     );
 }
 
-// =============================================================================
 // TEST 3: Drop Procedure validates Restrict rule (no dependents)
-// =============================================================================
 
 /// **Verification of Drop infrastructure compatibility (DEC-023)**
 ///
@@ -354,9 +346,7 @@ fn test_batch_drop_procedure_validates_restrict_rule() {
     assert!(!plan2.mutation_plan.deltas.is_empty());
 }
 
-// =============================================================================
 // TEST 4: Batch replay is idempotent (same operations produce same plan)
-// =============================================================================
 
 /// **Verification of Replay Idempotency (DEC-023 requirement)**
 ///
@@ -415,9 +405,7 @@ fn test_batch_replay_idempotent() {
     );
 }
 
-// =============================================================================
 // Supplementary Compatibility Verification Tests
-// =============================================================================
 
 /// **Verification: Batch rejects duplicate object IDs in single batch**
 ///

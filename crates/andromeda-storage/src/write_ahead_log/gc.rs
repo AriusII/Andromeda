@@ -508,7 +508,7 @@ mod tests {
 
     #[test]
     fn wal_gc_audit_event_names_are_unique() {
-        let events = vec![
+        let events = [
             WalGcAuditEvent::CandidateIdentified {
                 segment_id: 1,
                 creation_lsn: Lsn::new(100),

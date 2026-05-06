@@ -1,4 +1,4 @@
-//! F5 Backup Physical Plan Contract Tests
+//! Backup physical plan contract tests.
 //!
 //! Comprehensive test suite validating:
 //! - BackupPhysicalPlan creation and validation
@@ -16,8 +16,6 @@
 mod tests {
     use andromeda_observe::TraceId;
     use andromeda_storage::backup::*;
-
-    // ============ Test Helpers ============
 
     fn create_basic_physical_plan() -> BackupPhysicalPlan {
         BackupPhysicalPlan::new(
@@ -50,8 +48,6 @@ mod tests {
         )
     }
 
-    // ============ Test Set 1: BackupPhysicalPlan Creation (2 tests) ============
-
     #[test]
     fn test_backup_physical_plan_creation_and_validation() {
         let plan = create_basic_physical_plan();
@@ -77,8 +73,6 @@ mod tests {
         );
         assert!(plan.validate().is_err());
     }
-
-    // ============ Test Set 2: Segment Scheduling - Order Enforcement (3 tests) ============
 
     #[test]
     fn test_hot_store_scheduled_before_cold_store() {
@@ -134,8 +128,6 @@ mod tests {
         assert!(plan.validate().is_err());
     }
 
-    // ============ Test Set 3: I/O Budget Respect (3 tests) ============
-
     #[test]
     fn test_io_scheduler_respects_nvme_budget() {
         let scheduler = BackupIOScheduler::new(4096, 500, 100); // 500 MB/s NVMe, 100 MB/s HDD
@@ -164,8 +156,6 @@ mod tests {
         assert!(schedule.total_bytes > 0);
         assert!(schedule.peak_throughput_mbps > 0);
     }
-
-    // ============ Test Set 4: Checkpoint Creation and Recovery (4 tests) ============
 
     #[test]
     fn test_backup_checkpoint_persist_valid() {
@@ -212,8 +202,6 @@ mod tests {
         assert!(recovery.is_err());
     }
 
-    // ============ Test Set 5: Checksum Validation on Resumed Backup (2 tests) ============
-
     #[test]
     fn test_checksum_validation_same_data() {
         let manager = BackupCheckpointManager::new(BackupId::new(1), "/tmp/backup".to_string());
@@ -244,8 +232,6 @@ mod tests {
         );
     }
 
-    // ============ Test Set 6: WAL Archive Validation (2 tests) ============
-
     #[test]
     fn test_wal_archive_validation_sufficient_coverage() {
         let result = WalArchiveIntegration::validate_wal_archive(
@@ -272,8 +258,6 @@ mod tests {
 
         assert!(result.is_err());
     }
-
-    // ============ Test Set 7: PITR Window Computation (2 tests) ============
 
     #[test]
     fn test_pitr_window_computed_correctly() {
@@ -322,8 +306,6 @@ mod tests {
         assert!(WalArchiveIntegration::validate_pitr_target(&manifest, Lsn::new(1500)).is_ok());
         assert!(WalArchiveIntegration::validate_pitr_target(&manifest, Lsn::new(2000)).is_ok());
     }
-
-    // ============ Test Set 8: Error Cases (3 tests) ============
 
     #[test]
     fn test_backup_id_not_found_error() {

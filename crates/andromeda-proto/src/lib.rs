@@ -109,7 +109,7 @@ Every error carries:
 
 Example error mapping (AndromedaError → ErrorEnvelope):
 
-```ignore
+```text
 AndromedaErrorKind::Protocol
   → ErrorFamily::Protocol + RetryDisposition::NotRetryable
 

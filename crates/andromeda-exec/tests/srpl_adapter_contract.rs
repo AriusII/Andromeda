@@ -15,16 +15,14 @@ use andromeda_exec::{
 };
 use andromeda_srpl::Cardinality;
 use andromeda_srpl::execution_adapter::{
-    SrplAssertRequest, SrplAssertionAdapter, SrplEmitRequest, SrplExecutionFailure,
-    SrplFailureAdapter, SrplFailureRequest, SrplOperationContext, SrplReadRequest, SrplReadResult,
-    SrplRowBound, SrplTypedEmitAdapter, SrplTypedReadAdapter, SrplTypedUpdateAdapter,
-    SrplUpdateRequest,
+    SrplAssertRequest, SrplEmitRequest, SrplExecutionFailure, SrplFailureRequest,
+    SrplOperationContext, SrplReadRequest, SrplRowBound, SrplUpdateRequest,
 };
-use andromeda_srpl::procedure_model::{SrplAssignmentIr, SrplPredicateIr, SrplValueIr};
+use andromeda_srpl::procedure_model::{
+    SrplAssignmentIr, SrplEmitValueIr, SrplPredicateIr, SrplValueIr,
+};
 
-// ============================================================================
 // HELPER FUNCTIONS
-// ============================================================================
 
 fn make_test_procedure_ref() -> ProcedureContractRef {
     ProcedureContractRef {
@@ -58,19 +56,26 @@ fn make_read_request(
     .unwrap()
 }
 
-fn make_assert_request(ordicate: u32) -> SrplAssertRequest {
+fn make_assert_request(ordinal: u32) -> SrplAssertRequest {
     let predicate = SrplPredicateIr::InputEqualsField {
-        input: "param".to_string(),
-        binding: "binding".to_string(),
-        field: "field".to_string(),
+        input: "expected_id".to_string(),
+        binding: "data".to_string(),
+        field: "actual_id".to_string(),
     };
 
     SrplAssertRequest::new(
-        SrplOperationContext::new(make_test_procedure_ref(), ordicate).unwrap(),
+        SrplOperationContext::new(make_test_procedure_ref(), ordinal).unwrap(),
         predicate,
         "check_failed",
     )
     .unwrap()
+}
+
+fn emit_values() -> Vec<SrplEmitValueIr> {
+    vec![SrplEmitValueIr {
+        column: "ok".to_string(),
+        value: SrplValueIr::Bool(true),
+    }]
 }
 
 fn make_update_request(ordinal: u32) -> SrplUpdateRequest {
@@ -93,7 +98,7 @@ fn make_emit_request(ordinal: u32) -> SrplEmitRequest {
         "result_stream",
         Cardinality::Many,
         SrplRowBound::at_most(10).unwrap(),
-        vec![],
+        emit_values(),
     )
     .unwrap()
 }
@@ -107,18 +112,18 @@ fn make_failure_request(ordinal: u32, failure: SrplExecutionFailure) -> SrplFail
     .unwrap()
 }
 
-// ============================================================================
 // ADAPTER TRAIT TESTS
-// ============================================================================
 
 #[test]
 fn test_read_adapter_single_row() {
     let mut adapter = SrplExecutionAdapter::new(1000);
     let request = make_read_request(0, SrplRowBound::exact(1).unwrap(), Cardinality::One);
 
-    // Mock: adapter returns empty result set
     let result = adapter.read_typed(request);
-    assert!(result.is_ok());
+    assert!(matches!(
+        result,
+        Err(SrplExecutionFailure::CardinalityViolation { .. })
+    ));
 }
 
 #[test]
@@ -148,7 +153,10 @@ fn test_read_adapter_cardinality_one() {
     let request = make_read_request(0, SrplRowBound::exact(1).unwrap(), Cardinality::One);
 
     let result = adapter.read_typed(request);
-    assert!(result.is_ok());
+    assert!(matches!(
+        result,
+        Err(SrplExecutionFailure::CardinalityViolation { .. })
+    ));
 }
 
 #[test]
@@ -174,7 +182,10 @@ fn test_read_adapter_cardinality_nonempty_many() {
     );
 
     let result = adapter.read_typed(request);
-    assert!(result.is_ok());
+    assert!(matches!(
+        result,
+        Err(SrplExecutionFailure::CardinalityViolation { .. })
+    ));
 }
 
 #[test]
@@ -191,8 +202,8 @@ fn test_read_adapter_with_predicates() {
     let request = SrplReadRequest::new(
         SrplOperationContext::new(make_test_procedure_ref(), 0).unwrap(),
         make_test_object_ref("test.schema.users"),
-        Cardinality::One,
-        SrplRowBound::exact(1).unwrap(),
+        Cardinality::Many,
+        SrplRowBound::at_most(1).unwrap(),
         predicates,
     )
     .unwrap();
@@ -201,9 +212,7 @@ fn test_read_adapter_with_predicates() {
     assert!(result.is_ok());
 }
 
-// ============================================================================
 // ASSERTION ADAPTER TESTS
-// ============================================================================
 
 #[test]
 fn test_assert_adapter_true_predicate() {
@@ -301,7 +310,7 @@ fn test_assert_adapter_missing_input() {
 #[test]
 fn test_assert_adapter_missing_binding() {
     let mut adapter = SrplExecutionAdapter::new(1000);
-    adapter.add_input("param", FieldValue::Integer(42));
+    adapter.add_input("expected_id", FieldValue::Integer(42));
 
     let request = make_assert_request(0);
     let result = adapter.assert_typed(request);
@@ -309,9 +318,7 @@ fn test_assert_adapter_missing_binding() {
     assert!(result.is_err());
 }
 
-// ============================================================================
 // UPDATE ADAPTER TESTS
-// ============================================================================
 
 #[test]
 fn test_update_adapter_single_row() {
@@ -369,9 +376,7 @@ fn test_update_adapter_records_pending_updates() {
     assert!(!adapter.is_transaction_aborted());
 }
 
-// ============================================================================
 // EMIT ADAPTER TESTS
-// ============================================================================
 
 #[test]
 fn test_emit_adapter_single_row() {
@@ -391,7 +396,7 @@ fn test_emit_adapter_batch() {
         "results",
         Cardinality::Many,
         SrplRowBound::at_most(100).unwrap(),
-        vec![],
+        emit_values(),
     )
     .unwrap();
 
@@ -408,20 +413,20 @@ fn test_emit_adapter_backpressure_respected() {
         "results",
         Cardinality::Many,
         SrplRowBound::at_most(5).unwrap(),
-        vec![],
+        emit_values(),
     )
     .unwrap();
 
     // First emit should succeed
     assert!(adapter.emit_typed(request.clone()).is_ok());
 
-    // Second emit should fail due to backpressure
+    // A single request larger than the bounded buffer must be rejected.
     let request2 = SrplEmitRequest::new(
         SrplOperationContext::new(make_test_procedure_ref(), 1).unwrap(),
         "results",
         Cardinality::Many,
-        SrplRowBound::at_most(10).unwrap(),
-        vec![],
+        SrplRowBound::at_most(11).unwrap(),
+        emit_values(),
     )
     .unwrap();
 
@@ -438,7 +443,7 @@ fn test_emit_adapter_cardinality_one() {
         "result",
         Cardinality::One,
         SrplRowBound::exact(1).unwrap(),
-        vec![],
+        emit_values(),
     )
     .unwrap();
 
@@ -455,7 +460,7 @@ fn test_emit_adapter_cardinality_optional_one() {
         "result",
         Cardinality::OptionalOne,
         SrplRowBound::at_most(1).unwrap(),
-        vec![],
+        emit_values(),
     )
     .unwrap();
 
@@ -463,9 +468,7 @@ fn test_emit_adapter_cardinality_optional_one() {
     assert!(result.is_ok());
 }
 
-// ============================================================================
 // FAILURE ADAPTER TESTS
-// ============================================================================
 
 #[test]
 fn test_failure_adapter_semantic_violation() {
@@ -522,9 +525,7 @@ fn test_failure_adapter_multiple_failures() {
     assert_eq!(adapter.failures().len(), 3);
 }
 
-// ============================================================================
 // TRANSACTION CONTEXT TESTS
-// ============================================================================
 
 #[test]
 fn test_transaction_context_records_updates() {
@@ -570,9 +571,7 @@ fn test_transaction_context_abort_prevents_updates() {
     assert!(result.is_err());
 }
 
-// ============================================================================
 // STREAM BACKPRESSURE TESTS
-// ============================================================================
 
 #[test]
 fn test_backpressure_respects_limit() {
@@ -609,9 +608,7 @@ fn test_backpressure_saturating_release() {
     assert!(bp.buffer_rows(50).is_ok()); // Should still work
 }
 
-// ============================================================================
 // ENVIRONMENT TESTS
-// ============================================================================
 
 #[test]
 fn test_environment_input_management() {
@@ -658,20 +655,16 @@ fn test_environment_multiple_bindings() {
     assert!(env.get_binding_internal("products").is_some());
 }
 
-// ============================================================================
 // INTEGRATION TESTS
-// ============================================================================
 
 #[test]
 fn test_adapter_read_and_assert_workflow() {
     let mut adapter = SrplExecutionAdapter::new(1000);
 
-    // Setup: add input and bind data
-    adapter.add_input("target_id", FieldValue::Integer(5));
-    let row = StructuredObject::new().with_field("id", FieldValue::Integer(5));
+    adapter.add_input("expected_id", FieldValue::Integer(5));
+    let row = StructuredObject::new().with_field("actual_id", FieldValue::Integer(5));
     adapter.environment_mut().bind_read("data", vec![row]);
 
-    // Test: assert on binding
     let request = make_assert_request(0);
     let result = adapter.assert_typed(request);
 
@@ -723,9 +716,16 @@ fn test_adapter_transaction_rollback_on_failure() {
 fn test_adapter_cardinality_preserved_through_operations() {
     let mut adapter = SrplExecutionAdapter::new(1000);
 
-    // Simulate: 1:1 cardinality through read -> assert -> emit
     let read_request = make_read_request(0, SrplRowBound::exact(1).unwrap(), Cardinality::One);
-    let _ = adapter.read_typed(read_request);
+    let read_result = adapter.read_typed(read_request);
+    assert!(matches!(
+        read_result,
+        Err(SrplExecutionFailure::CardinalityViolation { .. })
+    ));
+
+    adapter.add_input("expected_id", FieldValue::Integer(1));
+    let row = StructuredObject::new().with_field("actual_id", FieldValue::Integer(1));
+    adapter.environment_mut().bind_read("data", vec![row]);
 
     let assert_request = make_assert_request(1);
     let assert_result = adapter.assert_typed(assert_request);
@@ -736,7 +736,7 @@ fn test_adapter_cardinality_preserved_through_operations() {
         "result",
         Cardinality::One,
         SrplRowBound::exact(1).unwrap(),
-        vec![],
+        emit_values(),
     )
     .unwrap();
 

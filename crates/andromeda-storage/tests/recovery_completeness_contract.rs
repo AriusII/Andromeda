@@ -1,7 +1,7 @@
 //! Recovery completeness contract tests.
 //!
 //! These tests exercise the public recovery replay API. They intentionally avoid
-//! placeholder-only scenarios so the suite fails only on observable contract
+//! metadata-only scenarios so the suite fails only on observable contract
 //! regressions.
 
 use andromeda_core::TransactionId;
@@ -101,7 +101,7 @@ fn marker_and_boundary_records_are_skipped_without_errors() {
     ];
 
     let mut ctx = ReplayContext::new();
-    for (idx, kind) in skipped_kinds.into_iter().enumerate() {
+    for (idx, kind) in skipped_kinds.iter().copied().enumerate() {
         let record = record_for_kind(kind, Lsn::new(idx as u64 + 1));
         replay_wal_record(&mut ctx, &record).expect("skipped handler should not fail");
     }
@@ -125,8 +125,8 @@ fn future_work_records_fail_stop_with_clear_error_and_context() {
         let message = err.message();
 
         assert!(
-            message.contains("not yet implemented"),
-            "{kind:?} error must identify deferred implementation"
+            message.contains("not promoted"),
+            "{kind:?} error must identify the recovery promotion gate"
         );
         assert!(
             message.contains(&format!("{kind:?}")),

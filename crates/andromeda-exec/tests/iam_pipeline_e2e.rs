@@ -1,4 +1,4 @@
-//! End-to-end tests for IAM pipeline (Wave 19).
+//! End-to-end tests for the IAM pipeline.
 //!
 //! These tests verify the complete authorization flow:
 //! - Principal resolution from certificate fingerprint

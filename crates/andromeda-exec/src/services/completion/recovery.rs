@@ -249,29 +249,28 @@ fn completion_recovery_committed(
     durable_lsn: Lsn,
     commit_lsn: Option<Lsn>,
 ) -> CompletionRecoveryRecord {
-    if let Some(journal_record) = expectation.journal_record {
-        if journal_record.status != CompletionStatus::Committed {
-            return completion_recovery_ambiguous(
-                expectation,
-                durable_lsn,
-                Some(DurableTransactionState::Committed),
-                commit_lsn.unwrap_or_default(),
-                CompletionRecoveryAmbiguity::JournalContradictsWal,
-            );
-        }
+    if let Some(journal_record) = expectation.journal_record
+        && journal_record.status != CompletionStatus::Committed
+    {
+        return completion_recovery_ambiguous(
+            expectation,
+            durable_lsn,
+            Some(DurableTransactionState::Committed),
+            commit_lsn.unwrap_or_default(),
+            CompletionRecoveryAmbiguity::JournalContradictsWal,
+        );
     }
-    if let Some(journal_record) = expectation.journal_record {
-        if journal_record.terminal_lsn != commit_lsn
-            || matches!(journal_record.durable_lsn, Some(journal_durable_lsn) if journal_durable_lsn > durable_lsn)
-        {
-            return completion_recovery_ambiguous(
-                expectation,
-                durable_lsn,
-                Some(DurableTransactionState::Committed),
-                commit_lsn.unwrap_or_default(),
-                CompletionRecoveryAmbiguity::JournalContradictsWal,
-            );
-        }
+    if let Some(journal_record) = expectation.journal_record
+        && (journal_record.terminal_lsn != commit_lsn
+            || matches!(journal_record.durable_lsn, Some(journal_durable_lsn) if journal_durable_lsn > durable_lsn))
+    {
+        return completion_recovery_ambiguous(
+            expectation,
+            durable_lsn,
+            Some(DurableTransactionState::Committed),
+            commit_lsn.unwrap_or_default(),
+            CompletionRecoveryAmbiguity::JournalContradictsWal,
+        );
     }
 
     let rows_affected = expectation
@@ -287,31 +286,29 @@ fn completion_recovery_committed(
         if let (Some(journal_rows), Some(expected_rows)) = (
             journal_record.rows_affected,
             expectation.expected_rows_affected,
-        ) {
-            if journal_rows != expected_rows {
-                return completion_recovery_ambiguous(
-                    expectation,
-                    durable_lsn,
-                    Some(DurableTransactionState::Committed),
-                    commit_lsn.unwrap_or_default(),
-                    CompletionRecoveryAmbiguity::RowsAffectedMismatch,
-                );
-            }
+        ) && journal_rows != expected_rows
+        {
+            return completion_recovery_ambiguous(
+                expectation,
+                durable_lsn,
+                Some(DurableTransactionState::Committed),
+                commit_lsn.unwrap_or_default(),
+                CompletionRecoveryAmbiguity::RowsAffectedMismatch,
+            );
         }
 
         if let (Some(journal_rows), Some(expected_rows)) = (
             journal_record.result_row_count_exact,
             expectation.expected_result_row_count_exact,
-        ) {
-            if journal_rows != expected_rows {
-                return completion_recovery_ambiguous(
-                    expectation,
-                    durable_lsn,
-                    Some(DurableTransactionState::Committed),
-                    commit_lsn.unwrap_or_default(),
-                    CompletionRecoveryAmbiguity::ResultRowCountMismatch,
-                );
-            }
+        ) && journal_rows != expected_rows
+        {
+            return completion_recovery_ambiguous(
+                expectation,
+                durable_lsn,
+                Some(DurableTransactionState::Committed),
+                commit_lsn.unwrap_or_default(),
+                CompletionRecoveryAmbiguity::ResultRowCountMismatch,
+            );
         }
     }
 
@@ -333,29 +330,28 @@ fn completion_recovery_rolled_back(
     durable_lsn: Lsn,
     rollback_lsn: Option<Lsn>,
 ) -> CompletionRecoveryRecord {
-    if let Some(journal_record) = expectation.journal_record {
-        if journal_record.status != CompletionStatus::RolledBack {
-            return completion_recovery_ambiguous(
-                expectation,
-                durable_lsn,
-                Some(DurableTransactionState::RolledBack),
-                rollback_lsn.unwrap_or_default(),
-                CompletionRecoveryAmbiguity::JournalContradictsWal,
-            );
-        }
+    if let Some(journal_record) = expectation.journal_record
+        && journal_record.status != CompletionStatus::RolledBack
+    {
+        return completion_recovery_ambiguous(
+            expectation,
+            durable_lsn,
+            Some(DurableTransactionState::RolledBack),
+            rollback_lsn.unwrap_or_default(),
+            CompletionRecoveryAmbiguity::JournalContradictsWal,
+        );
     }
-    if let Some(journal_record) = expectation.journal_record {
-        if journal_record.terminal_lsn != rollback_lsn
-            || matches!(journal_record.durable_lsn, Some(journal_durable_lsn) if journal_durable_lsn > durable_lsn)
-        {
-            return completion_recovery_ambiguous(
-                expectation,
-                durable_lsn,
-                Some(DurableTransactionState::RolledBack),
-                rollback_lsn.unwrap_or_default(),
-                CompletionRecoveryAmbiguity::JournalContradictsWal,
-            );
-        }
+    if let Some(journal_record) = expectation.journal_record
+        && (journal_record.terminal_lsn != rollback_lsn
+            || matches!(journal_record.durable_lsn, Some(journal_durable_lsn) if journal_durable_lsn > durable_lsn))
+    {
+        return completion_recovery_ambiguous(
+            expectation,
+            durable_lsn,
+            Some(DurableTransactionState::RolledBack),
+            rollback_lsn.unwrap_or_default(),
+            CompletionRecoveryAmbiguity::JournalContradictsWal,
+        );
     }
 
     CompletionRecoveryRecord {

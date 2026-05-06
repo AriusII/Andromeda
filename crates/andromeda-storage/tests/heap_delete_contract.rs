@@ -1,17 +1,12 @@
-//! N1-HEAP-007 Heap Delete Contract Tests
+//! Heap delete contract tests.
 //!
-//! Comprehensive test suite for logical deletion, batch deletion, and compaction.
+//! Logical deletion, group deletion, and compaction.
 //! Validates invariants and performance requirements.
 
 #![forbid(unsafe_code)]
 
 use andromeda_storage::{HeapPage, HeapVacuumMode, PageSize};
 
-// ============================================================================
-// Single Tuple Deletion Tests (5 tests)
-// ============================================================================
-
-/// Test 1: Delete single tuple
 #[test]
 fn test_heap_delete_single_tuple() {
     let mut page = HeapPage::new(PageSize::KiB16);
@@ -25,7 +20,6 @@ fn test_heap_delete_single_tuple() {
     assert!(result.unwrap_err().message().contains("deleted"));
 }
 
-/// Test 2: Delete non-existent slot
 #[test]
 fn test_heap_delete_nonexistent_slot() {
     let mut page = HeapPage::new(PageSize::KiB16);
@@ -33,7 +27,6 @@ fn test_heap_delete_nonexistent_slot() {
     assert!(result.is_err());
 }
 
-/// Test 3: Delete already deleted slot
 #[test]
 fn test_heap_delete_already_deleted() {
     let mut page = HeapPage::new(PageSize::KiB16);
@@ -46,7 +39,6 @@ fn test_heap_delete_already_deleted() {
     assert!(result.unwrap_err().message().contains("already deleted"));
 }
 
-/// Test 4: Delete doesn't affect live tuples
 #[test]
 fn test_heap_delete_preserves_live() {
     let mut page = HeapPage::new(PageSize::KiB16);
@@ -63,7 +55,6 @@ fn test_heap_delete_preserves_live() {
     assert_eq!(page.read_tuple(slot3).unwrap(), b"tuple3");
 }
 
-/// Test 5: Delete consecutive tuples
 #[test]
 fn test_heap_delete_consecutive() {
     let mut page = HeapPage::new(PageSize::KiB16);
@@ -84,11 +75,6 @@ fn test_heap_delete_consecutive() {
     assert_eq!(page.live_row_count(), 5);
 }
 
-// ============================================================================
-// Batch Deletion Tests (4 tests)
-// ============================================================================
-
-/// Test 6: Batch delete multiple tuples
 #[test]
 fn test_heap_batch_delete_multiple() {
     let mut page = HeapPage::new(PageSize::KiB16);
@@ -107,7 +93,6 @@ fn test_heap_batch_delete_multiple() {
     assert_eq!(page.live_row_count(), 7);
 }
 
-/// Test 7: Batch delete with out-of-range slot
 #[test]
 fn test_heap_batch_delete_out_of_range() {
     let mut page = HeapPage::new(PageSize::KiB16);
@@ -123,7 +108,6 @@ fn test_heap_batch_delete_out_of_range() {
     assert_eq!(page.read_tuple(slot1).unwrap(), b"data1");
 }
 
-/// Test 8: Batch delete empty vector
 #[test]
 fn test_heap_batch_delete_empty() {
     let mut page = HeapPage::new(PageSize::KiB16);
@@ -133,7 +117,6 @@ fn test_heap_batch_delete_empty() {
     assert_eq!(count, 0);
 }
 
-/// Test 9: Batch delete with already-deleted slot
 #[test]
 fn test_heap_batch_delete_already_deleted() {
     let mut page = HeapPage::new(PageSize::KiB16);
@@ -151,18 +134,12 @@ fn test_heap_batch_delete_already_deleted() {
     assert_eq!(page.read_tuple(slot2).unwrap(), b"data2");
 }
 
-// ============================================================================
-// Deleted Slot Detection Tests (2 tests)
-// ============================================================================
-
-/// Test 10: has_deleted_slots empty page
 #[test]
 fn test_has_deleted_slots_empty() {
     let page = HeapPage::new(PageSize::KiB16);
     assert!(!page.has_deleted_slots());
 }
 
-/// Test 11: has_deleted_slots after deletion
 #[test]
 fn test_has_deleted_slots_after_delete() {
     let mut page = HeapPage::new(PageSize::KiB16);
@@ -174,11 +151,6 @@ fn test_has_deleted_slots_after_delete() {
     assert!(page.has_deleted_slots());
 }
 
-// ============================================================================
-// Compaction Tests (6 tests)
-// ============================================================================
-
-/// Test 12: Compact empty page (no deleted slots)
 #[test]
 fn test_heap_compact_no_deleted() {
     let mut page = HeapPage::new(PageSize::KiB16);
@@ -190,7 +162,6 @@ fn test_heap_compact_no_deleted() {
     assert_eq!(reclaimed, 0);
 }
 
-/// Test 13: Compact page with deleted slots
 #[test]
 fn test_heap_compact_with_deleted() {
     let mut page = HeapPage::new(PageSize::KiB16);
@@ -212,7 +183,6 @@ fn test_heap_compact_with_deleted() {
     assert!(page.read_tuple(slot2).is_err());
 }
 
-/// Test 14: Compact preserves live tuple order
 #[test]
 fn test_heap_compact_preserves_order() {
     let mut page = HeapPage::new(PageSize::KiB16);
@@ -236,7 +206,6 @@ fn test_heap_compact_preserves_order() {
     assert_eq!(page.read_tuple(ids[4]).unwrap(), b"tuple_04");
 }
 
-/// Test 15: Compact preserves live data across all sizes
 #[test]
 fn test_heap_compact_data_integrity() {
     let mut page = HeapPage::new(PageSize::KiB16);
@@ -261,7 +230,7 @@ fn test_heap_compact_data_integrity() {
         if i % 3 != 0 {
             // Should be readable
             let data = page.read_tuple(slot_id).expect("read");
-            assert!(data.len() > 0, "live tuple should have data");
+            assert!(!data.is_empty(), "live tuple should have data");
             found_count += 1;
         }
     }
@@ -269,7 +238,6 @@ fn test_heap_compact_data_integrity() {
     assert_eq!(found_count, page.live_row_count() as usize);
 }
 
-/// Test 16: Compact multiple deletions
 #[test]
 fn test_heap_compact_multiple_deletions() {
     let mut page = HeapPage::new(PageSize::KiB16);
@@ -293,11 +261,6 @@ fn test_heap_compact_multiple_deletions() {
     assert_eq!(page.live_row_count(), 5); // Live count unchanged
 }
 
-// ============================================================================
-// Integration Tests (3+ tests)
-// ============================================================================
-
-/// Test 17: Insert after delete (without compact)
 #[test]
 fn test_heap_insert_after_delete() {
     let mut page = HeapPage::new(PageSize::KiB16);
@@ -310,7 +273,6 @@ fn test_heap_insert_after_delete() {
     assert_eq!(page.read_tuple(slot2).unwrap(), b"data2_new");
 }
 
-/// Test 18: Scan skips deleted tuples
 #[test]
 fn test_heap_scan_skips_deleted() {
     let mut page = HeapPage::new(PageSize::KiB16);
@@ -335,7 +297,6 @@ fn test_heap_scan_skips_deleted() {
     }
 }
 
-/// Test 19: Mixed operations (insert, delete, batch delete, compact)
 #[test]
 fn test_heap_mixed_operations() {
     let mut page = HeapPage::new(PageSize::KiB16);
@@ -351,7 +312,7 @@ fn test_heap_mixed_operations() {
     // Single delete
     page.delete_tuple(ids[5]).expect("delete 5");
 
-    // Batch delete
+    // Delete a group of rows.
     let batch = vec![ids[10], ids[11], ids[12]];
     let count = page.mark_deleted_batch(&batch).expect("batch delete");
     assert_eq!(count, 3);
@@ -368,26 +329,23 @@ fn test_heap_mixed_operations() {
     assert_eq!(page.live_row_count(), 16);
 
     // Verify remaining tuples readable
-    for i in 0..20 {
+    for (i, &slot_id) in ids.iter().enumerate().take(20) {
         if i == 5 || i == 10 || i == 11 || i == 12 {
-            assert!(page.read_tuple(ids[i]).is_err());
+            assert!(page.read_tuple(slot_id).is_err());
         } else {
-            assert!(page.read_tuple(ids[i]).is_ok());
+            assert!(page.read_tuple(slot_id).is_ok());
         }
     }
 }
 
-// ============================================================================
 // Page Size Variants (2 tests)
-// ============================================================================
 
-/// Test 20: Delete on 16 KiB page
 #[test]
 fn test_heap_delete_16kib() {
     let mut page = HeapPage::new(PageSize::KiB16);
 
     let ids: Vec<_> = (0..50)
-        .map(|_i| page.insert_tuple(&vec![0u8; 100]).expect("insert"))
+        .map(|_i| page.insert_tuple(&[0u8; 100]).expect("insert"))
         .collect();
 
     for i in (0..ids.len()).step_by(2) {
@@ -398,13 +356,12 @@ fn test_heap_delete_16kib() {
     assert_eq!(live, 25);
 }
 
-/// Test 21: Delete on 32 KiB page
 #[test]
 fn test_heap_delete_32kib() {
     let mut page = HeapPage::new(PageSize::KiB32);
 
     let ids: Vec<_> = (0..100)
-        .map(|_i| page.insert_tuple(&vec![0u8; 100]).expect("insert"))
+        .map(|_i| page.insert_tuple(&[0u8; 100]).expect("insert"))
         .collect();
 
     for i in (0..ids.len()).step_by(2) {
@@ -415,17 +372,14 @@ fn test_heap_delete_32kib() {
     assert_eq!(live, 50);
 }
 
-// ============================================================================
 // Invariant Validation (2 tests)
-// ============================================================================
 
-/// Test 22: After compact, no gaps in live tuples
 #[test]
 fn test_heap_compact_no_gaps() {
     let mut page = HeapPage::new(PageSize::KiB16);
 
     let _ids: Vec<_> = (0..10)
-        .map(|i| page.insert_tuple(&vec![i as u8; 100]).expect("insert"))
+        .map(|i| page.insert_tuple(&[i as u8; 100]).expect("insert"))
         .collect();
 
     // Delete some
@@ -440,7 +394,6 @@ fn test_heap_compact_no_gaps() {
     assert_eq!(live_count, 7);
 }
 
-/// Test 23: Compaction is idempotent
 #[test]
 fn test_heap_compact_idempotent() {
     let mut page = HeapPage::new(PageSize::KiB16);
@@ -498,9 +451,7 @@ fn test_heap_compact_preserves_slot_ids_and_scan_ids() {
     assert_eq!(scanned_ids, vec![slot0, slot2, slot4]);
 }
 
-// ============================================================================
 // Heap Physical Vacuum Planning Contract
-// ============================================================================
 
 #[test]
 fn test_heap_vacuum_plan_empty_page_has_no_apply_requirements() {

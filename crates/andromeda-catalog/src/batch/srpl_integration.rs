@@ -117,21 +117,3 @@ pub fn drop_srpl_procedure(
     // 5. Append to batch.operations
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn add_srpl_procedure_placeholder() {
-        // Placeholder test; real tests in definitionbatch_compat.rs
-    }
-
-    #[test]
-    fn alter_srpl_procedure_placeholder() {
-        // Placeholder test; real tests in definitionbatch_compat.rs
-    }
-
-    #[test]
-    fn drop_srpl_procedure_placeholder() {
-        // Placeholder test; real tests in definitionbatch_compat.rs
-    }
-}

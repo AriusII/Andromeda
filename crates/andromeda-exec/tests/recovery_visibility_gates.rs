@@ -75,7 +75,7 @@ fn manifest() -> DatabaseManifest {
 /// absent (treated as InFlight by V0 doctrine), and we deliberately never
 /// fabricate `Committed` from RAM.
 fn status_table_from_recovery(evidence: &[DurableTransactionResume]) -> TransactionStatusTable {
-    let mut statuses = TransactionStatusTable::new();
+    let statuses = TransactionStatusTable::new();
     for resume in evidence {
         match resume.state {
             DurableTransactionState::Committed => statuses
@@ -194,13 +194,13 @@ fn crash_before_durable_commit_keeps_writes_invisible_after_recovery() {
     peer_statuses
         .record(reader, TransactionStatus::InFlight)
         .expect("reader registers as in-flight");
-    let peer_snapshot = read_committed_peer_snapshot(row_begin_ts + 1, reader, &peer_statuses);
+    let peer_snapshot = read_committed_peer_snapshot(row_begin_ts + 1, reader, peer_statuses);
 
     let row = MvccRowHeader::open_version(row_begin_ts, writer, None)
         .expect("row header builds for writer");
 
     assert!(
-        !row.visible_in_snapshot(&peer_snapshot, &peer_statuses)
+        !row.visible_in_snapshot(&peer_snapshot, peer_statuses)
             .expect("visibility check completes"),
         "writer row must remain INVISIBLE after crash-before-durable-commit recovery"
     );
@@ -284,13 +284,13 @@ fn crash_after_durable_commit_keeps_writes_visible_and_replayable() {
     peer_statuses
         .record(reader, TransactionStatus::InFlight)
         .expect("reader registers as in-flight");
-    let peer_snapshot = read_committed_peer_snapshot(row_begin_ts + 1, reader, &peer_statuses);
+    let peer_snapshot = read_committed_peer_snapshot(row_begin_ts + 1, reader, peer_statuses);
 
     let row = MvccRowHeader::open_version(row_begin_ts, writer, None)
         .expect("row header builds for writer");
 
     assert!(
-        row.visible_in_snapshot(&peer_snapshot, &peer_statuses)
+        row.visible_in_snapshot(&peer_snapshot, peer_statuses)
             .expect("visibility check completes"),
         "writer row MUST be visible after crash-after-durable-commit recovery"
     );
@@ -391,13 +391,13 @@ fn crash_after_durable_rollback_keeps_writes_invisible_and_seeds_allocator_above
     peer_statuses
         .record(reader, TransactionStatus::InFlight)
         .expect("reader registers as in-flight");
-    let peer_snapshot = read_committed_peer_snapshot(row_begin_ts + 1, reader, &peer_statuses);
+    let peer_snapshot = read_committed_peer_snapshot(row_begin_ts + 1, reader, peer_statuses);
 
     let row = MvccRowHeader::open_version(row_begin_ts, writer, None)
         .expect("row header builds for writer");
 
     assert!(
-        !row.visible_in_snapshot(&peer_snapshot, &peer_statuses)
+        !row.visible_in_snapshot(&peer_snapshot, peer_statuses)
             .expect("visibility check completes"),
         "writer row must remain INVISIBLE after crash-after-durable-rollback recovery"
     );

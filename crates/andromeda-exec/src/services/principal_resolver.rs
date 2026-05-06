@@ -1,30 +1,4 @@
-//! Principal resolver: X.509 certificate fingerprint → Principal mapping.
-//!
-//! This module implements the first stage of the IAM pipeline:
-//! - Certificate fingerprint extraction (from DEC-018, mTLS identity)
-//! - Fingerprint → Principal lookup in the principal store
-//! - Session token validation and binding
-//!
-//! ## Architecture
-//!
-//! The resolver uses a DashMap for O(1) concurrent lookups without global locks.
-//! Principal bindings are immutable once stored; modifications require explicit updates
-//! through the public API.
-//!
-//! ## Wave 19 Limitations
-//!
-//! - In-memory store only (no persistence)
-//! - No certificate revocation checking
-//! - No session expiry or renewal
-//! - Flat principal store (no hierarchical organizations)
-//!
-//! ## Wave 21+ Evolution
-//!
-//! - Persistent store backed by WAL-replicated table
-//! - Certificate revocation list (CRL) checking
-//! - Session expiry with renewal tokens
-//! - Principal lookup caching with TTL
-//! - Role-based scope filtering
+//! Principal resolution from certificate fingerprint to executor identity.
 
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, CertificateFingerprint, Principal,
@@ -33,110 +7,35 @@ use andromeda_core::{
 use dashmap::DashMap;
 use std::sync::Arc;
 
-/// PrincipalResolver trait: abstract interface for certificate fingerprint → Principal lookup.
-///
-/// Implementations may use in-memory stores (Wave 19), persistent databases (Wave 21+),
-/// or remote identity services. The trait is Send + Sync for use across async boundaries.
 pub trait PrincipalResolver: Send + Sync {
-    /// Resolve a certificate fingerprint to a Principal.
-    ///
-    /// Returns Ok(Principal) if the fingerprint is recognized and maps to an active principal.
-    /// Returns Err(PermissionDenied) if the fingerprint is unknown or the principal is revoked.
-    ///
-    /// # Errors
-    ///
-    /// Returns `AndromedaErrorKind::Security` for:
-    /// - Unknown fingerprint (not in the principal store)
-    /// - Expired session token
-    /// - Revoked principal (Wave 21+)
-    /// - Invalid certificate (malformed or tampered)
     fn resolve(&self, cert_fingerprint: &str) -> AndromedaResult<Principal>;
 
-    /// Register a principal for a certificate fingerprint (admin operation).
-    ///
-    /// This is called by administrators to bind a certificate to a role.
-    /// Subsequent `resolve()` calls with this fingerprint will return the registered Principal.
-    ///
-    /// # Errors
-    ///
-    /// Returns `AndromedaErrorKind::Security` if:
-    /// - Fingerprint is already registered (duplicate)
-    /// - Fingerprint format is invalid
-    /// - Caller lacks permission to register principals (Wave 21+)
     fn register_principal(
         &self,
         cert_fingerprint: String,
         role: PrincipalRole,
     ) -> AndromedaResult<Principal>;
 
-    /// Revoke a principal by certificate fingerprint.
-    ///
-    /// After revocation, `resolve()` calls will fail for this fingerprint.
-    /// Existing connections bound to this principal are not immediately closed
-    /// (revocation requires reconnection in Wave 19).
-    ///
-    /// # Errors
-    ///
-    /// Returns `AndromedaErrorKind::Security` if:
-    /// - Fingerprint is not registered
-    /// - Caller lacks permission to revoke (Wave 21+)
     fn revoke_principal(&self, cert_fingerprint: &str) -> AndromedaResult<()>;
 
-    /// List all registered principals (for audit and administration).
     fn list_principals(&self) -> AndromedaResult<Vec<Principal>>;
 }
 
-/// LocalPrincipalResolver: In-memory principal store using DashMap (Wave 19).
-///
-/// This implementation stores fingerprint → Principal mappings in a concurrent hash map.
-/// It is suitable for development, testing, and short-lived deployments.
-///
-/// ## Concurrency
-///
-/// - O(1) lookup via hash table
-/// - No global lock (fine-grained locking per bucket)
-/// - Safe concurrent register/revoke/resolve operations
-///
-/// ## Limitations (Wave 19)
-///
-/// - No persistence across restarts
-/// - No certificate revocation checking (CRL/OCSP)
-/// - No session expiry
-/// - All principals in the same namespace (no multi-tenant isolation)
-///
-/// ## Wave 21+ Migration Path
-///
-/// Replace with PersistentPrincipalResolver backed by:
-/// - WAL-replicated PrincipalRegistry table
-/// - CRL cache with periodic refresh
-/// - Session token store with TTL enforcement
 pub struct LocalPrincipalResolver {
     principal_store: Arc<DashMap<String, Principal>>,
 }
 
 impl LocalPrincipalResolver {
-    /// Create a new empty local principal resolver.
     pub fn new() -> Self {
         Self {
             principal_store: Arc::new(DashMap::new()),
         }
     }
 
-    /// Create a resolver pre-populated with test data (for testing and demo).
-    ///
-    /// This is a convenience method for integration tests. It registers:
-    /// - SuperAdmin certificate (for administrative operations)
-    /// - Admin certificate (for catalog management)
-    /// - Operator certificate (for procedures and audit)
-    /// - User certificate (for procedure execution)
-    /// - Guest certificate (for read-only access)
-    ///
-    /// Each certificate has a stable fingerprint for reproducible testing.
     #[cfg(test)]
     pub fn with_test_principals() -> Self {
         let resolver = Self::new();
 
-        // These registrations should not fail in a new resolver
         let _ = resolver.register_principal(
             "test_superadmin_fingerprint".into(),
             PrincipalRole::SuperAdmin,
@@ -150,12 +49,10 @@ impl LocalPrincipalResolver {
         resolver
     }
 
-    /// Get the count of registered principals (for monitoring).
     pub fn principal_count(&self) -> usize {
         self.principal_store.len()
     }
 
-    /// Get all registered fingerprints (for audit).
     pub fn fingerprints(&self) -> Vec<String> {
         self.principal_store
             .iter()
@@ -223,7 +120,6 @@ impl PrincipalResolver for LocalPrincipalResolver {
                 )
             })?;
 
-        // Centralized pure-core derivation: resolver remains only the store/lookup boundary.
         let principal_id = PrincipalId::from_certificate_fingerprint(&principal_fingerprint)?;
         let session_token = SessionToken::from_certificate_fingerprint(&principal_fingerprint);
         let principal = Principal::new(principal_id, role, session_token, principal_fingerprint)
@@ -459,7 +355,6 @@ mod tests {
             .resolve(fingerprint)
             .expect("resolve should succeed");
 
-        // Verify permissions are correctly loaded from role
         assert!(principal.has_permission(&andromeda_core::Permission::AuditRead));
     }
 

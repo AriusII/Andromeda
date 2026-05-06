@@ -45,7 +45,8 @@ pub use gc::mvcc_eligibility::{
     VersionEligibility, VersionEligibilityChecker, VersionEligibilityStats, VersionRecord,
 };
 pub use gc::reclamation::{
-    ReclamationCommand, ReclamationEligibility, ReclamationMark, ReclamationStats,
+    ReclamationCommand, ReclamationEligibility, ReclamationMark, ReclamationMarkCandidate,
+    ReclamationStats,
 };
 pub use gc::{
     GcEligibilityChecker, GcSchedulerExit, GcSchedulerExitReason, GcSchedulerHandle,

@@ -2,8 +2,8 @@
 
 //! Regression guard for WAL/storage canonical ownership.
 //!
-//! Wave 1 Agent 2 consolidated WAL types so each load-bearing struct/enum is
-//! defined in exactly one source file. This test walks every `.rs` file under
+//! Each load-bearing WAL struct/enum is defined in exactly one source file.
+//! This test walks every `.rs` file under
 //! `crates/andromeda-storage/src/`, counts top-level `pub struct` / `pub enum`
 //! declarations for the WAL ownership surface, and asserts:
 //!

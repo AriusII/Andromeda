@@ -5,12 +5,7 @@ use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const ALLOWED_PRE_EXISTING_ORPHANS: &[&str] = &[
-    // CLI scratch and legacy facades scheduled for cleanup.
-    "crates/andromeda-cli/src/cmd_mod.rs",
-    // Legacy all-in-one policy module superseded by hardware_* modules in lib.rs.
-    "crates/andromeda-core/src/policy.rs",
-];
+const ALLOWED_PRE_EXISTING_ORPHANS: &[&str] = &[];
 
 const FORBIDDEN_PRODUCTION_EDGES: &[(&str, &str)] = &[
     ("andromeda-tx", "andromeda-storage"),
@@ -40,9 +35,10 @@ const FORBIDDEN_CATALOG_PRODUCTION_DEPS: &[&str] = &[
 ];
 
 #[test]
-fn orphan_guard_finds_no_new_uncompiled_duplicates_under_crates_src() {
+fn orphan_guard_finds_no_new_active_rust_orphans_or_module_conflicts() {
     let workspace = workspace_root();
-    let observed = collect_orphan_sources(&workspace);
+    let report = collect_active_rust_sources(&workspace);
+    let observed = report.orphans(&workspace);
     let allowed = ALLOWED_PRE_EXISTING_ORPHANS
         .iter()
         .map(|path| (*path).to_string())
@@ -50,15 +46,65 @@ fn orphan_guard_finds_no_new_uncompiled_duplicates_under_crates_src() {
     let new_orphans = observed.difference(&allowed).collect::<Vec<_>>();
 
     assert!(
-        new_orphans.is_empty(),
-        "new orphan Rust source files detected under crates/*/src; wire them \
-         through lib.rs/main.rs or justify them in ALLOWED_PRE_EXISTING_ORPHANS:\n  - {}",
+        new_orphans.is_empty() && report.module_conflicts.is_empty(),
+        "active Rust source inventory violations detected.\n\
+         New orphan files must be wired through a Cargo root, mod/#[path], or include!, \
+         or justified in ALLOWED_PRE_EXISTING_ORPHANS. Module conflicts must remove either \
+         foo.rs or foo/mod.rs for the same declared module.\n\
+         \nNew orphans:\n  - {}\n\nModule file conflicts:\n  - {}",
         new_orphans
             .iter()
             .map(|path| path.as_str())
             .collect::<Vec<_>>()
+            .join("\n  - "),
+        report
+            .module_conflicts
+            .iter()
+            .map(|conflict| conflict.as_str())
+            .collect::<Vec<_>>()
             .join("\n  - ")
     );
+}
+
+#[test]
+fn active_rust_inventory_accounts_for_build_scripts_fuzz_targets_and_exclusions() {
+    let workspace = workspace_root();
+    let report = collect_active_rust_sources(&workspace);
+    let roots = report
+        .roots
+        .iter()
+        .map(|path| workspace_relative_path(&workspace, path))
+        .collect::<BTreeSet<_>>();
+
+    assert!(
+        roots.contains("crates/andromeda-proto/build.rs"),
+        "active inventory must include crate build scripts"
+    );
+    for fuzz_target in collect_direct_rs_files(&workspace.join("fuzz").join("fuzz_targets")) {
+        let fuzz_target = workspace_relative_path(&workspace, &fuzz_target);
+        assert!(
+            roots.contains(&fuzz_target),
+            "active inventory must include fuzz target root {fuzz_target}"
+        );
+    }
+    assert!(
+        roots
+            .iter()
+            .all(|path| !is_ignored_inventory_relative_path(path)),
+        "active inventory roots must exclude target, fuzz/target, and .claude/worktrees paths"
+    );
+
+    for ignored in [
+        "target/generated.rs",
+        "fuzz/target/generated.rs",
+        ".claude/worktrees/wave/src/lib.rs",
+        "crates/andromeda-cli/target/debug/build.rs",
+    ] {
+        assert!(
+            is_ignored_inventory_relative_path(ignored),
+            "inventory exclusion should ignore {ignored}"
+        );
+    }
 }
 
 #[test]
@@ -177,6 +223,79 @@ fn orphan_guard_inline_mod_block_does_not_consume_a_file() {
     assert_eq!(compute_orphans_from_virtual_crate(&files), expected);
 }
 
+#[test]
+fn orphan_guard_file_module_reaches_sibling_directory_modules() {
+    let mut files = BTreeMap::new();
+    files.insert("src/lib.rs".to_string(), "mod file;\n".to_string());
+    files.insert("src/file.rs".to_string(), "mod child;\n".to_string());
+    files.insert("src/file/child.rs".to_string(), String::new());
+    files.insert("src/file/orphan.rs".to_string(), String::new());
+
+    let expected = ["src/file/orphan.rs"]
+        .into_iter()
+        .map(String::from)
+        .collect::<BTreeSet<_>>();
+
+    assert_eq!(compute_orphans_from_virtual_crate(&files), expected);
+}
+
+#[test]
+fn orphan_guard_include_macro_counts_literal_rust_source() {
+    let mut files = BTreeMap::new();
+    files.insert(
+        "src/lib.rs".to_string(),
+        "include!(\"generated/included.rs\");\n".to_string(),
+    );
+    files.insert("src/generated/included.rs".to_string(), String::new());
+
+    assert!(compute_orphans_from_virtual_crate(&files).is_empty());
+}
+
+#[test]
+fn orphan_guard_detects_synthetic_file_vs_mod_rs_conflict() {
+    let mut files = BTreeMap::new();
+    files.insert("src/lib.rs".to_string(), "mod optimizer;\n".to_string());
+    files.insert("src/optimizer.rs".to_string(), String::new());
+    files.insert("src/optimizer/mod.rs".to_string(), String::new());
+
+    let expected =
+        ["src/lib.rs: mod optimizer resolves to both src/optimizer.rs and src/optimizer/mod.rs"]
+            .into_iter()
+            .map(String::from)
+            .collect::<BTreeSet<_>>();
+
+    assert_eq!(
+        compute_module_conflicts_from_virtual_crate(&files),
+        expected
+    );
+}
+
+#[test]
+fn orphan_guard_path_attribute_resolves_from_declaring_file_directory() {
+    let mut files = BTreeMap::new();
+    files.insert("src/lib.rs".to_string(), "mod manager;\n".to_string());
+    files.insert(
+        "src/manager.rs".to_string(),
+        "mod manager_core;\n".to_string(),
+    );
+    files.insert(
+        "src/manager/manager_core.rs".to_string(),
+        "#[cfg(test)]\n#[path = \"tests.rs\"]\nmod tests;\n".to_string(),
+    );
+    files.insert("src/manager/tests.rs".to_string(), String::new());
+    files.insert(
+        "src/manager/manager_core/tests.rs".to_string(),
+        String::new(),
+    );
+
+    let expected = ["src/manager/manager_core/tests.rs"]
+        .into_iter()
+        .map(String::from)
+        .collect::<BTreeSet<_>>();
+
+    assert_eq!(compute_orphans_from_virtual_crate(&files), expected);
+}
+
 fn workspace_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
@@ -184,23 +303,179 @@ fn workspace_root() -> PathBuf {
         .expect("workspace root resolves")
 }
 
-fn collect_orphan_sources(workspace: &Path) -> BTreeSet<String> {
-    let mut orphans = BTreeSet::new();
+#[derive(Debug, Default)]
+struct RustSourceReport {
+    active: BTreeSet<PathBuf>,
+    roots: BTreeSet<PathBuf>,
+    reachable: BTreeSet<PathBuf>,
+    module_conflicts: BTreeSet<String>,
+}
+
+impl RustSourceReport {
+    fn orphans(&self, workspace: &Path) -> BTreeSet<String> {
+        self.active
+            .difference(&self.reachable)
+            .map(|path| workspace_relative_path(workspace, path))
+            .collect()
+    }
+}
+
+fn collect_active_rust_sources(workspace: &Path) -> RustSourceReport {
+    let mut report = RustSourceReport::default();
+
+    for package_dir in collect_rust_package_dirs(workspace) {
+        report
+            .active
+            .extend(collect_active_rs_files(workspace, &package_dir));
+
+        let roots = collect_cargo_target_roots(&package_dir);
+        report.roots.extend(roots.iter().cloned());
+        for root in roots {
+            visit_module_file(&root, &mut report.reachable, &mut report.module_conflicts);
+        }
+    }
+
+    report
+}
+
+fn collect_rust_package_dirs(workspace: &Path) -> Vec<PathBuf> {
+    let mut package_dirs = Vec::new();
     for entry in fs::read_dir(workspace.join("crates")).expect("read crates directory") {
         let crate_dir = entry.expect("read crate directory entry").path();
-        let src_dir = crate_dir.join("src");
-        if !src_dir.is_dir() {
+        if crate_dir.join("Cargo.toml").is_file() {
+            package_dirs.push(crate_dir);
+        }
+    }
+
+    let fuzz_dir = workspace.join("fuzz");
+    if fuzz_dir.join("Cargo.toml").is_file() {
+        package_dirs.push(fuzz_dir);
+    }
+
+    package_dirs
+}
+
+fn collect_active_rs_files(workspace: &Path, package_dir: &Path) -> BTreeSet<PathBuf> {
+    let mut files = BTreeSet::new();
+    walk_inventory(package_dir, workspace, &mut |path| {
+        if path.extension() == Some(OsStr::new("rs"))
+            && is_active_rust_source_candidate(package_dir, path)
+        {
+            files.insert(path.to_path_buf());
+        }
+    });
+    files
+}
+
+fn is_active_rust_source_candidate(package_dir: &Path, path: &Path) -> bool {
+    let relative = package_relative_path(package_dir, path);
+    relative == "build.rs"
+        || relative.starts_with("src/")
+        || relative.starts_with("tests/")
+        || relative.starts_with("benches/")
+        || relative.starts_with("examples/")
+        || relative.starts_with("fuzz_targets/")
+}
+
+fn collect_cargo_target_roots(package_dir: &Path) -> BTreeSet<PathBuf> {
+    let manifest_path = package_dir.join("Cargo.toml");
+    let manifest = fs::read_to_string(&manifest_path)
+        .unwrap_or_else(|err| panic!("read {}: {err}", manifest_path.display()));
+    let declared = parse_manifest_target_paths(&manifest);
+    let mut roots = BTreeSet::new();
+
+    match declared.build_script {
+        Some(Some(path)) => add_if_file(&mut roots, package_dir.join(path)),
+        Some(None) => {}
+        None => add_if_file(&mut roots, package_dir.join("build.rs")),
+    }
+    for path in declared.explicit_source_paths {
+        add_if_file(&mut roots, package_dir.join(path));
+    }
+
+    add_if_file(&mut roots, package_dir.join("src").join("lib.rs"));
+    add_if_file(&mut roots, package_dir.join("src").join("main.rs"));
+    add_cargo_convention_roots(&mut roots, &package_dir.join("src").join("bin"));
+    add_cargo_convention_roots(&mut roots, &package_dir.join("tests"));
+    add_cargo_convention_roots(&mut roots, &package_dir.join("benches"));
+    add_cargo_convention_roots(&mut roots, &package_dir.join("examples"));
+    add_cargo_convention_roots(&mut roots, &package_dir.join("fuzz_targets"));
+
+    roots
+}
+
+#[derive(Debug, Default)]
+struct ManifestTargetPaths {
+    explicit_source_paths: BTreeSet<String>,
+    build_script: Option<Option<String>>,
+}
+
+fn parse_manifest_target_paths(text: &str) -> ManifestTargetPaths {
+    let mut paths = ManifestTargetPaths::default();
+    let mut section = String::new();
+
+    for line in text.lines() {
+        let trimmed = strip_toml_comment(line).trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if trimmed.starts_with("[[") && trimmed.ends_with("]]") {
+            section = trimmed.trim_matches(&['[', ']'][..]).to_string();
+            continue;
+        }
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            section = trimmed.trim_matches(&['[', ']'][..]).to_string();
             continue;
         }
 
-        let reachable = compute_reachable(&src_dir);
-        for path in collect_rs_files(&src_dir) {
-            if !reachable.contains(&path) {
-                orphans.insert(workspace_relative_path(workspace, &path));
-            }
+        let Some((key, value)) = trimmed.split_once('=') else {
+            continue;
+        };
+        let key = key.trim();
+        let value = value.trim();
+
+        if section == "package" && key == "build" {
+            paths.build_script = if value == "false" {
+                Some(None)
+            } else {
+                Some(Some(unquote(value).replace('\\', "/")))
+            };
+        } else if key == "path"
+            && matches!(
+                section.as_str(),
+                "lib" | "bin" | "test" | "bench" | "example"
+            )
+        {
+            paths
+                .explicit_source_paths
+                .insert(unquote(value).replace('\\', "/"));
         }
     }
-    orphans
+
+    paths
+}
+
+fn add_cargo_convention_roots(roots: &mut BTreeSet<PathBuf>, directory: &Path) {
+    let Ok(entries) = fs::read_dir(directory) else {
+        return;
+    };
+    for entry in entries {
+        let Ok(entry) = entry else {
+            continue;
+        };
+        let path = entry.path();
+        if path.is_dir() {
+            add_if_file(roots, path.join("main.rs"));
+        } else if path.extension() == Some(OsStr::new("rs")) {
+            roots.insert(path);
+        }
+    }
+}
+
+fn add_if_file(files: &mut BTreeSet<PathBuf>, path: PathBuf) {
+    if path.is_file() {
+        files.insert(path);
+    }
 }
 
 #[derive(Debug, Default)]
@@ -240,12 +515,14 @@ fn package_name_from_manifest(text: &str) -> Option<String> {
             section = trimmed.trim_matches(&['[', ']'][..]).to_string();
             continue;
         }
-        if section == "package" {
-            if let Some((key, value)) = trimmed.split_once('=') {
-                if key.trim() == "name" {
-                    return Some(unquote(value.trim()).to_string());
-                }
-            }
+        if section != "package" {
+            continue;
+        }
+        let Some((key, value)) = trimmed.split_once('=') else {
+            continue;
+        };
+        if key.trim() == "name" {
+            return Some(unquote(value.trim()).to_string());
         }
     }
     None
@@ -390,17 +667,28 @@ fn unquote(value: &str) -> &str {
         .unwrap_or(value)
 }
 
-fn collect_rs_files(src_dir: &Path) -> BTreeSet<PathBuf> {
+fn collect_direct_rs_files(dir: &Path) -> BTreeSet<PathBuf> {
     let mut files = BTreeSet::new();
-    walk(src_dir, &mut |path| {
-        if path.extension() == Some(OsStr::new("rs")) {
-            files.insert(path.to_path_buf());
+    let Ok(entries) = fs::read_dir(dir) else {
+        return files;
+    };
+    for entry in entries {
+        let Ok(entry) = entry else {
+            continue;
+        };
+        let path = entry.path();
+        if path.is_file() && path.extension() == Some(OsStr::new("rs")) {
+            files.insert(path);
         }
-    });
+    }
     files
 }
 
-fn walk(dir: &Path, visit: &mut dyn FnMut(&Path)) {
+fn walk_inventory(dir: &Path, workspace: &Path, visit: &mut dyn FnMut(&Path)) {
+    if is_ignored_inventory_path(workspace, dir) {
+        return;
+    }
+
     let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
@@ -410,25 +698,18 @@ fn walk(dir: &Path, visit: &mut dyn FnMut(&Path)) {
         };
         let path = entry.path();
         if path.is_dir() {
-            walk(&path, visit);
-        } else {
+            walk_inventory(&path, workspace, visit);
+        } else if !is_ignored_inventory_path(workspace, &path) {
             visit(&path);
         }
     }
 }
 
-fn compute_reachable(src_dir: &Path) -> BTreeSet<PathBuf> {
-    let mut reachable = BTreeSet::new();
-    for root in ["lib.rs", "main.rs"] {
-        let path = src_dir.join(root);
-        if path.is_file() {
-            visit_module_file(&path, &mut reachable);
-        }
-    }
-    reachable
-}
-
-fn visit_module_file(path: &Path, reachable: &mut BTreeSet<PathBuf>) {
+fn visit_module_file(
+    path: &Path,
+    reachable: &mut BTreeSet<PathBuf>,
+    module_conflicts: &mut BTreeSet<String>,
+) {
     if !reachable.insert(path.to_path_buf()) {
         return;
     }
@@ -436,15 +717,40 @@ fn visit_module_file(path: &Path, reachable: &mut BTreeSet<PathBuf>) {
     let Ok(text) = fs::read_to_string(path) else {
         return;
     };
-    let child_dir = child_dir_for(path);
-    for name in extract_file_mod_decls(&strip_comments(&text)) {
-        let as_file = child_dir.join(format!("{name}.rs"));
-        let as_mod = child_dir.join(&name).join("mod.rs");
-        if as_file.is_file() {
-            visit_module_file(&as_file, reachable);
+    let active_source = strip_comments(&text);
+    let parent = path.parent().expect("module file has parent");
+    for include_path in extract_include_paths(&active_source) {
+        let explicit_path = parent.join(include_path);
+        if explicit_path.is_file() {
+            visit_module_file(&explicit_path, reachable, module_conflicts);
         }
-        if as_mod.is_file() {
-            visit_module_file(&as_mod, reachable);
+    }
+
+    let child_dir = child_dir_for(path);
+    for decl in extract_file_mod_decls(&active_source) {
+        if let Some(path_override) = decl.path_override {
+            let explicit_path = parent.join(path_override);
+            if explicit_path.is_file() {
+                visit_module_file(&explicit_path, reachable, module_conflicts);
+            }
+        } else {
+            let as_file = child_dir.join(format!("{}.rs", decl.name));
+            let as_mod = child_dir.join(&decl.name).join("mod.rs");
+            if as_file.is_file() && as_mod.is_file() {
+                module_conflicts.insert(format!(
+                    "{}: mod {} resolves to both {} and {}",
+                    path.display(),
+                    decl.name,
+                    as_file.display(),
+                    as_mod.display()
+                ));
+            }
+            if as_file.is_file() {
+                visit_module_file(&as_file, reachable, module_conflicts);
+            }
+            if as_mod.is_file() {
+                visit_module_file(&as_mod, reachable, module_conflicts);
+            }
         }
     }
 }
@@ -459,22 +765,80 @@ fn child_dir_for(path: &Path) -> PathBuf {
     }
 }
 
-fn extract_file_mod_decls(source: &str) -> Vec<String> {
-    source
-        .lines()
-        .filter_map(|line| {
-            let line = strip_visibility(line.trim_start());
-            let rest = line.strip_prefix("mod ")?.trim_start();
-            let ident_end = rest
-                .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
-                .unwrap_or(rest.len());
-            if ident_end == 0 {
-                return None;
-            }
-            let (name, tail) = rest.split_at(ident_end);
-            tail.trim_start().starts_with(';').then(|| name.to_string())
-        })
-        .collect()
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ModuleDecl {
+    name: String,
+    path_override: Option<String>,
+}
+
+fn extract_file_mod_decls(source: &str) -> Vec<ModuleDecl> {
+    let mut decls = Vec::new();
+    let mut pending_path_override = None;
+
+    for raw_line in source.lines() {
+        let line = raw_line.trim_start();
+        if let Some(path_override) = parse_path_attribute(line) {
+            pending_path_override = Some(path_override);
+            continue;
+        }
+        if line.starts_with("#[") || line.is_empty() {
+            continue;
+        }
+
+        let line = strip_visibility(line);
+        let Some(rest) = line.strip_prefix("mod ").map(str::trim_start) else {
+            pending_path_override = None;
+            continue;
+        };
+        let ident_end = rest
+            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+            .unwrap_or(rest.len());
+        if ident_end == 0 {
+            pending_path_override = None;
+            continue;
+        }
+        let (name, tail) = rest.split_at(ident_end);
+        if tail.trim_start().starts_with(';') {
+            decls.push(ModuleDecl {
+                name: name.to_string(),
+                path_override: pending_path_override.take(),
+            });
+        } else {
+            pending_path_override = None;
+        }
+    }
+
+    decls
+}
+
+fn parse_path_attribute(line: &str) -> Option<String> {
+    let rest = line.strip_prefix("#[")?.trim_start();
+    let rest = rest.strip_prefix("path")?.trim_start();
+    let rest = rest.strip_prefix('=')?.trim_start();
+    let rest = rest.strip_prefix('"')?;
+    let end = rest.find('"')?;
+    Some(rest[..end].replace('\\', "/"))
+}
+
+fn extract_include_paths(source: &str) -> Vec<String> {
+    let mut paths = Vec::new();
+    for line in source.lines() {
+        let Some(index) = line.find("include!") else {
+            continue;
+        };
+        let rest = line[index + "include!".len()..].trim_start();
+        let Some(rest) = rest.strip_prefix('(').map(str::trim_start) else {
+            continue;
+        };
+        let Some(rest) = rest.strip_prefix('"') else {
+            continue;
+        };
+        let Some(end) = rest.find('"') else {
+            continue;
+        };
+        paths.push(rest[..end].replace('\\', "/"));
+    }
+    paths
 }
 
 fn strip_visibility(line: &str) -> &str {
@@ -482,10 +846,11 @@ fn strip_visibility(line: &str) -> &str {
         return line;
     };
     let rest = rest.trim_start();
-    if let Some(scoped) = rest.strip_prefix('(') {
-        if let Some(close) = scoped.find(')') {
-            return scoped[close + 1..].trim_start();
-        }
+    if let Some((scoped, close)) = rest
+        .strip_prefix('(')
+        .and_then(|scoped| scoped.find(')').map(|close| (scoped, close)))
+    {
+        return scoped[close + 1..].trim_start();
     }
     rest
 }
@@ -526,6 +891,20 @@ fn strip_comments(source: &str) -> String {
     out
 }
 
+fn is_ignored_inventory_path(workspace: &Path, path: &Path) -> bool {
+    is_ignored_inventory_relative_path(&workspace_relative_path(workspace, path))
+}
+
+fn is_ignored_inventory_relative_path(path: &str) -> bool {
+    path == "target"
+        || path.starts_with("target/")
+        || path.ends_with("/target")
+        || path.contains("/target/")
+        || path == ".claude/worktrees"
+        || path.starts_with(".claude/worktrees/")
+        || path.contains("/.claude/worktrees/")
+}
+
 fn workspace_relative_path(workspace: &Path, path: &Path) -> String {
     let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let workspace = workspace
@@ -538,11 +917,15 @@ fn workspace_relative_path(workspace: &Path, path: &Path) -> String {
         .replace('\\', "/")
 }
 
+fn package_relative_path(package_dir: &Path, path: &Path) -> String {
+    path.strip_prefix(package_dir)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
 fn compute_orphans_from_virtual_crate(files: &BTreeMap<String, String>) -> BTreeSet<String> {
-    let mut reachable = BTreeSet::new();
-    for root in ["src/lib.rs", "src/main.rs"] {
-        visit_virtual_module(root, files, &mut reachable);
-    }
+    let (reachable, _) = compute_virtual_reachability(files);
     files
         .keys()
         .filter(|path| path.ends_with(".rs") && !reachable.contains(*path))
@@ -550,10 +933,29 @@ fn compute_orphans_from_virtual_crate(files: &BTreeMap<String, String>) -> BTree
         .collect()
 }
 
+fn compute_module_conflicts_from_virtual_crate(
+    files: &BTreeMap<String, String>,
+) -> BTreeSet<String> {
+    let (_, module_conflicts) = compute_virtual_reachability(files);
+    module_conflicts
+}
+
+fn compute_virtual_reachability(
+    files: &BTreeMap<String, String>,
+) -> (BTreeSet<String>, BTreeSet<String>) {
+    let mut reachable = BTreeSet::new();
+    let mut module_conflicts = BTreeSet::new();
+    for root in ["src/lib.rs", "src/main.rs"] {
+        visit_virtual_module(root, files, &mut reachable, &mut module_conflicts);
+    }
+    (reachable, module_conflicts)
+}
+
 fn visit_virtual_module(
     path: &str,
     files: &BTreeMap<String, String>,
     reachable: &mut BTreeSet<String>,
+    module_conflicts: &mut BTreeSet<String>,
 ) {
     let Some(text) = files.get(path) else {
         return;
@@ -563,12 +965,35 @@ fn visit_virtual_module(
     }
 
     let base = virtual_child_dir_for(path);
-    for name in extract_file_mod_decls(&strip_comments(text)) {
-        let as_file = virtual_join(&base, &format!("{name}.rs"));
-        let as_mod = virtual_join(&virtual_join(&base, &name), "mod.rs");
-        visit_virtual_module(&as_file, files, reachable);
-        visit_virtual_module(&as_mod, files, reachable);
+    let parent = virtual_parent_dir_for(path);
+    let active_source = strip_comments(text);
+    for include_path in extract_include_paths(&active_source) {
+        let explicit_path = virtual_join(&parent, &include_path);
+        visit_virtual_module(&explicit_path, files, reachable, module_conflicts);
     }
+    for decl in extract_file_mod_decls(&active_source) {
+        if let Some(path_override) = decl.path_override {
+            let explicit_path = virtual_join(&parent, &path_override);
+            visit_virtual_module(&explicit_path, files, reachable, module_conflicts);
+        } else {
+            let as_file = virtual_join(&base, &format!("{}.rs", decl.name));
+            let as_mod = virtual_join(&virtual_join(&base, &decl.name), "mod.rs");
+            if files.contains_key(&as_file) && files.contains_key(&as_mod) {
+                module_conflicts.insert(format!(
+                    "{path}: mod {} resolves to both {as_file} and {as_mod}",
+                    decl.name
+                ));
+            }
+            visit_virtual_module(&as_file, files, reachable, module_conflicts);
+            visit_virtual_module(&as_mod, files, reachable, module_conflicts);
+        }
+    }
+}
+
+fn virtual_parent_dir_for(path: &str) -> String {
+    path.rsplit_once('/')
+        .map(|(dir, _)| dir.to_string())
+        .unwrap_or_default()
 }
 
 fn virtual_child_dir_for(path: &str) -> String {

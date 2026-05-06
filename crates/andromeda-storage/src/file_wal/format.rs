@@ -70,20 +70,20 @@ fn encode_file_wal_header(header: &FileWalHeader) -> [u8; FILE_WAL_HEADER_LEN] {
 }
 
 fn decode_file_wal_header(bytes: &[u8; FILE_WAL_HEADER_LEN]) -> AndromedaResult<FileWalHeader> {
-    let base_previous_lsn = read_u64(bytes, 32);
+    let base_previous_lsn = read_u64(bytes, 32)?;
     let header = FileWalHeader {
-        magic: read_u64(bytes, 0),
-        format_version: read_u16(bytes, 8),
-        byte_order: read_u16(bytes, 10),
-        header_length: read_u32(bytes, 12),
-        segment_id: read_u64(bytes, 16),
-        first_lsn: Lsn::new(read_u64(bytes, 24)),
+        magic: read_u64(bytes, 0)?,
+        format_version: read_u16(bytes, 8)?,
+        byte_order: read_u16(bytes, 10)?,
+        header_length: read_u32(bytes, 12)?,
+        segment_id: read_u64(bytes, 16)?,
+        first_lsn: Lsn::new(read_u64(bytes, 24)?),
         base_previous_lsn: (base_previous_lsn != 0).then_some(Lsn::new(base_previous_lsn)),
-        durable_lsn: Lsn::new(read_u64(bytes, 40)),
-        durable_bytes: read_u64(bytes, 48),
-        durable_record_count: read_u64(bytes, 56),
-        header_checksum: read_u64(bytes, 64),
-        reserved: read_u64(bytes, 72),
+        durable_lsn: Lsn::new(read_u64(bytes, 40)?),
+        durable_bytes: read_u64(bytes, 48)?,
+        durable_record_count: read_u64(bytes, 56)?,
+        header_checksum: read_u64(bytes, 64)?,
+        reserved: read_u64(bytes, 72)?,
     };
     header.validate()?;
     Ok(header)
@@ -113,28 +113,43 @@ fn write_u64(bytes: &mut [u8], offset: usize, value: u64) {
     bytes[offset..offset + 8].copy_from_slice(&value.to_le_bytes());
 }
 
-fn read_u16(bytes: &[u8], offset: usize) -> u16 {
-    u16::from_le_bytes(
-        bytes[offset..offset + 2]
-            .try_into()
-            .expect("file WAL u16 slice"),
-    )
+fn read_u16(bytes: &[u8; FILE_WAL_HEADER_LEN], offset: usize) -> AndromedaResult<u16> {
+    Ok(u16::from_le_bytes(read_array(
+        bytes,
+        offset,
+        "file WAL u16 header field out of bounds",
+    )?))
 }
 
-fn read_u32(bytes: &[u8], offset: usize) -> u32 {
-    u32::from_le_bytes(
-        bytes[offset..offset + 4]
-            .try_into()
-            .expect("file WAL u32 slice"),
-    )
+fn read_u32(bytes: &[u8; FILE_WAL_HEADER_LEN], offset: usize) -> AndromedaResult<u32> {
+    Ok(u32::from_le_bytes(read_array(
+        bytes,
+        offset,
+        "file WAL u32 header field out of bounds",
+    )?))
 }
 
-fn read_u64(bytes: &[u8], offset: usize) -> u64 {
-    u64::from_le_bytes(
-        bytes[offset..offset + 8]
-            .try_into()
-            .expect("file WAL u64 slice"),
-    )
+fn read_u64(bytes: &[u8; FILE_WAL_HEADER_LEN], offset: usize) -> AndromedaResult<u64> {
+    Ok(u64::from_le_bytes(read_array(
+        bytes,
+        offset,
+        "file WAL u64 header field out of bounds",
+    )?))
+}
+
+fn read_array<const N: usize>(
+    bytes: &[u8; FILE_WAL_HEADER_LEN],
+    offset: usize,
+    error_message: &'static str,
+) -> AndromedaResult<[u8; N]> {
+    let end = offset
+        .checked_add(N)
+        .ok_or_else(|| storage_error(error_message))?;
+    bytes
+        .get(offset..end)
+        .ok_or_else(|| storage_error(error_message))?
+        .try_into()
+        .map_err(|_| storage_error(error_message))
 }
 
 fn fnv64_nonzero(bytes: &[u8]) -> u64 {

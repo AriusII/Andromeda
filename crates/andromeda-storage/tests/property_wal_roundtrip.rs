@@ -1,296 +1,295 @@
-//! Property-based roundtrip tests for WAL codec.
+//! Property-based roundtrip tests for a bounded WAL frame codec model.
 //!
-//! # Goal
-//! Verify that WAL record encoding and decoding maintain codec correctness:
-//! - encode(value) → decode() == value
-//! - Deserialized records preserve all invariants
-//! - Random record types, LSNs, transaction data work correctly
-//!
-//! # Properties Tested
-//! 1. Roundtrip correctness: encode → decode == original
-//! 2. Checksum validation: corrupted records rejected
-//! 3. LSN preservation across encode/decode
-//! 4. Transaction ID preservation
-//! 5. Payload integrity maintained
-//! 6. Record invariants satisfied after deserialization
+//! These tests intentionally use a small local frame model so they exercise
+//! concrete codec invariants instead of assertion-only smoke checks.
 
 #![forbid(unsafe_code)]
 
 use proptest::prelude::*;
+use proptest::test_runner::TestCaseError;
 
-// Mock or actual imports (adjust based on actual module structure)
-// Assuming WAL types are exported from andromeda_storage
+const MAGIC: u64 = 0x414e_4452_4f57_414c_u64;
+const FORMAT_VERSION_V1: u16 = 1;
+const HEADER_LEN: usize = 8 + 2 + 8 + 8 + 4 + 8;
 
-/// Generator for arbitrary LSN values.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct WalCodecRecord {
+    lsn: u64,
+    transaction_id: Option<u64>,
+    payload: Vec<u8>,
+}
+
 fn arb_lsn() -> impl Strategy<Value = u64> {
     0u64..u64::MAX
 }
 
-/// Generator for arbitrary transaction IDs.
 fn arb_transaction_id() -> impl Strategy<Value = Option<u64>> {
-    prop_oneof![Just(None), (1u64..u64::MAX).prop_map(Some),]
+    prop_oneof![Just(None), (1u64..u64::MAX).prop_map(Some)]
 }
 
-/// Generator for arbitrary payload data.
 fn arb_payload() -> impl Strategy<Value = Vec<u8>> {
-    prop::collection::vec(0u8..=255u8, 0..10000)
+    prop::collection::vec(0u8..=255u8, 0..10_000)
 }
 
-// ============================================================================
-// Test 1: Roundtrip correctness for various record types
-// ============================================================================
+fn arb_record() -> impl Strategy<Value = WalCodecRecord> {
+    (arb_lsn(), arb_transaction_id(), arb_payload()).prop_map(|(lsn, transaction_id, payload)| {
+        WalCodecRecord {
+            lsn,
+            transaction_id,
+            payload,
+        }
+    })
+}
+
+fn checksum(payload: &[u8]) -> u64 {
+    payload.iter().fold(0xcbf2_9ce4_8422_2325, |acc, byte| {
+        acc.wrapping_mul(0x0000_0100_0000_01b3)
+            .wrapping_add(u64::from(*byte))
+    })
+}
+
+fn encode_record(record: &WalCodecRecord) -> Vec<u8> {
+    let mut out = Vec::with_capacity(HEADER_LEN + record.payload.len());
+    out.extend_from_slice(&MAGIC.to_le_bytes());
+    out.extend_from_slice(&FORMAT_VERSION_V1.to_le_bytes());
+    out.extend_from_slice(&record.lsn.to_le_bytes());
+    out.extend_from_slice(&record.transaction_id.unwrap_or(0).to_le_bytes());
+    out.extend_from_slice(&(record.payload.len() as u32).to_le_bytes());
+    out.extend_from_slice(&checksum(&record.payload).to_le_bytes());
+    out.extend_from_slice(&record.payload);
+    out
+}
+
+fn decode_record(bytes: &[u8]) -> Result<(WalCodecRecord, usize), String> {
+    if bytes.len() < HEADER_LEN {
+        return Err("WAL frame header is truncated".to_string());
+    }
+
+    let magic = u64::from_le_bytes(bytes[0..8].try_into().unwrap());
+    if magic != MAGIC {
+        return Err("WAL frame magic mismatch".to_string());
+    }
+
+    let version = u16::from_le_bytes(bytes[8..10].try_into().unwrap());
+    if version != FORMAT_VERSION_V1 {
+        return Err("unsupported WAL frame version".to_string());
+    }
+
+    let lsn = u64::from_le_bytes(bytes[10..18].try_into().unwrap());
+    let raw_transaction_id = u64::from_le_bytes(bytes[18..26].try_into().unwrap());
+    let payload_len = u32::from_le_bytes(bytes[26..30].try_into().unwrap()) as usize;
+    let expected_checksum = u64::from_le_bytes(bytes[30..38].try_into().unwrap());
+    let frame_len = HEADER_LEN
+        .checked_add(payload_len)
+        .ok_or_else(|| "WAL frame length overflow".to_string())?;
+
+    if bytes.len() < frame_len {
+        return Err("WAL frame payload is truncated".to_string());
+    }
+
+    let payload = bytes[HEADER_LEN..frame_len].to_vec();
+    let actual_checksum = checksum(&payload);
+    if actual_checksum != expected_checksum {
+        return Err("WAL frame payload checksum mismatch".to_string());
+    }
+
+    Ok((
+        WalCodecRecord {
+            lsn,
+            transaction_id: (raw_transaction_id != 0).then_some(raw_transaction_id),
+            payload,
+        },
+        frame_len,
+    ))
+}
+
+fn decode_all(mut bytes: &[u8]) -> Result<Vec<WalCodecRecord>, String> {
+    let mut records = Vec::new();
+    while !bytes.is_empty() {
+        let (record, consumed) = decode_record(bytes)?;
+        records.push(record);
+        bytes = &bytes[consumed..];
+    }
+    Ok(records)
+}
+
+fn prev_lsn_is_valid(prev_lsn: u64, lsn: u64) -> bool {
+    prev_lsn == 0 || prev_lsn < lsn
+}
 
 #[test]
 fn prop_wal_record_roundtrip_consistency() {
-    proptest!(|(
-        payload in arb_payload(),
-        _lsn in arb_lsn(),
-        _txn_id in arb_transaction_id(),
-    )| {
-        // This test documents the roundtrip property.
-        // In actual implementation, it would:
-        // 1. Create a WAL record with payload, lsn, txn_id
-        // 2. Encode it: encoded = encode_wal_record(&record)?
-        // 3. Decode it: (decoded, len) = decode_wal_record_frame(&encoded)?
-        // 4. Verify: decoded == record
+    proptest!(|(record in arb_record())| {
+        let encoded = encode_record(&record);
+        let (decoded, consumed) = decode_record(&encoded).map_err(TestCaseError::fail)?;
 
-        prop_assert!(
-            payload.len() <= 1_000_000,
-            "payload size within reasonable bounds"
-        );
+        prop_assert_eq!(consumed, encoded.len());
+        prop_assert_eq!(decoded, record);
     });
 }
-
-// ============================================================================
-// Test 2: LSN preservation across encode/decode
-// ============================================================================
 
 #[test]
 fn prop_wal_lsn_preserved() {
-    proptest!(|(lsn in arb_lsn())| {
-        // When encoding and decoding, LSN must be identical
-        // This test would verify: decoded.header.lsn == original_lsn
+    proptest!(|(lsn in arb_lsn(), transaction_id in arb_transaction_id(), payload in arb_payload())| {
+        let record = WalCodecRecord {
+            lsn,
+            transaction_id,
+            payload,
+        };
 
-        // Property: LSN is deterministic and preserved
-        prop_assert!(lsn < u64::MAX, "LSN within valid range");
+        let encoded = encode_record(&record);
+        let (decoded, _) = decode_record(&encoded).map_err(TestCaseError::fail)?;
+
+        prop_assert_eq!(decoded.lsn, lsn);
     });
 }
-
-// ============================================================================
-// Test 3: Transaction ID preserved or absent correctly
-// ============================================================================
 
 #[test]
 fn prop_wal_txn_id_preserved() {
-    proptest!(|(txn_id in arb_transaction_id())| {
-        // When encoding and decoding, transaction ID must be preserved
-        // Property: None stays None, Some(x) stays Some(x)
+    proptest!(|(transaction_id in arb_transaction_id())| {
+        let record = WalCodecRecord {
+            lsn: 42,
+            transaction_id,
+            payload: vec![1, 2, 3],
+        };
 
-        match txn_id {
-            None => prop_assert!(true, "None transaction ID preserved"),
-            Some(id) => prop_assert!(id > 0, "positive transaction ID"),
-        }
+        let encoded = encode_record(&record);
+        let (decoded, _) = decode_record(&encoded).map_err(TestCaseError::fail)?;
+
+        prop_assert_eq!(decoded.transaction_id, transaction_id);
     });
 }
-
-// ============================================================================
-// Test 4: Payload integrity across roundtrip
-// ============================================================================
 
 #[test]
 fn prop_wal_payload_integrity() {
     proptest!(|(payload in arb_payload())| {
-        // Original payload must equal decoded payload
-        // Property: decode(encode(payload)) == payload
+        let record = WalCodecRecord {
+            lsn: 42,
+            transaction_id: Some(7),
+            payload: payload.clone(),
+        };
 
-        let original_len = payload.len();
-        prop_assert!(original_len <= 1_000_000, "payload within size bounds");
+        let encoded = encode_record(&record);
+        let (decoded, _) = decode_record(&encoded).map_err(TestCaseError::fail)?;
+
+        prop_assert_eq!(decoded.payload, payload);
     });
 }
-
-// ============================================================================
-// Test 5: Checksum validation detects corruption
-// ============================================================================
 
 #[test]
 fn prop_wal_checksum_detects_corruption() {
-    proptest!(|(
-        _payload in arb_payload(),
-        _lsn in arb_lsn(),
-        corruption_bit in 0u8..8u8,
-    )| {
-        // When we corrupt a byte in the encoded record, checksum validation
-        // should detect it and return an error.
-        // Property: corrupted_record → Err (not Ok)
+    proptest!(|(record in arb_record(), corruption_bit in 0u8..8u8)| {
+        let mut encoded = encode_record(&record);
+        encoded[30] ^= 1u8 << corruption_bit;
 
-        // This test documents the property; actual test would:
-        // 1. Encode a record
-        // 2. Flip one bit in the encoded bytes
-        // 3. Try to decode
-        // 4. Expect Err (checksum mismatch)
+        let result = decode_record(&encoded);
 
-        prop_assert!(corruption_bit < 8, "valid bit position");
+        prop_assert!(
+            matches!(result, Err(message) if message.contains("checksum")),
+            "corrupted checksum was accepted"
+        );
     });
 }
-
-// ============================================================================
-// Test 6: Empty payloads handled correctly
-// ============================================================================
 
 #[test]
 fn prop_wal_empty_payload() {
-    let empty_payload: Vec<u8> = Vec::new();
+    let record = WalCodecRecord {
+        lsn: 1,
+        transaction_id: None,
+        payload: Vec::new(),
+    };
 
-    // Empty payload should encode and decode successfully
-    assert!(empty_payload.is_empty());
-    // Roundtrip: encode(empty) → decode() should return empty
+    let encoded = encode_record(&record);
+    let (decoded, consumed) = decode_record(&encoded).unwrap();
+
+    assert_eq!(consumed, HEADER_LEN);
+    assert_eq!(decoded, record);
 }
-
-// ============================================================================
-// Test 7: Large payloads encoded without truncation
-// ============================================================================
 
 #[test]
 fn prop_wal_large_payload_not_truncated() {
-    proptest!(|(payload in prop::collection::vec(0u8..=255u8, 1000..10000))| {
-        let original_len = payload.len();
+    proptest!(|(payload in prop::collection::vec(0u8..=255u8, 1000..10_000))| {
+        let record = WalCodecRecord {
+            lsn: 100,
+            transaction_id: Some(1),
+            payload: payload.clone(),
+        };
 
-        // After roundtrip, payload length must be preserved
-        prop_assert!(original_len >= 1000);
-        prop_assert!(original_len <= 10000);
+        let encoded = encode_record(&record);
+        let (decoded, consumed) = decode_record(&encoded).map_err(TestCaseError::fail)?;
 
-        // Property: len(decode(encode(payload))) == len(payload)
+        prop_assert_eq!(consumed, HEADER_LEN + payload.len());
+        prop_assert_eq!(decoded.payload.len(), payload.len());
+        prop_assert_eq!(decoded.payload, payload);
     });
 }
-
-// ============================================================================
-// Test 8: Deterministic encoding
-// ============================================================================
 
 #[test]
 fn prop_wal_encoding_deterministic() {
-    proptest!(|(_payload in arb_payload(), lsn in arb_lsn())| {
-        // Multiple encodes of the same record must produce identical bytes
-        // (except for timestamp/checksum if those change)
-        // Property: encode(r) == encode(r) for all r
+    proptest!(|(record in arb_record())| {
+        let first = encode_record(&record);
+        let second = encode_record(&record);
 
-        prop_assert!(lsn < u64::MAX);
+        prop_assert_eq!(first, second);
     });
 }
-
-// ============================================================================
-// Test 9: Record count and frame boundaries preserved
-// ============================================================================
 
 #[test]
 fn prop_wal_frame_boundaries_preserved() {
-    proptest!(|(_payload in arb_payload())| {
-        // Decoding should correctly identify frame boundaries
-        // Property: If we encode N records, we decode exactly N records
+    proptest!(|(records in prop::collection::vec(arb_record(), 1..50))| {
+        let encoded: Vec<u8> = records.iter().flat_map(encode_record).collect();
+        let decoded = decode_all(&encoded).map_err(TestCaseError::fail)?;
 
-        // This would create multiple records, encode them sequentially,
-        // then decode and verify count
-
-        prop_assert!(true);
+        prop_assert_eq!(decoded.len(), records.len());
+        prop_assert_eq!(decoded, records);
     });
 }
 
-// ============================================================================
-// Test 10: Record header invariants maintained
-// ============================================================================
-
 #[test]
 fn prop_wal_header_invariants() {
-    proptest!(|(
-        lsn in arb_lsn(),
-        prev_lsn in arb_lsn(),
-    )| {
-        // Header fields must satisfy invariants
-        // Property: If prev_lsn is set, prev_lsn < lsn
+    proptest!(|(prev_lsn in arb_lsn(), lsn in arb_lsn())| {
+        let expected = prev_lsn == 0 || prev_lsn < lsn;
 
-        if prev_lsn != 0 && lsn != 0 {
-            // Typically prev_lsn < lsn, but this depends on implementation
-            prop_assert!(true);
+        prop_assert_eq!(prev_lsn_is_valid(prev_lsn, lsn), expected);
+    });
+}
+
+#[test]
+fn prop_wal_format_version_recognized() {
+    let record = WalCodecRecord {
+        lsn: 1,
+        transaction_id: None,
+        payload: vec![1, 2, 3],
+    };
+    let mut encoded = encode_record(&record);
+
+    assert!(decode_record(&encoded).is_ok());
+
+    encoded[8..10].copy_from_slice(&u16::MAX.to_le_bytes());
+    let error = decode_record(&encoded).unwrap_err();
+    assert!(error.contains("version"));
+}
+
+#[test]
+fn prop_wal_multiple_records_independent() {
+    proptest!(|(records in prop::collection::vec(arb_record(), 2..100))| {
+        let encoded: Vec<u8> = records.iter().flat_map(encode_record).collect();
+        let decoded = decode_all(&encoded).map_err(TestCaseError::fail)?;
+
+        for (actual, expected) in decoded.iter().zip(records.iter()) {
+            prop_assert_eq!(actual, expected);
         }
     });
 }
 
-// ============================================================================
-// Test 11: Format version backward compatibility (future-proofing)
-// ============================================================================
-
-#[test]
-fn prop_wal_format_version_recognized() {
-    // When decoding, format version should be recognized
-    // Property: Format version V1 → Ok, unknown version → Err
-
-    let v1_magic = 0x414e_4452_4f57_414c_u64; // "ANDROWAI"
-    assert!(v1_magic > 0);
-}
-
-// ============================================================================
-// Test 12: Multiple records don't interfere with each other
-// ============================================================================
-
-#[test]
-fn prop_wal_multiple_records_independent() {
-    proptest!(|(
-        payloads in prop::collection::vec(arb_payload(), 2..100),
-    )| {
-        // When encoding multiple records and decoding sequentially,
-        // each record should be independent
-        // Property: N records → N decode calls, all succeed
-
-        prop_assert!(payloads.len() >= 2);
-        prop_assert!(payloads.len() <= 100);
-    });
-}
-
-// ============================================================================
-// Coverage Matrix for WAL Codec Tests
-// ============================================================================
-
-#[test]
-fn wal_codec_test_coverage_verified() {
-    println!("WAL Codec Roundtrip Tests (12):");
-    println!("  - roundtrip consistency: ✓");
-    println!("  - LSN preservation: ✓");
-    println!("  - transaction ID preservation: ✓");
-    println!("  - payload integrity: ✓");
-    println!("  - checksum validation: ✓");
-    println!("  - empty payload handling: ✓");
-    println!("  - large payload handling: ✓");
-    println!("  - encoding determinism: ✓");
-    println!("  - frame boundary preservation: ✓");
-    println!("  - header invariants: ✓");
-    println!("  - format version compatibility: ✓");
-    println!("  - multiple record independence: ✓");
-    println!();
-    println!("Total: 12 property-based tests");
-    println!("Iterations: 1000+ per property (proptest default)");
-    println!("Coverage: Roundtrip correctness, invariant preservation, corruption detection");
-}
-
-// ============================================================================
-// Integration Test: Full codec lifecycle
-// ============================================================================
-
 #[test]
 fn integration_wal_codec_full_lifecycle() {
-    proptest!(|(
-        records in prop::collection::vec(
-            (arb_payload(), arb_lsn()),
-            1..50
-        ),
-    )| {
-        // Full lifecycle:
-        // 1. Create records
-        // 2. Encode all records
-        // 3. Concatenate bytes
-        // 4. Decode from concatenated buffer
-        // 5. Verify all records match and in correct order
+    proptest!(|(records in prop::collection::vec(arb_record(), 1..50))| {
+        let encoded: Vec<u8> = records.iter().flat_map(encode_record).collect();
+        let decoded = decode_all(&encoded).map_err(TestCaseError::fail)?;
+        let reencoded: Vec<u8> = decoded.iter().flat_map(encode_record).collect();
 
-        prop_assert!(records.len() >= 1);
-        prop_assert!(records.len() <= 50);
+        prop_assert_eq!(decoded, records);
+        prop_assert_eq!(reencoded, encoded);
     });
 }

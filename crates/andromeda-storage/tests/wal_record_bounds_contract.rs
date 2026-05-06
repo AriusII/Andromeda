@@ -2,7 +2,7 @@
 //!
 //! This test suite validates:
 //! - Record size limits (1 MB maximum)
-//! - Batch cardinality bounds (256 rows maximum per transaction)
+//! - Transaction row cardinality bounds (256 rows maximum per transaction)
 //! - Segment overflow rejection
 //! - LSN monotonicity and continuity
 //! - Integration with InMemoryWal manager
@@ -12,9 +12,10 @@
 
 use andromeda_core::TransactionId;
 use andromeda_storage::{
-    InMemoryWal, Lsn, WAL_BATCH_ROW_LIMIT, WAL_RECORD_SIZE_LIMIT, WAL_SEGMENT_BOUNDARY, WalRecord,
-    WalRecordKind, validate_lsn_continuity, validate_record_size, validate_segment_boundary,
-    validate_transaction_batch_cardinality, validate_wal_batch_bounds, validate_wal_record_bounds,
+    InMemoryWal, Lsn, WAL_RECORD_HEADER_OVERHEAD, WAL_RECORD_SIZE_LIMIT, WAL_SEGMENT_BOUNDARY,
+    WalRecord, WalRecordKind, validate_lsn_continuity, validate_record_size,
+    validate_segment_boundary, validate_transaction_batch_cardinality, validate_wal_batch_bounds,
+    validate_wal_record_bounds,
 };
 
 /// Helper to create a test WAL record with configurable size.
@@ -58,10 +59,6 @@ fn tx_commit(lsn: u64, previous: u64, tx_id: u64) -> WalRecord {
     .expect("record creation should succeed")
 }
 
-// ============================================================================
-// Record Size Limit Tests (1 MB)
-// ============================================================================
-
 #[test]
 fn record_size_under_limit_is_accepted() {
     let record = sized_record(1, None, 512 * 1024); // 512 KB
@@ -100,10 +97,6 @@ fn in_memory_wal_rejects_oversized_record() {
     let result = wal.append(record);
     assert!(result.is_err());
 }
-
-// ============================================================================
-// Batch Cardinality Tests (256 rows per transaction)
-// ============================================================================
 
 #[test]
 fn batch_cardinality_under_limit_is_accepted() {
@@ -175,10 +168,6 @@ fn batch_with_257_rows_fails() {
     assert!(validate_transaction_batch_cardinality(&records).is_err());
 }
 
-// ============================================================================
-// Segment Boundary Tests (4 MB max cumulative)
-// ============================================================================
-
 #[test]
 fn single_small_record_within_segment_boundary() {
     let record = row_record(1, None);
@@ -202,12 +191,10 @@ fn multiple_records_within_segment_boundary() {
 
 #[test]
 fn segment_boundary_exceeded_is_rejected() {
-    let record_size = 2 * 1024 * 1024; // 2 MB each
-    let records = vec![
-        sized_record(1, None, record_size),
-        sized_record(2, Some(1), record_size),
-        sized_record(3, Some(2), record_size), // Total > 4 MB
-    ];
+    let record_size = WAL_RECORD_SIZE_LIMIT as usize; // Per-record valid, cumulative invalid.
+    let records: Vec<_> = (1..=5)
+        .map(|lsn| sized_record(lsn, (lsn > 1).then_some(lsn - 1), record_size))
+        .collect();
     let result = validate_segment_boundary(&records);
     assert!(result.is_err());
     assert!(
@@ -220,18 +207,20 @@ fn segment_boundary_exceeded_is_rejected() {
 
 #[test]
 fn segment_boundary_at_limit_passes() {
-    let record_size = (WAL_SEGMENT_BOUNDARY as usize) / 2;
-    let records = vec![
-        sized_record(1, None, record_size),
-        sized_record(2, Some(1), record_size),
-    ];
+    let record_count = 4;
+    let record_size = ((WAL_SEGMENT_BOUNDARY - (record_count * WAL_RECORD_HEADER_OVERHEAD))
+        / record_count) as usize;
+    let records: Vec<_> = (1..=record_count)
+        .map(|lsn| sized_record(lsn, (lsn > 1).then_some(lsn - 1), record_size))
+        .collect();
     let result = validate_segment_boundary(&records);
     assert!(result.is_ok());
 }
 
 #[test]
 fn large_batch_just_under_segment_boundary_passes() {
-    let max_per_record = (WAL_SEGMENT_BOUNDARY / 10) as usize;
+    let max_per_record =
+        ((WAL_SEGMENT_BOUNDARY - (10 * WAL_RECORD_HEADER_OVERHEAD) - 10) / 10) as usize;
     let mut records = vec![];
     for i in 1..=10 {
         records.push(if i == 1 {
@@ -243,10 +232,6 @@ fn large_batch_just_under_segment_boundary_passes() {
     let result = validate_segment_boundary(&records);
     assert!(result.is_ok());
 }
-
-// ============================================================================
-// LSN Continuity Tests (monotonic growth, no gaps)
-// ============================================================================
 
 #[test]
 fn lsn_continuity_single_record_no_base() {
@@ -335,10 +320,6 @@ fn lsn_continuity_rejects_decreasing_lsn() {
     assert!(result.is_err());
 }
 
-// ============================================================================
-// Comprehensive Batch Bounds Tests
-// ============================================================================
-
 #[test]
 fn batch_bounds_valid_records_pass() {
     let records = vec![
@@ -390,9 +371,7 @@ fn batch_bounds_with_base_previous_lsn() {
     assert_eq!(last_lsn, Lsn::new(6));
 }
 
-// ============================================================================
 // Integration Tests with InMemoryWal Manager
-// ============================================================================
 
 #[test]
 fn in_memory_wal_appends_valid_record() {
@@ -466,10 +445,6 @@ fn in_memory_wal_preserves_lsn_on_failed_append() {
     assert_eq!(result.unwrap(), Lsn::new(2));
 }
 
-// ============================================================================
-// Edge Case Tests
-// ============================================================================
-
 #[test]
 fn exactly_one_megabyte_record() {
     let record = sized_record(1, None, 1024 * 1024);
@@ -536,7 +511,7 @@ fn non_row_operations_ignored_in_batch_cardinality() {
 fn lsn_max_should_reject_on_next() {
     let records = vec![row_record(u64::MAX, None)];
     let result = validate_lsn_continuity(None, &records);
-    // The record itself is valid, but trying to continue would overflow.
-    // This validates that we check for overflow properly during validation.
-    assert!(result.is_ok()); // Record itself is OK
+    // Without a base LSN, the first record must start at LSN 1.
+    assert!(result.is_err());
+    assert!(result.unwrap_err().message().contains("LSN mismatch"));
 }

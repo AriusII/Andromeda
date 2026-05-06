@@ -10,12 +10,12 @@ mod state;
 
 pub use decision::ReconnectDecision;
 pub(crate) use error::{pool_error, reconnect_error};
-pub use policy::{
-    MAX_RECONNECT_ATTEMPTS, MAX_RECONNECT_BACKOFF_MS, ReconnectAttemptTrace, ReconnectPolicy,
-};
+pub use policy::{ReconnectAttemptTrace, ReconnectPolicy};
 pub use pool::ConnectionPool;
 pub use pool_key::ConnectionPoolKey;
-pub use pool_policy::{ConnectionPoolPolicy, MAX_POOL_CONNECTIONS_PER_KEY, MAX_POOL_IDLE_TIMEOUT_MS};
+pub use pool_policy::{
+    ConnectionPoolPolicy, MAX_POOL_CONNECTIONS_PER_KEY, MAX_POOL_IDLE_TIMEOUT_MS,
+};
 pub use pooled_connection::{
     PoolAdmission, PoolAdmissionKind, PoolConnectionId, PooledConnection, PooledConnectionHealth,
 };
@@ -23,6 +23,9 @@ pub use retry::{
     RetryAdmissionDecision, RetryAdmissionPolicy, RetryIdempotency, RetryRejectionReason,
 };
 pub use state::ReconnectState;
+
+#[cfg(test)]
+use policy::MAX_RECONNECT_ATTEMPTS;
 
 #[cfg(test)]
 mod tests {
@@ -106,7 +109,7 @@ mod tests {
         assert_eq!(
             ConnectionPoolKey::from_server_identity(&identity, SurfacePlane::Application)
                 .unwrap()
-                .server_fingerprint,
+                .server_fingerprint(),
             "server-fp"
         );
         assert!(

@@ -18,7 +18,7 @@
 //! ## Architecture
 //!
 //! - **BufferPoolConfig**: Static configuration (frame count, page size)
-//! - **BufferPool<S>**: Generic pool implementation over a `PageStore`
+//! - **`BufferPool<S>`**: Generic pool implementation over a `PageStore`
 //! - **BufferPoolManager**: Trait for pluggable pool implementations
 //! - **BufferFrame**: Transient metadata (page ID, pin count, dirty LSN, state)
 //! - **ClockEvictionPolicy**: Circular buffer with reference bits for eviction

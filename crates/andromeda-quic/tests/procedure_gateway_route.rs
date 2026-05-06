@@ -1,4 +1,4 @@
-//! D4 Procedure Gateway Route Tests
+//! Procedure gateway route contract tests.
 //!
 //! Rename note: this file is the governance successor to the former
 //! `procedure_gateway_dispatch.rs` test name. The test body remains focused on
@@ -96,7 +96,6 @@ fn setup_active_ha_connection() -> Connection {
     conn
 }
 
-/// Test 1: Gateway accepts a valid authorized invocation on Application plane.
 ///
 /// This test validates that:
 /// - Gateway construction succeeds when cert identity is bound and scope matches plane.
@@ -141,7 +140,6 @@ fn test_gateway_accepts_authorized_invocation() {
         .expect("dispatch preconditions validation failed");
 }
 
-/// Test 2: Gateway rejects cross-plane invocations before executor is reached.
 ///
 /// Scenario: An Administration certificate is presented, but the connection
 /// is on the Application plane. The gateway must reject this with a security error
@@ -186,7 +184,6 @@ fn test_gateway_rejects_cross_plane_invocation() {
     );
 }
 
-/// Test 3: Gateway correctly correlates stream ID to invocation.
 ///
 /// This test validates that:
 /// - Stream ID → InvocationId mapping is deterministic.
@@ -232,7 +229,6 @@ fn test_gateway_correlates_stream_id_to_invocation() {
     }
 }
 
-/// Test 4: Gateway validates preconditions before invocation.
 ///
 /// This test validates that:
 /// - Preconditions check fails if connection is not in Active state.
@@ -243,7 +239,6 @@ fn test_gateway_correlates_stream_id_to_invocation() {
 /// the gateway must verify that the connection is ready to dispatch.
 #[test]
 fn test_gateway_validates_preconditions() {
-    // Scenario 1: Connection not yet authenticated (not Active).
     let mut conn = Connection::new(SurfacePlane::Application);
     let identity = CertificateIdentity::new(
         "d".repeat(64),
@@ -267,7 +262,6 @@ fn test_gateway_validates_preconditions() {
         "error should mention Active state"
     );
 
-    // Scenario 2: Connection is Active.
     let conn_active = setup_active_application_connection();
     let gateway_active =
         ProcedureGateway::new(&conn_active).expect("gateway construction succeeded");
@@ -279,7 +273,6 @@ fn test_gateway_validates_preconditions() {
     );
 }
 
-/// Test 5: Gateway enforces plane-specific authorization boundaries.
 ///
 /// This test validates multi-plane scenarios:
 /// - Application gateway with Application identity -> preconditions pass.
@@ -330,7 +323,6 @@ fn test_gateway_enforces_plane_specific_boundaries() {
     assert_eq!(app_inv, InvocationId::new(stream_id));
 }
 
-/// Test 6: Gateway exposes immutable connection and identity references.
 ///
 /// This test validates that:
 /// - Gateway holds references, not ownership.
@@ -353,7 +345,6 @@ fn test_gateway_exposes_references() {
     assert_eq!(conn_ref.surface_plane(), SurfacePlane::Application);
 }
 
-/// Test 7: Gateway handles Monitoring plane correctly.
 ///
 /// The Monitoring plane is read-only for diagnostics. This test validates
 /// that the gateway correctly constructs and routes on the Monitoring plane.
@@ -383,7 +374,6 @@ fn test_gateway_supports_monitoring_plane() {
     );
 }
 
-/// Test 8: Gateway stream correlation integrates with frame correlation.
 ///
 /// This test validates that stream ID → InvocationId → frame correlation
 /// produces consistent trace evidence. (This is a contract test; actual frame
@@ -406,7 +396,6 @@ fn test_gateway_stream_correlation_enables_frame_tracing() {
     assert_eq!(invocation_id, invocation_id_again);
 }
 
-/// Test 9: Gateway rejects missing certificate identity explicitly.
 ///
 /// This test validates that the gateway catches missing identity at construction time,
 /// not at dispatch time. This is important for fail-fast semantics.
@@ -432,7 +421,6 @@ fn test_gateway_rejects_missing_certificate_identity() {
     );
 }
 
-/// Test 10: Gateway supports multiple gateways for the same connection.
 ///
 /// This test validates that multiple gateways can be created from the same
 /// connection (they hold immutable references and do not block each other).

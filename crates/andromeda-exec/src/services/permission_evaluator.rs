@@ -1,54 +1,19 @@
-//! Permission evaluator: RBAC permission checking for authorization decisions.
-//!
-//! This module implements the second stage of the IAM pipeline:
-//! - Principal → permission set lookup
-//! - Required permission → evaluation against permission set
-//! - Authorization decision (allow/deny with reason)
-//!
-//! ## Architecture
-//!
-//! The evaluator holds a reference to a PrincipalResolver for principal lookup
-//! and performs deterministic permission matching. Every evaluation is:
-//! - **Deterministic**: same input always produces same output
-//! - **Fail-safe**: deny on missing principal or permission
-//! - **Observable**: returns clear reason for audit logging
-//!
-//! ## Wave 19 Limitations
-//!
-//! - Flat permission model (no role hierarchy)
-//! - No dynamic permission grants or scope filtering
-//! - No attribute-based access control (ABAC)
-//! - Permissions fixed at role definition time
-//!
-//! ## Wave 21+ Evolution
-//!
-//! - Role hierarchy with transitive permission expansion
-//! - Fine-grained scope filtering (namespace-scoped admin permissions)
-//! - ABAC with runtime attribute predicates
-//! - Permission caching with TTL
+//! RBAC permission evaluation for executor admission.
 
 use andromeda_core::{AndromedaResult, Permission, Principal, PrincipalId};
 use std::sync::Arc;
 
 use super::principal_resolver::PrincipalResolver;
 
-/// Result of a permission evaluation: allow or deny with reason.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PermissionDecision {
-    /// Permission granted; action may proceed.
     Allowed {
-        /// Principal that was evaluated.
         principal_id: PrincipalId,
-        /// Permission that was granted.
         granted_permission: Permission,
     },
-    /// Permission denied; action is blocked.
     Denied {
-        /// Principal that was evaluated (if known).
         principal_id: Option<PrincipalId>,
-        /// Permission that was required but not held.
         required_permission: Permission,
-        /// Machine-readable reason for denial.
         reason: DenialReason,
     },
 }
@@ -70,16 +35,11 @@ impl PermissionDecision {
     }
 }
 
-/// Reason for permission denial (machine-parseable for audit logging).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DenialReason {
-    /// Certificate fingerprint not registered in principal store.
     PrincipalNotFound,
-    /// Principal is known but lacks the required permission.
     MissingPermission,
-    /// Principal's permission set is empty (default-deny).
     NoPermissionsGranted,
-    /// Permission set evaluation logic error (shouldn't happen).
     InternalError,
 }
 
@@ -100,18 +60,6 @@ impl std::fmt::Display for DenialReason {
     }
 }
 
-/// PermissionEvaluator: RBAC evaluation engine.
-///
-/// This evaluator checks whether a principal (identified by certificate fingerprint)
-/// holds the permissions required for an action. It is the authorization decision point
-/// before transaction creation and entry into the execution engine.
-///
-/// ## Design Invariants
-///
-/// - **Fail-safe**: Unknown principals are denied access (default-deny)
-/// - **Deterministic**: Same principal + permission always produces same decision
-/// - **Stateless**: Multiple evaluations are independent
-/// - **Observable**: Every decision includes a reason for audit logging
 pub trait PermissionEvaluator: Send + Sync {
     fn evaluate_permission(
         &self,
@@ -135,43 +83,20 @@ pub struct PermissionEvaluatorImpl<R: PrincipalResolver + ?Sized> {
 pub type ConcretePermissionEvaluator<R> = PermissionEvaluatorImpl<R>;
 
 impl<R: PrincipalResolver + ?Sized> PermissionEvaluatorImpl<R> {
-    /// Create a new permission evaluator with a principal resolver.
     pub fn new(resolver: Arc<R>) -> Self {
         Self { resolver }
     }
 }
 
 impl<R: PrincipalResolver + ?Sized> PermissionEvaluator for PermissionEvaluatorImpl<R> {
-    /// Evaluate whether a principal has a required permission.
-    ///
-    /// This is the core authorization decision: given a certificate fingerprint
-    /// and a required permission, determine if access should be allowed.
-    ///
-    /// The decision flow:
-    /// 1. Resolve certificate fingerprint to Principal
-    /// 2. If resolution fails, deny (default-deny)
-    /// 3. Get principal's permission set via role
-    /// 4. Check if permission set contains the required permission
-    /// 5. Return allow or deny decision
-    ///
-    /// # Arguments
-    ///
-    /// * `cert_fingerprint` - X.509 certificate fingerprint (from mTLS)
-    /// * `required_permission` - Required permission for the action
-    ///
-    /// # Returns
-    ///
-    /// `PermissionDecision` (allow or deny with reason)
     fn evaluate_permission(
         &self,
         cert_fingerprint: &str,
         required_permission: &Permission,
     ) -> PermissionDecision {
-        // Step 1: Resolve certificate to principal
         let principal = match self.resolver.resolve(cert_fingerprint) {
             Ok(p) => p,
             Err(_) => {
-                // Certificate not in principal store; deny access
                 return PermissionDecision::Denied {
                     principal_id: None,
                     required_permission: required_permission.clone(),
@@ -180,10 +105,8 @@ impl<R: PrincipalResolver + ?Sized> PermissionEvaluator for PermissionEvaluatorI
             }
         };
 
-        // Step 2: Get principal's permission set
         let permission_set = principal.permissions();
 
-        // Step 3: Check if permission set is empty (should not happen, but fail-safe)
         if permission_set.is_empty() {
             return PermissionDecision::Denied {
                 principal_id: Some(principal.id),
@@ -192,7 +115,6 @@ impl<R: PrincipalResolver + ?Sized> PermissionEvaluator for PermissionEvaluatorI
             };
         }
 
-        // Step 4: Check if permission set contains required permission
         if permission_set.has_permission(required_permission) {
             PermissionDecision::Allowed {
                 principal_id: principal.id,
@@ -207,20 +129,6 @@ impl<R: PrincipalResolver + ?Sized> PermissionEvaluator for PermissionEvaluatorI
         }
     }
 
-    /// Evaluate multiple required permissions (all must be present).
-    ///
-    /// This is a convenience method for actions requiring multiple permissions.
-    /// If any permission is denied, the entire evaluation fails.
-    ///
-    /// # Arguments
-    ///
-    /// * `cert_fingerprint` - X.509 certificate fingerprint
-    /// * `required_permissions` - Vec of required permissions
-    ///
-    /// # Returns
-    ///
-    /// `Ok(())` if all permissions are granted
-    /// `Err()` with first denied permission if any permission is denied
     fn evaluate_all_permissions(
         &self,
         cert_fingerprint: &str,
@@ -235,9 +143,6 @@ impl<R: PrincipalResolver + ?Sized> PermissionEvaluator for PermissionEvaluatorI
         Ok(())
     }
 
-    /// Get the principal associated with a certificate (for audit logging).
-    ///
-    /// This is useful for binding audit events to the correct principal.
     fn get_principal(&self, cert_fingerprint: &str) -> AndromedaResult<Principal> {
         self.resolver.resolve(cert_fingerprint)
     }
@@ -252,7 +157,6 @@ mod tests {
     };
     use std::sync::Arc;
 
-    /// Mock principal resolver for testing.
     struct MockResolver {
         principals: std::sync::Arc<std::sync::Mutex<Vec<Principal>>>,
     }
@@ -442,7 +346,7 @@ mod tests {
         resolver.add_principal(principal(PrincipalRole::User, "test_user_fingerprint"));
 
         let required_perms = vec![
-            Permission::AdminCatalogPublish, // User doesn't have this
+            Permission::AdminCatalogPublish,
             Permission::ExecuteProcedure(ProcedureId::new(42)),
         ];
 
@@ -463,7 +367,6 @@ mod tests {
             "test_operator_fingerprint",
         ));
 
-        // Operator has ExecuteProcedure(u64::MAX), should match any procedure
         let decision = evaluator.evaluate_permission(
             "test_operator_fingerprint",
             &Permission::ExecuteProcedure(ProcedureId::new(42)),

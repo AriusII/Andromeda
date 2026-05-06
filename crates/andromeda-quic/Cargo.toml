@@ -19,6 +19,9 @@ runtime-quinn = [
     "dep:rcgen",
     "dep:rustls",
     "dep:tokio",
+    "tokio/io-util",
+    "tokio/macros",
+    "tokio/rt-multi-thread",
 ]
 
 [dev-dependencies]

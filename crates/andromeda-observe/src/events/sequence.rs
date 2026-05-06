@@ -50,20 +50,7 @@ enum ProcedureLifecycleStep {
     PreTransactionRejected,
 }
 
-/// In-memory sequence validator for procedure lifecycle evidence.
-///
-/// This is not a filesystem, network, or external audit sink. It is a bounded
-/// in-process evidence foundation for tests and local validation. Each appended
-/// [`EventEnvelope`] is validated before it is stored, then checked against
-/// procedure lifecycle ordering and correlation gates:
-///
-/// * request/session/contract/catalog identity is required before a transaction
-///   can be observed and must remain stable for the sequence;
-/// * transaction id and durable LSN are introduced only by a WAL flush;
-/// * commit, rollback, completion, and recovery evidence must follow the
-///   durable boundary they claim;
-/// * pre-transaction rejection paths must not carry transaction or durable LSN
-///   evidence.
+/// Bounded in-memory validator for procedure lifecycle event order.
 #[derive(Debug, Clone)]
 pub struct InMemoryEventSequence {
     events: Vec<EventEnvelope>,
@@ -80,7 +67,7 @@ pub struct InMemoryEventSequence {
     durable_lsn: Option<u64>,
 }
 
-/// Procedure lifecycle trace helper backed by an in-memory validated sequence.
+/// Procedure lifecycle trace helper.
 pub type ProcedureLifecycleTrace = InMemoryEventSequence;
 
 impl Default for InMemoryEventSequence {

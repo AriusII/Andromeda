@@ -38,7 +38,7 @@ fn collect_proto_sources(proto_root: &Path) -> Result<Vec<PathBuf>, Box<dyn Erro
 
     let mut sources = Vec::new();
     collect_proto_sources_from(proto_root, &mut sources)?;
-    sources.sort_by(|left, right| stable_path_key(left).cmp(&stable_path_key(right)));
+    sources.sort_by_key(|path| stable_path_key(path));
 
     if sources.is_empty() {
         return Err(format!(
@@ -73,13 +73,12 @@ fn collect_proto_sources_from(
 fn reject_service_definitions(proto_sources: &[PathBuf]) -> Result<(), Box<dyn Error>> {
     for proto_source in proto_sources {
         let source = fs::read_to_string(proto_source)?;
-        for (line_index, line) in source.lines().enumerate() {
-            let trimmed = line.trim_start();
-            let keyword = trimmed
-                .split(|character: char| character.is_whitespace() || character == '{')
-                .next()
-                .unwrap_or_default();
-            if keyword == "service" || keyword == "rpc" {
+        let active_source = active_proto_source(&source);
+        for (line_index, line) in active_source.lines().enumerate() {
+            if line
+                .split(|character: char| !(character.is_ascii_alphanumeric() || character == '_'))
+                .any(|token| token == "service" || token == "rpc")
+            {
                 return Err(format!(
                     "gRPC service/rpc declarations are forbidden in crate-local proto source {}:{}",
                     proto_source.display(),
@@ -91,6 +90,65 @@ fn reject_service_definitions(proto_sources: &[PathBuf]) -> Result<(), Box<dyn E
     }
 
     Ok(())
+}
+
+fn active_proto_source(source: &str) -> String {
+    let mut active = String::with_capacity(source.len());
+    let mut chars = source.chars().peekable();
+    let mut in_block_comment = false;
+    let mut in_string = false;
+
+    while let Some(character) = chars.next() {
+        if in_block_comment {
+            if character == '*' && chars.peek() == Some(&'/') {
+                chars.next();
+                in_block_comment = false;
+            }
+            if character == '\n' {
+                active.push('\n');
+            }
+            continue;
+        }
+
+        if in_string {
+            if character == '\\' {
+                chars.next();
+                continue;
+            }
+            if character == '"' {
+                in_string = false;
+            }
+            if character == '\n' {
+                active.push('\n');
+            }
+            continue;
+        }
+
+        if character == '/' && chars.peek() == Some(&'/') {
+            for comment_character in chars.by_ref() {
+                if comment_character == '\n' {
+                    active.push('\n');
+                    break;
+                }
+            }
+            continue;
+        }
+
+        if character == '/' && chars.peek() == Some(&'*') {
+            chars.next();
+            in_block_comment = true;
+            continue;
+        }
+
+        if character == '"' {
+            in_string = true;
+            continue;
+        }
+
+        active.push(character);
+    }
+
+    active
 }
 
 fn stable_path_key(path: &Path) -> String {

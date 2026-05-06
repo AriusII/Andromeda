@@ -3,7 +3,6 @@ pub mod completion;
 pub mod pre_transaction;
 pub mod result_validation;
 
-// IAM services (Wave 19+)
 pub mod permission_audit_emitter;
 pub mod permission_evaluator;
 pub mod principal_resolver;
@@ -14,7 +13,6 @@ pub use completion::*;
 pub use pre_transaction::*;
 pub use result_validation::*;
 
-// IAM re-exports
 pub use permission_audit_emitter::{
     DenialAuditReason, NoOpPermissionAuditEmitter, PermissionAuditEmitter, PermissionAuditEvent,
     PermissionDecisionAudit,

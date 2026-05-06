@@ -9,7 +9,17 @@ mod tests {
     use andromeda_core::TransactionId;
     use andromeda_tx::*;
 
-    // ==================== Test 1: Mark Creation for Eligible Version ====================
+    fn candidate(
+        version_id: u64,
+        creator_tx_id: TransactionId,
+        end_ts: u64,
+        marked_at: u64,
+        gc_epoch: u64,
+    ) -> ReclamationMarkCandidate {
+        ReclamationMarkCandidate::new(version_id, creator_tx_id, end_ts, marked_at, gc_epoch)
+    }
+
+    // Mark creation for eligible versions.
 
     #[test]
     fn test_mark_created_for_eligible_version() {
@@ -20,11 +30,7 @@ mod tests {
         status_table.set_committed(tx_id).unwrap();
 
         let mark_opt = ReclamationMark::from_version_if_eligible(
-            1,     // version_id
-            tx_id, // creator_tx_id
-            50,    // end_ts (closed version)
-            20,    // marked_at
-            5,     // gc_epoch
+            candidate(1, tx_id, 50, 20, 5),
             &status_table,
             100, // min_visible_ts (end_ts < min_visible_ts)
             0,   // grace_period_epochs (no grace period)
@@ -38,7 +44,7 @@ mod tests {
         );
     }
 
-    // ==================== Test 2: Mark Rejected for Ineligible Version (Uncommitted Creator) ====================
+    // Rejection for an uncommitted creator.
 
     #[test]
     fn test_mark_rejected_uncommitted_creator() {
@@ -48,11 +54,7 @@ mod tests {
         // Don't mark as committed - remains InFlight
 
         let mark_opt = ReclamationMark::from_version_if_eligible(
-            1,
-            tx_id,
-            50,
-            20,
-            5,
+            candidate(1, tx_id, 50, 20, 5),
             &status_table,
             100,
             0,
@@ -66,7 +68,7 @@ mod tests {
         );
     }
 
-    // ==================== Test 3: Mark Eligibility with Active Snapshot (Still Visible) ====================
+    // Active snapshots keep still-visible versions out of reclamation.
 
     #[test]
     fn test_mark_rejected_version_still_visible() {
@@ -81,11 +83,7 @@ mod tests {
         // (versions are visible if begin_ts <= snapshot_ts AND end_ts > snapshot_ts)
 
         let mark_opt = ReclamationMark::from_version_if_eligible(
-            1,
-            tx_id,
-            150,
-            20,
-            5,
+            candidate(1, tx_id, 150, 20, 5),
             &status_table,
             100,
             0,
@@ -99,7 +97,7 @@ mod tests {
         );
     }
 
-    // ==================== Test 4: Grace Period Enforcement ====================
+    // Grace-period enforcement.
 
     #[test]
     fn test_mark_rejected_grace_period_not_expired() {
@@ -114,11 +112,7 @@ mod tests {
         // Not eligible: 10 < 10 + 5
 
         let mark_opt = ReclamationMark::from_version_if_eligible(
-            1,
-            tx_id,
-            50,
-            20,
-            10,
+            candidate(1, tx_id, 50, 20, 10),
             &status_table,
             100,
             5,
@@ -132,7 +126,7 @@ mod tests {
         );
     }
 
-    // ==================== Test 5: Mark Creates Reclamation Command ====================
+    // Reclamation command creation.
 
     #[test]
     fn test_mark_emits_reclamation_command() {
@@ -145,7 +139,7 @@ mod tests {
         assert_eq!(cmd.end_ts, 100);
     }
 
-    // ==================== Test 6: Batch Reclamation Processing ====================
+    // Reclamation mark set processing.
 
     #[test]
     fn test_batch_reclamation_100_marks() {
@@ -159,11 +153,7 @@ mod tests {
         // Create 100 marks with different version_ids
         for i in 1..=100 {
             let mark_opt = ReclamationMark::from_version_if_eligible(
-                i,      // version_id
-                tx_id,  // creator_tx_id
-                i * 10, // end_ts (100, 110, 120, ...)
-                20,     // marked_at
-                5,      // gc_epoch
+                candidate(i, tx_id, i * 10, 20, 5),
                 &status_table,
                 2000, // min_visible_ts (all end_ts < 2000)
                 0,    // grace_period_epochs
@@ -189,7 +179,7 @@ mod tests {
         );
     }
 
-    // ==================== Test 7: Correctness - No Visible Version Reclaimed ====================
+    // Visible-version safety.
 
     #[test]
     fn test_no_visible_version_can_be_reclaimed() {
@@ -207,11 +197,7 @@ mod tests {
         // Therefore, active snapshots at ts=100 can potentially see it
 
         let mark_opt = ReclamationMark::from_version_if_eligible(
-            1,
-            creator_tx_id,
-            100, // end_ts
-            20,
-            5,
+            candidate(1, creator_tx_id, 100, 20, 5),
             &status_table,
             100, // min_visible_ts
             0,
@@ -226,11 +212,7 @@ mod tests {
 
         // But if min_visible_ts advances to 101, now it's safe
         let mark_opt2 = ReclamationMark::from_version_if_eligible(
-            1,
-            creator_tx_id,
-            100,
-            20,
-            5,
+            candidate(1, creator_tx_id, 100, 20, 5),
             &status_table,
             101, // min_visible_ts advanced
             0,
@@ -244,7 +226,7 @@ mod tests {
         );
     }
 
-    // ==================== Test 8: Eligibility Criteria Structure ====================
+    // Eligibility criteria structure.
 
     #[test]
     fn test_eligibility_criteria_combinations() {
@@ -269,7 +251,7 @@ mod tests {
         }
     }
 
-    // ==================== Test 9: Mark Validation ====================
+    // Mark validation.
 
     #[test]
     fn test_mark_validation_rejects_invalid_inputs() {
@@ -290,7 +272,7 @@ mod tests {
         assert!(result4.is_ok());
     }
 
-    // ==================== Test 10: Runtime Eligibility Check ====================
+    // Runtime eligibility checks.
 
     #[test]
     fn test_mark_runtime_eligibility_check() {
@@ -314,7 +296,7 @@ mod tests {
         assert!(!eligibility2.is_fully_eligible());
     }
 
-    // ==================== Test 11: Multiple Creators Scenario ====================
+    // Multiple-creator scenarios.
 
     #[test]
     fn test_reclamation_multiple_creators() {
@@ -330,12 +312,27 @@ mod tests {
         status_table.set_committed(tx3).unwrap();
 
         // Try to create marks for all three
-        let mark1 =
-            ReclamationMark::from_version_if_eligible(1, tx1, 50, 20, 5, &status_table, 100, 0, 10);
-        let mark2 =
-            ReclamationMark::from_version_if_eligible(2, tx2, 50, 20, 5, &status_table, 100, 0, 10);
-        let mark3 =
-            ReclamationMark::from_version_if_eligible(3, tx3, 50, 20, 5, &status_table, 100, 0, 10);
+        let mark1 = ReclamationMark::from_version_if_eligible(
+            candidate(1, tx1, 50, 20, 5),
+            &status_table,
+            100,
+            0,
+            10,
+        );
+        let mark2 = ReclamationMark::from_version_if_eligible(
+            candidate(2, tx2, 50, 20, 5),
+            &status_table,
+            100,
+            0,
+            10,
+        );
+        let mark3 = ReclamationMark::from_version_if_eligible(
+            candidate(3, tx3, 50, 20, 5),
+            &status_table,
+            100,
+            0,
+            10,
+        );
 
         assert!(
             mark1.unwrap().is_some(),
@@ -351,7 +348,7 @@ mod tests {
         );
     }
 
-    // ==================== Test 12: Grace Period Scenarios ====================
+    // Grace-period scenarios.
 
     #[test]
     fn test_grace_period_multiple_epochs() {
@@ -382,7 +379,7 @@ mod tests {
         assert!(elig4.gc_epoch_qualified);
     }
 
-    // ==================== Test 13: Reclamation Stats Tracking ====================
+    // Reclamation stats tracking.
 
     #[test]
     fn test_reclamation_stats_accumulated() {
@@ -411,7 +408,7 @@ mod tests {
         assert_eq!(stats.versions_reclaimed(), 95);
     }
 
-    // ==================== Test 14: Edge Case - Version at Exact Boundary ====================
+    // Exact-boundary behavior.
 
     #[test]
     fn test_version_at_exact_min_visible_ts_boundary() {
@@ -425,11 +422,7 @@ mod tests {
         // So it must NOT be marked for reclamation
 
         let mark_opt = ReclamationMark::from_version_if_eligible(
-            1,
-            tx_id,
-            100,
-            20,
-            5,
+            candidate(1, tx_id, 100, 20, 5),
             &status_table,
             100, // end_ts == min_visible_ts
             0,
@@ -443,7 +436,7 @@ mod tests {
         );
     }
 
-    // ==================== Test 15: Large Scale Scenario ====================
+    // Large-scale scenarios.
 
     #[test]
     fn test_large_scale_reclamation_scenario() {
@@ -467,11 +460,7 @@ mod tests {
             let tx_id = tx_ids[tx_idx];
 
             let mark_opt = ReclamationMark::from_version_if_eligible(
-                version_id as u64,
-                tx_id,
-                50,
-                20,
-                5,
+                candidate(version_id as u64, tx_id, 50, 20, 5),
                 &status_table,
                 100,
                 0,
@@ -491,7 +480,7 @@ mod tests {
         );
     }
 
-    // ==================== Test 16: Mark Command Generation ====================
+    // Mark command generation.
 
     #[test]
     fn test_reclamation_command_generation() {
@@ -501,11 +490,7 @@ mod tests {
         status_table.set_committed(tx_id).unwrap();
 
         let mark_opt = ReclamationMark::from_version_if_eligible(
-            42,
-            tx_id,
-            500,
-            100,
-            10,
+            candidate(42, tx_id, 500, 100, 10),
             &status_table,
             1000,
             0,

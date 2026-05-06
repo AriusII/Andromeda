@@ -190,13 +190,13 @@ fn governed_schemas_stay_message_only_without_service_rpc_grpc_or_tonic_identifi
         let active_schema = active_schema_text(schema.source);
         for token in schema_identifier_tokens(&active_schema) {
             let lower = token.to_ascii_lowercase();
-            assert!(
-                lower != "service",
+            assert_ne!(
+                lower, "service",
                 "{} schema must not define protobuf services",
                 schema.logical_name
             );
-            assert!(
-                lower != "rpc",
+            assert_ne!(
+                lower, "rpc",
                 "{} schema must not define RPC service methods",
                 schema.logical_name
             );
@@ -423,8 +423,7 @@ fn generated_descriptor_set_matches_crate_local_proto_sources() {
 
 #[test]
 fn generated_prost_modules_follow_governed_package_layout() {
-    let protocol_version =
-        generated::andromeda::protocol::v1::ProtocolVersion { major: 1, minor: 0 };
+    let protocol_version = generated::protocol::v1::ProtocolVersion { major: 1, minor: 0 };
     let envelope = generated::protocol::v1::FrameEnvelope {
         protocol_version: Some(protocol_version),
         contract_hash: vec![7; ContractHash::LEN],
@@ -478,7 +477,7 @@ fn generated_prost_modules_follow_governed_package_layout() {
         PROTOCOL_PACKAGE
     );
     assert_eq!(
-        generated::andromeda::protocol::v1::PayloadKind::RpcCompletion as i32,
+        generated::protocol::v1::PayloadKind::RpcCompletion as i32,
         8
     );
     assert!(invocation.correlation.unwrap().request_id.is_some());
@@ -923,13 +922,12 @@ fn assert_all_message_definitions_have_reserved_ranges() {
                 });
             } else if trimmed.starts_with("enum ") || trimmed.starts_with("oneof ") {
                 stack.push(SchemaBlock::Other);
-            } else if trimmed.starts_with("reserved ") {
-                if let Some(SchemaBlock::Message {
+            } else if trimmed.starts_with("reserved ")
+                && let Some(SchemaBlock::Message {
                     has_reserved_range, ..
                 }) = stack.last_mut()
-                {
-                    *has_reserved_range = true;
-                }
+            {
+                *has_reserved_range = true;
             }
 
             for _ in 0..trimmed

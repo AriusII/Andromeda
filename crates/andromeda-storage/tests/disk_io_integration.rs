@@ -59,8 +59,8 @@ fn create_test_page_image(page_id: u64, page_size: PageSize) -> PageImage {
 
     let mut bytes = vec![0u8; page_size.bytes_usize()];
     // Fill with recognizable pattern for testing
-    for i in 0..bytes.len() {
-        bytes[i] = ((page_id ^ i as u64) & 0xFF) as u8;
+    for (i, byte) in bytes.iter_mut().enumerate() {
+        *byte = ((page_id ^ i as u64) & 0xFF) as u8;
     }
 
     PageImage::with_layout(layout, bytes).unwrap()

@@ -11,8 +11,7 @@ use andromeda_core::{
     ProcedureId, ScalarType, TypeDescriptor,
 };
 use andromeda_srpl::{
-    SourceSpan,
-    diagnostics::DiagnosticPhase,
+    DiagnosticPhase, SourceSpan,
     procedure_compiler::{
         INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, bind_executable_procedure_plan,
         compile_inventory_reserve_stock_contract,

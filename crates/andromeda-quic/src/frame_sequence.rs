@@ -1,29 +1,24 @@
 //! Result stream sequence validation.
 //!
 //! This module enforces the strict ordering of frames in result streams:
-//! metadata → batch* → completion
+//! metadata -> batch* -> completion
 
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId, SessionId, TransactionId,
 };
 
 use super::frame_code::FrameType;
-use super::frame_struct::FrameBytes;
+use super::frame_struct::{FrameBytes, FrameHeader};
 use crate::StreamRole;
 
-/// Policy for metadata frame presence in result streams.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResultStreamMetadataPolicy {
-    /// Metadata and batch required.
     RowBatchRequired,
-    /// Metadata required, batch optional.
     ZeroRowCompletionAllowed,
-    /// Only for mutation RPC (no row results).
     MutationOnly,
 }
 
 impl ResultStreamMetadataPolicy {
-    /// Returns true if completion is allowed without a batch frame.
     pub const fn allows_completion_without_batch(self) -> bool {
         matches!(self, Self::ZeroRowCompletionAllowed | Self::MutationOnly)
     }
@@ -40,12 +35,10 @@ pub struct ResultStreamSequence {
 }
 
 impl ResultStreamSequence {
-    /// Creates a new sequence with default (RowBatchRequired) policy.
     pub const fn new() -> Self {
         Self::new_with_metadata_policy(ResultStreamMetadataPolicy::RowBatchRequired)
     }
 
-    /// Creates a new sequence with specified metadata policy.
     pub const fn new_with_metadata_policy(metadata_policy: ResultStreamMetadataPolicy) -> Self {
         Self {
             metadata_policy,
@@ -56,7 +49,6 @@ impl ResultStreamSequence {
         }
     }
 
-    /// Processes a frame and validates sequence constraints.
     pub fn accept(&mut self, frame: &FrameBytes) -> AndromedaResult<()> {
         frame.validate(StreamRole::ResultUnidirectional)?;
         self.validate_context(frame.header)?;
@@ -124,17 +116,13 @@ impl ResultStreamSequence {
         Ok(())
     }
 
-    /// Returns true if the sequence has reached completion state.
     pub fn is_complete(self) -> bool {
         self.saw_metadata
             && self.completed
             && (self.saw_batch || self.metadata_policy.allows_completion_without_batch())
     }
 
-    fn validate_context(
-        &mut self,
-        header: super::frame_struct::FrameHeader,
-    ) -> AndromedaResult<()> {
+    fn validate_context(&mut self, header: FrameHeader) -> AndromedaResult<()> {
         let current_context = (header.request_id, header.session_id, header.tx_id);
 
         match self.request_context {
@@ -159,7 +147,6 @@ impl Default for ResultStreamSequence {
     }
 }
 
-/// Validates a result stream frame sequence with default policy.
 pub fn validate_result_stream_sequence(frames: &[FrameBytes]) -> AndromedaResult<()> {
     validate_result_stream_sequence_with_metadata_policy(
         frames,
@@ -167,7 +154,6 @@ pub fn validate_result_stream_sequence(frames: &[FrameBytes]) -> AndromedaResult
     )
 }
 
-/// Validates a result stream frame sequence with specified policy.
 pub fn validate_result_stream_sequence_with_metadata_policy(
     frames: &[FrameBytes],
     metadata_policy: ResultStreamMetadataPolicy,
@@ -188,7 +174,6 @@ pub fn validate_result_stream_sequence_with_metadata_policy(
     Ok(())
 }
 
-/// Validates frame sequences based on stream role.
 pub fn validate_frame_sequence(
     frames: &[FrameBytes],
     stream_role: StreamRole,

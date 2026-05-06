@@ -42,8 +42,6 @@ use super::startup::{
     decide_startup,
 };
 
-// ─── SafeStart proof ───────────────────────────────────────────────────────
-
 /// Acceptance proof produced by a successful `SafeStart`.
 ///
 /// Carries the manifest recovery floor, the durable WAL boundary, and an
@@ -78,8 +76,6 @@ impl SafeStartAcceptance {
         self.tail_discard.is_none()
     }
 }
-
-// ─── SafeStart entry points ────────────────────────────────────────────────
 
 /// Attempt a `SafeStart` from manifest and WAL scan evidence.
 ///
@@ -131,8 +127,6 @@ pub fn safe_start_from_decision(
         )),
     }
 }
-
-// ─── Invariant verification helpers ───────────────────────────────────────
 
 /// Verify all five SafeStart invariants against the manifest.
 ///
@@ -205,8 +199,6 @@ impl SafeStartInvariantReport {
             && self.format_fingerprints_ok
     }
 }
-
-// ─── Unit Tests ────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {

@@ -144,7 +144,7 @@ mod tests {
 
         let result = page.read_tuple(slot_id);
         assert!(result.is_err());
-        assert!(result.err().expect("error").message().contains("deleted"));
+        assert!(result.expect_err("error").message().contains("deleted"));
     }
 
     #[test]
@@ -226,11 +226,8 @@ mod tests {
         let large_tuple = vec![0u8; 2000];
 
         let mut inserted = 0;
-        loop {
-            match page.insert_tuple(&large_tuple) {
-                Ok(_) => inserted += 1,
-                Err(_) => break,
-            }
+        while page.insert_tuple(&large_tuple).is_ok() {
+            inserted += 1;
         }
 
         assert!(inserted > 0);
