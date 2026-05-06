@@ -39,7 +39,7 @@ jobs:
             artifact_suffix: linux-arm64
             packages: "gcc-aarch64-linux-gnu"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/rust-setup
         with:
           toolchain: stable
