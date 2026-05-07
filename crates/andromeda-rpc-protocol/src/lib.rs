@@ -11,11 +11,14 @@ mod frame_code;
 mod frame_codec;
 mod frame_sequence;
 mod frame_struct;
+mod protocol_invariants;
 mod stream_types;
 
+pub mod backpressure;
 pub mod frame;
 pub mod stream;
 
+pub use backpressure::{BackpressureReason, BackpressureSignal, BackpressureTransport};
 pub use frame::{
     AUTH_FRAME_CODE, CONTRACT_REQUEST_FRAME_CODE, CONTRACT_RESPONSE_FRAME_CODE, ERROR_FRAME_CODE,
     FRAME_CODEC_CRC_OFFSET, FRAME_CODEC_HEADER_LEN, FRAME_CODEC_VERSION,
@@ -26,5 +29,9 @@ pub use frame::{
     ResultStreamSequence, TELEMETRY_SOFT_SIGNAL_FRAME_CODE, validate_frame_sequence,
     validate_result_stream_sequence, validate_result_stream_sequence_with_metadata_policy,
     validate_single_frame_on_stream,
+};
+pub use protocol_invariants::{
+    FrameTypeInvariants, PayloadKindInvariants, ProtocolInvariants, ProtocolVersionInvariants,
+    validate_frame_header_layout,
 };
 pub use stream::{FrameFamily, StreamRole};
