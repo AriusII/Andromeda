@@ -1,16 +1,16 @@
 use andromeda_core::AndromedaResult;
+use andromeda_wal::scan_file_wal;
 use std::path::Path;
 
 use crate::{
     ConceptualRedoPlan, DatabaseManifest, DurableTransactionResume, DurableTransactionState,
     RecoveryPlan, RedoRecordDecision, RedoRecordPlan, StartupMode, WalRecord, WalScanStop,
-    summarize_transactions_from_records,
+    WalScanStopReason, summarize_transactions_from_records,
 };
 
 use super::{
     FileWalRecoveryBoundaryKind, FileWalRecoveryIgnoredTransaction,
     FileWalRecoveryIgnoredTransactionReason, FileWalRecoveryReplayRecord, FileWalRecoveryReportV0,
-    scan::{is_forensic_scan_stop, scan_file_wal},
 };
 
 pub fn report_file_wal_recovery_v0(
@@ -60,12 +60,14 @@ pub fn report_file_wal_recovery_v0(
 }
 
 fn recovery_boundary_kind(stop: Option<WalScanStop>) -> FileWalRecoveryBoundaryKind {
-    if is_forensic_scan_stop(stop) {
-        FileWalRecoveryBoundaryKind::ForensicChainBreak
-    } else if stop.is_some() {
-        FileWalRecoveryBoundaryKind::RecoverableTail
-    } else {
-        FileWalRecoveryBoundaryKind::Clean
+    match stop.map(|stop| stop.reason) {
+        Some(
+            WalScanStopReason::LsnGap
+            | WalScanStopReason::DuplicateOrReorderedLsn
+            | WalScanStopReason::PreviousLsnMismatch,
+        ) => FileWalRecoveryBoundaryKind::ForensicChainBreak,
+        Some(_) => FileWalRecoveryBoundaryKind::RecoverableTail,
+        None => FileWalRecoveryBoundaryKind::Clean,
     }
 }
 

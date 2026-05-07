@@ -27,8 +27,10 @@ use andromeda_storage::write_ahead_log::codec::{
     encode_wal_record as module_encode_wal_record,
 };
 use andromeda_storage::write_ahead_log::file::{
-    FileWal as ModuleFileWal, FileWalRecoveryBoundaryKind, FileWalRecoveryIgnoredTransactionReason,
-    recover_from_file_wal, report_file_wal_recovery_v0 as module_report_file_wal_recovery_v0,
+    FileWal as ModuleFileWal, FileWalDiskScan as ModuleFileWalDiskScan,
+    FileWalHeader as ModuleFileWalHeader, FileWalRecoveryBoundaryKind,
+    FileWalRecoveryIgnoredTransactionReason, recover_from_file_wal,
+    report_file_wal_recovery_v0 as module_report_file_wal_recovery_v0,
 };
 use andromeda_storage::write_ahead_log::record::{
     WalRecord as ModuleWalRecord, WalRecordHeader as ModuleWalRecordHeader,
@@ -49,11 +51,11 @@ use andromeda_storage::{
     BackupManifest, BackupResourceLimits, BufferPoolConfig, BufferPoolError, ColdSnapshotBoundary,
     ColumnDef, ColumnId, DatabaseManifest, Datum, DiskManager, DiskManagerError, DiskPageStore,
     DurableTransactionState, FileBackedBackupArtifactStore, FileBackedHadrMembershipStore,
-    FileDiskManager, FileWal, FileWalRecoveryReportV0, HadrMembershipRecord,
-    HadrMembershipSnapshot, HadrMembershipStore, HadrNodeId, HadrNodeRole, HeapPage,
-    HeapPageInsert, HeapScanIter, HeapVacuumMode, InMemoryBTreeIndexEngine, InMemoryPageStore,
-    InMemoryWal, IndexId, Key, KeyCodec, KeyComparator, KeyValuePair, Lsn, MemoryWal, ObjectId,
-    PageHeader, PageId, PageImage, PageSize, PageStore, PageTrailer, PageType,
+    FileDiskManager, FileWal, FileWalDiskScan, FileWalHeader, FileWalRecoveryReportV0,
+    HadrMembershipRecord, HadrMembershipSnapshot, HadrMembershipStore, HadrNodeId, HadrNodeRole,
+    HeapPage, HeapPageInsert, HeapScanIter, HeapVacuumMode, InMemoryBTreeIndexEngine,
+    InMemoryPageStore, InMemoryWal, IndexId, Key, KeyCodec, KeyComparator, KeyValuePair, Lsn,
+    MemoryWal, ObjectId, PageHeader, PageId, PageImage, PageSize, PageStore, PageTrailer, PageType,
     ProductStockHeapInsert, ProductStockRow, RecoveryPlan, RecoveryStage, ReplayContext,
     RestoreValidationPolicy, RowEncoder, RowId, RowSchema, ScalarType, SegmentDescriptor,
     SegmentId, StartupMode, WAL_FORMAT_VERSION, WalFrameHeader, WalRecord, WalRecordHeader,
@@ -126,4 +128,11 @@ fn pure_wal_storage_reexports_match_andromeda_wal_types() {
     assert_same_type::<ModuleWalScanResult, wal::write_ahead_log::codec::WalScanResult>();
     assert_same_type::<ModuleWalScanStop, wal::write_ahead_log::codec::WalScanStop>();
     assert_same_type::<ModuleWalScanStopReason, wal::write_ahead_log::codec::WalScanStopReason>();
+
+    assert_same_type::<FileWal, wal::FileWal>();
+    assert_same_type::<ModuleFileWal, wal::write_ahead_log::file::FileWal>();
+    assert_same_type::<FileWalHeader, wal::FileWalHeader>();
+    assert_same_type::<ModuleFileWalHeader, wal::write_ahead_log::file::FileWalHeader>();
+    assert_same_type::<FileWalDiskScan, wal::FileWalDiskScan>();
+    assert_same_type::<ModuleFileWalDiskScan, wal::write_ahead_log::file::FileWalDiskScan>();
 }

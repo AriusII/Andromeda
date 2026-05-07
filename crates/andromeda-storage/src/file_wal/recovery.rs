@@ -1,23 +1,14 @@
 use andromeda_core::{AndromedaResult, TransactionId};
+use andromeda_wal::{FileWalDiskScan, FileWalHeader, scan_file_wal};
 use std::path::Path;
 
 use crate::{
     ConceptualRedoPlan, DatabaseManifest, Lsn, RecoveryPlan, StartupAuditProjection,
-    StartupDecision, StartupEvidence, StartupMode, WalRecord, WalRecordKind, WalScanResult,
-    WalScanStop, decide_startup,
+    StartupDecision, StartupEvidence, StartupMode, WalRecord, WalRecordKind, WalScanStop,
+    decide_startup,
 };
 
-use super::{FileWalHeader, report, scan};
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FileWalDiskScan {
-    pub header: FileWalHeader,
-    pub physical_wal_bytes: u64,
-    pub scanned_bytes: u64,
-    pub durable_bytes: u64,
-    pub durable_lsn: Lsn,
-    pub scan: WalScanResult,
-}
+use super::report;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileWalRecoveryBoundaryKind {
@@ -119,10 +110,6 @@ impl FileWalStartupRecoveryV0 {
     pub const fn transaction_manager_allocator_floor(&self) -> u64 {
         self.recovered_transaction_id_floor
     }
-}
-
-pub fn scan_file_wal(path: impl AsRef<Path>) -> AndromedaResult<FileWalDiskScan> {
-    scan::scan_file_wal(path)
 }
 
 pub fn recover_from_file_wal(

@@ -2,17 +2,23 @@
 #![doc = r#"
 Native WAL type crate for Andromeda.
 
-This crate owns pure WAL primitives and codecs. Storage-backed WAL, recovery,
-and file implementations remain storage-owned; downstream crates should import
-pure WAL types from this crate while storage integration continues to use the
-storage crate surfaces.
+This crate owns pure WAL primitives, codecs, and the physical file-backed WAL
+byte contract. Storage recovery reports, replay planning, manifests, page
+integration, and durable visibility decisions remain storage-owned; downstream
+crates should import WAL owner types from this crate while storage integration
+continues to use storage crate surfaces.
 "#]
 
+pub mod file_wal;
 pub mod lsn;
 pub mod wal_codec;
 pub mod wal_segment;
 pub mod write_ahead_log;
 
+pub use file_wal::{
+    FILE_WAL_HEADER_LEN, FILE_WAL_MAGIC, FILE_WAL_MONO_SEGMENT_ID, FileWal, FileWalDiskScan,
+    FileWalHeader, scan_file_wal,
+};
 pub use lsn::Lsn;
 pub use wal_codec::{
     WAL_BYTE_ORDER_LITTLE_ENDIAN, WAL_FORMAT_VERSION, WAL_FORMAT_VERSION_V1, WAL_RECORD_HEADER_LEN,

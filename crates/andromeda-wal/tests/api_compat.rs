@@ -1,10 +1,11 @@
 use andromeda_core::TransactionId;
 use andromeda_wal::{
-    InMemoryWal, Lsn, MemoryWal, WAL_BYTE_ORDER_LITTLE_ENDIAN, WAL_FORMAT_VERSION,
+    FILE_WAL_HEADER_LEN, FILE_WAL_MAGIC, FILE_WAL_MONO_SEGMENT_ID, FileWal, FileWalDiskScan,
+    FileWalHeader, InMemoryWal, Lsn, MemoryWal, WAL_BYTE_ORDER_LITTLE_ENDIAN, WAL_FORMAT_VERSION,
     WAL_FORMAT_VERSION_V1, WAL_RECORD_HEADER_LEN, WAL_RECORD_MAGIC, WalFrameHeader, WalRecord,
     WalRecordHeader, WalRecordKind, WalScanResult, WalScanStop, WalScanStopReason, WalSegment,
     WalSegmentDescriptor, decode_frame_header, decode_wal_record_frame, encode_wal_record,
-    scan_wal_records, scan_wal_records_from, wal_record_checksum,
+    scan_file_wal, scan_wal_records, scan_wal_records_from, wal_record_checksum,
 };
 
 #[test]
@@ -104,4 +105,19 @@ fn nested_module_exports_match_root_export_identities() {
         andromeda_wal::wal_codec::scan_wal_records_from(&encoded, Lsn::new(1), None);
     assert!(scan.is_complete());
     assert_eq!(scan.records.len(), 1);
+
+    let _ = FILE_WAL_MAGIC;
+    let _ = FILE_WAL_HEADER_LEN;
+    let _ = FILE_WAL_MONO_SEGMENT_ID;
+    let root_header: FileWalHeader = andromeda_wal::file_wal::FileWalHeader::new(Lsn::ZERO, 0, 0);
+    let nested_header: andromeda_wal::write_ahead_log::file::FileWalHeader = root_header;
+    assert_eq!(nested_header.durable_lsn, Lsn::ZERO);
+
+    let _ =
+        scan_file_wal as fn(std::path::PathBuf) -> andromeda_core::AndromedaResult<FileWalDiskScan>;
+    let _ = andromeda_wal::write_ahead_log::file::scan_file_wal
+        as fn(
+            std::path::PathBuf,
+        ) -> andromeda_core::AndromedaResult<andromeda_wal::file_wal::FileWalDiskScan>;
+    let _ = FileWal::open as fn(std::path::PathBuf) -> andromeda_core::AndromedaResult<FileWal>;
 }

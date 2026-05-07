@@ -31,7 +31,7 @@ The matrix below is binding for release governance and supersedes implicit gate 
 
 | Gate | Specification locked | Test plan locked | Implementation status | Risk mitigation |
 |---|---|---|---|---|
-| **G1 Recovery failure** | Recovery must mount manifest + durable WAL, replay committed durable records, skip incomplete transactions, and emit typed boundary evidence (`RecoveryTrace`, corruption boundary). | `crates/andromeda-wal/tests/wal_codec_contract.rs` and `property_wal_roundtrip.rs` provide pure WAL owner evidence. `crates/andromeda-storage/tests/recovery_completeness_contract.rs`, `crates/andromeda-storage/tests/crash_recovery_impl.rs` (40 scenarios), `crates/andromeda-storage/tests/wal_scan_recovery_contract.rs`, and `crates/andromeda-exec/tests/recovery_visibility_gates.rs` provide storage/recovery integration evidence. | Pure LSN, frame codec, scan-prefix, record-bounds, and durability-fence primitives are owned by `andromeda-wal`; recovery planning/replay, file WAL recovery reports, manifests, and storage-backed `FileWal` remain implemented in `andromeda-storage`. | Fail-stop on recovery planning/replay errors; owner codec boundaries classify corrupt input before storage replay; storage boundary classification (`Clean`/forensic) prevents unsafe open. |
+| **G1 Recovery failure** | Recovery must mount manifest + durable WAL, replay committed durable records, skip incomplete transactions, and emit typed boundary evidence (`RecoveryTrace`, corruption boundary). | `crates/andromeda-wal/tests/wal_codec_contract.rs`, `property_wal_roundtrip.rs`, and Lot 4.5 `file_wal_contract.rs` provide WAL and physical FileWal owner evidence. `crates/andromeda-storage/tests/api_compat_reexports.rs`, `wal_ownership_invariants.rs`, `recovery_completeness_contract.rs`, `crates/andromeda-storage/tests/crash_recovery_impl.rs` (40 scenarios), `crates/andromeda-storage/tests/wal_scan_recovery_contract.rs`, `file_wal_recovery_contract.rs`, and `crates/andromeda-exec/tests/recovery_visibility_gates.rs` provide storage API, ownership-boundary, recovery, and visibility integration evidence. | Pure LSN, frame codec, scan-prefix, record-bounds, durability-fence primitives, and the physical FileWal byte contract are owned by `andromeda-wal`; recovery reports, startup planning, replay selection, manifests, page integration, and durable visibility proof remain implemented in `andromeda-storage`. | Fail-stop on recovery planning/replay errors; owner codec and physical FileWal boundaries classify corrupt input before storage replay; storage boundary classification (`Clean`/forensic) prevents unsafe open. |
 | **G2 Visibility violation** | Visible state is commit-durable only. No row may appear committed without durable WAL evidence and status reconstruction. | `crates/andromeda-exec/tests/recovery_visibility_gates.rs`, `crates/andromeda-tx/tests/commit_log_durability.rs`, `crates/andromeda-tx/tests/mvcc_gc_durability_contract.rs`. | Implemented in TX state machine + MVCC status-driven visibility + recovery status-table reconstruction. | Reject illegal transitions; require durable commit LSN before `Committed`; replay skips incomplete transactions. |
 | **G3 ContractHash mismatch** | Invocation must reject hash mismatch before transaction creation and before WAL append/dispatch. | `crates/andromeda-exec/src/invocation.rs` tests, `crates/andromeda-exec/tests/core_io_gates.rs`, `crates/andromeda-exec/tests/v0_vertical_e2e.rs`, `crates/andromeda-exec/tests/integration_execution_path.rs`. | Implemented in admission and pre-transaction validators; status mapped to `ContractRejected`. | Fail closed in admission; mismatch emits typed rejection trace and blocks execution path. |
 | **G4 Audit omission** | Critical decisions must produce typed event envelopes with non-empty evidence and schema validation; no silent drop in durable sink contract. | `crates/andromeda-observe/tests/audit_family_contract.rs`, `crates/andromeda-observe/tests/durable_audit_sink_contract.rs`, `crates/andromeda-exec/tests/c6_recovery_security_audit.rs`, `crates/andromeda-observe/tests/v0_procedure_lifecycle.rs`. | Implemented in `EventEnvelope::validate`, trace structs, and durable audit sink failure model. | Fail-closed durable sink failure kinds; no global audit disable switch; replay/query surfaces retained. |
@@ -119,7 +119,9 @@ Andromeda runtime enforcement additionally requires durable terminal status evid
 
 No mutation becomes externally visible until WAL durability evidence crosses the required LSN fence.
 
-Lot 4.4 separates evidence ownership from historical import paths. `andromeda-wal` owns the pure WAL primitives, frame codec, scan-prefix validation, record bounds, and durability-fence rules. `andromeda-storage` owns the storage-backed `FileWal`, page flush effects, manifest switch effects, recovery floor integration, replay planning, and visibility proof. Storage reexports are compatibility paths, not owner evidence.
+Lot 4.4 separates evidence ownership from historical import paths. Lot 4.5 extends the WAL owner boundary: `andromeda-wal` owns the pure WAL primitives, frame codec, scan-prefix validation, record bounds, durability-fence rules, and physical FileWal byte contract. `andromeda-storage` owns recovery reports, startup planning, replay selection, page flush effects, manifest switch effects, recovery floor integration, and visibility proof. Storage reexports are compatibility paths, not owner evidence.
+
+This split does not change runtime behavior, WAL record bytes, FileWal disk bytes, page bytes, manifest bytes, recovery semantics, or visible commit semantics. It also does not start Lot 5 recovery, page-layout, buffer-pool, cold-store, MVCC, or storage runtime extraction.
 
 ### Fence classification
 
@@ -219,7 +221,8 @@ The following matrix locks deterministic crash/recovery convergence and covers p
 | RCV-09 | `crates/andromeda-storage/tests/crash_recovery_impl.rs` | CAC committed mutation | `Replay` |
 | RCV-10 | `crates/andromeda-storage/tests/crash_recovery_impl.rs` | CAC mixed txs | committed replay only |
 | RCV-11a | `crates/andromeda-wal/tests/wal_codec_contract.rs` | WAL frame scan, LSN chain, corrupt/truncated tail classification | deterministic scan-prefix and owner-level corruption boundary |
-| RCV-11b | `crates/andromeda-storage/tests/wal_scan_recovery_contract.rs` | WAL scan replay boundaries consumed by recovery planning | deterministic LSN ordering through storage recovery integration |
+| RCV-11b | `crates/andromeda-wal/tests/file_wal_contract.rs` | physical FileWal header, open/append, scan, and byte-contract ownership | deterministic physical WAL file owner boundary without disk-format change |
+| RCV-11c | `crates/andromeda-storage/tests/wal_scan_recovery_contract.rs` and `crates/andromeda-storage/tests/file_wal_recovery_contract.rs` | WAL scan replay boundaries, recovery reports, ignored transactions, and forensic/tail classifications consumed by recovery planning | deterministic LSN ordering through storage recovery integration |
 | RCV-12 | `crates/andromeda-storage/tests/wal_durability_fence_contract.rs` | page flush fence | page LSN must be durable |
 | RCV-13 | `crates/andromeda-storage/tests/wal_durability_fence_contract.rs` | manifest switch fence | manifest checkpoint bounded by WAL checkpoint |
 | RCV-14 | `crates/andromeda-storage/tests/wal_durability_fence_contract.rs` | recovery floor | floor cannot precede required WAL start |
@@ -270,11 +273,15 @@ Targeted gate suites:
 ```powershell
 cargo test -p andromeda-exec --test recovery_visibility_gates -- --nocapture
 cargo test -p andromeda-wal --tests -- --nocapture
+cargo test -p andromeda-wal --test file_wal_contract -- --nocapture
+cargo test -p andromeda-storage --test api_compat_reexports -- --nocapture
+cargo test -p andromeda-storage --test wal_ownership_invariants -- --nocapture
 cargo test -p andromeda-storage --test crash_recovery_impl -- --nocapture
 cargo test -p andromeda-storage --test wal_scan_recovery_contract -- --nocapture
 cargo test -p andromeda-storage --test file_wal_recovery_contract -- --nocapture
 cargo test -p andromeda-storage --test wal_durability_fence_contract -- --nocapture
 cargo test -p andromeda-observe --test audit_family_contract -- --nocapture
+cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture
 ```
 
 ---

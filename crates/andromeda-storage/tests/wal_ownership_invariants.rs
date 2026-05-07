@@ -10,8 +10,8 @@
 //! 1. Each type is defined exactly once across the crate.
 //! 2. The single definition lives at the documented canonical path.
 //!
-//! Storage facade modules must remain `pub use`-only re-exports for pure WAL
-//! types. `FileWal` remains storage-owned until its later extraction lot.
+//! Storage facade modules must remain `pub use`-only re-exports for WAL and
+//! physical FileWal owner types. FileWal recovery reports remain storage-owned.
 
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
@@ -57,12 +57,17 @@ const CANONICAL_OWNERSHIP: &[(&str, &str, &str)] = &[
     (
         "struct",
         "FileWal",
-        "crates/andromeda-storage/src/file_wal/wal.rs",
+        "crates/andromeda-wal/src/file_wal/wal.rs",
     ),
     (
         "struct",
         "FileWalHeader",
-        "crates/andromeda-storage/src/file_wal/header.rs",
+        "crates/andromeda-wal/src/file_wal/header.rs",
+    ),
+    (
+        "struct",
+        "FileWalDiskScan",
+        "crates/andromeda-wal/src/file_wal/scan.rs",
     ),
 ];
 

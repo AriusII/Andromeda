@@ -10,7 +10,8 @@
 //! | Transaction classification helpers           | `andromeda_wal::write_ahead_log::transaction` |
 //! | `WalSegment`, `WalSegmentDescriptor`         | `andromeda_wal::wal_segment`                |
 //! | WAL frame codec, scanner, byte constants     | `andromeda_wal::wal_codec`                  |
-//! | `FileWal`, `FileWalHeader`, recovery report  | `crate::file_wal`                           |
+//! | `FileWal`, `FileWalHeader`, file scan types  | `andromeda_wal::file_wal`                   |
+//! | Storage startup recovery report              | `crate::file_wal`                           |
 //! | WAL GC: candidates, archive verification    | [`gc`]                                      |
 //! | WAL Compaction: fragmentation, scheduling   | [`compaction`]                              |
 //! | CommitLogEntry and CommitLog persistence    | [`commit_log_entry`]                        |
@@ -32,15 +33,19 @@ pub mod commit_log_facade;
 pub mod compaction;
 pub mod durability_fence;
 pub mod file {
-    //! Facade for the canonical `crate::file_wal` module.
+    //! Facade for file-backed WAL ownership and storage recovery.
     //!
-    //! Do not define new types here; add them under `crate::file_wal` and
-    //! re-export.
+    //! File WAL storage primitives are owned by `andromeda_wal`; storage keeps
+    //! only the manifest-aware startup recovery and forensic report projection.
     pub use crate::{
-        FILE_WAL_HEADER_LEN, FILE_WAL_MAGIC, FILE_WAL_MONO_SEGMENT_ID, FileWal, FileWalDiskScan,
-        FileWalHeader, FileWalRecoveryBoundaryKind, FileWalRecoveryIgnoredTransaction,
+        FileWalRecoveryBoundaryKind, FileWalRecoveryIgnoredTransaction,
         FileWalRecoveryIgnoredTransactionReason, FileWalRecoveryReplayRecord,
-        FileWalRecoveryReportV0, recover_from_file_wal, report_file_wal_recovery_v0, scan_file_wal,
+        FileWalRecoveryReportV0, FileWalStartupRecoveryV0, plan_file_wal_startup_recovery_v0,
+        recover_from_file_wal, report_file_wal_recovery_v0,
+    };
+    pub use andromeda_wal::{
+        FILE_WAL_HEADER_LEN, FILE_WAL_MAGIC, FILE_WAL_MONO_SEGMENT_ID, FileWal, FileWalDiskScan,
+        FileWalHeader, scan_file_wal,
     };
 }
 pub mod gc;

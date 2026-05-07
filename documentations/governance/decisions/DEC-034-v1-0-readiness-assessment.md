@@ -92,7 +92,7 @@ V1.0 readiness milestone deployment completes all foundational durability, foren
 
 **Mapping:** All record kinds have handler entry or documented placeholder
 
-**Post-Lot 4.4 evidence ownership note:** this historical V1.0 decision keeps its original release status. After the workspace restructuring, pure WAL record/frame/bounds evidence is owned by `andromeda-wal`; storage-backed `FileWal`, recovery reports, replay planning, manifest/page integration, and durable visibility gates remain owned by `andromeda-storage`.
+**Post-Lot 4.5 evidence ownership note:** this historical V1.0 decision keeps its original release status. After the workspace restructuring, pure WAL record/frame/bounds evidence and physical FileWal owner evidence are owned by `andromeda-wal`; recovery reports, startup planning, replay planning, manifest/page integration, and durable visibility gates remain owned by `andromeda-storage`.
 
 ---
 
@@ -111,7 +111,7 @@ V1.0 readiness milestone deployment completes all foundational durability, foren
 
 | Gate | Criterion | Status | Evidence |
 |------|-----------|--------|----------|
-| STOR-001 | Crash recovery preserves writes | ✓ PASS | Storage `FileWal` and recovery integration audit; DEC-025 |
+| STOR-001 | Crash recovery preserves writes | ✓ PASS | `andromeda-wal` physical FileWal owner evidence plus storage recovery integration audit; DEC-025 |
 | STOR-002 | Manifest validation | ✓ PASS | Manifest checksum tests; DEC-032 |
 | STOR-003 | Page layout stable | ✓ PASS | Golden vectors; test fixtures |
 | STOR-004 | WAL codec locked | ✓ PASS | `andromeda-wal` owner codec/golden/property evidence plus storage facade compatibility |
@@ -178,7 +178,7 @@ From DEC-033 (Durable Audit Ledger), five risks tracked and assessed for V1.0.0:
 - ✅ Recovery trace emission enabled
 - **Status:** PRODUCTION READY
 
-Post-Lot 4.4 restructuring tracks pure WAL owner evidence separately under `andromeda-wal`. The recovery engine status above remains a storage/recovery integration claim and does not imply that owner-level fuzz, FileWal physical extraction, or crash/recovery promotion can be skipped for future batches.
+Post-Lot 4.5 restructuring tracks pure WAL and physical FileWal owner evidence separately under `andromeda-wal`. The recovery engine status above remains a storage/recovery integration claim and does not imply that owner-level fuzz, FileWal recovery integration, or crash/recovery promotion can be skipped for future batches.
 
 ### Storage (I/O) Engine
 - ✅ Protocol immutability locked
@@ -242,7 +242,7 @@ All project invariants maintained:
    - security-owner (IAM/Audit)
    - architecture-owner (Cross-Engine)
 
-   Post-Lot 4.4 restructuring keeps this historical sign-off intact for V1.0. For later restructuring gates, `wal-owner` signs off pure WAL owner evidence, while `storage-owner` signs off storage-backed `FileWal`, recovery, manifest/page integration, and durable visibility evidence.
+   Post-Lot 4.5 restructuring keeps this historical sign-off intact for V1.0. For later restructuring gates, `wal-owner` signs off pure WAL and physical FileWal owner evidence, while `storage-owner` signs off recovery reports, startup/replay planning, manifest/page integration, and durable visibility evidence.
 
 2. **Git commit and tag:**
    ```bash
@@ -255,7 +255,7 @@ All project invariants maintained:
 ### Post-Release (implementation batch+)
 
 1. **implementation batch: Query and Analytics** — Audit index design for forensic performance (RISK-015 mitigation)
-2. **deferred redo-handler milestones: Redo Handlers** — Promote the remaining 14 deferred WAL record families only after `andromeda-wal` owner evidence covers record codec/golden/bounds/fuzz requirements and `andromeda-storage` evidence covers payload apply, replay planning, and crash/recovery gates. Neither evidence class is sufficient by itself.
+2. **deferred redo-handler milestones: Redo Handlers** — Promote the remaining 14 deferred WAL record families only after `andromeda-wal` owner evidence covers record codec/golden/bounds/fuzz and physical FileWal contract requirements, and `andromeda-storage` evidence covers payload apply, startup/replay planning, manifest/page integration, and crash/recovery gates. Neither evidence class is sufficient by itself.
 3. **heap/index mutation milestones: Heap/Index Mutations** — Storage engine finalization
 4. **performance baseline milestone: Performance Baseline** — Benchmark suite execution and baseline establishment
 

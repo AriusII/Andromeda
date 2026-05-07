@@ -1,39 +1,26 @@
-//! Canonical on-disk file-backed WAL implementation.
+//! Storage recovery facade for the file-backed WAL.
 //!
-//! Owns `FileWal`, `FileWalHeader`, `FILE_WAL_*` byte-format constants, and the
-//! v0 recovery report. The [`crate::write_ahead_log::file`] facade re-exports
-//! these names; do not redefine them. The on-disk header and frame layout are
-//! load-bearing for crash recovery and must not change without bumping
-//! `WAL_FORMAT_VERSION`.
-use andromeda_core::{AndromedaError, AndromedaErrorKind};
+//! `FileWal`, `FileWalHeader`, `FileWalDiskScan`, and the `FILE_WAL_*`
+//! byte-format constants are owned by `andromeda_wal`. Storage keeps the v0
+//! startup recovery and forensic report projection here because they combine
+//! WAL scans with storage manifests and startup policy.
 
-mod format;
-mod header;
 mod recovery;
 mod report;
-mod scan;
-mod wal;
 
-pub use header::{FILE_WAL_HEADER_LEN, FILE_WAL_MAGIC, FILE_WAL_MONO_SEGMENT_ID, FileWalHeader};
+pub use andromeda_wal::{
+    FILE_WAL_HEADER_LEN, FILE_WAL_MAGIC, FILE_WAL_MONO_SEGMENT_ID, FileWal, FileWalDiskScan,
+    FileWalHeader, scan_file_wal,
+};
 pub use recovery::{
-    FileWalDiskScan, FileWalRecoveryBoundaryKind, FileWalRecoveryIgnoredTransaction,
+    FileWalRecoveryBoundaryKind, FileWalRecoveryIgnoredTransaction,
     FileWalRecoveryIgnoredTransactionReason, FileWalRecoveryReplayRecord, FileWalRecoveryReportV0,
     FileWalStartupRecoveryV0, plan_file_wal_startup_recovery_v0, recover_from_file_wal,
-    report_file_wal_recovery_v0, scan_file_wal,
+    report_file_wal_recovery_v0,
 };
-pub use wal::FileWal;
-
-fn io_error(action: &str, error: std::io::Error) -> AndromedaError {
-    storage_error(format!("{action}: {error}"))
-}
-
-fn storage_error(message: impl Into<String>) -> AndromedaError {
-    AndromedaError::new(AndromedaErrorKind::Storage, message)
-}
 
 #[cfg(test)]
 mod tests {
-    use super::format::write_file_wal_header;
     use super::*;
     use crate::{
         DatabaseManifest, Lsn, ObservedBoundary, RedoRecordDecision, StartupMode,
@@ -72,9 +59,39 @@ mod tests {
             .unwrap_or(Lsn::ZERO);
         let header = FileWalHeader::new(durable_lsn, encoded.len() as u64, records.len() as u64);
         let mut file = File::create(path).unwrap();
-        write_file_wal_header(&mut file, &header).unwrap();
+        write_file_wal_header_for_test(&mut file, &header);
         file.write_all(&encoded).unwrap();
         file.sync_all().unwrap();
+    }
+
+    fn write_file_wal_header_for_test(file: &mut File, header: &FileWalHeader) {
+        header.validate().unwrap();
+        let mut bytes = [0; FILE_WAL_HEADER_LEN];
+        write_u64(&mut bytes, 0, header.magic);
+        write_u16(&mut bytes, 8, header.format_version);
+        write_u16(&mut bytes, 10, header.byte_order);
+        write_u32(&mut bytes, 12, header.header_length);
+        write_u64(&mut bytes, 16, header.segment_id);
+        write_u64(&mut bytes, 24, header.first_lsn.get());
+        write_u64(&mut bytes, 32, header.base_previous_lsn.map_or(0, Lsn::get));
+        write_u64(&mut bytes, 40, header.durable_lsn.get());
+        write_u64(&mut bytes, 48, header.durable_bytes);
+        write_u64(&mut bytes, 56, header.durable_record_count);
+        write_u64(&mut bytes, 64, header.header_checksum);
+        write_u64(&mut bytes, 72, header.reserved);
+        file.write_all(&bytes).unwrap();
+    }
+
+    fn write_u16(bytes: &mut [u8], offset: usize, value: u16) {
+        bytes[offset..offset + 2].copy_from_slice(&value.to_le_bytes());
+    }
+
+    fn write_u32(bytes: &mut [u8], offset: usize, value: u32) {
+        bytes[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+    }
+
+    fn write_u64(bytes: &mut [u8], offset: usize, value: u64) {
+        bytes[offset..offset + 8].copy_from_slice(&value.to_le_bytes());
     }
 
     fn encode_records(records: &[WalRecord]) -> Vec<u8> {

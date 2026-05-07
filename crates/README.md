@@ -21,11 +21,11 @@ This directory contains the Rust workspace crates that implement the Andromeda f
 - `andromeda-srpl-parser` owns SRPL tokenization and syntax parsing. It must not depend on catalog store, execution, storage, transport, or benchmark crates.
 - `andromeda-srpl-ir` owns bounded semantic IR and procedure signature data shapes. It must not depend on catalog store, execution, storage, transport, or benchmark crates.
 - `andromeda-srpl` is the temporary compatibility facade for parsing, binding, lowering, optimizer, interpreter, DefinitionBatch bridge, and compiler-facing SRPL semantics.
-- `andromeda-wal` owns pure WAL primitives, LSNs, WAL records, segment descriptors, frame codecs, scan-prefix validation, record bounds, durability fence helpers, and in-memory WAL summaries. It may depend only on WAL-safe foundation crates.
+- `andromeda-wal` owns pure WAL primitives, LSNs, WAL records, segment descriptors, frame codecs, scan-prefix validation, record bounds, durability fence helpers, in-memory WAL summaries, and the physical FileWal byte contract and file-backed open/append/header/scan surface. It may depend only on WAL-safe foundation crates.
 - `andromeda-tx` owns transaction state, WAL durability gates, MVCC visibility, locks, savepoints, and recovery-facing transaction evidence.
-- `andromeda-storage` owns page, heap, B+Tree, storage-backed FileWal, checkpoint, manifest, and recovery-planning storage surfaces. It temporarily reexports pure WAL types for compatibility.
+- `andromeda-storage` owns page, heap, B+Tree, checkpoint, manifest, recovery reports, startup planning, replay selection, manifest/page integration, and durable visibility integration. It temporarily reexports WAL and FileWal types for compatibility.
 - C5 durable-kernel crates, including current `andromeda-wal`, `andromeda-storage`, and `andromeda-tx` plus future recovery, cold-store, buffer-pool, page-layout, and MVCC splits, must not depend on SRPL parser/model crates, catalog store implementations, protocol runtime crates, QUIC runtime crates, execution crates, benchmark/analytics/GPU crates, SQL crates, or implicit native-layout serialization dependencies.
-- Future C5 extractions must keep `andromeda-storage` and `andromeda-tx` as temporary compatibility facades until public reexport tests pass for existing callers. Pure WAL compatibility paths must keep reexport tests passing until callers migrate to `andromeda-wal` directly.
+- Future C5 extractions must keep `andromeda-storage` and `andromeda-tx` as temporary compatibility facades until public reexport tests pass for existing callers. WAL and physical FileWal compatibility paths must keep reexport tests passing until callers migrate to `andromeda-wal` directly.
 - Persistent WAL, page, heap, B+Tree, manifest, backup, and recovery formats require explicit codecs, byte-for-byte roundtrip/golden tests, corruption rejection, and crash/recovery validation before any split is accepted.
 - `andromeda-exec` owns execution orchestration over cataloged Procedures. It must not create an ad hoc SQL application surface.
 - `andromeda-observe` owns typed traces, audit evidence, and post-fact decision explainability.
@@ -54,3 +54,15 @@ python fuzz/generators/generate_seed_corpus.py --check
 ```
 
 Use narrower package-level commands while developing, but the full workspace gates are the acceptance baseline.
+
+For Lot 4.5 FileWal ownership documentation and implementation gates, keep owner evidence and integration evidence separate:
+
+```powershell
+cargo test -p andromeda-wal --test file_wal_contract -- --nocapture
+cargo test -p andromeda-storage --test api_compat_reexports -- --nocapture
+cargo test -p andromeda-storage --test wal_ownership_invariants -- --nocapture
+cargo test -p andromeda-storage --test file_wal_recovery_contract -- --nocapture
+cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture
+```
+
+The `andromeda-wal` command is physical FileWal owner evidence. The storage commands are API compatibility, ownership-boundary, and recovery integration evidence. The topology command proves the crate graph remains inside the accepted durable-kernel dependency rings.

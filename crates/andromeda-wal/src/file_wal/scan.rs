@@ -5,13 +5,26 @@ use std::{
     path::Path,
 };
 
-use crate::{Lsn, WalRecord, WalScanStop, WalScanStopReason, encode_wal_record, scan_wal_records};
+use crate::{
+    Lsn, WalRecord, WalScanResult, WalScanStop, WalScanStopReason, encode_wal_record,
+    scan_wal_records,
+};
 
 use super::{
-    FileWalDiskScan,
+    FileWalHeader,
     format::{FILE_WAL_DATA_OFFSET, read_file_wal_header},
     io_error, storage_error,
 };
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileWalDiskScan {
+    pub header: FileWalHeader,
+    pub physical_wal_bytes: u64,
+    pub scanned_bytes: u64,
+    pub durable_bytes: u64,
+    pub durable_lsn: Lsn,
+    pub scan: WalScanResult,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct FileWalRecordBoundary {

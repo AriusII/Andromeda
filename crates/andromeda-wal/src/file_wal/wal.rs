@@ -10,9 +10,9 @@ use crate::{Lsn, WalRecord, WalRecordKind, WalScanStop, encode_wal_record};
 use super::{
     FileWalHeader,
     format::{FILE_WAL_DATA_OFFSET, file_offset_for_wal_bytes, write_file_wal_header},
-    recovery::{FileWalDiskScan, scan_file_wal},
     scan::{
-        FileWalRecordBoundary, is_forensic_scan_stop, record_boundaries_for, scan_open_file_wal,
+        FileWalDiskScan, FileWalRecordBoundary, is_forensic_scan_stop, record_boundaries_for,
+        scan_file_wal, scan_open_file_wal,
     },
     storage_error,
 };
