@@ -1,7 +1,7 @@
 use andromeda_core::{AndromedaErrorKind, AndromedaResult, TransactionId};
 use andromeda_exec::{
-    CommitLogInvocationWal, LocalDispatchPlan, LocalDispatcher, LocalRollbackPlan,
-    encode_exec_tx_commit_payload, encode_exec_tx_rollback_payload,
+    CommitLogInvocationWal, DurableExecWalPrefix, LocalDispatchPlan, LocalDispatcher,
+    LocalRollbackPlan, encode_exec_tx_commit_payload, encode_exec_tx_rollback_payload,
     map_exec_wal_evidence_to_tx_replay,
 };
 use andromeda_storage::{FileWal, InMemoryWal, Lsn as StorageLsn, WalRecord, WalRecordKind};
@@ -60,6 +60,17 @@ fn replay_wal() -> Arc<dyn andromeda_tx::commit_log::InvocationWal> {
     Arc::new(CommitLogInvocationWal::new(InMemoryWal::new()))
 }
 
+fn durable_prefix<const N: usize>(
+    records: [WalRecord; N],
+) -> AndromedaResult<DurableExecWalPrefix<WalRecord>> {
+    let durable_lsn = records
+        .iter()
+        .map(|record| record.header.lsn)
+        .max()
+        .unwrap_or(StorageLsn::ZERO);
+    DurableExecWalPrefix::new(records, durable_lsn)
+}
+
 #[test]
 fn local_dispatch_terminal_payloads_replay_through_tx_commit_log() -> AndromedaResult<()> {
     let committed = TransactionId::new(301);
@@ -79,7 +90,8 @@ fn local_dispatch_terminal_payloads_replay_through_tx_commit_log() -> AndromedaR
     })?;
     assert_eq!(rollback_receipt.transaction_id, rolled_back);
 
-    let bridged = map_exec_wal_evidence_to_tx_replay(wal.durable_records())?;
+    let bridged =
+        map_exec_wal_evidence_to_tx_replay(DurableExecWalPrefix::from_in_memory_wal(&wal)?)?;
     assert_eq!(bridged.evidence.commits, 1);
     assert_eq!(bridged.evidence.rollbacks, 1);
     assert_eq!(bridged.evidence.incomplete_transactions, 0);
@@ -154,7 +166,8 @@ async fn commit_log_manager_uses_exec_file_wal_bridge_for_terminal_records() -> 
     assert_eq!(durable_records[3].header.kind, WalRecordKind::TxRollback);
     assert_eq!(durable_records[3].header.transaction_id, Some(rolled_back));
 
-    let bridged = map_exec_wal_evidence_to_tx_replay(reopened.durable_records())?;
+    let bridged =
+        map_exec_wal_evidence_to_tx_replay(DurableExecWalPrefix::from_file_wal(&reopened)?)?;
     assert_eq!(bridged.evidence.source_records, 4);
     assert_eq!(bridged.evidence.adapter_records, 4);
     assert_eq!(bridged.evidence.commits, 1);
@@ -185,7 +198,7 @@ fn exec_wal_bridge_preserves_duplicate_terminal_idempotency() -> AndromedaResult
     let committed = TransactionId::new(201);
     let rolled_back = TransactionId::new(202);
 
-    let bridged = map_exec_wal_evidence_to_tx_replay([
+    let bridged = map_exec_wal_evidence_to_tx_replay(durable_prefix([
         record(WalRecordKind::TxBegin, 1, None, Some(committed), []),
         record(
             WalRecordKind::TxCommit,
@@ -202,7 +215,7 @@ fn exec_wal_bridge_preserves_duplicate_terminal_idempotency() -> AndromedaResult
             Some(rolled_back),
             rollback_payload(0xCAFE),
         ),
-    ])?;
+    ])?)?;
 
     assert_eq!(bridged.evidence.source_records, 4);
     assert_eq!(bridged.evidence.adapter_records, 4);
@@ -270,7 +283,7 @@ fn exec_wal_bridge_preserves_duplicate_terminal_idempotency() -> AndromedaResult
 fn exec_wal_bridge_maps_begin_only_to_incomplete_and_keeps_it_invisible() -> AndromedaResult<()> {
     let tx_id = TransactionId::new(203);
 
-    let bridged = map_exec_wal_evidence_to_tx_replay([
+    let bridged = map_exec_wal_evidence_to_tx_replay(durable_prefix([
         record(WalRecordKind::TxBegin, 10, None, Some(tx_id), []),
         record(
             WalRecordKind::RowInsert,
@@ -286,7 +299,7 @@ fn exec_wal_bridge_maps_begin_only_to_incomplete_and_keeps_it_invisible() -> And
             Some(tx_id),
             b"row2".to_vec(),
         ),
-    ])?;
+    ])?)?;
 
     assert_eq!(bridged.evidence.commits, 0);
     assert_eq!(bridged.evidence.rollbacks, 0);
@@ -311,23 +324,26 @@ fn exec_wal_bridge_maps_begin_only_to_incomplete_and_keeps_it_invisible() -> And
 fn exec_wal_bridge_fails_closed_on_conflicting_terminal_evidence() {
     let tx_id = TransactionId::new(204);
 
-    let error = map_exec_wal_evidence_to_tx_replay([
-        record(WalRecordKind::TxBegin, 20, None, Some(tx_id), []),
-        record(
-            WalRecordKind::TxCommit,
-            21,
-            Some(20),
-            Some(tx_id),
-            commit_payload(IsolationLevel::Snapshot, 1, 0x1111),
-        ),
-        record(
-            WalRecordKind::TxRollback,
-            22,
-            Some(21),
-            Some(tx_id),
-            rollback_payload(0x2222),
-        ),
-    ])
+    let error = map_exec_wal_evidence_to_tx_replay(
+        durable_prefix([
+            record(WalRecordKind::TxBegin, 20, None, Some(tx_id), []),
+            record(
+                WalRecordKind::TxCommit,
+                21,
+                Some(20),
+                Some(tx_id),
+                commit_payload(IsolationLevel::Snapshot, 1, 0x1111),
+            ),
+            record(
+                WalRecordKind::TxRollback,
+                22,
+                Some(21),
+                Some(tx_id),
+                rollback_payload(0x2222),
+            ),
+        ])
+        .unwrap(),
+    )
     .unwrap_err();
 
     assert_eq!(error.kind(), AndromedaErrorKind::Transaction);
@@ -337,23 +353,26 @@ fn exec_wal_bridge_fails_closed_on_conflicting_terminal_evidence() {
 fn exec_wal_bridge_fails_closed_on_same_kind_terminal_drift() {
     let tx_id = TransactionId::new(207);
 
-    let error = map_exec_wal_evidence_to_tx_replay([
-        record(WalRecordKind::TxBegin, 60, None, Some(tx_id), []),
-        record(
-            WalRecordKind::TxCommit,
-            61,
-            Some(60),
-            Some(tx_id),
-            commit_payload(IsolationLevel::Snapshot, 1, 0x3333),
-        ),
-        record(
-            WalRecordKind::TxCommit,
-            62,
-            Some(61),
-            Some(tx_id),
-            commit_payload(IsolationLevel::Serializable, 2, 0x4444),
-        ),
-    ])
+    let error = map_exec_wal_evidence_to_tx_replay(
+        durable_prefix([
+            record(WalRecordKind::TxBegin, 60, None, Some(tx_id), []),
+            record(
+                WalRecordKind::TxCommit,
+                61,
+                Some(60),
+                Some(tx_id),
+                commit_payload(IsolationLevel::Snapshot, 1, 0x3333),
+            ),
+            record(
+                WalRecordKind::TxCommit,
+                62,
+                Some(61),
+                Some(tx_id),
+                commit_payload(IsolationLevel::Serializable, 2, 0x4444),
+            ),
+        ])
+        .unwrap(),
+    )
     .unwrap_err();
 
     assert_eq!(error.kind(), AndromedaErrorKind::Transaction);
@@ -364,16 +383,19 @@ fn exec_wal_bridge_fails_closed_on_same_kind_terminal_drift() {
 fn exec_wal_bridge_fails_closed_on_duplicate_source_lsn() {
     let tx_id = TransactionId::new(206);
 
-    let error = map_exec_wal_evidence_to_tx_replay([
-        record(WalRecordKind::TxBegin, 40, None, Some(tx_id), []),
-        record(
-            WalRecordKind::TxCommit,
-            40,
-            None,
-            Some(tx_id),
-            commit_payload(IsolationLevel::Snapshot, 1, 0x3333),
-        ),
-    ])
+    let error = map_exec_wal_evidence_to_tx_replay(
+        durable_prefix([
+            record(WalRecordKind::TxBegin, 40, None, Some(tx_id), []),
+            record(
+                WalRecordKind::TxCommit,
+                40,
+                None,
+                Some(tx_id),
+                commit_payload(IsolationLevel::Snapshot, 1, 0x3333),
+            ),
+        ])
+        .unwrap(),
+    )
     .unwrap_err();
 
     assert_eq!(error.kind(), AndromedaErrorKind::Storage);
@@ -382,13 +404,16 @@ fn exec_wal_bridge_fails_closed_on_duplicate_source_lsn() {
 
 #[test]
 fn exec_wal_bridge_fails_closed_on_zero_transaction_id() {
-    let error = map_exec_wal_evidence_to_tx_replay([record(
-        WalRecordKind::TxBegin,
-        50,
-        None,
-        Some(TransactionId::new(0)),
-        [],
-    )])
+    let error = map_exec_wal_evidence_to_tx_replay(
+        durable_prefix([record(
+            WalRecordKind::TxBegin,
+            50,
+            None,
+            Some(TransactionId::new(0)),
+            [],
+        )])
+        .unwrap(),
+    )
     .unwrap_err();
 
     assert_eq!(error.kind(), AndromedaErrorKind::Transaction);
@@ -396,19 +421,43 @@ fn exec_wal_bridge_fails_closed_on_zero_transaction_id() {
 }
 
 #[test]
+fn exec_wal_bridge_rejects_records_beyond_durable_prefix() -> AndromedaResult<()> {
+    let tx_id = TransactionId::new(208);
+    let mut wal = InMemoryWal::new();
+
+    let begin_lsn = wal.append_tx_begin(tx_id)?;
+    let commit_lsn = wal.append_payload(
+        WalRecordKind::TxCommit,
+        Some(tx_id),
+        commit_payload(IsolationLevel::Snapshot, 1, 0x5555),
+    )?;
+    assert_eq!(commit_lsn, StorageLsn::new(2));
+    wal.flush_through(begin_lsn)?;
+
+    let error = DurableExecWalPrefix::new(wal.records(), wal.durable_lsn()).unwrap_err();
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Storage);
+    assert!(error.message().contains("non-durable source record"));
+    Ok(())
+}
+
+#[test]
 fn exec_wal_bridge_fails_closed_on_malformed_terminal_payload() {
     let tx_id = TransactionId::new(205);
 
-    let error = map_exec_wal_evidence_to_tx_replay([
-        record(WalRecordKind::TxBegin, 30, None, Some(tx_id), []),
-        record(
-            WalRecordKind::TxCommit,
-            31,
-            Some(30),
-            Some(tx_id),
-            b"legacy".to_vec(),
-        ),
-    ])
+    let error = map_exec_wal_evidence_to_tx_replay(
+        durable_prefix([
+            record(WalRecordKind::TxBegin, 30, None, Some(tx_id), []),
+            record(
+                WalRecordKind::TxCommit,
+                31,
+                Some(30),
+                Some(tx_id),
+                b"legacy".to_vec(),
+            ),
+        ])
+        .unwrap(),
+    )
     .unwrap_err();
 
     assert_eq!(error.kind(), AndromedaErrorKind::Transaction);

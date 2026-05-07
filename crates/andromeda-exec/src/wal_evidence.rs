@@ -141,6 +141,51 @@ where
     }
 }
 
+/// Exec WAL records proven to be within a durable WAL prefix.
+#[derive(Debug, Clone)]
+pub struct DurableExecWalPrefix<R> {
+    records: Vec<R>,
+    durable_lsn: Lsn,
+}
+
+impl<R> DurableExecWalPrefix<R>
+where
+    R: Borrow<WalRecord>,
+{
+    pub fn new(records: impl IntoIterator<Item = R>, durable_lsn: Lsn) -> AndromedaResult<Self> {
+        let records = records.into_iter().collect::<Vec<_>>();
+        for record in &records {
+            let record = record.borrow();
+            record.validate()?;
+            if record.header.lsn > durable_lsn {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Storage,
+                    "transaction WAL replay evidence contains a non-durable source record",
+                ));
+            }
+        }
+
+        Ok(Self {
+            records,
+            durable_lsn,
+        })
+    }
+
+    pub const fn durable_lsn(&self) -> Lsn {
+        self.durable_lsn
+    }
+}
+
+impl<'a> DurableExecWalPrefix<&'a WalRecord> {
+    pub fn from_in_memory_wal(wal: &'a InMemoryWal) -> AndromedaResult<Self> {
+        Self::new(wal.durable_records(), wal.durable_lsn())
+    }
+
+    pub fn from_file_wal(wal: &'a FileWal) -> AndromedaResult<Self> {
+        Self::new(wal.durable_records(), wal.durable_lsn())
+    }
+}
+
 /// Transaction replay records projected from durable exec-side WAL evidence.
 ///
 /// This bridge deliberately lives in `andromeda-exec`: storage WAL records are
@@ -162,6 +207,15 @@ pub struct TxReplayBridgeEvidence {
 }
 
 pub fn map_exec_wal_evidence_to_tx_replay<R>(
+    durable_prefix: DurableExecWalPrefix<R>,
+) -> AndromedaResult<TxReplayFromExecWalEvidence>
+where
+    R: Borrow<WalRecord>,
+{
+    map_checked_exec_wal_evidence_to_tx_replay(durable_prefix.records)
+}
+
+fn map_checked_exec_wal_evidence_to_tx_replay<R>(
     records: impl IntoIterator<Item = R>,
 ) -> AndromedaResult<TxReplayFromExecWalEvidence>
 where
