@@ -138,11 +138,19 @@ dependencies = [
  "andromeda-core",
  "andromeda-observe",
  "andromeda-proto",
+ "andromeda-rpc-protocol",
  "proptest",
  "quinn",
  "rcgen",
  "rustls",
  "tokio",
+]
+
+[[package]]
+name = "andromeda-rpc-protocol"
+version = "0.1.0"
+dependencies = [
+ "andromeda-core",
 ]
 
 [[package]]

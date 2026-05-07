@@ -16,18 +16,20 @@
 mod backpressure;
 mod catalog_manifest_resolution;
 mod connection;
-mod frame_code;
-mod frame_codec;
-mod frame_sequence;
-mod frame_struct;
 mod procedure_gateway;
 mod reconnect;
 mod rpc_dispatch;
-mod stream_types;
 mod typed_envelope;
 mod zero_rtt;
 
-pub mod frame;
+/// Compatibility facade for runtime-free RPC frame contracts.
+///
+/// Lot 5.2 moved the canonical frame protocol primitives to
+/// `andromeda-rpc-protocol`. `andromeda-quic::frame::*` remains available during
+/// migration so existing callers can move imports without behavior changes.
+pub mod frame {
+    pub use andromeda_rpc_protocol::frame::*;
+}
 mod stream_concurrency;
 mod transport;
 
@@ -47,7 +49,7 @@ pub use stream_concurrency::{
 
 pub mod mtls_identity;
 
-pub use frame::{
+pub use andromeda_rpc_protocol::frame::{
     AUTH_FRAME_CODE, CONTRACT_REQUEST_FRAME_CODE, CONTRACT_RESPONSE_FRAME_CODE, ERROR_FRAME_CODE,
     FRAME_CODEC_CRC_OFFSET, FRAME_CODEC_HEADER_LEN, FRAME_HEADER_CRC_UNCHECKED,
     FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP, FrameBytes, FrameCodec, FrameCodecEndian, FrameFamily,
@@ -58,7 +60,10 @@ pub use frame::{
     validate_result_stream_sequence_with_metadata_policy, validate_single_frame_on_stream,
 };
 
-pub mod stream;
+/// Compatibility facade for runtime-free stream role contracts.
+pub mod stream {
+    pub use andromeda_rpc_protocol::stream::*;
+}
 
 mod session;
 

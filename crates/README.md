@@ -13,7 +13,8 @@ This directory contains the Rust workspace crates that implement the Andromeda f
 - `andromeda-contract` owns contract-safe Procedure contracts, qualified names, catalog object descriptors, and structural catalog dependency edges. It may depend only on contract-safe foundation crates.
 - `andromeda-structured-object` owns contract-safe StructuredObject headers, layout descriptors, descriptor hashing, and row-count metadata policy. It may depend only on contract-safe foundation crates.
 - `andromeda-proto` owns custom typed RPC payload contracts. It must not introduce gRPC or make JSON the runtime default.
-- `andromeda-quic` owns QUIC transport behavior and maps transport events to typed protocol boundaries.
+- `andromeda-rpc-protocol` owns runtime-free RPC frame contracts, stream roles, explicit frame codecs, and ResultStream frame sequencing. It must not depend on QUIC runtime crates, executor, storage, WAL, or recovery.
+- `andromeda-quic` owns QUIC transport behavior and maps transport events to typed protocol boundaries. It temporarily reexports `andromeda-rpc-protocol` frame and stream types for compatibility.
 - `andromeda-catalog` owns catalog storage, DefinitionBatch behavior, plan cache identity, statistics metadata, publication, and WAL-facing catalog codecs. It temporarily reexports `andromeda-contract` types for compatibility.
 - `andromeda-srpl-diagnostics` owns SRPL source spans, diagnostic phases, forbidden construct diagnostics, and source validation. It must not depend on parser, catalog store, execution, storage, or transport crates.
 - `andromeda-srpl-cardinality` owns SRPL result cardinality semantics and contract cardinality conversion. It must not depend on catalog store or runtime crates.

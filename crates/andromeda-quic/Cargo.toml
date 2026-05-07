@@ -9,6 +9,7 @@ publish = false
 andromeda-core.workspace = true
 andromeda-observe.workspace = true
 andromeda-proto.workspace = true
+andromeda-rpc-protocol.workspace = true
 quinn = { workspace = true, optional = true }
 rcgen = { workspace = true, optional = true }
 rustls = { workspace = true, optional = true }

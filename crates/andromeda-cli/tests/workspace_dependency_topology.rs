@@ -376,6 +376,11 @@ fn allowed_dependency_rules() -> Vec<AllowedDependencyRule> {
             ],
         ),
         AllowedDependencyRule::new(
+            "andromeda-rpc-protocol may only depend on runtime-free protocol foundation crates",
+            "andromeda-rpc-protocol",
+            &["andromeda-core"],
+        ),
+        AllowedDependencyRule::new(
             "andromeda-storage may only depend on current Lot 4.3 durable-kernel support crates",
             "andromeda-storage",
             &[
