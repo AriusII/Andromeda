@@ -1,20 +1,13 @@
 [package]
-name = "andromeda-srpl"
+name = "andromeda-srpl-parser"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish = false
 
 [dependencies]
-andromeda-catalog.workspace = true
-andromeda-digest.workspace = true
-andromeda-error.workspace = true
+andromeda-contract.workspace = true
 andromeda-srpl-ast.workspace = true
 andromeda-srpl-cardinality.workspace = true
 andromeda-srpl-diagnostics.workspace = true
-andromeda-srpl-ir.workspace = true
-andromeda-srpl-parser.workspace = true
 andromeda-types.workspace = true
-
-[dev-dependencies]
-proptest.workspace = true

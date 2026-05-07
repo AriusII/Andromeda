@@ -14,6 +14,11 @@ members = [
     "crates/andromeda-proto",
     "crates/andromeda-quic",
     "crates/andromeda-srpl",
+    "crates/andromeda-srpl-ast",
+    "crates/andromeda-srpl-cardinality",
+    "crates/andromeda-srpl-diagnostics",
+    "crates/andromeda-srpl-ir",
+    "crates/andromeda-srpl-parser",
     "crates/andromeda-storage",
     "crates/andromeda-structured-object",
     "crates/andromeda-time",
@@ -39,6 +44,11 @@ andromeda-observe = { path = "crates/andromeda-observe", version = "0.1.0" }
 andromeda-proto = { path = "crates/andromeda-proto", version = "0.1.0" }
 andromeda-quic = { path = "crates/andromeda-quic", version = "0.1.0" }
 andromeda-srpl = { path = "crates/andromeda-srpl", version = "0.1.0" }
+andromeda-srpl-ast = { path = "crates/andromeda-srpl-ast", version = "0.1.0" }
+andromeda-srpl-cardinality = { path = "crates/andromeda-srpl-cardinality", version = "0.1.0" }
+andromeda-srpl-diagnostics = { path = "crates/andromeda-srpl-diagnostics", version = "0.1.0" }
+andromeda-srpl-ir = { path = "crates/andromeda-srpl-ir", version = "0.1.0" }
+andromeda-srpl-parser = { path = "crates/andromeda-srpl-parser", version = "0.1.0" }
 andromeda-storage = { path = "crates/andromeda-storage", version = "0.1.0" }
 andromeda-structured-object = { path = "crates/andromeda-structured-object", version = "0.1.0" }
 andromeda-time = { path = "crates/andromeda-time", version = "0.1.0" }

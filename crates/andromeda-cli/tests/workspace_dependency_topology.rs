@@ -177,11 +177,14 @@ fn forbidden_rules() -> Vec<ForbiddenRule> {
             ],
         ),
         ForbiddenRule::new(
-            "SRPL parser crates must not depend on catalog store implementation crates",
+            "SRPL parser and language-model crates must not depend on catalog store implementation crates",
             &[
                 "andromeda-srpl-parser",
                 "andromeda-srpl-ast",
                 "andromeda-srpl-lexer",
+                "andromeda-srpl-diagnostics",
+                "andromeda-srpl-cardinality",
+                "andromeda-srpl-ir",
             ],
             &[
                 "andromeda-catalog",
@@ -213,6 +216,47 @@ fn allowed_dependency_rules() -> Vec<AllowedDependencyRule> {
             "andromeda-structured-object may only depend on contract-safe R0 crates",
             "andromeda-structured-object",
             &["andromeda-digest", "andromeda-error", "andromeda-types"],
+        ),
+        AllowedDependencyRule::new(
+            "andromeda-srpl-diagnostics may only depend on foundation error handling",
+            "andromeda-srpl-diagnostics",
+            &["andromeda-error"],
+        ),
+        AllowedDependencyRule::new(
+            "andromeda-srpl-cardinality may only depend on contract-safe cardinality types",
+            "andromeda-srpl-cardinality",
+            &["andromeda-contract"],
+        ),
+        AllowedDependencyRule::new(
+            "andromeda-srpl-ast may only depend on parser-safe language model crates",
+            "andromeda-srpl-ast",
+            &[
+                "andromeda-contract",
+                "andromeda-srpl-cardinality",
+                "andromeda-srpl-diagnostics",
+                "andromeda-types",
+            ],
+        ),
+        AllowedDependencyRule::new(
+            "andromeda-srpl-parser may only depend on parser-safe language model crates",
+            "andromeda-srpl-parser",
+            &[
+                "andromeda-contract",
+                "andromeda-srpl-ast",
+                "andromeda-srpl-cardinality",
+                "andromeda-srpl-diagnostics",
+                "andromeda-types",
+            ],
+        ),
+        AllowedDependencyRule::new(
+            "andromeda-srpl-ir may only depend on contract-safe semantic model crates",
+            "andromeda-srpl-ir",
+            &[
+                "andromeda-contract",
+                "andromeda-error",
+                "andromeda-srpl-cardinality",
+                "andromeda-types",
+            ],
         ),
     ]
 }

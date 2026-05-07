@@ -15,7 +15,12 @@ This directory contains the Rust workspace crates that implement the Andromeda f
 - `andromeda-proto` owns custom typed RPC payload contracts. It must not introduce gRPC or make JSON the runtime default.
 - `andromeda-quic` owns QUIC transport behavior and maps transport events to typed protocol boundaries.
 - `andromeda-catalog` owns catalog storage, DefinitionBatch behavior, plan cache identity, statistics metadata, publication, and WAL-facing catalog codecs. It temporarily reexports `andromeda-contract` types for compatibility.
-- `andromeda-srpl` owns parsing, binding, and compiler-facing SRPL semantics.
+- `andromeda-srpl-diagnostics` owns SRPL source spans, diagnostic phases, forbidden construct diagnostics, and source validation. It must not depend on parser, catalog store, execution, storage, or transport crates.
+- `andromeda-srpl-cardinality` owns SRPL result cardinality semantics and contract cardinality conversion. It must not depend on catalog store or runtime crates.
+- `andromeda-srpl-ast` owns SRPL syntax data shapes. It must not lex, parse, bind, lower, execute, or depend on catalog store.
+- `andromeda-srpl-parser` owns SRPL tokenization and syntax parsing. It must not depend on catalog store, execution, storage, transport, or benchmark crates.
+- `andromeda-srpl-ir` owns bounded semantic IR and procedure signature data shapes. It must not depend on catalog store, execution, storage, transport, or benchmark crates.
+- `andromeda-srpl` is the temporary compatibility facade for parsing, binding, lowering, optimizer, interpreter, DefinitionBatch bridge, and compiler-facing SRPL semantics.
 - `andromeda-tx` owns transaction state, WAL durability gates, MVCC visibility, locks, savepoints, and recovery-facing transaction evidence.
 - `andromeda-storage` owns page, heap, B+Tree, WAL-record, checkpoint, and recovery-planning storage surfaces.
 - `andromeda-exec` owns execution orchestration over cataloged Procedures. It must not create an ad hoc SQL application surface.

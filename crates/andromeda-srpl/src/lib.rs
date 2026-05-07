@@ -31,4 +31,3 @@ pub use definition_batch_bridge::*;
 pub use diagnostics::*;
 pub use procedure_compiler::*;
 pub use procedure_model::*;
-pub use source_location::*;

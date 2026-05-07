@@ -1,0 +1,12 @@
+[package]
+name = "andromeda-srpl-ast"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+andromeda-contract.workspace = true
+andromeda-srpl-cardinality.workspace = true
+andromeda-srpl-diagnostics.workspace = true
+andromeda-types.workspace = true

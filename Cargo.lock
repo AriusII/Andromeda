@@ -152,8 +152,58 @@ dependencies = [
  "andromeda-catalog",
  "andromeda-digest",
  "andromeda-error",
+ "andromeda-srpl-ast",
+ "andromeda-srpl-cardinality",
+ "andromeda-srpl-diagnostics",
+ "andromeda-srpl-ir",
+ "andromeda-srpl-parser",
  "andromeda-types",
  "proptest",
+]
+
+[[package]]
+name = "andromeda-srpl-ast"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+ "andromeda-srpl-cardinality",
+ "andromeda-srpl-diagnostics",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-srpl-cardinality"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+]
+
+[[package]]
+name = "andromeda-srpl-diagnostics"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+]
+
+[[package]]
+name = "andromeda-srpl-ir"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+ "andromeda-error",
+ "andromeda-srpl-cardinality",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-srpl-parser"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+ "andromeda-srpl-ast",
+ "andromeda-srpl-cardinality",
+ "andromeda-srpl-diagnostics",
+ "andromeda-types",
 ]
 
 [[package]]

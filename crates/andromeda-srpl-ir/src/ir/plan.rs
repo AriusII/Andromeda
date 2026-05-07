@@ -1,4 +1,4 @@
-use andromeda_catalog::{CatalogObjectRef, QualifiedName};
+use andromeda_contract::{CatalogObjectRef, QualifiedName};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::Cardinality;
