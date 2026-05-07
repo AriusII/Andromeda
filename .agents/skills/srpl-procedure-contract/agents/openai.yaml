@@ -1,0 +1,3 @@
+display_name: "SRPL Procedure Contract"
+short_description: "Specify ProcedureContract fields, ContractHash, input/output shapes, permissions, read/write sets, isolation, resource policy, and compatibility. Use for RPC an"
+default_prompt: "Use the SRPL Procedure Contract skill to analyze the current Andromeda task and return a bounded, validated result."

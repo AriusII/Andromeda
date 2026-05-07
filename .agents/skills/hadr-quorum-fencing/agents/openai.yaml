@@ -1,0 +1,3 @@
+display_name: "HA/DR Quorum and Fencing"
+short_description: "Design single-primary HA/DR, replica metadata, quorum, fencing, promotion eligibility, epochs, and split-brain prevention. Use for HA/DR work."
+default_prompt: "Use the HA/DR Quorum and Fencing skill to analyze the current Andromeda task and return a bounded, validated result."

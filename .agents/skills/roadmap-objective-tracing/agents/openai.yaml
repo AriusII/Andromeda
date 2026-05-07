@@ -1,0 +1,3 @@
+display_name: "Roadmap Objective Tracing"
+short_description: "Track large Andromeda roadmap prompts, objectives, dependencies, status signals, constraints, and unresolved decisions. Use when Codex must preserve a long miss"
+default_prompt: "Use the Roadmap Objective Tracing skill to analyze the current Andromeda task and return a bounded, validated result."

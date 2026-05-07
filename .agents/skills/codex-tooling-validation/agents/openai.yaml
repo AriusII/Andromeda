@@ -1,0 +1,3 @@
+display_name: "Codex Tooling Validation"
+short_description: "Validate the full Codex tooling tree: AGENTS.md, .codex/config.toml, .codex/agents, .agents/skills, hooks, scripts, and prompt templates."
+default_prompt: "Use the Codex Tooling Validation skill to analyze the current Andromeda task and return a bounded, validated result."

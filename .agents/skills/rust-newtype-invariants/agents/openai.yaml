@@ -1,0 +1,3 @@
+display_name: "Rust Newtype Invariants"
+short_description: "Use Rust newtypes and checked constructors for IDs, hashes, LSNs, versions, domain primitives, and invariants. Use when primitive obsession risks bugs."
+default_prompt: "Use the Rust Newtype Invariants skill to analyze the current Andromeda task and return a bounded, validated result."

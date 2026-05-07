@@ -1,0 +1,3 @@
+display_name: "Rust SIMD Dispatch"
+short_description: "Implement runtime-dispatched x64/arm64 SIMD kernels with scalar fallback and target-feature guards. Use for CRC, scans, compression, histograms, or vector math."
+default_prompt: "Use the Rust SIMD Dispatch skill to analyze the current Andromeda task and return a bounded, validated result."

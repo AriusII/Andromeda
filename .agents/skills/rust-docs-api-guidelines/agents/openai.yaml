@@ -1,0 +1,3 @@
+display_name: "Rust Docs API Guidelines"
+short_description: "Document Rust APIs with crate docs, examples, errors, safety, panics, versioning, and observability. Use for public crates or stable internal APIs."
+default_prompt: "Use the Rust Docs API Guidelines skill to analyze the current Andromeda task and return a bounded, validated result."

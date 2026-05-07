@@ -1,53 +1,85 @@
 ---
 name: codex-skill-authoring
-description: Create or refine Codex skills using SKILL.md frontmatter, concise triggering descriptions, progressive disclosure, scripts, references, assets, validation, and forward-testing.
+description: "Create precise Codex skills with SKILL.md frontmatter, progressive disclosure, references, scripts, and validation. Use when adding or improving a skill."
 ---
 
 # Codex Skill Authoring
 
 ## Purpose
 
-Use this skill to perform a focused Andromeda workflow without re-deriving the project doctrine from scratch. Keep the output precise, testable, and aligned with the current consolidated Andromeda documents.
+Use this skill to execute a focused, reusable workflow for **Codex Skill Authoring** in the Andromeda project.
 
-## Core workflow
+This skill is intentionally not an agent. It does not own planning, delegation, or final authority. It provides domain-specific procedure, review points, and validation criteria that an agent can load when the user request requires this capability.
 
-1. Identify the exact object under review: document section, Procedure, contract, module, test, hook, skill, agent, or source file.
-2. Restate the relevant Andromeda invariants before proposing changes.
-3. Separate stable doctrine from open design decisions.
-4. Produce a concrete artifact: review notes, a patch plan, a specification, a test matrix, a checklist, or a corrected document section.
-5. State validation commands or deterministic checks that should be run.
-6. List residual risks and the smallest next action.
-
-## Andromeda constraints to preserve
-
-- No ad hoc SQL application surface.
-- Procedure-only RPC boundary.
-- Typed, hashed, versioned Procedure contracts.
-- Explicit transaction scope and isolation policy where relevant.
-- No visible commit without durable WAL.
-- Recovery and audit must be designed before critical features are accepted.
-- GPU, learned components, and predictive evidence may assist but must not become C5 truth.
-- Any adaptive behavior must be bounded, versioned, observable, explainable, and disableable.
-
-## Output format
-
-```markdown
 ## Scope
-<what was reviewed or designed>
 
-## Findings
-- [Critical|High|Medium|Low] <finding>
+Use this skill when the active task requires:
 
-## Recommended changes
-1. <specific change>
+- Precise work in the `codex` domain.
+- Alignment with Andromeda's strict relational, transactional, contract-first doctrine.
+- Rust 2024-compatible engineering discipline when code is involved.
+- Evidence-based validation instead of broad intuition.
+
+## Required inputs
+
+Collect or infer:
+
+1. The target subsystem, file set, document set, or prompt.
+2. The requested output format.
+3. The risk class: experimental, important, critical, or mission-critical.
+4. The source evidence that constrains the task.
+5. The validation gate that proves the result.
+
+## Procedure
+
+1. Restate the task in one precise sentence.
+2. Identify the applicable Andromeda invariants.
+3. Identify the smallest safe scope that satisfies the request.
+4. Apply the workflow from `references/checklist.md`.
+5. Produce an output that separates:
+   - findings,
+   - decisions,
+   - proposed changes,
+   - validation,
+   - residual risk.
+6. For code or repository changes, name the exact commands that should be run.
+7. For mission-critical claims, require a traceable source or an explicit uncertainty note.
+
+## Andromeda guardrails
+
+Always preserve these defaults:
+
+- No application-facing ad hoc SQL.
+- Procedure contracts are typed, versioned, and hashable.
+- WAL durability precedes visible commit.
+- Recovery and audit are design requirements, not afterthoughts.
+- GPU and learned components may propose or accelerate, but they do not decide critical truth.
+- Rust persistent/network formats use explicit codecs, never native struct layout.
 
 ## Validation
-- <command or test>
 
-## Residual risks
-- <risk>
+Use the strongest applicable validation:
+
+- Documentation-only change: consistency check against Andromeda doctrine.
+- Codex tooling change: `python3 .codex/scripts/validate_codex_tooling.py`.
+- Rust workspace change: `cargo fmt`, `cargo check`, `cargo clippy`, and relevant tests.
+- Parser/codec change: property tests and fuzz tests.
+- WAL/storage/recovery change: crash/recovery matrix.
+- Security/RPC change: permission, threat-model, and audit-trace review.
+
+## Output contract
+
+Return:
+
+```text
+Task
+Sources used
+Decision or change
+Validation performed or required
+Risks
+Next executable step
 ```
 
-## When to read references
+## Reference
 
-Read `references/checklist.md` when the task is a formal review, acceptance gate, or forward-test. Do not load it for trivial edits.
+Read `references/checklist.md` when the task needs detailed checks or acceptance criteria.

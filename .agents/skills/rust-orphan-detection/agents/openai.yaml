@@ -1,0 +1,3 @@
+display_name: "Rust Orphan Detection"
+short_description: "Find orphan files, modules, dependencies, features, examples, benches, scripts, fixtures, and docs. Use for repository cleanup and integrity checks."
+default_prompt: "Use the Rust Orphan Detection skill to analyze the current Andromeda task and return a bounded, validated result."

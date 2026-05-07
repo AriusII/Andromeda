@@ -1,0 +1,3 @@
+display_name: "Storage Segment Manifest"
+short_description: "Design root pointer, manifests, WAL/hot/cold segments, SegmentIndex, hashes, signatures, AEAD, and startup path. Use for physical storage format."
+default_prompt: "Use the Storage Segment Manifest skill to analyze the current Andromeda task and return a bounded, validated result."

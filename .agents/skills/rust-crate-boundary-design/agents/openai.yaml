@@ -1,0 +1,3 @@
+display_name: "Rust Crate Boundary Design"
+short_description: "Define crate boundaries by responsibility for Andromeda engine subsystems. Use when splitting or reviewing crates to avoid god crates and utility dumping ground"
+default_prompt: "Use the Rust Crate Boundary Design skill to analyze the current Andromeda task and return a bounded, validated result."

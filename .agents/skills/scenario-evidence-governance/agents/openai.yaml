@@ -1,0 +1,3 @@
+display_name: "Scenario Evidence Governance"
+short_description: "Govern ScenarioEvidence, confidence/criticality/freshness/realism/stability scores, expiration, validation, and optimizer consumption. Use for predictive eviden"
+default_prompt: "Use the Scenario Evidence Governance skill to analyze the current Andromeda task and return a bounded, validated result."

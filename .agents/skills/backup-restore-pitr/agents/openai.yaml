@@ -1,0 +1,3 @@
+display_name: "Backup Restore PITR"
+short_description: "Design backup, WAL archives, immutable retention, PITR restore, restore tests, and backup policies. Use for operations and DR work."
+default_prompt: "Use the Backup Restore PITR skill to analyze the current Andromeda task and return a bounded, validated result."

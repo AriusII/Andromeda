@@ -1,0 +1,3 @@
+display_name: "WAL Crash Recovery Testing"
+short_description: "Design crash tests for before/after WAL flush, TxCommit, dirty page flush, manifest switch, Map delta, WAL truncation, and recovery reports. Use for C5 validati"
+default_prompt: "Use the WAL Crash Recovery Testing skill to analyze the current Andromeda task and return a bounded, validated result."

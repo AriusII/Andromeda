@@ -1,0 +1,3 @@
+display_name: "Hook JSON Validation"
+short_description: "Validate .codex/hooks.json structure, event names, command paths, timeouts, matchers, and referenced scripts. Use before packaging or committing Codex hooks."
+default_prompt: "Use the Hook JSON Validation skill to analyze the current Andromeda task and return a bounded, validated result."

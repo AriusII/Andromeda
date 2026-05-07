@@ -1,0 +1,3 @@
+display_name: "Learned Component Skepticism"
+short_description: "Evaluate learned cardinality, learned indexes, learned optimizer, and workload prediction as evidence only with fallback and poisoning defenses. Use for modern "
+default_prompt: "Use the Learned Component Skepticism skill to analyze the current Andromeda task and return a bounded, validated result."

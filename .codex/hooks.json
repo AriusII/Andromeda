@@ -5,9 +5,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .codex/scripts/hooks/session_start_context.py",
+            "command": "python3 .codex/scripts/hooks/session_context_injector.py",
             "timeout": 10,
-            "statusMessage": "Loading Andromeda Codex context"
+            "statusMessage": "Loading Andromeda session context"
           }
         ]
       }
@@ -17,9 +17,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .codex/scripts/hooks/user_prompt_submit_guard.py",
+            "command": "python3 .codex/scripts/hooks/user_prompt_scope_guard.py",
             "timeout": 10,
-            "statusMessage": "Checking prompt against Andromeda guardrails"
+            "statusMessage": "Checking Andromeda prompt scope"
           }
         ]
       }
@@ -30,34 +30,57 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .codex/scripts/hooks/pre_tool_use_policy.py",
+            "command": "python3 .codex/scripts/hooks/pre_tool_destructive_guard.py",
             "timeout": 10,
-            "statusMessage": "Checking shell command policy"
+            "statusMessage": "Checking destructive command policy"
+          },
+          {
+            "type": "command",
+            "command": "python3 .codex/scripts/hooks/pre_tool_rust_guard.py",
+            "timeout": 10,
+            "statusMessage": "Checking Rust command policy"
           }
         ]
-      }
-    ],
-    "PostToolUse": [
+      },
       {
-        "matcher": "Bash",
+        "matcher": "Write|Edit|MultiEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "python .codex/scripts/hooks/post_tool_use_audit.py",
+            "command": "python3 .codex/scripts/hooks/pre_tool_destructive_guard.py",
             "timeout": 10,
-            "statusMessage": "Recording shell command audit event"
+            "statusMessage": "Checking write/edit safety"
           }
         ]
       }
     ],
     "PermissionRequest": [
       {
+        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "python .codex/scripts/hooks/pre_tool_use_policy.py",
+            "command": "python3 .codex/scripts/hooks/permission_request_guard.py",
             "timeout": 10,
-            "statusMessage": "Checking permission request policy"
+            "statusMessage": "Evaluating permission request policy"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .codex/scripts/hooks/post_tool_audit.py",
+            "timeout": 10,
+            "statusMessage": "Auditing tool result"
+          },
+          {
+            "type": "command",
+            "command": "python3 .codex/scripts/hooks/codex_tooling_audit.py",
+            "timeout": 10,
+            "statusMessage": "Checking Codex tooling impact"
           }
         ]
       }
@@ -67,9 +90,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .codex/scripts/hooks/stop_quality_gate.py",
+            "command": "python3 .codex/scripts/hooks/stop_quality_gate.py",
             "timeout": 10,
-            "statusMessage": "Applying final Andromeda quality reminder"
+            "statusMessage": "Running final quality gate"
           }
         ]
       }

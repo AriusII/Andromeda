@@ -1,0 +1,3 @@
+display_name: "Transaction State Machine"
+short_description: "Design transaction lifecycle: Created, Active, Committing, Committed, Failed, Poisoned, RollingBack, RolledBack, Disposed. Use for transaction kernel work."
+default_prompt: "Use the Transaction State Machine skill to analyze the current Andromeda task and return a bounded, validated result."

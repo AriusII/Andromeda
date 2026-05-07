@@ -1,0 +1,3 @@
+display_name: "Rust Binary Codec Design"
+short_description: "Design and implement explicit Rust binary codecs for persisted and network formats. Use for WAL, pages, manifests, SegmentIndex, RPC frames, and contract hashes"
+default_prompt: "Use the Rust Binary Codec Design skill to analyze the current Andromeda task and return a bounded, validated result."

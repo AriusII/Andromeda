@@ -1,0 +1,3 @@
+display_name: "Project Context Intake"
+short_description: "Extract the minimum sufficient Andromeda context from user prompts, repository files, uploaded documents, and local evidence. Use before major architecture, ref"
+default_prompt: "Use the Project Context Intake skill to analyze the current Andromeda task and return a bounded, validated result."

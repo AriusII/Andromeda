@@ -1,0 +1,3 @@
+display_name: "SRPL Parser Design"
+short_description: "Design lexer/parser behavior, grammar constraints, diagnostic codes, canonical forms, and ambiguity rejection for SRPL. Use for parser implementation planning."
+default_prompt: "Use the SRPL Parser Design skill to analyze the current Andromeda task and return a bounded, validated result."

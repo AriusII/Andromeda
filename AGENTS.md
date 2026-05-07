@@ -1,89 +1,105 @@
-# AGENTS.md — Andromeda Repository Instructions
+# Andromeda Codex Operating Instructions
 
-## Project identity
+**Status:** Mission-critical Codex guidance  
+**Package version:** 2026.05.07-rust-codex-tooling-v2  
+**Project:** Andromeda - modern relational transactional database engine and SRPL language  
+**Primary implementation language:** Rust 2024 Edition  
+**Default engineering posture:** strict boundaries, adaptive internals
 
-Andromeda is a modern 2026 relational transactional database project. It is not a generic SQL server. The native application surface is:
+## Purpose
 
-```text
-QUIC + custom typed RPC + cataloged Procedure + SRPL + typed ResultStream
+Use this file as the root instruction set for Codex when working in the Andromeda repository.
+
+Andromeda is not a general SQL server with a modern wrapper. It is a strict relational transactional database engine where application behavior is exposed through typed, cataloged Procedures invoked through a contract-first RPC surface. Treat every design or code change as part of a safety-critical engine unless the task explicitly says it is experimental.
+
+## Non-negotiable project invariants
+
+1. Do not introduce application-facing ad hoc SQL.
+2. Do not bypass typed Procedure contracts.
+3. Do not make a commit visible before durable WAL.
+4. Do not treat RAM, temp storage, GPU output, or benchmark output as truth.
+5. Do not place GPU work in the commit, WAL, rollback, recovery, MVCC short-visibility, catalog publication, or security-critical path.
+6. Do not serialize Rust native structs directly to disk or network.
+7. Do not use dynamic table names, dynamic predicates, shape-shifting returns, or implicit null semantics in SRPL core work.
+8. Do not expose Administration or HA/DR capabilities through the Application Surface.
+9. Do not accept optimization that is not observable, bounded, versioned, explainable, and disableable.
+10. Do not accept mission-critical behavior without crash/recovery validation.
+
+## Rust baseline
+
+Use Rust 2024 Edition unless an Architecture Decision Record changes the baseline.
+
+Default Rust engineering rules:
+
+- Keep crates aligned with engine responsibilities.
+- Keep `lib.rs` thin.
+- Prefer newtypes over primitive aliases for semantic identifiers.
+- Keep `unsafe` private, documented, tested, and reviewed.
+- Prefer typed errors over string errors.
+- Do not use `panic`, `unwrap`, or `expect` in critical runtime paths.
+- Use explicit binary codecs and little-endian canonical serialization.
+- Use scalar fallbacks for CPU SIMD and GPU paths.
+- Use measurement before optimization.
+
+## Codex behavior
+
+When a user request is broad, perform these steps:
+
+1. Normalize the request into a concrete work order.
+2. Identify the Andromeda subsystem and risk class.
+3. Select the relevant agent and skills from `.codex/agents` and `.agents/skills`.
+4. Preserve source evidence and uncertainty.
+5. Execute the smallest safe slice.
+6. Validate with the strongest reasonable gate.
+7. Report what changed, what was validated, and what remains risky.
+
+## Repository tooling
+
+Use:
+
+- `.codex/config.toml` for agent registry and Codex configuration.
+- `.codex/agents/*.toml` for specialized agents.
+- `.agents/skills/*/SKILL.md` for specialized skills.
+- `.codex/hooks.json` and `.codex/scripts/hooks/*.py` for hook policies.
+- `.codex/scripts/validate_codex_tooling.py` to validate this tooling package.
+- `.codex/prompts/*.md` for reusable prompt templates.
+- `docs/codex/` for operating model and governance documentation.
+
+## Required validation before completing Codex tooling changes
+
+Run:
+
+```bash
+python3 .codex/scripts/validate_codex_tooling.py
 ```
 
-Use American English for generated repository documents unless a task explicitly requests another language.
+For Rust code changes, prefer the applicable gate:
 
-## Non-negotiable invariants
-
-1. No ad hoc SQL on the application surface.
-2. Every application execution goes through a cataloged Procedure.
-3. Every Procedure has a typed, hashed, versioned contract.
-4. Every Procedure is transactionally scoped.
-5. No visible commit without durable WAL.
-6. RAM is never system truth.
-7. System truth is the last valid cold snapshot plus durable WAL since that snapshot.
-8. GPU never participates in commit, rollback, WAL, recovery, MVCC visibility, or security-critical paths.
-9. Predictive evidence never decides alone.
-10. Active plans are tied to `CatalogVersion + StatsVersion + ContractHash`.
-11. Every critical decision must be observable and explainable after the fact.
-12. Every feature must be definable, deterministic or explicitly bounded, typed, observable, recoverable after crash, versioned, explainable, and disableable.
-
-## Native terminology
-
-Prefer Andromeda terms over SQL analogies:
-
-| Use | Avoid as native term |
-|---|---|
-| Procedure / Invocation | Query |
-| Procedure Store | Query Store |
-| Map | View |
-| Modelization | Model |
-| DefinitionBatch | Migration script |
-| ResultStream | Result set |
-| StructuredObject | TVP / dynamic record |
-
-SQL Server, Oracle, PostgreSQL, and research literature may be used as references, but they do not define the native Andromeda surface.
-
-## Engineering posture
-
-- Preserve strict module boundaries.
-- Prefer explicit contracts over runtime discovery.
-- Prefer deterministic scripts over repeated ad hoc shell fragments.
-- Prefer small patches with clear validation.
-- Do not introduce dynamic SQL text, implicit nullability, non-bounded loops, random unseeded behavior, or filesystem/network access from Procedures.
-- Do not remove audit, WAL, version, recovery, or security requirements to simplify a design.
-
-## Validation expectations
-
-For code or spec changes, report:
-
-```text
-Changed files
-Reason for change
-Andromeda invariants touched
-Validation commands run
-Tests added or updated
-Residual risks
+```bash
+cargo fmt --all --check
+cargo check --workspace --all-targets --all-features
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo nextest run --workspace --all-features
+cargo test --doc --workspace
+cargo audit
+cargo deny check
 ```
 
-When checks cannot be run, state that explicitly and explain why.
+For C4/C5 storage, WAL, recovery, security, RPC, or catalog changes, add crash/recovery, fuzz, Miri, or targeted property tests as appropriate.
 
-## Recommended specialist routing
+## Output style
 
-- SRPL syntax/type/cardinality: use `srpl-language-specifier`.
-- WAL/MVCC/recovery: use `transaction-wal-recovery-auditor`.
-- Page/storage/manifest: use `storage-engine-page-layout-auditor`.
-- QUIC/RPC/contracts: use `quic-rpc-contract-auditor`.
-- Security/IAM/audit: use `security-iam-threat-modeler`.
-- Optimizer/statistics/evidence: use `optimizer-statistics-critic`.
-- Hooks/skills/agent tooling: use `hooks-governance-auditor` or `codex-skill-maintainer`.
+Use American English for generated project files and documentation.
 
-## Pull request guidance
+Use Microsoft Learn-style structure:
 
-A PR should include:
+- Purpose
+- Scope
+- Non-goals
+- Prerequisites
+- Procedure
+- Validation
+- Troubleshooting
+- References
 
-1. Summary.
-2. Design rationale.
-3. Andromeda invariants preserved.
-4. Tests and validation.
-5. Recovery/security/compatibility impact.
-6. Known limitations.
-
-Do not present unvalidated assumptions as facts.
+For chat responses to the repository owner, explain in French unless the user requests otherwise.

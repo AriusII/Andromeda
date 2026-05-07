@@ -1,0 +1,3 @@
+display_name: "DefinitionBatch Validation"
+short_description: "Validate DefinitionBatch dependency graph, ordering, DryRun, breaking changes, security impact, storage impact, and transactionality. Use for import/modelizatio"
+default_prompt: "Use the DefinitionBatch Validation skill to analyze the current Andromeda task and return a bounded, validated result."

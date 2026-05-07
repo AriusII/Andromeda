@@ -1,0 +1,3 @@
+display_name: "Codex Prompt Template Design"
+short_description: "Design reusable prompts for Codex agent work: implementation, review, cleanup, tests, research, specification, and recovery plans. Use when creating prompt libr"
+default_prompt: "Use the Codex Prompt Template Design skill to analyze the current Andromeda task and return a bounded, validated result."

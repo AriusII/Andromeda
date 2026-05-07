@@ -1,0 +1,3 @@
+display_name: "Release Gate Mission Critical"
+short_description: "Define release gates for C4/C5 components: WAL, recovery, storage, security, QUIC/RPC, catalog, and Procedure contracts. Use before release or major merge."
+default_prompt: "Use the Release Gate Mission Critical skill to analyze the current Andromeda task and return a bounded, validated result."

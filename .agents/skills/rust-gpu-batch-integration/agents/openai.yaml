@@ -1,0 +1,3 @@
+display_name: "Rust GPU Batch Integration"
+short_description: "Integrate GPU acceleration only for batch analytics/statistics/vector workloads outside commit path. Use when designing wgpu/CUDA/ROCm adapters or GPU policies."
+default_prompt: "Use the Rust GPU Batch Integration skill to analyze the current Andromeda task and return a bounded, validated result."

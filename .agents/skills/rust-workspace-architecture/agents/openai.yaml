@@ -1,0 +1,3 @@
+display_name: "Rust Workspace Architecture"
+short_description: "Design and review a Rust 2024 Cargo workspace for a systems-grade database engine. Use when defining crates, members, profiles, lints, and dependency policy."
+default_prompt: "Use the Rust Workspace Architecture skill to analyze the current Andromeda task and return a bounded, validated result."

@@ -1,56 +1,85 @@
 ---
 name: decision-record-authoring
-description: Author decision records for durable architecture or policy changes. Use when working on governance tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+description: "Create ADR/DEC records with context, decision, alternatives, consequences, revision criteria, and test gates. Use for architecture, tooling, Rust, WAL, SRPL, hook, or agent policy decisions."
 ---
 
-# decision-record-authoring
+# Decision Record Authoring
 
 ## Purpose
 
-Author decision records for durable architecture or policy changes.
+Use this skill to execute a focused, reusable workflow for **Decision Record Authoring** in the Andromeda project.
 
-## Use when
+This skill is intentionally not an agent. It does not own planning, delegation, or final authority. It provides domain-specific procedure, review points, and validation criteria that an agent can load when the user request requires this capability.
 
-Use this skill for focused governance work. Do not use it as a general architecture agent.
+## Scope
 
-## Inputs
+Use this skill when the active task requires:
 
-- Task brief.
-- Relevant project files.
-- Affected engine or plane.
-- Current assumptions.
-- Required output format.
+- Precise work in the `context` domain.
+- Alignment with Andromeda's strict relational, transactional, contract-first doctrine.
+- Rust 2024-compatible engineering discipline when code is involved.
+- Evidence-based validation instead of broad intuition.
+
+## Required inputs
+
+Collect or infer:
+
+1. The target subsystem, file set, document set, or prompt.
+2. The requested output format.
+3. The risk class: experimental, important, critical, or mission-critical.
+4. The source evidence that constrains the task.
+5. The validation gate that proves the result.
 
 ## Procedure
 
-1. Define context.
-2. State decision.
-3. List alternatives.
-4. State consequences.
-5. Define validation.
-6. Define rollback.
+1. Restate the task in one precise sentence.
+2. Identify the applicable Andromeda invariants.
+3. Identify the smallest safe scope that satisfies the request.
+4. Apply the workflow from `references/checklist.md`.
+5. Produce an output that separates:
+   - findings,
+   - decisions,
+   - proposed changes,
+   - validation,
+   - residual risk.
+6. For code or repository changes, name the exact commands that should be run.
+7. For mission-critical claims, require a traceable source or an explicit uncertainty note.
+
+## Andromeda guardrails
+
+Always preserve these defaults:
+
+- No application-facing ad hoc SQL.
+- Procedure contracts are typed, versioned, and hashable.
+- WAL durability precedes visible commit.
+- Recovery and audit are design requirements, not afterthoughts.
+- GPU and learned components may propose or accelerate, but they do not decide critical truth.
+- Rust persistent/network formats use explicit codecs, never native struct layout.
+
+## Validation
+
+Use the strongest applicable validation:
+
+- Documentation-only change: consistency check against Andromeda doctrine.
+- Codex tooling change: `python3 .codex/scripts/validate_codex_tooling.py`.
+- Rust workspace change: `cargo fmt`, `cargo check`, `cargo clippy`, and relevant tests.
+- Parser/codec change: property tests and fuzz tests.
+- WAL/storage/recovery change: crash/recovery matrix.
+- Security/RPC change: permission, threat-model, and audit-trace review.
 
 ## Output contract
 
 Return:
 
-- `summary`
-- `findings`
-- `recommended_action`
-- `risks`
-- `required_tests`
-- `open_questions`
+```text
+Task
+Sources used
+Decision or change
+Validation performed or required
+Risks
+Next executable step
+```
 
-## Boundaries
+## Reference
 
-- Do not override project doctrine.
-- Do not introduce gRPC.
-- Do not introduce ad hoc SQL as a native application surface.
-- Do not infer runtime behavior that is not specified.
-- Escalate cross-domain decisions to the responsible agent.
-
-## Version history
-
-- 0.1.0 (2026-05-03): Initial project-specific skill.
+Read `references/checklist.md` when the task needs detailed checks or acceptance criteria.

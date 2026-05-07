@@ -1,0 +1,3 @@
+display_name: "Agent Skill Routing"
+short_description: "Select agents and skills for a user request based on task type, criticality, Rust area, Andromeda subsystem, and risk class. Use when Codex must dynamically loa"
+default_prompt: "Use the Agent Skill Routing skill to analyze the current Andromeda task and return a bounded, validated result."

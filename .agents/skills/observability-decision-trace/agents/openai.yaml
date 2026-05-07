@@ -1,0 +1,3 @@
+display_name: "Observability Decision Trace"
+short_description: "Design DecisionTrace and operational metrics so optimizer, stats, security, storage, and recovery decisions are explainable after the fact. Use for traceability"
+default_prompt: "Use the Observability Decision Trace skill to analyze the current Andromeda task and return a bounded, validated result."

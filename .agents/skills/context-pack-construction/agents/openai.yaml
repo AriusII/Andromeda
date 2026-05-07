@@ -1,0 +1,3 @@
+display_name: "Context Pack Construction"
+short_description: "Build compact context packs for agents and skills. Use when preparing another agent, prompt template, or handoff with only the context needed to execute correct"
+default_prompt: "Use the Context Pack Construction skill to analyze the current Andromeda task and return a bounded, validated result."

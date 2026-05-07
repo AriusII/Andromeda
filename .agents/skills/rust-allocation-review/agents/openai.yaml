@@ -1,0 +1,3 @@
+display_name: "Rust Allocation Review"
+short_description: "Review allocations, clones, String/Vec growth, buffer reuse, preallocation, and hot-path memory pressure. Use for performance-sensitive Rust code."
+default_prompt: "Use the Rust Allocation Review skill to analyze the current Andromeda task and return a bounded, validated result."

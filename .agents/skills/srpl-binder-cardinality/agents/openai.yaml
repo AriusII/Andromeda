@@ -1,0 +1,3 @@
+display_name: "SRPL Binder Cardinality"
+short_description: "Bind SRPL names, types, scopes, cardinalities, effects, read/write sets, and permissions. Use when validating procedures before planning."
+default_prompt: "Use the SRPL Binder Cardinality skill to analyze the current Andromeda task and return a bounded, validated result."

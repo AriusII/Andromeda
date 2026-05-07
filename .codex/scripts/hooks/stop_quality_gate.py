@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-import json
+from common import emit, read_payload
 
+payload = read_payload()
 message = (
-    "Before finalizing: list changed files, validation run, Andromeda invariants touched, "
-    "recovery/security/compatibility impact, and residual risks."
+    "Stop quality gate complete. Before finalizing: provide artifact links when files were created, "
+    "state validation performed, cite sources for factual claims, and identify unvalidated risks."
 )
-print(json.dumps({"systemMessage": message}))
+emit({"systemMessage": message})
