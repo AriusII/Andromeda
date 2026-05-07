@@ -52,6 +52,15 @@ max_payload_bytes = 4096
 invalid_input_policy = "return-or-error-no-panic"
 
 [[target]]
+name = "wal_record_roundtrip"
+path = "fuzz_targets/wal_record_roundtrip.rs"
+corpus_dir = "fuzz/corpus/storage_wal_record_roundtrip"
+generator = "fuzz/generators/generate_seed_corpus.py"
+max_input_bytes = 65536
+max_payload_bytes = 4096
+invalid_input_policy = "return-or-error-no-panic"
+
+[[target]]
 name = "btree_node_v1_decode"
 path = "fuzz_targets/btree_node_v1_decode.rs"
 corpus_dir = "fuzz/corpus/btree_node_v1_decode"
@@ -97,7 +106,7 @@ invalid_input_policy = "return-or-error-no-panic"
 
 [[support]]
 path = "fuzz_targets/common.rs"
-used_by = ["btree_node_v1_decode", "durable_audit_journal_decode", "frame_codec_no_panic", "heap_page_v1_decode", "page_codec_v1_decode", "proto_frame_envelope_decode", "proto_rpc_completion_decode", "quic_zero_rtt_admission", "result_sequence_state_machine", "srpl_parser_signature_decode", "storage_wal_record_roundtrip"]
+used_by = ["btree_node_v1_decode", "durable_audit_journal_decode", "frame_codec_no_panic", "heap_page_v1_decode", "page_codec_v1_decode", "proto_frame_envelope_decode", "proto_rpc_completion_decode", "quic_zero_rtt_admission", "result_sequence_state_machine", "srpl_parser_signature_decode", "storage_wal_record_roundtrip", "wal_record_roundtrip"]
 
 [[support]]
 path = "fuzz_targets/durable_audit_journal_support.rs"

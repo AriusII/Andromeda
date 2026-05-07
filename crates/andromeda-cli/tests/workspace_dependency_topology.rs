@@ -17,6 +17,11 @@ fn workspace_crate_dependency_topology_blocks_forbidden_runtime_edges() {
                 .iter()
                 .flat_map(|rule| rule.violations(&manifests)),
         )
+        .chain(
+            allowed_dev_dependency_rules()
+                .iter()
+                .flat_map(|rule| rule.violations(&manifests)),
+        )
         .collect::<Vec<_>>();
 
     assert!(
@@ -320,16 +325,14 @@ fn allowed_dependency_rules() -> Vec<AllowedDependencyRule> {
             ],
         ),
         AllowedDependencyRule::new(
-            "andromeda-storage may only depend on current Lot 4.3 durable-kernel support crates and test harness dependencies",
+            "andromeda-storage may only depend on current Lot 4.3 durable-kernel support crates",
             "andromeda-storage",
             &[
                 "andromeda-core",
                 "andromeda-observe",
                 "andromeda-wal",
                 "dashmap",
-                "proptest",
                 "sha2",
-                "tempfile",
             ],
         ),
         AllowedDependencyRule::new(
@@ -348,6 +351,23 @@ fn allowed_dependency_rules() -> Vec<AllowedDependencyRule> {
                 "futures",
                 "tokio",
             ],
+        ),
+    ]
+}
+
+fn allowed_dev_dependency_rules() -> Vec<AllowedDependencyRule> {
+    vec![
+        AllowedDependencyRule::new_for_scope(
+            "andromeda-storage may only dev-depend on storage test harness crates",
+            "andromeda-storage",
+            DependencyScope::Dev,
+            &["proptest", "tempfile"],
+        ),
+        AllowedDependencyRule::new_for_scope(
+            "andromeda-wal may only dev-depend on pure WAL test harness crates",
+            "andromeda-wal",
+            DependencyScope::Dev,
+            &["proptest"],
         ),
     ]
 }
@@ -377,7 +397,7 @@ impl ForbiddenRule {
             .filter(|manifest| self.sources.contains(manifest.package_name.as_str()))
             .flat_map(|manifest| {
                 manifest
-                    .dependencies
+                    .runtime_dependencies
                     .iter()
                     .filter(|dependency| self.forbidden_dependencies.contains(dependency.as_str()))
                     .map(|dependency| {
@@ -398,6 +418,7 @@ impl ForbiddenRule {
 struct AllowedDependencyRule {
     message: &'static str,
     source: &'static str,
+    scope: DependencyScope,
     allowed_dependencies: BTreeSet<&'static str>,
 }
 
@@ -407,9 +428,24 @@ impl AllowedDependencyRule {
         source: &'static str,
         allowed_dependencies: &[&'static str],
     ) -> Self {
+        Self::new_for_scope(
+            message,
+            source,
+            DependencyScope::Runtime,
+            allowed_dependencies,
+        )
+    }
+
+    fn new_for_scope(
+        message: &'static str,
+        source: &'static str,
+        scope: DependencyScope,
+        allowed_dependencies: &[&'static str],
+    ) -> Self {
         Self {
             message,
             source,
+            scope,
             allowed_dependencies: allowed_dependencies.iter().copied().collect(),
         }
     }
@@ -419,8 +455,7 @@ impl AllowedDependencyRule {
             return Vec::new();
         };
 
-        manifest
-            .dependencies
+        self.dependencies_for(manifest)
             .iter()
             .filter(|dependency| !self.allowed_dependencies.contains(dependency.as_str()))
             .map(|dependency| {
@@ -434,12 +469,26 @@ impl AllowedDependencyRule {
             })
             .collect()
     }
+
+    fn dependencies_for<'a>(&self, manifest: &'a CrateManifest) -> &'a BTreeSet<String> {
+        match self.scope {
+            DependencyScope::Runtime => &manifest.runtime_dependencies,
+            DependencyScope::Dev => &manifest.dev_dependencies,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum DependencyScope {
+    Runtime,
+    Dev,
 }
 
 struct CrateManifest {
     package_name: String,
     path: PathBuf,
-    dependencies: BTreeSet<String>,
+    runtime_dependencies: BTreeSet<String>,
+    dev_dependencies: BTreeSet<String>,
 }
 
 fn load_crate_manifests(root: &Path) -> BTreeMap<String, CrateManifest> {
@@ -456,7 +505,8 @@ fn load_crate_manifests(root: &Path) -> BTreeMap<String, CrateManifest> {
             CrateManifest {
                 package_name,
                 path,
-                dependencies,
+                runtime_dependencies: dependencies.runtime,
+                dev_dependencies: dependencies.dev,
             },
         );
     }
@@ -503,9 +553,15 @@ fn parse_package_name(text: &str) -> Option<String> {
     None
 }
 
-fn parse_dependency_names(text: &str) -> BTreeSet<String> {
-    let mut dependencies = BTreeSet::new();
-    let mut in_dependency_section = false;
+#[derive(Default)]
+struct ManifestDependencies {
+    runtime: BTreeSet<String>,
+    dev: BTreeSet<String>,
+}
+
+fn parse_dependency_names(text: &str) -> ManifestDependencies {
+    let mut dependencies = ManifestDependencies::default();
+    let mut dependency_section = ParsedDependencySection::None;
 
     for line in text.lines() {
         let Some(line) = cargo_line_without_comment(line) else {
@@ -513,31 +569,64 @@ fn parse_dependency_names(text: &str) -> BTreeSet<String> {
         };
 
         if line.starts_with('[') {
-            in_dependency_section = matches!(
-                line,
-                "[dependencies]" | "[dev-dependencies]" | "[build-dependencies]"
-            ) || line.starts_with("[target.")
-                && (line.ends_with(".dependencies]")
-                    || line.ends_with(".dev-dependencies]")
-                    || line.ends_with(".build-dependencies]"));
+            dependency_section = dependency_section_for(line);
             continue;
         }
 
-        if !in_dependency_section {
+        if matches!(dependency_section, ParsedDependencySection::None) {
             continue;
         }
 
         if let Some((name, rest)) = line.split_once('=') {
             let dependency = normalize_dependency_name(name.trim());
-            dependencies.insert(dependency);
+            dependency_section.insert(&mut dependencies, dependency);
 
             if let Some(package) = parse_package_rename(rest) {
-                dependencies.insert(normalize_dependency_name(&package));
+                dependency_section.insert(&mut dependencies, normalize_dependency_name(&package));
             }
         }
     }
 
     dependencies
+}
+
+#[derive(Clone, Copy)]
+enum ParsedDependencySection {
+    None,
+    Runtime,
+    Dev,
+}
+
+impl ParsedDependencySection {
+    fn insert(self, dependencies: &mut ManifestDependencies, dependency: String) {
+        match self {
+            ParsedDependencySection::None => {}
+            ParsedDependencySection::Runtime => {
+                dependencies.runtime.insert(dependency);
+            }
+            ParsedDependencySection::Dev => {
+                dependencies.dev.insert(dependency);
+            }
+        }
+    }
+}
+
+fn dependency_section_for(line: &str) -> ParsedDependencySection {
+    if line == "[dependencies]"
+        || line == "[build-dependencies]"
+        || line.starts_with("[target.") && line.ends_with(".dependencies]")
+        || line.starts_with("[target.") && line.ends_with(".build-dependencies]")
+    {
+        return ParsedDependencySection::Runtime;
+    }
+
+    if line == "[dev-dependencies]"
+        || line.starts_with("[target.") && line.ends_with(".dev-dependencies]")
+    {
+        return ParsedDependencySection::Dev;
+    }
+
+    ParsedDependencySection::None
 }
 
 fn cargo_line_without_comment(line: &str) -> Option<&str> {
@@ -590,12 +679,23 @@ fn manifest_parser_tracks_package_renames_in_dependency_sections() {
         transport = { package = "quinn", workspace = true }
         ignored = { package = "andromeda-exec", workspace = true }
 
+        [dev-dependencies]
+        temp = { package = "tempfile", workspace = true }
+        proptest.workspace = true
+
+        [build-dependencies]
+        proto = { package = "prost-build", workspace = true }
+
         [workspace.dependencies]
         andromeda-bench = { path = "crates/andromeda-bench" }
         "#,
     );
 
-    assert!(dependencies.contains("quinn"));
-    assert!(dependencies.contains("andromeda-exec"));
-    assert!(!dependencies.contains("andromeda-bench"));
+    assert!(dependencies.runtime.contains("quinn"));
+    assert!(dependencies.runtime.contains("andromeda-exec"));
+    assert!(dependencies.runtime.contains("prost-build"));
+    assert!(dependencies.dev.contains("tempfile"));
+    assert!(dependencies.dev.contains("proptest"));
+    assert!(!dependencies.runtime.contains("andromeda-bench"));
+    assert!(!dependencies.dev.contains("andromeda-bench"));
 }

@@ -48,6 +48,7 @@ LEGACY_SEED1_PAYLOADS: Dict[str, bytes] = {
     "proto_rpc_completion_decode": b"completion\r\n",
     "srpl_parser_signature_decode": b"PROC demo(a:int)->rows\r\n",
     "storage_wal_record_roundtrip": b"wal\r\n",
+    "wal_record_roundtrip": b"wal\r\n",
 }
 
 
@@ -164,9 +165,12 @@ def parse_string_list(block: str, key: str) -> List[str]:
 
 
 def seed_payloads(target: str) -> Dict[str, bytes]:
-    if target == "storage_wal_record_roundtrip":
+    if target in {"storage_wal_record_roundtrip", "wal_record_roundtrip"}:
+        seed_identity = "storage_wal_record_roundtrip"
         payloads = {
-            "seed-basic.bin": f"ANDROMEDA-FUZZ-SEED::{target}::v1".encode("utf-8"),
+            "seed-basic.bin": f"ANDROMEDA-FUZZ-SEED::{seed_identity}::v1".encode(
+                "utf-8"
+            ),
             "seed1": LEGACY_SEED1_PAYLOADS[target],
             "seed-valid-security-audit-frame.bin": wal_record_frame_seed(
                 kind_tag=22,
@@ -514,11 +518,11 @@ def durable_audit_checksum64(payload: bytes) -> int:
     return value if value != 0 else 1
 
 
-def ensure_seed(root: pathlib.Path, target: str) -> List[pathlib.Path]:
-    corpus_dir = root / "fuzz" / "corpus" / target
+def ensure_seed(root: pathlib.Path, target: TargetSpec) -> List[pathlib.Path]:
+    corpus_dir = root / target.corpus_dir
     corpus_dir.mkdir(parents=True, exist_ok=True)
     written = []
-    for name, payload in seed_payloads(target).items():
+    for name, payload in seed_payloads(target.name).items():
         seed_file = corpus_dir / name
         if not seed_file.exists() or seed_file.read_bytes() != payload:
             seed_file.write_bytes(payload)
@@ -576,22 +580,25 @@ def check_seed_corpus(root: pathlib.Path, targets_file: str) -> int:
     if len({item.path for item in cargo_bin_specs}) != len(cargo_bin_specs):
         errors.append("fuzz/Cargo.toml contains duplicate [[bin]] paths")
 
-    actual_dirs = sorted(
-        path.name for path in (root / "fuzz" / "corpus").iterdir() if path.is_dir()
+    actual_corpus_dirs = sorted(
+        path.relative_to(root).as_posix()
+        for path in (root / "fuzz" / "corpus").iterdir()
+        if path.is_dir()
     )
-    expected_dirs = sorted(target_names)
-    if actual_dirs != expected_dirs:
+    expected_corpus_dirs = sorted({target.corpus_dir for target in target_specs})
+    if actual_corpus_dirs != expected_corpus_dirs:
         errors.append(
             "corpus directory set mismatch: "
-            f"actual={actual_dirs} expected={expected_dirs}"
+            f"actual={actual_corpus_dirs} expected={expected_corpus_dirs}"
         )
 
     cargo_by_name = {item.name: item for item in cargo_bin_specs}
     cargo_names = sorted(cargo_by_name)
     cargo_paths = {item.path for item in cargo_bin_specs}
-    if cargo_names != expected_dirs:
+    if cargo_names != sorted(target_names):
         errors.append(
-            f"fuzz/Cargo.toml target set mismatch: actual={cargo_names} expected={expected_dirs}"
+            "fuzz/Cargo.toml target set mismatch: "
+            f"actual={cargo_names} expected={sorted(target_names)}"
         )
     support_cargo_paths = sorted(support_path_set & cargo_paths)
     if support_cargo_paths:
@@ -688,9 +695,10 @@ def check_seed_corpus(root: pathlib.Path, targets_file: str) -> int:
             errors.append(f"{spec.path}: unknown used_by targets {unknown_targets}")
 
     manifest_targets = sorted(manifest_by_target)
-    if manifest_targets != expected_dirs:
+    if manifest_targets != sorted(target_names):
         errors.append(
-            f"manifest target set mismatch: actual={manifest_targets} expected={expected_dirs}"
+            "manifest target set mismatch: "
+            f"actual={manifest_targets} expected={sorted(target_names)}"
         )
 
     if errors:
@@ -717,7 +725,7 @@ def main() -> int:
     if args.check:
         return check_seed_corpus(root, args.targets_file)
 
-    targets = load_targets(root / args.targets_file)
+    targets = load_target_specs(root / args.targets_file)
     if not targets:
         raise SystemExit("No targets found in fuzz/targets.toml")
 

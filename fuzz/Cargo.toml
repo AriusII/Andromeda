@@ -18,6 +18,7 @@ andromeda-observe = { path = "../crates/andromeda-observe" }
 andromeda-quic = { path = "../crates/andromeda-quic" }
 andromeda-srpl = { path = "../crates/andromeda-srpl" }
 andromeda-storage = { path = "../crates/andromeda-storage" }
+andromeda-wal = { path = "../crates/andromeda-wal" }
 
 [[bin]]
 name = "frame_codec_no_panic"
@@ -52,6 +53,12 @@ doc = false
 [[bin]]
 name = "storage_wal_record_roundtrip"
 path = "fuzz_targets/storage_wal_record_roundtrip.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "wal_record_roundtrip"
+path = "fuzz_targets/wal_record_roundtrip.rs"
 test = false
 doc = false
 

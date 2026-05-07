@@ -15,13 +15,41 @@ dependencies = [
 name = "andromeda-catalog"
 version = "0.1.0"
 dependencies = [
- "andromeda-core",
+ "andromeda-contract",
+ "andromeda-digest",
+ "andromeda-error",
  "andromeda-observe",
  "andromeda-proto",
+ "andromeda-time",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-contract"
+version = "0.1.0"
+dependencies = [
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-types",
 ]
 
 [[package]]
 name = "andromeda-core"
+version = "0.1.0"
+dependencies = [
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-hardware",
+ "andromeda-time",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-digest"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-error"
 version = "0.1.0"
 
 [[package]]
@@ -34,7 +62,15 @@ dependencies = [
  "andromeda-quic",
  "andromeda-srpl",
  "andromeda-storage",
+ "andromeda-wal",
  "libfuzzer-sys",
+]
+
+[[package]]
+name = "andromeda-hardware"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
 ]
 
 [[package]]
@@ -42,13 +78,20 @@ name = "andromeda-observe"
 version = "0.1.0"
 dependencies = [
  "andromeda-core",
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-hardware",
+ "andromeda-types",
 ]
 
 [[package]]
 name = "andromeda-proto"
 version = "0.1.0"
 dependencies = [
- "andromeda-core",
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-structured-object",
+ "andromeda-types",
  "prost",
  "prost-build",
  "protoc-bin-vendored",
@@ -68,7 +111,59 @@ name = "andromeda-srpl"
 version = "0.1.0"
 dependencies = [
  "andromeda-catalog",
- "andromeda-core",
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-srpl-ast",
+ "andromeda-srpl-cardinality",
+ "andromeda-srpl-diagnostics",
+ "andromeda-srpl-ir",
+ "andromeda-srpl-parser",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-srpl-ast"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+ "andromeda-srpl-cardinality",
+ "andromeda-srpl-diagnostics",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-srpl-cardinality"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+]
+
+[[package]]
+name = "andromeda-srpl-diagnostics"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+]
+
+[[package]]
+name = "andromeda-srpl-ir"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+ "andromeda-error",
+ "andromeda-srpl-cardinality",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-srpl-parser"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+ "andromeda-srpl-ast",
+ "andromeda-srpl-cardinality",
+ "andromeda-srpl-diagnostics",
+ "andromeda-types",
 ]
 
 [[package]]
@@ -77,8 +172,39 @@ version = "0.1.0"
 dependencies = [
  "andromeda-core",
  "andromeda-observe",
+ "andromeda-wal",
  "dashmap",
  "sha2",
+]
+
+[[package]]
+name = "andromeda-structured-object"
+version = "0.1.0"
+dependencies = [
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-time"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+]
+
+[[package]]
+name = "andromeda-types"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+]
+
+[[package]]
+name = "andromeda-wal"
+version = "0.1.0"
+dependencies = [
+ "andromeda-core",
 ]
 
 [[package]]
