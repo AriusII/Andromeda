@@ -6,6 +6,8 @@
 //! downstream crates migrate deliberately. This test must not execute WAL,
 //! recovery, codec, HADR, backup, or restore behavior.
 
+use std::any::TypeId;
+
 use andromeda_storage::btree_format_validation::{
     BTreeKeyFormatIdentity, BTreeOperationType, KeyV1FormatValidator,
 };
@@ -19,8 +21,9 @@ use andromeda_storage::layout::{
 };
 use andromeda_storage::publication::DatabaseManifest as PublicationDatabaseManifest;
 use andromeda_storage::write_ahead_log::codec::{
-    WalScanStopReason, decode_frame_header,
-    decode_wal_record_frame as module_decode_wal_record_frame,
+    WalFrameHeader as ModuleWalFrameHeader, WalScanResult as ModuleWalScanResult,
+    WalScanStop as ModuleWalScanStop, WalScanStopReason as ModuleWalScanStopReason,
+    decode_frame_header, decode_wal_record_frame as module_decode_wal_record_frame,
     encode_wal_record as module_encode_wal_record,
 };
 use andromeda_storage::write_ahead_log::file::{
@@ -28,12 +31,16 @@ use andromeda_storage::write_ahead_log::file::{
     recover_from_file_wal, report_file_wal_recovery_v0 as module_report_file_wal_recovery_v0,
 };
 use andromeda_storage::write_ahead_log::record::{
-    WalRecord as ModuleWalRecord, WalRecordKind as ModuleWalRecordKind,
+    WalRecord as ModuleWalRecord, WalRecordHeader as ModuleWalRecordHeader,
+    WalRecordKind as ModuleWalRecordKind,
+};
+use andromeda_storage::write_ahead_log::segment::{
+    WalSegment as ModuleWalSegment, WalSegmentDescriptor as ModuleWalSegmentDescriptor,
 };
 use andromeda_storage::write_ahead_log::{
     CommitLog, CommitLogEntry, CommitLogFacade, DurableTransactionResume, HeapRowRedoPayloadV1,
-    IncompleteDurableTransaction, WAL_BATCH_ROW_LIMIT, WAL_RECORD_HEADER_OVERHEAD,
-    WAL_RECORD_SIZE_LIMIT, WAL_SEGMENT_BOUNDARY,
+    InMemoryWal as ModuleInMemoryWal, IncompleteDurableTransaction, MemoryWal as ModuleMemoryWal,
+    WAL_BATCH_ROW_LIMIT, WAL_RECORD_HEADER_OVERHEAD, WAL_RECORD_SIZE_LIMIT, WAL_SEGMENT_BOUNDARY,
 };
 use andromeda_storage::{
     AllocationId, BTREE_DURABLE_FORMAT_PROMOTED, BTREE_NODE_V1_FORMAT_VERSION,
@@ -45,16 +52,18 @@ use andromeda_storage::{
     FileDiskManager, FileWal, FileWalRecoveryReportV0, HadrMembershipRecord,
     HadrMembershipSnapshot, HadrMembershipStore, HadrNodeId, HadrNodeRole, HeapPage,
     HeapPageInsert, HeapScanIter, HeapVacuumMode, InMemoryBTreeIndexEngine, InMemoryPageStore,
-    InMemoryWal, IndexId, Key, KeyCodec, KeyComparator, KeyValuePair, Lsn, ObjectId, PageHeader,
-    PageId, PageImage, PageSize, PageStore, PageTrailer, PageType, ProductStockHeapInsert,
-    ProductStockRow, RecoveryPlan, RecoveryStage, ReplayContext, RestoreValidationPolicy,
-    RowEncoder, RowId, RowSchema, ScalarType, SegmentDescriptor, SegmentId, StartupMode,
-    WAL_FORMAT_VERSION, WalRecord, WalRecordKind, WalSegmentDescriptor, compute_restore_checksum,
-    decode_wal_record_frame, encode_catalog_record, encode_wal_record, plan_replay_segments,
-    product_stock_row_encoder, product_stock_row_schema, replay_wal_record,
+    InMemoryWal, IndexId, Key, KeyCodec, KeyComparator, KeyValuePair, Lsn, MemoryWal, ObjectId,
+    PageHeader, PageId, PageImage, PageSize, PageStore, PageTrailer, PageType,
+    ProductStockHeapInsert, ProductStockRow, RecoveryPlan, RecoveryStage, ReplayContext,
+    RestoreValidationPolicy, RowEncoder, RowId, RowSchema, ScalarType, SegmentDescriptor,
+    SegmentId, StartupMode, WAL_FORMAT_VERSION, WalFrameHeader, WalRecord, WalRecordHeader,
+    WalRecordKind, WalScanResult, WalScanStop, WalScanStopReason, WalSegment, WalSegmentDescriptor,
+    compute_restore_checksum, decode_wal_record_frame, encode_catalog_record, encode_wal_record,
+    plan_replay_segments, product_stock_row_encoder, product_stock_row_schema, replay_wal_record,
     report_file_wal_recovery_v0, validate_manifest_atomic_switch, validate_recovery_floor,
     validate_wal_durability_before_page_flush,
 };
+use andromeda_wal as wal;
 
 type RootLsn = Lsn;
 type RootWalRecord = WalRecord;
@@ -65,6 +74,10 @@ type RootManifest = DatabaseManifest;
 type NestedManifest = PublicationDatabaseManifest;
 type RootFileWal = FileWal;
 type NestedFileWal = ModuleFileWal;
+
+fn assert_same_type<T: 'static, U: 'static>() {
+    assert_eq!(TypeId::of::<T>(), TypeId::of::<U>());
+}
 
 #[test]
 fn storage_root_and_nested_facade_imports_compile() {
@@ -79,4 +92,38 @@ fn storage_root_and_nested_facade_imports_compile() {
     let _ = accepts_nested_manifest as fn(Option<NestedManifest>);
     let _ = WAL_FORMAT_VERSION;
     let _ = WAL_BATCH_ROW_LIMIT;
+}
+
+#[test]
+fn pure_wal_storage_reexports_match_andromeda_wal_types() {
+    assert_same_type::<Lsn, wal::Lsn>();
+
+    assert_same_type::<WalRecordKind, wal::WalRecordKind>();
+    assert_same_type::<WalRecordHeader, wal::WalRecordHeader>();
+    assert_same_type::<WalRecord, wal::WalRecord>();
+    assert_same_type::<ModuleWalRecordKind, wal::write_ahead_log::record::WalRecordKind>();
+    assert_same_type::<ModuleWalRecordHeader, wal::write_ahead_log::record::WalRecordHeader>();
+    assert_same_type::<ModuleWalRecord, wal::write_ahead_log::record::WalRecord>();
+
+    assert_same_type::<WalSegmentDescriptor, wal::WalSegmentDescriptor>();
+    assert_same_type::<WalSegment, wal::WalSegment>();
+    assert_same_type::<
+        ModuleWalSegmentDescriptor,
+        wal::write_ahead_log::segment::WalSegmentDescriptor,
+    >();
+    assert_same_type::<ModuleWalSegment, wal::write_ahead_log::segment::WalSegment>();
+
+    assert_same_type::<InMemoryWal, wal::InMemoryWal>();
+    assert_same_type::<MemoryWal, wal::MemoryWal>();
+    assert_same_type::<ModuleInMemoryWal, wal::write_ahead_log::manager::InMemoryWal>();
+    assert_same_type::<ModuleMemoryWal, wal::write_ahead_log::manager::MemoryWal>();
+
+    assert_same_type::<WalFrameHeader, wal::WalFrameHeader>();
+    assert_same_type::<WalScanResult, wal::WalScanResult>();
+    assert_same_type::<WalScanStop, wal::WalScanStop>();
+    assert_same_type::<WalScanStopReason, wal::WalScanStopReason>();
+    assert_same_type::<ModuleWalFrameHeader, wal::write_ahead_log::codec::WalFrameHeader>();
+    assert_same_type::<ModuleWalScanResult, wal::write_ahead_log::codec::WalScanResult>();
+    assert_same_type::<ModuleWalScanStop, wal::write_ahead_log::codec::WalScanStop>();
+    assert_same_type::<ModuleWalScanStopReason, wal::write_ahead_log::codec::WalScanStopReason>();
 }

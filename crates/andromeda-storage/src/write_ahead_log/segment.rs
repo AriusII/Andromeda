@@ -1,5 +1,6 @@
-//! Facade re-export of the canonical segment value types defined in
-//! `crate::wal_segment`. Do not define `WalSegment` or `WalSegmentDescriptor`
-//! here.
+//! Compatibility reexports for WAL segment value types.
+//!
+//! The canonical segment types moved to `andromeda_wal::write_ahead_log::segment`.
+//! Storage keeps this module as a stable facade for existing callers.
 
-pub use crate::{WalSegment, WalSegmentDescriptor};
+pub use andromeda_wal::write_ahead_log::segment::{WalSegment, WalSegmentDescriptor};

@@ -5,19 +5,19 @@
 //!
 //! | Type / item                                  | Canonical module                            |
 //! |----------------------------------------------|---------------------------------------------|
-//! | `WalRecord`, `WalRecordHeader`, `WalRecordKind`, checksum/tag helpers | [`record`] |
-//! | `InMemoryWal` and durable-LSN tracking       | [`manager`]                                 |
-//! | Transaction classification helpers           | [`transaction`]                             |
-//! | `WalSegment`, `WalSegmentDescriptor`         | `crate::wal_segment`                        |
-//! | WAL frame codec, scanner, byte constants     | `crate::wal_codec`                          |
+//! | `WalRecord`, `WalRecordHeader`, `WalRecordKind`, checksum/tag helpers | `andromeda_wal::write_ahead_log::record` |
+//! | `InMemoryWal` and durable-LSN tracking       | `andromeda_wal::write_ahead_log::manager`   |
+//! | Transaction classification helpers           | `andromeda_wal::write_ahead_log::transaction` |
+//! | `WalSegment`, `WalSegmentDescriptor`         | `andromeda_wal::wal_segment`                |
+//! | WAL frame codec, scanner, byte constants     | `andromeda_wal::wal_codec`                  |
 //! | `FileWal`, `FileWalHeader`, recovery report  | `crate::file_wal`                           |
 //! | WAL GC: candidates, archive verification    | [`gc`]                                      |
 //! | WAL Compaction: fragmentation, scheduling   | [`compaction`]                              |
 //! | CommitLogEntry and CommitLog persistence    | [`commit_log_entry`]                        |
 //!
-//! The submodules below are thin re-export facades for the cross-domain types
-//! (segment, codec, file). They MUST NOT define types of their own. The legacy
-//! `crate::wal` root facade is preserved for compatibility with older imports.
+//! The pure WAL submodules below are thin re-export facades for `andromeda_wal`.
+//! They MUST NOT define types of their own. The legacy `crate::wal` root facade
+//! is preserved for compatibility with older imports.
 //!
 //! Doctrine reminders enforced by the items re-exported here:
 //! * `visible commit == durable WAL` — frames are flushed before commit

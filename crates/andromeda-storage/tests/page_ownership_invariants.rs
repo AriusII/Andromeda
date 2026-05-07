@@ -5,7 +5,8 @@
 //! Future buffer-pool, heap, and index work must import the existing durable
 //! primitives from the storage crate root or the `layout::page` compatibility
 //! facade. They must not introduce mirror `PageId`, `PageSize`, `PageHeader`,
-//! `PageTrailer`, `PageLayoutContract`, or `Lsn` definitions.
+//! `PageTrailer`, `PageLayoutContract`, or `Lsn` definitions. `Lsn` is owned by
+//! the pure WAL crate and re-exported by storage.
 
 use std::any::TypeId;
 use std::collections::BTreeMap;
@@ -15,6 +16,7 @@ use std::path::{Path, PathBuf};
 
 use andromeda_storage as storage;
 use andromeda_storage::layout;
+use andromeda_wal as wal;
 
 /// Map of page/LSN ownership types to their canonical, workspace-relative
 /// source path (forward-slash form). Update this table only when canonical
@@ -46,23 +48,26 @@ const CANONICAL_OWNERSHIP: &[(&str, &str, &str)] = &[
         "PageLayoutContract",
         "crates/andromeda-storage/src/page/layout.rs",
     ),
-    ("struct", "Lsn", "crates/andromeda-storage/src/lsn.rs"),
+    ("struct", "Lsn", "crates/andromeda-wal/src/lsn.rs"),
 ];
 
 #[test]
 fn page_and_lsn_types_have_single_canonical_definition() {
     let storage_src = workspace_root().join("crates/andromeda-storage/src");
+    let wal_src = workspace_root().join("crates/andromeda-wal/src");
     let workspace = workspace_root();
     let mut occurrences: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
 
-    for source in collect_rs_files(&storage_src) {
-        let text = fs::read_to_string(&source).expect("read storage source file");
-        let stripped = strip_comments(&text);
-        for (kind, name) in extract_top_level_pub_type_decls(&stripped) {
-            occurrences
-                .entry((kind, name))
-                .or_default()
-                .push(workspace_relative_path(&workspace, &source));
+    for src_dir in [&storage_src, &wal_src] {
+        for source in collect_rs_files(src_dir) {
+            let text = fs::read_to_string(&source).expect("read page/WAL source file");
+            let stripped = strip_comments(&text);
+            for (kind, name) in extract_top_level_pub_type_decls(&stripped) {
+                occurrences
+                    .entry((kind, name))
+                    .or_default()
+                    .push(workspace_relative_path(&workspace, &source));
+            }
         }
     }
 
@@ -128,6 +133,7 @@ fn buffer_heap_and_index_style_imports_resolve_to_existing_primitives() {
         assert_type::<storage::PageLayoutContract>(),
         assert_type::<layout::page::PageLayoutContract>()
     );
+    assert_eq!(assert_type::<storage::Lsn>(), assert_type::<wal::Lsn>());
 
     let header = storage::PageHeader {
         magic: storage::PageHeader::MAGIC,

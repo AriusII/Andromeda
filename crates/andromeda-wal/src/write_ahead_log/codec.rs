@@ -1,9 +1,7 @@
-//! Compatibility reexports for the WAL frame codec.
-//!
-//! The canonical codec moved to `andromeda_wal::write_ahead_log::codec`.
-//! Storage keeps this module as a stable facade for existing callers.
+//! Facade re-export of the canonical WAL frame codec defined in
+//! `crate::wal_codec`. Do not define encode/decode/scan items here.
 
-pub use andromeda_wal::write_ahead_log::codec::{
+pub use crate::{
     WAL_BYTE_ORDER_LITTLE_ENDIAN, WAL_FORMAT_VERSION, WAL_FORMAT_VERSION_V1, WAL_RECORD_HEADER_LEN,
     WAL_RECORD_MAGIC, WalFrameHeader, WalScanResult, WalScanStop, WalScanStopReason,
     decode_frame_header, decode_wal_record_frame, encode_wal_record, scan_wal_records,

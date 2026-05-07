@@ -212,6 +212,7 @@ version = "0.1.0"
 dependencies = [
  "andromeda-core",
  "andromeda-observe",
+ "andromeda-wal",
  "dashmap",
  "proptest",
  "sha2",
@@ -251,6 +252,13 @@ name = "andromeda-types"
 version = "0.1.0"
 dependencies = [
  "andromeda-error",
+]
+
+[[package]]
+name = "andromeda-wal"
+version = "0.1.0"
+dependencies = [
+ "andromeda-core",
 ]
 
 [[package]]

@@ -320,16 +320,22 @@ fn allowed_dependency_rules() -> Vec<AllowedDependencyRule> {
             ],
         ),
         AllowedDependencyRule::new(
-            "andromeda-storage may only depend on current Lot 4.0 durable-kernel support crates and test harness dependencies",
+            "andromeda-storage may only depend on current Lot 4.3 durable-kernel support crates and test harness dependencies",
             "andromeda-storage",
             &[
                 "andromeda-core",
                 "andromeda-observe",
+                "andromeda-wal",
                 "dashmap",
                 "proptest",
                 "sha2",
                 "tempfile",
             ],
+        ),
+        AllowedDependencyRule::new(
+            "andromeda-wal may only depend on pure WAL foundation crates",
+            "andromeda-wal",
+            &["andromeda-core"],
         ),
         AllowedDependencyRule::new(
             "andromeda-tx may only depend on current Lot 4.0 transaction-kernel support crates",

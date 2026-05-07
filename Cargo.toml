@@ -24,6 +24,7 @@ members = [
     "crates/andromeda-time",
     "crates/andromeda-tx",
     "crates/andromeda-types",
+    "crates/andromeda-wal",
 ]
 
 [workspace.package]
@@ -54,6 +55,7 @@ andromeda-structured-object = { path = "crates/andromeda-structured-object", ver
 andromeda-time = { path = "crates/andromeda-time", version = "0.1.0" }
 andromeda-tx = { path = "crates/andromeda-tx", version = "0.1.0" }
 andromeda-types = { path = "crates/andromeda-types", version = "0.1.0" }
+andromeda-wal = { path = "crates/andromeda-wal", version = "0.1.0" }
 
 quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls-ring"] }
 rcgen = { version = "0.14.7" }
