@@ -2,17 +2,26 @@
 #[path = "../backup_execution_plan/support.rs"]
 mod backup_support;
 
-pub(crate) use backup_support::{
-    CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION, LEGACY_V1_ARTIFACT_MANIFEST_FORMAT_VERSION,
-    rewrite_manifest_to_v1_without_archive_digest, zero_manifest_archive_digest,
-};
-
 use andromeda_observe::TraceId;
 use andromeda_storage::{
     BackupArtifactWriteReport, BackupId, BackupManifest, ColdSnapshotBoundary, ExtentState, Lsn,
     RecoveryStage, RestoreAuditTrace, RestoreOrchestration, RestoreValidationPolicy,
     WalArchiveRange, WalSegmentDescriptor, compute_restore_checksum,
 };
+use std::path::Path;
+
+pub(crate) const CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION: u16 =
+    backup_support::CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION;
+pub(crate) const LEGACY_V1_ARTIFACT_MANIFEST_FORMAT_VERSION: u16 =
+    backup_support::LEGACY_V1_ARTIFACT_MANIFEST_FORMAT_VERSION;
+
+pub(crate) fn rewrite_manifest_to_v1_without_archive_digest(path: &Path) {
+    backup_support::rewrite_manifest_to_v1_without_archive_digest(path);
+}
+
+pub(crate) fn zero_manifest_archive_digest(path: &Path) {
+    backup_support::zero_manifest_archive_digest(path);
+}
 
 pub(crate) fn make_test_manifest() -> BackupManifest {
     BackupManifest {

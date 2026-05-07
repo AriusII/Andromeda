@@ -1,5 +1,5 @@
 use andromeda_core::{
-    CertificateIdentity, Permission, PermissionSet, Principal, PrincipalAuthorizationDenialReason,
+    CertificateIdentity, Permission, PermissionSet, PrincipalAuthorizationDenialReason,
     PrincipalBinding, PrincipalId, PrincipalRegistry, PrincipalRole, PrincipalStatus, ProcedureId,
     SessionToken, SurfaceScope,
 };
@@ -116,7 +116,7 @@ fn test_direct_permission_binding_rejects_permission_outside_certificate_surface
         SurfaceScope::Application,
     )
     .expect("valid certificate identity");
-    let principal = Principal::new(
+    let principal = andromeda_core::Principal::new(
         PrincipalId::new(821),
         PrincipalRole::User,
         SessionToken::from_certificate_fingerprint(certificate.fingerprint()),
