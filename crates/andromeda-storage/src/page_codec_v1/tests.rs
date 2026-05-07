@@ -1,4 +1,5 @@
 use andromeda_core::AndromedaErrorKind;
+use sha2::{Digest, Sha256};
 
 use crate::{
     AllocationId, Lsn, ObjectId, PageFlags, PageHeader, PageId, PageSize, PageTrailer, PageType,
@@ -7,6 +8,7 @@ use crate::{
 use super::binary::{read_u32, write_u16, write_u32};
 use super::format::{
     PAGE_CODEC_V1_HEADER_INTEGRITY_OFFSET, PAGE_CODEC_V1_HEADER_LEN, PAGE_CODEC_V1_HEADER_LEN_U32,
+    PAGE_CODEC_V1_TRAILER_LEN,
 };
 use super::*;
 
@@ -38,6 +40,12 @@ fn sample_header(page_size: PageSize, payload_len: u32) -> PageHeader {
 
 fn sample_trailer(header: &PageHeader, payload: &[u8]) -> PageTrailer {
     integrity_trailer_for_payload(header, payload)
+}
+
+fn patterned_payload(len: usize, seed: u8) -> Vec<u8> {
+    (0..len)
+        .map(|index| (index as u8).wrapping_mul(37).wrapping_add(seed))
+        .collect()
 }
 
 #[test]
@@ -221,5 +229,117 @@ fn corpus_page_sizes_16k_and_32k() {
         let decoded = PageCodecV1::decode_page(&encoded).unwrap();
         assert_eq!(decoded.header.page_size, size);
         assert_eq!(decoded.payload.len(), payload_len);
+    }
+}
+
+#[test]
+fn full_page_golden_vectors_pin_16k_and_32k_images() {
+    struct FullPageGolden {
+        page_size: PageSize,
+        payload_len: usize,
+        payload_seed: u8,
+        image_len: usize,
+        header_integrity_crc: u32,
+        payload_crc64: u64,
+        torn_write_guard: u64,
+        payload_prefix: [u8; 16],
+        payload_suffix: [u8; 16],
+        payload_hash: [u8; 32],
+        image_sha256: [u8; 32],
+    }
+
+    let vectors = [
+        FullPageGolden {
+            page_size: PageSize::KiB16,
+            payload_len: 16 * 1024 - PAGE_CODEC_V1_HEADER_LEN - PAGE_CODEC_V1_TRAILER_LEN,
+            payload_seed: 0x11,
+            image_len: 16 * 1024,
+            header_integrity_crc: 0x6246_fc29,
+            payload_crc64: 0xda4b_9bd0_8670_e785,
+            torn_write_guard: 0xd474_115b_c791_e7ff,
+            payload_prefix: [
+                0x11, 0x36, 0x5b, 0x80, 0xa5, 0xca, 0xef, 0x14, 0x39, 0x5e, 0x83, 0xa8, 0xcd, 0xf2,
+                0x17, 0x3c,
+            ],
+            payload_suffix: [
+                0xa1, 0xc6, 0xeb, 0x10, 0x35, 0x5a, 0x7f, 0xa4, 0xc9, 0xee, 0x13, 0x38, 0x5d, 0x82,
+                0xa7, 0xcc,
+            ],
+            payload_hash: [
+                0xc4, 0x4e, 0x2f, 0x29, 0xeb, 0xba, 0xbe, 0xfb, 0x10, 0x2f, 0x40, 0xef, 0xa8, 0xf8,
+                0xc0, 0x96, 0xd2, 0x1a, 0x8e, 0x34, 0x00, 0x54, 0xf4, 0xb9, 0x3f, 0x47, 0x5c, 0x83,
+                0xe5, 0x2c, 0x84, 0xc2,
+            ],
+            image_sha256: [
+                0x2d, 0x14, 0xf0, 0x99, 0x5d, 0x18, 0x55, 0xd9, 0x1a, 0xf1, 0x01, 0xef, 0x2b, 0x01,
+                0xd2, 0x55, 0x5c, 0x51, 0x7b, 0x07, 0xea, 0x5d, 0xfa, 0x2f, 0x1c, 0x50, 0x22, 0xd3,
+                0x0f, 0x0d, 0xa6, 0x21,
+            ],
+        },
+        FullPageGolden {
+            page_size: PageSize::KiB32,
+            payload_len: 32 * 1024 - PAGE_CODEC_V1_HEADER_LEN - PAGE_CODEC_V1_TRAILER_LEN,
+            payload_seed: 0x29,
+            image_len: 32 * 1024,
+            header_integrity_crc: 0x1702_2fb5,
+            payload_crc64: 0xb31e_06ac_1846_fec5,
+            torn_write_guard: 0x16c5_a612_da2c_7651,
+            payload_prefix: [
+                0x29, 0x4e, 0x73, 0x98, 0xbd, 0xe2, 0x07, 0x2c, 0x51, 0x76, 0x9b, 0xc0, 0xe5, 0x0a,
+                0x2f, 0x54,
+            ],
+            payload_suffix: [
+                0xb9, 0xde, 0x03, 0x28, 0x4d, 0x72, 0x97, 0xbc, 0xe1, 0x06, 0x2b, 0x50, 0x75, 0x9a,
+                0xbf, 0xe4,
+            ],
+            payload_hash: [
+                0xf9, 0xc3, 0x6d, 0x67, 0x88, 0xbb, 0xea, 0x16, 0x5e, 0x1f, 0x01, 0xb1, 0xc7, 0x6d,
+                0x23, 0x2c, 0x75, 0xe6, 0xfa, 0xfb, 0xe3, 0x0a, 0x24, 0xd2, 0x6f, 0xf6, 0x8b, 0x69,
+                0x32, 0x5a, 0x62, 0x8a,
+            ],
+            image_sha256: [
+                0x48, 0x94, 0xe0, 0xee, 0x5b, 0xf6, 0x4d, 0x11, 0xc3, 0xc6, 0x90, 0xa0, 0xc3, 0xb8,
+                0x64, 0x33, 0x47, 0x1b, 0x4d, 0x07, 0xfb, 0xef, 0x90, 0x02, 0xb7, 0xef, 0xfb, 0xed,
+                0xd3, 0xbc, 0x4d, 0x92,
+            ],
+        },
+    ];
+
+    for vector in vectors {
+        let payload = patterned_payload(vector.payload_len, vector.payload_seed);
+        let header = sample_header(vector.page_size, payload.len() as u32);
+        let trailer = sample_trailer(&header, &payload);
+        let encoded = PageCodecV1::encode_page(&header, &payload, &trailer).unwrap();
+        let decoded = PageCodecV1::decode_page(&encoded).unwrap();
+        let image_digest: [u8; 32] = Sha256::digest(&encoded).into();
+        let header_crc = u32::from_le_bytes(
+            encoded
+                [PAGE_CODEC_V1_HEADER_INTEGRITY_OFFSET..PAGE_CODEC_V1_HEADER_INTEGRITY_OFFSET + 4]
+                .try_into()
+                .unwrap(),
+        );
+        let trailer_offset = PAGE_CODEC_V1_HEADER_LEN + vector.payload_len;
+
+        assert_eq!(encoded.len(), vector.image_len);
+        assert_eq!(encoded.len(), vector.page_size.bytes_usize());
+        assert_eq!(image_digest, vector.image_sha256);
+        assert_eq!(decoded.header, header);
+        assert_eq!(decoded.payload, payload);
+        assert_eq!(decoded.trailer, trailer);
+        assert_eq!(
+            PageCodecV1::encode_page(&decoded.header, &decoded.payload, &decoded.trailer).unwrap(),
+            encoded
+        );
+        assert_eq!(header_crc, vector.header_integrity_crc);
+        assert_eq!(&encoded[PAGE_CODEC_V1_HEADER_LEN..trailer_offset], &payload);
+        assert_eq!(&payload[..16], &vector.payload_prefix);
+        assert_eq!(&payload[payload.len() - 16..], &vector.payload_suffix);
+        assert_eq!(decoded.trailer.payload_crc64, vector.payload_crc64);
+        assert_eq!(decoded.trailer.page_hash, vector.payload_hash);
+        assert_eq!(decoded.trailer.torn_write_guard, vector.torn_write_guard);
+        assert_eq!(
+            &encoded[trailer_offset..trailer_offset + PAGE_CODEC_V1_TRAILER_LEN],
+            &PageCodecV1::encode_trailer(&trailer).unwrap()
+        );
     }
 }

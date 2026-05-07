@@ -123,6 +123,19 @@ Lot 4.4 separates evidence ownership from historical import paths. Lot 4.5 exten
 
 This split does not change runtime behavior, WAL record bytes, FileWal disk bytes, page bytes, manifest bytes, recovery semantics, or visible commit semantics. It also does not start Lot 5 recovery, page-layout, buffer-pool, cold-store, MVCC, or storage runtime extraction.
 
+### Lot 4.7D durable-kernel closure evidence
+
+Lot 4 durable-kernel closure after the FileWal owner split is limited to release-gate evidence for the WAL durability prefix, storage recovery integration, and execution visibility prefix. It is not a claim of full production readiness, not a Lot 5 start, and not a promotion of page-layout, heap, B+Tree, buffer-pool, cold-store, MVCC, or broader storage runtime ownership.
+
+| Evidence owner | Closure evidence | Lot 4 disposition |
+|---|---|---|
+| `andromeda-wal` owner evidence | Pure WAL frame codec, LSN chain, scan-prefix classification, record bounds, durability-fence primitives, and physical FileWal byte-contract tests, including `crates/andromeda-wal/tests/wal_codec_contract.rs`, `property_wal_roundtrip.rs`, and `file_wal_contract.rs`. | Required for Lot 4 closure because it proves the owning WAL crate can classify durable prefixes and physical FileWal bytes without relying on storage reexports. |
+| `andromeda-storage` recovery integration evidence | Storage API compatibility and owner-boundary tests, recovery completeness, crash/recovery replay selection, WAL scan recovery, FileWal recovery consumption, page/manifest fence integration, and deterministic recovery reports, including `api_compat_reexports.rs`, `wal_ownership_invariants.rs`, `recovery_completeness_contract.rs`, `crash_recovery_impl.rs`, `wal_scan_recovery_contract.rs`, `file_wal_recovery_contract.rs`, and `wal_durability_fence_contract.rs`. | Required for Lot 4 closure because owner-level FileWal evidence alone does not prove startup recovery planning, replay selection, manifest fences, page flush fences, or storage recovery reports. |
+| `andromeda-exec` durable visibility prefix evidence | Recovery visibility gates that prove a writer is invisible after crash before durable commit and visible/replayable after durable commit, including `crates/andromeda-exec/tests/recovery_visibility_gates.rs`. | Required for Lot 4 closure because storage recovery evidence must connect to the application-visible durable-commit prefix without exposing ad hoc SQL or bypassing typed Procedure contracts. |
+| Page/heap/B+Tree durable-format preflight evidence | `fuzz/VALIDATION_MATRIX.md` tracks Lot 4.6C full-page `PageCodecV1` golden vectors, heap slot-directory corrupt/fuzz vectors, non-empty B+Tree node golden vectors, deterministic corpus updates, and remaining sustained fuzz-run evidence. | Non-blocking for Lot 4 durable-kernel closure. These items are promotion-blocking for page, heap, B+Tree, manifest, segment, or broader storage/runtime promotion, and remain subordinate to targeted crash/recovery validation before any such promotion. |
+
+The remaining page/heap/B+Tree preflight items therefore do not block Lot 4 closure when the WAL owner evidence, storage recovery integration evidence, and execution durable visibility prefix evidence above are present. They do block any claim that the page, heap, B+Tree, manifest, segment, or storage runtime surfaces are promoted beyond the documented Lot 4 scope.
+
 ### Fence classification
 
 | Fence class | Definition | Examples |

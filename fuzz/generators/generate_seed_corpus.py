@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import hashlib
 import pathlib
 import re
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 
 
 @dataclass(frozen=True)
@@ -40,6 +40,15 @@ class ManifestEntry:
 TARGETS_SCHEMA_VERSION = "andromeda-fuzz-targets-v1"
 CORPUS_SCHEMA_VERSION = "andromeda-fuzz-corpus-v1"
 GENERATOR_PATH = "fuzz/generators/generate_seed_corpus.py"
+
+HEAP_PAGE_V1_PAYLOAD_OFFSET = 112
+HEAP_PAGE_V1_TRAILER_SIZE = 48
+HEAP_PAGE_V1_SLOT_METADATA_SIZE = 4
+HEAP_PAGE_V1_SLOT_ENTRY_SIZE = 5
+HEAP_PAGE_V1_DELETED_SLOT_FLAG = 0x01
+PAGE_CODEC_V1_MAGIC = 0x414E_4452
+PAGE_CODEC_V1_FORMAT_VERSION = 1
+PAGE_CODEC_V1_HEADER_LEN = 112
 
 LEGACY_SEED1_PAYLOADS: Dict[str, bytes] = {
     "frame_codec_no_panic": b"frame\r\n",
@@ -189,7 +198,21 @@ def seed_payloads(target: str) -> Dict[str, bytes]:
     if target == "heap_page_v1_decode":
         return {
             "seed-empty-16k.bin": heap_page_v1_empty_seed(16 * 1024),
+            "seed-deleted-compacted-parity.bin": heap_page_v1_deleted_compacted_parity_seed(),
+            "seed-free-offset-crosses-slot-directory.bin": (
+                heap_page_v1_free_offset_crosses_slot_directory_seed()
+            ),
+            "seed-header-footer-slot-count-mismatch.bin": (
+                heap_page_v1_header_footer_slot_count_mismatch_seed()
+            ),
+            "seed-overlapping-live-tuples.bin": heap_page_v1_overlapping_live_tuple_ranges_seed(),
+            "seed-slot-entry-outside-payload-area.bin": (
+                heap_page_v1_slot_entry_outside_payload_area_seed()
+            ),
             "seed-single-32k.bin": heap_page_v1_tuple_seed(32 * 1024, [b"andromeda"]),
+            "seed-sparse-deleted-middle-live-higher.bin": (
+                heap_page_v1_sparse_deleted_middle_live_higher_seed()
+            ),
             "seed-two-tuples-16k.bin": heap_page_v1_tuple_seed(
                 16 * 1024, [b"abc", b"defgh"]
             ),
@@ -309,12 +332,8 @@ def heap_page_v1_empty_seed(page_size: int) -> bytes:
 
 
 def heap_page_v1_tuple_seed(page_size: int, tuples: List[bytes]) -> bytes:
-    header_size = 96
-    trailer_size = 48
-    slot_entry_size = 5
-    metadata_size = 4
     image = bytearray(page_size)
-    offset = header_size
+    offset = HEAP_PAGE_V1_PAYLOAD_OFFSET
     slots = []
 
     for item in tuples:
@@ -322,16 +341,145 @@ def heap_page_v1_tuple_seed(page_size: int, tuples: List[bytes]) -> bytes:
         slots.append((offset, len(item), 0))
         offset += len(item)
 
-    metadata_offset = page_size - trailer_size - metadata_size
+    return heap_page_v1_image(page_size, slots, offset, image)
+
+
+def heap_page_v1_deleted_compacted_parity_seed() -> bytes:
+    image = bytearray(16 * 1024)
+    first = b"live"
+    image[HEAP_PAGE_V1_PAYLOAD_OFFSET : HEAP_PAGE_V1_PAYLOAD_OFFSET + len(first)] = first
+    return heap_page_v1_image(
+        16 * 1024,
+        [
+            (HEAP_PAGE_V1_PAYLOAD_OFFSET, len(first), 0),
+            (0, 8, HEAP_PAGE_V1_DELETED_SLOT_FLAG),
+        ],
+        HEAP_PAGE_V1_PAYLOAD_OFFSET + len(first),
+        image,
+    )
+
+
+def heap_page_v1_sparse_deleted_middle_live_higher_seed() -> bytes:
+    image = bytearray(16 * 1024)
+    first = b"alpha"
+    second = b"omega!"
+    first_offset = HEAP_PAGE_V1_PAYLOAD_OFFSET
+    second_offset = first_offset + len(first)
+    image[first_offset : first_offset + len(first)] = first
+    image[second_offset : second_offset + len(second)] = second
+    return heap_page_v1_image(
+        16 * 1024,
+        [
+            (first_offset, len(first), 0),
+            (0, 6, HEAP_PAGE_V1_DELETED_SLOT_FLAG),
+            (second_offset, len(second), 0),
+        ],
+        second_offset + len(second),
+        image,
+    )
+
+
+def heap_page_v1_header_footer_slot_count_mismatch_seed() -> bytes:
+    image = bytearray(16 * 1024)
+    payload = b"hdrf"
+    image[HEAP_PAGE_V1_PAYLOAD_OFFSET : HEAP_PAGE_V1_PAYLOAD_OFFSET + len(payload)] = payload
+    return heap_page_v1_image(
+        16 * 1024,
+        [(HEAP_PAGE_V1_PAYLOAD_OFFSET, len(payload), 0)],
+        HEAP_PAGE_V1_PAYLOAD_OFFSET + len(payload),
+        image,
+        header_slot_count=2,
+    )
+
+
+def heap_page_v1_free_offset_crosses_slot_directory_seed() -> bytes:
+    page_size = 16 * 1024
+    image = bytearray(page_size)
+    payload = b"free"
+    image[HEAP_PAGE_V1_PAYLOAD_OFFSET : HEAP_PAGE_V1_PAYLOAD_OFFSET + len(payload)] = payload
+    slot_base = heap_page_v1_metadata_offset(page_size) - HEAP_PAGE_V1_SLOT_ENTRY_SIZE
+    return heap_page_v1_image(
+        page_size,
+        [(HEAP_PAGE_V1_PAYLOAD_OFFSET, len(payload), 0)],
+        slot_base + 1,
+        image,
+    )
+
+
+def heap_page_v1_slot_entry_outside_payload_area_seed() -> bytes:
+    image = bytearray(16 * 1024)
+    legacy_offset = 96
+    payload = b"old!"
+    image[legacy_offset : legacy_offset + len(payload)] = payload
+    return heap_page_v1_image(
+        16 * 1024,
+        [(legacy_offset, len(payload), 0)],
+        HEAP_PAGE_V1_PAYLOAD_OFFSET + len(payload),
+        image,
+    )
+
+
+def heap_page_v1_overlapping_live_tuple_ranges_seed() -> bytes:
+    image = bytearray(16 * 1024)
+    first = b"abcdefgh"
+    second = b"WXYZ1234"
+    first_offset = HEAP_PAGE_V1_PAYLOAD_OFFSET
+    second_offset = first_offset + 4
+    image[first_offset : first_offset + len(first)] = first
+    image[second_offset : second_offset + len(second)] = second
+    return heap_page_v1_image(
+        16 * 1024,
+        [
+            (first_offset, len(first), 0),
+            (second_offset, len(second), 0),
+        ],
+        second_offset + len(second),
+        image,
+    )
+
+
+def heap_page_v1_image(
+    page_size: int,
+    slots: List[Tuple[int, int, int]],
+    free_offset: int,
+    image: bytearray,
+    *,
+    header_slot_count: Optional[int] = None,
+) -> bytes:
+    metadata_offset = heap_page_v1_metadata_offset(page_size)
+
+    if header_slot_count is not None:
+        heap_page_v1_write_page_codec_header(image, header_slot_count)
+
     for slot_id, (slot_offset, slot_len, flags) in enumerate(slots):
-        entry_offset = metadata_offset - ((slot_id + 1) * slot_entry_size)
-        image[entry_offset : entry_offset + 2] = slot_offset.to_bytes(2, "little")
-        image[entry_offset + 2 : entry_offset + 4] = slot_len.to_bytes(2, "little")
+        entry_offset = metadata_offset - ((slot_id + 1) * HEAP_PAGE_V1_SLOT_ENTRY_SIZE)
+        put_u16(image, entry_offset, slot_offset)
+        put_u16(image, entry_offset + 2, slot_len)
         image[entry_offset + 4] = flags
 
-    image[metadata_offset : metadata_offset + 2] = len(slots).to_bytes(2, "little")
-    image[metadata_offset + 2 : metadata_offset + 4] = offset.to_bytes(2, "little")
+    put_u16(image, metadata_offset, len(slots))
+    put_u16(image, metadata_offset + 2, free_offset)
     return bytes(image)
+
+
+def heap_page_v1_metadata_offset(page_size: int) -> int:
+    return page_size - HEAP_PAGE_V1_TRAILER_SIZE - HEAP_PAGE_V1_SLOT_METADATA_SIZE
+
+
+def heap_page_v1_write_page_codec_header(image: bytearray, slot_count: int) -> None:
+    put_u32(image, 0, PAGE_CODEC_V1_MAGIC)
+    put_u16(image, 4, PAGE_CODEC_V1_FORMAT_VERSION)
+    put_u16(image, 68, PAGE_CODEC_V1_HEADER_LEN)
+    put_u32(image, 72, HEAP_PAGE_V1_PAYLOAD_OFFSET)
+    put_u16(image, 92, slot_count)
+
+
+def put_u16(target: bytearray, offset: int, value: int) -> None:
+    target[offset : offset + 2] = value.to_bytes(2, "little")
+
+
+def put_u32(target: bytearray, offset: int, value: int) -> None:
+    target[offset : offset + 4] = value.to_bytes(4, "little")
 
 
 def page_codec_v1_seed(

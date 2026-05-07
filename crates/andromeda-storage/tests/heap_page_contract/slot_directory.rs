@@ -1,7 +1,21 @@
 use andromeda_storage::PageSize;
+use andromeda_storage::SlotEntry;
 use andromeda_storage::slot_directory::{SlotDirectory, SlotId};
 
-use crate::support::HEADER_SIZE;
+use crate::support::{
+    HEADER_SIZE, HEADER_SLOT_COUNT_OFFSET, empty_heap_v1_image, slot_base, write_heap_v1_slot,
+    write_heap_v1_slot_bytes, write_heap_v1_slot_metadata,
+};
+
+fn assert_slot_directory_image_rejected(page_size: PageSize, image: &[u8], expected_message: &str) {
+    let err = SlotDirectory::from_page_data(page_size, image)
+        .expect_err("slot directory image should be rejected");
+    assert!(
+        err.message().contains(expected_message),
+        "unexpected error: {}",
+        err.message()
+    );
+}
 
 #[test]
 fn test_slot_directory_create_empty() {
@@ -455,4 +469,143 @@ fn test_slot_directory_serialize_preserves_structure() {
     assert!(restored.get_slot(slots[2]).expect("get").is_some());
     assert!(restored.get_slot(slots[3]).expect("get").is_none());
     assert!(restored.get_slot(slots[4]).expect("get").is_some());
+}
+
+#[test]
+fn test_lot_4_6c_deleted_compacted_directory_parity_vector() {
+    let page_size = PageSize::KiB16;
+    let mut dir = SlotDirectory::new(page_size);
+    let slot0 = dir.allocate_slot(3).expect("alloc 0");
+    let slot1 = dir.allocate_slot(5).expect("alloc 1");
+    let slot2 = dir.allocate_slot(7).expect("alloc 2");
+
+    dir.mark_deleted(slot1).expect("delete middle slot");
+    dir.mark_deleted(slot2).expect("delete tail slot");
+    let freed = dir.compact();
+
+    assert_eq!(freed, 7);
+    assert_eq!(dir.slot_count(), 2);
+    assert_eq!(dir.active_slot_count(), 1);
+
+    let mut image = empty_heap_v1_image(page_size);
+    dir.serialize_to_page(&mut image)
+        .expect("serialize compacted directory");
+
+    let restored =
+        SlotDirectory::from_page_data(page_size, &image).expect("deserialize compacted directory");
+
+    assert_eq!(restored.slot_count(), dir.slot_count());
+    assert_eq!(restored.active_slot_count(), dir.active_slot_count());
+    assert_eq!(
+        restored
+            .get_slot(slot0)
+            .expect("get slot 0")
+            .expect("slot 0 remains live"),
+        (HEADER_SIZE as u16, 3)
+    );
+    assert!(
+        restored
+            .get_slot(slot1)
+            .expect("get deleted middle slot")
+            .is_none()
+    );
+    assert!(
+        restored
+            .get_slot(slot2)
+            .expect("get compacted tail slot")
+            .is_none()
+    );
+}
+
+#[test]
+fn test_lot_4_6c_rejects_header_footer_slot_count_mismatch_corrupt_vector() {
+    let page_size = PageSize::KiB16;
+    let mut image = empty_heap_v1_image(page_size);
+    image[HEADER_SIZE..HEADER_SIZE + 3].copy_from_slice(b"abc");
+    image[HEADER_SLOT_COUNT_OFFSET..HEADER_SLOT_COUNT_OFFSET + 2]
+        .copy_from_slice(&2u16.to_le_bytes());
+    write_heap_v1_slot(&mut image, page_size, 0, HEADER_SIZE as u16, 3);
+    write_heap_v1_slot_metadata(&mut image, page_size, 1, (HEADER_SIZE + 3) as u16);
+
+    assert_slot_directory_image_rejected(page_size, &image, "slot count ambiguity");
+}
+
+#[test]
+fn test_lot_4_6c_rejects_free_offset_crossing_slot_directory_corrupt_vector() {
+    let page_size = PageSize::KiB16;
+    let mut image = empty_heap_v1_image(page_size);
+    image[HEADER_SIZE..HEADER_SIZE + 3].copy_from_slice(b"abc");
+    write_heap_v1_slot(&mut image, page_size, 0, HEADER_SIZE as u16, 3);
+    write_heap_v1_slot_metadata(
+        &mut image,
+        page_size,
+        1,
+        (slot_base(page_size, 1) + 1) as u16,
+    );
+
+    assert_slot_directory_image_rejected(page_size, &image, "outside payload/free-space bounds");
+}
+
+#[test]
+fn test_lot_4_6c_rejects_slot_entry_outside_tuple_payload_corrupt_vector() {
+    let page_size = PageSize::KiB16;
+    let mut image = empty_heap_v1_image(page_size);
+    let directory_start = slot_base(page_size, 1);
+    write_heap_v1_slot(&mut image, page_size, 0, directory_start as u16, 1);
+    write_heap_v1_slot_metadata(&mut image, page_size, 1, directory_start as u16);
+
+    assert_slot_directory_image_rejected(page_size, &image, "outside payload region");
+}
+
+#[test]
+fn test_lot_4_6c_rejects_overlapping_live_tuple_ranges_corrupt_vector() {
+    let page_size = PageSize::KiB16;
+    let mut image = empty_heap_v1_image(page_size);
+    image[HEADER_SIZE..HEADER_SIZE + 6].copy_from_slice(b"abcdef");
+    write_heap_v1_slot(&mut image, page_size, 0, HEADER_SIZE as u16, 4);
+    write_heap_v1_slot(&mut image, page_size, 1, (HEADER_SIZE + 2) as u16, 4);
+    write_heap_v1_slot_metadata(&mut image, page_size, 2, (HEADER_SIZE + 6) as u16);
+
+    assert_slot_directory_image_rejected(page_size, &image, "tuple overlap");
+}
+
+#[test]
+fn test_lot_4_6c_sparse_directory_deleted_middle_live_higher_slot_vector() {
+    let page_size = PageSize::KiB16;
+    let mut image = empty_heap_v1_image(page_size);
+    image[HEADER_SIZE..HEADER_SIZE + 10].copy_from_slice(b"abcdefghij");
+    write_heap_v1_slot(&mut image, page_size, 0, HEADER_SIZE as u16, 3);
+
+    let mut deleted_middle = SlotEntry::new(0, 4);
+    deleted_middle.mark_deleted();
+    write_heap_v1_slot_bytes(&mut image, page_size, 1, deleted_middle.to_bytes());
+
+    write_heap_v1_slot(&mut image, page_size, 2, (HEADER_SIZE + 6) as u16, 4);
+    write_heap_v1_slot_metadata(&mut image, page_size, 3, (HEADER_SIZE + 10) as u16);
+
+    let restored =
+        SlotDirectory::from_page_data(page_size, &image).expect("sparse directory should decode");
+
+    assert_eq!(restored.slot_count(), 3);
+    assert_eq!(restored.active_slot_count(), 2);
+    assert_eq!(
+        restored
+            .get_slot(SlotId::new(0))
+            .expect("get slot 0")
+            .expect("slot 0 live"),
+        (HEADER_SIZE as u16, 3)
+    );
+    assert!(
+        restored
+            .get_slot(SlotId::new(1))
+            .expect("get deleted middle slot")
+            .is_none()
+    );
+    assert_eq!(
+        restored
+            .get_slot(SlotId::new(2))
+            .expect("get higher slot")
+            .expect("higher slot live"),
+        ((HEADER_SIZE + 6) as u16, 4)
+    );
 }

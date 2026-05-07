@@ -52,7 +52,7 @@ generator = "deterministic-bytes-v1"
 [[entry]]
 target = "heap_page_v1_decode"
 corpus_dir = "fuzz/corpus/heap_page_v1_decode"
-seed_files = ["seed-empty-16k.bin", "seed-single-32k.bin", "seed-two-tuples-16k.bin"]
+seed_files = ["seed-deleted-compacted-parity.bin", "seed-empty-16k.bin", "seed-free-offset-crosses-slot-directory.bin", "seed-header-footer-slot-count-mismatch.bin", "seed-overlapping-live-tuples.bin", "seed-single-32k.bin", "seed-slot-entry-outside-payload-area.bin", "seed-sparse-deleted-middle-live-higher.bin", "seed-two-tuples-16k.bin"]
 generator = "deterministic-bytes-v1"
 
 [[entry]]
