@@ -94,7 +94,7 @@ impl FrameType {
     }
 
     pub const fn requires_non_empty_payload(self) -> bool {
-        matches!(self, Self::RpcExecuteRequest | Self::RpcBatch)
+        matches!(self, Self::RpcExecuteRequest | Self::RpcBatch | Self::Error)
     }
 
     pub const fn metadata_must_precede(self) -> bool {

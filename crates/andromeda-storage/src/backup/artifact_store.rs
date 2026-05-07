@@ -18,8 +18,8 @@ use crate::{Lsn, WAL_FORMAT_VERSION, WalSegmentDescriptor};
 
 use super::{
     artifacts::{
-        BackupArtifactDigest, BackupColdSnapshotArtifact, BackupPhysicalArtifactSet,
-        BackupWalSegmentArtifact,
+        BackupArtifactCompatibilityEvidence, BackupArtifactDigest, BackupColdSnapshotArtifact,
+        BackupPhysicalArtifactSet, BackupWalSegmentArtifact,
     },
     execution_plan::BackupExecutionPlan,
     helpers::backup_error,
@@ -28,11 +28,22 @@ use super::{
 };
 
 const ARTIFACT_MANIFEST_FILE_MAGIC: &[u8] = b"ANDROMEDA-BACKUP-ARTIFACT-V1\n";
-const ARTIFACT_MANIFEST_FORMAT_VERSION: u16 = 1;
+const ARTIFACT_MANIFEST_FORMAT_VERSION_V1: u16 = 1;
+const ARTIFACT_MANIFEST_FORMAT_VERSION_V2: u16 = 2;
+const ARTIFACT_MANIFEST_FORMAT_VERSION: u16 = 3;
 const MANIFEST_FILE_HEADER_LEN: usize = ARTIFACT_MANIFEST_FILE_MAGIC.len() + 2 + 8 + 32;
 const MANIFEST_FILE_NAME: &str = "backup.manifest";
 const SNAPSHOT_FILE_NAME: &str = "snapshot.bin";
 const WAL_DIRECTORY_NAME: &str = "wal";
+const BACKUP_ARTIFACT_MANIFEST_MAX_WAL_SEGMENTS: usize = 16_384;
+const BACKUP_ARTIFACT_MANIFEST_MAX_FILE_BYTES: u64 = 64 * 1024 * 1024;
+
+// Durable manifest compatibility policy:
+// - v1 reads are accepted after reconstructing the aggregate WAL archive digest.
+// - v2 reads are accepted with the persisted aggregate WAL archive digest.
+// - v3 is the only write format and must persist compatibility evidence:
+//   manifest format, physical plan format, storage format, and WAL format.
+// Unsupported versions fail closed before any restore preflight can proceed.
 
 /// WAL archive evidence stored in the durable artifact manifest.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,6 +52,7 @@ pub struct BackupWalArchiveEvidence {
     pub end_lsn: Lsn,
     pub segment_count: usize,
     pub total_bytes: u64,
+    pub archive_digest_sha256: [u8; 32],
 }
 
 impl BackupWalArchiveEvidence {
@@ -64,6 +76,16 @@ impl BackupWalArchiveEvidence {
                 "backup WAL archive evidence segment count must match artifacts",
             ));
         }
+        if self.segment_count == 0 {
+            return Err(backup_error(
+                "backup WAL archive evidence segment count must not be zero",
+            ));
+        }
+        if self.archive_digest_sha256 == [0; 32] {
+            return Err(backup_error(
+                "backup WAL archive evidence digest must not be zero",
+            ));
+        }
 
         let mut computed_bytes = 0_u64;
         for segment in wal_segments {
@@ -76,6 +98,11 @@ impl BackupWalArchiveEvidence {
                 "backup WAL archive evidence bytes must match WAL artifacts",
             ));
         }
+        if self.archive_digest_sha256 != compute_wal_archive_digest(wal_segments) {
+            return Err(backup_error(
+                "backup WAL archive evidence digest must match WAL artifacts",
+            ));
+        }
         Ok(())
     }
 }
@@ -84,8 +111,10 @@ impl BackupWalArchiveEvidence {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BackupArtifactManifestRecord {
     pub manifest: BackupManifest,
+    pub manifest_format_version: u16,
     pub source_checkpoint_lsn: Lsn,
     pub wal_archive_evidence: BackupWalArchiveEvidence,
+    pub compatibility_evidence: BackupArtifactCompatibilityEvidence,
     pub artifact_set: BackupPhysicalArtifactSet,
     pub manifest_path: PathBuf,
     pub snapshot_path: PathBuf,
@@ -95,6 +124,11 @@ pub struct BackupArtifactManifestRecord {
 impl BackupArtifactManifestRecord {
     pub fn validate_metadata(&self) -> AndromedaResult<()> {
         self.manifest.validate()?;
+        if !is_supported_manifest_format_version(self.manifest_format_version) {
+            return Err(backup_error(
+                "backup artifact manifest format version is unsupported",
+            ));
+        }
         if self.source_checkpoint_lsn.is_zero() {
             return Err(backup_error(
                 "backup artifact source checkpoint LSN must not be zero",
@@ -103,6 +137,19 @@ impl BackupArtifactManifestRecord {
         if self.source_checkpoint_lsn != self.manifest.snapshot.base_checkpoint_lsn {
             return Err(backup_error(
                 "backup artifact source checkpoint LSN must match manifest snapshot",
+            ));
+        }
+        self.compatibility_evidence.validate()?;
+        if self.compatibility_evidence.manifest_format_version != self.manifest_format_version {
+            return Err(backup_error(
+                "backup artifact compatibility format version must match manifest header",
+            ));
+        }
+        if self.manifest_format_version == ARTIFACT_MANIFEST_FORMAT_VERSION
+            && !self.compatibility_evidence.recorded_in_manifest
+        {
+            return Err(backup_error(
+                "backup artifact compatibility evidence must be recorded in current manifests",
             ));
         }
         if self.wal_segment_paths.len() != self.artifact_set.wal_segments.len() {
@@ -144,6 +191,7 @@ pub struct BackupArtifactWriteReport {
     pub source_checkpoint_lsn: Lsn,
     pub artifact_set: BackupPhysicalArtifactSet,
     pub wal_archive_evidence: BackupWalArchiveEvidence,
+    pub compatibility_evidence: BackupArtifactCompatibilityEvidence,
 }
 
 /// File-backed artifact store rooted at a directory controlled by the caller.
@@ -263,12 +311,14 @@ impl FileBackedBackupArtifactStore {
             end_lsn: plan.manifest.wal_archive.end_inclusive,
             segment_count: wal_segments.len(),
             total_bytes: total_wal_bytes,
+            archive_digest_sha256: compute_wal_archive_digest(&wal_segments),
         };
 
         let manifest_payload = encode_manifest_payload(
             &plan.manifest,
             plan.manifest.snapshot.base_checkpoint_lsn,
             &wal_archive_evidence,
+            BackupArtifactCompatibilityEvidence::recorded(ARTIFACT_MANIFEST_FORMAT_VERSION),
             &cold_snapshot,
             &wal_segments,
         )?;
@@ -285,8 +335,12 @@ impl FileBackedBackupArtifactStore {
 
         let record = BackupArtifactManifestRecord {
             manifest: plan.manifest,
+            manifest_format_version: ARTIFACT_MANIFEST_FORMAT_VERSION,
             source_checkpoint_lsn: plan.manifest.snapshot.base_checkpoint_lsn,
             wal_archive_evidence,
+            compatibility_evidence: BackupArtifactCompatibilityEvidence::recorded(
+                ARTIFACT_MANIFEST_FORMAT_VERSION,
+            ),
             artifact_set: artifact_set.clone(),
             manifest_path: manifest_path.clone(),
             snapshot_path: snapshot_path.clone(),
@@ -304,6 +358,9 @@ impl FileBackedBackupArtifactStore {
             source_checkpoint_lsn: plan.manifest.snapshot.base_checkpoint_lsn,
             artifact_set,
             wal_archive_evidence,
+            compatibility_evidence: BackupArtifactCompatibilityEvidence::recorded(
+                ARTIFACT_MANIFEST_FORMAT_VERSION,
+            ),
         })
     }
 
@@ -317,8 +374,7 @@ impl FileBackedBackupArtifactStore {
 
         let backup_dir = self.backup_dir(backup_id);
         let manifest_path = backup_dir.join(MANIFEST_FILE_NAME);
-        let manifest_bytes = fs::read(&manifest_path)
-            .map_err(|err| io_error("read backup artifact manifest", err))?;
+        let manifest_bytes = read_manifest_file(&manifest_path)?;
         let manifest_digest = digest_bytes(&manifest_bytes)?;
         let decoded = decode_manifest_file(&manifest_bytes)?;
 
@@ -338,8 +394,10 @@ impl FileBackedBackupArtifactStore {
 
         let record = BackupArtifactManifestRecord {
             manifest: decoded.manifest,
+            manifest_format_version: decoded.format_version,
             source_checkpoint_lsn: decoded.source_checkpoint_lsn,
             wal_archive_evidence: decoded.wal_archive_evidence,
+            compatibility_evidence: decoded.compatibility_evidence,
             artifact_set: BackupPhysicalArtifactSet {
                 backup_manifest: manifest_digest,
                 cold_snapshot: decoded.cold_snapshot,
@@ -366,8 +424,11 @@ impl FileBackedBackupArtifactStore {
         &self,
         record: &BackupArtifactManifestRecord,
     ) -> AndromedaResult<()> {
-        let snapshot_bytes =
-            fs::read(&record.snapshot_path).map_err(|err| io_error("read backup snapshot", err))?;
+        let snapshot_bytes = read_file_with_expected_len(
+            &record.snapshot_path,
+            record.artifact_set.cold_snapshot.artifact.byte_len,
+            "backup snapshot",
+        )?;
         let snapshot_digest = digest_bytes(&snapshot_bytes)?;
         if snapshot_digest != record.artifact_set.cold_snapshot.artifact {
             return Err(backup_error("backup snapshot artifact checksum mismatch"));
@@ -379,7 +440,7 @@ impl FileBackedBackupArtifactStore {
             .zip(record.artifact_set.wal_segments.iter())
         {
             let wal_bytes =
-                fs::read(path).map_err(|err| io_error("read backup WAL segment", err))?;
+                read_file_with_expected_len(path, segment.artifact.byte_len, "backup WAL segment")?;
             let wal_digest = digest_bytes(&wal_bytes)?;
             if wal_digest != segment.artifact {
                 return Err(backup_error(
@@ -393,9 +454,11 @@ impl FileBackedBackupArtifactStore {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct DecodedArtifactManifest {
+    format_version: u16,
     manifest: BackupManifest,
     source_checkpoint_lsn: Lsn,
     wal_archive_evidence: BackupWalArchiveEvidence,
+    compatibility_evidence: BackupArtifactCompatibilityEvidence,
     cold_snapshot: BackupColdSnapshotArtifact,
     wal_segments: Vec<BackupWalSegmentArtifact>,
 }
@@ -404,7 +467,10 @@ fn encode_manifest_file(payload: &[u8]) -> AndromedaResult<Vec<u8>> {
     let payload_len = u64::try_from(payload.len())
         .map_err(|_| backup_error("backup artifact manifest payload length exceeds u64"))?;
     let payload_checksum = Sha256::digest(payload);
-    let mut bytes = Vec::with_capacity(MANIFEST_FILE_HEADER_LEN + payload.len());
+    let capacity = MANIFEST_FILE_HEADER_LEN
+        .checked_add(payload.len())
+        .ok_or_else(|| backup_error("backup artifact manifest file length overflow"))?;
+    let mut bytes = Vec::with_capacity(capacity);
     bytes.extend_from_slice(ARTIFACT_MANIFEST_FILE_MAGIC);
     bytes.extend_from_slice(&ARTIFACT_MANIFEST_FORMAT_VERSION.to_le_bytes());
     bytes.extend_from_slice(&payload_len.to_le_bytes());
@@ -424,7 +490,7 @@ fn decode_manifest_file(bytes: &[u8]) -> AndromedaResult<DecodedArtifactManifest
     let mut offset = ARTIFACT_MANIFEST_FILE_MAGIC.len();
     let version = read_u16_at(bytes, offset)?;
     offset += 2;
-    if version != ARTIFACT_MANIFEST_FORMAT_VERSION {
+    if !is_supported_manifest_format_version(version) {
         return Err(backup_error(
             "backup artifact manifest format version is unsupported",
         ));
@@ -453,23 +519,33 @@ fn decode_manifest_file(bytes: &[u8]) -> AndromedaResult<DecodedArtifactManifest
             "backup artifact manifest payload checksum mismatch",
         ));
     }
-    decode_manifest_payload(payload)
+    decode_manifest_payload(version, payload)
 }
 
 fn encode_manifest_payload(
     manifest: &BackupManifest,
     source_checkpoint_lsn: Lsn,
     evidence: &BackupWalArchiveEvidence,
+    compatibility_evidence: BackupArtifactCompatibilityEvidence,
     cold_snapshot: &BackupColdSnapshotArtifact,
     wal_segments: &[BackupWalSegmentArtifact],
 ) -> AndromedaResult<Vec<u8>> {
     manifest.validate()?;
     cold_snapshot.validate_against(manifest)?;
     evidence.validate_against(manifest, wal_segments)?;
+    compatibility_evidence.validate()?;
+    if compatibility_evidence.manifest_format_version != ARTIFACT_MANIFEST_FORMAT_VERSION
+        || !compatibility_evidence.recorded_in_manifest
+    {
+        return Err(backup_error(
+            "backup artifact current manifest must record compatibility evidence",
+        ));
+    }
 
+    validate_manifest_wal_segment_count(wal_segments.len(), "backup artifact WAL segment count")?;
     let segment_count = u64::try_from(wal_segments.len())
         .map_err(|_| backup_error("backup artifact WAL segment count exceeds u64"))?;
-    let mut payload = Vec::with_capacity(256 + wal_segments.len() * 96);
+    let mut payload = Vec::with_capacity(manifest_payload_capacity(wal_segments.len(), true)?);
     push_u64(&mut payload, manifest.backup_id.get());
     push_u64(&mut payload, manifest.database_id);
     push_u64(&mut payload, manifest.created_epoch);
@@ -485,6 +561,7 @@ fn encode_manifest_payload(
     push_lsn(&mut payload, evidence.end_lsn);
     push_u64(&mut payload, segment_count);
     push_u64(&mut payload, evidence.total_bytes);
+    payload.extend_from_slice(&evidence.archive_digest_sha256);
 
     push_u64(&mut payload, cold_snapshot.database_id);
     push_u64(&mut payload, cold_snapshot.manifest_version);
@@ -504,10 +581,21 @@ fn encode_manifest_payload(
         push_digest(&mut payload, segment.artifact);
     }
 
+    // v3 compatibility trailer. It is intentionally placed after the segment
+    // list so v2 fixtures can be produced by truncating this trailer while
+    // keeping all earlier offsets stable for corruption tests.
+    push_u16(&mut payload, compatibility_evidence.manifest_format_version);
+    push_u16(&mut payload, compatibility_evidence.physical_plan_version);
+    push_u16(&mut payload, compatibility_evidence.storage_format_version);
+    push_u16(&mut payload, compatibility_evidence.wal_format_version);
+
     Ok(payload)
 }
 
-fn decode_manifest_payload(payload: &[u8]) -> AndromedaResult<DecodedArtifactManifest> {
+fn decode_manifest_payload(
+    format_version: u16,
+    payload: &[u8],
+) -> AndromedaResult<DecodedArtifactManifest> {
     let mut cursor = PayloadCursor::new(payload);
     let manifest = BackupManifest {
         backup_id: BackupId::new(cursor.read_u64()?),
@@ -523,12 +611,27 @@ fn decode_manifest_payload(payload: &[u8]) -> AndromedaResult<DecodedArtifactMan
         manifest_crc: cursor.read_u32()?,
     };
     let source_checkpoint_lsn = cursor.read_lsn()?;
-    let wal_archive_evidence = BackupWalArchiveEvidence {
+    let mut wal_archive_evidence = BackupWalArchiveEvidence {
         start_lsn: cursor.read_lsn()?,
         end_lsn: cursor.read_lsn()?,
-        segment_count: usize::try_from(cursor.read_u64()?)
-            .map_err(|_| backup_error("backup artifact evidence segment count exceeds usize"))?,
+        segment_count: {
+            let count = usize::try_from(cursor.read_u64()?).map_err(|_| {
+                backup_error("backup artifact evidence segment count exceeds usize")
+            })?;
+            validate_manifest_wal_segment_count(count, "backup artifact evidence segment count")?;
+            count
+        },
         total_bytes: cursor.read_u64()?,
+        archive_digest_sha256: match format_version {
+            ARTIFACT_MANIFEST_FORMAT_VERSION => cursor.read_array_32()?,
+            ARTIFACT_MANIFEST_FORMAT_VERSION_V2 => cursor.read_array_32()?,
+            ARTIFACT_MANIFEST_FORMAT_VERSION_V1 => [0; 32],
+            _ => {
+                return Err(backup_error(
+                    "backup artifact manifest format version is unsupported",
+                ));
+            }
+        },
     };
 
     let cold_snapshot = BackupColdSnapshotArtifact {
@@ -542,6 +645,12 @@ fn decode_manifest_payload(payload: &[u8]) -> AndromedaResult<DecodedArtifactMan
 
     let wal_segment_count = usize::try_from(cursor.read_u64()?)
         .map_err(|_| backup_error("backup artifact WAL segment count exceeds usize"))?;
+    validate_manifest_wal_segment_count(wal_segment_count, "backup artifact WAL segment count")?;
+    if wal_segment_count != wal_archive_evidence.segment_count {
+        return Err(backup_error(
+            "backup artifact WAL segment count must match archive evidence",
+        ));
+    }
     let mut wal_segments = Vec::with_capacity(wal_segment_count);
     for _ in 0..wal_segment_count {
         let segment = BackupWalSegmentArtifact {
@@ -555,15 +664,46 @@ fn decode_manifest_payload(payload: &[u8]) -> AndromedaResult<DecodedArtifactMan
         };
         wal_segments.push(segment);
     }
+    let compatibility_evidence = match format_version {
+        ARTIFACT_MANIFEST_FORMAT_VERSION => BackupArtifactCompatibilityEvidence {
+            manifest_format_version: cursor.read_u16()?,
+            physical_plan_version: cursor.read_u16()?,
+            storage_format_version: cursor.read_u16()?,
+            wal_format_version: cursor.read_u16()?,
+            recorded_in_manifest: true,
+        },
+        ARTIFACT_MANIFEST_FORMAT_VERSION_V1 | ARTIFACT_MANIFEST_FORMAT_VERSION_V2 => {
+            // Legacy manifests predate explicit compatibility persistence.
+            // Restore still gets bounded evidence, but callers can distinguish
+            // reconstructed evidence from v3's manifest-recorded evidence.
+            BackupArtifactCompatibilityEvidence::reconstructed_legacy(format_version)
+        }
+        _ => {
+            return Err(backup_error(
+                "backup artifact manifest format version is unsupported",
+            ));
+        }
+    };
+    if format_version == ARTIFACT_MANIFEST_FORMAT_VERSION_V1 {
+        wal_archive_evidence.archive_digest_sha256 = compute_wal_archive_digest(&wal_segments);
+    }
     cursor.finish()?;
 
     let decoded = DecodedArtifactManifest {
+        format_version,
         manifest,
         source_checkpoint_lsn,
         wal_archive_evidence,
+        compatibility_evidence,
         cold_snapshot,
         wal_segments,
     };
+    decoded.compatibility_evidence.validate()?;
+    if decoded.compatibility_evidence.manifest_format_version != decoded.format_version {
+        return Err(backup_error(
+            "backup artifact compatibility format version must match manifest header",
+        ));
+    }
     decoded.manifest.validate()?;
     if decoded.source_checkpoint_lsn != decoded.manifest.snapshot.base_checkpoint_lsn {
         return Err(backup_error(
@@ -616,6 +756,59 @@ fn write_file_atomically(path: &Path, bytes: &[u8]) -> AndromedaResult<()> {
     Ok(())
 }
 
+fn read_manifest_file(path: &Path) -> AndromedaResult<Vec<u8>> {
+    let metadata =
+        fs::metadata(path).map_err(|err| io_error("stat backup artifact manifest", err))?;
+    if metadata.len() > BACKUP_ARTIFACT_MANIFEST_MAX_FILE_BYTES {
+        return Err(backup_error(
+            "backup artifact manifest file exceeds bounded read limit",
+        ));
+    }
+    fs::read(path).map_err(|err| io_error("read backup artifact manifest", err))
+}
+
+fn read_file_with_expected_len(
+    path: &Path,
+    expected_len: u64,
+    label: &'static str,
+) -> AndromedaResult<Vec<u8>> {
+    let metadata = fs::metadata(path).map_err(|err| io_error(format!("stat {label}"), err))?;
+    if metadata.len() != expected_len {
+        return Err(backup_error(format!("{label} byte length mismatch")));
+    }
+    let bytes = fs::read(path).map_err(|err| io_error(format!("read {label}"), err))?;
+    let actual_len = u64::try_from(bytes.len())
+        .map_err(|_| backup_error(format!("{label} length exceeds u64")))?;
+    if actual_len != expected_len {
+        return Err(backup_error(format!("{label} byte length mismatch")));
+    }
+    Ok(bytes)
+}
+
+fn validate_manifest_wal_segment_count(count: usize, label: &str) -> AndromedaResult<()> {
+    if count > BACKUP_ARTIFACT_MANIFEST_MAX_WAL_SEGMENTS {
+        return Err(backup_error(format!(
+            "{label} exceeds bounded manifest segment limit"
+        )));
+    }
+    Ok(())
+}
+
+fn manifest_payload_capacity(
+    segment_count: usize,
+    has_compatibility_trailer: bool,
+) -> AndromedaResult<usize> {
+    let trailer_len = if has_compatibility_trailer { 8 } else { 0 };
+    288usize
+        .checked_add(
+            segment_count
+                .checked_mul(91)
+                .ok_or_else(|| backup_error("backup artifact manifest segment length overflow"))?,
+        )
+        .and_then(|len| len.checked_add(trailer_len))
+        .ok_or_else(|| backup_error("backup artifact manifest payload length overflow"))
+}
+
 fn digest_bytes(bytes: &[u8]) -> AndromedaResult<BackupArtifactDigest> {
     if bytes.is_empty() {
         return Err(backup_error(
@@ -631,6 +824,40 @@ fn digest_bytes(bytes: &[u8]) -> AndromedaResult<BackupArtifactDigest> {
     };
     digest.validate("backup artifact digest")?;
     Ok(digest)
+}
+
+fn compute_wal_archive_digest(wal_segments: &[BackupWalSegmentArtifact]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    for segment in wal_segments {
+        hasher.update(segment.segment_id.to_le_bytes());
+        hasher.update(segment.first_lsn.get().to_le_bytes());
+        hasher.update(segment.last_lsn.get().to_le_bytes());
+        match segment.base_previous_lsn {
+            Some(previous) => {
+                hasher.update([1]);
+                hasher.update(previous.get().to_le_bytes());
+            }
+            None => {
+                hasher.update([0]);
+                hasher.update(0_u64.to_le_bytes());
+            }
+        }
+        hasher.update(segment.record_count.to_le_bytes());
+        hasher.update(segment.wal_format_version.to_le_bytes());
+        hasher.update(segment.artifact.sha256);
+        hasher.update(segment.artifact.crc64.to_le_bytes());
+        hasher.update(segment.artifact.byte_len.to_le_bytes());
+    }
+    hasher.finalize().into()
+}
+
+const fn is_supported_manifest_format_version(version: u16) -> bool {
+    matches!(
+        version,
+        ARTIFACT_MANIFEST_FORMAT_VERSION_V1
+            | ARTIFACT_MANIFEST_FORMAT_VERSION_V2
+            | ARTIFACT_MANIFEST_FORMAT_VERSION
+    )
 }
 
 fn crc64(bytes: &[u8]) -> u64 {
@@ -829,8 +1056,11 @@ impl<'a> PayloadCursor<'a> {
     }
 }
 
-fn io_error(action: &str, err: std::io::Error) -> AndromedaError {
-    AndromedaError::new(AndromedaErrorKind::Storage, format!("{action}: {err}"))
+fn io_error(action: impl Into<String>, err: std::io::Error) -> AndromedaError {
+    AndromedaError::new(
+        AndromedaErrorKind::Storage,
+        format!("{}: {err}", action.into()),
+    )
 }
 
 #[allow(dead_code)]

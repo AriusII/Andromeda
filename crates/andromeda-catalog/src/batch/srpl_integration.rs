@@ -19,7 +19,7 @@
 //! - DEC-022: Alter Procedure Lifecycle Semantics
 //! - DEC-023: Drop Procedure Lifecycle Semantics
 
-use andromeda_core::AndromedaResult;
+use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{DefinitionBatch, QualifiedName};
 
@@ -46,13 +46,7 @@ pub fn add_srpl_procedure(
     _name: QualifiedName,
     _source: String,
 ) -> AndromedaResult<()> {
-    // TODO(E7): Implement in integration phase
-    // 1. Parse SRPL source
-    // 2. Bind and lower to IR
-    // 3. Validate no name conflicts
-    // 4. Create DefinitionOperation::Create
-    // 5. Append to batch.operations
-    Ok(())
+    Err(srpl_source_integration_error("add SRPL procedure"))
 }
 
 /// Alter an existing SRPL procedure's source (E2).
@@ -78,15 +72,7 @@ pub fn alter_srpl_procedure(
     _name: QualifiedName,
     _new_source: String,
 ) -> AndromedaResult<()> {
-    // TODO(E7): Implement in integration phase
-    // 1. Validate procedure exists
-    // 2. Parse new SRPL source
-    // 3. Bind and lower to IR
-    // 4. Check compatibility policy
-    // 5. Validate no broken dependencies
-    // 6. Create DefinitionOperation::Deprecate + DefinitionOperation::Create
-    // 7. Append to batch.operations
-    Ok(())
+    Err(srpl_source_integration_error("alter SRPL procedure"))
 }
 
 /// Drop an existing SRPL procedure (E3).
@@ -109,11 +95,47 @@ pub fn drop_srpl_procedure(
     _batch: &mut DefinitionBatch,
     _name: QualifiedName,
 ) -> AndromedaResult<()> {
-    // TODO(E7): Implement in integration phase
-    // 1. Validate procedure exists
-    // 2. Check no active invocations
-    // 3. Check no Maps depend on it
-    // 4. Create DefinitionOperation::Deprecate
-    // 5. Append to batch.operations
-    Ok(())
+    Err(srpl_source_integration_error("drop SRPL procedure"))
+}
+
+fn srpl_source_integration_error(operation: &str) -> AndromedaError {
+    AndromedaError::new(
+        AndromedaErrorKind::Catalog,
+        format!(
+            "{operation} must be performed through andromeda-srpl compiler helpers; \
+             andromeda-catalog cannot parse SRPL source without creating a crate dependency cycle"
+        ),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{DefinitionBatchId, INVENTORY_DATABASE_ID, INVENTORY_NAMESPACE_ID};
+    use andromeda_core::CatalogVersion;
+
+    fn empty_batch() -> DefinitionBatch {
+        DefinitionBatch {
+            batch_id: DefinitionBatchId::new(1),
+            database_id: INVENTORY_DATABASE_ID,
+            namespace_id: INVENTORY_NAMESPACE_ID,
+            base_version: CatalogVersion::new(0),
+            operations: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn srpl_source_helpers_do_not_silently_succeed_inside_catalog() {
+        let mut batch = empty_batch();
+        let error = add_srpl_procedure(
+            &mut batch,
+            QualifiedName::parse("Inventory.ReserveStock").unwrap(),
+            "procedure Inventory.ReserveStock accepts () returns R one (Ok bool);".to_string(),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+        assert!(error.message().contains("andromeda-srpl compiler helpers"));
+        assert!(batch.operations.is_empty());
+    }
 }

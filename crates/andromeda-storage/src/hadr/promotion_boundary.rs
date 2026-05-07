@@ -62,11 +62,12 @@ use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use crate::Lsn;
 
 use super::{
+    cluster_security::{HadrClusterOperation, HadrClusterSecurityEvidence},
     fencing::{HadrFencingContext, HadrFencingToken},
     membership_store::{HadrMembershipSnapshot, HadrMembershipStore},
     quorum::{
         HadrAuditRecord, HadrPromotionOutcome, HadrPromotionRequest, HadrPromotionVote,
-        HadrQuorumMembership, evaluate_promotion, promotion_outcome_into_result,
+        HadrQuorumMembership, evaluate_promotion,
     },
     types::{HadrEpoch, HadrNodeId, HadrNodeState},
 };
@@ -391,6 +392,33 @@ pub struct HadrPromotionAuditMarker {
     pub committed_safe_lsn: Lsn,
     pub token: HadrFencingToken,
     pub audit_record: HadrAuditRecord,
+    pub cluster_security: Option<HadrClusterSecurityEvidence>,
+}
+
+/// Durable receipt returned by a promotion audit sink.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HadrPromotionAuditReceipt {
+    pub audit_lsn: Lsn,
+    pub marker_digest_sha256: [u8; 32],
+}
+
+impl HadrPromotionAuditReceipt {
+    pub fn new(audit_lsn: Lsn, marker_digest_sha256: [u8; 32]) -> AndromedaResult<Self> {
+        if audit_lsn == Lsn::ZERO {
+            return Err(promotion_error(
+                "HADR promotion audit receipt requires a non-zero audit LSN",
+            ));
+        }
+        if marker_digest_sha256.iter().all(|byte| *byte == 0) {
+            return Err(promotion_error(
+                "HADR promotion audit receipt requires a non-zero marker digest",
+            ));
+        }
+        Ok(Self {
+            audit_lsn,
+            marker_digest_sha256,
+        })
+    }
 }
 
 /// Audit sink used by the storage-side promotion boundary.
@@ -399,6 +427,16 @@ pub trait HadrPromotionAuditLog {
         &self,
         marker: &HadrPromotionAuditMarker,
     ) -> AndromedaResult<()>;
+
+    fn append_primary_promotion_marker_durably(
+        &self,
+        marker: &HadrPromotionAuditMarker,
+    ) -> AndromedaResult<HadrPromotionAuditReceipt> {
+        let _ = marker;
+        Err(promotion_error(
+            "HADR promotion audit log did not return a durable audit receipt",
+        ))
+    }
 }
 
 /// No-op audit sink for callers that only need the membership-store records.
@@ -432,6 +470,27 @@ impl PromotionPlanner {
         membership_snapshot: &HadrMembershipSnapshot,
         attempt: PromotionAttempt,
     ) -> AndromedaResult<PromotionPlan> {
+        Self::plan_with_optional_cluster_security(membership_snapshot, attempt, None)
+    }
+
+    pub fn plan_with_cluster_security(
+        membership_snapshot: &HadrMembershipSnapshot,
+        attempt: PromotionAttempt,
+        cluster_security: HadrClusterSecurityEvidence,
+    ) -> AndromedaResult<PromotionPlan> {
+        cluster_security.require_operation(HadrClusterOperation::PromotePrimary)?;
+        Self::plan_with_optional_cluster_security(
+            membership_snapshot,
+            attempt,
+            Some(cluster_security),
+        )
+    }
+
+    fn plan_with_optional_cluster_security(
+        membership_snapshot: &HadrMembershipSnapshot,
+        attempt: PromotionAttempt,
+        cluster_security: Option<HadrClusterSecurityEvidence>,
+    ) -> AndromedaResult<PromotionPlan> {
         let member = membership_snapshot
             .get(attempt.candidate_id)
             .ok_or_else(|| {
@@ -458,12 +517,13 @@ impl PromotionPlanner {
         );
         let request = HadrPromotionRequest::new(candidate, proposed_epoch, attempt.votes);
         let audit_record = evaluate_promotion(&request, &membership, &attempt.fencing);
-        let token = promotion_outcome_into_result(&audit_record.outcome)?;
-        let committed_safe_lsn = match &audit_record.outcome {
+        let (token, committed_safe_lsn) = match &audit_record.outcome {
             HadrPromotionOutcome::Approved {
-                committed_safe_lsn, ..
-            } => *committed_safe_lsn,
-            HadrPromotionOutcome::Rejected(_) => unreachable!("rejected outcome returned error"),
+                token,
+                committed_safe_lsn,
+                ..
+            } => (*token, *committed_safe_lsn),
+            HadrPromotionOutcome::Rejected(reason) => return Err(promotion_error(reason.as_str())),
         };
 
         let marker = HadrPromotionAuditMarker {
@@ -473,6 +533,7 @@ impl PromotionPlanner {
             committed_safe_lsn,
             token,
             audit_record,
+            cluster_security,
         };
 
         Ok(PromotionPlan {
@@ -503,15 +564,33 @@ where
         }
     }
 
-    pub fn promote(&self, attempt: PromotionAttempt) -> AndromedaResult<PromotionCommit> {
+    /// Legacy promotion entry point retained for compatibility with older
+    /// callers. It never publishes a primary because HADR promotion requires
+    /// cluster-scope security evidence and a durable audit receipt.
+    pub fn promote(&self, _attempt: PromotionAttempt) -> AndromedaResult<PromotionCommit> {
+        Err(promotion_error(
+            "HADR primary promotion requires cluster security evidence and durable audit receipt; use promote_with_cluster_security",
+        ))
+    }
+
+    pub fn promote_with_cluster_security(
+        &self,
+        attempt: PromotionAttempt,
+        cluster_security: HadrClusterSecurityEvidence,
+    ) -> AndromedaResult<PromotionCommit> {
         let membership_snapshot = self
             .membership_store
             .load()?
             .ok_or_else(|| promotion_error("HADR membership snapshot is missing"))?;
-        let plan = PromotionPlanner::plan(&membership_snapshot, attempt)?;
+        let plan = PromotionPlanner::plan_with_cluster_security(
+            &membership_snapshot,
+            attempt,
+            cluster_security,
+        )?;
 
-        self.audit_log
-            .append_primary_promotion_marker(&plan.marker)?;
+        let audit_receipt = self
+            .audit_log
+            .append_primary_promotion_marker_durably(&plan.marker)?;
         let snapshot = self.membership_store.promote_primary(
             plan.candidate_id,
             plan.proposed_epoch,
@@ -521,6 +600,7 @@ where
         Ok(PromotionCommit {
             token: plan.token,
             marker: plan.marker,
+            audit_receipt: Some(audit_receipt),
             snapshot,
         })
     }
@@ -531,6 +611,7 @@ where
 pub struct PromotionCommit {
     pub token: HadrFencingToken,
     pub marker: HadrPromotionAuditMarker,
+    pub audit_receipt: Option<HadrPromotionAuditReceipt>,
     pub snapshot: HadrMembershipSnapshot,
 }
 

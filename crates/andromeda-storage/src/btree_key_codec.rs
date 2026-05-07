@@ -171,19 +171,24 @@ impl KeyCodec {
         }
 
         let type_tag = KeyType::from_tag(bytes[start])?;
-        let mut pos = start + 1;
+        let mut pos = start
+            .checked_add(1)
+            .ok_or_else(|| codec_error("key offset overflow"))?;
 
         if type_tag == KeyType::Text {
             let (s, consumed) = decode_text_order_preserving(&bytes[pos..])?;
-            return Ok((Key::Text(s), pos + consumed));
+            return Ok((
+                Key::Text(s),
+                pos.checked_add(consumed)
+                    .ok_or_else(|| codec_error("text key offset overflow"))?,
+            ));
         }
 
         // Read length, or column count for composite keys.
-        if pos + 2 > bytes.len() {
-            return Err(codec_error("truncated key: missing length"));
-        }
-        let length = u16::from_le_bytes([bytes[pos], bytes[pos + 1]]) as usize;
-        pos += 2;
+        let length = usize::from(read_u16_at(bytes, pos, "truncated key: missing length")?);
+        pos = pos
+            .checked_add(2)
+            .ok_or_else(|| codec_error("key length offset overflow"))?;
 
         // Validate and read value
         match type_tag {
@@ -215,17 +220,22 @@ impl KeyCodec {
                 let v = decode_int64_order_preserving(&encoded);
                 Ok((Key::Int64(v), pos + 8))
             }
-            KeyType::Text => unreachable!("text keys are decoded before length parsing"),
+            KeyType::Text => Err(codec_error(
+                "text key unexpectedly reached length-prefixed decoder",
+            )),
             KeyType::Bytes => {
-                if pos + length > bytes.len() {
-                    return Err(codec_error("truncated bytes"));
-                }
-                let b = bytes[pos..pos + length].to_vec();
-                Ok((Key::Bytes(b), pos + length))
+                let end = checked_end(bytes, pos, length, "truncated bytes")?;
+                let b = bytes[pos..end].to_vec();
+                Ok((Key::Bytes(b), end))
             }
             KeyType::Composite => {
                 // For composite keys, the top-level two-byte field is the column count.
                 let col_count = length;
+                if col_count > bytes.len().saturating_sub(pos) {
+                    return Err(codec_error(
+                        "composite column count exceeds remaining encoded bytes",
+                    ));
+                }
 
                 let mut datums = Vec::new();
                 for _ in 0..col_count {
@@ -269,12 +279,10 @@ impl KeyCodec {
         }
 
         if bytes[start] == DATUM_BOOL_TAG {
-            if start + 2 > bytes.len() {
-                return Err(codec_error("truncated bool datum"));
-            }
+            let end = checked_end(bytes, start, 2, "truncated bool datum")?;
             return match bytes[start + 1] {
-                0 => Ok((Datum::Bool(false), start + 2)),
-                1 => Ok((Datum::Bool(true), start + 2)),
+                0 => Ok((Datum::Bool(false), end)),
+                1 => Ok((Datum::Bool(true), end)),
                 _ => Err(codec_error("invalid bool datum")),
             };
         }
@@ -403,17 +411,35 @@ fn read_fixed_payload<const N: usize>(
     read_array_at(bytes, pos, truncated_msg)
 }
 
+fn read_u16_at(bytes: &[u8], pos: usize, truncated_msg: &'static str) -> AndromedaResult<u16> {
+    let end = checked_end(bytes, pos, 2, truncated_msg)?;
+    Ok(u16::from_le_bytes([bytes[pos], bytes[end - 1]]))
+}
+
 fn read_array_at<const N: usize>(
     bytes: &[u8],
     pos: usize,
     truncated_msg: &'static str,
 ) -> AndromedaResult<[u8; N]> {
-    if pos + N > bytes.len() {
+    let end = checked_end(bytes, pos, N, truncated_msg)?;
+    let mut result = [0; N];
+    result.copy_from_slice(&bytes[pos..end]);
+    Ok(result)
+}
+
+fn checked_end(
+    bytes: &[u8],
+    pos: usize,
+    len: usize,
+    truncated_msg: &'static str,
+) -> AndromedaResult<usize> {
+    let end = pos
+        .checked_add(len)
+        .ok_or_else(|| codec_error("key payload offset overflow"))?;
+    if end > bytes.len() {
         return Err(codec_error(truncated_msg));
     }
-    let mut result = [0; N];
-    result.copy_from_slice(&bytes[pos..pos + N]);
-    Ok(result)
+    Ok(end)
 }
 
 /// Order-preserving encoding for i32.
@@ -795,6 +821,21 @@ mod tests {
         let k1 = KeyCodec::encode_key(&Key::Int32(20)).expect("encode");
         let k2 = KeyCodec::encode_key(&Key::Int32(10)).expect("encode");
         assert_eq!(KeyComparator::compare(&k1, &k2), Ordering::Greater);
+    }
+
+    #[test]
+    fn malformed_decode_inputs_return_storage_errors() {
+        for bytes in [
+            vec![],
+            vec![KeyType::Int32.tag(), 4, 0, 1, 2, 3],
+            vec![KeyType::Bytes.tag(), 0xff, 0xff, 1],
+            vec![KeyType::Composite.tag(), 0xff, 0xff],
+            vec![KeyType::Composite.tag(), 2, 0, DATUM_BOOL_TAG, 1],
+            vec![DATUM_BOOL_TAG, 2],
+        ] {
+            let error = KeyCodec::decode_key(&bytes).expect_err("malformed key must be rejected");
+            assert_eq!(error.kind(), AndromedaErrorKind::Storage);
+        }
     }
 
     // Performance / Latency Checks (Informal)

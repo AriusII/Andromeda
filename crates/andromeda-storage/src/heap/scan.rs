@@ -1,10 +1,16 @@
 use andromeda_core::AndromedaResult;
 
+use crate::heap_row_encoder::ProductStockRow;
+
 use super::HeapPage;
 
 pub struct HeapScanIter<'a> {
     page: &'a HeapPage,
     current_slot: u16,
+}
+
+pub struct ProductStockHeapScanIter<'a> {
+    raw: HeapScanIter<'a>,
 }
 
 impl HeapPage {
@@ -13,6 +19,10 @@ impl HeapPage {
             page: self,
             current_slot: 0,
         }
+    }
+
+    pub fn scan_product_stock(&self) -> ProductStockHeapScanIter<'_> {
+        ProductStockHeapScanIter { raw: self.scan() }
     }
 }
 
@@ -31,5 +41,17 @@ impl<'a> Iterator for HeapScanIter<'a> {
             }
         }
         None
+    }
+}
+
+impl Iterator for ProductStockHeapScanIter<'_> {
+    type Item = AndromedaResult<(u16, ProductStockRow)>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.raw.next().map(|item| {
+            item.and_then(|(slot_id, tuple)| {
+                ProductStockRow::decode(&tuple).map(|row| (slot_id, row))
+            })
+        })
     }
 }

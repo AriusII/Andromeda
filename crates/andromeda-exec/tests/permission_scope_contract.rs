@@ -1,13 +1,15 @@
 //! Permission scope validation and registry enforcement contracts.
 
-use andromeda_catalog::ProcedureContractRef;
-use andromeda_core::{CatalogVersion, ContractHash, ProcedureId};
-use andromeda_exec::{
-    InvocationContext, LocalProcedure, PermissionScopeValidation, ProcedureHandler,
-    ProcedureRegistry, ResultStreamMetadata, validate_dispatch_permissions,
-    validate_dispatch_permissions_or_error,
+use andromeda_catalog::{
+    PolicyVersion, ProcedureContractBinding, ProcedureContractRef, StatsVersion,
 };
-use andromeda_observe::TraceId;
+use andromeda_core::{AndromedaErrorKind, CatalogVersion, ContractHash, InvocationId, ProcedureId};
+use andromeda_exec::{
+    InvocationContext, LocalProcedure, PermissionScopeValidation, PreTransactionDispatchEvidence,
+    ProcedureDispatchRequest, ProcedureDispatcher, ProcedureHandler, ProcedureRegistry,
+    ResultStreamMetadata, validate_dispatch_permissions, validate_dispatch_permissions_or_error,
+};
+use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
 use andromeda_srpl::Cardinality;
 
 const RESERVE_PROCEDURE_ID: ProcedureId = ProcedureId::new(0x1000);
@@ -56,11 +58,50 @@ impl ProcedureHandler for TestProcedureHandler {
     ) -> andromeda_core::AndromedaResult<LocalProcedure> {
         Ok(LocalProcedure {
             contract: self.contract(),
+            contract_binding: binding_for(self.contract()),
             required_permissions: self.required_permissions.clone(),
             result_metadata: self.result_metadata(),
             mutation_payload: vec![1],
             rows_affected: 1,
         })
+    }
+}
+
+fn binding_for(contract: ProcedureContractRef) -> ProcedureContractBinding {
+    ProcedureContractBinding {
+        procedure_id: contract.procedure_id,
+        catalog_version: contract.catalog_version,
+        contract_hash: contract.contract_hash,
+        stats_version: StatsVersion::new(1),
+        policy_version: PolicyVersion::new([1; PolicyVersion::LEN]),
+    }
+}
+
+fn decision_trace(trace_id: TraceId, decision: CriticalDecisionKind) -> DecisionTrace {
+    DecisionTrace {
+        trace_id,
+        decision,
+        reason: "permission scope contract test evidence".to_string(),
+    }
+}
+
+fn dispatch_request_for(
+    contract: ProcedureContractRef,
+    trace_id: TraceId,
+) -> ProcedureDispatchRequest {
+    ProcedureDispatchRequest {
+        invocation_id: InvocationId::new(42),
+        procedure: contract,
+        procedure_binding: Some(binding_for(contract)),
+        context: InvocationContext::new(trace_id, permission_vec(&[RESERVE_PERMISSION])),
+        pre_transaction: PreTransactionDispatchEvidence {
+            admission_trace: decision_trace(trace_id, CriticalDecisionKind::ResourceGovernance),
+            contract_trace: decision_trace(trace_id, CriticalDecisionKind::ContractValidation),
+            authorization_trace: Some(decision_trace(
+                trace_id,
+                CriticalDecisionKind::SecurityAuthorization,
+            )),
+        },
     }
 }
 
@@ -147,7 +188,10 @@ fn permission_scope_denial_converts_to_security_error() {
     )
     .expect_err("permission escalation must be rejected");
 
-    assert!(err.to_string().contains("permission escalation prevented"));
+    assert_eq!(err.kind(), AndromedaErrorKind::Security);
+    assert!(err.message().contains(ADMIN_PERMISSION));
+    assert!(err.message().contains("handler contract scope"));
+    assert!(err.message().contains("permission escalation prevented"));
 }
 
 #[test]
@@ -236,7 +280,9 @@ fn registry_dispatch_rejects_context_permission_escalation() {
         .dispatch(RESERVE_PROCEDURE_ID, context)
         .expect_err("out-of-scope caller permission must be rejected");
 
-    assert!(err.to_string().contains(ADMIN_PERMISSION));
+    assert_eq!(err.kind(), AndromedaErrorKind::Security);
+    assert!(err.message().contains(ADMIN_PERMISSION));
+    assert!(err.message().contains("handler contract scope"));
 }
 
 #[test]
@@ -248,5 +294,28 @@ fn registry_dispatch_unknown_procedure_fails_closed() {
         .dispatch(ProcedureId::new(0x9999), context)
         .expect_err("unknown procedure ids must not dispatch");
 
+    assert_eq!(err.kind(), AndromedaErrorKind::Execution);
     assert!(err.to_string().contains("does not contain"));
+}
+
+#[test]
+fn registry_dispatcher_rejects_contract_mismatch_before_handler_execution() {
+    let registry = registry_with_reserve_handler();
+    let mismatched_contract = ProcedureContractRef {
+        procedure_id: RESERVE_PROCEDURE_ID,
+        contract_hash: ContractHash::test_vector(99),
+        catalog_version: CatalogVersion::new(1),
+    };
+
+    let err = ProcedureDispatcher::dispatch_procedure(
+        &registry,
+        dispatch_request_for(mismatched_contract, TraceId::new(15)),
+    )
+    .expect_err("dispatch request contract must match the registered cataloged handler");
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Contract);
+    assert!(
+        err.message()
+            .contains("contract must match registered handler contract")
+    );
 }

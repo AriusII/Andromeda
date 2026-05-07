@@ -9,9 +9,9 @@
 //!
 //! # Durability Invariants (Strict Ordering)
 //!
-//! **Invariant 1: Commit log entry created AFTER WAL write**
-//! - WAL record is written first (LSN assigned by WAL manager)
-//! - CommitLogEntry created with LSN from WAL record
+//! **Invariant 1: Commit log entry created for an assigned WAL commit LSN**
+//! - Caller provides the LSN assigned to the corresponding WAL commit record
+//! - CommitLogEntry stores that LSN before any visibility publication
 //! - Never defer LSN assignment
 //!
 //! **Invariant 2: Durable flag set AFTER WAL flush confirmation**
@@ -58,7 +58,7 @@ use std::sync::Arc;
 /// # Usage Flow
 ///
 /// ```ignore
-/// // 1. Record commit and write WAL
+/// // 1. Record commit after assigning the WAL commit LSN
 /// facade.record_commit(tx_id, commit_lsn, visible_ts)?;
 ///
 /// // 2. After WAL flush completes
@@ -127,10 +127,7 @@ impl CommitLogFacade {
         commit_lsn: Lsn,
         visible_ts: Timestamp,
     ) -> AndromedaResult<()> {
-        // Create entry (initially not durable)
         let entry = CommitLogEntry::new(tx_id, commit_lsn, visible_ts)?;
-
-        // Record in commit log cache
         self.commit_log.record_commit(entry)
     }
 
@@ -186,7 +183,6 @@ impl CommitLogFacade {
     /// - `AndromedaErrorKind::Transaction` if no entry exists for tx_id
     /// - `AndromedaErrorKind::Transaction` if entry is not durable (precondition violation)
     pub fn make_visible(&self, tx_id: TransactionId) -> AndromedaResult<()> {
-        // Query entry to check durability
         match self.commit_log.query_commit_status(tx_id)? {
             Some(entry) => {
                 if !entry.is_durable() {
@@ -195,7 +191,6 @@ impl CommitLogFacade {
                         tx_id.get()
                     )));
                 }
-                // Entry is durable; caller will update visibility via TransactionStatusTable
                 Ok(())
             }
             None => Err(transaction_error(format!(

@@ -1,5 +1,6 @@
 use andromeda_core::{
-    AndromedaResult, CatalogVersion, ContractHash, ProcedureId, SessionId, TransactionId,
+    AndromedaErrorKind, AndromedaResult, CatalogVersion, ContractHash, ProcedureId, SessionId,
+    TransactionId,
 };
 use andromeda_observe::{CertificateIdentity, SurfaceScope};
 use andromeda_proto::generated::contract::v1::catalog_procedure_manifest_resolution_request;
@@ -35,6 +36,7 @@ fn manifest() -> CatalogProcedureManifest {
             contract_package: "andromeda.contract.v1".to_string(),
         },
         result_streams: Vec::new(),
+        stats_version: 5,
         policy_version: hash(0x44),
         required_permissions: vec![CatalogRequiredPermission {
             id: "andromeda.execute_procedure".to_string(),
@@ -80,9 +82,33 @@ fn response(
 }
 
 fn metadata(subject: &str) -> TransportEndpointMetadata {
+    metadata_with_surface(
+        SurfacePlane::Administration,
+        SurfaceScope::Administration,
+        subject,
+    )
+}
+
+fn metadata_with_surface(
+    plane: SurfacePlane,
+    scope: SurfaceScope,
+    subject: &str,
+) -> TransportEndpointMetadata {
+    TransportEndpointMetadata::new(
+        plane,
+        Some(SessionId::new(601)),
+        Some(CertificateIdentity::new("a".repeat(64), subject.to_string(), scope).unwrap()),
+    )
+}
+
+fn metadata_without_identity(plane: SurfacePlane) -> TransportEndpointMetadata {
+    TransportEndpointMetadata::new(plane, Some(SessionId::new(601)), None)
+}
+
+fn metadata_without_session(subject: &str) -> TransportEndpointMetadata {
     TransportEndpointMetadata::new(
         SurfacePlane::Administration,
-        Some(SessionId::new(601)),
+        None,
         Some(
             CertificateIdentity::new(
                 "a".repeat(64),
@@ -98,6 +124,13 @@ fn request_message(
     request: &CatalogProcedureManifestResolutionRequest,
     subject: &str,
 ) -> TransportMessage {
+    request_message_with_metadata(request, metadata(subject))
+}
+
+fn request_message_with_metadata(
+    request: &CatalogProcedureManifestResolutionRequest,
+    metadata: TransportEndpointMetadata,
+) -> TransportMessage {
     let frame = catalog_manifest_resolution_request_frame(
         request,
         SessionId::new(601),
@@ -111,7 +144,7 @@ fn request_message(
     let decoded = FrameCodec::decode(&encoded).unwrap();
     decode_catalog_manifest_resolution_request_frame(&decoded).unwrap();
 
-    TransportMessage::new(metadata(subject), StreamRole::CommandBidirectional, decoded).unwrap()
+    TransportMessage::new(metadata, StreamRole::CommandBidirectional, decoded).unwrap()
 }
 
 fn decode_response(message: TransportMessage) -> CatalogProcedureManifestResolutionResponse {
@@ -187,6 +220,39 @@ impl CatalogManifestResolutionRuntime for NotReadyRuntime {
     }
 }
 
+#[derive(Debug, Clone)]
+struct MismatchedManifestRuntime;
+
+impl CatalogManifestResolutionRuntime for MismatchedManifestRuntime {
+    fn resolve_catalog_manifest(
+        &mut self,
+        _context: &CatalogManifestResolutionContext,
+        request: CatalogManifestResolutionRequest,
+    ) -> AndromedaResult<CatalogManifestResolutionResponse> {
+        let mut mismatched = manifest();
+        mismatched.contract_hash = hash(0x77);
+
+        Ok(response(
+            &request,
+            CatalogManifestResolutionStatus::Resolved,
+            Some(mismatched),
+        ))
+    }
+}
+
+#[derive(Debug, Clone)]
+struct PanicRuntime;
+
+impl CatalogManifestResolutionRuntime for PanicRuntime {
+    fn resolve_catalog_manifest(
+        &mut self,
+        _context: &CatalogManifestResolutionContext,
+        _request: CatalogManifestResolutionRequest,
+    ) -> AndromedaResult<CatalogManifestResolutionResponse> {
+        panic!("route admission must reject before runtime dispatch");
+    }
+}
+
 #[test]
 fn catalog_manifest_resolution_loopback_quic() {
     let request = request();
@@ -253,4 +319,133 @@ fn catalog_manifest_resolution_not_ready() {
     );
     assert!(response.manifest.is_none());
     assert_eq!(response.current_catalog_version, Some(9));
+}
+
+#[test]
+fn catalog_manifest_resolution_rejects_runtime_resolved_contract_mismatch() {
+    let request = request();
+    let mut gateway = CatalogManifestResolutionGateway::new(MismatchedManifestRuntime);
+
+    let err = gateway
+        .route_transport_message(request_message(&request, "catalog-reader"))
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Contract);
+    assert!(
+        err.message().contains("request expectation"),
+        "route must reject resolved manifest data that contradicts request binding"
+    );
+}
+
+#[test]
+fn catalog_manifest_resolution_response_rejects_zero_manifest_binding_versions() {
+    let request = CatalogManifestResolutionRequest::from_protobuf(request()).unwrap();
+
+    let mut zero_stats = manifest();
+    zero_stats.stats_version = 0;
+    let err = response(
+        &request,
+        CatalogManifestResolutionStatus::Resolved,
+        Some(zero_stats),
+    )
+    .to_protobuf()
+    .unwrap_err();
+    assert_eq!(err.kind(), AndromedaErrorKind::Contract);
+    assert!(
+        err.message().contains("stats_version"),
+        "resolved manifest response must reject zero StatsVersion"
+    );
+
+    let mut zero_policy = manifest();
+    zero_policy.policy_version = ContractHash::zero();
+    let err = response(
+        &request,
+        CatalogManifestResolutionStatus::Resolved,
+        Some(zero_policy),
+    )
+    .to_protobuf()
+    .unwrap_err();
+    assert_eq!(err.kind(), AndromedaErrorKind::Contract);
+    assert!(
+        err.message().contains("policy_version"),
+        "resolved manifest response must reject zero PolicyVersion"
+    );
+}
+
+#[test]
+fn catalog_manifest_resolution_rejects_application_surface_before_runtime() {
+    let request = request();
+    let mut gateway = CatalogManifestResolutionGateway::new(PanicRuntime);
+    let message = request_message_with_metadata(
+        &request,
+        metadata_with_surface(
+            SurfacePlane::Application,
+            SurfaceScope::Application,
+            "app-service",
+        ),
+    );
+
+    let err = gateway.route_transport_message(message).unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Security);
+    assert!(
+        err.message().contains("Administration surface"),
+        "route admission should reject non-Administration surface before runtime"
+    );
+}
+
+#[test]
+fn catalog_manifest_resolution_rejects_missing_identity_before_runtime() {
+    let request = request();
+    let mut gateway = CatalogManifestResolutionGateway::new(PanicRuntime);
+    let message = request_message_with_metadata(
+        &request,
+        metadata_without_identity(SurfacePlane::Administration),
+    );
+
+    let err = gateway.route_transport_message(message).unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Security);
+    assert!(
+        err.message().contains("certificate identity"),
+        "route admission should reject missing mTLS identity before runtime"
+    );
+}
+
+#[test]
+fn catalog_manifest_resolution_rejects_missing_session_before_runtime() {
+    let request = request();
+    let mut gateway = CatalogManifestResolutionGateway::new(PanicRuntime);
+    let message =
+        request_message_with_metadata(&request, metadata_without_session("catalog-reader"));
+
+    let err = gateway.route_transport_message(message).unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Security);
+    assert!(
+        err.message().contains("session"),
+        "route admission should reject missing authenticated session before runtime"
+    );
+}
+
+#[test]
+fn catalog_manifest_resolution_rejects_scope_mismatch_before_runtime() {
+    let request = request();
+    let mut gateway = CatalogManifestResolutionGateway::new(PanicRuntime);
+    let message = request_message_with_metadata(
+        &request,
+        metadata_with_surface(
+            SurfacePlane::Administration,
+            SurfaceScope::Application,
+            "app-scope-on-admin-plane",
+        ),
+    );
+
+    let err = gateway.route_transport_message(message).unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Security);
+    assert!(
+        err.message().contains("certificate scope"),
+        "route admission should reject mTLS scope mismatch before runtime"
+    );
 }

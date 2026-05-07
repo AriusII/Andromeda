@@ -23,6 +23,7 @@ mod harness;
 mod limits;
 mod request;
 mod runner;
+mod scenario_boundary;
 mod storage_runtime_benchmark;
 mod workload;
 
@@ -45,18 +46,27 @@ pub use btree_node_codec_benchmark::{
 pub use budget::{BudgetStatus, PerformanceBudget, evaluate_budget};
 pub use crud::{
     CRUD_SCENARIOS, CrudDataGenerator, CrudOperationMetrics, CrudRow, CrudScenarioDefinition,
-    CrudWorkloadResult, compute_percentile, find_crud_scenario,
+    CrudWorkloadResult, MAX_CRUD_BATCH_SIZE, MAX_CRUD_DURATION_MS, MAX_CRUD_ROWS, MAX_CRUD_THREADS,
+    compute_percentile, find_crud_scenario,
 };
 pub use error::BenchmarkError;
-pub use evidence::{BenchmarkEvidence, BenchmarkMeasurementMode};
+pub use evidence::{
+    BENCHMARK_EVIDENCE_AUTHORITATIVE, BENCHMARK_EVIDENCE_CAN_SELECT_PLAN_ALONE,
+    BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY, BenchmarkEvidence, BenchmarkMeasurementMode,
+};
 pub use history_store::BenchmarkHistoryStore;
 pub use limits::{
-    DEFAULT_DURATION_MS, DEFAULT_SAMPLES, DEFAULT_WARMUPS, MAX_DURATION_MS, MAX_SAMPLES,
-    MAX_WARMUPS,
+    DEFAULT_DURATION_MS, DEFAULT_SAMPLES, DEFAULT_TEMP_BYTES, DEFAULT_WARMUPS, MAX_DURATION_MS,
+    MAX_EVIDENCE_TTL_MS, MAX_SAMPLES, MAX_TEMP_BYTES, MAX_WARMUPS,
 };
 pub use regression_detection::{BenchmarkBaseline, RegressionAnalysis, RegressionReason};
 pub use request::{BenchmarkHardwareProfile, BenchmarkRunRequest, validate_run_request};
 pub use runner::run_bounded_benchmark;
+pub use scenario_boundary::{
+    BenchmarkEvidenceBudgets, BenchmarkEvidenceConfidence, BenchmarkEvidenceContext,
+    BenchmarkEvidenceValidity, BenchmarkPlanClass, BenchmarkScenarioEvidence,
+    BenchmarkScenarioEvidenceError, BenchmarkScenarioTarget, BenchmarkStatsVersion,
+};
 pub use srpl_compiler_benchmark::{
     SRPL_COMPILE_OPTIMIZE_HARNESS_NAME, SRPL_COMPILE_OPTIMIZE_HARNESS_SOURCE,
     SRPL_COMPILE_OPTIMIZE_WORKLOAD_ID, SrplCompileOptimizeSmokeBenchmark,

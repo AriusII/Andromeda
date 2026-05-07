@@ -36,11 +36,41 @@ impl AdmissionService {
                 reason: error.to_string(),
             })?;
 
+        let expected_binding = request.expected_binding.ok_or_else(|| InvocationReject {
+            status: CompletionStatus::ContractRejected,
+            reason: "ProcedureContractBinding missing before transaction creation".to_string(),
+        })?;
+
+        expected_binding
+            .validate()
+            .map_err(|error| InvocationReject {
+                status: CompletionStatus::ContractRejected,
+                reason: error.to_string(),
+            })?;
+
+        if expected_binding.as_legacy_ref() != request.procedure {
+            return Err(InvocationReject {
+                status: CompletionStatus::ContractRejected,
+                reason:
+                    "ProcedureContractBinding does not match declared Procedure contract before transaction creation"
+                        .to_string(),
+            });
+        }
+
         if request.expected_contract_hash.is_zero() {
             return Err(InvocationReject {
                 status: CompletionStatus::ContractRejected,
                 reason: "expected ContractHash must not be zero before transaction creation"
                     .to_string(),
+            });
+        }
+
+        if request.expected_contract_hash != expected_binding.contract_hash {
+            return Err(InvocationReject {
+                status: CompletionStatus::ContractRejected,
+                reason:
+                    "expected ContractHash mismatch against ProcedureContractBinding before transaction creation"
+                        .to_string(),
             });
         }
 
@@ -51,11 +81,20 @@ impl AdmissionService {
             });
         }
 
+        if request.catalog_version != expected_binding.catalog_version {
+            return Err(InvocationReject {
+                status: CompletionStatus::ContractRejected,
+                reason:
+                    "CatalogVersion mismatch against ProcedureContractBinding before transaction creation"
+                        .to_string(),
+            });
+        }
+
         Ok(DecisionTrace {
             trace_id,
             decision: CriticalDecisionKind::ResourceGovernance,
             reason:
-                "invocation id and declared contract identity admitted before transaction creation"
+                "invocation id and full ProcedureContractBinding admitted before transaction creation"
                     .to_string(),
         })
     }
@@ -93,7 +132,11 @@ impl AdmissionService {
         let evaluator = match &self.permission_evaluator {
             Some(e) => e,
             None => {
-                return Ok(());
+                return Err(InvocationReject {
+                    status: CompletionStatus::PermissionDenied,
+                    reason: "permission evaluator unavailable before Procedure admission"
+                        .to_string(),
+                });
             }
         };
 
@@ -128,5 +171,22 @@ mod tests {
     fn test_admission_service_default() {
         let service = AdmissionService::default();
         assert!(service.permission_evaluator.is_none());
+    }
+
+    #[test]
+    fn admission_service_default_fails_closed_for_permission_evaluation() {
+        let service = AdmissionService::default();
+
+        let reject = service
+            .evaluate_permission(
+                "missing-evaluator",
+                &Permission::AdminShutdown,
+                ProcedureId::new(1),
+                TraceId::new(1),
+            )
+            .unwrap_err();
+
+        assert_eq!(reject.status, CompletionStatus::PermissionDenied);
+        assert!(reject.reason.contains("permission evaluator unavailable"));
     }
 }

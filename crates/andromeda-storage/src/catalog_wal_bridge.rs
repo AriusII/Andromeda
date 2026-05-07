@@ -23,13 +23,13 @@
 
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogObjectId, CatalogVersion,
-    ContractHash,
+    ContractHash, TransactionId,
 };
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
 
-use crate::Lsn;
 use crate::wal_record_catalog::{CatalogWalRecord, CatalogWalRecordVersion};
+use crate::{Lsn, WalRecord, WalRecordKind};
 
 /// Helper to convert io::Error to AndromedaError for codec operations.
 fn io_error(e: std::io::Error) -> AndromedaError {
@@ -37,6 +37,10 @@ fn io_error(e: std::io::Error) -> AndromedaError {
         AndromedaErrorKind::Storage,
         format!("catalog WAL codec I/O error: {}", e),
     )
+}
+
+fn catalog_wal_error(message: impl Into<String>) -> AndromedaError {
+    AndromedaError::new(AndromedaErrorKind::Storage, message.into())
 }
 
 /// Encodes a `CatalogWalRecord` to a deterministic binary format.
@@ -114,6 +118,17 @@ pub fn decode_catalog_record(bytes: &[u8]) -> AndromedaResult<CatalogWalRecord> 
     cursor.read_exact(&mut len_bytes).map_err(io_error)?;
     let payload_len = u32::from_le_bytes(len_bytes) as usize;
 
+    let expected_frame_len = (6 + 32usize)
+        .checked_add(payload_len)
+        .ok_or_else(|| catalog_wal_error("catalog record payload length overflows frame size"))?;
+    if bytes.len() != expected_frame_len {
+        return Err(catalog_wal_error(format!(
+            "catalog record frame length mismatch: header declares {} payload bytes, frame has {} bytes",
+            payload_len,
+            bytes.len()
+        )));
+    }
+
     // Read checksum (32 bytes)
     let mut expected_checksum = [0u8; 32];
     cursor
@@ -147,6 +162,200 @@ pub fn decode_catalog_record(bytes: &[u8]) -> AndromedaResult<CatalogWalRecord> 
     record.validate()?;
 
     Ok(record)
+}
+
+/// A single catalog mutation observed at a storage WAL LSN.
+///
+/// Storage keeps the original payload bytes for forensic replay evidence, but
+/// `CatalogChangeApply` payloads must decode to a validated catalog WAL record
+/// before they can participate in a durable publication report.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatalogWalPublicationRecord {
+    pub lsn: Lsn,
+    pub payload: Vec<u8>,
+    pub catalog_record: CatalogWalRecord,
+}
+
+/// A complete durable catalog publication reconstructed from storage WAL.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatalogWalDurablePublication {
+    pub transaction_id: TransactionId,
+    pub begin_lsn: Lsn,
+    pub commit_lsn: Lsn,
+    pub begin_payload: Vec<u8>,
+    pub apply_records: Vec<CatalogWalPublicationRecord>,
+    pub commit_payload: Vec<u8>,
+}
+
+impl CatalogWalDurablePublication {
+    pub fn apply_count(&self) -> usize {
+        self.apply_records.len()
+    }
+
+    pub fn record_count(&self) -> usize {
+        self.apply_records.len() + 2
+    }
+
+    pub fn decoded_catalog_records(&self) -> impl Iterator<Item = &CatalogWalRecord> {
+        self.apply_records
+            .iter()
+            .map(|record| &record.catalog_record)
+    }
+
+    pub fn last_catalog_version(&self) -> Option<CatalogVersion> {
+        self.apply_records
+            .iter()
+            .filter_map(|record| record.catalog_record.catalog_version())
+            .next_back()
+    }
+}
+
+/// Report produced by storage-side catalog publication replay.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatalogWalPublicationReplayReport {
+    pub total_records: usize,
+    pub catalog_records_seen: usize,
+    pub incomplete_tail_records: usize,
+    pub publications: Vec<CatalogWalDurablePublication>,
+}
+
+impl CatalogWalPublicationReplayReport {
+    pub fn last_durable_publication(&self) -> Option<&CatalogWalDurablePublication> {
+        self.publications.last()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PendingCatalogPublication {
+    transaction_id: TransactionId,
+    begin_lsn: Lsn,
+    begin_payload: Vec<u8>,
+    apply_records: Vec<CatalogWalPublicationRecord>,
+}
+
+/// Replays catalog publication boundaries from storage WAL records.
+///
+/// Only complete `CatalogChangeBegin` -> one or more `CatalogChangeApply` ->
+/// `CatalogChangeCommit` spans become durable publications. An incomplete tail
+/// is reported but not published, preserving WAL-before-visible-commit.
+/// `CatalogChangeApply` payloads are decoded and validated into catalog WAL
+/// records before publication evidence is retained; begin and commit payloads
+/// remain boundary metadata owned by the storage WAL bridge.
+pub fn replay_catalog_publications_from_wal(
+    records: &[WalRecord],
+) -> AndromedaResult<CatalogWalPublicationReplayReport> {
+    let mut report = CatalogWalPublicationReplayReport {
+        total_records: records.len(),
+        catalog_records_seen: 0,
+        incomplete_tail_records: 0,
+        publications: Vec::new(),
+    };
+
+    let mut last_lsn = None;
+    let mut pending: Option<PendingCatalogPublication> = None;
+
+    for record in records {
+        if let Some(previous_lsn) = last_lsn
+            && record.header.lsn <= previous_lsn
+        {
+            return Err(catalog_wal_error(format!(
+                "catalog WAL replay requires strictly increasing LSN order: previous {}, current {}",
+                previous_lsn.get(),
+                record.header.lsn.get()
+            )));
+        }
+        last_lsn = Some(record.header.lsn);
+
+        match record.header.kind {
+            WalRecordKind::CatalogChangeBegin => {
+                record.validate()?;
+                report.catalog_records_seen += 1;
+                if pending.is_some() {
+                    return Err(catalog_wal_error(
+                        "catalog WAL begin observed before the previous catalog publication committed",
+                    ));
+                }
+                let transaction_id = catalog_record_transaction_id(record)?;
+                pending = Some(PendingCatalogPublication {
+                    transaction_id,
+                    begin_lsn: record.header.lsn,
+                    begin_payload: record.payload().to_vec(),
+                    apply_records: Vec::new(),
+                });
+            }
+            WalRecordKind::CatalogChangeApply => {
+                record.validate()?;
+                report.catalog_records_seen += 1;
+                let transaction_id = catalog_record_transaction_id(record)?;
+                let Some(pending_publication) = pending.as_mut() else {
+                    return Err(catalog_wal_error(
+                        "catalog WAL apply observed before catalog publication begin",
+                    ));
+                };
+                if pending_publication.transaction_id != transaction_id {
+                    return Err(catalog_wal_error(
+                        "catalog WAL apply transaction id does not match publication begin",
+                    ));
+                }
+                let catalog_record = decode_catalog_record(record.payload()).map_err(|err| {
+                    catalog_wal_error(format!(
+                        "catalog WAL apply payload at LSN {} is not a valid catalog record: {}",
+                        record.header.lsn.get(),
+                        err.message()
+                    ))
+                })?;
+                pending_publication
+                    .apply_records
+                    .push(CatalogWalPublicationRecord {
+                        lsn: record.header.lsn,
+                        payload: record.payload().to_vec(),
+                        catalog_record,
+                    });
+            }
+            WalRecordKind::CatalogChangeCommit => {
+                record.validate()?;
+                report.catalog_records_seen += 1;
+                let transaction_id = catalog_record_transaction_id(record)?;
+                let Some(pending_publication) = pending.take() else {
+                    return Err(catalog_wal_error(
+                        "catalog WAL commit observed before catalog publication begin",
+                    ));
+                };
+                if pending_publication.transaction_id != transaction_id {
+                    return Err(catalog_wal_error(
+                        "catalog WAL commit transaction id does not match publication begin",
+                    ));
+                }
+                if pending_publication.apply_records.is_empty() {
+                    return Err(catalog_wal_error(
+                        "catalog WAL publication commit requires at least one apply record",
+                    ));
+                }
+
+                report.publications.push(CatalogWalDurablePublication {
+                    transaction_id,
+                    begin_lsn: pending_publication.begin_lsn,
+                    commit_lsn: record.header.lsn,
+                    begin_payload: pending_publication.begin_payload,
+                    apply_records: pending_publication.apply_records,
+                    commit_payload: record.payload().to_vec(),
+                });
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(pending_publication) = pending {
+        report.incomplete_tail_records = pending_publication.apply_records.len() + 1;
+    }
+
+    Ok(report)
+}
+
+fn catalog_record_transaction_id(record: &WalRecord) -> AndromedaResult<TransactionId> {
+    record.header.transaction_id.ok_or_else(|| {
+        catalog_wal_error("catalog WAL publication record requires a transaction id")
+    })
 }
 
 /// Helper: encode record payload to writer in deterministic order.
@@ -257,7 +466,7 @@ fn decode_record_payload(
     cursor.read_exact(&mut tag_byte).map_err(io_error)?;
     let tag = tag_byte[0];
 
-    match tag {
+    let record = match tag {
         0 => {
             // DefinitionBatchApplied
             let mut batch_id_bytes = [0u8; 8];
@@ -271,6 +480,23 @@ fn decode_record_payload(
             let mut count_bytes = [0u8; 4];
             cursor.read_exact(&mut count_bytes).map_err(io_error)?;
             let procedure_count = u32::from_le_bytes(count_bytes) as usize;
+
+            let remaining_after_count = bytes.len().saturating_sub(cursor.position() as usize);
+            let min_tail_bytes = 8usize + 4usize;
+            let required_procedure_and_tail_bytes = procedure_count
+                .checked_mul(8)
+                .and_then(|procedure_bytes| procedure_bytes.checked_add(min_tail_bytes))
+                .ok_or_else(|| {
+                    catalog_wal_error(
+                        "DefinitionBatchApplied procedure_count overflows payload bounds",
+                    )
+                })?;
+            if required_procedure_and_tail_bytes > remaining_after_count {
+                return Err(catalog_wal_error(format!(
+                    "DefinitionBatchApplied procedure_count {} exceeds payload remainder {}",
+                    procedure_count, remaining_after_count
+                )));
+            }
 
             let mut affected_procedure_ids = Vec::with_capacity(procedure_count);
             for _ in 0..procedure_count {
@@ -289,6 +515,14 @@ fn decode_record_payload(
                 .map_err(io_error)?;
             let principal_len = u32::from_le_bytes(principal_len_bytes) as usize;
 
+            let remaining_principal_bytes = bytes.len().saturating_sub(cursor.position() as usize);
+            if principal_len > remaining_principal_bytes {
+                return Err(catalog_wal_error(format!(
+                    "operator_principal length {} exceeds payload remainder {}",
+                    principal_len, remaining_principal_bytes
+                )));
+            }
+
             let mut principal_bytes = vec![0u8; principal_len];
             cursor.read_exact(&mut principal_bytes).map_err(io_error)?;
             let operator_principal = String::from_utf8(principal_bytes).map_err(|e| {
@@ -298,14 +532,14 @@ fn decode_record_payload(
                 )
             })?;
 
-            Ok(CatalogWalRecord::DefinitionBatchApplied {
+            CatalogWalRecord::DefinitionBatchApplied {
                 batch_id,
                 new_catalog_version,
                 procedure_count,
                 affected_procedure_ids,
                 timestamp_secs,
                 operator_principal,
-            })
+            }
         }
         1 => {
             // ProcedureAdded
@@ -325,12 +559,12 @@ fn decode_record_payload(
             cursor.read_exact(&mut ts_bytes).map_err(io_error)?;
             let timestamp_secs = u64::from_le_bytes(ts_bytes);
 
-            Ok(CatalogWalRecord::ProcedureAdded {
+            CatalogWalRecord::ProcedureAdded {
                 procedure_id,
                 signature_hash,
                 new_catalog_version,
                 timestamp_secs,
-            })
+            }
         }
         2 => {
             // ProcedureAltered
@@ -354,13 +588,13 @@ fn decode_record_payload(
             cursor.read_exact(&mut ts_bytes).map_err(io_error)?;
             let timestamp_secs = u64::from_le_bytes(ts_bytes);
 
-            Ok(CatalogWalRecord::ProcedureAltered {
+            CatalogWalRecord::ProcedureAltered {
                 procedure_id,
                 old_hash,
                 new_hash,
                 new_catalog_version,
                 timestamp_secs,
-            })
+            }
         }
         3 => {
             // ProcedureDropped
@@ -382,12 +616,12 @@ fn decode_record_payload(
             cursor.read_exact(&mut ts_bytes).map_err(io_error)?;
             let timestamp_secs = u64::from_le_bytes(ts_bytes);
 
-            Ok(CatalogWalRecord::ProcedureDropped {
+            CatalogWalRecord::ProcedureDropped {
                 procedure_id,
                 dropped_version,
                 new_catalog_version,
                 timestamp_secs,
-            })
+            }
         }
         4 => {
             // StatisticsUpdated
@@ -411,13 +645,13 @@ fn decode_record_payload(
             cursor.read_exact(&mut ts_bytes).map_err(io_error)?;
             let timestamp_secs = u64::from_le_bytes(ts_bytes);
 
-            Ok(CatalogWalRecord::StatisticsUpdated {
+            CatalogWalRecord::StatisticsUpdated {
                 stats_version,
                 table_id,
                 column_id,
                 histogram_data_lsn,
                 timestamp_secs,
-            })
+            }
         }
         5 => {
             // CatalogCheckpoint
@@ -437,18 +671,29 @@ fn decode_record_payload(
             cursor.read_exact(&mut ts_bytes).map_err(io_error)?;
             let timestamp_secs = u64::from_le_bytes(ts_bytes);
 
-            Ok(CatalogWalRecord::CatalogCheckpoint {
+            CatalogWalRecord::CatalogCheckpoint {
                 checkpoint_lsn,
                 catalog_version,
                 visible_procedure_count,
                 timestamp_secs,
-            })
+            }
         }
         t => Err(AndromedaError::new(
             AndromedaErrorKind::Storage,
             format!("unknown catalog record tag: {}", t),
-        )),
+        ))?,
+    };
+
+    let consumed = cursor.position() as usize;
+    if consumed != bytes.len() {
+        return Err(catalog_wal_error(format!(
+            "catalog record payload has trailing bytes: consumed {}, payload has {} bytes",
+            consumed,
+            bytes.len()
+        )));
     }
+
+    Ok(record)
 }
 
 /// Helper: format checksum as hex string for logging.

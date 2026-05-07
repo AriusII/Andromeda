@@ -5,7 +5,7 @@
 //! This test suite establishes deterministic, reproducible heap page formats
 //! by capturing and validating golden byte vectors for canonical heap states:
 //!
-//! - Empty heap page (all zeros except header/footer)
+//! - Blank/unallocated heap image (all zeros, explicit parser only)
 //! - Single tuple (100-byte payload)
 //! - Multiple tuples (3 tuples of varying sizes)
 //! - Logical delete (tuple marked deleted, slot preserved)
@@ -19,11 +19,11 @@
 //! - LSN correctness (tracks first dirty mutation)
 //! - Header/footer CRC integrity
 
-use andromeda_storage::{HeapPage, PageSize, SlotEntry};
+use andromeda_storage::{HEAP_PAGE_V1_PAYLOAD_OFFSET, HeapPage, PageSize, SlotEntry};
 
 const PAGE_SIZE_16K: PageSize = PageSize::KiB16;
 const PAGE_SIZE_16K_BYTES: usize = 16 * 1024;
-const HEADER_SIZE: usize = 96;
+const HEADER_SIZE: usize = HEAP_PAGE_V1_PAYLOAD_OFFSET;
 const TRAILER_SIZE: usize = 48;
 const SLOT_METADATA_SIZE: usize = 4;
 const SLOT_ENTRY_SIZE: usize = 5;
@@ -123,7 +123,7 @@ fn golden_compacted_page() -> Vec<u8> {
     let tuple0 = vec![0xAAu8; 50];
     page[HEADER_SIZE..HEADER_SIZE + 50].copy_from_slice(&tuple0);
 
-    // Tuple 2: 30 bytes (moved up from offset 155 to 150)
+    // Tuple 2: 30 bytes moved directly after tuple 0.
     let tuple2 = vec![0xCCu8; 30];
     page[HEADER_SIZE + 50..HEADER_SIZE + 80].copy_from_slice(&tuple2);
 
@@ -176,13 +176,20 @@ fn golden_min_tuple() -> Vec<u8> {
 }
 
 #[test]
-fn test_golden_empty_page_loads_and_validates() {
+fn test_golden_empty_page_requires_explicit_unallocated_parser() {
     let golden = golden_empty_page();
 
-    // Should load successfully
-    let page = HeapPage::from_image(PAGE_SIZE_16K, &golden).expect("empty golden page should load");
+    let err = HeapPage::from_image(PAGE_SIZE_16K, &golden)
+        .expect_err("durable heap decoder rejects blank page image");
+    assert!(
+        err.message().contains("unallocated"),
+        "unexpected error: {}",
+        err.message()
+    );
 
-    // Validate invariants
+    let page = HeapPage::from_blank_unallocated_image(PAGE_SIZE_16K, &golden)
+        .expect("explicit blank parser should load unallocated page image");
+
     assert_eq!(page.slot_count(), 0, "empty page should have 0 slots");
     assert_eq!(page.live_row_count(), 0, "empty page should have 0 rows");
 }

@@ -4,9 +4,10 @@
 //! schema and replay apply target are not promoted yet. Recovery must fail
 //! closed for both empty and non-empty payloads instead of inferring a format.
 
-use andromeda_core::AndromedaErrorKind;
+use andromeda_core::{AndromedaErrorKind, TransactionId};
 use andromeda_storage::{
-    Lsn, ReplayContext, ReplayOutcome, WalRecord, WalRecordKind, replay_wal_record,
+    DatabaseManifest, InMemoryWal, Lsn, RecoveryPlan, ReplayContext, ReplayOutcome, StartupMode,
+    WalRecord, WalRecordKind, execute_redo_plan_into_context, replay_wal_record,
 };
 
 #[test]
@@ -39,6 +40,92 @@ fn page_format_replay_fails_closed_until_payload_and_apply_contract_exist() {
         b"page-id=42;format=v1;page-type=fixed-row".to_vec(),
         "durable PageFormat payload schema",
     );
+}
+
+#[test]
+fn redo_plan_reports_nontransactional_page_records_as_explicit_replay_gates() {
+    let mut wal = InMemoryWal::new();
+    wal.append_payload(WalRecordKind::PageAllocate, None, b"page-allocate")
+        .expect("append page allocate");
+    wal.append_payload(WalRecordKind::PageFormat, None, b"page-format")
+        .expect("append page format");
+    wal.flush_all().expect("durable page records");
+
+    let records = wal.replay_durable();
+    let manifest = test_manifest(Lsn::new(1));
+    let plan = RecoveryPlan::from_manifest_and_wal(&manifest, StartupMode::SafeStart, &records)
+        .expect("redo plan");
+    let mut ctx = ReplayContext::new();
+
+    let report = execute_redo_plan_into_context(&plan, &records, &mut ctx)
+        .expect("explicit page gates are reported as replay errors");
+
+    assert_eq!(report.total_records, 2);
+    assert_eq!(report.applied_count, 0);
+    assert_eq!(report.plan_skipped_count, 0);
+    assert_eq!(report.not_yet_implemented_count, 2);
+    assert!(report.has_replay_errors);
+    assert_eq!(ctx.error_records.len(), 2);
+    assert!(
+        ctx.error_records
+            .iter()
+            .all(|result| result.error.as_deref().is_some_and(|message| {
+                message.contains("not promoted") && message.contains("fail closed")
+            }))
+    );
+}
+
+#[test]
+fn transaction_scoped_page_record_without_commit_is_discarded_before_handler_gate() {
+    let tx = TransactionId::new(501);
+    let mut wal = InMemoryWal::new();
+    wal.append_tx_begin(tx).expect("begin");
+    wal.append_payload(WalRecordKind::PageFormat, Some(tx), b"page-format")
+        .expect("append transaction-scoped page format");
+    wal.flush_all().expect("durable incomplete transaction");
+
+    let records = wal.replay_durable();
+    let manifest = test_manifest(Lsn::new(1));
+    let plan = RecoveryPlan::from_manifest_and_wal(&manifest, StartupMode::SafeStart, &records)
+        .expect("redo plan");
+    let mut ctx = ReplayContext::new();
+
+    let report = execute_redo_plan_into_context(&plan, &records, &mut ctx)
+        .expect("incomplete page record must be plan-discarded");
+
+    assert_eq!(report.applied_count, 0);
+    assert_eq!(report.plan_skipped_count, 2);
+    assert_eq!(report.incomplete_transaction_count, 1);
+    assert_eq!(report.not_yet_implemented_count, 0);
+    assert!(!report.has_replay_errors);
+    assert!(ctx.error_records.is_empty());
+}
+
+#[test]
+fn transaction_scoped_page_record_with_commit_reaches_fail_closed_gate() {
+    let tx = TransactionId::new(502);
+    let mut wal = InMemoryWal::new();
+    wal.append_tx_begin(tx).expect("begin");
+    wal.append_payload(WalRecordKind::PageFormat, Some(tx), b"page-format")
+        .expect("append transaction-scoped page format");
+    wal.append_tx_commit(tx).expect("commit");
+    wal.flush_all().expect("durable commit");
+
+    let records = wal.replay_durable();
+    let manifest = test_manifest(Lsn::new(1));
+    let plan = RecoveryPlan::from_manifest_and_wal(&manifest, StartupMode::SafeStart, &records)
+        .expect("redo plan");
+    let mut ctx = ReplayContext::new();
+
+    let report = execute_redo_plan_into_context(&plan, &records, &mut ctx)
+        .expect("committed page record gate should be reported");
+
+    assert_eq!(report.applied_count, 0);
+    assert_eq!(report.plan_skipped_count, 2);
+    assert_eq!(report.committed_transaction_count, 1);
+    assert_eq!(report.not_yet_implemented_count, 1);
+    assert!(report.has_replay_errors);
+    assert_eq!(ctx.error_records[0].kind, WalRecordKind::PageFormat);
 }
 
 fn assert_page_record_fails_closed(
@@ -87,4 +174,16 @@ fn assert_page_record_fails_closed(
         message.contains("fail closed") && message.contains("idempotent"),
         "gate error must reject inferred formats and require idempotent replay: {message}"
     );
+}
+
+fn test_manifest(required_wal_start_lsn: Lsn) -> DatabaseManifest {
+    DatabaseManifest {
+        database_id: 1,
+        manifest_version: 1,
+        snapshot_id: 1,
+        base_checkpoint_lsn: Lsn::ZERO,
+        required_wal_start_lsn,
+        previous_manifest_hash: [0; 32],
+        manifest_crc: 0xdead_beef,
+    }
 }

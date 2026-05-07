@@ -29,10 +29,66 @@ pub struct ProcedureManifest {
     pub procedure_name: String,
     pub contract_hash: ContractHash,
     pub catalog_version: CatalogVersion,
+    pub stats_version: u64,
     pub policy_version: ManifestPolicyVersion,
     pub protocol_layout: ProtocolLayout,
     pub result_streams: Vec<ResultStreamDescriptor>,
     pub required_permissions: Vec<RequiredPermission>,
+}
+
+/// Crate-local projection of the catalog `ProcedureContractBinding`.
+///
+/// This type mirrors the binding identities without depending on
+/// `andromeda-catalog`, keeping Protobuf as a boundary projection instead of
+/// the internal domain model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProcedureManifestBinding {
+    pub procedure_id: ProcedureId,
+    pub catalog_version: CatalogVersion,
+    pub contract_hash: ContractHash,
+    pub stats_version: u64,
+    pub policy_version: ManifestPolicyVersion,
+}
+
+impl ProcedureManifestBinding {
+    pub fn validate(&self) -> AndromedaResult<()> {
+        if self.procedure_id.get() == 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "procedure manifest binding id must not be zero",
+            ));
+        }
+
+        if self.catalog_version.get() == 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "procedure manifest binding catalog version must not be zero",
+            ));
+        }
+
+        if self.contract_hash.is_zero() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "procedure manifest binding contract hash must not be zero",
+            ));
+        }
+
+        if self.stats_version == 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "procedure manifest binding stats version must not be zero",
+            ));
+        }
+
+        if self.policy_version.is_zero() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "procedure manifest binding policy version must not be zero",
+            ));
+        }
+
+        Ok(())
+    }
 }
 
 impl ProcedureManifest {
@@ -97,13 +153,15 @@ impl ProcedureManifest {
     ///
     /// - non-empty `required_permissions` (procedure-only execution requires
     ///   at least the procedure-execute permission to be declared),
-    /// - non-zero `policy_version` (no implicit default policy bundle),
-    /// - non-zero `catalog_version`,
     /// - non-zero `procedure_id`,
+    /// - non-zero `catalog_version`,
+    /// - non-zero `stats_version`,
+    /// - non-zero `policy_version` (no implicit default policy bundle),
     /// - protocol layout descriptor and frame envelope hashes are present
     ///   and distinct (already enforced by [`ProtocolLayout::validate`]).
     pub fn ensure_source_generator_ready(&self) -> AndromedaResult<()> {
         self.validate()?;
+        self.binding().validate()?;
 
         if self.procedure_id.get() == 0 {
             return Err(AndromedaError::new(
@@ -136,6 +194,17 @@ impl ProcedureManifest {
         Ok(())
     }
 
+    /// Return the full binding identities carried by the manifest.
+    pub const fn binding(&self) -> ProcedureManifestBinding {
+        ProcedureManifestBinding {
+            procedure_id: self.procedure_id,
+            catalog_version: self.catalog_version,
+            contract_hash: self.contract_hash,
+            stats_version: self.stats_version,
+            policy_version: self.policy_version,
+        }
+    }
+
     /// Deterministic SHA-256 digest of the manifest in canonical encoding.
     ///
     /// The digest is field-tagged and length-prefixed so any reorder /
@@ -163,6 +232,11 @@ impl ProcedureManifest {
             &mut hasher,
             b"catalog_version",
             &self.catalog_version.get().to_be_bytes(),
+        );
+        write_tagged(
+            &mut hasher,
+            b"stats_version",
+            &self.stats_version.to_be_bytes(),
         );
         write_tagged(
             &mut hasher,

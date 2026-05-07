@@ -591,6 +591,19 @@ fn benchmark_run_rejects_unbounded_samples() {
 }
 
 #[test]
+fn benchmark_run_rejects_zero_temp_budget() {
+    let args = vec![
+        "benchmark".to_string(),
+        "run".to_string(),
+        "vertical-v0-smoke".to_string(),
+        "--temp-budget-bytes".to_string(),
+        "0".to_string(),
+    ];
+    let result = dispatch_command(&args);
+    assert!(result.is_err());
+}
+
+#[test]
 fn benchmark_run_executes_bounded_smoke_runner() {
     let args = vec![
         "benchmark".to_string(),
@@ -1165,13 +1178,13 @@ fn restore_rejects_lsn_out_of_range() {
         "--artifact".to_string(),
         artifact_dir.display().to_string(),
         "--pitr-lsn".to_string(),
-        "999".to_string(),
+        "2001".to_string(),
         "--dry-run".to_string(),
         "--json".to_string(),
     ]);
     assert!(
         !output.status.success(),
-        "restore should reject PITR below artifact WAL range"
+        "restore should reject PITR outside artifact WAL range"
     );
     assert!(String::from_utf8_lossy(&output.stderr).contains("within backup WAL archive range"));
     let _ = fs::remove_dir_all(artifact_dir);

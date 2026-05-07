@@ -2,12 +2,15 @@ use std::collections::BTreeMap;
 
 use andromeda_core::AndromedaResult;
 
-use crate::{Lsn, PageId, PageImage, PageLayoutContract, PageStore};
+use crate::{
+    Lsn, PageId, PageImage, PageLayoutContract, PageStore,
+    validate_wal_durability_before_page_flush,
+};
 
 use super::{
     BufferFrame, BufferFrameId, BufferFrameState, BufferPoolConfig, BufferPoolError,
     ClockEvictionPolicy, DirtyTracker, FlushAllDirtyResult, FlushBlockedFrame, FlushError,
-    PageGuard, PageGuardMut, WalDurabilityObserver,
+    FlushStorageOperation, PageGuard, PageGuardMut, WalDurabilityObserver,
 };
 
 /// Minimal buffer-pool manager contract for fixed-capacity residency work.
@@ -287,7 +290,7 @@ impl<S: PageStore> BufferPool<S> {
     /// Flush dirty frames that have LSNs durable in the WAL.
     ///
     /// This is the primary flush gate: before a page is written to disk,
-    /// the buffer pool verifies that the page's first_dirty_lsn has been made
+    /// the buffer pool verifies that the page's latest dirty LSN has been made
     /// durable in the WAL via the observer.
     ///
     /// Returns the count of pages successfully flushed.
@@ -300,10 +303,13 @@ impl<S: PageStore> BufferPool<S> {
 
         for candidate in candidates {
             let page_id = candidate.page_id();
-            let first_dirty_lsn = candidate.first_dirty_lsn();
+            let last_dirty_lsn = candidate.last_dirty_lsn();
+            let durable_lsn = observer.max_durable_lsn();
 
-            // Check if this LSN is durable in the WAL
-            if !observer.is_durable(first_dirty_lsn) {
+            // Check if every dirty update represented by the page is durable in the WAL.
+            if !observer.is_durable(last_dirty_lsn)
+                || validate_wal_durability_before_page_flush(last_dirty_lsn, durable_lsn).is_err()
+            {
                 // Cannot flush yet: LSN not durable in WAL
                 continue;
             }
@@ -324,8 +330,11 @@ impl<S: PageStore> BufferPool<S> {
                 .cloned()
                 .ok_or_else(|| BufferPoolError::InvalidPageImage.into_andromeda_error())?;
             self.frames[index].begin_flush()?;
-            self.store.write_page(image, first_dirty_lsn)?;
-            self.frames[index].finish_flush(first_dirty_lsn)?;
+            if let Err(error) = self.store.write_page(image, durable_lsn) {
+                self.frames[index].abort_flush()?;
+                return Err(error);
+            }
+            self.frames[index].finish_flush(last_dirty_lsn)?;
             self.dirty_tracker.mark_clean(page_id)?;
 
             flushed += 1;
@@ -338,9 +347,9 @@ impl<S: PageStore> BufferPool<S> {
     ///
     /// This method performs a single-pass flush of all dirty pages. For each page:
     ///
-    /// - If the page's first_dirty_lsn is durable in the WAL and the frame is not
+    /// - If the page's latest dirty LSN is durable in the WAL and the frame is not
     ///   pinned, the page is flushed and added to the `flushed` count.
-    /// - If the page's first_dirty_lsn is not yet durable in the WAL, the page is
+    /// - If the page's latest dirty LSN is not yet durable in the WAL, the page is
     ///   added to `blocked_by_wal_durability` with LSN information. The page remains
     ///   dirty and should be retried after WAL advances.
     /// - If the page encounters an error during flush (pinned, IO error, invalid state),
@@ -365,16 +374,21 @@ impl<S: PageStore> BufferPool<S> {
         for candidate in candidates {
             let page_id = candidate.page_id();
             let first_dirty_lsn = candidate.first_dirty_lsn();
+            let last_dirty_lsn = candidate.last_dirty_lsn();
+            let durable_lsn = observer.max_durable_lsn();
 
-            // Gate 1: Check if this LSN is durable in the WAL
-            if !observer.is_durable(first_dirty_lsn) {
+            // Gate 1: Check if every dirty update represented by the page is durable in the WAL
+            if !observer.is_durable(last_dirty_lsn)
+                || validate_wal_durability_before_page_flush(last_dirty_lsn, durable_lsn).is_err()
+            {
                 // Frame is blocked: LSN not yet durable
                 result
                     .blocked_by_wal_durability
-                    .push(FlushBlockedFrame::new(
+                    .push(FlushBlockedFrame::new_with_last_dirty_lsn(
                         page_id,
                         first_dirty_lsn,
-                        observer.max_durable_lsn(),
+                        last_dirty_lsn,
+                        durable_lsn,
                     ));
                 continue;
             }
@@ -414,14 +428,22 @@ impl<S: PageStore> BufferPool<S> {
                 continue;
             }
 
-            if let Err(e) = self.store.write_page(image, first_dirty_lsn) {
-                result
-                    .errors
-                    .push(FlushError::StorageError(e.message().to_string()));
+            if let Err(e) = self.store.write_page(image, durable_lsn) {
+                if self.frames[index].abort_flush().is_err() {
+                    result
+                        .errors
+                        .push(FlushError::InvalidFrameState { page_id });
+                    continue;
+                }
+                result.errors.push(FlushError::storage(
+                    page_id,
+                    FlushStorageOperation::PageStoreWrite,
+                    e.message(),
+                ));
                 continue;
             }
 
-            if self.frames[index].finish_flush(first_dirty_lsn).is_err() {
+            if self.frames[index].finish_flush(last_dirty_lsn).is_err() {
                 result
                     .errors
                     .push(FlushError::InvalidFrameState { page_id });
@@ -430,10 +452,11 @@ impl<S: PageStore> BufferPool<S> {
 
             // Mark clean only on successful flush
             if self.dirty_tracker.mark_clean(page_id).is_err() {
-                result.errors.push(FlushError::StorageError(format!(
-                    "Failed to mark page {} clean after flush",
-                    page_id.get()
-                )));
+                result.errors.push(FlushError::storage(
+                    page_id,
+                    FlushStorageOperation::DirtyTrackerMarkClean,
+                    format!("failed to mark page {} clean after flush", page_id.get()),
+                ));
                 continue;
             }
 

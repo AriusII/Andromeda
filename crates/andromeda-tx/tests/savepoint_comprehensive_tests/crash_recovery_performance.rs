@@ -349,7 +349,7 @@ fn sm_full_commit_path_is_legal() {
     machine
         .apply(andromeda_tx::TransactionEvent::Dispose)
         .unwrap();
-    assert_eq!(machine.state, TransactionState::Disposed);
+    assert_eq!(machine.state(), TransactionState::Disposed);
 }
 
 /// TC-SM-0004
@@ -365,7 +365,7 @@ fn sm_full_rollback_path_is_legal() {
     machine
         .apply(andromeda_tx::TransactionEvent::Dispose)
         .unwrap();
-    assert_eq!(machine.state, TransactionState::Disposed);
+    assert_eq!(machine.state(), TransactionState::Disposed);
 }
 
 /// TC-SM-0005
@@ -382,7 +382,7 @@ fn sm_full_poison_path_is_legal() {
     machine
         .apply(andromeda_tx::TransactionEvent::Dispose)
         .unwrap();
-    assert_eq!(machine.state, TransactionState::Disposed);
+    assert_eq!(machine.state(), TransactionState::Disposed);
 }
 
 /// TC-SS-0001

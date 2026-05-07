@@ -15,6 +15,9 @@ pub const MAX_WRITE_SET_RESOURCE_ID_BYTES: usize = 1024;
 /// Maximum encoded bytes accepted for before/after images.
 pub const MAX_WRITE_SET_IMAGE_BYTES: usize = 64 * 1024;
 
+/// Maximum bytes accepted for a custom write-set operation label.
+pub const MAX_WRITE_SET_OPERATION_KIND_BYTES: usize = 128;
+
 /// Transaction-local write ordinal.
 pub type WriteSetOrdinal = u64;
 
@@ -124,6 +127,9 @@ impl TxWriteSet {
         before_image: Option<WriteSetImage>,
         after_image: Option<WriteSetImage>,
     ) -> AndromedaResult<WriteSetEntry> {
+        validate_operation_kind(&operation_kind)?;
+        validate_resource_id(&resource_id)?;
+
         let ordinal = self.next_ordinal;
         self.next_ordinal = self
             .next_ordinal
@@ -235,6 +241,35 @@ fn validate_non_empty_bounded(
         return Err(transaction_error(oversize_message));
     }
     Ok(())
+}
+
+fn validate_operation_kind(operation_kind: &WriteSetOperationKind) -> AndromedaResult<()> {
+    if let WriteSetOperationKind::Custom(value) = operation_kind {
+        validate_non_empty_bounded(
+            value.as_bytes(),
+            MAX_WRITE_SET_OPERATION_KIND_BYTES,
+            "custom write-set operation kind must not be empty",
+            "custom write-set operation kind exceeds maximum size",
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_resource_id(resource_id: &WriteSetResourceId) -> AndromedaResult<()> {
+    match resource_id {
+        WriteSetResourceId::Text(value) => validate_non_empty_bounded(
+            value.as_bytes(),
+            MAX_WRITE_SET_RESOURCE_ID_BYTES,
+            "write-set resource id must not be empty",
+            "write-set resource id exceeds maximum size",
+        ),
+        WriteSetResourceId::Bytes(value) => validate_non_empty_bounded(
+            value,
+            MAX_WRITE_SET_RESOURCE_ID_BYTES,
+            "write-set resource id must not be empty",
+            "write-set resource id exceeds maximum size",
+        ),
+    }
 }
 
 fn transaction_error(message: impl Into<String>) -> AndromedaError {

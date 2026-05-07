@@ -12,10 +12,116 @@
 //! - Queries over the same record set with the same parameters are deterministic.
 //! - All records are serializable to JSON Lines for artifact portability.
 
+use std::collections::HashMap;
+
 use crate::flat_json::{
-    escape_json_string, optional_string, optional_u32, parse_flat_json_object, required_string,
-    required_u64,
+    JsonField, escape_json_string, optional_string, optional_u32, parse_flat_json_object,
+    required_string, required_u64,
 };
+use crate::{
+    BENCHMARK_EVIDENCE_AUTHORITATIVE, BENCHMARK_EVIDENCE_CAN_SELECT_PLAN_ALONE,
+    BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY, BenchmarkEvidenceBudgets, BenchmarkEvidenceConfidence,
+    BenchmarkEvidenceValidity, BenchmarkScenarioEvidence, BenchmarkScenarioEvidenceError,
+    BenchmarkScenarioTarget, MAX_DURATION_MS, MAX_SAMPLES, MAX_TEMP_BYTES,
+};
+
+/// Persisted advisory boundary metadata for history and regression records.
+///
+/// Benchmark history is optimizer input only. It must be explicit that these
+/// records are not authoritative and cannot select a plan without the catalog
+/// Procedure Store, statistics version, and active contract context.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BenchmarkHistoryAdvisoryMetadata {
+    pub advisory_boundary: String,
+    pub authoritative: bool,
+    pub can_select_plan_alone: bool,
+    pub optimizer_boundary: String,
+    pub duration_cap_ms: u64,
+    pub sample_cap: u32,
+    pub temp_cap_bytes: u64,
+}
+
+impl BenchmarkHistoryAdvisoryMetadata {
+    pub fn advisory_only_global_caps() -> Self {
+        Self {
+            advisory_boundary: BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY.to_string(),
+            authoritative: BENCHMARK_EVIDENCE_AUTHORITATIVE,
+            can_select_plan_alone: BENCHMARK_EVIDENCE_CAN_SELECT_PLAN_ALONE,
+            optimizer_boundary: BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY.to_string(),
+            duration_cap_ms: MAX_DURATION_MS,
+            sample_cap: MAX_SAMPLES,
+            temp_cap_bytes: MAX_TEMP_BYTES,
+        }
+    }
+
+    pub fn with_resource_caps(
+        duration_cap_ms: u64,
+        sample_cap: u32,
+        temp_cap_bytes: u64,
+    ) -> Result<Self, String> {
+        let metadata = Self {
+            duration_cap_ms,
+            sample_cap,
+            temp_cap_bytes,
+            ..Self::advisory_only_global_caps()
+        };
+        metadata.validate()?;
+        Ok(metadata)
+    }
+
+    fn from_json_fields(fields: &HashMap<String, JsonField>) -> Result<Self, String> {
+        let mut metadata = Self::advisory_only_global_caps();
+        metadata.advisory_boundary = optional_string_with_default(
+            fields,
+            "advisory_boundary",
+            BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY,
+        )?;
+        metadata.authoritative =
+            optional_bool_with_default(fields, "authoritative", BENCHMARK_EVIDENCE_AUTHORITATIVE)?;
+        metadata.can_select_plan_alone = optional_bool_with_default(
+            fields,
+            "can_select_plan_alone",
+            BENCHMARK_EVIDENCE_CAN_SELECT_PLAN_ALONE,
+        )?;
+        metadata.optimizer_boundary = optional_string_with_default(
+            fields,
+            "optimizer_boundary",
+            BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY,
+        )?;
+        metadata.duration_cap_ms =
+            optional_u64_with_default(fields, "duration_cap_ms", MAX_DURATION_MS)?;
+        metadata.sample_cap = optional_u32_with_default(fields, "sample_cap", MAX_SAMPLES)?;
+        metadata.temp_cap_bytes =
+            optional_u64_with_default(fields, "temp_cap_bytes", MAX_TEMP_BYTES)?;
+        metadata.validate()?;
+        Ok(metadata)
+    }
+
+    fn validate(&self) -> Result<(), String> {
+        if self.advisory_boundary != BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY {
+            return Err("benchmark history advisory_boundary must be advisory-only".to_string());
+        }
+        if self.authoritative {
+            return Err("benchmark history records must not be authoritative".to_string());
+        }
+        if self.can_select_plan_alone {
+            return Err("benchmark history records must not select plans alone".to_string());
+        }
+        if self.optimizer_boundary != BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY {
+            return Err("benchmark history optimizer_boundary must be advisory-only".to_string());
+        }
+        if self.duration_cap_ms == 0 || self.duration_cap_ms > MAX_DURATION_MS {
+            return Err("benchmark history duration_cap_ms is outside global limits".to_string());
+        }
+        if self.sample_cap == 0 || self.sample_cap > MAX_SAMPLES {
+            return Err("benchmark history sample_cap is outside global limits".to_string());
+        }
+        if self.temp_cap_bytes == 0 || self.temp_cap_bytes > MAX_TEMP_BYTES {
+            return Err("benchmark history temp_cap_bytes is outside global limits".to_string());
+        }
+        Ok(())
+    }
+}
 
 /// A single benchmark run record in history.
 ///
@@ -40,6 +146,8 @@ pub struct BenchmarkHistoryRecord {
     pub branch: Option<String>,
     /// PR number if this was a PR check (optional)
     pub pr_number: Option<u32>,
+    /// Advisory-only optimizer consumption boundary and resource caps.
+    pub advisory: BenchmarkHistoryAdvisoryMetadata,
 }
 
 impl BenchmarkHistoryRecord {
@@ -62,6 +170,7 @@ impl BenchmarkHistoryRecord {
             sample_count,
             branch: None,
             pr_number: None,
+            advisory: BenchmarkHistoryAdvisoryMetadata::advisory_only_global_caps(),
         }
     }
 
@@ -72,13 +181,35 @@ impl BenchmarkHistoryRecord {
         self
     }
 
+    /// Attach explicit advisory metadata and resource caps to the record.
+    pub fn with_advisory_metadata(mut self, advisory: BenchmarkHistoryAdvisoryMetadata) -> Self {
+        self.advisory = advisory;
+        self
+    }
+
+    /// Convert this immutable history record into a bounded, advisory
+    /// ScenarioEvidence boundary record.
+    ///
+    /// The bench crate does not construct catalog `ScenarioEvidence` directly.
+    /// Callers must supply the target and budgets that bind this history point
+    /// to a Procedure, ContractHash, StatsVersion, and PlanClass.
+    pub fn to_scenario_evidence_boundary(
+        &self,
+        target: BenchmarkScenarioTarget,
+        budgets: BenchmarkEvidenceBudgets,
+        confidence: BenchmarkEvidenceConfidence,
+        validity: BenchmarkEvidenceValidity,
+    ) -> Result<BenchmarkScenarioEvidence, BenchmarkScenarioEvidenceError> {
+        BenchmarkScenarioEvidence::from_history_record(self, target, budgets, confidence, validity)
+    }
+
     /// Serialize record to JSON Line (one line, complete JSON object).
     ///
     /// JSON Lines format is chosen because it is portable across storage backends
     /// and supports append-without-parsing of the whole file.
     pub fn to_json_line(&self) -> String {
         format!(
-            r#"{{"workload_id":"{}","commit_id":"{}","timestamp":"{}","p50_latency_us":{},"p95_latency_us":{},"error_count":{},"sample_count":{},"branch":{},"pr_number":{}}}"#,
+            r#"{{"workload_id":"{}","commit_id":"{}","timestamp":"{}","p50_latency_us":{},"p95_latency_us":{},"error_count":{},"sample_count":{},"branch":{},"pr_number":{},"advisory_boundary":"{}","authoritative":{},"can_select_plan_alone":{},"optimizer_boundary":"{}","duration_cap_ms":{},"sample_cap":{},"temp_cap_bytes":{}}}"#,
             escape_json_string(&self.workload_id),
             escape_json_string(&self.commit_id),
             escape_json_string(&self.timestamp),
@@ -92,7 +223,14 @@ impl BenchmarkHistoryRecord {
                 .unwrap_or_else(|| "null".to_string()),
             self.pr_number
                 .map(|p| p.to_string())
-                .unwrap_or_else(|| "null".to_string())
+                .unwrap_or_else(|| "null".to_string()),
+            escape_json_string(&self.advisory.advisory_boundary),
+            self.advisory.authoritative,
+            self.advisory.can_select_plan_alone,
+            escape_json_string(&self.advisory.optimizer_boundary),
+            self.advisory.duration_cap_ms,
+            self.advisory.sample_cap,
+            self.advisory.temp_cap_bytes
         )
     }
 
@@ -112,6 +250,7 @@ impl BenchmarkHistoryRecord {
             .map_err(|_| "sample_count exceeds u32".to_string())?;
         let branch = optional_string(&value, "branch")?;
         let pr_number = optional_u32(&value, "pr_number")?;
+        let advisory = BenchmarkHistoryAdvisoryMetadata::from_json_fields(&value)?;
 
         Ok(Self {
             workload_id,
@@ -123,11 +262,12 @@ impl BenchmarkHistoryRecord {
             sample_count,
             branch,
             pr_number,
+            advisory,
         })
     }
 
     /// Returns true if P50 or P95 latency degraded more than `threshold_pct` relative to
-    /// the provided baseline values.
+    /// the provided baseline latency values.
     ///
     /// Regression is strict: exactly at the threshold is not considered regressed.
     pub fn is_regressed_vs_baseline(
@@ -141,6 +281,21 @@ impl BenchmarkHistoryRecord {
 
         p50_pct > threshold_pct || p95_pct > threshold_pct
     }
+
+    /// Returns true if latency or error-rate evidence regressed relative to a baseline record.
+    ///
+    /// Error-rate comparison uses `error_count / sample_count` as bounded parts-per-million,
+    /// not raw error counts.
+    pub fn is_regressed_vs_record(&self, baseline: &Self, threshold_pct: f64) -> bool {
+        let p50_pct = percent_change(self.p50_latency_us, baseline.p50_latency_us);
+        let p95_pct = percent_change(self.p95_latency_us, baseline.p95_latency_us);
+        let error_rate_pct = percent_change(
+            error_rate_ppm(self.error_count, self.sample_count),
+            error_rate_ppm(baseline.error_count, baseline.sample_count),
+        );
+
+        p50_pct > threshold_pct || p95_pct > threshold_pct || error_rate_pct > 0.0
+    }
 }
 
 /// Compute a finite percentage change from `baseline` to `current`.
@@ -153,6 +308,63 @@ fn percent_change(current: u64, baseline: u64) -> f64 {
         (0, 0) => 0.0,
         (_, 0) => 100.0,
         _ => ((current as f64 - baseline as f64) / baseline as f64) * 100.0,
+    }
+}
+
+fn error_rate_ppm(error_count: u32, sample_count: u32) -> u64 {
+    if sample_count == 0 {
+        return if error_count == 0 { 0 } else { 1_000_000 };
+    }
+    ((u64::from(error_count) * 1_000_000) / u64::from(sample_count)).min(1_000_000)
+}
+
+fn optional_string_with_default(
+    fields: &HashMap<String, JsonField>,
+    name: &str,
+    default: &str,
+) -> Result<String, String> {
+    match fields.get(name) {
+        Some(JsonField::String(value)) => Ok(value.clone()),
+        Some(JsonField::Null) | None => Ok(default.to_string()),
+        _ => Err(format!("invalid {name}")),
+    }
+}
+
+fn optional_bool_with_default(
+    fields: &HashMap<String, JsonField>,
+    name: &str,
+    default: bool,
+) -> Result<bool, String> {
+    match fields.get(name) {
+        Some(JsonField::Bool(value)) => Ok(*value),
+        Some(JsonField::Null) | None => Ok(default),
+        _ => Err(format!("invalid {name}")),
+    }
+}
+
+fn optional_u64_with_default(
+    fields: &HashMap<String, JsonField>,
+    name: &str,
+    default: u64,
+) -> Result<u64, String> {
+    match fields.get(name) {
+        Some(JsonField::Unsigned(value)) => Ok(*value),
+        Some(JsonField::Null) | None => Ok(default),
+        _ => Err(format!("invalid {name}")),
+    }
+}
+
+fn optional_u32_with_default(
+    fields: &HashMap<String, JsonField>,
+    name: &str,
+    default: u32,
+) -> Result<u32, String> {
+    match fields.get(name) {
+        Some(JsonField::Unsigned(value)) => {
+            u32::try_from(*value).map_err(|_| format!("{name} exceeds u32"))
+        }
+        Some(JsonField::Null) | None => Ok(default),
+        _ => Err(format!("invalid {name}")),
     }
 }
 
@@ -317,6 +529,32 @@ mod tests {
         assert_eq!(record, deserialized);
         assert_eq!(deserialized.branch, Some("main".to_string()));
         assert_eq!(deserialized.pr_number, Some(42));
+        assert!(json_line.contains(r#""advisory_boundary":"advisory-only""#));
+        assert!(json_line.contains(r#""authoritative":false"#));
+        assert!(json_line.contains(r#""can_select_plan_alone":false"#));
+        assert!(json_line.contains(r#""optimizer_boundary":"advisory-only""#));
+        assert!(json_line.contains(r#""duration_cap_ms":"#));
+        assert!(json_line.contains(r#""sample_cap":"#));
+        assert!(json_line.contains(r#""temp_cap_bytes":"#));
+        assert!(!deserialized.advisory.authoritative);
+        assert!(!deserialized.advisory.can_select_plan_alone);
+        assert_eq!(deserialized.advisory.optimizer_boundary, "advisory-only");
+    }
+
+    #[test]
+    fn test_history_record_imports_legacy_json_with_advisory_defaults() {
+        let legacy_json_line = r#"{"workload_id":"test-workload","commit_id":"commit123","timestamp":"2026-01-15T12:00:00Z","p50_latency_us":100,"p95_latency_us":500,"error_count":0,"sample_count":10,"branch":null,"pr_number":null}"#;
+
+        let record = BenchmarkHistoryRecord::from_json_line(legacy_json_line).unwrap();
+
+        assert_eq!(record.workload_id, "test-workload");
+        assert_eq!(record.advisory.advisory_boundary, "advisory-only");
+        assert!(!record.advisory.authoritative);
+        assert!(!record.advisory.can_select_plan_alone);
+        assert_eq!(record.advisory.optimizer_boundary, "advisory-only");
+        assert_eq!(record.advisory.duration_cap_ms, MAX_DURATION_MS);
+        assert_eq!(record.advisory.sample_cap, MAX_SAMPLES);
+        assert_eq!(record.advisory.temp_cap_bytes, MAX_TEMP_BYTES);
     }
 
     #[test]
@@ -361,6 +599,40 @@ mod tests {
         );
 
         assert!(nonzero_current.is_regressed_vs_baseline(0, 0, 2.5));
+    }
+
+    #[test]
+    fn record_regression_uses_error_rate_not_raw_error_count() {
+        let baseline = BenchmarkHistoryRecord::new(
+            "test".to_string(),
+            "baseline".to_string(),
+            "2026-01-15T12:00:00Z".to_string(),
+            100,
+            500,
+            1,
+            100,
+        );
+        let same_count_higher_rate = BenchmarkHistoryRecord::new(
+            "test".to_string(),
+            "current".to_string(),
+            "2026-01-15T12:05:00Z".to_string(),
+            100,
+            500,
+            1,
+            10,
+        );
+        let higher_count_same_rate = BenchmarkHistoryRecord::new(
+            "test".to_string(),
+            "current".to_string(),
+            "2026-01-15T12:10:00Z".to_string(),
+            100,
+            500,
+            10,
+            1_000,
+        );
+
+        assert!(same_count_higher_rate.is_regressed_vs_record(&baseline, 2.5));
+        assert!(!higher_count_same_rate.is_regressed_vs_record(&baseline, 2.5));
     }
 
     #[test]

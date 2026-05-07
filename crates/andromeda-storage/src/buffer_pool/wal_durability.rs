@@ -2,7 +2,7 @@
 //!
 //! This module defines the interface between the buffer pool and WAL subsystem.
 //! Before flushing a dirty page, the buffer pool must verify that the page's
-//! first dirty LSN is durable in the WAL.
+//! latest dirty LSN is durable in the WAL.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -13,7 +13,7 @@ use crate::Lsn;
 ///
 /// Implementations report which LSNs have been made durable in the WAL.
 /// The buffer pool uses this to gate flush operations: a page can only be
-/// flushed once its first_dirty_lsn is confirmed durable.
+/// flushed once its latest dirty LSN is confirmed durable.
 pub trait WalDurabilityObserver: Send + Sync {
     /// Check whether an LSN is durable in the WAL.
     fn is_durable(&self, lsn: Lsn) -> bool;

@@ -121,6 +121,7 @@ pub enum PitrTargetRejection {
     BackupManifestInvalid,
     TargetLsnZero,
     TargetBeforeSnapshot,
+    TargetBeforeRequiredWalStart,
     TargetBeyondWalRange,
     WalCoverageMissing,
 }
@@ -132,6 +133,9 @@ impl PitrTargetRejection {
             Self::TargetLsnZero => "PITR target LSN must not be zero",
             Self::TargetBeforeSnapshot => {
                 "PITR target LSN is below the snapshot base checkpoint LSN"
+            }
+            Self::TargetBeforeRequiredWalStart => {
+                "PITR target LSN is below the snapshot required WAL start LSN"
             }
             Self::TargetBeyondWalRange => "PITR target LSN is above the WAL archive end LSN",
             Self::WalCoverageMissing => {
@@ -222,11 +226,15 @@ pub fn validate_pitr_target(
         return Err(PitrTargetRejection::TargetBeforeSnapshot.into_error());
     }
 
+    let replay_skipped = target.target_lsn == manifest.snapshot.base_checkpoint_lsn;
+
+    if !replay_skipped && target.target_lsn < manifest.snapshot.required_wal_start_lsn {
+        return Err(PitrTargetRejection::TargetBeforeRequiredWalStart.into_error());
+    }
+
     if target.target_lsn > manifest.wal_archive.end_inclusive {
         return Err(PitrTargetRejection::TargetBeyondWalRange.into_error());
     }
-
-    let replay_skipped = target.target_lsn == manifest.snapshot.base_checkpoint_lsn;
 
     Ok(PitrValidationAccepted {
         backup_id: manifest.backup_id,
@@ -266,6 +274,8 @@ fn classify_rejection(message: &str) -> PitrTargetRejection {
         PitrTargetRejection::TargetLsnZero
     } else if message == PitrTargetRejection::TargetBeforeSnapshot.as_str() {
         PitrTargetRejection::TargetBeforeSnapshot
+    } else if message == PitrTargetRejection::TargetBeforeRequiredWalStart.as_str() {
+        PitrTargetRejection::TargetBeforeRequiredWalStart
     } else if message == PitrTargetRejection::TargetBeyondWalRange.as_str() {
         PitrTargetRejection::TargetBeyondWalRange
     } else if message == PitrTargetRejection::WalCoverageMissing.as_str() {

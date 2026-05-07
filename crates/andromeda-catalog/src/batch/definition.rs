@@ -6,9 +6,13 @@ use andromeda_core::{
 use std::collections::BTreeSet;
 
 use crate::{
-    CatalogObjectRef, dependencies::validate_in_batch_dependencies, objects::CatalogDefinition,
+    CatalogObjectRef,
+    dependencies::{DefinitionBatchDependencyGraphHash, validate_in_batch_dependencies},
+    digest::Sha256,
+    objects::{CatalogDefinition, ObjectKind},
 };
 
+use super::dry_run_srpl::validate_srpl_batch_dry_run;
 use super::mutation::{CatalogMutation, CatalogMutationDelta, CatalogMutationPlan};
 use super::plan::{
     CatalogLifecycleAction, DefinitionBatchPlan, PlannedDefinition, PlannedLifecycleTransition,
@@ -25,6 +29,26 @@ impl DefinitionBatchId {
 
     pub const fn get(self) -> u64 {
         self.0
+    }
+}
+
+/// Canonical SHA-256 digest of the ordered DefinitionBatch source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct DefinitionBatchSourceHash([u8; Self::LEN]);
+
+impl DefinitionBatchSourceHash {
+    pub const LEN: usize = 32;
+
+    pub const fn new(bytes: [u8; Self::LEN]) -> Self {
+        Self(bytes)
+    }
+
+    pub const fn as_bytes(self) -> [u8; Self::LEN] {
+        self.0
+    }
+
+    pub fn is_zero(self) -> bool {
+        self.0.iter().all(|byte| *byte == 0)
     }
 }
 
@@ -62,6 +86,43 @@ pub struct DefinitionBatch {
 }
 
 impl DefinitionBatch {
+    /// Computes a deterministic digest over the exact ordered batch source.
+    ///
+    /// This hash intentionally includes operation order and object shape
+    /// hashes. It complements [`DefinitionBatchDependencyGraphHash`], which
+    /// canonicalizes the dependency graph and therefore ignores source order
+    /// when the graph itself is equivalent.
+    pub fn source_hash(&self) -> DefinitionBatchSourceHash {
+        let mut sink = DefinitionBatchSourceHashSink::new();
+        sink.str("andromeda.catalog.definition-batch.source.v1.sha256");
+        sink.u64(self.batch_id.get());
+        sink.u64(self.database_id.get());
+        sink.u64(self.namespace_id.get());
+        sink.u64(self.base_version.get());
+        sink.u64(self.operations.len() as u64);
+        for (operation_index, operation) in self.operations.iter().enumerate() {
+            sink.u64(operation_index as u64);
+            match operation {
+                DefinitionOperation::Create(definition) => {
+                    sink.u8(0);
+                    sink.object_ref(definition.object_ref());
+                    sink.raw_bytes(&definition.shape_hash().as_bytes());
+                }
+                DefinitionOperation::Deprecate(target) => {
+                    sink.u8(1);
+                    sink.object_ref(&target.object);
+                }
+            }
+        }
+        sink.finish()
+    }
+
+    /// Validates and computes the canonical dependency-graph digest for this
+    /// batch.
+    pub fn dependency_graph_hash(&self) -> AndromedaResult<DefinitionBatchDependencyGraphHash> {
+        validate_in_batch_dependencies(&self.operations).map(|graph| graph.dependency_graph_hash())
+    }
+
     /// Validates all operations and produces a [`DefinitionBatchPlan`] without
     /// applying any mutations.
     pub fn dry_run(&self) -> AndromedaResult<DefinitionBatchPlan> {
@@ -100,6 +161,7 @@ impl DefinitionBatch {
             )
         })?;
         let next_version = CatalogVersion::new(next_version);
+        validate_srpl_batch_dry_run(self)?;
 
         let mut object_ids = BTreeSet::new();
         let mut object_names = BTreeSet::new();
@@ -196,7 +258,9 @@ impl DefinitionBatch {
             }
         }
 
-        validate_in_batch_dependencies(&self.operations)?;
+        let source_hash = self.source_hash();
+        let dependency_graph_hash =
+            validate_in_batch_dependencies(&self.operations)?.dependency_graph_hash();
 
         let mutation = CatalogMutation {
             definition_batch_id: self.batch_id,
@@ -216,6 +280,8 @@ impl DefinitionBatch {
             self.namespace_id,
             self.base_version,
             next_version,
+            source_hash,
+            dependency_graph_hash,
             deltas,
         )?;
 
@@ -230,5 +296,68 @@ impl DefinitionBatch {
             deprecated_objects,
             mutation_plan,
         })
+    }
+}
+
+struct DefinitionBatchSourceHashSink {
+    hasher: Sha256,
+}
+
+impl DefinitionBatchSourceHashSink {
+    fn new() -> Self {
+        Self {
+            hasher: Sha256::new(),
+        }
+    }
+
+    fn finish(self) -> DefinitionBatchSourceHash {
+        DefinitionBatchSourceHash::new(self.hasher.finalize())
+    }
+
+    fn raw_bytes(&mut self, bytes: &[u8]) {
+        self.hasher.update(bytes);
+    }
+
+    fn bytes(&mut self, bytes: &[u8]) {
+        self.u64(bytes.len() as u64);
+        self.raw_bytes(bytes);
+    }
+
+    fn str(&mut self, value: &str) {
+        self.bytes(value.as_bytes());
+    }
+
+    fn u8(&mut self, value: u8) {
+        self.hasher.update(&[value]);
+    }
+
+    fn u64(&mut self, value: u64) {
+        self.raw_bytes(&value.to_le_bytes());
+    }
+
+    fn object_ref(&mut self, object: &CatalogObjectRef) {
+        self.u64(object.object_id.get());
+        self.qualified_name(&object.name);
+        self.object_kind(object.kind);
+        self.u64(object.catalog_version.get());
+    }
+
+    fn qualified_name(&mut self, name: &crate::QualifiedName) {
+        self.u64(name.parts().len() as u64);
+        for part in name.parts() {
+            self.str(part);
+        }
+    }
+
+    fn object_kind(&mut self, kind: ObjectKind) {
+        self.u8(match kind {
+            ObjectKind::Database => 0,
+            ObjectKind::Namespace => 1,
+            ObjectKind::Table => 2,
+            ObjectKind::Map => 3,
+            ObjectKind::Enum => 4,
+            ObjectKind::StructuredObject => 5,
+            ObjectKind::Procedure => 6,
+        });
     }
 }

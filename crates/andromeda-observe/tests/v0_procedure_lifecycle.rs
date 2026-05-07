@@ -6,8 +6,8 @@ use andromeda_observe::{
     AuthorizationDeniedTrace, CertificateIdentity, CompletionEmittedTrace, CriticalDecisionKind,
     DecisionTrace, EventCorrelation, EventEnvelope, EventId, InMemoryEventSequence,
     IoBudgetDecisionTrace, IoPipelineStage, Permission, ProtocolCorrelation, RecoveryTrace,
-    SecurityAuditOutcome, SecurityAuditTrace, SurfaceScope, TraceEvent, TraceId, UserPrincipal,
-    UserPrincipalKind, WalEventTrace, WalOperation,
+    SecurityAuditOutcome, SecurityAuditTrace, SecurityPolicyVersionEvidence, SurfaceScope,
+    TraceEvent, TraceId, UserPrincipal, UserPrincipalKind, WalEventTrace, WalOperation,
 };
 
 fn base_correlation() -> EventCorrelation {
@@ -333,6 +333,7 @@ fn security_audit_rejects_surface_permission_drift_and_secret_evidence() {
             principal: principal(),
             permission: Permission::ExecuteProcedure,
             outcome: SecurityAuditOutcome::Denied,
+            policy_version: SecurityPolicyVersionEvidence::bootstrap_v0(),
             reason: "certificate evidence must be secret-safe".to_string(),
         }),
     )

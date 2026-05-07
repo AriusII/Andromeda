@@ -391,8 +391,8 @@ fn validate_signature_matches_contract(
             .all(|(ir_stream, contract_stream)| {
                 ir_stream.name == contract_stream.name
                     && ir_stream.columns == contract_stream.columns
-                    && ir_stream.cardinality.requires_exact_row_count()
-                        == contract_stream.row_count_exact_required
+                    && andromeda_catalog::ResultStreamCardinality::from(ir_stream.cardinality)
+                        == contract_stream.cardinality
             })
     {
         return Err(AndromedaError::new(
@@ -418,10 +418,10 @@ fn validate_result_emission(
                 )
             })
             .count();
-        if result.cardinality.requires_exact_row_count() && emits != 1 {
+        if !result.cardinality.permits_emit_operation_count(emits) {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Srpl,
-                "SRPL exact-cardinality result stream must have exactly one emit operation",
+                result.cardinality.emit_count_diagnostic(),
             ));
         }
     }

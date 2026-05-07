@@ -10,6 +10,8 @@ use crate::{ExtentDescriptor, ExtentId, Lsn, PageId, PageImage};
 use super::interface::DiskManager;
 use super::{DiskManagerError, PageIntegrityMode};
 
+const MAX_FILE_PAGE_READ_BYTES: usize = 32 * 1024;
+
 /// File-backed disk manager implementation.
 #[derive(Debug)]
 pub struct FileDiskManager {
@@ -115,7 +117,8 @@ impl DiskManager for FileDiskManager {
 
         let offset = self.page_to_file_offset_impl(page_id)?;
 
-        let mut buffer = vec![0u8; extent.page_size.bytes_usize()];
+        let page_read_len = bounded_page_read_len(extent.page_size.bytes_usize(), page_id)?;
+        let mut buffer = vec![0u8; page_read_len];
         let mut file = OpenOptions::new()
             .read(true)
             .open(&self.file_path)
@@ -148,19 +151,31 @@ impl DiskManager for FileDiskManager {
         Ok(Some(image))
     }
 
-    fn write_page(&mut self, image: PageImage, _durable_lsn: Lsn) -> AndromedaResult<()> {
+    fn write_page(&mut self, image: PageImage, durable_lsn: Lsn) -> AndromedaResult<()> {
         let page_id = image
             .page_id()
             .ok_or_else(|| DiskManagerError::PageLayoutInvalid {
                 reason: "page image missing layout contract for page ID".to_string(),
             })?;
+        let page_lsn = image
+            .page_lsn()
+            .ok_or_else(|| DiskManagerError::PageLayoutInvalid {
+                reason: "page image missing layout contract for page LSN".to_string(),
+            })?;
+        if durable_lsn < page_lsn {
+            return Err(DiskManagerError::WalFenceViolation {
+                page_lsn: page_lsn.get(),
+                durable_lsn: durable_lsn.get(),
+            }
+            .into());
+        }
 
         self.extent_for_page_impl(page_id)?
             .ok_or_else(|| DiskManagerError::PageNotAllocated {
                 page_id: page_id.get(),
             })?;
 
-        let mut image_for_write = image.clone();
+        let mut image_for_write = image;
         self.stamp_page_integrity_if_enabled(&mut image_for_write)?;
         self.atomic_write_page(page_id, &image_for_write)?;
         Ok(())
@@ -218,11 +233,29 @@ impl DiskManager for FileDiskManager {
     }
 }
 
+fn bounded_page_read_len(page_bytes: usize, page_id: PageId) -> AndromedaResult<usize> {
+    if page_bytes == 0 || page_bytes > MAX_FILE_PAGE_READ_BYTES {
+        return Err(DiskManagerError::PageLayoutInvalid {
+            reason: format!(
+                "page {} read length {} exceeds fixed disk manager page budget {}",
+                page_id.get(),
+                page_bytes,
+                MAX_FILE_PAGE_READ_BYTES
+            ),
+        }
+        .into());
+    }
+    Ok(page_bytes)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::disk_manager::{DiskManager, DiskManagerError};
-    use crate::{AllocationId, ExtentState, ObjectId, PageSize};
+    use crate::{
+        AllocationId, ExtentState, ObjectId, PageFlags, PageHeader, PageLayoutContract, PageSize,
+        PageTrailer, PageType,
+    };
 
     fn create_temp_disk_manager() -> AndromedaResult<(FileDiskManager, tempfile::TempDir)> {
         let temp_dir = tempfile::TempDir::new().map_err(|e| DiskManagerError::IoError {
@@ -247,6 +280,41 @@ mod tests {
             file_offset: 0,
             allocated_on_disk: false,
         }
+    }
+
+    fn valid_page(page_id: PageId, page_lsn: Lsn) -> PageImage {
+        let layout = PageLayoutContract {
+            header: PageHeader {
+                magic: PageHeader::MAGIC,
+                format_version: PageHeader::FORMAT_VERSION_V0,
+                page_size: crate::PageSize::KiB16,
+                page_type: PageType::FixedRow,
+                page_id,
+                object_id: ObjectId::new(1),
+                allocation_id: AllocationId::new(1),
+                page_lsn,
+                page_epoch: 1,
+                previous_page_id: None,
+                next_page_id: None,
+                header_len: PageHeader::MIN_HEADER_LEN_V0,
+                payload_offset: 128,
+                payload_len: 512,
+                free_start: 256,
+                free_end: 512,
+                free_bytes: 256,
+                slot_count: 1,
+                row_count: 1,
+                flags: PageFlags::NONE,
+                header_crc: 5,
+            },
+            trailer: PageTrailer {
+                payload_crc64: 6,
+                page_hash: [7; 32],
+                torn_write_guard: 8,
+            },
+        };
+        PageImage::with_layout(layout, vec![0; crate::PageSize::KiB16.bytes_usize()])
+            .expect("valid page image")
     }
 
     #[test]
@@ -328,6 +396,31 @@ mod tests {
         assert_eq!(manager.page_to_file_offset(PageId::new(1))?, 0);
         assert_eq!(manager.page_to_file_offset(PageId::new(2))?, 16 * 1024);
         Ok(())
+    }
+
+    #[test]
+    fn test_write_page_rejects_page_lsn_ahead_of_durable_wal() -> AndromedaResult<()> {
+        let (mut manager, _temp) = create_temp_disk_manager()?;
+        manager.allocate_extent(create_test_extent())?;
+
+        let page = valid_page(PageId::new(1), Lsn::new(100));
+        let error = manager
+            .write_page(page.clone(), Lsn::new(99))
+            .expect_err("page write must wait for durable WAL through page LSN");
+
+        assert!(error.message().contains("WAL-before-page flush violated"));
+        manager
+            .write_page(page, Lsn::new(100))
+            .expect("page write succeeds once WAL is durable through page LSN");
+        Ok(())
+    }
+
+    #[test]
+    fn test_bounded_page_read_len_rejects_oversized_extent_page() {
+        let error = bounded_page_read_len(MAX_FILE_PAGE_READ_BYTES + 1, PageId::new(1))
+            .expect_err("disk manager page reads must stay within the fixed page budget");
+
+        assert!(error.message().contains("fixed disk manager page budget"));
     }
 
     #[test]

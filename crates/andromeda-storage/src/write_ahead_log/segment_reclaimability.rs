@@ -202,10 +202,12 @@ impl RetentionBoundaryPolicy {
         })
     }
 
-    /// The effective upper GC boundary: minimum of all four boundaries.
+    /// The effective upper GC boundary for segment end LSN checks.
     ///
-    /// A segment can only be reclaimed if all its records are strictly
-    /// before this LSN. Segments at or after this LSN must be retained.
+    /// A segment can only be reclaimed if its end LSN is before the
+    /// visibility and PITR boundaries and at or before the replication
+    /// boundary. The recovery floor is checked separately against segment
+    /// start LSN, so it is not folded into this end-LSN ceiling.
     pub fn gc_boundary_lsn(&self) -> Lsn {
         std::cmp::min(
             std::cmp::min(self.min_active_snapshot_lsn, self.min_standby_received_lsn),
@@ -417,7 +419,7 @@ mod tests {
         let policy = RetentionBoundaryPolicy::new(
             Lsn::new(100),
             Lsn::new(300),
-            Lsn::new(250), // lowest
+            Lsn::new(250), // lowest end-LSN boundary
             Lsn::new(500),
         )
         .unwrap();

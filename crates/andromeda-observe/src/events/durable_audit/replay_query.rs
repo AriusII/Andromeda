@@ -119,6 +119,10 @@ pub struct DurableAuditReplayEvidence {
     pub truncated: bool,
     pub first_returned_lsn: Option<u64>,
     pub last_returned_lsn: Option<u64>,
+    pub chain_anchor_present: bool,
+    pub first_scanned_lsn: Option<u64>,
+    pub last_scanned_lsn: Option<u64>,
+    pub tail_chain_checksum: u64,
 }
 
 impl DurableAuditReplayEvidence {
@@ -133,6 +137,10 @@ impl DurableAuditReplayEvidence {
             truncated: false,
             first_returned_lsn: None,
             last_returned_lsn: None,
+            chain_anchor_present: false,
+            first_scanned_lsn: None,
+            last_scanned_lsn: None,
+            tail_chain_checksum: 0,
         }
     }
 }

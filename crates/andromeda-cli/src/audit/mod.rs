@@ -1,5 +1,6 @@
 mod output;
 mod parsing;
+mod sensitive;
 
 use std::path::PathBuf;
 
@@ -14,15 +15,16 @@ use andromeda_observe::{
 use crate::error::cli_error;
 
 use self::output::{
-    print_audit_compact_result, print_audit_help, print_audit_query_result,
+    print_audit_compact_result, print_audit_help, print_audit_inspection_result,
     print_audit_verify_result,
 };
 use self::parsing::{
-    parse_audit_compact_options, parse_audit_query_options, parse_audit_verify_options,
+    parse_audit_compact_options, parse_audit_inspection_options, parse_audit_verify_options,
 };
+use self::sensitive::redact_sensitive_cli_evidence;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct AuditQueryOptions {
+pub(super) struct AuditInspectionOptions {
     pub(super) spec: TraceQuerySpec,
     pub(super) json_output: bool,
     pub(super) diagnostic_json: bool,
@@ -45,7 +47,7 @@ pub(super) struct AuditVerifyOptions {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct AuditQueryReport {
+pub(super) struct AuditInspectionReport {
     pub(super) schema: &'static str,
     pub(super) contract_preview: bool,
     pub(super) durable_backend: bool,
@@ -53,12 +55,12 @@ pub(super) struct AuditQueryReport {
     pub(super) journal_path: Option<String>,
     pub(super) spec: TraceQuerySpec,
     pub(super) result: Option<DurableAuditTraceQueryResult>,
-    pub(super) diagnostic_evidence: Option<AuditQueryDiagnosticEvidence>,
+    pub(super) diagnostic_evidence: Option<AuditInspectionDiagnosticEvidence>,
     pub(super) message: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) struct AuditQueryDiagnosticEvidence {
+pub(super) struct AuditInspectionDiagnosticEvidence {
     pub(super) records_scanned: usize,
     pub(super) records_matched: usize,
     pub(super) records_returned: usize,
@@ -96,7 +98,10 @@ pub(super) struct AuditVerifyReport {
 
 pub fn run_audit_command(args: &[String]) -> AndromedaResult<()> {
     match args.first().map(String::as_str) {
-        Some("query") => run_audit_query(&args[1..]),
+        Some("inspect") => run_audit_inspection(&args[1..]),
+        Some("query") => Err(cli_error(
+            "unsupported audit subcommand; use `andromeda-cli audit inspect` for durable journal inspection",
+        )),
         Some("compact") => run_audit_compact(&args[1..]),
         Some("verify") => run_audit_verify(&args[1..]),
         Some("-h" | "--help" | "help") | None => {
@@ -109,10 +114,10 @@ pub fn run_audit_command(args: &[String]) -> AndromedaResult<()> {
     }
 }
 
-fn run_audit_query(args: &[String]) -> AndromedaResult<()> {
-    let options = parse_audit_query_options(args)?;
-    let report = build_audit_query_report(&options)?;
-    print_audit_query_result(&report, options.json_output, options.diagnostic_json);
+fn run_audit_inspection(args: &[String]) -> AndromedaResult<()> {
+    let options = parse_audit_inspection_options(args)?;
+    let report = build_audit_inspection_report(&options)?;
+    print_audit_inspection_result(&report, options.json_output, options.diagnostic_json);
     Ok(())
 }
 
@@ -130,12 +135,14 @@ fn run_audit_verify(args: &[String]) -> AndromedaResult<()> {
     Ok(())
 }
 
-fn build_audit_query_report(options: &AuditQueryOptions) -> AndromedaResult<AuditQueryReport> {
+fn build_audit_inspection_report(
+    options: &AuditInspectionOptions,
+) -> AndromedaResult<AuditInspectionReport> {
     options.spec.validate()?;
 
     let Some(journal_path) = &options.journal_path else {
-        return Ok(AuditQueryReport {
-            schema: "andromeda.cli.audit.query.v1",
+        return Ok(AuditInspectionReport {
+            schema: "andromeda.cli.audit.inspection.v1",
             contract_preview: true,
             durable_backend: false,
             requires_durable_audit_journal: true,
@@ -143,33 +150,33 @@ fn build_audit_query_report(options: &AuditQueryOptions) -> AndromedaResult<Audi
             spec: options.spec.clone(),
             result: None,
             diagnostic_evidence: None,
-            message: "contract preview: provide --journal <path> to replay a durable audit journal; no journal was queried".to_string(),
+            message: "contract preview: provide --journal <path> to replay a durable audit journal; no journal was inspected".to_string(),
         });
     };
 
     if !journal_path.is_file() {
         return Err(cli_error(format!(
-            "audit query journal `{}` does not exist or is not a file",
-            journal_path.display()
+            "audit inspect journal `{}` does not exist or is not a file",
+            audit_path_for_output(journal_path)
         )));
     }
 
     let sink = FileDurableAuditWalSink::open(journal_path).map_err(|error| {
         cli_error(format!(
             "failed to open durable audit journal `{}`: {}",
-            journal_path.display(),
+            audit_path_for_output(journal_path),
             error.reason
         ))
     })?;
     let replay = sink
         .query_with_evidence(
-            &durable_replay_query_from_trace_spec(&options.spec),
+            &durable_replay_filter_from_trace_spec(&options.spec),
             DurableAuditReplayWindow::ALL,
         )
         .map_err(|error| {
             cli_error(format!(
                 "failed to replay durable audit journal `{}`: {}",
-                journal_path.display(),
+                audit_path_for_output(journal_path),
                 error.reason
             ))
         })?;
@@ -177,19 +184,19 @@ fn build_audit_query_report(options: &AuditQueryOptions) -> AndromedaResult<Audi
     let result = source.query(&options.spec)?;
     let diagnostic_evidence = options
         .diagnostic_json
-        .then(|| build_query_diagnostic_evidence(&options.spec, replay.evidence, &source))
+        .then(|| build_inspection_diagnostic_evidence(&options.spec, replay.evidence, &source))
         .transpose()?;
 
-    Ok(AuditQueryReport {
-        schema: "andromeda.cli.audit.query.v1",
+    Ok(AuditInspectionReport {
+        schema: "andromeda.cli.audit.inspection.v1",
         contract_preview: false,
         durable_backend: true,
         requires_durable_audit_journal: true,
-        journal_path: Some(journal_path.display().to_string()),
+        journal_path: Some(audit_path_for_output(journal_path)),
         spec: options.spec.clone(),
         result: Some(result),
         diagnostic_evidence,
-        message: "durable audit journal replay query completed".to_string(),
+        message: "durable audit journal replay inspection completed".to_string(),
     })
 }
 
@@ -219,14 +226,14 @@ fn build_audit_compact_report(
     if !journal_path.is_file() {
         return Err(cli_error(format!(
             "audit compact journal `{}` does not exist or is not a file",
-            journal_path.display()
+            audit_path_for_output(journal_path)
         )));
     }
 
     let sink = FileDurableAuditWalSink::open(journal_path).map_err(|error| {
         cli_error(format!(
             "failed to open durable audit journal `{}`: {}",
-            journal_path.display(),
+            audit_path_for_output(journal_path),
             error.reason
         ))
     })?;
@@ -236,7 +243,7 @@ fn build_audit_compact_report(
     let report = sink.compact(&policy).map_err(|error| {
         cli_error(format!(
             "failed to compact durable audit journal `{}`: {}",
-            journal_path.display(),
+            audit_path_for_output(journal_path),
             error.reason
         ))
     })?;
@@ -246,7 +253,7 @@ fn build_audit_compact_report(
         contract_preview: false,
         durable_backend: true,
         requires_durable_audit_journal: true,
-        journal_path: Some(journal_path.display().to_string()),
+        journal_path: Some(audit_path_for_output(journal_path)),
         retain_from_lsn: options.retain_from_lsn,
         preserve_forensic_hold: options.preserve_forensic_hold,
         report: Some(report),
@@ -264,14 +271,14 @@ fn build_audit_verify_report(options: &AuditVerifyOptions) -> AndromedaResult<Au
     if !journal_path.is_file() {
         return Err(cli_error(format!(
             "audit verify journal `{}` does not exist or is not a file",
-            journal_path.display()
+            audit_path_for_output(journal_path)
         )));
     }
 
     let sink = FileDurableAuditWalSink::open(journal_path).map_err(|error| {
         cli_error(format!(
             "failed to verify durable audit journal `{}`: {}",
-            journal_path.display(),
+            audit_path_for_output(journal_path),
             error.reason
         ))
     })?;
@@ -283,7 +290,7 @@ fn build_audit_verify_report(options: &AuditVerifyOptions) -> AndromedaResult<Au
         .map_err(|error| {
             cli_error(format!(
                 "failed to verify durable audit journal `{}`: {}",
-                journal_path.display(),
+                audit_path_for_output(journal_path),
                 error.reason
             ))
         })?;
@@ -292,7 +299,7 @@ fn build_audit_verify_report(options: &AuditVerifyOptions) -> AndromedaResult<Au
         schema: "andromeda.cli.audit.verify.v1",
         durable_backend: true,
         requires_durable_audit_journal: true,
-        journal_path: journal_path.display().to_string(),
+        journal_path: audit_path_for_output(journal_path),
         records_scanned: replay.evidence.records_scanned,
         records_returned: replay.evidence.records_returned,
         first_returned_lsn: replay.evidence.first_returned_lsn,
@@ -301,15 +308,15 @@ fn build_audit_verify_report(options: &AuditVerifyOptions) -> AndromedaResult<Au
     })
 }
 
-fn build_query_diagnostic_evidence(
+fn build_inspection_diagnostic_evidence(
     spec: &TraceQuerySpec,
     replay_evidence: DurableAuditReplayEvidence,
     source: &DurableAuditTraceQuerySource<'_>,
-) -> AndromedaResult<AuditQueryDiagnosticEvidence> {
+) -> AndromedaResult<AuditInspectionDiagnosticEvidence> {
     let mut diagnostic_spec = spec.clone();
     diagnostic_spec.include_total_count = true;
     let diagnostic_result = source.query(&diagnostic_spec)?;
-    Ok(AuditQueryDiagnosticEvidence {
+    Ok(AuditInspectionDiagnosticEvidence {
         records_scanned: replay_evidence.records_scanned,
         records_matched: diagnostic_result
             .metadata
@@ -323,7 +330,7 @@ fn build_query_diagnostic_evidence(
     })
 }
 
-fn durable_replay_query_from_trace_spec(spec: &TraceQuerySpec) -> DurableAuditReplayQuery {
+fn durable_replay_filter_from_trace_spec(spec: &TraceQuerySpec) -> DurableAuditReplayQuery {
     DurableAuditReplayQuery {
         family: spec
             .filter
@@ -350,6 +357,11 @@ fn durable_family_for_exact_trace_family(
     }
 }
 
+fn audit_path_for_output(path: &std::path::Path) -> String {
+    let display = path.display().to_string();
+    redact_sensitive_cli_evidence(&display).to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -360,8 +372,8 @@ mod tests {
     }
 
     #[test]
-    fn audit_query_defaults_to_contract_preview_without_journal() {
-        let options = parse_audit_query_options(&strings(&[
+    fn audit_inspect_defaults_to_contract_preview_without_journal() {
+        let options = parse_audit_inspection_options(&strings(&[
             "--trace-id",
             "42",
             "--principal",
@@ -370,7 +382,7 @@ mod tests {
             "10",
         ]))
         .unwrap();
-        let report = build_audit_query_report(&options).unwrap();
+        let report = build_audit_inspection_report(&options).unwrap();
 
         assert!(report.contract_preview);
         assert!(!report.durable_backend);
@@ -382,11 +394,11 @@ mod tests {
     }
 
     #[test]
-    fn audit_query_rejects_unbounded_limits() {
-        let zero = parse_audit_query_options(&strings(&["--limit", "0"]));
+    fn audit_inspect_rejects_unbounded_limits() {
+        let zero = parse_audit_inspection_options(&strings(&["--limit", "0"]));
         assert!(zero.is_err());
 
-        let too_large = parse_audit_query_options(&strings(&[
+        let too_large = parse_audit_inspection_options(&strings(&[
             "--limit",
             &(TRACE_QUERY_MAX_LIMIT + 1).to_string(),
         ]));
@@ -394,13 +406,13 @@ mod tests {
     }
 
     #[test]
-    fn audit_query_rejects_missing_journal_file() {
-        let options = parse_audit_query_options(&strings(&[
+    fn audit_inspect_rejects_missing_journal_file() {
+        let options = parse_audit_inspection_options(&strings(&[
             "--journal",
             "target/andromeda-cli/missing-audit-journal.log",
         ]))
         .unwrap();
-        let error = build_audit_query_report(&options).unwrap_err();
+        let error = build_audit_inspection_report(&options).unwrap_err();
         assert!(error.message().contains("does not exist or is not a file"));
     }
 

@@ -8,7 +8,7 @@ mod tests {
     use andromeda_core::TransactionId;
     use andromeda_tx::{
         ActiveSnapshotRegistry, GcSchedulerTask, MvccGarbageCollector, SnapshotHandle,
-        TransactionStatus, TransactionStatusTable,
+        TransactionStatusTable,
     };
     use std::sync::Arc;
     use std::time::Duration;
@@ -36,7 +36,11 @@ mod tests {
 
         // Mark tx1 as committed
         status_table
-            .record(tx1, TransactionStatus::Committed)
+            .record_committed_after_durable_wal(
+                tx1,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
             .expect("record tx1 commit");
 
         // Register snapshot at ts=200 (from tx2)
@@ -60,7 +64,11 @@ mod tests {
         let tx2 = TransactionId::new(2);
 
         status_table
-            .record(tx1, TransactionStatus::Committed)
+            .record_committed_after_durable_wal(
+                tx1,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
             .expect("record");
 
         // Register snapshot at ts=100
@@ -91,7 +99,11 @@ mod tests {
         let tx4 = TransactionId::new(4);
 
         status_table
-            .record(tx1, TransactionStatus::Committed)
+            .record_committed_after_durable_wal(
+                tx1,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
             .expect("record");
 
         // Register three snapshots at different timestamps
@@ -134,7 +146,11 @@ mod tests {
         let tx3 = TransactionId::new(3);
 
         status_table
-            .record(tx1, TransactionStatus::Committed)
+            .record_committed_after_durable_wal(
+                tx1,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
             .expect("record");
 
         let snap2 = SnapshotHandle::new(200, tx2).expect("snapshot");
@@ -175,7 +191,11 @@ mod tests {
         let tx2 = TransactionId::new(2);
 
         status_table
-            .record(tx1, TransactionStatus::Committed)
+            .record_committed_after_durable_wal(
+                tx1,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
             .expect("record");
 
         registry
@@ -217,7 +237,11 @@ mod tests {
 
         // Mark tx1 as rolled back
         status_table
-            .record(tx1, TransactionStatus::RolledBack)
+            .record_rolled_back_after_durable_wal(
+                tx1,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
             .expect("record rollback");
 
         // No snapshots registered (min_visible = u64::MAX)
@@ -250,7 +274,11 @@ mod tests {
         let tx1 = TransactionId::new(1);
 
         status_table
-            .record(tx1, TransactionStatus::Committed)
+            .record_committed_after_durable_wal(
+                tx1,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
             .expect("record");
 
         // With no snapshots, min_visible_ts = u64::MAX.
@@ -401,10 +429,18 @@ mod tests {
         let observer_tx = TransactionId::new(4);
 
         status_table
-            .record(tx_committed, TransactionStatus::Committed)
+            .record_committed_after_durable_wal(
+                tx_committed,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
             .expect("record committed");
         status_table
-            .record(tx_rolled_back, TransactionStatus::RolledBack)
+            .record_rolled_back_after_durable_wal(
+                tx_rolled_back,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
             .expect("record rollback");
         // tx_in_flight is not recorded
 

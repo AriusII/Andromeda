@@ -1,5 +1,9 @@
 use andromeda_core::{AndromedaErrorKind, AndromedaResult, TransactionId};
-use andromeda_exec::{CommitLogInvocationWal, map_exec_wal_evidence_to_tx_replay};
+use andromeda_exec::{
+    CommitLogInvocationWal, LocalDispatchPlan, LocalDispatcher, LocalRollbackPlan,
+    encode_exec_tx_commit_payload, encode_exec_tx_rollback_payload,
+    map_exec_wal_evidence_to_tx_replay,
+};
 use andromeda_storage::{FileWal, InMemoryWal, Lsn as StorageLsn, WalRecord, WalRecordKind};
 use andromeda_tx::{
     CommitLogManager, IsolationLevel, Lsn, TransactionStatus, TransactionStatusTable,
@@ -28,22 +32,11 @@ fn commit_payload(
     row_count_affected: u64,
     parameter_hash: u64,
 ) -> Vec<u8> {
-    let mut payload = Vec::with_capacity(25);
-    payload.push(match isolation_level {
-        IsolationLevel::Snapshot => 1,
-        IsolationLevel::Serializable => 2,
-    });
-    payload.extend_from_slice(&row_count_affected.to_le_bytes());
-    payload.extend_from_slice(&parameter_hash.to_le_bytes());
-    payload.extend_from_slice(&0_u64.to_le_bytes());
-    payload
+    encode_exec_tx_commit_payload(isolation_level, row_count_affected, parameter_hash)
 }
 
 fn rollback_payload(parameter_hash: u64) -> Vec<u8> {
-    let mut payload = Vec::with_capacity(16);
-    payload.extend_from_slice(&parameter_hash.to_le_bytes());
-    payload.extend_from_slice(&0_u64.to_le_bytes());
-    payload
+    encode_exec_tx_rollback_payload(parameter_hash)
 }
 
 fn record(
@@ -65,6 +58,47 @@ fn record(
 
 fn replay_wal() -> Arc<dyn andromeda_tx::commit_log::InvocationWal> {
     Arc::new(CommitLogInvocationWal::new(InMemoryWal::new()))
+}
+
+#[test]
+fn local_dispatch_terminal_payloads_replay_through_tx_commit_log() -> AndromedaResult<()> {
+    let committed = TransactionId::new(301);
+    let rolled_back = TransactionId::new(302);
+    let mut wal = InMemoryWal::new();
+
+    let commit_receipt = LocalDispatcher::new(&mut wal).dispatch_commit(LocalDispatchPlan {
+        transaction_id: committed,
+        mutation_payload: Vec::new(),
+        rows_affected: 0,
+    })?;
+    assert_eq!(commit_receipt.transaction_id, committed);
+
+    let rollback_receipt = LocalDispatcher::new(&mut wal).dispatch_rollback(LocalRollbackPlan {
+        transaction_id: rolled_back,
+        rollback_payload: b"business-validation-failed".to_vec(),
+    })?;
+    assert_eq!(rollback_receipt.transaction_id, rolled_back);
+
+    let bridged = map_exec_wal_evidence_to_tx_replay(wal.durable_records())?;
+    assert_eq!(bridged.evidence.commits, 1);
+    assert_eq!(bridged.evidence.rollbacks, 1);
+    assert_eq!(bridged.evidence.incomplete_transactions, 0);
+
+    let status_table = Arc::new(TransactionStatusTable::new());
+    let commit_log = CommitLogManager::new(replay_wal(), status_table.clone());
+    let summary = commit_log.reconstruct_from_tx_wal_replay(bridged.replay_records)?;
+
+    assert_eq!(summary.commits_restored, 1);
+    assert_eq!(summary.rollbacks_restored, 1);
+    assert_eq!(
+        status_table.status(committed),
+        Some(TransactionStatus::Committed)
+    );
+    assert_eq!(
+        status_table.status(rolled_back),
+        Some(TransactionStatus::RolledBack)
+    );
+    Ok(())
 }
 
 #[tokio::test]
@@ -155,26 +189,12 @@ fn exec_wal_bridge_preserves_duplicate_terminal_idempotency() -> AndromedaResult
         record(WalRecordKind::TxBegin, 1, None, Some(committed), []),
         record(
             WalRecordKind::TxCommit,
-            3,
-            Some(2),
-            Some(committed),
-            commit_payload(IsolationLevel::Serializable, 99, 0xBBBB),
-        ),
-        record(
-            WalRecordKind::TxCommit,
             2,
             Some(1),
             Some(committed),
             commit_payload(IsolationLevel::Snapshot, 3, 0xAAAA),
         ),
-        record(WalRecordKind::TxBegin, 4, Some(3), Some(rolled_back), []),
-        record(
-            WalRecordKind::TxRollback,
-            6,
-            Some(5),
-            Some(rolled_back),
-            rollback_payload(0xBEEF),
-        ),
+        record(WalRecordKind::TxBegin, 4, Some(2), Some(rolled_back), []),
         record(
             WalRecordKind::TxRollback,
             5,
@@ -184,8 +204,8 @@ fn exec_wal_bridge_preserves_duplicate_terminal_idempotency() -> AndromedaResult
         ),
     ])?;
 
-    assert_eq!(bridged.evidence.source_records, 6);
-    assert_eq!(bridged.evidence.adapter_records, 6);
+    assert_eq!(bridged.evidence.source_records, 4);
+    assert_eq!(bridged.evidence.adapter_records, 4);
     assert_eq!(bridged.evidence.commits, 1);
     assert_eq!(bridged.evidence.rollbacks, 1);
     assert_eq!(
@@ -311,6 +331,33 @@ fn exec_wal_bridge_fails_closed_on_conflicting_terminal_evidence() {
     .unwrap_err();
 
     assert_eq!(error.kind(), AndromedaErrorKind::Transaction);
+}
+
+#[test]
+fn exec_wal_bridge_fails_closed_on_same_kind_terminal_drift() {
+    let tx_id = TransactionId::new(207);
+
+    let error = map_exec_wal_evidence_to_tx_replay([
+        record(WalRecordKind::TxBegin, 60, None, Some(tx_id), []),
+        record(
+            WalRecordKind::TxCommit,
+            61,
+            Some(60),
+            Some(tx_id),
+            commit_payload(IsolationLevel::Snapshot, 1, 0x3333),
+        ),
+        record(
+            WalRecordKind::TxCommit,
+            62,
+            Some(61),
+            Some(tx_id),
+            commit_payload(IsolationLevel::Serializable, 2, 0x4444),
+        ),
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Transaction);
+    assert!(error.message().contains("conflicting terminal records"));
 }
 
 #[test]

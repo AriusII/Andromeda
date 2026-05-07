@@ -1,12 +1,12 @@
 //! Pure-Rust SHA-256 used as Andromeda's canonical digest backend.
 //!
 //! Andromeda needs a deterministic, collision-resistant fingerprint that can
-//! be computed without runtime serialization, ad-hoc multiplicative mixers, or
-//! external dependencies.  This module implements FIPS-180-4 SHA-256 in safe,
-//! `forbid(unsafe_code)`-compatible Rust and exposes a [`Sha256`] streaming
+//! be computed without runtime serialization, ad hoc multiplicative mixers, or
+//! external dependencies.  This module implements FIPS-180-4 SHA-256 in safe
+//! Rust and exposes a [`Sha256`] streaming
 //! hasher used by the catalog (`StableHashSink`, `ObjectShapeHashSink`,
 //! `PolicyVersion` digests) and by the protocol layer (StructuredObject
-//! descriptor hashes).  Centralising the digest backend guarantees that
+//! descriptor hashes).  Centralizing the digest backend guarantees that
 //! contract hashes, object-shape hashes, descriptor hashes, and policy
 //! versions all derive from the same proven one-way function.
 

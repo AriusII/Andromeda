@@ -18,6 +18,7 @@ pub fn run_vertical_demo() -> AndromedaResult<()> {
     let request = InvocationRequest {
         invocation_id: InvocationId::new(1),
         procedure: contract.as_ref(),
+        expected_binding: Some(contract.binding()),
         expected_contract_hash: contract.contract_hash,
         catalog_version: contract.object.catalog_version,
         structured_parameters: Vec::new(),
@@ -74,6 +75,7 @@ pub fn run_vertical_v0_demo(wal_path: PathBuf) -> AndromedaResult<()> {
     let request = InvocationRequest {
         invocation_id: InvocationId::new(2),
         procedure: contract.as_ref(),
+        expected_binding: Some(contract.binding()),
         expected_contract_hash: contract.contract_hash,
         catalog_version: contract.object.catalog_version,
         structured_parameters: Vec::new(),
@@ -171,9 +173,7 @@ pub fn print_help() {
     println!();
     println!("ADMIN COMMANDS:");
     println!("run `andromeda-cli hadr [status|promote|demote|quorum]` for HADR administration");
-    println!(
-        "run `andromeda-cli audit query [--journal <path>] [--json]` for durable audit trace queries"
-    );
+    println!("run `andromeda-cli audit --help` for durable audit trace inspection");
     println!(
         "run `andromeda-cli benchmark [workloads|contract|run]` for bounded diagnostic benchmark orchestration"
     );

@@ -2,14 +2,14 @@
 
 //! Property-based checks for generated `FrameEnvelope` decoding and validation.
 
-use andromeda_core::{CatalogVersion, ContractHash, RequestId, SessionId, TransactionId};
+use andromeda_core::ContractHash;
 use andromeda_proto::{
-    FrameEnvelope, PayloadKind, ProtocolVersion, decode_generated_message,
-    encode_generated_message,
+    PayloadKind, ProtocolVersion, decode_generated_message, encode_generated_message,
     generated::protocol::v1::{
         FrameEnvelope as ProtoFrameEnvelope, PayloadKind as ProtoPayloadKind,
         ProtocolVersion as ProtoProtocolVersion,
     },
+    project_generated_frame_envelope,
 };
 use proptest::prelude::*;
 use std::panic;
@@ -78,40 +78,8 @@ fn validate_envelope_safely(data: &[u8]) -> EnvelopeDecision {
 }
 
 fn validate_proto_envelope(proto: ProtoFrameEnvelope) -> EnvelopeDecision {
-    let Some(proto_version) = proto.protocol_version else {
-        return EnvelopeDecision::Reject("frame envelope requires protocol_version".to_string());
-    };
-
-    let payload_kind = match PayloadKind::try_from(proto.payload_kind as u32) {
-        Ok(payload_kind) => payload_kind,
-        Err(error) => return EnvelopeDecision::Reject(error.to_string()),
-    };
-
-    let contract_hash = if proto.contract_hash.is_empty() {
-        ContractHash::zero()
-    } else {
-        match ContractHash::from_slice(&proto.contract_hash) {
-            Ok(contract_hash) => contract_hash,
-            Err(error) => return EnvelopeDecision::Reject(error.to_string()),
-        }
-    };
-
-    let envelope = FrameEnvelope {
-        protocol_version: ProtocolVersion {
-            major: proto_version.major,
-            minor: proto_version.minor,
-        },
-        contract_hash,
-        catalog_version: CatalogVersion::new(proto.catalog_version),
-        request_id: RequestId::new(proto.request_id),
-        session_id: SessionId::new(proto.session_id),
-        tx_id: proto.tx_id.map(TransactionId::new),
-        payload_kind,
-        payload: proto.payload,
-    };
-
-    match envelope.validate() {
-        Ok(()) => EnvelopeDecision::Accept(EnvelopeFacts {
+    match project_generated_frame_envelope(&proto) {
+        Ok(envelope) => EnvelopeDecision::Accept(EnvelopeFacts {
             protocol_major: envelope.protocol_version.major,
             protocol_minor: envelope.protocol_version.minor,
             payload_kind: envelope.payload_kind,
@@ -259,6 +227,55 @@ fn prop_contract_bound_payloads_reject_invalid_hash_lengths() {
 fn contract_bound_payloads_reject_zero_hash() {
     let mut proto = valid_proto_envelope(ProtoPayloadKind::RpcCompletion, Vec::new());
     proto.contract_hash = vec![0; ContractHash::LEN];
+
+    let decision = validate_proto_envelope(proto);
+
+    assert!(matches!(decision, EnvelopeDecision::Reject(_)));
+    assert_decision_invariants(&decision);
+}
+
+#[test]
+fn contract_bound_payloads_reject_zero_runtime_binding_ids() {
+    let cases = [
+        (
+            "catalog_version",
+            ProtoFrameEnvelope {
+                catalog_version: 0,
+                ..valid_proto_envelope(ProtoPayloadKind::RpcCompletion, Vec::new())
+            },
+        ),
+        (
+            "request_id",
+            ProtoFrameEnvelope {
+                request_id: 0,
+                ..valid_proto_envelope(ProtoPayloadKind::RpcCompletion, Vec::new())
+            },
+        ),
+        (
+            "session_id",
+            ProtoFrameEnvelope {
+                session_id: 0,
+                ..valid_proto_envelope(ProtoPayloadKind::RpcCompletion, Vec::new())
+            },
+        ),
+    ];
+
+    for (field, proto) in cases {
+        let decision = validate_proto_envelope(proto);
+        assert!(
+            matches!(decision, EnvelopeDecision::Reject(_)),
+            "{field} should be rejected for contract-bound payloads"
+        );
+        assert_decision_invariants(&decision);
+    }
+}
+
+#[test]
+fn generated_frame_validator_rejects_missing_protocol_version() {
+    let proto = ProtoFrameEnvelope {
+        protocol_version: None,
+        ..valid_proto_envelope(ProtoPayloadKind::RpcCompletion, Vec::new())
+    };
 
     let decision = validate_proto_envelope(proto);
 

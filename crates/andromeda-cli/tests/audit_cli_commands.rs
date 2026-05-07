@@ -6,8 +6,8 @@ use andromeda_observe::{
     CertificateIdentity, DurableAuditPrincipalBinding, DurableAuditReplayBehavior,
     DurableAuditRetentionBoundary, DurableAuditSinkReport, DurableAuditWalSink, EventCorrelation,
     EventEnvelope, EventId, FileDurableAuditWalSink, PendingDurableAuditRecord, Permission,
-    SecurityAuditOutcome, SecurityAuditTrace, SurfaceScope, TraceEvent, TraceId, UserPrincipal,
-    UserPrincipalKind,
+    SecurityAuditOutcome, SecurityAuditTrace, SecurityPolicyVersionEvidence, SurfaceScope,
+    TraceEvent, TraceId, UserPrincipal, UserPrincipalKind,
 };
 use std::{
     fs,
@@ -17,10 +17,10 @@ use std::{
 };
 
 #[test]
-fn audit_query_accepts_bounded_filters() {
+fn audit_inspect_accepts_bounded_filters() {
     let args = vec![
         "audit".to_string(),
-        "query".to_string(),
+        "inspect".to_string(),
         "--trace-id".to_string(),
         "42".to_string(),
         "--principal".to_string(),
@@ -40,10 +40,10 @@ fn audit_query_accepts_bounded_filters() {
 }
 
 #[test]
-fn audit_query_rejects_zero_lsn_range() {
+fn audit_inspect_rejects_zero_lsn_range() {
     let args = vec![
         "audit".to_string(),
-        "query".to_string(),
+        "inspect".to_string(),
         "--lsn-range".to_string(),
         "0..0".to_string(),
     ];
@@ -53,10 +53,10 @@ fn audit_query_rejects_zero_lsn_range() {
 }
 
 #[test]
-fn audit_query_rejects_zero_limit() {
+fn audit_inspect_rejects_zero_limit() {
     let args = vec![
         "audit".to_string(),
-        "query".to_string(),
+        "inspect".to_string(),
         "--limit".to_string(),
         "0".to_string(),
     ];
@@ -69,7 +69,7 @@ fn audit_query_rejects_zero_limit() {
 fn audit_parser_errors_do_not_echo_values() {
     let args = vec![
         "audit".to_string(),
-        "query".to_string(),
+        "inspect".to_string(),
         "--token=super-secret".to_string(),
     ];
 
@@ -78,7 +78,7 @@ fn audit_parser_errors_do_not_echo_values() {
 
     let args = vec![
         "audit".to_string(),
-        "query".to_string(),
+        "inspect".to_string(),
         "--family".to_string(),
         "super-secret".to_string(),
     ];
@@ -88,10 +88,36 @@ fn audit_parser_errors_do_not_echo_values() {
 }
 
 #[test]
-fn audit_query_rejects_too_large_limit() {
+fn audit_principal_filter_rejects_secret_bearing_values() {
+    for principal in [
+        "token=super-secret",
+        "Bearer super-secret",
+        "credential=super-secret",
+        "x-api-key: super-secret",
+        "private_key=super-secret",
+    ] {
+        let output = run_cli_vec(vec![
+            "audit".to_string(),
+            "inspect".to_string(),
+            "--principal".to_string(),
+            principal.to_string(),
+            "--json".to_string(),
+        ]);
+
+        assert!(
+            !output.status.success(),
+            "secret-bearing principal filter must be rejected"
+        );
+        assert!(!stdout(&output).contains(principal));
+        assert!(!String::from_utf8_lossy(&output.stderr).contains(principal));
+    }
+}
+
+#[test]
+fn audit_inspect_rejects_too_large_limit() {
     let args = vec![
         "audit".to_string(),
-        "query".to_string(),
+        "inspect".to_string(),
         "--limit".to_string(),
         "1001".to_string(),
     ];
@@ -101,10 +127,26 @@ fn audit_query_rejects_too_large_limit() {
 }
 
 #[test]
-fn audit_query_json_exposes_admin_audit_gate() {
+fn audit_legacy_query_wording_is_not_a_positive_surface() {
+    let args = vec![
+        "audit".to_string(),
+        "query".to_string(),
+        "--limit".to_string(),
+        "5".to_string(),
+    ];
+
+    let err = dispatch_command(&args).unwrap_err();
+    assert_eq!(
+        err.message(),
+        "unsupported audit subcommand; use `andromeda-cli audit inspect` for durable journal inspection"
+    );
+}
+
+#[test]
+fn audit_inspect_json_exposes_admin_audit_gate() {
     let output = run_cli([
         "audit",
-        "query",
+        "inspect",
         "--trace-id",
         "42",
         "--principal",
@@ -120,7 +162,8 @@ fn audit_query_json_exposes_admin_audit_gate() {
     assert_contains_all(
         &json,
         &[
-            "\"schema\":\"andromeda.cli.audit.query.v1\"",
+            "\"schema\":\"andromeda.cli.audit.inspection.v1\"",
+            "\"diagnostic_only\":true",
             "\"contract_preview\":true",
             "\"durable_backend\":false",
             "\"requires_durable_audit_journal\":true",
@@ -133,14 +176,14 @@ fn audit_query_json_exposes_admin_audit_gate() {
             "\"audit_operation\":\"inspect-plans\"",
             "\"audit_required\":true",
             "\"result\":null",
-            "no journal was queried",
+            "no journal was inspected",
         ],
     );
 }
 
 #[test]
-fn audit_query_diagnostic_json_exposes_replay_evidence() {
-    let path = temp_journal_path("query-evidence");
+fn audit_inspect_diagnostic_json_exposes_replay_evidence() {
+    let path = temp_journal_path("inspection-evidence");
     let mut sink = FileDurableAuditWalSink::open(&path).expect("journal opens");
     append_security_record(
         &mut sink,
@@ -164,7 +207,7 @@ fn audit_query_diagnostic_json_exposes_replay_evidence() {
 
     let output = run_cli_vec(vec![
         "audit".to_string(),
-        "query".to_string(),
+        "inspect".to_string(),
         "--journal".to_string(),
         path.display().to_string(),
         "--principal".to_string(),
@@ -181,7 +224,7 @@ fn audit_query_diagnostic_json_exposes_replay_evidence() {
     assert_contains_all(
         &json,
         &[
-            "\"schema\":\"andromeda.cli.audit.query.v1\"",
+            "\"schema\":\"andromeda.cli.audit.inspection.v1\"",
             "\"diagnostic_only\":true",
             "\"durable_backend\":true",
             "\"diagnostic_evidence\":{\"records_scanned\":3,\"records_matched\":2,\"records_returned\":1,\"filter_applied\":true,\"limit\":1,\"offset\":0,\"truncated\":true}",
@@ -251,18 +294,18 @@ fn audit_compact_diagnostic_json_reports_retention_evidence() {
         ],
     );
 
-    let query_after_compaction = run_cli_vec(vec![
+    let inspection_after_compaction = run_cli_vec(vec![
         "audit".to_string(),
-        "query".to_string(),
+        "inspect".to_string(),
         "--journal".to_string(),
         path.display().to_string(),
         "--limit".to_string(),
         "10".to_string(),
         "--diagnostic-json".to_string(),
     ]);
-    assert_success(&query_after_compaction);
+    assert_success(&inspection_after_compaction);
     assert_contains_all(
-        &stdout(&query_after_compaction),
+        &stdout(&inspection_after_compaction),
         &[
             "\"diagnostic_evidence\":{\"records_scanned\":3,\"records_matched\":3,\"records_returned\":3,\"filter_applied\":false,\"limit\":10,\"offset\":0,\"truncated\":false}",
             "\"principal_id\":\"user:expired\"",
@@ -311,10 +354,10 @@ fn audit_verify_detects_checksum_corruption() {
 }
 
 #[test]
-fn audit_query_does_not_create_or_query_missing_journal() {
+fn audit_inspect_does_not_create_or_inspect_missing_journal() {
     let output = run_cli([
         "audit",
-        "query",
+        "inspect",
         "--journal",
         "target/andromeda-cli/missing-audit-cli-test.log",
         "--json",
@@ -329,6 +372,25 @@ fn audit_help_command_executes() {
     let args = vec!["audit".to_string(), "--help".to_string()];
     let result = dispatch_command(&args);
     assert!(result.is_ok());
+}
+
+#[test]
+fn audit_help_uses_inspection_wording() {
+    let output = run_cli(["audit", "--help"]);
+
+    assert_success(&output);
+    let help = stdout(&output);
+    assert_contains_all(
+        &help,
+        &[
+            "Inspect durable audit journal replay through the trace inspection contract",
+            "Filter by trace family",
+            "Emit replay evidence fields in diagnostic JSON",
+        ],
+    );
+    assert!(!help.contains("  query"));
+    assert!(!help.contains("Query a durable audit journal"));
+    assert!(!help.contains("Filter by query family"));
 }
 
 fn run_cli<const N: usize>(args: [&str; N]) -> Output {
@@ -407,6 +469,7 @@ fn principal_binding(event_id: u128, principal_id: &str) -> DurableAuditPrincipa
         certificate_fingerprint: Some(format!("sha256:cli-audit-{event_id}")),
         surface: Some(SurfaceScope::Administration),
         permission: Some(Permission::InspectPlans),
+        policy_version: Some(SecurityPolicyVersionEvidence::bootstrap_v0()),
         request_id: Some(RequestId::new(event_id as u64)),
         session_id: Some(SessionId::new(event_id as u64 + 100)),
     }

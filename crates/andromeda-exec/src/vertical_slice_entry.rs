@@ -13,19 +13,95 @@ use andromeda_quic::{
 use andromeda_srpl::{
     ExecutableProcedurePlan, bind_executable_procedure_plan, compile_narrow_procedure_signature,
 };
-use andromeda_storage::Lsn;
+use andromeda_storage::{Lsn, PageId, PageSize};
 
 use crate::{
-    CompletionStatus, InventoryReserveStockExecutor, InventoryStock, InvocationContext,
-    InvocationReject, InvocationRequest, InvocationWal, LocalVerticalRuntime, ReserveStockCommand,
-    ReserveStockEffect, VerticalInvocationOutcome,
+    CompletionStatus, InventoryProductStockCommitEvidence,
+    InventoryProductStockDurableRedoEvidence, InventoryProductStockStore, InventoryStock,
+    InvocationContext, InvocationReject, InvocationRequest, InvocationWal, LocalVerticalRuntime,
+    ReserveStockCommand, ReserveStockEffect, VerticalInvocationOutcome,
+    business::HeapInventoryProductStockStore,
 };
 
 const V0_RPC_EXECUTE_PAYLOAD_DOMAIN: &[u8] = b"andromeda.exec.v0.inventory-reserve-stock-rpc.v1";
 const V0_METADATA_PAYLOAD_DOMAIN: &[u8] = b"andromeda.exec.v0.result-metadata.v1";
 const V0_BATCH_PAYLOAD_DOMAIN: &[u8] = b"andromeda.exec.v0.inventory-reservation-batch.v1";
 const V0_COMPLETION_PAYLOAD_DOMAIN: &[u8] = b"andromeda.exec.v0.completion.v1";
+const V0_RPC_EXECUTE_PAYLOAD_LEN: usize = V0_RPC_EXECUTE_PAYLOAD_DOMAIN.len() + 1 + 16;
+const V0_RPC_EXECUTE_FRAME_LEN: usize = FrameCodec::HEADER_LEN + V0_RPC_EXECUTE_PAYLOAD_LEN;
 const V0_INVENTORY_RESERVE_STOCK_CONTRACT_KIND: u16 = 1;
+const V0_PRODUCT_STOCK_HEAP_PAGE_ID: PageId = PageId::new(42_000);
+const V0_PRODUCT_STOCK_HEAP_PAGE_SIZE: PageSize = PageSize::KiB16;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum V0InventoryProtocolViolation {
+    ExecuteFrameByteLength { expected: usize, actual: usize },
+    ExecuteFrameDecodeRejected { reason: String },
+    ExecuteFrameTransportRejected { reason: String },
+    ExecuteFrameType { actual: FrameType },
+    ExecuteFrameCarriesTransaction,
+    RpcPayloadByteLength { expected: usize, actual: usize },
+    RpcPayloadDomain,
+    RpcPayloadFieldTruncated { field: &'static str },
+    RpcPayloadFieldOffsetOverflow { field: &'static str },
+}
+
+impl V0InventoryProtocolViolation {
+    pub const fn code(&self) -> &'static str {
+        match self {
+            Self::ExecuteFrameByteLength { .. } => "AE-V0-RSVSTK-FRAME-LEN",
+            Self::ExecuteFrameDecodeRejected { .. } => "AE-V0-RSVSTK-FRAME-DECODE",
+            Self::ExecuteFrameTransportRejected { .. } => "AE-V0-RSVSTK-FRAME-STREAM",
+            Self::ExecuteFrameType { .. } => "AE-V0-RSVSTK-FRAME-TYPE",
+            Self::ExecuteFrameCarriesTransaction => "AE-V0-RSVSTK-FRAME-TXID",
+            Self::RpcPayloadByteLength { .. } => "AE-V0-RSVSTK-PAYLOAD-LEN",
+            Self::RpcPayloadDomain => "AE-V0-RSVSTK-PAYLOAD-DOMAIN",
+            Self::RpcPayloadFieldTruncated { .. } => "AE-V0-RSVSTK-PAYLOAD-FIELD",
+            Self::RpcPayloadFieldOffsetOverflow { .. } => "AE-V0-RSVSTK-PAYLOAD-OFFSET",
+        }
+    }
+
+    fn message(&self) -> String {
+        match self {
+            Self::ExecuteFrameByteLength { expected, actual } => format!(
+                "V0 Inventory.ReserveStock protocol rejection [{}]: execute frame byte length {actual} does not match fixed bounded length {expected}",
+                self.code()
+            ),
+            Self::ExecuteFrameDecodeRejected { reason } => format!(
+                "V0 Inventory.ReserveStock protocol rejection [{}]: execute frame decode rejected: {reason}",
+                self.code()
+            ),
+            Self::ExecuteFrameTransportRejected { reason } => format!(
+                "V0 Inventory.ReserveStock protocol rejection [{}]: execute frame stream policy rejected: {reason}",
+                self.code()
+            ),
+            Self::ExecuteFrameType { actual } => format!(
+                "V0 Inventory.ReserveStock protocol rejection [{}]: execute frame type must be RpcExecuteRequest, got {actual:?}",
+                self.code()
+            ),
+            Self::ExecuteFrameCarriesTransaction => format!(
+                "V0 Inventory.ReserveStock protocol rejection [{}]: execute frame must be pre-transaction and omit transaction evidence",
+                self.code()
+            ),
+            Self::RpcPayloadByteLength { expected, actual } => format!(
+                "V0 Inventory.ReserveStock protocol rejection [{}]: RPC payload byte length {actual} does not match fixed bounded length {expected}",
+                self.code()
+            ),
+            Self::RpcPayloadDomain => format!(
+                "V0 Inventory.ReserveStock protocol rejection [{}]: RPC payload domain tag mismatch",
+                self.code()
+            ),
+            Self::RpcPayloadFieldTruncated { field } => format!(
+                "V0 Inventory.ReserveStock protocol rejection [{}]: RPC payload field '{field}' is truncated",
+                self.code()
+            ),
+            Self::RpcPayloadFieldOffsetOverflow { field } => format!(
+                "V0 Inventory.ReserveStock protocol rejection [{}]: RPC payload field '{field}' offset overflow",
+                self.code()
+            ),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct V0InventoryReserveStockRpcPayload {
@@ -66,17 +142,20 @@ impl V0InventoryReserveStockRpcPayload {
     }
 
     pub fn decode(bytes: &[u8]) -> AndromedaResult<Self> {
-        let expected_len = V0_RPC_EXECUTE_PAYLOAD_DOMAIN.len() + 1 + 16;
+        let expected_len = V0_RPC_EXECUTE_PAYLOAD_LEN;
         if bytes.len() != expected_len {
             return Err(v0_protocol_error(
-                "V0 Inventory.ReserveStock RPC payload length mismatch",
+                V0InventoryProtocolViolation::RpcPayloadByteLength {
+                    expected: expected_len,
+                    actual: bytes.len(),
+                },
             ));
         }
         if !bytes.starts_with(V0_RPC_EXECUTE_PAYLOAD_DOMAIN)
             || bytes[V0_RPC_EXECUTE_PAYLOAD_DOMAIN.len()] != 0
         {
             return Err(v0_protocol_error(
-                "V0 Inventory.ReserveStock RPC payload domain mismatch",
+                V0InventoryProtocolViolation::RpcPayloadDomain,
             ));
         }
 
@@ -95,6 +174,8 @@ impl V0InventoryReserveStockRpcPayload {
 pub struct V0InventoryRecoverableOutcome {
     pub srpl_plan: ExecutableProcedurePlan,
     pub effect: ReserveStockEffect,
+    pub product_stock_commit: InventoryProductStockCommitEvidence,
+    pub product_stock_redo: Option<InventoryProductStockDurableRedoEvidence>,
     pub vertical: VerticalInvocationOutcome,
     pub command_frame: FrameBytes,
     pub result_frames: Vec<FrameBytes>,
@@ -153,6 +234,35 @@ where
         context: &InvocationContext,
         observed_stock: InventoryStock,
     ) -> AndromedaResult<V0InventoryRecoverableOutcome> {
+        let mut product_stock = v0_product_stock_store_from_cold_snapshot(observed_stock)?;
+        self.execute_encoded_inventory_reserve_stock_with_product_stock(
+            encoded_execute_frame,
+            srpl_source,
+            catalog,
+            contract,
+            request,
+            context,
+            &mut product_stock,
+        )
+    }
+
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "V0 vertical slice keeps each contractual input explicit at the RPC boundary."
+    )]
+    pub fn execute_encoded_inventory_reserve_stock_with_product_stock<P>(
+        &mut self,
+        encoded_execute_frame: &[u8],
+        srpl_source: &str,
+        catalog: &CatalogSnapshot,
+        contract: &ProcedureContract,
+        request: InvocationRequest,
+        context: &InvocationContext,
+        product_stock: &mut P,
+    ) -> AndromedaResult<V0InventoryRecoverableOutcome>
+    where
+        P: InventoryProductStockStore,
+    {
         let command_frame = decode_v0_execute_frame(encoded_execute_frame)?;
         let command =
             V0InventoryReserveStockRpcPayload::decode(&command_frame.payload)?.to_command();
@@ -174,11 +284,63 @@ where
             ));
         }
 
-        let effect = InventoryReserveStockExecutor::reserve(command, observed_stock)?;
-        let local_procedure = effect.to_local_procedure(contract)?;
-        let vertical = self
+        validate_v0_reserve_stock_before_product_stock_prepare(&request, context, contract)?;
+
+        let prepared = product_stock.prepare_reserve_stock(command)?;
+        let product_stock_redo_template =
+            product_stock.prepared_reserve_stock_redo_template(&prepared)?;
+        let effect = prepared.effect.clone();
+        let mut local_procedure = effect.to_local_procedure(contract)?;
+        if let Some(template) = &product_stock_redo_template {
+            local_procedure.mutation_payload = template.encode_template()?;
+        }
+        let vertical = match self
             .local
-            .execute_authorized(request, &local_procedure, context)?;
+            .execute_authorized(request, &local_procedure, context)
+        {
+            Ok(vertical) => vertical,
+            Err(error) => {
+                product_stock.abort_prepared_reserve_stock(&prepared, error.message())?;
+                return Err(error);
+            }
+        };
+        let durable_lsn = vertical.completion.durable_lsn.ok_or_else(|| {
+            AndromedaError::new(
+                AndromedaErrorKind::Transaction,
+                "V0 ProductStock publication requires durable commit LSN evidence",
+            )
+        })?;
+        let product_stock_commit =
+            InventoryProductStockCommitEvidence::new(vertical.transaction_id, durable_lsn)?;
+        let product_stock_redo = if let Some(template) = product_stock_redo_template {
+            let wal_evidence = vertical.wal_evidence.ok_or_else(|| {
+                AndromedaError::new(
+                    AndromedaErrorKind::Storage,
+                    "V0 ProductStock publication requires local WAL evidence for storage redo",
+                )
+            })?;
+            let redo_record_lsn = wal_evidence.mutation_lsn.ok_or_else(|| {
+                AndromedaError::new(
+                    AndromedaErrorKind::Storage,
+                    "V0 ProductStock publication requires a durable row redo WAL record LSN",
+                )
+            })?;
+            let redo_payload = template.materialize_heap_redo_payload(redo_record_lsn)?;
+            let redo = InventoryProductStockDurableRedoEvidence::new(
+                vertical.transaction_id,
+                durable_lsn,
+                redo_payload,
+            )?;
+            product_stock.publish_committed_reserve_stock_with_redo(
+                &prepared,
+                product_stock_commit,
+                redo.clone(),
+            )?;
+            Some(redo)
+        } else {
+            product_stock.publish_committed_reserve_stock(&prepared, product_stock_commit)?;
+            None
+        };
         let tx_id = vertical
             .completion
             .transaction_state
@@ -194,6 +356,8 @@ where
         Ok(V0InventoryRecoverableOutcome {
             srpl_plan,
             effect,
+            product_stock_commit,
+            product_stock_redo,
             vertical,
             command_frame,
             result_frames,
@@ -230,6 +394,37 @@ where
 
     #[allow(
         clippy::too_many_arguments,
+        reason = "Observed V0 path keeps transport, catalog, contract, request, stock adapter, and sink evidence separate."
+    )]
+    pub fn execute_encoded_inventory_reserve_stock_observed_with_product_stock<P>(
+        &mut self,
+        encoded_execute_frame: &[u8],
+        srpl_source: &str,
+        catalog: &CatalogSnapshot,
+        contract: &ProcedureContract,
+        request: InvocationRequest,
+        context: &InvocationContext,
+        product_stock: &mut P,
+        sink: &mut impl EventSink,
+    ) -> AndromedaResult<V0InventoryRecoverableOutcome>
+    where
+        P: InventoryProductStockStore,
+    {
+        let mut emitter = EventEmitter::new(sink);
+        self.execute_encoded_inventory_reserve_stock_observed_with_product_stock_and_emitter(
+            encoded_execute_frame,
+            srpl_source,
+            catalog,
+            contract,
+            request,
+            context,
+            product_stock,
+            &mut emitter,
+        )
+    }
+
+    #[allow(
+        clippy::too_many_arguments,
         reason = "Observed V0 path keeps transport, catalog, contract, request, and emitter evidence separate."
     )]
     pub fn execute_encoded_inventory_reserve_stock_observed_with_emitter<S: EventSink>(
@@ -243,16 +438,50 @@ where
         observed_stock: InventoryStock,
         emitter: &mut EventEmitter<S>,
     ) -> AndromedaResult<V0InventoryRecoverableOutcome> {
-        let rejection_request = request.clone();
-        let rejection_context = context.clone();
-        let outcome = match self.execute_encoded_inventory_reserve_stock(
+        let mut product_stock = v0_product_stock_store_from_cold_snapshot(observed_stock)?;
+        self.execute_encoded_inventory_reserve_stock_observed_with_product_stock_and_emitter(
             encoded_execute_frame,
             srpl_source,
             catalog,
             contract,
             request,
             context,
-            observed_stock,
+            &mut product_stock,
+            emitter,
+        )
+    }
+
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "Observed V0 path keeps transport, catalog, contract, request, stock adapter, and emitter evidence separate."
+    )]
+    pub fn execute_encoded_inventory_reserve_stock_observed_with_product_stock_and_emitter<
+        P,
+        S: EventSink,
+    >(
+        &mut self,
+        encoded_execute_frame: &[u8],
+        srpl_source: &str,
+        catalog: &CatalogSnapshot,
+        contract: &ProcedureContract,
+        request: InvocationRequest,
+        context: &InvocationContext,
+        product_stock: &mut P,
+        emitter: &mut EventEmitter<S>,
+    ) -> AndromedaResult<V0InventoryRecoverableOutcome>
+    where
+        P: InventoryProductStockStore,
+    {
+        let rejection_request = request.clone();
+        let rejection_context = context.clone();
+        let outcome = match self.execute_encoded_inventory_reserve_stock_with_product_stock(
+            encoded_execute_frame,
+            srpl_source,
+            catalog,
+            contract,
+            request,
+            context,
+            product_stock,
         ) {
             Ok(outcome) => outcome,
             Err(error) => {
@@ -275,6 +504,16 @@ where
         emit_v0_outcome_events(&outcome, emitter)?;
         Ok(outcome)
     }
+}
+
+fn v0_product_stock_store_from_cold_snapshot(
+    observed_stock: InventoryStock,
+) -> AndromedaResult<HeapInventoryProductStockStore> {
+    HeapInventoryProductStockStore::from_cold_snapshot(
+        V0_PRODUCT_STOCK_HEAP_PAGE_ID,
+        V0_PRODUCT_STOCK_HEAP_PAGE_SIZE,
+        observed_stock,
+    )
 }
 
 pub fn inventory_reserve_stock_v0_pdf_srpl_source() -> &'static str {
@@ -302,16 +541,39 @@ pub fn encode_inventory_reserve_stock_v0_execute_frame(
 }
 
 pub fn decode_v0_execute_frame(encoded_execute_frame: &[u8]) -> AndromedaResult<FrameBytes> {
-    let frame = FrameCodec::decode(encoded_execute_frame)?;
-    frame.validate(StreamRole::CommandBidirectional)?;
+    if encoded_execute_frame.len() != V0_RPC_EXECUTE_FRAME_LEN {
+        return Err(v0_protocol_error(
+            V0InventoryProtocolViolation::ExecuteFrameByteLength {
+                expected: V0_RPC_EXECUTE_FRAME_LEN,
+                actual: encoded_execute_frame.len(),
+            },
+        ));
+    }
+
+    let frame = FrameCodec::decode(encoded_execute_frame).map_err(|error| {
+        v0_protocol_error(V0InventoryProtocolViolation::ExecuteFrameDecodeRejected {
+            reason: error.message().to_string(),
+        })
+    })?;
+    frame
+        .validate(StreamRole::CommandBidirectional)
+        .map_err(|error| {
+            v0_protocol_error(
+                V0InventoryProtocolViolation::ExecuteFrameTransportRejected {
+                    reason: error.message().to_string(),
+                },
+            )
+        })?;
     if frame.header.frame_type != FrameType::RpcExecuteRequest {
         return Err(v0_protocol_error(
-            "V0 Inventory.ReserveStock requires an RPC execute request frame",
+            V0InventoryProtocolViolation::ExecuteFrameType {
+                actual: frame.header.frame_type,
+            },
         ));
     }
     if frame.header.tx_id.is_some() {
         return Err(v0_protocol_error(
-            "V0 RPC execute request must be pre-transaction and omit transaction evidence",
+            V0InventoryProtocolViolation::ExecuteFrameCarriesTransaction,
         ));
     }
     Ok(frame)
@@ -564,6 +826,29 @@ fn v0_pre_transaction_reject_from_error(error: &AndromedaError) -> Option<Invoca
     })
 }
 
+fn validate_v0_reserve_stock_before_product_stock_prepare(
+    request: &InvocationRequest,
+    context: &InvocationContext,
+    contract: &ProcedureContract,
+) -> AndromedaResult<()> {
+    request
+        .validate_admission(context.trace_id)
+        .map_err(|reject| AndromedaError::new(AndromedaErrorKind::Contract, reject.reason))?;
+    request
+        .validate_before_transaction(contract.binding(), context.trace_id)
+        .map_err(|reject| AndromedaError::new(AndromedaErrorKind::Contract, reject.reason))?;
+    context
+        .authorize(&contract.required_permissions)
+        .map_err(|reject| AndromedaError::new(AndromedaErrorKind::Security, reject.reason))?;
+    if !request.structured_parameters.is_empty() {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Contract,
+            "V0 Inventory.ReserveStock fixed RPC payload path rejects separate StructuredObject parameters before ProductStock preparation",
+        ));
+    }
+    Ok(())
+}
+
 fn v0_execute_request_protocol() -> ProtocolCorrelation {
     ProtocolCorrelation {
         protocol_version: Some(1),
@@ -588,17 +873,31 @@ fn denied_permission_for_context(
 }
 
 fn decode_v0_i64_field(data: &[u8], offset: usize, field: &str) -> AndromedaResult<i64> {
-    let end = offset
-        .checked_add(8)
-        .ok_or_else(|| v0_protocol_error(format!("V0 payload {field} offset overflow")))?;
-    let bytes = data
-        .get(offset..end)
-        .ok_or_else(|| v0_protocol_error(format!("V0 payload {field} is truncated")))?;
+    let end = offset.checked_add(8).ok_or_else(|| {
+        v0_protocol_error(
+            V0InventoryProtocolViolation::RpcPayloadFieldOffsetOverflow {
+                field: stable_v0_payload_field(field),
+            },
+        )
+    })?;
+    let bytes = data.get(offset..end).ok_or_else(|| {
+        v0_protocol_error(V0InventoryProtocolViolation::RpcPayloadFieldTruncated {
+            field: stable_v0_payload_field(field),
+        })
+    })?;
     let mut value = [0_u8; 8];
     value.copy_from_slice(bytes);
     Ok(i64::from_le_bytes(value))
 }
 
-fn v0_protocol_error(message: impl Into<String>) -> AndromedaError {
-    AndromedaError::new(AndromedaErrorKind::Protocol, message)
+fn stable_v0_payload_field(field: &str) -> &'static str {
+    match field {
+        "product id" => "product_id",
+        "quantity" => "quantity",
+        _ => "unknown",
+    }
+}
+
+fn v0_protocol_error(violation: V0InventoryProtocolViolation) -> AndromedaError {
+    AndromedaError::new(AndromedaErrorKind::Protocol, violation.message())
 }

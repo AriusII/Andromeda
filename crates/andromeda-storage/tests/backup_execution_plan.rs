@@ -20,6 +20,18 @@ use andromeda_storage::{
     FileBackedBackupArtifactStore, Lsn, ObjectId, PageId, PageSize, SegmentId, StorageTier,
     WalArchiveRange, WalSegmentCopyTask, WalSegmentDescriptor,
 };
+use sha2::{Digest, Sha256};
+
+const ARTIFACT_MANIFEST_MAGIC: &[u8] = b"ANDROMEDA-BACKUP-ARTIFACT-V1\n";
+const ARTIFACT_MANIFEST_HEADER_LEN: usize = ARTIFACT_MANIFEST_MAGIC.len() + 2 + 8 + 32;
+const CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION: u16 = 3;
+const LEGACY_V2_ARTIFACT_MANIFEST_FORMAT_VERSION: u16 = 2;
+const LEGACY_V1_ARTIFACT_MANIFEST_FORMAT_VERSION: u16 = 1;
+const WAL_ARCHIVE_DIGEST_PAYLOAD_OFFSET: usize = 140;
+const COLD_SNAPSHOT_MANIFEST_VERSION_PAYLOAD_OFFSET: usize = 180;
+const COLD_SNAPSHOT_MANIFEST_CRC_PAYLOAD_OFFSET: usize = 228;
+const WAL_SEGMENT_COUNT_PAYLOAD_OFFSET: usize = 280;
+const COMPATIBILITY_EVIDENCE_PAYLOAD_LEN: usize = 8;
 
 /// Helper: Create a sample extent descriptor for testing.
 fn test_extent(
@@ -84,6 +96,114 @@ fn test_resource_limits() -> BackupResourceLimits {
         max_parallel_extent_tasks: 16,
         max_wal_segment_count: 1000,
     }
+}
+
+fn rewrite_manifest_payload(
+    path: &std::path::Path,
+    mutate_payload: impl FnOnce(&mut Vec<u8>),
+    format_version: u16,
+) {
+    let mut bytes = std::fs::read(path).unwrap();
+    assert_eq!(
+        &bytes[..ARTIFACT_MANIFEST_MAGIC.len()],
+        ARTIFACT_MANIFEST_MAGIC
+    );
+    let mut payload = bytes[ARTIFACT_MANIFEST_HEADER_LEN..].to_vec();
+    mutate_payload(&mut payload);
+
+    bytes.truncate(ARTIFACT_MANIFEST_HEADER_LEN);
+    let version_offset = ARTIFACT_MANIFEST_MAGIC.len();
+    bytes[version_offset..version_offset + 2].copy_from_slice(&format_version.to_le_bytes());
+    let payload_len_offset = version_offset + 2;
+    bytes[payload_len_offset..payload_len_offset + 8]
+        .copy_from_slice(&(payload.len() as u64).to_le_bytes());
+    let checksum_offset = payload_len_offset + 8;
+    let checksum: [u8; 32] = Sha256::digest(&payload).into();
+    bytes[checksum_offset..checksum_offset + 32].copy_from_slice(&checksum);
+    bytes.extend_from_slice(&payload);
+    std::fs::write(path, bytes).unwrap();
+}
+
+fn rewrite_manifest_to_v1_without_archive_digest(path: &std::path::Path) {
+    rewrite_manifest_payload(
+        path,
+        |payload| {
+            payload
+                .drain(WAL_ARCHIVE_DIGEST_PAYLOAD_OFFSET..WAL_ARCHIVE_DIGEST_PAYLOAD_OFFSET + 32);
+            let legacy_len = payload.len() - COMPATIBILITY_EVIDENCE_PAYLOAD_LEN;
+            payload.truncate(legacy_len);
+        },
+        LEGACY_V1_ARTIFACT_MANIFEST_FORMAT_VERSION,
+    );
+}
+
+fn rewrite_manifest_to_v2_without_compatibility_evidence(path: &std::path::Path) {
+    rewrite_manifest_payload(
+        path,
+        |payload| {
+            let legacy_len = payload.len() - COMPATIBILITY_EVIDENCE_PAYLOAD_LEN;
+            payload.truncate(legacy_len);
+        },
+        LEGACY_V2_ARTIFACT_MANIFEST_FORMAT_VERSION,
+    );
+}
+
+fn zero_manifest_archive_digest(path: &std::path::Path) {
+    rewrite_manifest_payload(
+        path,
+        |payload| {
+            payload[WAL_ARCHIVE_DIGEST_PAYLOAD_OFFSET..WAL_ARCHIVE_DIGEST_PAYLOAD_OFFSET + 32]
+                .fill(0);
+        },
+        CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION,
+    );
+}
+
+fn rewrite_cold_snapshot_manifest_crc(path: &std::path::Path, manifest_crc: u32) {
+    rewrite_manifest_payload(
+        path,
+        |payload| {
+            payload[COLD_SNAPSHOT_MANIFEST_CRC_PAYLOAD_OFFSET
+                ..COLD_SNAPSHOT_MANIFEST_CRC_PAYLOAD_OFFSET + 4]
+                .copy_from_slice(&manifest_crc.to_le_bytes());
+        },
+        CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION,
+    );
+}
+
+fn rewrite_cold_snapshot_manifest_version(path: &std::path::Path, manifest_version: u64) {
+    rewrite_manifest_payload(
+        path,
+        |payload| {
+            payload[COLD_SNAPSHOT_MANIFEST_VERSION_PAYLOAD_OFFSET
+                ..COLD_SNAPSHOT_MANIFEST_VERSION_PAYLOAD_OFFSET + 8]
+                .copy_from_slice(&manifest_version.to_le_bytes());
+        },
+        CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION,
+    );
+}
+
+fn rewrite_manifest_wal_segment_count(path: &std::path::Path, segment_count: u64) {
+    rewrite_manifest_payload(
+        path,
+        |payload| {
+            payload[WAL_SEGMENT_COUNT_PAYLOAD_OFFSET..WAL_SEGMENT_COUNT_PAYLOAD_OFFSET + 8]
+                .copy_from_slice(&segment_count.to_le_bytes());
+        },
+        CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION,
+    );
+}
+
+fn rewrite_compatibility_wal_format(path: &std::path::Path, wal_format_version: u16) {
+    rewrite_manifest_payload(
+        path,
+        |payload| {
+            let wal_format_offset = payload.len() - 2;
+            payload[wal_format_offset..wal_format_offset + 2]
+                .copy_from_slice(&wal_format_version.to_le_bytes());
+        },
+        CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION,
+    );
 }
 
 #[test]
@@ -623,6 +743,21 @@ fn file_backed_artifact_store_writes_manifest_snapshot_and_wal() {
         report.wal_archive_evidence.total_bytes,
         (wal1_bytes.len() + wal2_bytes.len()) as u64
     );
+    assert_ne!(
+        report.wal_archive_evidence.archive_digest_sha256, [0; 32],
+        "WAL archive evidence must carry an aggregate durable digest"
+    );
+    assert_eq!(
+        report.compatibility_evidence.manifest_format_version,
+        CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION
+    );
+    assert_eq!(report.compatibility_evidence.physical_plan_version, 1);
+    assert_eq!(report.compatibility_evidence.storage_format_version, 1);
+    assert_eq!(report.compatibility_evidence.wal_format_version, 1);
+    assert!(
+        report.compatibility_evidence.recorded_in_manifest,
+        "current backup manifests must persist compatibility evidence"
+    );
 
     let reopened = FileBackedBackupArtifactStore::open_existing(temp.path()).unwrap();
     let record = reopened
@@ -630,10 +765,363 @@ fn file_backed_artifact_store_writes_manifest_snapshot_and_wal() {
         .unwrap();
     assert_eq!(record.manifest, manifest);
     assert_eq!(
+        record.manifest_format_version,
+        CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION
+    );
+    assert_eq!(record.compatibility_evidence, report.compatibility_evidence);
+    assert_eq!(
         record.artifact_set.cold_snapshot.artifact.byte_len,
         snapshot_bytes.len() as u64
     );
     assert_eq!(record.artifact_set.wal_segments.len(), 2);
+    assert_eq!(
+        record.wal_archive_evidence.archive_digest_sha256,
+        report.wal_archive_evidence.archive_digest_sha256
+    );
+}
+
+#[test]
+fn file_backed_artifact_store_rejects_incompatible_v3_wal_format_evidence() {
+    let temp = tempfile::TempDir::new().unwrap();
+    let store = FileBackedBackupArtifactStore::open(temp.path()).unwrap();
+
+    let snapshot_bytes = b"snapshot bytes with compatibility corruption";
+    let wal_bytes = b"durable wal segment";
+    let manifest = test_manifest(61, 101, 200);
+    let extent = test_extent(1, 1000, 1, ExtentState::PublishedCold);
+    let wal_seg = test_wal_segment(10, 101, 200, None);
+
+    let plan = BackupExecutionPlan {
+        manifest,
+        extent_copy_plan: vec![ExtentCopyTask {
+            extent_descriptor: extent,
+            source_tier: StorageTier::ColdStore,
+            byte_count: snapshot_bytes.len() as u64,
+        }],
+        wal_segment_copy_plan: vec![WalSegmentCopyTask {
+            segment_descriptor: wal_seg,
+            byte_count: wal_bytes.len() as u64,
+            sequence_index: 0,
+        }],
+        validate_checksum_on_copy: true,
+        resource_limits: test_resource_limits(),
+        total_extent_bytes: snapshot_bytes.len() as u64,
+        total_wal_bytes: wal_bytes.len() as u64,
+    };
+
+    let report = store
+        .write_execution_plan_artifact(&plan, snapshot_bytes, &[wal_bytes.as_slice()])
+        .unwrap();
+    rewrite_compatibility_wal_format(&report.manifest_path, 999);
+
+    let err = store
+        .validate_artifact_directory(BackupId::new(61))
+        .unwrap_err();
+    assert!(
+        err.message().contains("WAL format"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn file_backed_artifact_store_rejects_manifest_wal_segment_count_above_bound() {
+    let temp = tempfile::TempDir::new().unwrap();
+    let store = FileBackedBackupArtifactStore::open(temp.path()).unwrap();
+
+    let snapshot_bytes = b"snapshot bytes with oversized manifest count";
+    let wal_bytes = b"durable wal segment";
+    let manifest = test_manifest(62, 101, 200);
+    let extent = test_extent(1, 1000, 1, ExtentState::PublishedCold);
+    let wal_seg = test_wal_segment(10, 101, 200, None);
+
+    let plan = BackupExecutionPlan {
+        manifest,
+        extent_copy_plan: vec![ExtentCopyTask {
+            extent_descriptor: extent,
+            source_tier: StorageTier::ColdStore,
+            byte_count: snapshot_bytes.len() as u64,
+        }],
+        wal_segment_copy_plan: vec![WalSegmentCopyTask {
+            segment_descriptor: wal_seg,
+            byte_count: wal_bytes.len() as u64,
+            sequence_index: 0,
+        }],
+        validate_checksum_on_copy: true,
+        resource_limits: test_resource_limits(),
+        total_extent_bytes: snapshot_bytes.len() as u64,
+        total_wal_bytes: wal_bytes.len() as u64,
+    };
+
+    let report = store
+        .write_execution_plan_artifact(&plan, snapshot_bytes, &[wal_bytes.as_slice()])
+        .unwrap();
+    rewrite_manifest_wal_segment_count(&report.manifest_path, 16_385);
+
+    let err = store
+        .validate_artifact_directory(BackupId::new(62))
+        .unwrap_err();
+    assert!(
+        err.message().contains("bounded manifest segment limit"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn file_backed_artifact_store_rejects_cold_snapshot_manifest_version_mismatch() {
+    let temp = tempfile::TempDir::new().unwrap();
+    let store = FileBackedBackupArtifactStore::open(temp.path()).unwrap();
+
+    let snapshot_bytes = b"snapshot bytes with manifest version mismatch";
+    let wal_bytes = b"durable wal segment";
+    let manifest = test_manifest(63, 101, 200);
+    let extent = test_extent(1, 1000, 1, ExtentState::PublishedCold);
+    let wal_seg = test_wal_segment(10, 101, 200, None);
+
+    let plan = BackupExecutionPlan {
+        manifest,
+        extent_copy_plan: vec![ExtentCopyTask {
+            extent_descriptor: extent,
+            source_tier: StorageTier::ColdStore,
+            byte_count: snapshot_bytes.len() as u64,
+        }],
+        wal_segment_copy_plan: vec![WalSegmentCopyTask {
+            segment_descriptor: wal_seg,
+            byte_count: wal_bytes.len() as u64,
+            sequence_index: 0,
+        }],
+        validate_checksum_on_copy: true,
+        resource_limits: test_resource_limits(),
+        total_extent_bytes: snapshot_bytes.len() as u64,
+        total_wal_bytes: wal_bytes.len() as u64,
+    };
+
+    let report = store
+        .write_execution_plan_artifact(&plan, snapshot_bytes, &[wal_bytes.as_slice()])
+        .unwrap();
+    rewrite_cold_snapshot_manifest_version(&report.manifest_path, manifest.created_epoch + 1);
+
+    let err = store
+        .validate_artifact_directory(BackupId::new(63))
+        .unwrap_err();
+    assert!(
+        err.message().contains("manifest version"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn file_backed_artifact_store_reads_legacy_v2_manifest_without_compatibility_evidence() {
+    let temp = tempfile::TempDir::new().unwrap();
+    let store = FileBackedBackupArtifactStore::open(temp.path()).unwrap();
+
+    let snapshot_bytes = b"legacy v2 snapshot bytes for backup artifact";
+    let wal1_bytes = b"legacy v2 wal segment one";
+    let wal2_bytes = b"legacy v2 wal segment two";
+    let manifest = test_manifest(60, 101, 300);
+    let extent = test_extent(1, 1000, 1, ExtentState::PublishedCold);
+    let wal_seg1 = test_wal_segment(10, 101, 200, None);
+    let wal_seg2 = test_wal_segment(11, 201, 300, Some(200));
+
+    let plan = BackupExecutionPlan {
+        manifest,
+        extent_copy_plan: vec![ExtentCopyTask {
+            extent_descriptor: extent,
+            source_tier: StorageTier::ColdStore,
+            byte_count: snapshot_bytes.len() as u64,
+        }],
+        wal_segment_copy_plan: vec![
+            WalSegmentCopyTask {
+                segment_descriptor: wal_seg1,
+                byte_count: wal1_bytes.len() as u64,
+                sequence_index: 0,
+            },
+            WalSegmentCopyTask {
+                segment_descriptor: wal_seg2,
+                byte_count: wal2_bytes.len() as u64,
+                sequence_index: 1,
+            },
+        ],
+        validate_checksum_on_copy: true,
+        resource_limits: test_resource_limits(),
+        total_extent_bytes: snapshot_bytes.len() as u64,
+        total_wal_bytes: (wal1_bytes.len() + wal2_bytes.len()) as u64,
+    };
+
+    let report = store
+        .write_execution_plan_artifact(
+            &plan,
+            snapshot_bytes,
+            &[wal1_bytes.as_slice(), wal2_bytes.as_slice()],
+        )
+        .unwrap();
+    rewrite_manifest_to_v2_without_compatibility_evidence(&report.manifest_path);
+
+    let record = store
+        .validate_artifact_directory(BackupId::new(60))
+        .unwrap();
+    assert_eq!(
+        record.manifest_format_version,
+        LEGACY_V2_ARTIFACT_MANIFEST_FORMAT_VERSION
+    );
+    assert!(!record.compatibility_evidence.recorded_in_manifest);
+    assert_eq!(
+        record.compatibility_evidence.manifest_format_version,
+        LEGACY_V2_ARTIFACT_MANIFEST_FORMAT_VERSION
+    );
+    assert_eq!(record.compatibility_evidence.storage_format_version, 1);
+    assert_eq!(record.compatibility_evidence.wal_format_version, 1);
+    assert_eq!(
+        record.wal_archive_evidence.archive_digest_sha256,
+        report.wal_archive_evidence.archive_digest_sha256
+    );
+}
+
+#[test]
+fn file_backed_artifact_store_reads_legacy_v1_manifest_with_reconstructed_wal_digest() {
+    let temp = tempfile::TempDir::new().unwrap();
+    let store = FileBackedBackupArtifactStore::open(temp.path()).unwrap();
+
+    let snapshot_bytes = b"legacy snapshot bytes for backup artifact";
+    let wal1_bytes = b"legacy wal segment one";
+    let wal2_bytes = b"legacy wal segment two";
+    let manifest = test_manifest(57, 101, 300);
+    let extent = test_extent(1, 1000, 1, ExtentState::PublishedCold);
+    let wal_seg1 = test_wal_segment(10, 101, 200, None);
+    let wal_seg2 = test_wal_segment(11, 201, 300, Some(200));
+
+    let plan = BackupExecutionPlan {
+        manifest,
+        extent_copy_plan: vec![ExtentCopyTask {
+            extent_descriptor: extent,
+            source_tier: StorageTier::ColdStore,
+            byte_count: snapshot_bytes.len() as u64,
+        }],
+        wal_segment_copy_plan: vec![
+            WalSegmentCopyTask {
+                segment_descriptor: wal_seg1,
+                byte_count: wal1_bytes.len() as u64,
+                sequence_index: 0,
+            },
+            WalSegmentCopyTask {
+                segment_descriptor: wal_seg2,
+                byte_count: wal2_bytes.len() as u64,
+                sequence_index: 1,
+            },
+        ],
+        validate_checksum_on_copy: true,
+        resource_limits: test_resource_limits(),
+        total_extent_bytes: snapshot_bytes.len() as u64,
+        total_wal_bytes: (wal1_bytes.len() + wal2_bytes.len()) as u64,
+    };
+
+    let report = store
+        .write_execution_plan_artifact(
+            &plan,
+            snapshot_bytes,
+            &[wal1_bytes.as_slice(), wal2_bytes.as_slice()],
+        )
+        .unwrap();
+    rewrite_manifest_to_v1_without_archive_digest(&report.manifest_path);
+
+    let record = store
+        .validate_artifact_directory(BackupId::new(57))
+        .unwrap();
+    assert_eq!(record.manifest_format_version, 1);
+    assert!(!record.compatibility_evidence.recorded_in_manifest);
+    assert_eq!(
+        record.compatibility_evidence.manifest_format_version,
+        LEGACY_V1_ARTIFACT_MANIFEST_FORMAT_VERSION
+    );
+    assert_eq!(
+        record.wal_archive_evidence.archive_digest_sha256,
+        report.wal_archive_evidence.archive_digest_sha256
+    );
+}
+
+#[test]
+fn file_backed_artifact_store_rejects_zero_wal_archive_evidence_digest() {
+    let temp = tempfile::TempDir::new().unwrap();
+    let store = FileBackedBackupArtifactStore::open(temp.path()).unwrap();
+
+    let snapshot_bytes = b"snapshot bytes with evidence digest corruption";
+    let wal_bytes = b"durable wal segment";
+    let manifest = test_manifest(58, 101, 200);
+    let extent = test_extent(1, 1000, 1, ExtentState::PublishedCold);
+    let wal_seg = test_wal_segment(10, 101, 200, None);
+
+    let plan = BackupExecutionPlan {
+        manifest,
+        extent_copy_plan: vec![ExtentCopyTask {
+            extent_descriptor: extent,
+            source_tier: StorageTier::ColdStore,
+            byte_count: snapshot_bytes.len() as u64,
+        }],
+        wal_segment_copy_plan: vec![WalSegmentCopyTask {
+            segment_descriptor: wal_seg,
+            byte_count: wal_bytes.len() as u64,
+            sequence_index: 0,
+        }],
+        validate_checksum_on_copy: true,
+        resource_limits: test_resource_limits(),
+        total_extent_bytes: snapshot_bytes.len() as u64,
+        total_wal_bytes: wal_bytes.len() as u64,
+    };
+
+    let report = store
+        .write_execution_plan_artifact(&plan, snapshot_bytes, &[wal_bytes.as_slice()])
+        .unwrap();
+    zero_manifest_archive_digest(&report.manifest_path);
+
+    let err = store
+        .validate_artifact_directory(BackupId::new(58))
+        .unwrap_err();
+    assert!(
+        err.message().contains("evidence digest"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn file_backed_artifact_store_rejects_cold_snapshot_crc_mismatch() {
+    let temp = tempfile::TempDir::new().unwrap();
+    let store = FileBackedBackupArtifactStore::open(temp.path()).unwrap();
+
+    let snapshot_bytes = b"snapshot bytes with cold snapshot crc mismatch";
+    let wal_bytes = b"durable wal segment";
+    let manifest = test_manifest(59, 101, 200);
+    let extent = test_extent(1, 1000, 1, ExtentState::PublishedCold);
+    let wal_seg = test_wal_segment(10, 101, 200, None);
+
+    let plan = BackupExecutionPlan {
+        manifest,
+        extent_copy_plan: vec![ExtentCopyTask {
+            extent_descriptor: extent,
+            source_tier: StorageTier::ColdStore,
+            byte_count: snapshot_bytes.len() as u64,
+        }],
+        wal_segment_copy_plan: vec![WalSegmentCopyTask {
+            segment_descriptor: wal_seg,
+            byte_count: wal_bytes.len() as u64,
+            sequence_index: 0,
+        }],
+        validate_checksum_on_copy: true,
+        resource_limits: test_resource_limits(),
+        total_extent_bytes: snapshot_bytes.len() as u64,
+        total_wal_bytes: wal_bytes.len() as u64,
+    };
+
+    let report = store
+        .write_execution_plan_artifact(&plan, snapshot_bytes, &[wal_bytes.as_slice()])
+        .unwrap();
+    rewrite_cold_snapshot_manifest_crc(&report.manifest_path, manifest.manifest_crc + 1);
+
+    let err = store
+        .validate_artifact_directory(BackupId::new(59))
+        .unwrap_err();
+    assert!(
+        err.message().contains("manifest CRC"),
+        "unexpected error: {err}"
+    );
 }
 
 #[test]
@@ -668,7 +1156,9 @@ fn file_backed_artifact_store_rejects_corrupted_snapshot() {
     let report = store
         .write_execution_plan_artifact(&plan, snapshot_bytes, &[wal_bytes.as_slice()])
         .unwrap();
-    std::fs::write(&report.snapshot_path, b"corrupted snapshot bytes").unwrap();
+    let mut corrupted_snapshot = snapshot_bytes.to_vec();
+    corrupted_snapshot[0] ^= 0xFF;
+    std::fs::write(&report.snapshot_path, corrupted_snapshot).unwrap();
 
     let err = store
         .validate_artifact_directory(BackupId::new(56))

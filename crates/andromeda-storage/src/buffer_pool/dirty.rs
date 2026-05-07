@@ -9,8 +9,9 @@ use super::BufferPoolError;
 /// Deterministic dirty-page tracker for transient buffer-pool metadata.
 ///
 /// The tracker indexes dirty residency state by durable [`PageId`] but does not
-/// own page images, page layout, WAL contents, or flush IO. It records only the
-/// first dirty LSN needed by future buffer-pool flush scheduling.
+/// own page images, page layout, WAL contents, or flush IO. It records the first
+/// dirty LSN for deterministic scheduling and the latest dirty LSN for the
+/// WAL-before-page-flush durability fence.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct DirtyTracker {
     dirty_pages: BTreeMap<PageId, DirtyEntry>,
@@ -21,6 +22,7 @@ pub struct DirtyTracker {
 pub struct DirtyEntry {
     page_id: PageId,
     first_dirty_lsn: Lsn,
+    last_dirty_lsn: Lsn,
 }
 
 /// Stable flush candidate ordered by first dirty LSN and then page id.
@@ -28,6 +30,7 @@ pub struct DirtyEntry {
 pub struct DirtyFlushCandidate {
     page_id: PageId,
     first_dirty_lsn: Lsn,
+    last_dirty_lsn: Lsn,
 }
 
 impl DirtyTracker {
@@ -45,8 +48,8 @@ impl DirtyTracker {
         self.dirty_pages.is_empty()
     }
 
-    /// Mark a page dirty while preserving the earliest first-dirty LSN observed
-    /// for that page.
+    /// Mark a page dirty while preserving the earliest and latest dirty LSNs
+    /// observed for that page.
     ///
     /// Repeated marks for the same page update the existing entry in place, so
     /// the tracker never creates duplicate dirty records for a page.
@@ -60,10 +63,14 @@ impl DirtyTracker {
                 if dirty_lsn < entry.first_dirty_lsn {
                     entry.first_dirty_lsn = dirty_lsn;
                 }
+                if dirty_lsn > entry.last_dirty_lsn {
+                    entry.last_dirty_lsn = dirty_lsn;
+                }
             })
             .or_insert(DirtyEntry {
                 page_id,
                 first_dirty_lsn: dirty_lsn,
+                last_dirty_lsn: dirty_lsn,
             });
 
         Ok(())
@@ -99,6 +106,15 @@ impl DirtyTracker {
             .map(DirtyEntry::first_dirty_lsn))
     }
 
+    pub fn last_dirty_lsn(&self, page_id: PageId) -> AndromedaResult<Option<Lsn>> {
+        validate_page_id(page_id)?;
+        Ok(self
+            .dirty_pages
+            .get(&page_id)
+            .copied()
+            .map(DirtyEntry::last_dirty_lsn))
+    }
+
     pub fn dirty_entry(&self, page_id: PageId) -> AndromedaResult<Option<DirtyEntry>> {
         validate_page_id(page_id)?;
         Ok(self.dirty_pages.get(&page_id).copied())
@@ -113,6 +129,7 @@ impl DirtyTracker {
             .map(|entry| DirtyFlushCandidate {
                 page_id: entry.page_id,
                 first_dirty_lsn: entry.first_dirty_lsn,
+                last_dirty_lsn: entry.last_dirty_lsn,
             })
             .collect();
         candidates.sort_by_key(|candidate| (candidate.first_dirty_lsn, candidate.page_id));
@@ -132,6 +149,10 @@ impl DirtyEntry {
     pub const fn first_dirty_lsn(self) -> Lsn {
         self.first_dirty_lsn
     }
+
+    pub const fn last_dirty_lsn(self) -> Lsn {
+        self.last_dirty_lsn
+    }
 }
 
 impl DirtyFlushCandidate {
@@ -141,6 +162,10 @@ impl DirtyFlushCandidate {
 
     pub const fn first_dirty_lsn(self) -> Lsn {
         self.first_dirty_lsn
+    }
+
+    pub const fn last_dirty_lsn(self) -> Lsn {
+        self.last_dirty_lsn
     }
 }
 
@@ -184,10 +209,16 @@ mod tests {
                 .expect("valid lsn query"),
             Some(Lsn::new(100))
         );
+        assert_eq!(
+            tracker
+                .last_dirty_lsn(PageId::new(10))
+                .expect("valid lsn query"),
+            Some(Lsn::new(100))
+        );
     }
 
     #[test]
-    fn duplicate_dirty_mark_preserves_earliest_lsn_without_duplicates() {
+    fn duplicate_dirty_mark_preserves_dirty_lsn_range_without_duplicates() {
         let mut tracker = DirtyTracker::new();
 
         tracker
@@ -206,6 +237,12 @@ mod tests {
                 .first_dirty_lsn(PageId::new(11))
                 .expect("valid lsn query"),
             Some(Lsn::new(90))
+        );
+        assert_eq!(
+            tracker
+                .last_dirty_lsn(PageId::new(11))
+                .expect("valid lsn query"),
+            Some(Lsn::new(120))
         );
         assert_eq!(tracker.flush_candidates().len(), 1);
     }
@@ -228,12 +265,18 @@ mod tests {
         assert_eq!(
             candidates
                 .iter()
-                .map(|candidate| (candidate.page_id(), candidate.first_dirty_lsn()))
+                .map(|candidate| {
+                    (
+                        candidate.page_id(),
+                        candidate.first_dirty_lsn(),
+                        candidate.last_dirty_lsn(),
+                    )
+                })
                 .collect::<Vec<_>>(),
             vec![
-                (PageId::new(10), Lsn::new(200)),
-                (PageId::new(20), Lsn::new(200)),
-                (PageId::new(30), Lsn::new(300)),
+                (PageId::new(10), Lsn::new(200), Lsn::new(200)),
+                (PageId::new(20), Lsn::new(200), Lsn::new(200)),
+                (PageId::new(30), Lsn::new(300), Lsn::new(300)),
             ]
         );
     }

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import hashlib
 import pathlib
 import re
 from typing import Dict, List
@@ -17,12 +18,22 @@ class TargetSpec:
 
 
 @dataclass(frozen=True)
+class CargoBinSpec:
+    name: str
+    path: str
+
+
+@dataclass(frozen=True)
 class ManifestEntry:
     target: str
     corpus_dir: str
     seed_files: List[str]
     generator: str
 
+
+TARGETS_SCHEMA_VERSION = "andromeda-fuzz-targets-v1"
+CORPUS_SCHEMA_VERSION = "andromeda-fuzz-corpus-v1"
+GENERATOR_PATH = "fuzz/generators/generate_seed_corpus.py"
 
 LEGACY_SEED1_PAYLOADS: Dict[str, bytes] = {
     "frame_codec_no_panic": b"frame\r\n",
@@ -38,6 +49,19 @@ def load_targets(path: pathlib.Path) -> List[str]:
     return [target.name for target in load_target_specs(path)]
 
 
+def load_top_level_strings(path: pathlib.Path) -> Dict[str, str]:
+    text = path.read_text(encoding="utf-8")
+    fields: Dict[str, str] = {}
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("["):
+            break
+        match = re.match(r'^\s*([A-Za-z0-9_-]+)\s*=\s*"([^"]*)"\s*$', line)
+        if match:
+            fields[match.group(1)] = match.group(2)
+    return fields
+
+
 def load_target_specs(path: pathlib.Path) -> List[TargetSpec]:
     text = path.read_text(encoding="utf-8")
     targets: List[TargetSpec] = []
@@ -51,6 +75,19 @@ def load_target_specs(path: pathlib.Path) -> List[TargetSpec]:
             )
         )
     return targets
+
+
+def load_cargo_bin_specs(path: pathlib.Path) -> List[CargoBinSpec]:
+    text = path.read_text(encoding="utf-8")
+    bins: List[CargoBinSpec] = []
+    for block in parse_blocks(text, "[[bin]]"):
+        bins.append(
+            CargoBinSpec(
+                name=parse_string(block, "name"),
+                path=parse_string(block, "path"),
+            )
+        )
+    return bins
 
 
 def load_manifest_entries(path: pathlib.Path) -> List[ManifestEntry]:
@@ -127,7 +164,11 @@ def seed_payloads(target: str) -> Dict[str, bytes]:
                 [0, 1, 2, 3, 4, 5, 6, 7, 248, 249, 250, 251, 252, 253, 254, 255]
             )
         }
-    payloads = {"seed-basic.bin": f"WAVE14-SEED::{target}::v1".encode("utf-8")}
+    if target == "durable_audit_journal_decode":
+        return durable_audit_journal_decode_seeds()
+    payloads = {
+        "seed-basic.bin": f"ANDROMEDA-FUZZ-SEED::{target}::v1".encode("utf-8")
+    }
     if target in LEGACY_SEED1_PAYLOADS:
         payloads["seed1"] = LEGACY_SEED1_PAYLOADS[target]
     return payloads
@@ -303,6 +344,66 @@ def payload_crc64(payload: bytes) -> int:
     return state if state != 0 else 1
 
 
+def durable_audit_journal_decode_seeds() -> Dict[str, bytes]:
+    journal, anchor = durable_audit_valid_journal_and_anchor()
+    split = len(journal)
+    return {
+        "seed-empty-journal.bin": bytes([0]),
+        "seed-hostile-prefix.bin": b"\x00andromeda-durable-audit-v2|record_lsn=1\n",
+        "seed-valid-generic-audit.bin": bytes([1])
+        + split.to_bytes(2, "little")
+        + journal
+        + anchor,
+    }
+
+
+def durable_audit_valid_journal_and_anchor() -> tuple[bytes, bytes]:
+    payload = (
+        "andromeda-durable-audit-v2"
+        "|record_lsn=1"
+        "|durable_lsn=1"
+        "|event_id=1"
+        "|trace_id=1"
+        "|family=GenericAudit"
+        "|sequence=1"
+        "|retention=ForensicHold"
+        "|replay=ForensicOnly"
+        "|principal_id=66757a7a2d7072696e636970616c"
+        "|certificate_fingerprint=-"
+        "|surface=-"
+        "|permission=-"
+        "|policy_version=-"
+        "|policy_digest=-"
+        "|request_id=-"
+        "|session_id=-"
+        "|event_kind=46757a7a47656e657269634175646974"
+    )
+    checksum = durable_audit_checksum64(payload.encode("ascii"))
+    chain_checksum = durable_audit_checksum64(
+        f"{0:016x}|{checksum:016x}|{payload}".encode("ascii")
+    )
+    journal = (
+        f"{payload}|previous_chain_checksum={0:016x}"
+        f"|chain_checksum={chain_checksum:016x}|checksum={checksum:016x}\n"
+    )
+    anchor_payload = (
+        "andromeda-durable-audit-chain-v1"
+        "|first_record_lsn=1"
+        "|last_record_lsn=1"
+        "|record_count=1"
+        f"|tail_chain_checksum={chain_checksum:016x}"
+    )
+    anchor_checksum = durable_audit_checksum64(anchor_payload.encode("ascii"))
+    anchor = f"{anchor_payload}|checksum={anchor_checksum:016x}\n"
+    return journal.encode("ascii"), anchor.encode("ascii")
+
+
+def durable_audit_checksum64(payload: bytes) -> int:
+    digest = hashlib.sha256(payload).digest()
+    value = int.from_bytes(digest[:8], "big")
+    return value if value != 0 else 1
+
+
 def ensure_seed(root: pathlib.Path, target: str) -> List[pathlib.Path]:
     corpus_dir = root / "fuzz" / "corpus" / target
     corpus_dir.mkdir(parents=True, exist_ok=True)
@@ -316,17 +417,43 @@ def ensure_seed(root: pathlib.Path, target: str) -> List[pathlib.Path]:
 
 
 def check_seed_corpus(root: pathlib.Path, targets_file: str) -> int:
-    target_specs = load_target_specs(root / targets_file)
+    targets_path = root / targets_file
+    target_specs = load_target_specs(targets_path)
     manifest_path = root / "fuzz" / "corpus" / "manifest.toml"
     manifest_entries = load_manifest_entries(manifest_path)
+    cargo_bin_specs = load_cargo_bin_specs(root / "fuzz" / "Cargo.toml")
     manifest_by_target = {entry.target: entry for entry in manifest_entries}
     target_names = [target.name for target in target_specs]
     errors: List[str] = []
+
+    target_headers = load_top_level_strings(targets_path)
+    if target_headers.get("schema_version") != TARGETS_SCHEMA_VERSION:
+        errors.append(
+            f"{targets_file} schema_version {target_headers.get('schema_version')!r} "
+            f"does not match {TARGETS_SCHEMA_VERSION!r}"
+        )
+
+    manifest_headers = load_top_level_strings(manifest_path)
+    if manifest_headers.get("schema_version") != CORPUS_SCHEMA_VERSION:
+        errors.append(
+            "fuzz/corpus/manifest.toml schema_version "
+            f"{manifest_headers.get('schema_version')!r} does not match "
+            f"{CORPUS_SCHEMA_VERSION!r}"
+        )
+    if manifest_headers.get("generated_by") != GENERATOR_PATH:
+        errors.append(
+            "fuzz/corpus/manifest.toml generated_by "
+            f"{manifest_headers.get('generated_by')!r} does not match {GENERATOR_PATH!r}"
+        )
 
     if len(manifest_by_target) != len(manifest_entries):
         errors.append("manifest contains duplicate target entries")
     if len(set(target_names)) != len(target_names):
         errors.append(f"{targets_file} contains duplicate target names")
+    if len({item.name for item in cargo_bin_specs}) != len(cargo_bin_specs):
+        errors.append("fuzz/Cargo.toml contains duplicate [[bin]] names")
+    if len({item.path for item in cargo_bin_specs}) != len(cargo_bin_specs):
+        errors.append("fuzz/Cargo.toml contains duplicate [[bin]] paths")
 
     actual_dirs = sorted(
         path.name for path in (root / "fuzz" / "corpus").iterdir() if path.is_dir()
@@ -338,7 +465,34 @@ def check_seed_corpus(root: pathlib.Path, targets_file: str) -> int:
             f"actual={actual_dirs} expected={expected_dirs}"
         )
 
+    cargo_by_name = {item.name: item for item in cargo_bin_specs}
+    cargo_names = sorted(cargo_by_name)
+    if cargo_names != expected_dirs:
+        errors.append(
+            f"fuzz/Cargo.toml target set mismatch: actual={cargo_names} expected={expected_dirs}"
+        )
+
+    target_file_paths = sorted(
+        path.relative_to(root / "fuzz").as_posix()
+        for path in (root / "fuzz" / "fuzz_targets").glob("*.rs")
+    )
+    expected_target_file_paths = sorted(spec.path for spec in target_specs)
+    if target_file_paths != expected_target_file_paths:
+        errors.append(
+            "fuzz target source file set mismatch: "
+            f"actual={target_file_paths} expected={expected_target_file_paths}"
+        )
+
     for spec in target_specs:
+        cargo_bin = cargo_by_name.get(spec.name)
+        if cargo_bin is None:
+            errors.append(f"{spec.name}: missing fuzz/Cargo.toml [[bin]] entry")
+        elif cargo_bin.path != spec.path:
+            errors.append(
+                f"{spec.name}: Cargo.toml path {cargo_bin.path!r} "
+                f"does not match targets.toml {spec.path!r}"
+            )
+
         target_path = root / "fuzz" / spec.path
         if not target_path.is_file():
             errors.append(f"{spec.name}: target path missing: {target_path.as_posix()}")

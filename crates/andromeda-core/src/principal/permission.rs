@@ -1,6 +1,6 @@
 use crate::ProcedureId;
 
-pub(crate) const ALL_PROCEDURES: ProcedureId = ProcedureId::new(u64::MAX);
+pub(super) const ALL_PROCEDURES: ProcedureId = ProcedureId::new(u64::MAX);
 
 /// Atomic permission in the RBAC model.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -13,6 +13,9 @@ pub enum Permission {
     AdminRecovery,
     AuditRead,
     AdminCertificateRotate,
+    ClusterPromote,
+    ClusterFenceNode,
+    ClusterManifestUpdate,
 }
 
 impl Permission {
@@ -26,6 +29,9 @@ impl Permission {
             Self::AdminRecovery => "admin_recovery",
             Self::AuditRead => "audit_read",
             Self::AdminCertificateRotate => "admin_certificate_rotate",
+            Self::ClusterPromote => "cluster_promote",
+            Self::ClusterFenceNode => "cluster_fence_node",
+            Self::ClusterManifestUpdate => "cluster_manifest_update",
         }
     }
 

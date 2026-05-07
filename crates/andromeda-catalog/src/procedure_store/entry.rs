@@ -8,7 +8,7 @@ use crate::{
 };
 
 /// Canonical, durable identity + contract metadata for an executable
-/// procedure. Holds only contract-derived data — never plan caches, runtime
+/// procedure. Holds only contract-derived data; never plan caches, runtime
 /// state, or buffered results.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcedureStoreEntry {
@@ -23,8 +23,7 @@ pub struct ProcedureStoreEntry {
 impl ProcedureStoreEntry {
     /// Project a validated [`ProcedureContract`] into a store entry.
     pub fn from_contract(contract: &ProcedureContract) -> AndromedaResult<Self> {
-        contract.validate()?;
-        let binding = contract.binding();
+        let binding = contract.validated_binding()?;
         Ok(Self {
             procedure_id: contract.procedure_id,
             name: contract.object.name.clone(),

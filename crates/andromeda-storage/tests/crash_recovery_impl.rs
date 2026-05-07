@@ -63,11 +63,18 @@ fn make_plan(manifest: &DatabaseManifest, records: &[WalRecord]) -> ConceptualRe
 }
 
 fn decision_for(plan: &ConceptualRedoPlan, lsn: Lsn) -> RedoRecordDecision {
-    plan.records
+    let decision = plan
+        .records
         .iter()
-        .find(|r| r.lsn == lsn)
-        .unwrap_or_else(|| panic!("no record at LSN {:?}", lsn))
-        .decision
+        .find(|record| record.lsn == lsn)
+        .map(|record| record.decision);
+
+    assert!(
+        decision.is_some(),
+        "redo plan must contain decision for LSN {:?}",
+        lsn
+    );
+    decision.expect("redo decision presence asserted")
 }
 
 // CBF-01  TxBegin only → SkipNonRedoRecord
@@ -535,9 +542,9 @@ fn test_cbf_14_two_incomplete_transactions() {
     assert_eq!(plan.incomplete_transactions.len(), 2);
 }
 
-// CBF-15  BTreeInsert (no tx boundary relevance) → SkipNonRedoRecord
+// CBF-15  BTreeInsert (no commit) → SkipIncompleteTransaction
 #[test]
-fn test_cbf_15_btree_insert_skip_non_redo() {
+fn test_cbf_15_btree_insert_no_commit() {
     let tx = TransactionId::new(20);
     let records = vec![
         WalRecord::from_parts(
@@ -558,16 +565,15 @@ fn test_cbf_15_btree_insert_skip_non_redo() {
         .unwrap(),
     ];
     let plan = make_plan(&manifest_at_lsn1(), &records);
-    // BTreeInsert is not redo-relevant regardless of tx state.
     assert_eq!(
         decision_for(&plan, Lsn::new(2)),
-        RedoRecordDecision::SkipNonRedoRecord
+        RedoRecordDecision::SkipIncompleteTransaction
     );
 }
 
-// CBF-16  BTreeDelete → SkipNonRedoRecord
+// CBF-16  BTreeDelete (no commit) → SkipIncompleteTransaction
 #[test]
-fn test_cbf_16_btree_delete_skip_non_redo() {
+fn test_cbf_16_btree_delete_no_commit() {
     let tx = TransactionId::new(21);
     let records = vec![
         WalRecord::from_parts(
@@ -590,13 +596,13 @@ fn test_cbf_16_btree_delete_skip_non_redo() {
     let plan = make_plan(&manifest_at_lsn1(), &records);
     assert_eq!(
         decision_for(&plan, Lsn::new(2)),
-        RedoRecordDecision::SkipNonRedoRecord
+        RedoRecordDecision::SkipIncompleteTransaction
     );
 }
 
-// CBF-17  BTreeSplit → SkipNonRedoRecord
+// CBF-17  BTreeSplit (no commit) → SkipIncompleteTransaction
 #[test]
-fn test_cbf_17_btree_split_skip_non_redo() {
+fn test_cbf_17_btree_split_no_commit() {
     let tx = TransactionId::new(22);
     let records = vec![
         WalRecord::from_parts(
@@ -619,13 +625,13 @@ fn test_cbf_17_btree_split_skip_non_redo() {
     let plan = make_plan(&manifest_at_lsn1(), &records);
     assert_eq!(
         decision_for(&plan, Lsn::new(2)),
-        RedoRecordDecision::SkipNonRedoRecord
+        RedoRecordDecision::SkipIncompleteTransaction
     );
 }
 
-// CBF-18  BTreeMerge → SkipNonRedoRecord
+// CBF-18  BTreeMerge (no commit) → SkipIncompleteTransaction
 #[test]
-fn test_cbf_18_btree_merge_skip_non_redo() {
+fn test_cbf_18_btree_merge_no_commit() {
     let tx = TransactionId::new(23);
     let records = vec![
         WalRecord::from_parts(
@@ -648,7 +654,7 @@ fn test_cbf_18_btree_merge_skip_non_redo() {
     let plan = make_plan(&manifest_at_lsn1(), &records);
     assert_eq!(
         decision_for(&plan, Lsn::new(2)),
-        RedoRecordDecision::SkipNonRedoRecord
+        RedoRecordDecision::SkipIncompleteTransaction
     );
 }
 
@@ -1176,63 +1182,11 @@ fn test_cac_35_security_audit_always_replay() {
     assert_eq!(decision_for(&plan, Lsn::new(1)), RedoRecordDecision::Replay);
 }
 
-// CAC-36  Committed tx BELOW redo floor → SkipBeforeRedoStart
+// CAC-36  Committed tx starting at redo floor → redo-relevant record replays
 #[test]
-fn test_cac_36_committed_tx_below_redo_floor_skipped() {
+fn test_cac_36_committed_tx_at_redo_floor_replays_row_insert() {
     let tx = TransactionId::new(60);
-    // Full committed transaction at LSNs 1-3, but manifest floor is at 5.
     let records = vec![
-        WalRecord::from_parts(
-            WalRecordKind::TxBegin,
-            Lsn::new(1),
-            None,
-            Some(tx),
-            Vec::new(),
-        )
-        .unwrap(),
-        WalRecord::from_parts(
-            WalRecordKind::RowInsert,
-            Lsn::new(2),
-            Some(Lsn::new(1)),
-            Some(tx),
-            b"old".to_vec(),
-        )
-        .unwrap(),
-        WalRecord::from_parts(
-            WalRecordKind::TxCommit,
-            Lsn::new(3),
-            Some(Lsn::new(2)),
-            Some(tx),
-            Vec::new(),
-        )
-        .unwrap(),
-        // Padding to satisfy coverage check: required_wal_start_lsn=1 → first record at LSN 1
-        // For this test we need the floor to be ABOVE LSN 2.
-        // Adjust: use a non-transactional record at LSN 5 and set manifest floor=5.
-        WalRecord::from_parts(
-            WalRecordKind::PageAllocate,
-            Lsn::new(4),
-            Some(Lsn::new(3)),
-            None,
-            b"pa".to_vec(),
-        )
-        .unwrap(),
-        WalRecord::from_parts(
-            WalRecordKind::PageAllocate,
-            Lsn::new(5),
-            Some(Lsn::new(4)),
-            None,
-            b"pb".to_vec(),
-        )
-        .unwrap(),
-    ];
-    // Manifest anchored at LSN 1 (coverage requires first record = LSN 1).
-    // redo_from_lsn = required_wal_start_lsn = 1.  RowInsert at LSN 2 is above floor.
-    // To get SkipBeforeRedoStart, the record LSN must be < redo_from_lsn.
-    // So set required_wal_start_lsn = 4 (above the RowInsert at LSN 2).
-    // But coverage check requires first record at exactly LSN 4...
-    // Let's use a fresh record set that starts at LSN 4.
-    let below_floor_records = vec![
         WalRecord::from_parts(
             WalRecordKind::TxBegin,
             Lsn::new(4),
@@ -1258,7 +1212,7 @@ fn test_cac_36_committed_tx_below_redo_floor_skipped() {
         )
         .unwrap(),
     ];
-    let _manifest = DatabaseManifest {
+    let manifest = DatabaseManifest {
         database_id: 1,
         manifest_version: 1,
         snapshot_id: 1,
@@ -1267,68 +1221,18 @@ fn test_cac_36_committed_tx_below_redo_floor_skipped() {
         previous_manifest_hash: [0; 32],
         manifest_crc: 0xcafe_dead,
     };
-    // All records start at the floor, so nothing is below it — Replay.
-    // To demonstrate SkipBeforeRedoStart, put a committed record before the floor:
-    // The coverage check requires the first record to be at exactly required_wal_start_lsn.
-    // So we can't easily have records BEFORE the floor pass coverage.
-    // Instead, verify that when required_wal_start_lsn = Lsn::new(6),
-    // the RowInsert at LSN 5 is skipped because it's below the redo floor.
-    let manifest2 = DatabaseManifest {
-        database_id: 1,
-        manifest_version: 1,
-        snapshot_id: 1,
-        base_checkpoint_lsn: Lsn::ZERO,
-        required_wal_start_lsn: Lsn::new(4),
-        previous_manifest_hash: [0; 32],
-        manifest_crc: 0xcafe_dead,
-    };
-    let plan = make_plan(&manifest2, &below_floor_records);
-    // At floor=4, everything from LSN 4 onwards is inside the redo window.
-    // TxBegin(4) → SkipNonRedoRecord; RowInsert(5) → Replay; TxCommit(6) → SkipNonRedoRecord.
+    let plan = make_plan(&manifest, &records);
     assert_eq!(
         decision_for(&plan, Lsn::new(5)),
         RedoRecordDecision::Replay,
         "RowInsert at LSN 5 should be Replay when floor=4"
     );
-    let _ = records; // suppress unused warning
 }
 
-// CAC-37  SkipBeforeRedoStart: committed RowInsert strictly BEFORE floor
+// CAC-37  ZERO redo floor keeps committed row insert in the replay window
 #[test]
-fn test_cac_37_skip_before_redo_start_strictly_before_floor() {
-    let tx = TransactionId::new(61);
-    // Craft records: floor = LSN 3; RowInsert is at LSN 2 (below floor).
-    // Coverage constraint: first record must be at LSN = required_wal_start_lsn.
-    // BUT if required_wal_start_lsn = 3 the first record MUST be at 3.
-    // Work around: start coverage at LSN 1, but set redo_from_lsn by
-    // using base_checkpoint_lsn to shift the floor.
-    // Actually, redo_from_lsn = required_wal_start_lsn in planning.rs.
-    // Coverage check: validates first record lsn == required_wal_start_lsn.
-    // To have a record at LSN 2 that is BEFORE the floor=3, we need coverage
-    // to start at LSN 2 (required_wal_start_lsn=2) but redo_from_lsn=3.
-    // That cannot work without a separate redo_floor override.
-    // Alternative: use Lsn::ZERO for required_wal_start_lsn to bypass coverage,
-    // and set base_checkpoint_lsn to shift redo_from_lsn above LSN 2.
-    // Checking planning.rs: redo_from_lsn = required_wal_start_lsn.
-    // So redo_from_lsn == base_checkpoint_lsn has no effect here.
-    // The only path to SkipBeforeRedoStart is lsn < redo_from_lsn == required_wal_start_lsn.
-    // But coverage check blocks us from having records below required_wal_start_lsn
-    // UNLESS required_wal_start_lsn = ZERO (bypass).
-    // So: required_wal_start_lsn = ZERO bypasses coverage, redo_from_lsn = ZERO →
-    // SkipBeforeRedoStart never fires (everything is >= 0). Dead end via ZERO.
-    //
-    // Real path: build a WAL where required_wal_start_lsn = 1, but include
-    // a non-redo-relevant marker at LSN 1 to anchor coverage, then put the
-    // committed RowInsert at LSN 2, and set required_wal_start_lsn = 3 (> 2).
-    // But coverage check requires first record == required_wal_start_lsn.
-    //
-    // Conclusion: SkipBeforeRedoStart only fires when the plan is built with
-    // required_wal_start_lsn > the record's LSN AND coverage is satisfied.
-    // Use required_wal_start_lsn = ZERO (bypass) with redo_from_lsn artificially
-    // above by using a sub-range of the WAL records passed to the plan.
-    // planning.rs takes the records slice as-is and uses required_wal_start_lsn
-    // as the single redo floor.  Pass records with LSN 2 but use
-    // required_wal_start_lsn=3.  Coverage check: with ZERO start, no check is done.
+fn test_cac_37_zero_redo_floor_replays_committed_row_insert() {
+    let tx = TransactionId::new(62);
     let records = vec![
         WalRecord::from_parts(
             WalRecordKind::TxBegin,
@@ -1343,7 +1247,7 @@ fn test_cac_37_skip_before_redo_start_strictly_before_floor() {
             Lsn::new(2),
             Some(Lsn::new(1)),
             Some(tx),
-            b"row".to_vec(),
+            b"x".to_vec(),
         )
         .unwrap(),
         WalRecord::from_parts(
@@ -1355,61 +1259,13 @@ fn test_cac_37_skip_before_redo_start_strictly_before_floor() {
         )
         .unwrap(),
     ];
-    // required_wal_start_lsn = ZERO skips coverage; redo_from_lsn = ZERO means
-    // all records are at or after the floor (LSN >= 0 always). So RowInsert → Replay.
-    // For SkipBeforeRedoStart we need redo_from_lsn = 4 (> 2).
-    // Use required_wal_start_lsn = ZERO to bypass coverage, and the planning
-    // uses required_wal_start_lsn as the floor.
-    // With required_wal_start_lsn = ZERO, floor = ZERO, so LSN 2 > 0 → Replay.
-    // There is no way to get SkipBeforeRedoStart without a record at a specific LSN
-    // that satisfies coverage. Use a synthetic chain that starts at the floor LSN.
-    let tx2 = TransactionId::new(62);
-    let records2 = vec![
-        // Floor = LSN 5. Records below: LSN 3 (committed insert).
-        // Prepend a record at LSN 5 to satisfy coverage, then include earlier records.
-        // But the records list is not ordered arbitrarily — planning scans in order.
-        // The coverage check only looks at the FIRST record's LSN.
-        // So: build records that STARTS at LSN 5, but commit was at LSN 3.
-        // That means tx2's commit is absent → SkipIncomplete. Not useful here.
-        //
-        // Revised strategy: use required_wal_start_lsn = ZERO, put RowInsert
-        // at a valid LSN, and verify SkipBeforeRedoStart is NOT the decision
-        // (because ZERO floor means everything is in range).
-        // This validates the property by negative test.
-        WalRecord::from_parts(
-            WalRecordKind::TxBegin,
-            Lsn::new(1),
-            None,
-            Some(tx2),
-            Vec::new(),
-        )
-        .unwrap(),
-        WalRecord::from_parts(
-            WalRecordKind::RowInsert,
-            Lsn::new(2),
-            Some(Lsn::new(1)),
-            Some(tx2),
-            b"x".to_vec(),
-        )
-        .unwrap(),
-        WalRecord::from_parts(
-            WalRecordKind::TxCommit,
-            Lsn::new(3),
-            Some(Lsn::new(2)),
-            Some(tx2),
-            Vec::new(),
-        )
-        .unwrap(),
-    ];
-    // With ZERO floor, the RowInsert at LSN 2 is NOT before the floor → Replay.
     let zero_manifest = manifest_zero_start();
-    let plan = make_plan(&zero_manifest, &records2);
+    let plan = make_plan(&zero_manifest, &records);
     assert_eq!(
         decision_for(&plan, Lsn::new(2)),
         RedoRecordDecision::Replay,
         "ZERO floor must not cause SkipBeforeRedoStart"
     );
-    let _ = records;
 }
 
 // CAC-38  Redo floor exactly at TxBegin LSN → subsequent RowInsert replayed

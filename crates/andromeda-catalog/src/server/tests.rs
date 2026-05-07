@@ -312,6 +312,16 @@ fn test_catalog_subscription_registry_requires_ordered_version_changes() {
 
     assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
     assert!(error.message().contains("version ordering"));
+
+    let zero_lsn = CatalogChangeNotification {
+        new_version: CatalogVersion::new(3),
+        previous_version: CatalogVersion::new(2),
+        invalidation_boundary_lsn: 0,
+    };
+    let error = registry.publish(zero_lsn).unwrap_err();
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+    assert!(error.message().contains("boundary LSN"));
 }
 
 #[test]

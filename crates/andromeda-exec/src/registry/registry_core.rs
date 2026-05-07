@@ -109,8 +109,20 @@ impl ProcedureDispatcher for ProcedureRegistry {
                 "dispatch request contract must match registered handler contract before execution",
             ));
         }
+        let request_binding = request.procedure_binding.ok_or_else(|| {
+            AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "dispatch request requires ProcedureContractBinding before handler execution",
+            )
+        })?;
 
         let procedure = handler.execute(request.context.clone())?;
+        if procedure.contract_binding != request_binding {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "dispatched ProcedureContractBinding must match pre-transaction dispatch binding",
+            ));
+        }
         validate_dispatch_result(procedure_id, handler.as_ref(), &procedure, &request.context)?;
         Ok(procedure)
     }

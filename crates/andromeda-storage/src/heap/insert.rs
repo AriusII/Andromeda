@@ -1,9 +1,13 @@
 use andromeda_core::AndromedaResult;
 
-use crate::PageSize;
-use crate::heap_row_encoder::{Datum, RowEncoder};
+use crate::heap_row_encoder::{Datum, ProductStockRow, RowEncoder, product_stock_row_encoder};
+use crate::write_ahead_log::HeapRowRedoPayloadV1;
+use crate::{Lsn, PageId, PageSize};
 
-use super::{HeapPage, SlotEntry, heap_error, slot_directory};
+use super::{
+    HEAP_PAGE_V1_PAYLOAD_OFFSET, HeapPage, SlotEntry, heap_error,
+    heap_page_v1_validate_format_guard, slot_directory,
+};
 
 impl HeapPage {
     pub fn insert_tuple(&mut self, tuple: &[u8]) -> AndromedaResult<u16> {
@@ -28,7 +32,7 @@ impl HeapPage {
             .filter(|entry| !entry.is_deleted())
             .map(|entry| entry.offset as usize + entry.length as usize)
             .max()
-            .unwrap_or(super::HEAP_PAGE_V1_HEADER_SIZE);
+            .unwrap_or(HEAP_PAGE_V1_PAYLOAD_OFFSET);
         let insert_offset = next_tuple_offset as u16;
 
         let offset_usize = insert_offset as usize;
@@ -49,7 +53,7 @@ impl HeapPage {
 
 #[derive(Debug)]
 pub struct HeapPageInsert {
-    page_id: crate::PageId,
+    page_id: PageId,
     page_size: PageSize,
     data: Vec<u8>,
     slot_directory: slot_directory::SlotDirectory,
@@ -57,7 +61,9 @@ pub struct HeapPageInsert {
 }
 
 impl HeapPageInsert {
-    pub fn new(page_id: crate::PageId, page_size: PageSize) -> AndromedaResult<Self> {
+    pub fn new(page_id: PageId, page_size: PageSize) -> AndromedaResult<Self> {
+        heap_page_v1_validate_format_guard()?;
+
         if page_size.bytes() < 4096 {
             return Err(heap_error("page size must be >= 4 KiB"));
         }
@@ -70,6 +76,12 @@ impl HeapPageInsert {
             slot_directory: slot_directory::SlotDirectory::new(page_size),
             row_encoder: None,
         })
+    }
+
+    /// Create a heap insert context configured for deterministic
+    /// `Inventory.ProductStock` row bytes.
+    pub fn for_product_stock(page_id: PageId, page_size: PageSize) -> AndromedaResult<Self> {
+        Ok(Self::new(page_id, page_size)?.with_encoder(product_stock_row_encoder()?))
     }
 
     pub fn with_encoder(mut self, encoder: RowEncoder) -> Self {
@@ -91,13 +103,13 @@ impl HeapPageInsert {
         }
 
         let tuple_len = tuple_bytes.len() as u16;
-        let free_space = self.slot_directory.free_space();
+        let free_space = usize::from(self.slot_directory.free_space());
         let needed = tuple_len as usize + SlotEntry::SIZE;
 
-        if free_space < needed as u16 {
+        if free_space < needed {
             return Err(heap_error(format!(
                 "page full: need {} bytes, have {} bytes",
-                needed, free_space as usize
+                needed, free_space
             )));
         }
 
@@ -127,6 +139,27 @@ impl HeapPageInsert {
         self.insert_raw_tuple(&encoded)
     }
 
+    /// Stage a ProductStock row in the heap page and return the redo material
+    /// needed by a caller that appends WAL before publishing the page image.
+    pub fn insert_product_stock(
+        &mut self,
+        row: ProductStockRow,
+    ) -> AndromedaResult<ProductStockHeapInsert> {
+        let tuple = row.encode()?;
+        let slot_id = self.insert_raw_tuple(&tuple)?;
+        Ok(ProductStockHeapInsert {
+            page_id: self.page_id,
+            page_size: self.page_size,
+            slot_id,
+            row,
+            tuple,
+        })
+    }
+
+    pub fn read_product_stock(&self, slot_id: u16) -> AndromedaResult<ProductStockRow> {
+        ProductStockRow::decode(&self.read_tuple(slot_id)?)
+    }
+
     pub fn read_tuple(&self, slot_id: u16) -> AndromedaResult<Vec<u8>> {
         let slot = slot_directory::SlotId::new(slot_id);
         let (offset, length) = self
@@ -149,7 +182,7 @@ impl HeapPageInsert {
         Ok(())
     }
 
-    pub fn page_id(&self) -> crate::PageId {
+    pub fn page_id(&self) -> PageId {
         self.page_id
     }
 
@@ -172,6 +205,53 @@ impl HeapPageInsert {
     pub fn serialize(&mut self) -> AndromedaResult<Vec<u8>> {
         self.slot_directory.serialize_to_page(&mut self.data)?;
         Ok(self.data.clone())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProductStockHeapInsert {
+    page_id: PageId,
+    page_size: PageSize,
+    slot_id: u16,
+    row: ProductStockRow,
+    tuple: Vec<u8>,
+}
+
+impl ProductStockHeapInsert {
+    pub const fn page_id(&self) -> PageId {
+        self.page_id
+    }
+
+    pub const fn page_size(&self) -> PageSize {
+        self.page_size
+    }
+
+    pub const fn slot_id(&self) -> u16 {
+        self.slot_id
+    }
+
+    pub const fn row(&self) -> ProductStockRow {
+        self.row
+    }
+
+    pub fn tuple(&self) -> &[u8] {
+        &self.tuple
+    }
+
+    pub fn row_insert_redo_payload(
+        &self,
+        expected_previous_page_lsn: Lsn,
+        resulting_page_lsn: Lsn,
+    ) -> AndromedaResult<HeapRowRedoPayloadV1> {
+        HeapRowRedoPayloadV1::row_insert(
+            self.page_id,
+            self.page_size,
+            self.slot_id,
+            expected_previous_page_lsn,
+            resulting_page_lsn,
+            self.tuple.clone(),
+        )
+        .map_err(|error| heap_error(error.message().to_string()))
     }
 }
 

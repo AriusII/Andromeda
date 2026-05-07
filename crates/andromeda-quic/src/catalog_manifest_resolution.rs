@@ -10,7 +10,7 @@ use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, ContractHash, ProcedureId,
     RequestId, SessionId, TransactionId,
 };
-use andromeda_observe::CertificateIdentity;
+use andromeda_observe::{CertificateIdentity, SurfaceScope};
 use andromeda_proto::{
     FrameEnvelope as ProtoFrameEnvelope, PayloadKind, ProtocolVersion, decode_generated_message,
     encode_generated_message, generated, validate_catalog_procedure_manifest_resolution_request,
@@ -154,6 +154,56 @@ impl CatalogManifestResolutionResponse {
         validate_catalog_procedure_manifest_resolution_response(&response)?;
         Ok(response)
     }
+
+    pub fn validate_against_request(
+        &self,
+        request: &CatalogManifestResolutionRequest,
+    ) -> AndromedaResult<()> {
+        if self.status != CatalogManifestResolutionStatus::Resolved {
+            return Ok(());
+        }
+
+        let Some(manifest) = self.manifest.as_ref() else {
+            return Err(contract_error(
+                "resolved catalog manifest response requires manifest evidence",
+            ));
+        };
+
+        match &request.selector {
+            CatalogManifestSelector::ProcedureId(expected) => {
+                if manifest.procedure_id != *expected {
+                    return Err(contract_error(
+                        "resolved catalog manifest procedure id does not match request selector",
+                    ));
+                }
+            }
+            CatalogManifestSelector::ProcedureName(expected) => {
+                if manifest.procedure_name != *expected {
+                    return Err(contract_error(
+                        "resolved catalog manifest procedure name does not match request selector",
+                    ));
+                }
+            }
+        }
+
+        if let Some(expected_contract_hash) = request.expected_contract_hash
+            && manifest.contract_hash != expected_contract_hash
+        {
+            return Err(contract_error(
+                "resolved catalog manifest contract hash does not match request expectation",
+            ));
+        }
+
+        if let Some(expected_catalog_version) = request.expected_catalog_version
+            && manifest.catalog_version != expected_catalog_version
+        {
+            return Err(contract_error(
+                "resolved catalog manifest catalog version does not match request expectation",
+            ));
+        }
+
+        Ok(())
+    }
 }
 
 /// Domain Procedure manifest used inside the QUIC catalog route.
@@ -165,6 +215,7 @@ pub struct CatalogProcedureManifest {
     pub catalog_version: CatalogVersion,
     pub protocol_layout: CatalogProcedureProtocolLayout,
     pub result_streams: Vec<CatalogResultStreamDescriptor>,
+    pub stats_version: u64,
     pub policy_version: ContractHash,
     pub required_permissions: Vec<CatalogRequiredPermission>,
 }
@@ -188,6 +239,7 @@ impl CatalogProcedureManifest {
                 .iter()
                 .map(CatalogRequiredPermission::to_protobuf)
                 .collect(),
+            stats_version: Some(self.stats_version),
         };
         validate_catalog_procedure_manifest_resolution_response(
             &GeneratedCatalogManifestResolutionResponse {
@@ -231,6 +283,11 @@ impl TryFrom<GeneratedProcedureManifest> for CatalogProcedureManifest {
                 "resolved procedure manifest requires protocol layout",
             ));
         };
+        let Some(stats_version) = manifest.stats_version else {
+            return Err(protocol_error(
+                "resolved procedure manifest requires stats version",
+            ));
+        };
 
         Ok(Self {
             procedure_id: ProcedureId::new(manifest.procedure_id),
@@ -243,6 +300,7 @@ impl TryFrom<GeneratedProcedureManifest> for CatalogProcedureManifest {
                 .into_iter()
                 .map(CatalogResultStreamDescriptor::from)
                 .collect(),
+            stats_version,
             policy_version: ContractHash::from_slice(&manifest.policy_version)?,
             required_permissions: manifest
                 .required_permissions
@@ -500,10 +558,15 @@ impl<R: CatalogManifestResolutionRuntime> CatalogManifestResolutionGateway<R> {
                 "catalog manifest resolution frame family not permitted on surface plane",
             ));
         }
+        validate_catalog_route_admission(metadata)?;
 
-        if let Some(session_id) = metadata.session_id()
-            && session_id != frame.header.session_id
-        {
+        let Some(session_id) = metadata.session_id() else {
+            return Err(security_error(
+                "catalog manifest resolution requires authenticated session id",
+            ));
+        };
+
+        if session_id != frame.header.session_id {
             return Err(protocol_error(
                 "catalog manifest resolution session id does not match endpoint metadata",
             ));
@@ -525,8 +588,10 @@ impl<R: CatalogManifestResolutionRuntime> CatalogManifestResolutionGateway<R> {
             trace_id: request.trace_id.clone(),
         };
 
+        let request_for_validation = request.clone();
         let response = self.runtime.resolve_catalog_manifest(&context, request)?;
         validate_response_context(&context, &response)?;
+        response.validate_against_request(&request_for_validation)?;
         let generated_response = response.to_protobuf()?;
 
         let response_frame =
@@ -538,6 +603,28 @@ impl<R: CatalogManifestResolutionRuntime> CatalogManifestResolutionGateway<R> {
 
         Ok(response_frame)
     }
+}
+
+fn validate_catalog_route_admission(metadata: &TransportEndpointMetadata) -> AndromedaResult<()> {
+    if metadata.surface_plane() != SurfacePlane::Administration {
+        return Err(security_error(
+            "catalog manifest resolution requires Administration surface",
+        ));
+    }
+
+    let Some(identity) = metadata.certificate_identity() else {
+        return Err(security_error(
+            "catalog manifest resolution requires bound certificate identity",
+        ));
+    };
+
+    if identity.surface != SurfaceScope::Administration {
+        return Err(security_error(
+            "catalog manifest resolution certificate scope must match Administration surface",
+        ));
+    }
+
+    Ok(())
 }
 
 /// Builds a `ContractRequest` frame carrying a catalog manifest resolution request.
@@ -774,4 +861,12 @@ fn frame_with_payload(
 
 fn protocol_error(message: &'static str) -> AndromedaError {
     AndromedaError::new(AndromedaErrorKind::Protocol, message)
+}
+
+fn contract_error(message: &'static str) -> AndromedaError {
+    AndromedaError::new(AndromedaErrorKind::Contract, message)
+}
+
+fn security_error(message: &'static str) -> AndromedaError {
+    AndromedaError::new(AndromedaErrorKind::Security, message)
 }

@@ -2,12 +2,12 @@ syntax = "proto3";
 
 package andromeda.contract.v1;
 
-// Governed contract schema for Andromeda V0 result descriptors and structured
-// object payload layouts. ProcedureManifest and ProtocolLayout live in
+// Governed contract schema for Andromeda V0 ResultStream descriptors and
+// StructuredObject payload layouts. ProcedureManifest and ProtocolLayout live in
 // andromeda/contract/v1/manifest.proto under the same stable package. This
-// package is message-only and must not define services or rpc methods.
+// package is message-only and must not define gRPC service or rpc definitions.
 
-// Stable identifier for a permission required to invoke a procedure. The
+// Stable identifier for a permission required to invoke a Procedure. The
 // canonical id is a non-empty, lower-case dot-separated string emitted by the
 // catalog policy bundle (e.g. `andromeda.execute_procedure`). Family is the
 // permission family (e.g. `application`, `security`). The protobuf surface
@@ -42,11 +42,11 @@ message ResultStreamDescriptor {
   Cardinality cardinality = 3;
   RowCountRequirement row_count_requirement = 4;
   optional uint64 row_count_exact = 5;
-  // Optional inclusive upper bound on rows the stream may emit. Used to
-  // declare a *bounded* `ZeroOrMore` / `OneOrMore` stream without inventing a
-  // streaming engine. When present must respect the declared cardinality and
-  // be `>= row_count_exact` when both are declared. Validation is enforced by
-  // the Rust contract layer.
+  // Optional inclusive upper bound on rows the ResultStream may emit. Used to
+  // declare a bounded `ZeroOrMore` / `OneOrMore` ResultStream without
+  // inventing a streaming engine. When present must respect the declared
+  // cardinality and be `>= row_count_exact` when both are declared. Validation
+  // is enforced by the Rust contract layer.
   optional uint64 row_count_max = 6;
 
   reserved 7 to 31;
@@ -83,10 +83,11 @@ message StructuredObjectHeader {
   optional uint64 max_payload_length = 9;
   // Ordered descriptor fields. Dense, zero-based ordinals, unique names.
   repeated ColumnDescriptor fields = 10;
-  // Row-count policy in metadata-before-payload form. `EXACT_REQUIRED`
-  // forces `row_count_exact` to be set so the RowCountExact invariant is
-  // verifiable purely from metadata.
+  // Row-count policy in ResultStream metadata-before-payload form.
+  // `EXACT_REQUIRED` forces `row_count_exact` to be set so the exact row-count
+  // invariant is verifiable purely from metadata.
   ResultStreamDescriptor.RowCountRequirement row_count_policy = 11;
 
+  reserved "shape_hash";
   reserved 12 to 31;
 }

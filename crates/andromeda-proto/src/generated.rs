@@ -2,8 +2,12 @@ use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, Contra
 
 use crate::ProtocolLayout;
 pub use crate::generated_validation::{
-    validate_catalog_procedure_manifest_resolution_request,
-    validate_catalog_procedure_manifest_resolution_response, validate_generated_rpc_completion,
+    project_generated_frame_envelope, validate_catalog_procedure_manifest_resolution_request,
+    validate_catalog_procedure_manifest_resolution_response, validate_generated_error_envelope,
+    validate_generated_frame_envelope, validate_generated_invocation_request,
+    validate_generated_invocation_response, validate_generated_invocation_response_sequence,
+    validate_generated_rpc_batch, validate_generated_rpc_completion,
+    validate_generated_rpc_execute_request, validate_generated_rpc_metadata,
 };
 
 pub const PROTOCOL_PACKAGE: &str = "andromeda.protocol.v1";

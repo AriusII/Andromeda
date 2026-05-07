@@ -62,6 +62,7 @@ pub struct BufferFrame {
     pin_count: u32,
     is_dirty: bool,
     first_dirty_lsn: Option<Lsn>,
+    last_dirty_lsn: Option<Lsn>,
     clock_usage: bool,
 }
 
@@ -78,6 +79,7 @@ impl BufferFrame {
             pin_count: 0,
             is_dirty: false,
             first_dirty_lsn: None,
+            last_dirty_lsn: None,
             clock_usage: false,
         };
         frame.validate()?;
@@ -132,6 +134,7 @@ impl BufferFrame {
             pin_count: 0,
             is_dirty: false,
             first_dirty_lsn: None,
+            last_dirty_lsn: None,
             clock_usage: true,
         };
         frame.validate()?;
@@ -140,11 +143,11 @@ impl BufferFrame {
 
     pub fn validate(&self) -> AndromedaResult<()> {
         self.id.validate()?;
-        if self.is_dirty && self.first_dirty_lsn.is_none_or(Lsn::is_zero) {
-            return Err(BufferPoolError::InvalidDirtyLsn.into_andromeda_error());
-        }
-        if !self.is_dirty && self.first_dirty_lsn.is_some() {
-            return Err(BufferPoolError::InvalidDirtyLsn.into_andromeda_error());
+        match (self.is_dirty, self.first_dirty_lsn, self.last_dirty_lsn) {
+            (true, Some(first), Some(last))
+                if !first.is_zero() && !last.is_zero() && first <= last => {}
+            (false, None, None) => {}
+            _ => return Err(BufferPoolError::InvalidDirtyLsn.into_andromeda_error()),
         }
 
         match self.state {
@@ -155,6 +158,7 @@ impl BufferFrame {
                     || self.pin_count != 0
                     || self.is_dirty
                     || self.first_dirty_lsn.is_some()
+                    || self.last_dirty_lsn.is_some()
                 {
                     return Err(BufferPoolError::InvalidFrameState.into_andromeda_error());
                 }
@@ -216,6 +220,11 @@ impl BufferFrame {
         {
             return Err(BufferPoolError::InvalidDirtyLsn.into_andromeda_error());
         }
+        if let Some(last_dirty_lsn) = self.last_dirty_lsn
+            && (last_dirty_lsn.is_zero() || last_dirty_lsn < page_lsn)
+        {
+            return Err(BufferPoolError::InvalidDirtyLsn.into_andromeda_error());
+        }
         Ok(())
     }
 
@@ -249,6 +258,10 @@ impl BufferFrame {
 
     pub const fn first_dirty_lsn(&self) -> Option<Lsn> {
         self.first_dirty_lsn
+    }
+
+    pub const fn last_dirty_lsn(&self) -> Option<Lsn> {
+        self.last_dirty_lsn
     }
 
     pub const fn dirty_lsn(&self) -> Option<Lsn> {
@@ -315,13 +328,14 @@ impl BufferFrame {
         if dirty_lsn.is_zero() || dirty_lsn < page_lsn {
             return Err(BufferPoolError::InvalidDirtyLsn.into_andromeda_error());
         }
-        if let Some(first_dirty_lsn) = self.first_dirty_lsn {
-            if dirty_lsn < first_dirty_lsn {
+        if let Some(last_dirty_lsn) = self.last_dirty_lsn {
+            if dirty_lsn < last_dirty_lsn {
                 return Err(BufferPoolError::InvalidDirtyLsn.into_andromeda_error());
             }
         } else {
             self.first_dirty_lsn = Some(dirty_lsn);
         }
+        self.last_dirty_lsn = Some(dirty_lsn);
         self.is_dirty = true;
         self.set_clock_usage()?;
         Ok(())
@@ -337,11 +351,15 @@ impl BufferFrame {
         let first_dirty_lsn = self
             .first_dirty_lsn
             .ok_or_else(|| BufferPoolError::InvalidDirtyLsn.into_andromeda_error())?;
-        if flushed_lsn < first_dirty_lsn {
+        let last_dirty_lsn = self
+            .last_dirty_lsn
+            .ok_or_else(|| BufferPoolError::InvalidDirtyLsn.into_andromeda_error())?;
+        if first_dirty_lsn > last_dirty_lsn || flushed_lsn < last_dirty_lsn {
             return Err(BufferPoolError::InvalidDirtyLsn.into_andromeda_error());
         }
         self.is_dirty = false;
         self.first_dirty_lsn = None;
+        self.last_dirty_lsn = None;
         self.state = BufferFrameState::Resident;
         self.validate()
     }
@@ -349,6 +367,7 @@ impl BufferFrame {
     pub fn mark_clean(&mut self) {
         self.is_dirty = false;
         self.first_dirty_lsn = None;
+        self.last_dirty_lsn = None;
         if self.state == BufferFrameState::Flushing {
             self.state = BufferFrameState::Resident;
         }
@@ -379,6 +398,14 @@ impl BufferFrame {
         self.validate()
     }
 
+    pub(crate) fn abort_flush(&mut self) -> AndromedaResult<()> {
+        if self.state != BufferFrameState::Flushing || !self.is_dirty || self.pin_count != 0 {
+            return Err(BufferPoolError::InvalidFrameState.into_andromeda_error());
+        }
+        self.state = BufferFrameState::Resident;
+        self.validate()
+    }
+
     pub fn finish_flush(&mut self, flushed_lsn: Lsn) -> AndromedaResult<()> {
         if self.state != BufferFrameState::Flushing {
             return Err(BufferPoolError::InvalidFrameState.into_andromeda_error());
@@ -404,6 +431,7 @@ impl BufferFrame {
         self.pin_count = 0;
         self.is_dirty = false;
         self.first_dirty_lsn = None;
+        self.last_dirty_lsn = None;
         self.clock_usage = false;
         self.state = BufferFrameState::Free;
         self.validate()

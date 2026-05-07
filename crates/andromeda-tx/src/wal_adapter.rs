@@ -387,6 +387,8 @@ pub enum TxWalAdapterError {
     WalFlushFailed,
     /// WAL reported success but did not flush through the commit LSN
     DurableLsnBehindCommit,
+    /// WAL replay terminal evidence is not covered by the durable WAL prefix
+    DurableLsnBehindTerminal,
     /// Status table operation failed (concurrent modification, corruption)
     StatusTableError,
     /// Internal invariant violated (implementation bug)
@@ -415,9 +417,10 @@ impl TxWalAdapterError {
             | Self::ConflictingTerminalRecord
             | Self::RecordAfterTerminal
             | Self::ReplayLsnRegression => AndromedaErrorKind::Transaction,
-            Self::WalAppendFailed | Self::WalFlushFailed | Self::DurableLsnBehindCommit => {
-                AndromedaErrorKind::Storage
-            }
+            Self::WalAppendFailed
+            | Self::WalFlushFailed
+            | Self::DurableLsnBehindCommit
+            | Self::DurableLsnBehindTerminal => AndromedaErrorKind::Storage,
             Self::StatusTableError | Self::InvariantViolated => AndromedaErrorKind::Internal,
         }
     }
@@ -428,6 +431,9 @@ impl TxWalAdapterError {
             Self::WalAppendFailed => "WAL append failed",
             Self::WalFlushFailed => "WAL flush failed",
             Self::DurableLsnBehindCommit => "durable WAL flush ended before commit LSN",
+            Self::DurableLsnBehindTerminal => {
+                "durable WAL replay coverage ended before terminal LSN"
+            }
             Self::StatusTableError => "transaction status table error",
             Self::InvariantViolated => "TxWalAdapter invariant violation",
             Self::MissingReplayTransactionId => {
@@ -473,6 +479,7 @@ pub enum TxWalAdapterReplayKind {
 pub struct TxWalAdapterReplayRecord {
     pub kind: TxWalAdapterReplayKind,
     pub lsn: Lsn,
+    pub durable_lsn: Lsn,
     pub tx_id: Option<TransactionId>,
     pub timestamp: andromeda_core::EngineTimestamp,
     pub row_count_affected: u64,
@@ -511,6 +518,7 @@ impl TxWalAdapterReplayRecord {
         Self {
             kind: TxWalAdapterReplayKind::Other,
             lsn,
+            durable_lsn: lsn,
             tx_id,
             timestamp: andromeda_core::EngineTimestamp::ZERO,
             row_count_affected: 0,
@@ -536,10 +544,16 @@ impl TxWalAdapterReplayRecord {
         self
     }
 
+    pub fn with_durable_lsn(mut self, durable_lsn: Lsn) -> Self {
+        self.durable_lsn = durable_lsn;
+        self
+    }
+
     fn boundary(kind: TxWalAdapterReplayKind, tx_id: TransactionId, lsn: Lsn) -> Self {
         Self {
             kind,
             lsn,
+            durable_lsn: lsn,
             tx_id: Some(tx_id),
             timestamp: andromeda_core::EngineTimestamp::ZERO,
             row_count_affected: 0,
@@ -560,8 +574,10 @@ pub fn map_tx_wal_replay_records(
     records: impl IntoIterator<Item = TxWalAdapterReplayRecord>,
 ) -> AndromedaResult<Vec<TxWalReplayRecord>> {
     let mut states: BTreeMap<TransactionId, ReplayState> = BTreeMap::new();
+    let mut previous_record = None;
 
     for record in records {
+        validate_global_replay_lsn_order(&mut previous_record, record)?;
         match record.kind {
             TxWalAdapterReplayKind::Begin => {
                 let tx_id = replay_tx_id(record)?;
@@ -583,8 +599,9 @@ pub fn map_tx_wal_replay_records(
                     .get_mut(&tx_id)
                     .ok_or_else(|| tx_adapter_error(TxWalAdapterError::ReplayRecordWithoutBegin))?;
                 validate_replay_lsn_order(state, record.lsn)?;
+                validate_terminal_durable_coverage(record)?;
                 if let Some(existing) = state.terminal {
-                    if existing.kind != record.kind {
+                    if existing != record {
                         return Err(tx_adapter_error(
                             TxWalAdapterError::ConflictingTerminalRecord,
                         ));
@@ -612,18 +629,20 @@ pub fn map_tx_wal_replay_records(
     for (tx_id, state) in states {
         replay_records.push(match state.terminal {
             Some(record) if record.kind == TxWalAdapterReplayKind::Commit => {
-                TxWalReplayRecord::commit(
+                TxWalReplayRecord::commit_with_durable_lsn(
                     tx_id,
                     record.lsn,
+                    record.durable_lsn,
                     record.timestamp,
                     record.row_count_affected,
                     record.isolation_level,
                 )
             }
             Some(record) if record.kind == TxWalAdapterReplayKind::Rollback => {
-                TxWalReplayRecord::rollback(
+                TxWalReplayRecord::rollback_with_durable_lsn(
                     tx_id,
                     record.lsn,
+                    record.durable_lsn,
                     record.timestamp,
                     record.parameter_hash,
                 )
@@ -635,6 +654,7 @@ pub fn map_tx_wal_replay_records(
         });
     }
 
+    replay_records.sort_by_key(TxWalReplayRecord::replay_lsn);
     Ok(replay_records)
 }
 
@@ -649,6 +669,34 @@ fn validate_replay_lsn_order(state: &mut ReplayState, lsn: Lsn) -> AndromedaResu
         return Err(tx_adapter_error(TxWalAdapterError::ReplayLsnRegression));
     }
     state.last_lsn = lsn;
+    Ok(())
+}
+
+fn validate_terminal_durable_coverage(record: TxWalAdapterReplayRecord) -> AndromedaResult<()> {
+    if record.durable_lsn < record.lsn {
+        return Err(tx_adapter_error(
+            TxWalAdapterError::DurableLsnBehindTerminal,
+        ));
+    }
+
+    Ok(())
+}
+
+fn validate_global_replay_lsn_order(
+    previous_record: &mut Option<TxWalAdapterReplayRecord>,
+    record: TxWalAdapterReplayRecord,
+) -> AndromedaResult<()> {
+    if let Some(previous_record) = *previous_record {
+        if record.lsn < previous_record.lsn {
+            return Err(tx_adapter_error(TxWalAdapterError::ReplayLsnRegression));
+        }
+
+        if record.lsn == previous_record.lsn && record != previous_record {
+            return Err(tx_adapter_error(TxWalAdapterError::ReplayLsnRegression));
+        }
+    }
+
+    *previous_record = Some(record);
     Ok(())
 }
 
@@ -835,12 +883,10 @@ mod tests {
         let adapter = MockTxWalAdapter::new();
 
         let result = adapter.record_commit(TransactionId::new(0), wal).await;
-        assert!(result.is_err());
-        let error = match result {
-            Ok(_) => panic!("expected zero transaction id to be rejected"),
-            Err(error) => error,
-        };
-        assert_eq!(error.kind(), AndromedaErrorKind::Transaction);
+        assert!(matches!(
+            result,
+            Err(error) if error.kind() == AndromedaErrorKind::Transaction
+        ));
     }
 
     #[test]

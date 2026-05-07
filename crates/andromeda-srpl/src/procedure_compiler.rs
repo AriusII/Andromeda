@@ -5,6 +5,13 @@
 //! importing lexer/parser/binder/lowering entry points from this boundary.
 
 pub use crate::binder::{BoundProcedure, bind_procedure};
+pub use crate::definition_batch_bridge::{
+    SrplDefinitionBatchDiagnostic, SrplDefinitionBatchDryRunError, SrplDefinitionBatchDryRunReport,
+    SrplDefinitionBatchDryRunRequest, SrplDefinitionBatchDurableApplyReport,
+    SrplDefinitionBatchProcedureSource, SrplDefinitionBatchSourceEvidence,
+    SrplProcedureDryRunManifest, SrplProcedureSourceDigest, SrplProcedureSourceDigestEvidence,
+    dry_run_srpl_definition_batch_sources,
+};
 pub use crate::lexer::{Token, TokenKind, lex};
 pub use crate::lowering::{
     INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, bind_executable_procedure_plan,

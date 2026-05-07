@@ -35,14 +35,14 @@ jobs:
         with:
           toolchain: stable
       - run: cargo test -p andromeda-bench --locked --quiet
-      - name: Compare against Wave 14 baseline
+      - name: Compare against release-candidate baseline
         run: python .github/scripts/perf_regression_gate.py --output-dir target/perf-regression
       - uses: actions/upload-artifact@v7
         with:
-          name: perf-regression-wave14
+          name: perf-regression-release-candidate
           path: |
-            .github/perf/baseline.wave14.json
-            .github/perf/thresholds.wave14.json
+            .github/perf/baseline.release-candidate.json
+            .github/perf/thresholds.release-candidate.json
             target/perf-regression/performance-report.json
             target/perf-regression/performance-report.md
           retention-days: 30

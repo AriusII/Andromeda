@@ -8,6 +8,8 @@
 
 use std::cmp::Ordering;
 
+use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+
 /// Unified version representation for all storage formats.
 ///
 /// Versions follow semantic versioning:
@@ -22,7 +24,10 @@ pub struct FormatVersion {
 }
 
 impl FormatVersion {
-    /// Creates a new format version.
+    /// Creates a compile-time format version for constants and test fixtures.
+    ///
+    /// Runtime and durable decode paths must use [`Self::try_new`] so corrupt
+    /// metadata is reported through typed storage errors.
     ///
     /// # Panics
     /// Panics if both major and minor are zero (reserved for uninitialized state).
@@ -31,6 +36,20 @@ impl FormatVersion {
             panic!("Version (0, 0) is reserved; use (1, 0) for initial release");
         }
         FormatVersion { major, minor }
+    }
+
+    /// Creates a format version from runtime or durable metadata.
+    ///
+    /// Decode, replay, and manifest paths should use this fallible constructor
+    /// so corrupt reserved version bytes produce typed storage errors instead
+    /// of process panics.
+    pub fn try_new(major: u32, minor: u32) -> AndromedaResult<Self> {
+        if major == 0 && minor == 0 {
+            return Err(format_version_error(
+                "format version (0, 0) is reserved for uninitialized durable metadata",
+            ));
+        }
+        Ok(FormatVersion { major, minor })
     }
 
     /// Current production versions (locked for Andromeda V0.5).
@@ -269,6 +288,10 @@ fn format_version_string(version: FormatVersion) -> String {
     format!("{}.{}", version.major, version.minor)
 }
 
+fn format_version_error(message: impl Into<String>) -> AndromedaError {
+    AndromedaError::new(AndromedaErrorKind::Storage, message)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -278,6 +301,18 @@ mod tests {
         let v1_0 = FormatVersion::V1_0;
         assert_eq!(v1_0.major, 1);
         assert_eq!(v1_0.minor, 0);
+    }
+
+    #[test]
+    fn try_new_rejects_reserved_zero_version_with_typed_error() {
+        let error = FormatVersion::try_new(0, 0).expect_err("zero version must be rejected");
+        assert_eq!(error.kind(), AndromedaErrorKind::Storage);
+        assert!(error.message().contains("reserved"));
+
+        assert_eq!(
+            FormatVersion::try_new(1, 0).expect("v1.0"),
+            FormatVersion::V1_0
+        );
     }
 
     #[test]

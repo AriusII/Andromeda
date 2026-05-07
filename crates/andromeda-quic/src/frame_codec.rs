@@ -24,6 +24,7 @@ pub struct FrameCodec;
 impl FrameCodec {
     pub const HEADER_LEN: usize = FRAME_CODEC_HEADER_LEN;
     pub const ENDIAN: FrameCodecEndian = FRAME_CODEC_ENDIAN;
+    pub const MAX_SCAN_FRAMES: usize = 4_096;
 
     pub fn encode(frame: &FrameBytes) -> AndromedaResult<Vec<u8>> {
         let mut header = frame.header;
@@ -78,6 +79,12 @@ impl FrameCodec {
         let mut offset = 0;
 
         while offset < bytes.len() {
+            if frames.len() >= Self::MAX_SCAN_FRAMES {
+                return Err(resource_error(
+                    "frame batch contains more frames than the bounded decoder policy allows",
+                ));
+            }
+
             let (frame, consumed) = Self::scan_one(&bytes[offset..])?;
             offset = offset
                 .checked_add(consumed)
@@ -94,11 +101,7 @@ impl FrameCodec {
             header_crc: 0,
             ..*header
         });
-        Ok(u32::from_be_bytes(
-            encoded[FRAME_CODEC_CRC_OFFSET..FRAME_CODEC_CRC_OFFSET + 4]
-                .try_into()
-                .expect("fixed CRC slice length"),
-        ))
+        read_u32(&encoded, FRAME_CODEC_CRC_OFFSET)
     }
 }
 
@@ -129,12 +132,12 @@ fn encode_header_with_crc(header: &FrameHeader) -> Vec<u8> {
 }
 
 fn decode_header(bytes: &[u8]) -> AndromedaResult<FrameHeader> {
-    let header_len = read_u16(bytes, 0);
+    let header_len = read_u16(bytes, 0)?;
     if header_len != FRAME_CODEC_HEADER_LEN_U16 {
         return Err(protocol_error("unexpected QUIC frame header length"));
     }
 
-    let version = read_u16(bytes, 2);
+    let version = read_u16(bytes, 2)?;
     if version != FRAME_CODEC_VERSION {
         return Err(protocol_error("unsupported QUIC frame codec version"));
     }
@@ -147,16 +150,16 @@ fn decode_header(bytes: &[u8]) -> AndromedaResult<FrameHeader> {
     crc_input.copy_from_slice(bytes);
     crc_input[FRAME_CODEC_CRC_OFFSET..FRAME_CODEC_CRC_OFFSET + 4].fill(0);
     let expected_crc = crc32(&crc_input);
-    let header_crc = read_u32(bytes, FRAME_CODEC_CRC_OFFSET);
+    let header_crc = read_u32(bytes, FRAME_CODEC_CRC_OFFSET)?;
     if header_crc != expected_crc {
         return Err(protocol_error("frame header CRC mismatch"));
     }
 
-    let frame_type = super::frame_code::FrameType::try_from(read_u32(bytes, 4))?;
+    let frame_type = super::frame_code::FrameType::try_from(read_u32(bytes, 4)?)?;
     let tx_id_present = bytes[32];
     let tx_id = match tx_id_present {
         0 => None,
-        1 => Some(TransactionId::new(read_u64(bytes, 24))),
+        1 => Some(TransactionId::new(read_u64(bytes, 24)?)),
         _ => {
             return Err(protocol_error(
                 "frame header transaction-id marker is invalid",
@@ -166,11 +169,11 @@ fn decode_header(bytes: &[u8]) -> AndromedaResult<FrameHeader> {
 
     let header = FrameHeader {
         frame_type,
-        request_id: RequestId::new(read_u64(bytes, 8)),
-        session_id: SessionId::new(read_u64(bytes, 16)),
+        request_id: RequestId::new(read_u64(bytes, 8)?),
+        session_id: SessionId::new(read_u64(bytes, 16)?),
         tx_id,
-        payload_length: read_u64(bytes, 36),
-        flags: read_u32(bytes, 44),
+        payload_length: read_u64(bytes, 36)?,
+        flags: read_u32(bytes, 44)?,
         header_crc,
     };
     header.validate_header_crc(expected_crc)?;
@@ -178,28 +181,31 @@ fn decode_header(bytes: &[u8]) -> AndromedaResult<FrameHeader> {
     Ok(header)
 }
 
-fn read_u16(bytes: &[u8], offset: usize) -> u16 {
-    u16::from_be_bytes(
-        bytes[offset..offset + 2]
-            .try_into()
-            .expect("fixed u16 field length"),
-    )
+fn read_u16(bytes: &[u8], offset: usize) -> AndromedaResult<u16> {
+    let field = read_fixed::<2>(bytes, offset)?;
+    Ok(u16::from_be_bytes(field))
 }
 
-fn read_u32(bytes: &[u8], offset: usize) -> u32 {
-    u32::from_be_bytes(
-        bytes[offset..offset + 4]
-            .try_into()
-            .expect("fixed u32 field length"),
-    )
+fn read_u32(bytes: &[u8], offset: usize) -> AndromedaResult<u32> {
+    let field = read_fixed::<4>(bytes, offset)?;
+    Ok(u32::from_be_bytes(field))
 }
 
-fn read_u64(bytes: &[u8], offset: usize) -> u64 {
-    u64::from_be_bytes(
-        bytes[offset..offset + 8]
-            .try_into()
-            .expect("fixed u64 field length"),
-    )
+fn read_u64(bytes: &[u8], offset: usize) -> AndromedaResult<u64> {
+    let field = read_fixed::<8>(bytes, offset)?;
+    Ok(u64::from_be_bytes(field))
+}
+
+fn read_fixed<const N: usize>(bytes: &[u8], offset: usize) -> AndromedaResult<[u8; N]> {
+    let end = offset
+        .checked_add(N)
+        .ok_or_else(|| protocol_error("frame header field offset overflowed"))?;
+    let field = bytes
+        .get(offset..end)
+        .ok_or_else(|| protocol_error("frame header field is truncated"))?;
+    let mut out = [0_u8; N];
+    out.copy_from_slice(field);
+    Ok(out)
 }
 
 fn write_u16(bytes: &mut Vec<u8>, value: u16) {
@@ -216,6 +222,10 @@ fn write_u64(bytes: &mut Vec<u8>, value: u64) {
 
 fn protocol_error(message: &'static str) -> AndromedaError {
     AndromedaError::new(AndromedaErrorKind::Protocol, message)
+}
+
+fn resource_error(message: &'static str) -> AndromedaError {
+    AndromedaError::new(AndromedaErrorKind::Resource, message)
 }
 
 fn crc32(bytes: &[u8]) -> u32 {
@@ -288,6 +298,20 @@ mod tests {
         assert_eq!(
             FrameCodec::scan_one(&encoded).unwrap_err().kind(),
             AndromedaErrorKind::Protocol
+        );
+    }
+
+    #[test]
+    fn codec_rejects_unbounded_frame_batches() {
+        let encoded = FrameCodec::encode(&frame()).unwrap();
+        let mut batch = Vec::with_capacity(encoded.len() * (FrameCodec::MAX_SCAN_FRAMES + 1));
+        for _ in 0..=FrameCodec::MAX_SCAN_FRAMES {
+            batch.extend_from_slice(&encoded);
+        }
+
+        assert_eq!(
+            FrameCodec::scan_all(&batch).unwrap_err().kind(),
+            AndromedaErrorKind::Resource
         );
     }
 

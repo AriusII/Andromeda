@@ -5,7 +5,11 @@ use std::fmt;
 pub struct CertificateFingerprint(String);
 
 impl CertificateFingerprint {
-    /// Returns `None` when the trimmed input is empty.
+    /// Stores trimmed certificate fingerprint evidence.
+    ///
+    /// Returns `None` when the trimmed input is empty. Legacy non-SHA evidence
+    /// remains accepted here for compatibility; current mTLS identity binding
+    /// performs stricter SHA-256 validation at the certificate identity layer.
     pub fn new(fingerprint: impl Into<String>) -> Option<Self> {
         let fingerprint = fingerprint.into();
         let fingerprint = fingerprint.trim();

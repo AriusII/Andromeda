@@ -274,6 +274,7 @@ impl ReserveStockEffect {
 
         Ok(LocalProcedure {
             contract: contract.as_ref(),
+            contract_binding: contract.binding(),
             required_permissions: contract.required_permissions.clone(),
             result_metadata: ResultStreamMetadata {
                 stream_id: INVENTORY_RESERVE_STOCK_RESULT_STREAM_ID,
@@ -359,6 +360,7 @@ impl QueryStockEffect {
 
         Ok(LocalProcedure {
             contract: contract.as_ref(),
+            contract_binding: contract.binding(),
             required_permissions: contract.required_permissions.clone(),
             result_metadata: ResultStreamMetadata {
                 stream_id: INVENTORY_QUERY_STOCK_RESULT_STREAM_ID,
@@ -450,6 +452,7 @@ impl ReleaseStockEffect {
 
         Ok(LocalProcedure {
             contract: contract.as_ref(),
+            contract_binding: contract.binding(),
             required_permissions: contract.required_permissions.clone(),
             result_metadata: ResultStreamMetadata {
                 stream_id: INVENTORY_RELEASE_STOCK_RESULT_STREAM_ID,

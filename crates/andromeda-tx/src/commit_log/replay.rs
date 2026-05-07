@@ -21,9 +21,28 @@ impl TxWalReplayRecord {
         row_count_affected: u64,
         isolation_level: IsolationLevel,
     ) -> Self {
+        Self::commit_with_durable_lsn(
+            tx_id,
+            commit_lsn,
+            commit_lsn,
+            timestamp,
+            row_count_affected,
+            isolation_level,
+        )
+    }
+
+    pub fn commit_with_durable_lsn(
+        tx_id: TransactionId,
+        commit_lsn: Lsn,
+        durable_lsn: Lsn,
+        timestamp: EngineTimestamp,
+        row_count_affected: u64,
+        isolation_level: IsolationLevel,
+    ) -> Self {
         Self::Commit(CommitLogEntry {
             tx_id,
             commit_lsn,
+            durable_lsn,
             timestamp,
             row_count_affected,
             isolation_level,
@@ -36,9 +55,26 @@ impl TxWalReplayRecord {
         timestamp: EngineTimestamp,
         parameter_hash: u64,
     ) -> Self {
+        Self::rollback_with_durable_lsn(
+            tx_id,
+            rollback_lsn,
+            rollback_lsn,
+            timestamp,
+            parameter_hash,
+        )
+    }
+
+    pub fn rollback_with_durable_lsn(
+        tx_id: TransactionId,
+        rollback_lsn: Lsn,
+        durable_lsn: Lsn,
+        timestamp: EngineTimestamp,
+        parameter_hash: u64,
+    ) -> Self {
         Self::Rollback(RollbackLogEntry {
             tx_id,
             rollback_lsn,
+            durable_lsn,
             timestamp,
             parameter_hash,
         })
@@ -53,6 +89,14 @@ impl TxWalReplayRecord {
             Self::Commit(entry) => entry.tx_id,
             Self::Rollback(entry) => entry.tx_id,
             Self::Incomplete { tx_id, .. } => *tx_id,
+        }
+    }
+
+    pub fn replay_lsn(&self) -> Lsn {
+        match self {
+            Self::Commit(entry) => entry.commit_lsn,
+            Self::Rollback(entry) => entry.rollback_lsn,
+            Self::Incomplete { last_lsn, .. } => *last_lsn,
         }
     }
 }

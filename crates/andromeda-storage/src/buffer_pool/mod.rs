@@ -22,7 +22,7 @@
 //! - **BufferPoolManager**: Trait for pluggable pool implementations
 //! - **BufferFrame**: Transient metadata (page ID, pin count, dirty LSN, state)
 //! - **ClockEvictionPolicy**: Circular buffer with reference bits for eviction
-//! - **DirtyTracker**: Maintains set of dirty pages with first-dirty LSN per page
+//! - **DirtyTracker**: Maintains set of dirty pages with dirty LSN range per page
 //! - **PageGuard**/**PageGuardMut**: RAII guards for pinned page access
 //!
 //! ## Contracts
@@ -88,7 +88,7 @@ pub use clock::{ClockEvictionCandidate, ClockEvictionPolicy};
 pub use config::BufferPoolConfig;
 pub use dirty::{DirtyEntry, DirtyFlushCandidate, DirtyTracker};
 pub use error::BufferPoolError;
-pub use flush_result::{FlushAllDirtyResult, FlushBlockedFrame, FlushError};
+pub use flush_result::{FlushAllDirtyResult, FlushBlockedFrame, FlushError, FlushStorageOperation};
 pub use frame::{BufferFrame, BufferFrameId, BufferFrameState};
 pub use guard::{PageGuard, PageGuardMut};
 pub use manager::{BufferPool, BufferPoolManager};
@@ -196,6 +196,7 @@ mod tests {
         frame.mark_dirty(Lsn::new(7)).expect("nonzero dirty lsn");
         assert!(frame.is_dirty());
         assert_eq!(frame.dirty_lsn(), Some(Lsn::new(7)));
+        assert_eq!(frame.last_dirty_lsn(), Some(Lsn::new(7)));
         assert!(frame.validate().is_ok());
 
         frame.unpin().expect("unpin frame");
@@ -321,21 +322,23 @@ mod tests {
         frame.mark_dirty(Lsn::new(20)).expect("first dirty lsn");
         frame.mark_dirty(Lsn::new(21)).expect("later dirty lsn");
         assert_eq!(frame.first_dirty_lsn(), Some(Lsn::new(20)));
+        assert_eq!(frame.last_dirty_lsn(), Some(Lsn::new(21)));
         assert_eq!(
             frame.mark_dirty(Lsn::new(19)).unwrap_err().kind(),
             AndromedaErrorKind::Storage
         );
         assert_eq!(
             frame
-                .mark_clean_after_flush(Lsn::new(19))
+                .mark_clean_after_flush(Lsn::new(20))
                 .unwrap_err()
                 .kind(),
             AndromedaErrorKind::Storage
         );
         frame
-            .mark_clean_after_flush(Lsn::new(20))
-            .expect("flush through first dirty lsn");
+            .mark_clean_after_flush(Lsn::new(21))
+            .expect("flush through latest dirty lsn");
         assert_eq!(frame.first_dirty_lsn(), None);
+        assert_eq!(frame.last_dirty_lsn(), None);
         frame.unpin().expect("unpin after dirty ordering checks");
 
         let mut free_frame =
@@ -393,12 +396,14 @@ mod tests {
             guard.mark_dirty(Lsn::new(41)).expect("later dirty lsn");
             assert!(guard.is_dirty());
             assert_eq!(guard.first_dirty_lsn(), Some(Lsn::new(40)));
+            assert_eq!(guard.last_dirty_lsn(), Some(Lsn::new(41)));
             assert_eq!(guard.pin_count(), 1);
         }
 
         assert_eq!(frame.pin_count(), 0);
         assert!(frame.is_dirty());
         assert_eq!(frame.first_dirty_lsn(), Some(Lsn::new(40)));
+        assert_eq!(frame.last_dirty_lsn(), Some(Lsn::new(41)));
     }
 
     #[test]

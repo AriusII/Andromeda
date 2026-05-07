@@ -1,22 +1,21 @@
-//! Executor-layer Validation Gates — H1-SRPL-EXEC-007
+//! Executor-layer validation gates for H1-SRPL-EXEC-007.
 //!
 //! Comprehensive validation gates for executor integration:
 //! - SrplProcedureDispatcher and SrplDispatcherAdapter
 //! - Error boundary enforcement (pre-transaction)
-//! - Dispatch path coexistence (V0 + SRPL)
+//! - Dispatch path coexistence (cataloged local + SRPL)
 //! - Contract validation stability
 //! - Deterministic error handling
-//!
-//! Exit status: All gates must pass for production readiness.
 
 use andromeda_catalog::{
-    AccessMode, CatalogObjectRef, IsolationPolicy, MultiResultPolicy, ObjectKind,
-    ProcedureContractRef, ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName,
-    ResultMetadataPolicy, ResultStreamContract, TransactionPolicy,
+    AccessMode, CatalogObjectRef, IsolationPolicy, MultiResultPolicy, ObjectKind, PolicyVersion,
+    ProcedureContractBinding, ProcedureContractRef, ProcedureErrorPolicy, ProtocolLayoutRef,
+    QualifiedName, ResultMetadataPolicy, ResultStreamCardinality, ResultStreamContract,
+    StatsVersion, TransactionPolicy,
 };
 use andromeda_core::{
-    CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId, ScalarType,
-    TypeDescriptor,
+    CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, InvocationId, ProcedureId,
+    ScalarType, TypeDescriptor,
 };
 use andromeda_exec::dispatch::{
     PreTransactionDispatchEvidence, ProcedureDispatchRequest, ProcedureDispatcher,
@@ -122,6 +121,17 @@ fn contract_ref() -> ProcedureContractRef {
     }
 }
 
+fn contract_binding() -> ProcedureContractBinding {
+    let contract_ref = contract_ref();
+    ProcedureContractBinding {
+        procedure_id: contract_ref.procedure_id,
+        catalog_version: contract_ref.catalog_version,
+        contract_hash: contract_ref.contract_hash,
+        stats_version: StatsVersion::new(1),
+        policy_version: PolicyVersion::new([7; PolicyVersion::LEN]),
+    }
+}
+
 fn procedure_object() -> CatalogObjectRef {
     CatalogObjectRef {
         object_id: CatalogObjectId::new(1),
@@ -140,6 +150,7 @@ fn result_stream(stream_id: u64, name: &str) -> ResultStreamContract {
             data_type: TypeDescriptor::required(ScalarType::Bool),
             ordinal: 0,
         }],
+        cardinality: ResultStreamCardinality::One,
         row_count_exact_required: true,
     }
 }
@@ -213,7 +224,9 @@ fn srpl_dispatcher(
 
 fn valid_dispatch_request(trace_id: TraceId) -> ProcedureDispatchRequest {
     ProcedureDispatchRequest {
+        invocation_id: InvocationId::new(77),
         procedure: contract_ref(),
+        procedure_binding: Some(contract_binding()),
         context: invocation_context(trace_id),
         pre_transaction: PreTransactionDispatchEvidence {
             admission_trace: decision_trace(trace_id, CriticalDecisionKind::ResourceGovernance),
@@ -226,6 +239,7 @@ fn valid_dispatch_request(trace_id: TraceId) -> ProcedureDispatchRequest {
 fn local_procedure() -> LocalProcedure {
     LocalProcedure {
         contract: contract_ref(),
+        contract_binding: contract_binding(),
         required_permissions: vec!["Test.Procedure.Execute".to_string()],
         result_metadata: ResultStreamMetadata::exact(1, 1, Cardinality::One, 1),
         mutation_payload: b"local-handler-payload".to_vec(),
@@ -241,11 +255,7 @@ fn gate_exec_01_srpl_dispatcher_constructs_with_dependencies() {
     let interpreter = Arc::new(SrplIrInterpreter);
 
     let dispatcher = andromeda_exec::SrplProcedureDispatcher::new(resolver, interpreter);
-
-    // Should construct successfully
     let _ = dispatcher.clone();
-
-    println!("✅ Exec Gate 01: Dispatcher constructs with dependencies");
 }
 
 #[test]
@@ -261,8 +271,6 @@ fn gate_exec_01_srpl_dispatcher_cloneable_for_sharing() {
     let _d1 = dispatcher1;
     let _d2 = dispatcher2;
     let _d3 = dispatcher3;
-
-    println!("✅ Exec Gate 01: Dispatcher cloneable for thread sharing");
 }
 
 // GATE EXEC-02: Error Boundary Enforcement
@@ -285,8 +293,6 @@ fn gate_exec_02_error_boundary_pre_transaction() {
         ),
         "adapter must expose the stable SRPL/local boundary contract"
     );
-
-    println!("✅ Exec Gate 02: Error boundary enforced at pre-transaction");
 }
 
 #[test]
@@ -321,11 +327,13 @@ fn gate_exec_02_invalid_request_rejected_before_dispatch() {
 
     // Create request with mismatched trace IDs (invalid)
     let request = ProcedureDispatchRequest {
+        invocation_id: InvocationId::new(79),
         procedure: ProcedureContractRef {
             procedure_id: ProcedureId::new(1),
             contract_hash: ContractHash::test_vector(7),
             catalog_version: CatalogVersion::new(1),
         },
+        procedure_binding: Some(contract_binding()),
         context: invocation_context(TraceId::new(999)),
         pre_transaction: PreTransactionDispatchEvidence {
             admission_trace: decision_trace(
@@ -340,11 +348,27 @@ fn gate_exec_02_invalid_request_rejected_before_dispatch() {
         },
     };
 
-    // Should be rejected at request validation boundary
     let result = adapter.dispatch_procedure(request);
-    assert!(result.is_err(), "Invalid request should be rejected");
+    assert!(
+        result.is_err(),
+        "invalid trace correlation must be rejected at the request boundary"
+    );
+}
 
-    println!("✅ Exec Gate 02: Invalid requests rejected before dispatch");
+#[test]
+fn gate_exec_02_dispatch_requires_caller_invocation_identity() {
+    let resolver = Arc::new(MockRejectResolver);
+    let dispatcher = srpl_dispatcher(resolver);
+    let adapter = SrplDispatcherAdapter::new(dispatcher);
+    let mut request = valid_dispatch_request(TraceId::new(3));
+    request.invocation_id = InvocationId::new(0);
+
+    let err = adapter
+        .dispatch_procedure(request)
+        .expect_err("zero invocation id must be rejected before SRPL resolution");
+
+    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Execution);
+    assert!(err.message().contains("invocation id"));
 }
 
 // GATE EXEC-03: Dispatch Path Coexistence
@@ -354,29 +378,20 @@ fn gate_exec_03_both_dispatch_paths_available() {
     let resolver = Arc::new(MockValidResolver::new());
     let interpreter = Arc::new(SrplIrInterpreter);
 
-    // V0 hardcoded path (simulated)
     #[allow(dead_code)]
     enum DispatchPath {
-        V0Hardcoded,
+        CatalogedLocalProcedure,
         SrplInterpreted(andromeda_exec::SrplProcedureDispatcher),
     }
 
+    let local_path = DispatchPath::CatalogedLocalProcedure;
     let srpl_path = DispatchPath::SrplInterpreted(andromeda_exec::SrplProcedureDispatcher::new(
         resolver,
         interpreter,
     ));
 
-    // Both paths are constructible
-    match srpl_path {
-        DispatchPath::V0Hardcoded => {
-            panic!("Should have taken SRPL path");
-        }
-        DispatchPath::SrplInterpreted(_dispatcher) => {
-            // Correct path
-        }
-    }
-
-    println!("✅ Exec Gate 03: Both V0 and SRPL dispatch paths available");
+    assert!(matches!(local_path, DispatchPath::CatalogedLocalProcedure));
+    assert!(matches!(srpl_path, DispatchPath::SrplInterpreted(_)));
 }
 
 // GATE EXEC-04: Adapter Interface Compliance
@@ -389,8 +404,6 @@ fn gate_exec_04_adapter_implements_dispatcher_trait() {
 
     // Adapter must implement ProcedureDispatcher trait
     let _trait_obj: &dyn ProcedureDispatcher = &adapter;
-
-    println!("✅ Exec Gate 04: Adapter implements ProcedureDispatcher trait");
 }
 
 #[test]
@@ -401,8 +414,6 @@ fn gate_exec_04_adapter_cloneable() {
 
     let adapter2 = adapter1.clone();
     let _adapter3 = adapter2.clone();
-
-    println!("✅ Exec Gate 04: Adapter cloneable for runtime sharing");
 }
 
 // GATE EXEC-05: Thread Safety
@@ -417,18 +428,17 @@ fn gate_exec_05_dispatcher_thread_safe() {
     for i in 0..10 {
         let dispatcher_clone = Arc::clone(&dispatcher);
         let handle = std::thread::spawn(move || {
-            // Just verify the dispatcher can be moved to another thread
             let _d = dispatcher_clone;
-            println!("    Thread {}: dispatcher moved successfully", i);
+            i
         });
         handles.push(handle);
     }
 
+    let moved_count = handles.len();
     for handle in handles {
-        handle.join().expect("thread panicked");
+        handle.join().expect("dispatcher thread must not panic");
     }
-
-    println!("✅ Exec Gate 05: Dispatcher is Send + Sync");
+    assert_eq!(moved_count, 10);
 }
 
 #[test]
@@ -442,18 +452,17 @@ fn gate_exec_05_adapter_thread_safe() {
     for i in 0..10 {
         let adapter_clone = Arc::clone(&adapter);
         let handle = std::thread::spawn(move || {
-            // Verify adapter can be moved to another thread
             let _a = adapter_clone;
-            println!("    Thread {}: adapter moved successfully", i);
+            i
         });
         handles.push(handle);
     }
 
+    let moved_count = handles.len();
     for handle in handles {
-        handle.join().expect("thread panicked");
+        handle.join().expect("adapter thread must not panic");
     }
-
-    println!("✅ Exec Gate 05: Adapter is Send + Sync");
+    assert_eq!(moved_count, 10);
 }
 
 // GATE EXEC-06: Deterministic Error Handling
@@ -479,8 +488,6 @@ fn gate_exec_06_error_handling_deterministic() {
         result1.unwrap_err().message(),
         result2.unwrap_err().message()
     );
-
-    println!("✅ Exec Gate 06: Error handling is deterministic");
 }
 
 // GATE EXEC-07: Result Metadata Interface
@@ -498,8 +505,6 @@ fn gate_exec_07_result_metadata_extraction_documents_current_pre_tx_gap() {
         err.message()
             .contains("procedure must declare at least one result stream")
     );
-
-    println!("✅ Exec Gate 07: Result metadata extraction validates result streams");
 }
 
 #[test]
@@ -508,6 +513,7 @@ fn gate_exec_07_resolved_manifest_carries_metadata_and_single_result_policy() {
     let request = andromeda_exec::InvocationRequest {
         invocation_id: andromeda_core::InvocationId::new(77),
         procedure: contract_ref(),
+        expected_binding: Some(contract_binding()),
         expected_contract_hash: contract_ref().contract_hash,
         catalog_version: contract_ref().catalog_version,
         structured_parameters: Vec::new(),
@@ -536,8 +542,6 @@ fn gate_exec_07_resolved_manifest_carries_metadata_and_single_result_policy() {
 
     assert_eq!(metadata.stream_id, 1);
     assert_eq!(metadata.column_count, 1);
-
-    println!("✅ Exec Gate 07: Resolver metadata state is explicit");
 }
 
 #[test]
@@ -551,6 +555,7 @@ fn gate_exec_07_multi_result_manifest_rejected_before_dispatch() {
     let request = andromeda_exec::InvocationRequest {
         invocation_id: andromeda_core::InvocationId::new(78),
         procedure: contract_ref(),
+        expected_binding: Some(contract_binding()),
         expected_contract_hash: contract_ref().contract_hash,
         catalog_version: contract_ref().catalog_version,
         structured_parameters: Vec::new(),
@@ -575,30 +580,23 @@ fn gate_exec_08_plan_validation_interface_available() {
     let result = andromeda_exec::SrplProcedureDispatcher::validate_plan(&valid_plan());
 
     assert!(result.is_ok(), "valid deterministic SRPL plan should pass");
-
-    println!("✅ Exec Gate 08: Plan validation exercises a real valid plan");
 }
 
 // Summary
 
 #[test]
 fn gate_exec_summary_all_validations() {
-    println!("\n");
-    println!("╔════════════════════════════════════════════════════════════╗");
-    println!("║      Executor Validation Gates Summary                     ║");
-    println!("║                   H1-SRPL-EXEC-007                          ║");
-    println!("╚════════════════════════════════════════════════════════════╝");
-    println!();
-    println!("✅ Exec Gate 01: Dispatcher construction and cloning");
-    println!("✅ Exec Gate 02: Error boundary enforcement");
-    println!("✅ Exec Gate 03: Dispatch path coexistence");
-    println!("✅ Exec Gate 04: Adapter interface compliance");
-    println!("✅ Exec Gate 05: Thread safety (Send + Sync)");
-    println!("✅ Exec Gate 06: Deterministic error handling");
-    println!("✅ Exec Gate 07: Result metadata interface");
-    println!("✅ Exec Gate 08: Plan validation interface");
-    println!();
-    println!("Status: ALL EXECUTOR GATES PASSED ✅");
-    println!("Ready for production deployment.");
-    println!();
+    let covered_gates = [
+        "dispatcher construction and cloning",
+        "pre-transaction error boundary",
+        "cataloged local and SRPL dispatch paths",
+        "adapter trait compliance",
+        "Send + Sync movement",
+        "deterministic error handling",
+        "result metadata interface",
+        "plan validation interface",
+    ];
+
+    assert_eq!(covered_gates.len(), 8);
+    assert!(covered_gates.iter().all(|gate| !gate.trim().is_empty()));
 }

@@ -26,6 +26,22 @@ fn test_row() -> StructuredObjectHeader {
     }
 }
 
+fn test_metadata() -> ResultStreamMetadata {
+    ResultStreamMetadata {
+        stream_id: 1,
+        row_count_exact: None,
+        row_count_max: Some(1_000),
+        column_count: 1,
+        cardinality: Cardinality::Many,
+    }
+}
+
+fn stream_with_metadata(capacity: usize) -> BackpressuredResultStream {
+    let mut stream = BackpressuredResultStream::new(capacity).unwrap();
+    stream.emit_metadata(test_metadata()).unwrap();
+    stream
+}
+
 #[tokio::test]
 async fn test_result_stream_metadata_before_payload_contract() {
     let mut stream = BackpressuredResultStream::new(10).unwrap();
@@ -57,8 +73,21 @@ async fn test_result_stream_metadata_before_payload_contract() {
 }
 
 #[tokio::test]
+async fn test_payload_before_metadata_rejected() {
+    let stream = BackpressuredResultStream::new(10).unwrap();
+
+    let err = stream
+        .push_row(test_row())
+        .await
+        .expect_err("payload must not flow before metadata");
+
+    assert!(err.to_string().contains("metadata"));
+    assert!(err.to_string().contains("before payload"));
+}
+
+#[tokio::test]
 async fn test_slow_client_backpressure_engaged() {
-    let stream = Arc::new(BackpressuredResultStream::new(10).unwrap());
+    let stream = Arc::new(stream_with_metadata(10));
     let row_count = 20;
 
     let stream_producer = stream.clone();
@@ -100,7 +129,7 @@ async fn test_slow_client_backpressure_engaged() {
 
 #[tokio::test]
 async fn test_fast_client_no_backpressure() {
-    let stream = Arc::new(BackpressuredResultStream::new(100).unwrap());
+    let stream = Arc::new(stream_with_metadata(100));
 
     let stream_producer = stream.clone();
     let producer = tokio::spawn(async move {
@@ -165,7 +194,7 @@ async fn test_queue_capacity_enforced() {
 
 #[tokio::test]
 async fn test_completion_requires_valid_lsn() {
-    let stream = BackpressuredResultStream::new(10).unwrap();
+    let stream = stream_with_metadata(10);
 
     let result = stream.complete(CompletionStatus::Committed, 0).await;
     assert!(result.is_err());
@@ -182,8 +211,22 @@ async fn test_completion_requires_valid_lsn() {
 }
 
 #[tokio::test]
-async fn test_completion_is_single_terminal_signal() {
+async fn test_completion_requires_metadata_before_terminal_signal() {
     let stream = BackpressuredResultStream::new(10).unwrap();
+
+    let err = stream
+        .complete(CompletionStatus::Committed, 42)
+        .await
+        .expect_err("terminal completion must not flow before metadata");
+
+    assert!(err.to_string().contains("metadata"));
+    assert!(err.to_string().contains("terminal completion"));
+    assert!(stream.completion().await.is_none());
+}
+
+#[tokio::test]
+async fn test_completion_is_single_terminal_signal() {
+    let stream = stream_with_metadata(10);
 
     stream
         .complete(CompletionStatus::Committed, 42)
@@ -211,7 +254,7 @@ async fn test_completion_is_single_terminal_signal() {
 
 #[tokio::test]
 async fn test_no_silent_drops() {
-    let stream = Arc::new(BackpressuredResultStream::new(20).unwrap());
+    let stream = Arc::new(stream_with_metadata(20));
 
     let row_count = 100;
 
@@ -262,7 +305,7 @@ async fn test_no_silent_drops() {
 
 #[tokio::test]
 async fn test_concurrent_produce_consume_varying_speed() {
-    let stream = Arc::new(BackpressuredResultStream::new(30).unwrap());
+    let stream = Arc::new(stream_with_metadata(30));
 
     let barrier = Arc::new(Barrier::new(2));
 
@@ -323,7 +366,7 @@ async fn test_concurrent_produce_consume_varying_speed() {
 
 #[tokio::test]
 async fn test_backpressure_signal_generation() {
-    let stream = Arc::new(BackpressuredResultStream::new(10).unwrap());
+    let stream = Arc::new(stream_with_metadata(10));
 
     let stream_producer = stream.clone();
     let producer = tokio::spawn(async move {
@@ -356,8 +399,36 @@ async fn test_backpressure_signal_generation() {
 }
 
 #[tokio::test]
+async fn test_backpressure_signal_requires_request_identity() {
+    let stream = Arc::new(stream_with_metadata(10));
+
+    let stream_producer = stream.clone();
+    let producer = tokio::spawn(async move {
+        for _ in 0..50 {
+            let row = test_row();
+            let _ = stream_producer.push_row(row).await;
+        }
+    });
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+    if stream.is_backpressured() {
+        assert!(
+            stream.backpressure_signal(None).is_none(),
+            "backpressure evidence must carry request identity"
+        );
+    }
+
+    for _ in 0..50 {
+        let _ = stream.next_row().await;
+    }
+
+    let _ = producer.await;
+}
+
+#[tokio::test]
 async fn test_metrics_peak_tracking() {
-    let stream = Arc::new(BackpressuredResultStream::new(50).unwrap());
+    let stream = Arc::new(stream_with_metadata(50));
 
     let stream_producer = stream.clone();
     let producer = tokio::spawn(async move {
@@ -393,7 +464,7 @@ async fn test_metrics_peak_tracking() {
 
 #[tokio::test]
 async fn test_completion_state_persistence() {
-    let stream = Arc::new(BackpressuredResultStream::new(16).unwrap());
+    let stream = Arc::new(stream_with_metadata(16));
 
     let stream_clone = stream.clone();
     let producer = tokio::spawn(async move {
@@ -403,7 +474,7 @@ async fn test_completion_state_persistence() {
 
             if i == 9 {
                 stream_clone
-                    .complete(CompletionStatus::RolledBack, 999)
+                    .complete(CompletionStatus::Committed, 999)
                     .await
                     .unwrap();
             }
@@ -415,16 +486,42 @@ async fn test_completion_state_persistence() {
     let completion = stream.completion().await;
     assert!(completion.is_some());
     let comp = completion.unwrap();
-    assert_eq!(comp.status, CompletionStatus::RolledBack);
+    assert_eq!(comp.status, CompletionStatus::Committed);
     assert_eq!(comp.lsn, 999);
     assert_eq!(comp.row_count, 10);
 }
 
 #[tokio::test]
+async fn test_rolled_back_completion_rejects_payload_rows() {
+    let stream = stream_with_metadata(16);
+
+    stream.push_row(test_row()).await.unwrap();
+
+    let err = stream
+        .complete(CompletionStatus::RolledBack, 999)
+        .await
+        .expect_err("rolled-back completion must not report payload rows");
+
+    assert!(err.to_string().contains("zero rows"));
+    assert!(stream.completion().await.is_none());
+
+    stream
+        .complete(CompletionStatus::Committed, 1_000)
+        .await
+        .expect("failed terminal validation must not poison the stream");
+    let completion = stream
+        .completion()
+        .await
+        .expect("committed completion should be recorded after retry");
+    assert_eq!(completion.status, CompletionStatus::Committed);
+    assert_eq!(completion.row_count, 1);
+}
+
+#[tokio::test]
 async fn test_multiple_concurrent_streams() {
-    let stream1 = Arc::new(BackpressuredResultStream::new(128).unwrap());
-    let stream2 = Arc::new(BackpressuredResultStream::new(128).unwrap());
-    let stream3 = Arc::new(BackpressuredResultStream::new(128).unwrap());
+    let stream1 = Arc::new(stream_with_metadata(128));
+    let stream2 = Arc::new(stream_with_metadata(128));
+    let stream3 = Arc::new(stream_with_metadata(128));
 
     let s1_producer = stream1.clone();
     let task1 = tokio::spawn(async move {

@@ -19,7 +19,7 @@ fn commit_transition_carries_invocation_request_session_and_durable_lsn() {
     let mut tx = TransactionStateMachine::new(TransactionId::new(101));
     tx.begin().unwrap();
     tx.request_commit().unwrap();
-    let previous = tx.state;
+    let previous = tx.state();
     tx.publish_visible_commit_after_durable_flush(900).unwrap();
 
     let trace = tx.project_transition(
@@ -51,7 +51,7 @@ fn rollback_transition_carries_durable_rollback_lsn() {
     let mut tx = TransactionStateMachine::new(TransactionId::new(202));
     tx.begin().unwrap();
     tx.request_rollback().unwrap();
-    let previous = tx.state;
+    let previous = tx.state();
     tx.complete_rollback_after_durable_flush(555).unwrap();
 
     let trace = tx.project_transition(

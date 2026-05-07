@@ -7,8 +7,11 @@ use andromeda_core::{
     ResourceBudget, SessionId, TransactionId,
 };
 use andromeda_exec::{
-    CompletionStatus, ExecutionIoAdmissionRequest, InventoryReserveStockExecutor, InventoryStock,
-    InvocationContext, InvocationRequest, LocalVerticalRuntime, ReserveStockCommand,
+    CompletionStatus, ExecutionIoAdmissionRequest, HeapInventoryProductStockStore,
+    InventoryProductStockCommitEvidence, InventoryProductStockDurableRedoEvidence,
+    InventoryProductStockStore, InventoryReserveStockExecutor, InventoryStock, InvocationContext,
+    InvocationRequest, LocalHeapRowInsertRedoTemplate, LocalHeapRowRedoContractBinding,
+    LocalVerticalRuntime, ReserveStockCommand,
 };
 use andromeda_observe::{
     CommitVisibleTrace, CompletionEmittedTrace, CriticalDecisionKind, EventCorrelation,
@@ -22,9 +25,9 @@ use andromeda_srpl::{
 use andromeda_storage::publication::DatabaseManifest;
 use andromeda_storage::{
     CoreIoPlacementPolicy, CoreIoPlacementRequest, DurableTransactionState, InMemoryWal, Lsn,
-    OperationalProfile, PageSize, RecoveryPlan, RedoRecordDecision, StartupMode,
-    StorageIoBudgetScope, StorageTier, StorageWorkloadClass, WalRecordKind,
-    classify_durable_transactions,
+    OperationalProfile, PageId, PageSize, ProductStockRow, RecoveryPlan, RedoRecordDecision,
+    StartupMode, StorageIoBudgetScope, StorageTier, StorageWorkloadClass, WalRecordKind,
+    classify_durable_transactions, write_ahead_log::HeapRowRedoPayloadV1,
 };
 use andromeda_tx::TransactionState;
 
@@ -36,10 +39,21 @@ fn request_for(contract: &ProcedureContract, invocation_id: u64) -> InvocationRe
     InvocationRequest {
         invocation_id: InvocationId::new(invocation_id),
         procedure: contract.as_ref(),
+        expected_binding: Some(contract.binding()),
         expected_contract_hash: contract.contract_hash,
         catalog_version: contract.object.catalog_version,
         structured_parameters: Vec::new(),
     }
+}
+
+fn product_stock_redo_binding(contract: &ProcedureContract) -> LocalHeapRowRedoContractBinding {
+    let bindings =
+        inventory_reserve_stock_catalog_bindings(contract.object.catalog_version).unwrap();
+    LocalHeapRowRedoContractBinding::from_procedure_binding(
+        bindings.product_stock_table.object_id,
+        contract.binding(),
+    )
+    .unwrap()
 }
 
 fn foreground_io_admission(
@@ -96,6 +110,7 @@ fn reserve_stock_commit_gate_links_catalog_srpl_business_runtime_wal_recovery_ob
     let bindings =
         inventory_reserve_stock_catalog_bindings(contract.object.catalog_version).unwrap();
     bindings.validate().unwrap();
+    let redo_binding = product_stock_redo_binding(&contract);
 
     let srpl_ir =
         compile_narrow_procedure_signature(inventory_reserve_stock_srpl_source()).unwrap();
@@ -201,7 +216,38 @@ fn reserve_stock_commit_gate_links_catalog_srpl_business_runtime_wal_recovery_ob
             .proves_exact_result_and_remaining_stock()
     );
 
-    let procedure = effect.to_local_procedure(&contract).unwrap();
+    let mut product_stock = HeapInventoryProductStockStore::from_cold_snapshot(
+        PageId::new(42_201),
+        PageSize::KiB16,
+        effect.previous_stock,
+    )
+    .unwrap()
+    .with_redo_contract_binding(redo_binding)
+    .unwrap();
+    assert_eq!(product_stock.redo_contract_binding(), Some(redo_binding));
+    let prepared_product_stock = product_stock
+        .prepare_reserve_stock(ReserveStockCommand {
+            product_id: 42,
+            quantity: 3,
+        })
+        .unwrap();
+    assert_eq!(prepared_product_stock.effect, effect);
+    assert_eq!(
+        product_stock.visible_stock().unwrap(),
+        effect.previous_stock
+    );
+    assert_eq!(
+        product_stock.visible_product_stock_row().unwrap(),
+        ProductStockRow::new(42, 10).unwrap()
+    );
+    assert!(product_stock.published_commit().is_none());
+    let redo_template = product_stock
+        .prepared_reserve_stock_redo_template(&prepared_product_stock)
+        .unwrap()
+        .unwrap();
+    assert_eq!(redo_template.redo_binding(), Some(redo_binding));
+
+    let mut procedure = effect.to_local_procedure(&contract).unwrap();
     assert_eq!(
         procedure.required_permissions,
         vec![INVENTORY_RESERVE_STOCK_PERMISSION.to_string()]
@@ -210,6 +256,16 @@ fn reserve_stock_commit_gate_links_catalog_srpl_business_runtime_wal_recovery_ob
     assert_eq!(procedure.result_metadata.cardinality, Cardinality::One);
     assert_eq!(procedure.rows_affected, 2);
     assert_eq!(procedure.mutation_payload, effect.mutation_payload());
+    let logical_mutation_payload = procedure.mutation_payload.clone();
+    procedure.mutation_payload = redo_template.encode_template().unwrap();
+    assert_eq!(
+        LocalHeapRowInsertRedoTemplate::try_decode_template(&procedure.mutation_payload)
+            .unwrap()
+            .unwrap()
+            .redo_binding(),
+        Some(redo_binding)
+    );
+    assert_ne!(procedure.mutation_payload, logical_mutation_payload);
     assert_ne!(
         procedure.mutation_payload.as_slice(),
         inventory_reserve_stock_srpl_source().as_bytes()
@@ -225,7 +281,7 @@ fn reserve_stock_commit_gate_links_catalog_srpl_business_runtime_wal_recovery_ob
                 TraceId::new(9100),
                 vec![INVENTORY_RESERVE_STOCK_PERMISSION.to_string()],
             ),
-            foreground_io_admission(TraceId::new(9101)),
+            foreground_io_admission(TraceId::new(9100)),
         )
         .unwrap();
 
@@ -250,19 +306,83 @@ fn reserve_stock_commit_gate_links_catalog_srpl_business_runtime_wal_recovery_ob
             .collect::<Vec<_>>(),
         vec![
             WalRecordKind::TxBegin,
-            WalRecordKind::RowUpdate,
+            WalRecordKind::RowInsert,
             WalRecordKind::TxCommit,
         ]
     );
+    let wal_redo = HeapRowRedoPayloadV1::decode(
+        &runtime.wal().records()[1].payload,
+        runtime.wal().records()[1].header.kind,
+    )
+    .unwrap();
+    assert_eq!(wal_redo.resulting_page_lsn(), Lsn::new(2));
     assert_eq!(
-        runtime.wal().records()[1].payload,
-        effect.mutation_payload()
+        ProductStockRow::decode(wal_redo.tuple()).unwrap(),
+        ProductStockRow::new(42, 7).unwrap()
     );
     assert!(outcome.result_metadata.validate_completed_stream(1).is_ok());
     assert!(
         effect
             .result_evidence()
             .matches_committed_completion(&outcome.completion)
+    );
+
+    let product_stock_commit =
+        InventoryProductStockCommitEvidence::new(tx_id, runtime.wal().durable_lsn()).unwrap();
+    let wal_evidence = outcome.wal_evidence.unwrap();
+    let redo_record_lsn = wal_evidence.mutation_lsn.unwrap();
+    let redo_payload = redo_template
+        .materialize_heap_redo_payload(redo_record_lsn)
+        .unwrap();
+    assert_eq!(redo_payload, wal_redo);
+    let product_stock_redo = InventoryProductStockDurableRedoEvidence::new(
+        tx_id,
+        runtime.wal().durable_lsn(),
+        redo_payload.clone(),
+    )
+    .unwrap();
+    let missing_binding_error = product_stock
+        .publish_committed_reserve_stock_with_redo(
+            &prepared_product_stock,
+            product_stock_commit,
+            product_stock_redo,
+        )
+        .unwrap_err();
+    assert_eq!(missing_binding_error.kind(), AndromedaErrorKind::Contract);
+    assert_eq!(
+        product_stock.visible_stock().unwrap(),
+        effect.previous_stock
+    );
+
+    let product_stock_redo = InventoryProductStockDurableRedoEvidence::new_with_binding(
+        tx_id,
+        runtime.wal().durable_lsn(),
+        redo_binding,
+        redo_payload,
+    )
+    .unwrap();
+    assert_eq!(product_stock_redo.redo_binding, Some(redo_binding));
+    product_stock
+        .publish_committed_reserve_stock_with_redo(
+            &prepared_product_stock,
+            product_stock_commit,
+            product_stock_redo.clone(),
+        )
+        .unwrap();
+    assert_eq!(product_stock.visible_stock().unwrap(), effect.next_stock);
+    assert_eq!(
+        product_stock.visible_product_stock_row().unwrap(),
+        ProductStockRow::new(42, 7).unwrap()
+    );
+    assert_eq!(product_stock.active_heap_slot_count(), 2);
+    assert_eq!(product_stock.published_commit(), Some(product_stock_commit));
+    assert_eq!(product_stock.page_lsn(), product_stock_redo.redo_record_lsn);
+    assert_eq!(
+        product_stock
+            .last_redo_payload()
+            .unwrap()
+            .resulting_page_lsn(),
+        product_stock_redo.redo_record_lsn
     );
 
     let durable_records = runtime.wal().replay_durable();
@@ -274,7 +394,7 @@ fn reserve_stock_commit_gate_links_catalog_srpl_business_runtime_wal_recovery_ob
     .unwrap();
     let committed_redo = recovery_plan.committed_redo_records().collect::<Vec<_>>();
     assert_eq!(committed_redo.len(), 1);
-    assert_eq!(committed_redo[0].kind, WalRecordKind::RowUpdate);
+    assert_eq!(committed_redo[0].kind, WalRecordKind::RowInsert);
     assert_eq!(committed_redo[0].transaction_id, Some(tx_id));
     assert_eq!(
         committed_redo[0].transaction_state,
@@ -286,7 +406,7 @@ fn reserve_stock_commit_gate_links_catalog_srpl_business_runtime_wal_recovery_ob
             .find(|record| record.header.lsn == committed_redo[0].lsn)
             .unwrap()
             .payload,
-        effect.mutation_payload()
+        product_stock_redo.redo_payload.encode()
     );
     assert_eq!(
         recovery_plan.replay_lsns().collect::<Vec<_>>(),
@@ -362,6 +482,81 @@ fn reserve_stock_commit_gate_links_catalog_srpl_business_runtime_wal_recovery_ob
             CriticalDecisionKind::RecoveryStartup,
             CriticalDecisionKind::BusinessRuleDecision,
         ]
+    );
+}
+
+#[test]
+fn product_stock_redo_publication_rejects_mismatched_contract_binding() {
+    let contract = inventory_reserve_stock_contract().unwrap();
+    let redo_binding = product_stock_redo_binding(&contract);
+    let effect = InventoryReserveStockExecutor::reserve(
+        ReserveStockCommand {
+            product_id: 42,
+            quantity: 3,
+        },
+        InventoryStock {
+            product_id: 42,
+            available_quantity: 10,
+            version: 7,
+        },
+    )
+    .unwrap();
+    let mut product_stock = HeapInventoryProductStockStore::from_cold_snapshot(
+        PageId::new(42_202),
+        PageSize::KiB16,
+        effect.previous_stock,
+    )
+    .unwrap()
+    .with_redo_contract_binding(redo_binding)
+    .unwrap();
+    let prepared_product_stock = product_stock
+        .prepare_reserve_stock(ReserveStockCommand {
+            product_id: 42,
+            quantity: 3,
+        })
+        .unwrap();
+    let redo_template = product_stock
+        .prepared_reserve_stock_redo_template(&prepared_product_stock)
+        .unwrap()
+        .unwrap();
+    let redo_payload = redo_template
+        .materialize_heap_redo_payload(Lsn::new(2))
+        .unwrap();
+    let mismatched_binding = LocalHeapRowRedoContractBinding::new(
+        redo_binding.table_object_id,
+        redo_binding.procedure_id,
+        redo_binding.catalog_version,
+        ContractHash::test_vector(0xEE),
+    )
+    .unwrap();
+    let redo = InventoryProductStockDurableRedoEvidence::new_with_binding(
+        TransactionId::new(77),
+        Lsn::new(3),
+        mismatched_binding,
+        redo_payload,
+    )
+    .unwrap();
+    let commit =
+        InventoryProductStockCommitEvidence::new(TransactionId::new(77), Lsn::new(3)).unwrap();
+
+    let error = product_stock
+        .publish_committed_reserve_stock_with_redo(&prepared_product_stock, commit, redo)
+        .unwrap_err();
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Contract);
+    assert!(error.message().contains("expected table object"));
+    assert_eq!(
+        product_stock.visible_stock().unwrap(),
+        effect.previous_stock
+    );
+    assert_eq!(
+        product_stock.visible_product_stock_row().unwrap(),
+        ProductStockRow::new(42, 10).unwrap()
+    );
+    assert!(product_stock.published_commit().is_none());
+    assert_eq!(
+        product_stock.prepared_intent(),
+        Some(&prepared_product_stock)
     );
 }
 
@@ -450,7 +645,7 @@ fn insufficient_stock_rolls_back_with_typed_rejection_and_committed_only_recover
     );
     assert!(!runtime.wal().records().iter().any(|record| matches!(
         record.header.kind,
-        WalRecordKind::RowUpdate | WalRecordKind::TxCommit
+        WalRecordKind::RowInsert | WalRecordKind::RowUpdate | WalRecordKind::TxCommit
     )));
     assert_eq!(observed_stock.available_quantity, 10);
     assert_eq!(observed_stock.version, 7);
@@ -550,6 +745,7 @@ fn stale_contract_rejection_stays_pre_transaction_with_no_wal_or_transaction_obs
     let stale_request = InvocationRequest {
         expected_contract_hash: ContractHash::test_vector(99),
         catalog_version: CatalogVersion::new(99),
+        expected_binding: Some(contract.binding()),
         ..request_for(&contract, 9300)
     };
     let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
@@ -568,7 +764,7 @@ fn stale_contract_rejection_stays_pre_transaction_with_no_wal_or_transaction_obs
     assert!(runtime.wal().is_empty());
 
     let reject = stale_request
-        .validate_before_transaction(procedure.contract, TraceId::new(9301))
+        .validate_before_transaction(procedure.contract_binding, TraceId::new(9301))
         .unwrap_err();
     assert_eq!(reject.status, CompletionStatus::ContractRejected);
     assert!(

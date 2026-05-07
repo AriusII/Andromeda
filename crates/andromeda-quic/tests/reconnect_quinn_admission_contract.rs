@@ -2,14 +2,15 @@
 
 #![cfg(feature = "runtime-quinn")]
 
-use andromeda_core::AndromedaErrorKind;
+use andromeda_core::{AndromedaErrorKind, CertificateIdentityStatus};
 use andromeda_observe::{CertificateIdentity, SurfaceScope};
 use andromeda_quic::{
     ConnectionPoolKey, PoolAdmissionKind, ReconnectState, RetryAdmissionDecision, RetryIdempotency,
     RetryRejectionReason, SurfacePlane, ZeroRttAdmissionRejectionReason, ZeroRttReplayClass,
     quinn_backend::{
-        QuinnAdmissionPlanner, QuinnAdmissionRequest, QuinnNetworkFailureKind, QuinnRetryOutcome,
-        QuinnRetryRequest,
+        QuinnAdmissionPlanner, QuinnAdmissionRequest, QuinnCertificateStatusEvidence,
+        QuinnCertificateStatusOutcome, QuinnCertificateStatusReason, QuinnNetworkFailureKind,
+        QuinnRetryOutcome, QuinnRetryRequest,
     },
 };
 
@@ -55,12 +56,73 @@ fn quinn_admission_exposes_zero_rtt_unknown_idempotency_rejection() {
         .unwrap();
 
     assert_eq!(
+        decision.certificate_status.outcome,
+        QuinnCertificateStatusOutcome::Allowed
+    );
+    assert_eq!(
         decision.zero_rtt.rejection_reason(),
         Some(ZeroRttAdmissionRejectionReason::UnknownIdempotency)
     );
     assert!(
         decision.pool_admission.is_some(),
         "regular 1-RTT pool admission remains available after 0-RTT rejection"
+    );
+}
+
+#[test]
+fn quinn_admission_rejects_disabled_certificate_before_pool_admission() {
+    let mut planner = QuinnAdmissionPlanner::conservative().unwrap();
+    let presented = identity(fp('d'), SurfaceScope::Application);
+    let request = QuinnAdmissionRequest::initial(
+        &presented,
+        SurfacePlane::Application,
+        0,
+        ZeroRttReplayClass::ReadOnlyManifest,
+    )
+    .with_certificate_status(CertificateIdentityStatus::Disabled);
+
+    let error = planner.admit_request(request).unwrap_err();
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Security);
+    assert!(
+        error.message().contains("certificate_disabled"),
+        "disabled certificate denial must carry stable reason evidence"
+    );
+    assert!(
+        error.message().contains("status=disabled"),
+        "disabled certificate denial must carry status evidence"
+    );
+    assert!(
+        planner.pool().is_empty(),
+        "disabled certificate must not create or reuse a Quinn pool entry"
+    );
+}
+
+#[test]
+fn quinn_certificate_status_evidence_is_exhaustive_for_core_statuses() {
+    let presented = identity(fp('e'), SurfaceScope::Application);
+
+    let active =
+        QuinnCertificateStatusEvidence::evaluate(&presented, CertificateIdentityStatus::Active)
+            .unwrap();
+    let disabled =
+        QuinnCertificateStatusEvidence::evaluate(&presented, CertificateIdentityStatus::Disabled)
+            .unwrap();
+    let revoked =
+        QuinnCertificateStatusEvidence::evaluate(&presented, CertificateIdentityStatus::Revoked)
+            .unwrap();
+
+    assert!(active.is_allowed());
+    assert_eq!(active.reason, QuinnCertificateStatusReason::Active);
+    assert!(disabled.is_denied());
+    assert_eq!(
+        disabled.reason,
+        QuinnCertificateStatusReason::CertificateDisabled
+    );
+    assert!(revoked.is_denied());
+    assert_eq!(
+        revoked.reason,
+        QuinnCertificateStatusReason::CertificateRevoked
     );
 }
 

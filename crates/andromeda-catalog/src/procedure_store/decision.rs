@@ -1,36 +1,33 @@
 use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, ContractHash,
-    InvocationId, ProcedureId,
+    AndromedaError, AndromedaErrorKind, AndromedaResult, InvocationId, ProcedureId,
 };
 use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
+
+use crate::ProcedureContractBinding;
+
+use super::evidence_role::ProcedureStoreEvidenceRole;
 
 /// Decision evidence attached to a single invocation. Every invocation that
 /// reaches the store must carry a [`DecisionTrace`] explaining why it was
 /// admitted, rejected, contract-validated, etc.
 ///
-/// This struct is the *evidence shape* — it does not itself decide anything.
+/// This struct is the evidence shape; it does not itself decide anything.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InvocationDecisionRecord {
     pub invocation_id: InvocationId,
-    pub procedure_id: ProcedureId,
-    pub contract_hash: ContractHash,
-    pub catalog_version: CatalogVersion,
+    pub binding: ProcedureContractBinding,
     pub trace: DecisionTrace,
 }
 
 impl InvocationDecisionRecord {
     pub fn new(
         invocation_id: InvocationId,
-        procedure_id: ProcedureId,
-        contract_hash: ContractHash,
-        catalog_version: CatalogVersion,
+        binding: ProcedureContractBinding,
         trace: DecisionTrace,
     ) -> AndromedaResult<Self> {
         let record = Self {
             invocation_id,
-            procedure_id,
-            contract_hash,
-            catalog_version,
+            binding,
             trace,
         };
         record.validate()?;
@@ -44,24 +41,7 @@ impl InvocationDecisionRecord {
                 "invocation decision invocation id must not be zero",
             ));
         }
-        if self.procedure_id.get() == 0 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
-                "invocation decision procedure id must not be zero",
-            ));
-        }
-        if self.contract_hash.is_zero() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
-                "invocation decision contract hash must not be zero",
-            ));
-        }
-        if self.catalog_version.get() == 0 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
-                "invocation decision catalog version must not be zero",
-            ));
-        }
+        self.binding.validate()?;
         if !self.trace.has_explanation() {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Contract,
@@ -75,7 +55,31 @@ impl InvocationDecisionRecord {
         self.trace.trace_id
     }
 
+    pub const fn procedure_id(&self) -> ProcedureId {
+        self.binding.procedure_id
+    }
+
+    pub const fn binding(&self) -> ProcedureContractBinding {
+        self.binding
+    }
+
     pub fn decision_kind(&self) -> CriticalDecisionKind {
         self.trace.decision
+    }
+
+    pub const fn evidence_role(&self) -> ProcedureStoreEvidenceRole {
+        ProcedureStoreEvidenceRole::authoritative_decision()
+    }
+
+    pub const fn is_authoritative_decision(&self) -> bool {
+        self.evidence_role().is_authoritative_decision()
+    }
+
+    pub const fn is_observed_feedback(&self) -> bool {
+        self.evidence_role().is_observed_feedback()
+    }
+
+    pub const fn can_select_plan_alone(&self) -> bool {
+        self.evidence_role().can_select_plan_alone()
     }
 }

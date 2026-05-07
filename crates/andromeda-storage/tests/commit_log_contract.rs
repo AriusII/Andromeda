@@ -49,6 +49,13 @@ fn test_commit_log_entry_invalid_visible_timestamp_zero() {
     assert!(result.is_err());
 }
 
+#[test]
+fn test_commit_log_entry_invalid_commit_lsn_zero() {
+    let tx_id = TransactionIdGenerator::new().generate();
+    let result = CommitLogEntry::new(tx_id, Lsn::ZERO, 500);
+    assert!(result.is_err());
+}
+
 // Durability Flag Lifecycle
 
 #[test]
@@ -148,6 +155,30 @@ fn test_commit_log_entry_decode_invalid_tx_id() {
     // All zeros would result in tx_id = 0, which is invalid
     let result = CommitLogEntry::decode(&buffer);
     assert!(result.is_err());
+}
+
+#[test]
+fn test_commit_log_entry_decode_rejects_invalid_durable_evidence() {
+    let tx_id = TransactionIdGenerator::new().generate();
+    let entry = CommitLogEntry::new(tx_id, Lsn::new(100), 500).unwrap();
+    let mut encoded = entry.encode();
+
+    encoded[8..16].copy_from_slice(&0u64.to_le_bytes());
+    let error = CommitLogEntry::decode(&encoded)
+        .expect_err("zero commit LSN must be rejected during decode");
+    assert!(error.message().contains("commit_lsn"));
+
+    let mut encoded = entry.encode();
+    encoded[16..24].copy_from_slice(&0u64.to_le_bytes());
+    let error = CommitLogEntry::decode(&encoded)
+        .expect_err("zero visible timestamp must be rejected during decode");
+    assert!(error.message().contains("visible_timestamp"));
+
+    let mut encoded = entry.encode();
+    encoded[24] = 2;
+    let error = CommitLogEntry::decode(&encoded)
+        .expect_err("non-binary durability flag must be rejected during decode");
+    assert!(error.message().contains("durability flag"));
 }
 
 // CommitLog Basic Operations

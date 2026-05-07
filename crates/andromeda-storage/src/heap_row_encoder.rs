@@ -15,6 +15,10 @@ use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 const BITS_PER_BITMAP_BYTE: usize = 8;
 const VAR_OFFSET_WIDTH_BYTES: usize = 4;
+pub const INVENTORY_PRODUCT_STOCK_TABLE_NAME: &str = "Inventory.ProductStock";
+pub const PRODUCT_STOCK_PRODUCT_ID_COLUMN: &str = "ProductId";
+pub const PRODUCT_STOCK_QUANTITY_ON_HAND_COLUMN: &str = "QuantityOnHand";
+pub const PRODUCT_STOCK_ROW_ENCODED_LEN: usize = 1 + 8 + 8;
 
 /// Scalar data types supported by Andromeda storage engine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -138,6 +142,102 @@ pub enum Datum {
     Text(String),
 }
 
+/// Deterministic storage row shape for the minimal `Inventory.ProductStock`
+/// heap-facing API.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProductStockRow {
+    pub product_id: i64,
+    pub quantity_on_hand: i64,
+}
+
+impl ProductStockRow {
+    pub fn new(product_id: i64, quantity_on_hand: i64) -> AndromedaResult<Self> {
+        if product_id <= 0 {
+            return Err(encoder_error("ProductStock ProductId must be positive"));
+        }
+        if quantity_on_hand < 0 {
+            return Err(encoder_error(
+                "ProductStock QuantityOnHand must not be negative",
+            ));
+        }
+
+        Ok(Self {
+            product_id,
+            quantity_on_hand,
+        })
+    }
+
+    pub fn encode(self) -> AndromedaResult<Vec<u8>> {
+        let encoder = product_stock_row_encoder()?;
+        let encoded = encoder.encode(&self.to_datums())?;
+        if encoded.len() != PRODUCT_STOCK_ROW_ENCODED_LEN {
+            return Err(encoder_error(format!(
+                "ProductStock row encoded length drift: expected {}, got {}",
+                PRODUCT_STOCK_ROW_ENCODED_LEN,
+                encoded.len()
+            )));
+        }
+        Ok(encoded)
+    }
+
+    pub fn decode(bytes: &[u8]) -> AndromedaResult<Self> {
+        if bytes.len() != PRODUCT_STOCK_ROW_ENCODED_LEN {
+            return Err(encoder_error(format!(
+                "ProductStock row encoded length mismatch: expected {}, got {}",
+                PRODUCT_STOCK_ROW_ENCODED_LEN,
+                bytes.len()
+            )));
+        }
+        if bytes[0] != 0 {
+            return Err(encoder_error(
+                "ProductStock null bitmap and reserved bits must be zero",
+            ));
+        }
+        let encoder = product_stock_row_encoder()?;
+        let values = encoder.decode(bytes)?;
+        Self::from_datums(&values)
+    }
+
+    pub fn to_datums(self) -> [Datum; 2] {
+        [
+            Datum::Int64(self.product_id),
+            Datum::Int64(self.quantity_on_hand),
+        ]
+    }
+
+    pub fn from_datums(values: &[Datum]) -> AndromedaResult<Self> {
+        match values {
+            [Datum::Int64(product_id), Datum::Int64(quantity_on_hand)] => {
+                Self::new(*product_id, *quantity_on_hand)
+            }
+            _ => Err(encoder_error(
+                "ProductStock row must contain ProductId:Int64 and QuantityOnHand:Int64",
+            )),
+        }
+    }
+}
+
+pub fn product_stock_row_schema() -> AndromedaResult<Arc<RowSchema>> {
+    Ok(Arc::new(RowSchema::new(vec![
+        ColumnDef {
+            name: PRODUCT_STOCK_PRODUCT_ID_COLUMN.to_string(),
+            ordinal: 0,
+            scalar_type: ScalarType::Int64,
+            nullable: false,
+        },
+        ColumnDef {
+            name: PRODUCT_STOCK_QUANTITY_ON_HAND_COLUMN.to_string(),
+            ordinal: 1,
+            scalar_type: ScalarType::Int64,
+            nullable: false,
+        },
+    ])?))
+}
+
+pub fn product_stock_row_encoder() -> AndromedaResult<RowEncoder> {
+    Ok(RowEncoder::new(product_stock_row_schema()?))
+}
+
 impl Datum {
     /// Get byte length when serialized (excluding null bitmap and variable-length offsets).
     pub fn byte_length(&self) -> AndromedaResult<usize> {
@@ -188,6 +288,42 @@ impl Datum {
             Self::Bytes(b) => Ok(b.clone()),
             Self::Text(s) => Ok(s.as_bytes().to_vec()),
         }
+    }
+
+    fn type_name(&self) -> &'static str {
+        match self {
+            Self::Null => "Null",
+            Self::Int8(_) => "Int8",
+            Self::Int16(_) => "Int16",
+            Self::Int32(_) => "Int32",
+            Self::Int64(_) => "Int64",
+            Self::UInt8(_) => "UInt8",
+            Self::UInt16(_) => "UInt16",
+            Self::UInt32(_) => "UInt32",
+            Self::UInt64(_) => "UInt64",
+            Self::Float32(_) => "Float32",
+            Self::Float64(_) => "Float64",
+            Self::Bool(_) => "Bool",
+            Self::Bytes(_) => "Bytes",
+            Self::Text(_) => "Text",
+        }
+    }
+
+    fn matches_scalar_type(&self, scalar_type: ScalarType) -> bool {
+        matches!(
+            (self, scalar_type),
+            (Self::Int8(_), ScalarType::Int8)
+                | (Self::Int16(_), ScalarType::Int16)
+                | (Self::Int32(_), ScalarType::Int32)
+                | (Self::Int64(_), ScalarType::Int64)
+                | (Self::UInt8(_), ScalarType::UInt8)
+                | (Self::UInt16(_), ScalarType::UInt16)
+                | (Self::UInt32(_), ScalarType::UInt32)
+                | (Self::UInt64(_), ScalarType::UInt64)
+                | (Self::Float32(_), ScalarType::Float32)
+                | (Self::Float64(_), ScalarType::Float64)
+                | (Self::Bool(_), ScalarType::Bool)
+        )
     }
 
     /// Decode from bytes given a scalar type.
@@ -248,6 +384,7 @@ impl RowEncoder {
                 values.len()
             )));
         }
+        self.validate_values(values)?;
 
         let mut buffer = Vec::new();
 
@@ -324,6 +461,12 @@ impl RowEncoder {
         // Decode all columns
         for (i, col) in self.schema.columns.iter().enumerate() {
             if null_bitmap[i] {
+                if !col.nullable {
+                    return Err(encoder_error(format!(
+                        "column {} ({}) is not nullable",
+                        i, col.name
+                    )));
+                }
                 if !col.scalar_type.is_variable_width() {
                     let col_bytes = col.scalar_type.fixed_byte_length();
                     if offset + col_bytes > bytes.len() {
@@ -412,6 +555,31 @@ impl RowEncoder {
                 (bitmap_slice[i / BITS_PER_BITMAP_BYTE] & (1 << (i % BITS_PER_BITMAP_BYTE))) != 0
             })
             .collect())
+    }
+
+    fn validate_values(&self, values: &[Datum]) -> AndromedaResult<()> {
+        for (i, (col, value)) in self.schema.columns.iter().zip(values).enumerate() {
+            if matches!(value, Datum::Null) {
+                if !col.nullable {
+                    return Err(encoder_error(format!(
+                        "column {} ({}) is not nullable",
+                        i, col.name
+                    )));
+                }
+                continue;
+            }
+
+            if !value.matches_scalar_type(col.scalar_type) {
+                return Err(encoder_error(format!(
+                    "column {} ({}) expected {:?}, got {}",
+                    i,
+                    col.name,
+                    col.scalar_type,
+                    value.type_name()
+                )));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -557,5 +725,46 @@ mod tests {
         let result = encoder.encode(&values);
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_row_encoder_rejects_null_for_non_nullable_column() {
+        let schema = create_test_schema();
+        let encoder = RowEncoder::new(schema);
+
+        let values = vec![Datum::Null, Datum::Null, Datum::Bool(true)];
+        let error = encoder
+            .encode(&values)
+            .expect_err("non-nullable column must reject Null");
+
+        assert!(error.message().contains("not nullable"));
+    }
+
+    #[test]
+    fn test_row_encoder_rejects_type_mismatch() {
+        let schema = create_test_schema();
+        let encoder = RowEncoder::new(schema);
+
+        let values = vec![Datum::UInt64(42), Datum::Null, Datum::Bool(true)];
+        let error = encoder
+            .encode(&values)
+            .expect_err("schema type mismatch must be rejected");
+
+        assert!(error.message().contains("expected Int64"));
+    }
+
+    #[test]
+    fn test_row_encoder_decode_rejects_non_nullable_null_bitmap() {
+        let schema = create_test_schema();
+        let encoder = RowEncoder::new(schema);
+        let values = vec![Datum::Int64(42), Datum::Null, Datum::Bool(true)];
+        let mut encoded = encoder.encode(&values).expect("encode");
+        encoded[0] |= 0x01;
+
+        let error = encoder
+            .decode(&encoded)
+            .expect_err("non-nullable null bitmap must be rejected");
+
+        assert!(error.message().contains("not nullable"));
     }
 }

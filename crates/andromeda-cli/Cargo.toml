@@ -2,6 +2,7 @@
 name = "andromeda-cli"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 publish = false
 
 [dependencies]
@@ -13,3 +14,4 @@ andromeda-observe.workspace = true
 andromeda-quic.workspace = true
 andromeda-srpl.workspace = true
 andromeda-storage.workspace = true
+sha2 = "0.11.0"

@@ -371,6 +371,17 @@ fn test_principal_creation_empty_fingerprint_rejected() {
 }
 
 #[test]
+fn test_principal_try_new_returns_typed_security_errors() {
+    let token = SessionToken::new("test-token");
+    let fp = CertificateFingerprint::new("fingerprint").unwrap();
+
+    let error = Principal::try_new(PrincipalId::new(0), PrincipalRole::User, token, fp)
+        .expect_err("zero principal id must be rejected");
+
+    assert_eq!(error.kind(), crate::AndromedaErrorKind::Security);
+}
+
+#[test]
 fn test_principal_has_permission() {
     let id = PrincipalId::new(1);
     let token = SessionToken::new("test-token");
@@ -454,6 +465,69 @@ fn test_principal_superadmin_bypass_permissions() {
     assert!(principal.has_permission(&Permission::AdminRecovery));
     assert!(principal.has_permission(&Permission::AdminCertificateRotate));
     assert!(principal.has_permission(&Permission::ExecuteProcedure(ProcedureId::new(42))));
+}
+
+#[test]
+fn test_disabled_principal_denies_all_role_permissions() {
+    let id = PrincipalId::new(1001);
+    let token = SessionToken::new("disabled-token");
+    let fp = CertificateFingerprint::new(
+        "11111111e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+    )
+    .unwrap();
+
+    let principal = Principal::new_with_status(
+        id,
+        PrincipalRole::SuperAdmin,
+        PrincipalStatus::Disabled,
+        token,
+        fp,
+    )
+    .expect("disabled principal still carries audit identity");
+
+    assert!(!principal.is_active());
+    assert!(principal.permissions().is_empty());
+    assert!(!principal.has_permission(&Permission::AdminShutdown));
+    assert!(!principal.has_permission(&Permission::ExecuteProcedure(ProcedureId::new(42))));
+}
+
+#[test]
+fn test_certificate_identity_requires_sha256_subject_and_surface() {
+    let valid = CertificateIdentity::new(
+        "22222222e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+        "CN=svc-app",
+        SurfaceScope::Application,
+    )
+    .expect("valid certificate identity");
+
+    assert_eq!(valid.surface_scope(), SurfaceScope::Application);
+    assert_eq!(valid.status(), CertificateIdentityStatus::Active);
+    assert!(valid.has_identity_evidence());
+
+    let bad_fingerprint =
+        CertificateIdentity::new("short", "CN=svc-app", SurfaceScope::Application);
+    assert!(bad_fingerprint.is_err());
+
+    let bad_subject = CertificateIdentity::new(
+        "33333333e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+        "   ",
+        SurfaceScope::Application,
+    );
+    assert!(bad_subject.is_err());
+}
+
+#[test]
+fn test_surface_scope_denies_application_crossing_admin_permissions() {
+    assert!(
+        SurfaceScope::Application
+            .permits_permission(&Permission::ExecuteProcedure(ProcedureId::new(42)))
+    );
+    assert!(SurfaceScope::Application.permits_permission(&Permission::ReadContractMetadata));
+    assert!(!SurfaceScope::Application.permits_permission(&Permission::AdminShutdown));
+    assert!(SurfaceScope::Administration.permits_permission(&Permission::AdminShutdown));
+    assert!(!SurfaceScope::Administration.permits_permission(&Permission::ClusterPromote));
+    assert!(!SurfaceScope::Cluster.permits_permission(&Permission::AdminShutdown));
+    assert!(SurfaceScope::Cluster.permits_permission(&Permission::ClusterPromote));
 }
 
 #[test]

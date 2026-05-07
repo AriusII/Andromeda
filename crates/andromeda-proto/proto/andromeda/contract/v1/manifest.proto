@@ -4,10 +4,11 @@ package andromeda.contract.v1;
 
 import "andromeda/contract/v1/contract.proto";
 
-// Governed procedure manifest schema for the crate-local contract authority.
+// Governed ProcedureManifest schema for the crate-local contract authority.
 // These messages are split out of contract.proto without changing package,
 // message names, field numbers, field types, or reserved ranges. The schema is
-// message-only and must not define JSON, gRPC, tonic, service, or rpc surfaces.
+// message-only and must not define JSON payloads, tonic bindings, or gRPC
+// service/rpc definitions.
 
 message ProtocolLayout {
   bytes descriptor_set_hash = 1; // Validation-required: 32 bytes, nonzero.
@@ -30,10 +31,15 @@ message ProcedureManifest {
   // Distinct from contract / descriptor / frame envelope hashes by domain
   // separation; never confuse with `contract_hash`.
   bytes policy_version = 7; // Validation-required: 32 bytes, nonzero.
-  // Required permissions a caller must hold to invoke the procedure. Order
+  // Required permissions a caller must hold to invoke the Procedure. Order
   // is informational; uniqueness is enforced by the Rust contract layer.
   repeated RequiredPermission required_permissions = 8;
 
   reserved 9 to 31;
   reserved 32 to 63;
+
+  // StatsVersion bound to the ProcedureContractBinding. This additive field
+  // intentionally starts after the V1 reserved ranges so existing field
+  // numbers remain locked.
+  optional uint64 stats_version = 64; // Source-generator-ready: nonzero.
 }

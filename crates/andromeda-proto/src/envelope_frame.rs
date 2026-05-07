@@ -162,6 +162,29 @@ impl FrameEnvelope {
             ));
         }
 
+        if self.payload_kind.requires_contract_hash() {
+            if self.catalog_version.get() == 0 {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Contract,
+                    "contract-bound payload kind requires a nonzero CatalogVersion",
+                ));
+            }
+
+            if self.request_id.get() == 0 {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Protocol,
+                    "contract-bound payload kind requires a nonzero RequestId",
+                ));
+            }
+
+            if self.session_id.get() == 0 {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Protocol,
+                    "contract-bound payload kind requires a nonzero SessionId",
+                ));
+            }
+        }
+
         if self.payload_kind.requires_non_empty_payload() && self.payload.is_empty() {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Protocol,

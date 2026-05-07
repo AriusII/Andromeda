@@ -1,4 +1,4 @@
-//! V0 single-primary WAL shipping contract scaffold.
+//! V0 single-primary WAL shipping contract.
 //!
 //! Doctrine reminders enforced here:
 //! * `visible commit == durable WAL` — replicas only accept records that link
@@ -8,11 +8,9 @@
 //! * V0 topology is single-primary plus replicas. Shipping from a non-primary
 //!   role is rejected.
 //!
-//! This module is intentionally a *contract scaffold*. It owns the typed
-//! boundary (identities, roles, batch envelope, validation result) but does
-//! not provide a transport, runtime, or quorum implementation.
-//!
-//! No unsafe, no gRPC, no SQL, no runtime JSON.
+//! This module owns the typed shipping boundary: identities, roles, batch
+//! envelopes, ACK tracking, and validation results. Transport dispatch and
+//! quorum coordination live outside this module.
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use std::collections::{BTreeMap, BTreeSet};
@@ -174,10 +172,18 @@ impl WalReplicaSafeLsnTracker {
 /// narrow so upstream tooling can map each to a specific operator action.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WalShipmentRejection {
+    /// Source identity has the reserved zero id.
+    SourceIdZero,
+    /// Target identity has the reserved zero id.
+    TargetIdZero,
     /// Source identity is not a primary.
     SourceNotPrimary,
     /// Target identity is not a replica.
     TargetNotReplica,
+    /// Replica tail and expected next LSN do not form one contiguous chain.
+    ReplicaExpectationMismatch,
+    /// Replica tail cannot advance to a valid expected next LSN.
+    ReplicaExpectationOverflow,
     /// Empty batch — shipping must carry at least one record.
     EmptyBatch,
     /// First record's LSN does not match the replica's expected next LSN.
@@ -197,8 +203,16 @@ pub enum WalShipmentRejection {
 impl WalShipmentRejection {
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::SourceIdZero => "wal shipment source id must not be zero",
+            Self::TargetIdZero => "wal shipment target id must not be zero",
             Self::SourceNotPrimary => "wal shipment source is not a primary",
             Self::TargetNotReplica => "wal shipment target is not a replica",
+            Self::ReplicaExpectationMismatch => {
+                "wal shipment replica expectation does not match the replica tail"
+            }
+            Self::ReplicaExpectationOverflow => {
+                "wal shipment replica expectation would overflow the LSN space"
+            }
             Self::EmptyBatch => "wal shipment batch is empty",
             Self::UnexpectedFirstLsn => {
                 "wal shipment first LSN does not match replica expected next LSN"
@@ -274,6 +288,12 @@ impl<'a> WalShipmentBatch<'a> {
     /// applied range, or a typed [`WalShipmentRejection`] wrapped in an
     /// [`AndromedaError`].
     pub fn validate(&self) -> AndromedaResult<WalShipmentAccepted> {
+        if self.source.id() == 0 {
+            return Err(WalShipmentRejection::SourceIdZero.into_error());
+        }
+        if self.target.id() == 0 {
+            return Err(WalShipmentRejection::TargetIdZero.into_error());
+        }
         if !self.source.role().is_primary() {
             return Err(WalShipmentRejection::SourceNotPrimary.into_error());
         }
@@ -282,6 +302,14 @@ impl<'a> WalShipmentBatch<'a> {
         }
         if self.records.is_empty() {
             return Err(WalShipmentRejection::EmptyBatch.into_error());
+        }
+        if let Some(tail_lsn) = self.expectation.tail_lsn {
+            let expected_next = tail_lsn
+                .try_next()
+                .map_err(|_| WalShipmentRejection::ReplicaExpectationOverflow.into_error())?;
+            if self.expectation.expected_next_lsn != expected_next {
+                return Err(WalShipmentRejection::ReplicaExpectationMismatch.into_error());
+            }
         }
 
         let first = &self.records[0];
@@ -305,6 +333,12 @@ impl<'a> WalShipmentBatch<'a> {
             if record.header.lsn <= prev_lsn {
                 return Err(WalShipmentRejection::NonMonotonicLsn.into_error());
             }
+            let expected_lsn = prev_lsn
+                .try_next()
+                .map_err(|_| WalShipmentRejection::ReplicaExpectationOverflow.into_error())?;
+            if record.header.lsn != expected_lsn {
+                return Err(WalShipmentRejection::ChainGap.into_error());
+            }
             match record.header.previous_lsn {
                 Some(linked) if linked == prev_lsn => {}
                 _ => return Err(WalShipmentRejection::ChainGap.into_error()),
@@ -313,7 +347,9 @@ impl<'a> WalShipmentBatch<'a> {
         }
 
         let last_lsn = prev_lsn;
-        let next_expected_lsn = last_lsn.try_next()?;
+        let next_expected_lsn = last_lsn
+            .try_next()
+            .map_err(|_| WalShipmentRejection::ReplicaExpectationOverflow.into_error())?;
         Ok(WalShipmentAccepted {
             range: WalShipmentRange {
                 first: first.header.lsn,
@@ -351,14 +387,14 @@ mod tests {
     #[test]
     fn contiguous_batch_is_accepted() {
         let records = vec![
-            record(10, Some(7)),
+            record(10, Some(9)),
             record(11, Some(10)),
             record(12, Some(11)),
         ];
         let batch = WalShipmentBatch::new(
             primary(),
             replica(),
-            WalReplicaExpectation::after(Lsn::new(7), Lsn::new(10)),
+            WalReplicaExpectation::after(Lsn::new(9), Lsn::new(10)),
             &records,
         );
 
@@ -385,12 +421,12 @@ mod tests {
 
     #[test]
     fn gap_in_chain_is_rejected() {
-        // 11.previous_lsn = 9, but prior record had lsn = 10 -> chain gap.
-        let records = vec![record(10, Some(7)), record(11, Some(9))];
+        // 12 skips LSN 11 even though it links to the prior record.
+        let records = vec![record(10, Some(9)), record(12, Some(10))];
         let batch = WalShipmentBatch::new(
             primary(),
             replica(),
-            WalReplicaExpectation::after(Lsn::new(7), Lsn::new(10)),
+            WalReplicaExpectation::after(Lsn::new(9), Lsn::new(10)),
             &records,
         );
         let err = batch.validate().expect_err("gap rejected");
@@ -404,7 +440,7 @@ mod tests {
         let batch = WalShipmentBatch::new(
             primary(),
             replica(),
-            WalReplicaExpectation::after(Lsn::new(7), Lsn::new(10)),
+            WalReplicaExpectation::after(Lsn::new(9), Lsn::new(10)),
             &records,
         );
         let err = batch.validate().expect_err("unexpected first lsn rejected");
@@ -413,12 +449,12 @@ mod tests {
 
     #[test]
     fn first_previous_lsn_mismatch_is_rejected() {
-        // First record's previous_lsn = 6 but replica tail is 7.
-        let records = vec![record(10, Some(6))];
+        // First record's previous_lsn = 8 but replica tail is 9.
+        let records = vec![record(10, Some(8))];
         let batch = WalShipmentBatch::new(
             primary(),
             replica(),
-            WalReplicaExpectation::after(Lsn::new(7), Lsn::new(10)),
+            WalReplicaExpectation::after(Lsn::new(9), Lsn::new(10)),
             &records,
         );
         let err = batch
@@ -430,31 +466,31 @@ mod tests {
     #[test]
     fn reordered_batch_is_rejected() {
         let records = vec![
-            record(10, Some(7)),
+            record(10, Some(9)),
             record(12, Some(10)),
             record(11, Some(10)),
         ];
         let batch = WalShipmentBatch::new(
             primary(),
             replica(),
-            WalReplicaExpectation::after(Lsn::new(7), Lsn::new(10)),
+            WalReplicaExpectation::after(Lsn::new(9), Lsn::new(10)),
             &records,
         );
         let err = batch.validate().expect_err("reorder rejected");
-        assert!(err.to_string().contains("duplicate or reordered"));
+        assert!(err.to_string().contains("gap"));
     }
 
     #[test]
     fn duplicate_lsn_is_rejected() {
         let records = vec![
-            record(10, Some(7)),
+            record(10, Some(9)),
             record(11, Some(10)),
             record(11, Some(10)),
         ];
         let batch = WalShipmentBatch::new(
             primary(),
             replica(),
-            WalReplicaExpectation::after(Lsn::new(7), Lsn::new(10)),
+            WalReplicaExpectation::after(Lsn::new(9), Lsn::new(10)),
             &records,
         );
         let err = batch.validate().expect_err("duplicate rejected");
@@ -467,7 +503,7 @@ mod tests {
         let batch = WalShipmentBatch::new(
             primary(),
             replica(),
-            WalReplicaExpectation::after(Lsn::new(7), Lsn::new(10)),
+            WalReplicaExpectation::after(Lsn::new(9), Lsn::new(10)),
             &records,
         );
         let err = batch.validate().expect_err("empty rejected");
@@ -481,7 +517,7 @@ mod tests {
         let batch = WalShipmentBatch::new(
             bad_source,
             replica(),
-            WalReplicaExpectation::after(Lsn::new(7), Lsn::new(10)),
+            WalReplicaExpectation::after(Lsn::new(9), Lsn::new(10)),
             &records,
         );
         let err = batch.validate().expect_err("non-primary source rejected");
@@ -495,10 +531,56 @@ mod tests {
         let batch = WalShipmentBatch::new(
             primary(),
             bad_target,
-            WalReplicaExpectation::after(Lsn::new(7), Lsn::new(10)),
+            WalReplicaExpectation::after(Lsn::new(9), Lsn::new(10)),
             &records,
         );
         let err = batch.validate().expect_err("primary target rejected");
         assert!(err.to_string().contains("target is not a replica"));
+    }
+
+    #[test]
+    fn replica_expectation_must_match_tail_next_lsn() {
+        let records = vec![record(10, Some(9))];
+        let batch = WalShipmentBatch::new(
+            primary(),
+            replica(),
+            WalReplicaExpectation::after(Lsn::new(7), Lsn::new(10)),
+            &records,
+        );
+
+        let err = batch
+            .validate()
+            .expect_err("replica expectation must be contiguous");
+        assert!(err.to_string().contains("replica expectation"));
+    }
+
+    #[test]
+    fn zero_node_identity_is_rejected() {
+        let records = vec![record(10, Some(9))];
+        let batch = WalShipmentBatch::new(
+            WalNodeIdentity::new(0, WalNodeRole::Primary),
+            replica(),
+            WalReplicaExpectation::after(Lsn::new(9), Lsn::new(10)),
+            &records,
+        );
+
+        let err = batch.validate().expect_err("zero source id rejected");
+        assert!(err.to_string().contains("source id"));
+    }
+
+    #[test]
+    fn shipment_ending_at_max_lsn_is_rejected_without_overflow() {
+        let records = vec![record(u64::MAX, Some(u64::MAX - 1))];
+        let batch = WalShipmentBatch::new(
+            primary(),
+            replica(),
+            WalReplicaExpectation::after(Lsn::new(u64::MAX - 1), Lsn::MAX),
+            &records,
+        );
+
+        let err = batch
+            .validate()
+            .expect_err("next expected LSN overflow must be rejected");
+        assert!(err.to_string().contains("overflow"));
     }
 }

@@ -1,4 +1,4 @@
-use super::{HEAP_PAGE_V1_HEADER_SIZE, HeapPage};
+use super::{HEAP_PAGE_V1_PAYLOAD_OFFSET, HeapPage};
 
 /// Heap physical vacuum mode.
 ///
@@ -52,7 +52,7 @@ impl HeapPage {
         let mut candidate_deleted_slots = Vec::new();
         let mut live_slots_rewritten = Vec::new();
         let mut bytes_reclaimable = 0u32;
-        let mut next_compacted_offset = HEAP_PAGE_V1_HEADER_SIZE as u16;
+        let mut next_compacted_offset = HEAP_PAGE_V1_PAYLOAD_OFFSET as u16;
 
         for (slot_id, entry) in self.slot_directory.iter().enumerate() {
             if entry.is_deleted() {

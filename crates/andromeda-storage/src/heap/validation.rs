@@ -1,7 +1,7 @@
 use andromeda_core::AndromedaResult;
 
 use super::{
-    HEAP_PAGE_V1_HEADER_SIZE, HEAP_PAGE_V1_SLOT_FLAGS_KNOWN_MASK, HeapPageV1SlotMetadata,
+    HEAP_PAGE_V1_PAYLOAD_OFFSET, HEAP_PAGE_V1_SLOT_FLAGS_KNOWN_MASK, HeapPageV1SlotMetadata,
     SlotEntry, heap_error,
 };
 
@@ -14,9 +14,22 @@ pub(crate) fn heap_page_v1_read_and_validate_slots(
     let free_offset = metadata.free_offset as usize;
 
     for i in 0..metadata.slot_count {
-        let slot_offset = metadata.metadata_offset - ((i + 1) * SlotEntry::SIZE);
+        let slot_span = (i + 1)
+            .checked_mul(SlotEntry::SIZE)
+            .ok_or_else(|| heap_error("heap page v1 slot offset overflow"))?;
+        let slot_offset = metadata
+            .metadata_offset
+            .checked_sub(slot_span)
+            .ok_or_else(|| heap_error("heap page v1 slot directory offset underflow"))?;
+        let slot_end = slot_offset
+            .checked_add(SlotEntry::SIZE)
+            .ok_or_else(|| heap_error("heap page v1 slot directory offset overflow"))?;
         let mut slot_bytes = [0u8; 5];
-        slot_bytes.copy_from_slice(&page_data[slot_offset..slot_offset + 5]);
+        slot_bytes.copy_from_slice(
+            page_data
+                .get(slot_offset..slot_end)
+                .ok_or_else(|| heap_error("heap page v1 slot entry is truncated"))?,
+        );
         let entry = SlotEntry::from_bytes(slot_bytes);
 
         if entry.flags & !HEAP_PAGE_V1_SLOT_FLAGS_KNOWN_MASK != 0 {
@@ -48,10 +61,10 @@ pub(crate) fn heap_page_v1_read_and_validate_slots(
         let tuple_end = tuple_start
             .checked_add(entry.length as usize)
             .ok_or_else(|| heap_error(format!("heap page v1 slot {} tuple bounds overflow", i)))?;
-        if tuple_start < HEAP_PAGE_V1_HEADER_SIZE || tuple_end > metadata.slot_base {
+        if tuple_start < HEAP_PAGE_V1_PAYLOAD_OFFSET || tuple_end > metadata.slot_base {
             return Err(heap_error(format!(
                 "heap page v1 slot {} tuple bounds {}..{} outside payload region {}..{}",
-                i, tuple_start, tuple_end, HEAP_PAGE_V1_HEADER_SIZE, metadata.slot_base
+                i, tuple_start, tuple_end, HEAP_PAGE_V1_PAYLOAD_OFFSET, metadata.slot_base
             )));
         }
         if tuple_end > free_offset {

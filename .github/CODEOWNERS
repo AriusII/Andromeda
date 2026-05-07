@@ -1,6 +1,6 @@
 * @AriusII
 /.github/ @AriusII
-/schemas/proto/ @AriusII
+/.codex/schemas/proto/ @AriusII
 /proto/ @AriusII
 /crates/ @AriusII
-/docs/decisions/ @AriusII
+/documentations/governance/decisions/ @AriusII

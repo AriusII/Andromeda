@@ -1,7 +1,9 @@
 use crate::diagnostic_json::json_string;
 use andromeda_bench::{
-    BenchmarkEvidence, BenchmarkHardwareProfile, BudgetStatus, DEFAULT_DURATION_MS,
-    DEFAULT_SAMPLES, DEFAULT_WARMUPS, MAX_DURATION_MS, MAX_SAMPLES, MAX_WARMUPS, WORKLOADS,
+    BENCHMARK_EVIDENCE_AUTHORITATIVE, BENCHMARK_EVIDENCE_CAN_SELECT_PLAN_ALONE,
+    BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY, BenchmarkEvidence, BenchmarkHardwareProfile,
+    BudgetStatus, DEFAULT_DURATION_MS, DEFAULT_SAMPLES, DEFAULT_TEMP_BYTES, DEFAULT_WARMUPS,
+    MAX_DURATION_MS, MAX_SAMPLES, MAX_TEMP_BYTES, MAX_WARMUPS, WORKLOADS,
 };
 use std::fmt::Write as _;
 
@@ -25,6 +27,21 @@ pub(super) fn format_benchmark_run_evidence(
     writeln!(output, "=======================================").expect("format benchmark output");
     writeln!(output, "runner: deterministic-smoke").expect("format benchmark output");
     writeln!(output, "workload id: {}", evidence.workload_id).expect("format benchmark output");
+    writeln!(output, "hypothesis: {}", evidence.workload_hypothesis)
+        .expect("format benchmark output");
+    writeln!(
+        output,
+        "workload shape version: {}",
+        evidence.workload_shape_version
+    )
+    .expect("format benchmark output");
+    writeln!(output, "workload size: {}", evidence.workload_size).expect("format benchmark output");
+    writeln!(output, "primary metric: {}", evidence.primary_metric)
+        .expect("format benchmark output");
+    writeln!(output, "baseline ref: {}", evidence.baseline_ref).expect("format benchmark output");
+    writeln!(output, "budget origin: {}", evidence.budget_origin).expect("format benchmark output");
+    writeln!(output, "decision linkage: {}", evidence.decision_linkage)
+        .expect("format benchmark output");
     writeln!(
         output,
         "hardware profile: {}",
@@ -34,6 +51,8 @@ pub(super) fn format_benchmark_run_evidence(
     writeln!(output, "duration ms: {}", evidence.duration_ms).expect("format benchmark output");
     writeln!(output, "samples: {}", evidence.samples).expect("format benchmark output");
     writeln!(output, "warmups: {}", evidence.warmups).expect("format benchmark output");
+    writeln!(output, "temp budget bytes: {}", evidence.temp_budget_bytes)
+        .expect("format benchmark output");
     writeln!(
         output,
         "started at unix ms: {}",
@@ -75,19 +94,42 @@ pub(super) fn format_benchmark_run_evidence(
         evidence.synthetic_model_version.unwrap_or("none")
     )
     .expect("format benchmark output");
+    writeln!(output, "authoritative: {}", evidence.is_authoritative())
+        .expect("format benchmark output");
+    writeln!(
+        output,
+        "can select plan alone: {}",
+        evidence.can_select_plan_alone()
+    )
+    .expect("format benchmark output");
+    writeln!(
+        output,
+        "optimizer boundary: {}",
+        evidence.optimizer_consumption_role()
+    )
+    .expect("format benchmark output");
     output
 }
 
 fn format_benchmark_run_json(evidence: &BenchmarkEvidence) -> String {
     format!(
-        "{{\"schema\":{},\"diagnostic_only\":true,\"runner\":{},\"evidence\":{{\"workload_id\":{},\"hardware_profile\":{},\"duration_ms\":{},\"samples\":{},\"warmups\":{},\"started_at_unix_ms\":{},\"elapsed_ms\":{},\"sample_count\":{},\"p50_latency_us\":{},\"p95_latency_us\":{},\"error_count\":{},\"budget_status\":{},\"diagnostic_only\":{},\"measurement_mode\":{},\"latency_source\":{},\"engine_harness\":{},\"synthetic_model_version\":{}}}}}",
+        "{{\"schema\":{},\"diagnostic_only\":{},\"runner\":{},\"evidence\":{{\"workload_id\":{},\"workload_hypothesis\":{},\"workload_shape_version\":{},\"workload_size\":{},\"primary_metric\":{},\"baseline_ref\":{},\"budget_origin\":{},\"decision_linkage\":{},\"hardware_profile\":{},\"duration_ms\":{},\"samples\":{},\"warmups\":{},\"temp_budget_bytes\":{},\"started_at_unix_ms\":{},\"elapsed_ms\":{},\"sample_count\":{},\"p50_latency_us\":{},\"p95_latency_us\":{},\"error_count\":{},\"budget_status\":{},\"diagnostic_only\":{},\"measurement_mode\":{},\"latency_source\":{},\"engine_harness\":{},\"synthetic_model_version\":{},\"authoritative\":{},\"can_select_plan_alone\":{},\"optimizer_boundary\":{}}}}}",
         json_string("andromeda.cli.benchmark.run.v1"),
+        evidence.diagnostic_only,
         json_string("deterministic-smoke"),
         json_string(&evidence.workload_id),
+        json_string(evidence.workload_hypothesis),
+        json_string(evidence.workload_shape_version),
+        json_string(evidence.workload_size),
+        json_string(evidence.primary_metric),
+        json_string(evidence.baseline_ref),
+        json_string(evidence.budget_origin),
+        json_string(evidence.decision_linkage),
         json_string(evidence.hardware_profile.as_str()),
         evidence.duration_ms,
         evidence.samples,
         evidence.warmups,
+        evidence.temp_budget_bytes,
         evidence.started_at_unix_ms,
         evidence.elapsed_ms,
         evidence.sample_count,
@@ -99,7 +141,10 @@ fn format_benchmark_run_json(evidence: &BenchmarkEvidence) -> String {
         json_string(evidence.measurement_mode.as_str()),
         json_string(evidence.latency_source),
         optional_json_string(evidence.engine_harness),
-        optional_json_string(evidence.synthetic_model_version)
+        optional_json_string(evidence.synthetic_model_version),
+        evidence.is_authoritative(),
+        evidence.can_select_plan_alone(),
+        json_string(evidence.optimizer_consumption_role())
     ) + "\n"
 }
 
@@ -130,6 +175,7 @@ pub(super) fn print_benchmark_help() {
     println!("  --duration-ms <ms>  Duration cap; global max {MAX_DURATION_MS} ms");
     println!("  --samples <n>       Sample cap; global max {MAX_SAMPLES}");
     println!("  --warmups <n>       Warmup cap; global max {MAX_WARMUPS}");
+    println!("  --temp-budget-bytes <bytes>  Temp budget cap; global max {MAX_TEMP_BYTES} bytes");
     println!("  --hardware-profile <conservative|declared-local>");
     println!("  --diagnostic-json   Emit diagnostic machine-readable JSON output");
     println!();
@@ -159,9 +205,28 @@ pub(super) fn format_workloads(diagnostic_json: bool) -> String {
             cli_workload_description(workload.id, workload.description)
         )
         .expect("format benchmark output");
+        writeln!(output, "  hypothesis: {}", workload.hypothesis).expect("format benchmark output");
+        writeln!(
+            output,
+            "  workload shape version: {}",
+            workload.workload_shape_version
+        )
+        .expect("format benchmark output");
+        writeln!(output, "  workload size: {}", workload.workload_size)
+            .expect("format benchmark output");
+        writeln!(output, "  primary metric: {}", workload.primary_metric)
+            .expect("format benchmark output");
+        writeln!(output, "  baseline ref: {}", workload.baseline_ref)
+            .expect("format benchmark output");
+        writeln!(output, "  budget origin: {}", workload.budget_origin)
+            .expect("format benchmark output");
+        writeln!(output, "  decision linkage: {}", workload.decision_linkage)
+            .expect("format benchmark output");
         writeln!(output, "  max duration ms: {}", workload.max_duration_ms)
             .expect("format benchmark output");
         writeln!(output, "  max samples: {}", workload.max_samples)
+            .expect("format benchmark output");
+        writeln!(output, "  max temp bytes: {}", workload.max_temp_bytes)
             .expect("format benchmark output");
         writeln!(
             output,
@@ -191,13 +256,16 @@ pub(super) fn print_benchmark_contract(diagnostic_json: bool) {
     if diagnostic_json {
         let architecture = json_string(&format!("{:?}", profile.architecture));
         println!(
-            "{{\"schema\":{},\"diagnostic_only\":true,\"global_limits\":{{\"max_duration_ms\":{MAX_DURATION_MS},\"max_samples\":{MAX_SAMPLES},\"max_warmups\":{MAX_WARMUPS}}},\"default_limits\":{{\"duration_ms\":{DEFAULT_DURATION_MS},\"samples\":{DEFAULT_SAMPLES},\"warmups\":{DEFAULT_WARMUPS}}},\"hardware_profile\":{{\"name\":{},\"architecture\":{},\"has_simd\":{},\"has_direct_io\":{},\"gpu_available\":{}}},\"exit_codes\":{{\"success\":0,\"validation_failure\":1}},\"evidence_fields\":[\"workload_id\",\"hardware_profile\",\"duration_ms\",\"samples\",\"warmups\",\"started_at_unix_ms\",\"elapsed_ms\",\"sample_count\",\"p50_latency_us\",\"p95_latency_us\",\"error_count\",\"budget_status\",\"diagnostic_only\",\"measurement_mode\",\"latency_source\",\"engine_harness\",\"synthetic_model_version\"]}}",
+            "{{\"schema\":{},\"diagnostic_only\":true,\"global_limits\":{{\"max_duration_ms\":{MAX_DURATION_MS},\"max_samples\":{MAX_SAMPLES},\"max_warmups\":{MAX_WARMUPS},\"max_temp_bytes\":{MAX_TEMP_BYTES}}},\"default_limits\":{{\"duration_ms\":{DEFAULT_DURATION_MS},\"samples\":{DEFAULT_SAMPLES},\"warmups\":{DEFAULT_WARMUPS},\"temp_budget_bytes\":{DEFAULT_TEMP_BYTES}}},\"hardware_profile\":{{\"name\":{},\"architecture\":{},\"has_simd\":{},\"has_direct_io\":{},\"gpu_available\":{}}},\"optimizer_use\":{{\"authoritative\":{},\"can_select_plan_alone\":{},\"boundary\":{}}},\"exit_codes\":{{\"success\":0,\"validation_failure\":1}},\"evidence_fields\":[\"workload_id\",\"workload_hypothesis\",\"workload_shape_version\",\"workload_size\",\"primary_metric\",\"baseline_ref\",\"budget_origin\",\"decision_linkage\",\"hardware_profile\",\"duration_ms\",\"samples\",\"warmups\",\"temp_budget_bytes\",\"started_at_unix_ms\",\"elapsed_ms\",\"sample_count\",\"p50_latency_us\",\"p95_latency_us\",\"error_count\",\"budget_status\",\"diagnostic_only\",\"measurement_mode\",\"latency_source\",\"engine_harness\",\"synthetic_model_version\",\"authoritative\",\"can_select_plan_alone\",\"optimizer_boundary\"]}}",
             json_string("andromeda.cli.benchmark.contract.v1"),
             json_string("conservative"),
             architecture,
             profile.has_simd,
             profile.has_direct_io,
-            profile.gpu.available
+            profile.gpu.available,
+            BENCHMARK_EVIDENCE_AUTHORITATIVE,
+            BENCHMARK_EVIDENCE_CAN_SELECT_PLAN_ALONE,
+            json_string(BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY)
         );
         return;
     }
@@ -205,21 +273,32 @@ pub(super) fn print_benchmark_contract(diagnostic_json: bool) {
     println!("Andromeda benchmark contract");
     println!("============================");
     println!("surface: administration diagnostics only");
-    println!("JSON: --diagnostic-json only; not runtime wire");
+    println!("diagnostic JSON: --diagnostic-json only; not runtime protocol");
     println!("global max duration ms: {MAX_DURATION_MS}");
     println!("global max samples: {MAX_SAMPLES}");
     println!("global max warmups: {MAX_WARMUPS}");
+    println!("global max temp bytes: {MAX_TEMP_BYTES}");
     println!("default duration ms: {DEFAULT_DURATION_MS}");
     println!("default samples: {DEFAULT_SAMPLES}");
     println!("default warmups: {DEFAULT_WARMUPS}");
+    println!("default temp budget bytes: {DEFAULT_TEMP_BYTES}");
     println!(
         "hardware profile: conservative ({:?})",
         profile.architecture
     );
+    println!("authoritative: {}", BENCHMARK_EVIDENCE_AUTHORITATIVE);
+    println!(
+        "can select plan alone: {}",
+        BENCHMARK_EVIDENCE_CAN_SELECT_PLAN_ALONE
+    );
+    println!(
+        "optimizer boundary: {}",
+        BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY
+    );
     println!("exit code 0: command/validation success");
     println!("exit code 1: validation failure");
     println!(
-        "required evidence: workload_id, hardware_profile, duration_ms, samples, warmups, started_at_unix_ms, elapsed_ms, sample_count, p50_latency_us, p95_latency_us, error_count, budget_status, diagnostic_only, measurement_mode, latency_source, engine_harness, synthetic_model_version"
+        "required evidence: workload_id, workload_hypothesis, workload_shape_version, workload_size, primary_metric, baseline_ref, budget_origin, decision_linkage, hardware_profile, duration_ms, samples, warmups, temp_budget_bytes, started_at_unix_ms, elapsed_ms, sample_count, p50_latency_us, p95_latency_us, error_count, budget_status, diagnostic_only, measurement_mode, latency_source, engine_harness, synthetic_model_version, authoritative, can_select_plan_alone, optimizer_boundary"
     );
 }
 
@@ -234,11 +313,19 @@ fn format_workloads_json() -> String {
         }
         write!(
             output,
-            "{{\"id\":{},\"description\":{},\"max_duration_ms\":{},\"max_samples\":{},\"budget\":{{\"max_p50_latency_us\":{},\"max_p95_latency_us\":{},\"max_error_rate_ppm\":{}}}}}",
+            "{{\"id\":{},\"description\":{},\"hypothesis\":{},\"workload_shape_version\":{},\"workload_size\":{},\"primary_metric\":{},\"baseline_ref\":{},\"budget_origin\":{},\"decision_linkage\":{},\"max_duration_ms\":{},\"max_samples\":{},\"max_temp_bytes\":{},\"budget\":{{\"max_p50_latency_us\":{},\"max_p95_latency_us\":{},\"max_error_rate_ppm\":{}}}}}",
             json_string(workload.id),
             json_string(cli_workload_description(workload.id, workload.description)),
+            json_string(workload.hypothesis),
+            json_string(workload.workload_shape_version),
+            json_string(workload.workload_size),
+            json_string(workload.primary_metric),
+            json_string(workload.baseline_ref),
+            json_string(workload.budget_origin),
+            json_string(workload.decision_linkage),
             workload.max_duration_ms,
             workload.max_samples,
+            workload.max_temp_bytes,
             workload.budget.max_p50_latency_us,
             workload.budget.max_p95_latency_us,
             workload.budget.max_error_rate_ppm
@@ -286,6 +373,13 @@ mod tests {
         let json = format_benchmark_run_evidence(&evidence, true);
 
         assert!(json.contains("\"measurement_mode\":\"harness-diagnostic\""));
+        assert!(json.contains("\"workload_hypothesis\":"));
+        assert!(json.contains("\"budget_origin\":\"static-workload-registry-v1\""));
+        assert!(json.contains("\"decision_linkage\":\"advisory-only; requires ProcedureId+CatalogVersion+ContractHash+StatsVersion+PlanClass\""));
+        assert!(json.contains("\"temp_budget_bytes\":8388608"));
+        assert!(json.contains("\"authoritative\":false"));
+        assert!(json.contains("\"can_select_plan_alone\":false"));
+        assert!(json.contains("\"optimizer_boundary\":\"advisory-only\""));
         assert!(json.contains(&format!(
             "\"latency_source\":\"{BTREE_NODE_CODEC_HARNESS_SOURCE}\""
         )));
@@ -305,10 +399,19 @@ mod tests {
         let human = format_benchmark_run_evidence(&evidence, false);
 
         assert!(human.contains("measurement mode: harness-diagnostic"));
+        assert!(human.contains("hypothesis:"));
+        assert!(human.contains("budget origin: static-workload-registry-v1"));
+        assert!(human.contains(
+            "decision linkage: advisory-only; requires ProcedureId+CatalogVersion+ContractHash+StatsVersion+PlanClass"
+        ));
+        assert!(human.contains("temp budget bytes: 8388608"));
         assert!(human.contains(&format!(
             "latency source: {BTREE_NODE_CODEC_HARNESS_SOURCE}"
         )));
         assert!(human.contains(&format!("engine harness: {BTREE_NODE_CODEC_HARNESS_NAME}")));
         assert!(human.contains("synthetic model version: none"));
+        assert!(human.contains("authoritative: false"));
+        assert!(human.contains("can select plan alone: false"));
+        assert!(human.contains("optimizer boundary: advisory-only"));
     }
 }

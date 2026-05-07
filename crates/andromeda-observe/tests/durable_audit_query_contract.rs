@@ -2,8 +2,9 @@ use andromeda_core::{CatalogVersion, RequestId, SessionId};
 use andromeda_observe::{
     DurableAuditEventFamily, DurableAuditPrincipalBinding, DurableAuditReplayBehavior,
     DurableAuditReplayRecord, DurableAuditRetentionBoundary, DurableAuditSinkReport,
-    DurableAuditTraceQuerySource, DurableAuditWalEvidence, EventId, Permission, SurfaceScope,
-    TraceEventFamily, TraceId, TraceQueryFilter, TraceQueryLsnRange, TraceQuerySpec,
+    DurableAuditTraceQueryRow, DurableAuditTraceQuerySource, DurableAuditWalEvidence, EventId,
+    Permission, SecurityPolicyVersionEvidence, SurfaceScope, TraceEventFamily, TraceId,
+    TraceQueryFilter, TraceQueryLsnRange, TraceQuerySpec,
 };
 
 fn replay_record(
@@ -35,6 +36,18 @@ fn replay_record(
             certificate_fingerprint: Some(format!("sha256:fingerprint-{event_id}")),
             surface: Some(SurfaceScope::Administration),
             permission: Some(Permission::InspectPlans),
+            policy_version: matches!(
+                family,
+                DurableAuditEventFamily::SecurityDecision
+                    | DurableAuditEventFamily::AdminDecision
+                    | DurableAuditEventFamily::CatalogDecision
+                    | DurableAuditEventFamily::HadrDecision
+                    | DurableAuditEventFamily::BackupDecision
+                    | DurableAuditEventFamily::RestoreDecision
+                    | DurableAuditEventFamily::ForensicDecision
+                    | DurableAuditEventFamily::RecoveryDecision
+            )
+            .then(SecurityPolicyVersionEvidence::bootstrap_v0),
             request_id: Some(RequestId::new(event_id as u64)),
             session_id: Some(SessionId::new((event_id + 100) as u64)),
         },
@@ -42,27 +55,31 @@ fn replay_record(
     }
 }
 
-fn expected_trace_family(family: DurableAuditEventFamily, event_kind: &str) -> TraceEventFamily {
+fn expected_trace_family(
+    family: DurableAuditEventFamily,
+    event_kind: &str,
+) -> Option<TraceEventFamily> {
     match family {
-        DurableAuditEventFamily::SecurityDecision => TraceEventFamily::SecurityAudit,
+        DurableAuditEventFamily::SecurityDecision => Some(TraceEventFamily::SecurityAudit),
         DurableAuditEventFamily::AdminDecision
         | DurableAuditEventFamily::HadrDecision
         | DurableAuditEventFamily::BackupDecision
         | DurableAuditEventFamily::RestoreDecision
         | DurableAuditEventFamily::ForensicDecision
-        | DurableAuditEventFamily::GenericAudit => TraceEventFamily::AdminAudit,
-        DurableAuditEventFamily::AdmissionDecision => TraceEventFamily::Protocol,
-        DurableAuditEventFamily::CatalogDecision => TraceEventFamily::ManifestCatalog,
+        | DurableAuditEventFamily::GenericAudit => Some(TraceEventFamily::AdminAudit),
+        DurableAuditEventFamily::AdmissionDecision => Some(TraceEventFamily::Protocol),
+        DurableAuditEventFamily::CatalogDecision => Some(TraceEventFamily::ManifestCatalog),
         DurableAuditEventFamily::RecoveryDecision => match event_kind {
             "WalAppend" | "WalFlush" | "CommitVisible" | "RollbackDurable"
-            | "CorruptionBoundary" => TraceEventFamily::Wal,
-            _ => TraceEventFamily::Recovery,
+            | "CorruptionBoundary" => Some(TraceEventFamily::Wal),
+            "RecoveryStartup" => Some(TraceEventFamily::Recovery),
+            _ => None,
         },
     }
 }
 
 #[test]
-fn durable_audit_trace_query_source_filters_replay_records_with_common_query_spec() {
+fn durable_audit_trace_inspection_source_filters_replay_records_with_common_spec() {
     let records = vec![
         replay_record(
             1,
@@ -101,7 +118,7 @@ fn durable_audit_trace_query_source_filters_replay_records_with_common_query_spe
 
     let result = source
         .query(&spec)
-        .expect("durable replay records are queryable through common trace filters");
+        .expect("durable replay records are inspectable through common trace filters");
 
     assert_eq!(result.metadata.returned_rows, 1);
     assert_eq!(result.metadata.total_matching_rows, Some(1));
@@ -127,7 +144,7 @@ fn durable_audit_trace_query_source_filters_replay_records_with_common_query_spe
 }
 
 #[test]
-fn durable_audit_trace_query_mapping_covers_all_durable_families() {
+fn durable_audit_trace_inspection_mapping_covers_all_durable_families() {
     let records = DurableAuditEventFamily::ALL
         .iter()
         .enumerate()
@@ -152,23 +169,23 @@ fn durable_audit_trace_query_mapping_covers_all_durable_families() {
 
     let result = source
         .query(&TraceQuerySpec::new(TraceQueryFilter::default()))
-        .expect("all durable audit families are queryable through the durable query adapter");
+        .expect("all durable audit families are inspectable through the durable adapter");
 
     assert_eq!(result.rows.len(), DurableAuditEventFamily::ALL.len());
     for row in &result.rows {
         assert_eq!(
-            row.family,
+            Some(row.family),
             expected_trace_family(row.durable_audit_family, &row.event_kind)
         );
         assert!(
             DurableAuditEventFamily::ALL.contains(&row.durable_audit_family),
-            "durable audit query row must preserve a known durable family"
+            "durable audit inspection row must preserve a known durable family"
         );
     }
 }
 
 #[test]
-fn durable_audit_trace_query_source_rejects_filters_not_carried_by_journal() {
+fn durable_audit_trace_inspection_source_rejects_filters_not_carried_by_journal() {
     let records = vec![replay_record(
         1,
         90,
@@ -195,7 +212,7 @@ fn durable_audit_trace_query_source_rejects_filters_not_carried_by_journal() {
 }
 
 #[test]
-fn durable_audit_trace_query_source_rejects_secret_principal_filter() {
+fn durable_audit_trace_inspection_source_rejects_secret_principal_filter() {
     let records = vec![replay_record(
         1,
         90,
@@ -207,16 +224,59 @@ fn durable_audit_trace_query_source_rejects_secret_principal_filter() {
     let source = DurableAuditTraceQuerySource::new(&records);
 
     let spec = TraceQuerySpec::new(TraceQueryFilter {
-        principal: Some("token=must-not-enter-query-path".to_string()),
+        principal: Some("x-api-key must-not-enter-query-path".to_string()),
         ..TraceQueryFilter::default()
     });
 
     let error = source
         .query(&spec)
-        .expect_err("durable audit query rejects secret-bearing principal filters");
+        .expect_err("durable audit inspection rejects secret-bearing principal filters");
     assert!(
         error
             .message()
             .contains("principal filter must not contain secret evidence")
+    );
+}
+
+#[test]
+fn durable_audit_trace_inspection_row_rejects_secret_replay_fields_without_leak() {
+    let record = replay_record(
+        5,
+        95,
+        DurableAuditEventFamily::SecurityDecision,
+        "token=must-not-appear",
+        "user:durable-audit",
+        50,
+    );
+
+    let error = DurableAuditTraceQueryRow::from_replay_record(&record)
+        .expect_err("secret-bearing replay evidence must not become an inspection row");
+
+    assert!(error.message().contains("secret evidence"));
+    assert!(
+        !error.message().contains("must-not-appear"),
+        "durable audit inspection errors must not echo secret-bearing values"
+    );
+}
+
+#[test]
+fn durable_audit_trace_inspection_source_rejects_unknown_recovery_event_kind() {
+    let records = vec![replay_record(
+        4,
+        94,
+        DurableAuditEventFamily::RecoveryDecision,
+        "UnexpectedRecoveryString",
+        "user:storage",
+        40,
+    )];
+    let source = DurableAuditTraceQuerySource::new(&records);
+
+    let error = source
+        .query(&TraceQuerySpec::new(TraceQueryFilter::default()))
+        .expect_err("unknown recovery event_kind evidence must fail closed");
+
+    assert!(
+        error.message().contains("unknown event_kind evidence"),
+        "durable recovery replay projection must reject opaque event kinds"
     );
 }

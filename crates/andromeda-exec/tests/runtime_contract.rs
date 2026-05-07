@@ -1,5 +1,6 @@
 use andromeda_catalog::{
-    CatalogBindingKind, INVENTORY_RESERVE_STOCK_PERMISSION, ProcedureContractRef,
+    CatalogBindingKind, INVENTORY_RESERVE_STOCK_PERMISSION, PolicyVersion,
+    ProcedureContractBinding, ProcedureContractRef, StatsVersion,
     inventory_reserve_stock_catalog_bindings, inventory_reserve_stock_contract,
 };
 use andromeda_core::{
@@ -7,12 +8,12 @@ use andromeda_core::{
     ProcedureId, ResourceBudget, TransactionId,
 };
 use andromeda_exec::{
-    AdmissionService, CompletionMappingService, CompletionStatus, ExecutionIoAdmissionDecision,
-    ExecutionIoAdmissionRequest, InventoryBusinessMvccStore, InventoryReserveStockExecutor,
-    InventoryStock, InvocationContext, InvocationReject, InvocationRequest, InvocationWal,
-    LocalDispatchPlan, LocalDispatcher, LocalProcedure, LocalRollbackPlan, LocalVerticalRuntime,
-    PreTransactionValidationService, ReserveStockCommand, ResultStreamMetadata,
-    ResultValidationService,
+    AdmissionService, CompletionMappingService, CompletionStatus, EXEC_TX_ROLLBACK_PAYLOAD_LEN,
+    ExecutionIoAdmissionDecision, ExecutionIoAdmissionRequest, InventoryBusinessMvccStore,
+    InventoryReserveStockExecutor, InventoryStock, InvocationContext, InvocationReject,
+    InvocationRequest, InvocationWal, LocalDispatchPlan, LocalDispatcher, LocalProcedure,
+    LocalRollbackPlan, LocalVerticalRuntime, PreTransactionValidationService, ReserveStockCommand,
+    ResultStreamMetadata, ResultValidationService,
 };
 use andromeda_observe::TraceId;
 use andromeda_srpl::{
@@ -132,13 +133,15 @@ impl InvocationWal for FlushErrorWal {
 }
 
 fn request(expected_contract_hash: ContractHash) -> InvocationRequest {
+    let procedure = ProcedureContractRef {
+        procedure_id: ProcedureId::new(22),
+        contract_hash: ContractHash::test_vector(7),
+        catalog_version: CatalogVersion::new(3),
+    };
     InvocationRequest {
         invocation_id: InvocationId::new(11),
-        procedure: ProcedureContractRef {
-            procedure_id: ProcedureId::new(22),
-            contract_hash: ContractHash::test_vector(7),
-            catalog_version: CatalogVersion::new(3),
-        },
+        procedure,
+        expected_binding: Some(test_binding(procedure)),
         expected_contract_hash,
         catalog_version: CatalogVersion::new(3),
         structured_parameters: Vec::new(),
@@ -148,6 +151,7 @@ fn request(expected_contract_hash: ContractHash) -> InvocationRequest {
 fn procedure(contract: ProcedureContractRef) -> LocalProcedure {
     LocalProcedure {
         contract,
+        contract_binding: test_binding(contract),
         required_permissions: Vec::new(),
         result_metadata: ResultStreamMetadata {
             stream_id: 1,
@@ -158,6 +162,16 @@ fn procedure(contract: ProcedureContractRef) -> LocalProcedure {
         },
         mutation_payload: b"reserve-stock".to_vec(),
         rows_affected: 1,
+    }
+}
+
+fn test_binding(procedure: ProcedureContractRef) -> ProcedureContractBinding {
+    ProcedureContractBinding {
+        procedure_id: procedure.procedure_id,
+        catalog_version: procedure.catalog_version,
+        contract_hash: procedure.contract_hash,
+        stats_version: StatsVersion::new(1),
+        policy_version: PolicyVersion::new([7; PolicyVersion::LEN]),
     }
 }
 
@@ -226,7 +240,7 @@ fn local_vertical_runtime_can_require_io_admission_before_tx_begin() {
             request(ContractHash::test_vector(7)),
             &procedure,
             TraceId::new(103),
-            foreground_io_admission(TraceId::new(104)),
+            foreground_io_admission(TraceId::new(103)),
         )
         .unwrap();
 
@@ -236,6 +250,25 @@ fn local_vertical_runtime_can_require_io_admission_before_tx_begin() {
         Some(TransactionState::Committed)
     );
     assert_eq!(runtime.wal().records.len(), 3);
+}
+
+#[test]
+fn local_vertical_runtime_rejects_io_admission_trace_mismatch_before_tx_begin() {
+    let mut runtime = LocalVerticalRuntime::new(RecordingWal::default());
+    let procedure = procedure(request(ContractHash::test_vector(7)).procedure);
+
+    let err = runtime
+        .execute_io_admitted(
+            request(ContractHash::test_vector(7)),
+            &procedure,
+            TraceId::new(104),
+            foreground_io_admission(TraceId::new(105)),
+        )
+        .unwrap_err();
+
+    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Contract);
+    assert!(err.message().contains("trace id"));
+    assert!(runtime.wal().records.is_empty());
 }
 
 #[test]
@@ -275,6 +308,25 @@ fn contract_or_procedure_mismatch_is_rejected_before_tx_begin() {
         .unwrap_err();
 
     assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Contract);
+    assert!(runtime.wal().records.is_empty());
+}
+
+#[test]
+fn executable_binding_stats_drift_is_rejected_before_tx_begin() {
+    let mut runtime = LocalVerticalRuntime::new(RecordingWal::default());
+    let mut drifted_procedure = procedure(request(ContractHash::test_vector(7)).procedure);
+    drifted_procedure.contract_binding.stats_version = StatsVersion::new(2);
+
+    let err = runtime
+        .execute(
+            request(ContractHash::test_vector(7)),
+            &drifted_procedure,
+            TraceId::new(109),
+        )
+        .unwrap_err();
+
+    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Contract);
+    assert!(err.message().contains("StatsVersion"));
     assert!(runtime.wal().records.is_empty());
 }
 
@@ -399,6 +451,7 @@ fn local_vertical_happy_path_commits_only_with_durable_wal_evidence() {
     let request = InvocationRequest {
         invocation_id: InvocationId::new(700),
         procedure: contract.as_ref(),
+        expected_binding: Some(contract.binding()),
         expected_contract_hash: contract.contract_hash,
         catalog_version: contract.object.catalog_version,
         structured_parameters: Vec::new(),
@@ -585,6 +638,7 @@ fn inventory_reserve_stock_e2e_stitches_catalog_srpl_business_effect_and_authori
     let request = InvocationRequest {
         invocation_id: InvocationId::new(710),
         procedure: contract.as_ref(),
+        expected_binding: Some(contract.binding()),
         expected_contract_hash: contract.contract_hash,
         catalog_version: contract.object.catalog_version,
         structured_parameters: Vec::new(),
@@ -914,7 +968,7 @@ fn local_vertical_commit_append_failure_does_not_publish_terminal_status() {
             .expect("transaction snapshot lookup must succeed")
             .expect("transaction record must exist")
             .state_machine
-            .state,
+            .state(),
         TransactionState::Active
     );
 }
@@ -950,7 +1004,7 @@ fn local_vertical_flush_error_does_not_publish_terminal_status() {
             .expect("transaction snapshot lookup must succeed")
             .expect("transaction record must exist")
             .state_machine
-            .state,
+            .state(),
         TransactionState::Active
     );
 }
@@ -1017,10 +1071,9 @@ fn local_vertical_runtime_rolls_back_business_validation_failure_after_begin() {
     assert_eq!(runtime.wal().records.len(), 2);
     assert_eq!(runtime.wal().records[0].1, WalRecordKind::TxBegin);
     assert_eq!(runtime.wal().records[1].1, WalRecordKind::TxRollback);
-    assert!(
-        runtime.wal().records[1]
-            .3
-            .starts_with(b"andromeda.exec.business-validation-failed.v1\0")
+    assert_eq!(
+        runtime.wal().records[1].3.len(),
+        EXEC_TX_ROLLBACK_PAYLOAD_LEN
     );
     assert_eq!(runtime.wal().durable_lsn, runtime.wal().records[1].0);
 }
@@ -1072,6 +1125,7 @@ fn inventory_reserve_stock_business_failure_rolls_back_after_authorized_begin_wi
     let request = InvocationRequest {
         invocation_id: InvocationId::new(820),
         procedure: contract.as_ref(),
+        expected_binding: Some(contract.binding()),
         expected_contract_hash: contract.contract_hash,
         catalog_version: contract.object.catalog_version,
         structured_parameters: Vec::new(),
@@ -1109,15 +1163,15 @@ fn inventory_reserve_stock_business_failure_rolls_back_after_authorized_begin_wi
         runtime.wal().records()[1].header.kind,
         WalRecordKind::TxRollback
     );
-    assert!(
-        runtime.wal().records()[1]
-            .payload
-            .starts_with(b"andromeda.exec.business-validation-failed.v1\0")
+    assert_eq!(
+        runtime.wal().records()[1].payload.len(),
+        EXEC_TX_ROLLBACK_PAYLOAD_LEN
     );
     assert!(
-        std::str::from_utf8(&runtime.wal().records()[1].payload)
-            .unwrap()
-            .contains("insufficient inventory stock")
+        !runtime.wal().records()[1]
+            .payload
+            .windows(b"insufficient inventory stock".len())
+            .any(|window| window == b"insufficient inventory stock")
     );
     assert!(
         !runtime
@@ -1226,7 +1280,7 @@ fn service_and_dispatcher_api_is_usable_externally() {
     let request = request(ContractHash::test_vector(7));
     let trace = PreTransactionValidationService::validate_invocation_contract(
         &request,
-        request.procedure,
+        request.expected_binding.unwrap(),
         TraceId::new(202),
     )
     .unwrap();
@@ -1302,6 +1356,7 @@ fn poison_rollback_routes_through_poisoned_state_with_durable_evidence() {
     let request = InvocationRequest {
         invocation_id: InvocationId::new(821),
         procedure: contract.as_ref(),
+        expected_binding: Some(contract.binding()),
         expected_contract_hash: contract.contract_hash,
         catalog_version: contract.object.catalog_version,
         structured_parameters: Vec::new(),
@@ -1348,12 +1403,9 @@ fn poison_rollback_routes_through_poisoned_state_with_durable_evidence() {
             .iter()
             .any(|record| record.header.kind == WalRecordKind::TxCommit)
     );
-    // Rollback payload uses the poisoned-rollback domain tag, distinct from
-    // ordinary business validation failure rollback payloads.
-    assert!(
-        runtime.wal().records()[1]
-            .payload
-            .starts_with(b"andromeda.exec.poisoned-rollback.v1\0")
+    assert_eq!(
+        runtime.wal().records()[1].payload.len(),
+        EXEC_TX_ROLLBACK_PAYLOAD_LEN
     );
     assert!(outcome.authorization_trace.is_some());
 

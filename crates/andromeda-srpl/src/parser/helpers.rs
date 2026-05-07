@@ -42,6 +42,7 @@ impl Parser {
     /// Parse a single identifier token into a `Spanned<String>`.
     pub(super) fn parse_identifier_spanned(&mut self) -> Result<Spanned<String>, SrplDiagnostic> {
         let token = self.expect(TokenKind::Identifier)?;
+        self.reject_reserved_absence_identifier(&token.lexeme, token.span)?;
         Ok(Spanned::new(token.lexeme, token.span))
     }
 
@@ -99,6 +100,7 @@ impl Parser {
     /// Parse a result stream declaration: `name cardinality (fields)`.
     pub(super) fn parse_result_stream(&mut self) -> Result<ResultStreamAst, SrplDiagnostic> {
         let name = self.expect(TokenKind::Identifier)?;
+        self.reject_reserved_absence_identifier(&name.lexeme, name.span)?;
         let cardinality = self.parse_cardinality()?;
         let columns = self.parse_field_list(true)?;
         let span = SourceSpan::new(name.span.start, self.previous_end());
@@ -131,6 +133,7 @@ impl Parser {
 
         loop {
             let name = self.expect(TokenKind::Identifier)?;
+            self.reject_reserved_absence_identifier(&name.lexeme, name.span)?;
             let data_type = self.parse_type()?;
             fields.push(FieldAst {
                 name: Spanned::new(name.lexeme, name.span),
@@ -146,7 +149,9 @@ impl Parser {
         }
     }
 
-    /// Parse a result cardinality token: `one`, `?one`, `many`, or `many!`.
+    /// Parse a result cardinality token or phrase:
+    /// `one`, `optional one`, `optional_one`, `many`, `nonempty many`, or
+    /// `non_empty_many`.
     pub(super) fn parse_cardinality(&mut self) -> Result<Spanned<Cardinality>, SrplDiagnostic> {
         let token = self.advance().ok_or_else(|| {
             self.error_at(
@@ -159,9 +164,54 @@ impl Parser {
             TokenKind::OptionalOne => Cardinality::OptionalOne,
             TokenKind::Many => Cardinality::Many,
             TokenKind::NonEmptyMany => Cardinality::NonEmptyMany,
+            TokenKind::Identifier if token.lexeme.eq_ignore_ascii_case("optional") => {
+                let next = self.expect(TokenKind::One).map_err(|_| {
+                    self.error_at(
+                        token.span,
+                        "SRPL optional cardinality must be written as `optional one`",
+                    )
+                })?;
+                return Ok(Spanned::new(
+                    Cardinality::OptionalOne,
+                    SourceSpan::new(token.span.start, next.span.end),
+                ));
+            }
+            TokenKind::Identifier
+                if token.lexeme.eq_ignore_ascii_case("nonempty")
+                    || token.lexeme.eq_ignore_ascii_case("non_empty") =>
+            {
+                let next = self.expect(TokenKind::Many).map_err(|_| {
+                    self.error_at(
+                        token.span,
+                        "SRPL nonempty cardinality must be written as `nonempty many`",
+                    )
+                })?;
+                return Ok(Spanned::new(
+                    Cardinality::NonEmptyMany,
+                    SourceSpan::new(token.span.start, next.span.end),
+                ));
+            }
             _ => return Err(self.error_at(token.span, "expected SRPL result cardinality")),
         };
 
         Ok(Spanned::new(cardinality, token.span))
+    }
+
+    fn reject_reserved_absence_identifier(
+        &self,
+        lexeme: &str,
+        span: SourceSpan,
+    ) -> Result<(), SrplDiagnostic> {
+        if matches!(
+            lexeme.to_ascii_lowercase().as_str(),
+            "null" | "nullable" | "optional" | "option" | "maybe"
+        ) {
+            return Err(self.error_at(
+                span,
+                "SRPL V0 reserves absence keywords; model absence with explicit optional cardinality and branching",
+            ));
+        }
+
+        Ok(())
     }
 }

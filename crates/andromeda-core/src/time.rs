@@ -32,7 +32,7 @@
 //! let now = clock.now();
 //!
 //! // Testing: use controllable time
-//! let mut clock = ManualClock::new();
+//! let mut clock = ManualClock::default();
 //! clock.advance_millis(1000);
 //! let later = clock.now();
 //! ```
@@ -77,10 +77,10 @@ pub struct SystemClock;
 
 impl Clock for SystemClock {
     fn now(&self) -> EngineTimestamp {
-        let millis = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|duration| duration.as_millis())
-            .unwrap_or_default();
+        let millis = match SystemTime::now().duration_since(UNIX_EPOCH) {
+            Ok(duration) => duration.as_millis(),
+            Err(_) => 0,
+        };
 
         EngineTimestamp::from_unix_millis(millis.min(u128::from(u64::MAX)) as u64)
     }
@@ -133,6 +133,7 @@ mod tests {
     fn engine_timestamp_exposes_deterministic_arithmetic() {
         let timestamp = EngineTimestamp::from_unix_millis(100);
 
+        assert_eq!(timestamp.as_unix_millis(), 100);
         assert!(!timestamp.is_zero());
         assert_eq!(
             timestamp.checked_add_millis(23),
@@ -151,8 +152,8 @@ mod tests {
 
         assert_eq!(clock.now(), EngineTimestamp::from_unix_millis(10));
         assert_eq!(
-            clock.advance_millis(5).unwrap(),
-            EngineTimestamp::from_unix_millis(15)
+            clock.advance_millis(5),
+            Ok(EngineTimestamp::from_unix_millis(15))
         );
         clock.set(EngineTimestamp::from_unix_millis(42));
         assert_eq!(clock.now(), EngineTimestamp::from_unix_millis(42));
@@ -162,10 +163,10 @@ mod tests {
     fn manual_clock_rejects_overflow() {
         let mut clock = ManualClock::new(EngineTimestamp::MAX);
 
-        assert_eq!(
-            clock.advance_millis(1).unwrap_err().kind(),
-            AndromedaErrorKind::Resource
-        );
+        assert!(matches!(
+            clock.advance_millis(1),
+            Err(error) if error.kind() == AndromedaErrorKind::Resource
+        ));
         assert_eq!(clock.now(), EngineTimestamp::MAX);
     }
 }

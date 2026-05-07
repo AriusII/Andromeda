@@ -27,7 +27,7 @@ mod tests {
     use andromeda_core::TransactionId;
     use andromeda_tx::{
         ActiveSnapshotRegistry, GcSchedulerTask, MvccGarbageCollector, SnapshotHandle,
-        TransactionStatus, TransactionStatusTable,
+        TransactionStatusTable,
     };
     use std::sync::Arc;
     use std::time::Duration;
@@ -61,10 +61,20 @@ mod tests {
         for i in 1..=10 {
             let tx_id = TransactionId::new(i);
             if i <= 5 {
-                status_table.set_committed(tx_id).expect("set committed");
+                status_table
+                    .record_committed_after_durable_wal(
+                        tx_id,
+                        andromeda_tx::Lsn::new(1),
+                        andromeda_tx::Lsn::new(1),
+                    )
+                    .expect("set committed");
             } else {
                 status_table
-                    .record(tx_id, TransactionStatus::RolledBack)
+                    .record_rolled_back_after_durable_wal(
+                        tx_id,
+                        andromeda_tx::Lsn::new(1),
+                        andromeda_tx::Lsn::new(1),
+                    )
                     .expect("set rolled back");
             }
         }
@@ -91,11 +101,21 @@ mod tests {
         let tx3 = TransactionId::new(3);
 
         // Commit tx1 (eligible)
-        status_table.set_committed(tx1).expect("set committed");
+        status_table
+            .record_committed_after_durable_wal(
+                tx1,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .expect("set committed");
 
         // Rollback tx2 (always eligible)
         status_table
-            .record(tx2, TransactionStatus::RolledBack)
+            .record_rolled_back_after_durable_wal(
+                tx2,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
             .expect("set rolled back");
 
         // Leave tx3 as InFlight (NOT eligible)
@@ -134,7 +154,13 @@ mod tests {
         let tx1 = TransactionId::new(1);
         let tx2 = TransactionId::new(2);
 
-        status_table.set_committed(tx1).expect("set committed");
+        status_table
+            .record_committed_after_durable_wal(
+                tx1,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .expect("set committed");
 
         // Register snapshot at ts=100
         let snapshot = SnapshotHandle::new(100, tx2).expect("create snapshot");
@@ -203,10 +229,18 @@ mod tests {
         let tx_inflight = TransactionId::new(3);
 
         status_table
-            .set_committed(tx_committed)
+            .record_committed_after_durable_wal(
+                tx_committed,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
             .expect("set committed");
         status_table
-            .record(tx_rolled_back, TransactionStatus::RolledBack)
+            .record_rolled_back_after_durable_wal(
+                tx_rolled_back,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
             .expect("set rolled back");
 
         // tx_inflight stays InFlight by default
@@ -247,8 +281,20 @@ mod tests {
         let tx2 = TransactionId::new(2);
         let tx3 = TransactionId::new(3);
 
-        status_table.set_committed(tx1).expect("set committed");
-        status_table.set_committed(tx2).expect("set committed");
+        status_table
+            .record_committed_after_durable_wal(
+                tx1,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .expect("set committed");
+        status_table
+            .record_committed_after_durable_wal(
+                tx2,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .expect("set committed");
 
         // Register snapshot 1 at ts=300, tx3
         let snap1 = SnapshotHandle::new(300, tx3).expect("create snap1");
@@ -296,7 +342,13 @@ mod tests {
         let tx1 = TransactionId::new(1);
         let tx2 = TransactionId::new(2);
 
-        status_table.set_committed(tx1).expect("set committed");
+        status_table
+            .record_committed_after_durable_wal(
+                tx1,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .expect("set committed");
 
         // Create and register a snapshot at ts=200
         let snapshot = SnapshotHandle::new(200, tx2).expect("create snapshot");
@@ -334,7 +386,13 @@ mod tests {
         let (_registry, status_table, collector) = setup_gc();
 
         let tx1 = TransactionId::new(1);
-        status_table.set_committed(tx1).expect("set committed");
+        status_table
+            .record_committed_after_durable_wal(
+                tx1,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .expect("set committed");
 
         // Live version has end_ts = u64::MAX
         let live_end_ts = u64::MAX;
@@ -363,7 +421,13 @@ mod tests {
         // Simulate 10 commits
         for i in 1..=10 {
             let tx_id = TransactionId::new(i as u64);
-            status_table.set_committed(tx_id).expect("set committed");
+            status_table
+                .record_committed_after_durable_wal(
+                    tx_id,
+                    andromeda_tx::Lsn::new(1),
+                    andromeda_tx::Lsn::new(1),
+                )
+                .expect("set committed");
             collector.record_versions_scanned(10);
             collector.record_versions_reclaimed(5);
         }
@@ -391,7 +455,13 @@ mod tests {
         registry.register_snapshot(snapshot).expect("register");
 
         // Commit a transaction
-        status_table.set_committed(tx1).expect("set committed");
+        status_table
+            .record_committed_after_durable_wal(
+                tx1,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .expect("set committed");
 
         // Create scheduler with short interval
         let scheduler = GcSchedulerTask::new(collector.clone(), Duration::from_millis(50));
@@ -471,7 +541,13 @@ mod tests {
         let handle1 = thread::spawn(move || {
             for i in 1..=50 {
                 let tx_id = TransactionId::new(i as u64);
-                status_clone.set_committed(tx_id).unwrap();
+                status_clone
+                    .record_committed_after_durable_wal(
+                        tx_id,
+                        andromeda_tx::Lsn::new(1),
+                        andromeda_tx::Lsn::new(1),
+                    )
+                    .unwrap();
                 collector_clone1.record_versions_scanned(10);
             }
         });
@@ -479,7 +555,13 @@ mod tests {
         let handle2 = thread::spawn(move || {
             for i in 51..=100 {
                 let tx_id = TransactionId::new(i as u64);
-                status_table.set_committed(tx_id).unwrap();
+                status_table
+                    .record_committed_after_durable_wal(
+                        tx_id,
+                        andromeda_tx::Lsn::new(1),
+                        andromeda_tx::Lsn::new(1),
+                    )
+                    .unwrap();
                 collector_clone2.record_versions_reclaimed(5);
             }
         });
@@ -531,10 +613,20 @@ mod tests {
         for i in 1..=1000 {
             let tx_id = TransactionId::new(i as u64);
             if i % 2 == 0 {
-                status_table.set_committed(tx_id).unwrap();
+                status_table
+                    .record_committed_after_durable_wal(
+                        tx_id,
+                        andromeda_tx::Lsn::new(1),
+                        andromeda_tx::Lsn::new(1),
+                    )
+                    .unwrap();
             } else {
                 status_table
-                    .record(tx_id, TransactionStatus::RolledBack)
+                    .record_rolled_back_after_durable_wal(
+                        tx_id,
+                        andromeda_tx::Lsn::new(1),
+                        andromeda_tx::Lsn::new(1),
+                    )
                     .unwrap();
             }
         }
@@ -579,7 +671,13 @@ mod tests {
         for burst in 1..=10 {
             for i in 1..=100 {
                 let tx_id = TransactionId::new((burst * 100 + i) as u64);
-                status_table.set_committed(tx_id).unwrap();
+                status_table
+                    .record_committed_after_durable_wal(
+                        tx_id,
+                        andromeda_tx::Lsn::new(1),
+                        andromeda_tx::Lsn::new(1),
+                    )
+                    .unwrap();
             }
             collector.record_versions_scanned(100);
             collector.record_versions_reclaimed(75);
@@ -599,7 +697,13 @@ mod tests {
 
         // Initial state: no snapshots
         let tx1 = TransactionId::new(1);
-        status_table.set_committed(tx1).unwrap();
+        status_table
+            .record_committed_after_durable_wal(
+                tx1,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .unwrap();
 
         // Version with end_ts=100 is reclaimable when no snapshots
         assert!(
@@ -652,7 +756,13 @@ mod tests {
             // Create 100 versions per cycle
             for _ in 0..100 {
                 let tx_id = TransactionId::new(tx_id_counter);
-                status_table.set_committed(tx_id).unwrap();
+                status_table
+                    .record_committed_after_durable_wal(
+                        tx_id,
+                        andromeda_tx::Lsn::new(1),
+                        andromeda_tx::Lsn::new(1),
+                    )
+                    .unwrap();
                 tx_id_counter += 1;
             }
 
@@ -694,7 +804,13 @@ mod tests {
         let (registry, status_table, collector) = setup_gc();
 
         let tx1 = TransactionId::new(1);
-        status_table.set_committed(tx1).unwrap();
+        status_table
+            .record_committed_after_durable_wal(
+                tx1,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .unwrap();
 
         // Create 10 overlapping snapshots with various timestamps
         let mut handles = Vec::new();

@@ -1,47 +1,13 @@
 {
   "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python hooks/scripts/andromeda_tool_gate.py",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "Write|Edit|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python hooks/scripts/andromeda_file_write_gate.py",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Write|Edit|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python hooks/scripts/andromeda_artifact_gate.py",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
     "SessionStart": [
       {
-        "matcher": "startup|resume|compact|clear",
         "hooks": [
           {
             "type": "command",
-            "command": "python hooks/scripts/andromeda_context_loader.py",
-            "timeout": 10
+            "command": "python .codex/scripts/hooks/session_start_context.py",
+            "timeout": 10,
+            "statusMessage": "Loading Andromeda Codex context"
           }
         ]
       }
@@ -51,8 +17,47 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python hooks/scripts/andromeda_prompt_gate.py",
-            "timeout": 10
+            "command": "python .codex/scripts/hooks/user_prompt_submit_guard.py",
+            "timeout": 10,
+            "statusMessage": "Checking prompt against Andromeda guardrails"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .codex/scripts/hooks/pre_tool_use_policy.py",
+            "timeout": 10,
+            "statusMessage": "Checking shell command policy"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .codex/scripts/hooks/post_tool_use_audit.py",
+            "timeout": 10,
+            "statusMessage": "Recording shell command audit event"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .codex/scripts/hooks/pre_tool_use_policy.py",
+            "timeout": 10,
+            "statusMessage": "Checking permission request policy"
           }
         ]
       }
@@ -62,8 +67,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python hooks/scripts/andromeda_stop_gate.py",
-            "timeout": 10
+            "command": "python .codex/scripts/hooks/stop_quality_gate.py",
+            "timeout": 10,
+            "statusMessage": "Applying final Andromeda quality reminder"
           }
         ]
       }

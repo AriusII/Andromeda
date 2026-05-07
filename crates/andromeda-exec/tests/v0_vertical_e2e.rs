@@ -4,10 +4,13 @@ use andromeda_catalog::{
 };
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, ContractHash, InvocationId, RequestId,
-    SessionId,
+    SessionId, TransactionId,
 };
 use andromeda_exec::{
-    CompletionStatus, InventoryStock, InvocationContext, InvocationRequest,
+    CompletionStatus, HeapInventoryProductStockStore, InventoryProductStockCommitEvidence,
+    InventoryProductStockDurableRedoEvidence, InventoryProductStockReservationIntent,
+    InventoryProductStockStore, InventoryStock, InvocationContext, InvocationRequest,
+    InvocationWal, LocalHeapRowInsertRedoTemplate, ObservedInventoryProductStockStore,
     V0InventoryRecoverableRuntime, V0InventoryReserveStockRpcPayload,
     encode_inventory_reserve_stock_v0_execute_frame, inventory_reserve_stock_v0_pdf_srpl_source,
 };
@@ -16,11 +19,13 @@ use andromeda_observe::{
     TraceId,
 };
 use andromeda_quic::{
-    FrameType, StreamRole, validate_result_stream_sequence, validate_single_frame_on_stream,
+    FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader, FrameType, StreamRole,
+    validate_result_stream_sequence, validate_single_frame_on_stream,
 };
 use andromeda_storage::{
-    DatabaseManifest, FileWal, InMemoryWal, Lsn, RedoRecordDecision, StartupMode,
-    recover_from_file_wal,
+    DatabaseManifest, FileWal, InMemoryWal, Lsn, PageId, PageSize, ProductStockRow,
+    RedoRecordDecision, StartupMode, WalRecordKind, recover_from_file_wal,
+    write_ahead_log::HeapRowRedoPayloadV1,
 };
 
 fn inventory_catalog_snapshot() -> CatalogSnapshot {
@@ -39,6 +44,7 @@ fn request(contract: &ProcedureContract, invocation_id: u64) -> InvocationReques
     InvocationRequest {
         invocation_id: InvocationId::new(invocation_id),
         procedure: contract.as_ref(),
+        expected_binding: Some(contract.binding()),
         expected_contract_hash: contract.contract_hash,
         catalog_version: contract.object.catalog_version,
         structured_parameters: Vec::new(),
@@ -67,6 +73,82 @@ fn encoded_execute_frame() -> Vec<u8> {
         V0InventoryReserveStockRpcPayload::new(42, 3).unwrap(),
     )
     .unwrap()
+}
+
+fn encoded_execute_frame_with_transaction_id() -> Vec<u8> {
+    let payload = V0InventoryReserveStockRpcPayload::new(42, 3)
+        .unwrap()
+        .encode()
+        .unwrap();
+    FrameCodec::encode(&FrameBytes {
+        header: FrameHeader {
+            frame_type: FrameType::RpcExecuteRequest,
+            request_id: RequestId::new(902),
+            session_id: SessionId::new(903),
+            tx_id: Some(TransactionId::new(904)),
+            payload_length: payload.len() as u64,
+            flags: 0,
+            header_crc: FRAME_HEADER_CRC_UNCHECKED,
+        },
+        payload,
+    })
+    .unwrap()
+}
+
+#[derive(Debug)]
+struct CountingObservedProductStockStore {
+    inner: ObservedInventoryProductStockStore,
+    prepare_count: usize,
+    publish_count: usize,
+    abort_count: usize,
+}
+
+impl CountingObservedProductStockStore {
+    fn new(stock: InventoryStock) -> Self {
+        Self {
+            inner: ObservedInventoryProductStockStore::new(stock).unwrap(),
+            prepare_count: 0,
+            publish_count: 0,
+            abort_count: 0,
+        }
+    }
+}
+
+impl InventoryProductStockStore for CountingObservedProductStockStore {
+    fn prepare_reserve_stock(
+        &mut self,
+        command: andromeda_exec::ReserveStockCommand,
+    ) -> AndromedaResult<InventoryProductStockReservationIntent> {
+        self.prepare_count += 1;
+        self.inner.prepare_reserve_stock(command)
+    }
+
+    fn publish_committed_reserve_stock(
+        &mut self,
+        intent: &InventoryProductStockReservationIntent,
+        commit: InventoryProductStockCommitEvidence,
+    ) -> AndromedaResult<()> {
+        self.publish_count += 1;
+        self.inner.publish_committed_reserve_stock(intent, commit)
+    }
+
+    fn abort_prepared_reserve_stock(
+        &mut self,
+        intent: &InventoryProductStockReservationIntent,
+        reason: &str,
+    ) -> AndromedaResult<()> {
+        self.abort_count += 1;
+        self.inner.abort_prepared_reserve_stock(intent, reason)
+    }
+}
+
+fn assert_product_stock_untouched(product_stock: &CountingObservedProductStockStore) {
+    assert_eq!(product_stock.prepare_count, 0);
+    assert_eq!(product_stock.publish_count, 0);
+    assert_eq!(product_stock.abort_count, 0);
+    assert_eq!(product_stock.inner.visible_stock(), stock());
+    assert!(product_stock.inner.prepared_intent().is_none());
+    assert!(product_stock.inner.published_commit().is_none());
 }
 
 #[test]
@@ -118,6 +200,448 @@ fn v0_inventory_executes_from_bound_pdf_style_srpl_and_emits_ordered_result_fram
     for frame in &outcome.result_frames {
         validate_single_frame_on_stream(frame, StreamRole::ResultUnidirectional).unwrap();
     }
+}
+
+#[test]
+fn v0_inventory_rejects_malformed_execute_frame_before_product_stock_or_wal() {
+    let catalog = inventory_catalog_snapshot();
+    let contract = inventory_reserve_stock_contract().unwrap();
+    let mut runtime = V0InventoryRecoverableRuntime::new(InMemoryWal::new());
+    let mut product_stock = CountingObservedProductStockStore::new(stock());
+
+    let err = runtime
+        .execute_encoded_inventory_reserve_stock_with_product_stock(
+            b"short frame",
+            inventory_reserve_stock_v0_pdf_srpl_source(),
+            &catalog,
+            &contract,
+            request(&contract, 715),
+            &context(&contract, 7015),
+            &mut product_stock,
+        )
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Protocol);
+    assert!(err.message().contains("AE-V0-RSVSTK-FRAME-LEN"));
+    assert!(runtime.wal().is_empty());
+    assert_product_stock_untouched(&product_stock);
+}
+
+#[test]
+fn v0_inventory_rejects_invalid_payload_domain_before_product_stock_or_wal() {
+    let catalog = inventory_catalog_snapshot();
+    let contract = inventory_reserve_stock_contract().unwrap();
+    let mut runtime = V0InventoryRecoverableRuntime::new(InMemoryWal::new());
+    let mut product_stock = CountingObservedProductStockStore::new(stock());
+    let mut encoded = encoded_execute_frame();
+    encoded[FrameCodec::HEADER_LEN] ^= 0x01;
+
+    let err = runtime
+        .execute_encoded_inventory_reserve_stock_with_product_stock(
+            &encoded,
+            inventory_reserve_stock_v0_pdf_srpl_source(),
+            &catalog,
+            &contract,
+            request(&contract, 716),
+            &context(&contract, 7016),
+            &mut product_stock,
+        )
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Protocol);
+    assert!(err.message().contains("AE-V0-RSVSTK-PAYLOAD-DOMAIN"));
+    assert!(runtime.wal().is_empty());
+    assert_product_stock_untouched(&product_stock);
+}
+
+#[test]
+fn v0_inventory_rejects_transaction_bearing_execute_frame_before_product_stock_or_wal() {
+    let catalog = inventory_catalog_snapshot();
+    let contract = inventory_reserve_stock_contract().unwrap();
+    let mut runtime = V0InventoryRecoverableRuntime::new(InMemoryWal::new());
+    let mut product_stock = CountingObservedProductStockStore::new(stock());
+
+    let err = runtime
+        .execute_encoded_inventory_reserve_stock_with_product_stock(
+            &encoded_execute_frame_with_transaction_id(),
+            inventory_reserve_stock_v0_pdf_srpl_source(),
+            &catalog,
+            &contract,
+            request(&contract, 717),
+            &context(&contract, 7017),
+            &mut product_stock,
+        )
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Protocol);
+    assert!(err.message().contains("AE-V0-RSVSTK-FRAME-TXID"));
+    assert!(runtime.wal().is_empty());
+    assert_product_stock_untouched(&product_stock);
+}
+
+#[test]
+fn v0_inventory_product_stock_adapter_publishes_only_after_durable_commit() {
+    let catalog = inventory_catalog_snapshot();
+    let contract = inventory_reserve_stock_contract().unwrap();
+    let mut runtime = V0InventoryRecoverableRuntime::new(InMemoryWal::new());
+    let mut product_stock = ObservedInventoryProductStockStore::new(stock()).unwrap();
+
+    let outcome = runtime
+        .execute_encoded_inventory_reserve_stock_with_product_stock(
+            &encoded_execute_frame(),
+            inventory_reserve_stock_v0_pdf_srpl_source(),
+            &catalog,
+            &contract,
+            request(&contract, 711),
+            &context(&contract, 7011),
+            &mut product_stock,
+        )
+        .unwrap();
+
+    assert_eq!(
+        outcome.vertical.completion.status(),
+        CompletionStatus::Committed
+    );
+    assert_eq!(
+        outcome.product_stock_commit.durable_commit_lsn,
+        outcome.vertical.completion.durable_lsn().unwrap()
+    );
+    assert_eq!(
+        outcome.product_stock_commit.transaction_id,
+        outcome.vertical.transaction_id
+    );
+    assert_eq!(product_stock.visible_stock(), outcome.effect.next_stock);
+    assert!(product_stock.prepared_intent().is_none());
+    assert_eq!(
+        product_stock.published_commit(),
+        Some(outcome.product_stock_commit)
+    );
+    assert_eq!(
+        runtime
+            .wal()
+            .records()
+            .iter()
+            .map(|record| record.header.kind)
+            .collect::<Vec<_>>(),
+        vec![
+            WalRecordKind::TxBegin,
+            WalRecordKind::RowUpdate,
+            WalRecordKind::TxCommit,
+        ]
+    );
+    assert_eq!(
+        runtime.wal().records()[1].payload,
+        outcome.effect.mutation_payload()
+    );
+}
+
+#[test]
+fn v0_inventory_heap_product_stock_store_publishes_only_after_durable_commit() {
+    let catalog = inventory_catalog_snapshot();
+    let contract = inventory_reserve_stock_contract().unwrap();
+    let mut runtime = V0InventoryRecoverableRuntime::new(InMemoryWal::new());
+    let mut product_stock = HeapInventoryProductStockStore::from_cold_snapshot(
+        PageId::new(42_101),
+        PageSize::KiB16,
+        stock(),
+    )
+    .unwrap();
+
+    let outcome = runtime
+        .execute_encoded_inventory_reserve_stock_with_product_stock(
+            &encoded_execute_frame(),
+            inventory_reserve_stock_v0_pdf_srpl_source(),
+            &catalog,
+            &contract,
+            request(&contract, 714),
+            &context(&contract, 7014),
+            &mut product_stock,
+        )
+        .unwrap();
+
+    assert_eq!(
+        outcome.product_stock_commit.transaction_id,
+        outcome.vertical.transaction_id
+    );
+    assert_eq!(
+        outcome.product_stock_commit.durable_commit_lsn,
+        outcome.vertical.completion.durable_lsn().unwrap()
+    );
+    assert_eq!(
+        product_stock.visible_stock().unwrap(),
+        outcome.effect.next_stock
+    );
+    assert_eq!(
+        product_stock.visible_product_stock_row().unwrap(),
+        ProductStockRow::new(42, 7).unwrap()
+    );
+    assert_eq!(product_stock.active_heap_slot_count(), 2);
+    assert!(product_stock.prepared_intent().is_none());
+    assert_eq!(
+        product_stock.published_commit(),
+        Some(outcome.product_stock_commit)
+    );
+    let redo_evidence = outcome
+        .product_stock_redo
+        .as_ref()
+        .expect("heap-backed ProductStock must expose durable redo evidence");
+    assert_eq!(
+        redo_evidence.transaction_id,
+        outcome.vertical.transaction_id
+    );
+    assert_eq!(redo_evidence.redo_record_lsn, Lsn::new(2));
+    assert_eq!(
+        redo_evidence.durable_commit_lsn,
+        outcome.product_stock_commit.durable_commit_lsn
+    );
+    assert_eq!(product_stock.page_lsn(), redo_evidence.redo_record_lsn);
+
+    let insert = product_stock.last_committed_insert().unwrap();
+    assert_eq!(insert.slot_id(), 1);
+    assert_eq!(insert.row(), ProductStockRow::new(42, 7).unwrap());
+
+    let redo = product_stock.last_redo_payload().unwrap();
+    assert_eq!(redo.expected_previous_page_lsn(), Lsn::ZERO);
+    assert_eq!(redo.resulting_page_lsn(), redo_evidence.redo_record_lsn);
+    assert_eq!(redo.after_slot_id(), insert.slot_id());
+    assert_eq!(ProductStockRow::decode(redo.tuple()).unwrap(), insert.row());
+    assert_eq!(redo, &redo_evidence.redo_payload);
+    assert_eq!(
+        runtime
+            .wal()
+            .records()
+            .iter()
+            .map(|record| record.header.kind)
+            .collect::<Vec<_>>(),
+        vec![
+            WalRecordKind::TxBegin,
+            WalRecordKind::RowInsert,
+            WalRecordKind::TxCommit,
+        ]
+    );
+    let wal_redo = HeapRowRedoPayloadV1::decode(
+        &runtime.wal().records()[1].payload,
+        runtime.wal().records()[1].header.kind,
+    )
+    .unwrap();
+    assert_eq!(wal_redo, redo.clone());
+}
+
+#[test]
+fn v0_inventory_product_stock_adapter_aborts_prepared_heap_state_when_commit_evidence_is_absent() {
+    #[derive(Debug, Default)]
+    struct CommitAppendFailWal {
+        records: Vec<(WalRecordKind, Option<TransactionId>, Vec<u8>)>,
+    }
+
+    impl InvocationWal for CommitAppendFailWal {
+        fn append(
+            &mut self,
+            kind: WalRecordKind,
+            transaction_id: Option<TransactionId>,
+            payload: &[u8],
+        ) -> AndromedaResult<Lsn> {
+            if kind == WalRecordKind::TxCommit {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Storage,
+                    "injected commit append failure before ProductStock publication",
+                ));
+            }
+
+            let lsn = Lsn::new(self.records.len() as u64 + 1);
+            self.records.push((kind, transaction_id, payload.to_vec()));
+            Ok(lsn)
+        }
+
+        fn flush_through(&mut self, _lsn: Lsn) -> AndromedaResult<Lsn> {
+            unreachable!("commit append failure must prevent durable commit evidence")
+        }
+    }
+
+    #[derive(Debug)]
+    struct CountingProductStockStore {
+        inner: HeapInventoryProductStockStore,
+        prepare_count: usize,
+        publish_count: usize,
+        abort_count: usize,
+    }
+
+    impl CountingProductStockStore {
+        fn new(stock: InventoryStock) -> Self {
+            Self {
+                inner: HeapInventoryProductStockStore::from_cold_snapshot(
+                    PageId::new(42_102),
+                    PageSize::KiB16,
+                    stock,
+                )
+                .unwrap(),
+                prepare_count: 0,
+                publish_count: 0,
+                abort_count: 0,
+            }
+        }
+    }
+
+    impl InventoryProductStockStore for CountingProductStockStore {
+        fn prepare_reserve_stock(
+            &mut self,
+            command: andromeda_exec::ReserveStockCommand,
+        ) -> AndromedaResult<InventoryProductStockReservationIntent> {
+            self.prepare_count += 1;
+            self.inner.prepare_reserve_stock(command)
+        }
+
+        fn publish_committed_reserve_stock(
+            &mut self,
+            intent: &InventoryProductStockReservationIntent,
+            commit: InventoryProductStockCommitEvidence,
+        ) -> AndromedaResult<()> {
+            self.publish_count += 1;
+            self.inner.publish_committed_reserve_stock(intent, commit)
+        }
+
+        fn prepared_reserve_stock_redo_template(
+            &self,
+            intent: &InventoryProductStockReservationIntent,
+        ) -> AndromedaResult<Option<LocalHeapRowInsertRedoTemplate>> {
+            self.inner.prepared_reserve_stock_redo_template(intent)
+        }
+
+        fn publish_committed_reserve_stock_with_redo(
+            &mut self,
+            intent: &InventoryProductStockReservationIntent,
+            commit: InventoryProductStockCommitEvidence,
+            redo: InventoryProductStockDurableRedoEvidence,
+        ) -> AndromedaResult<()> {
+            self.publish_count += 1;
+            self.inner
+                .publish_committed_reserve_stock_with_redo(intent, commit, redo)
+        }
+
+        fn abort_prepared_reserve_stock(
+            &mut self,
+            intent: &InventoryProductStockReservationIntent,
+            reason: &str,
+        ) -> AndromedaResult<()> {
+            self.abort_count += 1;
+            self.inner.abort_prepared_reserve_stock(intent, reason)
+        }
+    }
+
+    let catalog = inventory_catalog_snapshot();
+    let contract = inventory_reserve_stock_contract().unwrap();
+    let mut runtime = V0InventoryRecoverableRuntime::new(CommitAppendFailWal::default());
+    let mut product_stock = CountingProductStockStore::new(stock());
+
+    let err = runtime
+        .execute_encoded_inventory_reserve_stock_with_product_stock(
+            &encoded_execute_frame(),
+            inventory_reserve_stock_v0_pdf_srpl_source(),
+            &catalog,
+            &contract,
+            request(&contract, 713),
+            &context(&contract, 7013),
+            &mut product_stock,
+        )
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Storage);
+    assert!(err.message().contains("commit append failure"));
+    assert_eq!(product_stock.prepare_count, 1);
+    assert_eq!(product_stock.publish_count, 0);
+    assert_eq!(product_stock.abort_count, 1);
+    assert_eq!(product_stock.inner.visible_stock().unwrap(), stock());
+    assert_eq!(product_stock.inner.active_heap_slot_count(), 1);
+    assert!(product_stock.inner.prepared_intent().is_none());
+    assert!(product_stock.inner.published_commit().is_none());
+    assert!(product_stock.inner.last_committed_insert().is_none());
+    assert!(product_stock.inner.last_redo_payload().is_none());
+    assert_eq!(product_stock.inner.page_lsn(), Lsn::ZERO);
+    assert_eq!(
+        runtime
+            .wal()
+            .records
+            .iter()
+            .map(|(kind, _, _)| *kind)
+            .collect::<Vec<_>>(),
+        vec![WalRecordKind::TxBegin, WalRecordKind::RowInsert]
+    );
+}
+
+#[test]
+fn v0_inventory_product_stock_adapter_is_not_touched_for_contract_rejection() {
+    #[derive(Debug)]
+    struct CountingProductStockStore {
+        inner: ObservedInventoryProductStockStore,
+        prepare_count: usize,
+        publish_count: usize,
+        abort_count: usize,
+    }
+
+    impl CountingProductStockStore {
+        fn new(stock: InventoryStock) -> Self {
+            Self {
+                inner: ObservedInventoryProductStockStore::new(stock).unwrap(),
+                prepare_count: 0,
+                publish_count: 0,
+                abort_count: 0,
+            }
+        }
+    }
+
+    impl InventoryProductStockStore for CountingProductStockStore {
+        fn prepare_reserve_stock(
+            &mut self,
+            command: andromeda_exec::ReserveStockCommand,
+        ) -> AndromedaResult<InventoryProductStockReservationIntent> {
+            self.prepare_count += 1;
+            self.inner.prepare_reserve_stock(command)
+        }
+
+        fn publish_committed_reserve_stock(
+            &mut self,
+            intent: &InventoryProductStockReservationIntent,
+            commit: InventoryProductStockCommitEvidence,
+        ) -> AndromedaResult<()> {
+            self.publish_count += 1;
+            self.inner.publish_committed_reserve_stock(intent, commit)
+        }
+
+        fn abort_prepared_reserve_stock(
+            &mut self,
+            intent: &InventoryProductStockReservationIntent,
+            reason: &str,
+        ) -> AndromedaResult<()> {
+            self.abort_count += 1;
+            self.inner.abort_prepared_reserve_stock(intent, reason)
+        }
+    }
+
+    let catalog = inventory_catalog_snapshot();
+    let contract = inventory_reserve_stock_contract().unwrap();
+    let mut stale_request = request(&contract, 712);
+    stale_request.expected_contract_hash = ContractHash::test_vector(0xBA);
+    let mut runtime = V0InventoryRecoverableRuntime::new(InMemoryWal::new());
+    let mut product_stock = CountingProductStockStore::new(stock());
+
+    let err = runtime
+        .execute_encoded_inventory_reserve_stock_with_product_stock(
+            &encoded_execute_frame(),
+            inventory_reserve_stock_v0_pdf_srpl_source(),
+            &catalog,
+            &contract,
+            stale_request,
+            &context(&contract, 7012),
+            &mut product_stock,
+        )
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Contract);
+    assert!(runtime.wal().is_empty());
+    assert_eq!(product_stock.prepare_count, 0);
+    assert_eq!(product_stock.publish_count, 0);
+    assert_eq!(product_stock.abort_count, 0);
+    assert_eq!(product_stock.inner.visible_stock(), stock());
 }
 
 #[test]

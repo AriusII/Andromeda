@@ -1,8 +1,8 @@
-//! SQL type system with validation rules.
+//! Andromeda type descriptors with validation rules.
 //!
-//! This module defines the SQL type descriptors used to describe database values.
-//! Each type combines a `ScalarType` with an `AbsencePolicy` to indicate
-//! whether null values are permitted.
+//! This module defines the descriptors used for Procedure contracts and
+//! ResultStream shapes. Each type combines a `ScalarType` with an
+//! `AbsencePolicy` to make absence explicit.
 //!
 //! ## Scalar Types
 //!
@@ -11,12 +11,12 @@
 //! - **Float**: IEEE floating-point with determinism mode options
 //! - **Bool**: True/false values
 //! - **Text**: Variable-length strings with encoding and collation
-//! - **Timestamp**: Database timestamps with different derivation methods
+//! - **Timestamp**: Engine timestamps with different derivation methods
 //!
 //! ## Absence Policy
 //!
-//! - **Required**: NULL values are not permitted
-//! - **ExplicitOptional**: NULL values are explicitly allowed
+//! - **Required**: absence is not permitted
+//! - **ExplicitOptional**: absence is explicitly allowed
 //!
 //! ## Validation
 //!
@@ -24,8 +24,10 @@
 //! - Decimal precision/scale relationships
 //! - Float determinism constraints
 //! - Text encoding and length constraints
-//! - Column name non-emptiness
-//! - Column ordinal density and zero-basedness
+//! - Per-column name non-emptiness
+//!
+//! Callers that own a column collection validate cross-column rules such as
+//! ordinal density and name uniqueness.
 
 use crate::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
@@ -206,20 +208,18 @@ mod tests {
             .validate()
             .is_ok()
         );
-        assert_eq!(
+        assert!(matches!(
             DecimalType::Custom {
                 precision: 2,
                 scale: 3,
             }
-            .validate()
-            .unwrap_err()
-            .kind(),
-            AndromedaErrorKind::Contract
-        );
+            .validate(),
+            Err(error) if error.kind() == AndromedaErrorKind::Contract
+        ));
     }
 
     #[test]
-    fn bool_is_required_without_nullable_shortcut() {
+    fn bool_is_required_without_implicit_absence_shortcut() {
         let descriptor = TypeDescriptor::required(ScalarType::Bool);
 
         assert_eq!(descriptor.absence, AbsencePolicy::Required);

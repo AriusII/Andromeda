@@ -1,6 +1,6 @@
 use andromeda_core::{CatalogVersion, TransactionId};
 use andromeda_tx::{
-    MvccIsolationPolicy, MvccRowHeader, Snapshot, TransactionState, TransactionStateMachine,
+    Lsn, MvccIsolationPolicy, MvccRowHeader, Snapshot, TransactionState, TransactionStateMachine,
     TransactionStatus, TransactionStatusTable,
 };
 
@@ -10,19 +10,19 @@ fn v0_commit_visibility_requires_nonzero_durable_lsn() {
 
     tx.begin().unwrap();
     tx.request_commit().unwrap();
-    assert_eq!(tx.state, TransactionState::Committing);
+    assert_eq!(tx.state(), TransactionState::Committing);
     assert!(!tx.is_visible_committed());
 
     let zero_lsn = tx
         .publish_visible_commit_after_durable_flush(0)
         .unwrap_err();
     assert!(zero_lsn.message().contains("must not be zero"));
-    assert_eq!(tx.state, TransactionState::Committing);
+    assert_eq!(tx.state(), TransactionState::Committing);
     assert!(!tx.is_visible_committed());
 
     tx.publish_visible_commit_after_durable_flush(900).unwrap();
-    assert_eq!(tx.state, TransactionState::Committed);
-    assert_eq!(tx.durable_commit_lsn, Some(900));
+    assert_eq!(tx.state(), TransactionState::Committed);
+    assert_eq!(tx.durable_commit_lsn(), Some(Lsn::new(900)));
     assert!(tx.is_visible_committed());
 }
 
@@ -32,55 +32,70 @@ fn v0_rollback_completion_requires_nonzero_durable_lsn() {
 
     tx.begin().unwrap();
     tx.request_rollback().unwrap();
-    assert_eq!(tx.state, TransactionState::RollingBack);
+    assert_eq!(tx.state(), TransactionState::RollingBack);
     assert!(!tx.is_durable_rolled_back());
 
     let zero_lsn = tx.complete_rollback_after_durable_flush(0).unwrap_err();
     assert!(zero_lsn.message().contains("must not be zero"));
-    assert_eq!(tx.state, TransactionState::RollingBack);
+    assert_eq!(tx.state(), TransactionState::RollingBack);
     assert!(!tx.is_durable_rolled_back());
 
     tx.complete_rollback_after_durable_flush(901).unwrap();
-    assert_eq!(tx.state, TransactionState::RolledBack);
-    assert_eq!(tx.durable_rollback_lsn, Some(901));
+    assert_eq!(tx.state(), TransactionState::RolledBack);
+    assert_eq!(tx.durable_rollback_lsn(), Some(Lsn::new(901)));
     assert!(tx.is_durable_rolled_back());
 }
 
 #[test]
 fn mvcc_v0_hides_inflight_and_rolled_back_creators_until_durable_commit_is_visible() {
-    let creator = TransactionId::new(201);
-    let row = MvccRowHeader::open_version(20, creator, None).unwrap();
+    let inflight_creator = TransactionId::new(201);
+    let rolled_back_creator = TransactionId::new(202);
+    let committed_creator = TransactionId::new(203);
+    let inflight_row = MvccRowHeader::open_version(20, inflight_creator, None).unwrap();
+    let rolled_back_row = MvccRowHeader::open_version(20, rolled_back_creator, None).unwrap();
+    let committed_row = MvccRowHeader::open_version(20, committed_creator, None).unwrap();
     let repeatable_snapshot = Snapshot::with_context(
         30,
         CatalogVersion::new(1),
         MvccIsolationPolicy::RepeatableRead,
         Some(TransactionId::new(999)),
-        [creator],
+        [committed_creator],
     )
     .unwrap();
     let statuses = TransactionStatusTable::new();
 
     statuses
-        .record(creator, TransactionStatus::InFlight)
+        .record(inflight_creator, TransactionStatus::InFlight)
         .unwrap();
     assert!(
-        !row.visible_in_snapshot(&repeatable_snapshot, &statuses)
+        !inflight_row
+            .visible_in_snapshot(&repeatable_snapshot, &statuses)
             .unwrap()
     );
 
     statuses
-        .record(creator, TransactionStatus::RolledBack)
+        .record_rolled_back_after_durable_wal(
+            rolled_back_creator,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
     assert!(
-        !row.visible_in_snapshot(&repeatable_snapshot, &statuses)
+        !rolled_back_row
+            .visible_in_snapshot(&repeatable_snapshot, &statuses)
             .unwrap()
     );
 
     statuses
-        .record(creator, TransactionStatus::Committed)
+        .record_committed_after_durable_wal(
+            committed_creator,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
     assert!(
-        !row.visible_in_snapshot(&repeatable_snapshot, &statuses)
+        !committed_row
+            .visible_in_snapshot(&repeatable_snapshot, &statuses)
             .unwrap(),
         "repeatable-read snapshots must not see transactions active at snapshot creation"
     );
@@ -93,16 +108,30 @@ fn mvcc_v0_hides_inflight_and_rolled_back_creators_until_durable_commit_is_visib
         Vec::<TransactionId>::new(),
     )
     .unwrap();
-    assert!(row.visible_in_snapshot(&fresh_snapshot, &statuses).unwrap());
+    assert!(
+        committed_row
+            .visible_in_snapshot(&fresh_snapshot, &statuses)
+            .unwrap()
+    );
 }
 
 #[test]
 fn mvcc_v0_ignores_inflight_and_rolled_back_delete_intents() {
     let creator = TransactionId::new(301);
-    let deleter = TransactionId::new(302);
-    let row = MvccRowHeader::open_version(10, creator, None)
+    let inflight_deleter = TransactionId::new(302);
+    let rolled_back_deleter = TransactionId::new(303);
+    let committed_deleter = TransactionId::new(304);
+    let inflight_delete_row = MvccRowHeader::open_version(10, creator, None)
         .unwrap()
-        .close_version(40, deleter)
+        .close_version(40, inflight_deleter)
+        .unwrap();
+    let rolled_back_delete_row = MvccRowHeader::open_version(10, creator, None)
+        .unwrap()
+        .close_version(40, rolled_back_deleter)
+        .unwrap();
+    let committed_delete_row = MvccRowHeader::open_version(10, creator, None)
+        .unwrap()
+        .close_version(40, committed_deleter)
         .unwrap();
     // RepeatableRead so that listing the deleter as active at snapshot
     // creation continues to hide its delete even after durable commit.
@@ -111,35 +140,50 @@ fn mvcc_v0_ignores_inflight_and_rolled_back_delete_intents() {
         CatalogVersion::new(2),
         MvccIsolationPolicy::RepeatableRead,
         Some(TransactionId::new(999)),
-        [deleter],
+        [committed_deleter],
     )
     .unwrap();
     let statuses = TransactionStatusTable::new();
     statuses
-        .record(creator, TransactionStatus::Committed)
+        .record_committed_after_durable_wal(
+            creator,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
 
     statuses
-        .record(deleter, TransactionStatus::InFlight)
+        .record(inflight_deleter, TransactionStatus::InFlight)
         .unwrap();
     assert!(
-        row.visible_in_snapshot(&snapshot_with_delete_in_flight, &statuses)
+        inflight_delete_row
+            .visible_in_snapshot(&snapshot_with_delete_in_flight, &statuses)
             .unwrap()
     );
 
     statuses
-        .record(deleter, TransactionStatus::RolledBack)
+        .record_rolled_back_after_durable_wal(
+            rolled_back_deleter,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
     assert!(
-        row.visible_in_snapshot(&snapshot_with_delete_in_flight, &statuses)
+        rolled_back_delete_row
+            .visible_in_snapshot(&snapshot_with_delete_in_flight, &statuses)
             .unwrap()
     );
 
     statuses
-        .record(deleter, TransactionStatus::Committed)
+        .record_committed_after_durable_wal(
+            committed_deleter,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
     assert!(
-        row.visible_in_snapshot(&snapshot_with_delete_in_flight, &statuses)
+        committed_delete_row
+            .visible_in_snapshot(&snapshot_with_delete_in_flight, &statuses)
             .unwrap(),
         "RR snapshot that still tracks deleter as active must not observe that delete as visible"
     );
@@ -153,7 +197,8 @@ fn mvcc_v0_ignores_inflight_and_rolled_back_delete_intents() {
     )
     .unwrap();
     assert!(
-        !row.visible_in_snapshot(&snapshot_after_delete, &statuses)
+        !committed_delete_row
+            .visible_in_snapshot(&snapshot_after_delete, &statuses)
             .unwrap()
     );
 }
@@ -238,7 +283,11 @@ fn mvcc_v0_rolled_back_creator_never_visible() {
     let row = MvccRowHeader::open_version(10, creator, None).unwrap();
     let statuses = TransactionStatusTable::new();
     statuses
-        .record(creator, TransactionStatus::RolledBack)
+        .record_rolled_back_after_durable_wal(
+            creator,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
 
     for policy in [
@@ -266,7 +315,11 @@ fn mvcc_v0_isolation_policies_differ_on_concurrent_committer() {
     let row = MvccRowHeader::open_version(10, creator, None).unwrap();
     let statuses = TransactionStatusTable::new();
     statuses
-        .record(creator, TransactionStatus::Committed)
+        .record_committed_after_durable_wal(
+            creator,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
 
     let rc_snapshot = Snapshot::with_context(
@@ -305,7 +358,11 @@ fn mvcc_v0_versions_after_snapshot_are_invisible() {
     let row = MvccRowHeader::open_version(100, creator, None).unwrap();
     let statuses = TransactionStatusTable::new();
     statuses
-        .record(creator, TransactionStatus::Committed)
+        .record_committed_after_durable_wal(
+            creator,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
 
     let snapshot = Snapshot::with_context(
@@ -333,10 +390,18 @@ fn mvcc_v0_delete_after_snapshot_is_not_observed() {
         .unwrap();
     let statuses = TransactionStatusTable::new();
     statuses
-        .record(creator, TransactionStatus::Committed)
+        .record_committed_after_durable_wal(
+            creator,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
     statuses
-        .record(deleter, TransactionStatus::Committed)
+        .record_committed_after_durable_wal(
+            deleter,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
 
     let snapshot = Snapshot::with_context(
@@ -361,7 +426,11 @@ fn snapshot_validation_rejects_terminal_owner() {
     let owner = TransactionId::new(1101);
     let statuses = TransactionStatusTable::new();
     statuses
-        .record(owner, TransactionStatus::Committed)
+        .record_committed_after_durable_wal(
+            owner,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
 
     let err = Snapshot::with_context_validated(
@@ -404,7 +473,11 @@ fn snapshot_validation_rejects_terminal_active_member() {
     let statuses = TransactionStatusTable::new();
     statuses.record(owner, TransactionStatus::InFlight).unwrap();
     statuses
-        .record(stale, TransactionStatus::RolledBack)
+        .record_rolled_back_after_durable_wal(
+            stale,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
 
     let err = Snapshot::with_context_validated(
@@ -481,7 +554,11 @@ fn mvcc_v0_visibility_requires_manager_durable_commit() {
     manager.request_commit(writer).unwrap();
     manager.commit_durable(writer, 4242).unwrap();
     statuses
-        .record(writer, manager.status(writer).unwrap().unwrap())
+        .record_committed_after_durable_wal(
+            writer,
+            andromeda_tx::Lsn::new(4242),
+            andromeda_tx::Lsn::new(4242),
+        )
         .unwrap();
     assert_eq!(
         manager.status(writer).unwrap(),
@@ -512,7 +589,11 @@ fn mvcc_v0_manager_rollback_keeps_writes_invisible() {
 
     let statuses = TransactionStatusTable::new();
     statuses
-        .record(writer, manager.status(writer).unwrap().unwrap())
+        .record_rolled_back_after_durable_wal(
+            writer,
+            andromeda_tx::Lsn::new(7777),
+            andromeda_tx::Lsn::new(7777),
+        )
         .unwrap();
     statuses
         .record(reader, manager.status(reader).unwrap().unwrap())

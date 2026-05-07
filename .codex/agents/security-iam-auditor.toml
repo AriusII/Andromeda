@@ -1,4 +1,5 @@
 description = "Owns mTLS, CertificateIdentity, UserPrincipal, RBAC/ABAC, permissions, audit, secrets, and admin surface risk. Use for authentication, authorization, audit traces, secret handling, and prompt-injection threat models."
+sandbox_mode = "read-only"
 developer_instructions = """
 # Security IAM Auditor
 

@@ -20,6 +20,9 @@ const FORMAT_VERSION_V1: u64 = 1;
 const FORMAT_VERSION_V2: u64 = 2;
 const FILE_MAGIC: &[u8; 16] = b"ANDHADR-MSTORE\0\0";
 const HEADER_LEN: usize = FILE_MAGIC.len() + 32 + 8;
+const HADR_MEMBERSHIP_MAX_NODES: usize = 1_024;
+const HADR_MEMBERSHIP_MAX_RECORDS: usize = 8_192;
+const HADR_MEMBERSHIP_MAX_FILE_BYTES: u64 = 1024 * 1024;
 
 /// Durable role record for one HADR node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -206,6 +209,11 @@ impl HadrMembershipSnapshot {
         id: HadrNodeId,
         role: HadrNodeRole,
     ) -> AndromedaResult<HadrMembershipSnapshot> {
+        if role == HadrNodeRole::Primary {
+            return Err(storage_error(
+                "HADR membership primary publication must use the promotion boundary",
+            ));
+        }
         let next_epoch = self.next_epoch()?;
         let previous_epoch = self.epoch;
         let Some(node) = self.nodes.iter_mut().find(|node| node.id == id) else {
@@ -216,19 +224,11 @@ impl HadrMembershipSnapshot {
         node.role_epoch = next_epoch;
         self.epoch = next_epoch;
         self.push_epoch_advanced(previous_epoch, next_epoch);
-        if role == HadrNodeRole::Primary {
-            self.records.push(HadrMembershipRecord::PrimaryPromoted {
-                node_id: id,
-                epoch: next_epoch,
-                committed_safe_lsn: Lsn::ZERO,
-            });
-        } else {
-            self.records.push(HadrMembershipRecord::NodeRoleUpdated {
-                node_id: id,
-                role,
-                epoch: next_epoch,
-            });
-        }
+        self.records.push(HadrMembershipRecord::NodeRoleUpdated {
+            node_id: id,
+            role,
+            epoch: next_epoch,
+        });
         Self::with_records(self.epoch, self.nodes, self.records)
     }
 
@@ -314,6 +314,9 @@ impl HadrMembershipSnapshot {
     }
 
     fn validate(&self) -> AndromedaResult<()> {
+        validate_node_count(self.nodes.len())?;
+        validate_record_count(self.records.len())?;
+
         for node in &self.nodes {
             if node.id.is_zero() {
                 return Err(storage_error("HADR membership node id must not be zero"));
@@ -573,6 +576,7 @@ pub struct FileBackedHadrMembershipStore {
 impl FileBackedHadrMembershipStore {
     pub fn open(path: impl Into<PathBuf>) -> AndromedaResult<Self> {
         let store = Self { path: path.into() };
+        store.recover_interrupted_publish()?;
         if store.path.exists() {
             store
                 .load()?
@@ -583,6 +587,33 @@ impl FileBackedHadrMembershipStore {
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    fn tmp_path(&self) -> PathBuf {
+        self.path.with_extension("tmp")
+    }
+
+    fn backup_path(&self) -> PathBuf {
+        self.path.with_extension("bak")
+    }
+
+    fn recover_interrupted_publish(&self) -> AndromedaResult<()> {
+        let tmp_path = self.tmp_path();
+        let backup_path = self.backup_path();
+
+        if !self.path.exists() && backup_path.exists() {
+            fs::rename(&backup_path, &self.path)
+                .map_err(|err| io_error("restore HADR membership backup file", err))?;
+        }
+        if self.path.exists() && backup_path.exists() {
+            fs::remove_file(&backup_path)
+                .map_err(|err| io_error("remove stale HADR membership backup file", err))?;
+        }
+        if self.path.exists() && tmp_path.exists() {
+            fs::remove_file(&tmp_path)
+                .map_err(|err| io_error("remove stale HADR membership temp file", err))?;
+        }
+        Ok(())
     }
 
     fn load_or_empty(&self) -> AndromedaResult<HadrMembershipSnapshot> {
@@ -598,8 +629,9 @@ impl FileBackedHadrMembershipStore {
                 .map_err(|err| io_error("create HADR membership directory", err))?;
         }
 
-        let bytes = encode_snapshot(snapshot);
-        let tmp_path = self.path.with_extension("tmp");
+        let bytes = encode_snapshot(snapshot)?;
+        let tmp_path = self.tmp_path();
+        let backup_path = self.backup_path();
         let mut tmp = File::create(&tmp_path)
             .map_err(|err| io_error("create HADR membership temp file", err))?;
         tmp.write_all(&bytes)
@@ -608,12 +640,24 @@ impl FileBackedHadrMembershipStore {
             .map_err(|err| io_error("sync HADR membership temp file", err))?;
         drop(tmp);
 
-        if self.path.exists() {
-            fs::remove_file(&self.path)
-                .map_err(|err| io_error("replace HADR membership file", err))?;
+        if backup_path.exists() {
+            fs::remove_file(&backup_path)
+                .map_err(|err| io_error("remove stale HADR membership backup file", err))?;
         }
-        fs::rename(&tmp_path, &self.path)
-            .map_err(|err| io_error("rename HADR membership temp file", err))?;
+        if self.path.exists() {
+            fs::rename(&self.path, &backup_path)
+                .map_err(|err| io_error("backup HADR membership file", err))?;
+        }
+        if let Err(err) = fs::rename(&tmp_path, &self.path) {
+            if backup_path.exists() && !self.path.exists() {
+                let _ = fs::rename(&backup_path, &self.path);
+            }
+            return Err(io_error("rename HADR membership temp file", err));
+        }
+
+        if backup_path.exists() {
+            let _ = fs::remove_file(&backup_path);
+        }
 
         Ok(())
     }
@@ -624,8 +668,7 @@ impl HadrMembershipStore for FileBackedHadrMembershipStore {
         if !self.path.exists() {
             return Ok(None);
         }
-        let bytes =
-            fs::read(&self.path).map_err(|err| io_error("read HADR membership file", err))?;
+        let bytes = read_membership_file(&self.path)?;
         decode_snapshot(&bytes).map(Some)
     }
 
@@ -681,15 +724,20 @@ impl HadrMembershipStore for FileBackedHadrMembershipStore {
     }
 }
 
-fn encode_snapshot(snapshot: &HadrMembershipSnapshot) -> Vec<u8> {
-    let payload = encode_payload(snapshot);
+fn encode_snapshot(snapshot: &HadrMembershipSnapshot) -> AndromedaResult<Vec<u8>> {
+    let payload = encode_payload(snapshot)?;
     let checksum = Sha256::digest(&payload);
-    let mut encoded = Vec::with_capacity(HEADER_LEN + payload.len());
+    let capacity = HEADER_LEN
+        .checked_add(payload.len())
+        .ok_or_else(|| storage_error("HADR membership file length overflow"))?;
+    let mut encoded = Vec::with_capacity(capacity);
     encoded.extend_from_slice(FILE_MAGIC);
     encoded.extend_from_slice(&checksum);
-    encoded.extend_from_slice(&(payload.len() as u64).to_le_bytes());
+    let payload_len = u64::try_from(payload.len())
+        .map_err(|_| storage_error("HADR membership payload length exceeds u64"))?;
+    encoded.extend_from_slice(&payload_len.to_le_bytes());
     encoded.extend_from_slice(&payload);
-    encoded
+    Ok(encoded)
 }
 
 fn decode_snapshot(bytes: &[u8]) -> AndromedaResult<HadrMembershipSnapshot> {
@@ -704,7 +752,9 @@ fn decode_snapshot(bytes: &[u8]) -> AndromedaResult<HadrMembershipSnapshot> {
     let checksum_end = checksum_start + 32;
     let payload_len_start = checksum_end;
     let payload_len_end = payload_len_start + 8;
-    let payload_len = read_u64(&bytes[payload_len_start..payload_len_end])? as usize;
+    let payload_len = usize::try_from(read_u64(&bytes[payload_len_start..payload_len_end])?)
+        .map_err(|_| storage_error("HADR membership payload length exceeds usize"))?;
+    validate_payload_len(payload_len)?;
     let expected_len = HEADER_LEN
         .checked_add(payload_len)
         .ok_or_else(|| storage_error("HADR membership file length overflow"))?;
@@ -721,13 +771,21 @@ fn decode_snapshot(bytes: &[u8]) -> AndromedaResult<HadrMembershipSnapshot> {
     decode_payload(payload)
 }
 
-fn encode_payload(snapshot: &HadrMembershipSnapshot) -> Vec<u8> {
-    let mut payload =
-        Vec::with_capacity(32 + snapshot.nodes.len() * 24 + snapshot.records.len() * 32);
+fn encode_payload(snapshot: &HadrMembershipSnapshot) -> AndromedaResult<Vec<u8>> {
+    validate_node_count(snapshot.nodes.len())?;
+    validate_record_count(snapshot.records.len())?;
+    let mut payload = Vec::with_capacity(membership_payload_capacity(
+        snapshot.nodes.len(),
+        snapshot.records.len(),
+    )?);
     payload.extend_from_slice(&FORMAT_VERSION_V2.to_le_bytes());
     payload.extend_from_slice(&snapshot.epoch.get().to_le_bytes());
-    payload.extend_from_slice(&(snapshot.nodes.len() as u64).to_le_bytes());
-    payload.extend_from_slice(&(snapshot.records.len() as u64).to_le_bytes());
+    let node_count = u64::try_from(snapshot.nodes.len())
+        .map_err(|_| storage_error("HADR membership node count exceeds u64"))?;
+    let record_count = u64::try_from(snapshot.records.len())
+        .map_err(|_| storage_error("HADR membership record count exceeds u64"))?;
+    payload.extend_from_slice(&node_count.to_le_bytes());
+    payload.extend_from_slice(&record_count.to_le_bytes());
     for node in &snapshot.nodes {
         payload.extend_from_slice(&node.id.get().to_le_bytes());
         payload.push(role_to_tag(node.role));
@@ -737,7 +795,7 @@ fn encode_payload(snapshot: &HadrMembershipSnapshot) -> Vec<u8> {
     for record in &snapshot.records {
         encode_record(&mut payload, *record);
     }
-    payload
+    Ok(payload)
 }
 
 fn decode_payload(payload: &[u8]) -> AndromedaResult<HadrMembershipSnapshot> {
@@ -755,7 +813,9 @@ fn decode_payload_v1(
     mut cursor: PayloadCursor<'_>,
 ) -> AndromedaResult<HadrMembershipSnapshot> {
     let epoch = HadrEpoch::new(cursor.read_u64()?);
-    let node_count = cursor.read_u64()? as usize;
+    let node_count = usize::try_from(cursor.read_u64()?)
+        .map_err(|_| storage_error("HADR membership node count exceeds usize"))?;
+    validate_node_count(node_count)?;
     let expected_len = 24usize
         .checked_add(
             node_count
@@ -784,8 +844,12 @@ fn decode_payload_v2(
     mut cursor: PayloadCursor<'_>,
 ) -> AndromedaResult<HadrMembershipSnapshot> {
     let epoch = HadrEpoch::new(cursor.read_u64()?);
-    let node_count = cursor.read_u64()? as usize;
-    let record_count = cursor.read_u64()? as usize;
+    let node_count = usize::try_from(cursor.read_u64()?)
+        .map_err(|_| storage_error("HADR membership node count exceeds usize"))?;
+    let record_count = usize::try_from(cursor.read_u64()?)
+        .map_err(|_| storage_error("HADR membership record count exceeds usize"))?;
+    validate_node_count(node_count)?;
+    validate_record_count(record_count)?;
     let nodes_len = node_count
         .checked_mul(24)
         .ok_or_else(|| storage_error("HADR membership node count overflow"))?;
@@ -989,6 +1053,60 @@ fn read_u64(bytes: &[u8]) -> AndromedaResult<u64> {
         .try_into()
         .map_err(|_| storage_error("HADR membership u64 field is truncated"))?;
     Ok(u64::from_le_bytes(array))
+}
+
+fn read_membership_file(path: &Path) -> AndromedaResult<Vec<u8>> {
+    let metadata = fs::metadata(path).map_err(|err| io_error("stat HADR membership file", err))?;
+    if metadata.len() > HADR_MEMBERSHIP_MAX_FILE_BYTES {
+        return Err(storage_error(
+            "HADR membership file exceeds bounded read limit",
+        ));
+    }
+    fs::read(path).map_err(|err| io_error("read HADR membership file", err))
+}
+
+fn validate_node_count(count: usize) -> AndromedaResult<()> {
+    if count > HADR_MEMBERSHIP_MAX_NODES {
+        return Err(storage_error(
+            "HADR membership node count exceeds bounded limit",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_record_count(count: usize) -> AndromedaResult<()> {
+    if count > HADR_MEMBERSHIP_MAX_RECORDS {
+        return Err(storage_error(
+            "HADR membership record count exceeds bounded limit",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_payload_len(len: usize) -> AndromedaResult<()> {
+    let max_len =
+        membership_payload_capacity(HADR_MEMBERSHIP_MAX_NODES, HADR_MEMBERSHIP_MAX_RECORDS)?;
+    if len > max_len {
+        return Err(storage_error(
+            "HADR membership payload length exceeds bounded limit",
+        ));
+    }
+    Ok(())
+}
+
+fn membership_payload_capacity(node_count: usize, record_count: usize) -> AndromedaResult<usize> {
+    32usize
+        .checked_add(
+            node_count
+                .checked_mul(24)
+                .ok_or_else(|| storage_error("HADR membership node count overflow"))?,
+        )
+        .and_then(|len| {
+            record_count
+                .checked_mul(32)
+                .and_then(|records_len| len.checked_add(records_len))
+        })
+        .ok_or_else(|| storage_error("HADR membership payload length overflow"))
 }
 
 struct PayloadCursor<'a> {

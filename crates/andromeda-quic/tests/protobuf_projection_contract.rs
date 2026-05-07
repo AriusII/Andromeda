@@ -9,7 +9,10 @@ use andromeda_proto::{
 use andromeda_quic::{
     BackpressureReason, BackpressureSignal, DispatchPolicy, FRAME_CODEC_CRC_OFFSET,
     FRAME_CODEC_HEADER_LEN, FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader,
-    FrameType, StreamRole, validate_result_stream_sequence, validate_single_frame_on_stream,
+    FrameType, ResultStreamMetadataPolicy, StreamRole, TypedResultStreamBounds,
+    TypedResultStreamContext, decode_typed_frame_envelope, validate_result_stream_sequence,
+    validate_single_frame_on_stream, validate_typed_result_stream_sequence,
+    validate_typed_result_stream_sequence_with_context_and_bounds,
 };
 
 fn hash(byte: u8) -> Vec<u8> {
@@ -47,6 +50,72 @@ fn envelope_payload(kind: generated::protocol::v1::PayloadKind, payload: Vec<u8>
         payload,
     };
     encode_generated_message(&envelope)
+}
+
+fn typed_result_stream_context() -> TypedResultStreamContext {
+    TypedResultStreamContext::new(
+        RequestId::new(501),
+        SessionId::new(601),
+        Some(TransactionId::new(701)),
+        ContractHash::from_slice(&hash(7)).unwrap(),
+        CatalogVersion::new(42),
+    )
+}
+
+fn typed_result_stream_frames() -> [FrameBytes; 3] {
+    let metadata_payload = encode_generated_message(&generated::protocol::v1::RpcMetadata {
+        result_streams: Vec::new(),
+        completion_policy: Some(generated::protocol::v1::ResultCompletionPolicy {
+            completion_shape:
+                generated::protocol::v1::result_completion_policy::CompletionShape::RequiresRowBatch
+                    as i32,
+            reason: "requires batch".to_string(),
+        }),
+    });
+    let batch_payload = encode_generated_message(&generated::protocol::v1::RpcBatch {
+        result_name: "Inventory.ReserveStock.Reservation".to_string(),
+        batch_index: 0,
+        rows_emitted: 1,
+        structured_payload: b"\x01".to_vec(),
+        row_count_exact: Some(1),
+        terminal_batch: true,
+    });
+    let completion_payload = encode_generated_message(&generated::protocol::v1::RpcCompletion {
+        status: generated::protocol::v1::rpc_completion::Status::Committed as i32,
+        rows_affected: Some(2),
+        tx_id: Some(701),
+        request_id: Some(501),
+        session_id: Some(601),
+        trace_id: Some("trace".to_string()),
+        transaction_outcome: generated::protocol::v1::rpc_completion::TransactionOutcome::Committed
+            as i32,
+        durable_lsn: Some(3),
+        result_row_counts: Vec::new(),
+    });
+
+    [
+        frame(
+            FrameType::RpcMetadata,
+            envelope_payload(
+                generated::protocol::v1::PayloadKind::RpcMetadata,
+                metadata_payload,
+            ),
+        ),
+        frame(
+            FrameType::RpcBatch,
+            envelope_payload(
+                generated::protocol::v1::PayloadKind::RpcBatch,
+                batch_payload,
+            ),
+        ),
+        frame(
+            FrameType::RpcCompletion,
+            envelope_payload(
+                generated::protocol::v1::PayloadKind::RpcCompletion,
+                completion_payload,
+            ),
+        ),
+    ]
 }
 
 fn proto_envelope_from_generated(
@@ -89,6 +158,7 @@ fn frame_codec_carries_generated_rpc_execute_request_without_translation() {
                 priority_class: Some(1),
             },
         ),
+        expected_stats_version: Some(3),
     };
     let payload = envelope_payload(
         generated::protocol::v1::PayloadKind::RpcExecuteRequest,
@@ -118,6 +188,7 @@ fn frame_codec_carries_generated_rpc_execute_request_without_translation() {
     );
     assert_eq!(decoded_request.procedure_name, "Inventory.ReserveStock");
     assert_eq!(decoded_request.expected_contract_hash, hash(7));
+    assert_eq!(decoded_request.expected_stats_version, Some(3));
     assert_eq!(decoded_request.arguments[0].value, 3_i64.to_le_bytes());
 }
 
@@ -201,12 +272,12 @@ fn result_stream_frames_carry_generated_metadata_batch_completion_payloads() {
     ];
 
     validate_result_stream_sequence(&frames).unwrap();
-    let mut dispatch = DispatchPolicy::new(StreamRole::ResultUnidirectional);
+    let mut dispatch = DispatchPolicy::new_result_stream(typed_result_stream_context());
     let mut proto_envelopes = Vec::new();
 
-    for frame in frames {
-        dispatch.dispatch(&frame).unwrap();
-        let encoded = FrameCodec::encode(&frame).unwrap();
+    for frame in &frames {
+        dispatch.dispatch(frame).unwrap();
+        let encoded = FrameCodec::encode(frame).unwrap();
         assert_eq!(
             &encoded[4..8],
             &frame.header.frame_type.wire_code().to_be_bytes()
@@ -228,6 +299,7 @@ fn result_stream_frames_carry_generated_metadata_batch_completion_payloads() {
 
     dispatch.finish().unwrap();
     ProtoFrameEnvelope::validate_rpc_stream_sequence(&proto_envelopes).unwrap();
+    validate_typed_result_stream_sequence(&frames).unwrap();
 
     let decoded_metadata: generated::protocol::v1::RpcMetadata =
         decode_generated_message(proto_envelopes[0].payload.as_slice()).unwrap();
@@ -247,6 +319,226 @@ fn result_stream_frames_carry_generated_metadata_batch_completion_payloads() {
 }
 
 #[test]
+fn dispatch_policy_requires_admitted_typed_result_stream_context() {
+    let frames = typed_result_stream_frames();
+    let mut missing_context = DispatchPolicy::new(StreamRole::ResultUnidirectional);
+    let missing = missing_context.dispatch(&frames[0]).unwrap_err();
+    assert_eq!(missing.kind(), AndromedaErrorKind::Protocol);
+    assert!(
+        missing
+            .message()
+            .contains("admitted typed ResultStream context"),
+        "result-stream dispatch must reject policies created without route context"
+    );
+
+    let wrong_contract_context = TypedResultStreamContext::new(
+        RequestId::new(501),
+        SessionId::new(601),
+        Some(TransactionId::new(701)),
+        ContractHash::from_slice(&hash(8)).unwrap(),
+        CatalogVersion::new(42),
+    );
+    let mut wrong_context = DispatchPolicy::new_result_stream(wrong_contract_context);
+    let mismatch = wrong_context.dispatch(&frames[0]).unwrap_err();
+    assert_eq!(mismatch.kind(), AndromedaErrorKind::Protocol);
+    assert!(
+        mismatch.message().contains("expected route context"),
+        "result-stream dispatch must reject ContractHash/CatalogVersion route drift"
+    );
+
+    let wrong_catalog_context = TypedResultStreamContext::new(
+        RequestId::new(501),
+        SessionId::new(601),
+        Some(TransactionId::new(701)),
+        ContractHash::from_slice(&hash(7)).unwrap(),
+        CatalogVersion::new(43),
+    );
+    let mut wrong_catalog = DispatchPolicy::new_result_stream(wrong_catalog_context);
+    let catalog_mismatch = wrong_catalog.dispatch(&frames[0]).unwrap_err();
+    assert_eq!(catalog_mismatch.kind(), AndromedaErrorKind::Protocol);
+    assert!(
+        catalog_mismatch
+            .message()
+            .contains("expected route context"),
+        "result-stream dispatch must reject CatalogVersion route drift"
+    );
+
+    let mut accepted = DispatchPolicy::new_result_stream(typed_result_stream_context());
+    for frame in &frames {
+        accepted.dispatch(frame).unwrap();
+    }
+    accepted.finish().unwrap();
+}
+
+#[test]
+fn typed_result_stream_sequence_binds_to_admitted_route_context() {
+    let frames = typed_result_stream_frames();
+    validate_typed_result_stream_sequence_with_context_and_bounds(
+        &frames,
+        ResultStreamMetadataPolicy::RowBatchRequired,
+        typed_result_stream_context(),
+        TypedResultStreamBounds::v0_default(),
+    )
+    .unwrap();
+
+    let wrong_session_context = TypedResultStreamContext::new(
+        RequestId::new(501),
+        SessionId::new(999),
+        Some(TransactionId::new(701)),
+        ContractHash::from_slice(&hash(7)).unwrap(),
+        CatalogVersion::new(42),
+    );
+    let err = validate_typed_result_stream_sequence_with_context_and_bounds(
+        &frames,
+        ResultStreamMetadataPolicy::RowBatchRequired,
+        wrong_session_context,
+        TypedResultStreamBounds::v0_default(),
+    )
+    .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Protocol);
+    assert!(
+        err.message().contains("expected route context"),
+        "typed result streams must reject session/contract drift against the admitted route"
+    );
+}
+
+#[test]
+fn typed_result_stream_sequence_enforces_bounded_policy_before_acceptance() {
+    let frames = typed_result_stream_frames();
+
+    let too_few_frames = TypedResultStreamBounds::new(2, 64 * 1024);
+    assert_eq!(
+        validate_typed_result_stream_sequence_with_context_and_bounds(
+            &frames,
+            ResultStreamMetadataPolicy::RowBatchRequired,
+            typed_result_stream_context(),
+            too_few_frames,
+        )
+        .unwrap_err()
+        .kind(),
+        AndromedaErrorKind::Resource
+    );
+
+    let byte_budget = (frames[0].payload.len() + frames[1].payload.len()) as u64;
+    assert_eq!(
+        validate_typed_result_stream_sequence_with_context_and_bounds(
+            &frames,
+            ResultStreamMetadataPolicy::RowBatchRequired,
+            typed_result_stream_context(),
+            TypedResultStreamBounds::new(3, byte_budget),
+        )
+        .unwrap_err()
+        .kind(),
+        AndromedaErrorKind::Resource
+    );
+}
+
+#[test]
+fn result_stream_projection_rejects_payload_kind_spoofing_before_payload_acceptance() {
+    let batch_payload = encode_generated_message(&generated::protocol::v1::RpcBatch {
+        result_name: "Inventory.ReserveStock.Reservation".to_string(),
+        batch_index: 0,
+        rows_emitted: 1,
+        structured_payload: b"\x01".to_vec(),
+        row_count_exact: Some(1),
+        terminal_batch: true,
+    });
+    let completion_payload = encode_generated_message(&generated::protocol::v1::RpcCompletion {
+        status: generated::protocol::v1::rpc_completion::Status::Committed as i32,
+        rows_affected: Some(2),
+        tx_id: Some(701),
+        request_id: Some(501),
+        session_id: Some(601),
+        trace_id: Some("trace".to_string()),
+        transaction_outcome: generated::protocol::v1::rpc_completion::TransactionOutcome::Committed
+            as i32,
+        durable_lsn: Some(3),
+        result_row_counts: Vec::new(),
+    });
+
+    let frames = [
+        frame(
+            FrameType::RpcMetadata,
+            envelope_payload(
+                generated::protocol::v1::PayloadKind::RpcBatch,
+                batch_payload.clone(),
+            ),
+        ),
+        frame(
+            FrameType::RpcBatch,
+            envelope_payload(
+                generated::protocol::v1::PayloadKind::RpcBatch,
+                batch_payload,
+            ),
+        ),
+        frame(
+            FrameType::RpcCompletion,
+            envelope_payload(
+                generated::protocol::v1::PayloadKind::RpcCompletion,
+                completion_payload,
+            ),
+        ),
+    ];
+
+    validate_result_stream_sequence(&frames)
+        .expect("header-only order is insufficient without envelope projection");
+    assert_eq!(
+        decode_typed_frame_envelope(&frames[0]).unwrap_err().kind(),
+        AndromedaErrorKind::Protocol
+    );
+    assert_eq!(
+        validate_typed_result_stream_sequence(&frames)
+            .unwrap_err()
+            .kind(),
+        AndromedaErrorKind::Protocol
+    );
+
+    let mut proto_envelopes = Vec::new();
+    for frame in &frames {
+        let decoded_frame = FrameCodec::decode(&FrameCodec::encode(frame).unwrap()).unwrap();
+        let decoded_envelope: generated::protocol::v1::FrameEnvelope =
+            decode_generated_message(decoded_frame.payload.as_slice()).unwrap();
+        proto_envelopes.push(proto_envelope_from_generated(decoded_envelope));
+    }
+
+    assert_eq!(proto_envelopes[0].payload_kind, PayloadKind::RpcBatch);
+    assert_ne!(
+        proto_envelopes[0].payload_kind.wire_code(),
+        frames[0].header.frame_type.wire_code()
+    );
+    assert_eq!(
+        ProtoFrameEnvelope::validate_rpc_stream_sequence(&proto_envelopes)
+            .unwrap_err()
+            .kind(),
+        AndromedaErrorKind::Protocol
+    );
+}
+
+#[test]
+fn typed_frame_envelope_rejects_frame_header_context_drift() {
+    let mut metadata = frame(
+        FrameType::RpcMetadata,
+        envelope_payload(
+            generated::protocol::v1::PayloadKind::RpcMetadata,
+            encode_generated_message(&generated::protocol::v1::RpcMetadata {
+                result_streams: Vec::new(),
+                completion_policy: None,
+            }),
+        ),
+    );
+    metadata.header.request_id = RequestId::new(502);
+
+    let err = decode_typed_frame_envelope(&metadata).unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Protocol);
+    assert!(
+        err.message().contains("context"),
+        "typed envelope rejection should name frame/envelope context drift"
+    );
+}
+
+#[test]
 fn quic_proto_loopback_rejects_wrong_role_malformed_frame_and_bad_ordering() {
     let request = generated::protocol::v1::RpcExecuteRequest {
         procedure_name: "Inventory.ReserveStock".to_string(),
@@ -255,6 +547,7 @@ fn quic_proto_loopback_rejects_wrong_role_malformed_frame_and_bad_ordering() {
         surface_scope: "application".to_string(),
         arguments: Vec::new(),
         budget: None,
+        expected_stats_version: Some(3),
     };
     let execute = frame(
         FrameType::RpcExecuteRequest,

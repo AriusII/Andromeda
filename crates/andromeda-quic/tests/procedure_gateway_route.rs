@@ -14,11 +14,19 @@
 //!
 //! These tests are runtime-free and do not depend on quinn or rustls.
 
-use andromeda_core::{AndromedaErrorKind, InvocationId};
+use andromeda_core::{
+    AndromedaErrorKind, CatalogVersion, CertificateFingerprint,
+    CertificateIdentity as CoreCertificateIdentity, ContractHash, InvocationId, Permission,
+    PermissionSet, Principal, PrincipalAuthorizationDenialReason, PrincipalAuthorizationOutcome,
+    PrincipalBinding, PrincipalId, PrincipalRegistry, PrincipalRole, PrincipalStatus, ProcedureId,
+    RequestId, SessionId, SessionToken, SurfaceScope as CoreSurfaceScope, TransactionId,
+};
 use andromeda_observe::{CertificateIdentity, SurfaceScope};
+use andromeda_proto::{PayloadKind, encode_generated_message, generated};
 use andromeda_quic::{
+    CatalogProcedureManifest, CatalogProcedureProtocolLayout, CatalogRequiredPermission,
     Connection, FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader, FrameType, LifecycleState,
-    ProcedureGateway, SurfacePlane,
+    ProcedureGateway, ResultStreamMetadataPolicy, SurfacePlane, TypedResultStreamContext,
 };
 
 fn hello_frame(session_id: u64) -> FrameBytes {
@@ -94,6 +102,202 @@ fn setup_active_ha_connection() -> Connection {
     conn.accept_auth(&auth_frame(300)).unwrap();
     assert_eq!(conn.state(), LifecycleState::Active);
     conn
+}
+
+fn hash(byte: u8) -> ContractHash {
+    ContractHash::test_vector(byte)
+}
+
+fn route_manifest() -> CatalogProcedureManifest {
+    CatalogProcedureManifest {
+        procedure_id: ProcedureId::new(42),
+        procedure_name: "Inventory.ReserveStock".to_string(),
+        contract_hash: hash(0x11),
+        catalog_version: CatalogVersion::new(9),
+        protocol_layout: CatalogProcedureProtocolLayout {
+            descriptor_set_hash: hash(0x22),
+            frame_envelope_hash: hash(0x33),
+            protocol_package: "andromeda.protocol.v1".to_string(),
+            contract_package: "andromeda.contract.v1".to_string(),
+        },
+        result_streams: Vec::new(),
+        stats_version: 5,
+        policy_version: hash(0x44),
+        required_permissions: vec![CatalogRequiredPermission {
+            id: "andromeda.execute_procedure".to_string(),
+            family: "application".to_string(),
+        }],
+    }
+}
+
+fn execute_request_frame(
+    procedure_name: &str,
+    request_contract_hash: ContractHash,
+    request_catalog_version: CatalogVersion,
+    request_stats_version: Option<u64>,
+    surface_scope: &str,
+    envelope_contract_hash: ContractHash,
+    envelope_catalog_version: CatalogVersion,
+) -> FrameBytes {
+    let execute_request = generated::protocol::v1::RpcExecuteRequest {
+        procedure_name: procedure_name.to_string(),
+        expected_contract_hash: request_contract_hash.as_bytes().to_vec(),
+        expected_catalog_version: request_catalog_version.get(),
+        surface_scope: surface_scope.to_string(),
+        arguments: Vec::new(),
+        budget: None,
+        expected_stats_version: request_stats_version,
+    };
+    execute_request_frame_from_generated(
+        execute_request,
+        envelope_contract_hash,
+        envelope_catalog_version,
+    )
+}
+
+fn execute_request_frame_from_generated(
+    execute_request: generated::protocol::v1::RpcExecuteRequest,
+    envelope_contract_hash: ContractHash,
+    envelope_catalog_version: CatalogVersion,
+) -> FrameBytes {
+    let envelope = generated::protocol::v1::FrameEnvelope {
+        protocol_version: Some(generated::protocol::v1::ProtocolVersion { major: 1, minor: 0 }),
+        contract_hash: envelope_contract_hash.as_bytes().to_vec(),
+        catalog_version: envelope_catalog_version.get(),
+        request_id: 501,
+        session_id: 100,
+        tx_id: None,
+        payload_kind: PayloadKind::RpcExecuteRequest.wire_code() as i32,
+        payload: encode_generated_message(&execute_request),
+    };
+    let payload = encode_generated_message(&envelope);
+
+    FrameBytes {
+        header: FrameHeader {
+            frame_type: FrameType::RpcExecuteRequest,
+            request_id: RequestId::new(501),
+            session_id: SessionId::new(100),
+            tx_id: None,
+            payload_length: payload.len() as u64,
+            flags: 0,
+            header_crc: FRAME_HEADER_CRC_UNCHECKED,
+        },
+        payload,
+    }
+}
+
+fn valid_generated_execute_request(
+    manifest: &CatalogProcedureManifest,
+) -> generated::protocol::v1::RpcExecuteRequest {
+    generated::protocol::v1::RpcExecuteRequest {
+        procedure_name: manifest.procedure_name.clone(),
+        expected_contract_hash: manifest.contract_hash.as_bytes().to_vec(),
+        expected_catalog_version: manifest.catalog_version.get(),
+        surface_scope: "application".to_string(),
+        arguments: Vec::new(),
+        budget: None,
+        expected_stats_version: Some(manifest.stats_version),
+    }
+}
+
+fn valid_execute_frame(manifest: &CatalogProcedureManifest) -> FrameBytes {
+    execute_request_frame(
+        &manifest.procedure_name,
+        manifest.contract_hash,
+        manifest.catalog_version,
+        Some(manifest.stats_version),
+        "application",
+        manifest.contract_hash,
+        manifest.catalog_version,
+    )
+}
+
+fn principal_with_role(
+    fingerprint: &str,
+    role: PrincipalRole,
+    status: PrincipalStatus,
+) -> (Principal, PrincipalId) {
+    let cert_fingerprint = CertificateFingerprint::new(fingerprint).expect("valid fingerprint");
+    let principal_id =
+        PrincipalId::from_certificate_fingerprint(&cert_fingerprint).expect("principal id");
+    let session_token = SessionToken::from_certificate_fingerprint(&cert_fingerprint);
+    let principal =
+        Principal::new_with_status(principal_id, role, status, session_token, cert_fingerprint)
+            .expect("principal evidence should be valid");
+
+    (principal, principal_id)
+}
+
+fn registry_with_binding(
+    fingerprint: &str,
+    certificate_scope: CoreSurfaceScope,
+    role: PrincipalRole,
+    status: PrincipalStatus,
+    direct_permissions: PermissionSet,
+) -> (PrincipalRegistry, PrincipalId) {
+    let certificate = CoreCertificateIdentity::new(fingerprint, "app-service", certificate_scope)
+        .expect("certificate evidence should be valid");
+    let (principal, principal_id) = principal_with_role(fingerprint, role, status);
+    let binding =
+        PrincipalBinding::new_with_direct_permissions(certificate, principal, direct_permissions)
+            .expect("valid principal binding");
+    let mut registry = PrincipalRegistry::new();
+    registry.register(binding).expect("registry insert");
+
+    (registry, principal_id)
+}
+
+fn registry_for_application_user() -> (PrincipalRegistry, PrincipalId) {
+    registry_with_binding(
+        &"a".repeat(64),
+        CoreSurfaceScope::Application,
+        PrincipalRole::User,
+        PrincipalStatus::Active,
+        PermissionSet::new(),
+    )
+}
+
+fn assert_authorized_route_denial(
+    registry: PrincipalRegistry,
+    expected_reason: PrincipalAuthorizationDenialReason,
+) {
+    let conn = setup_active_application_connection();
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
+    let manifest = route_manifest();
+    let frame = valid_execute_frame(&manifest);
+
+    let err = gateway
+        .bind_authorized_application_procedure_route(42, &frame, &manifest, &registry)
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Security);
+    assert!(
+        err.message().contains(expected_reason.as_str()),
+        "authorization denial should include the stable reason"
+    );
+    assert_eq!(
+        err.authorization_denial_reason(),
+        Some(expected_reason),
+        "authorization denial should expose the typed IAM reason"
+    );
+    let evidence = err
+        .authorization_evidence()
+        .expect("IAM denial should carry authorization evidence");
+    assert_eq!(
+        evidence.outcome,
+        PrincipalAuthorizationOutcome::Denied,
+        "denial evidence must be machine-classified"
+    );
+    assert_eq!(evidence.reason, expected_reason.as_str());
+    assert_eq!(
+        evidence.required_permission,
+        Permission::ExecuteProcedure(ProcedureId::new(42))
+    );
+    assert_eq!(evidence.surface_scope, CoreSurfaceScope::Application);
+    assert!(
+        evidence.has_identity_evidence(),
+        "audit evidence must preserve certificate/principal identity context"
+    );
 }
 
 ///
@@ -443,4 +647,637 @@ fn test_gateway_allows_multiple_instances_from_same_connection() {
     let inv_1 = gateway_1.map_stream_to_invocation_id(stream_id);
     let inv_2 = gateway_2.map_stream_to_invocation_id(stream_id);
     assert_eq!(inv_1, inv_2);
+}
+
+#[test]
+fn test_gateway_binds_application_execute_route_to_manifest_before_dispatch() {
+    let conn = setup_active_application_connection();
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
+    let manifest = route_manifest();
+    let frame = execute_request_frame(
+        "Inventory.ReserveStock",
+        manifest.contract_hash,
+        manifest.catalog_version,
+        Some(manifest.stats_version),
+        "application",
+        manifest.contract_hash,
+        manifest.catalog_version,
+    );
+
+    let binding = gateway
+        .bind_application_procedure_route(42, &frame, &manifest)
+        .expect("procedure route binding should validate");
+
+    assert_eq!(binding.invocation_id, InvocationId::new(42));
+    assert_eq!(binding.request_id, RequestId::new(501));
+    assert_eq!(binding.session_id, SessionId::new(100));
+    assert_eq!(binding.surface_plane, SurfacePlane::Application);
+    assert_eq!(binding.procedure_id, manifest.procedure_id);
+    assert_eq!(binding.contract_hash, manifest.contract_hash);
+    assert_eq!(binding.catalog_version, manifest.catalog_version);
+    assert_eq!(binding.stats_version, manifest.stats_version);
+    assert_eq!(
+        binding.execute_request.procedure_name,
+        "Inventory.ReserveStock"
+    );
+    assert_eq!(
+        binding.execute_request.expected_contract_hash,
+        manifest.contract_hash
+    );
+    assert_eq!(
+        binding.execute_request.expected_catalog_version,
+        manifest.catalog_version
+    );
+    assert_eq!(
+        binding.execute_request.expected_stats_version,
+        manifest.stats_version
+    );
+    assert_eq!(
+        binding.certificate_identity.surface,
+        SurfaceScope::Application
+    );
+    assert_eq!(
+        binding.typed_result_stream_context(),
+        TypedResultStreamContext::new(
+            RequestId::new(501),
+            SessionId::new(100),
+            None,
+            manifest.contract_hash,
+            manifest.catalog_version,
+        )
+    );
+    let result_dispatch =
+        binding.result_stream_dispatch_policy(ResultStreamMetadataPolicy::RowBatchRequired);
+    assert_eq!(
+        result_dispatch.typed_result_stream_context(),
+        Some(binding.typed_result_stream_context()),
+        "gateway-created result dispatch policy must carry admitted route context"
+    );
+}
+
+#[test]
+fn test_gateway_rejects_non_application_surface_before_procedure_dispatch() {
+    let conn = setup_active_administration_connection();
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
+    let manifest = route_manifest();
+    let frame = execute_request_frame(
+        "Inventory.ReserveStock",
+        manifest.contract_hash,
+        manifest.catalog_version,
+        Some(manifest.stats_version),
+        "application",
+        manifest.contract_hash,
+        manifest.catalog_version,
+    );
+
+    let err = gateway
+        .bind_application_procedure_route(7, &frame, &manifest)
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Security);
+    assert!(
+        err.message().contains("Application surface"),
+        "wrong-surface error should name the Application surface"
+    );
+}
+
+#[test]
+fn test_gateway_rejects_contract_mismatch_before_procedure_dispatch() {
+    let conn = setup_active_application_connection();
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
+    let manifest = route_manifest();
+    let frame = execute_request_frame(
+        "Inventory.ReserveStock",
+        hash(0x99),
+        manifest.catalog_version,
+        Some(manifest.stats_version),
+        "application",
+        hash(0x99),
+        manifest.catalog_version,
+    );
+
+    let err = gateway
+        .bind_application_procedure_route(8, &frame, &manifest)
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Contract);
+    assert!(
+        err.message().contains("ContractHash"),
+        "contract mismatch error should name ContractHash"
+    );
+}
+
+#[test]
+fn test_gateway_rejects_surface_scope_mismatch_before_procedure_dispatch() {
+    let conn = setup_active_application_connection();
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
+    let manifest = route_manifest();
+    let frame = execute_request_frame(
+        "Inventory.ReserveStock",
+        manifest.contract_hash,
+        manifest.catalog_version,
+        Some(manifest.stats_version),
+        "administration",
+        manifest.contract_hash,
+        manifest.catalog_version,
+    );
+
+    let err = gateway
+        .bind_application_procedure_route(9, &frame, &manifest)
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Security);
+    assert!(
+        err.message().contains("surface_scope"),
+        "surface mismatch error should name the protobuf surface_scope"
+    );
+}
+
+#[test]
+fn test_gateway_rejects_catalog_version_mismatch_before_procedure_dispatch() {
+    let conn = setup_active_application_connection();
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
+    let manifest = route_manifest();
+    let frame = execute_request_frame(
+        "Inventory.ReserveStock",
+        manifest.contract_hash,
+        CatalogVersion::new(10),
+        Some(manifest.stats_version),
+        "application",
+        manifest.contract_hash,
+        CatalogVersion::new(10),
+    );
+
+    let err = gateway
+        .bind_application_procedure_route(10, &frame, &manifest)
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Contract);
+    assert!(
+        err.message().contains("CatalogVersion"),
+        "catalog version mismatch error should name CatalogVersion"
+    );
+}
+
+#[test]
+fn test_gateway_rejects_stats_version_mismatch_before_procedure_dispatch() {
+    let conn = setup_active_application_connection();
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
+    let manifest = route_manifest();
+    let frame = execute_request_frame(
+        "Inventory.ReserveStock",
+        manifest.contract_hash,
+        manifest.catalog_version,
+        Some(manifest.stats_version + 1),
+        "application",
+        manifest.contract_hash,
+        manifest.catalog_version,
+    );
+
+    let err = gateway
+        .bind_application_procedure_route(11, &frame, &manifest)
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Contract);
+    assert!(
+        err.message().contains("StatsVersion"),
+        "stats version mismatch error should name StatsVersion"
+    );
+}
+
+#[test]
+fn test_gateway_rejects_missing_stats_version_before_procedure_dispatch() {
+    let conn = setup_active_application_connection();
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
+    let manifest = route_manifest();
+    let frame = execute_request_frame(
+        "Inventory.ReserveStock",
+        manifest.contract_hash,
+        manifest.catalog_version,
+        None,
+        "application",
+        manifest.contract_hash,
+        manifest.catalog_version,
+    );
+
+    let err = gateway
+        .bind_application_procedure_route(12, &frame, &manifest)
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Contract);
+    assert!(
+        err.message().contains("expected_stats_version"),
+        "missing stats version error should name expected_stats_version"
+    );
+}
+
+#[test]
+fn test_gateway_rejects_duplicate_execute_argument_names_before_dispatch() {
+    let conn = setup_active_application_connection();
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
+    let manifest = route_manifest();
+    let mut request = valid_generated_execute_request(&manifest);
+    request.arguments = vec![
+        generated::protocol::v1::rpc_execute_request::Argument {
+            name: "Quantity".to_string(),
+            type_name: "i64".to_string(),
+            value: 3_i64.to_le_bytes().to_vec(),
+        },
+        generated::protocol::v1::rpc_execute_request::Argument {
+            name: "Quantity".to_string(),
+            type_name: "i64".to_string(),
+            value: 4_i64.to_le_bytes().to_vec(),
+        },
+    ];
+    let frame = execute_request_frame_from_generated(
+        request,
+        manifest.contract_hash,
+        manifest.catalog_version,
+    );
+
+    let err = gateway
+        .bind_application_procedure_route(18, &frame, &manifest)
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Contract);
+    assert!(
+        err.message().contains("argument names"),
+        "canonical execute request validation should reject duplicate argument names"
+    );
+}
+
+#[test]
+fn test_gateway_rejects_empty_execute_argument_value_before_dispatch() {
+    let conn = setup_active_application_connection();
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
+    let manifest = route_manifest();
+    let mut request = valid_generated_execute_request(&manifest);
+    request.arguments = vec![generated::protocol::v1::rpc_execute_request::Argument {
+        name: "Quantity".to_string(),
+        type_name: "i64".to_string(),
+        value: Vec::new(),
+    }];
+    let frame = execute_request_frame_from_generated(
+        request,
+        manifest.contract_hash,
+        manifest.catalog_version,
+    );
+
+    let err = gateway
+        .bind_application_procedure_route(19, &frame, &manifest)
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Contract);
+    assert!(
+        err.message().contains("argument value"),
+        "canonical execute request validation should reject empty argument values"
+    );
+}
+
+#[test]
+fn test_gateway_rejects_zero_execute_budget_priority_before_dispatch() {
+    let conn = setup_active_application_connection();
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
+    let manifest = route_manifest();
+    let mut request = valid_generated_execute_request(&manifest);
+    request.budget = Some(
+        generated::protocol::v1::rpc_execute_request::RequestBudget {
+            cpu_micros: Some(5_000),
+            memory_bytes: Some(64 * 1024),
+            io_bytes: Some(128 * 1024),
+            priority_class: Some(0),
+        },
+    );
+    let frame = execute_request_frame_from_generated(
+        request,
+        manifest.contract_hash,
+        manifest.catalog_version,
+    );
+
+    let err = gateway
+        .bind_application_procedure_route(20, &frame, &manifest)
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Contract);
+    assert!(
+        err.message().contains("priority_class"),
+        "canonical execute request validation should reject zero budget priority"
+    );
+}
+
+#[test]
+fn test_gateway_rejects_zero_manifest_stats_version_before_procedure_dispatch() {
+    let conn = setup_active_application_connection();
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
+    let mut manifest = route_manifest();
+    manifest.stats_version = 0;
+    let frame = execute_request_frame(
+        "Inventory.ReserveStock",
+        manifest.contract_hash,
+        manifest.catalog_version,
+        Some(5),
+        "application",
+        manifest.contract_hash,
+        manifest.catalog_version,
+    );
+
+    let err = gateway
+        .bind_application_procedure_route(17, &frame, &manifest)
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Contract);
+    assert!(
+        err.message().contains("stats_version") || err.message().contains("stats version"),
+        "manifest binding error should name StatsVersion"
+    );
+}
+
+#[test]
+fn test_gateway_rejects_procedure_name_mismatch_before_procedure_dispatch() {
+    let conn = setup_active_application_connection();
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
+    let manifest = route_manifest();
+    let frame = execute_request_frame(
+        "Inventory.ReleaseStock",
+        manifest.contract_hash,
+        manifest.catalog_version,
+        Some(manifest.stats_version),
+        "application",
+        manifest.contract_hash,
+        manifest.catalog_version,
+    );
+
+    let err = gateway
+        .bind_application_procedure_route(13, &frame, &manifest)
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Contract);
+    assert!(
+        err.message().contains("Procedure name"),
+        "procedure name mismatch error should name Procedure name"
+    );
+}
+
+#[test]
+fn test_gateway_rejects_envelope_contract_mismatch_before_procedure_dispatch() {
+    let conn = setup_active_application_connection();
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
+    let manifest = route_manifest();
+    let frame = execute_request_frame(
+        "Inventory.ReserveStock",
+        manifest.contract_hash,
+        manifest.catalog_version,
+        Some(manifest.stats_version),
+        "application",
+        hash(0x77),
+        manifest.catalog_version,
+    );
+
+    let err = gateway
+        .bind_application_procedure_route(14, &frame, &manifest)
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Contract);
+    assert!(
+        err.message().contains("envelope ContractHash"),
+        "envelope mismatch error should name envelope ContractHash"
+    );
+}
+
+#[test]
+fn test_gateway_rejects_envelope_catalog_mismatch_before_procedure_dispatch() {
+    let conn = setup_active_application_connection();
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
+    let manifest = route_manifest();
+    let frame = execute_request_frame(
+        "Inventory.ReserveStock",
+        manifest.contract_hash,
+        manifest.catalog_version,
+        Some(manifest.stats_version),
+        "application",
+        manifest.contract_hash,
+        CatalogVersion::new(77),
+    );
+
+    let err = gateway
+        .bind_application_procedure_route(15, &frame, &manifest)
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Contract);
+    assert!(
+        err.message().contains("envelope CatalogVersion"),
+        "envelope mismatch error should name envelope CatalogVersion"
+    );
+}
+
+#[test]
+fn test_gateway_rejects_client_transaction_id_before_procedure_dispatch() {
+    let conn = setup_active_application_connection();
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
+    let manifest = route_manifest();
+    let mut frame = execute_request_frame(
+        "Inventory.ReserveStock",
+        manifest.contract_hash,
+        manifest.catalog_version,
+        Some(manifest.stats_version),
+        "application",
+        manifest.contract_hash,
+        manifest.catalog_version,
+    );
+    frame.header.tx_id = Some(TransactionId::new(700));
+
+    let err = gateway
+        .bind_application_procedure_route(16, &frame, &manifest)
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Protocol);
+    assert!(
+        err.message().contains("client transaction id"),
+        "client tx_id rejection should name client transaction id"
+    );
+}
+
+#[test]
+fn test_gateway_rejects_frame_envelope_context_mismatch_before_procedure_dispatch() {
+    let conn = setup_active_application_connection();
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
+    let manifest = route_manifest();
+    let mut frame = execute_request_frame(
+        "Inventory.ReserveStock",
+        manifest.contract_hash,
+        manifest.catalog_version,
+        Some(manifest.stats_version),
+        "application",
+        manifest.contract_hash,
+        manifest.catalog_version,
+    );
+    frame.header.request_id = RequestId::new(502);
+
+    let err = gateway
+        .bind_application_procedure_route(18, &frame, &manifest)
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Protocol);
+    assert!(
+        err.message().contains("context"),
+        "route must reject frame/envelope context divergence"
+    );
+}
+
+#[test]
+fn test_gateway_rejects_frame_session_not_bound_to_connection_before_dispatch() {
+    let conn = setup_active_application_connection();
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
+    let manifest = route_manifest();
+    let mut frame = execute_request_frame(
+        "Inventory.ReserveStock",
+        manifest.contract_hash,
+        manifest.catalog_version,
+        Some(manifest.stats_version),
+        "application",
+        manifest.contract_hash,
+        manifest.catalog_version,
+    );
+    frame.header.session_id = SessionId::new(101);
+
+    let err = gateway
+        .bind_application_procedure_route(20, &frame, &manifest)
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Protocol);
+    assert!(
+        err.message().contains("authenticated connection"),
+        "route must reject frames from a different authenticated session"
+    );
+}
+
+#[test]
+fn test_gateway_rejects_manifest_without_execute_permission_before_dispatch() {
+    let conn = setup_active_application_connection();
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
+    let mut manifest = route_manifest();
+    manifest.required_permissions.clear();
+    let frame = valid_execute_frame(&manifest);
+
+    let err = gateway
+        .bind_application_procedure_route(19, &frame, &manifest)
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Contract);
+    assert!(
+        err.message().contains("required_permissions"),
+        "manifest permission rejection should name required_permissions"
+    );
+    assert!(
+        err.message().contains("andromeda.execute_procedure"),
+        "manifest permission rejection should name the required execute permission"
+    );
+}
+
+#[test]
+fn test_gateway_authorized_route_allows_core_principal_before_dispatch() {
+    let conn = setup_active_application_connection();
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
+    let manifest = route_manifest();
+    let frame = valid_execute_frame(&manifest);
+    let (registry, principal_id) = registry_for_application_user();
+
+    let authorized = gateway
+        .bind_authorized_application_procedure_route(42, &frame, &manifest, &registry)
+        .expect("core IAM should allow the route before dispatch");
+
+    assert_eq!(authorized.route.invocation_id, InvocationId::new(42));
+    assert_eq!(authorized.route.procedure_id, ProcedureId::new(42));
+    assert_eq!(authorized.principal_id, principal_id);
+    assert_eq!(
+        authorized.authorization_evidence.outcome,
+        PrincipalAuthorizationOutcome::Allowed
+    );
+    assert_eq!(authorized.authorization_evidence.reason, "allowed");
+    assert_eq!(
+        authorized.authorization_evidence.required_permission,
+        Permission::ExecuteProcedure(ProcedureId::new(42))
+    );
+    assert_eq!(
+        authorized.authorization_evidence.surface_scope,
+        CoreSurfaceScope::Application
+    );
+    assert!(authorized.authorization_evidence.surface_policy_evaluated);
+    assert!(authorized.authorization_evidence.surface_policy_allowed);
+    assert!(authorized.authorization_evidence.role_permission_evaluated);
+    assert!(authorized.authorization_evidence.role_permission_granted);
+    assert!(
+        authorized
+            .authorization_evidence
+            .direct_permission_evaluated
+    );
+}
+
+#[test]
+fn test_gateway_authorized_route_rejects_unknown_certificate_before_dispatch() {
+    assert_authorized_route_denial(
+        PrincipalRegistry::new(),
+        PrincipalAuthorizationDenialReason::UnknownCertificate,
+    );
+}
+
+#[test]
+fn test_gateway_authorized_route_rejects_revoked_certificate_before_dispatch() {
+    let (mut registry, _) = registry_for_application_user();
+    registry
+        .revoke_certificate(&"a".repeat(64))
+        .expect("registered certificate can be revoked");
+
+    assert_authorized_route_denial(
+        registry,
+        PrincipalAuthorizationDenialReason::CertificateRevoked,
+    );
+}
+
+#[test]
+fn test_gateway_authorized_route_rejects_disabled_principal_before_dispatch() {
+    let (registry, _) = registry_with_binding(
+        &"a".repeat(64),
+        CoreSurfaceScope::Application,
+        PrincipalRole::User,
+        PrincipalStatus::Disabled,
+        PermissionSet::new(),
+    );
+
+    assert_authorized_route_denial(
+        registry,
+        PrincipalAuthorizationDenialReason::PrincipalDisabled,
+    );
+}
+
+#[test]
+fn test_gateway_authorized_route_rejects_core_surface_scope_mismatch_before_dispatch() {
+    let (registry, _) = registry_with_binding(
+        &"a".repeat(64),
+        CoreSurfaceScope::Administration,
+        PrincipalRole::User,
+        PrincipalStatus::Active,
+        PermissionSet::new(),
+    );
+
+    assert_authorized_route_denial(
+        registry,
+        PrincipalAuthorizationDenialReason::SurfaceScopeMismatch,
+    );
+}
+
+#[test]
+fn test_gateway_authorized_route_rejects_missing_execute_permission_before_dispatch() {
+    let (registry, _) = registry_with_binding(
+        &"a".repeat(64),
+        CoreSurfaceScope::Application,
+        PrincipalRole::Guest,
+        PrincipalStatus::Active,
+        PermissionSet::new(),
+    );
+
+    assert_authorized_route_denial(
+        registry,
+        PrincipalAuthorizationDenialReason::PrincipalMissingPermission,
+    );
 }

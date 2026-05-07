@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use andromeda_core::{AndromedaResult, CatalogVersion};
+use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion};
 
 use super::{
     CatalogPublicationReport, CatalogSubscriptionAcknowledgement,
@@ -43,6 +43,17 @@ impl CatalogRecoveryReplayExpectation {
             &receipt.record_count,
             "recovery replay expectation record count must match publication receipt",
         )?;
+        let expected_next = self.starting_version.get().checked_add(1).ok_or_else(|| {
+            AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "recovery replay expectation version advance overflowed",
+            )
+        })?;
+        if self.target_version.get() != expected_next {
+            return catalog_publication_error(
+                "recovery replay expectation must advance by exactly one catalog version",
+            );
+        }
         if !self.require_exact_commit_boundary {
             return catalog_publication_error(
                 "catalog recovery replay must require exact commit boundary matching",
@@ -133,6 +144,17 @@ impl CatalogPublicationReplayTerminalRecord {
                 "catalog publication replay terminal identity must describe a monotonic nonzero publication",
             );
         }
+        let expected_next = self.key.previous_version.checked_add(1).ok_or_else(|| {
+            AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "catalog publication replay terminal version advance overflowed",
+            )
+        })?;
+        if self.key.next_version != expected_next {
+            return catalog_publication_error(
+                "catalog publication replay terminal must advance by exactly one catalog version",
+            );
+        }
         if self.record_count == 0 {
             return catalog_publication_error(
                 "catalog publication replay terminal record count must not be zero",
@@ -141,6 +163,11 @@ impl CatalogPublicationReplayTerminalRecord {
         if self.audit_trace_id.trim().is_empty() {
             return catalog_publication_error(
                 "catalog publication replay terminal audit trace id must not be empty",
+            );
+        }
+        if self.durable_lsn == Some(0) {
+            return catalog_publication_error(
+                "catalog publication replay terminal durable LSN must not be zero",
             );
         }
         if self.durable_lsn.is_none() && self.durable_evidence_marker.is_none() {

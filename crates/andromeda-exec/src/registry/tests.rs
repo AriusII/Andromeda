@@ -5,10 +5,11 @@ use crate::{
     RemoteProcedureDispatcherUnavailable, ReserveStockCommand, ResultStreamMetadata,
 };
 use andromeda_catalog::{
-    INVENTORY_RESERVE_STOCK_PERMISSION, ProcedureContractRef, inventory_reserve_stock_contract,
+    INVENTORY_RESERVE_STOCK_PERMISSION, PolicyVersion, ProcedureContractBinding,
+    ProcedureContractRef, StatsVersion, inventory_reserve_stock_contract,
 };
 use andromeda_core::{
-    AndromedaErrorKind, AndromedaResult, CatalogVersion, ContractHash, ProcedureId,
+    AndromedaErrorKind, AndromedaResult, CatalogVersion, ContractHash, InvocationId, ProcedureId,
 };
 use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
 use andromeda_srpl::Cardinality;
@@ -46,6 +47,7 @@ impl ProcedureHandler for FakeProcedureHandler {
     fn execute(&self, _context: InvocationContext) -> AndromedaResult<LocalProcedure> {
         Ok(LocalProcedure {
             contract: self.result_contract,
+            contract_binding: binding_for(self.result_contract),
             required_permissions: vec!["inventory.reserve".to_string()],
             result_metadata: self.result_metadata(),
             mutation_payload: if self.invalid_payload_shape {
@@ -104,6 +106,7 @@ impl ProcedureHandler for QueryStockFakeProcedureHandler {
     fn execute(&self, _context: InvocationContext) -> AndromedaResult<LocalProcedure> {
         Ok(LocalProcedure {
             contract: self.contract,
+            contract_binding: binding_for(self.contract),
             required_permissions: vec![TEST_INVENTORY_QUERY_STOCK_PERMISSION.to_string()],
             result_metadata: self.result_metadata(),
             mutation_payload: self.payload(),
@@ -170,6 +173,7 @@ impl ProcedureHandler for ReleaseStockFakeProcedureHandler {
     fn execute(&self, _context: InvocationContext) -> AndromedaResult<LocalProcedure> {
         Ok(LocalProcedure {
             contract: self.contract,
+            contract_binding: binding_for(self.contract),
             required_permissions: vec![TEST_INVENTORY_RELEASE_STOCK_PERMISSION.to_string()],
             result_metadata: self.result_metadata(),
             mutation_payload: self.payload(),
@@ -199,6 +203,16 @@ fn contract(procedure_id: u64) -> ProcedureContractRef {
         procedure_id: ProcedureId::new(procedure_id),
         contract_hash: ContractHash::test_vector(procedure_id as u8),
         catalog_version: CatalogVersion::new(3),
+    }
+}
+
+fn binding_for(contract: ProcedureContractRef) -> ProcedureContractBinding {
+    ProcedureContractBinding {
+        procedure_id: contract.procedure_id,
+        catalog_version: contract.catalog_version,
+        contract_hash: contract.contract_hash,
+        stats_version: StatsVersion::new(1),
+        policy_version: PolicyVersion::new([contract.procedure_id.get() as u8; PolicyVersion::LEN]),
     }
 }
 
@@ -259,7 +273,9 @@ fn pre_transaction_evidence(trace_id: TraceId) -> PreTransactionDispatchEvidence
 fn dispatch_request(procedure: ProcedureContractRef) -> ProcedureDispatchRequest {
     let context = context();
     ProcedureDispatchRequest {
+        invocation_id: InvocationId::new(700),
         procedure,
+        procedure_binding: Some(binding_for(procedure)),
         pre_transaction: pre_transaction_evidence(context.trace_id),
         context,
     }

@@ -29,6 +29,7 @@ name = "andromeda-fuzz"
 version = "0.0.0"
 dependencies = [
  "andromeda-core",
+ "andromeda-observe",
  "andromeda-proto",
  "andromeda-quic",
  "andromeda-srpl",

@@ -12,15 +12,16 @@
 //!
 //! Every `WalRecordKind` variant must have an associated handler. Handlers
 //! may be:
-//! * **Implemented** - actively replay the operation (12 handlers, 46.1%)
-//! * **Deferred** - explicit fail-stop until payload and idempotency contracts
-//!   are promoted (14 handlers, 53.8%)
+//! * **Implemented** - skip an informational boundary or actively replay the
+//!   durable operation (12 handlers, 46.1%)
+//! * **Deferred** - explicit fail-stop or access-path rebuild evidence until
+//!   payload and idempotency contracts are promoted (14 handlers, 53.8%)
 //! * **Deprecated** - identified as obsolete with error messages (0 handlers, 0%)
 //!
 //! ## Implemented Handlers (12)
 //! 1. TxBegin - skipped (transaction context pre-exists)
 //! 2. TxCommit - skipped (commit determined by WAL presence)
-//! 3. TxRollback - skipped (deferred to explicit undo phase)
+//! 3. TxRollback - skipped (rollback determined by durable terminal record)
 //! 4. RowInsert - HREDOV1 heap row redo
 //! 5. RowUpdate - HREDOV1 close old slot + insert new slot redo
 //! 6. RowDelete - HREDOV1 heap tombstone redo
@@ -32,20 +33,20 @@
 //! 12. SecurityAuditAppend - skipped (audit is write-only in recovery)
 //!
 //! ## Deferred Handlers (14)
-//! 10. PageAllocate - page inventory
-//! 11. PageFormat - page format version
-//! 15. IndexInsert - secondary index replay
-//! 16. IndexDelete - secondary index replay
-//! 17. MvccVersionCreate - MVCC version store
-//! 18. MvccVersionClose - MVCC version visibility
-//! 19. MapDeltaAppend - map data structures
-//! 20. CatalogChangeBegin - catalog transactions
-//! 21. CatalogChangeApply - catalog mutations
-//! 22. CatalogChangeCommit - catalog commits
-//! 23. BTreeInsert - B-Tree record insertion
-//! 24. BTreeDelete - B-Tree record deletion
-//! 25. BTreeSplit - B-Tree node split
-//! 26. BTreeMerge - B-Tree node merge
+//! 1. PageAllocate - page inventory
+//! 2. PageFormat - page format version
+//! 3. IndexInsert - secondary index replay
+//! 4. IndexDelete - secondary index replay
+//! 5. MvccVersionCreate - MVCC version store
+//! 6. MvccVersionClose - MVCC version visibility
+//! 7. MapDeltaAppend - map data structures
+//! 8. CatalogChangeBegin - catalog transactions
+//! 9. CatalogChangeApply - catalog mutations
+//! 10. CatalogChangeCommit - catalog commits
+//! 11. BTreeInsert - B-Tree record insertion
+//! 12. BTreeDelete - B-Tree record deletion
+//! 13. BTreeSplit - B-Tree node split
+//! 14. BTreeMerge - B-Tree node merge
 //!
 //! # Idempotency Contract
 //!
@@ -68,7 +69,7 @@
 //!
 //! - TxBegin: Marks transaction start (skipped in redo)
 //! - TxCommit: Marks transaction commit (skipped in redo)
-//! - TxRollback: Marks transaction rollback (skipped in redo; triggers undo phase)
+//! - TxRollback: Marks transaction rollback (skipped in redo)
 //!
 //! # Checkpoint/Snapshot Markers
 //!
@@ -111,7 +112,10 @@ pub use result::{ReplayOutcome, ReplayResult};
 ///
 /// All handlers must be idempotent. Replaying the same record multiple
 /// times must produce the same result as replaying it once.
-pub fn replay_wal_record(ctx: &mut ReplayContext, record: &WalRecord) -> AndromedaResult<()> {
+pub(crate) fn replay_wal_record_result(
+    ctx: &mut ReplayContext,
+    record: &WalRecord,
+) -> AndromedaResult<ReplayResult> {
     let result = match record.header.kind {
         WalRecordKind::TxBegin => replay_tx_begin(ctx, record)?,
         WalRecordKind::TxCommit => replay_tx_commit(ctx, record)?,
@@ -147,10 +151,15 @@ pub fn replay_wal_record(ctx: &mut ReplayContext, record: &WalRecord) -> Androme
         if let Some(msg) = error_msg {
             return Err(storage_error(&msg));
         }
+        return Ok(result);
     }
 
-    ctx.record_result(result);
-    Ok(())
+    ctx.record_result(result.clone());
+    Ok(result)
+}
+
+pub fn replay_wal_record(ctx: &mut ReplayContext, record: &WalRecord) -> AndromedaResult<()> {
+    replay_wal_record_result(ctx, record).map(|_| ())
 }
 
 /// Replay manifest switch record.
@@ -169,6 +178,39 @@ fn replay_manifest_switch(
                 lsn: record.header.lsn,
                 manifest_version: payload.manifest_version,
                 reason: "required_wal_start_lsn precedes base_checkpoint_lsn",
+            },
+        );
+        return Ok(ReplayResult::skipped(
+            record.header.lsn,
+            WalRecordKind::ManifestSwitch,
+        ));
+    }
+
+    if payload.base_checkpoint_lsn > record.header.lsn {
+        ctx.manifest_switch_traces.push(
+            ManifestSwitchRecoveryTrace::ManifestSwitchValidationFailed {
+                lsn: record.header.lsn,
+                manifest_version: payload.manifest_version,
+                reason: "base_checkpoint_lsn exceeds manifest switch record LSN",
+            },
+        );
+        return Ok(ReplayResult::skipped(
+            record.header.lsn,
+            WalRecordKind::ManifestSwitch,
+        ));
+    }
+
+    if ctx.require_checkpoint_end_for_manifest_switch
+        && !payload.base_checkpoint_lsn.is_zero()
+        && ctx
+            .latest_checkpoint_end_lsn
+            .is_none_or(|checkpoint_lsn| checkpoint_lsn < payload.base_checkpoint_lsn)
+    {
+        ctx.manifest_switch_traces.push(
+            ManifestSwitchRecoveryTrace::ManifestSwitchValidationFailed {
+                lsn: record.header.lsn,
+                manifest_version: payload.manifest_version,
+                reason: "base_checkpoint_lsn lacks durable checkpoint_end evidence",
             },
         );
         return Ok(ReplayResult::skipped(
@@ -486,6 +528,7 @@ mod tests {
     #[test]
     fn manifest_switch_applies_when_crc_matches_known_manifest() {
         let mut ctx = ReplayContext::new();
+        ctx.observe_checkpoint_end(Lsn::new(40));
         ctx.known_manifest_crc_by_version.insert(7, 0xAA55_3311);
         let record = WalRecord::from_parts(
             WalRecordKind::ManifestSwitch,
@@ -516,6 +559,7 @@ mod tests {
     #[test]
     fn manifest_switch_rejects_crc_mismatch_and_keeps_previous_manifest() {
         let mut ctx = ReplayContext::new();
+        ctx.observe_checkpoint_end(Lsn::new(40));
         ctx.active_manifest = Some(DatabaseManifest {
             database_id: 1,
             manifest_version: 6,
@@ -549,6 +593,63 @@ mod tests {
             Some(
                 ManifestSwitchRecoveryTrace::ManifestSwitchValidationFailed {
                     reason: "manifest CRC mismatch",
+                    ..
+                }
+            )
+        ));
+    }
+
+    #[test]
+    fn manifest_switch_rejects_checkpoint_after_switch_record_lsn() {
+        let mut ctx = ReplayContext::new();
+        ctx.known_manifest_crc_by_version.insert(8, 0xAA55_4411);
+        let record = WalRecord::from_parts(
+            WalRecordKind::ManifestSwitch,
+            Lsn::new(77),
+            Some(Lsn::new(76)),
+            None,
+            manifest_switch_payload(8, 91, 80, 81, [4; 32], 0xAA55_4411),
+        )
+        .expect("manifest switch record should be structurally valid");
+
+        replay_wal_record(&mut ctx, &record).expect("replay should not hard-fail");
+        assert_eq!(ctx.applied_count, 0);
+        assert_eq!(ctx.skipped_count, 1);
+        assert!(ctx.active_manifest.is_none());
+        assert!(matches!(
+            ctx.manifest_switch_traces.last(),
+            Some(
+                ManifestSwitchRecoveryTrace::ManifestSwitchValidationFailed {
+                    reason: "base_checkpoint_lsn exceeds manifest switch record LSN",
+                    ..
+                }
+            )
+        ));
+    }
+
+    #[test]
+    fn manifest_switch_rejects_missing_checkpoint_end_evidence() {
+        let mut ctx = ReplayContext::new();
+        ctx.require_manifest_switch_checkpoint_evidence();
+        ctx.known_manifest_crc_by_version.insert(9, 0xCC55_4411);
+        let record = WalRecord::from_parts(
+            WalRecordKind::ManifestSwitch,
+            Lsn::new(77),
+            Some(Lsn::new(76)),
+            None,
+            manifest_switch_payload(9, 92, 40, 41, [5; 32], 0xCC55_4411),
+        )
+        .expect("manifest switch record should be structurally valid");
+
+        replay_wal_record(&mut ctx, &record).expect("replay should not hard-fail");
+        assert_eq!(ctx.applied_count, 0);
+        assert_eq!(ctx.skipped_count, 1);
+        assert!(ctx.active_manifest.is_none());
+        assert!(matches!(
+            ctx.manifest_switch_traces.last(),
+            Some(
+                ManifestSwitchRecoveryTrace::ManifestSwitchValidationFailed {
+                    reason: "base_checkpoint_lsn lacks durable checkpoint_end evidence",
                     ..
                 }
             )

@@ -4,11 +4,12 @@ use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, DatabaseId, NamespaceId,
 };
 
-use super::definition::DefinitionBatchId;
+use super::definition::{DefinitionBatchId, DefinitionBatchSourceHash};
 use super::mutation::{
     CatalogMutationBoundary, CatalogMutationPlan, CatalogMutationRecord,
     CatalogPublicationSemantics,
 };
+use crate::DefinitionBatchDependencyGraphHash;
 
 /// An opaque monotonic marker from an external durable store.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -130,6 +131,8 @@ impl CatalogMutationCommitEvidence {
             || self.commit_boundary.namespace_id != plan.namespace_id
             || self.commit_boundary.previous_version != plan.previous_version
             || self.commit_boundary.next_version != plan.next_version
+            || self.commit_boundary.source_hash != plan.source_hash
+            || self.commit_boundary.dependency_graph_hash != plan.dependency_graph_hash
             || self.commit_boundary.publication_semantics != plan.publication_semantics
         {
             return Err(AndromedaError::new(
@@ -159,6 +162,8 @@ pub struct CatalogPublicationReceipt {
     pub namespace_id: NamespaceId,
     pub previous_version: CatalogVersion,
     pub next_version: CatalogVersion,
+    pub source_hash: DefinitionBatchSourceHash,
+    pub dependency_graph_hash: DefinitionBatchDependencyGraphHash,
     pub durable_lsn: Option<u64>,
     pub durable_evidence_marker: Option<CatalogDurabilityMarker>,
     pub record_count: usize,
@@ -178,6 +183,8 @@ impl CatalogPublicationReceipt {
             namespace_id: plan.namespace_id,
             previous_version: plan.previous_version,
             next_version: plan.next_version,
+            source_hash: plan.source_hash,
+            dependency_graph_hash: plan.dependency_graph_hash,
             durable_lsn: evidence.durability.durable_lsn(),
             durable_evidence_marker: evidence.durability.durable_marker(),
             record_count: evidence.record_count,

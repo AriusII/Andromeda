@@ -4,6 +4,8 @@ use crate::{CompletionStatus, ResultStreamMetadata};
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId};
 use andromeda_proto::StructuredObjectHeader;
 use andromeda_quic::{BackpressureReason, BackpressureSignal};
+use andromeda_storage::Lsn;
+use andromeda_tx::TransactionState;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use tokio::sync::mpsc;
@@ -112,6 +114,13 @@ impl BackpressuredResultStream {
             ));
         }
 
+        if self.metadata.is_none() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Protocol,
+                "result stream metadata must be emitted before payload rows",
+            ));
+        }
+
         let message = match self.tx.try_send(ResultStreamMessage::Row(row)) {
             Ok(_) => {
                 self.metrics
@@ -165,6 +174,14 @@ impl BackpressuredResultStream {
                 "result stream completion requires nonzero durable LSN evidence",
             ));
         }
+        let transaction_state = completion_status_transaction_state(status)?;
+
+        let metadata = self.metadata.ok_or_else(|| {
+            AndromedaError::new(
+                AndromedaErrorKind::Protocol,
+                "result stream metadata must be emitted before terminal completion",
+            )
+        })?;
 
         if self.completed.swap(true, Ordering::AcqRel) {
             return Err(AndromedaError::new(
@@ -173,7 +190,13 @@ impl BackpressuredResultStream {
             ));
         }
 
-        let row_count = self.metrics.total_rows_pushed.load(Ordering::Relaxed);
+        let row_count = self.metrics.total_rows_pushed.load(Ordering::Acquire);
+        if let Err(error) =
+            metadata.validate_terminal_completion(transaction_state, Lsn::new(lsn), row_count)
+        {
+            self.completed.store(false, Ordering::Release);
+            return Err(error);
+        }
 
         let completion = StreamCompletion {
             status,
@@ -235,13 +258,15 @@ impl BackpressuredResultStream {
     }
 
     pub fn backpressure_signal(&self, request_id: Option<RequestId>) -> Option<BackpressureSignal> {
+        let request_id = request_id?;
+
         if !self.is_backpressured() {
             return None;
         }
 
         Some(BackpressureSignal {
             reason: BackpressureReason::ResultSpoolGrowth,
-            request_id,
+            request_id: Some(request_id),
             retry_after_millis: Some(10),
         })
     }
@@ -265,6 +290,22 @@ impl BackpressuredResultStream {
                 Err(actual) => peak = actual,
             }
         }
+    }
+}
+
+fn completion_status_transaction_state(
+    status: CompletionStatus,
+) -> AndromedaResult<TransactionState> {
+    match status {
+        CompletionStatus::Committed => Ok(TransactionState::Committed),
+        CompletionStatus::RolledBack => Ok(TransactionState::RolledBack),
+        _ => Err(AndromedaError::new(
+            AndromedaErrorKind::Transaction,
+            format!(
+                "result stream completion requires terminal status; got {:?}",
+                status
+            ),
+        )),
     }
 }
 

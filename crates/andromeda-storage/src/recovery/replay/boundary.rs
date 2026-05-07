@@ -45,9 +45,10 @@ pub(super) fn replay_checkpoint_begin(
 }
 
 pub(super) fn replay_checkpoint_end(
-    _ctx: &mut ReplayContext,
+    ctx: &mut ReplayContext,
     record: &WalRecord,
 ) -> AndromedaResult<ReplayResult> {
+    ctx.observe_checkpoint_end(record.header.lsn);
     Ok(ReplayResult::skipped(
         record.header.lsn,
         WalRecordKind::CheckpointEnd,

@@ -1,4 +1,5 @@
 use super::*;
+use crate::lock_manager::{LockAcquireStatus, LockManager, LockMode, LockResource};
 use crate::state::TransactionState;
 
 #[test]
@@ -11,7 +12,7 @@ fn begin_allocates_unique_monotonic_ids_and_mirrors_in_flight() {
     for id in [a, b, c] {
         assert_eq!(mgr.status(id).unwrap(), Some(TransactionStatus::InFlight));
         let snap = mgr.snapshot(id).unwrap().unwrap();
-        assert_eq!(snap.state_machine.state, TransactionState::Active);
+        assert_eq!(snap.state_machine.state(), TransactionState::Active);
         assert_eq!(snap.status, TransactionStatus::InFlight);
         assert_eq!(snap.savepoint_depth, 0);
     }
@@ -106,7 +107,27 @@ fn commit_path_requires_durable_lsn_before_status_mirrors_committed() {
 
     let snap = mgr.snapshot(id).unwrap().unwrap();
     assert!(snap.state_machine.is_visible_committed());
-    assert_eq!(snap.state_machine.durable_commit_lsn, Some(42));
+    assert_eq!(
+        snap.state_machine.durable_commit_lsn(),
+        Some(crate::Lsn::new(42))
+    );
+}
+
+#[test]
+fn commit_path_rejects_durable_lsn_behind_commit_record() {
+    let mgr = TransactionManager::new();
+    let id = mgr.begin().unwrap();
+    mgr.request_commit(id).unwrap();
+
+    let err = mgr
+        .commit_durable_after_wal_record(id, 42, 41)
+        .expect_err("commit must not become visible before its record is durable");
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Storage);
+    assert_eq!(mgr.status(id).unwrap(), Some(TransactionStatus::InFlight));
+    let snap = mgr.snapshot(id).unwrap().unwrap();
+    assert_eq!(snap.state_machine.state(), TransactionState::Committing);
+    assert_eq!(snap.state_machine.durable_commit_lsn(), None);
 }
 
 #[test]
@@ -117,6 +138,47 @@ fn rollback_path_requires_durable_lsn_before_status_mirrors_rolled_back() {
     assert_eq!(mgr.status(id).unwrap(), Some(TransactionStatus::InFlight));
     mgr.rollback_durable(id, 7).unwrap();
     assert_eq!(mgr.status(id).unwrap(), Some(TransactionStatus::RolledBack));
+}
+
+#[test]
+fn rollback_path_rejects_durable_lsn_behind_rollback_record() {
+    let mgr = TransactionManager::new();
+    let id = mgr.begin().unwrap();
+    mgr.request_rollback(id).unwrap();
+
+    let err = mgr
+        .rollback_durable_after_wal_record(id, 42, 41)
+        .expect_err("rollback must not complete before its record is durable");
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Storage);
+    assert_eq!(mgr.status(id).unwrap(), Some(TransactionStatus::InFlight));
+    let snap = mgr.snapshot(id).unwrap().unwrap();
+    assert_eq!(snap.state_machine.state(), TransactionState::RollingBack);
+    assert_eq!(snap.state_machine.durable_rollback_lsn(), None);
+}
+
+#[test]
+fn single_resource_lock_release_requires_shrinking_phase() {
+    let mgr = TransactionManager::new();
+    let locks = LockManager::new();
+    let id = mgr.begin().unwrap();
+    let resource = LockResource::row(1, 77, 770).unwrap();
+
+    assert_eq!(
+        mgr.acquire_lock(&locks, id, resource, LockMode::Shared)
+            .unwrap(),
+        LockAcquireStatus::Granted
+    );
+
+    let err = mgr
+        .release_lock(&locks, id, resource)
+        .expect_err("active transactions must not release single lock records");
+    assert_eq!(err.kind(), AndromedaErrorKind::Transaction);
+    assert!(locks.entry(resource).unwrap().is_some());
+
+    mgr.request_commit(id).unwrap();
+    assert!(mgr.release_lock(&locks, id, resource).unwrap());
+    assert_eq!(locks.entry(resource).unwrap(), None);
 }
 
 #[test]

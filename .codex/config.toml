@@ -1,0 +1,190 @@
+# Andromeda Codex configuration template.
+# Review against your installed Codex version before enabling all features.
+
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+model_reasoning_effort = "high"
+model_verbosity = "high"
+include_environment_context = true
+include_permissions_instructions = true
+
+# Optional: pin a model after checking the model catalog available to your account.
+# model = "gpt-5.3-codex"
+
+[features]
+hooks = true
+codex_hooks = true
+child_agents_md = true
+plugins = true
+multi_agent = true
+skills = true
+
+[agents]
+max_threads = 60
+max_depth = 2
+job_max_runtime_seconds = 3600
+interrupt_message = true
+
+[tui.model_availability_nux]
+"gpt-5.5" = 1
+
+[mcp_servers.rust-lsp-plugin]
+command = "rust-lsp-plugin"
+
+[agents.andromeda-architect]
+description = "System-level architecture reviewer for Andromeda doctrine, engine boundaries, invariants, and module separation."
+config_file = "agents/andromeda-architect.toml"
+[agents.srpl-language-specifier]
+description = "SRPL language and compiler specialist focused on strict relational procedure semantics."
+config_file = "agents/srpl-language-specifier.toml"
+[agents.procedure-contract-reviewer]
+description = "Procedure contract and RPC shape reviewer for typed inputs, outputs, permissions, compatibility, and ResultStream metadata."
+config_file = "agents/procedure-contract-reviewer.toml"
+[agents.transaction-wal-recovery-auditor]
+description = "Critical transaction kernel, WAL, MVCC, and crash recovery auditor."
+config_file = "agents/transaction-wal-recovery-auditor.toml"
+[agents.storage-engine-page-layout-auditor]
+description = "Storage engine reviewer for pages, extents, hot/cold layout, manifests, snapshots, and cold immutability."
+config_file = "agents/storage-engine-page-layout-auditor.toml"
+[agents.quic-rpc-contract-auditor]
+description = "QUIC/RPC framing and transport contract specialist."
+config_file = "agents/quic-rpc-contract-auditor.toml"
+[agents.security-iam-threat-modeler]
+description = "Security, IAM, audit, certificate, policy, and threat-model reviewer."
+config_file = "agents/security-iam-threat-modeler.toml"
+[agents.optimizer-statistics-critic]
+description = "Optimizer, statistics, histogram, Procedure Store, and learned-component critic."
+config_file = "agents/optimizer-statistics-critic.toml"
+[agents.map-analytics-summarizability-reviewer]
+description = "Maps, analytics, grain, summarizability, and refresh policy specialist."
+config_file = "agents/map-analytics-summarizability-reviewer.toml"
+[agents.hardware-rust-performance-engineer]
+description = "Rust, CPU, SIMD, GPU, NVMe, HDD, and performance engineering reviewer."
+config_file = "agents/hardware-rust-performance-engineer.toml"
+[agents.rust-unsafe-audit-agent]
+description = "Focused unsafe Rust and binary layout auditor."
+config_file = "agents/rust-unsafe-audit-agent.toml"
+[agents.modelization-catalog-governor]
+description = "Catalog, Modelization, DefinitionBatch, compatibility, and versioning reviewer."
+config_file = "agents/modelization-catalog-governor.toml"
+[agents.hadr-operations-runbook-agent]
+description = "HA/DR, backup, restore, PITR, forensic startup, and operations runbook specialist."
+config_file = "agents/hadr-operations-runbook-agent.toml"
+[agents.qa-crash-recovery-test-designer]
+description = "Test architect for crash, recovery, concurrency, storage, and protocol scenarios."
+config_file = "agents/qa-crash-recovery-test-designer.toml"
+[agents.documentation-consistency-editor]
+description = "Technical documentation editor for consistency, terminology, and non-marketing precision."
+config_file = "agents/documentation-consistency-editor.toml"
+[agents.source-grounding-researcher]
+description = "Official-source researcher and citation consolidator."
+config_file = "agents/source-grounding-researcher.toml"
+[agents.codex-skill-maintainer]
+description = "Codex skill authoring, validation, forward-testing, and maintenance specialist."
+config_file = "agents/codex-skill-maintainer.toml"
+[agents.hooks-governance-auditor]
+description = "Codex hooks, local policy, command safety, and audit-trail specialist."
+config_file = "agents/hooks-governance-auditor.toml"
+[agents.github-pr-reviewer]
+description = "GitHub pull request reviewer focused on correctness, tests, security, and maintainability."
+config_file = "agents/github-pr-reviewer.toml"
+[agents.formal-invariants-agent]
+description = "Formal invariants and acceptance-criteria reviewer."
+config_file = "agents/formal-invariants-agent.toml"
+[agents.enterprise-readiness-agent]
+description = "Enterprise-grade readiness reviewer for security, audit, operations, supportability, and governance."
+config_file = "agents/enterprise-readiness-agent.toml"
+[agents.roadmap-scope-controller]
+description = "Roadmap and scope-control critic for avoiding premature complexity."
+config_file = "agents/roadmap-scope-controller.toml"
+[agents.analytics-gpu-architect]
+description = "Owns off-critical-path analytics, SIMD/GPU batch work, and GPU safety boundaries. Use for GPU-assisted statistics, analytical maps, vector/statistical workloads, and GPU exclusion from commit path."
+config_file = "agents/analytics-gpu-architect.toml"
+[agents.andromeda-chief-architect]
+description = "Owns global coherence across engines, planes, contracts, and roadmap. Use for broad architecture decisions, cross-engine tradeoffs, and final consolidation."
+config_file = "agents/andromeda-chief-architect.toml"
+[agents.benchmark-evidence-architect]
+description = "Owns predictive evidence scenarios, workload realism, scoring, and benchmark governance. Use for benchmark design, ScenarioEvidence, and evidence validation."
+config_file = "agents/benchmark-evidence-architect.toml"
+[agents.binary-format-specifier]
+description = "Writes deterministic binary format specifications for pages, frames, WAL, and manifests. Use when a format requires offsets, endian rules, version fields, checksums, or compatibility policy."
+config_file = "agents/binary-format-specifier.toml"
+[agents.catalog-contract-engine-architect]
+description = "Owns canonical catalog, object versions, contract hashes, and definition batches. Use for system database, namespaces, object contracts, catalog history, and import batches."
+config_file = "agents/catalog-contract-engine-architect.toml"
+[agents.devex-rust-tooling-agent]
+description = "Owns local development workflow, CI, linting, cargo tooling, and RustRover-friendly repository practices. Use for dev setup, toolchain scripts, CI policy, and developer productivity."
+config_file = "agents/devex-rust-tooling-agent.toml"
+[agents.doctrine-guardian]
+description = "Checks all proposals against non-negotiable Andromeda invariants. Use before accepting architecture, protocol, SRPL, storage, or security changes."
+config_file = "agents/doctrine-guardian.toml"
+[agents.documentation-architect]
+description = "Owns Microsoft-style documentation, terminology consistency, information architecture, and deliverable polish. Use for documentation pages, README, architecture documents, and review edits."
+config_file = "agents/documentation-architect.toml"
+[agents.hadr-backup-architect]
+description = "Owns single-primary replication, quorum, WAL shipping, backup, restore, PITR, and forensic startup. Use for HA/DR, backup, restore, failover, quorum, and disaster recovery planning."
+config_file = "agents/hadr-backup-architect.toml"
+[agents.observability-forensic-architect]
+description = "Owns traces, metrics, decision logs, recovery evidence, and forensic reports. Use for DecisionTrace, ProcedureInvocationTrace, RecoveryTrace, and audit-friendly output."
+config_file = "agents/observability-forensic-architect.toml"
+[agents.optimizer-statistics-architect]
+description = "Owns cost/evidence planning, PlanClass, statistics versions, histograms, and plan stability. Use for plan cache, statistics, cardinality, skew, and evidence-driven optimization."
+config_file = "agents/optimizer-statistics-architect.toml"
+[agents.performance-engineer]
+description = "Owns performance budgets, benchmark interpretation, cache behavior, IO pressure, and regression risk. Use for CPU/NVMe/QUIC/storage performance analysis and budget proposals."
+config_file = "agents/performance-engineer.toml"
+[agents.promptops-curator-agent]
+description = "Owns prompts, instruction pack quality, agent-skill registry coherence, and hook governance. Use when editing this AI operating pack."
+config_file = "agents/promptops-curator-agent.toml"
+[agents.protobuf-contract-architect]
+description = "Owns .proto contracts, compatibility, schema evolution, result metadata, and StructuredObject payload shapes. Use for contract generation, schema review, and protobuf compatibility rules."
+config_file = "agents/protobuf-contract-architect.toml"
+[agents.quic-transport-architect]
+description = "Owns QUIC surfaces, streams, flow control, backpressure, session behavior, and RPC dispatch boundaries. Use for network surface, stream mapping, backpressure, connection lifecycle, and transport errors."
+config_file = "agents/quic-transport-architect.toml"
+[agents.release-governance-agent]
+description = "Owns release readiness, versioning, artifact checks, and publication gates. Use before tagging, publishing documentation, or freezing specs."
+config_file = "agents/release-governance-agent.toml"
+[agents.research-synthesizer]
+description = "Turns academic, standards, and vendor sources into project-safe recommendations. Use for modern research, source triangulation, and frontier versus consensus distinction."
+config_file = "agents/research-synthesizer.toml"
+[agents.risk-decision-manager]
+description = "Maintains risk register, decision records, rejected alternatives, and open issues. Use for ADRs, risk reviews, decision cleanup, and project governance."
+config_file = "agents/risk-decision-manager.toml"
+[agents.rust-memory-safety-auditor]
+description = "Reviews unsafe Rust, binary layouts, allocators, mmap, FFI, and concurrency invariants. Use for any code or design involving unsafe, direct I/O, CPU intrinsics, GPU FFI, or memory-mapped pages."
+config_file = "agents/rust-memory-safety-auditor.toml"
+[agents.rust-workspace-architect]
+description = "Designs workspace layout, crate boundaries, features, and build profiles. Use for Rust project structure, Cargo workspace, module dependencies, and tooling."
+config_file = "agents/rust-workspace-architect.toml"
+[agents.security-iam-auditor]
+description = "Owns mTLS, CertificateIdentity, UserPrincipal, RBAC/ABAC, permissions, audit, secrets, and admin surface risk. Use for authentication, authorization, audit traces, secret handling, and prompt-injection threat models."
+config_file = "agents/security-iam-auditor.toml"
+[agents.srpl-compiler-ir-architect]
+description = "Owns parsing, binding, typed AST, IR lowering, semantic validation, and plan preparation. Use for compiler pipeline, canonical IR, semantic hashes, and plan cache keys."
+config_file = "agents/srpl-compiler-ir-architect.toml"
+[agents.srpl-language-designer]
+description = "Designs SRPL syntax and user-facing semantics. Use for SRPL syntax, cardinality, errors, procedure shape, and language restrictions."
+config_file = "agents/srpl-language-designer.toml"
+[agents.storage-engine-architect]
+description = "Owns pages, extents, segments, HotStore, ColdStore, BufferPool, and manifest switching. Use for storage layout, hot/cold placement, page format, and cold segment invariants."
+config_file = "agents/storage-engine-architect.toml"
+[agents.test-verification-architect]
+description = "Owns unit, integration, fuzz, property, crash, and recovery test plans. Use for acceptance criteria, automated tests, and verification matrices."
+config_file = "agents/test-verification-architect.toml"
+[agents.transaction-kernel-architect]
+description = "Owns transaction states, isolation, MVCC, commit, rollback, and visibility rules. Use for transaction semantics and concurrency design."
+config_file = "agents/transaction-kernel-architect.toml"
+[agents.type-system-architect]
+description = "Owns scalar types, decimals, floats, text, enums, flags, nullability, StructuredObjects, and type contracts. Use for type policy, SRPL type binding, and contract-level type compatibility."
+config_file = "agents/type-system-architect.toml"
+[agents.wal-recovery-specialist]
+description = "Owns WAL records, replay, checkpoints, manifests, and crash-recovery scenarios. Use for log format, redo/undo behavior, recovery tests, and corruption handling."
+config_file = "agents/wal-recovery-specialist.toml"
+
+
+# Example MCP server configuration. Keep disabled until a local server exists.
+# [mcp_servers.andromeda-docs]
+# command = "andromeda-docs-mcp"
+# supports_parallel_tool_calls = false
+# default_tools_approval_mode = "prompt"

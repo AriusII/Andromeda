@@ -3,8 +3,8 @@ use andromeda_catalog::{
     CatalogPublicationAudience, CatalogPublicationAuditTrace, CatalogPublicationReasonCode,
     CatalogPublicationReceipt, CatalogPublicationReport, CatalogPublicationSemantics,
     CatalogPublishedContract, CatalogPublishedObject, CatalogRecoveryReplayExpectation,
-    CatalogSubscriberId, CatalogSubscriptionAcknowledgement, DefinitionBatchId, ObjectKind,
-    QualifiedName,
+    CatalogSubscriberId, CatalogSubscriptionAcknowledgement, DefinitionBatchDependencyGraphHash,
+    DefinitionBatchId, DefinitionBatchSourceHash, ObjectKind, QualifiedName,
 };
 use andromeda_core::{
     AndromedaErrorKind, CatalogObjectId, CatalogVersion, ContractHash, DatabaseId, NamespaceId,
@@ -21,6 +21,8 @@ fn receipt() -> CatalogPublicationReceipt {
         namespace_id: NAMESPACE_ID,
         previous_version: CatalogVersion::new(7),
         next_version: CatalogVersion::new(8),
+        source_hash: DefinitionBatchSourceHash::new([0x11; 32]),
+        dependency_graph_hash: DefinitionBatchDependencyGraphHash::new([0x22; 32]),
         durable_lsn: Some(80),
         durable_evidence_marker: None,
         record_count: 3,
@@ -93,6 +95,21 @@ fn publication_report_rejects_non_durable_or_stale_invalidation_evidence() {
     let error = non_durable.validate().unwrap_err();
     assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
     assert!(error.message().contains("durable"));
+
+    let mut zero_lsn = report();
+    zero_lsn.receipt.durable_lsn = Some(0);
+    let error = zero_lsn.validate().unwrap_err();
+    assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+    assert!(error.message().contains("durable WAL LSN"));
+
+    let mut skipped_version = report();
+    skipped_version.receipt.next_version = CatalogVersion::new(9);
+    skipped_version.plan_invalidation.catalog_version = CatalogVersion::new(9);
+    skipped_version.recovery_replay =
+        CatalogRecoveryReplayExpectation::from_receipt(&skipped_version.receipt);
+    let error = skipped_version.validate().unwrap_err();
+    assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+    assert!(error.message().contains("exactly one catalog version"));
 
     let mut stale_invalidation = report();
     stale_invalidation.plan_invalidation.catalog_version = CatalogVersion::new(7);

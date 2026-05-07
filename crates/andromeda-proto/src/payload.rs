@@ -90,7 +90,7 @@ impl PayloadKind {
     }
 
     pub const fn requires_non_empty_payload(self) -> bool {
-        matches!(self, Self::RpcExecuteRequest | Self::RpcBatch)
+        matches!(self, Self::RpcExecuteRequest | Self::RpcBatch | Self::Error)
     }
 
     pub const fn metadata_must_precede_payload(self) -> bool {
@@ -189,6 +189,6 @@ mod tests {
         assert!(PayloadKind::RpcBatch.requires_non_empty_payload());
 
         assert!(!PayloadKind::Error.requires_contract_hash());
-        assert!(!PayloadKind::Error.requires_non_empty_payload());
+        assert!(PayloadKind::Error.requires_non_empty_payload());
     }
 }

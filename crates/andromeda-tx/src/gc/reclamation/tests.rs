@@ -139,7 +139,9 @@ fn reclamation_mark_eligibility_with_committed_creator() {
     let status_table = TransactionStatusTable::new();
     let tx_id = TransactionId::new(1);
 
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(tx_id, crate::Lsn::new(1), crate::Lsn::new(1))
+        .unwrap();
 
     let mark = ReclamationMark::new(1, tx_id, 50, 20, 5).unwrap();
     let eligibility = mark.check_eligibility(&status_table, 100, 0, 10);
@@ -168,7 +170,9 @@ fn reclamation_mark_eligibility_end_ts_still_visible() {
     let status_table = TransactionStatusTable::new();
     let tx_id = TransactionId::new(1);
 
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(tx_id, crate::Lsn::new(1), crate::Lsn::new(1))
+        .unwrap();
 
     let mark = ReclamationMark::new(1, tx_id, 150, 20, 5).unwrap();
     // min_visible_ts is 100, but end_ts is 150
@@ -184,7 +188,9 @@ fn reclamation_mark_eligibility_grace_period_not_met() {
     let status_table = TransactionStatusTable::new();
     let tx_id = TransactionId::new(1);
 
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(tx_id, crate::Lsn::new(1), crate::Lsn::new(1))
+        .unwrap();
 
     let mark = ReclamationMark::new(1, tx_id, 50, 20, 10).unwrap();
     // Grace period is 5 epochs, current is 10, marked_at epoch is 10
@@ -202,7 +208,9 @@ fn reclamation_mark_from_version_if_fully_eligible() {
     let status_table = TransactionStatusTable::new();
     let tx_id = TransactionId::new(1);
 
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(tx_id, crate::Lsn::new(1), crate::Lsn::new(1))
+        .unwrap();
 
     let mark_opt = ReclamationMark::from_version_if_eligible(
         ReclamationMarkCandidate::new(1, tx_id, 50, 20, 5),
@@ -240,7 +248,9 @@ fn reclamation_mark_from_version_rejected_still_visible() {
     let status_table = TransactionStatusTable::new();
     let tx_id = TransactionId::new(1);
 
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(tx_id, crate::Lsn::new(1), crate::Lsn::new(1))
+        .unwrap();
 
     let mark_opt = ReclamationMark::from_version_if_eligible(
         ReclamationMarkCandidate::new(1, tx_id, 150, 20, 5),
@@ -259,7 +269,9 @@ fn reclamation_mark_from_version_rejected_grace_period() {
     let status_table = TransactionStatusTable::new();
     let tx_id = TransactionId::new(1);
 
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(tx_id, crate::Lsn::new(1), crate::Lsn::new(1))
+        .unwrap();
 
     let mark_opt = ReclamationMark::from_version_if_eligible(
         ReclamationMarkCandidate::new(1, tx_id, 50, 20, 10),
@@ -278,7 +290,9 @@ fn reclamation_mark_is_eligible_runtime_check() {
     let status_table = TransactionStatusTable::new();
     let tx_id = TransactionId::new(1);
 
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(tx_id, crate::Lsn::new(1), crate::Lsn::new(1))
+        .unwrap();
 
     let mark = ReclamationMark::new(1, tx_id, 50, 20, 5).unwrap();
 
@@ -292,7 +306,9 @@ fn reclamation_mark_batch_processing_scenario() {
 
     // Create 10 marks, all with same creator
     let tx_id = TransactionId::new(1);
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(tx_id, crate::Lsn::new(1), crate::Lsn::new(1))
+        .unwrap();
 
     for i in 1..=10 {
         let mark = ReclamationMark::new(i, tx_id, 50, 20, 5).unwrap();
@@ -314,7 +330,9 @@ fn reclamation_no_visible_version_invariant_proof() {
     let status_table = TransactionStatusTable::new();
     let tx_id = TransactionId::new(1);
 
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(tx_id, crate::Lsn::new(1), crate::Lsn::new(1))
+        .unwrap();
 
     // Version with end_ts = 50
     let mark = ReclamationMark::new(1, tx_id, 50, 20, 5).unwrap();

@@ -4,9 +4,9 @@
 
 use andromeda_core::{AndromedaErrorKind, RequestId, SessionId};
 use andromeda_quic::{
-    Connection, DatagramPolicy, EarlyDataPolicy, FRAME_HEADER_CRC_UNCHECKED, FrameBytes,
-    FrameHeader, FrameType, LifecycleState, SurfaceListenerConfig, SurfaceListenerSet,
-    SurfacePlane,
+    CancellationCause, CancellationOutcome, CancellationSignal, Connection, DatagramPolicy,
+    EarlyDataPolicy, FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader, FrameType,
+    LifecycleState, SurfaceListenerConfig, SurfaceListenerSet, SurfacePlane,
 };
 
 fn frame(frame_type: FrameType, session: u64) -> FrameBytes {
@@ -55,6 +55,26 @@ fn full_handshake_then_active_dispatch() {
         )
         .unwrap();
     assert_eq!(dispatched.frame_type, FrameType::RpcExecuteRequest);
+}
+
+#[test]
+fn active_dispatch_rejects_frame_from_different_session() {
+    let mut conn = Connection::new(SurfacePlane::Application);
+    conn.accept_hello(&frame(FrameType::Hello, 77)).unwrap();
+    conn.accept_auth(&frame(FrameType::Auth, 77)).unwrap();
+
+    let err = conn
+        .dispatch(
+            &frame(FrameType::RpcExecuteRequest, 78),
+            SurfacePlane::Application,
+        )
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Protocol);
+    assert!(
+        err.message().contains("session id"),
+        "session binding rejection should name session id"
+    );
 }
 
 #[test]
@@ -159,4 +179,47 @@ fn listener_created_session_is_bound_to_listener_plane() {
         )
         .unwrap();
     assert_eq!(dispatch.frame_type, FrameType::RpcExecuteRequest);
+}
+
+#[test]
+fn cancellation_routing_is_session_bound_and_drain_aware() {
+    let mut conn = Connection::new(SurfacePlane::Application);
+    conn.accept_hello(&frame(FrameType::Hello, 22)).unwrap();
+    conn.accept_auth(&frame(FrameType::Auth, 22)).unwrap();
+
+    let signal = CancellationSignal {
+        request_id: RequestId::new(9),
+        session_id: SessionId::new(22),
+        cause: CancellationCause::ClientRequested,
+    };
+    assert_eq!(
+        conn.route_cancellation(&signal).unwrap(),
+        CancellationOutcome::Delivered
+    );
+
+    let wrong_session = CancellationSignal {
+        session_id: SessionId::new(23),
+        ..signal
+    };
+    assert_eq!(
+        conn.route_cancellation(&wrong_session).unwrap_err().kind(),
+        AndromedaErrorKind::Protocol
+    );
+
+    conn.begin_drain().unwrap();
+    assert_eq!(
+        conn.route_cancellation(&signal).unwrap(),
+        CancellationOutcome::DeliveredDuringDrain
+    );
+
+    let closed_during_drain = CancellationSignal {
+        cause: CancellationCause::SessionClosed,
+        ..signal
+    };
+    assert_eq!(
+        conn.route_cancellation(&closed_during_drain)
+            .unwrap_err()
+            .kind(),
+        AndromedaErrorKind::Protocol
+    );
 }

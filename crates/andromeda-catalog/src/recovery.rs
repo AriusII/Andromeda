@@ -9,8 +9,9 @@ use andromeda_core::CatalogVersion;
 use std::collections::BTreeSet;
 
 use crate::{
-    CatalogMutationBoundary, CatalogMutationDelta, CatalogMutationPlan, CatalogMutationRecord,
-    CatalogSnapshot, DefinitionBatchId,
+    CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH, CatalogMutationBoundary, CatalogMutationDelta,
+    CatalogMutationOperation, CatalogMutationPlan, CatalogMutationRecord, CatalogSnapshot,
+    CatalogWalPayloadDecodeErrorKind, DefinitionBatch, DefinitionBatchId, DefinitionOperation,
 };
 
 /// Durable catalog mutation payload plus optional outer storage-WAL kind tag.
@@ -68,6 +69,8 @@ pub struct CatalogRecoveredBatch {
     pub batch_id: DefinitionBatchId,
     pub previous_version: CatalogVersion,
     pub next_version: CatalogVersion,
+    pub source_hash: crate::DefinitionBatchSourceHash,
+    pub dependency_graph_hash: crate::DefinitionBatchDependencyGraphHash,
     pub applied_delta_count: usize,
 }
 
@@ -88,8 +91,12 @@ pub enum CatalogSkippedBatchReason {
     MissingApplyRecords,
     DuplicateApplyIndex,
     SparseApplyIndexes,
+    ApplyRecordCountMismatch,
+    ApplyRecordLimitExceeded,
+    ApplyRecordOrderMismatch,
     WrongCatalogIdentity,
     VersionGap,
+    DefinitionBatchHashMismatch,
     PlanRejected,
     ReplayRejected,
 }
@@ -105,6 +112,9 @@ pub struct CatalogRecoveryAnomaly {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CatalogRecoveryAnomalyKind {
     PayloadCorruption,
+    PayloadMagicMismatch,
+    PayloadFormatVersionMismatch,
+    PayloadChecksumMismatch,
     WrongKindTag,
     OuterStorageKindMismatch,
     CommitWithoutBegin,
@@ -116,7 +126,11 @@ pub enum CatalogRecoveryAnomalyKind {
     MissingApplyRecords,
     DuplicateApplyIndex,
     SparseApplyIndexes,
+    ApplyRecordCountMismatch,
+    ApplyRecordLimitExceeded,
+    ApplyRecordOrderMismatch,
     PlanRejected,
+    DefinitionBatchHashMismatch,
     ReplayRejected,
 }
 
@@ -159,7 +173,7 @@ pub fn recover_catalog_snapshot_from_durable_payloads<'a>(
     let mut anomalies = Vec::new();
 
     for (record_index, input) in payloads.into_iter().enumerate() {
-        match CatalogMutationRecord::decode_durable_payload(input.payload) {
+        match CatalogMutationRecord::decode_durable_payload_typed(input.payload) {
             Ok(record) => {
                 if let Some(outer_tag) = input.storage_wal_kind_tag {
                     let inner_tag = record.kind().storage_wal_kind_tag();
@@ -182,17 +196,11 @@ pub fn recover_catalog_snapshot_from_durable_payloads<'a>(
                 });
             }
             Err(error) => {
-                let detail = error.message().to_string();
-                let kind = if detail.contains("kind tag") {
-                    CatalogRecoveryAnomalyKind::WrongKindTag
-                } else {
-                    CatalogRecoveryAnomalyKind::PayloadCorruption
-                };
                 anomalies.push(CatalogRecoveryAnomaly {
                     record_index,
                     batch_id: None,
-                    kind,
-                    detail,
+                    kind: recovery_anomaly_kind_for_decode_error(error.kind()),
+                    detail: format!("{}: {}", error.kind().stable_code(), error.detail()),
                 });
             }
         }
@@ -219,6 +227,32 @@ pub fn replay_catalog_mutation_records(
         })
         .collect();
     replay_indexed_catalog_mutation_records(snapshot, indexed, Vec::new())
+}
+
+fn recovery_anomaly_kind_for_decode_error(
+    kind: CatalogWalPayloadDecodeErrorKind,
+) -> CatalogRecoveryAnomalyKind {
+    match kind {
+        CatalogWalPayloadDecodeErrorKind::MagicMismatch => {
+            CatalogRecoveryAnomalyKind::PayloadMagicMismatch
+        }
+        CatalogWalPayloadDecodeErrorKind::LegacyFormatVersion
+        | CatalogWalPayloadDecodeErrorKind::UnsupportedFormatVersion => {
+            CatalogRecoveryAnomalyKind::PayloadFormatVersionMismatch
+        }
+        CatalogWalPayloadDecodeErrorKind::ChecksumMismatch => {
+            CatalogRecoveryAnomalyKind::PayloadChecksumMismatch
+        }
+        CatalogWalPayloadDecodeErrorKind::UnknownRecordKindTag => {
+            CatalogRecoveryAnomalyKind::WrongKindTag
+        }
+        CatalogWalPayloadDecodeErrorKind::TruncatedHeader
+        | CatalogWalPayloadDecodeErrorKind::BodyLengthOverflow
+        | CatalogWalPayloadDecodeErrorKind::BodyLengthMismatch
+        | CatalogWalPayloadDecodeErrorKind::BodyInvalid => {
+            CatalogRecoveryAnomalyKind::PayloadCorruption
+        }
+    }
 }
 
 fn replay_indexed_catalog_mutation_records(
@@ -248,6 +282,26 @@ fn replay_indexed_catalog_mutation_records(
                     );
                 }
 
+                if boundary.expected_apply_count > CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH {
+                    anomalies.push(CatalogRecoveryAnomaly {
+                        record_index: indexed.record_index,
+                        batch_id: Some(boundary.batch_id),
+                        kind: CatalogRecoveryAnomalyKind::ApplyRecordLimitExceeded,
+                        detail: format!(
+                            "catalog mutation batch expected {} apply records, above replay limit {CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH}",
+                            boundary.expected_apply_count
+                        ),
+                    });
+                    skipped_anomalous_batches.push(CatalogSkippedBatch {
+                        batch_id: boundary.batch_id,
+                        previous_version: boundary.previous_version,
+                        next_version: boundary.next_version,
+                        observed_apply_count: 0,
+                        reason: CatalogSkippedBatchReason::ApplyRecordLimitExceeded,
+                    });
+                    continue;
+                }
+
                 pending = Some(PendingCatalogBatch {
                     begin_record_index: indexed.record_index,
                     boundary,
@@ -255,6 +309,29 @@ fn replay_indexed_catalog_mutation_records(
                 });
             }
             CatalogMutationRecord::Apply(delta) => {
+                let exceeds_declared_apply_count = match pending.as_ref() {
+                    Some(open) => open.deltas.len() >= open.boundary.expected_apply_count,
+                    None => false,
+                };
+
+                if exceeds_declared_apply_count {
+                    if let Some(open) = pending.take() {
+                        anomalies.push(CatalogRecoveryAnomaly {
+                            record_index: indexed.record_index,
+                            batch_id: Some(open.boundary.batch_id),
+                            kind: CatalogRecoveryAnomalyKind::ApplyRecordCountMismatch,
+                            detail: format!(
+                                "catalog mutation batch received more than {} declared apply records",
+                                open.boundary.expected_apply_count
+                            ),
+                        });
+                        skipped_anomalous_batches.push(
+                            open.skipped(CatalogSkippedBatchReason::ApplyRecordCountMismatch),
+                        );
+                    }
+                    continue;
+                }
+
                 if let Some(open) = pending.as_mut() {
                     open.deltas.push((indexed.record_index, *delta));
                 } else {
@@ -360,6 +437,22 @@ fn replay_committed_batch(
         return;
     }
 
+    if open.deltas.len() != open.boundary.expected_apply_count {
+        anomalies.push(CatalogRecoveryAnomaly {
+            record_index: commit_record_index,
+            batch_id: Some(open.boundary.batch_id),
+            kind: CatalogRecoveryAnomalyKind::ApplyRecordCountMismatch,
+            detail: format!(
+                "catalog mutation batch expected {} apply records, observed {}",
+                open.boundary.expected_apply_count,
+                open.deltas.len()
+            ),
+        });
+        skipped_incomplete_batches
+            .push(open.skipped(CatalogSkippedBatchReason::ApplyRecordCountMismatch));
+        return;
+    }
+
     let mut sorted_deltas = open.deltas.clone();
     sorted_deltas.sort_by_key(|(_, delta)| delta.operation_index);
     for (expected_index, (record_index, delta)) in sorted_deltas.iter().enumerate() {
@@ -375,6 +468,23 @@ fn replay_committed_batch(
             });
             skipped_incomplete_batches
                 .push(open.skipped(CatalogSkippedBatchReason::SparseApplyIndexes));
+            return;
+        }
+    }
+
+    for (expected_index, (record_index, delta)) in open.deltas.iter().enumerate() {
+        if delta.operation_index != expected_index {
+            anomalies.push(CatalogRecoveryAnomaly {
+                record_index: *record_index,
+                batch_id: Some(open.boundary.batch_id),
+                kind: CatalogRecoveryAnomalyKind::ApplyRecordOrderMismatch,
+                detail: format!(
+                    "catalog apply record physical order mismatch: expected operation index {expected_index}, observed {}",
+                    delta.operation_index
+                ),
+            });
+            skipped_anomalous_batches
+                .push(open.skipped(CatalogSkippedBatchReason::ApplyRecordOrderMismatch));
             return;
         }
     }
@@ -432,12 +542,58 @@ fn replay_committed_batch(
         .map(|(_, delta)| delta)
         .collect::<Vec<_>>();
     let applied_delta_count = deltas.len();
+
+    let reconstructed_batch = definition_batch_from_recovered_deltas(&open.boundary, &deltas);
+    let recovered_source_hash = reconstructed_batch.source_hash();
+    if recovered_source_hash != open.boundary.source_hash {
+        anomalies.push(CatalogRecoveryAnomaly {
+            record_index: open.begin_record_index,
+            batch_id: Some(open.boundary.batch_id),
+            kind: CatalogRecoveryAnomalyKind::DefinitionBatchHashMismatch,
+            detail: "recovered DefinitionBatch source hash does not match durable boundary"
+                .to_string(),
+        });
+        skipped_anomalous_batches
+            .push(open.skipped(CatalogSkippedBatchReason::DefinitionBatchHashMismatch));
+        return;
+    }
+
+    let recovered_dependency_graph_hash = match reconstructed_batch.dependency_graph_hash() {
+        Ok(hash) => hash,
+        Err(error) => {
+            anomalies.push(CatalogRecoveryAnomaly {
+                record_index: open.begin_record_index,
+                batch_id: Some(open.boundary.batch_id),
+                kind: CatalogRecoveryAnomalyKind::DefinitionBatchHashMismatch,
+                detail: error.message().to_string(),
+            });
+            skipped_anomalous_batches
+                .push(open.skipped(CatalogSkippedBatchReason::DefinitionBatchHashMismatch));
+            return;
+        }
+    };
+    if recovered_dependency_graph_hash != open.boundary.dependency_graph_hash {
+        anomalies.push(CatalogRecoveryAnomaly {
+            record_index: open.begin_record_index,
+            batch_id: Some(open.boundary.batch_id),
+            kind: CatalogRecoveryAnomalyKind::DefinitionBatchHashMismatch,
+            detail:
+                "recovered DefinitionBatch dependency graph hash does not match durable boundary"
+                    .to_string(),
+        });
+        skipped_anomalous_batches
+            .push(open.skipped(CatalogSkippedBatchReason::DefinitionBatchHashMismatch));
+        return;
+    }
+
     let mut plan = match CatalogMutationPlan::new(
         open.boundary.batch_id,
         open.boundary.database_id,
         open.boundary.namespace_id,
         open.boundary.previous_version,
         open.boundary.next_version,
+        open.boundary.source_hash,
+        open.boundary.dependency_graph_hash,
         deltas,
     ) {
         Ok(plan) => plan,
@@ -475,8 +631,35 @@ fn replay_committed_batch(
         batch_id: open.boundary.batch_id,
         previous_version: open.boundary.previous_version,
         next_version: open.boundary.next_version,
+        source_hash: open.boundary.source_hash,
+        dependency_graph_hash: open.boundary.dependency_graph_hash,
         applied_delta_count,
     });
+}
+
+fn definition_batch_from_recovered_deltas(
+    boundary: &CatalogMutationBoundary,
+    deltas: &[CatalogMutationDelta],
+) -> DefinitionBatch {
+    let operations = deltas
+        .iter()
+        .map(|delta| match &delta.operation {
+            CatalogMutationOperation::CreateObject { definition, .. } => {
+                DefinitionOperation::Create(definition.clone())
+            }
+            CatalogMutationOperation::DeprecateObject { target } => {
+                DefinitionOperation::Deprecate(target.clone())
+            }
+        })
+        .collect();
+
+    DefinitionBatch {
+        batch_id: boundary.batch_id,
+        database_id: boundary.database_id,
+        namespace_id: boundary.namespace_id,
+        base_version: boundary.previous_version,
+        operations,
+    }
 }
 
 fn duplicate_apply_index(deltas: &[(usize, CatalogMutationDelta)]) -> Option<(usize, usize)> {

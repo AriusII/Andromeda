@@ -8,6 +8,10 @@ use crate::CatalogMutationRecordKind;
 
 pub(super) const CATALOG_WAL_PAYLOAD_MAGIC: u64 = 0x414e_4452_4341_5457; // "ANDRCATW"
 pub(super) const CATALOG_WAL_PAYLOAD_VERSION_V1: u16 = 1;
+pub(super) const CATALOG_WAL_PAYLOAD_VERSION_V2: u16 = 2;
+pub(super) const CATALOG_WAL_PAYLOAD_VERSION_V3: u16 = 3;
+pub(super) const CATALOG_WAL_PAYLOAD_VERSION_V4: u16 = 4;
+pub(super) const CATALOG_WAL_PAYLOAD_VERSION_CURRENT: u16 = CATALOG_WAL_PAYLOAD_VERSION_V4;
 pub(super) const CATALOG_WAL_PAYLOAD_HEADER_LEN: usize = 28;
 
 /// Stable storage WAL kind tag for `CatalogChangeBegin`.

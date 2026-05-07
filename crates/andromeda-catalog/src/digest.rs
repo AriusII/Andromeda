@@ -6,6 +6,17 @@
 
 pub use andromeda_core::digest::{Sha256, sha256};
 
+pub(crate) fn digest_prefix_hex(digest: &[u8; 32]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+
+    let mut out = String::with_capacity(16);
+    for byte in digest.iter().take(8) {
+        out.push(char::from(HEX[(byte >> 4) as usize]));
+        out.push(char::from(HEX[(byte & 0x0F) as usize]));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -34,5 +45,16 @@ mod tests {
         for message in messages {
             assert_eq!(sha256(message), andromeda_core::digest::sha256(message));
         }
+    }
+
+    #[test]
+    fn digest_prefix_hex_is_stable_and_bounded() {
+        let digest = [
+            0xAB, 0xCD, 0xEF, 0x01, 0x23, 0x45, 0x67, 0x89, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF,
+        ];
+
+        assert_eq!(digest_prefix_hex(&digest), "abcdef0123456789");
     }
 }

@@ -2,7 +2,7 @@
 from pathlib import Path
 import hashlib, json
 items=[]
-for root in [Path('schemas/proto'),Path('proto')]:
+for root in [Path('.codex/schemas/proto'), Path('proto')]:
     if root.exists():
         for p in sorted(root.rglob('*.proto')):
             data=p.read_bytes(); items.append({'path':str(p).replace('\\','/'),'sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data)})

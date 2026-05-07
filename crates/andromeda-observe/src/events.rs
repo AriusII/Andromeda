@@ -578,16 +578,28 @@ pub(super) fn contains_sensitive_marker(text: &str) -> bool {
     [
         "-----begin",
         "private key",
+        "private_key",
+        "bearer ",
+        "credential=",
         "password=",
         "passwd=",
         "secret=",
         "token=",
         "authorization:",
+        "x-api-key",
         "payload:",
         "payload body",
     ]
     .iter()
     .any(|marker| lowered.contains(marker))
+}
+
+pub(super) fn redact_sensitive_evidence(text: &str) -> String {
+    if contains_sensitive_marker(text) {
+        "[redacted-sensitive-evidence]".to_string()
+    } else {
+        text.to_string()
+    }
 }
 
 #[cfg(test)]

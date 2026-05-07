@@ -52,6 +52,18 @@ pub enum ForbiddenConstruct {
 }
 
 impl ForbiddenConstruct {
+    pub const fn diagnostic_code(self) -> &'static str {
+        match self {
+            Self::UnboundedWhile => "SRPL-FORBID-001",
+            Self::FreeRecursion => "SRPL-FORBID-002",
+            Self::ExternalNetwork => "SRPL-FORBID-003",
+            Self::ExternalFilesystem => "SRPL-FORBID-004",
+            Self::NondeterministicRandom => "SRPL-FORBID-005",
+            Self::DynamicTextSql => "SRPL-FORBID-006",
+            Self::SelectStar => "SRPL-FORBID-007",
+        }
+    }
+
     pub const fn diagnostic_phase(self) -> DiagnosticPhase {
         match self {
             Self::DynamicTextSql | Self::SelectStar => DiagnosticPhase::Binding,
@@ -61,15 +73,21 @@ impl ForbiddenConstruct {
 
     pub const fn message(self) -> &'static str {
         match self {
-            Self::UnboundedWhile => "unbounded while loops are forbidden in SRPL core",
-            Self::FreeRecursion => "free recursion is forbidden in SRPL core",
-            Self::ExternalNetwork => "external network access is forbidden in SRPL core",
-            Self::ExternalFilesystem => "external filesystem access is forbidden in SRPL core",
-            Self::NondeterministicRandom => {
-                "nondeterministic random sources are forbidden in SRPL core"
+            Self::UnboundedWhile => {
+                "SRPL-FORBID-001: unbounded while loops are forbidden in SRPL core"
             }
-            Self::DynamicTextSql => "dynamic text SQL is forbidden in SRPL core",
-            Self::SelectStar => "select star is forbidden in SRPL core",
+            Self::FreeRecursion => "SRPL-FORBID-002: free recursion is forbidden in SRPL core",
+            Self::ExternalNetwork => {
+                "SRPL-FORBID-003: external network access is forbidden in SRPL core"
+            }
+            Self::ExternalFilesystem => {
+                "SRPL-FORBID-004: external filesystem access is forbidden in SRPL core"
+            }
+            Self::NondeterministicRandom => {
+                "SRPL-FORBID-005: nondeterministic random sources are forbidden in SRPL core"
+            }
+            Self::DynamicTextSql => "SRPL-FORBID-006: dynamic text SQL is forbidden in SRPL core",
+            Self::SelectStar => "SRPL-FORBID-007: select star is forbidden in SRPL core",
         }
     }
 }

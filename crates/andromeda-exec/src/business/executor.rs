@@ -2,7 +2,7 @@ use andromeda_catalog::{
     INVENTORY_RESERVE_STOCK_OBJECT_ID, INVENTORY_RESERVE_STOCK_PROCEDURE_ID, ProcedureContract,
 };
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
-use andromeda_tx::{MvccRowHeader, Snapshot, TransactionStatus, TransactionStatusTable};
+use andromeda_tx::{Lsn, MvccRowHeader, Snapshot, TransactionStatus, TransactionStatusTable};
 use std::collections::BTreeMap;
 
 use super::constants::{
@@ -106,7 +106,11 @@ impl InventoryBusinessMvccStore {
             stock,
         };
         self.transaction_statuses
-            .record(creator_tx_id, TransactionStatus::Committed)?;
+            .record_committed_after_durable_wal(
+                creator_tx_id,
+                Lsn::new(commit_ts),
+                Lsn::new(commit_ts),
+            )?;
         self.stock_versions
             .entry(stock.product_id)
             .or_default()
@@ -261,7 +265,11 @@ impl InventoryBusinessMvccStore {
             "reserve stock commit requires non-zero durable WAL LSN before visibility",
         )?;
         self.transaction_statuses
-            .record(transaction_id, TransactionStatus::Committed)
+            .record_committed_after_durable_wal(
+                transaction_id,
+                Lsn::new(durable_commit_lsn),
+                Lsn::new(durable_commit_lsn),
+            )
     }
 
     pub fn rollback_transaction_after_durable_wal(
@@ -274,7 +282,11 @@ impl InventoryBusinessMvccStore {
             "reserve stock rollback requires non-zero durable WAL LSN before completion",
         )?;
         self.transaction_statuses
-            .record(transaction_id, TransactionStatus::RolledBack)
+            .record_rolled_back_after_durable_wal(
+                transaction_id,
+                Lsn::new(durable_rollback_lsn),
+                Lsn::new(durable_rollback_lsn),
+            )
     }
 
     fn visible_stock_version(

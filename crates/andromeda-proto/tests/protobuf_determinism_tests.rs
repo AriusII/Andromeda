@@ -61,6 +61,7 @@ fn valid_generated_manifest() -> ProcedureManifest {
             id: "andromeda.execute_procedure".to_string(),
             family: "application".to_string(),
         }],
+        stats_version: Some(5),
     }
 }
 
@@ -427,6 +428,26 @@ fn generated_manifest_boundary_validation_rejects_invalid_result_stream_metadata
         "generated column descriptors must not use empty type names"
     );
 
+    let mut empty_columns = valid_generated_manifest();
+    empty_columns.result_streams[0].columns.clear();
+    assert!(
+        validate_catalog_procedure_manifest_resolution_response(&resolved_response_with_manifest(
+            empty_columns
+        ))
+        .is_err(),
+        "generated result stream descriptors must carry typed columns"
+    );
+
+    let mut sparse_columns = valid_generated_manifest();
+    sparse_columns.result_streams[0].columns[0].ordinal = 1;
+    assert!(
+        validate_catalog_procedure_manifest_resolution_response(&resolved_response_with_manifest(
+            sparse_columns
+        ))
+        .is_err(),
+        "generated result stream column ordinals must be dense and zero-based"
+    );
+
     let mut contradictory_max = valid_generated_manifest();
     contradictory_max.result_streams[0].row_count_max = Some(2);
     assert!(
@@ -468,6 +489,75 @@ fn generated_manifest_boundary_validation_rejects_invalid_permission_policy() {
         ))
         .is_err(),
         "policy_version must remain distinct from contract_hash"
+    );
+
+    let mut empty_policy_version = valid_generated_manifest();
+    empty_policy_version.policy_version.clear();
+    assert!(
+        validate_catalog_procedure_manifest_resolution_response(&resolved_response_with_manifest(
+            empty_policy_version
+        ))
+        .is_err(),
+        "resolved manifests must carry a 32-byte policy_version"
+    );
+
+    let mut zero_policy_version = valid_generated_manifest();
+    zero_policy_version.policy_version = vec![0; 32];
+    assert!(
+        validate_catalog_procedure_manifest_resolution_response(&resolved_response_with_manifest(
+            zero_policy_version
+        ))
+        .is_err(),
+        "resolved manifests must reject zero policy_version"
+    );
+
+    let mut zero_catalog_version = valid_generated_manifest();
+    zero_catalog_version.catalog_version = 0;
+    assert!(
+        validate_catalog_procedure_manifest_resolution_response(&resolved_response_with_manifest(
+            zero_catalog_version
+        ))
+        .is_err(),
+        "resolved manifests must reject zero CatalogVersion"
+    );
+
+    let mut missing_stats_version = valid_generated_manifest();
+    missing_stats_version.stats_version = None;
+    assert!(
+        validate_catalog_procedure_manifest_resolution_response(&resolved_response_with_manifest(
+            missing_stats_version
+        ))
+        .is_err(),
+        "resolved manifests must carry ProcedureContractBinding stats_version"
+    );
+
+    let mut zero_stats_version = valid_generated_manifest();
+    zero_stats_version.stats_version = Some(0);
+    assert!(
+        validate_catalog_procedure_manifest_resolution_response(&resolved_response_with_manifest(
+            zero_stats_version
+        ))
+        .is_err(),
+        "resolved manifests must reject zero ProcedureContractBinding stats_version"
+    );
+}
+
+#[test]
+fn catalog_manifest_resolution_resolved_response_must_match_manifest_binding_identity() {
+    let manifest = valid_generated_manifest();
+
+    let mut wrong_hash = resolved_response_with_manifest(manifest.clone());
+    wrong_hash.resolved_contract_hash = Some(vec![0x55; 32]);
+    assert!(
+        validate_catalog_procedure_manifest_resolution_response(&wrong_hash).is_err(),
+        "resolved_contract_hash must match the resolved ProcedureManifest contract_hash"
+    );
+
+    let mut wrong_catalog = resolved_response_with_manifest(manifest);
+    wrong_catalog.resolved_catalog_version = Some(10);
+    assert!(
+        validate_catalog_procedure_manifest_resolution_response(&wrong_catalog).is_err(),
+        "resolved_catalog_version must match the resolved ProcedureManifest catalog_version"
     );
 }
 

@@ -130,8 +130,16 @@ pub struct RegressionAnalysis {
     pub p95_regression_pct: f64,
     /// Current error count
     pub current_error_count: u32,
+    /// Current sample count used to compute error-rate evidence
+    pub current_sample_count: u32,
     /// Baseline error count
     pub baseline_error_count: u32,
+    /// Baseline sample count used to compute error-rate evidence
+    pub baseline_sample_count: u32,
+    /// Current error rate in parts-per-million
+    pub current_error_rate_ppm: u64,
+    /// Baseline error rate in parts-per-million
+    pub baseline_error_rate_ppm: u64,
     /// Error rate regression percentage
     pub error_rate_regression_pct: f64,
     /// Primary reason for regression
@@ -148,6 +156,7 @@ impl RegressionAnalysis {
     /// Regression thresholds:
     /// - P50/P95 latency: degradation > 2.5% is flagged
     /// - Error rate: any increase is flagged
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         workload_id: String,
         current_p50_us: u64,
@@ -155,13 +164,19 @@ impl RegressionAnalysis {
         current_p95_us: u64,
         baseline_p95_us: u64,
         current_error_count: u32,
+        current_sample_count: u32,
         baseline_error_count: u32,
+        baseline_sample_count: u32,
     ) -> Self {
         // Calculate regression percentages
         let p50_regression_pct = compute_regression_percentage(current_p50_us, baseline_p50_us);
         let p95_regression_pct = compute_regression_percentage(current_p95_us, baseline_p95_us);
+        let current_error_rate_ppm =
+            compute_error_rate_ppm(current_error_count, current_sample_count);
+        let baseline_error_rate_ppm =
+            compute_error_rate_ppm(baseline_error_count, baseline_sample_count);
         let error_rate_regression_pct =
-            compute_regression_percentage(current_error_count as u64, baseline_error_count as u64);
+            compute_regression_percentage(current_error_rate_ppm, baseline_error_rate_ppm);
 
         // Determine regression status
         const REGRESSION_THRESHOLD_PCT: f64 = 2.5;
@@ -220,7 +235,11 @@ impl RegressionAnalysis {
             baseline_p95_us,
             p95_regression_pct,
             current_error_count,
+            current_sample_count,
             baseline_error_count,
+            baseline_sample_count,
+            current_error_rate_ppm,
+            baseline_error_rate_ppm,
             error_rate_regression_pct,
             primary_reason,
             is_regressed: regressed_count > 0,
@@ -231,7 +250,7 @@ impl RegressionAnalysis {
     /// Serialize analysis to JSON for CI reporting.
     pub fn to_json(&self) -> String {
         format!(
-            r#"{{"workload_id":"{}","current_p50_us":{},"baseline_p50_us":{},"p50_regression_pct":{:.2},"current_p95_us":{},"baseline_p95_us":{},"p95_regression_pct":{:.2},"current_error_count":{},"baseline_error_count":{},"error_rate_regression_pct":{:.2},"primary_reason":"{}","is_regressed":{},"severity":{}}}"#,
+            r#"{{"workload_id":"{}","current_p50_us":{},"baseline_p50_us":{},"p50_regression_pct":{:.2},"current_p95_us":{},"baseline_p95_us":{},"p95_regression_pct":{:.2},"current_error_count":{},"current_sample_count":{},"baseline_error_count":{},"baseline_sample_count":{},"current_error_rate_ppm":{},"baseline_error_rate_ppm":{},"error_rate_regression_pct":{:.2},"primary_reason":"{}","is_regressed":{},"severity":{}}}"#,
             escape_json_string(&self.workload_id),
             self.current_p50_us,
             self.baseline_p50_us,
@@ -240,13 +259,24 @@ impl RegressionAnalysis {
             self.baseline_p95_us,
             self.p95_regression_pct,
             self.current_error_count,
+            self.current_sample_count,
             self.baseline_error_count,
+            self.baseline_sample_count,
+            self.current_error_rate_ppm,
+            self.baseline_error_rate_ppm,
             self.error_rate_regression_pct,
             self.primary_reason.as_str(),
             self.is_regressed,
             self.severity
         )
     }
+}
+
+fn compute_error_rate_ppm(error_count: u32, sample_count: u32) -> u64 {
+    if sample_count == 0 {
+        return if error_count == 0 { 0 } else { 1_000_000 };
+    }
+    ((u64::from(error_count) * 1_000_000) / u64::from(sample_count)).min(1_000_000)
 }
 
 /// Compute regression percentage: ((new - old) / old) * 100.0
@@ -298,7 +328,9 @@ mod tests {
             50_000, // current P95
             50_000, // baseline P95
             0,      // current errors
+            20,     // current samples
             0,      // baseline errors
+            20,     // baseline samples
         );
 
         assert!(!analysis.is_regressed);
@@ -316,7 +348,9 @@ mod tests {
             50_000, // current P95
             50_000, // baseline P95
             0,
+            20,
             0,
+            20,
         );
 
         assert!(!analysis.is_regressed); // At threshold, not over
@@ -333,7 +367,9 @@ mod tests {
             50_000, // current P95
             50_000, // baseline P95
             0,
+            20,
             0,
+            20,
         );
 
         assert!(analysis.is_regressed);
@@ -350,7 +386,9 @@ mod tests {
             57_500, // current P95 (15% degradation)
             50_000, // baseline P95
             0,
+            20,
             0,
+            20,
         );
 
         assert!(analysis.is_regressed);
@@ -367,7 +405,9 @@ mod tests {
             60_500, // current P95 (21% degradation)
             50_000, // baseline P95
             0,
+            20,
             0,
+            20,
         );
 
         assert!(analysis.is_regressed);
@@ -383,7 +423,9 @@ mod tests {
             60_000, // current P95 (20% degradation)
             50_000, // baseline P95
             0,
+            20,
             0,
+            20,
         );
 
         assert!(analysis.is_regressed);
@@ -400,12 +442,56 @@ mod tests {
             50_000, // current P95
             50_000, // baseline P95
             5,      // current errors
+            100,    // current samples
             0,      // baseline errors
+            100,    // baseline samples
         );
 
         assert!(analysis.is_regressed);
         assert_eq!(analysis.primary_reason, RegressionReason::ErrorRateIncrease);
         assert_eq!(analysis.error_rate_regression_pct, 100.0);
+    }
+
+    #[test]
+    fn regression_analysis_error_rate_uses_sample_counts() {
+        let same_error_count_higher_rate = RegressionAnalysis::new(
+            "protocol-smoke-contract".to_string(),
+            10_000,
+            10_000,
+            50_000,
+            50_000,
+            1,
+            10,
+            1,
+            100,
+        );
+
+        assert!(same_error_count_higher_rate.is_regressed);
+        assert_eq!(
+            same_error_count_higher_rate.primary_reason,
+            RegressionReason::ErrorRateIncrease
+        );
+        assert_eq!(same_error_count_higher_rate.current_error_rate_ppm, 100_000);
+        assert_eq!(same_error_count_higher_rate.baseline_error_rate_ppm, 10_000);
+
+        let higher_count_lower_rate = RegressionAnalysis::new(
+            "protocol-smoke-contract".to_string(),
+            10_000,
+            10_000,
+            50_000,
+            50_000,
+            5,
+            1_000,
+            1,
+            100,
+        );
+
+        assert!(!higher_count_lower_rate.is_regressed);
+        assert_eq!(
+            higher_count_lower_rate.primary_reason,
+            RegressionReason::NoRegression
+        );
+        assert!(higher_count_lower_rate.error_rate_regression_pct < 0.0);
     }
 
     #[test]
@@ -417,7 +503,9 @@ mod tests {
             60_000, // P95 +20%
             50_000, // baseline P95
             2,      // errors
+            20,     // current samples
             0,      // baseline errors
+            20,     // baseline samples
         );
 
         assert!(analysis.is_regressed);
@@ -434,7 +522,9 @@ mod tests {
             45_000, // current P95 (10% improvement)
             50_000, // baseline P95
             0,
+            20,
             0,
+            20,
         );
 
         assert!(!analysis.is_regressed);
@@ -451,13 +541,17 @@ mod tests {
             510, // P95
             500, // baseline P95
             0,
+            20,
             0,
+            20,
         );
 
         let json = analysis.to_json();
         assert!(json.contains("\"workload_id\":\"btree-lookup-smoke\""));
         assert!(json.contains("\"current_p50_us\":26"));
         assert!(json.contains("\"p50_regression_pct\":4.00")); // 4% over threshold
+        assert!(json.contains("\"current_sample_count\":20"));
+        assert!(json.contains("\"baseline_sample_count\":20"));
         assert!(json.contains("\"is_regressed\":true"));
     }
 
@@ -476,8 +570,17 @@ mod tests {
 
     #[test]
     fn regression_analysis_zero_baselines_produce_finite_percentages() {
-        let analysis =
-            RegressionAnalysis::new("protocol-smoke-contract".to_string(), 0, 0, 1, 0, 0, 0);
+        let analysis = RegressionAnalysis::new(
+            "protocol-smoke-contract".to_string(),
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+        );
 
         assert!(analysis.p50_regression_pct.is_finite());
         assert!(analysis.p95_regression_pct.is_finite());

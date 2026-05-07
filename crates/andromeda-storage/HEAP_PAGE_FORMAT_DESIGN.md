@@ -1,5 +1,5 @@
 # Heap Page Format Design Document
-## Wave 21 Batch 5 Task 2: N1-HEAP-008
+## HeapPageV1 Finalization: N1-HEAP-008
 ## Storage Engine Architect
 
 ---
@@ -22,16 +22,18 @@ This document specifies the deterministic, reproducible heap page format for And
 
 ```
 Byte Offset    Region              Size      Properties
-0–95           PageHeader          96 B      Magic, LSN, page_id, type
-96–9,215       Payload Region      9,120 B   Tuple data (grows ↑)
+0–95           PageHeader          96 B      Minimum DEC-032 page header
+96–111         Header reserve      16 B      DiskPageStore/PageCodecV1 overlay
+112–...        Payload Region      variable  Tuple data (grows ↑)
                [Free Space]        variable
-9,216–16,351   Slot Directory      5× N      Entries (grows ↓)
-16,352–16,383  PageTrailer         48 B      CRC64, hash, torn-write guard
+...–16,331     Slot Directory      5× N      Entries (grows ↓)
+16,332–16,335  Slot metadata       4 B       Slot count and free offset
+16,336–16,383  PageTrailer         48 B      CRC64, hash, torn-write guard
 ```
 
 ### 1.2 Growing Direction
 
-- **Tuples:** Upward from byte 96 (after header)
+- **Tuples:** Upward from byte 112, after the durable header reserve
 - **Slots:** Downward from page end (before trailer)
 - **Free Space:** Single contiguous region between them
 
@@ -75,7 +77,7 @@ struct SlotEntry {
 ```rust
 pub fn insert_tuple(&mut self, tuple: &[u8]) -> AndromedaResult<u16> {
     // Validate space
-    // Compute next_offset = max(tuple.offset + tuple.length) or HEADER_SIZE
+    // Compute next_offset = max(tuple.offset + tuple.length) or HEAP_PAGE_V1_PAYLOAD_OFFSET
     // Write tuple to [next_offset..next_offset+tuple.len()]
     // Create SlotEntry(next_offset, tuple.len(), flags=0)
     // Return slot_id = current slot count
@@ -227,7 +229,7 @@ Page End
 [Slot 0 5B]    ← First slot (closest to metadata)
 [Free Space]
 [Tuples]
-[Header 96B]
+[Header reserve 112B]
 Page Start
 ```
 
@@ -235,13 +237,13 @@ Page Start
 
 ### 5.3 Tuple Data Layout
 
-Tuples grow upward from header boundary; no padding.
+Tuples grow upward from the locked payload offset at byte 112; no padding is added between tuples.
 
 ```
-[Header 96B]
-[Tuple 0: offset=96, length=50B]
-[Tuple 1: offset=146, length=75B]
-[Tuple 2: offset=221, length=100B]
+[Header reserve 112B]
+[Tuple 0: offset=112, length=50B]
+[Tuple 1: offset=162, length=75B]
+[Tuple 2: offset=237, length=100B]
 [Free Space]
 ```
 
@@ -295,45 +297,45 @@ Live rows: 0
 ### 7.2 Golden Page: Single Tuple (100 bytes)
 
 ```
-Payload: [Header 96B][Tuple 100B]
-Slot 0: offset=96, length=100, flags=0x00
-Metadata: slot_count=1, free_offset=196
+Payload: [Header reserve 112B][Tuple 100B]
+Slot 0: offset=112, length=100, flags=0x00
+Metadata: slot_count=1, free_offset=212
 ```
 
 **Hex Snapshot:** (first 150 bytes)
 ```
 0000: 0000 0000 0000 0000 0000 0000 ... [zeros] ...
-0060: 4242 4242 4242 4242 4242 4242 ... [0x42 × 100]
+0070: 4242 4242 4242 4242 4242 4242 ... [0x42 × 100]
 ```
 
 ### 7.3 Golden Page: Multiple Tuples (50, 75, 30 bytes)
 
 ```
-Payload: [Header 96B][Tuple0 50B][Tuple1 75B][Tuple2 30B]
-Slot 0: offset=96, length=50, flags=0x00
-Slot 1: offset=146, length=75, flags=0x00
-Slot 2: offset=221, length=30, flags=0x00
-Metadata: slot_count=3, free_offset=251
+Payload: [Header reserve 112B][Tuple0 50B][Tuple1 75B][Tuple2 30B]
+Slot 0: offset=112, length=50, flags=0x00
+Slot 1: offset=162, length=75, flags=0x00
+Slot 2: offset=237, length=30, flags=0x00
+Metadata: slot_count=3, free_offset=267
 ```
 
 ### 7.4 Golden Page: Deleted Slot
 
 ```
-Payload: [Header 96B][Tuple0 50B][Tuple1 75B][Tuple2 30B]
-Slot 0: offset=96, length=50, flags=0x00
+Payload: [Header reserve 112B][Tuple0 50B][Tuple1 75B][Tuple2 30B]
+Slot 0: offset=112, length=50, flags=0x00
 Slot 1: offset=0, length=75, flags=0x01   ← DELETED
-Slot 2: offset=221, length=30, flags=0x00
-Metadata: slot_count=3, free_offset=251
+Slot 2: offset=237, length=30, flags=0x00
+Metadata: slot_count=3, free_offset=267
 ```
 
 ### 7.5 Golden Page: Compacted
 
 ```
-Payload: [Header 96B][Tuple0 50B][Tuple2 30B]
-Slot 0: offset=96, length=50, flags=0x00
+Payload: [Header reserve 112B][Tuple0 50B][Tuple2 30B]
+Slot 0: offset=112, length=50, flags=0x00
 Slot 1: offset=0, length=0, flags=0x01   ← DELETED, PRESERVED
-Slot 2: offset=146, length=30, flags=0x00
-Metadata: slot_count=3, free_offset=176
+Slot 2: offset=162, length=30, flags=0x00
+Metadata: slot_count=3, free_offset=192
 ```
 
 ---
@@ -380,18 +382,19 @@ Metadata: slot_count=3, free_offset=176
 
 ## 9. Encoding Specification
 
-### 9.1 Page Header (96 bytes, partial)
+### 9.1 Page Header and Heap Payload Offset
 
 ```
-Offset  Size  Field           Encoding
-0–3     4B    magic           0x414E4452 (little-endian "ANDR")
-4–5     2B    format_version  1 (little-endian u16)
-6–7     2B    page_size       1 = 16 KiB, 2 = 32 KiB (u16)
-8–15    8B    page_id         little-endian u64
-40–41   2B    slot_count      little-endian u16 (redundant copy, validated against footer)
-...
-96–144  varies PageTrailer (CRC, hash, torn-write guard)
+Offset  Size  Field                         Encoding
+0–95    96B   PageHeader V0 minimum          DEC-032 page header minimum
+96–111  16B   Durable header reserve         Reserved for DiskPageStore/PageCodecV1 overlays
+112     —     HEAP_PAGE_V1_PAYLOAD_OFFSET    First byte a tuple may occupy
 ```
+
+When persisted page header bytes are present, the header `slot_count` is validated against the
+authoritative footer metadata. DiskPageStore uses slot count offset 86 in its persisted header.
+PageCodecV1 uses slot count offset 92 in its fixed 112-byte header. Legacy raw heap images may have
+no persisted page header; in that case, footer metadata remains authoritative.
 
 ### 9.2 Page Metadata (4 bytes, at page_end − 52)
 
@@ -420,13 +423,13 @@ Offset (from end)  Size  Field              Encoding
 2. **Magic Valid:** `header.magic == 0x414E4452`
 3. **Format Version:** `header.format_version == 1`
 4. **Slot Count in Range:** `footer_slot_count ≤ max_slots(page_size)`
-5. **Free Offset Valid:** `free_offset == 0 OR (HEADER_SIZE ≤ free_offset ≤ slot_base)`
-6. **No Overlaps:** `header_end ≤ slot_base ≤ footer_start`
+5. **Free Offset Valid:** `free_offset == 0 OR (HEAP_PAGE_V1_PAYLOAD_OFFSET ≤ free_offset ≤ slot_base)`
+6. **No Overlaps:** `HEAP_PAGE_V1_PAYLOAD_OFFSET ≤ slot_base ≤ footer_start`
 
 ### 10.2 Slot Validation
 
 For each slot 0..N−1:
-1. **Offset Valid:** If not deleted, offset ≥ HEADER_SIZE
+1. **Offset Valid:** If not deleted, offset ≥ HEAP_PAGE_V1_PAYLOAD_OFFSET
 2. **Bounds OK:** `offset + length ≤ slot_base`
 3. **No Overlaps:** Check all slot ranges disjoint
 4. **Flags Valid:** Only known bits set (0x01, 0x02)
@@ -478,24 +481,24 @@ If load succeeds, page is guaranteed:
 
 ---
 
-## 12. Future Enhancements (Wave 22+)
+## 12. Roadmap Candidates
 
-### 12.1 In-Place Update (Wave 22)
+### 12.1 In-Place Update
 
 Currently: Update = Delete + Insert (creates new slot)  
 Future: Reuse same slot if new tuple ≤ old size
 
-### 12.2 Slot Remap (Wave 22)
+### 12.2 Slot Remap
 
 Currently: Deleted slots preserved  
 Future: Offline rewrite to reclaim deleted slots (requires remap protocol)
 
-### 12.3 Compression (Wave 23+)
+### 12.3 Compression
 
 Currently: Raw tuple bytes  
 Future: Optional per-tuple compression (flag in slot entry)
 
-### 12.4 32 KiB Page Support (Wave 22)
+### 12.4 32 KiB Page Support
 
 Currently tested: 16 KiB pages  
 Future: Full 32 KiB page support (same format, doubled capacity)
@@ -529,7 +532,7 @@ Future: Full 32 KiB page support (same format, doubled capacity)
 ## 15. Sign-Off
 
 **Storage Engine Architect**  
-Wave 21 Batch 5 Task 2: N1-HEAP-008  
+HeapPageV1 Finalization: N1-HEAP-008
 Heap Page Format Finalization with Golden Byte Vectors & E2E Recovery
 
 **Status:** ✅ **COMPLETE**  

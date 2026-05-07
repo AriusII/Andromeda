@@ -20,3 +20,9 @@ Recommended required checks:
 - `cargo-audit`
 - `cargo-deny`
 - `actionlint`
+
+The `Andromeda project policy gate` is a classified release gate. It blocks
+active runtime/API drift in Cargo manifests, active Protobuf schemas, and
+active Rust runtime sources. It does not fail on doctrine-negative references in
+documentation, tests, skills, comments, or guardrail code; those references keep
+the invariant visible without becoming release blockers.

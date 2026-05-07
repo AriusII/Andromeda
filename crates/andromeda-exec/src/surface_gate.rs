@@ -78,13 +78,9 @@ impl<'a> SurfacePlaneAuthorizer<'a> {
         action: SurfaceAction,
     ) -> andromeda_core::AndromedaResult<AuthorizationOutcome> {
         let scope = surface_plane_to_scope(plane);
-        let outcome = self
-            .inner
-            .authorize(trace_id, scope, presented_fingerprint, action)?;
-
         if matches!(action, SurfaceAction::ExecuteProcedure)
             && plane != SurfacePlane::Application
-            && outcome.is_allowed()
+            && self.registry.lookup(presented_fingerprint).is_some()
         {
             return self.deny_non_application_procedure_dispatch(
                 trace_id,
@@ -92,6 +88,10 @@ impl<'a> SurfacePlaneAuthorizer<'a> {
                 presented_fingerprint,
             );
         }
+
+        let outcome = self
+            .inner
+            .authorize(trace_id, scope, presented_fingerprint, action)?;
 
         Ok(outcome)
     }

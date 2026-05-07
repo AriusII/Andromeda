@@ -91,8 +91,25 @@ mod tests {
 
     #[test]
     fn error_kind_has_stable_label() {
-        assert_eq!(AndromedaErrorKind::Security.as_str(), "security");
-        assert_eq!(AndromedaErrorKind::Timeout.to_string(), "timeout");
+        let labels = [
+            (AndromedaErrorKind::Catalog, "catalog"),
+            (AndromedaErrorKind::Contract, "contract"),
+            (AndromedaErrorKind::Execution, "execution"),
+            (AndromedaErrorKind::Internal, "internal"),
+            (AndromedaErrorKind::Protocol, "protocol"),
+            (AndromedaErrorKind::Resource, "resource"),
+            (AndromedaErrorKind::Security, "security"),
+            (AndromedaErrorKind::Srpl, "srpl"),
+            (AndromedaErrorKind::Storage, "storage"),
+            (AndromedaErrorKind::Timeout, "timeout"),
+            (AndromedaErrorKind::Transaction, "transaction"),
+            (AndromedaErrorKind::Transport, "transport"),
+        ];
+
+        for (kind, label) in labels {
+            assert_eq!(kind.as_str(), label);
+            assert_eq!(kind.to_string(), label);
+        }
     }
 
     #[test]

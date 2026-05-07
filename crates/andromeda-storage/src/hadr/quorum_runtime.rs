@@ -69,6 +69,7 @@ pub enum QuorumMembershipRejection {
     EmptyReplicaSet,
     DuplicateReplicaId,
     ReplicaMatchesPrimary,
+    EpochOverflow,
 }
 
 impl QuorumMembershipRejection {
@@ -79,6 +80,7 @@ impl QuorumMembershipRejection {
             Self::ReplicaMatchesPrimary => {
                 "HADR quorum membership replica id must not match primary id"
             }
+            Self::EpochOverflow => "HADR quorum membership epoch overflow",
         }
     }
 }
@@ -158,7 +160,7 @@ impl QuorumMembership {
             members.insert(replica.replica_id, replica);
         }
 
-        let quorum_size = members.len().div_ceil(2);
+        let quorum_size = majority_quorum_size(members.len());
 
         Ok(Self {
             members,
@@ -174,8 +176,12 @@ impl QuorumMembership {
     }
 
     /// Increment membership epoch (called on any topology change).
-    pub fn increment_epoch(&mut self) {
-        self.epoch = self.epoch.saturating_add(1);
+    pub fn increment_epoch(&mut self) -> Result<(), QuorumMembershipRejection> {
+        self.epoch = self
+            .epoch
+            .checked_add(1)
+            .ok_or(QuorumMembershipRejection::EpochOverflow)?;
+        Ok(())
     }
 
     /// Get total number of replicas in membership.
@@ -227,33 +233,36 @@ impl QuorumMembership {
     }
 
     /// Mark a replica as suspect (due to missed heartbeat).
-    pub fn mark_suspect(&mut self, replica_id: u64) {
+    pub fn mark_suspect(&mut self, replica_id: u64) -> Result<(), QuorumMembershipRejection> {
         if let Some(replica) = self.members.get_mut(&replica_id)
             && replica.health_state.is_alive()
         {
             replica.health_state = ReplicaHealthState::Suspect;
-            self.increment_epoch();
+            self.increment_epoch()?;
         }
+        Ok(())
     }
 
     /// Mark a replica as dead (connection permanently lost).
-    pub fn mark_dead(&mut self, replica_id: u64) {
+    pub fn mark_dead(&mut self, replica_id: u64) -> Result<(), QuorumMembershipRejection> {
         if let Some(replica) = self.members.get_mut(&replica_id)
             && !replica.health_state.is_dead()
         {
             replica.health_state = ReplicaHealthState::Dead;
-            self.increment_epoch();
+            self.increment_epoch()?;
         }
+        Ok(())
     }
 
     /// Mark a suspect replica as alive again (reconnected).
-    pub fn mark_alive(&mut self, replica_id: u64) {
+    pub fn mark_alive(&mut self, replica_id: u64) -> Result<(), QuorumMembershipRejection> {
         if let Some(replica) = self.members.get_mut(&replica_id)
             && replica.health_state.is_suspect()
         {
             replica.health_state = ReplicaHealthState::Alive;
-            self.increment_epoch();
+            self.increment_epoch()?;
         }
+        Ok(())
     }
 
     /// Update a replica's LSN state (received_lsn, shipped_lsn).
@@ -265,16 +274,20 @@ impl QuorumMembership {
     }
 
     /// Remove a dead replica from membership entirely.
-    pub fn remove_dead(&mut self, replica_id: u64) {
-        if let Some(replica) = self.members.remove(&replica_id)
-            && replica.health_state.is_dead()
+    pub fn remove_dead(&mut self, replica_id: u64) -> Result<(), QuorumMembershipRejection> {
+        if self
+            .members
+            .get(&replica_id)
+            .is_some_and(|replica| replica.health_state.is_dead())
         {
+            self.members.remove(&replica_id);
             // Recompute quorum size if we had replicas.
             if !self.members.is_empty() {
-                self.quorum_size = self.members.len().div_ceil(2);
+                self.quorum_size = majority_quorum_size(self.members.len());
             }
-            self.increment_epoch();
+            self.increment_epoch()?;
         }
+        Ok(())
     }
 }
 
@@ -487,6 +500,10 @@ pub fn select_promotion_candidate(
     PromotionRank::best_candidate(&ranks)
 }
 
+const fn majority_quorum_size(member_count: usize) -> usize {
+    member_count / 2 + 1
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -538,6 +555,20 @@ mod tests {
     }
 
     #[test]
+    fn membership_quorum_size_uses_strict_majority_for_even_membership()
+    -> Result<(), QuorumMembershipRejection> {
+        let replicas = vec![
+            ReplicaMember::new(2, Lsn::new(0), Lsn::new(0)),
+            ReplicaMember::new(3, Lsn::new(0), Lsn::new(0)),
+        ];
+        let membership = QuorumMembership::new(1, replicas)?;
+
+        assert_eq!(membership.quorum_size(), 2);
+        assert!(membership.has_quorum());
+        Ok(())
+    }
+
+    #[test]
     fn fencing_decision_async_always_allows() -> Result<(), QuorumMembershipRejection> {
         let replicas = vec![ReplicaMember::new(2, Lsn::new(0), Lsn::new(0))];
         let membership = QuorumMembership::new(1, replicas)?;
@@ -562,8 +593,8 @@ mod tests {
         let mut membership = QuorumMembership::new(1, replicas)?;
 
         // Mark both replicas dead => lost quorum (need 2 alive, have 0).
-        membership.mark_dead(2);
-        membership.mark_dead(3);
+        membership.mark_dead(2)?;
+        membership.mark_dead(3)?;
 
         let decision = decide_fencing(
             &membership,
@@ -640,11 +671,25 @@ mod tests {
         let mut membership = QuorumMembership::new(1, replicas)?;
 
         let initial_epoch = membership.epoch();
-        membership.mark_suspect(2);
+        membership.mark_suspect(2)?;
         assert_eq!(membership.epoch(), initial_epoch + 1);
 
-        membership.mark_dead(3);
+        membership.mark_dead(3)?;
         assert_eq!(membership.epoch(), initial_epoch + 2);
+        Ok(())
+    }
+
+    #[test]
+    fn membership_epoch_overflow_is_rejected() -> Result<(), QuorumMembershipRejection> {
+        let replicas = vec![ReplicaMember::new(2, Lsn::new(0), Lsn::new(0))];
+        let mut membership = QuorumMembership::new(1, replicas)?;
+        membership.epoch = u64::MAX;
+
+        let err = membership
+            .mark_suspect(2)
+            .expect_err("topology change must fail at epoch overflow");
+
+        assert_eq!(err, QuorumMembershipRejection::EpochOverflow);
         Ok(())
     }
 }

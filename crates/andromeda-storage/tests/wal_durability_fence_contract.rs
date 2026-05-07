@@ -6,7 +6,7 @@
 //! flushing and manifest switching:
 //!
 //! **Primary Invariants:**
-//! 1. Page Durability: A page's first_dirty_lsn must be ≤ wal_durable_lsn before flush
+//! 1. Page Durability: A page's latest dirty LSN must be ≤ wal_durable_lsn before flush
 //! 2. Manifest Atomicity: Manifest version can only advance after WAL checkpoint
 //! 3. Recovery Correctness: Recovery floor must be ≥ required_wal_start_lsn
 //! 4. LSN Monotonicity: LSNs must strictly increase across manifest versions
@@ -72,16 +72,28 @@ fn page_blocked_from_flush_when_first_dirty_lsn_exceeds_wal_durable_lsn() {
 }
 
 #[test]
-fn page_multiple_dirty_cycles_accumulate_to_first_dirty_lsn() {
-    // Setup: Page dirtied at LSN 200, then dirtied again at LSN 250
-    // Buffer pool's DirtyTracker preserves the FIRST dirty LSN (200)
-    let page_first_dirty_lsn = Lsn::new(200); // Earliest modification
+fn page_multiple_dirty_cycles_require_latest_dirty_lsn() {
+    // Setup: Page dirtied at LSN 200, then dirtied again at LSN 250.
+    // Flush must fence on the latest dirty LSN, not only the scheduling LSN.
+    let page_latest_dirty_lsn = Lsn::new(250);
     let wal_durable_lsn = Lsn::new(250); // WAL caught up to latest
 
-    // Assert: Page can flush because WAL is durable through its FIRST modification
+    // Assert: Page can flush because WAL is durable through its latest modification.
     assert!(
-        validate_wal_durability_before_page_flush(page_first_dirty_lsn, wal_durable_lsn).is_ok(),
-        "Page should be flushable once WAL durable through first modification"
+        validate_wal_durability_before_page_flush(page_latest_dirty_lsn, wal_durable_lsn).is_ok(),
+        "Page should be flushable once WAL durable through latest modification"
+    );
+}
+
+#[test]
+fn page_multiple_dirty_cycles_cannot_flush_on_first_dirty_lsn_only() {
+    let page_first_dirty_lsn = Lsn::new(200);
+    let page_latest_dirty_lsn = Lsn::new(250);
+    let wal_durable_lsn = page_first_dirty_lsn;
+
+    assert!(
+        validate_wal_durability_before_page_flush(page_latest_dirty_lsn, wal_durable_lsn).is_err(),
+        "Page must remain blocked until durable WAL reaches the latest dirty LSN"
     );
 }
 
@@ -160,6 +172,49 @@ fn manifest_blocked_from_switch_when_checkpoint_exceeds_wal_checkpoint() {
     assert!(
         error.message().contains("manifest"),
         "Error should mention manifest"
+    );
+}
+
+#[test]
+fn manifest_blocked_from_switch_when_wal_checkpoint_exceeds_durable_wal() {
+    // Setup: WAL checkpoint metadata says 600, but durable WAL scan only proves 500.
+    let manifest_checkpoint_lsn = Lsn::new(500);
+    let wal_durable_lsn = Lsn::new(500);
+    let wal_checkpoint_lsn = Lsn::new(600);
+
+    let result = validate_manifest_atomic_switch(
+        manifest_checkpoint_lsn,
+        wal_durable_lsn,
+        wal_checkpoint_lsn,
+    );
+    assert!(
+        result.is_err(),
+        "Manifest should be blocked when WAL checkpoint evidence is not durable"
+    );
+    let error = result.unwrap_err();
+    assert!(
+        error.message().contains("durable WAL LSN"),
+        "Error should mention the durable WAL boundary"
+    );
+}
+
+#[test]
+fn manifest_zero_checkpoint_switch_is_bootstrap_only() {
+    assert!(
+        validate_manifest_atomic_switch(Lsn::ZERO, Lsn::ZERO, Lsn::ZERO).is_ok(),
+        "ZERO checkpoint switch is only valid for empty bootstrap state"
+    );
+
+    let result = validate_manifest_atomic_switch(Lsn::ZERO, Lsn::new(10), Lsn::new(10));
+    assert!(
+        result.is_err(),
+        "manifest switch must not publish a ZERO checkpoint after durable WAL exists"
+    );
+    assert!(
+        result
+            .unwrap_err()
+            .message()
+            .contains("bootstrap manifest checkpoint")
     );
 }
 
@@ -283,7 +338,7 @@ fn lsn_strict_ordering_rejects_equal_lsns() {
 }
 
 #[test]
-fn scenario_steady_state_all_pages_flushed() {
+fn steady_state_pages_flush_after_wal_is_durable() {
     // Scenario: Normal operation - multiple pages dirty, WAL durable, flush succeeds
     let pages = vec![
         ("page_1", Lsn::new(100)),
@@ -304,7 +359,7 @@ fn scenario_steady_state_all_pages_flushed() {
 }
 
 #[test]
-fn scenario_crash_at_manifest_switch_requires_recovery_floor_check() {
+fn crash_at_manifest_switch_requires_checkpoint_and_recovery_floor_checks() {
     // Scenario: System crashes during manifest version increment.
     // At recovery time, we must ensure the recovery floor is safe.
 
@@ -351,7 +406,7 @@ fn scenario_crash_at_manifest_switch_requires_recovery_floor_check() {
 }
 
 #[test]
-fn scenario_crash_during_page_flush_dirty_page_remains() {
+fn crash_during_page_flush_preserves_wal_fence_idempotence() {
     // Scenario: Page flush begins but crashes mid-write.
     // Page remains in dirty state. On recovery, we must not re-flush it
     // if the previous instance made it to disk.
@@ -374,7 +429,7 @@ fn scenario_crash_during_page_flush_dirty_page_remains() {
 }
 
 #[test]
-fn scenario_burst_of_page_modifications_then_flush() {
+fn burst_page_modifications_flush_only_after_wal_catches_up() {
     // Scenario: Multiple transactions dirty pages at consecutive LSNs,
     // then WAL drains, then pages flush.
 
@@ -405,7 +460,7 @@ fn scenario_burst_of_page_modifications_then_flush() {
 }
 
 #[test]
-fn edge_case_max_lsn_comparisons() {
+fn max_lsn_comparisons_preserve_wal_fence() {
     // Setup: Use maximum representable LSN values
     let near_max = Lsn::new(u64::MAX - 1);
     let max_lsn = Lsn::MAX;
@@ -426,7 +481,7 @@ fn edge_case_max_lsn_comparisons() {
 }
 
 #[test]
-fn edge_case_error_messages_are_informative() {
+fn wal_fence_errors_include_lsn_context() {
     // Setup: Create an error condition
     let result = validate_wal_durability_before_page_flush(Lsn::new(500), Lsn::new(400));
 
@@ -448,7 +503,7 @@ fn edge_case_error_messages_are_informative() {
 }
 
 #[test]
-fn integration_full_checkpoint_workflow() {
+fn full_checkpoint_workflow_preserves_manifest_and_recovery_floor() {
     // Simulate a complete checkpoint sequence:
     // 1. Pages dirty at various LSNs (100, 150, 200)
     // 2. WAL advances to 300 (all changes logged)
@@ -485,7 +540,7 @@ fn integration_full_checkpoint_workflow() {
 }
 
 #[test]
-fn integration_multiple_checkpoints_each_advances_recovery_floor() {
+fn multiple_checkpoints_advance_recovery_floor_monotonically() {
     // Simulate: System runs multiple checkpoints over time
     // Each advances the recovery floor forward
 

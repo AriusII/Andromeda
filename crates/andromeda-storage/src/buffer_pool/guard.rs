@@ -71,7 +71,8 @@ impl Drop for PageGuard<'_> {
 ///
 /// Dirty state remains controlled by buffer-pool metadata: callers must mark the
 /// frame dirty explicitly with a non-zero LSN using [`Self::mark_dirty`]. The
-/// first dirty LSN is preserved by [`BufferFrame::mark_dirty`].
+/// first dirty LSN is preserved for scheduling while the latest dirty LSN is
+/// advanced for the WAL durability fence.
 #[derive(Debug)]
 pub struct PageGuardMut<'a> {
     frame: &'a mut BufferFrame,
@@ -138,6 +139,10 @@ impl<'a> PageGuardMut<'a> {
 
     pub fn first_dirty_lsn(&self) -> Option<Lsn> {
         self.frame.first_dirty_lsn()
+    }
+
+    pub fn last_dirty_lsn(&self) -> Option<Lsn> {
+        self.frame.last_dirty_lsn()
     }
 
     pub fn pin_count(&self) -> u32 {

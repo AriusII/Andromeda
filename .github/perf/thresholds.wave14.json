@@ -1,5 +1,0 @@
-{
-  "policy_version": "wave14-thresholds-v1",
-  "latency_regression_percent": 10.0,
-  "throughput_drop_percent": 5.0
-}

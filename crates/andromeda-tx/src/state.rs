@@ -1,5 +1,7 @@
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
 
+use crate::Lsn;
+
 /// Strict Two-Phase Locking (2PL) Disciplined Transaction States.
 ///
 /// # 2PL State Machine Overview
@@ -13,23 +15,24 @@ use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, Transa
 /// - `Active` (locks acquired, reads/writes performed)
 ///
 /// ## Shrinking Phase (Lock Release)
-/// During the shrinking phase, the transaction releases all locks before becoming
-/// visible to other transactions:
+/// During the shrinking phase, the transaction stops acquiring locks and may
+/// release individual lock records:
 /// - `Active` → `Committing` (commit requested, shrinking phase begins)
-/// - `Committing` (locks released, no new acquisitions allowed)
+/// - `Active` → `RollingBack` (rollback requested, shrinking phase begins)
+/// - `Committing` / `RollingBack` (individual releases allowed, no new acquisitions allowed)
 ///
 /// Once ANY lock is released, the transaction enters the shrinking phase and may
 /// not acquire additional locks. This is the core 2PL invariant.
 ///
 /// ## Terminal States
 /// After either commit or rollback completes durably, the transaction enters a
-/// terminal state and all lock records must be released:
-/// - `Committing` → `Committed` (all locks released, commit durable)
+/// terminal state and terminal lock cleanup can remove any remaining lock records:
+/// - `Committing` → `Committed` (commit record covered by durable WAL)
 /// - `Committed` → `Disposed` (final cleanup, no operations allowed)
 /// - (Rollback path): `Active` → `RollingBack` → `RolledBack` → `Disposed`
 ///
 /// ## Invariants
-/// 1. **Lock acquisition only in Growing Phase**: Active or Committing
+/// 1. **Lock acquisition only in Growing Phase**: Active
 /// 2. **Lock release only in Shrinking Phase**: Committing or RollingBack
 /// 3. **No acquire after release**: Once shrinking begins, only releases are allowed
 /// 4. **release_all only terminal**: Only after Committed or RolledBack
@@ -87,10 +90,10 @@ impl TransactionState {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TransactionStateMachine {
-    pub transaction_id: TransactionId,
-    pub state: TransactionState,
-    pub durable_commit_lsn: Option<u64>,
-    pub durable_rollback_lsn: Option<u64>,
+    transaction_id: TransactionId,
+    state: TransactionState,
+    durable_commit_lsn: Option<Lsn>,
+    durable_rollback_lsn: Option<Lsn>,
 }
 
 impl TransactionStateMachine {
@@ -132,7 +135,23 @@ impl TransactionStateMachine {
     }
 
     pub fn publish_visible_commit_after_durable_flush(&mut self, lsn: u64) -> AndromedaResult<()> {
-        self.mark_durable_commit_lsn(lsn)?;
+        self.publish_visible_commit_with_durable_evidence(lsn, lsn)
+    }
+
+    pub fn publish_visible_commit_with_durable_evidence(
+        &mut self,
+        commit_record_lsn: u64,
+        durable_lsn: u64,
+    ) -> AndromedaResult<()> {
+        let commit_record_lsn = Lsn::new(commit_record_lsn);
+        let durable_lsn = Lsn::new(durable_lsn);
+        validate_terminal_durable_evidence(
+            commit_record_lsn,
+            durable_lsn,
+            "commit record LSN",
+            "durable commit LSN",
+        )?;
+        self.mark_durable_commit_lsn(durable_lsn)?;
         self.apply(TransactionEvent::DurableWalFlushed)
     }
 
@@ -141,11 +160,27 @@ impl TransactionStateMachine {
     }
 
     pub fn complete_rollback_after_durable_flush(&mut self, lsn: u64) -> AndromedaResult<()> {
-        self.mark_durable_rollback_lsn(lsn)?;
+        self.complete_rollback_with_durable_evidence(lsn, lsn)
+    }
+
+    pub fn complete_rollback_with_durable_evidence(
+        &mut self,
+        rollback_record_lsn: u64,
+        durable_lsn: u64,
+    ) -> AndromedaResult<()> {
+        let rollback_record_lsn = Lsn::new(rollback_record_lsn);
+        let durable_lsn = Lsn::new(durable_lsn);
+        validate_terminal_durable_evidence(
+            rollback_record_lsn,
+            durable_lsn,
+            "rollback record LSN",
+            "durable rollback LSN",
+        )?;
+        self.mark_durable_rollback_lsn(durable_lsn)?;
         self.apply(TransactionEvent::RollbackComplete)
     }
 
-    pub fn mark_durable_commit_lsn(&mut self, lsn: u64) -> AndromedaResult<()> {
+    fn mark_durable_commit_lsn(&mut self, lsn: Lsn) -> AndromedaResult<()> {
         if !matches!(self.state, TransactionState::Committing) {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Transaction,
@@ -153,7 +188,7 @@ impl TransactionStateMachine {
             ));
         }
 
-        if lsn == 0 {
+        if lsn.get() == 0 {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Transaction,
                 "durable commit LSN must not be zero",
@@ -164,7 +199,7 @@ impl TransactionStateMachine {
         Ok(())
     }
 
-    pub fn mark_durable_rollback_lsn(&mut self, lsn: u64) -> AndromedaResult<()> {
+    fn mark_durable_rollback_lsn(&mut self, lsn: Lsn) -> AndromedaResult<()> {
         if !matches!(self.state, TransactionState::RollingBack) {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Transaction,
@@ -172,7 +207,7 @@ impl TransactionStateMachine {
             ));
         }
 
-        if lsn == 0 {
+        if lsn.get() == 0 {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Transaction,
                 "durable rollback LSN must not be zero",
@@ -190,6 +225,58 @@ impl TransactionStateMachine {
     pub const fn is_durable_rolled_back(self) -> bool {
         matches!(self.state, TransactionState::RolledBack) && self.durable_rollback_lsn.is_some()
     }
+
+    pub const fn transaction_id(self) -> TransactionId {
+        self.transaction_id
+    }
+
+    pub const fn state(self) -> TransactionState {
+        self.state
+    }
+
+    pub const fn durable_commit_lsn(self) -> Option<Lsn> {
+        self.durable_commit_lsn
+    }
+
+    pub const fn durable_rollback_lsn(self) -> Option<Lsn> {
+        self.durable_rollback_lsn
+    }
+}
+
+fn validate_terminal_durable_evidence(
+    record_lsn: Lsn,
+    durable_lsn: Lsn,
+    record_name: &'static str,
+    durable_name: &'static str,
+) -> AndromedaResult<()> {
+    if record_lsn.get() == 0 {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Transaction,
+            format!("{record_name} must not be zero"),
+        ));
+    }
+
+    if durable_lsn.get() == 0 {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Transaction,
+            format!("{durable_name} must not be zero"),
+        ));
+    }
+
+    if durable_lsn < record_lsn {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Storage,
+            format!(
+                "{} must cover {}: durable={}, record={}",
+                durable_name,
+                record_name,
+                durable_lsn.get(),
+                record_lsn.get()
+            ),
+        ));
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -202,7 +289,7 @@ mod tests {
 
         tx.apply(TransactionEvent::Begin).unwrap();
         tx.apply(TransactionEvent::CommitRequested).unwrap();
-        assert_eq!(tx.state, TransactionState::Committing);
+        assert_eq!(tx.state(), TransactionState::Committing);
         assert_eq!(
             tx.apply(TransactionEvent::DurableWalFlushed)
                 .unwrap_err()
@@ -210,7 +297,7 @@ mod tests {
             AndromedaErrorKind::Transaction
         );
 
-        tx.mark_durable_commit_lsn(42).unwrap();
+        tx.mark_durable_commit_lsn(Lsn::new(42)).unwrap();
         tx.apply(TransactionEvent::DurableWalFlushed).unwrap();
 
         assert!(tx.is_visible_committed());
@@ -254,9 +341,39 @@ mod tests {
             AndromedaErrorKind::Transaction
         );
 
-        tx.mark_durable_rollback_lsn(24).unwrap();
+        tx.mark_durable_rollback_lsn(Lsn::new(24)).unwrap();
         tx.apply(TransactionEvent::RollbackComplete).unwrap();
 
         assert!(tx.is_durable_rolled_back());
+    }
+
+    #[test]
+    fn commit_transition_rejects_durable_lsn_behind_record_lsn() {
+        let mut tx = TransactionStateMachine::new(TransactionId::new(4));
+        tx.apply(TransactionEvent::Begin).unwrap();
+        tx.apply(TransactionEvent::CommitRequested).unwrap();
+
+        let err = tx
+            .publish_visible_commit_with_durable_evidence(10, 9)
+            .expect_err("commit visibility must require durable WAL through the record");
+
+        assert_eq!(err.kind(), AndromedaErrorKind::Storage);
+        assert_eq!(tx.state(), TransactionState::Committing);
+        assert_eq!(tx.durable_commit_lsn(), None);
+    }
+
+    #[test]
+    fn rollback_transition_rejects_durable_lsn_behind_record_lsn() {
+        let mut tx = TransactionStateMachine::new(TransactionId::new(5));
+        tx.apply(TransactionEvent::Begin).unwrap();
+        tx.apply(TransactionEvent::RollbackRequested).unwrap();
+
+        let err = tx
+            .complete_rollback_with_durable_evidence(10, 9)
+            .expect_err("rollback completion must require durable WAL through the record");
+
+        assert_eq!(err.kind(), AndromedaErrorKind::Storage);
+        assert_eq!(tx.state(), TransactionState::RollingBack);
+        assert_eq!(tx.durable_rollback_lsn(), None);
     }
 }

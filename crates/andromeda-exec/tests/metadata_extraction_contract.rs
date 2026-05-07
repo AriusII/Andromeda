@@ -17,6 +17,7 @@
 use andromeda_catalog::CatalogObjectRef;
 use andromeda_catalog::ProcedureContractRef;
 use andromeda_catalog::QualifiedName;
+use andromeda_catalog::ResultStreamCardinality;
 use andromeda_catalog::ResultStreamContract;
 use andromeda_core::{
     CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId, ScalarType,
@@ -75,6 +76,7 @@ fn make_result_stream_contract(stream_id: u64, columns: usize) -> ResultStreamCo
                 data_type: TypeDescriptor::required(ScalarType::I64),
             })
             .collect(),
+        cardinality: ResultStreamCardinality::Many,
         row_count_exact_required: false,
     }
 }
@@ -196,15 +198,15 @@ fn ct_004_extract_from_read_optional_one_cardinality() {
         evidence: make_binding_evidence(),
     };
 
-    let result = DefaultResultMetadataExtractor::extract_metadata(
+    let metadata = DefaultResultMetadataExtractor::extract_metadata(
         &plan,
         &[make_result_stream_contract(1, 1)],
-    );
+    )
+    .expect("OptionalOne read metadata may be emitted without RowCountExact");
 
-    assert!(
-        result.is_err(),
-        "OptionalOne read metadata must fail closed until RowCountExact is available"
-    );
+    assert_eq!(metadata.cardinality, Cardinality::OptionalOne);
+    assert_eq!(metadata.row_count_exact, None);
+    assert_eq!(metadata.row_count_max, None);
 }
 
 #[test]

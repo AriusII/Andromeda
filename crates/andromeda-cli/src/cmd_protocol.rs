@@ -109,7 +109,7 @@ pub fn run_protocol_smoke(detailed: bool) -> AndromedaResult<String> {
     report.push_str(&format!(
         "payload/frame lockstep: ok ({lockstep_count} codes)\n"
     ));
-    report.push_str("result stream sequence: ok (metadata -> batch -> completion)\n");
+    report.push_str("typed ResultStream sequence: ok (metadata -> batch -> completion)\n");
     report.push_str("telemetry datagram policy: ok (TelemetrySoftSignal=100 datagram-only)\n");
     report.push_str(&format!(
         "completion/error/structured contract: ok ({contract_summary})\n"
@@ -122,7 +122,7 @@ pub fn run_protocol_smoke(detailed: bool) -> AndromedaResult<String> {
                 expected.name, expected.payload_const, expected.frame_const, expected.code
             ));
         }
-        report.push_str("representative result frames:\n");
+        report.push_str("representative ResultStream frames:\n");
         for frame in result_frames {
             report.push_str(&format!(
                 "  - {:?}: request={}, session={}, tx={:?}, payload_len={}\n",
@@ -225,7 +225,7 @@ fn validate_result_frame_sequence(frames: &[SmokeFrame]) -> AndromedaResult<()> 
         match context {
             Some(expected_context) if expected_context != current_context => {
                 return Err(protocol_error(
-                    "result-stream sequence changed request context",
+                    "ResultStream sequence changed request context",
                 ));
             }
             None => context = Some(current_context),
@@ -236,31 +236,37 @@ fn validate_result_frame_sequence(frames: &[SmokeFrame]) -> AndromedaResult<()> 
             SmokeFrameKind::Metadata => {
                 if saw_metadata || saw_batch || completed {
                     return Err(protocol_error(
-                        "RPC metadata must be the first result-stream frame",
+                        "ResultStream metadata must be the first frame",
                     ));
                 }
                 saw_metadata = true;
             }
             SmokeFrameKind::Batch => {
                 if !saw_metadata {
-                    return Err(protocol_error("RPC metadata must precede RPC batch frames"));
+                    return Err(protocol_error(
+                        "ResultStream metadata must precede batch frames",
+                    ));
                 }
                 if completed {
-                    return Err(protocol_error("RPC batch must not follow completion"));
+                    return Err(protocol_error(
+                        "ResultStream batch must not follow completion",
+                    ));
                 }
                 if frame.payload_len == 0 {
-                    return Err(protocol_error("RPC batch requires a non-empty payload"));
+                    return Err(protocol_error(
+                        "ResultStream batch requires a non-empty payload",
+                    ));
                 }
                 saw_batch = true;
             }
             SmokeFrameKind::Completion => {
                 if !saw_metadata || !saw_batch {
                     return Err(protocol_error(
-                        "RPC completion requires prior metadata and batch frames",
+                        "ResultStream completion requires prior metadata and batch frames",
                     ));
                 }
                 if completed {
-                    return Err(protocol_error("RPC completion must appear once"));
+                    return Err(protocol_error("ResultStream completion must appear once"));
                 }
                 completed = true;
             }
@@ -270,7 +276,7 @@ fn validate_result_frame_sequence(frames: &[SmokeFrame]) -> AndromedaResult<()> 
     if saw_metadata && saw_batch && completed {
         Ok(())
     } else {
-        Err(protocol_error("result-stream sequence is incomplete"))
+        Err(protocol_error("ResultStream sequence is incomplete"))
     }
 }
 
@@ -279,6 +285,7 @@ fn validate_completion_error_structured_contract() -> AndromedaResult<String> {
     let request = InvocationRequest {
         invocation_id: InvocationId::new(19),
         procedure: contract.as_ref(),
+        expected_binding: Some(contract.binding()),
         expected_contract_hash: contract.contract_hash,
         catalog_version: contract.object.catalog_version,
         structured_parameters: Vec::new(),
@@ -357,7 +364,7 @@ mod tests {
 
         assert_eq!(first, second);
         assert!(first.contains("payload/frame lockstep: ok (9 codes)"));
-        assert!(first.contains("result stream sequence: ok"));
+        assert!(first.contains("typed ResultStream sequence: ok"));
         assert!(first.contains("telemetry datagram policy: ok"));
         assert!(first.contains("network sockets: not opened"));
     }
@@ -368,7 +375,7 @@ mod tests {
 
         assert!(report.contains("payload/frame codes:"));
         assert!(report.contains("RpcExecuteRequest: payload=RPC_EXECUTE_REQUEST_WIRE_CODE"));
-        assert!(report.contains("representative result frames:"));
+        assert!(report.contains("representative ResultStream frames:"));
     }
 
     #[test]

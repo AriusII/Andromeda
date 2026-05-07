@@ -195,9 +195,10 @@ fn push_hit(
     construct: ForbiddenConstruct,
     span: SourceSpan,
 ) {
-    if hits.iter().any(|h| h.construct == construct) {
-        // Keep the first structural hit per construct so diagnostics stay
-        // focused; later matches are redundant for rejection purposes.
+    if let Some(existing) = hits.iter_mut().find(|h| h.construct == construct) {
+        if (span.start, span.end) < (existing.span.start, existing.span.end) {
+            existing.span = span;
+        }
         return;
     }
     hits.push(ForbiddenConstructHit::new(construct, span));
@@ -224,30 +225,28 @@ struct Lexeme<'a> {
 /// participate in forbidden patterns (`*`, `(`). Whitespace is skipped so
 /// tabs / newlines / multiple spaces between tokens behave identically.
 fn tokenize_for_forbidden_scan(input: &str) -> Vec<Lexeme<'_>> {
-    let bytes = input.as_bytes();
     let mut out = Vec::new();
-    let mut i = 0;
-    while i < bytes.len() {
-        let ch = bytes[i] as char;
+    let mut chars = input.char_indices().peekable();
+    while let Some((start, ch)) = chars.next() {
         if ch.is_ascii_whitespace() {
-            i += 1;
             continue;
         }
-        let start = i;
+
         if ch.is_ascii_alphanumeric() || ch == '_' {
-            i += 1;
-            while i < bytes.len() {
-                let c = bytes[i] as char;
+            let mut end = start + ch.len_utf8();
+            while let Some((next_index, next_ch)) = chars.peek().copied() {
+                let c = next_ch;
                 if c.is_ascii_alphanumeric() || c == '_' {
-                    i += 1;
+                    chars.next();
+                    end = next_index + c.len_utf8();
                 } else {
                     break;
                 }
             }
             out.push(Lexeme {
                 kind: LexKind::Word,
-                text: &input[start..i],
-                span: SourceSpan::new(start, i),
+                text: &input[start..end],
+                span: SourceSpan::new(start, end),
             });
         } else {
             let kind = match ch {
@@ -255,11 +254,11 @@ fn tokenize_for_forbidden_scan(input: &str) -> Vec<Lexeme<'_>> {
                 '(' => LexKind::LParen,
                 _ => LexKind::Other,
             };
-            i += ch.len_utf8();
+            let end = start + ch.len_utf8();
             out.push(Lexeme {
                 kind,
-                text: &input[start..i],
-                span: SourceSpan::new(start, i),
+                text: &input[start..end],
+                span: SourceSpan::new(start, end),
             });
         }
     }
@@ -292,6 +291,7 @@ mod tests {
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].phase, crate::DiagnosticPhase::Binding);
         assert_eq!(diagnostics[0].location, Some(SourceSpan::new(18, 26)));
+        assert!(diagnostics[0].message.starts_with("SRPL-FORBID-007"));
         assert!(diagnostics[0].message.contains("select star"));
     }
 
@@ -438,6 +438,18 @@ mod tests {
     }
 
     #[test]
+    fn external_filesystem_diagnostic_prefers_earliest_source_span() {
+        let source = SrplSource::new("procedure X begin external filesystem then file:///tmp end;");
+        let diagnostics = source.forbidden_construct_diagnostics();
+
+        assert_eq!(diagnostics.len(), 1);
+        let span = diagnostics[0]
+            .location
+            .expect("filesystem diagnostic must have a byte span");
+        assert_eq!(&source.text[span.start..span.end], "external filesystem");
+    }
+
+    #[test]
     fn standalone_while_keyword_is_caught_regardless_of_spacing() {
         let cases = [
             "procedure X begin WHILE true do nothing end;",
@@ -475,5 +487,48 @@ mod tests {
         let span = d.location.expect("dynamic sql diagnostic must have a span");
         // Span must cover the literal `EXECUTE SQL` substring.
         assert_eq!(&source.text[span.start..span.end], "EXECUTE SQL");
+    }
+
+    #[test]
+    fn forbidden_scanner_is_utf8_safe_and_keeps_byte_spans() {
+        let source = SrplSource::new("procedure Réserve begin note 😊; select * end;");
+        let diagnostics = source.forbidden_construct_diagnostics();
+
+        assert_eq!(diagnostics.len(), 1);
+        let span = diagnostics[0]
+            .location
+            .expect("select star diagnostic must have a byte span");
+        assert!(span.is_valid());
+        assert!(source.text.is_char_boundary(span.start));
+        assert!(source.text.is_char_boundary(span.end));
+        assert_eq!(&source.text[span.start..span.end], "select *");
+    }
+
+    #[test]
+    fn forbidden_scanner_accepts_non_ascii_without_forbidden_constructs() {
+        let source =
+            SrplSource::new("procedure Réserve accepts () returns Résultat one (Valide bool);");
+
+        assert!(source.forbidden_construct_diagnostics().is_empty());
+    }
+
+    #[test]
+    fn forbidden_scanner_keeps_all_utf8_diagnostic_spans_bounded() {
+        let source = SrplSource::new(
+            "procedure Réserve begin note 😊; dynamic SQL; https://example.invalid; select *; while true end;",
+        );
+        let diagnostics = source.forbidden_construct_diagnostics();
+
+        assert_eq!(diagnostics.len(), 4);
+        for diagnostic in diagnostics {
+            let span = diagnostic
+                .location
+                .expect("forbidden diagnostic must have a byte span");
+            assert!(span.is_valid());
+            assert!(span.end <= source.text.len());
+            assert!(source.text.is_char_boundary(span.start));
+            assert!(source.text.is_char_boundary(span.end));
+            assert!(!&source.text[span.start..span.end].is_empty());
+        }
     }
 }

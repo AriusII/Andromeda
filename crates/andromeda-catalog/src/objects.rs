@@ -299,7 +299,16 @@ impl CatalogDefinition {
                 }
                 sink.finish()
             }
-            Self::Procedure(definition) => definition.contract_hash,
+            Self::Procedure(definition) => {
+                let mut sink = ObjectShapeHashSink::new();
+                sink.str("andromeda.catalog.procedure-definition-shape.v1.sha256");
+                sink.object_ref(&definition.object);
+                sink.u64(definition.procedure_id.get());
+                sink.raw_bytes(&definition.contract_hash.as_bytes());
+                sink.u64(definition.stats_version.get());
+                sink.raw_bytes(&definition.policy_version().as_bytes());
+                sink.finish()
+            }
         }
     }
 }

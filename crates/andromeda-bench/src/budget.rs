@@ -23,6 +23,9 @@ pub fn evaluate_budget(
     if sample_count == 0 {
         return Err(BenchmarkError::InsufficientSamplesForStatistics);
     }
+    if error_count > sample_count {
+        return Err(BenchmarkError::ErrorCountExceedsSamples);
+    }
 
     let error_rate_ppm = (u64::from(error_count) * 1_000_000) / u64::from(sample_count);
     let failed = p50_latency_us > workload.budget.max_p50_latency_us
@@ -56,6 +59,16 @@ mod tests {
         assert_eq!(
             evaluate_budget(workload, 10_000, 50_000, 1, 10).unwrap(),
             BudgetStatus::Failed
+        );
+    }
+
+    #[test]
+    fn rejects_error_counts_that_exceed_samples() {
+        let workload = find_workload("protocol-smoke-contract").unwrap();
+
+        assert_eq!(
+            evaluate_budget(workload, 10_000, 50_000, 2, 1).unwrap_err(),
+            BenchmarkError::ErrorCountExceedsSamples
         );
     }
 }

@@ -69,6 +69,66 @@ impl BackupCompatibility {
     }
 }
 
+/// Compatibility evidence persisted in durable backup artifact manifests.
+///
+/// V1/V2 manifests did not carry this tuple. Readers reconstruct it from
+/// the supported engine constants and mark it as not recorded in the manifest;
+/// new manifests must persist the tuple explicitly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BackupArtifactCompatibilityEvidence {
+    pub manifest_format_version: u16,
+    pub physical_plan_version: u16,
+    pub storage_format_version: u16,
+    pub wal_format_version: u16,
+    pub recorded_in_manifest: bool,
+}
+
+impl BackupArtifactCompatibilityEvidence {
+    pub const fn recorded(manifest_format_version: u16) -> Self {
+        Self {
+            manifest_format_version,
+            physical_plan_version: BACKUP_PHYSICAL_PLAN_VERSION_V0,
+            storage_format_version: BACKUP_SUPPORTED_STORAGE_FORMAT_VERSION_V0,
+            wal_format_version: WAL_FORMAT_VERSION,
+            recorded_in_manifest: true,
+        }
+    }
+
+    pub const fn reconstructed_legacy(manifest_format_version: u16) -> Self {
+        Self {
+            manifest_format_version,
+            physical_plan_version: BACKUP_PHYSICAL_PLAN_VERSION_V0,
+            storage_format_version: BACKUP_SUPPORTED_STORAGE_FORMAT_VERSION_V0,
+            wal_format_version: WAL_FORMAT_VERSION,
+            recorded_in_manifest: false,
+        }
+    }
+
+    pub fn validate(&self) -> AndromedaResult<()> {
+        if self.manifest_format_version == 0 {
+            return Err(backup_error(
+                "backup artifact compatibility manifest format version must not be zero",
+            ));
+        }
+        if self.physical_plan_version != BACKUP_PHYSICAL_PLAN_VERSION_V0 {
+            return Err(backup_error(
+                "unsupported backup artifact physical plan version",
+            ));
+        }
+        if self.storage_format_version != BACKUP_SUPPORTED_STORAGE_FORMAT_VERSION_V0 {
+            return Err(backup_error(
+                "unsupported backup artifact storage format version",
+            ));
+        }
+        if self.wal_format_version != WAL_FORMAT_VERSION {
+            return Err(backup_error(
+                "unsupported backup artifact WAL format version",
+            ));
+        }
+        Ok(())
+    }
+}
+
 /// Durable cold-snapshot artifact bound to the backup manifest identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BackupColdSnapshotArtifact {
@@ -92,6 +152,11 @@ impl BackupColdSnapshotArtifact {
                 "cold snapshot artifact manifest version must not be zero",
             ));
         }
+        if self.manifest_version != manifest.created_epoch {
+            return Err(backup_error(
+                "cold snapshot artifact manifest version must match backup manifest epoch",
+            ));
+        }
         if self.snapshot_id != manifest.snapshot.snapshot_id {
             return Err(backup_error(
                 "cold snapshot artifact id must match backup manifest snapshot",
@@ -105,6 +170,11 @@ impl BackupColdSnapshotArtifact {
         if self.manifest_crc == 0 {
             return Err(backup_error(
                 "cold snapshot artifact manifest CRC must not be zero",
+            ));
+        }
+        if self.manifest_crc != manifest.manifest_crc {
+            return Err(backup_error(
+                "cold snapshot artifact manifest CRC must match backup manifest",
             ));
         }
         self.artifact.validate("cold snapshot artifact")

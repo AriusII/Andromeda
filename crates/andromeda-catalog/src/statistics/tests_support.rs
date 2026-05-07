@@ -146,13 +146,21 @@ fn histogram_rejects_decreasing_buckets() {
 
 #[test]
 fn builder_rejects_stats_version_zero() {
-    let err = StatsPublicationBuilder::new(StatsVersion::new(0)).unwrap_err();
+    let err =
+        StatsPublicationBuilder::new(CatalogVersion::new(1), StatsVersion::new(0)).unwrap_err();
     assert_eq!(err, StatsValidationError::StatsVersionZero);
 }
 
 #[test]
+fn builder_rejects_catalog_version_zero() {
+    let err =
+        StatsPublicationBuilder::new(CatalogVersion::new(0), StatsVersion::new(1)).unwrap_err();
+    assert_eq!(err, StatsValidationError::CatalogVersionZero);
+}
+
+#[test]
 fn builder_rejects_zero_object_id() {
-    let err = StatsPublicationBuilder::new(StatsVersion::new(1))
+    let err = StatsPublicationBuilder::new(CatalogVersion::new(1), StatsVersion::new(1))
         .unwrap()
         .push(target(0, 0), sample_histogram())
         .unwrap_err();
@@ -161,7 +169,7 @@ fn builder_rejects_zero_object_id() {
 
 #[test]
 fn builder_rejects_duplicate_target() {
-    let err = StatsPublicationBuilder::new(StatsVersion::new(1))
+    let err = StatsPublicationBuilder::new(CatalogVersion::new(1), StatsVersion::new(1))
         .unwrap()
         .push(target(7, 3), sample_histogram())
         .unwrap()
@@ -172,14 +180,14 @@ fn builder_rejects_duplicate_target() {
 
 #[test]
 fn publication_digest_is_deterministic() {
-    let lhs = StatsPublicationBuilder::new(StatsVersion::new(1))
+    let lhs = StatsPublicationBuilder::new(CatalogVersion::new(1), StatsVersion::new(1))
         .unwrap()
         .push(target(7, 3), sample_histogram())
         .unwrap()
         .push(target(7, 4), sample_histogram())
         .unwrap()
         .finish();
-    let rhs = StatsPublicationBuilder::new(StatsVersion::new(1))
+    let rhs = StatsPublicationBuilder::new(CatalogVersion::new(1), StatsVersion::new(1))
         .unwrap()
         .push(target(7, 3), sample_histogram())
         .unwrap()
@@ -194,14 +202,14 @@ fn publication_digest_is_deterministic() {
 
 #[test]
 fn publication_canonical_ordering_yields_same_digest() {
-    let forward = StatsPublicationBuilder::new(StatsVersion::new(1))
+    let forward = StatsPublicationBuilder::new(CatalogVersion::new(1), StatsVersion::new(1))
         .unwrap()
         .push(target(7, 3), sample_histogram())
         .unwrap()
         .push(target(9, 1), sample_histogram())
         .unwrap()
         .finish();
-    let reversed = StatsPublicationBuilder::new(StatsVersion::new(1))
+    let reversed = StatsPublicationBuilder::new(CatalogVersion::new(1), StatsVersion::new(1))
         .unwrap()
         .push(target(9, 1), sample_histogram())
         .unwrap()
@@ -216,12 +224,12 @@ fn publication_canonical_ordering_yields_same_digest() {
 
 #[test]
 fn publication_separates_on_stats_version() {
-    let v1 = StatsPublicationBuilder::new(StatsVersion::new(1))
+    let v1 = StatsPublicationBuilder::new(CatalogVersion::new(1), StatsVersion::new(1))
         .unwrap()
         .push(target(7, 3), sample_histogram())
         .unwrap()
         .finish();
-    let v2 = StatsPublicationBuilder::new(StatsVersion::new(2))
+    let v2 = StatsPublicationBuilder::new(CatalogVersion::new(1), StatsVersion::new(2))
         .unwrap()
         .push(target(7, 3), sample_histogram())
         .unwrap()
@@ -231,15 +239,33 @@ fn publication_separates_on_stats_version() {
 }
 
 #[test]
+fn publication_separates_on_catalog_version() {
+    let v1 = StatsPublicationBuilder::new(CatalogVersion::new(1), StatsVersion::new(1))
+        .unwrap()
+        .push(target(7, 3), sample_histogram())
+        .unwrap()
+        .finish();
+    let v2 = StatsPublicationBuilder::new(CatalogVersion::new(2), StatsVersion::new(1))
+        .unwrap()
+        .push(target(7, 3), sample_histogram())
+        .unwrap()
+        .finish();
+
+    assert_ne!(v1.digest(), v2.digest());
+    assert_ne!(v1.catalog_version(), v2.catalog_version());
+    assert_eq!(v1.version(), v2.version());
+}
+
+#[test]
 fn publication_separates_on_skew_marker() {
     let low = sample_histogram();
     let high = HistogramPlaceholder::new(low.buckets().to_vec(), SkewMarker::HighSkew).unwrap();
-    let pub_low = StatsPublicationBuilder::new(StatsVersion::new(1))
+    let pub_low = StatsPublicationBuilder::new(CatalogVersion::new(1), StatsVersion::new(1))
         .unwrap()
         .push(target(7, 3), low)
         .unwrap()
         .finish();
-    let pub_high = StatsPublicationBuilder::new(StatsVersion::new(1))
+    let pub_high = StatsPublicationBuilder::new(CatalogVersion::new(1), StatsVersion::new(1))
         .unwrap()
         .push(target(7, 3), high)
         .unwrap()
@@ -249,7 +275,7 @@ fn publication_separates_on_skew_marker() {
 
 #[test]
 fn publication_separates_on_bucket_evidence() {
-    let base = StatsPublicationBuilder::new(StatsVersion::new(1))
+    let base = StatsPublicationBuilder::new(CatalogVersion::new(1), StatsVersion::new(1))
         .unwrap()
         .push(target(7, 3), sample_histogram())
         .unwrap()
@@ -264,7 +290,7 @@ fn publication_separates_on_bucket_evidence() {
         SkewMarker::LowSkew,
     )
     .unwrap();
-    let altered = StatsPublicationBuilder::new(StatsVersion::new(1))
+    let altered = StatsPublicationBuilder::new(CatalogVersion::new(1), StatsVersion::new(1))
         .unwrap()
         .push(target(7, 3), altered_buckets)
         .unwrap()
@@ -275,16 +301,16 @@ fn publication_separates_on_bucket_evidence() {
 
 #[test]
 fn empty_publication_is_stable_and_distinct_from_populated() {
-    let empty_a = StatsPublicationBuilder::new(StatsVersion::new(1))
+    let empty_a = StatsPublicationBuilder::new(CatalogVersion::new(1), StatsVersion::new(1))
         .unwrap()
         .finish();
-    let empty_b = StatsPublicationBuilder::new(StatsVersion::new(1))
+    let empty_b = StatsPublicationBuilder::new(CatalogVersion::new(1), StatsVersion::new(1))
         .unwrap()
         .finish();
     assert_eq!(empty_a.digest(), empty_b.digest());
     assert!(empty_a.is_empty());
 
-    let populated = StatsPublicationBuilder::new(StatsVersion::new(1))
+    let populated = StatsPublicationBuilder::new(CatalogVersion::new(1), StatsVersion::new(1))
         .unwrap()
         .push(target(1, 0), sample_histogram())
         .unwrap()
@@ -294,10 +320,10 @@ fn empty_publication_is_stable_and_distinct_from_populated() {
 
 #[test]
 fn empty_publication_separates_on_stats_version() {
-    let v1 = StatsPublicationBuilder::new(StatsVersion::new(1))
+    let v1 = StatsPublicationBuilder::new(CatalogVersion::new(1), StatsVersion::new(1))
         .unwrap()
         .finish();
-    let v2 = StatsPublicationBuilder::new(StatsVersion::new(2))
+    let v2 = StatsPublicationBuilder::new(CatalogVersion::new(1), StatsVersion::new(2))
         .unwrap()
         .finish();
     assert_ne!(v1.digest(), v2.digest());

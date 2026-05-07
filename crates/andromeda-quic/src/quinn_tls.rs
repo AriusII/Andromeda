@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use rustls::{
-    ServerConfig,
+    RootCertStore, ServerConfig,
     pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, pem::PemObject},
 };
 
@@ -18,93 +18,50 @@ pub struct ServerTlsConfig {
 }
 
 impl ServerTlsConfig {
-    /// Creates a TLS config from certificate and private key files.
+    /// Creates an mTLS server config from certificate and private key files.
     ///
-    /// # Arguments
-    /// - `cert_path`: Path to PEM-encoded certificate file
-    /// - `key_path`: Path to PEM-encoded private key file
+    /// The server certificate file is also used as the client-auth trust root
+    /// for backward-compatible local deployments. Production deployments should
+    /// prefer [`Self::from_files_with_client_ca`] and pass an explicit client CA.
     pub fn from_files(cert_path: &Path, key_path: &Path) -> AndromedaResult<Self> {
-        let cert_pem = std::fs::read_to_string(cert_path).map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::Transport,
-                format!("failed to read certificate file: {}", e),
-            )
-        })?;
+        Self::from_files_with_client_ca(cert_path, key_path, cert_path)
+    }
 
-        let key_pem = std::fs::read_to_string(key_path).map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::Transport,
-                format!("failed to read private key file: {}", e),
-            )
-        })?;
-
-        let certs = CertificateDer::pem_slice_iter(cert_pem.as_bytes())
-            .collect::<Result<Vec<_>, _>>()
+    /// Creates an mTLS server config with an explicit PEM client CA trust root.
+    pub fn from_files_with_client_ca(
+        cert_path: &Path,
+        key_path: &Path,
+        client_ca_path: &Path,
+    ) -> AndromedaResult<Self> {
+        let certs = load_cert_chain_pem(cert_path)?;
+        let key = load_private_key_pem(key_path)?;
+        let client_roots = root_store_from_der(load_cert_chain_pem(client_ca_path)?)?;
+        let client_verifier = rustls::server::WebPkiClientVerifier::builder(Arc::new(client_roots))
+            .build()
             .map_err(|e| {
                 AndromedaError::new(
-                    AndromedaErrorKind::Protocol,
-                    format!("failed to parse certificate PEM: {}", e),
+                    AndromedaErrorKind::Security,
+                    format!("failed to build client certificate verifier: {e}"),
                 )
             })?;
-
-        if certs.is_empty() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Protocol,
-                "no certificates found in PEM file".to_string(),
-            ));
-        }
-
-        let key = PrivatePkcs8KeyDer::from_pem_slice(key_pem.as_bytes()).map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::Protocol,
-                format!("failed to parse private key PEM: {}", e),
-            )
-        })?;
 
         let config = ServerConfig::builder()
-            .with_no_client_auth()
-            .with_single_cert(certs, PrivateKeyDer::Pkcs8(key))
-            .map_err(|e| {
-                AndromedaError::new(
-                    AndromedaErrorKind::Protocol,
-                    format!("failed to build server config: {}", e),
-                )
-            })?;
+            .with_client_cert_verifier(client_verifier)
+            .with_single_cert(certs, key)
+            .map_err(|e| tls_error(format!("failed to build server config: {e}")))?;
 
         Ok(Self { config })
     }
 
-    /// Creates an ephemeral self-signed certificate for testing.
+    /// Creates an ephemeral mTLS self-signed certificate for local testing.
     ///
-    /// Generates a new certificate valid for the given domain names.
+    /// The generated certificate is trusted for client authentication. Tests
+    /// that need a matching client identity should use
+    /// [`MutualTlsTestConfig::ephemeral`].
     pub fn ephemeral(subject_alt_names: Vec<String>) -> AndromedaResult<Self> {
-        use rcgen::generate_simple_self_signed;
-
-        let rcgen::CertifiedKey { cert, signing_key } =
-            generate_simple_self_signed(subject_alt_names).map_err(|e| {
-                AndromedaError::new(
-                    AndromedaErrorKind::Protocol,
-                    format!("failed to generate self-signed certificate: {}", e),
-                )
-            })?;
-
-        let cert_der = cert.der().clone();
-        let key_der = signing_key.serialize_der();
-
-        let config = ServerConfig::builder()
-            .with_no_client_auth()
-            .with_single_cert(
-                vec![cert_der],
-                PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(key_der)),
-            )
-            .map_err(|e| {
-                AndromedaError::new(
-                    AndromedaErrorKind::Protocol,
-                    format!("failed to build server config: {}", e),
-                )
-            })?;
-
-        Ok(Self { config })
+        Ok(Self {
+            config: ephemeral_rustls_pair(subject_alt_names)?.server,
+        })
     }
 
     /// Returns the configured Quinn server config.
@@ -121,36 +78,163 @@ impl ServerTlsConfig {
     }
 }
 
-/// Helper for creating insecure client TLS configuration (for testing only).
+/// TLS configuration builder for QUIC clients.
 pub struct ClientTlsConfig;
 
 impl ClientTlsConfig {
-    /// Creates a client TLS config that accepts all server certificates (for testing).
+    /// Creates an mTLS client config from PEM identity and trust-root files.
+    pub fn from_files(
+        cert_path: &Path,
+        key_path: &Path,
+        trust_roots_path: &Path,
+    ) -> AndromedaResult<quinn::ClientConfig> {
+        let cfg = rustls::ClientConfig::builder()
+            .with_root_certificates(root_store_from_der(load_cert_chain_pem(trust_roots_path)?)?)
+            .with_client_auth_cert(
+                load_cert_chain_pem(cert_path)?,
+                load_private_key_pem(key_path)?,
+            )
+            .map_err(|e| tls_error(format!("failed to build client config: {e}")))?;
+
+        quinn_client_config(cfg)
+    }
+
+    /// Creates a client TLS config that accepts all server certificates.
     ///
-    /// **WARNING**: This disables certificate verification. Use only in tests!
-    pub fn insecure() -> AndromedaResult<quinn::ClientConfig> {
-        // For testing with self-signed certs, we create a client config
-        // that will accept any certificate
+    /// This is intentionally gated behind `insecure-test-tls` and keeps client
+    /// certificate authentication explicit even for local network tests.
+    #[cfg(any(test, feature = "insecure-test-tls"))]
+    pub fn insecure_for_tests(
+        client_cert_chain: Vec<CertificateDer<'static>>,
+        client_private_key: PrivateKeyDer<'static>,
+    ) -> AndromedaResult<quinn::ClientConfig> {
         let cfg = rustls::ClientConfig::builder()
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(InsecureVerifier))
-            .with_no_client_auth();
+            .with_client_auth_cert(client_cert_chain, client_private_key)
+            .map_err(|e| tls_error(format!("failed to build insecure test client config: {e}")))?;
 
-        let quic_config = quinn::crypto::rustls::QuicClientConfig::try_from(cfg).map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::Transport,
-                format!("failed to create Quinn client config: {e}"),
-            )
-        })?;
-
-        Ok(quinn::ClientConfig::new(Arc::new(quic_config)))
+        quinn_client_config(cfg)
     }
 }
 
+/// Paired Quinn configs for local mTLS tests.
+pub struct MutualTlsTestConfig {
+    server: quinn::ServerConfig,
+    client: quinn::ClientConfig,
+}
+
+impl MutualTlsTestConfig {
+    /// Creates a self-contained mTLS config pair with one ephemeral identity.
+    pub fn ephemeral(subject_alt_names: Vec<String>) -> AndromedaResult<Self> {
+        let pair = ephemeral_rustls_pair(subject_alt_names)?;
+        let server = ServerTlsConfig {
+            config: pair.server,
+        }
+        .into_quinn_config()?;
+        let client = quinn_client_config(pair.client)?;
+
+        Ok(Self { server, client })
+    }
+
+    pub fn server_config(&self) -> quinn::ServerConfig {
+        self.server.clone()
+    }
+
+    pub fn client_config(&self) -> quinn::ClientConfig {
+        self.client.clone()
+    }
+}
+
+struct RustlsMutualTlsPair {
+    server: rustls::ServerConfig,
+    client: rustls::ClientConfig,
+}
+
+fn ephemeral_rustls_pair(subject_alt_names: Vec<String>) -> AndromedaResult<RustlsMutualTlsPair> {
+    use rcgen::generate_simple_self_signed;
+
+    let rcgen::CertifiedKey { cert, signing_key } = generate_simple_self_signed(subject_alt_names)
+        .map_err(|e| tls_error(format!("failed to generate self-signed certificate: {e}")))?;
+
+    let cert_chain = vec![cert.der().clone()];
+    let private_key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(signing_key.serialize_der()));
+    let root_store = root_store_from_der(cert_chain.clone())?;
+    let client_verifier =
+        rustls::server::WebPkiClientVerifier::builder(Arc::new(root_store.clone()))
+            .build()
+            .map_err(|e| {
+                AndromedaError::new(
+                    AndromedaErrorKind::Security,
+                    format!("failed to build client certificate verifier: {e}"),
+                )
+            })?;
+
+    let server = ServerConfig::builder()
+        .with_client_cert_verifier(client_verifier)
+        .with_single_cert(cert_chain.clone(), private_key.clone_key())
+        .map_err(|e| tls_error(format!("failed to build server config: {e}")))?;
+    let client = rustls::ClientConfig::builder()
+        .with_root_certificates(root_store)
+        .with_client_auth_cert(cert_chain, private_key)
+        .map_err(|e| tls_error(format!("failed to build client config: {e}")))?;
+
+    Ok(RustlsMutualTlsPair { server, client })
+}
+
+fn load_cert_chain_pem(path: &Path) -> AndromedaResult<Vec<CertificateDer<'static>>> {
+    let certs = CertificateDer::pem_file_iter(path)
+        .map_err(|e| tls_error(format!("failed to open certificate PEM: {e}")))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| tls_error(format!("failed to parse certificate PEM: {e}")))?;
+
+    if certs.is_empty() {
+        return Err(tls_error("certificate PEM did not contain certificates"));
+    }
+
+    Ok(certs)
+}
+
+fn load_private_key_pem(path: &Path) -> AndromedaResult<PrivateKeyDer<'static>> {
+    PrivateKeyDer::from_pem_file(path)
+        .map_err(|e| tls_error(format!("failed to parse private key PEM: {e}")))
+}
+
+fn root_store_from_der(certs: Vec<CertificateDer<'static>>) -> AndromedaResult<RootCertStore> {
+    if certs.is_empty() {
+        return Err(tls_error("mTLS trust root set cannot be empty"));
+    }
+
+    let mut roots = RootCertStore::empty();
+    for cert in certs {
+        roots
+            .add(cert)
+            .map_err(|e| tls_error(format!("failed to add mTLS trust root: {e}")))?;
+    }
+    Ok(roots)
+}
+
+fn quinn_client_config(cfg: rustls::ClientConfig) -> AndromedaResult<quinn::ClientConfig> {
+    let quic_config = quinn::crypto::rustls::QuicClientConfig::try_from(cfg).map_err(|e| {
+        AndromedaError::new(
+            AndromedaErrorKind::Transport,
+            format!("failed to create Quinn client config: {e}"),
+        )
+    })?;
+
+    Ok(quinn::ClientConfig::new(Arc::new(quic_config)))
+}
+
+fn tls_error(message: impl Into<String>) -> AndromedaError {
+    AndromedaError::new(AndromedaErrorKind::Protocol, message)
+}
+
 /// Insecure certificate verifier that accepts all certificates (for testing only).
+#[cfg(any(test, feature = "insecure-test-tls"))]
 #[derive(Debug)]
 struct InsecureVerifier;
 
+#[cfg(any(test, feature = "insecure-test-tls"))]
 impl rustls::client::danger::ServerCertVerifier for InsecureVerifier {
     fn verify_server_cert(
         &self,

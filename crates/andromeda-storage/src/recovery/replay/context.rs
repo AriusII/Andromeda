@@ -1,9 +1,10 @@
 use std::collections::{BTreeMap, HashMap};
 
-use andromeda_core::TransactionId;
+use andromeda_core::{AndromedaResult, TransactionId};
 
 use crate::{DatabaseManifest, Lsn, PageId, PageSize, WalRecordKind};
 
+use super::super::storage_error;
 use super::heap_redo::HeapRedoPageState;
 use super::result::{ReplayOutcome, ReplayResult};
 
@@ -44,6 +45,12 @@ pub struct ReplayContext {
 
     /// Observable manifest-switch trace events from replay.
     pub manifest_switch_traces: Vec<ManifestSwitchRecoveryTrace>,
+
+    /// Highest durable `CheckpointEnd` marker observed during this recovery pass.
+    pub latest_checkpoint_end_lsn: Option<Lsn>,
+
+    /// Whether manifest switch replay must prove a durable checkpoint marker.
+    pub require_checkpoint_end_for_manifest_switch: bool,
 }
 
 impl ReplayContext {
@@ -58,6 +65,8 @@ impl ReplayContext {
             active_manifest: None,
             known_manifest_crc_by_version: HashMap::new(),
             manifest_switch_traces: Vec::new(),
+            latest_checkpoint_end_lsn: None,
+            require_checkpoint_end_for_manifest_switch: false,
         }
     }
 
@@ -79,6 +88,19 @@ impl ReplayContext {
         self.index_rebuild_required.push(evidence);
     }
 
+    pub fn observe_checkpoint_end(&mut self, lsn: Lsn) {
+        if self
+            .latest_checkpoint_end_lsn
+            .is_none_or(|current| lsn > current)
+        {
+            self.latest_checkpoint_end_lsn = Some(lsn);
+        }
+    }
+
+    pub fn require_manifest_switch_checkpoint_evidence(&mut self) {
+        self.require_checkpoint_end_for_manifest_switch = true;
+    }
+
     pub fn heap_redo_page(&self, page_id: PageId) -> Option<&HeapRedoPageState> {
         self.heap_redo_pages.get(&page_id)
     }
@@ -87,22 +109,46 @@ impl ReplayContext {
         self.heap_redo_pages.len()
     }
 
+    pub fn heap_redo_page_origin(&self, page_id: PageId) -> Option<&'static str> {
+        self.heap_redo_pages
+            .get(&page_id)
+            .map(HeapRedoPageState::origin_label)
+    }
+
+    pub fn hydrate_heap_redo_page_from_snapshot(
+        &mut self,
+        page_id: PageId,
+        page_size: PageSize,
+        page_lsn: Lsn,
+        live_slots: impl IntoIterator<Item = (u16, Vec<u8>)>,
+    ) -> AndromedaResult<()> {
+        if self.heap_redo_pages.contains_key(&page_id) {
+            return Err(storage_error(format!(
+                "heap redo page {} already has replay state; snapshot hydration must happen before WAL replay touches the page",
+                page_id.get()
+            )));
+        }
+        let page = HeapRedoPageState::snapshot_hydrated(page_id, page_size, page_lsn, live_slots)?;
+        self.heap_redo_pages.insert(page_id, page);
+        Ok(())
+    }
+
     pub(super) fn heap_redo_page_mut_or_insert(
         &mut self,
         page_id: PageId,
         page_size: PageSize,
-    ) -> Result<&mut HeapRedoPageState, String> {
+    ) -> AndromedaResult<&mut HeapRedoPageState> {
         let page = self
             .heap_redo_pages
             .entry(page_id)
-            .or_insert_with(|| HeapRedoPageState::new(page_id, page_size));
+            .or_insert_with(|| HeapRedoPageState::redo_created(page_id, page_size));
         if page.page_size() != page_size {
-            return Err(format!(
+            return Err(storage_error(format!(
                 "heap row redo page {} has size {:?}, payload declares {:?}",
                 page_id.get(),
                 page.page_size(),
                 page_size
-            ));
+            )));
         }
         Ok(page)
     }

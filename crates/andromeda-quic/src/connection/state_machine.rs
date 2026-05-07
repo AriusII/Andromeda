@@ -180,13 +180,27 @@ impl Connection {
                         "new commands rejected while session is draining",
                     ));
                 }
+                self.validate_dispatch_session(frame)?;
                 let role = frame.header.frame_type.stream_role();
                 dispatch_frame(frame, role)
             }
             LifecycleState::Active => {
+                self.validate_dispatch_session(frame)?;
                 let role = frame.header.frame_type.stream_role();
                 dispatch_frame(frame, role)
             }
+        }
+    }
+
+    fn validate_dispatch_session(&self, frame: &FrameBytes) -> AndromedaResult<()> {
+        match self.session_id {
+            Some(session_id) if session_id == frame.header.session_id => Ok(()),
+            Some(_) => Err(protocol_error(
+                "frame session id does not match authenticated connection",
+            )),
+            None => Err(protocol_error(
+                "frame dispatch requires authenticated connection session id",
+            )),
         }
     }
 
@@ -254,7 +268,11 @@ impl Connection {
                     ),
                     (LifecycleState::Active, _) => Ok(CancellationOutcome::Delivered),
                     (LifecycleState::Draining, _) => Ok(CancellationOutcome::DeliveredDuringDrain),
-                    _ => unreachable!(),
+                    (LifecycleState::Hello | LifecycleState::Auth | LifecycleState::Closed, _) => {
+                        Err(protocol_error(
+                            "cancellation routing observed an invalid lifecycle state",
+                        ))
+                    }
                 }
             }
         }

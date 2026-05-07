@@ -232,6 +232,7 @@ fn allowed_application_surface_dispatch_can_execute_with_token() {
             InvocationRequest {
                 invocation_id: InvocationId::new(46),
                 procedure: contract.as_ref(),
+                expected_binding: Some(contract.binding()),
                 expected_contract_hash: contract.contract_hash,
                 catalog_version: contract.object.catalog_version,
                 structured_parameters: Vec::new(),
@@ -246,6 +247,70 @@ fn allowed_application_surface_dispatch_can_execute_with_token() {
     assert_eq!(token.audit().outcome, SecurityAuditOutcome::Allowed);
     assert_eq!(outcome.completion.status(), CompletionStatus::Committed);
     assert!(!runtime.wal().is_empty());
+}
+
+#[test]
+fn allowed_surface_dispatch_token_trace_must_match_invocation_context() {
+    let contract = inventory_reserve_stock_contract().unwrap();
+    let effect = InventoryReserveStockExecutor::reserve(
+        ReserveStockCommand {
+            product_id: 42,
+            quantity: 2,
+        },
+        InventoryStock {
+            product_id: 42,
+            available_quantity: 10,
+            version: 1,
+        },
+    )
+    .unwrap();
+    let procedure = effect.to_local_procedure(&contract).unwrap();
+    let token_trace = TraceId::new(51);
+    let context = InvocationContext::new(TraceId::new(52), contract.required_permissions.clone());
+    let registry = registry(vec![binding(
+        "fp-app-trace-mismatch",
+        SurfaceScope::Application,
+        "svc-app",
+        vec![Permission::ExecuteProcedure],
+    )]);
+    let gate = SurfacePlaneAuthorizer::new(&registry);
+    let token = gate
+        .authorize_procedure_dispatch(
+            token_trace,
+            SurfacePlane::Application,
+            "fp-app-trace-mismatch",
+        )
+        .unwrap()
+        .unwrap();
+    let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
+
+    let err = runtime
+        .execute_surface_authorized(
+            InvocationRequest {
+                invocation_id: InvocationId::new(52),
+                procedure: contract.as_ref(),
+                expected_binding: Some(contract.binding()),
+                expected_contract_hash: contract.contract_hash,
+                catalog_version: contract.object.catalog_version,
+                structured_parameters: Vec::new(),
+            },
+            &procedure,
+            &context,
+            &token,
+        )
+        .expect_err("surface authorization token must be bound to the invocation trace");
+
+    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Security);
+    assert!(err.to_string().contains("trace id"));
+    assert!(
+        runtime.wal().is_empty(),
+        "trace-mismatched token must not create a WAL record"
+    );
+    assert_eq!(
+        runtime.transactions().live_count().unwrap(),
+        0,
+        "trace-mismatched token must not create a local transaction"
+    );
 }
 
 // D3: Certificate Identity Binding Contracts

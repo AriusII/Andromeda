@@ -6,7 +6,8 @@ use andromeda_observe::{
     DurableAuditRetentionBoundary, DurableAuditRetentionManager, DurableAuditRetentionPolicy,
     DurableAuditWalSegmentArchiveProof, DurableAuditWalSink, EventCorrelation, EventEnvelope,
     EventId, FileDurableAuditWalSink, PendingDurableAuditRecord, Permission, SecurityAuditOutcome,
-    SecurityAuditTrace, SurfaceScope, TraceEvent, TraceId, UserPrincipal, UserPrincipalKind,
+    SecurityAuditTrace, SecurityPolicyVersionEvidence, SurfaceScope, TraceEvent, TraceId,
+    UserPrincipal, UserPrincipalKind,
 };
 use std::{
     fs,
@@ -61,6 +62,7 @@ fn principal_binding(event_id: u128, principal_id: &str) -> DurableAuditPrincipa
         certificate_fingerprint: Some(format!("sha256:durable-audit-retention-{event_id}")),
         surface: Some(SurfaceScope::Administration),
         permission: Some(Permission::InspectPlans),
+        policy_version: Some(SecurityPolicyVersionEvidence::bootstrap_v0()),
         request_id: Some(RequestId::new(event_id as u64)),
         session_id: Some(SessionId::new(event_id as u64 + 100)),
     }
@@ -75,6 +77,24 @@ fn temp_journal_path(test_name: &str) -> PathBuf {
         "andromeda-observe-{test_name}-{}-{nonce}.audit",
         std::process::id()
     ))
+}
+
+fn chain_hex_field(line: &str, label: &str) -> u64 {
+    let marker = format!("|{label}=");
+    let value = line
+        .split(&marker)
+        .nth(1)
+        .and_then(|rest| rest.split('|').next())
+        .expect("journal line carries requested chain field");
+    u64::from_str_radix(value, 16).expect("chain field is fixed-width hex")
+}
+
+fn previous_chain_checksum(line: &str) -> u64 {
+    chain_hex_field(line, "previous_chain_checksum")
+}
+
+fn chain_checksum(line: &str) -> u64 {
+    chain_hex_field(line, "chain_checksum")
 }
 
 fn append_security_record(
@@ -114,8 +134,8 @@ fn replay_record_for_report(
 }
 
 #[test]
-fn durable_audit_journal_query_with_evidence_reports_stable_scan_counts() {
-    let path = temp_journal_path("query-evidence");
+fn durable_audit_journal_replay_with_evidence_reports_stable_scan_counts() {
+    let path = temp_journal_path("replay-evidence");
     let mut sink = FileDurableAuditWalSink::open(&path).expect("journal opens");
     append_security_record(
         &mut sink,
@@ -146,7 +166,7 @@ fn durable_audit_journal_query_with_evidence_reports_stable_scan_counts() {
             },
             DurableAuditReplayWindow::new(1, 0),
         )
-        .expect("durable audit journal query scans with evidence");
+        .expect("durable audit journal replay scans with evidence");
 
     assert_eq!(result.records.len(), 1);
     assert_eq!(result.evidence.records_scanned, 3);
@@ -164,6 +184,10 @@ fn durable_audit_journal_query_with_evidence_reports_stable_scan_counts() {
         result.evidence.last_returned_lsn,
         Some(first_match.evidence.record_lsn)
     );
+    assert!(result.evidence.chain_anchor_present);
+    assert_eq!(result.evidence.first_scanned_lsn, Some(1));
+    assert_eq!(result.evidence.last_scanned_lsn, Some(3));
+    assert_ne!(result.evidence.tail_chain_checksum, 0);
 
     let _ = fs::remove_file(path);
 }
@@ -365,7 +389,7 @@ fn wal_segment_retention_blocks_prune_when_archive_checksum_does_not_match_recor
 }
 
 #[test]
-fn durable_audit_compaction_keeps_retained_records_queryable_and_checksummed() {
+fn durable_audit_compaction_keeps_retained_records_replayable_and_checksummed() {
     let path = temp_journal_path("retention-compaction");
     let mut sink = FileDurableAuditWalSink::open(&path).expect("journal opens");
     let expired = append_security_record(
@@ -423,6 +447,36 @@ fn durable_audit_compaction_keeps_retained_records_queryable_and_checksummed() {
     assert_eq!(replayed[0].report, retained);
     assert_eq!(replayed[1].report, forensic_hold);
 
+    let compacted_text = fs::read_to_string(&path).expect("compacted journal can be read");
+    let compacted_lines = compacted_text.lines().collect::<Vec<_>>();
+    assert_eq!(compacted_lines.len(), 2);
+    assert_eq!(
+        previous_chain_checksum(compacted_lines[0]),
+        0,
+        "compaction must start the retained chain from genesis"
+    );
+    let retained_chain_checksum = chain_checksum(compacted_lines[0]);
+    assert_ne!(retained_chain_checksum, 0);
+    assert_eq!(
+        previous_chain_checksum(compacted_lines[1]),
+        retained_chain_checksum,
+        "second retained record must point to the rechained predecessor"
+    );
+    let forensic_chain_checksum = chain_checksum(compacted_lines[1]);
+    assert_ne!(forensic_chain_checksum, retained_chain_checksum);
+
+    let compacted_query = reopened
+        .query_with_evidence(
+            &DurableAuditReplayQuery::all(),
+            DurableAuditReplayWindow::ALL,
+        )
+        .expect("compacted journal exposes replay evidence");
+    assert!(compacted_query.evidence.chain_anchor_present);
+    assert_eq!(
+        compacted_query.evidence.tail_chain_checksum, forensic_chain_checksum,
+        "replay evidence must expose the retained chain tail checksum"
+    );
+
     let expired_query = reopened
         .query_with_evidence(
             &DurableAuditReplayQuery {
@@ -434,10 +488,23 @@ fn durable_audit_compaction_keeps_retained_records_queryable_and_checksummed() {
             },
             DurableAuditReplayWindow::ALL,
         )
-        .expect("expired LSN query is valid after compaction");
+        .expect("expired LSN replay inspection is valid after compaction");
     assert_eq!(expired_query.evidence.records_scanned, 2);
     assert_eq!(expired_query.evidence.records_returned, 0);
     assert!(expired_query.evidence.filter_applied);
+    assert!(expired_query.evidence.chain_anchor_present);
+    assert_eq!(
+        expired_query.evidence.first_scanned_lsn,
+        Some(retained.evidence.record_lsn)
+    );
+    assert_eq!(
+        expired_query.evidence.last_scanned_lsn,
+        Some(forensic_hold.evidence.record_lsn)
+    );
+    assert_ne!(
+        expired_query.evidence.tail_chain_checksum, 0,
+        "compaction must rechain retained records behind a durable anchor"
+    );
 
     let appended_after_compaction = append_security_record(
         &mut reopened,
@@ -481,7 +548,7 @@ fn durable_audit_compaction_retains_wal_segment_without_archive_proof() {
 
     let replayed = sink
         .replay(&DurableAuditReplayQuery::all())
-        .expect("retained WAL segment remains queryable");
+        .expect("retained WAL segment remains replayable");
     assert_eq!(replayed.len(), 1);
     assert_eq!(replayed[0].report, wal_segment);
 

@@ -600,6 +600,16 @@ fn test_backpressure_zero_limit() {
 }
 
 #[test]
+fn test_backpressure_rejects_row_count_overflow() {
+    let mut bp = SrplStreamBackpressure::new(usize::MAX);
+
+    bp.buffer_rows(usize::MAX).unwrap();
+    let result = bp.buffer_rows(1);
+
+    assert!(result.is_err());
+}
+
+#[test]
 fn test_backpressure_saturating_release() {
     let mut bp = SrplStreamBackpressure::new(100);
 

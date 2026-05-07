@@ -8,7 +8,7 @@ pub enum Cardinality {
 
 impl Cardinality {
     pub const fn requires_exact_row_count(self) -> bool {
-        matches!(self, Self::One | Self::OptionalOne | Self::NonEmptyMany)
+        matches!(self, Self::One | Self::NonEmptyMany)
     }
 
     pub const fn permits_exact_row_count(self, row_count: u64) -> bool {
@@ -53,6 +53,50 @@ impl Cardinality {
             None => true,
         }
     }
+
+    pub const fn permits_emit_operation_count(self, emit_count: usize) -> bool {
+        match self {
+            Self::One => emit_count == 1,
+            Self::OptionalOne => emit_count <= 1,
+            Self::Many => true,
+            Self::NonEmptyMany => emit_count >= 1,
+        }
+    }
+
+    pub const fn emit_count_diagnostic(self) -> &'static str {
+        match self {
+            Self::One => "SRPL one result stream must have exactly one emit operation",
+            Self::OptionalOne => {
+                "SRPL optional-one result stream may have zero or one emit operation"
+            }
+            Self::Many => "SRPL many result stream accepts zero or more emit operations",
+            Self::NonEmptyMany => {
+                "SRPL nonempty-many result stream must have at least one emit operation"
+            }
+        }
+    }
+}
+
+impl From<Cardinality> for andromeda_catalog::ResultStreamCardinality {
+    fn from(value: Cardinality) -> Self {
+        match value {
+            Cardinality::One => Self::One,
+            Cardinality::OptionalOne => Self::OptionalOne,
+            Cardinality::Many => Self::Many,
+            Cardinality::NonEmptyMany => Self::NonEmptyMany,
+        }
+    }
+}
+
+impl From<andromeda_catalog::ResultStreamCardinality> for Cardinality {
+    fn from(value: andromeda_catalog::ResultStreamCardinality) -> Self {
+        match value {
+            andromeda_catalog::ResultStreamCardinality::One => Self::One,
+            andromeda_catalog::ResultStreamCardinality::OptionalOne => Self::OptionalOne,
+            andromeda_catalog::ResultStreamCardinality::Many => Self::Many,
+            andromeda_catalog::ResultStreamCardinality::NonEmptyMany => Self::NonEmptyMany,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -62,7 +106,7 @@ mod tests {
     #[test]
     fn cardinality_exposes_exact_count_need() {
         assert!(Cardinality::One.requires_exact_row_count());
-        assert!(Cardinality::OptionalOne.requires_exact_row_count());
+        assert!(!Cardinality::OptionalOne.requires_exact_row_count());
         assert!(Cardinality::NonEmptyMany.requires_exact_row_count());
         assert!(!Cardinality::Many.requires_exact_row_count());
     }
@@ -113,5 +157,23 @@ mod tests {
         // Many: any max >= 0 is permitted.
         assert!(Cardinality::Many.permits_row_count_max(0));
         assert!(Cardinality::Many.permits_row_count_max(1_000_000));
+    }
+
+    #[test]
+    fn cardinality_emit_counts_match_declared_absence_policy() {
+        assert!(!Cardinality::One.permits_emit_operation_count(0));
+        assert!(Cardinality::One.permits_emit_operation_count(1));
+        assert!(!Cardinality::One.permits_emit_operation_count(2));
+
+        assert!(Cardinality::OptionalOne.permits_emit_operation_count(0));
+        assert!(Cardinality::OptionalOne.permits_emit_operation_count(1));
+        assert!(!Cardinality::OptionalOne.permits_emit_operation_count(2));
+
+        assert!(Cardinality::Many.permits_emit_operation_count(0));
+        assert!(Cardinality::Many.permits_emit_operation_count(10));
+
+        assert!(!Cardinality::NonEmptyMany.permits_emit_operation_count(0));
+        assert!(Cardinality::NonEmptyMany.permits_emit_operation_count(1));
+        assert!(Cardinality::NonEmptyMany.permits_emit_operation_count(10));
     }
 }

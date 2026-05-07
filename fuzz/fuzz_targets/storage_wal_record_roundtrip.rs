@@ -5,10 +5,13 @@ use andromeda_storage::{
 };
 use libfuzzer_sys::fuzz_target;
 
+const MAX_WAL_FRAME_FUZZ_BYTES: usize = 64 * 1024;
+
 fuzz_target!(|data: &[u8]| {
-    if let Ok(Some((record, consumed))) = decode_wal_record_frame(data) {
+    let frame_data = &data[..data.len().min(MAX_WAL_FRAME_FUZZ_BYTES)];
+    if let Ok(Some((record, consumed))) = decode_wal_record_frame(frame_data) {
         let _ = record.validate();
-        assert!(consumed <= data.len());
+        assert!(consumed <= frame_data.len());
         if let Ok(encoded) = encode_wal_record(&record) {
             let _ = decode_wal_record_frame(&encoded);
         }

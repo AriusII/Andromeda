@@ -27,7 +27,13 @@ mod tests {
         let tx_id = TransactionId::new(1);
 
         // Set creator as committed
-        status_table.set_committed(tx_id).unwrap();
+        status_table
+            .record_committed_after_durable_wal(
+                tx_id,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .unwrap();
 
         let mark_opt = ReclamationMark::from_version_if_eligible(
             candidate(1, tx_id, 50, 20, 5),
@@ -75,7 +81,13 @@ mod tests {
         let status_table = TransactionStatusTable::new();
         let tx_id = TransactionId::new(1);
 
-        status_table.set_committed(tx_id).unwrap();
+        status_table
+            .record_committed_after_durable_wal(
+                tx_id,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .unwrap();
 
         // Version with end_ts = 150
         // min_visible_ts = 100
@@ -104,7 +116,13 @@ mod tests {
         let status_table = TransactionStatusTable::new();
         let tx_id = TransactionId::new(1);
 
-        status_table.set_committed(tx_id).unwrap();
+        status_table
+            .record_committed_after_durable_wal(
+                tx_id,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .unwrap();
 
         // Grace period is 5 epochs
         // Version was marked at gc_epoch=10
@@ -146,7 +164,13 @@ mod tests {
         let status_table = TransactionStatusTable::new();
         let tx_id = TransactionId::new(1);
 
-        status_table.set_committed(tx_id).unwrap();
+        status_table
+            .record_committed_after_durable_wal(
+                tx_id,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .unwrap();
 
         let mut marks = Vec::new();
 
@@ -186,7 +210,13 @@ mod tests {
         let status_table = TransactionStatusTable::new();
         let creator_tx_id = TransactionId::new(1);
 
-        status_table.set_committed(creator_tx_id).unwrap();
+        status_table
+            .record_committed_after_durable_wal(
+                creator_tx_id,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .unwrap();
 
         // Scenario:
         // - Version with end_ts = 100
@@ -279,7 +309,13 @@ mod tests {
         let status_table = TransactionStatusTable::new();
         let tx_id = TransactionId::new(1);
 
-        status_table.set_committed(tx_id).unwrap();
+        status_table
+            .record_committed_after_durable_wal(
+                tx_id,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .unwrap();
 
         let mark = ReclamationMark::new(1, tx_id, 50, 20, 5).unwrap();
 
@@ -308,8 +344,20 @@ mod tests {
         let tx3 = TransactionId::new(3);
 
         // Mark tx1 and tx3 as committed, tx2 remains InFlight
-        status_table.set_committed(tx1).unwrap();
-        status_table.set_committed(tx3).unwrap();
+        status_table
+            .record_committed_after_durable_wal(
+                tx1,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .unwrap();
+        status_table
+            .record_committed_after_durable_wal(
+                tx3,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .unwrap();
 
         // Try to create marks for all three
         let mark1 = ReclamationMark::from_version_if_eligible(
@@ -355,7 +403,13 @@ mod tests {
         let status_table = TransactionStatusTable::new();
         let tx_id = TransactionId::new(1);
 
-        status_table.set_committed(tx_id).unwrap();
+        status_table
+            .record_committed_after_durable_wal(
+                tx_id,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .unwrap();
 
         let grace_period_epochs = 10;
 
@@ -415,7 +469,13 @@ mod tests {
         let status_table = TransactionStatusTable::new();
         let tx_id = TransactionId::new(1);
 
-        status_table.set_committed(tx_id).unwrap();
+        status_table
+            .record_committed_after_durable_wal(
+                tx_id,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .unwrap();
 
         // Version with end_ts exactly at min_visible_ts boundary
         // If end_ts = min_visible_ts, a snapshot at that exact timestamp could see it
@@ -448,7 +508,13 @@ mod tests {
             let tx_id = TransactionId::new(i as u64);
             // Only mark even-numbered transactions as committed
             if i % 2 == 0 {
-                status_table.set_committed(tx_id).unwrap();
+                status_table
+                    .record_committed_after_durable_wal(
+                        tx_id,
+                        andromeda_tx::Lsn::new(1),
+                        andromeda_tx::Lsn::new(1),
+                    )
+                    .unwrap();
             }
             tx_ids.push(tx_id);
         }
@@ -487,7 +553,13 @@ mod tests {
         let status_table = TransactionStatusTable::new();
         let tx_id = TransactionId::new(1);
 
-        status_table.set_committed(tx_id).unwrap();
+        status_table
+            .record_committed_after_durable_wal(
+                tx_id,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .unwrap();
 
         let mark_opt = ReclamationMark::from_version_if_eligible(
             candidate(42, tx_id, 500, 100, 10),

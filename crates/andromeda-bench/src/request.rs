@@ -1,11 +1,11 @@
 use andromeda_core::HardwareProfile;
 
 use crate::{
-    BenchmarkError, BenchmarkWorkload, DEFAULT_DURATION_MS, DEFAULT_SAMPLES, DEFAULT_WARMUPS,
-    MAX_DURATION_MS, MAX_SAMPLES, MAX_WARMUPS, find_workload,
+    BenchmarkError, BenchmarkWorkload, DEFAULT_DURATION_MS, DEFAULT_SAMPLES, DEFAULT_TEMP_BYTES,
+    DEFAULT_WARMUPS, MAX_DURATION_MS, MAX_SAMPLES, MAX_TEMP_BYTES, MAX_WARMUPS, find_workload,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BenchmarkHardwareProfile {
     Conservative,
     DeclaredLocal,
@@ -32,6 +32,7 @@ pub struct BenchmarkRunRequest {
     pub duration_ms: u64,
     pub samples: u32,
     pub warmups: u32,
+    pub temp_budget_bytes: u64,
     pub hardware_profile: BenchmarkHardwareProfile,
 }
 
@@ -42,6 +43,7 @@ impl BenchmarkRunRequest {
             duration_ms: DEFAULT_DURATION_MS,
             samples: DEFAULT_SAMPLES,
             warmups: DEFAULT_WARMUPS,
+            temp_budget_bytes: DEFAULT_TEMP_BYTES,
             hardware_profile: BenchmarkHardwareProfile::Conservative,
         }
     }
@@ -72,6 +74,12 @@ pub fn validate_run_request(
     if request.warmups > MAX_WARMUPS {
         return Err(BenchmarkError::WarmupsExceedsGlobalLimit);
     }
+    if request.temp_budget_bytes == 0 {
+        return Err(BenchmarkError::ZeroTempBudget);
+    }
+    if request.temp_budget_bytes > MAX_TEMP_BYTES {
+        return Err(BenchmarkError::TempBudgetExceedsGlobalLimit);
+    }
 
     let Some(workload) = find_workload(&request.workload_id) else {
         return Err(BenchmarkError::UnknownWorkload);
@@ -81,6 +89,9 @@ pub fn validate_run_request(
     }
     if request.samples > workload.max_samples {
         return Err(BenchmarkError::SamplesExceedsWorkloadLimit);
+    }
+    if request.temp_budget_bytes > workload.max_temp_bytes {
+        return Err(BenchmarkError::TempBudgetExceedsWorkloadLimit);
     }
 
     Ok(workload)
@@ -119,6 +130,25 @@ mod tests {
         assert_eq!(
             request.validate().unwrap_err(),
             BenchmarkError::SamplesExceedsWorkloadLimit
+        );
+
+        request.samples = 20;
+        request.temp_budget_bytes = MAX_TEMP_BYTES + 1;
+        assert_eq!(
+            request.validate().unwrap_err(),
+            BenchmarkError::TempBudgetExceedsGlobalLimit
+        );
+
+        request.temp_budget_bytes = 0;
+        assert_eq!(
+            request.validate().unwrap_err(),
+            BenchmarkError::ZeroTempBudget
+        );
+
+        request.temp_budget_bytes = DEFAULT_TEMP_BYTES + 1;
+        assert_eq!(
+            request.validate().unwrap_err(),
+            BenchmarkError::TempBudgetExceedsWorkloadLimit
         );
     }
 }

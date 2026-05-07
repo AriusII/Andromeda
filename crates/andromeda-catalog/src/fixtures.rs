@@ -14,8 +14,8 @@ use crate::{
     CompatibilityPolicy, DefinitionBatch, DefinitionBatchId, DefinitionOperation, IsolationPolicy,
     MultiResultPolicy, ObjectKind, ProcedureContract, ProcedureContractCandidate,
     ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName, ResultMetadataPolicy,
-    ResultStreamContract, StatsVersion, StructuredObjectDefinition, TableDefinition,
-    TransactionPolicy,
+    ResultStreamCardinality, ResultStreamContract, StatsVersion, StructuredObjectDefinition,
+    TableDefinition, TransactionPolicy,
 };
 
 pub const INVENTORY_RESERVE_STOCK_PERMISSION: &str = "Inventory.ReserveStock.Execute";
@@ -54,6 +54,7 @@ pub fn inventory_reserve_stock_contract_candidate(
             stream_id: 1,
             name: "Reservation".to_string(),
             columns: vec![phase1_column("Reserved", ScalarType::Bool, 0)],
+            cardinality: ResultStreamCardinality::One,
             row_count_exact_required: true,
         }],
         required_permissions: vec![INVENTORY_RESERVE_STOCK_PERMISSION.to_string()],
@@ -238,6 +239,7 @@ pub fn inventory_query_stock_contract_candidate(
             ],
             // OptionalOne: row count is 0 (not found) or 1 (found); not fixed at
             // declaration time, so exact count is not required in the contract.
+            cardinality: ResultStreamCardinality::OptionalOne,
             row_count_exact_required: false,
         }],
         required_permissions: vec![INVENTORY_QUERY_STOCK_PERMISSION.to_string()],
@@ -289,6 +291,7 @@ pub fn inventory_release_stock_contract_candidate(
             stream_id: 3,
             name: "Release".to_string(),
             columns: vec![phase1_column("Released", ScalarType::Bool, 0)],
+            cardinality: ResultStreamCardinality::One,
             row_count_exact_required: true,
         }],
         required_permissions: vec![INVENTORY_RELEASE_STOCK_PERMISSION.to_string()],

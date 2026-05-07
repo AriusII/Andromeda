@@ -5,14 +5,17 @@ use andromeda_quic::{
 };
 use libfuzzer_sys::fuzz_target;
 
+const MAX_ZERO_RTT_FUZZ_BYTES: usize = 1024;
+
 fuzz_target!(|data: &[u8]| {
+    let data = &data[..data.len().min(MAX_ZERO_RTT_FUZZ_BYTES)];
     let policy = if data.first().copied().unwrap_or_default() % 2 == 0 {
         ZeroRttAdmissionPolicy::doctrine_v1_disabled()
     } else {
         ZeroRttAdmissionPolicy::from_early_data_policy(EarlyDataPolicy::Disabled)
     };
 
-    for byte in data.iter().copied().take(1024) {
+    for byte in data.iter().copied() {
         let class = replay_class(byte);
         let decision = policy.evaluate(class);
 

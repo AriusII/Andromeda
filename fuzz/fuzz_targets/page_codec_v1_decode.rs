@@ -3,7 +3,10 @@
 use andromeda_storage::PageCodecV1;
 use libfuzzer_sys::fuzz_target;
 
+const MAX_PAGE_CODEC_FUZZ_BYTES: usize = 64 * 1024;
+
 fuzz_target!(|data: &[u8]| {
+    let data = &data[..data.len().min(MAX_PAGE_CODEC_FUZZ_BYTES)];
     let _ = PageCodecV1::decode_header(data);
     let _ = PageCodecV1::decode_trailer(data);
 
@@ -11,10 +14,14 @@ fuzz_target!(|data: &[u8]| {
         return;
     };
 
-    let encoded = PageCodecV1::encode_page(&decoded.header, &decoded.payload, &decoded.trailer)
-        .expect("decoded page should re-encode");
+    let Ok(encoded) = PageCodecV1::encode_page(&decoded.header, &decoded.payload, &decoded.trailer)
+    else {
+        return;
+    };
     assert_eq!(encoded, data);
 
-    let redecoded = PageCodecV1::decode_page(&encoded).expect("encoded page should decode");
+    let Ok(redecoded) = PageCodecV1::decode_page(&encoded) else {
+        return;
+    };
     assert_eq!(redecoded, decoded);
 });

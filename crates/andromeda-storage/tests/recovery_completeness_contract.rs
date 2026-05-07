@@ -7,7 +7,8 @@
 use andromeda_core::TransactionId;
 use andromeda_storage::{
     InMemoryWal, Lsn, RecoveryPlan, RedoRecordDecision, ReplayContext, ReplayOutcome, StartupMode,
-    UndoChainsBuilder, UndoOperation, WalRecord, WalRecordKind, replay_wal_record,
+    UndoChainsBuilder, UndoOperation, WalRecord, WalRecordKind, replay_wal_from_lsn_into_context,
+    replay_wal_record,
 };
 
 const ALL_WAL_RECORD_KINDS: [WalRecordKind; 26] = [
@@ -185,6 +186,321 @@ fn manifest_switch_with_valid_payload_is_applied() {
             .expect("manifest switch should install active manifest")
             .snapshot_id,
         90
+    );
+}
+
+#[test]
+fn manifest_switch_recovery_rejects_non_monotonic_version() {
+    let manifest = andromeda_storage::DatabaseManifest {
+        database_id: 1,
+        manifest_version: 5,
+        snapshot_id: 10,
+        base_checkpoint_lsn: Lsn::new(10),
+        required_wal_start_lsn: Lsn::new(20),
+        previous_manifest_hash: [0; 32],
+        manifest_crc: 0xABCD_5505,
+    };
+    let records = vec![
+        WalRecord::from_parts(
+            WalRecordKind::CheckpointEnd,
+            Lsn::new(20),
+            Some(Lsn::new(19)),
+            None,
+            Vec::new(),
+        )
+        .expect("checkpoint record should be valid"),
+        WalRecord::from_parts(
+            WalRecordKind::ManifestSwitch,
+            Lsn::new(21),
+            Some(Lsn::new(20)),
+            None,
+            manifest_switch_payload(5, 11, 20, 20, [1; 32], 0xABCD_5505),
+        )
+        .expect("manifest switch record should be valid"),
+    ];
+
+    let err = replay_wal_from_lsn_into_context(
+        &manifest,
+        StartupMode::SafeStart,
+        &records,
+        &mut ReplayContext::new(),
+    )
+    .expect_err("manifest switch must fail closed when version does not advance");
+
+    assert!(err.message().contains("regresses manifest version"));
+}
+
+#[test]
+fn manifest_switch_recovery_rejects_non_advancing_checkpoint_lsn() {
+    let manifest = andromeda_storage::DatabaseManifest {
+        database_id: 1,
+        manifest_version: 5,
+        snapshot_id: 10,
+        base_checkpoint_lsn: Lsn::new(20),
+        required_wal_start_lsn: Lsn::new(20),
+        previous_manifest_hash: [0; 32],
+        manifest_crc: 0xABCD_5505,
+    };
+    let records = vec![
+        WalRecord::from_parts(
+            WalRecordKind::CheckpointEnd,
+            Lsn::new(20),
+            Some(Lsn::new(19)),
+            None,
+            Vec::new(),
+        )
+        .expect("checkpoint record should be valid"),
+        WalRecord::from_parts(
+            WalRecordKind::ManifestSwitch,
+            Lsn::new(21),
+            Some(Lsn::new(20)),
+            None,
+            manifest_switch_payload(6, 11, 20, 20, [2; 32], 0xABCD_6606),
+        )
+        .expect("manifest switch record should be valid"),
+    ];
+
+    let err = replay_wal_from_lsn_into_context(
+        &manifest,
+        StartupMode::SafeStart,
+        &records,
+        &mut ReplayContext::new(),
+    )
+    .expect_err("manifest switch must fail closed when checkpoint LSN does not advance");
+
+    assert!(
+        err.message()
+            .contains("strictly advance base checkpoint LSN")
+    );
+}
+
+#[test]
+fn manifest_switch_recovery_rejects_missing_checkpoint_end_evidence() {
+    let manifest = andromeda_storage::DatabaseManifest {
+        database_id: 1,
+        manifest_version: 5,
+        snapshot_id: 10,
+        base_checkpoint_lsn: Lsn::new(10),
+        required_wal_start_lsn: Lsn::new(20),
+        previous_manifest_hash: [0; 32],
+        manifest_crc: 0xABCD_5505,
+    };
+    let records = vec![
+        WalRecord::from_parts(
+            WalRecordKind::ManifestSwitch,
+            Lsn::new(20),
+            Some(Lsn::new(19)),
+            None,
+            manifest_switch_payload(6, 11, 20, 20, [3; 32], 0xABCD_6606),
+        )
+        .expect("manifest switch record should be valid"),
+    ];
+
+    let err = replay_wal_from_lsn_into_context(
+        &manifest,
+        StartupMode::SafeStart,
+        &records,
+        &mut ReplayContext::new(),
+    )
+    .expect_err("manifest switch must fail closed without durable checkpoint evidence");
+
+    assert!(
+        err.message()
+            .contains("base_checkpoint_lsn lacks durable checkpoint_end evidence")
+    );
+}
+
+#[test]
+fn zero_redo_boundary_is_allowed_only_for_explicit_bootstrap() {
+    let bootstrap = manifest_for_replay_from(Lsn::ZERO);
+    let report = replay_wal_from_lsn_into_context(
+        &bootstrap,
+        StartupMode::SafeStart,
+        &[],
+        &mut ReplayContext::new(),
+    )
+    .expect("empty bootstrap recovery should be explicit and valid");
+    assert_eq!(report.replay_start_lsn, Lsn::ZERO);
+    assert_eq!(report.total_records, 0);
+
+    let first_epoch_records = vec![
+        WalRecord::from_parts(
+            WalRecordKind::SecurityAuditAppend,
+            Lsn::new(1),
+            None,
+            None,
+            Vec::new(),
+        )
+        .expect("first epoch record should be valid"),
+    ];
+    let report = replay_wal_from_lsn_into_context(
+        &bootstrap,
+        StartupMode::SafeStart,
+        &first_epoch_records,
+        &mut ReplayContext::new(),
+    )
+    .expect("bootstrap recovery may replay a WAL chain that starts at genesis LSN 1");
+    assert_eq!(report.total_records, 1);
+    assert_eq!(report.handler_skipped_count, 1);
+}
+
+#[test]
+fn zero_redo_boundary_rejects_non_bootstrap_snapshot_or_missing_wal_prefix() {
+    let mut snapshot_manifest = manifest_for_replay_from(Lsn::ZERO);
+    snapshot_manifest.base_checkpoint_lsn = Lsn::new(40);
+
+    let err = replay_wal_from_lsn_into_context(
+        &snapshot_manifest,
+        StartupMode::SafeStart,
+        &[],
+        &mut ReplayContext::new(),
+    )
+    .expect_err("non-bootstrap snapshots must not use ZERO as redo boundary");
+    assert!(err.message().contains("bootstrap ZERO redo boundary"));
+
+    let bootstrap = manifest_for_replay_from(Lsn::ZERO);
+    let truncated_prefix = vec![
+        WalRecord::from_parts(
+            WalRecordKind::SecurityAuditAppend,
+            Lsn::new(5),
+            Some(Lsn::new(4)),
+            None,
+            Vec::new(),
+        )
+        .expect("record should be valid enough for boundary validation"),
+    ];
+
+    let err = replay_wal_from_lsn_into_context(
+        &bootstrap,
+        StartupMode::SafeStart,
+        &truncated_prefix,
+        &mut ReplayContext::new(),
+    )
+    .expect_err("ZERO boundary must not hide missing durable WAL prefix");
+
+    assert!(err.message().contains("start at LSN 1"));
+}
+
+#[test]
+fn wal_replay_rejects_duplicate_or_reordered_lsn_before_visibility() {
+    let records = vec![
+        WalRecord::from_parts(
+            WalRecordKind::SecurityAuditAppend,
+            Lsn::new(1),
+            None,
+            None,
+            Vec::new(),
+        )
+        .expect("first record should be valid"),
+        WalRecord::from_parts(
+            WalRecordKind::SecurityAuditAppend,
+            Lsn::new(1),
+            None,
+            None,
+            Vec::new(),
+        )
+        .expect("duplicate LSN record should be structurally valid"),
+    ];
+
+    let err = replay_wal_from_lsn_into_context(
+        &manifest_for_replay_from(Lsn::new(1)),
+        StartupMode::SafeStart,
+        &records,
+        &mut ReplayContext::new(),
+    )
+    .expect_err("recovery must reject duplicate LSNs before replay");
+
+    assert!(
+        err.message().contains("strictly increasing by LSN"),
+        "error must identify the monotonic LSN invariant: {}",
+        err.message()
+    );
+}
+
+#[test]
+fn wal_replay_rejects_previous_lsn_chain_mismatch_before_visibility() {
+    let records = vec![
+        WalRecord::from_parts(
+            WalRecordKind::SecurityAuditAppend,
+            Lsn::new(1),
+            None,
+            None,
+            Vec::new(),
+        )
+        .expect("first record should be valid"),
+        WalRecord::from_parts(
+            WalRecordKind::SecurityAuditAppend,
+            Lsn::new(2),
+            None,
+            None,
+            Vec::new(),
+        )
+        .expect("wrong previous LSN record should be structurally valid"),
+    ];
+
+    let err = replay_wal_from_lsn_into_context(
+        &manifest_for_replay_from(Lsn::new(1)),
+        StartupMode::SafeStart,
+        &records,
+        &mut ReplayContext::new(),
+    )
+    .expect_err("recovery must reject broken previous-LSN chains before replay");
+
+    assert!(
+        err.message().contains("previous LSN chain mismatch"),
+        "error must identify the WAL chain invariant: {}",
+        err.message()
+    );
+}
+
+#[test]
+fn wal_replay_rejects_conflicting_terminal_records_before_visibility() {
+    let tx = TransactionId::new(45);
+    let records = vec![
+        WalRecord::from_parts(
+            WalRecordKind::TxBegin,
+            Lsn::new(1),
+            None,
+            Some(tx),
+            Vec::new(),
+        )
+        .expect("begin record should be valid"),
+        WalRecord::from_parts(
+            WalRecordKind::TxCommit,
+            Lsn::new(2),
+            Some(Lsn::new(1)),
+            Some(tx),
+            Vec::new(),
+        )
+        .expect("commit record should be valid"),
+        WalRecord::from_parts(
+            WalRecordKind::TxRollback,
+            Lsn::new(3),
+            Some(Lsn::new(2)),
+            Some(tx),
+            Vec::new(),
+        )
+        .expect("rollback record should be valid"),
+    ];
+
+    let err = replay_wal_from_lsn_into_context(
+        &manifest_for_replay_from(Lsn::new(1)),
+        StartupMode::SafeStart,
+        &records,
+        &mut ReplayContext::new(),
+    )
+    .expect_err("conflicting terminal records must fail recovery closed");
+
+    assert!(
+        err.message()
+            .contains("duplicate or conflicting terminal records"),
+        "error must expose conflicting terminal evidence: {}",
+        err.message()
+    );
+    assert!(
+        err.message().contains("TxCommit") && err.message().contains("TxRollback"),
+        "error must name both terminal record kinds: {}",
+        err.message()
     );
 }
 

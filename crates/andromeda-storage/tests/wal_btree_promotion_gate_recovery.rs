@@ -124,17 +124,24 @@ fn btree_variants_require_transaction_id() {
 }
 
 #[test]
-fn btree_variants_are_not_redo_relevant_until_durable_replay_is_promoted() {
-    // B-Tree records are not redo-relevant while durable page-backed recovery
-    // handlers are gated behind promotion.
-    assert!(!WalRecordKind::BTreeInsert.is_redo_relevant());
-    assert!(!WalRecordKind::BTreeDelete.is_redo_relevant());
-    assert!(!WalRecordKind::BTreeSplit.is_redo_relevant());
-    assert!(!WalRecordKind::BTreeMerge.is_redo_relevant());
+fn btree_variants_are_redo_relevant_but_inline_apply_remains_gated() {
+    // B-Tree records must enter the redo gate so committed durable WAL cannot
+    // be skipped silently. The handler still records rebuild-required evidence
+    // instead of applying inline page-backed B-Tree redo.
+    assert!(WalRecordKind::BTreeInsert.is_redo_relevant());
+    assert!(WalRecordKind::BTreeDelete.is_redo_relevant());
+    assert!(WalRecordKind::BTreeSplit.is_redo_relevant());
+    assert!(WalRecordKind::BTreeMerge.is_redo_relevant());
+    assert!(WalRecordKind::BTreeInsert.requires_access_path_rebuild_gate());
+    assert!(WalRecordKind::BTreeDelete.requires_access_path_rebuild_gate());
+    assert!(WalRecordKind::BTreeSplit.requires_access_path_rebuild_gate());
+    assert!(WalRecordKind::BTreeMerge.requires_access_path_rebuild_gate());
 
     // Verify existing mutations still are redo-relevant
     assert!(WalRecordKind::RowInsert.is_redo_relevant());
     assert!(WalRecordKind::PageAllocate.is_redo_relevant());
+    assert!(!WalRecordKind::RowInsert.requires_access_path_rebuild_gate());
+    assert!(!WalRecordKind::PageAllocate.requires_access_path_rebuild_gate());
 }
 
 #[test]

@@ -568,11 +568,11 @@ mod tests {
             (Cardinality::One, Some(0), 0, Some(C)),
             (Cardinality::One, Some(2), 2, Some(C)),
             (Cardinality::One, None, 1, Some(C)),
-            // OptionalOne: requires exact, must be 0 or 1.
+            // OptionalOne: exact is optional; when present it must be 0 or 1.
             (Cardinality::OptionalOne, Some(0), 0, None),
             (Cardinality::OptionalOne, Some(1), 1, None),
             (Cardinality::OptionalOne, Some(2), 2, Some(C)),
-            (Cardinality::OptionalOne, None, 0, Some(C)),
+            (Cardinality::OptionalOne, None, 0, None),
             // NonEmptyMany: requires exact, must be >= 1.
             (Cardinality::NonEmptyMany, Some(1), 1, None),
             (Cardinality::NonEmptyMany, Some(7), 7, None),

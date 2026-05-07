@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use andromeda_catalog::ProcedureContractRef;
+use andromeda_catalog::{ProcedureContractBinding, ProcedureContractRef};
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, InvocationId};
 use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
 
@@ -43,14 +43,35 @@ impl PreTransactionDispatchEvidence {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcedureDispatchRequest {
+    pub invocation_id: InvocationId,
     pub procedure: ProcedureContractRef,
+    pub procedure_binding: Option<ProcedureContractBinding>,
     pub context: InvocationContext,
     pub pre_transaction: PreTransactionDispatchEvidence,
 }
 
 impl ProcedureDispatchRequest {
     pub fn validate(&self) -> AndromedaResult<()> {
+        if self.invocation_id.get() == 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Execution,
+                "Procedure dispatch invocation id must not be zero before handler execution",
+            ));
+        }
         self.procedure.validate()?;
+        let binding = self.procedure_binding.ok_or_else(|| {
+            AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "Procedure dispatch requires full ProcedureContractBinding before handler execution",
+            )
+        })?;
+        binding.validate()?;
+        if binding.as_legacy_ref() != self.procedure {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "Procedure dispatch binding must match dispatch contract before handler execution",
+            ));
+        }
         self.pre_transaction
             .validate_for_trace(self.context.trace_id)
     }
@@ -193,8 +214,9 @@ impl ProcedureDispatcher for SrplDispatcherAdapter {
         request.validate()?;
 
         let invocation_request = crate::InvocationRequest {
-            invocation_id: InvocationId::new(1),
+            invocation_id: request.invocation_id,
             procedure: request.procedure,
+            expected_binding: request.procedure_binding,
             expected_contract_hash: request.procedure.contract_hash,
             catalog_version: request.procedure.catalog_version,
             structured_parameters: Vec::new(),

@@ -21,7 +21,7 @@ use crate::{
 
 use super::validation::{validate_ast_names_for_diagnostics, validate_declared_error_codes};
 
-/// Canonical PDF-style SRPL source for `Inventory.ReserveStock`.
+/// Canonical SRPL source for `Inventory.ReserveStock`.
 pub const INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE: &str = "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool) begin ensure Inventory.ProductStock Stock where ProductId = Stock.ProductId and Stock.AvailableQuantity >= Quantity else fail InsufficientStock; update Inventory.ProductStock set AvailableQuantity = Stock.AvailableQuantity - Quantity where ProductId = Stock.ProductId affected rows 1; return Reservation (Reserved); end;";
 
 /// Lowers a [`BoundProcedure`] to a [`SrplProcedureIr`].
@@ -340,6 +340,7 @@ pub fn lower_ir_to_contract_candidate(
                 stream_id: (index as u64) + 1,
                 name: result.name,
                 columns: result.columns,
+                cardinality: result.cardinality.into(),
                 row_count_exact_required: result.cardinality.requires_exact_row_count(),
             })
             .collect(),

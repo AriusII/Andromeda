@@ -24,6 +24,7 @@ mod procedure_gateway;
 mod reconnect;
 mod rpc_dispatch;
 mod stream_types;
+mod typed_envelope;
 mod zero_rtt;
 
 pub mod frame;
@@ -73,7 +74,18 @@ pub use rpc::{
     validate_transport_surface,
 };
 
-pub use procedure_gateway::ProcedureGateway;
+pub use typed_envelope::{
+    DEFAULT_MAX_TYPED_RESULT_STREAM_ENVELOPE_BYTES, DEFAULT_MAX_TYPED_RESULT_STREAM_FRAMES,
+    TypedResultStreamBounds, TypedResultStreamContext, decode_typed_frame_envelope,
+    validate_typed_result_stream_sequence,
+    validate_typed_result_stream_sequence_with_context_and_bounds,
+    validate_typed_result_stream_sequence_with_metadata_policy,
+};
+
+pub use procedure_gateway::{
+    ProcedureAuthorizedRouteBinding, ProcedureGateway, ProcedureRouteAdmissionError,
+    ProcedureRouteBinding, ProcedureRouteExecuteRequest,
+};
 
 pub use reconnect::{
     CertificateContinuityDecision, CertificateContinuityPolicy, CertificateRotationDeclaration,

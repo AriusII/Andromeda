@@ -12,6 +12,12 @@ pub enum TransactionStatus {
     RolledBack,
 }
 
+impl TransactionStatus {
+    pub const fn is_terminal(self) -> bool {
+        matches!(self, Self::Committed | Self::RolledBack)
+    }
+}
+
 /// Registry of transaction statuses for visibility determination.
 #[derive(Debug)]
 pub struct TransactionStatusTable {
@@ -31,9 +37,24 @@ impl TransactionStatusTable {
         status: TransactionStatus,
     ) -> AndromedaResult<()> {
         validate_transaction_id(transaction_id, "transaction status id must not be zero")?;
+        if status.is_terminal() {
+            return Err(terminal_status_requires_durable_wal());
+        }
+
         let mut statuses = self.lock_statuses();
-        statuses.insert(transaction_id, status);
+        match statuses.get(&transaction_id).copied() {
+            Some(existing) if existing.is_terminal() => {
+                return Err(terminal_status_conflict());
+            }
+            _ => {
+                statuses.insert(transaction_id, status);
+            }
+        }
         Ok(())
+    }
+
+    pub fn record_in_flight(&self, transaction_id: TransactionId) -> AndromedaResult<()> {
+        self.record(transaction_id, TransactionStatus::InFlight)
     }
 
     pub fn status(&self, transaction_id: TransactionId) -> Option<TransactionStatus> {
@@ -41,12 +62,72 @@ impl TransactionStatusTable {
         statuses.get(&transaction_id).copied()
     }
 
-    /// Set a transaction as committed (idempotent operation).
+    /// Kept for source compatibility, but terminal publication now requires
+    /// durable WAL evidence through the transaction commit-log boundary.
     pub fn set_committed(&self, transaction_id: TransactionId) -> AndromedaResult<()> {
         validate_transaction_id(transaction_id, "transaction status id must not be zero")?;
-        let mut statuses = self.lock_statuses();
-        statuses.insert(transaction_id, TransactionStatus::Committed);
-        Ok(())
+        Err(terminal_status_requires_durable_wal())
+    }
+
+    pub fn record_committed_after_durable_wal(
+        &self,
+        transaction_id: TransactionId,
+        commit_lsn: crate::Lsn,
+        durable_lsn: crate::Lsn,
+    ) -> AndromedaResult<()> {
+        self.record_terminal_from_durable_evidence(
+            transaction_id,
+            TransactionStatus::Committed,
+            commit_lsn,
+            durable_lsn,
+        )
+    }
+
+    pub fn record_rolled_back_after_durable_wal(
+        &self,
+        transaction_id: TransactionId,
+        rollback_lsn: crate::Lsn,
+        durable_lsn: crate::Lsn,
+    ) -> AndromedaResult<()> {
+        self.record_terminal_from_durable_evidence(
+            transaction_id,
+            TransactionStatus::RolledBack,
+            rollback_lsn,
+            durable_lsn,
+        )
+    }
+
+    pub(crate) fn record_commit_from_durable_evidence(
+        &self,
+        transaction_id: TransactionId,
+        commit_lsn: crate::Lsn,
+        durable_lsn: crate::Lsn,
+    ) -> AndromedaResult<()> {
+        self.record_committed_after_durable_wal(transaction_id, commit_lsn, durable_lsn)
+    }
+
+    pub(crate) fn record_rollback_from_durable_evidence(
+        &self,
+        transaction_id: TransactionId,
+        rollback_lsn: crate::Lsn,
+        durable_lsn: crate::Lsn,
+    ) -> AndromedaResult<()> {
+        self.record_rolled_back_after_durable_wal(transaction_id, rollback_lsn, durable_lsn)
+    }
+
+    pub(crate) fn restore_terminal_from_validated_replay(
+        &self,
+        transaction_id: TransactionId,
+        status: TransactionStatus,
+    ) -> AndromedaResult<()> {
+        validate_transaction_id(transaction_id, "transaction status id must not be zero")?;
+        if !status.is_terminal() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Transaction,
+                "validated replay status must be terminal",
+            ));
+        }
+        self.record_validated_terminal_status(transaction_id, status)
     }
 
     /// Get the status of a transaction.
@@ -101,6 +182,35 @@ impl TransactionStatusTable {
             .unwrap_or(TransactionStatus::InFlight)
     }
 
+    fn record_terminal_from_durable_evidence(
+        &self,
+        transaction_id: TransactionId,
+        status: TransactionStatus,
+        terminal_record_lsn: crate::Lsn,
+        durable_lsn: crate::Lsn,
+    ) -> AndromedaResult<()> {
+        validate_terminal_status(status)?;
+        validate_terminal_lsn_evidence(terminal_record_lsn, durable_lsn)?;
+        self.record_validated_terminal_status(transaction_id, status)
+    }
+
+    fn record_validated_terminal_status(
+        &self,
+        transaction_id: TransactionId,
+        status: TransactionStatus,
+    ) -> AndromedaResult<()> {
+        validate_terminal_status(status)?;
+        let mut statuses = self.lock_statuses();
+        match statuses.get(&transaction_id).copied() {
+            Some(existing) if existing == status => Ok(()),
+            Some(TransactionStatus::InFlight) | None => {
+                statuses.insert(transaction_id, status);
+                Ok(())
+            }
+            Some(_) => Err(terminal_status_conflict()),
+        }
+    }
+
     fn lock_statuses(&self) -> MutexGuard<'_, BTreeMap<TransactionId, TransactionStatus>> {
         self.statuses
             .lock()
@@ -128,35 +238,135 @@ fn validate_transaction_id(
     Ok(())
 }
 
+fn validate_terminal_status(status: TransactionStatus) -> AndromedaResult<()> {
+    if status.is_terminal() {
+        Ok(())
+    } else {
+        Err(AndromedaError::new(
+            AndromedaErrorKind::Transaction,
+            "terminal transaction status expected",
+        ))
+    }
+}
+
+fn validate_terminal_lsn_evidence(
+    terminal_record_lsn: crate::Lsn,
+    durable_lsn: crate::Lsn,
+) -> AndromedaResult<()> {
+    if terminal_record_lsn.get() == 0 {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Transaction,
+            "terminal transaction status record LSN must not be zero",
+        ));
+    }
+
+    if durable_lsn < terminal_record_lsn {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Storage,
+            format!(
+                "terminal transaction status durable LSN must cover record LSN: durable={}, record={}",
+                durable_lsn.get(),
+                terminal_record_lsn.get()
+            ),
+        ));
+    }
+
+    Ok(())
+}
+
+fn terminal_status_requires_durable_wal() -> AndromedaError {
+    AndromedaError::new(
+        AndromedaErrorKind::Transaction,
+        "terminal transaction status requires durable WAL evidence",
+    )
+}
+
+fn terminal_status_conflict() -> AndromedaError {
+    AndromedaError::new(
+        AndromedaErrorKind::Transaction,
+        "conflicting transaction terminal status",
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn transaction_status_records_and_retrieves() {
+    fn transaction_status_records_non_terminal_and_retrieves() {
         let table = TransactionStatusTable::new();
         let tx_id = TransactionId::new(1);
 
         assert!(table.record(tx_id, TransactionStatus::InFlight).is_ok());
         assert_eq!(table.status(tx_id), Some(TransactionStatus::InFlight));
+    }
 
-        assert!(table.record(tx_id, TransactionStatus::Committed).is_ok());
-        assert_eq!(table.status(tx_id), Some(TransactionStatus::Committed));
+    #[test]
+    fn transaction_status_rejects_public_terminal_recording() {
+        let table = TransactionStatusTable::new();
+        let tx_id = TransactionId::new(2);
+
+        let commit = table.record(tx_id, TransactionStatus::Committed);
+        assert!(commit.is_err());
+        assert_eq!(table.status(tx_id), None);
+
+        let rollback = table.record(tx_id, TransactionStatus::RolledBack);
+        assert!(rollback.is_err());
+        assert_eq!(table.status(tx_id), None);
     }
 
     #[test]
     fn transaction_status_rejects_zero_id() {
         let table = TransactionStatusTable::new();
-        let result = table.record(TransactionId::new(0), TransactionStatus::Committed);
+        let result = table.record(TransactionId::new(0), TransactionStatus::InFlight);
         assert!(result.is_err());
     }
 
     #[test]
-    fn transaction_status_set_committed() {
+    fn transaction_status_set_committed_rejects_without_evidence() {
         let table = TransactionStatusTable::new();
         let tx_id = TransactionId::new(42);
 
-        assert!(table.set_committed(tx_id).is_ok());
+        assert!(table.set_committed(tx_id).is_err());
+        assert_eq!(table.status(tx_id), None);
+    }
+
+    #[test]
+    fn transaction_status_internal_terminal_recording_requires_durable_coverage() {
+        let table = TransactionStatusTable::new();
+        let tx_id = TransactionId::new(43);
+
+        assert!(
+            table
+                .record_commit_from_durable_evidence(tx_id, crate::Lsn::new(7), crate::Lsn::new(6))
+                .is_err()
+        );
+        assert_eq!(table.status(tx_id), None);
+
+        assert!(
+            table
+                .record_commit_from_durable_evidence(tx_id, crate::Lsn::new(7), crate::Lsn::new(7),)
+                .is_ok()
+        );
+        assert_eq!(table.status(tx_id), Some(TransactionStatus::Committed));
+    }
+
+    #[test]
+    fn transaction_status_rejects_terminal_downgrade_to_in_flight() {
+        let table = TransactionStatusTable::new();
+        let tx_id = TransactionId::new(44);
+
+        assert!(
+            table
+                .record_commit_from_durable_evidence(tx_id, crate::Lsn::new(8), crate::Lsn::new(8))
+                .is_ok()
+        );
+
+        let error = table
+            .record(tx_id, TransactionStatus::InFlight)
+            .expect_err("durable terminal status must not be downgraded");
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Transaction);
         assert_eq!(table.status(tx_id), Some(TransactionStatus::Committed));
     }
 }

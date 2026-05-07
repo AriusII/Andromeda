@@ -1,7 +1,8 @@
 use andromeda_core::AndromedaResult;
 use andromeda_tx::{
-    SavepointId, SavepointRollbackMarker, SavepointStack, TxWriteSet, WriteSetImage,
-    WriteSetOperationKind, WriteSetResourceId,
+    MAX_WRITE_SET_OPERATION_KIND_BYTES, MAX_WRITE_SET_RESOURCE_ID_BYTES, SavepointId,
+    SavepointRollbackMarker, SavepointStack, TxWriteSet, WriteSetImage, WriteSetOperationKind,
+    WriteSetResourceId,
 };
 
 fn text_resource(value: &str) -> AndromedaResult<WriteSetResourceId> {
@@ -287,4 +288,55 @@ fn rollback_rejects_invalid_or_future_marker() -> AndromedaResult<()> {
     };
     assert!(write_set.rollback_to(future_marker).is_err());
     Ok(())
+}
+
+#[test]
+fn record_operation_revalidates_directly_constructed_public_variants() {
+    let mut write_set = TxWriteSet::new();
+
+    assert!(
+        write_set
+            .record_operation(
+                WriteSetOperationKind::Custom(String::new()),
+                text_resource("table/users/row/1").unwrap(),
+                None,
+                None,
+            )
+            .is_err()
+    );
+
+    assert!(
+        write_set
+            .record_operation(
+                WriteSetOperationKind::Custom("x".repeat(MAX_WRITE_SET_OPERATION_KIND_BYTES + 1)),
+                text_resource("table/users/row/1").unwrap(),
+                None,
+                None,
+            )
+            .is_err()
+    );
+
+    assert!(
+        write_set
+            .record_operation(
+                WriteSetOperationKind::Insert,
+                WriteSetResourceId::Text(String::new()),
+                None,
+                None,
+            )
+            .is_err()
+    );
+
+    assert!(
+        write_set
+            .record_operation(
+                WriteSetOperationKind::Insert,
+                WriteSetResourceId::Bytes(vec![7; MAX_WRITE_SET_RESOURCE_ID_BYTES + 1]),
+                None,
+                None,
+            )
+            .is_err()
+    );
+
+    assert!(write_set.is_empty());
 }

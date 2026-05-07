@@ -1,5 +1,10 @@
 #![forbid(unsafe_code)]
 
+use std::fs::OpenOptions;
+use std::io::{Read, Seek, SeekFrom, Write};
+use std::path::Path;
+
+use andromeda_storage::disk_manager::PageIntegrityMode;
 use andromeda_storage::{
     AllocationId, BufferPool, BufferPoolConfig, DiskPageStore, ExtentDescriptor, ExtentId,
     ExtentState, Lsn, ObjectId, PageFlags, PageHeader, PageId, PageLayoutContract, PageSize,
@@ -50,6 +55,23 @@ fn page_contract(page_id: PageId, page_lsn: Lsn) -> PageLayoutContract {
         header,
         trailer: integrity_trailer_for_payload(&header, &payload),
     }
+}
+
+fn corrupt_byte(data_file: &Path, offset: u64) {
+    let mut file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(data_file)
+        .expect("open data file for corruption");
+    file.seek(SeekFrom::Start(offset))
+        .expect("seek corruption offset");
+    let mut byte = [0];
+    file.read_exact(&mut byte).expect("read byte");
+    byte[0] ^= 0x01;
+    file.seek(SeekFrom::Start(offset))
+        .expect("seek rewrite offset");
+    file.write_all(&byte).expect("write corrupted byte");
+    file.sync_all().expect("sync corrupted data file");
 }
 
 #[test]
@@ -146,5 +168,79 @@ fn buffer_pool_flushes_disk_page_store_and_reopens_page_layout() {
     assert_eq!(
         guard.image().expect("resident image").as_bytes(),
         direct.as_bytes()
+    );
+}
+
+#[test]
+fn buffer_pool_flush_to_disk_page_store_preserves_header_crc_integrity() {
+    let temp_dir = tempfile::TempDir::new().expect("temp dir");
+    let data_file = temp_dir.path().join("pages.bin");
+    let temp_io_dir = temp_dir.path().join("io");
+    let extent = test_extent();
+    let page_id = PageId::new(1);
+    let page_lsn = Lsn::new(120);
+    let contract = page_contract(page_id, page_lsn);
+
+    {
+        let mut store = DiskPageStore::new_with_integrity(
+            &data_file,
+            &temp_io_dir,
+            PageIntegrityMode::HeaderCrc32,
+        )
+        .expect("disk page store");
+        store.allocate_extent(extent).expect("extent allocated");
+
+        let mut pool = BufferPool::new(
+            BufferPoolConfig::new(2, PageSize::KiB16).expect("buffer pool config"),
+            store,
+        )
+        .expect("buffer pool over disk page store");
+
+        {
+            let (_created_page_id, mut guard) = pool.new_page(contract).expect("page created");
+            guard.mark_dirty(page_lsn).expect("dirty at LSN 120");
+        }
+
+        let observer = TestWalDurabilityObserver::with_durable_lsn(120);
+        let flushed = pool
+            .flush_all_dirty_with_report(&observer)
+            .expect("durable flush report");
+        assert_eq!(flushed.flushed, 1);
+        assert!(flushed.blocked_by_wal_durability.is_empty());
+        assert!(flushed.errors.is_empty());
+
+        let store = pool.into_page_store();
+        let persisted = store
+            .read_page(page_id)
+            .expect("read persisted page")
+            .expect("page exists after flush");
+        let persisted_contract = persisted
+            .layout_contract()
+            .expect("persisted page has layout contract");
+        assert_ne!(
+            persisted_contract.header.header_crc,
+            contract.header.header_crc
+        );
+        assert_eq!(persisted_contract.header.page_lsn, page_lsn);
+    }
+
+    corrupt_byte(&data_file, 256);
+
+    let mut reopened_store =
+        DiskPageStore::new_with_integrity(&data_file, &temp_io_dir, PageIntegrityMode::HeaderCrc32)
+            .expect("reopen store");
+    reopened_store
+        .register_extent(extent)
+        .expect("re-register extent metadata");
+
+    let error = reopened_store
+        .read_page(page_id)
+        .expect_err("corrupted page must be rejected");
+    assert!(
+        error.message().contains("integrity")
+            || error.message().contains("CRC")
+            || error.message().contains("hash"),
+        "expected page-integrity error, got: {}",
+        error.message()
     );
 }

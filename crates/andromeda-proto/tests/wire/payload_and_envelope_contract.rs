@@ -1,5 +1,6 @@
 use andromeda_core::{
-    AndromedaErrorKind, CatalogVersion, ContractHash, RequestId, SessionId, TransactionId,
+    AndromedaErrorKind, AndromedaResult, CatalogVersion, ContractHash, RequestId, SessionId,
+    TransactionId,
 };
 use andromeda_proto::{
     AUTH_WIRE_CODE, BackpressureMetadata, CONTRACT_REQUEST_WIRE_CODE, CONTRACT_RESPONSE_WIRE_CODE,
@@ -8,7 +9,9 @@ use andromeda_proto::{
     RPC_BATCH_WIRE_CODE, RPC_COMPLETION_WIRE_CODE, RPC_EXECUTE_REQUEST_WIRE_CODE,
     RPC_METADATA_WIRE_CODE, ResultRowCountSummary, RetryDisposition, RpcCompletion,
     RpcCompletionStatus, RpcResultStreamMetadataPolicy, TransactionEffect, TransactionOutcome,
-    generated,
+    generated, validate_generated_invocation_response_sequence, validate_generated_rpc_batch,
+    validate_generated_rpc_completion, validate_generated_rpc_execute_request,
+    validate_generated_rpc_metadata,
 };
 use prost::Message;
 
@@ -174,16 +177,19 @@ fn generated_rpc_execute_request_and_batch_are_binary_projections() {
                 priority_class: Some(1),
             },
         ),
+        expected_stats_version: Some(6),
     };
 
     let encoded_execute = execute.encode_to_vec();
     let decoded_execute =
         generated::protocol::v1::RpcExecuteRequest::decode(encoded_execute.as_slice()).unwrap();
+    generated::validate_generated_rpc_execute_request(&decoded_execute).unwrap();
     assert_eq!(decoded_execute.procedure_name, "Inventory.ReserveStock");
     assert_eq!(
         decoded_execute.expected_contract_hash,
         vec![9; ContractHash::LEN]
     );
+    assert_eq!(decoded_execute.expected_stats_version, Some(6));
     assert_eq!(decoded_execute.arguments[0].value, 3_i64.to_le_bytes());
     assert!(decoded_execute.budget.is_some());
 
@@ -199,6 +205,7 @@ fn generated_rpc_execute_request_and_batch_are_binary_projections() {
     let encoded_batch = batch.encode_to_vec();
     let decoded_batch =
         generated::protocol::v1::RpcBatch::decode(encoded_batch.as_slice()).unwrap();
+    generated::validate_generated_rpc_batch(&decoded_batch).unwrap();
     assert_eq!(
         decoded_batch.result_name,
         "Inventory.ReserveStock.Reservation"
@@ -206,6 +213,214 @@ fn generated_rpc_execute_request_and_batch_are_binary_projections() {
     assert_eq!(decoded_batch.structured_payload, b"\x01");
     assert_eq!(decoded_batch.row_count_exact, Some(1));
     assert!(decoded_batch.terminal_batch);
+}
+
+#[test]
+fn crate_root_exports_quic_boundary_generated_validators() {
+    let execute_validator: fn(&generated::protocol::v1::RpcExecuteRequest) -> AndromedaResult<()> =
+        validate_generated_rpc_execute_request;
+    let metadata_validator: fn(&generated::protocol::v1::RpcMetadata) -> AndromedaResult<()> =
+        validate_generated_rpc_metadata;
+    let batch_validator: fn(&generated::protocol::v1::RpcBatch) -> AndromedaResult<()> =
+        validate_generated_rpc_batch;
+    let completion_validator: fn(&generated::protocol::v1::RpcCompletion) -> AndromedaResult<()> =
+        validate_generated_rpc_completion;
+    let sequence_validator: fn(
+        &[generated::protocol::v1::InvocationResponse],
+    ) -> AndromedaResult<()> = validate_generated_invocation_response_sequence;
+
+    let execute = generated::protocol::v1::RpcExecuteRequest {
+        procedure_name: "Inventory.ReserveStock".to_string(),
+        expected_contract_hash: vec![9; ContractHash::LEN],
+        expected_catalog_version: 44,
+        surface_scope: "application".to_string(),
+        arguments: Vec::new(),
+        budget: None,
+        expected_stats_version: Some(6),
+    };
+    execute_validator(&execute).unwrap();
+
+    let metadata = generated::protocol::v1::RpcMetadata {
+        result_streams: vec![generated::contract::v1::ResultStreamDescriptor {
+            stream_name: "Inventory.ReserveStock.Reservation".to_string(),
+            columns: vec![generated::contract::v1::ColumnDescriptor {
+                name: "reservation_id".to_string(),
+                ordinal: 0,
+                type_name: "u64".to_string(),
+            }],
+            cardinality: generated::contract::v1::result_stream_descriptor::Cardinality::ExactlyOne
+                as i32,
+            row_count_requirement:
+            generated::contract::v1::result_stream_descriptor::RowCountRequirement::ExactRequired
+                as i32,
+            row_count_exact: Some(1),
+            row_count_max: Some(1),
+        }],
+        completion_policy: Some(generated::protocol::v1::ResultCompletionPolicy {
+            completion_shape:
+                generated::protocol::v1::result_completion_policy::CompletionShape::RequiresRowBatch
+                    as i32,
+            reason: "reservation row required".to_string(),
+        }),
+    };
+    metadata_validator(&metadata).unwrap();
+
+    let batch = generated::protocol::v1::RpcBatch {
+        result_name: "Inventory.ReserveStock.Reservation".to_string(),
+        batch_index: 0,
+        rows_emitted: 1,
+        structured_payload: b"\x01".to_vec(),
+        row_count_exact: Some(1),
+        terminal_batch: true,
+    };
+    batch_validator(&batch).unwrap();
+
+    let completion = generated::protocol::v1::RpcCompletion {
+        status: generated::protocol::v1::rpc_completion::Status::Committed as i32,
+        rows_affected: Some(1),
+        tx_id: Some(404),
+        request_id: Some(101),
+        session_id: Some(202),
+        trace_id: Some("trace-proto-101".to_string()),
+        transaction_outcome: generated::protocol::v1::rpc_completion::TransactionOutcome::Committed
+            as i32,
+        durable_lsn: Some(505),
+        result_row_counts: vec![
+            generated::protocol::v1::rpc_completion::ResultRowCountSummary {
+                result_name: "Inventory.ReserveStock.Reservation".to_string(),
+                rows_emitted: 1,
+                row_count_exact: Some(1),
+            },
+        ],
+    };
+    completion_validator(&completion).unwrap();
+
+    let correlation = generated::protocol::v1::InvocationCorrelation {
+        request_id: Some(101),
+        session_id: Some(202),
+        trace_id: Some("trace-proto-101".to_string()),
+        contract_hash: Some(vec![9; ContractHash::LEN]),
+        catalog_version: Some(44),
+        invocation_id: Some(303),
+        stats_version: Some(6),
+        expected_policy_version: Some(11),
+    };
+    let responses = vec![
+        generated::protocol::v1::InvocationResponse {
+            correlation: Some(correlation.clone()),
+            response_index: Some(0),
+            response: Some(
+                generated::protocol::v1::invocation_response::Response::Metadata(metadata),
+            ),
+        },
+        generated::protocol::v1::InvocationResponse {
+            correlation: Some(correlation.clone()),
+            response_index: Some(1),
+            response: Some(generated::protocol::v1::invocation_response::Response::Batch(batch)),
+        },
+        generated::protocol::v1::InvocationResponse {
+            correlation: Some(correlation),
+            response_index: Some(2),
+            response: Some(
+                generated::protocol::v1::invocation_response::Response::Completion(completion),
+            ),
+        },
+    ];
+    sequence_validator(&responses).unwrap();
+}
+
+#[test]
+fn generated_rpc_execute_request_validation_rejects_default_runtime_bindings() {
+    let valid = generated::protocol::v1::RpcExecuteRequest {
+        procedure_name: "Inventory.ReserveStock".to_string(),
+        expected_contract_hash: vec![9; ContractHash::LEN],
+        expected_catalog_version: 44,
+        surface_scope: "application".to_string(),
+        arguments: vec![generated::protocol::v1::rpc_execute_request::Argument {
+            name: "Quantity".to_string(),
+            type_name: "i64".to_string(),
+            value: 3_i64.to_le_bytes().to_vec(),
+        }],
+        budget: Some(
+            generated::protocol::v1::rpc_execute_request::RequestBudget {
+                cpu_micros: Some(5_000),
+                memory_bytes: Some(64 * 1024),
+                io_bytes: Some(128 * 1024),
+                priority_class: Some(1),
+            },
+        ),
+        expected_stats_version: Some(6),
+    };
+
+    assert!(generated::validate_generated_rpc_execute_request(&valid).is_ok());
+
+    let invalid_cases = [
+        (
+            "procedure_name",
+            generated::protocol::v1::RpcExecuteRequest {
+                procedure_name: " ".to_string(),
+                ..valid.clone()
+            },
+        ),
+        (
+            "expected_contract_hash",
+            generated::protocol::v1::RpcExecuteRequest {
+                expected_contract_hash: vec![9; ContractHash::LEN - 1],
+                ..valid.clone()
+            },
+        ),
+        (
+            "expected_catalog_version",
+            generated::protocol::v1::RpcExecuteRequest {
+                expected_catalog_version: 0,
+                ..valid.clone()
+            },
+        ),
+        (
+            "surface_scope",
+            generated::protocol::v1::RpcExecuteRequest {
+                surface_scope: String::new(),
+                ..valid.clone()
+            },
+        ),
+        (
+            "expected_stats_version",
+            generated::protocol::v1::RpcExecuteRequest {
+                expected_stats_version: None,
+                ..valid.clone()
+            },
+        ),
+        (
+            "argument value",
+            generated::protocol::v1::RpcExecuteRequest {
+                arguments: vec![generated::protocol::v1::rpc_execute_request::Argument {
+                    name: "Quantity".to_string(),
+                    type_name: "i64".to_string(),
+                    value: Vec::new(),
+                }],
+                ..valid.clone()
+            },
+        ),
+        (
+            "budget priority_class",
+            generated::protocol::v1::RpcExecuteRequest {
+                budget: Some(
+                    generated::protocol::v1::rpc_execute_request::RequestBudget {
+                        priority_class: Some(0),
+                        ..valid.budget.unwrap()
+                    },
+                ),
+                ..valid.clone()
+            },
+        ),
+    ];
+
+    for (field, request) in invalid_cases {
+        assert!(
+            generated::validate_generated_rpc_execute_request(&request).is_err(),
+            "{field} should be rejected by generated typed Procedure execute validation"
+        );
+    }
 }
 
 #[test]
@@ -352,7 +567,6 @@ fn contract_bound_envelopes_require_nonzero_contract_hash() {
         PayloadKind::Auth,
         PayloadKind::ContractRequest,
         PayloadKind::ContractResponse,
-        PayloadKind::Error,
     ] {
         let contractless = FrameEnvelope {
             contract_hash: ContractHash::zero(),
@@ -367,6 +581,24 @@ fn contract_bound_envelopes_require_nonzero_contract_hash() {
             "{kind:?} should not require a contract hash"
         );
     }
+
+    let typed_error = FrameEnvelope {
+        contract_hash: ContractHash::zero(),
+        payload_kind: PayloadKind::Error,
+        payload: b"typed-error-envelope".to_vec(),
+        ..envelope(PayloadKind::Error, Vec::new())
+    };
+    assert!(!PayloadKind::Error.requires_contract_hash());
+    assert!(typed_error.validate().is_ok());
+
+    let empty_error = FrameEnvelope {
+        payload: Vec::new(),
+        ..typed_error
+    };
+    assert_eq!(
+        empty_error.validate().unwrap_err().kind(),
+        AndromedaErrorKind::Protocol
+    );
 }
 
 #[test]

@@ -409,17 +409,23 @@ impl LockManager {
     }
 
     fn allocate_sequence(&self) -> AndromedaResult<u64> {
-        self.next_sequence
-            .try_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
-                current.checked_add(1)
-            })
-            .map(|previous| previous + 1)
-            .map_err(|_| {
+        loop {
+            let current = self.next_sequence.load(Ordering::SeqCst);
+            let next = current.checked_add(1).ok_or_else(|| {
                 AndromedaError::new(
                     AndromedaErrorKind::Transaction,
                     "lock waiter sequence counter overflowed",
                 )
-            })
+            })?;
+
+            if self
+                .next_sequence
+                .compare_exchange(current, next, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+            {
+                return Ok(next);
+            }
+        }
     }
 
     fn lock_inner(&self) -> AndromedaResult<MutexGuard<'_, LockManagerInner>> {

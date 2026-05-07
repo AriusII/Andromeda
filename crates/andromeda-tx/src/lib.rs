@@ -70,8 +70,9 @@ pub use savepoint::{
     SavepointRollbackMarker, SavepointStack,
 };
 pub use savepoint_write_set::{
-    MAX_WRITE_SET_IMAGE_BYTES, MAX_WRITE_SET_RESOURCE_ID_BYTES, TxWriteSet, WriteSetEntry,
-    WriteSetImage, WriteSetOperationKind, WriteSetOrdinal, WriteSetResourceId,
+    MAX_WRITE_SET_IMAGE_BYTES, MAX_WRITE_SET_OPERATION_KIND_BYTES, MAX_WRITE_SET_RESOURCE_ID_BYTES,
+    TxWriteSet, WriteSetEntry, WriteSetImage, WriteSetOperationKind, WriteSetOrdinal,
+    WriteSetResourceId,
 };
 pub use state::*;
 pub use trace::*;

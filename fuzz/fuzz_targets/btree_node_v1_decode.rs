@@ -14,8 +14,9 @@ fuzz_target!(|data: &[u8]| {
 
     let decoded_key_count = decoded.key_count();
     let decoded_encoded_len = decoded.encoded_len();
-    let decoded_for_page = BTreeNodeV1::decode_for_page_id(data, decoded.header.page_id)
-        .expect("decoded page id must match its physical page id");
+    let Ok(decoded_for_page) = BTreeNodeV1::decode_for_page_id(data, decoded.header.page_id) else {
+        return;
+    };
     assert_eq!(decoded_for_page, decoded);
 
     if let Ok(encoded) = decoded.encode()

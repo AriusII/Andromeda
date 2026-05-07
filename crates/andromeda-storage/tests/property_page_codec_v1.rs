@@ -1,6 +1,7 @@
+use andromeda_core::AndromedaErrorKind;
 use andromeda_storage::{
-    AllocationId, Lsn, ObjectId, PageCodecV1, PageFlags, PageHeader, PageId, PageSize, PageTrailer,
-    PageType, payload_crc64,
+    AllocationId, Lsn, ObjectId, PageCodecV1, PageFlags, PageHeader, PageId, PageSize, PageType,
+    integrity_trailer_for_payload,
 };
 use proptest::prelude::*;
 
@@ -35,15 +36,25 @@ proptest! {
     fn page_codec_v1_roundtrip_is_stable(payload in proptest::collection::vec(any::<u8>(), 1..512), use_32k in any::<bool>()) {
         let size = if use_32k { PageSize::KiB32 } else { PageSize::KiB16 };
         let header = header_for(size, payload.len());
-        let trailer = PageTrailer {
-            payload_crc64: payload_crc64(&payload),
-            page_hash: [8; 32],
-            torn_write_guard: 9,
-        };
+        let trailer = integrity_trailer_for_payload(&header, &payload);
         let encoded = PageCodecV1::encode_page(&header, &payload, &trailer).unwrap();
         let decoded = PageCodecV1::decode_page(&encoded).unwrap();
         prop_assert_eq!(decoded.header, header);
         prop_assert_eq!(decoded.payload, payload);
         prop_assert_eq!(decoded.trailer, trailer);
+
+        let mut oversized = encoded.clone();
+        oversized.push(0);
+        prop_assert_eq!(
+            PageCodecV1::decode_page(&oversized).unwrap_err().kind(),
+            AndromedaErrorKind::Storage
+        );
+
+        let mut bad_magic = encoded;
+        bad_magic[0] ^= 0xff;
+        prop_assert_eq!(
+            PageCodecV1::decode_page(&bad_magic).unwrap_err().kind(),
+            AndromedaErrorKind::Storage
+        );
     }
 }

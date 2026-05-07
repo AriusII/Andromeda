@@ -26,8 +26,8 @@ use andromeda_storage::{
     StartupMode, plan_file_wal_startup_recovery_v0,
 };
 use andromeda_tx::{
-    MvccIsolationPolicy, MvccRowHeader, Snapshot, TransactionManager, TransactionStatus,
-    TransactionStatusTable,
+    Lsn as TxLsn, MvccIsolationPolicy, MvccRowHeader, Snapshot, TransactionManager,
+    TransactionStatus, TransactionStatusTable,
 };
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -78,12 +78,30 @@ fn status_table_from_recovery(evidence: &[DurableTransactionResume]) -> Transact
     let statuses = TransactionStatusTable::new();
     for resume in evidence {
         match resume.state {
-            DurableTransactionState::Committed => statuses
-                .record(resume.transaction_id, TransactionStatus::Committed)
-                .expect("committed evidence always has nonzero tx id"),
-            DurableTransactionState::RolledBack => statuses
-                .record(resume.transaction_id, TransactionStatus::RolledBack)
-                .expect("rolled-back evidence always has nonzero tx id"),
+            DurableTransactionState::Committed => {
+                let commit_lsn = resume
+                    .commit_lsn
+                    .expect("committed recovery evidence must carry commit LSN");
+                statuses
+                    .record_committed_after_durable_wal(
+                        resume.transaction_id,
+                        TxLsn::new(commit_lsn.get()),
+                        TxLsn::new(resume.last_lsn.get()),
+                    )
+                    .expect("committed evidence always has durable WAL evidence")
+            }
+            DurableTransactionState::RolledBack => {
+                let rollback_lsn = resume
+                    .rollback_lsn
+                    .expect("rolled-back recovery evidence must carry rollback LSN");
+                statuses
+                    .record_rolled_back_after_durable_wal(
+                        resume.transaction_id,
+                        TxLsn::new(rollback_lsn.get()),
+                        TxLsn::new(resume.last_lsn.get()),
+                    )
+                    .expect("rolled-back evidence always has durable WAL evidence")
+            }
             DurableTransactionState::Open | DurableTransactionState::Incomplete => {
                 // Doctrine: do NOT promote in-flight or torn writers to a
                 // terminal status. Their visibility must derive from

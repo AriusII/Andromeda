@@ -62,8 +62,10 @@ impl PageCodecV1 {
     }
 
     pub fn decode_header(bytes: &[u8]) -> AndromedaResult<PageHeader> {
-        if bytes.len() < PAGE_CODEC_V1_HEADER_LEN {
-            return Err(storage_error("page codec v1 header is truncated"));
+        if bytes.len() != PAGE_CODEC_V1_HEADER_LEN {
+            return Err(storage_error(
+                "page codec v1 header length must match fixed header length",
+            ));
         }
         let magic = read_u32(bytes, 0)?;
         if magic != PageHeader::MAGIC {
@@ -140,8 +142,10 @@ impl PageCodecV1 {
     }
 
     pub fn decode_trailer(bytes: &[u8]) -> AndromedaResult<PageTrailer> {
-        if bytes.len() < PAGE_CODEC_V1_TRAILER_LEN {
-            return Err(storage_error("page codec v1 trailer is truncated"));
+        if bytes.len() != PAGE_CODEC_V1_TRAILER_LEN {
+            return Err(storage_error(
+                "page codec v1 trailer length must match fixed trailer length",
+            ));
         }
         let mut page_hash = [0u8; 32];
         page_hash.copy_from_slice(&bytes[8..40]);
@@ -203,9 +207,7 @@ impl PageCodecV1 {
         }
         let payload = bytes[PAGE_CODEC_V1_HEADER_LEN..payload_end].to_vec();
         let trailer = Self::decode_trailer(&bytes[payload_end..])?;
-        if payload_crc64(&payload) != trailer.payload_crc64 {
-            return Err(storage_error("page payload CRC mismatch"));
-        }
+        validate_payload_integrity(&header, &payload, &trailer)?;
         Ok(DecodedPageV1 {
             header,
             payload,
@@ -259,28 +261,37 @@ fn write_u64(target: &mut [u8], offset: usize, value: u64) {
 }
 
 fn read_u16(source: &[u8], offset: usize) -> AndromedaResult<u16> {
+    let end = offset
+        .checked_add(2)
+        .ok_or_else(|| storage_error("u16 field offset overflows"))?;
     let mut bytes = [0u8; 2];
     bytes.copy_from_slice(
         source
-            .get(offset..offset + 2)
+            .get(offset..end)
             .ok_or_else(|| storage_error("truncated u16 field"))?,
     );
     Ok(u16::from_le_bytes(bytes))
 }
 fn read_u32(source: &[u8], offset: usize) -> AndromedaResult<u32> {
+    let end = offset
+        .checked_add(4)
+        .ok_or_else(|| storage_error("u32 field offset overflows"))?;
     let mut bytes = [0u8; 4];
     bytes.copy_from_slice(
         source
-            .get(offset..offset + 4)
+            .get(offset..end)
             .ok_or_else(|| storage_error("truncated u32 field"))?,
     );
     Ok(u32::from_le_bytes(bytes))
 }
 fn read_u64(source: &[u8], offset: usize) -> AndromedaResult<u64> {
+    let end = offset
+        .checked_add(8)
+        .ok_or_else(|| storage_error("u64 field offset overflows"))?;
     let mut bytes = [0u8; 8];
     bytes.copy_from_slice(
         source
-            .get(offset..offset + 8)
+            .get(offset..end)
             .ok_or_else(|| storage_error("truncated u64 field"))?,
     );
     Ok(u64::from_le_bytes(bytes))
@@ -428,18 +439,14 @@ mod tests {
         }
     }
 
-    fn sample_trailer(payload: &[u8]) -> PageTrailer {
-        PageTrailer {
-            payload_crc64: payload_crc64(payload),
-            page_hash: [3; 32],
-            torn_write_guard: 99,
-        }
+    fn sample_trailer(header: &PageHeader, payload: &[u8]) -> PageTrailer {
+        integrity_trailer_for_payload(header, payload)
     }
 
     #[test]
     fn header_and_trailer_roundtrip() {
         let header = sample_header(PageSize::KiB16, 32);
-        let trailer = sample_trailer(&[1; 32]);
+        let trailer = sample_trailer(&header, &[1; 32]);
         let encoded_h = PageCodecV1::encode_header(&header).unwrap();
         let encoded_t = PageCodecV1::encode_trailer(&trailer).unwrap();
         assert_ne!(
@@ -454,7 +461,7 @@ mod tests {
     fn payload_roundtrip_and_crc_validation() {
         let payload = vec![5u8; 64];
         let header = sample_header(PageSize::KiB16, payload.len() as u32);
-        let trailer = sample_trailer(&payload);
+        let trailer = sample_trailer(&header, &payload);
         let encoded = PageCodecV1::encode_page(&header, &payload, &trailer).unwrap();
         let decoded = PageCodecV1::decode_page(&encoded).unwrap();
         assert_eq!(decoded.header, header);
@@ -494,7 +501,7 @@ mod tests {
 
         let payload = vec![1u8; 8];
         let header = sample_header(PageSize::KiB16, payload.len() as u32);
-        let mut trailer = sample_trailer(&payload);
+        let mut trailer = sample_trailer(&header, &payload);
         trailer.payload_crc64 ^= 1;
         let encoded = PageCodecV1::encode_header(&header)
             .unwrap()
@@ -506,6 +513,32 @@ mod tests {
             PageCodecV1::decode_page(&encoded).unwrap_err().kind(),
             AndromedaErrorKind::Storage
         );
+
+        let payload = vec![2u8; 8];
+        let header = sample_header(PageSize::KiB16, payload.len() as u32);
+        let mut trailer = sample_trailer(&header, &payload);
+        trailer.page_hash[0] ^= 1;
+        let encoded = PageCodecV1::encode_header(&header)
+            .unwrap()
+            .into_iter()
+            .chain(payload.clone())
+            .chain(PageCodecV1::encode_trailer(&trailer).unwrap())
+            .collect::<Vec<_>>();
+        let error = PageCodecV1::decode_page(&encoded).unwrap_err();
+        assert!(error.message().contains("hash"));
+
+        let payload = vec![3u8; 8];
+        let header = sample_header(PageSize::KiB16, payload.len() as u32);
+        let mut trailer = sample_trailer(&header, &payload);
+        trailer.torn_write_guard ^= 1;
+        let encoded = PageCodecV1::encode_header(&header)
+            .unwrap()
+            .into_iter()
+            .chain(payload.clone())
+            .chain(PageCodecV1::encode_trailer(&trailer).unwrap())
+            .collect::<Vec<_>>();
+        let error = PageCodecV1::decode_page(&encoded).unwrap_err();
+        assert!(error.message().contains("torn-write"));
     }
 
     #[test]
@@ -534,6 +567,24 @@ mod tests {
         write_u32(&mut header_bytes, 72, PAGE_CODEC_V1_HEADER_LEN_U32 + 1);
         let error = PageCodecV1::decode_header(&header_bytes).unwrap_err();
         assert!(error.message().contains("payload_offset"));
+    }
+
+    #[test]
+    fn standalone_header_and_trailer_decoders_require_exact_lengths() {
+        let header = sample_header(PageSize::KiB16, 8);
+        let trailer = sample_trailer(&header, &[1; 8]);
+        let header_bytes = PageCodecV1::encode_header(&header).unwrap();
+        let trailer_bytes = PageCodecV1::encode_trailer(&trailer).unwrap();
+
+        let mut oversized_header = header_bytes.to_vec();
+        oversized_header.push(0);
+        let err = PageCodecV1::decode_header(&oversized_header).unwrap_err();
+        assert!(err.message().contains("header length"));
+
+        let mut oversized_trailer = trailer_bytes.to_vec();
+        oversized_trailer.push(0);
+        let err = PageCodecV1::decode_trailer(&oversized_trailer).unwrap_err();
+        assert!(err.message().contains("trailer length"));
     }
 
     #[test]
@@ -574,7 +625,7 @@ mod tests {
         for (size, payload_len) in [(PageSize::KiB16, 16usize), (PageSize::KiB32, 64usize)] {
             let payload = vec![7u8; payload_len];
             let header = sample_header(size, payload.len() as u32);
-            let trailer = sample_trailer(&payload);
+            let trailer = sample_trailer(&header, &payload);
             let encoded = PageCodecV1::encode_page(&header, &payload, &trailer).unwrap();
             let decoded = PageCodecV1::decode_page(&encoded).unwrap();
             assert_eq!(decoded.header.page_size, size);

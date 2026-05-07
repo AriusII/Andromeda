@@ -7,14 +7,15 @@ use super::{
 use crate::{
     DurableAuditEventFamily, DurableAuditReplayBehavior, DurableAuditReplayRecord,
     DurableAuditRetentionBoundary, EventId, Permission, SurfaceScope, TraceId,
-    events::contains_sensitive_marker,
+    events::{contains_sensitive_marker, redact_sensitive_evidence},
 };
 
-/// Query adapter over replayed durable-audit WAL records.
+/// Administrative inspection adapter over replayed durable-audit WAL records.
 ///
 /// Durable audit replay records intentionally do not carry the original
 /// `EventEnvelope`, so this source returns durable-audit rows while preserving
-/// the common query spec, metadata, bounds, ordering, and permission gate.
+/// the common trace inspection spec, metadata, bounds, ordering, and permission
+/// gate. This is not an application execution surface.
 #[derive(Debug, Clone, Copy)]
 pub struct DurableAuditTraceQuerySource<'a> {
     records: &'a [DurableAuditReplayRecord],
@@ -35,7 +36,7 @@ impl<'a> DurableAuditTraceQuerySource<'a> {
 
         for record in self.records {
             record.validate()?;
-            let row = DurableAuditTraceQueryRow::from_replay_record(record);
+            let row = DurableAuditTraceQueryRow::from_replay_record(record)?;
             if !row.matches(spec) {
                 continue;
             }
@@ -94,13 +95,14 @@ pub struct DurableAuditTraceQueryRow {
 }
 
 impl DurableAuditTraceQueryRow {
-    pub fn from_replay_record(record: &DurableAuditReplayRecord) -> Self {
+    pub fn from_replay_record(record: &DurableAuditReplayRecord) -> AndromedaResult<Self> {
+        record.validate()?;
         let identity = record.report.identity;
         let evidence = record.report.evidence;
-        Self {
+        Ok(Self {
             event_id: identity.event_id,
             trace_id: identity.trace_id,
-            family: trace_family_for_replay_record(record),
+            family: trace_family_for_replay_record(record)?,
             durable_audit_family: identity.family,
             sequence_number: identity.sequence_number,
             record_lsn: evidence.record_lsn,
@@ -108,14 +110,18 @@ impl DurableAuditTraceQueryRow {
             checksum: evidence.checksum,
             replay_behavior: record.report.replay_behavior,
             retention: record.report.retention,
-            principal_id: record.principal_binding.principal_id.clone(),
-            certificate_fingerprint: record.principal_binding.certificate_fingerprint.clone(),
+            principal_id: redact_sensitive_evidence(&record.principal_binding.principal_id),
+            certificate_fingerprint: record
+                .principal_binding
+                .certificate_fingerprint
+                .as_deref()
+                .map(redact_sensitive_evidence),
             surface: record.principal_binding.surface,
             permission: record.principal_binding.permission,
             request_id: record.principal_binding.request_id,
             session_id: record.principal_binding.session_id,
-            event_kind: record.event_kind.clone(),
-        }
+            event_kind: redact_sensitive_evidence(&record.event_kind),
+        })
     }
 
     fn matches(&self, spec: &TraceQuerySpec) -> bool {
@@ -148,18 +154,18 @@ fn validate_supported_filters(spec: &TraceQuerySpec) -> AndromedaResult<()> {
     if let Some(principal) = &spec.filter.principal
         && contains_sensitive_marker(principal)
     {
-        return Err(durable_query_error(
-            "durable audit trace query principal filter must not contain secret evidence",
+        return Err(durable_inspection_error(
+            "durable audit trace inspection principal filter must not contain secret evidence",
         ));
     }
     if spec.filter.catalog_version.is_some() {
-        return Err(durable_query_error(
-            "durable audit trace query cannot filter catalog_version because the durable audit journal does not carry catalog correlation",
+        return Err(durable_inspection_error(
+            "durable audit trace inspection cannot filter catalog_version because the durable audit journal does not carry catalog correlation",
         ));
     }
     if spec.filter.procedure_id.is_some() {
-        return Err(durable_query_error(
-            "durable audit trace query cannot filter procedure_id because the durable audit journal does not carry catalog object correlation",
+        return Err(durable_inspection_error(
+            "durable audit trace inspection cannot filter procedure_id because the durable audit journal does not carry catalog object correlation",
         ));
     }
     Ok(())
@@ -169,8 +175,10 @@ fn matches_lsn_range(row: &DurableAuditTraceQueryRow, range: TraceQueryLsnRange)
     range.contains(row.record_lsn) || range.contains(row.durable_lsn)
 }
 
-fn trace_family_for_replay_record(record: &DurableAuditReplayRecord) -> TraceEventFamily {
-    match record.report.identity.family {
+fn trace_family_for_replay_record(
+    record: &DurableAuditReplayRecord,
+) -> AndromedaResult<TraceEventFamily> {
+    Ok(match record.report.identity.family {
         DurableAuditEventFamily::SecurityDecision => TraceEventFamily::SecurityAudit,
         DurableAuditEventFamily::AdminDecision
         | DurableAuditEventFamily::HadrDecision
@@ -180,20 +188,22 @@ fn trace_family_for_replay_record(record: &DurableAuditReplayRecord) -> TraceEve
         | DurableAuditEventFamily::GenericAudit => TraceEventFamily::AdminAudit,
         DurableAuditEventFamily::AdmissionDecision => TraceEventFamily::Protocol,
         DurableAuditEventFamily::CatalogDecision => TraceEventFamily::ManifestCatalog,
-        DurableAuditEventFamily::RecoveryDecision => recovery_trace_family(&record.event_kind),
-    }
+        DurableAuditEventFamily::RecoveryDecision => recovery_trace_family(&record.event_kind)?,
+    })
 }
 
-fn recovery_trace_family(event_kind: &str) -> TraceEventFamily {
+fn recovery_trace_family(event_kind: &str) -> AndromedaResult<TraceEventFamily> {
     match event_kind {
-        "RecoveryStartup" => TraceEventFamily::Recovery,
+        "RecoveryStartup" => Ok(TraceEventFamily::Recovery),
         "WalAppend" | "WalFlush" | "CommitVisible" | "RollbackDurable" | "CorruptionBoundary" => {
-            TraceEventFamily::Wal
+            Ok(TraceEventFamily::Wal)
         }
-        _ => TraceEventFamily::Recovery,
+        _ => Err(durable_inspection_error(
+            "durable audit recovery replay record carries unknown event_kind evidence",
+        )),
     }
 }
 
-fn durable_query_error(message: impl Into<String>) -> AndromedaError {
+fn durable_inspection_error(message: impl Into<String>) -> AndromedaError {
     AndromedaError::new(AndromedaErrorKind::Protocol, message)
 }

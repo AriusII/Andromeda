@@ -1,12 +1,14 @@
+use std::collections::BTreeSet;
+
 use super::liveness::ColumnLiveness;
-use crate::{SrplBusinessOperationKindIr, SrplProcedureIr};
+use crate::{SrplBusinessOperationKindIr, SrplPredicateIr, SrplProcedureIr};
 
 /// Effective column projection computed for one `ReadTable` operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EffectiveProjection {
     /// Binding name this projection applies to.
     pub binding: String,
-    /// Columns that are live downstream.
+    /// Columns that are live downstream or required by read-local predicates.
     /// `None` = projection not computed / all columns required.
     /// `Some(vec![])` = no columns required (count-only scan).
     /// `Some(vec![...])` = only these columns need to be fetched.
@@ -32,22 +34,46 @@ pub fn apply(ir: SrplProcedureIr) -> ProjectionPushdownResult {
     let mut projections = Vec::new();
 
     for op in &ir.body.operations {
-        if let SrplBusinessOperationKindIr::Read { binding, .. } = &op.kind {
+        if let SrplBusinessOperationKindIr::Read {
+            binding,
+            predicates,
+            ..
+        } = &op.kind
+        {
             let live = liveness.live_columns_after(op.ordinal);
-            let live_for_binding: Vec<String> = live
+            let mut live_for_binding: BTreeSet<String> = live
                 .into_iter()
                 .filter(|(b, _)| b == binding)
                 .map(|(_, f)| f)
                 .collect();
+            add_read_predicate_fields(&mut live_for_binding, binding, predicates);
 
             projections.push(EffectiveProjection {
                 binding: binding.clone(),
-                live_columns: Some(live_for_binding),
+                live_columns: Some(live_for_binding.into_iter().collect()),
             });
         }
     }
 
     ProjectionPushdownResult { ir, projections }
+}
+
+fn add_read_predicate_fields(
+    fields: &mut BTreeSet<String>,
+    read_binding: &str,
+    predicates: &[SrplPredicateIr],
+) {
+    for predicate in predicates {
+        match predicate {
+            SrplPredicateIr::InputEqualsField { binding, field, .. }
+            | SrplPredicateIr::FieldGreaterThanOrEqualInput { binding, field, .. }
+                if binding == read_binding =>
+            {
+                fields.insert(field.clone());
+            }
+            _ => {}
+        }
+    }
 }
 
 #[cfg(test)]
@@ -110,6 +136,30 @@ mod tests {
         assert!(
             !live.contains(&"name".to_string()),
             "name must not be in projection"
+        );
+    }
+
+    #[test]
+    fn read_range_predicate_field_is_retained_without_downstream_use() {
+        let ir = make_ir(vec![SrplBusinessOperationIr {
+            ordinal: 0,
+            kind: SrplBusinessOperationKindIr::Read {
+                source: qn("db.ns.T"),
+                binding: "T".into(),
+                cardinality: Cardinality::One,
+                predicates: vec![SrplPredicateIr::FieldGreaterThanOrEqualInput {
+                    binding: "T".into(),
+                    field: "qty".into(),
+                    input: "requested_qty".into(),
+                }],
+            },
+        }]);
+
+        let result = apply(ir);
+        assert_eq!(result.projections.len(), 1);
+        assert_eq!(
+            result.projections[0].live_columns.as_ref(),
+            Some(&vec!["qty".to_string()])
         );
     }
 

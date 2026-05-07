@@ -3,8 +3,9 @@ use andromeda_core::AndromedaResult;
 use crate::PageSize;
 
 use super::{
-    HEAP_PAGE_V1_HEADER_SIZE, HEAP_PAGE_V1_TRAILER_SIZE, SlotEntry, heap_error,
+    HEAP_PAGE_V1_PAYLOAD_OFFSET, HEAP_PAGE_V1_TRAILER_SIZE, SlotEntry, heap_error,
     heap_page_v1_read_and_validate_slots, heap_page_v1_read_slot_metadata,
+    heap_page_v1_validate_format_guard,
 };
 
 /// A variadic-length heap page for tuple storage.
@@ -17,6 +18,7 @@ pub struct HeapPage {
 
 impl HeapPage {
     pub fn new(page_size: PageSize) -> Self {
+        debug_assert!(heap_page_v1_validate_format_guard().is_ok());
         let size = page_size.bytes_usize();
         let data = vec![0u8; size];
 
@@ -36,6 +38,11 @@ impl HeapPage {
                 bytes.len()
             )));
         }
+        if bytes.iter().all(|byte| *byte == 0) {
+            return Err(heap_error(
+                "blank/unallocated heap page image requires explicit unallocated parser",
+            ));
+        }
 
         let data = bytes.to_vec();
         let metadata = heap_page_v1_read_slot_metadata(page_size, &data)?;
@@ -46,6 +53,26 @@ impl HeapPage {
             data,
             slot_directory,
         })
+    }
+
+    pub fn from_blank_unallocated_image(
+        page_size: PageSize,
+        bytes: &[u8],
+    ) -> AndromedaResult<Self> {
+        let size = page_size.bytes_usize();
+        if bytes.len() != size {
+            return Err(heap_error(format!(
+                "page size mismatch: expected {} bytes, got {}",
+                size,
+                bytes.len()
+            )));
+        }
+        if !bytes.iter().all(|byte| *byte == 0) {
+            return Err(heap_error(
+                "explicit unallocated heap parser only accepts blank page images",
+            ));
+        }
+        Ok(Self::new(page_size))
     }
 
     pub fn page_size(&self) -> PageSize {
@@ -80,7 +107,10 @@ impl HeapPage {
 
         let offset = entry.offset as usize;
         let length = entry.length as usize;
-        if offset + length > self.data.len() {
+        let end = offset
+            .checked_add(length)
+            .ok_or_else(|| heap_error(format!("slot {} offset/length overflows", slot_id)))?;
+        if end > self.data.len() {
             return Err(heap_error(format!(
                 "slot {} has invalid offset/length: offset={}, len={}, page_size={}",
                 slot_id,
@@ -90,7 +120,7 @@ impl HeapPage {
             )));
         }
 
-        Ok(self.data[offset..offset + length].to_vec())
+        Ok(self.data[offset..end].to_vec())
     }
 
     pub fn serialize_slot_directory(&self) -> Vec<u8> {
@@ -108,7 +138,7 @@ impl HeapPage {
             .filter(|e| !e.is_deleted())
             .map(|e| e.offset as usize + e.length as usize)
             .max()
-            .unwrap_or(HEAP_PAGE_V1_HEADER_SIZE);
+            .unwrap_or(HEAP_PAGE_V1_PAYLOAD_OFFSET);
         let slot_directory_start = self.data.len()
             - HEAP_PAGE_V1_TRAILER_SIZE
             - (self.slot_directory.len() * SlotEntry::SIZE);

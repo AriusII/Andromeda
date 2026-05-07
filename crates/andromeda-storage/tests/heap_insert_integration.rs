@@ -5,7 +5,8 @@
 // These tests cover row encoding, slot directory management, heap invariants,
 // and the insertion latency budget.
 use andromeda_storage::{
-    ColumnDef, Datum, HeapPageInsert, PageId, PageSize, RowEncoder, RowSchema, ScalarType,
+    ColumnDef, Datum, HEAP_PAGE_V1_PAYLOAD_OFFSET, HeapPageInsert, PageId, PageSize, RowEncoder,
+    RowSchema, ScalarType,
 };
 use std::sync::Arc;
 
@@ -383,8 +384,8 @@ fn heap_page_insert_serialize_produces_valid_image() {
     // Page image should be exactly page_size bytes
     assert_eq!(serialized.len(), PageSize::KiB16.bytes_usize());
 
-    // First 96 bytes should be accessible (header region)
-    assert!(serialized.len() >= 96);
+    // The durable header reserve should be present before tuple payload bytes.
+    assert!(serialized.len() >= HEAP_PAGE_V1_PAYLOAD_OFFSET);
 }
 
 /// Test 16: Invariant verification - no overlapping tuples

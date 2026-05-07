@@ -5,9 +5,15 @@ use andromeda_core::{
 };
 use std::collections::BTreeSet;
 
-use crate::{CatalogObjectRef, objects::CatalogDefinition};
+use crate::{
+    CatalogObjectRef, DefinitionBatchDependencyGraphHash, DefinitionBatchSourceHash,
+    objects::CatalogDefinition,
+};
 
 use super::definition::{CatalogLifecycleTarget, DefinitionBatchId};
+
+/// Maximum number of Apply records that one durable DefinitionBatch replay may carry.
+pub const CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH: usize = 1024;
 
 /// Version-advancement proof for a single catalog mutation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,6 +46,76 @@ pub enum CatalogMutationRecordKind {
     CatalogChangeCommit,
 }
 
+/// Stable typed failure class for decoding durable catalog WAL payloads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CatalogWalPayloadDecodeErrorKind {
+    TruncatedHeader,
+    MagicMismatch,
+    LegacyFormatVersion,
+    UnsupportedFormatVersion,
+    UnknownRecordKindTag,
+    BodyLengthOverflow,
+    BodyLengthMismatch,
+    ChecksumMismatch,
+    BodyInvalid,
+}
+
+impl CatalogWalPayloadDecodeErrorKind {
+    pub const fn stable_code(self) -> &'static str {
+        match self {
+            Self::TruncatedHeader => "catalog_wal_payload_truncated_header",
+            Self::MagicMismatch => "catalog_wal_payload_magic_mismatch",
+            Self::LegacyFormatVersion => "catalog_wal_payload_legacy_format_version",
+            Self::UnsupportedFormatVersion => "catalog_wal_payload_unsupported_format_version",
+            Self::UnknownRecordKindTag => "catalog_wal_payload_unknown_record_kind_tag",
+            Self::BodyLengthOverflow => "catalog_wal_payload_body_length_overflow",
+            Self::BodyLengthMismatch => "catalog_wal_payload_body_length_mismatch",
+            Self::ChecksumMismatch => "catalog_wal_payload_checksum_mismatch",
+            Self::BodyInvalid => "catalog_wal_payload_body_invalid",
+        }
+    }
+}
+
+/// Typed durable catalog WAL decode failure with a stable class and detail.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatalogWalPayloadDecodeError {
+    kind: CatalogWalPayloadDecodeErrorKind,
+    detail: String,
+}
+
+impl CatalogWalPayloadDecodeError {
+    pub(crate) fn new(kind: CatalogWalPayloadDecodeErrorKind, detail: impl Into<String>) -> Self {
+        Self {
+            kind,
+            detail: detail.into(),
+        }
+    }
+
+    pub(crate) fn from_body_error(error: AndromedaError) -> Self {
+        Self::new(
+            CatalogWalPayloadDecodeErrorKind::BodyInvalid,
+            error.message().to_string(),
+        )
+    }
+
+    pub const fn kind(&self) -> CatalogWalPayloadDecodeErrorKind {
+        self.kind
+    }
+
+    pub fn detail(&self) -> &str {
+        &self.detail
+    }
+}
+
+impl From<CatalogWalPayloadDecodeError> for AndromedaError {
+    fn from(error: CatalogWalPayloadDecodeError) -> Self {
+        AndromedaError::new(
+            AndromedaErrorKind::Catalog,
+            format!("{}: {}", error.kind.stable_code(), error.detail),
+        )
+    }
+}
+
 /// The boundary markers written at the start and end of a mutation's WAL span.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CatalogMutationBoundary {
@@ -48,6 +124,9 @@ pub struct CatalogMutationBoundary {
     pub namespace_id: NamespaceId,
     pub previous_version: CatalogVersion,
     pub next_version: CatalogVersion,
+    pub source_hash: DefinitionBatchSourceHash,
+    pub dependency_graph_hash: DefinitionBatchDependencyGraphHash,
+    pub expected_apply_count: usize,
     pub publication_semantics: CatalogPublicationSemantics,
 }
 
@@ -142,23 +221,39 @@ pub struct CatalogMutationPlan {
     pub namespace_id: NamespaceId,
     pub previous_version: CatalogVersion,
     pub next_version: CatalogVersion,
+    pub source_hash: DefinitionBatchSourceHash,
+    pub dependency_graph_hash: DefinitionBatchDependencyGraphHash,
     pub publication_semantics: CatalogPublicationSemantics,
     pub deltas: Vec<CatalogMutationDelta>,
 }
 
 impl CatalogMutationPlan {
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "Catalog mutation plans keep versioned DefinitionBatch identities explicit."
+    )]
     pub fn new(
         batch_id: DefinitionBatchId,
         database_id: DatabaseId,
         namespace_id: NamespaceId,
         previous_version: CatalogVersion,
         next_version: CatalogVersion,
+        source_hash: DefinitionBatchSourceHash,
+        dependency_graph_hash: DefinitionBatchDependencyGraphHash,
         deltas: Vec<CatalogMutationDelta>,
     ) -> AndromedaResult<Self> {
         if deltas.is_empty() {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Catalog,
                 "catalog mutation plan must contain at least one delta",
+            ));
+        }
+        if deltas.len() > CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                format!(
+                    "catalog mutation plan must not exceed {CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH} apply records"
+                ),
             ));
         }
 
@@ -171,6 +266,18 @@ impl CatalogMutationPlan {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Catalog,
                 "catalog mutation plan must advance the catalog version",
+            ));
+        }
+        if source_hash.is_zero() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "catalog mutation plan source hash must not be zero",
+            ));
+        }
+        if dependency_graph_hash.is_zero() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "catalog mutation plan dependency graph hash must not be zero",
             ));
         }
 
@@ -247,6 +354,8 @@ impl CatalogMutationPlan {
             namespace_id,
             previous_version,
             next_version,
+            source_hash,
+            dependency_graph_hash,
             publication_semantics: CatalogPublicationSemantics::DurablePublicationExternal,
             deltas,
         })
@@ -281,6 +390,9 @@ impl CatalogMutationPlan {
             namespace_id: self.namespace_id,
             previous_version: self.previous_version,
             next_version: self.next_version,
+            source_hash: self.source_hash,
+            dependency_graph_hash: self.dependency_graph_hash,
+            expected_apply_count: self.deltas.len(),
             publication_semantics: self.publication_semantics,
         }
     }

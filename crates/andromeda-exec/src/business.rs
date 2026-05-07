@@ -1,6 +1,7 @@
 mod constants;
 mod executor;
 mod helpers;
+mod product_stock;
 mod types;
 
 pub use constants::{
@@ -11,6 +12,11 @@ pub use constants::{
     INVENTORY_RESERVE_STOCK_RESULT_STREAM_ID, INVENTORY_RESERVE_STOCK_STOCK_ROWS_AFFECTED,
 };
 pub use executor::{InventoryBusinessMvccStore, InventoryReserveStockExecutor};
+pub use product_stock::{
+    HeapInventoryProductStockStore, InventoryProductStockCommitEvidence,
+    InventoryProductStockDurableRedoEvidence, InventoryProductStockReservationIntent,
+    InventoryProductStockStore, ObservedInventoryProductStockStore,
+};
 pub use types::{
     InventoryReservation, InventoryReserveStockMvccDecision, InventoryReserveStockMvccEvidence,
     InventoryReserveStockRejectionEvidence, InventoryReserveStockResultEvidence, InventoryStock,

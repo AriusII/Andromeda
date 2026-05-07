@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, ColumnDescriptor, digest::Sha256,
 };
@@ -77,8 +79,38 @@ impl ResultStreamDescriptor {
             ));
         }
 
+        if self.columns.is_empty() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "result stream descriptor requires at least one typed column",
+            ));
+        }
+
+        let mut seen_column_names = BTreeSet::new();
+        let mut seen_column_ordinals = BTreeSet::new();
         for column in &self.columns {
             column.validate()?;
+            if !seen_column_names.insert(column.name.clone()) {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Contract,
+                    "result stream descriptor column names must be unique",
+                ));
+            }
+            if !seen_column_ordinals.insert(column.ordinal) {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Contract,
+                    "result stream descriptor column ordinals must be unique",
+                ));
+            }
+        }
+
+        for expected in 0..self.columns.len() as u32 {
+            if !seen_column_ordinals.contains(&expected) {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Contract,
+                    "result stream descriptor column ordinals must be dense and zero-based",
+                ));
+            }
         }
 
         if self.row_count_requirement == RowCountRequirement::ExactRequired

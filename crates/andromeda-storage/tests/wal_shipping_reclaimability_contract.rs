@@ -3,6 +3,17 @@ use andromeda_storage::{
     CatalogWalRecord, Lsn, LsnBoundCatalogRecord, replay_catalog_from_lsn, write_ahead_log::*,
 };
 
+fn wal_record(lsn: u64, previous_lsn: Option<u64>) -> WalRecord {
+    WalRecord::from_parts(
+        WalRecordKind::PageAllocate,
+        Lsn::new(lsn),
+        previous_lsn.map(Lsn::new),
+        None,
+        Vec::<u8>::new(),
+    )
+    .expect("test WAL record must be structurally valid")
+}
+
 #[test]
 fn shipping_ack_advances_replica_safe_lsn() {
     let mut tracker = WalReplicaSafeLsnTracker::new([2, 3]).expect("tracker");
@@ -90,6 +101,22 @@ fn required_replica_without_ack_blocks_segment_reclaim() {
             min_standby_received_lsn,
         } if segment_end_lsn == Lsn::new(300) && min_standby_received_lsn == Lsn::ZERO
     ));
+}
+
+#[test]
+fn shipment_rejects_numeric_lsn_gap_even_when_previous_lsn_links() {
+    let records = vec![wal_record(10, Some(9)), wal_record(12, Some(10))];
+    let batch = WalShipmentBatch::new(
+        WalNodeIdentity::new(1, WalNodeRole::Primary),
+        WalNodeIdentity::new(2, WalNodeRole::Replica),
+        WalReplicaExpectation::after(Lsn::new(9), Lsn::new(10)),
+        &records,
+    );
+
+    let err = batch
+        .validate()
+        .expect_err("WAL shipping must not skip durable LSNs");
+    assert!(err.message().contains("gap"), "unexpected error: {err}");
 }
 
 #[test]

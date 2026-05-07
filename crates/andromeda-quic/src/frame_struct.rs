@@ -221,5 +221,18 @@ mod tests {
                 .kind(),
             AndromedaErrorKind::Protocol
         );
+
+        let error_frame = FrameBytes {
+            header: header_with_len(FrameType::Error, 0),
+            payload: Vec::new(),
+        };
+
+        assert_eq!(
+            error_frame
+                .validate(StreamRole::Diagnostic)
+                .unwrap_err()
+                .kind(),
+            AndromedaErrorKind::Protocol
+        );
     }
 }

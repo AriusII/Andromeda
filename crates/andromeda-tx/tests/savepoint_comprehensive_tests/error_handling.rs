@@ -13,7 +13,7 @@ fn eh_fail_event_blocks_savepoint_operations() {
     mgr.fail(tx).unwrap();
 
     let snap = mgr.snapshot(tx).unwrap().unwrap();
-    assert_eq!(snap.state_machine.state, TransactionState::Failed);
+    assert_eq!(snap.state_machine.state(), TransactionState::Failed);
 
     // All savepoint ops must be rejected after fail.
     assert!(mgr.create_savepoint(tx, "after_fail").is_err());
@@ -32,7 +32,7 @@ fn eh_failed_tx_can_transition_to_rolling_back() {
     // Failed → RollingBack is a legal transition.
     mgr.request_rollback(tx).unwrap();
     let snap = mgr.snapshot(tx).unwrap().unwrap();
-    assert_eq!(snap.state_machine.state, TransactionState::RollingBack);
+    assert_eq!(snap.state_machine.state(), TransactionState::RollingBack);
 }
 
 /// TC-EH-0003
@@ -93,7 +93,7 @@ fn eh_rollback_to_on_failed_tx_returns_clean_error_no_corruption() {
 
     // Tx is still Failed — not corrupted to another state.
     let snap = mgr.snapshot(tx).unwrap().unwrap();
-    assert_eq!(snap.state_machine.state, TransactionState::Failed);
+    assert_eq!(snap.state_machine.state(), TransactionState::Failed);
 }
 
 /// TC-EH-0006
@@ -257,7 +257,7 @@ fn eh_trace_non_terminal_for_active_to_committing() {
 
     let mut machine = TransactionStateMachine::new(TransactionId::new(2));
     machine.begin().unwrap();
-    let prev = machine.state;
+    let prev = machine.state();
     machine.request_commit().unwrap();
 
     let trace = machine.project_transition(
@@ -282,7 +282,7 @@ fn eh_trace_rolled_back_carries_durable_lsn() {
     let mut machine = TransactionStateMachine::new(TransactionId::new(3));
     machine.begin().unwrap();
     machine.request_rollback().unwrap();
-    let prev = machine.state;
+    let prev = machine.state();
     machine.complete_rollback_after_durable_flush(1234).unwrap();
 
     let trace = machine.project_transition(

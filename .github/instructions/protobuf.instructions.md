@@ -1,5 +1,5 @@
 ---
-applyTo: "schemas/proto/**/*.proto"
+applyTo: ".codex/schemas/proto/**/*.proto"
 ---
 # Protobuf Contract Instructions
 - Protobuf is used as a contract language only.

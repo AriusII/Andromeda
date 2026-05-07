@@ -13,17 +13,21 @@ use andromeda_core::{
 };
 
 use crate::{
-    AccessMode, CatalogDefinition, CatalogLifecycleTarget, CatalogMutationBoundary,
-    CatalogMutationDelta, CatalogMutationOperation, CatalogMutationRecord,
-    CatalogMutationRecordKind, CatalogObjectRef, CatalogPublicationSemantics, CompatibilityPolicy,
+    AccessMode, CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH, CatalogDefinition,
+    CatalogLifecycleTarget, CatalogMutationBoundary, CatalogMutationDelta,
+    CatalogMutationOperation, CatalogMutationRecord, CatalogMutationRecordKind, CatalogObjectRef,
+    CatalogPublicationSemantics, CatalogWalPayloadDecodeError, CatalogWalPayloadDecodeErrorKind,
+    CompatibilityPolicy, DefinitionBatchDependencyGraphHash, DefinitionBatchSourceHash,
     EnumDefinition, EnumVariant, IsolationPolicy, MultiResultPolicy, ObjectKind, ProcedureContract,
     ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName, ResultMetadataPolicy,
-    ResultStreamContract, StatsVersion, StructuredObjectDefinition, TableDefinition,
-    TransactionPolicy,
+    ResultStreamCardinality, ResultStreamContract, StatsVersion, StructuredObjectDefinition,
+    TableDefinition, TransactionPolicy,
 };
 
 use super::constants::{
-    CATALOG_WAL_PAYLOAD_HEADER_LEN, CATALOG_WAL_PAYLOAD_MAGIC, CATALOG_WAL_PAYLOAD_VERSION_V1,
+    CATALOG_WAL_PAYLOAD_HEADER_LEN, CATALOG_WAL_PAYLOAD_MAGIC, CATALOG_WAL_PAYLOAD_VERSION_CURRENT,
+    CATALOG_WAL_PAYLOAD_VERSION_V1, CATALOG_WAL_PAYLOAD_VERSION_V2, CATALOG_WAL_PAYLOAD_VERSION_V3,
+    CATALOG_WAL_PAYLOAD_VERSION_V4,
 };
 
 // CatalogMutationRecord public encode / decode / validate
@@ -45,11 +49,16 @@ impl CatalogMutationRecord {
         let kind_tag = self.kind().storage_wal_kind_tag();
         let body_len = u64::try_from(body.len())
             .map_err(|_| catalog_error("catalog WAL payload body is too large"))?;
-        let checksum = catalog_wal_payload_checksum(kind_tag, body_len, &body);
+        let checksum = catalog_wal_payload_checksum(
+            CATALOG_WAL_PAYLOAD_VERSION_CURRENT,
+            kind_tag,
+            body_len,
+            &body,
+        );
 
         let mut encoded = Vec::with_capacity(CATALOG_WAL_PAYLOAD_HEADER_LEN + body.len());
         push_u64(&mut encoded, CATALOG_WAL_PAYLOAD_MAGIC);
-        push_u16(&mut encoded, CATALOG_WAL_PAYLOAD_VERSION_V1);
+        push_u16(&mut encoded, CATALOG_WAL_PAYLOAD_VERSION_CURRENT);
         push_u16(&mut encoded, kind_tag);
         push_u64(&mut encoded, body_len);
         push_u64(&mut encoded, checksum);
@@ -63,52 +72,110 @@ impl CatalogMutationRecord {
     /// and catalog-local structural invariants. It does not publish the decoded
     /// mutation or replay it into a snapshot.
     pub fn decode_durable_payload(payload: &[u8]) -> AndromedaResult<Self> {
+        Self::decode_durable_payload_typed(payload).map_err(AndromedaError::from)
+    }
+
+    pub(crate) fn decode_durable_payload_typed(
+        payload: &[u8],
+    ) -> Result<Self, CatalogWalPayloadDecodeError> {
         if payload.len() < CATALOG_WAL_PAYLOAD_HEADER_LEN {
-            return Err(catalog_error("truncated catalog WAL payload header"));
+            return Err(CatalogWalPayloadDecodeError::new(
+                CatalogWalPayloadDecodeErrorKind::TruncatedHeader,
+                "truncated catalog WAL payload header",
+            ));
         }
 
         let mut decoder = Decoder::new(payload);
-        let magic = decoder.u64()?;
+        let magic = decoder
+            .u64()
+            .map_err(CatalogWalPayloadDecodeError::from_body_error)?;
         if magic != CATALOG_WAL_PAYLOAD_MAGIC {
-            return Err(catalog_error("catalog WAL payload magic mismatch"));
+            return Err(CatalogWalPayloadDecodeError::new(
+                CatalogWalPayloadDecodeErrorKind::MagicMismatch,
+                "catalog WAL payload magic mismatch",
+            ));
         }
 
-        let version = decoder.u16()?;
-        if version != CATALOG_WAL_PAYLOAD_VERSION_V1 {
-            return Err(catalog_error("unsupported catalog WAL payload version"));
+        let version = decoder
+            .u16()
+            .map_err(CatalogWalPayloadDecodeError::from_body_error)?;
+        if matches!(
+            version,
+            CATALOG_WAL_PAYLOAD_VERSION_V1
+                | CATALOG_WAL_PAYLOAD_VERSION_V2
+                | CATALOG_WAL_PAYLOAD_VERSION_V3
+        ) {
+            return Err(CatalogWalPayloadDecodeError::new(
+                CatalogWalPayloadDecodeErrorKind::LegacyFormatVersion,
+                "legacy catalog WAL payload lacks complete DefinitionBatch replay integrity",
+            ));
+        }
+        if version != CATALOG_WAL_PAYLOAD_VERSION_V4 {
+            return Err(CatalogWalPayloadDecodeError::new(
+                CatalogWalPayloadDecodeErrorKind::UnsupportedFormatVersion,
+                "unsupported catalog WAL payload version",
+            ));
         }
 
-        let kind_tag = decoder.u16()?;
-        let kind = CatalogMutationRecordKind::from_storage_wal_kind_tag(kind_tag)
-            .ok_or_else(|| catalog_error("unknown catalog WAL record kind tag"))?;
-        let body_len = decoder.u64()?;
-        let checksum = decoder.u64()?;
+        let kind_tag = decoder
+            .u16()
+            .map_err(CatalogWalPayloadDecodeError::from_body_error)?;
+        let kind =
+            CatalogMutationRecordKind::from_storage_wal_kind_tag(kind_tag).ok_or_else(|| {
+                CatalogWalPayloadDecodeError::new(
+                    CatalogWalPayloadDecodeErrorKind::UnknownRecordKindTag,
+                    "unknown catalog WAL record kind tag",
+                )
+            })?;
+        let body_len = decoder
+            .u64()
+            .map_err(CatalogWalPayloadDecodeError::from_body_error)?;
+        let checksum = decoder
+            .u64()
+            .map_err(CatalogWalPayloadDecodeError::from_body_error)?;
 
-        let body_len_usize = usize::try_from(body_len)
-            .map_err(|_| catalog_error("catalog WAL payload body length does not fit usize"))?;
+        let body_len_usize = usize::try_from(body_len).map_err(|_| {
+            CatalogWalPayloadDecodeError::new(
+                CatalogWalPayloadDecodeErrorKind::BodyLengthOverflow,
+                "catalog WAL payload body length does not fit usize",
+            )
+        })?;
         if payload.len() - CATALOG_WAL_PAYLOAD_HEADER_LEN != body_len_usize {
-            return Err(catalog_error("catalog WAL payload body length mismatch"));
+            return Err(CatalogWalPayloadDecodeError::new(
+                CatalogWalPayloadDecodeErrorKind::BodyLengthMismatch,
+                "catalog WAL payload body length mismatch",
+            ));
         }
 
         let body = &payload[CATALOG_WAL_PAYLOAD_HEADER_LEN..];
-        if checksum != catalog_wal_payload_checksum(kind_tag, body_len, body) {
-            return Err(catalog_error("catalog WAL payload checksum mismatch"));
+        if checksum != catalog_wal_payload_checksum(version, kind_tag, body_len, body) {
+            return Err(CatalogWalPayloadDecodeError::new(
+                CatalogWalPayloadDecodeErrorKind::ChecksumMismatch,
+                "catalog WAL payload checksum mismatch",
+            ));
         }
 
         let mut body_decoder = Decoder::new(body);
         let record = match kind {
-            CatalogMutationRecordKind::CatalogChangeBegin => {
-                Self::Begin(decode_boundary(&mut body_decoder)?)
-            }
-            CatalogMutationRecordKind::CatalogChangeApply => {
-                Self::Apply(Box::new(decode_delta(&mut body_decoder)?))
-            }
-            CatalogMutationRecordKind::CatalogChangeCommit => {
-                Self::Commit(decode_boundary(&mut body_decoder)?)
-            }
+            CatalogMutationRecordKind::CatalogChangeBegin => Self::Begin(
+                decode_boundary(&mut body_decoder)
+                    .map_err(CatalogWalPayloadDecodeError::from_body_error)?,
+            ),
+            CatalogMutationRecordKind::CatalogChangeApply => Self::Apply(Box::new(
+                decode_delta(&mut body_decoder, version)
+                    .map_err(CatalogWalPayloadDecodeError::from_body_error)?,
+            )),
+            CatalogMutationRecordKind::CatalogChangeCommit => Self::Commit(
+                decode_boundary(&mut body_decoder)
+                    .map_err(CatalogWalPayloadDecodeError::from_body_error)?,
+            ),
         };
-        body_decoder.finish()?;
-        record.validate_for_durable_payload()?;
+        body_decoder
+            .finish()
+            .map_err(CatalogWalPayloadDecodeError::from_body_error)?;
+        record
+            .validate_for_durable_payload()
+            .map_err(CatalogWalPayloadDecodeError::from_body_error)?;
         Ok(record)
     }
 
@@ -141,6 +208,31 @@ fn validate_boundary(boundary: &CatalogMutationBoundary) -> AndromedaResult<()> 
     if boundary.next_version.get() <= boundary.previous_version.get() {
         return Err(catalog_error(
             "catalog WAL boundary must advance the catalog version",
+        ));
+    }
+    if boundary.source_hash.is_zero() {
+        return Err(catalog_error(
+            "catalog WAL boundary source hash must not be zero",
+        ));
+    }
+    if boundary.dependency_graph_hash.is_zero() {
+        return Err(catalog_error(
+            "catalog WAL boundary dependency graph hash must not be zero",
+        ));
+    }
+    if boundary.expected_apply_count == 0 {
+        return Err(catalog_error(
+            "catalog WAL boundary expected apply count must not be zero",
+        ));
+    }
+    if boundary.expected_apply_count > CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH {
+        return Err(catalog_error(&format!(
+            "catalog WAL boundary expected apply count must not exceed {CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH}"
+        )));
+    }
+    if boundary.publication_semantics != CatalogPublicationSemantics::DurablePublicationExternal {
+        return Err(catalog_error(
+            "catalog WAL boundary requires durable publication semantics",
         ));
     }
     Ok(())
@@ -181,6 +273,9 @@ fn encode_boundary(out: &mut Vec<u8>, boundary: &CatalogMutationBoundary) {
     push_u64(out, boundary.namespace_id.get());
     push_u64(out, boundary.previous_version.get());
     push_u64(out, boundary.next_version.get());
+    out.extend_from_slice(&boundary.source_hash.as_bytes());
+    out.extend_from_slice(&boundary.dependency_graph_hash.as_bytes());
+    push_u64(out, boundary.expected_apply_count as u64);
     push_u8(
         out,
         match boundary.publication_semantics {
@@ -197,6 +292,13 @@ fn decode_boundary(decoder: &mut Decoder<'_>) -> AndromedaResult<CatalogMutation
         namespace_id: NamespaceId::new(decoder.u64()?),
         previous_version: CatalogVersion::new(decoder.u64()?),
         next_version: CatalogVersion::new(decoder.u64()?),
+        source_hash: DefinitionBatchSourceHash::new(decode_sha256_array(decoder)?),
+        dependency_graph_hash: DefinitionBatchDependencyGraphHash::new(decode_sha256_array(
+            decoder,
+        )?),
+        expected_apply_count: usize::try_from(decoder.u64()?).map_err(|_| {
+            catalog_error("catalog WAL boundary expected apply count does not fit usize")
+        })?,
         publication_semantics: match decoder.u8()? {
             0 => CatalogPublicationSemantics::PlannedVersionOnly,
             1 => CatalogPublicationSemantics::DurablePublicationExternal,
@@ -205,6 +307,13 @@ fn decode_boundary(decoder: &mut Decoder<'_>) -> AndromedaResult<CatalogMutation
     };
     validate_boundary(&boundary)?;
     Ok(boundary)
+}
+
+fn decode_sha256_array(decoder: &mut Decoder<'_>) -> AndromedaResult<[u8; 32]> {
+    decoder
+        .bytes(32)?
+        .try_into()
+        .map_err(|_| catalog_error("catalog WAL SHA-256 field has invalid width"))
 }
 
 // Delta encode / decode
@@ -225,14 +334,17 @@ fn encode_delta(out: &mut Vec<u8>, delta: &CatalogMutationDelta) {
     }
 }
 
-fn decode_delta(decoder: &mut Decoder<'_>) -> AndromedaResult<CatalogMutationDelta> {
+fn decode_delta(
+    decoder: &mut Decoder<'_>,
+    payload_version: u16,
+) -> AndromedaResult<CatalogMutationDelta> {
     let operation_index = usize::try_from(decoder.u64()?)
         .map_err(|_| catalog_error("catalog WAL delta operation index does not fit usize"))?;
     let planned_version = CatalogVersion::new(decoder.u64()?);
     let operation = match decoder.u8()? {
         0 => CatalogMutationOperation::CreateObject {
             object: decode_object_ref(decoder)?,
-            definition: decode_definition(decoder)?,
+            definition: decode_definition(decoder, payload_version)?,
         },
         1 => CatalogMutationOperation::DeprecateObject {
             target: decode_lifecycle_target(decoder)?,
@@ -283,14 +395,20 @@ fn encode_definition(out: &mut Vec<u8>, definition: &CatalogDefinition) {
     }
 }
 
-fn decode_definition(decoder: &mut Decoder<'_>) -> AndromedaResult<CatalogDefinition> {
+fn decode_definition(
+    decoder: &mut Decoder<'_>,
+    payload_version: u16,
+) -> AndromedaResult<CatalogDefinition> {
     match decoder.u8()? {
         0 => Ok(CatalogDefinition::Table(decode_table(decoder)?)),
         1 => Ok(CatalogDefinition::StructuredObject(
             decode_structured_object(decoder)?,
         )),
         2 => Ok(CatalogDefinition::Enum(decode_enum(decoder)?)),
-        3 => Ok(CatalogDefinition::Procedure(decode_procedure(decoder)?)),
+        3 => Ok(CatalogDefinition::Procedure(decode_procedure(
+            decoder,
+            payload_version,
+        )?)),
         _ => Err(catalog_error("unknown catalog definition tag")),
     }
 }
@@ -384,7 +502,10 @@ fn encode_procedure(out: &mut Vec<u8>, procedure: &ProcedureContract) {
     );
 }
 
-fn decode_procedure(decoder: &mut Decoder<'_>) -> AndromedaResult<ProcedureContract> {
+fn decode_procedure(
+    decoder: &mut Decoder<'_>,
+    payload_version: u16,
+) -> AndromedaResult<ProcedureContract> {
     let object = decode_object_ref(decoder)?;
     let procedure_id = ProcedureId::new(decoder.u64()?);
     let contract_hash = ContractHash::from_slice(decoder.bytes(ContractHash::LEN)?)?;
@@ -395,7 +516,7 @@ fn decode_procedure(decoder: &mut Decoder<'_>) -> AndromedaResult<ProcedureContr
     };
     let inputs = decode_columns(decoder)?;
     let structured_inputs = decode_qualified_names(decoder)?;
-    let result_streams = decode_result_streams(decoder)?;
+    let result_streams = decode_result_streams(decoder, payload_version)?;
     let required_permissions = decode_strings(decoder)?;
     let transaction_policy = decode_transaction_policy(decoder)?;
     let compatibility_policy = match decoder.u8()? {
@@ -445,18 +566,32 @@ fn encode_result_streams(out: &mut Vec<u8>, streams: &[ResultStreamContract]) {
         encode_string(out, &stream.name);
         encode_columns(out, &stream.columns);
         push_bool(out, stream.row_count_exact_required);
+        push_u8(out, stream.cardinality.stable_tag());
     }
 }
 
-fn decode_result_streams(decoder: &mut Decoder<'_>) -> AndromedaResult<Vec<ResultStreamContract>> {
+fn decode_result_streams(
+    decoder: &mut Decoder<'_>,
+    payload_version: u16,
+) -> AndromedaResult<Vec<ResultStreamContract>> {
     let count = decoder.len()?;
     let mut streams = Vec::with_capacity(count);
     for _ in 0..count {
+        let stream_id = decoder.u64()?;
+        let name = decoder.string()?;
+        let columns = decode_columns(decoder)?;
+        let row_count_exact_required = decoder.bool()?;
+        let cardinality = if payload_version >= CATALOG_WAL_PAYLOAD_VERSION_V2 {
+            ResultStreamCardinality::from_stable_tag(decoder.u8()?)?
+        } else {
+            ResultStreamCardinality::from_legacy_row_count_exact_required(row_count_exact_required)
+        };
         streams.push(ResultStreamContract {
-            stream_id: decoder.u64()?,
-            name: decoder.string()?,
-            columns: decode_columns(decoder)?,
-            row_count_exact_required: decoder.bool()?,
+            stream_id,
+            name,
+            columns,
+            cardinality,
+            row_count_exact_required,
         });
     }
     Ok(streams)
@@ -819,7 +954,12 @@ fn encode_string(out: &mut Vec<u8>, value: &str) {
 
 // FNV-1a checksum
 
-pub(super) fn catalog_wal_payload_checksum(kind_tag: u16, body_len: u64, body: &[u8]) -> u64 {
+pub(super) fn catalog_wal_payload_checksum(
+    version: u16,
+    kind_tag: u16,
+    body_len: u64,
+    body: &[u8],
+) -> u64 {
     const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
     const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
 
@@ -832,7 +972,7 @@ pub(super) fn catalog_wal_payload_checksum(kind_tag: u16, body_len: u64, body: &
 
     let mut state = FNV_OFFSET;
     fold_bytes(&mut state, &CATALOG_WAL_PAYLOAD_MAGIC.to_le_bytes());
-    fold_bytes(&mut state, &CATALOG_WAL_PAYLOAD_VERSION_V1.to_le_bytes());
+    fold_bytes(&mut state, &version.to_le_bytes());
     fold_bytes(&mut state, &kind_tag.to_le_bytes());
     fold_bytes(&mut state, &body_len.to_le_bytes());
     fold_bytes(&mut state, body);

@@ -13,17 +13,18 @@
 //!
 //! No additional file I/O is done here; the WAL manager owns the I/O contract.
 
-use andromeda_core::{AndromedaResult, CatalogVersion};
+use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion};
 
 use crate::{CatalogMutation, CatalogWalRecord};
 
-/// Emits a CatalogWalRecord for a catalog mutation.
+/// Rejects legacy single-record catalog mutation publication.
 ///
 /// # Invariants
 ///
-/// - Exactly one WAL record is emitted per mutation (deterministic causality).
-/// - The record's catalog_version is monotonically greater than prior records.
-/// - The record is immutable after emission (no rewriting).
+/// - Catalog DefinitionBatch publication must be represented by the durable
+///   `Begin + Apply* + Commit` sequence emitted from `CatalogMutationPlan`.
+/// - This helper lacks the ordered operation records and storage-assigned LSN
+///   span required to prove all-or-nothing publication.
 ///
 /// # Parameters
 ///
@@ -32,22 +33,24 @@ use crate::{CatalogMutation, CatalogWalRecord};
 ///
 /// # Note
 ///
-/// This function only assembles the record; the caller (WAL manager) is responsible
-/// for physical durability.
+/// This function remains only as a fail-closed compatibility stub. Use
+/// `CatalogSystemStore::apply_definition_batch_durably` or
+/// `CatalogMutationPlan::records()` for durable catalog publication.
 pub fn emit_catalog_mutation_record(
     mutation: &CatalogMutation,
     _operator_principal: String,
 ) -> AndromedaResult<CatalogWalRecord> {
-    // In a full implementation, record_count and lsn come from the durable
-    // DefinitionBatch write pipeline.
-    let record = CatalogWalRecord::ApplyCatalogVersion {
-        batch_id: mutation.definition_batch_id,
-        version: mutation.next_version,
-        record_count: 1,
-        lsn: 1,
-    };
+    if !mutation.is_monotonic() {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Catalog,
+            "catalog mutation WAL emission requires monotonic catalog version advancement",
+        ));
+    }
 
-    Ok(record)
+    Err(AndromedaError::new(
+        AndromedaErrorKind::Catalog,
+        "legacy catalog mutation WAL helper cannot prove durable DefinitionBatch publication; use the Begin/Apply/Commit mutation plan sequence",
+    ))
 }
 
 /// Emits a CatalogCheckpoint record with the current catalog state.
@@ -75,6 +78,7 @@ pub fn emit_catalog_checkpoint_record(
         visible_procedure_count,
     };
 
+    record.validate()?;
     Ok(record)
 }
 
@@ -83,18 +87,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn emit_catalog_mutation_record_produces_valid_record() {
+    fn emit_catalog_mutation_record_rejects_legacy_single_record_publication() {
         let mutation = CatalogMutation {
             definition_batch_id: crate::DefinitionBatchId::new(1),
             previous_version: CatalogVersion::new(5),
             next_version: CatalogVersion::new(6),
         };
 
-        let record =
-            emit_catalog_mutation_record(&mutation, "test".to_string()).expect("emit failed");
+        let error = emit_catalog_mutation_record(&mutation, "test".to_string()).unwrap_err();
 
-        assert_eq!(record.catalog_version(), Some(CatalogVersion::new(6)));
-        assert!(record.validate().is_ok());
+        assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+        assert!(
+            error
+                .message()
+                .contains("durable DefinitionBatch publication")
+        );
     }
 
     #[test]
@@ -104,5 +111,17 @@ mod tests {
 
         assert_eq!(record.catalog_version(), Some(CatalogVersion::new(42)));
         assert!(record.validate().is_ok());
+    }
+
+    #[test]
+    fn emit_catalog_checkpoint_record_rejects_zero_identity() {
+        let zero_lsn = emit_catalog_checkpoint_record(0, CatalogVersion::new(42), 5).unwrap_err();
+        assert_eq!(zero_lsn.kind(), AndromedaErrorKind::Catalog);
+        assert!(zero_lsn.message().contains("checkpoint_lsn"));
+
+        let zero_version =
+            emit_catalog_checkpoint_record(1000, CatalogVersion::new(0), 5).unwrap_err();
+        assert_eq!(zero_version.kind(), AndromedaErrorKind::Catalog);
+        assert!(zero_version.message().contains("catalog_version"));
     }
 }

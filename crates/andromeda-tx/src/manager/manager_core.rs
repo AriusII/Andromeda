@@ -9,6 +9,7 @@ use crate::lock_manager::{
     LockReleaseAllSummary, LockReleaseEvidence, LockResource,
 };
 use crate::locking_protocol::{TwoPhaseLocksValidator, TwoPhaseOperation};
+use crate::lsn::Lsn;
 use crate::mvcc_status::{TransactionStatus, TransactionStatusTable};
 use crate::savepoint::{
     Savepoint, SavepointReleaseEvidence, SavepointRollbackEvidence, SavepointStack,
@@ -60,7 +61,7 @@ impl TransactionManager {
     /// Begin a fresh transaction. Returns the freshly allocated id and
     /// records `InFlight` status atomically with state-machine creation.
     pub fn begin(&self) -> AndromedaResult<TransactionId> {
-        let id = self.allocator.allocate();
+        let id = self.allocator.allocate()?;
         let mut inner = self.lock()?;
         if inner.live.contains_key(&id) {
             return Err(AndromedaError::new(
@@ -92,11 +93,29 @@ impl TransactionManager {
     /// transaction was in `Committing`; the status table is mirrored to
     /// `Committed` only after the state-machine transition succeeds.
     pub fn commit_durable(&self, id: TransactionId, durable_lsn: u64) -> AndromedaResult<()> {
+        self.commit_durable_after_wal_record(id, durable_lsn, durable_lsn)
+    }
+
+    /// Publish a durable commit with explicit terminal WAL evidence.
+    ///
+    /// `commit_record_lsn` is the TxCommit record position and `durable_lsn`
+    /// is the durable WAL prefix reported by storage. Visibility is mirrored
+    /// only when `durable_lsn >= commit_record_lsn`.
+    pub fn commit_durable_after_wal_record(
+        &self,
+        id: TransactionId,
+        commit_record_lsn: u64,
+        durable_lsn: u64,
+    ) -> AndromedaResult<()> {
         let mut inner = self.lock()?;
         let machine = Self::machine_mut(&mut inner.live, id)?;
-        machine.publish_visible_commit_after_durable_flush(durable_lsn)?;
+        machine.publish_visible_commit_with_durable_evidence(commit_record_lsn, durable_lsn)?;
         // State machine guarantees: state == Committed && durable_commit_lsn = Some(_).
-        inner.status.record(id, TransactionStatus::Committed)?;
+        inner.status.record_committed_after_durable_wal(
+            id,
+            Lsn::new(commit_record_lsn),
+            Lsn::new(durable_lsn),
+        )?;
         Ok(())
     }
 
@@ -114,10 +133,29 @@ impl TransactionManager {
 
     /// Complete a rollback once the corresponding WAL record is durable.
     pub fn rollback_durable(&self, id: TransactionId, durable_lsn: u64) -> AndromedaResult<()> {
+        self.rollback_durable_after_wal_record(id, durable_lsn, durable_lsn)
+    }
+
+    /// Complete a rollback with explicit terminal WAL evidence.
+    ///
+    /// `rollback_record_lsn` is the TxRollback record position and
+    /// `durable_lsn` is the durable WAL prefix reported by storage. The
+    /// rollback status is mirrored only when the durable prefix covers the
+    /// terminal record.
+    pub fn rollback_durable_after_wal_record(
+        &self,
+        id: TransactionId,
+        rollback_record_lsn: u64,
+        durable_lsn: u64,
+    ) -> AndromedaResult<()> {
         let mut inner = self.lock()?;
         let machine = Self::machine_mut(&mut inner.live, id)?;
-        machine.complete_rollback_after_durable_flush(durable_lsn)?;
-        inner.status.record(id, TransactionStatus::RolledBack)?;
+        machine.complete_rollback_with_durable_evidence(rollback_record_lsn, durable_lsn)?;
+        inner.status.record_rolled_back_after_durable_wal(
+            id,
+            Lsn::new(rollback_record_lsn),
+            Lsn::new(durable_lsn),
+        )?;
         Ok(())
     }
 
@@ -144,8 +182,12 @@ impl TransactionManager {
         let mut inner = self.lock()?;
         let machine = Self::machine_mut(&mut inner.live, id)?;
         machine.apply(crate::state::TransactionEvent::Dispose)?;
-        // Only remove once Dispose succeeds (i.e. machine reached Disposed).
-        debug_assert_eq!(machine.state, TransactionState::Disposed);
+        if machine.state() != TransactionState::Disposed {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Transaction,
+                "transaction dispose did not reach Disposed state",
+            ));
+        }
         inner.live.remove(&id);
         inner.savepoints.remove(&id);
         Ok(())
@@ -343,7 +385,7 @@ impl TransactionManager {
             .status(id)
             .ok_or_else(Self::unknown_transaction)?;
 
-        if machine.state != TransactionState::Active || status != TransactionStatus::InFlight {
+        if machine.state() != TransactionState::Active || status != TransactionStatus::InFlight {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Transaction,
                 "lock acquisition requires an active in-flight transaction",
@@ -351,7 +393,7 @@ impl TransactionManager {
         }
 
         // 2PL validation: only Active state allows lock acquisition (growing phase)
-        TwoPhaseLocksValidator::validate_operation(machine.state, TwoPhaseOperation::Acquire)?;
+        TwoPhaseLocksValidator::validate_operation(machine.state(), TwoPhaseOperation::Acquire)?;
 
         Ok(())
     }
@@ -359,9 +401,21 @@ impl TransactionManager {
     pub(super) fn require_known_transaction(&self, id: TransactionId) -> AndromedaResult<()> {
         Self::validate_non_zero_transaction_id(id)?;
 
-        if self.lock()?.status.status(id).is_none() {
-            return Err(Self::unknown_transaction());
+        let inner = self.lock()?;
+        let machine = inner.live.get(&id).ok_or_else(Self::unknown_transaction)?;
+        let status = inner
+            .status
+            .status(id)
+            .ok_or_else(Self::unknown_transaction)?;
+
+        if status != TransactionStatus::InFlight {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Transaction,
+                "single-resource lock release requires an in-flight shrinking transaction",
+            ));
         }
+
+        TwoPhaseLocksValidator::validate_operation(machine.state(), TwoPhaseOperation::Release)?;
 
         Ok(())
     }
@@ -391,7 +445,7 @@ impl TransactionManager {
             .status(id)
             .ok_or_else(Self::unknown_transaction)?;
 
-        if machine.state != TransactionState::Active || status != TransactionStatus::InFlight {
+        if machine.state() != TransactionState::Active || status != TransactionStatus::InFlight {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Transaction,
                 format!("{operation} requires an active in-flight transaction"),

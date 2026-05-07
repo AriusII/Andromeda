@@ -77,6 +77,34 @@ fn result_descriptor_rejects_inconsistent_row_count_max() {
     assert!(ok.validate().is_ok());
 }
 
+#[test]
+fn result_descriptor_rejects_missing_or_sparse_columns() {
+    let mut empty = sample_stream();
+    empty.columns.clear();
+    assert_eq!(
+        empty.validate().unwrap_err().kind(),
+        AndromedaErrorKind::Contract
+    );
+
+    let mut sparse = sample_stream();
+    sparse.columns[0].ordinal = 1;
+    assert_eq!(
+        sparse.validate().unwrap_err().kind(),
+        AndromedaErrorKind::Contract
+    );
+
+    let mut duplicate_name = sample_stream();
+    duplicate_name.columns.push(sample_column("ProductId", 1));
+    assert_eq!(
+        duplicate_name.validate().unwrap_err().kind(),
+        AndromedaErrorKind::Contract
+    );
+
+    let mut dense = sample_stream();
+    dense.columns.push(sample_column("Reserved", 1));
+    assert!(dense.validate().is_ok());
+}
+
 fn sample_column(name: &str, ordinal: u32) -> ColumnDescriptor {
     ColumnDescriptor {
         name: name.to_string(),
@@ -102,6 +130,7 @@ fn sample_manifest() -> ProcedureManifest {
         procedure_name: "Inventory.ReserveStock".to_string(),
         contract_hash: ContractHash::test_vector(0x11),
         catalog_version: CatalogVersion::new(7),
+        stats_version: 3,
         policy_version: ManifestPolicyVersion::test_vector(0x22),
         protocol_layout: ProtocolLayout {
             descriptor_set_hash: ContractHash::test_vector(0x33),
@@ -130,6 +159,10 @@ fn manifest_hash_is_deterministic_and_field_sensitive() {
     bumped_policy.policy_version = ManifestPolicyVersion::test_vector(0x55);
     assert_ne!(manifest.manifest_hash(), bumped_policy.manifest_hash());
 
+    let mut bumped_stats = manifest.clone();
+    bumped_stats.stats_version += 1;
+    assert_ne!(manifest.manifest_hash(), bumped_stats.manifest_hash());
+
     let mut extra_perm = manifest.clone();
     extra_perm
         .required_permissions
@@ -142,6 +175,39 @@ fn manifest_hash_is_deterministic_and_field_sensitive() {
     let mut wider_layout = manifest.clone();
     wider_layout.protocol_layout.descriptor_set_hash = ContractHash::test_vector(0x77);
     assert_ne!(manifest.manifest_hash(), wider_layout.manifest_hash());
+}
+
+#[test]
+fn manifest_binding_projection_is_deterministic_and_full_identity() {
+    let manifest = sample_manifest();
+    let binding = manifest.binding();
+
+    assert_eq!(binding, sample_manifest().binding());
+
+    let mut bumped_catalog = manifest.clone();
+    bumped_catalog.catalog_version = CatalogVersion::new(8);
+    assert_ne!(binding, bumped_catalog.binding());
+
+    let mut bumped_contract = manifest.clone();
+    bumped_contract.contract_hash = ContractHash::test_vector(0x55);
+    assert_ne!(binding, bumped_contract.binding());
+
+    let mut bumped_stats = manifest.clone();
+    bumped_stats.stats_version += 1;
+    assert_ne!(binding, bumped_stats.binding());
+
+    let mut bumped_policy = manifest.clone();
+    bumped_policy.policy_version = ManifestPolicyVersion::test_vector(0x66);
+    assert_ne!(binding, bumped_policy.binding());
+
+    let zero_contract = ProcedureManifest {
+        contract_hash: ContractHash::zero(),
+        ..manifest
+    };
+    assert_eq!(
+        zero_contract.binding().validate().unwrap_err().kind(),
+        AndromedaErrorKind::Contract
+    );
 }
 
 #[test]
@@ -237,6 +303,17 @@ fn ensure_source_generator_ready_demands_explicit_metadata() {
     let manifest = sample_manifest();
     assert!(manifest.ensure_source_generator_ready().is_ok());
 
+    let binding = manifest.binding();
+    assert_eq!(binding.procedure_id, ProcedureId::new(42));
+    assert_eq!(binding.catalog_version, CatalogVersion::new(7));
+    assert_eq!(binding.contract_hash, ContractHash::test_vector(0x11));
+    assert_eq!(binding.stats_version, 3);
+    assert_eq!(
+        binding.policy_version,
+        ManifestPolicyVersion::test_vector(0x22)
+    );
+    assert!(binding.validate().is_ok());
+
     let zero_proc = ProcedureManifest {
         procedure_id: ProcedureId::new(0),
         ..manifest.clone()
@@ -255,6 +332,18 @@ fn ensure_source_generator_ready_demands_explicit_metadata() {
     };
     assert_eq!(
         zero_catalog
+            .ensure_source_generator_ready()
+            .unwrap_err()
+            .kind(),
+        AndromedaErrorKind::Contract
+    );
+
+    let zero_stats = ProcedureManifest {
+        stats_version: 0,
+        ..manifest.clone()
+    };
+    assert_eq!(
+        zero_stats
             .ensure_source_generator_ready()
             .unwrap_err()
             .kind(),

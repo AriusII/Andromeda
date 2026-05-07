@@ -14,7 +14,9 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_core::{
+    AndromedaError, AndromedaErrorKind, AndromedaResult, CertificateIdentityStatus,
+};
 use andromeda_observe::{CertificateIdentity, SurfaceScope};
 
 use crate::{
@@ -91,6 +93,12 @@ impl QuinnAdmissionPlanner {
         &mut self,
         request: QuinnAdmissionRequest<'_>,
     ) -> AndromedaResult<QuinnAdmissionDecision> {
+        let certificate_status =
+            QuinnCertificateStatusEvidence::evaluate(request.presented_identity, request.status)?;
+        if certificate_status.is_denied() {
+            return Err(certificate_status.into_security_error());
+        }
+
         let pool_key =
             ConnectionPoolKey::from_server_identity(request.presented_identity, request.plane)?;
 
@@ -116,6 +124,7 @@ impl QuinnAdmissionPlanner {
         Ok(QuinnAdmissionDecision {
             pool_key,
             pool_admission,
+            certificate_status,
             continuity,
             zero_rtt,
             retry,
@@ -156,6 +165,7 @@ impl QuinnAdmissionPlanner {
 #[derive(Debug, Clone, Copy)]
 pub struct QuinnAdmissionRequest<'a> {
     pub presented_identity: &'a CertificateIdentity,
+    pub status: CertificateIdentityStatus,
     pub plane: SurfacePlane,
     pub now_ms: u64,
     pub previous_pool_key: Option<&'a ConnectionPoolKey>,
@@ -173,6 +183,7 @@ impl<'a> QuinnAdmissionRequest<'a> {
     ) -> Self {
         Self {
             presented_identity,
+            status: CertificateIdentityStatus::Active,
             plane,
             now_ms,
             previous_pool_key: None,
@@ -180,6 +191,11 @@ impl<'a> QuinnAdmissionRequest<'a> {
             zero_rtt_class,
             retry_after_failure: None,
         }
+    }
+
+    pub const fn with_certificate_status(mut self, status: CertificateIdentityStatus) -> Self {
+        self.status = status;
+        self
     }
 }
 
@@ -221,9 +237,114 @@ impl QuinnNetworkFailureKind {
 pub struct QuinnAdmissionDecision {
     pub pool_key: ConnectionPoolKey,
     pub pool_admission: Option<PoolAdmission>,
+    pub certificate_status: QuinnCertificateStatusEvidence,
     pub continuity: Option<CertificateContinuityDecision>,
     pub zero_rtt: ZeroRttAdmissionDecision,
     pub retry: QuinnRetryOutcome,
+}
+
+/// Audit-ready certificate status evidence evaluated before Quinn pool
+/// admission, reconnect, retry, or 0-RTT policy.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QuinnCertificateStatusEvidence {
+    pub fingerprint: String,
+    pub subject: String,
+    pub surface: SurfaceScope,
+    pub status: CertificateIdentityStatus,
+    pub outcome: QuinnCertificateStatusOutcome,
+    pub reason: QuinnCertificateStatusReason,
+}
+
+impl QuinnCertificateStatusEvidence {
+    pub fn evaluate(
+        identity: &CertificateIdentity,
+        status: CertificateIdentityStatus,
+    ) -> AndromedaResult<Self> {
+        if !identity.has_identity_evidence() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Security,
+                "QUIC mTLS certificate status admission requires fingerprint and subject evidence",
+            ));
+        }
+
+        let (outcome, reason) = match status {
+            CertificateIdentityStatus::Active => (
+                QuinnCertificateStatusOutcome::Allowed,
+                QuinnCertificateStatusReason::Active,
+            ),
+            CertificateIdentityStatus::Disabled => (
+                QuinnCertificateStatusOutcome::Denied,
+                QuinnCertificateStatusReason::CertificateDisabled,
+            ),
+            CertificateIdentityStatus::Revoked => (
+                QuinnCertificateStatusOutcome::Denied,
+                QuinnCertificateStatusReason::CertificateRevoked,
+            ),
+        };
+
+        Ok(Self {
+            fingerprint: identity.fingerprint.clone(),
+            subject: identity.subject.clone(),
+            surface: identity.surface,
+            status,
+            outcome,
+            reason,
+        })
+    }
+
+    pub const fn is_allowed(&self) -> bool {
+        matches!(self.outcome, QuinnCertificateStatusOutcome::Allowed)
+    }
+
+    pub const fn is_denied(&self) -> bool {
+        matches!(self.outcome, QuinnCertificateStatusOutcome::Denied)
+    }
+
+    pub fn into_security_error(self) -> AndromedaError {
+        AndromedaError::new(
+            AndromedaErrorKind::Security,
+            format!(
+                "QUIC mTLS certificate admission denied: reason={} status={} surface={} fingerprint={} subject_present={}",
+                self.reason.as_str(),
+                self.status.as_str(),
+                surface_scope_label(self.surface),
+                self.fingerprint,
+                !self.subject.trim().is_empty(),
+            ),
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum QuinnCertificateStatusOutcome {
+    Allowed,
+    Denied,
+}
+
+impl QuinnCertificateStatusOutcome {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Allowed => "allowed",
+            Self::Denied => "denied",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum QuinnCertificateStatusReason {
+    Active,
+    CertificateDisabled,
+    CertificateRevoked,
+}
+
+impl QuinnCertificateStatusReason {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Active => "active",
+            Self::CertificateDisabled => "certificate_disabled",
+            Self::CertificateRevoked => "certificate_revoked",
+        }
+    }
 }
 
 /// Retry decision after Quinn failures have been classified at the transport
@@ -253,19 +374,19 @@ impl QuinnRetryOutcome {
 /// This type bridges the quinn API to the abstract transport boundary.
 pub struct QuinnConnectionAdapter {
     inner: quinn::Connection,
-    identity: Option<CertificateIdentity>,
+    identity: CertificateIdentity,
     peer_certificates: Vec<RawCertificate>,
 }
 
 impl QuinnConnectionAdapter {
     /// Creates a new adapter for a quinn connection.
-    pub fn new(conn: quinn::Connection, identity: Option<CertificateIdentity>) -> Self {
+    pub fn new(conn: quinn::Connection, identity: CertificateIdentity) -> Self {
         Self::with_peer_certificates(conn, identity, Vec::new())
     }
 
     fn with_peer_certificates(
         conn: quinn::Connection,
-        identity: Option<CertificateIdentity>,
+        identity: CertificateIdentity,
         peer_certificates: Vec<RawCertificate>,
     ) -> Self {
         Self {
@@ -280,21 +401,15 @@ impl QuinnConnectionAdapter {
         self.inner.remote_address()
     }
 
-    /// Returns the certificate identity of the peer, if present.
-    pub fn certificate_identity(&self) -> Option<&CertificateIdentity> {
-        self.identity.as_ref()
+    /// Returns the authenticated certificate identity of the peer.
+    pub const fn certificate_identity(&self) -> &CertificateIdentity {
+        &self.identity
     }
 
     /// Builds the runtime-free connection pool key from the authenticated
     /// server identity extracted from the Quinn handshake.
-    pub fn connection_pool_key(
-        &self,
-        plane: SurfacePlane,
-    ) -> AndromedaResult<Option<ConnectionPoolKey>> {
-        self.identity
-            .as_ref()
-            .map(|identity| ConnectionPoolKey::from_server_identity(identity, plane))
-            .transpose()
+    pub fn connection_pool_key(&self, plane: SurfacePlane) -> AndromedaResult<ConnectionPoolKey> {
+        ConnectionPoolKey::from_server_identity(&self.identity, plane)
     }
 
     /// Returns the raw peer certificate chain exposed by Quinn.
@@ -556,7 +671,7 @@ impl QuicServer {
             })?;
 
             let peer_certificates = extract_peer_certificates(&conn);
-            let identity = extract_certificate_identity(&peer_certificates, self.required_scope)?;
+            let identity = require_certificate_identity(&peer_certificates, self.required_scope)?;
 
             Ok(QuinnConnectionAdapter::with_peer_certificates(
                 conn,
@@ -663,7 +778,7 @@ impl QuicClient {
         })?;
 
         let peer_certificates = extract_peer_certificates(&conn);
-        let identity = extract_certificate_identity(&peer_certificates, self.required_scope)?;
+        let identity = require_certificate_identity(&peer_certificates, self.required_scope)?;
 
         Ok(QuinnConnectionAdapter::with_peer_certificates(
             conn,
@@ -695,12 +810,42 @@ fn extract_peer_certificates(conn: &quinn::Connection) -> Vec<RawCertificate> {
         .collect()
 }
 
-fn extract_certificate_identity(
+const fn surface_scope_label(surface: SurfaceScope) -> &'static str {
+    match surface {
+        SurfaceScope::Application => "application",
+        SurfaceScope::Administration => "administration",
+        SurfaceScope::Cluster => "cluster",
+        SurfaceScope::BackupAgent => "backup_agent",
+        SurfaceScope::MonitoringAgent => "monitoring_agent",
+    }
+}
+
+fn require_certificate_identity(
     peer_certificates: &[RawCertificate],
     required_scope: SurfaceScope,
-) -> AndromedaResult<Option<CertificateIdentity>> {
-    peer_certificates
-        .first()
-        .map(|cert| cert.to_certificate_identity(required_scope))
-        .transpose()
+) -> AndromedaResult<CertificateIdentity> {
+    let Some(cert) = peer_certificates.first() else {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Security,
+            "QUIC mTLS handshake did not expose an authenticated peer certificate",
+        ));
+    };
+
+    cert.to_certificate_identity(required_scope)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn require_certificate_identity_rejects_missing_peer_certificate() {
+        let err = require_certificate_identity(&[], SurfaceScope::Application).unwrap_err();
+
+        assert_eq!(err.kind(), AndromedaErrorKind::Security);
+        assert!(
+            err.message().contains("mTLS"),
+            "missing peer certificate must fail closed as mTLS security evidence"
+        );
+    }
 }

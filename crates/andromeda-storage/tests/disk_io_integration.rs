@@ -508,13 +508,12 @@ fn test_wal_before_page_flush_contract_enforced() {
     let page_image =
         PageImage::with_layout(layout, vec![0u8; PageSize::KiB16.bytes_usize()]).unwrap();
 
-    // Write with durable LSN < page LSN (should fail in production but passes in MVP)
+    // Write with durable LSN < page LSN must fail: disk writes also preserve
+    // WAL-before-page-flush when called outside the buffer pool.
     let result = manager.write_page(page_image, Lsn::new(50)); // Durable LSN < page LSN
 
-    // MVP: The write will succeed because WAL-before-page-flush is checked at buffer pool level
-    // In production, this contract would be enforced here or in PageStore
     assert!(
-        result.is_ok(),
-        "Write should succeed (WAL check delegated to buffer pool)"
+        result.is_err(),
+        "Write should fail until WAL is durable through the page LSN"
     );
 }

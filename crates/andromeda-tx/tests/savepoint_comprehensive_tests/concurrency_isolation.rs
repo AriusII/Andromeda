@@ -139,7 +139,11 @@ fn ci_snapshot_ts_is_fixed_at_creation_future_commits_invisible() {
 
     // late_writer commits at ts=30, but snapshot was taken at ts=20.
     status_table
-        .record(late_writer, TransactionStatus::Committed)
+        .record_committed_after_durable_wal(
+            late_writer,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
 
     let late_row = MvccRowHeader {
@@ -293,7 +297,12 @@ fn ci_status_table_concurrent_registrations_are_correct() {
             thread::spawn(move || {
                 let tx_id = TransactionId::new(i);
                 t.record(tx_id, TransactionStatus::InFlight).unwrap();
-                t.record(tx_id, TransactionStatus::Committed).unwrap();
+                t.record_committed_after_durable_wal(
+                    tx_id,
+                    andromeda_tx::Lsn::new(1),
+                    andromeda_tx::Lsn::new(1),
+                )
+                .unwrap();
             })
         })
         .collect();

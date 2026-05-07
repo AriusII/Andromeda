@@ -1,0 +1,15 @@
+# Keep repository text files normalized to LF on every platform.
+* text=auto eol=lf
+
+# Windows command entry points should keep native CRLF if they are added later.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary artifacts and fuzz seeds must never be line-ending normalized.
+*.bin binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.pdf binary
+*.webp binary

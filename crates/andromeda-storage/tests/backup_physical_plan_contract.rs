@@ -260,6 +260,18 @@ mod tests {
     }
 
     #[test]
+    fn test_wal_archive_validation_rejects_start_after_catalog_snapshot() {
+        let result = WalArchiveIntegration::validate_wal_archive(
+            Lsn::new(1000), // catalog snapshot
+            Lsn::new(1001), // wal start after snapshot, missing required boundary
+            Lsn::new(2000),
+            5,
+        );
+
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_pitr_window_computed_correctly() {
         let snapshot = ColdSnapshotBoundary {
             snapshot_id: 1,

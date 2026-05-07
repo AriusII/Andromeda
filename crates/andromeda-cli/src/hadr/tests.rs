@@ -3,7 +3,7 @@ use crate::diagnostic_json::json_string;
 use andromeda_storage::{
     FileBackedHadrMembershipStore, HadrEpoch, HadrFencingContext, HadrFencingToken,
     HadrMembershipRecord, HadrMembershipStore, HadrNodeId, HadrNodeRole, HadrPromotionAuditLog,
-    HadrPromotionAuditMarker, HadrPromotionVote, Lsn, PromotionAttempt,
+    HadrPromotionAuditMarker, HadrPromotionAuditReceipt, HadrPromotionVote, Lsn, PromotionAttempt,
 };
 use std::{
     cell::RefCell,
@@ -754,6 +754,14 @@ impl HadrPromotionAuditLog for RecordingPromotionAudit<'_> {
         self.primary_seen_during_audit.borrow_mut().push(primary);
         self.markers.borrow_mut().push(marker.clone());
         Ok(())
+    }
+
+    fn append_primary_promotion_marker_durably(
+        &self,
+        marker: &HadrPromotionAuditMarker,
+    ) -> andromeda_core::AndromedaResult<HadrPromotionAuditReceipt> {
+        self.append_primary_promotion_marker(marker)?;
+        HadrPromotionAuditReceipt::new(marker.primary_durable_lsn, [0x16; 32])
     }
 }
 

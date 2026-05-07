@@ -34,6 +34,7 @@ fn request_for(
     InvocationRequest {
         invocation_id: InvocationId::new(invocation_id),
         procedure: contract.as_ref(),
+        expected_binding: Some(contract.binding()),
         expected_contract_hash: contract.contract_hash,
         catalog_version: contract.object.catalog_version,
         structured_parameters: Vec::new(),

@@ -3,10 +3,14 @@ use std::path::Path;
 use crate::error::cli_error;
 use crate::parse::parse_u64;
 use andromeda_core::AndromedaResult;
+use andromeda_observe::{
+    CertificateIdentity, Permission, SecurityAuditOutcome, SecurityAuditTrace,
+    SecurityPolicyVersionEvidence, SurfaceScope, TraceId, UserPrincipal, UserPrincipalKind,
+};
 use andromeda_storage::{
-    HadrFencingContext, HadrFencingToken, HadrMembershipSnapshot, HadrMembershipStore, HadrNodeId,
-    HadrPromotionAuditLog, HadrPromotionVote, Lsn, PromotionAttempt, PromotionBoundary,
-    PromotionCommit, PromotionPlanner,
+    HadrClusterOperation, HadrClusterSecurityEvidence, HadrFencingContext, HadrFencingToken,
+    HadrMembershipSnapshot, HadrMembershipStore, HadrNodeId, HadrPromotionAuditLog,
+    HadrPromotionVote, Lsn, PromotionAttempt, PromotionBoundary, PromotionCommit, PromotionPlanner,
 };
 
 use super::output::print_promotion_outcome;
@@ -166,7 +170,28 @@ where
     S: HadrMembershipStore,
     A: HadrPromotionAuditLog,
 {
-    PromotionBoundary::new(store, audit_log).promote(attempt)
+    PromotionBoundary::new(store, audit_log)
+        .promote_with_cluster_security(attempt, cluster_promotion_security_evidence()?)
+}
+
+fn cluster_promotion_security_evidence() -> AndromedaResult<HadrClusterSecurityEvidence> {
+    HadrClusterSecurityEvidence::new(
+        HadrClusterOperation::PromotePrimary,
+        SecurityAuditTrace::new_with_policy_version(
+            TraceId::new(16_001),
+            SurfaceScope::Cluster,
+            CertificateIdentity::new(
+                "fp-cli-hadr-controller",
+                "CN=andromeda-cli-hadr",
+                SurfaceScope::Cluster,
+            )?,
+            UserPrincipal::new("svc-andromeda-cli-hadr", UserPrincipalKind::Service)?,
+            Permission::ClusterPromote,
+            SecurityAuditOutcome::Allowed,
+            SecurityPolicyVersionEvidence::bootstrap_v0(),
+            "authorized HADR primary promotion via CLI",
+        )?,
+    )
 }
 
 fn build_promotion_attempt(

@@ -900,7 +900,7 @@ fn locking_protocol_transition_from_active_to_committing() {
 
     // Verify state is now Committing
     let snap = transactions.snapshot(tx).unwrap().unwrap();
-    assert_eq!(snap.state_machine.state, TransactionState::Committing);
+    assert_eq!(snap.state_machine.state(), TransactionState::Committing);
 }
 
 #[test]
@@ -995,8 +995,6 @@ fn locking_protocol_rollback_path_releases_locks() {
 
 #[test]
 fn locking_protocol_prevents_acquire_in_inflight_state_other_than_active() {
-    // This test verifies that acquire is restricted by the transaction manager
-    // to Active state only, not other in-flight states
     let transactions = TransactionManager::new();
     let locks = LockManager::new();
     let tx = transactions.begin().unwrap();
@@ -1016,18 +1014,48 @@ fn locking_protocol_prevents_acquire_in_inflight_state_other_than_active() {
     // Attempt to acquire more locks should be rejected
     // The transaction manager should reject this based on state validation
     let snap = transactions.snapshot(tx).unwrap().unwrap();
-    assert_eq!(snap.state_machine.state, TransactionState::Committing);
+    assert_eq!(snap.state_machine.state(), TransactionState::Committing);
 
-    // Note: The current implementation of TransactionLockCoordinator.acquire
-    // uses require_lock_acquire_transaction which requires Active state,
-    // so this would fail. But let's verify through 2PL validator.
-    use andromeda_tx::{TwoPhaseLocksValidator, TwoPhaseOperation};
-    let validation = TwoPhaseLocksValidator::validate_operation(
-        snap.state_machine.state,
-        TwoPhaseOperation::Acquire,
-    );
-    assert!(
-        validation.is_err(),
+    let err = transactions
+        .acquire_lock(
+            &locks,
+            tx,
+            LockResource::row(1, 105, 1051).unwrap(),
+            LockMode::Shared,
+        )
+        .expect_err("manager must reject acquisition after shrinking starts");
+    assert_eq!(
+        err.kind(),
+        AndromedaErrorKind::Transaction,
         "2PL must reject acquire in Committing state"
+    );
+}
+
+#[test]
+fn locking_protocol_prevents_single_release_before_shrinking_phase() {
+    let transactions = TransactionManager::new();
+    let locks = LockManager::new();
+    let tx = transactions.begin().unwrap();
+    let resource = LockResource::row(1, 106, 1060).unwrap();
+
+    assert_eq!(
+        transactions
+            .acquire_lock(&locks, tx, resource, LockMode::Shared)
+            .unwrap(),
+        LockAcquireStatus::Granted
+    );
+
+    let err = transactions
+        .release_lock(&locks, tx, resource)
+        .expect_err("active transactions must not release before shrinking");
+    assert_eq!(err.kind(), AndromedaErrorKind::Transaction);
+
+    let entry = locks.entry(resource).unwrap().unwrap();
+    assert_eq!(
+        entry.holders,
+        vec![LockHolder {
+            tx_id: tx,
+            mode: LockMode::Shared,
+        }]
     );
 }

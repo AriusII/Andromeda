@@ -2,8 +2,9 @@
 #![doc = r#"
 # Andromeda Core
 
-Foundation types for Andromeda crates: identifiers, errors, clocks, SQL type
-descriptors, principal identity, and conservative hardware/resource contracts.
+Foundation types for Andromeda crates: identifiers, errors, clocks,
+Andromeda type descriptors, principal identity, and conservative
+hardware/resource contracts.
 
 The crate is intentionally dependency-light and forbids unsafe code. Public
 exports here are cross-crate contracts; implementation details stay private to
@@ -41,8 +42,13 @@ pub use ids::{
 };
 
 pub use principal::{
-    CertificateFingerprint, Permission, PermissionSet, Principal, PrincipalId, PrincipalRole,
-    SessionToken,
+    CertificateFingerprint, CertificateIdentity, CertificateIdentityStatus,
+    PRINCIPAL_POLICY_EVIDENCE_VERSION, Permission, PermissionSet, Principal,
+    PrincipalAuthorizationDecision, PrincipalAuthorizationDenialReason,
+    PrincipalAuthorizationEvaluationStage, PrincipalAuthorizationEvidence,
+    PrincipalAuthorizationOutcome, PrincipalBinding, PrincipalId, PrincipalPolicyEvidenceBinding,
+    PrincipalPolicyVersion, PrincipalRegistry, PrincipalRole, PrincipalStatus, SessionToken,
+    SurfaceScope, UserPrincipal,
 };
 
 pub use hardware_cpu::{CpuCapabilityClass, CpuProfile, HardwareArchitecture};

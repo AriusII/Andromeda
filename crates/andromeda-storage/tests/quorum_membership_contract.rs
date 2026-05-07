@@ -8,9 +8,15 @@
 /// - Fencing decisions on membership loss
 /// - Membership epoch tracking
 /// - Atomic operations on concurrent join/promote
+use andromeda_observe::{
+    CertificateIdentity, Permission, SecurityAuditOutcome, SecurityAuditTrace,
+    SecurityPolicyVersionEvidence, SurfaceScope, TraceId, UserPrincipal, UserPrincipalKind,
+};
 use andromeda_storage::{
     Lsn,
     hadr::{
+        HadrClusterManifestUpdateEvidence, HadrClusterManifestUpdateRequest,
+        HadrClusterManifestVersion, HadrClusterOperation, HadrClusterSecurityEvidence, HadrEpoch,
         membership_transitions::{MembershipState, MembershipStateTracker, TransitionEvent},
         quorum_runtime::*,
     },
@@ -56,7 +62,7 @@ fn test_replica_marked_suspect_on_missed_heartbeat() {
     assert_eq!(membership.count_alive(), 1);
 
     // Mark replica as suspect
-    membership.mark_suspect(2);
+    membership.mark_suspect(2).expect("mark replica suspect");
 
     assert_eq!(membership.epoch(), initial_epoch + 1);
     assert_eq!(membership.count_alive(), 0);
@@ -73,11 +79,12 @@ fn test_quorum_blocks_writes_if_membership_quorum_lost() {
     ];
     let mut membership = QuorumMembership::new(1, replicas).expect("Create membership");
 
+    assert_eq!(membership.quorum_size(), 2); // 2/2 + 1 = 2
     assert!(membership.has_quorum()); // 2 alive >= 2 required
 
     // Mark both as dead
-    membership.mark_dead(2);
-    membership.mark_dead(3);
+    membership.mark_dead(2).expect("mark replica 2 dead");
+    membership.mark_dead(3).expect("mark replica 3 dead");
 
     assert!(!membership.has_quorum()); // 0 alive < 2 required
 
@@ -134,7 +141,7 @@ fn test_fencing_decision_blocks_in_quorum_mode_on_disconnect() {
     assert_eq!(decision, FencingDecision::Allow); // Quorum maintained
 
     // Mark replica as dead; now quorum is lost.
-    membership.mark_dead(2);
+    membership.mark_dead(2).expect("mark replica dead");
 
     let decision = decide_fencing(
         &membership,
@@ -163,7 +170,7 @@ fn test_fencing_decision_allows_in_async_mode_on_disconnect() {
     assert_eq!(decision, FencingDecision::Allow);
 
     // Mark replica as dead; even though quorum is lost, async mode allows.
-    membership.mark_dead(2);
+    membership.mark_dead(2).expect("mark replica dead");
 
     let decision = decide_fencing(
         &membership,
@@ -187,16 +194,16 @@ fn test_membership_epoch_increments_on_topology_change() {
     let epoch0 = membership.epoch();
     assert_eq!(epoch0, 0);
 
-    membership.mark_suspect(2);
+    membership.mark_suspect(2).expect("mark replica suspect");
     assert_eq!(membership.epoch(), epoch0 + 1);
 
-    membership.mark_alive(2);
+    membership.mark_alive(2).expect("mark replica alive");
     assert_eq!(membership.epoch(), epoch0 + 2);
 
-    membership.mark_dead(3);
+    membership.mark_dead(3).expect("mark replica dead");
     assert_eq!(membership.epoch(), epoch0 + 3);
 
-    membership.remove_dead(3);
+    membership.remove_dead(3).expect("remove dead replica");
     assert_eq!(membership.epoch(), epoch0 + 4);
 }
 
@@ -266,19 +273,62 @@ fn test_orphan_replica_detection_and_removal() {
     assert_eq!(membership.quorum_size(), 2); // 3/2 + 1 = 2
 
     // Replica 2 becomes suspect
-    membership.mark_suspect(2);
+    membership.mark_suspect(2).expect("mark replica suspect");
     assert_eq!(membership.count_alive(), 2);
 
     // Replica 2 becomes dead
-    membership.mark_dead(2);
+    membership.mark_dead(2).expect("mark replica dead");
     assert_eq!(membership.count_alive(), 2);
     assert!(membership.has_quorum()); // 2 alive >= 2 required
 
     // Remove dead replica
-    membership.remove_dead(2);
+    membership.remove_dead(2).expect("remove dead replica");
     assert_eq!(membership.size(), 2);
-    assert_eq!(membership.quorum_size(), 1); // 2/2 + 1 = 1, recomputed
-    assert!(membership.has_quorum()); // 2 alive >= 1 required
+    assert_eq!(membership.quorum_size(), 2); // 2/2 + 1 = 2, recomputed
+    assert!(membership.has_quorum()); // 2 alive >= 2 required
+}
+
+#[test]
+fn test_quorum_size_recomputes_strict_majority_after_multiple_removals() {
+    let replicas = vec![
+        ReplicaMember::new(2, Lsn::new(0), Lsn::new(0)),
+        ReplicaMember::new(3, Lsn::new(0), Lsn::new(0)),
+        ReplicaMember::new(4, Lsn::new(0), Lsn::new(0)),
+        ReplicaMember::new(5, Lsn::new(0), Lsn::new(0)),
+    ];
+    let mut membership = QuorumMembership::new(1, replicas).expect("Create membership");
+
+    assert_eq!(membership.size(), 4);
+    assert_eq!(membership.quorum_size(), 3);
+
+    membership.mark_dead(2).expect("mark replica 2 dead");
+    membership.remove_dead(2).expect("remove dead replica 2");
+    assert_eq!(membership.size(), 3);
+    assert_eq!(membership.quorum_size(), 2);
+
+    membership.mark_dead(3).expect("mark replica 3 dead");
+    membership.remove_dead(3).expect("remove dead replica 3");
+    assert_eq!(membership.size(), 2);
+    assert_eq!(membership.quorum_size(), 2);
+    assert!(membership.has_quorum());
+}
+
+#[test]
+fn test_remove_dead_does_not_remove_live_replica() {
+    let replicas = vec![
+        ReplicaMember::new(2, Lsn::new(0), Lsn::new(0)),
+        ReplicaMember::new(3, Lsn::new(0), Lsn::new(0)),
+    ];
+    let mut membership = QuorumMembership::new(1, replicas).expect("Create membership");
+    let initial_epoch = membership.epoch();
+
+    membership
+        .remove_dead(2)
+        .expect("live replica removal should be a no-op");
+
+    assert_eq!(membership.size(), 2);
+    assert_eq!(membership.epoch(), initial_epoch);
+    assert!(membership.get_replica(2).is_some());
 }
 
 #[test]
@@ -382,7 +432,7 @@ fn test_fencing_policy_allow_never_blocks() {
     let replicas = vec![ReplicaMember::new(2, Lsn::new(0), Lsn::new(0))];
     let mut membership = QuorumMembership::new(1, replicas).expect("Create membership");
 
-    membership.mark_dead(2); // Quorum lost
+    membership.mark_dead(2).expect("mark replica dead"); // Quorum lost
 
     let decision = decide_fencing(
         &membership,
@@ -414,4 +464,152 @@ fn test_promotion_eligibility_ranking_complete() {
     // Best candidate is replica 2 (only eligible one)
     let best = PromotionRank::best_candidate(&[rank1, rank2]).unwrap();
     assert_eq!(best.replica_id, 2);
+}
+
+#[test]
+fn test_cluster_manifest_update_requires_cluster_permission_policy_and_quorum() {
+    let security = cluster_security(
+        HadrClusterOperation::UpdateManifest,
+        SurfaceScope::Cluster,
+        Permission::UpdateClusterManifest,
+        SecurityAuditOutcome::Allowed,
+    );
+    let request = HadrClusterManifestUpdateRequest::new(
+        HadrEpoch::new(7),
+        HadrEpoch::new(8),
+        HadrClusterManifestVersion::new(12),
+        HadrClusterManifestVersion::new(13),
+        2,
+        2,
+        "publish quorum-approved HADR manifest",
+    );
+
+    let evidence = HadrClusterManifestUpdateEvidence::new(request, security)
+        .expect("manifest update evidence");
+
+    assert_eq!(evidence.request.proposed_epoch, HadrEpoch::new(8));
+    assert_eq!(
+        evidence.request.proposed_manifest_version,
+        HadrClusterManifestVersion::new(13)
+    );
+    assert_eq!(
+        evidence.security.operation(),
+        HadrClusterOperation::UpdateManifest
+    );
+    assert_eq!(evidence.security.audit().policy_version.policy_version, 16);
+}
+
+#[test]
+fn test_cluster_manifest_update_rejects_non_cluster_surface() {
+    let audit = security_audit_trace(
+        SurfaceScope::Administration,
+        Permission::UpdateClusterManifest,
+        SecurityAuditOutcome::Allowed,
+    );
+
+    let error = HadrClusterSecurityEvidence::new(HadrClusterOperation::UpdateManifest, audit)
+        .expect_err("manifest update must require cluster surface");
+
+    assert!(error.message().contains("Cluster surface"));
+}
+
+#[test]
+fn test_cluster_manifest_update_rejects_wrong_permission_or_stale_evidence() {
+    let wrong_security = cluster_security(
+        HadrClusterOperation::PromotePrimary,
+        SurfaceScope::Cluster,
+        Permission::ClusterPromote,
+        SecurityAuditOutcome::Allowed,
+    );
+    let request = HadrClusterManifestUpdateRequest::new(
+        HadrEpoch::new(7),
+        HadrEpoch::new(8),
+        HadrClusterManifestVersion::new(12),
+        HadrClusterManifestVersion::new(13),
+        2,
+        2,
+        "publish quorum-approved HADR manifest",
+    );
+
+    let error = HadrClusterManifestUpdateEvidence::new(request, wrong_security)
+        .expect_err("manifest update must require manifest permission");
+    assert!(error.message().contains("cluster manifest update"));
+
+    let stale_request = HadrClusterManifestUpdateRequest::new(
+        HadrEpoch::new(7),
+        HadrEpoch::new(7),
+        HadrClusterManifestVersion::new(12),
+        HadrClusterManifestVersion::new(13),
+        2,
+        2,
+        "publish quorum-approved HADR manifest",
+    );
+    let stale_error = HadrClusterManifestUpdateEvidence::new(
+        stale_request,
+        cluster_security(
+            HadrClusterOperation::UpdateManifest,
+            SurfaceScope::Cluster,
+            Permission::UpdateClusterManifest,
+            SecurityAuditOutcome::Allowed,
+        ),
+    )
+    .expect_err("manifest update must advance epoch");
+    assert!(stale_error.message().contains("proposed epoch"));
+
+    let no_quorum_request = HadrClusterManifestUpdateRequest::new(
+        HadrEpoch::new(7),
+        HadrEpoch::new(8),
+        HadrClusterManifestVersion::new(12),
+        HadrClusterManifestVersion::new(13),
+        2,
+        1,
+        "publish quorum-approved HADR manifest",
+    );
+    let quorum_error = HadrClusterManifestUpdateEvidence::new(
+        no_quorum_request,
+        cluster_security(
+            HadrClusterOperation::UpdateManifest,
+            SurfaceScope::Cluster,
+            Permission::UpdateClusterManifest,
+            SecurityAuditOutcome::Allowed,
+        ),
+    )
+    .expect_err("manifest update must require quorum grants");
+    assert!(quorum_error.message().contains("quorum-granted"));
+}
+
+fn cluster_security(
+    operation: HadrClusterOperation,
+    surface: SurfaceScope,
+    permission: Permission,
+    outcome: SecurityAuditOutcome,
+) -> HadrClusterSecurityEvidence {
+    HadrClusterSecurityEvidence::new(
+        operation,
+        security_audit_trace(surface, permission, outcome),
+    )
+    .expect("cluster security evidence")
+}
+
+fn security_audit_trace(
+    surface: SurfaceScope,
+    permission: Permission,
+    outcome: SecurityAuditOutcome,
+) -> SecurityAuditTrace {
+    SecurityAuditTrace::new_with_policy_version(
+        TraceId::new(16_002),
+        surface,
+        CertificateIdentity::new("fp-cluster-controller", "CN=hadr-controller", surface)
+            .expect("certificate"),
+        UserPrincipal::new("svc-hadr-controller", UserPrincipalKind::Service).expect("principal"),
+        permission,
+        outcome,
+        SecurityPolicyVersionEvidence::new(
+            16,
+            "sha256:2626262626262626262626262626262626262626262626262626262626262626",
+        )
+        .expect("policy evidence"),
+        "authorized HADR cluster operation",
+    )
+    .expect("security audit")
 }

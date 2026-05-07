@@ -13,7 +13,7 @@ mod mvcc_gc_gates {
     use andromeda_core::TransactionId;
     use andromeda_tx::{
         ActiveSnapshotRegistry, GcSchedulerTask, MvccGarbageCollector, SnapshotHandle,
-        TransactionStatus, TransactionStatusTable,
+        TransactionStatusTable,
     };
     use std::sync::Arc;
     use std::time::Duration;
@@ -52,7 +52,13 @@ mod mvcc_gc_gates {
         );
 
         // Now commit tx1
-        status_table.set_committed(tx1).expect("commit tx1");
+        status_table
+            .record_committed_after_durable_wal(
+                tx1,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .expect("commit tx1");
 
         // Same version NOW reclaimable (creator committed && end_ts < 300)
         assert!(
@@ -67,7 +73,13 @@ mod mvcc_gc_gates {
         let tx1 = TransactionId::new(1);
         let reader_tx = TransactionId::new(100);
 
-        status_table.set_committed(tx1).expect("commit tx1");
+        status_table
+            .record_committed_after_durable_wal(
+                tx1,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .expect("commit tx1");
 
         // Register snapshot at ts=200 (reader_tx)
         registry
@@ -100,7 +112,13 @@ mod mvcc_gc_gates {
         let tx1 = TransactionId::new(1);
         let reader_tx = TransactionId::new(100);
 
-        status_table.set_committed(tx1).expect("commit tx1");
+        status_table
+            .record_committed_after_durable_wal(
+                tx1,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .expect("commit tx1");
 
         // Register snapshot at ts=300
         let snapshot_handle = SnapshotHandle::new(300, reader_tx).expect("snapshot");
@@ -133,7 +151,13 @@ mod mvcc_gc_gates {
         let tx1 = TransactionId::new(1);
         let tx2 = TransactionId::new(2);
 
-        status_table.set_committed(tx1).expect("commit tx1");
+        status_table
+            .record_committed_after_durable_wal(
+                tx1,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .expect("commit tx1");
 
         // Register snapshot at ts=500 (even with very old min_visible_ts)
         registry
@@ -154,7 +178,11 @@ mod mvcc_gc_gates {
 
         // Mark tx1 as rolled back
         status_table
-            .record(tx1, TransactionStatus::RolledBack)
+            .record_rolled_back_after_durable_wal(
+                tx1,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
             .expect("rollback");
 
         // Rolled-back version with any end_ts is reclaimable (never visible)
@@ -175,7 +203,13 @@ mod mvcc_gc_gates {
         let reader_tx_1 = TransactionId::new(100);
         let reader_tx_2 = TransactionId::new(101);
 
-        status_table.set_committed(tx1).expect("commit");
+        status_table
+            .record_committed_after_durable_wal(
+                tx1,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .expect("commit");
 
         // Register first snapshot at ts=100
         let snap1 = SnapshotHandle::new(100, reader_tx_1).expect("snap1");
@@ -219,7 +253,13 @@ mod mvcc_gc_gates {
         let tx1 = TransactionId::new(1);
         let reader_tx = TransactionId::new(100);
 
-        status_table.set_committed(tx1).expect("commit");
+        status_table
+            .record_committed_after_durable_wal(
+                tx1,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .expect("commit");
 
         // Register initial snapshot at ts=100
         let snap = SnapshotHandle::new(100, reader_tx).expect("snapshot");
@@ -284,8 +324,20 @@ mod mvcc_gc_gates {
         let tx2 = TransactionId::new(2);
         let reader_tx = TransactionId::new(100);
 
-        status_table.set_committed(tx1).expect("commit tx1");
-        status_table.set_committed(tx2).expect("commit tx2");
+        status_table
+            .record_committed_after_durable_wal(
+                tx1,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .expect("commit tx1");
+        status_table
+            .record_committed_after_durable_wal(
+                tx2,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .expect("commit tx2");
 
         // Register snapshot at ts=500
         let snap = SnapshotHandle::new(500, reader_tx).expect("snapshot");
@@ -341,7 +393,11 @@ mod mvcc_gc_gates {
         let long_running_reader = TransactionId::new(100);
 
         status_table
-            .set_committed(creator_tx)
+            .record_committed_after_durable_wal(
+                creator_tx,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
             .expect("commit creator");
 
         // Register long-running transaction snapshot at ts=50
@@ -386,7 +442,13 @@ mod mvcc_gc_gates {
                 let tx_id = TransactionId::new(1000 + i);
 
                 // Commit transaction
-                status_table.set_committed(tx_id).expect("commit");
+                status_table
+                    .record_committed_after_durable_wal(
+                        tx_id,
+                        andromeda_tx::Lsn::new(1),
+                        andromeda_tx::Lsn::new(1),
+                    )
+                    .expect("commit");
 
                 // Simulate version visibility checks
                 for end_ts in [100, 200, 300, u64::MAX] {
@@ -436,7 +498,13 @@ mod mvcc_gc_gates {
         let tx1 = TransactionId::new(1);
         let reader_tx = TransactionId::new(100);
 
-        status_table.set_committed(tx1).expect("commit");
+        status_table
+            .record_committed_after_durable_wal(
+                tx1,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .expect("commit");
 
         // Register reader snapshot at ts=300
         let snap = SnapshotHandle::new(300, reader_tx).expect("snap");
@@ -482,7 +550,13 @@ mod mvcc_gc_gates {
         let (registry, status_table, collector) = setup_gc_system();
 
         let tx_id = TransactionId::new(1);
-        status_table.set_committed(tx_id).expect("commit");
+        status_table
+            .record_committed_after_durable_wal(
+                tx_id,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .expect("commit");
 
         // Register snapshot at ts=1000
         registry
@@ -525,7 +599,13 @@ mod mvcc_gc_gates {
         let (registry, status_table, collector) = setup_gc_system();
 
         let tx = TransactionId::new(1);
-        status_table.set_committed(tx).expect("commit");
+        status_table
+            .record_committed_after_durable_wal(
+                tx,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .expect("commit");
 
         // Register snapshot near max timestamp
         registry
@@ -551,14 +631,26 @@ mod mvcc_gc_gates {
         assert!(!collector.is_version_reclaimable(tx, 100));
 
         // Transition to Committed (now check eligibility)
-        status_table.set_committed(tx).expect("commit");
+        status_table
+            .record_committed_after_durable_wal(
+                tx,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .expect("commit");
         assert!(
             collector.is_version_reclaimable(tx, 50),
             "Reclaimable after commit"
         );
 
         // Check idempotence: committing again should not affect result
-        status_table.set_committed(tx).expect("commit again");
+        status_table
+            .record_committed_after_durable_wal(
+                tx,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .expect("commit again");
         assert!(
             collector.is_version_reclaimable(tx, 50),
             "Still reclaimable"
@@ -574,7 +666,13 @@ mod mvcc_gc_gates {
         let tx1 = TransactionId::new(1);
         let reader_tx = TransactionId::new(100);
 
-        status_table.set_committed(tx1).expect("commit");
+        status_table
+            .record_committed_after_durable_wal(
+                tx1,
+                andromeda_tx::Lsn::new(1),
+                andromeda_tx::Lsn::new(1),
+            )
+            .expect("commit");
 
         registry
             .register_snapshot(SnapshotHandle::new(500, reader_tx).expect("snap"))

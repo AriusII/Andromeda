@@ -100,16 +100,20 @@ fn parse_index_recovery_payload(
             bytes.len()
         ));
     }
-    if &bytes[0..8] != INDEX_REBUILD_PAYLOAD_MAGIC {
+    if bytes.get(0..8) != Some(INDEX_REBUILD_PAYLOAD_MAGIC.as_slice()) {
         return Err("missing IDXRBV1 recovery envelope magic".to_string());
     }
 
-    let major = read_u32(bytes, 8);
-    let minor = read_u32(bytes, 12);
-    let codec_version = bytes[16];
-    let operation_tag = bytes[17];
-    let max_key_size = read_u16(bytes, 18);
-    let index_id = read_u64(bytes, 20);
+    let major = read_u32(bytes, 8, "major")?;
+    let minor = read_u32(bytes, 12, "minor")?;
+    let codec_version = *bytes
+        .get(16)
+        .ok_or_else(|| "missing codec_version".to_string())?;
+    let operation_tag = *bytes
+        .get(17)
+        .ok_or_else(|| "missing operation tag".to_string())?;
+    let max_key_size = read_u16(bytes, 18, "max_key_size")?;
+    let index_id = read_u64(bytes, 20, "index_id")?;
 
     let Some(operation) = operation_from_tag(operation_tag) else {
         return Err(format!(
@@ -122,18 +126,14 @@ fn parse_index_recovery_payload(
             "operation tag {operation_tag} does not match record kind {kind:?}"
         ));
     }
-    if major == 0 && minor == 0 {
-        return Err("B-Tree format version 0.0 is reserved".to_string());
-    }
-    if max_key_size == 0 {
-        return Err("max_key_size must not be zero".to_string());
-    }
     if index_id == 0 {
         return Err("index_id must not be zero".to_string());
     }
+    let key_format = BTreeKeyFormatIdentity::try_new(major, minor, codec_version, max_key_size)
+        .map_err(|err| err.message().to_string())?;
 
     Ok(IndexRecoveryPayload {
-        key_format: BTreeKeyFormatIdentity::new(major, minor, codec_version, max_key_size),
+        key_format,
         operation,
         index_id,
     })
@@ -177,22 +177,32 @@ fn operation_from_tag(tag: u8) -> Option<BTreeOperationType> {
     }
 }
 
-fn read_u16(bytes: &[u8], start: usize) -> u16 {
-    let mut array = [0u8; 2];
-    array.copy_from_slice(&bytes[start..start + 2]);
-    u16::from_le_bytes(array)
+fn read_array<const N: usize>(
+    bytes: &[u8],
+    start: usize,
+    field: &'static str,
+) -> Result<[u8; N], String> {
+    let end = start
+        .checked_add(N)
+        .ok_or_else(|| format!("{field} offset overflows payload bounds"))?;
+    let slice = bytes
+        .get(start..end)
+        .ok_or_else(|| format!("{field} is truncated"))?;
+    let mut array = [0u8; N];
+    array.copy_from_slice(slice);
+    Ok(array)
 }
 
-fn read_u32(bytes: &[u8], start: usize) -> u32 {
-    let mut array = [0u8; 4];
-    array.copy_from_slice(&bytes[start..start + 4]);
-    u32::from_le_bytes(array)
+fn read_u16(bytes: &[u8], start: usize, field: &'static str) -> Result<u16, String> {
+    Ok(u16::from_le_bytes(read_array(bytes, start, field)?))
 }
 
-fn read_u64(bytes: &[u8], start: usize) -> u64 {
-    let mut array = [0u8; 8];
-    array.copy_from_slice(&bytes[start..start + 8]);
-    u64::from_le_bytes(array)
+fn read_u32(bytes: &[u8], start: usize, field: &'static str) -> Result<u32, String> {
+    Ok(u32::from_le_bytes(read_array(bytes, start, field)?))
+}
+
+fn read_u64(bytes: &[u8], start: usize, field: &'static str) -> Result<u64, String> {
+    Ok(u64::from_le_bytes(read_array(bytes, start, field)?))
 }
 
 pub(super) fn replay_page_allocate(

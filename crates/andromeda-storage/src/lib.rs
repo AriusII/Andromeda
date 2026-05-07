@@ -62,10 +62,15 @@ pub use extent::*;
 pub use file_wal::*;
 pub use hadr::*;
 pub use heap::{
-    HeapPage, HeapPageInsert, HeapScanIter, HeapVacuumMode, HeapVacuumPlan, HeapVacuumReport,
-    SlotEntry, slot_directory,
+    HEAP_PAGE_V1_PAYLOAD_OFFSET, HeapPage, HeapPageInsert, HeapScanIter, HeapVacuumMode,
+    HeapVacuumPlan, HeapVacuumReport, ProductStockHeapInsert, ProductStockHeapScanIter, SlotEntry,
+    slot_directory,
 };
-pub use heap_row_encoder::{ColumnDef, Datum, RowEncoder, RowSchema, ScalarType};
+pub use heap_row_encoder::{
+    ColumnDef, Datum, INVENTORY_PRODUCT_STOCK_TABLE_NAME, PRODUCT_STOCK_PRODUCT_ID_COLUMN,
+    PRODUCT_STOCK_QUANTITY_ON_HAND_COLUMN, PRODUCT_STOCK_ROW_ENCODED_LEN, ProductStockRow,
+    RowEncoder, RowSchema, ScalarType, product_stock_row_encoder, product_stock_row_schema,
+};
 pub use lsn::*;
 pub use manifest::*;
 pub use operational_profile::*;

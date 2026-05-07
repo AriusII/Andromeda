@@ -63,6 +63,9 @@ impl PermissionSet {
             .with_permission(Permission::AdminRecovery)
             .with_permission(Permission::AuditRead)
             .with_permission(Permission::AdminCertificateRotate)
+            .with_permission(Permission::ClusterPromote)
+            .with_permission(Permission::ClusterFenceNode)
+            .with_permission(Permission::ClusterManifestUpdate)
     }
 
     fn admin_permissions() -> Self {

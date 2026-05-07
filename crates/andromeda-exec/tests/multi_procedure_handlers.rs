@@ -25,6 +25,7 @@ use andromeda_catalog::{
     INVENTORY_RESERVE_STOCK_PROCEDURE_ID, inventory_query_stock_contract,
     inventory_release_stock_contract, inventory_reserve_stock_contract,
 };
+use andromeda_core::AndromedaErrorKind;
 use andromeda_exec::{
     InventoryQueryStockProcedureHandler, InventoryReleaseStockProcedureHandler,
     InventoryReserveStockExecutor, InventoryStock, InvocationContext, ProcedureHandler,
@@ -83,6 +84,36 @@ fn release_stock_effect() -> ReleaseStockEffect {
 
 fn test_invocation_context(permissions: Vec<String>) -> InvocationContext {
     InvocationContext::new(TraceId::new(0x0001_0000), permissions)
+}
+
+fn inventory_registry_with_all_handlers() -> ProcedureRegistry {
+    let mut registry = ProcedureRegistry::new();
+
+    let reserve_contract = inventory_reserve_stock_contract().expect("fixture must be valid");
+    let reserve_handler =
+        ReserveStockProcedureHandler::new(&reserve_contract, &reserve_stock_effect())
+            .expect("reserve handler fixture must be valid");
+    registry
+        .register(reserve_handler)
+        .expect("reserve handler must register");
+
+    let query_contract = inventory_query_stock_contract().expect("fixture must be valid");
+    let query_handler =
+        InventoryQueryStockProcedureHandler::new(&query_contract, &query_stock_effect_found())
+            .expect("query handler fixture must be valid");
+    registry
+        .register(query_handler)
+        .expect("query handler must register");
+
+    let release_contract = inventory_release_stock_contract().expect("fixture must be valid");
+    let release_handler =
+        InventoryReleaseStockProcedureHandler::new(&release_contract, &release_stock_effect())
+            .expect("release handler fixture must be valid");
+    registry
+        .register(release_handler)
+        .expect("release handler must register");
+
+    registry
 }
 
 // ReserveStockProcedureHandler — regression coverage
@@ -315,30 +346,7 @@ fn reserve_stock_handler_rejects_query_stock_contract() {
 
 #[test]
 fn procedure_registry_accepts_all_three_handlers_without_conflict() {
-    let mut registry = ProcedureRegistry::new();
-
-    let reserve_contract = inventory_reserve_stock_contract().unwrap();
-    let reserve_handler =
-        ReserveStockProcedureHandler::new(&reserve_contract, &reserve_stock_effect()).unwrap();
-    registry
-        .register(reserve_handler)
-        .expect("reserve handler must register");
-
-    let query_contract = inventory_query_stock_contract().unwrap();
-    let query_handler =
-        InventoryQueryStockProcedureHandler::new(&query_contract, &query_stock_effect_found())
-            .unwrap();
-    registry
-        .register(query_handler)
-        .expect("query handler must register");
-
-    let release_contract = inventory_release_stock_contract().unwrap();
-    let release_handler =
-        InventoryReleaseStockProcedureHandler::new(&release_contract, &release_stock_effect())
-            .unwrap();
-    registry
-        .register(release_handler)
-        .expect("release handler must register");
+    let registry = inventory_registry_with_all_handlers();
 
     assert_eq!(registry.len(), 3);
     assert!(registry.contains(INVENTORY_RESERVE_STOCK_PROCEDURE_ID));
@@ -362,6 +370,49 @@ fn procedure_registry_rejects_duplicate_registration() {
         result.is_err(),
         "duplicate ProcedureId registration must be rejected"
     );
+}
+
+#[test]
+fn procedure_registry_dispatches_query_stock_as_read_only_procedure() {
+    let registry = inventory_registry_with_all_handlers();
+    let ctx = test_invocation_context(vec!["Inventory.QueryStock.Execute".to_string()]);
+
+    let procedure = registry
+        .dispatch(INVENTORY_QUERY_STOCK_PROCEDURE_ID, ctx)
+        .expect("cataloged QueryStock handler must dispatch");
+
+    procedure
+        .validate()
+        .expect("dispatched QueryStock Procedure must validate");
+    assert!(
+        procedure.mutation_payload.is_empty(),
+        "read-only QueryStock dispatch must not produce mutation payload"
+    );
+    assert_eq!(
+        procedure.rows_affected, 0,
+        "read-only QueryStock dispatch must not report writes"
+    );
+    assert_eq!(
+        procedure.result_metadata.cardinality,
+        Cardinality::OptionalOne
+    );
+}
+
+#[test]
+fn procedure_registry_dispatch_denies_permission_outside_handler_contract() {
+    let registry = inventory_registry_with_all_handlers();
+    let ctx = test_invocation_context(vec![
+        "Inventory.QueryStock.Execute".to_string(),
+        "Inventory.ReleaseStock.Execute".to_string(),
+    ]);
+
+    let err = registry
+        .dispatch(INVENTORY_QUERY_STOCK_PROCEDURE_ID, ctx)
+        .expect_err("dispatch permissions must stay within the handler contract");
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Security);
+    assert!(err.message().contains("Inventory.ReleaseStock.Execute"));
+    assert!(err.message().contains("handler contract scope"));
 }
 
 // Query effect construction validation

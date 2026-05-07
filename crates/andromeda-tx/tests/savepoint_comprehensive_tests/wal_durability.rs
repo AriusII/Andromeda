@@ -29,10 +29,10 @@ fn wd_create_savepoint_does_not_advance_lsn_or_status() {
     mgr.create_savepoint(tx, "no_lsn_change").unwrap();
     let after = mgr.snapshot(tx).unwrap().unwrap();
 
-    assert_eq!(before.state_machine.state, after.state_machine.state);
+    assert_eq!(before.state_machine.state(), after.state_machine.state());
     assert_eq!(
-        before.state_machine.durable_commit_lsn,
-        after.state_machine.durable_commit_lsn
+        before.state_machine.durable_commit_lsn(),
+        after.state_machine.durable_commit_lsn()
     );
     assert_eq!(before.status, after.status);
 }
@@ -98,17 +98,15 @@ fn wd_incomplete_tx_remains_invisible_after_replay() {
 }
 
 /// TC-WD-0006
-/// Duplicate commit records during replay are idempotent; first wins.
+/// Exact duplicate commit records during replay are idempotent; first wins.
 #[test]
-fn wd_duplicate_commit_replay_is_idempotent_first_wins() {
+fn wd_exact_duplicate_commit_replay_is_idempotent_first_wins() {
     let (commit_log, status_table) = make_commit_log();
     let tx = TransactionId::new(103);
+    let commit = TxWalReplayRecord::commit(tx, Lsn::new(10), ts(100), 3, IsolationLevel::Snapshot);
 
     let summary = commit_log
-        .reconstruct_from_tx_wal_replay([
-            TxWalReplayRecord::commit(tx, Lsn::new(10), ts(100), 3, IsolationLevel::Snapshot),
-            TxWalReplayRecord::commit(tx, Lsn::new(11), ts(101), 99, IsolationLevel::Serializable),
-        ])
+        .reconstruct_from_tx_wal_replay([commit.clone(), commit])
         .unwrap();
 
     assert_eq!(summary.commits_restored, 1);
@@ -119,17 +117,15 @@ fn wd_duplicate_commit_replay_is_idempotent_first_wins() {
 }
 
 /// TC-WD-0007
-/// Duplicate rollback records during replay are idempotent; first wins.
+/// Exact duplicate rollback records during replay are idempotent; first wins.
 #[test]
-fn wd_duplicate_rollback_replay_is_idempotent_first_wins() {
+fn wd_exact_duplicate_rollback_replay_is_idempotent_first_wins() {
     let (commit_log, status_table) = make_commit_log();
     let tx = TransactionId::new(104);
+    let rollback = TxWalReplayRecord::rollback(tx, Lsn::new(20), ts(200), 1);
 
     let summary = commit_log
-        .reconstruct_from_tx_wal_replay([
-            TxWalReplayRecord::rollback(tx, Lsn::new(20), ts(200), 1),
-            TxWalReplayRecord::rollback(tx, Lsn::new(21), ts(201), 2),
-        ])
+        .reconstruct_from_tx_wal_replay([rollback.clone(), rollback])
         .unwrap();
 
     assert_eq!(summary.rollbacks_restored, 1);
@@ -142,7 +138,7 @@ fn wd_duplicate_rollback_replay_is_idempotent_first_wins() {
 /// Conflicting commit-then-rollback records are rejected.
 #[test]
 fn wd_conflicting_commit_and_rollback_records_are_rejected() {
-    let (commit_log, _) = make_commit_log();
+    let (commit_log, status_table) = make_commit_log();
     let tx = TransactionId::new(105);
 
     let err = commit_log
@@ -153,8 +149,9 @@ fn wd_conflicting_commit_and_rollback_records_are_rejected() {
         .unwrap_err();
 
     assert_eq!(err.kind(), AndromedaErrorKind::Transaction);
-    // First record still wins for commit LSN.
-    assert_eq!(commit_log.get_commit_lsn(tx), Some(Lsn::new(30)));
+    assert_eq!(status_table.status(tx), None);
+    assert_eq!(commit_log.get_commit_lsn(tx), None);
+    assert_eq!(commit_log.get_rollback_lsn(tx), None);
 }
 
 /// TC-WD-0009 · INV-SP-06

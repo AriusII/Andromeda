@@ -15,7 +15,7 @@ from typing import Sequence
 DEFAULT_PROTO_ROOTS = (
     Path("crates/andromeda-proto/proto"),
     Path("proto"),
-    Path("schemas/proto"),
+    Path(".codex/schemas/proto"),
 )
 
 DEFAULT_POLICY_ROOTS = (

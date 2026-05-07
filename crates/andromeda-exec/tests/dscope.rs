@@ -3,7 +3,9 @@
 //! These tests verify the security contract that caller permissions must not exceed
 //! handler contract permissions, preventing privilege escalation attacks.
 
-use andromeda_catalog::ProcedureContractRef;
+use andromeda_catalog::{
+    PolicyVersion, ProcedureContractBinding, ProcedureContractRef, StatsVersion,
+};
 use andromeda_core::{AndromedaResult, ProcedureId};
 use andromeda_core::{CatalogVersion, ContractHash};
 use andromeda_exec::{
@@ -50,6 +52,7 @@ impl ProcedureHandler for TestProcedureHandler {
     fn execute(&self, _context: InvocationContext) -> AndromedaResult<LocalProcedure> {
         Ok(LocalProcedure {
             contract: self.contract(),
+            contract_binding: binding_for(self.contract()),
             required_permissions: self
                 .required_permissions
                 .iter()
@@ -59,6 +62,16 @@ impl ProcedureHandler for TestProcedureHandler {
             mutation_payload: vec![1],
             rows_affected: 1,
         })
+    }
+}
+
+fn binding_for(contract: ProcedureContractRef) -> ProcedureContractBinding {
+    ProcedureContractBinding {
+        procedure_id: contract.procedure_id,
+        catalog_version: contract.catalog_version,
+        contract_hash: contract.contract_hash,
+        stats_version: StatsVersion::new(1),
+        policy_version: PolicyVersion::new([1; PolicyVersion::LEN]),
     }
 }
 

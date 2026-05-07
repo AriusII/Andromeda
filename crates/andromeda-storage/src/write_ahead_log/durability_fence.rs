@@ -11,8 +11,8 @@
 //! > after the WAL has itself durably persisted those modifications.
 //!
 //! This is enforced through LSN ordering:
-//! - `page.first_dirty_lsn` ≤ `wal.durable_lsn` (required before flush)
-//! - `manifest.checkpoint_lsn` ≤ `wal.checkpoint_lsn` (required before manifest switch)
+//! - `page.latest_dirty_lsn` ≤ `wal.durable_lsn` (required before flush)
+//! - `manifest.checkpoint_lsn` ≤ `wal.checkpoint_lsn` ≤ `wal.durable_lsn` (required before manifest switch)
 //! - `recovery.recovery_floor_lsn` ≥ `manifest.required_wal_start_lsn` (required for recovery)
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
@@ -28,6 +28,11 @@ pub enum DurabilityFenceError {
     ManifestCheckpointNotDurable {
         manifest_checkpoint_lsn: u64,
         wal_checkpoint_lsn: u64,
+    },
+    /// WAL checkpoint evidence itself is ahead of the durable WAL prefix.
+    WalCheckpointNotDurable {
+        wal_checkpoint_lsn: u64,
+        wal_durable_lsn: u64,
     },
     /// Manifest required WAL start LSN exceeds recovery floor (recovery would miss data).
     RecoveryFloorBeforeRequired {
@@ -61,6 +66,14 @@ impl DurabilityFenceError {
                  manifest switch is not safe",
                 manifest_checkpoint_lsn, wal_checkpoint_lsn
             ),
+            Self::WalCheckpointNotDurable {
+                wal_checkpoint_lsn,
+                wal_durable_lsn,
+            } => format!(
+                "WAL checkpoint LSN {} exceeds durable WAL LSN {}; \
+                 manifest switch checkpoint evidence is not durable",
+                wal_checkpoint_lsn, wal_durable_lsn
+            ),
             Self::RecoveryFloorBeforeRequired {
                 recovery_floor_lsn,
                 required_wal_start_lsn,
@@ -88,11 +101,11 @@ impl DurabilityFenceError {
 
 /// Validate that a page's LSN has been made durable in the WAL before page flush.
 ///
-/// **Invariant:** A dirty page can only be written to cold storage if its first
-/// modification's LSN is guaranteed durable in the WAL.
+/// **Invariant:** A dirty page can only be written to cold storage if the
+/// latest dirty LSN represented by the page image is guaranteed durable in the WAL.
 ///
 /// # Arguments
-/// - `page_lsn`: The LSN at which this page was first modified (its first_dirty_lsn)
+/// - `page_lsn`: The highest dirty LSN represented by the page image.
 /// - `wal_checkpoint_lsn`: The maximum LSN known to be durable in the WAL
 ///
 /// # Returns
@@ -139,11 +152,14 @@ pub fn validate_wal_durability_before_page_flush(
 /// # Arguments
 /// - `manifest_checkpoint_lsn`: The base checkpoint LSN of the new manifest
 /// - `wal_durable_lsn`: The maximum LSN currently durable in the WAL
-/// - `wal_checkpoint_lsn`: The checkpoint LSN recorded in the WAL segment
+/// - `wal_checkpoint_lsn`: The checkpoint LSN recorded in the durable WAL segment
 ///
 /// # Returns
-/// - `Ok(())` if manifest_checkpoint_lsn ≤ wal_checkpoint_lsn (manifest is safe to switch)
-/// - `Err(DurabilityFenceError::ManifestCheckpointNotDurable)` otherwise
+/// - `Ok(())` if manifest_checkpoint_lsn ≤ wal_checkpoint_lsn ≤ wal_durable_lsn
+/// - `Err(DurabilityFenceError::ManifestCheckpointNotDurable)` if the manifest
+///   outruns the WAL checkpoint
+/// - `Err(DurabilityFenceError::WalCheckpointNotDurable)` if checkpoint evidence
+///   itself outruns the durable WAL prefix
 ///
 /// # Rationale
 /// The manifest captures the state of the storage layer at a checkpoint. If we switch
@@ -171,9 +187,29 @@ pub fn validate_wal_durability_before_page_flush(
 /// ```
 pub fn validate_manifest_atomic_switch(
     manifest_checkpoint_lsn: Lsn,
-    _wal_durable_lsn: Lsn,
+    wal_durable_lsn: Lsn,
     wal_checkpoint_lsn: Lsn,
 ) -> AndromedaResult<()> {
+    if manifest_checkpoint_lsn.is_zero()
+        && (!wal_checkpoint_lsn.is_zero() || !wal_durable_lsn.is_zero())
+    {
+        return Err(DurabilityFenceError::LsnOrderingViolation {
+            earlier_name: "bootstrap manifest checkpoint".to_string(),
+            earlier_lsn: manifest_checkpoint_lsn.get(),
+            later_name: "nonzero durable WAL/checkpoint evidence".to_string(),
+            later_lsn: wal_checkpoint_lsn.get().max(wal_durable_lsn.get()),
+        }
+        .into_andromeda_error());
+    }
+
+    if wal_checkpoint_lsn.get() > wal_durable_lsn.get() {
+        return Err(DurabilityFenceError::WalCheckpointNotDurable {
+            wal_checkpoint_lsn: wal_checkpoint_lsn.get(),
+            wal_durable_lsn: wal_durable_lsn.get(),
+        }
+        .into_andromeda_error());
+    }
+
     if manifest_checkpoint_lsn.get() > wal_checkpoint_lsn.get() {
         return Err(DurabilityFenceError::ManifestCheckpointNotDurable {
             manifest_checkpoint_lsn: manifest_checkpoint_lsn.get(),
@@ -352,6 +388,18 @@ mod tests {
         let result = validate_manifest_atomic_switch(manifest_ckpt, wal_durable, wal_ckpt);
         assert!(result.is_err());
         assert!(result.unwrap_err().message().contains("checkpoint LSN"));
+    }
+
+    #[test]
+    fn manifest_switch_blocked_when_wal_checkpoint_exceeds_durable_wal() {
+        let manifest_ckpt = Lsn::new(500);
+        let wal_durable = Lsn::new(499);
+        let wal_ckpt = Lsn::new(500);
+        let result = validate_manifest_atomic_switch(manifest_ckpt, wal_durable, wal_ckpt);
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert_eq!(error.kind(), AndromedaErrorKind::Storage);
+        assert!(error.message().contains("durable WAL LSN"));
     }
 
     #[test]

@@ -137,6 +137,28 @@ fn test_cannot_release_in_active_state() {
 }
 
 #[test]
+fn test_transaction_coordinator_rejects_release_in_active_state() {
+    let tx_mgr = TransactionManager::new();
+    let lock_mgr = LockManager::new();
+    let tx_id = tx_mgr.begin().unwrap();
+    let coordinator = tx_mgr.lock_coordinator(&lock_mgr);
+    let resource = LockResource::row(1, 2, 20).unwrap();
+
+    assert_eq!(
+        coordinator
+            .acquire(tx_id, resource, LockMode::Shared)
+            .unwrap(),
+        LockAcquireStatus::Granted
+    );
+
+    let err = coordinator
+        .release(tx_id, resource)
+        .expect_err("single-resource release must wait for shrinking phase");
+    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Transaction);
+    assert!(lock_mgr.entry(resource).unwrap().is_some());
+}
+
+#[test]
 fn test_cannot_release_in_created_state() {
     let state = TransactionState::Created;
     assert!(!TwoPhaseLocksValidator::state_allows_release(state));
@@ -259,17 +281,17 @@ fn test_2pl_state_transition_sequence_valid() {
     // Created → Active
     let tx_id = tx_mgr.begin().unwrap();
     let snap = tx_mgr.snapshot(tx_id).unwrap().unwrap();
-    assert_eq!(snap.state_machine.state, TransactionState::Active);
+    assert_eq!(snap.state_machine.state(), TransactionState::Active);
 
     // Active → Committing
     tx_mgr.request_commit(tx_id).unwrap();
     let snap = tx_mgr.snapshot(tx_id).unwrap().unwrap();
-    assert_eq!(snap.state_machine.state, TransactionState::Committing);
+    assert_eq!(snap.state_machine.state(), TransactionState::Committing);
 
     // Committing → Committed (durable)
     tx_mgr.commit_durable(tx_id, 1).unwrap();
     let snap = tx_mgr.snapshot(tx_id).unwrap().unwrap();
-    assert_eq!(snap.state_machine.state, TransactionState::Committed);
+    assert_eq!(snap.state_machine.state(), TransactionState::Committed);
 
     // Committed → Disposed
     tx_mgr.dispose(tx_id).unwrap();
@@ -283,17 +305,17 @@ fn test_2pl_rollback_path_sequence() {
 
     let tx_id = tx_mgr.begin().unwrap();
     let snap = tx_mgr.snapshot(tx_id).unwrap().unwrap();
-    assert_eq!(snap.state_machine.state, TransactionState::Active);
+    assert_eq!(snap.state_machine.state(), TransactionState::Active);
 
     // Active → RollingBack
     tx_mgr.request_rollback(tx_id).unwrap();
     let snap = tx_mgr.snapshot(tx_id).unwrap().unwrap();
-    assert_eq!(snap.state_machine.state, TransactionState::RollingBack);
+    assert_eq!(snap.state_machine.state(), TransactionState::RollingBack);
 
     // RollingBack → RolledBack (durable)
     tx_mgr.rollback_durable(tx_id, 1).unwrap();
     let snap = tx_mgr.snapshot(tx_id).unwrap().unwrap();
-    assert_eq!(snap.state_machine.state, TransactionState::RolledBack);
+    assert_eq!(snap.state_machine.state(), TransactionState::RolledBack);
 
     // RolledBack → Disposed
     tx_mgr.dispose(tx_id).unwrap();
@@ -320,7 +342,7 @@ fn test_cannot_acquire_after_entering_committing() {
 
     // Verify state machine is now in Committing
     let snap = tx_mgr.snapshot(tx_id).unwrap().unwrap();
-    assert_eq!(snap.state_machine.state, TransactionState::Committing);
+    assert_eq!(snap.state_machine.state(), TransactionState::Committing);
 
     // Try to acquire another lock in Committing state
     // This should fail because state_allows_acquire(Committing) is false in our validator
@@ -348,7 +370,7 @@ fn test_poisoned_transaction_rejects_locks() {
 
     // Verify state is now Poisoned
     let snap = tx_mgr.snapshot(tx_id).unwrap().unwrap();
-    assert_eq!(snap.state_machine.state, TransactionState::Poisoned);
+    assert_eq!(snap.state_machine.state(), TransactionState::Poisoned);
 
     // Verify Poisoned state disallows acquisition
     assert!(!TwoPhaseLocksValidator::state_allows_acquire(
@@ -409,7 +431,7 @@ fn test_failed_transaction_must_rollback() {
 
     // Verify state is Failed
     let snap = tx_mgr.snapshot(tx_id).unwrap().unwrap();
-    assert_eq!(snap.state_machine.state, TransactionState::Failed);
+    assert_eq!(snap.state_machine.state(), TransactionState::Failed);
 
     // Failed transactions cannot acquire locks
     assert!(!TwoPhaseLocksValidator::state_allows_acquire(
@@ -419,7 +441,7 @@ fn test_failed_transaction_must_rollback() {
     // But they CAN transition to RollingBack (managed by transaction manager)
     tx_mgr.request_rollback(tx_id).unwrap();
     let snap = tx_mgr.snapshot(tx_id).unwrap().unwrap();
-    assert_eq!(snap.state_machine.state, TransactionState::RollingBack);
+    assert_eq!(snap.state_machine.state(), TransactionState::RollingBack);
 }
 
 #[test]
@@ -517,11 +539,11 @@ fn test_multiple_transactions_independent_2pl() {
     // Transaction 1 commits
     tx_mgr.request_commit(tx1).unwrap();
     let snap1 = tx_mgr.snapshot(tx1).unwrap().unwrap();
-    assert_eq!(snap1.state_machine.state, TransactionState::Committing);
+    assert_eq!(snap1.state_machine.state(), TransactionState::Committing);
 
     // Transaction 2 can still be in Active/acquiring
     let snap2 = tx_mgr.snapshot(tx2).unwrap().unwrap();
-    assert_eq!(snap2.state_machine.state, TransactionState::Active);
+    assert_eq!(snap2.state_machine.state(), TransactionState::Active);
 
     // Transaction 1 cannot acquire more locks (Committing state)
     let acq1_fail = TwoPhaseLocksValidator::validate_operation(

@@ -1,5 +1,8 @@
 use crate::TraceId;
-use andromeda_core::AndromedaResult;
+use andromeda_core::{
+    AndromedaResult, PRINCIPAL_POLICY_EVIDENCE_VERSION, PrincipalPolicyEvidenceBinding,
+    PrincipalPolicyVersion,
+};
 
 use super::{EventSchemaVersion, contains_sensitive_marker, non_empty_reason, observe_error};
 
@@ -19,13 +22,25 @@ impl SurfaceScope {
 
     pub const fn permits_permission(self, permission: Permission) -> bool {
         match self {
-            Self::Application => !permission.is_admin_operation_permission(),
+            Self::Application => {
+                matches!(
+                    permission,
+                    Permission::ExecuteProcedure | Permission::ReadContract
+                )
+            }
             Self::BackupAgent => matches!(
                 permission.family(),
                 PermissionFamily::Recovery | PermissionFamily::Diagnostics
             ),
             Self::MonitoringAgent => matches!(permission.family(), PermissionFamily::Diagnostics),
-            Self::Administration | Self::Cluster => true,
+            Self::Administration => matches!(
+                permission.family(),
+                PermissionFamily::Definition
+                    | PermissionFamily::Diagnostics
+                    | PermissionFamily::Security
+                    | PermissionFamily::Recovery
+            ),
+            Self::Cluster => matches!(permission.family(), PermissionFamily::Cluster),
         }
     }
 }
@@ -220,6 +235,92 @@ impl UserPrincipal {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SecurityPolicyVersionEvidence {
+    pub policy_version: u64,
+    pub policy_digest: String,
+}
+
+impl SecurityPolicyVersionEvidence {
+    pub fn new(policy_version: u64, policy_digest: impl Into<String>) -> AndromedaResult<Self> {
+        let evidence = Self {
+            policy_version,
+            policy_digest: non_empty_evidence("security policy digest", policy_digest)?,
+        };
+        if !evidence.has_version_evidence() {
+            return Err(observe_error(
+                "security policy version evidence requires non-zero version and canonical sha256 digest",
+            ));
+        }
+        Ok(evidence)
+    }
+
+    pub fn try_bootstrap_v0() -> AndromedaResult<Self> {
+        Self::from_core_policy_binding(&PrincipalPolicyEvidenceBinding::current()?)
+    }
+
+    /// Compatibility helper for tests and static bootstrap fixtures.
+    ///
+    /// Request-handling audit paths must prefer [`Self::try_bootstrap_v0`] so
+    /// policy-evidence regressions return typed observability errors.
+    pub fn bootstrap_v0() -> Self {
+        match Self::try_bootstrap_v0() {
+            Ok(evidence) => evidence,
+            Err(_) => Self {
+                policy_version: PRINCIPAL_POLICY_EVIDENCE_VERSION,
+                policy_digest: PrincipalPolicyVersion::current().sha256_digest(),
+            },
+        }
+    }
+
+    pub fn from_core_policy_binding(
+        binding: &PrincipalPolicyEvidenceBinding,
+    ) -> AndromedaResult<Self> {
+        Self::new(
+            binding.policy_version(),
+            binding.policy_digest().to_string(),
+        )
+    }
+
+    pub fn from_core_policy_version(
+        principal_policy_version: PrincipalPolicyVersion,
+    ) -> AndromedaResult<Self> {
+        Self::from_core_policy_binding(&principal_policy_version.evidence_binding()?)
+    }
+
+    pub fn matches_core_policy_binding(&self, binding: &PrincipalPolicyEvidenceBinding) -> bool {
+        self.matches_core_policy_version_and_digest(binding)
+    }
+
+    pub fn matches_core_policy_version_and_digest(
+        &self,
+        binding: &PrincipalPolicyEvidenceBinding,
+    ) -> bool {
+        binding.matches_version_and_digest(self.policy_version, &self.policy_digest)
+            && self.has_version_evidence()
+    }
+
+    pub fn matches_core_policy_version(
+        &self,
+        principal_policy_version: PrincipalPolicyVersion,
+    ) -> bool {
+        principal_policy_version
+            .evidence_binding()
+            .is_ok_and(|binding| self.matches_core_policy_binding(&binding))
+    }
+
+    pub fn has_version_evidence(&self) -> bool {
+        PrincipalPolicyEvidenceBinding::has_version_evidence_parts(
+            self.policy_version,
+            &self.policy_digest,
+        ) && !contains_sensitive_marker(&self.policy_digest)
+    }
+
+    pub fn contains_sensitive_evidence(&self) -> bool {
+        contains_sensitive_marker(&self.policy_digest)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SecurityAuditOutcome {
     Allowed,
@@ -235,6 +336,7 @@ pub struct SecurityAuditTrace {
     pub principal: UserPrincipal,
     pub permission: Permission,
     pub outcome: SecurityAuditOutcome,
+    pub policy_version: SecurityPolicyVersionEvidence,
     pub reason: String,
 }
 
@@ -248,6 +350,37 @@ impl SecurityAuditTrace {
         outcome: SecurityAuditOutcome,
         reason: impl Into<String>,
     ) -> AndromedaResult<Self> {
+        Self::new_with_policy_version(
+            trace_id,
+            surface,
+            certificate,
+            principal,
+            permission,
+            outcome,
+            SecurityPolicyVersionEvidence::try_bootstrap_v0()?,
+            reason,
+        )
+    }
+
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "Security audit construction keeps identity, permission, decision, policy version, and reason evidence explicit."
+    )]
+    pub fn new_with_policy_version(
+        trace_id: TraceId,
+        surface: SurfaceScope,
+        certificate: CertificateIdentity,
+        principal: UserPrincipal,
+        permission: Permission,
+        outcome: SecurityAuditOutcome,
+        policy_version: SecurityPolicyVersionEvidence,
+        reason: impl Into<String>,
+    ) -> AndromedaResult<Self> {
+        if !policy_version.has_version_evidence() {
+            return Err(observe_error(
+                "security audit traces require security policy version evidence",
+            ));
+        }
         Ok(Self {
             trace_id,
             schema_version: EventSchemaVersion::V0,
@@ -256,6 +389,7 @@ impl SecurityAuditTrace {
             principal,
             permission,
             outcome,
+            policy_version,
             reason: non_empty_reason(reason)?,
         })
     }
@@ -280,9 +414,14 @@ impl SecurityAuditTrace {
         self.surface.permits_permission(self.permission)
     }
 
+    pub fn has_policy_version_evidence(&self) -> bool {
+        self.policy_version.has_version_evidence()
+    }
+
     pub fn contains_sensitive_evidence(&self) -> bool {
         self.certificate.contains_sensitive_evidence()
             || self.principal.contains_sensitive_evidence()
+            || self.policy_version.contains_sensitive_evidence()
             || contains_sensitive_marker(&self.reason)
     }
 }
@@ -337,7 +476,8 @@ impl AdminOperationTrace {
     }
 
     pub const fn surface_permits_operation(&self) -> bool {
-        self.surface.permits_admin_operation()
+        self.surface
+            .permits_permission(self.operation.required_permission())
     }
 
     pub fn has_identity_evidence(&self) -> bool {
@@ -368,4 +508,79 @@ fn non_empty_evidence(label: &str, value: impl Into<String>) -> AndromedaResult<
     }
 
     Ok(value)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use andromeda_core::PRINCIPAL_POLICY_EVIDENCE_VERSION;
+
+    fn certificate() -> CertificateIdentity {
+        CertificateIdentity::new(
+            "sha256:observe-policy-test",
+            "CN=observe-policy-test",
+            SurfaceScope::Application,
+        )
+        .expect("test certificate evidence is explicit")
+    }
+
+    fn principal() -> UserPrincipal {
+        UserPrincipal::new("user:observe-policy", UserPrincipalKind::Service)
+            .expect("test principal evidence is explicit")
+    }
+
+    #[test]
+    fn security_policy_evidence_converts_from_core_binding() {
+        let core_policy_version = PrincipalPolicyVersion::test_vector(0x2a);
+        let evidence = SecurityPolicyVersionEvidence::from_core_policy_version(core_policy_version)
+            .expect("core policy version converts to audit policy evidence");
+
+        assert_eq!(evidence.policy_version, PRINCIPAL_POLICY_EVIDENCE_VERSION);
+        assert!(evidence.matches_core_policy_version(core_policy_version));
+        assert!(!evidence.matches_core_policy_version(PrincipalPolicyVersion::test_vector(0x2b)));
+
+        let wrong_version =
+            PrincipalPolicyEvidenceBinding::from_principal_policy_version(2, core_policy_version)
+                .expect("alternate policy evidence remains well-formed");
+        assert!(!evidence.matches_core_policy_version_and_digest(&wrong_version));
+
+        let wrong_digest = PrincipalPolicyVersion::test_vector(0x2b)
+            .evidence_binding()
+            .expect("alternate digest evidence is well-formed");
+        assert!(!evidence.matches_core_policy_version_and_digest(&wrong_digest));
+    }
+
+    #[test]
+    fn security_policy_evidence_rejects_version_only_or_digest_only() {
+        let valid_digest =
+            "sha256:1111111111111111111111111111111111111111111111111111111111111111";
+
+        assert!(SecurityPolicyVersionEvidence::new(0, valid_digest).is_err());
+        assert!(SecurityPolicyVersionEvidence::new(1, "").is_err());
+        assert!(
+            SecurityPolicyVersionEvidence::new(
+                1,
+                "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            )
+            .is_err(),
+            "audit policy evidence uses the same canonical digest rule as core"
+        );
+
+        let version_only = SecurityPolicyVersionEvidence {
+            policy_version: 1,
+            policy_digest: String::new(),
+        };
+        let err = SecurityAuditTrace::new_with_policy_version(
+            TraceId::new(901),
+            SurfaceScope::Application,
+            certificate(),
+            principal(),
+            Permission::ExecuteProcedure,
+            SecurityAuditOutcome::Denied,
+            version_only,
+            "version-only policy evidence is not audit-ready",
+        )
+        .unwrap_err();
+        assert!(err.message().contains("policy version evidence"));
+    }
 }

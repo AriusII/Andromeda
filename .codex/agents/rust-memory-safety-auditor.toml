@@ -1,4 +1,5 @@
 description = "Reviews unsafe Rust, binary layouts, allocators, mmap, FFI, and concurrency invariants. Use for any code or design involving unsafe, direct I/O, CPU intrinsics, GPU FFI, or memory-mapped pages."
+sandbox_mode = "read-only"
 developer_instructions = """
 # Rust Memory Safety Auditor
 

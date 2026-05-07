@@ -1,55 +1,11 @@
-//! V0 scored, expirable, *non-authoritative* scenario evidence scaffold.
+//! Bounded, expirable ScenarioEvidence records for advisory optimizer input.
 //!
-//! **Status: SCAFFOLD ONLY.**  This module does not run benchmarks, does
-//! not collect timings, does not maintain a workload catalog, and does
-//! **not** make optimizer decisions.  It only models the bounded shape of
-//! a [`ScenarioEvidence`] record that a future Procedure-only optimizer
-//! may consume *as advisory input*.  The optimizer remains the sole
-//! authoritative decision maker.
-//!
-//! ## Doctrine pinned by this module
-//!
-//! 1. **Advisory by construction.**  Every [`ScenarioEvidence`] reports
-//!    `is_authoritative() == false`.  There is no constructor, no setter,
-//!    and no variant that can flip the flag.  Optimizer code that ever
-//!    needs to know "may I treat this as binding?" gets a single,
-//!    unambiguous, type-level `false`.
-//! 2. **Bounded score and confidence.**  Scores and confidence values
-//!    live on a fixed `0..=1000` integer scale ("permille").  No floats,
-//!    no implicit clamping.  Out-of-range values are rejected at
-//!    construction.  This guarantees deterministic byte-for-byte digests
-//!    on every node.
-//! 3. **Mandatory validity window.**  Every record carries
-//!    `issued_at < expires_at` ([`EngineTimestamp`] millis).  Helpers
-//!    such as [`ScenarioEvidence::is_expired_at`] and
-//!    [`ScenarioEvidence::validate_for_use_at`] make expiry an explicit
-//!    consumer-side check.  There is **no silent expiry bypass**: the
-//!    consumer must pass a clock reading, and an expired record raises a
-//!    closed error variant.
-//! 4. **Explicit version targeting.**  The target couples a
-//!    `ProcedureId` with a `StatsVersion` (and optional `ContractHash` /
-//!    [`PlanClass`]).  Bumping the stats version or contract hash
-//!    automatically separates digests so a benchmark gathered against
-//!    one snapshot can never silently apply to a different snapshot.
-//! 5. **Deterministic digest.**  [`ScenarioEvidence::digest`] is a
-//!    SHA-256 over a domain-tagged, byte-tagged, little-endian encoding
-//!    of every field.  Two records that compare equal must produce the
-//!    same digest on every node, regardless of build target.
-//! 6. **Closed validation errors.**  [`ScenarioEvidenceError`] enumerates
-//!    every reject reason.  No free-form strings, no SQL surface, no
-//!    unbounded payloads.
-//!
-//! ## What this module deliberately does NOT do
-//!
-//! - It does not execute a workload or measure runtime.
-//! - It does not select a plan, score a plan, or rank procedures.
-//! - It does not own a publication store, eviction policy, or wire
-//!   format.
-//! - It does not interpret SQL.  The project remains Procedure-only.
-//! - It does not let evidence become authoritative.  Even a perfectly
-//!   scored, freshly-issued record is advisory input to the optimizer.
+//! Scenario evidence is never authoritative, never selects a plan alone, and
+//! never drives an active StatsVersion transition. Consumers must validate the
+//! validity window and combine the advisory token with catalog, statistics,
+//! contract, and optimizer decision evidence.
 
-use andromeda_core::{ContractHash, EngineTimestamp, ProcedureId};
+use andromeda_core::{CatalogVersion, ContractHash, EngineTimestamp, ProcedureId};
 
 use crate::contracts::StatsVersion;
 use crate::digest::Sha256;
@@ -60,6 +16,30 @@ const SCENARIO_EVIDENCE_DOMAIN: &[u8] = b"andromeda.scenario_evidence.v0";
 
 /// Maximum admissible score/confidence value on the fixed permille scale.
 const EVIDENCE_PERMILLE_MAX: u16 = 1_000;
+
+/// Closed optimizer consumption boundary for [`ScenarioEvidence`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum ScenarioEvidenceOptimizerBoundary {
+    AdvisoryOnly,
+}
+
+impl ScenarioEvidenceOptimizerBoundary {
+    pub const VARIANT_COUNT: usize = 1;
+
+    pub const fn as_tag(self) -> u8 {
+        match self {
+            Self::AdvisoryOnly => 0x01,
+        }
+    }
+
+    pub const fn is_authoritative(self) -> bool {
+        false
+    }
+
+    pub const fn can_select_plan_alone(self) -> bool {
+        false
+    }
+}
 
 const fn validate_evidence_permille(
     value: u16,
@@ -73,12 +53,6 @@ const fn validate_evidence_permille(
 }
 
 /// Bounded scenario-kind taxonomy.
-///
-/// The variants are closed.  Adding a variant is a doctrine change
-/// because it expands what kind of advisory signal the optimizer is
-/// allowed to react to.  Each variant carries a stable `as_tag` byte
-/// that participates in the digest so two scenarios of different kinds
-/// never collide.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ScenarioKind {
     /// A bounded micro-benchmark targeting a single procedure under a
@@ -106,8 +80,6 @@ impl ScenarioKind {
         }
     }
 
-    /// Total number of variants.  Asserted by tests so accidental growth
-    /// is flagged immediately.
     pub const VARIANT_COUNT: usize = 4;
 }
 
@@ -237,25 +209,29 @@ impl ValidityWindow {
 
 /// Bounded targeting metadata.
 ///
-/// Couples a procedure id with the statistics snapshot the evidence was
-/// gathered against, plus optional plan-class and contract-hash refinements.
-/// Optionality is encoded with explicit `Option` so the digest distinguishes
-/// "absent" from "present-but-zero".
+/// Couples a procedure id with the catalog and statistics snapshots the
+/// evidence was gathered against, plus optional plan-class and contract-hash
+/// refinements. Optionality is encoded with explicit `Option` so the digest
+/// distinguishes "absent" from "present-but-zero".
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ScenarioTarget {
     pub procedure_id: ProcedureId,
+    pub catalog_version: CatalogVersion,
     pub stats_version: StatsVersion,
     pub plan_class: Option<PlanClass>,
     pub contract_hash: Option<ContractHash>,
 }
 
 impl ScenarioTarget {
-    /// Validate the target.  `procedure_id` and `stats_version` must be
-    /// non-zero so evidence cannot be implicitly addressed at a
-    /// "no procedure" / "no stats" sentinel.
+    /// Validate the target.  `procedure_id`, `catalog_version`, and
+    /// `stats_version` must be non-zero so evidence cannot be implicitly
+    /// addressed at a "no procedure" / "no catalog" / "no stats" sentinel.
     pub fn validate(&self) -> Result<(), ScenarioEvidenceError> {
         if self.procedure_id.get() == 0 {
             return Err(ScenarioEvidenceError::TargetProcedureIdZero);
+        }
+        if self.catalog_version.get() == 0 {
+            return Err(ScenarioEvidenceError::TargetCatalogVersionZero);
         }
         if self.stats_version.get() == 0 {
             return Err(ScenarioEvidenceError::TargetStatsVersionZero);
@@ -267,11 +243,6 @@ impl ScenarioTarget {
         }
         Ok(())
     }
-
-    // NOTE: Target field absorption is performed inline by
-    // [`ScenarioEvidence::digest`] so that field ordering and tag bytes
-    // remain visible alongside the rest of the evidence layout.  This
-    // avoids accidentally splitting the digest layout across files.
 }
 
 /// V0 scored, expirable, advisory scenario evidence record.
@@ -290,11 +261,64 @@ pub struct ScenarioEvidence {
     validity: ValidityWindow,
 }
 
+/// Validated, non-authoritative ScenarioEvidence consumption token.
+///
+/// Constructed only through [`ScenarioEvidence::advisory_use_at`], which
+/// forces callers to check the validity window before the evidence can be
+/// handed to a future optimizer path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ScenarioEvidenceAdvisoryUse {
+    scenario_id: ScenarioId,
+    digest: [u8; 32],
+    boundary: ScenarioEvidenceOptimizerBoundary,
+    target: ScenarioTarget,
+    score: EvidenceScore,
+    confidence: EvidenceConfidence,
+}
+
+impl ScenarioEvidenceAdvisoryUse {
+    pub const fn scenario_id(self) -> ScenarioId {
+        self.scenario_id
+    }
+
+    pub const fn digest(self) -> [u8; 32] {
+        self.digest
+    }
+
+    pub const fn boundary(self) -> ScenarioEvidenceOptimizerBoundary {
+        self.boundary
+    }
+
+    pub const fn target(self) -> ScenarioTarget {
+        self.target
+    }
+
+    pub const fn score(self) -> EvidenceScore {
+        self.score
+    }
+
+    pub const fn confidence(self) -> EvidenceConfidence {
+        self.confidence
+    }
+
+    pub const fn is_authoritative(self) -> bool {
+        self.boundary.is_authoritative()
+    }
+
+    pub const fn can_select_plan_alone(self) -> bool {
+        self.boundary.can_select_plan_alone()
+    }
+
+    pub const fn can_drive_active_stats_version_transition(self) -> bool {
+        false
+    }
+}
+
 impl ScenarioEvidence {
     /// Construct an evidence record after running every bounded check.
     ///
     /// On success, the resulting record is guaranteed to:
-    /// - have a non-zero scenario id, procedure id, and stats version,
+    /// - have a non-zero scenario id, procedure id, catalog version, and stats version,
     /// - carry a score and confidence in `0..=1000`,
     /// - have a validity window with `issued_at < expires_at` and
     ///   `expires_at > 0`,
@@ -342,11 +366,27 @@ impl ScenarioEvidence {
         self.validity
     }
 
+    pub const fn optimizer_boundary(&self) -> ScenarioEvidenceOptimizerBoundary {
+        ScenarioEvidenceOptimizerBoundary::AdvisoryOnly
+    }
+
+    pub const fn can_select_plan_alone(&self) -> bool {
+        self.optimizer_boundary().can_select_plan_alone()
+    }
+
     /// **Doctrine invariant: scenario evidence is never authoritative.**
     /// This always returns `false`.  It exists so optimizer-side code
     /// can express the doctrine at the type level (`assert!(!ev.is_authoritative())`)
     /// without conditional logic.
     pub const fn is_authoritative(&self) -> bool {
+        false
+    }
+
+    /// **Doctrine invariant: predictive evidence cannot publish stats.**
+    /// This always returns `false`; active `StatsVersion` publication
+    /// requires typed stats-publication decision evidence in the
+    /// statistics module, not ScenarioEvidence alone.
+    pub const fn can_drive_active_stats_version_transition(&self) -> bool {
         false
     }
 
@@ -373,6 +413,26 @@ impl ScenarioEvidence {
         Ok(())
     }
 
+    /// Validate this evidence for advisory consumption at `now`.
+    ///
+    /// The returned token intentionally has no path to become an
+    /// authoritative plan choice. Consumers must combine it with catalog,
+    /// statistics, contract, and optimizer decision logic outside this module.
+    pub fn advisory_use_at(
+        &self,
+        now: EngineTimestamp,
+    ) -> Result<ScenarioEvidenceAdvisoryUse, ScenarioEvidenceError> {
+        self.validate_for_use_at(now)?;
+        Ok(ScenarioEvidenceAdvisoryUse {
+            scenario_id: self.scenario_id,
+            digest: self.digest(),
+            boundary: self.optimizer_boundary(),
+            target: self.target,
+            score: self.score,
+            confidence: self.confidence,
+        })
+    }
+
     /// Compute a deterministic 32-byte digest over every field.
     ///
     /// Equal records produce equal digests; differing records produce
@@ -391,13 +451,15 @@ impl ScenarioEvidence {
         hasher.update(&[0xE2]);
         hasher.update(&self.target.procedure_id.get().to_le_bytes());
         hasher.update(&[0xE3]);
-        hasher.update(&self.target.stats_version.get().to_le_bytes());
+        hasher.update(&self.target.catalog_version.get().to_le_bytes());
         hasher.update(&[0xE4]);
+        hasher.update(&self.target.stats_version.get().to_le_bytes());
+        hasher.update(&[0xE5]);
         match self.target.plan_class {
             Some(pc) => hasher.update(&[0x01, pc.as_tag()]),
             None => hasher.update(&[0x00, 0x00]),
         }
-        hasher.update(&[0xE5]);
+        hasher.update(&[0xE6]);
         match self.target.contract_hash {
             Some(hash) => {
                 hasher.update(&[0x01]);
@@ -409,20 +471,18 @@ impl ScenarioEvidence {
             }
         }
 
-        hasher.update(&[0xE6]);
-        hasher.update(&self.score.permille().to_le_bytes());
         hasher.update(&[0xE7]);
+        hasher.update(&self.score.permille().to_le_bytes());
+        hasher.update(&[0xE8]);
         hasher.update(&self.confidence.permille().to_le_bytes());
 
-        hasher.update(&[0xE8]);
-        hasher.update(&self.validity.issued_at.as_unix_millis().to_le_bytes());
         hasher.update(&[0xE9]);
+        hasher.update(&self.validity.issued_at.as_unix_millis().to_le_bytes());
+        hasher.update(&[0xEA]);
         hasher.update(&self.validity.expires_at.as_unix_millis().to_le_bytes());
 
-        // Authoritative flag is folded in as a constant `0` so a future
-        // attempt to add an "authoritative" variant would change the
-        // digest layout and break compatibility loudly.
-        hasher.update(&[0xEA, 0x00]);
+        hasher.update(&[0xEB, 0x00]);
+        hasher.update(&[0xEC, self.optimizer_boundary().as_tag()]);
 
         hasher.finalize()
     }
@@ -441,6 +501,8 @@ pub enum ScenarioEvidenceError {
     IssuedNotBeforeExpiry,
     /// Target carried a zero `ProcedureId`.
     TargetProcedureIdZero,
+    /// Target carried a zero `CatalogVersion`.
+    TargetCatalogVersionZero,
     /// Target carried a zero `StatsVersion`.
     TargetStatsVersionZero,
     /// Target carried an explicit but all-zero `ContractHash`.
@@ -469,6 +531,9 @@ impl core::fmt::Display for ScenarioEvidenceError {
             ScenarioEvidenceError::TargetProcedureIdZero => {
                 f.write_str("ScenarioTarget.procedure_id must be non-zero")
             }
+            ScenarioEvidenceError::TargetCatalogVersionZero => {
+                f.write_str("ScenarioTarget.catalog_version must be non-zero")
+            }
             ScenarioEvidenceError::TargetStatsVersionZero => {
                 f.write_str("ScenarioTarget.stats_version must be non-zero")
             }
@@ -496,6 +561,7 @@ mod tests {
     fn target() -> ScenarioTarget {
         ScenarioTarget {
             procedure_id: ProcedureId::new(7),
+            catalog_version: CatalogVersion::new(2),
             stats_version: StatsVersion::new(3),
             plan_class: Some(PlanClass::ParameterShape),
             contract_hash: Some(ContractHash::new([0xAB; ContractHash::LEN])),
@@ -605,6 +671,13 @@ mod tests {
         );
 
         let mut t = target();
+        t.catalog_version = CatalogVersion::new(0);
+        assert_eq!(
+            evidence_with(1, ScenarioKind::Microbenchmark, t, 0, 0, 1, 2,),
+            Err(ScenarioEvidenceError::TargetCatalogVersionZero)
+        );
+
+        let mut t = target();
         t.stats_version = StatsVersion::new(0);
         assert_eq!(
             evidence_with(1, ScenarioKind::Microbenchmark, t, 0, 0, 1, 2,),
@@ -626,6 +699,12 @@ mod tests {
         // runtime flag the caller could flip.
         let ev = evidence_at(1_000, 1_000, 100, 200).unwrap();
         assert!(!ev.is_authoritative());
+        assert_eq!(
+            ev.optimizer_boundary(),
+            ScenarioEvidenceOptimizerBoundary::AdvisoryOnly
+        );
+        assert!(!ev.can_select_plan_alone());
+        assert!(!ev.can_drive_active_stats_version_transition());
     }
 
     #[test]
@@ -654,6 +733,31 @@ mod tests {
 
         assert!(!ev.is_expired_at(ts(199)));
         assert!(ev.is_expired_at(ts(200)));
+    }
+
+    #[test]
+    fn advisory_use_token_requires_valid_window_and_stays_non_authoritative() {
+        let ev = evidence_at(1_000, 1_000, 100, 200).unwrap();
+
+        assert_eq!(
+            ev.advisory_use_at(ts(50)),
+            Err(ScenarioEvidenceError::NotYetValid)
+        );
+        assert_eq!(
+            ev.advisory_use_at(ts(200)),
+            Err(ScenarioEvidenceError::Expired)
+        );
+
+        let advisory = ev.advisory_use_at(ts(150)).unwrap();
+        assert_eq!(advisory.scenario_id(), ev.scenario_id());
+        assert_eq!(advisory.digest(), ev.digest());
+        assert_eq!(
+            advisory.boundary(),
+            ScenarioEvidenceOptimizerBoundary::AdvisoryOnly
+        );
+        assert!(!advisory.is_authoritative());
+        assert!(!advisory.can_select_plan_alone());
+        assert!(!advisory.can_drive_active_stats_version_transition());
     }
 
     #[test]
@@ -736,6 +840,19 @@ mod tests {
         .unwrap();
 
         let d = base.digest();
+        let mut other_catalog_target = target();
+        other_catalog_target.catalog_version = CatalogVersion::new(4);
+        let other_catalog = evidence_with(
+            42,
+            ScenarioKind::Microbenchmark,
+            other_catalog_target,
+            500,
+            800,
+            100,
+            200,
+        )
+        .unwrap();
+        assert_ne!(d, other_catalog.digest());
         assert_ne!(d, other_stats.digest());
         assert_ne!(d, other_class.digest());
         // Absent vs Some(...) must differ from Some(other) and from each other.

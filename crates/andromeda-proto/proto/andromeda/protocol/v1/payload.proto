@@ -11,12 +11,13 @@ import "andromeda/protocol/v1/completion.proto";
 // Metadata-before-payload invariant:
 //   * FrameEnvelope fields 4, 5, and 6 carry request/session/transaction
 //     metadata before the opaque payload bytes in field 8.
-//   * For result-producing procedure execution, an RpcMetadata payload must be
-//     emitted and accepted before the first RpcBatch for the same request.
-//   * RpcBatch.result_name must identify a result stream declared by the prior
+//   * For ResultStream-producing Procedure Invocation, an RpcMetadata payload
+//     must be emitted and accepted before the first RpcBatch for the same
+//     Invocation request.
+//   * RpcBatch.result_name must identify a ResultStream declared by the prior
 //     RpcMetadata.result_streams descriptor set.
 //   * StructuredObject row bytes remain binary-only; these schemas do not
-//     define JSON, gRPC, tonic, service, or rpc surfaces.
+//     define JSON payloads, tonic bindings, or gRPC service/rpc definitions.
 //   * ErrorEnvelope is split into error.proto without changing package, message
 //     name, field numbers, enum numeric values, optionality, or semantics.
 
@@ -44,12 +45,15 @@ message RpcExecuteRequest {
   string surface_scope = 4;
   repeated Argument arguments = 5;
   RequestBudget budget = 6;
+  // StatsVersion expected by the generated caller for this Procedure binding.
+  // Present and nonzero for source-generated contract-bound calls.
+  optional uint64 expected_stats_version = 7;
 
-  reserved 7 to 31;
+  reserved 8 to 31;
 }
 
 message RpcMetadata {
-  // Result descriptors are metadata-before-batch declarations. They must be
+  // ResultStream descriptors are metadata-before-batch declarations. They must be
   // observed before any RpcBatch carrying a matching result_name.
   repeated andromeda.contract.v1.ResultStreamDescriptor result_streams = 1;
   ResultCompletionPolicy completion_policy = 2;

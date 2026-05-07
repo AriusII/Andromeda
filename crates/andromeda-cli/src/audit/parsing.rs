@@ -9,9 +9,12 @@ use andromeda_observe::{
 use crate::diagnostic_json::{DIAGNOSTIC_JSON_FLAG, JSON_FLAG};
 use crate::error::cli_error;
 
-use super::{AuditCompactOptions, AuditQueryOptions, AuditVerifyOptions};
+use super::sensitive::contains_sensitive_cli_evidence;
+use super::{AuditCompactOptions, AuditInspectionOptions, AuditVerifyOptions};
 
-pub(super) fn parse_audit_query_options(args: &[String]) -> AndromedaResult<AuditQueryOptions> {
+pub(super) fn parse_audit_inspection_options(
+    args: &[String],
+) -> AndromedaResult<AuditInspectionOptions> {
     let mut json_output = false;
     let mut diagnostic_json = false;
     let mut journal_path = None;
@@ -38,60 +41,66 @@ pub(super) fn parse_audit_query_options(args: &[String]) -> AndromedaResult<Audi
                 journal_path = Some(PathBuf::from(next_value(
                     args,
                     &mut index,
-                    "query",
+                    "inspect",
                     "--journal",
                 )?));
             }
             "--trace-id" => {
                 let value = parse_u128(
-                    next_value(args, &mut index, "query", "--trace-id")?,
-                    "query",
+                    next_value(args, &mut index, "inspect", "--trace-id")?,
+                    "inspect",
                     "trace-id",
                 )?;
                 filter.trace_id = Some(TraceId::new(value));
             }
             "--principal" => {
-                filter.principal = Some(next_value(args, &mut index, "query", "--principal")?);
+                let principal = next_value(args, &mut index, "inspect", "--principal")?;
+                if contains_sensitive_cli_evidence(&principal) {
+                    return Err(cli_error(
+                        "audit inspect principal filter must not contain secret-bearing credential material",
+                    ));
+                }
+                filter.principal = Some(principal);
             }
             "--family" => {
                 filter.family = Some(parse_trace_family(&next_value(
-                    args, &mut index, "query", "--family",
+                    args, &mut index, "inspect", "--family",
                 )?)?);
             }
             "--limit" => {
                 limit = parse_usize(
-                    next_value(args, &mut index, "query", "--limit")?,
-                    "query",
+                    next_value(args, &mut index, "inspect", "--limit")?,
+                    "inspect",
                     "limit",
                 )?;
             }
             "--offset" => {
                 offset = parse_usize(
-                    next_value(args, &mut index, "query", "--offset")?,
-                    "query",
+                    next_value(args, &mut index, "inspect", "--offset")?,
+                    "inspect",
                     "offset",
                 )?;
             }
             "--lsn-start" => {
                 lsn_start = Some(parse_u64(
-                    next_value(args, &mut index, "query", "--lsn-start")?,
-                    "query",
+                    next_value(args, &mut index, "inspect", "--lsn-start")?,
+                    "inspect",
                     "lsn-start",
                 )?);
             }
             "--lsn-end" => {
                 lsn_end = Some(parse_u64(
-                    next_value(args, &mut index, "query", "--lsn-end")?,
-                    "query",
+                    next_value(args, &mut index, "inspect", "--lsn-end")?,
+                    "inspect",
                     "lsn-end",
                 )?);
             }
             "--lsn-range" => {
-                let value = next_value(args, &mut index, "query", "--lsn-range")?;
+                let value = next_value(args, &mut index, "inspect", "--lsn-range")?;
                 let (start, end) = parse_lsn_range(&value)?;
                 if lsn_start.is_some() || lsn_end.is_some() {
                     return Err(cli_error(
-                        "audit query cannot combine --lsn-range with --lsn-start/--lsn-end",
+                        "audit inspect cannot combine --lsn-range with --lsn-start/--lsn-end",
                     ));
                 }
                 lsn_start = Some(start);
@@ -103,17 +112,17 @@ pub(super) fn parse_audit_query_options(args: &[String]) -> AndromedaResult<Audi
             }
             "-h" | "--help" => {
                 return Err(cli_error(
-                    "usage: andromeda-cli audit query [--journal <path>] [--trace-id <u128>] [--principal <id>] [--family <family>] [--lsn-range <start..end>|--lsn-start <lsn> --lsn-end <lsn>] [--limit <n>] [--offset <n>] [--include-total-count] [--json|--diagnostic-json]",
+                    "usage: andromeda-cli audit inspect [--journal <path>] [--trace-id <u128>] [--principal <id>] [--family <family>] [--lsn-range <start..end>|--lsn-start <lsn> --lsn-end <lsn>] [--limit <n>] [--offset <n>] [--include-total-count] [--json|--diagnostic-json]",
                 ));
             }
             opt if opt.starts_with("--") => {
                 return Err(cli_error(
-                    "unknown audit query option; supported options are --journal, --trace-id, --principal, --family, --lsn-range, --lsn-start, --lsn-end, --limit, --offset, --include-total-count, --json, and --diagnostic-json",
+                    "unknown audit inspect option; supported options are --journal, --trace-id, --principal, --family, --lsn-range, --lsn-start, --lsn-end, --limit, --offset, --include-total-count, --json, and --diagnostic-json",
                 ));
             }
             _ => {
                 return Err(cli_error(
-                    "unexpected audit query argument; filters must be passed with named options",
+                    "unexpected audit inspect argument; filters must be passed with named options",
                 ));
             }
         }
@@ -122,13 +131,13 @@ pub(super) fn parse_audit_query_options(args: &[String]) -> AndromedaResult<Audi
     match (lsn_start, lsn_end) {
         (Some(start_lsn), Some(end_lsn)) => {
             if start_lsn == end_lsn {
-                return Err(cli_error("audit query LSN range must not be zero-width"));
+                return Err(cli_error("audit inspect LSN range must not be zero-width"));
             }
             filter.lsn_range = Some(TraceQueryLsnRange::new(start_lsn, end_lsn));
         }
         (Some(_), None) | (None, Some(_)) => {
             return Err(cli_error(
-                "audit query LSN filter requires both --lsn-start and --lsn-end",
+                "audit inspect LSN filter requires both --lsn-start and --lsn-end",
             ));
         }
         (None, None) => {}
@@ -142,7 +151,7 @@ pub(super) fn parse_audit_query_options(args: &[String]) -> AndromedaResult<Audi
     };
     spec.validate()?;
 
-    Ok(AuditQueryOptions {
+    Ok(AuditInspectionOptions {
         spec,
         json_output,
         diagnostic_json,
@@ -313,7 +322,9 @@ fn parse_usize(value: String, command: &str, label: &str) -> AndromedaResult<usi
         ))
     })?;
     if label == "limit" && parsed > TRACE_QUERY_MAX_LIMIT {
-        return Err(cli_error("audit query limit exceeds TRACE_QUERY_MAX_LIMIT"));
+        return Err(cli_error(
+            "audit inspect limit exceeds TRACE_QUERY_MAX_LIMIT",
+        ));
     }
     Ok(parsed)
 }
@@ -322,17 +333,17 @@ fn parse_lsn_range(value: &str) -> AndromedaResult<(u64, u64)> {
     let (start, end) = value
         .split_once("..=")
         .or_else(|| value.split_once(".."))
-        .ok_or_else(|| cli_error("audit query --lsn-range must use start..end syntax"))?;
-    let start = parse_u64(start.to_string(), "query", "lsn-range start")?;
-    let end = parse_u64(end.to_string(), "query", "lsn-range end")?;
+        .ok_or_else(|| cli_error("audit inspect --lsn-range must use start..end syntax"))?;
+    let start = parse_u64(start.to_string(), "inspect", "lsn-range start")?;
+    let end = parse_u64(end.to_string(), "inspect", "lsn-range end")?;
     if start == 0 || end == 0 {
         return Err(cli_error(
-            "audit query --lsn-range endpoints must be non-zero",
+            "audit inspect --lsn-range endpoints must be non-zero",
         ));
     }
     if start >= end {
         return Err(cli_error(
-            "audit query --lsn-range must have start less than end",
+            "audit inspect --lsn-range must have start less than end",
         ));
     }
     Ok((start, end))
@@ -353,7 +364,7 @@ fn parse_trace_family(value: &str) -> AndromedaResult<TraceEventFamily> {
         "gpu" => Ok(TraceEventFamily::Gpu),
         "transaction" => Ok(TraceEventFamily::Transaction),
         _ => Err(cli_error(
-            "unknown audit query family; expected decision, procedure-invocation, wal, recovery, manifest-catalog, protocol, security-audit, admin-audit, resource, io, gpu, or transaction",
+            "unknown audit inspect family; expected decision, procedure-invocation, wal, recovery, manifest-catalog, protocol, security-audit, admin-audit, resource, io, gpu, or transaction",
         )),
     }
 }

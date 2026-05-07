@@ -16,6 +16,12 @@ fn rewrite_membership_checksum(bytes: &mut [u8]) {
     bytes[16..48].copy_from_slice(&checksum);
 }
 
+fn rewrite_membership_u64(bytes: &mut [u8], payload_offset: usize, value: u64) {
+    let absolute_offset = 56 + payload_offset;
+    bytes[absolute_offset..absolute_offset + 8].copy_from_slice(&value.to_le_bytes());
+    rewrite_membership_checksum(bytes);
+}
+
 #[test]
 fn register_node_persists_after_reopen() {
     let dir = tempfile::tempdir().expect("temp dir");
@@ -65,16 +71,18 @@ fn membership_role_updates_increment_epoch_monotonically() {
     let candidate = store
         .update_node_role(HadrNodeId::new(2), HadrNodeRole::Candidate)
         .expect("stage candidate");
-    let promoted = store
+    let rejected_primary = store
         .update_node_role(HadrNodeId::new(2), HadrNodeRole::Primary)
-        .expect("promote primary");
+        .expect_err("generic role update must not publish primary");
 
     assert_eq!(registered.epoch(), HadrEpoch::new(1));
     assert_eq!(candidate.epoch(), HadrEpoch::new(2));
-    assert_eq!(promoted.epoch(), HadrEpoch::new(3));
+    assert!(rejected_primary.message().contains("promotion boundary"));
+    let loaded = store.load().expect("load").expect("snapshot");
+    assert_eq!(loaded.epoch(), HadrEpoch::new(2));
     assert_eq!(
-        promoted.get(HadrNodeId::new(2)).expect("node").role_epoch,
-        HadrEpoch::new(3)
+        loaded.get(HadrNodeId::new(2)).expect("node").role_epoch,
+        HadrEpoch::new(2)
     );
 }
 
@@ -115,6 +123,33 @@ fn corrupted_membership_file_is_rejected() {
 }
 
 #[test]
+fn interrupted_membership_publish_recovers_last_backup_snapshot() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let path = store_path(&dir);
+    let store = FileBackedHadrMembershipStore::open(&path).expect("open store");
+    store
+        .register_node(HadrNodeId::new(1), HadrNodeRole::Primary)
+        .expect("register primary");
+    store
+        .register_node(HadrNodeId::new(2), HadrNodeRole::Replica)
+        .expect("register replica");
+    let before = store.load().expect("load").expect("snapshot");
+
+    let backup_path = path.with_extension("bak");
+    let tmp_path = path.with_extension("tmp");
+    fs::rename(&path, &backup_path).expect("simulate old snapshot moved to backup");
+    fs::write(&tmp_path, b"interrupted-new-snapshot").expect("simulate temp file");
+
+    let reopened = FileBackedHadrMembershipStore::open(&path).expect("open should recover backup");
+    let loaded = reopened.load().expect("load recovered").expect("snapshot");
+
+    assert_eq!(loaded, before);
+    assert!(path.exists());
+    assert!(!backup_path.exists());
+    assert!(!tmp_path.exists());
+}
+
+#[test]
 fn reordered_membership_record_file_is_rejected_even_with_valid_hash() {
     let dir = tempfile::tempdir().expect("temp dir");
     let path = store_path(&dir);
@@ -141,6 +176,26 @@ fn reordered_membership_record_file_is_rejected_even_with_valid_hash() {
         error
             .message()
             .contains("action record must follow its epoch advance")
+    );
+}
+
+#[test]
+fn membership_file_rejects_node_count_above_bound_before_allocation() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let path = store_path(&dir);
+    let store = FileBackedHadrMembershipStore::open(&path).expect("open store");
+    store
+        .register_node(HadrNodeId::new(1), HadrNodeRole::Primary)
+        .expect("register primary");
+
+    let mut bytes = fs::read(&path).expect("read membership file");
+    rewrite_membership_u64(&mut bytes, 16, 1_025);
+    fs::write(&path, bytes).expect("write bounded-count file");
+
+    let error = FileBackedHadrMembershipStore::open(&path).expect_err("oversized count must fail");
+    assert!(
+        error.message().contains("node count exceeds bounded limit"),
+        "unexpected error: {error}"
     );
 }
 

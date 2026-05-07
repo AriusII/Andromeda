@@ -10,7 +10,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use andromeda_quic::EarlyDataPolicy;
+use andromeda_quic::{
+    EarlyDataPolicy, ZeroRttAdmissionDecision, ZeroRttAdmissionPolicy,
+    ZeroRttAdmissionRejectionReason, ZeroRttReplayClass,
+};
 
 fn project_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -70,6 +73,50 @@ fn early_data_policy_is_disabled_only_variant() {
         }
     }
     assert!(compile_lock(EarlyDataPolicy::Disabled));
+}
+
+#[test]
+fn zero_rtt_policy_rejects_mutating_unknown_and_replay_safe_classes() {
+    let policy = ZeroRttAdmissionPolicy::doctrine_v1_disabled();
+
+    let cases = [
+        (
+            ZeroRttReplayClass::MutatingProcedure,
+            ZeroRttAdmissionRejectionReason::MutatingProcedure,
+        ),
+        (
+            ZeroRttReplayClass::UnknownIdempotency,
+            ZeroRttAdmissionRejectionReason::UnknownIdempotency,
+        ),
+        (
+            ZeroRttReplayClass::ReadOnlyManifest,
+            ZeroRttAdmissionRejectionReason::DoctrineV1DisablesEarlyData,
+        ),
+    ];
+
+    for (class, reason) in cases {
+        assert_eq!(
+            policy.evaluate(class),
+            ZeroRttAdmissionDecision::Reject { class, reason },
+            "0-RTT admission must reject classified request {:?}",
+            class
+        );
+    }
+}
+
+#[test]
+fn zero_rtt_replay_safe_classes_are_classified_but_still_barred_in_v1() {
+    assert!(ZeroRttReplayClass::ReadOnlyManifest.is_replay_safe());
+    assert!(ZeroRttReplayClass::ReadOnlyTelemetry.is_replay_safe());
+    assert!(!ZeroRttReplayClass::MutatingProcedure.is_replay_safe());
+
+    let policy = ZeroRttAdmissionPolicy::from_early_data_policy(EarlyDataPolicy::Disabled);
+    for class in [
+        ZeroRttReplayClass::ReadOnlyManifest,
+        ZeroRttReplayClass::ReadOnlyTelemetry,
+    ] {
+        assert!(!policy.evaluate(class).is_admitted());
+    }
 }
 
 #[test]
@@ -142,7 +189,71 @@ fn rust_protocol_surface_does_not_introduce_grpc_or_tonic() {
 }
 
 #[test]
-fn owned_runtime_sources_do_not_use_panic_unwraps() {
+fn rust_protocol_surface_does_not_introduce_raw_sql_surface() {
+    let src_dir = project_root()
+        .join("crates")
+        .join("andromeda-quic")
+        .join("src");
+    let mut violations = Vec::new();
+    let forbidden = ["sql", "raw_sql", "execute_sql"];
+
+    for path in rust_sources_under(&src_dir) {
+        let content = fs::read_to_string(&path).expect("source file must be readable");
+        for (index, line) in production_source(&content).lines().enumerate() {
+            if forbidden
+                .iter()
+                .any(|word| contains_forbidden_protocol_word(line, word))
+            {
+                violations.push(format!("{}:{}", path.display(), index + 1));
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "Rust protocol surface introduced a raw SQL application route:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
+fn rust_protocol_surface_does_not_introduce_runtime_json_default() {
+    let src_dir = project_root()
+        .join("crates")
+        .join("andromeda-quic")
+        .join("src");
+    let manifest = project_root()
+        .join("crates")
+        .join("andromeda-quic")
+        .join("Cargo.toml");
+    let mut violations = Vec::new();
+
+    for path in rust_sources_under(&src_dir)
+        .into_iter()
+        .chain(std::iter::once(manifest))
+    {
+        let content = fs::read_to_string(&path).expect("protocol surface file must be readable");
+        for (index, line) in production_source(&content).lines().enumerate() {
+            let lower = line.to_ascii_lowercase();
+            if contains_forbidden_protocol_word(&lower, "json")
+                || lower.contains("serde_json")
+                || lower.contains("jsonrpc")
+                || lower.contains("json-rpc")
+            {
+                violations.push(format!("{}:{}", path.display(), index + 1));
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "Rust protocol surface introduced a runtime JSON protocol default:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
+fn owned_runtime_sources_do_not_use_panic_style_escape_hatches() {
     let src_dir = project_root()
         .join("crates")
         .join("andromeda-quic")
@@ -152,7 +263,13 @@ fn owned_runtime_sources_do_not_use_panic_unwraps() {
     for path in owned_runtime_sources(&src_dir) {
         let content = fs::read_to_string(&path).expect("source file must be readable");
         for (index, line) in production_source(&content).lines().enumerate() {
-            if line.contains(".unwrap(") || line.contains(".expect(") {
+            if line.contains(".unwrap(")
+                || line.contains(".expect(")
+                || line.contains("panic!(")
+                || line.contains("unreachable!(")
+                || line.contains("todo!(")
+                || line.contains("unimplemented!(")
+            {
                 violations.push(format!("{}:{}", path.display(), index + 1));
             }
         }
@@ -160,7 +277,7 @@ fn owned_runtime_sources_do_not_use_panic_unwraps() {
 
     assert!(
         violations.is_empty(),
-        "Runtime QUIC source uses panic-style unwrap/expect:\n{}",
+        "Runtime QUIC source uses panic-style escape hatches:\n{}",
         violations.join("\n")
     );
 }

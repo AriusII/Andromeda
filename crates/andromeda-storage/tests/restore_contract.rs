@@ -7,12 +7,20 @@ use andromeda_observe::TraceId;
 use andromeda_storage::{
     AllocationId, BackupExecutionPlan, BackupResourceLimits, ExtentCopyTask, ExtentDescriptor,
     ExtentId, ExtentState, FileBackedBackupArtifactStore, Lsn, ObjectId, PageId, PageSize,
-    RecoveryStage, RestoreAuditTrace, RestoreCompletion, RestoreOrchestration,
+    PitrTarget, RecoveryStage, RestoreAuditTrace, RestoreCompletion, RestoreOrchestration,
     RestoreValidationPolicy, SegmentId, StorageTier, WalSegmentCopyTask, WalSegmentDescriptor,
     backup::{BackupId, BackupManifest, ColdSnapshotBoundary, WalArchiveRange},
-    compute_restore_checksum, plan_replay_segments, validate_restore_artifact_preflight,
-    validate_restore_prerequisites,
+    compute_restore_checksum, plan_replay_segments, validate_pitr_target,
+    validate_restore_artifact_preflight, validate_restore_prerequisites,
 };
+use sha2::{Digest, Sha256};
+
+const ARTIFACT_MANIFEST_MAGIC: &[u8] = b"ANDROMEDA-BACKUP-ARTIFACT-V1\n";
+const ARTIFACT_MANIFEST_HEADER_LEN: usize = ARTIFACT_MANIFEST_MAGIC.len() + 2 + 8 + 32;
+const CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION: u16 = 3;
+const LEGACY_V1_ARTIFACT_MANIFEST_FORMAT_VERSION: u16 = 1;
+const WAL_ARCHIVE_DIGEST_PAYLOAD_OFFSET: usize = 140;
+const COMPATIBILITY_EVIDENCE_PAYLOAD_LEN: usize = 8;
 
 // Test Fixtures
 
@@ -105,6 +113,56 @@ fn write_test_artifact(
         .unwrap()
 }
 
+fn rewrite_manifest_payload(
+    path: &std::path::Path,
+    mutate_payload: impl FnOnce(&mut Vec<u8>),
+    format_version: u16,
+) {
+    let mut bytes = std::fs::read(path).unwrap();
+    assert_eq!(
+        &bytes[..ARTIFACT_MANIFEST_MAGIC.len()],
+        ARTIFACT_MANIFEST_MAGIC
+    );
+    let mut payload = bytes[ARTIFACT_MANIFEST_HEADER_LEN..].to_vec();
+    mutate_payload(&mut payload);
+
+    bytes.truncate(ARTIFACT_MANIFEST_HEADER_LEN);
+    let version_offset = ARTIFACT_MANIFEST_MAGIC.len();
+    bytes[version_offset..version_offset + 2].copy_from_slice(&format_version.to_le_bytes());
+    let payload_len_offset = version_offset + 2;
+    bytes[payload_len_offset..payload_len_offset + 8]
+        .copy_from_slice(&(payload.len() as u64).to_le_bytes());
+    let checksum_offset = payload_len_offset + 8;
+    let checksum: [u8; 32] = Sha256::digest(&payload).into();
+    bytes[checksum_offset..checksum_offset + 32].copy_from_slice(&checksum);
+    bytes.extend_from_slice(&payload);
+    std::fs::write(path, bytes).unwrap();
+}
+
+fn rewrite_manifest_to_v1_without_archive_digest(path: &std::path::Path) {
+    rewrite_manifest_payload(
+        path,
+        |payload| {
+            payload
+                .drain(WAL_ARCHIVE_DIGEST_PAYLOAD_OFFSET..WAL_ARCHIVE_DIGEST_PAYLOAD_OFFSET + 32);
+            let legacy_len = payload.len() - COMPATIBILITY_EVIDENCE_PAYLOAD_LEN;
+            payload.truncate(legacy_len);
+        },
+        LEGACY_V1_ARTIFACT_MANIFEST_FORMAT_VERSION,
+    );
+}
+
+fn zero_manifest_archive_digest(path: &std::path::Path) {
+    rewrite_manifest_payload(
+        path,
+        |payload| {
+            payload[WAL_ARCHIVE_DIGEST_PAYLOAD_OFFSET..WAL_ARCHIVE_DIGEST_PAYLOAD_OFFSET + 32]
+                .fill(0);
+        },
+        CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION,
+    );
+}
+
 // Test Suite: PITR LSN Validation
 
 #[test]
@@ -124,6 +182,17 @@ fn test_pitr_lsn_at_range_start() {
 }
 
 #[test]
+fn test_pitr_lsn_at_snapshot_base_checkpoint_is_snapshot_only() {
+    let manifest = make_test_manifest();
+    let pitr_lsn = Lsn::new(1000);
+
+    assert!(validate_restore_prerequisites(&manifest, pitr_lsn).is_ok());
+    let plan = plan_replay_segments(&manifest, pitr_lsn, &[])
+        .expect("snapshot base checkpoint target must not require WAL replay");
+    assert!(plan.is_empty());
+}
+
+#[test]
 fn test_pitr_lsn_at_range_end() {
     let manifest = make_test_manifest();
     let pitr_lsn = Lsn::new(2000); // Exactly at end
@@ -134,7 +203,7 @@ fn test_pitr_lsn_at_range_end() {
 #[test]
 fn test_pitr_lsn_below_range() {
     let manifest = make_test_manifest();
-    let pitr_lsn = Lsn::new(1000); // Below archive start
+    let pitr_lsn = Lsn::new(999); // Below snapshot base checkpoint
 
     assert!(validate_restore_prerequisites(&manifest, pitr_lsn).is_err());
 }
@@ -145,6 +214,50 @@ fn test_pitr_lsn_above_range() {
     let pitr_lsn = Lsn::new(2001); // Above archive end
 
     assert!(validate_restore_prerequisites(&manifest, pitr_lsn).is_err());
+}
+
+#[test]
+fn test_restore_prerequisites_reject_wal_archive_after_snapshot_required_start() {
+    let mut manifest = make_test_manifest();
+    manifest.wal_archive = WalArchiveRange::new(Lsn::new(1002), Lsn::new(2000));
+
+    let err = validate_restore_prerequisites(&manifest, Lsn::new(1500))
+        .expect_err("archive must anchor at snapshot required WAL start");
+
+    assert!(
+        err.message().contains("required WAL start"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn test_restore_prerequisites_reject_pitr_before_snapshot_required_start() {
+    let mut manifest = make_test_manifest();
+    manifest.snapshot.required_wal_start_lsn = Lsn::new(1005);
+    manifest.wal_archive = WalArchiveRange::new(Lsn::new(900), Lsn::new(2000));
+
+    let err = validate_restore_prerequisites(&manifest, Lsn::new(1002))
+        .expect_err("PITR before snapshot required WAL start must fail closed");
+
+    assert!(
+        err.message().contains("required WAL start"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn backup_pitr_validator_rejects_target_before_required_wal_start() {
+    let mut manifest = make_test_manifest();
+    manifest.snapshot.required_wal_start_lsn = Lsn::new(1005);
+    manifest.wal_archive = WalArchiveRange::new(Lsn::new(900), Lsn::new(2000));
+
+    let err = validate_pitr_target(&manifest, PitrTarget::new(Lsn::new(1002)))
+        .expect_err("PITR before required WAL start must fail closed");
+
+    assert!(
+        err.message().contains("required WAL start"),
+        "unexpected error: {err}"
+    );
 }
 
 // Test Suite: WAL Segment Replay Planning
@@ -162,6 +275,7 @@ fn test_plan_replay_single_segment_containing_pitr() {
     assert_eq!(segments_to_replay.len(), 1);
     assert!(segments_to_replay[0].contains_pitr_target);
     assert_eq!(segments_to_replay[0].sequence_index, 0);
+    assert_eq!(segments_to_replay[0].replay_stop_lsn, pitr_lsn);
 }
 
 #[test]
@@ -180,6 +294,8 @@ fn test_plan_replay_multiple_segments() {
     assert_eq!(segments_to_replay.len(), 2);
     assert!(!segments_to_replay[0].contains_pitr_target);
     assert!(segments_to_replay[1].contains_pitr_target);
+    assert_eq!(segments_to_replay[0].replay_stop_lsn, Lsn::new(1500));
+    assert_eq!(segments_to_replay[1].replay_stop_lsn, pitr_lsn);
 }
 
 #[test]
@@ -197,6 +313,7 @@ fn test_plan_replay_stops_after_pitr_segment() {
     let segments_to_replay = plan.unwrap();
     assert_eq!(segments_to_replay.len(), 1);
     assert!(segments_to_replay[0].contains_pitr_target);
+    assert_eq!(segments_to_replay[0].replay_stop_lsn, pitr_lsn);
 }
 
 #[test]
@@ -220,6 +337,21 @@ fn test_plan_replay_detects_lsn_gap() {
 
     let plan = plan_replay_segments(&manifest, pitr_lsn, &segments);
     assert!(plan.is_err());
+}
+
+#[test]
+fn test_plan_replay_requires_first_segment_at_archive_start() {
+    let manifest = make_test_manifest();
+    let segments = vec![make_wal_segment(1200, 2000, None)];
+    let pitr_lsn = Lsn::new(1500);
+
+    let err = plan_replay_segments(&manifest, pitr_lsn, &segments)
+        .expect_err("restore must not skip WAL before the first segment");
+
+    assert!(
+        err.message().contains("archive start"),
+        "unexpected error: {err}"
+    );
 }
 
 #[test]
@@ -264,6 +396,31 @@ fn test_restore_checksum_varies_with_wal_range() {
     let mut manifest2 = make_test_manifest();
 
     manifest2.wal_archive = WalArchiveRange::new(Lsn::new(1001), Lsn::new(3000));
+
+    let checksum1 = compute_restore_checksum(&manifest1);
+    let checksum2 = compute_restore_checksum(&manifest2);
+
+    assert_ne!(checksum1, checksum2);
+}
+
+#[test]
+fn test_restore_checksum_varies_with_required_wal_start() {
+    let manifest1 = make_test_manifest();
+    let mut manifest2 = make_test_manifest();
+    manifest2.snapshot.required_wal_start_lsn = Lsn::new(1002);
+    manifest2.wal_archive = WalArchiveRange::new(Lsn::new(1002), Lsn::new(2000));
+
+    let checksum1 = compute_restore_checksum(&manifest1);
+    let checksum2 = compute_restore_checksum(&manifest2);
+
+    assert_ne!(checksum1, checksum2);
+}
+
+#[test]
+fn test_restore_checksum_varies_with_snapshot_descriptor_hash() {
+    let manifest1 = make_test_manifest();
+    let mut manifest2 = make_test_manifest();
+    manifest2.snapshot.snapshot_descriptor_hash = [0xCD; 32];
 
     let checksum1 = compute_restore_checksum(&manifest1);
     let checksum2 = compute_restore_checksum(&manifest2);
@@ -429,6 +586,90 @@ fn test_restore_orchestration_rejects_pitr_out_of_range() {
 }
 
 #[test]
+fn test_restore_orchestration_rejects_audit_target_mismatch() {
+    let manifest = make_test_manifest();
+    let audit = RestoreAuditTrace::new(
+        TraceId::new(1),
+        BackupId::new(1),
+        Lsn::new(1501),
+        RecoveryStage::SafeStart,
+        compute_restore_checksum(&manifest),
+    );
+
+    let orch = RestoreOrchestration::new(
+        manifest,
+        Lsn::new(1500),
+        RecoveryStage::SafeStart,
+        RestoreValidationPolicy::Full,
+        audit,
+    );
+
+    let err = orch
+        .validate()
+        .expect_err("restore audit must bind the orchestration PITR target");
+    assert!(
+        err.message().contains("PITR target"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn test_restore_orchestration_rejects_audit_stage_mismatch() {
+    let manifest = make_test_manifest();
+    let audit = RestoreAuditTrace::new(
+        TraceId::new(1),
+        BackupId::new(1),
+        Lsn::new(1500),
+        RecoveryStage::ForensicStart,
+        compute_restore_checksum(&manifest),
+    );
+
+    let orch = RestoreOrchestration::new(
+        manifest,
+        Lsn::new(1500),
+        RecoveryStage::SafeStart,
+        RestoreValidationPolicy::Full,
+        audit,
+    );
+
+    let err = orch
+        .validate()
+        .expect_err("restore audit must bind the recovery stage");
+    assert!(
+        err.message().contains("recovery stage"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn test_restore_orchestration_rejects_audit_checksum_mismatch() {
+    let manifest = make_test_manifest();
+    let audit = RestoreAuditTrace::new(
+        TraceId::new(1),
+        BackupId::new(1),
+        Lsn::new(1500),
+        RecoveryStage::SafeStart,
+        compute_restore_checksum(&manifest).wrapping_add(1),
+    );
+
+    let orch = RestoreOrchestration::new(
+        manifest,
+        Lsn::new(1500),
+        RecoveryStage::SafeStart,
+        RestoreValidationPolicy::Full,
+        audit,
+    );
+
+    let err = orch
+        .validate()
+        .expect_err("restore audit checksum must bind the manifest");
+    assert!(
+        err.message().contains("checksum"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
 fn test_restore_orchestration_supports_forensic_start() {
     let manifest = make_test_manifest();
     let audit = RestoreAuditTrace::new(
@@ -449,6 +690,9 @@ fn test_restore_orchestration_supports_forensic_start() {
 
     assert!(orch.validate().is_ok());
     assert_eq!(orch.recovery_stage, RecoveryStage::ForensicStart);
+    assert!(!orch.recovery_stage.application_traffic_allowed());
+    assert!(!orch.recovery_stage.durable_truth_mutation_allowed());
+    assert!(!orch.recovery_stage.in_place_repair_allowed());
 }
 
 #[test]
@@ -474,6 +718,34 @@ fn test_restore_orchestration_supports_minimal_validation() {
     assert_eq!(orch.validation_policy, RestoreValidationPolicy::Minimal);
 }
 
+#[test]
+fn test_forensic_start_rejects_minimal_validation_policy() {
+    let manifest = make_test_manifest();
+    let audit = RestoreAuditTrace::new(
+        TraceId::new(1),
+        BackupId::new(1),
+        Lsn::new(1500),
+        RecoveryStage::ForensicStart,
+        compute_restore_checksum(&manifest),
+    );
+
+    let orch = RestoreOrchestration::new(
+        manifest,
+        Lsn::new(1500),
+        RecoveryStage::ForensicStart,
+        RestoreValidationPolicy::Minimal,
+        audit,
+    );
+
+    let err = orch
+        .validate()
+        .expect_err("ForensicStart must not use minimal restore validation");
+    assert!(
+        err.message().contains("full validation"),
+        "unexpected error: {err}"
+    );
+}
+
 // Integration Tests: PITR Checkpoint Reconstruction
 
 #[test]
@@ -489,6 +761,7 @@ fn test_pitr_checkpoint_after_single_segment_replay() {
     assert_eq!(plan[0].segment_descriptor.first_lsn, Lsn::new(1001));
     assert_eq!(plan[0].segment_descriptor.last_lsn, Lsn::new(2000));
     assert!(plan[0].contains_pitr_target);
+    assert_eq!(plan[0].replay_stop_lsn, pitr_lsn);
 }
 
 #[test]
@@ -525,13 +798,119 @@ fn restore_preflight_accepts_file_backed_artifact_directory() {
     .unwrap();
 
     assert_eq!(preflight.backup_id, backup_id);
+    assert_eq!(
+        preflight.manifest_format_version,
+        CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION
+    );
     assert_eq!(preflight.source_checkpoint_lsn, Lsn::new(1000));
     assert_eq!(preflight.replay_segment_count, 1);
+    assert_ne!(preflight.restore_evidence_checksum, 0);
     assert_eq!(
         preflight.manifest_digest,
         report.artifact_set.backup_manifest
     );
     assert_eq!(preflight.wal_archive_evidence.end_lsn, Lsn::new(2000));
+}
+
+#[test]
+fn restore_preflight_accepts_legacy_v1_manifest_after_reconstructing_wal_evidence() {
+    let temp = tempfile::TempDir::new().unwrap();
+    let backup_id = BackupId::new(80);
+    let report = write_test_artifact(&temp, backup_id);
+    rewrite_manifest_to_v1_without_archive_digest(&report.manifest_path);
+
+    let preflight = validate_restore_artifact_preflight(
+        temp.path(),
+        backup_id,
+        Lsn::new(1500),
+        RestoreValidationPolicy::Full,
+    )
+    .unwrap();
+
+    assert_eq!(preflight.manifest_format_version, 1);
+    assert_ne!(preflight.restore_evidence_checksum, 0);
+    assert_eq!(
+        preflight.wal_archive_evidence.archive_digest_sha256,
+        report.wal_archive_evidence.archive_digest_sha256
+    );
+}
+
+#[test]
+fn restore_orchestration_forensic_start_binds_preflight_evidence_checksum() {
+    let temp = tempfile::TempDir::new().unwrap();
+    let backup_id = BackupId::new(82);
+    let preflight = {
+        write_test_artifact(&temp, backup_id);
+        validate_restore_artifact_preflight(
+            temp.path(),
+            backup_id,
+            Lsn::new(1500),
+            RestoreValidationPolicy::Full,
+        )
+        .unwrap()
+    };
+    let mut manifest = make_test_manifest();
+    manifest.backup_id = backup_id;
+    let audit = RestoreAuditTrace::new(
+        TraceId::new(1),
+        backup_id,
+        Lsn::new(1500),
+        RecoveryStage::ForensicStart,
+        preflight.restore_evidence_checksum,
+    );
+
+    let orchestration = RestoreOrchestration::new(
+        manifest,
+        Lsn::new(1500),
+        RecoveryStage::ForensicStart,
+        RestoreValidationPolicy::Full,
+        audit,
+    );
+
+    orchestration
+        .validate_with_preflight(&preflight)
+        .expect("forensic restore must bind durable preflight evidence");
+}
+
+#[test]
+fn restore_orchestration_rejects_preflight_evidence_checksum_mismatch() {
+    let temp = tempfile::TempDir::new().unwrap();
+    let backup_id = BackupId::new(83);
+    let preflight = {
+        write_test_artifact(&temp, backup_id);
+        validate_restore_artifact_preflight(
+            temp.path(),
+            backup_id,
+            Lsn::new(1500),
+            RestoreValidationPolicy::Full,
+        )
+        .unwrap()
+    };
+    let mut manifest = make_test_manifest();
+    manifest.backup_id = backup_id;
+    let audit = RestoreAuditTrace::new(
+        TraceId::new(1),
+        backup_id,
+        Lsn::new(1500),
+        RecoveryStage::ForensicStart,
+        preflight.restore_evidence_checksum.wrapping_add(1),
+    );
+
+    let orchestration = RestoreOrchestration::new(
+        manifest,
+        Lsn::new(1500),
+        RecoveryStage::ForensicStart,
+        RestoreValidationPolicy::Full,
+        audit,
+    );
+
+    let err = orchestration
+        .validate_with_preflight(&preflight)
+        .expect_err("restore audit must bind preflight evidence checksum");
+    assert!(
+        err.message().contains("preflight evidence checksum"),
+        "unexpected error: {err}"
+    );
 }
 
 #[test]
@@ -550,7 +929,7 @@ fn restore_preflight_rejects_missing_wal_file() {
     .unwrap_err();
 
     assert!(
-        err.message().contains("read backup WAL segment"),
+        err.message().contains("backup WAL segment"),
         "unexpected error: {err}"
     );
 }
@@ -575,6 +954,27 @@ fn restore_preflight_rejects_corrupted_manifest_payload() {
 
     assert!(
         err.message().contains("manifest payload checksum mismatch"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn restore_preflight_rejects_corrupted_wal_archive_evidence_digest() {
+    let temp = tempfile::TempDir::new().unwrap();
+    let backup_id = BackupId::new(81);
+    let report = write_test_artifact(&temp, backup_id);
+    zero_manifest_archive_digest(&report.manifest_path);
+
+    let err = validate_restore_artifact_preflight(
+        temp.path(),
+        backup_id,
+        Lsn::new(1500),
+        RestoreValidationPolicy::Full,
+    )
+    .unwrap_err();
+
+    assert!(
+        err.message().contains("evidence digest"),
         "unexpected error: {err}"
     );
 }

@@ -10,6 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     batch::DefinitionOperation,
+    digest::Sha256,
     names::QualifiedName,
     objects::{CatalogDefinition, CatalogObjectBinding, ObjectKind},
 };
@@ -58,6 +59,26 @@ pub struct CatalogDependency {
     pub dependent_kind: ObjectKind,
     pub dependency_name: QualifiedName,
     pub dependency_kind: ObjectKind,
+}
+
+/// Canonical SHA-256 digest of a DefinitionBatch dependency graph.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct DefinitionBatchDependencyGraphHash([u8; Self::LEN]);
+
+impl DefinitionBatchDependencyGraphHash {
+    pub const LEN: usize = 32;
+
+    pub const fn new(bytes: [u8; Self::LEN]) -> Self {
+        Self(bytes)
+    }
+
+    pub const fn as_bytes(self) -> [u8; Self::LEN] {
+        self.0
+    }
+
+    pub fn is_zero(self) -> bool {
+        self.0.iter().all(|byte| *byte == 0)
+    }
 }
 
 impl CatalogDependency {
@@ -189,6 +210,7 @@ impl CatalogDefinition {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BatchDependencyGraph {
     edges: BTreeMap<QualifiedName, BTreeSet<QualifiedName>>,
+    dependencies: Vec<CatalogDependency>,
 }
 
 impl BatchDependencyGraph {
@@ -221,6 +243,7 @@ impl BatchDependencyGraph {
 
         let mut graph = Self {
             edges: BTreeMap::new(),
+            dependencies: Vec::new(),
         };
 
         for (operation_index, operation) in operations.iter().enumerate() {
@@ -268,6 +291,42 @@ impl BatchDependencyGraph {
         Ok(graph)
     }
 
+    /// Returns a deterministic digest over graph nodes and canonical
+    /// dependency edges.
+    pub fn dependency_graph_hash(&self) -> DefinitionBatchDependencyGraphHash {
+        let mut sink = DependencyGraphHashSink::new();
+        sink.str("andromeda.catalog.definition-batch.dependency-graph.v1.sha256");
+
+        sink.u64(self.edges.len() as u64);
+        for node in self.edges.keys() {
+            sink.qualified_name(node);
+        }
+
+        let dependencies = self.canonical_dependencies();
+        sink.u64(dependencies.len() as u64);
+        for dependency in dependencies {
+            sink.dependency(&dependency);
+        }
+
+        sink.finish()
+    }
+
+    /// Returns dependency edges in canonical order, with duplicate graph edges
+    /// collapsed. Source-level duplicates remain visible through
+    /// `DefinitionBatchSourceHash`.
+    pub fn canonical_dependencies(&self) -> Vec<CatalogDependency> {
+        let mut dependencies = self.dependencies.clone();
+        dependencies.sort_by_key(canonical_dependency_key);
+        dependencies.dedup_by(|left, right| {
+            canonical_dependency_key(left) == canonical_dependency_key(right)
+        });
+        dependencies
+    }
+
+    pub fn dependency_count(&self) -> usize {
+        self.canonical_dependencies().len()
+    }
+
     fn absorb_dependency(
         &mut self,
         dependent_name: &QualifiedName,
@@ -277,6 +336,7 @@ impl BatchDependencyGraph {
         created_name_kinds: &BTreeMap<QualifiedName, ObjectKind>,
     ) -> AndromedaResult<()> {
         dependency.validate()?;
+        self.dependencies.push(dependency.clone());
 
         let Some(dependency_index) = created_name_positions.get(&dependency.dependency_name) else {
             // Out-of-batch dependency: nothing to validate against the graph,
@@ -345,6 +405,93 @@ impl BatchDependencyGraph {
         visiting.remove(node);
         visited.insert(node.clone());
         Ok(())
+    }
+}
+
+fn canonical_dependency_key(dependency: &CatalogDependency) -> (u8, String, u8, String, u8) {
+    (
+        dependency_kind_tag(dependency.kind),
+        dependency.dependency_name.as_catalog_path(),
+        object_kind_tag(dependency.dependency_kind),
+        dependency.dependent_name.as_catalog_path(),
+        object_kind_tag(dependency.dependent_kind),
+    )
+}
+
+struct DependencyGraphHashSink {
+    hasher: Sha256,
+}
+
+impl DependencyGraphHashSink {
+    fn new() -> Self {
+        Self {
+            hasher: Sha256::new(),
+        }
+    }
+
+    fn finish(self) -> DefinitionBatchDependencyGraphHash {
+        DefinitionBatchDependencyGraphHash::new(self.hasher.finalize())
+    }
+
+    fn raw_bytes(&mut self, bytes: &[u8]) {
+        self.hasher.update(bytes);
+    }
+
+    fn bytes(&mut self, bytes: &[u8]) {
+        self.u64(bytes.len() as u64);
+        self.raw_bytes(bytes);
+    }
+
+    fn str(&mut self, value: &str) {
+        self.bytes(value.as_bytes());
+    }
+
+    fn u8(&mut self, value: u8) {
+        self.hasher.update(&[value]);
+    }
+
+    fn u64(&mut self, value: u64) {
+        self.raw_bytes(&value.to_le_bytes());
+    }
+
+    fn qualified_name(&mut self, name: &QualifiedName) {
+        self.u64(name.parts().len() as u64);
+        for part in name.parts() {
+            self.str(part);
+        }
+    }
+
+    fn dependency(&mut self, dependency: &CatalogDependency) {
+        self.u8(dependency_kind_tag(dependency.kind));
+        self.object_kind(dependency.dependent_kind);
+        self.qualified_name(&dependency.dependent_name);
+        self.object_kind(dependency.dependency_kind);
+        self.qualified_name(&dependency.dependency_name);
+    }
+
+    fn object_kind(&mut self, kind: ObjectKind) {
+        self.u8(object_kind_tag(kind));
+    }
+}
+
+fn dependency_kind_tag(kind: CatalogDependencyKind) -> u8 {
+    match kind {
+        CatalogDependencyKind::ProcedureStructuredInput => 0,
+        CatalogDependencyKind::ProcedureReadsTable => 1,
+        CatalogDependencyKind::ProcedureWritesTable => 2,
+        CatalogDependencyKind::ProcedureEmitsStructuredObject => 3,
+    }
+}
+
+fn object_kind_tag(kind: ObjectKind) -> u8 {
+    match kind {
+        ObjectKind::Database => 0,
+        ObjectKind::Namespace => 1,
+        ObjectKind::Table => 2,
+        ObjectKind::Map => 3,
+        ObjectKind::Enum => 4,
+        ObjectKind::StructuredObject => 5,
+        ObjectKind::Procedure => 6,
     }
 }
 

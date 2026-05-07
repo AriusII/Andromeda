@@ -16,17 +16,23 @@ impl SrplStreamBackpressure {
     }
 
     pub fn buffer_rows(&mut self, count: usize) -> AndromedaResult<()> {
-        if self.buffered_rows + count > self.max_buffered_rows {
+        let next_buffered_rows = self.buffered_rows.checked_add(count).ok_or_else(|| {
+            AndromedaError::new(
+                AndromedaErrorKind::Resource,
+                "SRPL stream backpressure row count overflow",
+            )
+        })?;
+
+        if next_buffered_rows > self.max_buffered_rows {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Resource,
                 format!(
                     "SRPL stream backpressure exceeded: {} rows buffered, max {}",
-                    self.buffered_rows + count,
-                    self.max_buffered_rows
+                    next_buffered_rows, self.max_buffered_rows
                 ),
             ));
         }
-        self.buffered_rows += count;
+        self.buffered_rows = next_buffered_rows;
         Ok(())
     }
 

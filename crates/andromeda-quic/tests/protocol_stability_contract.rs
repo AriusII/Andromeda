@@ -8,9 +8,9 @@ use andromeda_core::{RequestId, SessionId, TransactionId};
 use andromeda_proto::{PayloadKind, ProtocolVersion};
 use andromeda_quic::{
     AUTH_FRAME_CODE, CONTRACT_REQUEST_FRAME_CODE, CONTRACT_RESPONSE_FRAME_CODE, ERROR_FRAME_CODE,
-    FRAME_CODEC_CRC_OFFSET, FRAME_CODEC_HEADER_LEN, FrameHeader, FrameType, FrameTypeInvariants,
-    HELLO_FRAME_CODE, MAX_FRAME_PAYLOAD_LENGTH, PayloadKindInvariants, ProtocolInvariants,
-    ProtocolVersionInvariants, RPC_BATCH_FRAME_CODE, RPC_COMPLETION_FRAME_CODE,
+    FRAME_CODEC_CRC_OFFSET, FRAME_CODEC_HEADER_LEN, FrameCodec, FrameHeader, FrameType,
+    FrameTypeInvariants, HELLO_FRAME_CODE, MAX_FRAME_PAYLOAD_LENGTH, PayloadKindInvariants,
+    ProtocolInvariants, ProtocolVersionInvariants, RPC_BATCH_FRAME_CODE, RPC_COMPLETION_FRAME_CODE,
     RPC_EXECUTE_REQUEST_FRAME_CODE, RPC_METADATA_FRAME_CODE, TELEMETRY_SOFT_SIGNAL_FRAME_CODE,
     validate_frame_header_layout,
 };
@@ -370,6 +370,19 @@ fn test_frame_payload_max_size_locked() {
     assert_eq!(MAX_FRAME_PAYLOAD_LENGTH, sixteen_mib as u64);
 }
 
+/// Validates that bulk frame scans remain bounded.
+///
+/// This is a decoder resource contract, not a wire discriminator. The value can
+/// change only with an explicit compatibility and backpressure review.
+#[test]
+fn test_frame_scan_batch_limit_locked() {
+    assert_eq!(
+        FrameCodec::MAX_SCAN_FRAMES,
+        4_096,
+        "FrameCodec::MAX_SCAN_FRAMES changed without protocol compatibility review"
+    );
+}
+
 /// Demonstrates that field reordering would be caught by layout validation.
 ///
 /// This test validates that our invariant checks would catch a hypothetical
@@ -558,9 +571,9 @@ fn test_payload_requirements_preserved() {
     assert!(PayloadKind::RpcBatch.requires_non_empty_payload());
     assert!(FrameType::RpcBatch.requires_non_empty_payload());
 
-    // Error must NOT require non-empty payload
-    assert!(!PayloadKind::Error.requires_non_empty_payload());
-    assert!(!FrameType::Error.requires_non_empty_payload());
+    // Error diagnostics must carry an explicit payload for auditability.
+    assert!(PayloadKind::Error.requires_non_empty_payload());
+    assert!(FrameType::Error.requires_non_empty_payload());
 
     // Hello must NOT require non-empty payload
     assert!(!PayloadKind::Hello.requires_non_empty_payload());

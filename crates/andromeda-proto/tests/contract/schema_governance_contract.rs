@@ -124,7 +124,12 @@ const CONTRACT_SCHEMAS: &[(&str, &str)] = &[
 const PROTO_MANIFEST: &str = include_str!("../../Cargo.toml");
 const QUIC_MANIFEST: &str = include_str!("../../../andromeda-quic/Cargo.toml");
 const EXEC_MANIFEST: &str = include_str!("../../../andromeda-exec/Cargo.toml");
+const BUILD_SCRIPT: &str = include_str!("../../build.rs");
 const GENERATED_WRAPPER: &str = include_str!("../../src/generated.rs");
+const RUNTIME_PROJECTION_SOURCE: &str =
+    include_str!("../../src/generated_validation/runtime_projection.rs");
+const GENERATED_VALIDATION_MANIFEST_SOURCE: &str =
+    include_str!("../../src/generated_validation/manifest.rs");
 
 use andromeda_core::{
     AndromedaErrorKind, CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId, ScalarType,
@@ -185,7 +190,24 @@ fn repository_root_schemas_proto_tree_remains_retired() {
 }
 
 #[test]
-fn governed_schemas_stay_message_only_without_service_rpc_grpc_or_tonic_identifiers() {
+fn build_script_tracks_proto_directories_for_new_schema_discovery() {
+    for required_snippet in [
+        "collect_proto_directories(&proto_root)?",
+        "for proto_directory in &proto_directories",
+        "cargo:rerun-if-changed={}",
+        "lower.contains(\"grpc\")",
+        "lower.contains(\"json\")",
+        "lower.contains(\"sql\")",
+    ] {
+        assert!(
+            BUILD_SCRIPT.contains(required_snippet),
+            "build.rs must preserve deterministic directory rerun tracking snippet: {required_snippet}"
+        );
+    }
+}
+
+#[test]
+fn governed_schemas_stay_message_only_without_service_rpc_sql_grpc_json_or_serde_identifiers() {
     for schema in CRATE_LOCAL_PROTO_SCHEMAS {
         let active_schema = active_schema_text(schema.source);
         for token in schema_identifier_tokens(&active_schema) {
@@ -210,6 +232,21 @@ fn governed_schemas_stay_message_only_without_service_rpc_grpc_or_tonic_identifi
                 "{} schema must not contain active tonic identifiers",
                 schema.logical_name
             );
+            assert!(
+                !lower.contains("json"),
+                "{} schema must not contain active JSON identifiers",
+                schema.logical_name
+            );
+            assert!(
+                !lower.contains("serde"),
+                "{} schema must not contain active serde identifiers",
+                schema.logical_name
+            );
+            assert!(
+                !lower.contains("sql"),
+                "{} schema must not contain active SQL identifiers",
+                schema.logical_name
+            );
         }
     }
 
@@ -220,18 +257,63 @@ fn governed_schemas_stay_message_only_without_service_rpc_grpc_or_tonic_identifi
 }
 
 #[test]
-fn protocol_result_surface_does_not_add_grpc_or_runtime_json_dependencies() {
+fn protocol_result_surface_does_not_add_sql_grpc_or_runtime_json_dependencies() {
     for (name, manifest) in [
         ("andromeda-proto", PROTO_MANIFEST),
         ("andromeda-quic", QUIC_MANIFEST),
         ("andromeda-exec", EXEC_MANIFEST),
     ] {
         let lower = manifest.to_ascii_lowercase();
-        for forbidden in ["grpc", "tonic", "serde_json"] {
+        for forbidden in [
+            "grpc",
+            "tonic",
+            "json",
+            "serde",
+            "pbjson",
+            "simd-json",
+            "sql",
+            "sqlx",
+            "rusqlite",
+            "diesel",
+        ] {
             assert!(
                 !lower.contains(forbidden),
                 "{name} manifest must not expose {forbidden} on protocol/result surface"
             );
+        }
+    }
+}
+
+#[test]
+fn protocol_runtime_validation_sources_do_not_add_sql_grpc_or_json_paths() {
+    for (name, source) in [
+        ("runtime_projection", RUNTIME_PROJECTION_SOURCE),
+        (
+            "generated_validation_manifest",
+            GENERATED_VALIDATION_MANIFEST_SOURCE,
+        ),
+        ("build_script", BUILD_SCRIPT),
+    ] {
+        let active_source = active_schema_text(source);
+        for token in schema_identifier_tokens(&active_source) {
+            let lower = token.to_ascii_lowercase();
+            for forbidden in [
+                "grpc",
+                "tonic",
+                "json",
+                "serde",
+                "pbjson",
+                "simd_json",
+                "sql",
+                "sqlx",
+                "rusqlite",
+                "diesel",
+            ] {
+                assert!(
+                    !lower.contains(forbidden),
+                    "{name} runtime validation source must not contain active {forbidden} identifiers"
+                );
+            }
         }
     }
 }
@@ -451,6 +533,7 @@ fn generated_prost_modules_follow_governed_package_layout() {
             id: "andromeda.execute_procedure".to_string(),
             family: "application".to_string(),
         }],
+        stats_version: Some(5),
     };
     let invocation = generated::protocol::v1::InvocationRequest {
         correlation: Some(generated::protocol::v1::InvocationCorrelation {
@@ -460,6 +543,8 @@ fn generated_prost_modules_follow_governed_package_layout() {
             contract_hash: Some(vec![7; ContractHash::LEN]),
             catalog_version: Some(1),
             invocation_id: None,
+            stats_version: Some(5),
+            expected_policy_version: Some(11),
         }),
         execute_request: Some(generated::protocol::v1::RpcExecuteRequest {
             procedure_name: "Inventory.ReserveStock".to_string(),
@@ -468,6 +553,7 @@ fn generated_prost_modules_follow_governed_package_layout() {
             surface_scope: "inventory".to_string(),
             arguments: Vec::new(),
             budget: None,
+            expected_stats_version: Some(5),
         }),
     };
 
@@ -560,6 +646,9 @@ fn governed_schemas_declare_enriched_message_contracts_and_reserved_ranges() {
         "optional BackpressureMetadata backpressure = 10;",
         "CompletionShape completion_shape = 1;",
         "bytes expected_contract_hash = 2;",
+        "optional uint64 expected_stats_version = 7;",
+        "optional uint64 stats_version = 7;",
+        "optional uint64 expected_policy_version = 8;",
         "repeated Argument arguments = 5;",
         "RequestBudget budget = 6;",
         "bytes structured_payload = 4;",
@@ -578,9 +667,11 @@ fn governed_schemas_declare_enriched_message_contracts_and_reserved_ranges() {
         "optional uint64 max_payload_length = 9;",
         "bytes policy_version = 7;",
         "repeated RequiredPermission required_permissions = 8;",
+        "optional uint64 stats_version = 64;",
         "optional uint64 row_count_max = 6;",
         "repeated ColumnDescriptor fields = 10;",
         "ResultStreamDescriptor.RowCountRequirement row_count_policy = 11;",
+        "reserved \"shape_hash\";",
         "message CatalogProcedureManifestResolutionRequest",
         "message CatalogProcedureManifestResolutionResponse",
         "optional bytes expected_contract_hash = 7;",
@@ -1060,6 +1151,7 @@ fn governance_sample_manifest() -> ProcedureManifest {
         procedure_name: "Inventory.ReserveStock".to_string(),
         contract_hash: ContractHash::test_vector(0x11),
         catalog_version: CatalogVersion::new(3),
+        stats_version: 5,
         policy_version: ManifestPolicyVersion::test_vector(0x22),
         protocol_layout: ProtocolLayout {
             descriptor_set_hash: descriptor_set_hash(),
@@ -1103,6 +1195,10 @@ fn procedure_manifest_hash_is_deterministic_and_distinct_from_descriptor_hashes(
     let mut bumped = governance_sample_manifest();
     bumped.policy_version = ManifestPolicyVersion::test_vector(0x99);
     assert_ne!(hash, bumped.manifest_hash());
+
+    let mut bumped_stats = governance_sample_manifest();
+    bumped_stats.stats_version += 1;
+    assert_ne!(hash, bumped_stats.manifest_hash());
 }
 
 #[test]

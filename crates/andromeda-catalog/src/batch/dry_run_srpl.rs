@@ -1,32 +1,30 @@
-//! SRPL validation during DefinitionBatch dry-run phase.
+//! SRPL Procedure manifest validation during DefinitionBatch dry-run phase.
 //!
-//! This module validates all SRPL procedures in a batch before application.
-//! Validation is lazy: SRPL compilation happens only during dry-run, not when
-//! adding operations to the batch. This enables fail-fast semantics: if any
-//! procedure is invalid, the entire batch is rejected.
+//! This module validates Procedure contracts that have already been materialized
+//! by the SRPL compiler. `andromeda-catalog` intentionally does not parse SRPL
+//! source: `andromeda-srpl` depends on `andromeda-catalog`, so compiling source
+//! here would create a crate dependency cycle. Source-level parse, bind, lower,
+//! and manifest materialization must happen in `andromeda-srpl` before a
+//! `CatalogDefinition::Procedure` enters a DefinitionBatch.
 //!
 //! ## Validation Pipeline
 //!
-//! For each SRPL procedure in the batch:
-//! 1. **Parse**: Source → AST (detect syntax errors)
-//! 2. **Bind**: AST → Typed procedure (detect name conflicts, type mismatches)
-//! 3. **Lower**: Typed → IR (detect semantic errors, cardinality issues)
-//! 4. **Manifest**: IR → Contract (compute contract hash, input/output shapes)
+//! For each Procedure contract in the batch:
+//! 1. **Contract hash**: Verify the stored `ContractHash` matches the canonical contract shape.
+//! 2. **Binding**: Verify `ProcedureId`, `CatalogVersion`, `ContractHash`, `StatsVersion`, and `PolicyVersion`.
+//! 3. **Manifest readiness**: Count valid Procedure manifests before object mutation planning.
 //!
 //! If all procedures validate, dry-run returns success with affected catalog version.
 //! If any procedure fails, dry-run returns failure with diagnostic (entire batch rejected).
 //!
 //! ## Error Categories
 //!
-//! - **SyntaxError**: Lexer/parser failure (e.g., missing keyword)
-//! - **BindError**: Name/type validation failure (e.g., undefined table)
-//! - **CompileError**: Semantic validation failure (e.g., type mismatch)
-//! - **ManifestError**: Contract materialization failure
-//! - **IntegrityError**: Batch constraint violation (e.g., duplicate procedure name)
+//! Source diagnostics are emitted by `andromeda-srpl`. Catalog diagnostics here
+//! are contract or manifest integrity diagnostics.
 
-use andromeda_core::AndromedaResult;
+use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
-use crate::DefinitionBatch;
+use crate::{CatalogDefinition, DefinitionBatch, DefinitionOperation, ObjectKind};
 
 /// Report produced by a SRPL batch dry-run validation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -66,19 +64,20 @@ impl SrplBatchDryRunReport {
     }
 }
 
-/// Validate all SRPL procedures in a batch during dry-run phase.
+/// Validate all materialized Procedure manifests in a batch during dry-run phase.
 ///
 /// This function is called by DefinitionBatch::dry_run() before applying mutations.
-/// It performs complete SRPL compilation: parse → bind → lower → manifest.
+/// It does not compile SRPL source; it validates that each Procedure contract
+/// already carries canonical manifest and binding evidence.
 ///
 /// # Arguments
 ///
-/// * `batch` - The batch containing SRPL procedures to validate
+/// * `batch` - The batch containing materialized Procedure definitions to validate
 ///
 /// # Returns
 ///
 /// On success: SrplBatchDryRunReport with all_valid=true
-/// On failure: AndromedaError (entire batch rejected due to failed procedures)
+/// On failure: AndromedaError (entire batch rejected due to failed Procedure manifests)
 ///
 /// # Atomicity
 ///
@@ -87,24 +86,66 @@ impl SrplBatchDryRunReport {
 /// - Partial success is not allowed
 /// - Error diagnostic includes all failed procedures
 pub fn validate_srpl_batch_dry_run(
-    _batch: &DefinitionBatch,
+    batch: &DefinitionBatch,
 ) -> AndromedaResult<SrplBatchDryRunReport> {
-    // TODO(E7): Implement in integration phase
-    // 1. Iterate batch.operations
-    // 2. For each SRPL procedure operation:
-    //    a. Parse SRPL source to AST
-    //    b. Bind AST (validate names/types)
-    //    c. Lower AST to IR (validate semantics)
-    //    d. Materialize contract (compute hash)
-    // 3. Accumulate errors
-    // 4. If errors.is_empty(): return Ok(success_report)
-    // 5. Else: return Err(batch_validation_failed) with all errors
-    Ok(SrplBatchDryRunReport::success(0))
+    let mut valid_count = 0;
+    let mut rejection_reasons = Vec::new();
+
+    for (operation_index, operation) in batch.operations.iter().enumerate() {
+        let DefinitionOperation::Create(CatalogDefinition::Procedure(contract)) = operation else {
+            continue;
+        };
+
+        let procedure_name = contract.object.name.as_catalog_path();
+        if contract.object.kind != ObjectKind::Procedure {
+            rejection_reasons.push(format!(
+                "operation {operation_index} procedure {procedure_name}: catalog object kind must be Procedure"
+            ));
+            continue;
+        }
+
+        if let Err(error) = contract.validate_canonical_hash() {
+            rejection_reasons.push(format!(
+                "operation {operation_index} procedure {procedure_name}: {}",
+                error.message()
+            ));
+            continue;
+        }
+
+        if let Err(error) = contract.binding().validate() {
+            rejection_reasons.push(format!(
+                "operation {operation_index} procedure {procedure_name}: {}",
+                error.message()
+            ));
+            continue;
+        }
+
+        valid_count += 1;
+    }
+
+    if rejection_reasons.is_empty() {
+        return Ok(SrplBatchDryRunReport::success(valid_count));
+    }
+
+    let report = SrplBatchDryRunReport::failure(valid_count, rejection_reasons);
+    Err(AndromedaError::new(
+        AndromedaErrorKind::Contract,
+        format!(
+            "definition batch SRPL dry-run rejected {} procedure(s): {}",
+            report.rejected_count,
+            report.rejection_reasons.join("; ")
+        ),
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        DefinitionBatchId, INVENTORY_DATABASE_ID, INVENTORY_NAMESPACE_ID,
+        inventory_domain_definition_batch, inventory_reserve_stock_contract,
+    };
+    use andromeda_core::{AndromedaErrorKind, CatalogVersion};
 
     #[test]
     fn srpl_batch_dry_run_report_success() {
@@ -123,5 +164,36 @@ mod tests {
         assert_eq!(report.valid_count, 1);
         assert_eq!(report.rejected_count, 2);
         assert_eq!(report.rejection_reasons, reasons);
+    }
+
+    #[test]
+    fn srpl_batch_dry_run_counts_materialized_procedure_contracts() {
+        let batch = inventory_domain_definition_batch().unwrap();
+        let report = validate_srpl_batch_dry_run(&batch).unwrap();
+
+        assert!(report.all_valid);
+        assert_eq!(report.valid_count, 1);
+        assert_eq!(report.rejected_count, 0);
+    }
+
+    #[test]
+    fn srpl_batch_dry_run_rejects_stale_procedure_manifest_hash() {
+        let mut contract = inventory_reserve_stock_contract().unwrap();
+        contract.stats_version = crate::StatsVersion::new(contract.stats_version.get() + 1);
+        let batch = DefinitionBatch {
+            batch_id: DefinitionBatchId::new(0xD7),
+            database_id: INVENTORY_DATABASE_ID,
+            namespace_id: INVENTORY_NAMESPACE_ID,
+            base_version: CatalogVersion::new(0),
+            operations: vec![DefinitionOperation::Create(CatalogDefinition::Procedure(
+                contract,
+            ))],
+        };
+
+        let error = batch.dry_run().unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Contract);
+        assert!(error.message().contains("SRPL dry-run rejected"));
+        assert!(error.message().contains("canonical contract shape"));
     }
 }

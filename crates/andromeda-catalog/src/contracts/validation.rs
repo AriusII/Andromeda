@@ -1,5 +1,7 @@
 //! Compatibility checking between procedure contract versions.
 
+use crate::ObjectKind;
+
 use super::{CompatibilityPolicy, ContractCompatibilityDiagnostic, ProcedureContract};
 
 pub fn diagnose_procedure_contract_compatibility(
@@ -21,6 +23,24 @@ pub fn diagnose_procedure_contract_compatibility(
     if previous.object.name != next.object.name {
         messages
             .push("procedure contract compatibility requires the same procedure name".to_string());
+    }
+    if previous.procedure_id != next.procedure_id {
+        messages.push("procedure contract compatibility requires the same ProcedureId".to_string());
+    }
+    if previous.object.object_id != next.object.object_id {
+        messages.push(
+            "procedure contract compatibility requires the same catalog object id".to_string(),
+        );
+    }
+    if previous.object.kind != ObjectKind::Procedure || next.object.kind != ObjectKind::Procedure {
+        messages.push(
+            "procedure contract compatibility can only classify Procedure objects".to_string(),
+        );
+    }
+    if next.object.catalog_version <= previous.object.catalog_version {
+        messages.push(
+            "procedure contract compatibility requires an advancing CatalogVersion".to_string(),
+        );
     }
 
     match next.compatibility_policy {
@@ -95,8 +115,7 @@ pub fn diagnose_procedure_contract_compatibility(
                     ));
                 }
 
-                if previous_stream.row_count_exact_required != next_stream.row_count_exact_required
-                {
+                if previous_stream.cardinality != next_stream.cardinality {
                     messages.push(format!(
                         "additive compatibility does not permit changing cardinality contract for result stream {}",
                         previous_stream.name

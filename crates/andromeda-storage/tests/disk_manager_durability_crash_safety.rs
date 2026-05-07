@@ -16,7 +16,7 @@ use std::fs;
 use std::io::{Read, Seek, SeekFrom, Write};
 use tempfile::TempDir;
 
-/// Helper: Create a valid page header.
+/// Create a valid page header.
 fn create_valid_page_header(page_id: u64, page_size: PageSize, page_lsn: u64) -> PageHeader {
     let header_len = PageHeader::MIN_HEADER_LEN_V0;
     let trailer_len = PageTrailer::V0_LEN;
@@ -44,11 +44,11 @@ fn create_valid_page_header(page_id: u64, page_size: PageSize, page_lsn: u64) ->
         slot_count: 0,
         row_count: 0,
         flags: PageFlags::NONE,
-        header_crc: 0xDEADBEEF, // Valid non-zero CRC
+        header_crc: 0xDEADBEEF,
     }
 }
 
-/// Helper: Create a valid page trailer.
+/// Create a valid page trailer.
 fn create_valid_page_trailer() -> PageTrailer {
     PageTrailer {
         torn_write_guard: 0xDEADBEEF,
@@ -57,7 +57,7 @@ fn create_valid_page_trailer() -> PageTrailer {
     }
 }
 
-/// Helper: Create a page image with recognizable content.
+/// Create a page image with recognizable content.
 fn create_test_page_with_content(page_id: u64, page_size: PageSize, content_byte: u8) -> PageImage {
     let header = create_valid_page_header(page_id, page_size, 100);
     let trailer = create_valid_page_trailer();
@@ -67,7 +67,7 @@ fn create_test_page_with_content(page_id: u64, page_size: PageSize, content_byte
     PageImage::with_layout(layout, bytes).unwrap()
 }
 
-/// Helper: Allocate a test extent covering pages 1-100.
+/// Allocate a test extent covering pages 1-100.
 fn allocate_test_extent(manager: &mut FileDiskManager, page_size: PageSize) {
     let extent = ExtentDescriptor {
         extent_id: ExtentId::new(1),
@@ -85,7 +85,7 @@ fn allocate_test_extent(manager: &mut FileDiskManager, page_size: PageSize) {
 }
 
 #[test]
-fn test_page_survives_disk_manager_close_and_reopen() {
+fn page_survives_disk_manager_close_and_reopen() {
     let temp_dir = TempDir::new().unwrap();
     let data_file = temp_dir.path().join("durable.bin");
 
@@ -100,7 +100,6 @@ fn test_page_survives_disk_manager_close_and_reopen() {
                 Lsn::new(100),
             )
             .unwrap();
-        // manager dropped here; file should be closed and flushed
     }
 
     // Phase 2: Reopen and verify page is intact
@@ -123,11 +122,9 @@ fn test_page_survives_disk_manager_close_and_reopen() {
         let mut manager = manager;
         manager.register_extent(extent).unwrap();
 
-        // Read the page back
         let read_image = manager.read_page(PageId::new(1)).unwrap().unwrap();
         let read_bytes = read_image.as_bytes();
 
-        // Bytes should match exactly (recovery verified)
         assert_eq!(read_bytes.len(), PageSize::KiB16.bytes_usize());
         assert_eq!(read_bytes[0], 0xAB, "First byte of recovered page mismatch");
     }
@@ -145,7 +142,7 @@ fn corrupted_page_read_behavior_matches_integrity_mode() {
         allocate_test_extent(&mut manager, PageSize::KiB16);
 
         let page = create_test_page_with_content(1, PageSize::KiB16, 0xCD);
-        manager.write_page(page, Lsn::new(50)).unwrap();
+        manager.write_page(page, Lsn::new(100)).unwrap();
     }
 
     // Phase 2: Corrupt the page on disk (flip a bit)
@@ -187,34 +184,35 @@ fn corrupted_page_read_behavior_matches_integrity_mode() {
         };
         manager.register_extent(extent).unwrap();
 
-        let result = manager.read_page(PageId::new(1));
+        let read_result = manager.read_page(PageId::new(1));
 
-        match result {
-            Ok(Some(image)) => {
-                let bytes = image.as_bytes();
-                assert_eq!(bytes.len(), PageSize::KiB16.bytes_usize());
-                assert_eq!(
-                    bytes[100], corrupted_byte,
-                    "default integrity mode should make corruption visible if it is not rejected"
-                );
-                assert_ne!(bytes[100], original_byte);
-            }
-            Err(e) => {
-                assert!(
-                    e.message().contains("integrity")
-                        || e.message().contains("corrupted")
-                        || e.message().contains("CRC"),
-                    "expected page-integrity error, got: {}",
-                    e.message()
-                );
-            }
-            Ok(None) => panic!("Page should exist but returned None"),
+        if let Ok(Some(image)) = &read_result {
+            let bytes = image.as_bytes();
+            assert_eq!(bytes.len(), PageSize::KiB16.bytes_usize());
+            assert_eq!(
+                bytes[100], corrupted_byte,
+                "default integrity mode should make corruption visible if it is not rejected"
+            );
+            assert_ne!(bytes[100], original_byte);
         }
+        if let Err(error) = &read_result {
+            assert!(
+                error.message().contains("integrity")
+                    || error.message().contains("corrupted")
+                    || error.message().contains("CRC"),
+                "expected page-integrity error, got: {}",
+                error.message()
+            );
+        }
+        assert!(
+            matches!(read_result, Ok(Some(_)) | Err(_)),
+            "page should remain addressable or fail with an integrity error"
+        );
     }
 }
 
 #[test]
-fn test_multiple_pages_written_sequentially_survive_recovery() {
+fn multiple_pages_written_sequentially_survive_reopen() {
     let temp_dir = TempDir::new().unwrap();
     let data_file = temp_dir.path().join("multi.bin");
 
@@ -281,7 +279,7 @@ fn test_multiple_pages_written_sequentially_survive_recovery() {
 }
 
 #[test]
-fn test_pages_at_extent_boundary_durable() {
+fn extent_boundary_pages_survive_reopen() {
     let temp_dir = TempDir::new().unwrap();
     let data_file = temp_dir.path().join("boundary.bin");
 
@@ -323,8 +321,8 @@ fn test_pages_at_extent_boundary_durable() {
         let page10 = create_test_page_with_content(10, PageSize::KiB16, 0x10);
         let page11 = create_test_page_with_content(11, PageSize::KiB16, 0x11);
 
-        manager.write_page(page10, Lsn::new(10)).unwrap();
-        manager.write_page(page11, Lsn::new(11)).unwrap();
+        manager.write_page(page10, Lsn::new(100)).unwrap();
+        manager.write_page(page11, Lsn::new(100)).unwrap();
     }
 
     // Phase 2: Reopen and verify boundary pages
@@ -368,7 +366,7 @@ fn test_pages_at_extent_boundary_durable() {
 }
 
 #[test]
-fn test_file_preallocation_space_reserved() {
+fn file_preallocation_reserves_extent_space() {
     let temp_dir = TempDir::new().unwrap();
     let data_file = temp_dir.path().join("prealloc.bin");
 
@@ -379,7 +377,7 @@ fn test_file_preallocation_space_reserved() {
         object_id: ObjectId::new(1),
         allocation_id: AllocationId::new(1),
         first_page_id: PageId::new(1),
-        page_count: 500, // 500 * 16 KiB = 8 MB
+        page_count: 500,
         page_size: PageSize::KiB16,
         state: ExtentState::AllocatingHot,
         segment_id: None,
@@ -400,7 +398,7 @@ fn test_file_preallocation_space_reserved() {
 }
 
 #[test]
-fn test_large_page_32kib_survives_recovery() {
+fn large_32kib_page_survives_reopen() {
     let temp_dir = TempDir::new().unwrap();
     let data_file = temp_dir.path().join("large.bin");
 
@@ -425,7 +423,7 @@ fn test_large_page_32kib_survives_recovery() {
         manager.allocate_extent(extent).unwrap();
 
         let page = create_test_page_with_content(1, PageSize::KiB32, content_byte);
-        manager.write_page(page, Lsn::new(1)).unwrap();
+        manager.write_page(page, Lsn::new(100)).unwrap();
     }
 
     // Phase 2: Verify on disk

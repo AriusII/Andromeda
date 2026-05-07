@@ -45,7 +45,7 @@ pub(super) fn canonical_procedure_contract_hash_parts(
     multi_result_policy: MultiResultPolicy,
 ) -> ContractHash {
     let mut sink = StableHashSink::new();
-    sink.str("andromeda.catalog.procedure-contract.v3.sha256");
+    sink.str("andromeda.catalog.procedure-contract.v4.sha256");
     sink.qualified_name(name);
     sink.u64(stats_version.get());
     sink.contract_hash(protocol_layout.descriptor_set_hash);
@@ -59,7 +59,7 @@ pub(super) fn canonical_procedure_contract_hash_parts(
     for stream in result_streams {
         sink.u64(stream.stream_id);
         sink.str(&stream.name);
-        sink.bool(stream.row_count_exact_required);
+        sink.u8(stream.cardinality.stable_tag());
         sink.columns(&stream.columns);
     }
     sink.u64(required_permissions.len() as u64);

@@ -4,9 +4,7 @@
 
 use andromeda_core::TransactionId;
 use andromeda_tx::gc::mvcc_eligibility::{VersionEligibilityChecker, VersionRecord};
-use andromeda_tx::{
-    ActiveSnapshotRegistry, SnapshotHandle, TransactionStatus, TransactionStatusTable,
-};
+use andromeda_tx::{ActiveSnapshotRegistry, SnapshotHandle, TransactionStatusTable};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -34,7 +32,13 @@ fn test_creator_committed_true() {
         VersionEligibilityChecker::new(status_table.clone(), snapshot_registry.clone(), 2).unwrap();
 
     let tx_id = next_tx_id();
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
+        .unwrap();
 
     let version = VersionRecord::new(1, tx_id, 100, 5).unwrap();
     let eligibility = checker.check_all_criteria(&version, 10).unwrap();
@@ -67,7 +71,11 @@ fn test_creator_rolled_back_false() {
 
     let tx_id = next_tx_id();
     status_table
-        .record(tx_id, TransactionStatus::RolledBack)
+        .record_rolled_back_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
 
     let version = VersionRecord::new(1, tx_id, 100, 5).unwrap();
@@ -86,7 +94,13 @@ fn test_end_ts_strictly_less_than_min_visible() {
         VersionEligibilityChecker::new(status_table.clone(), snapshot_registry.clone(), 2).unwrap();
 
     let tx_id = next_tx_id();
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
+        .unwrap();
 
     // Version's end_ts is 100, and with no active snapshots, min_visible_ts is very large
     let version = VersionRecord::new(1, tx_id, 100, 5).unwrap();
@@ -103,7 +117,13 @@ fn test_end_ts_equal_to_min_visible_not_invisible() {
         VersionEligibilityChecker::new(status_table.clone(), snapshot_registry.clone(), 2).unwrap();
 
     let tx_id = next_tx_id();
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
+        .unwrap();
 
     // Register a snapshot at timestamp 100 to set min_visible_ts = 100
     let snapshot_tx_id = next_tx_id();
@@ -129,7 +149,13 @@ fn test_end_ts_greater_than_min_visible_not_invisible() {
         VersionEligibilityChecker::new(status_table.clone(), snapshot_registry.clone(), 2).unwrap();
 
     let tx_id = next_tx_id();
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
+        .unwrap();
 
     // Register a snapshot at timestamp 50 to set min_visible_ts = 50
     let snapshot_tx_id = next_tx_id();
@@ -162,7 +188,13 @@ fn test_grace_period_not_met_below_threshold() {
     .unwrap();
 
     let tx_id = next_tx_id();
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
+        .unwrap();
 
     let marked_at = 10;
     let version = VersionRecord::new(1, tx_id, 100, marked_at).unwrap();
@@ -185,7 +217,13 @@ fn test_grace_period_met_exactly_at_threshold() {
     .unwrap();
 
     let tx_id = next_tx_id();
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
+        .unwrap();
 
     let marked_at = 10;
     let version = VersionRecord::new(1, tx_id, 100, marked_at).unwrap();
@@ -208,7 +246,13 @@ fn test_grace_period_met_above_threshold() {
     .unwrap();
 
     let tx_id = next_tx_id();
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
+        .unwrap();
 
     let marked_at = 10;
     let version = VersionRecord::new(1, tx_id, 100, marked_at).unwrap();
@@ -246,7 +290,13 @@ fn test_ineligible_only_end_ts_fails() {
         VersionEligibilityChecker::new(status_table.clone(), snapshot_registry.clone(), 2).unwrap();
 
     let tx_id = next_tx_id();
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
+        .unwrap();
 
     // Register a snapshot at timestamp 50 to set min_visible_ts = 50
     let snapshot_tx_id = next_tx_id();
@@ -274,7 +324,13 @@ fn test_ineligible_only_grace_period_fails() {
         VersionEligibilityChecker::new(status_table.clone(), snapshot_registry.clone(), 5).unwrap();
 
     let tx_id = next_tx_id();
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
+        .unwrap();
 
     let version = VersionRecord::new(1, tx_id, 100, 10).unwrap();
     let eligibility = checker.check_all_criteria(&version, 12).unwrap(); // 12 < 10 + 5
@@ -351,7 +407,13 @@ fn test_fully_eligible_all_criteria_pass() {
         VersionEligibilityChecker::new(status_table.clone(), snapshot_registry.clone(), 2).unwrap();
 
     let tx_id = next_tx_id();
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
+        .unwrap();
 
     let version = VersionRecord::new(1, tx_id, 100, 5).unwrap();
     let eligibility = checker.check_all_criteria(&version, 10).unwrap();
@@ -367,7 +429,13 @@ fn test_fully_eligible_with_multiple_snapshots() {
         VersionEligibilityChecker::new(status_table.clone(), snapshot_registry.clone(), 2).unwrap();
 
     let tx_id = next_tx_id();
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
+        .unwrap();
 
     // Register multiple snapshots at older timestamps
     let snapshot_handles: Vec<_> = (0..5)
@@ -398,7 +466,13 @@ fn test_version_at_min_visible_boundary() {
         VersionEligibilityChecker::new(status_table.clone(), snapshot_registry.clone(), 2).unwrap();
 
     let tx_id = next_tx_id();
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
+        .unwrap();
 
     let snapshot_tx_id = next_tx_id();
     let snapshot_handle = SnapshotHandle::new(100, snapshot_tx_id).unwrap();
@@ -425,7 +499,13 @@ fn test_version_just_below_min_visible_boundary() {
         VersionEligibilityChecker::new(status_table.clone(), snapshot_registry.clone(), 2).unwrap();
 
     let tx_id = next_tx_id();
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
+        .unwrap();
 
     let snapshot_tx_id = next_tx_id();
     let snapshot_handle = SnapshotHandle::new(100, snapshot_tx_id).unwrap();
@@ -457,7 +537,13 @@ fn test_large_grace_period() {
     .unwrap();
 
     let tx_id = next_tx_id();
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
+        .unwrap();
 
     let version = VersionRecord::new(1, tx_id, 100, 0).unwrap();
     let eligibility = checker.check_all_criteria(&version, 999_999).unwrap();
@@ -476,7 +562,13 @@ fn test_stats_accumulate_correctly() {
         VersionEligibilityChecker::new(status_table.clone(), snapshot_registry.clone(), 2).unwrap();
 
     let tx_id_committed = next_tx_id();
-    status_table.set_committed(tx_id_committed).unwrap();
+    status_table
+        .record_committed_after_durable_wal(
+            tx_id_committed,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
+        .unwrap();
 
     let tx_id_inflight = next_tx_id();
 
@@ -502,7 +594,13 @@ fn test_stats_reset_works() {
         VersionEligibilityChecker::new(status_table.clone(), snapshot_registry.clone(), 2).unwrap();
 
     let tx_id = next_tx_id();
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
+        .unwrap();
 
     let version = VersionRecord::new(1, tx_id, 100, 5).unwrap();
 
@@ -533,7 +631,13 @@ fn test_invariant_no_visible_version_eligible() {
         VersionEligibilityChecker::new(status_table.clone(), snapshot_registry.clone(), 2).unwrap();
 
     let tx_id = next_tx_id();
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
+        .unwrap();
 
     // Create a snapshot at timestamp 50
     let snapshot_tx_id = next_tx_id();
@@ -562,7 +666,13 @@ fn test_is_eligible_method_consistency() {
         VersionEligibilityChecker::new(status_table.clone(), snapshot_registry.clone(), 2).unwrap();
 
     let tx_id = next_tx_id();
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
+        .unwrap();
 
     let version = VersionRecord::new(1, tx_id, 100, 5).unwrap();
 
@@ -587,7 +697,11 @@ fn test_aborted_version_immediately_eligible() {
     let tx_id = next_tx_id();
     // Mark transaction as RolledBack (aborted)
     status_table
-        .record(tx_id, TransactionStatus::RolledBack)
+        .record_rolled_back_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
 
     let version = VersionRecord::new(1, tx_id, 100, 0).unwrap();
@@ -620,7 +734,13 @@ fn test_committed_version_safe_to_proceed() {
         VersionEligibilityChecker::new(status_table.clone(), snapshot_registry.clone(), 2).unwrap();
 
     let tx_id = next_tx_id();
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
+        .unwrap();
 
     let version = VersionRecord::new(1, tx_id, 100, 5).unwrap();
 
@@ -642,7 +762,11 @@ fn test_aborted_version_bypasses_grace_period() {
 
     let tx_id = next_tx_id();
     status_table
-        .record(tx_id, TransactionStatus::RolledBack)
+        .record_rolled_back_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
 
     // Mark at gc_epoch=0, check at gc_epoch=1
@@ -662,7 +786,11 @@ fn test_aborted_version_bypasses_visibility_check() {
 
     let tx_id = next_tx_id();
     status_table
-        .record(tx_id, TransactionStatus::RolledBack)
+        .record_rolled_back_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
 
     // Create a snapshot that makes the version appear visible
@@ -690,7 +818,11 @@ fn test_rolled_back_version_immediately_eligible() {
 
     let tx_id = next_tx_id();
     status_table
-        .record(tx_id, TransactionStatus::RolledBack)
+        .record_rolled_back_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
 
     let version = VersionRecord::new(1, tx_id, 100, 5).unwrap();
@@ -709,7 +841,11 @@ fn test_is_eligible_extended_aborted_path() {
 
     let tx_id = next_tx_id();
     status_table
-        .record(tx_id, TransactionStatus::RolledBack)
+        .record_rolled_back_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
 
     let version = VersionRecord::new(1, tx_id, 100, 0).unwrap();
@@ -744,7 +880,13 @@ fn test_is_eligible_extended_committed_normal_path() {
         VersionEligibilityChecker::new(status_table.clone(), snapshot_registry.clone(), 2).unwrap();
 
     let tx_id = next_tx_id();
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
+        .unwrap();
 
     let version = VersionRecord::new(1, tx_id, 100, 5).unwrap();
 
@@ -762,7 +904,11 @@ fn test_aborted_version_does_not_count_as_in_flight() {
 
     let tx_id = next_tx_id();
     status_table
-        .record(tx_id, TransactionStatus::RolledBack)
+        .record_rolled_back_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
 
     let version = VersionRecord::new(1, tx_id, 100, 5).unwrap();
@@ -810,7 +956,11 @@ fn test_concurrent_aborted_versions_stress() {
                 // Half mark as rolled back, half leave in-flight
                 if i % 2 == 0 {
                     status_table_clone
-                        .record(tx_id, TransactionStatus::RolledBack)
+                        .record_rolled_back_after_durable_wal(
+                            tx_id,
+                            andromeda_tx::Lsn::new(1),
+                            andromeda_tx::Lsn::new(1),
+                        )
                         .unwrap();
                 }
 
@@ -865,12 +1015,13 @@ fn test_aborted_before_visibility_becomes_eligible() {
 
     let tx_id = next_tx_id();
 
-    // Initially committed
-    status_table.set_committed(tx_id).unwrap();
-
-    // Then marked as rolled back (simulating abort after commit detection)
+    // Mark as rolled back with durable WAL evidence before any commit visibility.
     status_table
-        .record(tx_id, TransactionStatus::RolledBack)
+        .record_rolled_back_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
 
     let version = VersionRecord::new(1, tx_id, 100, 5).unwrap();
@@ -894,7 +1045,11 @@ fn test_in_flight_rollback_release_versions() {
 
     // Transaction rolls back
     status_table
-        .record(tx_id, TransactionStatus::RolledBack)
+        .record_rolled_back_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
 
     // Now immediately eligible
@@ -913,7 +1068,11 @@ fn test_first_failed_criterion_aborted_supersedes_other_failures() {
     let tx_id = next_tx_id();
     // Mark as aborted instead of committed
     status_table
-        .record(tx_id, TransactionStatus::RolledBack)
+        .record_rolled_back_after_durable_wal(
+            tx_id,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
 
     // Create snapshot to make visibility fail
@@ -940,13 +1099,23 @@ fn test_stats_track_aborted_and_in_flight_checks() {
 
     let tx_aborted = next_tx_id();
     status_table
-        .record(tx_aborted, TransactionStatus::RolledBack)
+        .record_rolled_back_after_durable_wal(
+            tx_aborted,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
 
     let tx_inflight = next_tx_id();
 
     let tx_committed = next_tx_id();
-    status_table.set_committed(tx_committed).unwrap();
+    status_table
+        .record_committed_after_durable_wal(
+            tx_committed,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
+        .unwrap();
 
     let v1 = VersionRecord::new(1, tx_aborted, 100, 5).unwrap();
     let v2 = VersionRecord::new(2, tx_inflight, 100, 5).unwrap();

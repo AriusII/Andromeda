@@ -144,6 +144,7 @@ fn infer_result_stream_shape(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use andromeda_catalog::ResultStreamCardinality;
     use andromeda_srpl::procedure_model::{SrplEmitValueIr, SrplValueIr};
 
     fn body_with(operations: Vec<BoundSrplOperationPlan>) -> BoundSrplBodyPlan {
@@ -161,6 +162,7 @@ mod tests {
                     andromeda_core::ScalarType::Bool,
                 ),
             }],
+            cardinality: ResultStreamCardinality::Many,
             row_count_exact_required: false,
         }
     }

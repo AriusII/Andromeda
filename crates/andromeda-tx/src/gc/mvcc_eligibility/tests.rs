@@ -30,7 +30,9 @@ fn test_version_eligibility_all_criteria_met() {
         VersionEligibilityChecker::new(status_table.clone(), snapshot_registry, 2).unwrap();
 
     let tx_id = next_tx_id();
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(tx_id, crate::Lsn::new(1), crate::Lsn::new(1))
+        .unwrap();
 
     let version = VersionRecord::new(1, tx_id, 100, 5).unwrap();
     let eligibility = checker.check_all_criteria(&version, 10).unwrap();
@@ -66,7 +68,9 @@ fn test_version_eligibility_grace_period_not_met() {
         VersionEligibilityChecker::new(status_table.clone(), snapshot_registry, 5).unwrap();
 
     let tx_id = next_tx_id();
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(tx_id, crate::Lsn::new(1), crate::Lsn::new(1))
+        .unwrap();
 
     let version = VersionRecord::new(1, tx_id, 100, 5).unwrap();
     let eligibility = checker.check_all_criteria(&version, 8).unwrap(); // 8 < 5 + 5
@@ -129,7 +133,9 @@ fn test_checker_statistics_tracking() {
         VersionEligibilityChecker::new(status_table.clone(), snapshot_registry, 2).unwrap();
 
     let tx_id_1 = next_tx_id();
-    status_table.set_committed(tx_id_1).unwrap();
+    status_table
+        .record_committed_after_durable_wal(tx_id_1, crate::Lsn::new(1), crate::Lsn::new(1))
+        .unwrap();
 
     let tx_id_2 = next_tx_id();
     // Do not commit tx_id_2
@@ -154,7 +160,9 @@ fn test_checker_reset_stats() {
         VersionEligibilityChecker::new(status_table.clone(), snapshot_registry, 2).unwrap();
 
     let tx_id = next_tx_id();
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(tx_id, crate::Lsn::new(1), crate::Lsn::new(1))
+        .unwrap();
 
     let version = VersionRecord::new(1, tx_id, 100, 5).unwrap();
     checker.check_all_criteria(&version, 10).unwrap();
@@ -175,7 +183,9 @@ fn test_is_eligible_single_call() {
         VersionEligibilityChecker::new(status_table.clone(), snapshot_registry, 2).unwrap();
 
     let tx_id = next_tx_id();
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(tx_id, crate::Lsn::new(1), crate::Lsn::new(1))
+        .unwrap();
 
     let version = VersionRecord::new(1, tx_id, 100, 5).unwrap();
     let is_eligible = checker.is_eligible(&version, 10).unwrap();
@@ -217,7 +227,9 @@ fn test_grace_period_boundary_conditions() {
             .unwrap();
 
     let tx_id = next_tx_id();
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(tx_id, crate::Lsn::new(1), crate::Lsn::new(1))
+        .unwrap();
 
     let marked_at = 10;
     let version = VersionRecord::new(1, tx_id, 100, marked_at).unwrap();
@@ -270,7 +282,9 @@ fn test_version_eligibility_check_all_criteria_independent() {
         VersionEligibilityChecker::new(status_table.clone(), snapshot_registry, 2).unwrap();
 
     let tx_id = next_tx_id();
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(tx_id, crate::Lsn::new(1), crate::Lsn::new(1))
+        .unwrap();
 
     let version = VersionRecord::new(1, tx_id, 100, 0).unwrap();
 
@@ -294,7 +308,9 @@ fn test_stats_monotonic_accumulation() {
         VersionEligibilityChecker::new(status_table.clone(), snapshot_registry, 2).unwrap();
 
     let tx_id = next_tx_id();
-    status_table.set_committed(tx_id).unwrap();
+    status_table
+        .record_committed_after_durable_wal(tx_id, crate::Lsn::new(1), crate::Lsn::new(1))
+        .unwrap();
 
     let version = VersionRecord::new(1, tx_id, 100, 5).unwrap();
 

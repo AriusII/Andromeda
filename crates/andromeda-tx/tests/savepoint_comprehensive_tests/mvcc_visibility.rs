@@ -52,7 +52,11 @@ fn mv_savepoint_snapshot_sees_prior_committed_rows() {
     let status_table = TransactionStatusTable::new();
     let writer_tx = TransactionId::new(10);
     status_table
-        .record(writer_tx, TransactionStatus::Committed)
+        .record_committed_after_durable_wal(
+            writer_tx,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
 
     let row = MvccRowHeader {
@@ -221,7 +225,11 @@ fn mv_rolled_back_tx_rows_are_never_visible() {
     let status_table = TransactionStatusTable::new();
     let aborted_tx = TransactionId::new(20);
     status_table
-        .record(aborted_tx, TransactionStatus::RolledBack)
+        .record_rolled_back_after_durable_wal(
+            aborted_tx,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
 
     let row = MvccRowHeader {
@@ -363,7 +371,11 @@ fn mv_rr_does_not_see_post_snapshot_commits() {
 
     // Now tx_a commits.
     status_table
-        .record(tx_a, TransactionStatus::Committed)
+        .record_committed_after_durable_wal(
+            tx_a,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
 
     // RR: tx_b's snapshot was taken while tx_a was active, so tx_a remains invisible.
@@ -381,7 +393,11 @@ fn mv_rc_sees_newly_committed_rows() {
     let status_table = TransactionStatusTable::new();
     let tx_a = TransactionId::new(1);
     status_table
-        .record(tx_a, TransactionStatus::Committed)
+        .record_committed_after_durable_wal(
+            tx_a,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
 
     let row_a = MvccRowHeader {
@@ -495,10 +511,18 @@ fn mv_committed_delete_at_or_before_snapshot_ts_hides_row_under_rc() {
     let creator = TransactionId::new(1);
     let deleter = TransactionId::new(2);
     status_table
-        .record(creator, TransactionStatus::Committed)
+        .record_committed_after_durable_wal(
+            creator,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
     status_table
-        .record(deleter, TransactionStatus::Committed)
+        .record_committed_after_durable_wal(
+            deleter,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
 
     let row = MvccRowHeader {
@@ -526,10 +550,18 @@ fn mv_committed_delete_after_snapshot_ts_keeps_row_visible() {
     let creator = TransactionId::new(1);
     let deleter = TransactionId::new(2);
     status_table
-        .record(creator, TransactionStatus::Committed)
+        .record_committed_after_durable_wal(
+            creator,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
     status_table
-        .record(deleter, TransactionStatus::Committed)
+        .record_committed_after_durable_wal(
+            deleter,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
 
     let row = MvccRowHeader {
@@ -591,7 +623,11 @@ fn mv_snapshot_rejects_terminal_tx_in_active_list() {
     let status_table = TransactionStatusTable::new();
     let committed_tx = TransactionId::new(5);
     status_table
-        .record(committed_tx, TransactionStatus::Committed)
+        .record_committed_after_durable_wal(
+            committed_tx,
+            andromeda_tx::Lsn::new(1),
+            andromeda_tx::Lsn::new(1),
+        )
         .unwrap();
     // Also register owner as InFlight.
     let owner = TransactionId::new(9);

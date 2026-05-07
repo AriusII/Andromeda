@@ -2,6 +2,7 @@
 name = "andromeda-fuzz"
 version = "0.0.0"
 edition = "2024"
+rust-version = "1.85"
 publish = false
 
 [package.metadata]
@@ -13,6 +14,7 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 andromeda-proto = { path = "../crates/andromeda-proto" }
 andromeda-core = { path = "../crates/andromeda-core" }
+andromeda-observe = { path = "../crates/andromeda-observe" }
 andromeda-quic = { path = "../crates/andromeda-quic" }
 andromeda-srpl = { path = "../crates/andromeda-srpl" }
 andromeda-storage = { path = "../crates/andromeda-storage" }
@@ -74,5 +76,11 @@ doc = false
 [[bin]]
 name = "quic_zero_rtt_admission"
 path = "fuzz_targets/quic_zero_rtt_admission.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "durable_audit_journal_decode"
+path = "fuzz_targets/durable_audit_journal_decode.rs"
 test = false
 doc = false

@@ -2,6 +2,7 @@ use super::{
     DurableAuditEventFamily, DurableAuditFailureKind, DurableAuditPrincipalBinding,
     DurableAuditRetentionBoundary, DurableAuditSinkReport, DurableAuditSinkResult,
     DurableAuditWalSink, PendingDurableAuditRecord, sink_failure,
+    validate_permissioned_critical_policy_binding,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,6 +93,12 @@ impl DurableAuditDecisionGate {
                 "durable audit visible decision proof requires explicit surface and permission evidence",
             ));
         }
+        validate_permissioned_critical_policy_binding(
+            self.expected_family,
+            &principal_binding,
+            "durable audit visible decision proofs",
+        )
+        .map_err(|error| gate_failure(Some(report.identity), error.message().to_string()))?;
         if !retention_boundary_is_compatible(self.expected_family, report.retention) {
             return Err(gate_failure(
                 Some(report.identity),

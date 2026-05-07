@@ -11,10 +11,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
     let proto_root = manifest_dir.join("proto");
     let proto_sources = collect_proto_sources(&proto_root)?;
+    let proto_directories = collect_proto_directories(&proto_root)?;
     let descriptor_set_path = PathBuf::from(env::var("OUT_DIR")?).join("andromeda_descriptor.bin");
 
     reject_forbidden_proto_boundary_identifiers(&proto_sources)?;
 
+    for proto_directory in &proto_directories {
+        println!("cargo:rerun-if-changed={}", proto_directory.display());
+    }
     for proto_source in &proto_sources {
         println!("cargo:rerun-if-changed={}", proto_source.display());
     }
@@ -49,6 +53,32 @@ fn collect_proto_sources(proto_root: &Path) -> Result<Vec<PathBuf>, Box<dyn Erro
     }
 
     Ok(sources)
+}
+
+fn collect_proto_directories(proto_root: &Path) -> Result<Vec<PathBuf>, Box<dyn Error>> {
+    let mut directories = Vec::new();
+    collect_proto_directories_from(proto_root, &mut directories)?;
+    directories.sort_by_key(|path| stable_path_key(path));
+    Ok(directories)
+}
+
+fn collect_proto_directories_from(
+    directory: &Path,
+    directories: &mut Vec<PathBuf>,
+) -> Result<(), Box<dyn Error>> {
+    directories.push(directory.to_path_buf());
+
+    let mut entries = fs::read_dir(directory)?.collect::<Result<Vec<_>, _>>()?;
+    entries.sort_by_key(|entry| stable_path_key(&entry.path()));
+
+    for entry in entries {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_proto_directories_from(&path, directories)?;
+        }
+    }
+
+    Ok(())
 }
 
 fn collect_proto_sources_from(
@@ -107,6 +137,15 @@ fn forbidden_proto_identifier(token: &str) -> Option<&'static str> {
     }
     if lower.contains("tonic") {
         return Some("tonic");
+    }
+    if lower.contains("json") {
+        return Some("json");
+    }
+    if lower.contains("serde") {
+        return Some("serde");
+    }
+    if lower.contains("sql") {
+        return Some("sql");
     }
 
     None

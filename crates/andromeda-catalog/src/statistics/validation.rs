@@ -3,7 +3,9 @@ pub enum StatsValidationError {
     StatsVersionZero,
     ZeroObjectId,
     DuplicateTarget,
+    PublicationTargetsNotCanonical,
     PublicationExceedsHistogramCap,
+    PublicationDigestMismatch,
     HistogramHasNoBuckets,
     HistogramExceedsBucketCap,
     BucketBoundsInverted,
@@ -33,8 +35,14 @@ impl core::fmt::Display for StatsValidationError {
             StatsValidationError::DuplicateTarget => {
                 "duplicate (object, column) target in stats publication"
             }
+            StatsValidationError::PublicationTargetsNotCanonical => {
+                "stats publication targets must be canonical and strictly increasing"
+            }
             StatsValidationError::PublicationExceedsHistogramCap => {
                 "stats publication exceeds MAX_HISTOGRAMS_PER_PUBLICATION"
+            }
+            StatsValidationError::PublicationDigestMismatch => {
+                "stats publication digest does not match its canonical contents"
             }
             StatsValidationError::HistogramHasNoBuckets => {
                 "histogram placeholder must contain at least one bucket"

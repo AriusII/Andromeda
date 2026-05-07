@@ -3,10 +3,10 @@ name: 02 - Protobuf Contract Governance
 on:
   pull_request:
     branches: [ main ]
-    paths: [ "schemas/proto/**/*.proto", "proto/**/*.proto", ".github/workflows/02-protobuf-contracts.yml", ".github/actions/protobuf-governance/**" ]
+    paths: [ ".codex/schemas/proto/**/*.proto", "proto/**/*.proto", ".github/workflows/02-protobuf-contracts.yml", ".github/actions/protobuf-governance/**" ]
   push:
     branches: [ main ]
-    paths: [ "schemas/proto/**/*.proto", "proto/**/*.proto", ".github/workflows/02-protobuf-contracts.yml", ".github/actions/protobuf-governance/**" ]
+    paths: [ ".codex/schemas/proto/**/*.proto", "proto/**/*.proto", ".github/workflows/02-protobuf-contracts.yml", ".github/actions/protobuf-governance/**" ]
   workflow_dispatch:
 
 permissions:

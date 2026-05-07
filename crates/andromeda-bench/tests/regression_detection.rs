@@ -31,7 +31,9 @@ fn end_to_end_regression_detection_workflow() {
         current_p95,
         baseline.p95_latency_us,
         current_errors,
+        20,
         baseline.error_count,
+        baseline.sample_count,
     );
 
     assert!(analysis.is_regressed);
@@ -63,7 +65,9 @@ fn baseline_update_workflow() {
         530,
         baseline_v1.p95_latency_us,
         0,
+        20,
         baseline_v1.error_count,
+        baseline_v1.sample_count,
     );
 
     assert!(analysis_v1.is_regressed);
@@ -85,7 +89,9 @@ fn baseline_update_workflow() {
         495,
         baseline_v2.p95_latency_us,
         0,
+        20,
         baseline_v2.error_count,
+        baseline_v2.sample_count,
     );
 
     assert!(!analysis_v2.is_regressed);
@@ -124,7 +130,9 @@ fn multi_workload_regression_tracking() {
             current_p95,
             baseline.p95_latency_us,
             0,
+            20,
             baseline.error_count,
+            baseline.sample_count,
         );
         analyses.push(analysis);
     }
@@ -144,7 +152,9 @@ fn multi_workload_regression_tracking() {
         50_000,
         50_000,
         0,
+        20,
         0,
+        20,
     );
 
     assert!(bad_analysis.is_regressed);
@@ -174,7 +184,9 @@ fn error_rate_regression_critical() {
         50_200,
         baseline.p95_latency_us,
         5,
+        100,
         baseline.error_count,
+        baseline.sample_count,
     );
 
     assert!(analysis.is_regressed);
@@ -186,6 +198,45 @@ fn error_rate_regression_critical() {
 }
 
 #[test]
+fn error_rate_regression_uses_rate_not_raw_counts() {
+    let same_count_higher_rate = RegressionAnalysis::new(
+        "inventory-reserve-stock".to_string(),
+        15_000,
+        15_000,
+        50_000,
+        50_000,
+        1,
+        10,
+        1,
+        100,
+    );
+
+    assert!(same_count_higher_rate.is_regressed);
+    assert_eq!(
+        same_count_higher_rate.primary_reason,
+        RegressionReason::ErrorRateIncrease
+    );
+
+    let higher_count_lower_rate = RegressionAnalysis::new(
+        "inventory-reserve-stock".to_string(),
+        15_000,
+        15_000,
+        50_000,
+        50_000,
+        5,
+        1_000,
+        1,
+        100,
+    );
+
+    assert!(!higher_count_lower_rate.is_regressed);
+    assert_eq!(
+        higher_count_lower_rate.primary_reason,
+        RegressionReason::NoRegression
+    );
+}
+
+#[test]
 fn regression_analysis_for_observability() {
     let analysis = RegressionAnalysis::new(
         "wal-append-smoke".to_string(),
@@ -194,13 +245,19 @@ fn regression_analysis_for_observability() {
         75_000,
         75_000,
         0,
+        20,
         0,
+        20,
     );
 
     let json = analysis.to_json();
 
     assert!(json.contains("\"workload_id\":\"wal-append-smoke\""));
     assert!(json.contains("\"p50_regression_pct\":3.00"));
+    assert!(json.contains("\"current_sample_count\":20"));
+    assert!(json.contains("\"baseline_sample_count\":20"));
+    assert!(json.contains("\"current_error_rate_ppm\":0"));
+    assert!(json.contains("\"baseline_error_rate_ppm\":0"));
     assert!(json.contains("\"is_regressed\":true"));
     assert!(json.contains("\"severity\":1"));
     assert!(json.contains("\"primary_reason\":\"p50-latency-degradation\""));
@@ -224,7 +281,9 @@ fn false_positive_prevention() {
         4_080,
         baseline.p95_latency_us,
         0,
+        20,
         baseline.error_count,
+        baseline.sample_count,
     );
 
     assert!(!analysis.is_regressed);
@@ -256,9 +315,29 @@ fn baseline_json_validation() {
 
 #[test]
 fn reproducibility_across_ci_runs() {
-    let run1 = RegressionAnalysis::new("btree-lookup-smoke".to_string(), 30, 25, 550, 500, 1, 0);
+    let run1 = RegressionAnalysis::new(
+        "btree-lookup-smoke".to_string(),
+        30,
+        25,
+        550,
+        500,
+        1,
+        20,
+        0,
+        20,
+    );
 
-    let run2 = RegressionAnalysis::new("btree-lookup-smoke".to_string(), 30, 25, 550, 500, 1, 0);
+    let run2 = RegressionAnalysis::new(
+        "btree-lookup-smoke".to_string(),
+        30,
+        25,
+        550,
+        500,
+        1,
+        20,
+        0,
+        20,
+    );
 
     // Must be identical
     assert_eq!(run1, run2);
@@ -309,7 +388,9 @@ fn history_import_loads_baseline_for_regression_analysis() {
         current.p95_latency_us,
         baseline.p95_latency_us,
         current.error_count,
+        current.sample_count,
         baseline.error_count,
+        baseline.sample_count,
     );
 
     assert!(!analysis.is_regressed);

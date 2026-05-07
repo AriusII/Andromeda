@@ -7,8 +7,9 @@ use std::{
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_storage::{
     FileBackedHadrMembershipStore, HadrMembershipSnapshot, HadrMembershipStore, HadrNodeRole,
-    HadrPromotionAuditLog, HadrPromotionAuditMarker,
+    HadrPromotionAuditLog, HadrPromotionAuditMarker, HadrPromotionAuditReceipt,
 };
+use sha2::{Digest, Sha256};
 
 use super::types::NodeMembershipMemberReport;
 
@@ -68,6 +69,14 @@ impl HadrPromotionAuditLog for FileBackedPromotionAuditLog {
             .map_err(|err| io_error("sync HADR promotion audit marker", err))?;
         Ok(())
     }
+
+    fn append_primary_promotion_marker_durably(
+        &self,
+        marker: &HadrPromotionAuditMarker,
+    ) -> AndromedaResult<HadrPromotionAuditReceipt> {
+        self.append_primary_promotion_marker(marker)?;
+        HadrPromotionAuditReceipt::new(marker.primary_durable_lsn, promotion_marker_digest(marker))
+    }
 }
 
 pub(super) fn default_promotion_audit_log_path(membership_store: &Path) -> PathBuf {
@@ -118,4 +127,17 @@ pub(super) fn membership_epoch(snapshot: Option<&HadrMembershipSnapshot>) -> u64
 
 fn io_error(action: &str, err: std::io::Error) -> AndromedaError {
     AndromedaError::new(AndromedaErrorKind::Storage, format!("{action}: {err}"))
+}
+
+fn promotion_marker_digest(marker: &HadrPromotionAuditMarker) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(marker.candidate_id.get().to_le_bytes());
+    hasher.update(marker.proposed_epoch.get().to_le_bytes());
+    hasher.update(marker.primary_durable_lsn.get().to_le_bytes());
+    hasher.update(marker.committed_safe_lsn.get().to_le_bytes());
+    hasher.update(marker.token.primary_id.get().to_le_bytes());
+    hasher.update(marker.token.epoch.get().to_le_bytes());
+    hasher.update((marker.audit_record.granted_votes as u64).to_le_bytes());
+    hasher.update((marker.audit_record.quorum_size as u64).to_le_bytes());
+    hasher.finalize().into()
 }

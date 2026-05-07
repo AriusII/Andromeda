@@ -3,7 +3,7 @@ use std::sync::Arc;
 use andromeda_core::TransactionId;
 
 use crate::active_snapshot_registry::{ActiveSnapshotRegistry, SnapshotHandle};
-use crate::mvcc_status::{TransactionStatus, TransactionStatusTable};
+use crate::mvcc_status::TransactionStatusTable;
 
 use super::MvccGarbageCollector;
 
@@ -40,7 +40,7 @@ fn test_rolled_back_version_always_reclaimed() {
 
     // Record rollback
     status_table
-        .record(tx_id, TransactionStatus::RolledBack)
+        .record_rolled_back_after_durable_wal(tx_id, crate::Lsn::new(1), crate::Lsn::new(1))
         .expect("record rollback");
 
     let collector = MvccGarbageCollector::new(
@@ -63,7 +63,7 @@ fn test_committed_version_older_than_min_visible() {
 
     // Record creator as committed
     status_table
-        .record(tx_id, TransactionStatus::Committed)
+        .record_committed_after_durable_wal(tx_id, crate::Lsn::new(1), crate::Lsn::new(1))
         .expect("record commit");
 
     // Register a snapshot at ts=200 (min_visible will be 200)
@@ -90,7 +90,7 @@ fn test_committed_version_newer_than_min_visible() {
 
     // Record creator as committed
     status_table
-        .record(tx_id, TransactionStatus::Committed)
+        .record_committed_after_durable_wal(tx_id, crate::Lsn::new(1), crate::Lsn::new(1))
         .expect("record commit");
 
     // No snapshots registered: min_visible = u64::MAX
@@ -157,7 +157,7 @@ fn test_multiple_snapshots_min_visible() {
         .expect("register");
 
     status_table
-        .record(tx1, TransactionStatus::Committed)
+        .record_committed_after_durable_wal(tx1, crate::Lsn::new(1), crate::Lsn::new(1))
         .expect("record");
 
     let collector = MvccGarbageCollector::new(Arc::new(registry), Arc::new(status_table));

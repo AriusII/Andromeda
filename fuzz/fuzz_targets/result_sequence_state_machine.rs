@@ -6,7 +6,11 @@ use andromeda_quic::{
 };
 use libfuzzer_sys::fuzz_target;
 
+const MAX_SEQUENCE_FUZZ_BYTES: usize = 4 * 1024;
+const MAX_SEQUENCE_FRAMES: usize = 128;
+
 fuzz_target!(|data: &[u8]| {
+    let data = &data[..data.len().min(MAX_SEQUENCE_FUZZ_BYTES)];
     let policy = match data.first().copied().unwrap_or_default() % 3 {
         0 => ResultStreamMetadataPolicy::RowBatchRequired,
         1 => ResultStreamMetadataPolicy::ZeroRowCompletionAllowed,
@@ -14,7 +18,7 @@ fuzz_target!(|data: &[u8]| {
     };
     let mut sequence = ResultStreamSequence::new_with_metadata_policy(policy);
 
-    for (index, chunk) in data.chunks(12).take(128).enumerate() {
+    for (index, chunk) in data.chunks(12).take(MAX_SEQUENCE_FRAMES).enumerate() {
         let Some(selector) = chunk.first().copied() else {
             continue;
         };

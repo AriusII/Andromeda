@@ -5,9 +5,9 @@
 //!
 //! # Durability Invariants
 //!
-//! **Invariant 1: Commit log entry created AFTER WAL write**
-//! - Entry cannot exist before corresponding WAL record is written
-//! - WAL manager assigns LSN before entry creation
+//! **Invariant 1: Commit log entry created for an assigned WAL commit LSN**
+//! - Entry cannot exist before the caller has assigned the corresponding WAL commit LSN
+//! - The caller owns the WAL append boundary; this type records the durable-ordering evidence
 //!
 //! **Invariant 2: Durable flag set AFTER WAL flush confirmation**
 //! - Flag must remain `false` until WAL flush completes
@@ -25,11 +25,11 @@
 //! # Thread Safety
 //!
 //! `CommitLog` uses DashMap for concurrent access without locking entire table.
-//! Durability flag is stored in `Arc<Mutex>` to allow atomic transitions.
+//! Per-entry durability transitions are made through DashMap entry mutation.
 //!
 //! # Encoding Format
 //!
-//! Binary format for persistence (16 bytes minimum):
+//! Binary format for persistence (25 bytes total, little-endian integer fields):
 //! - Bytes 0-7:   `tx_id` (u64)
 //! - Bytes 8-15:  `commit_lsn` (u64)
 //! - Bytes 16-23: `visible_timestamp` (u64)
@@ -98,6 +98,10 @@ impl CommitLogEntry {
             return Err(transaction_error("visible_timestamp must not be zero"));
         }
 
+        if commit_lsn.is_zero() {
+            return Err(transaction_error("commit_lsn must not be zero"));
+        }
+
         Ok(CommitLogEntry {
             tx_id,
             commit_lsn,
@@ -157,24 +161,35 @@ impl CommitLogEntry {
             )));
         }
 
-        // Parse tx_id
         let tx_id_raw = read_u64_field(bytes, TX_ID_OFFSET);
         if tx_id_raw == 0 {
             return Err(transaction_error("invalid transaction id in encoded entry"));
         }
         let tx_id = TransactionId::new(tx_id_raw);
 
-        // Parse commit_lsn
         let commit_lsn_raw = read_u64_field(bytes, COMMIT_LSN_OFFSET);
+        if commit_lsn_raw == 0 {
+            return Err(transaction_error("invalid commit_lsn in encoded entry"));
+        }
         let commit_lsn = Lsn::new(commit_lsn_raw);
 
-        // Parse visible_timestamp
         let visible_timestamp = read_u64_field(bytes, VISIBLE_TIMESTAMP_OFFSET);
+        if visible_timestamp == 0 {
+            return Err(transaction_error(
+                "invalid visible_timestamp in encoded entry",
+            ));
+        }
 
-        // Parse durability flag
-        let wal_durability_confirmed = bytes[DURABILITY_FLAG_OFFSET] != WAL_DURABILITY_UNCONFIRMED;
+        let wal_durability_confirmed = match bytes[DURABILITY_FLAG_OFFSET] {
+            WAL_DURABILITY_UNCONFIRMED => false,
+            WAL_DURABILITY_CONFIRMED => true,
+            flag => {
+                return Err(transaction_error(format!(
+                    "invalid WAL durability flag in encoded entry: {flag}"
+                )));
+            }
+        };
 
-        // Create entry with confirmation already set if decoding from disk
         Ok(CommitLogEntry {
             tx_id,
             commit_lsn,

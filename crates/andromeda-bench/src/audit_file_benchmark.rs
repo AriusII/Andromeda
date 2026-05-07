@@ -5,8 +5,9 @@ use andromeda_observe::{
     CertificateIdentity, DurableAuditPrincipalBinding, DurableAuditReplayBehavior,
     DurableAuditReplayQuery, DurableAuditRetentionBoundary, DurableAuditSinkReport,
     DurableAuditWalSink, EventCorrelation, EventEnvelope, EventId, FileDurableAuditWalSink,
-    PendingDurableAuditRecord, Permission, SecurityAuditOutcome, SecurityAuditTrace, SurfaceScope,
-    TraceEvent, TraceId, UserPrincipal, UserPrincipalKind,
+    PendingDurableAuditRecord, Permission, SecurityAuditOutcome, SecurityAuditTrace,
+    SecurityPolicyVersionEvidence, SurfaceScope, TraceEvent, TraceId, UserPrincipal,
+    UserPrincipalKind,
 };
 
 use crate::{
@@ -139,6 +140,7 @@ fn principal_binding(sample: u32) -> DurableAuditPrincipalBinding {
         certificate_fingerprint: Some(format!("sha256:bench-durable-audit-{sample}")),
         surface: Some(SurfaceScope::Application),
         permission: Some(Permission::ExecuteProcedure),
+        policy_version: Some(SecurityPolicyVersionEvidence::bootstrap_v0()),
         request_id: Some(RequestId::new(FIRST_REQUEST_ID + u64::from(sample))),
         session_id: Some(SessionId::new(FIRST_SESSION_ID + u64::from(sample))),
     }

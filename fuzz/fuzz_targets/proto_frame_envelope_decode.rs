@@ -5,7 +5,10 @@ use andromeda_proto::{
 };
 use libfuzzer_sys::fuzz_target;
 
+const MAX_PROTO_FUZZ_BYTES: usize = 64 * 1024;
+
 fuzz_target!(|data: &[u8]| {
+    let data = &data[..data.len().min(MAX_PROTO_FUZZ_BYTES)];
     let decoded: andromeda_core::AndromedaResult<ProtoFrameEnvelope> =
         decode_generated_message(data);
 

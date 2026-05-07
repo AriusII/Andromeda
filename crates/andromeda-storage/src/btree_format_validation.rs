@@ -55,20 +55,38 @@ pub struct BTreeKeyFormatIdentity {
 }
 
 impl BTreeKeyFormatIdentity {
-    /// Create a new format identity.
+    /// Create a compile-time format identity for constants and test fixtures.
     ///
-    /// # Panics
-    /// Panics if major and minor are both zero (reserved for uninitialized state).
+    /// Runtime and durable decode paths should use [`Self::try_new`] when they
+    /// need immediate typed validation. Validators still reject invalid
+    /// identities before any operation, so this constructor never panics on
+    /// malformed metadata.
     pub const fn new(major: u32, minor: u32, codec_version: u8, max_key_size: u16) -> Self {
-        if major == 0 && minor == 0 {
-            panic!("Format version (0, 0) is reserved; use (1, 0) for initial KeyV1 format");
-        }
         Self {
             major,
             minor,
             codec_version,
             max_key_size,
         }
+    }
+
+    /// Create a format identity from runtime or durable metadata.
+    ///
+    /// Decode and recovery paths must use this fallible constructor so corrupt
+    /// format identity bytes produce typed storage errors instead of panics.
+    pub fn try_new(
+        major: u32,
+        minor: u32,
+        codec_version: u8,
+        max_key_size: u16,
+    ) -> AndromedaResult<Self> {
+        validate_identity_parts(major, minor, max_key_size)?;
+        Ok(Self {
+            major,
+            minor,
+            codec_version,
+            max_key_size,
+        })
     }
 
     /// KeyV1 format identity (current locked format per DEC-032).
@@ -256,6 +274,12 @@ impl KeyV1FormatValidator {
     /// - `Ok(())` if format is supported
     /// - `Err(...)` if format is unknown or incompatible
     fn validate_format_supported(&self) -> AndromedaResult<()> {
+        validate_identity_parts(
+            self.key_format.major,
+            self.key_format.minor,
+            self.key_format.max_key_size,
+        )?;
+
         if self.key_format.major != 1 {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Storage,
@@ -266,6 +290,21 @@ impl KeyV1FormatValidator {
                      Recovery mode: ForensicStart (read-only) only. \
                      For compatibility details, see DEC-038.",
                     self.key_format.major, self.key_format
+                ),
+            ));
+        }
+
+        if self.storage_version.major != self.key_format.major {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Storage,
+                format!(
+                    "B-Tree storage format version {}.{} is incompatible with index key format {}.{}. \
+                     Recovery mode: ForensicStart (read-only) only. \
+                     For compatibility details, see DEC-038.",
+                    self.storage_version.major,
+                    self.storage_version.minor,
+                    self.key_format.major,
+                    self.key_format.minor
                 ),
             ));
         }
@@ -309,6 +348,22 @@ impl KeyV1FormatValidator {
     }
 }
 
+fn validate_identity_parts(major: u32, minor: u32, max_key_size: u16) -> AndromedaResult<()> {
+    if major == 0 && minor == 0 {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Storage,
+            "B-Tree key format version 0.0 is reserved",
+        ));
+    }
+    if max_key_size == 0 {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Storage,
+            "B-Tree key format max_key_size must not be zero",
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -319,6 +374,51 @@ mod tests {
         assert_eq!(fmt.major, 1);
         assert_eq!(fmt.minor, 0);
         assert_eq!(fmt.codec_version, 1);
+    }
+
+    #[test]
+    fn test_format_identity_try_new_rejects_reserved_metadata() {
+        let error = BTreeKeyFormatIdentity::try_new(0, 0, 1, 4096)
+            .expect_err("reserved version must be rejected");
+        assert_eq!(error.kind(), AndromedaErrorKind::Storage);
+        assert!(error.message().contains("reserved"));
+
+        let error = BTreeKeyFormatIdentity::try_new(1, 0, 1, 0)
+            .expect_err("zero max_key_size must be rejected");
+        assert_eq!(error.kind(), AndromedaErrorKind::Storage);
+        assert!(error.message().contains("max_key_size"));
+
+        assert_eq!(
+            BTreeKeyFormatIdentity::try_new(1, 0, 1, 4096).expect("v1"),
+            BTreeKeyFormatIdentity::V1_0
+        );
+    }
+
+    #[test]
+    fn test_format_identity_new_does_not_panic_but_validator_rejects_invalid_parts() {
+        let reserved = BTreeKeyFormatIdentity::new(0, 0, 1, 4096);
+        let validator = KeyV1FormatValidator::new(FormatVersion::V1_0, reserved);
+        let error = validator
+            .validate_operation(BTreeOperationType::Lookup)
+            .expect_err("reserved version must be rejected by validator");
+        assert!(error.message().contains("reserved"));
+
+        let zero_key_limit = BTreeKeyFormatIdentity::new(1, 0, 1, 0);
+        let validator = KeyV1FormatValidator::new(FormatVersion::V1_0, zero_key_limit);
+        let error = validator
+            .validate_operation(BTreeOperationType::Lookup)
+            .expect_err("zero key size must be rejected by validator");
+        assert!(error.message().contains("max_key_size"));
+    }
+
+    #[test]
+    fn test_validator_rejects_incompatible_storage_version_before_operation() {
+        let validator =
+            KeyV1FormatValidator::new(FormatVersion::V2_0, BTreeKeyFormatIdentity::V1_0);
+        let error = validator
+            .validate_operation(BTreeOperationType::Lookup)
+            .expect_err("storage/index format mismatch must be rejected");
+        assert!(error.message().contains("incompatible"));
     }
 
     #[test]

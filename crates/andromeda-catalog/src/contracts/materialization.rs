@@ -1,6 +1,9 @@
 //! Contract materialization: builder types and hash-binding methods on `ProcedureContract`.
 
-use andromeda_core::{AndromedaResult, ColumnDescriptor, ContractHash, ProcedureId};
+use andromeda_core::{
+    AndromedaError, AndromedaErrorKind, AndromedaResult, ColumnDescriptor, ContractHash,
+    ProcedureId,
+};
 
 use crate::CatalogObjectRef;
 use crate::names::QualifiedName;
@@ -44,6 +47,11 @@ impl ProcedureContract {
     /// Build the four-identity binding evidence
     /// (`ContractHash` / `CatalogVersion` / `StatsVersion` / `PolicyVersion`)
     /// required by the SRPL specification for every procedure invocation.
+    ///
+    /// This method projects the fields stored on the contract. Use
+    /// [`Self::validated_binding`] before accepting or persisting binding
+    /// evidence because that path also proves the stored `ContractHash` still
+    /// matches the canonical contract shape.
     pub fn binding(&self) -> ProcedureContractBinding {
         ProcedureContractBinding {
             procedure_id: self.procedure_id,
@@ -52,6 +60,45 @@ impl ProcedureContract {
             stats_version: self.stats_version,
             policy_version: self.policy_version(),
         }
+    }
+
+    pub fn validated_binding(&self) -> AndromedaResult<ProcedureContractBinding> {
+        let binding = self.binding();
+        self.validate_binding(&binding)?;
+        Ok(binding)
+    }
+
+    pub fn validate_binding(&self, binding: &ProcedureContractBinding) -> AndromedaResult<()> {
+        self.validate_canonical_hash()?;
+        binding.validate()?;
+
+        if binding.procedure_id != self.procedure_id {
+            return Err(binding_mismatch(
+                "procedure binding id must match the procedure contract",
+            ));
+        }
+        if binding.catalog_version != self.object.catalog_version {
+            return Err(binding_mismatch(
+                "procedure binding catalog version must match the procedure contract",
+            ));
+        }
+        if binding.contract_hash != self.contract_hash {
+            return Err(binding_mismatch(
+                "procedure binding contract hash must match the procedure contract",
+            ));
+        }
+        if binding.stats_version != self.stats_version {
+            return Err(binding_mismatch(
+                "procedure binding stats version must match the procedure contract",
+            ));
+        }
+        if binding.policy_version != self.policy_version() {
+            return Err(binding_mismatch(
+                "procedure binding policy version must match the procedure contract",
+            ));
+        }
+
+        Ok(())
     }
 
     pub fn validate_canonical_hash(&self) -> AndromedaResult<()> {
@@ -67,7 +114,7 @@ impl ProcedureContract {
     }
 
     pub fn validated(self) -> AndromedaResult<Self> {
-        self.validate_canonical_hash()?;
+        self.validated_binding()?;
         Ok(self)
     }
 
@@ -128,7 +175,11 @@ impl ProcedureContractCandidate {
             error_policy: self.error_policy,
             multi_result_policy: self.multi_result_policy,
         };
-        contract.validate_canonical_hash()?;
+        contract.validated_binding()?;
         Ok(contract)
     }
+}
+
+fn binding_mismatch(message: &'static str) -> AndromedaError {
+    AndromedaError::new(AndromedaErrorKind::Contract, message)
 }

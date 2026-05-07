@@ -67,8 +67,8 @@ impl TransactionTrace {
     pub const fn from_state_machine(trace_id: TraceId, machine: TransactionStateMachine) -> Self {
         Self {
             trace_id,
-            transaction_id: machine.transaction_id,
-            state: machine.state,
+            transaction_id: machine.transaction_id(),
+            state: machine.state(),
         }
     }
 
@@ -95,15 +95,15 @@ impl TransactionStateMachine {
         reason_code: TransitionReasonCode,
         reason: impl Into<String>,
     ) -> TransactionTransitionTrace {
-        let next_phase = transaction_phase_code(self.state);
-        let durable_lsn = match self.state {
-            TransactionState::Committed => self.durable_commit_lsn,
-            TransactionState::RolledBack => self.durable_rollback_lsn,
+        let next_phase = transaction_phase_code(self.state());
+        let durable_lsn = match self.state() {
+            TransactionState::Committed => self.durable_commit_lsn().map(crate::Lsn::get),
+            TransactionState::RolledBack => self.durable_rollback_lsn().map(crate::Lsn::get),
             _ => None,
         };
         TransactionTransitionTrace {
             trace_id,
-            transaction_id: self.transaction_id,
+            transaction_id: self.transaction_id(),
             invocation_id: correlation.invocation_id,
             request_id: correlation.request_id,
             session_id: correlation.session_id,
@@ -138,7 +138,7 @@ mod tests {
         let mut tx = TransactionStateMachine::new(TransactionId::new(11));
         tx.begin().unwrap();
         tx.request_commit().unwrap();
-        let previous = tx.state;
+        let previous = tx.state();
         tx.publish_visible_commit_after_durable_flush(900).unwrap();
 
         let correlation = TransactionTransitionCorrelation {

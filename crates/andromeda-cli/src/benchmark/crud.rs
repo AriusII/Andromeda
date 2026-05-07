@@ -2,7 +2,10 @@ use crate::diagnostic_json::{DIAGNOSTIC_JSON_FLAG, JSON_FLAG, json_string};
 use crate::error::cli_error;
 use crate::parse::{next_option_value_rejecting_flag, parse_u64_option};
 use andromeda_bench::{
-    CRUD_SCENARIOS, CrudDataGenerator, CrudOperationMetrics, CrudWorkloadResult, find_crud_scenario,
+    BENCHMARK_EVIDENCE_AUTHORITATIVE, BENCHMARK_EVIDENCE_CAN_SELECT_PLAN_ALONE,
+    BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY, CRUD_SCENARIOS, CrudOperationMetrics,
+    CrudWorkloadResult, MAX_CRUD_BATCH_SIZE, MAX_CRUD_DURATION_MS, MAX_CRUD_ROWS, MAX_CRUD_THREADS,
+    find_crud_scenario,
 };
 use andromeda_core::AndromedaResult;
 
@@ -82,8 +85,6 @@ pub(super) fn run_crud_workload_deterministic(
         .validate()
         .map_err(|err| cli_error(format!("scenario validation failed: {err}")))?;
 
-    let generator = CrudDataGenerator::new(seed, 128);
-    let rows = generator.generate_rows(scenario.row_count);
     let start_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
@@ -99,10 +100,14 @@ pub(super) fn run_crud_workload_deterministic(
         _ => 500,
     };
 
-    let insert_count = (rows.len() as f64 * f64::from(scenario.insert_pct) / 100.0) as u64;
-    let update_count = (rows.len() as f64 * f64::from(scenario.update_pct) / 100.0) as u64;
-    let delete_count = (rows.len() as f64 * f64::from(scenario.delete_pct) / 100.0) as u64;
-    let scan_count = (rows.len() as f64 * f64::from(scenario.scan_pct) / 100.0) as u64;
+    let row_count = u64::from(scenario.row_count);
+    let insert_count = percentage_count(row_count, scenario.insert_pct);
+    let update_count = percentage_count(row_count, scenario.update_pct);
+    let delete_count = percentage_count(row_count, scenario.delete_pct);
+    let scan_count = row_count
+        .saturating_sub(insert_count)
+        .saturating_sub(update_count)
+        .saturating_sub(delete_count);
 
     let total_ops = insert_count + update_count + delete_count + scan_count;
     let elapsed_ms = (total_ops * base_latency_us / 1000).max(1);
@@ -156,6 +161,10 @@ pub(super) fn run_crud_workload_deterministic(
     })
 }
 
+fn percentage_count(total: u64, pct: u8) -> u64 {
+    total.saturating_mul(u64::from(pct)) / 100
+}
+
 fn push_operation_metrics(
     operations: &mut Vec<CrudOperationMetrics>,
     operation: &str,
@@ -183,9 +192,32 @@ pub(super) fn print_crud_scenarios(diagnostic_json: bool) {
 
     println!("Andromeda CRUD benchmark scenarios");
     println!("==================================");
+    println!("diagnostic only: true");
+    println!("authoritative: {}", BENCHMARK_EVIDENCE_AUTHORITATIVE);
+    println!(
+        "can select plan alone: {}",
+        BENCHMARK_EVIDENCE_CAN_SELECT_PLAN_ALONE
+    );
+    println!(
+        "optimizer boundary: {}",
+        BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY
+    );
+    println!("global max threads: {}", MAX_CRUD_THREADS);
+    println!("global max batch_size: {}", MAX_CRUD_BATCH_SIZE);
+    println!("global max row_count: {}", MAX_CRUD_ROWS);
+    println!("global max duration ms: {}", MAX_CRUD_DURATION_MS);
     for scenario in CRUD_SCENARIOS {
         println!("- {}", scenario.id);
         println!("  description: {}", scenario.description);
+        println!("  hypothesis: {}", scenario.hypothesis);
+        println!(
+            "  workload_shape_version: {}",
+            scenario.workload_shape_version
+        );
+        println!("  workload_size: {}", scenario.workload_size);
+        println!("  primary_metric: {}", scenario.primary_metric);
+        println!("  budget_origin: {}", scenario.budget_origin);
+        println!("  decision_linkage: {}", scenario.decision_linkage);
         println!("  threads: {}", scenario.thread_count);
         println!("  batch_size: {}", scenario.batch_size);
         println!("  row_count: {}", scenario.row_count);
@@ -199,8 +231,15 @@ pub(super) fn print_crud_scenarios(diagnostic_json: bool) {
 
 fn print_crud_scenarios_json() {
     print!(
-        "{{\"schema\":{},\"diagnostic_only\":true,\"scenarios\":[",
-        json_string("andromeda.cli.benchmark.crud_scenarios.v1")
+        "{{\"schema\":{},\"diagnostic_only\":true,\"optimizer_use\":{{\"authoritative\":{},\"can_select_plan_alone\":{},\"boundary\":{}}},\"global_limits\":{{\"max_threads\":{},\"max_batch_size\":{},\"max_row_count\":{},\"max_duration_ms\":{}}},\"scenarios\":[",
+        json_string("andromeda.cli.benchmark.crud_scenarios.v1"),
+        BENCHMARK_EVIDENCE_AUTHORITATIVE,
+        BENCHMARK_EVIDENCE_CAN_SELECT_PLAN_ALONE,
+        json_string(BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY),
+        MAX_CRUD_THREADS,
+        MAX_CRUD_BATCH_SIZE,
+        MAX_CRUD_ROWS,
+        MAX_CRUD_DURATION_MS
     );
 
     for (index, scenario) in CRUD_SCENARIOS.iter().enumerate() {
@@ -208,9 +247,15 @@ fn print_crud_scenarios_json() {
             print!(",");
         }
         print!(
-            "{{\"id\":{},\"description\":{},\"thread_count\":{},\"batch_size\":{},\"row_count\":{},\"insert_pct\":{},\"update_pct\":{},\"delete_pct\":{},\"scan_pct\":{},\"max_duration_ms\":{}}}",
+            "{{\"id\":{},\"description\":{},\"hypothesis\":{},\"workload_shape_version\":{},\"workload_size\":{},\"primary_metric\":{},\"budget_origin\":{},\"decision_linkage\":{},\"thread_count\":{},\"batch_size\":{},\"row_count\":{},\"insert_pct\":{},\"update_pct\":{},\"delete_pct\":{},\"scan_pct\":{},\"max_duration_ms\":{}}}",
             json_string(scenario.id),
             json_string(scenario.description),
+            json_string(scenario.hypothesis),
+            json_string(scenario.workload_shape_version),
+            json_string(scenario.workload_size),
+            json_string(scenario.primary_metric),
+            json_string(scenario.budget_origin),
+            json_string(scenario.decision_linkage),
             scenario.thread_count,
             scenario.batch_size,
             scenario.row_count,
@@ -233,6 +278,17 @@ pub(super) fn print_crud_result(result: &CrudWorkloadResult, diagnostic_json: bo
     println!("Andromeda CRUD workload result");
     println!("=============================");
     println!("scenario_id: {}", result.scenario_id);
+    if let Some(scenario) = find_crud_scenario(&result.scenario_id) {
+        println!("hypothesis: {}", scenario.hypothesis);
+        println!(
+            "workload_shape_version: {}",
+            scenario.workload_shape_version
+        );
+        println!("workload_size: {}", scenario.workload_size);
+        println!("primary_metric: {}", scenario.primary_metric);
+        println!("budget_origin: {}", scenario.budget_origin);
+        println!("decision_linkage: {}", scenario.decision_linkage);
+    }
     println!("start_time_unix_ms: {}", result.start_time_unix_ms);
     println!("elapsed_ms: {}", result.elapsed_ms);
     println!("thread_count: {}", result.thread_count);
@@ -245,6 +301,13 @@ pub(super) fn print_crud_result(result: &CrudWorkloadResult, diagnostic_json: bo
     );
     println!("total_errors: {}", result.total_errors);
     println!("seed: {}", result.seed);
+    println!("diagnostic_only: true");
+    println!("authoritative: {}", result.is_authoritative());
+    println!("can select plan alone: {}", result.can_select_plan_alone());
+    println!(
+        "optimizer boundary: {}",
+        result.optimizer_consumption_role()
+    );
     println!();
     println!("operations:");
     for op in &result.operations {

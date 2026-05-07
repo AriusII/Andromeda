@@ -3,7 +3,7 @@ use crate::error::cli_error;
 use crate::parse::{next_option_value_rejecting_flag, parse_u32_option, parse_u64_option};
 use andromeda_bench::{
     BenchmarkHardwareProfile, BenchmarkRunRequest, DEFAULT_DURATION_MS, DEFAULT_SAMPLES,
-    DEFAULT_WARMUPS,
+    DEFAULT_TEMP_BYTES, DEFAULT_WARMUPS,
 };
 use andromeda_core::AndromedaResult;
 
@@ -18,6 +18,7 @@ pub(super) fn parse_benchmark_run_options(args: &[String]) -> AndromedaResult<Be
     let mut duration_ms = DEFAULT_DURATION_MS;
     let mut samples = DEFAULT_SAMPLES;
     let mut warmups = DEFAULT_WARMUPS;
+    let mut temp_budget_bytes = DEFAULT_TEMP_BYTES;
     let mut hardware_profile = BenchmarkHardwareProfile::Conservative;
     let mut diagnostic_json = false;
     let mut index = 0;
@@ -48,6 +49,14 @@ pub(super) fn parse_benchmark_run_options(args: &[String]) -> AndromedaResult<Be
                 )?;
                 warmups = parse_u32_option(value, "--warmups")?;
             }
+            "--temp-budget-bytes" => {
+                let value = next_option_value_rejecting_flag(
+                    args,
+                    &mut index,
+                    "--temp-budget-bytes requires an unsigned integer",
+                )?;
+                temp_budget_bytes = parse_u64_option(value, "--temp-budget-bytes")?;
+            }
             "--hardware-profile" => {
                 let value = next_option_value_rejecting_flag(
                     args,
@@ -64,7 +73,7 @@ pub(super) fn parse_benchmark_run_options(args: &[String]) -> AndromedaResult<Be
             }
             opt if opt.starts_with("--") => {
                 return Err(cli_error(
-                    "unknown benchmark run option; supported options are --duration-ms, --samples, --warmups, --hardware-profile, and --diagnostic-json",
+                    "unknown benchmark run option; supported options are --duration-ms, --samples, --warmups, --temp-budget-bytes, --hardware-profile, and --diagnostic-json",
                 ));
             }
             value => {
@@ -82,7 +91,7 @@ pub(super) fn parse_benchmark_run_options(args: &[String]) -> AndromedaResult<Be
 
     let Some(workload_id) = workload_id else {
         return Err(cli_error(
-            "usage: andromeda-cli benchmark run <workload> [--duration-ms <ms>] [--samples <n>] [--warmups <n>] [--hardware-profile conservative|declared-local] [--diagnostic-json]",
+            "usage: andromeda-cli benchmark run <workload> [--duration-ms <ms>] [--samples <n>] [--warmups <n>] [--temp-budget-bytes <bytes>] [--hardware-profile conservative|declared-local] [--diagnostic-json]",
         ));
     };
 
@@ -90,6 +99,7 @@ pub(super) fn parse_benchmark_run_options(args: &[String]) -> AndromedaResult<Be
     request.duration_ms = duration_ms;
     request.samples = samples;
     request.warmups = warmups;
+    request.temp_budget_bytes = temp_budget_bytes;
     request.hardware_profile = hardware_profile;
 
     Ok(BenchmarkRunOptions {
@@ -147,7 +157,7 @@ pub(super) fn validate_benchmark_run_options(options: &BenchmarkRunOptions) -> A
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_bench::{BenchmarkHardwareProfile, MAX_DURATION_MS};
+    use andromeda_bench::{BenchmarkHardwareProfile, MAX_DURATION_MS, MAX_TEMP_BYTES};
 
     fn strings(args: &[&str]) -> Vec<String> {
         args.iter().map(|arg| arg.to_string()).collect()
@@ -161,6 +171,7 @@ mod tests {
         assert_eq!(options.request.duration_ms, DEFAULT_DURATION_MS);
         assert_eq!(options.request.samples, DEFAULT_SAMPLES);
         assert_eq!(options.request.warmups, DEFAULT_WARMUPS);
+        assert_eq!(options.request.temp_budget_bytes, DEFAULT_TEMP_BYTES);
         assert_eq!(
             options.request.hardware_profile,
             BenchmarkHardwareProfile::Conservative
@@ -178,6 +189,8 @@ mod tests {
             "5",
             "--warmups",
             "1",
+            "--temp-budget-bytes",
+            "1048576",
             "--hardware-profile",
             "declared-local",
             "--diagnostic-json",
@@ -189,6 +202,7 @@ mod tests {
             options.request.hardware_profile,
             BenchmarkHardwareProfile::DeclaredLocal
         );
+        assert_eq!(options.request.temp_budget_bytes, 1_048_576);
         assert!(options.diagnostic_json);
     }
 
@@ -203,6 +217,34 @@ mod tests {
         .unwrap();
 
         assert!(validate_benchmark_run_options(&options).is_err());
+    }
+
+    #[test]
+    fn rejects_invalid_temp_budget_with_user_facing_messages() {
+        let options = parse_benchmark_run_options(&strings(&[
+            "vertical-v0-smoke",
+            "--temp-budget-bytes",
+            "0",
+        ]))
+        .unwrap();
+        let err = validate_benchmark_run_options(&options).unwrap_err();
+        assert_eq!(
+            err.message(),
+            "--temp-budget-bytes must be greater than zero"
+        );
+
+        let too_large = (MAX_TEMP_BYTES + 1).to_string();
+        let options = parse_benchmark_run_options(&strings(&[
+            "vertical-v0-smoke",
+            "--temp-budget-bytes",
+            too_large.as_str(),
+        ]))
+        .unwrap();
+        let err = validate_benchmark_run_options(&options).unwrap_err();
+        assert_eq!(
+            err.message(),
+            format!("--temp-budget-bytes must be <= {MAX_TEMP_BYTES}")
+        );
     }
 
     #[test]
@@ -237,7 +279,7 @@ mod tests {
                 .unwrap_err();
         assert_eq!(
             err.message(),
-            "unknown benchmark run option; supported options are --duration-ms, --samples, --warmups, --hardware-profile, and --diagnostic-json"
+            "unknown benchmark run option; supported options are --duration-ms, --samples, --warmups, --temp-budget-bytes, --hardware-profile, and --diagnostic-json"
         );
         assert!(!err.message().contains("super-secret"));
 

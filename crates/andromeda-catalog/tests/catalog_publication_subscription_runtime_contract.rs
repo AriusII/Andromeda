@@ -5,8 +5,9 @@ use andromeda_catalog::{
     CatalogPublicationReport, CatalogPublicationSemantics, CatalogPublicationSubscriberRegistry,
     CatalogPublicationSubscriptionReplayRecord, CatalogPublishedContract, CatalogPublishedObject,
     CatalogRecoveryReplayExpectation, CatalogSubscriberId, CatalogSubscriberRegistration,
-    CatalogSubscriptionAcknowledgement, CatalogVisibleChangeAuditEvidence, DefinitionBatchId,
-    ObjectKind, QualifiedName,
+    CatalogSubscriptionAcknowledgement, CatalogVisibleChangeAuditEvidence,
+    DefinitionBatchDependencyGraphHash, DefinitionBatchId, DefinitionBatchSourceHash, ObjectKind,
+    QualifiedName,
 };
 use andromeda_core::{
     AndromedaErrorKind, CatalogObjectId, CatalogVersion, ContractHash, DatabaseId, NamespaceId,
@@ -23,6 +24,8 @@ fn receipt() -> CatalogPublicationReceipt {
         namespace_id: NAMESPACE_ID,
         previous_version: CatalogVersion::new(7),
         next_version: CatalogVersion::new(8),
+        source_hash: DefinitionBatchSourceHash::new([0x11; 32]),
+        dependency_graph_hash: DefinitionBatchDependencyGraphHash::new([0x22; 32]),
         durable_lsn: Some(80),
         durable_evidence_marker: None,
         record_count: 3,
@@ -127,6 +130,19 @@ fn catalog_publication_requires_durable_lsn_or_marker() {
     let mut registry = CatalogPublicationSubscriberRegistry::new();
     let error = registry
         .record_visible_publication(publication, audit_evidence, terminal)
+        .unwrap_err();
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+    assert!(error.message().contains("durable"));
+
+    let mut zero_lsn_publication = report();
+    zero_lsn_publication.receipt.durable_lsn = Some(0);
+    zero_lsn_publication.recovery_replay =
+        CatalogRecoveryReplayExpectation::from_receipt(&zero_lsn_publication.receipt);
+    let (terminal, audit_evidence) = visible_records(zero_lsn_publication.clone());
+
+    let error = registry
+        .record_visible_publication(zero_lsn_publication, audit_evidence, terminal)
         .unwrap_err();
 
     assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
@@ -262,6 +278,29 @@ fn runtime_registry_rejects_visible_publications_out_of_catalog_version_order() 
 
     assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
     assert!(error.message().contains("version ordering"));
+}
+
+#[test]
+fn runtime_registry_rejects_visible_publication_that_skips_catalog_version() {
+    let skipped_publication = report_for_versions(30, 7, 9);
+    let (terminal, audit_evidence) = visible_records(skipped_publication.clone());
+
+    let error = CatalogPublicationSubscriberRegistry::restore_from_replay(
+        [
+            CatalogPublicationSubscriptionReplayRecord::Terminal(terminal),
+            CatalogPublicationSubscriptionReplayRecord::VisiblePublication {
+                publication: skipped_publication,
+                audit_evidence,
+            },
+        ],
+        [CatalogSubscriberRegistration::hadr_replica(
+            CatalogSubscriberId::new("hadr-replica-a").unwrap(),
+        )],
+    )
+    .unwrap_err();
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+    assert!(error.message().contains("exactly one catalog version"));
 }
 
 #[test]

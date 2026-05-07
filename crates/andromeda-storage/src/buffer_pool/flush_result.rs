@@ -13,7 +13,7 @@ use crate::{Lsn, PageId};
 ///
 /// - `flushed`: Count of pages successfully written to durable storage
 /// - `blocked_by_wal_durability`: Pages that could not be flushed because their
-///   first_dirty_lsn was not yet durable in the WAL
+///   latest dirty LSN was not yet durable in the WAL
 /// - `errors`: Pages that encountered flush errors (pinned, IO errors, etc.)
 ///
 /// Invariant: A page appears in exactly one of these lists: flushed, blocked, or errors.
@@ -40,30 +40,53 @@ pub struct FlushBlockedFrame {
     pub page_id: PageId,
 
     /// The first LSN at which this page became dirty. This LSN must be durable
-    /// in the WAL before the frame can be flushed.
+    /// in the WAL before the frame can be flushed, but it is not sufficient
+    /// when the page has later dirty updates.
     pub first_dirty_lsn: Lsn,
 
+    /// The latest dirty LSN observed for this page. This is the durability
+    /// fence LSN that must be covered by durable WAL before flush.
+    pub last_dirty_lsn: Lsn,
+
     /// The maximum LSN currently durable in the WAL. The frame is blocked because
-    /// `first_dirty_lsn > max_durable_lsn`.
+    /// `last_dirty_lsn > max_durable_lsn`.
     pub max_durable_lsn: Lsn,
 }
 
 impl FlushBlockedFrame {
     /// Create a blocked frame record.
     pub fn new(page_id: PageId, first_dirty_lsn: Lsn, max_durable_lsn: Lsn) -> Self {
+        Self::new_with_last_dirty_lsn(page_id, first_dirty_lsn, first_dirty_lsn, max_durable_lsn)
+    }
+
+    /// Create a blocked frame record carrying the full dirty LSN range.
+    pub fn new_with_last_dirty_lsn(
+        page_id: PageId,
+        first_dirty_lsn: Lsn,
+        last_dirty_lsn: Lsn,
+        max_durable_lsn: Lsn,
+    ) -> Self {
         Self {
             page_id,
             first_dirty_lsn,
+            last_dirty_lsn,
             max_durable_lsn,
         }
     }
 
     /// LSN gap that must close before this frame can flush.
     pub fn lsn_gap(&self) -> u64 {
-        self.first_dirty_lsn
+        self.last_dirty_lsn
             .get()
             .saturating_sub(self.max_durable_lsn.get())
     }
+}
+
+/// Storage operation that failed during dirty-page flush.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FlushStorageOperation {
+    PageStoreWrite,
+    DirtyTrackerMarkClean,
 }
 
 /// Error encountered while attempting to flush a specific page.
@@ -78,8 +101,12 @@ pub enum FlushError {
     /// The frame is pinned and cannot be flushed.
     FramePinned { page_id: PageId, pin_count: u32 },
 
-    /// A storage-layer error occurred during flush.
-    StorageError(String),
+    /// A typed storage-layer error occurred during flush.
+    StorageError {
+        page_id: PageId,
+        operation: FlushStorageOperation,
+        message: String,
+    },
 
     /// The frame is in an invalid state for flush.
     InvalidFrameState { page_id: PageId },
@@ -94,15 +121,23 @@ impl FlushError {
         match self {
             Self::FrameNotResident { page_id } => Some(*page_id),
             Self::FramePinned { page_id, .. } => Some(*page_id),
-            Self::StorageError(_) => None,
+            Self::StorageError { page_id, .. } => Some(*page_id),
             Self::InvalidFrameState { page_id } => Some(*page_id),
             Self::InvalidPageImage { page_id } => Some(*page_id),
         }
     }
 
-    /// Convert a storage error string into a StorageError variant.
-    pub fn storage(msg: impl Into<String>) -> Self {
-        Self::StorageError(msg.into())
+    /// Convert a storage error into an observable page-scoped flush error.
+    pub fn storage(
+        page_id: PageId,
+        operation: FlushStorageOperation,
+        message: impl Into<String>,
+    ) -> Self {
+        Self::StorageError {
+            page_id,
+            operation,
+            message: message.into(),
+        }
     }
 }
 
@@ -177,8 +212,13 @@ mod tests {
             Some(PageId::new(11))
         );
         assert_eq!(
-            FlushError::StorageError("io error".to_string()).page_id(),
-            None
+            FlushError::storage(
+                PageId::new(12),
+                FlushStorageOperation::PageStoreWrite,
+                "io error",
+            )
+            .page_id(),
+            Some(PageId::new(12))
         );
     }
 

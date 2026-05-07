@@ -1,9 +1,12 @@
-use andromeda_core::{AndromedaErrorKind, RequestId, SessionId, TransactionId};
+use andromeda_core::{
+    AndromedaErrorKind, CatalogVersion, ContractHash, RequestId, SessionId, TransactionId,
+};
+use andromeda_proto::{encode_generated_message, generated};
 use andromeda_quic::{
     BackpressureReason, BackpressureSignal, DispatchPolicy, FRAME_CODEC_CRC_OFFSET,
     FRAME_CODEC_HEADER_LEN, FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader,
-    FrameType, ResultStreamMetadataPolicy, StreamRole, TransportSurface, dispatch_frame,
-    expected_stream_role, validate_transport_surface,
+    FrameType, ResultStreamMetadataPolicy, StreamRole, TransportSurface, TypedResultStreamContext,
+    dispatch_frame, expected_stream_role, validate_transport_surface,
 };
 
 fn header(frame_type: FrameType, payload_length: u64) -> FrameHeader {
@@ -24,6 +27,84 @@ fn frame(frame_type: FrameType, payload: impl Into<Vec<u8>>) -> FrameBytes {
         header: header(frame_type, payload.len() as u64),
         payload,
     }
+}
+
+fn hash(byte: u8) -> Vec<u8> {
+    vec![byte; ContractHash::LEN]
+}
+
+fn typed_result_stream_context() -> TypedResultStreamContext {
+    TypedResultStreamContext::new(
+        RequestId::new(101),
+        SessionId::new(202),
+        Some(TransactionId::new(303)),
+        ContractHash::from_slice(&hash(7)).unwrap(),
+        CatalogVersion::new(42),
+    )
+}
+
+fn envelope_payload(kind: generated::protocol::v1::PayloadKind, payload: Vec<u8>) -> Vec<u8> {
+    encode_generated_message(&generated::protocol::v1::FrameEnvelope {
+        protocol_version: Some(generated::protocol::v1::ProtocolVersion { major: 1, minor: 0 }),
+        contract_hash: hash(7),
+        catalog_version: 42,
+        request_id: 101,
+        session_id: 202,
+        tx_id: Some(303),
+        payload_kind: kind as i32,
+        payload,
+    })
+}
+
+fn result_metadata_frame() -> FrameBytes {
+    frame(
+        FrameType::RpcMetadata,
+        envelope_payload(
+            generated::protocol::v1::PayloadKind::RpcMetadata,
+            encode_generated_message(&generated::protocol::v1::RpcMetadata {
+                result_streams: Vec::new(),
+                completion_policy: None,
+            }),
+        ),
+    )
+}
+
+fn result_batch_frame() -> FrameBytes {
+    frame(
+        FrameType::RpcBatch,
+        envelope_payload(
+            generated::protocol::v1::PayloadKind::RpcBatch,
+            encode_generated_message(&generated::protocol::v1::RpcBatch {
+                result_name: "Inventory.ReserveStock.Reservation".to_string(),
+                batch_index: 0,
+                rows_emitted: 1,
+                structured_payload: b"\x01".to_vec(),
+                row_count_exact: Some(1),
+                terminal_batch: true,
+            }),
+        ),
+    )
+}
+
+fn result_completion_frame() -> FrameBytes {
+    frame(
+        FrameType::RpcCompletion,
+        envelope_payload(
+            generated::protocol::v1::PayloadKind::RpcCompletion,
+            encode_generated_message(&generated::protocol::v1::RpcCompletion {
+                status: generated::protocol::v1::rpc_completion::Status::Committed as i32,
+                rows_affected: Some(1),
+                tx_id: Some(303),
+                request_id: Some(101),
+                session_id: Some(202),
+                trace_id: Some("trace".to_string()),
+                transaction_outcome:
+                    generated::protocol::v1::rpc_completion::TransactionOutcome::Committed as i32,
+                durable_lsn: Some(1),
+                result_row_counts: Vec::new(),
+            }),
+        ),
+    )
 }
 
 #[test]
@@ -113,22 +194,16 @@ fn dispatcher_rejects_wrong_stream_role() {
 
 #[test]
 fn dispatcher_validates_result_stream_sequence() {
-    let mut policy = DispatchPolicy::new(StreamRole::ResultUnidirectional);
-    policy
-        .dispatch(&frame(FrameType::RpcMetadata, b"meta".to_vec()))
-        .unwrap();
-    policy
-        .dispatch(&frame(FrameType::RpcBatch, b"row".to_vec()))
-        .unwrap();
-    policy
-        .dispatch(&frame(FrameType::RpcCompletion, Vec::new()))
-        .unwrap();
+    let mut policy = DispatchPolicy::new_result_stream(typed_result_stream_context());
+    policy.dispatch(&result_metadata_frame()).unwrap();
+    policy.dispatch(&result_batch_frame()).unwrap();
+    policy.dispatch(&result_completion_frame()).unwrap();
     assert!(policy.finish().is_ok());
 
-    let mut wrong_order = DispatchPolicy::new(StreamRole::ResultUnidirectional);
+    let mut wrong_order = DispatchPolicy::new_result_stream(typed_result_stream_context());
     assert_eq!(
         wrong_order
-            .dispatch(&frame(FrameType::RpcBatch, b"row".to_vec()))
+            .dispatch(&result_batch_frame())
             .unwrap_err()
             .kind(),
         AndromedaErrorKind::Protocol
@@ -137,28 +212,22 @@ fn dispatcher_validates_result_stream_sequence() {
 
 #[test]
 fn dispatcher_allows_metadata_only_completion_only_with_explicit_policy() {
-    let mut strict = DispatchPolicy::new(StreamRole::ResultUnidirectional);
-    strict
-        .dispatch(&frame(FrameType::RpcMetadata, b"zero-row-policy".to_vec()))
-        .unwrap();
+    let mut strict = DispatchPolicy::new_result_stream(typed_result_stream_context());
+    strict.dispatch(&result_metadata_frame()).unwrap();
     assert_eq!(
         strict
-            .dispatch(&frame(FrameType::RpcCompletion, Vec::new()))
+            .dispatch(&result_completion_frame())
             .unwrap_err()
             .kind(),
         AndromedaErrorKind::Protocol
     );
 
-    let mut zero_row = DispatchPolicy::new_with_result_metadata_policy(
-        StreamRole::ResultUnidirectional,
+    let mut zero_row = DispatchPolicy::new_result_stream_with_metadata_policy(
+        typed_result_stream_context(),
         ResultStreamMetadataPolicy::ZeroRowCompletionAllowed,
     );
-    zero_row
-        .dispatch(&frame(FrameType::RpcMetadata, b"zero-row-policy".to_vec()))
-        .unwrap();
-    zero_row
-        .dispatch(&frame(FrameType::RpcCompletion, Vec::new()))
-        .unwrap();
+    zero_row.dispatch(&result_metadata_frame()).unwrap();
+    zero_row.dispatch(&result_completion_frame()).unwrap();
     assert!(zero_row.finish().is_ok());
 }
 

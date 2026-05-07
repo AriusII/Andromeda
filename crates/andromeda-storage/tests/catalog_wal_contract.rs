@@ -1,6 +1,6 @@
 //! Comprehensive contract tests for catalog WAL record encoding and recovery.
 //!
-//! Total tests: 21
+//! Total tests are maintained by `cargo test`.
 //!
 //! Categories:
 //! - Encode/decode round-trip tests (8 tests)
@@ -8,14 +8,63 @@
 //! - Procedure ID validation tests (3 tests)
 //! - Checksum and corruption tests (3 tests)
 //! - Recovery replay tests (4 tests)
+//! - Storage-side publication bridge tests (6 tests)
 
 #[cfg(test)]
 mod tests {
-    use andromeda_core::{CatalogObjectId, CatalogVersion, ContractHash};
+    use andromeda_core::{CatalogObjectId, CatalogVersion, ContractHash, TransactionId};
     use andromeda_storage::{
-        CatalogWalRecord, Lsn, decode_catalog_record, encode_catalog_record,
-        replay_catalog_wal_records,
+        CatalogWalRecord, Lsn, WalRecord, WalRecordKind, decode_catalog_record,
+        encode_catalog_record, replay_catalog_publications_from_wal, replay_catalog_wal_records,
     };
+    use sha2::{Digest, Sha256};
+
+    fn catalog_storage_record(
+        kind: WalRecordKind,
+        lsn: u64,
+        previous_lsn: Option<u64>,
+        transaction_id: u64,
+        payload: &[u8],
+    ) -> WalRecord {
+        WalRecord::from_parts(
+            kind,
+            Lsn::new(lsn),
+            previous_lsn.map(Lsn::new),
+            Some(TransactionId::new(transaction_id)),
+            payload.to_vec(),
+        )
+        .expect("catalog storage WAL record")
+    }
+
+    fn catalog_frame_from_payload(payload: Vec<u8>) -> Vec<u8> {
+        let mut frame = Vec::new();
+        frame.extend_from_slice(&1u16.to_le_bytes());
+        frame.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        let checksum = Sha256::digest(&payload);
+        frame.extend_from_slice(&checksum);
+        frame.extend_from_slice(&payload);
+        frame
+    }
+
+    fn catalog_frame_with_declared_payload_tail(encoded: Vec<u8>, tail: &[u8]) -> Vec<u8> {
+        assert!(encoded.len() >= 38);
+        let mut payload = encoded[38..].to_vec();
+        payload.extend_from_slice(tail);
+        catalog_frame_from_payload(payload)
+    }
+
+    fn procedure_added_record(procedure_id: u64, catalog_version: u64) -> CatalogWalRecord {
+        CatalogWalRecord::ProcedureAdded {
+            procedure_id: CatalogObjectId::new(procedure_id),
+            signature_hash: ContractHash::test_vector(procedure_id as u8),
+            new_catalog_version: CatalogVersion::new(catalog_version),
+            timestamp_secs: 1704067300 + catalog_version,
+        }
+    }
+
+    fn encode_catalog_apply_payload(record: &CatalogWalRecord) -> Vec<u8> {
+        encode_catalog_record(record).expect("encode catalog apply payload")
+    }
 
     #[test]
     fn test_encode_decode_definition_batch_applied_preserves_all_fields() {
@@ -329,6 +378,384 @@ mod tests {
                 .unwrap_err()
                 .message()
                 .contains("unsupported catalog WAL record version")
+        );
+    }
+
+    #[test]
+    fn test_decode_rejects_trailing_bytes_after_declared_payload() {
+        let original = CatalogWalRecord::ProcedureAdded {
+            procedure_id: CatalogObjectId::new(1),
+            signature_hash: ContractHash::test_vector(0xAC),
+            new_catalog_version: CatalogVersion::new(1),
+            timestamp_secs: 1000,
+        };
+
+        let mut encoded = encode_catalog_record(&original).expect("encode failed");
+        encoded.extend_from_slice(b"tail");
+
+        let result = decode_catalog_record(&encoded);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .message()
+                .contains("frame length mismatch")
+        );
+    }
+
+    #[test]
+    fn test_decode_rejects_trailing_bytes_inside_declared_payload() {
+        let original = CatalogWalRecord::ProcedureAdded {
+            procedure_id: CatalogObjectId::new(1),
+            signature_hash: ContractHash::test_vector(0xAD),
+            new_catalog_version: CatalogVersion::new(1),
+            timestamp_secs: 1000,
+        };
+
+        let encoded = encode_catalog_record(&original).expect("encode failed");
+        let frame = catalog_frame_with_declared_payload_tail(encoded, b"semantic-tail");
+
+        let result = decode_catalog_record(&frame);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .message()
+                .contains("payload has trailing bytes")
+        );
+    }
+
+    #[test]
+    fn test_decode_rejects_definition_batch_count_before_large_allocation() {
+        let mut payload = Vec::new();
+        payload.push(0u8);
+        payload.extend_from_slice(&1u64.to_le_bytes());
+        payload.extend_from_slice(&CatalogVersion::new(1).get().to_le_bytes());
+        payload.extend_from_slice(&u32::MAX.to_le_bytes());
+
+        let frame = catalog_frame_from_payload(payload);
+        let result = decode_catalog_record(&frame);
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().message().contains("procedure_count"));
+    }
+
+    #[test]
+    fn test_storage_publication_bridge_reconstructs_complete_catalog_publication() {
+        let apply_record = procedure_added_record(501, 11);
+        let apply_payload = encode_catalog_apply_payload(&apply_record);
+        let records = vec![
+            catalog_storage_record(WalRecordKind::CatalogChangeBegin, 10, None, 77, b"begin-v1"),
+            catalog_storage_record(
+                WalRecordKind::CatalogChangeApply,
+                11,
+                Some(10),
+                77,
+                &apply_payload,
+            ),
+            catalog_storage_record(
+                WalRecordKind::CatalogChangeCommit,
+                12,
+                Some(11),
+                77,
+                b"commit-v1",
+            ),
+        ];
+
+        let report = replay_catalog_publications_from_wal(&records).expect("publication replay");
+        let publication = report
+            .last_durable_publication()
+            .expect("last durable publication");
+
+        assert_eq!(report.catalog_records_seen, 3);
+        assert_eq!(report.incomplete_tail_records, 0);
+        assert_eq!(report.publications.len(), 1);
+        assert_eq!(publication.transaction_id, TransactionId::new(77));
+        assert_eq!(publication.begin_lsn, Lsn::new(10));
+        assert_eq!(publication.commit_lsn, Lsn::new(12));
+        assert_eq!(publication.apply_count(), 1);
+        assert_eq!(publication.record_count(), 3);
+        assert_eq!(publication.begin_payload, b"begin-v1".to_vec());
+        assert_eq!(
+            publication.apply_records[0].payload.as_slice(),
+            apply_payload.as_slice()
+        );
+        assert_eq!(&publication.apply_records[0].catalog_record, &apply_record);
+        assert_eq!(
+            publication.last_catalog_version(),
+            Some(CatalogVersion::new(11))
+        );
+        assert_eq!(publication.commit_payload, b"commit-v1".to_vec());
+    }
+
+    #[test]
+    fn test_storage_publication_bridge_ignores_incomplete_tail_without_commit() {
+        let apply_record = procedure_added_record(502, 12);
+        let apply_payload = encode_catalog_apply_payload(&apply_record);
+        let records = vec![
+            catalog_storage_record(WalRecordKind::CatalogChangeBegin, 20, None, 88, b"begin-v2"),
+            catalog_storage_record(
+                WalRecordKind::CatalogChangeApply,
+                21,
+                Some(20),
+                88,
+                &apply_payload,
+            ),
+        ];
+
+        let report = replay_catalog_publications_from_wal(&records).expect("publication replay");
+
+        assert!(report.last_durable_publication().is_none());
+        assert!(report.publications.is_empty());
+        assert_eq!(report.catalog_records_seen, 2);
+        assert_eq!(report.incomplete_tail_records, 2);
+    }
+
+    #[test]
+    fn test_storage_publication_bridge_reconstructs_last_durable_before_tail() {
+        let durable_apply_record = procedure_added_record(503, 13);
+        let durable_apply_payload = encode_catalog_apply_payload(&durable_apply_record);
+        let tail_apply_record = procedure_added_record(504, 14);
+        let tail_apply_payload = encode_catalog_apply_payload(&tail_apply_record);
+        let records = vec![
+            catalog_storage_record(WalRecordKind::CatalogChangeBegin, 30, None, 90, b"begin-v3"),
+            catalog_storage_record(
+                WalRecordKind::CatalogChangeApply,
+                31,
+                Some(30),
+                90,
+                &durable_apply_payload,
+            ),
+            catalog_storage_record(
+                WalRecordKind::CatalogChangeCommit,
+                32,
+                Some(31),
+                90,
+                b"commit-v3",
+            ),
+            catalog_storage_record(
+                WalRecordKind::CatalogChangeBegin,
+                33,
+                Some(32),
+                91,
+                b"begin-v4",
+            ),
+            catalog_storage_record(
+                WalRecordKind::CatalogChangeApply,
+                34,
+                Some(33),
+                91,
+                &tail_apply_payload,
+            ),
+        ];
+
+        let report = replay_catalog_publications_from_wal(&records).expect("publication replay");
+        let publication = report
+            .last_durable_publication()
+            .expect("last durable publication");
+
+        assert_eq!(report.publications.len(), 1);
+        assert_eq!(report.incomplete_tail_records, 2);
+        assert_eq!(publication.transaction_id, TransactionId::new(90));
+        assert_eq!(publication.commit_lsn, Lsn::new(32));
+        assert_eq!(publication.commit_payload, b"commit-v3".to_vec());
+        assert_eq!(
+            &publication.apply_records[0].catalog_record,
+            &durable_apply_record
+        );
+    }
+
+    #[test]
+    fn test_storage_publication_bridge_rejects_apply_before_begin() {
+        let records = vec![catalog_storage_record(
+            WalRecordKind::CatalogChangeApply,
+            40,
+            None,
+            99,
+            b"apply-orphan",
+        )];
+
+        let result = replay_catalog_publications_from_wal(&records);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .message()
+                .contains("apply observed before")
+        );
+    }
+
+    #[test]
+    fn test_storage_publication_bridge_rejects_commit_without_apply() {
+        let records = vec![
+            catalog_storage_record(
+                WalRecordKind::CatalogChangeBegin,
+                50,
+                None,
+                100,
+                b"begin-empty",
+            ),
+            catalog_storage_record(
+                WalRecordKind::CatalogChangeCommit,
+                51,
+                Some(50),
+                100,
+                b"commit-empty",
+            ),
+        ];
+
+        let result = replay_catalog_publications_from_wal(&records);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .message()
+                .contains("requires at least one apply record")
+        );
+    }
+
+    #[test]
+    fn test_storage_publication_bridge_preserves_multiple_decoded_apply_records() {
+        let first_record = procedure_added_record(505, 15);
+        let first_payload = encode_catalog_apply_payload(&first_record);
+        let second_record = procedure_added_record(506, 16);
+        let second_payload = encode_catalog_apply_payload(&second_record);
+        let records = vec![
+            catalog_storage_record(
+                WalRecordKind::CatalogChangeBegin,
+                60,
+                None,
+                101,
+                b"begin-v5",
+            ),
+            catalog_storage_record(
+                WalRecordKind::CatalogChangeApply,
+                61,
+                Some(60),
+                101,
+                &first_payload,
+            ),
+            catalog_storage_record(
+                WalRecordKind::CatalogChangeApply,
+                62,
+                Some(61),
+                101,
+                &second_payload,
+            ),
+            catalog_storage_record(
+                WalRecordKind::CatalogChangeCommit,
+                63,
+                Some(62),
+                101,
+                b"commit-v5",
+            ),
+        ];
+
+        let report = replay_catalog_publications_from_wal(&records).expect("publication replay");
+        let publication = report
+            .last_durable_publication()
+            .expect("last durable publication");
+
+        assert_eq!(publication.apply_count(), 2);
+        assert_eq!(publication.apply_records[0].lsn, Lsn::new(61));
+        assert_eq!(publication.apply_records[1].lsn, Lsn::new(62));
+        assert_eq!(&publication.apply_records[0].catalog_record, &first_record);
+        assert_eq!(&publication.apply_records[1].catalog_record, &second_record);
+        assert_eq!(
+            publication.last_catalog_version(),
+            Some(CatalogVersion::new(16))
+        );
+    }
+
+    #[test]
+    fn test_storage_publication_bridge_rejects_malformed_apply_payload_before_publication() {
+        let records = vec![
+            catalog_storage_record(
+                WalRecordKind::CatalogChangeBegin,
+                70,
+                None,
+                102,
+                b"begin-v6",
+            ),
+            catalog_storage_record(
+                WalRecordKind::CatalogChangeApply,
+                71,
+                Some(70),
+                102,
+                b"not-a-catalog-frame",
+            ),
+            catalog_storage_record(
+                WalRecordKind::CatalogChangeCommit,
+                72,
+                Some(71),
+                102,
+                b"commit-v6",
+            ),
+        ];
+
+        let result = replay_catalog_publications_from_wal(&records);
+
+        assert!(result.is_err());
+        let message = result.unwrap_err().message().to_string();
+        assert!(message.contains("apply payload at LSN 71"));
+        assert!(message.contains("not a valid catalog record"));
+    }
+
+    #[test]
+    fn test_storage_publication_bridge_rejects_truncated_apply_payload_before_publication() {
+        let apply_record = procedure_added_record(507, 17);
+        let mut apply_payload = encode_catalog_apply_payload(&apply_record);
+        apply_payload.truncate(apply_payload.len() - 1);
+        let records = vec![
+            catalog_storage_record(
+                WalRecordKind::CatalogChangeBegin,
+                80,
+                None,
+                103,
+                b"begin-v7",
+            ),
+            catalog_storage_record(
+                WalRecordKind::CatalogChangeApply,
+                81,
+                Some(80),
+                103,
+                &apply_payload,
+            ),
+            catalog_storage_record(
+                WalRecordKind::CatalogChangeCommit,
+                82,
+                Some(81),
+                103,
+                b"commit-v7",
+            ),
+        ];
+
+        let result = replay_catalog_publications_from_wal(&records);
+
+        assert!(result.is_err());
+        let message = result.unwrap_err().message().to_string();
+        assert!(message.contains("apply payload at LSN 81"));
+        assert!(message.contains("frame length mismatch"));
+    }
+
+    #[test]
+    fn test_storage_publication_bridge_rejects_commit_before_begin() {
+        let records = vec![catalog_storage_record(
+            WalRecordKind::CatalogChangeCommit,
+            90,
+            None,
+            104,
+            b"commit-orphan",
+        )];
+
+        let result = replay_catalog_publications_from_wal(&records);
+
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .message()
+                .contains("commit observed before")
         );
     }
 

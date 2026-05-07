@@ -12,13 +12,19 @@
 //!
 //! The "no-silent-drop" guarantee is the core invariant: when a component
 //! changes, the resulting key MUST NOT equal the old key, MUST have a different
-//! digest, and a future runtime cache MUST NOT reuse plans across the boundary.
+//! digest, and the runtime cache MUST NOT reuse plans across the boundary.
 
 use andromeda_catalog::{
-    CardinalityBucket, PlanCacheKey, PlanCacheKeyError, PlanClass, PlanShapeFingerprint,
-    PlanShapeFingerprintBuilder, PolicyVersion, ProcedureContractBinding, StatsVersion,
+    AdvisoryEvidenceStatus, BoundedPlanCache, CardinalityBucket, EvidenceConfidence, EvidenceScore,
+    PLAN_SELECTION_MAX_SCENARIO_EVIDENCE, PlanCacheError, PlanCacheKey, PlanCacheKeyError,
+    PlanCacheMissReason, PlanCandidate, PlanCandidateId, PlanCandidateRank, PlanClass,
+    PlanDecisionOutcome, PlanSelectionError, PlanShapeFingerprint, PlanShapeFingerprintBuilder,
+    PolicyVersion, ProcedureContractBinding, ScenarioEvidence, ScenarioId, ScenarioKind,
+    ScenarioTarget, StatsVersion, ValidityWindow, classify_advisory_evidence_for_key,
+    select_minimal_plan,
 };
-use andromeda_core::{CatalogVersion, ContractHash, ProcedureId};
+use andromeda_core::{CatalogVersion, ContractHash, EngineTimestamp, ProcedureId};
+use andromeda_observe::{CriticalDecisionKind, TraceId};
 
 /// Helper to construct a test binding with all fields customizable.
 fn binding(
@@ -52,6 +58,43 @@ fn shaped_fingerprint_alt() -> PlanShapeFingerprint {
         .push_parameter(0x03, false, 2)
         .push_cardinality(0, CardinalityBucket::classify(10_000))
         .finish()
+}
+
+fn ts(ms: u64) -> EngineTimestamp {
+    EngineTimestamp::from_unix_millis(ms)
+}
+
+fn candidate(id: u64, plan_class: PlanClass, rank: u16, digest_byte: u8) -> PlanCandidate {
+    PlanCandidate::new(
+        PlanCandidateId::new(id).expect("candidate id must be non-zero"),
+        plan_class,
+        PlanCandidateRank::from_permille(rank).expect("rank must be bounded"),
+        [digest_byte; 32],
+    )
+    .expect("candidate digest must be non-zero")
+}
+
+fn scenario_evidence_for_key(
+    key: PlanCacheKey,
+    scenario_id: u64,
+    score: u16,
+    confidence: u16,
+) -> ScenarioEvidence {
+    ScenarioEvidence::new(
+        ScenarioId::new(scenario_id).expect("scenario id must be non-zero"),
+        ScenarioKind::Microbenchmark,
+        ScenarioTarget {
+            procedure_id: key.procedure_id,
+            catalog_version: key.catalog_version,
+            stats_version: key.stats_version,
+            plan_class: Some(key.plan_class),
+            contract_hash: Some(key.contract_hash),
+        },
+        EvidenceScore::from_permille(score).expect("score must be bounded"),
+        EvidenceConfidence::from_permille(confidence).expect("confidence must be bounded"),
+        ValidityWindow::new(ts(100), ts(200)).expect("validity window must be bounded"),
+    )
+    .expect("scenario evidence target must be valid")
 }
 
 // TEST 1: Cache key stability with no changes
@@ -541,4 +584,562 @@ fn test_plan_cache_rejects_all_zero_identities() {
         let err = PlanCacheKey::build(&bind, PlanClass::ParameterShape, fp);
         assert!(err.is_err(), "{}should be rejected", label);
     }
+}
+
+#[test]
+fn minimal_plan_selection_keeps_scenario_evidence_advisory_only() {
+    let bind = binding(800, 60, 0xAA, 12, 0xBB);
+    let key = PlanCacheKey::build(&bind, PlanClass::StatsAdaptive, shaped_fingerprint())
+        .expect("valid stats-adaptive key");
+    let candidates = [
+        candidate(20, PlanClass::StatsAdaptive, 400, 0x20),
+        candidate(10, PlanClass::StatsAdaptive, 100, 0x10),
+        candidate(30, PlanClass::Cardinality, 0, 0x30),
+    ];
+    let evidence = scenario_evidence_for_key(key, 1, 1_000, 1_000);
+
+    assert!(!evidence.is_authoritative());
+    assert_eq!(
+        classify_advisory_evidence_for_key(&key, &evidence, ts(150)),
+        AdvisoryEvidenceStatus::AcceptedAdvisory
+    );
+
+    let selection =
+        select_minimal_plan(key, &candidates, &[evidence], ts(150), TraceId::new(16_001))
+            .expect("bounded candidates and evidence should select");
+
+    assert_eq!(
+        selection.selected().plan_id(),
+        PlanCandidateId::new(10).unwrap(),
+        "static rank remains the selector authority"
+    );
+    assert_eq!(selection.trace().advisory_evidence().supplied_count(), 1);
+    assert_eq!(selection.trace().advisory_evidence().accepted_count(), 1);
+    assert_eq!(selection.trace().outcome(), PlanDecisionOutcome::Selected);
+
+    let trace = selection.trace().as_decision_trace();
+    assert_eq!(trace.decision, CriticalDecisionKind::PlanSelection);
+    assert!(trace.has_explanation());
+    assert!(trace.reason.contains("advisory_only=true"));
+    assert!(trace.reason.contains("contract_hash="));
+    assert!(
+        trace
+            .reason
+            .contains("version_binding=ContractHash+CatalogVersion+StatsVersion")
+    );
+    assert!(trace.reason.contains("stats_version=12"));
+    assert!(trace.reason.contains("policy_version="));
+    assert!(
+        trace
+            .reason
+            .contains("scenario_evidence_statuses=accepted-advisory:1")
+    );
+}
+
+#[test]
+fn minimal_plan_selection_traces_rejected_stale_scenario_evidence_without_changing_selection() {
+    let bind = binding(801, 61, 0xAA, 13, 0xBB);
+    let key = PlanCacheKey::build(&bind, PlanClass::ParameterShape, shaped_fingerprint())
+        .expect("valid parameter-shape key");
+    let candidates = [
+        candidate(11, PlanClass::ParameterShape, 200, 0x11),
+        candidate(12, PlanClass::ParameterShape, 300, 0x12),
+    ];
+    let mut stale_target_evidence = scenario_evidence_for_key(key, 2, 1_000, 1_000);
+    stale_target_evidence = ScenarioEvidence::new(
+        stale_target_evidence.scenario_id(),
+        stale_target_evidence.kind(),
+        ScenarioTarget {
+            procedure_id: key.procedure_id,
+            catalog_version: key.catalog_version,
+            stats_version: StatsVersion::new(key.stats_version.get() + 1),
+            plan_class: Some(key.plan_class),
+            contract_hash: Some(key.contract_hash),
+        },
+        stale_target_evidence.score(),
+        stale_target_evidence.confidence(),
+        stale_target_evidence.validity(),
+    )
+    .expect("stale target is structurally valid evidence");
+
+    assert_eq!(
+        classify_advisory_evidence_for_key(&key, &stale_target_evidence, ts(150)),
+        AdvisoryEvidenceStatus::StatsVersionMismatch
+    );
+
+    let selection = select_minimal_plan(
+        key,
+        &candidates,
+        &[stale_target_evidence],
+        ts(150),
+        TraceId::new(16_002),
+    )
+    .expect("stale evidence should be rejected, not fatal");
+
+    assert_eq!(
+        selection.selected().plan_id(),
+        PlanCandidateId::new(11).unwrap()
+    );
+    assert_eq!(selection.trace().advisory_evidence().accepted_count(), 0);
+    assert_eq!(selection.trace().advisory_evidence().rejected_count(), 1);
+    assert_eq!(
+        selection
+            .trace()
+            .advisory_evidence()
+            .status_count(AdvisoryEvidenceStatus::StatsVersionMismatch),
+        1
+    );
+    assert!(
+        selection
+            .trace()
+            .as_decision_trace()
+            .reason
+            .contains("scenario_evidence_rejected=1")
+    );
+}
+
+#[test]
+fn minimal_plan_selection_rejects_stale_catalog_scenario_evidence_without_changing_selection() {
+    let bind = binding(802, 62, 0xAA, 14, 0xBB);
+    let key = PlanCacheKey::build(&bind, PlanClass::ParameterShape, shaped_fingerprint())
+        .expect("valid parameter-shape key");
+    let candidates = [
+        candidate(21, PlanClass::ParameterShape, 200, 0x21),
+        candidate(22, PlanClass::ParameterShape, 300, 0x22),
+    ];
+    let mut stale_catalog_evidence = scenario_evidence_for_key(key, 3, 1_000, 1_000);
+    stale_catalog_evidence = ScenarioEvidence::new(
+        stale_catalog_evidence.scenario_id(),
+        stale_catalog_evidence.kind(),
+        ScenarioTarget {
+            procedure_id: key.procedure_id,
+            catalog_version: CatalogVersion::new(key.catalog_version.get() + 1),
+            stats_version: key.stats_version,
+            plan_class: Some(key.plan_class),
+            contract_hash: Some(key.contract_hash),
+        },
+        stale_catalog_evidence.score(),
+        stale_catalog_evidence.confidence(),
+        stale_catalog_evidence.validity(),
+    )
+    .expect("stale catalog target is structurally valid evidence");
+
+    assert_eq!(
+        classify_advisory_evidence_for_key(&key, &stale_catalog_evidence, ts(150)),
+        AdvisoryEvidenceStatus::CatalogVersionMismatch
+    );
+
+    let selection = select_minimal_plan(
+        key,
+        &candidates,
+        &[stale_catalog_evidence],
+        ts(150),
+        TraceId::new(16_013),
+    )
+    .expect("stale catalog evidence should be rejected, not fatal");
+
+    assert_eq!(
+        selection.selected().plan_id(),
+        PlanCandidateId::new(21).unwrap()
+    );
+    assert_eq!(selection.trace().advisory_evidence().accepted_count(), 0);
+    assert_eq!(selection.trace().advisory_evidence().rejected_count(), 1);
+    assert_eq!(
+        selection
+            .trace()
+            .advisory_evidence()
+            .status_count(AdvisoryEvidenceStatus::CatalogVersionMismatch),
+        1
+    );
+    assert!(
+        selection
+            .trace()
+            .as_decision_trace()
+            .reason
+            .contains("catalog_version=62")
+    );
+}
+
+#[test]
+fn bounded_plan_cache_requires_exact_versioned_key_for_hit() {
+    let base_bind = binding(900, 70, 0xAA, 14, 0xBB);
+    let base_key = PlanCacheKey::build(
+        &base_bind,
+        PlanClass::Singleton,
+        PlanShapeFingerprint::empty(),
+    )
+    .expect("valid singleton key");
+    let candidates = [candidate(1, PlanClass::Singleton, 0, 0x41)];
+    let selection = select_minimal_plan(base_key, &candidates, &[], ts(150), TraceId::new(16_003))
+        .expect("singleton candidate should select");
+
+    let mut cache = BoundedPlanCache::new(2).expect("bounded non-zero capacity");
+    let insert = cache
+        .insert_selection(&selection, TraceId::new(16_004))
+        .expect("selected plan can be cached");
+    assert_eq!(
+        insert.insert_trace().outcome(),
+        PlanDecisionOutcome::CacheInsert
+    );
+
+    let hit = cache
+        .lookup(base_key, TraceId::new(16_005))
+        .expect("non-zero trace id permits lookup evidence");
+    assert!(hit.is_hit(), "same full key should hit");
+    assert_eq!(hit.trace().outcome(), PlanDecisionOutcome::CacheHit);
+    assert_eq!(hit.trace().cache_miss_reason(), None);
+    let hit_reason = hit.trace().as_decision_trace().reason;
+    assert!(hit_reason.contains("key_digest="));
+    assert!(hit_reason.contains("contract_hash="));
+    assert!(hit_reason.contains("catalog_version=70"));
+    assert!(hit_reason.contains("stats_version=14"));
+    assert!(hit_reason.contains("policy_version="));
+    assert!(hit_reason.contains("plan_class=Singleton"));
+    assert!(hit_reason.contains("shape_digest="));
+    assert!(hit_reason.contains("cache_miss_reason=none"));
+
+    let changed_catalog = PlanCacheKey::build(
+        &binding(900, 71, 0xAA, 14, 0xBB),
+        PlanClass::Singleton,
+        PlanShapeFingerprint::empty(),
+    )
+    .unwrap();
+    let changed_stats = PlanCacheKey::build(
+        &binding(900, 70, 0xAA, 15, 0xBB),
+        PlanClass::Singleton,
+        PlanShapeFingerprint::empty(),
+    )
+    .unwrap();
+    let changed_contract = PlanCacheKey::build(
+        &binding(900, 70, 0xCC, 14, 0xBB),
+        PlanClass::Singleton,
+        PlanShapeFingerprint::empty(),
+    )
+    .unwrap();
+    let changed_policy = PlanCacheKey::build(
+        &binding(900, 70, 0xAA, 14, 0xDD),
+        PlanClass::Singleton,
+        PlanShapeFingerprint::empty(),
+    )
+    .unwrap();
+    let changed_plan_class =
+        PlanCacheKey::build(&base_bind, PlanClass::ParameterShape, shaped_fingerprint()).unwrap();
+
+    for (key, expected_reason) in [
+        (changed_catalog, PlanCacheMissReason::CatalogVersionMismatch),
+        (changed_stats, PlanCacheMissReason::StatsVersionMismatch),
+        (changed_contract, PlanCacheMissReason::ContractHashMismatch),
+        (changed_policy, PlanCacheMissReason::PolicyVersionMismatch),
+        (changed_plan_class, PlanCacheMissReason::PlanClassMismatch),
+    ] {
+        let miss = cache
+            .lookup(key, TraceId::new(16_006))
+            .expect("non-zero trace id permits lookup evidence");
+        assert!(!miss.is_hit(), "changed key component must miss");
+        assert_eq!(miss.trace().outcome(), PlanDecisionOutcome::CacheMiss);
+        assert_eq!(miss.trace().cache_miss_reason(), Some(expected_reason));
+        let reason = miss.trace().as_decision_trace().reason;
+        assert!(reason.contains("cache-miss"));
+        assert!(reason.contains(&format!("cache_miss_reason={}", expected_reason.as_str())));
+        assert!(reason.contains("policy_version="));
+    }
+}
+
+#[test]
+fn bounded_plan_cache_evicts_oldest_entry_with_trace() {
+    let bind_a = binding(901, 80, 0xAA, 16, 0xBB);
+    let bind_b = binding(902, 80, 0xAA, 16, 0xBB);
+    let key_a =
+        PlanCacheKey::build(&bind_a, PlanClass::Singleton, PlanShapeFingerprint::empty()).unwrap();
+    let key_b =
+        PlanCacheKey::build(&bind_b, PlanClass::Singleton, PlanShapeFingerprint::empty()).unwrap();
+    let selected_a = select_minimal_plan(
+        key_a,
+        &[candidate(1, PlanClass::Singleton, 0, 0x51)],
+        &[],
+        ts(150),
+        TraceId::new(16_007),
+    )
+    .unwrap();
+    let selected_b = select_minimal_plan(
+        key_b,
+        &[candidate(2, PlanClass::Singleton, 0, 0x52)],
+        &[],
+        ts(150),
+        TraceId::new(16_008),
+    )
+    .unwrap();
+
+    let mut cache = BoundedPlanCache::new(1).unwrap();
+    cache
+        .insert_selection(&selected_a, TraceId::new(16_009))
+        .unwrap();
+    let insert_b = cache
+        .insert_selection(&selected_b, TraceId::new(16_010))
+        .unwrap();
+
+    assert_eq!(cache.len(), 1);
+    assert_eq!(insert_b.evicted().unwrap().key(), key_a);
+    assert_eq!(
+        insert_b.eviction_trace().unwrap().outcome(),
+        PlanDecisionOutcome::CacheEvict
+    );
+    assert!(
+        !cache
+            .lookup(key_a, TraceId::new(16_011))
+            .expect("non-zero trace id permits miss evidence")
+            .is_hit()
+    );
+    assert!(
+        cache
+            .lookup(key_b, TraceId::new(16_012))
+            .expect("non-zero trace id permits hit evidence")
+            .is_hit()
+    );
+}
+
+#[test]
+fn minimal_plan_selection_rejects_zero_trace_id_before_emitting_trace() {
+    let bind = binding(910, 81, 0xAA, 17, 0xBB);
+    let key =
+        PlanCacheKey::build(&bind, PlanClass::Singleton, PlanShapeFingerprint::empty()).unwrap();
+    let candidates = [candidate(3, PlanClass::Singleton, 0, 0x61)];
+
+    let error = select_minimal_plan(key, &candidates, &[], ts(150), TraceId::new(0)).unwrap_err();
+
+    assert_eq!(error, PlanSelectionError::TraceIdZero);
+}
+
+#[test]
+fn bounded_plan_cache_rejects_zero_trace_id_for_trace_producing_operations() {
+    let bind = binding(911, 81, 0xAA, 17, 0xBB);
+    let key =
+        PlanCacheKey::build(&bind, PlanClass::Singleton, PlanShapeFingerprint::empty()).unwrap();
+    let selected = select_minimal_plan(
+        key,
+        &[candidate(4, PlanClass::Singleton, 0, 0x62)],
+        &[],
+        ts(150),
+        TraceId::new(16_015),
+    )
+    .unwrap();
+
+    let mut cache = BoundedPlanCache::new(2).unwrap();
+    let insert_error = cache
+        .insert_selection(&selected, TraceId::new(0))
+        .unwrap_err();
+    assert_eq!(insert_error, PlanCacheError::TraceIdZero);
+    assert_eq!(
+        cache.len(),
+        0,
+        "zero-trace insert must fail before mutating the cache"
+    );
+
+    cache
+        .insert_selection(&selected, TraceId::new(16_016))
+        .expect("non-zero trace id permits insert evidence");
+    let lookup_error = cache.lookup(key, TraceId::new(0)).unwrap_err();
+    assert_eq!(lookup_error, PlanCacheError::TraceIdZero);
+
+    let hit = cache
+        .lookup(key, TraceId::new(16_017))
+        .expect("non-zero trace id permits lookup evidence");
+    assert!(hit.is_hit());
+    assert!(!hit.trace().trace_id().is_zero());
+}
+
+#[test]
+fn scenario_evidence_key_mismatches_are_rejected_and_traced_without_selecting() {
+    let bind = binding(950, 82, 0xAA, 18, 0xBB);
+    let key = PlanCacheKey::build(&bind, PlanClass::StatsAdaptive, shaped_fingerprint())
+        .expect("valid stats-adaptive key");
+    let candidates = [
+        candidate(30, PlanClass::StatsAdaptive, 100, 0x30),
+        candidate(31, PlanClass::StatsAdaptive, 900, 0x31),
+    ];
+
+    let plan_class_mismatch = ScenarioEvidence::new(
+        ScenarioId::new(30).unwrap(),
+        ScenarioKind::Microbenchmark,
+        ScenarioTarget {
+            procedure_id: key.procedure_id,
+            catalog_version: key.catalog_version,
+            stats_version: key.stats_version,
+            plan_class: Some(PlanClass::Cardinality),
+            contract_hash: Some(key.contract_hash),
+        },
+        EvidenceScore::from_permille(1_000).unwrap(),
+        EvidenceConfidence::from_permille(1_000).unwrap(),
+        ValidityWindow::new(ts(100), ts(200)).unwrap(),
+    )
+    .unwrap();
+    let missing_contract = ScenarioEvidence::new(
+        ScenarioId::new(31).unwrap(),
+        ScenarioKind::Microbenchmark,
+        ScenarioTarget {
+            procedure_id: key.procedure_id,
+            catalog_version: key.catalog_version,
+            stats_version: key.stats_version,
+            plan_class: Some(key.plan_class),
+            contract_hash: None,
+        },
+        EvidenceScore::from_permille(1_000).unwrap(),
+        EvidenceConfidence::from_permille(1_000).unwrap(),
+        ValidityWindow::new(ts(100), ts(200)).unwrap(),
+    )
+    .unwrap();
+    let contract_mismatch = ScenarioEvidence::new(
+        ScenarioId::new(32).unwrap(),
+        ScenarioKind::Microbenchmark,
+        ScenarioTarget {
+            procedure_id: key.procedure_id,
+            catalog_version: key.catalog_version,
+            stats_version: key.stats_version,
+            plan_class: Some(key.plan_class),
+            contract_hash: Some(ContractHash::new([0xCC; ContractHash::LEN])),
+        },
+        EvidenceScore::from_permille(1_000).unwrap(),
+        EvidenceConfidence::from_permille(1_000).unwrap(),
+        ValidityWindow::new(ts(100), ts(200)).unwrap(),
+    )
+    .unwrap();
+    let expired = ScenarioEvidence::new(
+        ScenarioId::new(33).unwrap(),
+        ScenarioKind::Microbenchmark,
+        ScenarioTarget {
+            procedure_id: key.procedure_id,
+            catalog_version: key.catalog_version,
+            stats_version: key.stats_version,
+            plan_class: Some(key.plan_class),
+            contract_hash: Some(key.contract_hash),
+        },
+        EvidenceScore::from_permille(1_000).unwrap(),
+        EvidenceConfidence::from_permille(1_000).unwrap(),
+        ValidityWindow::new(ts(100), ts(120)).unwrap(),
+    )
+    .unwrap();
+    let not_yet_valid = ScenarioEvidence::new(
+        ScenarioId::new(34).unwrap(),
+        ScenarioKind::Microbenchmark,
+        ScenarioTarget {
+            procedure_id: key.procedure_id,
+            catalog_version: key.catalog_version,
+            stats_version: key.stats_version,
+            plan_class: Some(key.plan_class),
+            contract_hash: Some(key.contract_hash),
+        },
+        EvidenceScore::from_permille(1_000).unwrap(),
+        EvidenceConfidence::from_permille(1_000).unwrap(),
+        ValidityWindow::new(ts(180), ts(220)).unwrap(),
+    )
+    .unwrap();
+
+    assert_eq!(
+        classify_advisory_evidence_for_key(&key, &plan_class_mismatch, ts(150)),
+        AdvisoryEvidenceStatus::PlanClassMismatch
+    );
+    assert_eq!(
+        classify_advisory_evidence_for_key(&key, &missing_contract, ts(150)),
+        AdvisoryEvidenceStatus::ContractHashMissing
+    );
+    assert_eq!(
+        classify_advisory_evidence_for_key(&key, &contract_mismatch, ts(150)),
+        AdvisoryEvidenceStatus::ContractHashMismatch
+    );
+    assert_eq!(
+        classify_advisory_evidence_for_key(&key, &expired, ts(150)),
+        AdvisoryEvidenceStatus::Expired
+    );
+    assert_eq!(
+        classify_advisory_evidence_for_key(&key, &not_yet_valid, ts(150)),
+        AdvisoryEvidenceStatus::NotYetValid
+    );
+
+    let selection = select_minimal_plan(
+        key,
+        &candidates,
+        &[
+            plan_class_mismatch,
+            missing_contract,
+            contract_mismatch,
+            expired,
+            not_yet_valid,
+        ],
+        ts(150),
+        TraceId::new(16_013),
+    )
+    .expect("rejected advisory evidence must not block deterministic selection");
+
+    assert_eq!(
+        selection.selected().plan_id(),
+        PlanCandidateId::new(30).unwrap()
+    );
+    assert_eq!(selection.trace().advisory_evidence().accepted_count(), 0);
+    assert_eq!(selection.trace().advisory_evidence().rejected_count(), 5);
+    assert_eq!(
+        selection
+            .trace()
+            .advisory_evidence()
+            .status_count(AdvisoryEvidenceStatus::PlanClassMismatch),
+        1
+    );
+    assert_eq!(
+        selection
+            .trace()
+            .advisory_evidence()
+            .status_count(AdvisoryEvidenceStatus::ContractHashMissing),
+        1
+    );
+    assert_eq!(
+        selection
+            .trace()
+            .advisory_evidence()
+            .status_count(AdvisoryEvidenceStatus::ContractHashMismatch),
+        1
+    );
+    assert_eq!(
+        selection
+            .trace()
+            .advisory_evidence()
+            .status_count(AdvisoryEvidenceStatus::Expired),
+        1
+    );
+    assert_eq!(
+        selection
+            .trace()
+            .advisory_evidence()
+            .status_count(AdvisoryEvidenceStatus::NotYetValid),
+        1
+    );
+
+    let trace = selection.trace().as_decision_trace();
+    assert_eq!(trace.decision, CriticalDecisionKind::PlanSelection);
+    assert!(trace.reason.contains("catalog_version=82"));
+    assert!(trace.reason.contains("stats_version=18"));
+    assert!(trace.reason.contains("plan_class=StatsAdaptive"));
+    assert!(trace.reason.contains("scenario_evidence_supplied=5"));
+    assert!(trace.reason.contains("scenario_evidence_rejected=5"));
+    assert!(trace.reason.contains("plan-class-mismatch:1"));
+    assert!(trace.reason.contains("contract-hash-missing:1"));
+    assert!(trace.reason.contains("contract-hash-mismatch:1"));
+    assert!(trace.reason.contains("expired:1"));
+    assert!(trace.reason.contains("not-yet-valid:1"));
+    assert!(trace.reason.contains("advisory_only=true"));
+}
+
+#[test]
+fn scenario_evidence_batch_size_is_bounded_before_plan_selection() {
+    let bind = binding(951, 83, 0xAA, 19, 0xBB);
+    let key = PlanCacheKey::build(&bind, PlanClass::StatsAdaptive, shaped_fingerprint())
+        .expect("valid stats-adaptive key");
+    let candidates = [candidate(40, PlanClass::StatsAdaptive, 100, 0x40)];
+
+    let mut evidence = Vec::new();
+    for index in 0..=PLAN_SELECTION_MAX_SCENARIO_EVIDENCE {
+        evidence.push(scenario_evidence_for_key(key, 40 + index as u64, 900, 900));
+    }
+
+    let error = select_minimal_plan(key, &candidates, &evidence, ts(150), TraceId::new(16_014))
+        .unwrap_err();
+    assert_eq!(error, PlanSelectionError::TooManyScenarioEvidence);
 }

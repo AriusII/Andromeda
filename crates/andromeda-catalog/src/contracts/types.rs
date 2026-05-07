@@ -92,11 +92,69 @@ impl ContractCompatibilityDiagnostic {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResultStreamCardinality {
+    One,
+    OptionalOne,
+    Many,
+    NonEmptyMany,
+}
+
+impl ResultStreamCardinality {
+    pub const fn legacy_row_count_exact_required(self) -> bool {
+        matches!(self, Self::One | Self::NonEmptyMany)
+    }
+
+    pub const fn min_row_count(self) -> u64 {
+        match self {
+            Self::One | Self::NonEmptyMany => 1,
+            Self::OptionalOne | Self::Many => 0,
+        }
+    }
+
+    pub const fn intrinsic_max_row_count(self) -> Option<u64> {
+        match self {
+            Self::One | Self::OptionalOne => Some(1),
+            Self::Many | Self::NonEmptyMany => None,
+        }
+    }
+
+    pub const fn stable_tag(self) -> u8 {
+        match self {
+            Self::One => 0,
+            Self::OptionalOne => 1,
+            Self::Many => 2,
+            Self::NonEmptyMany => 3,
+        }
+    }
+
+    pub const fn from_legacy_row_count_exact_required(required: bool) -> Self {
+        if required { Self::One } else { Self::Many }
+    }
+
+    pub fn from_stable_tag(tag: u8) -> AndromedaResult<Self> {
+        match tag {
+            0 => Ok(Self::One),
+            1 => Ok(Self::OptionalOne),
+            2 => Ok(Self::Many),
+            3 => Ok(Self::NonEmptyMany),
+            _ => Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "unknown result stream cardinality tag",
+            )),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResultStreamContract {
     pub stream_id: u64,
     pub name: String,
     pub columns: Vec<ColumnDescriptor>,
+    pub cardinality: ResultStreamCardinality,
+    /// Legacy v0/v1 compatibility projection. New code must use
+    /// `cardinality`; validation requires this flag to remain the deterministic
+    /// projection of the full cardinality.
     pub row_count_exact_required: bool,
 }
 
@@ -116,11 +174,20 @@ impl ResultStreamContract {
             ));
         }
 
-        validate_columns(&self.columns)
+        validate_columns(&self.columns)?;
+
+        if self.row_count_exact_required != self.cardinality.legacy_row_count_exact_required() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "result stream legacy row-count flag must match full cardinality",
+            ));
+        }
+
+        Ok(())
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct StatsVersion(u64);
 
 impl StatsVersion {
@@ -130,6 +197,10 @@ impl StatsVersion {
 
     pub const fn get(self) -> u64 {
         self.0
+    }
+
+    pub const fn is_zero(self) -> bool {
+        self.0 == 0
     }
 }
 
@@ -174,12 +245,6 @@ impl PolicyVersion {
     }
 }
 
-impl Default for PolicyVersion {
-    fn default() -> Self {
-        Self::zero()
-    }
-}
-
 /// Full procedure binding evidence: the four identities that the SRPL
 /// specification requires every procedure invocation to bind against.
 ///
@@ -198,6 +263,24 @@ pub struct ProcedureContractBinding {
 }
 
 impl ProcedureContractBinding {
+    pub fn new(
+        procedure_id: ProcedureId,
+        catalog_version: CatalogVersion,
+        contract_hash: ContractHash,
+        stats_version: StatsVersion,
+        policy_version: PolicyVersion,
+    ) -> AndromedaResult<Self> {
+        let binding = Self {
+            procedure_id,
+            catalog_version,
+            contract_hash,
+            stats_version,
+            policy_version,
+        };
+        binding.validate()?;
+        Ok(binding)
+    }
+
     pub fn validate(&self) -> AndromedaResult<()> {
         if self.procedure_id.get() == 0 {
             return Err(AndromedaError::new(
@@ -217,7 +300,7 @@ impl ProcedureContractBinding {
                 "procedure binding contract hash must not be zero",
             ));
         }
-        if self.stats_version.get() == 0 {
+        if self.stats_version.is_zero() {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Contract,
                 "procedure binding stats version must not be zero",
@@ -340,7 +423,7 @@ impl ProcedureContract {
         self.object.validate_for_definition(ObjectKind::Procedure)?;
         self.as_ref().validate()?;
         validate_columns_allow_empty(&self.inputs)?;
-        if self.stats_version.get() == 0 {
+        if self.stats_version.is_zero() {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Contract,
                 "procedure stats version must not be zero",

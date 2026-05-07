@@ -84,6 +84,25 @@ impl WalRecordKind {
                 | Self::CatalogChangeApply
                 | Self::CatalogChangeCommit
                 | Self::SecurityAuditAppend
+                | Self::BTreeInsert
+                | Self::BTreeDelete
+                | Self::BTreeSplit
+                | Self::BTreeMerge
+        )
+    }
+
+    /// Returns `true` for index access-path mutations whose durable WAL payload
+    /// is validated during replay, but whose inline redo remains gated behind
+    /// an explicit rebuild/quarantine boundary.
+    pub const fn requires_access_path_rebuild_gate(self) -> bool {
+        matches!(
+            self,
+            Self::IndexInsert
+                | Self::IndexDelete
+                | Self::BTreeInsert
+                | Self::BTreeDelete
+                | Self::BTreeSplit
+                | Self::BTreeMerge
         )
     }
 }
@@ -344,5 +363,19 @@ mod tests {
             record.validate().unwrap_err().kind(),
             AndromedaErrorKind::Storage
         );
+    }
+
+    #[test]
+    fn wal_taxonomy_marks_access_path_rebuild_gate_kinds() {
+        assert!(WalRecordKind::IndexInsert.requires_access_path_rebuild_gate());
+        assert!(WalRecordKind::IndexDelete.requires_access_path_rebuild_gate());
+        assert!(WalRecordKind::BTreeInsert.requires_access_path_rebuild_gate());
+        assert!(WalRecordKind::BTreeDelete.requires_access_path_rebuild_gate());
+        assert!(WalRecordKind::BTreeSplit.requires_access_path_rebuild_gate());
+        assert!(WalRecordKind::BTreeMerge.requires_access_path_rebuild_gate());
+
+        assert!(!WalRecordKind::RowInsert.requires_access_path_rebuild_gate());
+        assert!(!WalRecordKind::TxCommit.requires_access_path_rebuild_gate());
+        assert!(!WalRecordKind::ManifestSwitch.requires_access_path_rebuild_gate());
     }
 }

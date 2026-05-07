@@ -446,8 +446,8 @@ fn validate_dense_columns_allow_empty(
 mod tests {
     use super::*;
     use andromeda_catalog::{
-        AccessMode, CatalogObjectRef, IsolationPolicy, ObjectKind, ResultStreamContract,
-        TransactionPolicy,
+        AccessMode, CatalogObjectRef, IsolationPolicy, ObjectKind, ResultStreamCardinality,
+        ResultStreamContract, TransactionPolicy,
     };
     use andromeda_core::{CatalogObjectId, ScalarType, TimestampType, TypeDescriptor};
 
@@ -509,6 +509,7 @@ mod tests {
                     )),
                     ordinal: 0,
                 }],
+                cardinality: ResultStreamCardinality::One,
                 row_count_exact_required: true,
             }],
             transaction_policy: TransactionPolicy {

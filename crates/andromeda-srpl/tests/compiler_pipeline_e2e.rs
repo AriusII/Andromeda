@@ -2,9 +2,11 @@ use andromeda_catalog::{
     AccessMode, CatalogDefinition, CatalogObjectRef, CatalogSnapshot, CompatibilityPolicy,
     DefinitionBatch, DefinitionBatchId, DefinitionOperation, INVENTORY_DATABASE_ID,
     INVENTORY_DEFINITION_BATCH_ID, INVENTORY_NAMESPACE_ID, IsolationPolicy, MultiResultPolicy,
-    ObjectKind, ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName, ResultMetadataPolicy,
-    StatsVersion, StructuredObjectDefinition, TransactionPolicy, inventory_domain_definition_batch,
-    inventory_reserve_stock_contract, inventory_reserve_stock_contract_candidate,
+    ObjectKind, ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName,
+    ResultMetadataPolicy, ResultStreamCardinality, ResultStreamContract, StatsVersion,
+    StructuredObjectDefinition, TransactionPolicy, inventory_domain_definition_batch,
+    inventory_protocol_layout_ref, inventory_reserve_stock_contract,
+    inventory_reserve_stock_contract_candidate,
 };
 use andromeda_core::{
     AndromedaErrorKind, CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash,
@@ -22,8 +24,9 @@ use andromeda_srpl::{
         lower_ir_to_catalog_definition, lower_ir_to_contract_candidate, parse_procedure_signature,
     },
     procedure_model::{
-        Cardinality, ProcedureSignature, ResultContract, SrplBusinessOperationKindIr,
-        SrplProcedureContractMetadata, SrplProcedureIr, SrplValueIr,
+        Cardinality, ProcedureSignature, ResultContract, SrplBusinessOperationIr,
+        SrplBusinessOperationKindIr, SrplEmitValueIr, SrplProcedureBodyIr,
+        SrplProcedureContractMetadata, SrplProcedureIr, SrplResultStreamIr, SrplValueIr,
     },
     source_location::SrplSource,
 };
@@ -96,6 +99,157 @@ fn parser_diagnostics_include_phase_and_span() {
 }
 
 #[test]
+fn parser_accepts_documented_cardinality_phrases_with_stable_spans() {
+    let optional_source = "procedure X accepts (P i64) returns R optional one (C bool);";
+    let optional_ast = parse_procedure_signature(optional_source).unwrap();
+    let optional_cardinality = &optional_ast.results[0].cardinality;
+
+    assert_eq!(optional_cardinality.value, Cardinality::OptionalOne);
+    assert_eq!(
+        &optional_source[optional_cardinality.span.start..optional_cardinality.span.end],
+        "optional one"
+    );
+
+    let nonempty_source = "procedure X accepts (P i64) returns R nonempty many (C bool);";
+    let nonempty_ast = parse_procedure_signature(nonempty_source).unwrap();
+    let nonempty_cardinality = &nonempty_ast.results[0].cardinality;
+
+    assert_eq!(nonempty_cardinality.value, Cardinality::NonEmptyMany);
+    assert_eq!(
+        &nonempty_source[nonempty_cardinality.span.start..nonempty_cardinality.span.end],
+        "nonempty many"
+    );
+}
+
+#[test]
+fn parser_rejects_ambiguous_cardinality_phrases_with_stable_diagnostics() {
+    let cases = [
+        (
+            "procedure X accepts (P i64) returns R optional many (C bool);",
+            "SRPL optional cardinality must be written as `optional one`",
+        ),
+        (
+            "procedure X accepts (P i64) returns R nonempty one (C bool);",
+            "SRPL nonempty cardinality must be written as `nonempty many`",
+        ),
+        (
+            "procedure X accepts (P i64) returns R optional (C bool);",
+            "SRPL optional cardinality must be written as `optional one`",
+        ),
+    ];
+
+    for (source, expected_message) in cases {
+        let diagnostic = parse_procedure_signature(source)
+            .expect_err("ambiguous cardinality phrase must fail closed");
+
+        assert_eq!(diagnostic.phase, DiagnosticPhase::Parsing);
+        assert!(
+            diagnostic.message.contains(expected_message),
+            "unexpected diagnostic for {source}: {}",
+            diagnostic.message
+        );
+        let span = diagnostic
+            .location
+            .expect("cardinality diagnostic must retain a source span");
+        assert!(span.is_valid());
+        assert!(source.is_char_boundary(span.start));
+        assert!(source.is_char_boundary(span.end));
+    }
+}
+
+#[test]
+fn lexer_error_span_is_valid_utf8_boundary() {
+    let source = "procedure X accepts () returns R one (C bool); 😊";
+    let diagnostic = andromeda_srpl::procedure_compiler::lex(source).unwrap_err();
+
+    assert_eq!(diagnostic.phase, DiagnosticPhase::Lexing);
+    let span = diagnostic
+        .location
+        .expect("lexing diagnostic must include a byte span");
+    assert!(span.is_valid());
+    assert!(source.is_char_boundary(span.start));
+    assert!(source.is_char_boundary(span.end));
+    assert_eq!(&source[span.start..span.end], "😊");
+}
+
+#[test]
+fn compiler_rejects_ambient_absence_and_float_types_with_spans() {
+    let cases = [
+        (
+            "procedure X accepts (ProductId nullable) returns R one (C bool);",
+            "forbids nullable values",
+        ),
+        (
+            "procedure X accepts (ProductId optional) returns R one (C bool);",
+            "forbids nullable values",
+        ),
+        (
+            "procedure X accepts (ProductId maybe) returns R one (C bool);",
+            "forbids nullable values",
+        ),
+        (
+            "procedure X accepts (ProductId i64) returns R one (C null);",
+            "forbids nullable values",
+        ),
+        (
+            "procedure X accepts (ProductId i64) returns R one (C option);",
+            "forbids nullable values",
+        ),
+        (
+            "procedure X accepts (Price float) returns R one (C bool);",
+            "float scalar types are not permitted",
+        ),
+    ];
+
+    for (source, expected_message) in cases {
+        let diagnostic = compile_narrow_procedure_signature(source)
+            .expect_err("ambient absence and float types must be rejected");
+
+        assert_eq!(diagnostic.phase, DiagnosticPhase::Parsing);
+        assert!(
+            diagnostic.message.contains(expected_message),
+            "unexpected diagnostic for {source}: {}",
+            diagnostic.message
+        );
+        let span = diagnostic
+            .location
+            .expect("type rejection must retain a source span");
+        assert!(span.is_valid());
+        assert!(source.is_char_boundary(span.start));
+        assert!(source.is_char_boundary(span.end));
+        assert!(!&source[span.start..span.end].is_empty());
+    }
+}
+
+#[test]
+fn compiler_rejects_absence_keywords_as_identifiers_or_emit_values() {
+    let cases = [
+        "procedure X accepts (ProductId i64) returns R one (null bool);",
+        "procedure X accepts (ProductId i64) returns maybe one (C bool);",
+        "procedure X accepts () returns R one (C bool) body { emit R (null); }",
+        "procedure X accepts () returns R one (C bool) begin return R (maybe); end;",
+    ];
+
+    for source in cases {
+        let diagnostic = compile_narrow_procedure_signature(source)
+            .expect_err("absence keywords must not be accepted as ordinary SRPL identifiers");
+
+        assert_eq!(diagnostic.phase, DiagnosticPhase::Parsing);
+        assert!(
+            diagnostic.message.contains("reserves absence keywords"),
+            "unexpected diagnostic for {source}: {}",
+            diagnostic.message
+        );
+        let span = diagnostic
+            .location
+            .expect("reserved absence keyword diagnostic must retain a source span");
+        assert!(span.is_valid());
+        assert!(source.is_char_boundary(span.start));
+        assert!(source.is_char_boundary(span.end));
+    }
+}
+
+#[test]
 fn forbidden_constructs_reject_before_lowering() {
     let diagnostic = compile_narrow_procedure_signature(
         "procedure X accepts () returns R many (C bool); execute sql",
@@ -104,6 +258,7 @@ fn forbidden_constructs_reject_before_lowering() {
 
     assert_eq!(diagnostic.phase, DiagnosticPhase::Binding);
     assert!(diagnostic.location.is_some());
+    assert!(diagnostic.message.contains("SRPL-FORBID-006"));
     assert!(diagnostic.message.contains("dynamic text SQL"));
 }
 
@@ -262,7 +417,11 @@ fn srpl_ir_lowers_to_catalog_contract_candidate_with_cardinality_mapping() {
         "Inventory.StockRequest"
     );
     assert_eq!(contract.result_streams[0].name, "Reservation");
-    assert!(contract.result_streams[0].row_count_exact_required);
+    assert_eq!(
+        contract.result_streams[0].cardinality,
+        ResultStreamCardinality::OptionalOne
+    );
+    assert!(!contract.result_streams[0].row_count_exact_required);
     assert!(contract.validate_canonical_hash().is_ok());
 }
 
@@ -280,6 +439,10 @@ fn contract_candidate_hash_is_stable_for_identical_srpl_and_metadata() {
 
     assert_eq!(first.contract_hash, second.contract_hash);
     assert!(!first.contract_hash.is_zero());
+    assert_eq!(
+        first.result_streams[0].cardinality,
+        ResultStreamCardinality::Many
+    );
     assert!(!first.result_streams[0].row_count_exact_required);
 }
 
@@ -533,6 +696,165 @@ fn inventory_catalog_snapshot() -> CatalogSnapshot {
     snapshot
 }
 
+fn cardinality_probe_snapshot(
+    procedure_name: &str,
+    result_name: &str,
+    cardinality: Cardinality,
+    emit_count: usize,
+) -> (SrplProcedureIr, CatalogSnapshot) {
+    let catalog_version = CatalogVersion::new(1);
+    let result_columns = vec![ColumnDescriptor {
+        name: "Present".to_string(),
+        data_type: TypeDescriptor::required(ScalarType::Bool),
+        ordinal: 0,
+    }];
+    let contract = ProcedureContractCandidate {
+        object: CatalogObjectRef {
+            object_id: CatalogObjectId::new(0x7100 + emit_count as u64),
+            name: QualifiedName::parse(procedure_name).unwrap(),
+            kind: ObjectKind::Procedure,
+            catalog_version,
+        },
+        procedure_id: ProcedureId::new(0x7200 + emit_count as u64),
+        stats_version: StatsVersion::new(1),
+        protocol_layout: inventory_protocol_layout_ref(),
+        inputs: Vec::new(),
+        structured_inputs: Vec::new(),
+        result_streams: vec![ResultStreamContract {
+            stream_id: 1,
+            name: result_name.to_string(),
+            columns: result_columns.clone(),
+            cardinality: cardinality.into(),
+            row_count_exact_required: cardinality.requires_exact_row_count(),
+        }],
+        required_permissions: vec![format!("{procedure_name}.Execute")],
+        transaction_policy: TransactionPolicy {
+            access_mode: AccessMode::ReadOnly,
+            isolation: IsolationPolicy::Serializable,
+            retryable: true,
+        },
+        compatibility_policy: CompatibilityPolicy::ExactHash,
+        result_metadata_policy: ResultMetadataPolicy::RequireBeforePayload,
+        error_policy: ProcedureErrorPolicy {
+            rollback_on_error: false,
+            allowed_error_codes: vec!["NoValue".to_string()],
+        },
+        multi_result_policy: MultiResultPolicy::SingleResultOnly,
+    }
+    .materialize()
+    .unwrap();
+
+    let batch = DefinitionBatch {
+        batch_id: DefinitionBatchId::new(0x7300 + emit_count as u64),
+        database_id: INVENTORY_DATABASE_ID,
+        namespace_id: INVENTORY_NAMESPACE_ID,
+        base_version: CatalogVersion::new(0),
+        operations: vec![DefinitionOperation::Create(CatalogDefinition::Procedure(
+            contract,
+        ))],
+    };
+    let plan = batch.dry_run().unwrap();
+    let mut snapshot = CatalogSnapshot::empty(
+        INVENTORY_DATABASE_ID,
+        INVENTORY_NAMESPACE_ID,
+        batch.base_version,
+    );
+    snapshot.apply_mutation_plan(&plan.mutation_plan).unwrap();
+
+    let operations = if emit_count == 0 {
+        vec![SrplBusinessOperationIr {
+            ordinal: 0,
+            kind: SrplBusinessOperationKindIr::Raise {
+                code: "NoValue".to_string(),
+            },
+        }]
+    } else {
+        (0..emit_count)
+            .map(|ordinal| SrplBusinessOperationIr {
+                ordinal: ordinal as u32,
+                kind: SrplBusinessOperationKindIr::Emit {
+                    stream: result_name.to_string(),
+                    values: vec![SrplEmitValueIr {
+                        column: "Present".to_string(),
+                        value: SrplValueIr::Bool(true),
+                    }],
+                },
+            })
+            .collect()
+    };
+
+    let ir = SrplProcedureIr {
+        name: QualifiedName::parse(procedure_name).unwrap(),
+        inputs: Vec::new(),
+        result_streams: vec![SrplResultStreamIr {
+            name: result_name.to_string(),
+            cardinality,
+            columns: result_columns,
+        }],
+        body: SrplProcedureBodyIr { operations },
+    };
+
+    (ir, snapshot)
+}
+
+#[test]
+fn executable_plan_validates_result_emit_counts_by_cardinality() {
+    let (optional_absent, optional_snapshot) = cardinality_probe_snapshot(
+        "Inventory.OptionalProbe",
+        "MaybeValue",
+        Cardinality::OptionalOne,
+        0,
+    );
+    let optional_plan = bind_executable_procedure_plan(&optional_absent, &optional_snapshot)
+        .expect("optional one may represent absence without an emit");
+    assert!(matches!(
+        optional_plan.body.operations[0],
+        andromeda_srpl::procedure_model::BoundSrplOperationPlan::Raise { .. }
+    ));
+
+    let (optional_duplicate, optional_duplicate_snapshot) = cardinality_probe_snapshot(
+        "Inventory.OptionalProbeDuplicate",
+        "MaybeValue",
+        Cardinality::OptionalOne,
+        2,
+    );
+    let optional_error =
+        bind_executable_procedure_plan(&optional_duplicate, &optional_duplicate_snapshot)
+            .expect_err("optional one must reject more than one emitted row shape");
+    assert_eq!(optional_error.kind(), AndromedaErrorKind::Srpl);
+    assert!(
+        optional_error
+            .message()
+            .contains("optional-one result stream may have zero or one emit operation")
+    );
+
+    let (nonempty_absent, nonempty_snapshot) = cardinality_probe_snapshot(
+        "Inventory.NonEmptyProbe",
+        "Values",
+        Cardinality::NonEmptyMany,
+        0,
+    );
+    let nonempty_error = bind_executable_procedure_plan(&nonempty_absent, &nonempty_snapshot)
+        .expect_err("nonempty many must reject missing emit coverage");
+    assert_eq!(nonempty_error.kind(), AndromedaErrorKind::Srpl);
+    assert!(
+        nonempty_error
+            .message()
+            .contains("nonempty-many result stream must have at least one emit operation")
+    );
+
+    let (one_absent, one_snapshot) =
+        cardinality_probe_snapshot("Inventory.OneProbe", "Value", Cardinality::One, 0);
+    let one_error = bind_executable_procedure_plan(&one_absent, &one_snapshot)
+        .expect_err("one must reject missing emit coverage");
+    assert_eq!(one_error.kind(), AndromedaErrorKind::Srpl);
+    assert!(
+        one_error
+            .message()
+            .contains("one result stream must have exactly one emit operation")
+    );
+}
+
 #[test]
 fn inventory_reserve_stock_body_binds_to_deterministic_executable_plan() {
     let mut ir = compile_narrow_procedure_signature(
@@ -686,6 +1008,7 @@ fn binder_supports_a_distinct_read_only_procedure_shape() {
                 data_type: TypeDescriptor::required(ScalarType::I64),
                 ordinal: 0,
             }],
+            cardinality: ResultStreamCardinality::Many,
             row_count_exact_required: false,
         }],
         required_permissions: vec!["Inventory.QueryProductStock.Execute".to_string()],

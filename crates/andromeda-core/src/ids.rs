@@ -13,14 +13,18 @@
 //! - **CatalogObjectId**: References objects in the system catalog
 //! - **CatalogVersion**: Increments when catalog objects change
 //! - **DatabaseId**: References a database instance
-//! - **InvocationId**: References a single invocation/execution
-//! - **NamespaceId**: References a schema or namespace
+//! - **InvocationId**: References a single invocation
+//! - **NamespaceId**: References a catalog namespace
 //! - **ProcedureId**: References a procedure in the catalog
+//!
+//! These low-level wrappers preserve the supplied `u64` exactly, including
+//! zero. Domain-specific constructors decide whether zero is a valid sentinel,
+//! an unassigned value, or an invalid identifier for active runtime use.
 //!
 //! ## ContractHash
 //!
 //! `ContractHash` is a 32-byte stable hash of a procedure's contract,
-//! computed deterministically from the schema and policies.
+//! computed deterministically from the procedure contract shape and policies.
 //! Zero hash is reserved and indicates "no contract binding".
 //!
 //! Contract hashes enable:
@@ -37,6 +41,7 @@ macro_rules! id_type {
         pub struct $name(u64);
 
         impl $name {
+            /// Constructs the identifier without applying domain validation.
             pub const fn new(value: u64) -> Self {
                 Self(value)
             }
@@ -130,16 +135,43 @@ mod tests {
 
     #[test]
     fn contract_hash_requires_exact_length() {
+        assert!(matches!(
+            ContractHash::from_slice(&[1; 31]),
+            Err(error) if error.kind() == AndromedaErrorKind::Contract
+        ));
         assert_eq!(
-            ContractHash::from_slice(&[1; 31]).unwrap_err().kind(),
-            AndromedaErrorKind::Contract
+            ContractHash::from_slice(&[1; ContractHash::LEN]),
+            Ok(ContractHash::new([1; ContractHash::LEN]))
         );
-        assert!(ContractHash::from_slice(&[1; ContractHash::LEN]).is_ok());
+    }
+
+    #[test]
+    fn contract_hash_display_is_lowercase_hex() {
+        let hash = ContractHash::new([0xab; ContractHash::LEN]);
+
+        assert_eq!(hash.to_string().len(), ContractHash::LEN * 2);
+        assert_eq!(
+            hash.to_string(),
+            "abababababababababababababababababababababababababababababababab"
+        );
+        assert_eq!(
+            format!("{hash:?}"),
+            "ContractHash(abababababababababababababababababababababababababababababababab)"
+        );
+    }
+
+    #[test]
+    fn contract_hash_zero_remains_reserved_sentinel() {
+        let hash = ContractHash::zero();
+
+        assert!(hash.is_zero());
+        assert_eq!(hash.as_bytes(), [0; ContractHash::LEN]);
     }
 
     #[test]
     fn typed_identifiers_preserve_values() {
         assert_eq!(RequestId::new(42).get(), 42);
+        assert_eq!(TransactionId::new(0).get(), 0);
         assert_eq!(SessionId::from(7).get(), 7);
     }
 }

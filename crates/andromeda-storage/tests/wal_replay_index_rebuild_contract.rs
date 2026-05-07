@@ -2,8 +2,9 @@
 
 use andromeda_core::{AndromedaErrorKind, TransactionId};
 use andromeda_storage::{
-    Lsn, ReplayContext, ReplayOutcome, WalRecord, WalRecordKind, replay_wal_record,
-    wal_record_kind_from_tag,
+    DatabaseManifest, InMemoryWal, Lsn, RecoveryPlan, RedoRecordDecision, ReplayContext,
+    ReplayOutcome, StartupMode, WalRecord, WalRecordKind, replay_wal_from_lsn_into_context,
+    replay_wal_record, wal_record_kind_from_tag,
 };
 
 const INDEX_REBUILD_PAYLOAD_MAGIC: &[u8; 8] = b"IDXRBV1\0";
@@ -21,6 +22,182 @@ fn index_delete_valid_payload_records_rebuild_required_not_inline_apply() {
 #[test]
 fn btree_split_valid_payload_records_rebuild_required_not_inline_apply() {
     assert_rebuild_required(WalRecordKind::BTreeSplit, 5, Lsn::new(12), "BTreeSplit");
+}
+
+#[test]
+fn all_index_btree_valid_payloads_record_rebuild_required_not_inline_apply() {
+    for (kind, operation_tag, kind_name, lsn) in [
+        (WalRecordKind::IndexInsert, 1, "IndexInsert", Lsn::new(30)),
+        (WalRecordKind::IndexDelete, 2, "IndexDelete", Lsn::new(31)),
+        (WalRecordKind::BTreeInsert, 3, "BTreeInsert", Lsn::new(32)),
+        (WalRecordKind::BTreeDelete, 4, "BTreeDelete", Lsn::new(33)),
+        (WalRecordKind::BTreeSplit, 5, "BTreeSplit", Lsn::new(34)),
+        (WalRecordKind::BTreeMerge, 6, "BTreeMerge", Lsn::new(35)),
+    ] {
+        assert_rebuild_required(kind, operation_tag, lsn, kind_name);
+    }
+}
+
+#[test]
+fn committed_btree_payloads_enter_redo_plan_and_surface_rebuild_evidence() {
+    for (kind, operation_tag, index_id) in [
+        (WalRecordKind::BTreeInsert, 3, 777),
+        (WalRecordKind::BTreeDelete, 4, 778),
+        (WalRecordKind::BTreeSplit, 5, 779),
+        (WalRecordKind::BTreeMerge, 6, 780),
+    ] {
+        assert_committed_btree_payload_enters_redo_plan(kind, operation_tag, index_id);
+    }
+}
+
+fn assert_committed_btree_payload_enters_redo_plan(
+    kind: WalRecordKind,
+    operation_tag: u8,
+    index_id: u64,
+) {
+    let tx = TransactionId::new(101);
+    let mut wal = InMemoryWal::new();
+    wal.append_tx_begin(tx).expect("begin should append");
+    let btree_lsn = wal
+        .append_payload(
+            kind,
+            Some(tx),
+            index_rebuild_payload(1, 0, 1, 4096, operation_tag, index_id),
+        )
+        .expect("B-Tree WAL payload should append");
+    wal.append_tx_commit(tx).expect("commit should append");
+    wal.flush_all().expect("test WAL should flush");
+
+    let records = wal.replay_durable();
+    let manifest = manifest_for_replay_from(Lsn::new(1));
+    let plan = RecoveryPlan::from_manifest_and_wal(&manifest, StartupMode::SafeStart, &records)
+        .expect("committed B-Tree WAL must produce a recovery plan");
+    let btree_plan = plan
+        .records
+        .iter()
+        .find(|record| record.lsn == btree_lsn)
+        .expect("B-Tree record should be present in the redo plan");
+
+    assert_eq!(btree_plan.kind, kind);
+    assert_eq!(btree_plan.decision, RedoRecordDecision::Replay);
+
+    let mut ctx = ReplayContext::new();
+    let report =
+        replay_wal_from_lsn_into_context(&manifest, StartupMode::SafeStart, &records, &mut ctx)
+            .expect("valid B-Tree rebuild evidence should not apply inline redo");
+
+    assert_eq!(report.applied_count, 0);
+    assert_eq!(report.handler_skipped_count, 1);
+    assert_eq!(report.index_rebuild_required_count, 1);
+    assert_eq!(report.index_rebuild_required.len(), 1);
+    assert_eq!(report.access_path_rebuild_evidence().len(), 1);
+    assert_eq!(report.not_yet_implemented_count, 0);
+    assert!(!report.has_replay_errors);
+    assert!(report.has_replay_work());
+    assert!(report.requires_access_path_rebuild());
+    assert!(!report.is_clean_recovery());
+    assert_eq!(ctx.index_rebuild_required.len(), 1);
+
+    let evidence = &ctx.index_rebuild_required[0];
+    assert_eq!(
+        report.access_path_rebuild_evidence().first(),
+        Some(evidence)
+    );
+    assert_eq!(evidence.lsn, btree_lsn);
+    assert_eq!(evidence.kind, kind);
+    assert_eq!(evidence.transaction_id, Some(tx));
+    assert_eq!(evidence.index_id, index_id);
+    assert_eq!(evidence.payload_checksum, records[1].header.checksum);
+    assert!(
+        evidence.reason.contains(&format!("{kind:?}"))
+            && evidence.reason.contains("index rebuild required")
+            && evidence.reason.contains("instead of applying inline redo"),
+        "evidence must explain the promotion gate: {}",
+        evidence.reason
+    );
+}
+
+#[test]
+fn committed_btree_malformed_payload_fails_recovery_driver_closed() {
+    let tx = TransactionId::new(102);
+    let mut wal = InMemoryWal::new();
+    wal.append_tx_begin(tx).expect("begin should append");
+    let btree_lsn = wal
+        .append_payload(
+            WalRecordKind::BTreeDelete,
+            Some(tx),
+            b"malformed-btree-payload",
+        )
+        .expect("structural B-Tree WAL payload should append");
+    wal.append_tx_commit(tx).expect("commit should append");
+    wal.flush_all().expect("test WAL should flush");
+
+    let records = wal.replay_durable();
+    let manifest = manifest_for_replay_from(Lsn::new(1));
+    let mut ctx = ReplayContext::new();
+    let err =
+        replay_wal_from_lsn_into_context(&manifest, StartupMode::SafeStart, &records, &mut ctx)
+            .expect_err("malformed committed B-Tree WAL must fail recovery closed");
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Storage);
+    assert!(
+        err.message()
+            .contains("BTreeDelete recovery payload is malformed"),
+        "error must identify the committed B-Tree promotion gate payload: {}",
+        err.message()
+    );
+    assert!(ctx.index_rebuild_required.is_empty());
+    assert_eq!(ctx.error_records.len(), 1);
+    assert_eq!(ctx.error_records[0].lsn, btree_lsn);
+    assert_eq!(ctx.error_records[0].kind, WalRecordKind::BTreeDelete);
+    assert_eq!(
+        ctx.error_records[0].outcome,
+        ReplayOutcome::NotYetImplemented
+    );
+}
+
+#[test]
+fn incomplete_btree_payload_is_discarded_without_rebuild_evidence() {
+    let tx = TransactionId::new(103);
+    let mut wal = InMemoryWal::new();
+    wal.append_tx_begin(tx).expect("begin should append");
+    let btree_lsn = wal
+        .append_payload(
+            WalRecordKind::BTreeMerge,
+            Some(tx),
+            index_rebuild_payload(1, 0, 1, 4096, 6, 778),
+        )
+        .expect("B-Tree WAL payload should append");
+    wal.flush_all().expect("test WAL should flush");
+
+    let records = wal.replay_durable();
+    let manifest = manifest_for_replay_from(Lsn::new(1));
+    let plan = RecoveryPlan::from_manifest_and_wal(&manifest, StartupMode::SafeStart, &records)
+        .expect("incomplete B-Tree WAL should still produce a recovery plan");
+    let btree_plan = plan
+        .records
+        .iter()
+        .find(|record| record.lsn == btree_lsn)
+        .expect("B-Tree record should be present in the redo plan");
+
+    assert_eq!(
+        btree_plan.decision,
+        RedoRecordDecision::SkipIncompleteTransaction
+    );
+
+    let mut ctx = ReplayContext::new();
+    let report =
+        replay_wal_from_lsn_into_context(&manifest, StartupMode::SafeStart, &records, &mut ctx)
+            .expect("incomplete B-Tree transaction should be discarded before handler replay");
+
+    assert_eq!(report.applied_count, 0);
+    assert_eq!(report.handler_skipped_count, 0);
+    assert_eq!(report.index_rebuild_required_count, 0);
+    assert!(report.index_rebuild_required.is_empty());
+    assert!(report.access_path_rebuild_evidence().is_empty());
+    assert_eq!(report.incomplete_transaction_count, 1);
+    assert!(ctx.index_rebuild_required.is_empty());
+    assert!(ctx.error_records.is_empty());
 }
 
 #[test]
@@ -111,8 +288,72 @@ fn mismatched_index_operation_tag_fails_closed() {
 }
 
 #[test]
+fn unknown_index_operation_tag_fails_closed() {
+    assert_recovery_payload_fails_closed(
+        WalRecordKind::BTreeMerge,
+        index_rebuild_payload(1, 0, 1, 4096, 99, 702),
+        "unknown index recovery operation tag 99",
+    );
+}
+
+#[test]
+fn zero_max_key_size_fails_closed() {
+    assert_recovery_payload_fails_closed(
+        WalRecordKind::BTreeInsert,
+        index_rebuild_payload(1, 0, 1, 0, 3, 703),
+        "max_key_size must not be zero",
+    );
+}
+
+#[test]
+fn zero_index_id_fails_closed() {
+    assert_recovery_payload_fails_closed(
+        WalRecordKind::BTreeDelete,
+        index_rebuild_payload(1, 0, 1, 4096, 4, 0),
+        "index_id must not be zero",
+    );
+}
+
+#[test]
+fn reserved_zero_format_version_fails_closed() {
+    assert_recovery_payload_fails_closed(
+        WalRecordKind::BTreeSplit,
+        index_rebuild_payload(0, 0, 1, 4096, 5, 704),
+        "B-Tree key format version 0.0 is reserved",
+    );
+}
+
+#[test]
 fn unknown_wal_record_kind_tag_stays_explicit() {
     assert_eq!(wal_record_kind_from_tag(99), None);
+}
+
+fn assert_recovery_payload_fails_closed(
+    kind: WalRecordKind,
+    payload: Vec<u8>,
+    expected_message: &'static str,
+) {
+    let record = WalRecord::from_parts(
+        kind,
+        Lsn::new(40),
+        None,
+        Some(TransactionId::new(55)),
+        payload,
+    )
+    .expect("record should be structurally valid");
+    let mut ctx = ReplayContext::new();
+
+    let err = replay_wal_record(&mut ctx, &record)
+        .expect_err("malformed index/B-Tree recovery payload must fail closed");
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Storage);
+    assert!(ctx.index_rebuild_required.is_empty());
+    assert_eq!(ctx.error_records.len(), 1);
+    assert!(
+        err.message().contains(expected_message),
+        "error must contain `{expected_message}`: {}",
+        err.message()
+    );
 }
 
 fn assert_rebuild_required(
@@ -177,4 +418,16 @@ fn index_rebuild_payload(
     payload.extend_from_slice(&max_key_size.to_le_bytes());
     payload.extend_from_slice(&index_id.to_le_bytes());
     payload
+}
+
+fn manifest_for_replay_from(required_wal_start_lsn: Lsn) -> DatabaseManifest {
+    DatabaseManifest {
+        database_id: 1,
+        manifest_version: 1,
+        snapshot_id: 1,
+        base_checkpoint_lsn: Lsn::ZERO,
+        required_wal_start_lsn,
+        previous_manifest_hash: [0; 32],
+        manifest_crc: 0xCAFE_BABE,
+    }
 }

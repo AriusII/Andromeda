@@ -6,6 +6,7 @@ use std::sync::Arc;
 struct MockWal {
     records: std::sync::Mutex<Vec<Lsn>>,
     durable_lsn: std::sync::Mutex<Lsn>,
+    short_flush_lsn: Option<Lsn>,
 }
 
 impl MockWal {
@@ -13,6 +14,15 @@ impl MockWal {
         Arc::new(Self {
             records: std::sync::Mutex::new(Vec::new()),
             durable_lsn: std::sync::Mutex::new(Lsn::new(0)),
+            short_flush_lsn: None,
+        })
+    }
+
+    fn short_flush(short_flush_lsn: Lsn) -> Arc<Self> {
+        Arc::new(Self {
+            records: std::sync::Mutex::new(Vec::new()),
+            durable_lsn: std::sync::Mutex::new(Lsn::new(0)),
+            short_flush_lsn: Some(short_flush_lsn),
         })
     }
 }
@@ -33,8 +43,9 @@ impl InvocationWal for MockWal {
 
     async fn flush_through(&self, lsn: Lsn) -> AndromedaResult<Lsn> {
         let mut durable = self.durable_lsn.lock().unwrap();
-        *durable = lsn;
-        Ok(lsn)
+        let durable_lsn = self.short_flush_lsn.unwrap_or(lsn);
+        *durable = durable_lsn;
+        Ok(durable_lsn)
     }
 }
 
@@ -52,6 +63,10 @@ async fn test_commit_log_records_entry() {
 
     assert!(commit_log.is_committed(tx_id));
     assert_eq!(commit_log.get_commit_lsn(tx_id), Some(entry.commit_lsn));
+    assert_eq!(
+        commit_log.get_commit_durable_lsn(tx_id),
+        Some(entry.durable_lsn)
+    );
     assert_eq!(commit_log.get_affected_rows(tx_id), Some(10));
 }
 
@@ -86,13 +101,56 @@ async fn test_commit_log_records_durable_rollback() {
 
     assert_eq!(entry.tx_id, tx_id);
     assert_eq!(entry.rollback_lsn, Lsn::new(1));
+    assert_eq!(entry.durable_lsn, Lsn::new(1));
     assert_eq!(entry.parameter_hash, 0xCAFE);
     assert!(commit_log.is_rolled_back(tx_id));
+    assert_eq!(
+        commit_log.get_rollback_durable_lsn(tx_id),
+        Some(entry.durable_lsn)
+    );
     assert_eq!(
         status_table.status(tx_id),
         Some(TransactionStatus::RolledBack)
     );
     assert_eq!(*wal.durable_lsn.lock().unwrap(), entry.rollback_lsn);
+}
+
+#[tokio::test]
+async fn test_commit_log_rejects_short_commit_flush_before_visibility() {
+    let wal = MockWal::short_flush(Lsn::new(1));
+    let status_table = Arc::new(TransactionStatusTable::new());
+    let commit_log = CommitLogManager::new(wal.clone(), status_table.clone());
+
+    wal.records.lock().unwrap().push(Lsn::new(1));
+    let tx_id = TransactionId::new(30);
+    let err = commit_log
+        .record_commit(tx_id, IsolationLevel::Snapshot, 1, 0)
+        .await
+        .expect_err("short commit flush must fail");
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Storage);
+    assert_eq!(status_table.status(tx_id), None);
+    assert!(!commit_log.is_committed(tx_id));
+    assert_eq!(commit_log.get_commit_lsn(tx_id), None);
+}
+
+#[tokio::test]
+async fn test_commit_log_rejects_short_rollback_flush_before_status_update() {
+    let wal = MockWal::short_flush(Lsn::new(1));
+    let status_table = Arc::new(TransactionStatusTable::new());
+    let commit_log = CommitLogManager::new(wal.clone(), status_table.clone());
+
+    wal.records.lock().unwrap().push(Lsn::new(1));
+    let tx_id = TransactionId::new(31);
+    let err = commit_log
+        .record_rollback(tx_id, 0)
+        .await
+        .expect_err("short rollback flush must fail");
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Storage);
+    assert_eq!(status_table.status(tx_id), None);
+    assert!(!commit_log.is_rolled_back(tx_id));
+    assert_eq!(commit_log.get_rollback_lsn(tx_id), None);
 }
 
 #[tokio::test]
@@ -153,6 +211,7 @@ fn test_commit_log_rebuilds_missing_status_from_local_records() {
         .restore_commit_entry(CommitLogEntry {
             tx_id: committed,
             commit_lsn: Lsn::new(11),
+            durable_lsn: Lsn::new(11),
             timestamp: EngineTimestamp::from_unix_millis(1),
             row_count_affected: 2,
             isolation_level: IsolationLevel::Snapshot,
@@ -162,6 +221,7 @@ fn test_commit_log_rebuilds_missing_status_from_local_records() {
         .restore_rollback_entry(RollbackLogEntry {
             tx_id: rolled_back,
             rollback_lsn: Lsn::new(12),
+            durable_lsn: Lsn::new(12),
             timestamp: EngineTimestamp::from_unix_millis(2),
             parameter_hash: 3,
         })
@@ -181,6 +241,7 @@ fn test_commit_log_rebuilds_missing_status_from_local_records() {
     recovered.seed_commit_entry_without_status(CommitLogEntry {
         tx_id: committed,
         commit_lsn: Lsn::new(21),
+        durable_lsn: Lsn::new(21),
         timestamp: EngineTimestamp::from_unix_millis(1),
         row_count_affected: 2,
         isolation_level: IsolationLevel::Serializable,
@@ -188,6 +249,7 @@ fn test_commit_log_rebuilds_missing_status_from_local_records() {
     recovered.seed_rollback_entry_without_status(RollbackLogEntry {
         tx_id: rolled_back,
         rollback_lsn: Lsn::new(22),
+        durable_lsn: Lsn::new(22),
         timestamp: EngineTimestamp::from_unix_millis(2),
         parameter_hash: 3,
     });
@@ -203,6 +265,202 @@ fn test_commit_log_rebuilds_missing_status_from_local_records() {
         status_table.status(rolled_back),
         Some(TransactionStatus::RolledBack)
     );
+}
+
+#[test]
+fn test_commit_log_does_not_trust_forged_terminal_status_without_wal_entry() {
+    let wal = MockWal::new();
+    let status_table = Arc::new(TransactionStatusTable::new());
+    let commit_log = CommitLogManager::new(wal, status_table.clone());
+
+    let committed = TransactionId::new(26);
+    let commit_err = status_table
+        .record(committed, TransactionStatus::Committed)
+        .expect_err("public status table must reject terminal commit without WAL evidence");
+
+    assert_eq!(commit_err.kind(), AndromedaErrorKind::Transaction);
+    assert_eq!(status_table.status(committed), None);
+    assert!(!commit_log.is_committed(committed));
+    assert_eq!(commit_log.get_commit_lsn(committed), None);
+    assert_eq!(commit_log.get_commit_durable_lsn(committed), None);
+
+    let rolled_back = TransactionId::new(27);
+    let rollback_err = status_table
+        .record(rolled_back, TransactionStatus::RolledBack)
+        .expect_err("public status table must reject terminal rollback without WAL evidence");
+
+    assert_eq!(rollback_err.kind(), AndromedaErrorKind::Transaction);
+    assert_eq!(status_table.status(rolled_back), None);
+    assert!(!commit_log.is_rolled_back(rolled_back));
+    assert_eq!(commit_log.get_rollback_lsn(rolled_back), None);
+    assert_eq!(commit_log.get_rollback_durable_lsn(rolled_back), None);
+}
+
+#[test]
+fn test_commit_log_rebuild_rejects_seeded_terminal_entry_without_durable_coverage() {
+    let wal = MockWal::new();
+    let status_table = Arc::new(TransactionStatusTable::new());
+    let commit_log = CommitLogManager::new(wal, status_table.clone());
+
+    let committed = TransactionId::new(28);
+    commit_log.seed_commit_entry_without_status(CommitLogEntry {
+        tx_id: committed,
+        commit_lsn: Lsn::new(9),
+        durable_lsn: Lsn::new(8),
+        timestamp: EngineTimestamp::from_unix_millis(1),
+        row_count_affected: 1,
+        isolation_level: IsolationLevel::Snapshot,
+    });
+
+    assert!(!commit_log.is_committed(committed));
+    assert_eq!(status_table.status(committed), None);
+    assert_eq!(commit_log.get_commit_lsn(committed), None);
+
+    let err = commit_log
+        .rebuild_status_from_records()
+        .expect_err("rebuild must not publish invalid terminal evidence");
+    assert_eq!(err.kind(), AndromedaErrorKind::Storage);
+    assert_eq!(status_table.status(committed), None);
+}
+
+#[test]
+fn test_commit_log_restore_rejects_inconsistent_durability_evidence() {
+    let wal = MockWal::new();
+    let status_table = Arc::new(TransactionStatusTable::new());
+    let commit_log = CommitLogManager::new(wal, status_table);
+
+    let err = commit_log
+        .restore_commit_entry(CommitLogEntry {
+            tx_id: TransactionId::new(32),
+            commit_lsn: Lsn::new(5),
+            durable_lsn: Lsn::new(4),
+            timestamp: EngineTimestamp::from_unix_millis(1),
+            row_count_affected: 1,
+            isolation_level: IsolationLevel::Snapshot,
+        })
+        .expect_err("restore must reject commit entries not covered by durable LSN");
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Storage);
+    assert!(!commit_log.is_committed(TransactionId::new(32)));
+}
+
+#[test]
+fn test_commit_log_restore_rejects_rollback_without_durable_coverage() {
+    let wal = MockWal::new();
+    let status_table = Arc::new(TransactionStatusTable::new());
+    let commit_log = CommitLogManager::new(wal, status_table.clone());
+    let tx_id = TransactionId::new(33);
+
+    let err = commit_log
+        .restore_rollback_entry(RollbackLogEntry {
+            tx_id,
+            rollback_lsn: Lsn::new(8),
+            durable_lsn: Lsn::new(7),
+            timestamp: EngineTimestamp::from_unix_millis(1),
+            parameter_hash: 0xD00D,
+        })
+        .expect_err("restore must reject rollback entries not covered by durable LSN");
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Storage);
+    assert_eq!(status_table.status(tx_id), None);
+    assert!(!commit_log.is_rolled_back(tx_id));
+    assert_eq!(commit_log.get_rollback_lsn(tx_id), None);
+}
+
+#[test]
+fn test_commit_log_replay_rejects_terminal_records_without_durable_coverage() {
+    let wal = MockWal::new();
+    let status_table = Arc::new(TransactionStatusTable::new());
+    let commit_log = CommitLogManager::new(wal, status_table.clone());
+
+    let committed = TransactionId::new(34);
+    let commit_err = commit_log
+        .replay_tx_wal_record(TxWalReplayRecord::Commit(CommitLogEntry {
+            tx_id: committed,
+            commit_lsn: Lsn::new(9),
+            durable_lsn: Lsn::new(8),
+            timestamp: EngineTimestamp::from_unix_millis(1),
+            row_count_affected: 1,
+            isolation_level: IsolationLevel::Snapshot,
+        }))
+        .expect_err("replay must reject commit records not covered by durable LSN");
+
+    assert_eq!(commit_err.kind(), AndromedaErrorKind::Storage);
+    assert_eq!(status_table.status(committed), None);
+    assert!(!commit_log.is_committed(committed));
+    assert_eq!(commit_log.get_commit_lsn(committed), None);
+
+    let rolled_back = TransactionId::new(35);
+    let rollback_err = commit_log
+        .replay_tx_wal_record(TxWalReplayRecord::Rollback(RollbackLogEntry {
+            tx_id: rolled_back,
+            rollback_lsn: Lsn::new(10),
+            durable_lsn: Lsn::new(9),
+            timestamp: EngineTimestamp::from_unix_millis(2),
+            parameter_hash: 0xA11,
+        }))
+        .expect_err("replay must reject rollback records not covered by durable LSN");
+
+    assert_eq!(rollback_err.kind(), AndromedaErrorKind::Storage);
+    assert_eq!(status_table.status(rolled_back), None);
+    assert!(!commit_log.is_rolled_back(rolled_back));
+    assert_eq!(commit_log.get_rollback_lsn(rolled_back), None);
+}
+
+#[test]
+fn test_commit_log_replay_advances_in_flight_status_with_durable_terminal_evidence()
+-> AndromedaResult<()> {
+    let wal = MockWal::new();
+    let status_table = Arc::new(TransactionStatusTable::new());
+    let commit_log = CommitLogManager::new(wal, status_table.clone());
+    let tx_id = TransactionId::new(36);
+
+    status_table.record_in_flight(tx_id)?;
+
+    let action = commit_log.replay_tx_wal_record(TxWalReplayRecord::commit(
+        tx_id,
+        Lsn::new(11),
+        EngineTimestamp::from_unix_millis(1),
+        1,
+        IsolationLevel::Snapshot,
+    ))?;
+
+    assert_eq!(action, TxWalReplayAction::CommitRestored);
+    assert_eq!(
+        status_table.status(tx_id),
+        Some(TransactionStatus::Committed)
+    );
+    assert_eq!(commit_log.get_commit_lsn(tx_id), Some(Lsn::new(11)));
+    Ok(())
+}
+
+#[test]
+fn test_commit_log_replay_conflict_does_not_leave_partial_terminal_entry() -> AndromedaResult<()> {
+    let wal = MockWal::new();
+    let status_table = Arc::new(TransactionStatusTable::new());
+    let commit_log = CommitLogManager::new(wal, status_table.clone());
+    let tx_id = TransactionId::new(37);
+
+    status_table.record_rolled_back_after_durable_wal(tx_id, Lsn::new(10), Lsn::new(10))?;
+
+    let err = commit_log
+        .replay_tx_wal_record(TxWalReplayRecord::commit(
+            tx_id,
+            Lsn::new(11),
+            EngineTimestamp::from_unix_millis(1),
+            1,
+            IsolationLevel::Snapshot,
+        ))
+        .expect_err("conflicting terminal replay must be rejected before insert");
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Transaction);
+    assert_eq!(
+        status_table.status(tx_id),
+        Some(TransactionStatus::RolledBack)
+    );
+    assert_eq!(commit_log.get_commit_lsn(tx_id), None);
+    assert!(!commit_log.is_committed(tx_id));
+    Ok(())
 }
 
 #[tokio::test]

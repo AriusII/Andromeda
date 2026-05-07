@@ -41,7 +41,10 @@ pub use startup::{
 };
 pub use trace::RecoveryTrace;
 pub use undo::{UndoChain, UndoChainsBuilder, UndoOperation, UndoRecord};
-pub use wal_replay::{WalReplayReport, execute_redo_plan, replay_wal_from_lsn};
+pub use wal_replay::{
+    WalReplayReport, execute_redo_plan, execute_redo_plan_into_context, replay_wal_from_lsn,
+    replay_wal_from_lsn_into_context,
+};
 
 fn storage_error(message: impl Into<String>) -> AndromedaError {
     AndromedaError::new(AndromedaErrorKind::Storage, message)

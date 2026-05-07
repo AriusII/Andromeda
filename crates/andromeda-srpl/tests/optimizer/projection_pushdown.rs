@@ -202,6 +202,16 @@ fn t_pj_05_no_downstream_use_yields_empty_projection() {
     );
 }
 
+/// T-PJ-05B  Read-local predicates require their referenced fields.
+#[test]
+fn t_pj_05b_read_predicate_column_stays_projected() {
+    let ir = make_ir(vec![read_op(0, "T", vec![eq_pred("id", "T", "id")])]);
+    let res = proj_apply(ir);
+    let live = res.projections[0].live_columns.as_ref().unwrap();
+
+    assert_eq!(live, &vec!["id".to_string()]);
+}
+
 /// T-PJ-06  proj_apply does NOT mutate the IR body structure (annotation-only).
 #[test]
 fn t_pj_06_apply_does_not_mutate_ir_body() {

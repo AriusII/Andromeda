@@ -1,4 +1,6 @@
-use andromeda_catalog::ProcedureContractRef;
+use andromeda_catalog::{
+    PolicyVersion, ProcedureContractBinding, ProcedureContractRef, StatsVersion,
+};
 use andromeda_core::{
     AndromedaErrorKind, CatalogVersion, ContractHash, InvocationId, PipelineClass, ProcedureId,
     RequestId, ResourceBudget, SessionId,
@@ -166,7 +168,7 @@ fn pre_transaction_contract_rejection_blocks_runtime_io_admission_evidence() {
     executable_contract.contract_hash = ContractHash::test_vector(99);
 
     let reject = request
-        .validate_before_transaction(executable_contract, TraceId::new(300))
+        .validate_before_transaction(test_binding(executable_contract), TraceId::new(300))
         .expect_err("contract hash mismatch must be rejected before transaction or IO planning");
     assert_eq!(reject.status, CompletionStatus::ContractRejected);
     assert!(reject.reason.contains("ContractHash"));
@@ -233,16 +235,28 @@ fn contains_forbidden_token(source: &str, forbidden: &str) -> bool {
 }
 
 fn invocation_request() -> InvocationRequest {
+    let procedure = ProcedureContractRef {
+        procedure_id: ProcedureId::new(2),
+        contract_hash: ContractHash::test_vector(7),
+        catalog_version: CatalogVersion::new(3),
+    };
     InvocationRequest {
         invocation_id: InvocationId::new(1),
-        procedure: ProcedureContractRef {
-            procedure_id: ProcedureId::new(2),
-            contract_hash: ContractHash::test_vector(7),
-            catalog_version: CatalogVersion::new(3),
-        },
+        procedure,
+        expected_binding: Some(test_binding(procedure)),
         expected_contract_hash: ContractHash::test_vector(7),
         catalog_version: CatalogVersion::new(3),
         structured_parameters: Vec::new(),
+    }
+}
+
+fn test_binding(procedure: ProcedureContractRef) -> ProcedureContractBinding {
+    ProcedureContractBinding {
+        procedure_id: procedure.procedure_id,
+        catalog_version: procedure.catalog_version,
+        contract_hash: procedure.contract_hash,
+        stats_version: StatsVersion::new(1),
+        policy_version: PolicyVersion::new([7; PolicyVersion::LEN]),
     }
 }
 

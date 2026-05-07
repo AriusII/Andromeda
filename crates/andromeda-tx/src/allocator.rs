@@ -41,12 +41,27 @@ impl TransactionIdAllocator {
 
     /// Allocate a new transaction id strictly greater than every previously
     /// issued id and every value previously passed to [`Self::seed`].
-    pub fn allocate(&self) -> TransactionId {
-        // `fetch_add` on a monotonic counter is sufficient: even under
-        // contention the produced ids are unique and strictly increasing.
-        let next = self.last_issued.fetch_add(1, Ordering::SeqCst) + 1;
-        debug_assert!(next != 0, "transaction id counter overflowed");
-        TransactionId::new(next)
+    pub fn allocate(&self) -> AndromedaResult<TransactionId> {
+        let previous = self
+            .last_issued
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
+                current.checked_add(1)
+            })
+            .map_err(|_| {
+                AndromedaError::new(
+                    AndromedaErrorKind::Transaction,
+                    "transaction id allocator exhausted durable id space",
+                )
+            })?;
+
+        let next = previous.checked_add(1).ok_or_else(|| {
+            AndromedaError::new(
+                AndromedaErrorKind::Transaction,
+                "transaction id allocator exhausted durable id space",
+            )
+        })?;
+
+        Ok(TransactionId::new(next))
     }
 
     /// Raise the floor for future allocations during recovery.
@@ -100,9 +115,9 @@ mod tests {
     #[test]
     fn allocate_starts_at_one_and_is_monotonic() {
         let allocator = TransactionIdAllocator::new();
-        assert_eq!(allocator.allocate().get(), 1);
-        assert_eq!(allocator.allocate().get(), 2);
-        assert_eq!(allocator.allocate().get(), 3);
+        assert_eq!(allocate(&allocator), 1);
+        assert_eq!(allocate(&allocator), 2);
+        assert_eq!(allocate(&allocator), 3);
         assert_eq!(allocator.peek_last_issued(), 3);
     }
 
@@ -110,27 +125,46 @@ mod tests {
     fn never_returns_zero() {
         let allocator = TransactionIdAllocator::new();
         for _ in 0..16 {
-            assert_ne!(allocator.allocate().get(), 0);
+            assert_ne!(allocate(&allocator), 0);
         }
     }
 
     #[test]
     fn seed_advances_floor_and_keeps_monotonicity() {
         let allocator = TransactionIdAllocator::new();
-        allocator.seed(100).unwrap();
-        assert_eq!(allocator.allocate().get(), 101);
+        allocator
+            .seed(100)
+            .expect("seeding allocator floor should succeed");
+        assert_eq!(allocate(&allocator), 101);
         // Re-seeding to a higher floor still works.
-        allocator.seed(500).unwrap();
-        assert_eq!(allocator.allocate().get(), 501);
+        allocator
+            .seed(500)
+            .expect("raising allocator floor should succeed");
+        assert_eq!(allocate(&allocator), 501);
     }
 
     #[test]
     fn seed_rejects_backwards_floor() {
         let allocator = TransactionIdAllocator::with_floor(50);
-        let err = allocator.seed(10).unwrap_err();
+        let err = allocator
+            .seed(10)
+            .expect_err("lowering allocator floor must fail");
         assert_eq!(err.kind(), AndromedaErrorKind::Transaction);
         // The floor must not have moved.
-        assert_eq!(allocator.allocate().get(), 51);
+        assert_eq!(allocate(&allocator), 51);
+    }
+
+    #[test]
+    fn allocate_returns_typed_error_at_id_space_exhaustion() {
+        let allocator = TransactionIdAllocator::with_floor(u64::MAX - 1);
+
+        assert_eq!(allocate(&allocator), u64::MAX);
+        let err = allocator
+            .allocate()
+            .expect_err("exhausted transaction id allocator must fail");
+
+        assert_eq!(err.kind(), AndromedaErrorKind::Transaction);
+        assert_eq!(allocator.peek_last_issued(), u64::MAX);
     }
 
     #[test]
@@ -142,7 +176,7 @@ mod tests {
             handles.push(thread::spawn(move || {
                 let mut local = Vec::with_capacity(256);
                 for _ in 0..256 {
-                    local.push(allocator.allocate().get());
+                    local.push(allocate(&allocator));
                 }
                 local
             }));
@@ -150,12 +184,22 @@ mod tests {
 
         let mut all = Vec::new();
         for handle in handles {
-            all.extend(handle.join().unwrap());
+            all.extend(handle.join().expect("allocator worker should not panic"));
         }
 
         let unique: HashSet<u64> = all.iter().copied().collect();
         assert_eq!(unique.len(), all.len(), "transaction ids collided");
         assert!(unique.iter().all(|id| *id != 0));
-        assert_eq!(*unique.iter().max().unwrap(), 8 * 256);
+        assert_eq!(
+            *unique.iter().max().expect("allocator should produce ids"),
+            8 * 256
+        );
+    }
+
+    fn allocate(allocator: &TransactionIdAllocator) -> u64 {
+        allocator
+            .allocate()
+            .expect("transaction id allocation should succeed")
+            .get()
     }
 }

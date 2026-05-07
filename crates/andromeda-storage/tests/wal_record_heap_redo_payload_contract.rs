@@ -21,6 +21,11 @@ fn wal_record_heap_redo_insert_payload_roundtrips_through_frame_codec() {
         b"alpha".to_vec(),
     )
     .expect("insert payload should build");
+    assert_eq!(
+        payload.encode().len(),
+        HEAP_ROW_REDO_HEADER_LEN + b"alpha".len(),
+        "HREDOV1 remains a storage-local v1 payload; catalog/procedure binding is adjacent exec evidence"
+    );
     let record = wal_record_from_payload(&payload, TransactionId::new(101), None);
 
     let encoded = encode_wal_record(&record).expect("WAL frame encode");
@@ -36,6 +41,34 @@ fn wal_record_heap_redo_insert_payload_roundtrips_through_frame_codec() {
     assert_eq!(decoded_payload.operation(), HeapRowRedoOperation::Insert);
     assert_eq!(decoded_payload.wal_record_kind(), decoded.header.kind);
     assert_eq!(decoded_payload.tuple(), b"alpha");
+}
+
+#[test]
+fn wal_record_heap_redo_payload_bytes_are_wal_checksum_protected() {
+    let payload = HeapRowRedoPayloadV1::row_insert(
+        PageId::new(916),
+        PageSize::KiB16,
+        2,
+        Lsn::ZERO,
+        Lsn::new(43),
+        b"alpha".to_vec(),
+    )
+    .expect("insert payload should build");
+    let mut record = wal_record_from_payload(&payload, TransactionId::new(103), None);
+
+    record.payload[HEAP_ROW_REDO_HEADER_LEN] = b'b';
+    let error = record
+        .validate()
+        .expect_err("tampered HREDOV1 tuple bytes must break WAL checksum");
+
+    assert!(error.message().contains("checksum"));
+
+    let mut ctx = ReplayContext::new();
+    let replay_error = replay_wal_record(&mut ctx, &record)
+        .expect_err("direct heap redo replay must validate WAL checksum before apply");
+
+    assert!(replay_error.message().contains("checksum"));
+    assert_eq!(ctx.heap_redo_page_count(), 0);
 }
 
 #[test]

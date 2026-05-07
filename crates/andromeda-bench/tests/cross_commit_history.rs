@@ -2,7 +2,10 @@
 
 //! Cross-commit benchmark history integration tests.
 
-use andromeda_bench::{BenchmarkHistoryRecord, BenchmarkHistoryStore, HistoryQuery, TimeRange};
+use andromeda_bench::{
+    BenchmarkHistoryRecord, BenchmarkHistoryStore, HistoryQuery, RegressionAnalysis,
+    RegressionReason, TimeRange,
+};
 
 #[test]
 fn detects_regression_onset_across_commits() {
@@ -88,14 +91,14 @@ fn tracks_error_rate_regression_across_commits() {
     let mut store = BenchmarkHistoryStore::new(".andromeda/benchmark-history".to_string());
 
     let commits = [
-        ("c1", "2026-01-15T10:00:00Z", 100, 500, 0),
-        ("c2", "2026-01-15T10:10:00Z", 101, 501, 0),
-        ("c3", "2026-01-15T10:20:00Z", 102, 502, 1),
-        ("c4", "2026-01-15T10:30:00Z", 105, 510, 2),
-        ("c5", "2026-01-15T10:40:00Z", 110, 520, 5),
+        ("c1", "2026-01-15T10:00:00Z", 100, 500, 0, 100),
+        ("c2", "2026-01-15T10:10:00Z", 100, 500, 0, 100),
+        ("c3", "2026-01-15T10:20:00Z", 100, 500, 1, 100),
+        ("c4", "2026-01-15T10:30:00Z", 100, 500, 2, 100),
+        ("c5", "2026-01-15T10:40:00Z", 100, 500, 5, 100),
     ];
 
-    for (commit_id, timestamp, p50, p95, errors) in commits {
+    for (commit_id, timestamp, p50, p95, errors, samples) in commits {
         let record = BenchmarkHistoryRecord::new(
             "inventory-reserve".to_string(),
             commit_id.to_string(),
@@ -103,7 +106,7 @@ fn tracks_error_rate_regression_across_commits() {
             p50,
             p95,
             errors,
-            100,
+            samples,
         );
         store.append(record).unwrap();
     }
@@ -117,8 +120,61 @@ fn tracks_error_rate_regression_across_commits() {
     let last = result.records.last().unwrap();
     assert_eq!(last.error_count, 5);
 
-    let is_regressed = last.is_regressed_vs_baseline(100, 500, 2.5);
-    assert!(is_regressed);
+    let baseline = result.records.first().unwrap();
+    let analysis = RegressionAnalysis::new(
+        last.workload_id.clone(),
+        last.p50_latency_us,
+        baseline.p50_latency_us,
+        last.p95_latency_us,
+        baseline.p95_latency_us,
+        last.error_count,
+        last.sample_count,
+        baseline.error_count,
+        baseline.sample_count,
+    );
+
+    assert!(!last.is_regressed_vs_baseline(100, 500, 2.5));
+    assert!(last.is_regressed_vs_record(baseline, 2.5));
+    assert!(analysis.is_regressed);
+    assert_eq!(analysis.primary_reason, RegressionReason::ErrorRateIncrease);
+}
+
+#[test]
+fn stable_error_rate_with_changed_sample_count_does_not_regress() {
+    let baseline = BenchmarkHistoryRecord::new(
+        "inventory-reserve".to_string(),
+        "c1".to_string(),
+        "2026-01-15T10:00:00Z".to_string(),
+        100,
+        500,
+        1,
+        100,
+    );
+    let current = BenchmarkHistoryRecord::new(
+        "inventory-reserve".to_string(),
+        "c2".to_string(),
+        "2026-01-15T10:10:00Z".to_string(),
+        100,
+        500,
+        10,
+        1_000,
+    );
+
+    let analysis = RegressionAnalysis::new(
+        current.workload_id.clone(),
+        current.p50_latency_us,
+        baseline.p50_latency_us,
+        current.p95_latency_us,
+        baseline.p95_latency_us,
+        current.error_count,
+        current.sample_count,
+        baseline.error_count,
+        baseline.sample_count,
+    );
+
+    assert!(!current.is_regressed_vs_record(&baseline, 2.5));
+    assert!(!analysis.is_regressed);
+    assert_eq!(analysis.primary_reason, RegressionReason::NoRegression);
 }
 
 #[test]
@@ -188,6 +244,13 @@ fn serializes_history_to_json_lines_and_imports_it() {
     }
 
     let json_output = store.save().unwrap();
+    assert!(json_output.contains(r#""advisory_boundary":"advisory-only""#));
+    assert!(json_output.contains(r#""authoritative":false"#));
+    assert!(json_output.contains(r#""can_select_plan_alone":false"#));
+    assert!(json_output.contains(r#""optimizer_boundary":"advisory-only""#));
+    assert!(json_output.contains(r#""duration_cap_ms":"#));
+    assert!(json_output.contains(r#""sample_cap":"#));
+    assert!(json_output.contains(r#""temp_cap_bytes":"#));
 
     let mut new_store = BenchmarkHistoryStore::new(".andromeda/benchmark-history".to_string());
     let imported = new_store.import_json_lines(&json_output).unwrap();
@@ -202,9 +265,53 @@ fn serializes_history_to_json_lines_and_imports_it() {
     let first = &result.records[0];
     assert_eq!(first.branch, Some("main".to_string()));
     assert_eq!(first.pr_number, Some(123));
+    assert!(!first.advisory.authoritative);
+    assert!(!first.advisory.can_select_plan_alone);
+    assert_eq!(first.advisory.optimizer_boundary, "advisory-only");
 
     let second = &result.records[1];
     assert_eq!(second.error_count, 1);
+}
+
+#[test]
+fn imports_legacy_history_and_reserializes_advisory_metadata() {
+    let mut store = BenchmarkHistoryStore::new(".andromeda/benchmark-history".to_string());
+    let legacy_json_lines = r#"{"workload_id":"protocol-smoke-contract","commit_id":"abc001","timestamp":"2026-01-15T10:00:00Z","p50_latency_us":10000,"p95_latency_us":50000,"error_count":0,"sample_count":20,"branch":"main","pr_number":null}
+{"workload_id":"protocol-smoke-contract","commit_id":"abc002","timestamp":"2026-01-15T10:10:00Z","p50_latency_us":10100,"p95_latency_us":50200,"error_count":0,"sample_count":20,"branch":"main","pr_number":null}"#;
+
+    let imported = store.import_json_lines(legacy_json_lines).unwrap();
+    assert_eq!(imported, 2);
+
+    let result = store
+        .query("protocol-smoke-contract", HistoryQuery::AllForWorkload)
+        .unwrap();
+    assert!(
+        result
+            .records
+            .iter()
+            .all(|record| !record.advisory.authoritative)
+    );
+    assert!(
+        result
+            .records
+            .iter()
+            .all(|record| !record.advisory.can_select_plan_alone)
+    );
+    assert!(
+        result
+            .records
+            .iter()
+            .all(|record| record.advisory.optimizer_boundary == "advisory-only")
+    );
+
+    let saved = store.save().unwrap();
+    assert!(saved.contains(r#""advisory_boundary":"advisory-only""#));
+    assert!(saved.contains(r#""authoritative":false"#));
+    assert!(saved.contains(r#""can_select_plan_alone":false"#));
+    assert!(saved.contains(r#""optimizer_boundary":"advisory-only""#));
+    assert!(saved.contains(r#""duration_cap_ms":"#));
+    assert!(saved.contains(r#""sample_cap":"#));
+    assert!(saved.contains(r#""temp_cap_bytes":"#));
 }
 
 #[test]
@@ -371,6 +478,13 @@ fn regression_gate_workflow_updates_history_and_finds_regression() {
 
     let updated_json = history_store.save().unwrap();
     assert!(updated_json.contains("abc004"));
+    assert!(updated_json.contains(r#""advisory_boundary":"advisory-only""#));
+    assert!(updated_json.contains(r#""authoritative":false"#));
+    assert!(updated_json.contains(r#""can_select_plan_alone":false"#));
+    assert!(updated_json.contains(r#""optimizer_boundary":"advisory-only""#));
+    assert!(updated_json.contains(r#""duration_cap_ms":"#));
+    assert!(updated_json.contains(r#""sample_cap":"#));
+    assert!(updated_json.contains(r#""temp_cap_bytes":"#));
 }
 
 #[test]

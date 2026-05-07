@@ -151,28 +151,22 @@ fn maps_begin_commit_and_rollback_boundaries_to_tx_replay_records() -> Andromeda
 }
 
 #[test]
-fn duplicate_terminal_boundaries_are_idempotent_and_preserve_first_payload() -> AndromedaResult<()>
-{
+fn exact_duplicate_terminal_boundaries_are_idempotent_and_preserve_first_payload()
+-> AndromedaResult<()> {
     let committed = TransactionId::new(12);
     let rolled_back = TransactionId::new(13);
+    let commit = TxWalAdapterReplayRecord::commit(committed, Lsn::new(2), ts(10))
+        .with_commit_metadata(3, IsolationLevel::Snapshot, 0xAAAA);
+    let rollback = TxWalAdapterReplayRecord::rollback(rolled_back, Lsn::new(5), ts(12))
+        .with_parameter_hash(0x1111);
 
     let records = map_tx_wal_replay_records([
         TxWalAdapterReplayRecord::begin(committed, Lsn::new(1)),
-        TxWalAdapterReplayRecord::commit(committed, Lsn::new(2), ts(10)).with_commit_metadata(
-            3,
-            IsolationLevel::Snapshot,
-            0xAAAA,
-        ),
-        TxWalAdapterReplayRecord::commit(committed, Lsn::new(3), ts(11)).with_commit_metadata(
-            99,
-            IsolationLevel::Serializable,
-            0xBBBB,
-        ),
+        commit,
+        commit,
         TxWalAdapterReplayRecord::begin(rolled_back, Lsn::new(4)),
-        TxWalAdapterReplayRecord::rollback(rolled_back, Lsn::new(5), ts(12))
-            .with_parameter_hash(0x1111),
-        TxWalAdapterReplayRecord::rollback(rolled_back, Lsn::new(6), ts(13))
-            .with_parameter_hash(0x2222),
+        rollback,
+        rollback,
     ])?;
 
     assert_eq!(
@@ -183,6 +177,31 @@ fn duplicate_terminal_boundaries_are_idempotent_and_preserve_first_payload() -> 
         ]
     );
     Ok(())
+}
+
+#[test]
+fn divergent_duplicate_terminal_boundaries_are_rejected() {
+    let tx_id = TransactionId::new(14);
+
+    let error = expect_error(map_tx_wal_replay_records([
+        TxWalAdapterReplayRecord::begin(tx_id, Lsn::new(1)),
+        TxWalAdapterReplayRecord::commit(tx_id, Lsn::new(2), ts(10)).with_commit_metadata(
+            3,
+            IsolationLevel::Snapshot,
+            0xAAAA,
+        ),
+        TxWalAdapterReplayRecord::commit(tx_id, Lsn::new(3), ts(11)).with_commit_metadata(
+            99,
+            IsolationLevel::Serializable,
+            0xBBBB,
+        ),
+    ]));
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Transaction);
+    assert_eq!(
+        error.message(),
+        TxWalAdapterError::ConflictingTerminalRecord.message()
+    );
 }
 
 #[test]
@@ -209,8 +228,8 @@ fn ignores_storage_records_that_do_not_belong_to_a_transaction() -> AndromedaRes
     let records = map_tx_wal_replay_records([
         TxWalAdapterReplayRecord::other(Lsn::new(1), None),
         TxWalAdapterReplayRecord::begin(tx_id, Lsn::new(2)),
-        TxWalAdapterReplayRecord::other(Lsn::new(9), None),
         TxWalAdapterReplayRecord::other(Lsn::new(3), Some(tx_id)),
+        TxWalAdapterReplayRecord::other(Lsn::new(9), None),
     ])?;
 
     assert_eq!(
@@ -304,6 +323,80 @@ fn rejects_lsn_regression_for_one_transaction() {
 }
 
 #[test]
+fn rejects_global_lsn_regression_across_transactions() {
+    let first = TransactionId::new(34);
+    let second = TransactionId::new(35);
+
+    let error = expect_error(map_tx_wal_replay_records([
+        TxWalAdapterReplayRecord::begin(first, Lsn::new(40)),
+        TxWalAdapterReplayRecord::begin(second, Lsn::new(39)),
+    ]));
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Transaction);
+    assert_eq!(
+        error.message(),
+        TxWalAdapterError::ReplayLsnRegression.message()
+    );
+}
+
+#[test]
+fn rejects_equal_lsn_for_distinct_replay_records() {
+    let first = TransactionId::new(42);
+    let second = TransactionId::new(43);
+
+    let error = expect_error(map_tx_wal_replay_records([
+        TxWalAdapterReplayRecord::begin(first, Lsn::new(45)),
+        TxWalAdapterReplayRecord::begin(second, Lsn::new(45)),
+    ]));
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Transaction);
+    assert_eq!(
+        error.message(),
+        TxWalAdapterError::ReplayLsnRegression.message()
+    );
+}
+
+#[test]
+fn terminal_replay_record_carries_durable_lsn_to_commit_log_record() -> AndromedaResult<()> {
+    let tx_id = TransactionId::new(36);
+
+    let records = map_tx_wal_replay_records([
+        TxWalAdapterReplayRecord::begin(tx_id, Lsn::new(1)),
+        TxWalAdapterReplayRecord::commit(tx_id, Lsn::new(2), ts(20)).with_durable_lsn(Lsn::new(5)),
+    ])?;
+
+    assert_eq!(
+        records,
+        vec![TxWalReplayRecord::commit_with_durable_lsn(
+            tx_id,
+            Lsn::new(2),
+            Lsn::new(5),
+            ts(20),
+            0,
+            IsolationLevel::Snapshot,
+        )]
+    );
+    Ok(())
+}
+
+#[test]
+fn rejects_terminal_replay_record_beyond_durable_prefix() {
+    let tx_id = TransactionId::new(37);
+
+    let error = expect_error(map_tx_wal_replay_records([
+        TxWalAdapterReplayRecord::begin(tx_id, Lsn::new(1)),
+        TxWalAdapterReplayRecord::rollback(tx_id, Lsn::new(4), ts(21))
+            .with_durable_lsn(Lsn::new(3)),
+    ]));
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Storage);
+    assert_eq!(
+        error.message(),
+        TxWalAdapterError::DurableLsnBehindTerminal.message()
+    );
+}
+
+#[test]
 fn rejects_terminal_replay_record_without_begin_evidence() {
     let tx_id = TransactionId::new(40);
 
@@ -319,6 +412,7 @@ fn rejects_boundary_record_without_transaction_id() {
     let error = expect_error(map_tx_wal_replay_records([TxWalAdapterReplayRecord {
         kind: TxWalAdapterReplayKind::Begin,
         lsn: Lsn::new(41),
+        durable_lsn: Lsn::new(41),
         tx_id: None,
         timestamp: EngineTimestamp::ZERO,
         row_count_affected: 0,

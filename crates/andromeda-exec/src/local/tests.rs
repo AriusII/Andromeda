@@ -2,7 +2,9 @@ use super::runtime::LocalVerticalRuntime;
 use super::types::LocalProcedure;
 use andromeda_catalog::{
     CatalogLifecycleTarget, CatalogSnapshot, CatalogSystemStore, DefinitionBatch,
-    DefinitionBatchId, DefinitionOperation, ProcedureContract, ProcedureContractRef,
+    DefinitionBatchId, DefinitionOperation, InvocationRuntimeRecordOutcome, PolicyVersion,
+    ProcedureContract, ProcedureContractBinding, ProcedureContractRef, ProcedureRuntimePlanId,
+    ProcedureRuntimeStatus, ProcedureStore, ProcedureStoreEntry, StatsVersion,
     inventory_domain_definition_batch, inventory_reserve_stock_contract,
 };
 use andromeda_core::{
@@ -20,8 +22,9 @@ use andromeda_storage::{InMemoryWal, Lsn, WalRecordKind};
 use andromeda_tx::TransactionState;
 
 use crate::{
-    CompletionStatus, InvocationContext, InvocationRequest, InvocationWal, LocalDispatcher,
-    LocalRollbackPlan, ResultStreamMetadata, RollbackCause, SurfacePlaneAuthorizer,
+    CompletionStatus, EXEC_TX_ROLLBACK_PAYLOAD_LEN, InvocationContext, InvocationRequest,
+    InvocationWal, LocalDispatcher, LocalRollbackPlan, ResultStreamMetadata, RollbackCause,
+    SurfacePlaneAuthorizer,
 };
 
 #[derive(Debug, Default)]
@@ -50,13 +53,15 @@ impl InvocationWal for TestWal {
 }
 
 fn request(expected_contract_hash: ContractHash) -> InvocationRequest {
+    let procedure = ProcedureContractRef {
+        procedure_id: ProcedureId::new(2),
+        contract_hash: ContractHash::test_vector(7),
+        catalog_version: CatalogVersion::new(3),
+    };
     InvocationRequest {
         invocation_id: InvocationId::new(1),
-        procedure: ProcedureContractRef {
-            procedure_id: ProcedureId::new(2),
-            contract_hash: ContractHash::test_vector(7),
-            catalog_version: CatalogVersion::new(3),
-        },
+        procedure,
+        expected_binding: Some(test_binding(procedure)),
         expected_contract_hash,
         catalog_version: CatalogVersion::new(3),
         structured_parameters: Vec::new(),
@@ -67,6 +72,7 @@ fn inventory_request(contract: &ProcedureContract) -> InvocationRequest {
     InvocationRequest {
         invocation_id: InvocationId::new(700),
         procedure: contract.as_ref(),
+        expected_binding: Some(contract.binding()),
         expected_contract_hash: contract.contract_hash,
         catalog_version: contract.object.catalog_version,
         structured_parameters: Vec::new(),
@@ -76,6 +82,7 @@ fn inventory_request(contract: &ProcedureContract) -> InvocationRequest {
 fn inventory_local_procedure(contract: &ProcedureContract) -> LocalProcedure {
     LocalProcedure {
         contract: contract.as_ref(),
+        contract_binding: contract.binding(),
         required_permissions: contract.required_permissions.clone(),
         result_metadata: ResultStreamMetadata {
             stream_id: 1,
@@ -86,6 +93,16 @@ fn inventory_local_procedure(contract: &ProcedureContract) -> LocalProcedure {
         },
         mutation_payload: b"Inventory.ReserveStock".to_vec(),
         rows_affected: 1,
+    }
+}
+
+fn test_binding(procedure: ProcedureContractRef) -> ProcedureContractBinding {
+    ProcedureContractBinding {
+        procedure_id: procedure.procedure_id,
+        catalog_version: procedure.catalog_version,
+        contract_hash: procedure.contract_hash,
+        stats_version: StatsVersion::new(1),
+        policy_version: PolicyVersion::new([7; PolicyVersion::LEN]),
     }
 }
 
@@ -128,6 +145,9 @@ fn local_vertical_runtime_commits_only_after_durable_wal() {
     let mut runtime = LocalVerticalRuntime::new(TestWal::default());
     let procedure = LocalProcedure {
         contract: request(ContractHash::test_vector(7)).procedure,
+        contract_binding: request(ContractHash::test_vector(7))
+            .expected_binding
+            .unwrap(),
         required_permissions: Vec::new(),
         result_metadata: ResultStreamMetadata {
             stream_id: 1,
@@ -163,6 +183,9 @@ fn local_vertical_runtime_rejects_contract_before_begin() {
     let mut runtime = LocalVerticalRuntime::new(TestWal::default());
     let procedure = LocalProcedure {
         contract: request(ContractHash::test_vector(7)).procedure,
+        contract_binding: request(ContractHash::test_vector(7))
+            .expected_binding
+            .unwrap(),
         required_permissions: Vec::new(),
         result_metadata: ResultStreamMetadata {
             stream_id: 1,
@@ -195,6 +218,10 @@ fn local_vertical_runtime_rejects_executable_contract_mismatch_before_begin() {
             procedure_id: ProcedureId::new(99),
             ..request(ContractHash::test_vector(7)).procedure
         },
+        contract_binding: test_binding(ProcedureContractRef {
+            procedure_id: ProcedureId::new(99),
+            ..request(ContractHash::test_vector(7)).procedure
+        }),
         required_permissions: Vec::new(),
         result_metadata: ResultStreamMetadata {
             stream_id: 1,
@@ -225,12 +252,14 @@ fn local_vertical_runtime_uses_inventory_contract_and_in_memory_wal() {
     let request = InvocationRequest {
         invocation_id: InvocationId::new(700),
         procedure: contract.as_ref(),
+        expected_binding: Some(contract.binding()),
         expected_contract_hash: contract.contract_hash,
         catalog_version: contract.object.catalog_version,
         structured_parameters: Vec::new(),
     };
     let procedure = LocalProcedure {
         contract: contract.as_ref(),
+        contract_binding: contract.binding(),
         required_permissions: contract.required_permissions.clone(),
         result_metadata: ResultStreamMetadata {
             stream_id: 1,
@@ -257,6 +286,48 @@ fn local_vertical_runtime_uses_inventory_contract_and_in_memory_wal() {
     assert_eq!(outcome.completion.durable_lsn, Some(Lsn::new(3)));
     assert_eq!(runtime.wal().durable_lsn(), Lsn::new(3));
     assert_eq!(runtime.wal().replay_durable().len(), 3);
+
+    let runtime_record = outcome.procedure_runtime_record();
+    assert_eq!(runtime_record.invocation_id, InvocationId::new(700));
+    assert_eq!(runtime_record.binding, contract.binding());
+    assert_eq!(runtime_record.status, ProcedureRuntimeStatus::Committed);
+    assert_eq!(runtime_record.error_kind, None);
+    assert!(runtime_record.completed_at >= runtime_record.started_at);
+    assert_eq!(
+        runtime_record.duration_millis,
+        runtime_record.completed_at.as_unix_millis() - runtime_record.started_at.as_unix_millis()
+    );
+    assert_eq!(runtime_record.counters.rows_read, 1);
+    assert_eq!(runtime_record.counters.rows_written, 1);
+    assert!(runtime_record.counters.wal_bytes > 0);
+    assert_eq!(runtime_record.counters.temp_bytes, 0);
+    let plan_key = runtime_record
+        .plan_key
+        .expect("local runtime emits a singleton plan key");
+    assert_eq!(plan_key.catalog_version, contract.object.catalog_version);
+    assert_eq!(plan_key.contract_hash, contract.contract_hash);
+    assert_eq!(
+        runtime_record.plan_id,
+        Some(ProcedureRuntimePlanId::from_plan_cache_key(&plan_key))
+    );
+
+    let mut procedure_store = ProcedureStore::new();
+    procedure_store
+        .register(ProcedureStoreEntry::from_contract(&contract).unwrap())
+        .unwrap();
+    assert_eq!(
+        outcome
+            .attach_runtime_to_procedure_store(&mut procedure_store)
+            .unwrap(),
+        InvocationRuntimeRecordOutcome::Stored
+    );
+    assert_eq!(
+        outcome
+            .attach_runtime_to_procedure_store(&mut procedure_store)
+            .unwrap(),
+        InvocationRuntimeRecordOutcome::Duplicate
+    );
+    assert_eq!(procedure_store.total_recorded_runtime_invocations(), 1);
 }
 
 #[test]
@@ -265,12 +336,14 @@ fn local_vertical_runtime_rejects_missing_permission_before_begin() {
     let request = InvocationRequest {
         invocation_id: InvocationId::new(701),
         procedure: contract.as_ref(),
+        expected_binding: Some(contract.binding()),
         expected_contract_hash: contract.contract_hash,
         catalog_version: contract.object.catalog_version,
         structured_parameters: Vec::new(),
     };
     let procedure = LocalProcedure {
         contract: contract.as_ref(),
+        contract_binding: contract.binding(),
         required_permissions: contract.required_permissions.clone(),
         result_metadata: ResultStreamMetadata {
             stream_id: 1,
@@ -294,6 +367,43 @@ fn local_vertical_runtime_rejects_missing_permission_before_begin() {
 
     assert_eq!(err.kind(), AndromedaErrorKind::Security);
     assert!(runtime.wal().is_empty());
+}
+
+#[test]
+fn local_vertical_runtime_rejects_permissioned_execute_without_context_before_begin() {
+    let contract = inventory_reserve_stock_contract().unwrap();
+    let procedure = inventory_local_procedure(&contract);
+    let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
+
+    let err = runtime
+        .execute(inventory_request(&contract), &procedure, TraceId::new(7005))
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Security);
+    assert!(err.message().contains("authorization context"));
+    assert!(runtime.wal().is_empty());
+    assert_eq!(runtime.transactions().live_count().unwrap(), 0);
+}
+
+#[test]
+fn local_vertical_runtime_rejects_permissioned_rollback_without_context_before_begin() {
+    let contract = inventory_reserve_stock_contract().unwrap();
+    let procedure = inventory_local_procedure(&contract);
+    let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
+
+    let err = runtime
+        .rollback_business_validation_failure_after_begin(
+            inventory_request(&contract),
+            &procedure,
+            TraceId::new(7006),
+            "insufficient inventory stock for reservation",
+        )
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Security);
+    assert!(err.message().contains("authorization context"));
+    assert!(runtime.wal().is_empty());
+    assert_eq!(runtime.transactions().live_count().unwrap(), 0);
 }
 
 #[test]
@@ -509,6 +619,7 @@ fn failure_request() -> InvocationRequest {
 fn failure_procedure() -> LocalProcedure {
     LocalProcedure {
         contract: failure_request().procedure,
+        contract_binding: failure_request().expected_binding.unwrap(),
         required_permissions: Vec::new(),
         result_metadata: ResultStreamMetadata {
             stream_id: 1,
@@ -557,11 +668,20 @@ fn business_failure_routes_through_failed_before_durable_rollback() {
             .any(|(_, kind, _, _)| *kind == WalRecordKind::TxCommit)
     );
     assert!(wal.durable_lsn >= wal.records[1].0);
-    assert!(
-        wal.records[1]
-            .3
-            .starts_with(b"andromeda.exec.business-validation-failed.v1\0")
+    assert_eq!(wal.records[1].3.len(), EXEC_TX_ROLLBACK_PAYLOAD_LEN);
+
+    let runtime_record = outcome.procedure_runtime_record();
+    assert_eq!(runtime_record.binding, procedure.contract_binding);
+    assert_eq!(runtime_record.status, ProcedureRuntimeStatus::RolledBack);
+    assert_eq!(
+        runtime_record.error_kind,
+        Some(AndromedaErrorKind::Execution)
     );
+    assert_eq!(runtime_record.counters.rows_written, 0);
+    assert!(runtime_record.counters.rows_read > 0);
+    assert!(runtime_record.counters.wal_bytes > 0);
+    assert!(runtime_record.plan_key.is_some());
+    assert!(runtime_record.plan_id.is_some());
 }
 
 #[test]
@@ -596,11 +716,7 @@ fn poison_failure_routes_through_poisoned_before_durable_rollback() {
             .any(|(_, kind, _, _)| *kind == WalRecordKind::TxCommit)
     );
     assert!(wal.durable_lsn >= wal.records[1].0);
-    assert!(
-        wal.records[1]
-            .3
-            .starts_with(b"andromeda.exec.poisoned-rollback.v1\0")
-    );
+    assert_eq!(wal.records[1].3.len(), EXEC_TX_ROLLBACK_PAYLOAD_LEN);
 }
 
 #[test]

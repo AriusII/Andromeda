@@ -43,6 +43,7 @@ dependencies = [
  "andromeda-quic",
  "andromeda-srpl",
  "andromeda-storage",
+ "sha2",
 ]
 
 [[package]]

@@ -1,6 +1,16 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, PipelineClass};
+use andromeda_core::{
+    AndromedaError, AndromedaErrorKind, AndromedaResult, PipelineClass, ResourceBudget,
+};
+use andromeda_observe::TraceId;
+use andromeda_storage::{
+    CoreIoPlacementRequest, OperationalProfile, PageSize, StorageIoBudgetScope,
+    StorageWorkloadClass,
+};
 
-use crate::{CompletionStatus, ExecutionIoAdmissionDecision, InvocationReject, RollbackCause};
+use crate::{
+    CompletionStatus, ExecutionIoAdmissionDecision, ExecutionIoAdmissionRequest, InvocationReject,
+    RollbackCause,
+};
 
 pub fn require_local_procedure_execution_io_admission(
     io_admission: Result<ExecutionIoAdmissionDecision, InvocationReject>,
@@ -36,6 +46,44 @@ pub fn require_local_procedure_execution_io_admission(
     Ok(decision)
 }
 
+pub(super) fn require_local_procedure_execution_io_admission_for_trace(
+    io_admission: Result<ExecutionIoAdmissionDecision, InvocationReject>,
+    trace_id: TraceId,
+) -> AndromedaResult<ExecutionIoAdmissionDecision> {
+    let decision = require_local_procedure_execution_io_admission(io_admission)?;
+    if decision.trace.trace_id != trace_id {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Contract,
+            "execution IO admission evidence trace id must match local Procedure invocation trace",
+        ));
+    }
+
+    Ok(decision)
+}
+
+pub(super) fn default_local_procedure_execution_io_admission(
+    trace_id: TraceId,
+) -> AndromedaResult<ExecutionIoAdmissionDecision> {
+    let profile = OperationalProfile::hot_write();
+    let placement_request = CoreIoPlacementRequest::new(
+        StorageWorkloadClass::HotAppend,
+        StorageIoBudgetScope::Page(PageSize::KiB16),
+        profile.workflow.page_budget.path_budget,
+        false,
+    );
+    let request = ExecutionIoAdmissionRequest::new(
+        profile,
+        PipelineClass::ForegroundExecution,
+        ResourceBudget::new(PageSize::KiB16.bytes() as u64, 0, 1),
+        placement_request,
+    );
+
+    require_local_procedure_execution_io_admission_for_trace(
+        request.validate_admission(trace_id),
+        trace_id,
+    )
+}
+
 pub(super) fn io_admission_error_kind(status: CompletionStatus) -> AndromedaErrorKind {
     match status {
         CompletionStatus::PermissionDenied => AndromedaErrorKind::Security,
@@ -67,8 +115,6 @@ pub(super) fn rollback_payload_for_cause(
     }
 
     let domain: &[u8] = match cause {
-        // Preserve the historical business-validation domain tag so existing
-        // recovery tools and tests keep parsing the WAL payload format.
         RollbackCause::Direct | RollbackCause::BusinessFailure => {
             b"andromeda.exec.business-validation-failed.v1"
         }

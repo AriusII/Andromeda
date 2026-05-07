@@ -3,9 +3,10 @@ use andromeda_core::AndromedaResult;
 use crate::PageSize;
 
 use super::{
-    HEAP_PAGE_V1_HEADER_SIZE, HEAP_PAGE_V1_SLOT_METADATA_SIZE, HEAP_PAGE_V1_TRAILER_SIZE,
+    HEAP_PAGE_V1_PAYLOAD_OFFSET, HEAP_PAGE_V1_SLOT_METADATA_SIZE, HEAP_PAGE_V1_TRAILER_SIZE,
     SlotEntry, heap_error, heap_page_v1_max_slots, heap_page_v1_metadata_offset,
     heap_page_v1_read_and_validate_slots, heap_page_v1_read_slot_metadata,
+    heap_page_v1_validate_format_guard,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -34,11 +35,12 @@ pub struct SlotDirectory {
 
 impl SlotDirectory {
     pub fn new(page_size: PageSize) -> Self {
-        let header_size = HEAP_PAGE_V1_HEADER_SIZE as u16;
+        debug_assert!(heap_page_v1_validate_format_guard().is_ok());
+        let payload_offset = HEAP_PAGE_V1_PAYLOAD_OFFSET as u16;
         Self {
             page_size,
             slots: Vec::new(),
-            free_offset: header_size,
+            free_offset: payload_offset,
         }
     }
 
@@ -63,19 +65,24 @@ impl SlotDirectory {
             .iter()
             .any(|slot| slot.is_deleted() && slot.offset == 0);
         let slot_entry_space = if can_reuse_deleted_slot {
-            0u16
+            0usize
         } else {
-            SlotEntry::SIZE as u16
+            SlotEntry::SIZE
         };
-        let required_space = length.saturating_add(slot_entry_space);
-        if required_space > self.free_space() {
+        let required_space = usize::from(length)
+            .checked_add(slot_entry_space)
+            .ok_or_else(|| heap_error("tuple allocation space overflow"))?;
+        if required_space > usize::from(self.free_space()) {
             return Err(heap_error("insufficient free space for tuple"));
         }
 
         for (i, slot) in self.slots.iter_mut().enumerate() {
             if slot.is_deleted() && slot.offset == 0 {
                 *slot = SlotEntry::new(self.free_offset, length);
-                self.free_offset = self.free_offset.saturating_add(length);
+                self.free_offset = self
+                    .free_offset
+                    .checked_add(length)
+                    .ok_or_else(|| heap_error("heap page free offset overflow"))?;
                 return Ok(SlotId::new(i as u16));
             }
         }
@@ -87,7 +94,10 @@ impl SlotDirectory {
 
         let slot_id = self.slots.len() as u16;
         self.slots.push(SlotEntry::new(self.free_offset, length));
-        self.free_offset = self.free_offset.saturating_add(length);
+        self.free_offset = self
+            .free_offset
+            .checked_add(length)
+            .ok_or_else(|| heap_error("heap page free offset overflow"))?;
 
         Ok(SlotId::new(slot_id))
     }
@@ -161,8 +171,8 @@ impl SlotDirectory {
 
         for (i, slot) in self.slots.iter().enumerate() {
             let slot_offset = metadata_offset - ((i + 1) * SlotEntry::SIZE);
-            if slot_offset < HEAP_PAGE_V1_HEADER_SIZE {
-                return Err(heap_error("slot directory overlaps page header"));
+            if slot_offset < HEAP_PAGE_V1_PAYLOAD_OFFSET {
+                return Err(heap_error("slot directory overlaps heap payload offset"));
             }
             let slot_bytes = slot.to_bytes();
             page_data[slot_offset..slot_offset + 5].copy_from_slice(&slot_bytes);
@@ -215,6 +225,7 @@ impl SlotDirectory {
 mod tests {
     use crate::PageSize;
 
+    use super::super::HEAP_PAGE_V1_PAYLOAD_OFFSET;
     use super::{SlotDirectory, SlotEntry};
 
     #[test]
@@ -232,7 +243,7 @@ mod tests {
         assert_eq!(dir.slot_count(), 1);
 
         let (offset, length) = dir.get_slot(slot_id).expect("get").expect("exists");
-        assert_eq!((offset, length), (96, 100));
+        assert_eq!((offset, length), (HEAP_PAGE_V1_PAYLOAD_OFFSET as u16, 100));
     }
 
     #[test]
@@ -245,11 +256,11 @@ mod tests {
         assert_eq!(dir.slot_count(), 3);
 
         let (o1, l1) = dir.get_slot(slot1).expect("get").expect("exists");
-        assert_eq!((o1, l1), (96, 100));
+        assert_eq!((o1, l1), (HEAP_PAGE_V1_PAYLOAD_OFFSET as u16, 100));
         let (o2, l2) = dir.get_slot(slot2).expect("get").expect("exists");
-        assert_eq!((o2, l2), (196, 200));
+        assert_eq!((o2, l2), ((HEAP_PAGE_V1_PAYLOAD_OFFSET + 100) as u16, 200));
         let (o3, l3) = dir.get_slot(slot3).expect("get").expect("exists");
-        assert_eq!((o3, l3), (396, 150));
+        assert_eq!((o3, l3), ((HEAP_PAGE_V1_PAYLOAD_OFFSET + 300) as u16, 150));
     }
 
     #[test]
@@ -288,6 +299,20 @@ mod tests {
 
         assert!(after < initial);
         assert_eq!(initial - after, 1000 + SlotEntry::SIZE as u16);
+    }
+
+    #[test]
+    fn test_allocate_rejects_tuple_larger_than_page_without_u16_wrap() {
+        let mut dir = SlotDirectory::new(PageSize::KiB16);
+        let initial_free_space = dir.free_space();
+
+        let err = dir
+            .allocate_slot(u16::MAX)
+            .expect_err("tuple larger than page must be rejected");
+
+        assert!(err.message().contains("insufficient free space"));
+        assert_eq!(dir.slot_count(), 0);
+        assert_eq!(dir.free_space(), initial_free_space);
     }
 
     #[test]

@@ -15,6 +15,10 @@ pub struct SessionToken {
 }
 
 impl SessionToken {
+    /// Constructs non-secret session evidence without validation.
+    ///
+    /// This compatibility constructor preserves the supplied token exactly.
+    /// Callers must not pass bearer credentials or other secret material.
     pub fn new(token: impl Into<String>) -> Self {
         Self {
             token: token.into(),

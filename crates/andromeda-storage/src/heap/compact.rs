@@ -1,6 +1,6 @@
 use andromeda_core::AndromedaResult;
 
-use super::{HEAP_PAGE_V1_HEADER_SIZE, HEAP_PAGE_V1_TRAILER_SIZE, HeapPage, SlotEntry};
+use super::{HEAP_PAGE_V1_PAYLOAD_OFFSET, HEAP_PAGE_V1_TRAILER_SIZE, HeapPage, SlotEntry};
 
 impl HeapPage {
     /// Compact deleted tuples while preserving slot IDs for live rows.
@@ -17,13 +17,13 @@ impl HeapPage {
         }
 
         let mut new_data = vec![0u8; self.data.len()];
-        new_data[..HEAP_PAGE_V1_HEADER_SIZE]
-            .copy_from_slice(&self.data[..HEAP_PAGE_V1_HEADER_SIZE]);
+        new_data[..HEAP_PAGE_V1_PAYLOAD_OFFSET]
+            .copy_from_slice(&self.data[..HEAP_PAGE_V1_PAYLOAD_OFFSET]);
 
         let trailer_start = self.data.len() - HEAP_PAGE_V1_TRAILER_SIZE;
         new_data[trailer_start..].copy_from_slice(&self.data[trailer_start..]);
 
-        let mut new_offset = HEAP_PAGE_V1_HEADER_SIZE as u16;
+        let mut new_offset = HEAP_PAGE_V1_PAYLOAD_OFFSET as u16;
         let mut new_slot_directory = Vec::with_capacity(self.slot_directory.len());
 
         // Slot ids stay stable: deleted slots remain deleted and live slots are rewritten.

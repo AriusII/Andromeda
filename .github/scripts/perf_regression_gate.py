@@ -19,15 +19,15 @@ def pct_change(current: float, baseline: float) -> float:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Wave 14 performance regression gate")
+    parser = argparse.ArgumentParser(description="Release-candidate performance regression gate")
     parser.add_argument(
         "--baseline",
-        default=".github/perf/baseline.wave14.json",
+        default=".github/perf/baseline.release-candidate.json",
         help="Path to baseline JSON",
     )
     parser.add_argument(
         "--thresholds",
-        default=".github/perf/thresholds.wave14.json",
+        default=".github/perf/thresholds.release-candidate.json",
         help="Path to thresholds JSON",
     )
     parser.add_argument(
@@ -100,7 +100,7 @@ def main() -> int:
         )
 
     summary = {
-        "wave": "14",
+        "gate": "release-candidate",
         "baseline_version": baseline["baseline_version"],
         "threshold_policy_version": thresholds["policy_version"],
         "status": "FAIL" if failures else "PASS",
@@ -111,7 +111,7 @@ def main() -> int:
     )
 
     md_lines = [
-        "# Wave 14 performance regression report",
+        "# Release-candidate performance regression report",
         "",
         f"- Status: **{summary['status']}**",
         f"- Baseline version: `{baseline['baseline_version']}`",
@@ -138,7 +138,7 @@ def main() -> int:
             print(f"::error::{item}")
         return 1
 
-    print("Wave 14 performance regression gate passed.")
+    print("Release-candidate performance regression gate passed.")
     return 0
 
 

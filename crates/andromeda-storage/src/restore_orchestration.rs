@@ -51,7 +51,8 @@ pub struct RestoreOrchestration {
     pub backup_manifest: BackupManifest,
 
     /// Target LSN for PITR (point-in-time recovery).
-    /// Must be within backup's WAL archive range [start, end_inclusive].
+    /// Must be exactly the snapshot base checkpoint or within backup's WAL
+    /// archive range [start, end_inclusive].
     /// None is NOT allowed; app must be explicit about the target.
     pub pitr_target_lsn: Lsn,
 
@@ -89,23 +90,66 @@ impl RestoreOrchestration {
     ///
     /// Checks:
     /// - Manifest is valid (CRC, identity, WAL bounds)
-    /// - PITR target LSN is within backup's WAL archive range
-    /// - Audit trace has valid trace ID
+    /// - PITR target LSN is either exactly the snapshot base checkpoint or
+    ///   within backup's WAL archive range
+    /// - PITR target LSN does not fall between the snapshot base and required WAL start
+    /// - Audit trace binds to the same backup id, target LSN, stage, and manifest checksum
     pub fn validate(&self) -> AndromedaResult<()> {
-        self.backup_manifest.validate()?;
+        validate_restore_prerequisites(&self.backup_manifest, self.pitr_target_lsn)?;
+        self.audit.validate()?;
+        self.audit.validate_binding(
+            &self.backup_manifest,
+            self.pitr_target_lsn,
+            self.recovery_stage,
+        )?;
 
-        // Validate PITR target LSN is in range
-        if !self
-            .backup_manifest
-            .wal_archive
-            .contains(self.pitr_target_lsn)
+        if self.recovery_stage == RecoveryStage::ForensicStart
+            && self.validation_policy != RestoreValidationPolicy::Full
         {
             return Err(restore_error(
-                "PITR target LSN must be within backup WAL archive range",
+                "ForensicStart restore orchestration requires full validation",
             ));
         }
 
+        Ok(())
+    }
+
+    /// Validate restore orchestration against durable artifact preflight evidence.
+    ///
+    /// This stricter gate is intended for startup paths that have already loaded
+    /// a file-backed backup artifact. The audit checksum must bind the complete
+    /// preflight evidence, not only the logical backup manifest.
+    pub fn validate_with_preflight(
+        &self,
+        preflight: &RestoreArtifactPreflight,
+    ) -> AndromedaResult<()> {
+        validate_restore_prerequisites(&self.backup_manifest, self.pitr_target_lsn)?;
         self.audit.validate()?;
+        self.audit.validate_preflight_binding(preflight)?;
+
+        if self.backup_manifest.backup_id != preflight.backup_id {
+            return Err(restore_error(
+                "restore preflight backup ID must match backup manifest",
+            ));
+        }
+        if preflight.validation_policy != self.validation_policy {
+            return Err(restore_error(
+                "restore preflight validation policy must match orchestration policy",
+            ));
+        }
+        if preflight.source_checkpoint_lsn != self.backup_manifest.snapshot.base_checkpoint_lsn {
+            return Err(restore_error(
+                "restore preflight source checkpoint LSN must match backup manifest",
+            ));
+        }
+
+        if self.recovery_stage == RecoveryStage::ForensicStart
+            && self.validation_policy != RestoreValidationPolicy::Full
+        {
+            return Err(restore_error(
+                "ForensicStart restore orchestration requires full validation",
+            ));
+        }
 
         Ok(())
     }
@@ -127,12 +171,14 @@ pub enum RestoreValidationPolicy {
 pub struct RestoreArtifactPreflight {
     pub backup_id: BackupId,
     pub artifact_root: PathBuf,
+    pub manifest_format_version: u16,
     pub validation_policy: RestoreValidationPolicy,
     pub pitr_target_lsn: Lsn,
     pub source_checkpoint_lsn: Lsn,
     pub manifest_digest: BackupArtifactDigest,
     pub snapshot_digest: BackupArtifactDigest,
     pub wal_archive_evidence: BackupWalArchiveEvidence,
+    pub restore_evidence_checksum: u64,
     pub replay_segment_count: usize,
 }
 
@@ -156,16 +202,26 @@ pub fn validate_restore_artifact_preflight(
     let wal_descriptors = record.wal_segment_descriptors()?;
     let replay_segments =
         plan_replay_segments(&record.manifest, pitr_target_lsn, &wal_descriptors)?;
+    let restore_evidence_checksum = compute_restore_preflight_checksum(
+        &record.manifest,
+        record.manifest_format_version,
+        pitr_target_lsn,
+        &record.artifact_set.backup_manifest,
+        &record.artifact_set.cold_snapshot.artifact,
+        &record.wal_archive_evidence,
+    );
 
     Ok(RestoreArtifactPreflight {
         backup_id,
         artifact_root: store.root().to_path_buf(),
+        manifest_format_version: record.manifest_format_version,
         validation_policy,
         pitr_target_lsn,
         source_checkpoint_lsn: record.source_checkpoint_lsn,
         manifest_digest: record.artifact_set.backup_manifest,
         snapshot_digest: record.artifact_set.cold_snapshot.artifact,
         wal_archive_evidence: record.wal_archive_evidence,
+        restore_evidence_checksum,
         replay_segment_count: replay_segments.len(),
     })
 }
@@ -178,6 +234,23 @@ pub enum RecoveryStage {
 
     /// Forensic startup: detect and report corruption; do not repair in-place
     ForensicStart,
+}
+
+impl RecoveryStage {
+    /// Whether this stage may open application traffic after recovery gates pass.
+    pub const fn application_traffic_allowed(self) -> bool {
+        matches!(self, Self::SafeStart)
+    }
+
+    /// Whether this stage may mutate durable application truth during startup.
+    pub const fn durable_truth_mutation_allowed(self) -> bool {
+        matches!(self, Self::SafeStart)
+    }
+
+    /// Whether this stage may perform in-place repair.
+    pub const fn in_place_repair_allowed(self) -> bool {
+        false
+    }
 }
 
 /// Immutable audit trace capturing restore inputs and final status.
@@ -236,6 +309,63 @@ impl RestoreAuditTrace {
             return Err(restore_error("backup ID must not be zero"));
         }
 
+        if self.checksum == 0 {
+            return Err(restore_error("restore audit checksum must not be zero"));
+        }
+
+        Ok(())
+    }
+
+    /// Validate that this trace describes the exact restore orchestration being executed.
+    pub fn validate_binding(
+        &self,
+        manifest: &BackupManifest,
+        pitr_target_lsn: Lsn,
+        stage: RecoveryStage,
+    ) -> AndromedaResult<()> {
+        if self.backup_id != manifest.backup_id {
+            return Err(restore_error(
+                "restore audit backup ID must match backup manifest",
+            ));
+        }
+        if self.pitr_target_lsn != pitr_target_lsn {
+            return Err(restore_error(
+                "restore audit PITR target LSN must match orchestration target",
+            ));
+        }
+        if self.stage != stage {
+            return Err(restore_error(
+                "restore audit recovery stage must match orchestration stage",
+            ));
+        }
+        if self.checksum != compute_restore_checksum(manifest) {
+            return Err(restore_error(
+                "restore audit checksum must match backup manifest",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Validate that this trace binds to a durable restore artifact preflight.
+    pub fn validate_preflight_binding(
+        &self,
+        preflight: &RestoreArtifactPreflight,
+    ) -> AndromedaResult<()> {
+        if self.backup_id != preflight.backup_id {
+            return Err(restore_error(
+                "restore audit backup ID must match preflight backup ID",
+            ));
+        }
+        if self.pitr_target_lsn != preflight.pitr_target_lsn {
+            return Err(restore_error(
+                "restore audit PITR target LSN must match preflight target",
+            ));
+        }
+        if self.checksum != preflight.restore_evidence_checksum {
+            return Err(restore_error(
+                "restore audit checksum must match preflight evidence checksum",
+            ));
+        }
         Ok(())
     }
 
@@ -276,6 +406,13 @@ pub struct WalSegmentToReplay {
 
     /// Whether this segment contains or passes the PITR target LSN
     pub contains_pitr_target: bool,
+
+    /// Last LSN the replay executor may apply from this segment.
+    ///
+    /// For segments before the target this is the segment's last LSN. For the
+    /// segment containing the PITR target this is exactly the requested target
+    /// LSN, so replay does not advance to the segment tail by accident.
+    pub replay_stop_lsn: Lsn,
 }
 
 /// Validate restore prerequisites: manifest + PITR target LSN.
@@ -285,7 +422,8 @@ pub struct WalSegmentToReplay {
 /// Checks:
 /// - Manifest identity fields are non-zero
 /// - WAL archive range is valid
-/// - PITR target LSN is within [start, end_inclusive]
+/// - PITR target LSN is exactly the snapshot base checkpoint, or within
+///   [start, end_inclusive]
 pub fn validate_restore_prerequisites(
     manifest: &BackupManifest,
     pitr_lsn: Lsn,
@@ -296,8 +434,27 @@ pub fn validate_restore_prerequisites(
     // Validate WAL archive range is valid
     manifest.wal_archive.validate()?;
 
+    if manifest.wal_archive.start > manifest.snapshot.required_wal_start_lsn {
+        return Err(restore_error(
+            "backup WAL archive must cover snapshot required WAL start LSN",
+        ));
+    }
+
+    if pitr_lsn < manifest.snapshot.base_checkpoint_lsn {
+        return Err(restore_error(
+            "PITR LSN must not be before snapshot base checkpoint LSN",
+        ));
+    }
+
+    let is_snapshot_only_target = pitr_lsn == manifest.snapshot.base_checkpoint_lsn;
+    if !is_snapshot_only_target && pitr_lsn < manifest.snapshot.required_wal_start_lsn {
+        return Err(restore_error(
+            "PITR LSN must not be before snapshot required WAL start LSN",
+        ));
+    }
+
     // Check PITR target is in range
-    if !manifest.wal_archive.contains(pitr_lsn) {
+    if !is_snapshot_only_target && !manifest.wal_archive.contains(pitr_lsn) {
         return Err(restore_error(
             "PITR LSN must be within backup WAL archive range",
         ));
@@ -325,8 +482,17 @@ pub fn plan_replay_segments(
 ) -> AndromedaResult<Vec<WalSegmentToReplay>> {
     validate_restore_prerequisites(manifest, pitr_lsn)?;
 
-    if segments.is_empty() {
-        return Err(restore_error("WAL segment list must not be empty"));
+    if pitr_lsn == manifest.snapshot.base_checkpoint_lsn {
+        return Ok(Vec::new());
+    }
+
+    let first = segments
+        .first()
+        .ok_or_else(|| restore_error("WAL segment list must not be empty"))?;
+    if first.first_lsn != manifest.wal_archive.start {
+        return Err(restore_error(
+            "first WAL segment must start at backup archive start LSN",
+        ));
     }
 
     let mut replay_plan: Vec<WalSegmentToReplay> = Vec::new();
@@ -368,6 +534,11 @@ pub fn plan_replay_segments(
             segment_descriptor: *seg,
             sequence_index: index,
             contains_pitr_target,
+            replay_stop_lsn: if contains_pitr_target {
+                pitr_lsn
+            } else {
+                seg.last_lsn
+            },
         });
 
         expected_previous_lsn = Some(seg.last_lsn);
@@ -393,24 +564,64 @@ pub fn plan_replay_segments(
 /// Used for audit trail verification and replay proof.
 /// Result is stable across invocations if manifest and archive are unchanged.
 pub fn compute_restore_checksum(manifest: &BackupManifest) -> u64 {
-    // Simple deterministic hash combining manifest fields + WAL bounds
     let mut hash: u64 = 0;
+    hash = mix_restore_checksum(hash, manifest.backup_id.get());
+    hash = mix_restore_checksum(hash, manifest.database_id);
+    hash = mix_restore_checksum(hash, manifest.created_epoch);
+    hash = mix_restore_checksum(hash, manifest.snapshot.snapshot_id);
+    hash = mix_bytes(hash, &manifest.snapshot.snapshot_descriptor_hash);
+    hash = mix_restore_checksum(hash, manifest.snapshot.base_checkpoint_lsn.get());
+    hash = mix_restore_checksum(hash, manifest.snapshot.required_wal_start_lsn.get());
+    hash = mix_restore_checksum(hash, manifest.wal_archive.start.get());
+    hash = mix_restore_checksum(hash, manifest.wal_archive.end_inclusive.get());
+    hash = mix_restore_checksum(hash, u64::from(manifest.manifest_crc));
+    if hash == 0 { 1 } else { hash }
+}
 
-    // Combine backup ID, snapshot ID, created epoch
-    hash = hash.wrapping_add(manifest.backup_id.get().wrapping_mul(31));
-    hash = hash.wrapping_add(manifest.snapshot.snapshot_id.wrapping_mul(31));
-    hash = hash.wrapping_add(manifest.created_epoch.wrapping_mul(31));
+/// Compute an audit-friendly checksum for restore preflight evidence.
+///
+/// This binds the selected PITR target to durable artifact evidence: manifest
+/// bytes, snapshot bytes, and aggregate WAL archive evidence. It is not a
+/// replacement for byte-level SHA-256 checks; those are validated before this
+/// value is returned.
+pub fn compute_restore_preflight_checksum(
+    manifest: &BackupManifest,
+    manifest_format_version: u16,
+    pitr_target_lsn: Lsn,
+    manifest_digest: &BackupArtifactDigest,
+    snapshot_digest: &BackupArtifactDigest,
+    wal_archive_evidence: &BackupWalArchiveEvidence,
+) -> u64 {
+    let mut hash = compute_restore_checksum(manifest);
+    hash = mix_restore_checksum(hash, u64::from(manifest_format_version));
+    hash = mix_restore_checksum(hash, pitr_target_lsn.get());
+    hash = mix_artifact_digest(hash, manifest_digest);
+    hash = mix_artifact_digest(hash, snapshot_digest);
+    hash = mix_restore_checksum(hash, wal_archive_evidence.start_lsn.get());
+    hash = mix_restore_checksum(hash, wal_archive_evidence.end_lsn.get());
+    hash = mix_restore_checksum(hash, wal_archive_evidence.segment_count as u64);
+    hash = mix_restore_checksum(hash, wal_archive_evidence.total_bytes);
+    hash = mix_bytes(hash, &wal_archive_evidence.archive_digest_sha256);
+    if hash == 0 { 1 } else { hash }
+}
 
-    // Combine checkpoint LSN and WAL bounds
-    hash = hash.wrapping_add(manifest.snapshot.base_checkpoint_lsn.get().wrapping_mul(31));
-    hash = hash.wrapping_add(manifest.wal_archive.start.get().wrapping_mul(31));
-    hash = hash.wrapping_add(manifest.wal_archive.end_inclusive.get().wrapping_mul(31));
+fn mix_artifact_digest(mut hash: u64, digest: &BackupArtifactDigest) -> u64 {
+    hash = mix_bytes(hash, &digest.sha256);
+    hash = mix_restore_checksum(hash, digest.crc64);
+    mix_restore_checksum(hash, digest.byte_len)
+}
 
-    // Combine database ID and manifest CRC
-    hash = hash.wrapping_add(manifest.database_id.wrapping_mul(31));
-    hash = hash.wrapping_add(manifest.manifest_crc as u64);
-
+fn mix_bytes(mut hash: u64, bytes: &[u8]) -> u64 {
+    for byte in bytes {
+        hash = mix_restore_checksum(hash, u64::from(*byte));
+    }
     hash
+}
+
+fn mix_restore_checksum(hash: u64, value: u64) -> u64 {
+    hash.rotate_left(7)
+        .wrapping_mul(0x9E37_79B1_85EB_CA87)
+        .wrapping_add(value)
 }
 
 #[cfg(test)]
@@ -443,9 +654,24 @@ mod tests {
     }
 
     #[test]
+    fn validate_restore_prerequisites_rejects_pitr_before_required_wal_start() {
+        let mut manifest = make_test_manifest();
+        manifest.snapshot.required_wal_start_lsn = Lsn::new(1005);
+        manifest.wal_archive = WalArchiveRange::new(Lsn::new(900), Lsn::new(2000));
+
+        let err = validate_restore_prerequisites(&manifest, Lsn::new(1002))
+            .expect_err("PITR before required WAL start must fail closed");
+
+        assert!(
+            err.message().contains("required WAL start"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
     fn validate_restore_prerequisites_rejects_pitr_below_range() {
         let manifest = make_test_manifest();
-        let pitr_lsn = Lsn::new(1000); // Below archive start
+        let pitr_lsn = Lsn::new(999); // Below snapshot base checkpoint
 
         assert!(validate_restore_prerequisites(&manifest, pitr_lsn).is_err());
     }
@@ -473,6 +699,16 @@ mod tests {
         let pitr_lsn = Lsn::new(1500);
 
         assert!(plan_replay_segments(&manifest, pitr_lsn, &[]).is_err());
+    }
+
+    #[test]
+    fn plan_replay_segments_skips_wal_for_snapshot_base_target() {
+        let manifest = make_test_manifest();
+        let pitr_lsn = Lsn::new(1000);
+
+        let plan = plan_replay_segments(&manifest, pitr_lsn, &[])
+            .expect("snapshot base checkpoint target must not need WAL");
+        assert!(plan.is_empty());
     }
 
     #[test]
@@ -521,6 +757,28 @@ mod tests {
         );
 
         assert!(orch.validate().is_ok());
+    }
+
+    #[test]
+    fn restore_orchestration_rejects_audit_binding_mismatch() {
+        let manifest = make_test_manifest();
+        let audit = RestoreAuditTrace::new(
+            TraceId::new(1),
+            BackupId::new(1),
+            Lsn::new(1500),
+            RecoveryStage::SafeStart,
+            compute_restore_checksum(&manifest).wrapping_add(1),
+        );
+
+        let orch = RestoreOrchestration::new(
+            manifest,
+            Lsn::new(1500),
+            RecoveryStage::SafeStart,
+            RestoreValidationPolicy::Full,
+            audit,
+        );
+
+        assert!(orch.validate().is_err());
     }
 
     #[test]

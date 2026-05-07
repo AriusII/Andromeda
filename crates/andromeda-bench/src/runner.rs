@@ -52,10 +52,18 @@ pub fn run_bounded_benchmark(
 
     Ok(BenchmarkEvidence {
         workload_id: workload.id.to_string(),
+        workload_hypothesis: workload.hypothesis,
+        workload_shape_version: workload.workload_shape_version,
+        workload_size: workload.workload_size,
+        primary_metric: workload.primary_metric,
+        baseline_ref: workload.baseline_ref,
+        budget_origin: workload.budget_origin,
+        decision_linkage: workload.decision_linkage,
         hardware_profile: request.hardware_profile,
         duration_ms: request.duration_ms,
         samples: request.samples,
         warmups: request.warmups,
+        temp_budget_bytes: request.temp_budget_bytes,
         started_at_unix_ms: 0,
         elapsed_ms,
         sample_count,
@@ -256,6 +264,23 @@ mod tests {
         assert_eq!(first.started_at_unix_ms, 0);
         assert_eq!(first.elapsed_ms, 6);
         assert_eq!(first.sample_count, 5);
+        assert!(first.workload_hypothesis.contains("protocol contract"));
+        assert_eq!(
+            first.workload_shape_version,
+            "protocol-smoke-contract.synthetic.v1"
+        );
+        assert!(first.workload_size.contains("samples<=20"));
+        assert_eq!(
+            first.primary_metric,
+            "p50_latency_us,p95_latency_us,error_rate_ppm"
+        );
+        assert_eq!(
+            first.baseline_ref,
+            "history.protocol-smoke-contract.synthetic.v1"
+        );
+        assert_eq!(first.budget_origin, "static-workload-registry-v1");
+        assert!(first.decision_linkage.contains("CatalogVersion"));
+        assert_eq!(first.temp_budget_bytes, request.temp_budget_bytes);
         assert_eq!(first.budget_status, BudgetStatus::Passed);
         assert!(first.diagnostic_only);
         assert_eq!(

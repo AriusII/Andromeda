@@ -24,12 +24,14 @@ pub enum WalArchiveRejection {
     ArchiveEndLsnZero,
     ArchiveEndBeforeStart,
     SegmentCountZero,
+    FinalizedEventEpochOverflow,
     FinalizedEventBackupIdZero,
     FinalizedEventEpochZero,
     PitrWindowLsnZero,
     PitrWindowEndBeforeStart,
     CatalogSnapshotLsnZero,
     ShippedStartLsnZero,
+    ShippedStartAfterCatalogSnapshot,
     ShippedEndLsnZero,
     ShippedEndBeforeStart,
     ShippedEndBeforeCatalogSnapshot,
@@ -52,6 +54,9 @@ impl std::fmt::Display for WalArchiveRejection {
             Self::ArchiveEndLsnZero => f.write_str("WAL archive end LSN must not be zero"),
             Self::ArchiveEndBeforeStart => f.write_str("WAL archive end must not precede start"),
             Self::SegmentCountZero => f.write_str("WAL archive segment count must not be zero"),
+            Self::FinalizedEventEpochOverflow => {
+                f.write_str("backup manifest finalized event epoch overflow")
+            }
             Self::FinalizedEventBackupIdZero => {
                 f.write_str("backup manifest finalized event backup id must not be zero")
             }
@@ -65,6 +70,9 @@ impl std::fmt::Display for WalArchiveRejection {
             }
             Self::ShippedStartLsnZero => {
                 f.write_str("WAL archive shipped start LSN must not be zero")
+            }
+            Self::ShippedStartAfterCatalogSnapshot => {
+                f.write_str("WAL archive shipped start must not follow catalog snapshot LSN")
             }
             Self::ShippedEndLsnZero => f.write_str("WAL archive shipped end LSN must not be zero"),
             Self::ShippedEndBeforeStart => {
@@ -199,6 +207,10 @@ impl WalArchiveIntegration {
             return Err(WalArchiveRejection::ShippedEndBeforeStart.into_error());
         }
 
+        if shipped_wal_start_lsn > catalog_snapshot_lsn {
+            return Err(WalArchiveRejection::ShippedStartAfterCatalogSnapshot.into_error());
+        }
+
         // Key invariant: WAL must cover catalog snapshot
         if shipped_wal_end_lsn < catalog_snapshot_lsn {
             return Err(WalArchiveRejection::ShippedEndBeforeCatalogSnapshot.into_error());
@@ -260,9 +272,13 @@ impl WalArchiveIntegration {
         finalized_manifest.validate()?;
 
         // Create audit event
+        let finalized_epoch = plan
+            .created_epoch
+            .checked_add(1)
+            .ok_or_else(|| WalArchiveRejection::FinalizedEventEpochOverflow.into_error())?;
         let event = BackupManifestFinalizedEvent {
             backup_id: plan.backup_id,
-            finalized_epoch: plan.created_epoch + 1,
+            finalized_epoch,
             pitr_start_lsn: finalized_manifest.earliest_pitr_target(),
             pitr_end_lsn: finalized_manifest.latest_pitr_target(),
         };
@@ -349,6 +365,24 @@ mod tests {
             WalArchiveIntegration::validate_wal_archive(catalog_lsn, wal_start, wal_end, 5);
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_wal_archive_validation_rejects_start_after_catalog_snapshot() {
+        let result = WalArchiveIntegration::validate_wal_archive(
+            Lsn::new(1000),
+            Lsn::new(1001),
+            Lsn::new(2000),
+            5,
+        );
+
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .message()
+                .contains("must not follow catalog snapshot"),
+        );
     }
 
     #[test]

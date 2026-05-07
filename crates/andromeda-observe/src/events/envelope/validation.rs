@@ -89,15 +89,18 @@ pub(super) fn validate(envelope: &EventEnvelope) -> AndromedaResult<()> {
         TraceEvent::SecurityAudit(trace) if !trace.surface_permits_permission() => Err(
             observe_error("security audit traces require surface scope matching permission family"),
         ),
+        TraceEvent::SecurityAudit(trace) if !trace.has_policy_version_evidence() => Err(
+            observe_error("security audit traces require security policy version evidence"),
+        ),
         TraceEvent::SecurityAudit(trace) if !trace.has_reason() => Err(observe_error(
             "security audit traces require a non-empty reason",
         )),
         TraceEvent::AdminOperation(trace) if !trace.has_supported_schema_version() => Err(
             observe_error("admin operation traces require the V0 event schema version"),
         ),
-        TraceEvent::AdminOperation(trace) if !trace.surface_permits_operation() => Err(
-            observe_error("application surface cannot carry admin operation traces"),
-        ),
+        TraceEvent::AdminOperation(trace) if !trace.surface_permits_operation() => {
+            Err(observe_error("surface cannot carry admin operation traces"))
+        }
         TraceEvent::AdminOperation(trace) if !trace.has_identity_evidence() => Err(observe_error(
             "admin operation traces require certificate and principal identity evidence",
         )),

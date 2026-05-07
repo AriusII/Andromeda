@@ -7,6 +7,9 @@ use crate::generated::{CONTRACT_PACKAGE, PROTOCOL_PACKAGE, contract};
 
 use super::{contract_error, validate_required_contract_hash};
 
+const MAX_GENERATED_RESULT_STREAMS: usize = 128;
+const MAX_GENERATED_RESULT_STREAM_COLUMNS: usize = 256;
+
 pub(crate) fn validate_generated_procedure_manifest(
     manifest: &contract::v1::ProcedureManifest,
 ) -> AndromedaResult<()> {
@@ -25,6 +28,10 @@ pub(crate) fn validate_generated_procedure_manifest(
     validate_optional_catalog_version(
         "resolved procedure manifest catalog_version",
         Some(manifest.catalog_version),
+    )?;
+    validate_required_stats_version(
+        "resolved procedure manifest stats_version",
+        manifest.stats_version,
     )?;
     validate_required_contract_hash(
         "resolved procedure manifest policy_version",
@@ -88,9 +95,23 @@ pub(crate) fn validate_optional_catalog_version(
     Ok(())
 }
 
-fn validate_generated_result_streams(
+fn validate_required_stats_version(label: &str, version: Option<u64>) -> AndromedaResult<()> {
+    match version {
+        Some(value) if value != 0 => Ok(()),
+        Some(_) => contract_error(format!("{label} must be nonzero")),
+        None => contract_error(format!("{label} must be present")),
+    }
+}
+
+pub(crate) fn validate_generated_result_streams(
     descriptors: &[contract::v1::ResultStreamDescriptor],
 ) -> AndromedaResult<()> {
+    if descriptors.len() > MAX_GENERATED_RESULT_STREAMS {
+        return contract_error(format!(
+            "resolved procedure manifest result streams exceed bounded limit of {MAX_GENERATED_RESULT_STREAMS}"
+        ));
+    }
+
     let mut seen_streams = BTreeSet::new();
     for descriptor in descriptors {
         validate_generated_result_stream_descriptor(descriptor)?;
@@ -142,6 +163,15 @@ fn validate_generated_result_stream_descriptor(
 }
 
 fn validate_generated_columns(columns: &[contract::v1::ColumnDescriptor]) -> AndromedaResult<()> {
+    if columns.is_empty() {
+        return contract_error("resolved result stream requires at least one typed column");
+    }
+    if columns.len() > MAX_GENERATED_RESULT_STREAM_COLUMNS {
+        return contract_error(format!(
+            "resolved result stream columns exceed bounded limit of {MAX_GENERATED_RESULT_STREAM_COLUMNS}"
+        ));
+    }
+
     let mut seen_names = BTreeSet::new();
     let mut seen_ordinals = BTreeSet::new();
     for column in columns {
@@ -156,6 +186,14 @@ fn validate_generated_columns(columns: &[contract::v1::ColumnDescriptor]) -> And
         }
         if !seen_ordinals.insert(column.ordinal) {
             return contract_error("resolved result stream column ordinals must be unique");
+        }
+    }
+
+    for expected in 0..columns.len() as u32 {
+        if !seen_ordinals.contains(&expected) {
+            return contract_error(
+                "resolved result stream column ordinals must be dense and zero-based",
+            );
         }
     }
 

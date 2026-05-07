@@ -2,8 +2,8 @@
 //!
 //! Invariants:
 //! - Deterministic extent-to-file mapping.
-//! - WAL-before-page remains enforced by higher layers; `durable_lsn` is accepted but
-//!   not interpreted here.
+//! - Raw `FileDiskManager` performs fixed-offset page I/O; `DiskPageStore` is the
+//!   buffer-pool façade that enforces WAL-before-page flush ordering.
 //! - Page-integrity checks are opt-in per manager and validate persisted layout bytes
 //!   when `PageIntegrityMode::HeaderCrc32` is enabled.
 

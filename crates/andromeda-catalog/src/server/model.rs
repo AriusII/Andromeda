@@ -147,6 +147,12 @@ impl CatalogChangeNotification {
                 "catalog change notification must advance catalog version ordering",
             ));
         }
+        if self.invalidation_boundary_lsn == 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "catalog change notification invalidation boundary LSN must not be zero",
+            ));
+        }
         let expected_next = self.previous_version.get().checked_add(1).ok_or_else(|| {
             AndromedaError::new(
                 AndromedaErrorKind::Catalog,

@@ -8,8 +8,10 @@
 use andromeda_core::{AndromedaResult, CatalogVersion, DatabaseId, NamespaceId};
 
 use crate::{
-    CatalogMutationCommitEvidence, CatalogMutationPlan, CatalogPublicationReceipt, CatalogSnapshot,
-    CatalogSnapshotApplyReport, DefinitionBatch, DefinitionBatchPlan,
+    CatalogMutationCommitEvidence, CatalogMutationDurability, CatalogMutationPlan,
+    CatalogMutationRecordKind, CatalogPublicationReceipt, CatalogSnapshot,
+    CatalogSnapshotApplyReport, DefinitionBatch, DefinitionBatchDependencyGraphHash,
+    DefinitionBatchPlan, DefinitionBatchSourceHash,
 };
 
 /// In-memory catalog system facade for definition planning and snapshot mutation.
@@ -76,19 +78,167 @@ impl CatalogSystemStore {
         batch: &DefinitionBatch,
     ) -> AndromedaResult<CatalogSystemApplyReport> {
         let plan = self.plan_definition_batch(batch)?;
+        let source_hash = batch.source_hash();
+        let dependency_graph_hash = batch.dependency_graph_hash()?;
         let snapshot_report = self.apply_mutation_plan(&plan.mutation_plan)?;
 
         Ok(CatalogSystemApplyReport {
             plan,
             snapshot_report,
+            source_hash,
+            dependency_graph_hash,
         })
     }
+
+    /// Plans, WAL-persists, durably flushes, and then publishes a definition
+    /// batch.
+    ///
+    /// The store remains storage-agnostic: callers own the WAL and provide
+    /// append/flush callbacks. Publication happens only after every catalog
+    /// mutation record has been appended and the returned durable LSN reaches
+    /// the commit record LSN.
+    pub fn apply_definition_batch_durably<Append, Flush>(
+        &mut self,
+        batch: &DefinitionBatch,
+        mut append: Append,
+        mut flush_through: Flush,
+    ) -> AndromedaResult<CatalogSystemDurableApplyReport>
+    where
+        Append: FnMut(CatalogMutationRecordKind, &[u8]) -> AndromedaResult<u64>,
+        Flush: FnMut(u64) -> AndromedaResult<u64>,
+    {
+        let plan = self.plan_definition_batch(batch)?;
+        let source_hash = batch.source_hash();
+        let dependency_graph_hash = batch.dependency_graph_hash()?;
+        let records = plan.mutation_plan.records();
+        let expected_kinds = records
+            .iter()
+            .map(|record| record.kind())
+            .collect::<Vec<_>>();
+        let mut appended_records = Vec::with_capacity(records.len());
+
+        for record in &records {
+            let payload = record.encode_durable_payload()?;
+            let kind = record.kind();
+            let lsn = append(kind, &payload)?;
+            appended_records.push(CatalogSystemWalAppend { kind, lsn });
+        }
+
+        validate_catalog_wal_append_sequence(&appended_records, &expected_kinds)?;
+
+        let commit_record = records.last().ok_or_else(|| {
+            andromeda_core::AndromedaError::new(
+                andromeda_core::AndromedaErrorKind::Catalog,
+                "catalog mutation plan must emit a commit record",
+            )
+        })?;
+        let commit_lsn = appended_records
+            .last()
+            .map(|record| record.lsn)
+            .ok_or_else(|| {
+                andromeda_core::AndromedaError::new(
+                    andromeda_core::AndromedaErrorKind::Catalog,
+                    "catalog mutation plan must append at least one record",
+                )
+            })?;
+        let durable_lsn = flush_through(commit_lsn)?;
+        let evidence = CatalogMutationCommitEvidence::from_durable_commit_record(
+            commit_record,
+            records.len(),
+            CatalogMutationDurability::StorageWal {
+                commit_lsn,
+                durable_lsn,
+            },
+        )?;
+        let receipt = self.publish_durable_mutation_plan(&plan.mutation_plan, evidence)?;
+
+        Ok(CatalogSystemDurableApplyReport {
+            plan,
+            receipt,
+            appended_records,
+            source_hash,
+            dependency_graph_hash,
+        })
+    }
+}
+
+fn validate_catalog_wal_append_sequence(
+    appended_records: &[CatalogSystemWalAppend],
+    expected_kinds: &[CatalogMutationRecordKind],
+) -> AndromedaResult<()> {
+    if appended_records.len() != expected_kinds.len() {
+        return Err(andromeda_core::AndromedaError::new(
+            andromeda_core::AndromedaErrorKind::Catalog,
+            "catalog WAL append sequence must include every planned mutation record",
+        ));
+    }
+
+    if !matches!(
+        appended_records.last(),
+        Some(record) if record.kind == CatalogMutationRecordKind::CatalogChangeCommit
+    ) {
+        return Err(andromeda_core::AndromedaError::new(
+            andromeda_core::AndromedaErrorKind::Catalog,
+            "catalog WAL append sequence must end with the commit record",
+        ));
+    }
+
+    let mut previous_lsn = None;
+    for (index, (append, expected_kind)) in appended_records
+        .iter()
+        .zip(expected_kinds.iter())
+        .enumerate()
+    {
+        if append.kind != *expected_kind {
+            return Err(andromeda_core::AndromedaError::new(
+                andromeda_core::AndromedaErrorKind::Catalog,
+                format!("catalog WAL append kind at index {index} must match the mutation plan"),
+            ));
+        }
+
+        if append.lsn == 0 {
+            return Err(andromeda_core::AndromedaError::new(
+                andromeda_core::AndromedaErrorKind::Catalog,
+                "catalog WAL append LSN must not be zero",
+            ));
+        }
+
+        if let Some(previous_lsn) = previous_lsn
+            && append.lsn <= previous_lsn
+        {
+            return Err(andromeda_core::AndromedaError::new(
+                andromeda_core::AndromedaErrorKind::Catalog,
+                "catalog WAL append LSNs must be strictly increasing",
+            ));
+        }
+
+        previous_lsn = Some(append.lsn);
+    }
+
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CatalogSystemApplyReport {
     pub plan: DefinitionBatchPlan,
     pub snapshot_report: CatalogSnapshotApplyReport,
+    pub source_hash: DefinitionBatchSourceHash,
+    pub dependency_graph_hash: DefinitionBatchDependencyGraphHash,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CatalogSystemWalAppend {
+    pub kind: CatalogMutationRecordKind,
+    pub lsn: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatalogSystemDurableApplyReport {
+    pub plan: DefinitionBatchPlan,
+    pub receipt: CatalogPublicationReceipt,
+    pub appended_records: Vec<CatalogSystemWalAppend>,
+    pub source_hash: DefinitionBatchSourceHash,
+    pub dependency_graph_hash: DefinitionBatchDependencyGraphHash,
 }
 
 #[cfg(test)]

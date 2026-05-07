@@ -21,19 +21,12 @@ use andromeda_quic::frame::{FRAME_HEADER_CRC_UNCHECKED, FrameType};
 use andromeda_quic::{
     FrameBytes, FrameCodec, FrameHeader,
     quinn_backend::{BidiStream, QuicClient, QuicServer},
-    quinn_tls::{ClientTlsConfig, ServerTlsConfig},
+    quinn_tls::MutualTlsTestConfig,
 };
 use tokio::{sync::oneshot, task::JoinHandle, time::timeout};
 
-/// Creates an ephemeral server TLS configuration (self-signed cert for testing).
-fn create_test_server_tls() -> AndromedaResult<quinn::ServerConfig> {
-    let tls_config = ServerTlsConfig::ephemeral(vec!["localhost".to_string()])?;
-    tls_config.into_quinn_config()
-}
-
-/// Creates an insecure client TLS configuration for testing.
-fn create_test_client_tls() -> AndromedaResult<quinn::ClientConfig> {
-    ClientTlsConfig::insecure()
+fn create_test_tls() -> AndromedaResult<MutualTlsTestConfig> {
+    MutualTlsTestConfig::ephemeral(vec!["localhost".to_string()])
 }
 
 /// Allocates an ephemeral local socket address.
@@ -88,9 +81,9 @@ async fn read_bidi_to_end(stream: &mut BidiStream, max_bytes: usize) -> Andromed
 #[tokio::test]
 async fn test_server_startup_and_listen_address() -> AndromedaResult<()> {
     let addr = allocate_test_address();
-    let server_tls = create_test_server_tls()?;
+    let tls = create_test_tls()?;
 
-    let server = QuicServer::new(addr, server_tls)?;
+    let server = QuicServer::new(addr, tls.server_config())?;
     let local_addr = server.local_addr();
 
     assert_eq!(local_addr.ip(), std::net::IpAddr::V4(Ipv4Addr::LOCALHOST));
@@ -103,16 +96,15 @@ async fn test_server_startup_and_listen_address() -> AndromedaResult<()> {
 #[tokio::test]
 async fn test_client_connection_tls_negotiation() -> AndromedaResult<()> {
     let server_addr = allocate_test_address();
-    let server_tls = create_test_server_tls()?;
-    let server = QuicServer::new(server_addr, server_tls)?;
+    let tls = create_test_tls()?;
+    let server = QuicServer::new(server_addr, tls.server_config())?;
     let listen_addr = server.local_addr();
 
     let server_handle = tokio::spawn(async move {
         with_timeout(Duration::from_secs(5), server.accept_connection()).await
     });
 
-    let client_tls = create_test_client_tls()?;
-    let client = QuicClient::new(client_tls)?;
+    let client = QuicClient::new(tls.client_config())?;
 
     let conn = with_timeout(
         Duration::from_secs(5),
@@ -132,8 +124,8 @@ async fn test_client_connection_tls_negotiation() -> AndromedaResult<()> {
 #[tokio::test]
 async fn test_frame_echo_unidirectional() -> AndromedaResult<()> {
     let server_addr = allocate_test_address();
-    let server_tls = create_test_server_tls()?;
-    let server = QuicServer::new(server_addr, server_tls)?;
+    let tls = create_test_tls()?;
+    let server = QuicServer::new(server_addr, tls.server_config())?;
     let listen_addr = server.local_addr();
 
     let server_handle = tokio::spawn(async move {
@@ -141,8 +133,7 @@ async fn test_frame_echo_unidirectional() -> AndromedaResult<()> {
         Ok(())
     });
 
-    let client_tls = create_test_client_tls()?;
-    let client = QuicClient::new(client_tls)?;
+    let client = QuicClient::new(tls.client_config())?;
     let mut conn = with_timeout(
         Duration::from_secs(5),
         client.connect(listen_addr, "localhost"),
@@ -177,8 +168,8 @@ async fn test_frame_echo_unidirectional() -> AndromedaResult<()> {
 #[tokio::test]
 async fn test_peer_certificate_chain_is_exposed() -> AndromedaResult<()> {
     let server_addr = allocate_test_address();
-    let server_tls = create_test_server_tls()?;
-    let server = QuicServer::new(server_addr, server_tls)?;
+    let tls = create_test_tls()?;
+    let server = QuicServer::new(server_addr, tls.server_config())?;
     let listen_addr = server.local_addr();
 
     let server_handle = tokio::spawn(async move {
@@ -186,8 +177,7 @@ async fn test_peer_certificate_chain_is_exposed() -> AndromedaResult<()> {
         Ok(conn.peer_certificate_chain().len())
     });
 
-    let client_tls = create_test_client_tls()?;
-    let client = QuicClient::new(client_tls)?;
+    let client = QuicClient::new(tls.client_config())?;
     let conn = with_timeout(
         Duration::from_secs(5),
         client.connect(listen_addr, "localhost"),
@@ -197,15 +187,13 @@ async fn test_peer_certificate_chain_is_exposed() -> AndromedaResult<()> {
     let client_peer_certificates = conn.peer_certificate_chain();
     assert!(!client_peer_certificates.is_empty());
     assert!(!client_peer_certificates[0].is_empty());
-    let client_identity = conn
-        .certificate_identity()
-        .expect("client should derive identity from server certificate");
+    let client_identity = conn.certificate_identity();
     assert_eq!(client_identity.fingerprint.len(), 64);
     assert_eq!(client_identity.surface, SurfaceScope::Application);
 
     let server_peer_certificate_count =
         join_with_timeout(Duration::from_secs(5), server_handle).await?;
-    assert_eq!(server_peer_certificate_count, 0);
+    assert_ne!(server_peer_certificate_count, 0);
 
     Ok(())
 }
@@ -213,8 +201,8 @@ async fn test_peer_certificate_chain_is_exposed() -> AndromedaResult<()> {
 #[tokio::test]
 async fn test_concurrent_connections() -> AndromedaResult<()> {
     let server_addr = allocate_test_address();
-    let server_tls = create_test_server_tls()?;
-    let server = Arc::new(QuicServer::new(server_addr, server_tls)?);
+    let tls = create_test_tls()?;
+    let server = Arc::new(QuicServer::new(server_addr, tls.server_config())?);
     let listen_addr = server.local_addr();
 
     let accepted_count = Arc::new(AtomicU32::new(0));
@@ -233,8 +221,8 @@ async fn test_concurrent_connections() -> AndromedaResult<()> {
     let mut client_handles = vec![];
     for _ in 0..10 {
         let listen_addr_copy = listen_addr;
+        let client_tls = tls.client_config();
         let handle = tokio::spawn(async move {
-            let client_tls = create_test_client_tls()?;
             let client = QuicClient::new(client_tls)?;
             let _conn = with_timeout(
                 Duration::from_secs(5),
@@ -264,8 +252,8 @@ async fn test_concurrent_connections() -> AndromedaResult<()> {
 #[tokio::test]
 async fn test_bidirectional_stream_communication() -> AndromedaResult<()> {
     let server_addr = allocate_test_address();
-    let server_tls = create_test_server_tls()?;
-    let server = QuicServer::new(server_addr, server_tls)?;
+    let tls = create_test_tls()?;
+    let server = QuicServer::new(server_addr, tls.server_config())?;
     let listen_addr = server.local_addr();
     let (release_server, keep_server_alive) = oneshot::channel();
 
@@ -282,8 +270,7 @@ async fn test_bidirectional_stream_communication() -> AndromedaResult<()> {
         Ok(bytes)
     });
 
-    let client_tls = create_test_client_tls()?;
-    let client = QuicClient::new(client_tls)?;
+    let client = QuicClient::new(tls.client_config())?;
     let mut conn = with_timeout(
         Duration::from_secs(5),
         client.connect(listen_addr, "localhost"),
@@ -310,7 +297,11 @@ async fn test_bidirectional_stream_communication() -> AndromedaResult<()> {
     stream.write_all(&encoded).await?;
     stream.finish().await?;
 
-    let response_buf = read_bidi_to_end(&mut stream, 16 * 1024).await?;
+    let response_buf = with_timeout(
+        Duration::from_secs(5),
+        read_bidi_to_end(&mut stream, 16 * 1024),
+    )
+    .await?;
 
     assert_eq!(
         response_buf, encoded,
@@ -330,8 +321,8 @@ async fn test_bidirectional_stream_communication() -> AndromedaResult<()> {
 #[tokio::test]
 async fn test_multiple_sequential_frames() -> AndromedaResult<()> {
     let server_addr = allocate_test_address();
-    let server_tls = create_test_server_tls()?;
-    let server = QuicServer::new(server_addr, server_tls)?;
+    let tls = create_test_tls()?;
+    let server = QuicServer::new(server_addr, tls.server_config())?;
     let listen_addr = server.local_addr();
 
     let frame_count = Arc::new(AtomicU32::new(0));
@@ -347,8 +338,7 @@ async fn test_multiple_sequential_frames() -> AndromedaResult<()> {
         Ok(())
     });
 
-    let client_tls = create_test_client_tls()?;
-    let client = QuicClient::new(client_tls)?;
+    let client = QuicClient::new(tls.client_config())?;
     let mut conn = with_timeout(
         Duration::from_secs(5),
         client.connect(listen_addr, "localhost"),
@@ -392,8 +382,8 @@ async fn test_multiple_sequential_frames() -> AndromedaResult<()> {
 #[tokio::test]
 async fn test_large_payload_frame() -> AndromedaResult<()> {
     let server_addr = allocate_test_address();
-    let server_tls = create_test_server_tls()?;
-    let server = QuicServer::new(server_addr, server_tls)?;
+    let tls = create_test_tls()?;
+    let server = QuicServer::new(server_addr, tls.server_config())?;
     let listen_addr = server.local_addr();
 
     let payload_size = 65_536;
@@ -413,8 +403,7 @@ async fn test_large_payload_frame() -> AndromedaResult<()> {
         Ok(n)
     });
 
-    let client_tls = create_test_client_tls()?;
-    let client = QuicClient::new(client_tls)?;
+    let client = QuicClient::new(tls.client_config())?;
     let mut conn = with_timeout(
         Duration::from_secs(10),
         client.connect(listen_addr, "localhost"),
@@ -441,7 +430,11 @@ async fn test_large_payload_frame() -> AndromedaResult<()> {
     stream.write_all(&encoded).await?;
     stream.finish().await?;
 
-    let response_buf = read_bidi_to_end(&mut stream, encoded.len() + 1_024).await?;
+    let response_buf = with_timeout(
+        Duration::from_secs(10),
+        read_bidi_to_end(&mut stream, encoded.len() + 1_024),
+    )
+    .await?;
 
     assert_eq!(
         response_buf, encoded,

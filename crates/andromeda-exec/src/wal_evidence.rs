@@ -271,6 +271,32 @@ struct RollbackPayloadMetadata {
     parameter_hash: u64,
 }
 
+pub const EXEC_TX_COMMIT_PAYLOAD_LEN: usize = 25;
+pub const EXEC_TX_ROLLBACK_PAYLOAD_LEN: usize = 16;
+
+pub fn encode_exec_tx_commit_payload(
+    isolation_level: andromeda_tx::IsolationLevel,
+    row_count_affected: u64,
+    parameter_hash: u64,
+) -> Vec<u8> {
+    let mut payload = Vec::with_capacity(EXEC_TX_COMMIT_PAYLOAD_LEN);
+    payload.push(match isolation_level {
+        andromeda_tx::IsolationLevel::Snapshot => 1,
+        andromeda_tx::IsolationLevel::Serializable => 2,
+    });
+    payload.extend_from_slice(&row_count_affected.to_le_bytes());
+    payload.extend_from_slice(&parameter_hash.to_le_bytes());
+    payload.extend_from_slice(&0_u64.to_le_bytes());
+    payload
+}
+
+pub fn encode_exec_tx_rollback_payload(parameter_hash: u64) -> Vec<u8> {
+    let mut payload = Vec::with_capacity(EXEC_TX_ROLLBACK_PAYLOAD_LEN);
+    payload.extend_from_slice(&parameter_hash.to_le_bytes());
+    payload.extend_from_slice(&0_u64.to_le_bytes());
+    payload
+}
+
 fn required_tx_id(record: &WalRecord) -> AndromedaResult<TransactionId> {
     let transaction_id = record.header.transaction_id.ok_or_else(|| {
         AndromedaError::new(
@@ -290,10 +316,9 @@ fn required_tx_id(record: &WalRecord) -> AndromedaResult<TransactionId> {
 }
 
 fn decode_commit_payload(payload: &[u8]) -> AndromedaResult<CommitPayloadMetadata> {
-    const COMMIT_PAYLOAD_LEN: usize = 25;
-    if payload.len() != COMMIT_PAYLOAD_LEN {
+    if payload.len() != EXEC_TX_COMMIT_PAYLOAD_LEN {
         return Err(tx_bridge_error(format!(
-            "transaction commit WAL payload has unsupported length: expected {COMMIT_PAYLOAD_LEN} bytes, got {} bytes",
+            "transaction commit WAL payload has unsupported length: expected {EXEC_TX_COMMIT_PAYLOAD_LEN} bytes, got {} bytes",
             payload.len()
         )));
     }
@@ -317,10 +342,9 @@ fn decode_commit_payload(payload: &[u8]) -> AndromedaResult<CommitPayloadMetadat
 }
 
 fn decode_rollback_payload(payload: &[u8]) -> AndromedaResult<RollbackPayloadMetadata> {
-    const ROLLBACK_PAYLOAD_LEN: usize = 16;
-    if payload.len() != ROLLBACK_PAYLOAD_LEN {
+    if payload.len() != EXEC_TX_ROLLBACK_PAYLOAD_LEN {
         return Err(tx_bridge_error(format!(
-            "transaction rollback WAL payload has unsupported length: expected {ROLLBACK_PAYLOAD_LEN} bytes, got {} bytes",
+            "transaction rollback WAL payload has unsupported length: expected {EXEC_TX_ROLLBACK_PAYLOAD_LEN} bytes, got {} bytes",
             payload.len()
         )));
     }

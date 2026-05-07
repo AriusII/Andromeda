@@ -1,0 +1,44 @@
+PostToolUse:
+  - hooks:
+      - command: python .codex/scripts/hooks/andromeda_artifact_gate.py
+        timeout: 10
+        type: command
+    matcher: Write|Edit|MultiEdit
+PreCompact:
+  - hooks:
+      - command: python .codex/scripts/hooks/andromeda_precompact_notice.py
+        timeout: 5
+        type: command
+    matcher: manual|auto
+PreToolUse:
+  - hooks:
+      - command: python .codex/scripts/hooks/andromeda_tool_gate.py
+        timeout: 10
+        type: command
+    matcher: Bash
+  - hooks:
+      - command: python .codex/scripts/hooks/andromeda_file_write_gate.py
+        timeout: 10
+        type: command
+    matcher: Write|Edit|MultiEdit
+SessionStart:
+  - hooks:
+      - command: python .codex/scripts/hooks/andromeda_context_loader.py
+        timeout: 10
+        type: command
+    matcher: startup|resume|compact|clear
+Stop:
+  - hooks:
+      - command: python .codex/scripts/hooks/andromeda_stop_gate.py
+        timeout: 10
+        type: command
+SubagentStop:
+  - hooks:
+      - command: python .codex/scripts/hooks/andromeda_subagent_gate.py
+        timeout: 10
+        type: command
+UserPromptSubmit:
+  - hooks:
+      - command: python .codex/scripts/hooks/andromeda_prompt_gate.py
+        timeout: 10
+        type: command

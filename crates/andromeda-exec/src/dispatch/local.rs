@@ -1,8 +1,11 @@
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
 use andromeda_storage::{Lsn, WalRecordKind};
-use andromeda_tx::{TransactionEvent, TransactionState, TransactionStateMachine};
+use andromeda_tx::{IsolationLevel, TransactionEvent, TransactionState, TransactionStateMachine};
 
-use crate::InvocationWal;
+use crate::{
+    InvocationWal, LocalHeapRowInsertRedoTemplate, encode_exec_tx_commit_payload,
+    encode_exec_tx_rollback_payload,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalDispatchPlan {
@@ -31,7 +34,32 @@ impl LocalDispatchPlan {
             ));
         }
 
+        if self.has_mutation() {
+            LocalHeapRowInsertRedoTemplate::try_decode_template(&self.mutation_payload)?;
+        }
+
         Ok(())
+    }
+
+    fn mutation_record_for_lsn(
+        &self,
+        mutation_lsn: Lsn,
+    ) -> AndromedaResult<(WalRecordKind, Vec<u8>, bool)> {
+        if let Some(template) =
+            LocalHeapRowInsertRedoTemplate::try_decode_template(&self.mutation_payload)?
+        {
+            return Ok((
+                WalRecordKind::RowInsert,
+                template.materialize_wal_payload(mutation_lsn)?,
+                true,
+            ));
+        }
+
+        Ok((
+            WalRecordKind::RowUpdate,
+            self.mutation_payload.clone(),
+            false,
+        ))
     }
 }
 
@@ -204,20 +232,34 @@ where
         )?;
 
         let mutation_lsn = if plan.has_mutation() {
-            Some(self.wal.append(
-                WalRecordKind::RowUpdate,
-                Some(plan.transaction_id),
-                &plan.mutation_payload,
-            )?)
+            let expected_mutation_lsn = begin_lsn.try_next()?;
+            let (mutation_kind, mutation_payload, requires_exact_lsn) =
+                plan.mutation_record_for_lsn(expected_mutation_lsn)?;
+            let mutation_lsn =
+                self.wal
+                    .append(mutation_kind, Some(plan.transaction_id), &mutation_payload)?;
+            if requires_exact_lsn && mutation_lsn != expected_mutation_lsn {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Storage,
+                    format!(
+                        "local storage redo payload was materialized for mutation LSN {} but WAL appended it at {}",
+                        expected_mutation_lsn.get(),
+                        mutation_lsn.get()
+                    ),
+                ));
+            }
+            Some(mutation_lsn)
         } else {
             None
         };
 
         tx.apply(TransactionEvent::CommitRequested)?;
+        let commit_payload =
+            encode_exec_tx_commit_payload(IsolationLevel::Serializable, plan.rows_affected, 0);
         let commit_lsn = self.wal.append(
             WalRecordKind::TxCommit,
             Some(plan.transaction_id),
-            b"tx-commit",
+            &commit_payload,
         )?;
         let durable_lsn = self.wal.flush_through(commit_lsn)?;
         let wal_evidence = WalDurabilityEvidence {
@@ -227,12 +269,11 @@ where
             durable_lsn,
         };
         wal_evidence.validate()?;
-        tx.mark_durable_commit_lsn(durable_lsn.get())?;
-        tx.apply(TransactionEvent::DurableWalFlushed)?;
+        tx.publish_visible_commit_with_durable_evidence(commit_lsn.get(), durable_lsn.get())?;
 
         Ok(LocalDispatchReceipt {
             transaction_id: plan.transaction_id,
-            transaction_state: tx.state,
+            transaction_state: tx.state(),
             durable_lsn,
             rows_affected: plan.rows_affected,
             wal_evidence,
@@ -283,10 +324,11 @@ where
         };
 
         tx.apply(TransactionEvent::RollbackRequested)?;
+        let rollback_payload = encode_exec_tx_rollback_payload(0);
         let rollback_lsn = self.wal.append(
             WalRecordKind::TxRollback,
             Some(plan.transaction_id),
-            &plan.rollback_payload,
+            &rollback_payload,
         )?;
         let durable_lsn = self.wal.flush_through(rollback_lsn)?;
         let wal_evidence = RollbackWalDurabilityEvidence {
@@ -295,12 +337,11 @@ where
             durable_lsn,
         };
         wal_evidence.validate()?;
-        tx.mark_durable_rollback_lsn(durable_lsn.get())?;
-        tx.apply(TransactionEvent::RollbackComplete)?;
+        tx.complete_rollback_with_durable_evidence(rollback_lsn.get(), durable_lsn.get())?;
 
         Ok(LocalRollbackReceipt {
             transaction_id: plan.transaction_id,
-            transaction_state: tx.state,
+            transaction_state: tx.state(),
             durable_lsn,
             wal_evidence,
             intermediate_state,

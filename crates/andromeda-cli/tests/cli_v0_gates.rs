@@ -21,6 +21,8 @@ const FORBIDDEN_SQL_CLIENT_DEPS: &[&str] = &[
     "tokio-postgres",
 ];
 
+const FORBIDDEN_JSON_RUNTIME_DEPS: &[&str] = &["jsonrpsee", "serde_json"];
+
 const FORBIDDEN_APPLICATION_SQL_SURFACE_TOKENS: &[&str] = &[
     "--sql",
     "execute_sql",
@@ -30,6 +32,22 @@ const FORBIDDEN_APPLICATION_SQL_SURFACE_TOKENS: &[&str] = &[
     "sql_text",
     "SqlCommand",
     "SqlQuery",
+];
+
+const FORBIDDEN_RUNTIME_JSON_SURFACE_TOKENS: &[&str] = &[
+    "application/json",
+    "jsonrpc",
+    "JsonRpc",
+    "json_wire",
+    "JsonWire",
+];
+
+const FORBIDDEN_PROTO_RUNTIME_JSON_TOKENS: &[&str] = &[
+    "google.protobuf.Struct",
+    "google.protobuf.Value",
+    "google.protobuf.ListValue",
+    "google.protobuf.NullValue",
+    "json_name",
 ];
 
 #[test]
@@ -45,8 +63,31 @@ fn protocol_smoke_detail_output_is_deterministic() {
     assert_eq!(first_stdout, second_stdout);
     assert!(first_stdout.contains("payload/frame lockstep: ok (9 codes)"));
     assert!(first_stdout.contains("payload/frame codes:"));
-    assert!(first_stdout.contains("representative result frames:"));
+    assert!(first_stdout.contains("representative ResultStream frames:"));
     assert!(first_stdout.contains("network sockets: not opened"));
+}
+
+#[test]
+fn cli_human_surfaces_do_not_advertise_sql_grpc_or_default_json_runtime() {
+    let help = run_cli(["--help"]);
+    assert_success(&help);
+    let help_stdout = stdout(&help);
+    assert!(help_stdout.contains("durable audit trace inspection"));
+    assert!(!help_stdout.contains("audit query"));
+    assert!(!help_stdout.contains("durable audit trace queries"));
+    assert_no_cli_surface_drift(&help_stdout);
+
+    let audit_help = run_cli(["audit", "--help"]);
+    assert_success(&audit_help);
+    let audit_help_stdout = stdout(&audit_help);
+    assert!(audit_help_stdout.contains("inspect  Inspect durable audit journal replay"));
+    assert_no_cli_surface_drift(&audit_help_stdout);
+
+    let protocol = run_cli(["protocol-smoke", "--detail"]);
+    assert_success(&protocol);
+    let protocol_stdout = stdout(&protocol);
+    assert!(protocol_stdout.contains("typed ResultStream sequence: ok"));
+    assert_no_cli_surface_drift(&protocol_stdout);
 }
 
 #[test]
@@ -86,7 +127,6 @@ fn vertical_v0_writes_file_wal_and_recovery_inspect_reports_replay() {
 fn workspace_policy_gates_do_not_drift_through_cli_scope() {
     let root = workspace_root();
     let crate_sources = root.join("crates");
-    let proto_schemas = root.join("schemas").join("proto");
 
     let manifest_files = collect_files(&root, |path| {
         path.file_name() == Some(OsStr::new("Cargo.toml"))
@@ -98,15 +138,17 @@ fn workspace_policy_gates_do_not_drift_through_cli_scope() {
             "{} must not introduce gRPC/tonic dependencies",
             path.display()
         );
-        assert!(
-            !contains_word(&text, "serde_json"),
-            "{} must not introduce serde_json runtime dependency",
-            path.display()
-        );
         for dep in FORBIDDEN_SQL_CLIENT_DEPS {
             assert!(
                 !contains_dependency_name(&text, dep),
                 "{} must not introduce SQL client/runtime dependency `{dep}`; application traffic must stay Procedure-only",
+                path.display()
+            );
+        }
+        for dep in FORBIDDEN_JSON_RUNTIME_DEPS {
+            assert!(
+                !contains_dependency_name(&text, dep),
+                "{} must not introduce JSON runtime dependency `{dep}`; runtime protocol payloads must stay typed and Protobuf-backed",
                 path.display()
             );
         }
@@ -130,11 +172,22 @@ fn workspace_policy_gates_do_not_drift_through_cli_scope() {
         for token in FORBIDDEN_APPLICATION_SQL_SURFACE_TOKENS {
             assert_no_source_token(&path, &text, token);
         }
+        for token in FORBIDDEN_RUNTIME_JSON_SURFACE_TOKENS {
+            assert_no_source_token(&path, &text, token);
+        }
     }
 
-    let proto_files = collect_files(&proto_schemas, |path| {
-        path.extension() == Some(OsStr::new("proto"))
-    });
+    let proto_files = [
+        root.join("schemas").join("proto"),
+        root.join("crates").join("andromeda-proto").join("proto"),
+    ]
+    .into_iter()
+    .flat_map(|root| collect_files(&root, |path| path.extension() == Some(OsStr::new("proto"))))
+    .collect::<Vec<_>>();
+    assert!(
+        !proto_files.is_empty(),
+        "workspace policy gate must scan normative Protobuf schemas"
+    );
     for path in proto_files {
         let text = fs::read_to_string(&path).expect("read proto schema");
         for line in text.lines() {
@@ -144,6 +197,15 @@ fn workspace_policy_gates_do_not_drift_through_cli_scope() {
                 "{} must not define gRPC service/rpc declarations",
                 path.display()
             );
+            if !trimmed.starts_with("//") {
+                for token in FORBIDDEN_PROTO_RUNTIME_JSON_TOKENS {
+                    assert!(
+                        !trimmed.contains(token),
+                        "{} must not define runtime JSON-compatible Protobuf token `{token}`",
+                        path.display()
+                    );
+                }
+            }
         }
     }
 }
@@ -228,6 +290,38 @@ fn assert_no_source_token(path: &Path, text: &str, token: &str) {
         "{} must not contain `{token}`",
         path.display()
     );
+}
+
+fn assert_no_cli_surface_drift(text: &str) {
+    let lower = text.to_ascii_lowercase();
+    for token in [
+        "--sql",
+        "ad hoc sql",
+        "audit query",
+        "execute sql",
+        "raw sql",
+        "result set",
+        "resultset",
+        "trace query",
+        "grpc",
+        "tonic",
+        "application/json",
+        "jsonrpc",
+        "default json",
+        "json runtime",
+    ] {
+        assert!(
+            !lower.contains(token),
+            "CLI human surface must not advertise `{token}` as an Andromeda runtime surface:\n{text}"
+        );
+    }
+
+    for token in ["query", "queries"] {
+        assert!(
+            !contains_word(&lower, token),
+            "CLI human surface must not advertise `{token}` as native user wording:\n{text}"
+        );
+    }
 }
 
 fn contains_word(text: &str, word: &str) -> bool {

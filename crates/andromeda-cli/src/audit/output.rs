@@ -5,10 +5,11 @@ use andromeda_observe::{
     TraceQueryLsnRange, TraceQueryPermissionMatrix, TraceQuerySpec,
 };
 
-use crate::diagnostic_json::{json_option_string, json_option_u64, json_string};
+use crate::diagnostic_json::{json_option_u64, json_string};
 
 use super::{
-    AuditCompactReport, AuditQueryDiagnosticEvidence, AuditQueryReport, AuditVerifyReport,
+    AuditCompactReport, AuditInspectionDiagnosticEvidence, AuditInspectionReport,
+    AuditVerifyReport, sensitive::redact_sensitive_cli_evidence,
 };
 
 pub(super) fn print_audit_help() {
@@ -17,15 +18,17 @@ pub(super) fn print_audit_help() {
     println!("USAGE: andromeda-cli audit <SUBCOMMAND> [OPTIONS]");
     println!();
     println!("SUBCOMMANDS:");
-    println!("  query    Query a durable audit journal replay through the trace-query contract");
+    println!(
+        "  inspect  Inspect durable audit journal replay through the trace inspection contract"
+    );
     println!("  compact  Rewrite a durable audit journal through the retention contract");
     println!("  verify   Verify durable audit journal checksums without creating missing files");
     println!();
-    println!("QUERY OPTIONS:");
+    println!("INSPECT OPTIONS:");
     println!("  --journal <path>          Durable audit journal file to replay");
     println!("  --trace-id <u128>         Filter by trace id");
     println!("  --principal <id>          Filter by durable principal id");
-    println!("  --family <family>         Filter by query family");
+    println!("  --family <family>         Filter by trace family");
     println!("  --lsn-range <start..end>  Inclusive LSN filter range");
     println!("  --lsn-start <lsn>         Inclusive LSN filter start");
     println!("  --lsn-end <lsn>           Inclusive LSN filter end");
@@ -33,7 +36,7 @@ pub(super) fn print_audit_help() {
     println!("  --offset <n>              Rows to skip after filtering");
     println!("  --include-total-count     Include full matching count");
     println!("  --json                    Emit machine-readable JSON output");
-    println!("  --diagnostic-json         Emit query evidence fields in diagnostic JSON");
+    println!("  --diagnostic-json         Emit replay evidence fields in diagnostic JSON");
     println!();
     println!("COMPACT OPTIONS:");
     println!("  --journal <path>          Durable audit journal file to rewrite");
@@ -48,15 +51,15 @@ pub(super) fn print_audit_help() {
     println!("  -h, --help                Show this help message");
 }
 
-pub(super) fn print_audit_query_result(
-    report: &AuditQueryReport,
+pub(super) fn print_audit_inspection_result(
+    report: &AuditInspectionReport,
     json_output: bool,
     diagnostic_json: bool,
 ) {
     if json_output {
-        print_audit_query_json(report, diagnostic_json);
+        print_audit_inspection_json(report, diagnostic_json);
     } else {
-        print_audit_query_human(report);
+        print_audit_inspection_human(report);
     }
 }
 
@@ -76,9 +79,9 @@ pub(super) fn print_audit_verify_result(report: &AuditVerifyReport, json_output:
     }
 }
 
-fn print_audit_query_human(report: &AuditQueryReport) {
-    println!("Audit Query");
-    println!("===========");
+fn print_audit_inspection_human(report: &AuditInspectionReport) {
+    println!("Audit Replay Inspection");
+    println!("=======================");
     println!("Schema: {}", report.schema);
     println!("Contract Preview: {}", report.contract_preview);
     println!("Durable Backend Wired: {}", report.durable_backend);
@@ -87,7 +90,7 @@ fn print_audit_query_human(report: &AuditQueryReport) {
         report.requires_durable_audit_journal
     );
     if let Some(path) = &report.journal_path {
-        println!("Journal: {path}");
+        println!("Journal: {}", audit_output_text(path));
     }
     println!(
         "Permission: {} on {} (audit required: {})",
@@ -108,8 +111,8 @@ fn print_audit_query_human(report: &AuditQueryReport) {
                 row.trace_id.get(),
                 trace_family_str(row.family),
                 row.record_lsn,
-                row.principal_id,
-                row.event_kind
+                audit_output_text(&row.principal_id),
+                audit_output_text(&row.event_kind)
             );
         }
     }
@@ -122,7 +125,7 @@ fn print_audit_query_human(report: &AuditQueryReport) {
         println!("Evidence Offset: {}", evidence.offset);
         println!("Evidence Truncated: {}", evidence.truncated);
     }
-    println!("{}", report.message);
+    println!("{}", audit_output_text(&report.message));
 }
 
 fn print_filters_human(filter: &TraceQueryFilter) {
@@ -130,7 +133,7 @@ fn print_filters_human(filter: &TraceQueryFilter) {
         println!("Trace ID: {}", trace_id.get());
     }
     if let Some(principal) = &filter.principal {
-        println!("Principal: {principal}");
+        println!("Principal: {}", audit_output_text(principal));
     }
     if let Some(family) = filter.family {
         println!("Family: {}", trace_family_str(family));
@@ -140,20 +143,19 @@ fn print_filters_human(filter: &TraceQueryFilter) {
     }
 }
 
-fn print_audit_query_json(report: &AuditQueryReport, diagnostic_json: bool) {
+fn print_audit_inspection_json(report: &AuditInspectionReport, _diagnostic_json: bool) {
     println!(
-        "{{\"schema\":{},\"diagnostic_only\":{},\"contract_preview\":{},\"durable_backend\":{},\"requires_durable_audit_journal\":{},\"journal_path\":{},\"query\":{},\"permission_matrix\":{},\"diagnostic_evidence\":{},\"result\":{},\"message\":{}}}",
+        "{{\"schema\":{},\"diagnostic_only\":true,\"contract_preview\":{},\"durable_backend\":{},\"requires_durable_audit_journal\":{},\"journal_path\":{},\"inspection\":{},\"permission_matrix\":{},\"diagnostic_evidence\":{},\"result\":{},\"message\":{}}}",
         json_string(report.schema),
-        diagnostic_json,
         report.contract_preview,
         report.durable_backend,
         report.requires_durable_audit_journal,
-        json_option_string(report.journal_path.as_deref()),
-        query_spec_json(&report.spec),
+        json_option_audit_string(report.journal_path.as_deref()),
+        inspection_spec_json(&report.spec),
         permission_matrix_json(report.spec_permission_matrix()),
-        query_evidence_json(report.diagnostic_evidence.as_ref()),
+        inspection_evidence_json(report.diagnostic_evidence.as_ref()),
         result_json(report.result.as_ref()),
-        json_string(&report.message),
+        json_audit_string(&report.message),
     );
 }
 
@@ -168,7 +170,7 @@ fn print_audit_compact_human(report: &AuditCompactReport) {
         report.requires_durable_audit_journal
     );
     if let Some(path) = &report.journal_path {
-        println!("Journal: {path}");
+        println!("Journal: {}", audit_output_text(path));
     }
     println!("Retain From LSN: {}", report.retain_from_lsn);
     println!("Preserve Forensic Hold: {}", report.preserve_forensic_hold);
@@ -189,7 +191,7 @@ fn print_audit_compact_human(report: &AuditCompactReport) {
             compaction.retained_checksum_evidence
         );
     }
-    println!("{}", report.message);
+    println!("{}", audit_output_text(&report.message));
 }
 
 fn print_audit_compact_json(report: &AuditCompactReport) {
@@ -199,11 +201,11 @@ fn print_audit_compact_json(report: &AuditCompactReport) {
         report.contract_preview,
         report.durable_backend,
         report.requires_durable_audit_journal,
-        json_option_string(report.journal_path.as_deref()),
+        json_option_audit_string(report.journal_path.as_deref()),
         report.retain_from_lsn,
         report.preserve_forensic_hold,
         compaction_report_json(report.report.as_ref()),
-        json_string(&report.message),
+        json_audit_string(&report.message),
     );
 }
 
@@ -216,7 +218,7 @@ fn print_audit_verify_human(report: &AuditVerifyReport) {
         "Requires Durable Audit Journal: {}",
         report.requires_durable_audit_journal
     );
-    println!("Journal: {}", report.journal_path);
+    println!("Journal: {}", audit_output_text(&report.journal_path));
     println!("Records Scanned: {}", report.records_scanned);
     println!("Records Returned: {}", report.records_returned);
     println!(
@@ -227,25 +229,25 @@ fn print_audit_verify_human(report: &AuditVerifyReport) {
         "Last Returned LSN: {}",
         option_u64_human(report.last_returned_lsn)
     );
-    println!("{}", report.message);
+    println!("{}", audit_output_text(&report.message));
 }
 
 fn print_audit_verify_json(report: &AuditVerifyReport) {
     println!(
-        "{{\"schema\":{},\"durable_backend\":{},\"requires_durable_audit_journal\":{},\"journal_path\":{},\"records_scanned\":{},\"records_returned\":{},\"first_returned_lsn\":{},\"last_returned_lsn\":{},\"message\":{}}}",
+        "{{\"schema\":{},\"diagnostic_only\":true,\"durable_backend\":{},\"requires_durable_audit_journal\":{},\"journal_path\":{},\"records_scanned\":{},\"records_returned\":{},\"first_returned_lsn\":{},\"last_returned_lsn\":{},\"message\":{}}}",
         json_string(report.schema),
         report.durable_backend,
         report.requires_durable_audit_journal,
-        json_string(&report.journal_path),
+        json_audit_string(&report.journal_path),
         report.records_scanned,
         report.records_returned,
         json_option_u64(report.first_returned_lsn),
         json_option_u64(report.last_returned_lsn),
-        json_string(&report.message),
+        json_audit_string(&report.message),
     );
 }
 
-fn query_spec_json(spec: &TraceQuerySpec) -> String {
+fn inspection_spec_json(spec: &TraceQuerySpec) -> String {
     format!(
         "{{\"limit\":{},\"offset\":{},\"include_total_count\":{},\"filters\":{}}}",
         spec.limit,
@@ -262,7 +264,7 @@ fn filters_json(filter: &TraceQueryFilter) -> String {
             .trace_id
             .map(|trace_id| trace_id.get().to_string())
             .unwrap_or_else(|| "null".to_string()),
-        json_option_string(filter.principal.as_deref()),
+        json_option_audit_string(filter.principal.as_deref()),
         filter
             .family
             .map(|family| json_string(trace_family_str(family)))
@@ -312,7 +314,7 @@ fn result_json(result: Option<&DurableAuditTraceQueryResult>) -> String {
     )
 }
 
-fn query_evidence_json(evidence: Option<&AuditQueryDiagnosticEvidence>) -> String {
+fn inspection_evidence_json(evidence: Option<&AuditInspectionDiagnosticEvidence>) -> String {
     let Some(evidence) = evidence else {
         return "null".to_string();
     };
@@ -367,8 +369,8 @@ fn row_json(row: &DurableAuditTraceQueryRow) -> String {
         row.checksum,
         json_string(replay_behavior_str(row.replay_behavior)),
         json_string(retention_str(row.retention)),
-        json_string(&row.principal_id),
-        json_option_string(row.certificate_fingerprint.as_deref()),
+        json_option_audit_string(Some(&row.principal_id)),
+        json_option_audit_string(row.certificate_fingerprint.as_deref()),
         row.surface
             .map(|surface| json_string(surface_str(surface)))
             .unwrap_or_else(|| "null".to_string()),
@@ -381,15 +383,29 @@ fn row_json(row: &DurableAuditTraceQueryRow) -> String {
         row.session_id
             .map(|session_id| session_id.get().to_string())
             .unwrap_or_else(|| "null".to_string()),
-        json_string(&row.event_kind),
+        json_audit_string(&row.event_kind),
     )
 }
 
-trait AuditQueryReportPermission {
+fn audit_output_text(value: &str) -> &str {
+    redact_sensitive_cli_evidence(value)
+}
+
+fn json_audit_string(value: &str) -> String {
+    json_string(audit_output_text(value))
+}
+
+fn json_option_audit_string(value: Option<&str>) -> String {
+    value
+        .map(json_audit_string)
+        .unwrap_or_else(|| "null".to_string())
+}
+
+trait AuditInspectionReportPermission {
     fn spec_permission_matrix(&self) -> TraceQueryPermissionMatrix;
 }
 
-impl AuditQueryReportPermission for AuditQueryReport {
+impl AuditInspectionReportPermission for AuditInspectionReport {
     fn spec_permission_matrix(&self) -> TraceQueryPermissionMatrix {
         TraceQueryPermissionMatrix::V1_ADMIN
     }
