@@ -24,6 +24,12 @@ class CargoBinSpec:
 
 
 @dataclass(frozen=True)
+class SupportFileSpec:
+    path: str
+    used_by: List[str]
+
+
+@dataclass(frozen=True)
 class ManifestEntry:
     target: str
     corpus_dir: str
@@ -90,6 +96,19 @@ def load_cargo_bin_specs(path: pathlib.Path) -> List[CargoBinSpec]:
     return bins
 
 
+def load_support_file_specs(path: pathlib.Path) -> List[SupportFileSpec]:
+    text = path.read_text(encoding="utf-8")
+    support_files: List[SupportFileSpec] = []
+    for block in parse_blocks(text, "[[support]]"):
+        support_files.append(
+            SupportFileSpec(
+                path=parse_string(block, "path"),
+                used_by=parse_string_list(block, "used_by"),
+            )
+        )
+    return support_files
+
+
 def load_manifest_entries(path: pathlib.Path) -> List[ManifestEntry]:
     text = path.read_text(encoding="utf-8")
     entries: List[ManifestEntry] = []
@@ -110,15 +129,22 @@ def parse_blocks(text: str, marker: str) -> List[str]:
     current: List[str] = []
     in_block = False
     for line in text.splitlines():
-        if line.strip() == marker:
-            if current:
+        stripped = line.strip()
+        if stripped == marker:
+            if in_block and current:
                 blocks.append("\n".join(current))
             current = []
             in_block = True
             continue
+        if in_block and stripped.startswith("[") and stripped.endswith("]"):
+            if current:
+                blocks.append("\n".join(current))
+            current = []
+            in_block = False
+            continue
         if in_block:
             current.append(line)
-    if current:
+    if in_block and current:
         blocks.append("\n".join(current))
     return blocks
 
@@ -419,11 +445,13 @@ def ensure_seed(root: pathlib.Path, target: str) -> List[pathlib.Path]:
 def check_seed_corpus(root: pathlib.Path, targets_file: str) -> int:
     targets_path = root / targets_file
     target_specs = load_target_specs(targets_path)
+    support_specs = load_support_file_specs(targets_path)
     manifest_path = root / "fuzz" / "corpus" / "manifest.toml"
     manifest_entries = load_manifest_entries(manifest_path)
     cargo_bin_specs = load_cargo_bin_specs(root / "fuzz" / "Cargo.toml")
     manifest_by_target = {entry.target: entry for entry in manifest_entries}
     target_names = [target.name for target in target_specs]
+    support_paths = [support.path for support in support_specs]
     errors: List[str] = []
 
     target_headers = load_top_level_strings(targets_path)
@@ -450,6 +478,15 @@ def check_seed_corpus(root: pathlib.Path, targets_file: str) -> int:
         errors.append("manifest contains duplicate target entries")
     if len(set(target_names)) != len(target_names):
         errors.append(f"{targets_file} contains duplicate target names")
+    if len(set(support_paths)) != len(support_paths):
+        errors.append(f"{targets_file} contains duplicate support file paths")
+    target_file_path_set = {spec.path for spec in target_specs}
+    support_path_set = set(support_paths)
+    overlapping_paths = sorted(target_file_path_set & support_path_set)
+    if overlapping_paths:
+        errors.append(
+            f"{targets_file} marks files as both target and support: {overlapping_paths}"
+        )
     if len({item.name for item in cargo_bin_specs}) != len(cargo_bin_specs):
         errors.append("fuzz/Cargo.toml contains duplicate [[bin]] names")
     if len({item.path for item in cargo_bin_specs}) != len(cargo_bin_specs):
@@ -467,9 +504,16 @@ def check_seed_corpus(root: pathlib.Path, targets_file: str) -> int:
 
     cargo_by_name = {item.name: item for item in cargo_bin_specs}
     cargo_names = sorted(cargo_by_name)
+    cargo_paths = {item.path for item in cargo_bin_specs}
     if cargo_names != expected_dirs:
         errors.append(
             f"fuzz/Cargo.toml target set mismatch: actual={cargo_names} expected={expected_dirs}"
+        )
+    support_cargo_paths = sorted(support_path_set & cargo_paths)
+    if support_cargo_paths:
+        errors.append(
+            "support files must not be executable fuzz bins: "
+            f"{support_cargo_paths}"
         )
 
     target_file_paths = sorted(
@@ -477,10 +521,11 @@ def check_seed_corpus(root: pathlib.Path, targets_file: str) -> int:
         for path in (root / "fuzz" / "fuzz_targets").glob("*.rs")
     )
     expected_target_file_paths = sorted(spec.path for spec in target_specs)
-    if target_file_paths != expected_target_file_paths:
+    expected_source_file_paths = sorted(expected_target_file_paths + support_paths)
+    if target_file_paths != expected_source_file_paths:
         errors.append(
-            "fuzz target source file set mismatch: "
-            f"actual={target_file_paths} expected={expected_target_file_paths}"
+            "fuzz source file set mismatch: "
+            f"actual={target_file_paths} expected={expected_source_file_paths}"
         )
 
     for spec in target_specs:
@@ -542,6 +587,21 @@ def check_seed_corpus(root: pathlib.Path, targets_file: str) -> int:
                     f"{spec.name}: generated seed {seed_name} is not deterministic "
                     f"(actual {len(actual_payload)} bytes, expected {len(expected_payload)} bytes)"
                 )
+
+    target_name_set = set(target_names)
+    for spec in support_specs:
+        support_path = root / "fuzz" / spec.path
+        if not support_path.is_file():
+            errors.append(f"support file path missing: {support_path.as_posix()}")
+        if not spec.path.startswith("fuzz_targets/") or not spec.path.endswith(".rs"):
+            errors.append(
+                f"support file path must stay under fuzz_targets/*.rs: {spec.path!r}"
+            )
+        if not spec.used_by:
+            errors.append(f"{spec.path}: support file must declare at least one used_by target")
+        unknown_targets = sorted(set(spec.used_by) - target_name_set)
+        if unknown_targets:
+            errors.append(f"{spec.path}: unknown used_by targets {unknown_targets}")
 
     manifest_targets = sorted(manifest_by_target)
     if manifest_targets != expected_dirs:

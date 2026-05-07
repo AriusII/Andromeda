@@ -1,6 +1,6 @@
 # Andromeda Codex configuration
 # Generated package version: 2026.05.07-rust-codex-tooling-v2
-model = "gpt-5.5-pro"
+model = "gpt-5.5"
 model_reasoning_effort = "high"
 model_verbosity = "high"
 sandbox_mode = "workspace-write"
