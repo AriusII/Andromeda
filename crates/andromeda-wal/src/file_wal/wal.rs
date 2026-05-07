@@ -5,7 +5,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{Lsn, WalRecord, WalRecordKind, WalScanStop, encode_wal_record};
+use crate::{
+    Lsn, WalRecord, WalRecordKind, WalScanStop, encode_wal_record, validate_wal_record_bounds,
+};
 
 use super::{
     FileWalHeader,
@@ -144,6 +146,7 @@ impl FileWal {
 
     pub fn append(&mut self, record: WalRecord) -> AndromedaResult<Lsn> {
         record.validate()?;
+        validate_wal_record_bounds(&record)?;
 
         let expected_lsn = self.try_next_lsn()?;
         if record.header.lsn != expected_lsn {

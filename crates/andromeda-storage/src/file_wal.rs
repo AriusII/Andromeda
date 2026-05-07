@@ -127,7 +127,7 @@ mod tests {
         }
 
         let wal = FileWal::open(&path).unwrap();
-        let expected_len = format::FILE_WAL_DATA_OFFSET + wal.durable_bytes();
+        let expected_len = FILE_WAL_HEADER_LEN as u64 + wal.durable_bytes();
         assert_eq!(wal.last_lsn(), Some(Lsn::new(3)));
         assert_eq!(wal.durable_lsn(), Lsn::new(3));
         assert_eq!(metadata(&path).unwrap().len(), expected_len);

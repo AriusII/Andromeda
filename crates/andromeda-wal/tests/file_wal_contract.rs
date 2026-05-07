@@ -1,7 +1,7 @@
 use andromeda_core::{AndromedaErrorKind, TransactionId};
 use andromeda_wal::{
-    FILE_WAL_HEADER_LEN, FileWal, FileWalHeader, Lsn, WalRecord, WalRecordKind, WalScanStopReason,
-    encode_wal_record, scan_file_wal,
+    FILE_WAL_HEADER_LEN, FileWal, FileWalHeader, Lsn, WAL_RECORD_SIZE_LIMIT, WalRecord,
+    WalRecordKind, WalScanStopReason, encode_wal_record, scan_file_wal,
 };
 use std::fs::{File, OpenOptions, metadata, remove_file};
 use std::io::Write;
@@ -111,6 +111,31 @@ fn append_flush_and_reopen_preserves_strict_lsn_chain() {
     assert_eq!(wal.records()[0].header.previous_lsn, None);
     assert_eq!(wal.records()[1].header.previous_lsn, Some(Lsn::new(1)));
     assert_eq!(wal.records()[2].header.previous_lsn, Some(Lsn::new(2)));
+
+    remove_file(&path).ok();
+}
+
+#[test]
+fn append_rejects_payload_beyond_wal_record_size_limit() {
+    let path = test_wal_path("oversized-record");
+    remove_file(&path).ok();
+    let payload = vec![0x5a; WAL_RECORD_SIZE_LIMIT as usize + 1];
+    let record = WalRecord::from_parts(
+        WalRecordKind::RowInsert,
+        Lsn::new(1),
+        None,
+        Some(TransactionId::new(17)),
+        payload,
+    )
+    .unwrap();
+
+    let mut wal = FileWal::open(&path).unwrap();
+    let error = wal.append(record).unwrap_err();
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Storage);
+    assert_eq!(wal.len(), 0);
+    assert_eq!(wal.append_bytes(), 0);
+    assert_eq!(metadata(&path).unwrap().len(), FILE_WAL_HEADER_LEN as u64);
 
     remove_file(&path).ok();
 }

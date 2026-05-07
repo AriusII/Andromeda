@@ -13,6 +13,11 @@ fn workspace_crate_dependency_topology_blocks_forbidden_runtime_edges() {
         .iter()
         .flat_map(|rule| rule.violations(&manifests))
         .chain(
+            forbidden_rules()
+                .iter()
+                .flat_map(|rule| rule.transitive_violations(&manifests)),
+        )
+        .chain(
             allowed_dependency_rules()
                 .iter()
                 .flat_map(|rule| rule.violations(&manifests)),
@@ -413,6 +418,60 @@ impl ForbiddenRule {
             })
             .collect()
     }
+
+    fn transitive_violations(&self, manifests: &BTreeMap<String, CrateManifest>) -> Vec<String> {
+        manifests
+            .values()
+            .filter(|manifest| self.sources.contains(manifest.package_name.as_str()))
+            .flat_map(|manifest| self.transitive_violations_for_manifest(manifest, manifests))
+            .collect()
+    }
+
+    fn transitive_violations_for_manifest(
+        &self,
+        manifest: &CrateManifest,
+        manifests: &BTreeMap<String, CrateManifest>,
+    ) -> Vec<String> {
+        let mut violations = Vec::new();
+        let mut visited = BTreeSet::new();
+        let mut pending = manifest
+            .runtime_dependencies
+            .iter()
+            .map(|dependency| vec![manifest.package_name.clone(), dependency.clone()])
+            .collect::<Vec<_>>();
+
+        while let Some(path) = pending.pop() {
+            let dependency = path.last().expect("path contains dependency").clone();
+
+            if path.len() > 2 && self.forbidden_dependencies.contains(dependency.as_str()) {
+                violations.push(format!(
+                    "{}: `{}` must not transitively depend on `{}` through `{}` in {}",
+                    self.message,
+                    manifest.package_name,
+                    dependency,
+                    path.join(" -> "),
+                    manifest.path.display()
+                ));
+                continue;
+            }
+
+            if !visited.insert(dependency.clone()) {
+                continue;
+            }
+
+            let Some(dependency_manifest) = manifests.get(&dependency) else {
+                continue;
+            };
+
+            for child_dependency in &dependency_manifest.runtime_dependencies {
+                let mut child_path = path.clone();
+                child_path.push(child_dependency.clone());
+                pending.push(child_path);
+            }
+        }
+
+        violations
+    }
 }
 
 struct AllowedDependencyRule {
@@ -698,4 +757,59 @@ fn manifest_parser_tracks_package_renames_in_dependency_sections() {
     assert!(dependencies.dev.contains("proptest"));
     assert!(!dependencies.runtime.contains("andromeda-bench"));
     assert!(!dependencies.dev.contains("andromeda-bench"));
+}
+
+#[test]
+fn forbidden_rules_report_transitive_dependency_paths() {
+    let manifests = BTreeMap::from([
+        (
+            "andromeda-storage".to_owned(),
+            test_manifest(
+                "andromeda-storage",
+                &["andromeda-observe"],
+                "crates/andromeda-storage/Cargo.toml",
+            ),
+        ),
+        (
+            "andromeda-observe".to_owned(),
+            test_manifest(
+                "andromeda-observe",
+                &["andromeda-quic"],
+                "crates/andromeda-observe/Cargo.toml",
+            ),
+        ),
+        (
+            "andromeda-quic".to_owned(),
+            test_manifest(
+                "andromeda-quic",
+                &["quinn"],
+                "crates/andromeda-quic/Cargo.toml",
+            ),
+        ),
+    ]);
+    let rule = ForbiddenRule::new(
+        "WAL, storage, and recovery crates must not depend on Quinn or RPC runtime crates",
+        &["andromeda-storage"],
+        &["andromeda-quic", "quinn"],
+    );
+
+    let violations = rule.transitive_violations(&manifests);
+
+    assert_eq!(violations.len(), 1);
+    assert!(
+        violations[0].contains("andromeda-storage -> andromeda-observe -> andromeda-quic"),
+        "{violations:?}"
+    );
+}
+
+fn test_manifest(name: &str, runtime_dependencies: &[&str], path: &str) -> CrateManifest {
+    CrateManifest {
+        package_name: name.to_owned(),
+        path: PathBuf::from(path),
+        runtime_dependencies: runtime_dependencies
+            .iter()
+            .map(|dependency| dependency.to_string())
+            .collect(),
+        dev_dependencies: BTreeSet::new(),
+    }
 }
