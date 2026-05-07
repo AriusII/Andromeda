@@ -1,6 +1,6 @@
 name = "security-implementation-engineer"
 description = "Implements IAM, permission evaluation, policy checks, audit traces, certificate identity, and break-glass enforcement."
-model = "gpt-5.5-pro"
+model = "gpt-5.5"
 model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"

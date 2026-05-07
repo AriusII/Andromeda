@@ -1,6 +1,6 @@
 name = "release-readiness-coordinator"
 description = "Coordinates release readiness evidence across Rust, Codex tooling, C4/C5 components, docs, and validation."
-model = "gpt-5.5-pro"
+model = "gpt-5.5"
 model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"

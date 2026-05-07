@@ -1,6 +1,6 @@
 name = "github-pr-reviewer"
 description = "Read-only GitHub PR reviewer for Rust, Andromeda architecture, tests, and policy compliance."
-model = "gpt-5.5-pro"
+model = "gpt-5.5"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 approval_policy = "on-request"

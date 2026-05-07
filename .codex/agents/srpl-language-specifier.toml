@@ -1,6 +1,6 @@
 name = "srpl-language-specifier"
 description = "Read-only SRPL language specification agent for syntax, semantics, restrictions, diagnostics, and IR."
-model = "gpt-5.5-pro"
+model = "gpt-5.5"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 approval_policy = "on-request"

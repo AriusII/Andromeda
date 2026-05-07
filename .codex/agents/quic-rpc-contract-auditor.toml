@@ -1,6 +1,6 @@
 name = "quic-rpc-contract-auditor"
 description = "Read-only auditor for QUIC/RPC frame contracts, surfaces, metadata-before-payload, errors, and backpressure."
-model = "gpt-5.5-pro"
+model = "gpt-5.5"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 approval_policy = "on-request"

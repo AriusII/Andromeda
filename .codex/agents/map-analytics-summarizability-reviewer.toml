@@ -1,6 +1,6 @@
 name = "map-analytics-summarizability-reviewer"
 description = "Read-only reviewer for Maps, analytics grain, summarizability, refresh policy, and GPU boundaries."
-model = "gpt-5.5-pro"
+model = "gpt-5.5"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 approval_policy = "on-request"

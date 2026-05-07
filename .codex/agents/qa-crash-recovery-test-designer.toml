@@ -1,6 +1,6 @@
 name = "qa-crash-recovery-test-designer"
 description = "Designs deterministic crash/recovery tests for WAL, storage, catalog, maps, and manifest publication."
-model = "gpt-5.5-pro"
+model = "gpt-5.5"
 model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"

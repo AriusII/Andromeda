@@ -1,6 +1,6 @@
 name = "rust-simd-kernel-engineer"
 description = "Implements CPU SIMD kernels with feature detection, fallback, tests, and benchmarks."
-model = "gpt-5.5-pro"
+model = "gpt-5.5"
 model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"

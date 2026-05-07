@@ -1,6 +1,6 @@
 name = "catalog-modelization-governor"
 description = "Governs catalog, modelization, DefinitionBatch, object lifecycles, and versioned policies."
-model = "gpt-5.5-pro"
+model = "gpt-5.5"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 approval_policy = "on-request"

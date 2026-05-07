@@ -1,6 +1,6 @@
 name = "enterprise-readiness-agent"
 description = "Read-only enterprise readiness reviewer for supportability, auditability, recoverability, operations, and release gates."
-model = "gpt-5.5-pro"
+model = "gpt-5.5"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 approval_policy = "on-request"

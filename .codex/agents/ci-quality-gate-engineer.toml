@@ -1,6 +1,6 @@
 name = "ci-quality-gate-engineer"
 description = "Implements CI gates and local scripts for Rust and Codex tooling validation."
-model = "gpt-5.5-pro"
+model = "gpt-5.5"
 model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"

@@ -1,6 +1,6 @@
 name = "prompt-refinement-specialist"
 description = "Rewrites broad user requests into precise Codex work orders and prompt templates without losing intent."
-model = "gpt-5.5-pro"
+model = "gpt-5.5"
 model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"

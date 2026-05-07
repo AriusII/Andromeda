@@ -1,6 +1,6 @@
 name = "file-size-split-enforcer"
 description = "Finds large Rust files and proposes responsibility-based splits with tests and reexports."
-model = "gpt-5.5-pro"
+model = "gpt-5.5"
 model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"

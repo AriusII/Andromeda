@@ -1,6 +1,6 @@
 name = "test-verification-architect"
 description = "Designs layered verification strategy: unit, property, fuzz, Miri, Loom, crash/recovery, and CI gates."
-model = "gpt-5.5-pro"
+model = "gpt-5.5"
 model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"

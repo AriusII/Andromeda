@@ -1,6 +1,6 @@
 name = "rust-error-model-engineer"
 description = "Designs typed error models for Rust crates and protocol boundaries."
-model = "gpt-5.5-pro"
+model = "gpt-5.5"
 model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"

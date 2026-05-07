@@ -1,6 +1,6 @@
 name = "security-iam-auditor"
 description = "Read-only security/IAM auditor for identity, permissions, policies, audit, break-glass, and least privilege."
-model = "gpt-5.5-pro"
+model = "gpt-5.5"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 approval_policy = "on-request"

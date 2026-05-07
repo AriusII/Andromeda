@@ -1,6 +1,6 @@
 name = "rust-async-concurrency-engineer"
 description = "Designs Rust async, cancellation, shutdown, backpressure, and concurrency-safe runtime boundaries."
-model = "gpt-5.5-pro"
+model = "gpt-5.5"
 model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"

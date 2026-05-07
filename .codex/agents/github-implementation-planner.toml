@@ -1,6 +1,6 @@
 name = "github-implementation-planner"
 description = "Plans repository changes from GitHub context into safe file edits, tests, and review packets."
-model = "gpt-5.5-pro"
+model = "gpt-5.5"
 model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"

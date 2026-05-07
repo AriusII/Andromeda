@@ -1,6 +1,6 @@
 name = "codebase-cleanup-commander"
 description = "Coordinates broad code cleanup, dead code removal, orphan detection, refactor slices, and validation commands."
-model = "gpt-5.5-pro"
+model = "gpt-5.5"
 model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"

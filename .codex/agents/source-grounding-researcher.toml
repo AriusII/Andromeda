@@ -1,6 +1,6 @@
 name = "source-grounding-researcher"
 description = "Read-only researcher that cross-checks claims against official sources, repository evidence, and Andromeda documents."
-model = "gpt-5.5-pro"
+model = "gpt-5.5"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 approval_policy = "on-request"
