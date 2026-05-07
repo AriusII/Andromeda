@@ -1,4 +1,4 @@
-# DEC-034: V1.0 readiness milestone — Andromeda V1.0.0 Production Ready
+# DEC-034: V1.0 readiness milestone — historical readiness assessment
 
 **Status:** ACCEPTED ✓  
 **Date:** 2026-05-05  
@@ -7,9 +7,15 @@
 
 ---
 
+## Historical Scope Note
+
+This decision record is a historical V1.0 readiness milestone assessment. It records the gate status and owner sign-offs that were accepted for the milestone on 2026-05-05. It is not a current global product production-ready claim for the full Andromeda repository after later workspace restructuring.
+
+---
+
 ## Executive Summary
 
-V1.0 readiness milestone deployment completes all foundational durability, forensic audit, and disk I/O recovery infrastructure for Andromeda V1.0.0. All 21 release gates verified PASS. Five tracked risks from DEC-033 (Durable Audit Ledger) are mitigated. **V1.0.0 is production ready.**
+V1.0 readiness milestone deployment completed the foundational durability, forensic audit, and disk I/O recovery infrastructure that was in scope for the historical V1.0.0 milestone. All 21 release gates were verified PASS for that milestone. Five tracked risks from DEC-033 (Durable Audit Ledger) were mitigated for that milestone. **This record does not certify the current full product as production ready.**
 
 **Measurable Outcomes:**
 - ✅ **38/38 tests passing** (6 undo + 11 disk I/O + 21 smoke gates)
@@ -20,13 +26,13 @@ V1.0 readiness milestone deployment completes all foundational durability, foren
 
 ---
 
-## Decision: V1.0.0 PRODUCTION READY
+## Decision: historical V1.0.0 readiness milestone accepted
 
-**This decision record formally accepts V1.0 readiness milestone completion and authorizes:**
+**This historical decision record formally accepted V1.0 readiness milestone completion and authorized the following milestone actions at that time:**
 
-1. ✅ Tagged release `v1.0.0` with all changes committed
-2. ✅ Publication of production documentation (CLI.md, BENCHMARK.md, JSON_SCHEMA.md, TROUBLESHOOTING.md)
-3. ✅ Four domain owner sign-offs (protocol, storage, security, architecture)
+1. ✅ Tagged release `v1.0.0` with all milestone changes committed
+2. ✅ Publication of the milestone documentation set (CLI.md, BENCHMARK.md, JSON_SCHEMA.md, TROUBLESHOOTING.md)
+3. ✅ Four milestone domain owner sign-offs (protocol, storage, security, architecture)
 
 ---
 
@@ -92,7 +98,7 @@ V1.0 readiness milestone deployment completes all foundational durability, foren
 
 **Mapping:** All record kinds have handler entry or documented placeholder
 
-**Post-Lot 4.5 evidence ownership note:** this historical V1.0 decision keeps its original release status. After the workspace restructuring, pure WAL record/frame/bounds evidence and physical FileWal owner evidence are owned by `andromeda-wal`; recovery reports, startup planning, replay planning, manifest/page integration, and durable visibility gates remain owned by `andromeda-storage`.
+**Post-Lot 4.5 evidence ownership note:** this historical V1.0 decision keeps its original milestone status only. After the workspace restructuring, pure WAL record/frame/bounds evidence and physical FileWal owner evidence are owned by `andromeda-wal`; recovery reports, startup planning, replay selection, manifest/page integration, and durable visibility gates remain owned by `andromeda-storage`.
 
 ---
 
@@ -149,7 +155,7 @@ V1.0 readiness milestone deployment completes all foundational durability, foren
 | ARCH-002 | Risk register maintained | ✓ PASS | RISK-013 through RISK-017 tracked |
 | ARCH-003 | Doctrine compliance | ✓ PASS | No gRPC, SQL, JSON drift; no unsafe |
 
-**Gate Completion:** All 21 gates LOCKED for V1.0.0
+**Gate Completion:** All 21 gates were locked for the historical V1.0.0 readiness milestone.
 
 ---
 
@@ -165,7 +171,7 @@ From DEC-033 (Durable Audit Ledger), five risks tracked and assessed for V1.0.0:
 | **RISK-016** | Off-Critical-Path Enforcement | HIGH | VERIFIED | Future synchronous audit changes must be gated; gpu-off-commit-path-check skill active | Performance Engineer |
 | **RISK-017** | Event Classification Drift | HIGH | VERIFIED | Informal events may bypass audit; explicit inclusion/exclusion docs required; governance skill active | Architecture Team |
 
-**Risk Closure Decision:** All five risks acceptable for V1.0.0 production release. No BLOCKED risks.
+**Risk Closure Decision:** All five risks were acceptable for the historical V1.0.0 readiness milestone. No BLOCKED risks were recorded for that milestone.
 
 ---
 
@@ -176,7 +182,7 @@ From DEC-033 (Durable Audit Ledger), five risks tracked and assessed for V1.0.0:
 - ✅ Manifest immutability verified
 - ✅ LSN ordering enforced
 - ✅ Recovery trace emission enabled
-- **Status:** PRODUCTION READY
+- **Status:** HISTORICAL READINESS PASS
 
 Post-Lot 4.5 restructuring tracks pure WAL and physical FileWal owner evidence separately under `andromeda-wal`. The recovery engine status above remains a storage/recovery integration claim and does not imply that owner-level fuzz, FileWal recovery integration, or crash/recovery promotion can be skipped for future batches.
 
@@ -185,21 +191,21 @@ Post-Lot 4.5 restructuring tracks pure WAL and physical FileWal owner evidence s
 - ✅ Storage format stable
 - ✅ B-Tree key codec golden vectors
 - ✅ Corruption detection enabled
-- **Status:** PRODUCTION READY
+- **Status:** HISTORICAL READINESS PASS
 
 ### Observability (Audit) Engine
 - ✅ Durable audit ledger (1,790 LOC)
 - ✅ 9 event families non-disableable
 - ✅ No audit disable switch
 - ✅ Fail-closed semantics
-- **Status:** PRODUCTION READY
+- **Status:** HISTORICAL READINESS PASS
 
 ### Execution (Admission) Engine
 - ✅ Plan cache identity locked
 - ✅ Catalog WAL format stable
 - ✅ Backpressure enforced
 - ✅ Backup artifact validation
-- **Status:** PRODUCTION READY
+- **Status:** HISTORICAL READINESS PASS
 
 ---
 
@@ -226,7 +232,7 @@ All project invariants maintained:
 - [x] Clippy: `cargo clippy --workspace --all-targets` (warnings only on unrelated crates)
 - [x] Undo tests: 34/34 PASS
 - [x] Disk I/O tests: 11/11 PASS
-- [x] Production documentation complete (5 files)
+- [x] Milestone documentation set complete (5 files)
 - [x] Decision records archived (23 DEC records)
 - [x] Risk register updated (6 closure waves tracked)
 
@@ -242,13 +248,13 @@ All project invariants maintained:
    - security-owner (IAM/Audit)
    - architecture-owner (Cross-Engine)
 
-   Post-Lot 4.5 restructuring keeps this historical sign-off intact for V1.0. For later restructuring gates, `wal-owner` signs off pure WAL and physical FileWal owner evidence, while `storage-owner` signs off recovery reports, startup/replay planning, manifest/page integration, and durable visibility evidence.
+   Post-Lot 4.5 restructuring keeps this historical milestone sign-off intact for V1.0. For later restructuring gates, `wal-owner` signs off pure WAL and physical FileWal owner evidence, while `storage-owner` signs off recovery reports, startup planning, replay selection, manifest/page integration, and durable visibility evidence.
 
 2. **Git commit and tag:**
    ```bash
    git add -A
-   git commit -m "V1.0 readiness milestone — V1.0.0 production ready (all 21 gates PASS)"
-   git tag -a v1.0.0 -m "Andromeda V1.0.0 — Production certified"
+   git commit -m "V1.0 readiness milestone - all 21 gates PASS"
+   git tag -a v1.0.0 -m "Andromeda V1.0.0 readiness milestone"
    git push origin main && git push origin v1.0.0
    ```
 
@@ -265,7 +271,7 @@ All project invariants maintained:
 
 **Decision:** ✅ **ACCEPTED**
 
-**Basis:** All 21 release gates verified. All 5 durability milestone risks mitigated. Doctrine compliance confirmed. Production documentation complete. No blocking issues identified.
+**Basis:** All 21 milestone release gates were verified. All 5 durability milestone risks were mitigated. Doctrine compliance was confirmed for the milestone scope. The milestone documentation set was complete. No blocking issues were identified for that historical milestone.
 
 **Authority:** Risk Decision Manager + Release Governance + Architecture Team
 
