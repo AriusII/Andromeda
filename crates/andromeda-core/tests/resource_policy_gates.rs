@@ -1,15 +1,16 @@
 use andromeda_core::{
-    CertificateIdentity, CertificateIdentityStatus, PRINCIPAL_POLICY_EVIDENCE_VERSION, Permission,
-    Principal, PrincipalAuthorizationDenialReason, PrincipalAuthorizationEvaluationStage,
-    PrincipalBinding, PrincipalId, PrincipalPolicyEvidenceBinding, PrincipalPolicyVersion,
-    PrincipalRegistry, PrincipalRole, PrincipalStatus, ProcedureId, ResourceBudget, SessionToken,
-    SurfaceScope,
+    CertificateIdentityStatus, HardwareArchitecture, HardwareProfile,
+    PRINCIPAL_POLICY_EVIDENCE_VERSION, Permission, PrincipalAuthorizationDenialReason,
+    PrincipalAuthorizationEvaluationStage, PrincipalBinding, PrincipalPolicyEvidenceBinding,
+    PrincipalPolicyVersion, PrincipalRegistry, PrincipalRole, PrincipalStatus, ProcedureId,
+    ResourceBudget, SurfaceScope,
 };
-use andromeda_core::{HardwareArchitecture, HardwareProfile};
 
-fn fingerprint(seed: char) -> String {
-    format!("{seed}1111111e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
-}
+#[allow(dead_code)]
+#[path = "support/principal_fixtures.rs"]
+mod principal_fixtures;
+
+use principal_fixtures::{principal_binding, seeded_fingerprint};
 
 fn binding(
     fingerprint: String,
@@ -17,18 +18,14 @@ fn binding(
     role: PrincipalRole,
     status: PrincipalStatus,
 ) -> PrincipalBinding {
-    let certificate = CertificateIdentity::new(fingerprint, "CN=resource-policy", surface_scope)
-        .expect("valid certificate identity");
-    let principal = Principal::new_with_status(
-        PrincipalId::new(900),
+    principal_binding(
+        fingerprint,
+        "CN=resource-policy",
+        surface_scope,
+        900,
         role,
         status,
-        SessionToken::from_certificate_fingerprint(certificate.fingerprint()),
-        certificate.fingerprint().clone(),
     )
-    .expect("valid principal");
-
-    PrincipalBinding::new(certificate, principal).expect("valid principal binding")
 }
 
 #[test]
@@ -52,7 +49,7 @@ fn resource_budget_preserves_explicit_ram_temp_and_stream_limits() {
 
 #[test]
 fn iam_policy_gate_allows_active_principal_on_matching_surface() {
-    let fp = fingerprint('a');
+    let fp = seeded_fingerprint('a');
     let mut registry = PrincipalRegistry::new();
     registry
         .register(binding(
@@ -78,7 +75,7 @@ fn iam_policy_gate_allows_active_principal_on_matching_surface() {
 
 #[test]
 fn iam_policy_gate_denies_disabled_principal_even_when_role_would_allow() {
-    let fp = fingerprint('b');
+    let fp = seeded_fingerprint('b');
     let mut registry = PrincipalRegistry::new();
     registry
         .register(binding(
@@ -107,7 +104,7 @@ fn iam_policy_gate_denies_disabled_principal_even_when_role_would_allow() {
 
 #[test]
 fn iam_policy_gate_denies_surface_scope_mismatch_before_role_permission() {
-    let fp = fingerprint('c');
+    let fp = seeded_fingerprint('c');
     let mut registry = PrincipalRegistry::new();
     registry
         .register(binding(
@@ -136,7 +133,7 @@ fn iam_policy_gate_denies_surface_scope_mismatch_before_role_permission() {
 
 #[test]
 fn iam_policy_gate_denies_revoked_certificate_identity() {
-    let fp = fingerprint('d');
+    let fp = seeded_fingerprint('d');
     let mut registry = PrincipalRegistry::new();
     registry
         .register(binding(
@@ -168,7 +165,7 @@ fn iam_policy_gate_denies_revoked_certificate_identity() {
 
 #[test]
 fn principal_iam_policy_gate_denies_disabled_certificate_identity_with_audit_evidence() {
-    let fp = fingerprint('8');
+    let fp = seeded_fingerprint('8');
     let mut registry = PrincipalRegistry::new();
     registry
         .register(binding(
@@ -211,7 +208,7 @@ fn principal_iam_policy_gate_denies_disabled_certificate_identity_with_audit_evi
 #[test]
 fn iam_policy_gate_binds_explicit_policy_version_to_authorization_evidence() {
     let policy_version = PrincipalPolicyVersion::test_vector(0x5a);
-    let fp = fingerprint('e');
+    let fp = seeded_fingerprint('e');
     let mut registry =
         PrincipalRegistry::new_with_policy_version(policy_version).expect("policy version bound");
     registry
@@ -302,7 +299,7 @@ fn iam_policy_evidence_binding_compares_version_and_digest_deterministically() {
 #[test]
 fn iam_authorization_evidence_exposes_audit_policy_binding() {
     let policy_version = PrincipalPolicyVersion::test_vector(0x6c);
-    let fp = fingerprint('f');
+    let fp = seeded_fingerprint('f');
     let mut registry =
         PrincipalRegistry::new_with_policy_version(policy_version).expect("policy version bound");
     registry

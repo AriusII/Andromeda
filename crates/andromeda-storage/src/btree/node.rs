@@ -1,6 +1,11 @@
 //! B+ Tree node management — load, create, serialize, deserialize.
 use super::*;
 
+const NODE_IMPL_LEAF_TAG: u8 = 1;
+const NODE_IMPL_INTERNAL_TAG: u8 = 0;
+const NODE_IMPL_ABSENT_PAGE_ID: u64 = u64::MAX;
+const NODE_IMPL_HEADER_LEN: usize = 1 + 2 + 2 + 8 + 8;
+
 impl BTreeIndexNode {
     /// Create a new internal node (leaf=false).
     pub fn new_internal(node_id: PageId, parent_id: PageId) -> Self {
@@ -251,28 +256,39 @@ impl BTreeNodeImpl {
         let mut bytes = Vec::new();
 
         // Header: is_leaf, key_count, child_count
-        bytes.push(if self.is_leaf { 1 } else { 0 });
-        let key_count = self.key_value_pairs.len() as u16;
+        bytes.push(if self.is_leaf {
+            NODE_IMPL_LEAF_TAG
+        } else {
+            NODE_IMPL_INTERNAL_TAG
+        });
+        let key_count = u16::try_from(self.key_value_pairs.len())
+            .expect("BTreeNodeImpl key count must fit u16");
         bytes.extend_from_slice(&key_count.to_le_bytes());
-        let child_count = self.child_page_ids.len() as u16;
+        let child_count = u16::try_from(self.child_page_ids.len())
+            .expect("BTreeNodeImpl child count must fit u16");
         bytes.extend_from_slice(&child_count.to_le_bytes());
 
         // Parent and next sibling page IDs
-        let parent_id = self.parent_page_id.map(PageId::get).unwrap_or(u64::MAX);
+        let parent_id = self
+            .parent_page_id
+            .map(PageId::get)
+            .unwrap_or(NODE_IMPL_ABSENT_PAGE_ID);
         bytes.extend_from_slice(&parent_id.to_le_bytes());
         let next_sibling = self
             .next_sibling_page_id
             .map(PageId::get)
-            .unwrap_or(u64::MAX);
+            .unwrap_or(NODE_IMPL_ABSENT_PAGE_ID);
         bytes.extend_from_slice(&next_sibling.to_le_bytes());
 
         // Key-value pairs
         for kvp in &self.key_value_pairs {
-            let key_len = kvp.key.len() as u16;
+            let key_len =
+                u16::try_from(kvp.key.len()).expect("BTreeNodeImpl key length must fit u16");
             bytes.extend_from_slice(&key_len.to_le_bytes());
             bytes.extend_from_slice(&kvp.key);
 
-            let val_len = kvp.value.len() as u16;
+            let val_len =
+                u16::try_from(kvp.value.len()).expect("BTreeNodeImpl value length must fit u16");
             bytes.extend_from_slice(&val_len.to_le_bytes());
             bytes.extend_from_slice(&kvp.value);
         }
@@ -287,81 +303,47 @@ impl BTreeNodeImpl {
 
     /// Deserialize node from bytes
     pub fn deserialize(page_id: PageId, data: &[u8]) -> AndromedaResult<Self> {
-        if data.len() < 21 {
-            return Err(BTreeError::InvalidNodeFormat { page_id }.into());
-        }
-
         let mut offset = 0;
-        let is_leaf = data[offset] != 0;
-        offset += 1;
+        let node_tag = read_node_u8(page_id, data, &mut offset)?;
+        let is_leaf = match node_tag {
+            NODE_IMPL_LEAF_TAG => true,
+            NODE_IMPL_INTERNAL_TAG => false,
+            _ => return invalid_node_format(page_id),
+        };
 
-        let key_count = u16::from_le_bytes([data[offset], data[offset + 1]]) as usize;
-        offset += 2;
+        let key_count = usize::from(read_node_u16(page_id, data, &mut offset)?);
 
-        let child_count = u16::from_le_bytes([data[offset], data[offset + 1]]) as usize;
-        offset += 2;
+        let child_count = usize::from(read_node_u16(page_id, data, &mut offset)?);
 
-        let parent_id_raw =
-            u64::from_le_bytes(data[offset..offset + 8].try_into().unwrap_or([255; 8]));
-        let parent_page_id = if parent_id_raw == u64::MAX {
+        let parent_id_raw = read_node_u64(page_id, data, &mut offset)?;
+        let parent_page_id = if parent_id_raw == NODE_IMPL_ABSENT_PAGE_ID {
             None
         } else {
             Some(PageId::new(parent_id_raw))
         };
-        offset += 8;
 
-        let next_sibling_raw =
-            u64::from_le_bytes(data[offset..offset + 8].try_into().unwrap_or([255; 8]));
-        let next_sibling_page_id = if next_sibling_raw == u64::MAX {
+        let next_sibling_raw = read_node_u64(page_id, data, &mut offset)?;
+        let next_sibling_page_id = if next_sibling_raw == NODE_IMPL_ABSENT_PAGE_ID {
             None
         } else {
             Some(PageId::new(next_sibling_raw))
         };
-        offset += 8;
 
-        let mut key_value_pairs = Vec::new();
+        let mut key_value_pairs = Vec::with_capacity(key_count);
         for _ in 0..key_count {
-            if offset + 2 > data.len() {
-                return Err(BTreeError::InvalidNodeFormat { page_id }.into());
-            }
+            let key_len = usize::from(read_node_u16(page_id, data, &mut offset)?);
+            let key = read_node_bytes(page_id, data, &mut offset, key_len)?.to_vec();
 
-            let key_len = u16::from_le_bytes([data[offset], data[offset + 1]]) as usize;
-            offset += 2;
-
-            if offset + key_len > data.len() {
-                return Err(BTreeError::InvalidNodeFormat { page_id }.into());
-            }
-
-            let key = data[offset..offset + key_len].to_vec();
-            offset += key_len;
-
-            if offset + 2 > data.len() {
-                return Err(BTreeError::InvalidNodeFormat { page_id }.into());
-            }
-
-            let val_len = u16::from_le_bytes([data[offset], data[offset + 1]]) as usize;
-            offset += 2;
-
-            if offset + val_len > data.len() {
-                return Err(BTreeError::InvalidNodeFormat { page_id }.into());
-            }
-
-            let value = data[offset..offset + val_len].to_vec();
-            offset += val_len;
+            let val_len = usize::from(read_node_u16(page_id, data, &mut offset)?);
+            let value = read_node_bytes(page_id, data, &mut offset, val_len)?.to_vec();
 
             key_value_pairs.push(KeyValuePair { key, value });
         }
 
-        let mut child_page_ids = Vec::new();
+        let mut child_page_ids = Vec::with_capacity(child_count);
         for _ in 0..child_count {
-            if offset + 8 > data.len() {
-                return Err(BTreeError::InvalidNodeFormat { page_id }.into());
-            }
-
-            let child_id =
-                u64::from_le_bytes(data[offset..offset + 8].try_into().unwrap_or([0; 8]));
+            let child_id = read_node_u64(page_id, data, &mut offset)?;
             child_page_ids.push(PageId::new(child_id));
-            offset += 8;
         }
 
         Ok(BTreeNodeImpl {
@@ -373,4 +355,44 @@ impl BTreeNodeImpl {
             child_page_ids,
         })
     }
+}
+
+fn read_node_u8(page_id: PageId, data: &[u8], offset: &mut usize) -> AndromedaResult<u8> {
+    let bytes = read_node_bytes(page_id, data, offset, 1)?;
+    Ok(bytes[0])
+}
+
+fn read_node_u16(page_id: PageId, data: &[u8], offset: &mut usize) -> AndromedaResult<u16> {
+    let bytes = read_node_bytes(page_id, data, offset, 2)?;
+    Ok(u16::from_le_bytes([bytes[0], bytes[1]]))
+}
+
+fn read_node_u64(page_id: PageId, data: &[u8], offset: &mut usize) -> AndromedaResult<u64> {
+    let bytes = read_node_bytes(page_id, data, offset, 8)?;
+    let mut field = [0; 8];
+    field.copy_from_slice(bytes);
+    Ok(u64::from_le_bytes(field))
+}
+
+fn read_node_bytes<'a>(
+    page_id: PageId,
+    data: &'a [u8],
+    offset: &mut usize,
+    len: usize,
+) -> AndromedaResult<&'a [u8]> {
+    if data.len() < NODE_IMPL_HEADER_LEN {
+        return invalid_node_format(page_id);
+    }
+    let end = offset.checked_add(len).ok_or_else(|| {
+        andromeda_core::AndromedaError::from(BTreeError::InvalidNodeFormat { page_id })
+    })?;
+    let bytes = data.get(*offset..end).ok_or_else(|| {
+        andromeda_core::AndromedaError::from(BTreeError::InvalidNodeFormat { page_id })
+    })?;
+    *offset = end;
+    Ok(bytes)
+}
+
+fn invalid_node_format<T>(page_id: PageId) -> AndromedaResult<T> {
+    Err(BTreeError::InvalidNodeFormat { page_id }.into())
 }

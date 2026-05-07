@@ -105,7 +105,7 @@ fn trace_query_filters_by_family_lsn_catalog_procedure_and_principal() {
     });
     spec.include_total_count = true;
 
-    let result = sink.query_trace_events(&spec).unwrap();
+    let result = sink.inspect_trace_events(&spec).unwrap();
     assert_eq!(result.metadata.returned_rows, 1);
     assert_eq!(result.metadata.total_matching_rows, Some(1));
     assert_eq!(result.rows[0].family, TraceEventFamily::Wal);
@@ -114,7 +114,7 @@ fn trace_query_filters_by_family_lsn_catalog_procedure_and_principal() {
         principal: Some("principal:operator".to_string()),
         ..TraceQueryFilter::default()
     });
-    let result = sink.query_trace_events(&principal_spec).unwrap();
+    let result = sink.inspect_trace_events(&principal_spec).unwrap();
     assert_eq!(result.metadata.returned_rows, 1);
     assert_eq!(result.rows[0].family, TraceEventFamily::SecurityAudit);
 }
@@ -140,7 +140,7 @@ fn trace_query_limit_offset_and_permission_matrix_are_bounded_and_deterministic(
     spec.offset = 1;
     spec.include_total_count = true;
 
-    let result = emitter.sink().query_trace_events(&spec).unwrap();
+    let result = emitter.sink().inspect_trace_events(&spec).unwrap();
     assert_eq!(result.metadata.returned_rows, 1);
     assert_eq!(result.metadata.total_matching_rows, Some(3));
     assert!(result.metadata.truncated);

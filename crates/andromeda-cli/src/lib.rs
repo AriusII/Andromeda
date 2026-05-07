@@ -15,17 +15,14 @@ mod hadr;
 mod parse;
 mod proto_helpers;
 
-pub mod error {
-    pub use crate::error_mod::*;
+mod error {
+    pub(crate) use crate::error_mod::*;
 }
 
-pub mod args {
-    pub use crate::args_parser::*;
+mod args {
+    pub(crate) use crate::args_parser::*;
 }
 
-pub mod cmd;
-
-pub mod output {}
+mod cmd;
 
 pub use cmd::dispatch_command;
-pub use error::{cli_error, protocol_error};

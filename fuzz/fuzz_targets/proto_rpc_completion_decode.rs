@@ -5,15 +5,16 @@ use andromeda_proto::{
 };
 use libfuzzer_sys::fuzz_target;
 
-const MAX_PROTO_FUZZ_BYTES: usize = 64 * 1024;
+mod common;
+
 const MAX_ROW_COUNT_SUMMARIES: usize = 1024;
 
 fuzz_target!(|data: &[u8]| {
-    let data = &data[..data.len().min(MAX_PROTO_FUZZ_BYTES)];
-    let decoded: andromeda_core::AndromedaResult<ProtoRpcCompletion> =
-        decode_generated_message(data);
-
-    if let Ok(completion) = decoded {
+    if let Some(completion) =
+        common::decode_bounded::<ProtoRpcCompletion, _>(data, common::MAX_64K_INPUT_BYTES, |data| {
+            decode_generated_message(data)
+        })
+    {
         let _ = andromeda_proto::RpcCompletionStatus::from_terminal_code(completion.status as u32);
         let _ = completion
             .result_row_counts

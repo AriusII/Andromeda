@@ -1,16 +1,15 @@
 use crate::args::{parse_recovery_inspect_options, parse_vertical_v0_wal_path};
+use crate::audit::run_audit_command;
+use crate::benchmark::run_benchmark_command;
+use crate::cmd_backup::run_backup_command;
+use crate::cmd_catalog::run_catalog_command;
+use crate::cmd_protocol::run_protocol_smoke;
+use crate::cmd_recovery::run_recovery_inspect;
+use crate::cmd_restore::run_restore_command;
+use crate::cmd_vertical::{print_help, run_vertical_demo, run_vertical_v0_demo};
 use crate::error::cli_error;
+use crate::hadr::run_hadr_command;
 use andromeda_core::AndromedaResult;
-
-pub use crate::audit::run_audit_command;
-pub use crate::benchmark::run_benchmark_command;
-pub use crate::cmd_backup::run_backup_command;
-pub use crate::cmd_catalog::run_catalog_command;
-pub use crate::cmd_protocol::run_protocol_smoke;
-pub use crate::cmd_recovery::run_recovery_inspect;
-pub use crate::cmd_restore::run_restore_command;
-pub use crate::cmd_vertical::{print_help, run_vertical_demo, run_vertical_v0_demo};
-pub use crate::hadr::run_hadr_command;
 
 /// Dispatches a CLI command based on the first argument.
 pub fn dispatch_command(args: &[String]) -> AndromedaResult<()> {

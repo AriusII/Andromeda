@@ -102,6 +102,12 @@ fn publication_report_rejects_non_durable_or_stale_invalidation_evidence() {
     assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
     assert!(error.message().contains("durable WAL LSN"));
 
+    let mut zero_batch_id = report();
+    zero_batch_id.receipt.batch_id = DefinitionBatchId::new(0);
+    let error = zero_batch_id.validate().unwrap_err();
+    assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+    assert!(error.message().contains("identity fields"));
+
     let mut skipped_version = report();
     skipped_version.receipt.next_version = CatalogVersion::new(9);
     skipped_version.plan_invalidation.catalog_version = CatalogVersion::new(9);

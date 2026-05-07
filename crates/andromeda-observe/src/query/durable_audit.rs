@@ -26,7 +26,7 @@ impl<'a> DurableAuditTraceQuerySource<'a> {
         Self { records }
     }
 
-    pub fn query(&self, spec: &TraceQuerySpec) -> AndromedaResult<DurableAuditTraceQueryResult> {
+    pub fn inspect(&self, spec: &TraceQuerySpec) -> AndromedaResult<DurableAuditTraceQueryResult> {
         spec.validate()?;
         validate_supported_filters(spec)?;
 
@@ -64,6 +64,10 @@ impl<'a> DurableAuditTraceQuerySource<'a> {
             },
             rows,
         })
+    }
+
+    pub fn query(&self, spec: &TraceQuerySpec) -> AndromedaResult<DurableAuditTraceQueryResult> {
+        self.inspect(spec)
     }
 }
 

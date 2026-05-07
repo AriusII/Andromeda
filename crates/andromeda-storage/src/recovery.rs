@@ -1,14 +1,14 @@
-pub mod catalog_replay;
+mod catalog_replay;
 mod coverage;
 mod fast_start;
 mod forensic_start;
 mod planning;
-pub mod replay;
+mod replay;
 mod safe_start;
 mod startup;
 mod trace;
-pub mod undo;
-pub mod wal_replay;
+mod undo;
+mod wal_replay;
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind};
 

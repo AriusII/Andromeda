@@ -49,6 +49,7 @@ impl ServerTlsConfig {
             .with_client_cert_verifier(client_verifier)
             .with_single_cert(certs, key)
             .map_err(|e| tls_error(format!("failed to build server config: {e}")))?;
+        let config = zero_rtt_disabled_server_config(config);
 
         Ok(Self { config })
     }
@@ -95,6 +96,7 @@ impl ClientTlsConfig {
                 load_private_key_pem(key_path)?,
             )
             .map_err(|e| tls_error(format!("failed to build client config: {e}")))?;
+        let cfg = zero_rtt_disabled_client_config(cfg);
 
         quinn_client_config(cfg)
     }
@@ -113,6 +115,7 @@ impl ClientTlsConfig {
             .with_custom_certificate_verifier(Arc::new(InsecureVerifier))
             .with_client_auth_cert(client_cert_chain, client_private_key)
             .map_err(|e| tls_error(format!("failed to build insecure test client config: {e}")))?;
+        let cfg = zero_rtt_disabled_client_config(cfg);
 
         quinn_client_config(cfg)
     }
@@ -174,10 +177,13 @@ fn ephemeral_rustls_pair(subject_alt_names: Vec<String>) -> AndromedaResult<Rust
         .with_client_cert_verifier(client_verifier)
         .with_single_cert(cert_chain.clone(), private_key.clone_key())
         .map_err(|e| tls_error(format!("failed to build server config: {e}")))?;
+    let server = zero_rtt_disabled_server_config(server);
+
     let client = rustls::ClientConfig::builder()
         .with_root_certificates(root_store)
         .with_client_auth_cert(cert_chain, private_key)
         .map_err(|e| tls_error(format!("failed to build client config: {e}")))?;
+    let client = zero_rtt_disabled_client_config(client);
 
     Ok(RustlsMutualTlsPair { server, client })
 }
@@ -223,6 +229,17 @@ fn quinn_client_config(cfg: rustls::ClientConfig) -> AndromedaResult<quinn::Clie
     })?;
 
     Ok(quinn::ClientConfig::new(Arc::new(quic_config)))
+}
+
+fn zero_rtt_disabled_server_config(mut config: rustls::ServerConfig) -> rustls::ServerConfig {
+    config.max_early_data_size = 0;
+    config.send_half_rtt_data = false;
+    config
+}
+
+fn zero_rtt_disabled_client_config(mut config: rustls::ClientConfig) -> rustls::ClientConfig {
+    config.enable_early_data = false;
+    config
 }
 
 fn tls_error(message: impl Into<String>) -> AndromedaError {

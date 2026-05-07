@@ -34,18 +34,21 @@
 //! rolled-back transactions are discarded by the plan and never reach the
 //! replay layer.
 
-use std::collections::HashMap;
-
 use andromeda_core::AndromedaResult;
 
-use crate::{DatabaseManifest, DurableTransactionState, Lsn, WalRecord, WalRecordKind};
+use crate::{DatabaseManifest, Lsn, WalRecord};
 
-use super::planning::{ConceptualRedoPlan, RecoveryPlan, RedoRecordDecision, StartupMode};
-use super::replay::{
-    IndexRebuildRequiredEvidence, ManifestSwitchRecoveryTrace, ReplayContext, ReplayOutcome,
-    ReplayResult, replay_wal_record_result,
+mod driver;
+mod validation;
+
+use driver::{RedoPlanReplayDriver, ReplaySessionBaseline};
+use validation::{
+    validate_bootstrap_redo_boundary, validate_conflicting_terminal_records,
+    validate_durable_replay_chain,
 };
-use super::storage_error;
+
+use super::planning::{ConceptualRedoPlan, RecoveryPlan, StartupMode};
+use super::replay::{IndexRebuildRequiredEvidence, ReplayContext};
 
 /// Summary report produced at the end of a single WAL replay session.
 ///
@@ -166,7 +169,6 @@ pub fn replay_wal_from_lsn_into_context(
     ctx: &mut ReplayContext,
 ) -> AndromedaResult<WalReplayReport> {
     validate_durable_replay_chain(durable_records)?;
-    validate_conflicting_terminal_records(durable_records)?;
     validate_bootstrap_redo_boundary(manifest, durable_records)?;
     let plan = RecoveryPlan::from_manifest_and_wal(manifest, startup_mode, durable_records)?;
     if ctx.active_manifest.is_none() {
@@ -207,81 +209,10 @@ pub fn execute_redo_plan_into_context(
 ) -> AndromedaResult<WalReplayReport> {
     validate_conflicting_terminal_records(durable_records)?;
 
-    // Build O(1) LSN → record index.
-    let mut by_lsn: HashMap<Lsn, &WalRecord> = HashMap::with_capacity(durable_records.len());
-    for record in durable_records {
-        record.validate()?;
-        if record.header.kind == WalRecordKind::CheckpointEnd {
-            ctx.observe_checkpoint_end(record.header.lsn);
-        }
-        if by_lsn.insert(record.header.lsn, record).is_some() {
-            return Err(storage_error(format!(
-                "durable WAL replay input contains duplicate LSN {}",
-                record.header.lsn.get()
-            )));
-        }
-    }
-
-    let base_applied_count = ctx.applied_count;
-    let base_skipped_count = ctx.skipped_count;
-    let base_error_count = ctx.error_records.len();
-    let base_index_rebuild_required_count = ctx.index_rebuild_required.len();
+    let baseline = ReplaySessionBaseline::capture(ctx);
+    let mut driver = RedoPlanReplayDriver::from_durable_records(durable_records, ctx)?;
     ctx.require_manifest_switch_checkpoint_evidence();
-
-    let mut plan_skipped_count: usize = 0;
-    let mut replay_end_lsn: Option<Lsn> = None;
-    let mut previous_plan_lsn: Option<Lsn> = None;
-
-    for redo_rec in plan.records.iter() {
-        match previous_plan_lsn {
-            Some(previous) if redo_rec.lsn <= previous => {
-                return Err(storage_error(format!(
-                    "redo plan records must be strictly ordered by LSN: previous={}, current={}",
-                    previous.get(),
-                    redo_rec.lsn.get()
-                )));
-            }
-            _ => {}
-        }
-        previous_plan_lsn = Some(redo_rec.lsn);
-
-        match redo_rec.decision {
-            RedoRecordDecision::Replay => {
-                let Some(&record) = by_lsn.get(&redo_rec.lsn) else {
-                    return Err(storage_error(format!(
-                        "redo plan references LSN {} but the durable WAL input does not contain it",
-                        redo_rec.lsn.get()
-                    )));
-                };
-                validate_planned_replay_record(redo_rec, record)?;
-
-                let applied_before = ctx.applied_count;
-                let manifest_before = (record.header.kind == WalRecordKind::ManifestSwitch)
-                    .then_some(ctx.active_manifest)
-                    .flatten();
-                let manifest_trace_count_before = ctx.manifest_switch_traces.len();
-                match replay_wal_record_result(ctx, record) {
-                    Ok(_) => {}
-                    Err(_err) if is_explicit_deferred_replay_error(ctx, record) => {}
-                    Err(err) => return Err(err),
-                }
-                if record.header.kind == WalRecordKind::ManifestSwitch {
-                    validate_manifest_switch_replay_result(
-                        ctx,
-                        manifest_before,
-                        manifest_trace_count_before,
-                    )?;
-                }
-
-                if ctx.applied_count > applied_before {
-                    replay_end_lsn = Some(record.header.lsn);
-                }
-            }
-            _ => {
-                plan_skipped_count += 1;
-            }
-        }
-    }
+    driver.execute(plan, ctx)?;
 
     let committed_transaction_count = plan
         .transaction_evidence
@@ -289,253 +220,29 @@ pub fn execute_redo_plan_into_context(
         .filter(|t| t.commit_lsn.is_some())
         .count();
 
-    let new_index_rebuild_required =
-        ctx.index_rebuild_required[base_index_rebuild_required_count..].to_vec();
+    let new_index_rebuild_required = baseline.new_index_rebuild_required(ctx);
     let index_rebuild_required_count = new_index_rebuild_required.len();
 
     Ok(WalReplayReport {
         startup_mode: plan.startup_mode,
         replay_start_lsn: plan.redo_from_lsn,
-        replay_end_lsn,
+        replay_end_lsn: driver.replay_end_lsn(),
         total_records: plan.records.len(),
-        applied_count: ctx.applied_count - base_applied_count,
-        handler_skipped_count: ctx.skipped_count - base_skipped_count,
-        plan_skipped_count,
-        not_yet_implemented_count: ctx.error_records.len() - base_error_count,
+        applied_count: baseline.applied_delta(ctx),
+        handler_skipped_count: baseline.skipped_delta(ctx),
+        plan_skipped_count: driver.plan_skipped_count(),
+        not_yet_implemented_count: baseline.error_delta(ctx),
         index_rebuild_required_count,
         index_rebuild_required: new_index_rebuild_required,
         incomplete_transaction_count: plan.incomplete_transactions.len(),
         committed_transaction_count,
-        has_replay_errors: ctx.error_records.len() > base_error_count,
+        has_replay_errors: baseline.has_new_errors(ctx),
     })
-}
-
-fn validate_durable_replay_chain(durable_records: &[WalRecord]) -> AndromedaResult<()> {
-    let mut previous_lsn = None;
-    for record in durable_records {
-        record.validate()?;
-        let Some(previous) = previous_lsn else {
-            previous_lsn = Some(record.header.lsn);
-            continue;
-        };
-
-        if record.header.lsn <= previous {
-            return Err(storage_error(format!(
-                "durable WAL replay input must be strictly increasing by LSN: previous={}, current={}",
-                previous.get(),
-                record.header.lsn.get()
-            )));
-        }
-
-        if record.header.previous_lsn != Some(previous) {
-            let observed = record
-                .header
-                .previous_lsn
-                .map_or_else(|| "None".to_string(), |lsn| lsn.get().to_string());
-            return Err(storage_error(format!(
-                "durable WAL replay input previous LSN chain mismatch at LSN {}: expected previous {}, observed {}",
-                record.header.lsn.get(),
-                previous.get(),
-                observed
-            )));
-        }
-
-        previous_lsn = Some(record.header.lsn);
-    }
-
-    Ok(())
-}
-
-fn validate_conflicting_terminal_records(durable_records: &[WalRecord]) -> AndromedaResult<()> {
-    let mut terminal_by_transaction: HashMap<u64, (WalRecordKind, Lsn)> = HashMap::new();
-
-    for record in durable_records {
-        if !record.is_transaction_terminal() {
-            continue;
-        }
-
-        let transaction_id = record.header.transaction_id.ok_or_else(|| {
-            storage_error("transaction terminal WAL record requires a transaction id")
-        })?;
-        if let Some((first_kind, first_lsn)) = terminal_by_transaction.insert(
-            transaction_id.get(),
-            (record.header.kind, record.header.lsn),
-        ) {
-            return Err(storage_error(format!(
-                "durable WAL replay input contains duplicate or conflicting terminal records for transaction {}: first {:?} at LSN {}, second {:?} at LSN {}",
-                transaction_id.get(),
-                first_kind,
-                first_lsn.get(),
-                record.header.kind,
-                record.header.lsn.get()
-            )));
-        }
-    }
-
-    Ok(())
-}
-
-fn validate_bootstrap_redo_boundary(
-    manifest: &DatabaseManifest,
-    durable_records: &[WalRecord],
-) -> AndromedaResult<()> {
-    if !manifest.required_wal_start_lsn.is_zero() {
-        return Ok(());
-    }
-
-    if !manifest.base_checkpoint_lsn.is_zero() {
-        return Err(storage_error(
-            "bootstrap ZERO redo boundary requires a ZERO base checkpoint; \
-             non-bootstrap snapshots must name a nonzero required WAL start LSN",
-        ));
-    }
-
-    if let Some(first) = durable_records.first()
-        && (first.header.lsn != Lsn::new(1) || first.header.previous_lsn.is_some())
-    {
-        return Err(storage_error(
-            "bootstrap ZERO redo boundary requires durable WAL to start at LSN 1 \
-             with no previous LSN so recovery cannot skip required WAL",
-        ));
-    }
-
-    Ok(())
-}
-
-fn validate_manifest_switch_replay_result(
-    ctx: &ReplayContext,
-    previous_manifest: Option<DatabaseManifest>,
-    trace_count_before: usize,
-) -> AndromedaResult<()> {
-    let Some(trace) = ctx.manifest_switch_traces.get(trace_count_before) else {
-        return Err(storage_error(
-            "ManifestSwitch replay produced no recovery trace; recovery cannot open without observable switch evidence",
-        ));
-    };
-
-    match *trace {
-        ManifestSwitchRecoveryTrace::ManifestSwitchValidationFailed {
-            lsn,
-            manifest_version,
-            reason,
-        } => Err(storage_error(format!(
-            "ManifestSwitch at LSN {} for manifest version {} failed validation: {}",
-            lsn.get(),
-            manifest_version,
-            reason
-        ))),
-        ManifestSwitchRecoveryTrace::ManifestSwitchApplied {
-            lsn,
-            manifest_version,
-            base_checkpoint_lsn,
-            required_wal_start_lsn,
-            ..
-        } => {
-            if let Some(previous) = previous_manifest {
-                if manifest_version <= previous.manifest_version {
-                    return Err(storage_error(format!(
-                        "ManifestSwitch at LSN {} regresses manifest version: previous={}, next={}",
-                        lsn.get(),
-                        previous.manifest_version,
-                        manifest_version
-                    )));
-                }
-                if base_checkpoint_lsn <= previous.base_checkpoint_lsn {
-                    return Err(storage_error(format!(
-                        "ManifestSwitch at LSN {} must strictly advance base checkpoint LSN: previous={}, next={}",
-                        lsn.get(),
-                        previous.base_checkpoint_lsn.get(),
-                        base_checkpoint_lsn.get()
-                    )));
-                }
-                if required_wal_start_lsn < previous.required_wal_start_lsn {
-                    return Err(storage_error(format!(
-                        "ManifestSwitch at LSN {} regresses required WAL start LSN: previous={}, next={}",
-                        lsn.get(),
-                        previous.required_wal_start_lsn.get(),
-                        required_wal_start_lsn.get()
-                    )));
-                }
-                if lsn <= previous.base_checkpoint_lsn {
-                    return Err(storage_error(format!(
-                        "ManifestSwitch record LSN {} must follow the previous base checkpoint LSN {}",
-                        lsn.get(),
-                        previous.base_checkpoint_lsn.get()
-                    )));
-                }
-            }
-            Ok(())
-        }
-    }
-}
-
-fn validate_planned_replay_record(
-    redo_rec: &super::planning::RedoRecordPlan,
-    record: &WalRecord,
-) -> AndromedaResult<()> {
-    if record.header.kind != redo_rec.kind {
-        return Err(storage_error(format!(
-            "redo plan LSN {} expects {:?} but durable WAL contains {:?}",
-            redo_rec.lsn.get(),
-            redo_rec.kind,
-            record.header.kind
-        )));
-    }
-    if record.header.transaction_id != redo_rec.transaction_id {
-        return Err(storage_error(format!(
-            "redo plan LSN {} transaction evidence does not match durable WAL",
-            redo_rec.lsn.get()
-        )));
-    }
-    match (record.header.transaction_id, redo_rec.transaction_state) {
-        (Some(_), Some(DurableTransactionState::Committed)) => Ok(()),
-        (Some(_), Some(state)) => Err(storage_error(format!(
-            "redo plan attempted to replay non-committed transaction record at LSN {}: state={state:?}",
-            redo_rec.lsn.get()
-        ))),
-        (Some(_), None) => Err(storage_error(format!(
-            "redo plan attempted to replay transaction record at LSN {} without commit evidence",
-            redo_rec.lsn.get()
-        ))),
-        (None, _) => Ok(()),
-    }
-}
-
-fn is_explicit_deferred_replay_error(ctx: &ReplayContext, record: &WalRecord) -> bool {
-    let Some(result) = ctx.error_records.last() else {
-        return false;
-    };
-    result.lsn == record.header.lsn
-        && result.kind == record.header.kind
-        && result.outcome == ReplayOutcome::NotYetImplemented
-        && is_explicit_deferred_kind(result)
-}
-
-fn is_explicit_deferred_kind(result: &ReplayResult) -> bool {
-    match result.kind {
-        WalRecordKind::PageAllocate
-        | WalRecordKind::PageFormat
-        | WalRecordKind::IndexInsert
-        | WalRecordKind::IndexDelete
-        | WalRecordKind::MvccVersionCreate
-        | WalRecordKind::MvccVersionClose
-        | WalRecordKind::MapDeltaAppend
-        | WalRecordKind::CatalogChangeBegin
-        | WalRecordKind::CatalogChangeApply
-        | WalRecordKind::CatalogChangeCommit
-        | WalRecordKind::BTreeInsert
-        | WalRecordKind::BTreeDelete
-        | WalRecordKind::BTreeSplit
-        | WalRecordKind::BTreeMerge => result
-            .error
-            .as_deref()
-            .is_some_and(|message| message.contains("not promoted")),
-        _ => false,
-    }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::super::planning::RedoRecordDecision;
     use super::*;
     use andromeda_core::TransactionId;
 

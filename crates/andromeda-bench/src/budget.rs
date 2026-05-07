@@ -1,3 +1,4 @@
+use crate::metric_math::error_rate_ppm;
 use crate::{BenchmarkError, BenchmarkWorkload};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,10 +28,10 @@ pub fn evaluate_budget(
         return Err(BenchmarkError::ErrorCountExceedsSamples);
     }
 
-    let error_rate_ppm = (u64::from(error_count) * 1_000_000) / u64::from(sample_count);
+    let observed_error_rate_ppm = error_rate_ppm(error_count, sample_count);
     let failed = p50_latency_us > workload.budget.max_p50_latency_us
         || p95_latency_us > workload.budget.max_p95_latency_us
-        || error_rate_ppm > u64::from(workload.budget.max_error_rate_ppm);
+        || observed_error_rate_ppm > u64::from(workload.budget.max_error_rate_ppm);
 
     Ok(if failed {
         BudgetStatus::Failed

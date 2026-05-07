@@ -3,7 +3,12 @@
 use andromeda_storage::{HeapPage, PageSize};
 use libfuzzer_sys::fuzz_target;
 
+mod common;
+
+const MAX_HEAP_PAGE_FUZZ_BYTES: usize = 32 * 1024;
+
 fuzz_target!(|data: &[u8]| {
+    let data = common::bounded_input(data, MAX_HEAP_PAGE_FUZZ_BYTES);
     let page_size = selected_page_size(data);
     let image = page_image(page_size, data);
     exercise_heap_page_decode(page_size, &image);
@@ -26,8 +31,8 @@ fn selected_page_size(data: &[u8]) -> PageSize {
 
 fn page_image(page_size: PageSize, data: &[u8]) -> Vec<u8> {
     let mut image = vec![0u8; page_size.bytes_usize()];
-    let len = data.len().min(image.len());
-    image[..len].copy_from_slice(&data[..len]);
+    let prefix = common::bounded_input(data, image.len());
+    image[..prefix.len()].copy_from_slice(prefix);
     image
 }
 

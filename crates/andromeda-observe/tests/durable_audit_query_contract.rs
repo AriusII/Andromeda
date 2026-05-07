@@ -117,7 +117,7 @@ fn durable_audit_trace_inspection_source_filters_replay_records_with_common_spec
     spec.include_total_count = true;
 
     let result = source
-        .query(&spec)
+        .inspect(&spec)
         .expect("durable replay records are inspectable through common trace filters");
 
     assert_eq!(result.metadata.returned_rows, 1);
@@ -137,7 +137,7 @@ fn durable_audit_trace_inspection_source_filters_replay_records_with_common_spec
         ..TraceQueryFilter::default()
     });
     let recovery_result = source
-        .query(&recovery_spec)
+        .inspect(&recovery_spec)
         .expect("event_kind evidence disambiguates recovery startup from WAL replay records");
     assert_eq!(recovery_result.metadata.returned_rows, 1);
     assert_eq!(recovery_result.rows[0].event_kind, "RecoveryStartup");
@@ -168,7 +168,7 @@ fn durable_audit_trace_inspection_mapping_covers_all_durable_families() {
     let source = DurableAuditTraceQuerySource::new(&records);
 
     let result = source
-        .query(&TraceQuerySpec::new(TraceQueryFilter::default()))
+        .inspect(&TraceQuerySpec::new(TraceQueryFilter::default()))
         .expect("all durable audit families are inspectable through the durable adapter");
 
     assert_eq!(result.rows.len(), DurableAuditEventFamily::ALL.len());
@@ -202,7 +202,7 @@ fn durable_audit_trace_inspection_source_rejects_filters_not_carried_by_journal(
     });
 
     let error = source
-        .query(&spec)
+        .inspect(&spec)
         .expect_err("durable audit journal lacks catalog correlation");
     assert!(
         error
@@ -229,7 +229,7 @@ fn durable_audit_trace_inspection_source_rejects_secret_principal_filter() {
     });
 
     let error = source
-        .query(&spec)
+        .inspect(&spec)
         .expect_err("durable audit inspection rejects secret-bearing principal filters");
     assert!(
         error
@@ -272,7 +272,7 @@ fn durable_audit_trace_inspection_source_rejects_unknown_recovery_event_kind() {
     let source = DurableAuditTraceQuerySource::new(&records);
 
     let error = source
-        .query(&TraceQuerySpec::new(TraceQueryFilter::default()))
+        .inspect(&TraceQuerySpec::new(TraceQueryFilter::default()))
         .expect_err("unknown recovery event_kind evidence must fail closed");
 
     assert!(

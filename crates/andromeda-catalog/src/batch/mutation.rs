@@ -256,6 +256,24 @@ impl CatalogMutationPlan {
                 ),
             ));
         }
+        if batch_id.get() == 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "catalog mutation plan batch id must not be zero",
+            ));
+        }
+        if database_id.get() == 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "catalog mutation plan database id must not be zero",
+            ));
+        }
+        if namespace_id.get() == 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "catalog mutation plan namespace id must not be zero",
+            ));
+        }
 
         let mutation = CatalogMutation {
             definition_batch_id: batch_id,

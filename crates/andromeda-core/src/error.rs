@@ -68,6 +68,10 @@ impl AndromedaError {
         }
     }
 
+    pub(crate) fn security(message: impl Into<String>) -> Self {
+        Self::new(AndromedaErrorKind::Security, message)
+    }
+
     pub fn kind(&self) -> AndromedaErrorKind {
         self.kind
     }

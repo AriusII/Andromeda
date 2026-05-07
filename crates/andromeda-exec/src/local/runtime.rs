@@ -1,23 +1,18 @@
-use andromeda_catalog::{
-    CatalogSnapshot, InvocationRuntimeRecord, PlanCacheKey, PlanClass, PlanShapeFingerprint,
-    ProcedureRuntimeCounters, ProcedureRuntimePlanId, ProcedureRuntimeStatus,
-};
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, Clock, EngineTimestamp, SystemClock,
-};
-use andromeda_observe::Permission as AuditPermission;
-use andromeda_observe::{
-    CommitVisibleTrace, EventCorrelation, EventEmitter, EventSink, RollbackDurableTrace,
-    SecurityAuditOutcome, SurfaceScope as AuditSurfaceScope, TraceEvent, TraceId,
-};
+mod admission;
+mod events;
+mod records;
+mod transactions;
+
+use andromeda_catalog::CatalogSnapshot;
+use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_observe::{EventCorrelation, EventEmitter, EventSink, TraceId};
 use andromeda_quic::SurfacePlane;
 use andromeda_tx::TransactionManager;
 
 use crate::{
-    AuthorizedProcedureDispatch, EXEC_TX_COMMIT_PAYLOAD_LEN, EXEC_TX_ROLLBACK_PAYLOAD_LEN,
-    ExecutionIoAdmissionDecision, InvocationContext, InvocationReject, InvocationRequest,
-    InvocationWal, LocalDispatchPlan, LocalDispatcher, LocalRollbackPlan, RollbackCause,
-    services::CompletionMappingService,
+    AuthorizedProcedureDispatch, ExecutionIoAdmissionDecision, InvocationContext, InvocationReject,
+    InvocationRequest, InvocationWal, LocalDispatchPlan, LocalDispatcher, LocalRollbackPlan,
+    RollbackCause, services::CompletionMappingService,
 };
 
 use super::helpers::{
@@ -25,6 +20,15 @@ use super::helpers::{
     require_local_procedure_execution_io_admission_for_trace, rollback_payload_for_cause,
 };
 use super::types::{LocalProcedure, VerticalInvocationOutcome};
+use admission::{
+    validate_catalog_resolved_procedure, validate_pre_transaction_admission,
+    validate_surface_dispatch_token,
+};
+use records::{RuntimeRecordSpan, committed_runtime_record, rolled_back_runtime_record};
+use transactions::{
+    begin_runtime_transaction, mark_commit_visible_after_durable_wal,
+    mark_rollback_durable_after_wal, route_rollback_cause,
+};
 
 pub struct LocalVerticalRuntime<W> {
     wal: W,
@@ -127,7 +131,7 @@ where
         catalog: &CatalogSnapshot,
         trace_id: TraceId,
     ) -> AndromedaResult<VerticalInvocationOutcome> {
-        self.validate_catalog_resolved_procedure(&request, procedure, catalog, trace_id)?;
+        validate_catalog_resolved_procedure(&request, procedure, catalog, trace_id)?;
         self.execute_after_admission(request, procedure, trace_id, None, None)
     }
 
@@ -138,7 +142,7 @@ where
         catalog: &CatalogSnapshot,
         context: &InvocationContext,
     ) -> AndromedaResult<VerticalInvocationOutcome> {
-        self.validate_catalog_resolved_procedure(&request, procedure, catalog, context.trace_id)?;
+        validate_catalog_resolved_procedure(&request, procedure, catalog, context.trace_id)?;
         self.execute_after_admission(request, procedure, context.trace_id, Some(context), None)
     }
 
@@ -344,36 +348,21 @@ where
         context: Option<&InvocationContext>,
         io_admission: Option<Result<ExecutionIoAdmissionDecision, InvocationReject>>,
     ) -> AndromedaResult<VerticalInvocationOutcome> {
-        procedure.validate()?;
-        let admission_trace = request
-            .validate_admission(trace_id)
-            .map_err(|reject| AndromedaError::new(AndromedaErrorKind::Contract, reject.reason))?;
-        let contract_trace = request
-            .validate_before_transaction(procedure.contract_binding, trace_id)
-            .map_err(|reject| AndromedaError::new(AndromedaErrorKind::Contract, reject.reason))?;
-        require_authorization_context_for_permissioned_procedure(procedure, context)?;
-        let authorization_trace = context
-            .map(|context| {
-                context
-                    .authorize(&procedure.required_permissions)
-                    .map_err(|reject| {
-                        AndromedaError::new(AndromedaErrorKind::Security, reject.reason)
-                    })
-            })
-            .transpose()?;
+        let pre_transaction =
+            validate_pre_transaction_admission(&request, procedure, trace_id, context)?;
         let _io_admission = match io_admission {
             Some(io_admission) => {
                 require_local_procedure_execution_io_admission_for_trace(io_admission, trace_id)?
             }
             None => default_local_procedure_execution_io_admission(trace_id)?,
         };
-        let started_at = runtime_started_at();
+        let runtime_span = RuntimeRecordSpan::started();
 
         // Allocate a recovery-safe transaction id from the runtime-owned
         // TransactionManager. The manager mirrors the InFlight status into
         // its status table so MVCC visibility queries see the transaction
         // before the dispatcher reaches the durable WAL flush.
-        let transaction_id = self.transactions.begin()?;
+        let transaction_id = begin_runtime_transaction(&mut self.transactions)?;
 
         let dispatch_receipt =
             LocalDispatcher::new(&mut self.wal).dispatch_commit(LocalDispatchPlan {
@@ -387,10 +376,11 @@ where
         // status table publishes Committed strictly after that durable LSN
         // is known, preserving the "visible commit requires durable WAL
         // evidence" doctrine.
-        self.transactions.request_commit(transaction_id)?;
-        self.transactions
-            .commit_durable(transaction_id, dispatch_receipt.durable_lsn.get())?;
-        self.transactions.dispose(transaction_id)?;
+        mark_commit_visible_after_durable_wal(
+            &mut self.transactions,
+            transaction_id,
+            dispatch_receipt.durable_lsn,
+        )?;
 
         let completion = CompletionMappingService::committed(
             request.invocation_id,
@@ -399,74 +389,18 @@ where
             dispatch_receipt.durable_lsn,
             trace_id,
         )?;
-        let runtime_record = committed_runtime_record(
-            &request,
-            procedure,
-            started_at,
-            runtime_completed_at(started_at),
-        )?;
+        let runtime_record = committed_runtime_record(&request, procedure, runtime_span)?;
 
         Ok(VerticalInvocationOutcome {
             completion,
             transaction_id,
-            admission_trace,
-            contract_trace,
-            authorization_trace,
+            admission_trace: pre_transaction.admission_trace,
+            contract_trace: pre_transaction.contract_trace,
+            authorization_trace: pre_transaction.authorization_trace,
             result_metadata: procedure.result_metadata,
             runtime_record,
             wal_evidence: Some(dispatch_receipt.wal_evidence),
         })
-    }
-
-    fn validate_catalog_resolved_procedure(
-        &self,
-        request: &InvocationRequest,
-        procedure: &LocalProcedure,
-        catalog: &CatalogSnapshot,
-        trace_id: TraceId,
-    ) -> AndromedaResult<()> {
-        if request.catalog_version != catalog.version {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
-                "CatalogVersion mismatch against visible catalog snapshot before transaction creation",
-            ));
-        }
-
-        let published_contract = catalog
-            .get_procedure_by_id(request.procedure.procedure_id)
-            .ok_or_else(|| {
-                AndromedaError::new(
-                    AndromedaErrorKind::Contract,
-                    "procedure is absent from visible catalog snapshot before transaction creation",
-                )
-            })?;
-
-        if !catalog.is_active_object(published_contract.object.object_id) {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
-                "procedure is not active in visible catalog snapshot before transaction creation",
-            ));
-        }
-
-        request
-            .validate_before_transaction(published_contract.binding(), trace_id)
-            .map_err(|reject| AndromedaError::new(AndromedaErrorKind::Contract, reject.reason))?;
-
-        if procedure.contract != published_contract.as_ref() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
-                "local executable procedure does not match visible catalog contract before transaction creation",
-            ));
-        }
-
-        if procedure.contract_binding != published_contract.binding() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
-                "local executable ProcedureContractBinding does not match visible catalog binding before transaction creation",
-            ));
-        }
-
-        Ok(())
     }
 
     fn rollback_after_admission(
@@ -478,42 +412,20 @@ where
         cause: RollbackCause,
         failure_reason: String,
     ) -> AndromedaResult<VerticalInvocationOutcome> {
-        procedure.validate()?;
-        let admission_trace = request
-            .validate_admission(trace_id)
-            .map_err(|reject| AndromedaError::new(AndromedaErrorKind::Contract, reject.reason))?;
-        let contract_trace = request
-            .validate_before_transaction(procedure.contract_binding, trace_id)
-            .map_err(|reject| AndromedaError::new(AndromedaErrorKind::Contract, reject.reason))?;
-        require_authorization_context_for_permissioned_procedure(procedure, context)?;
-        let authorization_trace = context
-            .map(|context| {
-                context
-                    .authorize(&procedure.required_permissions)
-                    .map_err(|reject| {
-                        AndromedaError::new(AndromedaErrorKind::Security, reject.reason)
-                    })
-            })
-            .transpose()?;
+        let pre_transaction =
+            validate_pre_transaction_admission(&request, procedure, trace_id, context)?;
         let _io_admission = default_local_procedure_execution_io_admission(trace_id)?;
-        let started_at = runtime_started_at();
+        let runtime_span = RuntimeRecordSpan::started();
 
         let rollback_payload = rollback_payload_for_cause(cause, &failure_reason)?;
+        let rollback_payload_len = rollback_payload.len();
         // Allocate a recovery-safe transaction id and route the manager
         // through the cause-implied intermediate state before dispatching
         // the WAL rollback. The manager state machine refuses any other
         // ordering, which keeps the TransactionStatus mirror in lockstep
         // with the dispatcher's local state machine.
-        let transaction_id = self.transactions.begin()?;
-        match cause {
-            RollbackCause::Direct => {}
-            RollbackCause::BusinessFailure => {
-                self.transactions.fail(transaction_id)?;
-            }
-            RollbackCause::Poison => {
-                self.transactions.poison(transaction_id)?;
-            }
-        }
+        let transaction_id = begin_runtime_transaction(&mut self.transactions)?;
+        route_rollback_cause(&mut self.transactions, transaction_id, cause)?;
 
         let rollback_receipt = LocalDispatcher::new(&mut self.wal).dispatch_rollback_with_cause(
             LocalRollbackPlan {
@@ -540,10 +452,11 @@ where
         // dispatcher confirmed the WAL flush. Then dispose so the manager
         // stops tracking the live state-machine entry but the status table
         // retains the historical RolledBack outcome for visibility queries.
-        self.transactions.request_rollback(transaction_id)?;
-        self.transactions
-            .rollback_durable(transaction_id, rollback_receipt.durable_lsn.get())?;
-        self.transactions.dispose(transaction_id)?;
+        mark_rollback_durable_after_wal(
+            &mut self.transactions,
+            transaction_id,
+            rollback_receipt.durable_lsn,
+        )?;
 
         let completion = CompletionMappingService::rolled_back(
             request.invocation_id,
@@ -555,16 +468,16 @@ where
             &request,
             procedure,
             cause,
-            started_at,
-            runtime_completed_at(started_at),
+            rollback_payload_len,
+            runtime_span,
         )?;
 
         Ok(VerticalInvocationOutcome {
             completion,
             transaction_id,
-            admission_trace,
-            contract_trace,
-            authorization_trace,
+            admission_trace: pre_transaction.admission_trace,
+            contract_trace: pre_transaction.contract_trace,
+            authorization_trace: pre_transaction.authorization_trace,
             result_metadata: procedure.result_metadata,
             runtime_record,
             wal_evidence: None,
@@ -582,15 +495,13 @@ where
         durable_lsn: andromeda_storage::Lsn,
         correlation: EventCorrelation,
     ) -> AndromedaResult<()> {
-        emitter.emit(
+        events::emit_commit_visible_event(
+            emitter,
+            trace_id,
+            transaction_id,
+            durable_lsn,
             correlation,
-            TraceEvent::CommitVisible(CommitVisibleTrace {
-                trace_id,
-                transaction_id,
-                durable_commit_lsn: durable_lsn.get(),
-            }),
-        )?;
-        Ok(())
+        )
     }
 
     /// Emit a RollbackDurable event for a successfully rolled-back transaction.
@@ -605,172 +516,12 @@ where
         durable_lsn: andromeda_storage::Lsn,
         correlation: EventCorrelation,
     ) -> AndromedaResult<()> {
-        emitter.emit(
+        events::emit_rollback_durable_event(
+            emitter,
+            trace_id,
+            transaction_id,
+            durable_lsn,
             correlation,
-            TraceEvent::RollbackDurable(RollbackDurableTrace {
-                trace_id,
-                transaction_id,
-                durable_rollback_lsn: durable_lsn.get(),
-            }),
-        )?;
-        Ok(())
-    }
-}
-
-fn require_authorization_context_for_permissioned_procedure(
-    procedure: &LocalProcedure,
-    context: Option<&InvocationContext>,
-) -> AndromedaResult<()> {
-    if context.is_none() && !procedure.required_permissions.is_empty() {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Security,
-            "permissioned Procedure execution requires IAM authorization context before transaction creation",
-        ));
-    }
-
-    Ok(())
-}
-
-fn validate_surface_dispatch_token(
-    context: &InvocationContext,
-    dispatch: &AuthorizedProcedureDispatch,
-) -> AndromedaResult<()> {
-    let audit = dispatch.audit();
-    if audit.trace_id != context.trace_id {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Security,
-            "procedure dispatch authorization trace id must match invocation context before transaction creation",
-        ));
-    }
-    if audit.outcome != SecurityAuditOutcome::Allowed {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Security,
-            "procedure dispatch authorization token must carry an allowed audit decision",
-        ));
-    }
-    if audit.surface != AuditSurfaceScope::Application {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Security,
-            "procedure dispatch authorization token must be scoped to the Application surface",
-        ));
-    }
-    if audit.permission != AuditPermission::ExecuteProcedure {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Security,
-            "procedure dispatch authorization token must prove ExecuteProcedure permission",
-        ));
-    }
-
-    Ok(())
-}
-
-fn committed_runtime_record(
-    request: &InvocationRequest,
-    procedure: &LocalProcedure,
-    started_at: EngineTimestamp,
-    completed_at: EngineTimestamp,
-) -> AndromedaResult<InvocationRuntimeRecord> {
-    let (plan_key, plan_id) = singleton_runtime_plan(procedure)?;
-    InvocationRuntimeRecord::new(
-        request.invocation_id,
-        procedure.contract_binding,
-        started_at,
-        completed_at,
-        Some(plan_key),
-        Some(plan_id),
-        ProcedureRuntimeCounters::new(
-            procedure
-                .result_metadata
-                .row_count_exact
-                .unwrap_or_default(),
-            procedure.rows_affected,
-            committed_wal_payload_bytes(procedure),
-            0,
-        ),
-        ProcedureRuntimeStatus::Committed,
-        None,
-    )
-}
-
-fn rolled_back_runtime_record(
-    request: &InvocationRequest,
-    procedure: &LocalProcedure,
-    cause: RollbackCause,
-    started_at: EngineTimestamp,
-    completed_at: EngineTimestamp,
-) -> AndromedaResult<InvocationRuntimeRecord> {
-    let (plan_key, plan_id) = singleton_runtime_plan(procedure)?;
-    InvocationRuntimeRecord::new(
-        request.invocation_id,
-        procedure.contract_binding,
-        started_at,
-        completed_at,
-        Some(plan_key),
-        Some(plan_id),
-        ProcedureRuntimeCounters::new(
-            procedure
-                .result_metadata
-                .row_count_exact
-                .unwrap_or_default(),
-            0,
-            rolled_back_wal_payload_bytes(),
-            0,
-        ),
-        ProcedureRuntimeStatus::RolledBack,
-        Some(rollback_error_kind(cause)),
-    )
-}
-
-fn singleton_runtime_plan(
-    procedure: &LocalProcedure,
-) -> AndromedaResult<(PlanCacheKey, ProcedureRuntimePlanId)> {
-    let key = PlanCacheKey::build(
-        &procedure.contract_binding,
-        PlanClass::Singleton,
-        PlanShapeFingerprint::empty(),
-    )
-    .map_err(|error| {
-        AndromedaError::new(
-            AndromedaErrorKind::Contract,
-            format!("local Procedure runtime record cannot derive singleton plan key: {error}"),
         )
-    })?;
-    Ok((key, ProcedureRuntimePlanId::from_plan_cache_key(&key)))
-}
-
-fn committed_wal_payload_bytes(procedure: &LocalProcedure) -> u64 {
-    let mutation_bytes = if procedure.rows_affected > 0 {
-        procedure.mutation_payload.len() as u64
-    } else {
-        0
-    };
-    b"tx-begin".len() as u64 + mutation_bytes + EXEC_TX_COMMIT_PAYLOAD_LEN as u64
-}
-
-fn rolled_back_wal_payload_bytes() -> u64 {
-    b"tx-begin".len() as u64 + EXEC_TX_ROLLBACK_PAYLOAD_LEN as u64
-}
-
-fn rollback_error_kind(cause: RollbackCause) -> AndromedaErrorKind {
-    match cause {
-        RollbackCause::Direct => AndromedaErrorKind::Transaction,
-        RollbackCause::BusinessFailure => AndromedaErrorKind::Execution,
-        RollbackCause::Poison => AndromedaErrorKind::Internal,
-    }
-}
-
-fn runtime_started_at() -> EngineTimestamp {
-    nonzero_runtime_timestamp(SystemClock.now())
-}
-
-fn runtime_completed_at(started_at: EngineTimestamp) -> EngineTimestamp {
-    nonzero_runtime_timestamp(SystemClock.now()).max(started_at)
-}
-
-fn nonzero_runtime_timestamp(timestamp: EngineTimestamp) -> EngineTimestamp {
-    if timestamp.is_zero() {
-        EngineTimestamp::from_unix_millis(1)
-    } else {
-        timestamp
     }
 }

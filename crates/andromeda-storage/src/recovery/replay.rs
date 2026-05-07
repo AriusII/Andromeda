@@ -78,7 +78,7 @@
 
 use andromeda_core::AndromedaResult;
 
-use crate::{DatabaseManifest, Lsn, WalRecord, WalRecordKind};
+use crate::{WalRecord, WalRecordKind};
 
 use super::storage_error;
 
@@ -86,13 +86,20 @@ mod boundary;
 mod context;
 mod deferred;
 mod heap_redo;
+mod manifest_switch;
 mod result;
 
 use boundary::*;
 pub use context::{IndexRebuildRequiredEvidence, ManifestSwitchRecoveryTrace, ReplayContext};
 use deferred::*;
 pub use heap_redo::{HeapRedoPageState, HeapRedoSlotState};
+use manifest_switch::replay_manifest_switch;
 pub use result::{ReplayOutcome, ReplayResult};
+
+#[cfg(test)]
+use crate::{DatabaseManifest, Lsn};
+#[cfg(test)]
+use manifest_switch::MANIFEST_SWITCH_PAYLOAD_LEN;
 
 /// Replay a single WAL record in recovery context.
 ///
@@ -162,211 +169,6 @@ pub fn replay_wal_record(ctx: &mut ReplayContext, record: &WalRecord) -> Androme
     replay_wal_record_result(ctx, record).map(|_| ())
 }
 
-/// Replay manifest switch record.
-///
-/// **Idempotency:** Switching to the same manifest twice is a no-op.
-/// **Invariant:** Manifest switch must be atomic with respect to other operations.
-fn replay_manifest_switch(
-    ctx: &mut ReplayContext,
-    record: &WalRecord,
-) -> AndromedaResult<ReplayResult> {
-    let payload = parse_manifest_switch_payload(record.payload())?;
-
-    if payload.required_wal_start_lsn < payload.base_checkpoint_lsn {
-        ctx.manifest_switch_traces.push(
-            ManifestSwitchRecoveryTrace::ManifestSwitchValidationFailed {
-                lsn: record.header.lsn,
-                manifest_version: payload.manifest_version,
-                reason: "required_wal_start_lsn precedes base_checkpoint_lsn",
-            },
-        );
-        return Ok(ReplayResult::skipped(
-            record.header.lsn,
-            WalRecordKind::ManifestSwitch,
-        ));
-    }
-
-    if payload.base_checkpoint_lsn > record.header.lsn {
-        ctx.manifest_switch_traces.push(
-            ManifestSwitchRecoveryTrace::ManifestSwitchValidationFailed {
-                lsn: record.header.lsn,
-                manifest_version: payload.manifest_version,
-                reason: "base_checkpoint_lsn exceeds manifest switch record LSN",
-            },
-        );
-        return Ok(ReplayResult::skipped(
-            record.header.lsn,
-            WalRecordKind::ManifestSwitch,
-        ));
-    }
-
-    if ctx.require_checkpoint_end_for_manifest_switch
-        && !payload.base_checkpoint_lsn.is_zero()
-        && ctx
-            .latest_checkpoint_end_lsn
-            .is_none_or(|checkpoint_lsn| checkpoint_lsn < payload.base_checkpoint_lsn)
-    {
-        ctx.manifest_switch_traces.push(
-            ManifestSwitchRecoveryTrace::ManifestSwitchValidationFailed {
-                lsn: record.header.lsn,
-                manifest_version: payload.manifest_version,
-                reason: "base_checkpoint_lsn lacks durable checkpoint_end evidence",
-            },
-        );
-        return Ok(ReplayResult::skipped(
-            record.header.lsn,
-            WalRecordKind::ManifestSwitch,
-        ));
-    }
-
-    let expected_crc = ctx
-        .known_manifest_crc_by_version
-        .get(&payload.manifest_version)
-        .copied()
-        .or_else(|| {
-            ctx.active_manifest
-                .filter(|manifest| manifest.manifest_version == payload.manifest_version)
-                .map(|manifest| manifest.manifest_crc)
-        });
-
-    if matches!(expected_crc, Some(expected) if expected != payload.manifest_crc) {
-        ctx.manifest_switch_traces.push(
-            ManifestSwitchRecoveryTrace::ManifestSwitchValidationFailed {
-                lsn: record.header.lsn,
-                manifest_version: payload.manifest_version,
-                reason: "manifest CRC mismatch",
-            },
-        );
-        return Ok(ReplayResult::skipped(
-            record.header.lsn,
-            WalRecordKind::ManifestSwitch,
-        ));
-    }
-
-    let next_manifest = DatabaseManifest {
-        database_id: 1,
-        manifest_version: payload.manifest_version,
-        snapshot_id: payload.snapshot_id,
-        base_checkpoint_lsn: payload.base_checkpoint_lsn,
-        required_wal_start_lsn: payload.required_wal_start_lsn,
-        previous_manifest_hash: payload.previous_manifest_hash,
-        manifest_crc: payload.manifest_crc,
-    };
-    next_manifest.validate()?;
-
-    ctx.known_manifest_crc_by_version
-        .insert(payload.manifest_version, payload.manifest_crc);
-    ctx.active_manifest = Some(next_manifest);
-    ctx.manifest_switch_traces
-        .push(ManifestSwitchRecoveryTrace::ManifestSwitchApplied {
-            lsn: record.header.lsn,
-            manifest_version: payload.manifest_version,
-            snapshot_id: payload.snapshot_id,
-            base_checkpoint_lsn: payload.base_checkpoint_lsn,
-            required_wal_start_lsn: payload.required_wal_start_lsn,
-        });
-
-    Ok(ReplayResult::applied(
-        record.header.lsn,
-        WalRecordKind::ManifestSwitch,
-    ))
-}
-
-const MANIFEST_SWITCH_PAYLOAD_LEN: usize = 68;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct ManifestSwitchPayload {
-    manifest_version: u64,
-    snapshot_id: u64,
-    base_checkpoint_lsn: Lsn,
-    required_wal_start_lsn: Lsn,
-    previous_manifest_hash: [u8; 32],
-    manifest_crc: u32,
-}
-
-fn parse_manifest_switch_payload(bytes: &[u8]) -> AndromedaResult<ManifestSwitchPayload> {
-    if bytes.len() != MANIFEST_SWITCH_PAYLOAD_LEN {
-        return Err(storage_error(
-            "manifest switch payload length must be exactly 68 bytes",
-        ));
-    }
-
-    fn read_u64(bytes: &[u8], start: usize) -> AndromedaResult<u64> {
-        let end = start + 8;
-        let slice = bytes
-            .get(start..end)
-            .ok_or_else(|| storage_error("manifest switch payload is truncated"))?;
-        let mut array = [0u8; 8];
-        array.copy_from_slice(slice);
-        Ok(u64::from_le_bytes(array))
-    }
-    fn read_u32(bytes: &[u8], start: usize) -> AndromedaResult<u32> {
-        let end = start + 4;
-        let slice = bytes
-            .get(start..end)
-            .ok_or_else(|| storage_error("manifest switch payload is truncated"))?;
-        let mut array = [0u8; 4];
-        array.copy_from_slice(slice);
-        Ok(u32::from_le_bytes(array))
-    }
-
-    let mut hash = [0u8; 32];
-    hash.copy_from_slice(
-        bytes
-            .get(32..64)
-            .ok_or_else(|| storage_error("manifest switch payload hash is truncated"))?,
-    );
-
-    Ok(ManifestSwitchPayload {
-        manifest_version: read_u64(bytes, 0)?,
-        snapshot_id: read_u64(bytes, 8)?,
-        base_checkpoint_lsn: Lsn::new(read_u64(bytes, 16)?),
-        required_wal_start_lsn: Lsn::new(read_u64(bytes, 24)?),
-        previous_manifest_hash: hash,
-        manifest_crc: read_u32(bytes, 64)?,
-    })
-}
-
-/// Handler coverage statistics for WAL recovery.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct HandlerCoverageMetrics {
-    /// Total number of WalRecordKind variants.
-    pub total_kinds: usize,
-    /// Number of handlers implemented or skipped (actively handled).
-    pub implemented_count: usize,
-    /// Number of handlers documented as future work.
-    pub future_work_count: usize,
-    /// Number of missing handlers (should always be 0).
-    pub missing_count: usize,
-}
-
-impl HandlerCoverageMetrics {
-    /// Get current handler coverage metrics.
-    pub const fn current() -> Self {
-        Self {
-            total_kinds: 26,
-            implemented_count: 12,
-            future_work_count: 14,
-            missing_count: 0,
-        }
-    }
-
-    /// Calculate coverage percentage (implemented / total).
-    pub const fn coverage_percent(&self) -> u32 {
-        (self.implemented_count as u32 * 100) / self.total_kinds as u32
-    }
-
-    /// Check if all record kinds are accounted for.
-    pub const fn is_complete(&self) -> bool {
-        self.implemented_count + self.future_work_count + self.missing_count == self.total_kinds
-    }
-
-    /// Check if there are any missing handlers (should be false for production).
-    pub const fn has_missing_handlers(&self) -> bool {
-        self.missing_count > 0
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -411,19 +213,6 @@ mod tests {
         ));
         assert!(ctx.has_errors());
         assert_eq!(ctx.error_records.len(), 1);
-    }
-
-    #[test]
-    fn handler_coverage_metrics_validation() {
-        let metrics = HandlerCoverageMetrics::current();
-
-        assert_eq!(metrics.total_kinds, 26);
-        assert_eq!(metrics.implemented_count, 12);
-        assert_eq!(metrics.future_work_count, 14);
-        assert_eq!(metrics.missing_count, 0);
-        assert!(metrics.is_complete());
-        assert!(!metrics.has_missing_handlers());
-        assert_eq!(metrics.coverage_percent(), 46);
     }
 
     #[test]

@@ -6,11 +6,13 @@ use andromeda_quic::{
 };
 use libfuzzer_sys::fuzz_target;
 
+mod common;
+
 const MAX_SEQUENCE_FUZZ_BYTES: usize = 4 * 1024;
 const MAX_SEQUENCE_FRAMES: usize = 128;
 
 fuzz_target!(|data: &[u8]| {
-    let data = &data[..data.len().min(MAX_SEQUENCE_FUZZ_BYTES)];
+    let data = common::bounded_input(data, MAX_SEQUENCE_FUZZ_BYTES);
     let policy = match data.first().copied().unwrap_or_default() % 3 {
         0 => ResultStreamMetadataPolicy::RowBatchRequired,
         1 => ResultStreamMetadataPolicy::ZeroRowCompletionAllowed,

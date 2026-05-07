@@ -1,158 +1,40 @@
 //! Deterministic SRPL IR interpreter.
 //!
 //! This module executes the currently bound SRPL operation set:
-//! `ReadTable`, `Assert`, `UpdateTable`, `Emit`, and `Raise`.  The interpreter
+//! `ReadTable`, `Assert`, `UpdateTable`, `Emit`, and `Raise`. The interpreter
 //! performs a complete validation pass before invoking any adapter method, then
-//! executes operations in dense ordinal/source order and fails fast.  There is
-//! no storage, transport, transaction, physical execution, ad hoc SQL, or
+//! executes operations in dense ordinal/source order and fails fast. There is no
+//! storage, transport, transaction, physical execution, ad hoc SQL, or
 //! runtime-dispatch dependency in this module; all external behavior is behind
 //! the typed adapter traits from [`crate::execution_adapter`].
 
-use andromeda_catalog::{CatalogObjectRef, ObjectKind};
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+mod diagnostics;
+mod execution_state;
+mod expression;
+mod operation;
+mod validation;
+
+use andromeda_core::AndromedaResult;
 
 use crate::{
-    Cardinality,
     execution_adapter::{
-        SrplAssertRequest, SrplAssertResult, SrplAssertionAdapter, SrplBindingEnvironment,
-        SrplEmitRequest, SrplEmitResult, SrplExecutionFailure, SrplFailureAdapter,
-        SrplFailureRequest, SrplOperationContext, SrplReadRequest, SrplReadResult, SrplRowBound,
-        SrplTypedEmitAdapter, SrplTypedReadAdapter, SrplTypedUpdateAdapter, SrplUpdateRequest,
-        SrplUpdateResult,
+        SrplAssertionAdapter, SrplExecutionFailure, SrplFailureAdapter, SrplTypedEmitAdapter,
+        SrplTypedReadAdapter, SrplTypedUpdateAdapter,
     },
-    identifier::validate_srpl_identifier as validate_symbol,
-    procedure_model::{
-        BoundSrplOperationPlan, ExecutableProcedurePlan, SrplAssignmentIr, SrplEmitValueIr,
-        SrplPredicateIr, SrplValueIr,
-    },
+    procedure_model::ExecutableProcedurePlan,
 };
 
-/// Aggregate deterministic execution counters.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct SrplInterpreterReport {
-    pub operations_executed: usize,
-    pub reads: usize,
-    pub assertions: usize,
-    pub updates: usize,
-    pub emits: usize,
-}
+pub use execution_state::SrplInterpreterReport;
 
-/// Empty binding environment used by the deterministic interpreter.
-///
-/// The current narrow SRPL operation set validates symbol shapes and bounded
-/// contracts but does not require dynamic input/binding value lookup at this
-/// layer.
-struct MinimalBindingEnvironment;
-
-impl SrplBindingEnvironment for MinimalBindingEnvironment {
-    fn get_input(&self, _name: &str) -> Option<crate::execution_adapter::SrplBoundValue> {
-        None
-    }
-
-    fn get_field_from_binding(
-        &self,
-        _binding: &str,
-        _row_index: usize,
-        _field: &str,
-    ) -> Option<crate::execution_adapter::SrplBoundValue> {
-        None
-    }
-
-    fn binding_row_count(&self, _binding: &str) -> Option<usize> {
-        None
-    }
-}
+use operation::SrplOperationExecutor;
 
 /// Stateless interpreter for a catalog-bound executable SRPL plan.
 pub struct SrplIrInterpreter;
 
 impl SrplIrInterpreter {
     /// Validates the whole plan before adapter side effects are possible.
-    ///
-    /// The present bound IR enum has no unsupported variants: every current
-    /// variant is matched by this validator and by [`Self::execute`].  Future
-    /// variants will require an explicit compiler change because Rust's
-    /// exhaustive matching will fail compilation.
     pub fn validate_plan(plan: &ExecutableProcedurePlan) -> AndromedaResult<()> {
-        plan.validate()?;
-
-        for operation in &plan.body.operations {
-            match operation {
-                BoundSrplOperationPlan::ReadTable {
-                    source,
-                    binding,
-                    cardinality,
-                    predicates,
-                    ..
-                } => {
-                    source.validate_for_definition(ObjectKind::Table)?;
-                    require_evidence_for_table(plan, source)?;
-                    validate_symbol(binding, "SRPL read binding")?;
-                    validate_bounded_cardinality(*cardinality, "SRPL read")?;
-                    validate_predicates(predicates)?;
-                }
-                BoundSrplOperationPlan::Assert {
-                    predicate,
-                    failure_code,
-                    ..
-                } => {
-                    validate_predicate(predicate)?;
-                    validate_symbol(failure_code, "SRPL assertion failure code")?;
-                }
-                BoundSrplOperationPlan::UpdateTable {
-                    target,
-                    predicates,
-                    assignments,
-                    affected_rows_exact,
-                    ..
-                } => {
-                    target.validate_for_definition(ObjectKind::Table)?;
-                    require_evidence_for_table(plan, target)?;
-                    validate_predicates(predicates)?;
-                    if assignments.is_empty() {
-                        return Err(AndromedaError::new(
-                            AndromedaErrorKind::Srpl,
-                            "SRPL interpreter update operation must declare assignments",
-                        ));
-                    }
-                    for assignment in assignments {
-                        validate_assignment(assignment)?;
-                    }
-                    match affected_rows_exact {
-                        Some(rows) if *rows > 0 => {}
-                        Some(_) => {
-                            return Err(AndromedaError::new(
-                                AndromedaErrorKind::Srpl,
-                                "SRPL interpreter update exact affected-row contract must be greater than zero",
-                            ));
-                        }
-                        None => {
-                            return Err(AndromedaError::new(
-                                AndromedaErrorKind::Srpl,
-                                "SRPL interpreter rejects unbounded update affected-row contracts",
-                            ));
-                        }
-                    }
-                }
-                BoundSrplOperationPlan::Emit { stream, values, .. } => {
-                    validate_symbol(stream, "SRPL emit stream")?;
-                    if values.is_empty() {
-                        return Err(AndromedaError::new(
-                            AndromedaErrorKind::Srpl,
-                            "SRPL interpreter emit operation must declare values",
-                        ));
-                    }
-                    for value in values {
-                        validate_emit_value(value)?;
-                    }
-                }
-                BoundSrplOperationPlan::Raise { code, .. } => {
-                    validate_symbol(code, "SRPL raise code")?;
-                }
-            }
-        }
-
-        Ok(())
+        validation::validate_plan(plan)
     }
 
     /// Executes a validated plan over typed adapters in ordinal/source order.
@@ -169,251 +51,28 @@ impl SrplIrInterpreter {
     {
         Self::validate_plan(plan).map_err(SrplExecutionFailure::from)?;
 
-        let mut report = SrplInterpreterReport::default();
-        for operation in &plan.body.operations {
-            match operation {
-                BoundSrplOperationPlan::ReadTable {
-                    ordinal,
-                    source,
-                    cardinality,
-                    predicates,
-                    ..
-                } => {
-                    let bound =
-                        row_bound_for_read(*cardinality).map_err(SrplExecutionFailure::from)?;
-                    let request = SrplReadRequest::new(
-                        context(plan, *ordinal)?,
-                        source.clone(),
-                        *cardinality,
-                        bound,
-                        predicates.clone(),
-                    )
-                    .map_err(SrplExecutionFailure::from)?;
-                    let result = adapter.read_typed(request, &MinimalBindingEnvironment)?;
-                    SrplReadResult::new(result.rows, *cardinality, bound)?;
-                    report.reads += 1;
-                }
-                BoundSrplOperationPlan::Assert {
-                    ordinal,
-                    predicate,
-                    failure_code,
-                } => {
-                    let request = SrplAssertRequest::new(
-                        context(plan, *ordinal)?,
-                        predicate.clone(),
-                        failure_code.clone(),
-                    )
-                    .map_err(SrplExecutionFailure::from)?;
-                    let SrplAssertResult { passed } =
-                        adapter.assert_typed(request, &MinimalBindingEnvironment)?;
-                    report.assertions += 1;
-                    if !passed {
-                        let failure = SrplExecutionFailure::SemanticViolation(format!(
-                            "SRPL assertion failed: {failure_code}"
-                        ));
-                        adapter.fail_typed(
-                            SrplFailureRequest::new(
-                                context(plan, *ordinal)?,
-                                failure_code.clone(),
-                                failure.clone(),
-                            )
-                            .map_err(SrplExecutionFailure::from)?,
-                            &MinimalBindingEnvironment,
-                        )?;
-                        return Err(failure);
-                    }
-                }
-                BoundSrplOperationPlan::UpdateTable {
-                    ordinal,
-                    target,
-                    predicates,
-                    assignments,
-                    affected_rows_exact,
-                } => {
-                    let bound = SrplRowBound::exact(affected_rows_exact.ok_or_else(|| {
-                        SrplExecutionFailure::SemanticViolation(
-                            "SRPL interpreter rejects unbounded update affected-row contracts"
-                                .to_string(),
-                        )
-                    })?)
-                    .map_err(SrplExecutionFailure::from)?;
-                    let request = SrplUpdateRequest::new(
-                        context(plan, *ordinal)?,
-                        target.clone(),
-                        bound,
-                        predicates.clone(),
-                        assignments.clone(),
-                    )
-                    .map_err(SrplExecutionFailure::from)?;
-                    let result = adapter.update_typed(request, &MinimalBindingEnvironment)?;
-                    SrplUpdateResult::new(result.affected_rows, bound)?;
-                    report.updates += 1;
-                }
-                BoundSrplOperationPlan::Emit {
-                    ordinal,
-                    stream,
-                    values,
-                } => {
-                    let bound = SrplRowBound::exact(1).map_err(SrplExecutionFailure::from)?;
-                    let request = SrplEmitRequest::new(
-                        context(plan, *ordinal)?,
-                        stream.clone(),
-                        Cardinality::One,
-                        bound,
-                        values.clone(),
-                    )
-                    .map_err(SrplExecutionFailure::from)?;
-                    let result = adapter.emit_typed(request, &MinimalBindingEnvironment)?;
-                    SrplEmitResult::new(result.emitted_rows, Cardinality::One, bound)?;
-                    report.emits += 1;
-                }
-                BoundSrplOperationPlan::Raise { ordinal, code } => {
-                    let failure =
-                        SrplExecutionFailure::SemanticViolation(format!("SRPL raise: {code}"));
-                    adapter.fail_typed(
-                        SrplFailureRequest::new(
-                            context(plan, *ordinal)?,
-                            code.clone(),
-                            failure.clone(),
-                        )
-                        .map_err(SrplExecutionFailure::from)?,
-                        &MinimalBindingEnvironment,
-                    )?;
-                    return Err(failure);
-                }
-            }
-            report.operations_executed += 1;
-        }
-
-        Ok(report)
-    }
-}
-
-fn context(
-    plan: &ExecutableProcedurePlan,
-    ordinal: u32,
-) -> Result<SrplOperationContext, SrplExecutionFailure> {
-    SrplOperationContext::new(plan.evidence.procedure_contract, ordinal)
-        .map_err(SrplExecutionFailure::from)
-}
-
-fn row_bound_for_read(cardinality: Cardinality) -> AndromedaResult<SrplRowBound> {
-    match cardinality {
-        Cardinality::One => SrplRowBound::exact(1),
-        Cardinality::OptionalOne => SrplRowBound::at_most(1),
-        Cardinality::Many | Cardinality::NonEmptyMany => Err(AndromedaError::new(
-            AndromedaErrorKind::Srpl,
-            "SRPL interpreter rejects read operations without an intrinsic row bound",
-        )),
-    }
-}
-
-fn validate_bounded_cardinality(cardinality: Cardinality, context: &str) -> AndromedaResult<()> {
-    if cardinality.intrinsic_max_row_count().is_some() {
-        Ok(())
-    } else {
-        Err(AndromedaError::new(
-            AndromedaErrorKind::Srpl,
-            format!("{context} operation must carry a bounded row contract"),
-        ))
-    }
-}
-
-fn require_evidence_for_table(
-    plan: &ExecutableProcedurePlan,
-    object: &CatalogObjectRef,
-) -> AndromedaResult<()> {
-    let evidence = plan
-        .evidence
-        .bound_objects
-        .iter()
-        .find(|bound| bound.object == *object && bound.kind == ObjectKind::Table)
-        .ok_or_else(|| {
-            AndromedaError::new(
-                AndromedaErrorKind::Contract,
-                "SRPL interpreter table operation lacks matching binding evidence",
-            )
-        })?;
-    evidence.validate(ObjectKind::Table)?;
-    if evidence.object.catalog_version != plan.evidence.catalog_version {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Catalog,
-            "SRPL interpreter table evidence catalog version mismatch",
-        ));
-    }
-    Ok(())
-}
-
-fn validate_predicates(predicates: &[SrplPredicateIr]) -> AndromedaResult<()> {
-    for predicate in predicates {
-        validate_predicate(predicate)?;
-    }
-    Ok(())
-}
-
-fn validate_predicate(predicate: &SrplPredicateIr) -> AndromedaResult<()> {
-    match predicate {
-        SrplPredicateIr::InputEqualsField {
-            input,
-            binding,
-            field,
-        }
-        | SrplPredicateIr::FieldGreaterThanOrEqualInput {
-            binding,
-            field,
-            input,
-        } => {
-            validate_symbol(input, "SRPL predicate input")?;
-            validate_symbol(binding, "SRPL predicate binding")?;
-            validate_symbol(field, "SRPL predicate field")?;
-        }
-    }
-    Ok(())
-}
-
-fn validate_assignment(assignment: &SrplAssignmentIr) -> AndromedaResult<()> {
-    validate_symbol(&assignment.field, "SRPL assignment field")?;
-    validate_value(&assignment.value)
-}
-
-fn validate_emit_value(value: &SrplEmitValueIr) -> AndromedaResult<()> {
-    validate_symbol(&value.column, "SRPL emit column")?;
-    validate_value(&value.value)
-}
-
-fn validate_value(value: &SrplValueIr) -> AndromedaResult<()> {
-    match value {
-        SrplValueIr::Input(input) => validate_symbol(input, "SRPL value input"),
-        SrplValueIr::Field { binding, field } => {
-            validate_symbol(binding, "SRPL value binding")?;
-            validate_symbol(field, "SRPL value field")
-        }
-        SrplValueIr::Bool(_) => Ok(()),
-        SrplValueIr::SubtractInput {
-            binding,
-            field,
-            input,
-        } => {
-            validate_symbol(binding, "SRPL subtract binding")?;
-            validate_symbol(field, "SRPL subtract field")?;
-            validate_symbol(input, "SRPL subtract input")
-        }
-        SrplValueIr::Constant(literal) => literal.validate(),
-        SrplValueIr::BinaryArith { left, right, .. } => {
-            validate_value(left)?;
-            validate_value(right)
-        }
+        SrplOperationExecutor::new(plan, adapter).execute_plan()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_catalog::{CatalogObjectRef, ProcedureContractRef, QualifiedName};
+    use andromeda_catalog::{CatalogObjectRef, ObjectKind, ProcedureContractRef, QualifiedName};
     use andromeda_core::{CatalogObjectId, CatalogVersion, ContractHash, ProcedureId};
 
-    use crate::procedure_model::{
-        BoundSrplBodyPlan, SrplCatalogBindingEvidence, SrplObjectBindingEvidence,
+    use crate::{
+        Cardinality,
+        execution_adapter::{
+            SrplAssertRequest, SrplAssertResult, SrplBindingEnvironment, SrplEmitRequest,
+            SrplEmitResult, SrplFailureRequest, SrplReadRequest, SrplReadResult,
+            SrplTypedReadAdapter, SrplUpdateRequest, SrplUpdateResult,
+        },
+        procedure_model::{
+            BoundSrplBodyPlan, BoundSrplOperationPlan, ExecutableProcedurePlan, SrplAssignmentIr,
+            SrplCatalogBindingEvidence, SrplEmitValueIr, SrplObjectBindingEvidence,
+            SrplPredicateIr, SrplValueIr,
+        },
     };
 
     #[derive(Default)]

@@ -8,13 +8,13 @@
 //! TLS configuration is constructed here; socket/listener wiring lives in the
 //! Quinn backend module.
 
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_observe::{CertificateIdentity, SurfaceScope};
 use rustls::{
     RootCertStore,
-    pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, pem::PemObject},
+    pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer},
 };
 
 use crate::{
@@ -256,64 +256,6 @@ pub(crate) fn ephemeral_test_tls_config(
     )
 }
 
-/// Builds rustls server/client configs from file-backed PEM certificates.
-///
-/// No additional PEM parser dependency is introduced: this uses the PEM support
-/// re-exported by `rustls::pki_types`. The same identity cert/key is installed
-/// on both sides for local test/runtime wiring; deployment code can pass
-/// distinct DER chains to the lower-level builder.
-#[allow(dead_code)]
-pub(crate) fn file_backed_mtls_config_from_pem_files(
-    identity_cert_chain_pem: impl AsRef<Path>,
-    identity_private_key_pem: impl AsRef<Path>,
-    trust_roots_pem: impl AsRef<Path>,
-    required_scope: SurfaceScope,
-) -> AndromedaResult<RuntimeQuinnTlsConfig> {
-    let identity_cert_chain = load_cert_chain_pem(identity_cert_chain_pem.as_ref())?;
-    let trust_roots = load_cert_chain_pem(trust_roots_pem.as_ref())?;
-
-    build_mtls_configs_from_der(
-        identity_cert_chain.clone(),
-        load_private_key_pem(identity_private_key_pem.as_ref())?,
-        identity_cert_chain,
-        load_private_key_pem(identity_private_key_pem.as_ref())?,
-        trust_roots,
-        CertificateIdentityExtraction::without_parser(required_scope),
-        TlsEarlyDataPolicy::disabled(),
-    )
-}
-
-/// Builds rustls server/client configs from file-backed DER certificates.
-///
-/// The private key is expected to be unencrypted PKCS#8 DER. Supporting other
-/// key formats for DER files should be added deliberately with tests.
-#[allow(dead_code)]
-pub(crate) fn file_backed_mtls_config_from_der_files(
-    identity_cert_der: impl AsRef<Path>,
-    identity_private_key_pkcs8_der: impl AsRef<Path>,
-    trust_root_der: impl AsRef<Path>,
-    required_scope: SurfaceScope,
-) -> AndromedaResult<RuntimeQuinnTlsConfig> {
-    let identity_cert_chain = vec![load_certificate_der(identity_cert_der.as_ref())?];
-    let key_bytes = std::fs::read(identity_private_key_pkcs8_der.as_ref()).map_err(|err| {
-        security_error(format!(
-            "failed to read DER private key {}: {err}",
-            identity_private_key_pkcs8_der.as_ref().display()
-        ))
-    })?;
-    let trust_roots = vec![load_certificate_der(trust_root_der.as_ref())?];
-
-    build_mtls_configs_from_der(
-        identity_cert_chain.clone(),
-        private_key_from_pkcs8_der(key_bytes.clone()),
-        identity_cert_chain,
-        private_key_from_pkcs8_der(key_bytes),
-        trust_roots,
-        CertificateIdentityExtraction::without_parser(required_scope),
-        TlsEarlyDataPolicy::disabled(),
-    )
-}
-
 fn build_mtls_configs_from_der(
     server_cert_chain: Vec<CertificateDer<'static>>,
     server_private_key: PrivateKeyDer<'static>,
@@ -374,51 +316,6 @@ fn root_store_from_der(
             .map_err(|err| security_error(format!("failed to add trust root: {err}")))?;
     }
     Ok(roots)
-}
-
-fn load_cert_chain_pem(path: &Path) -> AndromedaResult<Vec<CertificateDer<'static>>> {
-    let certs = CertificateDer::pem_file_iter(path)
-        .map_err(|err| {
-            security_error(format!(
-                "failed to open PEM certificate file {}: {err}",
-                path.display()
-            ))
-        })?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|err| {
-            security_error(format!(
-                "failed to parse PEM certificate file {}: {err}",
-                path.display()
-            ))
-        })?;
-
-    if certs.is_empty() {
-        return Err(security_error(format!(
-            "PEM certificate file {} did not contain certificates",
-            path.display()
-        )));
-    }
-    Ok(certs)
-}
-
-fn load_private_key_pem(path: &Path) -> AndromedaResult<PrivateKeyDer<'static>> {
-    PrivateKeyDer::from_pem_file(path).map_err(|err| {
-        security_error(format!(
-            "failed to parse PEM private key {}: {err}",
-            path.display()
-        ))
-    })
-}
-
-fn load_certificate_der(path: &Path) -> AndromedaResult<CertificateDer<'static>> {
-    std::fs::read(path)
-        .map(CertificateDer::from)
-        .map_err(|err| {
-            security_error(format!(
-                "failed to read DER certificate {}: {err}",
-                path.display()
-            ))
-        })
 }
 
 fn private_key_from_pkcs8_der(key_der: Vec<u8>) -> PrivateKeyDer<'static> {

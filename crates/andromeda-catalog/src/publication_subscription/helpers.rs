@@ -3,7 +3,10 @@ use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use crate::{CatalogPublicationReceipt, CatalogPublicationSemantics};
 
 pub(super) fn validate_receipt(receipt: &CatalogPublicationReceipt) -> AndromedaResult<()> {
-    if receipt.database_id.get() == 0 || receipt.namespace_id.get() == 0 {
+    if receipt.batch_id.get() == 0
+        || receipt.database_id.get() == 0
+        || receipt.namespace_id.get() == 0
+    {
         return catalog_publication_error(
             "catalog publication receipt identity fields must not be zero",
         );

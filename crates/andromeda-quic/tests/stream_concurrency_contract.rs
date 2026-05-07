@@ -1,9 +1,7 @@
 //! Public-surface contract for stream concurrency, cancellation, and backpressure.
 
 use andromeda_core::{AndromedaErrorKind, InvocationId};
-use andromeda_quic::{
-    CancellationReason, CancellationToken, StreamConcurrencyManager, StreamState,
-};
+use andromeda_quic::{CancellationReason, StreamConcurrencyManager, StreamState};
 use std::thread;
 use std::time::Duration;
 
@@ -200,14 +198,12 @@ fn test_backpressure_recovery_on_stream_completion() {
 
 #[test]
 fn test_cancellation_token_deterministic_and_replay_safe() {
-    let mut mgr1 = StreamConcurrencyManager::new();
-
     let id = invocation_id(42);
 
-    let token1 = mgr1.create_stream(id).unwrap();
-    let token_direct = CancellationToken::from_invocation_id(id);
+    let token1 = StreamConcurrencyManager::new().create_stream(id).unwrap();
+    let token2 = StreamConcurrencyManager::new().create_stream(id).unwrap();
 
-    assert_eq!(token1, token_direct);
+    assert_eq!(token1, token2);
     assert_eq!(token1.get(), 42);
 }
 

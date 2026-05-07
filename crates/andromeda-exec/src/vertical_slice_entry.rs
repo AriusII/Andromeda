@@ -1,181 +1,41 @@
-use andromeda_catalog::{CatalogSnapshot, ProcedureContract};
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId, SessionId, TransactionId,
-};
-use andromeda_observe::{
-    CompletionEmittedTrace, EventCorrelation, EventEmitter, EventSink, ProtocolCorrelation,
-    TraceEvent,
-};
-use andromeda_quic::{
-    FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader, FrameType,
-    ResultStreamMetadataPolicy, StreamRole, validate_result_stream_sequence_with_metadata_policy,
-};
+mod events;
+mod protocol;
+mod result_frames;
+
+use andromeda_catalog::{CatalogSnapshot, ProcedureContract, ProcedureContractBinding};
+use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, digest::sha256};
+use andromeda_observe::{EventEmitter, EventSink};
+use andromeda_quic::FrameBytes;
 use andromeda_srpl::{
     ExecutableProcedurePlan, bind_executable_procedure_plan, compile_narrow_procedure_signature,
 };
 use andromeda_storage::{Lsn, PageId, PageSize};
 
 use crate::{
-    CompletionStatus, InventoryProductStockCommitEvidence,
-    InventoryProductStockDurableRedoEvidence, InventoryProductStockStore, InventoryStock,
-    InvocationContext, InvocationReject, InvocationRequest, InvocationWal, LocalVerticalRuntime,
-    ReserveStockCommand, ReserveStockEffect, VerticalInvocationOutcome,
+    InventoryProductStockCommitEvidence, InventoryProductStockDurableRedoEvidence,
+    InventoryProductStockStore, InventoryStock, InvocationContext, InvocationRequest,
+    InvocationWal, LocalVerticalRuntime, ReserveStockEffect, VerticalInvocationOutcome,
     business::HeapInventoryProductStockStore,
 };
 
-const V0_RPC_EXECUTE_PAYLOAD_DOMAIN: &[u8] = b"andromeda.exec.v0.inventory-reserve-stock-rpc.v1";
-const V0_METADATA_PAYLOAD_DOMAIN: &[u8] = b"andromeda.exec.v0.result-metadata.v1";
-const V0_BATCH_PAYLOAD_DOMAIN: &[u8] = b"andromeda.exec.v0.inventory-reservation-batch.v1";
-const V0_COMPLETION_PAYLOAD_DOMAIN: &[u8] = b"andromeda.exec.v0.completion.v1";
-const V0_RPC_EXECUTE_PAYLOAD_LEN: usize = V0_RPC_EXECUTE_PAYLOAD_DOMAIN.len() + 1 + 16;
-const V0_RPC_EXECUTE_FRAME_LEN: usize = FrameCodec::HEADER_LEN + V0_RPC_EXECUTE_PAYLOAD_LEN;
-const V0_INVENTORY_RESERVE_STOCK_CONTRACT_KIND: u16 = 1;
+use events::{emit_v0_outcome_events, v0_pre_transaction_reject_from_error};
+use result_frames::encode_v0_result_frames;
+
+pub use events::emit_v0_inventory_reserve_stock_pre_transaction_refusal;
+pub use protocol::{
+    V0InventoryProtocolViolation, V0InventoryReserveStockRpcPayload, decode_v0_execute_frame,
+    encode_inventory_reserve_stock_v0_execute_frame,
+};
+
 const V0_PRODUCT_STOCK_HEAP_PAGE_ID: PageId = PageId::new(42_000);
 const V0_PRODUCT_STOCK_HEAP_PAGE_SIZE: PageSize = PageSize::KiB16;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum V0InventoryProtocolViolation {
-    ExecuteFrameByteLength { expected: usize, actual: usize },
-    ExecuteFrameDecodeRejected { reason: String },
-    ExecuteFrameTransportRejected { reason: String },
-    ExecuteFrameType { actual: FrameType },
-    ExecuteFrameCarriesTransaction,
-    RpcPayloadByteLength { expected: usize, actual: usize },
-    RpcPayloadDomain,
-    RpcPayloadFieldTruncated { field: &'static str },
-    RpcPayloadFieldOffsetOverflow { field: &'static str },
-}
-
-impl V0InventoryProtocolViolation {
-    pub const fn code(&self) -> &'static str {
-        match self {
-            Self::ExecuteFrameByteLength { .. } => "AE-V0-RSVSTK-FRAME-LEN",
-            Self::ExecuteFrameDecodeRejected { .. } => "AE-V0-RSVSTK-FRAME-DECODE",
-            Self::ExecuteFrameTransportRejected { .. } => "AE-V0-RSVSTK-FRAME-STREAM",
-            Self::ExecuteFrameType { .. } => "AE-V0-RSVSTK-FRAME-TYPE",
-            Self::ExecuteFrameCarriesTransaction => "AE-V0-RSVSTK-FRAME-TXID",
-            Self::RpcPayloadByteLength { .. } => "AE-V0-RSVSTK-PAYLOAD-LEN",
-            Self::RpcPayloadDomain => "AE-V0-RSVSTK-PAYLOAD-DOMAIN",
-            Self::RpcPayloadFieldTruncated { .. } => "AE-V0-RSVSTK-PAYLOAD-FIELD",
-            Self::RpcPayloadFieldOffsetOverflow { .. } => "AE-V0-RSVSTK-PAYLOAD-OFFSET",
-        }
-    }
-
-    fn message(&self) -> String {
-        match self {
-            Self::ExecuteFrameByteLength { expected, actual } => format!(
-                "V0 Inventory.ReserveStock protocol rejection [{}]: execute frame byte length {actual} does not match fixed bounded length {expected}",
-                self.code()
-            ),
-            Self::ExecuteFrameDecodeRejected { reason } => format!(
-                "V0 Inventory.ReserveStock protocol rejection [{}]: execute frame decode rejected: {reason}",
-                self.code()
-            ),
-            Self::ExecuteFrameTransportRejected { reason } => format!(
-                "V0 Inventory.ReserveStock protocol rejection [{}]: execute frame stream policy rejected: {reason}",
-                self.code()
-            ),
-            Self::ExecuteFrameType { actual } => format!(
-                "V0 Inventory.ReserveStock protocol rejection [{}]: execute frame type must be RpcExecuteRequest, got {actual:?}",
-                self.code()
-            ),
-            Self::ExecuteFrameCarriesTransaction => format!(
-                "V0 Inventory.ReserveStock protocol rejection [{}]: execute frame must be pre-transaction and omit transaction evidence",
-                self.code()
-            ),
-            Self::RpcPayloadByteLength { expected, actual } => format!(
-                "V0 Inventory.ReserveStock protocol rejection [{}]: RPC payload byte length {actual} does not match fixed bounded length {expected}",
-                self.code()
-            ),
-            Self::RpcPayloadDomain => format!(
-                "V0 Inventory.ReserveStock protocol rejection [{}]: RPC payload domain tag mismatch",
-                self.code()
-            ),
-            Self::RpcPayloadFieldTruncated { field } => format!(
-                "V0 Inventory.ReserveStock protocol rejection [{}]: RPC payload field '{field}' is truncated",
-                self.code()
-            ),
-            Self::RpcPayloadFieldOffsetOverflow { field } => format!(
-                "V0 Inventory.ReserveStock protocol rejection [{}]: RPC payload field '{field}' offset overflow",
-                self.code()
-            ),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct V0InventoryReserveStockRpcPayload {
-    pub product_id: i64,
-    pub quantity: i64,
-}
-
-impl V0InventoryReserveStockRpcPayload {
-    pub fn new(product_id: i64, quantity: i64) -> AndromedaResult<Self> {
-        let payload = Self {
-            product_id,
-            quantity,
-        };
-        payload.validate()?;
-        Ok(payload)
-    }
-
-    pub fn from_command(command: ReserveStockCommand) -> AndromedaResult<Self> {
-        command.validate()?;
-        Self::new(command.product_id, command.quantity)
-    }
-
-    pub fn to_command(self) -> ReserveStockCommand {
-        ReserveStockCommand {
-            product_id: self.product_id,
-            quantity: self.quantity,
-        }
-    }
-
-    pub fn encode(self) -> AndromedaResult<Vec<u8>> {
-        self.validate()?;
-        let mut bytes = Vec::with_capacity(V0_RPC_EXECUTE_PAYLOAD_DOMAIN.len() + 1 + 16);
-        bytes.extend_from_slice(V0_RPC_EXECUTE_PAYLOAD_DOMAIN);
-        bytes.push(0);
-        bytes.extend_from_slice(&self.product_id.to_le_bytes());
-        bytes.extend_from_slice(&self.quantity.to_le_bytes());
-        Ok(bytes)
-    }
-
-    pub fn decode(bytes: &[u8]) -> AndromedaResult<Self> {
-        let expected_len = V0_RPC_EXECUTE_PAYLOAD_LEN;
-        if bytes.len() != expected_len {
-            return Err(v0_protocol_error(
-                V0InventoryProtocolViolation::RpcPayloadByteLength {
-                    expected: expected_len,
-                    actual: bytes.len(),
-                },
-            ));
-        }
-        if !bytes.starts_with(V0_RPC_EXECUTE_PAYLOAD_DOMAIN)
-            || bytes[V0_RPC_EXECUTE_PAYLOAD_DOMAIN.len()] != 0
-        {
-            return Err(v0_protocol_error(
-                V0InventoryProtocolViolation::RpcPayloadDomain,
-            ));
-        }
-
-        let data = &bytes[V0_RPC_EXECUTE_PAYLOAD_DOMAIN.len() + 1..];
-        let product_id = decode_v0_i64_field(data, 0, "product id")?;
-        let quantity = decode_v0_i64_field(data, 8, "quantity")?;
-        Self::new(product_id, quantity)
-    }
-
-    fn validate(self) -> AndromedaResult<()> {
-        self.to_command().validate()
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct V0InventoryRecoverableOutcome {
     pub srpl_plan: ExecutableProcedurePlan,
     pub effect: ReserveStockEffect,
     pub product_stock_commit: InventoryProductStockCommitEvidence,
-    pub product_stock_redo: Option<InventoryProductStockDurableRedoEvidence>,
+    pub product_stock_redo: InventoryProductStockDurableRedoEvidence,
     pub vertical: VerticalInvocationOutcome,
     pub command_frame: FrameBytes,
     pub result_frames: Vec<FrameBytes>,
@@ -184,6 +44,80 @@ pub struct V0InventoryRecoverableOutcome {
 impl V0InventoryRecoverableOutcome {
     pub fn durable_lsn(&self) -> Option<Lsn> {
         self.vertical.completion.durable_lsn
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct V0InventoryReserveStockExecutableProcedure {
+    pub contract: ProcedureContract,
+    pub binding: ProcedureContractBinding,
+    pub srpl_source_digest: [u8; 32],
+    pub srpl_plan: ExecutableProcedurePlan,
+}
+
+impl V0InventoryReserveStockExecutableProcedure {
+    pub fn bind_from_srpl_source(
+        srpl_source: &str,
+        catalog: &CatalogSnapshot,
+        contract: &ProcedureContract,
+    ) -> AndromedaResult<Self> {
+        let srpl_ir = compile_narrow_procedure_signature(srpl_source).map_err(|diagnostic| {
+            AndromedaError::new(
+                AndromedaErrorKind::Srpl,
+                format!(
+                    "V0 Inventory.ReserveStock SRPL compilation failed during {:?}: {}",
+                    diagnostic.phase, diagnostic.message
+                ),
+            )
+        })?;
+        let srpl_plan = bind_executable_procedure_plan(&srpl_ir, catalog)?;
+        let executable = Self {
+            contract: contract.clone(),
+            binding: contract.validated_binding()?,
+            srpl_source_digest: sha256(srpl_source.as_bytes()),
+            srpl_plan,
+        };
+        executable.validate()?;
+        Ok(executable)
+    }
+
+    pub fn validate(&self) -> AndromedaResult<()> {
+        self.contract.validate_binding(&self.binding)?;
+        self.srpl_plan.validate()?;
+
+        if self.srpl_source_digest == [0; 32] {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "V0 executable procedure requires non-zero SRPL source digest evidence",
+            ));
+        }
+
+        if self.srpl_plan.evidence.procedure_contract != self.contract.as_ref() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "V0 executable procedure plan contract evidence does not match its contract",
+            ));
+        }
+
+        if self.srpl_plan.evidence.catalog_version != self.binding.catalog_version {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "V0 executable procedure plan catalog version does not match binding evidence",
+            ));
+        }
+
+        if self.srpl_plan.evidence.procedure_object != self.contract.object {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "V0 executable procedure plan object evidence does not match its contract",
+            ));
+        }
+
+        Ok(())
+    }
+
+    pub fn contract(&self) -> &ProcedureContract {
+        &self.contract
     }
 }
 
@@ -227,9 +161,7 @@ where
     pub fn execute_encoded_inventory_reserve_stock(
         &mut self,
         encoded_execute_frame: &[u8],
-        srpl_source: &str,
-        catalog: &CatalogSnapshot,
-        contract: &ProcedureContract,
+        procedure: &V0InventoryReserveStockExecutableProcedure,
         request: InvocationRequest,
         context: &InvocationContext,
         observed_stock: InventoryStock,
@@ -237,9 +169,7 @@ where
         let mut product_stock = v0_product_stock_store_from_cold_snapshot(observed_stock)?;
         self.execute_encoded_inventory_reserve_stock_with_product_stock(
             encoded_execute_frame,
-            srpl_source,
-            catalog,
-            contract,
+            procedure,
             request,
             context,
             &mut product_stock,
@@ -253,9 +183,7 @@ where
     pub fn execute_encoded_inventory_reserve_stock_with_product_stock<P>(
         &mut self,
         encoded_execute_frame: &[u8],
-        srpl_source: &str,
-        catalog: &CatalogSnapshot,
-        contract: &ProcedureContract,
+        procedure: &V0InventoryReserveStockExecutableProcedure,
         request: InvocationRequest,
         context: &InvocationContext,
         product_stock: &mut P,
@@ -263,26 +191,11 @@ where
     where
         P: InventoryProductStockStore,
     {
+        procedure.validate()?;
+        let contract = procedure.contract();
         let command_frame = decode_v0_execute_frame(encoded_execute_frame)?;
         let command =
             V0InventoryReserveStockRpcPayload::decode(&command_frame.payload)?.to_command();
-        let srpl_ir = compile_narrow_procedure_signature(srpl_source).map_err(|diagnostic| {
-            AndromedaError::new(
-                AndromedaErrorKind::Srpl,
-                format!(
-                    "V0 Inventory.ReserveStock SRPL compilation failed during {:?}: {}",
-                    diagnostic.phase, diagnostic.message
-                ),
-            )
-        })?;
-        let srpl_plan = bind_executable_procedure_plan(&srpl_ir, catalog)?;
-
-        if srpl_plan.evidence.procedure_contract != contract.as_ref() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
-                "V0 Inventory.ReserveStock SRPL plan contract evidence does not match the runtime contract",
-            ));
-        }
 
         validate_v0_reserve_stock_before_product_stock_prepare(&request, context, contract)?;
 
@@ -291,9 +204,7 @@ where
             product_stock.prepared_reserve_stock_redo_template(&prepared)?;
         let effect = prepared.effect.clone();
         let mut local_procedure = effect.to_local_procedure(contract)?;
-        if let Some(template) = &product_stock_redo_template {
-            local_procedure.mutation_payload = template.encode_template()?;
-        }
+        local_procedure.mutation_payload = product_stock_redo_template.encode_template()?;
         let vertical = match self
             .local
             .execute_authorized(request, &local_procedure, context)
@@ -312,35 +223,30 @@ where
         })?;
         let product_stock_commit =
             InventoryProductStockCommitEvidence::new(vertical.transaction_id, durable_lsn)?;
-        let product_stock_redo = if let Some(template) = product_stock_redo_template {
-            let wal_evidence = vertical.wal_evidence.ok_or_else(|| {
-                AndromedaError::new(
-                    AndromedaErrorKind::Storage,
-                    "V0 ProductStock publication requires local WAL evidence for storage redo",
-                )
-            })?;
-            let redo_record_lsn = wal_evidence.mutation_lsn.ok_or_else(|| {
-                AndromedaError::new(
-                    AndromedaErrorKind::Storage,
-                    "V0 ProductStock publication requires a durable row redo WAL record LSN",
-                )
-            })?;
-            let redo_payload = template.materialize_heap_redo_payload(redo_record_lsn)?;
-            let redo = InventoryProductStockDurableRedoEvidence::new(
-                vertical.transaction_id,
-                durable_lsn,
-                redo_payload,
-            )?;
-            product_stock.publish_committed_reserve_stock_with_redo(
-                &prepared,
-                product_stock_commit,
-                redo.clone(),
-            )?;
-            Some(redo)
-        } else {
-            product_stock.publish_committed_reserve_stock(&prepared, product_stock_commit)?;
-            None
-        };
+        let wal_evidence = vertical.wal_evidence.ok_or_else(|| {
+            AndromedaError::new(
+                AndromedaErrorKind::Storage,
+                "V0 ProductStock publication requires local WAL evidence for storage redo",
+            )
+        })?;
+        let redo_record_lsn = wal_evidence.mutation_lsn.ok_or_else(|| {
+            AndromedaError::new(
+                AndromedaErrorKind::Storage,
+                "V0 ProductStock publication requires a durable row redo WAL record LSN",
+            )
+        })?;
+        let redo_payload =
+            product_stock_redo_template.materialize_heap_redo_payload(redo_record_lsn)?;
+        let product_stock_redo = InventoryProductStockDurableRedoEvidence::new(
+            vertical.transaction_id,
+            durable_lsn,
+            redo_payload,
+        )?;
+        product_stock.publish_committed_reserve_stock_with_redo(
+            &prepared,
+            product_stock_commit,
+            product_stock_redo.clone(),
+        )?;
         let tx_id = vertical
             .completion
             .transaction_state
@@ -354,7 +260,7 @@ where
         )?;
 
         Ok(V0InventoryRecoverableOutcome {
-            srpl_plan,
+            srpl_plan: procedure.srpl_plan.clone(),
             effect,
             product_stock_commit,
             product_stock_redo,
@@ -371,9 +277,7 @@ where
     pub fn execute_encoded_inventory_reserve_stock_observed(
         &mut self,
         encoded_execute_frame: &[u8],
-        srpl_source: &str,
-        catalog: &CatalogSnapshot,
-        contract: &ProcedureContract,
+        procedure: &V0InventoryReserveStockExecutableProcedure,
         request: InvocationRequest,
         context: &InvocationContext,
         observed_stock: InventoryStock,
@@ -382,9 +286,7 @@ where
         let mut emitter = EventEmitter::new(sink);
         self.execute_encoded_inventory_reserve_stock_observed_with_emitter(
             encoded_execute_frame,
-            srpl_source,
-            catalog,
-            contract,
+            procedure,
             request,
             context,
             observed_stock,
@@ -399,9 +301,7 @@ where
     pub fn execute_encoded_inventory_reserve_stock_observed_with_product_stock<P>(
         &mut self,
         encoded_execute_frame: &[u8],
-        srpl_source: &str,
-        catalog: &CatalogSnapshot,
-        contract: &ProcedureContract,
+        procedure: &V0InventoryReserveStockExecutableProcedure,
         request: InvocationRequest,
         context: &InvocationContext,
         product_stock: &mut P,
@@ -413,9 +313,7 @@ where
         let mut emitter = EventEmitter::new(sink);
         self.execute_encoded_inventory_reserve_stock_observed_with_product_stock_and_emitter(
             encoded_execute_frame,
-            srpl_source,
-            catalog,
-            contract,
+            procedure,
             request,
             context,
             product_stock,
@@ -430,9 +328,7 @@ where
     pub fn execute_encoded_inventory_reserve_stock_observed_with_emitter<S: EventSink>(
         &mut self,
         encoded_execute_frame: &[u8],
-        srpl_source: &str,
-        catalog: &CatalogSnapshot,
-        contract: &ProcedureContract,
+        procedure: &V0InventoryReserveStockExecutableProcedure,
         request: InvocationRequest,
         context: &InvocationContext,
         observed_stock: InventoryStock,
@@ -441,9 +337,7 @@ where
         let mut product_stock = v0_product_stock_store_from_cold_snapshot(observed_stock)?;
         self.execute_encoded_inventory_reserve_stock_observed_with_product_stock_and_emitter(
             encoded_execute_frame,
-            srpl_source,
-            catalog,
-            contract,
+            procedure,
             request,
             context,
             &mut product_stock,
@@ -461,9 +355,7 @@ where
     >(
         &mut self,
         encoded_execute_frame: &[u8],
-        srpl_source: &str,
-        catalog: &CatalogSnapshot,
-        contract: &ProcedureContract,
+        procedure: &V0InventoryReserveStockExecutableProcedure,
         request: InvocationRequest,
         context: &InvocationContext,
         product_stock: &mut P,
@@ -472,13 +364,13 @@ where
     where
         P: InventoryProductStockStore,
     {
+        procedure.validate()?;
+        let contract = procedure.contract();
         let rejection_request = request.clone();
         let rejection_context = context.clone();
         let outcome = match self.execute_encoded_inventory_reserve_stock_with_product_stock(
             encoded_execute_frame,
-            srpl_source,
-            catalog,
-            contract,
+            procedure,
             request,
             context,
             product_stock,
@@ -520,310 +412,15 @@ pub fn inventory_reserve_stock_v0_pdf_srpl_source() -> &'static str {
     "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool) begin ensure Inventory.ProductStock Stock where ProductId = Stock.ProductId and Stock.AvailableQuantity >= Quantity else fail InsufficientStock; update Inventory.ProductStock set AvailableQuantity = Stock.AvailableQuantity - Quantity where ProductId = Stock.ProductId affected rows 1; return Reservation (Reserved); end;"
 }
 
-pub fn encode_inventory_reserve_stock_v0_execute_frame(
-    request_id: RequestId,
-    session_id: SessionId,
-    payload: V0InventoryReserveStockRpcPayload,
-) -> AndromedaResult<Vec<u8>> {
-    let payload = payload.encode()?;
-    FrameCodec::encode(&FrameBytes {
-        header: FrameHeader {
-            frame_type: FrameType::RpcExecuteRequest,
-            request_id,
-            session_id,
-            tx_id: None,
-            payload_length: payload.len() as u64,
-            flags: 0,
-            header_crc: FRAME_HEADER_CRC_UNCHECKED,
-        },
-        payload,
-    })
-}
-
-pub fn decode_v0_execute_frame(encoded_execute_frame: &[u8]) -> AndromedaResult<FrameBytes> {
-    if encoded_execute_frame.len() != V0_RPC_EXECUTE_FRAME_LEN {
-        return Err(v0_protocol_error(
-            V0InventoryProtocolViolation::ExecuteFrameByteLength {
-                expected: V0_RPC_EXECUTE_FRAME_LEN,
-                actual: encoded_execute_frame.len(),
-            },
-        ));
-    }
-
-    let frame = FrameCodec::decode(encoded_execute_frame).map_err(|error| {
-        v0_protocol_error(V0InventoryProtocolViolation::ExecuteFrameDecodeRejected {
-            reason: error.message().to_string(),
-        })
-    })?;
-    frame
-        .validate(StreamRole::CommandBidirectional)
-        .map_err(|error| {
-            v0_protocol_error(
-                V0InventoryProtocolViolation::ExecuteFrameTransportRejected {
-                    reason: error.message().to_string(),
-                },
-            )
-        })?;
-    if frame.header.frame_type != FrameType::RpcExecuteRequest {
-        return Err(v0_protocol_error(
-            V0InventoryProtocolViolation::ExecuteFrameType {
-                actual: frame.header.frame_type,
-            },
-        ));
-    }
-    if frame.header.tx_id.is_some() {
-        return Err(v0_protocol_error(
-            V0InventoryProtocolViolation::ExecuteFrameCarriesTransaction,
-        ));
-    }
-    Ok(frame)
-}
-
-fn encode_v0_result_frames(
-    request_id: RequestId,
-    session_id: SessionId,
-    tx_id: Option<TransactionId>,
-    effect: &ReserveStockEffect,
-    vertical: &VerticalInvocationOutcome,
-) -> AndromedaResult<Vec<FrameBytes>> {
-    let completion = vertical.completion;
-    let durable_lsn = completion.durable_lsn.ok_or_else(|| {
-        AndromedaError::new(
-            AndromedaErrorKind::Transaction,
-            "V0 committed completion requires a durable LSN",
-        )
-    })?;
-    let mut frames = vec![
-        result_frame(
-            FrameType::RpcMetadata,
-            request_id,
-            session_id,
-            tx_id,
-            encode_v0_metadata_payload(vertical),
-        ),
-        result_frame(
-            FrameType::RpcBatch,
-            request_id,
-            session_id,
-            tx_id,
-            encode_v0_batch_payload(effect),
-        ),
-        result_frame(
-            FrameType::RpcCompletion,
-            request_id,
-            session_id,
-            tx_id,
-            encode_v0_completion_payload(completion.rows_affected.unwrap_or_default(), durable_lsn),
-        ),
-    ];
-
-    for frame in &mut frames {
-        frame.header.payload_length = frame.payload.len() as u64;
-    }
-    validate_result_stream_sequence_with_metadata_policy(
-        &frames,
-        ResultStreamMetadataPolicy::RowBatchRequired,
-    )?;
-    Ok(frames)
-}
-
-fn result_frame(
-    frame_type: FrameType,
-    request_id: RequestId,
-    session_id: SessionId,
-    tx_id: Option<TransactionId>,
-    payload: Vec<u8>,
-) -> FrameBytes {
-    FrameBytes {
-        header: FrameHeader {
-            frame_type,
-            request_id,
-            session_id,
-            tx_id,
-            payload_length: payload.len() as u64,
-            flags: 0,
-            header_crc: FRAME_HEADER_CRC_UNCHECKED,
-        },
-        payload,
-    }
-}
-
-fn encode_v0_metadata_payload(vertical: &VerticalInvocationOutcome) -> Vec<u8> {
-    let metadata = vertical.result_metadata;
-    let mut bytes = Vec::with_capacity(V0_METADATA_PAYLOAD_DOMAIN.len() + 1 + 32);
-    bytes.extend_from_slice(V0_METADATA_PAYLOAD_DOMAIN);
-    bytes.push(0);
-    bytes.extend_from_slice(&metadata.stream_id.to_le_bytes());
-    bytes.extend_from_slice(&metadata.row_count_exact.unwrap_or_default().to_le_bytes());
-    bytes.extend_from_slice(&metadata.column_count.to_le_bytes());
-    bytes.push(u8::from(metadata.row_count_exact.is_some()));
-    bytes
-}
-
-fn encode_v0_batch_payload(effect: &ReserveStockEffect) -> Vec<u8> {
-    let mut bytes = Vec::with_capacity(V0_BATCH_PAYLOAD_DOMAIN.len() + 1 + 33);
-    bytes.extend_from_slice(V0_BATCH_PAYLOAD_DOMAIN);
-    bytes.push(0);
-    bytes.extend_from_slice(&effect.result.product_id.to_le_bytes());
-    bytes.extend_from_slice(&effect.result.quantity.to_le_bytes());
-    bytes.extend_from_slice(&effect.result.remaining_quantity.to_le_bytes());
-    bytes.push(u8::from(effect.result.reserved));
-    bytes.extend_from_slice(&effect.rows_affected.to_le_bytes());
-    bytes
-}
-
-fn encode_v0_completion_payload(rows_affected: u64, durable_lsn: Lsn) -> Vec<u8> {
-    let mut bytes = Vec::with_capacity(V0_COMPLETION_PAYLOAD_DOMAIN.len() + 1 + 16);
-    bytes.extend_from_slice(V0_COMPLETION_PAYLOAD_DOMAIN);
-    bytes.push(0);
-    bytes.extend_from_slice(&rows_affected.to_le_bytes());
-    bytes.extend_from_slice(&durable_lsn.get().to_le_bytes());
-    bytes
-}
-
-fn emit_v0_outcome_events<S: EventSink>(
-    outcome: &V0InventoryRecoverableOutcome,
-    emitter: &mut EventEmitter<S>,
-) -> AndromedaResult<()> {
-    let protocol = ProtocolCorrelation {
-        protocol_version: Some(1),
-        stream_id: Some(outcome.vertical.result_metadata.stream_id),
-        stream_role: Some(StreamRole::ResultUnidirectional as u16),
-        frame_type: Some(FrameType::RpcCompletion.wire_code() as u16),
-        payload_kind: Some(FrameType::RpcCompletion.wire_code() as u16),
-        sequence: Some(3),
-    };
-    let pre_transaction_correlation = EventCorrelation {
-        request_id: Some(outcome.command_frame.header.request_id),
-        session_id: Some(outcome.command_frame.header.session_id),
-        contract_hash: Some(outcome.srpl_plan.evidence.procedure_contract.contract_hash),
-        catalog_version: Some(outcome.srpl_plan.evidence.catalog_version),
-        catalog_object_id: Some(outcome.srpl_plan.evidence.procedure_object.object_id),
-        transaction_id: None,
-        durable_lsn: None,
-        protocol: Some(protocol),
-    };
-    let transaction_id = outcome.vertical.transaction_id;
-    let durable_lsn = outcome.vertical.completion.durable_lsn.ok_or_else(|| {
-        AndromedaError::new(
-            AndromedaErrorKind::Transaction,
-            "V0 completion event requires durable LSN evidence",
-        )
-    })?;
-    let completion_correlation = EventCorrelation {
-        transaction_id: Some(transaction_id),
-        durable_lsn: Some(durable_lsn.get()),
-        ..pre_transaction_correlation
-    };
-    emitter.emit(
-        pre_transaction_correlation,
-        TraceEvent::Decision(outcome.vertical.admission_trace.clone()),
-    )?;
-    emitter.emit(
-        pre_transaction_correlation,
-        TraceEvent::Decision(outcome.vertical.contract_trace.clone()),
-    )?;
-    if let Some(authorization_trace) = &outcome.vertical.authorization_trace {
-        emitter.emit(
-            pre_transaction_correlation,
-            TraceEvent::Decision(authorization_trace.clone()),
-        )?;
-    }
-    emitter.emit(
-        completion_correlation,
-        TraceEvent::CompletionEmitted(CompletionEmittedTrace {
-            trace_id: outcome.vertical.completion.trace_id,
-            protocol,
-            completion_code: Some(1),
-            committed: true,
-            durable_lsn: Some(durable_lsn.get()),
-            reason: "V0 Inventory.ReserveStock emitted committed completion after durable WAL"
-                .to_string(),
-        }),
-    )?;
-    Ok(())
-}
-
-/// Emit typed evidence for V0 invocation refusals that happen before a
-/// transaction exists.
-///
-/// This helper is intentionally limited to the C4 pre-transaction surface:
-/// contract/admission rejections and authorization denials. It never fabricates
-/// transaction or durable-LSN correlation, and it lets [`EventEmitter`] surface
-/// sink/envelope failures to the caller.
-pub fn emit_v0_inventory_reserve_stock_pre_transaction_refusal<S: EventSink>(
-    request: &InvocationRequest,
-    context: &InvocationContext,
-    request_id: RequestId,
-    session_id: SessionId,
+pub fn bind_inventory_reserve_stock_v0_pdf_executable_procedure(
+    catalog: &CatalogSnapshot,
     contract: &ProcedureContract,
-    reject: &InvocationReject,
-    emitter: &mut EventEmitter<S>,
-) -> AndromedaResult<()> {
-    let protocol = v0_execute_request_protocol();
-    let correlation = EventCorrelation {
-        request_id: Some(request_id),
-        session_id: Some(session_id),
-        contract_hash: Some(request.expected_contract_hash),
-        catalog_version: Some(request.catalog_version),
-        catalog_object_id: Some(contract.object.object_id),
-        transaction_id: None,
-        durable_lsn: None,
-        protocol: Some(protocol),
-    };
-
-    match reject.status {
-        CompletionStatus::ContractRejected | CompletionStatus::FailedBeforeTransaction => {
-            if let Some(trace) = reject.contract_rejected_trace(
-                context.trace_id,
-                protocol,
-                V0_INVENTORY_RESERVE_STOCK_CONTRACT_KIND,
-                reject.status.terminal_code() as u16,
-            ) {
-                emitter.emit(correlation, TraceEvent::ContractRejected(trace))?;
-            }
-        }
-        CompletionStatus::PermissionDenied => {
-            if let Some(trace) = reject.authorization_denial_trace(
-                context.trace_id,
-                denied_permission_for_context(contract, context),
-            ) {
-                emitter.emit(correlation, TraceEvent::AuthorizationDenied(trace))?;
-            }
-        }
-        CompletionStatus::SystemUnavailable
-        | CompletionStatus::Cancelled
-        | CompletionStatus::Poisoned
-        | CompletionStatus::Committed
-        | CompletionStatus::RolledBack => {}
-    }
-
-    if request.invocation_id.get() != 0 {
-        emitter.emit(
-            correlation,
-            TraceEvent::ExecutionTransition(reject.project_transition(
-                request.invocation_id,
-                context.trace_id,
-                Some(request_id),
-                Some(session_id),
-            )),
-        )?;
-    }
-
-    Ok(())
-}
-
-fn v0_pre_transaction_reject_from_error(error: &AndromedaError) -> Option<InvocationReject> {
-    let status = match error.kind() {
-        AndromedaErrorKind::Contract => CompletionStatus::ContractRejected,
-        AndromedaErrorKind::Security => CompletionStatus::PermissionDenied,
-        _ => return None,
-    };
-
-    Some(InvocationReject {
-        status,
-        reason: error.message().to_string(),
-    })
+) -> AndromedaResult<V0InventoryReserveStockExecutableProcedure> {
+    V0InventoryReserveStockExecutableProcedure::bind_from_srpl_source(
+        inventory_reserve_stock_v0_pdf_srpl_source(),
+        catalog,
+        contract,
+    )
 }
 
 fn validate_v0_reserve_stock_before_product_stock_prepare(
@@ -847,57 +444,4 @@ fn validate_v0_reserve_stock_before_product_stock_prepare(
         ));
     }
     Ok(())
-}
-
-fn v0_execute_request_protocol() -> ProtocolCorrelation {
-    ProtocolCorrelation {
-        protocol_version: Some(1),
-        stream_id: None,
-        stream_role: Some(StreamRole::CommandBidirectional as u16),
-        frame_type: Some(FrameType::RpcExecuteRequest.wire_code() as u16),
-        payload_kind: Some(FrameType::RpcExecuteRequest.wire_code() as u16),
-        sequence: Some(1),
-    }
-}
-
-fn denied_permission_for_context(
-    contract: &ProcedureContract,
-    context: &InvocationContext,
-) -> String {
-    contract
-        .required_permissions
-        .iter()
-        .find(|permission| !context.grants(permission))
-        .cloned()
-        .unwrap_or_else(|| "unknown required permission".to_string())
-}
-
-fn decode_v0_i64_field(data: &[u8], offset: usize, field: &str) -> AndromedaResult<i64> {
-    let end = offset.checked_add(8).ok_or_else(|| {
-        v0_protocol_error(
-            V0InventoryProtocolViolation::RpcPayloadFieldOffsetOverflow {
-                field: stable_v0_payload_field(field),
-            },
-        )
-    })?;
-    let bytes = data.get(offset..end).ok_or_else(|| {
-        v0_protocol_error(V0InventoryProtocolViolation::RpcPayloadFieldTruncated {
-            field: stable_v0_payload_field(field),
-        })
-    })?;
-    let mut value = [0_u8; 8];
-    value.copy_from_slice(bytes);
-    Ok(i64::from_le_bytes(value))
-}
-
-fn stable_v0_payload_field(field: &str) -> &'static str {
-    match field {
-        "product id" => "product_id",
-        "quantity" => "quantity",
-        _ => "unknown",
-    }
-}
-
-fn v0_protocol_error(violation: V0InventoryProtocolViolation) -> AndromedaError {
-    AndromedaError::new(AndromedaErrorKind::Protocol, violation.message())
 }

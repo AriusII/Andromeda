@@ -28,7 +28,7 @@ mod typed_envelope;
 mod zero_rtt;
 
 pub mod frame;
-pub mod stream_concurrency;
+mod stream_concurrency;
 mod transport;
 
 #[cfg(feature = "runtime-quinn")]

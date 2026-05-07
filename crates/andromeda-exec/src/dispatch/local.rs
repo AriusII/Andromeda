@@ -2,10 +2,7 @@ use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, Transa
 use andromeda_storage::{Lsn, WalRecordKind};
 use andromeda_tx::{IsolationLevel, TransactionEvent, TransactionState, TransactionStateMachine};
 
-use crate::{
-    InvocationWal, LocalHeapRowInsertRedoTemplate, encode_exec_tx_commit_payload,
-    encode_exec_tx_rollback_payload,
-};
+use crate::{InvocationWal, LocalHeapRowInsertRedoTemplate, encode_exec_tx_commit_payload};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalDispatchPlan {
@@ -16,7 +13,7 @@ pub struct LocalDispatchPlan {
 
 impl LocalDispatchPlan {
     pub fn has_mutation(&self) -> bool {
-        self.rows_affected > 0
+        !self.mutation_payload.is_empty()
     }
 
     pub fn validate(&self) -> AndromedaResult<()> {
@@ -27,7 +24,7 @@ impl LocalDispatchPlan {
             ));
         }
 
-        if self.has_mutation() && self.mutation_payload.is_empty() {
+        if self.rows_affected > 0 && self.mutation_payload.is_empty() {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Execution,
                 "mutation payload must exist when rows are affected",
@@ -324,11 +321,10 @@ where
         };
 
         tx.apply(TransactionEvent::RollbackRequested)?;
-        let rollback_payload = encode_exec_tx_rollback_payload(0);
         let rollback_lsn = self.wal.append(
             WalRecordKind::TxRollback,
             Some(plan.transaction_id),
-            &rollback_payload,
+            &plan.rollback_payload,
         )?;
         let durable_lsn = self.wal.flush_through(rollback_lsn)?;
         let wal_evidence = RollbackWalDurabilityEvidence {

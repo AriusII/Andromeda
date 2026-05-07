@@ -35,20 +35,18 @@ pub mod write_ahead_log;
 pub use backup::*;
 #[allow(deprecated)]
 pub use btree::{
-    BTREE_DURABLE_FORMAT_PROMOTED, BTreeConcurrencyPolicy, BTreeConfig, BTreeError, BTreeIndex,
+    BTREE_DURABLE_FORMAT_PROMOTED, BTREE_NODE_V1_FORMAT_VERSION, BTREE_NODE_V1_HEADER_LEN,
+    BTREE_NODE_V1_MAGIC, BTreeConcurrencyPolicy, BTreeConfig, BTreeError, BTreeIndex,
     BTreeIndexEngine, BTreeIndexMetadata, BTreeIndexNode, BTreeLatchLevel, BTreeLatchMode,
-    BTreeLatchTarget, BTreeMvccInteraction, BTreeNodeImpl, BTreeOperationKind,
-    BTreePanicPoisonBehavior, BTreeRangeCursor, BTreeRestartReason, BTreeScanConsistency,
-    BTreeStatistics, ColumnId, InMemoryBTreeIndexEngine, IndexId, KeyValuePair, RowId,
-    node_format_v1::{
-        BTREE_NODE_V1_FORMAT_VERSION, BTREE_NODE_V1_HEADER_LEN, BTREE_NODE_V1_MAGIC,
-        BTreeNodeHeaderV1, BTreeNodeKindV1, BTreeNodeV1,
-    },
+    BTreeLatchTarget, BTreeMvccInteraction, BTreeNodeHeaderV1, BTreeNodeImpl, BTreeNodeKindV1,
+    BTreeNodeV1, BTreeOperationKind, BTreePanicPoisonBehavior, BTreeRangeCursor,
+    BTreeRestartReason, BTreeScanConsistency, BTreeStatistics, ColumnId, InMemoryBTreeIndexEngine,
+    IndexId, KeyValuePair, RowId,
 };
 pub use btree_format_validation::{
     BTreeKeyFormatIdentity, BTreeOperationType, KeyV1FormatValidator,
 };
-pub use btree_key_codec::{Key, KeyCodec, KeyComparator, KeyType};
+pub use btree_key_codec::{Key, KeyCodec, KeyComparator};
 pub use buffer_pool::{
     BufferFrame, BufferFrameId, BufferFrameState, BufferPool, BufferPoolConfig, BufferPoolError,
     BufferPoolManager, ClockEvictionCandidate, ClockEvictionPolicy, DirtyEntry,

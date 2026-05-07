@@ -32,11 +32,12 @@ impl FileDurableAuditWalSink {
         replay_records(&self.path, query)
     }
 
-    pub fn query(
+    pub fn replay_with_evidence(
         &self,
         query: &DurableAuditReplayQuery,
-    ) -> DurableAuditSinkResult<Vec<DurableAuditReplayRecord>> {
-        self.replay(query)
+        window: DurableAuditReplayWindow,
+    ) -> DurableAuditSinkResult<DurableAuditReplayResult> {
+        replay_records_with_evidence(&self.path, query, window)
     }
 
     pub fn query_with_evidence(
@@ -44,7 +45,7 @@ impl FileDurableAuditWalSink {
         query: &DurableAuditReplayQuery,
         window: DurableAuditReplayWindow,
     ) -> DurableAuditSinkResult<DurableAuditReplayResult> {
-        replay_records_with_evidence(&self.path, query, window)
+        self.replay_with_evidence(query, window)
     }
 
     pub fn compact(

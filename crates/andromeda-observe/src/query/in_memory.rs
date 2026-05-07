@@ -7,8 +7,8 @@ use super::{
 use crate::InMemoryEventSink;
 
 impl InMemoryEventSink {
-    /// Run a bounded trace query over recorded in-memory envelopes.
-    pub fn query_trace_events(&self, spec: &TraceQuerySpec) -> AndromedaResult<TraceQueryResult> {
+    /// Run a bounded administrative trace inspection over recorded envelopes.
+    pub fn inspect_trace_events(&self, spec: &TraceQuerySpec) -> AndromedaResult<TraceQueryResult> {
         spec.validate()?;
 
         let mut skipped = 0usize;

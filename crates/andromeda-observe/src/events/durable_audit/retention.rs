@@ -21,10 +21,6 @@ pub struct DurableAuditRetentionPolicy {
 }
 
 impl DurableAuditRetentionPolicy {
-    pub fn retain_all() -> Self {
-        Self::default()
-    }
-
     pub fn retain_record_lsn_at_or_after(min_record_lsn: u64) -> Self {
         Self {
             min_record_lsn: Some(min_record_lsn),
@@ -32,22 +28,8 @@ impl DurableAuditRetentionPolicy {
         }
     }
 
-    pub fn retain_durable_lsn_at_or_after(min_durable_lsn: u64) -> Self {
-        Self {
-            min_durable_lsn: Some(min_durable_lsn),
-            ..Self::default()
-        }
-    }
-
     pub fn with_forensic_hold_preserved(mut self, preserve_forensic_hold: bool) -> Self {
         self.preserve_forensic_hold = preserve_forensic_hold;
-        self
-    }
-
-    pub fn with_retention_boundary(mut self, boundary: DurableAuditRetentionBoundary) -> Self {
-        if !self.retain_boundaries.contains(&boundary) {
-            self.retain_boundaries.push(boundary);
-        }
         self
     }
 

@@ -4,51 +4,13 @@ use andromeda_core::{
 };
 
 use super::{
-    CriticalDecisionKind, EventEnvelope, EventId, EventSink, SecurityAuditOutcome,
-    SecurityAuditTrace, TraceEvent, WalOperation, observe_error,
+    EventEnvelope, EventId, EventSink, SecurityAuditOutcome, SecurityAuditTrace, TraceEvent,
+    observe_error,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ProcedureLifecycleCursor {
-    Empty,
-    AdmissionAccepted,
-    Authorized,
-    IoAdmitted,
-    WalFlushed,
-    CommitVisible,
-    RollbackDurable,
-    CompletionEmitted,
-    RecoveryStarted,
-    PreTransactionRejected,
-    PreTransactionCompletionEmitted,
-}
+mod lifecycle;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ProcedureLifecycleStep {
-    AdmissionAccepted,
-    Authorized,
-    IoAdmitted,
-    WalFlushed {
-        transaction_id: TransactionId,
-        durable_lsn: u64,
-    },
-    CommitVisible {
-        transaction_id: TransactionId,
-        durable_lsn: u64,
-    },
-    RollbackDurable {
-        transaction_id: TransactionId,
-        durable_lsn: u64,
-    },
-    CompletionEmitted {
-        committed: bool,
-        durable_lsn: Option<u64>,
-    },
-    RecoveryStarted {
-        last_durable_lsn: u64,
-    },
-    PreTransactionRejected,
-}
+use lifecycle::{ProcedureLifecycleCursor, ProcedureLifecycleStep};
 
 /// Bounded in-memory validator for procedure lifecycle event order.
 #[derive(Debug, Clone)]
@@ -78,26 +40,17 @@ impl Default for InMemoryEventSequence {
 
 impl InMemoryEventSequence {
     pub const fn new() -> Self {
-        Self {
-            events: Vec::new(),
-            max_events: None,
-            cursor: ProcedureLifecycleCursor::Empty,
-            last_event_id: None,
-            security_audit_seen: false,
-            request_id: None,
-            session_id: None,
-            contract_hash: None,
-            catalog_version: None,
-            catalog_object_id: None,
-            transaction_id: None,
-            durable_lsn: None,
-        }
+        Self::with_max_events(None)
     }
 
     pub const fn with_capacity_limit(max_events: usize) -> Self {
+        Self::with_max_events(Some(max_events))
+    }
+
+    const fn with_max_events(max_events: Option<usize>) -> Self {
         Self {
             events: Vec::new(),
-            max_events: Some(max_events),
+            max_events,
             cursor: ProcedureLifecycleCursor::Empty,
             last_event_id: None,
             security_audit_seen: false,
@@ -459,73 +412,6 @@ impl InMemoryEventSequence {
             | ProcedureLifecycleStep::IoAdmitted
             | ProcedureLifecycleStep::CompletionEmitted { .. }
             | ProcedureLifecycleStep::PreTransactionRejected => {}
-        }
-    }
-}
-
-impl ProcedureLifecycleStep {
-    fn from_event(event: &EventEnvelope) -> AndromedaResult<Self> {
-        match &event.event {
-            TraceEvent::Decision(trace)
-                if trace.decision == CriticalDecisionKind::ContractValidation =>
-            {
-                Ok(Self::AdmissionAccepted)
-            }
-            TraceEvent::Decision(trace)
-                if trace.decision == CriticalDecisionKind::SecurityAuthorization =>
-            {
-                Ok(Self::Authorized)
-            }
-            TraceEvent::SecurityAudit(trace) if trace.outcome == SecurityAuditOutcome::Allowed => {
-                Ok(Self::Authorized)
-            }
-            TraceEvent::Decision(trace)
-                if matches!(
-                    trace.decision,
-                    CriticalDecisionKind::IoBudgetValidation
-                        | CriticalDecisionKind::IoPlacementDecision
-                ) =>
-            {
-                Ok(Self::IoAdmitted)
-            }
-            TraceEvent::IoBudgetDecision(trace) if trace.accepted => Ok(Self::IoAdmitted),
-            TraceEvent::IoPlacementDecision(trace) if trace.accepted => Ok(Self::IoAdmitted),
-            TraceEvent::WalEvent(trace) if trace.operation == WalOperation::Flush => {
-                let transaction_id = trace.transaction_id.ok_or_else(|| {
-                    observe_error("procedure lifecycle WAL flush requires transaction_id evidence")
-                })?;
-                let durable_lsn = trace.durable_lsn.ok_or_else(|| {
-                    observe_error("procedure lifecycle WAL flush requires durable_lsn evidence")
-                })?;
-                Ok(Self::WalFlushed {
-                    transaction_id,
-                    durable_lsn,
-                })
-            }
-            TraceEvent::CommitVisible(trace) => Ok(Self::CommitVisible {
-                transaction_id: trace.transaction_id,
-                durable_lsn: trace.durable_commit_lsn,
-            }),
-            TraceEvent::RollbackDurable(trace) => Ok(Self::RollbackDurable {
-                transaction_id: trace.transaction_id,
-                durable_lsn: trace.durable_rollback_lsn,
-            }),
-            TraceEvent::CompletionEmitted(trace) => Ok(Self::CompletionEmitted {
-                committed: trace.committed,
-                durable_lsn: trace.durable_lsn,
-            }),
-            TraceEvent::RecoveryStartup(trace) => Ok(Self::RecoveryStarted {
-                last_durable_lsn: trace.last_durable_lsn,
-            }),
-            TraceEvent::ContractRejected(_)
-            | TraceEvent::AuthorizationDenied(_)
-            | TraceEvent::SecurityAudit(SecurityAuditTrace {
-                outcome: SecurityAuditOutcome::Denied,
-                ..
-            }) => Ok(Self::PreTransactionRejected),
-            _ => Err(observe_error(
-                "event is not accepted as procedure lifecycle sequence evidence",
-            )),
         }
     }
 }

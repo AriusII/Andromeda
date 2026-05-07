@@ -15,7 +15,7 @@ pub use executor::{InventoryBusinessMvccStore, InventoryReserveStockExecutor};
 pub use product_stock::{
     HeapInventoryProductStockStore, InventoryProductStockCommitEvidence,
     InventoryProductStockDurableRedoEvidence, InventoryProductStockReservationIntent,
-    InventoryProductStockStore, ObservedInventoryProductStockStore,
+    InventoryProductStockStore,
 };
 pub use types::{
     InventoryReservation, InventoryReserveStockMvccDecision, InventoryReserveStockMvccEvidence,

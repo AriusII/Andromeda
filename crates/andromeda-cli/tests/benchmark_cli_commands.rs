@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 use andromeda_bench::{DEFAULT_TEMP_BYTES, MAX_TEMP_BYTES};
-use andromeda_cli::cmd::dispatch_command;
+use andromeda_cli::dispatch_command;
 use std::process::{Command, Output};
 
 #[test]

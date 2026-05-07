@@ -200,10 +200,10 @@ fn procedure_store_records_runtime_invocation_metrics_against_full_binding() {
     assert!(stored.is_observed_feedback());
     assert!(!stored.is_authoritative_decision());
     assert!(!stored.can_select_plan_alone());
-    assert_eq!(stored.counters.evidence_role().as_tag(), 0x02);
-    assert!(stored.counters.is_observed_feedback());
-    assert!(!stored.counters.is_authoritative_decision());
-    assert!(!stored.counters.can_select_plan_alone());
+    assert_eq!(stored.evidence_role().as_tag(), 0x02);
+    assert!(stored.is_observed_feedback());
+    assert!(!stored.is_authoritative_decision());
+    assert!(!stored.can_select_plan_alone());
     assert_eq!(stored.expected_contract_hash(), contract.contract_hash);
     assert_eq!(stored.expected_catalog_version(), CatalogVersion::new(7));
     assert_eq!(stored.expected_stats_version(), StatsVersion::new(1));

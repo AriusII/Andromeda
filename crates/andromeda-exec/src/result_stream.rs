@@ -1,24 +1,18 @@
 //! Backpressured result stream with bounded queue and durable completion evidence.
 
+use crate::result::completion_status_transaction_state;
 use crate::{CompletionStatus, ResultStreamMetadata};
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId};
 use andromeda_proto::StructuredObjectHeader;
 use andromeda_quic::{BackpressureReason, BackpressureSignal};
 use andromeda_storage::Lsn;
-use andromeda_tx::TransactionState;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use tokio::sync::mpsc;
+use tokio::sync::{Mutex, RwLock, mpsc};
 
 pub const DEFAULT_RESULT_STREAM_CAPACITY: usize = 1024;
 pub const MAX_RESULT_STREAM_CAPACITY: usize = 1_000_000;
 pub const MIN_RESULT_STREAM_CAPACITY: usize = 1;
-
-#[derive(Debug)]
-enum ResultStreamMessage {
-    Row(StructuredObjectHeader),
-    Completion,
-}
 
 #[derive(Debug, Clone)]
 pub struct ResultStreamMetrics {
@@ -27,24 +21,6 @@ pub struct ResultStreamMetrics {
     pub total_rows_consumed: u64,
     pub backpressure_count: u64,
     pub peak_queue_depth: usize,
-    pub memory_usage_bytes: u64,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct StreamCompletion {
-    pub status: CompletionStatus,
-    pub lsn: u64,
-    pub row_count: u64,
-}
-
-pub struct BackpressuredResultStream {
-    metadata: Option<ResultStreamMetadata>,
-    tx: mpsc::Sender<ResultStreamMessage>,
-    rx: Arc<tokio::sync::Mutex<mpsc::Receiver<ResultStreamMessage>>>,
-    completion: Arc<tokio::sync::Mutex<Option<StreamCompletion>>>,
-    completed: Arc<AtomicBool>,
-    metrics: Arc<ResultStreamMetricsInner>,
-    capacity: usize,
 }
 
 struct ResultStreamMetricsInner {
@@ -53,7 +29,157 @@ struct ResultStreamMetricsInner {
     total_rows_consumed: AtomicU64,
     backpressure_count: AtomicU64,
     peak_queue_depth: AtomicUsize,
-    memory_usage_bytes: AtomicU64,
+}
+
+impl ResultStreamMetricsInner {
+    fn new() -> Self {
+        Self {
+            queue_depth: AtomicUsize::new(0),
+            total_rows_pushed: AtomicU64::new(0),
+            total_rows_consumed: AtomicU64::new(0),
+            backpressure_count: AtomicU64::new(0),
+            peak_queue_depth: AtomicUsize::new(0),
+        }
+    }
+
+    fn record_row_pushed(&self) {
+        self.total_rows_pushed.fetch_add(1, Ordering::Relaxed);
+        self.update_queue_depth();
+    }
+
+    fn record_row_consumed(&self) {
+        self.total_rows_consumed.fetch_add(1, Ordering::Relaxed);
+        self.update_queue_depth();
+    }
+
+    fn record_backpressure(&self) {
+        self.backpressure_count.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn total_rows_pushed(&self) -> u64 {
+        self.total_rows_pushed.load(Ordering::Acquire)
+    }
+
+    fn queue_depth(&self) -> usize {
+        self.queue_depth.load(Ordering::Relaxed)
+    }
+
+    fn snapshot(&self) -> ResultStreamMetrics {
+        ResultStreamMetrics {
+            queue_depth: self.queue_depth.load(Ordering::Relaxed),
+            total_rows_pushed: self.total_rows_pushed.load(Ordering::Relaxed),
+            total_rows_consumed: self.total_rows_consumed.load(Ordering::Relaxed),
+            backpressure_count: self.backpressure_count.load(Ordering::Relaxed),
+            peak_queue_depth: self.peak_queue_depth.load(Ordering::Relaxed),
+        }
+    }
+
+    fn update_queue_depth(&self) {
+        let pushed = self.total_rows_pushed.load(Ordering::Relaxed) as usize;
+        let consumed = self.total_rows_consumed.load(Ordering::Relaxed) as usize;
+        let depth = pushed.saturating_sub(consumed);
+
+        self.queue_depth.store(depth, Ordering::Relaxed);
+
+        let mut peak = self.peak_queue_depth.load(Ordering::Relaxed);
+        while depth > peak {
+            match self.peak_queue_depth.compare_exchange(
+                peak,
+                depth,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => break,
+                Err(actual) => peak = actual,
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+enum ResultStreamMessage {
+    Row(StructuredObjectHeader),
+    Completion(StreamCompletion),
+}
+
+impl ResultStreamMessage {
+    fn row(row: StructuredObjectHeader) -> Self {
+        Self::Row(row)
+    }
+
+    const fn completion(completion: StreamCompletion) -> Self {
+        Self::Completion(completion)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ResultStreamFrame {
+    Row(StructuredObjectHeader),
+    Completion(StreamCompletion),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StreamCompletion {
+    status: CompletionStatus,
+    lsn: u64,
+    row_count: u64,
+}
+
+impl StreamCompletion {
+    pub fn new(status: CompletionStatus, lsn: u64, row_count: u64) -> AndromedaResult<Self> {
+        if !status.is_transactional_terminal() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Transaction,
+                format!(
+                    "result stream completion requires terminal status; got {:?}",
+                    status
+                ),
+            ));
+        }
+
+        if lsn == 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Storage,
+                "result stream completion requires nonzero durable LSN evidence",
+            ));
+        }
+
+        if status == CompletionStatus::RolledBack && row_count != 0 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Transaction,
+                "rolled-back result stream completion must report zero rows",
+            ));
+        }
+
+        Ok(Self {
+            status,
+            lsn,
+            row_count,
+        })
+    }
+
+    pub const fn status(&self) -> CompletionStatus {
+        self.status
+    }
+
+    pub const fn lsn(&self) -> u64 {
+        self.lsn
+    }
+
+    pub const fn row_count(&self) -> u64 {
+        self.row_count
+    }
+}
+
+pub struct BackpressuredResultStream {
+    metadata: Option<ResultStreamMetadata>,
+    tx: mpsc::Sender<ResultStreamMessage>,
+    rx: Arc<Mutex<mpsc::Receiver<ResultStreamMessage>>>,
+    completion: Arc<Mutex<Option<StreamCompletion>>>,
+    completed: Arc<AtomicBool>,
+    emission_gate: Arc<RwLock<()>>,
+    metrics: Arc<ResultStreamMetricsInner>,
+    capacity: usize,
 }
 
 impl BackpressuredResultStream {
@@ -73,17 +199,11 @@ impl BackpressuredResultStream {
         Ok(Self {
             metadata: None,
             tx,
-            rx: Arc::new(tokio::sync::Mutex::new(rx)),
-            completion: Arc::new(tokio::sync::Mutex::new(None)),
+            rx: Arc::new(Mutex::new(rx)),
+            completion: Arc::new(Mutex::new(None)),
             completed: Arc::new(AtomicBool::new(false)),
-            metrics: Arc::new(ResultStreamMetricsInner {
-                queue_depth: AtomicUsize::new(0),
-                total_rows_pushed: AtomicU64::new(0),
-                total_rows_consumed: AtomicU64::new(0),
-                backpressure_count: AtomicU64::new(0),
-                peak_queue_depth: AtomicUsize::new(0),
-                memory_usage_bytes: AtomicU64::new(0),
-            }),
+            emission_gate: Arc::new(RwLock::new(())),
+            metrics: Arc::new(ResultStreamMetricsInner::new()),
             capacity,
         })
     }
@@ -107,6 +227,8 @@ impl BackpressuredResultStream {
     }
 
     pub async fn push_row(&self, row: StructuredObjectHeader) -> AndromedaResult<()> {
+        let _admission = self.emission_gate.read().await;
+
         if self.completed.load(Ordering::Acquire) {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Protocol,
@@ -114,25 +236,15 @@ impl BackpressuredResultStream {
             ));
         }
 
-        if self.metadata.is_none() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Protocol,
-                "result stream metadata must be emitted before payload rows",
-            ));
-        }
+        self.validate_row_before_enqueue(&row)?;
 
-        let message = match self.tx.try_send(ResultStreamMessage::Row(row)) {
+        let message = match self.tx.try_send(ResultStreamMessage::row(row)) {
             Ok(_) => {
-                self.metrics
-                    .total_rows_pushed
-                    .fetch_add(1, Ordering::Relaxed);
-                self.update_queue_depth_metric();
+                self.metrics.record_row_pushed();
                 return Ok(());
             }
             Err(mpsc::error::TrySendError::Full(message)) => {
-                self.metrics
-                    .backpressure_count
-                    .fetch_add(1, Ordering::Relaxed);
+                self.metrics.record_backpressure();
                 message
             }
             Err(mpsc::error::TrySendError::Closed(_message)) => {
@@ -150,14 +262,13 @@ impl BackpressuredResultStream {
             )
         })?;
 
-        self.metrics
-            .total_rows_pushed
-            .fetch_add(1, Ordering::Relaxed);
-        self.update_queue_depth_metric();
+        self.metrics.record_row_pushed();
         Ok(())
     }
 
     pub async fn complete(&self, status: CompletionStatus, lsn: u64) -> AndromedaResult<()> {
+        let _terminal = self.emission_gate.write().await;
+
         if !status.is_transactional_terminal() {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Transaction,
@@ -190,7 +301,7 @@ impl BackpressuredResultStream {
             ));
         }
 
-        let row_count = self.metrics.total_rows_pushed.load(Ordering::Acquire);
+        let row_count = self.metrics.total_rows_pushed();
         if let Err(error) =
             metadata.validate_terminal_completion(transaction_state, Lsn::new(lsn), row_count)
         {
@@ -198,18 +309,18 @@ impl BackpressuredResultStream {
             return Err(error);
         }
 
-        let completion = StreamCompletion {
-            status,
-            lsn,
-            row_count,
-        };
+        let completion = StreamCompletion::new(status, lsn, row_count)?;
 
         {
             let mut guard = self.completion.lock().await;
             *guard = Some(completion);
         }
 
-        if let Err(error) = self.tx.send(ResultStreamMessage::Completion).await {
+        if let Err(error) = self
+            .tx
+            .send(ResultStreamMessage::completion(completion))
+            .await
+        {
             self.completed.store(false, Ordering::Release);
             let mut guard = self.completion.lock().await;
             *guard = None;
@@ -227,33 +338,33 @@ impl BackpressuredResultStream {
         *guard
     }
 
-    pub async fn next_row(&self) -> Option<StructuredObjectHeader> {
+    pub(crate) async fn next_frame(&self) -> Option<ResultStreamFrame> {
         let mut rx = self.rx.lock().await;
         match rx.recv().await {
             Some(ResultStreamMessage::Row(row)) => {
-                self.metrics
-                    .total_rows_consumed
-                    .fetch_add(1, Ordering::Relaxed);
-                self.update_queue_depth_metric();
-                Some(row)
+                self.metrics.record_row_consumed();
+                Some(ResultStreamFrame::Row(row))
             }
-            Some(ResultStreamMessage::Completion) | None => None,
+            Some(ResultStreamMessage::Completion(completion)) => {
+                Some(ResultStreamFrame::Completion(completion))
+            }
+            None => None,
+        }
+    }
+
+    pub async fn next_row(&self) -> Option<StructuredObjectHeader> {
+        match self.next_frame().await {
+            Some(ResultStreamFrame::Row(row)) => Some(row),
+            Some(ResultStreamFrame::Completion(_)) | None => None,
         }
     }
 
     pub fn metrics(&self) -> ResultStreamMetrics {
-        ResultStreamMetrics {
-            queue_depth: self.metrics.queue_depth.load(Ordering::Relaxed),
-            total_rows_pushed: self.metrics.total_rows_pushed.load(Ordering::Relaxed),
-            total_rows_consumed: self.metrics.total_rows_consumed.load(Ordering::Relaxed),
-            backpressure_count: self.metrics.backpressure_count.load(Ordering::Relaxed),
-            peak_queue_depth: self.metrics.peak_queue_depth.load(Ordering::Relaxed),
-            memory_usage_bytes: self.metrics.memory_usage_bytes.load(Ordering::Relaxed),
-        }
+        self.metrics.snapshot()
     }
 
     pub fn is_backpressured(&self) -> bool {
-        let depth = self.metrics.queue_depth.load(Ordering::Relaxed);
+        let depth = self.metrics.queue_depth();
         depth > (self.capacity * 3 / 4)
     }
 
@@ -271,41 +382,27 @@ impl BackpressuredResultStream {
         })
     }
 
-    fn update_queue_depth_metric(&self) {
-        let pushed = self.metrics.total_rows_pushed.load(Ordering::Relaxed) as usize;
-        let consumed = self.metrics.total_rows_consumed.load(Ordering::Relaxed) as usize;
-        let depth = pushed.saturating_sub(consumed);
+    fn validate_row_before_enqueue(&self, row: &StructuredObjectHeader) -> AndromedaResult<()> {
+        let metadata = self.metadata.ok_or_else(|| {
+            AndromedaError::new(
+                AndromedaErrorKind::Protocol,
+                "result stream metadata must be emitted before payload rows",
+            )
+        })?;
 
-        self.metrics.queue_depth.store(depth, Ordering::Relaxed);
+        row.validate()?;
 
-        let mut peak = self.metrics.peak_queue_depth.load(Ordering::Relaxed);
-        while depth > peak {
-            match self.metrics.peak_queue_depth.compare_exchange(
-                peak,
-                depth,
-                Ordering::Relaxed,
-                Ordering::Relaxed,
-            ) {
-                Ok(_) => break,
-                Err(actual) => peak = actual,
-            }
+        if row.column_count != metadata.column_count {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                format!(
+                    "result stream row column_count {} does not match metadata column_count {}",
+                    row.column_count, metadata.column_count
+                ),
+            ));
         }
-    }
-}
 
-fn completion_status_transaction_state(
-    status: CompletionStatus,
-) -> AndromedaResult<TransactionState> {
-    match status {
-        CompletionStatus::Committed => Ok(TransactionState::Committed),
-        CompletionStatus::RolledBack => Ok(TransactionState::RolledBack),
-        _ => Err(AndromedaError::new(
-            AndromedaErrorKind::Transaction,
-            format!(
-                "result stream completion requires terminal status; got {:?}",
-                status
-            ),
-        )),
+        Ok(())
     }
 }
 
@@ -332,14 +429,13 @@ mod tests {
     }
 
     #[test]
-    fn test_completion_type_construction() {
-        let completion = StreamCompletion {
-            status: CompletionStatus::Committed,
-            lsn: 42,
-            row_count: 10,
-        };
-        assert_eq!(completion.status, CompletionStatus::Committed);
-        assert_eq!(completion.lsn, 42);
-        assert_eq!(completion.row_count, 10);
+    fn test_completion_type_construction_is_validated() {
+        let completion = StreamCompletion::new(CompletionStatus::Committed, 42, 10).unwrap();
+        assert_eq!(completion.status(), CompletionStatus::Committed);
+        assert_eq!(completion.lsn(), 42);
+        assert_eq!(completion.row_count(), 10);
+
+        assert!(StreamCompletion::new(CompletionStatus::Committed, 0, 10).is_err());
+        assert!(StreamCompletion::new(CompletionStatus::RolledBack, 42, 1).is_err());
     }
 }

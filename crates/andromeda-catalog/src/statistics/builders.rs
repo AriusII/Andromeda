@@ -1,8 +1,15 @@
-use std::collections::HashSet;
+mod common;
+#[cfg(test)]
+mod tests;
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
-use super::{HistogramBucket, HistogramPlaceholder, SkewMarker, StatsValidationError};
+use common::{
+    datum_to_key, empty_histogram, estimate_ndv, infer_skew, keyable_keys, single_bucket_histogram,
+    sort_values_by_key, stats_validation_error,
+};
+
+use super::{HistogramBucket, HistogramPlaceholder, SkewMarker};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Datum {
@@ -28,38 +35,9 @@ pub trait HistogramBuilderTrait: Send + Sync {
     fn estimated_memory_bytes(&self) -> u64;
 }
 
-fn datum_to_key(value: &Datum) -> AndromedaResult<u64> {
-    match value {
-        Datum::Null => Err(AndromedaError::new(
-            AndromedaErrorKind::Catalog,
-            "datum_to_key: cannot key null value",
-        )),
-        Datum::Int8(v) => Ok((*v as i64) as u64),
-        Datum::Int16(v) => Ok((*v as i64) as u64),
-        Datum::Int32(v) => Ok((*v as i64) as u64),
-        Datum::Int64(v) => Ok(*v as u64),
-        Datum::UInt8(v) => Ok(*v as u64),
-        Datum::UInt16(v) => Ok(*v as u64),
-        Datum::UInt32(v) => Ok(*v as u64),
-        Datum::UInt64(v) => Ok(*v),
-        Datum::Float32(v) => Ok(v.to_bits() as u64),
-        Datum::Float64(v) => Ok(v.to_bits()),
-        Datum::Bool(v) => Ok(if *v { 1 } else { 0 }),
-        Datum::Bytes(_) | Datum::Text(_) => Err(AndromedaError::new(
-            AndromedaErrorKind::Catalog,
-            "datum_to_key: unsupported type for histogram bucketing",
-        )),
-    }
-}
-
-fn stats_validation_error(err: StatsValidationError) -> AndromedaError {
-    AndromedaError::new(AndromedaErrorKind::Catalog, err.to_string())
-}
-
 pub struct EquiWidthHistogramBuilder {
     bucket_count: u32,
     values: Vec<Datum>,
-    null_count: u64,
 }
 
 impl EquiWidthHistogramBuilder {
@@ -73,102 +51,41 @@ impl EquiWidthHistogramBuilder {
         Ok(Self {
             bucket_count,
             values: Vec::new(),
-            null_count: 0,
         })
     }
 
     pub fn finalize(self) -> AndromedaResult<HistogramPlaceholder> {
         HistogramBuilderTrait::finalize(Box::new(self))
     }
-
-    fn estimate_ndv(values: &[Datum]) -> AndromedaResult<u64> {
-        let mut seen = HashSet::new();
-        for v in values {
-            let key = format!("{:?}", v);
-            seen.insert(key);
-        }
-        Ok(seen.len() as u64)
-    }
-
-    fn infer_skew(values: &[Datum]) -> SkewMarker {
-        if values.is_empty() {
-            return SkewMarker::Unknown;
-        }
-
-        let ndv_exact = {
-            let mut s = HashSet::new();
-            for v in values {
-                s.insert(format!("{:?}", v));
-            }
-            s.len() as f64
-        };
-
-        let total = values.len() as f64;
-        let ndv_ratio = ndv_exact / total;
-
-        match ndv_ratio {
-            r if r > 0.9 => SkewMarker::Uniform,
-            r if r > 0.7 => SkewMarker::LowSkew,
-            r if r > 0.3 => SkewMarker::ModerateSkew,
-            r if r > 0.05 => SkewMarker::HighSkew,
-            _ => SkewMarker::HeavyHitter,
-        }
-    }
 }
 
 impl HistogramBuilderTrait for EquiWidthHistogramBuilder {
     fn add_value(&mut self, value: &Datum) -> AndromedaResult<()> {
         if matches!(value, Datum::Null) {
-            self.null_count += 1;
-        } else {
-            self.values.push(value.clone());
+            return Ok(());
         }
+        self.values.push(value.clone());
         Ok(())
     }
 
     fn finalize(mut self: Box<Self>) -> AndromedaResult<HistogramPlaceholder> {
         if self.values.is_empty() {
-            return HistogramPlaceholder::new(
-                vec![HistogramBucket {
-                    lower_inclusive: 0,
-                    upper_inclusive: 0,
-                    row_estimate: 0,
-                    distinct_estimate: 0,
-                }],
-                SkewMarker::Unknown,
-            )
-            .map_err(stats_validation_error);
+            return empty_histogram();
         }
 
-        self.values.sort_by(|a, b| {
-            let a_key = datum_to_key(a);
-            let b_key = datum_to_key(b);
-            match (a_key, b_key) {
-                (Ok(a), Ok(b)) => a.cmp(&b),
-                _ => format!("{:?}", a).cmp(&format!("{:?}", b)),
-            }
-        });
+        sort_values_by_key(&mut self.values);
 
-        let ndv = Self::estimate_ndv(&self.values)?;
-
-        let mut keys: Vec<u64> = Vec::new();
-        for datum in &self.values {
-            if let Ok(k) = datum_to_key(datum) {
-                keys.push(k);
-            }
-        }
+        let ndv = estimate_ndv(self.values.iter());
+        let mut keys = keyable_keys(&self.values);
 
         if keys.is_empty() {
-            return HistogramPlaceholder::new(
-                vec![HistogramBucket {
-                    lower_inclusive: 0,
-                    upper_inclusive: 0,
-                    row_estimate: self.values.len() as u64,
-                    distinct_estimate: ndv,
-                }],
+            return single_bucket_histogram(
+                0,
+                0,
+                self.values.len() as u64,
+                ndv,
                 SkewMarker::Unknown,
-            )
-            .map_err(stats_validation_error);
+            );
         }
 
         keys.sort_unstable();
@@ -205,12 +122,7 @@ impl HistogramBuilderTrait for EquiWidthHistogramBuilder {
                 .collect();
 
             if !bucket_values.is_empty() {
-                let bucket_ndv = Self::estimate_ndv(
-                    &bucket_values
-                        .iter()
-                        .map(|v| (*v).clone())
-                        .collect::<Vec<_>>(),
-                )?;
+                let bucket_ndv = estimate_ndv(bucket_values.iter().copied());
 
                 buckets.push(HistogramBucket {
                     lower_inclusive: lower_key,
@@ -222,16 +134,16 @@ impl HistogramBuilderTrait for EquiWidthHistogramBuilder {
         }
 
         if buckets.is_empty() {
-            buckets.push(HistogramBucket {
-                lower_inclusive: min_key,
-                upper_inclusive: max_key,
-                row_estimate: self.values.len() as u64,
-                distinct_estimate: ndv,
-            });
+            return single_bucket_histogram(
+                min_key,
+                max_key,
+                self.values.len() as u64,
+                ndv,
+                SkewMarker::Unknown,
+            );
         }
 
-        HistogramPlaceholder::new(buckets, Self::infer_skew(&self.values))
-            .map_err(stats_validation_error)
+        HistogramPlaceholder::new(buckets, infer_skew(&self.values)).map_err(stats_validation_error)
     }
 
     fn estimated_memory_bytes(&self) -> u64 {
@@ -242,7 +154,6 @@ impl HistogramBuilderTrait for EquiWidthHistogramBuilder {
 pub struct EquiDepthHistogramBuilder {
     bucket_count: u32,
     values: Vec<Datum>,
-    null_count: u64,
 }
 
 impl EquiDepthHistogramBuilder {
@@ -256,97 +167,42 @@ impl EquiDepthHistogramBuilder {
         Ok(Self {
             bucket_count,
             values: Vec::new(),
-            null_count: 0,
         })
     }
 
     pub fn finalize(self) -> AndromedaResult<HistogramPlaceholder> {
         HistogramBuilderTrait::finalize(Box::new(self))
     }
-
-    fn estimate_ndv(values: &[Datum]) -> AndromedaResult<u64> {
-        let mut seen = HashSet::new();
-        for v in values {
-            let key = format!("{:?}", v);
-            seen.insert(key);
-        }
-        Ok(seen.len() as u64)
-    }
-
-    fn infer_skew(values: &[Datum]) -> SkewMarker {
-        if values.is_empty() {
-            return SkewMarker::Unknown;
-        }
-
-        let ndv_exact = {
-            let mut s = HashSet::new();
-            for v in values {
-                s.insert(format!("{:?}", v));
-            }
-            s.len() as f64
-        };
-
-        let total = values.len() as f64;
-        let ndv_ratio = ndv_exact / total;
-
-        match ndv_ratio {
-            r if r > 0.9 => SkewMarker::Uniform,
-            r if r > 0.7 => SkewMarker::LowSkew,
-            r if r > 0.3 => SkewMarker::ModerateSkew,
-            r if r > 0.05 => SkewMarker::HighSkew,
-            _ => SkewMarker::HeavyHitter,
-        }
-    }
 }
 
 impl HistogramBuilderTrait for EquiDepthHistogramBuilder {
     fn add_value(&mut self, value: &Datum) -> AndromedaResult<()> {
         if matches!(value, Datum::Null) {
-            self.null_count += 1;
-        } else {
-            self.values.push(value.clone());
+            return Ok(());
         }
+        self.values.push(value.clone());
         Ok(())
     }
 
     fn finalize(mut self: Box<Self>) -> AndromedaResult<HistogramPlaceholder> {
         if self.values.is_empty() {
-            return HistogramPlaceholder::new(
-                vec![HistogramBucket {
-                    lower_inclusive: 0,
-                    upper_inclusive: 0,
-                    row_estimate: 0,
-                    distinct_estimate: 0,
-                }],
-                SkewMarker::Unknown,
-            )
-            .map_err(stats_validation_error);
+            return empty_histogram();
         }
 
-        self.values.sort_by(|a, b| {
-            let a_key = datum_to_key(a);
-            let b_key = datum_to_key(b);
-            match (a_key, b_key) {
-                (Ok(a), Ok(b)) => a.cmp(&b),
-                _ => format!("{:?}", a).cmp(&format!("{:?}", b)),
-            }
-        });
+        sort_values_by_key(&mut self.values);
 
-        let ndv = Self::estimate_ndv(&self.values)?;
+        let ndv = estimate_ndv(self.values.iter());
         let mut buckets = Vec::new();
         let bucket_count = (self.bucket_count as usize).min(self.values.len());
 
-        if bucket_count == 0 {
-            return HistogramPlaceholder::new(
-                vec![HistogramBucket {
-                    lower_inclusive: 0,
-                    upper_inclusive: 0,
-                    row_estimate: 0,
-                    distinct_estimate: 0,
-                }],
+        if keyable_keys(&self.values).is_empty() {
+            return single_bucket_histogram(
+                0,
+                0,
+                self.values.len() as u64,
+                ndv,
                 SkewMarker::Unknown,
-            )
-            .map_err(stats_validation_error);
+            );
         }
 
         let mut start_idx = 0usize;
@@ -367,7 +223,7 @@ impl HistogramBuilderTrait for EquiDepthHistogramBuilder {
             }
 
             let bucket_values = &self.values[start_idx..end_idx];
-            let bucket_ndv = Self::estimate_ndv(bucket_values)?;
+            let bucket_ndv = estimate_ndv(bucket_values.iter());
 
             let Some(first_value) = bucket_values.first() else {
                 return Err(AndromedaError::new(
@@ -396,148 +252,19 @@ impl HistogramBuilderTrait for EquiDepthHistogramBuilder {
         }
 
         if buckets.is_empty() {
-            buckets.push(HistogramBucket {
-                lower_inclusive: 0,
-                upper_inclusive: 0,
-                row_estimate: self.values.len() as u64,
-                distinct_estimate: ndv,
-            });
+            return single_bucket_histogram(
+                0,
+                0,
+                self.values.len() as u64,
+                ndv,
+                SkewMarker::Unknown,
+            );
         }
 
-        HistogramPlaceholder::new(buckets, Self::infer_skew(&self.values))
-            .map_err(stats_validation_error)
+        HistogramPlaceholder::new(buckets, infer_skew(&self.values)).map_err(stats_validation_error)
     }
 
     fn estimated_memory_bytes(&self) -> u64 {
         (self.values.len() as u64) * 48
-    }
-}
-
-#[cfg(test)]
-mod builder_tests {
-    use super::*;
-
-    #[test]
-    fn test_equiwidth_histogram_empty() {
-        let builder = EquiWidthHistogramBuilder::new(4).unwrap();
-        let result = builder.finalize();
-        assert!(result.is_ok());
-        let histo = result.unwrap();
-        assert!(!histo.buckets().is_empty());
-    }
-
-    #[test]
-    fn test_equiwidth_histogram_integers() {
-        let mut builder = EquiWidthHistogramBuilder::new(4).unwrap();
-        for i in 1..=100 {
-            builder.add_value(&Datum::Int64(i)).unwrap();
-        }
-        let result = builder.finalize();
-        assert!(result.is_ok());
-        let histo = result.unwrap();
-        assert!(!histo.buckets().is_empty());
-        assert!(histo.buckets().iter().any(|b| b.row_estimate > 0));
-    }
-
-    #[test]
-    fn test_equiwidth_with_nulls() {
-        let mut builder = EquiWidthHistogramBuilder::new(4).unwrap();
-        for i in 1..=50 {
-            builder.add_value(&Datum::Int64(i)).unwrap();
-        }
-        for _ in 0..50 {
-            builder.add_value(&Datum::Null).unwrap();
-        }
-        let result = builder.finalize();
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_equidepth_histogram_integers() {
-        let mut builder = EquiDepthHistogramBuilder::new(4).unwrap();
-        for i in 1..=100 {
-            builder.add_value(&Datum::Int64(i)).unwrap();
-        }
-        let result = builder.finalize();
-        assert!(result.is_ok());
-        let histo = result.unwrap();
-        assert!(!histo.buckets().is_empty());
-    }
-
-    #[test]
-    fn test_equidepth_balanced_buckets() {
-        let mut builder = EquiDepthHistogramBuilder::new(4).unwrap();
-        for i in 1..=100 {
-            builder.add_value(&Datum::Int64(i)).unwrap();
-        }
-        let result = builder.finalize();
-        assert!(result.is_ok());
-        let histo = result.unwrap();
-        let total_rows: u64 = histo.buckets().iter().map(|b| b.row_estimate).sum();
-        assert_eq!(total_rows, 100);
-    }
-
-    #[test]
-    fn test_builder_zero_buckets_fails() {
-        let result = EquiWidthHistogramBuilder::new(0);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_equidepth_builder_zero_buckets_fails() {
-        let result = EquiDepthHistogramBuilder::new(0);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_mixed_numeric_types() {
-        let mut builder = EquiWidthHistogramBuilder::new(4).unwrap();
-        builder.add_value(&Datum::Int32(10)).unwrap();
-        builder.add_value(&Datum::Int64(20)).unwrap();
-        builder.add_value(&Datum::UInt64(30)).unwrap();
-        let result = builder.finalize();
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_skew_inference_uniform() {
-        let mut builder = EquiWidthHistogramBuilder::new(4).unwrap();
-        for i in 1..=100 {
-            builder.add_value(&Datum::Int64(i)).unwrap();
-        }
-        let result = builder.finalize();
-        assert!(result.is_ok());
-        let histo = result.unwrap();
-        assert!(matches!(
-            histo.skew(),
-            SkewMarker::Uniform | SkewMarker::LowSkew
-        ));
-    }
-
-    #[test]
-    fn test_memory_estimation() {
-        let mut builder = EquiWidthHistogramBuilder::new(4).unwrap();
-        for i in 1..=1000 {
-            builder.add_value(&Datum::Int64(i)).unwrap();
-        }
-        let estimated = builder.estimated_memory_bytes();
-        assert!(estimated > 0);
-        assert!(estimated >= 1000 * 40);
-    }
-
-    #[test]
-    fn test_histogram_validation_invariants() {
-        let mut builder = EquiWidthHistogramBuilder::new(8).unwrap();
-        for i in 1..=256 {
-            builder.add_value(&Datum::Int64(i)).unwrap();
-        }
-        let result = builder.finalize();
-        assert!(result.is_ok());
-        let histo = result.unwrap();
-
-        for bucket in histo.buckets() {
-            assert!(bucket.lower_inclusive <= bucket.upper_inclusive);
-            assert!(bucket.distinct_estimate <= bucket.row_estimate);
-        }
     }
 }

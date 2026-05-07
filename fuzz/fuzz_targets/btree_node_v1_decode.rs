@@ -3,10 +3,12 @@
 use andromeda_storage::BTreeNodeV1;
 use libfuzzer_sys::fuzz_target;
 
+mod common;
+
+const MAX_BTREE_NODE_FUZZ_BYTES: usize = u16::MAX as usize;
+
 fuzz_target!(|data: &[u8]| {
-    if data.len() > u16::MAX as usize {
-        return;
-    }
+    let data = common::bounded_input(data, MAX_BTREE_NODE_FUZZ_BYTES);
 
     let Ok(decoded) = BTreeNodeV1::decode(data) else {
         return;

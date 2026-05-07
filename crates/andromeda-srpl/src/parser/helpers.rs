@@ -12,6 +12,18 @@ use crate::{
 
 use super::core::Parser;
 
+const EMPTY_IDENTIFIER_LIST_MESSAGE: &str = "SRPL identifier list must declare at least one value";
+const EMPTY_RESULT_STREAM_MESSAGE: &str = "SRPL result stream must declare at least one column";
+const OPTIONAL_CARDINALITY_MESSAGE: &str =
+    "SRPL optional cardinality must be written as `optional one`";
+const NONEMPTY_CARDINALITY_MESSAGE: &str =
+    "SRPL nonempty cardinality must be written as `nonempty many`";
+const RESERVED_ABSENCE_IDENTIFIER_MESSAGE: &str = concat!(
+    "SRPL V0 reserves absence keywords; ",
+    "model absence with explicit optional cardinality and branching"
+);
+const RESERVED_ABSENCE_IDENTIFIERS: &[&str] = &["null", "nullable", "optional", "option", "maybe"];
+
 impl Parser {
     /// Parse a dot-separated qualified name such as `Inventory.ReserveStock`.
     pub(super) fn parse_qualified_name(
@@ -75,26 +87,11 @@ impl Parser {
         &mut self,
         require_non_empty: bool,
     ) -> Result<Vec<Spanned<String>>, SrplDiagnostic> {
-        self.expect(TokenKind::LParen)?;
-        let mut values = Vec::new();
-        if self.match_kind(TokenKind::RParen).is_some() {
-            if require_non_empty {
-                return Err(self.error_at(
-                    SourceSpan::new(self.previous_end(), self.previous_end()),
-                    "SRPL identifier list must declare at least one value",
-                ));
-            }
-            return Ok(values);
-        }
-
-        loop {
-            values.push(self.parse_identifier_spanned()?);
-            if self.match_kind(TokenKind::Comma).is_some() {
-                continue;
-            }
-            self.expect(TokenKind::RParen)?;
-            return Ok(values);
-        }
+        self.parse_parenthesized_list(
+            require_non_empty,
+            EMPTY_IDENTIFIER_LIST_MESSAGE,
+            |parser, _ordinal| parser.parse_identifier_spanned(),
+        )
     }
 
     /// Parse a result stream declaration: `name cardinality (fields)`.
@@ -119,34 +116,51 @@ impl Parser {
         &mut self,
         require_non_empty: bool,
     ) -> Result<Vec<FieldAst>, SrplDiagnostic> {
+        self.parse_parenthesized_list(
+            require_non_empty,
+            EMPTY_RESULT_STREAM_MESSAGE,
+            |parser, ordinal| parser.parse_field(ordinal),
+        )
+    }
+
+    fn parse_parenthesized_list<T>(
+        &mut self,
+        require_non_empty: bool,
+        empty_message: &'static str,
+        mut parse_item: impl FnMut(&mut Self, u32) -> Result<T, SrplDiagnostic>,
+    ) -> Result<Vec<T>, SrplDiagnostic> {
         self.expect(TokenKind::LParen)?;
-        let mut fields = Vec::new();
+        let mut values = Vec::new();
         if self.match_kind(TokenKind::RParen).is_some() {
             if require_non_empty {
                 return Err(self.error_at(
                     SourceSpan::new(self.previous_end(), self.previous_end()),
-                    "SRPL result stream must declare at least one column",
+                    empty_message,
                 ));
             }
-            return Ok(fields);
+            return Ok(values);
         }
 
         loop {
-            let name = self.expect(TokenKind::Identifier)?;
-            self.reject_reserved_absence_identifier(&name.lexeme, name.span)?;
-            let data_type = self.parse_type()?;
-            fields.push(FieldAst {
-                name: Spanned::new(name.lexeme, name.span),
-                data_type,
-                ordinal: (fields.len() as u32),
-            });
+            values.push(parse_item(self, values.len() as u32)?);
 
             if self.match_kind(TokenKind::Comma).is_some() {
                 continue;
             }
             self.expect(TokenKind::RParen)?;
-            return Ok(fields);
+            return Ok(values);
         }
+    }
+
+    fn parse_field(&mut self, ordinal: u32) -> Result<FieldAst, SrplDiagnostic> {
+        let name = self.expect(TokenKind::Identifier)?;
+        self.reject_reserved_absence_identifier(&name.lexeme, name.span)?;
+        let data_type = self.parse_type()?;
+        Ok(FieldAst {
+            name: Spanned::new(name.lexeme, name.span),
+            data_type,
+            ordinal,
+        })
     }
 
     /// Parse a result cardinality token or phrase:
@@ -165,12 +179,9 @@ impl Parser {
             TokenKind::Many => Cardinality::Many,
             TokenKind::NonEmptyMany => Cardinality::NonEmptyMany,
             TokenKind::Identifier if token.lexeme.eq_ignore_ascii_case("optional") => {
-                let next = self.expect(TokenKind::One).map_err(|_| {
-                    self.error_at(
-                        token.span,
-                        "SRPL optional cardinality must be written as `optional one`",
-                    )
-                })?;
+                let next = self
+                    .expect(TokenKind::One)
+                    .map_err(|_| self.error_at(token.span, OPTIONAL_CARDINALITY_MESSAGE))?;
                 return Ok(Spanned::new(
                     Cardinality::OptionalOne,
                     SourceSpan::new(token.span.start, next.span.end),
@@ -180,12 +191,9 @@ impl Parser {
                 if token.lexeme.eq_ignore_ascii_case("nonempty")
                     || token.lexeme.eq_ignore_ascii_case("non_empty") =>
             {
-                let next = self.expect(TokenKind::Many).map_err(|_| {
-                    self.error_at(
-                        token.span,
-                        "SRPL nonempty cardinality must be written as `nonempty many`",
-                    )
-                })?;
+                let next = self
+                    .expect(TokenKind::Many)
+                    .map_err(|_| self.error_at(token.span, NONEMPTY_CARDINALITY_MESSAGE))?;
                 return Ok(Spanned::new(
                     Cardinality::NonEmptyMany,
                     SourceSpan::new(token.span.start, next.span.end),
@@ -202,14 +210,11 @@ impl Parser {
         lexeme: &str,
         span: SourceSpan,
     ) -> Result<(), SrplDiagnostic> {
-        if matches!(
-            lexeme.to_ascii_lowercase().as_str(),
-            "null" | "nullable" | "optional" | "option" | "maybe"
-        ) {
-            return Err(self.error_at(
-                span,
-                "SRPL V0 reserves absence keywords; model absence with explicit optional cardinality and branching",
-            ));
+        if RESERVED_ABSENCE_IDENTIFIERS
+            .iter()
+            .any(|reserved| lexeme.eq_ignore_ascii_case(reserved))
+        {
+            return Err(self.error_at(span, RESERVED_ABSENCE_IDENTIFIER_MESSAGE));
         }
 
         Ok(())

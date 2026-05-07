@@ -1,7 +1,7 @@
 use super::DurableAuditEventFamily;
 use crate::events::{AdminOperation, TraceEvent};
 
-pub fn durable_audit_family(event: &TraceEvent) -> Option<DurableAuditEventFamily> {
+pub(crate) fn durable_audit_family(event: &TraceEvent) -> Option<DurableAuditEventFamily> {
     match event {
         TraceEvent::SecurityAudit(_) => Some(DurableAuditEventFamily::SecurityDecision),
         TraceEvent::AdminOperation(trace) => Some(admin_operation_family(trace.operation)),

@@ -32,6 +32,8 @@ pub struct CostEstimate {
 }
 
 impl CostEstimate {
+    const COMPONENT_CONSISTENCY_TOLERANCE: f64 = 0.000_001;
+
     /// A zero-cost estimate (used as a baseline / default).
     pub const fn zero() -> Self {
         Self {
@@ -44,12 +46,24 @@ impl CostEstimate {
 
     /// True when all components are non-negative and the total is consistent.
     pub fn is_valid(&self) -> bool {
-        self.cpu_cost >= 0.0
-            && self.io_cost >= 0.0
-            && self.memory_cost >= 0.0
-            && self.total_cost >= 0.0
-            && !self.total_cost.is_nan()
-            && !self.total_cost.is_infinite()
+        if !self.cpu_cost.is_finite()
+            || !self.io_cost.is_finite()
+            || !self.memory_cost.is_finite()
+            || !self.total_cost.is_finite()
+        {
+            return false;
+        }
+
+        if self.cpu_cost < 0.0
+            || self.io_cost < 0.0
+            || self.memory_cost < 0.0
+            || self.total_cost < 0.0
+        {
+            return false;
+        }
+
+        let component_total = self.cpu_cost + self.io_cost + self.memory_cost;
+        (component_total - self.total_cost).abs() <= Self::COMPONENT_CONSISTENCY_TOLERANCE
     }
 }
 
@@ -229,6 +243,46 @@ mod tests {
         let cost = estimate_without_stats(&ir);
         assert!(cost.is_valid());
         assert_eq!(cost.total_cost, 0.0);
+    }
+
+    #[test]
+    fn cost_estimate_rejects_invalid_or_inconsistent_components() {
+        assert!(
+            !CostEstimate {
+                cpu_cost: f64::NAN,
+                io_cost: 0.0,
+                memory_cost: 0.0,
+                total_cost: 0.0,
+            }
+            .is_valid()
+        );
+        assert!(
+            !CostEstimate {
+                cpu_cost: 1.0,
+                io_cost: f64::INFINITY,
+                memory_cost: 0.0,
+                total_cost: 1.0,
+            }
+            .is_valid()
+        );
+        assert!(
+            !CostEstimate {
+                cpu_cost: -1.0,
+                io_cost: 0.0,
+                memory_cost: 0.0,
+                total_cost: 0.0,
+            }
+            .is_valid()
+        );
+        assert!(
+            !CostEstimate {
+                cpu_cost: 1.0,
+                io_cost: 1.0,
+                memory_cost: 1.0,
+                total_cost: 2.0,
+            }
+            .is_valid()
+        );
     }
 
     // T-CM-06 / T-CM-07: cost accuracy thresholds

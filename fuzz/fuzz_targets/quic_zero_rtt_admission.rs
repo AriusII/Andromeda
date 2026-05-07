@@ -5,10 +5,12 @@ use andromeda_quic::{
 };
 use libfuzzer_sys::fuzz_target;
 
+mod common;
+
 const MAX_ZERO_RTT_FUZZ_BYTES: usize = 1024;
 
 fuzz_target!(|data: &[u8]| {
-    let data = &data[..data.len().min(MAX_ZERO_RTT_FUZZ_BYTES)];
+    let data = common::bounded_input(data, MAX_ZERO_RTT_FUZZ_BYTES);
     let policy = if data.first().copied().unwrap_or_default() % 2 == 0 {
         ZeroRttAdmissionPolicy::doctrine_v1_disabled()
     } else {

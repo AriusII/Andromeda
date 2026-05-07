@@ -5,8 +5,8 @@ use andromeda_core::{AndromedaResult, HardwareProfile, InvocationId, RequestId, 
 use andromeda_exec::{
     CompletionStatus, InventoryReserveStockExecutor, InventoryStock, InvocationContext,
     InvocationRequest, LocalVerticalRuntime, ReserveStockCommand, V0InventoryRecoverableRuntime,
-    V0InventoryReserveStockRpcPayload, encode_inventory_reserve_stock_v0_execute_frame,
-    inventory_reserve_stock_v0_pdf_srpl_source,
+    V0InventoryReserveStockRpcPayload, bind_inventory_reserve_stock_v0_pdf_executable_procedure,
+    encode_inventory_reserve_stock_v0_execute_frame,
 };
 use andromeda_observe::TraceId;
 use andromeda_storage::{FileWal, InMemoryWal, Lsn};
@@ -72,6 +72,7 @@ pub fn run_vertical_demo() -> AndromedaResult<()> {
 pub fn run_vertical_v0_demo(wal_path: PathBuf) -> AndromedaResult<()> {
     let contract = inventory_reserve_stock_contract()?;
     let catalog = crate::proto_helpers::inventory_catalog_snapshot()?;
+    let procedure = bind_inventory_reserve_stock_v0_pdf_executable_procedure(&catalog, &contract)?;
     let request = InvocationRequest {
         invocation_id: InvocationId::new(2),
         procedure: contract.as_ref(),
@@ -90,9 +91,7 @@ pub fn run_vertical_v0_demo(wal_path: PathBuf) -> AndromedaResult<()> {
     let context = InvocationContext::new(TraceId::new(2), contract.required_permissions.clone());
     let outcome = runtime.execute_encoded_inventory_reserve_stock(
         &encoded_frame,
-        inventory_reserve_stock_v0_pdf_srpl_source(),
-        &catalog,
-        &contract,
+        &procedure,
         request,
         &context,
         InventoryStock {

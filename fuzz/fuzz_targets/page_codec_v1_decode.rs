@@ -3,12 +3,12 @@
 use andromeda_storage::PageCodecV1;
 use libfuzzer_sys::fuzz_target;
 
-const MAX_PAGE_CODEC_FUZZ_BYTES: usize = 64 * 1024;
+mod common;
 
 fuzz_target!(|data: &[u8]| {
-    let data = &data[..data.len().min(MAX_PAGE_CODEC_FUZZ_BYTES)];
-    let _ = PageCodecV1::decode_header(data);
-    let _ = PageCodecV1::decode_trailer(data);
+    let data = common::bounded_input(data, common::MAX_64K_INPUT_BYTES);
+    common::ignore_decode(data, PageCodecV1::decode_header);
+    common::ignore_decode(data, PageCodecV1::decode_trailer);
 
     let Ok(decoded) = PageCodecV1::decode_page(data) else {
         return;

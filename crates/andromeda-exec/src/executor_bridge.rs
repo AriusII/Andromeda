@@ -220,6 +220,7 @@ impl<'a> ExecutorDispatchBridge<'a> {
         authorizer: &SurfacePlaneAuthorizer,
         trace_id: TraceId,
     ) -> AndromedaResult<Result<AuthorizedProcedureDispatch, AuthorizationOutcome>> {
+        self.validate_dispatch_preconditions()?;
         authorizer.authorize_procedure_dispatch(
             trace_id,
             self.plane,
@@ -443,6 +444,12 @@ mod tests {
             precond_err.is_err(),
             "preconditions should fail for non-Active connection"
         );
+        let registry = andromeda_observe::PrincipalRegistry::new();
+        let authorizer = SurfacePlaneAuthorizer::new(&registry);
+        let authorization_err = bridge
+            .authorize_procedure_dispatch(&authorizer, TraceId::new(44))
+            .unwrap_err();
+        assert_eq!(authorization_err.kind(), AndromedaErrorKind::Protocol);
 
         let conn_active = setup_active_application_connection();
         let bridge_active =

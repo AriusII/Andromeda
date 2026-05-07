@@ -5,14 +5,14 @@ use andromeda_proto::{
 };
 use libfuzzer_sys::fuzz_target;
 
-const MAX_PROTO_FUZZ_BYTES: usize = 64 * 1024;
+mod common;
 
 fuzz_target!(|data: &[u8]| {
-    let data = &data[..data.len().min(MAX_PROTO_FUZZ_BYTES)];
-    let decoded: andromeda_core::AndromedaResult<ProtoFrameEnvelope> =
-        decode_generated_message(data);
-
-    if let Ok(envelope) = decoded {
+    if let Some(envelope) =
+        common::decode_bounded::<ProtoFrameEnvelope, _>(data, common::MAX_64K_INPUT_BYTES, |data| {
+            decode_generated_message(data)
+        })
+    {
         let _ = envelope.protocol_version.as_ref().map(|version| {
             let protocol_version = andromeda_proto::ProtocolVersion {
                 major: version.major,

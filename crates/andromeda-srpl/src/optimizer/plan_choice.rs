@@ -18,6 +18,7 @@ pub struct AlternativePlanRecord {
 pub enum RejectionReason {
     HigherCost,
     TiedCostLowerPriority,
+    InvalidCostEvidence,
 }
 
 /// The result of `PlanChoice::choose`.
@@ -49,6 +50,15 @@ pub fn choose(
         ));
     }
 
+    for (_, cost, kind) in &alternatives {
+        if !cost.is_valid() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Srpl,
+                format!("optimizer plan choice rejected invalid cost evidence for {kind:?}"),
+            ));
+        }
+    }
+
     // Find the index of the minimum-cost / lowest-priority-tie alternative.
     let chosen_idx = alternatives
         .iter()
@@ -56,8 +66,7 @@ pub fn choose(
         .min_by(|(_, (_, cost_a, kind_a)), (_, (_, cost_b, kind_b))| {
             cost_a
                 .total_cost
-                .partial_cmp(&cost_b.total_cost)
-                .unwrap_or(std::cmp::Ordering::Equal)
+                .total_cmp(&cost_b.total_cost)
                 .then(kind_a.priority().cmp(&kind_b.priority()))
         })
         .map(|(i, _)| i)
@@ -158,6 +167,41 @@ mod tests {
     fn empty_alternatives_returns_error() {
         let result = choose(vec![]);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn invalid_cost_evidence_returns_error() {
+        let invalid_costs = [
+            CostEstimate {
+                total_cost: f64::NAN,
+                ..CostEstimate::zero()
+            },
+            CostEstimate {
+                cpu_cost: f64::INFINITY,
+                total_cost: f64::INFINITY,
+                ..CostEstimate::zero()
+            },
+            CostEstimate {
+                cpu_cost: -1.0,
+                total_cost: -1.0,
+                ..CostEstimate::zero()
+            },
+            CostEstimate {
+                cpu_cost: 1.0,
+                io_cost: 1.0,
+                memory_cost: 1.0,
+                total_cost: 2.0,
+            },
+        ];
+
+        for invalid_cost in invalid_costs {
+            let result = choose(vec![(
+                empty_ir(),
+                invalid_cost,
+                OptimizerPlanKind::PointLookup,
+            )]);
+            assert!(result.is_err());
+        }
     }
 
     #[test]

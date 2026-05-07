@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use andromeda_cli::cmd::dispatch_command;
+use andromeda_cli::dispatch_command;
 use andromeda_core::{RequestId, SessionId};
 use andromeda_observe::{
     CertificateIdentity, DurableAuditPrincipalBinding, DurableAuditReplayBehavior,

@@ -42,339 +42,28 @@
 //! - ✗ Quorum consensus algorithm (designed in F3).
 //! - ✗ Compression/encryption (future scope).
 
-use crate::{Lsn, write_ahead_log::*};
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use std::collections::HashMap;
+mod checksum;
+mod correlation;
+mod fencing;
+mod flow_control;
+mod segment;
 
-/// Typed rejection reason for malformed WAL shipping envelopes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ShippingSegmentRejection {
-    RecordCountMismatch,
-    EmptyLsnRange,
-    EmptyRecords,
-    FirstLsnMismatch,
-    LastLsnMismatch,
-    ChecksumMismatch,
-}
-
-impl ShippingSegmentRejection {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::RecordCountMismatch => "shipping segment record count mismatch",
-            Self::EmptyLsnRange => "shipping segment LSN range invalid",
-            Self::EmptyRecords => "shipping segment has no records",
-            Self::FirstLsnMismatch => "shipping segment first LSN mismatch",
-            Self::LastLsnMismatch => "shipping segment last LSN mismatch",
-            Self::ChecksumMismatch => "shipping segment checksum mismatch",
-        }
-    }
-
-    fn into_error(self) -> AndromedaError {
-        AndromedaError::new(AndromedaErrorKind::Storage, self.as_str())
-    }
-}
-
-/// Segment identity and metadata for shipping protocol.
-///
-/// This struct describes a single WAL segment as it moves from primary to replicas.
-/// It is immutable once created and carries all metadata required for validation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ShippingSegmentDescriptor {
-    /// Unique identifier for this segment (monotonically increasing).
-    pub segment_id: u64,
-    /// First LSN in this segment (inclusive).
-    pub start_lsn: Lsn,
-    /// Last LSN in this segment (inclusive).
-    pub end_lsn: Lsn,
-    /// Number of records in this segment.
-    pub record_count: usize,
-    /// Checksum of all segment record bytes (FNV-1a 64-bit).
-    pub checksum: u64,
-}
-
-impl ShippingSegmentDescriptor {
-    pub fn new(
-        segment_id: u64,
-        start_lsn: Lsn,
-        end_lsn: Lsn,
-        record_count: usize,
-        checksum: u64,
-    ) -> Self {
-        Self {
-            segment_id,
-            start_lsn,
-            end_lsn,
-            record_count,
-            checksum,
-        }
-    }
-
-    /// Compute a segment checksum from a slice of WAL records.
-    /// Uses FNV-1a folding of record bytes.
-    pub fn compute_checksum(records: &[WalRecord]) -> u64 {
-        const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
-        const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
-
-        let mut state = FNV_OFFSET;
-
-        for record in records {
-            // Fold record header fields
-            for byte in (record.header.kind as u64).to_le_bytes() {
-                state ^= u64::from(byte);
-                state = state.wrapping_mul(FNV_PRIME);
-            }
-            for byte in record.header.lsn.get().to_le_bytes() {
-                state ^= u64::from(byte);
-                state = state.wrapping_mul(FNV_PRIME);
-            }
-            // Fold payload bytes
-            for byte in &record.payload {
-                state ^= u64::from(*byte);
-                state = state.wrapping_mul(FNV_PRIME);
-            }
-        }
-
-        if state == 0 { 1 } else { state }
-    }
-}
-
-/// Segment shipping envelope: descriptor + borrowed record bytes.
-///
-/// This is the atomic unit sent from primary to replica over QUIC.
-/// The replica receives this, validates the checksum, and appends records to its local WAL.
-#[derive(Debug, Clone, Copy)]
-pub struct ShippingSegmentEnvelope<'a> {
-    pub descriptor: ShippingSegmentDescriptor,
-    pub records: &'a [WalRecord],
-}
-
-impl<'a> ShippingSegmentEnvelope<'a> {
-    pub fn new(descriptor: ShippingSegmentDescriptor, records: &'a [WalRecord]) -> Self {
-        Self {
-            descriptor,
-            records,
-        }
-    }
-
-    /// Validate the envelope structure (checksum, record count consistency).
-    /// Does NOT validate LSN chain; that is the replica's concern.
-    pub fn validate_structure(&self) -> AndromedaResult<()> {
-        // Check record count matches
-        if self.descriptor.record_count != self.records.len() {
-            return Err(ShippingSegmentRejection::RecordCountMismatch.into_error());
-        }
-
-        // Check LSN range is non-empty
-        if self.descriptor.start_lsn > self.descriptor.end_lsn {
-            return Err(ShippingSegmentRejection::EmptyLsnRange.into_error());
-        }
-
-        // Check records are non-empty
-        if self.records.is_empty() {
-            return Err(ShippingSegmentRejection::EmptyRecords.into_error());
-        }
-
-        // Check first and last LSN match descriptor
-        if self.records[0].header.lsn != self.descriptor.start_lsn {
-            return Err(ShippingSegmentRejection::FirstLsnMismatch.into_error());
-        }
-        if self.records[self.records.len() - 1].header.lsn != self.descriptor.end_lsn {
-            return Err(ShippingSegmentRejection::LastLsnMismatch.into_error());
-        }
-
-        Ok(())
-    }
-
-    /// Validate the segment checksum against the records.
-    pub fn validate_checksum(&self) -> AndromedaResult<()> {
-        let computed = ShippingSegmentDescriptor::compute_checksum(self.records);
-        if computed != self.descriptor.checksum {
-            return Err(ShippingSegmentRejection::ChecksumMismatch.into_error());
-        }
-        Ok(())
-    }
-
-    /// Full envelope validation: structure + checksum.
-    pub fn validate(&self) -> AndromedaResult<()> {
-        self.validate_structure()?;
-        self.validate_checksum()?;
-        Ok(())
-    }
-}
-
-/// Segment shipping condition: a segment is shippable when all its records are durable.
-///
-/// The primary's WriterThread flushes records to durable storage. The ShippingThread
-/// polls durable_lsn and ships segments whose end_lsn ≤ durable_lsn.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ShippingCondition {
-    /// Highest LSN known to be durable at the primary.
-    pub primary_durable_lsn: Lsn,
-    /// Highest LSN the segment covers.
-    pub segment_end_lsn: Lsn,
-}
-
-impl ShippingCondition {
-    pub fn is_shippable(&self) -> bool {
-        self.segment_end_lsn <= self.primary_durable_lsn
-    }
-}
-
-/// Replica backpressure request: signal to primary that replica needs older segments.
-///
-/// If a replica falls behind (e.g., due to network lag or slow I/O), it can request
-/// replaying an earlier segment. The primary ships it again; the replica re-validates
-/// and re-applies.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ShippingBackpressureRequest {
-    /// Replica's current head: the highest LSN it has received and validated.
-    pub replica_received_lsn: Lsn,
-    /// Next LSN the replica expects to receive.
-    pub replica_expected_next_lsn: Lsn,
-}
-
-impl ShippingBackpressureRequest {
-    pub fn new(received_lsn: Lsn, expected_next_lsn: Lsn) -> Self {
-        Self {
-            replica_received_lsn: received_lsn,
-            replica_expected_next_lsn: expected_next_lsn,
-        }
-    }
-}
-
-/// LSN correlation state: tracks what the primary has shipped and what replicas have received.
-///
-/// At the primary:
-/// - `wal_shipped_lsn[replica_id]` = highest LSN sent to that replica.
-///
-/// At a replica:
-/// - `wal_received_lsn` = highest LSN received, validated, and durably appended.
-///
-/// The replica's lag is computed as `primary_durable_lsn - replica_received_lsn`.
-#[derive(Debug, Clone)]
-pub struct LsnCorrelationState {
-    /// Per-replica shipping position (what we've sent to each).
-    pub shipped_lsn_by_replica: HashMap<u64, Lsn>,
-    /// Replica's received position (what it has told us it received).
-    pub replica_received_lsn: Lsn,
-}
-
-impl LsnCorrelationState {
-    pub fn new() -> Self {
-        Self {
-            shipped_lsn_by_replica: HashMap::new(),
-            replica_received_lsn: Lsn::ZERO,
-        }
-    }
-
-    /// Record that we've shipped records up to this LSN to a specific replica.
-    pub fn update_shipped(&mut self, replica_id: u64, lsn: Lsn) {
-        self.shipped_lsn_by_replica.insert(replica_id, lsn);
-    }
-
-    /// Record that the replica has told us it received up to this LSN.
-    pub fn update_received(&mut self, lsn: Lsn) {
-        if lsn > self.replica_received_lsn {
-            self.replica_received_lsn = lsn;
-        }
-    }
-
-    /// Compute lag: how far behind is this replica?
-    pub fn replica_lag(&self, primary_durable_lsn: Lsn) -> Lsn {
-        if self.replica_received_lsn > primary_durable_lsn {
-            Lsn::ZERO
-        } else {
-            // Simulate lag as bytes; in practice this is a numeric difference
-            Lsn::new(primary_durable_lsn.get() - self.replica_received_lsn.get())
-        }
-    }
-
-    /// Is this replica fully caught up?
-    pub fn is_caught_up(&self, primary_durable_lsn: Lsn) -> bool {
-        self.replica_lag(primary_durable_lsn) == Lsn::ZERO
-    }
-}
-
-impl Default for LsnCorrelationState {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Fencing decision at the primary: should we block commits if a replica is lost?
-///
-/// The quorum policy determines replication mode:
-/// - Single replica: async (continue writing even if replica is unreachable).
-/// - 2+ replicas: quorum (block writes until a quorum of replicas acknowledge).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FencingPolicy {
-    /// Asynchronous: continue writing regardless of replica ack. Used when replica count = 1.
-    Asynchronous,
-    /// Quorum-enforced: wait for a majority of replicas to acknowledge before visibility.
-    /// Used when replica count >= 2.
-    QuorumEnforced,
-}
-
-impl FencingPolicy {
-    /// Select fencing policy based on replica count.
-    pub fn for_replica_count(replica_count: usize) -> Self {
-        if replica_count >= 2 {
-            FencingPolicy::QuorumEnforced
-        } else {
-            FencingPolicy::Asynchronous
-        }
-    }
-}
-
-/// Fencing event: what happened when we tried to ship to a replica and it failed?
-///
-/// The primary emits these as trace events. They inform the promotion/demotion flow
-/// and may trigger operational alerts.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FencingEvent {
-    /// Replica connection lost. No ack received for the last segment sent.
-    ReplicaConnectionLost,
-    /// Replica returned a checksum mismatch for a segment we sent.
-    ReplicaChecksumMismatch,
-    /// Replica reported a gap in the LSN chain. Possible data corruption.
-    ReplicaChainGap,
-    /// Replica returned an error we don't understand. Safe to assume it's fenced.
-    ReplicaUnknownError,
-}
-
-impl FencingEvent {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::ReplicaConnectionLost => "replica connection lost",
-            Self::ReplicaChecksumMismatch => "replica checksum mismatch",
-            Self::ReplicaChainGap => "replica chain gap detected",
-            Self::ReplicaUnknownError => "replica unknown error",
-        }
-    }
-}
-
-/// Fencing decision: given a fencing event and the quorum policy, decide what to do.
-///
-/// Returns `true` if we should block transaction visibility (synchronous mode).
-/// Returns `false` if we should continue (asynchronous mode).
-pub fn decide_fencing(_event: FencingEvent, policy: FencingPolicy) -> bool {
-    match policy {
-        FencingPolicy::Asynchronous => {
-            // Async mode: continue writing even if replica fails.
-            false
-        }
-        FencingPolicy::QuorumEnforced => {
-            // Quorum mode: block visibility on any replica failure.
-            // (The actual quorum algorithm is in F3; this is the decision point.)
-            true
-        }
-    }
-}
+pub use correlation::*;
+pub use fencing::*;
+pub use flow_control::*;
+pub use segment::*;
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::write_ahead_log::record::{WalRecord, WalRecordKind};
+    use crate::{
+        Lsn,
+        write_ahead_log::{
+            WalNodeIdentity, WalNodeRole, WalReplicaExpectation, WalShipmentBatch,
+            record::{WalRecord, WalRecordKind},
+        },
+    };
+    use andromeda_core::AndromedaResult;
 
     fn sample_record(lsn: u64, prev: Option<u64>) -> AndromedaResult<WalRecord> {
         WalRecord::from_parts(
@@ -386,7 +75,7 @@ mod tests {
         )
     }
 
-    /// Test 1: Segment committed → ShippingThread reads → sends via QUIC
+    /// Test 1: Segment committed -> ShippingThread reads -> sends via QUIC
     ///
     /// Simulates:
     /// - Primary WriterThread appends records LSN 1-10 and flushes.
@@ -437,7 +126,7 @@ mod tests {
         Ok(())
     }
 
-    /// Test 2: Replica receives segment → validates checksum → appends to local WAL
+    /// Test 2: Replica receives segment -> validates checksum -> appends to local WAL
     ///
     /// Simulates:
     /// - Primary sends ShippingSegmentEnvelope with LSN 6-10.
@@ -476,8 +165,7 @@ mod tests {
         // Now validate via WalShipmentBatch (replica side)
         let primary = WalNodeIdentity::new(1, WalNodeRole::Primary);
         let replica = WalNodeIdentity::new(2, WalNodeRole::Replica);
-        let expectation =
-            crate::write_ahead_log::WalReplicaExpectation::after(Lsn::new(5), Lsn::new(6));
+        let expectation = WalReplicaExpectation::after(Lsn::new(5), Lsn::new(6));
 
         let batch = WalShipmentBatch::new(primary, replica, expectation, &records);
         let accepted = batch.validate()?;
@@ -488,7 +176,7 @@ mod tests {
         Ok(())
     }
 
-    /// Test 3: Shipping backpressure — replica falls behind → requests earlier segment
+    /// Test 3: Shipping backpressure - replica falls behind -> requests earlier segment
     ///
     /// Simulates:
     /// - Primary has shipped up to LSN 50.

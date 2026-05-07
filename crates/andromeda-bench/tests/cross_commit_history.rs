@@ -133,8 +133,8 @@ fn tracks_error_rate_regression_across_commits() {
         baseline.sample_count,
     );
 
-    assert!(!last.is_regressed_vs_baseline(100, 500, 2.5));
-    assert!(last.is_regressed_vs_record(baseline, 2.5));
+    assert!(analysis.p50_regression_pct <= 2.5);
+    assert!(analysis.p95_regression_pct <= 2.5);
     assert!(analysis.is_regressed);
     assert_eq!(analysis.primary_reason, RegressionReason::ErrorRateIncrease);
 }
@@ -172,7 +172,6 @@ fn stable_error_rate_with_changed_sample_count_does_not_regress() {
         baseline.sample_count,
     );
 
-    assert!(!current.is_regressed_vs_record(&baseline, 2.5));
     assert!(!analysis.is_regressed);
     assert_eq!(analysis.primary_reason, RegressionReason::NoRegression);
 }
@@ -469,9 +468,19 @@ fn regression_gate_workflow_updates_history_and_finds_regression() {
 
     let baseline_p50 = 10_000;
     let baseline_p95 = 50_000;
-    let is_regressed = current_record.is_regressed_vs_baseline(baseline_p50, baseline_p95, 2.5);
+    let analysis = RegressionAnalysis::new(
+        current_record.workload_id.clone(),
+        current_record.p50_latency_us,
+        baseline_p50,
+        current_record.p95_latency_us,
+        baseline_p95,
+        current_record.error_count,
+        current_record.sample_count,
+        0,
+        current_record.sample_count,
+    );
 
-    assert!(is_regressed);
+    assert!(analysis.is_regressed);
 
     let regression_point = result.find_regression_point(2.0);
     assert!(regression_point.is_some());

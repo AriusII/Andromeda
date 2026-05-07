@@ -13,6 +13,7 @@ mod family;
 mod file_sink;
 mod identity;
 mod journal_format;
+mod journal_mutation;
 mod pending_record;
 mod policy_requirement;
 mod principal_binding;
@@ -22,12 +23,13 @@ mod replay_record;
 mod retention;
 mod sink;
 mod sink_report;
+mod validation;
 mod wal_evidence;
 
 use checksum::checksum64;
 pub use decision_gate::{DurableAuditDecisionGate, DurableAuditVisibleDecisionProof};
 pub use error::{DurableAuditSinkFailure, DurableAuditSinkResult};
-pub use event_mapping::durable_audit_family;
+pub(crate) use event_mapping::durable_audit_family;
 pub use failure::DurableAuditFailureKind;
 pub use family::DurableAuditEventFamily;
 pub use file_sink::FileDurableAuditWalSink;
@@ -55,143 +57,12 @@ pub use retention::{
 };
 pub use sink::DurableAuditWalSink;
 pub use sink_report::DurableAuditSinkReport;
+use validation::validation_failure;
+pub(crate) use validation::{validate_permissioned_critical_policy_binding, validate_record};
 pub use wal_evidence::DurableAuditWalEvidence;
 
 use error::sink_failure;
-
-use andromeda_core::AndromedaResult;
-
-use super::{TraceEvent, observe_error};
-
-struct DurableAuditMutationLock {
-    path: PathBuf,
-}
-
-impl Drop for DurableAuditMutationLock {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&self.path);
-    }
-}
-
-pub(crate) fn validate_record(record: &PendingDurableAuditRecord) -> AndromedaResult<()> {
-    record.identity.validate()?;
-    record.principal_binding.validate()?;
-    record.envelope.validate()?;
-
-    if record.identity.trace_id != record.envelope.trace_id {
-        return Err(observe_error(
-            "durable audit identity trace_id must match envelope trace_id",
-        ));
-    }
-    if record.identity.event_id != record.envelope.event_id {
-        return Err(observe_error(
-            "durable audit identity event_id must match envelope event_id",
-        ));
-    }
-
-    let Some(family) = durable_audit_family(&record.envelope.event) else {
-        return Err(observe_error(
-            "durable audit record requires an audit-eligible trace event",
-        ));
-    };
-    if family != record.identity.family {
-        return Err(observe_error(
-            "durable audit identity family must match envelope event family",
-        ));
-    }
-
-    if matches!(family, DurableAuditEventFamily::SecurityDecision) {
-        validate_security_decision_binding(record)?;
-    }
-    validate_permissioned_critical_policy_binding(
-        family,
-        &record.principal_binding,
-        "durable audit records",
-    )?;
-
-    Ok(())
-}
-
-pub(crate) fn validate_permissioned_critical_policy_binding(
-    family: DurableAuditEventFamily,
-    binding: &DurableAuditPrincipalBinding,
-    context: &str,
-) -> AndromedaResult<()> {
-    if !classify_policy_evidence_requirement(family, binding).requires_policy_evidence() {
-        return Ok(());
-    }
-
-    let Some(policy_version) = binding.policy_version.as_ref() else {
-        return Err(observe_error(format!(
-            "{context} require policy version evidence for permissioned critical {family:?} records",
-        )));
-    };
-    if !policy_version.has_version_evidence() {
-        return Err(observe_error(format!(
-            "{context} require non-zero canonical policy version and digest evidence for permissioned critical {family:?} records",
-        )));
-    }
-
-    Ok(())
-}
-
-fn validate_security_decision_binding(record: &PendingDurableAuditRecord) -> AndromedaResult<()> {
-    if !record.envelope.correlation.has_request_session() {
-        return Err(observe_error(
-            "durable security audit records require request/session correlation",
-        ));
-    }
-
-    let binding = &record.principal_binding;
-    if binding.certificate_fingerprint.is_none()
-        || binding.surface.is_none()
-        || binding.permission.is_none()
-        || binding.policy_version.is_none()
-    {
-        return Err(observe_error(
-            "durable security audit records require certificate, surface, permission, and policy version evidence",
-        ));
-    }
-    if binding.request_id != record.envelope.correlation.request_id
-        || binding.session_id != record.envelope.correlation.session_id
-    {
-        return Err(observe_error(
-            "durable security audit principal binding request/session ids must match envelope correlation",
-        ));
-    }
-
-    if let TraceEvent::SecurityAudit(trace) = &record.envelope.event {
-        if binding.principal_id != trace.principal.principal_id {
-            return Err(observe_error(
-                "durable security audit principal_id must match security audit trace",
-            ));
-        }
-        if binding.certificate_fingerprint.as_deref()
-            != Some(trace.certificate.fingerprint.as_str())
-        {
-            return Err(observe_error(
-                "durable security audit certificate fingerprint must match security audit trace",
-            ));
-        }
-        if binding.surface != Some(trace.surface) {
-            return Err(observe_error(
-                "durable security audit surface must match security audit trace",
-            ));
-        }
-        if binding.permission != Some(trace.permission) {
-            return Err(observe_error(
-                "durable security audit permission must match security audit trace",
-            ));
-        }
-        if binding.policy_version.as_ref() != Some(&trace.policy_version) {
-            return Err(observe_error(
-                "durable security audit policy version evidence must match security audit trace",
-            ));
-        }
-    }
-
-    Ok(())
-}
+use journal_mutation::{acquire_mutation_lock, journal_sidecar_path, publish_compacted_journal};
 
 pub(crate) fn append_record(
     path: &Path,
@@ -296,17 +167,6 @@ fn write_journal_line(
     })?;
 
     Ok(())
-}
-
-fn validation_failure(
-    identity: DurableAuditRecordIdentity,
-    message: impl Into<String>,
-) -> DurableAuditSinkFailure {
-    sink_failure(
-        DurableAuditFailureKind::ValidationRejected,
-        Some(identity),
-        message,
-    )
 }
 
 pub(crate) fn open_sink(path: impl AsRef<Path>) -> DurableAuditSinkResult<PathBuf> {
@@ -516,113 +376,5 @@ fn rewrite_compacted_journal(
     }
     let _ = fs::remove_file(tmp_path);
 
-    Ok(())
-}
-
-fn acquire_mutation_lock(
-    path: &Path,
-    failure_kind: DurableAuditFailureKind,
-    identity: Option<DurableAuditRecordIdentity>,
-) -> DurableAuditSinkResult<DurableAuditMutationLock> {
-    let lock_path = journal_sidecar_path(path, ".lock");
-    let mut lock = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&lock_path)
-        .map_err(|error| {
-            let reason = if error.kind() == std::io::ErrorKind::AlreadyExists {
-                "durable audit journal mutation lock is already held".to_string()
-            } else {
-                format!("failed to acquire durable audit journal mutation lock: {error}")
-            };
-            sink_failure(failure_kind, identity, reason)
-        })?;
-    lock.write_all(b"andromeda-durable-audit-mutation-lock-v1\n")
-        .map_err(|error| {
-            let _ = fs::remove_file(&lock_path);
-            sink_failure(
-                failure_kind,
-                identity,
-                format!("failed to write durable audit journal mutation lock: {error}"),
-            )
-        })?;
-    lock.sync_all().map_err(|error| {
-        let _ = fs::remove_file(&lock_path);
-        sink_failure(
-            failure_kind,
-            identity,
-            format!("failed to flush durable audit journal mutation lock: {error}"),
-        )
-    })?;
-    Ok(DurableAuditMutationLock { path: lock_path })
-}
-
-fn publish_compacted_journal(tmp_path: &Path, path: &Path) -> DurableAuditSinkResult<()> {
-    match fs::rename(tmp_path, path) {
-        Ok(()) => Ok(()),
-        Err(error) if path.exists() => {
-            fs::remove_file(path).map_err(|remove_error| {
-                sink_failure(
-                    DurableAuditFailureKind::RetentionRejected,
-                    None,
-                    format!(
-                        "failed to replace durable audit journal during compaction after rename error {error}: {remove_error}"
-                    ),
-                )
-            })?;
-            fs::rename(tmp_path, path).map_err(|rename_error| {
-                sink_failure(
-                    DurableAuditFailureKind::RetentionRejected,
-                    None,
-                    format!("failed to publish durable audit compacted journal: {rename_error}"),
-                )
-            })
-        }
-        Err(error) => Err(sink_failure(
-            DurableAuditFailureKind::RetentionRejected,
-            None,
-            format!("failed to publish durable audit compacted journal: {error}"),
-        )),
-    }?;
-    sync_parent_directory(path, DurableAuditFailureKind::RetentionRejected, None)
-}
-
-fn journal_sidecar_path(path: &Path, suffix: &str) -> PathBuf {
-    let mut sidecar = path.as_os_str().to_os_string();
-    sidecar.push(suffix);
-    PathBuf::from(sidecar)
-}
-
-#[cfg(unix)]
-fn sync_parent_directory(
-    path: &Path,
-    failure_kind: DurableAuditFailureKind,
-    identity: Option<DurableAuditRecordIdentity>,
-) -> DurableAuditSinkResult<()> {
-    let Some(parent) = path.parent() else {
-        return Ok(());
-    };
-    let directory = fs::File::open(parent).map_err(|error| {
-        sink_failure(
-            failure_kind,
-            identity,
-            format!("failed to open durable audit parent directory for sync: {error}"),
-        )
-    })?;
-    directory.sync_all().map_err(|error| {
-        sink_failure(
-            failure_kind,
-            identity,
-            format!("failed to sync durable audit parent directory: {error}"),
-        )
-    })
-}
-
-#[cfg(not(unix))]
-fn sync_parent_directory(
-    _path: &Path,
-    _failure_kind: DurableAuditFailureKind,
-    _identity: Option<DurableAuditRecordIdentity>,
-) -> DurableAuditSinkResult<()> {
     Ok(())
 }

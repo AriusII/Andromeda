@@ -4,7 +4,7 @@ use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{ForbiddenConstruct, ForbiddenConstructHit, SrplDiagnostic};
 
-const URL_SCHEME_SEPARATOR: &str = "://";
+mod forbidden_scan;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SourceSpan {
@@ -48,73 +48,7 @@ impl<'a> SrplSource<'a> {
     }
 
     pub fn forbidden_construct_hits(&self) -> Vec<ForbiddenConstructHit> {
-        let lexemes = tokenize_for_forbidden_scan(self.text);
-        let mut hits: Vec<ForbiddenConstructHit> = Vec::new();
-
-        push_url_scheme_substring(
-            self.text,
-            &mut hits,
-            ForbiddenConstruct::ExternalNetwork,
-            &["http", "https"],
-        );
-        push_substring(
-            self.text,
-            &mut hits,
-            ForbiddenConstruct::ExternalFilesystem,
-            &["file://"],
-        );
-
-        for (i, lex) in lexemes.iter().enumerate() {
-            if lex.kind == LexKind::Word {
-                let lower = lex.text.to_ascii_lowercase();
-                let next = lexemes.get(i + 1);
-                let next_word = next.and_then(|n| {
-                    if n.kind == LexKind::Word {
-                        Some(n.text.to_ascii_lowercase())
-                    } else {
-                        None
-                    }
-                });
-                let next_is_lparen = matches!(next, Some(n) if n.kind == LexKind::LParen);
-                let next_is_star = matches!(next, Some(n) if n.kind == LexKind::Star);
-                let span_with_next =
-                    next.map(|next| SourceSpan::new(lex.span.start, next.span.end));
-
-                match lower.as_str() {
-                    "while" => push_hit(&mut hits, ForbiddenConstruct::UnboundedWhile, lex.span),
-                    "recursive" => push_hit(&mut hits, ForbiddenConstruct::FreeRecursion, lex.span),
-                    "call" if next_word.as_deref() == Some("self") => push_hit(
-                        &mut hits,
-                        ForbiddenConstruct::FreeRecursion,
-                        span_with_next.unwrap_or(lex.span),
-                    ),
-                    "random" | "rand" if next_is_lparen => push_hit(
-                        &mut hits,
-                        ForbiddenConstruct::NondeterministicRandom,
-                        span_with_next.unwrap_or(lex.span),
-                    ),
-                    "select" if next_is_star => push_hit(
-                        &mut hits,
-                        ForbiddenConstruct::SelectStar,
-                        span_with_next.unwrap_or(lex.span),
-                    ),
-                    "dynamic" | "execute" if next_word.as_deref() == Some("sql") => push_hit(
-                        &mut hits,
-                        ForbiddenConstruct::DynamicTextSql,
-                        span_with_next.unwrap_or(lex.span),
-                    ),
-                    "external" if next_word.as_deref() == Some("filesystem") => push_hit(
-                        &mut hits,
-                        ForbiddenConstruct::ExternalFilesystem,
-                        span_with_next.unwrap_or(lex.span),
-                    ),
-                    _ => {}
-                }
-            }
-        }
-
-        hits.sort_by_key(|hit| (hit.span.start, hit.span.end));
-        hits
+        forbidden_scan::scan_forbidden_construct_hits(self.text)
     }
 
     pub fn forbidden_construct_diagnostics(&self) -> Vec<SrplDiagnostic> {
@@ -141,128 +75,6 @@ impl<'a> SrplSource<'a> {
             format!("{}{}", first.message, location),
         ))
     }
-}
-
-fn push_url_scheme_substring(
-    source: &str,
-    hits: &mut Vec<ForbiddenConstructHit>,
-    construct: ForbiddenConstruct,
-    schemes: &[&str],
-) {
-    let lowered = source.to_ascii_lowercase();
-    let Some((start, scheme)) = schemes
-        .iter()
-        .filter_map(|scheme| find_url_scheme_prefix(&lowered, scheme).map(|start| (start, *scheme)))
-        .min_by_key(|(start, _)| *start)
-    else {
-        return;
-    };
-    push_hit(
-        hits,
-        construct,
-        SourceSpan::new(start, start + scheme.len() + URL_SCHEME_SEPARATOR.len()),
-    );
-}
-
-fn find_url_scheme_prefix(source: &str, scheme: &str) -> Option<usize> {
-    let pattern = format!("{scheme}{URL_SCHEME_SEPARATOR}");
-    source.find(&pattern)
-}
-
-fn push_substring(
-    source: &str,
-    hits: &mut Vec<ForbiddenConstructHit>,
-    construct: ForbiddenConstruct,
-    patterns: &[&str],
-) {
-    let lowered = source.to_ascii_lowercase();
-    let Some((start, pattern)) = patterns
-        .iter()
-        .filter_map(|pattern| lowered.find(pattern).map(|start| (start, *pattern)))
-        .min_by_key(|(start, _)| *start)
-    else {
-        return;
-    };
-    push_hit(
-        hits,
-        construct,
-        SourceSpan::new(start, start + pattern.len()),
-    );
-}
-
-fn push_hit(
-    hits: &mut Vec<ForbiddenConstructHit>,
-    construct: ForbiddenConstruct,
-    span: SourceSpan,
-) {
-    if let Some(existing) = hits.iter_mut().find(|h| h.construct == construct) {
-        if (span.start, span.end) < (existing.span.start, existing.span.end) {
-            existing.span = span;
-        }
-        return;
-    }
-    hits.push(ForbiddenConstructHit::new(construct, span));
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum LexKind {
-    Word,
-    Star,
-    LParen,
-    Other,
-}
-
-#[derive(Debug, Clone)]
-struct Lexeme<'a> {
-    kind: LexKind,
-    text: &'a str,
-    span: SourceSpan,
-}
-
-/// Coarse word/punctuation tokenizer used solely by the forbidden-construct
-/// scanner. It does not attempt to honor SRPL grammar; it only needs to
-/// produce stable word boundaries and recognize the punctuation symbols that
-/// participate in forbidden patterns (`*`, `(`). Whitespace is skipped so
-/// tabs / newlines / multiple spaces between tokens behave identically.
-fn tokenize_for_forbidden_scan(input: &str) -> Vec<Lexeme<'_>> {
-    let mut out = Vec::new();
-    let mut chars = input.char_indices().peekable();
-    while let Some((start, ch)) = chars.next() {
-        if ch.is_ascii_whitespace() {
-            continue;
-        }
-
-        if ch.is_ascii_alphanumeric() || ch == '_' {
-            let mut end = start + ch.len_utf8();
-            while let Some((next_index, next_ch)) = chars.peek().copied() {
-                let c = next_ch;
-                if c.is_ascii_alphanumeric() || c == '_' {
-                    chars.next();
-                    end = next_index + c.len_utf8();
-                } else {
-                    break;
-                }
-            }
-            out.push(Lexeme {
-                kind: LexKind::Word,
-                text: &input[start..end],
-                span: SourceSpan::new(start, end),
-            });
-        } else {
-            let kind = match ch {
-                '*' => LexKind::Star,
-                '(' => LexKind::LParen,
-                _ => LexKind::Other,
-            };
-            let end = start + ch.len_utf8();
-            out.push(Lexeme {
-                kind,
-                text: &input[start..end],
-                span: SourceSpan::new(start, end),
-            });
-        }
-    }
-    out
 }
 
 #[cfg(test)]

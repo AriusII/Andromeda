@@ -1,39 +1,6 @@
 //! B+ Tree leaf node operations — key insertion, deletion, value lookup.
 use super::*;
 
-/// Leaf node lookup — find row IDs for a given key.
-pub fn lookup_in_leaf<'a>(node: &'a BTreeIndexNode, key: &[u8]) -> Option<&'a [RowId]> {
-    if !node.is_leaf {
-        return None;
-    }
-
-    node.keys
-        .binary_search_by(|candidate| candidate.as_slice().cmp(key))
-        .ok()
-        .and_then(|idx| node.values.get(idx).map(Vec::as_slice))
-}
-
-/// Leaf node insert — add key and row ID, handle splits.
-pub fn insert_into_leaf(
-    _node: &mut BTreeIndexNode,
-    _key: Vec<u8>,
-    _row_id: RowId,
-    _branching_factor: u16,
-    _is_unique: bool,
-) -> AndromedaResult<Option<(Vec<u8>, PageId)>> {
-    deferred_btree_result("page-backed leaf insert")
-}
-
-/// Leaf node delete — remove key/row ID, handle merges.
-pub fn delete_from_leaf(
-    _node: &mut BTreeIndexNode,
-    _key: &[u8],
-    _row_id: Option<RowId>,
-    _branching_factor: u16,
-) -> AndromedaResult<()> {
-    deferred_btree_result("page-backed leaf delete")
-}
-
 impl BTreeNodeImpl {
     /// Insert a key-value pair into leaf node (maintaining sorted order)
     pub fn insert_into_leaf(&mut self, key: Vec<u8>, row_id: RowId) -> AndromedaResult<()> {

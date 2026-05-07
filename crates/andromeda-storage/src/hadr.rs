@@ -2,9 +2,13 @@
 
 mod cluster_security;
 mod fencing;
+mod membership_persistence_format;
+mod membership_state_validation;
 mod membership_store;
 pub mod membership_transitions;
 mod promotion_boundary;
+mod promotion_decision_helpers;
+mod promotion_quorum_evidence;
 mod quorum;
 pub mod quorum_runtime;
 pub mod shipping_runtime;

@@ -67,8 +67,4 @@ impl DurableAuditReplayRecord {
         }
         true
     }
-
-    pub fn matches_query(&self, query: &DurableAuditReplayQuery) -> bool {
-        self.matches_replay_filter(query)
-    }
 }

@@ -4,7 +4,7 @@
 
 use andromeda_core::TransactionId;
 use andromeda_storage::Lsn;
-use andromeda_storage::write_ahead_log::{CommitLog, CommitLogEntry};
+use andromeda_storage::write_ahead_log::{CommitLog, CommitLogEntry, CommitLogFacade};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 struct TransactionIdGenerator;
@@ -399,45 +399,6 @@ fn test_commit_log_cleanup_boundary() {
     assert_eq!(commit_log.entry_count(), 0);
 }
 
-// Utility Operations
-
-#[test]
-fn test_commit_log_all_tx_ids() {
-    let commit_log = CommitLog::new();
-
-    let tx_ids: Vec<_> = (0..5)
-        .map(|i| {
-            let tx_id = TransactionIdGenerator::new().generate();
-            let entry = CommitLogEntry::new(tx_id, Lsn::new(100 + i as u64), 500).unwrap();
-            commit_log.record_commit(entry).unwrap();
-            tx_id
-        })
-        .collect();
-
-    let stored_ids = commit_log.all_tx_ids();
-    assert_eq!(stored_ids.len(), 5);
-
-    for tx_id in tx_ids {
-        assert!(stored_ids.contains(&tx_id));
-    }
-}
-
-#[test]
-fn test_commit_log_clear() {
-    let commit_log = CommitLog::new();
-
-    for i in 0..5 {
-        let tx_id = TransactionIdGenerator::new().generate();
-        let entry = CommitLogEntry::new(tx_id, Lsn::new(100 + i as u64), 500).unwrap();
-        commit_log.record_commit(entry).unwrap();
-    }
-
-    assert_eq!(commit_log.entry_count(), 5);
-
-    commit_log.clear();
-    assert_eq!(commit_log.entry_count(), 0);
-}
-
 #[test]
 fn test_commit_log_default_construction() {
     let log1 = CommitLog::default();
@@ -597,4 +558,51 @@ fn test_commit_workflow_happy_path() {
 
     // Step 6: Verify entry is gone
     assert!(commit_log.query_commit_status(tx_id).unwrap().is_none());
+}
+
+// CommitLogFacade Visibility Gate
+
+#[test]
+fn test_facade_rejects_visibility_before_wal_durability() {
+    let facade = CommitLogFacade::new();
+    let tx_id = TransactionIdGenerator::new().generate();
+
+    facade.record_commit(tx_id, Lsn::new(100), 500).unwrap();
+
+    let error = facade
+        .make_visible(tx_id)
+        .expect_err("visibility must be blocked until WAL durability is confirmed");
+    assert!(error.message().contains("not durable"));
+}
+
+#[test]
+fn test_facade_allows_visibility_after_wal_durability() {
+    let facade = CommitLogFacade::new();
+    let tx_id = TransactionIdGenerator::new().generate();
+
+    facade.record_commit(tx_id, Lsn::new(100), 500).unwrap();
+    facade.confirm_durable(tx_id).unwrap();
+
+    facade
+        .make_visible(tx_id)
+        .expect("durable WAL evidence must allow visibility publication");
+}
+
+#[test]
+fn test_facade_cleanup_removes_only_durable_entries() {
+    let facade = CommitLogFacade::new();
+    let durable_tx = TransactionIdGenerator::new().generate();
+    let pending_tx = TransactionIdGenerator::new().generate();
+
+    facade
+        .record_commit(durable_tx, Lsn::new(100), 500)
+        .unwrap();
+    facade
+        .record_commit(pending_tx, Lsn::new(110), 510)
+        .unwrap();
+    facade.confirm_durable(durable_tx).unwrap();
+
+    assert_eq!(facade.cleanup_before_lsn(Lsn::new(200)), 1);
+    assert!(facade.query_status(durable_tx).unwrap().is_none());
+    assert!(facade.query_status(pending_tx).unwrap().is_some());
 }

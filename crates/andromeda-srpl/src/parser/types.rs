@@ -92,7 +92,7 @@ impl Parser {
         ))
     }
 
-    pub(super) fn parse_text_type(
+    fn parse_text_type(
         &mut self,
         head_span: SourceSpan,
     ) -> Result<(ScalarType, usize), SrplDiagnostic> {
@@ -122,7 +122,7 @@ impl Parser {
         ))
     }
 
-    pub(super) fn parse_decimal_type(
+    fn parse_decimal_type(
         &mut self,
         head_span: SourceSpan,
     ) -> Result<(ScalarType, usize), SrplDiagnostic> {
@@ -155,7 +155,7 @@ impl Parser {
         ))
     }
 
-    pub(super) fn parse_timestamp_type(
+    fn parse_timestamp_type(
         &mut self,
         head_span: SourceSpan,
     ) -> Result<(ScalarType, usize), SrplDiagnostic> {

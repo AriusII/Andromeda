@@ -457,10 +457,16 @@ fn print_failover_prepare_json(report: &FailoverPrepareReport) {
         report.quorum_size,
         report.witness_available,
         json_option_u64(report.promotion_candidate_id),
-        json_option_u64(report.promotion_candidate_lsn_distance.map(|x| x as u64)),
+        json_option_i64(report.promotion_candidate_lsn_distance),
         json_string_array(&report.blocking_issues),
         json_string_array(&report.remediation_steps),
         json_string(&report.fencing_policy),
         json_string(&report.message),
     );
+}
+
+pub(super) fn json_option_i64(value: Option<i64>) -> String {
+    value
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "null".to_string())
 }
