@@ -164,6 +164,19 @@ def parse_string_list(block: str, key: str) -> List[str]:
 
 
 def seed_payloads(target: str) -> Dict[str, bytes]:
+    if target == "storage_wal_record_roundtrip":
+        payloads = {
+            "seed-basic.bin": f"ANDROMEDA-FUZZ-SEED::{target}::v1".encode("utf-8"),
+            "seed1": LEGACY_SEED1_PAYLOADS[target],
+            "seed-valid-security-audit-frame.bin": wal_record_frame_seed(
+                kind_tag=22,
+                lsn=1,
+                previous_lsn=None,
+                transaction_id=None,
+                payload=b"security-audit-seed-v1",
+            ),
+        }
+        return payloads
     if target == "btree_node_v1_decode":
         return {
             "seed-basic.bin": btree_node_v1_leaf_seed(),
@@ -363,6 +376,77 @@ def page_codec_v1_seed(
 
 
 def payload_crc64(payload: bytes) -> int:
+    state = 0xCBF2_9CE4_8422_2325
+    for byte in payload:
+        state ^= byte
+        state = (state * 0x0000_0100_0000_01B3) & 0xFFFF_FFFF_FFFF_FFFF
+    return state if state != 0 else 1
+
+
+def wal_record_frame_seed(
+    kind_tag: int,
+    lsn: int,
+    previous_lsn: int | None,
+    transaction_id: int | None,
+    payload: bytes,
+) -> bytes:
+    magic = 0x414E_4452_4F57_414C
+    format_version = 1
+    header_len = 72
+    flags = 0
+    if previous_lsn is not None:
+        flags |= 0x0001
+    if transaction_id is not None:
+        flags |= 0x0002
+
+    previous_lsn_value = previous_lsn or 0
+    transaction_id_value = transaction_id or 0
+    payload_length = len(payload)
+    total_length = header_len + payload_length
+    record_checksum = wal_record_checksum(
+        kind_tag,
+        lsn,
+        previous_lsn_value,
+        transaction_id_value,
+        payload,
+    )
+    header_without_checksum = b"".join(
+        [
+            magic.to_bytes(8, "little"),
+            format_version.to_bytes(2, "little"),
+            header_len.to_bytes(2, "little"),
+            total_length.to_bytes(8, "little"),
+            kind_tag.to_bytes(2, "little"),
+            flags.to_bytes(2, "little"),
+            lsn.to_bytes(8, "little"),
+            previous_lsn_value.to_bytes(8, "little"),
+            transaction_id_value.to_bytes(8, "little"),
+            payload_length.to_bytes(8, "little"),
+            record_checksum.to_bytes(8, "little"),
+        ]
+    )
+    header_checksum = fnv64_nonzero(header_without_checksum)
+    return header_without_checksum + header_checksum.to_bytes(8, "little") + payload
+
+
+def wal_record_checksum(
+    kind_tag: int,
+    lsn: int,
+    previous_lsn: int,
+    transaction_id: int,
+    payload: bytes,
+) -> int:
+    fields = [
+        kind_tag.to_bytes(8, "little"),
+        lsn.to_bytes(8, "little"),
+        previous_lsn.to_bytes(8, "little"),
+        transaction_id.to_bytes(8, "little"),
+        len(payload).to_bytes(8, "little"),
+    ]
+    return fnv64_nonzero(b"".join(fields) + payload)
+
+
+def fnv64_nonzero(payload: bytes) -> int:
     state = 0xCBF2_9CE4_8422_2325
     for byte in payload:
         state ^= byte

@@ -34,7 +34,7 @@ generator = "deterministic-bytes-v1"
 [[entry]]
 target = "storage_wal_record_roundtrip"
 corpus_dir = "fuzz/corpus/storage_wal_record_roundtrip"
-seed_files = ["seed-basic.bin", "seed1"]
+seed_files = ["seed-basic.bin", "seed-valid-security-audit-frame.bin", "seed1"]
 generator = "deterministic-bytes-v1"
 
 [[entry]]

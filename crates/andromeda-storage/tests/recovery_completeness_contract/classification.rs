@@ -4,6 +4,97 @@ use super::support::{
 };
 use andromeda_storage::{Lsn, ReplayContext, ReplayOutcome, WalRecordKind, replay_wal_record};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RecoveryPromotionFamily {
+    PageLifecycle,
+    AccessPathRebuild,
+    MvccVersion,
+    MapDelta,
+    CatalogDefinitionBatch,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RecoveryPromotionGate {
+    kind: WalRecordKind,
+    family: RecoveryPromotionFamily,
+    payload_codec_required: bool,
+    golden_vectors_required: bool,
+    property_or_fuzz_required: bool,
+    crash_recovery_required: bool,
+    inline_replay_allowed_before_gate: bool,
+}
+
+const FUTURE_WORK_PROMOTION_GATES: [RecoveryPromotionGate; 14] = [
+    gate(
+        WalRecordKind::PageAllocate,
+        RecoveryPromotionFamily::PageLifecycle,
+    ),
+    gate(
+        WalRecordKind::PageFormat,
+        RecoveryPromotionFamily::PageLifecycle,
+    ),
+    gate(
+        WalRecordKind::IndexInsert,
+        RecoveryPromotionFamily::AccessPathRebuild,
+    ),
+    gate(
+        WalRecordKind::IndexDelete,
+        RecoveryPromotionFamily::AccessPathRebuild,
+    ),
+    gate(
+        WalRecordKind::MvccVersionCreate,
+        RecoveryPromotionFamily::MvccVersion,
+    ),
+    gate(
+        WalRecordKind::MvccVersionClose,
+        RecoveryPromotionFamily::MvccVersion,
+    ),
+    gate(
+        WalRecordKind::MapDeltaAppend,
+        RecoveryPromotionFamily::MapDelta,
+    ),
+    gate(
+        WalRecordKind::CatalogChangeBegin,
+        RecoveryPromotionFamily::CatalogDefinitionBatch,
+    ),
+    gate(
+        WalRecordKind::CatalogChangeApply,
+        RecoveryPromotionFamily::CatalogDefinitionBatch,
+    ),
+    gate(
+        WalRecordKind::CatalogChangeCommit,
+        RecoveryPromotionFamily::CatalogDefinitionBatch,
+    ),
+    gate(
+        WalRecordKind::BTreeInsert,
+        RecoveryPromotionFamily::AccessPathRebuild,
+    ),
+    gate(
+        WalRecordKind::BTreeDelete,
+        RecoveryPromotionFamily::AccessPathRebuild,
+    ),
+    gate(
+        WalRecordKind::BTreeSplit,
+        RecoveryPromotionFamily::AccessPathRebuild,
+    ),
+    gate(
+        WalRecordKind::BTreeMerge,
+        RecoveryPromotionFamily::AccessPathRebuild,
+    ),
+];
+
+const fn gate(kind: WalRecordKind, family: RecoveryPromotionFamily) -> RecoveryPromotionGate {
+    RecoveryPromotionGate {
+        kind,
+        family,
+        payload_codec_required: true,
+        golden_vectors_required: true,
+        property_or_fuzz_required: true,
+        crash_recovery_required: true,
+        inline_replay_allowed_before_gate: false,
+    }
+}
+
 #[test]
 fn all_record_kinds_are_classified_exactly_once() {
     assert_eq!(ALL_WAL_RECORD_KINDS.len(), 26);
@@ -18,6 +109,72 @@ fn all_record_kinds_are_classified_exactly_once() {
             handled, deferred,
             "{kind_name} must be classified as exactly one recovery category",
         );
+    }
+}
+
+#[test]
+fn future_work_records_have_explicit_promotion_gates() {
+    assert_eq!(FUTURE_WORK_PROMOTION_GATES.len(), FUTURE_WORK_KINDS.len());
+
+    for kind in FUTURE_WORK_KINDS {
+        let matches: Vec<_> = FUTURE_WORK_PROMOTION_GATES
+            .iter()
+            .filter(|gate| gate.kind == kind)
+            .collect();
+        assert_eq!(
+            matches.len(),
+            1,
+            "{kind:?} must have exactly one recovery promotion gate",
+        );
+
+        let gate = matches[0];
+        assert_eq!(
+            gate.family,
+            expected_promotion_family(kind),
+            "{kind:?} must stay in its documented recovery promotion family",
+        );
+        assert!(
+            gate.payload_codec_required,
+            "{kind:?} must define an explicit payload codec before replay promotion",
+        );
+        assert!(
+            gate.golden_vectors_required,
+            "{kind:?} must add golden vectors before replay promotion",
+        );
+        assert!(
+            gate.property_or_fuzz_required,
+            "{kind:?} must add property or fuzz coverage before replay promotion",
+        );
+        assert!(
+            gate.crash_recovery_required,
+            "{kind:?} must add crash/recovery coverage before replay promotion",
+        );
+        assert!(
+            !gate.inline_replay_allowed_before_gate,
+            "{kind:?} must remain fail-stop until every promotion gate is satisfied",
+        );
+    }
+}
+
+fn expected_promotion_family(kind: WalRecordKind) -> RecoveryPromotionFamily {
+    match kind {
+        WalRecordKind::PageAllocate | WalRecordKind::PageFormat => {
+            RecoveryPromotionFamily::PageLifecycle
+        }
+        WalRecordKind::IndexInsert
+        | WalRecordKind::IndexDelete
+        | WalRecordKind::BTreeInsert
+        | WalRecordKind::BTreeDelete
+        | WalRecordKind::BTreeSplit
+        | WalRecordKind::BTreeMerge => RecoveryPromotionFamily::AccessPathRebuild,
+        WalRecordKind::MvccVersionCreate | WalRecordKind::MvccVersionClose => {
+            RecoveryPromotionFamily::MvccVersion
+        }
+        WalRecordKind::MapDeltaAppend => RecoveryPromotionFamily::MapDelta,
+        WalRecordKind::CatalogChangeBegin
+        | WalRecordKind::CatalogChangeApply
+        | WalRecordKind::CatalogChangeCommit => RecoveryPromotionFamily::CatalogDefinitionBatch,
+        other => panic!("{other:?} is not a deferred recovery promotion kind"),
     }
 }
 

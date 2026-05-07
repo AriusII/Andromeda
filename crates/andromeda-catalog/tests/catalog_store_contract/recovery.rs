@@ -19,7 +19,7 @@ fn recovery_rejects_commit_with_definition_batch_hash_mismatch() {
 }
 
 #[test]
-fn durable_apply_recovery_reconstructs_last_published_catalog_from_storage_wal() {
+fn durable_apply_recovery_reconstructs_last_published_catalog_from_storage_wal_frame_roundtrip() {
     let mut store = store_at(10);
     let mut appended = Vec::new();
     let mut next_lsn = 100;
@@ -37,13 +37,11 @@ fn durable_apply_recovery_reconstructs_last_published_catalog_from_storage_wal()
         )
         .unwrap();
 
+    let roundtripped = roundtrip_appended_payloads_through_storage_wal(appended);
     let outcome = recover_payloads_at(
         10,
-        appended.iter().map(|(kind, payload, _)| {
-            CatalogDurableMutationPayload::with_storage_wal_kind_tag(
-                payload,
-                kind.storage_wal_kind_tag(),
-            )
+        roundtripped.iter().map(|(payload, storage_wal_kind_tag)| {
+            CatalogDurableMutationPayload::with_storage_wal_kind_tag(payload, *storage_wal_kind_tag)
         }),
     );
 
@@ -84,6 +82,56 @@ fn durable_apply_crash_before_commit_does_not_publish_half_catalog() {
     assert_eq!(error.kind(), AndromedaErrorKind::Storage);
     assert_eq!(appended.len(), 3);
     assert_store_unpublished_at(&store, 10);
+
+    let pre_commit_record_count = appended.len() - 1;
+    let roundtripped = roundtrip_appended_payloads_through_storage_wal(
+        appended
+            .into_iter()
+            .take(pre_commit_record_count)
+            .collect::<Vec<_>>(),
+    );
+    let outcome = recover_payloads_at(
+        10,
+        roundtripped.iter().map(|(payload, storage_wal_kind_tag)| {
+            CatalogDurableMutationPayload::with_storage_wal_kind_tag(payload, *storage_wal_kind_tag)
+        }),
+    );
+
+    assert!(outcome.report.replayed_batches.is_empty());
+    assert_eq!(outcome.report.skipped_incomplete_batches.len(), 1);
+    assert_eq!(
+        outcome.report.skipped_incomplete_batches[0].reason,
+        CatalogSkippedBatchReason::EndOfLogBeforeCommit
+    );
+    assert_empty_snapshot_at(&outcome, 10);
+}
+
+#[test]
+fn recovery_ignores_crash_before_commit_payloads_after_storage_wal_frame_roundtrip() {
+    let planner = store_at(10);
+    let plan = plan_product_batch(&planner, 10, 11);
+    let records = plan
+        .mutation_plan
+        .records()
+        .into_iter()
+        .take(plan.mutation_plan.record_count() - 1)
+        .collect::<Vec<_>>();
+
+    let roundtripped = roundtrip_catalog_records_through_storage_wal(records, 300);
+    let outcome = recover_payloads_at(
+        10,
+        roundtripped.iter().map(|(payload, storage_wal_kind_tag)| {
+            CatalogDurableMutationPayload::with_storage_wal_kind_tag(payload, *storage_wal_kind_tag)
+        }),
+    );
+
+    assert!(outcome.report.replayed_batches.is_empty());
+    assert_eq!(outcome.report.skipped_incomplete_batches.len(), 1);
+    assert_eq!(
+        outcome.report.skipped_incomplete_batches[0].reason,
+        CatalogSkippedBatchReason::EndOfLogBeforeCommit
+    );
+    assert_empty_snapshot_at(&outcome, 10);
 }
 
 #[test]
@@ -416,4 +464,103 @@ fn recovery_reports_wrong_identity_version_gap_outer_kind_and_payload_corruption
         assert_has_anomaly(&corrupt_outcome, expected_kind);
         assert_eq!(corrupt_outcome.snapshot.version, version(10));
     }
+}
+
+fn roundtrip_appended_payloads_through_storage_wal(
+    appended: Vec<(CatalogMutationRecordKind, Vec<u8>, u64)>,
+) -> Vec<(Vec<u8>, u16)> {
+    let mut previous_lsn = None;
+    appended
+        .into_iter()
+        .map(|(kind, payload, lsn)| {
+            let roundtripped = roundtrip_storage_wal_frame(
+                storage_wal_kind_for_catalog_record(kind),
+                payload,
+                Lsn::new(lsn),
+                previous_lsn,
+            );
+            previous_lsn = Some(roundtripped.header.lsn);
+            (
+                roundtripped.payload,
+                storage_wal_kind_tag_for_catalog_record(kind),
+            )
+        })
+        .collect()
+}
+
+fn roundtrip_catalog_records_through_storage_wal(
+    records: Vec<CatalogMutationRecord>,
+    first_lsn: u64,
+) -> Vec<(Vec<u8>, u16)> {
+    let mut previous_lsn = None;
+    records
+        .into_iter()
+        .enumerate()
+        .map(|(index, record)| {
+            let kind = record.kind();
+            let lsn = Lsn::new(first_lsn + index as u64);
+            let payload = record.encode_durable_payload().unwrap();
+            let roundtripped = roundtrip_storage_wal_frame(
+                storage_wal_kind_for_catalog_record(kind),
+                payload,
+                lsn,
+                previous_lsn,
+            );
+
+            assert_eq!(
+                CatalogMutationRecord::decode_durable_payload(roundtripped.payload()).unwrap(),
+                record
+            );
+            previous_lsn = Some(roundtripped.header.lsn);
+            (
+                roundtripped.payload,
+                storage_wal_kind_tag_for_catalog_record(kind),
+            )
+        })
+        .collect()
+}
+
+fn roundtrip_storage_wal_frame(
+    storage_kind: WalRecordKind,
+    payload: Vec<u8>,
+    lsn: Lsn,
+    previous_lsn: Option<Lsn>,
+) -> WalRecord {
+    let wal_record = WalRecord::from_parts(
+        storage_kind,
+        lsn,
+        previous_lsn,
+        Some(TransactionId::new(77)),
+        payload,
+    )
+    .unwrap();
+    let encoded = encode_wal_record(&wal_record).unwrap();
+    let (decoded_wal_record, consumed) = decode_wal_record_frame(&encoded).unwrap().unwrap();
+
+    assert_eq!(consumed, encoded.len());
+    assert_eq!(decoded_wal_record.header.kind, storage_kind);
+    assert_eq!(decoded_wal_record.header.lsn, lsn);
+    assert_eq!(decoded_wal_record.header.previous_lsn, previous_lsn);
+    assert_eq!(
+        decoded_wal_record.header.transaction_id,
+        Some(TransactionId::new(77))
+    );
+    decoded_wal_record
+}
+
+fn storage_wal_kind_for_catalog_record(kind: CatalogMutationRecordKind) -> WalRecordKind {
+    match kind {
+        CatalogMutationRecordKind::CatalogChangeBegin => WalRecordKind::CatalogChangeBegin,
+        CatalogMutationRecordKind::CatalogChangeApply => WalRecordKind::CatalogChangeApply,
+        CatalogMutationRecordKind::CatalogChangeCommit => WalRecordKind::CatalogChangeCommit,
+    }
+}
+
+fn storage_wal_kind_tag_for_catalog_record(kind: CatalogMutationRecordKind) -> u16 {
+    let storage_kind = storage_wal_kind_for_catalog_record(kind);
+    assert_eq!(
+        kind.storage_wal_kind_tag() as u64,
+        andromeda_storage::wal_record_kind_tag(storage_kind)
+    );
+    kind.storage_wal_kind_tag()
 }

@@ -123,8 +123,10 @@ No mutation becomes externally visible until WAL durability evidence crosses the
 
 | Fence class | Definition | Examples |
 |---|---|---|
-| Persistent (required redo) | Record kinds with `is_redo_relevant() == true`; recovery replay depends on durable presence. | `RowInsert`, `RowUpdate`, `RowDelete`, `IndexInsert`, `IndexDelete`, `MvccVersionCreate`, `ManifestSwitch`, `CatalogChangeApply`, `CatalogChangeCommit`, `SecurityAuditAppend` |
-| Non-persistent (optional redo / structural only) | Transaction markers and structural boundaries that do not apply business redo directly. | `TxBegin`, `TxCommit`, `TxRollback`, `CheckpointBegin/End`, `SnapshotBegin/End`, deferred non-redo B-Tree placeholders |
+| Persistent (required redo) | Record kinds with `is_redo_relevant() == true`; recovery replay depends on durable presence. | `PageAllocate`, `PageFormat`, `RowInsert`, `RowUpdate`, `RowDelete`, `IndexInsert`, `IndexDelete`, `MvccVersionCreate`, `MvccVersionClose`, `MapDeltaAppend`, `ManifestSwitch`, `CatalogChangeApply`, `CatalogChangeCommit`, `SecurityAuditAppend`, `BTreeInsert/Delete/Split/Merge` |
+| Non-persistent (optional redo / structural only) | Transaction markers and structural boundaries that do not apply business redo directly. | `TxBegin`, `TxCommit`, `TxRollback`, `CheckpointBegin/End`, `SnapshotBegin/End`, `CatalogChangeBegin` |
+
+B-Tree records are redo-relevant but remain deferred behind rebuild-evidence and fail-closed gates; they are not non-redo placeholders.
 
 ### Crash semantics lock
 
@@ -220,6 +222,11 @@ The following matrix locks deterministic crash/recovery convergence and covers p
 | RCV-14 | `crates/andromeda-storage/tests/wal_durability_fence_contract.rs` | recovery floor | floor cannot precede required WAL start |
 | RCV-15 | `crates/andromeda-storage/tests/property_recovery_replay.rs` | replay property tests | deterministic replay classification |
 | RCV-16 | `crates/andromeda-storage/tests/disk_manager_durability_crash_safety.rs` | disk/WAL crash-safety integration | durable state survives crash |
+| RCV-17 | `crates/andromeda-storage/tests/crash_recovery_impl.rs` | CBF-15..18 B-Tree mutation without commit | `SkipIncompleteTransaction` |
+| RCV-18 | `crates/andromeda-storage/tests/crash_recovery_impl.rs` | committed `MvccVersionClose` | replay classification for committed MVCC close |
+| RCV-19 | `crates/andromeda-storage/tests/crash_recovery_impl.rs` | non-transactional `PageAllocate` and `PageFormat` | explicit deferred replay gate; no inferred page payload apply |
+| RCV-20 | `crates/andromeda-storage/tests/crash_recovery_impl.rs` | non-transactional `MapDeltaAppend` | explicit deferred replay gate |
+| RCV-21 | `crates/andromeda-storage/tests/recovery_completeness_contract.rs` | 26-kind recovery classification and promotion gates | every deferred kind requires payload codec, golden vectors, property or fuzz coverage, and crash/recovery gate before promotion |
 
 Determinism property lock:
 

@@ -43,6 +43,24 @@ fn page_format_replay_fails_closed_until_payload_and_apply_contract_exist() {
 }
 
 #[test]
+fn future_page_payload_envelopes_fail_closed_until_full_promotion_gates_exist() {
+    assert_page_record_fails_closed(
+        WalRecordKind::PageAllocate,
+        Lsn::new(30),
+        b"PALLOCV1;page_id=42;extent_id=7;schema=stable;golden=present;prop_fuzz=present;crash_recovery=present"
+            .to_vec(),
+        "durable PageAllocate payload schema",
+    );
+    assert_page_record_fails_closed(
+        WalRecordKind::PageFormat,
+        Lsn::new(31),
+        b"PFRMTV1;page_id=42;page_size=16384;codec=PGV1;golden=present;prop_fuzz=present;crash_recovery=present"
+            .to_vec(),
+        "durable PageFormat payload schema",
+    );
+}
+
+#[test]
 fn redo_plan_reports_nontransactional_page_records_as_explicit_replay_gates() {
     let mut wal = InMemoryWal::new();
     wal.append_payload(WalRecordKind::PageAllocate, None, b"page-allocate")

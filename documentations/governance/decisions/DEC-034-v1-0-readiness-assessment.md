@@ -88,7 +88,7 @@ V1.0 readiness milestone deployment completes all foundational durability, foren
 
 ### E. Recovery Handler Audit
 
-**Status:** 22 WAL record types inventoried; 7 implemented, 15 documented as future work
+**Status:** 26 WAL record types inventoried; 12 implemented or explicitly skipped, 14 documented as future work with promotion gates
 
 **Mapping:** All record kinds have handler entry or documented placeholder
 
@@ -249,7 +249,7 @@ All project invariants maintained:
 ### Post-Release (implementation batch+)
 
 1. **implementation batch: Query and Analytics** — Audit index design for forensic performance (RISK-015 mitigation)
-2. **deferred redo-handler milestones: Redo Handlers** — Implement remaining 15 WAL record handlers
+2. **deferred redo-handler milestones: Redo Handlers** — Promote the remaining 14 deferred WAL record families only after payload codecs, golden vectors, property or fuzz coverage, and crash/recovery gates are complete
 3. **heap/index mutation milestones: Heap/Index Mutations** — Storage engine finalization
 4. **performance baseline milestone: Performance Baseline** — Benchmark suite execution and baseline establishment
 
