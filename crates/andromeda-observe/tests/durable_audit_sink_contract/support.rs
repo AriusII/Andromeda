@@ -1,5 +1,4 @@
-use andromeda_core::digest::sha256;
-pub(crate) use andromeda_core::{CatalogObjectId, CatalogVersion, RequestId, SessionId};
+use andromeda_digest::sha256;
 pub(crate) use andromeda_observe::{
     AdminOperation, AdminOperationTrace, CatalogMutationTrace, CertificateIdentity,
     DurableAuditDecisionGate, DurableAuditEventFamily, DurableAuditFailureKind,
@@ -10,6 +9,7 @@ pub(crate) use andromeda_observe::{
     Permission, SecurityAuditOutcome, SecurityAuditTrace, SecurityPolicyVersionEvidence,
     SurfaceScope, TraceEvent, TraceId, UserPrincipal, UserPrincipalKind,
 };
+pub(crate) use andromeda_types::{CatalogObjectId, CatalogVersion, RequestId, SessionId};
 pub(crate) use std::fs;
 use std::{
     path::{Path, PathBuf},

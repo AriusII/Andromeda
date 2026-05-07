@@ -1,4 +1,5 @@
-use andromeda_core::{AndromedaResult, ContractHash};
+use andromeda_error::AndromedaResult;
+use andromeda_types::ContractHash;
 
 use super::contract_error;
 

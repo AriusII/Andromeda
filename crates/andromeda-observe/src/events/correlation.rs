@@ -1,4 +1,4 @@
-use andromeda_core::{
+use andromeda_types::{
     CatalogObjectId, CatalogVersion, ContractHash, RequestId, SessionId, TransactionId,
 };
 

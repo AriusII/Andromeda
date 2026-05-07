@@ -3,10 +3,8 @@
 //! This module defines the `FrameEnvelope` struct which wraps protocol payloads
 //! with essential metadata like contract hash, protocol version, and identifiers.
 
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, ContractHash, RequestId,
-    SessionId, TransactionId,
-};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::{CatalogVersion, ContractHash, RequestId, SessionId, TransactionId};
 
 use crate::{PayloadKind, ProtocolVersion};
 

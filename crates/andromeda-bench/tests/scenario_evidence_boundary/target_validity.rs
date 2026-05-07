@@ -2,7 +2,7 @@ use andromeda_bench::{
     BenchmarkEvidenceBudgets, BenchmarkPlanClass, BenchmarkScenarioEvidenceError,
     BenchmarkScenarioTarget, BenchmarkStatsVersion,
 };
-use andromeda_core::{CatalogVersion, ContractHash, ProcedureId};
+use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 use crate::common::{
     boundary_from_history, default_budgets, default_confidence, target, target_with_stats, ts,

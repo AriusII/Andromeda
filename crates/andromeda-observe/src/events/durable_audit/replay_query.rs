@@ -1,4 +1,4 @@
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 use crate::TraceId;
 use crate::events::{contains_sensitive_marker, observe_error};

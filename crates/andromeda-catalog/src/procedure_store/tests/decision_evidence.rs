@@ -28,7 +28,7 @@ fn decision_evidence_rejects_unknown_procedure() {
     let err = store
         .attach_invocation_decision(decision(101, 1, 42))
         .unwrap_err();
-    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Contract);
+    assert_eq!(err.kind(), andromeda_error::AndromedaErrorKind::Contract);
     assert!(err.message().contains("unknown procedure id"));
 }
 
@@ -41,7 +41,7 @@ fn decision_evidence_rejects_contract_hash_mismatch_with_binding() {
     let err = store
         .attach_invocation_decision(decision(101, 1, 99))
         .unwrap_err();
-    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Contract);
+    assert_eq!(err.kind(), andromeda_error::AndromedaErrorKind::Contract);
     assert!(err.message().contains("contract hash"));
 }
 
@@ -54,7 +54,7 @@ fn decision_evidence_rejects_catalog_version_drift() {
     let mut record = decision(101, 1, 42);
     record.binding.catalog_version = CatalogVersion::new(8);
     let err = store.attach_invocation_decision(record).unwrap_err();
-    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Contract);
+    assert_eq!(err.kind(), andromeda_error::AndromedaErrorKind::Contract);
     assert!(err.message().contains("catalog version"));
 }
 
@@ -68,13 +68,13 @@ fn decision_evidence_rejects_stats_or_policy_version_drift() {
     let mut stats_drift = decision(101, 1, 42);
     stats_drift.binding.stats_version = StatsVersion::new(8);
     let err = store.attach_invocation_decision(stats_drift).unwrap_err();
-    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Contract);
+    assert_eq!(err.kind(), andromeda_error::AndromedaErrorKind::Contract);
     assert!(err.message().contains("stats version"));
 
     let mut policy_drift = decision(102, 1, 42);
     policy_drift.binding.policy_version = PolicyVersion::new([8; PolicyVersion::LEN]);
     let err = store.attach_invocation_decision(policy_drift).unwrap_err();
-    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Contract);
+    assert_eq!(err.kind(), andromeda_error::AndromedaErrorKind::Contract);
     assert!(err.message().contains("policy version"));
 }
 
@@ -91,6 +91,6 @@ fn decision_evidence_requires_non_empty_reason() {
         },
     );
     let err = bad.unwrap_err();
-    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Contract);
+    assert_eq!(err.kind(), andromeda_error::AndromedaErrorKind::Contract);
     assert!(err.message().contains("non-empty reason"));
 }

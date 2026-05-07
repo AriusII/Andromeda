@@ -1,8 +1,9 @@
 use std::collections::BTreeSet;
 
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, ColumnDescriptor, digest::Sha256,
-};
+use andromeda_digest::Sha256;
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+pub use andromeda_structured_object::RowCountRequirement;
+use andromeda_types::ColumnDescriptor;
 
 use super::procedure_manifest::write_tagged;
 
@@ -28,13 +29,6 @@ pub enum ResultCardinality {
     ZeroOrOne,
     OneOrMore,
     ExactlyOne,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RowCountRequirement {
-    UnknownAllowed,
-    ExactIfKnown,
-    ExactRequired,
 }
 
 impl ResultCardinality {

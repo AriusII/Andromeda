@@ -1,5 +1,6 @@
-use andromeda_core::{AndromedaErrorKind, CatalogVersion, ContractHash, RequestId, SessionId};
+use andromeda_error::AndromedaErrorKind;
 use andromeda_proto::{FrameEnvelope, PayloadKind};
+use andromeda_types::{CatalogVersion, ContractHash, RequestId, SessionId};
 
 use super::fixtures::{envelope, hash};
 

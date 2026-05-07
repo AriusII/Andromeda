@@ -1,4 +1,4 @@
-use andromeda_core::{AndromedaErrorKind, CatalogVersion};
+use andromeda_error::AndromedaErrorKind;
 use andromeda_srpl::{
     DiagnosticPhase,
     definition_batch_bridge::{
@@ -6,6 +6,7 @@ use andromeda_srpl::{
         dry_run_srpl_definition_batch_sources,
     },
 };
+use andromeda_types::CatalogVersion;
 
 use crate::support::{
     dry_run_request, lookup_signature_source, signature_only_source, test_metadata,

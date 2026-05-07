@@ -1,4 +1,5 @@
-use andromeda_core::{AndromedaResult, RequestId, SessionId, TransactionId};
+use andromeda_error::AndromedaResult;
+use andromeda_types::{RequestId, SessionId, TransactionId};
 
 use crate::generated::protocol;
 use crate::{

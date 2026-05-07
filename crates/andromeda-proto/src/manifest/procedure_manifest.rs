@@ -1,7 +1,6 @@
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, ContractHash, ProcedureId,
-    digest::Sha256,
-};
+use andromeda_digest::Sha256;
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 use super::{ManifestPolicyVersion, ProtocolLayout, RequiredPermission, ResultStreamDescriptor};
 

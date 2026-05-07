@@ -1,4 +1,5 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, ContractHash};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::ContractHash;
 
 use crate::ProtocolLayout;
 pub use crate::generated_validation::{

@@ -1,4 +1,4 @@
-use andromeda_core::digest::sha256;
+use andromeda_digest::sha256;
 
 pub(super) fn checksum64(bytes: &[u8]) -> u64 {
     let digest = sha256(bytes);

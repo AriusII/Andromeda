@@ -23,8 +23,9 @@ use andromeda_catalog::{
     ScenarioTarget, StatsVersion, ValidityWindow, classify_advisory_evidence_for_key,
     select_minimal_plan,
 };
-use andromeda_core::{CatalogVersion, ContractHash, EngineTimestamp, ProcedureId};
 use andromeda_observe::{CriticalDecisionKind, TraceId};
+use andromeda_time::EngineTimestamp;
+use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 #[path = "plan_invalidation/advisory_evidence.rs"]
 mod advisory_evidence;

@@ -1,13 +1,20 @@
 # Rust Source Layout
 
-This directory contains the Rust workspace crates that implement the Andromeda core runtime, protocol, storage, transaction, catalog, SRPL, execution, observability, CLI, and benchmark surfaces.
+This directory contains the Rust workspace crates that implement the Andromeda foundation, protocol, storage, transaction, catalog, SRPL, execution, observability, CLI, and benchmark surfaces.
 
 ## Boundary Rules
 
-- `andromeda-core` owns shared identifiers, digests, errors, and primitive contracts. It must not depend on higher-level engine crates.
+- `andromeda-error` owns typed engine error kinds and results. It must not depend on higher-level engine crates.
+- `andromeda-digest` owns deterministic digest primitives. It must not depend on higher-level engine crates.
+- `andromeda-types` owns shared identifiers, contract hashes, and primitive type descriptors. It may depend only on foundation crates.
+- `andromeda-time` owns engine timestamps and clock abstractions. It may depend only on foundation crates.
+- `andromeda-hardware` owns hardware profiles and C5 exclusion policy descriptors. It may depend only on foundation crates.
+- `andromeda-core` is a temporary compatibility facade over foundation crates and principal identity types. It must not regain higher-level engine ownership.
+- `andromeda-contract` owns contract-safe Procedure contracts, qualified names, catalog object descriptors, and structural catalog dependency edges. It may depend only on contract-safe foundation crates.
+- `andromeda-structured-object` owns contract-safe StructuredObject headers, layout descriptors, descriptor hashing, and row-count metadata policy. It may depend only on contract-safe foundation crates.
 - `andromeda-proto` owns custom typed RPC payload contracts. It must not introduce gRPC or make JSON the runtime default.
 - `andromeda-quic` owns QUIC transport behavior and maps transport events to typed protocol boundaries.
-- `andromeda-catalog` owns catalog objects, Procedure contracts, DefinitionBatch behavior, plan cache identity, and statistics metadata.
+- `andromeda-catalog` owns catalog storage, DefinitionBatch behavior, plan cache identity, statistics metadata, publication, and WAL-facing catalog codecs. It temporarily reexports `andromeda-contract` types for compatibility.
 - `andromeda-srpl` owns parsing, binding, and compiler-facing SRPL semantics.
 - `andromeda-tx` owns transaction state, WAL durability gates, MVCC visibility, locks, savepoints, and recovery-facing transaction evidence.
 - `andromeda-storage` owns page, heap, B+Tree, WAL-record, checkpoint, and recovery-planning storage surfaces.

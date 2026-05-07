@@ -1,6 +1,5 @@
-use andromeda_core::{
-    AndromedaResult, CatalogVersion, ContractHash, RequestId, SessionId, TransactionId,
-};
+use andromeda_error::AndromedaResult;
+use andromeda_types::{CatalogVersion, ContractHash, RequestId, SessionId, TransactionId};
 
 use crate::generated::protocol;
 use crate::{FrameEnvelope, PayloadKind, ProtocolVersion};

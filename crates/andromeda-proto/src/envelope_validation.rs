@@ -3,10 +3,8 @@
 //! This module validates the structure and ordering constraints of RPC result streams,
 //! ensuring protocol compliance for metadata, batches, and completions.
 
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, ContractHash, RequestId,
-    SessionId, TransactionId,
-};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::{CatalogVersion, ContractHash, RequestId, SessionId, TransactionId};
 
 use super::envelope_frame::FrameEnvelope;
 use crate::PayloadKind;
@@ -217,7 +215,7 @@ mod tests {
         FrameEnvelope {
             protocol_version: crate::ProtocolVersion::V1,
             contract_hash: hash(7),
-            catalog_version: andromeda_core::CatalogVersion::new(1),
+            catalog_version: andromeda_types::CatalogVersion::new(1),
             request_id: RequestId::new(10),
             session_id: SessionId::new(20),
             tx_id: Some(TransactionId::new(30)),

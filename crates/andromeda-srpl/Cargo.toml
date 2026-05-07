@@ -7,7 +7,9 @@ publish = false
 
 [dependencies]
 andromeda-catalog.workspace = true
-andromeda-core.workspace = true
+andromeda-digest.workspace = true
+andromeda-error.workspace = true
+andromeda-types.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

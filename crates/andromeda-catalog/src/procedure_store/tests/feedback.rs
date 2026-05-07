@@ -21,7 +21,7 @@ fn procedure_feedback_attaches_to_registered_procedure() {
 
     let visible = store.procedure_feedback_for_at(
         ProcedureId::new(1),
-        andromeda_core::EngineTimestamp::from_unix_millis(50),
+        andromeda_time::EngineTimestamp::from_unix_millis(50),
     );
     assert_eq!(visible.len(), 1);
     assert!(!visible[0].is_authoritative());
@@ -33,7 +33,7 @@ fn procedure_feedback_rejects_unknown_procedure() {
     let err = store
         .attach_procedure_feedback(feedback_for(1001, 99, 1))
         .unwrap_err();
-    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Contract);
+    assert_eq!(err.kind(), andromeda_error::AndromedaErrorKind::Contract);
     assert!(err.message().contains("unknown procedure id"));
     assert_eq!(store.total_procedure_feedback(), 0);
 }
@@ -48,7 +48,7 @@ fn procedure_feedback_rejects_stats_version_mismatch_with_binding() {
     let err = store
         .attach_procedure_feedback(feedback_for(1001, 1, 7))
         .unwrap_err();
-    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Contract);
+    assert_eq!(err.kind(), andromeda_error::AndromedaErrorKind::Contract);
     assert!(err.message().contains("stats version"));
     assert_eq!(store.total_procedure_feedback(), 0);
 }
@@ -79,7 +79,7 @@ fn procedure_feedback_rejects_conflicting_record_with_same_id_but_different_dige
     .unwrap();
 
     let err = store.attach_procedure_feedback(conflicting).unwrap_err();
-    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Contract);
+    assert_eq!(err.kind(), andromeda_error::AndromedaErrorKind::Contract);
     assert!(err.message().to_lowercase().contains("conflict"));
     assert_eq!(store.total_procedure_feedback(), 1);
 }
@@ -111,7 +111,7 @@ fn procedure_feedback_prune_expired_drops_only_expired_records() {
         .unwrap();
 
     let removed = store
-        .prune_expired_procedure_feedback(andromeda_core::EngineTimestamp::from_unix_millis(100));
+        .prune_expired_procedure_feedback(andromeda_time::EngineTimestamp::from_unix_millis(100));
     assert_eq!(removed, 1);
     assert_eq!(store.total_procedure_feedback(), 1);
 }

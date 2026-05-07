@@ -1,8 +1,7 @@
 //! Durability evidence and publication receipt types for catalog mutations.
 
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, DatabaseId, NamespaceId,
-};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId};
 
 use super::definition::{DefinitionBatchId, DefinitionBatchSourceHash};
 use super::mutation::{

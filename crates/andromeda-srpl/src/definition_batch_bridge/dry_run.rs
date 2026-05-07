@@ -4,7 +4,8 @@ use andromeda_catalog::{
     DefinitionBatchPlan, DefinitionBatchSourceHash, DefinitionOperation, ProcedureContractBinding,
     QualifiedName, ResultStreamCardinality,
 };
-use andromeda_core::{AndromedaResult, CatalogObjectId, CatalogVersion, ContractHash};
+use andromeda_error::AndromedaResult;
+use andromeda_types::{CatalogObjectId, CatalogVersion, ContractHash};
 
 use super::MAX_SRPL_DEFINITION_BATCH_PROCEDURES;
 use super::diagnostics::{SrplDefinitionBatchDiagnostic, SrplDefinitionBatchDryRunError};
@@ -38,8 +39,8 @@ impl SrplDefinitionBatchProcedureSource {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SrplDefinitionBatchDryRunRequest {
     pub batch_id: DefinitionBatchId,
-    pub database_id: andromeda_core::DatabaseId,
-    pub namespace_id: andromeda_core::NamespaceId,
+    pub database_id: andromeda_types::DatabaseId,
+    pub namespace_id: andromeda_types::NamespaceId,
     pub base_version: CatalogVersion,
     pub procedures: Vec<SrplDefinitionBatchProcedureSource>,
 }
@@ -270,8 +271,8 @@ fn materialize_procedure_operation(
 
 fn build_dry_run_report(
     batch_id: DefinitionBatchId,
-    database_id: andromeda_core::DatabaseId,
-    namespace_id: andromeda_core::NamespaceId,
+    database_id: andromeda_types::DatabaseId,
+    namespace_id: andromeda_types::NamespaceId,
     base_version: CatalogVersion,
     operations: Vec<DefinitionOperation>,
     manifests: Vec<SrplProcedureDryRunManifest>,

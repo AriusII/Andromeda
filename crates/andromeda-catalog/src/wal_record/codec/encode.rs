@@ -1,8 +1,9 @@
 //! Body encoding for catalog mutation WAL payloads.
 
-use andromeda_core::{
-    AbsencePolicy, AndromedaResult, ColumnDescriptor, DecimalType, FloatMode, FloatType,
-    ScalarType, TextEncoding, TimestampType, TypeDescriptor,
+use andromeda_error::AndromedaResult;
+use andromeda_types::{
+    AbsencePolicy, ColumnDescriptor, DecimalType, FloatMode, FloatType, ScalarType, TextEncoding,
+    TimestampType, TypeDescriptor,
 };
 
 use crate::{

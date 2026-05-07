@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use super::super::{HistogramBucket, HistogramPlaceholder, SkewMarker, StatsValidationError};
 use super::Datum;

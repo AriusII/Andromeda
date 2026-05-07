@@ -1,9 +1,7 @@
 //! Contract materialization: builder types and hash-binding methods on `ProcedureContract`.
 
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, ColumnDescriptor, ContractHash,
-    ProcedureId,
-};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::{ColumnDescriptor, ContractHash, ProcedureId};
 
 use crate::CatalogObjectRef;
 use crate::names::QualifiedName;
@@ -104,8 +102,8 @@ impl ProcedureContract {
     pub fn validate_canonical_hash(&self) -> AndromedaResult<()> {
         self.validate()?;
         if self.contract_hash != self.canonical_hash() {
-            return Err(andromeda_core::AndromedaError::new(
-                andromeda_core::AndromedaErrorKind::Contract,
+            return Err(andromeda_error::AndromedaError::new(
+                andromeda_error::AndromedaErrorKind::Contract,
                 "procedure contract hash must match canonical contract shape",
             ));
         }

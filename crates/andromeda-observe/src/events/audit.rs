@@ -13,7 +13,7 @@ use super::{contains_sensitive_marker, non_empty_reason, observe_error};
 fn non_empty_evidence(
     label: &str,
     value: impl Into<String>,
-) -> andromeda_core::AndromedaResult<String> {
+) -> andromeda_error::AndromedaResult<String> {
     let value = value.into();
     if value.trim().is_empty() {
         return Err(observe_error(format!(

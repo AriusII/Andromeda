@@ -1,4 +1,3 @@
-use andromeda_core::{CatalogVersion, RequestId, SessionId};
 use andromeda_observe::{
     DurableAuditEventFamily, DurableAuditPrincipalBinding, DurableAuditReplayBehavior,
     DurableAuditReplayRecord, DurableAuditRetentionBoundary, DurableAuditSinkReport,
@@ -6,6 +5,7 @@ use andromeda_observe::{
     Permission, SecurityPolicyVersionEvidence, SurfaceScope, TraceEventFamily, TraceId,
     TraceQueryFilter, TraceQueryLsnRange, TraceQuerySpec,
 };
+use andromeda_types::{CatalogVersion, RequestId, SessionId};
 
 fn replay_record(
     event_id: u128,

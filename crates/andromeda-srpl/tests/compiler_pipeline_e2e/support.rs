@@ -8,10 +8,7 @@ pub(crate) use andromeda_catalog::{
     inventory_protocol_layout_ref, inventory_reserve_stock_contract,
     inventory_reserve_stock_contract_candidate,
 };
-pub(crate) use andromeda_core::{
-    AndromedaErrorKind, CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash,
-    ProcedureId, ScalarType, TypeDescriptor,
-};
+pub(crate) use andromeda_error::AndromedaErrorKind;
 pub(crate) use andromeda_srpl::{
     DiagnosticPhase, SourceSpan,
     procedure_compiler::{
@@ -29,6 +26,10 @@ pub(crate) use andromeda_srpl::{
         SrplProcedureContractMetadata, SrplProcedureIr, SrplResultStreamIr, SrplValueIr,
     },
     source_location::SrplSource,
+};
+pub(crate) use andromeda_types::{
+    CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId, ScalarType,
+    TypeDescriptor,
 };
 
 pub(crate) fn contract_metadata() -> SrplProcedureContractMetadata {

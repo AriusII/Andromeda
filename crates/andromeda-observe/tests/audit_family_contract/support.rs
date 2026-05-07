@@ -1,4 +1,3 @@
-pub(crate) use andromeda_core::{RequestId, SessionId, TransactionId};
 pub(crate) use andromeda_observe::{
     AdminOperation, AdminOperationTrace, AuthorizationDeniedTrace, CertificateIdentity,
     CriticalDecisionKind, DurableAuditEventFamily, DurableAuditPrincipalBinding,
@@ -9,6 +8,7 @@ pub(crate) use andromeda_observe::{
     StreamRoleRejectionTrace, SurfaceScope, TraceEvent, TraceId, UnsupportedVersionTrace,
     UserPrincipal, UserPrincipalKind, V0_EVENT_SCHEMA_VERSION,
 };
+pub(crate) use andromeda_types::{RequestId, SessionId, TransactionId};
 
 pub(crate) fn request_correlation() -> EventCorrelation {
     EventCorrelation {

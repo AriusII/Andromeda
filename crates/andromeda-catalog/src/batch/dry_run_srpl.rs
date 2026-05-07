@@ -22,7 +22,7 @@
 //! Source diagnostics are emitted by `andromeda-srpl`. Catalog diagnostics here
 //! are contract or manifest integrity diagnostics.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{CatalogDefinition, DefinitionBatch, DefinitionOperation, ObjectKind};
 
@@ -145,7 +145,8 @@ mod tests {
         DefinitionBatchId, INVENTORY_DATABASE_ID, INVENTORY_NAMESPACE_ID,
         inventory_domain_definition_batch, inventory_reserve_stock_contract,
     };
-    use andromeda_core::{AndromedaErrorKind, CatalogVersion};
+    use andromeda_error::AndromedaErrorKind;
+    use andromeda_types::CatalogVersion;
 
     #[test]
     fn srpl_batch_dry_run_report_success() {

@@ -1,10 +1,14 @@
-//! Procedure contracts and contract compatibility checking.
+//! Temporary compatibility facade for Procedure contracts.
+//!
+//! Lot 2.1 moves the canonical contract model to `andromeda-contract`.
+//! `andromeda-catalog` keeps these explicit reexports for one migration cycle
+//! so existing imports such as `andromeda_catalog::ProcedureContract` remain
+//! valid while call sites migrate deliberately.
 
-mod hash;
-mod materialization;
-mod types;
-mod validation;
-
-pub use materialization::*;
-pub use types::*;
-pub use validation::*;
+pub use andromeda_contract::{
+    AccessMode, CompatibilityPolicy, ContractCompatibilityDiagnostic, IsolationPolicy,
+    MultiResultPolicy, PolicyVersion, ProcedureContract, ProcedureContractBinding,
+    ProcedureContractCandidate, ProcedureContractRef, ProcedureErrorPolicy, ProtocolLayoutRef,
+    ResultMetadataPolicy, ResultStreamCardinality, ResultStreamContract, StatsVersion,
+    TransactionPolicy, diagnose_procedure_contract_compatibility,
+};

@@ -1,4 +1,4 @@
-use andromeda_core::CatalogObjectId;
+use andromeda_types::CatalogObjectId;
 
 use crate::digest::Sha256;
 

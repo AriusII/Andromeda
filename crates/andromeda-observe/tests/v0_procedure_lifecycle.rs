@@ -1,13 +1,13 @@
-use andromeda_core::{
-    CatalogObjectId, CatalogVersion, ContractHash, RequestId, ResourceBudget, SessionId,
-    TransactionId,
-};
+use andromeda_hardware::{PipelineClass, ResourceBudget};
 use andromeda_observe::{
     AuthorizationDeniedTrace, CertificateIdentity, CompletionEmittedTrace, CriticalDecisionKind,
     DecisionTrace, EventCorrelation, EventEnvelope, EventId, InMemoryEventSequence,
     IoBudgetDecisionTrace, IoPipelineStage, Permission, ProtocolCorrelation, RecoveryTrace,
     SecurityAuditOutcome, SecurityAuditTrace, SecurityPolicyVersionEvidence, SurfaceScope,
     TraceEvent, TraceId, UserPrincipal, UserPrincipalKind, WalEventTrace, WalOperation,
+};
+use andromeda_types::{
+    CatalogObjectId, CatalogVersion, ContractHash, RequestId, SessionId, TransactionId,
 };
 
 fn base_correlation() -> EventCorrelation {
@@ -133,7 +133,7 @@ fn v0_procedure_lifecycle_records_audit_wal_commit_completion_and_recovery() {
                 TraceEvent::IoBudgetDecision(
                     IoBudgetDecisionTrace::from_budget_request(
                         TraceId::new(103),
-                        andromeda_core::PipelineClass::ForegroundExecution,
+                        PipelineClass::ForegroundExecution,
                         IoPipelineStage::Hot,
                         ResourceBudget::new(16 * 1024, 4 * 1024, 1),
                         4 * 1024,

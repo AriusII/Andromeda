@@ -1,7 +1,7 @@
 //! GPU availability and pipeline eligibility policy.
 
-use super::hardware_pipeline::PipelineClass;
-use crate::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use crate::PipelineClass;
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 /// Policy for GPU execution availability and restrictions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

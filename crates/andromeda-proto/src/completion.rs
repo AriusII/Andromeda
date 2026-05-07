@@ -11,7 +11,7 @@ mod validation;
 #[cfg(test)]
 mod tests;
 
-use andromeda_core::{RequestId, SessionId, TransactionId};
+use andromeda_types::{RequestId, SessionId, TransactionId};
 
 use crate::ProtocolVersion;
 

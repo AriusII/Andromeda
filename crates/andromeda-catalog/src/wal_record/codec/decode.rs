@@ -1,9 +1,10 @@
 //! Body decoding for catalog mutation WAL payloads.
 
-use andromeda_core::{
-    AbsencePolicy, AndromedaResult, CatalogObjectId, CatalogVersion, ColumnDescriptor,
-    ContractHash, DatabaseId, DecimalType, FloatMode, FloatType, NamespaceId, ProcedureId,
-    ScalarType, TextEncoding, TextType, TimestampType, TypeDescriptor,
+use andromeda_error::AndromedaResult;
+use andromeda_types::{
+    AbsencePolicy, CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, DatabaseId,
+    DecimalType, FloatMode, FloatType, NamespaceId, ProcedureId, ScalarType, TextEncoding,
+    TextType, TimestampType, TypeDescriptor,
 };
 
 use crate::{

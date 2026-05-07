@@ -6,18 +6,18 @@ Foundation types for Andromeda crates: identifiers, errors, clocks,
 Andromeda type descriptors, principal identity, and conservative
 hardware/resource contracts.
 
-The crate is intentionally dependency-light and forbids unsafe code. Public
-exports here are cross-crate contracts; implementation details stay private to
-their modules.
+This crate is a compatibility facade over the first foundation split. Public
+exports here remain stable while downstream crates migrate to narrower
+dependencies.
 "#]
 
-pub mod digest;
-mod error;
-mod ids;
-mod time;
-mod types;
-
 mod principal;
+
+/// Compatibility digest module for crates that still use
+/// `andromeda_core::digest::*`.
+pub mod digest {
+    pub use andromeda_digest::{Sha256, sha256};
+}
 
 /// Compatibility exports for crates that still import hardware policy types via
 /// `andromeda_core::policy::*`.
@@ -29,16 +29,16 @@ pub mod policy {
     };
 }
 
-mod hardware_cpu;
-mod hardware_gpu;
-mod hardware_integration;
-mod hardware_pipeline;
-mod hardware_ram;
-
-pub use error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-pub use ids::{
-    CatalogObjectId, CatalogVersion, ContractHash, DatabaseId, InvocationId, NamespaceId,
-    ProcedureId, RequestId, SessionId, TransactionId,
+pub use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+pub use andromeda_hardware::{
+    CpuCapabilityClass, CpuProfile, GpuExecutionPolicy, GpuProfile, HardwareArchitecture,
+    HardwareProfile, PipelineClass, RamProfile, RamSectionBudget, RamSectionRole, ResourceBudget,
+};
+pub use andromeda_time::{Clock, EngineTimestamp, ManualClock, SystemClock};
+pub use andromeda_types::{
+    AbsencePolicy, CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, DatabaseId,
+    DecimalType, FloatMode, FloatType, InvocationId, NamespaceId, ProcedureId, RequestId,
+    ScalarType, SessionId, TextEncoding, TextType, TimestampType, TransactionId, TypeDescriptor,
 };
 
 pub use principal::{
@@ -49,17 +49,6 @@ pub use principal::{
     PrincipalAuthorizationOutcome, PrincipalBinding, PrincipalId, PrincipalPolicyEvidenceBinding,
     PrincipalPolicyVersion, PrincipalRegistry, PrincipalRole, PrincipalStatus, SessionToken,
     SurfaceScope, UserPrincipal,
-};
-
-pub use hardware_cpu::{CpuCapabilityClass, CpuProfile, HardwareArchitecture};
-pub use hardware_gpu::{GpuExecutionPolicy, GpuProfile};
-pub use hardware_integration::{HardwareProfile, ResourceBudget};
-pub use hardware_pipeline::PipelineClass;
-pub use hardware_ram::{RamProfile, RamSectionBudget, RamSectionRole};
-pub use time::{Clock, EngineTimestamp, ManualClock, SystemClock};
-pub use types::{
-    AbsencePolicy, ColumnDescriptor, DecimalType, FloatMode, FloatType, ScalarType, TextEncoding,
-    TextType, TimestampType, TypeDescriptor,
 };
 
 #[cfg(test)]
@@ -76,5 +65,15 @@ mod tests {
 
         let gpu_policy = policy::GpuExecutionPolicy::OffCriticalPathOnly;
         assert!(!gpu_policy.permits_pipeline(policy::PipelineClass::Commit));
+    }
+
+    #[test]
+    fn foundation_facade_preserves_legacy_public_paths() {
+        let _request_id = RequestId::new(1);
+        let _timestamp = EngineTimestamp::from_unix_millis(0);
+        let _descriptor = TypeDescriptor::required(ScalarType::Bool);
+        let _digest = digest::sha256(b"andromeda");
+        let _profile = HardwareProfile::conservative();
+        let _error = AndromedaError::new(AndromedaErrorKind::Contract, "contract error");
     }
 }

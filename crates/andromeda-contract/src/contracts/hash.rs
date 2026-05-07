@@ -1,10 +1,11 @@
 //! Canonical hash computation for procedure contracts and policy versions.
 
-use andromeda_core::{
+use andromeda_digest::Sha256;
+use andromeda_types::{
     ContractHash, DecimalType, FloatMode, FloatType, ScalarType, TextEncoding, TimestampType,
 };
 
-use crate::{digest::Sha256, names::QualifiedName};
+use crate::names::QualifiedName;
 
 use super::{
     AccessMode, CompatibilityPolicy, IsolationPolicy, MultiResultPolicy, PolicyVersion,
@@ -34,7 +35,7 @@ pub(super) fn canonical_procedure_contract_hash_parts(
     name: &QualifiedName,
     stats_version: StatsVersion,
     protocol_layout: ProtocolLayoutRef,
-    inputs: &[andromeda_core::ColumnDescriptor],
+    inputs: &[andromeda_types::ColumnDescriptor],
     structured_inputs: &[QualifiedName],
     result_streams: &[ResultStreamContract],
     required_permissions: &[String],
@@ -195,7 +196,7 @@ impl StableHashSink {
         }
     }
 
-    fn columns(&mut self, columns: &[andromeda_core::ColumnDescriptor]) {
+    fn columns(&mut self, columns: &[andromeda_types::ColumnDescriptor]) {
         self.u64(columns.len() as u64);
         for column in columns {
             self.str(&column.name);
@@ -204,11 +205,11 @@ impl StableHashSink {
         }
     }
 
-    fn type_descriptor(&mut self, descriptor: &andromeda_core::TypeDescriptor) {
+    fn type_descriptor(&mut self, descriptor: &andromeda_types::TypeDescriptor) {
         self.scalar_type(&descriptor.scalar);
         self.u8(match descriptor.absence {
-            andromeda_core::AbsencePolicy::Required => 0,
-            andromeda_core::AbsencePolicy::ExplicitOptional => 1,
+            andromeda_types::AbsencePolicy::Required => 0,
+            andromeda_types::AbsencePolicy::ExplicitOptional => 1,
         });
     }
 

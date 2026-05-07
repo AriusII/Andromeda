@@ -1,4 +1,5 @@
-use andromeda_core::{AndromedaResult, ContractHash, RequestId, SessionId};
+use andromeda_error::AndromedaResult;
+use andromeda_types::{ContractHash, RequestId, SessionId};
 
 use crate::events::{
     EventEnvelope, ProtocolEventScope, TraceEvent, TransactionPhaseCode, TransitionReasonCode,

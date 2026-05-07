@@ -1,4 +1,4 @@
-use andromeda_core::EngineTimestamp;
+use andromeda_time::EngineTimestamp;
 
 use crate::{
     BENCHMARK_EVIDENCE_AUTHORITATIVE, BENCHMARK_EVIDENCE_CAN_SELECT_PLAN_ALONE,

@@ -27,9 +27,9 @@ pub use traits::{
 mod tests {
     use super::*;
     use andromeda_catalog::{CatalogObjectRef, ObjectKind, ProcedureContractRef, QualifiedName};
-    use andromeda_core::{
-        AndromedaErrorKind, CatalogObjectId, CatalogVersion, ContractHash, ProcedureId, ScalarType,
-        TypeDescriptor,
+    use andromeda_error::AndromedaErrorKind;
+    use andromeda_types::{
+        CatalogObjectId, CatalogVersion, ContractHash, ProcedureId, ScalarType, TypeDescriptor,
     };
 
     use crate::procedure_model::{Cardinality, SrplAssignmentIr, SrplEmitValueIr, SrplPredicateIr};

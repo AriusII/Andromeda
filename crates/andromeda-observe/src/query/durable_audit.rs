@@ -1,4 +1,4 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use super::{
     TraceEventFamily, TraceQueryLsnRange, TraceQueryMetadata, TraceQueryPermissionMatrix,
@@ -93,8 +93,8 @@ pub struct DurableAuditTraceQueryRow {
     pub certificate_fingerprint: Option<String>,
     pub surface: Option<SurfaceScope>,
     pub permission: Option<Permission>,
-    pub request_id: Option<andromeda_core::RequestId>,
-    pub session_id: Option<andromeda_core::SessionId>,
+    pub request_id: Option<andromeda_types::RequestId>,
+    pub session_id: Option<andromeda_types::SessionId>,
     pub event_kind: String,
 }
 

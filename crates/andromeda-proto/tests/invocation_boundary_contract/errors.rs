@@ -1,4 +1,4 @@
-use andromeda_core::AndromedaErrorKind;
+use andromeda_error::AndromedaErrorKind;
 use andromeda_proto::generated::{
     self,
     contract::v1::result_stream_descriptor,

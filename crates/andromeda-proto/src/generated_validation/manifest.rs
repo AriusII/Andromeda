@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 use crate::generated::contract::v1::result_stream_descriptor::{Cardinality, RowCountRequirement};
 use crate::generated::{CONTRACT_PACKAGE, PROTOCOL_PACKAGE, contract};

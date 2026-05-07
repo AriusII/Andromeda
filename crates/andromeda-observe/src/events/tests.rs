@@ -1,5 +1,5 @@
 use super::*;
-use andromeda_core::{ContractHash, RequestId, SessionId};
+use andromeda_types::{ContractHash, RequestId, SessionId};
 
 #[test]
 fn event_envelope_validates_non_zero_ids_and_payload_shape() {

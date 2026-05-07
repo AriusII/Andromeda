@@ -1,4 +1,4 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::identifier::validate_srpl_identifier as validate_symbol;
 
@@ -115,8 +115,8 @@ impl ConstantLiteral {
 
     /// True when this literal is type-compatible with `scalar` without
     /// silent conversion.
-    pub fn is_compatible_with(&self, scalar: &andromeda_core::ScalarType) -> bool {
-        use andromeda_core::ScalarType;
+    pub fn is_compatible_with(&self, scalar: &andromeda_types::ScalarType) -> bool {
+        use andromeda_types::ScalarType;
         matches!(
             (self, scalar),
             (Self::Bool(_), ScalarType::Bool)

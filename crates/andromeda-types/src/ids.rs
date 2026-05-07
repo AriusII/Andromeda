@@ -32,7 +32,7 @@
 //! - Contract evolution tracking
 //! - Change impact analysis
 
-use crate::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use std::fmt;
 
 macro_rules! id_type {

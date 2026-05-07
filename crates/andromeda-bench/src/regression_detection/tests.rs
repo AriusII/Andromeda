@@ -1,6 +1,6 @@
 use super::*;
 use crate::metric_math::percent_change;
-use andromeda_core::{CatalogVersion, ContractHash, ProcedureId};
+use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 use crate::{
     BenchmarkHardwareProfile, BenchmarkPlanClass, BenchmarkRunRequest, BenchmarkScenarioTarget,

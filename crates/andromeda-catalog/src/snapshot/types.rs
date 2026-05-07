@@ -3,7 +3,7 @@
 //! These types are shared across the snapshot sub-modules and are
 //! re-exported from the module root.
 
-use andromeda_core::CatalogVersion;
+use andromeda_types::CatalogVersion;
 
 use crate::{CatalogPublicationReceipt, CatalogPublicationSemantics};
 

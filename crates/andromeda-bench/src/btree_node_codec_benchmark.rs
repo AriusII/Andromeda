@@ -51,7 +51,7 @@ pub fn run_btree_node_codec_smoke_benchmark(
     })
 }
 
-fn sample_node(sample: u32) -> Result<BTreeNodeV1, andromeda_core::AndromedaError> {
+fn sample_node(sample: u32) -> Result<BTreeNodeV1, andromeda_error::AndromedaError> {
     if sample.is_multiple_of(2) {
         BTreeNodeV1::new_leaf(
             PageId::new(FIRST_PAGE_ID + u64::from(sample)),

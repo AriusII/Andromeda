@@ -8,8 +8,8 @@ use andromeda_catalog::{
     INVENTORY_RESERVE_STOCK_PROCEDURE_ID, ProcedureContract, QualifiedName,
     inventory_domain_definition_batch, inventory_reserve_stock_contract_candidate,
 };
-use andromeda_core::{CatalogVersion, ContractHash, ProcedureId};
 use andromeda_proto::generated::contract::v1::catalog_procedure_manifest_resolution_response::Status as ProtoCatalogManifestResolutionStatus;
+use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 fn catalog_server_runtime_fixture() -> (
     CatalogServerRuntime,
@@ -193,20 +193,20 @@ fn catalog_server_rejects_unspecified_proto_status_at_boundary() {
     .unwrap_err();
     assert_eq!(
         unspecified.kind(),
-        andromeda_core::AndromedaErrorKind::Protocol
+        andromeda_error::AndromedaErrorKind::Protocol
     );
     assert!(unspecified.message().contains("must be specified"));
 
     let unspecified_i32 = CatalogManifestResolutionStatus::from_proto_i32(0).unwrap_err();
     assert_eq!(
         unspecified_i32.kind(),
-        andromeda_core::AndromedaErrorKind::Protocol
+        andromeda_error::AndromedaErrorKind::Protocol
     );
 
     let unknown_i32 = CatalogManifestResolutionStatus::from_proto_i32(99).unwrap_err();
     assert_eq!(
         unknown_i32.kind(),
-        andromeda_core::AndromedaErrorKind::Protocol
+        andromeda_error::AndromedaErrorKind::Protocol
     );
 
     assert_eq!(

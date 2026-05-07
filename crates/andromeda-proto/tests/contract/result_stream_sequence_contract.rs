@@ -1,5 +1,6 @@
-use andromeda_core::{AndromedaErrorKind, ContractHash};
+use andromeda_error::AndromedaErrorKind;
 use andromeda_proto::{ResultCardinality, ResultStreamDescriptor, RowCountRequirement, generated};
+use andromeda_types::ContractHash;
 use generated::{
     contract::v1::{
         ColumnDescriptor as ProtoColumnDescriptor,

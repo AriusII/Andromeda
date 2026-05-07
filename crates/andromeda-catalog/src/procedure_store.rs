@@ -7,7 +7,7 @@
 //! (or constructed from the same typed building blocks) and the store exposes
 //! only typed accessors. There is no ad hoc text query surface (no SQL, no
 //! command string); callers must address procedures by
-//! [`ProcedureId`](andromeda_core::ProcedureId) or
+//! [`ProcedureId`](andromeda_types::ProcedureId) or
 //! [`QualifiedName`](crate::QualifiedName).
 //!
 //! The store also accepts [`InvocationDecisionRecord`] values, allowing every

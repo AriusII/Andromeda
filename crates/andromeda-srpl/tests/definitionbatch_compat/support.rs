@@ -1,5 +1,4 @@
 use andromeda_catalog::{CatalogDefinition, DefinitionBatch, DefinitionBatchId};
-use andromeda_core::{CatalogObjectId, CatalogVersion, DatabaseId, NamespaceId, ProcedureId};
 use andromeda_srpl::{
     SrplProcedureContractMetadata,
     definition_batch_bridge::{
@@ -8,6 +7,7 @@ use andromeda_srpl::{
     },
     inventory_reserve_stock_contract_metadata,
 };
+use andromeda_types::{CatalogObjectId, CatalogVersion, DatabaseId, NamespaceId, ProcedureId};
 
 pub(crate) const TEST_DB_ID: DatabaseId = DatabaseId::new(1);
 pub(crate) const TEST_NS_ID: NamespaceId = NamespaceId::new(1);

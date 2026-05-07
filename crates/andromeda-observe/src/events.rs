@@ -8,9 +8,9 @@
 
 #[cfg(test)]
 use crate::TraceId;
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 #[cfg(test)]
-use andromeda_core::{CatalogObjectId, CatalogVersion, InvocationId, TransactionId};
+use andromeda_types::{CatalogObjectId, CatalogVersion, InvocationId, TransactionId};
 
 mod admission_audit;
 mod audit;

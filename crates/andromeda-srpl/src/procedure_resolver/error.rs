@@ -1,6 +1,5 @@
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, CatalogVersion, ContractHash, ProcedureId,
-};
+use andromeda_error::{AndromedaError, AndromedaErrorKind};
+use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 use super::request::ProcedureResolveTarget;
 

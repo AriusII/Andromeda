@@ -1,4 +1,5 @@
-use andromeda_core::{AndromedaErrorKind, AndromedaResult, RequestId, SessionId};
+use andromeda_error::{AndromedaErrorKind, AndromedaResult};
+use andromeda_types::{RequestId, SessionId};
 
 use crate::generated::protocol;
 use crate::{
@@ -103,7 +104,7 @@ fn project_backpressure_metadata(
 ) -> AndromedaResult<BackpressureMetadata> {
     let capacity_percent = match backpressure.capacity_percent {
         Some(percent) => Some(u8::try_from(percent).map_err(|_| {
-            andromeda_core::AndromedaError::new(
+            andromeda_error::AndromedaError::new(
                 AndromedaErrorKind::Resource,
                 "generated backpressure capacity_percent must fit in u8",
             )

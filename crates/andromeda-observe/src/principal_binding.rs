@@ -7,7 +7,7 @@
 
 use std::collections::BTreeMap;
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::events::{
     AdminOperation, CertificateIdentity, Permission, SecurityAuditOutcome, SecurityAuditTrace,

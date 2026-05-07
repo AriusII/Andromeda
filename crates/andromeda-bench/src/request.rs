@@ -1,4 +1,4 @@
-use andromeda_core::HardwareProfile;
+use andromeda_hardware::HardwareProfile;
 
 use crate::{
     BenchmarkError, BenchmarkWorkload, DEFAULT_DURATION_MS, DEFAULT_SAMPLES, DEFAULT_TEMP_BYTES,

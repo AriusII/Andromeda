@@ -1,6 +1,6 @@
 //! RAM budget allocation and validation.
 
-use crate::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 /// Logical role for a RAM section in the execution environment.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

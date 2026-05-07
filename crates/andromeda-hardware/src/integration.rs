@@ -1,10 +1,7 @@
 //! Hardware capability aggregation and resource budgets.
 
-use super::hardware_cpu::{CpuProfile, HardwareArchitecture};
-use super::hardware_gpu::GpuProfile;
-use super::hardware_pipeline::PipelineClass;
-use super::hardware_ram::RamProfile;
-use crate::AndromedaResult;
+use crate::{CpuProfile, GpuProfile, HardwareArchitecture, PipelineClass, RamProfile};
+use andromeda_error::AndromedaResult;
 
 /// Complete hardware profile describing the compute environment.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -67,9 +64,8 @@ impl ResourceBudget {
 
 #[cfg(test)]
 mod tests {
-    use super::super::hardware_cpu::CpuCapabilityClass;
-    use super::super::hardware_gpu::GpuExecutionPolicy;
     use super::*;
+    use crate::{CpuCapabilityClass, GpuExecutionPolicy};
 
     #[test]
     fn conservative_profile_disables_gpu() {

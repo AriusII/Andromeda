@@ -1,6 +1,5 @@
 use std::time::Instant;
 
-use andromeda_core::{RequestId, SessionId};
 use andromeda_observe::{
     CertificateIdentity, DurableAuditPrincipalBinding, DurableAuditReplayBehavior,
     DurableAuditReplayQuery, DurableAuditRetentionBoundary, DurableAuditSinkReport,
@@ -9,6 +8,7 @@ use andromeda_observe::{
     SecurityPolicyVersionEvidence, SurfaceScope, TraceEvent, TraceId, UserPrincipal,
     UserPrincipalKind,
 };
+use andromeda_types::{RequestId, SessionId};
 
 use crate::{
     BenchmarkError,

@@ -1,9 +1,10 @@
-use andromeda_core::{AndromedaResult, ContractHash};
+use andromeda_error::AndromedaResult;
 use andromeda_proto::{
     generated, validate_generated_invocation_response_sequence, validate_generated_rpc_batch,
     validate_generated_rpc_completion, validate_generated_rpc_execute_request,
     validate_generated_rpc_metadata,
 };
+use andromeda_types::ContractHash;
 use prost::Message;
 
 use super::proto_wire_fixtures::{
@@ -69,7 +70,6 @@ fn generated_rpc_execute_request_validation_rejects_default_runtime_bindings() {
     let valid = reserve_stock_execute_request();
     let valid_budget = valid
         .budget
-        .clone()
         .expect("valid ReserveStock execute fixture carries a request budget");
 
     assert!(generated::validate_generated_rpc_execute_request(&valid).is_ok());
@@ -127,7 +127,7 @@ fn generated_rpc_execute_request_validation_rejects_default_runtime_bindings() {
                 budget: Some(
                     generated::protocol::v1::rpc_execute_request::RequestBudget {
                         priority_class: Some(0),
-                        ..valid_budget.clone()
+                        ..valid_budget
                     },
                 ),
                 ..valid.clone()

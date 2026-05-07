@@ -5,11 +5,10 @@ use crate::{
     ProtocolLayoutRef, QualifiedName, RecordOutcome, ResultMetadataPolicy, StatsVersion,
     TransactionPolicy,
 };
-use andromeda_core::{
-    AndromedaErrorKind, CatalogObjectId, CatalogVersion, ContractHash, EngineTimestamp,
-    InvocationId, ProcedureId,
-};
+use andromeda_error::AndromedaErrorKind;
 use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
+use andromeda_time::EngineTimestamp;
+use andromeda_types::{CatalogObjectId, CatalogVersion, ContractHash, InvocationId, ProcedureId};
 
 fn entry(id: u64, name: &str, hash_seed: u8) -> ProcedureStoreEntry {
     ProcedureStoreEntry {
@@ -91,8 +90,8 @@ fn runtime_record(
 
 fn make_window(issued: u64, expires: u64) -> crate::ValidityWindow {
     crate::ValidityWindow::new(
-        andromeda_core::EngineTimestamp::from_unix_millis(issued),
-        andromeda_core::EngineTimestamp::from_unix_millis(expires),
+        andromeda_time::EngineTimestamp::from_unix_millis(issued),
+        andromeda_time::EngineTimestamp::from_unix_millis(expires),
     )
     .expect("valid window")
 }

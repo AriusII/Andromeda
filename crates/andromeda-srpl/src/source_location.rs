@@ -1,6 +1,6 @@
 //! SRPL source text and location primitives.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{ForbiddenConstruct, ForbiddenConstructHit, SrplDiagnostic};
 

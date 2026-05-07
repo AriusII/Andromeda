@@ -1,6 +1,6 @@
 //! Primitive field writers and the checked decode cursor.
 
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 use super::catalog_error;
 

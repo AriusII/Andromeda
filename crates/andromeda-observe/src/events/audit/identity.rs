@@ -1,7 +1,7 @@
 use andromeda_core::{
-    AndromedaResult, PRINCIPAL_POLICY_EVIDENCE_VERSION, PrincipalPolicyEvidenceBinding,
-    PrincipalPolicyVersion,
+    PRINCIPAL_POLICY_EVIDENCE_VERSION, PrincipalPolicyEvidenceBinding, PrincipalPolicyVersion,
 };
+use andromeda_error::AndromedaResult;
 
 use super::{SurfaceScope, contains_sensitive_marker, non_empty_evidence, observe_error};
 

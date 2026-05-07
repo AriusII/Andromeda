@@ -7,10 +7,9 @@ pub(crate) use andromeda_catalog::{
     StatsPublicationDecisionEvidenceKind, StatsPublicationDecisionStage, StatsPublicationSwitch,
     StatsPublicationSwitchDecision, StatsPublicationSwitchError, StatsVersion, ValidityWindow,
 };
-pub(crate) use andromeda_core::{
-    CatalogObjectId, CatalogVersion, ContractHash, EngineTimestamp, ProcedureId,
-};
 pub(crate) use andromeda_observe::TraceId;
+pub(crate) use andromeda_time::EngineTimestamp;
+pub(crate) use andromeda_types::{CatalogObjectId, CatalogVersion, ContractHash, ProcedureId};
 
 fn target(object: u64, column: u16) -> StatsColumnTarget {
     StatsColumnTarget::new(CatalogObjectId::new(object), column)

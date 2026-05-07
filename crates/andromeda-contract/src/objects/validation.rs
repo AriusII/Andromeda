@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, ColumnDescriptor};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::ColumnDescriptor;
 
 pub(crate) fn validate_columns(columns: &[ColumnDescriptor]) -> AndromedaResult<()> {
     validate_columns_with_min(columns, true)

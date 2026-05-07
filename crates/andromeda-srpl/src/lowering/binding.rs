@@ -6,7 +6,8 @@ use andromeda_catalog::{
     CatalogDefinition, CatalogSnapshot, ObjectKind, ProcedureContract, QualifiedName,
     StructuredObjectDefinition, TableDefinition,
 };
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, ColumnDescriptor};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::ColumnDescriptor;
 
 use crate::{
     BoundSrplBodyPlan, BoundSrplOperationPlan, ExecutableProcedurePlan, SrplAssignmentIr,

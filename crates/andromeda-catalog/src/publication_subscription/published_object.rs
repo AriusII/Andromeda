@@ -1,4 +1,5 @@
-use andromeda_core::{AndromedaResult, CatalogVersion, ContractHash, ProcedureId};
+use andromeda_error::AndromedaResult;
+use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 use super::catalog_publication_error;
 use crate::{CatalogObjectRef, ObjectKind};

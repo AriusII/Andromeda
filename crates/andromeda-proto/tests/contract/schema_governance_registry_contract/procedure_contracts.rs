@@ -1,4 +1,4 @@
-use andromeda_core::AndromedaErrorKind;
+use andromeda_error::AndromedaErrorKind;
 
 use super::super::support::{
     CONTRACT_SCHEMAS, PROTOCOL_SCHEMAS, assert_all_message_definitions_have_reserved_ranges,

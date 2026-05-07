@@ -1,11 +1,11 @@
 use andromeda_catalog::{CatalogDefinition, DefinitionOperation, ResultStreamCardinality};
-use andromeda_core::{AbsencePolicy, CatalogObjectId, CatalogVersion, ProcedureId};
 use andromeda_srpl::{
     DiagnosticPhase,
     definition_batch_bridge::{
         SrplDefinitionBatchProcedureSource, dry_run_srpl_definition_batch_sources,
     },
 };
+use andromeda_types::{AbsencePolicy, CatalogObjectId, CatalogVersion, ProcedureId};
 
 use crate::support::{dry_run_request, test_metadata};
 

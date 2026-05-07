@@ -2,7 +2,8 @@
 //! the [`ProcedureFeedbackStore`] trait, and the bounded
 //! [`InMemoryProcedureFeedbackStore`] implementation.
 
-use andromeda_core::{EngineTimestamp, ProcedureId};
+use andromeda_time::EngineTimestamp;
+use andromeda_types::ProcedureId;
 
 use super::record::{FeedbackId, ProcedureFeedback};
 

@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 
-use andromeda_core::{AndromedaResult, CatalogVersion};
+use andromeda_error::AndromedaResult;
+use andromeda_types::CatalogVersion;
 
 use super::{CatalogPublishedContract, catalog_publication_error};
 use crate::CatalogPublicationReceipt;

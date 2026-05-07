@@ -7,6 +7,10 @@ publish = false
 
 [dependencies]
 andromeda-core.workspace = true
+andromeda-digest.workspace = true
+andromeda-error.workspace = true
+andromeda-hardware.workspace = true
+andromeda-types.workspace = true
 
 [dev-dependencies]
 andromeda-storage.workspace = true

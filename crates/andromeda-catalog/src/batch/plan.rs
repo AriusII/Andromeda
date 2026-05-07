@@ -1,6 +1,6 @@
 //! Dry-run plan types produced by `DefinitionBatch::dry_run`.
 
-use andromeda_core::{CatalogObjectId, CatalogVersion, DatabaseId, NamespaceId};
+use andromeda_types::{CatalogObjectId, CatalogVersion, DatabaseId, NamespaceId};
 
 use crate::{ObjectKind, QualifiedName};
 

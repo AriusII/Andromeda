@@ -1,4 +1,4 @@
-use andromeda_core::ContractHash;
+use andromeda_types::ContractHash;
 
 /// Versioning bytes for the policy bundle backing a procedure manifest.
 ///

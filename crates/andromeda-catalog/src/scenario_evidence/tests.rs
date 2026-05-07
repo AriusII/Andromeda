@@ -1,4 +1,5 @@
-use andromeda_core::{CatalogVersion, ContractHash, EngineTimestamp, ProcedureId};
+use andromeda_time::EngineTimestamp;
+use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 use crate::contracts::StatsVersion;
 use crate::plan_cache::PlanClass;

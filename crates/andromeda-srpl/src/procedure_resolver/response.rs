@@ -1,5 +1,5 @@
 use andromeda_catalog::{ProcedureContractRef, QualifiedName};
-use andromeda_core::{CatalogVersion, ContractHash, ProcedureId};
+use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 use crate::procedure_model::ExecutableProcedurePlan;
 

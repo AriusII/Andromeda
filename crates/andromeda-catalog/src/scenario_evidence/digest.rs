@@ -1,4 +1,4 @@
-use andromeda_core::ContractHash;
+use andromeda_types::ContractHash;
 
 use crate::digest::Sha256;
 

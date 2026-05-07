@@ -1,4 +1,4 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 pub const DEFAULT_HLL_PRECISION: u8 = 12;
 pub const NDV_EXACT_THRESHOLD: u64 = 10_000;

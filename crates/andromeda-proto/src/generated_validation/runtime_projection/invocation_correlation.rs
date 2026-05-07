@@ -1,4 +1,4 @@
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 use crate::generated::protocol;
 use crate::generated_validation::{contract_error, validate_required_contract_hash};

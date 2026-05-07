@@ -2,10 +2,8 @@ use andromeda_catalog::{
     CompatibilityPolicy, MultiResultPolicy, ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName,
     ResultMetadataPolicy, StatsVersion, TransactionPolicy,
 };
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogObjectId, CatalogVersion,
-    ColumnDescriptor, ProcedureId,
-};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::{CatalogObjectId, CatalogVersion, ColumnDescriptor, ProcedureId};
 
 use crate::{Cardinality, identifier::validate_srpl_identifier as validate_symbol};
 

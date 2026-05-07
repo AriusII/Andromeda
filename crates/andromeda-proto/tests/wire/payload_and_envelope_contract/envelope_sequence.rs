@@ -1,5 +1,6 @@
-use andromeda_core::{AndromedaErrorKind, SessionId};
+use andromeda_error::AndromedaErrorKind;
 use andromeda_proto::{FrameEnvelope, PayloadKind, RpcResultStreamMetadataPolicy};
+use andromeda_types::SessionId;
 
 use super::fixtures::envelope;
 

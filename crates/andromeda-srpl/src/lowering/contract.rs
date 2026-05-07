@@ -4,7 +4,8 @@ use andromeda_catalog::{
     CatalogDefinition, DefinitionBatch, DefinitionBatchId, DefinitionOperation,
     ProcedureContractCandidate, ResultStreamContract, inventory_reserve_stock_contract_candidate,
 };
-use andromeda_core::{AndromedaResult, CatalogVersion, DatabaseId, NamespaceId};
+use andromeda_error::AndromedaResult;
+use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId};
 
 use crate::{SrplProcedureContractMetadata, SrplProcedureIr};
 

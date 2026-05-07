@@ -5,7 +5,7 @@
 //! [`DefinitionBatchPlan`], keeping catalog object migration planning distinct
 //! from SRPL procedure ALTER/DROP lifecycle helpers.
 
-use andromeda_core::{CatalogObjectId, CatalogVersion, DatabaseId, NamespaceId};
+use andromeda_types::{CatalogObjectId, CatalogVersion, DatabaseId, NamespaceId};
 
 use crate::{ObjectKind, QualifiedName};
 

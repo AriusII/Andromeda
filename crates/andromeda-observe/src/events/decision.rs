@@ -1,6 +1,5 @@
-use andromeda_core::{
-    AndromedaResult, GpuExecutionPolicy, GpuProfile, PipelineClass, ResourceBudget,
-};
+use andromeda_error::AndromedaResult;
+use andromeda_hardware::{GpuExecutionPolicy, GpuProfile, PipelineClass, ResourceBudget};
 
 use crate::TraceId;
 

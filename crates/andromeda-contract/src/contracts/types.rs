@@ -1,9 +1,7 @@
 //! Core contract types: enums, structs, and their basic constructors and validation.
 
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, ColumnDescriptor,
-    ContractHash, ProcedureId,
-};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::{CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId};
 
 use crate::{
     CatalogObjectRef, ObjectKind,
@@ -492,5 +490,61 @@ impl ProcedureContract {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use andromeda_types::{ScalarType, TypeDescriptor};
+
+    fn column(name: &str, ordinal: u32) -> ColumnDescriptor {
+        ColumnDescriptor {
+            name: name.to_string(),
+            data_type: TypeDescriptor::required(ScalarType::I64),
+            ordinal,
+        }
+    }
+
+    #[test]
+    fn result_stream_cardinality_tags_are_stable() {
+        let cases = [
+            (ResultStreamCardinality::One, 0, true, 1, Some(1)),
+            (ResultStreamCardinality::OptionalOne, 1, false, 0, Some(1)),
+            (ResultStreamCardinality::Many, 2, false, 0, None),
+            (ResultStreamCardinality::NonEmptyMany, 3, true, 1, None),
+        ];
+
+        for (cardinality, tag, legacy_required, min_rows, max_rows) in cases {
+            assert_eq!(cardinality.stable_tag(), tag);
+            assert_eq!(
+                ResultStreamCardinality::from_stable_tag(tag).unwrap(),
+                cardinality
+            );
+            assert_eq!(
+                cardinality.legacy_row_count_exact_required(),
+                legacy_required
+            );
+            assert_eq!(cardinality.min_row_count(), min_rows);
+            assert_eq!(cardinality.intrinsic_max_row_count(), max_rows);
+        }
+
+        assert!(ResultStreamCardinality::from_stable_tag(4).is_err());
+    }
+
+    #[test]
+    fn result_stream_contract_rejects_legacy_cardinality_drift() {
+        let stream = ResultStreamContract {
+            stream_id: 1,
+            name: "Rows".to_string(),
+            columns: vec![column("ProductId", 0)],
+            cardinality: ResultStreamCardinality::One,
+            row_count_exact_required: false,
+        };
+
+        assert_eq!(
+            stream.validate().unwrap_err().kind(),
+            AndromedaErrorKind::Contract
+        );
     }
 }

@@ -1,5 +1,5 @@
 use andromeda_catalog::QualifiedName;
-use andromeda_core::TypeDescriptor;
+use andromeda_types::TypeDescriptor;
 
 use crate::{Cardinality, SourceSpan};
 

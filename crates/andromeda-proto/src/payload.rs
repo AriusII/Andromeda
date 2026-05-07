@@ -2,7 +2,7 @@
 //!
 //! This module defines payload types and their wire representation codes.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind};
+use andromeda_error::{AndromedaError, AndromedaErrorKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PayloadFrameFamily {

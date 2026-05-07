@@ -25,7 +25,7 @@
 //! ## Usage
 //!
 //! ```ignore
-//! use andromeda_core::{Clock, SystemClock, ManualClock, EngineTimestamp};
+//! use andromeda_time::{Clock, SystemClock, ManualClock, EngineTimestamp};
 //!
 //! // Production: use real time
 //! let clock = SystemClock;
@@ -37,7 +37,7 @@
 //! let later = clock.now();
 //! ```
 
-use crate::error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]

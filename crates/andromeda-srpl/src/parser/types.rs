@@ -5,7 +5,7 @@
 //! `timestamp(mode)`. Float and nullable keywords are rejected with
 //! explicit diagnostics.
 
-use andromeda_core::{
+use andromeda_types::{
     DecimalType, ScalarType, TextEncoding, TextType, TimestampType, TypeDescriptor,
 };
 

@@ -1,5 +1,6 @@
 use super::*;
-use andromeda_core::{AndromedaErrorKind, RequestId, SessionId, TransactionId};
+use andromeda_error::AndromedaErrorKind;
+use andromeda_types::{RequestId, SessionId, TransactionId};
 
 fn committed_template() -> RpcCompletion {
     RpcCompletion {

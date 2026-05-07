@@ -4,7 +4,8 @@ use andromeda_bench::{
     BenchmarkScenarioEvidenceError, BenchmarkScenarioTarget, BenchmarkStatsVersion,
     DEFAULT_TEMP_BYTES,
 };
-use andromeda_core::{CatalogVersion, ContractHash, EngineTimestamp, ProcedureId};
+use andromeda_time::EngineTimestamp;
+use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 pub(crate) fn ts(value: u64) -> EngineTimestamp {
     EngineTimestamp::from_unix_millis(value)

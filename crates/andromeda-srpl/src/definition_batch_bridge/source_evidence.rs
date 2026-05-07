@@ -1,10 +1,9 @@
 use andromeda_catalog::{
     DefinitionBatchDependencyGraphHash, DefinitionBatchSourceHash, QualifiedName,
 };
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogObjectId, ContractHash,
-    ProcedureId, digest::Sha256,
-};
+use andromeda_digest::Sha256;
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::{CatalogObjectId, ContractHash, ProcedureId};
 
 use super::MAX_SRPL_DEFINITION_BATCH_PROCEDURES;
 use super::dry_run::SrplProcedureDryRunManifest;

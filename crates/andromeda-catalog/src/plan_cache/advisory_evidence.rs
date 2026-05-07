@@ -1,4 +1,4 @@
-use andromeda_core::EngineTimestamp;
+use andromeda_time::EngineTimestamp;
 
 use crate::scenario_evidence::{
     ScenarioEvidence, ScenarioEvidenceAdvisoryUse, ScenarioEvidenceError,

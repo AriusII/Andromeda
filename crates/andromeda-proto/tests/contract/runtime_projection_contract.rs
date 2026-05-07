@@ -1,7 +1,6 @@
-use andromeda_core::{
-    AndromedaErrorKind, ColumnDescriptor, ContractHash, ScalarType, TypeDescriptor,
-};
+use andromeda_error::AndromedaErrorKind;
 use andromeda_proto::{RowCountRequirement, StructuredObjectHeader, StructuredObjectLayout};
+use andromeda_types::{ColumnDescriptor, ContractHash, ScalarType, TypeDescriptor};
 
 use super::support::{
     BUILD_SCRIPT, CONTRACT_SCHEMAS, EXEC_MANIFEST, GENERATED_VALIDATION_MANIFEST_SOURCE,

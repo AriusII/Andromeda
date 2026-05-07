@@ -1,10 +1,10 @@
 use std::path::Path;
 use std::time::Instant;
 
-use andromeda_core::TransactionId;
 use andromeda_storage::{
     DatabaseManifest, FileWal, Lsn, StartupMode, WalRecordKind, recover_from_file_wal,
 };
+use andromeda_types::TransactionId;
 
 use crate::{
     BenchmarkError,

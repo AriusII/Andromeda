@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt};
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 const URL_SCHEME_SEPARATOR: &str = "://";
 const NETWORK_ENDPOINT_URL_SCHEMES: [&str; 3] = ["http", "https", "unix"];

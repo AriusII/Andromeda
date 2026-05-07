@@ -1,6 +1,5 @@
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, ProcedureId,
-};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::{CatalogVersion, ProcedureId};
 
 use super::{CatalogChangeSubscription, ProcedureManifest};
 

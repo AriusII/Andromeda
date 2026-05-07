@@ -5,7 +5,8 @@ use andromeda_catalog::{
     ProtocolLayoutRef, QualifiedName, ResultMetadataPolicy, ResultStreamContract,
     TransactionPolicy,
 };
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, ColumnDescriptor};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::ColumnDescriptor;
 
 use super::validation::validate_dense_columns_allow_empty;
 

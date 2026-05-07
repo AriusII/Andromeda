@@ -1,5 +1,5 @@
 use andromeda_catalog::{AlterCompatibilityPolicy, CatalogWalRecord, DefinitionBatchId};
-use andromeda_core::CatalogVersion;
+use andromeda_types::CatalogVersion;
 
 use super::fixtures::{
     alter_procedure_record, apply_catalog_version_record, assert_valid_record,

@@ -5,7 +5,7 @@ mod manifest;
 mod protocol_version;
 mod runtime_projection;
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 pub use catalog_manifest_resolution::{
     validate_catalog_procedure_manifest_resolution_request,

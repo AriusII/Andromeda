@@ -14,7 +14,7 @@ mod expression;
 mod operation;
 mod validation;
 
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 use crate::{
     execution_adapter::{
@@ -59,7 +59,7 @@ impl SrplIrInterpreter {
 mod tests {
     use super::*;
     use andromeda_catalog::{CatalogObjectRef, ObjectKind, ProcedureContractRef, QualifiedName};
-    use andromeda_core::{CatalogObjectId, CatalogVersion, ContractHash, ProcedureId};
+    use andromeda_types::{CatalogObjectId, CatalogVersion, ContractHash, ProcedureId};
 
     use crate::{
         Cardinality,

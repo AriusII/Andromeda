@@ -2,7 +2,7 @@ mod common;
 #[cfg(test)]
 mod tests;
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use common::{
     datum_to_key, empty_histogram, estimate_ndv, infer_skew, keyable_keys, single_bucket_histogram,

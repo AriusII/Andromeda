@@ -1,10 +1,10 @@
 use std::collections::BTreeMap;
 
-use andromeda_core::{CatalogObjectId, CatalogVersion, ProcedureId};
 use andromeda_srpl::definition_batch_bridge::{
     MAX_SRPL_DEFINITION_BATCH_PROCEDURES, SrplDefinitionBatchProcedureSource,
     dry_run_srpl_definition_batch_sources,
 };
+use andromeda_types::{CatalogObjectId, CatalogVersion, ProcedureId};
 
 use crate::support::{
     dry_run_request, lookup_signature_source, signature_only_source, test_metadata,

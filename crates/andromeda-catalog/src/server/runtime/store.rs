@@ -3,7 +3,8 @@ use std::{
     sync::{Arc, RwLock, RwLockReadGuard},
 };
 
-use andromeda_core::{AndromedaResult, CatalogVersion, ProcedureId};
+use andromeda_error::AndromedaResult;
+use andromeda_types::{CatalogVersion, ProcedureId};
 
 use crate::{CatalogDefinition, CatalogSystemStore, ProcedureContract, QualifiedName};
 

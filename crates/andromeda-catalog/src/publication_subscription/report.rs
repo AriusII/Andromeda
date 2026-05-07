@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 use super::{
     CatalogPlanInvalidationReport, CatalogPublicationAudience, CatalogPublicationAuditTrace,

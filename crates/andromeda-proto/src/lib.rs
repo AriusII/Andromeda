@@ -147,7 +147,7 @@ This crate forbids unsafe code (`#![forbid(unsafe_code)]`).
 
 ```ignore
 use andromeda_proto::FrameEnvelope;
-use andromeda_core::{ContractHash, CatalogVersion, RequestId, SessionId};
+use andromeda_types::{ContractHash, CatalogVersion, RequestId, SessionId};
 
 let envelope = FrameEnvelope::rpc_execute_request(
     ContractHash::test_vector(1),

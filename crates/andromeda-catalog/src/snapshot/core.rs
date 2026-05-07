@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use andromeda_core::{CatalogObjectId, CatalogVersion, DatabaseId, NamespaceId, ProcedureId};
+use andromeda_types::{CatalogObjectId, CatalogVersion, DatabaseId, NamespaceId, ProcedureId};
 
 use crate::{CatalogDefinition, CatalogPublicationReceipt, ProcedureContract, QualifiedName};
 

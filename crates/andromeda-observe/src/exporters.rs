@@ -3,7 +3,7 @@
 //! Exporters validate their inputs and report every backend failure through
 //! `AndromedaResult`, whether data is emitted one item at a time or in batches.
 
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 mod mock;
 mod types;

@@ -1,6 +1,7 @@
-use andromeda_core::{
+use andromeda_digest::Sha256;
+use andromeda_types::{
     ColumnDescriptor, ContractHash, DecimalType, FloatMode, FloatType, ScalarType, TextEncoding,
-    TimestampType, digest::Sha256,
+    TimestampType,
 };
 
 use super::StructuredObjectLayout;
@@ -71,8 +72,8 @@ impl StructuredObjectHashSink {
             self.u32(column.ordinal);
             self.scalar(&column.data_type.scalar);
             self.u8(match column.data_type.absence {
-                andromeda_core::AbsencePolicy::Required => 0,
-                andromeda_core::AbsencePolicy::ExplicitOptional => 1,
+                andromeda_types::AbsencePolicy::Required => 0,
+                andromeda_types::AbsencePolicy::ExplicitOptional => 1,
             });
         }
     }

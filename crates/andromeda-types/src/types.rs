@@ -29,7 +29,7 @@
 //! Callers that own a column collection validate cross-column rules such as
 //! ordinal density and name uniqueness.
 
-use crate::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AbsencePolicy {

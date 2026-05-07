@@ -15,20 +15,27 @@ dependencies = [
 name = "andromeda-bench"
 version = "0.1.0"
 dependencies = [
- "andromeda-core",
+ "andromeda-error",
+ "andromeda-hardware",
  "andromeda-observe",
  "andromeda-srpl",
  "andromeda-storage",
+ "andromeda-time",
+ "andromeda-types",
 ]
 
 [[package]]
 name = "andromeda-catalog"
 version = "0.1.0"
 dependencies = [
- "andromeda-core",
+ "andromeda-contract",
+ "andromeda-digest",
+ "andromeda-error",
  "andromeda-observe",
  "andromeda-proto",
  "andromeda-storage",
+ "andromeda-time",
+ "andromeda-types",
 ]
 
 [[package]]
@@ -47,7 +54,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-contract"
+version = "0.1.0"
+dependencies = [
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-types",
+]
+
+[[package]]
 name = "andromeda-core"
+version = "0.1.0"
+dependencies = [
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-hardware",
+ "andromeda-time",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-digest"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-error"
 version = "0.1.0"
 
 [[package]]
@@ -67,18 +98,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-hardware"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+]
+
+[[package]]
 name = "andromeda-observe"
 version = "0.1.0"
 dependencies = [
  "andromeda-core",
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-hardware",
  "andromeda-storage",
+ "andromeda-types",
 ]
 
 [[package]]
 name = "andromeda-proto"
 version = "0.1.0"
 dependencies = [
- "andromeda-core",
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-structured-object",
+ "andromeda-types",
  "proptest",
  "prost",
  "prost-build",
@@ -105,7 +150,9 @@ name = "andromeda-srpl"
 version = "0.1.0"
 dependencies = [
  "andromeda-catalog",
- "andromeda-core",
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-types",
  "proptest",
 ]
 
@@ -122,6 +169,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-structured-object"
+version = "0.1.0"
+dependencies = [
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-time"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+]
+
+[[package]]
 name = "andromeda-tx"
 version = "0.1.0"
 dependencies = [
@@ -131,6 +194,13 @@ dependencies = [
  "dashmap",
  "futures",
  "tokio",
+]
+
+[[package]]
+name = "andromeda-types"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
 ]
 
 [[package]]

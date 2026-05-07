@@ -9,27 +9,27 @@ use andromeda_catalog::{
     ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName, ResultMetadataPolicy, StatsVersion,
     StructuredObjectDefinition, TableDefinition, TransactionPolicy,
 };
-use andromeda_core::{
-    AndromedaErrorKind, CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash,
-    ProcedureId, ScalarType, TypeDescriptor,
+use andromeda_error::AndromedaErrorKind;
+use andromeda_types::{
+    CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId, ScalarType,
+    TypeDescriptor,
 };
 
 #[test]
 fn catalog_digest_is_core_digest_alias() {
     let message = b"catalog contract digest canonical backend";
 
-    let mut catalog_hasher: andromeda_catalog::digest::Sha256 =
-        andromeda_core::digest::Sha256::new();
+    let mut catalog_hasher: andromeda_catalog::digest::Sha256 = andromeda_digest::Sha256::new();
     catalog_hasher.update(&message[..8]);
     catalog_hasher.update(&message[8..]);
 
-    let mut core_hasher: andromeda_core::digest::Sha256 = andromeda_catalog::digest::Sha256::new();
+    let mut core_hasher: andromeda_digest::Sha256 = andromeda_catalog::digest::Sha256::new();
     core_hasher.update(message);
 
     assert_eq!(catalog_hasher.finalize(), core_hasher.finalize());
     assert_eq!(
         andromeda_catalog::digest::sha256(message),
-        andromeda_core::digest::sha256(message)
+        andromeda_digest::sha256(message)
     );
 }
 
@@ -224,8 +224,8 @@ fn definition_batch_source_hash_binds_procedure_identity() {
 
     let base_batch = DefinitionBatch {
         batch_id: andromeda_catalog::DefinitionBatchId::new(1),
-        database_id: andromeda_core::DatabaseId::new(1),
-        namespace_id: andromeda_core::NamespaceId::new(1),
+        database_id: andromeda_types::DatabaseId::new(1),
+        namespace_id: andromeda_types::NamespaceId::new(1),
         base_version: CatalogVersion::new(0),
         operations: vec![DefinitionOperation::Create(CatalogDefinition::Procedure(
             base,

@@ -6,7 +6,10 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
-andromeda-core.workspace = true
+andromeda-digest.workspace = true
+andromeda-error.workspace = true
+andromeda-structured-object.workspace = true
+andromeda-types.workspace = true
 prost = "0.14.3"
 
 [dev-dependencies]

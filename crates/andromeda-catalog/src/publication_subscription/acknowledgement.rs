@@ -1,4 +1,5 @@
-use andromeda_core::{AndromedaResult, CatalogVersion, DatabaseId, NamespaceId};
+use andromeda_error::AndromedaResult;
+use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId};
 
 use super::{
     CatalogPublicationReport, CatalogSubscriberId, catalog_publication_error, require_equal,

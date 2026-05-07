@@ -1,9 +1,11 @@
-use andromeda_core::{
+use andromeda_types::{
     AbsencePolicy, ColumnDescriptor, ContractHash, DecimalType, FloatMode, FloatType, ScalarType,
     TextEncoding, TimestampType, TypeDescriptor,
 };
 
-use crate::{contracts::ProcedureContract, digest::Sha256};
+use andromeda_digest::Sha256;
+
+use crate::contracts::ProcedureContract;
 
 use super::{
     CatalogObjectRef, EnumDefinition, ObjectKind, StructuredObjectDefinition, TableDefinition,

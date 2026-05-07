@@ -1,6 +1,5 @@
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, ContractHash, ProcedureId,
-};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 /// A procedure manifest providing metadata needed by remote clients.
 #[derive(Debug, Clone, PartialEq, Eq)]

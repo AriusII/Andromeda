@@ -1,5 +1,6 @@
 use andromeda_catalog::{ProcedureContractRef, QualifiedName};
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, ColumnDescriptor};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::ColumnDescriptor;
 use std::collections::BTreeSet;
 
 use crate::Cardinality;
@@ -97,7 +98,7 @@ fn validate_dense_columns(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_core::{
+    use andromeda_types::{
         CatalogVersion, ContractHash, ProcedureId, ScalarType, TimestampType, TypeDescriptor,
     };
 

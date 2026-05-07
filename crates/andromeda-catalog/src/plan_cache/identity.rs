@@ -1,4 +1,4 @@
-use andromeda_core::{CatalogVersion, ContractHash, ProcedureId};
+use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 use crate::contracts::{PolicyVersion, ProcedureContractBinding, StatsVersion};
 use crate::digest::Sha256;

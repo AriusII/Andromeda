@@ -1,4 +1,4 @@
-use andromeda_core::{AndromedaError, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaResult};
 
 use crate::events::{
     EventCorrelation, EventEnvelope, EventId, EventSink, TraceEvent, observe_error,

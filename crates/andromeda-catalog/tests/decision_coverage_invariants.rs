@@ -72,10 +72,10 @@ fn drop_procedure_operation_surface_is_guarded_not_yet_implemented() {
     let create_example = DefinitionOperation::Create(andromeda_catalog::CatalogDefinition::Table(
         andromeda_catalog::TableDefinition {
             object: andromeda_catalog::CatalogObjectRef {
-                object_id: andromeda_core::CatalogObjectId::new(1),
+                object_id: andromeda_types::CatalogObjectId::new(1),
                 name: andromeda_catalog::QualifiedName::parse("test.Table").unwrap(),
                 kind: andromeda_catalog::ObjectKind::Table,
-                catalog_version: andromeda_core::CatalogVersion::new(1),
+                catalog_version: andromeda_types::CatalogVersion::new(1),
             },
             columns: vec![],
         },
@@ -84,10 +84,10 @@ fn drop_procedure_operation_surface_is_guarded_not_yet_implemented() {
     let deprecate_example =
         DefinitionOperation::Deprecate(andromeda_catalog::CatalogLifecycleTarget {
             object: andromeda_catalog::CatalogObjectRef {
-                object_id: andromeda_core::CatalogObjectId::new(1),
+                object_id: andromeda_types::CatalogObjectId::new(1),
                 name: andromeda_catalog::QualifiedName::parse("test.Table").unwrap(),
                 kind: andromeda_catalog::ObjectKind::Table,
-                catalog_version: andromeda_core::CatalogVersion::new(1),
+                catalog_version: andromeda_types::CatalogVersion::new(1),
             },
         });
 

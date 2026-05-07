@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::generated::protocol;
 use crate::generated_validation::{contract_error, protocol_error};

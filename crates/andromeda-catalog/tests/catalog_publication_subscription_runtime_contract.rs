@@ -9,9 +9,9 @@ use andromeda_catalog::{
     DefinitionBatchDependencyGraphHash, DefinitionBatchId, DefinitionBatchSourceHash, ObjectKind,
     QualifiedName,
 };
-use andromeda_core::{
-    AndromedaErrorKind, CatalogObjectId, CatalogVersion, ContractHash, DatabaseId, NamespaceId,
-    ProcedureId,
+use andromeda_error::AndromedaErrorKind;
+use andromeda_types::{
+    CatalogObjectId, CatalogVersion, ContractHash, DatabaseId, NamespaceId, ProcedureId,
 };
 
 const DATABASE_ID: DatabaseId = DatabaseId::new(10);

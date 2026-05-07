@@ -5,7 +5,10 @@ edition.workspace = true
 publish = false
 
 [dependencies]
-andromeda-core.workspace = true
+andromeda-error.workspace = true
+andromeda-hardware.workspace = true
 andromeda-observe.workspace = true
 andromeda-srpl.workspace = true
 andromeda-storage.workspace = true
+andromeda-time.workspace = true
+andromeda-types.workspace = true

@@ -1,4 +1,5 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, CatalogVersion, ContractHash};
+use andromeda_error::{AndromedaError, AndromedaErrorKind};
+use andromeda_types::{CatalogVersion, ContractHash};
 
 use crate::ProcedureManifest;
 

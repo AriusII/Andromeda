@@ -1,4 +1,4 @@
-use andromeda_core::{CatalogObjectId, CatalogVersion};
+use andromeda_types::{CatalogObjectId, CatalogVersion};
 
 use crate::contracts::StatsVersion;
 

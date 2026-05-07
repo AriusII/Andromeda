@@ -4,9 +4,10 @@
 //! It includes example catalog objects, procedures, and contracts that can be used
 //! consistently across the test suite.
 
-use andromeda_core::{
-    AndromedaResult, CatalogObjectId, CatalogVersion, ColumnDescriptor, DatabaseId, NamespaceId,
-    ProcedureId, ScalarType, TypeDescriptor,
+use andromeda_error::AndromedaResult;
+use andromeda_types::{
+    CatalogObjectId, CatalogVersion, ColumnDescriptor, DatabaseId, NamespaceId, ProcedureId,
+    ScalarType, TypeDescriptor,
 };
 
 use crate::{
@@ -75,8 +76,8 @@ pub fn inventory_reserve_stock_contract_candidate(
 
 pub fn inventory_protocol_layout_ref() -> ProtocolLayoutRef {
     ProtocolLayoutRef {
-        descriptor_set_hash: andromeda_core::ContractHash::test_vector(0x51),
-        frame_envelope_hash: andromeda_core::ContractHash::test_vector(0x52),
+        descriptor_set_hash: andromeda_types::ContractHash::test_vector(0x51),
+        frame_envelope_hash: andromeda_types::ContractHash::test_vector(0x52),
     }
 }
 
@@ -135,22 +136,22 @@ impl InventoryReserveStockCatalogBindings {
         if self.product_stock_table_binding.dependent != self.procedure
             || self.reservation_result_binding.dependent != self.procedure
         {
-            return Err(andromeda_core::AndromedaError::new(
-                andromeda_core::AndromedaErrorKind::Catalog,
+            return Err(andromeda_error::AndromedaError::new(
+                andromeda_error::AndromedaErrorKind::Catalog,
                 "Inventory.ReserveStock bindings must use the ReserveStock procedure as dependent",
             ));
         }
 
         if self.product_stock_table_binding.dependency != self.product_stock_table {
-            return Err(andromeda_core::AndromedaError::new(
-                andromeda_core::AndromedaErrorKind::Catalog,
+            return Err(andromeda_error::AndromedaError::new(
+                andromeda_error::AndromedaErrorKind::Catalog,
                 "Inventory.ReserveStock table binding must target Inventory.ProductStock",
             ));
         }
 
         if self.reservation_result_binding.dependency != self.reservation_structured_object {
-            return Err(andromeda_core::AndromedaError::new(
-                andromeda_core::AndromedaErrorKind::Catalog,
+            return Err(andromeda_error::AndromedaError::new(
+                andromeda_error::AndromedaErrorKind::Catalog,
                 "Inventory.ReserveStock result binding must target Inventory.Reservation",
             ));
         }
@@ -343,7 +344,7 @@ fn phase1_column(name: &str, scalar: ScalarType, ordinal: u32) -> ColumnDescript
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_core::AndromedaErrorKind;
+    use andromeda_error::AndromedaErrorKind;
 
     #[test]
     fn reserve_stock_contract_helper_returns_valid_phase1_vector() {

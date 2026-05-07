@@ -3,7 +3,7 @@
 //! This module owns source parsing, binding, and typed IR lowering. Catalog
 //! contract materialization lives in the sibling `contract` module.
 
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 use crate::{
     BoundProcedure, BusinessOperationKindAst, ProcedureBodyAst, SrplAssignmentIr,

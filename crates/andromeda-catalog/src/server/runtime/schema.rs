@@ -1,6 +1,7 @@
-use andromeda_core::{
-    AbsencePolicy, AndromedaResult, CatalogVersion, ColumnDescriptor, DecimalType, FloatMode,
-    FloatType, ScalarType, TextEncoding, TimestampType, TypeDescriptor,
+use andromeda_error::AndromedaResult;
+use andromeda_types::{
+    AbsencePolicy, CatalogVersion, ColumnDescriptor, DecimalType, FloatMode, FloatType, ScalarType,
+    TextEncoding, TimestampType, TypeDescriptor,
 };
 
 use crate::{AccessMode, ColumnSchema, ProcedureContract, ProcedureManifest};

@@ -1,4 +1,4 @@
-use andromeda_core::CatalogVersion;
+use andromeda_types::CatalogVersion;
 
 use crate::{CatalogSnapshot, DefinitionBatchId};
 

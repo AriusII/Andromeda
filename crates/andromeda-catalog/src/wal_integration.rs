@@ -13,7 +13,8 @@
 //!
 //! No additional file I/O is done here; the WAL manager owns the I/O contract.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::CatalogVersion;
 
 use crate::{CatalogMutation, CatalogWalRecord};
 

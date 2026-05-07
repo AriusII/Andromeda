@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, ColumnDescriptor};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::ColumnDescriptor;
 
 use crate::{ProcedureAst, ProcedureBodyAst, ProcedureSignature, ResultContract};
 

@@ -1,4 +1,4 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 pub(crate) fn validate_srpl_identifier(value: &str, context: &str) -> AndromedaResult<()> {
     let mut chars = value.chars();

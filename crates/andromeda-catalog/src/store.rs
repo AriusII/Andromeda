@@ -5,7 +5,8 @@
 //! still delegated to callers, but callers can now provide committed durable evidence
 //! to publish the next visible snapshot with a catalog-local receipt.
 
-use andromeda_core::{AndromedaResult, CatalogVersion, DatabaseId, NamespaceId};
+use andromeda_error::AndromedaResult;
+use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId};
 
 use crate::{
     CatalogMutationCommitEvidence, CatalogMutationDurability, CatalogMutationPlan,
@@ -127,8 +128,8 @@ impl CatalogSystemStore {
         validate_catalog_wal_append_sequence(&appended_records, &expected_kinds)?;
 
         let commit_record = records.last().ok_or_else(|| {
-            andromeda_core::AndromedaError::new(
-                andromeda_core::AndromedaErrorKind::Catalog,
+            andromeda_error::AndromedaError::new(
+                andromeda_error::AndromedaErrorKind::Catalog,
                 "catalog mutation plan must emit a commit record",
             )
         })?;
@@ -136,8 +137,8 @@ impl CatalogSystemStore {
             .last()
             .map(|record| record.lsn)
             .ok_or_else(|| {
-                andromeda_core::AndromedaError::new(
-                    andromeda_core::AndromedaErrorKind::Catalog,
+                andromeda_error::AndromedaError::new(
+                    andromeda_error::AndromedaErrorKind::Catalog,
                     "catalog mutation plan must append at least one record",
                 )
             })?;
@@ -167,8 +168,8 @@ fn validate_catalog_wal_append_sequence(
     expected_kinds: &[CatalogMutationRecordKind],
 ) -> AndromedaResult<()> {
     if appended_records.len() != expected_kinds.len() {
-        return Err(andromeda_core::AndromedaError::new(
-            andromeda_core::AndromedaErrorKind::Catalog,
+        return Err(andromeda_error::AndromedaError::new(
+            andromeda_error::AndromedaErrorKind::Catalog,
             "catalog WAL append sequence must include every planned mutation record",
         ));
     }
@@ -177,8 +178,8 @@ fn validate_catalog_wal_append_sequence(
         appended_records.last(),
         Some(record) if record.kind == CatalogMutationRecordKind::CatalogChangeCommit
     ) {
-        return Err(andromeda_core::AndromedaError::new(
-            andromeda_core::AndromedaErrorKind::Catalog,
+        return Err(andromeda_error::AndromedaError::new(
+            andromeda_error::AndromedaErrorKind::Catalog,
             "catalog WAL append sequence must end with the commit record",
         ));
     }
@@ -190,15 +191,15 @@ fn validate_catalog_wal_append_sequence(
         .enumerate()
     {
         if append.kind != *expected_kind {
-            return Err(andromeda_core::AndromedaError::new(
-                andromeda_core::AndromedaErrorKind::Catalog,
+            return Err(andromeda_error::AndromedaError::new(
+                andromeda_error::AndromedaErrorKind::Catalog,
                 format!("catalog WAL append kind at index {index} must match the mutation plan"),
             ));
         }
 
         if append.lsn == 0 {
-            return Err(andromeda_core::AndromedaError::new(
-                andromeda_core::AndromedaErrorKind::Catalog,
+            return Err(andromeda_error::AndromedaError::new(
+                andromeda_error::AndromedaErrorKind::Catalog,
                 "catalog WAL append LSN must not be zero",
             ));
         }
@@ -206,8 +207,8 @@ fn validate_catalog_wal_append_sequence(
         if let Some(previous_lsn) = previous_lsn
             && append.lsn <= previous_lsn
         {
-            return Err(andromeda_core::AndromedaError::new(
-                andromeda_core::AndromedaErrorKind::Catalog,
+            return Err(andromeda_error::AndromedaError::new(
+                andromeda_error::AndromedaErrorKind::Catalog,
                 "catalog WAL append LSNs must be strictly increasing",
             ));
         }
@@ -248,9 +249,8 @@ mod tests {
         CatalogDefinition, CatalogObjectRef, DefinitionBatchId, DefinitionOperation, ObjectKind,
         QualifiedName, TableDefinition,
     };
-    use andromeda_core::{
-        AndromedaErrorKind, CatalogObjectId, ColumnDescriptor, ScalarType, TypeDescriptor,
-    };
+    use andromeda_error::AndromedaErrorKind;
+    use andromeda_types::{CatalogObjectId, ColumnDescriptor, ScalarType, TypeDescriptor};
 
     fn column(name: &str, ordinal: u32) -> ColumnDescriptor {
         ColumnDescriptor {

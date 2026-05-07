@@ -4,9 +4,10 @@ use andromeda_catalog::{
     ProcedureContractRef, ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName,
     ResultMetadataPolicy, ResultStreamCardinality, ResultStreamContract, TransactionPolicy,
 };
-use andromeda_core::{
-    AndromedaErrorKind, CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash,
-    ProcedureId, ScalarType, TimestampType, TypeDescriptor,
+use andromeda_error::AndromedaErrorKind;
+use andromeda_types::{
+    CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId, ScalarType,
+    TimestampType, TypeDescriptor,
 };
 
 use crate::procedure_model::{

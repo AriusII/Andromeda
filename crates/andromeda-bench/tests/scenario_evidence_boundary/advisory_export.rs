@@ -1,7 +1,7 @@
 use andromeda_bench::{
     BenchmarkPlanClass, BenchmarkStatsVersion, BenchmarkWorkloadClass, DEFAULT_TEMP_BYTES,
 };
-use andromeda_core::{CatalogVersion, ContractHash, ProcedureId};
+use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 use crate::common::{boundary_from_history, default_budgets, ts, vertical_history_record};
 

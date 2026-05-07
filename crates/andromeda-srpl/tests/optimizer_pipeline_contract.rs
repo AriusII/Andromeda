@@ -1,7 +1,6 @@
 #![forbid(unsafe_code)]
 
 use andromeda_catalog::QualifiedName;
-use andromeda_core::{ColumnDescriptor, ScalarType, TypeDescriptor};
 use andromeda_srpl::{
     Cardinality, SrplAssignmentIr, SrplBusinessOperationIr, SrplBusinessOperationKindIr,
     SrplEmitValueIr, SrplPredicateIr, SrplProcedureBodyIr, SrplProcedureIr, SrplResultStreamIr,
@@ -12,6 +11,7 @@ use andromeda_srpl::{
     },
     procedure_model::{ArithOp, ConstantLiteral},
 };
+use andromeda_types::{ColumnDescriptor, ScalarType, TypeDescriptor};
 
 fn qn(path: &str) -> QualifiedName {
     QualifiedName::parse(path).expect("valid qualified name")

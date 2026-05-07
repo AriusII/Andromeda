@@ -1,4 +1,4 @@
-use andromeda_core::{AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaErrorKind, AndromedaResult};
 
 use crate::generated::protocol;
 
@@ -68,7 +68,7 @@ pub(super) struct StructuredPayloadByteTracker {
 impl StructuredPayloadByteTracker {
     pub(super) fn observe_batch_payload(&mut self, payload: &[u8]) -> AndromedaResult<()> {
         let payload_len = u64::try_from(payload.len()).map_err(|_| {
-            andromeda_core::AndromedaError::new(
+            andromeda_error::AndromedaError::new(
                 AndromedaErrorKind::Protocol,
                 "generated invocation response sequence structured_payload length does not fit u64",
             )
@@ -77,7 +77,7 @@ impl StructuredPayloadByteTracker {
             .total_structured_payload_bytes
             .checked_add(payload_len)
             .ok_or_else(|| {
-                andromeda_core::AndromedaError::new(
+                andromeda_error::AndromedaError::new(
                     AndromedaErrorKind::Protocol,
                     "generated invocation response sequence structured_payload byte count overflow",
                 )

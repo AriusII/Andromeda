@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
-use andromeda_core::{AndromedaResult, CatalogVersion};
+use andromeda_error::AndromedaResult;
+use andromeda_types::CatalogVersion;
 
 use super::{
     CatalogPublicationReplayKey, CatalogPublicationReplayTerminalRecord, CatalogPublicationReport,

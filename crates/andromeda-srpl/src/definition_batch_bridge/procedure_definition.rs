@@ -2,10 +2,8 @@ use andromeda_catalog::{
     AccessMode, CatalogDefinition, CompatibilityPolicy, IsolationPolicy, MultiResultPolicy,
     ProcedureErrorPolicy, ProtocolLayoutRef, ResultMetadataPolicy, StatsVersion, TransactionPolicy,
 };
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogObjectId, CatalogVersion,
-    ContractHash, ProcedureId,
-};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::{CatalogObjectId, CatalogVersion, ContractHash, ProcedureId};
 
 use crate::{
     ProcedureAst, SrplProcedureContractMetadata, SrplProcedureIr, SrplSource,

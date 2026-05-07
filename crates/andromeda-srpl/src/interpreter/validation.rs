@@ -1,5 +1,5 @@
 use andromeda_catalog::{CatalogObjectRef, ObjectKind};
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{
     identifier::validate_srpl_identifier as validate_symbol,

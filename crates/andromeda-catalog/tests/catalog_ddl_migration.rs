@@ -3,7 +3,7 @@ use andromeda_catalog::{
     CatalogLifecycleTarget, CatalogObjectRef, CatalogPublicationSemantics, DefinitionBatch,
     DefinitionBatchId, DefinitionOperation, ObjectKind, QualifiedName, TableDefinition,
 };
-use andromeda_core::{
+use andromeda_types::{
     CatalogObjectId, CatalogVersion, ColumnDescriptor, DatabaseId, NamespaceId, ScalarType,
     TypeDescriptor,
 };

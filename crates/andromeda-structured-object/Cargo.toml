@@ -1,0 +1,11 @@
+[package]
+name = "andromeda-structured-object"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+andromeda-digest.workspace = true
+andromeda-error.workspace = true
+andromeda-types.workspace = true

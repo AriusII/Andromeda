@@ -1,5 +1,5 @@
 use andromeda_catalog::QualifiedName;
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 pub(super) fn validate_qualified_name(name: &QualifiedName, context: &str) -> AndromedaResult<()> {
     if name.parts().is_empty() {

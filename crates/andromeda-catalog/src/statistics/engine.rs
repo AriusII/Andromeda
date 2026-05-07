@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use andromeda_core::CatalogObjectId;
+use andromeda_types::CatalogObjectId;
 
 use crate::contracts::StatsVersion;
 

@@ -3,7 +3,6 @@
 #![forbid(unsafe_code)]
 
 use andromeda_catalog::{PlanClass, QualifiedName};
-use andromeda_core::ScalarType;
 use andromeda_srpl::{
     Cardinality, SrplAssignmentIr, SrplBusinessOperationIr, SrplBusinessOperationKindIr,
     SrplEmitValueIr, SrplPredicateIr, SrplProcedureBodyIr, SrplProcedureIr, SrplValueIr,
@@ -25,6 +24,7 @@ use andromeda_srpl::{
     },
     procedure_model::{ArithOp, ConstantLiteral, MAX_EXPR_DEPTH, MAX_SRPL_BODY_OPERATIONS},
 };
+use andromeda_types::ScalarType;
 
 fn qn(s: &str) -> QualifiedName {
     QualifiedName::parse(s).unwrap()

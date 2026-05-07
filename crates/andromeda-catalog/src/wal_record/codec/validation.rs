@@ -1,6 +1,6 @@
 //! Structural validation for durable catalog WAL payload records.
 
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 use crate::{
     CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH, CatalogMutationBoundary, CatalogMutationDelta,

@@ -1,4 +1,4 @@
-use andromeda_core::{CatalogObjectId, CatalogVersion, TransactionId};
+use andromeda_types::{CatalogObjectId, CatalogVersion, TransactionId};
 
 use crate::TraceId;
 

@@ -1,6 +1,6 @@
-use andromeda_core::{
-    AndromedaResult, CatalogObjectId, CatalogVersion, ContractHash, RequestId, SessionId,
-    TransactionId,
+use andromeda_error::AndromedaResult;
+use andromeda_types::{
+    CatalogObjectId, CatalogVersion, ContractHash, RequestId, SessionId, TransactionId,
 };
 
 use super::{

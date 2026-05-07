@@ -4,14 +4,21 @@ members = [
     "crates/andromeda-bench",
     "crates/andromeda-cli",
     "crates/andromeda-catalog",
+    "crates/andromeda-contract",
     "crates/andromeda-core",
+    "crates/andromeda-digest",
+    "crates/andromeda-error",
     "crates/andromeda-exec",
+    "crates/andromeda-hardware",
     "crates/andromeda-observe",
     "crates/andromeda-proto",
     "crates/andromeda-quic",
     "crates/andromeda-srpl",
     "crates/andromeda-storage",
+    "crates/andromeda-structured-object",
+    "crates/andromeda-time",
     "crates/andromeda-tx",
+    "crates/andromeda-types",
 ]
 
 [workspace.package]
@@ -22,14 +29,21 @@ rust-version = "1.85"
 [workspace.dependencies]
 andromeda-catalog = { path = "crates/andromeda-catalog", version = "0.1.0" }
 andromeda-bench = { path = "crates/andromeda-bench", version = "0.1.0" }
+andromeda-contract = { path = "crates/andromeda-contract", version = "0.1.0" }
 andromeda-core = { path = "crates/andromeda-core", version = "0.1.0" }
+andromeda-digest = { path = "crates/andromeda-digest", version = "0.1.0" }
+andromeda-error = { path = "crates/andromeda-error", version = "0.1.0" }
 andromeda-exec = { path = "crates/andromeda-exec", version = "0.1.0" }
+andromeda-hardware = { path = "crates/andromeda-hardware", version = "0.1.0" }
 andromeda-observe = { path = "crates/andromeda-observe", version = "0.1.0" }
 andromeda-proto = { path = "crates/andromeda-proto", version = "0.1.0" }
 andromeda-quic = { path = "crates/andromeda-quic", version = "0.1.0" }
 andromeda-srpl = { path = "crates/andromeda-srpl", version = "0.1.0" }
 andromeda-storage = { path = "crates/andromeda-storage", version = "0.1.0" }
+andromeda-structured-object = { path = "crates/andromeda-structured-object", version = "0.1.0" }
+andromeda-time = { path = "crates/andromeda-time", version = "0.1.0" }
 andromeda-tx = { path = "crates/andromeda-tx", version = "0.1.0" }
+andromeda-types = { path = "crates/andromeda-types", version = "0.1.0" }
 
 quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls-ring"] }
 rcgen = { version = "0.14.7" }
