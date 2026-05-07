@@ -374,3 +374,62 @@ fn test_gateway_rejects_non_application_surface_before_procedure_dispatch() {
         "wrong-surface error should name the Application surface"
     );
 }
+
+#[test]
+fn test_gateway_rejects_every_non_application_surface_before_procedure_dispatch() {
+    let cases = [
+        (
+            setup_active_administration_connection(),
+            SurfacePlane::Administration,
+        ),
+        (setup_active_ha_connection(), SurfacePlane::HighAvailability),
+        (
+            setup_active_monitoring_connection(),
+            SurfacePlane::Monitoring,
+        ),
+    ];
+
+    for (conn, plane) in cases {
+        let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
+        let manifest = route_manifest();
+        let frame = execute_request_frame(
+            "Inventory.ReserveStock",
+            manifest.contract_hash,
+            manifest.catalog_version,
+            Some(manifest.stats_version),
+            "application",
+            manifest.contract_hash,
+            manifest.catalog_version,
+        );
+
+        let err = gateway
+            .bind_application_procedure_route(7, &frame, &manifest)
+            .unwrap_err();
+
+        assert_eq!(
+            err.kind(),
+            AndromedaErrorKind::Security,
+            "{plane:?} must be rejected before Procedure dispatch"
+        );
+        assert!(
+            err.message().contains("Application surface"),
+            "{plane:?} wrong-surface error should name the Application surface: {}",
+            err.message()
+        );
+    }
+}
+
+fn setup_active_monitoring_connection() -> Connection {
+    let mut conn = Connection::new(SurfacePlane::Monitoring);
+    let identity = CertificateIdentity::new(
+        "m".repeat(64),
+        "monitoring-agent".to_string(),
+        SurfaceScope::MonitoringAgent,
+    )
+    .unwrap();
+    conn.set_certificate_identity(identity).unwrap();
+    conn.accept_hello(&hello_frame(900)).unwrap();
+    conn.accept_auth(&auth_frame(900)).unwrap();
+    assert_eq!(conn.state(), LifecycleState::Active);
+    conn
+}

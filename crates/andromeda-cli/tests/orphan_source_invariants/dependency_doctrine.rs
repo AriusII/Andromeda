@@ -3,6 +3,22 @@ use crate::support::workspace_root;
 
 const FORBIDDEN_PRODUCTION_EDGES: &[(&str, &str)] = &[
     ("andromeda-tx", "andromeda-storage"),
+    ("andromeda-tx", "andromeda-quic"),
+    ("andromeda-tx", "andromeda-rpc-runtime"),
+    ("andromeda-tx", "andromeda-runtime-quinn"),
+    ("andromeda-tx", "quinn"),
+    ("andromeda-tx", "rustls"),
+    ("andromeda-tx", "tokio-rustls"),
+    ("andromeda-tx", "h2"),
+    ("andromeda-tx", "hyper"),
+    ("andromeda-tx", "tower"),
+    ("andromeda-proto", "andromeda-quic"),
+    ("andromeda-proto", "andromeda-rpc-runtime"),
+    ("andromeda-proto", "andromeda-runtime-quinn"),
+    ("andromeda-proto", "quinn"),
+    ("andromeda-proto", "rcgen"),
+    ("andromeda-proto", "rustls"),
+    ("andromeda-proto", "tokio"),
     ("andromeda-wal", "andromeda-storage"),
     ("andromeda-wal", "andromeda-tx"),
     ("andromeda-wal", "andromeda-exec"),
@@ -11,6 +27,12 @@ const FORBIDDEN_PRODUCTION_EDGES: &[(&str, &str)] = &[
     ("andromeda-wal", "andromeda-quic"),
     ("andromeda-wal", "andromeda-rpc-runtime"),
     ("andromeda-wal", "andromeda-runtime-quinn"),
+    ("andromeda-wal", "quinn"),
+    ("andromeda-wal", "rustls"),
+    ("andromeda-wal", "tokio-rustls"),
+    ("andromeda-wal", "h2"),
+    ("andromeda-wal", "hyper"),
+    ("andromeda-wal", "tower"),
     ("andromeda-wal", "andromeda-analytics"),
     ("andromeda-wal", "andromeda-bench"),
     ("andromeda-wal", "andromeda-gpu"),
@@ -18,6 +40,14 @@ const FORBIDDEN_PRODUCTION_EDGES: &[(&str, &str)] = &[
     ("andromeda-wal", "andromeda-catalog-runtime"),
     ("andromeda-storage", "andromeda-exec"),
     ("andromeda-storage", "andromeda-quic"),
+    ("andromeda-storage", "andromeda-rpc-runtime"),
+    ("andromeda-storage", "andromeda-runtime-quinn"),
+    ("andromeda-storage", "quinn"),
+    ("andromeda-storage", "rustls"),
+    ("andromeda-storage", "tokio-rustls"),
+    ("andromeda-storage", "h2"),
+    ("andromeda-storage", "hyper"),
+    ("andromeda-storage", "tower"),
     ("andromeda-storage", "andromeda-srpl"),
     ("andromeda-quic", "andromeda-exec"),
 ];
@@ -41,6 +71,27 @@ const FORBIDDEN_CATALOG_PRODUCTION_DEPS: &[&str] = &[
     "warp",
 ];
 
+const FUTURE_APPLICATION_SURFACE_CRATES: &[&str] = &[
+    "andromeda-application",
+    "andromeda-application-rpc",
+    "andromeda-application-surface",
+    "andromeda-rpc-application",
+    "andromeda-rpc-application-surface",
+];
+
+const FORBIDDEN_APPLICATION_SURFACE_RUNTIME_DEPS: &[&str] = &[
+    "andromeda-admin",
+    "andromeda-admin-runtime",
+    "andromeda-administration",
+    "andromeda-administration-runtime",
+    "andromeda-backup",
+    "andromeda-backup-runtime",
+    "andromeda-cluster",
+    "andromeda-cluster-runtime",
+    "andromeda-hadr",
+    "andromeda-hadr-runtime",
+];
+
 #[test]
 fn dependency_guard_enforces_workspace_doctrine() {
     let workspace = workspace_root();
@@ -56,6 +107,20 @@ fn dependency_guard_enforces_workspace_doctrine() {
             }
         } else {
             violations.push(format!("missing manifest for guarded crate: {source}"));
+        }
+    }
+
+    for source in FUTURE_APPLICATION_SURFACE_CRATES {
+        let Some(manifest) = manifests.get(*source) else {
+            continue;
+        };
+
+        for target in FORBIDDEN_APPLICATION_SURFACE_RUNTIME_DEPS {
+            if manifest.production_deps.contains(*target) {
+                violations.push(format!(
+                    "application RPC surface must not gain administration, cluster, HA/DR, or backup runtime edge: {source} -> {target}"
+                ));
+            }
         }
     }
 
