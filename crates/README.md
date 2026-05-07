@@ -23,6 +23,9 @@ This directory contains the Rust workspace crates that implement the Andromeda f
 - `andromeda-srpl` is the temporary compatibility facade for parsing, binding, lowering, optimizer, interpreter, DefinitionBatch bridge, and compiler-facing SRPL semantics.
 - `andromeda-tx` owns transaction state, WAL durability gates, MVCC visibility, locks, savepoints, and recovery-facing transaction evidence.
 - `andromeda-storage` owns page, heap, B+Tree, WAL-record, checkpoint, and recovery-planning storage surfaces.
+- C5 durable-kernel crates, including current `andromeda-storage` and `andromeda-tx` plus future WAL, recovery, cold-store, buffer-pool, page-layout, and MVCC splits, must not depend on SRPL parser/model crates, catalog store implementations, protocol runtime crates, QUIC runtime crates, execution crates, benchmark/analytics/GPU crates, SQL crates, or implicit native-layout serialization dependencies.
+- Future C5 extractions must keep `andromeda-storage` and `andromeda-tx` as temporary compatibility facades until public reexport tests pass for existing callers.
+- Persistent WAL, page, heap, B+Tree, manifest, backup, and recovery formats require explicit codecs, byte-for-byte roundtrip/golden tests, corruption rejection, and crash/recovery validation before any split is accepted.
 - `andromeda-exec` owns execution orchestration over cataloged Procedures. It must not create an ad hoc SQL application surface.
 - `andromeda-observe` owns typed traces, audit evidence, and post-fact decision explainability.
 - `andromeda-cli` is an operator/developer interface over bounded workspace commands and must not bypass cataloged Procedure contracts for application execution.
