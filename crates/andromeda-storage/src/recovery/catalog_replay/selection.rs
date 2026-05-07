@@ -54,7 +54,7 @@ impl CatalogReplaySelection {
         self.records_below_floor
     }
 
-    pub(super) const fn records_replayed(&self) -> usize {
+    pub(super) fn records_replayed(&self) -> usize {
         self.eligible_records.len()
     }
 

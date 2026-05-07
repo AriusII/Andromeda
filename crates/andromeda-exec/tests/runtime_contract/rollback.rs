@@ -158,7 +158,7 @@ fn inventory_reserve_stock_business_failure_rolls_back_after_authorized_begin_wi
     );
     assert_eq!(
         runtime.wal().records()[1].payload.as_slice(),
-        b"andromeda.exec.business-validation-failed.v1\0insufficient inventory stock"
+        b"andromeda.exec.business-validation-failed.v1\0insufficient inventory stock for reservation"
     );
     assert!(
         !runtime

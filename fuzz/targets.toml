@@ -94,3 +94,11 @@ max_input_bytes = 69635
 max_journal_bytes = 65536
 max_anchor_bytes = 4096
 invalid_input_policy = "return-or-error-no-panic"
+
+[[support]]
+path = "fuzz_targets/common.rs"
+used_by = ["btree_node_v1_decode", "durable_audit_journal_decode", "frame_codec_no_panic", "heap_page_v1_decode", "page_codec_v1_decode", "proto_frame_envelope_decode", "proto_rpc_completion_decode", "quic_zero_rtt_admission", "result_sequence_state_machine", "srpl_parser_signature_decode", "storage_wal_record_roundtrip"]
+
+[[support]]
+path = "fuzz_targets/durable_audit_journal_support.rs"
+used_by = ["durable_audit_journal_decode"]

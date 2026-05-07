@@ -75,7 +75,7 @@ fn local_dispatch_terminal_payloads_replay_through_tx_commit_log() -> AndromedaR
 
     let rollback_receipt = LocalDispatcher::new(&mut wal).dispatch_rollback(LocalRollbackPlan {
         transaction_id: rolled_back,
-        rollback_payload: b"business-validation-failed".to_vec(),
+        rollback_payload: rollback_payload(0xBEEF),
     })?;
     assert_eq!(rollback_receipt.transaction_id, rolled_back);
 

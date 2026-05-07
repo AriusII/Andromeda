@@ -21,22 +21,30 @@ use andromeda_storage::layout;
 /// ownership intentionally moves; do not duplicate definitions to silence the
 /// test.
 const CANONICAL_OWNERSHIP: &[(&str, &str, &str)] = &[
-    ("struct", "PageId", "crates/andromeda-storage/src/page.rs"),
-    ("enum", "PageSize", "crates/andromeda-storage/src/page.rs"),
+    (
+        "struct",
+        "PageId",
+        "crates/andromeda-storage/src/page/identity.rs",
+    ),
+    (
+        "enum",
+        "PageSize",
+        "crates/andromeda-storage/src/page/layout.rs",
+    ),
     (
         "struct",
         "PageHeader",
-        "crates/andromeda-storage/src/page.rs",
+        "crates/andromeda-storage/src/page/layout.rs",
     ),
     (
         "struct",
         "PageTrailer",
-        "crates/andromeda-storage/src/page.rs",
+        "crates/andromeda-storage/src/page/layout.rs",
     ),
     (
         "struct",
         "PageLayoutContract",
-        "crates/andromeda-storage/src/page.rs",
+        "crates/andromeda-storage/src/page/layout.rs",
     ),
     ("struct", "Lsn", "crates/andromeda-storage/src/lsn.rs"),
 ];

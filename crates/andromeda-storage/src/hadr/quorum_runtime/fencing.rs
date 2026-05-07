@@ -91,9 +91,7 @@ pub fn decide_fencing(
         FencingPolicy::Allow => FencingDecision::Allow,
         FencingPolicy::BlockOnQuorumLoss => {
             // In async mode, always allow (no quorum requirement).
-            if replication_mode.is_async() {
-                FencingDecision::Allow
-            } else if membership.has_quorum() {
+            if replication_mode.is_async() || membership.has_quorum() {
                 FencingDecision::Allow
             } else {
                 FencingDecision::Block

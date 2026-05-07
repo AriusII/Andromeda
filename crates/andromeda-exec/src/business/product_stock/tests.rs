@@ -151,8 +151,10 @@ fn heap_store_rejects_non_advancing_durable_lsn_without_visibility_change() {
         })
         .unwrap();
     let second_template = store.prepared_reserve_stock_redo_template(&second).unwrap();
-    let second_redo_payload = second_template
-        .materialize_heap_redo_payload(Lsn::new(9))
+    assert_eq!(second_template.expected_previous_page_lsn, Lsn::new(9));
+    let second_insert = store.prepared_heap_insert().unwrap();
+    let second_redo_payload = second_insert
+        .row_insert_redo_payload(Lsn::ZERO, Lsn::new(9))
         .unwrap();
     let second_commit =
         InventoryProductStockCommitEvidence::new(TransactionId::new(12), Lsn::new(11)).unwrap();
