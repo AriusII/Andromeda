@@ -258,6 +258,19 @@ fn recovery_seed_prevents_id_reuse() {
 }
 
 #[test]
+fn begin_returns_typed_error_at_id_space_exhaustion() {
+    let mgr = TransactionManager::with_recovered_floor(u64::MAX);
+
+    let err = mgr
+        .begin()
+        .expect_err("begin must fail when the recovered transaction id floor exhausts id space");
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Transaction);
+    assert_eq!(mgr.live_count().unwrap(), 0);
+    assert_eq!(mgr.allocator().peek_last_issued(), u64::MAX);
+}
+
+#[test]
 fn cannot_commit_without_request_commit_first() {
     let mgr = TransactionManager::new();
     let id = mgr.begin().unwrap();
