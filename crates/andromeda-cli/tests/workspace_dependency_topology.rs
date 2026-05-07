@@ -6,6 +6,19 @@ use std::{
     path::{Path, PathBuf},
 };
 
+const CONCRETE_RUNTIME_TLS_QUIC_DEPS: [&str; 3] = ["quinn", "rcgen", "rustls"];
+const RPC_PROTOCOL_FORBIDDEN_RUNTIME_DEPS: [&str; 4] = ["quinn", "rcgen", "rustls", "tokio"];
+const RPC_PROTOCOL_FORBIDDEN_SOURCE_TOKENS: [&str; 8] = [
+    "quinn::",
+    "rcgen::",
+    "rustls::",
+    "tokio::",
+    "runtime_quinn",
+    "quinn_backend",
+    "quinn_tls",
+    "#[tokio::",
+];
+
 #[test]
 fn workspace_crate_dependency_topology_blocks_forbidden_runtime_edges() {
     let manifests = load_crate_manifests(&workspace_root().join("crates"));
@@ -32,6 +45,103 @@ fn workspace_crate_dependency_topology_blocks_forbidden_runtime_edges() {
     assert!(
         violations.is_empty(),
         "workspace dependency topology violations:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
+fn only_andromeda_quic_declares_concrete_runtime_tls_quic_crates() {
+    let manifests = load_crate_manifests(&workspace_root().join("crates"));
+    let mut violations = Vec::new();
+
+    for manifest in manifests.values() {
+        if manifest.package_name == "andromeda-quic" {
+            continue;
+        }
+
+        for dependency in &manifest.runtime_dependencies {
+            if CONCRETE_RUNTIME_TLS_QUIC_DEPS.contains(&dependency.as_str()) {
+                violations.push(format!(
+                    "{} declares production dependency `{dependency}` in {}; concrete Quinn/TLS crates must stay owned by andromeda-quic until runtime extraction",
+                    manifest.package_name,
+                    manifest.path.display()
+                ));
+            }
+        }
+
+        for dependency in &manifest.dev_dependencies {
+            if CONCRETE_RUNTIME_TLS_QUIC_DEPS.contains(&dependency.as_str()) {
+                violations.push(format!(
+                    "{} declares dev dependency `{dependency}` in {}; concrete Quinn/TLS crates must stay owned by andromeda-quic until runtime extraction",
+                    manifest.package_name,
+                    manifest.path.display()
+                ));
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "concrete runtime TLS/QUIC dependency ownership violations:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
+fn rpc_protocol_crate_stays_runtime_free_in_manifest_and_source() {
+    let workspace = workspace_root();
+    let manifests = load_crate_manifests(&workspace.join("crates"));
+    let manifest = manifests
+        .get("andromeda-rpc-protocol")
+        .expect("workspace must include andromeda-rpc-protocol");
+    let mut violations = Vec::new();
+
+    for dependency in manifest
+        .runtime_dependencies
+        .iter()
+        .chain(manifest.dev_dependencies.iter())
+    {
+        if RPC_PROTOCOL_FORBIDDEN_RUNTIME_DEPS.contains(&dependency.as_str()) {
+            violations.push(format!(
+                "andromeda-rpc-protocol manifest must not depend on runtime crate `{dependency}`"
+            ));
+        }
+    }
+
+    let rpc_protocol_src = workspace.join("crates/andromeda-rpc-protocol/src");
+    for file in rust_source_files(&rpc_protocol_src) {
+        let source = fs::read_to_string(&file)
+            .unwrap_or_else(|err| panic!("failed to read {}: {err}", file.display()));
+        let code_without_comments = strip_rust_comments(&source);
+        let relative = relative_slash_path(&workspace, &file);
+
+        for (line_index, line) in code_without_comments.lines().enumerate() {
+            let compact_line = line
+                .chars()
+                .filter(|character| !character.is_whitespace())
+                .collect::<String>();
+
+            for token in RPC_PROTOCOL_FORBIDDEN_SOURCE_TOKENS {
+                if compact_line.contains(token) {
+                    violations.push(format!(
+                        "{relative}:{} exposes runtime token `{token}`",
+                        line_index + 1
+                    ));
+                }
+            }
+
+            if compact_line.starts_with("pubmodruntime") || compact_line.starts_with("modruntime") {
+                violations.push(format!(
+                    "{relative}:{} declares a runtime module from the abstract protocol crate",
+                    line_index + 1
+                ));
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "andromeda-rpc-protocol must remain runtime-free:\n{}",
         violations.join("\n")
     );
 }
@@ -640,6 +750,89 @@ fn collect_manifest_paths(root: &Path) -> Vec<PathBuf> {
     }
 
     manifests
+}
+
+fn rust_source_files(root: &Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    collect_rust_source_files(root, &mut files);
+    files.sort();
+    files
+}
+
+fn collect_rust_source_files(dir: &Path, files: &mut Vec<PathBuf>) {
+    for entry in fs::read_dir(dir)
+        .unwrap_or_else(|err| panic!("failed to read directory {}: {err}", dir.display()))
+    {
+        let entry = entry.unwrap_or_else(|err| {
+            panic!("failed to read directory entry in {}: {err}", dir.display())
+        });
+        let path = entry.path();
+        if path.is_dir() {
+            collect_rust_source_files(&path, files);
+        } else if path.extension().is_some_and(|extension| extension == "rs") {
+            files.push(path);
+        }
+    }
+}
+
+fn relative_slash_path(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
+fn strip_rust_comments(source: &str) -> String {
+    let mut output = String::with_capacity(source.len());
+    let mut chars = source.chars().peekable();
+    let mut block_depth = 0_usize;
+    let mut in_line_comment = false;
+
+    while let Some(ch) = chars.next() {
+        if in_line_comment {
+            if ch == '\n' {
+                in_line_comment = false;
+                output.push('\n');
+            } else {
+                output.push(' ');
+            }
+            continue;
+        }
+
+        if block_depth > 0 {
+            match (ch, chars.peek().copied()) {
+                ('/', Some('*')) => {
+                    chars.next();
+                    block_depth += 1;
+                    output.push_str("  ");
+                }
+                ('*', Some('/')) => {
+                    chars.next();
+                    block_depth -= 1;
+                    output.push_str("  ");
+                }
+                ('\n', _) => output.push('\n'),
+                _ => output.push(' '),
+            }
+            continue;
+        }
+
+        match (ch, chars.peek().copied()) {
+            ('/', Some('/')) => {
+                chars.next();
+                in_line_comment = true;
+                output.push_str("  ");
+            }
+            ('/', Some('*')) => {
+                chars.next();
+                block_depth = 1;
+                output.push_str("  ");
+            }
+            _ => output.push(ch),
+        }
+    }
+
+    output
 }
 
 fn parse_package_name(text: &str) -> Option<String> {

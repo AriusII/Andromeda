@@ -4,6 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const RUNTIME_FEATURE: &str = "runtime-quinn";
+const DEFERRED_RUNTIME_CRATE: &str = "andromeda-runtime-quinn";
 const RUNTIME_DEPS: [&str; 4] = ["quinn", "rcgen", "rustls", "tokio"];
 const TOKIO_RUNTIME_FEATURES: [&str; 3] =
     ["tokio/io-util", "tokio/macros", "tokio/rt-multi-thread"];
@@ -36,6 +37,7 @@ fn concrete_runtime_dependencies_are_optional_and_runtime_quinn_owned() {
         feature_values(&features, "default").is_empty(),
         "andromeda-quic default features must stay empty"
     );
+    assert_deferred_runtime_crate_is_not_wired(&dependencies, &features);
 
     let runtime_values = feature_values(&features, RUNTIME_FEATURE);
     for dep in RUNTIME_DEPS {
@@ -108,6 +110,37 @@ fn non_runtime_source_surface_has_no_concrete_runtime_crate_paths() {
     assert!(
         violations.is_empty(),
         "default non-runtime source files must not expose quinn/rustls/tokio/rcgen paths: {violations:?}"
+    );
+}
+
+fn assert_deferred_runtime_crate_is_not_wired(dependencies: &[&str], features: &[FeatureSpec]) {
+    let dependency_key = format!("{DEFERRED_RUNTIME_CRATE} = ");
+    let package_value = format!("package = \"{DEFERRED_RUNTIME_CRATE}\"");
+    let manifest_edges = dependencies
+        .iter()
+        .map(|line| strip_toml_comment(line).trim())
+        .filter(|line| line.starts_with(&dependency_key) || line.contains(&package_value))
+        .collect::<Vec<_>>();
+
+    assert!(
+        manifest_edges.is_empty(),
+        "{DEFERRED_RUNTIME_CRATE} extraction is deferred; andromeda-quic must keep owning concrete runtime dependencies directly for now: {manifest_edges:?}"
+    );
+
+    let feature_edges = features
+        .iter()
+        .flat_map(|feature| {
+            feature.values.iter().filter_map(|value| {
+                value
+                    .contains(DEFERRED_RUNTIME_CRATE)
+                    .then(|| format!("{} -> {}", feature.name, value))
+            })
+        })
+        .collect::<Vec<_>>();
+
+    assert!(
+        feature_edges.is_empty(),
+        "{DEFERRED_RUNTIME_CRATE} extraction is deferred; no feature may activate it yet: {feature_edges:?}"
     );
 }
 
