@@ -340,7 +340,7 @@ fn test_page_not_found_when_unallocated() {
     match result {
         Ok(None) => {
             // Expected: page not found but no error
-        }
+        },
         _ => panic!("Expected Ok(None) for unallocated page"),
     }
 }

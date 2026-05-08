@@ -20,6 +20,9 @@ andromeda-result-stream.workspace = true
 andromeda-retry.workspace = true
 andromeda-security.workspace = true
 andromeda-srpl.workspace = true
+andromeda-srpl-execution-adapter.workspace = true
+andromeda-srpl-interpreter.workspace = true
+andromeda-srpl-ir.workspace = true
 andromeda-storage.workspace = true
 andromeda-tx.workspace = true
 tokio.workspace = true
@@ -66,3 +69,4 @@ path = "tests/runtime_contract.rs"
 [[test]]
 name = "v0_vertical_e2e"
 path = "tests/v0_vertical_e2e.rs"
+

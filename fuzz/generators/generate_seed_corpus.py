@@ -266,12 +266,43 @@ def seed_payloads(target: str) -> Dict[str, bytes]:
         return {
             "seed-surface-permission-matrix.bin": security_contract_admission_matrix_seed()
         }
+    if target == "manifest_boundary":
+        return {"seed-basic.bin": manifest_boundary_seed()}
+    if target == "recovery_manifest_durability_boundary":
+        return {"seed-basic.bin": recovery_manifest_durability_boundary_seed()}
     payloads = {
         "seed-basic.bin": f"ANDROMEDA-FUZZ-SEED::{target}::v1".encode("utf-8")
     }
     if target in LEGACY_SEED1_PAYLOADS:
         payloads["seed1"] = LEGACY_SEED1_PAYLOADS[target]
     return payloads
+
+
+def manifest_boundary_seed() -> bytes:
+    payload = bytearray(104)
+    payload[0:8] = (100).to_bytes(8, "little")
+    payload[8:16] = (120).to_bytes(8, "little")
+    payload[16:24] = (140).to_bytes(8, "little")
+    payload[24:32] = (140).to_bytes(8, "little")
+    payload[32:40] = (140).to_bytes(8, "little")
+    payload[40:48] = (1).to_bytes(8, "little")
+    payload[48:56] = (2).to_bytes(8, "little")
+    payload[56:64] = (3).to_bytes(8, "little")
+    payload[64:68] = (0xA1B2C3D4).to_bytes(4, "little")
+    payload[68:100] = bytes(range(32))
+    return bytes(payload)
+
+
+def recovery_manifest_durability_boundary_seed() -> bytes:
+    payload = bytearray(76)
+    payload[0:8] = (1).to_bytes(8, "little")
+    payload[8:16] = (2).to_bytes(8, "little")
+    payload[16:24] = (3).to_bytes(8, "little")
+    payload[24:32] = (100).to_bytes(8, "little")
+    payload[32:40] = (120).to_bytes(8, "little")
+    payload[40:44] = (0x01020304).to_bytes(4, "little")
+    payload[44:76] = bytes(reversed(range(32)))
+    return bytes(payload)
 
 
 def btree_node_v1_leaf_seed() -> bytes:

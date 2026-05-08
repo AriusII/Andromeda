@@ -33,11 +33,11 @@ pub(super) fn compute_wal_archive_digest(wal_segments: &[BackupWalSegmentArtifac
             Some(previous) => {
                 hasher.update([1]);
                 hasher.update(previous.get().to_le_bytes());
-            }
+            },
             None => {
                 hasher.update([0]);
                 hasher.update(0_u64.to_le_bytes());
-            }
+            },
         }
         hasher.update(segment.record_count.to_le_bytes());
         hasher.update(segment.wal_format_version.to_le_bytes());

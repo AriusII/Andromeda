@@ -1,12 +1,10 @@
-use andromeda_srpl::{
-    execution_adapter::{
-        SrplAssertRequest, SrplAssertResult, SrplAssertionAdapter, SrplBindingEnvironment,
-        SrplBoundValue, SrplEmitRequest, SrplEmitResult, SrplExecutionFailure, SrplFailureAdapter,
-        SrplFailureRequest, SrplReadRequest, SrplReadResult, SrplTypedEmitAdapter,
-        SrplTypedReadAdapter, SrplTypedUpdateAdapter, SrplUpdateRequest, SrplUpdateResult,
-    },
-    procedure_model::SrplPredicateIr,
+use andromeda_srpl_execution_adapter::{
+    SrplAssertRequest, SrplAssertResult, SrplAssertionAdapter, SrplBindingEnvironment,
+    SrplBoundValue, SrplEmitRequest, SrplEmitResult, SrplExecutionFailure, SrplFailureAdapter,
+    SrplFailureRequest, SrplReadRequest, SrplReadResult, SrplTypedEmitAdapter,
+    SrplTypedReadAdapter, SrplTypedUpdateAdapter, SrplUpdateRequest, SrplUpdateResult,
 };
+use andromeda_srpl_ir::SrplPredicateIr;
 
 use super::{
     backpressure::SrplStreamBackpressure,
@@ -240,7 +238,7 @@ impl SrplExecutionAdapter {
                     })?;
 
                 Ok(input_val == field_val)
-            }
+            },
             SrplPredicateIr::FieldGreaterThanOrEqualInput {
                 binding,
                 field,
@@ -279,7 +277,7 @@ impl SrplExecutionAdapter {
                         "SRPL comparison requires integer values".to_string(),
                     )),
                 }
-            }
+            },
         }
     }
 
@@ -309,7 +307,7 @@ impl SrplExecutionAdapter {
 
                 // Read target bindings may be materialized after input validation.
                 Ok(())
-            }
+            },
         }
     }
 

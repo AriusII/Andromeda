@@ -92,14 +92,14 @@ pub fn compact_segment(
     for record in &original_records {
         match context.should_keep_record(record) {
             Ok(true) => live_records.push(record.clone()),
-            Ok(false) => {} // Skip dead record
+            Ok(false) => {}, // Skip dead record
             Err(e) => {
                 context.emit_audit_event(WalCompactionAuditEvent::CompactionFailed {
                     segment_id,
                     reason: format!("Record filtering error: {}", e),
                 })?;
                 return Err(e);
-            }
+            },
         }
     }
 
@@ -116,7 +116,7 @@ pub fn compact_segment(
                     reason: format!("Write failed: {}", e),
                 })?;
                 return Err(e);
-            }
+            },
         };
 
     let bytes_recovered = original_bytes.saturating_sub(compacted_bytes);
@@ -143,7 +143,7 @@ pub fn compact_segment(
             })?;
 
             Ok(result)
-        }
+        },
         Err(e) => {
             // Step 5: On swap failure, old segment remains and temporary is abandoned
             context.emit_audit_event(WalCompactionAuditEvent::CompactionFailed {
@@ -151,6 +151,6 @@ pub fn compact_segment(
                 reason: format!("Swap failed: {}", e),
             })?;
             Err(e)
-        }
+        },
     }
 }

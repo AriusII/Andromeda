@@ -1,6 +1,6 @@
 use super::fixtures::integer_row;
 use super::*;
-use andromeda_srpl::execution_adapter::{SrplBindingEnvironment, SrplBoundValue};
+use andromeda_srpl_execution_adapter::{SrplBindingEnvironment, SrplBoundValue};
 
 #[test]
 fn srpl_typed_environment_inputs() {

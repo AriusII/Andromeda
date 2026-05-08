@@ -1,10 +1,10 @@
 //! V0 plan-class and bounded plan-cache gate.
 //!
-//! **Status: MINIMAL RUNTIME GATE.** This module still does not compile SRPL,
-//! inspect histograms, or perform cost-based optimization. It defines the
-//! bounded identity inputs, validates opaque plan candidates, selects a
-//! deterministic minimal candidate, records advisory scenario evidence, and
-//! guards an in-memory bounded cache with DecisionTrace-style evidence.
+//! **Status: CATALOG BRIDGE FACADE.** The pure plan-cache identity, bounded
+//! cache, and deterministic selection logic now live in
+//! `andromeda-plan-cache`. This catalog module keeps the `ScenarioEvidence`
+//! bridge and the source-level coverage markers that document the runtime gate
+//! contract visible from the catalog facade.
 //!
 //! ## What this module pins down
 //!
@@ -96,13 +96,6 @@
 //! `advisory_only=true`, `policy_version`, `contract_hash`, `stats_version`,
 //! and `catalog_version`.
 
-mod advisory_evidence;
-mod selection;
-
-#[cfg(test)]
-mod tests;
-
-pub use advisory_evidence::classify_advisory_evidence_for_key;
 pub use andromeda_plan_cache::{
     AdvisoryEvidenceStatus, AdvisoryEvidenceSummary, AdvisoryEvidenceSummaryBuilder,
     BoundedPlanCache, CardinalityBucket, PLAN_CACHE_MAX_ENTRIES, PLAN_SELECTION_MAX_CANDIDATES,
@@ -111,4 +104,4 @@ pub use andromeda_plan_cache::{
     PlanCandidateId, PlanCandidateRank, PlanClass, PlanDecisionEvidence, PlanDecisionOutcome,
     PlanSelectionError, PlanSelectionOutcome, PlanShapeFingerprint, PlanShapeFingerprintBuilder,
 };
-pub use selection::select_minimal_plan;
+pub use andromeda_scenario_evidence::{classify_advisory_evidence_for_key, select_minimal_plan};

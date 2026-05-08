@@ -369,7 +369,7 @@ impl AdmissionAuditEvent {
                     !affected_principal.is_empty()
                         && has_text(certificate_identity)
                         && has_text(surface_plane)
-                }
+                },
             }
     }
 }

@@ -1,7 +1,5 @@
-use crate::{
-    contracts::StatsVersion, scenario_evidence::ScenarioEvidenceError,
-    statistics::StatsValidationError,
-};
+use crate::{contracts::StatsVersion, statistics::StatsValidationError};
+use andromeda_scenario_evidence::ScenarioEvidenceError;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StatsPublicationSwitchError {

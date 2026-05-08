@@ -202,7 +202,7 @@ mod heap_engine_tests {
                 Err(e) => {
                     assert!(e.message().contains("page full"));
                     break;
-                }
+                },
             }
         }
 

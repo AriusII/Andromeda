@@ -55,10 +55,10 @@ fn classify_fast_start(
         ObservedBoundary::Clean => accepted_replay(boundary, forensic_report_attached),
         ObservedBoundary::RecoverableTail => {
             StartupOutcome::Rejected(StartupRejectionReason::FastStartRequiresCleanScan)
-        }
+        },
         ObservedBoundary::ForensicChainBreak => {
             StartupOutcome::Rejected(StartupRejectionReason::ForensicHandlingRequired)
-        }
+        },
     }
 }
 
@@ -69,10 +69,10 @@ fn classify_safe_start(
     match boundary {
         ObservedBoundary::Clean | ObservedBoundary::RecoverableTail => {
             accepted_replay(boundary, forensic_report_attached)
-        }
+        },
         ObservedBoundary::ForensicChainBreak => {
             StartupOutcome::Rejected(StartupRejectionReason::ForensicHandlingRequired)
-        }
+        },
     }
 }
 

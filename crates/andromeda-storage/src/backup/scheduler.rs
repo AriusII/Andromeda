@@ -200,7 +200,7 @@ impl BackupIOScheduler {
                             pages_remaining = pages_remaining.saturating_sub(pages_in_task);
                         }
                     }
-                }
+                },
                 SegmentPlan::ColdStoreScan {
                     cold_segment_id,
                     page_count,
@@ -243,7 +243,7 @@ impl BackupIOScheduler {
                             .ok_or_else(|| backup_error("backup IO page offset overflow"))?;
                         pages_remaining = pages_remaining.saturating_sub(pages_in_task);
                     }
-                }
+                },
             }
         }
 

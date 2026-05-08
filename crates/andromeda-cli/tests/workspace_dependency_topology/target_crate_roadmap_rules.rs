@@ -194,14 +194,49 @@ const TEMPORARY_DEV_DEPENDENCY_BACKEDGE_EXCEPTIONS: &[TemporaryDependencyExcepti
 ];
 const TEMPORARY_C5_CORE_FACADE_EXCEPTIONS: &[TemporaryDependencyException] = &[
     TemporaryDependencyException {
+        source: "andromeda-backup",
+        dependency: "andromeda-core",
+        exit_criteria: "Exit criteria: extract backup snapshot identifiers and restore error vocabulary from the temporary core facade.",
+    },
+    TemporaryDependencyException {
+        source: "andromeda-hadr",
+        dependency: "andromeda-core",
+        exit_criteria: "Exit criteria: extract HA/DR replica identity and failover epoch primitives from the temporary core facade.",
+    },
+    TemporaryDependencyException {
+        source: "andromeda-locking",
+        dependency: "andromeda-core",
+        exit_criteria: "Exit criteria: extract lock resource identifiers and conflict errors from the temporary core facade.",
+    },
+    TemporaryDependencyException {
         source: "andromeda-storage",
         dependency: "andromeda-core",
         exit_criteria: "Exit criteria: replace the wide andromeda-core facade with extracted durable-storage foundation crates.",
     },
     TemporaryDependencyException {
+        source: "andromeda-storage-index",
+        dependency: "andromeda-core",
+        exit_criteria: "Exit criteria: replace index codec result and error aliases with narrower durable-storage foundation crates.",
+    },
+    TemporaryDependencyException {
+        source: "andromeda-storage-heap",
+        dependency: "andromeda-core",
+        exit_criteria: "Exit criteria: extract heap row/page identity and validation primitives from the temporary core facade.",
+    },
+    TemporaryDependencyException {
+        source: "andromeda-mvcc",
+        dependency: "andromeda-core",
+        exit_criteria: "Exit criteria: extract MVCC timestamp/version identity and visibility errors from the temporary core facade.",
+    },
+    TemporaryDependencyException {
         source: "andromeda-tx",
         dependency: "andromeda-core",
         exit_criteria: "Exit criteria: replace the wide andromeda-core facade with extracted transaction foundation crates.",
+    },
+    TemporaryDependencyException {
+        source: "andromeda-transaction",
+        dependency: "andromeda-core",
+        exit_criteria: "Exit criteria: extract transaction identity/state primitives from the temporary core facade.",
     },
     TemporaryDependencyException {
         source: "andromeda-wal",

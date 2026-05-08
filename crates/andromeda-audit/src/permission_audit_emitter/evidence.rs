@@ -451,10 +451,10 @@ const fn retention_boundary_is_visible_decision_compatible(
                 AuditEmissionRetentionBoundary::WalSegment
                     | AuditEmissionRetentionBoundary::ForensicHold
             )
-        }
+        },
         AuditEmissionEventFamily::ForensicDecision => {
             matches!(boundary, AuditEmissionRetentionBoundary::ForensicHold)
-        }
+        },
         AuditEmissionEventFamily::AdmissionDecision
         | AuditEmissionEventFamily::RecoveryDecision
         | AuditEmissionEventFamily::GenericAudit => false,

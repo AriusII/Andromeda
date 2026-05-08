@@ -79,33 +79,33 @@ pub(crate) const fn durable_family_to_audit_family(
     match family {
         DurableAuditEventFamily::SecurityDecision => {
             andromeda_audit::AuditEmissionEventFamily::SecurityDecision
-        }
+        },
         DurableAuditEventFamily::AdminDecision => {
             andromeda_audit::AuditEmissionEventFamily::AdminDecision
-        }
+        },
         DurableAuditEventFamily::AdmissionDecision => {
             andromeda_audit::AuditEmissionEventFamily::AdmissionDecision
-        }
+        },
         DurableAuditEventFamily::CatalogDecision => {
             andromeda_audit::AuditEmissionEventFamily::CatalogDecision
-        }
+        },
         DurableAuditEventFamily::HadrDecision => {
             andromeda_audit::AuditEmissionEventFamily::HadrDecision
-        }
+        },
         DurableAuditEventFamily::BackupDecision => {
             andromeda_audit::AuditEmissionEventFamily::BackupDecision
-        }
+        },
         DurableAuditEventFamily::RestoreDecision => {
             andromeda_audit::AuditEmissionEventFamily::RestoreDecision
-        }
+        },
         DurableAuditEventFamily::ForensicDecision => {
             andromeda_audit::AuditEmissionEventFamily::ForensicDecision
-        }
+        },
         DurableAuditEventFamily::RecoveryDecision => {
             andromeda_audit::AuditEmissionEventFamily::RecoveryDecision
-        }
+        },
         DurableAuditEventFamily::GenericAudit => {
             andromeda_audit::AuditEmissionEventFamily::GenericAudit
-        }
+        },
     }
 }

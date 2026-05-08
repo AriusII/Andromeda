@@ -56,7 +56,7 @@ impl QuorumMembershipRejection {
             Self::DuplicateReplicaId => "HADR quorum membership contains duplicate replica ids",
             Self::ReplicaMatchesPrimary => {
                 "HADR quorum membership replica id must not match primary id"
-            }
+            },
             Self::EpochOverflow => "HADR quorum membership epoch overflow",
         }
     }

@@ -27,10 +27,10 @@ impl StorageIoBudgetScope {
         match self {
             Self::Page(page_size) => {
                 PageIoBudget::new(page_size, use_class, path_budget).validate()
-            }
+            },
             Self::Segment { bytes } => {
                 SegmentIoBudget::new(bytes, use_class, path_budget, thresholds).validate()
-            }
+            },
         }
     }
 }

@@ -115,13 +115,13 @@ impl PermissionAuditEvent {
                     self.required_permission.clone(),
                     reason.clone(),
                 )
-            }
+            },
             PermissionDecisionAudit::DeniedUnknownPrincipal => {
                 andromeda_audit::PermissionAuditEvent::denied_unknown_principal(
                     self.trace_id,
                     self.required_permission.clone(),
                 )
-            }
+            },
         };
         event.timestamp = self.timestamp;
         event

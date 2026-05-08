@@ -33,11 +33,11 @@ pub(super) fn compute_digest(evidence: &ScenarioEvidence) -> [u8; 32] {
         Some(hash) => {
             hasher.update(&[0x01]);
             hasher.update(&hash.as_bytes());
-        }
+        },
         None => {
             hasher.update(&[0x00]);
             hasher.update(&[0u8; ContractHash::LEN]);
-        }
+        },
     }
 
     hasher.update(&[0xE7]);

@@ -51,7 +51,7 @@ fn index_rebuild_handler(
                 kind,
                 format!("{kind:?} recovery payload is malformed: {message}"),
             ));
-        }
+        },
     };
 
     if let Some(message) = validate_index_recovery_format(payload.key_format) {

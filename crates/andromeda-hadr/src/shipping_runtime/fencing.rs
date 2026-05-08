@@ -59,11 +59,11 @@ pub fn decide_fencing(_event: FencingEvent, policy: FencingPolicy) -> bool {
         FencingPolicy::Asynchronous => {
             // Async mode: continue writing even if replica fails.
             false
-        }
+        },
         FencingPolicy::QuorumEnforced => {
             // Quorum mode: block visibility on any replica failure.
             // (The actual quorum algorithm is in F3; this is the decision point.)
             true
-        }
+        },
     }
 }

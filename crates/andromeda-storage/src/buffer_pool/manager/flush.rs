@@ -118,7 +118,7 @@ impl<S: PageStore> BufferPool<S> {
                 None => {
                     result.errors.push(FlushError::FrameNotResident { page_id });
                     continue;
-                }
+                },
             };
 
             let pin_count = self.frames[index].pin_count();
@@ -134,7 +134,7 @@ impl<S: PageStore> BufferPool<S> {
                 None => {
                     result.errors.push(FlushError::InvalidPageImage { page_id });
                     continue;
-                }
+                },
             };
 
             if self.frames[index].begin_flush().is_err() {

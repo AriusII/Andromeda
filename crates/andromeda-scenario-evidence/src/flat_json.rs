@@ -19,7 +19,7 @@ pub(crate) fn escape_json_string(value: &str) -> String {
             '\t' => escaped.push_str("\\t"),
             c if c.is_control() => {
                 escaped.push_str(&format!("\\u{:04x}", c as u32));
-            }
+            },
             c => escaped.push(c),
         }
     }
@@ -123,15 +123,15 @@ impl<'a> Parser<'a> {
             Some(b'n') => {
                 self.expect_literal(b"null")?;
                 Ok(JsonField::Null)
-            }
+            },
             Some(b't') => {
                 self.expect_literal(b"true")?;
                 Ok(JsonField::Bool(true))
-            }
+            },
             Some(b'f') => {
                 self.expect_literal(b"false")?;
                 Ok(JsonField::Bool(false))
-            }
+            },
             _ => Err("invalid JSON value".to_string()),
         }
     }

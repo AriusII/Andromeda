@@ -10,5 +10,6 @@ mod ir;
 mod signature;
 
 pub use andromeda_srpl_cardinality::Cardinality;
+pub use identifier::validate_srpl_identifier;
 pub use ir::*;
 pub use signature::*;

@@ -9,3 +9,4 @@ publish = false
 andromeda-core.workspace = true
 andromeda-storage-page.workspace = true
 andromeda-wal.workspace = true
+sha2 = "0.11.0"

@@ -165,7 +165,7 @@ fn classify_scan_stop(stop: WalScanStop) -> ForensicAnomaly {
                 kind: ForensicAnomalyKind::RecoverableTailTruncation { offset },
                 detail: format!("WAL tail truncated at offset {offset}: {:?}", stop.reason),
             }
-        }
+        },
         WalScanStopReason::CorruptRecord => ForensicAnomaly {
             kind: ForensicAnomalyKind::ChecksumFailure { offset },
             detail: format!("WAL record checksum failure at offset {offset}"),
@@ -223,7 +223,7 @@ pub fn forensic_start_from_decision(
                 anomaly_report,
                 inner,
             })
-        }
+        },
         StartupOutcome::Rejected(reason) => Err(AndromedaError::new(
             AndromedaErrorKind::Storage,
             format!(

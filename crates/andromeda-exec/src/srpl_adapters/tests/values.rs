@@ -1,5 +1,5 @@
 use super::*;
-use andromeda_srpl::execution_adapter::SrplBoundValue;
+use andromeda_srpl_execution_adapter::SrplBoundValue;
 
 #[test]
 fn structured_object_field_access() {

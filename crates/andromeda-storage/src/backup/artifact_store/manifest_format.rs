@@ -213,7 +213,7 @@ fn decode_manifest_payload(
                 return Err(backup_error(
                     "backup artifact manifest format version is unsupported",
                 ));
-            }
+            },
         },
     };
 
@@ -260,12 +260,12 @@ fn decode_manifest_payload(
             // Restore still gets bounded evidence, but callers can distinguish
             // reconstructed evidence from v3's manifest-recorded evidence.
             BackupArtifactCompatibilityEvidence::reconstructed_legacy(format_version)
-        }
+        },
         _ => {
             return Err(backup_error(
                 "backup artifact manifest format version is unsupported",
             ));
-        }
+        },
     };
     if format_version == ARTIFACT_MANIFEST_FORMAT_VERSION_V1 {
         wal_archive_evidence.archive_digest_sha256 = compute_wal_archive_digest(&wal_segments);

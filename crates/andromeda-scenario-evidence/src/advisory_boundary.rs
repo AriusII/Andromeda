@@ -58,7 +58,7 @@ pub(crate) fn optional_u32_with_default(
     match fields.get(name) {
         Some(JsonField::Unsigned(value)) => {
             u32::try_from(*value).map_err(|_| format!("{name} exceeds u32"))
-        }
+        },
         Some(JsonField::Null) | None => Ok(default),
         _ => Err(format!("invalid {name}")),
     }

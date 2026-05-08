@@ -110,18 +110,18 @@ impl CatalogReplayState {
             } => {
                 self.replay_definition_batch_applied(affected_procedure_ids);
                 Ok(())
-            }
+            },
             CatalogWalRecord::ProcedureAdded { procedure_id, .. } => {
                 self.mark_procedure_visible(*procedure_id);
                 Ok(())
-            }
+            },
             CatalogWalRecord::ProcedureAltered { procedure_id, .. } => {
                 self.ensure_visible_procedure(*procedure_id, "ProcedureAltered")?;
                 self.snapshot
                     .procedure_versions
                     .insert(*procedure_id, self.snapshot.catalog_version);
                 Ok(())
-            }
+            },
             CatalogWalRecord::ProcedureDropped { procedure_id, .. } => {
                 self.ensure_visible_procedure(*procedure_id, "ProcedureDropped")?;
                 self.snapshot.procedure_ids.remove(procedure_id);
@@ -129,7 +129,7 @@ impl CatalogReplayState {
                     .procedure_versions
                     .insert(*procedure_id, self.snapshot.catalog_version);
                 Ok(())
-            }
+            },
             CatalogWalRecord::StatisticsUpdated {
                 table_id,
                 column_id,
@@ -137,7 +137,7 @@ impl CatalogReplayState {
             } => {
                 let _ = (table_id, column_id);
                 Ok(())
-            }
+            },
             CatalogWalRecord::CatalogCheckpoint {
                 visible_procedure_count,
                 ..

@@ -25,7 +25,7 @@ impl StorageWorkloadClass {
             Self::Recovery => PipelineClass::Recovery,
             Self::RamWorkingSet | Self::HotAppend | Self::ColdRead => {
                 PipelineClass::ForegroundExecution
-            }
+            },
             Self::ColdPublication => PipelineClass::BackgroundMaintenance,
         }
     }
@@ -34,7 +34,7 @@ impl StorageWorkloadClass {
         match self {
             Self::Commit | Self::WalAppend | Self::Rollback | Self::Recovery => {
                 IoUseClass::CommitCriticalHotPath
-            }
+            },
             Self::RamWorkingSet | Self::HotAppend => IoUseClass::OnlineHotPath,
             Self::ColdRead | Self::ColdPublication => IoUseClass::ColdSegmentPath,
         }
@@ -53,7 +53,7 @@ impl StorageWorkloadClass {
         match self {
             Self::Commit | Self::WalAppend | Self::Rollback | Self::Recovery | Self::HotAppend => {
                 PlacementDecision::append(DataTemperature::Hot)
-            }
+            },
             Self::RamWorkingSet => Ok(PlacementDecision::read(DataTemperature::RamWorkingSet)),
             Self::ColdRead => Ok(PlacementDecision::read(DataTemperature::Cold)),
             Self::ColdPublication => Ok(PlacementDecision {

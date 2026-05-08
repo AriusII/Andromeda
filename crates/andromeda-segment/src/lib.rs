@@ -17,8 +17,17 @@ C5 invariants:
 "#]
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use andromeda_storage_page::{AllocationId, ObjectId, PageId};
-use andromeda_wal::Lsn;
+mod descriptor;
+pub mod extent;
+pub mod segment_index;
+
+pub use andromeda_storage_page::{AllocationId, ExtentId, ObjectId, PageId, PageSize};
+pub use andromeda_wal::Lsn;
+pub use descriptor::SegmentDescriptor;
+pub use extent::{
+    ColdExtentReclaimEvidence, ExtentDescriptor, ExtentFreeRange, ExtentManager,
+    ExtentManagerReplayRecord, ExtentState, validate_segment_extent_contiguity,
+};
 
 /// Durable segment identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

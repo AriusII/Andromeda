@@ -151,10 +151,10 @@ mod wal_gc_snapshot_protection_tests {
                             .lock()
                             .unwrap()
                             .push(candidate.segment_id);
-                    }
+                    },
                     _ => {
                         summary.candidates_blocked += 1;
-                    }
+                    },
                 }
             }
 

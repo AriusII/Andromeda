@@ -41,7 +41,7 @@ fn test_replica_promoted_if_lsn_caught_up_and_member() {
             assert_eq!(candidate.rank, 0);
             assert_eq!(candidate.observed_epoch, 5);
             assert!(candidate.validate().is_ok());
-        }
+        },
         _ => panic!("Expected Eligible variant"),
     }
 }
@@ -77,7 +77,7 @@ fn test_replica_not_promoted_if_behind_primary_lsn() {
             assert!(
                 reason.to_lowercase().contains("behind") || reason.to_lowercase().contains("loss")
             );
-        }
+        },
         _ => panic!("Expected Ineligible variant"),
     }
 }

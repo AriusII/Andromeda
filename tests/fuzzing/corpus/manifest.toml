@@ -138,3 +138,15 @@ target = "structured_object_payload"
 corpus_dir = "tests/fuzzing/corpus/structured_object_payload"
 seed_files = ["seed-basic.bin"]
 generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "recovery_manifest_durability_boundary"
+corpus_dir = "tests/fuzzing/corpus/recovery_manifest_durability_boundary"
+seed_files = ["seed-basic.bin"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "manifest_boundary"
+corpus_dir = "tests/fuzzing/corpus/manifest_boundary"
+seed_files = ["seed-basic.bin"]
+generator = "deterministic-bytes-v1"

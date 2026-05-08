@@ -37,7 +37,7 @@ pub(super) fn encode_record_payload(
             let principal_bytes = operator_principal.as_bytes();
             bytes.extend_from_slice(&(principal_bytes.len() as u32).to_le_bytes());
             bytes.extend_from_slice(principal_bytes);
-        }
+        },
         CatalogWalRecord::ProcedureAdded {
             procedure_id,
             signature_hash,
@@ -49,7 +49,7 @@ pub(super) fn encode_record_payload(
             bytes.extend_from_slice(&signature_hash.as_bytes());
             bytes.extend_from_slice(&new_catalog_version.get().to_le_bytes());
             bytes.extend_from_slice(&timestamp_secs.to_le_bytes());
-        }
+        },
         CatalogWalRecord::ProcedureAltered {
             procedure_id,
             old_hash,
@@ -63,7 +63,7 @@ pub(super) fn encode_record_payload(
             bytes.extend_from_slice(&new_hash.as_bytes());
             bytes.extend_from_slice(&new_catalog_version.get().to_le_bytes());
             bytes.extend_from_slice(&timestamp_secs.to_le_bytes());
-        }
+        },
         CatalogWalRecord::ProcedureDropped {
             procedure_id,
             dropped_version,
@@ -75,7 +75,7 @@ pub(super) fn encode_record_payload(
             bytes.extend_from_slice(&dropped_version.get().to_le_bytes());
             bytes.extend_from_slice(&new_catalog_version.get().to_le_bytes());
             bytes.extend_from_slice(&timestamp_secs.to_le_bytes());
-        }
+        },
         CatalogWalRecord::StatisticsUpdated {
             stats_version,
             table_id,
@@ -89,7 +89,7 @@ pub(super) fn encode_record_payload(
             bytes.extend_from_slice(&column_id.get().to_le_bytes());
             bytes.extend_from_slice(&histogram_data_lsn.get().to_le_bytes());
             bytes.extend_from_slice(&timestamp_secs.to_le_bytes());
-        }
+        },
         CatalogWalRecord::CatalogCheckpoint {
             checkpoint_lsn,
             catalog_version,
@@ -101,7 +101,7 @@ pub(super) fn encode_record_payload(
             bytes.extend_from_slice(&catalog_version.get().to_le_bytes());
             bytes.extend_from_slice(&(*visible_procedure_count as u32).to_le_bytes());
             bytes.extend_from_slice(&timestamp_secs.to_le_bytes());
-        }
+        },
     }
 
     // Now write the collected bytes (convert io::Error to AndromedaError)
@@ -195,7 +195,7 @@ pub(super) fn decode_record_payload(
                 timestamp_secs,
                 operator_principal,
             }
-        }
+        },
         1 => {
             // ProcedureAdded
             let mut pid_bytes = [0u8; 8];
@@ -220,7 +220,7 @@ pub(super) fn decode_record_payload(
                 new_catalog_version,
                 timestamp_secs,
             }
-        }
+        },
         2 => {
             // ProcedureAltered
             let mut pid_bytes = [0u8; 8];
@@ -250,7 +250,7 @@ pub(super) fn decode_record_payload(
                 new_catalog_version,
                 timestamp_secs,
             }
-        }
+        },
         3 => {
             // ProcedureDropped
             let mut pid_bytes = [0u8; 8];
@@ -277,7 +277,7 @@ pub(super) fn decode_record_payload(
                 new_catalog_version,
                 timestamp_secs,
             }
-        }
+        },
         4 => {
             // StatisticsUpdated
             let mut stats_ver_bytes = [0u8; 8];
@@ -307,7 +307,7 @@ pub(super) fn decode_record_payload(
                 histogram_data_lsn,
                 timestamp_secs,
             }
-        }
+        },
         5 => {
             // CatalogCheckpoint
             let mut lsn_bytes = [0u8; 8];
@@ -332,7 +332,7 @@ pub(super) fn decode_record_payload(
                 visible_procedure_count,
                 timestamp_secs,
             }
-        }
+        },
         t => Err(AndromedaError::new(
             AndromedaErrorKind::Storage,
             format!("unknown catalog record tag: {}", t),

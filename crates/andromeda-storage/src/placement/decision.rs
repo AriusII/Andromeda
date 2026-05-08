@@ -73,7 +73,7 @@ impl PlacementDecision {
                     mutation_allowed: true,
                     reason: "mutable page work is staged in RAM before HotStore placement",
                 })
-            }
+            },
         }
     }
 

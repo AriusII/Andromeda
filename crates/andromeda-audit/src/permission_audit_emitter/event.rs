@@ -73,20 +73,20 @@ impl PermissionAuditEvent {
                     format!("PrincipalId({})", self.principal_id),
                     self.required_permission
                 )
-            }
+            },
             PermissionDecisionAudit::Denied(reason) => {
                 format!(
                     "permission denied: principal {} - {}",
                     format!("PrincipalId({})", self.principal_id),
                     reason.explanation()
                 )
-            }
+            },
             PermissionDecisionAudit::DeniedUnknownPrincipal => {
                 format!(
                     "permission denied: unknown principal - permission required: {}",
                     self.required_permission
                 )
-            }
+            },
         }
     }
 

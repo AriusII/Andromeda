@@ -1,18 +1,7 @@
-mod codec;
-mod digest;
-mod error;
-mod types;
+//! Compatibility facade for the segment index owner crate.
+//!
+//! Segment-index codecs and contracts are owned by `andromeda-segment` during
+//! the storage extraction. Storage keeps this module as a reexport so existing
+//! callers can migrate without changing durable byte semantics.
 
-pub use codec::{
-    SEGMENT_INDEX_V0_BYTE_ORDER, SEGMENT_INDEX_V0_ENTRY_LEN,
-    SEGMENT_INDEX_V0_FLAG_CONTIGUOUS_PAGE_RANGES, SEGMENT_INDEX_V0_FLAG_FORENSIC_HOLD,
-    SEGMENT_INDEX_V0_FLAG_PUBLISHED_COLD_ONLY, SEGMENT_INDEX_V0_FORMAT_MAJOR,
-    SEGMENT_INDEX_V0_FORMAT_MINOR, SEGMENT_INDEX_V0_HEADER_LEN, SEGMENT_INDEX_V0_MAGIC,
-    SEGMENT_INDEX_V0_MAX_ENTRIES, SEGMENT_INDEX_V0_MAX_EXTENSION_BYTES,
-    SEGMENT_INDEX_V0_TRAILER_LEN,
-};
-pub use error::{SegmentIndexError, SegmentIndexResult};
-pub use types::{
-    SegmentIndexBuildContextV0, SegmentIndexEntryV0, SegmentIndexHeaderV0, SegmentIndexTrailerV0,
-    SegmentIndexV0,
-};
+pub use andromeda_segment::segment_index::*;

@@ -94,7 +94,7 @@ impl TwoPhaseLocksValidator {
                         ),
                     ));
                 }
-            }
+            },
             TwoPhaseOperation::Release => {
                 if !Self::state_allows_release(current_state) {
                     return Err(AndromedaError::new(
@@ -105,7 +105,7 @@ impl TwoPhaseLocksValidator {
                         ),
                     ));
                 }
-            }
+            },
             TwoPhaseOperation::ReleaseAll => {
                 if !Self::state_allows_release_all(current_state) {
                     return Err(AndromedaError::new(
@@ -116,8 +116,8 @@ impl TwoPhaseLocksValidator {
                         ),
                     ));
                 }
-            }
-            TwoPhaseOperation::NoOp => {}
+            },
+            TwoPhaseOperation::NoOp => {},
         }
 
         Ok(())

@@ -96,6 +96,6 @@ pub fn decide_fencing(
             } else {
                 FencingDecision::Block
             }
-        }
+        },
     }
 }

@@ -181,20 +181,20 @@ impl HadrPromotionRejection {
             Self::CandidateNotMember => "hadr promotion candidate is not a quorum member",
             Self::StaleCandidateLsn => {
                 "hadr promotion candidate safe LSN is below a granting voter"
-            }
+            },
             Self::DivergentCandidate => {
                 "hadr promotion candidate has divergence evidence at or below its safe LSN"
-            }
+            },
             Self::InsufficientQuorum => "hadr promotion granted votes are below quorum size",
             Self::InvalidVoteRoster => {
                 "hadr promotion vote roster contains non-members or duplicates"
-            }
+            },
             Self::EpochNotMonotonic => {
                 "hadr promotion proposed epoch is not strictly greater than highest observed epoch"
-            }
+            },
             Self::SplitBrainActiveToken => {
                 "hadr promotion would conflict with an active fencing token (split-brain)"
-            }
+            },
         }
     }
 

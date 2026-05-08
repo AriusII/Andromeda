@@ -67,13 +67,13 @@ impl BenchmarkEvidenceContext {
             let expected_mode = match self.workload_class {
                 BenchmarkWorkloadClass::SyntheticDiagnostic => {
                     BenchmarkMeasurementMode::SyntheticDiagnostic
-                }
+                },
                 BenchmarkWorkloadClass::HarnessDiagnostic => {
                     BenchmarkMeasurementMode::HarnessDiagnostic
-                }
+                },
                 BenchmarkWorkloadClass::RealRuntime => {
                     return Err(BenchmarkScenarioEvidenceError::WorkloadMeasurementModeMismatch);
-                }
+                },
             };
             if measurement_mode != expected_mode {
                 return Err(BenchmarkScenarioEvidenceError::WorkloadMeasurementModeMismatch);
@@ -90,7 +90,7 @@ impl BenchmarkEvidenceContext {
                 if self.latency_source.is_none() {
                     return Err(BenchmarkScenarioEvidenceError::EmptyLatencySource);
                 }
-            }
+            },
             Some(BenchmarkMeasurementMode::HarnessDiagnostic) => {
                 if self.engine_harness.is_none() {
                     return Err(BenchmarkScenarioEvidenceError::MissingEngineHarness);
@@ -98,8 +98,8 @@ impl BenchmarkEvidenceContext {
                 if self.latency_source.is_none() {
                     return Err(BenchmarkScenarioEvidenceError::EmptyLatencySource);
                 }
-            }
-            None => {}
+            },
+            None => {},
         }
         Ok(())
     }

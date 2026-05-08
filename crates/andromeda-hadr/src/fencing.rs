@@ -78,7 +78,7 @@ impl HadrFencingRejection {
             Self::StaleEpoch => "hadr fencing token epoch is below active epoch",
             Self::PrimaryIdMismatch => {
                 "hadr fencing token primary id does not match active primary"
-            }
+            },
             Self::NoActiveToken => "hadr cluster has no active fencing token",
         }
     }

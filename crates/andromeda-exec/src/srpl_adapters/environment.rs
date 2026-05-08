@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use andromeda_srpl::execution_adapter::{SrplBindingEnvironment, SrplBoundValue};
+use andromeda_srpl_execution_adapter::{SrplBindingEnvironment, SrplBoundValue};
 
 use super::values::{FieldValue, StructuredObject};
 

@@ -280,13 +280,13 @@ const fn replay_behavior_to_audit(
     match replay {
         DurableAuditReplayBehavior::ForensicOnly => {
             andromeda_audit::AuditEmissionReplayBehavior::ForensicOnly
-        }
+        },
         DurableAuditReplayBehavior::RebuildDecisionIndex => {
             andromeda_audit::AuditEmissionReplayBehavior::RebuildDecisionIndex
-        }
+        },
         DurableAuditReplayBehavior::CorruptionBoundary => {
             andromeda_audit::AuditEmissionReplayBehavior::CorruptionBoundary
-        }
+        },
     }
 }
 
@@ -296,15 +296,15 @@ const fn retention_boundary_to_audit(
     match retention {
         DurableAuditRetentionBoundary::WalSegment => {
             andromeda_audit::AuditEmissionRetentionBoundary::WalSegment
-        }
+        },
         DurableAuditRetentionBoundary::CatalogVersion => {
             andromeda_audit::AuditEmissionRetentionBoundary::CatalogVersion
-        }
+        },
         DurableAuditRetentionBoundary::SecurityPolicy => {
             andromeda_audit::AuditEmissionRetentionBoundary::SecurityPolicy
-        }
+        },
         DurableAuditRetentionBoundary::ForensicHold => {
             andromeda_audit::AuditEmissionRetentionBoundary::ForensicHold
-        }
+        },
     }
 }

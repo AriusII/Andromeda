@@ -81,7 +81,7 @@ async fn test_single_invocation_e2e() -> AndromedaResult<()> {
             Ok(0) => break, // EOF
             Ok(n) => {
                 response_frames.extend_from_slice(&buf[..n]);
-            }
+            },
             Err(_) => break,
         }
     }

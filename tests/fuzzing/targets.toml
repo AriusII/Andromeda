@@ -164,6 +164,14 @@ max_input_bytes = 4096
 invalid_input_policy = "return-or-error-no-panic"
 
 [[target]]
+name = "manifest_boundary"
+path = "fuzz_targets/manifest_boundary.rs"
+corpus_dir = "tests/fuzzing/corpus/manifest_boundary"
+generator = "fuzz/generators/generate_seed_corpus.py"
+max_input_bytes = 104
+invalid_input_policy = "return-or-error-no-panic"
+
+[[target]]
 name = "segment_index_decode"
 path = "fuzz_targets/segment_index_decode.rs"
 corpus_dir = "tests/fuzzing/corpus/segment_index_decode"
@@ -195,6 +203,14 @@ corpus_dir = "tests/fuzzing/corpus/structured_object_payload"
 generator = "fuzz/generators/generate_seed_corpus.py"
 max_input_bytes = 65536
 invalid_input_policy = "return-or-error-no-panic"
+
+[[target]]
+name = "recovery_manifest_durability_boundary"
+path = "fuzz_targets/recovery_manifest_durability_boundary.rs"
+corpus_dir = "tests/fuzzing/corpus/recovery_manifest_durability_boundary"
+generator = "fuzz/generators/generate_seed_corpus.py"
+max_input_bytes = 76
+invalid_input_policy = "property-assertion-no-panic"
 
 [[support]]
 path = "fuzz_targets/common.rs"

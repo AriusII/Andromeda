@@ -313,11 +313,11 @@ where
             RollbackCause::BusinessFailure => {
                 tx.apply(TransactionEvent::Fail)?;
                 Some(TransactionState::Failed)
-            }
+            },
             RollbackCause::Poison => {
                 tx.apply(TransactionEvent::Poison)?;
                 Some(TransactionState::Poisoned)
-            }
+            },
         };
 
         tx.apply(TransactionEvent::RollbackRequested)?;

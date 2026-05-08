@@ -32,7 +32,7 @@ pub(super) fn validate_plan(plan: &ExecutableProcedurePlan) -> AndromedaResult<(
                 validate_symbol(binding, "SRPL read binding")?;
                 validate_bounded_cardinality(*cardinality, "SRPL read")?;
                 validate_predicates(predicates)?;
-            }
+            },
             BoundSrplOperationPlan::Assert {
                 predicate,
                 failure_code,
@@ -40,7 +40,7 @@ pub(super) fn validate_plan(plan: &ExecutableProcedurePlan) -> AndromedaResult<(
             } => {
                 validate_predicate(predicate)?;
                 validate_symbol(failure_code, "SRPL assertion failure code")?;
-            }
+            },
             BoundSrplOperationPlan::UpdateTable {
                 target,
                 predicates,
@@ -61,21 +61,21 @@ pub(super) fn validate_plan(plan: &ExecutableProcedurePlan) -> AndromedaResult<(
                     validate_assignment(assignment)?;
                 }
                 match affected_rows_exact {
-                    Some(rows) if *rows > 0 => {}
+                    Some(rows) if *rows > 0 => {},
                     Some(_) => {
                         return Err(AndromedaError::new(
                             AndromedaErrorKind::Srpl,
                             "SRPL interpreter update exact affected-row contract must be greater than zero",
                         ));
-                    }
+                    },
                     None => {
                         return Err(AndromedaError::new(
                             AndromedaErrorKind::Srpl,
                             "SRPL interpreter rejects unbounded update affected-row contracts",
                         ));
-                    }
+                    },
                 }
-            }
+            },
             BoundSrplOperationPlan::Emit { stream, values, .. } => {
                 validate_symbol(stream, "SRPL emit stream")?;
                 if values.is_empty() {
@@ -87,10 +87,10 @@ pub(super) fn validate_plan(plan: &ExecutableProcedurePlan) -> AndromedaResult<(
                 for value in values {
                     validate_emit_value(value)?;
                 }
-            }
+            },
             BoundSrplOperationPlan::Raise { code, .. } => {
                 validate_symbol(code, "SRPL raise code")?;
-            }
+            },
         }
     }
 

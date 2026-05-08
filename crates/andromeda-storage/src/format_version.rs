@@ -162,10 +162,10 @@ impl CompatibilityResult {
             CompatibilityResult::FullyCompatible => "Fully compatible (same version)",
             CompatibilityResult::BackwardCompatible => {
                 "Backward compatible (reader is newer; can read safely)"
-            }
+            },
             CompatibilityResult::Incompatible => {
                 "Incompatible (version mismatch; upgrade reader or downgrade writer)"
-            }
+            },
         }
     }
 }
@@ -267,7 +267,7 @@ impl CompatibilityMatrix {
         match compat {
             CompatibilityResult::FullyCompatible | CompatibilityResult::BackwardCompatible => {
                 Ok(())
-            }
+            },
             CompatibilityResult::Incompatible => Err(format!(
                 "Format version mismatch: reader {} cannot read writer {} ({})",
                 format_version_string(self.reader_version),

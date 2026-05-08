@@ -17,6 +17,9 @@ pub use envelope::{
     RpcResultStreamMetadataPolicy, project_generated_frame_envelope,
     project_generated_payload_kind, project_generated_protocol_version,
 };
+pub use andromeda_rpc_protocol::{
+    BackpressureMetadata, ErrorEnvelope, ErrorFamily, RetryDisposition, TransactionEffect,
+};
 pub use generated::{
     CONTRACT_PACKAGE, DESCRIPTOR_SET_HASH_ALGORITHM, GeneratedColumnDescriptor,
     GeneratedCompletionShape, GeneratedFrameEnvelope, GeneratedPayloadKind,

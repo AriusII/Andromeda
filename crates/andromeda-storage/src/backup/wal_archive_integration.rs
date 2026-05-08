@@ -57,31 +57,31 @@ impl std::fmt::Display for WalArchiveRejection {
             Self::SegmentCountZero => f.write_str("WAL archive segment count must not be zero"),
             Self::FinalizedEventEpochOverflow => {
                 f.write_str("backup manifest finalized event epoch overflow")
-            }
+            },
             Self::FinalizedEventBackupIdZero => {
                 f.write_str("backup manifest finalized event backup id must not be zero")
-            }
+            },
             Self::FinalizedEventEpochZero => {
                 f.write_str("backup manifest finalized event finalized epoch must not be zero")
-            }
+            },
             Self::PitrWindowLsnZero => f.write_str("PITR window LSNs must not be zero"),
             Self::PitrWindowEndBeforeStart => f.write_str("PITR window end must not precede start"),
             Self::CatalogSnapshotLsnZero => {
                 f.write_str("WAL archive validation requires non-zero catalog snapshot LSN")
-            }
+            },
             Self::ShippedStartLsnZero => {
                 f.write_str("WAL archive shipped start LSN must not be zero")
-            }
+            },
             Self::ShippedStartAfterCatalogSnapshot => {
                 f.write_str("WAL archive shipped start must not follow catalog snapshot LSN")
-            }
+            },
             Self::ShippedEndLsnZero => f.write_str("WAL archive shipped end LSN must not be zero"),
             Self::ShippedEndBeforeStart => {
                 f.write_str("WAL archive shipped end must not precede shipped start")
-            }
+            },
             Self::ShippedEndBeforeCatalogSnapshot => {
                 f.write_str("WAL archive shipped end must cover catalog snapshot LSN")
-            }
+            },
             Self::PitrTargetLsnZero => f.write_str("PITR target LSN must not be zero"),
             Self::PitrTargetBeforeWindow {
                 target_lsn,

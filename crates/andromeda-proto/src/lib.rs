@@ -179,7 +179,7 @@ mod generated_validation;
 mod manifest;
 mod structured;
 
-pub use andromeda_rpc_protocol::{
+pub use andromeda_proto_wire::{
     AUTH_WIRE_CODE, CONTRACT_REQUEST_WIRE_CODE, CONTRACT_RESPONSE_WIRE_CODE, ERROR_WIRE_CODE,
     FrameEnvelope, HELLO_WIRE_CODE, PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP, PayloadFrameFamily,
     PayloadFrameMapping, PayloadKind, ProtocolVersion, RPC_BATCH_WIRE_CODE,

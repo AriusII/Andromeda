@@ -176,7 +176,7 @@ impl HeapRedoPageState {
             Some(HeapRedoSlotState::Live { tuple, .. }) if tuple == &payload.tuple => {
                 self.page_lsn = self.page_lsn.max(payload.resulting_page_lsn);
                 Ok(())
-            }
+            },
             Some(HeapRedoSlotState::Live { .. }) => Err(storage_error(format!(
                 "heap row insert conflict on page {} slot {}: slot already contains different tuple bytes",
                 self.page_id.get(),
@@ -197,7 +197,7 @@ impl HeapRedoPageState {
                 );
                 self.page_lsn = payload.resulting_page_lsn;
                 Ok(())
-            }
+            },
         }
     }
 
@@ -210,7 +210,7 @@ impl HeapRedoPageState {
                 HeapRedoSlotState::Deleted { .. } => {
                     self.page_lsn = self.page_lsn.max(payload.resulting_page_lsn);
                     Ok(())
-                }
+                },
                 HeapRedoSlotState::Live { tuple, .. } => {
                     let previous_tuple = Some(tuple.clone());
                     *slot = HeapRedoSlotState::Deleted {
@@ -219,7 +219,7 @@ impl HeapRedoPageState {
                     };
                     self.page_lsn = payload.resulting_page_lsn;
                     Ok(())
-                }
+                },
             },
             None => Err(storage_error(format!(
                 "heap row delete references unknown page {} slot {}",
@@ -257,32 +257,32 @@ impl HeapRedoPageState {
                     self.page_id.get(),
                     before_slot_id
                 )));
-            }
+            },
             None => {
                 return Err(storage_error(format!(
                     "heap row update references unknown old page {} slot {}",
                     self.page_id.get(),
                     before_slot_id
                 )));
-            }
+            },
         };
 
         match self.slots.get(&after_slot_id) {
-            Some(HeapRedoSlotState::Live { tuple, .. }) if tuple == &payload.tuple => {}
+            Some(HeapRedoSlotState::Live { tuple, .. }) if tuple == &payload.tuple => {},
             Some(HeapRedoSlotState::Live { .. }) => {
                 return Err(storage_error(format!(
                     "heap row update conflict on page {} new slot {}: slot already contains different tuple bytes",
                     self.page_id.get(),
                     after_slot_id
                 )));
-            }
+            },
             Some(HeapRedoSlotState::Deleted { .. }) => {
                 return Err(storage_error(format!(
                     "heap row update conflict on page {} new slot {}: slot is already deleted",
                     self.page_id.get(),
                     after_slot_id
                 )));
-            }
+            },
             None => {
                 self.slots.insert(
                     after_slot_id,
@@ -291,7 +291,7 @@ impl HeapRedoPageState {
                         last_lsn: payload.resulting_page_lsn,
                     },
                 );
-            }
+            },
         }
 
         self.slots.insert(
@@ -395,7 +395,7 @@ pub(super) fn replay_heap_row_record(
                 kind,
                 error.message().to_string(),
             ));
-        }
+        },
     };
 
     if payload.resulting_page_lsn != record.header.lsn {

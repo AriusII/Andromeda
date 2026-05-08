@@ -369,7 +369,7 @@ fn validate_slots(
             if tuple.is_empty() {
                 return Err(error("RowInsert tuple bytes must not be empty"));
             }
-        }
+        },
         HeapRowRedoOperation::Delete => {
             if before_slot_id == HEAP_ROW_REDO_NONE_SLOT_ID {
                 return Err(error(
@@ -382,7 +382,7 @@ fn validate_slots(
             if !tuple.is_empty() {
                 return Err(error("RowDelete tuple bytes must be empty"));
             }
-        }
+        },
         HeapRowRedoOperation::Update => {
             if before_slot_id == HEAP_ROW_REDO_NONE_SLOT_ID
                 || after_slot_id == HEAP_ROW_REDO_NONE_SLOT_ID
@@ -399,7 +399,7 @@ fn validate_slots(
             if tuple.is_empty() {
                 return Err(error("RowUpdate new tuple bytes must not be empty"));
             }
-        }
+        },
     }
     Ok(())
 }

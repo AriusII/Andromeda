@@ -111,7 +111,7 @@ impl OperationalProfile {
                         "analytics profile requires GPU access limited to analytics pipelines",
                     ));
                 }
-            }
+            },
             OperationalProfileMode::Conservative
             | OperationalProfileMode::HotWrite
             | OperationalProfileMode::ColdArchive => {
@@ -120,7 +120,7 @@ impl OperationalProfile {
                         "non-analytics operational profiles must keep GPU execution disabled",
                     ));
                 }
-            }
+            },
         }
 
         Ok(())

@@ -2,9 +2,8 @@
 
 use andromeda_catalog::ResultStreamContract;
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use andromeda_srpl::{
-    Cardinality,
-    procedure_model::{BoundSrplBodyPlan, BoundSrplOperationPlan, ExecutableProcedurePlan},
+use andromeda_srpl_ir::{
+    BoundSrplBodyPlan, BoundSrplOperationPlan, Cardinality, ExecutableProcedurePlan,
 };
 
 use crate::ResultStreamMetadata;
@@ -113,7 +112,7 @@ fn infer_result_stream_shape(
                         | Cardinality::NonEmptyMany => RowCountInfo::Unknown,
                     },
                 });
-            }
+            },
             BoundSrplOperationPlan::UpdateTable {
                 affected_rows_exact,
                 ..
@@ -124,14 +123,14 @@ fn infer_result_stream_shape(
                         .map(RowCountInfo::Exact)
                         .unwrap_or(RowCountInfo::Unknown),
                 });
-            }
+            },
             BoundSrplOperationPlan::Raise { .. } => {
                 return Ok(ResultStreamShape {
                     cardinality: Cardinality::Many,
                     row_count: RowCountInfo::Unknown,
                 });
-            }
-            BoundSrplOperationPlan::Assert { .. } | BoundSrplOperationPlan::Emit { .. } => {}
+            },
+            BoundSrplOperationPlan::Assert { .. } | BoundSrplOperationPlan::Emit { .. } => {},
         }
     }
 
@@ -145,7 +144,7 @@ fn infer_result_stream_shape(
 mod tests {
     use super::*;
     use andromeda_catalog::ResultStreamCardinality;
-    use andromeda_srpl::procedure_model::{SrplEmitValueIr, SrplValueIr};
+    use andromeda_srpl_ir::{SrplEmitValueIr, SrplValueIr};
 
     fn body_with(operations: Vec<BoundSrplOperationPlan>) -> BoundSrplBodyPlan {
         BoundSrplBodyPlan { operations }

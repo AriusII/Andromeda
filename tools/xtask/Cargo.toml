@@ -1,0 +1,12 @@
+[package]
+name = "xtask"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+
+[[bin]]
+name = "xtask"
+path = "src/main.rs"
+
+[dependencies]
+# Add dependencies as needed for task orchestration

@@ -159,7 +159,7 @@ fn c5_commit_lifecycle_emits_commit_visible_event_with_durable_lsn() {
             assert_eq!(trace.transaction_id, tx_id);
             assert_eq!(trace.durable_commit_lsn, durable_lsn.get());
             assert!(trace.proves_wal_before_visible_commit());
-        }
+        },
         _ => panic!(
             "expected CommitVisible event, got {:?}",
             envelope.event.kind()
@@ -264,7 +264,7 @@ fn c5_rollback_lifecycle_emits_rollback_durable_event_with_durable_lsn() {
             assert_eq!(trace.transaction_id, tx_id);
             assert_eq!(trace.durable_rollback_lsn, durable_lsn.get());
             assert!(trace.proves_durable_rollback());
-        }
+        },
         _ => panic!(
             "expected RollbackDurable event, got {:?}",
             envelope.event.kind()

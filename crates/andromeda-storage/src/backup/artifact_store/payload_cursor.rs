@@ -28,11 +28,11 @@ pub(super) fn push_option_lsn(bytes: &mut Vec<u8>, lsn: Option<Lsn>) {
         Some(value) => {
             bytes.push(1);
             push_lsn(bytes, value);
-        }
+        },
         None => {
             bytes.push(0);
             push_u64(bytes, 0);
-        }
+        },
     }
 }
 
@@ -144,7 +144,7 @@ impl<'a> PayloadCursor<'a> {
                     ));
                 }
                 Ok(None)
-            }
+            },
             1 => {
                 if value.is_zero() {
                     return Err(backup_error(
@@ -152,7 +152,7 @@ impl<'a> PayloadCursor<'a> {
                     ));
                 }
                 Ok(Some(value))
-            }
+            },
             _ => Err(backup_error(
                 "backup artifact manifest optional LSN tag is invalid",
             )),

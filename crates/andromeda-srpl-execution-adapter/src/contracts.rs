@@ -3,11 +3,9 @@ use std::num::NonZeroU64;
 use andromeda_contract::{CatalogObjectRef, ObjectKind, ProcedureContractRef};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_srpl_ir::{
-    Cardinality, MAX_EXPR_DEPTH, MAX_SRPL_BODY_OPERATIONS, SrplAssignmentIr, SrplEmitValueIr,
-    SrplPredicateIr, SrplValueIr,
+    validate_srpl_identifier as validate_symbol, Cardinality, MAX_EXPR_DEPTH,
+    MAX_SRPL_BODY_OPERATIONS, SrplAssignmentIr, SrplEmitValueIr, SrplPredicateIr, SrplValueIr,
 };
-
-use crate::identifier::validate_srpl_identifier as validate_symbol;
 
 use super::diagnostics::SrplExecutionFailure;
 

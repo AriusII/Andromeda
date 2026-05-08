@@ -74,7 +74,7 @@ fn test_codec_composite_mixed_roundtrip() {
     match decoded {
         Key::Composite(decoded_datums) => {
             assert_eq!(decoded_datums.len(), 3, "composite length mismatch");
-        }
+        },
         _ => panic!("expected composite key, got {:?}", decoded),
     }
 }

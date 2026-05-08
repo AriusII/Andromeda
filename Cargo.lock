@@ -256,6 +256,9 @@ dependencies = [
  "andromeda-retry",
  "andromeda-security",
  "andromeda-srpl",
+ "andromeda-srpl-execution-adapter",
+ "andromeda-srpl-interpreter",
+ "andromeda-srpl-ir",
  "andromeda-storage",
  "andromeda-tx",
  "tokio",
@@ -431,7 +434,6 @@ dependencies = [
  "andromeda-error",
  "andromeda-procedure-contract",
  "andromeda-proto-wire",
- "andromeda-rpc-protocol",
  "andromeda-structured-object",
  "andromeda-types",
  "proptest",
@@ -466,6 +468,7 @@ name = "andromeda-quic"
 version = "0.1.0"
 dependencies = [
  "andromeda-core",
+ "andromeda-hadr",
  "andromeda-proto",
  "andromeda-rpc",
  "andromeda-rpc-codec",
@@ -586,6 +589,7 @@ version = "0.1.0"
 dependencies = [
  "andromeda-bench-workload",
  "andromeda-digest",
+ "andromeda-observe",
  "andromeda-plan-cache",
  "andromeda-procedure-contract",
  "andromeda-time",
@@ -611,6 +615,7 @@ dependencies = [
  "andromeda-core",
  "andromeda-storage-page",
  "andromeda-wal",
+ "sha2",
 ]
 
 [[package]]
@@ -798,6 +803,9 @@ dependencies = [
 [[package]]
 name = "andromeda-storage-index"
 version = "0.1.0"
+dependencies = [
+ "andromeda-core",
+]
 
 [[package]]
 name = "andromeda-storage-page"
@@ -805,6 +813,7 @@ version = "0.1.0"
 dependencies = [
  "andromeda-error",
  "andromeda-wal",
+ "sha2",
 ]
 
 [[package]]
@@ -832,9 +841,11 @@ name = "andromeda-transaction"
 version = "0.1.0"
 dependencies = [
  "andromeda-core",
+ "andromeda-mvcc",
  "andromeda-observe",
  "andromeda-transaction-log",
  "async-trait",
+ "dashmap",
  "tokio",
 ]
 

@@ -16,7 +16,6 @@
 
 mod identity;
 mod operation;
-mod validation;
 mod validator;
 
 pub use andromeda_storage_index::BTreeFormatIdentityError;

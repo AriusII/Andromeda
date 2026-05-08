@@ -160,7 +160,7 @@ fn expected_promotion_family(kind: WalRecordKind) -> RecoveryPromotionFamily {
     match kind {
         WalRecordKind::PageAllocate | WalRecordKind::PageFormat => {
             RecoveryPromotionFamily::PageLifecycle
-        }
+        },
         WalRecordKind::IndexInsert
         | WalRecordKind::IndexDelete
         | WalRecordKind::BTreeInsert
@@ -169,7 +169,7 @@ fn expected_promotion_family(kind: WalRecordKind) -> RecoveryPromotionFamily {
         | WalRecordKind::BTreeMerge => RecoveryPromotionFamily::AccessPathRebuild,
         WalRecordKind::MvccVersionCreate | WalRecordKind::MvccVersionClose => {
             RecoveryPromotionFamily::MvccVersion
-        }
+        },
         WalRecordKind::MapDeltaAppend => RecoveryPromotionFamily::MapDelta,
         WalRecordKind::CatalogChangeBegin
         | WalRecordKind::CatalogChangeApply

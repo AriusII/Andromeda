@@ -57,7 +57,7 @@ mod iam_hardening_tests {
         match decision {
             PermissionDecision::Denied { reason, .. } => {
                 assert_eq!(reason, DenialReason::MissingPermission);
-            }
+            },
             _ => panic!("expected denied decision"),
         }
 
@@ -97,7 +97,7 @@ mod iam_hardening_tests {
         match decision {
             PermissionDecision::Allowed { principal_id, .. } => {
                 assert!(!principal_id.is_zero());
-            }
+            },
             _ => panic!("expected allowed decision"),
         }
     }
@@ -179,7 +179,7 @@ mod iam_hardening_tests {
             } => {
                 assert!(principal_id.is_none()); // Unknown principal
                 assert_eq!(reason, DenialReason::PrincipalNotFound);
-            }
+            },
             _ => panic!("expected denied decision"),
         }
     }
@@ -207,7 +207,7 @@ mod iam_hardening_tests {
         match decision {
             PermissionDecision::Denied { reason, .. } => {
                 assert_eq!(reason, DenialReason::MissingPermission);
-            }
+            },
             _ => panic!("expected denied decision"),
         }
     }
@@ -236,7 +236,7 @@ mod iam_hardening_tests {
             } => {
                 assert!(principal_id.is_none());
                 assert_eq!(reason, DenialReason::PrincipalNotFound);
-            }
+            },
             _ => panic!("expected denied decision"),
         }
     }
@@ -261,7 +261,7 @@ mod iam_hardening_tests {
         match decision {
             PermissionDecision::Denied { reason, .. } => {
                 assert_eq!(reason, DenialReason::MissingPermission);
-            }
+            },
             _ => panic!("expected denied decision"),
         }
     }
@@ -375,7 +375,7 @@ mod iam_hardening_tests {
             Err(denied_decision) => {
                 assert!(denied_decision.is_denied());
                 assert_eq!(denied_decision.reason_str(), "missing_permission");
-            }
+            },
             _ => panic!("expected error"),
         }
     }

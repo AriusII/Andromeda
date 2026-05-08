@@ -250,7 +250,7 @@ pub fn is_promotion_eligible(
             let candidate =
                 PromotionCandidate::new(replica_id, *requirements, observed_epoch, candidate_rank);
             PromotionEligibility::Eligible(candidate)
-        }
+        },
         Err(e) => PromotionEligibility::Ineligible {
             replica_id,
             reason: e.message().to_string(),

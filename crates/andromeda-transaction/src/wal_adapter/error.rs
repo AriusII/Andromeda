@@ -60,20 +60,20 @@ impl TxWalAdapterError {
             Self::DurableLsnBehindCommit => "durable WAL flush ended before commit LSN",
             Self::DurableLsnBehindTerminal => {
                 "durable WAL replay coverage ended before terminal LSN"
-            }
+            },
             Self::StatusTableError => "transaction status table error",
             Self::InvariantViolated => "TxWalAdapter invariant violation",
             Self::MissingReplayTransactionId => {
                 "transaction WAL replay boundary record is missing transaction id"
-            }
+            },
             Self::DuplicateBeginRecord => "transaction WAL replay saw duplicate TxBegin",
             Self::ReplayRecordWithoutBegin => "transaction WAL replay record has no TxBegin",
             Self::ConflictingTerminalRecord => {
                 "transaction WAL replay saw conflicting terminal records"
-            }
+            },
             Self::RecordAfterTerminal => {
                 "transaction WAL replay saw record after terminal boundary"
-            }
+            },
             Self::ReplayLsnRegression => "transaction WAL replay LSN order regressed",
         }
     }

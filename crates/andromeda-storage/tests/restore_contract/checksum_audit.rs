@@ -121,7 +121,7 @@ fn test_audit_trace_binds_completion_success() {
 
     assert!(completed.completion_status.is_some());
     match completed.completion_status {
-        Some(RestoreCompletion::Success { .. }) => {}
+        Some(RestoreCompletion::Success { .. }) => {},
         _ => panic!("Expected success"),
     }
 }
@@ -144,7 +144,7 @@ fn test_audit_trace_binds_completion_failed() {
     match completed.completion_status {
         Some(RestoreCompletion::Failed { reason }) => {
             assert_eq!(reason, "WAL gap detected");
-        }
+        },
         _ => panic!("Expected failure"),
     }
 }

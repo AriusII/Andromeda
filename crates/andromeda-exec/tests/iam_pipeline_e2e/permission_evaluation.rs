@@ -12,7 +12,7 @@ fn test_permission_evaluation_allowed() {
     match decision {
         PermissionDecision::Allowed { principal_id, .. } => {
             assert!(!principal_id.is_zero());
-        }
+        },
         _ => panic!("expected allowed decision"),
     }
 }
@@ -32,7 +32,7 @@ fn test_permission_evaluation_denied_missing() {
         } => {
             assert_eq!(reason, DenialReason::MissingPermission);
             assert!(principal_id.is_some());
-        }
+        },
         _ => panic!("expected denied decision"),
     }
 }
@@ -54,7 +54,7 @@ fn test_permission_evaluation_denied_principal_not_found() {
         } => {
             assert_eq!(reason, DenialReason::PrincipalNotFound);
             assert!(principal_id.is_none());
-        }
+        },
         _ => panic!("expected denied decision"),
     }
 }
@@ -89,7 +89,7 @@ fn test_permission_evaluation_all_permissions_denied() {
     match err {
         PermissionDecision::Denied { reason, .. } => {
             assert_eq!(reason, DenialReason::MissingPermission);
-        }
+        },
         _ => panic!("expected denied decision"),
     }
 }

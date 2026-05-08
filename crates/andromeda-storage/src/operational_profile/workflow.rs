@@ -113,12 +113,12 @@ impl IoWorkflowProfile {
             OperationalProfileMode::Conservative | OperationalProfileMode::HotWrite => {
                 self.require_hot_page_path()?;
                 self.require_hot_segment_path()?;
-            }
+            },
             OperationalProfileMode::ColdArchive
             | OperationalProfileMode::AnalyticsOffCriticalPath => {
                 self.require_hot_page_path()?;
                 self.require_cold_segment_path()?;
-            }
+            },
         }
 
         Ok(())

@@ -36,19 +36,19 @@ impl std::fmt::Display for DiskManagerError {
             Self::PageNotFound { page_id } => write!(f, "page {} not found on disk", page_id),
             Self::PageCorrupted { page_id, reason } => {
                 write!(f, "page {} corrupted: {}", page_id, reason)
-            }
+            },
             Self::PageLayoutInvalid { reason } => write!(f, "page layout invalid: {}", reason),
             Self::InvalidExtentDescriptor { reason } => {
                 write!(f, "invalid extent descriptor: {}", reason)
-            }
+            },
             Self::OffsetOverflow { page_id, reason } => {
                 write!(f, "offset overflow for page {}: {}", page_id, reason)
-            }
+            },
             Self::ExtentNotFound { extent_id } => write!(f, "extent {} not found", extent_id),
             Self::IoError { operation, reason } => write!(f, "{} failed: {}", operation, reason),
             Self::ExtentMetadataInconsistent { reason } => {
                 write!(f, "extent metadata inconsistent: {}", reason)
-            }
+            },
             Self::ExtentOverlap { reason } => write!(f, "extent overlap: {}", reason),
             Self::DiskSpaceExhausted { reason } => write!(f, "disk space exhausted: {}", reason),
             Self::WalFenceViolation {

@@ -53,7 +53,7 @@ pub(super) fn validate_predicate(predicate: &SrplPredicateIr) -> AndromedaResult
             validate_symbol(input, "SRPL predicate input")?;
             validate_symbol(binding, "SRPL predicate binding")?;
             validate_symbol(field, "SRPL predicate field")?;
-        }
+        },
     }
     Ok(())
 }
@@ -74,7 +74,7 @@ fn validate_value(value: &SrplValueIr) -> AndromedaResult<()> {
         SrplValueIr::Field { binding, field } => {
             validate_symbol(binding, "SRPL value binding")?;
             validate_symbol(field, "SRPL value field")
-        }
+        },
         SrplValueIr::SubtractInput {
             binding,
             field,
@@ -83,11 +83,11 @@ fn validate_value(value: &SrplValueIr) -> AndromedaResult<()> {
             validate_symbol(binding, "SRPL subtract binding")?;
             validate_symbol(field, "SRPL subtract field")?;
             validate_symbol(input, "SRPL subtract input")
-        }
+        },
         SrplValueIr::Constant(literal) => literal.validate(),
         SrplValueIr::BinaryArith { left, right, .. } => {
             validate_value(left)?;
             validate_value(right)
-        }
+        },
     }
 }

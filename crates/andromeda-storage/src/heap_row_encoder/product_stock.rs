@@ -79,7 +79,7 @@ impl ProductStockRow {
         match values {
             [Datum::Int64(product_id), Datum::Int64(quantity_on_hand)] => {
                 Self::new(*product_id, *quantity_on_hand)
-            }
+            },
             _ => Err(encoder_error(
                 "ProductStock row must contain ProductId:Int64 and QuantityOnHand:Int64",
             )),

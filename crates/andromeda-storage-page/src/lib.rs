@@ -23,6 +23,7 @@ mod error;
 mod identity;
 mod image;
 mod layout;
+mod page_codec_v1;
 mod store;
 
 #[cfg(test)]
@@ -33,9 +34,14 @@ pub use btree_node_format_v1::{
     BTREE_NODE_V1_FORMAT_VERSION, BTREE_NODE_V1_HEADER_LEN, BTREE_NODE_V1_MAGIC, BTreeNodeHeaderV1,
     BTreeNodeKindV1, BTreeNodeV1,
 };
-pub use identity::{AllocationId, ObjectId, PageId};
+pub use identity::{AllocationId, ExtentId, ObjectId, PageId};
 pub use image::PageImage;
 pub use layout::{PageFlags, PageHeader, PageLayoutContract, PageSize, PageTrailer, PageType};
+pub use page_codec_v1::{
+    DecodedPageV1, PAGE_CODEC_V1_HEADER_LEN, PAGE_CODEC_V1_TRAILER_LEN, PageCodecV1,
+    integrity_trailer_for_payload, payload_crc64, payload_hash, torn_write_guard,
+    validate_payload_integrity,
+};
 pub use store::{InMemoryPageStore, PageStore};
 
 /// Error returned when a dirty page is flushed before its WAL is durable.

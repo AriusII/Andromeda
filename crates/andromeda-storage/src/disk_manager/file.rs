@@ -237,7 +237,7 @@ fn validate_page_flush_boundary(page_lsn: Lsn, durable_lsn: Lsn) -> AndromedaRes
                     reason: "page flush requires a nonzero page LSN".to_string(),
                 }
                 .into()
-            }
+            },
             andromeda_disk_page_store::PageFlushDurabilityError::WalFenceViolation {
                 page_lsn,
                 durable_lsn,

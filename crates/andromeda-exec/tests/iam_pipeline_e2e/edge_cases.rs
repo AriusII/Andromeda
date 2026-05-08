@@ -19,7 +19,7 @@ fn test_edge_case_anonymous_principal() {
     match decision {
         PermissionDecision::Denied { reason, .. } => {
             assert_eq!(reason, DenialReason::PrincipalNotFound);
-        }
+        },
         _ => panic!("expected denied decision"),
     }
 }

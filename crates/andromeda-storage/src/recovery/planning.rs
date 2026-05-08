@@ -54,7 +54,7 @@ impl PreRedoStorageFormatRejection {
                     "unknown storage subformat `{}` must be rejected before redo",
                     kind.name()
                 )
-            }
+            },
             Self::Unsupported {
                 kind,
                 observed,
@@ -109,7 +109,7 @@ impl PreRedoStorageFormatGate {
                         kind: reason_kind(reason),
                     })
                 }
-            }
+            },
             Some(reason) => Err(reason),
         }
     }
@@ -123,7 +123,7 @@ impl PreRedoStorageFormatGate {
             Ok(PreRedoStorageFormatDecision::ReplayAllowed) => Ok(()),
             Ok(PreRedoStorageFormatDecision::ForensicReadOnly { reason }) | Err(reason) => {
                 Err(storage_error(reason.message()))
-            }
+            },
         }
     }
 
@@ -470,16 +470,16 @@ fn redo_decision_for_record(
         };
 
         match summary.state {
-            DurableTransactionState::Committed => {}
+            DurableTransactionState::Committed => {},
             DurableTransactionState::RolledBack => {
                 return RedoRecordDecision::SkipRolledBackTransaction;
-            }
+            },
             DurableTransactionState::Open | DurableTransactionState::Incomplete => {
                 if plan.discard_incomplete_transactions {
                     return RedoRecordDecision::SkipIncompleteTransaction;
                 }
                 return RedoRecordDecision::SkipMissingCommitEvidence;
-            }
+            },
         }
     }
 

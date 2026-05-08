@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use andromeda_srpl::execution_adapter::SrplBoundValue;
+use andromeda_srpl_execution_adapter::SrplBoundValue;
 
 /// Structured row object used by the SRPL execution adapter boundary.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

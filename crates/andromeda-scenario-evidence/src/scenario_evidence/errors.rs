@@ -28,34 +28,34 @@ impl core::fmt::Display for ScenarioEvidenceError {
         match self {
             ScenarioEvidenceError::ScoreOutOfRange => {
                 f.write_str("EvidenceScore raw value must be in 0..=1000")
-            }
+            },
             ScenarioEvidenceError::ConfidenceOutOfRange => {
                 f.write_str("EvidenceConfidence raw value must be in 0..=1000")
-            }
+            },
             ScenarioEvidenceError::ExpiryMustBeNonZero => {
                 f.write_str("ValidityWindow.expires_at must be non-zero")
-            }
+            },
             ScenarioEvidenceError::IssuedNotBeforeExpiry => {
                 f.write_str("ValidityWindow requires issued_at < expires_at")
-            }
+            },
             ScenarioEvidenceError::TargetProcedureIdZero => {
                 f.write_str("ScenarioTarget.procedure_id must be non-zero")
-            }
+            },
             ScenarioEvidenceError::TargetCatalogVersionZero => {
                 f.write_str("ScenarioTarget.catalog_version must be non-zero")
-            }
+            },
             ScenarioEvidenceError::TargetStatsVersionZero => {
                 f.write_str("ScenarioTarget.stats_version must be non-zero")
-            }
+            },
             ScenarioEvidenceError::TargetContractHashZero => {
                 f.write_str("ScenarioTarget.contract_hash, when present, must be non-zero")
-            }
+            },
             ScenarioEvidenceError::NotYetValid => {
                 f.write_str("ScenarioEvidence is not yet valid at the supplied clock reading")
-            }
+            },
             ScenarioEvidenceError::Expired => {
                 f.write_str("ScenarioEvidence has expired at the supplied clock reading")
-            }
+            },
         }
     }
 }

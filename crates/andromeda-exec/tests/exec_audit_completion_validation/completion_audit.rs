@@ -176,10 +176,10 @@ fn committed_and_rolled_back_completions_require_durable_completion_audit_eviden
         let emission = match status {
             CompletionStatus::Committed => {
                 CompletionEmission::committed(completion, transaction_id, terminal_lsn, Some(4))
-            }
+            },
             CompletionStatus::RolledBack => {
                 CompletionEmission::rolled_back(completion, transaction_id, terminal_lsn)
-            }
+            },
             _ => unreachable!("test covers transactional terminal completions"),
         };
 

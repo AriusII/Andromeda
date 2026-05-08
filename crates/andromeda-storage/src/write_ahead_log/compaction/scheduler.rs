@@ -103,10 +103,10 @@ impl WalCompactionScheduler {
                 Ok(result) => {
                     summary.candidates_compacted += 1;
                     summary.total_bytes_recovered += result.bytes_recovered;
-                }
+                },
                 Err(_) => {
                     summary.compaction_skipped += 1;
-                }
+                },
             }
         }
 

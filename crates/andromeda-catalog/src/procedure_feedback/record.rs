@@ -1,12 +1,12 @@
 //! Core feedback record types: completion status, evidence, feedback identity,
 //! the [`ProcedureFeedback`] record, and its error taxonomy.
 
+use andromeda_scenario_evidence::{ScenarioEvidenceError, ValidityWindow};
 use andromeda_time::EngineTimestamp;
 use andromeda_types::ProcedureId;
 
 use crate::contracts::StatsVersion;
 use crate::digest::Sha256;
-use crate::scenario_evidence::{ScenarioEvidenceError, ValidityWindow};
 
 /// Domain tag absorbed at the start of every procedure-feedback digest.
 const PROCEDURE_FEEDBACK_DOMAIN: &[u8] = b"andromeda.procedure_feedback.v0";
@@ -75,7 +75,7 @@ impl CompletionEvidence {
         // Committed outcomes require non-zero durable LSN evidence.
         if let CompletionStatus::Committed = self.status {
             match self.durable_lsn {
-                Some(lsn) if lsn != 0 => {}
+                Some(lsn) if lsn != 0 => {},
                 _ => return Err(ProcedureFeedbackError::CommittedRequiresDurableLsn),
             }
         }
@@ -239,11 +239,11 @@ impl ProcedureFeedback {
             Some(d) => {
                 hasher.update(&[0x01]);
                 hasher.update(&d);
-            }
+            },
             None => {
                 hasher.update(&[0x00]);
                 hasher.update(&[0u8; 32]);
-            }
+            },
         }
 
         hasher.update(&[0xF3]);
@@ -255,33 +255,33 @@ impl ProcedureFeedback {
             Some(c) => {
                 hasher.update(&[0x01]);
                 hasher.update(&c.to_le_bytes());
-            }
+            },
             None => {
                 hasher.update(&[0x00]);
                 hasher.update(&[0u8; 4]);
-            }
+            },
         }
         hasher.update(&[0xF6]);
         match self.completion.row_count {
             Some(r) => {
                 hasher.update(&[0x01]);
                 hasher.update(&r.to_le_bytes());
-            }
+            },
             None => {
                 hasher.update(&[0x00]);
                 hasher.update(&[0u8; 8]);
-            }
+            },
         }
         hasher.update(&[0xF7]);
         match self.completion.durable_lsn {
             Some(l) => {
                 hasher.update(&[0x01]);
                 hasher.update(&l.to_le_bytes());
-            }
+            },
             None => {
                 hasher.update(&[0x00]);
                 hasher.update(&[0u8; 8]);
-            }
+            },
         }
 
         hasher.update(&[0xF8]);
@@ -333,19 +333,19 @@ impl core::fmt::Display for ProcedureFeedbackError {
         match self {
             ProcedureFeedbackError::ProcedureIdZero => {
                 f.write_str("ProcedureFeedback.procedure_id must be non-zero")
-            }
+            },
             ProcedureFeedbackError::StatsVersionZero => {
                 f.write_str("ProcedureFeedback.stats_version must be non-zero")
-            }
+            },
             ProcedureFeedbackError::PlanCacheKeyDigestZero => f.write_str(
                 "ProcedureFeedback.plan_cache_key_digest, when present, must be non-zero",
             ),
             ProcedureFeedbackError::DurableLsnZero => {
                 f.write_str("CompletionEvidence.durable_lsn, when present, must be non-zero")
-            }
+            },
             ProcedureFeedbackError::CommittedRequiresDurableLsn => {
                 f.write_str("CompletionStatus::Committed requires non-zero durable LSN evidence")
-            }
+            },
         }
     }
 }

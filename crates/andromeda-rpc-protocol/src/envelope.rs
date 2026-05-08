@@ -4,7 +4,6 @@ use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, ContractHash, RequestId,
     SessionId, TransactionId,
 };
-use andromeda_procedure_contract::CompletionProtocolVersion;
 
 use crate::frame_code::{
     AUTH_FRAME_CODE, CONTRACT_REQUEST_FRAME_CODE, CONTRACT_RESPONSE_FRAME_CODE, ERROR_FRAME_CODE,
@@ -13,9 +12,16 @@ use crate::frame_code::{
 };
 use crate::frame_sequence::ResultStreamMetadataPolicy;
 use crate::stream_types::FrameFamily;
+use andromeda_procedure_contract::CompletionProtocolVersion as CompletionProtocolVersionContract;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ProtocolVersion {
+    pub major: u32,
+    pub minor: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CompletionProtocolVersion {
     pub major: u32,
     pub minor: u32,
 }
@@ -34,23 +40,26 @@ impl ProtocolVersion {
     }
 
     pub fn validate(self) -> AndromedaResult<()> {
-        if self.major == 0 {
-            return protocol_error("protocol major version must be positive");
-        }
+        validate_protocol_version_fields(self.major, self.minor)
+    }
 
-        if self.major != Self::SUPPORTED_MAJOR {
-            return protocol_error("unsupported protocol major version");
+    pub const fn completion_protocol_version(self) -> CompletionProtocolVersion {
+        CompletionProtocolVersion {
+            major: self.major,
+            minor: self.minor,
         }
-
-        if self.minor > Self::SUPPORTED_MINOR {
-            return protocol_error("unsupported protocol minor version");
-        }
-
-        Ok(())
     }
 }
 
-impl CompletionProtocolVersion for ProtocolVersion {
+impl CompletionProtocolVersion {
+    pub const V1: Self = Self { major: 1, minor: 0 };
+
+    pub fn validate(self) -> AndromedaResult<()> {
+        validate_protocol_version_fields(self.major, self.minor)
+    }
+}
+
+impl CompletionProtocolVersionContract for ProtocolVersion {
     fn validate_completion_protocol_version(self) -> AndromedaResult<()> {
         self.validate()
     }
@@ -61,6 +70,25 @@ impl CompletionProtocolVersion for ProtocolVersion {
 
     fn completion_protocol_minor(self) -> u32 {
         self.minor
+    }
+}
+
+impl CompletionProtocolVersionContract for CompletionProtocolVersion {
+    fn validate_completion_protocol_version(self) -> AndromedaResult<()> {
+        self.validate()
+    }
+
+    fn completion_protocol_major(self) -> u32 {
+        self.major
+    }
+
+    fn completion_protocol_minor(self) -> u32 {
+        self.minor
+    }
+}
+impl From<ProtocolVersion> for CompletionProtocolVersion {
+    fn from(value: ProtocolVersion) -> Self {
+        value.completion_protocol_version()
     }
 }
 
@@ -123,7 +151,7 @@ impl PayloadKind {
             Self::RpcExecuteRequest => FrameFamily::RpcCommand,
             Self::RpcMetadata | Self::RpcBatch | Self::RpcCompletion => {
                 FrameFamily::RpcResultStream
-            }
+            },
             Self::Error => FrameFamily::Diagnostic,
         }
     }
@@ -295,9 +323,9 @@ impl FrameEnvelope {
                 match request_context {
                     Some(expected_context) if expected_context != current_context => {
                         return protocol_error("RPC stream sequence changed request context");
-                    }
+                    },
                     None => request_context = Some(current_context),
-                    _ => {}
+                    _ => {},
                 }
             }
 
@@ -310,7 +338,7 @@ impl FrameEnvelope {
                     }
 
                     saw_metadata = true;
-                }
+                },
                 PayloadKind::RpcBatch => {
                     if !saw_metadata {
                         return protocol_error("RPC metadata must precede RPC batch payloads");
@@ -321,7 +349,7 @@ impl FrameEnvelope {
                     }
 
                     saw_batch = true;
-                }
+                },
                 PayloadKind::RpcCompletion => {
                     if !saw_metadata {
                         return protocol_error("RPC completion requires prior metadata");
@@ -338,12 +366,12 @@ impl FrameEnvelope {
                     }
 
                     saw_completion = true;
-                }
+                },
                 _ => {
                     return protocol_error(
                         "RPC stream sequence accepts only metadata, batch, and completion",
                     );
-                }
+                },
             }
         }
 
@@ -388,6 +416,22 @@ fn protocol_error<T>(message: &'static str) -> AndromedaResult<T> {
     Err(AndromedaError::new(AndromedaErrorKind::Protocol, message))
 }
 
+fn validate_protocol_version_fields(major: u32, minor: u32) -> AndromedaResult<()> {
+    if major == 0 {
+        return protocol_error("protocol major version must be positive");
+    }
+
+    if major != ProtocolVersion::SUPPORTED_MAJOR {
+        return protocol_error("unsupported protocol major version");
+    }
+
+    if minor > ProtocolVersion::SUPPORTED_MINOR {
+        return protocol_error("unsupported protocol minor version");
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -400,6 +444,11 @@ mod tests {
     fn protocol_version_accepts_only_locked_v1_0_contract() {
         assert!(ProtocolVersion::V1.validate().is_ok());
         assert!(ProtocolVersion::V1.is_supported());
+        assert_eq!(
+            ProtocolVersion::V1.completion_protocol_version(),
+            CompletionProtocolVersion::V1
+        );
+        assert!(CompletionProtocolVersion::V1.validate().is_ok());
 
         assert_eq!(
             ProtocolVersion { major: 1, minor: 1 }
@@ -411,6 +460,14 @@ mod tests {
 
         assert_eq!(
             ProtocolVersion { major: 2, minor: 0 }
+                .validate()
+                .unwrap_err()
+                .kind(),
+            AndromedaErrorKind::Protocol
+        );
+
+        assert_eq!(
+            CompletionProtocolVersion { major: 0, minor: 0 }
                 .validate()
                 .unwrap_err()
                 .kind(),

@@ -117,7 +117,7 @@ pub fn safe_start_from_decision(
                 tail_discard,
                 inner,
             })
-        }
+        },
         StartupOutcome::Rejected(reason) => Err(AndromedaError::new(
             AndromedaErrorKind::Storage,
             format!(

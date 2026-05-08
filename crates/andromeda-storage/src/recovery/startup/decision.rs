@@ -61,7 +61,7 @@ impl StartupDecision {
             ObservedBoundary::Clean => None,
             ObservedBoundary::RecoverableTail | ObservedBoundary::ForensicChainBreak => {
                 Some(self.evidence.last_durable_lsn.get())
-            }
+            },
         };
         Some(andromeda_observe::RecoveryTrace {
             trace_id,

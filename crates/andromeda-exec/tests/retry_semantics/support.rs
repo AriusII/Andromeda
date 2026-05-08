@@ -56,7 +56,7 @@ pub fn assert_retry_after(decision: RetryDecision, next_attempt: u32, delay_ms: 
         } => {
             assert_eq!(actual_attempt, next_attempt);
             assert_eq!(actual_delay, delay_ms);
-        }
+        },
         RetryDecision::GiveUp => panic!("expected RetryAfter"),
     }
 }

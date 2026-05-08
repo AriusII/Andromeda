@@ -77,10 +77,10 @@ impl ReplayContext {
             ReplayOutcome::Applied => self.applied_count += 1,
             ReplayOutcome::Skipped | ReplayOutcome::IndexRebuildRequired => {
                 self.skipped_count += 1;
-            }
+            },
             ReplayOutcome::NotYetImplemented | ReplayOutcome::Deprecated => {
                 self.error_records.push(result);
-            }
+            },
         }
     }
 

@@ -64,8 +64,8 @@ impl<'a> RedoPlanReplayDriver<'a> {
                     previous.get(),
                     current_lsn.get()
                 )));
-            }
-            _ => {}
+            },
+            _ => {},
         }
         self.previous_plan_lsn = Some(current_lsn);
         Ok(())
@@ -90,8 +90,8 @@ impl<'a> RedoPlanReplayDriver<'a> {
             .flatten();
         let manifest_trace_count_before = ctx.manifest_switch_traces.len();
         match replay_wal_record_result(ctx, record) {
-            Ok(_) => {}
-            Err(_err) if is_explicit_deferred_replay_error(ctx, record) => {}
+            Ok(_) => {},
+            Err(_err) if is_explicit_deferred_replay_error(ctx, record) => {},
             Err(err) => return Err(err),
         }
         if record.header.kind == WalRecordKind::ManifestSwitch {
@@ -236,7 +236,7 @@ fn validate_manifest_switch_replay_result(
                 }
             }
             Ok(())
-        }
+        },
     }
 }
 

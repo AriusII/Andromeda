@@ -115,7 +115,7 @@ pub fn emit_v0_inventory_reserve_stock_pre_transaction_refusal<S: EventSink>(
             ) {
                 emitter.emit(correlation, TraceEvent::ContractRejected(trace))?;
             }
-        }
+        },
         CompletionStatus::PermissionDenied => {
             if let Some(trace) = reject.authorization_denial_trace(
                 context.trace_id,
@@ -123,12 +123,12 @@ pub fn emit_v0_inventory_reserve_stock_pre_transaction_refusal<S: EventSink>(
             ) {
                 emitter.emit(correlation, TraceEvent::AuthorizationDenied(trace))?;
             }
-        }
+        },
         CompletionStatus::SystemUnavailable
         | CompletionStatus::Cancelled
         | CompletionStatus::Poisoned
         | CompletionStatus::Committed
-        | CompletionStatus::RolledBack => {}
+        | CompletionStatus::RolledBack => {},
     }
 
     if request.invocation_id.get() != 0 {

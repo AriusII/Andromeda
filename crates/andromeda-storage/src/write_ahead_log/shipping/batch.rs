@@ -114,7 +114,7 @@ impl<'a> WalShipmentBatch<'a> {
                 return Err(WalShipmentRejection::ChainGap.into_error());
             }
             match record.header.previous_lsn {
-                Some(linked) if linked == prev_lsn => {}
+                Some(linked) if linked == prev_lsn => {},
                 _ => return Err(WalShipmentRejection::ChainGap.into_error()),
             }
             prev_lsn = record.header.lsn;

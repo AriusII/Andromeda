@@ -136,10 +136,10 @@ fn ignored_transaction_reason(
     match state {
         DurableTransactionState::RolledBack => {
             Some(FileWalRecoveryIgnoredTransactionReason::RolledBack)
-        }
+        },
         DurableTransactionState::Open | DurableTransactionState::Incomplete => {
             Some(FileWalRecoveryIgnoredTransactionReason::Incomplete)
-        }
+        },
         DurableTransactionState::Committed => None,
     }
 }

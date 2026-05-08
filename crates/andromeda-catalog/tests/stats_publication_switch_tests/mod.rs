@@ -1,13 +1,16 @@
 pub(crate) use andromeda_catalog::{
     EvidenceConfidence, EvidenceScore, HistogramBucket, HistogramPlaceholder, PlanClass,
-    STATS_PUBLICATION_SWITCH_HISTORY_LIMIT, STATS_PUBLICATION_SWITCH_REASON_MAX_BYTES,
-    ScenarioEvidence, ScenarioEvidenceAdvisoryUse, ScenarioId, ScenarioKind, ScenarioTarget,
-    SkewMarker, StatsColumnTarget, StatsPublication, StatsPublicationAdvisoryEvidenceReference,
+    STATS_PUBLICATION_SWITCH_HISTORY_LIMIT, STATS_PUBLICATION_SWITCH_REASON_MAX_BYTES, SkewMarker,
+    StatsColumnTarget, StatsPublication, StatsPublicationAdvisoryEvidenceReference,
     StatsPublicationBuilder, StatsPublicationCandidateState, StatsPublicationDecisionEvidence,
     StatsPublicationDecisionEvidenceKind, StatsPublicationDecisionStage, StatsPublicationSwitch,
-    StatsPublicationSwitchDecision, StatsPublicationSwitchError, StatsVersion, ValidityWindow,
+    StatsPublicationSwitchDecision, StatsPublicationSwitchError, StatsVersion,
 };
 pub(crate) use andromeda_observe::TraceId;
+pub(crate) use andromeda_scenario_evidence::{
+    ScenarioEvidence, ScenarioEvidenceAdvisoryUse, ScenarioId, ScenarioKind, ScenarioTarget,
+    ValidityWindow,
+};
 pub(crate) use andromeda_time::EngineTimestamp;
 pub(crate) use andromeda_types::{CatalogObjectId, CatalogVersion, ContractHash, ProcedureId};
 

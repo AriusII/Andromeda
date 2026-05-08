@@ -11,6 +11,7 @@ mod benchmark_history;
 mod evidence;
 mod flat_json;
 mod history_store;
+mod plan_cache_bridge;
 mod scenario_boundary;
 mod scenario_evidence;
 
@@ -34,6 +35,7 @@ pub use evidence::{
     BenchmarkMeasurementMode, BenchmarkWorkloadCounter, MAX_BENCHMARK_WORKLOAD_COUNTERS,
 };
 pub use history_store::BenchmarkHistoryStore;
+pub use plan_cache_bridge::{classify_advisory_evidence_for_key, select_minimal_plan};
 pub use scenario_boundary::{
     BenchmarkEvidenceBudgets, BenchmarkEvidenceConfidence, BenchmarkEvidenceContext,
     BenchmarkEvidenceValidity, BenchmarkPlanClass, BenchmarkScenarioEvidence,

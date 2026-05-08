@@ -1,6 +1,5 @@
 use andromeda_observe::TraceId;
-
-use crate::scenario_evidence::{ScenarioEvidenceAdvisoryUse, ScenarioId, ScenarioTarget};
+use andromeda_scenario_evidence::{ScenarioEvidenceAdvisoryUse, ScenarioId, ScenarioTarget};
 
 use super::error::StatsPublicationSwitchError;
 

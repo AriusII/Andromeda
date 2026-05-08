@@ -204,6 +204,40 @@ tokio = { version = "1", default-features = false, features = ["net", "rt", "tim
 # Fuzz and property testing
 proptest = "1.4"
 
+[workspace.lints.rust]
+# Safety: unsafe_op_in_unsafe_fn enforces that unsafe operations within unsafe blocks
+# are explicitly marked with inner unsafe. This catches logic errors and makes code intent clear.
+unsafe_op_in_unsafe_fn = "warn"
+
+# API clarity: unreachable_pub catches unintended public items in internal modules
+# Reduces API surface and makes intentions explicit
+unreachable_pub = "warn"
+
+# Documentation: require docs for public items (can be configured per crate)
+# C5 critical crates may use "deny", others use "warn"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+# Correctness: catch actual bugs
+correctness = { level = "deny", priority = -1 }
+
+# Suspicious patterns: likely mistakes
+suspicious = { level = "deny", priority = -1 }
+
+# Pedantic: useful warnings for code quality (allow-by-default, but good to catch)
+pedantic = { level = "warn", priority = -1 }
+
+# Perf: optimization suggestions (warn, not deny)
+perf = { level = "warn", priority = -1 }
+
+# Allow style lints: Clippy style is subjective, rustfmt handles formatting
+style = { level = "allow", priority = -1 }
+
+# Crate-level exceptions (to be set in individual crates):
+# - andromeda-simd: allow unsafe_code (with documentation)
+# - andromeda-gpu: allow unsafe_code (analytics-only, no commit path)
+# - andromeda-proto: allow missing_docs (generated code)
+
 [profile.fuzz]
 inherits = "release"
 lto = true

@@ -99,13 +99,13 @@ fn heap_page_insert_fill_to_capacity() {
         match insert.insert_raw_tuple(&large_chunk) {
             Ok(_) => {
                 inserted_count += 1;
-            }
+            },
             Err(e) if e.message().contains("full") => {
                 break;
-            }
+            },
             Err(e) => {
                 panic!("unexpected error: {}", e.message());
-            }
+            },
         }
     }
 

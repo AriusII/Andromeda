@@ -89,7 +89,7 @@ fn status_table_from_recovery(evidence: &[DurableTransactionResume]) -> Transact
                         TxLsn::new(resume.last_lsn.get()),
                     )
                     .expect("committed evidence always has durable WAL evidence")
-            }
+            },
             DurableTransactionState::RolledBack => {
                 let rollback_lsn = resume
                     .rollback_lsn
@@ -101,12 +101,12 @@ fn status_table_from_recovery(evidence: &[DurableTransactionResume]) -> Transact
                         TxLsn::new(resume.last_lsn.get()),
                     )
                     .expect("rolled-back evidence always has durable WAL evidence")
-            }
+            },
             DurableTransactionState::Open | DurableTransactionState::Incomplete => {
                 // Doctrine: do NOT promote in-flight or torn writers to a
                 // terminal status. Their visibility must derive from
                 // absence in the status table.
-            }
+            },
         }
     }
     statuses

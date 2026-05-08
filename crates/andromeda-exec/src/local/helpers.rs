@@ -108,7 +108,7 @@ pub(super) fn rollback_payload_for_cause(
             match cause {
                 RollbackCause::Direct | RollbackCause::BusinessFailure => {
                     "business validation rollback reason must not be empty"
-                }
+                },
                 RollbackCause::Poison => "poison rollback reason must not be empty",
             },
         ));
@@ -117,7 +117,7 @@ pub(super) fn rollback_payload_for_cause(
     let domain: &[u8] = match cause {
         RollbackCause::Direct | RollbackCause::BusinessFailure => {
             b"andromeda.exec.business-validation-failed.v1"
-        }
+        },
         RollbackCause::Poison => b"andromeda.exec.poisoned-rollback.v1",
     };
     let mut payload = Vec::with_capacity(domain.len() + 1 + trimmed_reason.len());

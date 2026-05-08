@@ -8,6 +8,7 @@ use crate::{
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
+    fs,
     path::PathBuf,
 };
 const WORKSPACE_CRATE_COUNT: usize = 94;
@@ -492,7 +493,7 @@ fn allowed_dependency_rules() -> Vec<AllowedDependencyRule> {
         AllowedDependencyRule::new(
             "andromeda-rpc-protocol may only depend on runtime-free protocol foundation crates",
             "andromeda-rpc-protocol",
-            &["andromeda-core"],
+            &["andromeda-core", "andromeda-procedure-contract"],
         ),
         AllowedDependencyRule::new(
             "andromeda-security-contract may only depend on runtime-free security contract foundation crates",
@@ -507,6 +508,7 @@ fn allowed_dependency_rules() -> Vec<AllowedDependencyRule> {
                 "andromeda-error",
                 "andromeda-procedure-contract",
                 "andromeda-proto-wire",
+                "andromeda-rpc-protocol",
                 "andromeda-structured-object",
                 "andromeda-types",
                 "prost",
@@ -582,6 +584,9 @@ fn allowed_dependency_rules() -> Vec<AllowedDependencyRule> {
                 "andromeda-retry",
                 "andromeda-security",
                 "andromeda-srpl",
+                "andromeda-srpl-execution-adapter",
+                "andromeda-srpl-interpreter",
+                "andromeda-srpl-ir",
                 "andromeda-storage",
                 "andromeda-tx",
                 "dashmap",
@@ -592,11 +597,15 @@ fn allowed_dependency_rules() -> Vec<AllowedDependencyRule> {
             "andromeda-storage may only depend on current Lot 4.3 durable-kernel support crates",
             "andromeda-storage",
             &[
+                "andromeda-backup",
                 "andromeda-buffer-pool",
                 "andromeda-core",
+                "andromeda-disk-page-store",
+                "andromeda-hadr",
                 "andromeda-manifest",
                 "andromeda-observe",
                 "andromeda-recovery",
+                "andromeda-restore",
                 "andromeda-segment",
                 "andromeda-storage-heap",
                 "andromeda-storage-index",
@@ -616,8 +625,11 @@ fn allowed_dependency_rules() -> Vec<AllowedDependencyRule> {
             "andromeda-tx",
             &[
                 "andromeda-core",
+                "andromeda-locking",
+                "andromeda-mvcc",
                 "andromeda-observe",
                 "andromeda-savepoint",
+                "andromeda-transaction",
                 "andromeda-transaction-log",
                 "async-trait",
                 "dashmap",
@@ -726,10 +738,10 @@ fn allowed_dev_dependency_rules() -> Vec<AllowedDependencyRule> {
             &["proptest"],
         ),
         AllowedDependencyRule::new_for_scope(
-            "andromeda-exec must not gain direct dev-dependencies without a topology update",
+            "andromeda-exec may only dev-depend on the documented business-fixture harness",
             "andromeda-exec",
             DependencyScope::Dev,
-            &[],
+            &["andromeda-business-fixtures"],
         ),
         AllowedDependencyRule::new_for_scope(
             "andromeda-srpl-diagnostics must not gain dev-dependencies during Lot 3 language-model extraction",
@@ -762,10 +774,10 @@ fn allowed_dev_dependency_rules() -> Vec<AllowedDependencyRule> {
             &[],
         ),
         AllowedDependencyRule::new_for_scope(
-            "andromeda-srpl may only dev-depend on the Lot 3 property-test harness while it remains a facade",
+            "andromeda-srpl may only dev-depend on the documented Lot 3 facade test harness crates",
             "andromeda-srpl",
             DependencyScope::Dev,
-            &["proptest"],
+            &["andromeda-contract", "andromeda-plan-cache", "proptest"],
         ),
         AllowedDependencyRule::new_for_scope(
             "andromeda-storage may only dev-depend on storage test harness crates",
@@ -781,6 +793,91 @@ fn allowed_dev_dependency_rules() -> Vec<AllowedDependencyRule> {
         ),
     ]
 }
+#[test]
+fn tests_fuzzing_stays_registry_and_corpus_only_not_harness_owner() {
+    let workspace = workspace_root();
+    let tests_fuzzing_root = workspace.join("tests/fuzzing");
+    let registry_path = tests_fuzzing_root.join("targets.toml");
+    let corpus_manifest_path = tests_fuzzing_root.join("corpus/manifest.toml");
+    let registry_text = fs::read_to_string(&registry_path)
+        .unwrap_or_else(|err| panic!("read {}: {err}", registry_path.display()));
+    let corpus_manifest_text = fs::read_to_string(&corpus_manifest_path)
+        .unwrap_or_else(|err| panic!("read {}: {err}", corpus_manifest_path.display()));
+
+    let rust_files_under_tests_fuzzing =
+        collect_relative_rs_files(&tests_fuzzing_root, &tests_fuzzing_root);
+    assert!(
+        rust_files_under_tests_fuzzing.is_empty(),
+        "tests/fuzzing must stay registry/corpus-only; executable Rust harnesses belong under fuzz/fuzz_targets, not tests/fuzzing:\n{}",
+        rust_files_under_tests_fuzzing.join("\n")
+    );
+
+    let registry_harness_paths = quoted_toml_values(&registry_text, "path");
+    let invalid_registry_paths = registry_harness_paths
+        .iter()
+        .filter(|path| {
+            !path.starts_with("fuzz_targets/")
+                || !path.ends_with(".rs")
+                || !workspace.join("fuzz").join(path).is_file()
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    assert!(
+        invalid_registry_paths.is_empty(),
+        "tests/fuzzing/targets.toml must reference Rust harness files under fuzz/fuzz_targets only:\n{}",
+        invalid_registry_paths.join("\n")
+    );
+
+    let invalid_corpus_dirs = quoted_toml_values(&corpus_manifest_text, "corpus_dir")
+        .into_iter()
+        .filter(|path| !path.starts_with("tests/fuzzing/corpus/") || !workspace.join(path).is_dir())
+        .collect::<Vec<_>>();
+    assert!(
+        invalid_corpus_dirs.is_empty(),
+        "tests/fuzzing/corpus/manifest.toml must stay a corpus registry rooted under tests/fuzzing/corpus:\n{}",
+        invalid_corpus_dirs.join("\n")
+    );
+}
+
+fn collect_relative_rs_files(root: &std::path::Path, current: &std::path::Path) -> Vec<String> {
+    let mut files = Vec::new();
+
+    for entry in
+        fs::read_dir(current).unwrap_or_else(|err| panic!("read {}: {err}", current.display()))
+    {
+        let entry =
+            entry.unwrap_or_else(|err| panic!("read entry in {}: {err}", current.display()));
+        let path = entry.path();
+        if path.is_dir() {
+            files.extend(collect_relative_rs_files(root, &path));
+            continue;
+        }
+
+        if path.extension().and_then(|ext| ext.to_str()) == Some("rs") {
+            files.push(
+                path.strip_prefix(root)
+                    .expect("tests/fuzzing file stays under root")
+                    .to_string_lossy()
+                    .replace('\\', "/"),
+            );
+        }
+    }
+
+    files.sort();
+    files
+}
+
+fn quoted_toml_values(text: &str, key: &str) -> Vec<String> {
+    text.lines()
+        .filter_map(|line| {
+            let trimmed = line.trim();
+            let prefix = format!("{key} = ");
+            let value = trimmed.strip_prefix(&prefix)?;
+            Some(value.trim().trim_matches('"').replace('\\', "/"))
+        })
+        .collect()
+}
+
 pub(crate) struct TemporaryDependencyException {
     pub(crate) source: &'static str,
     pub(crate) dependency: &'static str,

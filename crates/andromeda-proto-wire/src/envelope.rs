@@ -11,7 +11,6 @@ pub use andromeda_rpc_protocol::{
 use andromeda_types::{CatalogVersion, ContractHash, RequestId, SessionId, TransactionId};
 
 use crate::generated::{GeneratedFrameEnvelope, GeneratedProtocolVersion};
-
 pub const fn project_generated_protocol_version(
     version: &GeneratedProtocolVersion,
 ) -> ProtocolVersion {

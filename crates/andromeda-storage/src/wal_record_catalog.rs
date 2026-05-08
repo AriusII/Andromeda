@@ -276,7 +276,7 @@ impl CatalogWalRecord {
                     ));
                 }
                 Ok(())
-            }
+            },
             Self::ProcedureAdded { signature_hash, .. } => {
                 if signature_hash.is_zero() {
                     return Err(AndromedaError::new(
@@ -285,7 +285,7 @@ impl CatalogWalRecord {
                     ));
                 }
                 Ok(())
-            }
+            },
             Self::ProcedureAltered {
                 old_hash, new_hash, ..
             } => {
@@ -296,7 +296,7 @@ impl CatalogWalRecord {
                     ));
                 }
                 Ok(())
-            }
+            },
             Self::ProcedureDropped {
                 dropped_version,
                 new_catalog_version,
@@ -309,7 +309,7 @@ impl CatalogWalRecord {
                     ));
                 }
                 Ok(())
-            }
+            },
             Self::StatisticsUpdated { .. } => Ok(()),
             Self::CatalogCheckpoint {
                 visible_procedure_count,
@@ -322,7 +322,7 @@ impl CatalogWalRecord {
                     ));
                 }
                 Ok(())
-            }
+            },
         }
     }
 

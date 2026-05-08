@@ -20,6 +20,7 @@ pub fn build_test_manifest(
 }
 
 /// Builds a bootstrap manifest (empty database).
+#[allow(dead_code)]
 pub fn build_bootstrap_manifest() -> ManifestDurabilityBoundary {
     build_test_manifest(0, 0)
 }
@@ -67,6 +68,7 @@ pub fn assert_lsn_monotonic(lsns: &[u64]) {
 }
 
 /// Verifies no gaps in LSN sequence.
+#[allow(dead_code)]
 pub fn assert_lsn_continuous(start: u64, lsns: &[u64]) {
     for (idx, &lsn) in lsns.iter().enumerate() {
         assert_eq!(

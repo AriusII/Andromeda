@@ -76,14 +76,14 @@ fn permission_allowed_admin_and_security_visible_decisions_require_durable_audit
                     family,
                     91 + offset as u64,
                 ))
-            }
+            },
             DurableAuditEventFamily::AdminDecision => {
                 AuditSinkAvailability::durable_for_admin_decision(durable_audit_report(
                     trace_id,
                     family,
                     91 + offset as u64,
                 ))
-            }
+            },
             _ => unreachable!("test covers security/admin visible decisions"),
         }
         .expect("typed durable audit report should become sink availability");

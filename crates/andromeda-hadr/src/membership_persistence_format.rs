@@ -215,7 +215,7 @@ fn encode_record(payload: &mut Vec<u8>, record: HadrMembershipRecord) {
             payload.extend_from_slice(&node_id.get().to_le_bytes());
             payload.extend_from_slice(&epoch.get().to_le_bytes());
             payload.extend_from_slice(&0u64.to_le_bytes());
-        }
+        },
         HadrMembershipRecord::NodeDeregistered { node_id, epoch } => {
             payload.push(2);
             payload.push(0);
@@ -223,7 +223,7 @@ fn encode_record(payload: &mut Vec<u8>, record: HadrMembershipRecord) {
             payload.extend_from_slice(&node_id.get().to_le_bytes());
             payload.extend_from_slice(&epoch.get().to_le_bytes());
             payload.extend_from_slice(&0u64.to_le_bytes());
-        }
+        },
         HadrMembershipRecord::NodeFenced { node_id, epoch } => {
             payload.push(3);
             payload.push(0);
@@ -231,7 +231,7 @@ fn encode_record(payload: &mut Vec<u8>, record: HadrMembershipRecord) {
             payload.extend_from_slice(&node_id.get().to_le_bytes());
             payload.extend_from_slice(&epoch.get().to_le_bytes());
             payload.extend_from_slice(&0u64.to_le_bytes());
-        }
+        },
         HadrMembershipRecord::EpochAdvanced {
             previous_epoch,
             new_epoch,
@@ -242,7 +242,7 @@ fn encode_record(payload: &mut Vec<u8>, record: HadrMembershipRecord) {
             payload.extend_from_slice(&previous_epoch.get().to_le_bytes());
             payload.extend_from_slice(&new_epoch.get().to_le_bytes());
             payload.extend_from_slice(&0u64.to_le_bytes());
-        }
+        },
         HadrMembershipRecord::NodeRoleUpdated {
             node_id,
             role,
@@ -254,7 +254,7 @@ fn encode_record(payload: &mut Vec<u8>, record: HadrMembershipRecord) {
             payload.extend_from_slice(&node_id.get().to_le_bytes());
             payload.extend_from_slice(&epoch.get().to_le_bytes());
             payload.extend_from_slice(&0u64.to_le_bytes());
-        }
+        },
         HadrMembershipRecord::PrimaryPromoted {
             node_id,
             epoch,
@@ -266,7 +266,7 @@ fn encode_record(payload: &mut Vec<u8>, record: HadrMembershipRecord) {
             payload.extend_from_slice(&node_id.get().to_le_bytes());
             payload.extend_from_slice(&epoch.get().to_le_bytes());
             payload.extend_from_slice(&committed_safe_lsn.get().to_le_bytes());
-        }
+        },
     }
 }
 
@@ -290,7 +290,7 @@ fn decode_record(cursor: &mut PayloadCursor<'_>) -> AndromedaResult<HadrMembersh
                 role: tag_to_role(aux)?,
                 epoch: HadrEpoch::new(b),
             })
-        }
+        },
         2 => {
             if aux != 0 || c != 0 {
                 return Err(storage_error(
@@ -301,7 +301,7 @@ fn decode_record(cursor: &mut PayloadCursor<'_>) -> AndromedaResult<HadrMembersh
                 node_id: HadrNodeId::new(a),
                 epoch: HadrEpoch::new(b),
             })
-        }
+        },
         3 => {
             if aux != 0 || c != 0 {
                 return Err(storage_error(
@@ -312,7 +312,7 @@ fn decode_record(cursor: &mut PayloadCursor<'_>) -> AndromedaResult<HadrMembersh
                 node_id: HadrNodeId::new(a),
                 epoch: HadrEpoch::new(b),
             })
-        }
+        },
         4 => {
             if aux != 0 || c != 0 {
                 return Err(storage_error(
@@ -323,7 +323,7 @@ fn decode_record(cursor: &mut PayloadCursor<'_>) -> AndromedaResult<HadrMembersh
                 previous_epoch: HadrEpoch::new(a),
                 new_epoch: HadrEpoch::new(b),
             })
-        }
+        },
         5 => {
             if aux != 0 {
                 return Err(storage_error(
@@ -335,7 +335,7 @@ fn decode_record(cursor: &mut PayloadCursor<'_>) -> AndromedaResult<HadrMembersh
                 epoch: HadrEpoch::new(b),
                 committed_safe_lsn: Lsn::new(c),
             })
-        }
+        },
         6 => {
             if c != 0 {
                 return Err(storage_error(
@@ -347,7 +347,7 @@ fn decode_record(cursor: &mut PayloadCursor<'_>) -> AndromedaResult<HadrMembersh
                 role: tag_to_role(aux)?,
                 epoch: HadrEpoch::new(b),
             })
-        }
+        },
         _ => Err(storage_error("HADR membership record tag is invalid")),
     }
 }

@@ -146,7 +146,7 @@ impl BTreeNodeV1 {
                     write_len_prefixed_bytes(&mut page, &mut offset, key)?;
                     write_len_prefixed_bytes(&mut page, &mut offset, value)?;
                 }
-            }
+            },
             BTreeNodeKindV1::Internal => {
                 for child in &self.child_page_ids {
                     write_u64_at(&mut page, &mut offset, child.get())?;
@@ -154,7 +154,7 @@ impl BTreeNodeV1 {
                 for key in &self.keys {
                     write_len_prefixed_bytes(&mut page, &mut offset, key)?;
                 }
-            }
+            },
         }
         debug_assert_eq!(offset, self.header.free_start as usize);
         Ok(page)
@@ -199,7 +199,7 @@ impl BTreeNodeV1 {
                 };
                 node.validate()?;
                 Ok(node)
-            }
+            },
             BTreeNodeKindV1::Internal => {
                 validate_internal_body_min_len(header.key_count, header.child_count, body_len)?;
                 let mut children = Vec::with_capacity(header.child_count as usize);
@@ -224,7 +224,7 @@ impl BTreeNodeV1 {
                 };
                 node.validate()?;
                 Ok(node)
-            }
+            },
         }
     }
 
@@ -273,7 +273,7 @@ impl BTreeNodeV1 {
                         "BTree leaf high_key_offset does not match encoded keys",
                     ));
                 }
-            }
+            },
             BTreeNodeKindV1::Internal => {
                 if self.header.key_count as usize != self.keys.len()
                     || self.header.child_count as usize != self.child_page_ids.len()
@@ -303,7 +303,7 @@ impl BTreeNodeV1 {
                         "BTree internal high_key_offset does not match encoded keys",
                     ));
                 }
-            }
+            },
         }
         Ok(())
     }

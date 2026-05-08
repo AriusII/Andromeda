@@ -213,7 +213,7 @@ where
             Err(error) => {
                 product_stock.abort_prepared_reserve_stock(&prepared, error.message())?;
                 return Err(error);
-            }
+            },
         };
         let durable_lsn = vertical.completion.durable_lsn.ok_or_else(|| {
             AndromedaError::new(
@@ -390,7 +390,7 @@ where
                     )?;
                 }
                 return Err(error);
-            }
+            },
         };
 
         emit_v0_outcome_events(&outcome, emitter)?;

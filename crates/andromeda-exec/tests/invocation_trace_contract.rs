@@ -68,7 +68,7 @@ fn test_admission_denial_trace_recorded() {
                 reason.contains("permission denied"),
                 "reason should indicate permission denial"
             );
-        }
+        },
         _ => panic!("expected admission decision trace"),
     }
 }
@@ -102,7 +102,7 @@ fn test_dispatch_event_trace_recorded() {
         } => {
             assert_eq!(procedure_name, "calculate_revenue");
             assert_eq!(executor_kind, "LocalVerticalExecutor");
-        }
+        },
         _ => panic!("expected dispatch event trace"),
     }
 }
@@ -134,7 +134,7 @@ fn test_execution_start_trace_recorded() {
             ..
         } => {
             assert_eq!(tx_id.get(), 100, "transaction id should be preserved");
-        }
+        },
         _ => panic!("expected execution start trace"),
     }
 }
@@ -167,7 +167,7 @@ fn test_execution_end_trace_recorded() {
         } => {
             assert_eq!(rows_affected, &Some(42));
             assert_eq!(result_cardinality, &Some("One".to_string()));
-        }
+        },
         _ => panic!("expected execution end trace"),
     }
 }
@@ -199,7 +199,7 @@ fn test_execution_failed_trace_recorded() {
         } => {
             assert!(failure_reason.contains("constraint violation"));
             assert_eq!(recoverable, &true);
-        }
+        },
         _ => panic!("expected execution failed trace"),
     }
 }
@@ -322,7 +322,7 @@ fn test_query_by_trace_id_filters_correctly() {
         } => {
             assert_eq!(t, &trace_id1);
             assert_eq!(i, &invocation_id1);
-        }
+        },
         _ => panic!("unexpected event type"),
     }
 }

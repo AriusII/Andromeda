@@ -120,7 +120,7 @@ fn validate_record_replay(snapshot: &HadrMembershipSnapshot) -> AndromedaResult<
                 }
                 replay_epoch = new_epoch;
                 action_seen_for_epoch = false;
-            }
+            },
             HadrMembershipRecord::NodeRegistered {
                 node_id,
                 role,
@@ -147,7 +147,7 @@ fn validate_record_replay(snapshot: &HadrMembershipSnapshot) -> AndromedaResult<
                     ));
                 }
                 replay_nodes.push(HadrMembershipNode::new(node_id, role, epoch));
-            }
+            },
             HadrMembershipRecord::NodeDeregistered { node_id, epoch } => {
                 validate_action_epoch(epoch, replay_epoch, action_seen_for_epoch)?;
                 action_seen_for_epoch = true;
@@ -158,7 +158,7 @@ fn validate_record_replay(snapshot: &HadrMembershipSnapshot) -> AndromedaResult<
                         "HADR membership deregister record references an unregistered node",
                     ));
                 }
-            }
+            },
             HadrMembershipRecord::NodeFenced { node_id, epoch } => {
                 validate_action_epoch(epoch, replay_epoch, action_seen_for_epoch)?;
                 action_seen_for_epoch = true;
@@ -171,7 +171,7 @@ fn validate_record_replay(snapshot: &HadrMembershipSnapshot) -> AndromedaResult<
                     node.role = HadrNodeRole::Replica;
                     node.role_epoch = epoch;
                 }
-            }
+            },
             HadrMembershipRecord::NodeRoleUpdated {
                 node_id,
                 role,
@@ -195,7 +195,7 @@ fn validate_record_replay(snapshot: &HadrMembershipSnapshot) -> AndromedaResult<
                 };
                 node.role = role;
                 node.role_epoch = epoch;
-            }
+            },
             HadrMembershipRecord::PrimaryPromoted {
                 node_id,
                 epoch,
@@ -224,7 +224,7 @@ fn validate_record_replay(snapshot: &HadrMembershipSnapshot) -> AndromedaResult<
                         node.role_epoch = epoch;
                     }
                 }
-            }
+            },
         }
     }
 

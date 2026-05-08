@@ -14,11 +14,17 @@ C5 invariants:
 - RAM, temporary storage, GPU output, and benchmark output are advisory only; they are not truth.
 "#]
 
+pub mod commit_log;
 mod locking_protocol;
 mod state;
 mod trace;
 mod wal_adapter;
 
+pub use commit_log::{
+    CommitLogEntry, CommitLogManager, IsolationLevel, Lsn, RollbackLogEntry,
+    TransactionStatusRebuild, TxWalReplayAction, TxWalReplayRecord, TxWalReplaySummary,
+    WalRecordKind,
+};
 pub use locking_protocol::{TwoPhaseLocksValidator, TwoPhaseOperation};
 pub use state::{TransactionEvent, TransactionState, TransactionStateMachine};
 pub use trace::{

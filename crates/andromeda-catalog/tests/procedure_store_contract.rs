@@ -13,12 +13,15 @@ use andromeda_catalog::{
     PlanClass, PlanShapeFingerprint, PolicyVersion, ProcedureContract, ProcedureErrorPolicy,
     ProcedureFeedback, ProcedureRegistration, ProcedureRuntimeCounters, ProcedureRuntimePlanId,
     ProcedureRuntimeStatus, ProcedureStore, ProcedureStoreEntry, ProcedureStoreEvidenceRole,
-    ProtocolLayoutRef, QualifiedName, RecordOutcome, ResultMetadataPolicy, ScenarioEvidence,
-    ScenarioEvidenceOptimizerBoundary, ScenarioId, ScenarioKind, ScenarioTarget, StatsVersion,
-    TransactionPolicy, ValidityWindow,
+    ProtocolLayoutRef, QualifiedName, RecordOutcome, ResultMetadataPolicy, StatsVersion,
+    TransactionPolicy,
 };
 use andromeda_error::AndromedaErrorKind;
 use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
+use andromeda_scenario_evidence::{
+    ScenarioEvidence, ScenarioEvidenceOptimizerBoundary, ScenarioId, ScenarioKind, ScenarioTarget,
+    ValidityWindow,
+};
 use andromeda_time::EngineTimestamp;
 use andromeda_types::{CatalogObjectId, CatalogVersion, ContractHash, InvocationId, ProcedureId};
 

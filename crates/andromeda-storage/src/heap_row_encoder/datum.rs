@@ -44,14 +44,14 @@ impl Datum {
                     return Err(encoder_error("byte array too large"));
                 }
                 Ok(b.len())
-            }
+            },
             Self::Text(s) => {
                 let bytes = s.as_bytes();
                 if bytes.len() > u32::MAX as usize {
                     return Err(encoder_error("text too large"));
                 }
                 Ok(bytes.len())
-            }
+            },
         }
     }
 
@@ -117,7 +117,7 @@ impl Datum {
             ScalarType::Int8 => {
                 let byte = read_scalar_byte(bytes, "int8")?;
                 Ok(Self::Int8(byte as i8))
-            }
+            },
             ScalarType::Int16 => Ok(Self::Int16(i16::from_le_bytes(read_scalar_array(
                 bytes, "int16",
             )?))),

@@ -137,7 +137,7 @@ impl BTreeConcurrencyPolicy {
             BTreeOperationKind::Insert => child_key_count < max_keys,
             BTreeOperationKind::Delete => {
                 child_is_root || child_key_count > non_root_min_keys(branching_factor)
-            }
+            },
         }
     }
 

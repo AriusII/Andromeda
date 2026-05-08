@@ -244,7 +244,7 @@ where
                     tx_lsn,
                 ));
                 evidence.adapter_records += 1;
-            }
+            },
             WalRecordKind::TxCommit => {
                 let metadata = decode_commit_payload(record.payload())?;
                 adapter_records.push(
@@ -260,7 +260,7 @@ where
                     ),
                 );
                 evidence.adapter_records += 1;
-            }
+            },
             WalRecordKind::TxRollback => {
                 let metadata = decode_rollback_payload(record.payload())?;
                 adapter_records.push(
@@ -272,7 +272,7 @@ where
                     .with_parameter_hash(metadata.parameter_hash),
                 );
                 evidence.adapter_records += 1;
-            }
+            },
             _ => {
                 if record.header.transaction_id.is_some() {
                     adapter_records.push(
@@ -283,7 +283,7 @@ where
                     );
                     evidence.adapter_records += 1;
                 }
-            }
+            },
         }
     }
 
@@ -295,7 +295,7 @@ where
             andromeda_tx::TxWalReplayRecord::Rollback(_) => evidence.rollbacks += 1,
             andromeda_tx::TxWalReplayRecord::Incomplete { .. } => {
                 evidence.incomplete_transactions += 1;
-            }
+            },
         }
     }
 
@@ -385,7 +385,7 @@ fn decode_commit_payload(payload: &[u8]) -> AndromedaResult<CommitPayloadMetadat
                 "transaction commit WAL payload has unknown isolation level code {}",
                 payload[0]
             )));
-        }
+        },
     };
 
     Ok(CommitPayloadMetadata {

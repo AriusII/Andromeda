@@ -1,3 +1,17 @@
+# Andromeda Rust toolchain configuration
+# Channel: stable (production-ready, no nightly dependency)
+# Edition: 2024 (latest language features, strict semantics)
+# MSRV (Minimum Supported Rust Version): 1.85
+#
+# Rationale for stable channel:
+# - Mission-critical database engine requires stability guarantee
+# - No nightly-only features required for core architecture
+# - Reproducible builds across CI/developer environments
+# - Predictable lint/compiler behavior
+
 [toolchain]
-channel = "1.95.0"
+channel = "stable"
 components = ["clippy", "rustfmt"]
+
+# Profile override for development: keep debug symbols
+# CI/release builds use Cargo.toml profile settings

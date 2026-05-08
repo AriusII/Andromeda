@@ -13,6 +13,8 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 andromeda-catalog = { path = "../crates/andromeda-catalog" }
+andromeda-manifest = { path = "../crates/andromeda-manifest" }
+andromeda-recovery = { path = "../crates/andromeda-recovery" }
 andromeda-proto = { path = "../crates/andromeda-proto" }
 andromeda-core = { path = "../crates/andromeda-core" }
 andromeda-observe = { path = "../crates/andromeda-observe" }
@@ -140,6 +142,12 @@ test = false
 doc = false
 
 [[bin]]
+name = "manifest_boundary"
+path = "fuzz_targets/manifest_boundary.rs"
+test = false
+doc = false
+
+[[bin]]
 name = "segment_index_decode"
 path = "fuzz_targets/segment_index_decode.rs"
 test = false
@@ -160,5 +168,11 @@ doc = false
 [[bin]]
 name = "structured_object_payload"
 path = "fuzz_targets/structured_object_payload.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "recovery_manifest_durability_boundary"
+path = "fuzz_targets/recovery_manifest_durability_boundary.rs"
 test = false
 doc = false

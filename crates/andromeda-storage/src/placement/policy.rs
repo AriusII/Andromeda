@@ -134,12 +134,12 @@ fn validate_core_placement_invariants(
                     "commit-critical and hot append workloads must target HotStore",
                 ));
             }
-        }
+        },
         StorageWorkloadClass::RamWorkingSet => {
             if placement.target_tier != StorageTier::Ram {
                 return Err(storage_error("RAM working set must target RAM placement"));
             }
-        }
+        },
         StorageWorkloadClass::ColdRead | StorageWorkloadClass::ColdPublication => {
             if placement.target_tier != StorageTier::ColdStore {
                 return Err(storage_error(
@@ -151,7 +151,7 @@ fn validate_core_placement_invariants(
                     "cold reads and publication must not allow mutation",
                 ));
             }
-        }
+        },
     }
     Ok(())
 }

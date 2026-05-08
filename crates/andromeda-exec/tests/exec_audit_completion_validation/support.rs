@@ -77,7 +77,7 @@ pub(crate) fn retention_boundary_for_family(
         DurableAuditEventFamily::CatalogDecision => DurableAuditRetentionBoundary::CatalogVersion,
         DurableAuditEventFamily::BackupDecision | DurableAuditEventFamily::RestoreDecision => {
             DurableAuditRetentionBoundary::WalSegment
-        }
+        },
         DurableAuditEventFamily::ForensicDecision => DurableAuditRetentionBoundary::ForensicHold,
         _ => DurableAuditRetentionBoundary::SecurityPolicy,
     }

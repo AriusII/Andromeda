@@ -113,12 +113,12 @@ impl BufferFrame {
                 if self.image.is_some() {
                     return Err(BufferPoolError::InvalidFrameState.into_andromeda_error());
                 }
-            }
+            },
             BufferFrameState::Resident
             | BufferFrameState::Flushing
             | BufferFrameState::Evicting => {
                 self.validate_resident_metadata()?;
-            }
+            },
         }
         Ok(())
     }

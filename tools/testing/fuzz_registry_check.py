@@ -22,7 +22,7 @@ CANONICAL_RUN_COMMAND = (
     'cargo +nightly fuzz run "$target" "$corpus_dir" -- '
     '-max_total_time="$fuzz_seconds"'
 )
-ALLOWED_RUNTIME_OUTPUT_PREFIXES = ("fuzz/target/",)
+ALLOWED_RUNTIME_OUTPUT_PREFIXES = ("target/fuzz/",)
 RUNTIME_HYGIENE_EXEMPT_PATH_PREFIXES = ("fuzz/generators/",)
 FORBIDDEN_RUNTIME_DIR_NAMES = frozenset({"__pycache__", "artifacts", "coverage", "crashes"})
 FORBIDDEN_RUNTIME_FILE_PREFIXES = ("crash-", "leak-", "oom-", "slow-unit-", "timeout-")
@@ -577,7 +577,7 @@ def validate_runtime_artifact_hygiene(root: Path, errors: list[str]) -> None:
             if path.is_dir() and path.name in FORBIDDEN_RUNTIME_DIR_NAMES:
                 message = (
                     f"runtime artifact directory is not allowed in source tree: {relative}; "
-                    "use fuzz/target or an explicit temporary directory"
+                    "use target/fuzz or an explicit temporary directory"
                 )
                 if message not in seen:
                     seen.add(message)
@@ -589,7 +589,7 @@ def validate_runtime_artifact_hygiene(root: Path, errors: list[str]) -> None:
             if filename.endswith(FORBIDDEN_RUNTIME_FILE_SUFFIXES):
                 message = (
                     f"runtime artifact file is not allowed in source tree: {relative}; "
-                    "use fuzz/target or an explicit temporary directory"
+                    "use target/fuzz or an explicit temporary directory"
                 )
                 if message not in seen:
                     seen.add(message)
@@ -598,7 +598,7 @@ def validate_runtime_artifact_hygiene(root: Path, errors: list[str]) -> None:
             if filename.startswith(FORBIDDEN_RUNTIME_FILE_PREFIXES):
                 message = (
                     f"runtime fuzz artifact is not allowed in source tree: {relative}; "
-                    "use fuzz/target or an explicit temporary directory"
+                    "use target/fuzz or an explicit temporary directory"
                 )
                 if message not in seen:
                     seen.add(message)

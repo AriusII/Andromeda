@@ -31,17 +31,17 @@ impl DenialAuditReason {
             Self::NoPermissionsGranted => "principal has no permissions granted".to_string(),
             Self::PermissionNotGranted => {
                 "required permission is not in principal's permission set".to_string()
-            }
+            },
             Self::ProcedureIdMismatch => {
                 "requested procedure ID does not match granted procedure".to_string()
-            }
+            },
             Self::SuperAdminOperationNotAudited => {
                 "super-admin operation attempted without explicit authorization audit record"
                     .to_string()
-            }
+            },
             Self::WildcardDeniedByPolicy => {
                 "wildcard permission was explicitly denied by policy".to_string()
-            }
+            },
             Self::SessionExpired => "principal's session has expired".to_string(),
             Self::CertificateRevoked => "certificate revocation check failed".to_string(),
             Self::InternalError => "internal error during permission evaluation".to_string(),

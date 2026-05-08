@@ -83,7 +83,7 @@ impl FileDiskManager {
             PageIntegrityMode::None => {
                 let _ = image;
                 Ok(())
-            }
+            },
             PageIntegrityMode::HeaderCrc32 => {
                 let Some(mut layout) = image.layout_contract() else {
                     return Err(DiskManagerError::PageLayoutInvalid {
@@ -108,7 +108,7 @@ impl FileDiskManager {
                     }
                 })?;
                 Ok(())
-            }
+            },
         }
     }
 
@@ -136,7 +136,7 @@ impl FileDiskManager {
                     .into());
                 }
                 Ok(())
-            }
+            },
         }
     }
 }

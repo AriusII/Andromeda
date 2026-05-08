@@ -18,14 +18,14 @@ fn durable_report(
         retention: match family {
             AuditEmissionEventFamily::CatalogDecision => {
                 AuditEmissionRetentionBoundary::CatalogVersion
-            }
+            },
             AuditEmissionEventFamily::BackupDecision
             | AuditEmissionEventFamily::RestoreDecision => {
                 AuditEmissionRetentionBoundary::WalSegment
-            }
+            },
             AuditEmissionEventFamily::ForensicDecision => {
                 AuditEmissionRetentionBoundary::ForensicHold
-            }
+            },
             _ => AuditEmissionRetentionBoundary::SecurityPolicy,
         },
     }

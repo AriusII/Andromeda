@@ -38,18 +38,18 @@ impl std::fmt::Display for BTreeError {
         match self {
             BTreeError::KeyNotFound { key } => {
                 write!(f, "key not found: {:?}", String::from_utf8_lossy(key))
-            }
+            },
             BTreeError::DuplicateKey { key } => {
                 write!(f, "duplicate key: {:?}", String::from_utf8_lossy(key))
-            }
+            },
             BTreeError::NodeNotFound { node_id } => write!(f, "node not found: {:?}", node_id),
             BTreeError::CorruptedNode { node_id, reason } => {
                 write!(f, "corrupted node {:?}: {}", node_id, reason)
-            }
+            },
             BTreeError::TreeTooDeep { height } => write!(f, "tree too deep: height={}", height),
             BTreeError::InvalidNodeFormat { page_id } => {
                 write!(f, "invalid node format: page_id={:?}", page_id)
-            }
+            },
             BTreeError::NodeSerializationLimitExceeded {
                 node_id,
                 field,

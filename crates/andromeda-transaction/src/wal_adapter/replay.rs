@@ -120,7 +120,7 @@ pub fn map_tx_wal_replay_records(
                         terminal: None,
                     },
                 );
-            }
+            },
             TxWalAdapterReplayKind::Commit | TxWalAdapterReplayKind::Rollback => {
                 let tx_id = replay_tx_id(record)?;
                 let state = states
@@ -137,7 +137,7 @@ pub fn map_tx_wal_replay_records(
                     continue;
                 }
                 state.terminal = Some(record);
-            }
+            },
             TxWalAdapterReplayKind::Other => {
                 let Some(tx_id) = record.tx_id else {
                     continue;
@@ -149,7 +149,7 @@ pub fn map_tx_wal_replay_records(
                     return Err(tx_adapter_error(TxWalAdapterError::RecordAfterTerminal));
                 }
                 validate_replay_lsn_order(state, record.lsn)?;
-            }
+            },
         }
     }
 
@@ -165,7 +165,7 @@ pub fn map_tx_wal_replay_records(
                     record.row_count_affected,
                     record.isolation_level,
                 )
-            }
+            },
             Some(record) if record.kind == TxWalAdapterReplayKind::Rollback => {
                 TxWalReplayRecord::rollback_with_durable_lsn(
                     tx_id,
@@ -174,10 +174,10 @@ pub fn map_tx_wal_replay_records(
                     record.timestamp,
                     record.parameter_hash,
                 )
-            }
+            },
             Some(_) => {
                 return Err(tx_adapter_error(TxWalAdapterError::InvariantViolated));
-            }
+            },
             None => TxWalReplayRecord::incomplete(tx_id, state.last_lsn),
         });
     }

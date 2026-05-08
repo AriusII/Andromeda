@@ -41,17 +41,17 @@ impl WalShipmentRejection {
             Self::TargetNotReplica => "wal shipment target is not a replica",
             Self::ReplicaExpectationMismatch => {
                 "wal shipment replica expectation does not match the replica tail"
-            }
+            },
             Self::ReplicaExpectationOverflow => {
                 "wal shipment replica expectation would overflow the LSN space"
-            }
+            },
             Self::EmptyBatch => "wal shipment batch is empty",
             Self::UnexpectedFirstLsn => {
                 "wal shipment first LSN does not match replica expected next LSN"
-            }
+            },
             Self::PreviousLsnMismatch => {
                 "wal shipment first record previous_lsn does not link to replica tail"
-            }
+            },
             Self::NonMonotonicLsn => "wal shipment contains duplicate or reordered LSNs",
             Self::ChainGap => "wal shipment contains a gap in the previous_lsn chain",
             Self::RecordSelfInvalid => "wal shipment contains a structurally invalid record",

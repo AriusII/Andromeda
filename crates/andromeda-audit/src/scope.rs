@@ -19,7 +19,7 @@ impl SurfaceScope {
                     permission,
                     Permission::ExecuteProcedure | Permission::ReadContract
                 )
-            }
+            },
             Self::BackupAgent => matches!(
                 permission.family(),
                 PermissionFamily::Recovery | PermissionFamily::Diagnostics
@@ -79,14 +79,14 @@ impl Permission {
             | Self::ImportDefinitionBatch => PermissionFamily::Definition,
             Self::DebugProcedure | Self::ReadProcedureStore | Self::InspectPlans => {
                 PermissionFamily::Diagnostics
-            }
+            },
             Self::ManageSecurity | Self::RotateCertificate | Self::RevokeCertificateIdentity => {
                 PermissionFamily::Security
-            }
+            },
             Self::Backup | Self::Restore | Self::ForensicStart => PermissionFamily::Recovery,
             Self::ClusterPromote | Self::FenceNode | Self::UpdateClusterManifest => {
                 PermissionFamily::Cluster
-            }
+            },
         }
     }
 

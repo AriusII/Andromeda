@@ -80,7 +80,7 @@ impl BenchmarkHistoryStore {
             HistoryQuery::LastNCommits(n) => {
                 let start = all_records.len().saturating_sub(n);
                 all_records[start..].to_vec()
-            }
+            },
 
             HistoryQuery::TimeRange(range) => all_records
                 .iter()

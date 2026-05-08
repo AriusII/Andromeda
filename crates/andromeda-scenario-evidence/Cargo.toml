@@ -8,6 +8,7 @@ publish = false
 [dependencies]
 andromeda-bench-workload.workspace = true
 andromeda-digest.workspace = true
+andromeda-observe.workspace = true
 andromeda-plan-cache.workspace = true
 andromeda-procedure-contract.workspace = true
 andromeda-time.workspace = true

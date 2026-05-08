@@ -353,7 +353,7 @@ where
         let _io_admission = match io_admission {
             Some(io_admission) => {
                 require_local_procedure_execution_io_admission_for_trace(io_admission, trace_id)?
-            }
+            },
             None => default_local_procedure_execution_io_admission(trace_id)?,
         };
         let runtime_span = RuntimeRecordSpan::started();

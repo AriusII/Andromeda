@@ -8,16 +8,31 @@ QUIC + custom typed RPC + cataloged Procedure + SRPL + typed ResultStream
 
 It is not a generic SQL server. Application execution must go through cataloged Procedures with typed, hashed, versioned contracts and explicit transaction scope.
 
+## Quick Start
+
+**New to Andromeda?** Start here:
+
+- [Architecture overview](docs/architecture/README.md)
+- [ADRs and decisions](docs/adr/README.md)
+- [Specifications](docs/specifications/README.md)
+- [Operations runbooks](docs/runbooks/README.md)
+- [Testing strategy](docs/testing/README.md)
+
 ## Repository Layout
 
 | Path | Purpose |
 |---|---|
-| `crates/` | Rust workspace crates. This task intentionally does not reorganize crate code. |
-| `fuzz/` | Fuzzing targets and seed tooling. This task intentionally does not reorganize fuzz assets. |
-| `documentations/` | Project doctrine, roadmap, governance records, implementation status, runbooks, and references. |
-| `.codex/` | Codex operating pack: agents, hooks, workflows, prompt templates, schemas, adapters, and validation scripts. |
-| `.agents/` | Reusable skills, agent-facing instructions, and governance registries. |
-| `.github/` | GitHub Actions, issue/PR templates, Code Owners, Copilot instructions, and CI scripts. |
+| `crates/` | Rust workspace crates (96 crates total). |
+| `docs/` | Architecture decisions, specifications, runbooks, testing guidance. |
+| `tools/` | Standalone diagnostic and orchestration tools (xtask, wal-dump, page-dump, etc). |
+| `tests/` | Test roadmap index (crate-owned test suites listed by domain). |
+| `benches/` | Benchmark infrastructure and scenarios by subsystem. |
+| `fuzz/` | Fuzzing targets and seed corpus organization. |
+| `supply-chain/` | Dependency governance and security policy. |
+| `documentations/` | Project doctrine, roadmap, governance records, implementation status. |
+| `.codex/` | Codex operating pack: agents, hooks, workflows, prompt templates, validation. |
+| `.agents/` | Reusable skills, agent-facing instructions, governance registries. |
+| `.github/` | GitHub Actions, CI scripts, Code Owners, Copilot instructions. |
 
 Root-level source of truth is intentionally small. Generated outputs, runtime logs, local experiments, and one-off reports should stay outside the repository root.
 

@@ -1,5 +1,6 @@
 use super::*;
-use andromeda_srpl::{execution_adapter::SrplExecutionFailure, procedure_model::SrplPredicateIr};
+use andromeda_srpl_execution_adapter::SrplExecutionFailure;
+use andromeda_srpl_ir::SrplPredicateIr;
 
 pub(super) const DEFAULT_BUFFERED_ROWS: usize = 1_000;
 

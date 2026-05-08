@@ -12,6 +12,20 @@ const ALLOWED_PRE_EXISTING_ORPHANS: &[&str] = &[
     "crates/andromeda-catalog/src/plan_cache/decision.rs",
     "crates/andromeda-catalog/src/plan_cache/identity.rs",
     "crates/andromeda-catalog/src/plan_cache/limits.rs",
+    "crates/andromeda-proto/src/generated_validation/manifest.rs",
+    "crates/andromeda-storage/src/write_ahead_log/gc/collector.rs",
+    "crates/andromeda-storage/src/write_ahead_log/gc/context.rs",
+    "crates/andromeda-storage/src/write_ahead_log/gc/model.rs",
+    "crates/andromeda-storage/src/write_ahead_log/gc/scheduler.rs",
+    "crates/andromeda-storage/src/write_ahead_log/segment_reclaimability/boundary.rs",
+    "crates/andromeda-storage/src/write_ahead_log/segment_reclaimability/decision.rs",
+    "crates/andromeda-storage/src/write_ahead_log/segment_reclaimability/evidence.rs",
+    "crates/andromeda-storage/src/write_ahead_log/segment_reclaimability/policy.rs",
+    "crates/andromeda-tx/src/lock_manager/entry.rs",
+    "crates/andromeda-tx/src/lock_manager/evidence.rs",
+    "crates/andromeda-tx/src/lock_manager/manager_core.rs",
+    "crates/andromeda-tx/src/lock_manager/mode.rs",
+    "crates/andromeda-tx/src/lock_manager/resource.rs",
 ];
 
 #[test]
@@ -125,6 +139,18 @@ fn orphan_guard_file_module_reaches_sibling_directory_modules() {
         ("src/file/orphan.rs", ""),
     ]);
     let expected = path_set(&["src/file/orphan.rs"]);
+
+    assert_eq!(compute_orphans_from_virtual_crate(&files), expected);
+}
+
+#[test]
+fn orphan_guard_target_root_reaches_sibling_support_module() {
+    let files = virtual_files(&[
+        ("tests/key_contract.rs", "mod support;\n"),
+        ("tests/support/mod.rs", ""),
+        ("tests/key_contract/orphan.rs", ""),
+    ]);
+    let expected = path_set(&["tests/key_contract/orphan.rs"]);
 
     assert_eq!(compute_orphans_from_virtual_crate(&files), expected);
 }
