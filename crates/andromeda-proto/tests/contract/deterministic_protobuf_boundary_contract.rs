@@ -1,10 +1,10 @@
 use std::collections::BTreeSet;
 
+use andromeda_core::ContractHash;
 use andromeda_proto::{
     CONTRACT_PACKAGE, DESCRIPTOR_SET_HASH_ALGORITHM, PROTOCOL_PACKAGE, ProtocolLayout,
     descriptor_set_bytes, descriptor_set_hash, frame_envelope_hash, generated, protocol_layout,
 };
-use andromeda_types::ContractHash;
 use prost::Message;
 use prost_types::FileDescriptorSet;
 

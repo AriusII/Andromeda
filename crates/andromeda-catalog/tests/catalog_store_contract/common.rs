@@ -12,13 +12,12 @@ pub(crate) use andromeda_catalog::{
     StructuredObjectDefinition, TableDefinition, TransactionPolicy,
     recover_catalog_snapshot_from_durable_payloads, replay_catalog_mutation_records,
 };
-pub(crate) use andromeda_error::{AndromedaError, AndromedaErrorKind};
+pub(crate) use andromeda_core::{
+    AndromedaError, AndromedaErrorKind, CatalogObjectId, CatalogVersion, ColumnDescriptor,
+    ContractHash, DatabaseId, NamespaceId, ProcedureId, ScalarType, TransactionId, TypeDescriptor,
+};
 pub(crate) use andromeda_storage::{
     Lsn, WalRecord, WalRecordKind, decode_wal_record_frame, encode_wal_record,
-};
-pub(crate) use andromeda_types::{
-    CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, DatabaseId, NamespaceId,
-    ProcedureId, ScalarType, TransactionId, TypeDescriptor,
 };
 
 pub(crate) const DATABASE_ID: DatabaseId = DatabaseId::new(1);

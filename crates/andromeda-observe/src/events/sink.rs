@@ -1,4 +1,4 @@
-use andromeda_error::AndromedaResult;
+use andromeda_core::AndromedaResult;
 
 use super::{EventEnvelope, observe_error};
 

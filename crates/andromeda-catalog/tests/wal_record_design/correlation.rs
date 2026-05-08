@@ -1,5 +1,5 @@
 use andromeda_catalog::CatalogWalRecord;
-use andromeda_types::CatalogVersion;
+use andromeda_core::CatalogVersion;
 
 use super::fixtures::apply_catalog_version_record;
 use andromeda_catalog::DefinitionBatchId;

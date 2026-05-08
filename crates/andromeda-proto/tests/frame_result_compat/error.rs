@@ -1,4 +1,4 @@
-use andromeda_error::AndromedaErrorKind;
+use andromeda_core::AndromedaErrorKind;
 use andromeda_proto::generated::{
     decode_generated_message,
     protocol::v1::{

@@ -1,6 +1,7 @@
-use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_core::{
+    AndromedaError, AndromedaErrorKind, AndromedaResult, InvocationId, ProcedureId,
+};
 use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
-use andromeda_types::{InvocationId, ProcedureId};
 
 use crate::ProcedureContractBinding;
 

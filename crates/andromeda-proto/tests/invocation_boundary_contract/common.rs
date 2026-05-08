@@ -1,3 +1,4 @@
+use andromeda_core::ContractHash;
 use andromeda_proto::generated::{
     contract::v1::{ColumnDescriptor, ResultStreamDescriptor, result_stream_descriptor},
     protocol::v1::{
@@ -6,7 +7,6 @@ use andromeda_proto::generated::{
         result_completion_policy, rpc_completion,
     },
 };
-use andromeda_types::ContractHash;
 
 pub(crate) fn hash(byte: u8) -> Vec<u8> {
     vec![byte; ContractHash::LEN]

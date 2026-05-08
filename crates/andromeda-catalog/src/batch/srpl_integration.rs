@@ -19,7 +19,7 @@
 //! - DEC-022: Alter Procedure Lifecycle Semantics
 //! - DEC-023: Drop Procedure Lifecycle Semantics
 
-use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{DefinitionBatch, QualifiedName};
 
@@ -112,7 +112,7 @@ fn srpl_source_integration_error(operation: &str) -> AndromedaError {
 mod tests {
     use super::*;
     use crate::{DefinitionBatchId, INVENTORY_DATABASE_ID, INVENTORY_NAMESPACE_ID};
-    use andromeda_types::CatalogVersion;
+    use andromeda_core::CatalogVersion;
 
     fn empty_batch() -> DefinitionBatch {
         DefinitionBatch {

@@ -4,7 +4,7 @@ pub(crate) use andromeda_catalog::{
     ProcedureContract, ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef,
     QualifiedName, ResultMetadataPolicy, StatsVersion, TransactionPolicy,
 };
-pub(crate) use andromeda_types::{
+pub(crate) use andromeda_core::{
     CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, DatabaseId, NamespaceId,
     ProcedureId, ScalarType, TypeDescriptor,
 };

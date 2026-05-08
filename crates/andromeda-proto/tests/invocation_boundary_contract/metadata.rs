@@ -1,4 +1,4 @@
-use andromeda_error::AndromedaErrorKind;
+use andromeda_core::AndromedaErrorKind;
 use andromeda_proto::generated;
 
 use super::common::{hash, valid_invocation_request};

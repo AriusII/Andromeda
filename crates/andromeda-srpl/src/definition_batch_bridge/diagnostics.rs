@@ -1,5 +1,5 @@
 use andromeda_catalog::QualifiedName;
-use andromeda_error::{AndromedaError, AndromedaErrorKind};
+use andromeda_core::{AndromedaError, AndromedaErrorKind};
 
 use crate::{DiagnosticPhase, SrplDiagnostic};
 

@@ -1,5 +1,4 @@
-use andromeda_error::AndromedaResult;
-use andromeda_types::{ContractHash, RequestId, SessionId, TransactionId};
+use andromeda_core::{AndromedaResult, ContractHash, RequestId, SessionId, TransactionId};
 
 use super::*;
 use crate::{
@@ -229,7 +228,7 @@ fn emitter_routes_transition_traces_into_sink_with_query_helpers() {
         ExecutionTransitionTrace, TransactionPhaseCode, TransactionTransitionTrace,
         TransitionReasonCode,
     };
-    use andromeda_types::InvocationId;
+    use andromeda_core::InvocationId;
 
     let mut emitter = EventEmitter::new(InMemoryEventSink::new());
 

@@ -1,4 +1,4 @@
-use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_proto::generated::contract::v1::catalog_procedure_manifest_resolution_response::Status as ProtoCatalogManifestResolutionStatus;
 
 /// Catalog-owned manifest resolution status.

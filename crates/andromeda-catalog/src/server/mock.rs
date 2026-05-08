@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
-use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use andromeda_types::{CatalogVersion, ProcedureId};
+use andromeda_core::{
+    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, ProcedureId,
+};
 
 use super::{
     CatalogChangeNotification, CatalogChangeSubscription, CatalogRuntimeEvidence,

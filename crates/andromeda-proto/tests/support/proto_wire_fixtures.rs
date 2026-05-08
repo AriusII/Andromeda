@@ -3,11 +3,11 @@
 // Each integration test crate includes this fixture file independently and uses
 // only the helpers relevant to that contract surface.
 
+use andromeda_core::{CatalogVersion, ContractHash, RequestId, SessionId, TransactionId};
 use andromeda_proto::generated::{
     contract::v1 as contract_v1, decode_generated_message, encode_generated_message,
     protocol::v1 as protocol_v1,
 };
-use andromeda_types::{CatalogVersion, ContractHash, RequestId, SessionId, TransactionId};
 use prost::Message;
 
 pub(crate) const HASH_LEN: usize = ContractHash::LEN;

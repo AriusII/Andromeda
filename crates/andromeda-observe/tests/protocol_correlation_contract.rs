@@ -1,10 +1,10 @@
+use andromeda_core::{RequestId, SessionId};
 use andromeda_observe::{
     AuthorizationDeniedTrace, BackpressureTrace, CompletionEmittedTrace, ContractRejectedTrace,
     EventCorrelation, EventEnvelope, EventId, EventSink, FrameRejectionTrace, InMemoryEventSink,
     ProtocolCorrelation, ProtocolEventScope, SchemaLayoutDecisionTrace, StreamRoleRejectionTrace,
     TraceEvent, TraceId, UnsupportedVersionTrace,
 };
-use andromeda_types::{RequestId, SessionId};
 
 fn request_correlation() -> EventCorrelation {
     EventCorrelation {
@@ -47,7 +47,7 @@ fn denied_security_paths_are_auditable_without_transaction_evidence_or_secrets()
     assert!(denial.correlation.has_no_transaction_evidence());
 
     let mut leaked = request_correlation();
-    leaked.transaction_id = Some(andromeda_types::TransactionId::new(88));
+    leaked.transaction_id = Some(andromeda_core::TransactionId::new(88));
     let tx_implied = EventEnvelope::new(
         EventId::new(21),
         leaked,

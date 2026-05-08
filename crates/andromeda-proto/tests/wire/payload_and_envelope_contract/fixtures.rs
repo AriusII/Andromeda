@@ -1,5 +1,5 @@
+use andromeda_core::{CatalogVersion, ContractHash, RequestId, SessionId, TransactionId};
 use andromeda_proto::{FrameEnvelope, PayloadKind, ProtocolVersion};
-use andromeda_types::{CatalogVersion, ContractHash, RequestId, SessionId, TransactionId};
 
 pub(crate) fn hash(byte: u8) -> ContractHash {
     ContractHash::test_vector(byte)

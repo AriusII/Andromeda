@@ -7,7 +7,7 @@
 
 use std::collections::BTreeSet;
 
-use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{
     CatalogMutationCommitEvidence, CatalogMutationOperation, CatalogMutationPlan,

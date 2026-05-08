@@ -1,5 +1,5 @@
 use crate::events::{EventEnvelope, observe_error};
-use andromeda_error::AndromedaResult;
+use andromeda_core::AndromedaResult;
 
 use super::{
     DurableAuditPrincipalBinding, DurableAuditRecordIdentity, DurableAuditReplayBehavior,

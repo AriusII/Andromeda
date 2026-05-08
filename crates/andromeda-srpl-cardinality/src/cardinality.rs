@@ -77,7 +77,7 @@ impl Cardinality {
     }
 }
 
-impl From<Cardinality> for andromeda_contract::ResultStreamCardinality {
+impl From<Cardinality> for andromeda_catalog::ResultStreamCardinality {
     fn from(value: Cardinality) -> Self {
         match value {
             Cardinality::One => Self::One,
@@ -88,13 +88,13 @@ impl From<Cardinality> for andromeda_contract::ResultStreamCardinality {
     }
 }
 
-impl From<andromeda_contract::ResultStreamCardinality> for Cardinality {
-    fn from(value: andromeda_contract::ResultStreamCardinality) -> Self {
+impl From<andromeda_catalog::ResultStreamCardinality> for Cardinality {
+    fn from(value: andromeda_catalog::ResultStreamCardinality) -> Self {
         match value {
-            andromeda_contract::ResultStreamCardinality::One => Self::One,
-            andromeda_contract::ResultStreamCardinality::OptionalOne => Self::OptionalOne,
-            andromeda_contract::ResultStreamCardinality::Many => Self::Many,
-            andromeda_contract::ResultStreamCardinality::NonEmptyMany => Self::NonEmptyMany,
+            andromeda_catalog::ResultStreamCardinality::One => Self::One,
+            andromeda_catalog::ResultStreamCardinality::OptionalOne => Self::OptionalOne,
+            andromeda_catalog::ResultStreamCardinality::Many => Self::Many,
+            andromeda_catalog::ResultStreamCardinality::NonEmptyMany => Self::NonEmptyMany,
         }
     }
 }

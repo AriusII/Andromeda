@@ -1,9 +1,8 @@
-use andromeda_error::AndromedaErrorKind;
+use andromeda_core::{AndromedaErrorKind, RequestId, SessionId, TransactionId};
 use andromeda_proto::{
     BackpressureMetadata, ErrorEnvelope, ErrorFamily, ResultRowCountSummary, RetryDisposition,
     RpcCompletion, RpcCompletionStatus, TransactionEffect, TransactionOutcome,
 };
-use andromeda_types::{RequestId, SessionId, TransactionId};
 
 use super::proto_wire_fixtures::{RESERVATION_RESULT, RESERVATION_STREAM};
 

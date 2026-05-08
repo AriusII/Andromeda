@@ -1,8 +1,7 @@
 //! Core feedback record types: completion status, evidence, feedback identity,
 //! the [`ProcedureFeedback`] record, and its error taxonomy.
 
-use andromeda_time::EngineTimestamp;
-use andromeda_types::ProcedureId;
+use andromeda_core::{EngineTimestamp, ProcedureId};
 
 use crate::contracts::StatsVersion;
 use crate::digest::Sha256;

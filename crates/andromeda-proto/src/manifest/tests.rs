@@ -1,7 +1,7 @@
 use super::*;
-use andromeda_error::AndromedaErrorKind;
-use andromeda_types::{
-    CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId, ScalarType, TypeDescriptor,
+use andromeda_core::{
+    AndromedaErrorKind, CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId, ScalarType,
+    TypeDescriptor,
 };
 
 #[test]

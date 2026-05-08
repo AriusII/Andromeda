@@ -1,6 +1,6 @@
 use andromeda_catalog::{CatalogDefinition, ResultStreamCardinality};
+use andromeda_core::{CatalogObjectId, CatalogVersion, ProcedureId};
 use andromeda_srpl::definition_batch_bridge::SrplProcedureDefinition;
-use andromeda_types::{CatalogObjectId, CatalogVersion, ProcedureId};
 
 use crate::support::{bound_definition, signature_only_source, test_metadata};
 

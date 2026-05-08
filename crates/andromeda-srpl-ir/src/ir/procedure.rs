@@ -1,4 +1,4 @@
-use andromeda_contract::{
+use andromeda_catalog::{
     CompatibilityPolicy, MultiResultPolicy, ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName,
     ResultMetadataPolicy, StatsVersion, TransactionPolicy,
 };

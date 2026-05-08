@@ -1,9 +1,8 @@
-use andromeda_error::AndromedaErrorKind;
+use andromeda_core::{AndromedaErrorKind, RequestId, SessionId};
 use andromeda_proto::{
     BackpressureMetadata, ErrorEnvelope, ErrorFamily, RetryDisposition, TransactionEffect,
     generated, validate_generated_error_envelope,
 };
-use andromeda_types::{RequestId, SessionId};
 use generated::protocol::v1::{ErrorEnvelope as ProtoErrorEnvelope, error_envelope};
 
 use super::support::{PROTOCOL_SCHEMAS, declared_message_names, schema_contains};
