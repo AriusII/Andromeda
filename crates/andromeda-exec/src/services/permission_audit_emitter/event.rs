@@ -102,13 +102,29 @@ impl PermissionAuditEvent {
     }
 
     fn to_audit(&self) -> andromeda_audit::PermissionAuditEvent {
-        andromeda_audit::PermissionAuditEvent {
-            trace_id: self.trace_id,
-            principal_id: self.principal_id,
-            required_permission: self.required_permission,
-            decision: self.decision.clone(),
-            timestamp: self.timestamp,
-        }
+        let mut event = match &self.decision {
+            PermissionDecisionAudit::Allowed => andromeda_audit::PermissionAuditEvent::allowed(
+                self.trace_id,
+                self.principal_id,
+                self.required_permission.clone(),
+            ),
+            PermissionDecisionAudit::Denied(reason) => {
+                andromeda_audit::PermissionAuditEvent::denied(
+                    self.trace_id,
+                    self.principal_id,
+                    self.required_permission.clone(),
+                    reason.clone(),
+                )
+            }
+            PermissionDecisionAudit::DeniedUnknownPrincipal => {
+                andromeda_audit::PermissionAuditEvent::denied_unknown_principal(
+                    self.trace_id,
+                    self.required_permission.clone(),
+                )
+            }
+        };
+        event.timestamp = self.timestamp;
+        event
     }
 }
 

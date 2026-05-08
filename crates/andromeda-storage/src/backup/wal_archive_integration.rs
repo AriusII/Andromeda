@@ -11,9 +11,10 @@
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
-use super::physical_plan::BackupPhysicalPlan;
-use super::plan::BackupManifest;
 use super::types::{BackupId, WalArchiveRange};
+use super::{
+    helpers::map_backup_validation, physical_plan::BackupPhysicalPlan, plan::BackupManifest,
+};
 use crate::Lsn;
 
 /// Typed rejection reason for WAL archive and PITR window validation.
@@ -244,10 +245,10 @@ impl WalArchiveIntegration {
         wal_segment_count: u64,
     ) -> AndromedaResult<(BackupManifest, BackupManifestFinalizedEvent)> {
         // Validate physical plan
-        plan.validate()?;
+        map_backup_validation(plan.validate())?;
 
         // Validate manifest template
-        manifest_template.validate()?;
+        map_backup_validation(manifest_template.validate())?;
 
         // Validate WAL archive covers the snapshot
         let validation = Self::validate_wal_archive(
@@ -269,7 +270,7 @@ impl WalArchiveIntegration {
             manifest_crc: manifest_template.manifest_crc,
         };
 
-        finalized_manifest.validate()?;
+        map_backup_validation(finalized_manifest.validate())?;
 
         // Create audit event
         let finalized_epoch = plan
@@ -292,7 +293,7 @@ impl WalArchiveIntegration {
     ///
     /// Returns [earliest_restorable_lsn, latest_restorable_lsn].
     pub fn compute_pitr_window(manifest: &BackupManifest) -> AndromedaResult<(Lsn, Lsn)> {
-        manifest.validate()?;
+        map_backup_validation(manifest.validate())?;
 
         let earliest = manifest.earliest_pitr_target();
         let latest = manifest.latest_pitr_target();
@@ -310,7 +311,7 @@ impl WalArchiveIntegration {
 
     /// Validate that a target LSN falls within PITR window.
     pub fn validate_pitr_target(manifest: &BackupManifest, target_lsn: Lsn) -> AndromedaResult<()> {
-        manifest.validate()?;
+        map_backup_validation(manifest.validate())?;
 
         if target_lsn.is_zero() {
             return Err(WalArchiveRejection::PitrTargetLsnZero.into_error());

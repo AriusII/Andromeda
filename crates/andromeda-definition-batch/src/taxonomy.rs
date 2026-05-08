@@ -39,77 +39,70 @@ pub struct TaxonomyEntry {
     pub status: TaxonomyStatus,
 }
 
+const fn taxonomy_entry(id: &'static str, label: &'static str) -> TaxonomyEntry {
+    TaxonomyEntry {
+        id,
+        label,
+        status: TaxonomyStatus::Reserved,
+    }
+}
+
 pub type DefinitionBatchOperationKind = TaxonomyEntry;
 pub type DefinitionBatchPhase = TaxonomyEntry;
 pub type DefinitionBatchApplyBarrier = TaxonomyEntry;
 
 pub const ALL_DEFINITION_BATCH_OPERATION_KINDS: &[DefinitionBatchOperationKind] = &[
-    DefinitionBatchOperationKind {
-        id: DEFINITION_BATCH_OPERATION_CREATE_OBJECT,
-        label: "Create catalog object definition",
-        status: TaxonomyStatus::Reserved,
-    },
-    DefinitionBatchOperationKind {
-        id: DEFINITION_BATCH_OPERATION_REPLACE_OBJECT,
-        label: "Replace catalog object definition",
-        status: TaxonomyStatus::Reserved,
-    },
-    DefinitionBatchOperationKind {
-        id: DEFINITION_BATCH_OPERATION_RETIRE_OBJECT,
-        label: "Retire catalog object definition",
-        status: TaxonomyStatus::Reserved,
-    },
+    taxonomy_entry(
+        DEFINITION_BATCH_OPERATION_CREATE_OBJECT,
+        "Create catalog object definition",
+    ),
+    taxonomy_entry(
+        DEFINITION_BATCH_OPERATION_REPLACE_OBJECT,
+        "Replace catalog object definition",
+    ),
+    taxonomy_entry(
+        DEFINITION_BATCH_OPERATION_RETIRE_OBJECT,
+        "Retire catalog object definition",
+    ),
 ];
 
 pub const ALL_DEFINITION_BATCH_PHASES: &[DefinitionBatchPhase] = &[
-    DefinitionBatchPhase {
-        id: DEFINITION_BATCH_PHASE_PARSE,
-        label: "Parse submitted definition batch",
-        status: TaxonomyStatus::Reserved,
-    },
-    DefinitionBatchPhase {
-        id: DEFINITION_BATCH_PHASE_BIND,
-        label: "Bind catalog names and contract references",
-        status: TaxonomyStatus::Reserved,
-    },
-    DefinitionBatchPhase {
-        id: DEFINITION_BATCH_PHASE_DEPENDENCY_ORDER,
-        label: "Build deterministic dependency order",
-        status: TaxonomyStatus::Reserved,
-    },
-    DefinitionBatchPhase {
-        id: DEFINITION_BATCH_PHASE_CONFLICT_CHECK,
-        label: "Detect definition conflicts",
-        status: TaxonomyStatus::Reserved,
-    },
-    DefinitionBatchPhase {
-        id: DEFINITION_BATCH_PHASE_DRY_RUN,
-        label: "Produce dry-run report",
-        status: TaxonomyStatus::Reserved,
-    },
-    DefinitionBatchPhase {
-        id: DEFINITION_BATCH_PHASE_WAL_PRECONDITION,
-        label: "Check durable WAL precondition",
-        status: TaxonomyStatus::Reserved,
-    },
+    taxonomy_entry(
+        DEFINITION_BATCH_PHASE_PARSE,
+        "Parse submitted definition batch",
+    ),
+    taxonomy_entry(
+        DEFINITION_BATCH_PHASE_BIND,
+        "Bind catalog names and contract references",
+    ),
+    taxonomy_entry(
+        DEFINITION_BATCH_PHASE_DEPENDENCY_ORDER,
+        "Build deterministic dependency order",
+    ),
+    taxonomy_entry(
+        DEFINITION_BATCH_PHASE_CONFLICT_CHECK,
+        "Detect definition conflicts",
+    ),
+    taxonomy_entry(DEFINITION_BATCH_PHASE_DRY_RUN, "Produce dry-run report"),
+    taxonomy_entry(
+        DEFINITION_BATCH_PHASE_WAL_PRECONDITION,
+        "Check durable WAL precondition",
+    ),
 ];
 
 pub const ALL_DEFINITION_BATCH_APPLY_BARRIERS: &[DefinitionBatchApplyBarrier] = &[
-    DefinitionBatchApplyBarrier {
-        id: DEFINITION_BATCH_BARRIER_DURABLE_WAL_REQUIRED,
-        label: "Durable WAL required before visible publication",
-        status: TaxonomyStatus::Reserved,
-    },
-    DefinitionBatchApplyBarrier {
-        id: DEFINITION_BATCH_BARRIER_AUDIT_EVIDENCE_REQUIRED,
-        label: "Audit evidence required before apply",
-        status: TaxonomyStatus::Reserved,
-    },
-    DefinitionBatchApplyBarrier {
-        id: DEFINITION_BATCH_BARRIER_EXPLICIT_OPERATOR_AUTHORIZATION,
-        label: "Explicit operator authorization required",
-        status: TaxonomyStatus::Reserved,
-    },
+    taxonomy_entry(
+        DEFINITION_BATCH_BARRIER_DURABLE_WAL_REQUIRED,
+        "Durable WAL required before visible publication",
+    ),
+    taxonomy_entry(
+        DEFINITION_BATCH_BARRIER_AUDIT_EVIDENCE_REQUIRED,
+        "Audit evidence required before apply",
+    ),
+    taxonomy_entry(
+        DEFINITION_BATCH_BARRIER_EXPLICIT_OPERATOR_AUTHORIZATION,
+        "Explicit operator authorization required",
+    ),
 ];
 
 #[cfg(test)]

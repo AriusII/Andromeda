@@ -177,7 +177,7 @@ pub(crate) fn cardinality_probe_snapshot(
                     stream: result_name.to_string(),
                     values: vec![SrplEmitValueIr {
                         column: "Present".to_string(),
-                        value: SrplValueIr::Bool(true),
+                        value: SrplValueIr::bool(true),
                     }],
                 },
             })

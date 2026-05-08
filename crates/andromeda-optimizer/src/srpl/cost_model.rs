@@ -331,7 +331,7 @@ mod tests {
                             predicates: vec![],
                             assignments: vec![SrplAssignmentIr {
                                 field: "qty".into(),
-                                value: SrplValueIr::Bool(false),
+                                value: SrplValueIr::bool(false),
                             }],
                             affected_rows_exact: Some(1),
                         },

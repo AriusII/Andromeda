@@ -116,7 +116,7 @@ fn add_value_use(set: &mut BTreeSet<ColRef>, value: &SrplValueIr) {
             add_value_use(set, left);
             add_value_use(set, right);
         }
-        SrplValueIr::Input(_) | SrplValueIr::Bool(_) | SrplValueIr::Constant(_) => {}
+        SrplValueIr::Input(_) | SrplValueIr::Constant(_) => {}
     }
 }
 

@@ -111,7 +111,7 @@ fn emit_op(ordinal: u32) -> SrplBusinessOperationIr {
             stream: "Reservation".to_string(),
             values: vec![SrplEmitValueIr {
                 column: "Reserved".to_string(),
-                value: SrplValueIr::Bool(true),
+                value: SrplValueIr::bool(true),
             }],
         },
     }
@@ -184,7 +184,7 @@ fn safe_optimizer_preserves_mutation_and_emit_order_without_sorting_assignments(
         update_op(
             3,
             "Inventory.ReservationAudit",
-            vec![assignment("AuditFlag", SrplValueIr::Bool(true))],
+            vec![assignment("AuditFlag", SrplValueIr::bool(true))],
         ),
     ]);
 

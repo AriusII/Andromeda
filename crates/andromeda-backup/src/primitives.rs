@@ -1,6 +1,9 @@
 use std::fmt::Debug;
 
 use super::error::{BackupResult, backup_error};
+use andromeda_core::CatalogVersion as CoreCatalogVersion;
+use andromeda_observe::TraceId as ObserveTraceId;
+use andromeda_wal::Lsn as WalLsn;
 
 pub const WAL_FORMAT_VERSION: u16 = 1;
 
@@ -51,6 +54,16 @@ impl BackupLsn for Lsn {
     }
 }
 
+impl BackupLsn for WalLsn {
+    fn new(value: u64) -> Self {
+        Self::new(value)
+    }
+
+    fn get(self) -> u64 {
+        self.get()
+    }
+}
+
 pub trait BackupCatalogVersion: Copy + Eq + Debug {
     fn get(self) -> u64;
 }
@@ -69,6 +82,12 @@ impl CatalogVersion {
 }
 
 impl BackupCatalogVersion for CatalogVersion {
+    fn get(self) -> u64 {
+        self.get()
+    }
+}
+
+impl BackupCatalogVersion for CoreCatalogVersion {
     fn get(self) -> u64 {
         self.get()
     }
@@ -96,6 +115,12 @@ impl TraceId {
 }
 
 impl BackupTraceId for TraceId {
+    fn is_zero(self) -> bool {
+        self.is_zero()
+    }
+}
+
+impl BackupTraceId for ObserveTraceId {
     fn is_zero(self) -> bool {
         self.is_zero()
     }

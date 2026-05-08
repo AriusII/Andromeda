@@ -209,7 +209,7 @@ mod tests {
     fn emit_values() -> Vec<SrplEmitValueIr> {
         vec![SrplEmitValueIr {
             column: "value".to_string(),
-            value: SrplValueIr::Bool(true),
+            value: SrplValueIr::bool(true),
         }]
     }
 }

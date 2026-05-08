@@ -123,7 +123,7 @@ fn ct_013_skip_assert_operations() {
         stream: "result".to_string(),
         values: vec![SrplEmitValueIr {
             column: "col_0".to_string(),
-            value: SrplValueIr::Bool(true),
+            value: SrplValueIr::bool(true),
         }],
     });
 

@@ -12,7 +12,6 @@ mod registry;
 
 pub use crate::events::SecurityAuditDenialReason as AuthorizationDenialReason;
 pub use authorizer::SurfaceAuthorizer;
-pub use bridge::{core_principal_to_observe_user_principal, observe_user_principal_to_core};
 pub use model::{AuthorizationOutcome, PrincipalBinding, SurfaceAction};
 pub use registry::PrincipalRegistry;
 

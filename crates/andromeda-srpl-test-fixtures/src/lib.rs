@@ -146,14 +146,14 @@ pub fn srpl_predicate() -> SrplPredicateIr {
 pub fn srpl_assignment() -> SrplAssignmentIr {
     SrplAssignmentIr {
         field: "AvailableQuantity".to_string(),
-        value: SrplValueIr::Bool(true),
+        value: SrplValueIr::bool(true),
     }
 }
 
 pub fn srpl_emit_value() -> SrplEmitValueIr {
     SrplEmitValueIr {
         column: "Reserved".to_string(),
-        value: SrplValueIr::Bool(true),
+        value: SrplValueIr::bool(true),
     }
 }
 

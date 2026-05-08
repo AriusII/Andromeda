@@ -179,18 +179,21 @@ mod generated_validation;
 mod manifest;
 mod structured;
 
-pub use andromeda_proto_wire::{
+pub use andromeda_rpc_protocol::{
     AUTH_WIRE_CODE, CONTRACT_REQUEST_WIRE_CODE, CONTRACT_RESPONSE_WIRE_CODE, ERROR_WIRE_CODE,
     FrameEnvelope, HELLO_WIRE_CODE, PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP, PayloadFrameFamily,
     PayloadFrameMapping, PayloadKind, ProtocolVersion, RPC_BATCH_WIRE_CODE,
     RPC_COMPLETION_WIRE_CODE, RPC_EXECUTE_REQUEST_WIRE_CODE, RPC_METADATA_WIRE_CODE,
     RpcResultStreamMetadataPolicy,
 };
+pub use andromeda_proto_wire::{
+    CONTRACT_PACKAGE, DESCRIPTOR_SET_HASH_ALGORITHM, PROTOCOL_FRAME_ENVELOPE_TYPE,
+    PROTOCOL_PACKAGE,
+};
 pub use completion::*;
 pub use errors::*;
 pub use generated::{
-    CONTRACT_PACKAGE, DESCRIPTOR_SET_HASH_ALGORITHM, PROTOCOL_FRAME_ENVELOPE_TYPE,
-    PROTOCOL_PACKAGE, decode_generated_message, descriptor_set_bytes, descriptor_set_hash,
+    decode_generated_message, descriptor_set_bytes, descriptor_set_hash,
     encode_generated_message, frame_envelope_hash, project_generated_frame_envelope,
     project_generated_structured_object_header, protocol_layout,
     validate_catalog_procedure_manifest_resolution_request,

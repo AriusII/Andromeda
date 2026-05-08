@@ -64,7 +64,7 @@ pub(crate) fn make_assert_request(ordinal: u32) -> SrplAssertRequest {
 pub(crate) fn emit_values() -> Vec<SrplEmitValueIr> {
     vec![SrplEmitValueIr {
         column: "ok".to_string(),
-        value: SrplValueIr::Bool(true),
+        value: SrplValueIr::bool(true),
     }]
 }
 
@@ -76,7 +76,7 @@ pub(crate) fn make_update_request(ordinal: u32) -> SrplUpdateRequest {
         vec![],
         vec![SrplAssignmentIr {
             field: "status".to_string(),
-            value: SrplValueIr::Bool(true),
+            value: SrplValueIr::bool(true),
         }],
     )
     .unwrap()

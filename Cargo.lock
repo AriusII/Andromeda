@@ -45,6 +45,11 @@ dependencies = [
 [[package]]
 name = "andromeda-backup"
 version = "0.1.0"
+dependencies = [
+ "andromeda-core",
+ "andromeda-observe",
+ "andromeda-wal",
+]
 
 [[package]]
 name = "andromeda-bench"
@@ -504,6 +509,9 @@ dependencies = [
 [[package]]
 name = "andromeda-restore"
 version = "0.1.0"
+dependencies = [
+ "andromeda-wal",
+]
 
 [[package]]
 name = "andromeda-result-stream"
@@ -754,6 +762,7 @@ dependencies = [
 name = "andromeda-storage"
 version = "0.1.0"
 dependencies = [
+ "andromeda-backup",
  "andromeda-buffer-pool",
  "andromeda-core",
  "andromeda-disk-page-store",
@@ -761,6 +770,7 @@ dependencies = [
  "andromeda-manifest",
  "andromeda-observe",
  "andromeda-recovery",
+ "andromeda-restore",
  "andromeda-segment",
  "andromeda-storage-heap",
  "andromeda-storage-index",

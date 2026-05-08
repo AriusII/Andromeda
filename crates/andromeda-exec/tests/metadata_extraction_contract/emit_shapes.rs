@@ -8,7 +8,7 @@ fn ct_001_extract_from_single_value_emit() {
         stream: "result".to_string(),
         values: vec![SrplEmitValueIr {
             column: "col_0".to_string(),
-            value: SrplValueIr::Bool(true),
+            value: SrplValueIr::bool(true),
         }],
     });
 
@@ -35,7 +35,7 @@ fn ct_002_extract_from_multi_column_emit_is_one_result_row() {
     let emit_values = (0..3)
         .map(|i| SrplEmitValueIr {
             column: format!("col_{}", i),
-            value: SrplValueIr::Bool(i % 2 == 0),
+            value: SrplValueIr::bool(i % 2 == 0),
         })
         .collect();
 
@@ -64,7 +64,7 @@ fn ct_002_extract_from_multi_column_emit_is_one_result_row() {
 #[test]
 fn ct_018_emit_value_types_dont_affect_cardinality() {
     let value_types = vec![
-        SrplValueIr::Bool(true),
+        SrplValueIr::bool(true),
         SrplValueIr::Input("x".to_string()),
         SrplValueIr::Field {
             binding: "t".to_string(),
@@ -118,7 +118,7 @@ fn ct_020_emit_then_read_uses_first_operation() {
         stream: "result".to_string(),
         values: vec![SrplEmitValueIr {
             column: "col_0".to_string(),
-            value: SrplValueIr::Bool(true),
+            value: SrplValueIr::bool(true),
         }],
     });
 
@@ -164,7 +164,7 @@ fn ct_021_read_then_emit_uses_named_emit_result_shape() {
         stream: "result".to_string(),
         values: vec![SrplEmitValueIr {
             column: "col_0".to_string(),
-            value: SrplValueIr::Bool(true),
+            value: SrplValueIr::bool(true),
         }],
     });
 
@@ -201,7 +201,7 @@ fn ct_022_update_then_emit_does_not_use_affected_rows_as_result_rows() {
         stream: "result".to_string(),
         values: vec![SrplEmitValueIr {
             column: "col_0".to_string(),
-            value: SrplValueIr::Bool(true),
+            value: SrplValueIr::bool(true),
         }],
     });
 
@@ -229,7 +229,7 @@ fn ct_023_metadata_includes_all_required_fields() {
         stream: "result".to_string(),
         values: vec![SrplEmitValueIr {
             column: "col_0".to_string(),
-            value: SrplValueIr::Bool(true),
+            value: SrplValueIr::bool(true),
         }],
     });
 

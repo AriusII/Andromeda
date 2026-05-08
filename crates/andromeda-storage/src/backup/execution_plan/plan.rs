@@ -1,3 +1,4 @@
+use crate::backup::helpers::map_backup_validation;
 use andromeda_core::AndromedaResult;
 use std::collections::BTreeSet;
 
@@ -68,7 +69,7 @@ impl BackupExecutionPlan {
     /// 3. WAL segment copy plan forms a contiguous chain
     /// 4. Resource limits are satisfied
     pub fn validate(&self) -> AndromedaResult<()> {
-        self.manifest.validate()?;
+        map_backup_validation(self.manifest.validate())?;
         self.resource_limits.validate()?;
 
         let computed_extent_bytes = self.validate_extent_copy_plan()?;

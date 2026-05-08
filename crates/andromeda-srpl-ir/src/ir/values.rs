@@ -183,10 +183,6 @@ pub enum SrplValueIr {
     /// Reference to a field of a bound row-set.
     Field { binding: String, field: String },
 
-    /// **Deprecated** - use `Constant(ConstantLiteral::Bool(_))` instead.
-    /// Kept for lowering pipeline backward compatibility.
-    Bool(bool),
-
     /// `binding.field - :input` convenience shorthand (inventory pattern).
     SubtractInput {
         binding: String,
@@ -208,6 +204,10 @@ pub enum SrplValueIr {
 }
 
 impl SrplValueIr {
+    pub const fn bool(value: bool) -> Self {
+        Self::Constant(ConstantLiteral::Bool(value))
+    }
+
     /// Compute the nesting depth of an expression tree.
     /// Used to enforce `MAX_EXPR_DEPTH` at lowering time.
     pub fn depth(&self) -> usize {
@@ -220,7 +220,7 @@ impl SrplValueIr {
     /// True when this value is a compile-time constant (no runtime lookup).
     pub fn is_constant(&self) -> bool {
         match self {
-            Self::Constant(_) | Self::Bool(_) => true,
+            Self::Constant(_) => true,
             Self::BinaryArith { left, right, .. } => left.is_constant() && right.is_constant(),
             _ => false,
         }
@@ -239,7 +239,6 @@ impl SrplValueIr {
                 validate_symbol(binding, "SRPL value binding")?;
                 validate_symbol(field, "SRPL value field")?;
             }
-            Self::Bool(_) => {}
             Self::SubtractInput {
                 binding,
                 field,

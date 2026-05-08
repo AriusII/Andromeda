@@ -5,8 +5,10 @@
 
 use andromeda_core::AndromedaResult;
 
-use super::helpers::backup_error;
-use super::physical_plan::{BackupPhysicalPlan, SegmentPlan};
+use super::{
+    helpers::{backup_error, map_backup_validation},
+    physical_plan::{BackupPhysicalPlan, SegmentPlan},
+};
 
 /// Single I/O task with scheduling metadata.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -141,7 +143,7 @@ impl BackupIOScheduler {
         &self,
         plan: &BackupPhysicalPlan,
     ) -> AndromedaResult<BackupIOSchedule> {
-        plan.validate()?;
+        map_backup_validation(plan.validate())?;
 
         let mut tasks = Vec::new();
         let mut task_id = 1u64;

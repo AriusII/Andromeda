@@ -3,7 +3,7 @@
 use andromeda_error::AndromedaResult;
 use andromeda_srpl_ast::{BusinessOperationKindAst, ProcedureBodyAst};
 use andromeda_srpl_ir::{
-    Cardinality, ProcedureSignature, SrplAssignmentIr, SrplBusinessOperationIr,
+    Cardinality, ConstantLiteral, ProcedureSignature, SrplAssignmentIr, SrplBusinessOperationIr,
     SrplBusinessOperationKindIr, SrplEmitValueIr, SrplPredicateIr, SrplProcedureBodyIr,
     SrplProcedureIr, SrplResultStreamIr, SrplValueIr,
 };
@@ -89,13 +89,13 @@ pub fn lower_body_ast(body: ProcedureBodyAst) -> AndromedaResult<SrplProcedureBo
             BusinessOperationKindAst::Emit { stream, values } => {
                 operations.push(SrplBusinessOperationIr {
                     ordinal: operations.len() as u32,
-                    kind: SrplBusinessOperationKindIr::Emit {
+                            kind: SrplBusinessOperationKindIr::Emit {
                         stream: stream.value,
                         values: values
                             .into_iter()
                             .map(|value| SrplEmitValueIr {
                                 column: value.value,
-                                value: SrplValueIr::Bool(true),
+                                value: SrplValueIr::Constant(ConstantLiteral::Bool(true)),
                             })
                             .collect(),
                     },
@@ -172,13 +172,13 @@ pub fn lower_body_ast(body: ProcedureBodyAst) -> AndromedaResult<SrplProcedureBo
             BusinessOperationKindAst::Return { stream, values } => {
                 operations.push(SrplBusinessOperationIr {
                     ordinal: operations.len() as u32,
-                    kind: SrplBusinessOperationKindIr::Emit {
+                            kind: SrplBusinessOperationKindIr::Emit {
                         stream: stream.value,
                         values: values
                             .into_iter()
                             .map(|value| SrplEmitValueIr {
                                 column: value.value,
-                                value: SrplValueIr::Bool(true),
+                                value: SrplValueIr::Constant(ConstantLiteral::Bool(true)),
                             })
                             .collect(),
                     },

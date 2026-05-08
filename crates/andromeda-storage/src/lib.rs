@@ -76,7 +76,22 @@ pub use operational_profile::*;
 pub use page::*;
 pub use page_codec_v1::*;
 pub use placement::*;
-pub use recovery::*;
+pub use recovery::{
+    CatalogReplayFromLsnReport, CatalogSnapshot, ConceptualRedoPlan, FastStartAcceptance,
+    FastStartRejection, ForensicAnomaly, ForensicAnomalyKind, ForensicAnomalyReport,
+    ForensicStartAcceptance, HeapRedoPageState, HeapRedoSlotState, IndexRebuildRequiredEvidence,
+    LsnBoundCatalogRecord, ObservedBoundary, PreRedoStorageFormatDecision,
+    PreRedoStorageFormatGate, PreRedoStorageFormatRejection, RECOVERY_REQUIRED_STORAGE_FORMATS,
+    RecoveryPlan, RecoveryTrace, RedoRecordDecision, RedoRecordPlan, ReplayContext, ReplayOutcome,
+    ReplayResult, SafeStartAcceptance, SafeStartInvariantReport, SafeStartTailDiscard,
+    StartupAcceptance, StartupAuditProjection, StartupDecision, StartupEvidence, StartupMode,
+    StartupOutcome, StartupRejectionReason, StorageFormatFingerprint, UndoChain, UndoChainsBuilder,
+    UndoOperation, UndoRecord, WalCoverageEvidence, WalReplayReport, decide_startup,
+    execute_redo_plan, execute_redo_plan_into_context, fast_start_from_manifest_and_scan,
+    forensic_start_from_manifest_and_scan, replay_catalog_from_lsn, replay_catalog_wal_records,
+    replay_wal_from_lsn, replay_wal_from_lsn_into_context, replay_wal_record,
+    safe_start_from_manifest_and_scan, verify_safe_start_invariants,
+};
 pub use restore_orchestration::*;
 pub use segment::*;
 pub use segment_index::*;

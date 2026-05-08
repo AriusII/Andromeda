@@ -8,7 +8,7 @@ use super::super::{
         BackupArtifactCompatibilityEvidence, BackupArtifactDigest, BackupColdSnapshotArtifact,
         BackupPhysicalArtifactSet, BackupWalSegmentArtifact,
     },
-    helpers::backup_error,
+    helpers::{backup_error, map_backup_validation},
     plan::BackupManifest,
     types::{BackupId, ColdSnapshotBoundary, WalArchiveRange},
 };
@@ -113,10 +113,10 @@ pub(super) fn encode_manifest_payload(
     cold_snapshot: &BackupColdSnapshotArtifact,
     wal_segments: &[BackupWalSegmentArtifact],
 ) -> AndromedaResult<Vec<u8>> {
-    manifest.validate()?;
-    cold_snapshot.validate_against(manifest)?;
+    map_backup_validation(manifest.validate())?;
+    map_backup_validation(cold_snapshot.validate_against(manifest))?;
     evidence.validate_against(manifest, wal_segments)?;
-    compatibility_evidence.validate()?;
+    map_backup_validation(compatibility_evidence.validate())?;
     if compatibility_evidence.manifest_format_version != ARTIFACT_MANIFEST_FORMAT_VERSION
         || !compatibility_evidence.recorded_in_manifest
     {
@@ -281,32 +281,34 @@ fn decode_manifest_payload(
         cold_snapshot,
         wal_segments,
     };
-    decoded.compatibility_evidence.validate()?;
+    map_backup_validation(decoded.compatibility_evidence.validate())?;
     if decoded.compatibility_evidence.manifest_format_version != decoded.format_version {
         return Err(backup_error(
             "backup artifact compatibility format version must match manifest header",
         ));
     }
-    decoded.manifest.validate()?;
+    map_backup_validation(decoded.manifest.validate())?;
     if decoded.source_checkpoint_lsn != decoded.manifest.snapshot.base_checkpoint_lsn {
         return Err(backup_error(
             "backup artifact source checkpoint LSN must match manifest snapshot",
         ));
     }
-    decoded.cold_snapshot.validate_against(&decoded.manifest)?;
+    map_backup_validation(decoded.cold_snapshot.validate_against(&decoded.manifest))?;
     decoded
         .wal_archive_evidence
         .validate_against(&decoded.manifest, &decoded.wal_segments)?;
-    BackupPhysicalArtifactSet {
-        backup_manifest: BackupArtifactDigest {
-            sha256: [1; 32],
-            crc64: 1,
-            byte_len: 1,
-        },
-        cold_snapshot: decoded.cold_snapshot,
-        wal_segments: decoded.wal_segments.clone(),
-    }
-    .validate_against(&decoded.manifest)?;
+    map_backup_validation(
+        BackupPhysicalArtifactSet {
+            backup_manifest: BackupArtifactDigest {
+                sha256: [1; 32],
+                crc64: 1,
+                byte_len: 1,
+            },
+            cold_snapshot: decoded.cold_snapshot,
+            wal_segments: decoded.wal_segments.clone(),
+        }
+        .validate_against(&decoded.manifest),
+    )?;
 
     Ok(decoded)
 }

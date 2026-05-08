@@ -27,9 +27,6 @@ pub enum FoldDeferral {
 /// best-effort-folded children and returned as `Ok(BinaryArith { .. })`.
 pub fn fold_value(value: SrplValueIr) -> Result<SrplValueIr, FoldDeferral> {
     match value {
-        // Normalise deprecated Bool shorthand (INV migration).
-        SrplValueIr::Bool(b) => Ok(SrplValueIr::Constant(ConstantLiteral::Bool(b))),
-
         SrplValueIr::BinaryArith { op, left, right } => {
             // Recursively fold sub-trees first, best-effort.
             let left_folded = fold_value_best_effort(*left);
@@ -233,7 +230,7 @@ mod tests {
     // T-CF-07 — Bool normalisation
     #[test]
     fn fold_bool_normalises_to_constant() {
-        let result = fold_value(SrplValueIr::Bool(true)).unwrap();
+        let result = fold_value(SrplValueIr::bool(true)).unwrap();
         assert_eq!(result, SrplValueIr::Constant(ConstantLiteral::Bool(true)));
     }
 

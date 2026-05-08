@@ -339,7 +339,7 @@ fn adapter_public_requests_reject_sql_like_symbols_when_built_directly() {
         SrplRowBound::exact(1).expect("test bound should be valid"),
         vec![SrplEmitValueIr {
             column: "from".to_string(),
-            value: SrplValueIr::Bool(true),
+            value: SrplValueIr::bool(true),
         }],
     )
     .expect_err("direct emit request must reject SQL-like emit columns");

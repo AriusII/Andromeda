@@ -21,7 +21,7 @@ use crate::events::UserPrincipal;
 /// - Principal ID must be non-zero
 /// - Session token is derived from the bound certificate fingerprint via core
 /// - All constituent fields must pass Principal validation
-pub fn observe_user_principal_to_core(
+pub(crate) fn observe_user_principal_to_core(
     ouser: &UserPrincipal,
     fingerprint: &andromeda_core::CertificateFingerprint,
     role: andromeda_core::PrincipalRole,
@@ -72,7 +72,7 @@ pub fn observe_user_principal_to_core(
 /// # Invariants
 /// - Principal ID is converted to decimal string (non-empty)
 /// - Kind is preserved from argument
-pub fn core_principal_to_observe_user_principal(
+pub(crate) fn core_principal_to_observe_user_principal(
     cp: &andromeda_core::Principal,
     kind: crate::events::UserPrincipalKind,
 ) -> AndromedaResult<UserPrincipal> {

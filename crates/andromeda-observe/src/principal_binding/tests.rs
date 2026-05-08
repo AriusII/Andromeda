@@ -1,5 +1,11 @@
+use super::bridge::{core_principal_to_observe_user_principal, observe_user_principal_to_core};
 use super::*;
-use crate::events::{EventCorrelation, EventEnvelope, EventId, TraceEvent, UserPrincipalKind};
+use crate::TraceId;
+use crate::events::{
+    AdminOperation, CertificateIdentity, EventCorrelation, EventEnvelope, EventId, Permission,
+    SecurityAuditOutcome, SurfaceScope, TraceEvent, UserPrincipal, UserPrincipalKind,
+};
+use crate::{AuthorizationOutcome, SurfaceAction};
 use andromeda_types::{RequestId, SessionId};
 
 fn cert(fingerprint: &str, surface: SurfaceScope) -> CertificateIdentity {
@@ -329,12 +335,9 @@ fn observe_user_principal_to_core_maps_id_correctly() {
     )
     .unwrap();
 
-    let core_principal = super::observe_user_principal_to_core(
-        &observe_principal,
-        &fingerprint,
-        PrincipalRole::User,
-    )
-    .unwrap();
+    let core_principal =
+        observe_user_principal_to_core(&observe_principal, &fingerprint, PrincipalRole::User)
+            .unwrap();
 
     assert_eq!(core_principal.id.get(), 42);
     assert_eq!(core_principal.role, PrincipalRole::User);
@@ -356,7 +359,7 @@ fn observe_user_principal_to_core_rejects_non_numeric_id() {
     )
     .unwrap();
 
-    let result = super::observe_user_principal_to_core(
+    let result = observe_user_principal_to_core(
         &observe_principal,
         &fingerprint,
         andromeda_core::PrincipalRole::User,
@@ -375,7 +378,7 @@ fn observe_user_principal_to_core_rejects_zero_id() {
     )
     .unwrap();
 
-    let result = super::observe_user_principal_to_core(
+    let result = observe_user_principal_to_core(
         &observe_principal,
         &fingerprint,
         andromeda_core::PrincipalRole::User,
@@ -402,11 +405,9 @@ fn core_principal_to_observe_user_principal_maps_id_correctly() {
     )
     .unwrap();
 
-    let observe_principal = super::core_principal_to_observe_user_principal(
-        &core_principal,
-        UserPrincipalKind::Service,
-    )
-    .unwrap();
+    let observe_principal =
+        core_principal_to_observe_user_principal(&core_principal, UserPrincipalKind::Service)
+            .unwrap();
 
     assert_eq!(observe_principal.principal_id, "123");
     assert_eq!(observe_principal.kind, UserPrincipalKind::Service);
@@ -424,18 +425,15 @@ fn bridge_roundtrip_observe_to_core_to_observe() {
     .unwrap();
 
     // observe -> core
-    let core = super::observe_user_principal_to_core(
-        &original_observe,
-        &fingerprint,
-        PrincipalRole::Admin,
-    )
-    .unwrap();
+    let core =
+        observe_user_principal_to_core(&original_observe, &fingerprint, PrincipalRole::Admin)
+            .unwrap();
     assert_eq!(core.id.get(), 456);
     assert_eq!(core.role, PrincipalRole::Admin);
 
     // core -> observe
     let final_observe =
-        super::core_principal_to_observe_user_principal(&core, UserPrincipalKind::Human).unwrap();
+        core_principal_to_observe_user_principal(&core, UserPrincipalKind::Human).unwrap();
 
     // IDs must match (though kind is asserted separately)
     assert_eq!(original_observe.principal_id, final_observe.principal_id);
@@ -453,7 +451,7 @@ fn bridge_uses_core_certificate_derived_session_token() {
     )
     .unwrap();
 
-    let core = super::observe_user_principal_to_core(
+    let core = observe_user_principal_to_core(
         &observe_principal,
         &fingerprint,
         andromeda_core::PrincipalRole::SuperAdmin,

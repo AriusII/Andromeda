@@ -158,14 +158,14 @@ fn t_cf_19_uint64_underflow_deferred() {
 /// T-CF-20  Bool(true) → Constant(Bool(true))  (deprecated variant migration).
 #[test]
 fn t_cf_20_bool_true_normalises_to_constant() {
-    let result = fold_value(SrplValueIr::Bool(true)).unwrap();
+    let result = fold_value(SrplValueIr::bool(true)).unwrap();
     assert_eq!(result, SrplValueIr::Constant(ConstantLiteral::Bool(true)));
 }
 
 /// T-CF-21  Bool(false) → Constant(Bool(false)).
 #[test]
 fn t_cf_21_bool_false_normalises_to_constant() {
-    let result = fold_value(SrplValueIr::Bool(false)).unwrap();
+    let result = fold_value(SrplValueIr::bool(false)).unwrap();
     assert_eq!(result, SrplValueIr::Constant(ConstantLiteral::Bool(false)));
 }
 
@@ -318,7 +318,7 @@ fn t_cf_35_expression_at_max_depth_is_valid() {
 /// T-CF-36  fold_assignments normalises Bool in an assignment value.
 #[test]
 fn t_cf_36_fold_assignments_normalises_bool() {
-    let assignments = vec![simple_assignment("flag", SrplValueIr::Bool(false))];
+    let assignments = vec![simple_assignment("flag", SrplValueIr::bool(false))];
     let result = fold_assignments(assignments);
     assert_eq!(
         result[0].value,
@@ -356,7 +356,7 @@ fn t_cf_38_fold_multiple_assignments() {
 fn t_cf_39_fold_emit_values_normalises_bool() {
     let values = vec![SrplEmitValueIr {
         column: "active".into(),
-        value: SrplValueIr::Bool(true),
+        value: SrplValueIr::bool(true),
     }];
     let result = fold_emit_values(values);
     assert_eq!(
@@ -382,7 +382,7 @@ fn t_cf_41_fold_is_idempotent() {
     let cases: Vec<SrplValueIr> = vec![
         arith(ArithOp::Add, int(3), int(4)),
         arith(ArithOp::Divide, int(10), int(0)),
-        SrplValueIr::Bool(true),
+        SrplValueIr::bool(true),
         arith(ArithOp::Add, uint(u64::MAX), uint(1)),
     ];
     for expr in cases {

@@ -37,9 +37,9 @@ pub use traits::{
 mod tests {
     use super::*;
     use andromeda_contract::{CatalogObjectRef, ObjectKind, ProcedureContractRef, QualifiedName};
-    use andromeda_error::AndromedaErrorKind;
-    use andromeda_srpl_ir::{Cardinality, SrplAssignmentIr, SrplEmitValueIr, SrplPredicateIr};
-    use andromeda_types::{
+use andromeda_error::AndromedaErrorKind;
+use andromeda_srpl_ir::{Cardinality, SrplAssignmentIr, SrplEmitValueIr, SrplPredicateIr};
+use andromeda_types::{
         CatalogObjectId, CatalogVersion, ContractHash, ProcedureId, ScalarType, TypeDescriptor,
     };
 
@@ -93,7 +93,7 @@ mod tests {
             Vec::new(),
             vec![SrplAssignmentIr {
                 field: "Reserved".to_string(),
-                value: andromeda_srpl_ir::SrplValueIr::Bool(true),
+                value: andromeda_srpl_ir::SrplValueIr::bool(true),
             }],
         )
         .unwrap();
@@ -128,7 +128,7 @@ mod tests {
             SrplRowBound::exact(1).unwrap(),
             vec![SrplEmitValueIr {
                 column: "Reserved".to_string(),
-                value: andromeda_srpl_ir::SrplValueIr::Bool(true),
+                value: andromeda_srpl_ir::SrplValueIr::bool(true),
             }],
         )
         .unwrap();

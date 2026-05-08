@@ -21,7 +21,7 @@ impl QuicClient {
     ///
     /// Production wiring should use [`Self::for_surface`] so the runtime
     /// surface is explicit at construction time.
-    #[cfg(any(test, feature = "insecure-test-tls"))]
+    #[cfg(test)]
     #[doc(hidden)]
     pub fn new(client_config: quinn::ClientConfig) -> AndromedaResult<Self> {
         Self::for_surface(

@@ -184,11 +184,11 @@ fn validate_catalog_wal_append_sequence(
                 format!("catalog WAL append kind at index {index} must match the mutation plan")
             }
             CatalogStoreWalAppendSequenceError::ZeroLsn { index } => {
-                format!("catalog WAL append LSN at index {index} must not be zero")
+                format!("catalog WAL append LSN at index {index} must not be zero (LSN must not be zero)")
             }
             CatalogStoreWalAppendSequenceError::NonIncreasingLsn { index } => {
                 format!(
-                    "catalog WAL append LSN at index {index} must be strictly greater than the previous LSN"
+                    "catalog WAL append LSN at index {index} must be strictly increasing"
                 )
             }
             CatalogStoreWalAppendSequenceError::MissingPlannedRecord

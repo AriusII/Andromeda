@@ -1,5 +1,5 @@
-use andromeda_core::{
-    PRINCIPAL_POLICY_EVIDENCE_VERSION, PrincipalPolicyEvidenceBinding, PrincipalPolicyVersion,
+use andromeda_security_contract::{
+    SECURITY_POLICY_EVIDENCE_SCHEMA_VERSION, SecurityPolicyEvidence, SecurityPolicyVersion,
 };
 
 use crate::TraceId;
@@ -21,24 +21,28 @@ fn principal() -> UserPrincipal {
 }
 
 #[test]
-fn security_policy_evidence_converts_from_core_binding() {
-    let core_policy_version = PrincipalPolicyVersion::test_vector(0x2a);
-    let evidence = SecurityPolicyVersionEvidence::from_core_policy_version(core_policy_version)
-        .expect("core policy version converts to audit policy evidence");
+fn security_policy_evidence_converts_from_security_contract() {
+    let policy_version = SecurityPolicyVersion::test_vector(0x2a);
+    let evidence = SecurityPolicyVersionEvidence::from_security_policy_version(policy_version)
+        .expect("security policy version converts to audit policy evidence");
 
-    assert_eq!(evidence.policy_version, PRINCIPAL_POLICY_EVIDENCE_VERSION);
-    assert!(evidence.matches_core_policy_version(core_policy_version));
-    assert!(!evidence.matches_core_policy_version(PrincipalPolicyVersion::test_vector(0x2b)));
+    assert_eq!(
+        evidence.policy_version,
+        SECURITY_POLICY_EVIDENCE_SCHEMA_VERSION
+    );
+    assert!(evidence.matches_security_policy_version(policy_version));
+    assert!(!evidence.matches_security_policy_version(SecurityPolicyVersion::test_vector(0x2b)));
 
-    let wrong_version =
-        PrincipalPolicyEvidenceBinding::from_principal_policy_version(2, core_policy_version)
-            .expect("alternate policy evidence remains well-formed");
-    assert!(!evidence.matches_core_policy_version_and_digest(&wrong_version));
+    let wrong_version = SecurityPolicyEvidence::new(2, SecurityPolicyVersion::test_vector(0x2a))
+        .expect("alternate schema version remains well-formed");
+    assert!(!evidence.matches_security_policy_evidence(&wrong_version));
 
-    let wrong_digest = PrincipalPolicyVersion::test_vector(0x2b)
-        .evidence_binding()
-        .expect("alternate digest evidence is well-formed");
-    assert!(!evidence.matches_core_policy_version_and_digest(&wrong_digest));
+    let wrong_digest = SecurityPolicyEvidence::new(
+        SECURITY_POLICY_EVIDENCE_SCHEMA_VERSION,
+        SecurityPolicyVersion::test_vector(0x2b),
+    )
+    .expect("alternate digest remains well-formed");
+    assert!(!evidence.matches_security_policy_evidence(&wrong_digest));
 }
 
 #[test]

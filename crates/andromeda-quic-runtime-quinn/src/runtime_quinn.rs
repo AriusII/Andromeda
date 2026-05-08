@@ -13,7 +13,7 @@ use std::sync::Arc;
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_core::{CertificateIdentity, SurfaceScope};
 use rustls::pki_types::CertificateDer;
-#[cfg(any(test, feature = "insecure-test-tls"))]
+#[cfg(test)]
 use rustls::{
     RootCertStore,
     pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer},
@@ -105,7 +105,7 @@ impl Default for TlsEarlyDataPolicy {
 /// Private rustls config bundle used by Quinn listener/client adapters.
 ///
 /// The concrete rustls types are intentionally contained in this private,
-/// feature-gated module; the default public transport API remains runtime-free.
+/// test-gated module; the default public transport API remains runtime-free.
 #[derive(Clone)]
 #[allow(dead_code)]
 pub(crate) struct RuntimeQuinnTlsConfig {
@@ -232,7 +232,7 @@ impl CertificateIdentityExtraction {
 /// both the server certificate and the client-auth identity certificate. This
 /// helper performs no network I/O and starts no executor.
 #[allow(dead_code)]
-#[cfg(any(test, feature = "insecure-test-tls"))]
+#[cfg(test)]
 pub(crate) fn ephemeral_test_tls_config(
     required_scope: SurfaceScope,
 ) -> AndromedaResult<RuntimeQuinnTlsConfig> {
@@ -258,7 +258,7 @@ pub(crate) fn ephemeral_test_tls_config(
     )
 }
 
-#[cfg(any(test, feature = "insecure-test-tls"))]
+#[cfg(test)]
 fn build_mtls_configs_from_der(
     server_cert_chain: Vec<CertificateDer<'static>>,
     server_private_key: PrivateKeyDer<'static>,
@@ -305,7 +305,7 @@ fn build_mtls_configs_from_der(
     })
 }
 
-#[cfg(any(test, feature = "insecure-test-tls"))]
+#[cfg(test)]
 fn root_store_from_der(
     trust_roots: Vec<CertificateDer<'static>>,
 ) -> AndromedaResult<RootCertStore> {
@@ -322,7 +322,7 @@ fn root_store_from_der(
     Ok(roots)
 }
 
-#[cfg(any(test, feature = "insecure-test-tls"))]
+#[cfg(test)]
 fn private_key_from_pkcs8_der(key_der: Vec<u8>) -> PrivateKeyDer<'static> {
     PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(key_der))
 }

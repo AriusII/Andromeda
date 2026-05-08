@@ -21,7 +21,7 @@ impl QuicServer {
     ///
     /// Production wiring should use [`Self::for_surface`] so the runtime
     /// surface is explicit at construction time.
-    #[cfg(any(test, feature = "insecure-test-tls"))]
+    #[cfg(test)]
     #[doc(hidden)]
     pub fn new(addr: SocketAddr, server_config: quinn::ServerConfig) -> AndromedaResult<Self> {
         Self::for_surface(

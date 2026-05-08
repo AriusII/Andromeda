@@ -266,7 +266,7 @@ pub fn inventory_reserve_stock_body_ir() -> AndromedaResult<SrplProcedureBodyIr>
                     stream: "Reservation".to_string(),
                     values: vec![SrplEmitValueIr {
                         column: "Reserved".to_string(),
-                        value: SrplValueIr::Bool(true),
+                        value: SrplValueIr::bool(true),
                     }],
                 },
             },
@@ -424,7 +424,6 @@ fn validate_value(
                 require_input(inputs, input)?;
             }
         }
-        SrplValueIr::Bool(_) => {}
         SrplValueIr::Constant(literal) => literal.validate()?,
         SrplValueIr::BinaryArith { left, right, .. } => {
             validate_value(left, inputs, binding_sources)?;

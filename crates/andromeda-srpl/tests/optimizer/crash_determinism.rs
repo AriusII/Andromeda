@@ -238,7 +238,7 @@ fn t_cr_11_is_constant_reflects_tree_structure() {
         "Uint64 constant must report is_constant = true"
     );
     assert!(
-        SrplValueIr::Bool(false).is_constant(),
+        SrplValueIr::bool(false).is_constant(),
         "Bool must report is_constant = true"
     );
     assert!(

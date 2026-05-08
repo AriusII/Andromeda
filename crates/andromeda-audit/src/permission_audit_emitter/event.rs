@@ -7,13 +7,13 @@ use super::policy::AuditEmissionPolicy;
 use andromeda_core::{AndromedaResult, Permission, PrincipalId};
 use andromeda_observability::TraceId;
 
-const UNKNOWN_PRINCIPAL_ID: PrincipalId = PrincipalId::new(0);
+const UNKNOWN_PRINCIPAL_ID_VALUE: u64 = 0;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PermissionAuditEvent {
     pub trace_id: TraceId,
-    pub principal_id: PrincipalId,
-    pub required_permission: Permission,
+    pub principal_id: u64,
+    pub required_permission: String,
     pub decision: PermissionDecisionAudit,
     pub timestamp: std::time::SystemTime,
 }
@@ -26,8 +26,8 @@ impl PermissionAuditEvent {
     ) -> Self {
         Self {
             trace_id,
-            principal_id,
-            required_permission,
+            principal_id: principal_id.get(),
+            required_permission: required_permission.to_string(),
             decision: PermissionDecisionAudit::Allowed,
             timestamp: std::time::SystemTime::now(),
         }
@@ -41,8 +41,8 @@ impl PermissionAuditEvent {
     ) -> Self {
         Self {
             trace_id,
-            principal_id,
-            required_permission,
+            principal_id: principal_id.get(),
+            required_permission: required_permission.to_string(),
             decision: PermissionDecisionAudit::Denied(reason),
             timestamp: std::time::SystemTime::now(),
         }
@@ -51,8 +51,8 @@ impl PermissionAuditEvent {
     pub fn denied_unknown_principal(trace_id: TraceId, required_permission: Permission) -> Self {
         Self {
             trace_id,
-            principal_id: UNKNOWN_PRINCIPAL_ID,
-            required_permission,
+            principal_id: UNKNOWN_PRINCIPAL_ID_VALUE,
+            required_permission: required_permission.to_string(),
             decision: PermissionDecisionAudit::DeniedUnknownPrincipal,
             timestamp: std::time::SystemTime::now(),
         }
@@ -70,13 +70,14 @@ impl PermissionAuditEvent {
             PermissionDecisionAudit::Allowed => {
                 format!(
                     "permission allowed: principal {} granted permission {}",
-                    self.principal_id, self.required_permission
+                    format!("PrincipalId({})", self.principal_id),
+                    self.required_permission
                 )
             }
             PermissionDecisionAudit::Denied(reason) => {
                 format!(
                     "permission denied: principal {} - {}",
-                    self.principal_id,
+                    format!("PrincipalId({})", self.principal_id),
                     reason.explanation()
                 )
             }

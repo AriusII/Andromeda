@@ -75,7 +75,6 @@ fn validate_value(value: &SrplValueIr) -> AndromedaResult<()> {
             validate_symbol(binding, "SRPL value binding")?;
             validate_symbol(field, "SRPL value field")
         }
-        SrplValueIr::Bool(_) => Ok(()),
         SrplValueIr::SubtractInput {
             binding,
             field,

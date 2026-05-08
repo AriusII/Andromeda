@@ -2,7 +2,10 @@ use andromeda_core::AndromedaResult;
 
 use crate::Lsn;
 
-use super::super::{artifacts::BackupArtifactDigest, helpers::backup_error};
+use super::super::{
+    artifacts::BackupArtifactDigest,
+    helpers::{backup_error, map_backup_validation},
+};
 
 pub(super) fn push_u64(bytes: &mut Vec<u8>, value: u64) {
     bytes.extend_from_slice(&value.to_le_bytes());
@@ -168,7 +171,7 @@ impl<'a> PayloadCursor<'a> {
             crc64: self.read_u64()?,
             byte_len: self.read_u64()?,
         };
-        digest.validate("backup artifact manifest digest")?;
+        map_backup_validation(digest.validate("backup artifact manifest digest"))?;
         Ok(digest)
     }
 }

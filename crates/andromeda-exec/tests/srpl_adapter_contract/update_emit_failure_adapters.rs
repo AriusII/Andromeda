@@ -20,7 +20,7 @@ fn test_update_adapter_batch() {
         vec![],
         vec![SrplAssignmentIr {
             field: "status".to_string(),
-            value: SrplValueIr::Bool(true),
+            value: SrplValueIr::bool(true),
         }],
     )
     .unwrap();

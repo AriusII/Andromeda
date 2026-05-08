@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+use andromeda_wal::Lsn as WalLsn;
 use std::{error::Error, fmt, path::PathBuf};
 
 pub type RestoreResult<T> = Result<T, RestoreValidationError>;
@@ -61,6 +62,16 @@ impl Lsn {
 }
 
 impl RestoreLsn for Lsn {
+    fn new(value: u64) -> Self {
+        Self::new(value)
+    }
+
+    fn get(self) -> u64 {
+        self.get()
+    }
+}
+
+impl RestoreLsn for WalLsn {
     fn new(value: u64) -> Self {
         Self::new(value)
     }

@@ -96,7 +96,7 @@ fn safe_pipeline_orchestrates_existing_passes_and_returns_plan_evidence() {
                 stream: "Reservation".to_string(),
                 values: vec![SrplEmitValueIr {
                     column: "Reserved".to_string(),
-                    value: SrplValueIr::Bool(true),
+                    value: SrplValueIr::bool(true),
                 }],
             },
         },

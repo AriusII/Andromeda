@@ -5,15 +5,15 @@ use andromeda_observe::TraceId;
 
 use crate::Lsn;
 
-pub use super::backup_owner::{
-    BackupArtifactCompatibilityEvidence, BackupArtifactDigest, BackupIncompleteTransactionPolicy,
-    BackupResourceBounds,
-};
-
-pub type BackupCompatibility = super::backup_owner::BackupCompatibility<CatalogVersion>;
-pub type BackupColdSnapshotArtifact = super::backup_owner::BackupColdSnapshotArtifact;
-pub type BackupWalSegmentArtifact = super::backup_owner::BackupWalSegmentArtifact<Lsn>;
-pub type BackupPhysicalArtifactSet = super::backup_owner::BackupPhysicalArtifactSet<Lsn>;
+pub type BackupArtifactCompatibilityEvidence =
+    andromeda_backup::BackupArtifactCompatibilityEvidence;
+pub type BackupArtifactDigest = andromeda_backup::BackupArtifactDigest;
+pub type BackupResourceBounds = andromeda_backup::BackupResourceBounds;
+pub type BackupIncompleteTransactionPolicy = andromeda_backup::BackupIncompleteTransactionPolicy;
+pub type BackupCompatibility = andromeda_backup::BackupCompatibility<CatalogVersion>;
+pub type BackupColdSnapshotArtifact = andromeda_backup::BackupColdSnapshotArtifact;
 pub type BackupIncompleteTransactionBoundary =
-    super::backup_owner::BackupIncompleteTransactionBoundary<Lsn>;
-pub type BackupAuditTraceFields = super::backup_owner::BackupAuditTraceFields<TraceId>;
+    andromeda_backup::BackupIncompleteTransactionBoundary<Lsn>;
+pub type BackupPhysicalArtifactSet = andromeda_backup::BackupPhysicalArtifactSet<Lsn>;
+pub type BackupWalSegmentArtifact = andromeda_backup::BackupWalSegmentArtifact<Lsn>;
+pub type BackupAuditTraceFields = andromeda_backup::BackupAuditTraceFields<TraceId>;

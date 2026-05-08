@@ -8,7 +8,7 @@ fn ct_009_extract_stream_id_pass_through() {
         stream: "result".to_string(),
         values: vec![SrplEmitValueIr {
             column: "col_0".to_string(),
-            value: SrplValueIr::Bool(true),
+            value: SrplValueIr::bool(true),
         }],
     });
 
@@ -35,7 +35,7 @@ fn ct_010_extract_column_count_pass_through() {
     let emit_values = (0..10)
         .map(|i| SrplEmitValueIr {
             column: format!("col_{}", i),
-            value: SrplValueIr::Bool(true),
+            value: SrplValueIr::bool(true),
         })
         .collect();
 
@@ -70,7 +70,7 @@ fn ct_011_reject_empty_result_streams() {
         stream: "result".to_string(),
         values: vec![SrplEmitValueIr {
             column: "col_0".to_string(),
-            value: SrplValueIr::Bool(true),
+            value: SrplValueIr::bool(true),
         }],
     });
 
@@ -107,7 +107,7 @@ fn ct_015_multi_stream_selects_first() {
         stream: "result".to_string(),
         values: vec![SrplEmitValueIr {
             column: "col_0".to_string(),
-            value: SrplValueIr::Bool(true),
+            value: SrplValueIr::bool(true),
         }],
     });
 
@@ -182,7 +182,7 @@ fn ct_017_metadata_validates_before_payload() {
         stream: "result".to_string(),
         values: vec![SrplEmitValueIr {
             column: "col_0".to_string(),
-            value: SrplValueIr::Bool(true),
+            value: SrplValueIr::bool(true),
         }],
     });
 

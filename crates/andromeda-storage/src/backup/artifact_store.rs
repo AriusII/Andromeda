@@ -36,7 +36,7 @@ use super::{
         BackupWalSegmentArtifact,
     },
     execution_plan::BackupExecutionPlan,
-    helpers::backup_error,
+    helpers::{backup_error, map_backup_validation},
     plan::BackupManifest,
     types::BackupId,
 };
@@ -114,7 +114,7 @@ pub struct BackupArtifactManifestRecord {
 
 impl BackupArtifactManifestRecord {
     pub fn validate_metadata(&self) -> AndromedaResult<()> {
-        self.manifest.validate()?;
+        map_backup_validation(self.manifest.validate())?;
         if !is_supported_manifest_format_version(self.manifest_format_version) {
             return Err(backup_error(
                 "backup artifact manifest format version is unsupported",
@@ -130,7 +130,7 @@ impl BackupArtifactManifestRecord {
                 "backup artifact source checkpoint LSN must match manifest snapshot",
             ));
         }
-        self.compatibility_evidence.validate()?;
+        map_backup_validation(self.compatibility_evidence.validate())?;
         if self.compatibility_evidence.manifest_format_version != self.manifest_format_version {
             return Err(backup_error(
                 "backup artifact compatibility format version must match manifest header",
@@ -148,9 +148,11 @@ impl BackupArtifactManifestRecord {
                 "backup artifact WAL path count must match manifest segments",
             ));
         }
-        self.artifact_set.validate_against(&self.manifest)?;
+        map_backup_validation(self.artifact_set.validate_against(&self.manifest))?;
         self.wal_archive_evidence
-            .validate_against(&self.manifest, &self.artifact_set.wal_segments)
+            .validate_against(&self.manifest, &self.artifact_set.wal_segments)?;
+
+        Ok(())
     }
 
     pub fn wal_segment_descriptors(&self) -> AndromedaResult<Vec<WalSegmentDescriptor>> {

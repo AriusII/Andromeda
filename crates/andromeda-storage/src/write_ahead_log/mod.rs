@@ -58,7 +58,7 @@ pub mod record_bounds;
 pub mod segment;
 pub mod segment_reclaimability;
 pub mod shipping;
-pub mod transaction;
+mod transaction;
 
 pub use codec::*;
 pub use commit_log_entry::*;
@@ -75,4 +75,9 @@ pub use record_bounds::*;
 pub use segment::*;
 pub use segment_reclaimability::*;
 pub use shipping::*;
-pub use transaction::*;
+pub use transaction::{
+    DurableTransactionClassifications, DurableTransactionResume, DurableTransactionState,
+    IncompleteDurableTransaction, classify_durable_transactions,
+    incomplete_transactions_from_records, summarize_transaction,
+    summarize_transactions_from_records,
+};

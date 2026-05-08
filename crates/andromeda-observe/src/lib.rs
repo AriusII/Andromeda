@@ -49,8 +49,7 @@ pub use exporters::{
 };
 pub use principal_binding::{
     AuthorizationDenialReason, AuthorizationOutcome, PrincipalBinding, PrincipalRegistry,
-    SurfaceAction, SurfaceAuthorizer, core_principal_to_observe_user_principal,
-    observe_user_principal_to_core,
+    SurfaceAction, SurfaceAuthorizer,
 };
 pub use query::{
     DurableAuditTraceQueryResult, DurableAuditTraceQueryRow, DurableAuditTraceQuerySource,

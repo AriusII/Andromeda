@@ -2,12 +2,13 @@
 
 use crate::{DatabaseManifest, Lsn};
 
-pub use super::backup_owner::types::{
+pub use andromeda_backup::{
     BACKUP_PHYSICAL_PLAN_VERSION_V0, BACKUP_SUPPORTED_STORAGE_FORMAT_VERSION_V0, BackupId,
+    ColdSnapshotBoundary as ColdSnapshotBoundaryRaw, WalArchiveRange as WalArchiveRangeRaw,
 };
 
-pub type WalArchiveRange = super::backup_owner::WalArchiveRange<Lsn>;
-pub type ColdSnapshotBoundary = super::backup_owner::ColdSnapshotBoundary<Lsn>;
+pub type WalArchiveRange = WalArchiveRangeRaw<Lsn>;
+pub type ColdSnapshotBoundary = ColdSnapshotBoundaryRaw<Lsn>;
 
 pub fn cold_snapshot_boundary_from_manifest(
     manifest: &DatabaseManifest,

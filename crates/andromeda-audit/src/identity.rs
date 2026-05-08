@@ -1,7 +1,8 @@
-use andromeda_core::{
-    PRINCIPAL_POLICY_EVIDENCE_VERSION, PrincipalPolicyEvidenceBinding, PrincipalPolicyVersion,
-};
 use andromeda_error::AndromedaResult;
+use andromeda_security_contract::{
+    SECURITY_POLICY_EVIDENCE_SCHEMA_VERSION, SecurityPolicyEvidence, SecurityPolicyVersion,
+};
+use std::fmt::Write;
 
 use super::{SurfaceScope, contains_sensitive_marker, non_empty_evidence, observe_error};
 
@@ -85,7 +86,10 @@ impl SecurityPolicyVersionEvidence {
     }
 
     pub fn try_bootstrap_v0() -> AndromedaResult<Self> {
-        Self::from_core_policy_binding(&PrincipalPolicyEvidenceBinding::current()?)
+        let policy_evidence = andromeda_core::PrincipalPolicyVersion::current()
+            .to_security_policy_evidence()
+            .map_err(|error| observe_error(error.to_string()))?;
+        Self::from_security_policy_evidence(&policy_evidence)
     }
 
     /// Compatibility helper for tests and static bootstrap fixtures.
@@ -96,56 +100,83 @@ impl SecurityPolicyVersionEvidence {
         match Self::try_bootstrap_v0() {
             Ok(evidence) => evidence,
             Err(_) => Self {
-                policy_version: PRINCIPAL_POLICY_EVIDENCE_VERSION,
-                policy_digest: PrincipalPolicyVersion::current().sha256_digest(),
+                policy_version: SECURITY_POLICY_EVIDENCE_SCHEMA_VERSION,
+                policy_digest: policy_version_to_digest(SecurityPolicyVersion::default()),
             },
         }
     }
 
-    pub fn from_core_policy_binding(
-        binding: &PrincipalPolicyEvidenceBinding,
+    pub fn from_security_policy_evidence(
+        evidence: &SecurityPolicyEvidence,
     ) -> AndromedaResult<Self> {
         Self::new(
-            binding.policy_version(),
-            binding.policy_digest().to_string(),
+            evidence.schema_version(),
+            policy_version_to_digest(evidence.policy_version()),
         )
     }
 
-    pub fn from_core_policy_version(
-        principal_policy_version: PrincipalPolicyVersion,
+    pub fn from_security_policy_version(
+        policy_version: SecurityPolicyVersion,
     ) -> AndromedaResult<Self> {
-        Self::from_core_policy_binding(&principal_policy_version.evidence_binding()?)
+        let policy_evidence = SecurityPolicyEvidence::for_policy_version(policy_version)
+            .map_err(|error| observe_error(error.to_string()))?;
+        Self::from_security_policy_evidence(&policy_evidence)
     }
 
-    pub fn matches_core_policy_binding(&self, binding: &PrincipalPolicyEvidenceBinding) -> bool {
-        self.matches_core_policy_version_and_digest(binding)
+    pub fn matches_security_policy_evidence(&self, evidence: &SecurityPolicyEvidence) -> bool {
+        self.matches_security_policy_version_and_digest(
+            evidence.schema_version(),
+            &policy_version_to_digest(evidence.policy_version()),
+        )
     }
 
-    pub fn matches_core_policy_version_and_digest(
+    pub fn matches_security_policy_version_and_digest(
         &self,
-        binding: &PrincipalPolicyEvidenceBinding,
+        policy_version: u64,
+        policy_digest: &str,
     ) -> bool {
-        binding.matches_version_and_digest(self.policy_version, &self.policy_digest)
-            && self.has_version_evidence()
+        policy_version == self.policy_version
+            && policy_digest == self.policy_digest
+            && Self::has_version_evidence_parts(policy_version, policy_digest)
+            && !contains_sensitive_marker(policy_digest)
     }
 
-    pub fn matches_core_policy_version(
-        &self,
-        principal_policy_version: PrincipalPolicyVersion,
-    ) -> bool {
-        principal_policy_version
-            .evidence_binding()
-            .is_ok_and(|binding| self.matches_core_policy_binding(&binding))
+    pub fn matches_security_policy_version(&self, policy_version: SecurityPolicyVersion) -> bool {
+        let policy_digest = policy_version_to_digest(policy_version);
+        self.matches_security_policy_version_and_digest(
+            SECURITY_POLICY_EVIDENCE_SCHEMA_VERSION,
+            &policy_digest,
+        )
     }
 
     pub fn has_version_evidence(&self) -> bool {
-        PrincipalPolicyEvidenceBinding::has_version_evidence_parts(
-            self.policy_version,
-            &self.policy_digest,
-        ) && !contains_sensitive_marker(&self.policy_digest)
+        Self::has_version_evidence_parts(self.policy_version, &self.policy_digest)
+            && !contains_sensitive_marker(&self.policy_digest)
+    }
+
+    fn has_version_evidence_parts(policy_version: u64, policy_digest: &str) -> bool {
+        policy_version != 0 && is_canonical_sha256_digest(policy_digest)
     }
 
     pub fn contains_sensitive_evidence(&self) -> bool {
         contains_sensitive_marker(&self.policy_digest)
     }
+}
+
+fn policy_version_to_digest(policy_version: SecurityPolicyVersion) -> String {
+    let mut digest = String::with_capacity(7 + SecurityPolicyVersion::LEN * 2);
+    digest.push_str("sha256:");
+    for byte in policy_version.as_bytes() {
+        let _ = write!(&mut digest, "{byte:02x}");
+    }
+    digest
+}
+
+fn is_canonical_sha256_digest(value: &str) -> bool {
+    value.strip_prefix("sha256:").is_some_and(|hex| {
+        hex.len() == 64
+            && hex
+                .bytes()
+                .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+    })
 }

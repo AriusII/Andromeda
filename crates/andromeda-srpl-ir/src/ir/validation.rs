@@ -93,7 +93,6 @@ fn validate_value_symbols(value: &SrplValueIr) -> AndromedaResult<()> {
             reject_sql_like_symbol(binding)?;
             reject_sql_like_symbol(field)?;
         }
-        SrplValueIr::Bool(_) => {}
         SrplValueIr::SubtractInput {
             binding,
             field,

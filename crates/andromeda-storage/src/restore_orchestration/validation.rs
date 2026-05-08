@@ -1,4 +1,5 @@
-use andromeda_core::AndromedaResult;
+use andromeda_backup::BackupResult;
+use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{Lsn, backup::BackupManifest};
 
@@ -61,8 +62,8 @@ pub fn validate_restore_prerequisites(
     manifest: &BackupManifest,
     pitr_lsn: Lsn,
 ) -> AndromedaResult<()> {
-    manifest.validate()?;
-    manifest.wal_archive.validate()?;
+    map_backup_validation(manifest.validate())?;
+    map_backup_validation(manifest.wal_archive.validate())?;
 
     if manifest.wal_archive.start > manifest.snapshot.required_wal_start_lsn {
         return Err(restore_error(
@@ -90,4 +91,8 @@ pub fn validate_restore_prerequisites(
     }
 
     Ok(())
+}
+
+fn map_backup_validation<T>(result: BackupResult<T>) -> AndromedaResult<T> {
+    result.map_err(|error| AndromedaError::new(AndromedaErrorKind::Storage, error.message()))
 }

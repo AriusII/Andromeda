@@ -3,7 +3,7 @@ use sha2::{Digest, Sha256};
 
 use super::super::{
     artifacts::{BackupArtifactDigest, BackupWalSegmentArtifact},
-    helpers::backup_error,
+    helpers::{backup_error, map_backup_validation},
 };
 
 pub(super) fn digest_bytes(bytes: &[u8]) -> AndromedaResult<BackupArtifactDigest> {
@@ -19,7 +19,7 @@ pub(super) fn digest_bytes(bytes: &[u8]) -> AndromedaResult<BackupArtifactDigest
         byte_len: u64::try_from(bytes.len())
             .map_err(|_| backup_error("backup artifact byte length exceeds u64"))?,
     };
-    digest.validate("backup artifact digest")?;
+    map_backup_validation(digest.validate("backup artifact digest"))?;
     Ok(digest)
 }
 
