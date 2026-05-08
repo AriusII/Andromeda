@@ -49,6 +49,6 @@ impl ProcedureStoreEvidenceRole {
     }
 
     pub const fn can_select_plan_alone(self) -> bool {
-        false
+        self.is_authoritative_decision()
     }
 }

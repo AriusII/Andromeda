@@ -119,10 +119,7 @@ impl ProcedureStore {
         record: InvocationDecisionRecord,
     ) -> AndromedaResult<()> {
         record.validate()?;
-        if !record.is_authoritative_decision()
-            || record.is_observed_feedback()
-            || record.can_select_plan_alone()
-        {
+        if !record.is_authoritative_decision() || record.is_observed_feedback() {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Contract,
                 "procedure store decision boundary accepts authoritative decision evidence only",

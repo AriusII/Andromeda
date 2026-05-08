@@ -120,13 +120,13 @@ pub fn emit_catalog_checkpoint_record(
 #[cfg(test)]
 mod tests {
     use crate::CatalogLifecycleTarget;
-    use andromeda_catalog_recovery::CatalogPublicationSemantics;
+    use andromeda_catalog_store::CatalogPublicationSemantics;
     use andromeda_definition_batch::{
         DefinitionBatchDependencyGraphHash, DefinitionBatchId, DefinitionBatchSourceHash,
     };
     use andromeda_error::AndromedaErrorKind;
-    use andromeda_procedure_contract::{CatalogObjectId, CatalogObjectRef, ObjectKind};
-    use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId, QualifiedName};
+    use andromeda_procedure_contract::{CatalogObjectRef, ObjectKind, QualifiedName};
+    use andromeda_types::{CatalogObjectId, CatalogVersion, DatabaseId, NamespaceId};
 
     use super::*;
 
