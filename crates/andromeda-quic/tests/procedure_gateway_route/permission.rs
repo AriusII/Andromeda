@@ -24,6 +24,41 @@ fn test_gateway_rejects_manifest_without_execute_permission_before_dispatch() {
 }
 
 #[test]
+fn test_gateway_rejects_non_canonical_execute_permission_before_dispatch() {
+    let conn = setup_active_application_connection();
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
+
+    for (id, family) in [
+        ("execute_procedure", "application"),
+        (" andromeda.execute_procedure ", "application"),
+        ("andromeda.execute_procedure", " security "),
+        ("andromeda.execute_procedure", "security"),
+    ] {
+        let mut manifest = route_manifest();
+        manifest.required_permissions = vec![CatalogRequiredPermission {
+            id: id.to_string(),
+            family: family.to_string(),
+        }];
+        let frame = valid_execute_frame(&manifest);
+
+        let err = gateway
+            .bind_application_procedure_route(19, &frame, &manifest)
+            .unwrap_err();
+
+        assert_eq!(
+            err.kind(),
+            AndromedaErrorKind::Contract,
+            "non-canonical execute permission {id:?}/{family:?} must be rejected before dispatch"
+        );
+        assert!(
+            err.message().contains("andromeda.execute_procedure"),
+            "manifest permission rejection should name the canonical execute permission: {}",
+            err.message()
+        );
+    }
+}
+
+#[test]
 fn test_gateway_authorized_route_allows_core_principal_before_dispatch() {
     let conn = setup_active_application_connection();
     let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");

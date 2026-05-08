@@ -18,6 +18,92 @@ const RPC_PROTOCOL_FORBIDDEN_SOURCE_TOKENS: [&str; 8] = [
     "quinn_tls",
     "#[tokio::",
 ];
+const SECURITY_CONTRACT_FORBIDDEN_RUNTIME_DEPS: &[&str] = &[
+    "andromeda-core",
+    "andromeda-contract",
+    "andromeda-catalog",
+    "andromeda-proto",
+    "andromeda-rpc-protocol",
+    "andromeda-quic",
+    "andromeda-observe",
+    "andromeda-rpc-runtime",
+    "andromeda-runtime-quinn",
+    "andromeda-exec",
+    "andromeda-storage",
+    "andromeda-wal",
+    "andromeda-tx",
+    "quinn",
+    "rcgen",
+    "rustls",
+    "tokio",
+    "tokio-rustls",
+    "h2",
+    "hyper",
+    "tower",
+    "prost",
+    "prost-types",
+    "prost-build",
+    "protoc-bin-vendored",
+    "serde",
+    "serde-json",
+    "bincode",
+    "rkyv",
+    "bytemuck",
+    "zerocopy",
+    "sqlx",
+    "rusqlite",
+    "diesel",
+];
+const SECURITY_CONTRACT_FORBIDDEN_SOURCE_TOKENS: &[&str] = &[
+    "andromeda_core::",
+    "andromeda_contract::",
+    "andromeda_catalog::",
+    "andromeda_proto::",
+    "andromeda_rpc_protocol::",
+    "andromeda_quic::",
+    "andromeda_observe::",
+    "andromeda_rpc_runtime::",
+    "andromeda_runtime_quinn::",
+    "andromeda_exec::",
+    "andromeda_storage::",
+    "andromeda_wal::",
+    "andromeda_tx::",
+    "quinn::",
+    "rcgen::",
+    "rustls::",
+    "tokio::",
+    "runtime_quinn",
+    "quinn_backend",
+    "quinn_tls",
+    "#[tokio::",
+    "std::net::",
+    "std::fs::",
+    "std::process::",
+    "tonic::",
+    "grpc::",
+    "serde_json",
+    "json!",
+    "jsonrpc",
+    "application/json",
+    "PrincipalRegistry",
+    "PrincipalBindingStore",
+    "RevocationStore",
+    "RoleStore",
+    "PolicyStore",
+    "asu8",
+    "asu16",
+    "asu32",
+    "asusize",
+    "unsafe{",
+    "unsafefn",
+    "unsafeimpl",
+    ".unwrap(",
+    ".expect(",
+    "panic!",
+    "todo!",
+    "unimplemented!",
+    "unreachable!",
+];
 
 #[test]
 fn workspace_crate_dependency_topology_blocks_forbidden_runtime_edges() {
@@ -142,6 +228,69 @@ fn rpc_protocol_crate_stays_runtime_free_in_manifest_and_source() {
     assert!(
         violations.is_empty(),
         "andromeda-rpc-protocol must remain runtime-free:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
+fn security_contract_crate_stays_runtime_free_in_manifest_and_source_when_present() {
+    let workspace = workspace_root();
+    let manifests = load_crate_manifests(&workspace.join("crates"));
+    let Some(manifest) = manifests.get("andromeda-security-contract") else {
+        return;
+    };
+    let mut violations = Vec::new();
+
+    for dependency in manifest
+        .runtime_dependencies
+        .iter()
+        .chain(manifest.dev_dependencies.iter())
+    {
+        if SECURITY_CONTRACT_FORBIDDEN_RUNTIME_DEPS.contains(&dependency.as_str()) {
+            violations.push(format!(
+                "andromeda-security-contract manifest must not depend on runtime crate `{dependency}`"
+            ));
+        }
+    }
+
+    let security_contract_src = workspace.join("crates/andromeda-security-contract/src");
+    if security_contract_src.is_dir() {
+        for file in rust_source_files(&security_contract_src) {
+            let source = fs::read_to_string(&file)
+                .unwrap_or_else(|err| panic!("failed to read {}: {err}", file.display()));
+            let code_without_comments = strip_rust_comments(&source);
+            let relative = relative_slash_path(&workspace, &file);
+
+            for (line_index, line) in code_without_comments.lines().enumerate() {
+                let compact_line = line
+                    .chars()
+                    .filter(|character| !character.is_whitespace())
+                    .collect::<String>();
+
+                for token in SECURITY_CONTRACT_FORBIDDEN_SOURCE_TOKENS.iter().copied() {
+                    if compact_line.contains(token) {
+                        violations.push(format!(
+                            "{relative}:{} exposes runtime token `{token}`",
+                            line_index + 1
+                        ));
+                    }
+                }
+
+                if compact_line.starts_with("pubmodruntime")
+                    || compact_line.starts_with("modruntime")
+                {
+                    violations.push(format!(
+                        "{relative}:{} declares a runtime module from the security contract crate",
+                        line_index + 1
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "andromeda-security-contract must remain runtime-free:\n{}",
         violations.join("\n")
     );
 }
@@ -408,6 +557,11 @@ fn forbidden_rules() -> Vec<ForbiddenRule> {
             ],
         ),
         ForbiddenRule::new(
+            "Security contract crate must remain runtime-free and below RPC, execution, durable storage, WAL, transaction, TLS/QUIC, and async runtime crates",
+            &["andromeda-security-contract"],
+            SECURITY_CONTRACT_FORBIDDEN_RUNTIME_DEPS,
+        ),
+        ForbiddenRule::new(
             "Application RPC surface crates must not depend on administration, cluster, HA/DR, or backup runtime crates",
             &[
                 "andromeda-application",
@@ -489,6 +643,11 @@ fn allowed_dependency_rules() -> Vec<AllowedDependencyRule> {
             "andromeda-rpc-protocol may only depend on runtime-free protocol foundation crates",
             "andromeda-rpc-protocol",
             &["andromeda-core"],
+        ),
+        AllowedDependencyRule::new(
+            "andromeda-security-contract may only depend on runtime-free security contract foundation crates",
+            "andromeda-security-contract",
+            &["andromeda-digest", "andromeda-error", "andromeda-types"],
         ),
         AllowedDependencyRule::new(
             "andromeda-storage may only depend on current Lot 4.3 durable-kernel support crates",

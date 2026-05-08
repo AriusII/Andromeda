@@ -5,6 +5,7 @@ use andromeda_proto::{
     FrameEnvelope as ProtoFrameEnvelope, PayloadKind, decode_generated_message, generated,
     validate_generated_rpc_execute_request,
 };
+use andromeda_security_contract::{FAMILY_ID_APPLICATION, PERMISSION_ID_EXECUTE_PROCEDURE};
 
 use super::errors::{contract_error, protocol_error, security_error};
 use super::route::ProcedureRouteExecuteRequest;
@@ -50,11 +51,8 @@ pub(super) fn required_execute_permission(
     manifest: &CatalogProcedureManifest,
 ) -> AndromedaResult<Permission> {
     let declares_execute_permission = manifest.required_permissions.iter().any(|permission| {
-        permission.family.trim() == "application"
-            && matches!(
-                permission.id.trim(),
-                "andromeda.execute_procedure" | "execute_procedure"
-            )
+        permission.family == FAMILY_ID_APPLICATION
+            && permission.id == PERMISSION_ID_EXECUTE_PROCEDURE
     });
 
     if !declares_execute_permission {

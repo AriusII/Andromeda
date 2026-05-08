@@ -90,7 +90,7 @@ impl Connection {
 
         // Validate that the certificate's surface scope matches the connection plane.
         let required_scope = crate::mtls_identity::plane_to_required_surface_scope(self.plane);
-        if identity.surface as u8 != required_scope as u8 {
+        if identity.surface != required_scope {
             return Err(protocol_error(
                 "certificate surface scope does not match connection plane",
             ));

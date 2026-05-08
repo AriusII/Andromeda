@@ -1,0 +1,51 @@
+#![forbid(unsafe_code)]
+#![doc = r#"
+# Andromeda Security Contract
+
+Runtime-free public security contracts shared by IAM, RPC metadata, manifests,
+audit evidence, and operator tooling.
+
+This crate owns stable security surface names, permission families, canonical
+permission identifiers, and policy evidence shapes only. It does not own
+certificate parsing, principal registries, authorization evaluation, audit
+sinks, QUIC/TLS runtime behavior, WAL, storage, or recovery logic.
+
+The types in this crate are public contract types, not persistent or network
+wire formats. Persistent and network boundaries must continue to use explicit
+codecs or generated protocol contracts.
+"#]
+
+mod error;
+mod permission;
+mod policy;
+mod surface;
+
+pub use error::SecurityContractError;
+pub use permission::{
+    ALL_PERMISSION_FAMILIES, ALL_PERMISSIONS, FAMILY_ID_APPLICATION, FAMILY_ID_CLUSTER,
+    FAMILY_ID_DEFINITION, FAMILY_ID_DIAGNOSTICS, FAMILY_ID_RECOVERY, FAMILY_ID_SECURITY,
+    PERMISSION_ID_BACKUP, PERMISSION_ID_CLUSTER_FENCE_NODE, PERMISSION_ID_CLUSTER_PROMOTE,
+    PERMISSION_ID_CLUSTER_UPDATE_MANIFEST, PERMISSION_ID_CREATE_MAP,
+    PERMISSION_ID_CREATE_PROCEDURE, PERMISSION_ID_CREATE_TABLE, PERMISSION_ID_DEBUG_PROCEDURE,
+    PERMISSION_ID_EXECUTE_PROCEDURE, PERMISSION_ID_FORENSIC_START,
+    PERMISSION_ID_IMPORT_DEFINITION_BATCH, PERMISSION_ID_INSPECT_PLANS,
+    PERMISSION_ID_MANAGE_SECURITY, PERMISSION_ID_READ_AUDIT, PERMISSION_ID_READ_CONTRACT,
+    PERMISSION_ID_READ_CONTRACT_METADATA, PERMISSION_ID_READ_PROCEDURE_STORE,
+    PERMISSION_ID_RESTORE, PERMISSION_ID_REVOKE_CERTIFICATE_IDENTITY,
+    PERMISSION_ID_ROTATE_CERTIFICATE, Permission, PermissionDescriptor, PermissionFamily,
+    canonical_permission_id, permission_family_for_id, permission_from_canonical_id,
+};
+pub use policy::{
+    SECURITY_POLICY_EVIDENCE_SCHEMA_VERSION, SECURITY_POLICY_VERSION_LEN, SecurityPolicyEvidence,
+    SecurityPolicyVersion,
+};
+pub use surface::{
+    ALL_SECURITY_SURFACES, SURFACE_ID_ADMINISTRATION, SURFACE_ID_APPLICATION,
+    SURFACE_ID_BACKUP_AGENT, SURFACE_ID_CLUSTER, SURFACE_ID_MONITORING_AGENT, SecuritySurface,
+    SecuritySurfacePlane, SurfacePlaneBinding, security_surface_from_id,
+    surface_permits_permission,
+};
+
+pub type SecuritySurfaceScope = SecuritySurface;
+pub type SecurityPermission = Permission;
+pub type SecurityPermissionFamily = PermissionFamily;

@@ -130,11 +130,11 @@ fn assert_deferred_runtime_crate_is_not_wired(dependencies: &[&str], features: &
     let feature_edges = features
         .iter()
         .flat_map(|feature| {
-            feature.values.iter().filter_map(|value| {
-                value
-                    .contains(DEFERRED_RUNTIME_CRATE)
-                    .then(|| format!("{} -> {}", feature.name, value))
-            })
+            feature
+                .values
+                .iter()
+                .filter(|value| value.contains(DEFERRED_RUNTIME_CRATE))
+                .map(|value| format!("{} -> {}", feature.name, value))
         })
         .collect::<Vec<_>>();
 

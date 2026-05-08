@@ -102,6 +102,45 @@ const FORBIDDEN_APPLICATION_SURFACE_RUNTIME_DEPS: &[&str] = &[
     "andromeda-hadr",
     "andromeda-hadr-runtime",
 ];
+const FUTURE_SECURITY_CONTRACT_CRATES: &[&str] = &["andromeda-security-contract"];
+const SECURITY_CONTRACT_ALLOWED_RUNTIME_FREE_PRODUCTION_DEPS: &[&str] =
+    &["andromeda-digest", "andromeda-error", "andromeda-types"];
+const FORBIDDEN_SECURITY_CONTRACT_RUNTIME_DEPS: &[&str] = &[
+    "andromeda-core",
+    "andromeda-contract",
+    "andromeda-catalog",
+    "andromeda-proto",
+    "andromeda-rpc-protocol",
+    "andromeda-quic",
+    "andromeda-observe",
+    "andromeda-rpc-runtime",
+    "andromeda-runtime-quinn",
+    "andromeda-exec",
+    "andromeda-storage",
+    "andromeda-wal",
+    "andromeda-tx",
+    "quinn",
+    "rcgen",
+    "rustls",
+    "tokio",
+    "tokio-rustls",
+    "h2",
+    "hyper",
+    "tower",
+    "prost",
+    "prost-types",
+    "prost-build",
+    "protoc-bin-vendored",
+    "serde",
+    "serde-json",
+    "bincode",
+    "rkyv",
+    "bytemuck",
+    "zerocopy",
+    "sqlx",
+    "rusqlite",
+    "diesel",
+];
 
 #[test]
 fn dependency_guard_enforces_workspace_doctrine() {
@@ -130,6 +169,28 @@ fn dependency_guard_enforces_workspace_doctrine() {
             if manifest.production_deps.contains(*target) {
                 violations.push(format!(
                     "application RPC surface must not gain administration, cluster, HA/DR, or backup runtime edge: {source} -> {target}"
+                ));
+            }
+        }
+    }
+
+    for source in FUTURE_SECURITY_CONTRACT_CRATES {
+        let Some(manifest) = manifests.get(*source) else {
+            continue;
+        };
+
+        for dep in &manifest.production_deps {
+            if !SECURITY_CONTRACT_ALLOWED_RUNTIME_FREE_PRODUCTION_DEPS.contains(&dep.as_str()) {
+                violations.push(format!(
+                    "security contract crate must only use runtime-free foundation production dependencies: {source} -> {dep}"
+                ));
+            }
+        }
+
+        for target in FORBIDDEN_SECURITY_CONTRACT_RUNTIME_DEPS {
+            if manifest.production_deps.contains(*target) {
+                violations.push(format!(
+                    "security contract crate must not gain RPC, execution, durable storage, WAL, transaction, TLS/QUIC, or async runtime edge: {source} -> {target}"
                 ));
             }
         }

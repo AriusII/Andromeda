@@ -10,6 +10,7 @@ This directory contains the Rust workspace crates that implement the Andromeda f
 - `andromeda-time` owns engine timestamps and clock abstractions. It may depend only on foundation crates.
 - `andromeda-hardware` owns hardware profiles and C5 exclusion policy descriptors. It may depend only on foundation crates.
 - `andromeda-core` is a temporary compatibility facade over foundation crates and principal identity types. It must not regain higher-level engine ownership.
+- `andromeda-security-contract` owns runtime-free public security surfaces, permission families, canonical permission identifiers, and policy evidence/version shapes. It must not depend on IAM registries, QUIC/TLS runtimes, catalog stores, execution, WAL, storage, or recovery crates.
 - `andromeda-contract` owns contract-safe Procedure contracts, qualified names, catalog object descriptors, and structural catalog dependency edges. It may depend only on contract-safe foundation crates.
 - `andromeda-structured-object` owns contract-safe StructuredObject headers, layout descriptors, descriptor hashing, and row-count metadata policy. It may depend only on contract-safe foundation crates.
 - `andromeda-proto` owns custom typed RPC payload contracts. It must not introduce gRPC or make JSON the runtime default.

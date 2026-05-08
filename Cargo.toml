@@ -14,6 +14,7 @@ members = [
     "crates/andromeda-proto",
     "crates/andromeda-quic",
     "crates/andromeda-rpc-protocol",
+    "crates/andromeda-security-contract",
     "crates/andromeda-srpl",
     "crates/andromeda-srpl-ast",
     "crates/andromeda-srpl-cardinality",
@@ -46,6 +47,7 @@ andromeda-observe = { path = "crates/andromeda-observe", version = "0.1.0" }
 andromeda-proto = { path = "crates/andromeda-proto", version = "0.1.0" }
 andromeda-quic = { path = "crates/andromeda-quic", version = "0.1.0" }
 andromeda-rpc-protocol = { path = "crates/andromeda-rpc-protocol", version = "0.1.0" }
+andromeda-security-contract = { path = "crates/andromeda-security-contract", version = "0.1.0" }
 andromeda-srpl = { path = "crates/andromeda-srpl", version = "0.1.0" }
 andromeda-srpl-ast = { path = "crates/andromeda-srpl-ast", version = "0.1.0" }
 andromeda-srpl-cardinality = { path = "crates/andromeda-srpl-cardinality", version = "0.1.0" }

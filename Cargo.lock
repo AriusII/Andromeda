@@ -139,6 +139,7 @@ dependencies = [
  "andromeda-observe",
  "andromeda-proto",
  "andromeda-rpc-protocol",
+ "andromeda-security-contract",
  "proptest",
  "quinn",
  "rcgen",
@@ -152,6 +153,10 @@ version = "0.1.0"
 dependencies = [
  "andromeda-core",
 ]
+
+[[package]]
+name = "andromeda-security-contract"
+version = "0.1.0"
 
 [[package]]
 name = "andromeda-srpl"

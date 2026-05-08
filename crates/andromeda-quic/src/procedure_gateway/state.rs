@@ -64,7 +64,7 @@ fn validate_certificate_scope(
     plane: SurfacePlane,
 ) -> AndromedaResult<()> {
     let required_scope = crate::mtls_identity::plane_to_required_surface_scope(plane);
-    if certificate_identity.surface as u8 != required_scope as u8 {
+    if certificate_identity.surface != required_scope {
         return Err(security_error(
             "certificate surface scope does not match connection plane",
         ));

@@ -123,6 +123,20 @@ fn generated_manifest_boundary_validation_rejects_invalid_permission_policy() {
         "permission ids must stay canonical lower-case boundary metadata"
     );
 
+    let mut conflicting_permission_family = generated_reserve_stock_manifest();
+    let mut duplicate_permission = conflicting_permission_family.required_permissions[0].clone();
+    duplicate_permission.family = "security".to_string();
+    conflicting_permission_family
+        .required_permissions
+        .push(duplicate_permission);
+    assert!(
+        validate_catalog_procedure_manifest_resolution_response(&resolved_manifest_response(
+            conflicting_permission_family
+        ))
+        .is_err(),
+        "permission ids must not be repeated with a conflicting family"
+    );
+
     let mut policy_hash_collision = generated_reserve_stock_manifest();
     policy_hash_collision.policy_version = policy_hash_collision.contract_hash.clone();
     assert!(
