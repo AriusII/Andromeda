@@ -14,7 +14,10 @@ runtime behavior.
 
 This document covers:
 
-- Current 26-crate workspace reality.
+- Current 32-crate workspace reality before any additional target-crate
+  scaffolds are created.
+- Target-named scaffold crates that exist locally but are not accepted as final
+  canonical owners.
 - Target crate names observed in the external restructure roadmap.
 - Missing target crates by exact workspace name.
 - Current owner or facade likely to contain the responsibility today.
@@ -25,8 +28,11 @@ This document covers:
 - Do not create, remove, rename, move, stage, unstage, or commit any crate.
 - Do not decide final crate names where ADRs still need to approve naming.
 - Do not treat exact-name absence as proof that functionality is absent.
+- Do not treat exact-name presence as proof that ownership is accepted.
 - Do not treat broad current owners as acceptable long-term ownership.
 - Do not approve C5 extraction while the worktree is dirty.
+- Do not normalize `docs/` and `documentations/` path mapping in this packet.
+  That mapping is being clarified by a separate documentation owner.
 - Do not promote GPU, analytics, benchmark, RAM, temp, or audit evidence as
   database truth.
 
@@ -48,21 +54,27 @@ Before acting on any ledger row:
 
 ## Current Workspace
 
-The current root workspace declares 26 crates under `crates/`:
+The current root workspace declares 32 crates under `crates/`. Treat this as
+the branch shape before any additional target-crate scaffold packet:
 
 ```text
 andromeda-bench
 andromeda-catalog
 andromeda-cli
+andromeda-codec
 andromeda-contract
 andromeda-core
 andromeda-digest
 andromeda-error
 andromeda-exec
 andromeda-hardware
+andromeda-maps
 andromeda-observe
+andromeda-policy
+andromeda-procedure-store
 andromeda-proto
 andromeda-quic
+andromeda-resource
 andromeda-rpc-protocol
 andromeda-security-contract
 andromeda-srpl
@@ -70,6 +82,7 @@ andromeda-srpl-ast
 andromeda-srpl-cardinality
 andromeda-srpl-diagnostics
 andromeda-srpl-ir
+andromeda-srpl-lexer
 andromeda-srpl-parser
 andromeda-storage
 andromeda-structured-object
@@ -79,9 +92,21 @@ andromeda-types
 andromeda-wal
 ```
 
-The current branch already includes 24 exact target names from the external
-roadmap. Two current crates are branch-specific names that are not exact target
-names in the external extraction:
+The current branch includes 30 exact target names from the external roadmap.
+Six of those exact-name crates are local scaffolds or narrow extractions that
+must not be treated as accepted phase ownership:
+
+| Current target-named crate | Current posture | Acceptance caution |
+|---|---|---|
+| `andromeda-codec` | Provisional foundation scaffold for explicit byte helpers | Does not approve persistent or network byte ownership without golden vectors and malformed-input tests. |
+| `andromeda-policy` | Provisional runtime-free policy vocabulary | Does not approve IAM runtime, policy store, revocation, or durable authorization behavior. |
+| `andromeda-resource` | Provisional resource-budget vocabulary | Does not approve admission integration or C4/C5 resource enforcement. |
+| `andromeda-srpl-lexer` | Narrow SRPL lexical scanner extraction | Does not prove binder, lowering, interpreter, or catalog-store-free topology acceptance. |
+| `andromeda-procedure-store` | Provisional runtime-free invocation and evidence vocabulary | Does not approve durable Procedure Store runtime, catalog publication, or execution integration. |
+| `andromeda-maps` | Provisional runtime-free Map descriptor scaffold | Does not approve Map engine behavior, publication, refresh, rebuild, rollback, or analytics ownership. |
+
+Two current crates are branch-specific names that are not exact target names in
+the external extraction:
 
 | Current crate | Current role | Planning implication |
 |---|---|---|
@@ -92,10 +117,10 @@ names in the external extraction:
 
 | Category | Count | Interpretation |
 |---|---:|---|
-| Current workspace crates | 26 | Observed branch shape, not acceptance evidence. |
-| External target names present exactly | 24 | Already represented by exact crate names under `crates/`. |
+| Current workspace crates | 32 | Observed branch shape before additional scaffold packets, not acceptance evidence. |
+| External target names present exactly | 30 | Represented by exact crate names under `crates/`, including provisional scaffolds. |
 | Current-only branch names | 2 | `andromeda-rpc-protocol` and `andromeda-security-contract` are current partial splits. |
-| External target names missing exactly | 66 | Missing target names require owner review before creation, rename, or deferral. |
+| External target names missing exactly | 60 | Missing target names require owner review before creation, rename, or deferral. |
 
 ## Procedure
 
@@ -115,16 +140,16 @@ Use this ledger as follows:
 
 | Phase | Missing target crates | Current owner or partial equivalent | Acceptance gates before action |
 |---|---|---|---|
-| Phase 1 - Foundation | `andromeda-codec`, `andromeda-policy`, `andromeda-resource`, `andromeda-test-support` | `andromeda-core`, `andromeda-types`, `andromeda-error`, `andromeda-digest`, `andromeda-hardware`, crate-local test fixtures | Topology gates prove R0 crates have no engine/runtime ownership; codec work requires explicit endian, length-bound, malformed-input, and golden-vector policy before use by storage or protocol. |
+| Phase 1 - Foundation | `andromeda-test-support` | `andromeda-core`, `andromeda-types`, `andromeda-error`, `andromeda-digest`, `andromeda-hardware`; provisional `andromeda-codec`, `andromeda-policy`, and `andromeda-resource`; crate-local test fixtures | Topology gates prove R0 crates have no engine/runtime ownership; codec work requires explicit endian, length-bound, malformed-input, and golden-vector policy before use by storage or protocol. |
 | Phase 2 - Contract and catalog | `andromeda-contract-compat`, `andromeda-catalog-store`, `andromeda-definition-batch`, `andromeda-catalog-recovery`, `andromeda-catalog-diff`, `andromeda-procedure-contract`, `andromeda-client-sdk-gen` | `andromeda-contract`, `andromeda-catalog`, `andromeda-srpl`, `andromeda-proto`, tooling docs | ContractHash golden tests, compatibility matrix, DefinitionBatch dry-run tests, catalog publication WAL coverage, malformed-tail replay rejection, and facade compatibility. |
-| Phase 2 - SRPL | `andromeda-srpl-lexer`, `andromeda-srpl-binder`, `andromeda-srpl-lowering`, `andromeda-srpl-execution-adapter`, `andromeda-srpl-interpreter`, `andromeda-srpl-test-fixtures` | `andromeda-srpl`, `andromeda-srpl-parser`, `andromeda-srpl-ast`, `andromeda-srpl-cardinality`, `andromeda-srpl-diagnostics`, `andromeda-srpl-ir` | Parser/model crates stay catalog-store-free; binder and lowering moves keep typed Procedure contracts; SRPL parser, AST, cardinality, diagnostics, IR, and DefinitionBatch compatibility tests pass. |
+| Phase 2 - SRPL | `andromeda-srpl-binder`, `andromeda-srpl-lowering`, `andromeda-srpl-execution-adapter`, `andromeda-srpl-interpreter`, `andromeda-srpl-test-fixtures` | `andromeda-srpl`, `andromeda-srpl-lexer`, `andromeda-srpl-parser`, `andromeda-srpl-ast`, `andromeda-srpl-cardinality`, `andromeda-srpl-diagnostics`, `andromeda-srpl-ir` | Parser/model crates stay catalog-store-free; binder and lowering moves keep typed Procedure contracts; SRPL parser, AST, cardinality, diagnostics, IR, lexer, and DefinitionBatch compatibility tests pass. |
 | Phase 2 - Runtime-free protocol | `andromeda-rpc`, `andromeda-proto-wire`, `andromeda-rpc-codec` | `andromeda-rpc-protocol`, `andromeda-proto`, `andromeda-quic` compatibility paths | Runtime-free frame ownership, explicit wire codecs, no gRPC surface, no runtime JSON default, malformed frame tests, metadata-before-payload tests, and compatibility import tests. |
 | Phase 3 - Surface, security, and operations | `andromeda-quic-runtime-quinn`, `andromeda-security`, `andromeda-iam`, `andromeda-audit`, `andromeda-admin`, `andromeda-forensic`, `andromeda-observability`, `andromeda-runbooks` | `andromeda-quic`, `andromeda-security-contract`, `andromeda-core` principal facade, `andromeda-exec`, `andromeda-observe`, `andromeda-cli`, operations docs | Quinn stays feature-gated; security vocabulary remains runtime-free; IAM, admission, audit, Admin, Cluster, and Application surfaces stay separated; wrong surface, disabled principal, missing permission, malformed frame, and unsafe early-data tests create no transaction and emit required evidence. |
 | Phase 4 - Transaction and WAL | `andromeda-transaction`, `andromeda-transaction-log`, `andromeda-mvcc`, `andromeda-locking`, `andromeda-savepoint`, `andromeda-wal-codec` | `andromeda-tx`, `andromeda-wal`, `andromeda-storage`, `andromeda-observe` evidence paths | Define durable commit evidence, rollback evidence, WAL prefix boundaries, and visibility rules; run transaction, WAL owner, WAL codec, recovery replay, and prepared-not-visible crash tests before extracting C5 code. |
 | Phase 4 - Storage and recovery | `andromeda-storage-page`, `andromeda-storage-heap`, `andromeda-storage-index`, `andromeda-buffer-pool`, `andromeda-disk-page-store`, `andromeda-manifest`, `andromeda-segment`, `andromeda-recovery`, `andromeda-backup`, `andromeda-restore`, `andromeda-hadr` | `andromeda-storage`, `andromeda-wal`, `andromeda-tx`, `andromeda-cli` operation paths | No C5 move while packet is dirty; require explicit codecs, golden byte vectors, WAL-before-page-flush tests, torn-write rejection, manifest switch recovery, FileWal owner versus storage integration tests, backup/restore drills, PITR exact-LSN proof, quorum and fencing proof. |
-| Phase 5 - Execution | `andromeda-execution`, `andromeda-admission`, `andromeda-procedure-runtime`, `andromeda-result-stream`, `andromeda-procedure-store`, `andromeda-retry`, `andromeda-business-fixtures`, `andromeda-execution-trace` | `andromeda-exec`, `andromeda-catalog`, `andromeda-contract`, `andromeda-proto`, `andromeda-observe`, `andromeda-quic` bridge paths | Contract validation, `SecurityAdmission v0`, resource budget, and transaction creation order; generic Procedure dispatch; terminal Procedure Store records; ResultStream metadata before payload; exact row-count policy; retry idempotency evidence. |
+| Phase 5 - Execution | `andromeda-execution`, `andromeda-admission`, `andromeda-procedure-runtime`, `andromeda-result-stream`, `andromeda-retry`, `andromeda-business-fixtures`, `andromeda-execution-trace` | `andromeda-exec`, `andromeda-catalog`, provisional `andromeda-procedure-store`, `andromeda-contract`, `andromeda-proto`, `andromeda-observe`, `andromeda-quic` bridge paths | Contract validation, `SecurityAdmission v0`, resource budget, and transaction creation order; generic Procedure dispatch; terminal Procedure Store records; ResultStream metadata before payload; exact row-count policy; retry idempotency evidence. |
 | Phase 6 - Statistics and optimizer | `andromeda-statistics`, `andromeda-optimizer`, `andromeda-plan-cache` | `andromeda-catalog`, `andromeda-srpl`, `andromeda-bench` advisory evidence paths | `StatsVersion` publication validation, bounded plan classes, strict `PlanCacheKey`, DecisionTrace, evidence ignored when stale or unsafe, plan-flapping hysteresis, no learned or benchmark evidence as sole authority. |
-| Phase 6 - Maps, analytics, benchmark, and GPU later | `andromeda-maps`, `andromeda-analytics`, `andromeda-columnar`, `andromeda-bench-workload`, `andromeda-bench-harness`, `andromeda-scenario-evidence`, `andromeda-regression`, `andromeda-gpu`, `andromeda-vector`, `andromeda-simd` | `andromeda-catalog`, `andromeda-storage`, `andromeda-bench`, `andromeda-hardware`, future optional crates | Durable Procedure path and CPU statistics must be stable first; Maps enforce grain and summarizability; ScenarioEvidence remains advisory; GPU is optional, disabled by default, CPU-fallback capable, and import-scanned out of commit, WAL, rollback, recovery, MVCC visibility, catalog publication, and security-critical paths. |
+| Phase 6 - Maps, analytics, benchmark, and GPU later | `andromeda-analytics`, `andromeda-columnar`, `andromeda-bench-workload`, `andromeda-bench-harness`, `andromeda-scenario-evidence`, `andromeda-regression`, `andromeda-gpu`, `andromeda-vector`, `andromeda-simd` | Provisional `andromeda-maps`, `andromeda-catalog`, `andromeda-storage`, `andromeda-bench`, `andromeda-hardware`, future optional crates | Durable Procedure path and CPU statistics must be stable first; Maps enforce grain and summarizability; ScenarioEvidence remains advisory; GPU is optional, disabled by default, CPU-fallback capable, and import-scanned out of commit, WAL, rollback, recovery, MVCC visibility, catalog publication, and security-critical paths. |
 
 ## Exact Missing Target Names
 
@@ -145,7 +170,6 @@ andromeda-catalog-diff
 andromeda-catalog-recovery
 andromeda-catalog-store
 andromeda-client-sdk-gen
-andromeda-codec
 andromeda-columnar
 andromeda-contract-compat
 andromeda-definition-batch
@@ -158,20 +182,16 @@ andromeda-hadr
 andromeda-iam
 andromeda-locking
 andromeda-manifest
-andromeda-maps
 andromeda-mvcc
 andromeda-observability
 andromeda-optimizer
 andromeda-plan-cache
-andromeda-policy
 andromeda-procedure-contract
 andromeda-procedure-runtime
-andromeda-procedure-store
 andromeda-proto-wire
 andromeda-quic-runtime-quinn
 andromeda-recovery
 andromeda-regression
-andromeda-resource
 andromeda-restore
 andromeda-result-stream
 andromeda-retry
@@ -186,7 +206,6 @@ andromeda-simd
 andromeda-srpl-binder
 andromeda-srpl-execution-adapter
 andromeda-srpl-interpreter
-andromeda-srpl-lexer
 andromeda-srpl-lowering
 andromeda-srpl-test-fixtures
 andromeda-statistics
@@ -208,7 +227,7 @@ owner-scoped packets:
 | Current crate | Broad responsibility today | Reduction constraint |
 |---|---|---|
 | `andromeda-core` | Compatibility facade plus principal and foundation remnants | Keep thin; migrate callers to precise foundation or security identity crates only after topology gates. |
-| `andromeda-catalog` | Catalog, DefinitionBatch, Procedure Store, statistics, plan cache, scenario evidence, compatibility reexports | Split contract/runtime/store/evidence responsibilities without breaking catalog publication recovery. |
+| `andromeda-catalog` | Catalog, DefinitionBatch, Procedure Store runtime modules, statistics, plan cache, scenario evidence, compatibility reexports | Split contract/runtime/store/evidence responsibilities without breaking catalog publication recovery. Provisional `andromeda-procedure-store` does not replace catalog runtime ownership yet. |
 | `andromeda-srpl` | Facade, binder, lowering, optimizer, interpreter, DefinitionBatch bridge, resolver | Move parser/model/compiler-core work only with SRPL owner tests and facade compatibility. |
 | `andromeda-exec` | Admission, dispatch, Procedure runtime, result stream, retry, SRPL adapters, vertical slice | Preserve admission-before-transaction and contract-first invocation during every split. |
 | `andromeda-tx` | Transaction state, commit log, MVCC, locking, GC, savepoints, WAL adapter | Do not split C5 transaction behavior until durable evidence and recovery gates exist. |
@@ -231,6 +250,7 @@ owner-scoped packets:
 | Persistent or network bytes | Codec, WAL, page, manifest, catalog WAL, RPC frame, Protobuf wire, storage segment crates | Explicit codecs, format identity, version fields, length bounds, checksum or digest coverage, unknown-version rejection, and golden vectors. |
 | C5 extraction | WAL, transaction, storage, recovery, catalog publication, security-critical admission, backup, restore, HA/DR | Crash/recovery matrix, property or fuzz tests, durable evidence proof, threat-model or permission proof where relevant. |
 | Adaptive behavior | Statistics, optimizer, plan cache, Maps, benchmarks, ScenarioEvidence | Bounded candidate set, version binding, DecisionTrace, disable path, expiration or staleness policy, no-authoritative-evidence rule. |
+| Fuzz registry | Any fuzz target, corpus, or sustained fuzz evidence claim | Keep canonical harnesses, registry, and deterministic corpus metadata under `fuzz/`; treat `tests/fuzzing/` as an index and planning surface only. |
 | GPU | `andromeda-gpu`, `andromeda-vector`, GPU use in hardware or analytics paths | Optional feature, CPU fallback, kill switch, device/kernel trace, validation evidence, no-C5-import scan. |
 | Release promotion | Any claim that a phase is accepted | Clean candidate, exact command log, commit SHA, toolchain, pass/fail status, skipped tests, unresolved gaps, and ADR/DEC references. |
 
@@ -239,7 +259,7 @@ owner-scoped packets:
 This ledger was validated by targeted repository inspection:
 
 - Root `Cargo.toml` and `crates/` were inspected to confirm the current
-  26-crate branch reality.
+  32-crate branch reality before any additional scaffold packet.
 - The external roadmap referenced by
   `documentations/architecture/WORKSPACE_RESTRUCTURE_BASELINE_2026.md` was
   inspected for target crate names and roadmap steps.
@@ -250,6 +270,10 @@ This ledger was validated by targeted repository inspection:
 - `documentations/ROADMAP_RESTRUCTURE_STATUS_2026_05_08.md` and
   `documentations/implementation/worktree-packaging-plan-2026-05-08.md` were
   inspected for dirty-worktree risk and packet ordering.
+- `fuzz/README.md`, `fuzz/targets.toml`, and `fuzz/VALIDATION_MATRIX.md` were
+  inspected as the canonical fuzz workspace and registry surface.
+- Documentation path mapping between `docs/` and `documentations/` was left to
+  the separate documentation mapping owner.
 
 No Rust build, Cargo test, clippy, audit, deny, or Codex tooling validation was
 run because this task changes only standalone implementation documentation.
@@ -264,6 +288,8 @@ run because this task changes only standalone implementation documentation.
 | A future worker treats `andromeda-security-contract` as IAM runtime. | Correct the scope to runtime-free vocabulary and route IAM runtime work through a later security/admission/audit packet. |
 | A future worker treats `andromeda-rpc-protocol` as QUIC runtime. | Correct the scope to runtime-free protocol contracts and keep Quinn behavior in the transport runtime layer. |
 | A future worker introduces GPU imports from durable-kernel or security-critical crates. | Block the change until topology tests and GPU exclusion policy prove the critical path remains GPU-free. |
+| A future worker moves canonical fuzz ownership into `tests/fuzzing/`. | Keep harnesses, registry, corpus manifest, and generator under `fuzz/`; use `tests/fuzzing/` only as a validation index. |
+| A future worker asks this ledger to normalize `docs/` and `documentations/` references. | Defer to the documentation path-mapping owner and update only the owned roadmap-status facts here. |
 
 ## References
 
@@ -277,4 +303,7 @@ run because this task changes only standalone implementation documentation.
 - `documentations/implementation/worktree-packaging-plan-2026-05-08.md`
 - `documentations/testing/step-11-validation-matrix.md`
 - `documentations/governance/adr-backlog-2026-05-08.md`
+- `fuzz/README.md`
+- `fuzz/targets.toml`
+- `fuzz/VALIDATION_MATRIX.md`
 - `C:/Users/Arius/Desktop/andromeda_roadmap_restructuration_workspace_crates_engines_2026.md`

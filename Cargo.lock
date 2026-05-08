@@ -12,6 +12,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-admission"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-analytics"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-backup"
+version = "0.1.0"
+
+[[package]]
 name = "andromeda-bench"
 version = "0.1.0"
 dependencies = [
@@ -23,6 +35,18 @@ dependencies = [
  "andromeda-time",
  "andromeda-types",
 ]
+
+[[package]]
+name = "andromeda-bench-harness"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-bench-workload"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-buffer-pool"
+version = "0.1.0"
 
 [[package]]
 name = "andromeda-catalog"
@@ -37,6 +61,14 @@ dependencies = [
  "andromeda-time",
  "andromeda-types",
 ]
+
+[[package]]
+name = "andromeda-catalog-diff"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-catalog-store"
+version = "0.1.0"
 
 [[package]]
 name = "andromeda-cli"
@@ -58,6 +90,10 @@ name = "andromeda-codec"
 version = "0.1.0"
 
 [[package]]
+name = "andromeda-columnar"
+version = "0.1.0"
+
+[[package]]
 name = "andromeda-contract"
 version = "0.1.0"
 dependencies = [
@@ -65,6 +101,10 @@ dependencies = [
  "andromeda-error",
  "andromeda-types",
 ]
+
+[[package]]
+name = "andromeda-contract-compat"
+version = "0.1.0"
 
 [[package]]
 name = "andromeda-core"
@@ -79,7 +119,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-decision-trace"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-definition-batch"
+version = "0.1.0"
+
+[[package]]
 name = "andromeda-digest"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-disk-page-store"
 version = "0.1.0"
 
 [[package]]
@@ -103,6 +155,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-execution"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-execution-trace"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-hadr"
+version = "0.1.0"
+
+[[package]]
 name = "andromeda-hardware"
 version = "0.1.0"
 dependencies = [
@@ -110,7 +174,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-locking"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-manifest"
+version = "0.1.0"
+
+[[package]]
 name = "andromeda-maps"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-mvcc"
 version = "0.1.0"
 
 [[package]]
@@ -126,7 +202,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-optimizer"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-plan-cache"
+version = "0.1.0"
+
+[[package]]
 name = "andromeda-policy"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-procedure-runtime"
 version = "0.1.0"
 
 [[package]]
@@ -165,7 +253,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-recovery"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-regression"
+version = "0.1.0"
+
+[[package]]
 name = "andromeda-resource"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-restore"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-result-stream"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-retry"
 version = "0.1.0"
 
 [[package]]
@@ -176,7 +284,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-savepoint"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-scenario-evidence"
+version = "0.1.0"
+
+[[package]]
 name = "andromeda-security-contract"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-segment"
 version = "0.1.0"
 
 [[package]]
@@ -207,6 +327,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-srpl-binder"
+version = "0.1.0"
+
+[[package]]
 name = "andromeda-srpl-cardinality"
 version = "0.1.0"
 dependencies = [
@@ -219,6 +343,10 @@ version = "0.1.0"
 dependencies = [
  "andromeda-error",
 ]
+
+[[package]]
+name = "andromeda-srpl-execution-adapter"
+version = "0.1.0"
 
 [[package]]
 name = "andromeda-srpl-ir"
@@ -238,6 +366,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-srpl-lowering"
+version = "0.1.0"
+
+[[package]]
 name = "andromeda-srpl-parser"
 version = "0.1.0"
 dependencies = [
@@ -248,6 +380,10 @@ dependencies = [
  "andromeda-srpl-lexer",
  "andromeda-types",
 ]
+
+[[package]]
+name = "andromeda-statistics"
+version = "0.1.0"
 
 [[package]]
 name = "andromeda-storage"
@@ -261,6 +397,14 @@ dependencies = [
  "sha2",
  "tempfile",
 ]
+
+[[package]]
+name = "andromeda-storage-heap"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-storage-page"
+version = "0.1.0"
 
 [[package]]
 name = "andromeda-structured-object"
@@ -277,6 +421,14 @@ version = "0.1.0"
 dependencies = [
  "andromeda-error",
 ]
+
+[[package]]
+name = "andromeda-transaction"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-transaction-log"
+version = "0.1.0"
 
 [[package]]
 name = "andromeda-tx"

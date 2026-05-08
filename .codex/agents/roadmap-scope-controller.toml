@@ -1,7 +1,5 @@
 name = "roadmap-scope-controller"
 description = "Read-only scope controller that detects scope creep, missing acceptance criteria, and unsafe expansion beyond the requested roadmap."
-model = "gpt-5.5"
-model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 approval_policy = "on-request"
 developer_instructions = '''

@@ -1,7 +1,5 @@
 name = "formal-invariants-agent"
 description = "Read-only formal invariants agent for set theory, relational algebra, transaction invariants, and safety proofs."
-model = "gpt-5.5"
-model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 approval_policy = "on-request"
 developer_instructions = '''

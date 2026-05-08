@@ -1,7 +1,5 @@
 name = "prompt-library-curator"
 description = "Maintains .codex/prompts templates and aligns them with agents, skills, and Andromeda doctrine."
-model = "gpt-5.5"
-model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
 developer_instructions = '''

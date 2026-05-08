@@ -96,6 +96,26 @@ Promoting cargo-vet to a blocking gate requires:
 - A documented bootstrap procedure for first-party audits and third-party imports.
 - A workflow command that is known to exist in the repository and can run deterministically in CI.
 
+### Report-only preflight hardening
+
+`tools/testing/supply_chain_preflight.py` provides local report-only evidence. The script must not install tools, change Cargo features, rewrite manifests, update `Cargo.lock`, or modify `deny.toml`.
+
+The preflight report classifies missing tools as:
+
+- Required local: tools needed to produce preferred local evidence, such as workspace test or dependency graph evidence.
+- Required CI: tools required by CI and release gates, such as RustSec advisory and deny-policy checks.
+- Planned: tools that have governance value but are not mandatory until a decision record and repository configuration promote them.
+
+The preflight report also records:
+
+- Duplicate dependency owners from `cargo tree -d --workspace --locked` when Cargo can produce the graph.
+- C5 durable-crate external dependencies whose effective default-features state is implicit or enabled.
+- Workspace dependency centralization hints, including member declarations that bypass `[workspace.dependencies]` and repeated external dependencies that may need an owner decision.
+- Watch-edge gaps between supply-chain-sensitive paths and workflow path filters.
+- Dependency MSRV metadata from `cargo metadata --format-version 1 --locked`, compared with the workspace `rust-version` baseline.
+
+These sections are advisory evidence. A finding in these sections requires owner review, but it does not by itself change release policy or weaken the blocking gates defined by `cargo audit` and `cargo deny`.
+
 ## Validation
 
 Required CI evidence:
@@ -103,6 +123,13 @@ Required CI evidence:
 ```bash
 cargo audit --deny warnings
 cargo deny check --all-features
+```
+
+Required local preflight evidence for supply-chain hardening changes:
+
+```bash
+python -B tools/testing/supply_chain_preflight.py --json
+python -B tools/testing/msrv_dependency_check.py --cargo-metadata
 ```
 
 Release readiness also requires the mission-critical gates that already have repository commands:
@@ -126,11 +153,21 @@ If `cargo deny` fails, update the dependency, tighten the license/source entry, 
 
 If duplicate dependency warnings increase, inspect the reverse dependency graph and determine whether the duplicate is runtime, development-only, or tooling-only. C5 runtime duplicates require owner review.
 
+If the preflight C5 default-features report lists an external runtime dependency, review whether default features are acceptable for that crate boundary. Do not make a mechanical manifest change without an owner decision.
+
+If the preflight centralization report lists a workspace dependency bypass, decide whether the crate intentionally needs a local override. Do not centralize a dependency when the local declaration is carrying a deliberate feature or version boundary.
+
+If the watch-edge report lists a missing workflow path, treat it as a coverage review item. Adding or changing workflow triggers requires normal CI governance review.
+
+If MSRV metadata from `cargo metadata` reports a package above the workspace baseline, block release until the dependency is pinned, downgraded, replaced, isolated, or the MSRV raise is approved by decision record.
+
 If cargo-vet is requested before configuration exists, record the request as planned governance work and keep CI non-blocking until the cargo-vet decision record and configuration are accepted.
 
 ## References
 
 - `deny.toml`
+- `tools/testing/supply_chain_preflight.py`
+- `tools/testing/msrv_dependency_check.py`
 - `.github/workflows/05-supply-chain.yml`
 - `.github/workflows/release-gate-chain.yml`
 - `documentations/governance/decisions/DEC-026-release-gates-and-deferral-policy.md`

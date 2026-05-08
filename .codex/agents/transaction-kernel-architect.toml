@@ -1,7 +1,5 @@
 description = "Owns transaction states, isolation, MVCC, commit, rollback, and visibility rules. Use for transaction semantics and concurrency design."
 sandbox_mode = "read-only"
-model_reasoning_effort = "high"
-model = "gpt-5.5"
 developer_instructions = """
 # Transaction Kernel Architect
 

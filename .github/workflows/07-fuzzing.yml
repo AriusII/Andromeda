@@ -31,33 +31,27 @@ jobs:
           toolchain: nightly
           components: rust-src
       - run: cargo install cargo-fuzz --locked
-      - name: Ensure corpus seed set
-        run: python fuzz/generators/generate_seed_corpus.py --ensure-only
+      - name: Check deterministic corpus seed set
+        run: python fuzz/generators/generate_seed_corpus.py --check
+      - name: Check fuzz registry
+        run: python tools/testing/fuzz_registry_check.py
       - name: Discover fuzz targets
         id: discover
         shell: bash
         run: |
-          python - <<'PY' > fuzz-targets.txt
-          import pathlib, re
-          targets = []
-          for line in pathlib.Path("fuzz/targets.toml").read_text(encoding="utf-8").splitlines():
-              m = re.match(r'\s*name\s*=\s*"([^"]+)"', line)
-              if m:
-                  targets.append(m.group(1))
-          for target in targets:
-              print(target)
-          PY
-          cat fuzz-targets.txt
-          echo "count=$(wc -l < fuzz-targets.txt)" >> "$GITHUB_OUTPUT"
+          python tools/testing/fuzz_registry_check.py --list-targets > fuzz-targets.tsv
+          cat fuzz-targets.tsv
+          echo "count=$(wc -l < fuzz-targets.tsv)" >> "$GITHUB_OUTPUT"
       - name: Run fuzz targets
         if: steps.discover.outputs.count != '0'
         shell: bash
         run: |
-          while read -r target; do
+          fuzz_seconds="${{ github.event.inputs.fuzz_seconds || '15' }}"
+          while IFS=$'\t' read -r target corpus_dir; do
             echo "::group::fuzz $target"
-            cargo +nightly fuzz run "$target" -- -max_total_time=${{ github.event.inputs.fuzz_seconds || '15' }}
+            cargo +nightly fuzz run "$target" "$corpus_dir" -- -max_total_time="$fuzz_seconds"
             echo "::endgroup::"
-          done < fuzz-targets.txt
+          done < fuzz-targets.tsv
       - name: No fuzz targets yet
         if: steps.discover.outputs.count == '0'
         run: echo "No fuzz targets found. Add fuzz/fuzz_targets/*.rs to enable fuzzing."
@@ -66,7 +60,6 @@ jobs:
         shell: bash
         run: |
           find fuzz/artifacts -type f -mtime +30 -delete 2>/dev/null || true
-          find fuzz/corpus -type f -mtime +30 -delete 2>/dev/null || true
       - uses: actions/upload-artifact@v7
         if: always()
         with:

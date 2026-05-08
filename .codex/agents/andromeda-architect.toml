@@ -1,7 +1,5 @@
 name = "andromeda-architect"
 description = "System-level architecture reviewer for Andromeda doctrine, engine boundaries, invariants, and module separation."
-model = "gpt-5.5"
-model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 nickname_candidates = ["Andromeda"]
 

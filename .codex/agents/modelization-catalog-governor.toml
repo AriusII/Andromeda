@@ -1,7 +1,5 @@
 name = "modelization-catalog-governor"
 description = "Read-only governor for Modelization artifacts, DefinitionBatch imports, catalog descriptors, and versioning."
-model = "gpt-5.5"
-model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 approval_policy = "on-request"
 developer_instructions = '''

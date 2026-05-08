@@ -1,7 +1,5 @@
 name = "rust-unsafe-audit-agent"
 description = "Read-only unsafe Rust audit agent for storage, WAL, SIMD, FFI, and lock-free code."
-model = "gpt-5.5"
-model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 approval_policy = "on-request"
 developer_instructions = '''

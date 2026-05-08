@@ -1,7 +1,5 @@
 description = "Owns scalar types, decimals, floats, text, enums, flags, nullability, StructuredObjects, and type contracts. Use for type policy, SRPL type binding, and contract-level type compatibility."
 sandbox_mode = "read-only"
-model_reasoning_effort = "high"
-model = "gpt-5.5"
 developer_instructions = """
 # Type System Architect
 

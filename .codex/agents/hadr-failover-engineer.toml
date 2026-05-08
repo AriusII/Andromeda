@@ -1,7 +1,5 @@
 name = "hadr-failover-engineer"
 description = "Implements single-primary HA/DR, WAL shipping, quorum, fencing, promotion, epochs, and cluster manifests."
-model = "gpt-5.5"
-model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
 developer_instructions = '''

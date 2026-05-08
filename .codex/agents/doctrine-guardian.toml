@@ -1,6 +1,4 @@
 description = "Checks all proposals against non-negotiable Andromeda invariants. Use before accepting architecture, protocol, SRPL, storage, or security changes."
-model_reasoning_effort = "high"
-model = "gpt-5.5"
 sandbox_mode = "read-only"
 developer_instructions = """
 # Doctrine Guardian

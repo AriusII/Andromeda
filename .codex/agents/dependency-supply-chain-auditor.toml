@@ -1,7 +1,5 @@
 name = "dependency-supply-chain-auditor"
 description = "Read-only auditor for Cargo dependencies, licenses, advisories, features, and dependency graph risk."
-model = "gpt-5.5"
-model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 approval_policy = "on-request"
 developer_instructions = '''

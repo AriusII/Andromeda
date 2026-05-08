@@ -53,7 +53,8 @@ andromeda-types
 andromeda-wal
 ```
 
-The 32-crate shape is observed worktree output. It is not acceptance evidence.
+The 32-crate shape is observed worktree output before any additional
+target-crate scaffold packet. It is not acceptance evidence.
 
 ## Non-goals
 
@@ -63,6 +64,11 @@ The 32-crate shape is observed worktree output. It is not acceptance evidence.
 - Do not claim that new scaffold crates are final canonical owners.
 - Do not treat specifications, runbooks, fuzz corpora, benchmark output,
   audit output, RAM state, temp state, or GPU policy as database truth.
+- Do not treat planning indexes under `tests/` as canonical fuzz ownership;
+  canonical harnesses, target registry, corpus manifest, and generator remain
+  under `fuzz/`.
+- Do not normalize `docs/` and `documentations/` path mapping in this packet.
+  That mapping is being clarified by a separate documentation owner.
 - Do not resolve, stage, unstage, revert, commit, or package another worker's
   files from this artifact.
 
@@ -97,6 +103,19 @@ This document was built from source-grounded inspection:
 6. Recorded blockers separately from completed output to avoid release or
    runtime overclaim.
 
+## Roadmap Status Consolidation
+
+The read-only group findings update how this wave output should be interpreted.
+
+| Finding | Resulting status |
+| --- | --- |
+| The workspace currently has 32 root members under `crates/` before any additional target-crate scaffolds. | The new crate count is branch output only. Future scaffolds still need owner statements, topology gates, and path-local validation. |
+| Many roadmap phases remain partial. | The step table records concrete output, not phase acceptance. Specs, tests, and crates are evidence targets until clean candidate runs exist. |
+| `andromeda-maps` and `andromeda-procedure-store` are provisional. | Do not treat either crate as accepted runtime ownership for Maps, analytics, durable Procedure Store records, catalog publication, or execution integration. |
+| Fuzz remains canonical under `fuzz/`. | Use `fuzz/targets.toml`, `fuzz/corpus/manifest.toml`, `fuzz/generators/generate_seed_corpus.py`, and `fuzz/VALIDATION_MATRIX.md` as the harness and corpus authority. `tests/fuzzing/` is an index. |
+| Documentation path mapping is being clarified elsewhere. | This packet does not rewrite references between `docs/` and `documentations/`; it records only the owned roadmap-status consolidation. |
+| Release blockers remain. | Dirty worktree state, C5 crash/recovery gaps, sustained fuzz gaps, Miri/Loom gaps, supply-chain/MSRV risk, and missing retained release artifacts continue to block release claims. |
+
 ## Completed Output By Roadmap Step
 
 The table records completed worker-wave output observed in the worktree. The
@@ -115,7 +134,7 @@ status column describes validation posture, not roadmap acceptance.
 | 8 | Execution Engine, Procedure runtime, Admission, ResultStream, and Procedure Store | Added provisional `andromeda-procedure-store` with runtime-free invocation identity, status, evidence digest, evidence marker, and sink contracts. Modified execution admission, local runtime, remote invocation, ResultStream metadata, permission audit, and surface-gate tests. Added `ProcedureInvocationTrace` specification coverage. | Partial. A durable default Procedure path that mutates heap/page/WAL state and reconstructs after crash is not proven by this wave summary. |
 | 9 | Statistics, Optimizer, Plan Cache, and DecisionTrace | Added specifications for `DecisionTrace`, `PlanCacheKey`, and `StatsObject`. Modified catalog statistics, plan-cache identity, advisory evidence, scenario evidence, and procedure feedback paths. Modified SRPL optimizer tests and benchmark scenario-boundary evidence tests. | Partial or scaffolded. Optimizer and statistics decisions still require bounded, versioned, observable, explainable, disableable evidence and clean candidate tests. |
 | 10 | Maps, analytics, benchmark workload, scenario evidence, and optional GPU | Added provisional `andromeda-maps` with runtime-free Map descriptor, grain, refresh mode, and staleness primitives. Added specs for `MapDescriptor`, `MapRefreshValidation`, and `GpuBatchPolicy`. Modified benchmark history, scenario-boundary validity, regression detection, benchmark README material, and fuzz registry entries. | Planned or advisory. Maps and GPU are not accepted runtime behavior. ScenarioEvidence and benchmark output remain non-authoritative. No GPU runtime crate is present. |
-| 11 | Tests, fuzzing, crash runner, CI, supply chain, and release gates | Added root testing documentation under `tests/`, fuzz documentation and target registry updates, deterministic fuzz corpora, `fuzz/ROADMAP_FUZZ_GAPS_2026.md`, testing tools under `tools/testing/`, and release evidence documents including `documentations/testing/step-11-validation-matrix.md`, `ci-release-gate-evidence.md`, `fuzz-miri-loom-evidence.md`, `unsafe-miri-inventory-2026-05-08.md`, and `release-evidence-template.md`. | Evidence framework exists. Sustained fuzz, Miri, Loom, combined crash/recovery, and clean workspace gate artifacts remain missing for release claims. |
+| 11 | Tests, fuzzing, crash runner, CI, supply chain, and release gates | Added root testing documentation under `tests/`, fuzz documentation and target registry updates under canonical `fuzz/`, deterministic fuzz corpora, `fuzz/ROADMAP_FUZZ_GAPS_2026.md`, testing tools under `tools/testing/`, and release evidence documents including `documentations/testing/step-11-validation-matrix.md`, `ci-release-gate-evidence.md`, `fuzz-miri-loom-evidence.md`, `unsafe-miri-inventory-2026-05-08.md`, and `release-evidence-template.md`. | Evidence framework exists. Sustained fuzz, Miri, Loom, combined crash/recovery, and clean workspace gate artifacts remain missing for release claims. |
 | 12 | Normative documentation, ADRs, specs, runbooks, and PR packaging | Added or updated the specification index, governance documents, ADR backlog, C4/C5 control matrix, C5 refactor freeze checklist, MSRV and dependency risk notes, release-readiness gates, risk register, supply-chain policy, operations runbooks, implementation ledgers, architecture ledgers, and ADR files for unsafe policy, binary format endian policy, WAL commit visibility, GPU exclusion, Rust toolchain/MSRV, and engine crate mapping. | Documentation output is concrete, but it does not approve runtime behavior. Current release disposition remains blocked in governance documents. |
 
 ## New Crates
@@ -157,6 +176,11 @@ governance files, but they are not counted here as new untracked files.
 The wave added or modified tests across owner crates and added root-level test
 planning artifacts.
 
+Canonical fuzz ownership remains under `fuzz/`. Planning documents under
+`tests/fuzzing/` may index or explain fuzz evidence, but they do not replace
+`fuzz/targets.toml`, `fuzz/corpus/manifest.toml`,
+`fuzz/generators/generate_seed_corpus.py`, or `fuzz/VALIDATION_MATRIX.md`.
+
 | Test area | Concrete output observed |
 | --- | --- |
 | Workspace topology and doctrine | Modified CLI topology and orphan-source invariant tests; added `crates/andromeda-cli/tests/workspace_dependency_topology/` and policy scanner tests under `.github/scripts/tests/`. |
@@ -193,6 +217,7 @@ The following blockers are active as of the inspected 2026-05-08 worktree.
 
 | Blocker | Evidence observed | Effect |
 | --- | --- | --- |
+| Release blockers remain | Governance, testing, and release evidence documents still require clean candidate runs, retained artifacts, C5 crash/recovery evidence, sustained fuzz evidence, and MSRV/supply-chain validation. | No release readiness, production readiness, or phase acceptance claim can be made from this wave summary. |
 | Dirty worktree | `git status --short --branch` reports broad modified, mixed, added, deleted, and untracked paths. | No release, broad compile, or acceptance claim can be made from this source state. |
 | Mixed staged and unstaged files | Many paths report `MM`; many paths report `AD`. | Packet owners must reconcile path-specific staged and working-tree content before validation or packaging. |
 | Current source state is not a clean candidate | Documentation ledgers and status output both classify the worktree as dirty. | Prior pass records cannot be reused as current evidence for the 2026-05-08 dirty branch. |
@@ -203,6 +228,7 @@ The following blockers are active as of the inspected 2026-05-08 worktree.
 | Miri and Loom evidence missing where applicable | Root Miri and Loom planning docs exist; no blocking release evidence is recorded by this pass. | Unsafe, memory-sensitive, or concurrency-sensitive claims require targeted evidence or explicit residual risk. |
 | Future-dated governance records are not current proof | Release risk documents flag DEC-035, DEC-036, and DEC-037 as future-dated relative to 2026-05-08. | They cannot be used as current release proof for this date. |
 | Scaffold crates can be overclaimed | New crates exist but are small, runtime-free scaffolds with limited or no standalone tests. | Treat them as branch output until topology, owner tests, and facade migration gates pass. |
+| Documentation path mapping is owned elsewhere | The repository currently contains both `docs/` and `documentations/` references, and a separate documentation owner is clarifying path mapping. | Do not use this wave summary to normalize paths or edit Step 12-owned documentation. |
 
 ## Validation
 
@@ -221,6 +247,7 @@ Get-ChildItem crates -Directory | Select-Object -ExpandProperty Name | Sort-Obje
 rg --files documentations
 rg --files documentations/specs documentations/testing documentations/governance documentations/operations/runbooks documentations/architecture
 rg --files tests fuzz tools .github/scripts .github/workflows .cargo .config benches
+rg -n "fuzz/|targets.toml|VALIDATION_MATRIX|corpus/manifest" fuzz tests documentations -g "*.md" -g "*.toml"
 rustc -V
 cargo -V
 where.exe link
@@ -272,5 +299,8 @@ claims.
 - `documentations/testing/ci-release-gate-evidence.md`
 - `documentations/testing/fuzz-miri-loom-evidence.md`
 - `documentations/testing/step-11-validation-matrix.md`
+- `fuzz/README.md`
+- `fuzz/VALIDATION_MATRIX.md`
+- `fuzz/corpus/manifest.toml`
 - `fuzz/targets.toml`
 - `tools/testing/`

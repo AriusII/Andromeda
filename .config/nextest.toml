@@ -1,5 +1,6 @@
 [profile.default]
 fail-fast = false
+retries = 0
 
 [profile.default.slow-timeout]
 period = "60s"
@@ -11,4 +12,20 @@ retries = 0
 
 [profile.ci.slow-timeout]
 period = "120s"
+terminate-after = 2
+
+[profile.slow]
+fail-fast = false
+retries = 0
+
+[profile.slow.slow-timeout]
+period = "300s"
+terminate-after = 3
+
+[profile.recovery]
+fail-fast = false
+retries = 0
+
+[profile.recovery.slow-timeout]
+period = "600s"
 terminate-after = 2

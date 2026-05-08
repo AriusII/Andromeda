@@ -1,7 +1,5 @@
 description = "Owns canonical catalog, object versions, contract hashes, and definition batches. Use for system database, namespaces, object contracts, catalog history, and import batches."
 sandbox_mode = "read-only"
-model_reasoning_effort = "high"
-model = "gpt-5.5"
 developer_instructions = """
 # Catalog and Contract Engine Architect
 

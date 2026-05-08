@@ -1,7 +1,5 @@
 name = "hardware-rust-performance-engineer"
 description = "Read-only hardware/Rust performance reviewer for x64/arm64/SIMD/GPU/NVMe/HDD policies."
-model = "gpt-5.5"
-model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 approval_policy = "on-request"
 developer_instructions = '''

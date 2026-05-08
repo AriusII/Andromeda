@@ -1,7 +1,5 @@
 name = "codex-routing-architect"
 description = "Defines agent and skill routing strategies for Codex based on request type, subsystem, risk, and deliverable."
-model = "gpt-5.5"
-model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
 developer_instructions = '''

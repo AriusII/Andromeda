@@ -1,7 +1,5 @@
 description = "Writes deterministic binary format specifications for pages, frames, WAL, and manifests. Use when a format requires offsets, endian rules, version fields, checksums, or compatibility policy."
 sandbox_mode = "workspace-write"
-model_reasoning_effort = "high"
-model = "gpt-5.5"
 developer_instructions = """
 # Binary Format Specifier
 

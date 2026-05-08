@@ -1,7 +1,5 @@
 description = "Owns release readiness, versioning, artifact checks, and publication gates. Use before tagging, publishing documentation, or freezing specs."
 sandbox_mode = "workspace-write"
-model_reasoning_effort = "high"
-model = "gpt-5.5"
 developer_instructions = """
 # Release Governance Agent
 

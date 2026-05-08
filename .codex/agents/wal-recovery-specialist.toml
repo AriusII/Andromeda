@@ -1,7 +1,5 @@
 description = "Owns WAL records, replay, checkpoints, manifests, and crash-recovery scenarios. Use for log format, redo/undo behavior, recovery tests, and corruption handling."
 sandbox_mode = "read-only"
-model_reasoning_effort = "high"
-model = "gpt-5.5"
 developer_instructions = """
 # WAL and Recovery Specialist
 

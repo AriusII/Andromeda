@@ -57,7 +57,7 @@ Before using this plan for implementation, complete these checks:
 | Branch | Active restructure branch | `codex/workspace-crate-restructure` | Work is already in a restructure wave, not at the external roadmap baseline. |
 | Worktree | Dirty | `git status --short` reports broad `M`, `MM`, `A`, `AD`, and untracked paths. | Treat the tree as branch intent, not acceptance evidence. |
 | Workspace shape | 26 crates under `crates/` | Root `Cargo.toml` workspace members | The older 11-crate baseline is superseded for planning. |
-| Current files owned by this task | Two documentation files | This file and the target-crate gap ledger | No code, Cargo, test, CI, hook, or governance file is changed by this task. |
+| Current files owned by this task | Step 12 documentation trace files | Roadmap status, roadmap execution plan, documentation indexes, spec-to-test matrix, closure checklist, and ADR backlog files under `documentations/` | No code, Cargo, crate README, test source, CI, hook, or Rust source file is changed by this task. |
 | Validation posture | Documentation-only consistency validation | Targeted repository reads and path-specific diff checks | No Rust build or broad gate is a valid clean-candidate proof while the tree remains dirty. |
 
 ## Current 26-Crate Reality
@@ -101,6 +101,47 @@ the 12 roadmap execution steps recorded by this plan.
 | 10 | Maps, analytics, benchmark workload, scenario evidence, and optional GPU | Mostly missing or intentionally deferred | Keep CPU-first analytics and ScenarioEvidence advisory | Durable Procedure path, statistics publication, and Maps stability; GPU remains later |
 | 11 | Tests, fuzzing, crash runner, CI, supply chain, and release gates | Partial | Map root test labels to owner-crate suites without moving tests blindly | Recorded clean-candidate runs for workspace, C5, fuzz, Miri, Loom where applicable |
 | 12 | Normative documentation, ADRs, specs, runbooks, and PR packaging | Partial | Maintain ADR backlog, specs, runbooks, packaging plan, and current-state docs | Accepted ADRs and release artifacts replace planning docs as authority |
+
+## Step 12 Documentation Trace
+
+Step 12 has three documentation outputs in this packet:
+
+1. Canonical path mapping from historical roadmap `docs/*` names to current
+   `documentations/*` locations.
+2. A spec-to-test matrix that links v0 specifications to owner suites and
+   release-gate gaps without claiming those gates passed.
+3. A closure checklist that records what is complete for documentation
+   navigation and what remains blocked for release acceptance.
+
+### Canonical Path Mapping
+
+Use this map when an older roadmap, worker matrix, or cross-check cites product
+documentation under `docs/*`.
+
+| Historical roadmap path | Canonical path | Step 12 disposition |
+|---|---|---|
+| `docs/00_ANDROMEDA_INDEX_ET_MODE_DE_LECTURE.md` | `documentations/00_ANDROMEDA_INDEX_ET_MODE_DE_LECTURE.md` | Canonical protected reading-order file. |
+| `docs/01_DOCTRINE_LEXIQUE_ARCHITECTURE_CATALOGUE_MODELIZATION.md` | `documentations/01_DOCTRINE_LEXIQUE_ARCHITECTURE_CATALOGUE_MODELIZATION.md` | Canonical protected doctrine and architecture file. |
+| `docs/02_TYPE_SYSTEM_SRPL_PROCEDURES_MAPS.md` | `documentations/02_TYPE_SYSTEM_SRPL_PROCEDURES_MAPS.md` | Canonical protected type-system, SRPL, Procedure, and Map file. |
+| `docs/03_TRANSACTION_WAL_MVCC_STORAGE_RECOVERY.md` | `documentations/03_TRANSACTION_WAL_MVCC_STORAGE_RECOVERY.md` | Canonical protected transaction, WAL, MVCC, storage, and recovery file. |
+| `docs/04_QUIC_RPC_SECURITY_HADR_OPERATIONS.md` | `documentations/04_QUIC_RPC_SECURITY_HADR_OPERATIONS.md` | Canonical protected protocol, security, HA/DR, and operations file. |
+| `docs/05_OPTIMIZER_STATS_ANALYTICS_HARDWARE_ROADMAP_SOURCES.md` | `documentations/05_OPTIMIZER_STATS_ANALYTICS_HARDWARE_ROADMAP_SOURCES.md` | Canonical protected optimizer, statistics, analytics, hardware, and roadmap source file. |
+| `docs/ANDROMEDA_ROADMAP_IMPLEMENTATION_CROSSCHECK_2026.md` | `documentations/ANDROMEDA_ROADMAP_IMPLEMENTATION_CROSSCHECK_2026.md` | Canonical historical roadmap cross-check. |
+| `docs/CURRENT_STATE.md` | `documentations/CURRENT_STATE.md` | Canonical current-state summary. |
+| `docs/ROADMAP_IMPLEMENTATION_2026.md` | `documentations/ROADMAP_IMPLEMENTATION_2026.md` | Canonical implementation roadmap. |
+| `docs/WORKER_EXECUTION_MATRIX_2026.md` | `documentations/WORKER_EXECUTION_MATRIX_2026.md` | Canonical worker execution matrix. |
+| `docs/ROADMAP_RESTRUCTURE_STATUS_2026_05_08.md` | `documentations/ROADMAP_RESTRUCTURE_STATUS_2026_05_08.md` | Canonical restructure status. |
+
+Codex tooling ADRs remain under `docs/adr/`. Step 12 links to them as
+governance evidence, but it does not duplicate them under `documentations/`.
+
+### Step 12 Companion Artifacts
+
+| Artifact | Canonical path | Use |
+|---|---|---|
+| Spec-to-test matrix | `documentations/testing/spec-validation-matrix-2026-05-08.md` | Maps each v0 specification to owner-suite validation and residual release gaps. |
+| Closure checklist | `documentations/governance/step-12-documentation-closure-2026-05-08.md` | Records documentation closure checks without release-readiness approval. |
+| ADR backlog | `documentations/governance/adr-backlog-2026-05-08.md` | Records Step 12 ADR candidates and accepted ADR references. |
 
 ## Procedure
 
@@ -291,13 +332,16 @@ The following source classes were checked:
 - The external roadmap file referenced by the repository baseline for the
   12-step execution roadmap and target crate names.
 - `documentations/testing/step-11-validation-matrix.md` and
-  `documentations/governance/adr-backlog-2026-05-08.md` for Step 11 and Step 12
-  evidence already created.
+  `documentations/testing/spec-validation-matrix-2026-05-08.md` for Step 11 and
+  spec-to-test mapping.
+- `documentations/governance/adr-backlog-2026-05-08.md` and
+  `documentations/governance/step-12-documentation-closure-2026-05-08.md` for
+  Step 12 documentation closure evidence.
 
 No Rust build, Cargo test, clippy, audit, deny, or Codex tooling validation was
-run because this task changes only two standalone implementation documents and
-does not edit Rust code, Cargo manifests, CI, hooks, skills, agents, specs, or
-ADRs.
+run because this task changes only documentation trace, index, governance, and
+testing-matrix files. It does not edit Rust code, crate README files, Cargo
+manifests, CI, hooks, skills, agents, or executable tests.
 
 ## Troubleshooting
 
@@ -323,5 +367,7 @@ ADRs.
 - `documentations/architecture/WORKSPACE_RESTRUCTURE_BASELINE_2026.md`
 - `documentations/implementation/target-crate-gap-ledger-2026-05-08.md`
 - `documentations/testing/step-11-validation-matrix.md`
+- `documentations/testing/spec-validation-matrix-2026-05-08.md`
 - `documentations/governance/adr-backlog-2026-05-08.md`
+- `documentations/governance/step-12-documentation-closure-2026-05-08.md`
 - `C:/Users/Arius/Desktop/andromeda_roadmap_restructuration_workspace_crates_engines_2026.md`

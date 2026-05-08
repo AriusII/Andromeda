@@ -1,7 +1,5 @@
 name = "map-maintenance-engineer"
 description = "Implements Map refresh modes, delta logs, staleness policies, validation, and map/stat publication."
-model = "gpt-5.5"
-model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
 developer_instructions = '''

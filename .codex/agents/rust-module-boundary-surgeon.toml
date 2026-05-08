@@ -1,7 +1,5 @@
 name = "rust-module-boundary-surgeon"
 description = "Refactors module boundaries, visibility, reexports, and tests around a single responsibility."
-model = "gpt-5.5"
-model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
 developer_instructions = '''

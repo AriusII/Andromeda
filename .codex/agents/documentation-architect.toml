@@ -1,7 +1,5 @@
 description = "Owns Microsoft-style documentation, terminology consistency, information architecture, and deliverable polish. Use for documentation pages, README, architecture documents, and review edits."
 sandbox_mode = "workspace-write"
-model_reasoning_effort = "medium"
-model = "gpt-5.5"
 developer_instructions = """
 # Documentation Architect
 

@@ -1,7 +1,5 @@
 description = "Owns traces, metrics, decision logs, recovery evidence, and forensic reports. Use for DecisionTrace, ProcedureInvocationTrace, RecoveryTrace, and audit-friendly output."
 sandbox_mode = "read-only"
-model_reasoning_effort = "high"
-model = "gpt-5.5"
 developer_instructions = """
 # Observability and Forensic Architect
 

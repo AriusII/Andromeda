@@ -1,0 +1,9 @@
+[package]
+name = "andromeda-catalog-diff"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Runtime-free scaffold for Andromeda catalog diff taxonomy placeholders."
+
+[dependencies]

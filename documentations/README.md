@@ -52,6 +52,31 @@ Before editing or citing documentation:
 | Testing and release evidence | [Testing Documentation Index](testing/index.md) | Validation matrices, release-gate context, unsafe inventory guidance, and evidence templates. |
 | Release evidence | [Release Evidence Template](testing/release-evidence-template.md) | Template for exact command evidence and residual risk. |
 
+## Step 12 Canonical Path Map
+
+Step 12 documentation work uses `documentations/` as the canonical product
+documentation tree. Historical roadmap references that use `docs/*` names must
+be resolved through this map before a reader cites them as current
+documentation.
+
+| Historical roadmap path | Canonical path | Current use |
+| --- | --- | --- |
+| `docs/00_ANDROMEDA_INDEX_ET_MODE_DE_LECTURE.md` | [00 Andromeda Index Et Mode De Lecture](00_ANDROMEDA_INDEX_ET_MODE_DE_LECTURE.md) | Protected reading order and source map. |
+| `docs/01_DOCTRINE_LEXIQUE_ARCHITECTURE_CATALOGUE_MODELIZATION.md` | [01 Doctrine, Lexique, Architecture, Catalogue, Modelization](01_DOCTRINE_LEXIQUE_ARCHITECTURE_CATALOGUE_MODELIZATION.md) | Protected doctrine, terminology, architecture, catalog, and Modelization reference. |
+| `docs/02_TYPE_SYSTEM_SRPL_PROCEDURES_MAPS.md` | [02 Type System, SRPL, Procedures, Maps](02_TYPE_SYSTEM_SRPL_PROCEDURES_MAPS.md) | Protected type-system, SRPL, Procedure, and Map reference. |
+| `docs/03_TRANSACTION_WAL_MVCC_STORAGE_RECOVERY.md` | [03 Transaction, WAL, MVCC, Storage, Recovery](03_TRANSACTION_WAL_MVCC_STORAGE_RECOVERY.md) | Protected transaction, WAL, MVCC, storage, and recovery reference. |
+| `docs/04_QUIC_RPC_SECURITY_HADR_OPERATIONS.md` | [04 QUIC, RPC, Security, HA/DR, Operations](04_QUIC_RPC_SECURITY_HADR_OPERATIONS.md) | Protected protocol, security, HA/DR, and operations reference. |
+| `docs/05_OPTIMIZER_STATS_ANALYTICS_HARDWARE_ROADMAP_SOURCES.md` | [05 Optimizer, Stats, Analytics, Hardware, Roadmap Sources](05_OPTIMIZER_STATS_ANALYTICS_HARDWARE_ROADMAP_SOURCES.md) | Protected optimizer, statistics, analytics, hardware, and roadmap source reference. |
+| `docs/ANDROMEDA_ROADMAP_IMPLEMENTATION_CROSSCHECK_2026.md` | [Andromeda Roadmap Implementation Crosscheck 2026](ANDROMEDA_ROADMAP_IMPLEMENTATION_CROSSCHECK_2026.md) | Historical roadmap cross-check retained as planning evidence. |
+| `docs/CURRENT_STATE.md` | [Current State](CURRENT_STATE.md) | Current implementation-state summary. |
+| `docs/ROADMAP_IMPLEMENTATION_2026.md` | [Roadmap Implementation 2026](ROADMAP_IMPLEMENTATION_2026.md) | Current implementation roadmap. |
+| `docs/WORKER_EXECUTION_MATRIX_2026.md` | [Worker Execution Matrix 2026](WORKER_EXECUTION_MATRIX_2026.md) | Worker ownership, validation, and residual-risk matrix. |
+| `docs/ROADMAP_RESTRUCTURE_STATUS_2026_05_08.md` | [Roadmap Restructure Status 2026-05-08](ROADMAP_RESTRUCTURE_STATUS_2026_05_08.md) | Dirty-branch restructure status and next write-wave planning. |
+
+This map does not move or supersede Codex tooling ADRs that intentionally
+remain under `docs/adr/`. Those ADRs are governance references, not product
+documentation duplicates.
+
 ## Protected doctrine and planning files
 
 The following files are intentionally kept at the top level because they are
@@ -106,3 +131,5 @@ or release task calls for them.
 - [Implementation Index](implementation/index.md)
 - [Operations Runbook Index](operations/runbooks/index.md)
 - [Architecture Decision Records](governance/decisions/index.md)
+- [Specification Validation Matrix - 2026-05-08](testing/spec-validation-matrix-2026-05-08.md)
+- [Step 12 Documentation Closure - 2026-05-08](governance/step-12-documentation-closure-2026-05-08.md)

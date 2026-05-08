@@ -1,7 +1,5 @@
 name = "context-pack-builder"
 description = "Creates reusable context packs for handoffs, subagents, implementation plans, and prompt templates."
-model = "gpt-5.5"
-model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
 developer_instructions = '''

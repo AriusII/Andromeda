@@ -28,9 +28,9 @@ pub enum MapGrain {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MapRefreshMode {
     Immediate,
+    Incremental,
     Deferred,
-    Scheduled,
-    Manual,
+    SnapshotOnly,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -109,5 +109,17 @@ mod tests {
         assert_eq!(descriptor.grain, MapGrain::Relation);
         assert_eq!(descriptor.refresh_mode, MapRefreshMode::Deferred);
         assert_eq!(descriptor.staleness, MapStalenessPolicy::AdvisorySnapshot);
+    }
+
+    #[test]
+    fn refresh_modes_match_roadmap_names() {
+        let modes = [
+            MapRefreshMode::Immediate,
+            MapRefreshMode::Incremental,
+            MapRefreshMode::Deferred,
+            MapRefreshMode::SnapshotOnly,
+        ];
+
+        assert_eq!(modes.len(), 4);
     }
 }

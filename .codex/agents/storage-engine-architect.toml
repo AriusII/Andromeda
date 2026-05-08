@@ -1,7 +1,5 @@
 description = "Owns pages, extents, segments, HotStore, ColdStore, BufferPool, and manifest switching. Use for storage layout, hot/cold placement, page format, and cold segment invariants."
 sandbox_mode = "read-only"
-model_reasoning_effort = "high"
-model = "gpt-5.5"
 developer_instructions = """
 # Storage Engine Architect
 

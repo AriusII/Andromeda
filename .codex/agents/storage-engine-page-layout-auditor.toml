@@ -1,7 +1,5 @@
 name = "storage-engine-page-layout-auditor"
 description = "Read-only auditor for page layouts, segment formats, manifests, and storage invariants."
-model = "gpt-5.5"
-model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 approval_policy = "on-request"
 developer_instructions = '''

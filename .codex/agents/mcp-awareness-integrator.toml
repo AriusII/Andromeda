@@ -1,7 +1,5 @@
 name = "mcp-awareness-integrator"
 description = "Maintains Codex instructions for using rust-lsp and rust-rover-ide MCP tools when available, without hard dependency."
-model = "gpt-5.5"
-model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
 developer_instructions = '''

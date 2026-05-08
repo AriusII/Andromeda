@@ -1,7 +1,5 @@
 name = "optimizer-plan-engineer"
 description = "Implements optimizer plan candidates, physical operators, cost model, plan cache, plan classes, and DecisionTrace."
-model = "gpt-5.5"
-model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
 developer_instructions = '''

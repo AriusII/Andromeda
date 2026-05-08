@@ -2364,498 +2364,498 @@
     },
     {
       "path": ".codex/agents/agent-registry-maintainer.toml",
-      "sha256": "275458285579e04713f2895a2177b6bfa3852d245ca30b96a13fd36acae9fe68",
-      "bytes": 1635
-    },
-    {
-      "path": ".codex/agents/analytics-gpu-architect.toml",
-      "sha256": "81b01ce2fb49bcd589c56edb2b73b8ce49bc3d87eedde0b68034b536f129c462",
-      "bytes": 1822
-    },
-    {
-      "path": ".codex/agents/andromeda-architect.toml",
-      "sha256": "8908a757ae5809a346c0fd0b4f1084b6f0bae0b251f5ba9a7eccce62857d4d11",
-      "bytes": 930
-    },
-    {
-      "path": ".codex/agents/andromeda-chief-architect.toml",
-      "sha256": "5b2cf15f18ea7b676ffc143a227583643ec48fb7f2c94537e4212da1867c275a",
-      "bytes": 1874
-    },
-    {
-      "path": ".codex/agents/backup-restore-forensic-engineer.toml",
-      "sha256": "e7ef600742eca6b853ad643c360e7a35e22df9948bca9ad9421cad28862fc22d",
-      "bytes": 1648
-    },
-    {
-      "path": ".codex/agents/benchmark-evidence-architect.toml",
-      "sha256": "a1d4ad456159c9d5637e3e0a255a9442af6a351a025cd681aa6907b82db46a3b",
-      "bytes": 1778
-    },
-    {
-      "path": ".codex/agents/binary-format-specifier.toml",
-      "sha256": "43bd719f47ec3fdebd7a56ba0420cb7f66696247bbd490dd6e8b948a510d9836",
-      "bytes": 1856
-    },
-    {
-      "path": ".codex/agents/buffer-pool-engineer.toml",
-      "sha256": "15e2803a964f28f2a3b7a7099f7447d6ed8336c729d70b22829b52c824ae1804",
-      "bytes": 1625
-    },
-    {
-      "path": ".codex/agents/catalog-contract-engine-architect.toml",
-      "sha256": "788f13d7aba61505e198731c9ffd211fea24d8380121374e2f03a929f980fbba",
-      "bytes": 1819
-    },
-    {
-      "path": ".codex/agents/catalog-modelization-governor.toml",
-      "sha256": "89b941d9da763f6e474f17c8e466d8a8cd037d5fce3dc6fd695359838d7cdd18",
-      "bytes": 1632
-    },
-    {
-      "path": ".codex/agents/ci-quality-gate-engineer.toml",
-      "sha256": "82f56910819372d2bb663fabaaf4f5e9b94cab01599e16622794a3a2cdc9defe",
-      "bytes": 1599
-    },
-    {
-      "path": ".codex/agents/codebase-cleanup-commander.toml",
-      "sha256": "c7599926f7ceba1570bf79fe5381f3338318b333ff37ef1ec730a439b021e840",
-      "bytes": 1662
-    },
-    {
-      "path": ".codex/agents/codex-routing-architect.toml",
-      "sha256": "ac99179f40fcd23ea4408fc43eea291ac2be2216613406f2538cbdb7c76c5221",
-      "bytes": 1654
-    },
-    {
-      "path": ".codex/agents/codex-skill-maintainer.toml",
-      "sha256": "31b4bc229f8e29ac83a9cec6e8bf2b69fa58debb2af08b97576a24fc7105f785",
-      "bytes": 1706
-    },
-    {
-      "path": ".codex/agents/context-intake-analyst.toml",
-      "sha256": "1ae821068237de067a7ca5d780b42e36ba41bdad38c2998a3624f21edc7de85a",
-      "bytes": 1679
-    },
-    {
-      "path": ".codex/agents/context-pack-builder.toml",
-      "sha256": "33b726ffe017735eea5b59d6311555ad7b2ab05539b47921ebf8af098d804fcd",
-      "bytes": 1639
-    },
-    {
-      "path": ".codex/agents/definitionbatch-implementer.toml",
-      "sha256": "1483bb5c69bacd825248a1d58a4dbbe5954b6a3e4226125cfa4907922e6587cf",
-      "bytes": 1636
-    },
-    {
-      "path": ".codex/agents/dependency-supply-chain-auditor.toml",
-      "sha256": "1c666381a6f86aee95bc1038afdbe8dce9e04e7f40894424920883b778b50eb0",
-      "bytes": 1651
-    },
-    {
-      "path": ".codex/agents/devex-rust-tooling-agent.toml",
-      "sha256": "b0d1ade1e2a67414fe44ed0aef2e8f6c3bfbf39f4471275a42e67ea4f2577b7a",
-      "bytes": 1638
-    },
-    {
-      "path": ".codex/agents/doctrine-guardian.toml",
-      "sha256": "c0df4112e9853705ebce36fcbb1d49a2d5889634889e83758946fed8dcd9a414",
-      "bytes": 1745
-    },
-    {
-      "path": ".codex/agents/documentation-architect.toml",
-      "sha256": "17a8895a41b55882f2183fef5d924f48193e54d30e87c8e7b6482c933b04ee62",
-      "bytes": 1831
-    },
-    {
-      "path": ".codex/agents/documentation-consistency-editor.toml",
-      "sha256": "fab2a6fa4307ffbafcf3078b58df02d1194f2d8c27ce5c1e4c0b59000420b186",
-      "bytes": 1674
-    },
-    {
-      "path": ".codex/agents/enterprise-readiness-agent.toml",
-      "sha256": "5c3f03a412a0cbb681d5aa1253dc8a59426dff3ba35f5f8151c77051a8017687",
-      "bytes": 1655
-    },
-    {
-      "path": ".codex/agents/file-size-split-enforcer.toml",
-      "sha256": "a0b9f7ce8f904a6b51c23a0c76d9cf4cc3e57d1cfb92c32e0d540cfc6246f701",
-      "bytes": 1630
-    },
-    {
-      "path": ".codex/agents/formal-invariants-agent.toml",
-      "sha256": "31185a8509f972d6859c402892e1613442df2e2c9c86971a0c5dc764c9cd4e6a",
-      "bytes": 1678
-    },
-    {
-      "path": ".codex/agents/github-implementation-planner.toml",
-      "sha256": "d95821bf35e3681a877f151977a1375ba948d6684d126702cd294b3561d4ba64",
-      "bytes": 1649
-    },
-    {
-      "path": ".codex/agents/github-pr-reviewer.toml",
-      "sha256": "f1413fb7da1ac6c69a8fedaca7fa3b012bb5539d3f04332635d167a59f4dd96e",
-      "bytes": 1656
-    },
-    {
-      "path": ".codex/agents/hadr-backup-architect.toml",
-      "sha256": "ebc75cf407fa76a0d19e05a3b83ae1f1e5d270c7b086a681e27d75f8fb7f0264",
-      "bytes": 1794
-    },
-    {
-      "path": ".codex/agents/hadr-failover-engineer.toml",
-      "sha256": "84ca7ba18cfa2b66235d724c3f504d52acd904930f5670b2b7d72b3efc722c10",
-      "bytes": 1614
-    },
-    {
-      "path": ".codex/agents/hadr-operations-runbook-agent.toml",
-      "sha256": "def0eed3d2dff16f16ec675162d3772b78ef1fe5bf8754fb63486f711acf437b",
-      "bytes": 757
-    },
-    {
-      "path": ".codex/agents/hardware-rust-performance-engineer.toml",
-      "sha256": "c674acf73e2f8d3c87795563982e3c5392e7fe4ba9d41de48daca76b4d3ff01d",
-      "bytes": 1669
-    },
-    {
-      "path": ".codex/agents/hook-policy-implementer.toml",
-      "sha256": "38c54abc6d8957090e04e735e71855cfff30856b41bc49d463091eb45fd02bc7",
-      "bytes": 1705
-    },
-    {
-      "path": ".codex/agents/hooks-governance-auditor.toml",
-      "sha256": "02284b308b5cde307fe3c7a3745c1b7fe724c23508afa5e3b4e9c9871b4268f2",
-      "bytes": 1662
-    },
-    {
-      "path": ".codex/agents/map-analytics-summarizability-reviewer.toml",
-      "sha256": "0be82f0755c1914324260022941ca757b6e80e1b60a4f7e7f33b70a40e44a187",
-      "bytes": 1665
-    },
-    {
-      "path": ".codex/agents/map-maintenance-engineer.toml",
-      "sha256": "018549d4a4be2019d9967b05bd5bb935e62e7ea377584dbbd51836ba95bb742c",
+      "sha256": "e399a3597e7e11736d412cb88064422780eb7a263a8ca74280a5f3adbfb59d6f",
       "bytes": 1634
     },
     {
-      "path": ".codex/agents/mcp-awareness-integrator.toml",
-      "sha256": "585062fff01fec75d0f43e6f76141b1f20c22b4df634f34128d035b9eadbba1b",
-      "bytes": 1669
-    },
-    {
-      "path": ".codex/agents/mega-refactor-coordinator.toml",
-      "sha256": "288a9689bd413f5a8a72116099bb8e47c8213dd7b7dcddeacdf4b3534b98f929",
-      "bytes": 1676
-    },
-    {
-      "path": ".codex/agents/modelization-catalog-governor.toml",
-      "sha256": "e4f048d20aca08aaa353d23c020a53c293becbeda6cd875a6d998fc845bf8c34",
-      "bytes": 1665
-    },
-    {
-      "path": ".codex/agents/mvcc-isolation-engineer.toml",
-      "sha256": "be8e99a816b595b3ed191957315169f775c7b236923c436d408a47cb39795390",
-      "bytes": 1636
-    },
-    {
-      "path": ".codex/agents/observability-forensic-architect.toml",
-      "sha256": "806cb588b55c15053976b2a53773dd593cd8551ed7a7d63b53f43f9789351bfa",
-      "bytes": 1807
-    },
-    {
-      "path": ".codex/agents/observability-forensic-engineer.toml",
-      "sha256": "064fceb8bfd07da9398e936b5fa8ef856bfa2ffa28a87262930e03ef4112f6f1",
-      "bytes": 1661
-    },
-    {
-      "path": ".codex/agents/optimizer-plan-engineer.toml",
-      "sha256": "8df4fc9fbc44e2d18f5fd013941852704978e36474ba3147c45edec34b44f48f",
-      "bytes": 1648
-    },
-    {
-      "path": ".codex/agents/optimizer-statistics-architect.toml",
-      "sha256": "c4a2bdf924ede0296498863b4ed4189835e3d6cc4d8aae0f628ae47c07bc0f59",
-      "bytes": 1867
-    },
-    {
-      "path": ".codex/agents/optimizer-statistics-critic.toml",
-      "sha256": "be67520f8805bca0df32cb24ca5d0052da7bc8adb4a2b35181109a6fa8fe923a",
-      "bytes": 1662
-    },
-    {
-      "path": ".codex/agents/orphan-detection-specialist.toml",
-      "sha256": "9364ba206c0c89b3ae5d887440bfe66c759b59fae7e2a07a0dfe43ee6b86679c",
-      "bytes": 1612
-    },
-    {
-      "path": ".codex/agents/performance-engineer.toml",
-      "sha256": "790dc61066ff12a83db2e18ffc80e3d1eaebd5fba45fe6a27c0a8acbdeb18f35",
-      "bytes": 1794
-    },
-    {
-      "path": ".codex/agents/procedure-contract-implementer.toml",
-      "sha256": "aea76bad860147157c98d0e62fbdcda8063f0745e4b82433923eab5afc71a0eb",
-      "bytes": 1659
-    },
-    {
-      "path": ".codex/agents/procedure-contract-reviewer.toml",
-      "sha256": "0daf22ff522726958350479422d6f0f327101e04516abcad39ea9bd192e41821",
-      "bytes": 1676
-    },
-    {
-      "path": ".codex/agents/procedure-store-engineer.toml",
-      "sha256": "05e13b667ab13b170cf1682e269ad7871a6f0cde33553141b58a6a6254783804",
-      "bytes": 1675
-    },
-    {
-      "path": ".codex/agents/prompt-library-curator.toml",
-      "sha256": "13f7f812e42abab7afe0d37027a097a5c9aba775353217cf49a078307e43b161",
-      "bytes": 1623
-    },
-    {
-      "path": ".codex/agents/prompt-refinement-specialist.toml",
-      "sha256": "90e0e88392d968cb329cc9a1431ac38743eebf468bb7896ca2699598f35739f4",
-      "bytes": 1692
-    },
-    {
-      "path": ".codex/agents/promptops-curator-agent.toml",
-      "sha256": "995d9dd981618eec6d6c7b5bc92e0f401b11533ce0ca9c32f0ee3896b8311a9f",
-      "bytes": 1738
-    },
-    {
-      "path": ".codex/agents/protobuf-contract-architect.toml",
-      "sha256": "817a52427ab70842cd5efe36b5baf83485f09b70c1671dde61f2cd3630e286e0",
-      "bytes": 1863
-    },
-    {
-      "path": ".codex/agents/qa-crash-recovery-test-designer.toml",
-      "sha256": "1b94922a8f2aa9886e0b42ff744e812141a47ea250ea6c70e397b1e35113bbeb",
-      "bytes": 1671
-    },
-    {
-      "path": ".codex/agents/quic-rpc-contract-auditor.toml",
-      "sha256": "6951286c2cefdcaa822986ebe7bc12edfc6353228ac4f91cdc38e2c347601cf1",
-      "bytes": 1618
-    },
-    {
-      "path": ".codex/agents/quic-rpc-implementation-engineer.toml",
-      "sha256": "4914783931d3f5864a7ce54d7e47174674f90033f9193d7c620b4855b5ab4768",
-      "bytes": 1630
-    },
-    {
-      "path": ".codex/agents/quic-transport-architect.toml",
-      "sha256": "6563c518944adf87e8aefc41f430f5ffd35264a855c921159e92467e1acef272",
-      "bytes": 1843
-    },
-    {
-      "path": ".codex/agents/release-governance-agent.toml",
-      "sha256": "a780db2ad051d8a06591e58a9b461d9dc8a5bd92f065c12210241315d64684b9",
-      "bytes": 1734
-    },
-    {
-      "path": ".codex/agents/release-readiness-coordinator.toml",
-      "sha256": "0eb50e6f9ec797343bf1d3bb02620968447f0b90a704482378dbcec4b1042d11",
-      "bytes": 1656
-    },
-    {
-      "path": ".codex/agents/research-synthesizer.toml",
-      "sha256": "3b1475e75746871b38d36646932dfab5d1a8684d16e9188af18b76e34d1092ad",
-      "bytes": 1772
-    },
-    {
-      "path": ".codex/agents/risk-decision-manager.toml",
-      "sha256": "20367cbe4277762733852d9fbea7b1f4f2e59ac945091f995ba6cb89629dbf74",
-      "bytes": 1756
-    },
-    {
-      "path": ".codex/agents/roadmap-master-orchestrator.toml",
-      "sha256": "9630c4a6a52b7b4fc030a232d57f0053efbd1f7cb0c815fd17bd3cfdc0db0b46",
-      "bytes": 1863
-    },
-    {
-      "path": ".codex/agents/roadmap-scope-controller.toml",
-      "sha256": "534861fc67fa9312ed18b9e739395bde5bc4b669bf8f3f0239f6aa1ecd8bbd7c",
-      "bytes": 1719
-    },
-    {
-      "path": ".codex/agents/roadmap-task-decomposer.toml",
-      "sha256": "108fcfa7280e0f31cae768b3951d1c427b98658f70f88dbb439a87bdddb7bd72",
-      "bytes": 1698
-    },
-    {
-      "path": ".codex/agents/rust-allocation-optimizer.toml",
-      "sha256": "870a1b3d5d7047b5e3859f6c9c8634768746722b2da64ab61f5408be2367b05d",
-      "bytes": 1648
-    },
-    {
-      "path": ".codex/agents/rust-architecture-splitter.toml",
-      "sha256": "d947e000c947d1feb73db836db908f7b22359ee79708681756013fc495371d8e",
-      "bytes": 1664
-    },
-    {
-      "path": ".codex/agents/rust-async-concurrency-engineer.toml",
-      "sha256": "2f511aa5d78dfa7024adaf3eb927b6c55c4ee72821fdd2353bed26215922cc60",
-      "bytes": 1700
-    },
-    {
-      "path": ".codex/agents/rust-binary-codec-engineer.toml",
-      "sha256": "1e645b4fa76d49d4340b1625cf612062b2f015f4934eb92e5e0c7d334874858f",
-      "bytes": 1664
-    },
-    {
-      "path": ".codex/agents/rust-cleanup-refactor-architect.toml",
-      "sha256": "78c274b0d859af7ebc13fd60462e12e3025c900e2d0a841ad1c167cc7a2bffb5",
-      "bytes": 1676
-    },
-    {
-      "path": ".codex/agents/rust-crate-graph-architect.toml",
-      "sha256": "1cfc8e08ad86ece33cb89e76d468558db4476454552bd3240774f213a5a89c13",
-      "bytes": 1620
-    },
-    {
-      "path": ".codex/agents/rust-dead-code-excavator.toml",
-      "sha256": "40df84dc58429dbf464d7bf8882f8e992fc42b3408e5143264e2151a27db3474",
-      "bytes": 1627
-    },
-    {
-      "path": ".codex/agents/rust-error-model-engineer.toml",
-      "sha256": "54aac7987a490a661aa668a092236a4a347af9901081d9d66f1601200f4bd7bb",
-      "bytes": 1628
-    },
-    {
-      "path": ".codex/agents/rust-gpu-batch-engineer.toml",
-      "sha256": "cb9be9e5f8de882e6f57a3740a4048f1445124af9bbe180d31f15d2c584288a7",
-      "bytes": 1641
-    },
-    {
-      "path": ".codex/agents/rust-memory-safety-auditor.toml",
-      "sha256": "7643f7a7e754908270ff0c84091b830d85a184f8691d03d41e907caf4a9bd8e8",
-      "bytes": 1633
-    },
-    {
-      "path": ".codex/agents/rust-module-boundary-surgeon.toml",
-      "sha256": "f0dd52fdc45ca09ba18bb1b3efa2f9f157230ec79d4fcf8a10823f58fb95242d",
-      "bytes": 1637
-    },
-    {
-      "path": ".codex/agents/rust-performance-optimizer.toml",
-      "sha256": "0cf743a4ad10307ef3974e9b5e759d8df656154c8dbeae4a769d8343e1af3597",
-      "bytes": 1655
-    },
-    {
-      "path": ".codex/agents/rust-simd-kernel-engineer.toml",
-      "sha256": "731782e4405a8532e53043f4b08159661e64f75fbfc8d2da9fb243085b740c2b",
-      "bytes": 1636
-    },
-    {
-      "path": ".codex/agents/rust-unsafe-audit-agent.toml",
-      "sha256": "3bc0f7e2b802e782514bb07fee2da53d2a3e8e91f4b9b558d1abd5c8f148b9b3",
-      "bytes": 1642
-    },
-    {
-      "path": ".codex/agents/rust-workspace-architect.toml",
-      "sha256": "e805d332fa536762f8e31b7e9971b7cfcf99bf343e0219110db6201c800158a3",
-      "bytes": 1764
-    },
-    {
-      "path": ".codex/agents/security-iam-auditor.toml",
-      "sha256": "20a90868689bd6b9713a095bf1ffb82b954d21618b004dd52573563b40d20eb5",
-      "bytes": 1613
-    },
-    {
-      "path": ".codex/agents/security-iam-threat-modeler.toml",
-      "sha256": "715315c69bd7354f9c40f5366eb1b7d3b4adb790a34aedbd8d8faf04f5cab34e",
-      "bytes": 1624
-    },
-    {
-      "path": ".codex/agents/security-implementation-engineer.toml",
-      "sha256": "4c40feade65a0ca9d987c93336b8cb224461a0c1d989eb107371465d6998f070",
-      "bytes": 1666
-    },
-    {
-      "path": ".codex/agents/source-grounding-researcher.toml",
-      "sha256": "9242b4e417aaa308b1fe36e881a1ca4e1060945d3c15a3d923200c26594cd5f7",
-      "bytes": 1697
-    },
-    {
-      "path": ".codex/agents/srpl-compiler-ir-architect.toml",
-      "sha256": "158524d3336fd35d30ba075221ecd959f5c786ff273a0cd00ee29541b89bcc6c",
-      "bytes": 1824
-    },
-    {
-      "path": ".codex/agents/srpl-diagnostics-engineer.toml",
-      "sha256": "afadf1b90325ade5065a5f9d0b73f297f114a671da5d054ac6876c5403d472fe",
-      "bytes": 1617
-    },
-    {
-      "path": ".codex/agents/srpl-language-designer.toml",
-      "sha256": "27932c9def4ff4dde0a91bb0de787857c21dd4d88eb82a45427106b3aab5a951",
-      "bytes": 1742
-    },
-    {
-      "path": ".codex/agents/srpl-language-specifier.toml",
-      "sha256": "b1b50face23269d34ecdbd88c5a5e525da79bb3c49702ba749e9eacbd1a847ff",
-      "bytes": 1669
-    },
-    {
-      "path": ".codex/agents/srpl-parser-binder-engineer.toml",
-      "sha256": "ea634473d4a6a3a46a654730be7216bcbc4dbca2a0e6b61723a66a10da7dbc1c",
-      "bytes": 1661
-    },
-    {
-      "path": ".codex/agents/statistics-engineer.toml",
-      "sha256": "f86bbda0f5050ba41bc730dc98a6b54fd75e6dc4b1dd1709e21fabadc547d516",
-      "bytes": 1653
-    },
-    {
-      "path": ".codex/agents/storage-engine-architect.toml",
-      "sha256": "07a805dcbfe3602f4d6ab3bc9da9186925d2343663c93d2554a82596cc10c437",
-      "bytes": 1819
-    },
-    {
-      "path": ".codex/agents/storage-engine-page-layout-auditor.toml",
-      "sha256": "a9c9849cf7e1372641105f38947d598488ce24d5ef31c03c201de9a691782e71",
-      "bytes": 1644
-    },
-    {
-      "path": ".codex/agents/storage-segment-format-engineer.toml",
-      "sha256": "4c8409060b66d97aae7a1fbc8a50d83f43fe0eb6f436f4dc1251d037fc00d261",
-      "bytes": 1694
-    },
-    {
-      "path": ".codex/agents/test-verification-architect.toml",
-      "sha256": "e0fa926d5be56171a78d02149c5a9172c0540e0ba41c47a7fafc6b83af75e0bc",
-      "bytes": 1704
-    },
-    {
-      "path": ".codex/agents/transaction-kernel-architect.toml",
-      "sha256": "5709a6cae7812bfafaf9b6441cb61efedec1bee1754fdb8105f52a339e276cc3",
-      "bytes": 1755
-    },
-    {
-      "path": ".codex/agents/transaction-wal-recovery-auditor.toml",
-      "sha256": "2c64e3f4d9fc4644b6c3c1f1e2ff4c2a8434c3ea4f77fe9fe3c230dad8a71e44",
-      "bytes": 1646
-    },
-    {
-      "path": ".codex/agents/type-system-architect.toml",
-      "sha256": "98f283d1d62c363c9450ca899e6ccb312872b6ec7f6d6eb5af1aeeade0981ef2",
-      "bytes": 1818
-    },
-    {
-      "path": ".codex/agents/wal-implementation-engineer.toml",
-      "sha256": "6bfe730b57e7f50006ebaefa94a3ed80c7da5296b78f0b32a3cf8eae6d3cbc71",
-      "bytes": 1668
-    },
-    {
-      "path": ".codex/agents/wal-recovery-specialist.toml",
-      "sha256": "199141ff58d2ab6692a295a30ac68149d03f9ebbc198dc1570353063a162ebf2",
+      "path": ".codex/agents/analytics-gpu-architect.toml",
+      "sha256": "9e4c560e90f5ad883347e1955d2b420f74af20fb73ed139d0967237dc8d7b6bf",
       "bytes": 1770
     },
     {
+      "path": ".codex/agents/andromeda-architect.toml",
+      "sha256": "58366e5c04515f712bbceaeb85012f3f62816606c239e15127f754b2c3b4279b",
+      "bytes": 878
+    },
+    {
+      "path": ".codex/agents/andromeda-chief-architect.toml",
+      "sha256": "ff737a809ff33ca562909c21975a37a93e8da164174a8686b478cb544626082f",
+      "bytes": 1822
+    },
+    {
+      "path": ".codex/agents/backup-restore-forensic-engineer.toml",
+      "sha256": "58716673601cf3e3241bfd548528ea336d29b4bebc1879f815433b3b1c2b2223",
+      "bytes": 1649
+    },
+    {
+      "path": ".codex/agents/benchmark-evidence-architect.toml",
+      "sha256": "64d943e1209b12d9f8d22f0597ea23e70c433bfeedaf24495a06c7776b2457f7",
+      "bytes": 1726
+    },
+    {
+      "path": ".codex/agents/binary-format-specifier.toml",
+      "sha256": "5196087da31955c1c423299839ce40f33b0ade71b4b51b0496835ea3eec5c2b6",
+      "bytes": 1804
+    },
+    {
+      "path": ".codex/agents/buffer-pool-engineer.toml",
+      "sha256": "4f59f0eb56264ce2b4c930c7b2cc542ed5563fd0c5af66e2c3a2e6261a5b483f",
+      "bytes": 1624
+    },
+    {
+      "path": ".codex/agents/catalog-contract-engine-architect.toml",
+      "sha256": "edc722b40a07d94c356a8e96a45aca92dd10cabff6afd72862b14b64ca50d631",
+      "bytes": 1767
+    },
+    {
+      "path": ".codex/agents/catalog-modelization-governor.toml",
+      "sha256": "00c783cecb2dcd8fe762450d4b6a9a4792f8e134fdcf8bdc2ab43c0f8dab12f7",
+      "bytes": 1633
+    },
+    {
+      "path": ".codex/agents/ci-quality-gate-engineer.toml",
+      "sha256": "846623ebe632a2e18a048457b3062452b65e943d48c9ed3d9d16e2ecbf7fc438",
+      "bytes": 1598
+    },
+    {
+      "path": ".codex/agents/codebase-cleanup-commander.toml",
+      "sha256": "aa6a60c63c552873c55ef0121e4bf94d305dee26132ad4393cae1d8c86498256",
+      "bytes": 1664
+    },
+    {
+      "path": ".codex/agents/codex-routing-architect.toml",
+      "sha256": "f4aaaaacf4d205bae9e143c2614a34b301f11a5f600d254ede6dbdebd2202569",
+      "bytes": 1655
+    },
+    {
+      "path": ".codex/agents/codex-skill-maintainer.toml",
+      "sha256": "99bea9a7f0c3784f6094f2367cef622d29926251107ab5274b96154c3cc5a620",
+      "bytes": 1708
+    },
+    {
+      "path": ".codex/agents/context-intake-analyst.toml",
+      "sha256": "308fa42b92d94a012275483789d161b7a882db1616e37cfe1bfdea6cfb735bc0",
+      "bytes": 1680
+    },
+    {
+      "path": ".codex/agents/context-pack-builder.toml",
+      "sha256": "3a90c64066f0e8361c6a7c79fb76f9a8f3d0dbbb056b2596a18115cfaca816e6",
+      "bytes": 1638
+    },
+    {
+      "path": ".codex/agents/definitionbatch-implementer.toml",
+      "sha256": "b11fd542664840ee4262be6146db84f5b754684f5ae72c0021aeffe646da769f",
+      "bytes": 1637
+    },
+    {
+      "path": ".codex/agents/dependency-supply-chain-auditor.toml",
+      "sha256": "7b23d526139863225d7b7c822145af003162c71e74663cc09a87927229a4394b",
+      "bytes": 1652
+    },
+    {
+      "path": ".codex/agents/devex-rust-tooling-agent.toml",
+      "sha256": "52b47dc89c927bcb044c09ce3817ab1797528d55e81949f0f989fca38992ec7e",
+      "bytes": 1637
+    },
+    {
+      "path": ".codex/agents/doctrine-guardian.toml",
+      "sha256": "06d94196ebf16b888631d3952f9eeb2d854d6167758cdde6dc8e5c6dc6f42ee8",
+      "bytes": 1693
+    },
+    {
+      "path": ".codex/agents/documentation-architect.toml",
+      "sha256": "a09a4fd6c93ef3ee5ea7634d7383aabb33062575989dac97211fc56983edd49c",
+      "bytes": 1777
+    },
+    {
+      "path": ".codex/agents/documentation-consistency-editor.toml",
+      "sha256": "9f739a2969e60c22174696f9dff294ec5103ebf40634a185da5c5505a6130f7f",
+      "bytes": 1673
+    },
+    {
+      "path": ".codex/agents/enterprise-readiness-agent.toml",
+      "sha256": "7b5021ac799f1513750d271f68e585c2f927d307bfb8bd7dbd91c1236a39e92b",
+      "bytes": 1656
+    },
+    {
+      "path": ".codex/agents/file-size-split-enforcer.toml",
+      "sha256": "a7c94122a9c069937fa4e53c30627e7e3ff681f3520938aac93934fb82841c94",
+      "bytes": 1629
+    },
+    {
+      "path": ".codex/agents/formal-invariants-agent.toml",
+      "sha256": "3e3defe2db300cc4270ca76ca75b7ef9046d80db0299bd938ac63ba5426f98ea",
+      "bytes": 1680
+    },
+    {
+      "path": ".codex/agents/github-implementation-planner.toml",
+      "sha256": "15fbb73938b14e69335d578ff32e0660acc5ec246842ddb9f90af9991429129c",
+      "bytes": 1650
+    },
+    {
+      "path": ".codex/agents/github-pr-reviewer.toml",
+      "sha256": "2699d9098fa1a907bbec17f3964dde5a00ad67bf69bd66a63d6ce19b149c33c5",
+      "bytes": 1658
+    },
+    {
+      "path": ".codex/agents/hadr-backup-architect.toml",
+      "sha256": "0c6b1160ee61bd3bb2748619b65ceb5b5b28f5b3b0ecf7a8a0af19d30033abc0",
+      "bytes": 1742
+    },
+    {
+      "path": ".codex/agents/hadr-failover-engineer.toml",
+      "sha256": "1be29c4e1fa743257a26b9e454040313cbacbb8cba427cee0ca2b321c60dec1e",
+      "bytes": 1615
+    },
+    {
+      "path": ".codex/agents/hadr-operations-runbook-agent.toml",
+      "sha256": "84a424e4e25e3e10e3aa298d67e0fc507a73700b4f8d9373835c2ec24473b0fc",
+      "bytes": 705
+    },
+    {
+      "path": ".codex/agents/hardware-rust-performance-engineer.toml",
+      "sha256": "b5f38cf65b84f023106d8260d24b43dcf1056ae16b8b66d467f88fba91c7df0c",
+      "bytes": 1671
+    },
+    {
+      "path": ".codex/agents/hook-policy-implementer.toml",
+      "sha256": "e937c64d6e9dbab2a9c71042c14619c50e6adf53765a8d18b77ab57a8deeba17",
+      "bytes": 1708
+    },
+    {
+      "path": ".codex/agents/hooks-governance-auditor.toml",
+      "sha256": "5c373f0b670e99e6802e3e89b2176daa01974a7b422cdce532f3ac4dd2508ed2",
+      "bytes": 1664
+    },
+    {
+      "path": ".codex/agents/map-analytics-summarizability-reviewer.toml",
+      "sha256": "7067df2861c74ac42d7f07a0f960d7eea958a2d4d6c42ff50b68fbac4d0a1f41",
+      "bytes": 1666
+    },
+    {
+      "path": ".codex/agents/map-maintenance-engineer.toml",
+      "sha256": "4087594a3e3cdaa3ace05cd1452bdb7e93c04d1b056369fc93689ceb1dfbee48",
+      "bytes": 1635
+    },
+    {
+      "path": ".codex/agents/mcp-awareness-integrator.toml",
+      "sha256": "bd97ea22f20ec69d5564a6839979d269ce754e4517b6b0b80ae7b419b3daca6d",
+      "bytes": 1668
+    },
+    {
+      "path": ".codex/agents/mega-refactor-coordinator.toml",
+      "sha256": "461f764a320c3e6ebe778d531aedca189e7997c49fcc311343f5418cf39968b7",
+      "bytes": 1678
+    },
+    {
+      "path": ".codex/agents/modelization-catalog-governor.toml",
+      "sha256": "0686f190fd6a0caa010baa770c550cb3b70851ceeb0a17c14f3fc8cce95c67bd",
+      "bytes": 1666
+    },
+    {
+      "path": ".codex/agents/mvcc-isolation-engineer.toml",
+      "sha256": "7192edf26a0641e49cc19e2573159b2afd7570c36b1707a640e5b91794816a5a",
+      "bytes": 1637
+    },
+    {
+      "path": ".codex/agents/observability-forensic-architect.toml",
+      "sha256": "995bc6426bd3d7fdcab1c0784bedcdd91ad60164f6c786ad4020f2c47e990657",
+      "bytes": 1755
+    },
+    {
+      "path": ".codex/agents/observability-forensic-engineer.toml",
+      "sha256": "54cbd4a65cd9d7a8406a7bb812e56e157fc3035b7e8a196d21cdef82132649c1",
+      "bytes": 1660
+    },
+    {
+      "path": ".codex/agents/optimizer-plan-engineer.toml",
+      "sha256": "bcbb9a65dfbd4f47d9d0ae98b3074b32fe108be94f1b0ade08e22ed69e7b888f",
+      "bytes": 1649
+    },
+    {
+      "path": ".codex/agents/optimizer-statistics-architect.toml",
+      "sha256": "2641ad418cb3bc129f2b8e726d0e2850b53139d23928ad3a0f28187a4a6e0c95",
+      "bytes": 1815
+    },
+    {
+      "path": ".codex/agents/optimizer-statistics-critic.toml",
+      "sha256": "12454ad5906a7773ff3fad2346f782dbcc5131b6da941077635ef50608984b01",
+      "bytes": 1664
+    },
+    {
+      "path": ".codex/agents/orphan-detection-specialist.toml",
+      "sha256": "f437711cc5e82ff6bd064abe10de1d907cdc493530921666350b2b3d666f2e44",
+      "bytes": 1611
+    },
+    {
+      "path": ".codex/agents/performance-engineer.toml",
+      "sha256": "8cf672849137125c83ae5f51a53e956429b0d703076bd60e40455ffea40794b6",
+      "bytes": 1742
+    },
+    {
+      "path": ".codex/agents/procedure-contract-implementer.toml",
+      "sha256": "3b2fd36cb4e185da61d8ca0f620099b25afbc4db928637a6663baadb8f339110",
+      "bytes": 1660
+    },
+    {
+      "path": ".codex/agents/procedure-contract-reviewer.toml",
+      "sha256": "1427f53c65365fe7018938c09db848b82a061865ccbbe4a95a5f8fe50aff3edd",
+      "bytes": 1678
+    },
+    {
+      "path": ".codex/agents/procedure-store-engineer.toml",
+      "sha256": "fdb49cf3660678f08e266fe90465ee4d8100711277d2d75c77a2ac23d3f42493",
+      "bytes": 1674
+    },
+    {
+      "path": ".codex/agents/prompt-library-curator.toml",
+      "sha256": "cc4f5226e72725c77cc9b17fc68835fc23319988b0b75eb7a30a4ad3c5d31470",
+      "bytes": 1622
+    },
+    {
+      "path": ".codex/agents/prompt-refinement-specialist.toml",
+      "sha256": "9b82c9951cdfb09a4ff19ca08231e0c9e13f1c723807ebd5c663910a9f55e941",
+      "bytes": 1691
+    },
+    {
+      "path": ".codex/agents/promptops-curator-agent.toml",
+      "sha256": "13eb6568e4502ded4bddbdc9da7e7caaf4babd8ab7fc0c05d4cc347e9c0e81e2",
+      "bytes": 1684
+    },
+    {
+      "path": ".codex/agents/protobuf-contract-architect.toml",
+      "sha256": "d0d21bf88683624ae4d1d6ed4d6dca5bc6479f52bcc649d97c8f080af21c0ab6",
+      "bytes": 1811
+    },
+    {
+      "path": ".codex/agents/qa-crash-recovery-test-designer.toml",
+      "sha256": "7381ab81d6f6593229df25cfdd9d81afe9577b270b058b5d39c201cde66afa69",
+      "bytes": 1672
+    },
+    {
+      "path": ".codex/agents/quic-rpc-contract-auditor.toml",
+      "sha256": "4a8dd99fa5afc0d123020a83b647aff816bf4c95a928b437292a8720f372697b",
+      "bytes": 1619
+    },
+    {
+      "path": ".codex/agents/quic-rpc-implementation-engineer.toml",
+      "sha256": "be1a71d69eae2ca989ed16437ad409c622a38b6e0379d59bffe827b1082ae48f",
+      "bytes": 1631
+    },
+    {
+      "path": ".codex/agents/quic-transport-architect.toml",
+      "sha256": "68af0e55b67cfc347cc19627ccf03adf937e86cb3af78e9c8eb5c10e1569dea6",
+      "bytes": 1791
+    },
+    {
+      "path": ".codex/agents/release-governance-agent.toml",
+      "sha256": "d1ea207226a24c3e59ed9d2bb07a45b93cfce88dfb2e418d232f4af9b9f9399d",
+      "bytes": 1682
+    },
+    {
+      "path": ".codex/agents/release-readiness-coordinator.toml",
+      "sha256": "93d7278ee1a22dd643c0256a865c0eaaded55b993e4932ff1bfe03c88cde490d",
+      "bytes": 1657
+    },
+    {
+      "path": ".codex/agents/research-synthesizer.toml",
+      "sha256": "fcaac4feb6dc586d9efe7d7477f185b3d6807bbf8ebcabade7112007711d0d18",
+      "bytes": 1720
+    },
+    {
+      "path": ".codex/agents/risk-decision-manager.toml",
+      "sha256": "0b0284ae9a62a0ff877291822197fa8689de162e16fc81b9de946544ffb49fe5",
+      "bytes": 1704
+    },
+    {
+      "path": ".codex/agents/roadmap-master-orchestrator.toml",
+      "sha256": "639a25f975d9ee34df684a06468867de3b5bdb44b502a1ad6fae7fba937a3d61",
+      "bytes": 1866
+    },
+    {
+      "path": ".codex/agents/roadmap-scope-controller.toml",
+      "sha256": "e8a29581423fd7e5942022a51dc8c8f85f1363ebadfa73c658c7453c7164889c",
+      "bytes": 1720
+    },
+    {
+      "path": ".codex/agents/roadmap-task-decomposer.toml",
+      "sha256": "e971a2cb4f0150ba177955de991f3b3a266e67fdfa70d6e35823790646a81fdd",
+      "bytes": 1699
+    },
+    {
+      "path": ".codex/agents/rust-allocation-optimizer.toml",
+      "sha256": "4769d04742595fb89b03c993a6d75c9255e314c6e12bc6be0c573fcd894165e5",
+      "bytes": 1647
+    },
+    {
+      "path": ".codex/agents/rust-architecture-splitter.toml",
+      "sha256": "76ce0e9596bbea4c436707d398be8598fdbc478ca2ef52a58fb44989ff0e331a",
+      "bytes": 1666
+    },
+    {
+      "path": ".codex/agents/rust-async-concurrency-engineer.toml",
+      "sha256": "89aa5bc6b71a892b8cba5b10db26ca8f79963114350d2fd4ed3d143ed11fc9b4",
+      "bytes": 1702
+    },
+    {
+      "path": ".codex/agents/rust-binary-codec-engineer.toml",
+      "sha256": "0effa29ef887e495918784fa96865d36097520702a6ac8302a564b0ff6d7ce5e",
+      "bytes": 1666
+    },
+    {
+      "path": ".codex/agents/rust-cleanup-refactor-architect.toml",
+      "sha256": "1422d08c2a0e923e85c4e82b18b32e273fc70c6944f5b912d63b5bd12636c4f1",
+      "bytes": 1678
+    },
+    {
+      "path": ".codex/agents/rust-crate-graph-architect.toml",
+      "sha256": "ba35b63cbd908b06f2ae4ecf88d2134f340b37fc8e28bdca3b333d0483bca077",
+      "bytes": 1621
+    },
+    {
+      "path": ".codex/agents/rust-dead-code-excavator.toml",
+      "sha256": "353d6b6d8d8a52bdd6f452721c9fde682d37575f03e2f757926827d24efc3f05",
+      "bytes": 1626
+    },
+    {
+      "path": ".codex/agents/rust-error-model-engineer.toml",
+      "sha256": "60120a4272559c2a7cd0e844e8a5b90960ea6d68d87a11fdc2ed1ece7cf417a1",
+      "bytes": 1627
+    },
+    {
+      "path": ".codex/agents/rust-gpu-batch-engineer.toml",
+      "sha256": "477a27bf5cfe9bb5cd2cc7354631d7a592662b79821c536e0f0b6f2ea0f00c95",
+      "bytes": 1642
+    },
+    {
+      "path": ".codex/agents/rust-memory-safety-auditor.toml",
+      "sha256": "21d2afb12c5d038b04d616f33bb4717150e5bd933411d2a455ca206bb5b566e7",
+      "bytes": 1634
+    },
+    {
+      "path": ".codex/agents/rust-module-boundary-surgeon.toml",
+      "sha256": "f3acc888ffc8918e59650bc89f3d1d42fd2a10b7af99f9c94bfdca90890792e1",
+      "bytes": 1638
+    },
+    {
+      "path": ".codex/agents/rust-performance-optimizer.toml",
+      "sha256": "4f699db5f77dbbbb6f1b00ef36dd0703201e99a3bd938a000a8e1a0201e3f3c2",
+      "bytes": 1657
+    },
+    {
+      "path": ".codex/agents/rust-simd-kernel-engineer.toml",
+      "sha256": "abfeb2bf4e14f44e4e154146b2f7b5d26dab3b42edd8b90ebce982030919aa9c",
+      "bytes": 1637
+    },
+    {
+      "path": ".codex/agents/rust-unsafe-audit-agent.toml",
+      "sha256": "e9824eb423d732d80225978bce46a802171957a685d18d4eafda31ae68ed524a",
+      "bytes": 1644
+    },
+    {
+      "path": ".codex/agents/rust-workspace-architect.toml",
+      "sha256": "a254ec2786be470ea9bbfa0f088949ccdf251320c32f4089e81301badf966744",
+      "bytes": 1712
+    },
+    {
+      "path": ".codex/agents/security-iam-auditor.toml",
+      "sha256": "5034aef5bbac2669d93d1a98a316c660ef13c5ca9217a2eb611977d11a4bd212",
+      "bytes": 1614
+    },
+    {
+      "path": ".codex/agents/security-iam-threat-modeler.toml",
+      "sha256": "c85aa9610381301c3de14e1df24463884f8725c491c85cc55299826802ef9aa6",
+      "bytes": 1625
+    },
+    {
+      "path": ".codex/agents/security-implementation-engineer.toml",
+      "sha256": "df1f489344aa12ad81934cdf7f65889e5160d629855b16c7b2bb8760f82ac5af",
+      "bytes": 1667
+    },
+    {
+      "path": ".codex/agents/source-grounding-researcher.toml",
+      "sha256": "7fa0bd9012fc6c4f48b540e1d145f74206f0950576afe88e8a3ccbe464284ef8",
+      "bytes": 1698
+    },
+    {
+      "path": ".codex/agents/srpl-compiler-ir-architect.toml",
+      "sha256": "99fdf4228211f6864aae129ab6ae230863780aea079104c12b89cffead65df64",
+      "bytes": 1772
+    },
+    {
+      "path": ".codex/agents/srpl-diagnostics-engineer.toml",
+      "sha256": "3414c4ecb8a14e1168475c42d4f95517b8964510a5fc087e2d45fa5c9471a488",
+      "bytes": 1616
+    },
+    {
+      "path": ".codex/agents/srpl-language-designer.toml",
+      "sha256": "ea7f9ca263dd890fa7fb65600c99226ec7b2f20e40494173747a4f31a5a35366",
+      "bytes": 1690
+    },
+    {
+      "path": ".codex/agents/srpl-language-specifier.toml",
+      "sha256": "dcbcc44e90ec2646e185671c5baacbaa2b0412873467696d61ac4ca1c68320ee",
+      "bytes": 1671
+    },
+    {
+      "path": ".codex/agents/srpl-parser-binder-engineer.toml",
+      "sha256": "53f586be900410205ea63ee0f56c3ffe6a08127ecea41dfdca636f2beadf1483",
+      "bytes": 1663
+    },
+    {
+      "path": ".codex/agents/statistics-engineer.toml",
+      "sha256": "8a9c294773a8aab1fd2fa56a6e7dd939e2d0776f2157e7b420d5f8e5541bdc87",
+      "bytes": 1654
+    },
+    {
+      "path": ".codex/agents/storage-engine-architect.toml",
+      "sha256": "397c1b0f49d45776e3536e6120fb7cf0941d0672148a8d01c3e57bb091ed8c58",
+      "bytes": 1767
+    },
+    {
+      "path": ".codex/agents/storage-engine-page-layout-auditor.toml",
+      "sha256": "aeb08be36a245fb2f18833fe52593a99207f049262043dcbf1b043521b211bdf",
+      "bytes": 1645
+    },
+    {
+      "path": ".codex/agents/storage-segment-format-engineer.toml",
+      "sha256": "04559895733f7eda3d9dd99e37c80ca559a4fffb22265378ea418c0e53e5a760",
+      "bytes": 1696
+    },
+    {
+      "path": ".codex/agents/test-verification-architect.toml",
+      "sha256": "2493025da852948f2540ba37a7ea3ee1d964feda608fc0b7c030f031952a76a2",
+      "bytes": 1707
+    },
+    {
+      "path": ".codex/agents/transaction-kernel-architect.toml",
+      "sha256": "0a41681586c1bdd1d5c7fc064eba3b96cb12c3abe662d57d51e517488200e414",
+      "bytes": 1703
+    },
+    {
+      "path": ".codex/agents/transaction-wal-recovery-auditor.toml",
+      "sha256": "59c45716029645f215c2156325414e675b5e1d14d111aa4ee96fdf208b4fe673",
+      "bytes": 1648
+    },
+    {
+      "path": ".codex/agents/type-system-architect.toml",
+      "sha256": "8767a1ab47d06daee01dd87e1d07da0d46d12c45a9ad50d9e75a32b3298f5d34",
+      "bytes": 1766
+    },
+    {
+      "path": ".codex/agents/wal-implementation-engineer.toml",
+      "sha256": "ee3af08adf4f58cbc67a506245ea822b111af3c535c5c502ba79ddabda755b34",
+      "bytes": 1670
+    },
+    {
+      "path": ".codex/agents/wal-recovery-specialist.toml",
+      "sha256": "af6f5ebbfff43bbec6f66d1eb322dcc796e0883dd2c02b1b3f4e75712db68a6d",
+      "bytes": 1718
+    },
+    {
       "path": ".codex/config.toml",
-      "sha256": "00beec0d99b75166269cb611493da6f9e5134feb2432897daad9134c5b60dd6a",
-      "bytes": 22989
+      "sha256": "ceb6fb9bcce0b5ee2347ff3ad6c732c66189e8a17e2ed29d363d4a53565cbc06",
+      "bytes": 22859
     },
     {
       "path": ".codex/hooks.json",
@@ -3019,8 +3019,8 @@
     },
     {
       "path": ".codex/routing/agent_catalog.json",
-      "sha256": "ead16973658eae63d83da89b0acfcd74af4a3b083611ec1b64fc186db4b08fac",
-      "bytes": 40610
+      "sha256": "421916ac7d52e99de0aeadced5ce623e6fb73097bb8e791840805ec4595e4b03",
+      "bytes": 36750
     },
     {
       "path": ".codex/routing/skill_catalog.json",
@@ -3079,8 +3079,8 @@
     },
     {
       "path": ".codex/scripts/__pycache__/repair_codex_agent_registry.cpython-314.pyc",
-      "sha256": "ed4c00ffb62dd4b6ce8564258b2463c7fc980573ae4dc0a9f59ba8ab4c0bbaef",
-      "bytes": 18473
+      "sha256": "afae831d03c2a7c6cbb270058234cf052149606eeb6f8916afa6ac66138b3268",
+      "bytes": 17496
     },
     {
       "path": ".codex/scripts/__pycache__/validate_codex_tooling.cpython-314.pyc",
@@ -3334,8 +3334,8 @@
     },
     {
       "path": ".codex/scripts/repair_codex_agent_registry.py",
-      "sha256": "fabfa3039157b79e3e30a69d7922dc64563d3b9c09068523d060de72c508340b",
-      "bytes": 10691
+      "sha256": "9c7688ce4dd0aa575a4cedc589c1c760990bf6eba20d505595e88ac8bb6f7f85",
+      "bytes": 9881
     },
     {
       "path": ".codex/scripts/validate_codex_tooling.py",

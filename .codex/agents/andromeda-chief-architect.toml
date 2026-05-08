@@ -1,7 +1,5 @@
 description = "Owns global coherence across engines, planes, contracts, and roadmap. Use for broad architecture decisions, cross-engine tradeoffs, and final consolidation."
 sandbox_mode = "read-only"
-model_reasoning_effort = "high"
-model = "gpt-5.5"
 developer_instructions = """
 # Andromeda Chief Architect
 

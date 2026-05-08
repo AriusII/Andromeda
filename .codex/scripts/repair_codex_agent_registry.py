@@ -58,10 +58,6 @@ WORKSPACE_WRITE_NAMES = {
     "release-governance-agent",
     "risk-decision-manager",
 }
-MEDIUM_EFFORT_NAMES = {
-    "documentation-architect",
-    "promptops-curator-agent",
-}
 READ_ONLY_ROLE_RE = re.compile(
     r"\b(?:auditor|reviewer|critic|guardian)\b|threat[- ]model|source-grounding",
     re.I,
@@ -128,12 +124,6 @@ def intended_sandbox(name: str, description: str) -> str:
     return "workspace-write"
 
 
-def intended_effort(name: str) -> str:
-    if name in MEDIUM_EFFORT_NAMES:
-        return "medium"
-    return "high"
-
-
 def replace_or_insert_scalar(text: str, key: str, value: str) -> str:
     line = f'{key} = "{value}"'
     pattern = re.compile(rf"^{re.escape(key)}\s*=.*$", re.M)
@@ -141,12 +131,12 @@ def replace_or_insert_scalar(text: str, key: str, value: str) -> str:
         return pattern.sub(line, text, count=1)
 
     insert_after = None
-    for candidate in ("description", "model", "model_reasoning_effort", "sandbox_mode", "name"):
+    for candidate in ("description", "sandbox_mode", "name"):
         candidate_pattern = re.compile(rf"^{re.escape(candidate)}\s*=.*$", re.M)
         match = candidate_pattern.search(text)
         if match:
             insert_after = match
-            if candidate in {"description", "model", "model_reasoning_effort"}:
+            if candidate == "description":
                 break
 
     if insert_after is None:
@@ -161,10 +151,6 @@ def normalize_agent_file(path: Path) -> bool:
     description = str(data["description"])
 
     updated = text
-    if not isinstance(data.get("model"), str) or not data.get("model"):
-        updated = replace_or_insert_scalar(updated, "model", "gpt-5.5")
-    if not isinstance(data.get("model_reasoning_effort"), str) or not data.get("model_reasoning_effort"):
-        updated = replace_or_insert_scalar(updated, "model_reasoning_effort", intended_effort(name))
     if not isinstance(data.get("sandbox_mode"), str) or not data.get("sandbox_mode"):
         updated = replace_or_insert_scalar(updated, "sandbox_mode", intended_sandbox(name, description))
 
@@ -219,8 +205,6 @@ def build_config(original: dict[str, object], entries: list[tuple[str, str, str,
     header = {key: original[key] for key in TOP_LEVEL_KEYS if key in original}
     if not header:
         header = {
-            "model": "gpt-5.5",
-            "model_reasoning_effort": "high",
             "sandbox_mode": "workspace-write",
             "approval_policy": "on-request",
         }
@@ -279,7 +263,6 @@ def build_agent_catalog(entries: list[tuple[str, str, str, dict[str, object]]]) 
                 "name": name,
                 "description": description,
                 "sandbox_mode": agent.get("sandbox_mode", intended_sandbox(name, description)),
-                "model_reasoning_effort": agent.get("model_reasoning_effort", intended_effort(name)),
                 "primary_skills": extract_primary_skills(agent),
             }
         )

@@ -1,7 +1,5 @@
 name = "roadmap-task-decomposer"
 description = "Breaks large roadmap prompts into executable units, ordered milestones, dependencies, and validation gates."
-model = "gpt-5.5"
-model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
 developer_instructions = '''

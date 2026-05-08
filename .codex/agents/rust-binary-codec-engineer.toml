@@ -1,7 +1,5 @@
 name = "rust-binary-codec-engineer"
 description = "Implements explicit binary codecs for WAL, pages, manifests, segments, RPC frames, and contracts."
-model = "gpt-5.5"
-model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
 developer_instructions = '''

@@ -1,7 +1,5 @@
 name = "procedure-contract-reviewer"
 description = "Read-only reviewer for ProcedureContract, ContractHash, compatibility, permissions, and RPC shapes."
-model = "gpt-5.5"
-model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 approval_policy = "on-request"
 developer_instructions = '''

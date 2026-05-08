@@ -15,6 +15,7 @@ This index covers documentation in `documentations/testing`:
 - local release evidence generator schema;
 - bounded Miri subset inventory;
 - Step 11 owner-suite and crash/recovery mapping;
+- Step 12 spec-to-test mapping;
 - fuzz, Miri, and Loom evidence requirements;
 - unsafe, lock-free, sanitizer, and Miri inventory expectations.
 
@@ -48,6 +49,7 @@ Before using these documents for a release packet:
 | [Release Evidence Schema](../../tools/testing/release_evidence_schema.md) | JSON schema for the local release evidence generator. | The generator captures metadata and declared check results only; it does not run gates or claim readiness. |
 | [Miri Subset - 2026-05-08](miri-subset-2026-05-08.md) | Bounded Miri subset commands and exclusions for lightweight owner-crate checks. | Use `tools/testing/miri_subset.py` to print or run the subset; dry-run output is inventory, not release evidence. |
 | [Step 11 Validation Matrix](step-11-validation-matrix.md) | Mapping Step 11 roadmap labels to crate-owned suites, C5 combined gates, crash/recovery scenarios, and release gaps. | Treat isolated owner-suite passes as partial when a release claim needs end-to-end durable visibility. |
+| [Specification Validation Matrix - 2026-05-08](spec-validation-matrix-2026-05-08.md) | Mapping v0 specifications to owner-suite validation areas and residual release gaps. | Treat this as mapping evidence only; it does not prove that any listed command passed. |
 | [Fuzz, Miri, and Loom Evidence](fuzz-miri-loom-evidence.md) | Deep-validation evidence for fuzz targets, Miri targets, and Loom models. | Fuzz, Miri, and Loom evidence is subordinate to crash/recovery and durable visibility for C5 claims. |
 | [Unsafe, Lock-Free, and Miri Inventory](unsafe-miri-inventory-2026-05-08.md) | Inventory and evidence requirements for unsafe Rust, lock-free or atomic code, Miri checks, and sanitizer checks. | Inventory output is review evidence only. It does not approve unsafe code, lock-free algorithms, or C4/C5 behavior. |
 
@@ -55,13 +57,14 @@ Before using these documents for a release packet:
 
 1. Start with `ci-release-gate-evidence.md` to identify the required workspace, supply-chain, fuzz, Miri, Loom, and crash/recovery gate evidence.
 2. Use `step-11-validation-matrix.md` to map the affected roadmap label to crate-owned commands and crash/recovery scenarios.
-3. Use `fuzz-miri-loom-evidence.md` when the release claim touches malformed input, explicit byte formats, unsafe or aliasing-sensitive code, or concurrency interleavings.
-4. Use `unsafe-miri-inventory-2026-05-08.md` when a change or release claim touches unsafe Rust, atomics, lock-free behavior, sanitizer evidence, or Miri evidence.
-5. Record each command or manual decision with `release-evidence-template.md`.
-6. Use `tools/testing/miri_subset.py` to list or run the bounded Miri subset when memory-sensitive crates are in scope.
-7. Use `tools/testing/release_evidence.py` only to capture local metadata and declared check records; do not treat its output as release approval.
-8. Mark missing, failed, skipped, partial, smoke-only, or continue-on-error evidence as residual risk.
-9. Require release-owner review before changing any readiness disposition.
+3. Use `spec-validation-matrix-2026-05-08.md` to map the affected v0 specification to owner-suite validation areas and release gaps.
+4. Use `fuzz-miri-loom-evidence.md` when the release claim touches malformed input, explicit byte formats, unsafe or aliasing-sensitive code, or concurrency interleavings.
+5. Use `unsafe-miri-inventory-2026-05-08.md` when a change or release claim touches unsafe Rust, atomics, lock-free behavior, sanitizer evidence, or Miri evidence.
+6. Record each command or manual decision with `release-evidence-template.md`.
+7. Use `tools/testing/miri_subset.py` to list or run the bounded Miri subset when memory-sensitive crates are in scope.
+8. Use `tools/testing/release_evidence.py` only to capture local metadata and declared check records; do not treat its output as release approval.
+9. Mark missing, failed, skipped, partial, smoke-only, or continue-on-error evidence as residual risk.
+10. Require release-owner review before changing any readiness disposition.
 
 ## Validation
 
@@ -78,7 +81,10 @@ For documentation-only updates in this directory, validate by checking:
   guidance is referenced;
 - no pass claims without retained evidence.
 
-For release validation, use the commands and evidence requirements in `ci-release-gate-evidence.md`, `step-11-validation-matrix.md`, `fuzz-miri-loom-evidence.md`, and `unsafe-miri-inventory-2026-05-08.md`.
+For release validation, use the commands and evidence requirements in
+`ci-release-gate-evidence.md`, `step-11-validation-matrix.md`,
+`spec-validation-matrix-2026-05-08.md`, `fuzz-miri-loom-evidence.md`, and
+`unsafe-miri-inventory-2026-05-08.md`.
 
 ## Troubleshooting
 
@@ -110,3 +116,4 @@ If an artifact cannot be retained, do not use the command as release proof. Reru
 - `tests/miri/README.md`
 - `tests/loom/README.md`
 - `tests/loom/Cargo.toml`
+- `documentations/testing/spec-validation-matrix-2026-05-08.md`

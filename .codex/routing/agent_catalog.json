@@ -3,7 +3,6 @@
     "name": "agent-registry-maintainer",
     "description": "Maintains .codex/config.toml agent entries and .codex/agents TOML coherence.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "medium",
     "primary_skills": [
       "codex-agent-registry-maintenance",
       "codex-agent-authoring",
@@ -14,7 +13,6 @@
     "name": "analytics-gpu-architect",
     "description": "Owns off-critical-path analytics, SIMD/GPU batch work, and GPU safety boundaries. Use for GPU-assisted statistics, analytical maps, vector/statistical workloads, and GPU exclusion from commit path.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "gpu-off-commit-path-check",
       "statistics-histogram-design",
@@ -25,14 +23,12 @@
     "name": "andromeda-architect",
     "description": "System-level architecture reviewer for Andromeda doctrine, engine boundaries, invariants, and module separation.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": []
   },
   {
     "name": "andromeda-chief-architect",
     "description": "Owns global coherence across engines, planes, contracts, and roadmap. Use for broad architecture decisions, cross-engine tradeoffs, and final consolidation.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "project-invariant-check",
       "terminology-normalization",
@@ -44,7 +40,6 @@
     "name": "backup-restore-forensic-engineer",
     "description": "Implements backup, restore, PITR, forensic startup, immutable retention, and restore testing.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "backup-restore-pitr",
       "forensic-startup-runbook",
@@ -55,7 +50,6 @@
     "name": "benchmark-evidence-architect",
     "description": "Owns predictive evidence scenarios, workload realism, scoring, and benchmark governance. Use for benchmark design, ScenarioEvidence, and evidence validation.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "benchmark-workload-design",
       "predictive-evidence-scoring",
@@ -66,7 +60,6 @@
     "name": "binary-format-specifier",
     "description": "Writes deterministic binary format specifications for pages, frames, WAL, and manifests. Use when a format requires offsets, endian rules, version fields, checksums, or compatibility policy.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "storage-page-layout",
       "wal-record-design",
@@ -78,7 +71,6 @@
     "name": "buffer-pool-engineer",
     "description": "Designs BufferPool pinning, dirty tracking, eviction, checkpoint cooperation, read-ahead, and metrics.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "medium",
     "primary_skills": [
       "bufferpool-io-scheduler",
       "hot-cold-storage-policy",
@@ -89,7 +81,6 @@
     "name": "catalog-contract-engine-architect",
     "description": "Owns canonical catalog, object versions, contract hashes, and definition batches. Use for system database, namespaces, object contracts, catalog history, and import batches.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "catalog-object-modeling",
       "definition-batch-dryrun",
@@ -100,7 +91,6 @@
     "name": "catalog-modelization-governor",
     "description": "Governs catalog, modelization, DefinitionBatch, object lifecycles, and versioned policies.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "catalog-object-model",
       "definitionbatch-validation",
@@ -111,7 +101,6 @@
     "name": "ci-quality-gate-engineer",
     "description": "Implements CI gates and local scripts for Rust and Codex tooling validation.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "medium",
     "primary_skills": [
       "rust-ci-quality-gates",
       "codex-tooling-validation",
@@ -122,7 +111,6 @@
     "name": "codebase-cleanup-commander",
     "description": "Coordinates broad code cleanup, dead code removal, orphan detection, refactor slices, and validation commands.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "rust-clean-code-refactor",
       "rust-dead-code-removal",
@@ -134,7 +122,6 @@
     "name": "codex-routing-architect",
     "description": "Defines agent and skill routing strategies for Codex based on request type, subsystem, risk, and deliverable.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "agent-skill-routing",
       "codex-agent-authoring",
@@ -145,7 +132,6 @@
     "name": "codex-skill-maintainer",
     "description": "Creates, updates, validates, and forward-tests Codex skills with progressive disclosure and precise triggers.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "codex-skill-authoring",
       "skill-progressive-disclosure",
@@ -157,7 +143,6 @@
     "name": "context-intake-analyst",
     "description": "Builds a precise understanding of user intent, project context, available sources, and uncertainty before execution.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "project-context-intake",
       "prompt-intent-disambiguation",
@@ -168,7 +153,6 @@
     "name": "context-pack-builder",
     "description": "Creates reusable context packs for handoffs, subagents, implementation plans, and prompt templates.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "medium",
     "primary_skills": [
       "context-pack-construction",
       "agent-handoff-protocol",
@@ -179,7 +163,6 @@
     "name": "definitionbatch-implementer",
     "description": "Implements DefinitionBatch parsing, dependency sorting, DryRun, validation, WAL coverage, and rollback.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "definitionbatch-validation",
       "catalog-object-model",
@@ -190,7 +173,6 @@
     "name": "dependency-supply-chain-auditor",
     "description": "Read-only auditor for Cargo dependencies, licenses, advisories, features, and dependency graph risk.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "rust-supply-chain-audit",
       "rust-dependency-pruning",
@@ -201,7 +183,6 @@
     "name": "devex-rust-tooling-agent",
     "description": "Implements developer experience tooling for Rust quality gates, scripts, xtask, reports, and Codex validation.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "medium",
     "primary_skills": [
       "rust-ci-quality-gates",
       "codex-tooling-validation",
@@ -212,7 +193,6 @@
     "name": "doctrine-guardian",
     "description": "Checks all proposals against non-negotiable Andromeda invariants. Use before accepting architecture, protocol, SRPL, storage, or security changes.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "project-invariant-check",
       "no-sql-surface-scan",
@@ -224,7 +204,6 @@
     "name": "documentation-architect",
     "description": "Owns Microsoft-style documentation, terminology consistency, information architecture, and deliverable polish. Use for documentation pages, README, architecture documents, and review edits.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "medium",
     "primary_skills": [
       "microsoft-doc-style-edit",
       "terminology-normalization",
@@ -235,7 +214,6 @@
     "name": "documentation-consistency-editor",
     "description": "Read-only documentation consistency agent for Andromeda and Codex tooling documents.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "medium",
     "primary_skills": [
       "decision-record-authoring",
       "source-grounded-answering",
@@ -246,7 +224,6 @@
     "name": "enterprise-readiness-agent",
     "description": "Read-only enterprise readiness reviewer for supportability, auditability, recoverability, operations, and release gates.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "enterprise-readiness-review",
       "release-gate-mission-critical",
@@ -257,7 +234,6 @@
     "name": "file-size-split-enforcer",
     "description": "Finds large Rust files and proposes responsibility-based splits with tests and reexports.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "medium",
     "primary_skills": [
       "rust-file-size-governance",
       "rust-module-splitting",
@@ -268,7 +244,6 @@
     "name": "formal-invariants-agent",
     "description": "Read-only formal invariants agent for set theory, relational algebra, transaction invariants, and safety proofs.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "andromeda-doctrine-invariants",
       "relational-algebra-law-check",
@@ -280,7 +255,6 @@
     "name": "github-implementation-planner",
     "description": "Plans repository changes from GitHub context into safe file edits, tests, and review packets.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "project-context-intake",
       "roadmap-task-decomposition",
@@ -291,7 +265,6 @@
     "name": "github-pr-reviewer",
     "description": "Read-only GitHub PR reviewer for Rust, Andromeda architecture, tests, and policy compliance.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "rust-clean-code-refactor",
       "rust-ci-quality-gates",
@@ -303,7 +276,6 @@
     "name": "hadr-backup-architect",
     "description": "Owns single-primary replication, quorum, WAL shipping, backup, restore, PITR, and forensic startup. Use for HA/DR, backup, restore, failover, quorum, and disaster recovery planning.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "hadr-quorum-review",
       "backup-pitr-runbook",
@@ -314,7 +286,6 @@
     "name": "hadr-failover-engineer",
     "description": "Implements single-primary HA/DR, WAL shipping, quorum, fencing, promotion, epochs, and cluster manifests.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "hadr-quorum-fencing",
       "backup-restore-pitr",
@@ -325,14 +296,12 @@
     "name": "hadr-operations-runbook-agent",
     "description": "HA/DR, backup, restore, PITR, forensic startup, and operations runbook specialist.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": []
   },
   {
     "name": "hardware-rust-performance-engineer",
     "description": "Read-only hardware/Rust performance reviewer for x64/arm64/SIMD/GPU/NVMe/HDD policies.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "hardware-profile-policy",
       "cpu-simd-kernel-policy",
@@ -344,7 +313,6 @@
     "name": "hook-policy-implementer",
     "description": "Implements and hardens Codex hooks and hook scripts for Andromeda workflows.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "hook-design-governance",
       "hook-script-hardening",
@@ -357,7 +325,6 @@
     "name": "hooks-governance-auditor",
     "description": "Read-only auditor for Codex hook policies, hook scripts, matcher usage, failure modes, and user friction.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "hook-design-governance",
       "hook-json-validation",
@@ -369,7 +336,6 @@
     "name": "map-analytics-summarizability-reviewer",
     "description": "Read-only reviewer for Maps, analytics grain, summarizability, refresh policy, and GPU boundaries.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "map-summarizability-review",
       "map-materialization-policy",
@@ -380,7 +346,6 @@
     "name": "map-maintenance-engineer",
     "description": "Implements Map refresh modes, delta logs, staleness policies, validation, and map/stat publication.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "map-materialization-policy",
       "map-summarizability-review",
@@ -391,7 +356,6 @@
     "name": "mcp-awareness-integrator",
     "description": "Maintains Codex instructions for using rust-lsp and rust-rover-ide MCP tools when available, without hard dependency.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "medium",
     "primary_skills": [
       "mcp-aware-tool-selection",
       "context-pack-construction",
@@ -402,7 +366,6 @@
     "name": "mega-refactor-coordinator",
     "description": "Coordinates large refactors with behavior locks, strangler patterns, agent handoffs, and rollback plans.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "roadmap-task-decomposition",
       "rust-clean-code-refactor",
@@ -414,7 +377,6 @@
     "name": "modelization-catalog-governor",
     "description": "Read-only governor for Modelization artifacts, DefinitionBatch imports, catalog descriptors, and versioning.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "catalog-object-model",
       "definitionbatch-validation",
@@ -425,7 +387,6 @@
     "name": "mvcc-isolation-engineer",
     "description": "Designs MVCC visibility, isolation policies, long-reader handling, version GC, and anomaly documentation.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "mvcc-isolation-analysis",
       "transaction-state-machine",
@@ -436,7 +397,6 @@
     "name": "observability-forensic-architect",
     "description": "Owns traces, metrics, decision logs, recovery evidence, and forensic reports. Use for DecisionTrace, ProcedureInvocationTrace, RecoveryTrace, and audit-friendly output.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "observability-decision-trace",
       "audit-trace-specification",
@@ -447,7 +407,6 @@
     "name": "observability-forensic-engineer",
     "description": "Implements trace schemas, metrics, RecoveryReport, DecisionTrace, audit ledgers, and forensic evidence.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "medium",
     "primary_skills": [
       "audit-trace-schema",
       "observability-decision-trace",
@@ -458,7 +417,6 @@
     "name": "optimizer-plan-engineer",
     "description": "Implements optimizer plan candidates, physical operators, cost model, plan cache, plan classes, and DecisionTrace.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "optimizer-cost-modeling",
       "relational-algebra-law-check",
@@ -469,7 +427,6 @@
     "name": "optimizer-statistics-architect",
     "description": "Owns cost/evidence planning, PlanClass, statistics versions, histograms, and plan stability. Use for plan cache, statistics, cardinality, skew, and evidence-driven optimization.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "optimizer-planclass-design",
       "statistics-histogram-design",
@@ -481,7 +438,6 @@
     "name": "optimizer-statistics-critic",
     "description": "Read-only critic for optimizer, statistics, evidence, learned components, and plan stability.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "optimizer-cost-modeling",
       "statistics-histogram-design",
@@ -493,7 +449,6 @@
     "name": "orphan-detection-specialist",
     "description": "Finds orphan files, modules, dependencies, features, docs, examples, tests, and scripts.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "medium",
     "primary_skills": [
       "rust-orphan-detection",
       "rust-dead-code-removal",
@@ -504,7 +459,6 @@
     "name": "performance-engineer",
     "description": "Owns performance budgets, benchmark interpretation, cache behavior, IO pressure, and regression risk. Use for CPU/NVMe/QUIC/storage performance analysis and budget proposals.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "performance-budgeting",
       "benchmark-workload-design",
@@ -515,7 +469,6 @@
     "name": "procedure-contract-implementer",
     "description": "Implements ProcedureContract descriptors, canonicalization, compatibility, and contract validation.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "srpl-procedure-contract",
       "contracthash-canonicalization",
@@ -526,7 +479,6 @@
     "name": "procedure-contract-reviewer",
     "description": "Read-only reviewer for ProcedureContract, ContractHash, compatibility, permissions, and RPC shapes.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "srpl-procedure-contract",
       "contracthash-canonicalization",
@@ -538,7 +490,6 @@
     "name": "procedure-store-engineer",
     "description": "Implements Procedure Store invocation history, feedback, metrics, regression detection, and audit correlation.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "medium",
     "primary_skills": [
       "procedure-store-design",
       "observability-decision-trace",
@@ -549,7 +500,6 @@
     "name": "prompt-library-curator",
     "description": "Maintains .codex/prompts templates and aligns them with agents, skills, and Andromeda doctrine.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "medium",
     "primary_skills": [
       "prompt-library-maintenance",
       "codex-prompt-template-design",
@@ -560,7 +510,6 @@
     "name": "prompt-refinement-specialist",
     "description": "Rewrites broad user requests into precise Codex work orders and prompt templates without losing intent.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "medium",
     "primary_skills": [
       "prompt-scope-normalization",
       "codex-prompt-template-design",
@@ -571,7 +520,6 @@
     "name": "promptops-curator-agent",
     "description": "Owns prompts, instruction pack quality, agent-skill registry coherence, and hook governance. Use when editing this AI operating pack.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "medium",
     "primary_skills": [
       "skill-composition-review",
       "hook-policy-design",
@@ -583,7 +531,6 @@
     "name": "protobuf-contract-architect",
     "description": "Owns .proto contracts, compatibility, schema evolution, result metadata, and StructuredObject payload shapes. Use for contract generation, schema review, and protobuf compatibility rules.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "protobuf-schema-review",
       "structuredobject-layout",
@@ -595,7 +542,6 @@
     "name": "qa-crash-recovery-test-designer",
     "description": "Designs deterministic crash/recovery tests for WAL, storage, catalog, maps, and manifest publication.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "wal-crash-recovery-testing",
       "crash-injection-matrix",
@@ -606,7 +552,6 @@
     "name": "quic-rpc-contract-auditor",
     "description": "Read-only auditor for QUIC/RPC frame contracts, surfaces, metadata-before-payload, errors, and backpressure.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "quic-rpc-frame-contracts",
       "resultstream-protocol",
@@ -617,7 +562,6 @@
     "name": "quic-rpc-implementation-engineer",
     "description": "Implements QUIC/RPC frames, session state, typed payloads, ResultStream, errors, and backpressure.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "quic-rpc-frame-contracts",
       "resultstream-protocol",
@@ -628,7 +572,6 @@
     "name": "quic-transport-architect",
     "description": "Owns QUIC surfaces, streams, flow control, backpressure, session behavior, and RPC dispatch boundaries. Use for network surface, stream mapping, backpressure, connection lifecycle, and transport errors.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "quic-frame-design",
       "rowcount-metadata-design",
@@ -639,7 +582,6 @@
     "name": "release-governance-agent",
     "description": "Owns release readiness, versioning, artifact checks, and publication gates. Use before tagging, publishing documentation, or freezing specs.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "agent-output-validation",
       "risk-register-update",
@@ -650,7 +592,6 @@
     "name": "release-readiness-coordinator",
     "description": "Coordinates release readiness evidence across Rust, Codex tooling, C4/C5 components, docs, and validation.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "release-gate-mission-critical",
       "enterprise-readiness-review",
@@ -661,7 +602,6 @@
     "name": "research-synthesizer",
     "description": "Turns academic, standards, and vendor sources into project-safe recommendations. Use for modern research, source triangulation, and frontier versus consensus distinction.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "source-corpus-synthesis",
       "scientific-crosscheck",
@@ -672,7 +612,6 @@
     "name": "risk-decision-manager",
     "description": "Maintains risk register, decision records, rejected alternatives, and open issues. Use for ADRs, risk reviews, decision cleanup, and project governance.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "risk-register-update",
       "decision-record-authoring",
@@ -683,7 +622,6 @@
     "name": "roadmap-master-orchestrator",
     "description": "Central roadmap-following agent for large Andromeda Codex work. Coordinates objectives, task graphs, sub-agent routing, checkpoints, and final integration.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "roadmap-objective-tracing",
       "roadmap-task-decomposition",
@@ -696,7 +634,6 @@
     "name": "roadmap-scope-controller",
     "description": "Read-only scope controller that detects scope creep, missing acceptance criteria, and unsafe expansion beyond the requested roadmap.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "roadmap-objective-tracing",
       "user-request-risk-classification",
@@ -707,7 +644,6 @@
     "name": "roadmap-task-decomposer",
     "description": "Breaks large roadmap prompts into executable units, ordered milestones, dependencies, and validation gates.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "roadmap-task-decomposition",
       "prompt-scope-normalization",
@@ -718,7 +654,6 @@
     "name": "rust-allocation-optimizer",
     "description": "Reviews allocations, clone patterns, buffer growth, and memory pressure in Rust hot paths.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "medium",
     "primary_skills": [
       "rust-allocation-review",
       "rust-clone-copy-audit",
@@ -729,7 +664,6 @@
     "name": "rust-architecture-splitter",
     "description": "Splits Rust architecture by workspace, crates, modules, and responsibilities.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "rust-workspace-architecture",
       "rust-crate-boundary-design",
@@ -741,7 +675,6 @@
     "name": "rust-async-concurrency-engineer",
     "description": "Designs Rust async, cancellation, shutdown, backpressure, and concurrency-safe runtime boundaries.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "rust-async-cancellation",
       "rust-concurrency-loom-modeling",
@@ -753,7 +686,6 @@
     "name": "rust-binary-codec-engineer",
     "description": "Implements explicit binary codecs for WAL, pages, manifests, segments, RPC frames, and contracts.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "rust-newtype-invariants",
       "storage-page-format",
@@ -765,7 +697,6 @@
     "name": "rust-cleanup-refactor-architect",
     "description": "Leads broad Rust cleanup and refactor efforts while preserving behavior and tests.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "rust-clean-code-refactor",
       "rust-dead-code-removal",
@@ -777,7 +708,6 @@
     "name": "rust-crate-graph-architect",
     "description": "Designs and audits the Cargo crate graph and dependency direction.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "rust-workspace-architecture",
       "rust-crate-boundary-design",
@@ -788,7 +718,6 @@
     "name": "rust-dead-code-excavator",
     "description": "Finds and removes dead Rust code, unused modules, stale examples, and obsolete paths.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "medium",
     "primary_skills": [
       "rust-dead-code-removal",
       "rust-orphan-detection",
@@ -799,7 +728,6 @@
     "name": "rust-error-model-engineer",
     "description": "Designs typed error models for Rust crates and protocol boundaries.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "medium",
     "primary_skills": [
       "rust-error-modeling",
       "srpl-diagnostics-catalog",
@@ -810,7 +738,6 @@
     "name": "rust-gpu-batch-engineer",
     "description": "Implements GPU batch acceleration outside commit/recovery paths with cancellation and CPU fallback.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "rust-gpu-batch-integration",
       "gpu-no-commit-policy",
@@ -821,7 +748,6 @@
     "name": "rust-memory-safety-auditor",
     "description": "Read-only auditor for Rust memory safety, aliasing, lifetimes, unsafe boundaries, and panic risks.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "rust-unsafe-boundary-audit",
       "rust-miri-ub-checks",
@@ -832,7 +758,6 @@
     "name": "rust-module-boundary-surgeon",
     "description": "Refactors module boundaries, visibility, reexports, and tests around a single responsibility.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "rust-module-splitting",
       "rust-public-api-minimization",
@@ -843,7 +768,6 @@
     "name": "rust-performance-optimizer",
     "description": "Optimizes Rust code only with measurement, profiling, hypotheses, and regression gates.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "rust-performance-benchmarking",
       "rust-allocation-review",
@@ -855,7 +779,6 @@
     "name": "rust-simd-kernel-engineer",
     "description": "Implements CPU SIMD kernels with feature detection, fallback, tests, and benchmarks.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "rust-simd-dispatch",
       "cpu-simd-kernel-policy",
@@ -866,7 +789,6 @@
     "name": "rust-unsafe-audit-agent",
     "description": "Read-only unsafe Rust audit agent for storage, WAL, SIMD, FFI, and lock-free code.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "rust-unsafe-boundary-audit",
       "rust-ffi-boundary-audit",
@@ -878,7 +800,6 @@
     "name": "rust-workspace-architect",
     "description": "Designs workspace layout, crate boundaries, features, and build profiles. Use for Rust project structure, Cargo workspace, module dependencies, and tooling.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "rust-crate-boundary-design",
       "rust-async-quic-review",
@@ -889,7 +810,6 @@
     "name": "security-iam-auditor",
     "description": "Read-only security/IAM auditor for identity, permissions, policies, audit, break-glass, and least privilege.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "iam-security-policy",
       "security-threat-modeling",
@@ -900,7 +820,6 @@
     "name": "security-iam-threat-modeler",
     "description": "Read-only threat-modeling agent for IAM, RPC, admin, backup, cluster, and storage tampering scenarios.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "security-threat-modeling",
       "iam-security-policy",
@@ -911,7 +830,6 @@
     "name": "security-implementation-engineer",
     "description": "Implements IAM, permission evaluation, policy checks, audit traces, certificate identity, and break-glass enforcement.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "iam-security-policy",
       "audit-trace-schema",
@@ -922,7 +840,6 @@
     "name": "source-grounding-researcher",
     "description": "Read-only researcher that cross-checks claims against official sources, repository evidence, and Andromeda documents.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "source-grounded-answering",
       "project-context-intake",
@@ -933,7 +850,6 @@
     "name": "srpl-compiler-ir-architect",
     "description": "Owns parsing, binding, typed AST, IR lowering, semantic validation, and plan preparation. Use for compiler pipeline, canonical IR, semantic hashes, and plan cache keys.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "srpl-to-ir-lowering",
       "catalog-object-modeling",
@@ -945,7 +861,6 @@
     "name": "srpl-diagnostics-engineer",
     "description": "Maintains SRPL diagnostic codes, compiler messages, and fix guidance.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "medium",
     "primary_skills": [
       "srpl-diagnostics-catalog",
       "srpl-binder-cardinality",
@@ -956,7 +871,6 @@
     "name": "srpl-language-designer",
     "description": "Designs SRPL syntax and user-facing semantics. Use for SRPL syntax, cardinality, errors, procedure shape, and language restrictions.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "srpl-procedure-contract-design",
       "srpl-cardinality-typing",
@@ -968,7 +882,6 @@
     "name": "srpl-language-specifier",
     "description": "Read-only SRPL language specification agent for syntax, semantics, restrictions, diagnostics, and IR.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "srpl-language-design",
       "srpl-anti-dynamic-sql",
@@ -980,7 +893,6 @@
     "name": "srpl-parser-binder-engineer",
     "description": "Implements SRPL parsing, binding, type checking, cardinality validation, and semantic IR preparation.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "srpl-parser-design",
       "srpl-binder-cardinality",
@@ -992,7 +904,6 @@
     "name": "statistics-engineer",
     "description": "Implements statistics collection, histograms, skew, StatsVersion, publication, validation, and CPU/GPU separation.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "statistics-histogram-design",
       "scenario-evidence-governance",
@@ -1003,7 +914,6 @@
     "name": "storage-engine-architect",
     "description": "Owns pages, extents, segments, HotStore, ColdStore, BufferPool, and manifest switching. Use for storage layout, hot/cold placement, page format, and cold segment invariants.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "storage-page-layout",
       "segment-contiguity-audit",
@@ -1015,7 +925,6 @@
     "name": "storage-engine-page-layout-auditor",
     "description": "Read-only auditor for page layouts, segment formats, manifests, and storage invariants.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "storage-page-format",
       "storage-segment-manifest",
@@ -1026,7 +935,6 @@
     "name": "storage-segment-format-engineer",
     "description": "Implements segmented storage, manifests, root pointers, SegmentIndex, cold snapshots, and hot/cold merge policy.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "storage-segment-manifest",
       "hot-cold-storage-policy",
@@ -1038,7 +946,6 @@
     "name": "test-verification-architect",
     "description": "Designs layered verification strategy: unit, property, fuzz, Miri, Loom, crash/recovery, and CI gates.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "rust-test-strategy",
       "rust-property-testing",
@@ -1051,7 +958,6 @@
     "name": "transaction-kernel-architect",
     "description": "Owns transaction states, isolation, MVCC, commit, rollback, and visibility rules. Use for transaction semantics and concurrency design.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "transaction-state-machine",
       "mvcc-visibility-proof",
@@ -1063,7 +969,6 @@
     "name": "transaction-wal-recovery-auditor",
     "description": "Read-only auditor for transaction, WAL, MVCC, storage, and recovery invariants.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "transaction-state-machine",
       "wal-record-design",
@@ -1075,7 +980,6 @@
     "name": "type-system-architect",
     "description": "Owns scalar types, decimals, floats, text, enums, flags, nullability, StructuredObjects, and type contracts. Use for type policy, SRPL type binding, and contract-level type compatibility.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "srpl-cardinality-typing",
       "structuredobject-layout",
@@ -1086,7 +990,6 @@
     "name": "wal-implementation-engineer",
     "description": "Implements WAL record, segment, replay, checksum, chain hash, and durability behavior.",
     "sandbox_mode": "workspace-write",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "wal-record-design",
       "wal-crash-recovery-testing",
@@ -1098,7 +1001,6 @@
     "name": "wal-recovery-specialist",
     "description": "Owns WAL records, replay, checkpoints, manifests, and crash-recovery scenarios. Use for log format, redo/undo behavior, recovery tests, and corruption handling.",
     "sandbox_mode": "read-only",
-    "model_reasoning_effort": "high",
     "primary_skills": [
       "wal-record-design",
       "recovery-replay-proof",

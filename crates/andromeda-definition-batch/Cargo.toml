@@ -1,0 +1,9 @@
+[package]
+name = "andromeda-definition-batch"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Runtime-free scaffold for Andromeda DefinitionBatch taxonomy placeholders."
+
+[dependencies]

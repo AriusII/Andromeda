@@ -1,7 +1,5 @@
 name = "optimizer-statistics-critic"
 description = "Read-only critic for optimizer, statistics, evidence, learned components, and plan stability."
-model = "gpt-5.5"
-model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 approval_policy = "on-request"
 developer_instructions = '''

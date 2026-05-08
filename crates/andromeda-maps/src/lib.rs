@@ -2,17 +2,25 @@
 #![doc = r#"
 # Andromeda Maps
 
-Runtime-free Map descriptor, grain, refresh, and staleness primitives.
+Runtime-free Map descriptor, dependency, summarizability, refresh, and staleness primitives.
 "#]
 
+mod dependency;
 mod descriptor;
+mod diagnostic;
 mod error;
 mod publication;
+mod summarizability;
 
+pub use dependency::{MapDependency, MapDependencyGraph};
 pub use descriptor::{MapDescriptor, MapGrain, MapId, MapRefreshMode, MapStalenessPolicy};
+pub use diagnostic::{MapValidationDiagnostic, MapValidationReport};
 pub use error::{MapDescriptorError, MapDescriptorResult};
 pub use publication::{
     MapPublicationCandidate, MapPublicationEvidence, MapPublicationRebuildEvidence,
     MapPublicationRecoveryEvidence, MapPublicationRollbackEvidence, MapPublicationState,
     MapPublicationSwitch, MapValidatedPublicationCandidate,
+};
+pub use summarizability::{
+    MapMeasurePolicy, MapMeasureRollupPolicy, MapSummarizabilityMode, MapSummarizabilityPolicy,
 };

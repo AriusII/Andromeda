@@ -1,7 +1,5 @@
 name = "hook-policy-implementer"
 description = "Implements and hardens Codex hooks and hook scripts for Andromeda workflows."
-model = "gpt-5.5"
-model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
 developer_instructions = '''

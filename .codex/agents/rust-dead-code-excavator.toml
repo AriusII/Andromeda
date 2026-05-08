@@ -1,7 +1,5 @@
 name = "rust-dead-code-excavator"
 description = "Finds and removes dead Rust code, unused modules, stale examples, and obsolete paths."
-model = "gpt-5.5"
-model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
 developer_instructions = '''

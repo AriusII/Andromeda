@@ -19,6 +19,8 @@ Evidence used:
 - `documentations/WORKER_EXECUTION_MATRIX_2026.md`.
 - `docs/adr/ADR-0011-workspace-crate-boundaries.md`.
 - `documentations/ANDROMEDA_ROADMAP_IMPLEMENTATION_CROSSCHECK_2026.md`.
+- `documentations/testing/spec-validation-matrix-2026-05-08.md`.
+- `documentations/governance/step-12-documentation-closure-2026-05-08.md`.
 
 Non-goals:
 
@@ -66,6 +68,44 @@ The current branch declares 26 workspace crates:
 | Fuzz workspace member | `fuzz` |
 
 Status: the 26-crate shape supersedes the external 11-crate baseline for planning. It does not supersede validation gates. The branch still needs clean-index validation before any worker can state that the 26-crate restructure is accepted.
+
+## Step 12 Documentation Trace
+
+Step 12 is documentation and governance trace work. It does not validate
+runtime correctness, approve release readiness, or convert dirty-branch state
+into accepted implementation evidence.
+
+### Canonical Path Mapping
+
+Older roadmap and worker documents can still cite product documentation by
+`docs/*` names. The canonical product documentation paths are now under
+`documentations/*`.
+
+| Historical roadmap path | Canonical path | Status interpretation |
+|---|---|---|
+| `docs/00_ANDROMEDA_INDEX_ET_MODE_DE_LECTURE.md` | `documentations/00_ANDROMEDA_INDEX_ET_MODE_DE_LECTURE.md` | Canonical protected reading-order file. |
+| `docs/01_DOCTRINE_LEXIQUE_ARCHITECTURE_CATALOGUE_MODELIZATION.md` | `documentations/01_DOCTRINE_LEXIQUE_ARCHITECTURE_CATALOGUE_MODELIZATION.md` | Canonical protected doctrine and architecture file. |
+| `docs/02_TYPE_SYSTEM_SRPL_PROCEDURES_MAPS.md` | `documentations/02_TYPE_SYSTEM_SRPL_PROCEDURES_MAPS.md` | Canonical protected type-system, SRPL, Procedure, and Map file. |
+| `docs/03_TRANSACTION_WAL_MVCC_STORAGE_RECOVERY.md` | `documentations/03_TRANSACTION_WAL_MVCC_STORAGE_RECOVERY.md` | Canonical protected transaction, WAL, MVCC, storage, and recovery file. |
+| `docs/04_QUIC_RPC_SECURITY_HADR_OPERATIONS.md` | `documentations/04_QUIC_RPC_SECURITY_HADR_OPERATIONS.md` | Canonical protected protocol, security, HA/DR, and operations file. |
+| `docs/05_OPTIMIZER_STATS_ANALYTICS_HARDWARE_ROADMAP_SOURCES.md` | `documentations/05_OPTIMIZER_STATS_ANALYTICS_HARDWARE_ROADMAP_SOURCES.md` | Canonical protected optimizer, statistics, analytics, hardware, and roadmap source file. |
+| `docs/ANDROMEDA_ROADMAP_IMPLEMENTATION_CROSSCHECK_2026.md` | `documentations/ANDROMEDA_ROADMAP_IMPLEMENTATION_CROSSCHECK_2026.md` | Historical roadmap cross-check retained as planning evidence. |
+| `docs/CURRENT_STATE.md` | `documentations/CURRENT_STATE.md` | Canonical current-state summary. |
+| `docs/ROADMAP_IMPLEMENTATION_2026.md` | `documentations/ROADMAP_IMPLEMENTATION_2026.md` | Canonical implementation roadmap. |
+| `docs/WORKER_EXECUTION_MATRIX_2026.md` | `documentations/WORKER_EXECUTION_MATRIX_2026.md` | Canonical worker execution matrix. |
+| `docs/ROADMAP_RESTRUCTURE_STATUS_2026_05_08.md` | `documentations/ROADMAP_RESTRUCTURE_STATUS_2026_05_08.md` | Canonical restructure status and dirty-branch planning record. |
+
+`docs/adr/*` remains the Codex tooling ADR location and is intentionally cited
+as governance evidence. Do not create duplicate product copies of those ADRs in
+`documentations/`.
+
+### Step 12 Closure Artifacts
+
+| Artifact | Path | Status |
+|---|---|---|
+| Spec-to-test matrix | `documentations/testing/spec-validation-matrix-2026-05-08.md` | Added as mapping evidence only; it does not claim test execution. |
+| Closure checklist | `documentations/governance/step-12-documentation-closure-2026-05-08.md` | Added as documentation closure evidence only; it does not approve release readiness. |
+| ADR backlog | `documentations/governance/adr-backlog-2026-05-08.md` | Updated to point Step 12 ADR candidates at accepted ADR files where present. |
 
 ## Filtered Roadmap Status
 
@@ -293,3 +333,5 @@ Use the exact owning-crate tests once the owning workers finalize names. The min
 - `documentations/specs/FrameHeader_RPC_v0.md`
 - `documentations/specs/SecurityAdmission_v0.md`
 - `documentations/specs/AuditLedger_v0.md`
+- `documentations/testing/spec-validation-matrix-2026-05-08.md`
+- `documentations/governance/step-12-documentation-closure-2026-05-08.md`

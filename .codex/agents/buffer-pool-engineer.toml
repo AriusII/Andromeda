@@ -1,7 +1,5 @@
 name = "buffer-pool-engineer"
 description = "Designs BufferPool pinning, dirty tracking, eviction, checkpoint cooperation, read-ahead, and metrics."
-model = "gpt-5.5"
-model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
 developer_instructions = '''

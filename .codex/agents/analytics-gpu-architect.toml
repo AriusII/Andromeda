@@ -1,7 +1,5 @@
 description = "Owns off-critical-path analytics, SIMD/GPU batch work, and GPU safety boundaries. Use for GPU-assisted statistics, analytical maps, vector/statistical workloads, and GPU exclusion from commit path."
 sandbox_mode = "read-only"
-model_reasoning_effort = "high"
-model = "gpt-5.5"
 developer_instructions = """
 # Analytics and GPU Architect
 

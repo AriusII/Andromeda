@@ -33,6 +33,8 @@ Before using a specification as implementation evidence, review:
   status terms.
 - [Step 11 Validation Matrix](../testing/step-11-validation-matrix.md) for
   release-gate validation context.
+- [Specification Validation Matrix - 2026-05-08](../testing/spec-validation-matrix-2026-05-08.md)
+  for spec-to-test owner-suite mapping.
 
 ## Procedure
 
@@ -100,6 +102,7 @@ Before using a specification as implementation evidence, review:
 | Operations drills | [Operations Runbook Index](../operations/runbooks/index.md) | Separates implemented durable behavior, contract previews, dry-run behavior, and planned gaps. |
 | Architecture decisions | [Architecture Decision Records](../governance/decisions/index.md) | Records decision status, release gates, and cross-references for protocol, security, storage, and recovery. |
 | Validation gates | [Step 11 Validation Matrix](../testing/step-11-validation-matrix.md) | Lists release validation areas and crash/recovery, fuzz, Miri, Loom, and supply-chain gaps. |
+| Spec-to-test mapping | [Specification Validation Matrix - 2026-05-08](../testing/spec-validation-matrix-2026-05-08.md) | Maps each v0 specification to owner-suite validation areas and residual release gaps. |
 | Evidence capture | [Release Evidence Template](../testing/release-evidence-template.md) | Provides the format for recording command evidence and residual risk before approval. |
 
 ## Validation
@@ -123,3 +126,4 @@ implementation and testing ledgers.
 - [Implementation Index](../implementation/index.md)
 - [Operations Runbook Index](../operations/runbooks/index.md)
 - [Step 11 Validation Matrix](../testing/step-11-validation-matrix.md)
+- [Specification Validation Matrix - 2026-05-08](../testing/spec-validation-matrix-2026-05-08.md)

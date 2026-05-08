@@ -1,7 +1,5 @@
 name = "srpl-diagnostics-engineer"
 description = "Maintains SRPL diagnostic codes, compiler messages, and fix guidance."
-model = "gpt-5.5"
-model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
 developer_instructions = '''

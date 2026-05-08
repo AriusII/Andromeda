@@ -15,10 +15,10 @@ validation gate before moving code or changing manifests.
 This mapping covers the local Andromeda workspace on 2026-05-08 on branch
 `codex/workspace-crate-restructure`.
 
-The worktree is dirty. Existing architecture ledgers describe a 26-crate Step 0
-snapshot, while the current root `Cargo.toml` and `cargo metadata` output are
-ahead of that snapshot. The current local evidence observed for this document
-is:
+The worktree is dirty. Existing architecture ledgers describe an older
+26-crate Step 0 snapshot, while the current root `Cargo.toml` and
+`cargo metadata` output are ahead of that snapshot. The current local evidence
+observed for this document is:
 
 - `git status --short --branch` shows many modified, added, deleted, and
   untracked files outside this documentation packet.
@@ -28,6 +28,10 @@ is:
 - `cargo metadata --no-deps --format-version 1` succeeds locally and reports
   `andromeda-srpl-lexer` as a local workspace package through SRPL path
   dependencies.
+
+The 32-crate count covers root workspace members under `crates/` before any
+additional target-crate scaffolds. The canonical fuzz workspace remains under
+`fuzz/` and is not counted as an engine crate.
 
 Use this document as dirty-branch planning evidence only. Do not use it as
 release readiness evidence.
@@ -43,6 +47,10 @@ release readiness evidence.
 - Do not accept C5 extraction without behavior locks and crash/recovery or
   threat-model evidence.
 - Do not let compatibility facades hide canonical ownership.
+- Do not move or redefine canonical fuzz ownership; harnesses, target registry,
+  corpus manifest, and generator remain under `fuzz/`.
+- Do not normalize `docs/` and `documentations/` path mapping in this mapping
+  packet. That clarification is owned by a separate documentation packet.
 
 ## Prerequisites
 
@@ -94,6 +102,19 @@ architecture ledgers. Use these categories when reviewing ownership.
 | Catalog and adaptive metadata | `andromeda-catalog`, `andromeda-procedure-store`, `andromeda-maps` | `andromeda-catalog` remains broad. `andromeda-procedure-store` and `andromeda-maps` are provisional local shells unless later packets move behavior and tests into them. |
 | Execution and transport | `andromeda-exec`, `andromeda-quic` | `andromeda-exec` still has a temporary QUIC bridge. `andromeda-quic` is the concrete transport runtime and must not own Procedure semantics or storage truth. |
 | Observability, tools, and evidence | `andromeda-observe`, `andromeda-cli`, `andromeda-bench` | Observability and benchmark evidence are not database truth. CLI and benchmark crates must not become production dependencies. |
+
+## Roadmap Status Consolidation
+
+Use these read-only findings when interpreting the map.
+
+| Finding | Mapping implication |
+| --- | --- |
+| The current workspace has 32 root members under `crates/` before any additional scaffold packets. | Treat new target-named crates as branch output, not accepted ownership. Future crate creation still needs an owner statement, topology gates, and path-local validation. |
+| Most roadmap phases remain partial. | Do not promote a phase because one owner crate or specification exists; each phase still needs clean candidate tests and retained evidence. |
+| `andromeda-maps` and `andromeda-procedure-store` are provisional. | Keep current durable or runtime behavior attributed to `andromeda-catalog`, `andromeda-exec`, storage, or other existing owners until direct owner tests and integration gates move it. |
+| Fuzz remains canonical under `fuzz/`. | Use `fuzz/targets.toml`, `fuzz/corpus/manifest.toml`, and `fuzz/VALIDATION_MATRIX.md` for harness and corpus authority; use `tests/fuzzing/` only as an index and validation-planning surface. |
+| Documentation path mapping is being clarified elsewhere. | Preserve existing `docs/` and `documentations/` references in this packet unless they are required for one of the owned files. |
+| Release blockers remain. | Dirty worktree state, missing C5 crash/recovery evidence, sustained fuzz gaps, Miri/Loom gaps, and release evidence gaps still block readiness claims. |
 
 ## Macro-Engine Map
 
@@ -157,6 +178,7 @@ Use these gates before moving behavior out of a broad owner.
 | C5 durable behavior | WAL, storage, transaction, recovery, catalog publication, backup, restore, HA/DR | Owner tests, integration tests, property/fuzz tests, crash/recovery matrix, replay rejection, durable visibility evidence. |
 | Security-critical behavior | Admission, IAM, mTLS, permissions, surface routing, audit | Permission denial, wrong surface, disabled principal, no transaction on rejection, audit evidence, threat model. |
 | Adaptive behavior | Statistics, optimizer, plan cache, Maps, ScenarioEvidence, benchmark | Bounded candidates, version binding, DecisionTrace, disablement, stale evidence rejection, advisory-only evidence proof. |
+| Fuzz ownership | Parser, codec, persistent-byte, protocol, ResultStream, and security-admission fuzz evidence | Canonical harnesses and corpus metadata stay under `fuzz/`; sustained fuzz run evidence must record target, corpus hash, duration, commit, sanitizer mode, crash count, and artifacts. |
 | GPU or SIMD | Future optional hardware acceleration | CPU fallback, disablement, trace fields, no critical-path import scan, failure does not alter contractual or recovered results. |
 
 ## Validation
@@ -170,6 +192,7 @@ git status --short --branch
 Get-Content -Raw Cargo.toml
 cargo metadata --no-deps --format-version 1
 rg -n "macro-engine|macro engine|engine mapping|crate mapping|R0|R1|R2|R3|R4|R5" documentations docs crates\README.md Cargo.toml
+rg -n "fuzz/|targets.toml|VALIDATION_MATRIX|corpus/manifest" fuzz tests documentations -g "*.md" -g "*.toml"
 ```
 
 No Rust build, clippy, nextest, audit, deny, fuzz, Miri, crash/recovery, or
@@ -183,6 +206,10 @@ macro-engine row and in `docs/adr/ADR-0018-engine-crate-mapping-policy.md`.
 - Existing architecture ledgers may conflict with the dirty local crate count
   until a later owned documentation packet refreshes them.
 - Provisional local crates can be mistaken for accepted owners without tests.
+- Fuzz registry ownership can drift if planning documents under `tests/` are
+  mistaken for canonical harness or corpus locations.
+- Documentation path references can drift while `docs/` and `documentations/`
+  mapping is clarified by the separate documentation owner.
 - Broad owners can continue to grow if facade exits are not enforced.
 - C5 extraction can pass import compatibility while failing owner behavior or
   crash/recovery evidence.
@@ -201,6 +228,8 @@ macro-engine row and in `docs/adr/ADR-0018-engine-crate-mapping-policy.md`.
 | `cargo metadata` shows more crates than this document. | Refresh the map in a documentation-owned packet and explain whether the new crate is owner, facade, tool, or provisional. |
 | A C5 split lacks crash/recovery evidence. | Block the split until durable behavior tests and recovery gates exist. |
 | A benchmark or GPU output is used as acceptance truth. | Reword as advisory evidence and require CPU-backed or durable owner evidence. |
+| A worker treats `tests/fuzzing/` as the canonical fuzz workspace. | Redirect to `fuzz/targets.toml`, `fuzz/corpus/manifest.toml`, `fuzz/generators/generate_seed_corpus.py`, and `fuzz/VALIDATION_MATRIX.md`. |
+| A worker asks this map to settle `docs/` versus `documentations/`. | Leave path normalization to the dedicated documentation mapping packet and keep this map focused on crate ownership. |
 
 ## References
 
@@ -220,3 +249,6 @@ macro-engine row and in `docs/adr/ADR-0018-engine-crate-mapping-policy.md`.
 - `documentations/architecture/reexport-migration-ledger-2026-05-08.md`
 - `documentations/governance/adr-backlog-2026-05-08.md`
 - `documentations/implementation/target-crate-gap-ledger-2026-05-08.md`
+- `fuzz/README.md`
+- `fuzz/targets.toml`
+- `fuzz/VALIDATION_MATRIX.md`

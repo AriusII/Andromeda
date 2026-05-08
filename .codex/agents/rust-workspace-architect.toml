@@ -1,7 +1,5 @@
 description = "Designs workspace layout, crate boundaries, features, and build profiles. Use for Rust project structure, Cargo workspace, module dependencies, and tooling."
 sandbox_mode = "read-only"
-model_reasoning_effort = "high"
-model = "gpt-5.5"
 developer_instructions = """
 # Rust Workspace Architect
 
