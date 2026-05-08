@@ -172,12 +172,13 @@ impl InMemoryEventSequence {
         expected: Option<T>,
         observed: Option<T>,
     ) -> AndromedaResult<()> {
-        if let Some(expected) = expected
-            && observed != Some(expected)
-        {
-            return Err(observe_error(format!(
-                "procedure lifecycle {label} correlation must remain stable across the sequence",
-            )));
+        match expected {
+            Some(expected) if observed != Some(expected) => {
+                return Err(observe_error(format!(
+                    "procedure lifecycle {label} correlation must remain stable across the sequence",
+                )));
+            }
+            _ => {}
         }
 
         Ok(())

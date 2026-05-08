@@ -1,6 +1,7 @@
 use andromeda_bench::{
-    BenchmarkEvidenceBudgets, BenchmarkPlanClass, BenchmarkScenarioEvidenceError,
-    BenchmarkScenarioTarget, BenchmarkStatsVersion,
+    BenchmarkEvidenceBudgets, BenchmarkEvidenceConfidence, BenchmarkEvidenceValidity,
+    BenchmarkPlanClass, BenchmarkScenarioEvidenceError, BenchmarkScenarioTarget,
+    BenchmarkStatsVersion,
 };
 use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
@@ -59,6 +60,29 @@ fn boundary_validity_window_is_half_open_and_expirable() {
             .unwrap_err(),
         BenchmarkScenarioEvidenceError::Expired
     );
+}
+
+#[test]
+fn boundary_confidence_and_validity_are_explicitly_bounded() {
+    let record = vertical_history_record(20);
+    let max_confidence = BenchmarkEvidenceConfidence::from_permille(1_000).unwrap();
+    let short_validity = BenchmarkEvidenceValidity::new(ts(10), ts(20)).unwrap();
+    let boundary = record
+        .to_scenario_evidence_boundary(target(), default_budgets(), max_confidence, short_validity)
+        .unwrap();
+
+    assert_eq!(boundary.confidence().permille(), 1_000);
+    assert_eq!(boundary.validity().issued_at().as_unix_millis(), 10);
+    assert_eq!(boundary.validity().expires_at().as_unix_millis(), 20);
+    assert_eq!(
+        BenchmarkEvidenceConfidence::from_permille(1_001).unwrap_err(),
+        BenchmarkScenarioEvidenceError::ConfidenceOutOfRange
+    );
+
+    let json = boundary.to_json();
+    assert!(json.contains(r#""confidence_permille":1000"#));
+    assert!(json.contains(r#""issued_at_unix_ms":10"#));
+    assert!(json.contains(r#""expires_at_unix_ms":20"#));
 }
 
 #[test]

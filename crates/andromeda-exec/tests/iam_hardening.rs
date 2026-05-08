@@ -23,6 +23,10 @@
 #[cfg(test)]
 mod iam_hardening_tests {
     use andromeda_core::{AndromedaErrorKind, Permission, PrincipalId, PrincipalRole, ProcedureId};
+    use andromeda_exec::services::permission_audit_emitter::{
+        AuditEmissionEvidence, AuditEmissionKind, AuditEmissionOutcome, AuditEmissionPolicy,
+        AuditSinkAvailability, audit_text_contains_sensitive_marker,
+    };
     use andromeda_exec::services::{
         ConcretePermissionEvaluator, DenialAuditReason, DenialReason, LocalPrincipalResolver,
         NoOpPermissionAuditEmitter, PermissionAuditEmitter, PermissionDecision,
@@ -38,7 +42,7 @@ mod iam_hardening_tests {
         // Arrange
         let resolver = Arc::new(LocalPrincipalResolver::new());
         let evaluator = ConcretePermissionEvaluator::new(resolver.clone());
-        let emitter = NoOpPermissionAuditEmitter;
+        let emitter = NoOpPermissionAuditEmitter::new_for_tests();
 
         resolver
             .register_principal("user_fingerprint".into(), PrincipalRole::User)
@@ -57,14 +61,18 @@ mod iam_hardening_tests {
             _ => panic!("expected denied decision"),
         }
 
-        // Emit audit event
+        // Validate audit event through explicit test-support policy.
         let event = andromeda_exec::services::PermissionAuditEvent::denied(
             TraceId::new(1001),
             PrincipalId::new(1),
             Permission::AdminShutdown,
             DenialAuditReason::PermissionNotGranted,
         );
-        let result = emitter.emit_permission_decision(event);
+        let result = emitter.emit_permission_decision_with_policy(
+            event,
+            AuditEmissionPolicy::fail_closed(),
+            AuditSinkAvailability::available(),
+        );
         assert!(result.is_ok());
     }
 
@@ -263,7 +271,7 @@ mod iam_hardening_tests {
     #[test]
     fn test_iam_hardening_9_audit_event_emission_for_all_decisions() {
         // Arrange
-        let emitter = NoOpPermissionAuditEmitter;
+        let emitter = NoOpPermissionAuditEmitter::new_for_tests();
         let trace_id = TraceId::new(9000);
 
         // Act: Create and emit audit events for various decisions
@@ -286,12 +294,32 @@ mod iam_hardening_tests {
                 Permission::AdminCatalogPublish,
             );
 
-        // Assert: All events emit successfully
-        assert!(emitter.emit_permission_decision(allowed_event).is_ok());
-        assert!(emitter.emit_permission_decision(denied_event).is_ok());
+        // Assert: All events validate through explicit test-support policy.
         assert!(
             emitter
-                .emit_permission_decision(denied_unknown_event)
+                .emit_permission_decision_with_policy(
+                    allowed_event,
+                    AuditEmissionPolicy::fail_closed(),
+                    AuditSinkAvailability::available(),
+                )
+                .is_ok()
+        );
+        assert!(
+            emitter
+                .emit_permission_decision_with_policy(
+                    denied_event,
+                    AuditEmissionPolicy::fail_closed(),
+                    AuditSinkAvailability::available(),
+                )
+                .is_ok()
+        );
+        assert!(
+            emitter
+                .emit_permission_decision_with_policy(
+                    denied_unknown_event,
+                    AuditEmissionPolicy::fail_closed(),
+                    AuditSinkAvailability::available(),
+                )
                 .is_ok()
         );
     }
@@ -402,6 +430,27 @@ mod iam_hardening_tests {
         assert_eq!(trace.trace_id, TraceId::new(14000));
         assert!(trace.reason.contains("permission denied"));
         assert!(trace.reason.contains("PrincipalId(100)"));
+    }
+
+    // Test 15: Rejected Procedure work carries audit emission evidence
+
+    #[test]
+    fn test_iam_hardening_15_rejected_procedure_work_has_audit_emission_evidence() {
+        let trace_id = TraceId::new(15000);
+
+        let evidence = AuditEmissionEvidence::contract_rejected(
+            AuditEmissionPolicy::fail_closed(),
+            trace_id,
+            "Procedure runtime rejected work before transaction dispatch: ContractHash mismatch",
+            AuditSinkAvailability::available(),
+        )
+        .expect("pre-transaction rejected work must produce audit evidence");
+
+        assert_eq!(evidence.trace_id, trace_id);
+        assert_eq!(evidence.kind, AuditEmissionKind::ContractRejection);
+        assert_eq!(evidence.outcome, AuditEmissionOutcome::Rejected);
+        assert!(evidence.reason.contains("rejected work"));
+        assert!(!audit_text_contains_sensitive_marker(&evidence.reason));
     }
 
     // Helper: Verify Permission Set Behavior

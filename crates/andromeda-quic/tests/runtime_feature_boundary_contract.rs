@@ -4,10 +4,23 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const RUNTIME_FEATURE: &str = "runtime-quinn";
+const INSECURE_TEST_TLS_FEATURE: &str = "insecure-test-tls";
 const DEFERRED_RUNTIME_CRATE: &str = "andromeda-runtime-quinn";
 const RUNTIME_DEPS: [&str; 4] = ["quinn", "rcgen", "rustls", "tokio"];
 const TOKIO_RUNTIME_FEATURES: [&str; 3] =
     ["tokio/io-util", "tokio/macros", "tokio/rt-multi-thread"];
+const RUNTIME_QUINN_TEST_TARGETS: [&str; 2] =
+    ["real_quinn_network", "reconnect_quinn_admission_contract"];
+const RUNTIME_FREE_CONTRACT_TEST_FILES: [&str; 6] = [
+    "tests/cancel_backpressure_contract.rs",
+    "tests/connection_lifecycle_contract.rs",
+    "tests/flow_control_isolation_contract.rs",
+    "tests/procedure_gateway_route.rs",
+    "tests/procedure_gateway_route/route_admission.rs",
+    "tests/procedure_gateway_route/runtime_dispatch.rs",
+];
+const FORBIDDEN_RPC_RUNTIME_STACK_TOKENS: [&str; 5] =
+    ["grpc", "grpcio", "prost-grpc", "prost_grpc", "tonic"];
 
 #[derive(Debug)]
 struct FeatureSpec {
@@ -67,12 +80,187 @@ fn concrete_runtime_dependencies_are_optional_and_runtime_quinn_owned() {
 }
 
 #[test]
+fn insecure_test_tls_is_test_only_and_activates_runtime_quinn() {
+    let manifest = read_crate_file("Cargo.toml");
+    let features = feature_specs(&manifest);
+
+    assert!(
+        feature_values(&features, "default")
+            .iter()
+            .all(|value| value != INSECURE_TEST_TLS_FEATURE),
+        "{INSECURE_TEST_TLS_FEATURE} must not be part of default features"
+    );
+
+    let expected_insecure_values = [RUNTIME_FEATURE.to_string()];
+    assert_eq!(
+        feature_values(&features, INSECURE_TEST_TLS_FEATURE),
+        expected_insecure_values.as_slice(),
+        "{INSECURE_TEST_TLS_FEATURE} must only activate {RUNTIME_FEATURE}; it must not directly weaken production TLS or pull concrete runtime deps"
+    );
+
+    let crate_root = crate_root();
+    let mut unexpected_refs = Vec::new();
+    for file in rust_source_files(&crate_root.join("src")) {
+        let source = read_file(&file);
+        let relative = relative_slash_path(&crate_root, &file);
+        if relative != "src/quinn_tls.rs" && source.contains(INSECURE_TEST_TLS_FEATURE) {
+            unexpected_refs.push(relative);
+        }
+    }
+    assert!(
+        unexpected_refs.is_empty(),
+        "{INSECURE_TEST_TLS_FEATURE} must stay confined to src/quinn_tls.rs test helpers: {unexpected_refs:?}"
+    );
+
+    let quinn_tls = read_crate_file("src/quinn_tls.rs");
+    assert_cfg_gated_item(
+        &quinn_tls,
+        "pub fn insecure_for_tests(",
+        r#"#[cfg(any(test, feature = "insecure-test-tls"))]"#,
+    );
+    assert_cfg_gated_item(
+        &quinn_tls,
+        "struct InsecureVerifier;",
+        r#"#[cfg(any(test, feature = "insecure-test-tls"))]"#,
+    );
+}
+
+#[test]
+fn runtime_quinn_integration_tests_require_runtime_feature_targets() {
+    let manifest = read_crate_file("Cargo.toml");
+
+    for test_name in RUNTIME_QUINN_TEST_TARGETS {
+        let target = test_target_block(&manifest, test_name);
+        let expected_path = format!("path = \"tests/{test_name}.rs\"");
+        assert!(
+            target.lines().any(|line| line.trim() == expected_path),
+            "{test_name} must stay bound to tests/{test_name}.rs"
+        );
+        assert!(
+            target
+                .lines()
+                .any(|line| line.trim() == r#"required-features = ["runtime-quinn"]"#),
+            "{test_name} must not compile as an empty test target when {RUNTIME_FEATURE} is omitted"
+        );
+    }
+}
+
+#[test]
+fn only_concrete_runtime_tests_require_runtime_quinn_feature() {
+    let manifest = read_crate_file("Cargo.toml");
+    let mut unexpected_runtime_gates = Vec::new();
+
+    for block in manifest.split("[[test]]").skip(1) {
+        let requires_runtime_quinn = block
+            .lines()
+            .map(|line| strip_toml_comment(line).trim())
+            .any(|line| {
+                line.starts_with("required-features")
+                    && quoted_toml_values(line)
+                        .iter()
+                        .any(|value| value == RUNTIME_FEATURE)
+            });
+        if !requires_runtime_quinn {
+            continue;
+        }
+
+        let is_expected_runtime_target = RUNTIME_QUINN_TEST_TARGETS.iter().any(|test_name| {
+            block
+                .lines()
+                .any(|line| line.trim() == format!("name = \"{test_name}\""))
+        });
+        if !is_expected_runtime_target {
+            unexpected_runtime_gates.push(block.lines().take(4).collect::<Vec<_>>().join(" | "));
+        }
+    }
+
+    assert!(
+        unexpected_runtime_gates.is_empty(),
+        "drain, backpressure, and route-admission contract tests must stay runtime-free; only \
+         concrete Quinn network targets may require {RUNTIME_FEATURE}: {unexpected_runtime_gates:?}"
+    );
+}
+
+#[test]
+fn drain_backpressure_and_admission_contract_tests_stay_runtime_free() {
+    let mut violations = Vec::new();
+
+    for relative_path in RUNTIME_FREE_CONTRACT_TEST_FILES {
+        let source = read_crate_file(relative_path);
+        let code_without_comments = strip_rust_comments(&source);
+
+        for (line_index, line) in code_without_comments.lines().enumerate() {
+            let compact_line = line
+                .chars()
+                .filter(|ch| !ch.is_whitespace())
+                .collect::<String>();
+            for dep in RUNTIME_DEPS {
+                let concrete_path = format!("{dep}::");
+                if compact_line.contains(&concrete_path) {
+                    violations.push(format!(
+                        "{relative_path}:{} exposes concrete runtime crate path {concrete_path}",
+                        line_index + 1
+                    ));
+                }
+            }
+            if compact_line.contains(r#"feature="runtime-quinn""#) {
+                violations.push(format!(
+                    "{relative_path}:{} cfg-gates runtime-free contract coverage behind {RUNTIME_FEATURE}",
+                    line_index + 1
+                ));
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "drain, backpressure, and admission contract coverage must remain graceful without the \
+         concrete Quinn runtime feature: {violations:?}"
+    );
+}
+
+#[test]
+fn cargo_manifest_keeps_quic_runtime_boundary_free_of_grpc_stack() {
+    let manifest = read_crate_file("Cargo.toml");
+    let mut violations = Vec::new();
+
+    for (line_index, line) in manifest.lines().enumerate() {
+        let normalized = strip_toml_comment(line).trim().to_ascii_lowercase();
+        if normalized.is_empty() {
+            continue;
+        }
+
+        for token in FORBIDDEN_RPC_RUNTIME_STACK_TOKENS {
+            if normalized.contains(token) {
+                violations.push(format!("{}: {}", line_index + 1, line.trim()));
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "andromeda-quic must not add gRPC/tonic runtime stack dependencies or features: {violations:?}"
+    );
+}
+#[test]
 fn lib_rs_cfg_gates_concrete_runtime_modules() {
     let lib_rs = read_crate_file("src/lib.rs");
 
-    assert_cfg_gated_module(&lib_rs, "mod runtime_quinn;");
-    assert_cfg_gated_module(&lib_rs, "pub mod quinn_backend;");
-    assert_cfg_gated_module(&lib_rs, "pub mod quinn_tls;");
+    assert_cfg_gated_item(
+        &lib_rs,
+        "mod runtime_quinn;",
+        r#"#[cfg(feature = "runtime-quinn")]"#,
+    );
+    assert_cfg_gated_item(
+        &lib_rs,
+        "pub mod quinn_backend;",
+        r#"#[cfg(feature = "runtime-quinn")]"#,
+    );
+    assert_cfg_gated_item(
+        &lib_rs,
+        "pub mod quinn_tls;",
+        r#"#[cfg(feature = "runtime-quinn")]"#,
+    );
 }
 
 #[test]
@@ -184,6 +372,17 @@ fn table_lines<'a>(source: &'a str, table_header: &str) -> Vec<&'a str> {
     lines
 }
 
+fn test_target_block<'a>(manifest: &'a str, test_name: &str) -> &'a str {
+    manifest
+        .split("[[test]]")
+        .skip(1)
+        .find(|block| {
+            block
+                .lines()
+                .any(|line| line.trim() == format!("name = \"{test_name}\""))
+        })
+        .unwrap_or_else(|| panic!("manifest is missing [[test]] target for {test_name}"))
+}
 fn dependency_spec<'a>(dependencies: &'a [&str], dep: &str) -> &'a str {
     let prefix = format!("{dep} = ");
     dependencies
@@ -298,30 +497,33 @@ fn strip_toml_comment(line: &str) -> &str {
         .map_or(line, |(before_comment, _)| before_comment)
 }
 
-fn assert_cfg_gated_module(source: &str, declaration: &str) {
+fn assert_cfg_gated_item(source: &str, declaration: &str, expected_cfg: &str) {
     let lines = source.lines().collect::<Vec<_>>();
     let occurrences = lines
         .iter()
         .enumerate()
-        .filter_map(|(index, line)| (line.trim() == declaration).then_some(index))
+        .filter_map(|(index, line)| line.trim().starts_with(declaration).then_some(index))
         .collect::<Vec<_>>();
 
     assert_eq!(
         occurrences.len(),
         1,
-        "expected exactly one module declaration `{declaration}`"
+        "expected exactly one item declaration starting with `{declaration}`"
     );
 
-    let module_line = occurrences[0];
-    for line in lines[..module_line].iter().rev() {
+    let item_line = occurrences[0];
+    for line in lines[..item_line].iter().rev() {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
         }
+        if trimmed.starts_with("#[") && trimmed != expected_cfg {
+            continue;
+        }
 
         assert_eq!(
-            trimmed, "#[cfg(feature = \"runtime-quinn\")]",
-            "`{declaration}` must be immediately guarded by the runtime-quinn cfg"
+            trimmed, expected_cfg,
+            "`{declaration}` must be guarded by `{expected_cfg}`"
         );
         return;
     }

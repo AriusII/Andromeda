@@ -340,6 +340,33 @@ fn regression_analysis_json_serialization() {
 }
 
 #[test]
+fn regression_analysis_is_diagnostic_not_production_truth() {
+    let analysis = RegressionAnalysis::new(
+        "protocol-smoke-contract".to_string(),
+        10_300,
+        10_000,
+        51_000,
+        50_000,
+        0,
+        20,
+        0,
+        20,
+    );
+
+    assert!(analysis.is_regressed);
+    assert!(!analysis.is_production_truth());
+    assert!(!analysis.is_authoritative());
+    assert!(!analysis.can_select_plan_alone());
+    assert_eq!(analysis.optimizer_consumption_role(), "advisory-only");
+
+    let json = analysis.to_json();
+    assert!(json.contains("\"production_truth\":false"));
+    assert!(json.contains("\"authoritative\":false"));
+    assert!(json.contains("\"can_select_plan_alone\":false"));
+    assert!(json.contains("\"optimizer_boundary\":\"advisory-only\""));
+}
+
+#[test]
 fn regression_percentage_computation() {
     assert_eq!(percent_change(100, 100), 0.0); // No change
     assert_eq!(percent_change(150, 100), 50.0); // +50%

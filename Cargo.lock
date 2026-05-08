@@ -54,6 +54,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-codec"
+version = "0.1.0"
+
+[[package]]
 name = "andromeda-contract"
 version = "0.1.0"
 dependencies = [
@@ -69,6 +73,7 @@ dependencies = [
  "andromeda-digest",
  "andromeda-error",
  "andromeda-hardware",
+ "andromeda-security-contract",
  "andromeda-time",
  "andromeda-types",
 ]
@@ -105,6 +110,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-maps"
+version = "0.1.0"
+
+[[package]]
 name = "andromeda-observe"
 version = "0.1.0"
 dependencies = [
@@ -115,6 +124,14 @@ dependencies = [
  "andromeda-storage",
  "andromeda-types",
 ]
+
+[[package]]
+name = "andromeda-policy"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-procedure-store"
+version = "0.1.0"
 
 [[package]]
 name = "andromeda-proto"
@@ -148,6 +165,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-resource"
+version = "0.1.0"
+
+[[package]]
 name = "andromeda-rpc-protocol"
 version = "0.1.0"
 dependencies = [
@@ -169,6 +190,7 @@ dependencies = [
  "andromeda-srpl-cardinality",
  "andromeda-srpl-diagnostics",
  "andromeda-srpl-ir",
+ "andromeda-srpl-lexer",
  "andromeda-srpl-parser",
  "andromeda-types",
  "proptest",
@@ -209,6 +231,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-srpl-lexer"
+version = "0.1.0"
+dependencies = [
+ "andromeda-srpl-diagnostics",
+]
+
+[[package]]
 name = "andromeda-srpl-parser"
 version = "0.1.0"
 dependencies = [
@@ -216,6 +245,7 @@ dependencies = [
  "andromeda-srpl-ast",
  "andromeda-srpl-cardinality",
  "andromeda-srpl-diagnostics",
+ "andromeda-srpl-lexer",
  "andromeda-types",
 ]
 

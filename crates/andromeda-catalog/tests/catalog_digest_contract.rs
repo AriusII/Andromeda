@@ -4,9 +4,10 @@
 use andromeda_catalog::{
     AccessMode, BatchDependencyGraph, CatalogBindingKind, CatalogDefinition, CatalogDependency,
     CatalogDependencyKind, CatalogObjectBinding, CatalogObjectRef, CompatibilityPolicy,
-    DefinitionBatch, DefinitionOperation, IsolationPolicy, MultiResultPolicy, ObjectKind,
-    PolicyVersion, ProcedureContract, ProcedureContractBinding, ProcedureContractCandidate,
-    ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName, ResultMetadataPolicy, StatsVersion,
+    ContractCompatibilityDiagnostic, DefinitionBatch, DefinitionOperation, IsolationPolicy,
+    MultiResultPolicy, ObjectKind, PolicyVersion, ProcedureContract, ProcedureContractBinding,
+    ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName,
+    ResultMetadataPolicy, ResultStreamCardinality, ResultStreamContract, StatsVersion,
     StructuredObjectDefinition, TableDefinition, TransactionPolicy,
 };
 use andromeda_error::AndromedaErrorKind;
@@ -34,9 +35,13 @@ fn catalog_digest_is_core_digest_alias() {
 }
 
 fn column(name: &str, ordinal: u32) -> ColumnDescriptor {
+    typed_column(name, ordinal, ScalarType::I64)
+}
+
+fn typed_column(name: &str, ordinal: u32, scalar: ScalarType) -> ColumnDescriptor {
     ColumnDescriptor {
         name: name.to_string(),
-        data_type: TypeDescriptor::required(ScalarType::I64),
+        data_type: TypeDescriptor::required(scalar),
         ordinal,
     }
 }
@@ -51,9 +56,18 @@ fn object(id: u64, name: &str, kind: ObjectKind, version: CatalogVersion) -> Cat
 }
 
 fn table(id: u64, name: &str, version: CatalogVersion) -> TableDefinition {
+    table_with_columns(id, name, version, vec![column("ProductId", 0)])
+}
+
+fn table_with_columns(
+    id: u64,
+    name: &str,
+    version: CatalogVersion,
+    columns: Vec<ColumnDescriptor>,
+) -> TableDefinition {
     TableDefinition {
         object: object(id, name, ObjectKind::Table, version),
-        columns: vec![column("ProductId", 0)],
+        columns,
     }
 }
 
@@ -71,6 +85,26 @@ fn procedure(
     version: CatalogVersion,
     structured_inputs: Vec<QualifiedName>,
 ) -> ProcedureContract {
+    procedure_contract(
+        id,
+        name,
+        version,
+        structured_inputs,
+        Vec::new(),
+        CompatibilityPolicy::ExactHash,
+        MultiResultPolicy::SingleResultOnly,
+    )
+}
+
+fn procedure_contract(
+    id: u64,
+    name: &str,
+    version: CatalogVersion,
+    structured_inputs: Vec<QualifiedName>,
+    result_streams: Vec<ResultStreamContract>,
+    compatibility_policy: CompatibilityPolicy,
+    multi_result_policy: MultiResultPolicy,
+) -> ProcedureContract {
     ProcedureContractCandidate {
         object: object(id, name, ObjectKind::Procedure, version),
         procedure_id: ProcedureId::new(id),
@@ -81,23 +115,49 @@ fn procedure(
         },
         inputs: vec![column("ProductId", 0)],
         structured_inputs,
-        result_streams: Vec::new(),
+        result_streams,
         required_permissions: vec!["Inventory.ReserveStock.Execute".to_string()],
         transaction_policy: TransactionPolicy {
             access_mode: AccessMode::ReadWrite,
             isolation: IsolationPolicy::Serializable,
             retryable: false,
         },
-        compatibility_policy: CompatibilityPolicy::ExactHash,
+        compatibility_policy,
         result_metadata_policy: ResultMetadataPolicy::RequireBeforePayload,
         error_policy: ProcedureErrorPolicy {
             rollback_on_error: true,
             allowed_error_codes: vec!["InsufficientStock".to_string()],
         },
-        multi_result_policy: MultiResultPolicy::SingleResultOnly,
+        multi_result_policy,
     }
     .materialize()
     .unwrap()
+}
+
+fn result_stream(
+    stream_id: u64,
+    name: &str,
+    cardinality: ResultStreamCardinality,
+    columns: Vec<ColumnDescriptor>,
+) -> ResultStreamContract {
+    ResultStreamContract {
+        stream_id,
+        name: name.to_string(),
+        columns,
+        cardinality,
+        row_count_exact_required: cardinality.legacy_row_count_exact_required(),
+    }
+}
+
+fn assert_has_message(diagnostic: &ContractCompatibilityDiagnostic, text: &str) {
+    assert!(
+        diagnostic
+            .messages
+            .iter()
+            .any(|message| message.contains(text)),
+        "expected diagnostic to contain {text:?}; got {:?}",
+        diagnostic.messages
+    );
 }
 
 #[test]
@@ -155,6 +215,217 @@ fn policy_version_changes_with_policy_fields_only() {
         .required_permissions
         .push("Inventory.Audit".to_string());
     assert_ne!(baseline_policy, perms_changed.policy_version());
+}
+
+#[test]
+fn catalog_definition_shape_hash_tracks_versioned_additive_and_breaking_table_changes() {
+    let baseline =
+        CatalogDefinition::Table(table(401, "Inventory.ProductStock", CatalogVersion::new(1)));
+    let same_shape_next_version =
+        CatalogDefinition::Table(table(401, "Inventory.ProductStock", CatalogVersion::new(2)));
+    let additive_next_version = CatalogDefinition::Table(table_with_columns(
+        401,
+        "Inventory.ProductStock",
+        CatalogVersion::new(2),
+        vec![column("ProductId", 0), column("OnHandQuantity", 1)],
+    ));
+    let breaking_next_version = CatalogDefinition::Table(table_with_columns(
+        401,
+        "Inventory.ProductStock",
+        CatalogVersion::new(2),
+        vec![typed_column("Sku", 0, ScalarType::Bool)],
+    ));
+
+    assert!(baseline.validate().is_ok());
+    assert!(same_shape_next_version.validate().is_ok());
+    assert!(additive_next_version.validate().is_ok());
+    assert!(breaking_next_version.validate().is_ok());
+
+    assert_ne!(
+        baseline.shape_hash(),
+        same_shape_next_version.shape_hash(),
+        "CatalogVersion participates in the object diff hash"
+    );
+    assert_ne!(
+        same_shape_next_version.shape_hash(),
+        additive_next_version.shape_hash(),
+        "appending a table column must produce a distinct additive shape"
+    );
+    assert_ne!(
+        additive_next_version.shape_hash(),
+        breaking_next_version.shape_hash(),
+        "breaking table-column replacement must not collide with additive shape"
+    );
+}
+
+#[test]
+fn procedure_additive_compatibility_accepts_additive_result_growth() {
+    let previous = procedure_contract(
+        31,
+        "Inventory.ReserveStock",
+        CatalogVersion::new(1),
+        vec![],
+        vec![result_stream(
+            1,
+            "Reservations",
+            ResultStreamCardinality::One,
+            vec![column("ProductId", 0)],
+        )],
+        CompatibilityPolicy::ExactHash,
+        MultiResultPolicy::MultipleResultStreamsAllowed,
+    );
+    let additive = procedure_contract(
+        31,
+        "Inventory.ReserveStock",
+        CatalogVersion::new(2),
+        vec![],
+        vec![
+            result_stream(
+                1,
+                "Reservations",
+                ResultStreamCardinality::One,
+                vec![column("ProductId", 0), column("ReservedQuantity", 1)],
+            ),
+            result_stream(
+                2,
+                "AuditRows",
+                ResultStreamCardinality::Many,
+                vec![column("AuditId", 0)],
+            ),
+        ],
+        CompatibilityPolicy::AdditiveOnly,
+        MultiResultPolicy::MultipleResultStreamsAllowed,
+    );
+
+    assert_ne!(
+        previous.contract_hash, additive.contract_hash,
+        "additive result growth changes the canonical contract hash"
+    );
+
+    let diagnostic = additive.compatibility_with(&previous);
+    assert!(
+        diagnostic.compatible,
+        "AdditiveOnly must accept appended result columns and new result streams: {:?}",
+        diagnostic.messages
+    );
+    assert!(diagnostic.messages.is_empty());
+}
+
+#[test]
+fn procedure_exact_hash_compatibility_rejects_additive_contract_hash_change() {
+    let previous = procedure_contract(
+        32,
+        "Inventory.ReserveStock",
+        CatalogVersion::new(1),
+        vec![],
+        vec![result_stream(
+            1,
+            "Reservations",
+            ResultStreamCardinality::One,
+            vec![column("ProductId", 0)],
+        )],
+        CompatibilityPolicy::ExactHash,
+        MultiResultPolicy::MultipleResultStreamsAllowed,
+    );
+    let additive_shape_with_exact_hash = procedure_contract(
+        32,
+        "Inventory.ReserveStock",
+        CatalogVersion::new(2),
+        vec![],
+        vec![result_stream(
+            1,
+            "Reservations",
+            ResultStreamCardinality::One,
+            vec![column("ProductId", 0), column("ReservedQuantity", 1)],
+        )],
+        CompatibilityPolicy::ExactHash,
+        MultiResultPolicy::MultipleResultStreamsAllowed,
+    );
+
+    assert_ne!(
+        previous.contract_hash, additive_shape_with_exact_hash.contract_hash,
+        "the exact-hash gate has to see additive result-shape drift"
+    );
+
+    let diagnostic = additive_shape_with_exact_hash.compatibility_with(&previous);
+    assert!(!diagnostic.compatible);
+    assert_has_message(
+        &diagnostic,
+        "exact-hash compatibility requires unchanged contract hash",
+    );
+}
+
+#[test]
+fn procedure_additive_compatibility_rejects_shape_shifting_returns() {
+    let previous = procedure_contract(
+        33,
+        "Inventory.ReserveStock",
+        CatalogVersion::new(1),
+        vec![],
+        vec![result_stream(
+            1,
+            "Reservations",
+            ResultStreamCardinality::One,
+            vec![column("ProductId", 0), column("ReservedQuantity", 1)],
+        )],
+        CompatibilityPolicy::ExactHash,
+        MultiResultPolicy::MultipleResultStreamsAllowed,
+    );
+
+    let changed_cardinality = procedure_contract(
+        33,
+        "Inventory.ReserveStock",
+        CatalogVersion::new(2),
+        vec![],
+        vec![result_stream(
+            1,
+            "Reservations",
+            ResultStreamCardinality::Many,
+            vec![column("ProductId", 0), column("ReservedQuantity", 1)],
+        )],
+        CompatibilityPolicy::AdditiveOnly,
+        MultiResultPolicy::MultipleResultStreamsAllowed,
+    );
+    let diagnostic = changed_cardinality.compatibility_with(&previous);
+    assert!(!diagnostic.compatible);
+    assert_has_message(&diagnostic, "changing cardinality contract");
+
+    let changed_column_prefix = procedure_contract(
+        33,
+        "Inventory.ReserveStock",
+        CatalogVersion::new(2),
+        vec![],
+        vec![result_stream(
+            1,
+            "Reservations",
+            ResultStreamCardinality::One,
+            vec![
+                typed_column("ProductId", 0, ScalarType::Bool),
+                column("ReservedQuantity", 1),
+            ],
+        )],
+        CompatibilityPolicy::AdditiveOnly,
+        MultiResultPolicy::MultipleResultStreamsAllowed,
+    );
+    let diagnostic = changed_column_prefix.compatibility_with(&previous);
+    assert!(!diagnostic.compatible);
+    assert_has_message(
+        &diagnostic,
+        "existing columns to remain an unchanged prefix",
+    );
+
+    let removed_stream = procedure_contract(
+        33,
+        "Inventory.ReserveStock",
+        CatalogVersion::new(2),
+        vec![],
+        Vec::new(),
+        CompatibilityPolicy::AdditiveOnly,
+        MultiResultPolicy::MultipleResultStreamsAllowed,
+    );
+    let diagnostic = removed_stream.compatibility_with(&previous);
+    assert!(!diagnostic.compatible);
+    assert_has_message(&diagnostic, "removing result stream Reservations");
 }
 
 #[test]

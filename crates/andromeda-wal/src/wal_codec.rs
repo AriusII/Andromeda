@@ -5,7 +5,8 @@
 //! * `WAL_*` byte format constants (magic, header length, byte order, format
 //!   version),
 //! * the `WalFrameHeader` decoder,
-//! * `encode_wal_record` / `decode_wal_record_frame`, and
+//! * `encode_wal_record` / `encoded_wal_record_len` /
+//!   `decode_wal_record_frame`, and
 //! * the streaming `scan_wal_records` engine plus its `WalScanResult`,
 //!   `WalScanStop`, and `WalScanStopReason` types.
 //!
@@ -22,7 +23,7 @@ mod scan;
 use andromeda_core::{AndromedaError, AndromedaErrorKind};
 
 pub use frame::{WalFrameHeader, decode_frame_header};
-pub use record::{decode_wal_record_frame, encode_wal_record};
+pub use record::{decode_wal_record_frame, encode_wal_record, encoded_wal_record_len};
 pub use scan::{
     WalScanResult, WalScanStop, WalScanStopReason, scan_wal_records, scan_wal_records_from,
 };

@@ -5,13 +5,17 @@ use andromeda_core::{
 use andromeda_observe::CertificateIdentity;
 
 use crate::{
-    CatalogProcedureManifest, Connection, DispatchPolicy, FrameBytes, FrameType,
-    ResultStreamMetadataPolicy, StreamRole, SurfacePlane, TransportSurface,
+    CatalogProcedureManifest, Connection, DispatchPolicy, FrameBytes, FrameType, HADR_STREAM_MAX,
+    HADR_STREAM_MIN, ResultStreamMetadataPolicy, StreamRole, SurfacePlane, TransportSurface,
     TypedResultStreamBounds, TypedResultStreamContext, validate_transport_surface,
 };
 
 use super::errors::{protocol_error, security_error};
 use super::{state, validation};
+
+const APPLICATION_STREAM_MIN: u64 = 0;
+const APPLICATION_STREAM_MAX: u64 = HADR_STREAM_MIN - 1;
+const FUTURE_RESERVED_STREAM_MIN: u64 = HADR_STREAM_MAX + 1;
 
 /// Domain projection of the protobuf `RpcExecuteRequest` admitted by the
 /// Procedure gateway.
@@ -65,6 +69,7 @@ pub(super) fn bind_application_procedure_route(
             "procedure invocation route requires Application surface",
         ));
     }
+    validate_application_stream_id(stream_id)?;
     state::validate_frame_session_binding(admission.connection, frame)?;
 
     validate_transport_surface(
@@ -99,6 +104,28 @@ pub(super) fn bind_application_procedure_route(
         execute_request,
         manifest: manifest.clone(),
     })
+}
+
+fn validate_application_stream_id(stream_id: u64) -> AndromedaResult<()> {
+    if (APPLICATION_STREAM_MIN..=APPLICATION_STREAM_MAX).contains(&stream_id) {
+        return Ok(());
+    }
+
+    if (HADR_STREAM_MIN..=HADR_STREAM_MAX).contains(&stream_id) {
+        return Err(security_error(format!(
+            "application Procedure route cannot use HA/DR reserved stream id {stream_id}; \
+             HA/DR stream range is [{HADR_STREAM_MIN}..={HADR_STREAM_MAX}] and must not enter \
+             Application dispatch"
+        )));
+    }
+
+    Err(security_error(format!(
+        "application Procedure route cannot use future/reserved stream id {stream_id}; \
+         Application stream range is [{APPLICATION_STREAM_MIN}..={APPLICATION_STREAM_MAX}], \
+         HA/DR stream range is [{HADR_STREAM_MIN}..={HADR_STREAM_MAX}], and future/reserved \
+         stream ids start at {FUTURE_RESERVED_STREAM_MIN}; reserved namespaces must not enter \
+         Application dispatch"
+    )))
 }
 
 impl ProcedureRouteBinding {

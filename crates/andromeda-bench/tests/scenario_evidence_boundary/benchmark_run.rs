@@ -14,6 +14,11 @@ fn benchmark_run_evidence_preserves_explicit_generation_budgets() {
     request.temp_budget_bytes = DEFAULT_TEMP_BYTES / 2;
 
     let evidence = run_bounded_benchmark(&request).unwrap();
+    assert!(evidence.diagnostic_only);
+    assert!(!evidence.is_authoritative());
+    assert!(!evidence.can_select_plan_alone());
+    assert_eq!(evidence.optimizer_consumption_role(), "advisory-only");
+
     let boundary = BenchmarkScenarioEvidence::from_benchmark_evidence(
         &evidence,
         "commit-20260506",
@@ -50,4 +55,6 @@ fn benchmark_run_evidence_preserves_explicit_generation_budgets() {
             .contains(r#""timing_source":"deterministic-run-clock-placeholder""#)
     );
     assert!(!boundary.is_authoritative());
+    assert!(!boundary.can_select_plan_alone());
+    assert_eq!(boundary.optimizer_consumption_role(), "advisory-only");
 }

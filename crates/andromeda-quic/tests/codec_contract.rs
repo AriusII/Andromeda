@@ -5,8 +5,8 @@ use andromeda_proto::{encode_generated_message, generated};
 use andromeda_quic::{
     BackpressureReason, BackpressureSignal, DispatchPolicy, FRAME_CODEC_CRC_OFFSET,
     FRAME_CODEC_HEADER_LEN, FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader,
-    FrameType, ResultStreamMetadataPolicy, StreamRole, TransportSurface, TypedResultStreamContext,
-    dispatch_frame, expected_stream_role, validate_transport_surface,
+    FrameType, ResultStreamMetadataPolicy, StreamRole, TransportSurface, TypedResultStreamBounds,
+    TypedResultStreamContext, dispatch_frame, expected_stream_role, validate_transport_surface,
 };
 
 fn header(frame_type: FrameType, payload_length: u64) -> FrameHeader {
@@ -210,6 +210,36 @@ fn dispatcher_validates_result_stream_sequence() {
     );
 }
 
+#[test]
+fn dispatcher_rejects_typed_result_stream_bounds_before_acceptance() {
+    let metadata = result_metadata_frame();
+    let batch = result_batch_frame();
+
+    let mut frame_count_limited = DispatchPolicy::new_result_stream_with_context_and_bounds(
+        typed_result_stream_context(),
+        ResultStreamMetadataPolicy::RowBatchRequired,
+        TypedResultStreamBounds::new(1, 64 * 1024),
+    );
+    frame_count_limited.dispatch(&metadata).unwrap();
+    let frame_count_error = frame_count_limited.dispatch(&batch).unwrap_err();
+    assert_eq!(frame_count_error.kind(), AndromedaErrorKind::Resource);
+    assert!(
+        frame_count_error.message().contains("frame count"),
+        "bounded ResultStream rejection should identify frame-count budget"
+    );
+
+    let mut byte_limited = DispatchPolicy::new_result_stream_with_context_and_bounds(
+        typed_result_stream_context(),
+        ResultStreamMetadataPolicy::RowBatchRequired,
+        TypedResultStreamBounds::new(3, metadata.payload.len() as u64 - 1),
+    );
+    let byte_error = byte_limited.dispatch(&metadata).unwrap_err();
+    assert_eq!(byte_error.kind(), AndromedaErrorKind::Resource);
+    assert!(
+        byte_error.message().contains("envelope bytes"),
+        "bounded ResultStream rejection should identify envelope-byte budget"
+    );
+}
 #[test]
 fn dispatcher_allows_metadata_only_completion_only_with_explicit_policy() {
     let mut strict = DispatchPolicy::new_result_stream(typed_result_stream_context());

@@ -72,6 +72,55 @@ pub(crate) fn assert_contains_all(text: &str, expected: &[&str]) {
     }
 }
 
+pub(crate) fn assert_operator_boundary_json(text: &str, expected_schema: &str) {
+    assert!(
+        text.trim_start().starts_with('{'),
+        "expected JSON output: {text}"
+    );
+    assert!(
+        text.contains(&format!("\"schema\":\"{expected_schema}\"")),
+        "expected schema `{expected_schema}` in `{text}`"
+    );
+    assert_no_application_procedure_surface(text);
+    assert_no_ad_hoc_sql_surface(text);
+}
+
+pub(crate) fn assert_no_application_procedure_surface(text: &str) {
+    for forbidden in [
+        "\"surface\":\"application\"",
+        "\"required_permission\":\"execute-procedure\"",
+        "\"permission\":\"execute-procedure\"",
+        "\"family\":\"procedure-invocation\"",
+        "\"procedure_id\"",
+        "\"procedure\"",
+    ] {
+        assert!(
+            !text.contains(forbidden),
+            "operator command output exposed application procedure surface token `{forbidden}` in `{text}`"
+        );
+    }
+}
+
+pub(crate) fn assert_no_ad_hoc_sql_surface(text: &str) {
+    let lower = text.to_ascii_lowercase();
+    for forbidden in [
+        "\"sql\"",
+        "\"query\"",
+        "--sql",
+        "select ",
+        "insert ",
+        "update ",
+        "delete ",
+        " from ",
+        " where ",
+    ] {
+        assert!(
+            !lower.contains(forbidden),
+            "operator command output exposed ad hoc SQL token `{forbidden}` in `{text}`"
+        );
+    }
+}
+
 pub(crate) struct TestArtifactDir {
     root: PathBuf,
 }

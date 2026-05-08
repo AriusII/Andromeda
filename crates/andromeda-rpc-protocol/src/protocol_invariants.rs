@@ -95,8 +95,8 @@ impl FrameTypeInvariants {
 pub struct PayloadKindInvariants;
 
 impl PayloadKindInvariants {
-    /// Locked payload kind discriminator values.
-    pub const LOCKED_RANGE: RangeInclusive<u32> = 1..=8;
+    /// Locked payload kind discriminator values, including PAYLOAD_ERROR=9.
+    pub const LOCKED_RANGE: RangeInclusive<u32> = 1..=9;
 
     /// Expected discriminator values for RPC contract binding.
     pub const PAYLOAD_HELLO: u32 = 1;
@@ -133,7 +133,7 @@ impl PayloadKindInvariants {
         (Self::PAYLOAD_ERROR, 9, "PAYLOAD_ERROR"),
     ];
 
-    /// Validates that PayloadKind discriminators remain locked in range [1..8].
+    /// Validates that PayloadKind discriminators remain locked in range [1..9].
     pub fn validate() -> AndromedaResult<()> {
         ensure_u32(
             *Self::LOCKED_RANGE.start(),
@@ -142,7 +142,7 @@ impl PayloadKindInvariants {
         )?;
         ensure_u32(
             *Self::LOCKED_RANGE.end(),
-            8,
+            9,
             "PAYLOAD_KIND_LOCKED_RANGE_END",
         )?;
         for (actual, expected, name) in Self::VALIDATION {
@@ -264,6 +264,9 @@ mod tests {
     #[test]
     fn payload_kind_invariants_validate() {
         assert!(PayloadKindInvariants::validate().is_ok());
+        assert!(
+            PayloadKindInvariants::LOCKED_RANGE.contains(&PayloadKindInvariants::PAYLOAD_ERROR)
+        );
     }
 
     #[test]

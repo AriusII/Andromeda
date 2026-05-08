@@ -89,40 +89,45 @@ impl TraceQuerySpec {
                 "trace query limit exceeds TRACE_QUERY_MAX_LIMIT",
             ));
         }
-        if let Some(trace_id) = self.filter.trace_id
-            && trace_id.is_zero()
-        {
-            return Err(trace_query_error(
-                "trace query trace_id filter must be non-zero when present",
-            ));
+        match self.filter.trace_id {
+            Some(trace_id) if trace_id.is_zero() => {
+                return Err(trace_query_error(
+                    "trace query trace_id filter must be non-zero when present",
+                ));
+            }
+            _ => {}
         }
-        if let Some(range) = self.filter.lsn_range
-            && !range.is_valid()
-        {
-            return Err(trace_query_error(
-                "trace query LSN range must be non-zero and start_lsn <= end_lsn",
-            ));
+        match self.filter.lsn_range {
+            Some(range) if !range.is_valid() => {
+                return Err(trace_query_error(
+                    "trace query LSN range must be non-zero and start_lsn <= end_lsn",
+                ));
+            }
+            _ => {}
         }
-        if let Some(catalog_version) = self.filter.catalog_version
-            && catalog_version.get() == 0
-        {
-            return Err(trace_query_error(
-                "trace query catalog_version filter must be non-zero when present",
-            ));
+        match self.filter.catalog_version {
+            Some(catalog_version) if catalog_version.get() == 0 => {
+                return Err(trace_query_error(
+                    "trace query catalog_version filter must be non-zero when present",
+                ));
+            }
+            _ => {}
         }
-        if let Some(procedure_id) = self.filter.procedure_id
-            && procedure_id.get() == 0
-        {
-            return Err(trace_query_error(
-                "trace query procedure_id filter must be non-zero when present",
-            ));
+        match self.filter.procedure_id {
+            Some(procedure_id) if procedure_id.get() == 0 => {
+                return Err(trace_query_error(
+                    "trace query procedure_id filter must be non-zero when present",
+                ));
+            }
+            _ => {}
         }
-        if let Some(principal) = &self.filter.principal
-            && principal.trim().is_empty()
-        {
-            return Err(trace_query_error(
-                "trace query principal filter must be non-empty when present",
-            ));
+        match &self.filter.principal {
+            Some(principal) if principal.trim().is_empty() => {
+                return Err(trace_query_error(
+                    "trace query principal filter must be non-empty when present",
+                ));
+            }
+            _ => {}
         }
         Ok(())
     }

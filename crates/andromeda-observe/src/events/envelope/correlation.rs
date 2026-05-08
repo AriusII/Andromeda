@@ -116,12 +116,15 @@ fn validate_denied_path(envelope: &EventEnvelope) -> AndromedaResult<()> {
 fn validate_transaction(envelope: &EventEnvelope) -> AndromedaResult<()> {
     match &envelope.event {
         TraceEvent::WalEvent(trace) => {
-            if let Some(transaction_id) = trace.transaction_id
-                && envelope.correlation.transaction_id != Some(transaction_id)
-            {
-                return Err(observe_error(
-                    "WAL event transaction_id correlation must match WAL trace payload",
-                ));
+            match trace.transaction_id {
+                Some(transaction_id)
+                    if envelope.correlation.transaction_id != Some(transaction_id) =>
+                {
+                    return Err(observe_error(
+                        "WAL event transaction_id correlation must match WAL trace payload",
+                    ));
+                }
+                _ => {}
             }
 
             if trace.operation == WalOperation::Flush
@@ -182,12 +185,13 @@ fn validate_transaction(envelope: &EventEnvelope) -> AndromedaResult<()> {
             )?;
         }
         TraceEvent::ExecutionTransition(trace) => {
-            if let Some(payload_tx) = trace.transaction_id
-                && envelope.correlation.transaction_id != Some(payload_tx)
-            {
-                return Err(observe_error(
-                    "execution transition traces require matching transaction_id correlation when payload carries one",
-                ));
+            match trace.transaction_id {
+                Some(payload_tx) if envelope.correlation.transaction_id != Some(payload_tx) => {
+                    return Err(observe_error(
+                        "execution transition traces require matching transaction_id correlation when payload carries one",
+                    ));
+                }
+                _ => {}
             }
             validate_payload_durable_lsn(
                 envelope,
@@ -247,31 +251,36 @@ fn validate_payload_request_session(
     session_id: Option<SessionId>,
     context: &str,
 ) -> AndromedaResult<()> {
-    if let Some(request_id) = request_id
-        && envelope.correlation.request_id != Some(request_id)
-    {
-        return Err(observe_error(format!(
-            "{context} require matching request_id correlation when payload carries one",
-        )));
+    match request_id {
+        Some(request_id) if envelope.correlation.request_id != Some(request_id) => {
+            return Err(observe_error(format!(
+                "{context} require matching request_id correlation when payload carries one",
+            )));
+        }
+        _ => {}
     }
-    if let Some(session_id) = session_id
-        && envelope.correlation.session_id != Some(session_id)
-    {
-        return Err(observe_error(format!(
-            "{context} require matching session_id correlation when payload carries one",
-        )));
+    match session_id {
+        Some(session_id) if envelope.correlation.session_id != Some(session_id) => {
+            return Err(observe_error(format!(
+                "{context} require matching session_id correlation when payload carries one",
+            )));
+        }
+        _ => {}
     }
 
     Ok(())
 }
 
 fn validate_catalog(envelope: &EventEnvelope) -> AndromedaResult<()> {
-    if let TraceEvent::Manifest(trace) = &envelope.event
-        && envelope.correlation.catalog_version != Some(trace.catalog_version)
-    {
-        return Err(observe_error(
-            "manifest traces require matching catalog_version correlation",
-        ));
+    match &envelope.event {
+        TraceEvent::Manifest(trace)
+            if envelope.correlation.catalog_version != Some(trace.catalog_version) =>
+        {
+            return Err(observe_error(
+                "manifest traces require matching catalog_version correlation",
+            ));
+        }
+        _ => {}
     }
 
     Ok(())

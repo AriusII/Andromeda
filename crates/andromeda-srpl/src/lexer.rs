@@ -1,1 +1,1 @@
-pub use andromeda_srpl_parser::{Token, TokenKind, lex};
+pub use andromeda_srpl_lexer::{Token, TokenKind, lex};

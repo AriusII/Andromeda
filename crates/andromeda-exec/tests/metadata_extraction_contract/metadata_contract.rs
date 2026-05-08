@@ -136,7 +136,7 @@ fn ct_016_deterministic_extraction_same_input() {
         ordinal: 0,
         target: make_table_ref(),
         predicates: vec![],
-        assignments: vec![],
+        assignments: vec![make_assignment()],
         affected_rows_exact: Some(999),
     });
 
@@ -151,7 +151,7 @@ fn ct_016_deterministic_extraction_same_input() {
         ordinal: 0,
         target: make_table_ref(),
         predicates: vec![],
-        assignments: vec![],
+        assignments: vec![make_assignment()],
         affected_rows_exact: Some(999),
     });
 

@@ -7,7 +7,7 @@ fn ct_007_extract_from_update_with_exact_rows() {
         ordinal: 0,
         target: make_table_ref(),
         predicates: vec![],
-        assignments: vec![],
+        assignments: vec![make_assignment()],
         affected_rows_exact: Some(42),
     });
 
@@ -33,7 +33,7 @@ fn ct_008_extract_from_update_without_exact_rows() {
         ordinal: 0,
         target: make_table_ref(),
         predicates: vec![],
-        assignments: vec![],
+        assignments: vec![make_assignment()],
         affected_rows_exact: None,
     });
 
@@ -59,7 +59,7 @@ fn ct_014_exact_count_sets_row_count_max() {
         ordinal: 0,
         target: make_table_ref(),
         predicates: vec![],
-        assignments: vec![],
+        assignments: vec![make_assignment()],
         affected_rows_exact: Some(100),
     });
 
@@ -87,7 +87,7 @@ fn ct_019_large_affected_rows_count() {
         ordinal: 0,
         target: make_table_ref(),
         predicates: vec![],
-        assignments: vec![],
+        assignments: vec![make_assignment()],
         affected_rows_exact: Some(large_count),
     });
 

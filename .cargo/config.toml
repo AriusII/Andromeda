@@ -1,0 +1,5 @@
+[term]
+verbose = false
+
+[net]
+git-fetch-with-cli = true

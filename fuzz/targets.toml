@@ -155,9 +155,50 @@ max_input_bytes = 4096
 max_iterations = 128
 invalid_input_policy = "property-assertion-no-panic"
 
+[[target]]
+name = "manifest_decode"
+path = "fuzz_targets/manifest_decode.rs"
+corpus_dir = "fuzz/corpus/manifest_decode"
+generator = "fuzz/generators/generate_seed_corpus.py"
+max_input_bytes = 4096
+invalid_input_policy = "return-or-error-no-panic"
+
+[[target]]
+name = "segment_index_decode"
+path = "fuzz_targets/segment_index_decode.rs"
+corpus_dir = "fuzz/corpus/segment_index_decode"
+generator = "fuzz/generators/generate_seed_corpus.py"
+max_input_bytes = 4096
+invalid_input_policy = "return-or-error-no-panic"
+
+[[target]]
+name = "contract_hash"
+path = "fuzz_targets/contract_hash.rs"
+corpus_dir = "fuzz/corpus/contract_hash"
+generator = "fuzz/generators/generate_seed_corpus.py"
+max_input_bytes = 1024
+invalid_input_policy = "return-or-error-no-panic"
+
+[[target]]
+name = "definition_batch"
+path = "fuzz_targets/definition_batch.rs"
+corpus_dir = "fuzz/corpus/definition_batch"
+generator = "fuzz/generators/generate_seed_corpus.py"
+max_input_bytes = 4096
+max_iterations = 16
+invalid_input_policy = "property-assertion-no-panic"
+
+[[target]]
+name = "structured_object_payload"
+path = "fuzz_targets/structured_object_payload.rs"
+corpus_dir = "fuzz/corpus/structured_object_payload"
+generator = "fuzz/generators/generate_seed_corpus.py"
+max_input_bytes = 65536
+invalid_input_policy = "return-or-error-no-panic"
+
 [[support]]
 path = "fuzz_targets/common.rs"
-used_by = ["btree_node_v1_decode", "durable_audit_journal_decode", "frame_codec_no_panic", "heap_page_v1_decode", "page_codec_v1_decode", "proto_frame_envelope_decode", "proto_invocation_response_sequence_decode", "proto_rpc_completion_decode", "proto_rpc_execute_request_decode", "quic_typed_frame_envelope_decode", "quic_zero_rtt_admission", "result_sequence_state_machine", "rpc_protocol_frame_codec_decode", "security_contract_admission_matrix", "srpl_parser_owner_decode", "srpl_parser_signature_decode", "storage_wal_record_roundtrip", "wal_record_roundtrip"]
+used_by = ["btree_node_v1_decode", "contract_hash", "definition_batch", "durable_audit_journal_decode", "frame_codec_no_panic", "heap_page_v1_decode", "manifest_decode", "page_codec_v1_decode", "proto_frame_envelope_decode", "proto_invocation_response_sequence_decode", "proto_rpc_completion_decode", "proto_rpc_execute_request_decode", "quic_typed_frame_envelope_decode", "quic_zero_rtt_admission", "result_sequence_state_machine", "rpc_protocol_frame_codec_decode", "security_contract_admission_matrix", "segment_index_decode", "srpl_parser_owner_decode", "srpl_parser_signature_decode", "storage_wal_record_roundtrip", "structured_object_payload", "wal_record_roundtrip"]
 
 [[support]]
 path = "fuzz_targets/durable_audit_journal_support.rs"

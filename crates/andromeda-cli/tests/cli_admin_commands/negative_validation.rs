@@ -121,6 +121,55 @@ fn restore_lsn_options_reject_following_flags_without_echoing_values() {
 }
 
 #[test]
+fn operator_commands_reject_application_procedure_and_sql_surface_options() {
+    for args in [
+        vec!["audit", "inspect", "--sql", "select * from audit"],
+        vec!["audit", "inspect", "--procedure-id", "1"],
+        vec!["backup", "start", "--procedure-id", "1", "--dry-run"],
+        vec![
+            "backup",
+            "start",
+            "--sql",
+            "select * from backup",
+            "--dry-run",
+        ],
+        vec![
+            "restore",
+            "100",
+            "--artifact",
+            "target/backup",
+            "--pitr-lsn",
+            "1500",
+            "--procedure-id",
+            "1",
+            "--dry-run",
+        ],
+        vec![
+            "restore",
+            "100",
+            "--artifact",
+            "target/backup",
+            "--pitr-lsn",
+            "1500",
+            "--sql",
+            "select * from restore",
+            "--dry-run",
+        ],
+    ] {
+        let output = run_cli_vec(args);
+        assert!(
+            !output.status.success(),
+            "operator command accepted application procedure or SQL surface option"
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            !stderr.to_ascii_lowercase().contains("select *"),
+            "parser error echoed ad hoc SQL text: {stderr}"
+        );
+    }
+}
+
+#[test]
 fn unsupported_machine_output_formats_are_rejected() {
     for args in [
         vec!["backup", "status", "100", "--csv"],

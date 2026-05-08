@@ -214,13 +214,13 @@ impl InventoryProductStockStore for HeapInventoryProductStockStore {
             ));
         }
 
-        if let Some(expected_binding) = self.redo_binding {
-            if redo.redo_binding != Some(expected_binding) {
-                return Err(AndromedaError::new(
-                    AndromedaErrorKind::Contract,
-                    "ProductStock heap redo evidence must bind the expected table object, procedure, catalog version, and contract hash",
-                ));
-            }
+        if let Some(expected_binding) = self.redo_binding
+            && redo.redo_binding != Some(expected_binding)
+        {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "ProductStock heap redo evidence must bind the expected table object, procedure, catalog version, and contract hash",
+            ));
         }
 
         let template = self.prepared_reserve_stock_redo_template(intent)?;

@@ -2,6 +2,7 @@
 
 mod certificate;
 mod certificate_identity;
+mod contract;
 mod id;
 mod identity;
 mod permission;

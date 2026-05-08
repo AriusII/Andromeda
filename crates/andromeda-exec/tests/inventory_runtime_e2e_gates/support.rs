@@ -1,3 +1,5 @@
+#![allow(dead_code, unused_imports)]
+
 pub use andromeda_catalog::{
     INVENTORY_RESERVE_STOCK_PERMISSION, ProcedureContract,
     inventory_reserve_stock_catalog_bindings, inventory_reserve_stock_contract,

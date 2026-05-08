@@ -1,7 +1,7 @@
 #![no_main]
 
 use andromeda_storage::{
-    decode_wal_record_frame, encode_wal_record, Lsn, WalRecord, WalRecordKind,
+    Lsn, WalRecord, WalRecordKind, decode_wal_record_frame, encode_wal_record,
 };
 use libfuzzer_sys::fuzz_target;
 

@@ -10,4 +10,5 @@ andromeda-contract.workspace = true
 andromeda-srpl-ast.workspace = true
 andromeda-srpl-cardinality.workspace = true
 andromeda-srpl-diagnostics.workspace = true
+andromeda-srpl-lexer.workspace = true
 andromeda-types.workspace = true

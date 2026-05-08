@@ -1,14 +1,14 @@
 pub(crate) use super::super::{LocalProcedure, LocalVerticalRuntime};
 pub(crate) use andromeda_catalog::{
-    CatalogLifecycleTarget, CatalogSnapshot, CatalogSystemStore, DefinitionBatch,
-    DefinitionBatchId, DefinitionOperation, InvocationRuntimeRecordOutcome, PolicyVersion,
-    ProcedureContract, ProcedureContractBinding, ProcedureContractRef, ProcedureRuntimePlanId,
-    ProcedureRuntimeStatus, ProcedureStore, ProcedureStoreEntry, StatsVersion,
-    inventory_domain_definition_batch, inventory_reserve_stock_contract,
+    CatalogLifecycleTarget, CatalogSystemStore, DefinitionBatch, DefinitionBatchId,
+    DefinitionOperation, InvocationRuntimeRecordOutcome, PolicyVersion, ProcedureContract,
+    ProcedureContractBinding, ProcedureContractRef, ProcedureRuntimePlanId, ProcedureRuntimeStatus,
+    ProcedureStore, ProcedureStoreEntry, StatsVersion, inventory_domain_definition_batch,
+    inventory_reserve_stock_contract,
 };
 pub(crate) use andromeda_core::{
     AndromedaErrorKind, AndromedaResult, CatalogVersion, ContractHash, DatabaseId, InvocationId,
-    NamespaceId, ProcedureId, TransactionId,
+    NamespaceId, PipelineClass, ProcedureId, ResourceBudget, TransactionId,
 };
 pub(crate) use andromeda_observe::{
     AuthorizationDenialReason, AuthorizationOutcome, CertificateIdentity, Permission,
@@ -17,12 +17,16 @@ pub(crate) use andromeda_observe::{
 };
 pub(crate) use andromeda_quic::SurfacePlane;
 pub(crate) use andromeda_srpl::Cardinality;
-pub(crate) use andromeda_storage::{InMemoryWal, Lsn, WalRecordKind};
+pub(crate) use andromeda_storage::{
+    CoreIoPlacementRequest, InMemoryWal, Lsn, OperationalProfile, PageSize, StorageIoBudgetScope,
+    StorageWorkloadClass, WalRecordKind,
+};
 pub(crate) use andromeda_tx::TransactionState;
 
 pub(crate) use crate::{
-    CompletionStatus, InvocationContext, InvocationRequest, InvocationWal, LocalDispatcher,
-    LocalRollbackPlan, ResultStreamMetadata, RollbackCause, SurfacePlaneAuthorizer,
+    CompletionStatus, ExecutionIoAdmissionDecision, ExecutionIoAdmissionRequest, InvocationContext,
+    InvocationReject, InvocationRequest, InvocationWal, LocalDispatcher, LocalRollbackPlan,
+    ResultStreamMetadata, RollbackCause, SurfacePlaneAuthorizer,
 };
 
 #[derive(Debug, Default)]
@@ -126,6 +130,42 @@ pub(crate) fn inventory_context(contract: &ProcedureContract, trace_id: u128) ->
     )
 }
 
+pub(crate) fn foreground_io_admission(
+    trace_id: TraceId,
+) -> Result<ExecutionIoAdmissionDecision, InvocationReject> {
+    let profile = OperationalProfile::hot_write();
+    ExecutionIoAdmissionRequest::new(
+        profile.clone(),
+        PipelineClass::ForegroundExecution,
+        ResourceBudget::new(8 * 1024 * 1024, 1024 * 1024, 2),
+        CoreIoPlacementRequest::new(
+            StorageWorkloadClass::HotAppend,
+            StorageIoBudgetScope::Page(PageSize::KiB16),
+            profile.workflow.page_budget.path_budget,
+            false,
+        ),
+    )
+    .validate_admission(trace_id)
+}
+
+pub(crate) fn rejected_resource_budget_io_admission(
+    trace_id: TraceId,
+) -> Result<ExecutionIoAdmissionDecision, InvocationReject> {
+    let profile = OperationalProfile::hot_write();
+    ExecutionIoAdmissionRequest::new(
+        profile.clone(),
+        PipelineClass::ForegroundExecution,
+        ResourceBudget::new(0, 1024 * 1024, 2),
+        CoreIoPlacementRequest::new(
+            StorageWorkloadClass::HotAppend,
+            StorageIoBudgetScope::Page(PageSize::KiB16),
+            profile.workflow.page_budget.path_budget,
+            false,
+        ),
+    )
+    .validate_admission(trace_id)
+}
+
 pub(crate) fn test_binding(procedure: ProcedureContractRef) -> ProcedureContractBinding {
     ProcedureContractBinding {
         procedure_id: procedure.procedure_id,
@@ -136,7 +176,7 @@ pub(crate) fn test_binding(procedure: ProcedureContractRef) -> ProcedureContract
     }
 }
 
-pub(crate) fn inventory_catalog_store() -> CatalogSystemStore {
+pub(crate) fn staged_inventory_catalog_store() -> CatalogSystemStore {
     let mut store = CatalogSystemStore::empty(
         DatabaseId::new(0x1000),
         NamespaceId::new(0x1001),
@@ -146,6 +186,40 @@ pub(crate) fn inventory_catalog_store() -> CatalogSystemStore {
         .apply_definition_batch(&inventory_domain_definition_batch().unwrap())
         .unwrap();
     store
+}
+
+pub(crate) fn inventory_catalog_store() -> CatalogSystemStore {
+    let mut store = CatalogSystemStore::empty(
+        DatabaseId::new(0x1000),
+        NamespaceId::new(0x1001),
+        CatalogVersion::new(0),
+    );
+    apply_definition_batch_durably_for_test(
+        &mut store,
+        &inventory_domain_definition_batch().unwrap(),
+    );
+    store
+}
+
+pub(crate) fn apply_definition_batch_durably_for_test(
+    store: &mut CatalogSystemStore,
+    batch: &DefinitionBatch,
+) {
+    let mut next_lsn = store
+        .snapshot()
+        .visible_publication_receipt()
+        .and_then(|receipt| receipt.durable_lsn)
+        .unwrap_or(0);
+    store
+        .apply_definition_batch_durably(
+            batch,
+            |_kind, _payload| {
+                next_lsn += 1;
+                Ok(next_lsn)
+            },
+            Ok,
+        )
+        .unwrap();
 }
 
 pub(crate) fn principal_registry(bindings: Vec<PrincipalBinding>) -> PrincipalRegistry {

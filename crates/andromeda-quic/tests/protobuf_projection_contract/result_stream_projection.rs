@@ -67,6 +67,52 @@ fn result_stream_frames_carry_generated_metadata_batch_completion_payloads() {
 }
 
 #[test]
+fn proto_result_stream_projection_rejects_envelope_context_drift_fields() {
+    let frames = typed_result_stream_frames();
+    let proto_envelopes = frames
+        .iter()
+        .map(|frame| {
+            let (_, decoded_envelope) = roundtrip_generated_envelope(frame);
+            proto_envelope_from_generated(decoded_envelope)
+        })
+        .collect::<Vec<_>>();
+
+    for field in [
+        "ContractHash",
+        "CatalogVersion",
+        "RequestId",
+        "SessionId",
+        "tx_id",
+    ] {
+        let mut drifted = proto_envelopes.clone();
+        match field {
+            "ContractHash" => {
+                drifted[1].contract_hash = ContractHash::from_slice(&hash(8)).unwrap();
+            }
+            "CatalogVersion" => {
+                drifted[1].catalog_version = CatalogVersion::new(43);
+            }
+            "RequestId" => {
+                drifted[1].request_id = RequestId::new(502);
+            }
+            "SessionId" => {
+                drifted[1].session_id = SessionId::new(602);
+            }
+            "tx_id" => {
+                drifted[1].tx_id = Some(TransactionId::new(702));
+            }
+            _ => unreachable!(),
+        }
+
+        let err = ProtoFrameEnvelope::validate_rpc_stream_sequence(&drifted).unwrap_err();
+        assert_eq!(err.kind(), AndromedaErrorKind::Protocol, "{field}");
+        assert!(
+            err.message().contains("request context"),
+            "ProtoFrameEnvelope sequence must reject {field} drift"
+        );
+    }
+}
+#[test]
 fn result_stream_projection_rejects_payload_kind_spoofing_before_payload_acceptance() {
     let batch_payload = rpc_batch_payload();
     let completion_payload = rpc_completion_payload(Vec::new());

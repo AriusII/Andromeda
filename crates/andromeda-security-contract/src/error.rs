@@ -8,6 +8,8 @@ pub enum SecurityContractError {
     UnknownPermissionId,
     InvalidEvidenceSchemaVersion,
     MissingPolicyVersion,
+    SurfaceClassBoundaryMismatch,
+    SurfacePermissionBoundaryMismatch,
 }
 
 impl SecurityContractError {
@@ -18,6 +20,8 @@ impl SecurityContractError {
             Self::UnknownPermissionId => "unknown_permission_id",
             Self::InvalidEvidenceSchemaVersion => "invalid_evidence_schema_version",
             Self::MissingPolicyVersion => "missing_policy_version",
+            Self::SurfaceClassBoundaryMismatch => "surface_class_boundary_mismatch",
+            Self::SurfacePermissionBoundaryMismatch => "surface_permission_boundary_mismatch",
         }
     }
 }

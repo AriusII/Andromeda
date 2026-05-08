@@ -14,6 +14,37 @@ pub enum SecurityAuditOutcome {
     Denied,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SecurityAuditDenialReason {
+    UnknownCertificate,
+    SurfaceScopeMismatch,
+    SurfaceDoesNotPermitPermission,
+    PrincipalMissingPermission,
+}
+
+impl SecurityAuditDenialReason {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::UnknownCertificate => "unknown_certificate",
+            Self::SurfaceScopeMismatch => "surface_scope_mismatch",
+            Self::SurfaceDoesNotPermitPermission => "surface_does_not_permit_permission",
+            Self::PrincipalMissingPermission => "principal_missing_permission",
+        }
+    }
+
+    pub fn from_audit_reason(reason: &str) -> Option<Self> {
+        let reason = reason.trim();
+        let label = reason.strip_prefix("denied:")?.split(':').next()?;
+        match label {
+            "unknown_certificate" => Some(Self::UnknownCertificate),
+            "surface_scope_mismatch" => Some(Self::SurfaceScopeMismatch),
+            "surface_does_not_permit_permission" => Some(Self::SurfaceDoesNotPermitPermission),
+            "principal_missing_permission" => Some(Self::PrincipalMissingPermission),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SecurityAuditTrace {
     pub trace_id: TraceId,
@@ -94,7 +125,25 @@ impl SecurityAuditTrace {
     }
 
     pub const fn surface_matches_certificate(&self) -> bool {
-        self.surface as u8 == self.certificate.surface as u8
+        matches!(
+            (self.surface, self.certificate.surface),
+            (SurfaceScope::Application, SurfaceScope::Application)
+                | (SurfaceScope::Administration, SurfaceScope::Administration)
+                | (SurfaceScope::Cluster, SurfaceScope::Cluster)
+                | (SurfaceScope::BackupAgent, SurfaceScope::BackupAgent)
+                | (SurfaceScope::MonitoringAgent, SurfaceScope::MonitoringAgent)
+        )
+    }
+
+    pub fn denial_reason(&self) -> Option<SecurityAuditDenialReason> {
+        if !matches!(self.outcome, SecurityAuditOutcome::Denied) {
+            return None;
+        }
+        SecurityAuditDenialReason::from_audit_reason(&self.reason)
+    }
+
+    pub fn has_typed_surface_scope_mismatch_denial(&self) -> bool {
+        self.denial_reason() == Some(SecurityAuditDenialReason::SurfaceScopeMismatch)
     }
 
     pub const fn surface_permits_permission(&self) -> bool {

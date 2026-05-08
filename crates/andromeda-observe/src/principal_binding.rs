@@ -15,6 +15,8 @@ use crate::events::{
 };
 use crate::trace_id::TraceId;
 
+pub use crate::events::SecurityAuditDenialReason as AuthorizationDenialReason;
+
 /// The authorized verb a session is attempting before frame dispatch.
 ///
 /// Limited to the procedure-only execution surface plus the explicit
@@ -167,34 +169,6 @@ impl PrincipalRegistry {
     /// Look up a binding by certificate fingerprint.
     pub fn lookup(&self, fingerprint: &str) -> Option<&PrincipalBinding> {
         self.bindings.get(fingerprint)
-    }
-}
-
-/// Why an authorization decision was reached. Stable, machine-classifiable
-/// reasons for both allow and deny outcomes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum AuthorizationDenialReason {
-    /// No binding existed for the presented certificate fingerprint.
-    UnknownCertificate,
-    /// The certificate was issued for a different surface scope than the
-    /// surface the request arrived on.
-    SurfaceScopeMismatch,
-    /// The surface scope itself does not permit the requested permission
-    /// (e.g. an admin permission requested on the application surface).
-    SurfaceDoesNotPermitPermission,
-    /// The principal exists but does not hold the required permission.
-    PrincipalMissingPermission,
-}
-
-impl AuthorizationDenialReason {
-    /// Stable classification label, suitable for audit pipelines.
-    pub const fn label(self) -> &'static str {
-        match self {
-            Self::UnknownCertificate => "unknown_certificate",
-            Self::SurfaceScopeMismatch => "surface_scope_mismatch",
-            Self::SurfaceDoesNotPermitPermission => "surface_does_not_permit_permission",
-            Self::PrincipalMissingPermission => "principal_missing_permission",
-        }
     }
 }
 

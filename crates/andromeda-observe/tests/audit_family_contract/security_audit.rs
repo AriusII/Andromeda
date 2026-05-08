@@ -137,6 +137,49 @@ fn security_audit_rejects_admin_cluster_surface_permission_drift() {
 }
 
 #[test]
+fn security_audit_rejects_surface_mismatch_without_specific_denial_reason() {
+    for (event_id, trace_id, outcome, reason) in [
+        (
+            46,
+            146,
+            SecurityAuditOutcome::Allowed,
+            "allowed audit cannot carry certificate surface drift",
+        ),
+        (
+            47,
+            147,
+            SecurityAuditOutcome::Denied,
+            "principal_missing_permission without typed denial prefix",
+        ),
+        (
+            48,
+            148,
+            SecurityAuditOutcome::Denied,
+            "denied:principal_missing_permission:permission=ManageSecurity",
+        ),
+    ] {
+        let err = EventEnvelope::new(
+            EventId::new(event_id),
+            request_correlation(),
+            TraceEvent::SecurityAudit(
+                SecurityAuditTrace::new(
+                    TraceId::new(trace_id),
+                    SurfaceScope::Administration,
+                    certificate(SurfaceScope::Application),
+                    principal(),
+                    Permission::ManageSecurity,
+                    outcome,
+                    reason,
+                )
+                .expect("trace shape is valid before envelope surface validation"),
+            ),
+        )
+        .unwrap_err();
+
+        assert!(err.message().contains("surface mismatch"));
+    }
+}
+#[test]
 fn security_audit_rejects_invalid_policy_version_evidence() {
     let err = EventEnvelope::new(
         EventId::new(45),

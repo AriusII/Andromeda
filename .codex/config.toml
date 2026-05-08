@@ -10,7 +10,6 @@ approval_policy = "on-request"
 
 [features]
 child_agents_md = true
-codex_hooks = true
 hooks = true
 multi_agent = true
 plugins = true

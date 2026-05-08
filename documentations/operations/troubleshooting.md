@@ -619,39 +619,40 @@ Highest Observed Epoch: 42
 
 ### Audit Ledger Inspection
 
-All critical operations emit audit events to the durable audit ledger (DEC-033). Inspect with:
+Critical operations are expected to emit DEC-033 audit evidence to the durable audit ledger. Current operator tooling is bounded durable journal replay through `audit inspect`, not obsolete `audit query` wording and not an implemented Admin RPC query endpoint.
+
+Inspect a durable journal with bounded filters:
 
 ```bash
-andromeda-cli audit query --since "2 hours ago" --event-type promotion,failover,node-register
+andromeda-cli audit inspect --journal <path> --family admin-audit --limit 50 --include-total-count
 ```
 
-**Example Output:**
-
-```
-2026-01-15T14:30:45Z | promotion        | replica_id=2 | success | epoch=43 | operator=alice@company.com
-2026-01-15T14:25:30Z | node-register    | node_id=4    | dry-run | message=contract_validated
-2026-01-15T14:20:00Z | replication-lag  | lag_bytes=1024 | warning
-```
-
-### Common Queries
-
-**Find recent failovers:**
+Inspect security admission evidence:
 
 ```bash
-andromeda-cli audit query --event-type failover --since "24 hours ago"
+andromeda-cli audit inspect --journal <path> --family security-audit --principal user:ops --lsn-range 1000..2000 --diagnostic-json
 ```
 
-**Find failed promotion attempts:**
+Verify checksum-chain integrity:
 
 ```bash
-andromeda-cli audit query --event-type promotion --outcome failed --since "7 days ago"
+andromeda-cli audit verify --journal <path> --diagnostic-json
 ```
 
-**Find nodes that have been deregistered:**
+Compact retained records by policy:
 
 ```bash
-andromeda-cli audit query --event-type node-deregister
+andromeda-cli audit compact --journal <path> --retain-from-lsn 1000 --preserve-forensic-hold --diagnostic-json
 ```
+
+`audit compact` may rewrite a compacted journal by retaining records and rethreading chain evidence. It is a retention operation, not the transaction commit path and not database truth.
+
+### Common Inspection Tasks
+
+- Review recent admin or cluster decisions with `audit inspect --family admin-audit --limit <n>`.
+- Review denied security admission evidence with `audit inspect --family security-audit --principal <id>` plus an LSN range when available.
+- Validate a journal before forensic use with `audit verify --journal <path>`.
+- Compact only under retention policy, and preserve forensic hold when incident evidence must survive.
 
 ---
 

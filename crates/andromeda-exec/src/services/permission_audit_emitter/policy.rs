@@ -34,7 +34,18 @@ impl AuditEmissionPolicy {
         }
     }
 
+    /// Test-support policy for validation-only tests that do not model audit durability.
+    /// Visible security decisions must use a fail-closed durable policy instead.
+    pub const fn allow_unavailable_sink_for_explicit_test_support() -> Self {
+        Self::test_support_allow_unavailable_sink()
+    }
+
+    #[doc(hidden)]
     pub const fn allow_unavailable_sink_for_tests() -> Self {
+        Self::test_support_allow_unavailable_sink()
+    }
+
+    const fn test_support_allow_unavailable_sink() -> Self {
         Self {
             fail_closed_when_sink_unavailable: false,
             require_durable_wal_evidence: false,

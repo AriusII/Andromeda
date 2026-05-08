@@ -2,8 +2,9 @@ use andromeda_catalog::{
     CatalogObjectRef, CatalogPlanInvalidationReport, CatalogPublicationAudience,
     CatalogPublicationAuditTrace, CatalogPublicationReasonCode, CatalogPublicationReceipt,
     CatalogPublicationReplayTerminalOutcome, CatalogPublicationReplayTerminalRecord,
-    CatalogPublicationReport, CatalogPublicationSemantics, CatalogPublishedContract,
-    CatalogPublishedObject, CatalogRecoveryReplayExpectation, CatalogSubscriberId,
+    CatalogPublicationReport, CatalogPublicationSemantics, CatalogPublicationSubscriberRegistry,
+    CatalogPublishedContract, CatalogPublishedObject, CatalogRecoveryReplayExpectation,
+    CatalogSubscriberId, CatalogSubscriberKind, CatalogSubscriberRegistration,
     CatalogSubscriptionAcknowledgement, CatalogVisibleChangeAuditEvidence,
     DefinitionBatchDependencyGraphHash, DefinitionBatchId, DefinitionBatchSourceHash, ObjectKind,
     QualifiedName, replay_publication_subscription_changes,
@@ -157,6 +158,102 @@ fn replay_is_idempotent_for_duplicate_publication_ack_and_terminal_records() {
     assert_eq!(summary.acknowledged_subscription_count, 1);
     assert_eq!(summary.terminal_record_count, 1);
     assert_eq!(summary.duplicate_record_count, 3);
+}
+
+#[test]
+fn restore_from_replay_reconstructs_durable_publication_state_and_hadr_progress() {
+    let publication = report();
+    let (terminal, audit_evidence) = visible_records(&publication);
+    let acknowledgement = acknowledgement(&publication);
+    let subscriber_id = acknowledgement.subscriber_id.clone();
+
+    let registry = CatalogPublicationSubscriberRegistry::restore_from_replay(
+        [
+            andromeda_catalog::CatalogPublicationSubscriptionReplayRecord::Terminal(terminal),
+            andromeda_catalog::CatalogPublicationSubscriptionReplayRecord::VisiblePublication {
+                publication: publication.clone(),
+                audit_evidence,
+            },
+            andromeda_catalog::CatalogPublicationSubscriptionReplayRecord::SubscriptionAcknowledgement(
+                acknowledgement,
+            ),
+        ],
+        [CatalogSubscriberRegistration::hadr_replica(
+            subscriber_id.clone(),
+        )],
+    )
+    .unwrap();
+
+    let summary = registry.replay_summary().unwrap();
+    assert_eq!(summary.applied_publication_count, 1);
+    assert_eq!(summary.acknowledged_subscription_count, 1);
+    assert_eq!(summary.terminal_record_count, 1);
+    assert_eq!(
+        summary.final_visible_catalog_version,
+        Some(publication.receipt.next_version)
+    );
+    assert_eq!(registry.records().len(), 3);
+
+    let progress = registry.subscriber_progress(&subscriber_id).unwrap();
+    assert_eq!(progress.subscriber_kind, CatalogSubscriberKind::HadrReplica);
+    assert_eq!(
+        progress.acknowledged_version,
+        publication.receipt.next_version
+    );
+    assert_eq!(
+        progress.replayed_record_count,
+        publication.receipt.record_count
+    );
+    assert_eq!(
+        progress.expected_record_count,
+        publication.receipt.record_count
+    );
+    assert_eq!(progress.durable_lsn_seen, publication.receipt.durable_lsn);
+    assert_eq!(progress.audit_trace_id, publication.audit_trace.trace_id);
+
+    let hadr_evidence = registry
+        .hadr_replay_evidence(&subscriber_id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        hadr_evidence.restored_catalog_version,
+        publication.receipt.next_version
+    );
+    assert_eq!(
+        hadr_evidence.replayed_record_count,
+        publication.receipt.record_count
+    );
+    assert_eq!(
+        hadr_evidence.expected_record_count,
+        publication.receipt.record_count
+    );
+    assert_eq!(
+        hadr_evidence.durable_lsn_seen,
+        publication.receipt.durable_lsn
+    );
+    assert_eq!(
+        hadr_evidence.audit_trace_id,
+        publication.audit_trace.trace_id
+    );
+}
+
+#[test]
+fn replay_rejects_visible_publication_when_terminal_record_count_is_partial() {
+    let publication = report();
+    let (mut terminal, audit_evidence) = visible_records(&publication);
+    terminal.record_count = publication.receipt.record_count - 1;
+
+    let error = replay_publication_subscription_changes([
+        andromeda_catalog::CatalogPublicationSubscriptionReplayRecord::Terminal(terminal),
+        andromeda_catalog::CatalogPublicationSubscriptionReplayRecord::VisiblePublication {
+            publication,
+            audit_evidence,
+        },
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+    assert!(error.message().contains("record count"));
 }
 
 #[test]

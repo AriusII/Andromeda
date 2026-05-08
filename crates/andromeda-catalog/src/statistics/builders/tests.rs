@@ -114,6 +114,30 @@ fn skew_inference_uniform() {
 }
 
 #[test]
+fn equiwidth_repeated_values_expose_density_and_heavy_hitter_skew() {
+    let mut builder = EquiWidthHistogramBuilder::new(4).unwrap();
+    for _ in 0..97 {
+        builder.add_value(&Datum::Int64(7)).unwrap();
+    }
+    add_int64_range(&mut builder, 8, 10);
+
+    let histo = builder.finalize().unwrap();
+    let dense_bucket = histo
+        .buckets()
+        .iter()
+        .find(|bucket| bucket.lower_inclusive <= 7 && bucket.upper_inclusive >= 7)
+        .expect("histogram should retain a bucket for the repeated value");
+
+    assert_eq!(histo.skew(), SkewMarker::HeavyHitter);
+    assert!(dense_bucket.row_estimate >= 97);
+    assert!(dense_bucket.distinct_estimate <= 2);
+    assert!(
+        dense_bucket.distinct_estimate.saturating_mul(10) < dense_bucket.row_estimate,
+        "dense repeated-value bucket should expose low distinct-per-row evidence"
+    );
+}
+
+#[test]
 fn memory_estimation_tracks_non_null_values() {
     let mut builder = EquiWidthHistogramBuilder::new(4).unwrap();
     add_int64_range(&mut builder, 1, 1000);

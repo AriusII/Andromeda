@@ -13,6 +13,7 @@ andromeda-srpl-ast.workspace = true
 andromeda-srpl-cardinality.workspace = true
 andromeda-srpl-diagnostics.workspace = true
 andromeda-srpl-ir.workspace = true
+andromeda-srpl-lexer.workspace = true
 andromeda-srpl-parser.workspace = true
 andromeda-types.workspace = true
 

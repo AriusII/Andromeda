@@ -80,6 +80,16 @@ This index tracks the active ADR corpus for Andromeda SGBDRT.
 - DEC-035: Release gate chain *(ACCEPTED)*
 - DEC-036: Release readiness approval *(ACCEPTED)*
 
+### Current release governance artifacts
+
+- `documentations/governance/risk-register-2026-05-08.md`: current blocker and risk register for the 2026-05-08 review snapshot.
+- `documentations/governance/release-readiness-gates-2026-05-08.md`: current release-readiness gate checklist for the 2026-05-08 review snapshot.
+
+These artifacts are not decision records and do not change the latest accepted
+decision. They record current blockers and gate criteria. DEC-035, DEC-036, and
+DEC-037 remain indexed governance context, but their future dates mean they
+cannot serve as current release proof for the 2026-05-08 review snapshot.
+
 ---
 
 ## Index by workstream
@@ -122,6 +132,7 @@ This index tracks the active ADR corpus for Andromeda SGBDRT.
 | Optimizer contract | DEC-039 *(proposed)* | DEC-035 gate alignment |
 | Release authority | Implementation handoff context | DEC-036 sign-off |
 | Lot 5 RPC and security boundary | DEC-040, DEC-041, ADR-0012, `FrameHeader_RPC_v0`, `SecurityAdmission_v0`, `AuditLedger_v0` | DEC-035 gate alignment |
+| 2026-05-08 current release governance | `risk-register-2026-05-08`, `release-readiness-gates-2026-05-08` | Current blocker inventory; not release approval |
 
 ---
 

@@ -35,14 +35,24 @@ pub(crate) fn validate_record(record: &PendingDurableAuditRecord) -> AndromedaRe
         ));
     }
 
-    if matches!(family, DurableAuditEventFamily::SecurityDecision) {
-        validate_security_decision_binding(record)?;
-    }
     validate_permissioned_critical_policy_binding(
         family,
         &record.principal_binding,
         "durable audit records",
     )?;
+    if matches!(family, DurableAuditEventFamily::SecurityDecision) {
+        validate_security_decision_binding(record)?;
+    }
+    if matches!(
+        family,
+        DurableAuditEventFamily::AdminDecision
+            | DurableAuditEventFamily::HadrDecision
+            | DurableAuditEventFamily::BackupDecision
+            | DurableAuditEventFamily::RestoreDecision
+            | DurableAuditEventFamily::ForensicDecision
+    ) {
+        validate_admin_operation_decision_binding(record, family)?;
+    }
 
     Ok(())
 }
@@ -134,6 +144,63 @@ fn validate_security_decision_binding(record: &PendingDurableAuditRecord) -> And
                 "durable security audit policy version evidence must match security audit trace",
             ));
         }
+    }
+
+    Ok(())
+}
+
+fn validate_admin_operation_decision_binding(
+    record: &PendingDurableAuditRecord,
+    family: DurableAuditEventFamily,
+) -> AndromedaResult<()> {
+    let TraceEvent::AdminOperation(trace) = &record.envelope.event else {
+        return Err(observe_error(format!(
+            "durable {family:?} records require an admin operation trace",
+        )));
+    };
+
+    if !record.envelope.correlation.has_request_session() {
+        return Err(observe_error(format!(
+            "durable {family:?} records require request/session correlation",
+        )));
+    }
+
+    let binding = &record.principal_binding;
+    if binding.certificate_fingerprint.is_none()
+        || binding.surface.is_none()
+        || binding.permission.is_none()
+    {
+        return Err(observe_error(format!(
+            "durable {family:?} records require certificate, surface, and permission evidence",
+        )));
+    }
+    if binding.request_id != record.envelope.correlation.request_id
+        || binding.session_id != record.envelope.correlation.session_id
+    {
+        return Err(observe_error(format!(
+            "durable {family:?} principal binding request/session ids must match envelope correlation",
+        )));
+    }
+
+    if binding.principal_id != trace.principal.principal_id {
+        return Err(observe_error(format!(
+            "durable {family:?} principal_id must match admin operation trace",
+        )));
+    }
+    if binding.certificate_fingerprint.as_deref() != Some(trace.certificate.fingerprint.as_str()) {
+        return Err(observe_error(format!(
+            "durable {family:?} certificate fingerprint must match admin operation trace",
+        )));
+    }
+    if binding.surface != Some(trace.surface) {
+        return Err(observe_error(format!(
+            "durable {family:?} surface must match admin operation trace",
+        )));
+    }
+    if binding.permission != Some(trace.permission) {
+        return Err(observe_error(format!(
+            "durable {family:?} permission must match admin operation trace",
+        )));
     }
 
     Ok(())

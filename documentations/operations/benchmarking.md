@@ -1,537 +1,364 @@
-# BENCHMARK — Workload Registry and Framework
+# Benchmarking
 
-**Version:** 1.0.0  
-**Updated:** Q1 2026  
-**Language:** American English  
-**Style:** Microsoft Documentation  
+**Status:** Current operational runbook
+**Updated:** 2026-05-08
+**Owner:** Benchmark Evidence
+**Surface:** Administration diagnostics only
 
----
+## Purpose
 
-## Overview
+This document describes the current `andromeda-bench` and `andromeda-cli benchmark` implementation. It records what benchmark evidence means today, how to run the available workloads, and which claims are intentionally out of scope.
 
-This document describes the Andromeda benchmark framework, workload catalog, runner configuration, performance budgets, and CI/regression gate integration. The benchmark system is designed to measure and validate performance of critical Procedures under controlled, repeatable conditions.
+Benchmark output is diagnostic evidence. It is not durable engine truth, not an optimizer mandate, and not a runtime mutation path.
 
-Benchmarks are diagnostic operations only. JSON output is produced for CI automation and evidence archival, never as a runtime mutation path.
+## Scope
 
----
+This runbook covers:
 
-## Framework Architecture
+- The benchmark CLI surface in `crates/andromeda-cli/src/benchmark`.
+- The benchmark evidence model in `crates/andromeda-bench`.
+- The current workload registry and CRUD scenario registry.
+- Budget evaluation based on p50 latency, p95 latency, and error-rate evidence.
+- Advisory-only `BenchmarkScenarioEvidence` boundaries.
+- Known limitations around hardware profiles, GPU, CI, and future crate splits.
 
-### Key Principles
+## Non-goals
 
-1. **Isolation:** Each benchmark run executes in a fresh, bounded invocation context.
-2. **Determinism:** Identical hardware profiles and parameters produce consistent results within statistical tolerance.
-3. **Bounded execution:** All benchmarks have hard duration and sample limits to prevent runaway operations.
-4. **Non-intrusive:** Benchmarks do not modify the transaction kernel, recovery engine, or catalog; they exercise existing Procedures.
-5. **Evidence archival:** All runs produce timestamped evidence records for auditing and regression detection.
+This runbook does not claim:
 
-### Architecture Tiers
+- Application-facing ad hoc SQL support.
+- A production database benchmark suite.
+- Runtime optimizer authority from benchmark output.
+- GPU benchmark execution.
+- Network throughput benchmarking for QUIC sockets.
+- Automatic CI regression gating unless a caller wires it externally.
+- Final crate ownership after the planned workspace split.
 
-| Tier | Component | Purpose |
-|------|-----------|---------|
-| **Framework** | `run_bounded_benchmark()` | Entry point; validates request, spawns executor, collects evidence. |
-| **Workload** | `BenchmarkWorkload` struct | Static workload definition (name, duration bounds, sample limits, budget). |
-| **Runner** | `BenchmarkRunRequest` | User-supplied parameters (workload ID, duration, sample count). |
-| **Executor** | Per-workload runner | Executes the Procedure invocation loop; measures latency and throughput. |
-| **Evidence** | `BenchmarkEvidence` struct | Timestamped results (mean, p50, p99 latency, throughput, budget status). |
-| **CI Gate** | `evaluate_budget()` | Compares evidence against performance budget; flags regression. |
+## Current Implementation
 
----
+`andromeda-bench` is a bounded diagnostics crate. It defines workload metadata, request validation, synthetic and harness-based latency collection, evidence records, budget evaluation, regression comparison helpers, history records, and advisory ScenarioEvidence export shapes.
 
-## Workload Catalog
+The current benchmark runner is `run_bounded_benchmark(request: &BenchmarkRunRequest)`. It:
 
-All workloads are statically defined in `crates/andromeda-bench/src/lib.rs`. Each workload:
+1. Validates the workload id, duration, samples, warmups, temp budget, and hardware profile.
+2. Dispatches the workload to either a synthetic diagnostic model or a local harness.
+3. Computes `p50_latency_us` and `p95_latency_us`.
+4. Sets `error_count` to `0` for successful standard benchmark runs.
+5. Evaluates the static workload budget against p50, p95, and error-rate ppm.
+6. Returns `BenchmarkEvidence` with `diagnostic_only: true`, `authoritative: false`, `can_select_plan_alone: false`, and `optimizer_boundary: "advisory-only"`.
 
-- Has a globally unique identifier (`id: &str`).
-- Declares hardware profile requirements and constraints.
-- Specifies duration and sample count bounds.
-- Defines a performance budget (latency p99, throughput minimum).
-- Maps to an executable Procedure.
+The standard evidence contract is intentionally smaller than older documentation claimed. It does not contain mean latency, p99 latency, p999 latency, min/max latency, standard deviation, or throughput for standard `benchmark run` evidence.
 
-### Registered Workloads
+## Evidence Contract
 
-#### `inventory-reserve-stock` — Transactional Reservation
+Standard benchmark evidence is represented by `BenchmarkEvidence`.
 
-**Purpose:** Measure latency and throughput of the `Inventory.ReserveStock` Procedure under normal load.
+Required evidence fields currently emitted by the CLI contract are:
 
-**Metadata:**
+| Field | Meaning |
+| --- | --- |
+| `workload_id` | Registered workload identifier. |
+| `workload_hypothesis` | The workload question under test. |
+| `workload_shape_version` | Versioned shape of the synthetic or harness scenario. |
+| `workload_size` | Bounded input size and shape description. |
+| `primary_metric` | Current metric contract. Standard workloads use `p50_latency_us,p95_latency_us,error_rate_ppm`. |
+| `baseline_ref` | Logical baseline-history reference. |
+| `budget_origin` | Static budget source, currently `static-workload-registry-v1`. |
+| `decision_linkage` | Advisory optimizer linkage requirement. |
+| `hardware_profile` | Requested CLI profile, `conservative` or `declared-local`. |
+| `duration_ms` | Requested duration cap. |
+| `samples` | Requested sample cap. |
+| `warmups` | Requested warmup cap. |
+| `temp_budget_bytes` | Requested temporary byte budget. |
+| `started_at_unix_ms` | Placeholder start timestamp for standard benchmark runs. Current runner returns `0`. |
+| `elapsed_ms` | Deterministic bounded elapsed placeholder derived from request shape. |
+| `sample_count` | Sample count used for statistics. |
+| `p50_latency_us` | Median latency in microseconds. |
+| `p95_latency_us` | 95th percentile latency in microseconds. |
+| `error_count` | Count of observed workload errors. Current standard runner returns `0` after successful dispatch. |
+| `budget_status` | `passed` or `failed`. |
+| `diagnostic_only` | Always `true` for benchmark CLI evidence. |
+| `measurement_mode` | `synthetic-diagnostic` or `harness-diagnostic`. |
+| `latency_source` | Synthetic model or harness source. |
+| `engine_harness` | Harness name for harness diagnostics, otherwise `null`. |
+| `synthetic_model_version` | Synthetic model version for synthetic diagnostics, otherwise `null`. |
+| `authoritative` | Always `false`. |
+| `can_select_plan_alone` | Always `false`. |
+| `optimizer_boundary` | Always `advisory-only`. |
 
-| Field | Value |
-|-------|-------|
-| **ID** | `inventory-reserve-stock` |
-| **Procedure** | `Inventory.ReserveStock` |
-| **Purpose** | Business procedure latency and throughput baseline. |
-| **Default Duration** | 5 seconds |
-| **Maximum Duration** | 60 seconds |
-| **Default Samples** | 10 |
-| **Maximum Samples** | 100 |
-| **Hardware Profile** | Conservative (multicore, 8GB+ RAM) |
+### Budget Logic
 
-**Performance Budget:**
+Standard workload budgets are represented by `PerformanceBudget`:
 
-```
-Latency P99:   <= 50 ms
-Throughput:    >= 1000 invocations/second
-```
-
-**Invocation Parameters:**
-
-```
-stock_id:  "WIDGET-SKU-001" (constant across run)
-quantity:  1 (reserved per invocation)
-```
-
-**Expected Output:**
-
-```json
-{
-  "workload_id": "inventory-reserve-stock",
-  "procedure": "Inventory.ReserveStock",
-  "samples": 10,
-  "mean_latency_ms": 15.3,
-  "p50_latency_ms": 14.2,
-  "p99_latency_ms": 42.8,
-  "throughput_invocations_per_sec": 1250,
-  "budget_status": "PASS"
-}
-```
-
-**Constraints:**
-
-- Executes against a persistent in-memory catalog.
-- Does not reset database state between runs; results reflect steady-state performance.
-- Throughput calculation: `total_invocations / elapsed_time_sec`.
-
-#### `catalog-resolve-procedure` — Metadata Lookup
-
-**Purpose:** Measure latency of the catalog resolver for Procedure metadata lookups.
-
-**Metadata:**
-
-| Field | Value |
-|-------|-------|
-| **ID** | `catalog-resolve-procedure` |
-| **Purpose** | Catalog read-only performance baseline. |
-| **Default Duration** | 2 seconds |
-| **Maximum Duration** | 10 seconds |
-| **Default Samples** | 20 |
-| **Maximum Samples** | 100 |
-| **Hardware Profile** | Conservative |
-
-**Performance Budget:**
-
-```
-Latency P99:   <= 5 ms
-Throughput:    >= 10000 lookups/second
+```text
+max_p50_latency_us
+max_p95_latency_us
+max_error_rate_ppm
 ```
 
-**Expected Output:**
+`evaluate_budget()` fails a run if any of these conditions is true:
 
-```json
-{
-  "workload_id": "catalog-resolve-procedure",
-  "procedure": "System.CatalogResolveProcedure",
-  "samples": 20,
-  "mean_latency_ms": 0.8,
-  "p50_latency_ms": 0.7,
-  "p99_latency_ms": 4.2,
-  "throughput_invocations_per_sec": 11500,
-  "budget_status": "PASS"
-}
+```text
+p50_latency_us > max_p50_latency_us
+p95_latency_us > max_p95_latency_us
+error_rate_ppm(error_count, sample_count) > max_error_rate_ppm
 ```
 
-#### `wal-recovery-replay` — Recovery Performance
+The runner rejects empty statistics and invalid error counts:
 
-**Purpose:** Measure WAL recovery throughput for the `wal-recovery-replay` phase.
-
-**Metadata:**
-
-| Field | Value |
-|-------|-------|
-| **ID** | `wal-recovery-replay` |
-| **Purpose** | Recovery and durability verification. |
-| **Default Duration** | 10 seconds |
-| **Maximum Duration** | 60 seconds |
-| **Default Samples** | 5 |
-| **Maximum Samples** | 20 |
-| **Hardware Profile** | Declared-Local (single-core, < 4GB RAM) |
-
-**Performance Budget:**
-
-```
-Throughput:    >= 100 MB/second recovery rate
+```text
+sample_count == 0                  -> InsufficientSamplesForStatistics
+error_count > sample_count          -> ErrorCountExceedsSamples
 ```
 
-**Constraints:**
+### Regression Evidence
 
-- Executes recovery from a pre-generated, known-good WAL segment.
-- Does not simulate failures; tests happy-path recovery performance only.
+Regression comparison is available through `RegressionAnalysis`. It compares current evidence to a `BenchmarkBaseline` using:
 
----
+- Current and baseline p50 latency.
+- Current and baseline p95 latency.
+- Current and baseline error counts.
+- Current and baseline sample counts.
+- Derived current and baseline error-rate ppm.
 
-## Runner Configuration
+The current regression helper flags latency degradation above the configured threshold and flags error-rate increases. It is a library helper; the repository does not currently provide a complete always-on CI workflow that archives benchmark evidence and gates every push.
 
-### Command Syntax
+## ScenarioEvidence Boundary
+
+Benchmark-derived ScenarioEvidence is advisory only.
+
+`BenchmarkScenarioEvidence` can be built from a `BenchmarkEvidence` value or a benchmark history record, but it must carry explicit target and validity context:
+
+- `ProcedureId`
+- `CatalogVersion`
+- `ContractHash`
+- `StatsVersion`
+- `BenchmarkPlanClass`
+- Confidence
+- Validity window
+- Bounded duration, sample, and temp budgets
+- Provenance context such as hardware profile, measurement mode, latency source, timing source, engine harness, or synthetic model version
+
+The advisory boundary is enforced by stable flags:
+
+```text
+is_authoritative()        -> false
+can_select_plan_alone()   -> false
+optimizer_consumption_role() -> "advisory-only"
+```
+
+Benchmark evidence may help an optimizer integration layer explain or compare choices, but it cannot select a plan by itself and cannot replace catalog statistics, Procedure contracts, a valid plan-cache key, or a DecisionTrace.
+
+## Workload Registry
+
+Standard workloads are registered in `crates/andromeda-bench/src/workload.rs`.
+
+| Workload id | Class | Scope | Max duration ms | Max samples | Budget p50 us | Budget p95 us | Error budget ppm |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| `vertical-v0-smoke` | Synthetic diagnostic | Vertical V0 invocation plus WAL recovery accounting. | 10000 | 30 | 50000 | 150000 | 0 |
+| `protocol-smoke-contract` | Synthetic diagnostic | Protocol contract inspection without network sockets. | 5000 | 20 | 10000 | 50000 | 0 |
+| `wal-append-smoke` | Synthetic diagnostic | Synthetic WAL append accounting without file IO. | 10000 | 30 | 20000 | 75000 | 0 |
+| `btree-lookup-smoke` | Harness diagnostic | Mock B-Tree single-key lookup over a read-only key set. | 5000 | 20 | 50 | 500 | 0 |
+| `btree-range-scan-smoke` | Harness diagnostic | Mock B-Tree range scan over a bounded read-only key subset. | 5000 | 20 | 500 | 5000 | 0 |
+| `btree-node-codec-smoke` | Harness diagnostic | B-Tree durable node V1 encode/decode over page images. | 5000 | 20 | 2500 | 10000 | 0 |
+| `storage-page-store-smoke` | Harness diagnostic | DiskPageStore and BufferPool page write, flush, and readback. | 10000 | 20 | 5000000 | 10000000 | 0 |
+| `wal-append-file-smoke` | Harness diagnostic | File-backed WAL append and durable flush. | 10000 | 20 | 5000000 | 10000000 | 0 |
+| `recovery-replay-wal-smoke` | Harness diagnostic | File-backed WAL scan and recovery replay planning. | 10000 | 20 | 5000000 | 10000000 | 0 |
+| `audit-append-file-sink-smoke` | Harness diagnostic | File-backed durable audit sink append and replay. | 10000 | 20 | 5000000 | 10000000 | 0 |
+| `srpl-compile-optimize-smoke` | Harness diagnostic | SRPL parse, lower, and optimize compiler pipeline. | 5000 | 20 | 1000000 | 5000000 | 0 |
+
+### Workload Classes
+
+`BenchmarkWorkloadClass` currently has three variants:
+
+| Class | Current use |
+| --- | --- |
+| `synthetic-diagnostic` | Registered and executable through the standard runner. |
+| `harness-diagnostic` | Registered and executable through local harnesses. |
+| `real-runtime` | Defined in the type system but not currently used by registered workloads. |
+
+Do not document a workload as `real-runtime` unless the registered workload actually uses `BenchmarkWorkloadClass::RealRuntime`.
+
+## CRUD Scenario Registry
+
+CRUD diagnostics are exposed through separate CLI subcommands and are not part of `WORKLOADS`.
+
+Use:
 
 ```bash
-andromeda-cli benchmark run <workload-id> [--duration-ms <ms>] [--samples <n>] [--warmups <n>] [--hardware-profile <profile>] [--diagnostic-json]
+andromeda-cli benchmark crud-scenarios
+andromeda-cli benchmark crud <scenario> [--seed <u64>] [--diagnostic-json]
 ```
 
-### Parameters
+Current CRUD scenarios are registered in `crates/andromeda-bench/src/crud/scenario.rs`.
 
-| Parameter | Type | Default | Bounds | Description |
-|-----------|------|---------|--------|-------------|
-| `<workload-id>` | String | — | Must exist | Workload identifier from catalog. |
-| `--duration-ms` | u64 | 5000 | 1–60000 | Run duration in milliseconds. |
-| `--samples` | u32 | 10 | 1–100 | Number of latency samples to collect. |
-| `--warmups` | u32 | 1 | 0–10 | Warm-up invocations before sampling. |
-| `--hardware-profile` | String | Conservative | See below | Hardware class for scaling budgets. |
-| `--diagnostic-json` | flag | false | — | Output results in JSON format. |
+| Scenario id | Threads | Batch size | Rows | Insert | Update | Delete | Scan | Max duration ms |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `crud-single-1` | 1 | 1 | 10000 | 25% | 25% | 25% | 25% | 30000 |
+| `crud-single-100` | 1 | 100 | 10000 | 25% | 25% | 25% | 25% | 30000 |
+| `crud-multi4-10` | 4 | 10 | 100000 | 25% | 25% | 25% | 25% | 30000 |
+| `crud-multi8-100` | 8 | 100 | 100000 | 25% | 25% | 25% | 25% | 30000 |
+| `crud-scan-1m` | 1 | 1000000 | 1000000 | 10% | 10% | 10% | 70% | 60000 |
+| `crud-write-heavy` | 4 | 10 | 50000 | 40% | 40% | 20% | 0% | 30000 |
+
+CRUD output includes operation metrics such as `p50_us`, `p95_us`, `p99_us`, `throughput_ops_sec`, and `error_count`. That richer CRUD result shape should not be confused with the standard `BenchmarkEvidence` shape emitted by `benchmark run`.
+
+## Prerequisites
+
+- Build the workspace before relying on benchmark output:
+
+```bash
+cargo check --workspace --all-targets --all-features
+```
+
+- Use the CLI binary or `cargo run` from the repository root.
+- Treat output as local diagnostics unless a separate release or CI process records the exact commit, hardware context, and baseline.
+
+## Procedure
+
+### List Standard Workloads
+
+```bash
+andromeda-cli benchmark workloads
+andromeda-cli benchmark workloads --diagnostic-json
+```
+
+Equivalent through Cargo:
+
+```bash
+cargo run -p andromeda-cli -- benchmark workloads
+```
+
+### Display the Benchmark Contract
+
+```bash
+andromeda-cli benchmark contract
+andromeda-cli benchmark contract --diagnostic-json
+```
+
+The contract output reports global limits, default limits, conservative hardware materialization, advisory optimizer flags, and the required evidence field list.
+
+### Run a Standard Workload
+
+```bash
+andromeda-cli benchmark run <workload> \
+  [--duration-ms <ms>] \
+  [--samples <n>] \
+  [--warmups <n>] \
+  [--temp-budget-bytes <bytes>] \
+  [--hardware-profile conservative|declared-local] \
+  [--diagnostic-json]
+```
+
+Example:
+
+```bash
+cargo run -p andromeda-cli -- benchmark run btree-node-codec-smoke --samples 2 --warmups 0 --diagnostic-json
+```
+
+### Run a CRUD Scenario
+
+```bash
+cargo run -p andromeda-cli -- benchmark crud crud-single-1 --seed 42 --diagnostic-json
+```
+
+## Configuration
+
+### Global Limits
+
+| Limit | Value |
+| --- | ---: |
+| `MAX_DURATION_MS` | 60000 |
+| `MAX_SAMPLES` | 100 |
+| `MAX_WARMUPS` | 10 |
+| `MAX_TEMP_BYTES` | 67108864 |
+| `MAX_EVIDENCE_TTL_MS` | 604800000 |
+
+### Defaults
+
+| Default | Value |
+| --- | ---: |
+| `DEFAULT_DURATION_MS` | 5000 |
+| `DEFAULT_SAMPLES` | 10 |
+| `DEFAULT_WARMUPS` | 1 |
+| `DEFAULT_TEMP_BYTES` | 8388608 |
 
 ### Hardware Profiles
 
-**Conservative (default)**
+The CLI accepts two hardware profile names:
 
-- Target: Multicore systems with 8GB+ RAM.
-- Budget scaling: No adjustment (baseline budgets apply).
-- Use: CI pipelines, regression testing, production monitoring.
+| CLI profile | Current materialization | Notes |
+| --- | --- | --- |
+| `conservative` | `HardwareProfile::conservative()` | Unknown architecture, one hardware thread, no SIMD, no direct IO, GPU disabled. |
+| `declared-local` | `HardwareProfile::conservative()` | Accepted as an operator declaration, but currently materializes to the same conservative profile. |
 
-**Declared-Local**
+Current hardware profile handling is intentionally limited. It is not real hardware discovery, does not scale budgets, and does not enable GPU execution. The conservative profile has `gpu.available == false` and `GpuExecutionPolicy::Disabled`.
 
-- Target: Single-core or resource-constrained environments.
-- Budget scaling: Latency budgets +50%, throughput budgets -30%.
-- Use: Developer local testing, embedded environments, low-power deployments.
+## Validation
 
-**Example:**
-
-```bash
-# Conservative profile (default), 10 samples, 5 seconds
-andromeda-cli benchmark run inventory-reserve-stock
-
-# Declared-Local profile, 5 samples, 10 second warm-up
-andromeda-cli benchmark run inventory-reserve-stock \
-  --hardware-profile declared-local \
-  --warmups 10 \
-  --samples 5
-```
-
----
-
-## Evidence Format
-
-All benchmark runs produce a `BenchmarkEvidence` structure that captures the complete result snapshot.
-
-### Top-Level Evidence Contract
-
-```json
-{
-  "_diagnostic": {
-    "timestamp": "2026-01-15T14:30:45Z",
-    "framework_version": "1.0.0",
-    "source": "andromeda-cli benchmark"
-  },
-  "workload_id": "<workload-id>",
-  "procedure": "<fully-qualified-procedure-name>",
-  "run_config": {
-    "duration_ms": 5000,
-    "samples": 10,
-    "warmups": 1,
-    "hardware_profile": "Conservative"
-  },
-  "results": {
-    "samples_collected": 10,
-    "mean_latency_ms": <f64>,
-    "p50_latency_ms": <f64>,
-    "p95_latency_ms": <f64>,
-    "p99_latency_ms": <f64>,
-    "p999_latency_ms": <f64>,
-    "min_latency_ms": <f64>,
-    "max_latency_ms": <f64>,
-    "stdev_latency_ms": <f64>,
-    "throughput_invocations_per_sec": <f64>
-  },
-  "budget": {
-    "latency_p99_threshold_ms": 50,
-    "throughput_minimum_per_sec": 1000,
-    "latency_status": "PASS" | "FAIL",
-    "throughput_status": "PASS" | "FAIL",
-    "overall_status": "PASS" | "FAIL"
-  }
-}
-```
-
-### Field Definitions
-
-| Field | Type | Meaning |
-|-------|------|---------|
-| `timestamp` | ISO 8601 | UTC time of benchmark execution. |
-| `framework_version` | String | Benchmark framework version. |
-| `workload_id` | String | Workload identifier from catalog. |
-| `procedure` | String | Fully qualified Procedure name (e.g., `Inventory.ReserveStock`). |
-| `samples_collected` | u32 | Actual samples collected (may be less if timeout or error occurs). |
-| `mean_latency_ms` | f64 | Mean invocation latency. |
-| `p99_latency_ms` | f64 | 99th percentile latency. |
-| `p50_latency_ms` | f64 | Median (50th percentile) latency. |
-| `throughput_invocations_per_sec` | f64 | Invocations per second: `samples_collected / elapsed_seconds`. |
-| `latency_p99_threshold_ms` | f64 | Budget threshold for p99 latency. |
-| `throughput_minimum_per_sec` | f64 | Budget threshold for minimum throughput. |
-| `latency_status` | String | "PASS" if p99 ≤ threshold, "FAIL" otherwise. |
-| `throughput_status` | String | "PASS" if throughput ≥ threshold, "FAIL" otherwise. |
-| `overall_status` | String | "PASS" if all metrics pass, "FAIL" if any metric fails. |
-
-### Example Evidence
-
-```json
-{
-  "_diagnostic": {
-    "timestamp": "2026-01-15T14:30:45Z",
-    "framework_version": "1.0.0",
-    "source": "andromeda-cli benchmark"
-  },
-  "workload_id": "inventory-reserve-stock",
-  "procedure": "Inventory.ReserveStock",
-  "run_config": {
-    "duration_ms": 5000,
-    "samples": 10,
-    "warmups": 1,
-    "hardware_profile": "Conservative"
-  },
-  "results": {
-    "samples_collected": 10,
-    "mean_latency_ms": 15.3,
-    "p50_latency_ms": 14.2,
-    "p99_latency_ms": 42.8,
-    "p999_latency_ms": 48.5,
-    "min_latency_ms": 12.1,
-    "max_latency_ms": 49.2,
-    "stdev_latency_ms": 11.7,
-    "throughput_invocations_per_sec": 2000
-  },
-  "budget": {
-    "latency_p99_threshold_ms": 50,
-    "throughput_minimum_per_sec": 1000,
-    "latency_status": "PASS",
-    "throughput_status": "PASS",
-    "overall_status": "PASS"
-  }
-}
-```
-
----
-
-## Performance Budget Interpretation
-
-### Budget Status Logic
-
-The `evaluate_budget()` function compares evidence against configured thresholds:
-
-```text
-latency_status := if (p99_latency_ms <= threshold) then "PASS" else "FAIL"
-throughput_status := if (throughput >= threshold) then "PASS" else "FAIL"
-overall_status := if (latency_status == "PASS" AND throughput_status == "PASS") then "PASS" else "FAIL"
-```
-
-### Regression Detection
-
-A regression is detected when:
-
-1. **Latency increases:** p99 latency exceeds threshold (e.g., 50 ms → 65 ms).
-2. **Throughput decreases:** Invocations per second falls below minimum (e.g., 1200 → 800).
-3. **Hardware degradation:** Same workload on declared-local profile shows larger variance or repeated failures.
-
-### Budget Adjustment Policy
-
-Budgets are locked at workload definition time and updated only through:
-
-1. **Formal decision record** (DEC-*): Documented justification, stakeholder approval, compatibility impact.
-2. **Performance analysis:** Root cause of regression identified and fixed in the codebase.
-3. **Hardware profile change:** Workload is explicitly moved to a different hardware profile.
-
-Budgets are never dynamically adjusted based on single evidence runs.
-
----
-
-## CI Integration and Regression Gates
-
-### Benchmark CI Workflow
-
-**Trigger:** On every push to the main branch.
-
-**Steps:**
-
-1. Build all crates with optimizations (`cargo build --release`).
-2. Run all registered workloads with `--diagnostic-json` output.
-3. Parse JSON evidence and compare `overall_status` against previous baseline.
-4. If any workload shows `overall_status: FAIL`, fail the CI job.
-5. Archive all evidence records to S3 (or artifact store).
-6. Emit regression alert to observability-forensic-architect (DEC-033).
-
-**CI Configuration (GitHub Actions Example):**
-
-```yaml
-name: Benchmark Regression Gate
-
-on:
-  push:
-    branches:
-      - main
-
-jobs:
-  benchmark:
-    runs-on: ubuntu-latest-large
-    steps:
-      - uses: actions/checkout@v3
-      
-      - name: Build Release
-        run: cargo build --release
-      
-      - name: Run Benchmarks
-        run: |
-          cargo run --release -p andromeda-cli -- benchmark run inventory-reserve-stock --diagnostic-json > /tmp/evidence-1.json
-          cargo run --release -p andromeda-cli -- benchmark run catalog-resolve-procedure --diagnostic-json > /tmp/evidence-2.json
-          cargo run --release -p andromeda-cli -- benchmark run wal-recovery-replay --diagnostic-json > /tmp/evidence-3.json
-      
-      - name: Evaluate Regression
-        run: |
-          python3 scripts/benchmark_regression_check.py /tmp/evidence-*.json --baseline .benchmark/baseline.json
-      
-      - name: Archive Evidence
-        run: |
-          aws s3 cp /tmp/evidence-*.json s3://andromeda-bench/$(date +%Y%m%d-%H%M%S)/
-```
-
-**Baseline Maintenance:**
-
-- **Initial baseline:** Established on first merge (hardware profile, framework version recorded).
-- **Update trigger:** Only after approved performance optimization merge.
-- **Stability margin:** Baselines include 10% tolerance band to reduce flaky CI gates.
-
----
-
-## Available Subcommands
-
-### `benchmark workloads`
-
-**Purpose:** List all registered workloads and their budgets.
-
-**Syntax:**
+For this document or other documentation-only benchmark changes, run at least:
 
 ```bash
-andromeda-cli benchmark workloads [--diagnostic-json]
+cargo test -p andromeda-bench --all-targets
+cargo test -p andromeda-cli --test benchmark_cli_commands --all-features
 ```
 
-**Example Output:**
+For changes that alter benchmark code, evidence semantics, ScenarioEvidence export, or regression logic, add or run targeted tests for:
 
-```
-Registered Workloads:
+- Request validation bounds.
+- Workload registry uniqueness and metadata consistency.
+- Budget pass/fail behavior for p50, p95, and error-rate ppm.
+- Harness evidence fields and measurement mode.
+- Diagnostic JSON schema strings.
+- ScenarioEvidence target validation, expiry, and advisory-only flags.
+- Regression comparison with p50, p95, and error-rate evidence.
 
-1. inventory-reserve-stock
-   Procedure: Inventory.ReserveStock
-   Duration: 5–60 seconds (default 5s)
-   Samples: 1–100 (default 10)
-   Latency Budget (P99): ≤ 50 ms
-   Throughput Budget: ≥ 1000 invocations/sec
-
-2. catalog-resolve-procedure
-   Procedure: System.CatalogResolveProcedure
-   Duration: 2–10 seconds (default 2s)
-   Samples: 1–100 (default 20)
-   Latency Budget (P99): ≤ 5 ms
-   Throughput Budget: ≥ 10000 lookups/sec
-
-3. wal-recovery-replay
-   Procedure: Internal.WalRecoveryReplay
-   Duration: 10–60 seconds (default 10s)
-   Samples: 1–20 (default 5)
-   Throughput Budget: ≥ 100 MB/sec
-```
-
-### `benchmark contract`
-
-**Purpose:** Display the benchmark framework contract and parameter bounds.
-
-**Syntax:**
+Before release-readiness claims, also run the broader Rust gates selected for the affected crates:
 
 ```bash
-andromeda-cli benchmark contract [--diagnostic-json]
+cargo fmt --all --check
+cargo check --workspace --all-targets --all-features
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --all-features
 ```
 
-**Example Output:**
+Benchmark output alone is never sufficient validation for commit visibility, WAL durability, recovery, MVCC visibility, catalog publication, security policy, or optimizer correctness.
 
-```
-Benchmark Framework Contract (V1.0.0)
+## Troubleshooting
 
-Global Limits:
-  Max Duration: 60000 ms
-  Max Samples: 100
-  Max Warm-ups: 10
+| Symptom | Likely cause | Action |
+| --- | --- | --- |
+| `unknown benchmark workload` | The id is not in `WORKLOADS`. | Run `andromeda-cli benchmark workloads`. |
+| `unknown CRUD scenario` | The id is not in `CRUD_SCENARIOS`. | Run `andromeda-cli benchmark crud-scenarios`. |
+| `--json` is rejected | Benchmark commands require explicit diagnostic output naming. | Use `--diagnostic-json`. |
+| Duration, sample, warmup, or temp-budget validation fails | Request exceeds global or workload-specific caps. | Check `benchmark contract` and `benchmark workloads`. |
+| Budget fails on p50 or p95 | Current latency exceeds static workload budget. | Preserve the evidence, compare with an accepted baseline, and inspect the harness or code path before changing budgets. |
+| Budget fails on error rate | Error-rate ppm exceeds the workload budget. | Treat as a correctness or harness failure first; do not mask it by raising latency budgets. |
+| `declared-local` does not change observed budget behavior | The current implementation materializes it to the conservative profile. | Do not document budget scaling until code implements it. |
+| GPU is unavailable | The conservative hardware profile disables GPU. | Do not add GPU benchmark claims until a real off-critical-path GPU runtime and tests exist. |
 
-Hardware Profiles:
-  Conservative (default): Multicore, 8GB+ RAM, no budget scaling
-  Declared-Local: Single-core, <4GB RAM, latency +50%, throughput -30%
+## Governance Notes
 
-Evidence Format: JSON diagnostic only; never used as runtime mutation path
-Audit Ledger: All benchmark runs emit audit events (DEC-033)
-CI Gate: Regression detection via overall_status field
-```
+- Benchmark output is advisory evidence only.
+- ScenarioEvidence must remain bounded, expirable, target-validated, and non-authoritative.
+- Benchmark evidence cannot force a plan and cannot be used as optimizer truth.
+- Benchmark crates are R5 tools/evidence crates. Production crates must not depend upward on them.
+- Several future crate splits remain pending. Current documentation should name existing crates and avoid implying that planned benchmark split crates already exist.
+- Persistent engine truth still comes from durable storage, WAL, catalog contracts, validated statistics, and recovery evidence, not from benchmark or GPU output.
 
-### `benchmark run`
+## References
 
-**Purpose:** Execute a workload and produce evidence.
-
-**Syntax:**
-
-```bash
-andromeda-cli benchmark run <workload-id> [options]
-```
-
----
-
-## Error Handling
-
-### Validation Errors
-
-| Error | Meaning | Remediation |
-|-------|---------|-------------|
-| `EmptyWorkloadId` | Workload ID is empty. | Provide a non-empty workload ID from the catalog. |
-| `UnknownWorkload` | Workload not registered. | Run `benchmark workloads` to list available IDs. |
-| `ZeroDuration` | Duration is 0. | Specify `--duration-ms` ≥ 1. |
-| `ZeroSamples` | Sample count is 0. | Specify `--samples` ≥ 1. |
-| `DurationExceedsGlobalLimit` | Duration > 60000 ms. | Use `--duration-ms` ≤ 60000. |
-| `SamplesExceedsGlobalLimit` | Samples > 100. | Use `--samples` ≤ 100. |
-| `DurationExceedsWorkloadLimit` | Duration > workload's max. | Check `benchmark workloads` for limits. |
-| `SamplesExceedsWorkloadLimit` | Samples > workload's max. | Check `benchmark workloads` for limits. |
-| `InsufficientSamplesForStatistics` | Runner collected 0 samples. | Increase `--duration-ms` or reduce `--samples`. |
-
----
-
-## Related Documentation
-
-- **DEC-033:** Durable Audit Ledger (benchmark evidence archival)
-- **README.md:** Local V0 vertical prototype commands
-- **CLI.md:** General command reference
-
----
-
-## Versioning and Stability
-
-- **Baseline:** V1.0.0 (Q1 2026)
-- **Workload Additions:** New workloads will not break existing runs (backward compatible).
-- **Budget Changes:** Require formal decision records and release notes.
-- **Framework Changes:** Major version bumps documented in release notes.
-
----
-
-## Glossary
-
-| Term | Meaning |
-|------|---------|
-| **Workload** | Static definition of a benchmark (Procedure, budgets, bounds). |
-| **Invocation** | Single execution of a Procedure within a benchmark run. |
-| **Sample** | Latency measurement of one successful Procedure invocation. |
-| **Warm-up** | Pre-run invocations to stabilize CPU cache and JIT; not counted in results. |
-| **Evidence** | Timestamped result snapshot from one benchmark run. |
-| **Performance Budget** | Threshold for latency (p99) and throughput (invocations/sec). |
-| **Regression** | Evidence shows overall_status: FAIL due to latency or throughput violation. |
-| **CI Gate** | Automated check that fails the pipeline if regression is detected. |
-
+- `crates/andromeda-bench/src/lib.rs`
+- `crates/andromeda-bench/src/workload.rs`
+- `crates/andromeda-bench/src/evidence.rs`
+- `crates/andromeda-bench/src/evidence/model.rs`
+- `crates/andromeda-bench/src/budget.rs`
+- `crates/andromeda-bench/src/request.rs`
+- `crates/andromeda-bench/src/runner.rs`
+- `crates/andromeda-bench/src/scenario_boundary/evidence.rs`
+- `crates/andromeda-bench/src/regression_detection/comparison.rs`
+- `crates/andromeda-bench/src/crud/scenario.rs`
+- `crates/andromeda-cli/src/benchmark`
+- `crates/andromeda-hardware/src/integration.rs`
+- `docs/adr/ADR-0011-workspace-crate-boundaries.md`
+- `documentations/architecture/WORKSPACE_RESTRUCTURE_BASELINE_2026.md`

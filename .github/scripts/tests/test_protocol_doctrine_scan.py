@@ -12,8 +12,56 @@ assert SPEC.loader is not None
 sys.modules[SPEC.name] = protocol_doctrine_scan
 SPEC.loader.exec_module(protocol_doctrine_scan)
 
+PROTO_MANIFEST_SCRIPT = Path(__file__).resolve().parents[1] / "proto_manifest.py"
+PROTO_MANIFEST_SPEC = importlib.util.spec_from_file_location(
+    "proto_manifest",
+    PROTO_MANIFEST_SCRIPT,
+)
+proto_manifest = importlib.util.module_from_spec(PROTO_MANIFEST_SPEC)
+assert PROTO_MANIFEST_SPEC.loader is not None
+sys.modules[PROTO_MANIFEST_SPEC.name] = proto_manifest
+PROTO_MANIFEST_SPEC.loader.exec_module(proto_manifest)
+
 
 class ProtocolDoctrineScanTests(unittest.TestCase):
+    def test_protobuf_manifest_includes_crate_local_protos(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            crate_proto = (
+                root
+                / "crates"
+                / "andromeda-proto"
+                / "proto"
+                / "andromeda"
+                / "protocol"
+                / "v1"
+                / "payload.proto"
+            )
+            root_proto = (
+                root / "proto" / "andromeda" / "contract" / "v1" / "root.proto"
+            )
+            crate_proto.parent.mkdir(parents=True)
+            root_proto.parent.mkdir(parents=True)
+            crate_proto.write_text(
+                'syntax = "proto3"; message CratePayload { bytes body = 1; }\n',
+                encoding="utf-8",
+            )
+            root_proto.write_text(
+                'syntax = "proto3"; message RootPayload { bytes body = 1; }\n',
+                encoding="utf-8",
+            )
+
+            manifest = proto_manifest.build_manifest(root)
+
+        paths = [contract["path"] for contract in manifest["contracts"]]
+        self.assertEqual(paths, sorted(paths))
+        self.assertIn(
+            "crates/andromeda-proto/proto/andromeda/protocol/v1/payload.proto",
+            paths,
+        )
+        self.assertIn("proto/andromeda/contract/v1/root.proto", paths)
+        self.assertEqual(manifest["contract_count"], len(paths))
+
     def test_proto_schema_scan_rejects_service_declaration(self):
         with tempfile.TemporaryDirectory() as directory:
             proto = Path(directory) / "service.proto"

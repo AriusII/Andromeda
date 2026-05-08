@@ -19,11 +19,12 @@ pub(crate) use manifest::{
 };
 pub(crate) use protocol_version::validate_generated_protocol_version;
 pub use runtime_projection::{
-    project_generated_frame_envelope, validate_generated_error_envelope,
-    validate_generated_frame_envelope, validate_generated_invocation_request,
-    validate_generated_invocation_response, validate_generated_invocation_response_sequence,
-    validate_generated_rpc_batch, validate_generated_rpc_execute_request,
-    validate_generated_rpc_metadata,
+    project_generated_frame_envelope, project_generated_structured_object_header,
+    validate_generated_error_envelope, validate_generated_frame_envelope,
+    validate_generated_invocation_request, validate_generated_invocation_response,
+    validate_generated_invocation_response_sequence, validate_generated_rpc_batch,
+    validate_generated_rpc_execute_request, validate_generated_rpc_metadata,
+    validate_generated_structured_object_header,
 };
 
 pub(crate) fn contract_error<T>(message: impl Into<String>) -> AndromedaResult<T> {

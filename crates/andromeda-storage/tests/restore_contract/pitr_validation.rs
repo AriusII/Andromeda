@@ -1,7 +1,7 @@
 use crate::support::*;
 use andromeda_storage::{
-    Lsn, PitrTarget, WalArchiveRange, plan_replay_segments, validate_pitr_target,
-    validate_restore_prerequisites,
+    Lsn, PitrTarget, PitrTargetRejection, WalArchiveRange, plan_replay_segments,
+    validate_pitr_target, validate_pitr_target_with_audit, validate_restore_prerequisites,
 };
 
 #[test]
@@ -96,5 +96,51 @@ fn backup_pitr_validator_rejects_target_before_required_wal_start() {
     assert!(
         err.message().contains("required WAL start"),
         "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn backup_pitr_validator_reports_auditable_target_bounds() {
+    let manifest = make_test_manifest();
+
+    let (accepted, audit) =
+        validate_pitr_target_with_audit(&manifest, PitrTarget::new(Lsn::new(1000)));
+    let accepted = accepted.expect("snapshot base checkpoint target should be accepted");
+    assert!(accepted.replay_skipped);
+    assert!(!accepted.requires_wal_replay());
+    assert!(audit.accepted);
+    assert_eq!(audit.rejection, None);
+    assert_eq!(audit.target_lsn, Lsn::new(1000));
+
+    let (zero, audit) = validate_pitr_target_with_audit(&manifest, PitrTarget::new(Lsn::new(0)));
+    assert!(zero.is_err());
+    assert!(!audit.accepted);
+    assert_eq!(audit.rejection, Some(PitrTargetRejection::TargetLsnZero));
+
+    let (before_snapshot, audit) =
+        validate_pitr_target_with_audit(&manifest, PitrTarget::new(Lsn::new(999)));
+    assert!(before_snapshot.is_err());
+    assert_eq!(
+        audit.rejection,
+        Some(PitrTargetRejection::TargetBeforeSnapshot)
+    );
+
+    let mut gap_manifest = make_test_manifest();
+    gap_manifest.snapshot.required_wal_start_lsn = Lsn::new(1005);
+    gap_manifest.wal_archive = WalArchiveRange::new(Lsn::new(1001), Lsn::new(2000));
+    let (before_required_start, audit) =
+        validate_pitr_target_with_audit(&gap_manifest, PitrTarget::new(Lsn::new(1002)));
+    assert!(before_required_start.is_err());
+    assert_eq!(
+        audit.rejection,
+        Some(PitrTargetRejection::TargetBeforeRequiredWalStart)
+    );
+
+    let (beyond_archive, audit) =
+        validate_pitr_target_with_audit(&manifest, PitrTarget::new(Lsn::new(2001)));
+    assert!(beyond_archive.is_err());
+    assert_eq!(
+        audit.rejection,
+        Some(PitrTargetRejection::TargetBeyondWalRange)
     );
 }

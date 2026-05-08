@@ -18,6 +18,9 @@ tokio = { workspace = true, optional = true }
 
 [features]
 default = []
+# Test-only support for local network fixtures that need intentionally
+# insecure certificate verification. It must keep activating the Quinn runtime
+# feature and must not become a production/default runtime path.
 insecure-test-tls = [
     "runtime-quinn",
 ]
@@ -30,6 +33,16 @@ runtime-quinn = [
     "tokio/macros",
     "tokio/rt-multi-thread",
 ]
+
+[[test]]
+name = "real_quinn_network"
+path = "tests/real_quinn_network.rs"
+required-features = ["runtime-quinn"]
+
+[[test]]
+name = "reconnect_quinn_admission_contract"
+path = "tests/reconnect_quinn_admission_contract.rs"
+required-features = ["runtime-quinn"]
 
 [dev-dependencies]
 proptest.workspace = true

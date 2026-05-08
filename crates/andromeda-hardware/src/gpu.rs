@@ -15,7 +15,9 @@ impl GpuExecutionPolicy {
     pub const fn permits_pipeline(self, pipeline: PipelineClass) -> bool {
         match self {
             Self::Disabled => false,
-            Self::OffCriticalPathOnly => !pipeline.is_critical_path(),
+            Self::OffCriticalPathOnly => {
+                !pipeline.is_critical_path() && pipeline.is_gpu_advisory_candidate()
+            }
             Self::BatchAnalyticsOnly => matches!(
                 pipeline,
                 PipelineClass::StatisticsRefresh
@@ -55,7 +57,7 @@ impl GpuProfile {
         }
     }
 
-    /// Allows GPU only outside critical commit/recovery paths.
+    /// Allows GPU only outside critical engine truth paths.
     pub const fn off_critical_path() -> Self {
         Self {
             available: true,
@@ -81,6 +83,45 @@ impl GpuProfile {
 
         self.execution_policy.validate_pipeline(pipeline)
     }
+
+    /// Selects advisory GPU execution only when CPU fallback and cancellation are explicit.
+    pub fn select_advisory_gpu(
+        &self,
+        pipeline: PipelineClass,
+        cpu_fallback_available: bool,
+        cancellation_boundary: bool,
+    ) -> AndromedaResult<bool> {
+        if !pipeline.is_gpu_advisory_candidate() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Resource,
+                format!(
+                    "GPU advisory execution is not permitted for {} pipeline",
+                    pipeline.name()
+                ),
+            ));
+        }
+
+        if !cpu_fallback_available {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Resource,
+                "GPU advisory execution requires authoritative CPU fallback",
+            ));
+        }
+
+        if !cancellation_boundary {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Resource,
+                "GPU advisory execution requires a cancellation boundary",
+            ));
+        }
+
+        if !self.available || self.execution_policy == GpuExecutionPolicy::Disabled {
+            return Ok(false);
+        }
+
+        self.execution_policy.validate_pipeline(pipeline)?;
+        Ok(true)
+    }
 }
 
 impl Default for GpuProfile {
@@ -94,7 +135,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn gpu_policy_rejects_commit_wal_rollback_and_recovery() {
+    fn gpu_policy_rejects_critical_engine_truth_paths() {
         let policy = GpuExecutionPolicy::OffCriticalPathOnly;
 
         for pipeline in [
@@ -102,10 +143,35 @@ mod tests {
             PipelineClass::WalAppend,
             PipelineClass::Rollback,
             PipelineClass::Recovery,
+            PipelineClass::MvccVisibility,
+            PipelineClass::CatalogPublication,
+            PipelineClass::SecurityCriticalPath,
         ] {
             let error = policy.validate_pipeline(pipeline).unwrap_err();
             assert_eq!(error.kind(), AndromedaErrorKind::Resource);
             assert!(!policy.permits_pipeline(pipeline));
+        }
+    }
+
+    #[test]
+    fn off_critical_policy_rejects_non_advisory_pipelines() {
+        let policy = GpuExecutionPolicy::OffCriticalPathOnly;
+
+        for pipeline in [
+            PipelineClass::ForegroundExecution,
+            PipelineClass::BackgroundMaintenance,
+        ] {
+            let error = policy.validate_pipeline(pipeline).unwrap_err();
+            assert_eq!(error.kind(), AndromedaErrorKind::Resource);
+            assert!(!policy.permits_pipeline(pipeline));
+        }
+
+        for pipeline in [
+            PipelineClass::StatisticsRefresh,
+            PipelineClass::MapRefresh,
+            PipelineClass::BatchAnalytics,
+        ] {
+            assert!(policy.validate_pipeline(pipeline).is_ok());
         }
     }
 
@@ -126,6 +192,9 @@ mod tests {
             PipelineClass::WalAppend,
             PipelineClass::Rollback,
             PipelineClass::Recovery,
+            PipelineClass::MvccVisibility,
+            PipelineClass::CatalogPublication,
+            PipelineClass::SecurityCriticalPath,
             PipelineClass::ForegroundExecution,
             PipelineClass::BackgroundMaintenance,
         ] {
@@ -154,10 +223,69 @@ mod tests {
             PipelineClass::WalAppend,
             PipelineClass::Rollback,
             PipelineClass::Recovery,
+            PipelineClass::MvccVisibility,
+            PipelineClass::CatalogPublication,
+            PipelineClass::SecurityCriticalPath,
             PipelineClass::ForegroundExecution,
             PipelineClass::BackgroundMaintenance,
         ] {
             assert!(profile.validate_pipeline(pipeline).is_err());
+        }
+    }
+
+    #[test]
+    fn advisory_gpu_selection_requires_cpu_fallback() {
+        let profile = GpuProfile::batch_analytics_only();
+
+        let error = profile
+            .select_advisory_gpu(PipelineClass::BatchAnalytics, false, true)
+            .unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Resource);
+        assert!(error.message().contains("CPU fallback"));
+    }
+
+    #[test]
+    fn advisory_gpu_selection_requires_cancellation_boundary() {
+        let profile = GpuProfile::batch_analytics_only();
+
+        let error = profile
+            .select_advisory_gpu(PipelineClass::BatchAnalytics, true, false)
+            .unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Resource);
+        assert!(error.message().contains("cancellation boundary"));
+    }
+
+    #[test]
+    fn advisory_gpu_selection_uses_cpu_when_gpu_is_disabled() {
+        let profile = GpuProfile::disabled();
+
+        let selected = profile
+            .select_advisory_gpu(PipelineClass::BatchAnalytics, true, true)
+            .unwrap();
+
+        assert!(!selected);
+    }
+
+    #[test]
+    fn advisory_gpu_selection_rejects_critical_truth_paths() {
+        let profile = GpuProfile::batch_analytics_only();
+
+        for pipeline in [
+            PipelineClass::Commit,
+            PipelineClass::WalAppend,
+            PipelineClass::Rollback,
+            PipelineClass::Recovery,
+            PipelineClass::MvccVisibility,
+            PipelineClass::CatalogPublication,
+            PipelineClass::SecurityCriticalPath,
+        ] {
+            let error = profile
+                .select_advisory_gpu(pipeline, true, true)
+                .unwrap_err();
+            assert_eq!(error.kind(), AndromedaErrorKind::Resource);
+            assert!(!profile.execution_policy.permits_pipeline(pipeline));
         }
     }
 }

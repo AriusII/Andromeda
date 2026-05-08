@@ -57,6 +57,7 @@ version = "0.1.0"
 name = "andromeda-fuzz"
 version = "0.0.0"
 dependencies = [
+ "andromeda-catalog",
  "andromeda-core",
  "andromeda-observe",
  "andromeda-proto",
@@ -134,6 +135,7 @@ dependencies = [
  "andromeda-srpl-cardinality",
  "andromeda-srpl-diagnostics",
  "andromeda-srpl-ir",
+ "andromeda-srpl-lexer",
  "andromeda-srpl-parser",
  "andromeda-types",
 ]
@@ -173,6 +175,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-srpl-lexer"
+version = "0.1.0"
+dependencies = [
+ "andromeda-srpl-diagnostics",
+]
+
+[[package]]
 name = "andromeda-srpl-parser"
 version = "0.1.0"
 dependencies = [
@@ -180,6 +189,7 @@ dependencies = [
  "andromeda-srpl-ast",
  "andromeda-srpl-cardinality",
  "andromeda-srpl-diagnostics",
+ "andromeda-srpl-lexer",
  "andromeda-types",
 ]
 

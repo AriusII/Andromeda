@@ -1,6 +1,9 @@
 use crate::flat_json::escape_json_string;
 use crate::metric_math::{error_rate_ppm, percent_change};
-use crate::{BenchmarkEvidence, BenchmarkScenarioTarget};
+use crate::{
+    BENCHMARK_EVIDENCE_AUTHORITATIVE, BENCHMARK_EVIDENCE_CAN_SELECT_PLAN_ALONE,
+    BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY, BenchmarkEvidence, BenchmarkScenarioTarget,
+};
 
 use super::baseline::BenchmarkBaseline;
 use super::errors::BenchmarkBaselineComparisonError;
@@ -118,10 +121,29 @@ impl RegressionAnalysis {
         ))
     }
 
+    /// Regression analysis is CI and diagnostic evidence, never production truth.
+    pub const fn is_production_truth(&self) -> bool {
+        false
+    }
+
+    /// Regression analysis is never authoritative for optimizer or runtime decisions.
+    pub const fn is_authoritative(&self) -> bool {
+        BENCHMARK_EVIDENCE_AUTHORITATIVE
+    }
+
+    /// Regression analysis cannot select an execution plan by itself.
+    pub const fn can_select_plan_alone(&self) -> bool {
+        BENCHMARK_EVIDENCE_CAN_SELECT_PLAN_ALONE
+    }
+
+    pub const fn optimizer_consumption_role(&self) -> &'static str {
+        BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY
+    }
+
     /// Serialize analysis to JSON for CI reporting.
     pub fn to_json(&self) -> String {
         format!(
-            r#"{{"workload_id":"{}","current_p50_us":{},"baseline_p50_us":{},"p50_regression_pct":{:.2},"current_p95_us":{},"baseline_p95_us":{},"p95_regression_pct":{:.2},"current_error_count":{},"current_sample_count":{},"baseline_error_count":{},"baseline_sample_count":{},"current_error_rate_ppm":{},"baseline_error_rate_ppm":{},"error_rate_regression_pct":{:.2},"primary_reason":"{}","is_regressed":{},"severity":{}}}"#,
+            r#"{{"workload_id":"{}","current_p50_us":{},"baseline_p50_us":{},"p50_regression_pct":{:.2},"current_p95_us":{},"baseline_p95_us":{},"p95_regression_pct":{:.2},"current_error_count":{},"current_sample_count":{},"baseline_error_count":{},"baseline_sample_count":{},"current_error_rate_ppm":{},"baseline_error_rate_ppm":{},"error_rate_regression_pct":{:.2},"primary_reason":"{}","is_regressed":{},"severity":{},"production_truth":{},"authoritative":{},"can_select_plan_alone":{},"optimizer_boundary":"{}"}}"#,
             escape_json_string(&self.workload_id),
             self.current_p50_us,
             self.baseline_p50_us,
@@ -138,7 +160,11 @@ impl RegressionAnalysis {
             self.error_rate_regression_pct,
             self.primary_reason.as_str(),
             self.is_regressed,
-            self.severity
+            self.severity,
+            self.is_production_truth(),
+            self.is_authoritative(),
+            self.can_select_plan_alone(),
+            escape_json_string(self.optimizer_consumption_role())
         )
     }
 }

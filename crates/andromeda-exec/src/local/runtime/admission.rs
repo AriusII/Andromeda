@@ -9,6 +9,7 @@ use crate::{
     AuthorizedProcedureDispatch, InvocationContext, InvocationRequest, local::types::LocalProcedure,
 };
 
+#[derive(Debug)]
 pub(super) struct PreTransactionAdmission {
     pub(super) admission_trace: DecisionTrace,
     pub(super) contract_trace: DecisionTrace,
@@ -21,10 +22,10 @@ pub(super) fn validate_pre_transaction_admission(
     trace_id: TraceId,
     context: Option<&InvocationContext>,
 ) -> AndromedaResult<PreTransactionAdmission> {
-    procedure.validate()?;
     let admission_trace = request
         .validate_admission(trace_id)
         .map_err(|reject| AndromedaError::new(AndromedaErrorKind::Contract, reject.reason))?;
+    procedure.validate()?;
     let contract_trace = request
         .validate_before_transaction(procedure.contract_binding, trace_id)
         .map_err(|reject| AndromedaError::new(AndromedaErrorKind::Contract, reject.reason))?;
@@ -50,7 +51,17 @@ pub(super) fn validate_catalog_resolved_procedure(
     catalog: &CatalogSnapshot,
     trace_id: TraceId,
 ) -> AndromedaResult<()> {
-    if request.catalog_version != catalog.version {
+    let visible_catalog_version = catalog.visible_version();
+    let has_durable_publication =
+        catalog.is_durably_published() || catalog.visible_publication_receipt().is_some();
+    if !has_durable_publication {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Contract,
+            "catalog-resolved procedure execution requires a durably published visible catalog snapshot before transaction creation",
+        ));
+    }
+
+    if request.catalog_version != visible_catalog_version {
         return Err(AndromedaError::new(
             AndromedaErrorKind::Contract,
             "CatalogVersion mismatch against visible catalog snapshot before transaction creation",
@@ -139,4 +150,139 @@ fn require_authorization_context_for_permissioned_procedure(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use andromeda_catalog::{
+        PolicyVersion, ProcedureContract, ProcedureContractBinding, ProcedureContractRef,
+        StatsVersion, inventory_reserve_stock_contract,
+    };
+    use andromeda_core::{
+        AndromedaErrorKind, CatalogVersion, ContractHash, InvocationId, ProcedureId,
+    };
+    use andromeda_observe::TraceId;
+    use andromeda_srpl::Cardinality;
+
+    use crate::local::types::LocalProcedure;
+    use crate::{InvocationContext, InvocationRequest, ResultStreamMetadata};
+
+    use super::validate_pre_transaction_admission;
+
+    fn request(contract: &ProcedureContract) -> InvocationRequest {
+        InvocationRequest {
+            invocation_id: InvocationId::new(900),
+            procedure: contract.as_ref(),
+            expected_binding: Some(contract.binding()),
+            expected_contract_hash: contract.contract_hash,
+            catalog_version: contract.object.catalog_version,
+            structured_parameters: Vec::new(),
+        }
+    }
+
+    fn local_procedure(contract: &ProcedureContract) -> LocalProcedure {
+        LocalProcedure {
+            contract: contract.as_ref(),
+            contract_binding: contract.binding(),
+            required_permissions: contract.required_permissions.clone(),
+            result_metadata: ResultStreamMetadata {
+                stream_id: 1,
+                row_count_exact: Some(1),
+                row_count_max: Some(1),
+                column_count: contract.result_streams[0].columns.len() as u32,
+                cardinality: Cardinality::One,
+            },
+            mutation_payload: b"Inventory.ReserveStock".to_vec(),
+            rows_affected: 1,
+        }
+    }
+
+    fn binding_for(procedure: ProcedureContractRef) -> ProcedureContractBinding {
+        ProcedureContractBinding {
+            procedure_id: procedure.procedure_id,
+            catalog_version: procedure.catalog_version,
+            contract_hash: procedure.contract_hash,
+            stats_version: StatsVersion::new(1),
+            policy_version: PolicyVersion::new([7; PolicyVersion::LEN]),
+        }
+    }
+
+    #[test]
+    fn request_admission_precedes_local_executable_validation() {
+        let contract = inventory_reserve_stock_contract().unwrap();
+        let mut request = request(&contract);
+        request.invocation_id = InvocationId::new(0);
+        let mut procedure = local_procedure(&contract);
+        procedure.required_permissions = vec![String::new()];
+
+        let error = validate_pre_transaction_admission(
+            &request,
+            &procedure,
+            TraceId::new(9100),
+            Some(&InvocationContext::new(
+                TraceId::new(9100),
+                contract.required_permissions.clone(),
+            )),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Contract);
+        assert!(error.message().contains("InvocationId"));
+    }
+
+    #[test]
+    fn contract_validation_precedes_authorization_in_pre_transaction_admission() {
+        let contract = inventory_reserve_stock_contract().unwrap();
+        let mut request = request(&contract);
+        request.expected_contract_hash = ContractHash::test_vector(0x91);
+        let procedure = local_procedure(&contract);
+
+        let error = validate_pre_transaction_admission(
+            &request,
+            &procedure,
+            TraceId::new(9101),
+            Some(&InvocationContext::new(TraceId::new(9101), Vec::new())),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Contract);
+        assert!(error.message().contains("ContractHash"));
+    }
+
+    #[test]
+    fn full_binding_is_required_before_pre_transaction_dispatch() {
+        let contract = inventory_reserve_stock_contract().unwrap();
+        let mut request = request(&contract);
+        request.procedure = ProcedureContractRef {
+            procedure_id: ProcedureId::new(0x9102),
+            contract_hash: ContractHash::test_vector(0x92),
+            catalog_version: CatalogVersion::new(9),
+        };
+        request.expected_binding = Some(binding_for(request.procedure));
+        request.expected_contract_hash = request.procedure.contract_hash;
+        request.catalog_version = request.procedure.catalog_version;
+        let procedure = LocalProcedure {
+            contract: request.procedure,
+            contract_binding: binding_for(request.procedure),
+            required_permissions: Vec::new(),
+            result_metadata: ResultStreamMetadata {
+                stream_id: 1,
+                row_count_exact: Some(1),
+                row_count_max: Some(1),
+                column_count: 1,
+                cardinality: Cardinality::One,
+            },
+            mutation_payload: b"Inventory.ReserveStock".to_vec(),
+            rows_affected: 1,
+        };
+
+        request.expected_binding = None;
+
+        let error =
+            validate_pre_transaction_admission(&request, &procedure, TraceId::new(9102), None)
+                .unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Contract);
+        assert!(error.message().contains("ProcedureContractBinding"));
+    }
 }

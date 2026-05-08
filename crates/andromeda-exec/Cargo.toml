@@ -17,8 +17,17 @@ andromeda-tx.workspace = true
 dashmap = "6.0"
 tokio.workspace = true
 
+[features]
+default = []
+runtime-quinn = ["andromeda-quic/runtime-quinn"]
+
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("runtime-quinn"))'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(andromeda_remote_network_e2e)', 'cfg(feature, values("runtime-quinn"))'] }
+
+[[test]]
+name = "remote_invoke_network_e2e"
+path = "tests/remote_invoke_network_e2e.rs"
+required-features = ["runtime-quinn"]
 
 [[test]]
 name = "c4_admission_events"

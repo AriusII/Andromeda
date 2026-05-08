@@ -1,5 +1,6 @@
 use super::*;
-use crate::events::UserPrincipalKind;
+use crate::events::{EventCorrelation, EventEnvelope, EventId, TraceEvent, UserPrincipalKind};
+use andromeda_types::{RequestId, SessionId};
 
 fn cert(fingerprint: &str, surface: SurfaceScope) -> CertificateIdentity {
     CertificateIdentity::new(fingerprint, format!("CN={}", fingerprint), surface).unwrap()
@@ -29,6 +30,19 @@ fn registry_with(bindings: Vec<PrincipalBinding>) -> PrincipalRegistry {
         registry.register(b).unwrap();
     }
     registry
+}
+
+fn request_correlation() -> EventCorrelation {
+    EventCorrelation {
+        request_id: Some(RequestId::new(70)),
+        session_id: Some(SessionId::new(80)),
+        contract_hash: None,
+        catalog_version: None,
+        catalog_object_id: None,
+        transaction_id: None,
+        durable_lsn: None,
+        protocol: None,
+    }
 }
 
 #[test]
@@ -142,6 +156,38 @@ fn surface_scope_mismatch_denies_even_with_permission_grant() {
     }
 }
 
+#[test]
+fn surface_scope_mismatch_denial_audit_can_be_enveloped_when_typed() {
+    let reg = registry_with(vec![binding(
+        "fp-app-2",
+        SurfaceScope::Application,
+        "svc-2",
+        vec![Permission::ManageSecurity],
+    )]);
+    let auth = SurfaceAuthorizer::new(&reg);
+
+    let outcome = auth
+        .authorize(
+            TraceId::new(22),
+            SurfaceScope::Administration,
+            "fp-app-2",
+            SurfaceAction::Admin(AdminOperation::ManageSecurity),
+        )
+        .unwrap();
+
+    assert!(outcome.is_denied());
+    let audit = outcome.audit();
+    assert_eq!(
+        audit.denial_reason(),
+        Some(AuthorizationDenialReason::SurfaceScopeMismatch)
+    );
+    EventEnvelope::new(
+        EventId::new(22),
+        request_correlation(),
+        TraceEvent::SecurityAudit(audit.clone()),
+    )
+    .expect("typed surface scope mismatch denial should be envelope-valid");
+}
 #[test]
 fn surface_does_not_permit_admin_permission_on_application() {
     let reg = registry_with(vec![binding(

@@ -3,8 +3,38 @@ name: Release Gate Chain
 on:
   pull_request:
     branches: [ main ]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/**"
+      - "crates/**/Cargo.toml"
+      - "deny.toml"
+      - "fuzz/**"
+      - "tests/**"
+      - ".github/actions/**"
+      - ".github/scripts/**"
+      - ".github/workflows/release-gate-chain.yml"
+      - ".github/workflows/05-supply-chain.yml"
+      - ".github/workflows/06-nightly-deep-validation.yml"
+      - "documentations/governance/supply-chain-policy.md"
+      - "documentations/testing/**"
   push:
     branches: [ main ]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/**"
+      - "crates/**/Cargo.toml"
+      - "deny.toml"
+      - "fuzz/**"
+      - "tests/**"
+      - ".github/actions/**"
+      - ".github/scripts/**"
+      - ".github/workflows/release-gate-chain.yml"
+      - ".github/workflows/05-supply-chain.yml"
+      - ".github/workflows/06-nightly-deep-validation.yml"
+      - "documentations/governance/supply-chain-policy.md"
+      - "documentations/testing/**"
   workflow_dispatch:
 
 permissions:
@@ -43,9 +73,37 @@ jobs:
           toolchain: stable
       - run: cargo check --workspace --locked
 
+  supply-chain:
+    name: supply-chain-audit-deny
+    needs: compile
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/rust-setup
+        with:
+          toolchain: stable
+      - name: Audit RustSec advisories
+        run: |
+          cargo install cargo-audit --locked
+          cargo audit --deny warnings
+      - name: Check deny policy
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+          arguments: --all-features
+      - name: Record cargo-vet preview status
+        shell: bash
+        run: |
+          if [[ -f supply-chain/config.toml || -f cargo-vet.toml || -d .cargo-vet ]]; then
+            echo "::notice::cargo-vet config detected; promote the accepted vet command into this gate before release sign-off."
+          else
+            echo "::notice::cargo-vet is preview/planned only; no repository config exists, so this gate does not block on cargo-vet."
+          fi
+
   clippy:
     name: clippy
-    needs: compile
+    needs: supply-chain
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -176,3 +234,24 @@ jobs:
           toolchain: stable
       - run: cargo test -p andromeda-storage --test property_recovery_replay --locked -- --nocapture
       - run: cargo test -p andromeda-storage --test recovery_completeness_contract --locked -- --nocapture
+
+  backup-restore-forensic:
+    name: backup-restore-forensic
+    needs: rto-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/rust-setup
+        with:
+          toolchain: stable
+      - name: Run backup and restore contract evidence
+        run: |
+          cargo test -p andromeda-storage --test backup_physical_plan_contract --locked -- --nocapture
+          cargo test -p andromeda-storage --test backup_execution_plan --locked -- --nocapture
+          cargo test -p andromeda-storage --test restore_contract --locked -- --nocapture
+      - name: Run ForensicStart evidence
+        run: cargo test -p andromeda-storage --locked forensic_start -- --nocapture
+      - name: Record full drill status
+        run: |
+          echo "::notice::Release gate runs existing backup plan, restore contract, and ForensicStart evidence. Full PITR/cluster restore drills remain planned until repository commands exist."

@@ -23,10 +23,11 @@ fuzz_target!(|data: &[u8]| {
         }
     }
 
-    if let Ok(frames) = FrameCodec::scan_all(data)
-        && !frames.is_empty()
-        && frames.len() <= MAX_TYPED_SEQUENCE_FRAMES
-    {
+    if let Ok(frames) = FrameCodec::scan_all(data) {
+        if frames.is_empty() || frames.len() > MAX_TYPED_SEQUENCE_FRAMES {
+            return;
+        }
+
         let _ = validate_typed_result_stream_sequence_with_metadata_policy(
             &frames,
             ResultStreamMetadataPolicy::RowBatchRequired,

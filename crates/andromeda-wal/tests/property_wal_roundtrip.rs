@@ -1,7 +1,7 @@
 use andromeda_core::TransactionId;
 use andromeda_wal::{
     Lsn, WAL_RECORD_HEADER_LEN, WalRecord, WalRecordKind, WalScanStopReason,
-    decode_wal_record_frame, encode_wal_record, scan_wal_records_from,
+    decode_wal_record_frame, encode_wal_record, encoded_wal_record_len, scan_wal_records_from,
 };
 use proptest::prelude::*;
 use proptest::test_runner::Config;
@@ -63,6 +63,21 @@ proptest! {
         let second = encode_wal_record(&record).expect("owner WAL record should encode deterministically");
 
         prop_assert_eq!(first, second);
+    }
+
+    #[test]
+    fn encoded_length_matches_actual_encode_for_owner_records(
+        lsn in 1u64..=10_000,
+        transaction_id in transaction_id_strategy(),
+        payload in payload_strategy(),
+    ) {
+        let record = owner_record(lsn, None, transaction_id, payload);
+        let encoded = encode_wal_record(&record).expect("owner WAL record should encode");
+
+        prop_assert_eq!(
+            encoded_wal_record_len(&record).expect("owner WAL record length should compute"),
+            encoded.len() as u64
+        );
     }
 
     #[test]

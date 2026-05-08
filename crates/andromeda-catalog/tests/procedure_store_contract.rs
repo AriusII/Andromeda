@@ -8,13 +8,14 @@
 
 use andromeda_catalog::{
     AccessMode, CatalogObjectRef, CompatibilityPolicy, CompletionEvidence, CompletionStatus,
-    EvidenceConfidence, EvidenceScore, FeedbackId, InvocationDecisionRecord, IsolationPolicy,
-    MultiResultPolicy, ObjectKind, PlanCacheKey, PlanClass, PlanShapeFingerprint, PolicyVersion,
-    ProcedureContract, ProcedureErrorPolicy, ProcedureFeedback, ProcedureRegistration,
-    ProcedureRuntimeCounters, ProcedureRuntimePlanId, ProcedureRuntimeStatus, ProcedureStore,
-    ProcedureStoreEntry, ProcedureStoreEvidenceRole, ProtocolLayoutRef, QualifiedName,
-    RecordOutcome, ResultMetadataPolicy, ScenarioEvidence, ScenarioEvidenceOptimizerBoundary,
-    ScenarioId, ScenarioKind, ScenarioTarget, StatsVersion, TransactionPolicy, ValidityWindow,
+    EvidenceConfidence, EvidenceScore, FeedbackId, InvocationDecisionRecord,
+    InvocationRuntimeRecordOutcome, IsolationPolicy, MultiResultPolicy, ObjectKind, PlanCacheKey,
+    PlanClass, PlanShapeFingerprint, PolicyVersion, ProcedureContract, ProcedureErrorPolicy,
+    ProcedureFeedback, ProcedureRegistration, ProcedureRuntimeCounters, ProcedureRuntimePlanId,
+    ProcedureRuntimeStatus, ProcedureStore, ProcedureStoreEntry, ProcedureStoreEvidenceRole,
+    ProtocolLayoutRef, QualifiedName, RecordOutcome, ResultMetadataPolicy, ScenarioEvidence,
+    ScenarioEvidenceOptimizerBoundary, ScenarioId, ScenarioKind, ScenarioTarget, StatsVersion,
+    TransactionPolicy, ValidityWindow,
 };
 use andromeda_error::AndromedaErrorKind;
 use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
@@ -211,6 +212,97 @@ fn procedure_store_records_runtime_invocation_metrics_against_full_binding() {
     assert_eq!(stored.binding.catalog_version, CatalogVersion::new(7));
     assert_eq!(stored.binding.stats_version, StatsVersion::new(1));
     assert_eq!(stored.binding.policy_version, binding.policy_version);
+}
+
+/// Public contract coverage for the passive invocation history sink: terminal
+/// non-committed outcomes are retained as observed feedback and do not populate
+/// authoritative decision or advisory feedback indexes.
+#[test]
+fn procedure_store_invocation_history_sink_records_failed_and_pre_transaction_aborted_outcomes() {
+    let contract = sample_contract();
+    let entry = ProcedureStoreEntry::from_contract(&contract).unwrap();
+    let binding = entry.binding;
+    let plan_key = PlanCacheKey::build(
+        &binding,
+        PlanClass::Singleton,
+        PlanShapeFingerprint::empty(),
+    )
+    .expect("singleton plan key is valid");
+    let plan_id = ProcedureRuntimePlanId::from_plan_cache_key(&plan_key);
+    let mut store = ProcedureStore::new();
+    store.register(entry).unwrap();
+
+    let failed = andromeda_catalog::InvocationRuntimeRecord::new_with_decision_trace(
+        InvocationId::new(911),
+        binding,
+        EngineTimestamp::from_unix_millis(3_000),
+        EngineTimestamp::from_unix_millis(3_021),
+        TraceId::new(9_111),
+        Some(plan_key),
+        Some(plan_id),
+        ProcedureRuntimeCounters::new(5, 0, 0, 0).with_rows_returned(2),
+        ProcedureRuntimeStatus::Failed,
+        Some(AndromedaErrorKind::Execution),
+    )
+    .expect("failed terminal evidence is accepted by the public constructor");
+    let aborted = andromeda_catalog::InvocationRuntimeRecord::new(
+        InvocationId::new(912),
+        binding,
+        EngineTimestamp::from_unix_millis(3_050),
+        EngineTimestamp::from_unix_millis(3_051),
+        None,
+        None,
+        ProcedureRuntimeCounters::new(0, 0, 0, 0),
+        ProcedureRuntimeStatus::Aborted,
+        Some(AndromedaErrorKind::Security),
+    )
+    .expect("aborted pre-transaction evidence is accepted with empty counters");
+
+    assert_eq!(
+        store.attach_invocation_runtime(failed.clone()).unwrap(),
+        InvocationRuntimeRecordOutcome::Stored
+    );
+    assert_eq!(
+        store.attach_invocation_runtime(aborted.clone()).unwrap(),
+        InvocationRuntimeRecordOutcome::Stored
+    );
+
+    let history = store.invocation_runtime_for(binding.procedure_id);
+    assert_eq!(history.len(), 2);
+    assert_eq!(history[0], failed);
+    assert_eq!(history[1], aborted);
+    assert_eq!(store.total_recorded_runtime_invocations(), 2);
+    assert_eq!(store.total_recorded_decisions(), 0);
+    assert_eq!(store.total_procedure_feedback(), 0);
+
+    let failed = store
+        .invocation_runtime_for_invocation(InvocationId::new(911))
+        .expect("failed runtime evidence is indexed by invocation id");
+    assert_eq!(failed.status, ProcedureRuntimeStatus::Failed);
+    assert_eq!(failed.error_kind, Some(AndromedaErrorKind::Execution));
+    assert_eq!(failed.decision_trace_id, Some(TraceId::new(9_111)));
+    assert_eq!(failed.plan_key, Some(plan_key));
+    assert_eq!(failed.plan_id, Some(plan_id));
+    assert_eq!(failed.counters.rows_read, 5);
+    assert_eq!(failed.counters.rows_returned, 2);
+    assert!(!failed.counters.is_empty());
+    assert!(failed.is_terminal());
+    assert!(failed.is_observed_feedback());
+    assert!(!failed.is_authoritative_decision());
+    assert!(!failed.can_select_plan_alone());
+
+    let aborted = store
+        .invocation_runtime_for_invocation(InvocationId::new(912))
+        .expect("aborted pre-transaction evidence is indexed by invocation id");
+    assert_eq!(aborted.status, ProcedureRuntimeStatus::Aborted);
+    assert_eq!(aborted.error_kind, Some(AndromedaErrorKind::Security));
+    assert_eq!(aborted.plan_key, None);
+    assert_eq!(aborted.plan_id, None);
+    assert!(aborted.counters.is_empty());
+    assert!(aborted.is_terminal());
+    assert!(aborted.is_observed_feedback());
+    assert!(!aborted.is_authoritative_decision());
+    assert!(!aborted.can_select_plan_alone());
 }
 
 #[test]

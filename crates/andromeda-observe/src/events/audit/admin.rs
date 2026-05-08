@@ -67,7 +67,14 @@ impl AdminOperationTrace {
     }
 
     pub const fn surface_matches_certificate(&self) -> bool {
-        self.surface as u8 == self.certificate.surface as u8
+        matches!(
+            (self.surface, self.certificate.surface),
+            (SurfaceScope::Application, SurfaceScope::Application)
+                | (SurfaceScope::Administration, SurfaceScope::Administration)
+                | (SurfaceScope::Cluster, SurfaceScope::Cluster)
+                | (SurfaceScope::BackupAgent, SurfaceScope::BackupAgent)
+                | (SurfaceScope::MonitoringAgent, SurfaceScope::MonitoringAgent)
+        )
     }
 
     pub const fn permission_matches_operation(&self) -> bool {

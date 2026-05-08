@@ -93,7 +93,7 @@ pub(super) fn validate_bootstrap_redo_boundary(
     {
         return Err(storage_error(
             "bootstrap ZERO redo boundary requires durable WAL to start at LSN 1 \
-             with no previous LSN so recovery cannot skip required WAL",
+                 with no previous LSN so recovery cannot skip required WAL",
         ));
     }
 

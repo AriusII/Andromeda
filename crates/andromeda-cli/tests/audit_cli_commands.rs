@@ -3,11 +3,12 @@
 use andromeda_cli::dispatch_command;
 use andromeda_core::{RequestId, SessionId};
 use andromeda_observe::{
-    CertificateIdentity, DurableAuditPrincipalBinding, DurableAuditReplayBehavior,
-    DurableAuditRetentionBoundary, DurableAuditSinkReport, DurableAuditWalSink, EventCorrelation,
-    EventEnvelope, EventId, FileDurableAuditWalSink, PendingDurableAuditRecord, Permission,
-    SecurityAuditOutcome, SecurityAuditTrace, SecurityPolicyVersionEvidence, SurfaceScope,
-    TraceEvent, TraceId, UserPrincipal, UserPrincipalKind,
+    AdminOperation, AdminOperationTrace, CertificateIdentity, DurableAuditPrincipalBinding,
+    DurableAuditReplayBehavior, DurableAuditRetentionBoundary, DurableAuditSinkReport,
+    DurableAuditWalSink, EventCorrelation, EventEnvelope, EventId, FileDurableAuditWalSink,
+    PendingDurableAuditRecord, Permission, SecurityAuditOutcome, SecurityAuditTrace,
+    SecurityPolicyVersionEvidence, SurfaceScope, TraceEvent, TraceId, UserPrincipal,
+    UserPrincipalKind,
 };
 use std::{
     fs,
@@ -50,6 +51,32 @@ fn audit_inspect_rejects_zero_lsn_range() {
 
     let result = dispatch_command(&args);
     assert!(result.is_err());
+}
+
+#[test]
+fn audit_inspect_accepts_single_lsn_ranges() {
+    for args in [
+        vec![
+            "audit".to_string(),
+            "inspect".to_string(),
+            "--lsn-range".to_string(),
+            "10..10".to_string(),
+        ],
+        vec![
+            "audit".to_string(),
+            "inspect".to_string(),
+            "--lsn-start".to_string(),
+            "10".to_string(),
+            "--lsn-end".to_string(),
+            "10".to_string(),
+        ],
+    ] {
+        let result = dispatch_command(&args);
+        assert!(
+            result.is_ok(),
+            "single-LSN inclusive range should be accepted: {args:?}"
+        );
+    }
 }
 
 #[test]
@@ -159,6 +186,7 @@ fn audit_inspect_json_exposes_admin_audit_gate() {
     let json = stdout(&output);
 
     assert!(json.trim_start().starts_with('{'));
+    assert_no_application_procedure_or_sql_surface(&json);
     assert_contains_all(
         &json,
         &[
@@ -232,6 +260,116 @@ fn audit_inspect_diagnostic_json_exposes_replay_evidence() {
             "\"truncated\":true",
             "\"principal_id\":\"user:scan-b\"",
             &format!("\"record_lsn\":{}", first_match.evidence.record_lsn),
+        ],
+    );
+
+    let _ = fs::remove_file(path);
+}
+
+#[test]
+fn audit_inspect_filters_exact_durable_admin_families() {
+    let path = temp_journal_path("exact-admin-families");
+    let mut sink = FileDurableAuditWalSink::open(&path).expect("journal opens");
+    append_admin_record(
+        &mut sink,
+        31,
+        "user:exact-admin",
+        AdminOperation::InspectPlans,
+        DurableAuditRetentionBoundary::SecurityPolicy,
+    );
+    append_admin_record(
+        &mut sink,
+        32,
+        "user:exact-hadr",
+        AdminOperation::ClusterPromote,
+        DurableAuditRetentionBoundary::SecurityPolicy,
+    );
+    append_admin_record(
+        &mut sink,
+        33,
+        "user:exact-backup",
+        AdminOperation::Backup,
+        DurableAuditRetentionBoundary::SecurityPolicy,
+    );
+    append_admin_record(
+        &mut sink,
+        34,
+        "user:exact-restore",
+        AdminOperation::Restore,
+        DurableAuditRetentionBoundary::SecurityPolicy,
+    );
+    drop(sink);
+
+    for (family_filter, expected_durable_family, expected_principal) in [
+        ("admin", "admin-decision", "user:exact-admin"),
+        ("hadr", "hadr-decision", "user:exact-hadr"),
+        ("backup", "backup-decision", "user:exact-backup"),
+        ("restore", "restore-decision", "user:exact-restore"),
+    ] {
+        let output = run_cli_vec(vec![
+            "audit".to_string(),
+            "inspect".to_string(),
+            "--journal".to_string(),
+            path.display().to_string(),
+            "--family".to_string(),
+            family_filter.to_string(),
+            "--limit".to_string(),
+            "10".to_string(),
+            "--include-total-count".to_string(),
+            "--diagnostic-json".to_string(),
+        ]);
+        assert_success(&output);
+        let json = stdout(&output);
+        assert_no_application_procedure_or_sql_surface(&json);
+
+        assert_contains_all(
+            &json,
+            &[
+                "\"returned_rows\":1",
+                "\"total_matching_rows\":1",
+                &format!("\"durable_audit_family\":\"{expected_durable_family}\""),
+                &format!("\"principal_id\":\"{expected_principal}\""),
+            ],
+        );
+        for other_principal in [
+            "user:exact-admin",
+            "user:exact-hadr",
+            "user:exact-backup",
+            "user:exact-restore",
+        ] {
+            if other_principal != expected_principal {
+                assert!(
+                    !json.contains(other_principal),
+                    "exact family filter {family_filter} returned unrelated principal {other_principal}: {json}"
+                );
+            }
+        }
+    }
+
+    let broad_output = run_cli_vec(vec![
+        "audit".to_string(),
+        "inspect".to_string(),
+        "--journal".to_string(),
+        path.display().to_string(),
+        "--family".to_string(),
+        "admin-audit".to_string(),
+        "--limit".to_string(),
+        "10".to_string(),
+        "--include-total-count".to_string(),
+        "--diagnostic-json".to_string(),
+    ]);
+    assert_success(&broad_output);
+    let broad_json = stdout(&broad_output);
+    assert_no_application_procedure_or_sql_surface(&broad_json);
+    assert_contains_all(
+        &broad_json,
+        &[
+            "\"returned_rows\":4",
+            "\"total_matching_rows\":4",
+            "\"durable_audit_family\":\"admin-decision\"",
+            "\"durable_audit_family\":\"hadr-decision\"",
+            "\"durable_audit_family\":\"backup-decision\"",
+            "\"durable_audit_family\":\"restore-decision\"",
         ],
     );
 
@@ -422,6 +560,40 @@ fn assert_contains_all(text: &str, expected: &[&str]) {
     }
 }
 
+fn assert_no_application_procedure_or_sql_surface(text: &str) {
+    for forbidden in [
+        "\"surface\":\"application\"",
+        "\"required_permission\":\"execute-procedure\"",
+        "\"permission\":\"execute-procedure\"",
+        "\"family\":\"procedure-invocation\"",
+        "\"procedure_id\"",
+        "\"procedure\"",
+    ] {
+        assert!(
+            !text.contains(forbidden),
+            "audit admin diagnostic output exposed application procedure token `{forbidden}` in `{text}`"
+        );
+    }
+
+    let lower = text.to_ascii_lowercase();
+    for forbidden in [
+        "\"sql\"",
+        "\"query\"",
+        "--sql",
+        "select ",
+        "insert ",
+        "update ",
+        "delete ",
+        " from ",
+        " where ",
+    ] {
+        assert!(
+            !lower.contains(forbidden),
+            "audit admin diagnostic output exposed ad hoc SQL token `{forbidden}` in `{text}`"
+        );
+    }
+}
+
 fn request_correlation(event_id: u128) -> EventCorrelation {
     EventCorrelation {
         request_id: Some(RequestId::new(event_id as u64)),
@@ -432,6 +604,53 @@ fn request_correlation(event_id: u128) -> EventCorrelation {
         transaction_id: None,
         durable_lsn: None,
         protocol: None,
+    }
+}
+
+fn admin_envelope(event_id: u128, principal_id: &str, operation: AdminOperation) -> EventEnvelope {
+    let surface = surface_for_admin_operation(operation);
+    let certificate = CertificateIdentity::new(
+        format!("sha256:cli-audit-{event_id}"),
+        "CN=cli-audit",
+        surface,
+    )
+    .expect("test certificate has explicit non-secret evidence");
+    let principal = UserPrincipal::new(principal_id, UserPrincipalKind::Human)
+        .expect("test principal has explicit evidence");
+    let trace = AdminOperationTrace::new(
+        TraceId::new(event_id + 1_000),
+        surface,
+        certificate,
+        principal,
+        operation,
+        operation.required_permission(),
+        true,
+        format!("cli audit admin event {event_id}"),
+    )
+    .expect("admin operation trace has explicit reason");
+
+    EventEnvelope::new(
+        EventId::new(event_id),
+        request_correlation(event_id),
+        TraceEvent::AdminOperation(trace),
+    )
+    .expect("admin operation envelope is valid")
+}
+
+fn surface_for_admin_operation(operation: AdminOperation) -> SurfaceScope {
+    match operation {
+        AdminOperation::ClusterPromote
+        | AdminOperation::FenceNode
+        | AdminOperation::UpdateClusterManifest => SurfaceScope::Cluster,
+        AdminOperation::Backup | AdminOperation::Restore | AdminOperation::ForensicStart => {
+            SurfaceScope::BackupAgent
+        }
+        AdminOperation::DebugProcedure
+        | AdminOperation::ReadProcedureStore
+        | AdminOperation::InspectPlans
+        | AdminOperation::ManageSecurity
+        | AdminOperation::RotateCertificate
+        | AdminOperation::RevokeCertificateIdentity => SurfaceScope::Administration,
     }
 }
 
@@ -473,6 +692,42 @@ fn principal_binding(event_id: u128, principal_id: &str) -> DurableAuditPrincipa
         request_id: Some(RequestId::new(event_id as u64)),
         session_id: Some(SessionId::new(event_id as u64 + 100)),
     }
+}
+
+fn admin_principal_binding(
+    event_id: u128,
+    principal_id: &str,
+    operation: AdminOperation,
+) -> DurableAuditPrincipalBinding {
+    DurableAuditPrincipalBinding {
+        principal_id: principal_id.to_string(),
+        certificate_fingerprint: Some(format!("sha256:cli-audit-{event_id}")),
+        surface: Some(surface_for_admin_operation(operation)),
+        permission: Some(operation.required_permission()),
+        policy_version: Some(SecurityPolicyVersionEvidence::bootstrap_v0()),
+        request_id: Some(RequestId::new(event_id as u64)),
+        session_id: Some(SessionId::new(event_id as u64 + 100)),
+    }
+}
+
+fn append_admin_record(
+    sink: &mut FileDurableAuditWalSink,
+    event_id: u128,
+    principal_id: &str,
+    operation: AdminOperation,
+    retention: DurableAuditRetentionBoundary,
+) -> DurableAuditSinkReport {
+    let record = PendingDurableAuditRecord::new(
+        event_id as u64,
+        admin_principal_binding(event_id, principal_id, operation),
+        retention,
+        DurableAuditReplayBehavior::ForensicOnly,
+        admin_envelope(event_id, principal_id, operation),
+    )
+    .expect("durable admin audit record contract is satisfied");
+
+    sink.append_durable_audit_record(record)
+        .expect("append is flushed before success")
 }
 
 fn append_security_record(

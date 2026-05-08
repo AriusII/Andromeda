@@ -1,7 +1,8 @@
 use andromeda_core::TransactionId;
 use andromeda_wal::{
     Lsn, WAL_RECORD_HEADER_LEN, WalRecord, WalRecordKind, WalScanResult, WalScanStopReason,
-    decode_frame_header, decode_wal_record_frame, encode_wal_record, scan_wal_records_from,
+    decode_frame_header, decode_wal_record_frame, encode_wal_record, encoded_wal_record_len,
+    scan_wal_records_from,
 };
 
 fn record(
@@ -69,6 +70,34 @@ fn canonical_golden_record_bytes_are_stable() {
     let (decoded, consumed) = decode_wal_record_frame(&encoded).unwrap().unwrap();
     assert_eq!(decoded, record);
     assert_eq!(consumed, WAL_RECORD_HEADER_LEN);
+}
+
+#[test]
+fn encoded_wal_record_len_matches_actual_encode() {
+    let records = [
+        record(WalRecordKind::TxBegin, 1, None, []),
+        record(WalRecordKind::RowInsert, 2, Some(1), b"row".to_vec()),
+        record(
+            WalRecordKind::CatalogChangeApply,
+            3,
+            Some(2),
+            vec![0xa5; 257],
+        ),
+    ];
+
+    for record in records {
+        let encoded = encode_wal_record(&record).unwrap();
+        let frame_header = decode_frame_header(&encoded).unwrap();
+
+        assert_eq!(
+            encoded_wal_record_len(&record).unwrap(),
+            encoded.len() as u64
+        );
+        assert_eq!(
+            encoded_wal_record_len(&record).unwrap(),
+            frame_header.total_length
+        );
+    }
 }
 
 #[test]

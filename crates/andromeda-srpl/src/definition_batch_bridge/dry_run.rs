@@ -71,6 +71,14 @@ pub struct SrplDefinitionBatchDryRunReport {
 }
 
 impl SrplDefinitionBatchDryRunReport {
+    /// Applies this dry-run report through the catalog-owned durable
+    /// DefinitionBatch adapter.
+    ///
+    /// This method is a compatibility wrapper around
+    /// [`apply_srpl_definition_batch_report_to_catalog_store_durably`]. The
+    /// durable apply path remains owned by `andromeda-catalog`; SRPL only
+    /// supplies the already dry-run DefinitionBatch plus source-evidence hashes
+    /// that must match before and after catalog publication.
     pub fn apply_to_catalog_store_durably<Append, Flush>(
         &self,
         store: &mut CatalogSystemStore,
@@ -81,23 +89,49 @@ impl SrplDefinitionBatchDryRunReport {
         Append: FnMut(CatalogMutationRecordKind, &[u8]) -> AndromedaResult<u64>,
         Flush: FnMut(u64) -> AndromedaResult<u64>,
     {
-        let expected_source_hash = self.definition_batch.source_hash();
-        let expected_dependency_graph_hash = self.definition_batch.dependency_graph_hash()?;
-        self.source_evidence
-            .validate_catalog_hashes(expected_source_hash, expected_dependency_graph_hash)?;
-
-        let catalog_report =
-            store.apply_definition_batch_durably(&self.definition_batch, append, flush_through)?;
-        self.source_evidence.validate_catalog_hashes(
-            catalog_report.source_hash,
-            catalog_report.dependency_graph_hash,
-        )?;
-
-        Ok(SrplDefinitionBatchDurableApplyReport {
-            catalog_report,
-            source_evidence: self.source_evidence.clone(),
-        })
+        apply_srpl_definition_batch_report_to_catalog_store_durably(
+            self,
+            store,
+            append,
+            flush_through,
+        )
     }
+}
+
+/// Catalog-owned durable adapter for an SRPL DefinitionBatch dry-run report.
+///
+/// This function deliberately does not compile SRPL, open runtime storage, or
+/// publish application-visible state itself. It delegates the durable mutation
+/// to [`CatalogSystemStore::apply_definition_batch_durably`] and verifies that
+/// the SRPL source evidence still matches the catalog source and dependency
+/// graph hashes on both sides of that catalog-owned apply operation.
+pub fn apply_srpl_definition_batch_report_to_catalog_store_durably<Append, Flush>(
+    report: &SrplDefinitionBatchDryRunReport,
+    store: &mut CatalogSystemStore,
+    append: Append,
+    flush_through: Flush,
+) -> AndromedaResult<SrplDefinitionBatchDurableApplyReport>
+where
+    Append: FnMut(CatalogMutationRecordKind, &[u8]) -> AndromedaResult<u64>,
+    Flush: FnMut(u64) -> AndromedaResult<u64>,
+{
+    let expected_source_hash = report.definition_batch.source_hash();
+    let expected_dependency_graph_hash = report.definition_batch.dependency_graph_hash()?;
+    report
+        .source_evidence
+        .validate_catalog_hashes(expected_source_hash, expected_dependency_graph_hash)?;
+
+    let catalog_report =
+        store.apply_definition_batch_durably(&report.definition_batch, append, flush_through)?;
+    report.source_evidence.validate_catalog_hashes(
+        catalog_report.source_hash,
+        catalog_report.dependency_graph_hash,
+    )?;
+
+    Ok(SrplDefinitionBatchDurableApplyReport {
+        catalog_report,
+        source_evidence: report.source_evidence.clone(),
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

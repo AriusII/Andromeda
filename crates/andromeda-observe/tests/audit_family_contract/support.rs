@@ -125,3 +125,40 @@ pub(crate) fn admin_operation_trace(
     )
     .expect("admin operation trace has explicit operation evidence")
 }
+
+pub(crate) fn admin_operation_envelope(
+    event_id: u128,
+    trace_id: u128,
+    surface: SurfaceScope,
+    operation: AdminOperation,
+    permission: Permission,
+) -> EventEnvelope {
+    EventEnvelope::new(
+        EventId::new(event_id),
+        request_correlation(),
+        TraceEvent::AdminOperation(admin_operation_trace(
+            trace_id,
+            surface,
+            operation,
+            permission,
+            true,
+            "admin operation decision recorded before visible side effect",
+        )),
+    )
+    .expect("admin operation envelope has request/session and operation evidence")
+}
+
+pub(crate) fn durable_admin_operation_binding(
+    surface: SurfaceScope,
+    permission: Permission,
+) -> DurableAuditPrincipalBinding {
+    DurableAuditPrincipalBinding {
+        principal_id: "user:alice".to_string(),
+        certificate_fingerprint: Some("sha256:certificate-audit-test".to_string()),
+        surface: Some(surface),
+        permission: Some(permission),
+        policy_version: Some(SecurityPolicyVersionEvidence::bootstrap_v0()),
+        request_id: Some(RequestId::new(70)),
+        session_id: Some(SessionId::new(80)),
+    }
+}

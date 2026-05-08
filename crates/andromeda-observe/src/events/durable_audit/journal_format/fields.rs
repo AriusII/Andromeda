@@ -81,7 +81,7 @@ pub(super) fn encode_optional_string(value: Option<&str>) -> String {
 }
 
 pub(super) fn decode_string(value: &str) -> Result<String, String> {
-    if value.len() % 2 != 0 {
+    if !value.len().is_multiple_of(2) {
         return Err("hex string has odd length".to_string());
     }
     let mut bytes = Vec::with_capacity(value.len() / 2);

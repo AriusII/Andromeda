@@ -6,7 +6,8 @@ use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use crate::{
     identifier::validate_srpl_identifier as validate_symbol,
     procedure_model::{
-        Cardinality, MAX_SRPL_BODY_OPERATIONS, SrplAssignmentIr, SrplEmitValueIr, SrplPredicateIr,
+        Cardinality, MAX_EXPR_DEPTH, MAX_SRPL_BODY_OPERATIONS, SrplAssignmentIr, SrplEmitValueIr,
+        SrplPredicateIr, SrplValueIr,
     },
 };
 
@@ -147,6 +148,9 @@ impl SrplReadRequest {
         self.context.validate()?;
         self.source.validate_for_definition(ObjectKind::Table)?;
         self.row_bound.validate_for_cardinality(self.cardinality)?;
+        for predicate in &self.predicates {
+            validate_predicate(predicate)?;
+        }
         Ok(())
     }
 }
@@ -189,6 +193,12 @@ impl SrplUpdateRequest {
                 "SRPL adapter update request must declare at least one assignment",
             ));
         }
+        for predicate in &self.predicates {
+            validate_predicate(predicate)?;
+        }
+        for assignment in &self.assignments {
+            validate_assignment(assignment)?;
+        }
         Ok(())
     }
 }
@@ -224,13 +234,16 @@ impl SrplEmitRequest {
 
     pub fn validate(&self) -> AndromedaResult<()> {
         self.context.validate()?;
-        validate_symbol(&self.stream, "SRPL adapter emit stream")?;
+        validate_adapter_symbol(&self.stream, "SRPL adapter emit stream")?;
         self.row_bound.validate_for_cardinality(self.cardinality)?;
         if self.values.is_empty() {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Srpl,
                 "SRPL adapter emit request must declare at least one value",
             ));
+        }
+        for value in &self.values {
+            validate_emit_value(value)?;
         }
         Ok(())
     }
@@ -267,7 +280,8 @@ impl SrplAssertRequest {
 
     pub fn validate(&self) -> AndromedaResult<()> {
         self.context.validate()?;
-        validate_symbol(&self.failure_code, "SRPL adapter assertion failure code")
+        validate_predicate(&self.predicate)?;
+        validate_adapter_symbol(&self.failure_code, "SRPL adapter assertion failure code")
     }
 }
 
@@ -296,10 +310,91 @@ impl SrplFailureRequest {
 
     pub fn validate(&self) -> AndromedaResult<()> {
         self.context.validate()?;
-        validate_symbol(&self.code, "SRPL adapter failure code")
+        validate_adapter_symbol(&self.code, "SRPL adapter failure code")
     }
 }
 
+fn validate_predicate(predicate: &SrplPredicateIr) -> AndromedaResult<()> {
+    match predicate {
+        SrplPredicateIr::InputEqualsField {
+            input,
+            binding,
+            field,
+        }
+        | SrplPredicateIr::FieldGreaterThanOrEqualInput {
+            binding,
+            field,
+            input,
+        } => {
+            validate_adapter_symbol(input, "SRPL adapter predicate input")?;
+            validate_adapter_symbol(binding, "SRPL adapter predicate binding")?;
+            validate_adapter_symbol(field, "SRPL adapter predicate field")?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_assignment(assignment: &SrplAssignmentIr) -> AndromedaResult<()> {
+    validate_adapter_symbol(&assignment.field, "SRPL adapter assignment field")?;
+    validate_value(&assignment.value)
+}
+
+fn validate_emit_value(value: &SrplEmitValueIr) -> AndromedaResult<()> {
+    validate_adapter_symbol(&value.column, "SRPL adapter emit column")?;
+    validate_value(&value.value)
+}
+
+fn validate_value(value: &SrplValueIr) -> AndromedaResult<()> {
+    if value.depth() > MAX_EXPR_DEPTH {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Srpl,
+            "SRPL adapter value expression exceeds maximum nesting depth",
+        ));
+    }
+
+    match value {
+        SrplValueIr::Input(input) => validate_adapter_symbol(input, "SRPL adapter value input")?,
+        SrplValueIr::Field { binding, field } => {
+            validate_adapter_symbol(binding, "SRPL adapter value binding")?;
+            validate_adapter_symbol(field, "SRPL adapter value field")?;
+        }
+        SrplValueIr::Bool(_) => {}
+        SrplValueIr::SubtractInput {
+            binding,
+            field,
+            input,
+        } => {
+            validate_adapter_symbol(binding, "SRPL adapter subtract binding")?;
+            validate_adapter_symbol(field, "SRPL adapter subtract field")?;
+            validate_adapter_symbol(input, "SRPL adapter subtract input")?;
+        }
+        SrplValueIr::Constant(literal) => literal.validate()?,
+        SrplValueIr::BinaryArith { left, right, .. } => {
+            validate_value(left)?;
+            validate_value(right)?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_adapter_symbol(symbol: &str, context: &str) -> AndromedaResult<()> {
+    validate_symbol(symbol, context)?;
+    reject_sql_like_symbol(symbol, context)
+}
+
+fn reject_sql_like_symbol(symbol: &str, context: &str) -> AndromedaResult<()> {
+    let lower = symbol.to_ascii_lowercase();
+    if matches!(
+        lower.as_str(),
+        "select" | "update" | "insert" | "delete" | "merge" | "from" | "where" | "join" | "sql"
+    ) {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Srpl,
+            format!("{context} rejects SQL-like free-form symbols"),
+        ));
+    }
+    Ok(())
+}
 fn invalid_bound(message: &'static str) -> AndromedaError {
     AndromedaError::new(AndromedaErrorKind::Srpl, message)
 }

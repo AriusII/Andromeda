@@ -19,10 +19,16 @@ impl TraceQueryPermissionMatrix {
     };
 
     pub const fn permits(self, surface: SurfaceScope, permission: Permission) -> bool {
-        surface as u8 == self.surface as u8
-            && matches!(
-                permission,
-                Permission::InspectPlans | Permission::ManageSecurity
-            )
+        matches!(
+            (surface, self.surface),
+            (SurfaceScope::Application, SurfaceScope::Application)
+                | (SurfaceScope::Administration, SurfaceScope::Administration)
+                | (SurfaceScope::Cluster, SurfaceScope::Cluster)
+                | (SurfaceScope::BackupAgent, SurfaceScope::BackupAgent)
+                | (SurfaceScope::MonitoringAgent, SurfaceScope::MonitoringAgent)
+        ) && matches!(
+            permission,
+            Permission::InspectPlans | Permission::ManageSecurity
+        )
     }
 }

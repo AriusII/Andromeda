@@ -7,8 +7,9 @@ use generated::{
         ResultStreamDescriptor as ProtoResultStreamDescriptor, result_stream_descriptor,
     },
     protocol::v1::{
-        InvocationCorrelation, InvocationResponse, ResultCompletionPolicy, RpcBatch, RpcCompletion,
-        RpcMetadata, invocation_response, result_completion_policy, rpc_completion,
+        ErrorEnvelope, InvocationCorrelation, InvocationResponse, ResultCompletionPolicy, RpcBatch,
+        RpcCompletion, RpcMetadata, error_envelope, invocation_response, result_completion_policy,
+        rpc_completion,
     },
 };
 
@@ -56,6 +57,29 @@ fn valid_metadata() -> RpcMetadata {
     }
 }
 
+fn bounded_many_metadata(row_count_max: u64) -> RpcMetadata {
+    let mut metadata = valid_metadata();
+    let stream = &mut metadata.result_streams[0];
+    stream.cardinality = result_stream_descriptor::Cardinality::ZeroOrMore as i32;
+    stream.row_count_requirement =
+        result_stream_descriptor::RowCountRequirement::ExactIfKnown as i32;
+    stream.row_count_exact = None;
+    stream.row_count_max = Some(row_count_max);
+    metadata
+}
+
+fn zero_row_cancellable_metadata() -> RpcMetadata {
+    let mut metadata = valid_metadata();
+    let stream = &mut metadata.result_streams[0];
+    stream.cardinality = result_stream_descriptor::Cardinality::ZeroOrMore as i32;
+    stream.row_count_exact = Some(0);
+    stream.row_count_max = Some(0);
+    let policy = metadata.completion_policy.as_mut().unwrap();
+    policy.completion_shape =
+        result_completion_policy::CompletionShape::AllowsZeroRowCompletion as i32;
+    metadata
+}
+
 fn valid_batch(batch_index: u64) -> RpcBatch {
     RpcBatch {
         result_name: "Inventory.ReserveStock.Reservation".to_string(),
@@ -64,6 +88,14 @@ fn valid_batch(batch_index: u64) -> RpcBatch {
         structured_payload: vec![0xAA],
         row_count_exact: Some(1),
         terminal_batch: true,
+    }
+}
+
+fn bounded_many_batch(batch_index: u64, terminal_batch: bool) -> RpcBatch {
+    RpcBatch {
+        row_count_exact: None,
+        terminal_batch,
+        ..valid_batch(batch_index)
     }
 }
 
@@ -82,6 +114,52 @@ fn valid_completion() -> RpcCompletion {
             rows_emitted: 1,
             row_count_exact: Some(1),
         }],
+    }
+}
+
+fn bounded_many_completion(rows_emitted: u64) -> RpcCompletion {
+    RpcCompletion {
+        rows_affected: Some(rows_emitted),
+        result_row_counts: vec![rpc_completion::ResultRowCountSummary {
+            result_name: "Inventory.ReserveStock.Reservation".to_string(),
+            rows_emitted,
+            row_count_exact: None,
+        }],
+        ..valid_completion()
+    }
+}
+
+fn cancelled_completion() -> RpcCompletion {
+    RpcCompletion {
+        status: rpc_completion::Status::Cancelled as i32,
+        rows_affected: None,
+        transaction_outcome: rpc_completion::TransactionOutcome::Cancelled as i32,
+        durable_lsn: None,
+        result_row_counts: vec![rpc_completion::ResultRowCountSummary {
+            result_name: "Inventory.ReserveStock.Reservation".to_string(),
+            rows_emitted: 0,
+            row_count_exact: Some(0),
+        }],
+        ..valid_completion()
+    }
+}
+
+fn backpressure_error() -> ErrorEnvelope {
+    ErrorEnvelope {
+        request_id: Some(101),
+        session_id: Some(202),
+        trace_id: Some("trace-proto-101".to_string()),
+        family: error_envelope::ErrorFamily::Resource as i32,
+        code: "RESULT_STREAM_BACKPRESSURE".to_string(),
+        message: "ResultStream producer must slow down".to_string(),
+        transaction_effect: error_envelope::TransactionEffect::NoTransaction as i32,
+        retry_disposition: error_envelope::RetryDisposition::Backpressure as i32,
+        retry_after_ms: Some(10),
+        backpressure: Some(error_envelope::BackpressureMetadata {
+            retry_after_ms: Some(10),
+            capacity_percent: Some(90),
+            shed_load: false,
+        }),
     }
 }
 
@@ -168,6 +246,120 @@ fn generated_result_stream_sequence_accepts_metadata_batch_completion() {
     ];
 
     generated::validate_generated_invocation_response_sequence(&sequence).unwrap();
+}
+
+#[test]
+fn generated_result_stream_sequence_accepts_bounded_many_batches_with_terminal_completion() {
+    let sequence = vec![
+        response(
+            0,
+            invocation_response::Response::Metadata(bounded_many_metadata(2)),
+        ),
+        response(
+            1,
+            invocation_response::Response::Batch(bounded_many_batch(0, false)),
+        ),
+        response(
+            2,
+            invocation_response::Response::Batch(bounded_many_batch(1, true)),
+        ),
+        response(
+            3,
+            invocation_response::Response::Completion(bounded_many_completion(2)),
+        ),
+    ];
+
+    generated::validate_generated_invocation_response_sequence(&sequence).unwrap();
+}
+
+#[test]
+fn generated_result_stream_sequence_rejects_rows_beyond_metadata_max() {
+    let sequence = vec![
+        response(
+            0,
+            invocation_response::Response::Metadata(bounded_many_metadata(1)),
+        ),
+        response(
+            1,
+            invocation_response::Response::Batch(bounded_many_batch(0, false)),
+        ),
+        response(
+            2,
+            invocation_response::Response::Batch(bounded_many_batch(1, true)),
+        ),
+    ];
+
+    let error = generated::validate_generated_invocation_response_sequence(&sequence)
+        .expect_err("bounded ResultStream metadata must cap emitted rows");
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Contract);
+    assert!(
+        error.message().contains("row_count_max"),
+        "bounded row-count rejection should identify row_count_max"
+    );
+}
+
+#[test]
+fn generated_result_stream_sequence_rejects_batch_after_terminal_batch() {
+    let sequence = vec![
+        response(
+            0,
+            invocation_response::Response::Metadata(bounded_many_metadata(2)),
+        ),
+        response(
+            1,
+            invocation_response::Response::Batch(bounded_many_batch(0, true)),
+        ),
+        response(
+            2,
+            invocation_response::Response::Batch(bounded_many_batch(1, true)),
+        ),
+    ];
+
+    let error = generated::validate_generated_invocation_response_sequence(&sequence)
+        .expect_err("terminal batch must close payload emission for that result stream");
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Contract);
+    assert!(
+        error.message().contains("batch after terminal batch"),
+        "terminal-batch ordering rejection should identify the late batch"
+    );
+}
+
+#[test]
+fn generated_result_stream_sequence_accepts_cancelled_completion_as_terminal_evidence() {
+    let sequence = vec![
+        response(
+            0,
+            invocation_response::Response::Metadata(zero_row_cancellable_metadata()),
+        ),
+        response(
+            1,
+            invocation_response::Response::Completion(cancelled_completion()),
+        ),
+    ];
+
+    generated::validate_generated_invocation_response_sequence(&sequence).unwrap();
+}
+
+#[test]
+fn generated_result_stream_sequence_rejects_payload_after_backpressure_error() {
+    let sequence = vec![
+        response(
+            0,
+            invocation_response::Response::Error(backpressure_error()),
+        ),
+        response(1, invocation_response::Response::Metadata(valid_metadata())),
+    ];
+
+    let error = generated::validate_generated_invocation_response_sequence(&sequence)
+        .expect_err("backpressure error is terminal ResultStream evidence");
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Contract);
+    assert!(
+        error.message().contains("payload after terminal response"),
+        "terminal backpressure error should reject later ResultStream payloads"
+    );
 }
 
 #[test]

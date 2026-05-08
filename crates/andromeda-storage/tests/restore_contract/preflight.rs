@@ -33,6 +33,81 @@ fn restore_preflight_accepts_file_backed_artifact_directory() {
 }
 
 #[test]
+fn restore_preflight_evidence_checksum_binds_pitr_target() {
+    let temp = tempfile::TempDir::new().unwrap();
+    let backup_id = BackupId::new(84);
+    write_test_artifact(&temp, backup_id);
+
+    let first_target = validate_restore_artifact_preflight(
+        temp.path(),
+        backup_id,
+        Lsn::new(1500),
+        RestoreValidationPolicy::Full,
+    )
+    .unwrap();
+    let second_target = validate_restore_artifact_preflight(
+        temp.path(),
+        backup_id,
+        Lsn::new(1750),
+        RestoreValidationPolicy::Full,
+    )
+    .unwrap();
+
+    assert_eq!(first_target.manifest_digest, second_target.manifest_digest);
+    assert_eq!(first_target.snapshot_digest, second_target.snapshot_digest);
+    assert_eq!(
+        first_target.wal_archive_evidence,
+        second_target.wal_archive_evidence
+    );
+    assert_ne!(
+        first_target.restore_evidence_checksum, second_target.restore_evidence_checksum,
+        "restore evidence must bind the operator-selected PITR target"
+    );
+}
+
+#[test]
+fn restore_orchestration_rejects_preflight_source_checkpoint_mismatch() {
+    let temp = tempfile::TempDir::new().unwrap();
+    let backup_id = BackupId::new(85);
+    let mut preflight = {
+        write_test_artifact(&temp, backup_id);
+        validate_restore_artifact_preflight(
+            temp.path(),
+            backup_id,
+            Lsn::new(1500),
+            RestoreValidationPolicy::Full,
+        )
+        .unwrap()
+    };
+    preflight.source_checkpoint_lsn = Lsn::new(999);
+
+    let mut manifest = make_test_manifest();
+    manifest.backup_id = backup_id;
+    let audit = restore_audit_with_checksum(
+        backup_id,
+        Lsn::new(1500),
+        RecoveryStage::SafeStart,
+        preflight.restore_evidence_checksum,
+    );
+
+    let orchestration = restore_orchestration_for(
+        manifest,
+        Lsn::new(1500),
+        RecoveryStage::SafeStart,
+        RestoreValidationPolicy::Full,
+        audit,
+    );
+
+    let err = orchestration
+        .validate_with_preflight(&preflight)
+        .expect_err("restore orchestration must bind the preflight source checkpoint");
+    assert!(
+        err.message().contains("source checkpoint"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
 fn restore_preflight_accepts_legacy_v1_manifest_after_reconstructing_wal_evidence() {
     let temp = tempfile::TempDir::new().unwrap();
     let backup_id = BackupId::new(80);

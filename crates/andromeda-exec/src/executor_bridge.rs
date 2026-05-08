@@ -135,7 +135,7 @@ impl<'a> ExecutorDispatchBridge<'a> {
 
         // Validate scope match.
         let required_scope = andromeda_quic::mtls_identity::plane_to_required_surface_scope(plane);
-        if certificate_identity.surface as u8 != required_scope as u8 {
+        if certificate_identity.surface != required_scope {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Security,
                 "certificate surface scope does not match connection plane",

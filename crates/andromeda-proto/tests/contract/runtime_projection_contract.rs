@@ -134,6 +134,15 @@ fn structured_object_header_validates_shape_hash_and_payload_bounds() {
         AndromedaErrorKind::Contract
     );
 
+    let descriptor_drift = StructuredObjectHeader {
+        descriptor_hash: ContractHash::test_vector(0xAA),
+        ..valid.clone()
+    };
+    assert_eq!(
+        descriptor_drift.validate().unwrap_err().kind(),
+        AndromedaErrorKind::Contract
+    );
+
     let over_bound = StructuredObjectHeader {
         payload_length: 257,
         ..valid

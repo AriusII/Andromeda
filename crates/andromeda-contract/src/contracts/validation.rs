@@ -10,11 +10,17 @@ pub fn diagnose_procedure_contract_compatibility(
 ) -> ContractCompatibilityDiagnostic {
     let mut messages = Vec::new();
 
-    if let Err(error) = previous.validate() {
-        messages.push(format!("previous contract is invalid: {}", error.message()));
+    if let Err(error) = previous.validate_canonical_hash() {
+        messages.push(format!(
+            "previous contract is invalid or non-canonical: {}",
+            error.message()
+        ));
     }
-    if let Err(error) = next.validate() {
-        messages.push(format!("next contract is invalid: {}", error.message()));
+    if let Err(error) = next.validate_canonical_hash() {
+        messages.push(format!(
+            "next contract is invalid or non-canonical: {}",
+            error.message()
+        ));
     }
     if !messages.is_empty() {
         return ContractCompatibilityDiagnostic::incompatible(messages);

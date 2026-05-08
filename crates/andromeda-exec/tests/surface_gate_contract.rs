@@ -5,19 +5,19 @@ use andromeda_exec::{
     InvocationRequest, LocalVerticalRuntime, ReserveStockCommand, SurfacePlaneAuthorizer,
 };
 use andromeda_observe::{
-    AuthorizationDenialReason, AuthorizationOutcome, CertificateIdentity, Permission,
-    PrincipalBinding, PrincipalRegistry, SecurityAuditOutcome, SurfaceScope, TraceId,
-    UserPrincipal, UserPrincipalKind,
+    AdminOperation, AuthorizationDenialReason, AuthorizationOutcome, CertificateIdentity,
+    Permission, PrincipalBinding, PrincipalRegistry, SecurityAuditOutcome, SurfaceAction,
+    SurfaceScope, TraceId, UserPrincipal, UserPrincipalKind,
 };
 use andromeda_quic::SurfacePlane;
 use andromeda_storage::InMemoryWal;
 
-struct ExpectedDenial {
+struct ExpectedDenial<'a> {
     trace_id: TraceId,
     plane: SurfacePlane,
-    fingerprint: &'static str,
+    fingerprint: &'a str,
     reason: AuthorizationDenialReason,
-    audit_reason_fragment: &'static str,
+    audit_reason_fragment: &'a str,
 }
 
 fn registry(bindings: Vec<PrincipalBinding>) -> PrincipalRegistry {
@@ -44,7 +44,7 @@ fn binding(
 
 fn assert_procedure_dispatch_denied_without_local_runtime_entry(
     registry: PrincipalRegistry,
-    expected: ExpectedDenial,
+    expected: ExpectedDenial<'_>,
 ) {
     let gate = SurfacePlaneAuthorizer::new(&registry);
     let runtime = LocalVerticalRuntime::new(InMemoryWal::new());
@@ -88,6 +88,71 @@ fn assert_procedure_dispatch_denied_without_local_runtime_entry(
     );
 }
 
+fn assert_admin_dispatch_denied_without_local_runtime_entry(
+    registry: PrincipalRegistry,
+    expected: ExpectedDenial<'_>,
+    operation: AdminOperation,
+    expected_permission: Permission,
+) {
+    let gate = SurfacePlaneAuthorizer::new(&registry);
+    let runtime = LocalVerticalRuntime::new(InMemoryWal::new());
+    let action = SurfaceAction::Admin(operation);
+
+    assert!(expected_permission.is_admin_operation_permission());
+    assert_eq!(operation.required_permission(), expected_permission);
+    assert_eq!(action.required_permission(), expected_permission);
+
+    let denied = gate
+        .authorize_dispatch(
+            expected.trace_id,
+            expected.plane,
+            expected.fingerprint,
+            action,
+        )
+        .unwrap();
+
+    assert!(denied.is_denied());
+    if let AuthorizationOutcome::Denied { reason, audit } = denied {
+        assert_eq!(reason, expected.reason);
+        assert_eq!(audit.trace_id, expected.trace_id);
+        assert_eq!(audit.permission, expected_permission);
+        assert_eq!(audit.outcome, SecurityAuditOutcome::Denied);
+        assert!(audit.has_identity_evidence());
+        assert!(!audit.contains_sensitive_evidence());
+        assert_eq!(audit.denial_reason(), Some(expected.reason));
+        assert!(
+            audit.reason.contains(expected.reason.label()),
+            "audit reason `{}` should contain typed denial label `{}`",
+            audit.reason,
+            expected.reason.label()
+        );
+        assert!(
+            audit.reason.contains(expected.audit_reason_fragment),
+            "audit reason `{}` should contain expected fragment `{}`",
+            audit.reason,
+            expected.audit_reason_fragment
+        );
+        assert!(
+            audit.reason.contains(action.evidence_label()),
+            "audit reason `{}` should contain action evidence label `{}`",
+            audit.reason,
+            action.evidence_label()
+        );
+    } else {
+        panic!("admin dispatch should have been denied");
+    }
+
+    assert!(
+        runtime.wal().is_empty(),
+        "authorization denial must not create a WAL record"
+    );
+    assert_eq!(
+        runtime.transactions().live_count().unwrap(),
+        0,
+        "authorization denial must not create a local transaction"
+    );
+}
+
 #[test]
 fn denied_surface_dispatch_never_enters_local_transaction_runtime() {
     assert_procedure_dispatch_denied_without_local_runtime_entry(
@@ -100,6 +165,78 @@ fn denied_surface_dispatch_never_enters_local_transaction_runtime() {
             audit_reason_fragment: "execute_procedure",
         },
     );
+}
+
+#[derive(Clone, Copy)]
+struct ForbiddenApplicationAdminCase {
+    operation: AdminOperation,
+    permission: Permission,
+    audit_reason_fragment: &'static str,
+}
+
+fn forbidden_application_admin_cases() -> [ForbiddenApplicationAdminCase; 12] {
+    [
+        ForbiddenApplicationAdminCase {
+            operation: AdminOperation::DebugProcedure,
+            permission: Permission::DebugProcedure,
+            audit_reason_fragment: "DebugProcedure",
+        },
+        ForbiddenApplicationAdminCase {
+            operation: AdminOperation::ReadProcedureStore,
+            permission: Permission::ReadProcedureStore,
+            audit_reason_fragment: "ReadProcedureStore",
+        },
+        ForbiddenApplicationAdminCase {
+            operation: AdminOperation::InspectPlans,
+            permission: Permission::InspectPlans,
+            audit_reason_fragment: "InspectPlans",
+        },
+        ForbiddenApplicationAdminCase {
+            operation: AdminOperation::ManageSecurity,
+            permission: Permission::ManageSecurity,
+            audit_reason_fragment: "ManageSecurity",
+        },
+        ForbiddenApplicationAdminCase {
+            operation: AdminOperation::RotateCertificate,
+            permission: Permission::RotateCertificate,
+            audit_reason_fragment: "RotateCertificate",
+        },
+        ForbiddenApplicationAdminCase {
+            operation: AdminOperation::RevokeCertificateIdentity,
+            permission: Permission::RevokeCertificateIdentity,
+            audit_reason_fragment: "RevokeCertificateIdentity",
+        },
+        ForbiddenApplicationAdminCase {
+            operation: AdminOperation::Backup,
+            permission: Permission::Backup,
+            audit_reason_fragment: "Backup",
+        },
+        ForbiddenApplicationAdminCase {
+            operation: AdminOperation::Restore,
+            permission: Permission::Restore,
+            audit_reason_fragment: "Restore",
+        },
+        ForbiddenApplicationAdminCase {
+            operation: AdminOperation::ForensicStart,
+            permission: Permission::ForensicStart,
+            audit_reason_fragment: "ForensicStart",
+        },
+        ForbiddenApplicationAdminCase {
+            operation: AdminOperation::ClusterPromote,
+            permission: Permission::ClusterPromote,
+            audit_reason_fragment: "ClusterPromote",
+        },
+        ForbiddenApplicationAdminCase {
+            operation: AdminOperation::FenceNode,
+            permission: Permission::FenceNode,
+            audit_reason_fragment: "FenceNode",
+        },
+        ForbiddenApplicationAdminCase {
+            operation: AdminOperation::UpdateClusterManifest,
+            permission: Permission::UpdateClusterManifest,
+            audit_reason_fragment: "UpdateClusterManifest",
+        },
+    ]
 }
 
 #[test]
@@ -195,6 +332,82 @@ fn procedure_dispatch_rejects_hadr_surface_before_transaction() {
             audit_reason_fragment: "requires_application_surface",
         },
     );
+}
+
+#[test]
+fn application_surface_cannot_carry_manage_security_before_transaction() {
+    assert_admin_dispatch_denied_without_local_runtime_entry(
+        registry(vec![binding(
+            "fp-app-manage-security",
+            SurfaceScope::Application,
+            "svc-admin-abuse",
+            vec![Permission::ManageSecurity],
+        )]),
+        ExpectedDenial {
+            trace_id: TraceId::new(53),
+            plane: SurfacePlane::Application,
+            fingerprint: "fp-app-manage-security",
+            reason: AuthorizationDenialReason::SurfaceDoesNotPermitPermission,
+            audit_reason_fragment: "ManageSecurity",
+        },
+        AdminOperation::ManageSecurity,
+        Permission::ManageSecurity,
+    );
+}
+
+#[test]
+fn application_surface_cannot_carry_cluster_promote_before_transaction() {
+    assert_admin_dispatch_denied_without_local_runtime_entry(
+        registry(vec![binding(
+            "fp-app-cluster-promote",
+            SurfaceScope::Application,
+            "svc-cluster-abuse",
+            vec![Permission::ClusterPromote],
+        )]),
+        ExpectedDenial {
+            trace_id: TraceId::new(54),
+            plane: SurfacePlane::Application,
+            fingerprint: "fp-app-cluster-promote",
+            reason: AuthorizationDenialReason::SurfaceDoesNotPermitPermission,
+            audit_reason_fragment: "ClusterPromote",
+        },
+        AdminOperation::ClusterPromote,
+        Permission::ClusterPromote,
+    );
+}
+
+#[test]
+fn application_surface_rejects_every_admin_operation_before_transaction() {
+    assert!(!SurfaceScope::Application.permits_admin_operation());
+
+    for (index, case) in forbidden_application_admin_cases().into_iter().enumerate() {
+        let fingerprint = format!("fp-app-admin-abuse-{index}");
+        let principal_id = format!("svc-admin-abuse-{index}");
+
+        assert!(
+            !SurfaceScope::Application.permits_permission(case.permission),
+            "Application surface must not permit {:?}",
+            case.permission
+        );
+
+        assert_admin_dispatch_denied_without_local_runtime_entry(
+            registry(vec![binding(
+                &fingerprint,
+                SurfaceScope::Application,
+                &principal_id,
+                vec![case.permission],
+            )]),
+            ExpectedDenial {
+                trace_id: TraceId::new(60 + index as u128),
+                plane: SurfacePlane::Application,
+                fingerprint: &fingerprint,
+                reason: AuthorizationDenialReason::SurfaceDoesNotPermitPermission,
+                audit_reason_fragment: case.audit_reason_fragment,
+            },
+            case.operation,
+            case.permission,
+        );
+    }
 }
 
 #[test]

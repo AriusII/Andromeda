@@ -1,7 +1,8 @@
 /target
 .idea/
-/fuzz/targe
+/fuzz/target
 __pycache__/
 *.py[cod]
 /.codex/runtime/*
 !/.codex/runtime/.gitignore
+/tests/loom/target

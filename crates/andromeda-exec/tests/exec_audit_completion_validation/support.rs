@@ -21,6 +21,33 @@ pub use andromeda_observe::{
 pub use andromeda_storage::Lsn;
 pub use andromeda_tx::TransactionState;
 
+use std::sync::Mutex;
+
+pub(crate) struct RecordingPermissionAuditEmitter {
+    events: Mutex<Vec<PermissionAuditEvent>>,
+}
+
+impl Default for RecordingPermissionAuditEmitter {
+    fn default() -> Self {
+        Self {
+            events: Mutex::new(Vec::new()),
+        }
+    }
+}
+
+impl PermissionAuditEmitter for RecordingPermissionAuditEmitter {
+    fn emit_permission_decision(&self, event: PermissionAuditEvent) -> AndromedaResult<()> {
+        let mut events = self.events.lock().map_err(|_| {
+            AndromedaError::new(
+                AndromedaErrorKind::Internal,
+                "recording permission audit emitter lock poisoned",
+            )
+        })?;
+        events.push(event);
+        Ok(())
+    }
+}
+
 pub(crate) fn durable_audit_report(
     trace_id: TraceId,
     family: DurableAuditEventFamily,

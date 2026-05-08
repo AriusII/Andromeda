@@ -33,6 +33,16 @@ pub fn encode_wal_record(record: &WalRecord) -> AndromedaResult<Vec<u8>> {
     Ok(encoded)
 }
 
+pub fn encoded_wal_record_len(record: &WalRecord) -> AndromedaResult<u64> {
+    record.validate()?;
+    let total_length = (WAL_RECORD_HEADER_LEN as u64)
+        .checked_add(record.header.payload_length)
+        .ok_or_else(|| storage_error("WAL frame total length would overflow u64"))?;
+    usize::try_from(total_length)
+        .map_err(|_| storage_error("WAL frame total length does not fit usize"))?;
+    Ok(total_length)
+}
+
 pub fn decode_wal_record_frame(buffer: &[u8]) -> AndromedaResult<Option<(WalRecord, usize)>> {
     if buffer.is_empty() {
         return Ok(None);

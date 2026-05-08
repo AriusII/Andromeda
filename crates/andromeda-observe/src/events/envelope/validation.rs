@@ -83,9 +83,14 @@ pub(super) fn validate(envelope: &EventEnvelope) -> AndromedaResult<()> {
         TraceEvent::SecurityAudit(trace) if !trace.has_identity_evidence() => Err(observe_error(
             "security audit traces require certificate and principal identity evidence",
         )),
-        TraceEvent::SecurityAudit(trace) if !trace.surface_matches_certificate() => Err(
-            observe_error("security audit trace surface must match certificate surface scope"),
-        ),
+        TraceEvent::SecurityAudit(trace)
+            if !trace.surface_matches_certificate()
+                && !trace.has_typed_surface_scope_mismatch_denial() =>
+        {
+            Err(observe_error(
+                "security audit trace certificate surface mismatch requires a denied surface_scope_mismatch reason",
+            ))
+        }
         TraceEvent::SecurityAudit(trace) if !trace.surface_permits_permission() => Err(
             observe_error("security audit traces require surface scope matching permission family"),
         ),

@@ -73,11 +73,13 @@ fn test_gateway_authorized_route_allows_core_principal_before_dispatch() {
     assert_eq!(authorized.route.invocation_id, InvocationId::new(42));
     assert_eq!(authorized.route.procedure_id, ProcedureId::new(42));
     assert_eq!(authorized.principal_id, principal_id);
-    assert_eq!(
-        authorized.authorization_evidence.outcome,
-        PrincipalAuthorizationOutcome::Allowed
+    assert_common_authorization_evidence(
+        &authorized.authorization_evidence,
+        PrincipalAuthorizationOutcome::Allowed,
+        "allowed",
+        PrincipalAuthorizationEvaluationStage::Allowed,
+        &registry,
     );
-    assert_eq!(authorized.authorization_evidence.reason, "allowed");
     assert_eq!(
         authorized.authorization_evidence.required_permission,
         Permission::ExecuteProcedure(ProcedureId::new(42))
@@ -85,6 +87,30 @@ fn test_gateway_authorized_route_allows_core_principal_before_dispatch() {
     assert_eq!(
         authorized.authorization_evidence.surface_scope,
         CoreSurfaceScope::Application
+    );
+    assert_eq!(
+        authorized.authorization_evidence.certificate_surface_scope,
+        Some(CoreSurfaceScope::Application)
+    );
+    assert_eq!(
+        authorized.authorization_evidence.certificate_fingerprint,
+        "a".repeat(64)
+    );
+    assert_eq!(
+        authorized.authorization_evidence.certificate_subject,
+        "app-service"
+    );
+    assert_eq!(
+        authorized.authorization_evidence.certificate_status,
+        Some(CertificateIdentityStatus::Active)
+    );
+    assert_eq!(
+        authorized.authorization_evidence.principal_id,
+        Some(principal_id)
+    );
+    assert_eq!(
+        authorized.authorization_evidence.principal_status,
+        Some(PrincipalStatus::Active)
     );
     assert!(authorized.authorization_evidence.surface_policy_evaluated);
     assert!(authorized.authorization_evidence.surface_policy_allowed);
@@ -95,6 +121,7 @@ fn test_gateway_authorized_route_allows_core_principal_before_dispatch() {
             .authorization_evidence
             .direct_permission_evaluated
     );
+    assert!(!authorized.authorization_evidence.direct_permission_granted);
 }
 
 #[test]
@@ -115,6 +142,19 @@ fn test_gateway_authorized_route_rejects_revoked_certificate_before_dispatch() {
     assert_authorized_route_denial(
         registry,
         PrincipalAuthorizationDenialReason::CertificateRevoked,
+    );
+}
+
+#[test]
+fn test_gateway_authorized_route_rejects_disabled_certificate_before_dispatch() {
+    let (mut registry, _) = registry_for_application_user();
+    registry
+        .disable_certificate(&"a".repeat(64))
+        .expect("registered certificate can be disabled");
+
+    assert_authorized_route_denial(
+        registry,
+        PrincipalAuthorizationDenialReason::CertificateDisabled,
     );
 }
 

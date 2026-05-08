@@ -2,8 +2,8 @@ use std::path::PathBuf;
 
 use andromeda_core::AndromedaResult;
 use andromeda_observe::{
-    TRACE_QUERY_MAX_LIMIT, TraceEventFamily, TraceId, TraceQueryFilter, TraceQueryLsnRange,
-    TraceQuerySpec,
+    DurableAuditEventFamily, TRACE_QUERY_MAX_LIMIT, TraceEventFamily, TraceId, TraceQueryFilter,
+    TraceQueryLsnRange, TraceQuerySpec,
 };
 
 use crate::diagnostic_json::{DIAGNOSTIC_JSON_FLAG, JSON_FLAG};
@@ -24,6 +24,7 @@ pub(super) fn parse_audit_inspection_options(
     let mut include_total_count = false;
     let mut lsn_start = None;
     let mut lsn_end = None;
+    let mut durable_family_filter = None;
 
     let mut index = 0usize;
     while index < args.len() {
@@ -63,9 +64,11 @@ pub(super) fn parse_audit_inspection_options(
                 filter.principal = Some(principal);
             }
             "--family" => {
-                filter.family = Some(parse_trace_family(&next_value(
+                let family_filter = parse_audit_family_filter(&next_value(
                     args, &mut index, "inspect", "--family",
-                )?)?);
+                )?)?;
+                filter.family = Some(family_filter.trace_family);
+                durable_family_filter = family_filter.durable_family;
             }
             "--limit" => {
                 limit = parse_usize(
@@ -130,9 +133,6 @@ pub(super) fn parse_audit_inspection_options(
 
     match (lsn_start, lsn_end) {
         (Some(start_lsn), Some(end_lsn)) => {
-            if start_lsn == end_lsn {
-                return Err(cli_error("audit inspect LSN range must not be zero-width"));
-            }
             filter.lsn_range = Some(TraceQueryLsnRange::new(start_lsn, end_lsn));
         }
         (Some(_), None) | (None, Some(_)) => {
@@ -153,6 +153,7 @@ pub(super) fn parse_audit_inspection_options(
 
     Ok(AuditInspectionOptions {
         spec,
+        durable_family_filter,
         json_output,
         diagnostic_json,
         journal_path,
@@ -341,30 +342,64 @@ fn parse_lsn_range(value: &str) -> AndromedaResult<(u64, u64)> {
             "audit inspect --lsn-range endpoints must be non-zero",
         ));
     }
-    if start >= end {
+    if start > end {
         return Err(cli_error(
-            "audit inspect --lsn-range must have start less than end",
+            "audit inspect --lsn-range must have start_lsn <= end_lsn",
         ));
     }
     Ok((start, end))
 }
 
-fn parse_trace_family(value: &str) -> AndromedaResult<TraceEventFamily> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ParsedAuditFamilyFilter {
+    trace_family: TraceEventFamily,
+    durable_family: Option<DurableAuditEventFamily>,
+}
+
+fn parse_audit_family_filter(value: &str) -> AndromedaResult<ParsedAuditFamilyFilter> {
     match value {
-        "decision" => Ok(TraceEventFamily::Decision),
-        "procedure-invocation" => Ok(TraceEventFamily::ProcedureInvocation),
-        "wal" => Ok(TraceEventFamily::Wal),
-        "recovery" => Ok(TraceEventFamily::Recovery),
-        "manifest-catalog" => Ok(TraceEventFamily::ManifestCatalog),
-        "protocol" => Ok(TraceEventFamily::Protocol),
-        "security-audit" => Ok(TraceEventFamily::SecurityAudit),
-        "admin-audit" => Ok(TraceEventFamily::AdminAudit),
-        "resource" => Ok(TraceEventFamily::Resource),
-        "io" => Ok(TraceEventFamily::Io),
-        "gpu" => Ok(TraceEventFamily::Gpu),
-        "transaction" => Ok(TraceEventFamily::Transaction),
-        _ => Err(cli_error(
-            "unknown audit inspect family; expected decision, procedure-invocation, wal, recovery, manifest-catalog, protocol, security-audit, admin-audit, resource, io, gpu, or transaction",
+        "decision" => Ok(trace_family_filter(TraceEventFamily::Decision)),
+        "procedure-invocation" => Ok(trace_family_filter(TraceEventFamily::ProcedureInvocation)),
+        "wal" => Ok(trace_family_filter(TraceEventFamily::Wal)),
+        "recovery" => Ok(trace_family_filter(TraceEventFamily::Recovery)),
+        "manifest-catalog" => Ok(trace_family_filter(TraceEventFamily::ManifestCatalog)),
+        "protocol" => Ok(trace_family_filter(TraceEventFamily::Protocol)),
+        "security-audit" => Ok(trace_family_filter(TraceEventFamily::SecurityAudit)),
+        "admin-audit" => Ok(trace_family_filter(TraceEventFamily::AdminAudit)),
+        "resource" => Ok(trace_family_filter(TraceEventFamily::Resource)),
+        "io" => Ok(trace_family_filter(TraceEventFamily::Io)),
+        "gpu" => Ok(trace_family_filter(TraceEventFamily::Gpu)),
+        "transaction" => Ok(trace_family_filter(TraceEventFamily::Transaction)),
+        "admin" | "admin-decision" => Ok(exact_admin_audit_family_filter(
+            DurableAuditEventFamily::AdminDecision,
         )),
+        "hadr" | "hadr-decision" => Ok(exact_admin_audit_family_filter(
+            DurableAuditEventFamily::HadrDecision,
+        )),
+        "backup" | "backup-decision" => Ok(exact_admin_audit_family_filter(
+            DurableAuditEventFamily::BackupDecision,
+        )),
+        "restore" | "restore-decision" => Ok(exact_admin_audit_family_filter(
+            DurableAuditEventFamily::RestoreDecision,
+        )),
+        _ => Err(cli_error(
+            "unknown audit inspect family; expected decision, procedure-invocation, wal, recovery, manifest-catalog, protocol, security-audit, admin-audit, admin, hadr, backup, restore, resource, io, gpu, or transaction",
+        )),
+    }
+}
+
+const fn trace_family_filter(trace_family: TraceEventFamily) -> ParsedAuditFamilyFilter {
+    ParsedAuditFamilyFilter {
+        trace_family,
+        durable_family: None,
+    }
+}
+
+const fn exact_admin_audit_family_filter(
+    durable_family: DurableAuditEventFamily,
+) -> ParsedAuditFamilyFilter {
+    ParsedAuditFamilyFilter {
+        trace_family: TraceEventFamily::AdminAudit,
+        durable_family: Some(durable_family),
     }
 }

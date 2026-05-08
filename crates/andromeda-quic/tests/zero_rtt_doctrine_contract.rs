@@ -48,9 +48,11 @@ fn owned_runtime_sources(src_dir: &Path) -> Vec<PathBuf> {
         src_dir.join("catalog_manifest_resolution.rs"),
         src_dir.join("mtls_identity.rs"),
         src_dir.join("quinn_backend.rs"),
+        src_dir.join("quinn_tls.rs"),
         src_dir.join("runtime_quinn.rs"),
         src_dir.join("zero_rtt.rs"),
     ];
+    files.extend(rust_sources_under(&src_dir.join("quinn_backend")));
     files.extend(rust_sources_under(&src_dir.join("reconnect")));
     files.sort();
     files

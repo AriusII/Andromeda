@@ -33,6 +33,8 @@ impl<'a> DurableAuditTraceQuerySource<'a> {
         let mut skipped = 0usize;
         let mut total_matching = 0usize;
         let mut rows = Vec::new();
+        let mut previous_matching_event_id = None;
+        let mut ordered_by_event_id_ascending = true;
 
         for record in self.records {
             record.validate()?;
@@ -40,6 +42,14 @@ impl<'a> DurableAuditTraceQuerySource<'a> {
             if !row.matches(spec) {
                 continue;
             }
+
+            match previous_matching_event_id {
+                Some(previous_event_id) if row.event_id < previous_event_id => {
+                    ordered_by_event_id_ascending = false;
+                }
+                _ => {}
+            }
+            previous_matching_event_id = Some(row.event_id);
 
             total_matching = total_matching.saturating_add(1);
             if skipped < spec.offset {
@@ -59,7 +69,7 @@ impl<'a> DurableAuditTraceQuerySource<'a> {
                 returned_rows,
                 total_matching_rows: spec.include_total_count.then_some(total_matching),
                 truncated: total_matching.saturating_sub(spec.offset) > returned_rows,
-                ordered_by_event_id_ascending: true,
+                ordered_by_event_id_ascending,
                 permission_matrix: TraceQueryPermissionMatrix::V1_ADMIN,
             },
             rows,
@@ -130,37 +140,42 @@ impl DurableAuditTraceQueryRow {
 
     fn matches(&self, spec: &TraceQuerySpec) -> bool {
         let filter = &spec.filter;
-        if let Some(trace_id) = filter.trace_id
-            && self.trace_id != trace_id
-        {
-            return false;
+        match filter.trace_id {
+            Some(trace_id) if self.trace_id != trace_id => {
+                return false;
+            }
+            _ => {}
         }
-        if let Some(family) = filter.family
-            && self.family != family
-        {
-            return false;
+        match filter.family {
+            Some(family) if self.family != family => {
+                return false;
+            }
+            _ => {}
         }
-        if let Some(range) = filter.lsn_range
-            && !matches_lsn_range(self, range)
-        {
-            return false;
+        match filter.lsn_range {
+            Some(range) if !matches_lsn_range(self, range) => {
+                return false;
+            }
+            _ => {}
         }
-        if let Some(principal) = &filter.principal
-            && self.principal_id != *principal
-        {
-            return false;
+        match &filter.principal {
+            Some(principal) if self.principal_id != *principal => {
+                return false;
+            }
+            _ => {}
         }
         true
     }
 }
 
 fn validate_supported_filters(spec: &TraceQuerySpec) -> AndromedaResult<()> {
-    if let Some(principal) = &spec.filter.principal
-        && contains_sensitive_marker(principal)
-    {
-        return Err(durable_inspection_error(
-            "durable audit trace inspection principal filter must not contain secret evidence",
-        ));
+    match &spec.filter.principal {
+        Some(principal) if contains_sensitive_marker(principal) => {
+            return Err(durable_inspection_error(
+                "durable audit trace inspection principal filter must not contain secret evidence",
+            ));
+        }
+        _ => {}
     }
     if spec.filter.catalog_version.is_some() {
         return Err(durable_inspection_error(

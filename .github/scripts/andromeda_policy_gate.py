@@ -13,10 +13,11 @@ from __future__ import annotations
 
 import argparse
 import re
+import tomllib
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Iterator, Sequence
+from typing import Iterable, Iterator, Mapping, Sequence
 
 
 EXCLUDED_DIRS = {
@@ -75,6 +76,22 @@ class LinePolicy:
     message: str
 
 
+@dataclass(frozen=True)
+class ManifestDependency:
+    section: str
+    name: str
+    package: str
+    features: tuple[str, ...]
+    uses_workspace: bool
+
+
+@dataclass(frozen=True)
+class ManifestDependencyPolicy:
+    code: str
+    names: frozenset[str]
+    message: str
+
+
 MANIFEST_POLICIES: tuple[LinePolicy, ...] = (
     LinePolicy(
         "grpc_dependency",
@@ -114,6 +131,46 @@ MANIFEST_POLICIES: tuple[LinePolicy, ...] = (
             r'|^\s*package\s*=\s*"(?:diesel|mysql|postgres|rusqlite|sqlx|tokio-postgres)")',
             re.IGNORECASE,
         ),
+        "Ad hoc SQL dependencies are forbidden on the application/runtime surface.",
+    ),
+)
+
+MANIFEST_DEPENDENCY_POLICIES: tuple[ManifestDependencyPolicy, ...] = (
+    ManifestDependencyPolicy(
+        "grpc_dependency",
+        frozenset(
+            {
+                "grpc",
+                "grpcio",
+                "grpcio-sys",
+                "grpc-web",
+                "prost-grpc",
+                "tower-grpc",
+            }
+        ),
+        "gRPC dependencies are forbidden. Use QUIC + custom typed RPC.",
+    ),
+    ManifestDependencyPolicy(
+        "tonic_dependency",
+        frozenset(
+            {
+                "tonic",
+                "tonic-build",
+                "tonic-health",
+                "tonic-reflection",
+                "tonic-web",
+            }
+        ),
+        "tonic dependencies imply gRPC and are forbidden.",
+    ),
+    ManifestDependencyPolicy(
+        "json_runtime_dependency",
+        frozenset({"serde-json", "jsonrpsee"}),
+        "Runtime JSON dependencies are forbidden on Andromeda protocol/result surfaces.",
+    ),
+    ManifestDependencyPolicy(
+        "sql_dependency",
+        frozenset({"diesel", "mysql", "postgres", "rusqlite", "sqlx", "tokio-postgres"}),
         "Ad hoc SQL dependencies are forbidden on the application/runtime surface.",
     ),
 )
@@ -240,14 +297,87 @@ RUST_SOURCE_POLICIES: tuple[LinePolicy, ...] = (
     ),
 )
 
+EXEC_FORBIDDEN_DIRECT_DEPENDENCIES = frozenset(
+    {
+        "andromeda-runtime-quinn",
+        "grpc",
+        "grpc-web",
+        "grpcio",
+        "grpcio-sys",
+        "prost-grpc",
+        "quinn",
+        "rcgen",
+        "rustls",
+        "serde-json",
+        "tonic",
+        "tonic-build",
+        "tonic-health",
+        "tonic-prost",
+        "tonic-prost-build",
+        "tonic-reflection",
+        "tonic-transport",
+        "tonic-web",
+        "tower-grpc",
+    }
+)
+
+EXEC_RUST_SOURCE_POLICIES: tuple[LinePolicy, ...] = (
+    LinePolicy(
+        "exec_concrete_runtime_binding",
+        re.compile(
+            r"\b(?:quinn|rcgen|rustls|tonic|grpc|grpcio|prost_grpc|tower_grpc)::"
+            r"|\bserde_json\b",
+            re.IGNORECASE,
+        ),
+        "andromeda-exec must not bind concrete Quinn/TLS/gRPC/JSON crates directly; use the runtime-quinn feature reexport through andromeda-quic.",
+    ),
+)
+
 GPU_CRITICAL_PATH_POLICIES: tuple[LinePolicy, ...] = (
     LinePolicy(
         "gpu_critical_path",
         re.compile(
-            r"\b(?:gpu|Gpu|GPU|cuda|cudarc|wgpu|opencl|OpenCL|rocm|ROCm|vulkan|Vulkan|metal)\b"
+            r"\b(?:gpu[A-Za-z0-9_]*|[A-Za-z0-9_]*_gpu[A-Za-z0-9_]*|cuda|cudarc|wgpu|opencl|rocm|vulkan|metal)\b",
+            re.IGNORECASE,
         ),
         "GPU references are forbidden in commit/WAL/recovery/MVCC/security critical-path sources.",
     ),
+)
+
+# This source scan is intentionally narrower than topology's security/ordinal
+# roots. For example, observe query code may classify GPU audit events, but GPU
+# code remains excluded from commit, WAL, recovery, MVCC, and durable security
+# enforcement roots.
+GPU_CRITICAL_RUST_PATH_PREFIXES: tuple[tuple[str, ...], ...] = (
+    ("crates", "andromeda-tx", "src"),
+    ("crates", "andromeda-core", "src", "principal"),
+    ("crates", "andromeda-observe", "src", "events", "durable_audit"),
+)
+GPU_STORAGE_CRITICAL_CHILD_DIRS = frozenset(
+    {
+        "buffer_pool",
+        "disk_manager",
+        "file_wal",
+        "heap",
+        "manifest",
+        "page",
+        "placement",
+        "recovery",
+        "storage_placement",
+        "wal_codec",
+        "write_ahead_log",
+    }
+)
+GPU_STORAGE_CRITICAL_FILES = frozenset(
+    {
+        "buffer_pool.rs",
+        "disk_manager.rs",
+        "heap.rs",
+        "manifest.rs",
+        "page.rs",
+        "restore_orchestration.rs",
+        "storage_placement.rs",
+    }
 )
 
 SRPL_SOURCE_POLICIES: tuple[LinePolicy, ...] = (
@@ -299,32 +429,66 @@ def is_gpu_critical_rust_path(path: Path, root: Path) -> bool:
     name = path.name.lower()
     stem = path.stem.lower()
 
-    if has_prefix(lower_parts, ("crates", "andromeda-tx", "src")):
+    if any(has_prefix(lower_parts, prefix) for prefix in GPU_CRITICAL_RUST_PATH_PREFIXES):
         return True
 
     if has_prefix(lower_parts, ("crates", "andromeda-storage", "src")):
-        if len(lower_parts) >= 4 and lower_parts[3] in {
-            "file_wal",
-            "recovery",
-            "wal_codec",
-            "write_ahead_log",
-        }:
+        if len(lower_parts) >= 4 and lower_parts[3] in GPU_STORAGE_CRITICAL_CHILD_DIRS:
             return True
-        if name in {"restore_orchestration.rs"}:
+        if name in GPU_STORAGE_CRITICAL_FILES:
             return True
         if stem.startswith("wal_") or stem.endswith("_wal") or "_wal_" in stem:
             return True
 
-    if has_prefix(lower_parts, ("crates", "andromeda-core", "src", "principal")):
-        return True
+    return False
 
-    if has_prefix(
-        lower_parts,
-        ("crates", "andromeda-observe", "src", "events", "durable_audit"),
+
+def is_gpu_boundary_evidence_line(path: Path, root: Path, line: str) -> bool:
+    """Allow policy-only GPU denial evidence in the modules that enforce it."""
+    lower_parts = tuple(part.lower() for part in rel_parts(path, root))
+    lowered_line = line.lower()
+
+    if lower_parts == (
+        "crates",
+        "andromeda-observe",
+        "src",
+        "events",
+        "durable_audit",
+        "event_mapping.rs",
     ):
-        return True
+        return "traceevent::gpupolicydecision" in lowered_line
+
+    if lower_parts == (
+        "crates",
+        "andromeda-storage",
+        "src",
+        "manifest",
+        "cold_publication.rs",
+    ):
+        return "gpu_enabled" in lowered_line or "must not enable gpu execution" in lowered_line
+
+    if lower_parts == (
+        "crates",
+        "andromeda-storage",
+        "src",
+        "placement",
+        "policy.rs",
+    ):
+        return any(
+            token in lowered_line
+            for token in ("use_gpu", "gpu_enabled", "validate_gpu_pipeline")
+        )
 
     return False
+
+
+def iter_gpu_critical_policy_lines(
+    path: Path, root: Path, text: str
+) -> Iterator[tuple[int, str]]:
+    for line_number, line in iter_rust_policy_lines(text):
+        if is_gpu_boundary_evidence_line(path, root, line):
+            continue
+        yield line_number, line
 
 
 def policy_scope(path: Path, root: Path) -> str | None:
@@ -451,14 +615,269 @@ def scan_policy_lines(
     return violations
 
 
-def scan_file(path: Path, root: Path) -> list[PolicyViolation]:
+def is_andromeda_exec_manifest(path: Path, root: Path) -> bool:
+    return rel_parts(path, root) == ("crates", "andromeda-exec", "Cargo.toml")
+
+
+def is_andromeda_exec_runtime_source_path(path: Path, root: Path) -> bool:
+    return path.suffix == ".rs" and has_prefix(
+        tuple(part.lower() for part in rel_parts(path, root)),
+        ("crates", "andromeda-exec", "src"),
+    )
+
+
+def normalized_dependency_name(value: str) -> str:
+    return value.strip().replace("_", "-").lower()
+
+
+def dependency_features(value: object) -> tuple[str, ...]:
+    if not isinstance(value, dict):
+        return ()
+    features = value.get("features", [])
+    if not isinstance(features, list):
+        return ()
+    return tuple(str(feature) for feature in features)
+
+
+def dependency_uses_workspace(value: object) -> bool:
+    if not isinstance(value, dict):
+        return False
+    return value.get("workspace") is True
+
+
+def dependency_package(name: str, value: object) -> str:
+    if isinstance(value, dict):
+        package = value.get("package")
+        if isinstance(package, str):
+            return package
+    return name
+
+
+def iter_dependency_table(
+    section: str, table: object
+) -> Iterator[ManifestDependency]:
+    if not isinstance(table, dict):
+        return
+    for name, value in table.items():
+        yield ManifestDependency(
+            section=section,
+            name=normalized_dependency_name(str(name)),
+            package=normalized_dependency_name(dependency_package(str(name), value)),
+            features=dependency_features(value),
+            uses_workspace=dependency_uses_workspace(value),
+        )
+
+
+def iter_manifest_dependencies(manifest: dict[str, object]) -> Iterator[ManifestDependency]:
+    for section in ("dependencies", "dev-dependencies", "build-dependencies"):
+        yield from iter_dependency_table(section, manifest.get(section, {}))
+
+    workspace = manifest.get("workspace", {})
+    if isinstance(workspace, dict):
+        yield from iter_dependency_table(
+            "workspace.dependencies", workspace.get("dependencies", {})
+        )
+
+    targets = manifest.get("target", {})
+    if not isinstance(targets, dict):
+        return
+    for target_name, target_table in targets.items():
+        if not isinstance(target_table, dict):
+            continue
+        for section in ("dependencies", "dev-dependencies", "build-dependencies"):
+            yield from iter_dependency_table(
+                f"target.{target_name}.{section}", target_table.get(section, {})
+            )
+
+
+def line_number_containing(text: str, *needles: str) -> int:
+    lowered_needles = tuple(needle.lower() for needle in needles)
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        lowered_line = line.lower().replace("_", "-")
+        if all(needle in lowered_line for needle in lowered_needles):
+            return line_number
+    return 1
+
+
+def dependency_policy_match(
+    dependency: ManifestDependency,
+    workspace_forbidden_aliases: Mapping[str, frozenset[str]],
+) -> tuple[ManifestDependencyPolicy, str] | None:
+    dependency_names = {dependency.name, dependency.package}
+    workspace_alias_codes = workspace_forbidden_aliases.get(dependency.name, frozenset())
+
+    for policy in MANIFEST_DEPENDENCY_POLICIES:
+        forbidden = sorted(dependency_names & policy.names)
+        if forbidden:
+            return policy, forbidden[0]
+        if dependency.uses_workspace and policy.code in workspace_alias_codes:
+            return policy, dependency.name
+    return None
+
+
+def scan_manifest_dependency_drift(
+    path: Path,
+    text: str,
+    workspace_forbidden_aliases: Mapping[str, frozenset[str]] | None = None,
+) -> list[PolicyViolation]:
+    if workspace_forbidden_aliases is None:
+        workspace_forbidden_aliases = {}
+    try:
+        manifest = tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return []
+
+    violations: list[PolicyViolation] = []
+    for dependency in iter_manifest_dependencies(manifest):
+        match = dependency_policy_match(dependency, workspace_forbidden_aliases)
+        if match is None:
+            continue
+        policy, dependency_name = match
+        violations.append(
+            PolicyViolation(
+                path=path,
+                line=line_number_containing(text, dependency.name, dependency_name),
+                code=policy.code,
+                message=policy.message,
+                scope="dependency-manifest",
+                excerpt=(
+                    f"{dependency.section}: {dependency.name}"
+                    f" package={dependency.package}"
+                    f" workspace={dependency.uses_workspace}"
+                ),
+            )
+        )
+    return violations
+
+
+def collect_workspace_forbidden_aliases(root: Path) -> dict[str, frozenset[str]]:
+    aliases: dict[str, set[str]] = {}
+    for path in sorted(root.rglob("Cargo.toml")):
+        if has_part(path, root, EXCLUDED_DIRS):
+            continue
+        try:
+            manifest = tomllib.loads(path.read_text(encoding="utf-8", errors="ignore"))
+        except tomllib.TOMLDecodeError:
+            continue
+        workspace = manifest.get("workspace", {})
+        if not isinstance(workspace, dict):
+            continue
+        dependencies = workspace.get("dependencies", {})
+        if not isinstance(dependencies, dict):
+            continue
+        for dependency in iter_dependency_table("workspace.dependencies", dependencies):
+            for policy in MANIFEST_DEPENDENCY_POLICIES:
+                dependency_names = {dependency.name, dependency.package}
+                if dependency_names & policy.names:
+                    aliases.setdefault(dependency.name, set()).add(policy.code)
+    return {name: frozenset(codes) for name, codes in aliases.items()}
+
+
+def deduplicate_violations(violations: Iterable[PolicyViolation]) -> list[PolicyViolation]:
+    deduped: list[PolicyViolation] = []
+    seen: set[tuple[Path, int, str, str]] = set()
+    for violation in violations:
+        key = (violation.path, violation.line, violation.code, violation.scope)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(violation)
+    return deduped
+
+
+def scan_andromeda_exec_manifest(path: Path, text: str) -> list[PolicyViolation]:
+    try:
+        manifest = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as exc:
+        return [
+            PolicyViolation(
+                path=path,
+                line=exc.lineno,
+                code="exec_manifest_parse_error",
+                message="andromeda-exec Cargo.toml must remain parseable for topology policy checks.",
+                scope="dependency-manifest",
+                excerpt=exc.msg,
+            )
+        ]
+
+    violations: list[PolicyViolation] = []
+    for dependency in iter_manifest_dependencies(manifest):
+        dependency_names = {dependency.name, dependency.package}
+        forbidden = sorted(dependency_names & EXEC_FORBIDDEN_DIRECT_DEPENDENCIES)
+        for dependency_name in forbidden:
+            violations.append(
+                PolicyViolation(
+                    path=path,
+                    line=line_number_containing(text, dependency_name),
+                    code="exec_concrete_runtime_dependency",
+                    message="andromeda-exec must not depend directly on Quinn/TLS/gRPC/JSON crates; runtime-quinn is only reexported through andromeda-quic.",
+                    scope="dependency-manifest",
+                    excerpt=f"{dependency.section}: {dependency_name}",
+                )
+            )
+
+        if "andromeda-quic" in dependency_names and "runtime-quinn" in dependency.features:
+            violations.append(
+                PolicyViolation(
+                    path=path,
+                    line=line_number_containing(text, "andromeda-quic", "runtime-quinn"),
+                    code="exec_runtime_quinn_dependency_feature",
+                    message="andromeda-exec must not enable andromeda-quic/runtime-quinn from a dependency entry; use its runtime-quinn feature reexport.",
+                    scope="dependency-manifest",
+                    excerpt=f"{dependency.section}: andromeda-quic features={dependency.features}",
+                )
+            )
+
+    features = manifest.get("features", {})
+    if not isinstance(features, dict):
+        features = {}
+    runtime_quinn = features.get("runtime-quinn")
+    if runtime_quinn != ["andromeda-quic/runtime-quinn"]:
+        violations.append(
+            PolicyViolation(
+                path=path,
+                line=line_number_containing(text, "runtime-quinn"),
+                code="exec_runtime_quinn_feature",
+                message="andromeda-exec runtime-quinn feature must reexport exactly andromeda-quic/runtime-quinn.",
+                scope="dependency-manifest",
+                excerpt=str(runtime_quinn),
+            )
+        )
+
+    default_features = features.get("default", [])
+    if isinstance(default_features, list) and "runtime-quinn" in default_features:
+        violations.append(
+            PolicyViolation(
+                path=path,
+                line=line_number_containing(text, "default", "runtime-quinn"),
+                code="exec_runtime_quinn_default",
+                message="andromeda-exec runtime-quinn must remain non-default.",
+                scope="dependency-manifest",
+                excerpt=str(default_features),
+            )
+        )
+
+    return violations
+
+
+def scan_file(
+    path: Path,
+    root: Path,
+    workspace_forbidden_aliases: Mapping[str, frozenset[str]] | None = None,
+) -> list[PolicyViolation]:
     scope = policy_scope(path, root)
     if scope is None:
         return []
 
     text = path.read_text(encoding="utf-8", errors="ignore")
     if scope == "dependency-manifest":
-        return scan_policy_lines(path, scope, iter_manifest_lines(text), MANIFEST_POLICIES)
+        violations = scan_policy_lines(path, scope, iter_manifest_lines(text), MANIFEST_POLICIES)
+        violations.extend(
+            scan_manifest_dependency_drift(path, text, workspace_forbidden_aliases)
+        )
+        if is_andromeda_exec_manifest(path, root):
+            violations.extend(scan_andromeda_exec_manifest(path, text))
+        return deduplicate_violations(violations)
     if scope == "protocol-schema":
         return scan_policy_lines(path, scope, iter_non_comment_lines(text, "//"), PROTO_POLICIES)
     if scope == "srpl-source-artifact":
@@ -467,12 +886,21 @@ def scan_file(path: Path, root: Path) -> list[PolicyViolation]:
         violations = scan_policy_lines(
             path, scope, iter_rust_policy_lines(text), RUST_SOURCE_POLICIES
         )
+        if is_andromeda_exec_runtime_source_path(path, root):
+            violations.extend(
+                scan_policy_lines(
+                    path,
+                    "exec-runtime-rust-source",
+                    iter_rust_policy_lines(text),
+                    EXEC_RUST_SOURCE_POLICIES,
+                )
+            )
         if is_gpu_critical_rust_path(path, root):
             violations.extend(
                 scan_policy_lines(
                     path,
                     "gpu-critical-rust-source",
-                    iter_rust_policy_lines(text),
+                    iter_gpu_critical_policy_lines(path, root, text),
                     GPU_CRITICAL_PATH_POLICIES,
                 )
             )
@@ -482,10 +910,11 @@ def scan_file(path: Path, root: Path) -> list[PolicyViolation]:
 
 def run_policy_gate(root: Path | str = Path.cwd()) -> list[PolicyViolation]:
     root = Path(root).resolve()
+    workspace_forbidden_aliases = collect_workspace_forbidden_aliases(root)
     violations: list[PolicyViolation] = []
     for path in sorted(root.rglob("*")):
         if path.is_file():
-            violations.extend(scan_file(path, root))
+            violations.extend(scan_file(path, root, workspace_forbidden_aliases))
     return violations
 
 

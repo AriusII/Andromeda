@@ -198,6 +198,9 @@ pub use generated::{
     validate_generated_rpc_batch, validate_generated_rpc_completion,
     validate_generated_rpc_execute_request, validate_generated_rpc_metadata,
 };
+pub use generated_validation::{
+    project_generated_structured_object_header, validate_generated_structured_object_header,
+};
 pub use manifest::*;
 pub use payload::*;
 pub use structured::*;

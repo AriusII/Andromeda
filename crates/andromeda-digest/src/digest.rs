@@ -190,6 +190,23 @@ mod tests {
         output
     }
 
+    fn push_len_prefixed(bytes: &mut Vec<u8>, value: &[u8]) {
+        bytes.extend_from_slice(&(value.len() as u64).to_le_bytes());
+        bytes.extend_from_slice(value);
+    }
+
+    fn len_prefixed_fields(fields: &[&[u8]]) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        for field in fields {
+            push_len_prefixed(&mut bytes, field);
+        }
+        bytes
+    }
+
+    fn domain_separated_bytes(label: &[u8], payload: &[u8]) -> Vec<u8> {
+        len_prefixed_fields(&[label, payload])
+    }
+
     #[test]
     fn sha256_matches_fips_test_vector_empty() {
         assert_eq!(
@@ -228,5 +245,57 @@ mod tests {
         let streamed = streaming.finalize();
 
         assert_eq!(one_shot, streamed);
+    }
+
+    #[test]
+    fn sha256_hashes_explicit_canonical_byte_input() {
+        let mut canonical = Vec::new();
+        push_len_prefixed(&mut canonical, b"andromeda.digest.test.canonical.v1.sha256");
+        canonical.extend_from_slice(&42u64.to_le_bytes());
+        canonical.extend_from_slice(&[1]);
+        push_len_prefixed(&mut canonical, b"stable-name");
+        canonical.extend_from_slice(&0x01020304u32.to_le_bytes());
+
+        assert_eq!(
+            hex(&sha256(&canonical)),
+            "9c6d2d0104124b0ab4e65e81dbf8c4c0a6b270cb72b65ea221d2e6e0c632509a"
+        );
+    }
+
+    #[test]
+    fn canonical_length_prefixes_avoid_concatenation_aliases() {
+        let left = len_prefixed_fields(&[b"ab", b"c"]);
+        let right = len_prefixed_fields(&[b"a", b"bc"]);
+
+        assert_eq!([b"ab".as_slice(), b"c".as_slice()].concat(), b"abc");
+        assert_eq!([b"a".as_slice(), b"bc".as_slice()].concat(), b"abc");
+        assert_ne!(left, right);
+        assert_eq!(
+            hex(&sha256(&left)),
+            "43ee655579de01ca739b3f95c1c2d3f46d353b2c0df818064ea594506cdb2617"
+        );
+        assert_eq!(
+            hex(&sha256(&right)),
+            "9a8acca1b6c6c0befd3fbc756aed625da998c998f7252e738c4ef061906b9b21"
+        );
+    }
+
+    #[test]
+    fn domain_separation_labels_change_digest_for_same_payload() {
+        let payload = b"same-payload";
+        let domain_a = domain_separated_bytes(b"andromeda.digest.test.domain-a.v1.sha256", payload);
+        let domain_b = domain_separated_bytes(b"andromeda.digest.test.domain-b.v1.sha256", payload);
+
+        assert_ne!(domain_a, domain_b);
+        assert_ne!(sha256(&domain_a), sha256(payload));
+        assert_ne!(sha256(&domain_a), sha256(&domain_b));
+        assert_eq!(
+            hex(&sha256(&domain_a)),
+            "44e87944bdc5767a21f1e169c41ba47dbca3ec489e853bc0af17d9673b3297db"
+        );
+        assert_eq!(
+            hex(&sha256(&domain_b)),
+            "6bcaebd6d0a19d94eece10bd3c7ddd2c9a9f3049f2191825a9a6a6665dd92ff3"
+        );
     }
 }

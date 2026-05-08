@@ -5,7 +5,8 @@ use andromeda_wal::{
     WAL_FORMAT_VERSION_V1, WAL_RECORD_HEADER_LEN, WAL_RECORD_MAGIC, WalFrameHeader, WalRecord,
     WalRecordHeader, WalRecordKind, WalScanResult, WalScanStop, WalScanStopReason, WalSegment,
     WalSegmentDescriptor, decode_frame_header, decode_wal_record_frame, encode_wal_record,
-    scan_file_wal, scan_wal_records, scan_wal_records_from, wal_record_checksum,
+    encoded_wal_record_len, scan_file_wal, scan_wal_records, scan_wal_records_from,
+    wal_record_checksum,
 };
 
 #[test]
@@ -42,6 +43,10 @@ fn root_exports_cover_pure_wal_primitives_and_codec_roundtrip() {
     assert_eq!(
         encoded.len(),
         WAL_RECORD_HEADER_LEN + record.payload().len()
+    );
+    assert_eq!(
+        encoded_wal_record_len(&record).unwrap(),
+        encoded.len() as u64
     );
 
     let frame_header: WalFrameHeader = decode_frame_header(&encoded).unwrap();

@@ -6,7 +6,7 @@ use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_types::{CatalogObjectId, CatalogVersion, ContractHash, ProcedureId};
 
 use crate::{
-    ProcedureAst, SrplProcedureContractMetadata, SrplProcedureIr, SrplSource,
+    ProcedureAst, SrplDiagnostic, SrplProcedureContractMetadata, SrplProcedureIr, SrplSource,
     lowering::{lower_bound_procedure, lower_ir_to_catalog_definition},
     procedure_compiler::parse_procedure_signature,
 };
@@ -40,33 +40,26 @@ impl SrplProcedureDefinition {
     /// Parse SRPL source to AST.
     ///
     /// This is the first compilation phase: lexer -> parser.
-    /// On success, populates `parsed_ast`. On failure, returns a diagnostic.
-    pub fn parse(&mut self) -> AndromedaResult<()> {
+    /// On success, populates `parsed_ast`. On failure, returns the structured
+    /// staged diagnostic with its phase and source span intact.
+    pub fn parse_staged(&mut self) -> Result<(), SrplDiagnostic> {
         if let Some(diagnostic) = SrplSource::new(&self.srpl_source)
             .forbidden_construct_diagnostics()
             .into_iter()
             .next()
         {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Srpl,
-                format!(
-                    "SRPL core-language rejection during parsing: {:?}: {} at {:?}",
-                    diagnostic.phase, diagnostic.message, diagnostic.location
-                ),
-            ));
+            return Err(diagnostic);
         }
 
-        let ast = parse_procedure_signature(&self.srpl_source).map_err(|diagnostic| {
-            AndromedaError::new(
-                AndromedaErrorKind::Srpl,
-                format!(
-                    "SRPL syntax error during parsing: {} at {:?}",
-                    diagnostic.message, diagnostic.location
-                ),
-            )
-        })?;
+        let ast = parse_procedure_signature(&self.srpl_source)?;
         self.parsed_ast = Some(ast);
         Ok(())
+    }
+
+    /// Parse SRPL source to AST and map the structured staged diagnostic into
+    /// the crate-wide error type for legacy callers.
+    pub fn parse(&mut self) -> AndromedaResult<()> {
+        self.parse_staged().map_err(staged_parse_error)
     }
 
     /// Bind AST to typed procedure and lower to IR.
@@ -164,6 +157,21 @@ impl SrplProcedureDefinition {
 
         lower_ir_to_catalog_definition(ir, metadata)
     }
+}
+
+fn staged_parse_error(diagnostic: SrplDiagnostic) -> AndromedaError {
+    let location = diagnostic
+        .location
+        .map(|span| format!(" at byte {}..{}", span.start, span.end))
+        .unwrap_or_default();
+
+    AndromedaError::new(
+        AndromedaErrorKind::Srpl,
+        format!(
+            "SRPL staged parse diagnostic during {:?}: {}{}",
+            diagnostic.phase, diagnostic.message, location
+        ),
+    )
 }
 
 #[cfg(test)]

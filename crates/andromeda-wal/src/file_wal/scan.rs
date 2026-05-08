@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-    Lsn, WalRecord, WalScanResult, WalScanStop, WalScanStopReason, encode_wal_record,
+    Lsn, WalRecord, WalScanResult, WalScanStop, WalScanStopReason, encoded_wal_record_len,
     scan_wal_records,
 };
 
@@ -80,7 +80,7 @@ pub(super) fn record_boundaries_for(
     let mut offset = 0u64;
     let mut boundaries = Vec::with_capacity(records.len());
     for record in records {
-        let encoded_len = encode_wal_record(record)?.len() as u64;
+        let encoded_len = encoded_wal_record_len(record)?;
         offset = offset
             .checked_add(encoded_len)
             .ok_or_else(|| storage_error("file WAL record boundary would overflow u64"))?;

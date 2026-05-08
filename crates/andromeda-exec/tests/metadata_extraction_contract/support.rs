@@ -12,8 +12,9 @@ pub use andromeda_exec::{DefaultResultMetadataExtractor, ResultMetadataExtractor
 pub use andromeda_srpl::{
     Cardinality,
     procedure_model::{
-        BoundSrplBodyPlan, BoundSrplOperationPlan, ExecutableProcedurePlan,
-        SrplCatalogBindingEvidence, SrplEmitValueIr, SrplPredicateIr, SrplValueIr,
+        BoundSrplBodyPlan, BoundSrplOperationPlan, ConstantLiteral, ExecutableProcedurePlan,
+        SrplAssignmentIr, SrplCatalogBindingEvidence, SrplEmitValueIr, SrplPredicateIr,
+        SrplValueIr,
     },
 };
 
@@ -71,5 +72,12 @@ pub(crate) fn make_table_ref() -> CatalogObjectRef {
         name: QualifiedName::parse("test.table").unwrap(),
         kind: andromeda_catalog::ObjectKind::Table,
         catalog_version: make_catalog_version(),
+    }
+}
+
+pub(crate) fn make_assignment() -> SrplAssignmentIr {
+    SrplAssignmentIr {
+        field: "quantity".to_string(),
+        value: SrplValueIr::Constant(ConstantLiteral::Int64(1)),
     }
 }

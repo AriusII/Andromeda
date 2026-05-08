@@ -151,3 +151,94 @@ pub(crate) fn publish(
         )
         .unwrap();
 }
+
+#[test]
+fn publication_digest_and_summary_are_bound_to_stats_version() {
+    let v21 = publication(21, 90);
+    let v21_again = publication(21, 90);
+    let v22_same_histogram = publication(22, 90);
+
+    assert_eq!(v21.digest(), v21_again.digest());
+    assert_ne!(
+        v21.digest(),
+        v22_same_histogram.digest(),
+        "StatsVersion must participate in the published statistics digest"
+    );
+
+    let summary = v21.summary();
+    assert_eq!(summary.catalog_version, CatalogVersion::new(2));
+    assert_eq!(summary.version, StatsVersion::new(21));
+    assert_eq!(summary.digest, v21.digest());
+    assert_eq!(summary.entry_count, 1);
+}
+
+#[test]
+fn switch_publishes_successor_stats_version_with_traceable_digest() {
+    let mut switch = StatsPublicationSwitch::new();
+    let first = publication(31, 91);
+    let first_summary = first.summary();
+    publish(&mut switch, first, 4_000);
+
+    let successor = publication(32, 91);
+    let successor_summary = successor.summary();
+    assert_ne!(
+        first_summary.digest, successor_summary.digest,
+        "successor StatsVersion should carry a distinct publication digest"
+    );
+
+    let staged = switch
+        .stage_candidate(
+            successor,
+            TraceId::new(4_100),
+            "successor statistics candidate staged after collection",
+        )
+        .unwrap();
+    assert_eq!(staged.active_before, Some(first_summary));
+    assert_eq!(staged.candidate, Some(successor_summary));
+    assert_eq!(staged.active_after, Some(first_summary));
+    assert!(!staged.active_changed());
+    assert_eq!(switch.active().unwrap().summary(), first_summary);
+
+    let validated = switch
+        .validate_candidate(
+            TraceId::new(4_101),
+            "successor statistics candidate passed validation",
+        )
+        .unwrap();
+    assert_eq!(validated.active_after, Some(first_summary));
+    assert_eq!(switch.active().unwrap().summary(), first_summary);
+
+    let published = switch
+        .publish_validated_candidate(
+            TraceId::new(4_102),
+            canonical_evidence(4_202),
+            "successor StatsVersion published after canonical validation",
+        )
+        .unwrap();
+
+    assert_eq!(published.active_before, Some(first_summary));
+    assert_eq!(published.candidate, Some(successor_summary));
+    assert_eq!(published.active_after, Some(successor_summary));
+    assert!(published.active_changed());
+    assert_eq!(switch.active().unwrap().summary(), successor_summary);
+    assert!(
+        published
+            .reason
+            .contains("active_before=catalog_version:2,version:31")
+    );
+    assert!(
+        published
+            .reason
+            .contains("candidate=catalog_version:2,version:32")
+    );
+    assert!(
+        published
+            .reason
+            .contains("active_after=catalog_version:2,version:32")
+    );
+    assert!(
+        published
+            .reason
+            .contains("decision_evidence=kind:CanonicalValidation")
+    );
+}

@@ -5,25 +5,29 @@ use crate::{EventEnvelope, TraceEvent};
 
 pub(super) fn matches_filter(envelope: &EventEnvelope, spec: &TraceQuerySpec) -> bool {
     let filter = &spec.filter;
-    if let Some(trace_id) = filter.trace_id
-        && envelope.trace_id != trace_id
-    {
-        return false;
+    match filter.trace_id {
+        Some(trace_id) if envelope.trace_id != trace_id => {
+            return false;
+        }
+        _ => {}
     }
-    if let Some(family) = filter.family
-        && TraceEventFamily::of(&envelope.event) != family
-    {
-        return false;
+    match filter.family {
+        Some(family) if TraceEventFamily::of(&envelope.event) != family => {
+            return false;
+        }
+        _ => {}
     }
-    if let Some(range) = filter.lsn_range
-        && !matches_lsn_range(envelope, range)
-    {
-        return false;
+    match filter.lsn_range {
+        Some(range) if !matches_lsn_range(envelope, range) => {
+            return false;
+        }
+        _ => {}
     }
-    if let Some(catalog_version) = filter.catalog_version
-        && envelope.correlation.catalog_version != Some(catalog_version)
-    {
-        return false;
+    match filter.catalog_version {
+        Some(catalog_version) if envelope.correlation.catalog_version != Some(catalog_version) => {
+            return false;
+        }
+        _ => {}
     }
     if let Some(procedure_id) = filter.procedure_id {
         let expected = CatalogObjectId::new(procedure_id.get());
@@ -31,10 +35,11 @@ pub(super) fn matches_filter(envelope: &EventEnvelope, spec: &TraceQuerySpec) ->
             return false;
         }
     }
-    if let Some(principal) = &filter.principal
-        && principal_of(&envelope.event) != Some(principal.as_str())
-    {
-        return false;
+    match &filter.principal {
+        Some(principal) if principal_of(&envelope.event) != Some(principal.as_str()) => {
+            return false;
+        }
+        _ => {}
     }
     true
 }

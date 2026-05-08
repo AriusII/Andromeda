@@ -1,4 +1,4 @@
-use crate::{PermissionFamily, SecuritySurface};
+use crate::{Permission, PermissionFamily, SecurityContractError, SecuritySurface};
 
 pub const SECURITY_ADMISSION_V0_CONTRACT_ID: &str = "andromeda.security.admission.v0";
 pub const SECURITY_ADMISSION_V0_SCHEMA_VERSION: u16 = 0;
@@ -264,6 +264,297 @@ impl core::fmt::Display for SecurityAdmissionBoundaryV0 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str(self.as_str())
     }
+}
+
+pub const SURFACE_CLASS_ID_APPLICATION: &str = "application";
+pub const SURFACE_CLASS_ID_ADMINISTRATION: &str = "administration";
+pub const SURFACE_CLASS_ID_HADR: &str = "hadr";
+pub const SURFACE_CLASS_ID_RECOVERY: &str = "recovery";
+pub const SURFACE_CLASS_ID_FORENSIC: &str = "forensic";
+pub const SURFACE_CLASS_ID_MONITORING: &str = "monitoring";
+
+/// Runtime-free class of work requested before dispatch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SurfaceClass {
+    Application,
+    Administration,
+    Hadr,
+    Recovery,
+    Forensic,
+    Monitoring,
+}
+
+pub const ALL_SURFACE_CLASSES: [SurfaceClass; 6] = [
+    SurfaceClass::Application,
+    SurfaceClass::Administration,
+    SurfaceClass::Hadr,
+    SurfaceClass::Recovery,
+    SurfaceClass::Forensic,
+    SurfaceClass::Monitoring,
+];
+
+impl SurfaceClass {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Application => SURFACE_CLASS_ID_APPLICATION,
+            Self::Administration => SURFACE_CLASS_ID_ADMINISTRATION,
+            Self::Hadr => SURFACE_CLASS_ID_HADR,
+            Self::Recovery => SURFACE_CLASS_ID_RECOVERY,
+            Self::Forensic => SURFACE_CLASS_ID_FORENSIC,
+            Self::Monitoring => SURFACE_CLASS_ID_MONITORING,
+        }
+    }
+
+    pub fn from_code(code: &str) -> Option<Self> {
+        match code {
+            SURFACE_CLASS_ID_APPLICATION => Some(Self::Application),
+            SURFACE_CLASS_ID_ADMINISTRATION => Some(Self::Administration),
+            SURFACE_CLASS_ID_HADR => Some(Self::Hadr),
+            SURFACE_CLASS_ID_RECOVERY => Some(Self::Recovery),
+            SURFACE_CLASS_ID_FORENSIC => Some(Self::Forensic),
+            SURFACE_CLASS_ID_MONITORING => Some(Self::Monitoring),
+            _ => None,
+        }
+    }
+
+    pub const fn is_application_work(self) -> bool {
+        matches!(self, Self::Application)
+    }
+
+    pub const fn is_privileged_work(self) -> bool {
+        !self.is_application_work()
+    }
+
+    pub const fn permits_surface(self, surface: SecuritySurface) -> bool {
+        match self {
+            Self::Application => matches!(surface, SecuritySurface::Application),
+            Self::Administration => matches!(surface, SecuritySurface::Administration),
+            Self::Hadr => matches!(surface, SecuritySurface::Cluster),
+            Self::Recovery | Self::Forensic => {
+                matches!(
+                    surface,
+                    SecuritySurface::Administration | SecuritySurface::BackupAgent
+                )
+            }
+            Self::Monitoring => matches!(surface, SecuritySurface::MonitoringAgent),
+        }
+    }
+
+    pub const fn permits_permission(self, permission: Permission) -> bool {
+        match self {
+            Self::Application => matches!(permission.family(), PermissionFamily::Application),
+            Self::Administration => matches!(
+                permission.family(),
+                PermissionFamily::Definition
+                    | PermissionFamily::Diagnostics
+                    | PermissionFamily::Security
+            ),
+            Self::Hadr => matches!(permission.family(), PermissionFamily::Cluster),
+            Self::Recovery => matches!(permission, Permission::Backup | Permission::Restore),
+            Self::Forensic => matches!(permission, Permission::ForensicStart),
+            Self::Monitoring => matches!(permission.family(), PermissionFamily::Diagnostics),
+        }
+    }
+}
+
+impl core::fmt::Display for SurfaceClass {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Validated permission request after surface class and permission boundaries match.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PermissionRequest {
+    surface: SecuritySurface,
+    class: SurfaceClass,
+    permission: Permission,
+}
+
+impl PermissionRequest {
+    pub const fn new(
+        surface: SecuritySurface,
+        class: SurfaceClass,
+        permission: Permission,
+    ) -> Result<Self, SecurityContractError> {
+        match validate_permission_request(surface, class, permission) {
+            Ok(()) => Ok(Self {
+                surface,
+                class,
+                permission,
+            }),
+            Err(error) => Err(error),
+        }
+    }
+
+    pub const fn surface(self) -> SecuritySurface {
+        self.surface
+    }
+
+    pub const fn class(self) -> SurfaceClass {
+        self.class
+    }
+
+    pub const fn permission(self) -> Permission {
+        self.permission
+    }
+
+    pub const fn is_application_work(self) -> bool {
+        matches!(self.surface, SecuritySurface::Application)
+            && self.class.is_application_work()
+            && matches!(self.permission.family(), PermissionFamily::Application)
+    }
+}
+
+/// Runtime-free surface and permission admission decision.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct AdmissionDecision {
+    surface: SecuritySurface,
+    class: SurfaceClass,
+    permission: Permission,
+    outcome: SecurityAdmissionOutcomeV0,
+    reason_code: SecurityAdmissionReasonCodeV0,
+}
+
+impl AdmissionDecision {
+    pub const fn evaluate(
+        surface: SecuritySurface,
+        class: SurfaceClass,
+        permission: Permission,
+    ) -> Self {
+        match validate_permission_request(surface, class, permission) {
+            Ok(()) => Self {
+                surface,
+                class,
+                permission,
+                outcome: SecurityAdmissionOutcomeV0::Allowed,
+                reason_code: SecurityAdmissionReasonCodeV0::Satisfied,
+            },
+            Err(SecurityContractError::SurfaceClassBoundaryMismatch) => Self::denied(
+                surface,
+                class,
+                permission,
+                SecurityAdmissionReasonCodeV0::BoundaryPlaneMismatch,
+            ),
+            Err(SecurityContractError::SurfacePermissionBoundaryMismatch) => Self::denied(
+                surface,
+                class,
+                permission,
+                SecurityAdmissionReasonCodeV0::SurfacePermissionBoundaryMismatch,
+            ),
+            Err(_) => Self::denied(
+                surface,
+                class,
+                permission,
+                SecurityAdmissionReasonCodeV0::InvalidEvidenceShape,
+            ),
+        }
+    }
+
+    pub const fn admitted(request: PermissionRequest) -> Self {
+        Self {
+            surface: request.surface(),
+            class: request.class(),
+            permission: request.permission(),
+            outcome: SecurityAdmissionOutcomeV0::Allowed,
+            reason_code: SecurityAdmissionReasonCodeV0::Satisfied,
+        }
+    }
+
+    const fn denied(
+        surface: SecuritySurface,
+        class: SurfaceClass,
+        permission: Permission,
+        reason_code: SecurityAdmissionReasonCodeV0,
+    ) -> Self {
+        Self {
+            surface,
+            class,
+            permission,
+            outcome: SecurityAdmissionOutcomeV0::Denied,
+            reason_code,
+        }
+    }
+
+    pub const fn surface(self) -> SecuritySurface {
+        self.surface
+    }
+
+    pub const fn class(self) -> SurfaceClass {
+        self.class
+    }
+
+    pub const fn permission(self) -> Permission {
+        self.permission
+    }
+
+    pub const fn outcome(self) -> SecurityAdmissionOutcomeV0 {
+        self.outcome
+    }
+
+    pub const fn reason_code(self) -> SecurityAdmissionReasonCodeV0 {
+        self.reason_code
+    }
+
+    pub const fn is_admitted(self) -> bool {
+        matches!(self.outcome, SecurityAdmissionOutcomeV0::Allowed)
+    }
+
+    pub const fn is_denied(self) -> bool {
+        !self.is_admitted()
+    }
+
+    pub const fn request(self) -> Option<PermissionRequest> {
+        if self.is_admitted() {
+            Some(PermissionRequest {
+                surface: self.surface,
+                class: self.class,
+                permission: self.permission,
+            })
+        } else {
+            None
+        }
+    }
+
+    pub const fn security_admission_v0(self) -> SecurityAdmissionV0 {
+        if self.is_admitted() {
+            SecurityAdmissionV0::allowed(
+                SecurityAdmissionStepV0::PermissionBoundary,
+                SecurityAdmissionEvidenceCodeV0::PermissionFamily,
+            )
+        } else {
+            match self.reason_code {
+                SecurityAdmissionReasonCodeV0::BoundaryPlaneMismatch => {
+                    SecurityAdmissionV0::denied(
+                        SecurityAdmissionStepV0::SurfaceBoundary,
+                        SecurityAdmissionEvidenceCodeV0::SurfaceBoundary,
+                        self.reason_code,
+                    )
+                }
+                _ => SecurityAdmissionV0::denied(
+                    SecurityAdmissionStepV0::PermissionBoundary,
+                    SecurityAdmissionEvidenceCodeV0::PermissionFamily,
+                    self.reason_code,
+                ),
+            }
+        }
+    }
+}
+
+const fn validate_permission_request(
+    surface: SecuritySurface,
+    class: SurfaceClass,
+    permission: Permission,
+) -> Result<(), SecurityContractError> {
+    if !class.permits_surface(surface) {
+        return Err(SecurityContractError::SurfaceClassBoundaryMismatch);
+    }
+
+    if !surface.permits_permission(permission) || !class.permits_permission(permission) {
+        return Err(SecurityContractError::SurfacePermissionBoundaryMismatch);
+    }
+
+    Ok(())
 }
 
 /// Runtime-free V0 admission artifact containing only stable codes.

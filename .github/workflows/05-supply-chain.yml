@@ -3,10 +3,10 @@ name: 05 - Supply Chain
 on:
   pull_request:
     branches: [ main ]
-    paths: [ "Cargo.toml", "Cargo.lock", "deny.toml", ".github/workflows/05-supply-chain.yml" ]
+    paths: [ "Cargo.toml", "Cargo.lock", "crates/**/Cargo.toml", "deny.toml", ".github/workflows/05-supply-chain.yml", "documentations/governance/supply-chain-policy.md" ]
   push:
     branches: [ main ]
-    paths: [ "Cargo.toml", "Cargo.lock", "deny.toml", ".github/workflows/05-supply-chain.yml" ]
+    paths: [ "Cargo.toml", "Cargo.lock", "crates/**/Cargo.toml", "deny.toml", ".github/workflows/05-supply-chain.yml", "documentations/governance/supply-chain-policy.md" ]
   schedule:
     - cron: "41 2 * * 2"
   workflow_dispatch:
@@ -41,3 +41,18 @@ jobs:
         with:
           command: check
           arguments: --all-features
+
+  cargo-vet-status:
+    name: cargo-vet decision status
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - name: Record cargo-vet status
+        shell: bash
+        run: |
+          if [[ -f supply-chain/config.toml || -f cargo-vet.toml || -d .cargo-vet ]]; then
+            echo "::notice::cargo-vet configuration detected; wire this workflow to the accepted vet command before treating release evidence as complete."
+          else
+            echo "::notice::cargo-vet is planned, not a mandatory blocker; no cargo-vet config exists in this repository yet."
+          fi

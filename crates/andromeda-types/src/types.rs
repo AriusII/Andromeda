@@ -23,7 +23,7 @@
 //! Types validate:
 //! - Decimal precision/scale relationships
 //! - Float determinism constraints
-//! - Text encoding and length constraints
+//! - Text encoding, length, and collation constraints
 //! - Per-column name non-emptiness
 //!
 //! Callers that own a column collection validate cross-column rules such as
@@ -74,6 +74,29 @@ pub enum FloatType {
 }
 
 impl FloatType {
+    pub fn validate(self) -> AndromedaResult<()> {
+        match self {
+            Self::Custom { bits, mode } => {
+                if !matches!(bits, 16 | 32 | 64 | 128) {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Contract,
+                        "custom float bits must be one of 16, 32, 64, or 128",
+                    ));
+                }
+
+                if mode != FloatMode::DeterministicAnalytics {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Contract,
+                        "custom float mode must be deterministic",
+                    ));
+                }
+
+                Ok(())
+            }
+            _ => Ok(()),
+        }
+    }
+
     pub const fn can_back_exact_invariant(self) -> bool {
         false
     }
@@ -99,6 +122,15 @@ impl TextType {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Contract,
                 "text max length must be positive when present",
+            ));
+        }
+
+        if let Some(collation) = &self.collation
+            && collation.trim().is_empty()
+        {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "text collation must not be empty when present",
             ));
         }
 
@@ -162,11 +194,17 @@ impl TypeDescriptor {
     pub fn validate(&self) -> AndromedaResult<()> {
         match &self.scalar {
             ScalarType::Decimal(decimal) => decimal.validate(),
-            ScalarType::Float(float) if float.can_back_exact_invariant() => {
-                Err(AndromedaError::new(
-                    AndromedaErrorKind::Contract,
-                    "float types must not back exact relational invariants",
-                ))
+            ScalarType::Float(float) => {
+                float.validate()?;
+
+                if float.can_back_exact_invariant() {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Contract,
+                        "float types must not back exact relational invariants",
+                    ));
+                }
+
+                Ok(())
             }
             ScalarType::Text(text) => text.validate(),
             _ => Ok(()),
@@ -216,6 +254,121 @@ mod tests {
             .validate(),
             Err(error) if error.kind() == AndromedaErrorKind::Contract
         ));
+    }
+
+    #[test]
+    fn decimal_custom_rejects_zero_precision_through_type_descriptor() {
+        assert!(matches!(
+            TypeDescriptor::required(ScalarType::Decimal(DecimalType::Custom {
+                precision: 0,
+                scale: 0,
+            }))
+            .validate(),
+            Err(error) if error.kind() == AndromedaErrorKind::Contract
+        ));
+    }
+
+    #[test]
+    fn float_custom_deterministic_ieee_width_is_checked() {
+        assert!(
+            FloatType::Custom {
+                bits: 64,
+                mode: FloatMode::DeterministicAnalytics,
+            }
+            .validate()
+            .is_ok()
+        );
+        assert!(
+            TypeDescriptor::required(ScalarType::Float(FloatType::Custom {
+                bits: 32,
+                mode: FloatMode::DeterministicAnalytics,
+            }))
+            .validate()
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn float_custom_rejects_unbounded_or_approximate_shapes() {
+        assert!(matches!(
+            FloatType::Custom {
+                bits: 0,
+                mode: FloatMode::DeterministicAnalytics,
+            }
+            .validate(),
+            Err(error) if error.kind() == AndromedaErrorKind::Contract
+        ));
+        assert!(matches!(
+            FloatType::Custom {
+                bits: 24,
+                mode: FloatMode::DeterministicAnalytics,
+            }
+            .validate(),
+            Err(error) if error.kind() == AndromedaErrorKind::Contract
+        ));
+        assert!(matches!(
+            FloatType::Custom {
+                bits: 64,
+                mode: FloatMode::Approximate,
+            }
+            .validate(),
+            Err(error) if error.kind() == AndromedaErrorKind::Contract
+        ));
+        assert!(matches!(
+            TypeDescriptor::required(ScalarType::Float(FloatType::Custom {
+                bits: 256,
+                mode: FloatMode::Approximate,
+            }))
+            .validate(),
+            Err(error) if error.kind() == AndromedaErrorKind::Contract
+        ));
+    }
+
+    #[test]
+    fn text_bounds_and_collation_are_checked() {
+        assert!(
+            TypeDescriptor::required(ScalarType::Text(TextType {
+                encoding: TextEncoding::Utf8,
+                max_length: Some(128),
+                collation: Some("unicode:case-sensitive".to_string()),
+            }))
+            .validate()
+            .is_ok()
+        );
+
+        assert!(matches!(
+            TypeDescriptor::required(ScalarType::Text(TextType {
+                encoding: TextEncoding::Utf8,
+                max_length: Some(0),
+                collation: None,
+            }))
+            .validate(),
+            Err(error) if error.kind() == AndromedaErrorKind::Contract
+        ));
+
+        assert!(matches!(
+            TypeDescriptor::required(ScalarType::Text(TextType {
+                encoding: TextEncoding::Utf16,
+                max_length: Some(64),
+                collation: Some("  ".to_string()),
+            }))
+            .validate(),
+            Err(error) if error.kind() == AndromedaErrorKind::Contract
+        ));
+    }
+
+    #[test]
+    fn absence_policy_is_explicit_contract_shape() {
+        let required = TypeDescriptor::required(ScalarType::I64);
+        let optional = TypeDescriptor::optional(ScalarType::I64);
+
+        assert_eq!(required.absence, AbsencePolicy::Required);
+        assert_eq!(optional.absence, AbsencePolicy::ExplicitOptional);
+        assert_eq!(required.scalar, optional.scalar);
+        assert!(required.validate().is_ok());
+        assert!(optional.validate().is_ok());
+        assert!(!required.scalar.permits_silent_conversion());
+        assert!(!optional.scalar.permits_silent_conversion());
     }
 
     #[test]

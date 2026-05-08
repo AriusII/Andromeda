@@ -192,7 +192,7 @@ fn ct_022_update_then_emit_does_not_use_affected_rows_as_result_rows() {
         ordinal: 0,
         target: make_table_ref(),
         predicates: vec![],
-        assignments: vec![],
+        assignments: vec![make_assignment()],
         affected_rows_exact: Some(42),
     });
 

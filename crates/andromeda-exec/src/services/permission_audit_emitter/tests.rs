@@ -82,8 +82,8 @@ fn test_decision_trace_conversion() {
 }
 
 #[test]
-fn test_noop_emitter_accepts_all_events() {
-    let emitter = NoOpPermissionAuditEmitter;
+fn test_only_noop_emitter_rejects_direct_emission() {
+    let emitter = NoOpPermissionAuditEmitter::new_for_tests();
     let event = PermissionAuditEvent::denied(
         TraceId::new(1),
         PrincipalId::new(100),
@@ -91,7 +91,15 @@ fn test_noop_emitter_accepts_all_events() {
         DenialAuditReason::PermissionNotGranted,
     );
 
-    assert!(emitter.emit_permission_decision(event).is_ok());
+    let error = emitter
+        .emit_permission_decision(event)
+        .expect_err("test-only no-op emitter must reject direct emission");
+    assert_eq!(error.kind(), AndromedaErrorKind::Security);
+    assert!(
+        error
+            .message()
+            .contains("cannot emit audit records directly")
+    );
 }
 
 #[test]
@@ -125,7 +133,7 @@ fn audit_evidence_fails_closed_when_durable_sink_is_unavailable() {
 
 #[test]
 fn permission_emitter_consumes_policy_and_returns_evidence() -> AndromedaResult<()> {
-    let emitter = NoOpPermissionAuditEmitter;
+    let emitter = NoOpPermissionAuditEmitter::new_for_tests();
     let event = PermissionAuditEvent::denied(
         TraceId::new(79),
         PrincipalId::new(100),

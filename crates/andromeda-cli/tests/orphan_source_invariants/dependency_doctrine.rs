@@ -1,4 +1,13 @@
-use crate::dependency_manifest::{collect_dependency_manifests, parse_dependency_manifest};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
+
+use crate::dependency_manifest::{
+    WorkspaceDependencyAliases, collect_dependency_manifests,
+    crate_name_uses_generic_topology_bucket, parse_dependency_manifest,
+    parse_dependency_manifest_with_aliases,
+};
 use crate::support::workspace_root;
 
 const FORBIDDEN_PRODUCTION_EDGES: &[(&str, &str)] = &[
@@ -61,6 +70,20 @@ const FORBIDDEN_PRODUCTION_EDGES: &[(&str, &str)] = &[
     ("andromeda-storage", "tower"),
     ("andromeda-storage", "andromeda-srpl"),
     ("andromeda-quic", "andromeda-exec"),
+    ("andromeda-exec", "andromeda-runtime-quinn"),
+    ("andromeda-exec", "quinn"),
+    ("andromeda-exec", "rcgen"),
+    ("andromeda-exec", "rustls"),
+    ("andromeda-exec", "tonic"),
+    ("andromeda-exec", "tonic-build"),
+    ("andromeda-exec", "tonic-prost"),
+    ("andromeda-exec", "tonic-prost-build"),
+    ("andromeda-exec", "tonic-transport"),
+    ("andromeda-exec", "tonic-web"),
+    ("andromeda-exec", "grpc"),
+    ("andromeda-exec", "grpcio"),
+    ("andromeda-exec", "grpcio-sys"),
+    ("andromeda-exec", "serde-json"),
 ];
 
 const FORBIDDEN_CATALOG_PRODUCTION_DEPS: &[&str] = &[
@@ -68,16 +91,40 @@ const FORBIDDEN_CATALOG_PRODUCTION_DEPS: &[&str] = &[
     "actix-web",
     "async-std",
     "axum",
+    "diesel",
+    "grpc",
+    "grpcio",
+    "grpcio-sys",
     "h2",
     "hyper",
+    "json",
+    "json-rpc",
+    "jsonrpc-core",
+    "jsonrpsee",
     "mio",
+    "mysql",
+    "mysql-async",
+    "postgres",
     "quinn",
     "reqwest",
+    "rusqlite",
     "rustls",
+    "sea-orm",
+    "sea-query",
+    "serde-json",
+    "simd-json",
     "smol",
+    "sonic-rs",
+    "sqlx",
     "tokio",
+    "tokio-postgres",
     "tokio-rustls",
     "tonic",
+    "tonic-build",
+    "tonic-prost",
+    "tonic-prost-build",
+    "tonic-transport",
+    "tonic-web",
     "tower",
     "warp",
 ];
@@ -102,6 +149,48 @@ const FORBIDDEN_APPLICATION_SURFACE_RUNTIME_DEPS: &[&str] = &[
     "andromeda-hadr",
     "andromeda-hadr-runtime",
 ];
+const SECURITY_CRITICAL_PATH_CRATES: &[&str] = &[
+    "andromeda-core",
+    "andromeda-observe",
+    "andromeda-proto",
+    "andromeda-rpc-protocol",
+    "andromeda-security-contract",
+];
+
+const FORBIDDEN_SECURITY_CRITICAL_GPU_RUNTIME_DEPS: &[&str] = &[
+    "andromeda-analytics",
+    "andromeda-bench",
+    "andromeda-gpu",
+    "andromeda-gpu-kernels",
+    "ash",
+    "cuda",
+    "cudarc",
+    "cust",
+    "metal",
+    "naga",
+    "nvml-wrapper",
+    "opencl3",
+    "vulkano",
+    "wgpu",
+];
+
+const SECURITY_CRITICAL_SOURCE_ROOTS: &[&str] = &[
+    "crates/andromeda-core/src/principal",
+    "crates/andromeda-observe/src/events/audit",
+    "crates/andromeda-observe/src/query",
+    "crates/andromeda-proto/src/manifest",
+    "crates/andromeda-rpc-protocol/src",
+];
+
+const SECURITY_CRITICAL_CAST_CONTEXT_TOKENS: &[&str] = &[
+    "adminoperation",
+    "ordinal",
+    "permission",
+    "policy",
+    "principal",
+    "role",
+    "surface",
+];
 const FUTURE_SECURITY_CONTRACT_CRATES: &[&str] = &["andromeda-security-contract"];
 const SECURITY_CONTRACT_ALLOWED_RUNTIME_FREE_PRODUCTION_DEPS: &[&str] =
     &["andromeda-digest", "andromeda-error", "andromeda-types"];
@@ -113,6 +202,10 @@ const FORBIDDEN_SECURITY_CONTRACT_RUNTIME_DEPS: &[&str] = &[
     "andromeda-rpc-protocol",
     "andromeda-quic",
     "andromeda-observe",
+    "andromeda-analytics",
+    "andromeda-bench",
+    "andromeda-gpu",
+    "andromeda-gpu-kernels",
     "andromeda-rpc-runtime",
     "andromeda-runtime-quinn",
     "andromeda-exec",
@@ -127,19 +220,164 @@ const FORBIDDEN_SECURITY_CONTRACT_RUNTIME_DEPS: &[&str] = &[
     "h2",
     "hyper",
     "tower",
+    "tonic",
+    "tonic-build",
+    "tonic-prost",
+    "tonic-prost-build",
+    "tonic-transport",
+    "tonic-web",
+    "grpc",
+    "grpcio",
+    "grpcio-sys",
     "prost",
     "prost-types",
     "prost-build",
     "protoc-bin-vendored",
     "serde",
     "serde-json",
+    "json",
+    "json-rpc",
+    "jsonrpc",
+    "jsonrpc-core",
+    "jsonrpsee",
+    "serde-json-core",
+    "simd-json",
+    "sonic-rs",
     "bincode",
     "rkyv",
     "bytemuck",
     "zerocopy",
+    "abomonation",
+    "bitcode",
+    "borsh",
+    "postcard",
+    "speedy",
     "sqlx",
     "rusqlite",
     "diesel",
+    "mysql",
+    "mysql-async",
+    "postgres",
+    "sea-orm",
+    "sea-query",
+    "tokio-postgres",
+    "ash",
+    "cuda",
+    "cudarc",
+    "cust",
+    "metal",
+    "naga",
+    "nvml-wrapper",
+    "opencl3",
+    "vulkano",
+    "wgpu",
+];
+
+const STRICT_PRODUCTION_DEPENDENCY_ALLOWLISTS: &[(&str, &[&str])] = &[
+    ("andromeda-error", &[]),
+    ("andromeda-digest", &[]),
+    ("andromeda-types", &["andromeda-error"]),
+    ("andromeda-time", &["andromeda-error"]),
+    ("andromeda-hardware", &["andromeda-error"]),
+    (
+        "andromeda-core",
+        &[
+            "andromeda-digest",
+            "andromeda-error",
+            "andromeda-hardware",
+            "andromeda-security-contract",
+            "andromeda-time",
+            "andromeda-types",
+        ],
+    ),
+    (
+        "andromeda-security-contract",
+        &["andromeda-digest", "andromeda-error", "andromeda-types"],
+    ),
+    (
+        "andromeda-proto",
+        &[
+            "andromeda-digest",
+            "andromeda-error",
+            "andromeda-structured-object",
+            "andromeda-types",
+            "prost",
+        ],
+    ),
+    (
+        "andromeda-catalog",
+        &[
+            "andromeda-contract",
+            "andromeda-digest",
+            "andromeda-error",
+            "andromeda-observe",
+            "andromeda-proto",
+            "andromeda-time",
+            "andromeda-types",
+        ],
+    ),
+    (
+        "andromeda-observe",
+        &[
+            "andromeda-core",
+            "andromeda-digest",
+            "andromeda-error",
+            "andromeda-hardware",
+            "andromeda-types",
+        ],
+    ),
+    (
+        "andromeda-quic",
+        &[
+            "andromeda-core",
+            "andromeda-observe",
+            "andromeda-proto",
+            "andromeda-rpc-protocol",
+            "andromeda-security-contract",
+            "quinn",
+            "rcgen",
+            "rustls",
+            "tokio",
+        ],
+    ),
+    (
+        "andromeda-exec",
+        &[
+            "andromeda-catalog",
+            "andromeda-core",
+            "andromeda-observe",
+            "andromeda-proto",
+            "andromeda-quic",
+            "andromeda-srpl",
+            "andromeda-storage",
+            "andromeda-tx",
+            "dashmap",
+            "tokio",
+        ],
+    ),
+];
+
+const STRICT_DEV_DEPENDENCY_ALLOWLISTS: &[(&str, &[&str])] = &[
+    ("andromeda-error", &[]),
+    ("andromeda-digest", &[]),
+    ("andromeda-types", &[]),
+    ("andromeda-time", &[]),
+    ("andromeda-hardware", &[]),
+    ("andromeda-core", &[]),
+    ("andromeda-contract", &[]),
+    ("andromeda-structured-object", &[]),
+    ("andromeda-security-contract", &[]),
+    ("andromeda-proto", &["prost-types", "proptest"]),
+    ("andromeda-catalog", &["andromeda-storage"]),
+    ("andromeda-observe", &["andromeda-storage"]),
+    ("andromeda-quic", &["proptest"]),
+    ("andromeda-exec", &[]),
+    ("andromeda-srpl-diagnostics", &[]),
+    ("andromeda-srpl-cardinality", &[]),
+    ("andromeda-srpl-ast", &[]),
+    ("andromeda-srpl-parser", &[]),
+    ("andromeda-srpl-ir", &[]),
+    ("andromeda-srpl", &["proptest"]),
 ];
 
 #[test]
@@ -147,6 +385,48 @@ fn dependency_guard_enforces_workspace_doctrine() {
     let workspace = workspace_root();
     let manifests = collect_dependency_manifests(&workspace);
     let mut violations = Vec::new();
+
+    for crate_name in manifests.keys() {
+        if let Some(bucket) = crate_name_uses_generic_topology_bucket(crate_name) {
+            violations.push(format!(
+                "crate name uses generic topology bucket `{bucket}` instead of an ownership boundary: {crate_name}"
+            ));
+        }
+    }
+
+    for (source, allowed_deps) in STRICT_PRODUCTION_DEPENDENCY_ALLOWLISTS {
+        let Some(manifest) = manifests.get(*source) else {
+            violations.push(format!(
+                "missing manifest for strictly allowlisted crate: {source}"
+            ));
+            continue;
+        };
+
+        for dep in &manifest.production_deps {
+            if !allowed_deps.contains(&dep.as_str()) {
+                violations.push(format!(
+                    "strict production dependency allowlist violation: {source} -> {dep}"
+                ));
+            }
+        }
+    }
+
+    for (source, allowed_deps) in STRICT_DEV_DEPENDENCY_ALLOWLISTS {
+        let Some(manifest) = manifests.get(*source) else {
+            violations.push(format!(
+                "missing manifest for dev-dependency allowlisted crate: {source}"
+            ));
+            continue;
+        };
+
+        for dep in &manifest.dev_deps {
+            if !allowed_deps.contains(&dep.as_str()) {
+                violations.push(format!(
+                    "strict dev-dependency allowlist violation: {source} -> {dep}"
+                ));
+            }
+        }
+    }
 
     for (source, target) in FORBIDDEN_PRODUCTION_EDGES {
         if let Some(manifest) = manifests.get(*source) {
@@ -196,6 +476,22 @@ fn dependency_guard_enforces_workspace_doctrine() {
         }
     }
 
+    for source in SECURITY_CRITICAL_PATH_CRATES {
+        let Some(manifest) = manifests.get(*source) else {
+            continue;
+        };
+
+        for target in FORBIDDEN_SECURITY_CRITICAL_GPU_RUNTIME_DEPS {
+            if manifest.production_deps.contains(*target) {
+                violations.push(format!(
+                    "security-critical path must not gain GPU runtime dependency: {source} -> {target}"
+                ));
+            }
+        }
+    }
+
+    violations.extend(security_critical_source_cast_violations(&workspace));
+
     if let Some(catalog) = manifests.get("andromeda-catalog") {
         for dep in &catalog.production_deps {
             if FORBIDDEN_CATALOG_PRODUCTION_DEPS.contains(&dep.as_str()) {
@@ -221,6 +517,126 @@ fn dependency_guard_enforces_workspace_doctrine() {
         "dependency doctrine violations detected:\n  - {}",
         violations.join("\n  - ")
     );
+}
+
+fn security_critical_source_cast_violations(workspace: &Path) -> Vec<String> {
+    let mut violations = Vec::new();
+
+    for root in SECURITY_CRITICAL_SOURCE_ROOTS {
+        let root = workspace.join(root);
+        if !root.is_dir() {
+            continue;
+        }
+
+        for file in rust_source_files(&root) {
+            let source = fs::read_to_string(&file)
+                .unwrap_or_else(|err| panic!("read {}: {err}", file.display()));
+            let source = strip_rust_comments(&source);
+            let relative = workspace_relative_path(workspace, &file);
+
+            for (line_index, line) in source.lines().enumerate() {
+                let compact_line = line
+                    .chars()
+                    .filter(|character| !character.is_whitespace())
+                    .collect::<String>()
+                    .to_ascii_lowercase();
+                if security_critical_cast_uses_implicit_ordinal(&compact_line) {
+                    violations.push(format!(
+                        "{relative}:{} uses implicit ordinal cast `as u8` for security surface/permission semantics",
+                        line_index + 1
+                    ));
+                }
+            }
+        }
+    }
+
+    violations
+}
+
+fn security_critical_cast_uses_implicit_ordinal(compact_line: &str) -> bool {
+    compact_line.contains("asu8")
+        && SECURITY_CRITICAL_CAST_CONTEXT_TOKENS
+            .iter()
+            .any(|token| compact_line.contains(token))
+}
+
+fn rust_source_files(root: &Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    collect_rust_source_files(root, &mut files);
+    files.sort();
+    files
+}
+
+fn collect_rust_source_files(dir: &Path, files: &mut Vec<PathBuf>) {
+    for entry in fs::read_dir(dir).unwrap_or_else(|err| panic!("read {}: {err}", dir.display())) {
+        let entry = entry.unwrap_or_else(|err| panic!("read entry in {}: {err}", dir.display()));
+        let path = entry.path();
+        if path.is_dir() {
+            collect_rust_source_files(&path, files);
+        } else if path.extension().is_some_and(|extension| extension == "rs") {
+            files.push(path);
+        }
+    }
+}
+
+fn workspace_relative_path(workspace: &Path, path: &Path) -> String {
+    path.strip_prefix(workspace)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
+fn strip_rust_comments(source: &str) -> String {
+    let mut output = String::with_capacity(source.len());
+    let mut chars = source.chars().peekable();
+    let mut block_depth = 0_usize;
+    let mut in_line_comment = false;
+
+    while let Some(ch) = chars.next() {
+        if in_line_comment {
+            if ch == '\n' {
+                in_line_comment = false;
+                output.push('\n');
+            } else {
+                output.push(' ');
+            }
+            continue;
+        }
+
+        if block_depth > 0 {
+            match (ch, chars.peek().copied()) {
+                ('/', Some('*')) => {
+                    chars.next();
+                    block_depth += 1;
+                    output.push_str("  ");
+                }
+                ('*', Some('/')) => {
+                    chars.next();
+                    block_depth -= 1;
+                    output.push_str("  ");
+                }
+                ('\n', _) => output.push('\n'),
+                _ => output.push(' '),
+            }
+            continue;
+        }
+
+        match (ch, chars.peek().copied()) {
+            ('/', Some('/')) => {
+                chars.next();
+                in_line_comment = true;
+                output.push_str("  ");
+            }
+            ('/', Some('*')) => {
+                chars.next();
+                block_depth = 1;
+                output.push_str("  ");
+            }
+            _ => output.push(ch),
+        }
+    }
+
+    output
 }
 
 #[test]
@@ -253,10 +669,69 @@ tonic-build = "0.12"
         manifest
             .forbidden_wire_deps
             .iter()
-            .any(|violation| violation.contains("serde_json"))
+            .any(|violation| violation.contains("serde-json"))
     );
 }
+#[test]
+fn dependency_guard_resolves_workspace_aliases_before_forbidden_rules() {
+    let workspace_aliases = WorkspaceDependencyAliases::from_manifest(
+        r#"
+[workspace.dependencies]
+transport = { package = "quinn", version = "0.11" }
+grpc_wire = { package = "tonic", version = "0.12" }
+json_wire = { package = "serde_json", version = "1" }
+sql_backend = { package = "sqlx", version = "0.8" }
+native_layout = { package = "bytemuck", version = "1" }
+store_alias = { package = "andromeda-storage", path = "crates/andromeda-storage" }
+"#,
+    );
+    let manifest = parse_dependency_manifest_with_aliases(
+        "andromeda-tx",
+        r#"
+[dependencies]
+transport.workspace = true
+grpc_wire.workspace = true
+json_wire.workspace = true
+sql_backend.workspace = true
+native_layout.workspace = true
 
+[dependencies.store_alias]
+workspace = true
+"#,
+        &workspace_aliases,
+    );
+
+    assert!(manifest.production_deps.contains("quinn"));
+    assert!(manifest.production_deps.contains("tonic"));
+    assert!(manifest.production_deps.contains("serde-json"));
+    assert!(manifest.production_deps.contains("sqlx"));
+    assert!(manifest.production_deps.contains("bytemuck"));
+    assert!(manifest.production_deps.contains("andromeda-storage"));
+    assert!(
+        manifest
+            .forbidden_wire_deps
+            .iter()
+            .any(|violation| violation.contains("dependency names: grpc-wire, tonic"))
+    );
+    assert!(
+        manifest
+            .forbidden_wire_deps
+            .iter()
+            .any(|violation| violation.contains("serde-json"))
+    );
+    assert!(
+        manifest
+            .forbidden_wire_deps
+            .iter()
+            .any(|violation| violation.contains("sqlx"))
+    );
+    assert!(
+        manifest
+            .forbidden_wire_deps
+            .iter()
+            .any(|violation| violation.contains("bytemuck"))
+    );
+}
 #[test]
 fn dependency_guard_detects_synthetic_table_style_forbidden_dependencies() {
     let manifest = parse_dependency_manifest(
@@ -291,6 +766,6 @@ workspace = true
         manifest
             .forbidden_wire_deps
             .iter()
-            .any(|violation| violation.contains("serde_json"))
+            .any(|violation| violation.contains("serde-json"))
     );
 }

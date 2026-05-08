@@ -1,5 +1,43 @@
 use super::*;
 
+fn route_context(
+    request_id: RequestId,
+    session_id: SessionId,
+    tx_id: Option<TransactionId>,
+    contract_hash_byte: u8,
+    catalog_version: CatalogVersion,
+) -> TypedResultStreamContext {
+    TypedResultStreamContext::new(
+        request_id,
+        session_id,
+        tx_id,
+        ContractHash::from_slice(&hash(contract_hash_byte)).unwrap(),
+        catalog_version,
+    )
+}
+
+fn metadata_frame_with_envelope_context(
+    request_id: u64,
+    session_id: u64,
+    tx_id: Option<u64>,
+    contract_hash_byte: u8,
+    catalog_version: u64,
+) -> FrameBytes {
+    frame(
+        FrameType::RpcMetadata,
+        encode_generated_message(&generated::protocol::v1::FrameEnvelope {
+            protocol_version: Some(generated::protocol::v1::ProtocolVersion { major: 1, minor: 0 }),
+            contract_hash: hash(contract_hash_byte),
+            catalog_version,
+            request_id,
+            session_id,
+            tx_id,
+            payload_kind: generated::protocol::v1::PayloadKind::RpcMetadata as i32,
+            payload: rpc_metadata_payload(Vec::new()),
+        }),
+    )
+}
+
 #[test]
 fn dispatch_policy_requires_admitted_typed_result_stream_context() {
     let frames = typed_result_stream_frames();
@@ -71,6 +109,78 @@ fn typed_result_stream_sequence_binds_to_admitted_route_context() {
 }
 
 #[test]
+fn typed_result_stream_sequence_rejects_each_route_context_drift_field() {
+    let frames = typed_result_stream_frames();
+    let cases = [
+        (
+            "ContractHash",
+            route_context(
+                RequestId::new(501),
+                SessionId::new(601),
+                Some(TransactionId::new(701)),
+                8,
+                CatalogVersion::new(42),
+            ),
+        ),
+        (
+            "CatalogVersion",
+            route_context(
+                RequestId::new(501),
+                SessionId::new(601),
+                Some(TransactionId::new(701)),
+                7,
+                CatalogVersion::new(43),
+            ),
+        ),
+        (
+            "RequestId",
+            route_context(
+                RequestId::new(502),
+                SessionId::new(601),
+                Some(TransactionId::new(701)),
+                7,
+                CatalogVersion::new(42),
+            ),
+        ),
+        (
+            "SessionId",
+            route_context(
+                RequestId::new(501),
+                SessionId::new(602),
+                Some(TransactionId::new(701)),
+                7,
+                CatalogVersion::new(42),
+            ),
+        ),
+        (
+            "tx_id",
+            route_context(
+                RequestId::new(501),
+                SessionId::new(601),
+                Some(TransactionId::new(702)),
+                7,
+                CatalogVersion::new(42),
+            ),
+        ),
+    ];
+
+    for (field, context) in cases {
+        let err = validate_typed_result_stream_sequence_with_context_and_bounds(
+            &frames,
+            ResultStreamMetadataPolicy::RowBatchRequired,
+            context,
+            TypedResultStreamBounds::v0_default(),
+        )
+        .unwrap_err();
+
+        assert_eq!(err.kind(), AndromedaErrorKind::Protocol, "{field}");
+        assert!(
+            err.message().contains("expected route context"),
+            "typed ResultStream must reject {field} drift against the admitted route"
+        );
+    }
+}
+#[test]
 fn typed_result_stream_sequence_enforces_bounded_policy_before_acceptance() {
     let frames = typed_result_stream_frames();
 
@@ -103,25 +213,82 @@ fn typed_result_stream_sequence_enforces_bounded_policy_before_acceptance() {
 
 #[test]
 fn typed_frame_envelope_rejects_frame_header_context_drift() {
-    let mut metadata = frame(
-        FrameType::RpcMetadata,
-        envelope_payload(
-            generated::protocol::v1::PayloadKind::RpcMetadata,
-            encode_generated_message(&generated::protocol::v1::RpcMetadata {
-                result_streams: Vec::new(),
-                completion_policy: None,
-            }),
+    let mut request_drift = typed_result_stream_frames()[0].clone();
+    request_drift.header.request_id = RequestId::new(502);
+    let mut session_drift = typed_result_stream_frames()[0].clone();
+    session_drift.header.session_id = SessionId::new(602);
+    let mut tx_drift = typed_result_stream_frames()[0].clone();
+    tx_drift.header.tx_id = Some(TransactionId::new(702));
+
+    for (field, metadata) in [
+        ("RequestId", request_drift),
+        ("SessionId", session_drift),
+        ("tx_id", tx_drift),
+    ] {
+        let err = decode_typed_frame_envelope(&metadata).unwrap_err();
+
+        assert_eq!(err.kind(), AndromedaErrorKind::Protocol, "{field}");
+        assert!(
+            err.message().contains("context"),
+            "typed envelope rejection should name {field} frame/envelope context drift"
+        );
+    }
+}
+
+#[test]
+fn typed_frame_envelope_rejects_envelope_context_drift() {
+    for (field, metadata) in [
+        (
+            "RequestId",
+            metadata_frame_with_envelope_context(502, 601, Some(701), 7, 42),
         ),
-    );
-    metadata.header.request_id = RequestId::new(502);
+        (
+            "SessionId",
+            metadata_frame_with_envelope_context(501, 602, Some(701), 7, 42),
+        ),
+        (
+            "tx_id",
+            metadata_frame_with_envelope_context(501, 601, Some(702), 7, 42),
+        ),
+    ] {
+        let err = decode_typed_frame_envelope(&metadata).unwrap_err();
 
-    let err = decode_typed_frame_envelope(&metadata).unwrap_err();
+        assert_eq!(err.kind(), AndromedaErrorKind::Protocol, "{field}");
+        assert!(
+            err.message().contains("context"),
+            "typed envelope rejection should name {field} envelope/header context drift"
+        );
+    }
+}
 
-    assert_eq!(err.kind(), AndromedaErrorKind::Protocol);
-    assert!(
-        err.message().contains("context"),
-        "typed envelope rejection should name frame/envelope context drift"
-    );
+#[test]
+fn typed_result_stream_sequence_rejects_envelope_contract_and_catalog_route_drift() {
+    for (field, metadata) in [
+        (
+            "ContractHash",
+            metadata_frame_with_envelope_context(501, 601, Some(701), 8, 42),
+        ),
+        (
+            "CatalogVersion",
+            metadata_frame_with_envelope_context(501, 601, Some(701), 7, 43),
+        ),
+    ] {
+        let mut frames = typed_result_stream_frames();
+        frames[0] = metadata;
+        let err = validate_typed_result_stream_sequence_with_context_and_bounds(
+            &frames,
+            ResultStreamMetadataPolicy::RowBatchRequired,
+            typed_result_stream_context(),
+            TypedResultStreamBounds::v0_default(),
+        )
+        .unwrap_err();
+
+        assert_eq!(err.kind(), AndromedaErrorKind::Protocol, "{field}");
+        assert!(
+            err.message().contains("expected route context"),
+            "typed ResultStream must reject {field} drift inside the envelope"
+        );
+    }
 }
 
 #[test]

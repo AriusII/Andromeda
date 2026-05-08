@@ -71,12 +71,12 @@ pub(super) fn validate_header(header: &BTreeNodeHeaderV1) -> AndromedaResult<()>
             }
         }
     }
-    if let Some(high_key_offset) = header.high_key_offset {
-        if high_key_offset < BTREE_NODE_V1_HEADER_LEN_U16 || high_key_offset >= header.free_start {
-            return Err(btree_node_format_error(
-                "BTree high_key_offset must point inside encoded key area",
-            ));
-        }
+    if let Some(high_key_offset) = header.high_key_offset
+        && (high_key_offset < BTREE_NODE_V1_HEADER_LEN_U16 || high_key_offset >= header.free_start)
+    {
+        return Err(btree_node_format_error(
+            "BTree high_key_offset must point inside encoded key area",
+        ));
     }
 
     let mut expected_header = header.clone();

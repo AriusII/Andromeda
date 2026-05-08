@@ -1,10 +1,12 @@
-use andromeda_error::AndromedaResult;
+use andromeda_error::{AndromedaErrorKind, AndromedaResult};
 use andromeda_proto::{
-    generated, validate_generated_invocation_response_sequence, validate_generated_rpc_batch,
-    validate_generated_rpc_completion, validate_generated_rpc_execute_request,
-    validate_generated_rpc_metadata,
+    RowCountRequirement, StructuredObjectHeader, StructuredObjectLayout, generated,
+    project_generated_structured_object_header, validate_generated_invocation_response_sequence,
+    validate_generated_rpc_batch, validate_generated_rpc_completion,
+    validate_generated_rpc_execute_request, validate_generated_rpc_metadata,
+    validate_generated_structured_object_header,
 };
-use andromeda_types::ContractHash;
+use andromeda_types::{ColumnDescriptor, ContractHash, ScalarType, TypeDescriptor};
 use prost::Message;
 
 use super::proto_wire_fixtures::{
@@ -296,4 +298,209 @@ fn generated_rpc_batch_is_binary_projection() {
     assert_eq!(decoded_batch.structured_payload, b"\x01");
     assert_eq!(decoded_batch.row_count_exact, Some(1));
     assert!(decoded_batch.terminal_batch);
+}
+
+fn typed_structured_object_fields() -> Vec<ColumnDescriptor> {
+    vec![
+        ColumnDescriptor {
+            name: "product_id".to_string(),
+            data_type: TypeDescriptor::required(ScalarType::I64),
+            ordinal: 0,
+        },
+        ColumnDescriptor {
+            name: "quantity".to_string(),
+            data_type: TypeDescriptor::required(ScalarType::I32),
+            ordinal: 1,
+        },
+    ]
+}
+
+fn generated_structured_object_header() -> generated::contract::v1::StructuredObjectHeader {
+    let layout = StructuredObjectLayout::RowMajor;
+    let fields = typed_structured_object_fields();
+    let descriptor_hash = StructuredObjectHeader::compute_descriptor_hash(&fields, layout);
+
+    generated::contract::v1::StructuredObjectHeader {
+        name: "ReservationRows".to_string(),
+        contract_hash: vec![7; ContractHash::LEN],
+        descriptor_hash: descriptor_hash.as_bytes().to_vec(),
+        row_count_exact: 1,
+        column_count: fields.len() as u32,
+        layout: generated::contract::v1::structured_object_header::Layout::RowMajor as i32,
+        payload_length: 16,
+        payload_checksum: Some(0xABCD),
+        max_payload_length: Some(64),
+        fields: vec![
+            generated::contract::v1::ColumnDescriptor {
+                name: "product_id".to_string(),
+                ordinal: 0,
+                type_name: "i64".to_string(),
+            },
+            generated::contract::v1::ColumnDescriptor {
+                name: "quantity".to_string(),
+                ordinal: 1,
+                type_name: "i32".to_string(),
+            },
+        ],
+        row_count_policy:
+            generated::contract::v1::result_stream_descriptor::RowCountRequirement::ExactRequired
+                as i32,
+    }
+}
+
+#[test]
+fn generated_structured_object_header_projects_to_typed_runtime_model() {
+    let header = generated_structured_object_header();
+
+    let projected = project_generated_structured_object_header(&header).unwrap();
+    validate_generated_structured_object_header(&header).unwrap();
+
+    assert_eq!(projected.name, "ReservationRows");
+    assert_eq!(projected.layout, StructuredObjectLayout::RowMajor);
+    assert_eq!(
+        projected.row_count_policy,
+        RowCountRequirement::ExactRequired
+    );
+    assert_eq!(projected.row_count_exact, Some(1));
+    assert_eq!(projected.column_count, 2);
+    assert_eq!(projected.payload_length, 16);
+    assert_eq!(projected.max_payload_length, Some(64));
+    assert_eq!(projected.fields, typed_structured_object_fields());
+}
+
+#[test]
+fn generated_structured_object_header_rejects_hash_and_descriptor_mismatch() {
+    let valid = generated_structured_object_header();
+
+    let invalid_contract_hash = generated::contract::v1::StructuredObjectHeader {
+        contract_hash: vec![7; ContractHash::LEN - 1],
+        ..valid.clone()
+    };
+    assert_eq!(
+        project_generated_structured_object_header(&invalid_contract_hash)
+            .unwrap_err()
+            .kind(),
+        AndromedaErrorKind::Contract
+    );
+
+    let zero_descriptor_hash = generated::contract::v1::StructuredObjectHeader {
+        descriptor_hash: vec![0; ContractHash::LEN],
+        ..valid.clone()
+    };
+    assert_eq!(
+        project_generated_structured_object_header(&zero_descriptor_hash)
+            .unwrap_err()
+            .kind(),
+        AndromedaErrorKind::Contract
+    );
+
+    let descriptor_mismatch = generated::contract::v1::StructuredObjectHeader {
+        descriptor_hash: vec![9; ContractHash::LEN],
+        ..valid
+    };
+    assert_eq!(
+        project_generated_structured_object_header(&descriptor_mismatch)
+            .unwrap_err()
+            .kind(),
+        AndromedaErrorKind::Contract
+    );
+}
+
+#[test]
+fn generated_structured_object_header_rejects_layout_fields_and_type_ambiguity() {
+    let valid = generated_structured_object_header();
+
+    let unspecified_layout = generated::contract::v1::StructuredObjectHeader {
+        layout: generated::contract::v1::structured_object_header::Layout::Unspecified as i32,
+        ..valid.clone()
+    };
+    assert!(project_generated_structured_object_header(&unspecified_layout).is_err());
+
+    let duplicate_field_name = generated::contract::v1::StructuredObjectHeader {
+        fields: vec![
+            generated::contract::v1::ColumnDescriptor {
+                name: "product_id".to_string(),
+                ordinal: 0,
+                type_name: "i64".to_string(),
+            },
+            generated::contract::v1::ColumnDescriptor {
+                name: "product_id".to_string(),
+                ordinal: 1,
+                type_name: "i32".to_string(),
+            },
+        ],
+        ..valid.clone()
+    };
+    assert!(project_generated_structured_object_header(&duplicate_field_name).is_err());
+
+    let sparse_field_ordinal = generated::contract::v1::StructuredObjectHeader {
+        fields: vec![
+            generated::contract::v1::ColumnDescriptor {
+                name: "product_id".to_string(),
+                ordinal: 0,
+                type_name: "i64".to_string(),
+            },
+            generated::contract::v1::ColumnDescriptor {
+                name: "quantity".to_string(),
+                ordinal: 2,
+                type_name: "i32".to_string(),
+            },
+        ],
+        ..valid.clone()
+    };
+    assert!(project_generated_structured_object_header(&sparse_field_ordinal).is_err());
+
+    let unsupported_type = generated::contract::v1::StructuredObjectHeader {
+        fields: vec![generated::contract::v1::ColumnDescriptor {
+            name: "payload".to_string(),
+            ordinal: 0,
+            type_name: "string".to_string(),
+        }],
+        column_count: 1,
+        ..valid
+    };
+    let err = project_generated_structured_object_header(&unsupported_type).unwrap_err();
+    assert_eq!(err.kind(), AndromedaErrorKind::Contract);
+    assert!(err.message().contains("minimal contract-safe projection"));
+}
+
+#[test]
+fn generated_structured_object_header_fails_closed_on_row_count_presence_ambiguity() {
+    let ambiguous_zero = generated::contract::v1::StructuredObjectHeader {
+        row_count_exact: 0,
+        payload_length: 0,
+        max_payload_length: Some(0),
+        ..generated_structured_object_header()
+    };
+
+    let err = project_generated_structured_object_header(&ambiguous_zero).unwrap_err();
+    assert_eq!(err.kind(), AndromedaErrorKind::Contract);
+    assert!(err.message().contains("explicit presence"));
+}
+
+#[test]
+fn generated_structured_object_header_rejects_payload_limit_violations() {
+    let over_declared_max = generated::contract::v1::StructuredObjectHeader {
+        payload_length: 65,
+        max_payload_length: Some(64),
+        ..generated_structured_object_header()
+    };
+    assert_eq!(
+        project_generated_structured_object_header(&over_declared_max)
+            .unwrap_err()
+            .kind(),
+        AndromedaErrorKind::Protocol
+    );
+
+    let over_projection_cap = generated::contract::v1::StructuredObjectHeader {
+        payload_length: 1,
+        max_payload_length: Some(u64::MAX),
+        ..generated_structured_object_header()
+    };
+    assert_eq!(
+        project_generated_structured_object_header(&over_projection_cap)
+            .unwrap_err()
+            .kind(),
+        AndromedaErrorKind::Contract
+    );
 }

@@ -211,33 +211,33 @@ impl QuorumMembership {
 
     /// Mark a replica as suspect (due to missed heartbeat).
     pub fn mark_suspect(&mut self, replica_id: u64) -> Result<(), QuorumMembershipRejection> {
-        if let Some(replica) = self.members.get_mut(&replica_id) {
-            if replica.health_state.is_alive() {
-                replica.health_state = ReplicaHealthState::Suspect;
-                self.increment_epoch()?;
-            }
+        if let Some(replica) = self.members.get_mut(&replica_id)
+            && replica.health_state.is_alive()
+        {
+            replica.health_state = ReplicaHealthState::Suspect;
+            self.increment_epoch()?;
         }
         Ok(())
     }
 
     /// Mark a replica as dead (connection permanently lost).
     pub fn mark_dead(&mut self, replica_id: u64) -> Result<(), QuorumMembershipRejection> {
-        if let Some(replica) = self.members.get_mut(&replica_id) {
-            if !replica.health_state.is_dead() {
-                replica.health_state = ReplicaHealthState::Dead;
-                self.increment_epoch()?;
-            }
+        if let Some(replica) = self.members.get_mut(&replica_id)
+            && !replica.health_state.is_dead()
+        {
+            replica.health_state = ReplicaHealthState::Dead;
+            self.increment_epoch()?;
         }
         Ok(())
     }
 
     /// Mark a suspect replica as alive again (reconnected).
     pub fn mark_alive(&mut self, replica_id: u64) -> Result<(), QuorumMembershipRejection> {
-        if let Some(replica) = self.members.get_mut(&replica_id) {
-            if replica.health_state.is_suspect() {
-                replica.health_state = ReplicaHealthState::Alive;
-                self.increment_epoch()?;
-            }
+        if let Some(replica) = self.members.get_mut(&replica_id)
+            && replica.health_state.is_suspect()
+        {
+            replica.health_state = ReplicaHealthState::Alive;
+            self.increment_epoch()?;
         }
         Ok(())
     }

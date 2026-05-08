@@ -144,6 +144,65 @@ fn durable_audit_trace_inspection_source_filters_replay_records_with_common_spec
 }
 
 #[test]
+fn durable_audit_trace_inspection_reports_when_replay_order_is_not_event_id_order() {
+    let records = vec![
+        replay_record(
+            20,
+            120,
+            DurableAuditEventFamily::AdminDecision,
+            "AdminOperation",
+            "user:ordered-replay",
+            10,
+        ),
+        replay_record(
+            10,
+            110,
+            DurableAuditEventFamily::AdminDecision,
+            "AdminOperation",
+            "user:ordered-replay",
+            20,
+        ),
+    ];
+    let source = DurableAuditTraceQuerySource::new(&records);
+
+    let mut spec = TraceQuerySpec::new(TraceQueryFilter {
+        principal: Some("user:ordered-replay".to_string()),
+        ..TraceQueryFilter::default()
+    });
+    spec.include_total_count = true;
+
+    let result = source
+        .inspect(&spec)
+        .expect("replay inspection preserves journal order for durable audit records");
+
+    assert_eq!(result.metadata.returned_rows, 2);
+    assert_eq!(result.metadata.total_matching_rows, Some(2));
+    assert!(
+        !result.metadata.ordered_by_event_id_ascending,
+        "durable replay order is WAL/journal order, not an event_id ordering guarantee"
+    );
+    assert_eq!(result.rows[0].event_id, EventId::new(20));
+    assert_eq!(result.rows[0].record_lsn, 10);
+    assert_eq!(result.rows[1].event_id, EventId::new(10));
+    assert_eq!(result.rows[1].record_lsn, 20);
+
+    let mut paged_spec = TraceQuerySpec::new(TraceQueryFilter {
+        principal: Some("user:ordered-replay".to_string()),
+        ..TraceQueryFilter::default()
+    });
+    paged_spec.limit = 1;
+    paged_spec.offset = 1;
+    let paged = source
+        .inspect(&paged_spec)
+        .expect("pagination must not hide non-event-id replay ordering metadata");
+
+    assert_eq!(paged.metadata.returned_rows, 1);
+    assert!(!paged.metadata.ordered_by_event_id_ascending);
+    assert_eq!(paged.rows[0].event_id, EventId::new(10));
+    assert_eq!(paged.rows[0].record_lsn, 20);
+}
+
+#[test]
 fn durable_audit_trace_inspection_mapping_covers_all_durable_families() {
     let records = DurableAuditEventFamily::ALL
         .iter()

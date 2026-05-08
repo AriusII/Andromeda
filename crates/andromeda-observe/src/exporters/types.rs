@@ -19,7 +19,7 @@ pub struct ExportDecisionTrace {
     pub operation: String,
     /// Decision outcome (e.g., "allowed", "denied", "error")
     pub decision: String,
-    /// Structured trace data (JSON-formatted)
+    /// Diagnostic-only structured trace payload; not a runtime wire format
     pub payload: String,
     /// Timestamp of the trace (milliseconds since epoch)
     pub timestamp_ms: u64,

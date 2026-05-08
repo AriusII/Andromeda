@@ -108,3 +108,33 @@ target = "security_contract_admission_matrix"
 corpus_dir = "fuzz/corpus/security_contract_admission_matrix"
 seed_files = ["seed-surface-permission-matrix.bin"]
 generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "manifest_decode"
+corpus_dir = "fuzz/corpus/manifest_decode"
+seed_files = ["seed-basic.bin"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "segment_index_decode"
+corpus_dir = "fuzz/corpus/segment_index_decode"
+seed_files = ["seed-basic.bin"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "contract_hash"
+corpus_dir = "fuzz/corpus/contract_hash"
+seed_files = ["seed-basic.bin"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "definition_batch"
+corpus_dir = "fuzz/corpus/definition_batch"
+seed_files = ["seed-basic.bin"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "structured_object_payload"
+corpus_dir = "fuzz/corpus/structured_object_payload"
+seed_files = ["seed-basic.bin"]
+generator = "deterministic-bytes-v1"

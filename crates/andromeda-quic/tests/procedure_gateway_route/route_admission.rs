@@ -1,4 +1,5 @@
 use super::*;
+use andromeda_quic::{HADR_STREAM_MAX, HADR_STREAM_MIN};
 
 ///
 /// This test validates that:
@@ -453,6 +454,139 @@ fn test_application_route_rejects_non_application_request_scopes_before_dispatch
         assert!(
             err.message().contains("Application surface"),
             "{disallowed_scope} rejection should name the Application surface: {}",
+            err.message()
+        );
+    }
+}
+
+#[test]
+fn test_application_route_rejects_drain_before_payload_decode_or_authorization() {
+    let mut conn = setup_active_application_connection();
+    conn.begin_drain().expect("active connection should drain");
+    assert_eq!(conn.state(), LifecycleState::Draining);
+
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
+    let manifest = route_manifest();
+    let mut frame = valid_execute_frame(&manifest);
+    frame.payload.clear();
+    frame.header.payload_length = 0;
+
+    let err = gateway
+        .bind_application_procedure_route(7, &frame, &manifest)
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Protocol);
+    assert!(
+        err.message().contains("Draining"),
+        "drain rejection should happen before invalid payload is decoded: {}",
+        err.message()
+    );
+    assert!(
+        err.message().contains("not Active"),
+        "drain rejection should name the dispatch precondition: {}",
+        err.message()
+    );
+
+    let (registry, _) = registry_for_application_user();
+    let err = gateway
+        .bind_authorized_application_procedure_route(7, &frame, &manifest, &registry)
+        .unwrap_err();
+    assert_route_rejection_before_authorization(err, AndromedaErrorKind::Protocol, "Draining");
+}
+
+#[test]
+fn test_application_route_rejects_admin_and_hadr_manifest_permissions_before_dispatch() {
+    let conn = setup_active_application_connection();
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
+
+    for (family, id) in [
+        ("administration", "andromeda.admin.drain"),
+        ("cluster", "andromeda.hadr.promote"),
+    ] {
+        let mut manifest = route_manifest();
+        manifest.required_permissions = vec![CatalogRequiredPermission {
+            id: id.to_string(),
+            family: family.to_string(),
+        }];
+        let frame = valid_execute_frame(&manifest);
+
+        let err = gateway
+            .bind_application_procedure_route(7, &frame, &manifest)
+            .unwrap_err();
+
+        assert_eq!(
+            err.kind(),
+            AndromedaErrorKind::Contract,
+            "{family}/{id} must be rejected by manifest admission"
+        );
+        assert!(
+            err.message().contains("andromeda.execute_procedure"),
+            "Application route should require the application execute permission before dispatch: {}",
+            err.message()
+        );
+    }
+}
+
+#[test]
+fn application_route_accepts_only_v0_application_stream_namespace_before_dispatch() {
+    let conn = setup_active_application_connection();
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
+    let manifest = route_manifest();
+    let frame = valid_execute_frame(&manifest);
+    let expected_application_range = format!("[0..={}]", HADR_STREAM_MIN - 1);
+    let expected_hadr_range = format!("[{HADR_STREAM_MIN}..={HADR_STREAM_MAX}]");
+
+    for stream_id in [0, HADR_STREAM_MIN - 1] {
+        let binding = gateway
+            .bind_application_procedure_route(stream_id, &frame, &manifest)
+            .expect("V0 Application stream ID should be Application-routable");
+        assert_eq!(
+            binding.invocation_id,
+            InvocationId::new(stream_id),
+            "Application stream ID {stream_id} should preserve stream correlation"
+        );
+    }
+
+    for stream_id in HADR_STREAM_MIN..=HADR_STREAM_MAX {
+        let err = gateway
+            .bind_application_procedure_route(stream_id, &frame, &manifest)
+            .expect_err("HA/DR reserved stream ID must be rejected before Procedure dispatch");
+
+        assert_eq!(
+            err.kind(),
+            AndromedaErrorKind::Security,
+            "HA/DR reserved stream ID {stream_id} must be a surface-separation rejection"
+        );
+        assert!(
+            err.message().contains("HA/DR reserved stream id"),
+            "rejection should identify the HA/DR reserved stream namespace: {}",
+            err.message()
+        );
+        assert!(
+            err.message().contains(&expected_hadr_range),
+            "rejection should report the canonical reserved range: {}",
+            err.message()
+        );
+    }
+
+    for stream_id in [HADR_STREAM_MAX + 1, 512, u64::MAX] {
+        let err = gateway
+            .bind_application_procedure_route(stream_id, &frame, &manifest)
+            .expect_err("future/reserved stream ID must be rejected before Procedure dispatch");
+
+        assert_eq!(
+            err.kind(),
+            AndromedaErrorKind::Security,
+            "future/reserved stream ID {stream_id} must be a fail-closed rejection"
+        );
+        assert!(
+            err.message().contains("future/reserved stream id"),
+            "rejection should identify the future/reserved stream namespace: {}",
+            err.message()
+        );
+        assert!(
+            err.message().contains(&expected_application_range),
+            "rejection should report the V0 Application stream range: {}",
             err.message()
         );
     }

@@ -9,6 +9,11 @@ use super::{
 
 pub const MAX_CORRELATIONS_PER_PUBLICATION: usize = 1_024;
 
+/// Bounded, advisory correlation evidence for one catalog/statistics scope.
+///
+/// Map analytics validators may use this publication for staleness and
+/// summarizability checks only after the surrounding stats publication lifecycle
+/// has proven durable publication. The publication itself is never source truth.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StatsCorrelationPublication {
     catalog_version: CatalogVersion,
@@ -34,12 +39,41 @@ impl StatsCorrelationPublication {
         self.digest
     }
 
+    pub const fn is_authoritative(&self) -> bool {
+        false
+    }
+
+    pub const fn requires_durable_publication_evidence(&self) -> bool {
+        true
+    }
+
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 
     pub fn len(&self) -> usize {
         self.entries.len()
+    }
+
+    pub fn is_current_for(
+        &self,
+        catalog_version: CatalogVersion,
+        stats_version: StatsVersion,
+    ) -> bool {
+        self.catalog_version == catalog_version
+            && self.stats_version == stats_version
+            && self
+                .entries
+                .iter()
+                .all(|entry| entry.is_valid_for(catalog_version, stats_version))
+    }
+
+    pub fn is_stale_for(
+        &self,
+        catalog_version: CatalogVersion,
+        stats_version: StatsVersion,
+    ) -> bool {
+        !self.is_current_for(catalog_version, stats_version)
     }
 }
 

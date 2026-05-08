@@ -16,6 +16,8 @@ mod manifest;
 mod physical_plan;
 #[path = "backup_execution_plan/pitr.rs"]
 mod pitr;
+#[path = "backup_execution_plan/retention.rs"]
+mod retention;
 #[path = "backup_execution_plan/support.rs"]
 mod support;
 #[path = "backup_execution_plan/wal_archive.rs"]

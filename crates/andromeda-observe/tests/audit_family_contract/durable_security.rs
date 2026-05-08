@@ -102,6 +102,50 @@ fn durable_security_audit_records_require_binding_to_match_trace_and_correlation
 }
 
 #[test]
+fn surface_scope_mismatch_denial_is_envelope_valid_and_durable_audit_ready() {
+    let reason = format!(
+        "denied:{}:cert_surface={:?}:requested_surface={:?}:action=admin_operation",
+        andromeda_observe::SecurityAuditDenialReason::SurfaceScopeMismatch.label(),
+        SurfaceScope::Application,
+        SurfaceScope::Administration,
+    );
+    let envelope = EventEnvelope::new(
+        EventId::new(33),
+        request_correlation(),
+        TraceEvent::SecurityAudit(
+            SecurityAuditTrace::new(
+                TraceId::new(133),
+                SurfaceScope::Administration,
+                certificate(SurfaceScope::Application),
+                principal(),
+                Permission::ManageSecurity,
+                SecurityAuditOutcome::Denied,
+                reason,
+            )
+            .expect("surface mismatch denial keeps typed IAM evidence"),
+        ),
+    )
+    .expect("typed surface scope mismatch denial is envelope-valid");
+
+    let mut binding = durable_security_binding();
+    binding.surface = Some(SurfaceScope::Administration);
+    binding.permission = Some(Permission::ManageSecurity);
+
+    let record = PendingDurableAuditRecord::new(
+        8,
+        binding,
+        DurableAuditRetentionBoundary::SecurityPolicy,
+        DurableAuditReplayBehavior::ForensicOnly,
+        envelope,
+    )
+    .expect("typed surface scope mismatch denial is durable-audit ready");
+
+    assert_eq!(
+        record.identity.family,
+        DurableAuditEventFamily::SecurityDecision
+    );
+}
+#[test]
 fn legacy_authorization_denied_is_not_durable_security_decision_evidence() {
     let legacy_denial = EventEnvelope::new(
         EventId::new(32),

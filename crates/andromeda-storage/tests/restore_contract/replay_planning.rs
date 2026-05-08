@@ -93,6 +93,34 @@ fn test_plan_replay_requires_first_segment_at_archive_start() {
 }
 
 #[test]
+fn test_plan_replay_rejects_segment_bounds_outside_manifest_archive() {
+    let manifest = make_test_manifest();
+    let segments = vec![make_wal_segment(1001, 2001, None)];
+
+    let err = plan_replay_segments(&manifest, Lsn::new(1500), &segments)
+        .expect_err("restore replay plan must reject WAL beyond backup archive bounds");
+
+    assert!(
+        err.message().contains("archive range"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn test_plan_replay_rejects_missing_segment_containing_target() {
+    let manifest = make_test_manifest();
+    let segments = vec![make_wal_segment(1001, 1500, None)];
+
+    let err = plan_replay_segments(&manifest, Lsn::new(1750), &segments)
+        .expect_err("restore replay plan must prove the PITR target segment exists");
+
+    assert!(
+        err.message().contains("PITR target"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
 fn test_plan_replay_validates_first_segment_no_previous_lsn() {
     let manifest = make_test_manifest();
     let segments = vec![make_wal_segment(1001, 1500, Some(1000))];

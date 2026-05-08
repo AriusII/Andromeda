@@ -2,7 +2,7 @@ use crate::support::*;
 
 #[test]
 fn permission_denied_audit_evidence_is_required_and_fail_closed() {
-    let emitter = NoOpPermissionAuditEmitter;
+    let emitter = NoOpPermissionAuditEmitter::new_for_tests();
     let event = PermissionAuditEvent::denied(
         TraceId::new(5001),
         PrincipalId::new(41),
@@ -42,7 +42,7 @@ fn permission_denied_audit_evidence_is_required_and_fail_closed() {
 }
 #[test]
 fn permission_allowed_admin_and_security_visible_decisions_require_durable_audit_wal_evidence() {
-    let emitter = NoOpPermissionAuditEmitter;
+    let emitter = RecordingPermissionAuditEmitter::default();
     for (offset, family, permission) in [
         (
             0_u128,
@@ -104,6 +104,31 @@ fn permission_allowed_admin_and_security_visible_decisions_require_durable_audit
         );
     }
 }
+
+#[test]
+fn test_only_noop_permission_audit_emitter_rejects_visible_decision_policy() {
+    let emitter = NoOpPermissionAuditEmitter::new_for_tests();
+    let trace_id = TraceId::new(5306);
+    let event =
+        PermissionAuditEvent::allowed(trace_id, PrincipalId::new(74), Permission::AdminShutdown);
+    let policy = AuditEmissionPolicy::fail_closed_for_visible_decision(
+        DurableAuditEventFamily::AdminDecision,
+    );
+    let sink = AuditSinkAvailability::durable_for_admin_decision(durable_audit_report(
+        trace_id,
+        DurableAuditEventFamily::AdminDecision,
+        99,
+    ))
+    .expect("valid admin report should become sink availability");
+
+    let error = emitter
+        .emit_permission_decision_with_policy(event, policy, sink)
+        .expect_err("test-only no-op emitter must not satisfy strict visible-decision audit");
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Security);
+    assert!(error.message().contains("test-only no-op"));
+}
+
 #[test]
 fn permission_allowed_visible_decision_rejects_audit_append_failure() {
     struct FailingAppendPermissionAuditEmitter;
@@ -245,4 +270,19 @@ fn visible_decision_rejects_non_durable_audit_report() {
         .expect_err("sink availability must reject report before durable LSN catches up");
 
     assert_eq!(error.kind(), AndromedaErrorKind::Internal);
+}
+
+#[test]
+fn default_audit_policy_is_fail_closed_not_test_support() {
+    let default_policy = AuditEmissionPolicy::default();
+    let test_support_policy =
+        AuditEmissionPolicy::allow_unavailable_sink_for_explicit_test_support();
+
+    assert_eq!(default_policy, AuditEmissionPolicy::fail_closed());
+    assert_ne!(default_policy, test_support_policy);
+    assert!(default_policy.requires_available_sink());
+    assert!(!default_policy.requires_durable_wal_evidence());
+    assert!(!test_support_policy.requires_available_sink());
+    assert!(!test_support_policy.requires_durable_wal_evidence());
+    assert_eq!(test_support_policy.expected_event_family(), None);
 }

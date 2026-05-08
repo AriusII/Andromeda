@@ -8,6 +8,53 @@ fn decision_path(file_name: &str) -> std::path::PathBuf {
         .join(file_name)
 }
 
+fn spec_path(file_name: &str) -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("documentations")
+        .join("specs")
+        .join(file_name)
+}
+
+fn catalog_source_path(file_name: &str) -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("src")
+        .join("statistics")
+        .join(file_name)
+}
+
+fn map_stats_target(object_id: u64, column_index: u16) -> andromeda_catalog::StatsColumnTarget {
+    andromeda_catalog::StatsColumnTarget::new(
+        andromeda_types::CatalogObjectId::new(object_id),
+        column_index,
+    )
+}
+
+fn map_stats_correlation(
+    id: u64,
+    catalog_version: u64,
+    stats_version: u64,
+) -> andromeda_catalog::StatsCorrelation {
+    andromeda_catalog::StatsCorrelation::new(
+        andromeda_catalog::StatsCorrelationId::new(id)
+            .expect("test correlation id must be non-zero"),
+        andromeda_types::CatalogVersion::new(catalog_version),
+        andromeda_catalog::StatsVersion::new(stats_version),
+        andromeda_catalog::StatsCorrelationKind::FunctionalDependency,
+        andromeda_catalog::CorrelationStrengthPermille::from_permille(900)
+            .expect("test correlation strength must be in range"),
+        vec![map_stats_target(10, 1), map_stats_target(20, 2)],
+        andromeda_catalog::CorrelationEvidenceBounds {
+            sample_rows: 100,
+            population_lower_bound: 100,
+            population_upper_bound: 1_000,
+            confidence_permille: 950,
+        },
+    )
+    .expect("test correlation must be valid")
+}
+
 #[test]
 fn decision_coverage_dec_022_covers_alter_procedure_lifecycle_before_operation_surface_expands() {
     let decision = std::fs::read_to_string(decision_path("DEC-022-alter-procedure-lifecycle.md"))
@@ -225,4 +272,100 @@ fn decision_coverage_stats_publication_switch_is_bounded_advisory_and_traceable(
             "ScenarioEvidence must keep advisory-only consumption coverage visible for: {required}"
         );
     }
+}
+
+#[test]
+fn map_refresh_validation_spec_covers_stats_staleness_summarizability_and_truth_boundary() {
+    let spec = std::fs::read_to_string(spec_path("MapRefreshValidation_v0.md"))
+        .expect("MapRefreshValidation_v0 spec must exist");
+    let normalized = spec
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase();
+
+    for required in [
+        "# MapRefreshValidation v0 Specification",
+        "## Purpose",
+        "## Scope",
+        "## Non-goals",
+        "## Prerequisites",
+        "## Procedure",
+        "## Validation",
+        "## Troubleshooting",
+        "## References",
+        "current catalog stats",
+        "`StatsVersion`",
+        "`CatalogVersion`",
+        "staleness",
+        "summarizability",
+        "durable publication",
+        "source of truth",
+        "fail closed",
+        "`DecisionTrace`",
+        "MAP-STATS-STALE",
+        "MAP-SUMMARIZABILITY-UNPROVEN",
+        "MAP-STATS-NOT-DURABLE",
+        "MAP-ANALYTICS-NOT-TRUTH",
+    ] {
+        assert!(
+            normalized.contains(&required.to_lowercase()),
+            "MapRefreshValidation_v0 must cover required Map analytics validation topic: {required}"
+        );
+    }
+}
+
+#[test]
+fn stats_correlation_publication_surface_keeps_map_analytics_advisory_boundaries() {
+    let source = std::fs::read_to_string(catalog_source_path("correlation_publication.rs"))
+        .expect("correlation_publication.rs must be readable");
+
+    for required in [
+        "Map analytics validators",
+        "staleness",
+        "summarizability",
+        "durable publication",
+        "never source truth",
+        "is_authoritative",
+        "requires_durable_publication_evidence",
+        "is_current_for",
+        "is_stale_for",
+    ] {
+        assert!(
+            source.contains(required),
+            "correlation publication source must preserve advisory boundary text: {required}"
+        );
+    }
+}
+
+#[test]
+fn stats_correlation_publication_rejects_stale_map_analytics_scope() {
+    let publication = andromeda_catalog::StatsCorrelationPublicationBuilder::new(
+        andromeda_types::CatalogVersion::new(7),
+        andromeda_catalog::StatsVersion::new(3),
+    )
+    .expect("builder versions must be valid")
+    .push(map_stats_correlation(1, 7, 3))
+    .expect("correlation must match publication versions")
+    .finish();
+
+    assert!(!publication.is_authoritative());
+    assert!(publication.requires_durable_publication_evidence());
+    assert!(publication.is_current_for(
+        andromeda_types::CatalogVersion::new(7),
+        andromeda_catalog::StatsVersion::new(3),
+    ));
+    assert!(!publication.is_stale_for(
+        andromeda_types::CatalogVersion::new(7),
+        andromeda_catalog::StatsVersion::new(3),
+    ));
+
+    assert!(!publication.is_current_for(
+        andromeda_types::CatalogVersion::new(8),
+        andromeda_catalog::StatsVersion::new(3),
+    ));
+    assert!(publication.is_stale_for(
+        andromeda_types::CatalogVersion::new(7),
+        andromeda_catalog::StatsVersion::new(4),
+    ));
 }
