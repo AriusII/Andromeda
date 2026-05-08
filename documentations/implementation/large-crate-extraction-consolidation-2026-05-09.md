@@ -37,6 +37,19 @@ It also names target crates that already exist in the workspace and are intended
 - Added a runtime-free `CompletionProtocolVersion` adapter type in `andromeda-rpc-protocol` so Procedure completion validation can use protocol-owned versions without coupling `andromeda-procedure-contract` to wire crates.
 - Cleaned stale target artifacts that caused false `E0463` crate resolution failures after dependency and module movement.
 
+## Completed Extraction Slice
+
+- Moved `andromeda-storage/src/extent/*` into `andromeda-segment/src/extent/*`.
+- Moved `andromeda-storage/src/segment.rs` into `andromeda-segment/src/descriptor.rs`.
+- Converted `andromeda-storage::extent` and `andromeda-storage::segment` into compatibility facades over `andromeda-segment`.
+- Moved `andromeda-tx/src/commit_log/manager.rs`, `andromeda-tx/src/commit_log/manager/*`, and commit-log tests into `andromeda-transaction`.
+- Removed duplicate local `andromeda-tx/src/lock_manager/*` implementation files after confirming ownership belongs to `andromeda-locking`.
+- Converted `andromeda-tx::commit_log` and `andromeda-tx::lock_manager` into compatibility facades over owner crates.
+- Moved the catalog plan-cache ScenarioEvidence bridge from `andromeda-catalog/src/plan_cache/*` into `andromeda-scenario-evidence/src/plan_cache_bridge/*`.
+- Converted `andromeda-catalog::plan_cache` into a compatibility facade over `andromeda-scenario-evidence`.
+- Moved `andromeda-quic/src/hadr_streams.rs` and `andromeda-quic/src/hadr_streams/*` into `andromeda-hadr`.
+- Converted `andromeda-quic::hadr_streams` into a compatibility facade over `andromeda-hadr`.
+
 ## TODO / SUB TODO / DEPENDENCIES
 
 ### Storage Kernel
@@ -45,6 +58,7 @@ TODO: Reduce `andromeda-storage` from broad C5 owner to storage integration faca
 
 SUB TODO:
 
+- Keep extents and segment descriptors owned by `andromeda-segment`; remove storage compatibility facades after downstream call sites migrate.
 - Move remaining pure manifest domain, codec, root-switch, and publication boundary code into `andromeda-manifest`.
 - Move segment-index owner tests fully to `andromeda-segment`; leave storage tests as compatibility and recovery integration tests.
 - Move pure page I/O contracts into `andromeda-disk-page-store` only after WAL-before-page-flush tests are owner-level.
@@ -66,7 +80,7 @@ SUB TODO:
 
 - Move Procedure contract model and compatibility-only imports to `andromeda-procedure-contract` and `andromeda-contract` facade paths.
 - Move Procedure Store runtime records, feedback, and regression evidence into `andromeda-procedure-store` after catalog publication integration remains tested.
-- Move plan-cache identity, selection, and bounded evidence to `andromeda-plan-cache`; leave catalog only with published plan invalidation integration.
+- Keep the ScenarioEvidence plan-cache bridge owned by `andromeda-scenario-evidence`; move any remaining plan-cache identity, selection, and bounded evidence to `andromeda-plan-cache`; leave catalog only with published plan invalidation integration.
 - Move statistics object contracts and publication-switch primitives to `andromeda-statistics`; keep catalog activation and version publication in catalog until owner gates pass.
 - Move catalog recovery replay orchestration into `andromeda-catalog-recovery` behind an application trait that avoids cycles.
 - Move durable catalog diff behavior into `andromeda-catalog-diff` with Procedure compatibility and ContractHash impact evidence.
@@ -83,9 +97,9 @@ TODO: Convert `andromeda-tx` into a transaction integration facade over owner cr
 SUB TODO:
 
 - Move local MVCC modules from `andromeda-tx` into `andromeda-mvcc` or delete duplicates after call sites use the owner crate.
-- Move commit manager/protocol into `andromeda-transaction` when WAL append/flush can be expressed through a minimal WAL trait.
+- Keep commit-log manager and tests owned by `andromeda-transaction`; remove the `andromeda-tx` compatibility facade after downstream call sites migrate.
 - Keep transaction record shapes in `andromeda-transaction-log`.
-- Move lock manager/deadlock residuals to `andromeda-locking` after orphan and topology tests confirm no duplicate behavior.
+- Keep lock manager and deadlock residuals owned by `andromeda-locking`; remove the `andromeda-tx` compatibility facade after downstream call sites migrate.
 - Keep savepoint partial rollback local to `andromeda-savepoint`; do not confuse savepoint rollback with terminal durable rollback.
 - Implement deferred MVCC and index replay handlers before claiming complete recovery semantics.
 
@@ -137,6 +151,7 @@ SUB TODO:
 
 - Split `andromeda-proto-wire/src/generated_validation.rs` into frame envelope, result stream, invocation, manifest, structured object, errors, and view modules.
 - Keep `andromeda-rpc-protocol` as owner of frame and stream contracts; keep `andromeda-rpc-codec` as typed envelope/Protobuf glue.
+- Keep HA/DR stream ranges and multiplexing owned by `andromeda-hadr`; remove the `andromeda-quic` compatibility facade after downstream call sites migrate.
 - Keep `andromeda-quic` as transport abstraction and compatibility facade; concrete Quinn/Rustls/Tokio behavior remains in `andromeda-quic-runtime-quinn`.
 - Clarify `andromeda-protocol`; it appears to be a runtime-free facade and should not duplicate protocol ownership.
 - Add admission and mTLS certificate status evidence to the concrete Quinn accept/connect path.
@@ -183,6 +198,9 @@ Minimum gates for this stabilization slice:
 ```powershell
 cargo check --workspace --all-targets --all-features
 cargo check -p andromeda-storage -p andromeda-segment -p andromeda-storage-page -p andromeda-srpl-interpreter -p andromeda-proto -p andromeda-proto-wire -p andromeda-rpc-protocol --all-targets --all-features
+cargo check -p andromeda-transaction -p andromeda-tx -p andromeda-locking -p andromeda-mvcc --all-targets --all-features
+cargo check -p andromeda-scenario-evidence -p andromeda-plan-cache -p andromeda-catalog --all-targets --all-features
+cargo check -p andromeda-hadr -p andromeda-quic --all-targets --all-features
 rustfmt --edition 2024 <modified-rust-files>
 ```
 
