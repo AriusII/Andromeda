@@ -5,13 +5,12 @@
 //! [`DefinitionBatchPlan`], keeping catalog object migration planning distinct
 //! from SRPL procedure ALTER/DROP lifecycle helpers.
 
+use andromeda_definition_batch::DefinitionBatchId;
 use andromeda_types::{CatalogObjectId, CatalogVersion, DatabaseId, NamespaceId};
 
 use crate::{ObjectKind, QualifiedName};
 
-use super::{
-    CatalogMutationOperation, CatalogPublicationSemantics, DefinitionBatchId, DefinitionBatchPlan,
-};
+use super::{CatalogMutationOperation, CatalogPublicationSemantics, DefinitionBatchPlan};
 
 /// Classification for a planned definition-batch operation when viewed as DDL
 /// migration evidence.

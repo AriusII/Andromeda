@@ -1,14 +1,17 @@
 #![forbid(unsafe_code)]
 
-//! Future SRPL lowering owner.
+//! SRPL bound-input lowering.
 //!
-//! This scaffold intentionally contains no behavior. Existing lowering code
-//! remains in `andromeda-srpl` until a later behavior-preserving extraction
-//! moves it behind this crate boundary.
+//! This crate owns the bounded lowering behavior that can sit below the
+//! historical `andromeda-srpl` facade without depending on that facade. Source
+//! parsing, local facade binding wrappers, optimizer entry points, runtime
+//! execution, and catalog publication remain outside this crate.
 //!
 //! Dependency direction:
-//! - consume bound SRPL semantic input and lower it into typed IR;
-//! - depend only on contract-safe language-model crates and foundation crates;
+//! - consume typed AST/body input and lower it into typed IR;
 //! - avoid parser ownership, catalog storage, execution, storage, transaction,
-//!   WAL, transport, benchmark, analytics, GPU, and application-surface
-//!   dependencies.
+//!   WAL, transport, benchmark, analytics, GPU, and application-surface dependencies.
+
+mod pipeline;
+
+pub use pipeline::{BoundProcedureLoweringInput, lower_body_ast, lower_bound_procedure};

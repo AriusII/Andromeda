@@ -7,42 +7,17 @@ publish = false
 
 [dependencies]
 andromeda-core.workspace = true
-andromeda-observe.workspace = true
 andromeda-proto.workspace = true
+andromeda-rpc.workspace = true
+andromeda-rpc-codec.workspace = true
 andromeda-rpc-protocol.workspace = true
 andromeda-security-contract.workspace = true
-quinn = { workspace = true, optional = true }
-rcgen = { workspace = true, optional = true }
-rustls = { workspace = true, optional = true }
-tokio = { workspace = true, optional = true }
 
 [features]
 default = []
-# Test-only support for local network fixtures that need intentionally
-# insecure certificate verification. It must keep activating the Quinn runtime
-# feature and must not become a production/default runtime path.
-insecure-test-tls = [
-    "runtime-quinn",
-]
-runtime-quinn = [
-    "dep:quinn",
-    "dep:rcgen",
-    "dep:rustls",
-    "dep:tokio",
-    "tokio/io-util",
-    "tokio/macros",
-    "tokio/rt-multi-thread",
-]
-
-[[test]]
-name = "real_quinn_network"
-path = "tests/real_quinn_network.rs"
-required-features = ["runtime-quinn"]
-
-[[test]]
-name = "reconnect_quinn_admission_contract"
-path = "tests/reconnect_quinn_admission_contract.rs"
-required-features = ["runtime-quinn"]
+# Compatibility selector for downstream manifests during the W22 split.
+# Concrete Quinn/Rustls/Tokio ownership lives in andromeda-quic-runtime-quinn.
+runtime-quinn = []
 
 [dev-dependencies]
 proptest.workspace = true

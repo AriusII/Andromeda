@@ -6,6 +6,9 @@ This crate is intentionally behavior-free. It documents the boundary that may
 eventually own backup plans, backup artifacts, checkpoint evidence, WAL archive
 requirements, retention policy, and validation reports.
 
+Current status: ownership-boundary scaffold only. It does not claim production
+readiness, recoverability, or operational completeness.
+
 C5 invariants:
 
 - Backup consistency must be backed by durable checkpoint and WAL archive evidence.

@@ -2,32 +2,9 @@ use andromeda_types::CatalogVersion;
 
 use crate::{CatalogSnapshot, DefinitionBatchId};
 
-/// Durable catalog mutation payload plus optional outer storage-WAL kind tag.
-///
-/// When `storage_wal_kind_tag` is present, recovery enforces that the outer
-/// storage WAL record kind matches the inner catalog payload kind before the
-/// record can participate in replay.
-#[derive(Debug, Clone, Copy)]
-pub struct CatalogDurableMutationPayload<'a> {
-    pub payload: &'a [u8],
-    pub storage_wal_kind_tag: Option<u16>,
-}
-
-impl<'a> CatalogDurableMutationPayload<'a> {
-    pub const fn new(payload: &'a [u8]) -> Self {
-        Self {
-            payload,
-            storage_wal_kind_tag: None,
-        }
-    }
-
-    pub const fn with_storage_wal_kind_tag(payload: &'a [u8], storage_wal_kind_tag: u16) -> Self {
-        Self {
-            payload,
-            storage_wal_kind_tag: Some(storage_wal_kind_tag),
-        }
-    }
-}
+pub use andromeda_catalog_recovery::{
+    CatalogDurableMutationPayload, CatalogRecoveryAnomalyKind, CatalogSkippedBatchReason,
+};
 
 /// Result of catalog recovery replay.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,53 +48,10 @@ pub struct CatalogSkippedBatch {
     pub reason: CatalogSkippedBatchReason,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CatalogSkippedBatchReason {
-    BeginSupersededByAnotherBegin,
-    EndOfLogBeforeCommit,
-    CommitBoundaryMismatch,
-    MissingApplyRecords,
-    DuplicateApplyIndex,
-    SparseApplyIndexes,
-    ApplyRecordCountMismatch,
-    ApplyRecordLimitExceeded,
-    ApplyRecordOrderMismatch,
-    WrongCatalogIdentity,
-    VersionGap,
-    DefinitionBatchHashMismatch,
-    PlanRejected,
-    ReplayRejected,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CatalogRecoveryAnomaly {
     pub record_index: usize,
     pub batch_id: Option<DefinitionBatchId>,
     pub kind: CatalogRecoveryAnomalyKind,
     pub detail: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CatalogRecoveryAnomalyKind {
-    PayloadCorruption,
-    PayloadMagicMismatch,
-    PayloadFormatVersionMismatch,
-    PayloadChecksumMismatch,
-    WrongKindTag,
-    OuterStorageKindMismatch,
-    CommitWithoutBegin,
-    ApplyWithoutBegin,
-    BeginWhileBatchOpen,
-    CommitBoundaryMismatch,
-    WrongCatalogIdentity,
-    VersionGap,
-    MissingApplyRecords,
-    DuplicateApplyIndex,
-    SparseApplyIndexes,
-    ApplyRecordCountMismatch,
-    ApplyRecordLimitExceeded,
-    ApplyRecordOrderMismatch,
-    PlanRejected,
-    DefinitionBatchHashMismatch,
-    ReplayRejected,
 }

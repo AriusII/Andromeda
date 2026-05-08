@@ -71,7 +71,8 @@ The expected release evidence command is the command that should appear in the r
 | Documentation tests | `cargo test --doc --workspace --all-features --locked` | `release-gate-chain.yml` runs the exact release command in `doc-tests`. | Command transcript, doctest output, toolchain versions, and crate list. | Exit code `0`; failed or ignored doctests are recorded. |
 | Cargo audit | `cargo audit --deny warnings` | `05-supply-chain.yml` and `release-gate-chain.yml` run `cargo audit --deny warnings`. | Audit report, advisory database timestamp when available, tool version, and accepted-risk references for any exception. | Exit code `0`; unreviewed warnings or advisories block release. |
 | Cargo deny | `cargo deny check --all-features` | `05-supply-chain.yml` and `release-gate-chain.yml` use `cargo-deny-action` with `command: check` and `arguments: --all-features`. | Deny report, `deny.toml` identity, tool/action version, and exception rationale for any policy deviation. | Exit code `0`; license, source, advisory, or duplicate-policy failures require owner disposition. |
-| Fuzz smoke | `python fuzz/generators/generate_seed_corpus.py --ensure-only`, then `cargo +nightly fuzz run <target> -- -max_total_time=<seconds>` for each target discovered from `fuzz/targets.toml` | `07-fuzzing.yml` defaults to 15 seconds per target. `release-gate-chain.yml` also runs a 15-second fuzz smoke over manifest targets. | Target list, corpus manifest, seed generation log, per-target logs, `fuzz/artifacts`, `fuzz/corpus`, duration, nightly toolchain, and `cargo-fuzz` version. | Smoke evidence is preflight only. A release promotion needs sustained target-specific evidence and residual-risk review. |
+| Dependency topology preflight | `python -B tools/testing/supply_chain_preflight.py --json` | Local read-only tooling reports `workspace_topology_guard`, including `andromeda-protocol` workspace membership and direct GPU/SIMD exclusions for durable C5 crates. | JSON output, source-state metadata, and owner disposition for any nonzero `workspace_topology_guard.finding_count`. | `workspace_topology_guard.status` is `clean`, or every finding is fixed or explicitly scoped out before release readiness is claimed. |
+| Fuzz smoke | `python fuzz/generators/generate_seed_corpus.py --ensure-only`, then `cargo +nightly fuzz run <target> -- -max_total_time=<seconds>` for each target discovered from `tests/fuzzing/targets.toml` | `07-fuzzing.yml` defaults to 15 seconds per target. `release-gate-chain.yml` also runs a 15-second fuzz smoke over manifest targets. | Target list, corpus manifest, seed generation log, per-target logs, `fuzz/artifacts`, `tests/fuzzing/corpus`, duration, nightly toolchain, and `cargo-fuzz` version. | Smoke evidence is preflight only. A release promotion needs sustained target-specific evidence and residual-risk review. |
 | Miri | Broad preflight: `cargo +nightly miri setup` and `cargo +nightly miri test --workspace --all-features`. Bounded target: `cargo +nightly miri test -p <owning-crate> <target-name> --all-features`. | `06-nightly-deep-validation.yml` records a targeted subset inventory when `tools/testing/miri_subset.py` is present, runs the broad Miri command as `continue-on-error: true`, and uploads `nightly-miri-advisory-non-release`. Continue-on-error output and advisory artifacts do not count as a blocking release pass. | Miri setup log, command transcript, nightly toolchain, target selection rationale, unsupported-operation notes, and unsafe or aliasing invariant under test. | Exit code `0` in a blocking or release-reviewed run; unsupported targets require explicit residual risk. |
 | Loom | `cargo test --manifest-path tests/loom/Cargo.toml`; owner-crate shape: `cargo test -p <owning-crate> --features loom <target-name> --locked -- --nocapture` | `06-nightly-deep-validation.yml` runs the standalone command as `continue-on-error: true` when `tests/loom/Cargo.toml` is present, otherwise it records the missing harness in `nightly-loom-advisory-non-release`. `tests/loom/README.md` defines a minimal standalone WAL durable-before-visible publication model. Treat owner-crate coverage as still required for production release claims. | Model command, feature flags, modeled state, thread/task bounds, explored safety property, log output, and residual risk. | Required when a release claim depends on concurrency interleavings. The standalone model and advisory artifact are partial evidence only; absence of owner-crate or integration evidence remains a blocker unless scope excludes the concurrency-sensitive surface. |
 | Crash/recovery | Use the combined crash/recovery command set in this document and `step-11-validation-matrix.md`. | `15-crash-recovery-placeholder.yml` runs a small replay gate. `release-gate-chain.yml` adds selected recovery, backup, restore, and forensic commands. Treat isolated owner suites as partial for end-to-end durable visibility claims. | Command transcripts, scenario ID, crash point, durable state assertion, recovery report, WAL or manifest fixture details when retained, commit/branch, and residual risk. | Release evidence must prove durable WAL before visible commit, recovery replay, post-recovery visibility, and rejected corrupt or incomplete tails for the claimed scope. |
@@ -135,7 +136,7 @@ Validate this documentation by checking it against:
 - `tests/miri/README.md`;
 - `tests/loom/README.md`;
 - `tests/loom/Cargo.toml`;
-- `fuzz/targets.toml`.
+- `tests/fuzzing/targets.toml`.
 
 This documentation-only validation does not run Rust gates and does not prove release readiness.
 
@@ -150,6 +151,8 @@ If a workflow uploads an artifact with `advisory`, `inventory`, or `non-release`
 If a fuzz target only ran for the default 15-second smoke duration, keep the artifact as preflight evidence and record sustained fuzz evidence as missing.
 
 If a crash/recovery owner suite passes in isolation, do not infer end-to-end durable visibility. Attach the combined gate or mark the release claim partial.
+
+If `python -B tools/testing/supply_chain_preflight.py --json` reports missing `cargo-nextest`, `cargo-audit`, or `cargo-vet`, keep the preflight result as report-only tooling visibility. Missing `cargo-nextest` leaves the local nextest workspace gate and archive/profile evidence unavailable. Missing `cargo-audit` leaves local RustSec advisory evidence unavailable. Missing `cargo-vet` leaves local vet attestation evidence unavailable when vet governance applies. Use retained CI output, rerun locally after installing the tool, or record the gap as residual risk; do not treat the report-only finding as a release pass or as a default-mode script failure.
 
 If `cargo audit` or `cargo deny` reports a warning, advisory, license issue, source issue, or duplicate-policy concern, classify it before release approval. Do not weaken policy to make the gate pass.
 
@@ -169,7 +172,7 @@ If `cargo audit` or `cargo deny` reports a warning, advisory, license issue, sou
 - `documentations/governance/supply-chain-policy.md`
 - `docs/codex/rust-critical-quality-gates.md`
 - `docs/codex/mission-critical-change-policy.md`
-- `fuzz/targets.toml`
+- `tests/fuzzing/targets.toml`
 - `fuzz/VALIDATION_MATRIX.md`
 - `tests/miri/README.md`
 - `tests/loom/README.md`

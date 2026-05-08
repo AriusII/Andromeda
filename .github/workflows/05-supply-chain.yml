@@ -3,10 +3,30 @@ name: 05 - Supply Chain
 on:
   pull_request:
     branches: [ main ]
-    paths: [ "Cargo.toml", "Cargo.lock", "crates/**/Cargo.toml", "deny.toml", ".github/workflows/05-supply-chain.yml", "documentations/governance/supply-chain-policy.md" ]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/**/Cargo.toml"
+      - "deny.toml"
+      - "documentations/governance/supply-chain-policy.md"
+      - "tools/testing/supply_chain_preflight.py"
+      - "tools/testing/msrv_dependency_check.py"
+      - "rust-toolchain.toml"
+      - ".github/workflows/05-supply-chain.yml"
+      - ".github/workflows/release-gate-chain.yml"
   push:
     branches: [ main ]
-    paths: [ "Cargo.toml", "Cargo.lock", "crates/**/Cargo.toml", "deny.toml", ".github/workflows/05-supply-chain.yml", "documentations/governance/supply-chain-policy.md" ]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/**/Cargo.toml"
+      - "deny.toml"
+      - "documentations/governance/supply-chain-policy.md"
+      - "tools/testing/supply_chain_preflight.py"
+      - "tools/testing/msrv_dependency_check.py"
+      - "rust-toolchain.toml"
+      - ".github/workflows/05-supply-chain.yml"
+      - ".github/workflows/release-gate-chain.yml"
   schedule:
     - cron: "41 2 * * 2"
   workflow_dispatch:

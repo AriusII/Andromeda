@@ -1,9 +1,9 @@
 //! Durability evidence and publication receipt types for catalog mutations.
 
+use andromeda_definition_batch::{DefinitionBatchId, DefinitionBatchSourceHash};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId};
 
-use super::definition::{DefinitionBatchId, DefinitionBatchSourceHash};
 use super::mutation::{
     CatalogMutationBoundary, CatalogMutationPlan, CatalogMutationRecord,
     CatalogPublicationSemantics,

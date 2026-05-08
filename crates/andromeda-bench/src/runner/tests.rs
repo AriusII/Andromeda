@@ -250,6 +250,7 @@ fn srpl_compile_optimize_workload_uses_compiler_pipeline_metadata() {
     assert_eq!(evidence.workload_counters[1].name, "optimized_procedures");
     assert_eq!(evidence.workload_counters[1].value, 2);
     assert_eq!(evidence.workload_counters[2].name, "optimizer_diagnostics");
+    assert!(evidence.workload_counters[2].value >= 3);
     assert!(evidence.p50_latency_us >= 1);
     assert!(evidence.p95_latency_us >= evidence.p50_latency_us);
 }

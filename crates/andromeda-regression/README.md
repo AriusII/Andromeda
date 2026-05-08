@@ -2,13 +2,13 @@
 
 ## Purpose
 
-`andromeda-regression` is the future owner crate for advisory regression comparison, baseline compatibility rules, threshold policy, and diagnostic regression reports.
+`andromeda-regression` owns advisory regression comparison, baseline compatibility rules, threshold policy, and diagnostic regression reports.
 
-This directory is a scaffold only. It is not registered as a Cargo workspace member, and current regression behavior remains in `andromeda-bench`.
+`andromeda-bench` reexports this crate for compatibility. Regression output remains diagnostic and advisory only.
 
 ## Scope
 
-This crate is expected to own:
+This crate owns:
 
 - Baseline identity and compatibility rules across workload shape, hardware profile, measurement mode, and versioned targets.
 - Threshold policy for latency, throughput, allocation, temporary bytes, and error counts.
@@ -26,7 +26,7 @@ This crate is expected to own:
 
 ## Prerequisites
 
-- Keep current regression behavior in `andromeda-bench` until a registered extraction work order moves it.
+- Use `andromeda-bench-workload` and `andromeda-scenario-evidence` as input contracts.
 - Require compatible baselines before comparison.
 - Treat every report as diagnostic and advisory unless a separate owner validates a version-bound action.
 
@@ -40,15 +40,12 @@ This crate is expected to own:
 
 ## Validation
 
-Future behavior changes should use:
+Behavior changes should use:
 
 ```powershell
-cargo test -p andromeda-regression
-cargo test -p andromeda-bench --test regression_detection -- --nocapture
-cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture
+cargo check -p andromeda-regression --tests
+cargo check -p andromeda-bench --tests
 ```
-
-This scaffold was designed for documentation review only.
 
 ## Troubleshooting
 

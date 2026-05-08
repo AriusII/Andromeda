@@ -8,6 +8,8 @@ publish = false
 [dependencies]
 andromeda-core.workspace = true
 andromeda-observe.workspace = true
+andromeda-savepoint.workspace = true
+andromeda-transaction-log.workspace = true
 async-trait = "0.1"
 dashmap = "6.0"
 tokio = { version = "1", features = ["full"] }

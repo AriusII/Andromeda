@@ -98,6 +98,7 @@ If `windows_msvc_preflight.py` reports `MSVC_LINK_EXE_MISSING`, treat the Rust g
 
 If `supply_chain_preflight.py` reports missing tools, treat the output as local gate visibility. The script does not install tools. Default mode exits successfully for reporting; `--strict` exits with status `1` when any expected supply-chain tool is missing.
 
+
 If `step11_inventory.py` reports a missing test path, inspect the owning crate first. Update roadmap documentation only after confirming the suite was renamed, moved, or intentionally removed.
 
 If Loom evidence is reported missing, treat it as a planning gap for concurrency-sensitive promotion claims. Do not satisfy that gap with non-Loom unit tests unless the roadmap decision explicitly changes the required evidence.
@@ -110,8 +111,10 @@ If Loom evidence is reported missing, treat it as a planning gap for concurrency
 - `documentations/governance/supply-chain-policy.md`
 - `docs/codex/rust-critical-quality-gates.md`
 - `fuzz/README.md`
-- `fuzz/targets.toml`
+- `tests/fuzzing/targets.toml`
 - `fuzz/VALIDATION_MATRIX.md`
 - `.github/workflows/06-nightly-deep-validation.yml`
 - `.github/workflows/07-fuzzing.yml`
 - `.github/workflows/15-crash-recovery-placeholder.yml`
+
+

@@ -11,8 +11,8 @@
 use andromeda_catalog::{ProcedureContract, inventory_reserve_stock_contract};
 use andromeda_core::{CatalogVersion, ContractHash, InvocationId};
 use andromeda_exec::{
-    CompletionStatus, InvocationContext, InvocationRequest, services::AdmissionService,
-    services::PreTransactionValidationService,
+    AdmissionService, CompletionStatus, InvocationContext, InvocationRequest,
+    PreTransactionValidationService,
 };
 use andromeda_observe::TraceId;
 

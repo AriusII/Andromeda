@@ -8,5 +8,5 @@
 mod diagnostics;
 pub mod source_location;
 
-pub use diagnostics::*;
-pub use source_location::*;
+pub use diagnostics::{DiagnosticPhase, ForbiddenConstruct, ForbiddenConstructHit, SrplDiagnostic};
+pub use source_location::{SourceSpan, SrplSource};

@@ -1,10 +1,10 @@
 #![forbid(unsafe_code)]
 #![doc = r#"
-Future C5 owner scaffold for Andromeda startup recovery and replay planning.
+Boundary crate for Andromeda startup recovery and replay planning.
 
-This crate is intentionally behavior-free. It documents the boundary that may
-eventually own durable artifact discovery, replay selection, recovery floors,
-startup modes, recovery reports, and forensic evidence.
+This crate owns recovery boundary contracts that do not depend on storage page
+or WAL record internals. Storage keeps replay implementation during the
+migration and imports these contracts through its compatibility facade.
 
 C5 invariants:
 
@@ -13,5 +13,41 @@ C5 invariants:
 - Persistent and network bytes must use explicit codecs, never Rust native struct layout.
 - Crash/recovery validation is required before mission-critical behavior lands here.
 - RAM, temporary storage, GPU output, and benchmark output are advisory only; they are not truth.
-- No behavior has moved into this crate in this scaffold.
 "#]
+
+/// Startup mode requested for recovery against durable evidence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StartupMode {
+    /// Requires a clean durable WAL scan before replay.
+    FastStart,
+    /// Allows replay through recoverable durable-tail truncation or corruption.
+    SafeStart,
+    /// Preserves evidence and prevents replay until a forensic report exists.
+    ForensicStart,
+}
+
+impl StartupMode {
+    /// Returns `true` when this mode is allowed to replay records after a clean
+    /// durable evidence scan.
+    pub const fn permits_clean_replay(self) -> bool {
+        matches!(self, Self::FastStart | Self::SafeStart)
+    }
+
+    /// Returns `true` when this mode requires a persisted forensic report.
+    pub const fn requires_forensic_report(self) -> bool {
+        matches!(self, Self::ForensicStart)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn startup_mode_declares_replay_and_report_boundaries() {
+        assert!(StartupMode::FastStart.permits_clean_replay());
+        assert!(StartupMode::SafeStart.permits_clean_replay());
+        assert!(!StartupMode::ForensicStart.permits_clean_replay());
+        assert!(StartupMode::ForensicStart.requires_forensic_report());
+    }
+}

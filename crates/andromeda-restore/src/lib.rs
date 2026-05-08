@@ -6,6 +6,9 @@ This crate is intentionally behavior-free. It documents the boundary that may
 eventually own restore plans, point-in-time recovery targets, artifact
 verification, WAL archive ranges, and restore validation reports.
 
+Current status: ownership-boundary scaffold only. It does not claim production
+readiness, restore success, or operational completeness.
+
 C5 invariants:
 
 - Restored visible commits must be reconstructed only from durable commit evidence.

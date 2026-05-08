@@ -2,11 +2,15 @@
 
 ## Purpose
 
-`andromeda-manifest` is a future C5 owner crate for manifest publication, root pointers, checkpoint evidence, and storage topology descriptors.
+`andromeda-manifest` is the C5 boundary crate for manifest publication, root pointers, checkpoint evidence, and storage topology descriptors.
 
-This scaffold reserves a boundary for manifest formats, atomic switches, recovery floors, and publication evidence. No behavior has moved from `andromeda-storage`.
+This crate now owns the implementation-neutral manifest durability boundary used by `andromeda-storage`. Manifest byte codecs, root switching, and publication execution remain in storage during migration.
 
 ## Scope
+
+This crate owns:
+
+- Manifest recovery-root fields and validation for identity, checkpoint LSN, recovery floor, and manifest CRC.
 
 Future work in this crate may own:
 
@@ -21,7 +25,7 @@ Future work in this crate may own:
 - No bypass of typed Procedure contracts.
 - No transaction commit publication, physical WAL file ownership, buffer-pool residency, heap storage, backup execution, restore execution, or HA/DR quorum policy.
 - No GPU output, benchmark output, RAM state, or temporary storage as manifest truth.
-- No behavior move in this scaffold.
+- No manifest byte-codec promotion without explicit layout, checksum, and crash/recovery evidence.
 
 ## Prerequisites
 
@@ -42,7 +46,7 @@ Before behavior lands here:
 
 ## Validation
 
-This scaffold is documentation-only. Future behavior requires `cargo fmt`, `cargo check`, `cargo clippy`, manifest codec tests, atomic switch tests, recovery-floor tests, and crash/recovery scenarios.
+Run `cargo check -p andromeda-manifest`. Future codec and publication behavior requires `cargo fmt`, `cargo clippy`, manifest codec tests, atomic switch tests, recovery-floor tests, and crash/recovery scenarios.
 
 ## Troubleshooting
 

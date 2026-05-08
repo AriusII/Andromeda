@@ -6,10 +6,12 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+andromeda-audit.workspace = true
 andromeda-core.workspace = true
 andromeda-digest.workspace = true
 andromeda-error.workspace = true
 andromeda-hardware.workspace = true
+andromeda-observability.workspace = true
 andromeda-types.workspace = true
 
 [dev-dependencies]

@@ -6,6 +6,8 @@
 
 This scaffold reserves a boundary for backup manifests, snapshot checkpoints, WAL archive requirements, artifact verification, and immutable retention policy. No behavior has moved from `andromeda-storage`.
 
+Current status: ownership-boundary scaffold only. This crate does not claim production readiness, backup recoverability, or operational completeness.
+
 ## Scope
 
 Future work in this crate may own:

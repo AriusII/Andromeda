@@ -11,11 +11,20 @@ mod registry;
 mod result;
 mod result_metadata_extractor;
 mod result_stream;
+/// Compatibility facade for retry types.
+///
+/// Kept as a public module so callers can continue using
+/// `andromeda_exec::retry` after ownership moved to `andromeda-retry`.
 pub mod retry;
 pub mod services;
 mod srpl_adapters;
 mod srpl_dispatch;
 mod surface_gate;
+/// Compatibility facade for execution trace types.
+///
+/// Kept as a public module so callers can continue using
+/// `andromeda_exec::traces` after ownership moved to
+/// `andromeda-execution-trace`.
 pub mod traces;
 mod vertical_slice_entry;
 mod wal_evidence;
@@ -44,6 +53,7 @@ pub use result_stream::{
     BackpressuredResultStream, DEFAULT_RESULT_STREAM_CAPACITY, MAX_RESULT_STREAM_CAPACITY,
     MIN_RESULT_STREAM_CAPACITY, ResultStreamMetrics, StreamCompletion,
 };
+/// Re-export of stable retry types from `andromeda-retry`.
 pub use retry::{ErrorRetryability, RetryAttempt, RetryDecision, RetryPolicy};
 pub use services::{
     AdmissionService, CompletionEmission, CompletionMappingService, ErrorKind,
@@ -59,6 +69,7 @@ pub use srpl_dispatch::SrplProcedureDispatcher;
 pub use surface_gate::{
     AuthorizedProcedureDispatch, SurfacePlaneAuthorizer, surface_plane_to_scope,
 };
+/// Re-export of stable trace types from `andromeda-execution-trace`.
 pub use traces::{AuditLedger, InMemoryAuditLedger, InvocationTraceEvent};
 pub use vertical_slice_entry::*;
 pub use wal_evidence::*;

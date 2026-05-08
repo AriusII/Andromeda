@@ -1,10 +1,11 @@
 #![forbid(unsafe_code)]
 #![doc = r#"
-Future C5 owner scaffold for Andromeda durable page formats.
+C5 owner crate for Andromeda durable page-format boundaries.
 
-This crate is intentionally behavior-free. It documents the boundary that may
-eventually own page headers, trailers, payload bounds, checksums, page LSN
-policy, and explicit page codecs.
+This crate owns page identifiers, page layout contracts, full-page byte images,
+and the deterministic page-store abstraction used by storage tests. Concrete
+disk IO, buffer-pool residency, manifest publication, and WAL file ownership
+remain outside this crate.
 
 C5 invariants:
 
@@ -13,5 +14,19 @@ C5 invariants:
 - Persistent and network bytes must use explicit codecs, never Rust native struct layout.
 - Crash/recovery validation is required before mission-critical behavior lands here.
 - RAM, temporary storage, GPU output, and benchmark output are advisory only; they are not truth.
-- No behavior has moved into this crate in this scaffold.
 "#]
+
+mod error;
+mod identity;
+mod image;
+mod layout;
+mod store;
+
+#[cfg(test)]
+mod tests;
+
+pub use andromeda_wal::Lsn;
+pub use identity::{AllocationId, ObjectId, PageId};
+pub use image::PageImage;
+pub use layout::{PageFlags, PageHeader, PageLayoutContract, PageSize, PageTrailer, PageType};
+pub use store::{InMemoryPageStore, PageStore};

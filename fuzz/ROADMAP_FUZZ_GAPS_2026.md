@@ -11,7 +11,7 @@ This document is a planning artifact. It does not add targets, change fuzz behav
 This roadmap covers the following fuzz evidence surfaces:
 
 - Missing target candidates: `manifest_decode`, `segment_index_decode`, `contract_hash`, `definition_batch`, and `structured_object_payload`.
-- Current Lot 5 harnesses already registered in `fuzz/targets.toml`.
+- Current Lot 5 harnesses already registered in `tests/fuzzing/targets.toml`.
 - Corpus policy for deterministic committed seeds and generated seed manifests.
 - No-panic scope for malformed input handling.
 - Evidence boundaries for what fuzzing does not prove.
@@ -25,7 +25,7 @@ Affected engines and planes:
 
 ## Non-goals
 
-- Do not edit `fuzz/Cargo.toml`, `fuzz/targets.toml`, any file under `fuzz/fuzz_targets/`, or any corpus file as part of this roadmap document.
+- Do not edit `fuzz/Cargo.toml`, `tests/fuzzing/targets.toml`, any file under `fuzz/fuzz_targets/`, or any corpus file as part of this roadmap document.
 - Do not define new persistent formats here.
 - Do not treat fuzz evidence as crash/recovery evidence.
 - Do not treat fuzz evidence as authorization, admission durability, WAL durability, manifest publication, startup replay, visible commit, TLS, Quinn runtime, or HA/DR evidence.
@@ -38,7 +38,7 @@ Before adding any Roadmap 11.07 target, confirm that:
 
 - The production boundary has an explicit codec, parser, validator, or typed adapter that can reject malformed input without panicking.
 - The harness can stay bounded by input size, iteration count, allocation limits, and recursion limits.
-- The target has a deterministic seed plan that can be represented in `fuzz/corpus/manifest.toml`.
+- The target has a deterministic seed plan that can be represented in `tests/fuzzing/corpus/manifest.toml`.
 - The target owner is clear. Storage-owned targets must not be routed through compatibility facades when an owning crate API exists.
 - The no-panic property is meaningful for the target boundary and does not require swallowing invariant violations that production code must reject.
 - The target can be run without external services, network runtimes, nondeterministic clocks, GPU jobs, or durable state mutation outside the fuzz artifact directory.
@@ -81,7 +81,7 @@ Use this sequence for each Roadmap 11.07 fuzz gap.
 2. Add or update owner tests before adding a fuzz target.
 3. Define bounded input interpretation for the harness.
 4. Add deterministic seeds through `fuzz/generators/generate_seed_corpus.py`.
-5. Register the target in `fuzz/targets.toml`, `fuzz/Cargo.toml`, and `fuzz/corpus/manifest.toml` in the same implementation change.
+5. Register the target in `tests/fuzzing/targets.toml`, `fuzz/Cargo.toml`, and `tests/fuzzing/corpus/manifest.toml` in the same implementation change.
 6. Run the corpus generator check.
 7. Run `cargo check --manifest-path fuzz/Cargo.toml --bin <target> --locked`.
 8. Run a short local smoke fuzz job.
@@ -94,7 +94,7 @@ Committed corpus seeds must be deterministic, small, and explainable. Use them t
 
 Required corpus rules:
 
-- Every target must have an entry in `fuzz/corpus/manifest.toml`.
+- Every target must have an entry in `tests/fuzzing/corpus/manifest.toml`.
 - Every seed must be generated or checked by `fuzz/generators/generate_seed_corpus.py`.
 - Valid seeds should pin current canonical formats where those formats already exist.
 - Invalid seeds should target specific rejection gates: bad version, bad length, truncated body, bad checksum, zero sentinel misuse, duplicate identity, dependency mismatch, and declared-count mismatch.
@@ -155,7 +155,7 @@ Record sustained-run evidence with at least:
 
 ## Troubleshooting
 
-If the target name, corpus directory, or seed list drifts, reconcile `fuzz/targets.toml`, `fuzz/Cargo.toml`, and `fuzz/corpus/manifest.toml` before accepting evidence.
+If the target name, corpus directory, or seed list drifts, reconcile `tests/fuzzing/targets.toml`, `fuzz/Cargo.toml`, and `tests/fuzzing/corpus/manifest.toml` before accepting evidence.
 
 If a harness requires production-only runtime state, reduce the target to the explicit codec, validator, or typed adapter boundary. Fuzz jobs must not require live network sessions, durable cluster state, or external services.
 
@@ -168,8 +168,8 @@ If a surface has no explicit codec or typed validator, do not add a byte-level f
 - `AGENTS.md`
 - `fuzz/README.md`
 - `fuzz/VALIDATION_MATRIX.md`
-- `fuzz/targets.toml`
-- `fuzz/corpus/manifest.toml`
+- `tests/fuzzing/targets.toml`
+- `tests/fuzzing/corpus/manifest.toml`
 - `fuzz/generators/generate_seed_corpus.py`
 - `crates/README.md`
 - `crates/andromeda-types/src/ids.rs`

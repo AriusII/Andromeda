@@ -2,80 +2,47 @@
 
 ## Purpose
 
-`andromeda-execution-trace` is the future R3 owner for execution trace correlation.
-
-Execution traces explain Procedure admission, dispatch, transaction, ResultStream, retry, and terminal outcomes. They are evidence for review and audit correlation. They are not storage truth, commit authority, retry authority, or a replacement for durable WAL evidence.
-
-This scaffold is not a promoted Cargo workspace member until a later packet adds a manifest, root workspace wiring, topology tests, and compatibility evidence.
-
-## Scope
-
-This future crate owns:
-
-- Execution trace event taxonomy for admitted Procedure invocations.
-- Correlation identifiers that connect admission, Procedure runtime, transaction evidence, ResultStream events, retry decisions, and terminal completion.
-- Trace-safe summaries of contract hash, catalog version, invocation identity, surface, permission evidence, and terminal state.
-- Rejection and failure trace evidence that proves whether transaction creation occurred.
-- Redaction and bounded trace payload rules for execution evidence.
+`andromeda-execution-trace` owns execution trace events and in-memory trace ledger test support outside `andromeda-exec`.
 
 ## Non-goals
 
-This future crate does not own:
+- Durable storage design or append protocol ownership.
+- Retry policy or timeout policy enforcement.
+- Permission model definitions and transaction commit authority.
+- Exporter formatting or long-term query analytics.
 
-- Durable audit journal storage, WAL records, transaction state, recovery replay, or storage truth.
-- Admission decisions, Procedure runtime dispatch, retry decisions, or ResultStream sequencing.
-- Application-facing SQL, raw command text, dynamic predicates, or shape-shifting returns.
-- Business hardcoding or application-specific trace schemas.
-- Commit, rollback, catalog publication, authorization, or HA/DR authority.
+## Scope
+
+The crate stores invocation lifecycle evidence for admission, dispatch, execution, failure, and timeout events. Trace data is explanatory evidence only, not commit authority, retry authority, or storage truth.
 
 ## Prerequisites
 
-Before adding behavior here, confirm:
-
-- Trace events are derived from typed Procedure contracts and admitted route context.
-- Trace output cannot decide commit, rollback, recovery, authorization, or retry.
-- Sensitive payload fields are redacted or omitted by default.
-- Every terminal trace can be correlated with durable terminal evidence when a transaction exists.
-- Rejection traces can prove no transaction was created when admission fails.
+- Trace event sources must already be validated by caller-owned contracts before emission.
+- Event producers must provide an invocable `trace_id` and `invocation_id`.
+- Implementations must preserve append semantics for forensic continuity and never drop terminal lifecycle events silently.
 
 ## Procedure
 
-1. Start a trace only from a typed invocation context or admission rejection.
-2. Record contract hash, catalog version, invocation identity, surface, and permission evidence as bounded fields.
-3. Correlate Procedure runtime, transaction, ResultStream, retry, and terminal events with stable identifiers.
-4. Keep payload data out of trace fields unless an explicit redaction rule admits it.
-5. Mark traces as explanatory evidence, not database truth.
-6. Require durable terminal evidence references for committed or rolled-back transaction outcomes.
+1. Add new lifecycle events only when a durable subsystem boundary needs extra forensic visibility.
+2. Keep trace events descriptive and stable (`trace_id`, `invocation_id`, terminal state, reason).
+3. Route every emitted event through `AuditLedger` to keep observability behavior testable and consistent.
+4. Keep test ledgers in `InMemoryAuditLedger`; do not use production persistence contracts as test fallback unless explicitly required.
+5. Add or adjust focused unit tests when event schema or query behavior changes.
 
 ## Validation
 
-For the scaffold, validate that only README and `src/lib.rs` files were added under this directory.
-
-Before promoting this crate into the workspace, add and run:
-
 ```powershell
-cargo test -p andromeda-execution-trace --tests
-cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture
-cargo test -p andromeda-cli --test orphan_source_invariants -- --nocapture
+cargo test -p andromeda-execution-trace
 ```
-
-Runtime promotion must include tests for admission rejection traces, no transaction on denial, terminal correlation, redaction, bounded payload fields, metadata-before-payload trace ordering, no application-facing SQL, and no business hardcoding.
 
 ## Troubleshooting
 
-| Symptom | Check |
-| --- | --- |
-| Trace output is used as commit truth | Replace the decision source with transaction and WAL durability evidence. |
-| A trace contains raw command text | Store typed Procedure identity and contract evidence instead. |
-| A denial trace has transaction evidence | Ensure admission rejection happens before transaction creation. |
-| Trace fields contain business-specific payloads | Apply redaction and keep trace schemas engine-generic. |
+- Event is missing from traces: verify the caller emits every lifecycle boundary and that query filters include both `trace_id` and `invocation_id`.
+- Events do not appear in deterministic order: verify append order and serialization boundaries in the emitting integration point.
+- Recovery review is inconclusive: validate `TimeoutExceeded` and final event emission ordering around terminal states.
 
 ## References
 
-- `AGENTS.md`
-- `crates/AGENTS.md`
-- `crates/README.md`
-- `crates/andromeda-exec/README.md`
-- `crates/andromeda-observe/README.md`
-- `docs/adr/ADR-0018-engine-crate-mapping-policy.md`
-- `documentations/implementation/target-crate-gap-ledger-2026-05-08.md`
+- [`Cargo.toml`](Cargo.toml)
+- [`src/lib.rs`](src/lib.rs)
+- [`../andromeda-exec`](../andromeda-exec)

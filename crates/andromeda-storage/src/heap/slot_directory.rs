@@ -63,7 +63,7 @@ impl SlotDirectory {
         let can_reuse_deleted_slot = self
             .slots
             .iter()
-            .any(|slot| slot.is_deleted() && slot.offset == 0);
+            .any(|slot| slot.is_deleted() && slot.offset() == 0);
         let slot_entry_space = if can_reuse_deleted_slot {
             0usize
         } else {
@@ -77,7 +77,7 @@ impl SlotDirectory {
         }
 
         for (i, slot) in self.slots.iter_mut().enumerate() {
-            if slot.is_deleted() && slot.offset == 0 {
+            if slot.is_deleted() && slot.offset() == 0 {
                 *slot = SlotEntry::new(self.free_offset, length);
                 self.free_offset = self
                     .free_offset
@@ -109,8 +109,8 @@ impl SlotDirectory {
         }
 
         let slot = self.slots[idx];
-        if !slot.is_deleted() && slot.offset > 0 {
-            Ok(Some((slot.offset, slot.length)))
+        if !slot.is_deleted() && slot.offset() > 0 {
+            Ok(Some((slot.offset(), slot.length())))
         } else {
             Ok(None)
         }
@@ -132,7 +132,7 @@ impl SlotDirectory {
 
     pub fn compact(&mut self) -> u16 {
         if self.slots.last().is_some_and(|slot| slot.is_deleted()) {
-            let freed_bytes = self.slots.pop().map(|slot| slot.length).unwrap_or(0);
+            let freed_bytes = self.slots.pop().map(|slot| slot.length()).unwrap_or(0);
             self.free_offset = self.free_offset.saturating_sub(freed_bytes);
             return freed_bytes;
         }
@@ -158,7 +158,7 @@ impl SlotDirectory {
     pub fn active_slot_count(&self) -> usize {
         self.slots
             .iter()
-            .filter(|s| !s.is_deleted() && s.offset > 0)
+            .filter(|s| !s.is_deleted() && s.offset() > 0)
             .count()
     }
 
@@ -205,10 +205,10 @@ impl SlotDirectory {
                     continue;
                 }
 
-                let i_end = slot_i.offset.saturating_add(slot_i.length);
-                let j_end = slot_j.offset.saturating_add(slot_j.length);
+                let i_end = slot_i.offset().saturating_add(slot_i.length());
+                let j_end = slot_j.offset().saturating_add(slot_j.length());
 
-                if slot_i.offset < j_end && slot_j.offset < i_end {
+                if slot_i.offset() < j_end && slot_j.offset() < i_end {
                     return Err(heap_error(format!(
                         "tuple overlap: slot {} and slot {}",
                         i, j

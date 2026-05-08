@@ -9,11 +9,11 @@ use std::collections::BTreeMap;
 
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
+use crate::TraceId;
 use crate::events::{
     AdminOperation, CertificateIdentity, Permission, SecurityAuditOutcome, SecurityAuditTrace,
     SurfaceScope, UserPrincipal,
 };
-use crate::trace_id::TraceId;
 
 pub use crate::events::SecurityAuditDenialReason as AuthorizationDenialReason;
 

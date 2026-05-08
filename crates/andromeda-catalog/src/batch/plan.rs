@@ -1,10 +1,10 @@
 //! Dry-run plan types produced by `DefinitionBatch::dry_run`.
 
+use andromeda_definition_batch::DefinitionBatchId;
 use andromeda_types::{CatalogObjectId, CatalogVersion, DatabaseId, NamespaceId};
 
 use crate::{ObjectKind, QualifiedName};
 
-use super::definition::DefinitionBatchId;
 use super::mutation::CatalogMutationPlan;
 
 /// A successfully planned object creation within a [`DefinitionBatchPlan`].

@@ -82,14 +82,18 @@ pub(super) fn commit_entry_with_lsns(
     row_count_affected: u64,
     isolation_level: IsolationLevel,
 ) -> CommitLogEntry {
-    CommitLogEntry {
+    let TxWalReplayRecord::Commit(entry) = TxWalReplayRecord::commit_with_durable_lsn(
         tx_id,
         commit_lsn,
         durable_lsn,
-        timestamp: EngineTimestamp::from_unix_millis(1),
+        EngineTimestamp::from_unix_millis(1),
         row_count_affected,
         isolation_level,
-    }
+    ) else {
+        unreachable!("commit replay constructor must return a commit entry");
+    };
+
+    entry
 }
 
 pub(super) fn durable_rollback_entry(
@@ -106,13 +110,17 @@ pub(super) fn rollback_entry_with_lsns(
     durable_lsn: Lsn,
     parameter_hash: u64,
 ) -> RollbackLogEntry {
-    RollbackLogEntry {
+    let TxWalReplayRecord::Rollback(entry) = TxWalReplayRecord::rollback_with_durable_lsn(
         tx_id,
         rollback_lsn,
         durable_lsn,
-        timestamp: EngineTimestamp::from_unix_millis(2),
+        EngineTimestamp::from_unix_millis(2),
         parameter_hash,
-    }
+    ) else {
+        unreachable!("rollback replay constructor must return a rollback entry");
+    };
+
+    entry
 }
 
 #[async_trait::async_trait]

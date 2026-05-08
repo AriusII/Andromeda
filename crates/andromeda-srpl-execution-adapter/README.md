@@ -2,14 +2,12 @@
 
 ## Purpose
 
-`andromeda-srpl-execution-adapter` is the future owner for runtime-free SRPL
+`andromeda-srpl-execution-adapter` owns runtime-free SRPL
 execution adapter contracts.
 
-Use this crate when a later extraction needs a dedicated boundary between
-catalog-bound SRPL plans and concrete execution orchestration. The current
-scaffold intentionally contains no behavior. Existing adapter contracts remain
-in `andromeda-srpl` until a later behavior-preserving migration moves them with
-facade compatibility tests.
+Use this crate as the dedicated boundary between catalog-bound SRPL plans and
+concrete execution orchestration. `andromeda-srpl` keeps compatibility reexports
+and must not own adapter behavior.
 
 ## Scope
 
@@ -28,10 +26,8 @@ truth, WAL durability, transport sessions, or catalog publication.
 
 ## Dependency Direction
 
-This scaffold has no dependencies because no behavior has moved yet.
-
-When behavior is extracted, dependencies must point only toward lower or
-contract-safe crates such as `andromeda-error`, `andromeda-types`,
+Dependencies must point only toward lower or contract-safe crates such as
+`andromeda-error`, `andromeda-types`,
 `andromeda-contract`, `andromeda-srpl-diagnostics`,
 `andromeda-srpl-cardinality`, and `andromeda-srpl-ir`.
 
@@ -53,7 +49,7 @@ boundary must not depend back on concrete execution runtime crates.
 - Do not treat adapter results, traces, RAM, or benchmark output as durable
   truth.
 - Do not serialize Rust native structs directly to disk or network.
-- Do not move behavior from `andromeda-srpl` in this scaffold.
+- Do not depend on `andromeda-srpl` as a facade.
 
 ## Prerequisites
 
@@ -70,26 +66,13 @@ Before changing this crate, understand:
 
 ## Procedure
 
-1. Keep `src/lib.rs` limited to crate-level documentation until behavior moves.
-2. Move adapter behavior only in a dedicated extraction change with facade
-   compatibility tests.
-3. Keep adapter APIs typed, bounded, and runtime-free.
-4. Preserve row-bound and cardinality validation when introducing public
+1. Keep adapter APIs typed, bounded, and runtime-free.
+2. Preserve row-bound and cardinality validation when introducing public
    request and result types.
-5. Reject any design that lets adapter output decide durable truth or bypass
+3. Reject any design that lets adapter output decide durable truth or bypass
    typed Procedure contracts.
 
 ## Validation
-
-For this scaffold, file-shape validation is sufficient because the crate is not
-yet a workspace member:
-
-```powershell
-rg -n "forbid\\(unsafe_code\\)|Purpose|Scope|Non-goals|Dependency Direction" crates/andromeda-srpl-execution-adapter
-rg --files crates/andromeda-srpl-execution-adapter
-```
-
-When this crate becomes a workspace member, add package-level Rust gates such as:
 
 ```powershell
 cargo fmt --package andromeda-srpl-execution-adapter --check

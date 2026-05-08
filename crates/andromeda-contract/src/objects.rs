@@ -29,60 +29,13 @@
 use std::collections::BTreeSet;
 
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use andromeda_types::{CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash};
-
-use crate::{contracts::ProcedureContract, names::QualifiedName};
+use andromeda_procedure_contract::{CatalogObjectRef, ObjectKind, ProcedureContract};
+use andromeda_types::{ColumnDescriptor, ContractHash};
 
 mod shape_hash;
 mod validation;
 
-pub(crate) use validation::{validate_columns, validate_columns_allow_empty};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ObjectKind {
-    Database,
-    Namespace,
-    Table,
-    Map,
-    Enum,
-    StructuredObject,
-    Procedure,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogObjectRef {
-    pub object_id: CatalogObjectId,
-    pub name: QualifiedName,
-    pub kind: ObjectKind,
-    pub catalog_version: CatalogVersion,
-}
-
-impl CatalogObjectRef {
-    pub fn validate_for_definition(&self, expected_kind: ObjectKind) -> AndromedaResult<()> {
-        if self.object_id.get() == 0 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Catalog,
-                "catalog object id must not be zero",
-            ));
-        }
-
-        if self.catalog_version.get() == 0 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Catalog,
-                "catalog object version must not be zero",
-            ));
-        }
-
-        if self.kind != expected_kind {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Catalog,
-                "catalog object kind must match its definition",
-            ));
-        }
-
-        Ok(())
-    }
-}
+pub(crate) use validation::validate_columns;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CatalogBindingKind {
@@ -288,7 +241,8 @@ impl CatalogDefinition {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_types::{CatalogObjectId, ScalarType, TypeDescriptor};
+    use andromeda_procedure_contract::QualifiedName;
+    use andromeda_types::{CatalogObjectId, CatalogVersion, ScalarType, TypeDescriptor};
 
     fn object(id: u64, name: &str, kind: ObjectKind, version: u64) -> CatalogObjectRef {
         CatalogObjectRef {

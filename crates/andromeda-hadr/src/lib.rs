@@ -6,6 +6,9 @@ This crate is intentionally behavior-free. It documents the boundary that may
 eventually own replication roles, quorum evidence, fencing, promotion epochs,
 WAL shipping state, and cluster recovery reports.
 
+Current status: ownership-boundary scaffold only. It does not claim production
+readiness, failover safety, or operational completeness.
+
 C5 invariants:
 
 - Promotion and failover must be backed by quorum, fencing, epoch, and durable WAL evidence.

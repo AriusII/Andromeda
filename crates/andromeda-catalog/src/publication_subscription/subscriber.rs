@@ -1,3 +1,4 @@
+pub use andromeda_catalog_recovery::CatalogSubscriberKind;
 use andromeda_error::AndromedaResult;
 
 use super::catalog_publication_error;
@@ -18,13 +19,6 @@ impl CatalogSubscriberId {
     pub fn as_str(&self) -> &str {
         &self.0
     }
-}
-
-/// Runtime class for administrative catalog subscribers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CatalogSubscriberKind {
-    Administration,
-    HadrReplica,
 }
 
 /// Subscriber registration tracked by the publication/subscription runtime.

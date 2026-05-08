@@ -5,10 +5,18 @@ edition.workspace = true
 publish = false
 
 [dependencies]
+andromeda-bench-harness.workspace = true
+andromeda-bench-workload.workspace = true
 andromeda-error.workspace = true
 andromeda-hardware.workspace = true
 andromeda-observe.workspace = true
+andromeda-regression.workspace = true
+andromeda-scenario-evidence.workspace = true
+andromeda-srpl-binder.workspace = true
 andromeda-srpl.workspace = true
-andromeda-storage.workspace = true
+andromeda-srpl-lowering.workspace = true
+andromeda-srpl-parser.workspace = true
+andromeda-storage-page.workspace = true
 andromeda-time.workspace = true
 andromeda-types.workspace = true
+andromeda-wal.workspace = true

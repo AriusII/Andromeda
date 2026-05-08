@@ -40,6 +40,8 @@ class ManifestEntry:
 TARGETS_SCHEMA_VERSION = "andromeda-fuzz-targets-v1"
 CORPUS_SCHEMA_VERSION = "andromeda-fuzz-corpus-v1"
 GENERATOR_PATH = "fuzz/generators/generate_seed_corpus.py"
+DEFAULT_TARGETS_FILE = "tests/fuzzing/targets.toml"
+CORPUS_MANIFEST_PATH = "tests/fuzzing/corpus/manifest.toml"
 
 HEAP_PAGE_V1_PAYLOAD_OFFSET = 112
 HEAP_PAGE_V1_TRAILER_SIZE = 48
@@ -1125,7 +1127,7 @@ def seed_payload_is_deterministic(seed_name: str, actual: bytes, expected: bytes
 
 
 def write_manifest(root: pathlib.Path, targets: List[TargetSpec]) -> pathlib.Path:
-    manifest_path = root / "fuzz" / "corpus" / "manifest.toml"
+    manifest_path = root / CORPUS_MANIFEST_PATH
     lines = [
         f'schema_version = "{CORPUS_SCHEMA_VERSION}"',
         f'generated_by = "{GENERATOR_PATH}"',
@@ -1152,7 +1154,7 @@ def check_seed_corpus(root: pathlib.Path, targets_file: str) -> int:
     targets_path = root / targets_file
     target_specs = load_target_specs(targets_path)
     support_specs = load_support_file_specs(targets_path)
-    manifest_path = root / "fuzz" / "corpus" / "manifest.toml"
+    manifest_path = root / CORPUS_MANIFEST_PATH
     manifest_entries = load_manifest_entries(manifest_path)
     cargo_bin_specs = load_cargo_bin_specs(root / "fuzz" / "Cargo.toml")
     manifest_by_target = {entry.target: entry for entry in manifest_entries}
@@ -1170,13 +1172,13 @@ def check_seed_corpus(root: pathlib.Path, targets_file: str) -> int:
     manifest_headers = load_top_level_strings(manifest_path)
     if manifest_headers.get("schema_version") != CORPUS_SCHEMA_VERSION:
         errors.append(
-            "fuzz/corpus/manifest.toml schema_version "
+            "tests/fuzzing/corpus/manifest.toml schema_version "
             f"{manifest_headers.get('schema_version')!r} does not match "
             f"{CORPUS_SCHEMA_VERSION!r}"
         )
     if manifest_headers.get("generated_by") != GENERATOR_PATH:
         errors.append(
-            "fuzz/corpus/manifest.toml generated_by "
+            "tests/fuzzing/corpus/manifest.toml generated_by "
             f"{manifest_headers.get('generated_by')!r} does not match {GENERATOR_PATH!r}"
         )
 
@@ -1200,7 +1202,7 @@ def check_seed_corpus(root: pathlib.Path, targets_file: str) -> int:
 
     actual_corpus_dirs = sorted(
         path.relative_to(root).as_posix()
-        for path in (root / "fuzz" / "corpus").iterdir()
+        for path in (root / "tests" / "fuzzing" / "corpus").iterdir()
         if path.is_dir()
     )
     expected_corpus_dirs = sorted({target.corpus_dir for target in target_specs})
@@ -1337,7 +1339,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Generate deterministic fuzz seed corpus")
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--ensure-only", action="store_true")
-    parser.add_argument("--targets-file", default="fuzz/targets.toml")
+    parser.add_argument("--targets-file", default=DEFAULT_TARGETS_FILE)
     args = parser.parse_args()
 
     root = pathlib.Path.cwd()
@@ -1347,7 +1349,7 @@ def main() -> int:
 
     targets = load_target_specs(root / args.targets_file)
     if not targets:
-        raise SystemExit("No targets found in fuzz/targets.toml")
+        raise SystemExit(f"No targets found in {args.targets_file}")
 
     created = []
     for target in targets:

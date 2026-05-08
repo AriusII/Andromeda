@@ -59,10 +59,10 @@ pub use lock_manager::*;
 pub use locking_protocol::{TwoPhaseLocksValidator, TwoPhaseOperation};
 /// Transaction-local durable log sequence number used at WAL adapter boundaries.
 ///
-/// The transaction crate deliberately owns this boundary value instead of importing
-/// the storage crate's `Lsn`; storage implementations convert at the adapter edge.
-/// It remains public because `CommitLogEntry`, `InvocationWal`, `WalManager`, and
-/// `TxWalAdapterTrait` expose LSNs in their public contracts.
+/// The transaction-log crate owns this boundary value instead of importing the
+/// storage crate's `Lsn`; storage implementations convert at the adapter edge.
+/// `andromeda-tx` re-exports it because `CommitLogEntry`, `InvocationWal`,
+/// `WalManager`, and `TxWalAdapterTrait` expose LSNs in their public contracts.
 pub use lsn::Lsn;
 pub use manager::{TransactionLockCoordinator, TransactionManager, TransactionRecord};
 pub use savepoint::{

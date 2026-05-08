@@ -2,11 +2,15 @@
 
 ## Purpose
 
-`andromeda-segment` is a future C5 owner crate for durable storage segments and segment indexes.
+`andromeda-segment` is the C5 boundary crate for durable storage segments and segment indexes.
 
-This scaffold reserves a boundary for segment descriptors, immutable segment evidence, segment indexes, compaction inputs, and recovery-facing segment metadata. No behavior has moved from `andromeda-storage`.
+This crate now owns segment identity, lifecycle state, mutation class, and implementation-neutral durability boundary validation. Storage keeps page-backed descriptors and segment-index codecs during migration.
 
 ## Scope
+
+This crate owns:
+
+- `SegmentId`, `SegmentState`, `SegmentMutation`, and `SegmentDurabilityBoundary`.
 
 Future work in this crate may own:
 
@@ -21,7 +25,7 @@ Future work in this crate may own:
 - No bypass of typed Procedure contracts.
 - No transaction commit publication, physical WAL file ownership, heap row semantics, buffer-pool eviction, backup execution, restore execution, or HA/DR quorum policy.
 - No GPU output, benchmark output, RAM state, or temporary storage as segment truth.
-- No behavior move in this scaffold.
+- No segment byte-codec promotion without explicit layout, checksum, and crash/recovery evidence.
 
 ## Prerequisites
 
@@ -42,7 +46,7 @@ Before behavior lands here:
 
 ## Validation
 
-This scaffold is documentation-only. Future behavior requires `cargo fmt`, `cargo check`, `cargo clippy`, segment metadata tests, segment-index tests, corruption-rejection tests, and crash/recovery scenarios.
+Run `cargo check -p andromeda-segment`. Future descriptor and codec behavior requires `cargo fmt`, `cargo clippy`, segment metadata tests, segment-index tests, corruption-rejection tests, and crash/recovery scenarios.
 
 ## Troubleshooting
 

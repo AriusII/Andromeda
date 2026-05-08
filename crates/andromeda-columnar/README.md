@@ -4,12 +4,14 @@
 
 `andromeda-columnar` is the future owner crate for columnar analytical layout descriptors, batch scan contracts, and columnar evidence used by statistics, maps, analytics, and benchmarks.
 
-This directory is a scaffold only. It is not registered as a Cargo workspace member, and no columnar behavior has moved from existing owners.
+This crate currently owns runtime-free advisory columnar layout descriptors and the `ColumnarArtifactDescriptor` trait. It does not own persisted bytes, scan execution, WAL coverage, recovery replay, or catalog publication.
 
 ## Scope
 
 This crate is expected to own:
 
+- `ColumnarLayoutDescriptor`, `ColumnarVersionBinding`, consumer vocabulary, and acceleration policy vocabulary.
+- The advisory boundary trait used to prove columnar artifacts remain version-bound, CPU-fallback-capable, and outside C5 truth.
 - Runtime-free columnar layout descriptors and scan-shape contracts.
 - Version-bound columnar snapshots for analytical or diagnostic use.
 - Explicit codecs if any persisted or networked columnar bytes are accepted later.
@@ -43,11 +45,12 @@ This crate is expected to own:
 Future behavior changes should use:
 
 ```powershell
+cargo check -p andromeda-columnar --all-targets
 cargo test -p andromeda-columnar
 cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture
 ```
 
-Persisted columnar bytes would also require explicit codec, golden-vector, fuzz, and crash/recovery validation before acceptance.
+Persisted columnar bytes would also require explicit codec, golden-vector, fuzz, and crash/recovery validation before acceptance. Descriptor and trait changes alone do not prove release readiness.
 
 ## Troubleshooting
 
@@ -58,5 +61,7 @@ Persisted columnar bytes would also require explicit codec, golden-vector, fuzz,
 ## References
 
 - [Workspace crate rules](../README.md)
+- [Current analytics descriptor owner](../andromeda-analytics/README.md)
+- [Current Map descriptor owner](../andromeda-maps/README.md)
 - [Storage owner](../andromeda-storage/README.md)
 - [Hardware policy owner](../andromeda-hardware/README.md)

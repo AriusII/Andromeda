@@ -1,6 +1,7 @@
-use andromeda_bench::{
-    BenchmarkBaseline, BenchmarkBaselineComparisonError, BenchmarkRunRequest, RegressionAnalysis,
-    run_bounded_benchmark,
+use andromeda_bench::run_bounded_benchmark;
+use andromeda_bench_workload::BenchmarkRunRequest;
+use andromeda_regression::{
+    BenchmarkBaseline, BenchmarkBaselineComparisonError, RegressionAnalysis,
 };
 
 use crate::common::scenario_target;

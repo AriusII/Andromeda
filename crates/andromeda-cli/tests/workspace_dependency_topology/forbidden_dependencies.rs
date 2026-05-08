@@ -10,6 +10,7 @@ use std::fs;
 const CONCRETE_RUNTIME_TLS_QUIC_DEPS: [&str; 3] = ["quinn", "rcgen", "rustls"];
 const EXEC_FORBIDDEN_DIRECT_RUNTIME_DEPS: &[&str] = &[
     "andromeda-runtime-quinn",
+    "andromeda-quic-runtime-quinn",
     "grpc",
     "grpc-web",
     "grpcio",
@@ -84,6 +85,7 @@ pub(crate) const SECURITY_CONTRACT_FORBIDDEN_RUNTIME_DEPS: &[&str] = &[
     "andromeda-gpu-kernels",
     "andromeda-rpc-runtime",
     "andromeda-runtime-quinn",
+    "andromeda-quic-runtime-quinn",
     "andromeda-exec",
     "andromeda-storage",
     "andromeda-wal",
@@ -210,8 +212,14 @@ pub(crate) const SECURITY_CRITICAL_PATH_CRATES: &[&str] = &[
 pub(crate) const FORBIDDEN_SECURITY_CRITICAL_GPU_RUNTIME_DEPS: &[&str] = &[
     "andromeda-analytics",
     "andromeda-bench",
+    "andromeda-bench-harness",
+    "andromeda-bench-workload",
+    "andromeda-columnar",
     "andromeda-gpu",
     "andromeda-gpu-kernels",
+    "andromeda-maps",
+    "andromeda-simd",
+    "andromeda-vector",
     "ash",
     "cuda",
     "cudarc",
@@ -245,14 +253,14 @@ fn only_andromeda_quic_declares_concrete_runtime_tls_quic_crates() {
     let mut violations = Vec::new();
 
     for manifest in manifests.values() {
-        if manifest.package_name == "andromeda-quic" {
+        if manifest.package_name == "andromeda-quic-runtime-quinn" {
             continue;
         }
 
         for dependency in &manifest.runtime_dependencies {
             if CONCRETE_RUNTIME_TLS_QUIC_DEPS.contains(&dependency.as_str()) {
                 violations.push(format!(
-                    "{} declares production dependency `{dependency}` in {}; concrete Quinn/TLS crates must stay owned by andromeda-quic until runtime extraction",
+                    "{} declares production dependency `{dependency}` in {}; concrete Quinn/TLS crates must stay owned by andromeda-quic-runtime-quinn",
                     manifest.package_name,
                     manifest.path.display()
                 ));
@@ -262,7 +270,7 @@ fn only_andromeda_quic_declares_concrete_runtime_tls_quic_crates() {
         for dependency in &manifest.dev_dependencies {
             if CONCRETE_RUNTIME_TLS_QUIC_DEPS.contains(&dependency.as_str()) {
                 violations.push(format!(
-                    "{} declares dev dependency `{dependency}` in {}; concrete Quinn/TLS crates must stay owned by andromeda-quic until runtime extraction",
+                    "{} declares dev dependency `{dependency}` in {}; concrete Quinn/TLS crates must stay owned by andromeda-quic-runtime-quinn",
                     manifest.package_name,
                     manifest.path.display()
                 ));

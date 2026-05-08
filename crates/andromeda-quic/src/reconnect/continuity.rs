@@ -1,5 +1,5 @@
+use andromeda_core::CertificateIdentity;
 use andromeda_core::{AndromedaErrorKind, AndromedaResult};
-use andromeda_observe::CertificateIdentity;
 
 use crate::{SurfacePlane, mtls_identity::validate_fingerprint};
 
@@ -39,7 +39,7 @@ impl CertificateContinuityPolicy {
         }
 
         validate_fingerprint(previous_key.server_fingerprint())?;
-        validate_fingerprint(&presented_identity.fingerprint)?;
+        validate_fingerprint(presented_identity.fingerprint().as_str())?;
 
         let presented_key = ConnectionPoolKey::from_server_identity(presented_identity, plane)?;
         if previous_key == &presented_key {

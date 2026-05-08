@@ -153,4 +153,4 @@ the movement as blocked for that path.
 - `documentations/testing/release-evidence-template.md`
 - `documentations/WORKER_EXECUTION_MATRIX_2026.md`
 - `fuzz/VALIDATION_MATRIX.md`
-- `fuzz/targets.toml`
+- `tests/fuzzing/targets.toml`

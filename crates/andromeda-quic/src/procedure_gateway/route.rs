@@ -1,8 +1,8 @@
+use andromeda_core::CertificateIdentity;
 use andromeda_core::{
     AndromedaResult, CatalogVersion, ContractHash, InvocationId, ProcedureId, RequestId, SessionId,
     TransactionId,
 };
-use andromeda_observe::CertificateIdentity;
 
 use crate::{
     CatalogProcedureManifest, Connection, DispatchPolicy, FrameBytes, FrameType, HADR_STREAM_MAX,

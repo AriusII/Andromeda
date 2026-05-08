@@ -2,7 +2,7 @@
 
 use andromeda_srpl::{
     Cardinality, DiagnosticPhase, ForbiddenConstruct, ForbiddenConstructHit, ProcedureAst,
-    SourceSpan, SrplDiagnostic, SrplSource, compile_narrow_procedure_signature,
+    SourceSpan, Spanned, SrplDiagnostic, SrplSource, compile_narrow_procedure_signature,
     definition_batch_bridge::{
         SrplDefinitionBatchDiagnostic, SrplDefinitionBatchDryRunReport,
         SrplDefinitionBatchDryRunRequest,
@@ -28,6 +28,7 @@ use andromeda_srpl::{
 };
 
 fn assert_type<T>() {}
+fn assert_same_type<T>(_value: T) {}
 
 #[test]
 fn srpl_facade_preserves_historical_public_imports() {
@@ -74,6 +75,36 @@ fn srpl_facade_preserves_historical_public_imports() {
     assert_type::<ProcedureResolveTarget>();
     assert_type::<SrplProcedureManifest>();
     assert_type::<source_location::SourceSpan>();
+}
+
+#[test]
+fn srpl_facade_reexports_owner_crate_types_without_wrapping() {
+    assert_same_type::<andromeda_srpl_cardinality::Cardinality>(Cardinality::One);
+    assert_same_type::<Cardinality>(andromeda_srpl_cardinality::Cardinality::One);
+
+    let owner_span = andromeda_srpl_diagnostics::SourceSpan::new(3, 9);
+    let facade_span: SourceSpan = owner_span;
+    assert_eq!(facade_span, SourceSpan::new(3, 9));
+
+    let owner_source = andromeda_srpl_diagnostics::SrplSource::new("select *");
+    let facade_source: SrplSource<'_> = owner_source;
+    assert!(
+        facade_source
+            .forbidden_constructs()
+            .contains(&ForbiddenConstruct::SelectStar)
+    );
+
+    let owner_diag = andromeda_srpl_diagnostics::SrplDiagnostic::new(
+        DiagnosticPhase::Binding,
+        Some(facade_span),
+        "owner diagnostic",
+    );
+    let facade_diag: SrplDiagnostic = owner_diag;
+    assert_eq!(facade_diag.phase, DiagnosticPhase::Binding);
+
+    let owner_spanned = andromeda_srpl_ast::Spanned::new(Cardinality::Many, facade_span);
+    let facade_spanned: Spanned<Cardinality> = owner_spanned;
+    assert_eq!(facade_spanned.value, Cardinality::Many);
 }
 
 #[test]

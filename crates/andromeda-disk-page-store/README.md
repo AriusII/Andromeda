@@ -2,11 +2,15 @@
 
 ## Purpose
 
-`andromeda-disk-page-store` is a future C5 owner crate for durable page I/O against disk-backed storage.
+`andromeda-disk-page-store` is the C5 boundary crate for durable page I/O against disk-backed storage.
 
-This scaffold reserves a boundary for page read, write, allocation, sync, and device error classification. No behavior has moved from `andromeda-storage`.
+This crate now owns the implementation-neutral page flush durability boundary. The file-backed page store and disk manager remain in `andromeda-storage` during migration.
 
 ## Scope
+
+This crate owns:
+
+- WAL-before-page-flush validation for page LSN and durable WAL LSN evidence.
 
 Future work in this crate may own:
 
@@ -21,7 +25,7 @@ Future work in this crate may own:
 - No bypass of typed Procedure contracts.
 - No ownership of transaction status, WAL bytes, page format semantics, heap layout, buffer-pool eviction, backup, restore, or HA/DR orchestration.
 - No GPU output, benchmark output, RAM state, or temporary storage as disk-page-store truth.
-- No behavior move in this scaffold.
+- No durable page byte-format semantics; page bytes must come from explicit format codecs.
 
 ## Prerequisites
 
@@ -42,7 +46,7 @@ Before behavior lands here:
 
 ## Validation
 
-This scaffold is documentation-only. Future behavior requires `cargo fmt`, `cargo check`, `cargo clippy`, disk page-store contract tests, fault-injection tests, and crash/recovery scenarios.
+Run `cargo check -p andromeda-disk-page-store`. Future I/O behavior requires `cargo fmt`, `cargo clippy`, disk page-store contract tests, fault-injection tests, and crash/recovery scenarios.
 
 ## Troubleshooting
 

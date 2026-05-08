@@ -2,13 +2,13 @@
 
 ## Purpose
 
-`andromeda-transaction-log` is a future C5 owner crate for logical transaction terminal evidence.
+`andromeda-transaction-log` is the C5 owner crate for logical transaction terminal evidence.
 
-This scaffold reserves a boundary for transaction log records, terminal commit and rollback evidence, replay-facing classification, and the bridge between transaction policy and durable WAL bytes. No behavior has moved from `andromeda-tx`, `andromeda-wal`, or `andromeda-storage`.
+This crate owns transaction log record shapes, terminal commit and rollback evidence, replay-facing classification, and transaction-local LSN evidence. `andromeda-tx` still owns append, flush, status publication, and the commit manager facade.
 
 ## Scope
 
-Future work in this crate may own:
+This crate owns:
 
 - Logical transaction log record shapes and terminal evidence rules.
 - Commit and rollback evidence classification over a durable WAL prefix.
@@ -22,11 +22,10 @@ Future work in this crate may own:
 - No ownership of physical WAL file bytes unless a later explicit split assigns it.
 - No MVCC visibility, lock scheduling, page flushing, manifest switching, backup, restore, or HA/DR orchestration.
 - No GPU output, benchmark output, RAM state, or temporary storage as transaction-log truth.
-- No behavior move in this scaffold.
 
 ## Prerequisites
 
-Before behavior lands here:
+Before adding persistent transaction-log bytes:
 
 - Terminal transaction records must be covered by the durable WAL prefix before they influence visibility.
 - Log bytes must use explicit versioned codecs and little-endian canonical serialization.
@@ -39,11 +38,11 @@ Before behavior lands here:
 2. Keep `src/lib.rs` limited to module declarations and intentional reexports.
 3. Add explicit codecs before accepting persistent or network bytes.
 4. Preserve WAL-before-visible-commit ordering for all terminal classifications.
-5. Add crash/recovery and corruption-rejection tests before moving behavior.
+5. Add crash/recovery and corruption-rejection tests before expanding behavior.
 
 ## Validation
 
-This scaffold is documentation-only. Future behavior requires `cargo fmt`, `cargo check`, `cargo clippy`, transaction-log replay tests, codec roundtrip and corruption-rejection tests, and crash/recovery scenarios.
+Run `cargo fmt`, `cargo check`, `cargo clippy`, transaction-log replay tests, codec roundtrip and corruption-rejection tests, and crash/recovery scenarios.
 
 ## Troubleshooting
 
@@ -52,4 +51,5 @@ If replay derives a terminal transaction state from bytes outside the durable WA
 ## References
 
 - `src/lib.rs`
-- Existing owners: `crates/andromeda-tx/`, `crates/andromeda-wal/`, `crates/andromeda-storage/`
+- Compatibility facade and commit manager: `crates/andromeda-tx/`
+- Physical WAL owners: `crates/andromeda-wal/`, `crates/andromeda-storage/`

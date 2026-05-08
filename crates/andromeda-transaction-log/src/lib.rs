@@ -1,11 +1,10 @@
 #![forbid(unsafe_code)]
 #![doc = r#"
-Future C5 owner scaffold for logical transaction terminal evidence.
+Logical transaction terminal evidence for Andromeda.
 
-This crate is intentionally behavior-free. It documents the boundary that may
-eventually own transaction-log record shapes and replay-facing transaction
-classification after an explicit split from existing transaction, WAL, and
-storage crates.
+This crate owns transaction-log record shapes, transaction-local LSN evidence,
+and replay-facing terminal classification. It does not own physical WAL bytes or
+commit visibility publication.
 
 C5 invariants:
 
@@ -14,5 +13,14 @@ C5 invariants:
 - Persistent and network bytes must use explicit codecs, never Rust native struct layout.
 - Crash/recovery validation is required before mission-critical behavior lands here.
 - RAM, temporary storage, GPU output, and benchmark output are advisory only; they are not truth.
-- No behavior has moved into this crate in this scaffold.
 "#]
+
+mod entry;
+mod lsn;
+mod replay;
+mod rollback;
+
+pub use entry::{CommitLogEntry, IsolationLevel, WalRecordKind};
+pub use lsn::Lsn;
+pub use replay::{TxWalReplayAction, TxWalReplayRecord, TxWalReplaySummary};
+pub use rollback::RollbackLogEntry;

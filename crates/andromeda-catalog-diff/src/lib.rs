@@ -2,19 +2,24 @@
 #![doc = r#"
 # Andromeda Catalog Diff
 
-Runtime-free scaffold for future catalog diff ownership.
+Runtime-free catalog object diff boundary crate.
 
-This crate exposes stable taxonomy placeholders only. It does not compute diffs,
-evaluate compatibility, apply changes, publish catalog state, claim release
-readiness, serialize network or disk formats, or authorize any
+This crate owns object-level diff evidence and stable taxonomy placeholders. It
+does not evaluate Procedure compatibility, apply changes, publish catalog state,
+claim release readiness, serialize network or disk formats, or authorize any
 application-facing ad hoc SQL surface.
 
 Catalog publication remains outside this crate and must not become visible
 without durable WAL.
 "#]
 
+mod object_diff;
 mod taxonomy;
 
+pub use object_diff::{
+    CatalogObjectDiff, CatalogObjectDiffImpact, CatalogObjectDiffKind, CatalogObjectDiffSeverity,
+    diff_catalog_object_definitions,
+};
 pub use taxonomy::{
     ALL_CATALOG_DIFF_IMPACT_KINDS, ALL_CATALOG_DIFF_KINDS, ALL_CATALOG_DIFF_SEVERITIES,
     CATALOG_DIFF_IMPACT_CONTRACT_HASH_CHANGED, CATALOG_DIFF_IMPACT_DEPENDENCY_CHANGED,

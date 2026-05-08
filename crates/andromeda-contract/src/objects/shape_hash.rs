@@ -4,12 +4,9 @@ use andromeda_types::{
 };
 
 use andromeda_digest::Sha256;
+use andromeda_procedure_contract::{CatalogObjectRef, ObjectKind, ProcedureContract};
 
-use crate::contracts::ProcedureContract;
-
-use super::{
-    CatalogObjectRef, EnumDefinition, ObjectKind, StructuredObjectDefinition, TableDefinition,
-};
+use super::{EnumDefinition, StructuredObjectDefinition, TableDefinition};
 
 pub(super) fn table_shape_hash(definition: &TableDefinition) -> ContractHash {
     let mut sink = ObjectShapeHashSink::new();

@@ -1,4 +1,6 @@
-use andromeda_bench::{BenchmarkPlanClass, BenchmarkScenarioTarget, BenchmarkStatsVersion};
+use andromeda_scenario_evidence::{
+    BenchmarkPlanClass, BenchmarkScenarioTarget, BenchmarkStatsVersion,
+};
 use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 pub(crate) fn scenario_target(stats_version: u64) -> BenchmarkScenarioTarget {

@@ -1,17 +1,32 @@
 #![forbid(unsafe_code)]
 
-//! Future owner crate scaffold for bounded Andromeda benchmark workloads.
+//! Bounded Andromeda benchmark workload contracts.
 //!
-//! This crate intentionally defines no public API yet. Workload behavior stays
-//! in `andromeda-bench` until a later extraction registers this package in the
-//! workspace and proves compatibility.
-//!
-//! Ownership constraints:
-//! - Workloads must have explicit identity, shape version, limits, and stop
-//!   rules.
-//! - Benchmark output is advisory and cannot become storage, catalog, optimizer,
-//!   recovery, or security truth.
-//! - Benchmark and GPU work must stay outside C5 commit, WAL, rollback,
-//!   recovery, MVCC short-visibility, catalog publication, and security-critical
-//!   paths.
-//! - Adaptive consumers must explain use or rejection through DecisionTrace.
+//! This crate owns workload identity, request limits, budget evaluation, and
+//! bounded diagnostic metadata. It does not execute benchmarks and benchmark
+//! output remains advisory only.
+
+mod budget;
+mod error;
+mod limits;
+mod metric_math;
+mod request;
+mod workload;
+
+pub use budget::{BudgetStatus, PerformanceBudget, evaluate_budget};
+pub use error::BenchmarkError;
+pub use limits::{
+    DEFAULT_DURATION_MS, DEFAULT_SAMPLES, DEFAULT_TEMP_BYTES, DEFAULT_WARMUPS, MAX_DURATION_MS,
+    MAX_EVIDENCE_TTL_MS, MAX_SAMPLES, MAX_TEMP_BYTES, MAX_WARMUPS,
+};
+pub use metric_math::{error_rate_ppm, percent_change};
+pub use request::{BenchmarkHardwareProfile, BenchmarkRunRequest, validate_run_request};
+pub use workload::{
+    AUDIT_APPEND_FILE_SINK_SMOKE_WORKLOAD_ID, BENCHMARK_BUDGET_ORIGIN, BENCHMARK_DECISION_LINKAGE,
+    BENCHMARK_PRIMARY_METRIC, BTREE_LOOKUP_SMOKE_WORKLOAD_ID, BTREE_NODE_CODEC_SMOKE_WORKLOAD_ID,
+    BTREE_RANGE_SCAN_SMOKE_WORKLOAD_ID, BenchmarkWorkload, BenchmarkWorkloadClass,
+    PROTOCOL_SMOKE_CONTRACT_WORKLOAD_ID, RECOVERY_REPLAY_WAL_SMOKE_WORKLOAD_ID,
+    SRPL_COMPILE_OPTIMIZE_SMOKE_WORKLOAD_ID, STORAGE_PAGE_STORE_SMOKE_WORKLOAD_ID,
+    VERTICAL_V0_SMOKE_WORKLOAD_ID, WAL_APPEND_FILE_SMOKE_WORKLOAD_ID, WAL_APPEND_SMOKE_WORKLOAD_ID,
+    WORKLOADS, find_workload,
+};

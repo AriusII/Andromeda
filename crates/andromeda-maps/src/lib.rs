@@ -9,6 +9,7 @@ mod dependency;
 mod descriptor;
 mod diagnostic;
 mod error;
+mod ownership;
 mod publication;
 mod summarizability;
 
@@ -16,6 +17,7 @@ pub use dependency::{MapDependency, MapDependencyGraph};
 pub use descriptor::{MapDescriptor, MapGrain, MapId, MapRefreshMode, MapStalenessPolicy};
 pub use diagnostic::{MapValidationDiagnostic, MapValidationReport};
 pub use error::{MapDescriptorError, MapDescriptorResult};
+pub use ownership::{MapEvidenceAuthority, MapOwnershipBoundary};
 pub use publication::{
     MapPublicationCandidate, MapPublicationEvidence, MapPublicationRebuildEvidence,
     MapPublicationRecoveryEvidence, MapPublicationRollbackEvidence, MapPublicationState,

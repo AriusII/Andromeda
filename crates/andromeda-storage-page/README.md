@@ -2,9 +2,9 @@
 
 ## Purpose
 
-`andromeda-storage-page` is a future C5 owner crate for durable page format boundaries.
+`andromeda-storage-page` is the C5 owner crate for durable page format boundaries.
 
-This scaffold reserves a boundary for page identifiers, page headers, trailers, payload bounds, checksums, page LSN policy, and explicit page codecs. No behavior has moved from `andromeda-storage`.
+This crate owns page identifiers, page headers, trailers, payload bounds, checksums, page LSN policy, page images, and deterministic page-store contracts extracted from `andromeda-storage`.
 
 ## Scope
 
@@ -22,7 +22,7 @@ Future work in this crate may own:
 - No heap, B+Tree, buffer pool, manifest, recovery, backup, restore, or HA/DR orchestration.
 - No transaction commit publication or physical WAL file ownership.
 - No GPU output, benchmark output, RAM state, or temporary storage as page truth.
-- No behavior move in this scaffold.
+- No disk page I/O move in this extraction step.
 
 ## Prerequisites
 
@@ -43,7 +43,7 @@ Before behavior lands here:
 
 ## Validation
 
-This scaffold is documentation-only. Future behavior requires `cargo fmt`, `cargo check`, `cargo clippy`, page codec roundtrip tests, golden tests, property tests, fuzz or corruption-rejection coverage, and crash/recovery scenarios.
+This extraction includes type and in-memory contract ownership. Future durable codec or disk behavior requires `cargo fmt`, `cargo check`, `cargo clippy`, page codec roundtrip tests, golden tests, property tests, fuzz or corruption-rejection coverage, and crash/recovery scenarios.
 
 ## Troubleshooting
 

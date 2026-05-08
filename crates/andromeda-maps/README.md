@@ -11,6 +11,7 @@ Use this crate when an Andromeda component needs to describe Map identity, grain
 This crate owns:
 
 - `MapId`, `MapGrain`, `MapRefreshMode`, `MapStalenessPolicy`, and `MapDescriptor`.
+- `MapOwnershipBoundary` and `MapEvidenceAuthority` for distinguishing descriptor-only values from durable-owner-supplied evidence.
 - Publication candidates and validated publication candidates.
 - Publication evidence that binds Map projections to catalog, statistics, and WAL-related versions supplied by owning components.
 - Switch, rollback, rebuild, and recovery evidence shapes for Map publication state transitions.
@@ -32,6 +33,8 @@ The crate models the contract for Map projection evidence. It does not materiali
 
 Catalog, statistics, WAL, storage, execution, and recovery owners remain responsible for creating durable evidence, enforcing publication order, rebuilding projections from truth sources, and validating crash/recovery behavior. This crate may reject missing evidence, but it does not persist or replay that evidence.
 
+`MapOwnershipBoundary` is a marker contract for that split. Descriptor-only values do not carry durable-owner evidence. Active, rollback, rebuild, and recovery states may carry durable-owner-supplied evidence, but this crate still does not own source truth or the durable publication path.
+
 ## Validation
 
 For documentation-only changes, check that this README keeps the required headings and does not describe Maps as durable truth.
@@ -39,6 +42,7 @@ For documentation-only changes, check that this README keeps the required headin
 For source changes in this crate, prefer:
 
 ```powershell
+cargo check -p andromeda-maps --all-targets
 cargo test -p andromeda-maps
 ```
 

@@ -1,1 +1,1 @@
-pub use andromeda_srpl_cardinality::*;
+pub use andromeda_srpl_cardinality::Cardinality;

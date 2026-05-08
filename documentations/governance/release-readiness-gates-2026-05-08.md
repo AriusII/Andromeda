@@ -151,7 +151,7 @@ cargo test -p andromeda-quic --test hadr_stream_mapping_contract --locked -- --n
 
 ### Fuzz, Miri, and concurrency-sensitive evidence
 
-Use the targets listed in `fuzz/targets.toml` and `fuzz/VALIDATION_MATRIX.md`.
+Use the targets listed in `tests/fuzzing/targets.toml` and `fuzz/VALIDATION_MATRIX.md`.
 For each affected surface, the release packet must record duration, corpus, seed,
 toolchain, commit, command, pass/fail result, artifact path, and residual risk.
 
@@ -231,7 +231,7 @@ that proof until a current-dated approval artifact exists.
 - `documentations/testing/release-evidence-template.md`
 - `documentations/governance/supply-chain-policy.md`
 - `fuzz/VALIDATION_MATRIX.md`
-- `fuzz/targets.toml`
+- `tests/fuzzing/targets.toml`
 - `documentations/governance/decisions/DEC-035-release-gate-chain.md`
 - `documentations/governance/decisions/DEC-036-release-readiness-approval.md`
 - `documentations/governance/decisions/DEC-037-risk-register-updates.md`

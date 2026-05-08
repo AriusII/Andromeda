@@ -8,4 +8,6 @@ publish = false
 [dependencies]
 andromeda-digest.workspace = true
 andromeda-error.workspace = true
+andromeda-procedure-contract.workspace = true
+andromeda-structured-object.workspace = true
 andromeda-types.workspace = true

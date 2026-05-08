@@ -15,17 +15,17 @@ fn test_gateway_accepts_authorized_invocation() {
     // Verify gateway state.
     assert_eq!(gateway.surface_plane(), SurfacePlane::Application);
     assert_eq!(
-        gateway.certificate_identity().fingerprint,
+        gateway.certificate_identity().fingerprint().as_str(),
         "a".repeat(64),
         "certificate fingerprint mismatch"
     );
     assert_eq!(
-        gateway.certificate_identity().subject,
+        gateway.certificate_identity().subject(),
         "app-service",
         "certificate subject mismatch"
     );
     assert_eq!(
-        gateway.certificate_identity().surface,
+        gateway.certificate_identity().surface_scope(),
         SurfaceScope::Application,
         "certificate scope mismatch"
     );
@@ -241,8 +241,8 @@ fn test_gateway_exposes_references() {
     // Verify that gateway references are consistent.
     let id_1 = gateway.certificate_identity();
     let id_2 = gateway.certificate_identity();
-    assert_eq!(id_1.fingerprint, id_2.fingerprint);
-    assert_eq!(id_1.subject, id_2.subject);
+    assert_eq!(id_1.fingerprint(), id_2.fingerprint());
+    assert_eq!(id_1.subject(), id_2.subject());
 
     // Verify that connection is accessible.
     let conn_ref = gateway.connection();
@@ -270,7 +270,7 @@ fn test_gateway_supports_monitoring_plane() {
 
     assert_eq!(gateway.surface_plane(), SurfacePlane::Monitoring);
     assert_eq!(
-        gateway.certificate_identity().surface,
+        gateway.certificate_identity().surface_scope(),
         SurfaceScope::MonitoringAgent
     );
     assert!(
@@ -339,8 +339,8 @@ fn test_gateway_allows_multiple_instances_from_same_connection() {
     // Both gateways should operate independently.
     assert_eq!(gateway_1.surface_plane(), gateway_2.surface_plane());
     assert_eq!(
-        gateway_1.certificate_identity().fingerprint,
-        gateway_2.certificate_identity().fingerprint
+        gateway_1.certificate_identity().fingerprint(),
+        gateway_2.certificate_identity().fingerprint()
     );
 
     // Stream mapping should be consistent across gateways.

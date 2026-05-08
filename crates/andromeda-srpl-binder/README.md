@@ -2,13 +2,11 @@
 
 ## Purpose
 
-`andromeda-srpl-binder` is the future owner for SRPL semantic binding.
+`andromeda-srpl-binder` owns SRPL semantic binding.
 
-Use this crate when a later extraction needs a dedicated boundary for turning
-parsed SRPL AST shapes into bound, catalog-aware compiler input for lowering.
-The current scaffold intentionally contains no behavior. Existing binder code
-remains in `andromeda-srpl` until a later behavior-preserving migration moves
-it with compatibility tests.
+Use this crate as the dedicated boundary for turning parsed SRPL AST shapes into
+bound compiler input for lowering. `andromeda-srpl` keeps compatibility
+reexports and must not own binder behavior.
 
 ## Scope
 
@@ -27,10 +25,8 @@ shapes, and deterministic Procedure contracts.
 
 ## Dependency Direction
 
-This scaffold has no dependencies because no behavior has moved yet.
-
-When behavior is extracted, dependencies must point only toward lower or
-contract-safe crates such as `andromeda-error`, `andromeda-types`,
+Dependencies must point only toward lower or contract-safe crates such as
+`andromeda-error`, `andromeda-types`,
 `andromeda-contract`, `andromeda-srpl-diagnostics`,
 `andromeda-srpl-cardinality`, `andromeda-srpl-ast`, and
 `andromeda-srpl-ir`.
@@ -49,7 +45,7 @@ benchmark, analytics, GPU, or application-surface crates.
 - Do not allow dynamic table names, dynamic predicates, shape-shifting returns,
   or implicit null semantics.
 - Do not serialize Rust native structs directly to disk or network.
-- Do not move behavior from `andromeda-srpl` in this scaffold.
+- Do not depend on `andromeda-srpl` as a facade.
 
 ## Prerequisites
 
@@ -62,25 +58,13 @@ Before changing this crate, understand:
 
 ## Procedure
 
-1. Keep `src/lib.rs` limited to crate-level documentation until behavior moves.
-2. Move binder behavior only in a dedicated extraction change with facade
-   compatibility tests.
-3. Preserve diagnostics and source spans when introducing public binding types.
-4. Keep catalog interaction behind contract-safe evidence shapes.
-5. Reject any design that requires application-facing SQL or runtime-dependent
+1. Keep `src/lib.rs` limited to binder-owned behavior and intentional exports.
+2. Preserve diagnostics and source spans when introducing public binding types.
+3. Keep catalog interaction behind contract-safe evidence shapes.
+4. Reject any design that requires application-facing SQL or runtime-dependent
    result shapes.
 
 ## Validation
-
-For this scaffold, file-shape validation is sufficient because the crate is not
-yet a workspace member:
-
-```powershell
-rg -n "forbid\\(unsafe_code\\)|Purpose|Scope|Non-goals|Dependency Direction" crates/andromeda-srpl-binder
-rg --files crates/andromeda-srpl-binder
-```
-
-When this crate becomes a workspace member, add package-level Rust gates such as:
 
 ```powershell
 cargo fmt --package andromeda-srpl-binder --check

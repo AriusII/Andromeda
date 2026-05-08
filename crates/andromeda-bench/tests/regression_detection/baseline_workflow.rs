@@ -1,4 +1,4 @@
-use andromeda_bench::{BenchmarkBaseline, RegressionAnalysis, RegressionReason};
+use andromeda_regression::{BenchmarkBaseline, RegressionAnalysis, RegressionReason};
 
 #[test]
 fn end_to_end_regression_detection_workflow() {

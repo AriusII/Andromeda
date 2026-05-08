@@ -1,4 +1,5 @@
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion};
+pub use andromeda_manifest::ManifestDurabilityBoundary;
 use andromeda_observe::{ManifestEventKind, ManifestTrace, TraceId};
 
 use crate::Lsn;
@@ -28,41 +29,32 @@ pub struct DatabaseManifest {
 }
 
 impl DatabaseManifest {
+    pub const fn durability_boundary(self) -> ManifestDurabilityBoundary {
+        ManifestDurabilityBoundary {
+            database_id: self.database_id,
+            manifest_version: self.manifest_version,
+            snapshot_id: self.snapshot_id,
+            base_checkpoint_lsn: self.base_checkpoint_lsn,
+            required_wal_start_lsn: self.required_wal_start_lsn,
+            previous_manifest_hash: self.previous_manifest_hash,
+            manifest_crc: self.manifest_crc,
+        }
+    }
+
     pub const fn recovery_floor_lsn(self) -> Lsn {
-        self.required_wal_start_lsn
+        self.durability_boundary().recovery_floor_lsn()
     }
 
     pub const fn checkpoint_lsn(self) -> Lsn {
-        self.base_checkpoint_lsn
+        self.durability_boundary().checkpoint_lsn()
     }
 
     pub const fn can_start_recovery_at(self, lsn: Lsn) -> bool {
-        lsn.get() >= self.required_wal_start_lsn.get()
+        self.durability_boundary().can_start_recovery_at(lsn)
     }
 
     pub fn validate(&self) -> AndromedaResult<()> {
-        if self.database_id == 0 || self.manifest_version == 0 || self.snapshot_id == 0 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                "manifest identity fields must not be zero",
-            ));
-        }
-
-        if self.required_wal_start_lsn < self.base_checkpoint_lsn {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                "manifest required WAL start LSN must not precede checkpoint LSN",
-            ));
-        }
-
-        if self.manifest_crc == 0 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                "manifest CRC must not be zero",
-            ));
-        }
-
-        Ok(())
+        self.durability_boundary().validate()
     }
 
     pub fn storage_format_manifest(&self) -> AndromedaResult<StorageFormatManifest> {

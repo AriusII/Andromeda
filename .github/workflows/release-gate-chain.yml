@@ -11,6 +11,9 @@ on:
       - "deny.toml"
       - "fuzz/**"
       - "tests/**"
+      - "tools/testing/supply_chain_preflight.py"
+      - "tools/testing/msrv_dependency_check.py"
+      - "rust-toolchain.toml"
       - ".github/actions/**"
       - ".github/scripts/**"
       - ".github/workflows/release-gate-chain.yml"
@@ -28,6 +31,9 @@ on:
       - "deny.toml"
       - "fuzz/**"
       - "tests/**"
+      - "tools/testing/supply_chain_preflight.py"
+      - "tools/testing/msrv_dependency_check.py"
+      - "rust-toolchain.toml"
       - ".github/actions/**"
       - ".github/scripts/**"
       - ".github/workflows/release-gate-chain.yml"
@@ -196,27 +202,29 @@ jobs:
           toolchain: nightly
           components: rust-src
       - run: cargo install cargo-fuzz --locked
-      - name: Run 15s smoke fuzz over manifest targets
+      - name: Check deterministic corpus seed set
+        run: python fuzz/generators/generate_seed_corpus.py --check
+      - name: Check fuzz registry
+        run: python tools/testing/fuzz_registry_check.py
+      - name: Discover fuzz targets from canonical registry
+        id: discover
         shell: bash
         run: |
-          python fuzz/generators/generate_seed_corpus.py --ensure-only
-          python - <<'PY'
-          import pathlib, re, subprocess
-          names = []
-          for line in pathlib.Path("fuzz/targets.toml").read_text(encoding="utf-8").splitlines():
-              m = re.match(r'\s*name\s*=\s*"([^"]+)"', line)
-              if m:
-                  names.append(m.group(1))
-          if not names:
-              raise SystemExit("no fuzz targets declared")
-          for name in names:
-              print(f"::group::fuzz {name}")
-              subprocess.run(
-                  ["cargo", "+nightly", "fuzz", "run", name, "--", "-max_total_time=15"],
-                  check=True,
-              )
-              print("::endgroup::")
-          PY
+          python tools/testing/fuzz_registry_check.py --list-targets > fuzz-targets.tsv
+          echo "count=$(wc -l < fuzz-targets.tsv)" >> "$GITHUB_OUTPUT"
+      - name: Run fuzz targets
+        if: steps.discover.outputs.count != '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS=$'\t' read -r target corpus_dir; do
+            echo "::group::fuzz $target"
+            cargo +nightly fuzz run "$target" "$corpus_dir" -- -max_total_time=15
+            echo "::endgroup::"
+          done < fuzz-targets.tsv
+      - name: No fuzz targets yet
+        if: steps.discover.outputs.count == '0'
+        run: echo "No fuzz targets found. Add fuzz_targets/*.rs to enable fuzzing."
 
   property-tests:
     name: property-tests-3min

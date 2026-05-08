@@ -30,7 +30,7 @@ impl HeapPage {
             .slot_directory
             .iter()
             .filter(|entry| !entry.is_deleted())
-            .map(|entry| entry.offset as usize + entry.length as usize)
+            .map(|entry| entry.offset() as usize + entry.length() as usize)
             .max()
             .unwrap_or(HEAP_PAGE_V1_PAYLOAD_OFFSET);
         let insert_offset = next_tuple_offset as u16;

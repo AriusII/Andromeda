@@ -2,12 +2,12 @@
 
 ## Purpose
 
-`andromeda-srpl-lowering` is the future owner for SRPL lowering from bound
-semantic input into typed IR and contract-ready compiler output.
+`andromeda-srpl-lowering` owns SRPL lowering from typed, bound semantic input
+into bounded SRPL IR.
 
-The current scaffold intentionally contains no behavior. Existing lowering code
-remains in `andromeda-srpl` until a later behavior-preserving migration moves it
-with facade compatibility tests.
+The historical `andromeda-srpl` crate remains the compatibility facade for
+source parsing, facade-local binding wrappers, optimizer entry points, catalog
+binding, DefinitionBatch helpers, and existing public imports.
 
 ## Scope
 
@@ -15,33 +15,28 @@ This crate is intended to own:
 
 | Area | Responsibility |
 | --- | --- |
-| Bound-to-IR lowering | Convert bound SRPL Procedure shapes into bounded semantic IR. |
-| Contract candidate shaping | Produce contract-safe Procedure metadata and result contract candidates from validated compiler input. |
+| Bound-to-IR lowering | Convert typed SRPL Procedure body shapes into bounded semantic IR. |
 | Lowering validation | Preserve dense operation ordinals, fixed result streams, explicit cardinality, and closed predicate/value forms. |
-| Lowering diagnostics | Report deterministic lowering failures without panics or runtime-dependent state. |
+| Lowering input | Accept `ProcedureSignature` plus `ProcedureBodyAst` through `BoundProcedureLoweringInput`. |
 
-The lowering crate sits after binder ownership and before optimizer,
-interpreter, execution adapter, or catalog bridge behavior. It must not become a
-runtime execution owner.
+The lowering crate sits after parser or binder ownership and before optimizer,
+interpreter, execution adapter, catalog bridge behavior, or runtime execution.
 
 ## Dependency Direction
 
-This scaffold has no dependencies because no behavior has moved yet.
-
-When behavior is extracted, dependencies must point only toward lower or
-contract-safe crates such as `andromeda-error`, `andromeda-types`,
-`andromeda-contract`, `andromeda-srpl-diagnostics`,
-`andromeda-srpl-cardinality`, `andromeda-srpl-ast`,
-`andromeda-srpl-binder`, and `andromeda-srpl-ir`.
+Dependencies must point only toward lower or contract-safe crates. Current
+dependencies are limited to `andromeda-error`, `andromeda-srpl-ast`, and
+`andromeda-srpl-ir`.
 
 Do not depend on `andromeda-srpl` as a facade from this crate after extraction.
-Do not depend on execution, storage, transaction, WAL, QUIC transport,
-benchmark, analytics, GPU, or application-surface crates.
+Do not depend on catalog storage, execution, storage, transaction, WAL, QUIC
+transport, benchmark, analytics, GPU, or application-surface crates.
 
 ## Non-goals
 
 - Do not lex or parse SRPL source text.
 - Do not perform catalog name binding.
+- Do not materialize catalog definitions or DefinitionBatches.
 - Do not execute Procedure behavior or dispatch runtime adapters.
 - Do not read or write storage, write WAL, publish catalog versions, or decide
   transaction visibility.
@@ -49,41 +44,29 @@ benchmark, analytics, GPU, or application-surface crates.
 - Do not represent dynamic table names, dynamic predicates, shape-shifting
   returns, or implicit null semantics in lowered output.
 - Do not serialize Rust native structs directly to disk or network.
-- Do not move behavior from `andromeda-srpl` in this scaffold.
+- Do not depend on `andromeda-srpl` for facade convenience.
 
 ## Prerequisites
 
 Before changing this crate, understand:
 
-- Lowering consumes already-bound semantic input.
+- Lowering consumes typed semantic input supplied by the facade or binder owner.
 - `andromeda-srpl-ir` owns semantic IR data shapes and validation.
 - Lowering must preserve fixed Procedure contracts and bounded body operation
   semantics.
-- The current source of behavior is still `crates/andromeda-srpl/src/lowering.rs`
-  and `crates/andromeda-srpl/src/lowering/`.
+- Catalog binding and DefinitionBatch helpers still live behind the
+  `andromeda-srpl` facade.
 
 ## Procedure
 
-1. Keep `src/lib.rs` limited to crate-level documentation until behavior moves.
-2. Move lowering behavior only in a dedicated extraction change with facade
-   compatibility tests.
-3. Preserve typed diagnostics and validation behavior when introducing public
-   lowering APIs.
-4. Keep predicate, assignment, emit, and constant lowering closed and explicit.
-5. Reject any design that depends on hidden runtime state or dynamic result
+1. Keep `src/lib.rs` limited to module declarations and intentional reexports.
+2. Preserve facade compatibility by routing `andromeda-srpl` entry points
+   through this crate.
+3. Keep predicate, assignment, emit, and constant lowering closed and explicit.
+4. Reject any design that depends on hidden runtime state or dynamic result
    shapes.
 
 ## Validation
-
-For this scaffold, file-shape validation is sufficient because the crate is not
-yet a workspace member:
-
-```powershell
-rg -n "forbid\\(unsafe_code\\)|Purpose|Scope|Non-goals|Dependency Direction" crates/andromeda-srpl-lowering
-rg --files crates/andromeda-srpl-lowering
-```
-
-When this crate becomes a workspace member, add package-level Rust gates such as:
 
 ```powershell
 cargo fmt --package andromeda-srpl-lowering --check

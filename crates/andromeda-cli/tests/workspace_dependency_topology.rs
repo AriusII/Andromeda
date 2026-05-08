@@ -11,10 +11,8 @@ mod manifest_loading;
 #[path = "workspace_dependency_topology/target_crate_roadmap_rules.rs"]
 mod target_crate_roadmap_rules;
 
+use andromeda_test_support::workspace::workspace_root_from_manifest_dir;
 use std::path::PathBuf;
 pub(crate) fn workspace_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .expect("workspace root")
+    workspace_root_from_manifest_dir(env!("CARGO_MANIFEST_DIR"))
 }

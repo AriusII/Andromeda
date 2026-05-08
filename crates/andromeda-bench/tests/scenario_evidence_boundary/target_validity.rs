@@ -1,4 +1,4 @@
-use andromeda_bench::{
+use andromeda_scenario_evidence::{
     BenchmarkEvidenceBudgets, BenchmarkEvidenceConfidence, BenchmarkEvidenceValidity,
     BenchmarkPlanClass, BenchmarkScenarioEvidenceError, BenchmarkScenarioTarget,
     BenchmarkStatsVersion,
@@ -38,8 +38,7 @@ fn boundary_rejects_missing_contract_hash_and_stale_stats_version() {
 #[test]
 fn boundary_validity_window_is_half_open_and_expirable() {
     let record = vertical_history_record(20);
-    let short_validity =
-        andromeda_bench::BenchmarkEvidenceValidity::new(ts(1_000), ts(2_000)).unwrap();
+    let short_validity = BenchmarkEvidenceValidity::new(ts(1_000), ts(2_000)).unwrap();
     let boundary = record
         .to_scenario_evidence_boundary(
             target(),

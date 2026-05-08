@@ -1,10 +1,11 @@
-//! Temporary compatibility facade for catalog object descriptors.
+//! Compatibility facade for catalog object descriptors.
 //!
-//! Lot 2.1 moves contract-safe object descriptors to `andromeda-contract`.
-//! Catalog storage, WAL codecs, snapshots, and DefinitionBatch logic continue
-//! to live in `andromeda-catalog`.
+//! `andromeda-catalog-store` now owns the catalog-store import boundary for
+//! object descriptors. The canonical definitions still live in
+//! `andromeda-contract`; this module preserves the legacy
+//! `andromeda_catalog::*` facade.
 
-pub use andromeda_contract::{
+pub use andromeda_catalog_store::{
     CatalogBindingKind, CatalogDefinition, CatalogObjectBinding, CatalogObjectRef, EnumDefinition,
     EnumVariant, ObjectKind, StructuredObjectDefinition, TableDefinition,
 };

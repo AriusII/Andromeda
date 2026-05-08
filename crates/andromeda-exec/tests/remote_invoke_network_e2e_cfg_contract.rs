@@ -58,9 +58,9 @@ fn remote_invoke_network_e2e_contains_runtime_quinn_canary() {
         "remote network invocation tests need a discoverable runtime-quinn canary"
     );
     assert!(
-        source.contains("andromeda_quic::quinn_backend::QuicClient")
-            && source.contains("andromeda_quic::quinn_tls::MutualTlsTestConfig"),
-        "the canary must prove that andromeda-quic runtime Quinn symbols are available"
+        source.contains("andromeda_quic::QuicClientTransport")
+            && source.contains("andromeda_quic::QuicServerTransport"),
+        "the canary must prove that andromeda-quic transport traits are available"
     );
     assert!(
         source.contains("#[cfg(andromeda_remote_network_e2e)]"),

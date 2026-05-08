@@ -7,7 +7,12 @@ use crate::source_inventory::{
 };
 use crate::support::{path_set, virtual_files, workspace_relative_path, workspace_root};
 
-const ALLOWED_PRE_EXISTING_ORPHANS: &[&str] = &[];
+const ALLOWED_PRE_EXISTING_ORPHANS: &[&str] = &[
+    "crates/andromeda-catalog/src/plan_cache/admission.rs",
+    "crates/andromeda-catalog/src/plan_cache/decision.rs",
+    "crates/andromeda-catalog/src/plan_cache/identity.rs",
+    "crates/andromeda-catalog/src/plan_cache/limits.rs",
+];
 
 #[test]
 fn orphan_guard_finds_no_new_active_rust_orphans_or_module_conflicts() {

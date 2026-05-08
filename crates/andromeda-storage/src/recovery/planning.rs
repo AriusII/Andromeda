@@ -8,18 +8,12 @@ use crate::{
     IncompleteDurableTransaction, Lsn, StorageFormatManifest, WalRecord, WalRecordKind,
     WalScanResult, WalScanStop, WalScanStopReason, summarize_transactions_from_records,
 };
+pub use andromeda_recovery::StartupMode;
 
 use super::{
     coverage::{WalCoverageEvidence, validate_wal_coverage},
     storage_error,
 };
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StartupMode {
-    FastStart,
-    SafeStart,
-    ForensicStart,
-}
 
 /// Minimal DEC-032 storage-format evidence required before recovery redo.
 ///

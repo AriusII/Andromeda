@@ -9,12 +9,12 @@
 //! | `InMemoryWal` and durable-LSN tracking       | `andromeda_wal::write_ahead_log::manager`   |
 //! | Transaction classification helpers           | `andromeda_wal::write_ahead_log::transaction` |
 //! | `WalSegment`, `WalSegmentDescriptor`         | `andromeda_wal::wal_segment`                |
-//! | WAL frame codec, scanner, byte constants     | `andromeda_wal::wal_codec`                  |
+//! | WAL frame typed wrappers                     | `andromeda_wal::wal_codec` over `andromeda_wal_codec` |
 //! | `FileWal`, `FileWalHeader`, file scan types  | `andromeda_wal::file_wal`                   |
 //! | Storage startup recovery report              | `crate::file_wal`                           |
 //! | WAL GC: candidates, archive verification    | [`gc`]                                      |
 //! | WAL Compaction: fragmentation, scheduling   | [`compaction`]                              |
-//! | CommitLogEntry and CommitLog persistence    | [`commit_log_entry`]                        |
+//! | CommitLogEntry and CommitLog persistence    | `andromeda_wal::write_ahead_log::commit_log_entry` |
 //!
 //! The pure WAL submodules below are thin re-export facades for `andromeda_wal`.
 //! They MUST NOT define types of their own. The legacy `crate::wal` root facade

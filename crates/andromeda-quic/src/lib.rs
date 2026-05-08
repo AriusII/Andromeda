@@ -4,8 +4,8 @@
 //!
 //! The default API is runtime-free: frame encoding, stream role validation,
 //! lifecycle gating, backpressure, RPC dispatch, and HA/DR stream allocation are
-//! modelled without exposing a concrete QUIC backend. The optional
-//! `runtime-quinn` feature adds Quinn-backed TLS and network adapters.
+//! modelled without exposing a concrete QUIC backend. Quinn-backed TLS and
+//! network adapters live in the separate `andromeda-quic-runtime-quinn` crate.
 //!
 //! Critical invariants:
 //! - frame type codes stay locked to protobuf payload layer codes;
@@ -18,8 +18,6 @@ mod catalog_manifest_resolution;
 mod connection;
 mod procedure_gateway;
 mod reconnect;
-mod rpc_dispatch;
-mod typed_envelope;
 mod zero_rtt;
 
 /// Compatibility facade for runtime-free RPC frame contracts.
@@ -32,15 +30,6 @@ pub mod frame {
 }
 mod stream_concurrency;
 mod transport;
-
-#[cfg(feature = "runtime-quinn")]
-mod runtime_quinn;
-
-#[cfg(feature = "runtime-quinn")]
-pub mod quinn_backend;
-
-#[cfg(feature = "runtime-quinn")]
-pub mod quinn_tls;
 
 pub use stream_concurrency::{
     BackpressureRequest, CancellationReason, CancellationToken, StreamConcurrencyManager,
@@ -79,7 +68,11 @@ pub use rpc::{
     validate_transport_surface,
 };
 
-pub use typed_envelope::{
+pub mod typed_envelope {
+    pub use andromeda_rpc_codec::typed_envelope::*;
+}
+
+pub use andromeda_rpc_codec::{
     DEFAULT_MAX_TYPED_RESULT_STREAM_ENVELOPE_BYTES, DEFAULT_MAX_TYPED_RESULT_STREAM_FRAMES,
     TypedResultStreamBounds, TypedResultStreamContext, decode_typed_frame_envelope,
     validate_typed_result_stream_sequence,

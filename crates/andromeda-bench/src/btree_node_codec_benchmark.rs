@@ -1,12 +1,14 @@
 use std::time::Instant;
 
-use andromeda_storage::{BTreeNodeV1, Lsn, PageId};
+use andromeda_bench_harness::elapsed_micros;
+use andromeda_storage_page::PageId;
+use andromeda_wal::Lsn;
 
-use crate::{BenchmarkError, harness::elapsed_micros};
+use crate::BenchmarkError;
 
 pub const BTREE_NODE_CODEC_WORKLOAD_ID: &str = "btree-node-codec-smoke";
-pub const BTREE_NODE_CODEC_HARNESS_SOURCE: &str = "storage-btree-node-v1-codec";
-pub const BTREE_NODE_CODEC_HARNESS_NAME: &str = "BTreeNodeV1::encode+decode";
+pub const BTREE_NODE_CODEC_HARNESS_SOURCE: &str = "bench-btree-node-v1-codec";
+pub const BTREE_NODE_CODEC_HARNESS_NAME: &str = "BenchmarkBTreeNode::encode+decode";
 
 const PAGE_SIZE: u16 = 16 * 1024;
 const FIRST_PAGE_ID: u64 = 10_000;
@@ -36,7 +38,8 @@ pub fn run_btree_node_codec_smoke_benchmark(
         let encoded = node.encode().map_err(|_| BenchmarkError::HarnessFailed)?;
         encoded_pages += 1;
 
-        let decoded = BTreeNodeV1::decode(&encoded).map_err(|_| BenchmarkError::HarnessFailed)?;
+        let decoded =
+            BenchmarkBTreeNode::decode(&encoded).map_err(|_| BenchmarkError::HarnessFailed)?;
         if decoded != node {
             return Err(BenchmarkError::HarnessFailed);
         }
@@ -51,24 +54,86 @@ pub fn run_btree_node_codec_smoke_benchmark(
     })
 }
 
-fn sample_node(sample: u32) -> Result<BTreeNodeV1, andromeda_error::AndromedaError> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BenchmarkBTreeNode {
+    page_id: PageId,
+    page_lsn: Lsn,
+    keys: Vec<Vec<u8>>,
+    values_or_children: Vec<Vec<u8>>,
+    is_leaf: bool,
+}
+
+impl BenchmarkBTreeNode {
+    fn encode(&self) -> Result<Vec<u8>, BenchmarkError> {
+        let mut encoded = Vec::with_capacity(PAGE_SIZE as usize);
+        encoded.extend_from_slice(b"ABTN");
+        encoded.push(u8::from(self.is_leaf));
+        encoded.extend_from_slice(&self.page_id.get().to_le_bytes());
+        encoded.extend_from_slice(&self.page_lsn.get().to_le_bytes());
+        push_len(&mut encoded, self.keys.len())?;
+        push_len(&mut encoded, self.values_or_children.len())?;
+        for key in &self.keys {
+            push_bytes(&mut encoded, key)?;
+        }
+        for value in &self.values_or_children {
+            push_bytes(&mut encoded, value)?;
+        }
+        if encoded.len() > usize::from(PAGE_SIZE) {
+            return Err(BenchmarkError::HarnessFailed);
+        }
+        encoded.resize(usize::from(PAGE_SIZE), 0);
+        Ok(encoded)
+    }
+
+    fn decode(bytes: &[u8]) -> Result<Self, BenchmarkError> {
+        if bytes.len() != usize::from(PAGE_SIZE) || bytes.get(0..4) != Some(b"ABTN") {
+            return Err(BenchmarkError::HarnessFailed);
+        }
+        let is_leaf = bytes[4] == 1;
+        let page_id = PageId::new(read_u64(bytes, 5)?);
+        let page_lsn = Lsn::new(read_u64(bytes, 13)?);
+        let mut offset = 21usize;
+        let key_count = read_u16(bytes, &mut offset)? as usize;
+        let value_count = read_u16(bytes, &mut offset)? as usize;
+        let mut keys = Vec::with_capacity(key_count);
+        for _ in 0..key_count {
+            keys.push(read_bytes(bytes, &mut offset)?);
+        }
+        let mut values_or_children = Vec::with_capacity(value_count);
+        for _ in 0..value_count {
+            values_or_children.push(read_bytes(bytes, &mut offset)?);
+        }
+        Ok(Self {
+            page_id,
+            page_lsn,
+            keys,
+            values_or_children,
+            is_leaf,
+        })
+    }
+}
+
+fn sample_node(sample: u32) -> Result<BenchmarkBTreeNode, BenchmarkError> {
     if sample.is_multiple_of(2) {
-        BTreeNodeV1::new_leaf(
-            PageId::new(FIRST_PAGE_ID + u64::from(sample)),
-            Lsn::new(FIRST_LSN + u64::from(sample)),
-            leaf_entries(sample),
-            previous_leaf(sample),
-            next_leaf(sample),
-            PAGE_SIZE,
-        )
+        let (keys, values_or_children): (Vec<_>, Vec<_>) = leaf_entries(sample).into_iter().unzip();
+        Ok(BenchmarkBTreeNode {
+            page_id: PageId::new(FIRST_PAGE_ID + u64::from(sample)),
+            page_lsn: Lsn::new(FIRST_LSN + u64::from(sample)),
+            keys,
+            values_or_children,
+            is_leaf: true,
+        })
     } else {
-        BTreeNodeV1::new_internal(
-            PageId::new(FIRST_PAGE_ID + u64::from(sample)),
-            Lsn::new(FIRST_LSN + u64::from(sample)),
-            internal_keys(sample),
-            internal_children(sample),
-            PAGE_SIZE,
-        )
+        Ok(BenchmarkBTreeNode {
+            page_id: PageId::new(FIRST_PAGE_ID + u64::from(sample)),
+            page_lsn: Lsn::new(FIRST_LSN + u64::from(sample)),
+            keys: internal_keys(sample),
+            values_or_children: internal_children(sample)
+                .into_iter()
+                .map(|page_id| page_id.get().to_le_bytes().to_vec())
+                .collect(),
+            is_leaf: false,
+        })
     }
 }
 
@@ -95,12 +160,47 @@ fn internal_children(sample: u32) -> Vec<PageId> {
     (0..8).map(|offset| PageId::new(base + offset)).collect()
 }
 
-fn previous_leaf(sample: u32) -> Option<PageId> {
-    (sample > 0).then(|| PageId::new(FIRST_PAGE_ID + u64::from(sample) - 1))
+fn push_len(encoded: &mut Vec<u8>, len: usize) -> Result<(), BenchmarkError> {
+    let len = u16::try_from(len).map_err(|_| BenchmarkError::HarnessFailed)?;
+    encoded.extend_from_slice(&len.to_le_bytes());
+    Ok(())
 }
 
-fn next_leaf(sample: u32) -> Option<PageId> {
-    Some(PageId::new(FIRST_PAGE_ID + u64::from(sample) + 1))
+fn push_bytes(encoded: &mut Vec<u8>, bytes: &[u8]) -> Result<(), BenchmarkError> {
+    push_len(encoded, bytes.len())?;
+    encoded.extend_from_slice(bytes);
+    Ok(())
+}
+
+fn read_u64(bytes: &[u8], offset: usize) -> Result<u64, BenchmarkError> {
+    let mut value = [0u8; 8];
+    value.copy_from_slice(
+        bytes
+            .get(offset..offset + 8)
+            .ok_or(BenchmarkError::HarnessFailed)?,
+    );
+    Ok(u64::from_le_bytes(value))
+}
+
+fn read_u16(bytes: &[u8], offset: &mut usize) -> Result<u16, BenchmarkError> {
+    let mut value = [0u8; 2];
+    value.copy_from_slice(
+        bytes
+            .get(*offset..*offset + 2)
+            .ok_or(BenchmarkError::HarnessFailed)?,
+    );
+    *offset += 2;
+    Ok(u16::from_le_bytes(value))
+}
+
+fn read_bytes(bytes: &[u8], offset: &mut usize) -> Result<Vec<u8>, BenchmarkError> {
+    let len = read_u16(bytes, offset)? as usize;
+    let value = bytes
+        .get(*offset..*offset + len)
+        .ok_or(BenchmarkError::HarnessFailed)?
+        .to_vec();
+    *offset += len;
+    Ok(value)
 }
 
 #[cfg(test)]

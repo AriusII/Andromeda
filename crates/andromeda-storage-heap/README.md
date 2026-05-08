@@ -2,9 +2,9 @@
 
 ## Purpose
 
-`andromeda-storage-heap` is a future C5 owner crate for heap storage layout and heap-row access policy.
+`andromeda-storage-heap` is the C5 owner crate for heap storage layout and heap-row access policy.
 
-This scaffold reserves a boundary for heap page interpretation, slot directory policy, row placement, heap scans, and heap recovery evidence. No behavior has moved from `andromeda-storage`.
+This crate starts ownership with durable heap slot entries extracted from `andromeda-storage`. Heap page interpretation, row placement, heap scans, vacuum planning, and recovery evidence remain in `andromeda-storage` until their WAL and recovery contracts are promoted together.
 
 ## Scope
 
@@ -22,7 +22,7 @@ Future work in this crate may own:
 - No ownership of generic page codecs, buffer-pool residency, disk page I/O, manifests, backup, restore, or HA/DR orchestration.
 - No transaction commit publication or physical WAL file ownership.
 - No GPU output, benchmark output, RAM state, or temporary storage as heap truth.
-- No behavior move in this scaffold.
+- No heap page mutation, scan, vacuum, or redo move in this extraction step.
 
 ## Prerequisites
 
@@ -43,7 +43,7 @@ Before behavior lands here:
 
 ## Validation
 
-This scaffold is documentation-only. Future behavior requires `cargo fmt`, `cargo check`, `cargo clippy`, heap layout tests, scan and vacuum tests, codec tests through the page owner, and crash/recovery scenarios.
+This extraction includes slot-entry ownership. Future heap page behavior requires `cargo fmt`, `cargo check`, `cargo clippy`, heap layout tests, scan and vacuum tests, codec tests through the page owner, and crash/recovery scenarios.
 
 ## Troubleshooting
 

@@ -1,38 +1,28 @@
-//! RPC completion and transaction outcome types.
-//!
-//! This module defines the completion envelope which concludes an RPC stream,
-//! including transaction outcome, row counts, and durability evidence.
-
-mod outcome;
-mod row_count;
-mod status;
-mod validation;
-
 #[cfg(test)]
 mod tests;
 
-use andromeda_types::{RequestId, SessionId, TransactionId};
-
 use crate::ProtocolVersion;
-
-pub use outcome::TransactionOutcome;
-pub use row_count::ResultRowCountSummary;
-pub use status::{CompletionTerminalCode, RpcCompletionStatus};
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RpcCompletion {
-    pub request_id: Option<RequestId>,
-    pub session_id: Option<SessionId>,
-    pub trace_id: Option<String>,
-    pub status: RpcCompletionStatus,
-    pub transaction_outcome: TransactionOutcome,
-    pub rows_affected: Option<u64>,
-    pub result_row_counts: Vec<ResultRowCountSummary>,
-    pub tx_id: Option<TransactionId>,
-    pub durable_lsn: Option<u64>,
-}
+use andromeda_error::AndromedaResult;
+pub use andromeda_procedure_contract::{
+    CompletionEnvelopeVersion, CompletionProtocolVersion, CompletionTerminalCode,
+    ResultRowCountSummary, RpcCompletion, RpcCompletionStatus, TransactionOutcome,
+};
 
 /// Stable completion envelope contract version. Bumped only when the
 /// `RpcCompletion` shape, terminal status codes, or transactional binding
 /// rules change in a backwards-incompatible way.
 pub const COMPLETION_ENVELOPE_VERSION: ProtocolVersion = ProtocolVersion::V1;
+
+impl CompletionProtocolVersion for ProtocolVersion {
+    fn validate_completion_protocol_version(self) -> AndromedaResult<()> {
+        self.validate()
+    }
+
+    fn completion_protocol_major(self) -> u32 {
+        self.major
+    }
+
+    fn completion_protocol_minor(self) -> u32 {
+        self.minor
+    }
+}

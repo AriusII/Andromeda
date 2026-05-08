@@ -1,13 +1,10 @@
-mod error;
-mod identity;
-mod image;
-mod layout;
-mod store;
+//! Compatibility facade for the page owner crate.
+//!
+//! Page identifiers, page layout contracts, images, and page-store traits now
+//! live in `andromeda-storage-page`. This module preserves historical
+//! `andromeda_storage::Page*` imports during the crate extraction.
 
-#[cfg(test)]
-mod tests;
-
-pub use identity::{AllocationId, ObjectId, PageId};
-pub use image::PageImage;
-pub use layout::{PageFlags, PageHeader, PageLayoutContract, PageSize, PageTrailer, PageType};
-pub use store::{InMemoryPageStore, PageStore};
+pub use andromeda_storage_page::{
+    AllocationId, InMemoryPageStore, ObjectId, PageFlags, PageHeader, PageId, PageImage,
+    PageLayoutContract, PageSize, PageStore, PageTrailer, PageType,
+};

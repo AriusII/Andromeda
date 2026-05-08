@@ -13,16 +13,15 @@ mod format_v1;
 mod insert;
 mod page;
 mod scan;
-mod slot;
 mod vacuum;
 mod validation;
 
 pub mod slot_directory;
 
+pub use andromeda_storage_heap::SlotEntry;
 pub use insert::{HeapPageInsert, ProductStockHeapInsert};
 pub use page::HeapPage;
 pub use scan::{HeapScanIter, ProductStockHeapScanIter};
-pub use slot::SlotEntry;
 pub use vacuum::{HeapVacuumMode, HeapVacuumPlan, HeapVacuumReport};
 
 pub(crate) use error::heap_error;

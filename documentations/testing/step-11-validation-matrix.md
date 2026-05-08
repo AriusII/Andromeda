@@ -119,7 +119,7 @@ Use this matrix to convert Step 11 release claims into deterministic crash/recov
 
 | Gate | Current evidence | Gap to close |
 | --- | --- | --- |
-| Fuzz | `fuzz/targets.toml`, `fuzz/VALIDATION_MATRIX.md`, `.github/workflows/07-fuzzing.yml`, and `fuzz/fuzz_targets/segment_index_decode.rs` cover smoke fuzzing for WAL, storage byte formats, SegmentIndex, SRPL parser decode, RPC frame decode, typed QUIC envelope decode, ResultStream sequence validation, and security admission matrices. SegmentIndex compile check: `cargo check --manifest-path fuzz/Cargo.toml --bin segment_index_decode --locked`. | Sustained fuzz run evidence is still required before promotion of byte, parser, protocol, or admission surfaces. Compile checks and 15-second CI smoke runs are not release proof. |
+| Fuzz | `tests/fuzzing/targets.toml`, `fuzz/VALIDATION_MATRIX.md`, `.github/workflows/07-fuzzing.yml`, and `fuzz/fuzz_targets/segment_index_decode.rs` cover smoke fuzzing for WAL, storage byte formats, SegmentIndex, SRPL parser decode, RPC frame decode, typed QUIC envelope decode, ResultStream sequence validation, and security admission matrices. SegmentIndex compile check: `cargo check --manifest-path fuzz/Cargo.toml --bin segment_index_decode --locked`. | Sustained fuzz run evidence is still required before promotion of byte, parser, protocol, or admission surfaces. Compile checks and 15-second CI smoke runs are not release proof. |
 | Miri | `.github/workflows/06-nightly-deep-validation.yml` runs `cargo +nightly miri test --workspace --all-features` as a continue-on-error smoke job and records the `tools/testing/miri_subset.py` inventory when present. | C5 release should record a passing Miri subset for unsafe or memory-sensitive crates if the full workspace job is impractical. Continue-on-error CI and dry-run inventory output do not count as a blocking release gate. |
 | Loom | `tests/loom/Cargo.toml` provides the standalone command `cargo test --manifest-path tests/loom/Cargo.toml` for the current WAL durable-before-visible model. `.github/workflows/06-nightly-deep-validation.yml` runs it as continue-on-error advisory evidence. | The root Loom command and model path are present, so the missing-Loom blocker is obsolete. Owner-crate Loom models or explicit scope exclusions are still required before promoting production concurrency claims such as lock manager, ResultStream backpressure, QUIC stream concurrency, WAL append concurrency, or buffer-pool pin/flush concurrency. |
 | Crash/recovery | `crates/andromeda-storage/tests/crash_recovery_impl.rs`, `property_recovery_replay.rs`, `recovery_completeness_contract.rs`, `wal_scan_recovery_contract.rs`, `file_wal_recovery_contract.rs`, and `crates/andromeda-exec/tests/recovery_visibility_gates.rs` provide strong existing evidence. `.github/workflows/15-crash-recovery-placeholder.yml` runs a small replay gate. | Expand the release-recorded gate to include storage, tx, exec, WAL owner, and vertical ProductStock replay evidence together. Do not treat isolated owner tests as end-to-end durable visibility proof. |
@@ -140,7 +140,7 @@ If a root roadmap label conflicts with crate ownership, crate ownership wins. Ad
 - `docs/codex/rust-critical-quality-gates.md`
 - `docs/codex/mission-critical-change-policy.md`
 - `fuzz/VALIDATION_MATRIX.md`
-- `fuzz/targets.toml`
+- `tests/fuzzing/targets.toml`
 - `.github/workflows/06-nightly-deep-validation.yml`
 - `.github/workflows/07-fuzzing.yml`
 - `.github/workflows/15-crash-recovery-placeholder.yml`

@@ -10,7 +10,7 @@ use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId};
 use crate::{SrplProcedureContractMetadata, SrplProcedureIr};
 
 use super::{
-    pipeline::{INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, compile_narrow_procedure_signature},
+    INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, compile_narrow_procedure_signature,
     validation::validate_declared_error_codes,
 };
 

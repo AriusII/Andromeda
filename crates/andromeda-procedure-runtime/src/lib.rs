@@ -2,9 +2,17 @@
 #![doc = r#"
 # andromeda-procedure-runtime
 
-Future owner for generic Procedure runtime dispatch after admission.
+Owner for generic Procedure runtime dispatch after admission.
 
-This scaffold exports no runtime API yet. Promotion must preserve Procedure
-contract-first invocation, generic handler dispatch, no business hardcoding,
-no application-facing SQL, and durable terminal evidence handoff.
+This crate preserves Procedure contract-first invocation, generic handler
+dispatch, no business hardcoding, no application-facing SQL, and durable
+terminal evidence handoff.
 "#]
+
+mod dispatch;
+
+pub use dispatch::{
+    PreTransactionDispatchEvidence, ProcedureDispatchRequest, ProcedureDispatchUnavailableReason,
+    ProcedureDispatcher, ProcedureRequestResolver, RemoteProcedureDispatcherUnavailable,
+    SrplDispatcherAdapter,
+};

@@ -27,7 +27,7 @@ pub(super) fn authorize_application_route(
         .map_err(ProcedureRouteAdmissionError::route)?;
     let authorization = principal_registry.authorize(
         validation::core_surface_scope_for_plane(route.surface_plane),
-        route.certificate_identity.fingerprint.as_str(),
+        route.certificate_identity.fingerprint().as_str(),
         &required_permission,
     );
 

@@ -48,7 +48,7 @@ fn test_gateway_binds_application_execute_route_to_manifest_before_dispatch() {
         manifest.stats_version
     );
     assert_eq!(
-        binding.certificate_identity.surface,
+        binding.certificate_identity.surface_scope(),
         SurfaceScope::Application
     );
     assert_eq!(

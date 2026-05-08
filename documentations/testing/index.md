@@ -13,6 +13,7 @@ This index covers documentation in `documentations/testing`:
 - CI release gate evidence requirements;
 - release evidence record shape;
 - local release evidence generator schema;
+- local dependency topology preflight evidence;
 - bounded Miri subset inventory;
 - Step 11 owner-suite and crash/recovery mapping;
 - Step 12 spec-to-test mapping;
@@ -55,16 +56,19 @@ Before using these documents for a release packet:
 
 ## Procedure
 
-1. Start with `ci-release-gate-evidence.md` to identify the required workspace, supply-chain, fuzz, Miri, Loom, and crash/recovery gate evidence.
+1. Start with `ci-release-gate-evidence.md` to identify the required workspace, supply-chain, dependency topology, fuzz, Miri, Loom, and crash/recovery gate evidence.
 2. Use `step-11-validation-matrix.md` to map the affected roadmap label to crate-owned commands and crash/recovery scenarios.
 3. Use `spec-validation-matrix-2026-05-08.md` to map the affected v0 specification to owner-suite validation areas and release gaps.
 4. Use `fuzz-miri-loom-evidence.md` when the release claim touches malformed input, explicit byte formats, unsafe or aliasing-sensitive code, or concurrency interleavings.
 5. Use `unsafe-miri-inventory-2026-05-08.md` when a change or release claim touches unsafe Rust, atomics, lock-free behavior, sanitizer evidence, or Miri evidence.
 6. Record each command or manual decision with `release-evidence-template.md`.
 7. Use `tools/testing/miri_subset.py` to list or run the bounded Miri subset when memory-sensitive crates are in scope.
-8. Use `tools/testing/release_evidence.py` only to capture local metadata and declared check records; do not treat its output as release approval.
-9. Mark missing, failed, skipped, partial, smoke-only, or continue-on-error evidence as residual risk.
-10. Require release-owner review before changing any readiness disposition.
+8. Use `python -B tools/testing/supply_chain_preflight.py --json` to capture dependency topology preflight output, including `andromeda-protocol` workspace membership and C5 GPU/SIMD direct dependency exclusions.
+9. Use `tools/testing/release_evidence.py` only to capture local metadata and declared check records; do not treat its output as release approval.
+10. Mark missing, failed, skipped, partial, smoke-only, or continue-on-error evidence as residual risk.
+11. Require release-owner review before changing any readiness disposition.
+
+The supply-chain preflight is report-only unless strict mode is selected. Missing `cargo-nextest`, `cargo-audit`, or `cargo-vet` in that report produces a `findings` status and means the matching local evidence is unavailable; it does not prove the gate failed, and it does not approve release readiness. Attach CI evidence, rerun with the tool installed, or record the missing tool as residual risk with owner disposition.
 
 ## Validation
 
@@ -76,6 +80,7 @@ For documentation-only updates in this directory, validate by checking:
 - consistency with `docs/codex/rust-critical-quality-gates.md`;
 - consistency with `docs/codex/mission-critical-change-policy.md`;
 - consistency with `tools/testing/release_evidence_schema.md` when local generator output is referenced;
+- consistency with `tools/testing/supply_chain_preflight.py` when dependency topology output is referenced;
 - consistency with `tools/testing/miri_subset.py` when bounded Miri subset commands are referenced;
 - consistency with `tools/testing/unsafe_inventory.py` when unsafe inventory
   guidance is referenced;
@@ -108,9 +113,10 @@ If an artifact cannot be retained, do not use the command as release proof. Reru
 - `docs/codex/mission-critical-change-policy.md`
 - `tools/testing/release_evidence.py`
 - `tools/testing/release_evidence_schema.md`
+- `tools/testing/supply_chain_preflight.py`
 - `tools/testing/miri_subset.py`
 - `tools/testing/unsafe_inventory.py`
-- `fuzz/targets.toml`
+- `tests/fuzzing/targets.toml`
 - `fuzz/VALIDATION_MATRIX.md`
 - `tests/README.md`
 - `tests/miri/README.md`

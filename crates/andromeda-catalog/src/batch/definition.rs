@@ -1,5 +1,6 @@
 //! Core definition batch types: identifiers, operations, and the batch itself.
 
+use andromeda_definition_batch::{DefinitionBatchId, DefinitionBatchSourceHash};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId};
 use std::collections::BTreeSet;
@@ -16,40 +17,6 @@ use super::mutation::{CatalogMutation, CatalogMutationDelta, CatalogMutationPlan
 use super::plan::{
     CatalogLifecycleAction, DefinitionBatchPlan, PlannedDefinition, PlannedLifecycleTransition,
 };
-
-/// Unique identifier for a [`DefinitionBatch`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct DefinitionBatchId(u64);
-
-impl DefinitionBatchId {
-    pub const fn new(value: u64) -> Self {
-        Self(value)
-    }
-
-    pub const fn get(self) -> u64 {
-        self.0
-    }
-}
-
-/// Canonical SHA-256 digest of the ordered DefinitionBatch source.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct DefinitionBatchSourceHash([u8; Self::LEN]);
-
-impl DefinitionBatchSourceHash {
-    pub const LEN: usize = 32;
-
-    pub const fn new(bytes: [u8; Self::LEN]) -> Self {
-        Self(bytes)
-    }
-
-    pub const fn as_bytes(self) -> [u8; Self::LEN] {
-        self.0
-    }
-
-    pub fn is_zero(self) -> bool {
-        self.0.iter().all(|byte| *byte == 0)
-    }
-}
 
 /// A single operation within a [`DefinitionBatch`].
 #[allow(
@@ -132,7 +99,7 @@ impl DefinitionBatch {
             ));
         }
 
-        if self.batch_id.get() == 0 {
+        if self.batch_id.is_zero() {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Catalog,
                 "definition batch id must not be zero",

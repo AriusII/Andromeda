@@ -4,18 +4,8 @@
 //! `PolicyVersion` digests) and protocol-side descriptor hashes all derive
 //! from the same FIPS-180-4 implementation without duplication.
 
+pub(crate) use andromeda_decision_trace::digest_prefix_hex;
 pub use andromeda_digest::{Sha256, sha256};
-
-pub(crate) fn digest_prefix_hex(digest: &[u8; 32]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-
-    let mut out = String::with_capacity(16);
-    for byte in digest.iter().take(8) {
-        out.push(char::from(HEX[(byte >> 4) as usize]));
-        out.push(char::from(HEX[(byte & 0x0F) as usize]));
-    }
-    out
-}
 
 #[cfg(test)]
 mod tests {

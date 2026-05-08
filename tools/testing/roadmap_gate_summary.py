@@ -78,9 +78,9 @@ FUZZ_CHECKS = (
         "fuzz registry and evidence documents",
         (
             "fuzz/Cargo.toml",
-            "fuzz/targets.toml",
+            "tests/fuzzing/targets.toml",
             "fuzz/VALIDATION_MATRIX.md",
-            "fuzz/corpus/manifest.toml",
+            "tests/fuzzing/corpus/manifest.toml",
             "fuzz/generators/generate_seed_corpus.py",
             "fuzz/fuzz_targets/*.rs",
         ),
@@ -241,7 +241,7 @@ def parse_key_values(raw_line: str) -> tuple[str, str] | None:
 
 
 def parse_fuzz_targets(root: Path) -> list[dict[str, str]]:
-    targets_path = root / "fuzz" / "targets.toml"
+    targets_path = root / "tests" / "fuzzing" / "targets.toml"
     targets: list[dict[str, str]] = []
     current: dict[str, str] | None = None
 
@@ -271,7 +271,7 @@ def fuzz_target_gaps(root: Path) -> list[Gap]:
             Gap(
                 "fuzz",
                 "fuzz target registry",
-                "fuzz/targets.toml",
+                "tests/fuzzing/targets.toml",
                 "No [[target]] entries were found.",
             )
         ]
@@ -290,7 +290,7 @@ def fuzz_target_gaps(root: Path) -> list[Gap]:
                     Gap(
                         "fuzz",
                         f"fuzz target {name}",
-                        f"fuzz/targets.toml:{key}",
+                        f"tests/fuzzing/targets.toml:{key}",
                         f"Missing {description} entry.",
                     )
                 )

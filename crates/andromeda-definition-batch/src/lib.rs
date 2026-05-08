@@ -2,19 +2,22 @@
 #![doc = r#"
 # Andromeda Definition Batch
 
-Runtime-free scaffold for future DefinitionBatch ownership.
+Runtime-free DefinitionBatch identity, import correlation, and taxonomy primitives.
 
-This crate exposes stable taxonomy placeholders only. It does not parse, bind,
-apply, roll back, or publish definition changes. It does not claim release
-readiness, serialize network or disk formats, or authorize any
-application-facing ad hoc SQL surface.
+This crate exposes stable identity/hash primitives, import correlation
+identifiers, and taxonomy placeholders. It does not parse, bind, apply, roll
+back, or publish definition changes. It does not claim release readiness,
+serialize network or disk formats, or authorize any application-facing ad hoc
+SQL surface.
 
 Catalog publication remains outside this crate and must not become visible
 without durable WAL.
 "#]
 
+mod identity;
 mod taxonomy;
 
+pub use identity::{DefinitionBatchId, DefinitionBatchImportId, DefinitionBatchSourceHash};
 pub use taxonomy::{
     ALL_DEFINITION_BATCH_APPLY_BARRIERS, ALL_DEFINITION_BATCH_OPERATION_KINDS,
     ALL_DEFINITION_BATCH_PHASES, DEFINITION_BATCH_BARRIER_AUDIT_EVIDENCE_REQUIRED,

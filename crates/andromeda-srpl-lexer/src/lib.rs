@@ -5,7 +5,13 @@
 //! This crate owns tokenization only. It does not parse, bind, lower, execute,
 //! or consult catalog storage.
 
-use andromeda_srpl_diagnostics::{DiagnosticPhase, SourceSpan, SrplDiagnostic};
+use andromeda_srpl_diagnostics::{DiagnosticPhase, SrplDiagnostic};
+
+pub mod source_location {
+    pub use andromeda_srpl_diagnostics::source_location::SourceSpan;
+}
+
+pub use source_location::SourceSpan;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenKind {
@@ -134,9 +140,9 @@ fn keyword_kind(value: &str) -> TokenKind {
 
 #[cfg(test)]
 mod tests {
-    use andromeda_srpl_diagnostics::{DiagnosticPhase, SourceSpan};
+    use andromeda_srpl_diagnostics::DiagnosticPhase;
 
-    use super::{TokenKind, lex};
+    use super::{SourceSpan, TokenKind, lex};
 
     fn assert_utf8_span(source: &str, span: SourceSpan) {
         assert!(span.is_valid(), "span must be ordered: {span:?}");

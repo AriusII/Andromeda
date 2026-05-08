@@ -1,21 +1,29 @@
 [workspace]
 resolver = "3"
 members = [
+    "crates/andromeda-admin",
     "crates/andromeda-admission",
+    "crates/andromeda-audit",
     "crates/andromeda-analytics",
     "crates/andromeda-backup",
     "crates/andromeda-bench",
     "crates/andromeda-bench-harness",
     "crates/andromeda-bench-workload",
     "crates/andromeda-buffer-pool",
+    "crates/andromeda-business-fixtures",
     "crates/andromeda-cli",
     "crates/andromeda-catalog",
     "crates/andromeda-catalog-diff",
+    "crates/andromeda-catalog-recovery",
     "crates/andromeda-catalog-store",
     "crates/andromeda-codec",
+    "crates/andromeda-client-sdk-gen",
     "crates/andromeda-columnar",
     "crates/andromeda-contract",
     "crates/andromeda-contract-compat",
+    "crates/andromeda-forensic",
+    "crates/andromeda-gpu",
+    "crates/andromeda-iam",
     "crates/andromeda-core",
     "crates/andromeda-decision-trace",
     "crates/andromeda-definition-batch",
@@ -37,19 +45,29 @@ members = [
     "crates/andromeda-policy",
     "crates/andromeda-procedure-runtime",
     "crates/andromeda-procedure-store",
+    "crates/andromeda-procedure-contract",
     "crates/andromeda-proto",
+    "crates/andromeda-proto-wire",
+    "crates/andromeda-protocol",
+    "crates/andromeda-quic-runtime-quinn",
+    "crates/andromeda-rpc",
+    "crates/andromeda-rpc-codec",
     "crates/andromeda-quic",
     "crates/andromeda-recovery",
     "crates/andromeda-regression",
     "crates/andromeda-resource",
+    "crates/andromeda-runbooks",
     "crates/andromeda-restore",
     "crates/andromeda-result-stream",
     "crates/andromeda-retry",
     "crates/andromeda-rpc-protocol",
     "crates/andromeda-savepoint",
     "crates/andromeda-scenario-evidence",
+    "crates/andromeda-security",
     "crates/andromeda-security-contract",
+    "crates/andromeda-observability",
     "crates/andromeda-segment",
+    "crates/andromeda-srpl-interpreter",
     "crates/andromeda-srpl",
     "crates/andromeda-srpl-ast",
     "crates/andromeda-srpl-binder",
@@ -60,16 +78,22 @@ members = [
     "crates/andromeda-srpl-lexer",
     "crates/andromeda-srpl-lowering",
     "crates/andromeda-srpl-parser",
+    "crates/andromeda-srpl-test-fixtures",
     "crates/andromeda-statistics",
     "crates/andromeda-storage",
     "crates/andromeda-storage-heap",
     "crates/andromeda-storage-page",
+    "crates/andromeda-storage-index",
+    "crates/andromeda-simd",
     "crates/andromeda-structured-object",
     "crates/andromeda-time",
+    "crates/andromeda-test-support",
+    "crates/andromeda-vector",
     "crates/andromeda-transaction",
     "crates/andromeda-transaction-log",
     "crates/andromeda-tx",
     "crates/andromeda-types",
+    "crates/andromeda-wal-codec",
     "crates/andromeda-wal",
 ]
 
@@ -79,17 +103,22 @@ edition = "2024"
 rust-version = "1.95.0"
 
 [workspace.dependencies]
+andromeda-admin = { path = "crates/andromeda-admin", version = "0.1.0" }
 andromeda-admission = { path = "crates/andromeda-admission", version = "0.1.0" }
+andromeda-audit = { path = "crates/andromeda-audit", version = "0.1.0" }
 andromeda-analytics = { path = "crates/andromeda-analytics", version = "0.1.0" }
 andromeda-backup = { path = "crates/andromeda-backup", version = "0.1.0" }
 andromeda-bench = { path = "crates/andromeda-bench", version = "0.1.0" }
 andromeda-bench-harness = { path = "crates/andromeda-bench-harness", version = "0.1.0" }
 andromeda-bench-workload = { path = "crates/andromeda-bench-workload", version = "0.1.0" }
 andromeda-buffer-pool = { path = "crates/andromeda-buffer-pool", version = "0.1.0" }
+andromeda-business-fixtures = { path = "crates/andromeda-business-fixtures", version = "0.1.0" }
 andromeda-catalog = { path = "crates/andromeda-catalog", version = "0.1.0" }
 andromeda-catalog-diff = { path = "crates/andromeda-catalog-diff", version = "0.1.0" }
+andromeda-catalog-recovery = { path = "crates/andromeda-catalog-recovery", version = "0.1.0" }
 andromeda-catalog-store = { path = "crates/andromeda-catalog-store", version = "0.1.0" }
 andromeda-codec = { path = "crates/andromeda-codec", version = "0.1.0" }
+andromeda-client-sdk-gen = { path = "crates/andromeda-client-sdk-gen", version = "0.1.0" }
 andromeda-columnar = { path = "crates/andromeda-columnar", version = "0.1.0" }
 andromeda-contract = { path = "crates/andromeda-contract", version = "0.1.0" }
 andromeda-contract-compat = { path = "crates/andromeda-contract-compat", version = "0.1.0" }
@@ -102,29 +131,41 @@ andromeda-error = { path = "crates/andromeda-error", version = "0.1.0" }
 andromeda-exec = { path = "crates/andromeda-exec", version = "0.1.0" }
 andromeda-execution = { path = "crates/andromeda-execution", version = "0.1.0" }
 andromeda-execution-trace = { path = "crates/andromeda-execution-trace", version = "0.1.0" }
+andromeda-forensic = { path = "crates/andromeda-forensic", version = "0.1.0" }
+andromeda-gpu = { path = "crates/andromeda-gpu", version = "0.1.0" }
 andromeda-hadr = { path = "crates/andromeda-hadr", version = "0.1.0" }
 andromeda-hardware = { path = "crates/andromeda-hardware", version = "0.1.0" }
+andromeda-iam = { path = "crates/andromeda-iam", version = "0.1.0" }
 andromeda-locking = { path = "crates/andromeda-locking", version = "0.1.0" }
 andromeda-manifest = { path = "crates/andromeda-manifest", version = "0.1.0" }
 andromeda-maps = { path = "crates/andromeda-maps", version = "0.1.0" }
 andromeda-mvcc = { path = "crates/andromeda-mvcc", version = "0.1.0" }
 andromeda-observe = { path = "crates/andromeda-observe", version = "0.1.0" }
+andromeda-observability = { path = "crates/andromeda-observability", version = "0.1.0" }
 andromeda-optimizer = { path = "crates/andromeda-optimizer", version = "0.1.0" }
 andromeda-plan-cache = { path = "crates/andromeda-plan-cache", version = "0.1.0" }
 andromeda-policy = { path = "crates/andromeda-policy", version = "0.1.0" }
 andromeda-procedure-runtime = { path = "crates/andromeda-procedure-runtime", version = "0.1.0" }
 andromeda-procedure-store = { path = "crates/andromeda-procedure-store", version = "0.1.0" }
+andromeda-procedure-contract = { path = "crates/andromeda-procedure-contract", version = "0.1.0" }
 andromeda-proto = { path = "crates/andromeda-proto", version = "0.1.0" }
+andromeda-proto-wire = { path = "crates/andromeda-proto-wire", version = "0.1.0" }
+andromeda-protocol = { path = "crates/andromeda-protocol", version = "0.1.0" }
 andromeda-quic = { path = "crates/andromeda-quic", version = "0.1.0" }
+andromeda-quic-runtime-quinn = { path = "crates/andromeda-quic-runtime-quinn", version = "0.1.0" }
 andromeda-recovery = { path = "crates/andromeda-recovery", version = "0.1.0" }
 andromeda-regression = { path = "crates/andromeda-regression", version = "0.1.0" }
 andromeda-resource = { path = "crates/andromeda-resource", version = "0.1.0" }
 andromeda-restore = { path = "crates/andromeda-restore", version = "0.1.0" }
 andromeda-result-stream = { path = "crates/andromeda-result-stream", version = "0.1.0" }
 andromeda-retry = { path = "crates/andromeda-retry", version = "0.1.0" }
+andromeda-rpc = { path = "crates/andromeda-rpc", version = "0.1.0" }
+andromeda-rpc-codec = { path = "crates/andromeda-rpc-codec", version = "0.1.0" }
 andromeda-rpc-protocol = { path = "crates/andromeda-rpc-protocol", version = "0.1.0" }
 andromeda-savepoint = { path = "crates/andromeda-savepoint", version = "0.1.0" }
 andromeda-scenario-evidence = { path = "crates/andromeda-scenario-evidence", version = "0.1.0" }
+andromeda-runbooks = { path = "crates/andromeda-runbooks", version = "0.1.0" }
+andromeda-security = { path = "crates/andromeda-security", version = "0.1.0" }
 andromeda-security-contract = { path = "crates/andromeda-security-contract", version = "0.1.0" }
 andromeda-segment = { path = "crates/andromeda-segment", version = "0.1.0" }
 andromeda-srpl = { path = "crates/andromeda-srpl", version = "0.1.0" }
@@ -133,21 +174,27 @@ andromeda-srpl-binder = { path = "crates/andromeda-srpl-binder", version = "0.1.
 andromeda-srpl-cardinality = { path = "crates/andromeda-srpl-cardinality", version = "0.1.0" }
 andromeda-srpl-diagnostics = { path = "crates/andromeda-srpl-diagnostics", version = "0.1.0" }
 andromeda-srpl-execution-adapter = { path = "crates/andromeda-srpl-execution-adapter", version = "0.1.0" }
+andromeda-srpl-interpreter = { path = "crates/andromeda-srpl-interpreter", version = "0.1.0" }
 andromeda-srpl-ir = { path = "crates/andromeda-srpl-ir", version = "0.1.0" }
 andromeda-srpl-lexer = { path = "crates/andromeda-srpl-lexer", version = "0.1.0" }
 andromeda-srpl-lowering = { path = "crates/andromeda-srpl-lowering", version = "0.1.0" }
 andromeda-srpl-parser = { path = "crates/andromeda-srpl-parser", version = "0.1.0" }
+andromeda-srpl-test-fixtures = { path = "crates/andromeda-srpl-test-fixtures", version = "0.1.0" }
 andromeda-statistics = { path = "crates/andromeda-statistics", version = "0.1.0" }
 andromeda-storage = { path = "crates/andromeda-storage", version = "0.1.0" }
 andromeda-storage-heap = { path = "crates/andromeda-storage-heap", version = "0.1.0" }
+andromeda-storage-index = { path = "crates/andromeda-storage-index", version = "0.1.0" }
 andromeda-storage-page = { path = "crates/andromeda-storage-page", version = "0.1.0" }
 andromeda-structured-object = { path = "crates/andromeda-structured-object", version = "0.1.0" }
 andromeda-time = { path = "crates/andromeda-time", version = "0.1.0" }
+andromeda-test-support = { path = "crates/andromeda-test-support", version = "0.1.0" }
 andromeda-transaction = { path = "crates/andromeda-transaction", version = "0.1.0" }
 andromeda-transaction-log = { path = "crates/andromeda-transaction-log", version = "0.1.0" }
 andromeda-tx = { path = "crates/andromeda-tx", version = "0.1.0" }
 andromeda-types = { path = "crates/andromeda-types", version = "0.1.0" }
+andromeda-vector = { path = "crates/andromeda-vector", version = "0.1.0" }
 andromeda-wal = { path = "crates/andromeda-wal", version = "0.1.0" }
+andromeda-wal-codec = { path = "crates/andromeda-wal-codec", version = "0.1.0" }
 
 quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls-ring"] }
 rcgen = { version = "0.14.7" }

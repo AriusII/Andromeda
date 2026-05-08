@@ -1,10 +1,8 @@
+use andromeda_core::CertificateIdentity;
 use andromeda_core::{AndromedaResult, SessionId};
-use andromeda_observe::CertificateIdentity;
+use andromeda_rpc::{FrameDispatch, dispatch_frame};
 
-use crate::{
-    FrameBytes, FrameFamily, FrameType,
-    rpc_dispatch::{FrameDispatch, dispatch_frame},
-};
+use crate::{FrameBytes, FrameFamily, FrameType};
 
 use super::{
     cancellation::{CancellationCause, CancellationOutcome, CancellationSignal},
@@ -90,7 +88,7 @@ impl Connection {
 
         // Validate that the certificate's surface scope matches the connection plane.
         let required_scope = crate::mtls_identity::plane_to_required_surface_scope(self.plane);
-        if identity.surface != required_scope {
+        if identity.surface_scope() != required_scope {
             return Err(protocol_error(
                 "certificate surface scope does not match connection plane",
             ));

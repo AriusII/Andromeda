@@ -12,41 +12,69 @@ use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 #[cfg(test)]
 use andromeda_types::{CatalogObjectId, CatalogVersion, InvocationId, TransactionId};
 
-mod admission_audit;
-mod audit;
-mod backup_audit;
 mod core_trace;
-mod correlation;
 mod decision;
 mod durability;
 mod durable_audit;
 mod envelope;
 mod family;
-mod hadr_audit;
-mod identity;
 mod protocol;
 mod protocol_rejection;
 mod sequence;
 mod sink;
 mod transition;
 
-pub use admission_audit::*;
-pub use audit::*;
-pub use backup_audit::*;
-pub use core_trace::*;
-pub use correlation::*;
-pub use decision::*;
-pub use durability::*;
-pub use durable_audit::*;
-pub use envelope::*;
-pub use family::*;
-pub use hadr_audit::*;
-pub use identity::*;
-pub use protocol::*;
-pub use protocol_rejection::*;
-pub use sequence::*;
-pub use sink::*;
-pub use transition::*;
+pub use andromeda_audit::{
+    AdminOperation, AdminOperationTrace, AdmissionAuditEvent, AdmissionDecisionKind,
+    AffectedPrincipal, AuditTrace, BackpressureReason, BackupAuditEvent, BackupAuditTrace,
+    BackupId, CertificateIdentity, ContractValidationResult, FencingDecision, FencingEvent,
+    FencingPolicy, HadrAuditEvent, HadrAuditTrace, Permission, PermissionFamily, ProcedureId,
+    PromotionCompletion, PromotionEligibility, QuorumRole, RecoveryStage, ReplicaHealthState,
+    RestoreCompletion, SECURITY_ADMISSION_AUDIT_EVENT_V0_SCHEMA_ID,
+    SECURITY_ADMISSION_AUDIT_EVENT_V0_SCHEMA_VERSION, SecurityAdmissionAuditEventV0,
+    SecurityAuditDenialReason, SecurityAuditOutcome, SecurityAuditTrace,
+    SecurityPolicyVersionEvidence, SurfaceScope, UserPrincipal, UserPrincipalKind,
+};
+pub(crate) use andromeda_observability::{
+    EventCorrelation, EventId, ProtocolCorrelation, ProtocolEventScope,
+};
+pub use core_trace::{InvocationTrace, MvccTrace, ResourceTrace};
+pub use decision::{
+    CriticalDecisionKind, DecisionTrace, GpuPolicyDecisionTrace, IoBudgetDecisionTrace,
+    IoPipelineStage, IoPlacementDecisionTrace, IoStorageTier, PlacementAuditEvent,
+    PlacementAuditTransition, SchemaLayoutDecisionTrace,
+};
+pub use durability::{
+    CatalogMutationTrace, CommitVisibleTrace, CorruptionBoundaryTrace, ManifestEventKind,
+    ManifestTrace, RecoveryTrace, RollbackDurableTrace, WalEventTrace, WalOperation, WalTrace,
+};
+pub use durable_audit::{
+    DurableAuditCompactionReport, DurableAuditDecisionGate, DurableAuditEventFamily,
+    DurableAuditFailureKind, DurableAuditPolicyEvidenceRequirement, DurableAuditPrincipalBinding,
+    DurableAuditPruneBlockReason, DurableAuditPruneEvidence, DurableAuditRecordIdentity,
+    DurableAuditReplayBehavior, DurableAuditReplayEvidence, DurableAuditReplayLsnRange,
+    DurableAuditReplayQuery, DurableAuditReplayRecord, DurableAuditReplayResult,
+    DurableAuditReplayWindow, DurableAuditRetentionBoundary, DurableAuditRetentionManager,
+    DurableAuditRetentionPolicy, DurableAuditSinkFailure, DurableAuditSinkReport,
+    DurableAuditSinkResult, DurableAuditVisibleDecisionProof, DurableAuditWalEvidence,
+    DurableAuditWalSegmentArchiveProof, DurableAuditWalSink, FileDurableAuditWalSink,
+    PendingDurableAuditRecord, classify_policy_evidence_requirement,
+};
+pub use envelope::EventEnvelope;
+pub use family::TraceEvent;
+pub use protocol::{
+    AuthorizationDeniedTrace, BackpressureTrace, CompletionEmittedTrace, ContractRejectedTrace,
+    FrameRejectionTrace, StreamRoleRejectionTrace, UnsupportedVersionTrace,
+};
+pub use protocol_rejection::{
+    ProtocolRejectionReason, ProtocolRejectionTrace, ProtocolSurfacePlane,
+};
+pub use sequence::{InMemoryEventSequence, ProcedureLifecycleTrace};
+pub use sink::{EventSink, InMemoryEventSink};
+pub use transition::{
+    ExecutionTransitionTrace, TransactionPhaseCode, TransactionTransitionTrace,
+    TransitionReasonCode,
+};
 
 pub(crate) fn observe_error(message: impl Into<String>) -> AndromedaError {
     AndromedaError::new(AndromedaErrorKind::Internal, message)

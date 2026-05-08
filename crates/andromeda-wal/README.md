@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`andromeda-wal` owns Andromeda write-ahead log primitives, log sequence numbers, WAL record bounds, frame codecs, durable-prefix scanning, transaction classification, durability fence helpers, in-memory WAL summaries, and the physical `FileWal` byte contract.
+`andromeda-wal` owns Andromeda write-ahead log primitives, log sequence numbers, WAL record bounds, typed frame codec wrappers, durable-prefix scanning, transaction classification, durability fence helpers, commit-log durability evidence, in-memory WAL summaries, and the physical `FileWal` byte contract.
 
 This crate protects the durable ordering rule that a transaction commit cannot become visible until its commit record is durably flushed to WAL. It also protects the byte-level evidence that storage and recovery use to decide what can be replayed after a crash.
 
@@ -11,11 +11,12 @@ This crate protects the durable ordering rule that a transaction commit cannot b
 This crate owns:
 
 - `Lsn`, `WalRecord`, `WalRecordHeader`, `WalRecordKind`, and WAL segment descriptors.
-- Explicit WAL frame and file-header codecs with little-endian canonical serialization.
+- Typed WAL frame wrappers over the raw `andromeda-wal-codec` byte contract, plus file-header codecs with little-endian canonical serialization.
 - Record size, batch size, segment boundary, LSN ordering, and previous-LSN chain validation.
 - Durable-prefix scan behavior, recoverable-tail detection, and non-recoverable chain-break rejection.
 - `FileWal` open, append, flush-through, durable header, scan, and replay surfaces.
 - Durability fence helpers for page flushes, manifest switches, and recovery floors.
+- Commit log entries and the commit facade that enforce durable WAL before visibility publication.
 
 The crate uses typed errors and `AndromedaResult` failures to make short flushes, invalid bytes, broken chains, and unsafe durability states classifiable by callers.
 
@@ -24,7 +25,7 @@ The crate uses typed errors and `AndromedaResult` failures to make short flushes
 This crate does not own:
 
 - Storage recovery reports, heap redo, catalog replay bridges, startup policy, page integration, or durable visibility publication.
-- Transaction status tables, MVCC visibility, lock behavior, or commit-log policy.
+- Transaction status tables, MVCC visibility, lock behavior, or final visibility publication.
 - Procedure dispatch, SRPL execution, QUIC transport, or application-facing SQL.
 - Benchmark, GPU, analytics, or learned-model outputs as WAL truth.
 
@@ -86,9 +87,10 @@ For durable byte changes, add fuzz coverage for frame decoding and scan-prefix r
 - `src/lib.rs`
 - `src/lsn.rs`
 - `src/wal_codec.rs`
-- `src/wal_codec/`
 - `src/file_wal.rs`
 - `src/file_wal/`
+- `src/write_ahead_log/commit_log_entry.rs`
+- `src/write_ahead_log/commit_log_facade.rs`
 - `src/write_ahead_log/durability_fence.rs`
 - `src/write_ahead_log/record_bounds.rs`
 - `src/write_ahead_log/transaction.rs`

@@ -79,11 +79,13 @@ impl MockLocalDispatcher {
     }
 }
 
-impl ProcedureDispatcher for MockLocalDispatcher {
+impl andromeda_procedure_runtime::ProcedureDispatcher for MockLocalDispatcher {
+    type Procedure = LocalProcedure;
+
     fn dispatch_procedure(
         &self,
         request: ProcedureDispatchRequest,
-    ) -> AndromedaResult<LocalProcedure> {
+    ) -> AndromedaResult<Self::Procedure> {
         request.validate()?;
         if request.procedure != self.procedure.contract {
             return Err(AndromedaError::new(

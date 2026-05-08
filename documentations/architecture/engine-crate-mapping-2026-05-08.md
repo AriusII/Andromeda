@@ -112,7 +112,7 @@ Use these read-only findings when interpreting the map.
 | The current workspace has 32 root members under `crates/` before any additional scaffold packets. | Treat new target-named crates as branch output, not accepted ownership. Future crate creation still needs an owner statement, topology gates, and path-local validation. |
 | Most roadmap phases remain partial. | Do not promote a phase because one owner crate or specification exists; each phase still needs clean candidate tests and retained evidence. |
 | `andromeda-maps` and `andromeda-procedure-store` are provisional. | Keep current durable or runtime behavior attributed to `andromeda-catalog`, `andromeda-exec`, storage, or other existing owners until direct owner tests and integration gates move it. |
-| Fuzz remains canonical under `fuzz/`. | Use `fuzz/targets.toml`, `fuzz/corpus/manifest.toml`, and `fuzz/VALIDATION_MATRIX.md` for harness and corpus authority; use `tests/fuzzing/` only as an index and validation-planning surface. |
+| Fuzz remains canonical under `tests/fuzzing/`. | Use `tests/fuzzing/targets.toml`, `tests/fuzzing/corpus/manifest.toml`, and `fuzz/VALIDATION_MATRIX.md` for harness and corpus authority; use `tests/fuzzing/` as the planning surface. |
 | Documentation path mapping is being clarified elsewhere. | Preserve existing `docs/` and `documentations/` references in this packet unless they are required for one of the owned files. |
 | Release blockers remain. | Dirty worktree state, missing C5 crash/recovery evidence, sustained fuzz gaps, Miri/Loom gaps, and release evidence gaps still block readiness claims. |
 
@@ -228,7 +228,7 @@ macro-engine row and in `docs/adr/ADR-0018-engine-crate-mapping-policy.md`.
 | `cargo metadata` shows more crates than this document. | Refresh the map in a documentation-owned packet and explain whether the new crate is owner, facade, tool, or provisional. |
 | A C5 split lacks crash/recovery evidence. | Block the split until durable behavior tests and recovery gates exist. |
 | A benchmark or GPU output is used as acceptance truth. | Reword as advisory evidence and require CPU-backed or durable owner evidence. |
-| A worker treats `tests/fuzzing/` as the canonical fuzz workspace. | Redirect to `fuzz/targets.toml`, `fuzz/corpus/manifest.toml`, `fuzz/generators/generate_seed_corpus.py`, and `fuzz/VALIDATION_MATRIX.md`. |
+| A worker treats `tests/fuzzing/` as the canonical fuzz workspace. | Redirect to `tests/fuzzing/targets.toml`, `tests/fuzzing/corpus/manifest.toml`, `fuzz/generators/generate_seed_corpus.py`, and `fuzz/VALIDATION_MATRIX.md`. |
 | A worker asks this map to settle `docs/` versus `documentations/`. | Leave path normalization to the dedicated documentation mapping packet and keep this map focused on crate ownership. |
 
 ## References
@@ -250,5 +250,5 @@ macro-engine row and in `docs/adr/ADR-0018-engine-crate-mapping-policy.md`.
 - `documentations/governance/adr-backlog-2026-05-08.md`
 - `documentations/implementation/target-crate-gap-ledger-2026-05-08.md`
 - `fuzz/README.md`
-- `fuzz/targets.toml`
+- `tests/fuzzing/targets.toml`
 - `fuzz/VALIDATION_MATRIX.md`

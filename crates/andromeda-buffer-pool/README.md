@@ -2,17 +2,20 @@
 
 ## Purpose
 
-`andromeda-buffer-pool` is a future C5 owner crate for page residency, pinning, dirtiness, eviction, and flush coordination.
+`andromeda-buffer-pool` is the C5 boundary crate for page residency, pinning, dirtiness, eviction, and flush coordination.
 
-This scaffold reserves a boundary for buffer frames, page guards, dirty tracking, eviction policy, and WAL durability fences before flush. No behavior has moved from `andromeda-storage`.
+This crate now owns the WAL durability observer contract used by buffer-pool dirty flush gates. Resident frames, page guards, dirty tracking, and eviction remain in `andromeda-storage` during migration.
 
 ## Scope
+
+This crate owns:
+
+- WAL durability observer integration that blocks unsafe page flushes.
 
 Future work in this crate may own:
 
 - Buffer frame identifiers, pinning, guards, and frame lifecycle.
 - Dirty-page tracking, flush candidates, eviction policy, and flush scheduling.
-- WAL durability observer integration that blocks unsafe page flushes.
 - Typed errors for pinned-frame eviction, dirty flush failure, insufficient WAL durability, and invalid frame state.
 
 ## Non-goals
@@ -22,7 +25,7 @@ Future work in this crate may own:
 - No ownership of durable page byte formats, heap semantics, physical disk I/O, manifest publication, recovery replay, backup, restore, or HA/DR.
 - No transaction commit publication or physical WAL byte ownership.
 - No GPU output, benchmark output, RAM state, or temporary storage as buffer-pool truth.
-- No behavior move in this scaffold.
+- No durable page byte formats, heap semantics, physical disk I/O, manifest publication, recovery replay, backup, restore, or HA/DR.
 
 ## Prerequisites
 
@@ -43,7 +46,7 @@ Before behavior lands here:
 
 ## Validation
 
-This scaffold is documentation-only. Future behavior requires `cargo fmt`, `cargo check`, `cargo clippy`, buffer-pool lifecycle tests, WAL durability fence tests, eviction tests, and crash/recovery scenarios.
+Run `cargo check -p andromeda-buffer-pool`. Future resident-frame behavior requires `cargo fmt`, `cargo clippy`, buffer-pool lifecycle tests, WAL durability fence tests, eviction tests, and crash/recovery scenarios.
 
 ## Troubleshooting
 

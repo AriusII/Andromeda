@@ -6,6 +6,8 @@
 
 This scaffold reserves a boundary for restore plans, artifact verification, WAL archive replay ranges, PITR targets, and restore reports. No behavior has moved from `andromeda-storage`.
 
+Current status: ownership-boundary scaffold only. This crate does not claim production readiness, restore success, or operational completeness.
+
 ## Scope
 
 Future work in this crate may own:

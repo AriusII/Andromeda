@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish = false
-description = "Runtime-free scaffold for Andromeda catalog store taxonomy placeholders."
+description = "Runtime-free catalog object and store boundary types for Andromeda."
 
 [dependencies]
+andromeda-contract.workspace = true

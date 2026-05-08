@@ -1,5 +1,6 @@
 //! Temporary compatibility facade for catalog qualified names.
 //!
-//! The canonical definition lives in `andromeda-contract` after Lot 2.1.
+//! `andromeda-catalog-store` owns the catalog-store import boundary. The
+//! canonical definition still lives in `andromeda-contract`.
 
-pub use andromeda_contract::QualifiedName;
+pub use andromeda_catalog_store::QualifiedName;

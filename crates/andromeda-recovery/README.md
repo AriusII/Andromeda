@@ -2,11 +2,15 @@
 
 ## Purpose
 
-`andromeda-recovery` is a future C5 owner crate for startup recovery, replay planning, recovery reports, and forensic evidence.
+`andromeda-recovery` is the C5 boundary crate for startup recovery, replay planning, recovery reports, and forensic evidence.
 
-This scaffold reserves a boundary for durable artifact discovery, replay selection, recovery floors, startup modes, and recovery reporting. No behavior has moved from `andromeda-storage`, `andromeda-tx`, or `andromeda-wal`.
+This crate now owns the startup mode boundary used by `andromeda-storage`. Replay planning, durable artifact discovery, and report construction remain in storage, transaction, and WAL crates during migration.
 
 ## Scope
+
+This crate owns:
+
+- `StartupMode` and its clean-replay and forensic-report boundary helpers.
 
 Future work in this crate may own:
 
@@ -22,7 +26,7 @@ Future work in this crate may own:
 - No physical WAL byte ownership unless a later explicit split assigns it.
 - No page format, heap format, buffer-pool, backup creation, restore orchestration, or HA/DR quorum ownership.
 - No GPU output, benchmark output, RAM state, or temporary storage as recovery truth.
-- No behavior move in this scaffold.
+- No replay behavior that treats RAM, temp storage, GPU output, or benchmark output as recovery truth.
 
 ## Prerequisites
 
@@ -43,7 +47,7 @@ Before behavior lands here:
 
 ## Validation
 
-This scaffold is documentation-only. Future behavior requires `cargo fmt`, `cargo check`, `cargo clippy`, recovery replay tests, recovery report tests, corruption-rejection tests, and deterministic crash/recovery scenarios.
+Run `cargo check -p andromeda-recovery`. Future replay and report behavior requires `cargo fmt`, `cargo clippy`, recovery replay tests, recovery report tests, corruption-rejection tests, and deterministic crash/recovery scenarios.
 
 ## Troubleshooting
 

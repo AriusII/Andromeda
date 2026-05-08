@@ -78,11 +78,11 @@ EVIDENCE_CHECKS = (
     PathCheck(
         "fuzz evidence paths",
         (
-            "fuzz/targets.toml",
+            "tests/fuzzing/targets.toml",
             "fuzz/VALIDATION_MATRIX.md",
             "fuzz/README.md",
             "fuzz/fuzz_targets/*.rs",
-            "fuzz/corpus/manifest.toml",
+            "tests/fuzzing/corpus/manifest.toml",
             "fuzz/generators/generate_seed_corpus.py",
             ".github/workflows/07-fuzzing.yml",
         ),
@@ -375,7 +375,7 @@ def print_check_group(title: str, checks: tuple[PathCheck, ...]) -> list[CheckRe
 
 def print_fuzz_targets() -> list[str]:
     print("Fuzz Targets")
-    targets_path = ROOT / "fuzz" / "targets.toml"
+    targets_path = ROOT / "tests" / "fuzzing" / "targets.toml"
     targets = parse_fuzz_targets(targets_path)
     missing: list[str] = []
     print(f"  registry: {rel(targets_path)}")

@@ -2,11 +2,11 @@
 //!
 //! This module provides the contract surface for extracting and binding mTLS
 //! certificate identities to QUIC sessions. The default crate remains
-//! runtime-free; concrete Quinn extraction is available only behind the
-//! `runtime-quinn` feature.
+//! runtime-free; concrete Quinn extraction lives in
+//! `andromeda-quic-runtime-quinn`.
 
+use andromeda_core::SurfaceScope;
 use andromeda_core::{AndromedaResult, digest};
-use andromeda_observe::SurfaceScope;
 
 /// Convert a QUIC `SurfacePlane` to its required [`SurfaceScope`].
 ///
@@ -64,7 +64,7 @@ impl RawCertificate {
     pub fn to_certificate_identity(
         &self,
         required_scope: SurfaceScope,
-    ) -> AndromedaResult<andromeda_observe::CertificateIdentity> {
+    ) -> AndromedaResult<andromeda_core::CertificateIdentity> {
         if self.is_empty() {
             return Err(andromeda_core::AndromedaError::new(
                 andromeda_core::AndromedaErrorKind::Security,
@@ -74,7 +74,7 @@ impl RawCertificate {
 
         let fingerprint = self.fingerprint_sha256_hex();
         let subject = format!("sha256:{}", &fingerprint[..16]);
-        andromeda_observe::CertificateIdentity::new(fingerprint, subject, required_scope)
+        andromeda_core::CertificateIdentity::new(fingerprint, subject, required_scope)
     }
 }
 
@@ -146,13 +146,9 @@ impl ParsedCertificate {
     pub fn to_certificate_identity(
         self,
         required_scope: SurfaceScope,
-    ) -> AndromedaResult<andromeda_observe::CertificateIdentity> {
+    ) -> AndromedaResult<andromeda_core::CertificateIdentity> {
         let subject = self.subject_cn.clone();
-        andromeda_observe::CertificateIdentity::new(
-            self.fingerprint_sha256,
-            subject,
-            required_scope,
-        )
+        andromeda_core::CertificateIdentity::new(self.fingerprint_sha256, subject, required_scope)
     }
 }
 
@@ -206,13 +202,19 @@ mod tests {
             .to_certificate_identity(SurfaceScope::Application)
             .unwrap();
 
-        assert_eq!(identity.fingerprint.len(), 64);
-        assert!(identity.fingerprint.chars().all(|c| c.is_ascii_hexdigit()));
-        assert_eq!(
-            identity.subject,
-            format!("sha256:{}", &identity.fingerprint[..16])
+        assert_eq!(identity.fingerprint().len(), 64);
+        assert!(
+            identity
+                .fingerprint()
+                .as_str()
+                .chars()
+                .all(|c| c.is_ascii_hexdigit())
         );
-        assert_eq!(identity.surface, SurfaceScope::Application);
+        assert_eq!(
+            identity.subject(),
+            format!("sha256:{}", &identity.fingerprint().as_str()[..16])
+        );
+        assert_eq!(identity.surface_scope(), SurfaceScope::Application);
     }
 
     #[test]
@@ -283,9 +285,9 @@ mod tests {
             .to_certificate_identity(SurfaceScope::Application)
             .unwrap();
 
-        assert_eq!(identity.fingerprint, "a".repeat(64));
-        assert_eq!(identity.subject, "test-service");
-        assert_eq!(identity.surface, SurfaceScope::Application);
+        assert_eq!(identity.fingerprint().as_str(), "a".repeat(64));
+        assert_eq!(identity.subject(), "test-service");
+        assert_eq!(identity.surface_scope(), SurfaceScope::Application);
     }
 
     #[test]

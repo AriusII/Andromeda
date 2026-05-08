@@ -1,10 +1,10 @@
 #![forbid(unsafe_code)]
 
-//! Future owner crate scaffold for Andromeda columnar analytical descriptors.
+//! Andromeda columnar analytical descriptor ownership contracts.
 //!
-//! This crate intentionally defines no public API yet. Columnar behavior stays
-//! in current owners until a later extraction registers this package in the
-//! workspace and proves compatibility.
+//! This crate owns runtime-free descriptors for derived columnar analytical
+//! artifacts. It does not persist columnar bytes, publish catalog state, or make
+//! columnar output durable truth.
 //!
 //! Ownership constraints:
 //! - Columnar artifacts are derived and advisory unless a later C5 design adds
@@ -14,3 +14,10 @@
 //!   recovery, MVCC short-visibility, catalog publication, and security-critical
 //!   paths.
 //! - Adaptive consumers must explain use or rejection through DecisionTrace.
+
+mod descriptor;
+
+pub use descriptor::{
+    ColumnarAccelerationPolicy, ColumnarArtifactDescriptor, ColumnarConsumer,
+    ColumnarLayoutDescriptor, ColumnarVersionBinding,
+};

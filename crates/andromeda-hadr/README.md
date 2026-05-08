@@ -6,6 +6,8 @@
 
 This scaffold reserves a boundary for single-primary replication, quorum evidence, fencing, promotion epochs, WAL shipping state, and cluster recovery reports. No behavior has moved from `andromeda-storage`.
 
+Current status: ownership-boundary scaffold only. This crate does not claim production readiness, failover safety, or operational completeness.
+
 ## Scope
 
 Future work in this crate may own:

@@ -1,10 +1,11 @@
 #![forbid(unsafe_code)]
 #![doc = r#"
-Future C5 owner scaffold for Andromeda disk-backed page storage.
+Boundary crate for Andromeda disk-backed page storage.
 
-This crate is intentionally behavior-free. It documents the boundary that may
-eventually own page read, write, allocation, sync, and device error
-classification.
+This crate owns disk page-store durability contracts that are independent of
+storage's page layout and disk-manager implementation. Storage keeps the
+current file-backed implementation during the migration and delegates page flush
+durability validation here.
 
 C5 invariants:
 
@@ -13,5 +14,90 @@ C5 invariants:
 - Persistent and network bytes must use explicit codecs, never Rust native struct layout.
 - Crash/recovery validation is required before mission-critical behavior lands here.
 - RAM, temporary storage, GPU output, and benchmark output are advisory only; they are not truth.
-- No behavior has moved into this crate in this scaffold.
 "#]
+
+use std::fmt::{Display, Formatter};
+
+use andromeda_wal::Lsn;
+
+/// Error returned when a durable page write boundary is unsafe.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PageFlushDurabilityError {
+    MissingPageLsn,
+    WalFenceViolation { page_lsn: u64, durable_lsn: u64 },
+}
+
+impl Display for PageFlushDurabilityError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MissingPageLsn => write!(f, "page flush requires a nonzero page LSN"),
+            Self::WalFenceViolation {
+                page_lsn,
+                durable_lsn,
+            } => write!(
+                f,
+                "WAL-before-page flush violated: page LSN {page_lsn} exceeds durable WAL LSN {durable_lsn}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for PageFlushDurabilityError {}
+
+/// WAL-before-page-flush boundary for disk and page-store callers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PageFlushDurabilityBoundary {
+    pub page_lsn: Lsn,
+    pub durable_lsn: Lsn,
+}
+
+impl PageFlushDurabilityBoundary {
+    pub const fn new(page_lsn: Lsn, durable_lsn: Lsn) -> Self {
+        Self {
+            page_lsn,
+            durable_lsn,
+        }
+    }
+
+    pub fn validate(self) -> Result<(), PageFlushDurabilityError> {
+        if self.page_lsn.is_zero() {
+            return Err(PageFlushDurabilityError::MissingPageLsn);
+        }
+        if self.durable_lsn < self.page_lsn {
+            return Err(PageFlushDurabilityError::WalFenceViolation {
+                page_lsn: self.page_lsn.get(),
+                durable_lsn: self.durable_lsn.get(),
+            });
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn page_flush_boundary_requires_wal_through_page_lsn() {
+        assert!(
+            PageFlushDurabilityBoundary::new(Lsn::new(10), Lsn::new(10))
+                .validate()
+                .is_ok()
+        );
+        assert!(
+            PageFlushDurabilityBoundary::new(Lsn::new(10), Lsn::new(11))
+                .validate()
+                .is_ok()
+        );
+
+        assert_eq!(
+            PageFlushDurabilityBoundary::new(Lsn::new(10), Lsn::new(9))
+                .validate()
+                .unwrap_err(),
+            PageFlushDurabilityError::WalFenceViolation {
+                page_lsn: 10,
+                durable_lsn: 9
+            }
+        );
+    }
+}

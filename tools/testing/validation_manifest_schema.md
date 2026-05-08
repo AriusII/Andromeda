@@ -130,17 +130,17 @@ The `inventory` object contains one object per validation category.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `registered_targets` | integer | Number of `[[target]]` entries in `fuzz/targets.toml`. |
+| `registered_targets` | integer | Number of `[[target]]` entries in `tests/fuzzing/targets.toml`. |
 | `cargo_bins` | integer | Number of fuzz `[[bin]]` entries in `fuzz/Cargo.toml`. |
-| `corpus_manifest_entries` | integer | Number of `[[entry]]` records in `fuzz/corpus/manifest.toml`. |
-| `target_sources` | integer | Number of Rust fuzz target source files, excluding files declared as `[[support]]` in `fuzz/targets.toml`. |
+| `corpus_manifest_entries` | integer | Number of `[[entry]]` records in `tests/fuzzing/corpus/manifest.toml`. |
+| `target_sources` | integer | Number of Rust fuzz target source files, excluding files declared as `[[support]]` in `tests/fuzzing/targets.toml`. |
 | `targets` | array | Per-target source, corpus, generator, Cargo bin, corpus manifest, and invalid-input policy status. |
 
 Each item in `inventory.fuzz.targets` has these fields.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `name` | string | Fuzz target name from `fuzz/targets.toml`. |
+| `name` | string | Fuzz target name from `tests/fuzzing/targets.toml`. |
 | `source` | string | Repository-relative source path. |
 | `source_present` | boolean | Whether the source path exists. |
 | `corpus_dir` | string | Corpus directory from the registry. |
@@ -148,7 +148,7 @@ Each item in `inventory.fuzz.targets` has these fields.
 | `generator` | string | Seed generator path from the registry. |
 | `generator_present` | boolean | Whether the seed generator exists. |
 | `cargo_bin_present` | boolean | Whether `fuzz/Cargo.toml` has a matching `[[bin]]`. |
-| `corpus_manifest_present` | boolean | Whether `fuzz/corpus/manifest.toml` has a matching entry. |
+| `corpus_manifest_present` | boolean | Whether `tests/fuzzing/corpus/manifest.toml` has a matching entry. |
 | `invalid_input_policy` | string | Policy value from the target registry. Values that mention `stub` are reported as known blockers before promotion. |
 
 ### `inventory.runbooks`
@@ -213,7 +213,7 @@ If `status` is `FAIL`, inspect `summary[*].required_missing` and restore or upda
 
 If `status` is `BLOCKED`, inspect `known_blockers`. A blocker can be a real missing file, a registry mismatch, or a documented release gap that still needs retained evidence.
 
-If a fuzz target reports a missing corpus seed, reconcile `fuzz/targets.toml`, `fuzz/Cargo.toml`, `fuzz/corpus/manifest.toml`, and `fuzz/generators/generate_seed_corpus.py` before accepting release evidence.
+If a fuzz target reports a missing corpus seed, reconcile `tests/fuzzing/targets.toml`, `fuzz/Cargo.toml`, `tests/fuzzing/corpus/manifest.toml`, and `fuzz/generators/generate_seed_corpus.py` before accepting release evidence.
 
 If `loom_model_paths` is empty, do not use the manifest to approve concurrency-sensitive C5 claims. Add owner-crate Loom evidence or explicitly scope the claim away from that concurrency surface.
 
@@ -228,5 +228,5 @@ If `loom_model_paths` is empty, do not use the manifest to approve concurrency-s
 - `documentations/testing/ci-release-gate-evidence.md`
 - `documentations/specs/index.md`
 - `documentations/operations/runbooks/index.md`
-- `fuzz/targets.toml`
-- `fuzz/corpus/manifest.toml`
+- `tests/fuzzing/targets.toml`
+- `tests/fuzzing/corpus/manifest.toml`

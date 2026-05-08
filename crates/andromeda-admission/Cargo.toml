@@ -6,3 +6,9 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+andromeda-contract.workspace = true
+andromeda-core.workspace = true
+andromeda-observe.workspace = true
+andromeda-proto.workspace = true
+andromeda-result-stream.workspace = true
+andromeda-storage.workspace = true

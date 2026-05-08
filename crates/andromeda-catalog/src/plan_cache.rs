@@ -96,31 +96,19 @@
 //! `advisory_only=true`, `policy_version`, `contract_hash`, `stats_version`,
 //! and `catalog_version`.
 
-mod admission;
 mod advisory_evidence;
-mod decision;
-mod identity;
-mod limits;
 mod selection;
 
 #[cfg(test)]
 mod tests;
 
-pub use admission::{
-    BoundedPlanCache, PlanCacheEntry, PlanCacheError, PlanCacheInsertReport, PlanCacheLookupReport,
+pub use advisory_evidence::classify_advisory_evidence_for_key;
+pub use andromeda_plan_cache::{
+    AdvisoryEvidenceStatus, AdvisoryEvidenceSummary, AdvisoryEvidenceSummaryBuilder,
+    BoundedPlanCache, CardinalityBucket, PLAN_CACHE_MAX_ENTRIES, PLAN_SELECTION_MAX_CANDIDATES,
+    PLAN_SELECTION_MAX_SCENARIO_EVIDENCE, PlanCacheEntry, PlanCacheError, PlanCacheInsertReport,
+    PlanCacheKey, PlanCacheKeyError, PlanCacheLookupReport, PlanCacheMissReason, PlanCandidate,
+    PlanCandidateId, PlanCandidateRank, PlanClass, PlanDecisionEvidence, PlanDecisionOutcome,
+    PlanSelectionError, PlanSelectionOutcome, PlanShapeFingerprint, PlanShapeFingerprintBuilder,
 };
-pub use advisory_evidence::{
-    AdvisoryEvidenceStatus, AdvisoryEvidenceSummary, classify_advisory_evidence_for_key,
-};
-pub use decision::{PlanCacheMissReason, PlanDecisionEvidence, PlanDecisionOutcome};
-pub use identity::{
-    CardinalityBucket, PlanCacheKey, PlanCacheKeyError, PlanClass, PlanShapeFingerprint,
-    PlanShapeFingerprintBuilder,
-};
-pub use limits::{
-    PLAN_CACHE_MAX_ENTRIES, PLAN_SELECTION_MAX_CANDIDATES, PLAN_SELECTION_MAX_SCENARIO_EVIDENCE,
-};
-pub use selection::{
-    PlanCandidate, PlanCandidateId, PlanCandidateRank, PlanSelectionError, PlanSelectionOutcome,
-    select_minimal_plan,
-};
+pub use selection::select_minimal_plan;

@@ -66,8 +66,8 @@ INDEX_SPECS = (
     IndexSpec("crates", "workspace manifest", "Cargo.toml"),
     IndexSpec("fuzz", "fuzz index", "fuzz/README.md"),
     IndexSpec("fuzz", "fuzz validation matrix", "fuzz/VALIDATION_MATRIX.md"),
-    IndexSpec("fuzz", "fuzz target registry", "fuzz/targets.toml"),
-    IndexSpec("fuzz", "fuzz corpus manifest", "fuzz/corpus/manifest.toml"),
+    IndexSpec("fuzz", "fuzz target registry", "tests/fuzzing/targets.toml"),
+    IndexSpec("fuzz", "fuzz corpus manifest", "tests/fuzzing/corpus/manifest.toml"),
     IndexSpec(
         "runbooks",
         "operations runbook index",
@@ -337,10 +337,13 @@ def build_crates_inventory(root: Path) -> tuple[dict[str, object], list[Blocker]
 
 
 def build_fuzz_inventory(root: Path) -> tuple[dict[str, object], list[Blocker]]:
-    targets = parse_array_tables(root / "fuzz" / "targets.toml", "target")
-    support = parse_array_tables(root / "fuzz" / "targets.toml", "support")
+    targets = parse_array_tables(root / "tests" / "fuzzing" / "targets.toml", "target")
+    support = parse_array_tables(root / "tests" / "fuzzing" / "targets.toml", "support")
     bins = parse_array_tables(root / "fuzz" / "Cargo.toml", "bin")
-    corpus_entries = parse_array_tables(root / "fuzz" / "corpus" / "manifest.toml", "entry")
+    corpus_entries = parse_array_tables(
+        root / "tests" / "fuzzing" / "corpus" / "manifest.toml",
+        "entry",
+    )
     bin_names = {str(item.get("name", "")) for item in bins}
     support_paths = {str(item.get("path", "")) for item in support if item.get("path")}
     corpus_by_target = {
@@ -391,7 +394,7 @@ def build_fuzz_inventory(root: Path) -> tuple[dict[str, object], list[Blocker]]:
                     Blocker(
                         "fuzz",
                         "high",
-                        value or f"fuzz/targets.toml:{name}",
+                        value or f"tests/fuzzing/targets.toml:{name}",
                         f"{name}: {message}",
                     )
                 )
@@ -409,7 +412,7 @@ def build_fuzz_inventory(root: Path) -> tuple[dict[str, object], list[Blocker]]:
                 Blocker(
                     "fuzz",
                     "high",
-                    "fuzz/corpus/manifest.toml",
+                    "tests/fuzzing/corpus/manifest.toml",
                     f"{name}: registered fuzz target has no corpus manifest entry.",
                 )
             )
@@ -418,7 +421,7 @@ def build_fuzz_inventory(root: Path) -> tuple[dict[str, object], list[Blocker]]:
                 Blocker(
                     "fuzz",
                     "medium",
-                    "fuzz/targets.toml",
+                    "tests/fuzzing/targets.toml",
                     f"{name}: invalid_input_policy records a compile-intent stub and requires owner decode API follow-up before promotion.",
                 )
             )
@@ -589,7 +592,7 @@ def build_inventory(root: Path) -> tuple[dict[str, object], list[Blocker]]:
 
 
 def has_fuzz_target(root: Path, name: str) -> bool:
-    targets = parse_array_tables(root / "fuzz" / "targets.toml", "target")
+    targets = parse_array_tables(root / "tests" / "fuzzing" / "targets.toml", "target")
     return any(str(target.get("name", "")) == name for target in targets)
 
 
@@ -601,7 +604,7 @@ def static_blockers(root: Path) -> list[Blocker]:
             Blocker(
                 "fuzz",
                 "high",
-                "fuzz/targets.toml",
+                "tests/fuzzing/targets.toml",
                 "SegmentIndex fuzz coverage is not registered; byte-format promotion requires a real target or explicit scope exclusion.",
             )
         )

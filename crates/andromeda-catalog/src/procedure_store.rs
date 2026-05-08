@@ -37,6 +37,17 @@ pub use self::runtime::{
     ProcedureRuntimePlanId, ProcedureRuntimeRecordId, ProcedureRuntimeStatus,
 };
 pub use self::store::{PROCEDURE_FEEDBACK_CAPACITY_PER_PROCEDURE, ProcedureStore};
+pub use andromeda_procedure_store::{
+    AuditCorrelation, AuditCorrelationId, EvidenceDigest as ProcedureStoreEvidenceDigest,
+    FeedbackId as ProcedureStoreFeedbackId, InvocationEvidenceKind, InvocationEvidenceMarker,
+    InvocationEvidenceSink, InvocationFeedback, InvocationHistoryRecord,
+    InvocationId as ProcedureStoreInvocationId,
+    InvocationIdentity as ProcedureStoreInvocationIdentity, InvocationMetricKind,
+    InvocationMetrics, InvocationStatus as ProcedureStoreInvocationStatus,
+    MAX_REGRESSION_THRESHOLD_BPS, ProcedureId as ProcedureStoreProcedureId,
+    ProcedureStorePrimitiveError, ProcedureStorePrimitiveResult, RegressionSeverity,
+    RegressionSignal, RegressionThresholdBps,
+};
 
 #[cfg(test)]
 mod tests;

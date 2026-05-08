@@ -4,11 +4,11 @@ use andromeda_storage::{
     HadrPromotionAuditLog, HadrPromotionAuditMarker, HadrPromotionAuditReceipt, HadrPromotionVote,
     Lsn, PromotionAttempt,
 };
+use andromeda_test_support::workspace::unique_temp_dir_path;
 use std::{
     cell::RefCell,
     fs,
     path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 pub(super) fn membership_store_json_args(path: &Path) -> Vec<String> {
@@ -226,14 +226,7 @@ impl HadrPromotionAuditLog for RecordingPromotionAudit<'_> {
 }
 
 pub(super) fn durable_store_path(name: &str) -> PathBuf {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system clock after unix epoch")
-        .as_nanos();
-    let dir = std::env::temp_dir().join(format!(
-        "andromeda-cli-hadr-{name}-{}-{nanos}",
-        std::process::id()
-    ));
+    let dir = unique_temp_dir_path(&format!("andromeda-cli-hadr-{name}"));
     fs::create_dir_all(&dir).expect("create temp HADR dir");
     dir.join("membership.bin")
 }

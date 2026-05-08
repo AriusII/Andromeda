@@ -1,0 +1,14 @@
+[package]
+name = "andromeda-rpc"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+andromeda-core.workspace = true
+andromeda-rpc-codec.workspace = true
+andromeda-rpc-protocol.workspace = true
+
+[dev-dependencies]
+andromeda-proto-wire.workspace = true

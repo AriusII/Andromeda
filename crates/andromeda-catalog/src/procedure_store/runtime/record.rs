@@ -4,7 +4,9 @@ use andromeda_time::EngineTimestamp;
 use andromeda_types::{CatalogVersion, ContractHash, InvocationId, ProcedureId};
 
 use crate::{
-    PlanCacheKey, PlanClass, PolicyVersion, ProcedureContractBinding, StatsVersion, digest::Sha256,
+    PolicyVersion, ProcedureContractBinding, StatsVersion,
+    digest::Sha256,
+    plan_cache::{PlanCacheKey, PlanClass},
 };
 
 use super::{

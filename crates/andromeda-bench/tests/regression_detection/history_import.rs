@@ -1,7 +1,5 @@
-use andromeda_bench::{
-    BenchmarkHistoryRecord, BenchmarkHistoryStore, HistoryQuery, RegressionAnalysis,
-    RegressionReason,
-};
+use andromeda_regression::{RegressionAnalysis, RegressionReason};
+use andromeda_scenario_evidence::{BenchmarkHistoryRecord, BenchmarkHistoryStore, HistoryQuery};
 
 #[test]
 fn history_import_loads_baseline_for_regression_analysis() {

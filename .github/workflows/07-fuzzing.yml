@@ -54,7 +54,7 @@ jobs:
           done < fuzz-targets.tsv
       - name: No fuzz targets yet
         if: steps.discover.outputs.count == '0'
-        run: echo "No fuzz targets found. Add fuzz/fuzz_targets/*.rs to enable fuzzing."
+        run: echo "No fuzz targets found. Add fuzz_targets/*.rs to enable fuzzing."
       - name: Rotate stale fuzz artifacts in workspace snapshot
         if: always()
         shell: bash
@@ -66,8 +66,8 @@ jobs:
           name: fuzz-artifacts
           path: |
             fuzz/artifacts
-            fuzz/corpus
-            fuzz/corpus/manifest.toml
-            fuzz/targets.toml
+            tests/fuzzing/corpus
+            tests/fuzzing/corpus/manifest.toml
+            tests/fuzzing/targets.toml
           if-no-files-found: ignore
           retention-days: 30

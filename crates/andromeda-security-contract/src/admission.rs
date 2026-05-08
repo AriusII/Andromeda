@@ -7,14 +7,16 @@ pub const SECURITY_ADMISSION_V0_SCHEMA_VERSION: u16 = 0;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SecurityAdmissionStepV0 {
     SurfaceBoundary,
+    PrincipalBinding,
     ProcedureContract,
     PolicyEvidence,
     PermissionBoundary,
     DecisionEvidence,
 }
 
-pub const ALL_SECURITY_ADMISSION_V0_STEPS: [SecurityAdmissionStepV0; 5] = [
+pub const ALL_SECURITY_ADMISSION_V0_STEPS: [SecurityAdmissionStepV0; 6] = [
     SecurityAdmissionStepV0::SurfaceBoundary,
+    SecurityAdmissionStepV0::PrincipalBinding,
     SecurityAdmissionStepV0::ProcedureContract,
     SecurityAdmissionStepV0::PolicyEvidence,
     SecurityAdmissionStepV0::PermissionBoundary,
@@ -25,6 +27,7 @@ impl SecurityAdmissionStepV0 {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::SurfaceBoundary => "surface_boundary",
+            Self::PrincipalBinding => "principal_binding",
             Self::ProcedureContract => "procedure_contract",
             Self::PolicyEvidence => "policy_evidence",
             Self::PermissionBoundary => "permission_boundary",
@@ -35,16 +38,18 @@ impl SecurityAdmissionStepV0 {
     pub const fn order(self) -> usize {
         match self {
             Self::SurfaceBoundary => 0,
-            Self::ProcedureContract => 1,
-            Self::PolicyEvidence => 2,
-            Self::PermissionBoundary => 3,
-            Self::DecisionEvidence => 4,
+            Self::PrincipalBinding => 1,
+            Self::ProcedureContract => 2,
+            Self::PolicyEvidence => 3,
+            Self::PermissionBoundary => 4,
+            Self::DecisionEvidence => 5,
         }
     }
 
     pub fn from_code(code: &str) -> Option<Self> {
         match code {
             "surface_boundary" => Some(Self::SurfaceBoundary),
+            "principal_binding" => Some(Self::PrincipalBinding),
             "procedure_contract" => Some(Self::ProcedureContract),
             "policy_evidence" => Some(Self::PolicyEvidence),
             "permission_boundary" => Some(Self::PermissionBoundary),
@@ -64,6 +69,7 @@ impl core::fmt::Display for SecurityAdmissionStepV0 {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SecurityAdmissionEvidenceCodeV0 {
     SurfaceBoundary,
+    PrincipalBinding,
     ProcedureContract,
     PolicyVersion,
     PermissionFamily,
@@ -71,8 +77,9 @@ pub enum SecurityAdmissionEvidenceCodeV0 {
     Missing,
 }
 
-pub const ALL_SECURITY_ADMISSION_V0_EVIDENCE_CODES: [SecurityAdmissionEvidenceCodeV0; 6] = [
+pub const ALL_SECURITY_ADMISSION_V0_EVIDENCE_CODES: [SecurityAdmissionEvidenceCodeV0; 7] = [
     SecurityAdmissionEvidenceCodeV0::SurfaceBoundary,
+    SecurityAdmissionEvidenceCodeV0::PrincipalBinding,
     SecurityAdmissionEvidenceCodeV0::ProcedureContract,
     SecurityAdmissionEvidenceCodeV0::PolicyVersion,
     SecurityAdmissionEvidenceCodeV0::PermissionFamily,
@@ -84,6 +91,7 @@ impl SecurityAdmissionEvidenceCodeV0 {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::SurfaceBoundary => "surface_boundary",
+            Self::PrincipalBinding => "principal_binding",
             Self::ProcedureContract => "procedure_contract",
             Self::PolicyVersion => "policy_version",
             Self::PermissionFamily => "permission_family",
@@ -99,6 +107,7 @@ impl SecurityAdmissionEvidenceCodeV0 {
     pub fn from_code(code: &str) -> Option<Self> {
         match code {
             "surface_boundary" => Some(Self::SurfaceBoundary),
+            "principal_binding" => Some(Self::PrincipalBinding),
             "procedure_contract" => Some(Self::ProcedureContract),
             "policy_version" => Some(Self::PolicyVersion),
             "permission_family" => Some(Self::PermissionFamily),
@@ -156,16 +165,20 @@ pub enum SecurityAdmissionReasonCodeV0 {
     Satisfied,
     MissingEvidence,
     InvalidEvidenceShape,
+    PrincipalBindingMissing,
+    PermissionNotGranted,
     SurfacePermissionBoundaryMismatch,
     ProcedureContractBoundaryMismatch,
     PolicyVersionMissing,
     BoundaryPlaneMismatch,
 }
 
-pub const ALL_SECURITY_ADMISSION_V0_REASON_CODES: [SecurityAdmissionReasonCodeV0; 7] = [
+pub const ALL_SECURITY_ADMISSION_V0_REASON_CODES: [SecurityAdmissionReasonCodeV0; 9] = [
     SecurityAdmissionReasonCodeV0::Satisfied,
     SecurityAdmissionReasonCodeV0::MissingEvidence,
     SecurityAdmissionReasonCodeV0::InvalidEvidenceShape,
+    SecurityAdmissionReasonCodeV0::PrincipalBindingMissing,
+    SecurityAdmissionReasonCodeV0::PermissionNotGranted,
     SecurityAdmissionReasonCodeV0::SurfacePermissionBoundaryMismatch,
     SecurityAdmissionReasonCodeV0::ProcedureContractBoundaryMismatch,
     SecurityAdmissionReasonCodeV0::PolicyVersionMissing,
@@ -178,6 +191,8 @@ impl SecurityAdmissionReasonCodeV0 {
             Self::Satisfied => "satisfied",
             Self::MissingEvidence => "missing_evidence",
             Self::InvalidEvidenceShape => "invalid_evidence_shape",
+            Self::PrincipalBindingMissing => "principal_binding_missing",
+            Self::PermissionNotGranted => "permission_not_granted",
             Self::SurfacePermissionBoundaryMismatch => "surface_permission_boundary_mismatch",
             Self::ProcedureContractBoundaryMismatch => "procedure_contract_boundary_mismatch",
             Self::PolicyVersionMissing => "policy_version_missing",
@@ -190,6 +205,8 @@ impl SecurityAdmissionReasonCodeV0 {
             "satisfied" => Some(Self::Satisfied),
             "missing_evidence" => Some(Self::MissingEvidence),
             "invalid_evidence_shape" => Some(Self::InvalidEvidenceShape),
+            "principal_binding_missing" => Some(Self::PrincipalBindingMissing),
+            "permission_not_granted" => Some(Self::PermissionNotGranted),
             "surface_permission_boundary_mismatch" => Some(Self::SurfacePermissionBoundaryMismatch),
             "procedure_contract_boundary_mismatch" => Some(Self::ProcedureContractBoundaryMismatch),
             "policy_version_missing" => Some(Self::PolicyVersionMissing),
@@ -657,24 +674,29 @@ mod tests {
                 0,
             ),
             (
+                SecurityAdmissionStepV0::PrincipalBinding,
+                "principal_binding",
+                1,
+            ),
+            (
                 SecurityAdmissionStepV0::ProcedureContract,
                 "procedure_contract",
-                1,
+                2,
             ),
             (
                 SecurityAdmissionStepV0::PolicyEvidence,
                 "policy_evidence",
-                2,
+                3,
             ),
             (
                 SecurityAdmissionStepV0::PermissionBoundary,
                 "permission_boundary",
-                3,
+                4,
             ),
             (
                 SecurityAdmissionStepV0::DecisionEvidence,
                 "decision_evidence",
-                4,
+                5,
             ),
         ];
 
@@ -692,6 +714,10 @@ mod tests {
             (
                 SecurityAdmissionEvidenceCodeV0::SurfaceBoundary,
                 "surface_boundary",
+            ),
+            (
+                SecurityAdmissionEvidenceCodeV0::PrincipalBinding,
+                "principal_binding",
             ),
             (
                 SecurityAdmissionEvidenceCodeV0::ProcedureContract,
@@ -739,6 +765,14 @@ mod tests {
             (
                 SecurityAdmissionReasonCodeV0::InvalidEvidenceShape,
                 "invalid_evidence_shape",
+            ),
+            (
+                SecurityAdmissionReasonCodeV0::PrincipalBindingMissing,
+                "principal_binding_missing",
+            ),
+            (
+                SecurityAdmissionReasonCodeV0::PermissionNotGranted,
+                "permission_not_granted",
             ),
             (
                 SecurityAdmissionReasonCodeV0::SurfacePermissionBoundaryMismatch,

@@ -1,5 +1,8 @@
 use std::collections::BTreeMap;
 
+pub use andromeda_catalog_recovery::{
+    CatalogPublicationReplayTerminalOutcome, CatalogPublicationSubscriptionReplayRecordKind,
+};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_types::CatalogVersion;
 
@@ -103,12 +106,6 @@ impl CatalogSubscriptionReplayKey {
             acknowledged_version: acknowledgement.acknowledged_version.get(),
         }
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CatalogPublicationReplayTerminalOutcome {
-    Committed,
-    Aborted,
 }
 
 /// Durable terminal evidence observed while replaying a publication stream.
@@ -235,13 +232,6 @@ pub enum CatalogPublicationSubscriptionReplayEvidence {
     DuplicateIgnored {
         record_kind: CatalogPublicationSubscriptionReplayRecordKind,
     },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CatalogPublicationSubscriptionReplayRecordKind {
-    Publication,
-    SubscriptionAcknowledgement,
-    Terminal,
 }
 
 #[allow(

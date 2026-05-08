@@ -1,8 +1,8 @@
-use crate::evidence::{
+use crate::flat_json::escape_json_string;
+use andromeda_scenario_evidence::{
     BENCHMARK_EVIDENCE_AUTHORITATIVE, BENCHMARK_EVIDENCE_CAN_SELECT_PLAN_ALONE,
     BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY,
 };
-use crate::flat_json::escape_json_string;
 
 use super::metrics::{CrudOperationMetrics, operation_metrics_json};
 use super::scenario::{

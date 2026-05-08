@@ -137,6 +137,44 @@ status column describes validation posture, not roadmap acceptance.
 | 11 | Tests, fuzzing, crash runner, CI, supply chain, and release gates | Added root testing documentation under `tests/`, fuzz documentation and target registry updates under canonical `fuzz/`, deterministic fuzz corpora, `fuzz/ROADMAP_FUZZ_GAPS_2026.md`, testing tools under `tools/testing/`, and release evidence documents including `documentations/testing/step-11-validation-matrix.md`, `ci-release-gate-evidence.md`, `fuzz-miri-loom-evidence.md`, `unsafe-miri-inventory-2026-05-08.md`, and `release-evidence-template.md`. | Evidence framework exists. Sustained fuzz, Miri, Loom, combined crash/recovery, and clean workspace gate artifacts remain missing for release claims. |
 | 12 | Normative documentation, ADRs, specs, runbooks, and PR packaging | Added or updated the specification index, governance documents, ADR backlog, C4/C5 control matrix, C5 refactor freeze checklist, MSRV and dependency risk notes, release-readiness gates, risk register, supply-chain policy, operations runbooks, implementation ledgers, architecture ledgers, and ADR files for unsafe policy, binary format endian policy, WAL commit visibility, GPU exclusion, Rust toolchain/MSRV, and engine crate mapping. | Documentation output is concrete, but it does not approve runtime behavior. Current release disposition remains blocked in governance documents. |
 
+## Lot 1+2 Consolidation
+
+### Completed work
+
+- Step 1 groundwork completed in this wave created the build and governance
+  substrate: explicit root workspace tooling, fixed Rust baseline files (`.cargo/`,
+  `.config/nextest.toml`, `rust-toolchain.toml`, `rustfmt.toml`),
+  script and workflow updates for policy/protocol/doc governance,
+  and consolidated testing/benchmark documentation for packet packaging.
+- Step 2 foundations were delivered as explicit runtime-free baseline crates:
+  `andromeda-codec`, `andromeda-policy`, and `andromeda-resource`,
+  each with dedicated scaffolding, typed primitives, and local crate-level
+  validation artifacts.
+
+### Fixed issues
+
+- Removed path-fragment ambiguity in this artifact by keeping `doc` and
+  `documentations` distinctions non-final and explicitly carrying roadmap scope
+  with stable references for this wave.
+- Reduced baseline governance uncertainty by introducing repeatable checks that
+  detect workspace topology and policy/protocol drift before broader lots are
+  accepted.
+- Replaced fragmented root configuration assumptions with versioned, repository-owned
+  baseline files and test-area READMEs, so subsequent lots can be packaged and
+  reviewed on bounded file sets.
+
+### Remaining work
+
+- Lot 1+2 are still blocked from release acceptance because the worktree is
+  dirty, `MM`/`AD` path mix remains, and there is no clean-candidate evidence
+  run attached to this wave summary.
+- Foundation crates are still **provisional** for runtime ownership: they need
+  topology, owner tests, and facade migration evidence before being treated as
+  accepted boundaries in execution, WAL, and storage paths.
+- Cradle-level hard blockers remain outside Lot 1+2 (C5 crash/recovery,
+  sustained fuzz, Miri/Loom, and retained release evidence), so these lots can
+  only claim completed scaffolding and evidence preparation at this stage.
+
 ## New Crates
 
 The following crates are new untracked directories in the local worktree and

@@ -7,10 +7,6 @@ pub(crate) fn validate_columns(columns: &[ColumnDescriptor]) -> AndromedaResult<
     validate_columns_with_min(columns, true)
 }
 
-pub(crate) fn validate_columns_allow_empty(columns: &[ColumnDescriptor]) -> AndromedaResult<()> {
-    validate_columns_with_min(columns, false)
-}
-
 fn validate_columns_with_min(
     columns: &[ColumnDescriptor],
     require_non_empty: bool,

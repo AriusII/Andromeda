@@ -34,7 +34,7 @@ Before collecting evidence:
 - record the branch, commit SHA, and `git status --short`;
 - record `rustc -Vv`, `cargo -V`, nightly details, and gate-specific tool versions;
 - generate or check deterministic seed corpora before fuzzing;
-- select targets from `fuzz/targets.toml`;
+- select targets from `tests/fuzzing/targets.toml`;
 - name the owning crate and safety property for every Miri or Loom target;
 - retain logs, corpora, crash artifacts, model output, and residual-risk notes.
 
@@ -78,7 +78,7 @@ The default 15-second CI run is smoke evidence only. A release promotion must re
 
 ## Fuzz Target Evidence Matrix
 
-The current target registry is `fuzz/targets.toml`. The table lists expected evidence per target; it does not claim that any target has passed.
+The current target registry is `tests/fuzzing/targets.toml`. The table lists expected evidence per target; it does not claim that any target has passed.
 
 | Target | Owner surface | Required release evidence |
 | --- | --- | --- |
@@ -166,7 +166,7 @@ Retain these artifacts for each fuzz, Miri, or Loom record:
 
 | Gate | Required artifacts |
 | --- | --- |
-| Fuzz | `fuzz/targets.toml`, `fuzz/corpus/manifest.toml`, seed generation log, per-target command log, target duration, `fuzz/corpus/<target>`, `fuzz/artifacts/<target>` when present, toolchain versions, and crash minimization notes. |
+| Fuzz | `tests/fuzzing/targets.toml`, `tests/fuzzing/corpus/manifest.toml`, seed generation log, per-target command log, target duration, `tests/fuzzing/corpus/<target>`, `fuzz/artifacts/<target>` when present, toolchain versions, and crash minimization notes. |
 | Miri | Miri setup log, command log, nightly toolchain details, owning crate and target, unsafe or aliasing invariant, unsupported-operation notes, and release-owner disposition. |
 | Loom | Command log, standalone model path or owning crate and target, feature flags, modeled state, thread/task bounds, safety assertion, explored or reduced state-space note, and residual risk. |
 
@@ -176,7 +176,7 @@ If an artifact path points outside the repository or GitHub Actions artifact sto
 
 Validate this document against:
 
-- `fuzz/targets.toml`;
+- `tests/fuzzing/targets.toml`;
 - `fuzz/VALIDATION_MATRIX.md`;
 - `.github/workflows/06-nightly-deep-validation.yml`;
 - `.github/workflows/07-fuzzing.yml`;
@@ -201,7 +201,7 @@ If fuzz, Miri, or Loom evidence conflicts with crash/recovery evidence, treat th
 
 ## References
 
-- `fuzz/targets.toml`
+- `tests/fuzzing/targets.toml`
 - `fuzz/VALIDATION_MATRIX.md`
 - `fuzz/README.md`
 - `.github/workflows/06-nightly-deep-validation.yml`

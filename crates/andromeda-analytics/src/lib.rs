@@ -1,10 +1,10 @@
 #![forbid(unsafe_code)]
 
-//! Future owner crate scaffold for advisory Andromeda batch analytics.
+//! Advisory Andromeda batch analytics ownership contracts.
 //!
-//! This crate intentionally defines no public API yet. Analytics behavior stays
-//! in current owners until a later extraction registers this package in the
-//! workspace and proves compatibility.
+//! This crate owns runtime-free descriptors for analytical jobs that can feed
+//! statistics, Maps, benchmark review, and operational diagnostics. It does not
+//! execute those jobs or make their output durable truth.
 //!
 //! Ownership constraints:
 //! - Analytical output is advisory until a runtime owner validates and publishes
@@ -13,3 +13,10 @@
 //!   short-visibility, catalog publication, or security-critical paths.
 //! - GPU acceleration must be optional, disableable, and backed by CPU fallback.
 //! - Adaptive consumers must explain use or rejection through DecisionTrace.
+
+mod boundary;
+
+pub use boundary::{
+    AdvisoryAnalyticsJob, AnalyticsAccelerationPolicy, AnalyticsExecutionBounds,
+    AnalyticsJobDescriptor, AnalyticsWorkloadKind,
+};

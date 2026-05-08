@@ -2,9 +2,9 @@
 
 ## Purpose
 
-`andromeda-decision-trace` is the future owner crate for runtime-free decision trace contracts used by optimizer, statistics, plan cache, benchmark evidence, analytics, and operator explanation paths.
+`andromeda-decision-trace` owns runtime-free decision trace contracts used by optimizer, statistics, plan cache, benchmark evidence, analytics, and operator explanation paths.
 
-This directory is a scaffold only. It is not registered as a Cargo workspace member, and current DecisionTrace behavior remains in `andromeda-observe`.
+The crate exposes bounded v0 trace identities, reason codes, evidence digests, version bindings, and adaptive-control disablement state. Runtime event sinks and durable audit export remain outside this crate.
 
 ## Scope
 
@@ -26,7 +26,7 @@ This crate is expected to own:
 
 ## Prerequisites
 
-- Keep current trace implementation in `andromeda-observe` until a registered extraction work order moves runtime-free contracts.
+- Keep persistent trace emission and exporter behavior in `andromeda-observe` until a registered extraction work order moves runtime integrations.
 - Preserve audit-safe redaction and bounded payload rules.
 - Keep trace emission explanatory, not authoritative.
 
@@ -48,7 +48,7 @@ cargo test -p andromeda-observe --test audit_family_contract -- --nocapture
 cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture
 ```
 
-This scaffold was designed for documentation review only.
+Use this crate for runtime-free contract validation; use observability crates for sinks and retained audit records.
 
 ## Troubleshooting
 

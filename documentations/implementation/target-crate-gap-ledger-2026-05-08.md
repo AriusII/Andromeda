@@ -270,7 +270,7 @@ This ledger was validated by targeted repository inspection:
 - `documentations/ROADMAP_RESTRUCTURE_STATUS_2026_05_08.md` and
   `documentations/implementation/worktree-packaging-plan-2026-05-08.md` were
   inspected for dirty-worktree risk and packet ordering.
-- `fuzz/README.md`, `fuzz/targets.toml`, and `fuzz/VALIDATION_MATRIX.md` were
+- `fuzz/README.md`, `tests/fuzzing/targets.toml`, and `fuzz/VALIDATION_MATRIX.md` were
   inspected as the canonical fuzz workspace and registry surface.
 - Documentation path mapping between `docs/` and `documentations/` was left to
   the separate documentation mapping owner.
@@ -304,6 +304,6 @@ run because this task changes only standalone implementation documentation.
 - `documentations/testing/step-11-validation-matrix.md`
 - `documentations/governance/adr-backlog-2026-05-08.md`
 - `fuzz/README.md`
-- `fuzz/targets.toml`
+- `tests/fuzzing/targets.toml`
 - `fuzz/VALIDATION_MATRIX.md`
 - `C:/Users/Arius/Desktop/andromeda_roadmap_restructuration_workspace_crates_engines_2026.md`

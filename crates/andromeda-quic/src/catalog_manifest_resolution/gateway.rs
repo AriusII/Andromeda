@@ -1,5 +1,5 @@
+use andromeda_core::CertificateIdentity;
 use andromeda_core::{AndromedaResult, RequestId, SessionId, TransactionId};
-use andromeda_observe::CertificateIdentity;
 use andromeda_proto::{
     PayloadKind, decode_generated_message, validate_catalog_procedure_manifest_resolution_request,
 };

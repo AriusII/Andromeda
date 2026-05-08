@@ -1,30 +1,7 @@
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+pub use andromeda_segment::{SegmentDurabilityBoundary, SegmentId, SegmentMutation, SegmentState};
 
 use crate::{AllocationId, ExtentId, Lsn, ObjectId, PageId, PageSize};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct SegmentId(u64);
-
-impl SegmentId {
-    pub const fn new(value: u64) -> Self {
-        Self(value)
-    }
-
-    pub const fn get(self) -> u64 {
-        self.0
-    }
-
-    pub const fn is_zero(self) -> bool {
-        self.0 == 0
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SegmentState {
-    BuildingHotSnapshot,
-    Sealed,
-    PublishedCold,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SegmentHeader {
@@ -116,43 +93,24 @@ pub struct SegmentDescriptor {
 }
 
 impl SegmentDescriptor {
+    pub fn durability_boundary(&self) -> SegmentDurabilityBoundary {
+        SegmentDurabilityBoundary {
+            segment_id: self.segment_id,
+            object_id: self.object_id.get(),
+            allocation_id: self.allocation_id.get(),
+            first_extent_id: self.first_extent_id.get(),
+            extent_count: self.extent_count,
+            first_page_id: self.first_page_id.get(),
+            page_count: self.page_count,
+            min_page_lsn: self.min_page_lsn,
+            max_page_lsn: self.max_page_lsn,
+            snapshot_id: self.snapshot_id,
+            state: self.state,
+        }
+    }
+
     pub fn validate(&self) -> AndromedaResult<()> {
-        if self.segment_id.is_zero() || self.object_id.is_zero() || self.allocation_id.is_zero() {
-            return Err(storage_error(
-                "segment descriptor identity fields must not be zero",
-            ));
-        }
-        if self.first_extent_id.is_zero() {
-            return Err(storage_error("segment first extent id must not be zero"));
-        }
-        if self.extent_count == 0 {
-            return Err(storage_error("segment extent count must not be zero"));
-        }
-        if self.first_page_id.is_zero() || self.page_count == 0 {
-            return Err(storage_error("segment page range must not be empty"));
-        }
-        if self
-            .first_page_id
-            .get()
-            .checked_add(u64::from(self.page_count - 1))
-            .is_none()
-        {
-            return Err(storage_error("segment page range overflows u64"));
-        }
-        if self.min_page_lsn.is_zero() || self.max_page_lsn.is_zero() {
-            return Err(storage_error("segment page LSN bounds must not be zero"));
-        }
-        if self.max_page_lsn < self.min_page_lsn {
-            return Err(storage_error("segment max page LSN precedes min page LSN"));
-        }
-        if matches!(self.snapshot_id, Some(0)) {
-            return Err(storage_error("segment snapshot id must not be zero"));
-        }
-        if self.state == SegmentState::PublishedCold && self.snapshot_id.is_none() {
-            return Err(storage_error(
-                "published cold segment must reference a snapshot",
-            ));
-        }
+        self.durability_boundary().validate()?;
 
         self.header.validate()?;
         self.trailer.validate()?;
@@ -175,29 +133,8 @@ impl SegmentDescriptor {
 
     pub fn validate_mutation(&self, mutation: SegmentMutation) -> AndromedaResult<()> {
         self.validate()?;
-        if self.state == SegmentState::PublishedCold {
-            return Err(storage_error(format!(
-                "published cold segment rejects {mutation:?}; ColdStore is immutable after publication"
-            )));
-        }
-        if matches!(
-            mutation,
-            SegmentMutation::UpdatePageInPlace | SegmentMutation::SplitSegment
-        ) && self.state == SegmentState::Sealed
-        {
-            return Err(storage_error(
-                "sealed segment rejects update-in-place and split mutations",
-            ));
-        }
-        Ok(())
+        self.durability_boundary().validate_mutation(mutation)
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SegmentMutation {
-    AppendExtent,
-    UpdatePageInPlace,
-    SplitSegment,
 }
 
 fn storage_error(message: impl Into<String>) -> AndromedaError {

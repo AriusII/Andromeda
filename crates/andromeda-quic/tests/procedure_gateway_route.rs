@@ -23,7 +23,7 @@ use andromeda_core::{
     PrincipalStatus, ProcedureId, RequestId, SessionId, SessionToken,
     SurfaceScope as CoreSurfaceScope, TransactionId,
 };
-use andromeda_observe::{CertificateIdentity, SurfaceScope};
+use andromeda_core::{CertificateIdentity, SurfaceScope};
 use andromeda_proto::{PayloadKind, encode_generated_message, generated};
 use andromeda_quic::{
     CatalogProcedureManifest, CatalogProcedureProtocolLayout, CatalogRequiredPermission,

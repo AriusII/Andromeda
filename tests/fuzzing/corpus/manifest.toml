@@ -1,0 +1,140 @@
+schema_version = "andromeda-fuzz-corpus-v1"
+generated_by = "fuzz/generators/generate_seed_corpus.py"
+
+[[entry]]
+target = "frame_codec_no_panic"
+corpus_dir = "tests/fuzzing/corpus/frame_codec_no_panic"
+seed_files = ["seed-basic.bin", "seed1"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "result_sequence_state_machine"
+corpus_dir = "tests/fuzzing/corpus/result_sequence_state_machine"
+seed_files = ["seed-basic.bin", "seed1"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "proto_frame_envelope_decode"
+corpus_dir = "tests/fuzzing/corpus/proto_frame_envelope_decode"
+seed_files = ["seed-basic.bin", "seed1"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "proto_rpc_execute_request_decode"
+corpus_dir = "tests/fuzzing/corpus/proto_rpc_execute_request_decode"
+seed_files = ["seed-basic.bin", "seed-valid-reserve-stock-execute.bin"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "proto_rpc_completion_decode"
+corpus_dir = "tests/fuzzing/corpus/proto_rpc_completion_decode"
+seed_files = ["seed-basic.bin", "seed1"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "proto_invocation_response_sequence_decode"
+corpus_dir = "tests/fuzzing/corpus/proto_invocation_response_sequence_decode"
+seed_files = ["seed-basic.bin", "seed-valid-metadata-batch-completion.bin"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "srpl_parser_signature_decode"
+corpus_dir = "tests/fuzzing/corpus/srpl_parser_signature_decode"
+seed_files = ["seed-basic.bin", "seed1"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "srpl_parser_owner_decode"
+corpus_dir = "tests/fuzzing/corpus/srpl_parser_signature_decode"
+seed_files = ["seed-basic.bin", "seed1"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "storage_wal_record_roundtrip"
+corpus_dir = "tests/fuzzing/corpus/storage_wal_record_roundtrip"
+seed_files = ["seed-basic.bin", "seed-valid-security-audit-frame.bin", "seed1"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "wal_record_roundtrip"
+corpus_dir = "tests/fuzzing/corpus/storage_wal_record_roundtrip"
+seed_files = ["seed-basic.bin", "seed-valid-security-audit-frame.bin", "seed1"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "btree_node_v1_decode"
+corpus_dir = "tests/fuzzing/corpus/btree_node_v1_decode"
+seed_files = ["seed-basic.bin", "seed-internal.bin"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "heap_page_v1_decode"
+corpus_dir = "tests/fuzzing/corpus/heap_page_v1_decode"
+seed_files = ["seed-deleted-compacted-parity.bin", "seed-empty-16k.bin", "seed-free-offset-crosses-slot-directory.bin", "seed-header-footer-slot-count-mismatch.bin", "seed-overlapping-live-tuples.bin", "seed-single-32k.bin", "seed-slot-entry-outside-payload-area.bin", "seed-sparse-deleted-middle-live-higher.bin", "seed-two-tuples-16k.bin"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "page_codec_v1_decode"
+corpus_dir = "tests/fuzzing/corpus/page_codec_v1_decode"
+seed_files = ["seed-fixed-row-16k.bin", "seed-manifest-32k.bin"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "quic_zero_rtt_admission"
+corpus_dir = "tests/fuzzing/corpus/quic_zero_rtt_admission"
+seed_files = ["seed-basic.bin"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "quic_typed_frame_envelope_decode"
+corpus_dir = "tests/fuzzing/corpus/quic_typed_frame_envelope_decode"
+seed_files = ["seed-basic.bin", "seed-valid-rpc-execute-envelope-frame.bin"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "durable_audit_journal_decode"
+corpus_dir = "tests/fuzzing/corpus/durable_audit_journal_decode"
+seed_files = ["seed-empty-journal.bin", "seed-hostile-prefix.bin", "seed-valid-admission-decision.bin", "seed-valid-generic-audit.bin", "seed-valid-security-decision.bin"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "rpc_protocol_frame_codec_decode"
+corpus_dir = "tests/fuzzing/corpus/rpc_protocol_frame_codec_decode"
+seed_files = ["seed-basic.bin", "seed-valid-rpc-execute-frame.bin"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "security_contract_admission_matrix"
+corpus_dir = "tests/fuzzing/corpus/security_contract_admission_matrix"
+seed_files = ["seed-surface-permission-matrix.bin"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "manifest_decode"
+corpus_dir = "tests/fuzzing/corpus/manifest_decode"
+seed_files = ["seed-basic.bin"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "segment_index_decode"
+corpus_dir = "tests/fuzzing/corpus/segment_index_decode"
+seed_files = ["seed-basic.bin"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "contract_hash"
+corpus_dir = "tests/fuzzing/corpus/contract_hash"
+seed_files = ["seed-basic.bin"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "definition_batch"
+corpus_dir = "tests/fuzzing/corpus/definition_batch"
+seed_files = ["seed-basic.bin"]
+generator = "deterministic-bytes-v1"
+
+[[entry]]
+target = "structured_object_payload"
+corpus_dir = "tests/fuzzing/corpus/structured_object_payload"
+seed_files = ["seed-basic.bin"]
+generator = "deterministic-bytes-v1"

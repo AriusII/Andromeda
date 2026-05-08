@@ -1,4 +1,4 @@
-use crate::PlanCacheKey;
+use crate::plan_cache::PlanCacheKey;
 
 use super::record::{InvocationRuntimeRecord, compute_runtime_record_id};
 

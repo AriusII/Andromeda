@@ -1,5 +1,5 @@
 use andromeda_core::AndromedaResult;
-use andromeda_observe::SurfaceScope;
+use andromeda_core::SurfaceScope;
 use andromeda_proto::FrameEnvelope as ProtoFrameEnvelope;
 
 use crate::{FrameBytes, SurfacePlane, TransportEndpointMetadata};
@@ -23,7 +23,7 @@ pub(super) fn validate_catalog_route_admission(
         ));
     };
 
-    if identity.surface != SurfaceScope::Administration {
+    if identity.surface_scope() != SurfaceScope::Administration {
         return Err(security_error(
             "catalog manifest resolution certificate scope must match Administration surface",
         ));

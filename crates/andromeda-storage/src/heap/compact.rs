@@ -9,7 +9,7 @@ impl HeapPage {
             .slot_directory
             .iter()
             .filter(|e| e.is_deleted())
-            .map(|e| e.length)
+            .map(|e| e.length())
             .sum();
 
         if reclaimed == 0 {
@@ -29,14 +29,14 @@ impl HeapPage {
         // Slot ids stay stable: deleted slots remain deleted and live slots are rewritten.
         for slot_entry in self.slot_directory.iter() {
             if !slot_entry.is_deleted() {
-                let old_offset = slot_entry.offset as usize;
-                let length = slot_entry.length as usize;
+                let old_offset = slot_entry.offset() as usize;
+                let length = slot_entry.length() as usize;
 
                 new_data[new_offset as usize..new_offset as usize + length]
                     .copy_from_slice(&self.data[old_offset..old_offset + length]);
 
-                new_slot_directory.push(SlotEntry::new(new_offset, slot_entry.length));
-                new_offset = new_offset.saturating_add(slot_entry.length);
+                new_slot_directory.push(SlotEntry::new(new_offset, slot_entry.length()));
+                new_offset = new_offset.saturating_add(slot_entry.length());
             } else {
                 new_slot_directory.push(*slot_entry);
             }

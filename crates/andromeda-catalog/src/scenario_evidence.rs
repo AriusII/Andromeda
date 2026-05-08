@@ -13,20 +13,8 @@
 //! `can_drive_active_stats_version_transition`,
 //! `ScenarioEvidenceOptimizerBoundary::AdvisoryOnly`, and `validate_for_use_at`.
 
-mod advisory;
-mod digest;
-mod errors;
-mod evidence;
-mod identity;
-mod score;
-mod validity;
-
-#[cfg(test)]
-mod tests;
-
-pub use advisory::{ScenarioEvidenceAdvisoryUse, ScenarioEvidenceOptimizerBoundary};
-pub use errors::ScenarioEvidenceError;
-pub use evidence::ScenarioEvidence;
-pub use identity::{ScenarioId, ScenarioKind, ScenarioTarget};
-pub use score::{EvidenceConfidence, EvidenceScore};
-pub use validity::ValidityWindow;
+pub use andromeda_scenario_evidence::{
+    EvidenceConfidence, EvidenceScore, ScenarioEvidence, ScenarioEvidenceAdvisoryUse,
+    ScenarioEvidenceError, ScenarioEvidenceOptimizerBoundary, ScenarioId, ScenarioKind,
+    ScenarioTarget, ValidityWindow,
+};

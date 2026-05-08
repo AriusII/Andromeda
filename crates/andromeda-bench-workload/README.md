@@ -2,17 +2,17 @@
 
 ## Purpose
 
-`andromeda-bench-workload` is the future owner crate for bounded benchmark workload definitions, workload shape versions, input limits, and diagnostic workload metadata.
+`andromeda-bench-workload` owns bounded benchmark workload definitions, workload shape versions, input limits, run request validation, and diagnostic workload metadata.
 
-This directory is a scaffold only. It is not registered as a Cargo workspace member, and current benchmark behavior remains in `andromeda-bench`.
+`andromeda-bench` uses this crate as the workload contract source. Benchmark execution remains outside this crate.
 
 ## Scope
 
-This crate is expected to own:
+This crate owns:
 
 - Workload identities, shape versions, parameters, limits, and stop rules.
 - Hardware profile requirements and reproducibility descriptors.
-- Advisory evidence boundaries for workload output.
+- Budget evaluation for advisory workload output.
 - Compatibility metadata used by benchmark harness, regression, and ScenarioEvidence crates.
 - DecisionTrace input descriptors when benchmark evidence is later considered by adaptive systems.
 
@@ -26,7 +26,7 @@ This crate is expected to own:
 
 ## Prerequisites
 
-- Keep current workload behavior in `andromeda-bench` until a registered extraction work order moves it.
+- Use this crate as the source of workload identity, limits, and request validation.
 - Version every workload shape before comparing results.
 - Define stop rules before adding new workload families.
 
@@ -40,15 +40,12 @@ This crate is expected to own:
 
 ## Validation
 
-Future behavior changes should use:
+Behavior changes should use:
 
 ```powershell
-cargo test -p andromeda-bench-workload
-cargo test -p andromeda-bench --test scenario_evidence_boundary -- --nocapture
-cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture
+cargo check -p andromeda-bench-workload --tests
+cargo check -p andromeda-bench --tests
 ```
-
-This scaffold was designed for documentation review only.
 
 ## Troubleshooting
 

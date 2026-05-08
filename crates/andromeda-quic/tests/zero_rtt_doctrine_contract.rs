@@ -43,17 +43,33 @@ fn rust_sources_under(dir: &Path) -> Vec<PathBuf> {
     files
 }
 
-fn owned_runtime_sources(src_dir: &Path) -> Vec<PathBuf> {
+fn quic_src_dir() -> PathBuf {
+    project_root()
+        .join("crates")
+        .join("andromeda-quic")
+        .join("src")
+}
+
+fn runtime_src_dir() -> PathBuf {
+    project_root()
+        .join("crates")
+        .join("andromeda-quic-runtime-quinn")
+        .join("src")
+}
+
+fn owned_runtime_sources() -> Vec<PathBuf> {
+    let quic_src = quic_src_dir();
+    let runtime_src = runtime_src_dir();
     let mut files = vec![
-        src_dir.join("catalog_manifest_resolution.rs"),
-        src_dir.join("mtls_identity.rs"),
-        src_dir.join("quinn_backend.rs"),
-        src_dir.join("quinn_tls.rs"),
-        src_dir.join("runtime_quinn.rs"),
-        src_dir.join("zero_rtt.rs"),
+        quic_src.join("catalog_manifest_resolution.rs"),
+        quic_src.join("mtls_identity.rs"),
+        quic_src.join("zero_rtt.rs"),
+        runtime_src.join("quinn_backend.rs"),
+        runtime_src.join("quinn_tls.rs"),
+        runtime_src.join("runtime_quinn.rs"),
     ];
-    files.extend(rust_sources_under(&src_dir.join("quinn_backend")));
-    files.extend(rust_sources_under(&src_dir.join("reconnect")));
+    files.extend(rust_sources_under(&quic_src.join("reconnect")));
+    files.extend(rust_sources_under(&runtime_src.join("quinn_backend")));
     files.sort();
     files
 }
@@ -123,11 +139,7 @@ fn zero_rtt_replay_safe_classes_are_classified_but_still_barred_in_v1() {
 
 #[test]
 fn rustls_runtime_flags_are_hard_disabled_in_source() {
-    let runtime_quinn = project_root()
-        .join("crates")
-        .join("andromeda-quic")
-        .join("src")
-        .join("runtime_quinn.rs");
+    let runtime_quinn = runtime_src_dir().join("runtime_quinn.rs");
     let source = fs::read_to_string(runtime_quinn).expect("runtime_quinn.rs should exist");
     assert!(source.contains("config.max_early_data_size = 0;"));
     assert!(source.contains("config.send_half_rtt_data = false;"));
@@ -136,13 +148,12 @@ fn rustls_runtime_flags_are_hard_disabled_in_source() {
 
 #[test]
 fn doctrine_scan_rejects_unapproved_zero_rtt_enablement() {
-    let src_dir = project_root()
-        .join("crates")
-        .join("andromeda-quic")
-        .join("src");
     let mut violations = Vec::new();
 
-    for path in rust_sources_under(&src_dir) {
+    for path in rust_sources_under(&quic_src_dir())
+        .into_iter()
+        .chain(rust_sources_under(&runtime_src_dir()))
+    {
         let content = fs::read_to_string(&path).expect("source file must be readable");
         for (index, line) in content.lines().enumerate() {
             let is_enablement = line.contains("enable_early_data = true")
@@ -164,14 +175,13 @@ fn doctrine_scan_rejects_unapproved_zero_rtt_enablement() {
 
 #[test]
 fn rust_protocol_surface_does_not_introduce_grpc_or_tonic() {
-    let src_dir = project_root()
-        .join("crates")
-        .join("andromeda-quic")
-        .join("src");
     let mut violations = Vec::new();
     let forbidden = ["grpc", "tonic", "prost_grpc"];
 
-    for path in rust_sources_under(&src_dir) {
+    for path in rust_sources_under(&quic_src_dir())
+        .into_iter()
+        .chain(rust_sources_under(&runtime_src_dir()))
+    {
         let content = fs::read_to_string(&path).expect("source file must be readable");
         for (index, line) in content.lines().enumerate() {
             if forbidden
@@ -192,14 +202,13 @@ fn rust_protocol_surface_does_not_introduce_grpc_or_tonic() {
 
 #[test]
 fn rust_protocol_surface_does_not_introduce_raw_sql_surface() {
-    let src_dir = project_root()
-        .join("crates")
-        .join("andromeda-quic")
-        .join("src");
     let mut violations = Vec::new();
     let forbidden = ["sql", "raw_sql", "execute_sql"];
 
-    for path in rust_sources_under(&src_dir) {
+    for path in rust_sources_under(&quic_src_dir())
+        .into_iter()
+        .chain(rust_sources_under(&runtime_src_dir()))
+    {
         let content = fs::read_to_string(&path).expect("source file must be readable");
         for (index, line) in production_source(&content).lines().enumerate() {
             if forbidden
@@ -220,18 +229,15 @@ fn rust_protocol_surface_does_not_introduce_raw_sql_surface() {
 
 #[test]
 fn rust_protocol_surface_does_not_introduce_runtime_json_default() {
-    let src_dir = project_root()
-        .join("crates")
-        .join("andromeda-quic")
-        .join("src");
     let manifest = project_root()
         .join("crates")
         .join("andromeda-quic")
         .join("Cargo.toml");
     let mut violations = Vec::new();
 
-    for path in rust_sources_under(&src_dir)
+    for path in rust_sources_under(&quic_src_dir())
         .into_iter()
+        .chain(rust_sources_under(&runtime_src_dir()))
         .chain(std::iter::once(manifest))
     {
         let content = fs::read_to_string(&path).expect("protocol surface file must be readable");
@@ -256,13 +262,9 @@ fn rust_protocol_surface_does_not_introduce_runtime_json_default() {
 
 #[test]
 fn owned_runtime_sources_do_not_use_panic_style_escape_hatches() {
-    let src_dir = project_root()
-        .join("crates")
-        .join("andromeda-quic")
-        .join("src");
     let mut violations = Vec::new();
 
-    for path in owned_runtime_sources(&src_dir) {
+    for path in owned_runtime_sources() {
         let content = fs::read_to_string(&path).expect("source file must be readable");
         for (index, line) in production_source(&content).lines().enumerate() {
             if line.contains(".unwrap(")

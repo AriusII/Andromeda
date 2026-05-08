@@ -15,8 +15,8 @@
 //! * Cancellation, backpressure, and shutdown are represented as typed trait
 //!   methods instead of hidden runtime side channels.
 
+use andromeda_core::CertificateIdentity;
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId, SessionId};
-use andromeda_observe::CertificateIdentity;
 
 use crate::{BackpressureSignal, CancellationSignal, FrameBytes, StreamRole, SurfacePlane};
 

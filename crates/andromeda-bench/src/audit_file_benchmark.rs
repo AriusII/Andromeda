@@ -10,10 +10,9 @@ use andromeda_observe::{
 };
 use andromeda_types::{RequestId, SessionId};
 
-use crate::{
-    BenchmarkError,
-    harness::{BenchmarkTempDir as BenchTempDir, elapsed_micros},
-};
+use andromeda_bench_harness::{BenchmarkTempDir as BenchTempDir, elapsed_micros};
+
+use crate::BenchmarkError;
 
 pub const AUDIT_APPEND_FILE_SINK_WORKLOAD_ID: &str = "audit-append-file-sink-smoke";
 pub const AUDIT_APPEND_FILE_SINK_HARNESS_SOURCE: &str = "observe-durable-audit-file-sink";

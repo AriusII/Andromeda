@@ -2,15 +2,15 @@
 
 ## Purpose
 
-`andromeda-scenario-evidence` is the future owner crate for ScenarioEvidence records, validity windows, confidence policy, target bindings, and advisory evidence lifecycle.
+`andromeda-scenario-evidence` owns advisory benchmark evidence, benchmark history records, ScenarioEvidence boundary records, validity windows, confidence policy, target bindings, and advisory evidence lifecycle.
 
-This directory is a scaffold only. It is not registered as a Cargo workspace member, and current ScenarioEvidence behavior remains in existing owners.
+`andromeda-bench` reexports this crate for compatibility. Evidence from this crate remains advisory only.
 
 ## Scope
 
-This crate is expected to own:
+This crate owns:
 
-- ScenarioEvidence identity, digest policy, confidence bounds, and validity windows.
+- Benchmark evidence, benchmark history records, confidence bounds, and validity windows.
 - Target bindings for procedure, contract hash, catalog version, stats version, policy version, and plan class.
 - Advisory use statuses such as accepted, stale, expired, target mismatch, disabled, and ignored.
 - Conversion boundaries from benchmark runs into expirable evidence records.
@@ -26,7 +26,7 @@ This crate is expected to own:
 
 ## Prerequisites
 
-- Keep current ScenarioEvidence behavior in `andromeda-catalog` and `andromeda-bench` until a registered extraction work order moves it.
+- Keep catalog-side authoritative ScenarioEvidence publication outside this crate.
 - Require every record to be expirable, bounded, version-bound, and disableable.
 - Require DecisionTrace when evidence affects an adaptive decision.
 
@@ -40,15 +40,12 @@ This crate is expected to own:
 
 ## Validation
 
-Future behavior changes should use:
+Behavior changes should use:
 
 ```powershell
-cargo test -p andromeda-scenario-evidence
-cargo test -p andromeda-bench --test scenario_evidence_boundary -- --nocapture
-cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture
+cargo check -p andromeda-scenario-evidence --tests
+cargo check -p andromeda-bench --tests
 ```
-
-This scaffold was designed for documentation review only.
 
 ## Troubleshooting
 

@@ -2,9 +2,9 @@
 
 ## Purpose
 
-`andromeda-plan-cache` is the future owner crate for plan cache identity, version binding, bounded cache policy, invalidation evidence, and plan reuse DecisionTrace.
+`andromeda-plan-cache` owns plan cache identity, version binding, bounded cache policy, invalidation evidence, and plan reuse DecisionTrace contracts.
 
-This directory is a scaffold only. It is not registered as a Cargo workspace member, and no plan cache behavior has moved from existing owners.
+The crate exposes the v0 plan-cache key, bounded plan class taxonomy, shape fingerprinting, advisory evidence summaries, bounded in-memory cache gate, and disableable reuse policy. It stores only opaque plan identity evidence, not executable plans.
 
 ## Scope
 
@@ -26,7 +26,7 @@ This crate is expected to own:
 
 ## Prerequisites
 
-- Keep current plan cache identity and selection behavior in `andromeda-catalog` until a registered extraction work order moves it.
+- Keep catalog publication and executable plan ownership outside this crate unless a registered extraction work order moves those integrations.
 - Require complete version bindings before admitting any plan entry.
 - Keep all advisory evidence expirable, rejectable, and traceable.
 
@@ -48,7 +48,7 @@ cargo test -p andromeda-catalog --test catalog_server_runtime_contract -- --noca
 cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture
 ```
 
-This scaffold was designed for documentation review only.
+Use this crate for plan-cache identity, bounded reuse policy, and traceable cache-gate validation.
 
 ## Troubleshooting
 

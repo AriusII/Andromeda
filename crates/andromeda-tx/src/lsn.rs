@@ -1,18 +1,6 @@
-//! Transaction-local durable log sequence number contract.
+//! Compatibility re-export for transaction-log LSNs.
 //!
-//! The transaction crate must not depend on the storage crate. This LSN type is
-//! the boundary value used by transaction/WAL adapters; storage implementations
-//! convert at the adapter boundary.
+//! The boundary type lives in `andromeda-transaction-log`; `andromeda-tx` keeps
+//! this module as the legacy import path while extraction continues.
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Lsn(u64);
-
-impl Lsn {
-    pub const fn new(value: u64) -> Self {
-        Self(value)
-    }
-
-    pub const fn get(self) -> u64 {
-        self.0
-    }
-}
+pub use andromeda_transaction_log::Lsn;

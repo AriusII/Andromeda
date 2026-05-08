@@ -13,8 +13,10 @@ from typing import Any
 TARGETS_SCHEMA_VERSION = "andromeda-fuzz-targets-v1"
 CORPUS_SCHEMA_VERSION = "andromeda-fuzz-corpus-v1"
 GENERATOR_PATH = "fuzz/generators/generate_seed_corpus.py"
+TARGETS_REGISTRY_PATH = "tests/fuzzing/targets.toml"
+CORPUS_MANIFEST_PATH = "tests/fuzzing/corpus/manifest.toml"
 TARGET_PATH_PREFIX = "fuzz_targets/"
-CORPUS_DIR_PREFIX = "fuzz/corpus/"
+CORPUS_DIR_PREFIX = "tests/fuzzing/corpus/"
 WORKFLOW_PATH = ".github/workflows/07-fuzzing.yml"
 CANONICAL_RUN_COMMAND = (
     'cargo +nightly fuzz run "$target" "$corpus_dir" -- '
@@ -313,9 +315,9 @@ def duplicate_values(values: list[str]) -> list[str]:
 
 def validate_registry(root: Path) -> tuple[Registry, list[str]]:
     errors: list[str] = []
-    targets_path = root / "fuzz" / "targets.toml"
+    targets_path = root / TARGETS_REGISTRY_PATH
     cargo_path = root / "fuzz" / "Cargo.toml"
-    manifest_path = root / "fuzz" / "corpus" / "manifest.toml"
+    manifest_path = root / CORPUS_MANIFEST_PATH
 
     targets_data = load_toml(targets_path, errors)
     cargo_data = load_toml(cargo_path, errors)
@@ -343,12 +345,12 @@ def validate_name_sets(root: Path, registry: Registry, errors: list[str]) -> Non
     manifest_targets = [entry.target for entry in registry.manifest_entries]
 
     for label, values in (
-        ("fuzz/targets.toml target names", target_names),
-        ("fuzz/targets.toml target paths", target_paths),
-        ("fuzz/targets.toml support paths", support_paths),
+        ("tests/fuzzing/targets.toml target names", target_names),
+        ("tests/fuzzing/targets.toml target paths", target_paths),
+        ("tests/fuzzing/targets.toml support paths", support_paths),
         ("fuzz/Cargo.toml bin names", bin_names),
         ("fuzz/Cargo.toml bin paths", bin_paths),
-        ("fuzz/corpus/manifest.toml targets", manifest_targets),
+        ("tests/fuzzing/corpus/manifest.toml targets", manifest_targets),
     ):
         duplicates = duplicate_values(values)
         if duplicates:
@@ -362,12 +364,12 @@ def validate_name_sets(root: Path, registry: Registry, errors: list[str]) -> Non
 
     if sorted(bin_names) != sorted(target_names):
         errors.append(
-            "fuzz/Cargo.toml bin names do not match fuzz/targets.toml target names: "
+            "fuzz/Cargo.toml bin names do not match tests/fuzzing/targets.toml target names: "
             f"actual={sorted(bin_names)} expected={sorted(target_names)}"
         )
     if sorted(manifest_targets) != sorted(target_names):
         errors.append(
-            "fuzz/corpus/manifest.toml targets do not match fuzz/targets.toml: "
+            "tests/fuzzing/corpus/manifest.toml targets do not match tests/fuzzing/targets.toml: "
             f"actual={sorted(manifest_targets)} expected={sorted(target_names)}"
         )
 
@@ -384,13 +386,13 @@ def validate_name_sets(root: Path, registry: Registry, errors: list[str]) -> Non
         if cargo_bin is not None and cargo_bin.path != target.path:
             errors.append(
                 f"{target.name}: fuzz/Cargo.toml path {cargo_bin.path!r} "
-                f"does not match fuzz/targets.toml path {target.path!r}"
+                f"does not match tests/fuzzing/targets.toml path {target.path!r}"
             )
         entry = manifest_by_target.get(target.name)
         if entry is not None and entry.corpus_dir != target.corpus_dir:
             errors.append(
                 f"{target.name}: manifest corpus_dir {entry.corpus_dir!r} "
-                f"does not match fuzz/targets.toml corpus_dir {target.corpus_dir!r}"
+                f"does not match tests/fuzzing/targets.toml corpus_dir {target.corpus_dir!r}"
             )
         if entry is not None and entry.generator != "deterministic-bytes-v1":
             errors.append(
@@ -409,7 +411,7 @@ def validate_name_sets(root: Path, registry: Registry, errors: list[str]) -> Non
 def validate_filesystem(root: Path, registry: Registry, errors: list[str]) -> None:
     fuzz_root = root / "fuzz"
     sources_root = fuzz_root / "fuzz_targets"
-    corpus_root = fuzz_root / "corpus"
+    corpus_root = root / "tests" / "fuzzing" / "corpus"
 
     expected_source_paths = sorted(
         [target.path for target in registry.targets] + [item.path for item in registry.support]
@@ -421,7 +423,7 @@ def validate_filesystem(root: Path, registry: Registry, errors: list[str]) -> No
     )
     if actual_source_paths != expected_source_paths:
         errors.append(
-            "fuzz/fuzz_targets source set does not match fuzz/targets.toml: "
+            "fuzz/fuzz_targets source set does not match tests/fuzzing/targets.toml: "
             f"actual={actual_source_paths} expected={expected_source_paths}"
         )
 
@@ -449,7 +451,7 @@ def validate_filesystem(root: Path, registry: Registry, errors: list[str]) -> No
     )
     if actual_corpus_dirs != expected_corpus_dirs:
         errors.append(
-            "fuzz/corpus directory set does not match target corpus_dir values: "
+            "tests/fuzzing/corpus directory set does not match target corpus_dir values: "
             f"actual={actual_corpus_dirs} expected={expected_corpus_dirs}"
         )
 
@@ -498,14 +500,14 @@ def validate_workflow(root: Path, registry: Registry, errors: list[str]) -> None
                 f"{WORKFLOW_PATH}:{line_number}: fuzz run command must use the "
                 "registry target and corpus_dir shape"
             )
-        if "find fuzz/corpus" in line and "-delete" in line:
+        if "find tests/fuzzing/corpus" in line and "-delete" in line:
             errors.append(
-                f"{WORKFLOW_PATH}:{line_number}: workflow must not delete under fuzz/corpus"
+                f"{WORKFLOW_PATH}:{line_number}: workflow must not delete under tests/fuzzing/corpus"
             )
 
     forbidden_fragments = [
         "--ensure-only",
-        "rm -rf fuzz/corpus",
+        "rm -rf tests/fuzzing/corpus",
         "git clean",
     ]
     for fragment in forbidden_fragments:
@@ -520,7 +522,7 @@ def validate_git_tracked_corpus(root: Path, registry: Registry, errors: list[str
         return
     try:
         result = subprocess.run(
-            ["git", "ls-files", "--", "fuzz/corpus"],
+            ["git", "ls-files", "--", "tests/fuzzing/corpus"],
             cwd=root,
             check=False,
             capture_output=True,
@@ -531,7 +533,7 @@ def validate_git_tracked_corpus(root: Path, registry: Registry, errors: list[str
     if result.returncode != 0:
         return
 
-    expected = {"fuzz/corpus/manifest.toml"}
+    expected = {CORPUS_MANIFEST_PATH}
     for entry in registry.manifest_entries:
         for seed_file in entry.seed_files:
             expected.add(f"{entry.corpus_dir}/{seed_file}")
@@ -542,7 +544,7 @@ def validate_git_tracked_corpus(root: Path, registry: Registry, errors: list[str
     if missing:
         errors.append(f"manifest corpus seeds are not tracked by git: {missing}")
     if extra:
-        errors.append(f"tracked fuzz/corpus files are not listed in manifest: {extra}")
+        errors.append(f"tracked tests/fuzzing/corpus files are not listed in manifest: {extra}")
 
 
 def print_errors(errors: list[str]) -> None:

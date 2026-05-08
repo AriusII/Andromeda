@@ -2,7 +2,7 @@
 
 use andromeda_srpl_parser::{
     BusinessOperationKindAst, Cardinality, DiagnosticPhase, SourceSpan, TokenKind, lex,
-    parse_procedure_signature,
+    parse_procedure_signature, source_location,
 };
 use andromeda_types::{AbsencePolicy, ScalarType};
 
@@ -233,6 +233,18 @@ fn parser_directly_enforces_bounded_body_operation_limit() {
         .location
         .expect("operation-limit diagnostic must include a source span");
     assert_utf8_span(&rejected_source, span);
+}
+
+#[test]
+fn parser_owner_exports_source_location_boundary() {
+    let span = source_location::SourceSpan::new(2, 5);
+    assert_eq!(span.len(), 3);
+    assert!(span.is_valid());
+
+    let source = source_location::SrplSource::new(
+        "procedure Inventory.Lookup accepts () returns R one (C bool);",
+    );
+    assert!(source.forbidden_construct_diagnostics().is_empty());
 }
 
 fn body_with_emit_count(count: usize) -> String {

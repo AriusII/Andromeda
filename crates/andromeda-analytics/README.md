@@ -4,12 +4,14 @@
 
 `andromeda-analytics` is the future owner crate for offline and batch analytical operators that support statistics refresh, map refresh, benchmark review, and operational diagnostics.
 
-This directory is a scaffold only. It is not registered as a Cargo workspace member, and no analytics behavior has moved from existing owners.
+This crate currently owns runtime-free advisory job descriptors and the `AdvisoryAnalyticsJob` trait. No analytical operator execution or durable publication behavior has moved from existing owners.
 
 ## Scope
 
 This crate is expected to own:
 
+- `AnalyticsJobDescriptor`, `AnalyticsExecutionBounds`, `AnalyticsWorkloadKind`, and acceleration policy vocabulary.
+- The advisory boundary trait used to prove analytics jobs stay bounded, CPU-fallback-capable, and outside C5 truth.
 - Batch analytical descriptors and bounded execution policy for non-critical paths.
 - CPU-first analytical kernels with optional acceleration only after fallback policy exists.
 - Advisory outputs that can feed statistics, maps, or investigation workflows after validation.
@@ -43,12 +45,13 @@ This crate is expected to own:
 Future behavior changes should use:
 
 ```powershell
+cargo check -p andromeda-analytics --all-targets
 cargo test -p andromeda-analytics
 cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture
 cargo test -p andromeda-cli --test orphan_source_invariants -- --nocapture
 ```
 
-This scaffold was designed for documentation review only.
+Descriptor and trait changes must keep analytics advisory, bounded, disableable, and outside C5 durable-kernel dependency edges.
 
 ## Troubleshooting
 
@@ -59,5 +62,7 @@ This scaffold was designed for documentation review only.
 ## References
 
 - [Workspace crate rules](../README.md)
+- [Current Map descriptor owner](../andromeda-maps/README.md)
+- [Current columnar descriptor owner](../andromeda-columnar/README.md)
 - [Hardware policy owner](../andromeda-hardware/README.md)
 - [Current benchmark owner](../andromeda-bench/README.md)

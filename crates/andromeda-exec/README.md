@@ -18,6 +18,12 @@ This crate owns:
 - Retry classification, timeout and deadlock routing, durable rollback fences, and audit ledger events.
 - Execution-facing typed errors through `AndromedaResult`, stable error kinds, and explicit recovery/terminal evidence structs.
 
+## Public API compatibility
+
+- `andromeda_exec::retry` is a stable re-export surface for retry types, backed by `andromeda-retry`.
+- `andromeda_exec::traces` is a stable re-export surface for audit trace types, backed by `andromeda-execution-trace`.
+- Root re-exports currently include `ErrorRetryability`, `RetryAttempt`, `RetryDecision`, `RetryPolicy`, `AuditLedger`, `InMemoryAuditLedger`, and `InvocationTraceEvent`.
+
 ## Non-goals
 
 This crate does not own:

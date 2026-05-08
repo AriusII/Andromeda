@@ -6,8 +6,15 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+andromeda-buffer-pool.workspace = true
 andromeda-core.workspace = true
+andromeda-manifest.workspace = true
 andromeda-observe.workspace = true
+andromeda-recovery.workspace = true
+andromeda-segment.workspace = true
+andromeda-storage-heap.workspace = true
+andromeda-storage-index.workspace = true
+andromeda-storage-page.workspace = true
 andromeda-wal.workspace = true
 dashmap = "6.0"
 sha2 = "0.11.0"

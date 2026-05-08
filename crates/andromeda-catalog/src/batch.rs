@@ -8,6 +8,9 @@ mod mutation;
 mod plan;
 mod srpl_integration;
 
+pub use andromeda_definition_batch::{
+    DefinitionBatchId, DefinitionBatchImportId, DefinitionBatchSourceHash,
+};
 pub use ddl_migration::*;
 pub use definition::*;
 pub use dry_run_srpl::*;

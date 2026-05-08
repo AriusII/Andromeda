@@ -5,7 +5,7 @@ async fn test_stress_rapid_procedures() -> AndromedaResult<()> {
     // Start server
     let server_addr = allocate_test_address();
     let server_tls = create_test_server_tls()?;
-    let server = QuicServer::new(server_addr, server_tls)?;
+    let server = QuicServer::new(server_addr, server_tls.server_config())?;
     let listen_addr = server.local_addr();
 
     let registry = Arc::new(MockRegistry::new());
@@ -20,15 +20,15 @@ async fn test_stress_rapid_procedures() -> AndromedaResult<()> {
         if let Ok(mut conn) = timeout(Duration::from_secs(30), server.accept_connection()).await {
             if let Ok(mut conn) = conn {
                 for _ in 0..1000 {
-                    if let Ok(mut stream) =
-                        timeout(Duration::from_secs(5), conn.accept_bidi_stream()).await
-                    {
-                        if let Ok(mut stream) = stream {
-                            let mut buf = vec![0u8; 512];
-                            if let Ok(n) = stream.recv.read(&mut buf).await {
-                                if n > 0 {
-                                    buf.truncate(n);
-                                    if let Ok(frame) = FrameBytes::decode(&buf) {
+                            if let Ok(mut stream) =
+                                timeout(Duration::from_secs(5), conn.accept_bidi_stream()).await
+                            {
+                                if let Ok(mut stream) = stream {
+                                    let mut buf = vec![0u8; 512];
+                                    if let Ok(n) = stream.read(&mut buf).await {
+                                        if n > 0 {
+                                            buf.truncate(n);
+                                    if let Ok(frame) = FrameCodec::decode(&buf) {
                                         let proc_name = String::from_utf8_lossy(&frame.payload);
                                         if let Ok(response_frames) = server_clone
                                             .execute(
@@ -39,13 +39,13 @@ async fn test_stress_rapid_procedures() -> AndromedaResult<()> {
                                             .await
                                         {
                                             for resp_frame in response_frames {
-                                                let mut encoded = Vec::new();
-                                                let _ = resp_frame.encode(&mut encoded);
-                                                let _ = stream.send.write_all(&encoded).await;
+                                                if let Ok(encoded) = encode_frame(&resp_frame) {
+                                                    let _ = stream.write_all(&encoded).await;
+                                                }
                                             }
                                         }
                                     }
-                                    let _ = stream.send.finish().await;
+                                    let _ = stream.finish().await;
                                     completed_clone.fetch_add(1, Ordering::SeqCst);
                                 }
                             }
@@ -57,8 +57,8 @@ async fn test_stress_rapid_procedures() -> AndromedaResult<()> {
     });
 
     // Client: send 1000+ rapid requests
-    let client_tls = create_test_client_tls();
-    let client = QuicClient::new(client_tls)?;
+    let client_tls = create_test_client_tls()?;
+    let client = QuicClient::new(client_tls.client_config())?;
     let mut conn = timeout(
         Duration::from_secs(10),
         client.connect(listen_addr, "localhost"),
@@ -79,9 +79,9 @@ async fn test_stress_rapid_procedures() -> AndromedaResult<()> {
             let request_frame = FrameBytes {
                 header: FrameHeader {
                     frame_type: FrameType::RpcExecuteRequest,
-                    request_id: req_id as u64,
-                    session_id: 5000,
-                    tx_id: 0,
+                    request_id: req_id.into(),
+                    session_id: 5000.into(),
+                    tx_id: None,
                     payload_length: proc_name.len() as u64,
                     flags: 0,
                     header_crc: FRAME_HEADER_CRC_UNCHECKED,
@@ -89,14 +89,13 @@ async fn test_stress_rapid_procedures() -> AndromedaResult<()> {
                 payload: proc_name.as_bytes().to_vec(),
             };
 
-            let mut encoded = Vec::new();
-            let _ = request_frame.encode(&mut encoded);
+            let encoded = encode_frame(&request_frame)?;
             let _ = stream.write_all(&encoded).await;
             let _ = stream.finish().await;
 
             // Drain response asynchronously
             let mut buf = vec![0u8; 1024];
-            let _ = stream.recv.read(&mut buf).await;
+            let _ = stream.read(&mut buf).await;
         }
     }
 
@@ -124,7 +123,7 @@ async fn test_latency_measurements() -> AndromedaResult<()> {
     // Start server
     let server_addr = allocate_test_address();
     let server_tls = create_test_server_tls()?;
-    let server = QuicServer::new(server_addr, server_tls)?;
+    let server = QuicServer::new(server_addr, server_tls.server_config())?;
     let listen_addr = server.local_addr();
 
     let registry = Arc::new(MockRegistry::new());
@@ -135,15 +134,15 @@ async fn test_latency_measurements() -> AndromedaResult<()> {
         if let Ok(mut conn) = timeout(Duration::from_secs(30), server.accept_connection()).await {
             if let Ok(mut conn) = conn {
                 for _ in 0..100 {
-                    if let Ok(mut stream) =
-                        timeout(Duration::from_secs(5), conn.accept_bidi_stream()).await
-                    {
-                        if let Ok(mut stream) = stream {
-                            let mut buf = vec![0u8; 512];
-                            if let Ok(n) = stream.recv.read(&mut buf).await {
-                                if n > 0 {
-                                    buf.truncate(n);
-                                    if let Ok(frame) = FrameBytes::decode(&buf) {
+                            if let Ok(mut stream) =
+                                timeout(Duration::from_secs(5), conn.accept_bidi_stream()).await
+                            {
+                                if let Ok(mut stream) = stream {
+                                    let mut buf = vec![0u8; 512];
+                                    if let Ok(n) = stream.read(&mut buf).await {
+                                        if n > 0 {
+                                            buf.truncate(n);
+                                    if let Ok(frame) = FrameCodec::decode(&buf) {
                                         let proc_name = String::from_utf8_lossy(&frame.payload);
                                         if let Ok(response_frames) = registry_clone
                                             .execute(
@@ -154,13 +153,13 @@ async fn test_latency_measurements() -> AndromedaResult<()> {
                                             .await
                                         {
                                             for resp_frame in response_frames {
-                                                let mut encoded = Vec::new();
-                                                let _ = resp_frame.encode(&mut encoded);
-                                                let _ = stream.send.write_all(&encoded).await;
+                                                if let Ok(encoded) = encode_frame(&resp_frame) {
+                                                    let _ = stream.write_all(&encoded).await;
+                                                }
                                             }
                                         }
                                     }
-                                    let _ = stream.send.finish().await;
+                                    let _ = stream.finish().await;
                                 }
                             }
                         }
@@ -171,8 +170,8 @@ async fn test_latency_measurements() -> AndromedaResult<()> {
     });
 
     // Client: measure latencies
-    let client_tls = create_test_client_tls();
-    let client = QuicClient::new(client_tls)?;
+    let client_tls = create_test_client_tls()?;
+    let client = QuicClient::new(client_tls.client_config())?;
     let mut conn = timeout(
         Duration::from_secs(10),
         client.connect(listen_addr, "localhost"),
@@ -190,9 +189,9 @@ async fn test_latency_measurements() -> AndromedaResult<()> {
         let request_frame = FrameBytes {
             header: FrameHeader {
                 frame_type: FrameType::RpcExecuteRequest,
-                request_id: req_id as u64,
-                session_id: 6000,
-                tx_id: 0,
+                request_id: req_id.into(),
+                session_id: 6000.into(),
+                tx_id: None,
                 payload_length: proc_name.len() as u64,
                 flags: 0,
                 header_crc: FRAME_HEADER_CRC_UNCHECKED,
@@ -200,13 +199,12 @@ async fn test_latency_measurements() -> AndromedaResult<()> {
             payload: proc_name.as_bytes().to_vec(),
         };
 
-        let mut encoded = Vec::new();
-        request_frame.encode(&mut encoded)?;
+        let encoded = encode_frame(&request_frame)?;
         stream.write_all(&encoded).await?;
         stream.finish().await?;
 
         let mut buf = vec![0u8; 512];
-        let _ = stream.recv.read(&mut buf).await;
+        let _ = stream.read(&mut buf).await;
 
         let elapsed = start.elapsed();
         latencies.push(elapsed);

@@ -2,9 +2,9 @@
 
 ## Purpose
 
-`andromeda-contract` owns the runtime-free contract model for Andromeda catalog objects and typed Procedure contracts.
+`andromeda-contract` is the compatibility facade and catalog-object descriptor crate for Andromeda contract surfaces.
 
-Use this crate when code needs stable descriptors for Procedure contracts, catalog object identities, qualified names, structural dependencies, result stream contracts, transaction policies, contract compatibility diagnostics, and canonical contract hashes.
+Use this crate when code needs the legacy unified contract surface: catalog object descriptors, structural dependencies, Procedure contract reexports from `andromeda-procedure-contract`, and StructuredObject metadata reexports from `andromeda-structured-object`.
 
 Application behavior in Andromeda is exposed through typed, cataloged Procedures. This crate helps preserve that boundary by making contract identity, shape, dependencies, and compatibility explicit before execution, transport dispatch, or catalog publication.
 
@@ -14,11 +14,11 @@ This crate is responsible for:
 
 | Area | Responsibility |
 | --- | --- |
-| Procedure contracts | Contract descriptors, typed input and output shapes, transaction policy, result metadata policy, and error policy. |
-| Contract identity | `ContractHash`, policy version materialization, and golden-vector-compatible canonical hashing. |
+| Procedure contracts | Reexports from `andromeda-procedure-contract` for compatibility with existing `andromeda_contract::*` imports. |
+| Contract identity | Reexports Procedure `ContractHash` and policy-version materialization from `andromeda-procedure-contract`; owns catalog object shape hashes. |
 | Catalog objects | Runtime-free descriptors for tables, Procedures, StructuredObjects, enums, and versioned object references. |
-| Names and dependencies | Qualified names and structural dependency edges derived from contract-safe definitions. |
-| Compatibility | Diagnostics for Procedure contract compatibility across catalog versions. |
+| Names and dependencies | Reexports qualified names and owns structural dependency edges derived from contract-safe definitions. |
+| Compatibility | Reexports Procedure contract compatibility diagnostics across catalog versions. |
 
 The crate is an R1 contract crate. It may describe what a Procedure contract means, but it does not execute a Procedure, resolve an invocation, open a transaction, write WAL, or publish catalog changes.
 
@@ -45,7 +45,7 @@ Before changing this crate, understand:
 
 1. Model new public concepts as typed descriptors or newtypes instead of primitive aliases.
 2. Keep `lib.rs` limited to module declarations and intentional reexports.
-3. Keep contract materialization deterministic. Any field that affects Procedure compatibility must affect the canonical hash or be explicitly excluded with a documented reason.
+3. Keep Procedure contract materialization in `andromeda-procedure-contract`; keep catalog object shape hashing here.
 4. Derive dependencies from contract-safe definitions. Do not reach into catalog stores or execution state to infer dependencies.
 5. Keep compatibility checks explicit. A changed Procedure shape should produce a diagnostic rather than an implicit accept or reject.
 6. Keep Application and Administration concerns separate. Application contracts describe typed Procedure invocation; administrative capabilities belong behind Administration, security, recovery, or cluster surfaces.
@@ -60,6 +60,7 @@ For code changes in this crate, prefer:
 cargo fmt --all --check
 cargo test -p andromeda-contract --tests
 cargo test -p andromeda-contract --test contract_hash_golden
+cargo check -p andromeda-procedure-contract --all-targets
 cargo check -p andromeda-contract --all-targets
 ```
 
@@ -81,6 +82,6 @@ If a change affects contract hash materialization, add or update golden vectors 
 - `crates/AGENTS.md`
 - `docs/adr/ADR-0011-workspace-crate-boundaries.md`
 - `crates/andromeda-contract/src/lib.rs`
-- `crates/andromeda-contract/src/contracts.rs`
+- `crates/andromeda-procedure-contract/src/lib.rs`
 - `crates/andromeda-contract/src/objects.rs`
 - `crates/andromeda-contract/tests/contract_hash_golden.rs`

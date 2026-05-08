@@ -7,4 +7,4 @@
 
 mod cardinality;
 
-pub use cardinality::*;
+pub use cardinality::Cardinality;

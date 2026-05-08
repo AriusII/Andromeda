@@ -1,8 +1,11 @@
-use andromeda_bench::{
-    BenchmarkEvidence, BenchmarkEvidenceBudgets, BenchmarkEvidenceConfidence,
-    BenchmarkHardwareProfile, BenchmarkHistoryAdvisoryMetadata, BenchmarkMeasurementMode,
-    BenchmarkScenarioEvidence, BenchmarkScenarioEvidenceError, BenchmarkWorkloadCounter,
-    BudgetStatus, DEFAULT_TEMP_BYTES, MAX_TEMP_BYTES,
+use andromeda_bench_workload::{
+    BenchmarkHardwareProfile, BudgetStatus, DEFAULT_TEMP_BYTES, MAX_TEMP_BYTES,
+};
+use andromeda_scenario_evidence::{
+    BENCHMARK_EVIDENCE_TIMING_SOURCE_DETERMINISTIC_PLACEHOLDER, BenchmarkEvidence,
+    BenchmarkEvidenceBudgets, BenchmarkEvidenceConfidence, BenchmarkHistoryAdvisoryMetadata,
+    BenchmarkMeasurementMode, BenchmarkScenarioEvidence, BenchmarkScenarioEvidenceError,
+    BenchmarkWorkloadCounter,
 };
 
 use crate::common::{
@@ -141,7 +144,7 @@ fn boundary_rejects_workload_measurement_mode_mismatch() {
         diagnostic_only: true,
         measurement_mode: BenchmarkMeasurementMode::HarnessDiagnostic,
         latency_source: "in-memory-btree-read-harness",
-        timing_source: andromeda_bench::BENCHMARK_EVIDENCE_TIMING_SOURCE_DETERMINISTIC_PLACEHOLDER,
+        timing_source: BENCHMARK_EVIDENCE_TIMING_SOURCE_DETERMINISTIC_PLACEHOLDER,
         engine_harness: Some("MockBTreeIndex"),
         synthetic_model_version: None,
         workload_counters: vec![BenchmarkWorkloadCounter::new("lookup_operations", 5, "ops")],

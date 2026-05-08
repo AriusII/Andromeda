@@ -26,11 +26,11 @@
 
 #[test]
 fn runtime_quinn_feature_discovers_remote_invoke_network_e2e_tests() {
-    let backend = core::any::type_name::<andromeda_quic::quinn_backend::QuicClient>();
-    let tls = core::any::type_name::<andromeda_quic::quinn_tls::MutualTlsTestConfig>();
+    let client_transport = core::any::type_name::<dyn andromeda_quic::QuicClientTransport>();
+    let server_transport = core::any::type_name::<dyn andromeda_quic::QuicServerTransport>();
 
-    assert!(backend.contains("QuicClient"));
-    assert!(tls.contains("MutualTlsTestConfig"));
+    assert!(client_transport.contains("QuicClientTransport"));
+    assert!(server_transport.contains("QuicServerTransport"));
 }
 
 // The legacy network scenarios below are kept as explicit opt-in coverage until

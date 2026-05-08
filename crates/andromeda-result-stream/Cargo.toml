@@ -6,3 +6,11 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+andromeda-core.workspace = true
+andromeda-observe.workspace = true
+andromeda-proto.workspace = true
+andromeda-rpc-protocol.workspace = true
+andromeda-srpl-cardinality.workspace = true
+andromeda-storage.workspace = true
+andromeda-tx.workspace = true
+tokio = { workspace = true, features = ["sync"] }

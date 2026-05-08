@@ -2,19 +2,16 @@
 
 ## Purpose
 
-`andromeda-bench-harness` is the future owner crate for bounded benchmark execution harnesses, measurement control, run envelopes, and diagnostic export policy.
+`andromeda-bench-harness` owns reusable bounded benchmark harness helpers, timer accounting, and temporary resource isolation.
 
-This directory is a scaffold only. It is not registered as a Cargo workspace member, and current benchmark execution remains in `andromeda-bench`.
+Engine-specific smoke benchmark execution remains in `andromeda-bench` and uses this crate for shared harness support.
 
 ## Scope
 
-This crate is expected to own:
+This crate owns:
 
-- Harness run envelopes, measurement modes, timers, sample controls, and stop rules.
+- Timer helpers and temporary file or directory isolation for bounded harnesses.
 - Isolation between benchmark execution and production runtime decisions.
-- Diagnostic export metadata for advisory results.
-- Hardware profile capture and reproducibility warnings.
-- Links to ScenarioEvidence and regression records after validation.
 
 ## Non-goals
 
@@ -26,7 +23,7 @@ This crate is expected to own:
 
 ## Prerequisites
 
-- Keep current harness behavior in `andromeda-bench` until a registered extraction work order moves it.
+- Keep engine-specific benchmark behavior in `andromeda-bench`.
 - Require explicit workload identity and shape version for every run.
 - Require bounded duration, sample count, warmup count, and temporary byte limits.
 
@@ -40,15 +37,12 @@ This crate is expected to own:
 
 ## Validation
 
-Future behavior changes should use:
+Behavior changes should use:
 
 ```powershell
-cargo test -p andromeda-bench-harness
-cargo test -p andromeda-bench --test regression_detection -- --nocapture
-cargo test -p andromeda-cli --test benchmark_cli_commands -- --nocapture
+cargo check -p andromeda-bench-harness --tests
+cargo check -p andromeda-bench --tests
 ```
-
-This scaffold was designed for documentation review only.
 
 ## Troubleshooting
 

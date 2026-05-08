@@ -2,17 +2,50 @@ pub use std::collections::HashMap;
 pub use std::net::SocketAddr;
 pub use std::sync::Arc;
 pub use std::sync::atomic::{AtomicU64, Ordering};
+pub use std::sync::OnceLock;
 pub use std::time::Instant;
 
-pub use andromeda_core::{AndromedaErrorKind, AndromedaResult, RequestId, SessionId};
+pub use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId, SessionId};
 pub use andromeda_quic::frame::FrameType;
 pub use andromeda_quic::{
     FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader,
+};
+pub use andromeda_quic_runtime_quinn::{
     quinn_backend::{QuicClient, QuicServer},
-    quinn_tls::{ClientTlsConfig, ServerTlsConfig},
+    quinn_tls::MutualTlsTestConfig,
 };
 pub use tokio::sync::RwLock;
+use tokio::task::JoinHandle;
 pub use tokio::time::{Duration, timeout};
+
+static TEST_TLS: OnceLock<MutualTlsTestConfig> = OnceLock::new();
+
+fn test_tls() -> AndromedaResult<&'static MutualTlsTestConfig> {
+    TEST_TLS.get_or_try_init(|| MutualTlsTestConfig::ephemeral(vec!["localhost".to_string()]))
+}
+
+fn transport_error(message: impl Into<String>) -> AndromedaError {
+    AndromedaError::new(AndromedaErrorKind::Transport, message.into())
+}
+
+pub(crate) async fn with_timeout<T>(
+    duration: Duration,
+    future: impl std::future::Future<Output = AndromedaResult<T>>,
+) -> AndromedaResult<T> {
+    timeout(duration, future)
+        .await
+        .map_err(|_| transport_error("operation timed out"))
+}
+
+pub(crate) async fn join_with_timeout<T>(
+    duration: Duration,
+    handle: JoinHandle<AndromedaResult<T>>,
+) -> AndromedaResult<T> {
+    timeout(duration, handle)
+        .await
+        .map_err(|_| transport_error("join task timed out"))?
+        .map_err(|error| transport_error(format!("task join failed: {error}")))?
+}
 
 // Mock Procedure Registry
 
@@ -126,7 +159,7 @@ impl MockRegistry {
             Ok(frames)
         } else {
             Err(andromeda_core::AndromedaError::new(
-                AndromedaErrorKind::NotFound,
+                AndromedaErrorKind::Execution,
                 format!("procedure '{}' not found", procedure_name),
             ))
         }
@@ -146,7 +179,7 @@ pub(crate) fn make_response_frame(
             frame_type,
             request_id,
             session_id,
-            tx_id: 0,
+            tx_id: None,
             payload_length: payload.len() as u64,
             flags: 0,
             header_crc: FRAME_HEADER_CRC_UNCHECKED,
@@ -155,13 +188,16 @@ pub(crate) fn make_response_frame(
     }
 }
 
-pub(crate) fn create_test_server_tls() -> AndromedaResult<quinn::ServerConfig> {
-    let tls_config = ServerTlsConfig::ephemeral(vec!["localhost".to_string()])?;
-    Ok(tls_config.into_quinn_config())
+pub(crate) fn create_test_server_tls() -> AndromedaResult<&'static MutualTlsTestConfig> {
+    test_tls()
 }
 
-pub(crate) fn create_test_client_tls() -> quinn::ClientConfig {
-    ClientTlsConfig::insecure()
+pub(crate) fn create_test_client_tls() -> AndromedaResult<&'static MutualTlsTestConfig> {
+    test_tls()
+}
+
+pub(crate) fn encode_frame(frame: &FrameBytes) -> AndromedaResult<Vec<u8>> {
+    FrameCodec::encode(frame)
 }
 
 pub(crate) fn allocate_test_address() -> SocketAddr {

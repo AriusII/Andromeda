@@ -6,6 +6,8 @@
 //! re-exported here as a WAL owner surface.
 
 pub mod codec;
+pub mod commit_log_entry;
+pub mod commit_log_facade;
 pub mod durability_fence;
 pub mod file;
 pub mod manager;
@@ -15,6 +17,8 @@ pub mod segment;
 pub mod transaction;
 
 pub use codec::*;
+pub use commit_log_entry::*;
+pub use commit_log_facade::*;
 pub use durability_fence::*;
 pub use file::*;
 pub use manager::*;

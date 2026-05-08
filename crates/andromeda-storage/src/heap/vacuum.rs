@@ -57,14 +57,14 @@ impl HeapPage {
         for (slot_id, entry) in self.slot_directory.iter().enumerate() {
             if entry.is_deleted() {
                 candidate_deleted_slots.push(slot_id as u16);
-                bytes_reclaimable = bytes_reclaimable.saturating_add(u32::from(entry.length));
+                bytes_reclaimable = bytes_reclaimable.saturating_add(u32::from(entry.length()));
                 continue;
             }
 
-            if entry.offset != next_compacted_offset {
+            if entry.offset() != next_compacted_offset {
                 live_slots_rewritten.push(slot_id as u16);
             }
-            next_compacted_offset = next_compacted_offset.saturating_add(entry.length);
+            next_compacted_offset = next_compacted_offset.saturating_add(entry.length());
         }
 
         let has_work = !candidate_deleted_slots.is_empty() || !live_slots_rewritten.is_empty();

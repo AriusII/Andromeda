@@ -32,6 +32,9 @@ pub(crate) fn load_crate_manifests(root: &Path) -> BTreeMap<String, CrateManifes
 
     manifests
 }
+pub(crate) fn collect_workspace_member_manifests(root: &Path) -> Vec<PathBuf> {
+    collect_manifest_paths(root)
+}
 fn collect_manifest_paths(root: &Path) -> Vec<PathBuf> {
     let mut manifests = Vec::new();
     let entries = fs::read_dir(root).expect("read crates directory");
@@ -142,6 +145,7 @@ fn parse_dependency_names_with_aliases(
 ) -> ManifestDependencies {
     let mut dependencies = ManifestDependencies::default();
     let mut dependency_section = ParsedDependencySection::None;
+    let mut section_dependency_name = None;
 
     for line in text.lines() {
         let Some(line) = cargo_line_without_comment(line) else {
@@ -149,11 +153,33 @@ fn parse_dependency_names_with_aliases(
         };
 
         if line.starts_with('[') {
-            dependency_section = dependency_section_for(line);
+            let parsed_section = dependency_section_for(line);
+            dependency_section = parsed_section.scope;
+            section_dependency_name = parsed_section.dependency_name;
             continue;
         }
 
         if matches!(dependency_section, ParsedDependencySection::None) {
+            continue;
+        }
+
+        if let Some(dependency_name) = &section_dependency_name {
+            dependency_section.insert(&mut dependencies, dependency_name.clone());
+
+            if let Some((raw_key, value)) = line.split_once('=') {
+                if raw_key.trim() == "workspace" && value.trim() == "true" {
+                    for resolved_dependency in workspace_aliases.resolve(dependency_name) {
+                        dependency_section.insert(&mut dependencies, resolved_dependency);
+                    }
+                } else if raw_key.trim() == "package" {
+                    let package = value
+                        .trim()
+                        .trim_matches(|character| character == '"' || character == '\'');
+                    dependency_section
+                        .insert(&mut dependencies, normalize_dependency_name(package));
+                }
+            }
+
             continue;
         }
 
@@ -175,6 +201,10 @@ fn parse_dependency_names_with_aliases(
 
     dependencies
 }
+struct ParsedDependencyHeader {
+    scope: ParsedDependencySection,
+    dependency_name: Option<String>,
+}
 #[derive(Clone, Copy)]
 enum ParsedDependencySection {
     None,
@@ -194,22 +224,54 @@ impl ParsedDependencySection {
         }
     }
 }
-fn dependency_section_for(line: &str) -> ParsedDependencySection {
-    if line == "[dependencies]"
-        || line == "[build-dependencies]"
-        || line.starts_with("[target.") && line.ends_with(".dependencies]")
-        || line.starts_with("[target.") && line.ends_with(".build-dependencies]")
-    {
-        return ParsedDependencySection::Runtime;
+fn dependency_section_for(line: &str) -> ParsedDependencyHeader {
+    let section = line.trim_matches(&['[', ']'][..]);
+    let runtime_dependency_name = dependency_name_for_section(section, "dependencies")
+        .or_else(|| dependency_name_for_section(section, "build-dependencies"));
+    if let Some(dependency_name) = runtime_dependency_name {
+        return ParsedDependencyHeader {
+            scope: ParsedDependencySection::Runtime,
+            dependency_name,
+        };
     }
 
-    if line == "[dev-dependencies]"
-        || line.starts_with("[target.") && line.ends_with(".dev-dependencies]")
-    {
-        return ParsedDependencySection::Dev;
+    if let Some(dependency_name) = dependency_name_for_section(section, "dev-dependencies") {
+        return ParsedDependencyHeader {
+            scope: ParsedDependencySection::Dev,
+            dependency_name,
+        };
     }
 
-    ParsedDependencySection::None
+    ParsedDependencyHeader {
+        scope: ParsedDependencySection::None,
+        dependency_name: None,
+    }
+}
+fn dependency_name_for_section(section: &str, section_name: &str) -> Option<Option<String>> {
+    let target_section = format!(".{section_name}");
+    let named_section_prefix = format!("{section_name}.");
+    let named_target_section = format!(".{section_name}.");
+
+    if section == section_name
+        || (section.starts_with("target.") && section.ends_with(target_section.as_str()))
+    {
+        return Some(None);
+    }
+
+    let raw_name = section
+        .strip_prefix(named_section_prefix.as_str())
+        .or_else(|| {
+            if !section.starts_with("target.") {
+                return None;
+            }
+            section
+                .split_once(named_target_section.as_str())
+                .map(|(_, name)| name)
+        })?;
+    let name = raw_name.split('.').next().unwrap_or(raw_name);
+    let name = normalize_dependency_name(name);
+
+    (!name.is_empty()).then_some(Some(name))
 }
 pub(crate) fn cargo_line_without_comment(line: &str) -> Option<&str> {
     let line = line.split('#').next().unwrap_or_default().trim();
@@ -315,4 +377,29 @@ fn manifest_parser_resolves_workspace_dependency_aliases_before_rules() {
     assert!(dependencies.runtime.contains("serde-json"));
     assert!(dependencies.runtime.contains("sqlx"));
     assert!(dependencies.runtime.contains("bytemuck"));
+}
+#[test]
+fn manifest_parser_tracks_table_style_dependency_sections() {
+    let dependencies = parse_dependency_names(
+        r#"
+        [package]
+        name = "sample"
+
+        [dependencies.transport]
+        package = "quinn"
+        workspace = true
+
+        [target.'cfg(unix)'.dependencies.rpc_wire]
+        package = "tonic"
+        version = "0.12"
+
+        [dev-dependencies.storage_fixture]
+        package = "andromeda-storage"
+        workspace = true
+        "#,
+    );
+
+    assert!(dependencies.runtime.contains("quinn"));
+    assert!(dependencies.runtime.contains("tonic"));
+    assert!(dependencies.dev.contains("andromeda-storage"));
 }

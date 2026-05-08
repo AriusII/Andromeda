@@ -1,15 +1,13 @@
 //! Catalog mutation records, plans, and WAL-boundary types.
 
+use andromeda_definition_batch::{DefinitionBatchId, DefinitionBatchSourceHash};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId};
 use std::collections::BTreeSet;
 
-use crate::{
-    CatalogObjectRef, DefinitionBatchDependencyGraphHash, DefinitionBatchSourceHash,
-    objects::CatalogDefinition,
-};
+use crate::{CatalogObjectRef, DefinitionBatchDependencyGraphHash, objects::CatalogDefinition};
 
-use super::definition::{CatalogLifecycleTarget, DefinitionBatchId};
+use super::definition::CatalogLifecycleTarget;
 
 /// Maximum number of Apply records that one durable DefinitionBatch replay may carry.
 pub const CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH: usize = 1024;
@@ -255,7 +253,7 @@ impl CatalogMutationPlan {
                 ),
             ));
         }
-        if batch_id.get() == 0 {
+        if batch_id.is_zero() {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Catalog,
                 "catalog mutation plan batch id must not be zero",

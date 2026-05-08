@@ -1,10 +1,11 @@
 #![forbid(unsafe_code)]
 #![doc = r#"
-Future C5 owner scaffold for Andromeda heap storage.
+C5 owner crate for Andromeda heap storage boundaries.
 
-This crate is intentionally behavior-free. It documents the boundary that may
-eventually own heap page interpretation, slot directory policy, row placement,
-scans, vacuum planning, and heap recovery evidence.
+This crate starts the extraction of heap-owned durable slot metadata from
+`andromeda-storage`. Full heap page mutation, scans, vacuum planning, and redo
+remain in `andromeda-storage` until their WAL and recovery evidence contracts
+are promoted together.
 
 C5 invariants:
 
@@ -13,5 +14,8 @@ C5 invariants:
 - Persistent and network bytes must use explicit codecs, never Rust native struct layout.
 - Crash/recovery validation is required before mission-critical behavior lands here.
 - RAM, temporary storage, GPU output, and benchmark output are advisory only; they are not truth.
-- No behavior has moved into this crate in this scaffold.
 "#]
+
+mod slot;
+
+pub use slot::SlotEntry;

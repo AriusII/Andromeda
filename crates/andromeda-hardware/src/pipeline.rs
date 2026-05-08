@@ -18,7 +18,7 @@ pub enum PipelineClass {
 }
 
 impl PipelineClass {
-    /// Critical engine truth paths stay off accelerated paths.
+    /// Critical engine truth paths stay off optional accelerated paths.
     pub const fn is_critical_path(self) -> bool {
         matches!(
             self,
@@ -32,12 +32,22 @@ impl PipelineClass {
         )
     }
 
-    /// GPU work may only be considered for advisory analytical pipelines.
-    pub const fn is_gpu_advisory_candidate(self) -> bool {
+    /// C5 truth paths must not depend on optional GPU, SIMD, or vector output.
+    pub const fn is_c5_truth_path(self) -> bool {
+        self.is_critical_path()
+    }
+
+    /// Optional acceleration may only be considered for advisory analytical pipelines.
+    pub const fn is_optional_acceleration_candidate(self) -> bool {
         matches!(
             self,
             Self::StatisticsRefresh | Self::MapRefresh | Self::BatchAnalytics
         )
+    }
+
+    /// GPU work may only be considered for advisory analytical pipelines.
+    pub const fn is_gpu_advisory_candidate(self) -> bool {
+        self.is_optional_acceleration_candidate()
     }
 
     /// Returns the stable string name for this pipeline class.
@@ -88,6 +98,7 @@ mod tests {
             PipelineClass::BatchAnalytics,
         ] {
             assert!(pipeline.is_gpu_advisory_candidate());
+            assert!(pipeline.is_optional_acceleration_candidate());
         }
 
         for pipeline in [
@@ -102,6 +113,23 @@ mod tests {
             PipelineClass::BackgroundMaintenance,
         ] {
             assert!(!pipeline.is_gpu_advisory_candidate());
+            assert!(!pipeline.is_optional_acceleration_candidate());
+        }
+    }
+
+    #[test]
+    fn c5_truth_paths_are_excluded_from_optional_acceleration() {
+        for pipeline in [
+            PipelineClass::Commit,
+            PipelineClass::WalAppend,
+            PipelineClass::Rollback,
+            PipelineClass::Recovery,
+            PipelineClass::MvccVisibility,
+            PipelineClass::CatalogPublication,
+            PipelineClass::SecurityCriticalPath,
+        ] {
+            assert!(pipeline.is_c5_truth_path());
+            assert!(!pipeline.is_optional_acceleration_candidate());
         }
     }
 

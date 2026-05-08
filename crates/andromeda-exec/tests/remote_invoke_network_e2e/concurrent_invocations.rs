@@ -5,7 +5,7 @@ async fn test_concurrent_invocations() -> AndromedaResult<()> {
     // Start server
     let server_addr = allocate_test_address();
     let server_tls = create_test_server_tls()?;
-    let server = Arc::new(QuicServer::new(server_addr, server_tls)?);
+    let server = Arc::new(QuicServer::new(server_addr, server_tls.server_config())?);
     let listen_addr = server.local_addr();
 
     let registry = Arc::new(MockRegistry::new());
@@ -33,29 +33,28 @@ async fn test_concurrent_invocations() -> AndromedaResult<()> {
                             {
                                 if let Ok(mut stream) = stream {
                                     let mut buf = vec![0u8; 512];
-                                    if let Ok(n) = stream.recv.read(&mut buf).await {
+                                    if let Ok(n) = stream.read(&mut buf).await {
                                         if n > 0 {
                                             buf.truncate(n);
-                                            if let Ok(frame) = FrameBytes::decode(&buf) {
+                                                    if let Ok(frame) = FrameCodec::decode(&buf) {
                                                 let proc_name =
                                                     String::from_utf8_lossy(&frame.payload);
-                                                if let Ok(response_frames) = registry_inner
-                                                    .execute(
-                                                        &proc_name,
-                                                        frame.header.request_id,
-                                                        frame.header.session_id,
+                                            if let Ok(response_frames) = registry_inner
+                                                .execute(
+                                                    &proc_name,
+                                                    frame.header.request_id,
+                                                    frame.header.session_id,
                                                     )
                                                     .await
                                                 {
                                                     for resp_frame in response_frames {
-                                                        let mut encoded = Vec::new();
-                                                        let _ = resp_frame.encode(&mut encoded);
-                                                        let _ =
-                                                            stream.send.write_all(&encoded).await;
+                                                        if let Ok(encoded) = encode_frame(&resp_frame) {
+                                                            let _ = stream.write_all(&encoded).await;
+                                                        }
                                                     }
                                                 }
                                             }
-                                            let _ = stream.send.finish().await;
+                                            let _ = stream.finish().await;
                                             completed_inner.fetch_add(1, Ordering::SeqCst);
                                         }
                                     }
@@ -74,8 +73,10 @@ async fn test_concurrent_invocations() -> AndromedaResult<()> {
     for client_id in 0..10 {
         let listen_addr_copy = listen_addr;
         let handle = tokio::spawn(async move {
-            let client_tls = create_test_client_tls();
-            if let Ok(client) = QuicClient::new(client_tls) {
+                                let client_tls = create_test_client_tls().expect(
+                "test client TLS should be initialized from shared test certificate bundle",
+            );
+            if let Ok(client) = QuicClient::new(client_tls.client_config()) {
                 if let Ok(mut conn) = timeout(
                     Duration::from_secs(10),
                     client.connect(listen_addr_copy, "localhost"),
@@ -97,9 +98,9 @@ async fn test_concurrent_invocations() -> AndromedaResult<()> {
                                 let request_frame = FrameBytes {
                                     header: FrameHeader {
                                         frame_type: FrameType::RpcExecuteRequest,
-                                        request_id: (client_id as u64 * 100 + req_id as u64) as u64,
-                                        session_id: (client_id as u64 * 1000) as u64,
-                                        tx_id: 0,
+                                        request_id: (client_id as u64 * 100 + req_id as u64).into(),
+                                        session_id: (client_id as u64 * 1000).into(),
+                                        tx_id: None,
                                         payload_length: proc_name.len() as u64,
                                         flags: 0,
                                         header_crc: FRAME_HEADER_CRC_UNCHECKED,
@@ -107,14 +108,14 @@ async fn test_concurrent_invocations() -> AndromedaResult<()> {
                                     payload: proc_name.as_bytes().to_vec(),
                                 };
 
-                                let mut encoded = Vec::new();
-                                let _ = request_frame.encode(&mut encoded);
-                                let _ = stream.write_all(&encoded).await;
+                                if let Ok(encoded) = encode_frame(&request_frame) {
+                                    let _ = stream.write_all(&encoded).await;
+                                }
                                 let _ = stream.finish().await;
 
                                 // Drain response (we don't verify it for this test)
                                 let mut buf = vec![0u8; 1024];
-                                let _ = stream.recv.read(&mut buf).await;
+                                let _ = stream.read(&mut buf).await;
                             }
                         }
                     }

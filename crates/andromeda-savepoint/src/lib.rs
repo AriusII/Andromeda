@@ -1,10 +1,11 @@
 #![forbid(unsafe_code)]
 #![doc = r#"
-Future C5 owner scaffold for Andromeda savepoint stacks and partial rollback metadata.
+Andromeda savepoint stacks and partial rollback metadata.
 
-This crate is intentionally behavior-free. It documents the boundary that may
-eventually own savepoint identifiers, nesting rules, bounded write-set evidence,
-and rollback coordination.
+This crate owns storage-agnostic savepoint identifiers, nesting rules, bounded
+write-set evidence, and transaction-local rollback coordination. Savepoint
+operations never publish transaction visibility and never replace durable
+terminal WAL evidence.
 
 C5 invariants:
 
@@ -13,5 +14,17 @@ C5 invariants:
 - Persistent and network bytes must use explicit codecs, never Rust native struct layout.
 - Crash/recovery validation is required before mission-critical behavior lands here.
 - RAM, temporary storage, GPU output, and benchmark output are advisory only; they are not truth.
-- No behavior has moved into this crate in this scaffold.
 "#]
+
+mod stack;
+mod write_set;
+
+pub use stack::{
+    Savepoint, SavepointId, SavepointReleaseEvidence, SavepointRollbackEvidence,
+    SavepointRollbackMarker, SavepointStack,
+};
+pub use write_set::{
+    MAX_WRITE_SET_IMAGE_BYTES, MAX_WRITE_SET_OPERATION_KIND_BYTES, MAX_WRITE_SET_RESOURCE_ID_BYTES,
+    TxWriteSet, WriteSetEntry, WriteSetImage, WriteSetOperationKind, WriteSetOrdinal,
+    WriteSetResourceId,
+};

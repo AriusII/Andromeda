@@ -2,9 +2,9 @@
 
 ## Purpose
 
-`andromeda-optimizer` is the future owner crate for bounded plan candidate construction, cost model policy, access path selection, plan class governance, and optimizer DecisionTrace production.
+`andromeda-optimizer` owns bounded optimizer policy and runtime-free plan-input DecisionTrace production.
 
-This directory is a scaffold only. It is not registered as a Cargo workspace member, and no optimizer behavior has moved from existing owners.
+The crate currently validates optimizer input ownership: complete plan-cache identity, published statistics compatibility, policy-version compatibility, and disableable adaptive fallback. SRPL compilation and executable plan construction remain in their current owners.
 
 ## Scope
 
@@ -26,7 +26,7 @@ This crate is expected to own:
 
 ## Prerequisites
 
-- Keep current optimizer-adjacent behavior in `andromeda-catalog` and `andromeda-srpl` until a registered extraction work order moves it.
+- Keep SRPL compilation and executable optimizer behavior in `andromeda-srpl` and catalog-facing crates until a registered extraction work order moves it.
 - Require complete plan identity: procedure contract, catalog version, stats version, policy version, and plan class.
 - Require a deterministic fallback when advisory evidence is missing, stale, disabled, or unsafe.
 
@@ -48,7 +48,7 @@ cargo test -p andromeda-srpl --test optimizer_pipeline_contract -- --nocapture
 cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture
 ```
 
-This scaffold was designed for documentation review only.
+Run package checks and focused tests when changing these contracts.
 
 ## Troubleshooting
 

@@ -2,11 +2,11 @@
 
 ## Purpose
 
-`andromeda-procedure-runtime` is the future R3 owner for generic Procedure runtime dispatch after admission.
+`andromeda-procedure-runtime` is the R3 owner for generic Procedure runtime dispatch after admission.
 
 The runtime invokes cataloged Procedure implementations through typed contracts. It must not become an application-specific business module, a raw SQL tunnel, or a bypass around admission, transaction, WAL, catalog, or security boundaries.
 
-This scaffold is not a promoted Cargo workspace member until a later packet adds a manifest, root workspace wiring, topology tests, and compatibility evidence.
+`andromeda-exec` keeps compatibility reexports while this crate owns generic dispatch evidence, dispatch request validation, remote-unavailable errors, and the generic SRPL-to-local dispatch adapter.
 
 ## Scope
 
@@ -49,17 +49,16 @@ Before adding behavior here, confirm:
 
 ## Validation
 
-For the scaffold, validate that only README and `src/lib.rs` files were added under this directory.
-
-Before promoting this crate into the workspace, add and run:
+Run the owner and compatibility gates:
 
 ```powershell
-cargo test -p andromeda-procedure-runtime --tests
+cargo check -p andromeda-procedure-runtime --all-targets
+cargo check -p andromeda-exec --all-targets
 cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture
 cargo test -p andromeda-cli --test orphan_source_invariants -- --nocapture
 ```
 
-Runtime promotion must include tests for contract-first invocation, handler lookup rejection, input-shape rejection, no application-facing SQL, no business hardcoding, cancellation routing, rollback routing, and durable commit evidence handoff.
+Runtime changes must include tests for contract-first invocation, handler lookup rejection, input-shape rejection, no application-facing SQL, no business hardcoding, cancellation routing, rollback routing, and durable commit evidence handoff.
 
 ## Troubleshooting
 

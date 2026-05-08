@@ -1,8 +1,8 @@
-use andromeda_bench::{
+use andromeda_bench_workload::DEFAULT_TEMP_BYTES;
+use andromeda_scenario_evidence::{
     BenchmarkEvidenceBudgets, BenchmarkEvidenceConfidence, BenchmarkEvidenceValidity,
     BenchmarkHistoryRecord, BenchmarkPlanClass, BenchmarkScenarioEvidence,
     BenchmarkScenarioEvidenceError, BenchmarkScenarioTarget, BenchmarkStatsVersion,
-    DEFAULT_TEMP_BYTES,
 };
 use andromeda_time::EngineTimestamp;
 use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};

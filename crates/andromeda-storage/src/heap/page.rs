@@ -105,8 +105,8 @@ impl HeapPage {
             return Err(heap_error(format!("slot {} has been deleted", slot_id)));
         }
 
-        let offset = entry.offset as usize;
-        let length = entry.length as usize;
+        let offset = entry.offset() as usize;
+        let length = entry.length() as usize;
         let end = offset
             .checked_add(length)
             .ok_or_else(|| heap_error(format!("slot {} offset/length overflows", slot_id)))?;
@@ -136,7 +136,7 @@ impl HeapPage {
             .slot_directory
             .iter()
             .filter(|e| !e.is_deleted())
-            .map(|e| e.offset as usize + e.length as usize)
+            .map(|e| e.offset() as usize + e.length() as usize)
             .max()
             .unwrap_or(HEAP_PAGE_V1_PAYLOAD_OFFSET);
         let slot_directory_start = self.data.len()

@@ -1,17 +1,39 @@
 #![forbid(unsafe_code)]
 
-//! Future owner crate scaffold for Andromeda plan cache identity and policy.
+//! Andromeda plan-cache identity and policy contracts.
 //!
-//! This crate intentionally defines no public API yet. Plan cache behavior
-//! remains in the current broad owners until a later extraction registers this
-//! package in the workspace and moves code with compatibility tests.
-//!
-//! Ownership constraints:
-//! - Plan entries must be bound to complete catalog, contract, statistics,
-//!   policy, and plan-class identity.
-//! - Cache output is not durable truth and must be bounded and disableable.
-//! - Benchmark output and ScenarioEvidence are advisory and must be traceable
-//!   when used or ignored.
-//! - GPU and analytics work must stay outside C5 commit, WAL, rollback,
-//!   recovery, MVCC short-visibility, catalog publication, and security-critical
-//!   paths.
+//! This crate owns the versioned `PlanCacheKey` identity and the runtime-free
+//! policy gate for deciding whether reuse is allowed. It does not store
+//! executable plans and does not treat cache output as durable truth.
+
+mod admission;
+mod advisory_evidence;
+mod decision;
+mod error;
+mod identity;
+mod limits;
+mod policy;
+mod selection;
+
+pub use admission::{
+    BoundedPlanCache, PlanCacheEntry, PlanCacheError, PlanCacheInsertReport, PlanCacheLookupReport,
+};
+pub use advisory_evidence::{
+    AdvisoryEvidenceStatus, AdvisoryEvidenceSummary, AdvisoryEvidenceSummaryBuilder,
+};
+pub use decision::{PlanCacheMissReason, PlanDecisionEvidence, PlanDecisionOutcome};
+pub use error::{PlanCacheKeyError, PlanCachePolicyError};
+pub use identity::{
+    CardinalityBucket, PLAN_CACHE_KEY_SCHEMA_VERSION, PlanCacheKey, PlanClass,
+    PlanShapeFingerprint, PlanShapeFingerprintBuilder,
+};
+pub use limits::{
+    PLAN_CACHE_MAX_ENTRIES, PLAN_SELECTION_MAX_CANDIDATES, PLAN_SELECTION_MAX_SCENARIO_EVIDENCE,
+};
+pub use policy::{
+    PlanCachePolicy, PlanCacheReuseDecision, PlanCacheReuseReason, evaluate_plan_cache_reuse,
+};
+pub use selection::{
+    PlanCandidate, PlanCandidateId, PlanCandidateRank, PlanSelectionError, PlanSelectionOutcome,
+    select_minimal_plan_with_advisory_evidence,
+};

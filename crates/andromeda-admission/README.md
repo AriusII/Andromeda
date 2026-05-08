@@ -2,11 +2,11 @@
 
 ## Purpose
 
-`andromeda-admission` is the future R3 owner for pre-transaction Procedure admission.
+`andromeda-admission` is the R3 owner for pre-transaction Procedure admission.
 
 Admission decides whether a request may enter execution. It must complete before transaction creation and before Procedure runtime dispatch. The output of this crate is admission evidence, not business execution and not durable storage truth.
 
-This scaffold is not a promoted Cargo workspace member until a later packet adds a manifest, root workspace wiring, topology tests, and compatibility evidence.
+`andromeda-exec` keeps compatibility reexports while this crate owns the admission types, rejection evidence, permission evaluator trait, and pre-transaction contract validation.
 
 ## Scope
 
@@ -48,17 +48,16 @@ Before adding behavior here, confirm:
 
 ## Validation
 
-For the scaffold, validate that only README and `src/lib.rs` files were added under this directory.
-
-Before promoting this crate into the workspace, add and run:
+Run the owner and compatibility gates:
 
 ```powershell
-cargo test -p andromeda-admission --tests
+cargo check -p andromeda-admission --all-targets
+cargo check -p andromeda-exec --all-targets
 cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture
 cargo test -p andromeda-cli --test orphan_source_invariants -- --nocapture
 ```
 
-Runtime promotion must include tests proving admission before transaction, no transaction on denial, contract-hash and catalog-version rejection, wrong-surface rejection, resource-budget rejection, no application-facing SQL, and no business hardcoding.
+Runtime changes must include tests proving admission before transaction, no transaction on denial, contract-hash and catalog-version rejection, wrong-surface rejection, resource-budget rejection, no application-facing SQL, and no business hardcoding.
 
 ## Troubleshooting
 

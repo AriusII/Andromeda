@@ -32,15 +32,16 @@ pub(crate) fn heap_page_v1_read_and_validate_slots(
         );
         let entry = SlotEntry::from_bytes(slot_bytes);
 
-        if entry.flags & !HEAP_PAGE_V1_SLOT_FLAGS_KNOWN_MASK != 0 {
+        if entry.flags() & !HEAP_PAGE_V1_SLOT_FLAGS_KNOWN_MASK != 0 {
             return Err(heap_error(format!(
                 "heap page v1 slot {} has unknown flags 0x{:02x}",
-                i, entry.flags
+                i,
+                entry.flags()
             )));
         }
 
         if entry.is_deleted() {
-            if entry.offset != 0 {
+            if entry.offset() != 0 {
                 return Err(heap_error(format!(
                     "heap page v1 slot {} deleted flag requires zero offset",
                     i
@@ -50,16 +51,16 @@ pub(crate) fn heap_page_v1_read_and_validate_slots(
             continue;
         }
 
-        if entry.offset == 0 || entry.length == 0 {
+        if entry.offset() == 0 || entry.length() == 0 {
             return Err(heap_error(format!(
                 "heap page v1 live slot {} requires non-zero offset and length",
                 i
             )));
         }
 
-        let tuple_start = entry.offset as usize;
+        let tuple_start = entry.offset() as usize;
         let tuple_end = tuple_start
-            .checked_add(entry.length as usize)
+            .checked_add(entry.length() as usize)
             .ok_or_else(|| heap_error(format!("heap page v1 slot {} tuple bounds overflow", i)))?;
         if tuple_start < HEAP_PAGE_V1_PAYLOAD_OFFSET || tuple_end > metadata.slot_base {
             return Err(heap_error(format!(

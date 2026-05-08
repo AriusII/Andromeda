@@ -10,12 +10,11 @@ use andromeda_observe::{
     SecurityPolicyVersionEvidence, SurfaceScope, TraceEvent, TraceId, UserPrincipal,
     UserPrincipalKind,
 };
-use std::{
-    fs,
-    path::PathBuf,
-    process::{Command, Output},
-    time::{SystemTime, UNIX_EPOCH},
+use andromeda_test_support::{
+    process::{assert_contains_all, assert_success, run_binary, stdout_lossy as stdout},
+    workspace::unique_temp_path,
 };
+use std::fs;
 
 #[test]
 fn audit_inspect_accepts_bounded_filters() {
@@ -123,13 +122,16 @@ fn audit_principal_filter_rejects_secret_bearing_values() {
         "x-api-key: super-secret",
         "private_key=super-secret",
     ] {
-        let output = run_cli_vec(vec![
-            "audit".to_string(),
-            "inspect".to_string(),
-            "--principal".to_string(),
-            principal.to_string(),
-            "--json".to_string(),
-        ]);
+        let output = run_binary(
+            cli_binary(),
+            vec![
+                "audit".to_string(),
+                "inspect".to_string(),
+                "--principal".to_string(),
+                principal.to_string(),
+                "--json".to_string(),
+            ],
+        );
 
         assert!(
             !output.status.success(),
@@ -171,17 +173,20 @@ fn audit_legacy_query_wording_is_not_a_positive_surface() {
 
 #[test]
 fn audit_inspect_json_exposes_admin_audit_gate() {
-    let output = run_cli([
-        "audit",
-        "inspect",
-        "--trace-id",
-        "42",
-        "--principal",
-        "user:ops",
-        "--limit",
-        "5",
-        "--json",
-    ]);
+    let output = run_binary(
+        cli_binary(),
+        [
+            "audit",
+            "inspect",
+            "--trace-id",
+            "42",
+            "--principal",
+            "user:ops",
+            "--limit",
+            "5",
+            "--json",
+        ],
+    );
     assert_success(&output);
     let json = stdout(&output);
 
@@ -211,7 +216,7 @@ fn audit_inspect_json_exposes_admin_audit_gate() {
 
 #[test]
 fn audit_inspect_diagnostic_json_exposes_replay_evidence() {
-    let path = temp_journal_path("inspection-evidence");
+    let path = unique_temp_path("andromeda-cli-inspection-evidence", ".audit");
     let mut sink = FileDurableAuditWalSink::open(&path).expect("journal opens");
     append_security_record(
         &mut sink,
@@ -233,19 +238,22 @@ fn audit_inspect_diagnostic_json_exposes_replay_evidence() {
     );
     drop(sink);
 
-    let output = run_cli_vec(vec![
-        "audit".to_string(),
-        "inspect".to_string(),
-        "--journal".to_string(),
-        path.display().to_string(),
-        "--principal".to_string(),
-        "user:scan-b".to_string(),
-        "--family".to_string(),
-        "security-audit".to_string(),
-        "--limit".to_string(),
-        "1".to_string(),
-        "--diagnostic-json".to_string(),
-    ]);
+    let output = run_binary(
+        cli_binary(),
+        vec![
+            "audit".to_string(),
+            "inspect".to_string(),
+            "--journal".to_string(),
+            path.display().to_string(),
+            "--principal".to_string(),
+            "user:scan-b".to_string(),
+            "--family".to_string(),
+            "security-audit".to_string(),
+            "--limit".to_string(),
+            "1".to_string(),
+            "--diagnostic-json".to_string(),
+        ],
+    );
     assert_success(&output);
     let json = stdout(&output);
 
@@ -268,7 +276,7 @@ fn audit_inspect_diagnostic_json_exposes_replay_evidence() {
 
 #[test]
 fn audit_inspect_filters_exact_durable_admin_families() {
-    let path = temp_journal_path("exact-admin-families");
+    let path = unique_temp_path("andromeda-cli-exact-admin-families", ".audit");
     let mut sink = FileDurableAuditWalSink::open(&path).expect("journal opens");
     append_admin_record(
         &mut sink,
@@ -306,18 +314,21 @@ fn audit_inspect_filters_exact_durable_admin_families() {
         ("backup", "backup-decision", "user:exact-backup"),
         ("restore", "restore-decision", "user:exact-restore"),
     ] {
-        let output = run_cli_vec(vec![
-            "audit".to_string(),
-            "inspect".to_string(),
-            "--journal".to_string(),
-            path.display().to_string(),
-            "--family".to_string(),
-            family_filter.to_string(),
-            "--limit".to_string(),
-            "10".to_string(),
-            "--include-total-count".to_string(),
-            "--diagnostic-json".to_string(),
-        ]);
+        let output = run_binary(
+            cli_binary(),
+            vec![
+                "audit".to_string(),
+                "inspect".to_string(),
+                "--journal".to_string(),
+                path.display().to_string(),
+                "--family".to_string(),
+                family_filter.to_string(),
+                "--limit".to_string(),
+                "10".to_string(),
+                "--include-total-count".to_string(),
+                "--diagnostic-json".to_string(),
+            ],
+        );
         assert_success(&output);
         let json = stdout(&output);
         assert_no_application_procedure_or_sql_surface(&json);
@@ -346,18 +357,21 @@ fn audit_inspect_filters_exact_durable_admin_families() {
         }
     }
 
-    let broad_output = run_cli_vec(vec![
-        "audit".to_string(),
-        "inspect".to_string(),
-        "--journal".to_string(),
-        path.display().to_string(),
-        "--family".to_string(),
-        "admin-audit".to_string(),
-        "--limit".to_string(),
-        "10".to_string(),
-        "--include-total-count".to_string(),
-        "--diagnostic-json".to_string(),
-    ]);
+    let broad_output = run_binary(
+        cli_binary(),
+        vec![
+            "audit".to_string(),
+            "inspect".to_string(),
+            "--journal".to_string(),
+            path.display().to_string(),
+            "--family".to_string(),
+            "admin-audit".to_string(),
+            "--limit".to_string(),
+            "10".to_string(),
+            "--include-total-count".to_string(),
+            "--diagnostic-json".to_string(),
+        ],
+    );
     assert_success(&broad_output);
     let broad_json = stdout(&broad_output);
     assert_no_application_procedure_or_sql_surface(&broad_json);
@@ -378,7 +392,7 @@ fn audit_inspect_filters_exact_durable_admin_families() {
 
 #[test]
 fn audit_compact_diagnostic_json_reports_retention_evidence() {
-    let path = temp_journal_path("compact-evidence");
+    let path = unique_temp_path("andromeda-cli-compact-evidence", ".audit");
     let mut sink = FileDurableAuditWalSink::open(&path).expect("journal opens");
     let expired = append_security_record(
         &mut sink,
@@ -400,16 +414,19 @@ fn audit_compact_diagnostic_json_reports_retention_evidence() {
     );
     drop(sink);
 
-    let output = run_cli_vec(vec![
-        "audit".to_string(),
-        "compact".to_string(),
-        "--journal".to_string(),
-        path.display().to_string(),
-        "--retain-from-lsn".to_string(),
-        retained.evidence.record_lsn.to_string(),
-        "--preserve-forensic-hold".to_string(),
-        "--diagnostic-json".to_string(),
-    ]);
+    let output = run_binary(
+        cli_binary(),
+        vec![
+            "audit".to_string(),
+            "compact".to_string(),
+            "--journal".to_string(),
+            path.display().to_string(),
+            "--retain-from-lsn".to_string(),
+            retained.evidence.record_lsn.to_string(),
+            "--preserve-forensic-hold".to_string(),
+            "--diagnostic-json".to_string(),
+        ],
+    );
     assert_success(&output);
     let json = stdout(&output);
 
@@ -432,15 +449,18 @@ fn audit_compact_diagnostic_json_reports_retention_evidence() {
         ],
     );
 
-    let inspection_after_compaction = run_cli_vec(vec![
-        "audit".to_string(),
-        "inspect".to_string(),
-        "--journal".to_string(),
-        path.display().to_string(),
-        "--limit".to_string(),
-        "10".to_string(),
-        "--diagnostic-json".to_string(),
-    ]);
+    let inspection_after_compaction = run_binary(
+        cli_binary(),
+        vec![
+            "audit".to_string(),
+            "inspect".to_string(),
+            "--journal".to_string(),
+            path.display().to_string(),
+            "--limit".to_string(),
+            "10".to_string(),
+            "--diagnostic-json".to_string(),
+        ],
+    );
     assert_success(&inspection_after_compaction);
     assert_contains_all(
         &stdout(&inspection_after_compaction),
@@ -457,7 +477,7 @@ fn audit_compact_diagnostic_json_reports_retention_evidence() {
 
 #[test]
 fn audit_verify_detects_checksum_corruption() {
-    let path = temp_journal_path("verify-corruption");
+    let path = unique_temp_path("andromeda-cli-verify-corruption", ".audit");
     let mut sink = FileDurableAuditWalSink::open(&path).expect("journal opens");
     append_security_record(
         &mut sink,
@@ -471,13 +491,16 @@ fn audit_verify_detects_checksum_corruption() {
     journal = journal.replacen("SecurityDecision", "SecurityDecisioN", 1);
     fs::write(&path, journal).expect("corruption is written");
 
-    let output = run_cli_vec(vec![
-        "audit".to_string(),
-        "verify".to_string(),
-        "--journal".to_string(),
-        path.display().to_string(),
-        "--json".to_string(),
-    ]);
+    let output = run_binary(
+        cli_binary(),
+        vec![
+            "audit".to_string(),
+            "verify".to_string(),
+            "--journal".to_string(),
+            path.display().to_string(),
+            "--json".to_string(),
+        ],
+    );
     assert!(
         !output.status.success(),
         "audit verify should fail closed on checksum corruption"
@@ -493,13 +516,16 @@ fn audit_verify_detects_checksum_corruption() {
 
 #[test]
 fn audit_inspect_does_not_create_or_inspect_missing_journal() {
-    let output = run_cli([
-        "audit",
-        "inspect",
-        "--journal",
-        "target/andromeda-cli/missing-audit-cli-test.log",
-        "--json",
-    ]);
+    let output = run_binary(
+        cli_binary(),
+        [
+            "audit",
+            "inspect",
+            "--journal",
+            "target/andromeda-cli/missing-audit-cli-test.log",
+            "--json",
+        ],
+    );
 
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("does not exist or is not a file"));
@@ -514,7 +540,7 @@ fn audit_help_command_executes() {
 
 #[test]
 fn audit_help_uses_inspection_wording() {
-    let output = run_cli(["audit", "--help"]);
+    let output = run_binary(cli_binary(), ["audit", "--help"]);
 
     assert_success(&output);
     let help = stdout(&output);
@@ -531,33 +557,8 @@ fn audit_help_uses_inspection_wording() {
     assert!(!help.contains("Filter by query family"));
 }
 
-fn run_cli<const N: usize>(args: [&str; N]) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_andromeda-cli"));
-    command.args(args).output().expect("run andromeda-cli")
-}
-
-fn run_cli_vec(args: Vec<String>) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_andromeda-cli"));
-    command.args(args).output().expect("run andromeda-cli")
-}
-
-fn assert_success(output: &Output) {
-    assert!(
-        output.status.success(),
-        "expected success\nstdout:\n{}\nstderr:\n{}",
-        stdout(output),
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
-
-fn stdout(output: &Output) -> String {
-    String::from_utf8_lossy(&output.stdout).into_owned()
-}
-
-fn assert_contains_all(text: &str, expected: &[&str]) {
-    for item in expected {
-        assert!(text.contains(item), "expected `{item}` in `{text}`");
-    }
+fn cli_binary() -> &'static str {
+    env!("CARGO_BIN_EXE_andromeda-cli")
 }
 
 fn assert_no_application_procedure_or_sql_surface(text: &str) {
@@ -747,15 +748,4 @@ fn append_security_record(
 
     sink.append_durable_audit_record(record)
         .expect("append is flushed before success")
-}
-
-fn temp_journal_path(test_name: &str) -> PathBuf {
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system time is after UNIX epoch")
-        .as_nanos();
-    std::env::temp_dir().join(format!(
-        "andromeda-cli-{test_name}-{}-{nonce}.audit",
-        std::process::id()
-    ))
 }

@@ -2,9 +2,9 @@
 
 ## Purpose
 
-`andromeda-statistics` is the future owner crate for versioned statistics descriptors, refresh policy, histogram summaries, skew metadata, and statistics publication contracts.
+`andromeda-statistics` owns versioned statistics descriptors, histogram summaries, skew metadata, correlation evidence, and optimizer-use contracts.
 
-This directory is a scaffold only. It is not registered as a Cargo workspace member, and no runtime behavior has moved from the current broad owners.
+The crate exposes statistics builders, publication digests, descriptors, stale-use policy, and DecisionTrace-backed optimizer-use decisions. Catalog remains responsible for active publication switching where catalog-local ScenarioEvidence is still required.
 
 ## Scope
 
@@ -26,7 +26,7 @@ This crate is expected to own:
 
 ## Prerequisites
 
-- Keep current behavior in `andromeda-catalog` until an extraction work order registers this crate and proves compatibility.
+- Keep catalog publication switching and catalog-local ScenarioEvidence integrations outside this crate until a registered extraction work order moves them.
 - Bind every published statistics view to explicit catalog, contract, policy, and statistics versions.
 - Require CPU fallbacks for any future acceleration path.
 - Treat benchmark and ScenarioEvidence input as advisory only.
@@ -49,7 +49,7 @@ cargo test -p andromeda-catalog --test catalog_publication_subscription -- --noc
 cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture
 ```
 
-This scaffold was designed for documentation review only.
+Run package checks and focused tests when changing these contracts.
 
 ## Troubleshooting
 

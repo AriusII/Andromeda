@@ -1,11 +1,13 @@
 #![forbid(unsafe_code)]
 
+use andromeda_test_support::{
+    process::{assert_success, run_binary, run_binary_with_path, stdout_utf8 as stdout},
+    workspace::{unique_temp_path, workspace_root_from_manifest_dir},
+};
 use std::{
     ffi::OsStr,
     fs,
     path::{Path, PathBuf},
-    process::{Command, Output},
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 const FORBIDDEN_SQL_CLIENT_DEPS: &[&str] = &[
@@ -52,8 +54,8 @@ const FORBIDDEN_PROTO_RUNTIME_JSON_TOKENS: &[&str] = &[
 
 #[test]
 fn protocol_smoke_detail_output_is_deterministic() {
-    let first = run_cli(["protocol-smoke", "--detail"]);
-    let second = run_cli(["protocol-smoke", "--detail"]);
+    let first = run_binary(cli_binary(), ["protocol-smoke", "--detail"]);
+    let second = run_binary(cli_binary(), ["protocol-smoke", "--detail"]);
     assert_success(&first);
     assert_success(&second);
 
@@ -69,7 +71,7 @@ fn protocol_smoke_detail_output_is_deterministic() {
 
 #[test]
 fn cli_human_surfaces_do_not_advertise_sql_grpc_or_default_json_runtime() {
-    let help = run_cli(["--help"]);
+    let help = run_binary(cli_binary(), ["--help"]);
     assert_success(&help);
     let help_stdout = stdout(&help);
     assert!(help_stdout.contains("durable audit trace inspection"));
@@ -77,13 +79,13 @@ fn cli_human_surfaces_do_not_advertise_sql_grpc_or_default_json_runtime() {
     assert!(!help_stdout.contains("durable audit trace queries"));
     assert_no_cli_surface_drift(&help_stdout);
 
-    let audit_help = run_cli(["audit", "--help"]);
+    let audit_help = run_binary(cli_binary(), ["audit", "--help"]);
     assert_success(&audit_help);
     let audit_help_stdout = stdout(&audit_help);
     assert!(audit_help_stdout.contains("inspect  Inspect durable audit journal replay"));
     assert_no_cli_surface_drift(&audit_help_stdout);
 
-    let protocol = run_cli(["protocol-smoke", "--detail"]);
+    let protocol = run_binary(cli_binary(), ["protocol-smoke", "--detail"]);
     assert_success(&protocol);
     let protocol_stdout = stdout(&protocol);
     assert!(protocol_stdout.contains("typed ResultStream sequence: ok"));
@@ -92,10 +94,10 @@ fn cli_human_surfaces_do_not_advertise_sql_grpc_or_default_json_runtime() {
 
 #[test]
 fn vertical_v0_writes_file_wal_and_recovery_inspect_reports_replay() {
-    let wal_path = unique_temp_wal_path("andromeda-cli-v0");
+    let wal_path = unique_temp_path("andromeda-cli-v0", ".wal");
     fs::remove_file(&wal_path).ok();
 
-    let vertical = run_cli_with_path(["vertical-v0", "--wal"], &wal_path);
+    let vertical = run_binary_with_path(cli_binary(), ["vertical-v0", "--wal"], &wal_path);
     assert_success(&vertical);
 
     let vertical_stdout = stdout(&vertical);
@@ -107,7 +109,7 @@ fn vertical_v0_writes_file_wal_and_recovery_inspect_reports_replay() {
     assert!(vertical_stdout.contains("forensic required: false"));
     assert!(vertical_stdout.contains("result frames: 3"));
 
-    let inspect = run_cli_with_path(["recovery-inspect"], &wal_path);
+    let inspect = run_binary_with_path(cli_binary(), ["recovery-inspect"], &wal_path);
     assert_success(&inspect);
 
     let inspect_stdout = stdout(&inspect);
@@ -210,50 +212,12 @@ fn workspace_policy_gates_do_not_drift_through_cli_scope() {
     }
 }
 
-fn run_cli<const N: usize>(args: [&str; N]) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_andromeda-cli"));
-    command.args(args).output().expect("run andromeda-cli")
-}
-
-fn run_cli_with_path<const N: usize>(args: [&str; N], path: &Path) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_andromeda-cli"));
-    command
-        .args(args)
-        .arg(path)
-        .output()
-        .expect("run andromeda-cli")
-}
-
-fn assert_success(output: &Output) {
-    assert!(
-        output.status.success(),
-        "command failed\nstdout:\n{}\nstderr:\n{}",
-        stdout(output),
-        stderr(output)
-    );
-}
-
-fn stdout(output: &Output) -> String {
-    String::from_utf8(output.stdout.clone()).expect("stdout is utf8")
-}
-
-fn stderr(output: &Output) -> String {
-    String::from_utf8(output.stderr.clone()).expect("stderr is utf8")
+fn cli_binary() -> &'static str {
+    env!("CARGO_BIN_EXE_andromeda-cli")
 }
 
 fn workspace_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .expect("workspace root")
-}
-
-fn unique_temp_wal_path(prefix: &str) -> PathBuf {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system time after unix epoch")
-        .as_nanos();
-    std::env::temp_dir().join(format!("{prefix}-{}-{nanos}.wal", std::process::id()))
+    workspace_root_from_manifest_dir(env!("CARGO_MANIFEST_DIR"))
 }
 
 fn collect_files(root: &Path, include: impl Fn(&Path) -> bool) -> Vec<PathBuf> {

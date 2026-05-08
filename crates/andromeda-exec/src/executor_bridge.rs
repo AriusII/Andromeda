@@ -69,8 +69,10 @@
 //! - No gRPC: invocation is typed, not gRPC-mapped.
 
 use crate::surface_gate::{AuthorizedProcedureDispatch, SurfacePlaneAuthorizer};
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, InvocationId};
-use andromeda_observe::{AuthorizationOutcome, CertificateIdentity, TraceId};
+use andromeda_core::{
+    AndromedaError, AndromedaErrorKind, AndromedaResult, CertificateIdentity, InvocationId,
+};
+use andromeda_observe::{AuthorizationOutcome, TraceId};
 use andromeda_quic::{Connection, SurfacePlane};
 
 /// Bridges a QUIC connection and certificate identity to executor dispatch.
@@ -114,11 +116,11 @@ impl<'a> ExecutorDispatchBridge<'a> {
     /// ```no_run
     /// use andromeda_quic::{Connection, SurfacePlane};
     /// use andromeda_exec::ExecutorDispatchBridge;
-    /// # use andromeda_observe::CertificateIdentity;
-    /// # use andromeda_observe::SurfaceScope;
+    /// # use andromeda_core::CertificateIdentity;
+    /// # use andromeda_core::SurfaceScope;
     ///
     /// # let mut conn = Connection::new(SurfacePlane::Application);
-    /// # let identity = CertificateIdentity::new("abc123", "svc-001", SurfaceScope::Application).unwrap();
+    /// # let identity = CertificateIdentity::new("a".repeat(64), "svc-001", SurfaceScope::Application).unwrap();
     /// # conn.set_certificate_identity(identity.clone()).unwrap();
     /// let bridge = ExecutorDispatchBridge::new(&conn)?;
     /// # Ok::<(), andromeda_core::AndromedaError>(())
@@ -135,7 +137,7 @@ impl<'a> ExecutorDispatchBridge<'a> {
 
         // Validate scope match.
         let required_scope = andromeda_quic::mtls_identity::plane_to_required_surface_scope(plane);
-        if certificate_identity.surface != required_scope {
+        if certificate_identity.surface_scope() != required_scope {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Security,
                 "certificate surface scope does not match connection plane",
@@ -186,9 +188,9 @@ impl<'a> ExecutorDispatchBridge<'a> {
     /// # use andromeda_exec::ExecutorDispatchBridge;
     /// # use andromeda_observe::TraceId;
     /// # use andromeda_exec::SurfacePlaneAuthorizer;
-    /// # use andromeda_observe::{CertificateIdentity, SurfaceScope};
+    /// # use andromeda_core::{CertificateIdentity, SurfaceScope};
     /// # let mut conn = andromeda_quic::Connection::new(andromeda_quic::SurfacePlane::Application);
-    /// # let identity = CertificateIdentity::new("abc123", "svc-001", SurfaceScope::Application).unwrap();
+    /// # let identity = CertificateIdentity::new("a".repeat(64), "svc-001", SurfaceScope::Application).unwrap();
     /// # conn.set_certificate_identity(identity).unwrap();
     /// # let registry = andromeda_observe::PrincipalRegistry::new();
     /// # let bridge = ExecutorDispatchBridge::new(&conn)?;
@@ -224,7 +226,7 @@ impl<'a> ExecutorDispatchBridge<'a> {
         authorizer.authorize_procedure_dispatch(
             trace_id,
             self.plane,
-            &self.certificate_identity.fingerprint,
+            self.certificate_identity.fingerprint().as_str(),
         )
     }
 
@@ -247,9 +249,9 @@ impl<'a> ExecutorDispatchBridge<'a> {
     /// ```no_run
     /// # use andromeda_exec::ExecutorDispatchBridge;
     /// # use andromeda_core::InvocationId;
-    /// # use andromeda_observe::{CertificateIdentity, SurfaceScope};
+    /// # use andromeda_core::{CertificateIdentity, SurfaceScope};
     /// # let mut conn = andromeda_quic::Connection::new(andromeda_quic::SurfacePlane::Application);
-    /// # let identity = CertificateIdentity::new("abc123", "svc-001", SurfaceScope::Application).unwrap();
+    /// # let identity = CertificateIdentity::new("a".repeat(64), "svc-001", SurfaceScope::Application).unwrap();
     /// # conn.set_certificate_identity(identity).unwrap();
     /// # let bridge = ExecutorDispatchBridge::new(&conn)?;
     ///
@@ -296,7 +298,7 @@ impl<'a> ExecutorDispatchBridge<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_observe::SurfaceScope;
+    use andromeda_core::SurfaceScope;
     use andromeda_quic::{
         FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader, FrameType, LifecycleState,
     };
@@ -353,17 +355,17 @@ mod tests {
 
         assert_eq!(bridge.surface_plane(), SurfacePlane::Application);
         assert_eq!(
-            bridge.certificate_identity().fingerprint,
+            bridge.certificate_identity().fingerprint().as_str(),
             "a".repeat(64),
             "certificate fingerprint mismatch"
         );
         assert_eq!(
-            bridge.certificate_identity().subject,
+            bridge.certificate_identity().subject(),
             "app-service",
             "certificate subject mismatch"
         );
         assert_eq!(
-            bridge.certificate_identity().surface,
+            bridge.certificate_identity().surface_scope(),
             SurfaceScope::Application,
             "certificate scope mismatch"
         );
@@ -385,7 +387,7 @@ mod tests {
     fn test_bridge_rejects_cross_plane_invocation() {
         let mut conn = Connection::new(SurfacePlane::Application);
         let admin_identity = CertificateIdentity::new(
-            "wrong_scope".repeat(8),
+            "f".repeat(64),
             "admin-service".to_string(),
             SurfaceScope::Administration,
         )

@@ -1,6 +1,8 @@
-use andromeda_bench::{
-    BenchmarkEvidenceConfidence, BenchmarkMeasurementMode, BenchmarkRunRequest,
-    BenchmarkScenarioEvidence, DEFAULT_TEMP_BYTES, run_bounded_benchmark,
+use andromeda_bench::run_bounded_benchmark;
+use andromeda_bench_workload::{BenchmarkRunRequest, DEFAULT_TEMP_BYTES};
+use andromeda_scenario_evidence::{
+    BENCHMARK_EVIDENCE_TIMING_SOURCE_DETERMINISTIC_PLACEHOLDER, BenchmarkEvidenceConfidence,
+    BenchmarkMeasurementMode, BenchmarkScenarioEvidence,
 };
 
 use crate::common::{target, validity};
@@ -47,7 +49,7 @@ fn benchmark_run_evidence_preserves_explicit_generation_budgets() {
     );
     assert_eq!(
         boundary.context().timing_source(),
-        Some(andromeda_bench::BENCHMARK_EVIDENCE_TIMING_SOURCE_DETERMINISTIC_PLACEHOLDER)
+        Some(BENCHMARK_EVIDENCE_TIMING_SOURCE_DETERMINISTIC_PLACEHOLDER)
     );
     assert!(
         boundary

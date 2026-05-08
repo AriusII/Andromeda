@@ -31,8 +31,8 @@ pub use admission::ProcedureAuthorizedRouteBinding;
 pub use errors::ProcedureRouteAdmissionError;
 pub use route::{ProcedureRouteBinding, ProcedureRouteExecuteRequest};
 
+use andromeda_core::CertificateIdentity;
 use andromeda_core::{AndromedaResult, InvocationId, PrincipalRegistry};
-use andromeda_observe::CertificateIdentity;
 
 use crate::{CatalogProcedureManifest, FrameBytes};
 use crate::{Connection, SurfacePlane};
@@ -80,8 +80,8 @@ impl<'a> ProcedureGateway<'a> {
     ///
     /// ```no_run
     /// use andromeda_quic::{Connection, ProcedureGateway, SurfacePlane};
-    /// # use andromeda_observe::CertificateIdentity;
-    /// # use andromeda_observe::SurfaceScope;
+    /// # use andromeda_core::CertificateIdentity;
+    /// # use andromeda_core::SurfaceScope;
     ///
     /// # let mut conn = Connection::new(SurfacePlane::Application);
     /// # let identity = CertificateIdentity::new("abc123", "svc-001", SurfaceScope::Application)?;
@@ -133,7 +133,7 @@ impl<'a> ProcedureGateway<'a> {
     /// ```no_run
     /// # use andromeda_quic::ProcedureGateway;
     /// # use andromeda_core::InvocationId;
-    /// # use andromeda_observe::{CertificateIdentity, SurfaceScope};
+    /// # use andromeda_core::{CertificateIdentity, SurfaceScope};
     /// # let mut conn = andromeda_quic::Connection::new(andromeda_quic::SurfacePlane::Application);
     /// # let identity = CertificateIdentity::new("abc123", "svc-001", SurfaceScope::Application)?;
     /// # conn.set_certificate_identity(identity)?;
@@ -210,7 +210,7 @@ impl<'a> ProcedureGateway<'a> {
 mod tests {
     use super::*;
     use crate::LifecycleState;
-    use andromeda_observe::SurfaceScope;
+    use andromeda_core::SurfaceScope;
 
     fn setup_application_connection() -> Connection {
         let mut conn = Connection::new(SurfacePlane::Application);
@@ -282,10 +282,13 @@ mod tests {
         let gateway = ProcedureGateway::new(&conn).unwrap();
 
         assert_eq!(gateway.surface_plane(), SurfacePlane::Application);
-        assert_eq!(gateway.certificate_identity().fingerprint, "a".repeat(64));
-        assert_eq!(gateway.certificate_identity().subject, "test-service");
         assert_eq!(
-            gateway.certificate_identity().surface,
+            gateway.certificate_identity().fingerprint().as_str(),
+            "a".repeat(64)
+        );
+        assert_eq!(gateway.certificate_identity().subject(), "test-service");
+        assert_eq!(
+            gateway.certificate_identity().surface_scope(),
             SurfaceScope::Application
         );
     }
@@ -296,7 +299,10 @@ mod tests {
         let gateway = ProcedureGateway::new(&conn).unwrap();
 
         assert_eq!(gateway.surface_plane(), SurfacePlane::Administration);
-        assert_eq!(gateway.certificate_identity().fingerprint, "b".repeat(64));
+        assert_eq!(
+            gateway.certificate_identity().fingerprint().as_str(),
+            "b".repeat(64)
+        );
     }
 
     #[test]
@@ -305,7 +311,10 @@ mod tests {
         let gateway = ProcedureGateway::new(&conn).unwrap();
 
         assert_eq!(gateway.surface_plane(), SurfacePlane::HighAvailability);
-        assert_eq!(gateway.certificate_identity().fingerprint, "c".repeat(64));
+        assert_eq!(
+            gateway.certificate_identity().fingerprint().as_str(),
+            "c".repeat(64)
+        );
     }
 
     #[test]
@@ -362,7 +371,7 @@ mod tests {
 
         // This test focuses on the happy path: gateway created successfully
         // from an authenticated connection means preconditions can be validated.
-        assert_eq!(gateway.certificate_identity().subject, "test-service");
+        assert_eq!(gateway.certificate_identity().subject(), "test-service");
         assert_eq!(gateway.surface_plane(), SurfacePlane::Application);
     }
 
@@ -386,6 +395,6 @@ mod tests {
         // (This is implicit in the type signature, but document it in the test.)
         let identity_ref_1 = gateway.certificate_identity();
         let identity_ref_2 = gateway.certificate_identity();
-        assert_eq!(identity_ref_1.fingerprint, identity_ref_2.fingerprint);
+        assert_eq!(identity_ref_1.fingerprint(), identity_ref_2.fingerprint());
     }
 }

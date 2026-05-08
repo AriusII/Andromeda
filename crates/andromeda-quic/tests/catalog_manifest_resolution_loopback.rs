@@ -2,7 +2,7 @@ use andromeda_core::{
     AndromedaErrorKind, AndromedaResult, CatalogVersion, ContractHash, ProcedureId, SessionId,
     TransactionId,
 };
-use andromeda_observe::{CertificateIdentity, SurfaceScope};
+use andromeda_core::{CertificateIdentity, SurfaceScope};
 use andromeda_proto::generated::contract::v1::catalog_procedure_manifest_resolution_request;
 use andromeda_quic::{
     CatalogManifestResolutionContext, CatalogManifestResolutionGateway,
@@ -186,7 +186,7 @@ impl CatalogManifestResolutionRuntime for PermissionRuntime {
     ) -> AndromedaResult<CatalogManifestResolutionResponse> {
         if context
             .certificate_identity()
-            .is_some_and(|identity| identity.subject == "catalog-reader")
+            .is_some_and(|identity| identity.subject() == "catalog-reader")
         {
             return Ok(response(
                 &request,

@@ -2,16 +2,17 @@
 
 ## Purpose
 
-`andromeda-observe` owns typed trace events, audit evidence, durable audit journal contracts, query models, exporters, and post-fact decision explainability for Andromeda.
+`andromeda-observe` owns trace envelopes, runtime emission helpers, durable audit journal contracts, query models, exporters, and post-fact decision explainability for Andromeda.
 
-Observability records are bounded and audit-safe. They support review, replay, correlation, and forensic explanation, but they must not become storage truth or the transaction commit path.
+Observability records are bounded and audit-safe. They support review, replay, correlation, and forensic explanation, but they must not become storage truth or the transaction commit path. Shared identifiers live in `andromeda-observability`; typed audit trace contracts live in `andromeda-audit` and are reexported here for compatibility.
 
 ## Scope
 
 This crate provides:
 
-- Trace identifiers, event envelopes, correlation metadata, and lifecycle sequencing.
-- Decision, protocol, admission, security, placement, HADR, backup, restore, and core trace event families.
+- Event envelopes, lifecycle sequencing, validation, and in-memory sinks.
+- Decision, protocol, placement, durability, transition, and core trace event families.
+- Compatibility reexports for shared observability identifiers and typed audit traces.
 - Durable audit journal records, checksum chaining, replay evidence, retention policy, compaction reports, and file-backed audit sink contracts.
 - Bounded trace query specifications, filters, result metadata, and in-memory query sources.
 - Exporter contracts and mock exporters for tests.
@@ -24,6 +25,7 @@ This crate provides:
 - Do not log secrets, raw credentials, or unbounded payloads.
 - Do not turn diagnostic JSON or exporter output into the runtime protocol.
 - Do not let retention compaction erase the evidence required to explain retained audit chains.
+- Do not move durable audit journal truth into `andromeda-audit`; that crate owns trace contracts only.
 
 ## Prerequisites
 
@@ -34,7 +36,7 @@ This crate provides:
 
 ## Procedure
 
-1. Create typed trace events at the owning subsystem boundary.
+1. Create typed trace or audit records at the owning subsystem boundary.
 2. Attach correlation and principal binding evidence needed for post-fact review.
 3. Validate envelopes before emission.
 4. Use bounded query specifications when reading traces or durable audit records.
@@ -76,3 +78,5 @@ Before accepting source changes, use the broader workspace gates listed in `crat
 - [`src/events`](src/events)
 - [`src/events/durable_audit`](src/events/durable_audit)
 - [`src/query`](src/query)
+- [`../andromeda-observability`](../andromeda-observability)
+- [`../andromeda-audit`](../andromeda-audit)

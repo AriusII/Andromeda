@@ -20,24 +20,24 @@ use crate::page::PageId;
 use andromeda_core::AndromedaResult;
 
 mod concurrency;
-mod config;
 mod contract;
 mod cursor;
 mod engine;
 mod error;
-mod identity;
 mod leaf;
 
 mod node;
 pub(crate) mod node_format_v1;
 
+pub use andromeda_storage_index::{
+    BTREE_DURABLE_FORMAT_PROMOTED, BTreeConfig, ColumnId, IndexId, RowId,
+};
 pub(crate) use concurrency::non_root_min_keys;
 pub use concurrency::{
     BTreeConcurrencyPolicy, BTreeLatchLevel, BTreeLatchMode, BTreeLatchTarget,
     BTreeMvccInteraction, BTreeOperationKind, BTreePanicPoisonBehavior, BTreeRestartReason,
     BTreeScanConsistency,
 };
-pub use config::{BTREE_DURABLE_FORMAT_PROMOTED, BTreeConfig};
 pub use contract::{
     BTreeIndex, BTreeIndexMetadata, BTreeIndexNode, BTreeRangeCursor, BTreeStatistics,
 };
@@ -45,7 +45,6 @@ pub use contract::{
 pub use engine::{BTreeIndexEngine, BTreeNodeImpl, InMemoryBTreeIndexEngine, KeyValuePair};
 pub use error::BTreeError;
 pub(crate) use error::deferred_btree_result;
-pub use identity::{ColumnId, IndexId, RowId};
 pub use node_format_v1::{
     BTREE_NODE_V1_FORMAT_VERSION, BTREE_NODE_V1_HEADER_LEN, BTREE_NODE_V1_MAGIC, BTreeNodeHeaderV1,
     BTreeNodeKindV1, BTreeNodeV1,

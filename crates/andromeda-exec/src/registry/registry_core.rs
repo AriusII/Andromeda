@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, ProcedureId};
 
-use crate::{InvocationContext, LocalProcedure, ProcedureDispatchRequest, ProcedureDispatcher};
+use crate::{InvocationContext, LocalProcedure, ProcedureDispatchRequest};
 
 use super::{
     handler::ProcedureHandler,
@@ -91,11 +91,13 @@ impl ProcedureRegistry {
     }
 }
 
-impl ProcedureDispatcher for ProcedureRegistry {
+impl andromeda_procedure_runtime::ProcedureDispatcher for ProcedureRegistry {
+    type Procedure = LocalProcedure;
+
     fn dispatch_procedure(
         &self,
         request: ProcedureDispatchRequest,
-    ) -> AndromedaResult<LocalProcedure> {
+    ) -> AndromedaResult<Self::Procedure> {
         request.validate()?;
 
         let procedure_id = request.procedure.procedure_id;
