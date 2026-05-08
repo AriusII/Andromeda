@@ -6,3 +6,6 @@ rust-version = "1.95.0"
 publish = false
 
 [dependencies]
+andromeda-manifest = { path = "../andromeda-manifest" }
+andromeda-storage-page = { path = "../andromeda-storage-page" }
+andromeda-wal = { path = "../andromeda-wal" }

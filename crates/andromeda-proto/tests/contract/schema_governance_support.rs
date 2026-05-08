@@ -4,13 +4,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use andromeda_core::{
-    CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId, ScalarType, TypeDescriptor,
-};
 use andromeda_proto::{
     ManifestPolicyVersion, ProcedureManifest, ProtocolLayout, RequiredPermission,
     ResultCardinality, ResultStreamDescriptor, RowCountRequirement, descriptor_set_hash,
     frame_envelope_hash,
+};
+use andromeda_types::{
+    CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId, ScalarType, TypeDescriptor,
 };
 use prost_types::DescriptorProto;
 

@@ -1,4 +1,4 @@
-use andromeda_catalog::{ProcedureContractRef, QualifiedName};
+use andromeda_contract::{ProcedureContractRef, QualifiedName};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_types::ColumnDescriptor;
 use std::collections::BTreeSet;

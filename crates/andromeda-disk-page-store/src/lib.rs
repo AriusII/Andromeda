@@ -76,9 +76,6 @@ impl PageFlushDurabilityBoundary {
     }
 
     pub fn validate(self) -> Result<(), PageFlushDurabilityError> {
-        if self.page_lsn.is_zero() {
-            return Err(PageFlushDurabilityError::MissingPageLsn);
-        }
         if self.durable_lsn < self.page_lsn {
             return Err(PageFlushDurabilityError::WalFenceViolation {
                 page_lsn: self.page_lsn.get(),
@@ -114,6 +111,15 @@ mod tests {
                 page_lsn: 10,
                 durable_lsn: 9
             }
+        );
+    }
+
+    #[test]
+    fn page_flush_boundary_allows_zero_lsn_pages() {
+        assert!(
+            PageFlushDurabilityBoundary::new(Lsn::new(0), Lsn::new(0))
+                .validate()
+                .is_ok()
         );
     }
 }

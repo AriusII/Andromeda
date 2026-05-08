@@ -6,7 +6,7 @@ use super::{
     CertificateFingerprint, Permission, PermissionSet, PrincipalId, PrincipalRole, PrincipalStatus,
     SessionToken,
 };
-use crate::AndromedaError;
+use crate::{AndromedaError, AndromedaErrorKind};
 use std::time::SystemTime;
 
 /// Principal identity bound to certificate, role, and session token.
@@ -23,5 +23,5 @@ pub struct Principal {
 pub type UserPrincipal = Principal;
 
 fn security_error(message: &'static str) -> AndromedaError {
-    AndromedaError::security(message)
+    AndromedaError::new(AndromedaErrorKind::Security, message)
 }

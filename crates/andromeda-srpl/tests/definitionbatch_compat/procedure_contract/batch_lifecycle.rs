@@ -1,5 +1,5 @@
 use andromeda_catalog::{CatalogDefinition, DefinitionOperation};
-use andromeda_core::{CatalogVersion, ProcedureId};
+use andromeda_types::{CatalogVersion, ProcedureId};
 
 use crate::support::{catalog_definition_from_source, signature_only_source, test_batch};
 

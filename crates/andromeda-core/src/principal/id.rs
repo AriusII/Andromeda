@@ -32,7 +32,8 @@ impl PrincipalId {
         fingerprint: &CertificateFingerprint,
     ) -> crate::AndromedaResult<Self> {
         if fingerprint.as_str().trim().is_empty() {
-            return Err(crate::AndromedaError::security(
+            return Err(crate::AndromedaError::new(
+                crate::AndromedaErrorKind::Security,
                 "certificate fingerprint must not be empty",
             ));
         }
@@ -40,7 +41,10 @@ impl PrincipalId {
         let value = if fingerprint.is_valid_sha256() {
             let hex_part = &fingerprint.as_str()[..8];
             u64::from_str_radix(hex_part, 16).map_err(|_| {
-                crate::AndromedaError::security("certificate fingerprint hex parsing failed")
+                crate::AndromedaError::new(
+                    crate::AndromedaErrorKind::Security,
+                    "certificate fingerprint hex parsing failed",
+                )
             })?
         } else {
             fingerprint

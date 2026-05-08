@@ -1,4 +1,3 @@
-pub(crate) use andromeda_core::{RequestId, SessionId};
 pub(crate) use andromeda_observe::{
     CertificateIdentity, DurableAuditEventFamily, DurableAuditPrincipalBinding,
     DurableAuditPruneBlockReason, DurableAuditReplayBehavior, DurableAuditReplayLsnRange,
@@ -9,6 +8,7 @@ pub(crate) use andromeda_observe::{
     Permission, SecurityAuditOutcome, SecurityAuditTrace, SecurityPolicyVersionEvidence,
     SurfaceScope, TraceEvent, TraceId, UserPrincipal, UserPrincipalKind,
 };
+pub(crate) use andromeda_types::{RequestId, SessionId};
 pub(crate) use std::{
     fs,
     path::{Path, PathBuf},

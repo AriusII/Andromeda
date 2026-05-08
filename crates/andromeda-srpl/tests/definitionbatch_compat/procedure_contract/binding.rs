@@ -1,4 +1,4 @@
-use andromeda_core::{ScalarType, TypeDescriptor};
+use andromeda_types::{ScalarType, TypeDescriptor};
 
 use crate::support::{bound_definition, signature_only_source};
 

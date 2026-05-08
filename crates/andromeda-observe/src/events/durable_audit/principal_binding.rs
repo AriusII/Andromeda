@@ -1,4 +1,5 @@
-use andromeda_core::{AndromedaResult, RequestId, SessionId};
+use andromeda_error::AndromedaResult;
+use andromeda_types::{RequestId, SessionId};
 
 use crate::events::{
     Permission, SecurityPolicyVersionEvidence, SurfaceScope, contains_sensitive_marker,

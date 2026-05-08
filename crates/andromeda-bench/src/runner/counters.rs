@@ -27,7 +27,7 @@ pub(super) fn counters_from_usize(
 ) -> Result<Vec<BenchmarkWorkloadCounter>, BenchmarkError> {
     counters
         .iter()
-        .map(|(name, value, unit)| counter_from_usize(*name, *value, *unit))
+        .map(|(name, value, unit)| counter_from_usize(name, *value, unit))
         .collect()
 }
 

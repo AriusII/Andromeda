@@ -3,6 +3,7 @@ use crate::{
     BenchmarkRunRequest, RECOVERY_REPLAY_WAL_WORKLOAD_ID, SRPL_COMPILE_OPTIMIZE_WORKLOAD_ID,
     STORAGE_PAGE_STORE_WORKLOAD_ID, WAL_APPEND_FILE_WORKLOAD_ID,
 };
+use andromeda_bench_workload::{BTREE_LOOKUP_SMOKE_WORKLOAD_ID, BTREE_RANGE_SCAN_SMOKE_WORKLOAD_ID};
 
 use super::harnesses::{
     run_audit_append_file_sink_harness, run_btree_lookup_harness, run_btree_node_codec_harness,
@@ -17,8 +18,8 @@ pub(super) fn dispatch_latency_evidence(
     request: &BenchmarkRunRequest,
 ) -> Result<LatencyEvidence, BenchmarkError> {
     match workload_id {
-        "btree-lookup-smoke" => run_btree_lookup_harness(request),
-        "btree-range-scan-smoke" => run_btree_range_scan_harness(request),
+        BTREE_LOOKUP_SMOKE_WORKLOAD_ID => run_btree_lookup_harness(request),
+        BTREE_RANGE_SCAN_SMOKE_WORKLOAD_ID => run_btree_range_scan_harness(request),
         BTREE_NODE_CODEC_WORKLOAD_ID => run_btree_node_codec_harness(request),
         STORAGE_PAGE_STORE_WORKLOAD_ID => run_storage_page_store_harness(request),
         WAL_APPEND_FILE_WORKLOAD_ID => run_wal_append_file_harness(request),

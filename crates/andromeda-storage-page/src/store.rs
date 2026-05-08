@@ -83,12 +83,12 @@ impl InMemoryPageStore {
         let page_lsn = image
             .page_lsn()
             .ok_or_else(|| storage_error("page image must expose page LSN through its layout"))?;
-        if durable_lsn < page_lsn {
-            return Err(storage_error(
-                "WAL-before-page-flush precondition failed: durable WAL LSN is behind page LSN",
-            ));
-        }
-        Ok(())
+        super::validate_wal_durability_before_page_flush(page_lsn, durable_lsn)
+            .map_err(|_| {
+                storage_error(
+                    "WAL-before-page-flush precondition failed: durable WAL LSN is behind page LSN",
+                )
+            })
     }
 }
 

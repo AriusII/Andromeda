@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod admission;
-mod business;
+pub mod business;
 pub mod compat;
 pub mod dispatch;
 mod executor_bridge;
@@ -9,7 +9,7 @@ mod helpers;
 mod invocation;
 mod local;
 mod registry;
-mod result;
+pub mod result;
 mod result_metadata_extractor;
 mod result_stream;
 /// Compatibility facade for retry types.
@@ -17,7 +17,7 @@ mod result_stream;
 /// Kept as a public module so callers can continue using
 /// `andromeda_exec::retry` after ownership moved to `andromeda-retry`.
 pub mod retry;
-mod services;
+pub mod services;
 mod srpl_adapters;
 mod srpl_dispatch;
 mod surface_gate;
@@ -46,7 +46,6 @@ pub use business::{
     ObservedInventoryProductStockStore, QueryStockCommand, QueryStockEffect, ReleaseStockCommand,
     ReleaseStockEffect, ReservationResult, ReserveStockCommand, ReserveStockEffect,
 };
-pub use compat::{business, result, services};
 pub use dispatch::{
     LocalDispatchPlan, LocalDispatchReceipt, LocalDispatcher, LocalRollbackPlan,
     LocalRollbackReceipt, PermissionScopeValidation, PreTransactionDispatchEvidence,

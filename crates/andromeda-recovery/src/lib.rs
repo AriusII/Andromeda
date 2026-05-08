@@ -15,6 +15,8 @@ C5 invariants:
 - RAM, temporary storage, GPU output, and benchmark output are advisory only; they are not truth.
 "#]
 
+mod crash_recovery_matrix;
+
 /// Startup mode requested for recovery against durable evidence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StartupMode {

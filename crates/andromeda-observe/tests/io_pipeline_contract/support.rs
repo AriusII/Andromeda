@@ -1,7 +1,6 @@
-pub(crate) use andromeda_core::{
-    ContractHash, CpuProfile, GpuExecutionPolicy, GpuProfile, HardwareArchitecture,
-    HardwareProfile, PipelineClass, RamProfile, RamSectionBudget, RamSectionRole, ResourceBudget,
-    SessionId, TransactionId,
+pub(crate) use andromeda_hardware::{
+    CpuProfile, GpuExecutionPolicy, GpuProfile, HardwareArchitecture, HardwareProfile,
+    PipelineClass, RamProfile, RamSectionBudget, RamSectionRole, ResourceBudget,
 };
 pub(crate) use andromeda_observe::{
     CriticalDecisionKind, EventCorrelation, EventEnvelope, EventId, GpuPolicyDecisionTrace,
@@ -13,6 +12,7 @@ pub(crate) use andromeda_storage::{
     IoLatencyBudget, IoPathBudget, IoPathClass, IoThroughputBudget, PageSize, PipelineStage,
     PlacementDecision, StorageIoBudgetScope, StorageTier, StorageWorkloadClass,
 };
+pub(crate) use andromeda_types::{ContractHash, SessionId, TransactionId};
 
 pub(crate) fn workflow_policy() -> CoreIoPlacementPolicy {
     let cpu = CpuProfile::conservative();

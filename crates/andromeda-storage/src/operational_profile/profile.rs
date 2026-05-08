@@ -86,6 +86,9 @@ impl OperationalProfile {
             PipelineClass::WalAppend,
             PipelineClass::Rollback,
             PipelineClass::Recovery,
+            PipelineClass::MvccVisibility,
+            PipelineClass::CatalogPublication,
+            PipelineClass::SecurityCriticalPath,
         ] {
             if self
                 .hardware

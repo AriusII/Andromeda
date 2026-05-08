@@ -1,5 +1,5 @@
 use super::{CertificateFingerprint, SurfaceScope};
-use crate::{AndromedaError, AndromedaResult};
+use crate::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 /// Lifecycle status for an mTLS certificate identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -118,5 +118,5 @@ impl CertificateIdentity {
 }
 
 fn security_error(message: &'static str) -> AndromedaError {
-    AndromedaError::security(message)
+    AndromedaError::new(AndromedaErrorKind::Security, message)
 }

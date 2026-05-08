@@ -7,8 +7,8 @@ use andromeda_wal::Lsn;
 use crate::BenchmarkError;
 
 pub const BTREE_NODE_CODEC_WORKLOAD_ID: &str = "btree-node-codec-smoke";
-pub const BTREE_NODE_CODEC_HARNESS_SOURCE: &str = "bench-btree-node-v1-codec";
-pub const BTREE_NODE_CODEC_HARNESS_NAME: &str = "BenchmarkBTreeNode::encode+decode";
+pub const BTREE_NODE_CODEC_HARNESS_SOURCE: &str = "storage-btree-node-v1-codec";
+pub const BTREE_NODE_CODEC_HARNESS_NAME: &str = "BTreeNodeV1::encode+decode";
 
 const PAGE_SIZE: u16 = 16 * 1024;
 const FIRST_PAGE_ID: u64 = 10_000;

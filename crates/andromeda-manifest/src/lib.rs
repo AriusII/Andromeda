@@ -70,6 +70,48 @@ fn manifest_error(message: impl Into<String>) -> AndromedaError {
     AndromedaError::new(AndromedaErrorKind::Storage, message)
 }
 
+/// Validate that a manifest checkpoint can safely be persisted.
+pub fn validate_manifest_atomic_switch(
+    manifest_checkpoint_lsn: Lsn,
+    wal_durable_lsn: Lsn,
+    wal_checkpoint_lsn: Lsn,
+) -> AndromedaResult<()> {
+    if manifest_checkpoint_lsn.is_zero() && (!wal_checkpoint_lsn.is_zero() || !wal_durable_lsn.is_zero())
+    {
+        return Err(manifest_error(
+            "bootstrap manifest checkpoint conflicts with nonzero WAL evidence",
+        ));
+    }
+
+    if wal_checkpoint_lsn.get() > wal_durable_lsn.get() {
+        return Err(manifest_error(
+            "WAL checkpoint LSN exceeds durable WAL LSN; manifest switch is not safe",
+        ));
+    }
+
+    if manifest_checkpoint_lsn.get() > wal_checkpoint_lsn.get() {
+        return Err(manifest_error(
+            "manifest checkpoint LSN exceeds WAL checkpoint LSN; manifest switch is not safe",
+        ));
+    }
+
+    Ok(())
+}
+
+/// Validate that recovery can start from a given durable floor.
+pub fn validate_recovery_floor(
+    recovery_floor_lsn: Lsn,
+    required_wal_start_lsn: Lsn,
+) -> AndromedaResult<()> {
+    if recovery_floor_lsn.get() < required_wal_start_lsn.get() {
+        return Err(manifest_error(
+            "recovery floor LSN is before manifest required WAL start LSN",
+        ));
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -103,5 +145,14 @@ mod tests {
             invalid.validate().unwrap_err().kind(),
             AndromedaErrorKind::Storage
         );
+    }
+
+    #[test]
+    fn manifest_switch_and_recovery_fences_validate() {
+        assert!(validate_manifest_atomic_switch(Lsn::new(500), Lsn::new(600), Lsn::new(500)).is_ok());
+        assert!(validate_recovery_floor(Lsn::new(300), Lsn::new(300)).is_ok());
+
+        assert!(validate_manifest_atomic_switch(Lsn::new(600), Lsn::new(600), Lsn::new(500)).is_err());
+        assert!(validate_recovery_floor(Lsn::new(200), Lsn::new(300)).is_err());
     }
 }

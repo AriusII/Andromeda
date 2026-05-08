@@ -489,6 +489,11 @@ dependencies = [
 [[package]]
 name = "andromeda-recovery"
 version = "0.1.0"
+dependencies = [
+ "andromeda-manifest",
+ "andromeda-storage-page",
+ "andromeda-wal",
+]
 
 [[package]]
 name = "andromeda-regression"

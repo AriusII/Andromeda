@@ -1,5 +1,6 @@
 use super::*;
-use andromeda_core::{ScalarType, TypeDescriptor};
+use andromeda_error::AndromedaErrorKind;
+use andromeda_types::{ColumnDescriptor, ContractHash, ScalarType, TypeDescriptor};
 
 fn fields() -> Vec<ColumnDescriptor> {
     vec![

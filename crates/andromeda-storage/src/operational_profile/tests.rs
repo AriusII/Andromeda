@@ -74,6 +74,9 @@ fn analytics_gpu_profile_permits_only_off_critical_path_analytics_pipelines() {
         PipelineClass::WalAppend,
         PipelineClass::Rollback,
         PipelineClass::Recovery,
+        PipelineClass::MvccVisibility,
+        PipelineClass::CatalogPublication,
+        PipelineClass::SecurityCriticalPath,
         PipelineClass::ForegroundExecution,
         PipelineClass::BackgroundMaintenance,
     ] {

@@ -1,4 +1,3 @@
-use andromeda_core::{CatalogVersion, ContractHash, RequestId, SessionId, TransactionId};
 use andromeda_proto::{
     FrameEnvelope, PayloadKind, ProtocolVersion,
     generated::{
@@ -6,6 +5,7 @@ use andromeda_proto::{
         protocol::v1::{FrameEnvelope as ProtoFrameEnvelope, PayloadKind as ProtoPayloadKind},
     },
 };
+use andromeda_types::{CatalogVersion, ContractHash, RequestId, SessionId, TransactionId};
 
 use crate::proto_wire_fixtures::{
     generated_protocol_v1, proto_frame_envelope, round_trip_generated,

@@ -2,7 +2,6 @@
 
 //! Property-based checks for generated `FrameEnvelope` decoding and validation.
 
-use andromeda_core::ContractHash;
 use andromeda_proto::{
     PayloadKind, ProtocolVersion, decode_generated_message, encode_generated_message,
     generated::protocol::v1::{
@@ -11,6 +10,7 @@ use andromeda_proto::{
     },
     project_generated_frame_envelope,
 };
+use andromeda_types::ContractHash;
 use proptest::prelude::*;
 use std::panic;
 

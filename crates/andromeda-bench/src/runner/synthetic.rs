@@ -1,6 +1,10 @@
 use crate::{
     BenchmarkError, BenchmarkHardwareProfile, BenchmarkMeasurementMode, BenchmarkRunRequest,
 };
+use andromeda_bench_workload::{
+    PROTOCOL_SMOKE_CONTRACT_WORKLOAD_ID, VERTICAL_V0_SMOKE_WORKLOAD_ID,
+    WAL_APPEND_SMOKE_WORKLOAD_ID,
+};
 
 use super::counters::requested_sample_counters;
 use super::latency::LatencyEvidence;
@@ -17,9 +21,9 @@ pub(super) fn synthetic_latency_evidence(
         BenchmarkHardwareProfile::DeclaredLocal => 1,
     };
     let workload_base_latency_us = match workload_id {
-        "vertical-v0-smoke" => 2_500,
-        "protocol-smoke-contract" => 1_000,
-        "wal-append-smoke" => 1_500,
+        VERTICAL_V0_SMOKE_WORKLOAD_ID => 2_500,
+        PROTOCOL_SMOKE_CONTRACT_WORKLOAD_ID => 1_000,
+        WAL_APPEND_SMOKE_WORKLOAD_ID => 1_500,
         _ => return Err(BenchmarkError::UnknownWorkload),
     };
 

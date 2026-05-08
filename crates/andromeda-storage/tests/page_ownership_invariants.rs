@@ -5,8 +5,10 @@
 //! Future buffer-pool, heap, and index work must import the existing durable
 //! primitives from the storage crate root or the `layout::page` compatibility
 //! facade. They must not introduce mirror `PageId`, `PageSize`, `PageHeader`,
-//! `PageTrailer`, `PageLayoutContract`, or `Lsn` definitions. `Lsn` is owned by
-//! the pure WAL crate and re-exported by storage.
+//! `PageTrailer`, `PageLayoutContract`, or `Lsn` definitions. `PageId`,
+//! `PageSize`, `PageHeader`, `PageTrailer`, and `PageLayoutContract` are
+//! canonical in `andromeda-storage-page`; `Lsn` is owned by the pure WAL crate
+//! and re-exported by storage.
 
 use std::any::TypeId;
 use std::collections::BTreeMap;
@@ -26,27 +28,27 @@ const CANONICAL_OWNERSHIP: &[(&str, &str, &str)] = &[
     (
         "struct",
         "PageId",
-        "crates/andromeda-storage/src/page/identity.rs",
+        "crates/andromeda-storage-page/src/identity.rs",
     ),
     (
         "enum",
         "PageSize",
-        "crates/andromeda-storage/src/page/layout.rs",
+        "crates/andromeda-storage-page/src/layout.rs",
     ),
     (
         "struct",
         "PageHeader",
-        "crates/andromeda-storage/src/page/layout.rs",
+        "crates/andromeda-storage-page/src/layout.rs",
     ),
     (
         "struct",
         "PageTrailer",
-        "crates/andromeda-storage/src/page/layout.rs",
+        "crates/andromeda-storage-page/src/layout.rs",
     ),
     (
         "struct",
         "PageLayoutContract",
-        "crates/andromeda-storage/src/page/layout.rs",
+        "crates/andromeda-storage-page/src/layout.rs",
     ),
     ("struct", "Lsn", "crates/andromeda-wal/src/lsn.rs"),
 ];
@@ -54,11 +56,12 @@ const CANONICAL_OWNERSHIP: &[(&str, &str, &str)] = &[
 #[test]
 fn page_and_lsn_types_have_single_canonical_definition() {
     let storage_src = workspace_root().join("crates/andromeda-storage/src");
+    let storage_page_src = workspace_root().join("crates/andromeda-storage-page/src");
     let wal_src = workspace_root().join("crates/andromeda-wal/src");
     let workspace = workspace_root();
     let mut occurrences: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
 
-    for src_dir in [&storage_src, &wal_src] {
+    for src_dir in [&storage_src, &storage_page_src, &wal_src] {
         for source in collect_rs_files(src_dir) {
             let text = fs::read_to_string(&source).expect("read page/WAL source file");
             let stripped = strip_comments(&text);

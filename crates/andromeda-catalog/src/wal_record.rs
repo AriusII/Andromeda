@@ -16,10 +16,8 @@ pub use constants::{
 };
 pub use design::CatalogWalRecordDesign;
 
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogObjectId, CatalogVersion,
-    ContractHash,
-};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::{CatalogObjectId, CatalogVersion, ContractHash};
 
 use crate::DefinitionBatchId;
 

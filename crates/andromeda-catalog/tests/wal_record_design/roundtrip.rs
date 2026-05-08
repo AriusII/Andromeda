@@ -1,5 +1,5 @@
 use andromeda_catalog::{AlterCompatibilityPolicy, CatalogWalRecord};
-use andromeda_core::{CatalogVersion, ContractHash};
+use andromeda_types::{CatalogVersion, ContractHash};
 
 use super::fixtures::{
     alter_procedure_record, apply_catalog_version_record, assert_valid_record, checkpoint_record,

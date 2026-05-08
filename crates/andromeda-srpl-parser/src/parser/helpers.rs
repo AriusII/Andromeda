@@ -3,7 +3,7 @@
 //! These are lower-level parse helpers used by both the statement parsers
 //! and the type parsers. They do not depend on any statement-level logic.
 
-use andromeda_catalog::QualifiedName;
+use andromeda_contract::QualifiedName;
 
 use crate::{
     Cardinality, DiagnosticPhase, FieldAst, ResultStreamAst, SourceSpan, Spanned, SrplDiagnostic,

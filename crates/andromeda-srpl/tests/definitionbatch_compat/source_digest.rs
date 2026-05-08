@@ -1,8 +1,8 @@
 use andromeda_catalog::CatalogSystemStore;
-use andromeda_core::{CatalogVersion, ProcedureId};
 use andromeda_srpl::definition_batch_bridge::{
     SrplDefinitionBatchProcedureSource, dry_run_srpl_definition_batch_sources,
 };
+use andromeda_types::{CatalogVersion, ProcedureId};
 
 use crate::support::{
     TEST_DB_ID, TEST_NS_ID, dry_run_request, signature_only_source, test_metadata,
