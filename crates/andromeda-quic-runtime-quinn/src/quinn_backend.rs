@@ -16,6 +16,7 @@ mod client;
 mod connection_adapter;
 mod peer_certificate;
 mod server;
+mod surface;
 
 pub use admission::{
     QuinnAdmissionDecision, QuinnAdmissionPlanner, QuinnAdmissionRequest,
@@ -25,3 +26,4 @@ pub use admission::{
 pub use client::QuicClient;
 pub use connection_adapter::{BidiStream, QuinnConnectionAdapter, UniStream};
 pub use server::QuicServer;
+pub use surface::QuinnRuntimeSurface;

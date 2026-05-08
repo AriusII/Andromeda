@@ -17,7 +17,7 @@ pub use stream::{
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+    use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
     use andromeda_srpl_cardinality::Cardinality;
 
     fn require_error_kind(
@@ -85,8 +85,8 @@ mod tests {
 
     #[test]
     fn result_stream_completion_requires_terminal_state_and_durable_lsn() -> AndromedaResult<()> {
-        use andromeda_storage::Lsn;
-        use andromeda_tx::TransactionState;
+        use andromeda_transaction::TransactionState;
+        use andromeda_wal::Lsn;
 
         let metadata = ResultStreamMetadata {
             stream_id: 1,

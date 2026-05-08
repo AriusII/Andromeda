@@ -1,18 +1,13 @@
 use andromeda_core::AndromedaResult;
 
-use super::{BufferFrame, BufferFrameId, BufferFrameState, BufferPoolError};
+use super::error::map_core_error;
+use super::{BufferFrame, BufferFrameId};
 
-/// Deterministic Clock eviction policy over transient buffer-pool frames.
-///
-/// The policy owns only the transient scan cursor. Durable page identity and
-/// layout remain in the resident [`BufferFrame`] image, while pin, dirty,
-/// lifecycle state, and Clock usage are interpreted as eviction metadata.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct ClockEvictionPolicy {
-    cursor: usize,
+    core: andromeda_buffer_pool::ClockEvictionPolicy,
 }
 
-/// Stable victim descriptor for future buffer-pool integration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ClockEvictionCandidate {
     frame_index: usize,
@@ -21,55 +16,24 @@ pub struct ClockEvictionCandidate {
 
 impl ClockEvictionPolicy {
     pub const fn new() -> Self {
-        Self { cursor: 0 }
+        Self {
+            core: andromeda_buffer_pool::ClockEvictionPolicy::new(),
+        }
     }
 
     pub const fn cursor(&self) -> usize {
-        self.cursor
+        self.core.cursor()
     }
 
-    /// Select a clean, unpinned, resident frame using Clock second-chance rules.
-    ///
-    /// Pinned frames are never evicted. Dirty, free, flushing, and already
-    /// evicting frames are ineligible under the current [`BufferFrame`] contract:
-    /// [`BufferFrame::begin_eviction`] accepts only clean unpinned resident
-    /// frames. Clean unpinned frames with a set Clock usage bit receive exactly
-    /// one second chance per scan and have that bit cleared deterministically.
     pub fn select_victim(
         &mut self,
         frames: &mut [BufferFrame],
     ) -> AndromedaResult<ClockEvictionCandidate> {
-        if frames.is_empty() {
-            return Err(BufferPoolError::NoEvictionFrames.into_andromeda_error());
-        }
-
-        let frame_count = frames.len();
-        self.cursor %= frame_count;
-
-        for _ in 0..frame_count.saturating_mul(2) {
-            let frame_index = self.cursor;
-            self.advance(frame_count);
-
-            let frame = &mut frames[frame_index];
-            if !is_clean_unpinned_resident(frame) {
-                continue;
-            }
-
-            if frame.consume_clock_usage()? {
-                continue;
-            }
-
-            return Ok(ClockEvictionCandidate {
-                frame_index,
-                frame_id: frame.id(),
-            });
-        }
-
-        Err(classify_exhaustion(frames).into_andromeda_error())
-    }
-
-    fn advance(&mut self, frame_count: usize) {
-        self.cursor = (self.cursor + 1) % frame_count;
+        let candidate = self.core.select_victim(frames).map_err(map_core_error)?;
+        Ok(ClockEvictionCandidate {
+            frame_index: candidate.frame_index(),
+            frame_id: BufferFrameId::from_core(candidate.frame_id()),
+        })
     }
 }
 
@@ -80,21 +44,6 @@ impl ClockEvictionCandidate {
 
     pub const fn frame_id(self) -> BufferFrameId {
         self.frame_id
-    }
-}
-
-fn is_clean_unpinned_resident(frame: &BufferFrame) -> bool {
-    frame.state() == BufferFrameState::Resident && frame.pin_count() == 0 && !frame.is_dirty()
-}
-
-fn classify_exhaustion(frames: &[BufferFrame]) -> BufferPoolError {
-    if frames
-        .iter()
-        .all(|frame| frame.state() == BufferFrameState::Resident && frame.pin_count() > 0)
-    {
-        BufferPoolError::AllFramesPinned
-    } else {
-        BufferPoolError::NoEvictableFrame
     }
 }
 

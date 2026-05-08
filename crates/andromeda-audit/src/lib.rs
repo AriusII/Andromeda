@@ -13,6 +13,7 @@ mod core;
 mod hadr;
 mod helpers;
 mod identity;
+mod permission_audit_emitter;
 mod scope;
 mod security;
 
@@ -30,6 +31,14 @@ pub use hadr::{
 };
 pub use identity::{
     CertificateIdentity, SecurityPolicyVersionEvidence, UserPrincipal, UserPrincipalKind,
+};
+pub use permission_audit_emitter::{
+    AuditEmissionEventFamily, AuditEmissionEvidence, AuditEmissionKind, AuditEmissionOutcome,
+    AuditEmissionPolicy, AuditEmissionReplayBehavior, AuditEmissionRetentionBoundary,
+    AuditSinkAvailability, AuditSinkDurabilityEvidence, AuditSinkDurabilityReport,
+    DenialAuditReason, NoOpPermissionAuditEmitter, PermissionAuditDecisionTrace,
+    PermissionAuditEmitter, PermissionAuditEvent, PermissionAuditEvidence, PermissionDecisionAudit,
+    audit_emission_error, audit_text_contains_sensitive_marker, redact_audit_reason,
 };
 pub use scope::{AdminOperation, Permission, PermissionFamily, SurfaceScope};
 pub use security::{SecurityAuditDenialReason, SecurityAuditOutcome, SecurityAuditTrace};

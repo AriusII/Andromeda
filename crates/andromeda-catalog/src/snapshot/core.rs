@@ -5,6 +5,7 @@
 
 use std::collections::BTreeMap;
 
+use andromeda_catalog_store::CatalogSnapshotPublicationGate;
 use andromeda_types::{CatalogObjectId, CatalogVersion, DatabaseId, NamespaceId, ProcedureId};
 
 use crate::{CatalogDefinition, CatalogPublicationReceipt, ProcedureContract, QualifiedName};
@@ -55,6 +56,14 @@ pub struct CatalogSnapshot {
 }
 
 impl CatalogSnapshot {
+    fn publication_gate(&self) -> CatalogSnapshotPublicationGate<CatalogPublicationReceipt> {
+        CatalogSnapshotPublicationGate {
+            version: self.version,
+            publication: self.publication,
+            last_durable_version: self.last_durable_version,
+        }
+    }
+
     /// Constructs an empty snapshot at the given version with no objects and
     /// no durable publication.
     pub fn empty(
@@ -83,7 +92,7 @@ impl CatalogSnapshot {
     /// durable evidence. This is the externally visible catalog version
     /// observed by clients; in-memory-only mutations do not advance it.
     pub fn visible_version(&self) -> CatalogVersion {
-        self.last_durable_version
+        self.publication_gate().visible_version()
     }
 
     /// Returns `true` only when the *currently applied* snapshot state has
@@ -92,8 +101,7 @@ impl CatalogSnapshot {
     /// readers must use before treating snapshot contents as externally
     /// publishable truth.
     pub fn is_durably_published(&self) -> bool {
-        matches!(self.publication, CatalogSnapshotPublication::Durable(_))
-            && self.version == self.last_durable_version
+        self.publication_gate().is_durably_published()
     }
 
     /// Returns the publication receipt covering the *currently applied*
@@ -105,15 +113,7 @@ impl CatalogSnapshot {
     /// Doctrine: a receipt witnesses durable evidence for *exactly* one
     /// catalog version; it must never be returned alongside staged state.
     pub fn visible_publication_receipt(&self) -> Option<CatalogPublicationReceipt> {
-        match self.publication {
-            CatalogSnapshotPublication::Durable(receipt)
-                if self.version == self.last_durable_version
-                    && receipt.next_version == self.last_durable_version =>
-            {
-                Some(receipt)
-            }
-            _ => None,
-        }
+        self.publication_gate().visible_publication_receipt()
     }
 
     /// If the snapshot has staged in-memory mutation state ahead of the
@@ -124,11 +124,7 @@ impl CatalogSnapshot {
     /// observe the staging gap (never as a substitute for
     /// [`Self::visible_version`]).
     pub fn staged_in_memory_version(&self) -> Option<CatalogVersion> {
-        if self.version.get() > self.last_durable_version.get() {
-            Some(self.version)
-        } else {
-            None
-        }
+        self.publication_gate().staged_in_memory_version()
     }
 
     /// Recovery-time entry point: mark a catalog version as durably

@@ -1,16 +1,18 @@
 use std::collections::HashSet;
 
+use super::HadrLogicalStreamId;
+
 /// Orphan stream cleanup handler.
 ///
 /// Detects and cleans up streams that become orphaned due to connection loss,
 /// timeout, or explicit disconnection. Cleanup is deterministic and idempotent.
 #[derive(Debug)]
 pub struct HadrStreamCleanup {
-    /// Stream IDs to be cleaned up.
-    orphan_streams: HashSet<u64>,
+    /// Logical stream IDs to be cleaned up.
+    orphan_streams: HashSet<HadrLogicalStreamId>,
 
-    /// Stream IDs successfully cleaned (freed).
-    cleaned_streams: HashSet<u64>,
+    /// Logical stream IDs successfully cleaned (freed).
+    cleaned_streams: HashSet<HadrLogicalStreamId>,
 }
 
 impl HadrStreamCleanup {
@@ -26,13 +28,18 @@ impl HadrStreamCleanup {
     ///
     /// The stream will be cleaned up (freed) when `execute_cleanup()` is called.
     pub fn mark_orphan(&mut self, stream_id: u64) {
+        self.mark_logical_orphan(HadrLogicalStreamId::new(stream_id));
+    }
+
+    /// Marks a logical stream as orphaned.
+    pub fn mark_logical_orphan(&mut self, stream_id: HadrLogicalStreamId) {
         self.orphan_streams.insert(stream_id);
     }
 
     /// Marks multiple streams as orphaned (e.g., all streams for a replica).
     pub fn mark_orphans(&mut self, stream_ids: &[u64]) {
         for &stream_id in stream_ids {
-            self.orphan_streams.insert(stream_id);
+            self.mark_orphan(stream_id);
         }
     }
 
@@ -42,8 +49,8 @@ impl HadrStreamCleanup {
     /// Returns the set of successfully cleaned stream IDs.
     pub fn execute_cleanup(&mut self) -> HashSet<u64> {
         let cleaned = self.orphan_streams.drain().collect::<HashSet<_>>();
-        self.cleaned_streams.extend(cleaned.iter());
-        cleaned
+        self.cleaned_streams.extend(cleaned.iter().copied());
+        cleaned.into_iter().map(HadrLogicalStreamId::get).collect()
     }
 
     /// Returns the count of orphaned (pending cleanup) streams.

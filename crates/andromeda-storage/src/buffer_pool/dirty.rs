@@ -1,139 +1,88 @@
-use std::collections::BTreeMap;
-
 use andromeda_core::AndromedaResult;
 
 use crate::{Lsn, PageId};
 
-use super::BufferPoolError;
+use super::error::map_core_error;
 
-/// Deterministic dirty-page tracker for transient buffer-pool metadata.
-///
-/// The tracker indexes dirty residency state by durable [`PageId`] but does not
-/// own page images, page layout, WAL contents, or flush IO. It records the first
-/// dirty LSN for deterministic scheduling and the latest dirty LSN for the
-/// WAL-before-page-flush durability fence.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct DirtyTracker {
-    dirty_pages: BTreeMap<PageId, DirtyEntry>,
+    core: andromeda_buffer_pool::DirtyTracker,
 }
 
-/// Dirty metadata associated with one resident page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DirtyEntry {
-    page_id: PageId,
-    first_dirty_lsn: Lsn,
-    last_dirty_lsn: Lsn,
+    core: andromeda_buffer_pool::DirtyEntry,
 }
 
-/// Stable flush candidate ordered by first dirty LSN and then page id.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DirtyFlushCandidate {
-    page_id: PageId,
-    first_dirty_lsn: Lsn,
-    last_dirty_lsn: Lsn,
+    core: andromeda_buffer_pool::DirtyFlushCandidate,
 }
 
 impl DirtyTracker {
     pub const fn new() -> Self {
         Self {
-            dirty_pages: BTreeMap::new(),
+            core: andromeda_buffer_pool::DirtyTracker::new(),
         }
     }
 
     pub fn len(&self) -> usize {
-        self.dirty_pages.len()
+        self.core.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.dirty_pages.is_empty()
+        self.core.is_empty()
     }
 
-    /// Mark a page dirty while preserving the earliest and latest dirty LSNs
-    /// observed for that page.
-    ///
-    /// Repeated marks for the same page update the existing entry in place, so
-    /// the tracker never creates duplicate dirty records for a page.
     pub fn mark_dirty(&mut self, page_id: PageId, dirty_lsn: Lsn) -> AndromedaResult<()> {
-        validate_page_id(page_id)?;
-        validate_dirty_lsn(dirty_lsn)?;
-
-        self.dirty_pages
-            .entry(page_id)
-            .and_modify(|entry| {
-                if dirty_lsn < entry.first_dirty_lsn {
-                    entry.first_dirty_lsn = dirty_lsn;
-                }
-                if dirty_lsn > entry.last_dirty_lsn {
-                    entry.last_dirty_lsn = dirty_lsn;
-                }
-            })
-            .or_insert(DirtyEntry {
-                page_id,
-                first_dirty_lsn: dirty_lsn,
-                last_dirty_lsn: dirty_lsn,
-            });
-
-        Ok(())
+        self.core
+            .mark_dirty(page_id.get(), dirty_lsn)
+            .map_err(map_core_error)
     }
 
-    /// Remove a page from the dirty set after a successful flush.
-    ///
-    /// Returns `true` when an entry existed and was removed.
     pub fn mark_clean(&mut self, page_id: PageId) -> AndromedaResult<bool> {
-        validate_page_id(page_id)?;
-        Ok(self.dirty_pages.remove(&page_id).is_some())
+        self.core.mark_clean(page_id.get()).map_err(map_core_error)
     }
 
     pub fn mark_clean_after_flush(&mut self, page_id: PageId) -> AndromedaResult<bool> {
-        self.mark_clean(page_id)
+        self.core
+            .mark_clean_after_flush(page_id.get())
+            .map_err(map_core_error)
     }
 
     pub fn contains(&self, page_id: PageId) -> AndromedaResult<bool> {
-        validate_page_id(page_id)?;
-        Ok(self.dirty_pages.contains_key(&page_id))
+        self.core.contains(page_id.get()).map_err(map_core_error)
     }
 
     pub fn is_dirty(&self, page_id: PageId) -> AndromedaResult<bool> {
-        self.contains(page_id)
+        self.core.is_dirty(page_id.get()).map_err(map_core_error)
     }
 
     pub fn first_dirty_lsn(&self, page_id: PageId) -> AndromedaResult<Option<Lsn>> {
-        validate_page_id(page_id)?;
-        Ok(self
-            .dirty_pages
-            .get(&page_id)
-            .copied()
-            .map(DirtyEntry::first_dirty_lsn))
+        self.core
+            .first_dirty_lsn(page_id.get())
+            .map_err(map_core_error)
     }
 
     pub fn last_dirty_lsn(&self, page_id: PageId) -> AndromedaResult<Option<Lsn>> {
-        validate_page_id(page_id)?;
-        Ok(self
-            .dirty_pages
-            .get(&page_id)
-            .copied()
-            .map(DirtyEntry::last_dirty_lsn))
+        self.core
+            .last_dirty_lsn(page_id.get())
+            .map_err(map_core_error)
     }
 
     pub fn dirty_entry(&self, page_id: PageId) -> AndromedaResult<Option<DirtyEntry>> {
-        validate_page_id(page_id)?;
-        Ok(self.dirty_pages.get(&page_id).copied())
+        self.core
+            .dirty_entry(page_id.get())
+            .map(|entry| entry.map(DirtyEntry::from_core))
+            .map_err(map_core_error)
     }
 
-    /// Produce deterministic flush candidates ordered by oldest first dirty LSN,
-    /// with [`PageId`] as the stable tie-breaker.
     pub fn flush_candidates(&self) -> Vec<DirtyFlushCandidate> {
-        let mut candidates: Vec<_> = self
-            .dirty_pages
-            .values()
-            .map(|entry| DirtyFlushCandidate {
-                page_id: entry.page_id,
-                first_dirty_lsn: entry.first_dirty_lsn,
-                last_dirty_lsn: entry.last_dirty_lsn,
-            })
-            .collect();
-        candidates.sort_by_key(|candidate| (candidate.first_dirty_lsn, candidate.page_id));
-        candidates
+        self.core
+            .flush_candidates()
+            .into_iter()
+            .map(DirtyFlushCandidate::from_core)
+            .collect()
     }
 
     pub fn ordered_flush_candidates(&self) -> Vec<DirtyFlushCandidate> {
@@ -142,45 +91,39 @@ impl DirtyTracker {
 }
 
 impl DirtyEntry {
+    const fn from_core(core: andromeda_buffer_pool::DirtyEntry) -> Self {
+        Self { core }
+    }
+
     pub const fn page_id(self) -> PageId {
-        self.page_id
+        PageId::new(self.core.page_id())
     }
 
     pub const fn first_dirty_lsn(self) -> Lsn {
-        self.first_dirty_lsn
+        self.core.first_dirty_lsn()
     }
 
     pub const fn last_dirty_lsn(self) -> Lsn {
-        self.last_dirty_lsn
+        self.core.last_dirty_lsn()
     }
 }
 
 impl DirtyFlushCandidate {
+    pub(crate) const fn from_core(core: andromeda_buffer_pool::DirtyFlushCandidate) -> Self {
+        Self { core }
+    }
+
     pub const fn page_id(self) -> PageId {
-        self.page_id
+        PageId::new(self.core.page_id())
     }
 
     pub const fn first_dirty_lsn(self) -> Lsn {
-        self.first_dirty_lsn
+        self.core.first_dirty_lsn()
     }
 
     pub const fn last_dirty_lsn(self) -> Lsn {
-        self.last_dirty_lsn
+        self.core.last_dirty_lsn()
     }
-}
-
-fn validate_page_id(page_id: PageId) -> AndromedaResult<()> {
-    if page_id.is_zero() {
-        return Err(BufferPoolError::InvalidPageId.into_andromeda_error());
-    }
-    Ok(())
-}
-
-fn validate_dirty_lsn(dirty_lsn: Lsn) -> AndromedaResult<()> {
-    if dirty_lsn.is_zero() {
-        return Err(BufferPoolError::InvalidDirtyLsn.into_andromeda_error());
-    }
-    Ok(())
 }
 
 #[cfg(test)]

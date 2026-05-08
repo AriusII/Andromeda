@@ -6,7 +6,6 @@
 //! catalog objects, produce executable plans, execute runtime behavior, or
 //! depend on catalog storage.
 
-mod lexer;
 mod parser;
 
 const MAX_SRPL_BODY_OPERATIONS: usize = 16;
@@ -21,6 +20,6 @@ pub use andromeda_srpl_cardinality::Cardinality;
 pub use andromeda_srpl_diagnostics::{
     DiagnosticPhase, ForbiddenConstruct, ForbiddenConstructHit, SrplDiagnostic,
 };
-pub use lexer::{Token, TokenKind, lex};
+pub use andromeda_srpl_lexer::{Token, TokenKind, lex};
 pub use parser::parse_procedure_signature;
 pub use source_location::{SourceSpan, SrplSource};

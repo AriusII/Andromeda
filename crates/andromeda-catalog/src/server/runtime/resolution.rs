@@ -1,94 +1,58 @@
+use andromeda_catalog_store::ProcedureManifest;
 use andromeda_error::{AndromedaError, AndromedaErrorKind};
-use andromeda_types::{CatalogVersion, ContractHash};
-
-use crate::ProcedureManifest;
+use andromeda_types::CatalogVersion;
 
 use super::status::CatalogManifestResolutionStatus;
 
-/// Failure details returned by the runtime resolver before projection to the
-/// governed proto catalog status model.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CatalogManifestResolutionFailure {
-    NotFound,
-    ContractHashMismatch {
-        expected: ContractHash,
-        actual: ContractHash,
-    },
-    CatalogVersionMismatch {
-        expected: CatalogVersion,
-        actual: CatalogVersion,
-    },
-    NotSourceGeneratorReady,
-    PermissionDenied,
-    CatalogNotReady,
-    Malformed(String),
-    Internal(String),
+pub use andromeda_catalog_store::CatalogManifestResolutionFailure;
+
+/// Resolver outcome with catalog-owned proto status mapping.
+pub type CatalogManifestResolution =
+    andromeda_catalog_store::CatalogManifestResolution<CatalogManifestResolutionStatus>;
+
+pub(super) fn resolved(
+    manifest: ProcedureManifest,
+    current_catalog_version: CatalogVersion,
+) -> CatalogManifestResolution {
+    CatalogManifestResolution::resolved(
+        manifest,
+        current_catalog_version,
+        CatalogManifestResolutionStatus::Resolved,
+    )
 }
 
-impl CatalogManifestResolutionFailure {
-    pub fn status(&self) -> CatalogManifestResolutionStatus {
-        match self {
-            Self::NotFound => CatalogManifestResolutionStatus::NotFound,
-            Self::ContractHashMismatch { .. } => {
-                CatalogManifestResolutionStatus::ContractHashMismatch
-            }
-            Self::CatalogVersionMismatch { .. } => {
-                CatalogManifestResolutionStatus::CatalogVersionMismatch
-            }
-            Self::NotSourceGeneratorReady => {
-                CatalogManifestResolutionStatus::NotSourceGeneratorReady
-            }
-            Self::PermissionDenied => CatalogManifestResolutionStatus::PermissionDenied,
-            Self::CatalogNotReady => CatalogManifestResolutionStatus::CatalogNotReady,
-            Self::Malformed(_) => CatalogManifestResolutionStatus::Malformed,
-            Self::Internal(_) => CatalogManifestResolutionStatus::Internal,
-        }
-    }
-
-    pub fn diagnostic_code(&self) -> &'static str {
-        self.status().diagnostic_code()
-    }
+pub(super) fn failed(
+    failure: CatalogManifestResolutionFailure,
+    current_catalog_version: CatalogVersion,
+) -> CatalogManifestResolution {
+    let status = status_from_failure(&failure);
+    CatalogManifestResolution::failed(failure, current_catalog_version, status)
 }
 
-/// Resolver outcome with proto catalog status mapping.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogManifestResolution {
-    pub status: CatalogManifestResolutionStatus,
-    pub manifest: Option<ProcedureManifest>,
-    pub current_catalog_version: CatalogVersion,
-    pub diagnostic_code: Option<&'static str>,
-    pub failure: Option<CatalogManifestResolutionFailure>,
-}
-
-impl CatalogManifestResolution {
-    pub(super) fn resolved(
-        manifest: ProcedureManifest,
-        current_catalog_version: CatalogVersion,
-    ) -> Self {
-        Self {
-            status: CatalogManifestResolutionStatus::Resolved,
-            manifest: Some(manifest),
-            current_catalog_version,
-            diagnostic_code: None,
-            failure: None,
+fn status_from_failure(
+    failure: &CatalogManifestResolutionFailure,
+) -> CatalogManifestResolutionStatus {
+    match failure {
+        CatalogManifestResolutionFailure::NotFound => CatalogManifestResolutionStatus::NotFound,
+        CatalogManifestResolutionFailure::ContractHashMismatch { .. } => {
+            CatalogManifestResolutionStatus::ContractHashMismatch
         }
-    }
-
-    pub(super) fn failed(
-        failure: CatalogManifestResolutionFailure,
-        current_catalog_version: CatalogVersion,
-    ) -> Self {
-        Self {
-            status: failure.status(),
-            manifest: None,
-            current_catalog_version,
-            diagnostic_code: Some(failure.diagnostic_code()),
-            failure: Some(failure),
+        CatalogManifestResolutionFailure::CatalogVersionMismatch { .. } => {
+            CatalogManifestResolutionStatus::CatalogVersionMismatch
         }
-    }
-
-    pub fn is_resolved(&self) -> bool {
-        self.status == CatalogManifestResolutionStatus::Resolved
+        CatalogManifestResolutionFailure::NotSourceGeneratorReady => {
+            CatalogManifestResolutionStatus::NotSourceGeneratorReady
+        }
+        CatalogManifestResolutionFailure::PermissionDenied => {
+            CatalogManifestResolutionStatus::PermissionDenied
+        }
+        CatalogManifestResolutionFailure::CatalogNotReady => {
+            CatalogManifestResolutionStatus::CatalogNotReady
+        }
+        CatalogManifestResolutionFailure::Malformed(_) => {
+            CatalogManifestResolutionStatus::Malformed
+        }
+        CatalogManifestResolutionFailure::Internal(_) => CatalogManifestResolutionStatus::Internal,
     }
 }
 

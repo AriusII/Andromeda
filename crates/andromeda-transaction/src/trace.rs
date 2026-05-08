@@ -1,4 +1,4 @@
-use andromeda_core::{InvocationId, RequestId, SessionId, TransactionId};
+use andromeda_core::{EngineTimestamp, InvocationId, RequestId, SessionId, TransactionId};
 use andromeda_observe::{
     TraceId, TransactionPhaseCode, TransactionTransitionTrace, TransitionReasonCode,
 };
@@ -103,6 +103,39 @@ impl TransactionStateMachine {
     }
 }
 
+/// Trace evidence for terminal lock cleanup (`release_all`).
+///
+/// Emitted when a transaction's locks are cleaned up after durable terminal
+/// evidence (commit or rollback). Captures the cleanup summary and final state.
+#[derive(Clone, Debug)]
+pub struct LockReleaseAllTrace {
+    /// Transaction ID being cleaned up.
+    pub tx_id: TransactionId,
+    /// Number of resources from which locks were released.
+    pub resources_released: usize,
+    /// Final transaction state (`Committed` or `RolledBack`).
+    pub terminal_state: TransactionState,
+    /// Timestamp when cleanup was recorded.
+    pub timestamp: EngineTimestamp,
+}
+
+impl LockReleaseAllTrace {
+    /// Construct a release-all trace.
+    pub fn new(
+        tx_id: TransactionId,
+        resources_released: usize,
+        terminal_state: TransactionState,
+        timestamp: EngineTimestamp,
+    ) -> Self {
+        Self {
+            tx_id,
+            resources_released,
+            terminal_state,
+            timestamp,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -118,5 +151,17 @@ mod tests {
         assert_eq!(trace.transaction_id, TransactionId::new(6));
         assert_eq!(trace.state, TransactionState::Created);
         assert!(!trace.is_terminal());
+    }
+
+    #[test]
+    fn lock_release_all_trace_captures_cleanup_summary() {
+        let tx_id = TransactionId::new(1);
+        let ts = EngineTimestamp::from_unix_millis(1000);
+        let trace = LockReleaseAllTrace::new(tx_id, 3, TransactionState::Committed, ts);
+
+        assert_eq!(trace.tx_id, tx_id);
+        assert_eq!(trace.resources_released, 3);
+        assert_eq!(trace.terminal_state, TransactionState::Committed);
+        assert_eq!(trace.timestamp, ts);
     }
 }

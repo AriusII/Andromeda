@@ -1,4 +1,4 @@
-use super::{ColumnId, IndexId, PageId, RowId};
+use super::{BTreeStatistics, ColumnId, IndexId, PageId, RowId};
 use andromeda_core::AndromedaResult;
 
 /// B-Tree index trait: key-value lookup, mutation, and range scan operations.
@@ -38,18 +38,6 @@ pub trait BTreeIndex: Send + Sync {
 
     /// Get index statistics for monitoring and optimization.
     fn statistics(&self) -> BTreeStatistics;
-}
-
-/// B-Tree index statistics for monitoring and planning.
-#[derive(Debug, Clone)]
-pub struct BTreeStatistics {
-    pub tree_height: u32,
-    pub internal_node_count: u64,
-    pub leaf_node_count: u64,
-    pub total_key_count: u64,
-    pub avg_keys_per_leaf: f64,
-    pub min_occupancy: f64,
-    pub max_occupancy: f64,
 }
 
 /// Page-backed B-Tree node shape.

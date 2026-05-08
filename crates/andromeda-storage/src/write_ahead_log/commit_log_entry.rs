@@ -4,4 +4,4 @@
 //! `andromeda_wal::write_ahead_log::commit_log_entry`. Storage keeps this shim
 //! so existing integration imports continue to resolve.
 
-pub use andromeda_wal::write_ahead_log::commit_log_entry::{CommitLog, CommitLogEntry, Timestamp};
+pub use andromeda_wal::{CommitLog, CommitLogEntry, Timestamp};

@@ -1,7 +1,7 @@
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 use andromeda_srpl_cardinality::Cardinality;
-use andromeda_storage::Lsn;
-use andromeda_tx::TransactionState;
+use andromeda_transaction::TransactionState;
+use andromeda_wal::Lsn;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ResultStreamMetadata {

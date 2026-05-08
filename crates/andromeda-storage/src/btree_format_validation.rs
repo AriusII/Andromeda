@@ -19,6 +19,7 @@ mod operation;
 mod validation;
 mod validator;
 
+pub use andromeda_storage_index::BTreeFormatIdentityError;
 pub use identity::BTreeKeyFormatIdentity;
 pub use operation::BTreeOperationType;
 pub use validator::KeyV1FormatValidator;

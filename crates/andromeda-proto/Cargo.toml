@@ -10,6 +10,7 @@ andromeda-digest.workspace = true
 andromeda-error.workspace = true
 andromeda-procedure-contract.workspace = true
 andromeda-proto-wire.workspace = true
+andromeda-rpc-protocol.workspace = true
 andromeda-structured-object.workspace = true
 andromeda-types.workspace = true
 prost = "0.14.3"

@@ -21,6 +21,12 @@ impl CatalogSubscriberId {
     }
 }
 
+impl andromeda_catalog_recovery::CatalogSubscriberIdentity for CatalogSubscriberId {
+    fn catalog_subscriber_id(&self) -> &str {
+        self.as_str()
+    }
+}
+
 /// Subscriber registration tracked by the publication/subscription runtime.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CatalogSubscriberRegistration {

@@ -4,7 +4,7 @@
 //! Keep this module as a stable storage import path until downstream callers
 //! migrate to the WAL crate directly.
 
-pub use andromeda_wal::write_ahead_log::record::{
+pub use andromeda_wal::{
     WalRecord, WalRecordHeader, WalRecordKind, wal_record_checksum, wal_record_kind_from_tag,
     wal_record_kind_tag,
 };

@@ -8,7 +8,7 @@ use super::{
     CatalogPublicationSubscriptionReplayRecord, CatalogPublicationSubscriptionReplaySummary,
     CatalogSubscriberId, CatalogSubscriberKind, CatalogSubscriberRegistration,
     CatalogSubscriptionAcknowledgement, CatalogVisibleChangeAuditEvidence,
-    catalog_publication_error, replay_publication_subscription_changes,
+    catalog_publication_error, replay_publication_subscription_changes, require_equal,
     validate_subscription_acknowledgement_for_publication,
     validate_visible_change_audit_for_publication,
 };
@@ -379,13 +379,16 @@ impl CatalogPublicationSubscriberRegistry {
             }
         }
 
-        if progress.replayed_record_count != progress.expected_record_count
-            || progress.acknowledged_version != progress.expected_version
-        {
-            return catalog_publication_error(
-                "catalog subscription acknowledgement progress must match expected version and record count",
-            );
-        }
+        require_equal(
+            &progress.replayed_record_count,
+            &progress.expected_record_count,
+            "catalog subscription acknowledgement progress must match expected record count",
+        )?;
+        require_equal(
+            &progress.acknowledged_version,
+            &progress.expected_version,
+            "catalog subscription acknowledgement progress must match expected version",
+        )?;
 
         self.records.push(
             CatalogPublicationSubscriptionReplayRecord::SubscriptionAcknowledgement(

@@ -3,7 +3,8 @@ use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use super::kind::HadrStreamKind;
 use super::{
     HADR_STREAM_STRIDE, HADR_STREAMS_PER_REPLICA, HEARTBEAT_MAX_REPLICAS, HEARTBEAT_STREAM_MIN,
-    VOTE_MAX_REPLICAS, VOTE_STREAM_MIN, WAL_SHIPPING_MAX_REPLICAS, WAL_SHIPPING_STREAM_MIN,
+    HadrLogicalStreamId, VOTE_MAX_REPLICAS, VOTE_STREAM_MIN, WAL_SHIPPING_MAX_REPLICAS,
+    WAL_SHIPPING_STREAM_MIN,
 };
 
 /// Stream allocation information.
@@ -15,14 +16,14 @@ pub struct StreamAllocation {
     /// Replica index in the topology (0-based).
     replica_index: u64,
 
-    /// Heartbeat stream ID (bidirectional, opened by primary).
-    heartbeat_stream_id: u64,
+    /// Heartbeat logical stream ID.
+    heartbeat_stream_id: HadrLogicalStreamId,
 
-    /// WAL shipping stream ID (unidirectional, primary→replica).
-    wal_shipping_stream_id: u64,
+    /// WAL shipping logical stream ID.
+    wal_shipping_stream_id: HadrLogicalStreamId,
 
-    /// Promotion vote stream ID (bidirectional, opened by replica).
-    promotion_vote_stream_id: u64,
+    /// Promotion vote logical stream ID.
+    promotion_vote_stream_id: HadrLogicalStreamId,
 }
 
 impl StreamAllocation {
@@ -45,9 +46,12 @@ impl StreamAllocation {
             ));
         }
 
-        let heartbeat_stream_id = HEARTBEAT_STREAM_MIN + (replica_index * HADR_STREAM_STRIDE);
-        let wal_shipping_stream_id = WAL_SHIPPING_STREAM_MIN + (replica_index * HADR_STREAM_STRIDE);
-        let promotion_vote_stream_id = VOTE_STREAM_MIN + (replica_index * HADR_STREAM_STRIDE);
+        let heartbeat_stream_id =
+            HadrLogicalStreamId::new(HEARTBEAT_STREAM_MIN + replica_index * HADR_STREAM_STRIDE);
+        let wal_shipping_stream_id =
+            HadrLogicalStreamId::new(WAL_SHIPPING_STREAM_MIN + replica_index * HADR_STREAM_STRIDE);
+        let promotion_vote_stream_id =
+            HadrLogicalStreamId::new(VOTE_STREAM_MIN + replica_index * HADR_STREAM_STRIDE);
 
         Ok(Self {
             replica_index,
@@ -62,24 +66,39 @@ impl StreamAllocation {
         self.replica_index
     }
 
-    /// Returns the heartbeat stream ID for this replica.
-    pub const fn heartbeat_stream_id(&self) -> u64 {
+    /// Returns the heartbeat logical stream ID for this replica.
+    pub const fn heartbeat_logical_stream_id(&self) -> HadrLogicalStreamId {
         self.heartbeat_stream_id
     }
 
-    /// Returns the WAL shipping stream ID for this replica.
-    pub const fn wal_shipping_stream_id(&self) -> u64 {
+    /// Returns the WAL shipping logical stream ID for this replica.
+    pub const fn wal_shipping_logical_stream_id(&self) -> HadrLogicalStreamId {
         self.wal_shipping_stream_id
     }
 
-    /// Returns the promotion vote stream ID for this replica.
-    pub const fn promotion_vote_stream_id(&self) -> u64 {
+    /// Returns the promotion vote logical stream ID for this replica.
+    pub const fn promotion_vote_logical_stream_id(&self) -> HadrLogicalStreamId {
         self.promotion_vote_stream_id
+    }
+
+    /// Returns the heartbeat stream ID facade value for this replica.
+    pub const fn heartbeat_stream_id(&self) -> u64 {
+        self.heartbeat_stream_id.get()
+    }
+
+    /// Returns the WAL shipping stream ID facade value for this replica.
+    pub const fn wal_shipping_stream_id(&self) -> u64 {
+        self.wal_shipping_stream_id.get()
+    }
+
+    /// Returns the promotion vote stream ID facade value for this replica.
+    pub const fn promotion_vote_stream_id(&self) -> u64 {
+        self.promotion_vote_stream_id.get()
     }
 
     pub(super) fn stream_ids_with_kinds(
         &self,
-    ) -> [(u64, HadrStreamKind); HADR_STREAMS_PER_REPLICA] {
+    ) -> [(HadrLogicalStreamId, HadrStreamKind); HADR_STREAMS_PER_REPLICA] {
         [
             (self.heartbeat_stream_id, HadrStreamKind::Heartbeat),
             (self.wal_shipping_stream_id, HadrStreamKind::WalShipping),
@@ -92,8 +111,9 @@ impl StreamAllocation {
     /// Returns the kind if the stream ID is allocated to this replica;
     /// returns `None` if the stream ID does not belong to this allocation.
     pub fn stream_kind_for_id(&self, stream_id: u64) -> Option<HadrStreamKind> {
+        let logical_stream_id = HadrLogicalStreamId::new(stream_id);
         self.stream_ids_with_kinds()
             .into_iter()
-            .find_map(|(id, kind)| (id == stream_id).then_some(kind))
+            .find_map(|(id, kind)| (id == logical_stream_id).then_some(kind))
     }
 }

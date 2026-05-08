@@ -1,6 +1,12 @@
 use std::path::Path;
 
 use andromeda_core::AndromedaResult;
+use andromeda_disk_page_store::{
+    PAGE_SIZE_16K, PAGE_SIZE_32K, PAGE_TYPE_FIXED_ROW, PAGE_TYPE_FREE, PAGE_TYPE_HYBRID_ROW,
+    PAGE_TYPE_MANIFEST, PageFlushDurabilityBoundary, PageFlushDurabilityError,
+    PageLayoutCodecError, PersistedPageLayoutV1, decode_optional_page_id,
+    encode_page_size_16k_or_32k, optional_page_id_value,
+};
 
 use crate::{
     AllocationId, ExtentDescriptor, Lsn, ObjectId, PageFlags, PageHeader, PageId, PageImage,
@@ -81,14 +87,9 @@ impl DiskPageStore {
         let page_lsn = image
             .page_lsn()
             .ok_or_else(|| storage_error("page image must expose page LSN through its layout"))?;
-        if durable_lsn < page_lsn {
-            return Err(DiskManagerError::WalFenceViolation {
-                page_lsn: page_lsn.get(),
-                durable_lsn: durable_lsn.get(),
-            }
-            .into());
-        }
-        Ok(())
+        PageFlushDurabilityBoundary::new(page_lsn, durable_lsn)
+            .validate()
+            .map_err(map_page_flush_error)
     }
 
     fn image_with_persisted_layout(image: PageImage) -> AndromedaResult<PageImage> {
@@ -169,131 +170,76 @@ impl PageStore for DiskPageStore {
     }
 }
 
-const PAGE_SIZE_16K: u8 = 1;
-const PAGE_SIZE_32K: u8 = 2;
-const PAGE_TYPE_FIXED_ROW: u8 = 1;
-const PAGE_TYPE_HYBRID_ROW: u8 = 2;
-const PAGE_TYPE_MANIFEST: u8 = 3;
-const PAGE_TYPE_FREE: u8 = 4;
-const NONE_PAGE_ID: u64 = 0;
-const PERSISTED_HEADER_LEN: u32 = 98;
-
 fn encode_layout_contract(layout: PageLayoutContract, bytes: &mut [u8]) -> AndromedaResult<()> {
-    if bytes.len() != layout.header.page_size.bytes_usize() {
-        return Err(storage_error("page bytes do not match layout page size"));
+    PersistedPageLayoutV1 {
+        magic: layout.header.magic,
+        format_version: layout.header.format_version,
+        page_size: encode_page_size(layout.header.page_size)?,
+        page_type: encode_page_type(layout.header.page_type),
+        page_id: layout.header.page_id.get(),
+        object_id: layout.header.object_id.get(),
+        allocation_id: layout.header.allocation_id.get(),
+        page_lsn: layout.header.page_lsn.get(),
+        page_epoch: layout.header.page_epoch,
+        previous_page_id: optional_page_id_value(layout.header.previous_page_id.map(PageId::get)),
+        next_page_id: optional_page_id_value(layout.header.next_page_id.map(PageId::get)),
+        header_len: layout.header.header_len,
+        payload_offset: layout.header.payload_offset,
+        payload_len: layout.header.payload_len,
+        free_start: layout.header.free_start,
+        free_end: layout.header.free_end,
+        free_bytes: layout.header.free_bytes,
+        slot_count: layout.header.slot_count,
+        row_count: layout.header.row_count,
+        flags: layout.header.flags.bits(),
+        header_crc: layout.header.header_crc,
+        payload_crc64: layout.trailer.payload_crc64,
+        page_hash: layout.trailer.page_hash,
+        torn_write_guard: layout.trailer.torn_write_guard,
     }
-    if bytes.len() < PageHeader::MIN_HEADER_LEN_V0 as usize + PageTrailer::V0_LEN as usize {
-        return Err(storage_error("page bytes too small for layout metadata"));
-    }
-    if layout.header.payload_offset < PERSISTED_HEADER_LEN {
-        return Err(storage_error(
-            "page payload offset overlaps persisted page header",
-        ));
-    }
-
-    put_u32(bytes, 0, layout.header.magic)?;
-    put_u16(bytes, 4, layout.header.format_version)?;
-    put_u8(bytes, 6, encode_page_size(layout.header.page_size))?;
-    put_u8(bytes, 7, encode_page_type(layout.header.page_type))?;
-    put_u64(bytes, 8, layout.header.page_id.get())?;
-    put_u64(bytes, 16, layout.header.object_id.get())?;
-    put_u64(bytes, 24, layout.header.allocation_id.get())?;
-    put_u64(bytes, 32, layout.header.page_lsn.get())?;
-    put_u64(bytes, 40, layout.header.page_epoch)?;
-    put_u64(
-        bytes,
-        48,
-        layout
-            .header
-            .previous_page_id
-            .map(PageId::get)
-            .unwrap_or(NONE_PAGE_ID),
-    )?;
-    put_u64(
-        bytes,
-        56,
-        layout
-            .header
-            .next_page_id
-            .map(PageId::get)
-            .unwrap_or(NONE_PAGE_ID),
-    )?;
-    put_u16(bytes, 64, layout.header.header_len)?;
-    put_u32(bytes, 66, layout.header.payload_offset)?;
-    put_u32(bytes, 70, layout.header.payload_len)?;
-    put_u32(bytes, 74, layout.header.free_start)?;
-    put_u32(bytes, 78, layout.header.free_end)?;
-    put_u32(bytes, 82, layout.header.free_bytes)?;
-    put_u16(bytes, 86, layout.header.slot_count)?;
-    put_u32(bytes, 88, layout.header.row_count)?;
-    put_u16(bytes, 92, layout.header.flags.bits())?;
-    put_u32(bytes, 94, layout.header.header_crc)?;
-
-    let trailer_offset = bytes.len() - PageTrailer::V0_LEN as usize;
-    put_u64(bytes, trailer_offset, layout.trailer.payload_crc64)?;
-    put_slice(bytes, trailer_offset + 8, &layout.trailer.page_hash)?;
-    put_u64(bytes, trailer_offset + 40, layout.trailer.torn_write_guard)?;
-    Ok(())
+    .encode(bytes)
+    .map_err(map_layout_codec_error)
 }
 
 fn decode_layout_contract(bytes: &[u8]) -> AndromedaResult<Option<PageLayoutContract>> {
-    if bytes.len() < PageHeader::MIN_HEADER_LEN_V0 as usize + PageTrailer::V0_LEN as usize {
-        return Err(storage_error("page bytes too small for layout metadata"));
-    }
-    let magic = get_u32(bytes, 0)?;
-    if magic == 0 {
-        if bytes.iter().all(|byte| *byte == 0) {
-            return Ok(None);
-        }
-        return Err(storage_error(
-            "persisted page layout marker is missing from non-empty page",
-        ));
-    }
-    if magic != PageHeader::MAGIC {
-        return Err(storage_error("persisted page layout marker is corrupted"));
-    }
+    let Some(layout) =
+        PersistedPageLayoutV1::decode(bytes, PageHeader::MAGIC).map_err(map_layout_codec_error)?
+    else {
+        return Ok(None);
+    };
 
-    let page_size = decode_page_size(get_u8(bytes, 6)?)?;
-    if bytes.len() != page_size.bytes_usize() {
-        return Err(storage_error(
-            "persisted page size does not match image length",
-        ));
-    }
-
-    let previous_page_id = optional_page_id(get_u64(bytes, 48)?);
-    let next_page_id = optional_page_id(get_u64(bytes, 56)?);
-    let trailer_offset = bytes.len() - PageTrailer::V0_LEN as usize;
-    let mut page_hash = [0; 32];
-    page_hash.copy_from_slice(get_slice(bytes, trailer_offset + 8, 32)?);
+    let page_size = decode_page_size(layout.page_size)?;
+    let previous_page_id = decode_optional_page_id(layout.previous_page_id).map(PageId::new);
+    let next_page_id = decode_optional_page_id(layout.next_page_id).map(PageId::new);
 
     let layout_contract = PageLayoutContract {
         header: PageHeader {
-            magic,
-            format_version: get_u16(bytes, 4)?,
+            magic: layout.magic,
+            format_version: layout.format_version,
             page_size,
-            page_type: decode_page_type(get_u8(bytes, 7)?)?,
-            page_id: PageId::new(get_u64(bytes, 8)?),
-            object_id: ObjectId::new(get_u64(bytes, 16)?),
-            allocation_id: AllocationId::new(get_u64(bytes, 24)?),
-            page_lsn: Lsn::new(get_u64(bytes, 32)?),
-            page_epoch: get_u64(bytes, 40)?,
+            page_type: decode_page_type(layout.page_type)?,
+            page_id: PageId::new(layout.page_id),
+            object_id: ObjectId::new(layout.object_id),
+            allocation_id: AllocationId::new(layout.allocation_id),
+            page_lsn: Lsn::new(layout.page_lsn),
+            page_epoch: layout.page_epoch,
             previous_page_id,
             next_page_id,
-            header_len: get_u16(bytes, 64)?,
-            payload_offset: get_u32(bytes, 66)?,
-            payload_len: get_u32(bytes, 70)?,
-            free_start: get_u32(bytes, 74)?,
-            free_end: get_u32(bytes, 78)?,
-            free_bytes: get_u32(bytes, 82)?,
-            slot_count: get_u16(bytes, 86)?,
-            row_count: get_u32(bytes, 88)?,
-            flags: PageFlags::new(get_u16(bytes, 92)?),
-            header_crc: get_u32(bytes, 94)?,
+            header_len: layout.header_len,
+            payload_offset: layout.payload_offset,
+            payload_len: layout.payload_len,
+            free_start: layout.free_start,
+            free_end: layout.free_end,
+            free_bytes: layout.free_bytes,
+            slot_count: layout.slot_count,
+            row_count: layout.row_count,
+            flags: PageFlags::new(layout.flags),
+            header_crc: layout.header_crc,
         },
         trailer: PageTrailer {
-            payload_crc64: get_u64(bytes, trailer_offset)?,
-            page_hash,
-            torn_write_guard: get_u64(bytes, trailer_offset + 40)?,
+            payload_crc64: layout.payload_crc64,
+            page_hash: layout.page_hash,
+            torn_write_guard: layout.torn_write_guard,
         },
     };
     layout_contract.validate()?;
@@ -316,14 +262,12 @@ fn payload_slice<'a>(header: &PageHeader, bytes: &'a [u8]) -> AndromedaResult<&'
         .map_err(|_| storage_error("page payload offset does not fit usize"))?;
     let len = usize::try_from(header.payload_len)
         .map_err(|_| storage_error("page payload length does not fit usize"))?;
-    get_slice(bytes, start, len)
+    slice_at(bytes, start, len)
 }
 
-fn encode_page_size(page_size: PageSize) -> u8 {
-    match page_size {
-        PageSize::KiB16 => PAGE_SIZE_16K,
-        PageSize::KiB32 => PAGE_SIZE_32K,
-    }
+fn encode_page_size(page_size: PageSize) -> AndromedaResult<u8> {
+    encode_page_size_16k_or_32k(page_size.bytes())
+        .ok_or_else(|| storage_error("unknown persisted page size"))
 }
 
 fn decode_page_size(value: u8) -> AndromedaResult<PageSize> {
@@ -353,76 +297,34 @@ fn decode_page_type(value: u8) -> AndromedaResult<PageType> {
     }
 }
 
-fn optional_page_id(value: u64) -> Option<PageId> {
-    if value == NONE_PAGE_ID {
-        None
-    } else {
-        Some(PageId::new(value))
-    }
-}
-
-fn put_u8(bytes: &mut [u8], offset: usize, value: u8) -> AndromedaResult<()> {
-    *bytes
-        .get_mut(offset)
-        .ok_or_else(|| storage_error("page layout write exceeds image"))? = value;
-    Ok(())
-}
-
-fn put_u16(bytes: &mut [u8], offset: usize, value: u16) -> AndromedaResult<()> {
-    put_slice(bytes, offset, &value.to_le_bytes())
-}
-
-fn put_u32(bytes: &mut [u8], offset: usize, value: u32) -> AndromedaResult<()> {
-    put_slice(bytes, offset, &value.to_le_bytes())
-}
-
-fn put_u64(bytes: &mut [u8], offset: usize, value: u64) -> AndromedaResult<()> {
-    put_slice(bytes, offset, &value.to_le_bytes())
-}
-
-fn put_slice(bytes: &mut [u8], offset: usize, value: &[u8]) -> AndromedaResult<()> {
-    let end = offset
-        .checked_add(value.len())
-        .ok_or_else(|| storage_error("page layout offset overflow"))?;
-    let destination = bytes
-        .get_mut(offset..end)
-        .ok_or_else(|| storage_error("page layout write exceeds image"))?;
-    destination.copy_from_slice(value);
-    Ok(())
-}
-
-fn get_u8(bytes: &[u8], offset: usize) -> AndromedaResult<u8> {
-    bytes
-        .get(offset)
-        .copied()
-        .ok_or_else(|| storage_error("page layout read exceeds image"))
-}
-
-fn get_u16(bytes: &[u8], offset: usize) -> AndromedaResult<u16> {
-    let mut value = [0; 2];
-    value.copy_from_slice(get_slice(bytes, offset, 2)?);
-    Ok(u16::from_le_bytes(value))
-}
-
-fn get_u32(bytes: &[u8], offset: usize) -> AndromedaResult<u32> {
-    let mut value = [0; 4];
-    value.copy_from_slice(get_slice(bytes, offset, 4)?);
-    Ok(u32::from_le_bytes(value))
-}
-
-fn get_u64(bytes: &[u8], offset: usize) -> AndromedaResult<u64> {
-    let mut value = [0; 8];
-    value.copy_from_slice(get_slice(bytes, offset, 8)?);
-    Ok(u64::from_le_bytes(value))
-}
-
-fn get_slice(bytes: &[u8], offset: usize, len: usize) -> AndromedaResult<&[u8]> {
+fn slice_at(bytes: &[u8], offset: usize, len: usize) -> AndromedaResult<&[u8]> {
     let end = offset
         .checked_add(len)
         .ok_or_else(|| storage_error("page layout offset overflow"))?;
     bytes
         .get(offset..end)
         .ok_or_else(|| storage_error("page layout read exceeds image"))
+}
+
+fn map_page_flush_error(error: PageFlushDurabilityError) -> andromeda_core::AndromedaError {
+    match error {
+        PageFlushDurabilityError::MissingPageLsn => DiskManagerError::PageLayoutInvalid {
+            reason: "page flush requires a nonzero page LSN".to_string(),
+        }
+        .into(),
+        PageFlushDurabilityError::WalFenceViolation {
+            page_lsn,
+            durable_lsn,
+        } => DiskManagerError::WalFenceViolation {
+            page_lsn,
+            durable_lsn,
+        }
+        .into(),
+    }
+}
+
+fn map_layout_codec_error(error: PageLayoutCodecError) -> andromeda_core::AndromedaError {
+    storage_error(error.to_string())
 }
 
 fn storage_error(message: impl Into<String>) -> andromeda_core::AndromedaError {

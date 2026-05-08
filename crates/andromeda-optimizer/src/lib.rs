@@ -10,6 +10,7 @@
 mod error;
 mod plan_decision;
 mod policy;
+pub mod srpl;
 
 pub use error::OptimizerError;
 pub use plan_decision::{

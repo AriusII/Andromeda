@@ -1,6 +1,6 @@
 use super::*;
 use crate::format_version::FormatVersion;
-use andromeda_core::AndromedaErrorKind;
+use andromeda_storage_index::BTreeFormatIdentityError;
 
 #[test]
 fn test_format_identity_v1_0_valid() {
@@ -14,12 +14,12 @@ fn test_format_identity_v1_0_valid() {
 fn test_format_identity_try_new_rejects_reserved_metadata() {
     let error = BTreeKeyFormatIdentity::try_new(0, 0, 1, 4096)
         .expect_err("reserved version must be rejected");
-    assert_eq!(error.kind(), AndromedaErrorKind::Storage);
+    assert_eq!(error, BTreeFormatIdentityError::ReservedVersion);
     assert!(error.message().contains("reserved"));
 
     let error = BTreeKeyFormatIdentity::try_new(1, 0, 1, 0)
         .expect_err("zero max_key_size must be rejected");
-    assert_eq!(error.kind(), AndromedaErrorKind::Storage);
+    assert_eq!(error, BTreeFormatIdentityError::ZeroMaxKeySize);
     assert!(error.message().contains("max_key_size"));
 
     assert_eq!(

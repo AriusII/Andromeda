@@ -1,10 +1,12 @@
-use super::policy::AuditEmissionPolicy;
-use super::redaction::{audit_text_contains_sensitive_marker, redact_audit_reason};
+use super::policy::{AuditEmissionPolicy, durable_family_to_audit_family};
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_observe::{
     DurableAuditEventFamily, DurableAuditReplayBehavior, DurableAuditRetentionBoundary,
     DurableAuditSinkReport, TraceId,
 };
+
+pub type AuditEmissionKind = andromeda_audit::AuditEmissionKind;
+pub type AuditEmissionOutcome = andromeda_audit::AuditEmissionOutcome;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuditSinkAvailability {
@@ -62,7 +64,7 @@ impl AuditSinkAvailability {
     pub fn unavailable(reason: impl Into<String>) -> Self {
         Self {
             durable_sink_available: false,
-            reason: Some(redact_audit_reason(reason)),
+            reason: Some(andromeda_audit::redact_audit_reason(reason)),
             durability: None,
         }
     }
@@ -77,6 +79,21 @@ impl AuditSinkAvailability {
 
     pub const fn durability(&self) -> Option<AuditSinkDurabilityEvidence> {
         self.durability
+    }
+
+    pub(crate) fn to_audit(&self) -> AndromedaResult<andromeda_audit::AuditSinkAvailability> {
+        if let Some(durability) = self.durability {
+            return andromeda_audit::AuditSinkAvailability::durable(durability.to_audit_report());
+        }
+        if self.durable_sink_available {
+            Ok(andromeda_audit::AuditSinkAvailability::available())
+        } else {
+            Ok(andromeda_audit::AuditSinkAvailability::unavailable(
+                self.reason
+                    .clone()
+                    .unwrap_or_else(|| "durable audit sink unavailable".to_string()),
+            ))
+        }
     }
 
     fn from_durability(durability: AuditSinkDurabilityEvidence) -> Self {
@@ -132,69 +149,32 @@ impl AuditSinkDurabilityEvidence {
         self,
         expected_family: DurableAuditEventFamily,
     ) -> AndromedaResult<()> {
-        if !expected_family.requires_wal_before_visible_decision() {
-            return Err(audit_emission_error(format!(
-                "durable audit WAL evidence expected family is not a visible decision family: {:?}",
-                expected_family
-            )));
-        }
-        if self.family != expected_family {
-            return Err(audit_emission_error(format!(
-                "durable audit WAL evidence family mismatch: expected {:?}, got {:?}",
-                expected_family, self.family
-            )));
-        }
-        if !self.proves_durable() {
-            return Err(audit_emission_error(
-                "durable audit WAL evidence did not prove append and flush",
-            ));
-        }
-        if !self.replay_behavior.is_visible_decision_evidence() {
-            return Err(audit_emission_error(
-                "durable audit WAL evidence replay behavior is not visible-decision evidence",
-            ));
-        }
-        if !retention_boundary_is_visible_decision_compatible(expected_family, self.retention) {
-            return Err(audit_emission_error(
-                "durable audit WAL evidence retention boundary is not compatible with visible decision family",
-            ));
-        }
-        Ok(())
+        self.to_audit()
+            .validate_visible_decision(durable_family_to_audit_family(expected_family))
     }
-}
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AuditEmissionKind {
-    PermissionDecision,
-    ContractRejection,
-    Completion,
-}
-
-impl AuditEmissionKind {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::PermissionDecision => "permission_decision",
-            Self::ContractRejection => "contract_rejection",
-            Self::Completion => "completion",
+    fn to_audit(self) -> andromeda_audit::AuditSinkDurabilityEvidence {
+        andromeda_audit::AuditSinkDurabilityEvidence {
+            trace_id: self.trace_id,
+            family: durable_family_to_audit_family(self.family),
+            record_lsn: self.record_lsn,
+            durable_lsn: self.durable_lsn,
+            checksum: self.checksum,
+            replay_behavior: replay_behavior_to_audit(self.replay_behavior),
+            retention: retention_boundary_to_audit(self.retention),
         }
     }
-}
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AuditEmissionOutcome {
-    Allowed,
-    Denied,
-    Rejected,
-    Emitted,
-}
-
-impl AuditEmissionOutcome {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Allowed => "allowed",
-            Self::Denied => "denied",
-            Self::Rejected => "rejected",
-            Self::Emitted => "emitted",
+    fn to_audit_report(self) -> andromeda_audit::AuditSinkDurabilityReport {
+        andromeda_audit::AuditSinkDurabilityReport {
+            trace_id: self.trace_id,
+            family: durable_family_to_audit_family(self.family),
+            sequence_number: self.record_lsn,
+            record_lsn: self.record_lsn,
+            durable_lsn: self.durable_lsn,
+            checksum: self.checksum,
+            replay_behavior: replay_behavior_to_audit(self.replay_behavior),
+            retention: retention_boundary_to_audit(self.retention),
         }
     }
 }
@@ -219,16 +199,15 @@ impl AuditEmissionEvidence {
         reason: impl Into<String>,
         sink: AuditSinkAvailability,
     ) -> AndromedaResult<Self> {
-        let evidence = Self {
+        let audit_evidence = andromeda_audit::AuditEmissionEvidence::new(
+            policy.into_audit(),
             trace_id,
             kind,
             outcome,
-            reason: redact_audit_reason(reason),
-            sink,
-        };
-        evidence.validate()?;
-        evidence.validate_policy(policy)?;
-        Ok(evidence)
+            reason,
+            sink.to_audit()?,
+        )?;
+        Ok(Self::from_audit_with_sink(audit_evidence, sink))
     }
 
     pub fn contract_rejected(
@@ -264,75 +243,30 @@ impl AuditEmissionEvidence {
     }
 
     pub fn validate(&self) -> AndromedaResult<()> {
-        if self.trace_id.is_zero() {
-            return Err(audit_emission_error(
-                "audit emission evidence requires nonzero trace id",
-            ));
-        }
-        if self.reason.trim().is_empty() {
-            return Err(audit_emission_error(
-                "audit emission evidence requires reason evidence",
-            ));
-        }
-        if audit_text_contains_sensitive_marker(&self.reason) {
-            return Err(audit_emission_error(
-                "audit emission evidence reason must be redacted before emission",
-            ));
-        }
-        if self
-            .sink
-            .reason()
-            .is_some_and(audit_text_contains_sensitive_marker)
-        {
-            return Err(audit_emission_error(
-                "audit sink availability reason must be redacted before emission",
-            ));
-        }
-        Ok(())
+        self.to_audit()?.validate()
     }
 
-    fn validate_policy(&self, policy: AuditEmissionPolicy) -> AndromedaResult<()> {
-        self.validate_sink_availability(policy)?;
-        self.validate_durable_wal_evidence(policy)
+    fn to_audit(&self) -> AndromedaResult<andromeda_audit::AuditEmissionEvidence> {
+        Ok(andromeda_audit::AuditEmissionEvidence {
+            trace_id: self.trace_id,
+            kind: self.kind,
+            outcome: self.outcome,
+            reason: self.reason.clone(),
+            sink: self.sink.to_audit()?,
+        })
     }
 
-    fn validate_sink_availability(&self, policy: AuditEmissionPolicy) -> AndromedaResult<()> {
-        if policy.requires_available_sink() && !self.sink.is_available() {
-            return Err(audit_emission_error(format!(
-                "durable audit sink unavailable for {} {}: {}",
-                self.kind.as_str(),
-                self.outcome.as_str(),
-                self.sink
-                    .reason()
-                    .unwrap_or("durable audit sink unavailable")
-            )));
+    fn from_audit_with_sink(
+        audit_evidence: andromeda_audit::AuditEmissionEvidence,
+        sink: AuditSinkAvailability,
+    ) -> Self {
+        Self {
+            trace_id: audit_evidence.trace_id,
+            kind: audit_evidence.kind,
+            outcome: audit_evidence.outcome,
+            reason: audit_evidence.reason,
+            sink,
         }
-        Ok(())
-    }
-
-    fn validate_durable_wal_evidence(&self, policy: AuditEmissionPolicy) -> AndromedaResult<()> {
-        if !policy.requires_durable_wal_evidence() {
-            return Ok(());
-        }
-
-        let Some(durability) = self.sink.durability() else {
-            return Err(audit_emission_error(format!(
-                "durable audit WAL evidence required before visible {} {} decision",
-                self.kind.as_str(),
-                self.outcome.as_str()
-            )));
-        };
-
-        durability.validate_trace_id(self.trace_id)?;
-        if !durability.proves_durable() {
-            return Err(audit_emission_error(
-                "durable audit WAL evidence did not prove append and flush",
-            ));
-        }
-        if let Some(expected) = policy.expected_event_family() {
-            durability.validate_visible_decision(expected)?;
-        }
-        Ok(())
     }
 }
 
@@ -340,35 +274,37 @@ pub(crate) fn audit_emission_error(message: impl Into<String>) -> AndromedaError
     AndromedaError::new(AndromedaErrorKind::Security, message)
 }
 
-const fn retention_boundary_is_visible_decision_compatible(
-    family: DurableAuditEventFamily,
-    boundary: DurableAuditRetentionBoundary,
-) -> bool {
-    match family {
-        DurableAuditEventFamily::SecurityDecision
-        | DurableAuditEventFamily::AdminDecision
-        | DurableAuditEventFamily::HadrDecision => matches!(
-            boundary,
-            DurableAuditRetentionBoundary::SecurityPolicy
-                | DurableAuditRetentionBoundary::ForensicHold
-        ),
-        DurableAuditEventFamily::CatalogDecision => matches!(
-            boundary,
-            DurableAuditRetentionBoundary::CatalogVersion
-                | DurableAuditRetentionBoundary::ForensicHold
-        ),
-        DurableAuditEventFamily::BackupDecision | DurableAuditEventFamily::RestoreDecision => {
-            matches!(
-                boundary,
-                DurableAuditRetentionBoundary::WalSegment
-                    | DurableAuditRetentionBoundary::ForensicHold
-            )
+const fn replay_behavior_to_audit(
+    replay: DurableAuditReplayBehavior,
+) -> andromeda_audit::AuditEmissionReplayBehavior {
+    match replay {
+        DurableAuditReplayBehavior::ForensicOnly => {
+            andromeda_audit::AuditEmissionReplayBehavior::ForensicOnly
         }
-        DurableAuditEventFamily::ForensicDecision => {
-            matches!(boundary, DurableAuditRetentionBoundary::ForensicHold)
+        DurableAuditReplayBehavior::RebuildDecisionIndex => {
+            andromeda_audit::AuditEmissionReplayBehavior::RebuildDecisionIndex
         }
-        DurableAuditEventFamily::AdmissionDecision
-        | DurableAuditEventFamily::RecoveryDecision
-        | DurableAuditEventFamily::GenericAudit => false,
+        DurableAuditReplayBehavior::CorruptionBoundary => {
+            andromeda_audit::AuditEmissionReplayBehavior::CorruptionBoundary
+        }
+    }
+}
+
+const fn retention_boundary_to_audit(
+    retention: DurableAuditRetentionBoundary,
+) -> andromeda_audit::AuditEmissionRetentionBoundary {
+    match retention {
+        DurableAuditRetentionBoundary::WalSegment => {
+            andromeda_audit::AuditEmissionRetentionBoundary::WalSegment
+        }
+        DurableAuditRetentionBoundary::CatalogVersion => {
+            andromeda_audit::AuditEmissionRetentionBoundary::CatalogVersion
+        }
+        DurableAuditRetentionBoundary::SecurityPolicy => {
+            andromeda_audit::AuditEmissionRetentionBoundary::SecurityPolicy
+        }
+        DurableAuditRetentionBoundary::ForensicHold => {
+            andromeda_audit::AuditEmissionRetentionBoundary::ForensicHold
+        }
     }
 }

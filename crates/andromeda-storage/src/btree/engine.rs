@@ -1,13 +1,6 @@
-use super::{BTreeConfig, BTreeError, BTreeStatistics, IndexId, PageId, RowId};
+use super::{BTreeConfig, BTreeError, BTreeStatistics, IndexId, KeyValuePair, PageId, RowId};
 use andromeda_core::AndromedaResult;
 use std::collections::BTreeMap;
-
-/// Key-value pair for internal tree representation.
-#[derive(Debug, Clone)]
-pub struct KeyValuePair {
-    pub key: Vec<u8>,
-    pub value: Vec<u8>,
-}
 
 /// In-memory B-Tree node representation.
 #[derive(Debug, Clone)]

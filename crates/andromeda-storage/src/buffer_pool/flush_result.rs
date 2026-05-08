@@ -80,6 +80,15 @@ impl FlushBlockedFrame {
             .get()
             .saturating_sub(self.max_durable_lsn.get())
     }
+
+    pub(crate) fn from_core(core: andromeda_buffer_pool::FlushBlockedFrameCore) -> Self {
+        Self {
+            page_id: PageId::new(core.page_id()),
+            first_dirty_lsn: core.first_dirty_lsn(),
+            last_dirty_lsn: core.last_dirty_lsn(),
+            max_durable_lsn: core.max_durable_lsn(),
+        }
+    }
 }
 
 /// Storage operation that failed during dirty-page flush.

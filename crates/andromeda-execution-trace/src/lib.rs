@@ -31,6 +31,12 @@ use andromeda_core::{AndromedaResult, InvocationId};
 use andromeda_observe::TraceId;
 use std::sync::Arc;
 
+pub mod completion;
+pub mod transaction_error_routing;
+
+pub use completion::*;
+pub use transaction_error_routing::*;
+
 /// Minimal trace event type for invocation lifecycle.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InvocationTraceEvent {

@@ -252,7 +252,7 @@ impl BTreeNodeImpl {
     }
 
     /// Serialize node to bytes for page storage
-    pub fn serialize(&self) -> Vec<u8> {
+    pub fn serialize(&self) -> AndromedaResult<Vec<u8>> {
         let mut bytes = Vec::new();
 
         // Header: is_leaf, key_count, child_count
@@ -261,11 +261,11 @@ impl BTreeNodeImpl {
         } else {
             NODE_IMPL_INTERNAL_TAG
         });
-        let key_count = u16::try_from(self.key_value_pairs.len())
-            .expect("BTreeNodeImpl key count must fit u16");
+        let key_count =
+            node_serialized_len_u16(self.page_id, "key_count", self.key_value_pairs.len())?;
         bytes.extend_from_slice(&key_count.to_le_bytes());
-        let child_count = u16::try_from(self.child_page_ids.len())
-            .expect("BTreeNodeImpl child count must fit u16");
+        let child_count =
+            node_serialized_len_u16(self.page_id, "child_count", self.child_page_ids.len())?;
         bytes.extend_from_slice(&child_count.to_le_bytes());
 
         // Parent and next sibling page IDs
@@ -282,13 +282,11 @@ impl BTreeNodeImpl {
 
         // Key-value pairs
         for kvp in &self.key_value_pairs {
-            let key_len =
-                u16::try_from(kvp.key.len()).expect("BTreeNodeImpl key length must fit u16");
+            let key_len = node_serialized_len_u16(self.page_id, "key_len", kvp.key.len())?;
             bytes.extend_from_slice(&key_len.to_le_bytes());
             bytes.extend_from_slice(&kvp.key);
 
-            let val_len =
-                u16::try_from(kvp.value.len()).expect("BTreeNodeImpl value length must fit u16");
+            let val_len = node_serialized_len_u16(self.page_id, "value_len", kvp.value.len())?;
             bytes.extend_from_slice(&val_len.to_le_bytes());
             bytes.extend_from_slice(&kvp.value);
         }
@@ -298,7 +296,7 @@ impl BTreeNodeImpl {
             bytes.extend_from_slice(&child_id.get().to_le_bytes());
         }
 
-        bytes
+        Ok(bytes)
     }
 
     /// Deserialize node from bytes
@@ -395,4 +393,20 @@ fn read_node_bytes<'a>(
 
 fn invalid_node_format<T>(page_id: PageId) -> AndromedaResult<T> {
     Err(BTreeError::InvalidNodeFormat { page_id }.into())
+}
+
+fn node_serialized_len_u16(
+    node_id: PageId,
+    field: &'static str,
+    len: usize,
+) -> AndromedaResult<u16> {
+    u16::try_from(len).map_err(|_| {
+        BTreeError::NodeSerializationLimitExceeded {
+            node_id,
+            field,
+            actual: len,
+            max: u16::MAX as usize,
+        }
+        .into()
+    })
 }

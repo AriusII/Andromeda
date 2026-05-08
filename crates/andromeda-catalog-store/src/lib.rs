@@ -14,21 +14,49 @@ Catalog publication remains outside this crate and must not become visible
 without durable WAL.
 "#]
 
+mod change_subscription;
+mod manifest;
+mod manifest_resolution;
+mod mutation_record;
 mod names;
 mod objects;
+mod publication_receipt;
 mod runtime_boundary;
+mod snapshot;
 mod store_boundary;
 mod taxonomy;
 
+pub use change_subscription::{
+    CatalogChangeNotification, CatalogChangeSubscription, CatalogChangeSubscriptionCursor,
+    CatalogSubscriptionRegistry,
+};
+pub use manifest::{ColumnSchema, ProcedureManifest};
+pub use manifest_resolution::{
+    CatalogManifestResolution, CatalogManifestResolutionFailure, CatalogManifestResolutionRequest,
+    CatalogManifestSelector,
+};
+pub use mutation_record::{
+    CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH, CatalogLifecycleMutationTarget, CatalogMutation,
+    CatalogMutationBoundary, CatalogMutationDelta, CatalogMutationOperation,
+    CatalogPublicationSemantics,
+};
 pub use names::QualifiedName;
 pub use objects::{
     CatalogBindingKind, CatalogDefinition, CatalogObjectBinding, CatalogObjectRef, EnumDefinition,
     EnumVariant, ObjectKind, StructuredObjectDefinition, TableDefinition,
 };
+pub use publication_receipt::{
+    CatalogDurabilityMarker, CatalogMutationDurability, CatalogPublicationCommitEvidence,
+    CatalogPublicationPlan, CatalogPublicationReceipt,
+};
 pub use runtime_boundary::{
     CatalogManifestStoreBoundary, CatalogRuntimeEvidence, CatalogRuntimeReopenEvidence,
     CatalogRuntimeStore, CatalogServerRuntimeDiagnostic, CatalogServerRuntimeKind,
     DurableCatalogRuntimeHandle,
+};
+pub use snapshot::{
+    CatalogObjectLifecycle, CatalogObjectLifecycleStatus, CatalogSnapshotApplyReport,
+    CatalogSnapshotPublication, CatalogSnapshotPublicationGate, CatalogSnapshotReceipt,
 };
 pub use store_boundary::{
     CatalogStoreApplyReport, CatalogStoreDurableApplyReport, CatalogStoreMutationKind,

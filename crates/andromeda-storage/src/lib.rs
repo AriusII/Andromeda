@@ -45,7 +45,7 @@ pub use btree::{
     IndexId, KeyValuePair, RowId,
 };
 pub use btree_format_validation::{
-    BTreeKeyFormatIdentity, BTreeOperationType, KeyV1FormatValidator,
+    BTreeFormatIdentityError, BTreeKeyFormatIdentity, BTreeOperationType, KeyV1FormatValidator,
 };
 pub use btree_key_codec::{Key, KeyCodec, KeyComparator};
 pub use buffer_pool::{

@@ -12,12 +12,19 @@
 //! - avoid execution, storage, transaction, WAL, transport, benchmark,
 //!   analytics, GPU, and application-surface dependencies.
 
+mod catalog_plan;
+
 use std::collections::BTreeSet;
 
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_srpl_ast::{ProcedureAst, ProcedureBodyAst};
 use andromeda_srpl_ir::{ProcedureSignature, ResultContract};
 use andromeda_types::ColumnDescriptor;
+
+pub use catalog_plan::{
+    SrplCatalogStructuredObjectBinding, SrplCatalogTableBinding, SrplExecutableCatalogView,
+    bind_executable_procedure_plan, inventory_reserve_stock_body_ir,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BoundProcedure {

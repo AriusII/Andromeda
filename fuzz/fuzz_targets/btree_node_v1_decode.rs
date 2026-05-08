@@ -1,6 +1,6 @@
 #![no_main]
 
-use andromeda_storage::BTreeNodeV1;
+use andromeda_storage_page::BTreeNodeV1;
 use libfuzzer_sys::fuzz_target;
 
 mod common;

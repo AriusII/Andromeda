@@ -3,7 +3,7 @@
 //! Canonical eligibility logic now lives in
 //! `andromeda_wal::write_ahead_log::gc_eligibility`.
 
-pub use andromeda_wal::write_ahead_log::gc_eligibility::{EligibilityResult, GcEligibilityChecker};
+pub use andromeda_wal::{EligibilityResult, GcEligibilityChecker};
 
 #[cfg(test)]
 mod tests;

@@ -1,7 +1,8 @@
-use andromeda_core::{AndromedaResult, InvocationId, RequestId, SessionId};
+use andromeda_error::AndromedaResult;
 use andromeda_observe::{ExecutionTransitionTrace, TraceId, TransitionReasonCode};
-use andromeda_storage::Lsn;
-use andromeda_tx::{TransactionState, transaction_phase_code};
+use andromeda_transaction::{TransactionState, transaction_phase_code};
+use andromeda_types::{InvocationId, RequestId, SessionId, TransactionId};
+use andromeda_wal::Lsn;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompletionStatus {
@@ -175,7 +176,7 @@ impl InvocationCompletion {
         previous_state: Option<TransactionState>,
         request_id: Option<RequestId>,
         session_id: Option<SessionId>,
-        transaction_id: Option<andromeda_core::TransactionId>,
+        transaction_id: Option<TransactionId>,
         reason: impl Into<String>,
     ) -> ExecutionTransitionTrace {
         let next_phase = self.transaction_state.map(transaction_phase_code);

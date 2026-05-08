@@ -3,92 +3,60 @@ use andromeda_core::AndromedaResult;
 use crate::{Lsn, PageId, PageImage, PageLayoutContract, PageSize};
 
 use super::BufferPoolError;
+use super::error::map_core_error;
 
-/// Transient identifier for a buffer-pool frame.
-///
-/// This is not a durable page identity and must not be persisted in page images,
-/// WAL payloads, manifests, or cold segment metadata.
+pub use andromeda_buffer_pool::BufferFrameState;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct BufferFrameId(usize);
+pub struct BufferFrameId(andromeda_buffer_pool::BufferFrameId);
 
 impl BufferFrameId {
     pub fn new(value: usize) -> AndromedaResult<Self> {
-        let id = Self(value);
-        id.validate()?;
-        Ok(id)
+        andromeda_buffer_pool::BufferFrameId::new(value)
+            .map(Self)
+            .map_err(map_core_error)
     }
 
     pub fn validate(self) -> AndromedaResult<()> {
-        if self.0 == 0 {
-            return Err(BufferPoolError::InvalidFrameId { frame_id: self.0 }.into_andromeda_error());
-        }
-        Ok(())
+        self.0.validate().map_err(map_core_error)
     }
 
     pub const fn get(self) -> usize {
-        self.0
+        self.0.get()
     }
 
     pub const fn zero_based_index(self) -> usize {
-        self.0 - 1
+        self.0.zero_based_index()
+    }
+
+    pub(crate) const fn from_core(id: andromeda_buffer_pool::BufferFrameId) -> Self {
+        Self(id)
+    }
+
+    pub(crate) const fn into_core(self) -> andromeda_buffer_pool::BufferFrameId {
+        self.0
     }
 }
 
-/// Transient lifecycle state for a buffer frame.
-///
-/// The state is buffer-pool metadata only. It must never be serialized into page
-/// images, WAL records, manifests, or cold segment metadata.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BufferFrameState {
-    Free,
-    Resident,
-    Flushing,
-    Evicting,
-}
-
-/// Transient metadata and resident image for a buffer-pool frame.
-///
-/// Durable identity, layout, page size, and LSN metadata are imported from the
-/// canonical page/LSN owners. The frame only adds transient pin/dirty/Clock and
-/// lifecycle state.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BufferFrame {
-    id: BufferFrameId,
-    state: BufferFrameState,
+    core: andromeda_buffer_pool::BufferFrameCore,
     image: Option<PageImage>,
-    page_id: Option<PageId>,
     page_size: PageSize,
-    page_lsn: Option<Lsn>,
-    pin_count: u32,
-    is_dirty: bool,
-    first_dirty_lsn: Option<Lsn>,
-    last_dirty_lsn: Option<Lsn>,
-    clock_usage: bool,
 }
 
 impl BufferFrame {
-    /// Construct a free frame with no resident page image.
     pub fn free(id: BufferFrameId, page_size: PageSize) -> AndromedaResult<Self> {
         let frame = Self {
-            id,
-            state: BufferFrameState::Free,
+            core: andromeda_buffer_pool::BufferFrameCore::free(id.into_core())
+                .map_err(map_core_error)?,
             image: None,
-            page_id: None,
             page_size,
-            page_lsn: None,
-            pin_count: 0,
-            is_dirty: false,
-            first_dirty_lsn: None,
-            last_dirty_lsn: None,
-            clock_usage: false,
         };
         frame.validate()?;
         Ok(frame)
     }
 
-    /// Compatibility constructor for an empty free frame.
-    ///
-    /// New residency code should prefer [`Self::free`] or [`Self::with_image`].
     pub fn new(id: BufferFrameId, page_id: PageId, page_size: PageSize) -> AndromedaResult<Self> {
         if page_id.is_zero() {
             return Err(BufferPoolError::InvalidPageId.into_andromeda_error());
@@ -125,59 +93,31 @@ impl BufferFrame {
             return Err(BufferPoolError::InvalidPageImage.into_andromeda_error());
         }
         let frame = Self {
-            id,
-            state: BufferFrameState::Resident,
+            core: andromeda_buffer_pool::BufferFrameCore::resident(
+                id.into_core(),
+                page_id.get(),
+                page_lsn,
+            )
+            .map_err(map_core_error)?,
             page_size: image.page_size(),
             image: Some(image),
-            page_id: Some(page_id),
-            page_lsn: Some(page_lsn),
-            pin_count: 0,
-            is_dirty: false,
-            first_dirty_lsn: None,
-            last_dirty_lsn: None,
-            clock_usage: true,
         };
         frame.validate()?;
         Ok(frame)
     }
 
     pub fn validate(&self) -> AndromedaResult<()> {
-        self.id.validate()?;
-        match (self.is_dirty, self.first_dirty_lsn, self.last_dirty_lsn) {
-            (true, Some(first), Some(last))
-                if !first.is_zero() && !last.is_zero() && first <= last => {}
-            (false, None, None) => {}
-            _ => return Err(BufferPoolError::InvalidDirtyLsn.into_andromeda_error()),
-        }
-
-        match self.state {
+        self.core.validate().map_err(map_core_error)?;
+        match self.core.state() {
             BufferFrameState::Free => {
-                if self.image.is_some()
-                    || self.page_id.is_some()
-                    || self.page_lsn.is_some()
-                    || self.pin_count != 0
-                    || self.is_dirty
-                    || self.first_dirty_lsn.is_some()
-                    || self.last_dirty_lsn.is_some()
-                {
+                if self.image.is_some() {
                     return Err(BufferPoolError::InvalidFrameState.into_andromeda_error());
-                }
-                if self.clock_usage {
-                    return Err(BufferPoolError::InvalidClockUsage.into_andromeda_error());
                 }
             }
             BufferFrameState::Resident
             | BufferFrameState::Flushing
             | BufferFrameState::Evicting => {
                 self.validate_resident_metadata()?;
-                if matches!(self.state, BufferFrameState::Flushing) && self.pin_count != 0 {
-                    return Err(BufferPoolError::InvalidFrameState.into_andromeda_error());
-                }
-                if matches!(self.state, BufferFrameState::Evicting)
-                    && (self.pin_count != 0 || self.is_dirty)
-                {
-                    return Err(BufferPoolError::InvalidFrameState.into_andromeda_error());
-                }
             }
         }
         Ok(())
@@ -192,7 +132,7 @@ impl BufferFrame {
             return Err(BufferPoolError::InvalidPageImage.into_andromeda_error());
         }
         let page_id = self
-            .page_id
+            .page_id()
             .ok_or_else(|| BufferPoolError::InvalidPageId.into_andromeda_error())?;
         if page_id.is_zero() {
             return Err(BufferPoolError::InvalidPageId.into_andromeda_error());
@@ -204,7 +144,7 @@ impl BufferFrame {
             return Err(BufferPoolError::InvalidPageImage.into_andromeda_error());
         }
         let page_lsn = self
-            .page_lsn
+            .page_lsn()
             .ok_or_else(|| BufferPoolError::InvalidPageImage.into_andromeda_error())?;
         if page_lsn.is_zero() {
             return Err(BufferPoolError::InvalidPageImage.into_andromeda_error());
@@ -215,29 +155,19 @@ impl BufferFrame {
         if image_page_lsn != page_lsn {
             return Err(BufferPoolError::InvalidPageImage.into_andromeda_error());
         }
-        if let Some(first_dirty_lsn) = self.first_dirty_lsn
-            && (first_dirty_lsn.is_zero() || first_dirty_lsn < page_lsn)
-        {
-            return Err(BufferPoolError::InvalidDirtyLsn.into_andromeda_error());
-        }
-        if let Some(last_dirty_lsn) = self.last_dirty_lsn
-            && (last_dirty_lsn.is_zero() || last_dirty_lsn < page_lsn)
-        {
-            return Err(BufferPoolError::InvalidDirtyLsn.into_andromeda_error());
-        }
         Ok(())
     }
 
     pub const fn id(&self) -> BufferFrameId {
-        self.id
+        BufferFrameId::from_core(self.core.id())
     }
 
     pub const fn state(&self) -> BufferFrameState {
-        self.state
+        self.core.state()
     }
 
-    pub const fn page_id(&self) -> Option<PageId> {
-        self.page_id
+    pub fn page_id(&self) -> Option<PageId> {
+        self.core.page_id_value().map(PageId::new)
     }
 
     pub const fn page_size(&self) -> PageSize {
@@ -245,27 +175,27 @@ impl BufferFrame {
     }
 
     pub const fn page_lsn(&self) -> Option<Lsn> {
-        self.page_lsn
+        self.core.page_lsn()
     }
 
     pub const fn pin_count(&self) -> u32 {
-        self.pin_count
+        self.core.pin_count()
     }
 
     pub const fn is_dirty(&self) -> bool {
-        self.is_dirty
+        self.core.is_dirty()
     }
 
     pub const fn first_dirty_lsn(&self) -> Option<Lsn> {
-        self.first_dirty_lsn
+        self.core.first_dirty_lsn()
     }
 
     pub const fn last_dirty_lsn(&self) -> Option<Lsn> {
-        self.last_dirty_lsn
+        self.core.last_dirty_lsn()
     }
 
     pub const fn dirty_lsn(&self) -> Option<Lsn> {
-        self.first_dirty_lsn
+        self.core.first_dirty_lsn()
     }
 
     pub fn image(&self) -> Option<&PageImage> {
@@ -281,19 +211,11 @@ impl BufferFrame {
     }
 
     pub const fn clock_usage(&self) -> bool {
-        self.clock_usage
+        self.core.clock_usage()
     }
 
     pub fn pin(&mut self) -> AndromedaResult<()> {
-        if self.state != BufferFrameState::Resident {
-            return Err(BufferPoolError::InvalidFrameState.into_andromeda_error());
-        }
-        self.pin_count = self
-            .pin_count
-            .checked_add(1)
-            .ok_or_else(|| BufferPoolError::InvalidPinCount.into_andromeda_error())?;
-        self.set_clock_usage()?;
-        Ok(())
+        self.core.pin().map_err(map_core_error)
     }
 
     pub fn pin_guard(&mut self) -> AndromedaResult<super::PageGuard<'_>> {
@@ -305,135 +227,72 @@ impl BufferFrame {
     }
 
     pub fn unpin(&mut self) -> AndromedaResult<()> {
-        if self.state != BufferFrameState::Resident {
-            return Err(BufferPoolError::InvalidFrameState.into_andromeda_error());
-        }
-        self.pin_count = self
-            .pin_count
-            .checked_sub(1)
-            .ok_or_else(|| BufferPoolError::InvalidPinCount.into_andromeda_error())?;
-        Ok(())
+        self.core.unpin().map_err(map_core_error)
     }
 
     pub fn mark_dirty(&mut self, dirty_lsn: Lsn) -> AndromedaResult<()> {
-        if self.state != BufferFrameState::Resident {
-            return Err(BufferPoolError::InvalidFrameState.into_andromeda_error());
-        }
-        if self.pin_count == 0 {
-            return Err(BufferPoolError::InvalidPinCount.into_andromeda_error());
-        }
-        let page_lsn = self
-            .page_lsn
-            .ok_or_else(|| BufferPoolError::InvalidPageImage.into_andromeda_error())?;
-        if dirty_lsn.is_zero() || dirty_lsn < page_lsn {
-            return Err(BufferPoolError::InvalidDirtyLsn.into_andromeda_error());
-        }
-        if let Some(last_dirty_lsn) = self.last_dirty_lsn {
-            if dirty_lsn < last_dirty_lsn {
-                return Err(BufferPoolError::InvalidDirtyLsn.into_andromeda_error());
-            }
-        } else {
-            self.first_dirty_lsn = Some(dirty_lsn);
-        }
-        self.last_dirty_lsn = Some(dirty_lsn);
-        self.is_dirty = true;
-        self.set_clock_usage()?;
-        Ok(())
+        self.core.mark_dirty(dirty_lsn).map_err(map_core_error)
     }
 
     pub fn mark_clean_after_flush(&mut self, flushed_lsn: Lsn) -> AndromedaResult<()> {
-        if !matches!(
-            self.state,
-            BufferFrameState::Resident | BufferFrameState::Flushing
-        ) {
-            return Err(BufferPoolError::InvalidFrameState.into_andromeda_error());
-        }
-        let first_dirty_lsn = self
-            .first_dirty_lsn
-            .ok_or_else(|| BufferPoolError::InvalidDirtyLsn.into_andromeda_error())?;
-        let last_dirty_lsn = self
-            .last_dirty_lsn
-            .ok_or_else(|| BufferPoolError::InvalidDirtyLsn.into_andromeda_error())?;
-        if first_dirty_lsn > last_dirty_lsn || flushed_lsn < last_dirty_lsn {
-            return Err(BufferPoolError::InvalidDirtyLsn.into_andromeda_error());
-        }
-        self.is_dirty = false;
-        self.first_dirty_lsn = None;
-        self.last_dirty_lsn = None;
-        self.state = BufferFrameState::Resident;
-        self.validate()
+        self.core
+            .mark_clean_after_flush(flushed_lsn)
+            .map_err(map_core_error)
     }
 
     pub fn mark_clean(&mut self) {
-        self.is_dirty = false;
-        self.first_dirty_lsn = None;
-        self.last_dirty_lsn = None;
-        if self.state == BufferFrameState::Flushing {
-            self.state = BufferFrameState::Resident;
-        }
+        self.core.mark_clean();
     }
 
     pub fn set_clock_usage(&mut self) -> AndromedaResult<()> {
-        if self.state == BufferFrameState::Free {
-            return Err(BufferPoolError::InvalidClockUsage.into_andromeda_error());
-        }
-        self.clock_usage = true;
-        Ok(())
+        self.core.set_clock_usage().map_err(map_core_error)
     }
 
     pub fn consume_clock_usage(&mut self) -> AndromedaResult<bool> {
-        if self.state == BufferFrameState::Free {
-            return Err(BufferPoolError::InvalidClockUsage.into_andromeda_error());
-        }
-        let previous = self.clock_usage;
-        self.clock_usage = false;
-        Ok(previous)
+        self.core.consume_clock_usage().map_err(map_core_error)
     }
 
     pub fn begin_flush(&mut self) -> AndromedaResult<()> {
-        if self.state != BufferFrameState::Resident || !self.is_dirty || self.pin_count != 0 {
-            return Err(BufferPoolError::InvalidFrameState.into_andromeda_error());
-        }
-        self.state = BufferFrameState::Flushing;
-        self.validate()
+        self.core.begin_flush().map_err(map_core_error)
     }
 
     pub(crate) fn abort_flush(&mut self) -> AndromedaResult<()> {
-        if self.state != BufferFrameState::Flushing || !self.is_dirty || self.pin_count != 0 {
-            return Err(BufferPoolError::InvalidFrameState.into_andromeda_error());
-        }
-        self.state = BufferFrameState::Resident;
-        self.validate()
+        self.core.abort_flush().map_err(map_core_error)
     }
 
     pub fn finish_flush(&mut self, flushed_lsn: Lsn) -> AndromedaResult<()> {
-        if self.state != BufferFrameState::Flushing {
-            return Err(BufferPoolError::InvalidFrameState.into_andromeda_error());
-        }
-        self.mark_clean_after_flush(flushed_lsn)
+        self.core.finish_flush(flushed_lsn).map_err(map_core_error)
     }
 
     pub fn begin_eviction(&mut self) -> AndromedaResult<()> {
-        if self.state != BufferFrameState::Resident || self.pin_count != 0 || self.is_dirty {
-            return Err(BufferPoolError::InvalidFrameState.into_andromeda_error());
-        }
-        self.state = BufferFrameState::Evicting;
-        self.validate()
+        self.core.begin_eviction().map_err(map_core_error)
     }
 
     pub fn finish_eviction(&mut self) -> AndromedaResult<()> {
-        if self.state != BufferFrameState::Evicting {
-            return Err(BufferPoolError::InvalidFrameState.into_andromeda_error());
-        }
+        self.core.finish_eviction().map_err(map_core_error)?;
         self.image = None;
-        self.page_id = None;
-        self.page_lsn = None;
-        self.pin_count = 0;
-        self.is_dirty = false;
-        self.first_dirty_lsn = None;
-        self.last_dirty_lsn = None;
-        self.clock_usage = false;
-        self.state = BufferFrameState::Free;
-        self.validate()
+        Ok(())
+    }
+}
+
+impl andromeda_buffer_pool::ClockFrame for BufferFrame {
+    fn clock_frame_id(&self) -> andromeda_buffer_pool::BufferFrameId {
+        self.id().into_core()
+    }
+
+    fn clock_state(&self) -> BufferFrameState {
+        self.state()
+    }
+
+    fn clock_pin_count(&self) -> u32 {
+        self.pin_count()
+    }
+
+    fn clock_is_dirty(&self) -> bool {
+        self.is_dirty()
+    }
+
+    fn consume_clock_usage(&mut self) -> Result<bool, andromeda_buffer_pool::BufferPoolCoreError> {
+        self.core.consume_clock_usage()
     }
 }

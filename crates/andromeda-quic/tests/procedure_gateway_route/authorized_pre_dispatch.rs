@@ -3,19 +3,13 @@ use super::*;
 #[test]
 fn test_authorized_route_rejects_non_application_surface_before_iam_or_dispatch() {
     let conn = setup_active_administration_connection();
-    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
-    let manifest = route_manifest();
-    let frame = valid_execute_frame(&manifest);
-    let (registry, _) = registry_for_application_user();
+    let err = ProcedureGateway::new(&conn).unwrap_err();
 
-    let err = gateway
-        .bind_authorized_application_procedure_route(71, &frame, &manifest, &registry)
-        .unwrap_err();
-
-    assert_route_rejection_before_authorization(
-        err,
-        AndromedaErrorKind::Security,
-        "Application surface",
+    assert_eq!(err.kind(), AndromedaErrorKind::Security);
+    assert!(
+        err.message().contains("Application-surface only"),
+        "gateway construction must reject non-Application surface before IAM or dispatch: {}",
+        err.message()
     );
 }
 

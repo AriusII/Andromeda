@@ -8,6 +8,8 @@ publish = false
 [dependencies]
 andromeda-buffer-pool.workspace = true
 andromeda-core.workspace = true
+andromeda-disk-page-store.workspace = true
+andromeda-hadr.workspace = true
 andromeda-manifest.workspace = true
 andromeda-observe.workspace = true
 andromeda-recovery.workspace = true

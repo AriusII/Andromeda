@@ -44,7 +44,7 @@ impl HadrStreamKind {
             Self::Heartbeat => HEARTBEAT_MAX_REPLICAS,
             Self::WalShipping => WAL_SHIPPING_MAX_REPLICAS,
             Self::PromotionVote => VOTE_MAX_REPLICAS,
-            Self::Control => 32,
+            Self::Control => RESERVED_STREAM_MAX - RESERVED_STREAM_MIN + 1,
         }
     }
 }

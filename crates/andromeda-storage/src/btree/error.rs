@@ -4,12 +4,31 @@ use andromeda_core::{AndromedaError, AndromedaResult};
 /// B-Tree index errors.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BTreeError {
-    KeyNotFound { key: Vec<u8> },
-    DuplicateKey { key: Vec<u8> },
-    NodeNotFound { node_id: PageId },
-    CorruptedNode { node_id: PageId, reason: String },
-    TreeTooDeep { height: u32 },
-    InvalidNodeFormat { page_id: PageId },
+    KeyNotFound {
+        key: Vec<u8>,
+    },
+    DuplicateKey {
+        key: Vec<u8>,
+    },
+    NodeNotFound {
+        node_id: PageId,
+    },
+    CorruptedNode {
+        node_id: PageId,
+        reason: String,
+    },
+    TreeTooDeep {
+        height: u32,
+    },
+    InvalidNodeFormat {
+        page_id: PageId,
+    },
+    NodeSerializationLimitExceeded {
+        node_id: PageId,
+        field: &'static str,
+        actual: usize,
+        max: usize,
+    },
     BufferPoolError(String),
     SerializationError(String),
 }
@@ -31,6 +50,16 @@ impl std::fmt::Display for BTreeError {
             BTreeError::InvalidNodeFormat { page_id } => {
                 write!(f, "invalid node format: page_id={:?}", page_id)
             }
+            BTreeError::NodeSerializationLimitExceeded {
+                node_id,
+                field,
+                actual,
+                max,
+            } => write!(
+                f,
+                "B-Tree node {:?} serialization field '{}' length {} exceeds max {}",
+                node_id, field, actual, max
+            ),
             BTreeError::BufferPoolError(msg) => write!(f, "buffer pool error: {}", msg),
             BTreeError::SerializationError(msg) => write!(f, "serialization error: {}", msg),
         }

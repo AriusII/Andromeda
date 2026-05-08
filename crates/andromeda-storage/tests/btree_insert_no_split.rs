@@ -333,7 +333,7 @@ mod btree_insert_no_split_tests {
         }
 
         // Serialize
-        let serialized = node.serialize();
+        let serialized = node.serialize().expect("serialize BTreeNodeImpl");
 
         // Deserialize
         let restored = BTreeNodeImpl::deserialize(PageId::new(100), &serialized)

@@ -8,6 +8,8 @@
 //! - Concurrent connections
 //! - End-to-end frame exchange
 
+#![cfg(feature = "insecure-test-tls")]
+
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -16,15 +18,19 @@ use std::time::Duration;
 use andromeda_core::AndromedaResult;
 use andromeda_core::SurfaceScope;
 use andromeda_quic::frame::{FRAME_HEADER_CRC_UNCHECKED, FrameType};
-use andromeda_quic::{FrameBytes, FrameCodec, FrameHeader};
+use andromeda_quic::{FrameBytes, FrameCodec, FrameHeader, SurfacePlane};
 use andromeda_quic_runtime_quinn::{
-    quinn_backend::{BidiStream, QuicClient, QuicServer},
+    quinn_backend::{BidiStream, QuicClient, QuicServer, QuinnRuntimeSurface},
     quinn_tls::MutualTlsTestConfig,
 };
 use tokio::{sync::oneshot, task::JoinHandle, time::timeout};
 
 fn create_test_tls() -> AndromedaResult<MutualTlsTestConfig> {
     MutualTlsTestConfig::ephemeral(vec!["localhost".to_string()])
+}
+
+fn test_runtime_surface() -> QuinnRuntimeSurface {
+    QuinnRuntimeSurface::for_plane(SurfacePlane::Application)
 }
 
 /// Allocates an ephemeral local socket address.
@@ -81,9 +87,10 @@ async fn test_server_startup_and_listen_address() -> AndromedaResult<()> {
     let addr = allocate_test_address();
     let tls = create_test_tls()?;
 
-    let server = QuicServer::new(addr, tls.server_config())?;
+    let server = QuicServer::for_surface(addr, tls.server_config(), test_runtime_surface())?;
     let local_addr = server.local_addr();
 
+    assert_eq!(server.runtime_surface(), test_runtime_surface());
     assert_eq!(local_addr.ip(), std::net::IpAddr::V4(Ipv4Addr::LOCALHOST));
     assert_ne!(local_addr.port(), 0, "Port should be allocated");
 
@@ -95,14 +102,15 @@ async fn test_server_startup_and_listen_address() -> AndromedaResult<()> {
 async fn test_client_connection_tls_negotiation() -> AndromedaResult<()> {
     let server_addr = allocate_test_address();
     let tls = create_test_tls()?;
-    let server = QuicServer::new(server_addr, tls.server_config())?;
+    let server = QuicServer::for_surface(server_addr, tls.server_config(), test_runtime_surface())?;
     let listen_addr = server.local_addr();
 
     let server_handle = tokio::spawn(async move {
         with_timeout(Duration::from_secs(5), server.accept_connection()).await
     });
 
-    let client = QuicClient::new(tls.client_config())?;
+    let client = QuicClient::for_surface(tls.client_config(), test_runtime_surface())?;
+    assert_eq!(client.runtime_surface(), test_runtime_surface());
 
     let conn = with_timeout(
         Duration::from_secs(5),
@@ -123,7 +131,7 @@ async fn test_client_connection_tls_negotiation() -> AndromedaResult<()> {
 async fn test_frame_echo_unidirectional() -> AndromedaResult<()> {
     let server_addr = allocate_test_address();
     let tls = create_test_tls()?;
-    let server = QuicServer::new(server_addr, tls.server_config())?;
+    let server = QuicServer::for_surface(server_addr, tls.server_config(), test_runtime_surface())?;
     let listen_addr = server.local_addr();
 
     let server_handle = tokio::spawn(async move {
@@ -131,7 +139,7 @@ async fn test_frame_echo_unidirectional() -> AndromedaResult<()> {
         Ok(())
     });
 
-    let client = QuicClient::new(tls.client_config())?;
+    let client = QuicClient::for_surface(tls.client_config(), test_runtime_surface())?;
     let mut conn = with_timeout(
         Duration::from_secs(5),
         client.connect(listen_addr, "localhost"),
@@ -167,7 +175,7 @@ async fn test_frame_echo_unidirectional() -> AndromedaResult<()> {
 async fn test_peer_certificate_chain_is_exposed() -> AndromedaResult<()> {
     let server_addr = allocate_test_address();
     let tls = create_test_tls()?;
-    let server = QuicServer::new(server_addr, tls.server_config())?;
+    let server = QuicServer::for_surface(server_addr, tls.server_config(), test_runtime_surface())?;
     let listen_addr = server.local_addr();
 
     let server_handle = tokio::spawn(async move {
@@ -175,7 +183,7 @@ async fn test_peer_certificate_chain_is_exposed() -> AndromedaResult<()> {
         Ok(conn.peer_certificate_chain().len())
     });
 
-    let client = QuicClient::new(tls.client_config())?;
+    let client = QuicClient::for_surface(tls.client_config(), test_runtime_surface())?;
     let conn = with_timeout(
         Duration::from_secs(5),
         client.connect(listen_addr, "localhost"),
@@ -200,7 +208,11 @@ async fn test_peer_certificate_chain_is_exposed() -> AndromedaResult<()> {
 async fn test_concurrent_connections() -> AndromedaResult<()> {
     let server_addr = allocate_test_address();
     let tls = create_test_tls()?;
-    let server = Arc::new(QuicServer::new(server_addr, tls.server_config())?);
+    let server = Arc::new(QuicServer::for_surface(
+        server_addr,
+        tls.server_config(),
+        test_runtime_surface(),
+    )?);
     let listen_addr = server.local_addr();
 
     let accepted_count = Arc::new(AtomicU32::new(0));
@@ -221,7 +233,7 @@ async fn test_concurrent_connections() -> AndromedaResult<()> {
         let listen_addr_copy = listen_addr;
         let client_tls = tls.client_config();
         let handle = tokio::spawn(async move {
-            let client = QuicClient::new(client_tls)?;
+            let client = QuicClient::for_surface(client_tls, test_runtime_surface())?;
             let _conn = with_timeout(
                 Duration::from_secs(5),
                 client.connect(listen_addr_copy, "localhost"),
@@ -251,7 +263,7 @@ async fn test_concurrent_connections() -> AndromedaResult<()> {
 async fn test_bidirectional_stream_communication() -> AndromedaResult<()> {
     let server_addr = allocate_test_address();
     let tls = create_test_tls()?;
-    let server = QuicServer::new(server_addr, tls.server_config())?;
+    let server = QuicServer::for_surface(server_addr, tls.server_config(), test_runtime_surface())?;
     let listen_addr = server.local_addr();
     let (release_server, keep_server_alive) = oneshot::channel();
 
@@ -268,7 +280,7 @@ async fn test_bidirectional_stream_communication() -> AndromedaResult<()> {
         Ok(bytes)
     });
 
-    let client = QuicClient::new(tls.client_config())?;
+    let client = QuicClient::for_surface(tls.client_config(), test_runtime_surface())?;
     let mut conn = with_timeout(
         Duration::from_secs(5),
         client.connect(listen_addr, "localhost"),
@@ -320,7 +332,7 @@ async fn test_bidirectional_stream_communication() -> AndromedaResult<()> {
 async fn test_multiple_sequential_frames() -> AndromedaResult<()> {
     let server_addr = allocate_test_address();
     let tls = create_test_tls()?;
-    let server = QuicServer::new(server_addr, tls.server_config())?;
+    let server = QuicServer::for_surface(server_addr, tls.server_config(), test_runtime_surface())?;
     let listen_addr = server.local_addr();
 
     let frame_count = Arc::new(AtomicU32::new(0));
@@ -336,7 +348,7 @@ async fn test_multiple_sequential_frames() -> AndromedaResult<()> {
         Ok(())
     });
 
-    let client = QuicClient::new(tls.client_config())?;
+    let client = QuicClient::for_surface(tls.client_config(), test_runtime_surface())?;
     let mut conn = with_timeout(
         Duration::from_secs(5),
         client.connect(listen_addr, "localhost"),
@@ -381,7 +393,7 @@ async fn test_multiple_sequential_frames() -> AndromedaResult<()> {
 async fn test_large_payload_frame() -> AndromedaResult<()> {
     let server_addr = allocate_test_address();
     let tls = create_test_tls()?;
-    let server = QuicServer::new(server_addr, tls.server_config())?;
+    let server = QuicServer::for_surface(server_addr, tls.server_config(), test_runtime_surface())?;
     let listen_addr = server.local_addr();
 
     let payload_size = 65_536;
@@ -401,7 +413,7 @@ async fn test_large_payload_frame() -> AndromedaResult<()> {
         Ok(n)
     });
 
-    let client = QuicClient::new(tls.client_config())?;
+    let client = QuicClient::for_surface(tls.client_config(), test_runtime_surface())?;
     let mut conn = with_timeout(
         Duration::from_secs(10),
         client.connect(listen_addr, "localhost"),

@@ -1,7 +1,3 @@
-/// Summary returned after rebuilding MVCC status from local durable records.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TransactionStatusRebuild {
-    pub committed_restored: usize,
-    pub rolled_back_restored: usize,
-    pub already_present: usize,
-}
+//! Compatibility re-export for transaction-log status rebuild summaries.
+
+pub use andromeda_transaction_log::TransactionStatusRebuild;

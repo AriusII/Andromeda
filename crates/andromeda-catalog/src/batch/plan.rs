@@ -1,36 +1,12 @@
-//! Dry-run plan types produced by `DefinitionBatch::dry_run`.
+//! Catalog dry-run plan types produced by `DefinitionBatch::dry_run`.
 
 use andromeda_definition_batch::DefinitionBatchId;
-use andromeda_types::{CatalogObjectId, CatalogVersion, DatabaseId, NamespaceId};
-
-use crate::{ObjectKind, QualifiedName};
+pub use andromeda_definition_batch::{
+    CatalogLifecycleAction, PlannedDefinition, PlannedLifecycleTransition,
+};
+use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId};
 
 use super::mutation::CatalogMutationPlan;
-
-/// A successfully planned object creation within a [`DefinitionBatchPlan`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PlannedDefinition {
-    pub object_id: CatalogObjectId,
-    pub name: QualifiedName,
-    pub kind: ObjectKind,
-    pub planned_version: CatalogVersion,
-}
-
-/// The lifecycle action applied to an existing catalog object.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CatalogLifecycleAction {
-    Deprecate,
-}
-
-/// A successfully planned lifecycle transition within a [`DefinitionBatchPlan`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PlannedLifecycleTransition {
-    pub object_id: CatalogObjectId,
-    pub name: QualifiedName,
-    pub kind: ObjectKind,
-    pub action: CatalogLifecycleAction,
-    pub planned_version: CatalogVersion,
-}
 
 /// The validated, ready-to-apply result of `DefinitionBatch::dry_run`.
 #[derive(Debug, Clone, PartialEq, Eq)]

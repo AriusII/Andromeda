@@ -1,6 +1,7 @@
+use andromeda_buffer_pool::FlushReadiness;
 use andromeda_core::AndromedaResult;
 
-use crate::{PageStore, validate_wal_durability_before_page_flush};
+use crate::PageStore;
 
 use super::super::{
     BufferPoolError, FlushAllDirtyResult, FlushBlockedFrame, FlushError, FlushStorageOperation,
@@ -26,13 +27,15 @@ impl<S: PageStore> BufferPool<S> {
         for candidate in candidates {
             let page_id = candidate.page_id();
             let last_dirty_lsn = candidate.last_dirty_lsn();
-            let durable_lsn = observer.max_durable_lsn();
-
-            if !observer.is_durable(last_dirty_lsn)
-                || validate_wal_durability_before_page_flush(last_dirty_lsn, durable_lsn).is_err()
-            {
+            let FlushReadiness::Ready = andromeda_buffer_pool::classify_flush_candidate(
+                page_id.get(),
+                candidate.first_dirty_lsn(),
+                last_dirty_lsn,
+                observer,
+            ) else {
                 continue;
-            }
+            };
+            let durable_lsn = observer.max_durable_lsn();
 
             let index = *self
                 .page_table
@@ -93,21 +96,22 @@ impl<S: PageStore> BufferPool<S> {
             let page_id = candidate.page_id();
             let first_dirty_lsn = candidate.first_dirty_lsn();
             let last_dirty_lsn = candidate.last_dirty_lsn();
-            let durable_lsn = observer.max_durable_lsn();
-
-            if !observer.is_durable(last_dirty_lsn)
-                || validate_wal_durability_before_page_flush(last_dirty_lsn, durable_lsn).is_err()
-            {
+            let readiness = andromeda_buffer_pool::classify_flush_candidate(
+                page_id.get(),
+                first_dirty_lsn,
+                last_dirty_lsn,
+                observer,
+            );
+            let FlushReadiness::Ready = readiness else {
+                let FlushReadiness::Blocked(blocked) = readiness else {
+                    continue;
+                };
                 result
                     .blocked_by_wal_durability
-                    .push(FlushBlockedFrame::new_with_last_dirty_lsn(
-                        page_id,
-                        first_dirty_lsn,
-                        last_dirty_lsn,
-                        durable_lsn,
-                    ));
+                    .push(FlushBlockedFrame::from_core(blocked));
                 continue;
-            }
+            };
+            let durable_lsn = observer.max_durable_lsn();
 
             let index = match self.page_table.get(&page_id) {
                 Some(&idx) => idx,

@@ -1,17 +1,13 @@
-//! HA/DR stream mapping over QUIC connections.
+//! HA/DR logical stream mapping over QUIC connections.
 //!
-//! This module defines the stream multiplexing strategy for WAL shipping, replica heartbeats,
-//! and promotion votes over QUIC. It ensures deterministic stream ID allocation, proper flow
-//! control via backpressure, and orphan stream cleanup on connection failure.
+//! This module defines the stream multiplexing strategy for WAL shipping,
+//! replica heartbeats, and promotion votes before transport binding. It ensures
+//! deterministic logical stream allocation, proper flow control via
+//! backpressure, and orphan stream cleanup on connection failure.
 //!
 //! ## Architecture
 //!
-//! QUIC streams are reserved and allocated as follows:
-//!
-//! - **Client-initiated streams (even IDs)**: Client sends RPC commands; server replies on result streams
-//! - **Server-initiated streams (odd IDs)**: Server sends server-driven commands (heartbeats, votes)
-//!
-//! Andromeda partitions stream space into semantic ranges:
+//! Andromeda partitions a logical HA/DR stream space into semantic ranges:
 //!
 //! ```text
 //! ┌─ Stream ID Range ────────────────────────────────────────────┐
@@ -27,21 +23,27 @@
 //!
 //! The **HA/DR Control** range [128-255] is further subdivided:
 //!
-//! - **[128-159]** (32 stream IDs / 16 replica slots): Replica heartbeat channels (bidirectional)
-//! - **[160-191]** (32 stream IDs / 16 replica slots): WAL shipping channels (unidirectional primary→replica)
-//! - **[192-223]** (32 stream IDs / 16 replica slots): Promotion vote channels (bidirectional)
-//! - **[224-255]** (32 streams): Reserved for future use (backpressure, control signals)
+//! - **[128-159]**: Replica heartbeat channels.
+//! - **[160-191]**: WAL shipping channels.
+//! - **[192-223]**: Promotion vote channels.
+//! - **[224-255]**: Reserved for future use.
 //!
 //! ## Deterministic Allocation
 //!
-//! Stream IDs are allocated **deterministically** based on topology. Given a replica at index `r`:
+//! Logical stream IDs are allocated deterministically from topology. Given a
+//! replica at index `r`:
 //!
-//! - **Heartbeat Stream ID**: `128 + (r * 2)` (bidirectional, opened by primary)
-//! - **WAL Shipping Stream ID**: `160 + (r * 2)` (unidirectional, primary→replica)
-//! - **Promotion Vote Stream ID**: `192 + (r * 2)` (bidirectional, opened by replica)
+//! - **Heartbeat logical stream ID**: `128 + r`
+//! - **WAL shipping logical stream ID**: `160 + r`
+//! - **Promotion vote logical stream ID**: `192 + r`
 //!
 //! This ensures that the same topology always produces the same stream allocation,
 //! enabling deterministic replay and consistent failover decisions.
+//!
+//! These values are not wire-level QUIC stream IDs. QUIC stream IDs encode
+//! initiator and directionality in low bits and are allocated by the transport.
+//! A transport facade binds each HADR logical stream ID to whatever QUIC stream
+//! ID was actually opened.
 //!
 //! ## Backpressure Integration
 //!
@@ -82,39 +84,65 @@ pub use cleanup::HadrStreamCleanup;
 pub use kind::HadrStreamKind;
 pub use multiplexer::StreamMultiplexer;
 
-/// Reserved stream ID range for HA/DR control operations.
+/// Reserved logical stream ID range for HA/DR control operations.
 ///
-/// QUIC stream IDs are u64, but Andromeda reserves a canonical range for all
-/// HA/DR traffic. This ensures deterministic allocation across restarts.
+/// The transport layer maps these logical IDs to concrete QUIC stream IDs.
+/// Keeping this model logical avoids coupling HADR decisions to QUIC low-bit
+/// initiator and directionality encoding.
 pub const HADR_STREAM_MIN: u64 = 128;
 pub const HADR_STREAM_MAX: u64 = 255;
 
-const HADR_STREAM_STRIDE: u64 = 2;
+const HADR_STREAM_STRIDE: u64 = 1;
 const HADR_STREAMS_PER_REPLICA: usize = 3;
 
 /// Heartbeat stream subrange: [128-159].
 pub const HEARTBEAT_STREAM_MIN: u64 = 128;
 pub const HEARTBEAT_STREAM_MAX: u64 = 159;
 pub const HEARTBEAT_MAX_REPLICAS: u64 =
-    replica_slots_for_quic_range(HEARTBEAT_STREAM_MIN, HEARTBEAT_STREAM_MAX);
+    replica_slots_for_logical_range(HEARTBEAT_STREAM_MIN, HEARTBEAT_STREAM_MAX);
 
 /// WAL shipping stream subrange: [160-191].
 pub const WAL_SHIPPING_STREAM_MIN: u64 = 160;
 pub const WAL_SHIPPING_STREAM_MAX: u64 = 191;
 pub const WAL_SHIPPING_MAX_REPLICAS: u64 =
-    replica_slots_for_quic_range(WAL_SHIPPING_STREAM_MIN, WAL_SHIPPING_STREAM_MAX);
+    replica_slots_for_logical_range(WAL_SHIPPING_STREAM_MIN, WAL_SHIPPING_STREAM_MAX);
 
 /// Promotion vote stream subrange: [192-223].
 pub const VOTE_STREAM_MIN: u64 = 192;
 pub const VOTE_STREAM_MAX: u64 = 223;
-pub const VOTE_MAX_REPLICAS: u64 = replica_slots_for_quic_range(VOTE_STREAM_MIN, VOTE_STREAM_MAX);
+pub const VOTE_MAX_REPLICAS: u64 =
+    replica_slots_for_logical_range(VOTE_STREAM_MIN, VOTE_STREAM_MAX);
 
 /// Reserved/future stream subrange: [224-255].
 pub const RESERVED_STREAM_MIN: u64 = 224;
 pub const RESERVED_STREAM_MAX: u64 = 255;
 
-const fn replica_slots_for_quic_range(min: u64, max: u64) -> u64 {
-    (max - min).div_ceil(HADR_STREAM_STRIDE)
+/// Deterministic HADR stream identity before binding to a transport stream.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct HadrLogicalStreamId(u64);
+
+impl HadrLogicalStreamId {
+    pub const fn new(value: u64) -> Self {
+        Self(value)
+    }
+
+    pub const fn get(self) -> u64 {
+        self.0
+    }
+
+    pub const fn is_hadr_reserved(self) -> bool {
+        self.0 >= HADR_STREAM_MIN && self.0 <= HADR_STREAM_MAX
+    }
+}
+
+impl From<HadrLogicalStreamId> for u64 {
+    fn from(value: HadrLogicalStreamId) -> Self {
+        value.get()
+    }
+}
+
+const fn replica_slots_for_logical_range(min: u64, max: u64) -> u64 {
+    max - min + 1
 }
 
 #[cfg(test)]

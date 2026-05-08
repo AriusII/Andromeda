@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use andromeda_catalog::QualifiedName;
+use andromeda_contract::QualifiedName;
 use andromeda_srpl::{
     Cardinality, DiagnosticPhase, SrplAssignmentIr, SrplBusinessOperationIr,
     SrplBusinessOperationKindIr, SrplEmitValueIr, SrplPredicateIr, SrplProcedureBodyIr,

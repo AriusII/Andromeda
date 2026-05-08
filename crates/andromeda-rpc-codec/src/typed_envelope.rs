@@ -9,11 +9,12 @@ use andromeda_core::{
     SessionId, TransactionId,
 };
 use andromeda_proto_wire::{
-    FrameEnvelope as ProtoFrameEnvelope, GeneratedFrameEnvelope, PayloadKind, ProtocolVersion,
-    RpcResultStreamMetadataPolicy, decode_protobuf_message,
+    GeneratedFrameEnvelope, decode_protobuf_message, project_generated_frame_envelope,
 };
-
-use andromeda_rpc_protocol::{FrameBytes, ResultStreamMetadataPolicy, ResultStreamSequence};
+use andromeda_rpc_protocol::{
+    FrameBytes, FrameEnvelope as ProtocolFrameEnvelope, ResultStreamMetadataPolicy,
+    ResultStreamSequence,
+};
 
 /// Default V0 upper bound for one typed ResultStream.
 ///
@@ -55,7 +56,7 @@ impl TypedResultStreamContext {
         }
     }
 
-    pub const fn from_envelope(envelope: &ProtoFrameEnvelope) -> Self {
+    pub const fn from_envelope(envelope: &ProtocolFrameEnvelope) -> Self {
         Self {
             request_id: envelope.request_id,
             session_id: envelope.session_id,
@@ -129,7 +130,7 @@ impl Default for TypedResultStreamBounds {
 /// - payload kind not matching the QUIC `FrameType`;
 /// - request/session/transaction context drift between header and envelope;
 /// - envelope-level contract and payload invariants.
-pub fn decode_typed_frame_envelope(frame: &FrameBytes) -> AndromedaResult<ProtoFrameEnvelope> {
+pub fn decode_typed_frame_envelope(frame: &FrameBytes) -> AndromedaResult<ProtocolFrameEnvelope> {
     if frame.header.frame_type.allows_datagram() {
         return Err(protocol_error(
             "telemetry datagram frames do not carry typed RPC envelopes",
@@ -138,27 +139,7 @@ pub fn decode_typed_frame_envelope(frame: &FrameBytes) -> AndromedaResult<ProtoF
 
     let generated_envelope: GeneratedFrameEnvelope =
         decode_protobuf_message(&frame.payload, "typed frame envelope")?;
-    let Some(protocol_version) = generated_envelope.protocol_version else {
-        return Err(protocol_error(
-            "typed frame envelope requires protocol version",
-        ));
-    };
-    let payload_kind = PayloadKind::try_from(generated_envelope.payload_kind as u32)?;
-
-    let envelope = ProtoFrameEnvelope {
-        protocol_version: ProtocolVersion {
-            major: protocol_version.major,
-            minor: protocol_version.minor,
-        },
-        contract_hash: ContractHash::from_slice(&generated_envelope.contract_hash)?,
-        catalog_version: CatalogVersion::new(generated_envelope.catalog_version),
-        request_id: RequestId::new(generated_envelope.request_id),
-        session_id: SessionId::new(generated_envelope.session_id),
-        tx_id: generated_envelope.tx_id.map(TransactionId::new),
-        payload_kind,
-        payload: generated_envelope.payload,
-    };
-    envelope.validate()?;
+    let envelope = project_generated_frame_envelope(generated_envelope)?;
 
     if envelope.payload_kind.wire_code() != frame.header.frame_type.wire_code() {
         return Err(protocol_error(
@@ -259,24 +240,10 @@ fn validate_typed_result_stream_sequence_internal(
         return Err(protocol_error("typed result-stream sequence is incomplete"));
     }
 
-    ProtoFrameEnvelope::validate_rpc_stream_sequence_with_metadata_policy(
+    ProtocolFrameEnvelope::validate_rpc_stream_sequence_with_metadata_policy(
         &envelopes,
-        proto_metadata_policy(metadata_policy),
+        metadata_policy,
     )
-}
-
-const fn proto_metadata_policy(
-    metadata_policy: ResultStreamMetadataPolicy,
-) -> RpcResultStreamMetadataPolicy {
-    match metadata_policy {
-        ResultStreamMetadataPolicy::RowBatchRequired => {
-            RpcResultStreamMetadataPolicy::RowBatchRequired
-        }
-        ResultStreamMetadataPolicy::ZeroRowCompletionAllowed => {
-            RpcResultStreamMetadataPolicy::ZeroRowCompletionAllowed
-        }
-        ResultStreamMetadataPolicy::MutationOnly => RpcResultStreamMetadataPolicy::MutationOnly,
-    }
 }
 
 fn protocol_error(message: &'static str) -> AndromedaError {

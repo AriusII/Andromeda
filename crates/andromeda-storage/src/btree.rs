@@ -30,7 +30,8 @@ mod node;
 pub(crate) mod node_format_v1;
 
 pub use andromeda_storage_index::{
-    BTREE_DURABLE_FORMAT_PROMOTED, BTreeConfig, ColumnId, IndexId, RowId,
+    BTREE_DURABLE_FORMAT_PROMOTED, BTreeConfig, BTreeStatistics, ColumnId, IndexId, KeyValuePair,
+    RowId,
 };
 pub(crate) use concurrency::non_root_min_keys;
 pub use concurrency::{
@@ -38,11 +39,9 @@ pub use concurrency::{
     BTreeMvccInteraction, BTreeOperationKind, BTreePanicPoisonBehavior, BTreeRestartReason,
     BTreeScanConsistency,
 };
-pub use contract::{
-    BTreeIndex, BTreeIndexMetadata, BTreeIndexNode, BTreeRangeCursor, BTreeStatistics,
-};
+pub use contract::{BTreeIndex, BTreeIndexMetadata, BTreeIndexNode, BTreeRangeCursor};
 #[allow(deprecated)]
-pub use engine::{BTreeIndexEngine, BTreeNodeImpl, InMemoryBTreeIndexEngine, KeyValuePair};
+pub use engine::{BTreeIndexEngine, BTreeNodeImpl, InMemoryBTreeIndexEngine};
 pub use error::BTreeError;
 pub(crate) use error::deferred_btree_result;
 pub use node_format_v1::{

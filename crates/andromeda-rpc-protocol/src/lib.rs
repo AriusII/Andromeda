@@ -7,6 +7,8 @@
 //! own QUIC sockets, Quinn, TLS, listener lifecycle, executor dispatch, IAM, WAL,
 //! storage, or recovery behavior.
 
+mod envelope;
+mod errors;
 mod frame_code;
 mod frame_codec;
 mod frame_sequence;
@@ -19,6 +21,16 @@ pub mod frame;
 pub mod stream;
 
 pub use backpressure::{BackpressureReason, BackpressureSignal, BackpressureTransport};
+pub use envelope::{
+    AUTH_WIRE_CODE, CONTRACT_REQUEST_WIRE_CODE, CONTRACT_RESPONSE_WIRE_CODE, ERROR_WIRE_CODE,
+    FrameEnvelope, HELLO_WIRE_CODE, PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP, PayloadFrameFamily,
+    PayloadFrameMapping, PayloadKind, ProtocolVersion, RPC_BATCH_WIRE_CODE,
+    RPC_COMPLETION_WIRE_CODE, RPC_EXECUTE_REQUEST_WIRE_CODE, RPC_METADATA_WIRE_CODE,
+    RpcResultStreamMetadataPolicy,
+};
+pub use errors::{
+    BackpressureMetadata, ErrorEnvelope, ErrorFamily, RetryDisposition, TransactionEffect,
+};
 pub use frame::{
     AUTH_FRAME_CODE, CONTRACT_REQUEST_FRAME_CODE, CONTRACT_RESPONSE_FRAME_CODE, ERROR_FRAME_CODE,
     FRAME_CODEC_CRC_OFFSET, FRAME_CODEC_HEADER_LEN, FRAME_CODEC_VERSION,

@@ -1,9 +1,12 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use andromeda_admission::{InvocationContext, InvocationRequest};
-use andromeda_catalog::{ProcedureContractBinding, ProcedureContractRef};
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, InvocationId};
+use andromeda_contract::{ProcedureContractBinding, ProcedureContractRef};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
+use andromeda_types::{InvocationId, ProcedureId};
+
+use crate::procedure_resolver::{ProcedureResolveRequest, ProcedureResolver};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreTransactionDispatchEvidence {
@@ -178,6 +181,36 @@ pub trait ProcedureRequestResolver {
     fn resolve_request(&self, request: &InvocationRequest) -> AndromedaResult<()>;
 }
 
+impl<T> ProcedureRequestResolver for T
+where
+    T: ProcedureResolver,
+{
+    fn resolve_request(&self, request: &InvocationRequest) -> AndromedaResult<()> {
+        if request.expected_contract_hash != request.procedure.contract_hash {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "Procedure resolution request expected ContractHash must match ProcedureContractRef",
+            ));
+        }
+        if request.catalog_version != request.procedure.catalog_version {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "Procedure resolution request CatalogVersion must match ProcedureContractRef",
+            ));
+        }
+
+        let resolve_request = ProcedureResolveRequest::from_contract_ref(request.procedure)
+            .map_err(|error| error.into_andromeda_error())?;
+        let response = self
+            .resolve_procedure(resolve_request.clone())
+            .map_err(|error| error.into_andromeda_error())?;
+
+        resolve_request
+            .validate_response(&response)
+            .map_err(|error| error.into_andromeda_error())
+    }
+}
+
 #[derive(Clone)]
 pub struct SrplDispatcherAdapter<Resolver, Procedure> {
     resolver: Resolver,
@@ -246,7 +279,7 @@ where
     }
 }
 
-fn srpl_local_boundary_contract_error(procedure_id: andromeda_core::ProcedureId) -> AndromedaError {
+fn srpl_local_boundary_contract_error(procedure_id: ProcedureId) -> AndromedaError {
     AndromedaError::new(
         AndromedaErrorKind::Contract,
         format!(

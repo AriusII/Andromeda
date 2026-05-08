@@ -8,6 +8,9 @@
 //!
 //! - **Certificate Identity Required**: The QUIC connection must have a bound
 //!   certificate identity before dispatch. If absent, returns `AuthorizationError`.
+//! - **Application Plane Only**: ProcedureGateway admits only the tenant-facing
+//!   Application surface. Administration, HA/DR, recovery, and monitoring work
+//!   must stay on their dedicated surfaces.
 //! - **Plane Scope Match**: The certificate's `surface_scope` is derived from
 //!   the connection's [`SurfacePlane`] via `plane_to_required_surface_scope()`.
 //! - **Stream Correlation**: QUIC stream ID is bound to [`InvocationId`] via
@@ -39,13 +42,14 @@ use crate::{Connection, SurfacePlane};
 
 /// QUIC-side gateway for Procedure dispatch.
 ///
-/// This type holds the connection state, certificate identity, and surface plane,
-/// and exposes the transport evidence needed by the executor-owned admission
-/// gate.
+/// This type holds the Application connection state, certificate identity, and
+/// surface plane, and exposes the transport evidence needed by the
+/// executor-owned admission gate.
 ///
 /// ## Type Invariants
 ///
 /// - The connection must be in `LifecycleState::Active` before dispatch.
+/// - The connection must be bound to [`SurfacePlane::Application`].
 /// - The certificate identity must be bound to the connection.
 /// - The certificate scope must match the connection plane.
 /// - Core IAM authorization can be enforced by
@@ -74,6 +78,7 @@ impl<'a> ProcedureGateway<'a> {
     ///
     /// Returns `Err` if:
     /// - The connection has no bound certificate identity.
+    /// - The connection is not bound to the Application surface.
     /// - The certificate scope does not match the connection plane.
     ///
     /// # Example
@@ -294,26 +299,26 @@ mod tests {
     }
 
     #[test]
-    fn gateway_accepts_valid_administration_connection() {
+    fn gateway_rejects_valid_administration_connection() {
         let conn = setup_administration_connection();
-        let gateway = ProcedureGateway::new(&conn).unwrap();
+        let result = ProcedureGateway::new(&conn);
 
-        assert_eq!(gateway.surface_plane(), SurfacePlane::Administration);
         assert_eq!(
-            gateway.certificate_identity().fingerprint().as_str(),
-            "b".repeat(64)
+            result.unwrap_err().message(),
+            "ProcedureGateway is Application-surface only; administration, HA/DR, recovery, and monitoring work must use their dedicated surfaces"
         );
     }
 
     #[test]
-    fn gateway_accepts_valid_ha_connection() {
+    fn gateway_rejects_valid_ha_connection() {
         let conn = setup_ha_connection();
-        let gateway = ProcedureGateway::new(&conn).unwrap();
+        let result = ProcedureGateway::new(&conn);
 
-        assert_eq!(gateway.surface_plane(), SurfacePlane::HighAvailability);
-        assert_eq!(
-            gateway.certificate_identity().fingerprint().as_str(),
-            "c".repeat(64)
+        assert!(
+            result
+                .unwrap_err()
+                .message()
+                .contains("Application-surface only")
         );
     }
 

@@ -9,6 +9,8 @@ publish = false
 andromeda-catalog.workspace = true
 andromeda-digest.workspace = true
 andromeda-error.workspace = true
+andromeda-optimizer.workspace = true
+andromeda-procedure-runtime.workspace = true
 andromeda-srpl-ast.workspace = true
 andromeda-srpl-binder.workspace = true
 andromeda-srpl-cardinality.workspace = true
@@ -22,4 +24,6 @@ andromeda-srpl-parser.workspace = true
 andromeda-types.workspace = true
 
 [dev-dependencies]
+andromeda-contract.workspace = true
+andromeda-plan-cache.workspace = true
 proptest.workspace = true

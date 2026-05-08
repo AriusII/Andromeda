@@ -23,16 +23,35 @@ classification and envelope contracts compile-safe here.
 
 "#]
 
+mod durable_payload;
 mod mutation;
 mod publication;
 
+pub use durable_payload::{
+    decode_catalog_durable_payload, encode_catalog_durable_payload,
+    validate_catalog_mutation_record,
+};
 pub use mutation::{
-    CatalogDurableMutationPayload, CatalogRecoveryAnomalyKind, CatalogSkippedBatchReason,
+    CATALOG_CHANGE_APPLY_WAL_KIND_TAG, CATALOG_CHANGE_BEGIN_WAL_KIND_TAG,
+    CATALOG_CHANGE_COMMIT_WAL_KIND_TAG, CatalogDurableMutationPayload, CatalogLifecycleTarget,
+    CatalogMutationBoundary, CatalogMutationDelta, CatalogMutationOperation, CatalogMutationRecord,
+    CatalogMutationRecordKind, CatalogPublicationSemantics, CatalogRecoveryAnomalyKind,
+    CatalogSkippedBatchReason, CatalogWalPayloadDecodeError, CatalogWalPayloadDecodeErrorKind,
+    DefinitionBatchDependencyGraphHash,
 };
 pub use publication::{
     CatalogPlanInvalidatedContract, CatalogPlanInvalidationReport, CatalogPublicationAudience,
-    CatalogPublicationAuditTrace, CatalogPublicationReasonCode,
-    CatalogPublicationReceiptExpectation, CatalogPublicationReplayTerminalOutcome,
-    CatalogPublicationSubscriptionReplayRecordKind, CatalogSubscriberKind,
-    CatalogSubscriptionAcknowledgement, CatalogVisibleChangeAuditEvidence,
+    CatalogPublicationAuditTrace, CatalogPublicationBatchIdView, CatalogPublicationHashEvidence,
+    CatalogPublicationReasonCode, CatalogPublicationReceiptExpectation,
+    CatalogPublicationReceiptView, CatalogPublicationReplayKey,
+    CatalogPublicationReplayTerminalOutcome, CatalogPublicationReplayTerminalRecord,
+    CatalogPublicationReport, CatalogPublicationSubscriptionReplayEvidence,
+    CatalogPublicationSubscriptionReplayRecord, CatalogPublicationSubscriptionReplayRecordKind,
+    CatalogPublicationSubscriptionReplaySummary, CatalogPublishedContract, CatalogPublishedObject,
+    CatalogRecoveryReplayExpectation, CatalogSubscriberIdentity, CatalogSubscriberKind,
+    CatalogSubscriptionAcknowledgement, CatalogSubscriptionReplayKey,
+    CatalogVisibleChangeAuditEvidence, catalog_visible_change_audit_evidence_for_publication,
+    replay_publication_subscription_changes, validate_catalog_publication_receipt,
+    validate_subscription_acknowledgement_for_publication,
+    validate_visible_change_audit_for_publication,
 };

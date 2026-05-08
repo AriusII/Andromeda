@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 use andromeda_srpl_parser::{
-    BusinessOperationKindAst, Cardinality, DiagnosticPhase, SourceSpan, TokenKind, lex,
+    BusinessOperationKindAst, Cardinality, DiagnosticPhase, SourceSpan, Token, TokenKind, lex,
     parse_procedure_signature, source_location,
 };
 use andromeda_types::{AbsencePolicy, ScalarType};
@@ -23,10 +23,11 @@ fn assert_utf8_span(source: &str, span: SourceSpan) {
 }
 
 #[test]
-fn lexer_directly_emits_keywords_punctuation_and_byte_spans() {
+fn parser_facade_reexports_lexer_tokens_and_byte_spans() {
     let source = "procedure Inventory.ReserveStock accepts (ProductId i64) returns Reservation one (Reserved bool);";
 
-    let tokens = lex(source).expect("parser owner lexer must accept a narrow signature");
+    let tokens: Vec<Token> =
+        lex(source).expect("parser facade reexport must accept a narrow signature");
 
     assert_eq!(tokens[0].kind, TokenKind::Procedure);
     assert!(tokens.iter().any(|token| token.kind == TokenKind::Dot));

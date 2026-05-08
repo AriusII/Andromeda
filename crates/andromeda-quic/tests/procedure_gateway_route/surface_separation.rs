@@ -75,10 +75,12 @@ fn application_route_rejects_privileged_manifest_permissions_before_iam_or_dispa
         ("recovery", "andromeda.recovery.restore", "restore"),
     ] {
         let mut manifest = route_manifest();
-        manifest.required_permissions = vec![CatalogRequiredPermission {
-            id: id.to_string(),
-            family: family.to_string(),
-        }];
+        manifest
+            .required_permissions
+            .push(CatalogRequiredPermission {
+                id: id.to_string(),
+                family: family.to_string(),
+            });
         let frame = valid_execute_frame(&manifest);
 
         let err = gateway
@@ -88,7 +90,7 @@ fn application_route_rejects_privileged_manifest_permissions_before_iam_or_dispa
         assert_route_rejection_before_authorization(
             err,
             AndromedaErrorKind::Contract,
-            "andromeda.execute_procedure",
+            "non-Application permission",
         );
 
         assert!(

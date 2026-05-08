@@ -1,3 +1,29 @@
+use andromeda_procedure_contract::ProtocolLayout;
+use andromeda_types::ContractHash;
+
+pub const PROTOCOL_PACKAGE: &str = "andromeda.protocol.v1";
+pub const CONTRACT_PACKAGE: &str = "andromeda.contract.v1";
+pub const PROTOCOL_FRAME_ENVELOPE_TYPE: &str = "andromeda.protocol.v1.FrameEnvelope";
+pub const DESCRIPTOR_SET_HASH_ALGORITHM: &str = "andromeda-stable-fnv1a-256-v1";
+
+pub fn descriptor_set_hash(descriptor_set_bytes: &[u8]) -> ContractHash {
+    crate::stable_contract_hash(b"andromeda-descriptor-set", descriptor_set_bytes)
+}
+
+pub fn frame_envelope_hash(descriptor_set_bytes: &[u8]) -> ContractHash {
+    crate::stable_contract_hash(
+        PROTOCOL_FRAME_ENVELOPE_TYPE.as_bytes(),
+        descriptor_set_bytes,
+    )
+}
+
+pub fn protocol_layout(descriptor_set_bytes: &[u8]) -> ProtocolLayout {
+    ProtocolLayout {
+        descriptor_set_hash: descriptor_set_hash(descriptor_set_bytes),
+        frame_envelope_hash: frame_envelope_hash(descriptor_set_bytes),
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, prost::Message)]
 pub struct GeneratedProtocolVersion {
     #[prost(uint32, tag = "1")]

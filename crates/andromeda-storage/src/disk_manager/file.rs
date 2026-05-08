@@ -4,6 +4,7 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 use andromeda_core::AndromedaResult;
+use andromeda_disk_page_store::PageFlushDurabilityBoundary;
 
 use crate::{ExtentDescriptor, ExtentId, Lsn, PageId, PageImage};
 
@@ -162,13 +163,7 @@ impl DiskManager for FileDiskManager {
             .ok_or_else(|| DiskManagerError::PageLayoutInvalid {
                 reason: "page image missing layout contract for page LSN".to_string(),
             })?;
-        if durable_lsn < page_lsn {
-            return Err(DiskManagerError::WalFenceViolation {
-                page_lsn: page_lsn.get(),
-                durable_lsn: durable_lsn.get(),
-            }
-            .into());
-        }
+        validate_page_flush_boundary(page_lsn, durable_lsn)?;
 
         self.extent_for_page_impl(page_id)?
             .ok_or_else(|| DiskManagerError::PageNotAllocated {
@@ -231,6 +226,27 @@ impl DiskManager for FileDiskManager {
     fn verify_extent_contiguity(&self, descriptor: &ExtentDescriptor) -> AndromedaResult<()> {
         self.verify_extent_contiguity_impl(descriptor)
     }
+}
+
+fn validate_page_flush_boundary(page_lsn: Lsn, durable_lsn: Lsn) -> AndromedaResult<()> {
+    PageFlushDurabilityBoundary::new(page_lsn, durable_lsn)
+        .validate()
+        .map_err(|error| match error {
+            andromeda_disk_page_store::PageFlushDurabilityError::MissingPageLsn => {
+                DiskManagerError::PageLayoutInvalid {
+                    reason: "page flush requires a nonzero page LSN".to_string(),
+                }
+                .into()
+            }
+            andromeda_disk_page_store::PageFlushDurabilityError::WalFenceViolation {
+                page_lsn,
+                durable_lsn,
+            } => DiskManagerError::WalFenceViolation {
+                page_lsn,
+                durable_lsn,
+            }
+            .into(),
+        })
 }
 
 fn bounded_page_read_len(page_bytes: usize, page_id: PageId) -> AndromedaResult<usize> {

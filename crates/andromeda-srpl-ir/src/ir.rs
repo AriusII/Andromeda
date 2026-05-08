@@ -10,6 +10,7 @@ pub use procedure::{
     MAX_SRPL_BODY_OPERATIONS, SrplBusinessOperationIr, SrplBusinessOperationKindIr,
     SrplProcedureBodyIr, SrplProcedureContractMetadata, SrplProcedureIr, SrplResultStreamIr,
 };
+pub use validation::validate_no_sql_like_symbols;
 pub use values::{
     ArithOp, ConstantLiteral, MAX_EXPR_DEPTH, SrplAssignmentIr, SrplEmitValueIr, SrplPredicateIr,
     SrplValueIr,

@@ -77,7 +77,7 @@ fn test_serialize_deserialize_leaf() {
     let row_id = RowId::new(99);
     node.insert_into_leaf(vec![10, 11], row_id).unwrap();
 
-    let serialized = node.serialize();
+    let serialized = node.serialize().expect("serialize BTreeNodeImpl");
     let deserialized = BTreeNodeImpl::deserialize(PageId::new(1), &serialized).unwrap();
 
     assert!(deserialized.is_leaf);

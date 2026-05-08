@@ -192,15 +192,14 @@ pub use generated::{
     CONTRACT_PACKAGE, DESCRIPTOR_SET_HASH_ALGORITHM, PROTOCOL_FRAME_ENVELOPE_TYPE,
     PROTOCOL_PACKAGE, decode_generated_message, descriptor_set_bytes, descriptor_set_hash,
     encode_generated_message, frame_envelope_hash, project_generated_frame_envelope,
-    protocol_layout, validate_catalog_procedure_manifest_resolution_request,
+    project_generated_structured_object_header, protocol_layout,
+    validate_catalog_procedure_manifest_resolution_request,
     validate_catalog_procedure_manifest_resolution_response, validate_generated_error_envelope,
     validate_generated_frame_envelope, validate_generated_invocation_request,
     validate_generated_invocation_response, validate_generated_invocation_response_sequence,
     validate_generated_rpc_batch, validate_generated_rpc_completion,
     validate_generated_rpc_execute_request, validate_generated_rpc_metadata,
-};
-pub use generated_validation::{
-    project_generated_structured_object_header, validate_generated_structured_object_header,
+    validate_generated_structured_object_header,
 };
 pub use manifest::*;
 pub use structured::*;

@@ -12,9 +12,11 @@ use std::sync::Arc;
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_core::{CertificateIdentity, SurfaceScope};
+use rustls::pki_types::CertificateDer;
+#[cfg(any(test, feature = "insecure-test-tls"))]
 use rustls::{
     RootCertStore,
-    pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer},
+    pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer},
 };
 
 use andromeda_quic::{
@@ -230,6 +232,7 @@ impl CertificateIdentityExtraction {
 /// both the server certificate and the client-auth identity certificate. This
 /// helper performs no network I/O and starts no executor.
 #[allow(dead_code)]
+#[cfg(any(test, feature = "insecure-test-tls"))]
 pub(crate) fn ephemeral_test_tls_config(
     required_scope: SurfaceScope,
 ) -> AndromedaResult<RuntimeQuinnTlsConfig> {
@@ -255,6 +258,7 @@ pub(crate) fn ephemeral_test_tls_config(
     )
 }
 
+#[cfg(any(test, feature = "insecure-test-tls"))]
 fn build_mtls_configs_from_der(
     server_cert_chain: Vec<CertificateDer<'static>>,
     server_private_key: PrivateKeyDer<'static>,
@@ -301,6 +305,7 @@ fn build_mtls_configs_from_der(
     })
 }
 
+#[cfg(any(test, feature = "insecure-test-tls"))]
 fn root_store_from_der(
     trust_roots: Vec<CertificateDer<'static>>,
 ) -> AndromedaResult<RootCertStore> {
@@ -317,6 +322,7 @@ fn root_store_from_der(
     Ok(roots)
 }
 
+#[cfg(any(test, feature = "insecure-test-tls"))]
 fn private_key_from_pkcs8_der(key_der: Vec<u8>) -> PrivateKeyDer<'static> {
     PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(key_der))
 }

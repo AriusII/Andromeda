@@ -21,6 +21,20 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use andromeda_wal::Lsn;
 
+mod clock;
+mod config;
+mod dirty;
+mod error;
+mod flush;
+mod frame;
+
+pub use clock::{ClockEvictionCandidate, ClockEvictionPolicy, ClockFrame};
+pub use config::BufferPoolFrameConfig;
+pub use dirty::{DirtyEntry, DirtyFlushCandidate, DirtyTracker};
+pub use error::BufferPoolCoreError;
+pub use flush::{FlushBlockedFrameCore, FlushReadiness, classify_flush_candidate};
+pub use frame::{BufferFrameCore, BufferFrameId, BufferFrameState};
+
 /// Observer contract for WAL durability tracking.
 ///
 /// Implementations report which LSNs have been made durable in the WAL. Buffer

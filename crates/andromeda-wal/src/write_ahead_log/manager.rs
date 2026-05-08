@@ -65,6 +65,12 @@ impl InMemoryWal {
                 "WAL record LSN must equal the next append LSN",
             ));
         }
+        if record.header.previous_lsn != self.last_lsn() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Storage,
+                "WAL record previous LSN must chain to the append tail",
+            ));
+        }
 
         let lsn = record.header.lsn;
         self.records.push(record);
@@ -190,6 +196,54 @@ mod tests {
         assert_eq!(wal.next_lsn(), Lsn::new(3));
         assert_eq!(wal.records()[0].header.kind, WalRecordKind::TxBegin);
         assert_eq!(wal.records()[1].header.kind, WalRecordKind::TxCommit);
+    }
+
+    #[test]
+    fn in_memory_wal_rejects_first_record_with_previous_lsn() {
+        let mut wal = InMemoryWal::new();
+        let transaction_id = TransactionId::new(10);
+        let record = WalRecord::from_parts(
+            WalRecordKind::TxBegin,
+            Lsn::new(1),
+            Some(Lsn::ZERO),
+            Some(transaction_id),
+            Vec::new(),
+        )
+        .unwrap();
+
+        let error = wal.append(record).unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Storage);
+        assert_eq!(
+            error.message(),
+            "WAL record previous LSN must chain to the append tail"
+        );
+        assert!(wal.is_empty());
+    }
+
+    #[test]
+    fn in_memory_wal_rejects_previous_lsn_mismatch_at_tail() {
+        let mut wal = InMemoryWal::new();
+        let transaction_id = TransactionId::new(11);
+        wal.append_tx_begin(transaction_id).unwrap();
+        let record = WalRecord::from_parts(
+            WalRecordKind::TxCommit,
+            Lsn::new(2),
+            None,
+            Some(transaction_id),
+            Vec::new(),
+        )
+        .unwrap();
+
+        let error = wal.append(record).unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Storage);
+        assert_eq!(
+            error.message(),
+            "WAL record previous LSN must chain to the append tail"
+        );
+        assert_eq!(wal.len(), 1);
+        assert_eq!(wal.last_lsn(), Some(Lsn::new(1)));
     }
 
     #[test]

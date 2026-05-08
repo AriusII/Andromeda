@@ -1,5 +1,5 @@
 use super::StreamCompletion;
-use andromeda_proto::StructuredObjectHeader;
+use andromeda_structured_object::StructuredObjectHeader;
 
 #[derive(Debug)]
 pub(super) enum ResultStreamMessage {

@@ -1,5 +1,9 @@
-use andromeda_core::{AndromedaError, PipelineClass, RamSectionRole, ResourceBudget};
+use andromeda_core::{AndromedaError, PipelineClass};
 use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
+use andromeda_resource::{
+    ExecutionResourceAdmissionDecision, ExecutionResourceAdmissionRequest,
+    ResourceAdmissionRejection, ResourceBudget,
+};
 use andromeda_storage::{
     CoreIoPlacementDecision, CoreIoPlacementPolicy, CoreIoPlacementRequest, OperationalProfile,
     OperationalProfileMode, StorageWorkloadClass,
@@ -14,6 +18,7 @@ pub struct ExecutionIoAdmissionDecision {
     pub pipeline_class: PipelineClass,
     pub workload: StorageWorkloadClass,
     pub resource_budget: ResourceBudget,
+    pub resource_decision: ExecutionResourceAdmissionDecision,
     pub placement: CoreIoPlacementDecision,
 }
 
@@ -29,13 +34,13 @@ impl ExecutionIoAdmissionRequest {
     pub fn new(
         operational_profile: OperationalProfile,
         pipeline_class: PipelineClass,
-        resource_budget: ResourceBudget,
+        resource_budget: impl Into<ResourceBudget>,
         placement_request: CoreIoPlacementRequest,
     ) -> Self {
         Self {
             operational_profile,
             pipeline_class,
-            resource_budget,
+            resource_budget: resource_budget.into(),
             placement_request,
         }
     }
@@ -56,29 +61,21 @@ impl ExecutionIoAdmissionRequest {
             });
         }
 
-        if self.pipeline_class.is_critical_path() && self.placement_request.use_gpu {
-            return Err(resource_reject(format!(
-                "GPU execution is not permitted on critical {} pipeline admission",
-                self.pipeline_class.name()
-            )));
-        }
-        if self.pipeline_class.is_critical_path() && self.operational_profile.hardware.gpu.available
-        {
-            return Err(resource_reject(format!(
-                "GPU-permitted operational profiles are not permitted for critical {} pipeline admission",
-                self.pipeline_class.name()
-            )));
-        }
+        let resource_admission = ExecutionResourceAdmissionRequest::new(
+            self.pipeline_class,
+            self.resource_budget,
+            self.placement_request.use_gpu,
+        );
 
-        reject_profile_that_permits_critical_gpu(&self.operational_profile)?;
+        resource_admission
+            .validate_no_critical_gpu(&self.operational_profile.hardware)
+            .map_err(resource_reject_from_admission)?;
         self.operational_profile
             .validate()
             .map_err(resource_reject_from_error)?;
-        validate_resource_budget(
-            self.resource_budget,
-            &self.operational_profile,
-            self.pipeline_class,
-        )?;
+        let resource_decision = resource_admission
+            .admit(&self.operational_profile.hardware)
+            .map_err(resource_reject_from_admission)?;
 
         let placement_policy = CoreIoPlacementPolicy::new(
             self.operational_profile.hardware.clone(),
@@ -102,89 +99,17 @@ impl ExecutionIoAdmissionRequest {
             pipeline_class: self.pipeline_class,
             workload: self.placement_request.workload,
             resource_budget: self.resource_budget,
+            resource_decision,
             placement,
         })
     }
 }
 
-fn reject_profile_that_permits_critical_gpu(
-    profile: &OperationalProfile,
-) -> Result<(), InvocationReject> {
-    for pipeline in [
-        PipelineClass::Commit,
-        PipelineClass::WalAppend,
-        PipelineClass::Rollback,
-        PipelineClass::Recovery,
-    ] {
-        if profile
-            .hardware
-            .gpu
-            .execution_policy
-            .permits_pipeline(pipeline)
-        {
-            return Err(resource_reject(
-                "operational profile must not permit GPU work on commit, WAL, rollback, or recovery critical paths",
-            ));
-        }
-    }
-
-    Ok(())
-}
-
-fn validate_resource_budget(
-    budget: ResourceBudget,
-    profile: &OperationalProfile,
-    pipeline: PipelineClass,
-) -> Result<(), InvocationReject> {
-    if budget.max_memory_bytes == 0 {
-        return Err(resource_reject(
-            "execution memory budget must not be zero during admission",
-        ));
-    }
-    if budget.max_streams == 0 {
-        return Err(resource_reject(
-            "execution stream budget must not be zero during admission",
-        ));
-    }
-    if pipeline.is_critical_path() && budget.max_streams != 1 {
-        return Err(resource_reject(
-            "critical path execution IO admission requires a single bounded stream",
-        ));
-    }
-
-    let ram = &profile.hardware.ram;
-    if ram.total_bytes != 0 {
-        let combined = budget
-            .max_memory_bytes
-            .checked_add(budget.max_temp_bytes)
-            .ok_or_else(|| resource_reject("execution resource budget byte totals overflow"))?;
-        if combined > ram.total_bytes {
-            return Err(resource_reject(
-                "execution memory budget plus temp budget exceeds operational profile RAM total",
-            ));
-        }
-    }
-
-    if let Some(max_execution_bytes) = ram.section_budget_bytes(RamSectionRole::Execution)
-        && budget.max_memory_bytes > max_execution_bytes
-    {
-        return Err(resource_reject(
-            "execution memory budget exceeds operational profile execution RAM section",
-        ));
-    }
-
-    if let Some(max_temp_bytes) = ram.section_budget_bytes(RamSectionRole::Temp)
-        && budget.max_temp_bytes > max_temp_bytes
-    {
-        return Err(resource_reject(
-            "execution temp budget exceeds operational profile temp RAM section",
-        ));
-    }
-
-    Ok(())
-}
-
 fn resource_reject_from_error(error: AndromedaError) -> InvocationReject {
+    resource_reject(error.to_string())
+}
+
+fn resource_reject_from_admission(error: ResourceAdmissionRejection) -> InvocationReject {
     resource_reject(error.to_string())
 }
 
@@ -236,6 +161,8 @@ mod tests {
             CriticalDecisionKind::ResourceGovernance
         );
         assert_eq!(decision.pipeline_class, PipelineClass::ForegroundExecution);
+        assert_eq!(decision.resource_decision.budget, decision.resource_budget);
+        assert_eq!(decision.resource_decision.evidence.streams, 2);
         assert!(!decision.placement.gpu_enabled);
     }
 

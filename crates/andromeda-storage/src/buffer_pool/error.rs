@@ -82,3 +82,50 @@ impl BufferPoolError {
         }
     }
 }
+
+impl From<andromeda_buffer_pool::BufferPoolCoreError> for BufferPoolError {
+    fn from(value: andromeda_buffer_pool::BufferPoolCoreError) -> Self {
+        match value {
+            andromeda_buffer_pool::BufferPoolCoreError::InvalidFrameCount {
+                frame_count,
+                max_frame_count,
+            } => Self::InvalidFrameCount {
+                frame_count,
+                max_frame_count,
+            },
+            andromeda_buffer_pool::BufferPoolCoreError::InvalidFrameId { frame_id } => {
+                Self::InvalidFrameId { frame_id }
+            }
+            andromeda_buffer_pool::BufferPoolCoreError::InvalidPageId => Self::InvalidPageId,
+            andromeda_buffer_pool::BufferPoolCoreError::InvalidDirtyLsn => Self::InvalidDirtyLsn,
+            andromeda_buffer_pool::BufferPoolCoreError::InvalidPinCount => Self::InvalidPinCount,
+            andromeda_buffer_pool::BufferPoolCoreError::InvalidFrameState => {
+                Self::InvalidFrameState
+            }
+            andromeda_buffer_pool::BufferPoolCoreError::InvalidClockUsage => {
+                Self::InvalidClockUsage
+            }
+            andromeda_buffer_pool::BufferPoolCoreError::NoEvictionFrames => Self::NoEvictionFrames,
+            andromeda_buffer_pool::BufferPoolCoreError::AllFramesPinned => Self::AllFramesPinned,
+            andromeda_buffer_pool::BufferPoolCoreError::NoEvictableFrame => Self::NoEvictableFrame,
+            andromeda_buffer_pool::BufferPoolCoreError::PageNotFound { page_id } => {
+                Self::PageNotFound { page_id }
+            }
+            andromeda_buffer_pool::BufferPoolCoreError::PageSizeMismatch => Self::PageSizeMismatch,
+            andromeda_buffer_pool::BufferPoolCoreError::WalDurabilityRequired => {
+                Self::WalDurabilityRequired
+            }
+            andromeda_buffer_pool::BufferPoolCoreError::PageTableConflict { page_id } => {
+                Self::PageTableConflict { page_id }
+            }
+            andromeda_buffer_pool::BufferPoolCoreError::InvalidPageLayout => {
+                Self::InvalidPageLayout
+            }
+            andromeda_buffer_pool::BufferPoolCoreError::InvalidPageImage => Self::InvalidPageImage,
+        }
+    }
+}
+
+pub(crate) fn map_core_error(error: andromeda_buffer_pool::BufferPoolCoreError) -> AndromedaError {
+    BufferPoolError::from(error).into_andromeda_error()
+}

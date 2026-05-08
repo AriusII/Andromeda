@@ -2,6 +2,7 @@ use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use std::collections::{HashMap, HashSet};
 
 use super::HADR_STREAMS_PER_REPLICA;
+use super::HadrLogicalStreamId;
 use super::allocation::StreamAllocation;
 use super::kind::HadrStreamKind;
 
@@ -16,14 +17,14 @@ use super::kind::HadrStreamKind;
 /// - Control stream (heartbeat, votes) have priority over data streams (WAL)
 #[derive(Debug)]
 pub struct StreamMultiplexer {
-    /// Map of stream ID to allocated stream information.
-    stream_allocations: HashMap<u64, (u64, HadrStreamKind)>,
+    /// Map of logical stream ID to allocated stream information.
+    stream_allocations: HashMap<HadrLogicalStreamId, (u64, HadrStreamKind)>,
 
-    /// Set of open (non-terminal) stream IDs.
-    open_streams: HashSet<u64>,
+    /// Set of open (non-terminal) logical stream IDs.
+    open_streams: HashSet<HadrLogicalStreamId>,
 
-    /// Set of closed (terminal) stream IDs.
-    closed_streams: HashSet<u64>,
+    /// Set of closed (terminal) logical stream IDs.
+    closed_streams: HashSet<HadrLogicalStreamId>,
 
     /// Maximum concurrent streams allowed (to prevent exhaustion).
     max_concurrent_streams: usize,
@@ -97,7 +98,9 @@ impl StreamMultiplexer {
     /// Returns `(replica_index, stream_kind)` if the stream is allocated;
     /// returns `None` otherwise.
     pub fn lookup_stream(&self, stream_id: u64) -> Option<(u64, HadrStreamKind)> {
-        self.stream_allocations.get(&stream_id).copied()
+        self.stream_allocations
+            .get(&HadrLogicalStreamId::new(stream_id))
+            .copied()
     }
 
     /// Marks a stream as closed (terminal).
@@ -108,15 +111,16 @@ impl StreamMultiplexer {
     ///
     /// Returns `Err` if the stream ID is not allocated.
     pub fn close_stream(&mut self, stream_id: u64) -> AndromedaResult<()> {
-        if !self.stream_allocations.contains_key(&stream_id) {
+        let logical_stream_id = HadrLogicalStreamId::new(stream_id);
+        if !self.stream_allocations.contains_key(&logical_stream_id) {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Protocol,
                 format!("stream ID {} is not allocated", stream_id),
             ));
         }
 
-        self.open_streams.remove(&stream_id);
-        self.closed_streams.insert(stream_id);
+        self.open_streams.remove(&logical_stream_id);
+        self.closed_streams.insert(logical_stream_id);
         Ok(())
     }
 
@@ -132,12 +136,14 @@ impl StreamMultiplexer {
 
     /// Returns true if a stream ID is open.
     pub fn is_stream_open(&self, stream_id: u64) -> bool {
-        self.open_streams.contains(&stream_id)
+        self.open_streams
+            .contains(&HadrLogicalStreamId::new(stream_id))
     }
 
     /// Returns true if a stream ID is closed.
     pub fn is_stream_closed(&self, stream_id: u64) -> bool {
-        self.closed_streams.contains(&stream_id)
+        self.closed_streams
+            .contains(&HadrLogicalStreamId::new(stream_id))
     }
 }
 

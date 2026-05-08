@@ -23,6 +23,7 @@ dependencies = [
  "andromeda-core",
  "andromeda-observe",
  "andromeda-proto",
+ "andromeda-resource",
  "andromeda-result-stream",
  "andromeda-storage",
 ]
@@ -127,7 +128,9 @@ name = "andromeda-catalog-recovery"
 version = "0.1.0"
 dependencies = [
  "andromeda-catalog-store",
+ "andromeda-definition-batch",
  "andromeda-error",
+ "andromeda-procedure-contract",
  "andromeda-types",
 ]
 
@@ -206,6 +209,13 @@ dependencies = [
 [[package]]
 name = "andromeda-definition-batch"
 version = "0.1.0"
+dependencies = [
+ "andromeda-catalog-store",
+ "andromeda-contract",
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-types",
+]
 
 [[package]]
 name = "andromeda-digest"
@@ -227,21 +237,22 @@ name = "andromeda-exec"
 version = "0.1.0"
 dependencies = [
  "andromeda-admission",
+ "andromeda-audit",
  "andromeda-business-fixtures",
  "andromeda-catalog",
  "andromeda-core",
  "andromeda-execution-trace",
+ "andromeda-iam",
  "andromeda-observe",
  "andromeda-procedure-runtime",
  "andromeda-proto",
  "andromeda-quic",
- "andromeda-quic-runtime-quinn",
  "andromeda-result-stream",
  "andromeda-retry",
+ "andromeda-security",
  "andromeda-srpl",
  "andromeda-storage",
  "andromeda-tx",
- "dashmap",
  "tokio",
 ]
 
@@ -259,6 +270,9 @@ version = "0.1.0"
 dependencies = [
  "andromeda-core",
  "andromeda-observe",
+ "andromeda-result-stream",
+ "andromeda-storage",
+ "andromeda-tx",
 ]
 
 [[package]]
@@ -276,6 +290,12 @@ dependencies = [
 [[package]]
 name = "andromeda-hadr"
 version = "0.1.0"
+dependencies = [
+ "andromeda-core",
+ "andromeda-observe",
+ "andromeda-wal",
+ "sha2",
+]
 
 [[package]]
 name = "andromeda-hardware"
@@ -288,8 +308,11 @@ dependencies = [
 name = "andromeda-iam"
 version = "0.1.0"
 dependencies = [
+ "andromeda-admission",
  "andromeda-audit",
+ "andromeda-core",
  "andromeda-security-contract",
+ "dashmap",
 ]
 
 [[package]]
@@ -317,6 +340,7 @@ version = "0.1.0"
 dependencies = [
  "andromeda-core",
  "andromeda-transaction-log",
+ "tokio",
 ]
 
 [[package]]
@@ -346,7 +370,9 @@ version = "0.1.0"
 dependencies = [
  "andromeda-contract",
  "andromeda-decision-trace",
+ "andromeda-error",
  "andromeda-plan-cache",
+ "andromeda-srpl-ir",
  "andromeda-statistics",
  "andromeda-types",
 ]
@@ -381,9 +407,11 @@ name = "andromeda-procedure-runtime"
 version = "0.1.0"
 dependencies = [
  "andromeda-admission",
- "andromeda-catalog",
- "andromeda-core",
+ "andromeda-contract",
+ "andromeda-error",
  "andromeda-observe",
+ "andromeda-srpl-ir",
+ "andromeda-types",
 ]
 
 [[package]]
@@ -398,6 +426,7 @@ dependencies = [
  "andromeda-error",
  "andromeda-procedure-contract",
  "andromeda-proto-wire",
+ "andromeda-rpc-protocol",
  "andromeda-structured-object",
  "andromeda-types",
  "proptest",
@@ -413,6 +442,8 @@ version = "0.1.0"
 dependencies = [
  "andromeda-error",
  "andromeda-procedure-contract",
+ "andromeda-rpc-protocol",
+ "andromeda-structured-object",
  "andromeda-types",
  "prost",
 ]
@@ -466,6 +497,9 @@ dependencies = [
 [[package]]
 name = "andromeda-resource"
 version = "0.1.0"
+dependencies = [
+ "andromeda-hardware",
+]
 
 [[package]]
 name = "andromeda-restore"
@@ -475,13 +509,15 @@ version = "0.1.0"
 name = "andromeda-result-stream"
 version = "0.1.0"
 dependencies = [
- "andromeda-core",
+ "andromeda-error",
  "andromeda-observe",
  "andromeda-proto",
  "andromeda-rpc-protocol",
  "andromeda-srpl-cardinality",
- "andromeda-storage",
- "andromeda-tx",
+ "andromeda-structured-object",
+ "andromeda-transaction",
+ "andromeda-types",
+ "andromeda-wal",
  "tokio",
 ]
 
@@ -517,6 +553,7 @@ name = "andromeda-rpc-protocol"
 version = "0.1.0"
 dependencies = [
  "andromeda-core",
+ "andromeda-procedure-contract",
 ]
 
 [[package]]
@@ -545,6 +582,10 @@ dependencies = [
 [[package]]
 name = "andromeda-security"
 version = "0.1.0"
+dependencies = [
+ "andromeda-core",
+ "andromeda-observe",
+]
 
 [[package]]
 name = "andromeda-security-contract"
@@ -572,8 +613,12 @@ name = "andromeda-srpl"
 version = "0.1.0"
 dependencies = [
  "andromeda-catalog",
+ "andromeda-contract",
  "andromeda-digest",
  "andromeda-error",
+ "andromeda-optimizer",
+ "andromeda-plan-cache",
+ "andromeda-procedure-runtime",
  "andromeda-srpl-ast",
  "andromeda-srpl-binder",
  "andromeda-srpl-cardinality",
@@ -665,6 +710,7 @@ dependencies = [
 name = "andromeda-srpl-lowering"
 version = "0.1.0"
 dependencies = [
+ "andromeda-contract",
  "andromeda-error",
  "andromeda-srpl-ast",
  "andromeda-srpl-ir",
@@ -710,6 +756,8 @@ version = "0.1.0"
 dependencies = [
  "andromeda-buffer-pool",
  "andromeda-core",
+ "andromeda-disk-page-store",
+ "andromeda-hadr",
  "andromeda-manifest",
  "andromeda-observe",
  "andromeda-recovery",
@@ -727,6 +775,10 @@ dependencies = [
 [[package]]
 name = "andromeda-storage-heap"
 version = "0.1.0"
+dependencies = [
+ "andromeda-core",
+ "andromeda-storage-page",
+]
 
 [[package]]
 name = "andromeda-storage-index"

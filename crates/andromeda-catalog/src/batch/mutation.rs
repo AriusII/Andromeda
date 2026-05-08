@@ -5,35 +5,27 @@ use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId};
 use std::collections::BTreeSet;
 
-use crate::{CatalogObjectRef, DefinitionBatchDependencyGraphHash, objects::CatalogDefinition};
+use crate::DefinitionBatchDependencyGraphHash;
 
 use super::definition::CatalogLifecycleTarget;
 
-/// Maximum number of Apply records that one durable DefinitionBatch replay may carry.
-pub const CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH: usize = 1024;
+pub use andromeda_catalog_store::{
+    CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH, CatalogPublicationSemantics,
+};
 
-/// Version-advancement proof for a single catalog mutation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CatalogMutation {
-    pub definition_batch_id: DefinitionBatchId,
-    pub previous_version: CatalogVersion,
-    pub next_version: CatalogVersion,
-}
+pub type CatalogMutation = andromeda_catalog_store::CatalogMutation<DefinitionBatchId>;
 
-impl CatalogMutation {
-    /// Returns `true` when `next_version` strictly advances beyond `previous_version`.
-    pub fn is_monotonic(self) -> bool {
-        self.next_version.get() > self.previous_version.get()
-    }
-}
+pub type CatalogMutationBoundary = andromeda_catalog_store::CatalogMutationBoundary<
+    DefinitionBatchId,
+    DefinitionBatchSourceHash,
+    DefinitionBatchDependencyGraphHash,
+>;
 
-/// Controls whether a mutation is acknowledged only within the engine or also
-/// confirmed to an external durable store.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CatalogPublicationSemantics {
-    PlannedVersionOnly,
-    DurablePublicationExternal,
-}
+pub type CatalogMutationDelta =
+    andromeda_catalog_store::CatalogMutationDelta<CatalogLifecycleTarget>;
+
+pub type CatalogMutationOperation =
+    andromeda_catalog_store::CatalogMutationOperation<CatalogLifecycleTarget>;
 
 /// Discriminant for a [`CatalogMutationRecord`] entry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -111,85 +103,6 @@ impl From<CatalogWalPayloadDecodeError> for AndromedaError {
             format!("{}: {}", error.kind.stable_code(), error.detail),
         )
     }
-}
-
-/// The boundary markers written at the start and end of a mutation's WAL span.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CatalogMutationBoundary {
-    pub batch_id: DefinitionBatchId,
-    pub database_id: DatabaseId,
-    pub namespace_id: NamespaceId,
-    pub previous_version: CatalogVersion,
-    pub next_version: CatalogVersion,
-    pub source_hash: DefinitionBatchSourceHash,
-    pub dependency_graph_hash: DefinitionBatchDependencyGraphHash,
-    pub expected_apply_count: usize,
-    pub publication_semantics: CatalogPublicationSemantics,
-}
-
-/// One atomic object-level change within a [`CatalogMutationPlan`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogMutationDelta {
-    pub operation_index: usize,
-    pub planned_version: CatalogVersion,
-    pub operation: CatalogMutationOperation,
-}
-
-impl CatalogMutationDelta {
-    pub fn create(
-        operation_index: usize,
-        planned_version: CatalogVersion,
-        definition: CatalogDefinition,
-    ) -> Self {
-        let object = definition.object_ref().clone();
-        Self {
-            operation_index,
-            planned_version,
-            operation: CatalogMutationOperation::CreateObject { object, definition },
-        }
-    }
-
-    pub fn deprecate(
-        operation_index: usize,
-        planned_version: CatalogVersion,
-        target: CatalogLifecycleTarget,
-    ) -> Self {
-        Self {
-            operation_index,
-            planned_version,
-            operation: CatalogMutationOperation::DeprecateObject { target },
-        }
-    }
-
-    pub fn object(&self) -> &CatalogObjectRef {
-        match &self.operation {
-            CatalogMutationOperation::CreateObject { object, .. } => object,
-            CatalogMutationOperation::DeprecateObject { target } => &target.object,
-        }
-    }
-
-    pub fn definition(&self) -> Option<&CatalogDefinition> {
-        match &self.operation {
-            CatalogMutationOperation::CreateObject { definition, .. } => Some(definition),
-            CatalogMutationOperation::DeprecateObject { .. } => None,
-        }
-    }
-}
-
-/// The specific operation carried by a [`CatalogMutationDelta`].
-#[allow(
-    clippy::large_enum_variant,
-    reason = "Catalog WAL mutation payloads stay inline to preserve deterministic value semantics."
-)]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CatalogMutationOperation {
-    CreateObject {
-        object: CatalogObjectRef,
-        definition: CatalogDefinition,
-    },
-    DeprecateObject {
-        target: CatalogLifecycleTarget,
-    },
 }
 
 /// A WAL record emitted during catalog mutation replay.

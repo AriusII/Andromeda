@@ -7,9 +7,11 @@ use std::path::Path;
 use std::sync::Arc;
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+#[cfg(any(test, feature = "insecure-test-tls"))]
+use rustls::pki_types::PrivatePkcs8KeyDer;
 use rustls::{
     RootCertStore, ServerConfig,
-    pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, pem::PemObject},
+    pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject},
 };
 
 /// TLS configuration builder for QUIC server.
@@ -18,11 +20,12 @@ pub struct ServerTlsConfig {
 }
 
 impl ServerTlsConfig {
-    /// Creates an mTLS server config from certificate and private key files.
+    /// Creates a self-trusting mTLS server config from certificate and private key files.
     ///
-    /// The server certificate file is also used as the client-auth trust root
-    /// for backward-compatible local deployments. Production deployments should
-    /// prefer [`Self::from_files_with_client_ca`] and pass an explicit client CA.
+    /// The server certificate file is also used as the client-auth trust root.
+    /// This is only available for test compatibility; production deployments
+    /// must use [`Self::from_files_with_client_ca`] and pass an explicit client CA.
+    #[cfg(any(test, feature = "insecure-test-tls"))]
     pub fn from_files(cert_path: &Path, key_path: &Path) -> AndromedaResult<Self> {
         Self::from_files_with_client_ca(cert_path, key_path, cert_path)
     }
@@ -57,8 +60,9 @@ impl ServerTlsConfig {
     /// Creates an ephemeral mTLS self-signed certificate for local testing.
     ///
     /// The generated certificate is trusted for client authentication. Tests
-    /// that need a matching client identity should use
-    /// [`MutualTlsTestConfig::ephemeral`].
+    /// that need a matching client identity should use the paired test config
+    /// behind `insecure-test-tls`.
+    #[cfg(any(test, feature = "insecure-test-tls"))]
     pub fn ephemeral(subject_alt_names: Vec<String>) -> AndromedaResult<Self> {
         Ok(Self {
             config: ephemeral_rustls_pair(subject_alt_names)?.server,
@@ -122,11 +126,13 @@ impl ClientTlsConfig {
 }
 
 /// Paired Quinn configs for local mTLS tests.
+#[cfg(any(test, feature = "insecure-test-tls"))]
 pub struct MutualTlsTestConfig {
     server: quinn::ServerConfig,
     client: quinn::ClientConfig,
 }
 
+#[cfg(any(test, feature = "insecure-test-tls"))]
 impl MutualTlsTestConfig {
     /// Creates a self-contained mTLS config pair with one ephemeral identity.
     pub fn ephemeral(subject_alt_names: Vec<String>) -> AndromedaResult<Self> {
@@ -149,11 +155,13 @@ impl MutualTlsTestConfig {
     }
 }
 
+#[cfg(any(test, feature = "insecure-test-tls"))]
 struct RustlsMutualTlsPair {
     server: rustls::ServerConfig,
     client: rustls::ClientConfig,
 }
 
+#[cfg(any(test, feature = "insecure-test-tls"))]
 fn ephemeral_rustls_pair(subject_alt_names: Vec<String>) -> AndromedaResult<RustlsMutualTlsPair> {
     use rcgen::generate_simple_self_signed;
 

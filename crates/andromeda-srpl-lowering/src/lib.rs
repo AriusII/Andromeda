@@ -12,6 +12,8 @@
 //! - avoid parser ownership, catalog storage, execution, storage, transaction,
 //!   WAL, transport, benchmark, analytics, GPU, and application-surface dependencies.
 
+mod contract;
 mod pipeline;
 
+pub use contract::lower_ir_to_contract_candidate;
 pub use pipeline::{BoundProcedureLoweringInput, lower_body_ast, lower_bound_procedure};

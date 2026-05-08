@@ -20,6 +20,22 @@ use std::fmt::{Display, Formatter};
 
 use andromeda_wal::Lsn;
 
+mod layout_codec;
+
+pub use layout_codec::{
+    NONE_PAGE_ID, PAGE_SIZE_16K, PAGE_SIZE_32K, PAGE_TRAILER_V0_LEN, PAGE_TYPE_FIXED_ROW,
+    PAGE_TYPE_FREE, PAGE_TYPE_HYBRID_ROW, PAGE_TYPE_MANIFEST, PERSISTED_HEADER_LEN,
+    PageLayoutCodecError, PersistedPageLayoutV1, decode_optional_page_id,
+    encode_page_size_16k_or_32k, optional_page_id_value, page_size_bytes_const,
+};
+
+/// Explicit integrity mode for durable pages.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PageIntegrityMode {
+    None,
+    HeaderCrc32,
+}
+
 /// Error returned when a durable page write boundary is unsafe.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PageFlushDurabilityError {

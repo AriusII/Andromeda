@@ -59,33 +59,15 @@ impl PermissionAuditEvent {
     }
 
     pub fn to_decision_trace(&self) -> DecisionTrace {
-        let reason = match &self.decision {
-            PermissionDecisionAudit::Allowed => {
-                format!(
-                    "permission allowed: principal {} granted permission {}",
-                    self.principal_id, self.required_permission
-                )
-            }
-            PermissionDecisionAudit::Denied(reason) => {
-                format!(
-                    "permission denied: principal {} - {}",
-                    self.principal_id,
-                    reason.explanation()
-                )
-            }
-            PermissionDecisionAudit::DeniedUnknownPrincipal => {
-                format!(
-                    "permission denied: unknown principal - permission required: {}",
-                    self.required_permission
-                )
-            }
-        };
-
         DecisionTrace {
             trace_id: self.trace_id,
             decision: CriticalDecisionKind::SecurityAuthorization,
-            reason,
+            reason: self.decision_reason(),
         }
+    }
+
+    pub fn decision_reason(&self) -> String {
+        self.to_audit().decision_reason()
     }
 
     pub fn is_allowed(&self) -> bool {
@@ -114,15 +96,20 @@ impl PermissionAuditEvent {
             self.trace_id,
             AuditEmissionKind::PermissionDecision,
             outcome,
-            self.to_decision_trace().reason,
+            self.decision_reason(),
             sink,
         )
     }
+
+    fn to_audit(&self) -> andromeda_audit::PermissionAuditEvent {
+        andromeda_audit::PermissionAuditEvent {
+            trace_id: self.trace_id,
+            principal_id: self.principal_id,
+            required_permission: self.required_permission,
+            decision: self.decision.clone(),
+            timestamp: self.timestamp,
+        }
+    }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PermissionDecisionAudit {
-    Allowed,
-    Denied(DenialAuditReason),
-    DeniedUnknownPrincipal,
-}
+pub type PermissionDecisionAudit = andromeda_audit::PermissionDecisionAudit;

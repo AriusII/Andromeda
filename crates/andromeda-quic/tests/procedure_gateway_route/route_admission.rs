@@ -60,7 +60,7 @@ fn test_gateway_rejects_cross_plane_invocation() {
     let mut conn = Connection::new(SurfacePlane::Application);
 
     let admin_identity = CertificateIdentity::new(
-        "wrong_scope".repeat(8),
+        "d".repeat(64),
         "admin-service".to_string(),
         SurfaceScope::Administration,
     )
@@ -181,10 +181,7 @@ fn test_gateway_validates_preconditions() {
 ///
 /// This test validates multi-plane scenarios:
 /// - Application gateway with Application identity -> preconditions pass.
-/// - Administration gateway with Administration identity -> preconditions pass.
-/// - HA gateway with Cluster identity -> preconditions pass.
-///
-/// Each plane must have its own authorization context and must not cross-dispatch.
+/// - Non-Application planes cannot construct a ProcedureGateway.
 #[test]
 fn test_gateway_enforces_plane_specific_boundaries() {
     // Application plane.
@@ -198,33 +195,27 @@ fn test_gateway_enforces_plane_specific_boundaries() {
 
     // Administration plane.
     let admin_conn = setup_active_administration_connection();
-    let admin_gateway =
-        ProcedureGateway::new(&admin_conn).expect("admin gateway construction failed");
-    assert_eq!(admin_gateway.surface_plane(), SurfacePlane::Administration);
     assert!(
-        admin_gateway.validate_dispatch_preconditions().is_ok(),
-        "admin gateway should validate preconditions"
+        ProcedureGateway::new(&admin_conn)
+            .unwrap_err()
+            .message()
+            .contains("Application-surface only"),
+        "admin plane must not construct the Application ProcedureGateway"
     );
 
     // HA plane.
     let ha_conn = setup_active_ha_connection();
-    let ha_gateway = ProcedureGateway::new(&ha_conn).expect("ha gateway construction failed");
-    assert_eq!(ha_gateway.surface_plane(), SurfacePlane::HighAvailability);
     assert!(
-        ha_gateway.validate_dispatch_preconditions().is_ok(),
-        "ha gateway should validate preconditions"
+        ProcedureGateway::new(&ha_conn)
+            .unwrap_err()
+            .message()
+            .contains("Application-surface only"),
+        "HA/DR plane must not construct the Application ProcedureGateway"
     );
 
-    // Each gateway should correlate stream IDs independently.
     let stream_id = 999u64;
     let app_inv = app_gateway.map_stream_to_invocation_id(stream_id);
-    let admin_inv = admin_gateway.map_stream_to_invocation_id(stream_id);
-    let ha_inv = ha_gateway.map_stream_to_invocation_id(stream_id);
 
-    // All should map to the same InvocationId despite different planes.
-    // (The mapping is stream_id-based, not plane-specific.)
-    assert_eq!(app_inv, admin_inv);
-    assert_eq!(admin_inv, ha_inv);
     assert_eq!(app_inv, InvocationId::new(stream_id));
 }
 
@@ -252,9 +243,9 @@ fn test_gateway_exposes_references() {
 
 ///
 /// The Monitoring plane is read-only for diagnostics. This test validates
-/// that the gateway correctly constructs and routes on the Monitoring plane.
+/// that the ProcedureGateway does not construct on the Monitoring plane.
 #[test]
-fn test_gateway_supports_monitoring_plane() {
+fn test_gateway_rejects_monitoring_plane() {
     let mut conn = Connection::new(SurfacePlane::Monitoring);
     let identity = CertificateIdentity::new(
         "e".repeat(64),
@@ -266,16 +257,12 @@ fn test_gateway_supports_monitoring_plane() {
     conn.accept_hello(&hello_frame(400)).unwrap();
     conn.accept_auth(&auth_frame(400)).unwrap();
 
-    let gateway = ProcedureGateway::new(&conn).expect("monitoring gateway construction failed");
+    let err = ProcedureGateway::new(&conn).unwrap_err();
 
-    assert_eq!(gateway.surface_plane(), SurfacePlane::Monitoring);
-    assert_eq!(
-        gateway.certificate_identity().surface_scope(),
-        SurfaceScope::MonitoringAgent
-    );
     assert!(
-        gateway.validate_dispatch_preconditions().is_ok(),
-        "monitoring gateway should validate preconditions"
+        err.message().contains("Application-surface only"),
+        "monitoring plane must not construct the Application ProcedureGateway: {}",
+        err.message()
     );
 }
 
@@ -353,25 +340,11 @@ fn test_gateway_allows_multiple_instances_from_same_connection() {
 #[test]
 fn test_gateway_rejects_non_application_surface_before_procedure_dispatch() {
     let conn = setup_active_administration_connection();
-    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
-    let manifest = route_manifest();
-    let frame = execute_request_frame(
-        "Inventory.ReserveStock",
-        manifest.contract_hash,
-        manifest.catalog_version,
-        Some(manifest.stats_version),
-        "application",
-        manifest.contract_hash,
-        manifest.catalog_version,
-    );
-
-    let err = gateway
-        .bind_application_procedure_route(7, &frame, &manifest)
-        .unwrap_err();
+    let err = ProcedureGateway::new(&conn).unwrap_err();
 
     assert_eq!(err.kind(), AndromedaErrorKind::Security);
     assert!(
-        err.message().contains("Application surface"),
+        err.message().contains("Application-surface only"),
         "wrong-surface error should name the Application surface"
     );
 }
@@ -391,21 +364,7 @@ fn test_gateway_rejects_every_non_application_surface_before_procedure_dispatch(
     ];
 
     for (conn, plane) in cases {
-        let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
-        let manifest = route_manifest();
-        let frame = execute_request_frame(
-            "Inventory.ReserveStock",
-            manifest.contract_hash,
-            manifest.catalog_version,
-            Some(manifest.stats_version),
-            "application",
-            manifest.contract_hash,
-            manifest.catalog_version,
-        );
-
-        let err = gateway
-            .bind_application_procedure_route(7, &frame, &manifest)
-            .unwrap_err();
+        let err = ProcedureGateway::new(&conn).unwrap_err();
 
         assert_eq!(
             err.kind(),
@@ -413,7 +372,7 @@ fn test_gateway_rejects_every_non_application_surface_before_procedure_dispatch(
             "{plane:?} must be rejected before Procedure dispatch"
         );
         assert!(
-            err.message().contains("Application surface"),
+            err.message().contains("Application-surface only"),
             "{plane:?} wrong-surface error should name the Application surface: {}",
             err.message()
         );
@@ -520,8 +479,8 @@ fn test_application_route_rejects_admin_and_hadr_manifest_permissions_before_dis
             "{family}/{id} must be rejected by manifest admission"
         );
         assert!(
-            err.message().contains("andromeda.execute_procedure"),
-            "Application route should require the application execute permission before dispatch: {}",
+            err.message().contains("non-Application permission"),
+            "Application route should reject privileged manifest permissions before dispatch: {}",
             err.message()
         );
     }
@@ -595,7 +554,7 @@ fn application_route_accepts_only_v0_application_stream_namespace_before_dispatc
 fn setup_active_monitoring_connection() -> Connection {
     let mut conn = Connection::new(SurfacePlane::Monitoring);
     let identity = CertificateIdentity::new(
-        "m".repeat(64),
+        "f".repeat(64),
         "monitoring-agent".to_string(),
         SurfaceScope::MonitoringAgent,
     )

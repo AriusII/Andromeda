@@ -8,3 +8,6 @@ publish = false
 [dependencies]
 andromeda-core.workspace = true
 andromeda-observe.workspace = true
+andromeda-result-stream.workspace = true
+andromeda-storage.workspace = true
+andromeda-tx.workspace = true

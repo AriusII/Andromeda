@@ -16,6 +16,7 @@ pub(super) fn resolve_gateway_state(connection: &Connection) -> AndromedaResult<
         .ok_or_else(|| security_error("procedure gateway requires bound certificate identity"))?;
     let plane = connection.surface_plane();
     validate_certificate_scope(certificate_identity, plane)?;
+    validate_application_gateway_plane(plane)?;
 
     Ok(GatewayState {
         certificate_identity,
@@ -57,6 +58,16 @@ pub(super) fn validate_frame_session_binding(
             "procedure invocation requires authenticated connection session id",
         )),
     }
+}
+
+fn validate_application_gateway_plane(plane: SurfacePlane) -> AndromedaResult<()> {
+    if !plane.is_application() {
+        return Err(security_error(
+            "ProcedureGateway is Application-surface only; administration, HA/DR, recovery, and monitoring work must use their dedicated surfaces",
+        ));
+    }
+
+    Ok(())
 }
 
 fn validate_certificate_scope(

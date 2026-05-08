@@ -35,6 +35,17 @@ fn test_wal_shipping_stream_allocated_deterministically() {
 }
 
 #[test]
+fn test_hadr_stream_ids_are_logical_not_quic_low_bit_ids() {
+    let replica0 = StreamAllocation::new(0).expect("allocation should succeed");
+    let replica1 = StreamAllocation::new(1).expect("allocation should succeed");
+
+    assert_eq!(replica0.heartbeat_stream_id(), HEARTBEAT_STREAM_MIN);
+    assert_eq!(replica1.heartbeat_stream_id(), HEARTBEAT_STREAM_MIN + 1);
+    assert_eq!(replica1.heartbeat_stream_id() % 2, 1);
+    assert!(replica1.heartbeat_logical_stream_id().is_hadr_reserved());
+}
+
+#[test]
 fn test_heartbeat_stream_bidirectional() {
     // Arrange: Allocate streams for a replica
     let alloc = StreamAllocation::new(3).expect("allocation should succeed");

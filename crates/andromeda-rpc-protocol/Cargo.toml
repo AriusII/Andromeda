@@ -7,3 +7,4 @@ publish = false
 
 [dependencies]
 andromeda-core.workspace = true
+andromeda-procedure-contract.workspace = true

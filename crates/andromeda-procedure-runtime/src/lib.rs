@@ -10,9 +10,14 @@ terminal evidence handoff.
 "#]
 
 mod dispatch;
+pub mod procedure_resolver;
 
 pub use dispatch::{
     PreTransactionDispatchEvidence, ProcedureDispatchRequest, ProcedureDispatchUnavailableReason,
     ProcedureDispatcher, ProcedureRequestResolver, RemoteProcedureDispatcherUnavailable,
     SrplDispatcherAdapter,
+};
+pub use procedure_resolver::{
+    ProcedureResolveError, ProcedureResolveRequest, ProcedureResolveResponse,
+    ProcedureResolveTarget, ProcedureResolver, SrplProcedureManifest,
 };

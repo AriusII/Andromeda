@@ -40,6 +40,19 @@ fn test_stream_allocation_non_overlapping() {
 }
 
 #[test]
+fn test_logical_stream_ids_do_not_encode_quic_parity() {
+    let alloc0 = StreamAllocation::new(0).unwrap();
+    let alloc1 = StreamAllocation::new(1).unwrap();
+
+    assert_eq!(alloc0.heartbeat_stream_id(), HEARTBEAT_STREAM_MIN);
+    assert_eq!(alloc1.heartbeat_stream_id(), HEARTBEAT_STREAM_MIN + 1);
+    assert_eq!(alloc1.wal_shipping_stream_id(), WAL_SHIPPING_STREAM_MIN + 1);
+    assert_eq!(alloc1.promotion_vote_stream_id(), VOTE_STREAM_MIN + 1);
+    assert_eq!(alloc1.heartbeat_stream_id() % 2, 1);
+    assert!(alloc1.heartbeat_logical_stream_id().is_hadr_reserved());
+}
+
+#[test]
 fn test_stream_allocation_bounds() {
     let alloc = StreamAllocation::new(0).unwrap();
 

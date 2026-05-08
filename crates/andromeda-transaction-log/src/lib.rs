@@ -19,8 +19,15 @@ mod entry;
 mod lsn;
 mod replay;
 mod rollback;
+mod status_rebuild;
+mod wal;
 
 pub use entry::{CommitLogEntry, IsolationLevel, WalRecordKind};
 pub use lsn::Lsn;
 pub use replay::{TxWalReplayAction, TxWalReplayRecord, TxWalReplaySummary};
 pub use rollback::RollbackLogEntry;
+pub use status_rebuild::TransactionStatusRebuild;
+pub use wal::{
+    InvocationWal, InvocationWalFuture, TX_COMMIT_PAYLOAD_LEN, TX_ROLLBACK_PAYLOAD_LEN,
+    encode_commit_payload, encode_rollback_payload,
+};

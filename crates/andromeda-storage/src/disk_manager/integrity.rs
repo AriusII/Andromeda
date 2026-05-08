@@ -4,12 +4,7 @@ use crate::{PageHeader, PageImage};
 
 use super::{DiskManagerError, FileDiskManager};
 
-/// Explicit integrity mode for durable pages.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PageIntegrityMode {
-    None,
-    HeaderCrc32,
-}
+pub use andromeda_disk_page_store::PageIntegrityMode;
 
 impl FileDiskManager {
     pub(crate) const HEADER_CRC_OFFSET: usize = 94;

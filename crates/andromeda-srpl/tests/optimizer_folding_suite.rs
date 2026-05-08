@@ -2,7 +2,8 @@
 
 #![forbid(unsafe_code)]
 
-use andromeda_catalog::{PlanClass, QualifiedName};
+use andromeda_contract::QualifiedName;
+use andromeda_plan_cache::PlanClass;
 use andromeda_srpl::{
     Cardinality, SrplAssignmentIr, SrplBusinessOperationIr, SrplBusinessOperationKindIr,
     SrplEmitValueIr, SrplPredicateIr, SrplProcedureBodyIr, SrplProcedureIr, SrplValueIr,

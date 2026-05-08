@@ -1,8 +1,8 @@
 //! Durability evidence and publication receipt types for catalog mutations.
 
+use andromeda_catalog_store::{CatalogPublicationCommitEvidence, CatalogPublicationPlan};
 use andromeda_definition_batch::{DefinitionBatchId, DefinitionBatchSourceHash};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId};
 
 use super::mutation::{
     CatalogMutationBoundary, CatalogMutationPlan, CatalogMutationRecord,
@@ -10,74 +10,13 @@ use super::mutation::{
 };
 use crate::DefinitionBatchDependencyGraphHash;
 
-/// An opaque monotonic marker from an external durable store.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct CatalogDurabilityMarker(u64);
+pub use andromeda_catalog_store::{CatalogDurabilityMarker, CatalogMutationDurability};
 
-impl CatalogDurabilityMarker {
-    pub const fn new(value: u64) -> Self {
-        Self(value)
-    }
-
-    pub const fn get(self) -> u64 {
-        self.0
-    }
-}
-
-/// Proof that a catalog mutation has been durably persisted.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CatalogMutationDurability {
-    StorageWal { commit_lsn: u64, durable_lsn: u64 },
-    ExternalMarker(CatalogDurabilityMarker),
-}
-
-impl CatalogMutationDurability {
-    pub fn validate(self) -> AndromedaResult<()> {
-        match self {
-            Self::StorageWal {
-                commit_lsn,
-                durable_lsn,
-            } => {
-                if commit_lsn == 0 {
-                    return Err(AndromedaError::new(
-                        AndromedaErrorKind::Catalog,
-                        "catalog publication commit LSN must not be zero",
-                    ));
-                }
-                if durable_lsn < commit_lsn {
-                    return Err(AndromedaError::new(
-                        AndromedaErrorKind::Catalog,
-                        "catalog publication durable LSN must reach the commit LSN",
-                    ));
-                }
-            }
-            Self::ExternalMarker(marker) => {
-                if marker.get() == 0 {
-                    return Err(AndromedaError::new(
-                        AndromedaErrorKind::Catalog,
-                        "catalog publication durable evidence marker must not be zero",
-                    ));
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    pub const fn durable_lsn(self) -> Option<u64> {
-        match self {
-            Self::StorageWal { durable_lsn, .. } => Some(durable_lsn),
-            Self::ExternalMarker(_) => None,
-        }
-    }
-
-    pub const fn durable_marker(self) -> Option<CatalogDurabilityMarker> {
-        match self {
-            Self::StorageWal { .. } => None,
-            Self::ExternalMarker(marker) => Some(marker),
-        }
-    }
-}
+pub type CatalogPublicationReceipt = andromeda_catalog_store::CatalogPublicationReceipt<
+    DefinitionBatchId,
+    DefinitionBatchSourceHash,
+    DefinitionBatchDependencyGraphHash,
+>;
 
 /// Proof that a specific commit record was durably persisted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -153,41 +92,68 @@ impl CatalogMutationCommitEvidence {
     }
 }
 
-/// Immutable confirmation that a catalog mutation was applied and durably persisted.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CatalogPublicationReceipt {
-    pub batch_id: DefinitionBatchId,
-    pub database_id: DatabaseId,
-    pub namespace_id: NamespaceId,
-    pub previous_version: CatalogVersion,
-    pub next_version: CatalogVersion,
-    pub source_hash: DefinitionBatchSourceHash,
-    pub dependency_graph_hash: DefinitionBatchDependencyGraphHash,
-    pub durable_lsn: Option<u64>,
-    pub durable_evidence_marker: Option<CatalogDurabilityMarker>,
-    pub record_count: usize,
-    pub publication_semantics: CatalogPublicationSemantics,
+impl
+    CatalogPublicationPlan<
+        DefinitionBatchId,
+        DefinitionBatchSourceHash,
+        DefinitionBatchDependencyGraphHash,
+    > for CatalogMutationPlan
+{
+    fn batch_id(&self) -> DefinitionBatchId {
+        self.batch_id
+    }
+
+    fn database_id(&self) -> andromeda_types::DatabaseId {
+        self.database_id
+    }
+
+    fn namespace_id(&self) -> andromeda_types::NamespaceId {
+        self.namespace_id
+    }
+
+    fn previous_version(&self) -> andromeda_types::CatalogVersion {
+        self.previous_version
+    }
+
+    fn next_version(&self) -> andromeda_types::CatalogVersion {
+        self.next_version
+    }
+
+    fn source_hash(&self) -> DefinitionBatchSourceHash {
+        self.source_hash
+    }
+
+    fn dependency_graph_hash(&self) -> DefinitionBatchDependencyGraphHash {
+        self.dependency_graph_hash
+    }
+
+    fn record_count(&self) -> usize {
+        self.record_count()
+    }
+
+    fn publication_semantics(&self) -> CatalogPublicationSemantics {
+        self.publication_semantics
+    }
+
+    fn is_monotonic(&self) -> bool {
+        self.mutation().is_monotonic()
+    }
 }
 
-impl CatalogPublicationReceipt {
-    pub fn from_plan_and_evidence(
-        plan: &CatalogMutationPlan,
-        evidence: CatalogMutationCommitEvidence,
-    ) -> AndromedaResult<Self> {
-        evidence.validate_for_plan(plan)?;
+impl CatalogPublicationCommitEvidence<CatalogMutationPlan> for CatalogMutationCommitEvidence {
+    fn validate_for_publication_plan(&self, plan: &CatalogMutationPlan) -> AndromedaResult<()> {
+        (*self).validate_for_plan(plan)
+    }
 
-        Ok(Self {
-            batch_id: plan.batch_id,
-            database_id: plan.database_id,
-            namespace_id: plan.namespace_id,
-            previous_version: plan.previous_version,
-            next_version: plan.next_version,
-            source_hash: plan.source_hash,
-            dependency_graph_hash: plan.dependency_graph_hash,
-            durable_lsn: evidence.durability.durable_lsn(),
-            durable_evidence_marker: evidence.durability.durable_marker(),
-            record_count: evidence.record_count,
-            publication_semantics: plan.publication_semantics,
-        })
+    fn durable_lsn(&self) -> Option<u64> {
+        self.durability.durable_lsn()
+    }
+
+    fn durable_evidence_marker(&self) -> Option<CatalogDurabilityMarker> {
+        self.durability.durable_marker()
+    }
+
+    fn record_count(&self) -> usize {
+        self.record_count
     }
 }

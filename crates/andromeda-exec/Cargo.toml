@@ -7,19 +7,21 @@ publish = false
 
 [dependencies]
 andromeda-admission.workspace = true
+andromeda-audit.workspace = true
 andromeda-catalog.workspace = true
 andromeda-core.workspace = true
 andromeda-execution-trace.workspace = true
+andromeda-iam.workspace = true
 andromeda-observe.workspace = true
 andromeda-procedure-runtime.workspace = true
 andromeda-proto.workspace = true
 andromeda-quic.workspace = true
 andromeda-result-stream.workspace = true
 andromeda-retry.workspace = true
+andromeda-security.workspace = true
 andromeda-srpl.workspace = true
 andromeda-storage.workspace = true
 andromeda-tx.workspace = true
-dashmap = "6.0"
 tokio.workspace = true
 
 [features]
@@ -28,7 +30,6 @@ runtime-quinn = ["andromeda-quic/runtime-quinn"]
 
 [dev-dependencies]
 andromeda-business-fixtures.workspace = true
-andromeda-quic-runtime-quinn.workspace = true
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(andromeda_remote_network_e2e)', 'cfg(feature, values("runtime-quinn"))'] }

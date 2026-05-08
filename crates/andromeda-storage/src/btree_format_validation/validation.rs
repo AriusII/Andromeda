@@ -1,21 +1,11 @@
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_storage_index::validate_btree_key_format_identity_parts;
 
 pub(super) fn validate_identity_parts(
     major: u32,
     minor: u32,
     max_key_size: u16,
 ) -> AndromedaResult<()> {
-    if major == 0 && minor == 0 {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Storage,
-            "B-Tree key format version 0.0 is reserved",
-        ));
-    }
-    if max_key_size == 0 {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Storage,
-            "B-Tree key format max_key_size must not be zero",
-        ));
-    }
-    Ok(())
+    validate_btree_key_format_identity_parts(major, minor, max_key_size)
+        .map_err(|err| AndromedaError::new(AndromedaErrorKind::Storage, err.message()))
 }

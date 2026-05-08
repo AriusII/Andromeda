@@ -6,5 +6,8 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+andromeda-admission.workspace = true
 andromeda-audit.workspace = true
+andromeda-core.workspace = true
 andromeda-security-contract.workspace = true
+dashmap = "6.0"

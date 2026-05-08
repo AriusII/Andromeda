@@ -1,11 +1,11 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use andromeda_core::SurfaceScope;
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use super::connection_adapter::QuinnConnectionAdapter;
 use super::peer_certificate::{extract_peer_certificates, require_certificate_identity};
+use super::surface::QuinnRuntimeSurface;
 
 /// Quinn-based QUIC client.
 ///
@@ -13,26 +13,34 @@ use super::peer_certificate::{extract_peer_certificates, require_certificate_ide
 pub struct QuicClient {
     endpoint: quinn::Endpoint,
     client_config: quinn::ClientConfig,
-    required_scope: SurfaceScope,
+    runtime_surface: QuinnRuntimeSurface,
 }
 
 impl QuicClient {
-    /// Creates a new QUIC client.
+    /// Creates a test QUIC client on the Application surface.
+    ///
+    /// Production wiring should use [`Self::for_surface`] so the runtime
+    /// surface is explicit at construction time.
+    #[cfg(any(test, feature = "insecure-test-tls"))]
+    #[doc(hidden)]
+    pub fn new(client_config: quinn::ClientConfig) -> AndromedaResult<Self> {
+        Self::for_surface(
+            client_config,
+            QuinnRuntimeSurface::for_plane(andromeda_quic::SurfacePlane::Application),
+        )
+    }
+
+    /// Creates a QUIC client for an explicit runtime surface.
     ///
     /// # Arguments
     /// - `client_config`: Quinn client configuration with TLS settings
+    /// - `runtime_surface`: selected transport plane and required peer scope
     ///
     /// # Errors
     /// - `Transport` if endpoint creation fails
-    pub fn new(client_config: quinn::ClientConfig) -> AndromedaResult<Self> {
-        Self::with_required_scope(client_config, SurfaceScope::Application)
-    }
-
-    /// Creates a new QUIC client with the certificate surface scope to bind
-    /// to the connected server identity.
-    pub fn with_required_scope(
+    pub fn for_surface(
         client_config: quinn::ClientConfig,
-        required_scope: SurfaceScope,
+        runtime_surface: QuinnRuntimeSurface,
     ) -> AndromedaResult<Self> {
         let socket =
             std::net::UdpSocket::bind(SocketAddr::from(([0, 0, 0, 0], 0))).map_err(|e| {
@@ -58,8 +66,13 @@ impl QuicClient {
         Ok(Self {
             endpoint,
             client_config,
-            required_scope,
+            runtime_surface,
         })
+    }
+
+    /// Returns the selected runtime surface for this endpoint.
+    pub const fn runtime_surface(&self) -> QuinnRuntimeSurface {
+        self.runtime_surface
     }
 
     /// Connects to a remote QUIC server.
@@ -93,7 +106,10 @@ impl QuicClient {
         })?;
 
         let peer_certificates = extract_peer_certificates(&conn);
-        let identity = require_certificate_identity(&peer_certificates, self.required_scope)?;
+        let identity = require_certificate_identity(
+            &peer_certificates,
+            self.runtime_surface.required_scope(),
+        )?;
 
         Ok(QuinnConnectionAdapter::with_peer_certificates(
             conn,

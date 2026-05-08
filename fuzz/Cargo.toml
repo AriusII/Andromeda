@@ -22,6 +22,7 @@ andromeda-security-contract = { path = "../crates/andromeda-security-contract" }
 andromeda-srpl = { path = "../crates/andromeda-srpl" }
 andromeda-srpl-parser = { path = "../crates/andromeda-srpl-parser" }
 andromeda-storage = { path = "../crates/andromeda-storage" }
+andromeda-storage-page = { path = "../crates/andromeda-storage-page" }
 andromeda-wal = { path = "../crates/andromeda-wal" }
 
 [[bin]]
