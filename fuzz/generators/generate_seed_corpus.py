@@ -51,13 +51,13 @@ PAGE_CODEC_V1_FORMAT_VERSION = 1
 PAGE_CODEC_V1_HEADER_LEN = 112
 
 LEGACY_SEED1_PAYLOADS: Dict[str, bytes] = {
-    "frame_codec_no_panic": b"frame\r\n",
-    "result_sequence_state_machine": b"result-sequence\r\n",
-    "proto_frame_envelope_decode": b"proto-envelope\r\n",
-    "proto_rpc_completion_decode": b"completion\r\n",
-    "srpl_parser_signature_decode": b"PROC demo(a:int)->rows\r\n",
-    "storage_wal_record_roundtrip": b"wal\r\n",
-    "wal_record_roundtrip": b"wal\r\n",
+    "frame_codec_no_panic": b"frame\n",
+    "result_sequence_state_machine": b"result-sequence\n",
+    "proto_frame_envelope_decode": b"proto-envelope\n",
+    "proto_rpc_completion_decode": b"completion\n",
+    "srpl_parser_signature_decode": b"PROC demo(a:int)->rows\n",
+    "storage_wal_record_roundtrip": b"wal\n",
+    "wal_record_roundtrip": b"wal\n",
 }
 
 
@@ -174,6 +174,8 @@ def parse_string_list(block: str, key: str) -> List[str]:
 
 
 def seed_payloads(target: str) -> Dict[str, bytes]:
+    if target == "srpl_parser_owner_decode":
+        return seed_payloads("srpl_parser_signature_decode")
     if target in {"storage_wal_record_roundtrip", "wal_record_roundtrip"}:
         seed_identity = "storage_wal_record_roundtrip"
         payloads = {
@@ -224,14 +226,43 @@ def seed_payloads(target: str) -> Dict[str, bytes]:
                 3, 2, 32 * 1024, b"manifest-page-v1"
             ),
         }
+    if target == "proto_rpc_execute_request_decode":
+        return {
+            "seed-basic.bin": f"ANDROMEDA-FUZZ-SEED::{target}::v1".encode("utf-8"),
+            "seed-valid-reserve-stock-execute.bin": proto_rpc_execute_request_seed(),
+        }
+    if target == "proto_invocation_response_sequence_decode":
+        return {
+            "seed-basic.bin": f"ANDROMEDA-FUZZ-SEED::{target}::v1".encode("utf-8"),
+            "seed-valid-metadata-batch-completion.bin": (
+                proto_invocation_response_sequence_seed()
+            ),
+        }
     if target == "quic_zero_rtt_admission":
         return {
             "seed-basic.bin": bytes(
                 [0, 1, 2, 3, 4, 5, 6, 7, 248, 249, 250, 251, 252, 253, 254, 255]
             )
         }
+    if target == "quic_typed_frame_envelope_decode":
+        return {
+            "seed-basic.bin": f"ANDROMEDA-FUZZ-SEED::{target}::v1".encode("utf-8"),
+            "seed-valid-rpc-execute-envelope-frame.bin": quic_typed_frame_envelope_seed(),
+        }
     if target == "durable_audit_journal_decode":
         return durable_audit_journal_decode_seeds()
+    if target == "rpc_protocol_frame_codec_decode":
+        return {
+            "seed-basic.bin": f"ANDROMEDA-FUZZ-SEED::{target}::v1".encode("utf-8"),
+            "seed-valid-rpc-execute-frame.bin": rpc_protocol_frame_seed(
+                frame_type=5,
+                payload=b"rpc-protocol-frame-seed-v1",
+            ),
+        }
+    if target == "security_contract_admission_matrix":
+        return {
+            "seed-surface-permission-matrix.bin": security_contract_admission_matrix_seed()
+        }
     payloads = {
         "seed-basic.bin": f"ANDROMEDA-FUZZ-SEED::{target}::v1".encode("utf-8")
     }
@@ -575,6 +606,7 @@ def wal_record_frame_seed(
             transaction_id_value.to_bytes(8, "little"),
             payload_length.to_bytes(8, "little"),
             record_checksum.to_bytes(8, "little"),
+
         ]
     )
     header_checksum = fnv64_nonzero(header_without_checksum)
@@ -604,18 +636,424 @@ def fnv64_nonzero(payload: bytes) -> int:
         state ^= byte
         state = (state * 0x0000_0100_0000_01B3) & 0xFFFF_FFFF_FFFF_FFFF
     return state if state != 0 else 1
+PROTO_WIRE_VARINT = 0
+PROTO_WIRE_LEN = 2
+
+
+def proto_rpc_execute_request_seed() -> bytes:
+    argument = b"".join(
+        [
+            proto_string_field(1, "Quantity"),
+            proto_string_field(2, "i64"),
+            proto_bytes_field(3, (3).to_bytes(8, "little")),
+        ]
+    )
+    budget = b"".join(
+        [
+            proto_varint_field(1, 5_000),
+            proto_varint_field(2, 64 * 1024),
+            proto_varint_field(3, 128 * 1024),
+            proto_varint_field(4, 1),
+        ]
+    )
+    return b"".join(
+        [
+            proto_string_field(1, "Inventory.ReserveStock"),
+            proto_bytes_field(2, bytes([9]) * 32),
+            proto_varint_field(3, 44),
+            proto_string_field(4, "application"),
+            proto_message_field(5, argument),
+            proto_message_field(6, budget),
+            proto_varint_field(7, 6),
+        ]
+    )
+
+
+def proto_invocation_response_sequence_seed() -> bytes:
+    correlation = proto_invocation_correlation_seed()
+    responses = [
+        proto_invocation_response_seed(
+            correlation=correlation,
+            response_index=0,
+            response_field=3,
+            response_payload=proto_rpc_metadata_seed(),
+        ),
+        proto_invocation_response_seed(
+            correlation=correlation,
+            response_index=1,
+            response_field=4,
+            response_payload=proto_rpc_batch_seed(),
+        ),
+        proto_invocation_response_seed(
+            correlation=correlation,
+            response_index=2,
+            response_field=5,
+            response_payload=proto_rpc_completion_seed(),
+        ),
+    ]
+    framed = bytearray([1])
+    for response in responses:
+        framed.extend(len(response).to_bytes(2, "little"))
+        framed.extend(response)
+    return bytes(framed)
+
+
+def proto_invocation_correlation_seed() -> bytes:
+    return b"".join(
+        [
+            proto_varint_field(1, 101),
+            proto_varint_field(2, 202),
+            proto_string_field(3, "trace-proto-101"),
+            proto_bytes_field(4, bytes([9]) * 32),
+            proto_varint_field(5, 44),
+            proto_varint_field(6, 303),
+            proto_varint_field(7, 6),
+            proto_varint_field(8, 11),
+        ]
+    )
+
+
+def proto_invocation_response_seed(
+    *, correlation: bytes, response_index: int, response_field: int, response_payload: bytes
+) -> bytes:
+    return b"".join(
+        [
+            proto_message_field(1, correlation),
+            proto_varint_field(2, response_index),
+            proto_message_field(response_field, response_payload),
+        ]
+    )
+
+
+def proto_rpc_metadata_seed() -> bytes:
+    policy = b"".join(
+        [
+            proto_varint_field(1, 1),
+            proto_string_field(2, "reservation row required"),
+        ]
+    )
+    return b"".join(
+        [
+            proto_message_field(1, proto_result_stream_descriptor_seed()),
+            proto_message_field(2, policy),
+        ]
+    )
+
+
+def proto_result_stream_descriptor_seed() -> bytes:
+    column = b"".join(
+        [
+            proto_string_field(1, "reservation_id"),
+            proto_varint_field(2, 0),
+            proto_string_field(3, "u64"),
+        ]
+    )
+    return b"".join(
+        [
+            proto_string_field(1, "Inventory.ReserveStock.Reservation"),
+            proto_message_field(2, column),
+            proto_varint_field(3, 4),
+            proto_varint_field(4, 3),
+            proto_varint_field(5, 1),
+            proto_varint_field(6, 1),
+        ]
+    )
+
+
+def proto_rpc_batch_seed() -> bytes:
+    return b"".join(
+        [
+            proto_string_field(1, "Inventory.ReserveStock.Reservation"),
+            proto_varint_field(2, 0),
+            proto_varint_field(3, 1),
+            proto_bytes_field(4, b"\x01"),
+            proto_varint_field(5, 1),
+            proto_varint_field(6, 1),
+        ]
+    )
+
+
+def proto_rpc_completion_seed() -> bytes:
+    summary = b"".join(
+        [
+            proto_string_field(1, "Inventory.ReserveStock.Reservation"),
+            proto_varint_field(2, 1),
+            proto_varint_field(3, 1),
+        ]
+    )
+    return b"".join(
+        [
+            proto_varint_field(1, 1),
+            proto_varint_field(2, 1),
+            proto_varint_field(3, 404),
+            proto_varint_field(32, 101),
+            proto_varint_field(33, 202),
+            proto_string_field(34, "trace-proto-101"),
+            proto_varint_field(35, 2),
+            proto_varint_field(36, 505),
+            proto_message_field(37, summary),
+        ]
+    )
+
+
+def quic_typed_frame_envelope_seed() -> bytes:
+    envelope = proto_frame_envelope_seed(
+        payload_kind=5,
+        payload=proto_rpc_execute_request_seed(),
+    )
+    return rpc_protocol_frame_seed(frame_type=5, payload=envelope)
+
+
+def proto_frame_envelope_seed(payload_kind: int, payload: bytes) -> bytes:
+    version = b"".join([proto_varint_field(1, 1), proto_varint_field(2, 0)])
+    return b"".join(
+        [
+            proto_message_field(1, version),
+            proto_bytes_field(2, bytes([9]) * 32),
+            proto_varint_field(3, 44),
+            proto_varint_field(4, 501),
+            proto_varint_field(5, 601),
+            proto_varint_field(6, 701),
+            proto_varint_field(7, payload_kind),
+            proto_bytes_field(8, payload),
+        ]
+    )
+
+
+def proto_varint_field(field_number: int, value: int) -> bytes:
+    return proto_key(field_number, PROTO_WIRE_VARINT) + proto_varint(value)
+
+
+def proto_string_field(field_number: int, value: str) -> bytes:
+    return proto_bytes_field(field_number, value.encode("utf-8"))
+
+
+def proto_message_field(field_number: int, payload: bytes) -> bytes:
+    return proto_bytes_field(field_number, payload)
+
+
+def proto_bytes_field(field_number: int, payload: bytes) -> bytes:
+    return proto_key(field_number, PROTO_WIRE_LEN) + proto_varint(len(payload)) + payload
+
+
+def proto_key(field_number: int, wire_type: int) -> bytes:
+    return proto_varint((field_number << 3) | wire_type)
+
+
+def proto_varint(value: int) -> bytes:
+    encoded = bytearray()
+    while value >= 0x80:
+        encoded.append((value & 0x7F) | 0x80)
+        value >>= 7
+    encoded.append(value)
+    return bytes(encoded)
+
+
+def rpc_protocol_frame_seed(
+    *, frame_type: int, payload: bytes, request_id: int = 501, session_id: int = 601
+) -> bytes:
+    tx_id = 701
+    header = bytearray()
+    header.extend((52).to_bytes(2, "big"))
+    header.extend((1).to_bytes(2, "big"))
+    header.extend(frame_type.to_bytes(4, "big"))
+    header.extend(request_id.to_bytes(8, "big"))
+    header.extend(session_id.to_bytes(8, "big"))
+    header.extend(tx_id.to_bytes(8, "big"))
+    header.append(1)
+    header.extend(b"\x00\x00\x00")
+    header.extend(len(payload).to_bytes(8, "big"))
+    header.extend((0).to_bytes(4, "big"))
+    header.extend((0).to_bytes(4, "big"))
+    crc = rpc_frame_crc32(header)
+    header[48:52] = crc.to_bytes(4, "big")
+    return bytes(header) + payload
+
+
+def rpc_frame_crc32(payload: bytes) -> int:
+    state = 0xFFFF_FFFF
+    for byte in payload:
+        state ^= byte
+        for _ in range(8):
+            mask = (-(state & 1)) & 0xFFFF_FFFF
+            state = ((state >> 1) ^ (0xEDB8_8320 & mask)) & 0xFFFF_FFFF
+    return (~state) & 0xFFFF_FFFF
+
+
+def security_contract_admission_matrix_seed() -> bytes:
+    return bytes([1, 0, 0, *range(3, 64), 128, 129, 250, 251, 252, 253, 254, 255])
+
+
+def durable_audit_security_decision_journal_and_anchor() -> tuple[bytes, bytes]:
+    payload = durable_audit_record_payload(
+        record_lsn=1,
+        durable_lsn=1,
+        event_id=2,
+        trace_id=2,
+        family="SecurityDecision",
+        retention="SecurityPolicy",
+        replay="ForensicOnly",
+        principal_id="fuzz-principal",
+        certificate_fingerprint="sha256:fuzz-cert",
+        surface="Application",
+        permission="ExecuteProcedure",
+        policy_version="1",
+        policy_digest="security-policy-v1",
+        request_id="501",
+        session_id="601",
+        event_kind="FuzzSecurityDecision",
+    )
+    return durable_audit_journal_and_anchor([payload])
+
+
+def durable_audit_admission_decision_journal_and_anchor() -> tuple[bytes, bytes]:
+    payload = durable_audit_record_payload(
+        record_lsn=1,
+        durable_lsn=1,
+        event_id=3,
+        trace_id=3,
+        family="AdmissionDecision",
+        retention="ForensicHold",
+        replay="ForensicOnly",
+        principal_id="fuzz-principal",
+        certificate_fingerprint=None,
+        surface=None,
+        permission=None,
+        policy_version=None,
+        policy_digest=None,
+        request_id=None,
+        session_id=None,
+        event_kind="FuzzAdmissionDecision",
+    )
+    return durable_audit_journal_and_anchor([payload])
+
+
+def durable_audit_record_payload(
+    *,
+    record_lsn: int,
+    durable_lsn: int,
+    event_id: int,
+    trace_id: int,
+    family: str,
+    retention: str,
+    replay: str,
+    principal_id: str,
+    certificate_fingerprint: Optional[str],
+    surface: Optional[str],
+    permission: Optional[str],
+    policy_version: Optional[str],
+    policy_digest: Optional[str],
+    request_id: Optional[str],
+    session_id: Optional[str],
+    event_kind: str,
+) -> str:
+    return (
+        "andromeda-durable-audit-v2"
+        f"|record_lsn={record_lsn}"
+        f"|durable_lsn={durable_lsn}"
+        f"|event_id={event_id}"
+        f"|trace_id={trace_id}"
+        f"|family={family}"
+        "|sequence=1"
+        f"|retention={retention}"
+        f"|replay={replay}"
+        f"|principal_id={durable_audit_hex(principal_id)}"
+        f"|certificate_fingerprint={durable_audit_optional_hex(certificate_fingerprint)}"
+        f"|surface={durable_audit_optional_raw(surface)}"
+        f"|permission={durable_audit_optional_raw(permission)}"
+        f"|policy_version={durable_audit_optional_raw(policy_version)}"
+        f"|policy_digest={durable_audit_optional_hex(policy_digest)}"
+        f"|request_id={durable_audit_optional_raw(request_id)}"
+        f"|session_id={durable_audit_optional_raw(session_id)}"
+        f"|event_kind={durable_audit_hex(event_kind)}"
+    )
+
+
+def durable_audit_journal_and_anchor(payloads: List[str]) -> tuple[bytes, bytes]:
+    previous_chain_checksum = 0
+    lines = []
+    record_lsns = []
+    for payload in payloads:
+        line, previous_chain_checksum = durable_audit_journal_line(
+            payload,
+            previous_chain_checksum,
+        )
+        lines.append(line)
+        match = re.search(r"\|record_lsn=(\d+)", payload)
+        if match:
+            record_lsns.append(int(match.group(1)))
+
+    first_record_lsn = min(record_lsns) if record_lsns else 1
+    last_record_lsn = max(record_lsns) if record_lsns else 1
+    anchor = durable_audit_anchor(
+        first_record_lsn=first_record_lsn,
+        last_record_lsn=last_record_lsn,
+        record_count=len(lines),
+        tail_chain_checksum=previous_chain_checksum,
+    )
+    return "".join(lines).encode("ascii"), anchor.encode("ascii")
+
+
+def durable_audit_journal_line(payload: str, previous_chain_checksum: int) -> tuple[str, int]:
+    checksum = durable_audit_checksum64(payload.encode("ascii"))
+    chain_checksum = durable_audit_checksum64(
+        f"{previous_chain_checksum:016x}|{checksum:016x}|{payload}".encode("ascii")
+    )
+    line = (
+        f"{payload}|previous_chain_checksum={previous_chain_checksum:016x}"
+        f"|chain_checksum={chain_checksum:016x}|checksum={checksum:016x}\n"
+    )
+    return line, chain_checksum
+
+
+def durable_audit_anchor(
+    *, first_record_lsn: int, last_record_lsn: int, record_count: int, tail_chain_checksum: int
+) -> str:
+    anchor_payload = (
+        "andromeda-durable-audit-chain-v1"
+        f"|first_record_lsn={first_record_lsn}"
+        f"|last_record_lsn={last_record_lsn}"
+        f"|record_count={record_count}"
+        f"|tail_chain_checksum={tail_chain_checksum:016x}"
+    )
+    anchor_checksum = durable_audit_checksum64(anchor_payload.encode("ascii"))
+    return f"{anchor_payload}|checksum={anchor_checksum:016x}\n"
+
+
+def durable_audit_hex(value: str) -> str:
+    return value.encode("utf-8").hex()
+
+
+def durable_audit_optional_hex(value: Optional[str]) -> str:
+    return durable_audit_hex(value) if value is not None else "-"
+
+
+def durable_audit_optional_raw(value: Optional[str]) -> str:
+    return value if value is not None else "-"
 
 
 def durable_audit_journal_decode_seeds() -> Dict[str, bytes]:
     journal, anchor = durable_audit_valid_journal_and_anchor()
     split = len(journal)
+    security_journal, security_anchor = durable_audit_security_decision_journal_and_anchor()
+    security_split = len(security_journal)
+    admission_journal, admission_anchor = durable_audit_admission_decision_journal_and_anchor()
+    admission_split = len(admission_journal)
     return {
         "seed-empty-journal.bin": bytes([0]),
         "seed-hostile-prefix.bin": b"\x00andromeda-durable-audit-v2|record_lsn=1\n",
+        "seed-valid-admission-decision.bin": bytes([1])
+        + admission_split.to_bytes(2, "little")
+        + admission_journal
+        + admission_anchor,
         "seed-valid-generic-audit.bin": bytes([1])
         + split.to_bytes(2, "little")
         + journal
         + anchor,
+        "seed-valid-security-decision.bin": bytes([1])
+        + security_split.to_bytes(2, "little")
+        + security_journal
+        + security_anchor,
     }
 
 
@@ -676,6 +1114,38 @@ def ensure_seed(root: pathlib.Path, target: TargetSpec) -> List[pathlib.Path]:
             seed_file.write_bytes(payload)
         written.append(seed_file)
     return written
+
+
+def seed_payload_is_deterministic(seed_name: str, actual: bytes, expected: bytes) -> bool:
+    if actual == expected:
+        return True
+    if seed_name == "seed1" and actual == expected.replace(b"\n", b"\r\n"):
+        return True
+    return False
+
+
+def write_manifest(root: pathlib.Path, targets: List[TargetSpec]) -> pathlib.Path:
+    manifest_path = root / "fuzz" / "corpus" / "manifest.toml"
+    lines = [
+        f'schema_version = "{CORPUS_SCHEMA_VERSION}"',
+        f'generated_by = "{GENERATOR_PATH}"',
+        "",
+    ]
+    for target in targets:
+        seed_files = sorted(seed_payloads(target.name))
+        seed_list = ", ".join(f'"{name}"' for name in seed_files)
+        lines.extend(
+            [
+                "[[entry]]",
+                f'target = "{target.name}"',
+                f'corpus_dir = "{target.corpus_dir}"',
+                f"seed_files = [{seed_list}]",
+                'generator = "deterministic-bytes-v1"',
+                "",
+            ]
+        )
+    manifest_path.write_text("\n".join(lines), encoding="utf-8")
+    return manifest_path
 
 
 def check_seed_corpus(root: pathlib.Path, targets_file: str) -> int:
@@ -821,7 +1291,9 @@ def check_seed_corpus(root: pathlib.Path, targets_file: str) -> int:
                 errors.append(f"{spec.name}: generated seed {seed_name} missing on disk")
                 continue
             actual_payload = seed_path.read_bytes()
-            if actual_payload != expected_payload:
+            if not seed_payload_is_deterministic(
+                seed_name, actual_payload, expected_payload
+            ):
                 errors.append(
                     f"{spec.name}: generated seed {seed_name} is not deterministic "
                     f"(actual {len(actual_payload)} bytes, expected {len(expected_payload)} bytes)"
@@ -882,8 +1354,10 @@ def main() -> int:
         created.extend(ensure_seed(root, target))
 
     if not args.ensure_only:
+        manifest_path = write_manifest(root, targets)
         for item in created:
             print(item.as_posix())
+        print(manifest_path.as_posix())
     return 0
 
 

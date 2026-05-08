@@ -13,6 +13,27 @@ Ce document consolide la surface réseau, le protocole RPC custom, les contrats 
 
 La règle de base est simple : Andromeda n’expose pas une surface SQL libre. Il expose des surfaces QUIC séparées, des frames typées, des contrats de Procedure, des StructuredObjects et des ResultStreams.
 
+### 1.1 Lot 5 Acceptance Alignment
+
+Lot 5 acceptance follows DEC-040 and DEC-041. The accepted claim is boundary governance and contract vocabulary, not a complete production network, IAM, or audit runtime.
+
+- `andromeda-rpc-protocol` is the runtime-free RPC frame and stream contract layer. It must not depend on Quinn, Rustls, Tokio, listener lifecycles, storage, WAL, or recovery.
+- `andromeda-quic` is the concrete QUIC runtime boundary. Quinn, Rustls, and Tokio belong behind feature-gated transport adapters and must not define Procedure semantics, storage truth, or authorization policy.
+- `andromeda-security-contract` is security contract vocabulary: surfaces, permission families, operation classes, stable labels, and semantic mappings. It is not the IAM runtime, policy store, revocation store, durable `PrincipalRegistry`, or certificate extraction runtime.
+- Protobuf message contracts and custom frames are allowed. gRPC, tonic, generated gRPC services, ad hoc SQL application surfaces, generic command tunnels, and runtime JSON defaults are not allowed.
+- `SecurityAdmission v0` is the pre-transaction admission contract. Protocol validation, surface validation, Procedure contract binding, principal/policy evidence, resource budget checks, and audit evidence must be established before transaction creation. This does not claim full durable IAM implementation.
+- `AuditLedger v0` is append-only and checksum chained at the durable audit record layer. Retention compaction may rewrite a compacted journal by retaining records and rethreading chain evidence; compaction is not the transaction commit path and audit evidence is not database truth.
+- Do not describe an implemented Admin RPC audit query endpoint unless code proves it. Current operator wording must use `andromeda-cli audit inspect`, `andromeda-cli audit verify`, and `andromeda-cli audit compact`.
+
+Lot 5 acceptance documentation must preserve these limits even when future implementation lots add runtime behavior.
+
+Normative WR-5.DOC links:
+
+- `docs/adr/ADR-0012-quic-rpc-no-grpc.md`
+- `documentations/specs/FrameHeader_RPC_v0.md`
+- `documentations/specs/SecurityAdmission_v0.md`
+- `documentations/specs/AuditLedger_v0.md`
+
 ## 2. Décision réseau
 
 Andromeda utilise QUIC comme transport et un protocole applicatif custom fortement typé.
@@ -176,7 +197,7 @@ Le client ne doit pas découvrir la forme d’un résultat par hasard au runtime
 | Fast path | Petits paramètres, petite réponse, plan chaud, buffers préalloués. | Peu d’allocations, faible overhead, pas de spool. |
 | Slow path | Gros payload, streaming, tri, spill, client lent. | Backpressure, segmentation, spool NVMe contrôlé. |
 
-Le fast path ne doit jamais contourner sécurité, contrat, WAL ou audit. Il optimise seulement l’exécution déjà autorisée.
+The fast path must never bypass `SecurityAdmission v0`, Procedure contracts, WAL durability, or audit evidence. It only optimizes execution after authorization.
 
 ## 10. Backpressure
 
@@ -215,6 +236,15 @@ mTLS -> CertificateIdentity -> UserPrincipal -> Roles/Groups -> Permissions -> P
 ```
 
 Un certificat prouve une identité cryptographique. Il ne doit pas être l’utilisateur logique. Cette séparation permet : rotation, révocation, expiration, multi-device, séparation humain/service et audit long terme.
+
+Lot 5 separates security vocabulary from IAM runtime behavior:
+
+- Security contract vocabulary belongs in `andromeda-security-contract` and must remain runtime-free.
+- IAM runtime behavior belongs to explicit authorization components and future durable registries.
+- Documentation must not use `andromeda-security-contract` as shorthand for a mutable IAM store, policy-management runtime, revocation workflow, or certificate lifecycle implementation.
+
+This distinction keeps DEC-041 contract extraction from becoming an implicit security runtime claim.
+
 
 ## 12. CertificateIdentity
 
@@ -334,6 +364,13 @@ ErrorKind si applicable
 CorrelationId/InvocationId
 ```
 
+For Lot 5, `AuditLedger v0` means DEC-033 durable audit journal evidence. The record layer is append-only and checksum chained. Retention compaction is allowed only as a policy-governed rewrite of retained records with rethreaded chain evidence and preserved retained payload checksum evidence.
+
+Audit records are forensic and authorization evidence. They are not database truth, do not replace the latest valid cold snapshot plus durable WAL, and must not be placed in the transaction commit path.
+
+Operator examples must use `audit inspect`, `audit verify`, and `audit compact`; `audit query` is obsolete wording.
+
+
 ## 17. SuperAdmin et break-glass
 
 Le SuperAdmin est créé au bootstrap. Règles :
@@ -366,6 +403,11 @@ certificats/IAM
 forensic startup
 cluster operations selon permissions
 ```
+
+Admin audit read is an accepted capability target, but this document must not claim an implemented Admin RPC audit query until code evidence proves that endpoint. Current operator-facing examples are CLI audit tooling: `andromeda-cli audit inspect`, `andromeda-cli audit verify`, and `andromeda-cli audit compact`.
+
+The Application Surface must not route these administrative or forensic operations.
+
 
 ## 19. Debug SRPL
 
@@ -634,24 +676,26 @@ Transitions interdites :
 
 Une erreur réseau ne doit pas automatiquement révéler des détails internes. Les détails profonds sont réservés à l’Admin Surface avec permissions.
 
-## 33. Algorithme de décision IAM
+## 33. SecurityAdmission v0 Decision Order
+
+`SecurityAdmission v0` is the pre-transaction contract boundary for Application and Administration admission. It composes protocol, surface, contract, principal, policy, resource, and audit evidence before transaction creation. It is not a claim that durable IAM policy storage is complete.
 
 ```text
-1. Valider certificat mTLS.
-2. Résoudre CertificateIdentity.
-3. Vérifier validité, révocation, SurfaceScope.
-4. Résoudre UserPrincipal.
-5. Vérifier statut utilisateur.
-6. Charger roles/groups/direct permissions.
-7. Charger policies applicables.
-8. Évaluer deny explicites.
-9. Évaluer allow nécessaires.
-10. Vérifier contraintes de contexte : surface, database, namespace, time, resource.
-11. Émettre SecurityAuditTrace.
-12. Autoriser ou refuser.
+1. Validate frame and protocol version; reject gRPC, runtime JSON defaults, and generic payload tunnels.
+2. Validate mTLS certificate and listener surface.
+3. Resolve CertificateIdentity evidence.
+4. Check certificate validity, revocation, and SurfaceScope.
+5. Resolve UserPrincipal or current principal evidence.
+6. Check principal status.
+7. Load available roles, groups, direct permissions, and policy evidence.
+8. Evaluate explicit deny rules.
+9. Evaluate required allow rules for the operation and surface.
+10. Check context constraints: surface, database, namespace, time, resource budget.
+11. Require SecurityAuditTrace or audit evidence for the accepted or rejected decision.
+12. Authorize or fail closed before transaction creation.
 ```
 
-Deny explicite doit généralement gagner sur allow, sauf break-glass formellement audité.
+Explicit deny generally wins over allow, except under formally audited break-glass policy.
 
 ## 34. Threat model minimal
 
@@ -727,4 +771,3 @@ QUIC + RPC custom + Procedure cataloguée + SRPL + contrats typés + WAL/MVCC/re
 ```
 
 Toute extension future doit rester définissable, déterministe ou explicitement bornée, typée, observable, récupérable après crash, versionnée, explicable et désactivable.
-

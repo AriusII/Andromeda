@@ -19,10 +19,14 @@ The main risk is not lack of features. The main risk is integration drift: contr
 
 - No ad hoc SQL application surface.
 - No gRPC protocol surface.
+- No generic crate ownership buckets named `common`, `utils`, `misc`, `helpers`, or `god_engine`.
 - No runtime JSON default for typed protocol payloads.
+- `andromeda-rpc-protocol` remains runtime-free and does not depend on QUIC runtime crates.
+- `andromeda-quic` owns the concrete QUIC runtime boundary and must not own Procedure semantics, storage truth, or authorization policy.
+- `andromeda-security-contract` is runtime-free security vocabulary, not IAM runtime or durable policy storage.
 - Every application execution goes through a cataloged Procedure.
 - Every Procedure has a typed, hashed, versioned contract.
-- No transaction starts before contract, surface, and IAM validation.
+- No transaction starts before `SecurityAdmission v0` validates protocol, contract, surface, principal/policy evidence, resource budget, and audit evidence.
 - No visible mutation exists without durable WAL.
 - RAM and HotStore are not system truth.
 - Reconstructible truth is the last valid cold snapshot plus durable WAL.
@@ -53,8 +57,8 @@ The completed 20-worker phase produced a broad set of implementation changes. Th
 | Procedure Store | Invocation runtime records capture binding, timing, plan, row, WAL, temp, and error evidence. | Execution must emit records for committed, failed, and aborted outcomes. |
 | Statistics publication | Candidate `StatsVersion` validation and active switch are explicit and traced. | Optimizer consumption and rollback policy still need runtime wiring. |
 | PlanCache gate | PlanCache identity is bounded and versioned with advisory evidence only. | This is not a full optimizer. Do not overstate it as one. |
-| IAM primitives | Certificate identity, principal status, permissions, and surface scopes exist. | Durable registries and protocol/execution integration remain pending. |
-| Durable audit | Audit journal checksum chaining detects missing or corrupted records. | Legacy journal compatibility or migration policy remains open. |
+| Security admission and IAM primitives | `SecurityAdmission v0` is documented as a pre-transaction contract over surface, principal, policy, resource, and audit evidence; certificate identity, principal status, permissions, and surface scopes exist. | Full durable IAM registries and policy-management runtime remain pending. |
+| Durable audit | `AuditLedger v0` journal evidence is append-only at the record layer, and checksum-chain validation detects missing or corrupted records. | Legacy journal compatibility or migration policy remains open; retention compaction must preserve retained payload checksum evidence and is not the transaction commit path. |
 | Benchmark evidence | Scenario evidence is bounded, expirable, and non-authoritative. | Catalog/optimizer publication remains pending. |
 | HA/DR and PITR | Majority, promotion, WAL range, and exact target LSN gates are tested. | Full backup/restore drills and cluster simulation remain future work. |
 
@@ -69,10 +73,33 @@ The consolidation wave was intentionally narrower than the 20-worker fan-out. It
 | C | Catalog and planning evidence | Wire Procedure Store, statistics publication, and PlanCache identity into runtime paths. | Invocation and plan evidence include contract, catalog, statistics, and policy versions. |
 | D | Transaction, HA/DR, and PITR proof | Strengthen commit-log durable LSN evidence, promotion fencing, quorum, and PITR WAL coverage gates. | Commit/rollback terminal records prove durable LSN coverage; promotion and restore decisions are deterministic and explainable. |
 | E | QUIC, IAM, audit, and recovery integration edges | Connect route binding, principal checks, audit evidence, and catalog/heap replay decisions into runtime paths. | Wrong surface, disabled principal, or missing permission creates no transaction, emits audit evidence, and preserves recovery explainability. |
+| WR-5.DOC | Lot 5 docs and ADR acceptance alignment | Align DEC-040/041 index, Lot 5 acceptance, `SecurityAdmission v0`, `AuditLedger v0`, RPC/QUIC/security-contract vocabulary, and audit CLI wording. | Documentation only; no Rust code; no implemented Admin RPC query claim. |
 | G/L | Doctrine and release scan | Run doctrine scanners, focused policy gates, compile gate, and release gate checks. | Doctrine scans, policy gate, and workspace gates pass without false-positive release blockers. |
 | J | Test gap matrix | Identify missing deterministic tests and add only low-conflict tests in owning crates. | Added tests prioritize WAL-before-visible-commit, catalog/version binding, audit chain, and recovery replay. |
 | H | Documentation consolidation | Update current state, roadmap, and worker matrix only. | Documents distinguish implemented, partially integrated, validated, and residual-risk work without touching production code. |
+| WR-GOV-TOPO-DOC | Lots 1-2-3 transversal topology and documentation governance | Strengthen topology guards for R0 foundation, Lot 2 protocol/catalog/security-contract boundaries, and Lot 3 SRPL dev-dependency drift without touching business crates. | `common`/`utils`/`misc`/`helpers`/`god_engine` crates are rejected; `andromeda-security-contract` is documented as runtime-free R1 vocabulary; `andromeda-quic` to `andromeda-rpc-protocol` and `andromeda-srpl` facade exit criteria are explicit; targeted CLI topology gates are the acceptance checks. |
 | N | Documentation stale-blocker audit | Review current state, roadmap, and worker matrix for outdated blocker claims. | Documents mark the previous CLI benchmark error mapping issue as resolved in the latest compile report. |
+
+## Lot 5 Acceptance Alignment
+
+WR-5.DOC aligns documentation with DEC-040 and DEC-041. Lot 5 acceptance is limited to the following claims unless code evidence proves more:
+
+| Area | Accepted claim | Claim to avoid |
+|---|---|---|
+| `SecurityAdmission v0` | Pre-transaction contract boundary over protocol, contract, surface, principal/policy evidence, resource budget, and audit evidence. | Full durable IAM implementation or policy-management runtime. |
+| `AuditLedger v0` | Append-only, checksum-chained durable audit record evidence with retention compaction caveats. | Database truth, transaction commit path, or immutable bytes across compaction. |
+| RPC protocol | `andromeda-rpc-protocol` is runtime-free frame, stream, codec, and sequencing contract ownership. | QUIC listener runtime or transport adapter ownership. |
+| QUIC runtime | `andromeda-quic` owns feature-gated concrete transport behavior. | Procedure semantics, storage truth, or authorization policy authority. |
+| Security contract | `andromeda-security-contract` owns runtime-free vocabulary and explicit semantic mappings. | IAM runtime, durable `PrincipalRegistry`, revocation store, or policy store. |
+| Audit tooling | Current operator wording uses `audit inspect`, `audit verify`, and `audit compact`. | Implemented Admin RPC audit query endpoint or legacy `audit query` examples. |
+
+Normative WR-5.DOC acceptance references:
+
+- `docs/adr/ADR-0012-quic-rpc-no-grpc.md`
+- `documentations/specs/FrameHeader_RPC_v0.md`
+- `documentations/specs/SecurityAdmission_v0.md`
+- `documentations/specs/AuditLedger_v0.md`
+
 
 ## Priority Roadmap
 
@@ -86,7 +113,7 @@ P0 is the minimum path to a credible recoverable database prototype.
 4. Make catalog DefinitionBatch publication WAL-covered and replayable through the durable catalog store.
 5. Use full `ProcedureContractBinding` everywhere an Invocation, plan, audit record, manifest, or benchmark evidence item is created.
 6. Emit Procedure Store runtime records from all execution terminal outcomes.
-7. Persist IAM and QUIC admission rejection evidence into durable audit.
+7. Persist `SecurityAdmission v0` rejection evidence for QUIC, surface, principal, and policy failures into durable audit where the owning implementation proves the path.
 8. Keep doctrine scans active for no gRPC, no ad hoc SQL application surface, no runtime JSON default, and no GPU critical-path use.
 
 ### P1 - Make Procedure Execution Generic
@@ -95,7 +122,7 @@ P1 replaces special-case vertical behavior with generic catalog-backed execution
 
 1. Make `ProcedureRegistry` catalog-backed.
 2. Dispatch by Procedure identity, contract hash, and typed payload.
-3. Require admission order: protocol validation, contract validation, IAM validation, resource budget, then transaction creation.
+3. Require admission order: protocol validation, contract validation, `SecurityAdmission v0` validation, resource budget, then transaction creation.
 4. Lower SRPL IR to minimal physical operators.
 5. Emit ResultStream metadata before payload batches.
 6. Preserve exact row-count policy in ResultStream metadata.
@@ -133,25 +160,27 @@ P3 makes isolation and rollback observable on durable state, not only in the sta
 P4 moves from local protocol smoke checks to a minimal networked application runtime.
 
 1. Keep `runtime-quinn` feature-gated until tests are stable.
-2. Implement application frames for hello, authentication, contract request, execution request, metadata, payload batch, completion, and typed error.
-3. Use mTLS development certificates only in local tests.
-4. Keep Application, Admin, and Cluster surfaces separated.
-5. Reject Admin or Cluster frames on the Application surface.
-6. Enforce backpressure with bounded buffers and batch sizing.
-7. Reject mutation admission through unsafe early-data paths.
-8. Add malformed frame, length, header checksum, and payload-kind tests.
+2. Keep `andromeda-rpc-protocol` runtime-free while QUIC runtime work happens in `andromeda-quic`.
+3. Implement application frames for hello, authentication, contract request, execution request, metadata, payload batch, completion, and typed error.
+4. Use mTLS development certificates only in local tests.
+5. Keep Application, Admin, and Cluster surfaces separated.
+6. Reject Admin or Cluster frames on the Application surface.
+7. Enforce backpressure with bounded buffers and batch sizing.
+8. Reject mutation admission through unsafe early-data paths.
+9. Add malformed frame, length, header checksum, and payload-kind tests.
 
-### P5 - Make IAM And Audit Durable
+### P5 - Make Security Runtime And Audit Durable
 
-P5 turns security primitives into durable system behavior.
+P5 turns security primitives into durable system behavior. It does not turn DEC-041 security contract vocabulary into an IAM runtime claim.
 
 1. Store `UserPrincipal`, `CertificateIdentity`, roles, permissions, and policies in the system catalog.
 2. Validate the chain: certificate identity, principal, roles, permissions, policies, audit.
 3. Add minimum permissions for Procedure execution, contract read, DefinitionBatch import, backup, restore, cluster promotion, audit read, and plan inspection.
 4. Add policy scope for surface, namespace, tenant, resource budget, time window, and break-glass.
 5. Ensure disabled principals fail before transaction creation.
-6. Make audit append-only, checksum chained, durable, retained by policy, and readable through the Admin surface.
+6. Keep `AuditLedger v0` append-only at the record layer, checksum chained, durable, retained by policy, and eventually readable through an explicitly implemented Admin surface. Retention compaction may rewrite retained journal records with rethreaded chain evidence.
 7. Ensure audit cannot be globally disabled.
+8. Do not document an Admin RPC audit query as implemented until code proves that endpoint.
 
 ### P6 - Publish Statistics And Minimal Optimization
 
@@ -222,19 +251,20 @@ P10 moves availability and recovery from contracts to drills.
 
 1. Keep the CLI benchmark error mapping exhaustive as benchmark temp-budget variants evolve.
 2. Re-run the full workspace gates after every accepted integration batch.
-3. Connect the execution `ProductStock` adapter to the durable heap API as the default path.
-4. Add crash tests for committed ProductStock heap state replay through the vertical path.
-5. Wire Procedure Store runtime record emission in execution.
-6. Ensure contract mismatch, disabled principal, wrong surface, and missing permission create no transaction.
-7. Persist admission rejection decisions to durable audit.
-8. Connect catalog WAL bridge replay to durable catalog store publication.
-9. Add DefinitionBatch crash tests for begin/apply/commit boundaries.
-10. Add compatibility policy for old Protobuf manifests without `StatsVersion`.
-11. Add compatibility policy for old durable audit journals without checksum-chain fields.
-12. Publish basic table statistics for the durable ProductStock path.
-13. Feed published `StatsVersion` into PlanCache identity and DecisionTrace.
-14. Keep ScenarioEvidence advisory and version-bound.
-15. Review and package the broad dirty worktree into coherent PR-sized batches.
+3. Keep `workspace_dependency_topology` and `orphan_source_invariants` active for R0, Lot 2, Lot 3, protocol, security-contract, and anti-pattern crate-name drift.
+4. Connect the execution `ProductStock` adapter to the durable heap API as the default path.
+5. Add crash tests for committed ProductStock heap state replay through the vertical path.
+6. Wire Procedure Store runtime record emission in execution.
+7. Ensure contract mismatch, disabled principal, wrong surface, and missing permission create no transaction.
+8. Persist admission rejection decisions to durable audit.
+9. Connect catalog WAL bridge replay to durable catalog store publication.
+10. Add DefinitionBatch crash tests for begin/apply/commit boundaries.
+11. Add compatibility policy for old Protobuf manifests without `StatsVersion`.
+12. Add compatibility policy for old durable audit journals without checksum-chain fields.
+13. Publish basic table statistics for the durable ProductStock path.
+14. Feed published `StatsVersion` into PlanCache identity and DecisionTrace.
+15. Keep ScenarioEvidence advisory and version-bound.
+16. Review and package the broad dirty worktree into coherent PR-sized batches.
 
 ## Open Decisions
 
@@ -244,6 +274,7 @@ P10 moves availability and recovery from contracts to drills.
 | GPU placement | Core module or optional crate | Use an optional crate to prevent accidental critical-path imports. |
 | Legacy Protobuf manifest handling | Reject, migrate, or dual-read | Reject by default until a migration policy is written. |
 | Legacy audit journal handling | Reject, migrate, or dual-read | Reject by default for corruption safety; add explicit migrator if needed. |
+| Admin audit read surface shape | CLI-only inspection, Admin RPC endpoint, or both | Use current CLI `audit inspect`/`audit verify`/`audit compact` wording until an Admin RPC endpoint is implemented and tested. |
 | Page size policy | 16 KiB, 32 KiB, or mixed | Keep current V1 format fixed; add policy later for cold/analytics paths. |
 | Serializable V0 | Strict 2PL, SSI scaffold, or deterministic scheduling | Use strict locking for critical writes first; add SSI later. |
 | Catalog version granularity | Database, instance, or hybrid | Use database-scoped catalog versions with global system-catalog versions for registries. |

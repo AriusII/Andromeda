@@ -2,8 +2,8 @@
 
 This index tracks the active ADR corpus for Andromeda SGBDRT.
 
-- **Latest accepted decision:** DEC-036
-- **Latest numbered record in directory:** DEC-039
+- **Latest accepted decision:** DEC-041
+- **Latest numbered record in directory:** DEC-041
 
 ---
 
@@ -63,6 +63,18 @@ This index tracks the active ADR corpus for Andromeda SGBDRT.
 
 - DEC-039: Optimizer intermediate pass contract *(PROPOSED)*
 
+### Lot 5 boundary governance
+
+- DEC-040: RPC, QUIC, and security boundary governance for Lot 5.1 *(ACCEPTED)*
+- DEC-041: Security contract boundary for Lot 5.4A *(ACCEPTED)*
+
+### Lot 5 documentation acceptance references
+
+- ADR-0012: QUIC/RPC no-gRPC documentation acceptance
+- `documentations/specs/FrameHeader_RPC_v0.md`: accepted RPC frame header documentation contract
+- `documentations/specs/SecurityAdmission_v0.md`: accepted pre-transaction security admission documentation contract
+- `documentations/specs/AuditLedger_v0.md`: accepted durable audit ledger documentation contract
+
 ### Release gate cycle
 
 - DEC-035: Release gate chain *(ACCEPTED)*
@@ -86,7 +98,7 @@ This index tracks the active ADR corpus for Andromeda SGBDRT.
 
 ### Security, protocol, and observability
 
-- DEC-017, DEC-018, DEC-021, DEC-027, DEC-033, DEC-035, DEC-036, DEC-037
+- DEC-017, DEC-018, DEC-021, DEC-027, DEC-033, DEC-035, DEC-036, DEC-037, DEC-040, DEC-041
 
 ---
 
@@ -109,10 +121,11 @@ This index tracks the active ADR corpus for Andromeda SGBDRT.
 | Storage boundaries | DEC-038 | DEC-035, DEC-036 |
 | Optimizer contract | DEC-039 *(proposed)* | DEC-035 gate alignment |
 | Release authority | Implementation handoff context | DEC-036 sign-off |
+| Lot 5 RPC and security boundary | DEC-040, DEC-041, ADR-0012, `FrameHeader_RPC_v0`, `SecurityAdmission_v0`, `AuditLedger_v0` | DEC-035 gate alignment |
 
 ---
 
 ## Last updated
 
-- **Date:** 2026-06-16
+- **Date:** 2026-05-08
 - **Next review:** At the next release gate checkpoint

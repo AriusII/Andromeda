@@ -16,7 +16,10 @@ andromeda-proto = { path = "../crates/andromeda-proto" }
 andromeda-core = { path = "../crates/andromeda-core" }
 andromeda-observe = { path = "../crates/andromeda-observe" }
 andromeda-quic = { path = "../crates/andromeda-quic" }
+andromeda-rpc-protocol = { path = "../crates/andromeda-rpc-protocol" }
+andromeda-security-contract = { path = "../crates/andromeda-security-contract" }
 andromeda-srpl = { path = "../crates/andromeda-srpl" }
+andromeda-srpl-parser = { path = "../crates/andromeda-srpl-parser" }
 andromeda-storage = { path = "../crates/andromeda-storage" }
 andromeda-wal = { path = "../crates/andromeda-wal" }
 
@@ -39,14 +42,32 @@ test = false
 doc = false
 
 [[bin]]
+name = "proto_rpc_execute_request_decode"
+path = "fuzz_targets/proto_rpc_execute_request_decode.rs"
+test = false
+doc = false
+
+[[bin]]
 name = "proto_rpc_completion_decode"
 path = "fuzz_targets/proto_rpc_completion_decode.rs"
 test = false
 doc = false
 
 [[bin]]
+name = "proto_invocation_response_sequence_decode"
+path = "fuzz_targets/proto_invocation_response_sequence_decode.rs"
+test = false
+doc = false
+
+[[bin]]
 name = "srpl_parser_signature_decode"
 path = "fuzz_targets/srpl_parser_signature_decode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "srpl_parser_owner_decode"
+path = "fuzz_targets/srpl_parser_owner_decode.rs"
 test = false
 doc = false
 
@@ -87,7 +108,25 @@ test = false
 doc = false
 
 [[bin]]
+name = "quic_typed_frame_envelope_decode"
+path = "fuzz_targets/quic_typed_frame_envelope_decode.rs"
+test = false
+doc = false
+
+[[bin]]
 name = "durable_audit_journal_decode"
 path = "fuzz_targets/durable_audit_journal_decode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "rpc_protocol_frame_codec_decode"
+path = "fuzz_targets/rpc_protocol_frame_codec_decode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "security_contract_admission_matrix"
+path = "fuzz_targets/security_contract_admission_matrix.rs"
 test = false
 doc = false

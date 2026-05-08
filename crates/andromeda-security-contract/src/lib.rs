@@ -6,7 +6,7 @@ Runtime-free public security contracts shared by IAM, RPC metadata, manifests,
 audit evidence, and operator tooling.
 
 This crate owns stable security surface names, permission families, canonical
-permission identifiers, and policy evidence shapes only. It does not own
+permission identifiers, policy evidence shapes, and admission codes only. It does not own
 certificate parsing, principal registries, authorization evaluation, audit
 sinks, QUIC/TLS runtime behavior, WAL, storage, or recovery logic.
 
@@ -15,11 +15,20 @@ wire formats. Persistent and network boundaries must continue to use explicit
 codecs or generated protocol contracts.
 "#]
 
+mod admission;
 mod error;
 mod permission;
 mod policy;
 mod surface;
 
+pub use admission::{
+    ALL_SECURITY_ADMISSION_V0_BOUNDARIES, ALL_SECURITY_ADMISSION_V0_EVIDENCE_CODES,
+    ALL_SECURITY_ADMISSION_V0_OUTCOMES, ALL_SECURITY_ADMISSION_V0_REASON_CODES,
+    ALL_SECURITY_ADMISSION_V0_STEPS, SECURITY_ADMISSION_V0_CONTRACT_ID,
+    SECURITY_ADMISSION_V0_SCHEMA_VERSION, SecurityAdmissionBoundaryV0,
+    SecurityAdmissionEvidenceCodeV0, SecurityAdmissionOutcomeV0, SecurityAdmissionReasonCodeV0,
+    SecurityAdmissionStepV0, SecurityAdmissionV0,
+};
 pub use error::SecurityContractError;
 pub use permission::{
     ALL_PERMISSION_FAMILIES, ALL_PERMISSIONS, FAMILY_ID_APPLICATION, FAMILY_ID_CLUSTER,

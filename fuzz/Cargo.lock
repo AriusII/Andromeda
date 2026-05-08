@@ -40,6 +40,7 @@ dependencies = [
  "andromeda-digest",
  "andromeda-error",
  "andromeda-hardware",
+ "andromeda-security-contract",
  "andromeda-time",
  "andromeda-types",
 ]
@@ -60,7 +61,10 @@ dependencies = [
  "andromeda-observe",
  "andromeda-proto",
  "andromeda-quic",
+ "andromeda-rpc-protocol",
+ "andromeda-security-contract",
  "andromeda-srpl",
+ "andromeda-srpl-parser",
  "andromeda-storage",
  "andromeda-wal",
  "libfuzzer-sys",
@@ -104,7 +108,20 @@ dependencies = [
  "andromeda-core",
  "andromeda-observe",
  "andromeda-proto",
+ "andromeda-rpc-protocol",
+ "andromeda-security-contract",
 ]
+
+[[package]]
+name = "andromeda-rpc-protocol"
+version = "0.1.0"
+dependencies = [
+ "andromeda-core",
+]
+
+[[package]]
+name = "andromeda-security-contract"
+version = "0.1.0"
 
 [[package]]
 name = "andromeda-srpl"
