@@ -1,8 +1,6 @@
 ---
 name: rowcount-metadata-design
-description: Specify exact row count metadata for procedure results and StructuredObjects. Use when working on protocol tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+description: "Specify exact row count metadata for procedure results and StructuredObjects. Use when working on protocol tasks for the Andromeda relational transactional database engine project."
 ---
 
 # rowcount-metadata-design

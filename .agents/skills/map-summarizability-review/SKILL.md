@@ -1,6 +1,6 @@
 ---
 name: map-summarizability-review
-description: "Review analytical Maps for grain, summarizability, aggregation correctness, staleness, layout, and GPU batch boundaries. Use for OLAP/analytics maps."
+description: "Review analytical Maps for grain, summarizability, aggregation correctness, staleness, layout, and GPU batch boundaries. Use when working on OLAP/analytics maps."
 ---
 
 # Map Summarizability Review

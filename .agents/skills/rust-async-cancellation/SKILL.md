@@ -1,6 +1,6 @@
 ---
 name: rust-async-cancellation
-description: "Design cancellation-safe async Rust around QUIC/RPC/admin jobs without corrupting transaction or storage state. Use for Tokio tasks, streams, shutdown, and backpressure."
+description: "Design cancellation-safe async Rust around QUIC/RPC/admin jobs without corrupting transaction or storage state. Use when working on Tokio tasks, streams, shutdown, and backpressure."
 ---
 
 # Rust Async Cancellation

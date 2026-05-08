@@ -1,6 +1,6 @@
 ---
 name: hot-cold-storage-policy
-description: "Design RAM, NVMe HotStore, WAL, TempStore, HDD ColdStore, snapshots, and reconstruction truth. Use for storage architecture."
+description: "Design RAM, NVMe HotStore, WAL, TempStore, HDD ColdStore, snapshots, and reconstruction truth. Use when working on storage architecture."
 ---
 
 # Hot/Cold Storage Policy

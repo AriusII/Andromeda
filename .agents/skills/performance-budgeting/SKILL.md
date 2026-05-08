@@ -1,8 +1,6 @@
 ---
 name: performance-budgeting
-description: Define performance budgets and regression thresholds. Use when working on performance tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+description: "Define performance budgets and regression thresholds. Use when working on performance tasks for the Andromeda relational transactional database engine project."
 ---
 
 # performance-budgeting

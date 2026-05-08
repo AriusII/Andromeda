@@ -1,109 +1,189 @@
 # Andromeda Codex Skill Index
 
-- `roadmap-objective-tracing` — Roadmap Objective Tracing (roadmap)
-- `roadmap-task-decomposition` — Roadmap Task Decomposition (roadmap)
-- `roadmap-delegation-tree` — Roadmap Delegation Tree (roadmap)
-- `roadmap-progress-checkpointing` — Roadmap Progress Checkpointing (roadmap)
-- `project-context-intake` — Project Context Intake (context)
-- `prompt-intent-disambiguation` — Prompt Intent Disambiguation (context)
-- `prompt-scope-normalization` — Prompt Scope Normalization (context)
-- `context-pack-construction` — Context Pack Construction (context)
-- `source-grounded-answering` — Source-Grounded Answering (context)
-- `decision-record-authoring` — Decision Record Authoring (context)
-- `agent-handoff-protocol` — Agent Handoff Protocol (context)
-- `agent-skill-routing` — Agent Skill Routing (context)
-- `codex-prompt-template-design` — Codex Prompt Template Design (context)
-- `user-request-risk-classification` — User Request Risk Classification (context)
-- `agents-md-authoring` — AGENTS.md Authoring (codex)
-- `codex-agent-authoring` — Codex Agent Authoring (codex)
-- `codex-agent-registry-maintenance` — Codex Agent Registry Maintenance (codex)
-- `codex-skill-authoring` — Codex Skill Authoring (codex)
-- `skill-progressive-disclosure` — Skill Progressive Disclosure (codex)
-- `skill-forward-testing` — Skill Forward Testing (codex)
-- `hook-design-governance` — Hook Design Governance (codex)
-- `hook-script-hardening` — Hook Script Hardening (codex)
-- `hook-json-validation` — Hook JSON Validation (codex)
-- `permission-request-policy` — Permission Request Policy (codex)
-- `pretooluse-guardrails` — PreToolUse Guardrails (codex)
-- `posttooluse-audit` — PostToolUse Audit (codex)
-- `sessionstart-context` — SessionStart Context (codex)
-- `stop-quality-gate` — Stop Quality Gate (codex)
-- `codex-tooling-validation` — Codex Tooling Validation (codex)
-- `mcp-aware-tool-selection` — MCP-Aware Tool Selection (codex)
-- `prompt-library-maintenance` — Prompt Library Maintenance (codex)
-- `rust-workspace-architecture` — Rust Workspace Architecture (rust)
-- `rust-crate-boundary-design` — Rust Crate Boundary Design (rust)
-- `rust-module-splitting` — Rust Module Splitting (rust)
-- `rust-file-size-governance` — Rust File Size Governance (rust)
-- `rust-clean-code-refactor` — Rust Clean Code Refactor (rust)
-- `rust-dead-code-removal` — Rust Dead Code Removal (rust)
-- `rust-orphan-detection` — Rust Orphan Detection (rust)
-- `rust-dependency-pruning` — Rust Dependency Pruning (rust)
-- `rust-feature-flag-governance` — Rust Feature Flag Governance (rust)
-- `rust-public-api-minimization` — Rust Public API Minimization (rust)
-- `rust-error-modeling` — Rust Error Modeling (rust)
-- `rust-newtype-invariants` — Rust Newtype Invariants (rust)
-- `rust-unsafe-boundary-audit` — Rust Unsafe Boundary Audit (rust)
-- `rust-ffi-boundary-audit` — Rust FFI Boundary Audit (rust)
-- `rust-panic-eradication` — Rust Panic Eradication (rust)
-- `rust-allocation-review` — Rust Allocation Review (rust)
-- `rust-clone-copy-audit` — Rust Clone and Copy Audit (rust)
-- `rust-async-cancellation` — Rust Async Cancellation (rust)
-- `rust-concurrency-loom-modeling` — Rust Concurrency Loom Modeling (rust)
-- `rust-performance-benchmarking` — Rust Performance Benchmarking (rust)
-- `rust-simd-dispatch` — Rust SIMD Dispatch (rust)
-- `rust-gpu-batch-integration` — Rust GPU Batch Integration (rust)
-- `rust-supply-chain-audit` — Rust Supply Chain Audit (rust)
-- `rust-ci-quality-gates` — Rust CI Quality Gates (rust)
-- `rust-docs-api-guidelines` — Rust Docs API Guidelines (rust)
-- `rust-test-strategy` — Rust Test Strategy (rust)
-- `rust-fuzzing-harness-design` — Rust Fuzzing Harness Design (rust)
-- `rust-miri-ub-checks` — Rust Miri UB Checks (rust)
-- `rust-property-testing` — Rust Property Testing (rust)
-- `andromeda-doctrine-invariants` — Andromeda Doctrine Invariants (andromeda)
-- `relational-algebra-law-check` — Relational Algebra Law Check (andromeda)
-- `set-theory-semantics` — Set Theory Semantics (andromeda)
-- `normalization-dependency-analysis` — Normalization Dependency Analysis (andromeda)
-- `cardinality-grain-analysis` — Cardinality and Grain Analysis (andromeda)
-- `srpl-language-design` — SRPL Language Design (andromeda)
-- `srpl-parser-design` — SRPL Parser Design (andromeda)
-- `srpl-binder-cardinality` — SRPL Binder Cardinality (andromeda)
-- `srpl-diagnostics-catalog` — SRPL Diagnostics Catalog (andromeda)
-- `srpl-procedure-contract` — SRPL Procedure Contract (andromeda)
-- `srpl-anti-dynamic-sql` — SRPL Anti Dynamic SQL (andromeda)
-- `structuredobject-contracts` — StructuredObject Contracts (andromeda)
-- `type-system-domain-modeling` — Type System Domain Modeling (andromeda)
-- `catalog-object-model` — Catalog Object Model (andromeda)
-- `definitionbatch-validation` — DefinitionBatch Validation (andromeda)
-- `contracthash-canonicalization` — ContractHash Canonicalization (andromeda)
-- `procedure-store-design` — Procedure Store Design (andromeda)
-- `optimizer-cost-modeling` — Optimizer Cost Modeling (andromeda)
-- `statistics-histogram-design` — Statistics Histogram Design (andromeda)
-- `scenario-evidence-governance` — Scenario Evidence Governance (andromeda)
-- `learned-component-skepticism` — Learned Component Skepticism (andromeda)
-- `map-materialization-policy` — Map Materialization Policy (andromeda)
-- `map-summarizability-review` — Map Summarizability Review (andromeda)
-- `transaction-state-machine` — Transaction State Machine (andromeda)
-- `wal-record-design` — WAL Record Design (andromeda)
-- `wal-crash-recovery-testing` — WAL Crash Recovery Testing (andromeda)
-- `mvcc-isolation-analysis` — MVCC Isolation Analysis (andromeda)
-- `storage-page-format` — Storage Page Format (andromeda)
-- `storage-segment-manifest` — Storage Segment Manifest (andromeda)
-- `bufferpool-io-scheduler` — BufferPool and I/O Scheduler (andromeda)
-- `hot-cold-storage-policy` — Hot/Cold Storage Policy (andromeda)
-- `quic-rpc-frame-contracts` — QUIC/RPC Frame Contracts (andromeda)
-- `resultstream-protocol` — ResultStream Protocol (andromeda)
-- `iam-security-policy` — IAM Security Policy (andromeda)
-- `security-threat-modeling` — Security Threat Modeling (andromeda)
-- `audit-trace-schema` — Audit Trace Schema (andromeda)
-- `hadr-quorum-fencing` — HA/DR Quorum and Fencing (andromeda)
-- `backup-restore-pitr` — Backup Restore PITR (andromeda)
-- `forensic-startup-runbook` — Forensic Startup Runbook (andromeda)
-- `hardware-profile-policy` — Hardware Profile Policy (andromeda)
-- `cpu-simd-kernel-policy` — CPU SIMD Kernel Policy (andromeda)
-- `gpu-no-commit-policy` — GPU No Commit Policy (andromeda)
-- `observability-decision-trace` — Observability Decision Trace (andromeda)
-- `enterprise-readiness-review` — Enterprise Readiness Review (andromeda)
-- `release-gate-mission-critical` — Release Gate Mission Critical (andromeda)
-- `crash-injection-matrix` — Crash Injection Matrix (andromeda)
-- `rust-binary-codec-design` — Rust Binary Codec Design (rust)
+Generated from `.agents/skills/*/SKILL.md` frontmatter. Skill count: 185.
+
+- `access-path-index-review` - Access Path Index Review (Storage): Review access path design for B+Tree, hash, hot/cold merge, and scan requirements. Use when working on storage and optimizer tasks for the Andromeda relational transactional database engine project.
+- `agent-handoff-contracting` - Agent Handoff Contracting (Agent Ops): Write precise handoff contracts between agents. Use when working on agent ops tasks for the Andromeda relational transactional database engine project.
+- `agent-handoff-protocol` - Agent Handoff Protocol (Agent Ops): Prepare handoffs between Codex agents with exact task boundaries, inputs, constraints, expected outputs, and validation. Use when a master agent delegates to specialized subagents.
+- `agent-output-validation` - Agent Output Validation (Agent Ops): Validate final agent outputs against task completion and project gates. Use when working on agent ops tasks for the Andromeda relational transactional database engine project.
+- `agent-skill-routing` - Agent Skill Routing (Agent Ops): Select agents and skills for a user request based on task type, criticality, Rust area, Andromeda subsystem, and risk class. Use when Codex must dynamically load the right skills.
+- `agents-md-authoring` - Agents Md Authoring (Codex): Author and maintain repository-level AGENTS.md instructions for Codex. Use when defining project doctrine, hierarchy, scope, precedence, and contribution rules.
+- `andromeda-architecture-review` - Andromeda Architecture Review (Governance): Review Andromeda architecture, module boundaries, doctrine, engine responsibilities, anti-patterns, and cross-document consistency. Use when evaluating system design, refactors, architectural drift, or module responsibilities.
+- `andromeda-doctrine-invariants` - Andromeda Doctrine Invariants (WAL and Recovery): Apply Andromeda invariants: RPC-only procedures, typed contracts, durable WAL before visible commit, versioned stats/plans, no GPU commit path, and recoverability. Use when working on any design or code review.
+- `audit-trace-schema` - Audit Trace Schema (WAL and Recovery): Design audit traces for security, catalog changes, admin operations, procedures, transactions, plans, recovery, cluster events, and DefinitionBatch. Use when working on observability.
+- `audit-trace-specification` - Audit Trace Specification (WAL and Recovery): Specify audit trace fields for security, catalog, transaction, recovery, or agent operations. Use when working on observability tasks for the Andromeda relational transactional database engine project.
+- `backup-pitr-runbook` - Backup PITR Runbook (WAL and Recovery): Write or review backup and point-in-time recovery runbooks. Use when working on backup tasks for the Andromeda relational transactional database engine project.
+- `backup-restore-pitr` - Backup Restore PITR (WAL and Recovery): Design backup, WAL archives, immutable retention, PITR restore, restore tests, and backup policies. Use when working on operations and DR work.
+- `benchmark-workload-design` - Benchmark Workload Design (General): Design bounded benchmark workloads and evidence scenarios. Use when working on benchmark tasks for the Andromeda relational transactional database engine project.
+- `bufferpool-io-scheduler` - Bufferpool I/O Scheduler (Storage): Design BufferPool pinning, dirty tracking, eviction, checkpoint cooperation, P0 WAL flush priority, temp/spill quotas, and metrics. Use when working on storage runtime.
+- `cardinality-grain-analysis` - Cardinality Grain Analysis (SRPL): Separate conceptual cardinality, optimizer cardinality, analytical grain, and summarizability. Use when working on type system, Maps, stats, analytics, and SRPL diagnostics.
+- `catalog-modelization-definitionbatch` - Catalog Modelization Definitionbatch (Catalog): Design or review Catalog descriptors, Modelization import, DefinitionBatch ordering, dependency graphs, dry-run reports, catalog versioning, signatures, and rollback behavior. Use when working on catalog tasks that require this workflow.
+- `catalog-object-model` - Catalog Object Model (Catalog): Design catalog descriptors for Database, Namespace, Table, Map, Enum, StructuredObject, Procedure, versions, policies, and state lifecycles. Use when working on catalog implementation.
+- `catalog-object-modeling` - Catalog Object Modeling (Catalog): Model catalog objects, versions, dependencies, and contract hashes. Use when working on catalog tasks for the Andromeda relational transactional database engine project.
+- `codex-agent-authoring` - Codex Agent Authoring (Agent Ops): Create or update Codex agent TOML definitions with clear agent role, non-overlapping behavior, sandbox posture, primary skills, and output contracts. Use when working on agent ops tasks that require this workflow.
+- `codex-agent-design` - Codex Agent Design (Agent Ops): Create or refine Codex custom agents/subagents, TOML role files, routing rules, model reasoning effort, sandbox posture, and specialist review workflows. Use when working on agent ops tasks that require this workflow.
+- `codex-agent-registry-maintenance` - Codex Agent Registry Maintenance (Agent Ops): Maintain .codex/config.toml agent registry entries and ensure each agent file is registered and coherent. Use when adding, renaming, deleting, or reorganizing agents.
+- `codex-hook-governance` - Codex Hook Governance (Agent Ops): Design or review Codex hooks for SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PermissionRequest, Stop, command policies, audit logs, and safe failure behavior. Use when working on agent ops tasks that require this workflow.
+- `codex-prompt-template-design` - Codex Prompt Template Design (Agent Ops): Design reusable prompts for Codex agent work: implementation, review, cleanup, tests, research, specification, and recovery plans. Use when creating prompt libraries or templates.
+- `codex-repo-maintenance-workflow` - Codex Repo Maintenance Workflow (Codex): Codify repeatable repository maintenance work: issue triage, PR review, doc consistency, dependency hygiene, changelog checks, and release-readiness routines. Use when working on codex tasks that require this workflow.
+- `codex-skill-authoring` - Codex Skill Authoring (Agent Ops): Create precise Codex skills with SKILL.md frontmatter, progressive disclosure, references, scripts, and validation. Use when adding or improving a skill.
+- `codex-tooling-validation` - Codex Tooling Validation (Agent Ops): Validate the full Codex tooling tree: AGENTS.md, .codex/config.toml, .codex/agents, .agents/skills, hooks, scripts, and prompt templates. Use when working on agent ops tasks that require this workflow.
+- `coldstore-manifest-snapshot-review` - Coldstore Manifest Snapshot Review (Storage): Review ColdStore immutable segment design, manifests, snapshot publication, atomic switches, scrub, archive, and restore compatibility. Use when working on storage tasks that require this workflow.
+- `context-pack-construction` - Context Pack Construction (Agent Ops): Build compact context packs for agents and skills. Use when preparing another agent, prompt template, or handoff with only the context needed to execute correctly.
+- `contracthash-canonicalization` - Contracthash Canonicalization (Catalog): Define stable ContractHash canonicalization across shapes, types, permissions, policies, compatibility, and semantic IR. Use when hashing procedures/contracts.
+- `cost-model-risk-penalty-design` - Cost Model Risk Penalty Design (WAL and Recovery): Design cost-model components, risk penalties, uncertainty scoring, resource budgets, spill risk, network cost, WAL cost, and plan-stability hysteresis. Use when working on wal and recovery tasks that require this workflow.
+- `cpu-simd-kernel-policy` - CPU SIMD Kernel Policy (Maps and Analytics): Govern CPU acceleration for CRC, encryption, scans, bitmap/cardinality, compression, and atomics with scalar fallback and evidence. Use when working on CPU kernels.
+- `crash-injection-matrix` - Crash Injection Matrix (Storage): Build and maintain crash injection matrices for WAL, manifest, page, map, catalog, backup, and recovery. Use when designing tests or validating C5 paths.
+- `crash-recovery-test-design` - Crash Recovery Test Design (WAL and Recovery): Design crash and recovery test scenarios. Use when working on testing tasks for the Andromeda relational transactional database engine project.
+- `decision-record-authoring` - Decision Record Authoring (Agent Ops): Create ADR/DEC records with context, decision, alternatives, consequences, revision criteria, and test gates. Use when working on architecture, tooling, Rust, WAL, SRPL, hook, or agent policy decisions.
+- `decision-trace-observability` - Decision Trace Observability (WAL and Recovery): Design or review DecisionTrace, ProcedureInvocationTrace, PlanDecisionTrace, SecurityAuditTrace, RecoveryTrace, metrics, logs, and forensic explainability. Use when working on wal and recovery tasks that require this workflow.
+- `definition-batch-dryrun` - Definition Batch Dryrun (Catalog): Design or review DefinitionBatch dry-run and apply behavior. Use when working on catalog tasks for the Andromeda relational transactional database engine project.
+- `definitionbatch-validation` - Definitionbatch Validation (Storage): Validate DefinitionBatch dependency graph, ordering, DryRun, breaking changes, security impact, storage impact, and transactionality. Use when working on import/modelization work.
+- `docs-source-grounding` - Docs Source Grounding (Documentation): Produce source-grounded technical documentation with official-source preference, clear assumptions, citation inventory, and distinction between stable facts and active research. Use when working on documentation tasks that require this workflow.
+- `enterprise-grade-readiness-review` - Enterprise Grade Readiness Review (WAL and Recovery): Evaluate enterprise readiness: operations, security, auditing, recovery, versioning, supportability, documentation, runbooks, observability, and rollback. Use when working on wal and recovery tasks that require this workflow.
+- `enterprise-readiness-review` - Enterprise Readiness Review (WAL and Recovery): Review Andromeda features for Enterprise Grade requirements: strict contracts, audit, recovery, security, testing, versioning, supportability, and operations. Use when working on wal and recovery tasks that require this workflow.
+- `forensic-startup-runbook` - Forensic Startup Runbook (WAL and Recovery): Design FastStart, SafeStart, ForensicStart, consistency reports, app blocking, corruption response, and RecoveryReport. Use when working on incident recovery.
+- `formal-invariant-ledger` - Formal Invariant Ledger (Governance): Extract and maintain formal invariants, acceptance criteria, rejection rules, preconditions, postconditions, failure modes, and proof obligations. Use when working on governance tasks that require this workflow.
+- `gpu-no-commit-policy` - GPU No Commit Policy (WAL and Recovery): Enforce that GPU jobs are analytics/statistics/vector/batch only and never participate in commit, WAL, rollback, recovery, security, or OLTP visibility. Use when working on GPU proposals.
+- `gpu-off-commit-path-check` - GPU Off Commit Path Check (WAL and Recovery): Verify that GPU usage remains outside commit, WAL, rollback, and recovery paths. Use when working on hardware and analytics tasks for the Andromeda relational transactional database engine project.
+- `hadr-backup-forensic-runbook` - HA/DR Backup Forensic Runbook (WAL and Recovery): Design or review HA/DR, Single Primary, replicas, quorum, fencing, failover, WAL shipping, backup, PITR restore, forensic startup, and incident runbooks. Use when working on wal and recovery tasks that require this workflow.
+- `hadr-quorum-fencing` - HA/DR Quorum Fencing (Backup and HA/DR): Design single-primary HA/DR, replica metadata, quorum, fencing, promotion eligibility, epochs, and split-brain prevention. Use when working on HA/DR work.
+- `hadr-quorum-review` - HA/DR Quorum Review (Backup and HA/DR): Review HA/DR quorum, fencing, failover, and promotion rules. Use when working on ha/dr tasks for the Andromeda relational transactional database engine project.
+- `hardware-profile-policy` - Hardware Profile Policy (Maps and Analytics): Define hardware profiles for x64/arm64, SIMD, GPU, NVMe, HDD, ZNS, and runtime detection with policy and fallback. Use when working on hardware-aware design.
+- `hardware-simd-gpu-nvme-planning` - Hardware SIMD GPU Nvme Planning (Optimizer): Plan or review x64/ARM64 CPU profiles, SIMD, GPU analytics/statistics/vector paths, NVMe hot store, HDD cold store, ZNS, and hardware policies. Use when working on optimizer tasks that require this workflow.
+- `hook-design-governance` - Hook Design Governance (Agent Ops): Design Codex hooks for SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PermissionRequest, and Stop with clear purpose and minimal friction. Use when working on agent ops tasks that require this workflow.
+- `hook-json-validation` - Hook JSON Validation (Agent Ops): Validate .codex/hooks.json structure, event names, command paths, timeouts, matchers, and referenced scripts. Use when preparing for packaging or committing Codex hooks.
+- `hook-policy-design` - Hook Policy Design (Agent Ops): Design hook policies for prompt, tool, artifact, and stop gates. Use when working on agent ops tasks for the Andromeda relational transactional database engine project.
+- `hook-script-hardening` - Hook Script Hardening (Agent Ops): Harden Python hook scripts for deterministic JSON input/output, safe failures, no secret leakage, and bounded execution. Use when writing or reviewing hook scripts.
+- `hot-cold-storage-policy` - Hot Cold Storage Policy (Storage): Design RAM, NVMe HotStore, WAL, TempStore, HDD ColdStore, snapshots, and reconstruction truth. Use when working on storage architecture.
+- `hotcold-data-placement` - Hotcold Data Placement (Storage): Classify data placement across RAM, HotStore NVMe, and ColdStore HDD. Use when working on storage tasks for the Andromeda relational transactional database engine project.
+- `iam-security-policy` - IAM Security Policy (Security): Design mTLS to CertificateIdentity to UserPrincipal to roles/permissions/policies/audit. Use when working on security and authorization implementation.
+- `learned-component-skepticism` - Learned Component Skepticism (Optimizer): Evaluate learned cardinality, learned indexes, learned optimizer, and workload prediction as evidence only with fallback and poisoning defenses. Use when working on modern ML-adjacent proposals.
+- `map-materialization-policy` - Map Materialization Policy (WAL and Recovery): Select Map refresh modes: Immediate, Incremental, Deferred, SnapshotOnly with WAL, consistency, cost, and staleness policies. Use when working on Maps design.
+- `map-refresh-policy` - Map Refresh Policy (Maps and Analytics): Define Map consistency and refresh mode. Use when working on maps tasks for the Andromeda relational transactional database engine project.
+- `map-summarizability-review` - Map Summarizability Review (Maps and Analytics): Review analytical Maps for grain, summarizability, aggregation correctness, staleness, layout, and GPU batch boundaries. Use when working on OLAP/analytics maps.
+- `maps-analytics-summarizability` - Maps Analytics Summarizability (Maps and Analytics): Design or review Maps, analytical grain, summarizability, refresh modes, staleness, incremental maintenance, columnar layout, and GPU-off-commit constraints. Use when working on maps and analytics tasks that require this workflow.
+- `mcp-aware-tool-selection` - MCP Aware Tool Selection (Codex): Use MCP tools such as rust-lsp and rust-rover-ide when available without making Codex tooling depend on MCP. Use when working on repository analysis, Rust symbols, diagnostics, and IDE-aware tasks.
+- `microsoft-doc-style-edit` - Microsoft Doc Style Edit (Documentation): Edit documentation to Microsoft documentation style. Use when working on documentation tasks for the Andromeda relational transactional database engine project.
+- `migration-compatibility-review` - Migration Compatibility Review (Catalog): Review compatibility, additive/breaking changes, migrations, catalog evolution, client contract impact, rollback, deprecation, and DefinitionBatch risk. Use when working on catalog tasks that require this workflow.
+- `mvcc-isolation-analysis` - MVCC Isolation Analysis (Transaction): Analyze MVCC visibility, snapshots, GC, anomalies, snapshot isolation, serializable behavior, and long-reader retention. Use when working on transaction/isolation design.
+- `mvcc-isolation-anomaly-review` - MVCC Isolation Anomaly Review (Transaction): Analyze MVCC visibility, isolation levels, anomalies, Serializable/Snapshot tradeoffs, long readers, version GC, and concurrency safety. Use when working on transaction tasks that require this workflow.
+- `mvcc-visibility-proof` - MVCC Visibility Proof (Transaction): Review MVCC visibility rules for deterministic snapshot behavior. Use when working on transaction tasks for the Andromeda relational transactional database engine project.
+- `no-grpc-enforcement` - No gRPC Enforcement (Protocol): Scan artifacts for accidental gRPC introduction. Use when working on doctrine and protocol tasks for the Andromeda relational transactional database engine project.
+- `no-json-runtime-policy` - No JSON Runtime Policy (Governance): Scan runtime protocol artifacts for JSON default format drift. Use when working on doctrine and protocol tasks for the Andromeda relational transactional database engine project.
+- `no-sql-surface-scan` - No SQL Surface Scan (Governance): Scan artifacts for accidental ad hoc SQL surface introduction. Use when working on doctrine tasks for the Andromeda relational transactional database engine project.
+- `normalization-dependency-analysis` - Normalization Dependency Analysis (Catalog): Analyze functional dependencies, multivalued dependencies, keys, 3NF, BCNF, 4NF, DKNF, lossless decomposition, and dependency preservation. Use when working on catalog/modelization review.
+- `observability-decision-trace` - Observability Decision Trace (Storage): Design DecisionTrace and operational metrics so optimizer, stats, security, storage, and recovery decisions are explainable after the fact. Use when working on traceability.
+- `optimizer-cost-modeling` - Optimizer Cost Modeling (Optimizer): Design cost model terms, physical operators, plan candidates, risk penalties, plan classes, and DecisionTrace for Andromeda procedures. Use when working on optimizer work.
+- `optimizer-planclass-design` - Optimizer Planclass Design (Optimizer): Design bounded multi-plan classes and plan cache behavior. Use when working on optimizer tasks for the Andromeda relational transactional database engine project.
+- `optimizer-statistics-plan-review` - Optimizer Statistics Plan Review (Optimizer): Review optimizer choices, physical operators, cost model, histograms, cardinality estimates, skew, StatsVersion, plan cache, multi-plan quotas, and risk penalties. Use when working on optimizer tasks that require this workflow.
+- `performance-budgeting` - Performance Budgeting (Hardware and Performance): Define performance budgets and regression thresholds. Use when working on performance tasks for the Andromeda relational transactional database engine project.
+- `permission-policy-matrix` - Permission Policy Matrix (Security): Build or review permission and policy matrices. Use when working on security tasks for the Andromeda relational transactional database engine project.
+- `permission-request-policy` - Permission Request Policy (Agent Ops): Define PermissionRequest hook behavior for risky shell, network, git, filesystem, and destructive operations. Use when approval requests must be policy-aware.
+- `posttooluse-audit` - Posttooluse Audit (Agent Ops): Audit tool outputs after execution and inject follow-up context for validation, tests, or cleanup. Use after file edits, shell commands, searches, or validation scripts. Use when working on agent ops tasks that require this workflow.
+- `predictive-evidence-scoring` - Predictive Evidence Scoring (Optimizer): Define ScenarioEvidence scoring and optimizer consumption rules. Use when working on benchmark and optimizer tasks for the Andromeda relational transactional database engine project.
+- `pretooluse-guardrails` - Pretooluse Guardrails (Agent Ops): Apply PreToolUse safety checks before shell/tool execution. Use when you need to prevent destructive commands, unsafe repo rewrites, secret leakage, and unbounded scans.
+- `procedure-contract-design` - Procedure Contract Design (Transaction): Create or review ProcedureContract definitions, ContractHash contents, input/output shapes, permissions, read/write sets, isolation policies, ResultStream metadata, and compatibility rules. Use when working on transaction tasks that require this workflow.
+- `procedure-store-design` - Procedure Store Design (General): Design Procedure Store fields, invocation traces, plan feedback, regressions, resource telemetry, and audit correlation. Use when implementing diagnostic history.
+- `procedure-store-evidence-review` - Procedure Store Evidence Review (Optimizer): Review Procedure Store metrics, ScenarioEvidence, predictive evidence, benchmark discipline, regression detection, and evidence expiration. Use when working on optimizer tasks that require this workflow.
+- `project-context-intake` - Project Context Intake (Agent Ops): Extract the minimum sufficient Andromeda context from user prompts, repository files, uploaded documents, and local evidence. Use when preparing for major architecture, refactor, or implementation tasks.
+- `project-invariant-check` - Project Invariant Check (Governance): Check an artifact against Andromeda non-negotiable invariants. Use when working on doctrine tasks for the Andromeda relational transactional database engine project.
+- `prompt-injection-threat-model` - Prompt Injection Threat Model (Agent Ops): Threat-model prompt injection and agentic manipulation. Use when working on security tasks for the Andromeda relational transactional database engine project.
+- `prompt-intent-disambiguation` - Prompt Intent Disambiguation (Agent Ops): Clarify user intent without losing momentum. Use when a user prompt mixes roadmap, implementation, cleanup, research, and tooling requirements and Codex must infer a safe actionable scope.
+- `prompt-library-maintenance` - Prompt Library Maintenance (Agent Ops): Maintain reusable prompt templates for Codex agents, reviews, cleanup, crash tests, SRPL specs, and Rust implementation tasks. Use when working on agent ops tasks that require this workflow.
+- `prompt-scope-normalization` - Prompt Scope Normalization (Agent Ops): Normalize oversized or emotional prompts into a precise engineering work order. Use when Codex must turn broad ambition into a bounded, testable, mission-critical task.
+- `property-fuzz-test-design` - Property Fuzz Test Design (Testing): Design property-based and fuzz tests for binary, parser, and protocol surfaces. Use when working on testing tasks for the Andromeda relational transactional database engine project.
+- `protobuf-schema-review` - Protobuf Schema Review (Protocol): Review Protobuf schemas for Andromeda contract compatibility. Use when working on protocol tasks for the Andromeda relational transactional database engine project.
+- `quic-frame-design` - QUIC Frame Design (Protocol): Design QUIC frame mapping for Andromeda RPC. Use when working on protocol tasks for the Andromeda relational transactional database engine project.
+- `quic-rpc-frame-contracts` - QUIC RPC Frame Contracts (Protocol): Design QUIC surfaces, FrameHeader, RPC frame types, structured payloads, metadata-before-payload, and error taxonomy. Use when working on network/RPC work.
+- `quic-rpc-protocol-design` - QUIC RPC Protocol Design (Protocol): Design or review QUIC surfaces, RPC frames, metadata-before-payload, StructuredObject transport, backpressure, error taxonomy, and protocol compatibility. Use when working on protocol tasks that require this workflow.
+- `recovery-replay-proof` - Recovery Replay Proof (WAL and Recovery): Prove or review recovery replay procedure. Use when working on recovery tasks for the Andromeda relational transactional database engine project.
+- `relational-algebra-law-check` - Relational Algebra Law Check (SRPL): Check relational algebra rewrites under set semantics, projection, selection, join, union, difference, aggregation, and bag-semantics caveats. Use when working on optimizer and SRPL reasoning.
+- `release-gate-mission-critical` - Release Gate Mission Critical (Storage): Define release gates for C4/C5 components: WAL, recovery, storage, security, QUIC/RPC, catalog, and Procedure contracts. Use when preparing for release or major merge.
+- `research-corpus-expansion` - Research Corpus Expansion (Codex): Expand and consolidate research corpus for relational systems, transactions, optimizer statistics, learned components, hardware, Codex tooling, and enterprise operations. Use when working on codex tasks that require this workflow.
+- `resultstream-protocol` - Resultstream Protocol (Protocol): Design ResultStream metadata, batch descriptors, ordering contracts, payload layout, backpressure, and completion semantics. Use when working on RPC result transport.
+- `risk-register-update` - Risk Register Update (Governance): Update risks with severity, likelihood, mitigation, owner, and status. Use when working on governance tasks for the Andromeda relational transactional database engine project.
+- `roadmap-delegation-tree` - Roadmap Delegation Tree (Codex): Build a master-to-student delegation model for Codex agents. Use when one central agent must route subtasks to specialized agents while preserving context, scope, and output contracts.
+- `roadmap-objective-tracing` - Roadmap Objective Tracing (Agent Ops): Track large Andromeda roadmap prompts, objectives, dependencies, status signals, constraints, and unresolved decisions. Use when Codex must preserve a long mission-critical roadmap, derive work items, or verify that a response stays aligned with the requested objectives.
+- `roadmap-progress-checkpointing` - Roadmap Progress Checkpointing (Codex): Create checkpoints for long-running Codex work within a single response: completed items, partial results, blockers, risks, and next executable step. Use when working on major refactor, audit, design, or tooling work.
+- `roadmap-task-decomposition` - Roadmap Task Decomposition (Agent Ops): Break a large roadmap, prompt, or implementation request into ordered tasks, sub-agent work packets, dependencies, milestones, and acceptance gates. Use when a request is too broad to execute safely in one pass.
+- `rowcount-metadata-design` - Rowcount Metadata Design (Protocol): Specify exact row count metadata for procedure results and StructuredObjects. Use when working on protocol tasks for the Andromeda relational transactional database engine project.
+- `rust-allocation-review` - Rust Allocation Review (Rust): Review allocations, clones, String/Vec growth, buffer reuse, preallocation, and hot-path memory pressure. Use when working on performance-sensitive Rust code.
+- `rust-async-cancellation` - Rust Async Cancellation (Rust): Design cancellation-safe async Rust around QUIC/RPC/admin jobs without corrupting transaction or storage state. Use when working on Tokio tasks, streams, shutdown, and backpressure.
+- `rust-async-quic-review` - Rust Async QUIC Review (Rust): Review async Rust and QUIC code or design for cancellation, backpressure, and lifetimes. Use when working on rust and network tasks for the Andromeda relational transactional database engine project.
+- `rust-binary-codec-design` - Rust Binary Codec Design (Rust): Design and implement explicit Rust binary codecs for persisted and network formats. Use when working on WAL, pages, manifests, SegmentIndex, RPC frames, and contract hashes.
+- `rust-ci-quality-gates` - Rust CI Quality Gates (Rust): Define CI gates for Rust format, check, clippy, nextest, docs, audit, deny, feature matrix, fuzz, Miri, coverage, and benchmarks. Use when working on rust tasks that require this workflow.
+- `rust-clean-code-refactor` - Rust Clean Code Refactor (Rust): Refactor Rust code without behavior changes. Use when working on simplification, naming, extraction, deduplication, visibility reduction, and stronger invariants.
+- `rust-clone-copy-audit` - Rust Clone Copy Audit (Rust): Audit Clone, Copy, Arc, Bytes, Cow, borrowing, and ownership choices in hot paths. Use when performance, lifetime, or memory pressure matters.
+- `rust-concurrency-loom-modeling` - Rust Concurrency Loom Modeling (Rust): Model small Rust concurrency primitives with Loom. Use when working on atomics, pin guards, latches, lock-free queues, and backpressure flags.
+- `rust-core-code-review` - Rust Core Code Review (Rust): Review Rust core engine code for correctness, safety, and Andromeda invariants. Use when working on rust tasks for the Andromeda relational transactional database engine project.
+- `rust-crate-boundary-design` - Rust Crate Boundary Design (Rust): Define crate boundaries by responsibility for Andromeda engine subsystems. Use when splitting or reviewing crates to avoid god crates and utility dumping grounds.
+- `rust-dead-code-removal` - Rust Dead Code Removal (Rust): Identify and remove dead code, unused imports, unused functions, stale tests, obsolete docs, and unreachable paths. Use when running cleanup cycles.
+- `rust-dependency-pruning` - Rust Dependency Pruning (Rust): Prune unused, duplicated, risky, or over-featured Cargo dependencies. Use when working with cargo tree, cargo machete, udeps, deny, and audit.
+- `rust-docs-api-guidelines` - Rust Docs Api Guidelines (Rust): Document Rust APIs with crate docs, examples, errors, safety, panics, versioning, and observability. Use when working on public crates or stable internal APIs.
+- `rust-error-modeling` - Rust Error Modeling (Rust): Design typed Rust errors for library, engine, RPC, transaction, storage, and business boundaries. Use when you need to replace stringly errors or panic paths.
+- `rust-feature-flag-governance` - Rust Feature Flag Governance (Rust): Govern Cargo features: additive features, minimal defaults, feature matrix testing, mutually exclusive flags, and workspace consistency. Use when working on rust tasks that require this workflow.
+- `rust-ffi-boundary-audit` - Rust FFI Boundary Audit (Rust): Review Rust FFI boundaries for unsafe extern, ABI, ownership, lifetimes, error propagation, and build-script behavior. Use when working on OS, GPU, crypto, storage, or C library integration.
+- `rust-file-size-governance` - Rust File Size Governance (Rust): Detect oversized Rust files/functions/modules and propose clean splits with test preservation. Use when files exceed quality thresholds or cognitive load.
+- `rust-fuzzing-harness-design` - Rust Fuzzing Harness Design (Rust): Create fuzz harnesses for parsers, binary codecs, RPC frames, WAL, pages, manifests, and SegmentIndex. Use when working on untrusted or persisted bytes.
+- `rust-gpu-batch-integration` - Rust GPU Batch Integration (Rust): Integrate GPU acceleration only for batch analytics/statistics/vector workloads outside commit path. Use when designing wgpu/CUDA/ROCm adapters or GPU policies.
+- `rust-miri-ub-checks` - Rust Miri UB Checks (Rust): Use Miri for unsafe wrappers and pointer-sensitive Rust tests. Use when unsafe code, raw pointers, aliasing, or layout assumptions need validation.
+- `rust-module-splitting` - Rust Module Splitting (Rust): Split Rust modules by responsibility, not by arbitrary size. Use when files become large or mix parsing, validation, I/O, tests, and runtime logic.
+- `rust-newtype-invariants` - Rust Newtype Invariants (Rust): Use Rust newtypes and checked constructors for IDs, hashes, LSNs, versions, domain primitives, and invariants. Use when primitive obsession risks bugs.
+- `rust-orphan-detection` - Rust Orphan Detection (Rust): Find orphan files, modules, dependencies, features, examples, benches, scripts, fixtures, and docs. Use when working on repository cleanup and integrity checks.
+- `rust-panic-eradication` - Rust Panic Eradication (Rust): Remove panic, unwrap, expect, todo, dbg, and uncontrolled aborts from mission-critical runtime paths. Use when working in WAL, recovery, RPC, security, and storage.
+- `rust-performance-benchmarking` - Rust Performance Benchmarking (Rust): Design measured Rust performance work with hypotheses, benchmarks, profiles, baselines, and regression thresholds. Use when preparing for accepting optimizations.
+- `rust-property-testing` - Rust Property Testing (Rust): Use property-based tests for deterministic invariants, codecs, canonicalization, state machines, and algebraic laws. Use when working with proptest-style generators.
+- `rust-public-api-minimization` - Rust Public Api Minimization (Rust): Reduce public API surface using private, pub(super), pub(crate), sealed traits, and stable reexports. Use when crates expose too much.
+- `rust-safety-performance-review` - Rust Safety Performance Review (Rust): Review Rust implementation strategy, ownership, lifetimes, concurrency, allocation, CPU cache behavior, error handling, and performance-critical APIs. Use when working on rust tasks that require this workflow.
+- `rust-simd-dispatch` - Rust SIMD Dispatch (Rust): Implement runtime-dispatched x64/arm64 SIMD kernels with scalar fallback and target-feature guards. Use when working on CRC, scans, compression, histograms, or vector math.
+- `rust-supply-chain-audit` - Rust Supply Chain Audit (Rust): Audit Cargo dependencies, advisories, licenses, sources, transitive graph, and vet status. Use when preparing for adding dependencies or release gates.
+- `rust-test-strategy` - Rust Test Strategy (Rust): Design a layered Rust test strategy: unit, integration, property, fuzz, Miri, Loom, crash/recovery, HA/DR, E2E, and benchmarks. Use when working on rust tasks that require this workflow.
+- `rust-unsafe-audit` - Rust Unsafe Audit (Rust): Audit unsafe Rust plans or code for memory, aliasing, and lifetime invariants. Use when working on rust tasks for the Andromeda relational transactional database engine project.
+- `rust-unsafe-boundary-audit` - Rust Unsafe Boundary Audit (Rust): Audit unsafe Rust blocks, unsafe functions, target-feature code, raw pointers, and memory layout assumptions. Use when working in storage, WAL, FFI, SIMD, and lock-free code.
+- `rust-workspace-architecture` - Rust Workspace Architecture (Rust): Design and review a Rust 2024 Cargo workspace for a systems-grade database engine. Use when defining crates, members, profiles, lints, and dependency policy.
+- `scenario-evidence-governance` - Scenario Evidence Governance (Optimizer): Govern ScenarioEvidence, confidence/criticality/freshness/realism/stability scores, expiration, validation, and optimizer consumption. Use when working on predictive evidence.
+- `scientific-crosscheck` - Scientific Crosscheck (Governance): Cross-check technical claims against source classes and project doctrine. Use when working on research tasks for the Andromeda relational transactional database engine project.
+- `security-iam-audit-review` - Security IAM Audit Review (Security): Review security, mTLS, CertificateIdentity, UserPrincipal, roles, permissions, policies, break-glass, audit traces, threat model, and admin-surface separation. Use when working on security tasks that require this workflow.
+- `security-mtls-iam-review` - Security mTLS IAM Review (Security): Review mTLS, certificate identity, UserPrincipal, and permissions. Use when working on security tasks for the Andromeda relational transactional database engine project.
+- `security-threat-modeling` - Security Threat Modeling (Security): Threat-model certificate theft, replay, oversized payloads, contract probing, admin abuse, split-brain, ransomware, slow clients, and replica poisoning. Use when working on security reviews.
+- `segment-contiguity-audit` - Segment Contiguity Audit (Storage): Audit segment and page layouts for cold contiguity invariants. Use when working on storage tasks for the Andromeda relational transactional database engine project.
+- `sessionstart-context` - Sessionstart Context (Agent Ops): Inject compact Andromeda mission context at session start. Use when you need to keep Codex aligned with strict boundaries, Rust baseline, and core invariants.
+- `set-theory-semantics` - Set Theory Semantics (SRPL): Reason about set semantics, absence of duplicates, relations, tuples, projection, membership, and explicit multiset/sequence boundaries. Use when working in SRPL and optimizer design.
+- `skill-composition-review` - Skill Composition Review (Agent Ops): Review whether skills are atomic and correctly composed by agents. Use when working on agent ops tasks for the Andromeda relational transactional database engine project.
+- `skill-forward-testing` - Skill Forward Testing (Agent Ops): Forward-test skills with realistic tasks and no leaked expected answer. Use when validating whether a skill works for future Codex agents.
+- `skill-progressive-disclosure` - Skill Progressive Disclosure (Agent Ops): Design skills that keep SKILL.md lean while moving details to references, scripts, or assets. Use when a skill risks becoming too long or duplicative.
+- `source-corpus-synthesis` - Source Corpus Synthesis (Documentation): Synthesize project and external research sources into decision-ready notes. Use when working on research and documentation tasks for the Andromeda relational transactional database engine project.
+- `source-grounded-answering` - Source Grounded Answering (Documentation): Answer using project and official sources with explicit citations, source hierarchy, uncertainty, and cross-checks. Use when claims must be traceable to uploaded documents, repository files, or official documentation.
+- `sql-server-oracle-crosscheck` - SQL Server Oracle Crosscheck (Governance): Cross-check Andromeda decisions against mature SGBDR practices from SQL Server, Oracle, PostgreSQL, and DB2 without importing incompatible SQL-surface assumptions. Use when working on governance tasks that require this workflow.
+- `srpl-anti-dynamic-sql` - SRPL Anti Dynamic SQL (SRPL): Reject dynamic SQL/text construction, implicit names, SELECT *, shape-shifting returns, unbounded loops, and ambient NULLs in SRPL. Use when running language review.
+- `srpl-binder-cardinality` - SRPL Binder Cardinality (SRPL): Bind SRPL names, types, scopes, cardinalities, effects, read/write sets, and permissions. Use when validating procedures before planning.
+- `srpl-cardinality-typing` - SRPL Cardinality Typing (SRPL): Review SRPL expressions for explicit type and cardinality semantics. Use when working on srpl tasks for the Andromeda relational transactional database engine project.
+- `srpl-diagnostics-catalog` - SRPL Diagnostics Catalog (SRPL): Create stable SRPL diagnostic codes for type, cardinality, map, resource, contract, and determinism errors. Use when working on compiler and CI outputs.
+- `srpl-error-semantics` - SRPL Error Semantics (SRPL): Define SRPL failure, rollback, poison, and error return behavior. Use when working on srpl tasks for the Andromeda relational transactional database engine project.
+- `srpl-language-design` - SRPL Language Design (SRPL): Design SRPL as a strict relational procedure language with English-like canonical syntax, explicit absence, explicit cardinality, bounded loops, and IR compilation. Use when working on srpl tasks that require this workflow.
+- `srpl-parser-design` - SRPL Parser Design (SRPL): Design lexer/parser behavior, grammar constraints, diagnostic codes, canonical forms, and ambiguity rejection for SRPL. Use when working on parser implementation planning.
+- `srpl-procedure-contract` - SRPL Procedure Contract (SRPL): Specify ProcedureContract fields, ContractHash, input/output shapes, permissions, read/write sets, isolation, resource policy, and compatibility. Use when working on RPC and catalog work.
+- `srpl-procedure-contract-design` - SRPL Procedure Contract Design (SRPL): Design strict SRPL procedure signatures and contracts. Use when working on srpl tasks for the Andromeda relational transactional database engine project.
+- `srpl-procedure-design` - SRPL Procedure Design (SRPL): Design or review SRPL Procedures, transaction declarations, readable intent syntax, cardinality, explicit absence handling, scoped variables, bounded loops, and typed errors. Use when working on srpl tasks that require this workflow.
+- `srpl-to-ir-lowering` - SRPL To Ir Lowering (SRPL): Lower SRPL constructs to typed AST and relational IR requirements. Use when working on compiler tasks for the Andromeda relational transactional database engine project.
+- `srpl-type-system-review` - SRPL Type System Review (SRPL): Review Andromeda type-system decisions, scalar/domain types, decimal/float policy, text/collation rules, Enums, flags, Optional, cardinality, and StructuredObjects. Use when working on srpl tasks that require this workflow.
+- `statistics-histogram-design` - Statistics Histogram Design (Optimizer): Design StatsVersion, histograms, row counts, skew, density, validation state, and publication switch. Use when working on statistics engine implementation.
+- `stop-quality-gate` - Stop Quality Gate (Agent Ops): Run final response quality checks before completion. Use when you need to detect missing artifacts, missing validation, unsafe claims, and incomplete mission-critical deliverables.
+- `storage-page-format` - Storage Page Format (Storage): Design PageHeader, PageTrailer, layout variants, fixed/hybrid rows, column segments, overflow, checksums, and page invariants. Use when working on storage pages.
+- `storage-page-layout` - Storage Page Layout (Storage): Design page header, payload, slot directory, and trailer layouts. Use when working on storage tasks for the Andromeda relational transactional database engine project.
+- `storage-page-layout-review` - Storage Page Layout Review (Storage): Review page, extent, row layout, PageHeader/PageTrailer, slot directories, overflow, column segments, BufferPool, and page-level corruption detection. Use when working on storage tasks that require this workflow.
+- `storage-segment-manifest` - Storage Segment Manifest (Storage): Design root pointer, manifests, WAL/hot/cold segments, SegmentIndex, hashes, signatures, AEAD, and startup path. Use when working on physical storage format.
+- `structuredobject-contracts` - Structuredobject Contracts (Protocol): Design StructuredObject shapes, row counts, layouts, intrinsic invariants, RPC metadata, and contract compatibility. Use when working on batch parameters and result types.
+- `structuredobject-layout` - Structuredobject Layout (Protocol): Design StructuredObject row, column, or hybrid layouts. Use when working on protocol and type system tasks for the Andromeda relational transactional database engine project.
+- `terminology-normalization` - Terminology Normalization (Documentation): Normalize language to Andromeda native terminology and controlled SQL equivalences. Use when working on documentation tasks for the Andromeda relational transactional database engine project.
+- `test-matrix-generation` - Test Matrix Generation (WAL and Recovery): Generate test matrices for specs, code, protocols, and recovery scenarios. Use when working on testing tasks for the Andromeda relational transactional database engine project.
+- `testing-crash-recovery-matrix` - Testing Crash Recovery Matrix (Agent Ops): Design deterministic test matrices for crash recovery, WAL, MVCC, manifest switching, corruption detection, RPC framing, hooks, and concurrency cases. Use when working on agent ops tasks that require this workflow.
+- `threat-modeling-abuse-cases` - Threat Modeling Abuse Cases (Security): Create threat models, abuse cases, mitigations, audit requirements, permission checks, and security regression tests for Andromeda features. Use when working on security tasks that require this workflow.
+- `transaction-state-machine` - Transaction State Machine (Transaction): Design transaction lifecycle: Created, Active, Committing, Committed, Failed, Poisoned, RollingBack, RolledBack, Disposed. Use when working on transaction kernel work.
+- `transaction-wal-recovery-review` - Transaction WAL Recovery Review (WAL and Recovery): Review transaction kernel, WAL records, commit visibility, redo/undo, checkpointing, recovery reports, crash scenarios, and durable truth invariants. Use when working on wal and recovery tasks that require this workflow.
+- `type-system-domain-modeling` - Type System Domain Modeling (Type System): Design scalars, decimals, floats, text, binary, domain types, enums, flags, optional types, and collection cardinality. Use when working on TypeSystem v0.
+- `unsafe-rust-audit` - Unsafe Rust Audit (Rust): Audit unsafe Rust, binary layout, FFI, direct I/O, mmap, pointer arithmetic, lock-free structures, and safe wrapper invariants. Use when working on rust tasks that require this workflow.
+- `user-request-risk-classification` - User Request Risk Classification (Agent Ops): Classify requests by risk, destructive potential, security impact, recovery impact, and required review posture. Use when preparing for edits, shell commands, refactors, deletion, or policy changes.
+- `wal-crash-recovery-testing` - WAL Crash Recovery Testing (Storage): Design crash tests for before/after WAL flush, TxCommit, dirty page flush, manifest switch, Map delta, WAL truncation, and recovery reports. Use when working on C5 validation.
+- `wal-record-design` - WAL Record Design (Storage): Design WalRecord, LSN, PrevLsn, Crc64, ChainHash, TxBegin/Commit/Rollback, page/index/map/catalog/security records. Use when working on WAL v0.

@@ -1,8 +1,6 @@
 ---
 name: gpu-off-commit-path-check
-description: Verify that GPU usage remains outside commit, WAL, rollback, and recovery paths. Use when working on hardware and analytics tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob
-version: 0.1.0
+description: "Verify that GPU usage remains outside commit, WAL, rollback, and recovery paths. Use when working on hardware and analytics tasks for the Andromeda relational transactional database engine project."
 ---
 
 # gpu-off-commit-path-check

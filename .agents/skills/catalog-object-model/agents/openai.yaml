@@ -1,3 +1,3 @@
 display_name: "Catalog Object Model"
-short_description: "Design catalog descriptors for Database, Namespace, Table, Map, Enum, StructuredObject, Procedure, versions, policies, and state lifecycles. Use for catalog imp"
+short_description: "Design catalog descriptors for Database, Namespace, Table, Map, Enum, StructuredObject, Procedure, versions, policies, and state lifecycles. Use when working on catalog implementation."
 default_prompt: "Use the Catalog Object Model skill to analyze the current Andromeda task and return a bounded, validated result."

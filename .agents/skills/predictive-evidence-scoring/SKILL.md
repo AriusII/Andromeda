@@ -1,8 +1,6 @@
 ---
 name: predictive-evidence-scoring
-description: Define ScenarioEvidence scoring and optimizer consumption rules. Use when working on benchmark and optimizer tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+description: "Define ScenarioEvidence scoring and optimizer consumption rules. Use when working on benchmark and optimizer tasks for the Andromeda relational transactional database engine project."
 ---
 
 # predictive-evidence-scoring

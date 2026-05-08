@@ -1,6 +1,6 @@
 ---
 name: wal-record-design
-description: "Design WalRecord, LSN, PrevLsn, Crc64, ChainHash, TxBegin/Commit/Rollback, page/index/map/catalog/security records. Use for WAL v0."
+description: "Design WalRecord, LSN, PrevLsn, Crc64, ChainHash, TxBegin/Commit/Rollback, page/index/map/catalog/security records. Use when working on WAL v0."
 ---
 
 # WAL Record Design

@@ -1,6 +1,6 @@
 ---
 name: type-system-domain-modeling
-description: "Design scalars, decimals, floats, text, binary, domain types, enums, flags, optional types, and collection cardinality. Use for TypeSystem v0."
+description: "Design scalars, decimals, floats, text, binary, domain types, enums, flags, optional types, and collection cardinality. Use when working on TypeSystem v0."
 ---
 
 # Type System Domain Modeling

@@ -1,6 +1,6 @@
 ---
 name: rust-ffi-boundary-audit
-description: "Review Rust FFI boundaries for unsafe extern, ABI, ownership, lifetimes, error propagation, and build-script behavior. Use for OS, GPU, crypto, storage, or C library integration."
+description: "Review Rust FFI boundaries for unsafe extern, ABI, ownership, lifetimes, error propagation, and build-script behavior. Use when working on OS, GPU, crypto, storage, or C library integration."
 ---
 
 # Rust FFI Boundary Audit

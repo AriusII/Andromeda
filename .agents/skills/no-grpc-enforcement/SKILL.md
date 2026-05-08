@@ -1,8 +1,6 @@
 ---
 name: no-grpc-enforcement
-description: Scan artifacts for accidental gRPC introduction. Use when working on doctrine and protocol tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob
-version: 0.1.0
+description: "Scan artifacts for accidental gRPC introduction. Use when working on doctrine and protocol tasks for the Andromeda relational transactional database engine project."
 ---
 
 # no-grpc-enforcement

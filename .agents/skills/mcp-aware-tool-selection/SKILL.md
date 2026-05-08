@@ -1,6 +1,6 @@
 ---
 name: mcp-aware-tool-selection
-description: "Use MCP tools such as rust-lsp and rust-rover-ide when available without making Codex tooling depend on MCP. Use for repository analysis, Rust symbols, diagnostics, and IDE-aware tasks."
+description: "Use MCP tools such as rust-lsp and rust-rover-ide when available without making Codex tooling depend on MCP. Use when working on repository analysis, Rust symbols, diagnostics, and IDE-aware tasks."
 ---
 
 # MCP-Aware Tool Selection

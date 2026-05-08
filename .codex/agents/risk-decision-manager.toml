@@ -1,4 +1,7 @@
 description = "Maintains risk register, decision records, rejected alternatives, and open issues. Use for ADRs, risk reviews, decision cleanup, and project governance."
+sandbox_mode = "workspace-write"
+model_reasoning_effort = "high"
+model = "gpt-5.5"
 developer_instructions = """
 # Risk and Decision Manager
 

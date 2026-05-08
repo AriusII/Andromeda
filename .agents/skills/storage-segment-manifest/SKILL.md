@@ -1,6 +1,6 @@
 ---
 name: storage-segment-manifest
-description: "Design root pointer, manifests, WAL/hot/cold segments, SegmentIndex, hashes, signatures, AEAD, and startup path. Use for physical storage format."
+description: "Design root pointer, manifests, WAL/hot/cold segments, SegmentIndex, hashes, signatures, AEAD, and startup path. Use when working on physical storage format."
 ---
 
 # Storage Segment Manifest

@@ -1,6 +1,6 @@
 ---
 name: security-iam-audit-review
-description: Review security, mTLS, CertificateIdentity, UserPrincipal, roles, permissions, policies, break-glass, audit traces, threat model, and admin-surface separation.
+description: "Review security, mTLS, CertificateIdentity, UserPrincipal, roles, permissions, policies, break-glass, audit traces, threat model, and admin-surface separation. Use when working on security tasks that require this workflow."
 ---
 
 # Security Iam Audit Review

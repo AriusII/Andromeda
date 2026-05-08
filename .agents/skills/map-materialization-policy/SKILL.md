@@ -1,6 +1,6 @@
 ---
 name: map-materialization-policy
-description: "Select Map refresh modes: Immediate, Incremental, Deferred, SnapshotOnly with WAL, consistency, cost, and staleness policies. Use for Maps design."
+description: "Select Map refresh modes: Immediate, Incremental, Deferred, SnapshotOnly with WAL, consistency, cost, and staleness policies. Use when working on Maps design."
 ---
 
 # Map Materialization Policy

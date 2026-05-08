@@ -1,8 +1,6 @@
 ---
 name: agent-output-validation
-description: Validate final agent outputs against task completion and project gates. Use when working on agent ops tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob
-version: 0.1.0
+description: "Validate final agent outputs against task completion and project gates. Use when working on agent ops tasks for the Andromeda relational transactional database engine project."
 ---
 
 # agent-output-validation

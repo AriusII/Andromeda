@@ -1,6 +1,6 @@
 ---
 name: codex-agent-authoring
-description: "Create or update Codex agent TOML definitions with clear agent role, non-overlapping behavior, sandbox posture, primary skills, and output contracts."
+description: "Create or update Codex agent TOML definitions with clear agent role, non-overlapping behavior, sandbox posture, primary skills, and output contracts. Use when working on agent ops tasks that require this workflow."
 ---
 
 # Codex Agent Authoring

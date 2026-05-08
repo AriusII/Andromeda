@@ -1,6 +1,6 @@
 ---
 name: observability-decision-trace
-description: "Design DecisionTrace and operational metrics so optimizer, stats, security, storage, and recovery decisions are explainable after the fact. Use for traceability."
+description: "Design DecisionTrace and operational metrics so optimizer, stats, security, storage, and recovery decisions are explainable after the fact. Use when working on traceability."
 ---
 
 # Observability Decision Trace

@@ -1,6 +1,6 @@
 ---
 name: unsafe-rust-audit
-description: Audit unsafe Rust, binary layout, FFI, direct I/O, mmap, pointer arithmetic, lock-free structures, and safe wrapper invariants.
+description: "Audit unsafe Rust, binary layout, FFI, direct I/O, mmap, pointer arithmetic, lock-free structures, and safe wrapper invariants. Use when working on rust tasks that require this workflow."
 ---
 
 # Unsafe Rust Audit

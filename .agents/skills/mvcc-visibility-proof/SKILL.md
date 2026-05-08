@@ -1,8 +1,6 @@
 ---
 name: mvcc-visibility-proof
-description: Review MVCC visibility rules for deterministic snapshot behavior. Use when working on transaction tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob
-version: 0.1.0
+description: "Review MVCC visibility rules for deterministic snapshot behavior. Use when working on transaction tasks for the Andromeda relational transactional database engine project."
 ---
 
 # mvcc-visibility-proof

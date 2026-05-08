@@ -1,44 +1,52 @@
-PostToolUse:
-  - hooks:
-      - command: python .codex/scripts/hooks/andromeda_artifact_gate.py
-        timeout: 10
-        type: command
-    matcher: Write|Edit|MultiEdit
-PreCompact:
-  - hooks:
-      - command: python .codex/scripts/hooks/andromeda_precompact_notice.py
-        timeout: 5
-        type: command
-    matcher: manual|auto
-PreToolUse:
-  - hooks:
-      - command: python .codex/scripts/hooks/andromeda_tool_gate.py
-        timeout: 10
-        type: command
-    matcher: Bash
-  - hooks:
-      - command: python .codex/scripts/hooks/andromeda_file_write_gate.py
-        timeout: 10
-        type: command
-    matcher: Write|Edit|MultiEdit
 SessionStart:
   - hooks:
-      - command: python .codex/scripts/hooks/andromeda_context_loader.py
-        timeout: 10
-        type: command
-    matcher: startup|resume|compact|clear
-Stop:
-  - hooks:
-      - command: python .codex/scripts/hooks/andromeda_stop_gate.py
-        timeout: 10
-        type: command
-SubagentStop:
-  - hooks:
-      - command: python .codex/scripts/hooks/andromeda_subagent_gate.py
+      - command: python3 .codex/scripts/hooks/session_context_injector.py
+        statusMessage: Loading Andromeda session context
         timeout: 10
         type: command
 UserPromptSubmit:
   - hooks:
-      - command: python .codex/scripts/hooks/andromeda_prompt_gate.py
+      - command: python3 .codex/scripts/hooks/user_prompt_scope_guard.py
+        statusMessage: Checking Andromeda prompt scope
+        timeout: 10
+        type: command
+PreToolUse:
+  - matcher: Bash
+    hooks:
+      - command: python3 .codex/scripts/hooks/pre_tool_destructive_guard.py
+        statusMessage: Checking destructive command policy
+        timeout: 10
+        type: command
+      - command: python3 .codex/scripts/hooks/pre_tool_rust_guard.py
+        statusMessage: Checking Rust command policy
+        timeout: 10
+        type: command
+  - matcher: Write|Edit|MultiEdit
+    hooks:
+      - command: python3 .codex/scripts/hooks/andromeda_file_write_gate.py
+        statusMessage: Checking file write policy
+        timeout: 10
+        type: command
+PermissionRequest:
+  - matcher: Bash
+    hooks:
+      - command: python3 .codex/scripts/hooks/permission_request_guard.py
+        statusMessage: Evaluating permission request policy
+        timeout: 10
+        type: command
+PostToolUse:
+  - hooks:
+      - command: python3 .codex/scripts/hooks/post_tool_audit.py
+        statusMessage: Auditing tool result
+        timeout: 10
+        type: command
+      - command: python3 .codex/scripts/hooks/codex_tooling_audit.py
+        statusMessage: Checking Codex tooling impact
+        timeout: 10
+        type: command
+Stop:
+  - hooks:
+      - command: python3 .codex/scripts/hooks/stop_quality_gate.py
+        statusMessage: Running final quality gate
         timeout: 10
         type: command

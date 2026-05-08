@@ -1,6 +1,6 @@
 ---
 name: hadr-backup-forensic-runbook
-description: Design or review HA/DR, Single Primary, replicas, quorum, fencing, failover, WAL shipping, backup, PITR restore, forensic startup, and incident runbooks.
+description: "Design or review HA/DR, Single Primary, replicas, quorum, fencing, failover, WAL shipping, backup, PITR restore, forensic startup, and incident runbooks. Use when working on wal and recovery tasks that require this workflow."
 ---
 
 # Hadr Backup Forensic Runbook

@@ -1,3 +1,3 @@
 display_name: "Hook Design Governance"
-short_description: "Design Codex hooks for SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PermissionRequest, and Stop with clear purpose and minimal friction."
+short_description: "Design Codex hooks for SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PermissionRequest, and Stop with clear purpose and minimal friction. Use when working on agent ops tasks that require this workflow."
 default_prompt: "Use the Hook Design Governance skill to analyze the current Andromeda task and return a bounded, validated result."

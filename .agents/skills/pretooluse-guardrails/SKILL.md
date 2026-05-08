@@ -1,6 +1,6 @@
 ---
 name: pretooluse-guardrails
-description: "Apply PreToolUse safety checks before shell/tool execution. Use to prevent destructive commands, unsafe repo rewrites, secret leakage, and unbounded scans."
+description: "Apply PreToolUse safety checks before shell/tool execution. Use when you need to prevent destructive commands, unsafe repo rewrites, secret leakage, and unbounded scans."
 ---
 
 # PreToolUse Guardrails

@@ -1,8 +1,6 @@
 ---
 name: audit-trace-specification
-description: Specify audit trace fields for security, catalog, transaction, recovery, or agent operations. Use when working on observability tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+description: "Specify audit trace fields for security, catalog, transaction, recovery, or agent operations. Use when working on observability tasks for the Andromeda relational transactional database engine project."
 ---
 
 # audit-trace-specification

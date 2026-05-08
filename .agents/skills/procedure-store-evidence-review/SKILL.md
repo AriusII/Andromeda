@@ -1,6 +1,6 @@
 ---
 name: procedure-store-evidence-review
-description: Review Procedure Store metrics, ScenarioEvidence, predictive evidence, benchmark discipline, regression detection, and evidence expiration.
+description: "Review Procedure Store metrics, ScenarioEvidence, predictive evidence, benchmark discipline, regression detection, and evidence expiration. Use when working on optimizer tasks that require this workflow."
 ---
 
 # Procedure Store Evidence Review

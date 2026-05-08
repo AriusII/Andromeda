@@ -1,4 +1,7 @@
 description = "Owns predictive evidence scenarios, workload realism, scoring, and benchmark governance. Use for benchmark design, ScenarioEvidence, and evidence validation."
+sandbox_mode = "read-only"
+model_reasoning_effort = "high"
+model = "gpt-5.5"
 developer_instructions = """
 # Benchmark Evidence Architect
 

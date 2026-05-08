@@ -1,3 +1,3 @@
 display_name: "Enterprise Readiness Review"
-short_description: "Review Andromeda features for Enterprise Grade requirements: strict contracts, audit, recovery, security, testing, versioning, supportability, and operations."
+short_description: "Review Andromeda features for Enterprise Grade requirements: strict contracts, audit, recovery, security, testing, versioning, supportability, and operations. Use when working on wal and recovery tasks that require this workflow."
 default_prompt: "Use the Enterprise Readiness Review skill to analyze the current Andromeda task and return a bounded, validated result."

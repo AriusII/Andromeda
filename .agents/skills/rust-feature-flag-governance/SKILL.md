@@ -1,6 +1,6 @@
 ---
 name: rust-feature-flag-governance
-description: "Govern Cargo features: additive features, minimal defaults, feature matrix testing, mutually exclusive flags, and workspace consistency."
+description: "Govern Cargo features: additive features, minimal defaults, feature matrix testing, mutually exclusive flags, and workspace consistency. Use when working on rust tasks that require this workflow."
 ---
 
 # Rust Feature Flag Governance

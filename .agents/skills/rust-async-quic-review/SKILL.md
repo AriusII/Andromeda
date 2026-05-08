@@ -1,8 +1,6 @@
 ---
 name: rust-async-quic-review
-description: Review async Rust and QUIC code or design for cancellation, backpressure, and lifetimes. Use when working on rust and network tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob
-version: 0.1.0
+description: "Review async Rust and QUIC code or design for cancellation, backpressure, and lifetimes. Use when working on rust and network tasks for the Andromeda relational transactional database engine project."
 ---
 
 # rust-async-quic-review

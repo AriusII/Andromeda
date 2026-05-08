@@ -1,4 +1,7 @@
 description = "Owns cost/evidence planning, PlanClass, statistics versions, histograms, and plan stability. Use for plan cache, statistics, cardinality, skew, and evidence-driven optimization."
+sandbox_mode = "read-only"
+model_reasoning_effort = "high"
+model = "gpt-5.5"
 developer_instructions = """
 # Optimizer and Statistics Architect
 

@@ -1,6 +1,6 @@
 ---
 name: srpl-language-design
-description: "Design SRPL as a strict relational procedure language with English-like canonical syntax, explicit absence, explicit cardinality, bounded loops, and IR compilation."
+description: "Design SRPL as a strict relational procedure language with English-like canonical syntax, explicit absence, explicit cardinality, bounded loops, and IR compilation. Use when working on srpl tasks that require this workflow."
 ---
 
 # SRPL Language Design

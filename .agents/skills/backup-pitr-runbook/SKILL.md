@@ -1,8 +1,6 @@
 ---
 name: backup-pitr-runbook
-description: Write or review backup and point-in-time recovery runbooks. Use when working on backup tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+description: "Write or review backup and point-in-time recovery runbooks. Use when working on backup tasks for the Andromeda relational transactional database engine project."
 ---
 
 # backup-pitr-runbook

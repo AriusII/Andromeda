@@ -1,6 +1,6 @@
 ---
 name: scenario-evidence-governance
-description: "Govern ScenarioEvidence, confidence/criticality/freshness/realism/stability scores, expiration, validation, and optimizer consumption. Use for predictive evidence."
+description: "Govern ScenarioEvidence, confidence/criticality/freshness/realism/stability scores, expiration, validation, and optimizer consumption. Use when working on predictive evidence."
 ---
 
 # Scenario Evidence Governance

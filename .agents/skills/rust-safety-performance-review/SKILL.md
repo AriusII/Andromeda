@@ -1,6 +1,6 @@
 ---
 name: rust-safety-performance-review
-description: Review Rust implementation strategy, ownership, lifetimes, concurrency, allocation, CPU cache behavior, error handling, and performance-critical APIs.
+description: "Review Rust implementation strategy, ownership, lifetimes, concurrency, allocation, CPU cache behavior, error handling, and performance-critical APIs. Use when working on rust tasks that require this workflow."
 ---
 
 # Rust Safety Performance Review

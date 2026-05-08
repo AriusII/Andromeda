@@ -1,6 +1,6 @@
 ---
 name: coldstore-manifest-snapshot-review
-description: Review ColdStore immutable segment design, manifests, snapshot publication, atomic switches, scrub, archive, and restore compatibility.
+description: "Review ColdStore immutable segment design, manifests, snapshot publication, atomic switches, scrub, archive, and restore compatibility. Use when working on storage tasks that require this workflow."
 ---
 
 # Coldstore Manifest Snapshot Review

@@ -1,6 +1,6 @@
 ---
 name: codex-tooling-validation
-description: "Validate the full Codex tooling tree: AGENTS.md, .codex/config.toml, .codex/agents, .agents/skills, hooks, scripts, and prompt templates."
+description: "Validate the full Codex tooling tree: AGENTS.md, .codex/config.toml, .codex/agents, .agents/skills, hooks, scripts, and prompt templates. Use when working on agent ops tasks that require this workflow."
 ---
 
 # Codex Tooling Validation

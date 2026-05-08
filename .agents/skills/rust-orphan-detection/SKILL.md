@@ -1,6 +1,6 @@
 ---
 name: rust-orphan-detection
-description: "Find orphan files, modules, dependencies, features, examples, benches, scripts, fixtures, and docs. Use for repository cleanup and integrity checks."
+description: "Find orphan files, modules, dependencies, features, examples, benches, scripts, fixtures, and docs. Use when working on repository cleanup and integrity checks."
 ---
 
 # Rust Orphan Detection

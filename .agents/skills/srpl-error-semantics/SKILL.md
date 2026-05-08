@@ -1,8 +1,6 @@
 ---
 name: srpl-error-semantics
-description: Define SRPL failure, rollback, poison, and error return behavior. Use when working on srpl tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+description: "Define SRPL failure, rollback, poison, and error return behavior. Use when working on srpl tasks for the Andromeda relational transactional database engine project."
 ---
 
 # srpl-error-semantics

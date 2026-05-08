@@ -1,8 +1,6 @@
 ---
 name: rust-unsafe-audit
-description: Audit unsafe Rust plans or code for memory, aliasing, and lifetime invariants. Use when working on rust tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob
-version: 0.1.0
+description: "Audit unsafe Rust plans or code for memory, aliasing, and lifetime invariants. Use when working on rust tasks for the Andromeda relational transactional database engine project."
 ---
 
 # rust-unsafe-audit

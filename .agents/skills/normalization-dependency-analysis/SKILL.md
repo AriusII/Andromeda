@@ -1,6 +1,6 @@
 ---
 name: normalization-dependency-analysis
-description: "Analyze functional dependencies, multivalued dependencies, keys, 3NF, BCNF, 4NF, DKNF, lossless decomposition, and dependency preservation. Use for catalog/modelization review."
+description: "Analyze functional dependencies, multivalued dependencies, keys, 3NF, BCNF, 4NF, DKNF, lossless decomposition, and dependency preservation. Use when working on catalog/modelization review."
 ---
 
 # Normalization Dependency Analysis

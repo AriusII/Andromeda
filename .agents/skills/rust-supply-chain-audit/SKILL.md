@@ -1,6 +1,6 @@
 ---
 name: rust-supply-chain-audit
-description: "Audit Cargo dependencies, advisories, licenses, sources, transitive graph, and vet status. Use before adding dependencies or release gates."
+description: "Audit Cargo dependencies, advisories, licenses, sources, transitive graph, and vet status. Use when preparing for adding dependencies or release gates."
 ---
 
 # Rust Supply Chain Audit

@@ -1,8 +1,6 @@
 ---
 name: no-json-runtime-policy
-description: Scan runtime protocol artifacts for JSON default format drift. Use when working on doctrine and protocol tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob
-version: 0.1.0
+description: "Scan runtime protocol artifacts for JSON default format drift. Use when working on doctrine and protocol tasks for the Andromeda relational transactional database engine project."
 ---
 
 # no-json-runtime-policy

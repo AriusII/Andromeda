@@ -1,6 +1,6 @@
 ---
 name: srpl-procedure-design
-description: Design or review SRPL Procedures, transaction declarations, readable intent syntax, cardinality, explicit absence handling, scoped variables, bounded loops, and typed errors.
+description: "Design or review SRPL Procedures, transaction declarations, readable intent syntax, cardinality, explicit absence handling, scoped variables, bounded loops, and typed errors. Use when working on srpl tasks that require this workflow."
 ---
 
 # Srpl Procedure Design

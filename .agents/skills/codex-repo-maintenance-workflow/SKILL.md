@@ -1,6 +1,6 @@
 ---
 name: codex-repo-maintenance-workflow
-description: "Codify repeatable repository maintenance work: issue triage, PR review, doc consistency, dependency hygiene, changelog checks, and release-readiness routines."
+description: "Codify repeatable repository maintenance work: issue triage, PR review, doc consistency, dependency hygiene, changelog checks, and release-readiness routines. Use when working on codex tasks that require this workflow."
 ---
 
 # Codex Repo Maintenance Workflow

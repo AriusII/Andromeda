@@ -1,6 +1,6 @@
 ---
 name: statistics-histogram-design
-description: "Design StatsVersion, histograms, row counts, skew, density, validation state, and publication switch. Use for statistics engine implementation."
+description: "Design StatsVersion, histograms, row counts, skew, density, validation state, and publication switch. Use when working on statistics engine implementation."
 ---
 
 # Statistics Histogram Design

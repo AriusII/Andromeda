@@ -1,3 +1,3 @@
 display_name: "Rust Error Modeling"
-short_description: "Design typed Rust errors for library, engine, RPC, transaction, storage, and business boundaries. Use to replace stringly errors or panic paths."
+short_description: "Design typed Rust errors for library, engine, RPC, transaction, storage, and business boundaries. Use when you need to replace stringly errors or panic paths."
 default_prompt: "Use the Rust Error Modeling skill to analyze the current Andromeda task and return a bounded, validated result."

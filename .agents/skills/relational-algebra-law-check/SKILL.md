@@ -1,6 +1,6 @@
 ---
 name: relational-algebra-law-check
-description: "Check relational algebra rewrites under set semantics, projection, selection, join, union, difference, aggregation, and bag-semantics caveats. Use for optimizer and SRPL reasoning."
+description: "Check relational algebra rewrites under set semantics, projection, selection, join, union, difference, aggregation, and bag-semantics caveats. Use when working on optimizer and SRPL reasoning."
 ---
 
 # Relational Algebra Law Check

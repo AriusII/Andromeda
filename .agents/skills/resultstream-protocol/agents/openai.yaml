@@ -1,3 +1,3 @@
-display_name: "ResultStream Protocol"
-short_description: "Design ResultStream metadata, batch descriptors, ordering contracts, payload layout, backpressure, and completion semantics. Use for RPC result transport."
-default_prompt: "Use the ResultStream Protocol skill to analyze the current Andromeda task and return a bounded, validated result."
+display_name: "Resultstream Protocol"
+short_description: "Design ResultStream metadata, batch descriptors, ordering contracts, payload layout, backpressure, and completion semantics. Use when working on RPC result transport."
+default_prompt: "Use the Resultstream Protocol skill to analyze the current Andromeda task and return a bounded, validated result."

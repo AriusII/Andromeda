@@ -1,6 +1,6 @@
 ---
 name: hadr-quorum-fencing
-description: "Design single-primary HA/DR, replica metadata, quorum, fencing, promotion eligibility, epochs, and split-brain prevention. Use for HA/DR work."
+description: "Design single-primary HA/DR, replica metadata, quorum, fencing, promotion eligibility, epochs, and split-brain prevention. Use when working on HA/DR work."
 ---
 
 # HA/DR Quorum and Fencing

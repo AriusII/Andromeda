@@ -1,8 +1,6 @@
 ---
 name: project-invariant-check
-description: Check an artifact against Andromeda non-negotiable invariants. Use when working on doctrine tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob
-version: 0.1.0
+description: "Check an artifact against Andromeda non-negotiable invariants. Use when working on doctrine tasks for the Andromeda relational transactional database engine project."
 ---
 
 # project-invariant-check

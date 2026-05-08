@@ -1,6 +1,6 @@
 ---
 name: sql-server-oracle-crosscheck
-description: Cross-check Andromeda decisions against mature SGBDR practices from SQL Server, Oracle, PostgreSQL, and DB2 without importing incompatible SQL-surface assumptions.
+description: "Cross-check Andromeda decisions against mature SGBDR practices from SQL Server, Oracle, PostgreSQL, and DB2 without importing incompatible SQL-surface assumptions. Use when working on governance tasks that require this workflow."
 ---
 
 # Sql Server Oracle Crosscheck

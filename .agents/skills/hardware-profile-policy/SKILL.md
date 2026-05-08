@@ -1,6 +1,6 @@
 ---
 name: hardware-profile-policy
-description: "Define hardware profiles for x64/arm64, SIMD, GPU, NVMe, HDD, ZNS, and runtime detection with policy and fallback. Use for hardware-aware design."
+description: "Define hardware profiles for x64/arm64, SIMD, GPU, NVMe, HDD, ZNS, and runtime detection with policy and fallback. Use when working on hardware-aware design."
 ---
 
 # Hardware Profile Policy

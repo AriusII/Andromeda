@@ -1,6 +1,6 @@
 ---
 name: wal-crash-recovery-testing
-description: "Design crash tests for before/after WAL flush, TxCommit, dirty page flush, manifest switch, Map delta, WAL truncation, and recovery reports. Use for C5 validation."
+description: "Design crash tests for before/after WAL flush, TxCommit, dirty page flush, manifest switch, Map delta, WAL truncation, and recovery reports. Use when working on C5 validation."
 ---
 
 # WAL Crash Recovery Testing

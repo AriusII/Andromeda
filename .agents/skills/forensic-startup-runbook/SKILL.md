@@ -1,6 +1,6 @@
 ---
 name: forensic-startup-runbook
-description: "Design FastStart, SafeStart, ForensicStart, consistency reports, app blocking, corruption response, and RecoveryReport. Use for incident recovery."
+description: "Design FastStart, SafeStart, ForensicStart, consistency reports, app blocking, corruption response, and RecoveryReport. Use when working on incident recovery."
 ---
 
 # Forensic Startup Runbook

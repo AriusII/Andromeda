@@ -1,4 +1,7 @@
 description = "Designs SRPL syntax and user-facing semantics. Use for SRPL syntax, cardinality, errors, procedure shape, and language restrictions."
+sandbox_mode = "read-only"
+model_reasoning_effort = "high"
+model = "gpt-5.5"
 developer_instructions = """
 # SRPL Language Designer
 

@@ -1,6 +1,6 @@
 ---
 name: mvcc-isolation-analysis
-description: "Analyze MVCC visibility, snapshots, GC, anomalies, snapshot isolation, serializable behavior, and long-reader retention. Use for transaction/isolation design."
+description: "Analyze MVCC visibility, snapshots, GC, anomalies, snapshot isolation, serializable behavior, and long-reader retention. Use when working on transaction/isolation design."
 ---
 
 # MVCC Isolation Analysis

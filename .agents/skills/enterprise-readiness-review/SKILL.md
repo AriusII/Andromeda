@@ -1,6 +1,6 @@
 ---
 name: enterprise-readiness-review
-description: "Review Andromeda features for Enterprise Grade requirements: strict contracts, audit, recovery, security, testing, versioning, supportability, and operations."
+description: "Review Andromeda features for Enterprise Grade requirements: strict contracts, audit, recovery, security, testing, versioning, supportability, and operations. Use when working on wal and recovery tasks that require this workflow."
 ---
 
 # Enterprise Readiness Review

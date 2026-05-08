@@ -1,3 +1,3 @@
 display_name: "SRPL Language Design"
-short_description: "Design SRPL as a strict relational procedure language with English-like canonical syntax, explicit absence, explicit cardinality, bounded loops, and IR compilat"
+short_description: "Design SRPL as a strict relational procedure language with English-like canonical syntax, explicit absence, explicit cardinality, bounded loops, and IR compilation. Use when working on srpl tasks that require this workflow."
 default_prompt: "Use the SRPL Language Design skill to analyze the current Andromeda task and return a bounded, validated result."

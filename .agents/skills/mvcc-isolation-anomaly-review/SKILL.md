@@ -1,6 +1,6 @@
 ---
 name: mvcc-isolation-anomaly-review
-description: Analyze MVCC visibility, isolation levels, anomalies, Serializable/Snapshot tradeoffs, long readers, version GC, and concurrency safety.
+description: "Analyze MVCC visibility, isolation levels, anomalies, Serializable/Snapshot tradeoffs, long readers, version GC, and concurrency safety. Use when working on transaction tasks that require this workflow."
 ---
 
 # Mvcc Isolation Anomaly Review

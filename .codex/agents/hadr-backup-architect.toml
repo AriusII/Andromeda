@@ -1,4 +1,7 @@
 description = "Owns single-primary replication, quorum, WAL shipping, backup, restore, PITR, and forensic startup. Use for HA/DR, backup, restore, failover, quorum, and disaster recovery planning."
+sandbox_mode = "read-only"
+model_reasoning_effort = "high"
+model = "gpt-5.5"
 developer_instructions = """
 # HA/DR and Backup Architect
 

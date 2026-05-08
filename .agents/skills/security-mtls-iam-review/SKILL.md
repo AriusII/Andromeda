@@ -1,8 +1,6 @@
 ---
 name: security-mtls-iam-review
-description: Review mTLS, certificate identity, UserPrincipal, and permissions. Use when working on security tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+description: "Review mTLS, certificate identity, UserPrincipal, and permissions. Use when working on security tasks for the Andromeda relational transactional database engine project."
 ---
 
 # security-mtls-iam-review

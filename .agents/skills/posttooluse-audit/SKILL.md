@@ -1,6 +1,6 @@
 ---
 name: posttooluse-audit
-description: "Audit tool outputs after execution and inject follow-up context for validation, tests, or cleanup. Use after file edits, shell commands, searches, or validation scripts."
+description: "Audit tool outputs after execution and inject follow-up context for validation, tests, or cleanup. Use after file edits, shell commands, searches, or validation scripts. Use when working on agent ops tasks that require this workflow."
 ---
 
 # PostToolUse Audit

@@ -1,6 +1,6 @@
 ---
 name: optimizer-statistics-plan-review
-description: Review optimizer choices, physical operators, cost model, histograms, cardinality estimates, skew, StatsVersion, plan cache, multi-plan quotas, and risk penalties.
+description: "Review optimizer choices, physical operators, cost model, histograms, cardinality estimates, skew, StatsVersion, plan cache, multi-plan quotas, and risk penalties. Use when working on optimizer tasks that require this workflow."
 ---
 
 # Optimizer Statistics Plan Review

@@ -1,3 +1,3 @@
 display_name: "Relational Algebra Law Check"
-short_description: "Check relational algebra rewrites under set semantics, projection, selection, join, union, difference, aggregation, and bag-semantics caveats. Use for optimizer"
+short_description: "Check relational algebra rewrites under set semantics, projection, selection, join, union, difference, aggregation, and bag-semantics caveats. Use when working on optimizer and SRPL reasoning."
 default_prompt: "Use the Relational Algebra Law Check skill to analyze the current Andromeda task and return a bounded, validated result."

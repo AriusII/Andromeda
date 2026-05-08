@@ -1,6 +1,6 @@
 ---
 name: learned-component-skepticism
-description: "Evaluate learned cardinality, learned indexes, learned optimizer, and workload prediction as evidence only with fallback and poisoning defenses. Use for modern ML-adjacent proposals."
+description: "Evaluate learned cardinality, learned indexes, learned optimizer, and workload prediction as evidence only with fallback and poisoning defenses. Use when working on modern ML-adjacent proposals."
 ---
 
 # Learned Component Skepticism

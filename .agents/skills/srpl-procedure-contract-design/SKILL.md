@@ -1,8 +1,6 @@
 ---
 name: srpl-procedure-contract-design
-description: Design strict SRPL procedure signatures and contracts. Use when working on srpl tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+description: "Design strict SRPL procedure signatures and contracts. Use when working on srpl tasks for the Andromeda relational transactional database engine project."
 ---
 
 # srpl-procedure-contract-design

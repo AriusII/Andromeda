@@ -1,6 +1,6 @@
 ---
 name: rust-error-modeling
-description: "Design typed Rust errors for library, engine, RPC, transaction, storage, and business boundaries. Use to replace stringly errors or panic paths."
+description: "Design typed Rust errors for library, engine, RPC, transaction, storage, and business boundaries. Use when you need to replace stringly errors or panic paths."
 ---
 
 # Rust Error Modeling

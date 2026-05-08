@@ -1,6 +1,6 @@
 ---
 name: threat-modeling-abuse-cases
-description: Create threat models, abuse cases, mitigations, audit requirements, permission checks, and security regression tests for Andromeda features.
+description: "Create threat models, abuse cases, mitigations, audit requirements, permission checks, and security regression tests for Andromeda features. Use when working on security tasks that require this workflow."
 ---
 
 # Threat Modeling Abuse Cases

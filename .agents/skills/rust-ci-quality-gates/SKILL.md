@@ -1,6 +1,6 @@
 ---
 name: rust-ci-quality-gates
-description: "Define CI gates for Rust format, check, clippy, nextest, docs, audit, deny, feature matrix, fuzz, Miri, coverage, and benchmarks."
+description: "Define CI gates for Rust format, check, clippy, nextest, docs, audit, deny, feature matrix, fuzz, Miri, coverage, and benchmarks. Use when working on rust tasks that require this workflow."
 ---
 
 # Rust CI Quality Gates

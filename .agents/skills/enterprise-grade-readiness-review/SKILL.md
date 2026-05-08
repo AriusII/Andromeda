@@ -1,6 +1,6 @@
 ---
 name: enterprise-grade-readiness-review
-description: "Evaluate enterprise readiness: operations, security, auditing, recovery, versioning, supportability, documentation, runbooks, observability, and rollback."
+description: "Evaluate enterprise readiness: operations, security, auditing, recovery, versioning, supportability, documentation, runbooks, observability, and rollback. Use when working on wal and recovery tasks that require this workflow."
 ---
 
 # Enterprise Grade Readiness Review

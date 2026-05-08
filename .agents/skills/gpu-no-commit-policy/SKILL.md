@@ -1,6 +1,6 @@
 ---
 name: gpu-no-commit-policy
-description: "Enforce that GPU jobs are analytics/statistics/vector/batch only and never participate in commit, WAL, rollback, recovery, security, or OLTP visibility. Use for GPU proposals."
+description: "Enforce that GPU jobs are analytics/statistics/vector/batch only and never participate in commit, WAL, rollback, recovery, security, or OLTP visibility. Use when working on GPU proposals."
 ---
 
 # GPU No Commit Policy

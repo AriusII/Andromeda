@@ -1,4 +1,7 @@
 description = "Owns QUIC surfaces, streams, flow control, backpressure, session behavior, and RPC dispatch boundaries. Use for network surface, stream mapping, backpressure, connection lifecycle, and transport errors."
+sandbox_mode = "read-only"
+model_reasoning_effort = "high"
+model = "gpt-5.5"
 developer_instructions = """
 # QUIC Transport Architect
 

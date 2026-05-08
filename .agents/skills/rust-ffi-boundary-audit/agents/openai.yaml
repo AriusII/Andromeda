@@ -1,3 +1,3 @@
 display_name: "Rust FFI Boundary Audit"
-short_description: "Review Rust FFI boundaries for unsafe extern, ABI, ownership, lifetimes, error propagation, and build-script behavior. Use for OS, GPU, crypto, storage, or C li"
+short_description: "Review Rust FFI boundaries for unsafe extern, ABI, ownership, lifetimes, error propagation, and build-script behavior. Use when working on OS, GPU, crypto, storage, or C library integration."
 default_prompt: "Use the Rust FFI Boundary Audit skill to analyze the current Andromeda task and return a bounded, validated result."

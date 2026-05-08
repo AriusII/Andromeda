@@ -1,6 +1,6 @@
 ---
 name: maps-analytics-summarizability
-description: Design or review Maps, analytical grain, summarizability, refresh modes, staleness, incremental maintenance, columnar layout, and GPU-off-commit constraints.
+description: "Design or review Maps, analytical grain, summarizability, refresh modes, staleness, incremental maintenance, columnar layout, and GPU-off-commit constraints. Use when working on maps and analytics tasks that require this workflow."
 ---
 
 # Maps Analytics Summarizability

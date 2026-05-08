@@ -1,3 +1,3 @@
 display_name: "MVCC Isolation Analysis"
-short_description: "Analyze MVCC visibility, snapshots, GC, anomalies, snapshot isolation, serializable behavior, and long-reader retention. Use for transaction/isolation design."
+short_description: "Analyze MVCC visibility, snapshots, GC, anomalies, snapshot isolation, serializable behavior, and long-reader retention. Use when working on transaction/isolation design."
 default_prompt: "Use the MVCC Isolation Analysis skill to analyze the current Andromeda task and return a bounded, validated result."

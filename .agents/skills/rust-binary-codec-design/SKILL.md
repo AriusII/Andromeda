@@ -1,6 +1,6 @@
 ---
 name: rust-binary-codec-design
-description: "Design and implement explicit Rust binary codecs for persisted and network formats. Use for WAL, pages, manifests, SegmentIndex, RPC frames, and contract hashes."
+description: "Design and implement explicit Rust binary codecs for persisted and network formats. Use when working on WAL, pages, manifests, SegmentIndex, RPC frames, and contract hashes."
 ---
 
 # Rust Binary Codec Design

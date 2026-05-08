@@ -1,6 +1,6 @@
 ---
 name: rust-simd-dispatch
-description: "Implement runtime-dispatched x64/arm64 SIMD kernels with scalar fallback and target-feature guards. Use for CRC, scans, compression, histograms, or vector math."
+description: "Implement runtime-dispatched x64/arm64 SIMD kernels with scalar fallback and target-feature guards. Use when working on CRC, scans, compression, histograms, or vector math."
 ---
 
 # Rust SIMD Dispatch

@@ -1,4 +1,7 @@
 description = "Owns .proto contracts, compatibility, schema evolution, result metadata, and StructuredObject payload shapes. Use for contract generation, schema review, and protobuf compatibility rules."
+sandbox_mode = "read-only"
+model_reasoning_effort = "high"
+model = "gpt-5.5"
 developer_instructions = """
 # Protobuf Contract Architect
 

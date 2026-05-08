@@ -1,6 +1,6 @@
 ---
 name: srpl-type-system-review
-description: Review Andromeda type-system decisions, scalar/domain types, decimal/float policy, text/collation rules, Enums, flags, Optional, cardinality, and StructuredObjects.
+description: "Review Andromeda type-system decisions, scalar/domain types, decimal/float policy, text/collation rules, Enums, flags, Optional, cardinality, and StructuredObjects. Use when working on srpl tasks that require this workflow."
 ---
 
 # Srpl Type System Review

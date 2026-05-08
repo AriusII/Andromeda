@@ -1,8 +1,6 @@
 ---
 name: no-sql-surface-scan
-description: Scan artifacts for accidental ad hoc SQL surface introduction. Use when working on doctrine tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob
-version: 0.1.0
+description: "Scan artifacts for accidental ad hoc SQL surface introduction. Use when working on doctrine tasks for the Andromeda relational transactional database engine project."
 ---
 
 # no-sql-surface-scan

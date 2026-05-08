@@ -1,8 +1,6 @@
 ---
 name: agent-handoff-contracting
-description: Write precise handoff contracts between agents. Use when working on agent ops tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+description: "Write precise handoff contracts between agents. Use when working on agent ops tasks for the Andromeda relational transactional database engine project."
 ---
 
 # agent-handoff-contracting

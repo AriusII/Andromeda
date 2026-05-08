@@ -1,8 +1,6 @@
 ---
 name: scientific-crosscheck
-description: Cross-check technical claims against source classes and project doctrine. Use when working on research tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, WebFetch, WebSearch
-version: 0.1.0
+description: "Cross-check technical claims against source classes and project doctrine. Use when working on research tasks for the Andromeda relational transactional database engine project."
 ---
 
 # scientific-crosscheck

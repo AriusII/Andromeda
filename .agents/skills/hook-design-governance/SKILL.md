@@ -1,6 +1,6 @@
 ---
 name: hook-design-governance
-description: "Design Codex hooks for SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PermissionRequest, and Stop with clear purpose and minimal friction."
+description: "Design Codex hooks for SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PermissionRequest, and Stop with clear purpose and minimal friction. Use when working on agent ops tasks that require this workflow."
 ---
 
 # Hook Design Governance

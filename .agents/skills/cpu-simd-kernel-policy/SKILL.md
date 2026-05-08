@@ -1,6 +1,6 @@
 ---
 name: cpu-simd-kernel-policy
-description: "Govern CPU acceleration for CRC, encryption, scans, bitmap/cardinality, compression, and atomics with scalar fallback and evidence. Use for CPU kernels."
+description: "Govern CPU acceleration for CRC, encryption, scans, bitmap/cardinality, compression, and atomics with scalar fallback and evidence. Use when working on CPU kernels."
 ---
 
 # CPU SIMD Kernel Policy

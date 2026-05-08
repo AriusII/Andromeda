@@ -1,6 +1,6 @@
 ---
 name: transaction-state-machine
-description: "Design transaction lifecycle: Created, Active, Committing, Committed, Failed, Poisoned, RollingBack, RolledBack, Disposed. Use for transaction kernel work."
+description: "Design transaction lifecycle: Created, Active, Committing, Committed, Failed, Poisoned, RollingBack, RolledBack, Disposed. Use when working on transaction kernel work."
 ---
 
 # Transaction State Machine

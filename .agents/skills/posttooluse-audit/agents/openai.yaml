@@ -1,3 +1,3 @@
-display_name: "PostToolUse Audit"
-short_description: "Audit tool outputs after execution and inject follow-up context for validation, tests, or cleanup. Use after file edits, shell commands, searches, or validation"
-default_prompt: "Use the PostToolUse Audit skill to analyze the current Andromeda task and return a bounded, validated result."
+display_name: "Posttooluse Audit"
+short_description: "Audit tool outputs after execution and inject follow-up context for validation, tests, or cleanup. Use after file edits, shell commands, searches, or validation scripts. Use when working on agent ops tasks that require this workflow."
+default_prompt: "Use the Posttooluse Audit skill to analyze the current Andromeda task and return a bounded, validated result."

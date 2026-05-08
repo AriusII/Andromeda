@@ -1,8 +1,6 @@
 ---
 name: hotcold-data-placement
-description: Classify data placement across RAM, HotStore NVMe, and ColdStore HDD. Use when working on storage tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+description: "Classify data placement across RAM, HotStore NVMe, and ColdStore HDD. Use when working on storage tasks for the Andromeda relational transactional database engine project."
 ---
 
 # hotcold-data-placement

@@ -1,6 +1,6 @@
 ---
 name: docs-source-grounding
-description: Produce source-grounded technical documentation with official-source preference, clear assumptions, citation inventory, and distinction between stable facts and active research.
+description: "Produce source-grounded technical documentation with official-source preference, clear assumptions, citation inventory, and distinction between stable facts and active research. Use when working on documentation tasks that require this workflow."
 ---
 
 # Docs Source Grounding

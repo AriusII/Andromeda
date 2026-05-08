@@ -1,3 +1,3 @@
 display_name: "Roadmap Progress Checkpointing"
-short_description: "Create checkpoints for long-running Codex work within a single response: completed items, partial results, blockers, risks, and next executable step. Use for ma"
+short_description: "Create checkpoints for long-running Codex work within a single response: completed items, partial results, blockers, risks, and next executable step. Use when working on major refactor, audit, design, or tooling work."
 default_prompt: "Use the Roadmap Progress Checkpointing skill to analyze the current Andromeda task and return a bounded, validated result."

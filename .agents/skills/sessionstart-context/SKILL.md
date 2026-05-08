@@ -1,6 +1,6 @@
 ---
 name: sessionstart-context
-description: "Inject compact Andromeda mission context at session start. Use to keep Codex aligned with strict boundaries, Rust baseline, and core invariants."
+description: "Inject compact Andromeda mission context at session start. Use when you need to keep Codex aligned with strict boundaries, Rust baseline, and core invariants."
 ---
 
 # SessionStart Context

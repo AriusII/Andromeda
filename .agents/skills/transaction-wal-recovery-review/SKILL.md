@@ -1,6 +1,6 @@
 ---
 name: transaction-wal-recovery-review
-description: Review transaction kernel, WAL records, commit visibility, redo/undo, checkpointing, recovery reports, crash scenarios, and durable truth invariants.
+description: "Review transaction kernel, WAL records, commit visibility, redo/undo, checkpointing, recovery reports, crash scenarios, and durable truth invariants. Use when working on wal and recovery tasks that require this workflow."
 ---
 
 # Transaction Wal Recovery Review

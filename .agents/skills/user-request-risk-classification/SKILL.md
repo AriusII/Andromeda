@@ -1,6 +1,6 @@
 ---
 name: user-request-risk-classification
-description: "Classify requests by risk, destructive potential, security impact, recovery impact, and required review posture. Use before edits, shell commands, refactors, deletion, or policy changes."
+description: "Classify requests by risk, destructive potential, security impact, recovery impact, and required review posture. Use when preparing for edits, shell commands, refactors, deletion, or policy changes."
 ---
 
 # User Request Risk Classification

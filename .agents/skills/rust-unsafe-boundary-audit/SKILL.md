@@ -1,6 +1,6 @@
 ---
 name: rust-unsafe-boundary-audit
-description: "Audit unsafe Rust blocks, unsafe functions, target-feature code, raw pointers, and memory layout assumptions. Use in storage, WAL, FFI, SIMD, and lock-free code."
+description: "Audit unsafe Rust blocks, unsafe functions, target-feature code, raw pointers, and memory layout assumptions. Use when working in storage, WAL, FFI, SIMD, and lock-free code."
 ---
 
 # Rust Unsafe Boundary Audit

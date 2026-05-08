@@ -1,8 +1,6 @@
 ---
 name: quic-frame-design
-description: Design QUIC frame mapping for Andromeda RPC. Use when working on protocol tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+description: "Design QUIC frame mapping for Andromeda RPC. Use when working on protocol tasks for the Andromeda relational transactional database engine project."
 ---
 
 # quic-frame-design

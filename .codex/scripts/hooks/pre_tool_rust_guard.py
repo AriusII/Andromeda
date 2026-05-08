@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
-from common import emit, event_context, event_deny_pretool, read_payload, tool_command, tool_name
+from common import emit, event_context, event_deny_pretool, hook_parse_error, read_payload, tool_command
 
 payload = read_payload()
+parse_error = hook_parse_error(payload)
+if parse_error:
+    emit(event_deny_pretool(f"Blocked PreToolUse because hook input could not be parsed: {parse_error}."))
+    raise SystemExit(0)
+
 command = tool_command(payload)
 
 if "cargo clean" in command and "--package" not in command:

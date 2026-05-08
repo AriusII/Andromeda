@@ -1,6 +1,6 @@
 ---
 name: hook-json-validation
-description: "Validate .codex/hooks.json structure, event names, command paths, timeouts, matchers, and referenced scripts. Use before packaging or committing Codex hooks."
+description: "Validate .codex/hooks.json structure, event names, command paths, timeouts, matchers, and referenced scripts. Use when preparing for packaging or committing Codex hooks."
 ---
 
 # Hook JSON Validation

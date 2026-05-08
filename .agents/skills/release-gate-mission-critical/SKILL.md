@@ -1,6 +1,6 @@
 ---
 name: release-gate-mission-critical
-description: "Define release gates for C4/C5 components: WAL, recovery, storage, security, QUIC/RPC, catalog, and Procedure contracts. Use before release or major merge."
+description: "Define release gates for C4/C5 components: WAL, recovery, storage, security, QUIC/RPC, catalog, and Procedure contracts. Use when preparing for release or major merge."
 ---
 
 # Release Gate Mission Critical

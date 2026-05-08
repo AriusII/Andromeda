@@ -1,6 +1,6 @@
 ---
 name: decision-record-authoring
-description: "Create ADR/DEC records with context, decision, alternatives, consequences, revision criteria, and test gates. Use for architecture, tooling, Rust, WAL, SRPL, hook, or agent policy decisions."
+description: "Create ADR/DEC records with context, decision, alternatives, consequences, revision criteria, and test gates. Use when working on architecture, tooling, Rust, WAL, SRPL, hook, or agent policy decisions."
 ---
 
 # Decision Record Authoring

@@ -1,8 +1,6 @@
 ---
 name: microsoft-doc-style-edit
-description: Edit documentation to Microsoft documentation style. Use when working on documentation tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Edit
-version: 0.1.0
+description: "Edit documentation to Microsoft documentation style. Use when working on documentation tasks for the Andromeda relational transactional database engine project."
 ---
 
 # microsoft-doc-style-edit

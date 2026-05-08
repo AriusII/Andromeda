@@ -1,3 +1,3 @@
-display_name: "Cardinality and Grain Analysis"
-short_description: "Separate conceptual cardinality, optimizer cardinality, analytical grain, and summarizability. Use for type system, Maps, stats, analytics, and SRPL diagnostics"
-default_prompt: "Use the Cardinality and Grain Analysis skill to analyze the current Andromeda task and return a bounded, validated result."
+display_name: "Cardinality Grain Analysis"
+short_description: "Separate conceptual cardinality, optimizer cardinality, analytical grain, and summarizability. Use when working on type system, Maps, stats, analytics, and SRPL diagnostics."
+default_prompt: "Use the Cardinality Grain Analysis skill to analyze the current Andromeda task and return a bounded, validated result."

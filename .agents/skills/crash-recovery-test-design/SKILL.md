@@ -1,8 +1,6 @@
 ---
 name: crash-recovery-test-design
-description: Design crash and recovery test scenarios. Use when working on testing tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+description: "Design crash and recovery test scenarios. Use when working on testing tasks for the Andromeda relational transactional database engine project."
 ---
 
 # crash-recovery-test-design

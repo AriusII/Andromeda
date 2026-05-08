@@ -1,6 +1,6 @@
 ---
 name: research-corpus-expansion
-description: Expand and consolidate research corpus for relational systems, transactions, optimizer statistics, learned components, hardware, Codex tooling, and enterprise operations.
+description: "Expand and consolidate research corpus for relational systems, transactions, optimizer statistics, learned components, hardware, Codex tooling, and enterprise operations. Use when working on codex tasks that require this workflow."
 ---
 
 # Research Corpus Expansion

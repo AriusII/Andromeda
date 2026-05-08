@@ -1,8 +1,6 @@
 ---
 name: srpl-to-ir-lowering
-description: Lower SRPL constructs to typed AST and relational IR requirements. Use when working on compiler tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+description: "Lower SRPL constructs to typed AST and relational IR requirements. Use when working on compiler tasks for the Andromeda relational transactional database engine project."
 ---
 
 # srpl-to-ir-lowering

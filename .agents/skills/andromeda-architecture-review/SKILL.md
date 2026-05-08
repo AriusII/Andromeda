@@ -1,6 +1,6 @@
 ---
 name: andromeda-architecture-review
-description: Review Andromeda architecture, module boundaries, doctrine, engine responsibilities, anti-patterns, and cross-document consistency. Use when evaluating system design, refactors, architectural drift, or module responsibilities.
+description: "Review Andromeda architecture, module boundaries, doctrine, engine responsibilities, anti-patterns, and cross-document consistency. Use when evaluating system design, refactors, architectural drift, or module responsibilities."
 ---
 
 # Andromeda Architecture Review

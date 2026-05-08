@@ -1,6 +1,6 @@
 ---
 name: rust-property-testing
-description: "Use property-based tests for deterministic invariants, codecs, canonicalization, state machines, and algebraic laws. Use with proptest-style generators."
+description: "Use property-based tests for deterministic invariants, codecs, canonicalization, state machines, and algebraic laws. Use when working with proptest-style generators."
 ---
 
 # Rust Property Testing

@@ -1,6 +1,6 @@
 ---
 name: iam-security-policy
-description: "Design mTLS to CertificateIdentity to UserPrincipal to roles/permissions/policies/audit. Use for security and authorization implementation."
+description: "Design mTLS to CertificateIdentity to UserPrincipal to roles/permissions/policies/audit. Use when working on security and authorization implementation."
 ---
 
 # IAM Security Policy

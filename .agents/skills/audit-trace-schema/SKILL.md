@@ -1,6 +1,6 @@
 ---
 name: audit-trace-schema
-description: "Design audit traces for security, catalog changes, admin operations, procedures, transactions, plans, recovery, cluster events, and DefinitionBatch. Use for observability."
+description: "Design audit traces for security, catalog changes, admin operations, procedures, transactions, plans, recovery, cluster events, and DefinitionBatch. Use when working on observability."
 ---
 
 # Audit Trace Schema

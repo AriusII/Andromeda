@@ -48,3 +48,29 @@ Validation:
 ## Completion criteria
 
 The skill is complete when the output is actionable, bounded, and connected to validation evidence.
+
+## Migrated Root Checklist
+
+The following content was migrated from `CHECKLIST.md` during skill consolidation.
+
+# wal-record-design Checklist
+
+Use this checklist when the skill is active.
+
+## Required checks
+
+- Confirm scope.
+- Confirm project invariant alignment.
+- Confirm versioning.
+- Confirm observability.
+- Confirm failure behavior.
+- Confirm testing approach.
+- Confirm rollback or disablement path.
+
+## Andromeda-specific checks
+
+- QUIC remains the transport.
+- Protobuf does not imply gRPC.
+- Procedures remain the only execution surface.
+- WAL durability precedes visibility for persistent mutation.
+- Security and audit requirements are explicit.

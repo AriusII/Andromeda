@@ -1,3 +1,3 @@
 display_name: "Rust Dead Code Removal"
-short_description: "Identify and remove dead code, unused imports, unused functions, stale tests, obsolete docs, and unreachable paths. Use during cleanup cycles."
+short_description: "Identify and remove dead code, unused imports, unused functions, stale tests, obsolete docs, and unreachable paths. Use when running cleanup cycles."
 default_prompt: "Use the Rust Dead Code Removal skill to analyze the current Andromeda task and return a bounded, validated result."

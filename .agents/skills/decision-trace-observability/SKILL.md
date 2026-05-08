@@ -1,6 +1,6 @@
 ---
 name: decision-trace-observability
-description: Design or review DecisionTrace, ProcedureInvocationTrace, PlanDecisionTrace, SecurityAuditTrace, RecoveryTrace, metrics, logs, and forensic explainability.
+description: "Design or review DecisionTrace, ProcedureInvocationTrace, PlanDecisionTrace, SecurityAuditTrace, RecoveryTrace, metrics, logs, and forensic explainability. Use when working on wal and recovery tasks that require this workflow."
 ---
 
 # Decision Trace Observability

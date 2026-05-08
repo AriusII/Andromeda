@@ -1,8 +1,6 @@
 ---
 name: optimizer-planclass-design
-description: Design bounded multi-plan classes and plan cache behavior. Use when working on optimizer tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+description: "Design bounded multi-plan classes and plan cache behavior. Use when working on optimizer tasks for the Andromeda relational transactional database engine project."
 ---
 
 # optimizer-planclass-design

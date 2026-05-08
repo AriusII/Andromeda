@@ -1,6 +1,6 @@
 ---
 name: rust-panic-eradication
-description: "Remove panic, unwrap, expect, todo, dbg, and uncontrolled aborts from mission-critical runtime paths. Use in WAL, recovery, RPC, security, and storage."
+description: "Remove panic, unwrap, expect, todo, dbg, and uncontrolled aborts from mission-critical runtime paths. Use when working in WAL, recovery, RPC, security, and storage."
 ---
 
 # Rust Panic Eradication

@@ -1,8 +1,6 @@
 ---
 name: property-fuzz-test-design
-description: Design property-based and fuzz tests for binary, parser, and protocol surfaces. Use when working on testing tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+description: "Design property-based and fuzz tests for binary, parser, and protocol surfaces. Use when working on testing tasks for the Andromeda relational transactional database engine project."
 ---
 
 # property-fuzz-test-design

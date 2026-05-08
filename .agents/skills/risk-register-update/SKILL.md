@@ -1,8 +1,6 @@
 ---
 name: risk-register-update
-description: Update risks with severity, likelihood, mitigation, owner, and status. Use when working on governance tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write, Edit
-version: 0.1.0
+description: "Update risks with severity, likelihood, mitigation, owner, and status. Use when working on governance tasks for the Andromeda relational transactional database engine project."
 ---
 
 # risk-register-update

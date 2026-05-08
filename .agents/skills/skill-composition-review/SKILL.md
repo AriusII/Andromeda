@@ -1,8 +1,6 @@
 ---
 name: skill-composition-review
-description: Review whether skills are atomic and correctly composed by agents. Use when working on agent ops tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Edit
-version: 0.1.0
+description: "Review whether skills are atomic and correctly composed by agents. Use when working on agent ops tasks for the Andromeda relational transactional database engine project."
 ---
 
 # skill-composition-review

@@ -29,6 +29,10 @@ def read_payload() -> dict[str, Any]:
     except Exception as exc:
         return {"_hook_parse_error": str(exc)}
 
+def hook_parse_error(payload: dict[str, Any]) -> str | None:
+    value = payload.get("_hook_parse_error")
+    return value if isinstance(value, str) and value else None
+
 def emit(obj: dict[str, Any]) -> None:
     sys.stdout.write(json.dumps(obj, ensure_ascii=False) + "\n")
     sys.stdout.flush()

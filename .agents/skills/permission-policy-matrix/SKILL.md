@@ -1,8 +1,6 @@
 ---
 name: permission-policy-matrix
-description: Build or review permission and policy matrices. Use when working on security tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+description: "Build or review permission and policy matrices. Use when working on security tasks for the Andromeda relational transactional database engine project."
 ---
 
 # permission-policy-matrix

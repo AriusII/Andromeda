@@ -1,3 +1,3 @@
 display_name: "Map Materialization Policy"
-short_description: "Select Map refresh modes: Immediate, Incremental, Deferred, SnapshotOnly with WAL, consistency, cost, and staleness policies. Use for Maps design."
+short_description: "Select Map refresh modes: Immediate, Incremental, Deferred, SnapshotOnly with WAL, consistency, cost, and staleness policies. Use when working on Maps design."
 default_prompt: "Use the Map Materialization Policy skill to analyze the current Andromeda task and return a bounded, validated result."

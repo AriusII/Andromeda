@@ -1,8 +1,6 @@
 ---
 name: storage-page-layout
-description: Design page header, payload, slot directory, and trailer layouts. Use when working on storage tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.2.0
+description: "Design page header, payload, slot directory, and trailer layouts. Use when working on storage tasks for the Andromeda relational transactional database engine project."
 ---
 
 # storage-page-layout

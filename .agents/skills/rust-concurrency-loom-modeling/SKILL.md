@@ -1,6 +1,6 @@
 ---
 name: rust-concurrency-loom-modeling
-description: "Model small Rust concurrency primitives with Loom. Use for atomics, pin guards, latches, lock-free queues, and backpressure flags."
+description: "Model small Rust concurrency primitives with Loom. Use when working on atomics, pin guards, latches, lock-free queues, and backpressure flags."
 ---
 
 # Rust Concurrency Loom Modeling

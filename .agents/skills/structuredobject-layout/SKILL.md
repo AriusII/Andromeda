@@ -1,8 +1,6 @@
 ---
 name: structuredobject-layout
-description: Design StructuredObject row, column, or hybrid layouts. Use when working on protocol and type system tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+description: "Design StructuredObject row, column, or hybrid layouts. Use when working on protocol and type system tasks for the Andromeda relational transactional database engine project."
 ---
 
 # structuredobject-layout

@@ -1,6 +1,6 @@
 ---
 name: hardware-simd-gpu-nvme-planning
-description: Plan or review x64/ARM64 CPU profiles, SIMD, GPU analytics/statistics/vector paths, NVMe hot store, HDD cold store, ZNS, and hardware policies.
+description: "Plan or review x64/ARM64 CPU profiles, SIMD, GPU analytics/statistics/vector paths, NVMe hot store, HDD cold store, ZNS, and hardware policies. Use when working on optimizer tasks that require this workflow."
 ---
 
 # Hardware Simd Gpu Nvme Planning

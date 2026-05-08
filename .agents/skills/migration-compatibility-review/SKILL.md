@@ -1,6 +1,6 @@
 ---
 name: migration-compatibility-review
-description: Review compatibility, additive/breaking changes, migrations, catalog evolution, client contract impact, rollback, deprecation, and DefinitionBatch risk.
+description: "Review compatibility, additive/breaking changes, migrations, catalog evolution, client contract impact, rollback, deprecation, and DefinitionBatch risk. Use when working on catalog tasks that require this workflow."
 ---
 
 # Migration Compatibility Review

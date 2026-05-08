@@ -1,6 +1,6 @@
 ---
 name: bufferpool-io-scheduler
-description: "Design BufferPool pinning, dirty tracking, eviction, checkpoint cooperation, P0 WAL flush priority, temp/spill quotas, and metrics. Use for storage runtime."
+description: "Design BufferPool pinning, dirty tracking, eviction, checkpoint cooperation, P0 WAL flush priority, temp/spill quotas, and metrics. Use when working on storage runtime."
 ---
 
 # BufferPool and I/O Scheduler

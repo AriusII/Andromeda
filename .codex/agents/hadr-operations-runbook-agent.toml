@@ -1,5 +1,6 @@
 name = "hadr-operations-runbook-agent"
 description = "HA/DR, backup, restore, PITR, forensic startup, and operations runbook specialist."
+model = "gpt-5.5"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 nickname_candidates = ["Hadr"]

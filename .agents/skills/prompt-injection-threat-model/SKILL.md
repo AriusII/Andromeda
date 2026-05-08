@@ -1,8 +1,6 @@
 ---
 name: prompt-injection-threat-model
-description: Threat-model prompt injection and agentic manipulation. Use when working on security tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+description: "Threat-model prompt injection and agentic manipulation. Use when working on security tasks for the Andromeda relational transactional database engine project."
 ---
 
 # prompt-injection-threat-model

@@ -1,6 +1,6 @@
 ---
 name: rust-dead-code-removal
-description: "Identify and remove dead code, unused imports, unused functions, stale tests, obsolete docs, and unreachable paths. Use during cleanup cycles."
+description: "Identify and remove dead code, unused imports, unused functions, stale tests, obsolete docs, and unreachable paths. Use when running cleanup cycles."
 ---
 
 # Rust Dead Code Removal

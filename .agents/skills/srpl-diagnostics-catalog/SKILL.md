@@ -1,6 +1,6 @@
 ---
 name: srpl-diagnostics-catalog
-description: "Create stable SRPL diagnostic codes for type, cardinality, map, resource, contract, and determinism errors. Use for compiler and CI outputs."
+description: "Create stable SRPL diagnostic codes for type, cardinality, map, resource, contract, and determinism errors. Use when working on compiler and CI outputs."
 ---
 
 # SRPL Diagnostics Catalog

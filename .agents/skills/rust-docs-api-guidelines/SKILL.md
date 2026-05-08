@@ -1,6 +1,6 @@
 ---
 name: rust-docs-api-guidelines
-description: "Document Rust APIs with crate docs, examples, errors, safety, panics, versioning, and observability. Use for public crates or stable internal APIs."
+description: "Document Rust APIs with crate docs, examples, errors, safety, panics, versioning, and observability. Use when working on public crates or stable internal APIs."
 ---
 
 # Rust Docs API Guidelines

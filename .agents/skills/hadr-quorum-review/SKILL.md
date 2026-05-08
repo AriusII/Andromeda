@@ -1,8 +1,6 @@
 ---
 name: hadr-quorum-review
-description: Review HA/DR quorum, fencing, failover, and promotion rules. Use when working on ha/dr tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.2.0
+description: "Review HA/DR quorum, fencing, failover, and promotion rules. Use when working on ha/dr tasks for the Andromeda relational transactional database engine project."
 ---
 
 # hadr-quorum-review

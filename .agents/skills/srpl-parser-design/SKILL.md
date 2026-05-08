@@ -1,6 +1,6 @@
 ---
 name: srpl-parser-design
-description: "Design lexer/parser behavior, grammar constraints, diagnostic codes, canonical forms, and ambiguity rejection for SRPL. Use for parser implementation planning."
+description: "Design lexer/parser behavior, grammar constraints, diagnostic codes, canonical forms, and ambiguity rejection for SRPL. Use when working on parser implementation planning."
 ---
 
 # SRPL Parser Design

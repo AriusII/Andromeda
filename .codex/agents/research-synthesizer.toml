@@ -1,4 +1,7 @@
 description = "Turns academic, standards, and vendor sources into project-safe recommendations. Use for modern research, source triangulation, and frontier versus consensus distinction."
+sandbox_mode = "read-only"
+model_reasoning_effort = "high"
+model = "gpt-5.5"
 developer_instructions = """
 # Research Synthesizer
 

@@ -1,8 +1,6 @@
 ---
 name: benchmark-workload-design
-description: Design bounded benchmark workloads and evidence scenarios. Use when working on benchmark tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+description: "Design bounded benchmark workloads and evidence scenarios. Use when working on benchmark tasks for the Andromeda relational transactional database engine project."
 ---
 
 # benchmark-workload-design

@@ -1,6 +1,6 @@
 ---
 name: resultstream-protocol
-description: "Design ResultStream metadata, batch descriptors, ordering contracts, payload layout, backpressure, and completion semantics. Use for RPC result transport."
+description: "Design ResultStream metadata, batch descriptors, ordering contracts, payload layout, backpressure, and completion semantics. Use when working on RPC result transport."
 ---
 
 # ResultStream Protocol

@@ -1,6 +1,6 @@
 ---
 name: codex-agent-design
-description: Create or refine Codex custom agents/subagents, TOML role files, routing rules, model reasoning effort, sandbox posture, and specialist review workflows.
+description: "Create or refine Codex custom agents/subagents, TOML role files, routing rules, model reasoning effort, sandbox posture, and specialist review workflows. Use when working on agent ops tasks that require this workflow."
 ---
 
 # Codex Agent Design

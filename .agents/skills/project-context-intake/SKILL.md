@@ -1,6 +1,6 @@
 ---
 name: project-context-intake
-description: "Extract the minimum sufficient Andromeda context from user prompts, repository files, uploaded documents, and local evidence. Use before major architecture, refactor, or implementation tasks."
+description: "Extract the minimum sufficient Andromeda context from user prompts, repository files, uploaded documents, and local evidence. Use when preparing for major architecture, refactor, or implementation tasks."
 ---
 
 # Project Context Intake

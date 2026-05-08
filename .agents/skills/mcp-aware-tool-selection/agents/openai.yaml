@@ -1,3 +1,3 @@
-display_name: "MCP-Aware Tool Selection"
-short_description: "Use MCP tools such as rust-lsp and rust-rover-ide when available without making Codex tooling depend on MCP. Use for repository analysis, Rust symbols, diagnost"
-default_prompt: "Use the MCP-Aware Tool Selection skill to analyze the current Andromeda task and return a bounded, validated result."
+display_name: "MCP Aware Tool Selection"
+short_description: "Use MCP tools such as rust-lsp and rust-rover-ide when available without making Codex tooling depend on MCP. Use when working on repository analysis, Rust symbols, diagnostics, and IDE-aware tasks."
+default_prompt: "Use the MCP Aware Tool Selection skill to analyze the current Andromeda task and return a bounded, validated result."

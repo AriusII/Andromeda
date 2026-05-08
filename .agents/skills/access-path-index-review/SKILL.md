@@ -1,8 +1,6 @@
 ---
 name: access-path-index-review
-description: Review access path design for B+Tree, hash, hot/cold merge, and scan requirements. Use when working on storage and optimizer tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+description: "Review access path design for B+Tree, hash, hot/cold merge, and scan requirements. Use when working on storage and optimizer tasks for the Andromeda relational transactional database engine project."
 ---
 
 # access-path-index-review

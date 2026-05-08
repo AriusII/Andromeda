@@ -1,6 +1,6 @@
 ---
 name: testing-crash-recovery-matrix
-description: Design deterministic test matrices for crash recovery, WAL, MVCC, manifest switching, corruption detection, RPC framing, hooks, and concurrency cases.
+description: "Design deterministic test matrices for crash recovery, WAL, MVCC, manifest switching, corruption detection, RPC framing, hooks, and concurrency cases. Use when working on agent ops tasks that require this workflow."
 ---
 
 # Testing Crash Recovery Matrix

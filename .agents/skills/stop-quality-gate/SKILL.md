@@ -1,6 +1,6 @@
 ---
 name: stop-quality-gate
-description: "Run final response quality checks before completion. Use to detect missing artifacts, missing validation, unsafe claims, and incomplete mission-critical deliverables."
+description: "Run final response quality checks before completion. Use when you need to detect missing artifacts, missing validation, unsafe claims, and incomplete mission-critical deliverables."
 ---
 
 # Stop Quality Gate

@@ -1,6 +1,6 @@
 ---
 name: srpl-procedure-contract
-description: "Specify ProcedureContract fields, ContractHash, input/output shapes, permissions, read/write sets, isolation, resource policy, and compatibility. Use for RPC and catalog work."
+description: "Specify ProcedureContract fields, ContractHash, input/output shapes, permissions, read/write sets, isolation, resource policy, and compatibility. Use when working on RPC and catalog work."
 ---
 
 # SRPL Procedure Contract

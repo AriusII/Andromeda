@@ -1,8 +1,6 @@
 ---
 name: recovery-replay-proof
-description: Prove or review recovery replay procedure. Use when working on recovery tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+description: "Prove or review recovery replay procedure. Use when working on recovery tasks for the Andromeda relational transactional database engine project."
 ---
 
 # recovery-replay-proof

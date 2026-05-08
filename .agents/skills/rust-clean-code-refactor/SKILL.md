@@ -1,6 +1,6 @@
 ---
 name: rust-clean-code-refactor
-description: "Refactor Rust code without behavior changes. Use for simplification, naming, extraction, deduplication, visibility reduction, and stronger invariants."
+description: "Refactor Rust code without behavior changes. Use when working on simplification, naming, extraction, deduplication, visibility reduction, and stronger invariants."
 ---
 
 # Rust Clean Code Refactor

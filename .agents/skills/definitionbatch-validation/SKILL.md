@@ -1,6 +1,6 @@
 ---
 name: definitionbatch-validation
-description: "Validate DefinitionBatch dependency graph, ordering, DryRun, breaking changes, security impact, storage impact, and transactionality. Use for import/modelization work."
+description: "Validate DefinitionBatch dependency graph, ordering, DryRun, breaking changes, security impact, storage impact, and transactionality. Use when working on import/modelization work."
 ---
 
 # DefinitionBatch Validation

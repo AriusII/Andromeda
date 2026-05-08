@@ -1,6 +1,6 @@
 ---
 name: storage-page-format
-description: "Design PageHeader, PageTrailer, layout variants, fixed/hybrid rows, column segments, overflow, checksums, and page invariants. Use for storage pages."
+description: "Design PageHeader, PageTrailer, layout variants, fixed/hybrid rows, column segments, overflow, checksums, and page invariants. Use when working on storage pages."
 ---
 
 # Storage Page Format

@@ -1,6 +1,6 @@
 ---
 name: srpl-anti-dynamic-sql
-description: "Reject dynamic SQL/text construction, implicit names, SELECT *, shape-shifting returns, unbounded loops, and ambient NULLs in SRPL. Use during language review."
+description: "Reject dynamic SQL/text construction, implicit names, SELECT *, shape-shifting returns, unbounded loops, and ambient NULLs in SRPL. Use when running language review."
 ---
 
 # SRPL Anti Dynamic SQL

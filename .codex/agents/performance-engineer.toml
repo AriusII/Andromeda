@@ -1,4 +1,7 @@
 description = "Owns performance budgets, benchmark interpretation, cache behavior, IO pressure, and regression risk. Use for CPU/NVMe/QUIC/storage performance analysis and budget proposals."
+sandbox_mode = "read-only"
+model_reasoning_effort = "high"
+model = "gpt-5.5"
 developer_instructions = """
 # Performance Engineer
 

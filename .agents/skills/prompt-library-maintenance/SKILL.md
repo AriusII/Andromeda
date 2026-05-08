@@ -1,6 +1,6 @@
 ---
 name: prompt-library-maintenance
-description: "Maintain reusable prompt templates for Codex agents, reviews, cleanup, crash tests, SRPL specs, and Rust implementation tasks."
+description: "Maintain reusable prompt templates for Codex agents, reviews, cleanup, crash tests, SRPL specs, and Rust implementation tasks. Use when working on agent ops tasks that require this workflow."
 ---
 
 # Prompt Library Maintenance

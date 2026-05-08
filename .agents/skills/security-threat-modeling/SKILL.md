@@ -1,6 +1,6 @@
 ---
 name: security-threat-modeling
-description: "Threat-model certificate theft, replay, oversized payloads, contract probing, admin abuse, split-brain, ransomware, slow clients, and replica poisoning. Use for security reviews."
+description: "Threat-model certificate theft, replay, oversized payloads, contract probing, admin abuse, split-brain, ransomware, slow clients, and replica poisoning. Use when working on security reviews."
 ---
 
 # Security Threat Modeling

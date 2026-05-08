@@ -1,8 +1,6 @@
 ---
 name: hook-policy-design
-description: Design hook policies for prompt, tool, artifact, and stop gates. Use when working on agent ops tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+description: "Design hook policies for prompt, tool, artifact, and stop gates. Use when working on agent ops tasks for the Andromeda relational transactional database engine project."
 ---
 
 # hook-policy-design

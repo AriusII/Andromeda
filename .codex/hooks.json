@@ -47,9 +47,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .codex/scripts/hooks/pre_tool_destructive_guard.py",
+            "command": "python3 .codex/scripts/hooks/andromeda_file_write_gate.py",
             "timeout": 10,
-            "statusMessage": "Checking write/edit safety"
+            "statusMessage": "Checking file write policy"
           }
         ]
       }

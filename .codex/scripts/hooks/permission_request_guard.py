@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
-from common import DESTRUCTIVE_PATTERNS, emit, event_permission_decision, matches_any, read_payload, tool_command
+from common import DESTRUCTIVE_PATTERNS, emit, event_permission_decision, hook_parse_error, matches_any, read_payload, tool_command
 
 payload = read_payload()
+parse_error = hook_parse_error(payload)
+if parse_error:
+    emit(event_permission_decision("deny", f"Permission denied because hook input could not be parsed: {parse_error}."))
+    raise SystemExit(0)
+
 command = tool_command(payload)
 
 pattern = matches_any(DESTRUCTIVE_PATTERNS, command)

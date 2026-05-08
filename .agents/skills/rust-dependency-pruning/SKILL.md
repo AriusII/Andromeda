@@ -1,6 +1,6 @@
 ---
 name: rust-dependency-pruning
-description: "Prune unused, duplicated, risky, or over-featured Cargo dependencies. Use with cargo tree, cargo machete, udeps, deny, and audit."
+description: "Prune unused, duplicated, risky, or over-featured Cargo dependencies. Use when working with cargo tree, cargo machete, udeps, deny, and audit."
 ---
 
 # Rust Dependency Pruning

@@ -1,3 +1,3 @@
-display_name: "PreToolUse Guardrails"
-short_description: "Apply PreToolUse safety checks before shell/tool execution. Use to prevent destructive commands, unsafe repo rewrites, secret leakage, and unbounded scans."
-default_prompt: "Use the PreToolUse Guardrails skill to analyze the current Andromeda task and return a bounded, validated result."
+display_name: "Pretooluse Guardrails"
+short_description: "Apply PreToolUse safety checks before shell/tool execution. Use when you need to prevent destructive commands, unsafe repo rewrites, secret leakage, and unbounded scans."
+default_prompt: "Use the Pretooluse Guardrails skill to analyze the current Andromeda task and return a bounded, validated result."

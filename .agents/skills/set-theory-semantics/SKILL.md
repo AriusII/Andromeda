@@ -1,6 +1,6 @@
 ---
 name: set-theory-semantics
-description: "Reason about set semantics, absence of duplicates, relations, tuples, projection, membership, and explicit multiset/sequence boundaries. Use in SRPL and optimizer design."
+description: "Reason about set semantics, absence of duplicates, relations, tuples, projection, membership, and explicit multiset/sequence boundaries. Use when working in SRPL and optimizer design."
 ---
 
 # Set Theory Semantics

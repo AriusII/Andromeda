@@ -1,6 +1,6 @@
 ---
 name: rust-fuzzing-harness-design
-description: "Create fuzz harnesses for parsers, binary codecs, RPC frames, WAL, pages, manifests, and SegmentIndex. Use for untrusted or persisted bytes."
+description: "Create fuzz harnesses for parsers, binary codecs, RPC frames, WAL, pages, manifests, and SegmentIndex. Use when working on untrusted or persisted bytes."
 ---
 
 # Rust Fuzzing Harness Design

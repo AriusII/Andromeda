@@ -1,6 +1,6 @@
 ---
 name: quic-rpc-frame-contracts
-description: "Design QUIC surfaces, FrameHeader, RPC frame types, structured payloads, metadata-before-payload, and error taxonomy. Use for network/RPC work."
+description: "Design QUIC surfaces, FrameHeader, RPC frame types, structured payloads, metadata-before-payload, and error taxonomy. Use when working on network/RPC work."
 ---
 
 # QUIC/RPC Frame Contracts

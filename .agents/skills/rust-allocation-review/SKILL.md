@@ -1,6 +1,6 @@
 ---
 name: rust-allocation-review
-description: "Review allocations, clones, String/Vec growth, buffer reuse, preallocation, and hot-path memory pressure. Use for performance-sensitive Rust code."
+description: "Review allocations, clones, String/Vec growth, buffer reuse, preallocation, and hot-path memory pressure. Use when working on performance-sensitive Rust code."
 ---
 
 # Rust Allocation Review

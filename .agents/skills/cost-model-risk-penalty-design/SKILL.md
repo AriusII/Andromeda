@@ -1,6 +1,6 @@
 ---
 name: cost-model-risk-penalty-design
-description: Design cost-model components, risk penalties, uncertainty scoring, resource budgets, spill risk, network cost, WAL cost, and plan-stability hysteresis.
+description: "Design cost-model components, risk penalties, uncertainty scoring, resource budgets, spill risk, network cost, WAL cost, and plan-stability hysteresis. Use when working on wal and recovery tasks that require this workflow."
 ---
 
 # Cost Model Risk Penalty Design

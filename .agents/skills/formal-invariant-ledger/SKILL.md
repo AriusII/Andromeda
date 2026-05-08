@@ -1,6 +1,6 @@
 ---
 name: formal-invariant-ledger
-description: Extract and maintain formal invariants, acceptance criteria, rejection rules, preconditions, postconditions, failure modes, and proof obligations.
+description: "Extract and maintain formal invariants, acceptance criteria, rejection rules, preconditions, postconditions, failure modes, and proof obligations. Use when working on governance tasks that require this workflow."
 ---
 
 # Formal Invariant Ledger

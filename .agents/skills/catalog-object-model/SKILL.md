@@ -1,6 +1,6 @@
 ---
 name: catalog-object-model
-description: "Design catalog descriptors for Database, Namespace, Table, Map, Enum, StructuredObject, Procedure, versions, policies, and state lifecycles. Use for catalog implementation."
+description: "Design catalog descriptors for Database, Namespace, Table, Map, Enum, StructuredObject, Procedure, versions, policies, and state lifecycles. Use when working on catalog implementation."
 ---
 
 # Catalog Object Model

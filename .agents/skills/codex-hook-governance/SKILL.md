@@ -1,6 +1,6 @@
 ---
 name: codex-hook-governance
-description: Design or review Codex hooks for SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PermissionRequest, Stop, command policies, audit logs, and safe failure behavior.
+description: "Design or review Codex hooks for SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PermissionRequest, Stop, command policies, audit logs, and safe failure behavior. Use when working on agent ops tasks that require this workflow."
 ---
 
 # Codex Hook Governance

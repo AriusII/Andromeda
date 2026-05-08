@@ -1,6 +1,6 @@
 ---
 name: structuredobject-contracts
-description: "Design StructuredObject shapes, row counts, layouts, intrinsic invariants, RPC metadata, and contract compatibility. Use for batch parameters and result types."
+description: "Design StructuredObject shapes, row counts, layouts, intrinsic invariants, RPC metadata, and contract compatibility. Use when working on batch parameters and result types."
 ---
 
 # StructuredObject Contracts

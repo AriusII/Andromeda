@@ -1,6 +1,6 @@
 ---
 name: procedure-contract-design
-description: Create or review ProcedureContract definitions, ContractHash contents, input/output shapes, permissions, read/write sets, isolation policies, ResultStream metadata, and compatibility rules.
+description: "Create or review ProcedureContract definitions, ContractHash contents, input/output shapes, permissions, read/write sets, isolation policies, ResultStream metadata, and compatibility rules. Use when working on transaction tasks that require this workflow."
 ---
 
 # Procedure Contract Design

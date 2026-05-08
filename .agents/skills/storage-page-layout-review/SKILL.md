@@ -1,6 +1,6 @@
 ---
 name: storage-page-layout-review
-description: Review page, extent, row layout, PageHeader/PageTrailer, slot directories, overflow, column segments, BufferPool, and page-level corruption detection.
+description: "Review page, extent, row layout, PageHeader/PageTrailer, slot directories, overflow, column segments, BufferPool, and page-level corruption detection. Use when working on storage tasks that require this workflow."
 ---
 
 # Storage Page Layout Review

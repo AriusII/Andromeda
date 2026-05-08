@@ -1,6 +1,6 @@
 ---
 name: cardinality-grain-analysis
-description: "Separate conceptual cardinality, optimizer cardinality, analytical grain, and summarizability. Use for type system, Maps, stats, analytics, and SRPL diagnostics."
+description: "Separate conceptual cardinality, optimizer cardinality, analytical grain, and summarizability. Use when working on type system, Maps, stats, analytics, and SRPL diagnostics."
 ---
 
 # Cardinality and Grain Analysis

@@ -1,6 +1,6 @@
 ---
 name: backup-restore-pitr
-description: "Design backup, WAL archives, immutable retention, PITR restore, restore tests, and backup policies. Use for operations and DR work."
+description: "Design backup, WAL archives, immutable retention, PITR restore, restore tests, and backup policies. Use when working on operations and DR work."
 ---
 
 # Backup Restore PITR

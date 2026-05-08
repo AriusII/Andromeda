@@ -1,8 +1,6 @@
 ---
 name: definition-batch-dryrun
-description: Design or review DefinitionBatch dry-run and apply behavior. Use when working on catalog tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+description: "Design or review DefinitionBatch dry-run and apply behavior. Use when working on catalog tasks for the Andromeda relational transactional database engine project."
 ---
 
 # definition-batch-dryrun

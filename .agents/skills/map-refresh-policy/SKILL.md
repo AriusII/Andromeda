@@ -1,8 +1,6 @@
 ---
 name: map-refresh-policy
-description: Define Map consistency and refresh mode. Use when working on maps tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+description: "Define Map consistency and refresh mode. Use when working on maps tasks for the Andromeda relational transactional database engine project."
 ---
 
 # map-refresh-policy

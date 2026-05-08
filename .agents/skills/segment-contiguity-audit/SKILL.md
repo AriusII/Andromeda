@@ -1,8 +1,6 @@
 ---
 name: segment-contiguity-audit
-description: Audit segment and page layouts for cold contiguity invariants. Use when working on storage tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob
-version: 0.1.0
+description: "Audit segment and page layouts for cold contiguity invariants. Use when working on storage tasks for the Andromeda relational transactional database engine project."
 ---
 
 # segment-contiguity-audit

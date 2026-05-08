@@ -1,6 +1,6 @@
 ---
 name: optimizer-cost-modeling
-description: "Design cost model terms, physical operators, plan candidates, risk penalties, plan classes, and DecisionTrace for Andromeda procedures. Use for optimizer work."
+description: "Design cost model terms, physical operators, plan candidates, risk penalties, plan classes, and DecisionTrace for Andromeda procedures. Use when working on optimizer work."
 ---
 
 # Optimizer Cost Modeling

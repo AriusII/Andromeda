@@ -1,6 +1,6 @@
 ---
 name: roadmap-progress-checkpointing
-description: "Create checkpoints for long-running Codex work within a single response: completed items, partial results, blockers, risks, and next executable step. Use for major refactor, audit, design, or tooling work."
+description: "Create checkpoints for long-running Codex work within a single response: completed items, partial results, blockers, risks, and next executable step. Use when working on major refactor, audit, design, or tooling work."
 ---
 
 # Roadmap Progress Checkpointing

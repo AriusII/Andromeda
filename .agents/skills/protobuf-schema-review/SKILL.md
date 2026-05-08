@@ -1,8 +1,6 @@
 ---
 name: protobuf-schema-review
-description: Review Protobuf schemas for Andromeda contract compatibility. Use when working on protocol tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Edit
-version: 0.2.0
+description: "Review Protobuf schemas for Andromeda contract compatibility. Use when working on protocol tasks for the Andromeda relational transactional database engine project."
 ---
 
 # protobuf-schema-review

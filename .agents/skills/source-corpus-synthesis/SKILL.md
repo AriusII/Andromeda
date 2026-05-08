@@ -1,8 +1,6 @@
 ---
 name: source-corpus-synthesis
-description: Synthesize project and external research sources into decision-ready notes. Use when working on research and documentation tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, WebFetch, WebSearch
-version: 0.1.0
+description: "Synthesize project and external research sources into decision-ready notes. Use when working on research and documentation tasks for the Andromeda relational transactional database engine project."
 ---
 
 # source-corpus-synthesis

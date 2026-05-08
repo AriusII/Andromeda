@@ -1,8 +1,6 @@
 ---
 name: rust-core-code-review
-description: Review Rust core engine code for correctness, safety, and Andromeda invariants. Use when working on rust tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob
-version: 0.1.0
+description: "Review Rust core engine code for correctness, safety, and Andromeda invariants. Use when working on rust tasks for the Andromeda relational transactional database engine project."
 ---
 
 # rust-core-code-review

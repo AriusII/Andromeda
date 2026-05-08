@@ -1,8 +1,6 @@
 ---
 name: terminology-normalization
-description: Normalize language to Andromeda native terminology and controlled SQL equivalences. Use when working on documentation tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Edit
-version: 0.1.0
+description: "Normalize language to Andromeda native terminology and controlled SQL equivalences. Use when working on documentation tasks for the Andromeda relational transactional database engine project."
 ---
 
 # terminology-normalization

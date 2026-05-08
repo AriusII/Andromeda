@@ -1,8 +1,6 @@
 ---
 name: test-matrix-generation
-description: Generate test matrices for specs, code, protocols, and recovery scenarios. Use when working on testing tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob, Write
-version: 0.1.0
+description: "Generate test matrices for specs, code, protocols, and recovery scenarios. Use when working on testing tasks for the Andromeda relational transactional database engine project."
 ---
 
 # test-matrix-generation

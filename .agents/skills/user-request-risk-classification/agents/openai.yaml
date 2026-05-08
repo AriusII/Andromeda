@@ -1,3 +1,3 @@
 display_name: "User Request Risk Classification"
-short_description: "Classify requests by risk, destructive potential, security impact, recovery impact, and required review posture. Use before edits, shell commands, refactors, de"
+short_description: "Classify requests by risk, destructive potential, security impact, recovery impact, and required review posture. Use when preparing for edits, shell commands, refactors, deletion, or policy changes."
 default_prompt: "Use the User Request Risk Classification skill to analyze the current Andromeda task and return a bounded, validated result."

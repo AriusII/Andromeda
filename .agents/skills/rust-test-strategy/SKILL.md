@@ -1,6 +1,6 @@
 ---
 name: rust-test-strategy
-description: "Design a layered Rust test strategy: unit, integration, property, fuzz, Miri, Loom, crash/recovery, HA/DR, E2E, and benchmarks."
+description: "Design a layered Rust test strategy: unit, integration, property, fuzz, Miri, Loom, crash/recovery, HA/DR, E2E, and benchmarks. Use when working on rust tasks that require this workflow."
 ---
 
 # Rust Test Strategy

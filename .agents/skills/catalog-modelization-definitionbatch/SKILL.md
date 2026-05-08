@@ -1,6 +1,6 @@
 ---
 name: catalog-modelization-definitionbatch
-description: Design or review Catalog descriptors, Modelization import, DefinitionBatch ordering, dependency graphs, dry-run reports, catalog versioning, signatures, and rollback behavior.
+description: "Design or review Catalog descriptors, Modelization import, DefinitionBatch ordering, dependency graphs, dry-run reports, catalog versioning, signatures, and rollback behavior. Use when working on catalog tasks that require this workflow."
 ---
 
 # Catalog Modelization Definitionbatch

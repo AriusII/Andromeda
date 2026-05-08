@@ -1,4 +1,7 @@
 description = "Owns parsing, binding, typed AST, IR lowering, semantic validation, and plan preparation. Use for compiler pipeline, canonical IR, semantic hashes, and plan cache keys."
+sandbox_mode = "read-only"
+model_reasoning_effort = "high"
+model = "gpt-5.5"
 developer_instructions = """
 # SRPL Compiler and IR Architect
 

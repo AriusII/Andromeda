@@ -1,8 +1,6 @@
 ---
 name: srpl-cardinality-typing
-description: Review SRPL expressions for explicit type and cardinality semantics. Use when working on srpl tasks for the Andromeda SGBDRT project.
-allowed-tools: Read, Grep, Glob
-version: 0.1.0
+description: "Review SRPL expressions for explicit type and cardinality semantics. Use when working on srpl tasks for the Andromeda relational transactional database engine project."
 ---
 
 # srpl-cardinality-typing

@@ -1,6 +1,6 @@
 ---
 name: quic-rpc-protocol-design
-description: Design or review QUIC surfaces, RPC frames, metadata-before-payload, StructuredObject transport, backpressure, error taxonomy, and protocol compatibility.
+description: "Design or review QUIC surfaces, RPC frames, metadata-before-payload, StructuredObject transport, backpressure, error taxonomy, and protocol compatibility. Use when working on protocol tasks that require this workflow."
 ---
 
 # Quic Rpc Protocol Design

@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
-from common import DESTRUCTIVE_PATTERNS, SECRET_PATTERNS, emit, event_context, event_deny_pretool, matches_any, read_payload, tool_command, tool_name
+from common import DESTRUCTIVE_PATTERNS, SECRET_PATTERNS, emit, event_context, event_deny_pretool, hook_parse_error, matches_any, read_payload, tool_command, tool_name
 
 payload = read_payload()
+parse_error = hook_parse_error(payload)
+if parse_error:
+    emit(event_deny_pretool(f"Blocked PreToolUse because hook input could not be parsed: {parse_error}."))
+    raise SystemExit(0)
+
 name = tool_name(payload)
 command = tool_command(payload)
 

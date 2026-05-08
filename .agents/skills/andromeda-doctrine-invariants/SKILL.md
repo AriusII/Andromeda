@@ -1,6 +1,6 @@
 ---
 name: andromeda-doctrine-invariants
-description: "Apply Andromeda invariants: RPC-only procedures, typed contracts, durable WAL before visible commit, versioned stats/plans, no GPU commit path, and recoverability. Use for any design or code review."
+description: "Apply Andromeda invariants: RPC-only procedures, typed contracts, durable WAL before visible commit, versioned stats/plans, no GPU commit path, and recoverability. Use when working on any design or code review."
 ---
 
 # Andromeda Doctrine Invariants

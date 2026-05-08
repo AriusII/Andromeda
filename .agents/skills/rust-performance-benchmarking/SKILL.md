@@ -1,6 +1,6 @@
 ---
 name: rust-performance-benchmarking
-description: "Design measured Rust performance work with hypotheses, benchmarks, profiles, baselines, and regression thresholds. Use before accepting optimizations."
+description: "Design measured Rust performance work with hypotheses, benchmarks, profiles, baselines, and regression thresholds. Use when preparing for accepting optimizations."
 ---
 
 # Rust Performance Benchmarking
