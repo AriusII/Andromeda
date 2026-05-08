@@ -17,6 +17,7 @@ C5 invariants:
 "#]
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_storage_page::{AllocationId, ObjectId, PageId};
 use andromeda_wal::Lsn;
 
 /// Durable segment identity.
@@ -52,6 +53,80 @@ pub enum SegmentMutation {
     AppendExtent,
     UpdatePageInPlace,
     SplitSegment,
+}
+
+/// Durable segment header carried with page-backed cold snapshots and sealed
+/// segment publications.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SegmentHeader {
+    pub magic: u32,
+    pub format_version: u16,
+    pub segment_id: SegmentId,
+    pub object_id: ObjectId,
+    pub allocation_id: AllocationId,
+    pub first_page_id: PageId,
+    pub page_count: u32,
+    pub min_page_lsn: Lsn,
+    pub max_page_lsn: Lsn,
+    pub header_crc: u32,
+}
+
+impl SegmentHeader {
+    pub const MAGIC: u32 = 0x414E4453;
+    pub const FORMAT_VERSION_V0: u16 = 1;
+
+    pub fn validate(&self) -> AndromedaResult<()> {
+        if self.magic != Self::MAGIC {
+            return Err(segment_error("segment header magic mismatch"));
+        }
+        if self.format_version != Self::FORMAT_VERSION_V0 {
+            return Err(segment_error("unsupported segment header format version"));
+        }
+        if self.segment_id.is_zero() || self.object_id.is_zero() || self.allocation_id.is_zero() {
+            return Err(segment_error(
+                "segment header identity fields must not be zero",
+            ));
+        }
+        if self.first_page_id.is_zero() {
+            return Err(segment_error("segment first page id must not be zero"));
+        }
+        if self.page_count == 0 {
+            return Err(segment_error("segment page count must not be zero"));
+        }
+        if self.min_page_lsn.is_zero() || self.max_page_lsn.is_zero() {
+            return Err(segment_error("segment LSN bounds must not be zero"));
+        }
+        if self.max_page_lsn < self.min_page_lsn {
+            return Err(segment_error("segment max page LSN precedes min page LSN"));
+        }
+        if self.header_crc == 0 {
+            return Err(segment_error("segment header CRC must not be zero"));
+        }
+        Ok(())
+    }
+}
+
+/// Durable trailer integrity fields for sealed segment bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SegmentTrailer {
+    pub segment_payload_crc64: u64,
+    pub segment_hash: [u8; 32],
+    pub trailer_crc: u32,
+}
+
+impl SegmentTrailer {
+    pub fn validate(&self) -> AndromedaResult<()> {
+        if self.segment_payload_crc64 == 0 {
+            return Err(segment_error("segment payload CRC must not be zero"));
+        }
+        if self.segment_hash == [0; 32] {
+            return Err(segment_error("segment hash must not be zero"));
+        }
+        if self.trailer_crc == 0 {
+            return Err(segment_error("segment trailer CRC must not be zero"));
+        }
+        Ok(())
+    }
 }
 
 /// Implementation-neutral segment durability fields.
@@ -187,5 +262,29 @@ mod tests {
                 .validate_mutation(SegmentMutation::UpdatePageInPlace)
                 .is_err()
         );
+    }
+
+    #[test]
+    fn segment_header_and_trailer_validate_integrity_fields() {
+        let header = SegmentHeader {
+            magic: SegmentHeader::MAGIC,
+            format_version: SegmentHeader::FORMAT_VERSION_V0,
+            segment_id: SegmentId::new(10),
+            object_id: ObjectId::new(11),
+            allocation_id: AllocationId::new(12),
+            first_page_id: PageId::new(1000),
+            page_count: 8,
+            min_page_lsn: Lsn::new(20),
+            max_page_lsn: Lsn::new(30),
+            header_crc: 90,
+        };
+        let trailer = SegmentTrailer {
+            segment_payload_crc64: 1,
+            segment_hash: [2; 32],
+            trailer_crc: 3,
+        };
+
+        assert!(header.validate().is_ok());
+        assert!(trailer.validate().is_ok());
     }
 }

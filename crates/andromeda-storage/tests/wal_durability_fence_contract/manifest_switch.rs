@@ -1,5 +1,5 @@
 use crate::support::{assert_manifest_switch_allowed, assert_message_contains};
-use andromeda_storage::{Lsn, validate_manifest_atomic_switch};
+use andromeda_wal::{Lsn, validate_manifest_atomic_switch};
 
 #[test]
 fn manifest_can_switch_when_checkpoint_equals_wal_checkpoint() {

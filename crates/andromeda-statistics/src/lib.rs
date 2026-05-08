@@ -27,6 +27,7 @@ mod feedback;
 mod histogram;
 mod ndv;
 mod policy;
+mod publication;
 mod usage;
 mod validation;
 
@@ -62,5 +63,6 @@ pub use ndv::{
     DEFAULT_HLL_PRECISION, ExactNdvCounter, HyperLogLog, NDV_EXACT_THRESHOLD, NdvEstimator,
 };
 pub use policy::StatisticsUsePolicy;
+pub use publication::{StatsPublication, StatsPublicationBuilder, StatsPublicationSummary};
 pub use usage::{StatisticsUseDecision, StatisticsUseReason, evaluate_statistics_for_optimizer};
 pub use validation::StatsValidationError;

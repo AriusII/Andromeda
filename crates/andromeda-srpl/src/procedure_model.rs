@@ -8,11 +8,11 @@ pub use crate::ast::{
     ResultStreamAst, Spanned,
 };
 pub use crate::cardinality::Cardinality;
-pub use crate::ir::{
+pub use andromeda_srpl_ir::{
     ArithOp, BoundSrplBodyPlan, BoundSrplOperationPlan, ConstantLiteral, ExecutableProcedurePlan,
     MAX_EXPR_DEPTH, MAX_SRPL_BODY_OPERATIONS, SrplAssignmentIr, SrplBusinessOperationIr,
     SrplBusinessOperationKindIr, SrplCatalogBindingEvidence, SrplEmitValueIr,
     SrplObjectBindingEvidence, SrplPredicateIr, SrplProcedureBodyIr, SrplProcedureContractMetadata,
     SrplProcedureIr, SrplResultStreamIr, SrplValueIr,
 };
-pub use crate::signature::{ProcedureSignature, ResultContract};
+pub use andromeda_srpl_ir::{ProcedureSignature, ResultContract};

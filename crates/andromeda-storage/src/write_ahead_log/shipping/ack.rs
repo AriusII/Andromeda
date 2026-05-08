@@ -1,4 +1,5 @@
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_wal::write_ahead_log::WalReplicaSafeLsnBoundaryProvider;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::Lsn;
@@ -109,5 +110,11 @@ impl WalReplicaSafeLsnTracker {
                 .get(replica_id)
                 .is_some_and(|safe_lsn| *safe_lsn >= segment_end_lsn)
         })
+    }
+}
+
+impl WalReplicaSafeLsnBoundaryProvider for WalReplicaSafeLsnTracker {
+    fn retention_boundary_lsn(&self) -> Lsn {
+        WalReplicaSafeLsnTracker::retention_boundary_lsn(self)
     }
 }

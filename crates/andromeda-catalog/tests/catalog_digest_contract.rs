@@ -9,6 +9,7 @@ use andromeda_catalog::{
     ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName,
     ResultMetadataPolicy, ResultStreamCardinality, ResultStreamContract, StatsVersion,
     StructuredObjectDefinition, TableDefinition, TransactionPolicy,
+    compute_structured_object_shape_hash, structured_object_shape_hash_compatible,
 };
 use andromeda_error::AndromedaErrorKind;
 use andromeda_types::{
@@ -77,6 +78,26 @@ fn structured(id: u64, name: &str, version: CatalogVersion) -> StructuredObjectD
         fields: vec![column("ProductId", 0)],
         unique_by: vec!["ProductId".to_string()],
     }
+}
+
+#[test]
+fn structured_object_boundary_hash_compatibility_is_exact() {
+    let baseline = structured(41, "Inventory.Reservation", CatalogVersion::new(1));
+    let mut drifted = baseline.clone();
+    drifted.fields.push(column("Quantity", 1));
+    drifted.unique_by.push("Quantity".to_string());
+
+    let baseline_hash = compute_structured_object_shape_hash(&baseline.fields, &baseline.unique_by);
+    let drifted_hash = compute_structured_object_shape_hash(&drifted.fields, &drifted.unique_by);
+
+    assert!(structured_object_shape_hash_compatible(
+        baseline_hash,
+        baseline_hash
+    ));
+    assert!(!structured_object_shape_hash_compatible(
+        baseline_hash,
+        drifted_hash
+    ));
 }
 
 fn procedure(

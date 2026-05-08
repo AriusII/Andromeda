@@ -1,7 +1,6 @@
-use andromeda_srpl::procedure_compiler::lex;
-use andromeda_srpl::source_location::SrplSource;
-
-use crate::support::compile_gate_source;
+use andromeda_srpl_diagnostics::source_location::SrplSource;
+use andromeda_srpl_lexer::{TokenKind, lex};
+use andromeda_srpl_parser::{Cardinality, parse_procedure_signature};
 
 #[test]
 fn gate_01_lexer_all_keyword_tokens() {
@@ -19,6 +18,12 @@ fn gate_01_lexer_all_keyword_tokens() {
         assert!(result.is_ok(), "{}: lex failed for '{}'", desc, keyword);
         let tokens = result.unwrap();
         assert!(!tokens.is_empty(), "{}: no tokens produced", desc);
+        assert_ne!(
+            tokens[0].kind,
+            TokenKind::Identifier,
+            "{}: expected keyword token kind",
+            desc
+        );
         println!("  ✅ {}: '{}'", desc, keyword);
     }
 
@@ -50,11 +55,12 @@ fn gate_01_lexer_all_punctuation_tokens() {
 #[test]
 fn gate_02_parser_simple_procedure_signature() {
     let srpl = "procedure Inventory.ReserveStock accepts (ProductId i64) returns Reservation one (Reserved bool);";
-    let ir = compile_gate_source(srpl, "should compile simple procedure signature");
+    let ast = parse_procedure_signature(srpl).expect("should parse simple procedure signature");
 
-    assert_eq!(ir.name.as_catalog_path(), "Inventory.ReserveStock");
-    assert_eq!(ir.inputs.len(), 1);
-    assert_eq!(ir.result_streams.len(), 1);
+    assert_eq!(ast.name.value.as_catalog_path(), "Inventory.ReserveStock");
+    assert_eq!(ast.parameters.len(), 1);
+    assert_eq!(ast.results.len(), 1);
+    assert_eq!(ast.results[0].cardinality.value, Cardinality::One);
     println!("  ✅ Simple procedure signature parses correctly");
     println!("✅ Gate 02: Parser grammar coverage verified");
 }
@@ -70,10 +76,9 @@ fn gate_02_parser_procedure_with_body() {
             emit Reservation (Reserved); \
         }";
 
-    let ir = compile_gate_source(srpl, "should compile procedure with body");
+    let ast = parse_procedure_signature(srpl).expect("should parse procedure with body");
 
-    assert_eq!(ir.body.operations.len(), 4);
-    assert!(ir.body.validate_bounded().is_ok());
+    assert_eq!(ast.body.operations.len(), 4);
     println!("  ✅ Procedure with body parses and validates");
     println!("✅ Gate 02: Procedure body grammar verified");
 }

@@ -1,4 +1,4 @@
-use crate::ir::{ArithOp, ConstantLiteral, SrplValueIr};
+use andromeda_srpl_ir::{ArithOp, ConstantLiteral, SrplValueIr};
 
 /// Reason a constant fold was deferred.
 ///
@@ -141,8 +141,8 @@ fn fold_binary_constants(
 
 /// Apply constant folding to all value nodes in an assignment list.
 pub fn fold_assignments(
-    assignments: Vec<crate::ir::SrplAssignmentIr>,
-) -> Vec<crate::ir::SrplAssignmentIr> {
+    assignments: Vec<andromeda_srpl_ir::SrplAssignmentIr>,
+) -> Vec<andromeda_srpl_ir::SrplAssignmentIr> {
     assignments
         .into_iter()
         .map(|mut a| {
@@ -154,8 +154,8 @@ pub fn fold_assignments(
 
 /// Apply constant folding to all value nodes in an emit value list.
 pub fn fold_emit_values(
-    values: Vec<crate::ir::SrplEmitValueIr>,
-) -> Vec<crate::ir::SrplEmitValueIr> {
+    values: Vec<andromeda_srpl_ir::SrplEmitValueIr>,
+) -> Vec<andromeda_srpl_ir::SrplEmitValueIr> {
     values
         .into_iter()
         .map(|mut ev| {
@@ -168,7 +168,7 @@ pub fn fold_emit_values(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::{ArithOp, ConstantLiteral, SrplValueIr};
+    use andromeda_srpl_ir::{ArithOp, ConstantLiteral, SrplValueIr};
 
     fn int(n: i64) -> SrplValueIr {
         SrplValueIr::Constant(ConstantLiteral::Int64(n))

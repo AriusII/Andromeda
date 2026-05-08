@@ -1,4 +1,4 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 pub(crate) fn checked_add(lhs: u32, rhs: u32, context: &'static str) -> AndromedaResult<u32> {
     lhs.checked_add(rhs)

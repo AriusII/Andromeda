@@ -16,6 +16,7 @@ without durable WAL.
 
 mod names;
 mod objects;
+mod runtime_boundary;
 mod store_boundary;
 mod taxonomy;
 
@@ -23,6 +24,11 @@ pub use names::QualifiedName;
 pub use objects::{
     CatalogBindingKind, CatalogDefinition, CatalogObjectBinding, CatalogObjectRef, EnumDefinition,
     EnumVariant, ObjectKind, StructuredObjectDefinition, TableDefinition,
+};
+pub use runtime_boundary::{
+    CatalogManifestStoreBoundary, CatalogRuntimeEvidence, CatalogRuntimeReopenEvidence,
+    CatalogRuntimeStore, CatalogServerRuntimeDiagnostic, CatalogServerRuntimeKind,
+    DurableCatalogRuntimeHandle,
 };
 pub use store_boundary::{
     CatalogStoreApplyReport, CatalogStoreDurableApplyReport, CatalogStoreMutationKind,

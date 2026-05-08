@@ -1,4 +1,4 @@
-use andromeda_storage::{
+use andromeda_wal::{
     Lsn, validate_lsn_strictly_ordered, validate_manifest_atomic_switch, validate_recovery_floor,
     validate_wal_durability_before_page_flush,
 };

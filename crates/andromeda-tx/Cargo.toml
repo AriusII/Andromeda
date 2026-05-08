@@ -7,8 +7,11 @@ publish = false
 
 [dependencies]
 andromeda-core.workspace = true
+andromeda-locking.workspace = true
+andromeda-mvcc.workspace = true
 andromeda-observe.workspace = true
 andromeda-savepoint.workspace = true
+andromeda-transaction.workspace = true
 andromeda-transaction-log.workspace = true
 async-trait = "0.1"
 dashmap = "6.0"

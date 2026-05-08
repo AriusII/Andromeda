@@ -308,7 +308,7 @@ mod tests {
 
     #[test]
     fn estimate_is_non_negative_for_any_operation_mix() {
-        use crate::ir::{SrplAssignmentIr, SrplValueIr};
+        use andromeda_srpl_ir::{SrplAssignmentIr, SrplValueIr};
         let ir = SrplProcedureIr {
             name: qn("db.ns.P"),
             inputs: vec![],

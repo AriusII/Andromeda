@@ -1,13 +1,14 @@
 use andromeda_catalog::{
-    CatalogObjectRef, CatalogPlanInvalidationReport, CatalogPublicationAudience,
-    CatalogPublicationAuditTrace, CatalogPublicationReasonCode, CatalogPublicationReceipt,
-    CatalogPublicationReplayTerminalOutcome, CatalogPublicationReplayTerminalRecord,
-    CatalogPublicationReport, CatalogPublicationSemantics, CatalogPublicationSubscriberRegistry,
-    CatalogPublicationSubscriptionReplayRecord, CatalogPublishedContract, CatalogPublishedObject,
-    CatalogRecoveryReplayExpectation, CatalogSubscriberId, CatalogSubscriberRegistration,
-    CatalogSubscriptionAcknowledgement, CatalogVisibleChangeAuditEvidence,
-    DefinitionBatchDependencyGraphHash, DefinitionBatchId, DefinitionBatchSourceHash, ObjectKind,
-    QualifiedName,
+    CatalogObjectRef, CatalogPlanInvalidatedContract, CatalogPlanInvalidationReport,
+    CatalogPublicationAudience, CatalogPublicationAuditTrace, CatalogPublicationReasonCode,
+    CatalogPublicationReceipt, CatalogPublicationReplayTerminalOutcome,
+    CatalogPublicationReplayTerminalRecord, CatalogPublicationReport, CatalogPublicationSemantics,
+    CatalogPublicationSubscriberRegistry, CatalogPublicationSubscriptionReplayRecord,
+    CatalogPublishedObject, CatalogRecoveryReplayExpectation, CatalogSubscriberId,
+    CatalogSubscriberRegistration, CatalogSubscriptionAcknowledgement,
+    CatalogVisibleChangeAuditEvidence, DefinitionBatchDependencyGraphHash, DefinitionBatchId,
+    DefinitionBatchSourceHash, ObjectKind, QualifiedName,
+    catalog_visible_change_audit_evidence_for_publication,
 };
 use andromeda_error::AndromedaErrorKind;
 use andromeda_types::{
@@ -52,7 +53,7 @@ fn report_for_versions(
     receipt.previous_version = CatalogVersion::new(previous_version);
     receipt.next_version = CatalogVersion::new(next_version);
     let object = procedure_object_at(receipt.next_version);
-    let contract = CatalogPublishedContract {
+    let contract = CatalogPlanInvalidatedContract {
         procedure_id: ProcedureId::new(99),
         object: object.clone(),
         contract_hash: ContractHash::test_vector(0xA5),
@@ -102,7 +103,7 @@ fn visible_records(
     CatalogVisibleChangeAuditEvidence,
 ) {
     let terminal = CatalogPublicationReplayTerminalRecord::committed_for_publication(&publication);
-    let audit_evidence = CatalogVisibleChangeAuditEvidence::for_publication(&publication, 1, 2);
+    let audit_evidence = catalog_visible_change_audit_evidence_for_publication(&publication, 1, 2);
     (terminal, audit_evidence)
 }
 

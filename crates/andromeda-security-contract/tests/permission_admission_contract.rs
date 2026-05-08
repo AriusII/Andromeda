@@ -96,6 +96,22 @@ fn permission_request_rejects_application_surface_privilege_escalation() {
     assert_eq!(
         PermissionRequest::new(
             SecuritySurface::Application,
+            SurfaceClass::Monitoring,
+            Permission::InspectPlans,
+        ),
+        Err(SecurityContractError::SurfaceClassBoundaryMismatch)
+    );
+    assert_eq!(
+        PermissionRequest::new(
+            SecuritySurface::Application,
+            SurfaceClass::Recovery,
+            Permission::Backup,
+        ),
+        Err(SecurityContractError::SurfaceClassBoundaryMismatch)
+    );
+    assert_eq!(
+        PermissionRequest::new(
+            SecuritySurface::Application,
             SurfaceClass::Recovery,
             Permission::Restore,
         ),
@@ -132,6 +148,8 @@ fn admission_decision_fails_closed_for_privileged_application_routes() {
 
     for (class, permission) in [
         (SurfaceClass::Administration, Permission::ManageSecurity),
+        (SurfaceClass::Monitoring, Permission::InspectPlans),
+        (SurfaceClass::Recovery, Permission::Backup),
         (SurfaceClass::Hadr, Permission::ClusterPromote),
         (SurfaceClass::Recovery, Permission::Restore),
         (SurfaceClass::Forensic, Permission::ForensicStart),

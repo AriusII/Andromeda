@@ -344,6 +344,7 @@ fn phase1_column(name: &str, scalar: ScalarType, ordinal: u32) -> ColumnDescript
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{compute_structured_object_shape_hash, structured_object_shape_hash_compatible};
     use andromeda_error::AndromedaErrorKind;
 
     #[test]
@@ -478,5 +479,19 @@ mod tests {
         assert!(created_objects.contains(&&bindings.product_stock_table));
         assert!(created_objects.contains(&&bindings.reservation_structured_object));
         assert!(created_objects.contains(&&bindings.procedure));
+    }
+
+    #[test]
+    fn inventory_reservation_structured_shape_hash_is_explicitly_compatible() {
+        let reservation = inventory_reservation_structured_object(CatalogVersion::new(1)).unwrap();
+        let baseline_hash =
+            compute_structured_object_shape_hash(&reservation.fields, &reservation.unique_by);
+        let repeated_hash =
+            compute_structured_object_shape_hash(&reservation.fields, &reservation.unique_by);
+
+        assert!(structured_object_shape_hash_compatible(
+            baseline_hash,
+            repeated_hash
+        ));
     }
 }

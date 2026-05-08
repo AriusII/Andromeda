@@ -3,7 +3,8 @@ use andromeda_storage::{Lsn, PageId, PageSize, ProductStockRow};
 
 use super::super::types::{InventoryStock, ReserveStockCommand};
 use super::{
-    HeapInventoryProductStockStore, InventoryProductStockCommitEvidence, InventoryProductStockStore,
+    HeapInventoryProductStockStore, InventoryProductStockCommitEvidence,
+    InventoryProductStockStore, ObservedInventoryProductStockStore,
 };
 
 fn stock() -> InventoryStock {
@@ -176,4 +177,56 @@ fn heap_store_rejects_non_advancing_durable_lsn_without_visibility_change() {
     assert!(store.prepared_heap_insert().is_some());
     assert_eq!(store.published_commit(), Some(first_commit));
     assert_eq!(store.page_lsn(), Lsn::new(9));
+}
+
+#[test]
+fn observed_store_requires_heap_adapter_for_redo_template_materialization() {
+    let mut store = ObservedInventoryProductStockStore::new(stock()).unwrap();
+    let intent = store.prepare_reserve_stock(command()).unwrap();
+
+    let err = store
+        .prepared_reserve_stock_redo_template(&intent)
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Storage);
+    assert!(err.message().contains("does not materialize heap row redo"));
+    assert_eq!(store.visible_stock(), stock());
+    assert_eq!(store.prepared_intent(), Some(&intent));
+}
+
+#[test]
+fn observed_store_publishes_after_durable_commit_and_redo_evidence_match() {
+    let mut heap = HeapInventoryProductStockStore::from_cold_snapshot(
+        PageId::new(31_004),
+        PageSize::KiB16,
+        stock(),
+    )
+    .unwrap();
+    let mut observed = ObservedInventoryProductStockStore::new(stock()).unwrap();
+
+    let heap_intent = heap.prepare_reserve_stock(command()).unwrap();
+    let observed_intent = observed.prepare_reserve_stock(command()).unwrap();
+    let redo_template = heap
+        .prepared_reserve_stock_redo_template(&heap_intent)
+        .unwrap();
+    let redo_payload = redo_template
+        .materialize_heap_redo_payload(Lsn::new(17))
+        .unwrap();
+    let commit =
+        InventoryProductStockCommitEvidence::new(TransactionId::new(14), Lsn::new(18)).unwrap();
+    let redo = super::InventoryProductStockDurableRedoEvidence::new(
+        TransactionId::new(14),
+        Lsn::new(18),
+        redo_payload,
+    )
+    .unwrap();
+
+    observed
+        .publish_committed_reserve_stock_with_redo(&observed_intent, commit, redo.clone())
+        .unwrap();
+
+    assert_eq!(observed.visible_stock(), observed_intent.effect.next_stock);
+    assert!(observed.prepared_intent().is_none());
+    assert_eq!(observed.published_commit(), Some(commit));
+    assert_eq!(observed.published_redo(), Some(&redo));
 }

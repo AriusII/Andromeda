@@ -1,7 +1,7 @@
 use crate::support::{
     assert_lsn_strictly_ordered, assert_message_contains, assert_recovery_floor_allowed,
 };
-use andromeda_storage::{Lsn, validate_lsn_strictly_ordered, validate_recovery_floor};
+use andromeda_wal::{Lsn, validate_lsn_strictly_ordered, validate_recovery_floor};
 
 #[test]
 fn recovery_allowed_when_floor_equals_required() {

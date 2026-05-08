@@ -3,6 +3,7 @@
 ## Purpose
 
 This document is the canonical registry of executable fuzzing targets for Andromeda.
+The registry is metadata-only; executable harness source remains canonical under `fuzz/`.
 
 It is the test-side source of truth for:
 
@@ -11,11 +12,13 @@ It is the test-side source of truth for:
 - target property policy (`invalid_input_policy`),
 - execution status.
 
+Reference inventory (2026-05-08): `23` registered targets and `51` manifest seeds.
+
 ## Scope
 
 Canonical definitions are:
 
-- `fuzz/`: fuzz targets, support modules, build manifests, and tooling scripts.
+- `fuzz/`: isolated `cargo-fuzz`/libFuzzer execution workspace, fuzz targets, support modules, build manifests, and tooling scripts.
 - `tests/fuzzing/targets.toml`: canonical target registry.
 - `tests/fuzzing/corpus/manifest.toml`: declared seed list by target.
 - `tests/fuzzing/corpus/`: committed seed files.
@@ -24,6 +27,8 @@ Canonical definitions are:
 ## Non-goals
 
 - Add executable harnesses outside `fuzz/`.
+- Add executable harnesses under `tests/fuzzing/`.
+- Run libFuzzer directly from `tests/fuzzing/`.
 - Change the execution policy to bypass `cargo-fuzz`.
 - Treat fuzz success as evidence for WAL durability, recovery, global security, or feature completeness.
 
@@ -93,6 +98,8 @@ After any registry, target, or seed change:
 python ../tools/testing/fuzz_registry_check.py
 python generators/generate_seed_corpus.py --check
 ```
+
+Passing smoke runs or compile-only checks does not satisfy sustained fuzz evidence and does not prove release/C5 readiness.
 
 ## Troubleshooting
 

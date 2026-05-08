@@ -8,6 +8,7 @@
 //! benchmark, analytics, or GPU dependencies.
 
 use andromeda_contract::{CatalogObjectRef, ObjectKind, ProcedureContractRef, QualifiedName};
+use andromeda_srpl_cardinality::Cardinality;
 use andromeda_srpl_execution_adapter::{
     SrplAssertRequest, SrplAssertResult, SrplAssertionAdapter, SrplBindingEnvironment,
     SrplEmitRequest, SrplEmitResult, SrplExecutionFailure, SrplFailureAdapter, SrplFailureRequest,
@@ -15,9 +16,9 @@ use andromeda_srpl_execution_adapter::{
     SrplTypedUpdateAdapter, SrplUpdateRequest, SrplUpdateResult,
 };
 use andromeda_srpl_ir::{
-    BoundSrplBodyPlan, BoundSrplOperationPlan, Cardinality, ExecutableProcedurePlan,
-    SrplAssignmentIr, SrplCatalogBindingEvidence, SrplEmitValueIr, SrplObjectBindingEvidence,
-    SrplPredicateIr, SrplValueIr,
+    BoundSrplBodyPlan, BoundSrplOperationPlan, ExecutableProcedurePlan, SrplAssignmentIr,
+    SrplCatalogBindingEvidence, SrplEmitValueIr, SrplObjectBindingEvidence, SrplPredicateIr,
+    SrplValueIr,
 };
 use andromeda_types::{CatalogObjectId, CatalogVersion, ContractHash, ProcedureId};
 

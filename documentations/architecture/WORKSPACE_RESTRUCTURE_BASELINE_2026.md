@@ -26,7 +26,7 @@ Before using this baseline for a commit or PR, verify:
 
 ## Baseline
 
-The external roadmap was written against the original `main` branch shape, where the workspace had 11 primary crates. The current restructure branch has already moved beyond that baseline and includes 26 workspace members.
+The external roadmap was written against the original `main` branch shape, where the workspace had 11 primary crates. The current restructure branch has already moved beyond that baseline and the root `Cargo.toml` now declares 94 workspace members.
 
 Crates already present include the original broad crates plus these extracted or newly introduced crates:
 

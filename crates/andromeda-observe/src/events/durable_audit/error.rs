@@ -50,7 +50,7 @@ impl DurableAuditSinkFailure {
 
 pub type DurableAuditSinkResult<T> = Result<T, DurableAuditSinkFailure>;
 
-pub(super) fn sink_failure(
+pub(crate) fn sink_failure(
     kind: DurableAuditFailureKind,
     identity: Option<DurableAuditRecordIdentity>,
     reason: impl Into<String>,

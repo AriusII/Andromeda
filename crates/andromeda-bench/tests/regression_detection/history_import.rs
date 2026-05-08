@@ -1,5 +1,9 @@
 use andromeda_regression::{RegressionAnalysis, RegressionReason};
 use andromeda_scenario_evidence::{BenchmarkHistoryRecord, BenchmarkHistoryStore, HistoryQuery};
+use std::{
+    env,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 #[test]
 fn history_import_loads_baseline_for_regression_analysis() {
@@ -27,7 +31,19 @@ fn history_import_loads_baseline_for_regression_analysis() {
         current_record.to_json_line()
     );
 
-    let mut store = BenchmarkHistoryStore::from_file("target/bench-history.jsonl").unwrap();
+    let unique_suffix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let history_path = env::temp_dir()
+        .join(format!(
+            "andromeda-bench-history-import-{}-{}.jsonl",
+            std::process::id(),
+            unique_suffix
+        ))
+        .to_string_lossy()
+        .into_owned();
+    let mut store = BenchmarkHistoryStore::from_file(&history_path).unwrap();
     assert_eq!(store.import_json_lines(&json_lines).unwrap(), 2);
 
     let history = store

@@ -2,7 +2,7 @@ use crate::support::{
     assert_lsn_strictly_ordered, assert_manifest_switch_allowed, assert_page_flush_allowed,
     assert_recovery_floor_allowed,
 };
-use andromeda_storage::Lsn;
+use andromeda_wal::Lsn;
 
 #[test]
 fn crash_at_manifest_switch_requires_checkpoint_and_recovery_floor_checks() {

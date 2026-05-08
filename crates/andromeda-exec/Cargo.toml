@@ -27,6 +27,7 @@ default = []
 runtime-quinn = ["andromeda-quic/runtime-quinn"]
 
 [dev-dependencies]
+andromeda-business-fixtures.workspace = true
 andromeda-quic-runtime-quinn.workspace = true
 
 [lints.rust]

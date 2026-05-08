@@ -9,6 +9,7 @@
 - Own scaffold-only security crate identity.
 - Keep dependencies and behavior empty until a concrete security responsibility is assigned.
 - Keep existing security contract vocabulary in `andromeda-security-contract` and pre-transaction admission behavior in `andromeda-iam`.
+- Keep durable IAM state, runtime storage integration, WAL coupling, and transaction-time security enforcement out of this crate.
 
 ## Non-goals
 

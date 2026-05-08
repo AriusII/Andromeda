@@ -125,12 +125,19 @@ dependencies = [
 [[package]]
 name = "andromeda-catalog-recovery"
 version = "0.1.0"
+dependencies = [
+ "andromeda-catalog-store",
+ "andromeda-error",
+ "andromeda-types",
+]
 
 [[package]]
 name = "andromeda-catalog-store"
 version = "0.1.0"
 dependencies = [
  "andromeda-contract",
+ "andromeda-error",
+ "andromeda-types",
 ]
 
 [[package]]
@@ -220,6 +227,7 @@ name = "andromeda-exec"
 version = "0.1.0"
 dependencies = [
  "andromeda-admission",
+ "andromeda-business-fixtures",
  "andromeda-catalog",
  "andromeda-core",
  "andromeda-execution-trace",
@@ -240,6 +248,10 @@ dependencies = [
 [[package]]
 name = "andromeda-execution"
 version = "0.1.0"
+dependencies = [
+ "andromeda-core",
+ "andromeda-procedure-runtime",
+]
 
 [[package]]
 name = "andromeda-execution-trace"
@@ -283,6 +295,9 @@ dependencies = [
 [[package]]
 name = "andromeda-locking"
 version = "0.1.0"
+dependencies = [
+ "andromeda-core",
+]
 
 [[package]]
 name = "andromeda-manifest"
@@ -299,6 +314,10 @@ version = "0.1.0"
 [[package]]
 name = "andromeda-mvcc"
 version = "0.1.0"
+dependencies = [
+ "andromeda-core",
+ "andromeda-transaction-log",
+]
 
 [[package]]
 name = "andromeda-observability"
@@ -393,6 +412,7 @@ name = "andromeda-proto-wire"
 version = "0.1.0"
 dependencies = [
  "andromeda-error",
+ "andromeda-procedure-contract",
  "andromeda-types",
  "prost",
 ]
@@ -400,6 +420,10 @@ dependencies = [
 [[package]]
 name = "andromeda-protocol"
 version = "0.1.0"
+dependencies = [
+ "andromeda-proto",
+ "andromeda-proto-wire",
+]
 
 [[package]]
 name = "andromeda-quic"
@@ -531,6 +555,7 @@ name = "andromeda-segment"
 version = "0.1.0"
 dependencies = [
  "andromeda-core",
+ "andromeda-storage-page",
  "andromeda-wal",
 ]
 
@@ -662,6 +687,7 @@ name = "andromeda-srpl-test-fixtures"
 version = "0.1.0"
 dependencies = [
  "andromeda-contract",
+ "andromeda-srpl-cardinality",
  "andromeda-srpl-execution-adapter",
  "andromeda-srpl-ir",
  "andromeda-types",
@@ -710,7 +736,7 @@ version = "0.1.0"
 name = "andromeda-storage-page"
 version = "0.1.0"
 dependencies = [
- "andromeda-core",
+ "andromeda-error",
  "andromeda-wal",
 ]
 
@@ -737,6 +763,13 @@ dependencies = [
 [[package]]
 name = "andromeda-transaction"
 version = "0.1.0"
+dependencies = [
+ "andromeda-core",
+ "andromeda-observe",
+ "andromeda-transaction-log",
+ "async-trait",
+ "tokio",
+]
 
 [[package]]
 name = "andromeda-transaction-log"
@@ -750,8 +783,11 @@ name = "andromeda-tx"
 version = "0.1.0"
 dependencies = [
  "andromeda-core",
+ "andromeda-locking",
+ "andromeda-mvcc",
  "andromeda-observe",
  "andromeda-savepoint",
+ "andromeda-transaction",
  "andromeda-transaction-log",
  "async-trait",
  "dashmap",
@@ -788,7 +824,7 @@ dependencies = [
 name = "andromeda-wal-codec"
 version = "0.1.0"
 dependencies = [
- "andromeda-core",
+ "andromeda-error",
 ]
 
 [[package]]

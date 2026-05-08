@@ -7,4 +7,5 @@ publish = false
 
 [dependencies]
 andromeda-core.workspace = true
+andromeda-storage-page.workspace = true
 andromeda-wal.workspace = true

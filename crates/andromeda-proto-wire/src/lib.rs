@@ -2,13 +2,20 @@
 
 //! Runtime-free protobuf wire adapter helpers.
 
+mod completion;
 mod envelope;
 mod generated;
 mod hash;
 mod protobuf;
 mod result_metadata;
 
-pub use envelope::{FrameEnvelope, PayloadKind, ProtocolVersion, RpcResultStreamMetadataPolicy};
+pub use envelope::{
+    AUTH_WIRE_CODE, CONTRACT_REQUEST_WIRE_CODE, CONTRACT_RESPONSE_WIRE_CODE, ERROR_WIRE_CODE,
+    FrameEnvelope, HELLO_WIRE_CODE, PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP, PayloadFrameFamily,
+    PayloadFrameMapping, PayloadKind, ProtocolVersion, RPC_BATCH_WIRE_CODE,
+    RPC_COMPLETION_WIRE_CODE, RPC_EXECUTE_REQUEST_WIRE_CODE, RPC_METADATA_WIRE_CODE,
+    RpcResultStreamMetadataPolicy,
+};
 pub use generated::{
     GeneratedColumnDescriptor, GeneratedCompletionShape, GeneratedFrameEnvelope,
     GeneratedPayloadKind, GeneratedProtocolVersion, GeneratedResultCompletionPolicy,

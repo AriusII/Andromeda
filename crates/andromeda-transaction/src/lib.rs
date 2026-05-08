@@ -1,10 +1,9 @@
 #![forbid(unsafe_code)]
 #![doc = r#"
-Future C5 owner scaffold for Andromeda transaction lifecycle coordination.
+Andromeda transaction lifecycle state and WAL adapter boundary contracts.
 
-This crate is intentionally behavior-free. It documents the boundary that may
-eventually own transaction lifecycle state after an explicit split from
-`andromeda-tx`.
+This crate owns storage-agnostic transaction state transitions and the typed
+WAL adapter contract used to enforce durable terminal evidence.
 
 C5 invariants:
 
@@ -13,5 +12,15 @@ C5 invariants:
 - Persistent and network bytes must use explicit codecs, never Rust native struct layout.
 - Crash/recovery validation is required before mission-critical behavior lands here.
 - RAM, temporary storage, GPU output, and benchmark output are advisory only; they are not truth.
-- No behavior has moved into this crate in this scaffold.
 "#]
+
+mod state;
+mod trace;
+mod wal_adapter;
+
+pub use state::{TransactionEvent, TransactionState, TransactionStateMachine};
+pub use trace::{TransactionTrace, TransactionTransitionCorrelation, transaction_phase_code};
+pub use wal_adapter::{
+    TxWalAdapterError, TxWalAdapterReplayKind, TxWalAdapterReplayRecord, TxWalAdapterTrait,
+    WalManager, append_commit_and_flush, map_tx_wal_replay_records,
+};

@@ -9,10 +9,12 @@ Andromeda engine crates.
 mod ids;
 mod types;
 
+#[doc(inline)]
 pub use ids::{
     CatalogObjectId, CatalogVersion, ContractHash, DatabaseId, InvocationId, NamespaceId,
     ProcedureId, RequestId, SessionId, TransactionId,
 };
+#[doc(inline)]
 pub use types::{
     AbsencePolicy, ColumnDescriptor, DecimalType, FloatMode, FloatType, ScalarType, TextEncoding,
     TextType, TimestampType, TypeDescriptor,

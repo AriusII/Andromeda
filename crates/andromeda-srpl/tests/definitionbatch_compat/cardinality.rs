@@ -1,4 +1,5 @@
-use andromeda_catalog::{CatalogDefinition, DefinitionOperation, ResultStreamCardinality};
+use andromeda_catalog::{CatalogDefinition, DefinitionOperation};
+use andromeda_contract::ResultStreamCardinality;
 use andromeda_srpl::{
     DiagnosticPhase,
     definition_batch_bridge::{

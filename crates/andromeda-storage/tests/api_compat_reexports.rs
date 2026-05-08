@@ -50,19 +50,20 @@ use andromeda_storage::{
     BTreeNodeHeaderV1, BTreeNodeImpl, BTreeNodeKindV1, BTreeNodeV1, BackupExecutionPlan, BackupId,
     BackupManifest, BackupResourceLimits, BufferPoolConfig, BufferPoolError, ColdSnapshotBoundary,
     ColumnDef, ColumnId, DatabaseManifest, Datum, DiskManager, DiskManagerError, DiskPageStore,
-    DurableTransactionState, FileBackedBackupArtifactStore, FileBackedHadrMembershipStore,
-    FileDiskManager, FileWal, FileWalDiskScan, FileWalHeader, FileWalRecoveryReportV0,
-    HadrMembershipRecord, HadrMembershipSnapshot, HadrMembershipStore, HadrNodeId, HadrNodeRole,
-    HeapPage, HeapPageInsert, HeapScanIter, HeapVacuumMode, InMemoryBTreeIndexEngine,
-    InMemoryPageStore, InMemoryWal, IndexId, Key, KeyCodec, KeyComparator, KeyValuePair, Lsn,
-    MemoryWal, ObjectId, PageHeader, PageId, PageImage, PageSize, PageStore, PageTrailer, PageType,
-    ProductStockHeapInsert, ProductStockRow, RecoveryPlan, RecoveryStage, ReplayContext,
-    RestoreValidationPolicy, RowEncoder, RowId, RowSchema, ScalarType, SegmentDescriptor,
-    SegmentId, StartupMode, WAL_FORMAT_VERSION, WalFrameHeader, WalRecord, WalRecordHeader,
-    WalRecordKind, WalScanResult, WalScanStop, WalScanStopReason, WalSegment, WalSegmentDescriptor,
-    compute_restore_checksum, decode_wal_record_frame, encode_catalog_record, encode_wal_record,
-    plan_replay_segments, product_stock_row_encoder, product_stock_row_schema, replay_wal_record,
-    report_file_wal_recovery_v0, validate_manifest_atomic_switch, validate_recovery_floor,
+    DurabilityFenceError, DurableTransactionState, FileBackedBackupArtifactStore,
+    FileBackedHadrMembershipStore, FileDiskManager, FileWal, FileWalDiskScan, FileWalHeader,
+    FileWalRecoveryReportV0, HadrMembershipRecord, HadrMembershipSnapshot, HadrMembershipStore,
+    HadrNodeId, HadrNodeRole, HeapPage, HeapPageInsert, HeapScanIter, HeapVacuumMode,
+    InMemoryBTreeIndexEngine, InMemoryPageStore, InMemoryWal, IndexId, Key, KeyCodec,
+    KeyComparator, KeyValuePair, Lsn, MemoryWal, ObjectId, PageHeader, PageId, PageImage, PageSize,
+    PageStore, PageTrailer, PageType, ProductStockHeapInsert, ProductStockRow, RecoveryPlan,
+    RecoveryStage, ReplayContext, RestoreValidationPolicy, RowEncoder, RowId, RowSchema,
+    ScalarType, SegmentDescriptor, SegmentId, StartupMode, WAL_FORMAT_VERSION, WalFrameHeader,
+    WalRecord, WalRecordHeader, WalRecordKind, WalScanResult, WalScanStop, WalScanStopReason,
+    WalSegment, WalSegmentDescriptor, compute_restore_checksum, decode_wal_record_frame,
+    encode_catalog_record, encode_wal_record, plan_replay_segments, product_stock_row_encoder,
+    product_stock_row_schema, replay_wal_record, report_file_wal_recovery_v0,
+    validate_manifest_atomic_switch, validate_recovery_floor,
     validate_wal_durability_before_page_flush,
 };
 use andromeda_wal as wal;
@@ -119,6 +120,10 @@ fn pure_wal_storage_reexports_match_andromeda_wal_types() {
     assert_same_type::<MemoryWal, wal::MemoryWal>();
     assert_same_type::<ModuleInMemoryWal, wal::write_ahead_log::manager::InMemoryWal>();
     assert_same_type::<ModuleMemoryWal, wal::write_ahead_log::manager::MemoryWal>();
+    assert_same_type::<CommitLog, wal::CommitLog>();
+    assert_same_type::<CommitLogEntry, wal::CommitLogEntry>();
+    assert_same_type::<CommitLogFacade, wal::CommitLogFacade>();
+    assert_same_type::<DurabilityFenceError, wal::DurabilityFenceError>();
 
     assert_same_type::<WalFrameHeader, wal::WalFrameHeader>();
     assert_same_type::<WalScanResult, wal::WalScanResult>();

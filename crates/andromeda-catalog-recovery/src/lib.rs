@@ -30,7 +30,9 @@ pub use mutation::{
     CatalogDurableMutationPayload, CatalogRecoveryAnomalyKind, CatalogSkippedBatchReason,
 };
 pub use publication::{
-    CatalogPublicationAudience, CatalogPublicationReasonCode,
-    CatalogPublicationReplayTerminalOutcome, CatalogPublicationSubscriptionReplayRecordKind,
-    CatalogSubscriberKind,
+    CatalogPlanInvalidatedContract, CatalogPlanInvalidationReport, CatalogPublicationAudience,
+    CatalogPublicationAuditTrace, CatalogPublicationReasonCode,
+    CatalogPublicationReceiptExpectation, CatalogPublicationReplayTerminalOutcome,
+    CatalogPublicationSubscriptionReplayRecordKind, CatalogSubscriberKind,
+    CatalogSubscriptionAcknowledgement, CatalogVisibleChangeAuditEvidence,
 };

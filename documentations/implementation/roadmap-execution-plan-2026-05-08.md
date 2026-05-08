@@ -6,7 +6,7 @@ Record the executable status of the workspace restructure roadmap against the
 current local Andromeda branch.
 
 This plan translates the external 12-step roadmap into a safe execution order
-for the current 26-crate Rust workspace. It separates branch shape from
+for the current 94-crate Rust workspace. It separates branch shape from
 validated acceptance evidence and keeps C5 storage, WAL, recovery, transaction,
 security, RPC, catalog publication, and HA/DR work out of broad refactors while
 the worktree is dirty.
@@ -16,7 +16,7 @@ the worktree is dirty.
 This document covers:
 
 - The roadmap prerequisite step and the 12 execution steps.
-- The current 26-crate workspace shape observed in the root `Cargo.toml`.
+- The current 94-crate workspace shape observed in the root `Cargo.toml`.
 - Acceptance gates needed before each phase can be treated as accepted.
 - A phased execution order for future workers.
 - Dirty-worktree constraints that prevent unsafe C5 refactors.
@@ -56,13 +56,15 @@ Before using this plan for implementation, complete these checks:
 |---|---|---|---|
 | Branch | Active restructure branch | `codex/workspace-crate-restructure` | Work is already in a restructure wave, not at the external roadmap baseline. |
 | Worktree | Dirty | `git status --short` reports broad `M`, `MM`, `A`, `AD`, and untracked paths. | Treat the tree as branch intent, not acceptance evidence. |
-| Workspace shape | 26 crates under `crates/` | Root `Cargo.toml` workspace members | The older 11-crate baseline is superseded for planning. |
+| Workspace shape | 94 crates under `crates/` | Root `Cargo.toml` workspace members | The older 11-crate baseline is superseded for planning. |
 | Current files owned by this task | Step 12 documentation trace files | Roadmap status, roadmap execution plan, documentation indexes, spec-to-test matrix, closure checklist, and ADR backlog files under `documentations/` | No code, Cargo, crate README, test source, CI, hook, or Rust source file is changed by this task. |
 | Validation posture | Documentation-only consistency validation | Targeted repository reads and path-specific diff checks | No Rust build or broad gate is a valid clean-candidate proof while the tree remains dirty. |
 
-## Current 26-Crate Reality
+## Current 94-Crate Reality
 
-The current root workspace declares these 26 crates.
+The current root workspace declares 94 crates. Many are not yet final behavior
+owners: several remain scaffold-only, runtime-free vocabulary surfaces, or
+compatibility facades.
 
 | Ring or role | Current crates | Status interpretation |
 |---|---|---|
@@ -170,7 +172,7 @@ Exit criteria:
 
 ### Phase 1 - Topology, Foundation, And Runtime-Free Contracts
 
-Purpose: prove the 26-crate shape respects ownership rings before deeper
+Purpose: prove the 94-crate shape respects ownership rings before deeper
 extraction.
 
 Procedure:
@@ -321,7 +323,7 @@ The following source classes were checked:
 
 - Root `AGENTS.md` for invariants, Rust posture, validation guidance, and chat
   language.
-- Root `Cargo.toml` and `crates/` directory listing for the current 26-crate
+- Root `Cargo.toml` and `crates/` directory listing for the current 94-crate
   workspace reality.
 - `documentations/ROADMAP_RESTRUCTURE_STATUS_2026_05_08.md` for dirty-branch
   status and safe write-wave ordering.
@@ -343,11 +345,31 @@ run because this task changes only documentation trace, index, governance, and
 testing-matrix files. It does not edit Rust code, crate README files, Cargo
 manifests, CI, hooks, skills, agents, or executable tests.
 
+`cargo check --workspace --all-targets --all-features` is tracked as build
+continuity only when observed from this wave context. It is not release
+approval and not C5 crash/recovery approval.
+
+Fuzz posture in this planning pass is preflight-only; no sustained fuzz
+campaign evidence is claimed.
+
+Remaining required gates:
+
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo nextest run --workspace --all-features`
+- `cargo test --doc --workspace`
+- `cargo audit`
+- `cargo deny check`
+- Sustained fuzz campaigns with retained artifacts
+- Targeted Miri evidence
+- Targeted Loom evidence
+- Combined C5 crash/recovery matrix evidence
+- Release gate chain evidence package
+
 ## Troubleshooting
 
 | Symptom | Corrective action |
 |---|---|
-| A future worker treats the 26-crate shape as accepted architecture. | Require topology, compile, owner tests, and doctrine gates from a clean candidate before acceptance. |
+| A future worker treats the 94-crate shape as accepted architecture. | Require topology, compile, owner tests, and doctrine gates from a clean candidate before acceptance. |
 | A future packet wants to move storage, WAL, transaction, recovery, catalog publication, or security-critical code while the packet has `MM` or `AD` entries. | Stop the move. Reconcile the packet first and add behavior locks before C5 extraction. |
 | A future crate split removes a historical import path in the same packet as the move. | Preserve a compatibility reexport first unless a targeted compatibility test proves removal is safe. |
 | A future document says GPU, benchmark, audit, RAM, or temp output is truth. | Replace the claim with the durable truth rule: accepted cold snapshot plus durable WAL, with typed recovery evidence. |

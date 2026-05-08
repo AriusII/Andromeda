@@ -5,6 +5,7 @@ use andromeda_types::{
 
 use andromeda_digest::Sha256;
 use andromeda_procedure_contract::{CatalogObjectRef, ObjectKind, ProcedureContract};
+use andromeda_structured_object::encode_structured_object_shape_material;
 
 use super::{EnumDefinition, StructuredObjectDefinition, TableDefinition};
 
@@ -22,11 +23,10 @@ pub(super) fn structured_object_shape_hash(
     let mut sink = ObjectShapeHashSink::new();
     sink.str("andromeda.catalog.structured-object-shape.v2.sha256");
     sink.object_ref(&definition.object);
-    sink.columns(&definition.fields);
-    sink.u64(definition.unique_by.len() as u64);
-    for field in &definition.unique_by {
-        sink.str(field);
-    }
+    sink.raw_bytes(&encode_structured_object_shape_material(
+        &definition.fields,
+        &definition.unique_by,
+    ));
     sink.finish()
 }
 

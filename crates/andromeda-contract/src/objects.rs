@@ -121,18 +121,7 @@ impl StructuredObjectDefinition {
     pub fn validate(&self) -> AndromedaResult<()> {
         self.object
             .validate_for_definition(ObjectKind::StructuredObject)?;
-        validate_columns(&self.fields)?;
-
-        for unique_field in &self.unique_by {
-            if !self.fields.iter().any(|field| &field.name == unique_field) {
-                return Err(AndromedaError::new(
-                    AndromedaErrorKind::Catalog,
-                    "structured object unique key must reference an existing field",
-                ));
-            }
-        }
-
-        Ok(())
+        andromeda_structured_object::validate_structured_object_shape(&self.fields, &self.unique_by)
     }
 
     pub fn shape_hash(&self) -> ContractHash {

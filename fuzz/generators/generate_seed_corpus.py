@@ -6,7 +6,8 @@ from dataclasses import dataclass
 import hashlib
 import pathlib
 import re
-from typing import Dict, List, Optional, Tuple
+import tomllib
+from typing import Any, Dict, List, Optional, Tuple
 
 
 @dataclass(frozen=True)
@@ -67,112 +68,112 @@ def load_targets(path: pathlib.Path) -> List[str]:
     return [target.name for target in load_target_specs(path)]
 
 
+def load_toml(path: pathlib.Path) -> Dict[str, Any]:
+    with path.open("rb") as handle:
+        data = tomllib.load(handle)
+    if not isinstance(data, dict):
+        raise ValueError(f"{path.as_posix()}: TOML root must be a table")
+    return data
+
+
+def require_table_list(
+    data: Dict[str, Any], key: str, *, path: pathlib.Path
+) -> List[Dict[str, Any]]:
+    raw_items = data.get(key, [])
+    if not isinstance(raw_items, list):
+        raise ValueError(f"{path.as_posix()}: {key!r} must be an array of tables")
+    items: List[Dict[str, Any]] = []
+    for index, raw in enumerate(raw_items, start=1):
+        if not isinstance(raw, dict):
+            raise ValueError(
+                f"{path.as_posix()} [[{key}]] #{index}: entry must be a table"
+            )
+        items.append(raw)
+    return items
+
+
+def require_string(table: Dict[str, Any], key: str, *, context: str) -> str:
+    value = table.get(key)
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{context}: {key} must be a non-empty string")
+    return value
+
+
+def require_string_list(table: Dict[str, Any], key: str, *, context: str) -> List[str]:
+    value = table.get(key)
+    if not isinstance(value, list):
+        raise ValueError(f"{context}: {key} must be a string array")
+    items: List[str] = []
+    for index, item in enumerate(value):
+        if not isinstance(item, str) or not item:
+            raise ValueError(f"{context}: {key}[{index}] must be a non-empty string")
+        items.append(item)
+    return items
+
+
 def load_top_level_strings(path: pathlib.Path) -> Dict[str, str]:
-    text = path.read_text(encoding="utf-8")
-    fields: Dict[str, str] = {}
-    for line in text.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("["):
-            break
-        match = re.match(r'^\s*([A-Za-z0-9_-]+)\s*=\s*"([^"]*)"\s*$', line)
-        if match:
-            fields[match.group(1)] = match.group(2)
-    return fields
+    data = load_toml(path)
+    return {key: value for key, value in data.items() if isinstance(value, str)}
 
 
 def load_target_specs(path: pathlib.Path) -> List[TargetSpec]:
-    text = path.read_text(encoding="utf-8")
+    data = load_toml(path)
     targets: List[TargetSpec] = []
-    for block in parse_blocks(text, "[[target]]"):
+    for index, table in enumerate(require_table_list(data, "target", path=path), start=1):
+        context = f"{path.as_posix()} [[target]] #{index}"
         targets.append(
             TargetSpec(
-                name=parse_string(block, "name"),
-                path=parse_string(block, "path"),
-                corpus_dir=parse_string(block, "corpus_dir"),
-                generator=parse_string(block, "generator"),
+                name=require_string(table, "name", context=context),
+                path=require_string(table, "path", context=context),
+                corpus_dir=require_string(table, "corpus_dir", context=context),
+                generator=require_string(table, "generator", context=context),
             )
         )
     return targets
 
 
 def load_cargo_bin_specs(path: pathlib.Path) -> List[CargoBinSpec]:
-    text = path.read_text(encoding="utf-8")
+    data = load_toml(path)
     bins: List[CargoBinSpec] = []
-    for block in parse_blocks(text, "[[bin]]"):
+    for index, table in enumerate(require_table_list(data, "bin", path=path), start=1):
+        context = f"{path.as_posix()} [[bin]] #{index}"
         bins.append(
             CargoBinSpec(
-                name=parse_string(block, "name"),
-                path=parse_string(block, "path"),
+                name=require_string(table, "name", context=context),
+                path=require_string(table, "path", context=context),
             )
         )
     return bins
 
 
 def load_support_file_specs(path: pathlib.Path) -> List[SupportFileSpec]:
-    text = path.read_text(encoding="utf-8")
+    data = load_toml(path)
     support_files: List[SupportFileSpec] = []
-    for block in parse_blocks(text, "[[support]]"):
+    for index, table in enumerate(require_table_list(data, "support", path=path), start=1):
+        context = f"{path.as_posix()} [[support]] #{index}"
         support_files.append(
             SupportFileSpec(
-                path=parse_string(block, "path"),
-                used_by=parse_string_list(block, "used_by"),
+                path=require_string(table, "path", context=context),
+                used_by=require_string_list(table, "used_by", context=context),
             )
         )
     return support_files
 
 
 def load_manifest_entries(path: pathlib.Path) -> List[ManifestEntry]:
-    text = path.read_text(encoding="utf-8")
+    data = load_toml(path)
     entries: List[ManifestEntry] = []
-    for block in parse_blocks(text, "[[entry]]"):
+    for index, table in enumerate(require_table_list(data, "entry", path=path), start=1):
+        context = f"{path.as_posix()} [[entry]] #{index}"
         entries.append(
             ManifestEntry(
-                target=parse_string(block, "target"),
-                corpus_dir=parse_string(block, "corpus_dir"),
-                seed_files=parse_string_list(block, "seed_files"),
-                generator=parse_string(block, "generator"),
+                target=require_string(table, "target", context=context),
+                corpus_dir=require_string(table, "corpus_dir", context=context),
+                seed_files=require_string_list(table, "seed_files", context=context),
+                generator=require_string(table, "generator", context=context),
             )
         )
     return entries
-
-
-def parse_blocks(text: str, marker: str) -> List[str]:
-    blocks: List[str] = []
-    current: List[str] = []
-    in_block = False
-    for line in text.splitlines():
-        stripped = line.strip()
-        if stripped == marker:
-            if in_block and current:
-                blocks.append("\n".join(current))
-            current = []
-            in_block = True
-            continue
-        if in_block and stripped.startswith("[") and stripped.endswith("]"):
-            if current:
-                blocks.append("\n".join(current))
-            current = []
-            in_block = False
-            continue
-        if in_block:
-            current.append(line)
-    if in_block and current:
-        blocks.append("\n".join(current))
-    return blocks
-
-
-def parse_string(block: str, key: str) -> str:
-    match = re.search(rf'^\s*{re.escape(key)}\s*=\s*"([^"]*)"', block, re.MULTILINE)
-    if not match:
-        raise ValueError(f"missing {key} in block:\n{block}")
-    return match.group(1)
-
-
-def parse_string_list(block: str, key: str) -> List[str]:
-    match = re.search(rf"^\s*{re.escape(key)}\s*=\s*\[(.*)\]", block, re.MULTILINE)
-    if not match:
-        raise ValueError(f"missing {key} in block:\n{block}")
-    return re.findall(r'"([^"]*)"', match.group(1))
 
 
 def seed_payloads(target: str) -> Dict[str, bytes]:
@@ -1106,11 +1107,22 @@ def durable_audit_checksum64(payload: bytes) -> int:
     return value if value != 0 else 1
 
 
-def ensure_seed(root: pathlib.Path, target: TargetSpec) -> List[pathlib.Path]:
+def ensure_seed(
+    root: pathlib.Path, target: TargetSpec, seed_files: Optional[List[str]] = None
+) -> List[pathlib.Path]:
     corpus_dir = root / target.corpus_dir
     corpus_dir.mkdir(parents=True, exist_ok=True)
+    payloads = seed_payloads(target.name)
+    selected_seed_files = (
+        sorted(seed_files) if seed_files is not None else sorted(payloads)
+    )
     written = []
-    for name, payload in seed_payloads(target.name).items():
+    for name in selected_seed_files:
+        payload = payloads.get(name)
+        if payload is None:
+            raise ValueError(
+                f"{target.name}: manifest declares unknown deterministic seed {name!r}"
+            )
         seed_file = corpus_dir / name
         if not seed_file.exists() or seed_file.read_bytes() != payload:
             seed_file.write_bytes(payload)
@@ -1126,23 +1138,23 @@ def seed_payload_is_deterministic(seed_name: str, actual: bytes, expected: bytes
     return False
 
 
-def write_manifest(root: pathlib.Path, targets: List[TargetSpec]) -> pathlib.Path:
+def write_manifest(root: pathlib.Path, entries: List[ManifestEntry]) -> pathlib.Path:
     manifest_path = root / CORPUS_MANIFEST_PATH
     lines = [
         f'schema_version = "{CORPUS_SCHEMA_VERSION}"',
         f'generated_by = "{GENERATOR_PATH}"',
         "",
     ]
-    for target in targets:
-        seed_files = sorted(seed_payloads(target.name))
+    for entry in entries:
+        seed_files = sorted(entry.seed_files)
         seed_list = ", ".join(f'"{name}"' for name in seed_files)
         lines.extend(
             [
                 "[[entry]]",
-                f'target = "{target.name}"',
-                f'corpus_dir = "{target.corpus_dir}"',
+                f'target = "{entry.target}"',
+                f'corpus_dir = "{entry.corpus_dir}"',
                 f"seed_files = [{seed_list}]",
-                'generator = "deterministic-bytes-v1"',
+                f'generator = "{entry.generator}"',
                 "",
             ]
         )
@@ -1152,11 +1164,15 @@ def write_manifest(root: pathlib.Path, targets: List[TargetSpec]) -> pathlib.Pat
 
 def check_seed_corpus(root: pathlib.Path, targets_file: str) -> int:
     targets_path = root / targets_file
-    target_specs = load_target_specs(targets_path)
-    support_specs = load_support_file_specs(targets_path)
     manifest_path = root / CORPUS_MANIFEST_PATH
-    manifest_entries = load_manifest_entries(manifest_path)
-    cargo_bin_specs = load_cargo_bin_specs(root / "fuzz" / "Cargo.toml")
+    try:
+        target_specs = load_target_specs(targets_path)
+        support_specs = load_support_file_specs(targets_path)
+        manifest_entries = load_manifest_entries(manifest_path)
+        cargo_bin_specs = load_cargo_bin_specs(root / "fuzz" / "Cargo.toml")
+    except ValueError as error:
+        print(f"ERROR: {error}")
+        return 1
     manifest_by_target = {entry.target: entry for entry in manifest_entries}
     target_names = [target.name for target in target_specs]
     support_paths = [support.path for support in support_specs]
@@ -1277,27 +1293,23 @@ def check_seed_corpus(root: pathlib.Path, targets_file: str) -> int:
             )
 
         expected_payloads = seed_payloads(spec.name)
-        generated_seed_files = sorted(expected_payloads)
-        if manifest_seed_files != generated_seed_files:
-            errors.append(
-                f"{spec.name}: manifest seed_files {manifest_seed_files} "
-                f"do not match generated seeds {generated_seed_files}"
-            )
-
-        for seed_name, expected_payload in expected_payloads.items():
-            if seed_name not in entry.seed_files:
-                errors.append(f"{spec.name}: generated seed {seed_name} missing from manifest")
+        for seed_name in entry.seed_files:
+            expected_payload = expected_payloads.get(seed_name)
+            if expected_payload is None:
+                errors.append(
+                    f"{spec.name}: manifest seed {seed_name!r} has no deterministic generator"
+                )
                 continue
             seed_path = corpus_dir / seed_name
             if not seed_path.is_file():
-                errors.append(f"{spec.name}: generated seed {seed_name} missing on disk")
+                errors.append(f"{spec.name}: manifest seed {seed_name} missing on disk")
                 continue
             actual_payload = seed_path.read_bytes()
             if not seed_payload_is_deterministic(
                 seed_name, actual_payload, expected_payload
             ):
                 errors.append(
-                    f"{spec.name}: generated seed {seed_name} is not deterministic "
+                    f"{spec.name}: manifest seed {seed_name} is not deterministic "
                     f"(actual {len(actual_payload)} bytes, expected {len(expected_payload)} bytes)"
                 )
 
@@ -1347,16 +1359,36 @@ def main() -> int:
     if args.check:
         return check_seed_corpus(root, args.targets_file)
 
-    targets = load_target_specs(root / args.targets_file)
+    targets_path = root / args.targets_file
+    manifest_path = root / CORPUS_MANIFEST_PATH
+    try:
+        targets = load_target_specs(targets_path)
+        manifest_entries = load_manifest_entries(manifest_path)
+    except ValueError as error:
+        raise SystemExit(str(error))
     if not targets:
         raise SystemExit(f"No targets found in {args.targets_file}")
 
+    manifest_by_target: Dict[str, ManifestEntry] = {}
+    for entry in manifest_entries:
+        if entry.target in manifest_by_target:
+            raise SystemExit(f"duplicate manifest entry for target {entry.target!r}")
+        manifest_by_target[entry.target] = entry
+
     created = []
     for target in targets:
-        created.extend(ensure_seed(root, target))
+        manifest_entry = manifest_by_target.get(target.name)
+        if manifest_entry is None:
+            raise SystemExit(f"{target.name}: missing manifest entry")
+        if manifest_entry.corpus_dir != target.corpus_dir:
+            raise SystemExit(
+                f"{target.name}: manifest corpus_dir {manifest_entry.corpus_dir!r} "
+                f"does not match targets.toml {target.corpus_dir!r}"
+            )
+        created.extend(ensure_seed(root, target, manifest_entry.seed_files))
 
     if not args.ensure_only:
-        manifest_path = write_manifest(root, targets)
+        manifest_path = write_manifest(root, manifest_entries)
         for item in created:
             print(item.as_posix())
         print(manifest_path.as_posix())

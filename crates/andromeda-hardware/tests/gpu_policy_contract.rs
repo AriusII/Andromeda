@@ -122,3 +122,20 @@ fn gpu_selection_accepts_only_advisory_pipelines_with_guards() {
         assert!(error.message().contains(pipeline.name()));
     }
 }
+
+#[test]
+fn hardware_policy_namespace_preserves_flat_public_types() {
+    use andromeda_hardware::policy::*;
+
+    let _: Option<andromeda_hardware::CpuCapabilityClass> = Option::<CpuCapabilityClass>::None;
+    let _: Option<andromeda_hardware::CpuProfile> = Option::<CpuProfile>::None;
+    let _: Option<andromeda_hardware::HardwareArchitecture> = Option::<HardwareArchitecture>::None;
+    let _: Option<andromeda_hardware::HardwareProfile> = Option::<HardwareProfile>::None;
+    let _: Option<andromeda_hardware::ResourceBudget> = Option::<ResourceBudget>::None;
+    let _: Option<andromeda_hardware::GpuExecutionPolicy> = Option::<GpuExecutionPolicy>::None;
+    let _: Option<andromeda_hardware::GpuProfile> = Option::<GpuProfile>::None;
+    let _: Option<andromeda_hardware::PipelineClass> = Option::<PipelineClass>::None;
+    let _: Option<andromeda_hardware::RamProfile> = Option::<RamProfile>::None;
+    let _: Option<andromeda_hardware::RamSectionBudget> = Option::<RamSectionBudget>::None;
+    let _: Option<andromeda_hardware::RamSectionRole> = Option::<RamSectionRole>::None;
+}

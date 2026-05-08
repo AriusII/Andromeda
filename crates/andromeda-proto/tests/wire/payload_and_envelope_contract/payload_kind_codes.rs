@@ -5,6 +5,10 @@ use andromeda_proto::{
     RPC_BATCH_WIRE_CODE, RPC_COMPLETION_WIRE_CODE, RPC_EXECUTE_REQUEST_WIRE_CODE,
     RPC_METADATA_WIRE_CODE,
 };
+use andromeda_proto_wire::PayloadKind as WirePayloadKind;
+
+const PROTO_WIRE_MANIFEST: &str = include_str!("../../../../andromeda-proto-wire/Cargo.toml");
+const RPC_PROTOCOL_MANIFEST: &str = include_str!("../../../../andromeda-rpc-protocol/Cargo.toml");
 
 #[test]
 fn payload_kind_wire_codes_are_contract_locked() {
@@ -114,5 +118,87 @@ fn generated_payload_kind_codes_match_custom_contract_codes() {
 
     for (generated_kind, code) in expected {
         assert_eq!(generated_kind as u32, code);
+    }
+}
+
+#[test]
+fn split_crates_keep_payload_kind_and_frame_code_lockstep() {
+    let expected = [
+        (PayloadKind::Hello, WirePayloadKind::Hello, HELLO_WIRE_CODE),
+        (PayloadKind::Auth, WirePayloadKind::Auth, AUTH_WIRE_CODE),
+        (
+            PayloadKind::ContractRequest,
+            WirePayloadKind::ContractRequest,
+            CONTRACT_REQUEST_WIRE_CODE,
+        ),
+        (
+            PayloadKind::ContractResponse,
+            WirePayloadKind::ContractResponse,
+            CONTRACT_RESPONSE_WIRE_CODE,
+        ),
+        (
+            PayloadKind::RpcExecuteRequest,
+            WirePayloadKind::RpcExecuteRequest,
+            RPC_EXECUTE_REQUEST_WIRE_CODE,
+        ),
+        (
+            PayloadKind::RpcMetadata,
+            WirePayloadKind::RpcMetadata,
+            RPC_METADATA_WIRE_CODE,
+        ),
+        (
+            PayloadKind::RpcBatch,
+            WirePayloadKind::RpcBatch,
+            RPC_BATCH_WIRE_CODE,
+        ),
+        (
+            PayloadKind::RpcCompletion,
+            WirePayloadKind::RpcCompletion,
+            RPC_COMPLETION_WIRE_CODE,
+        ),
+        (PayloadKind::Error, WirePayloadKind::Error, ERROR_WIRE_CODE),
+    ];
+
+    for (proto_kind, wire_kind, proto_code) in expected {
+        assert_eq!(proto_kind.wire_code(), proto_code);
+        assert_eq!(wire_kind.wire_code(), proto_code);
+    }
+}
+
+#[test]
+fn split_manifests_reject_json_and_grpc_runtime_dependencies() {
+    let manifests = [
+        (
+            "andromeda-proto-wire",
+            PROTO_WIRE_MANIFEST.to_ascii_lowercase(),
+        ),
+        (
+            "andromeda-rpc-protocol",
+            RPC_PROTOCOL_MANIFEST.to_ascii_lowercase(),
+        ),
+    ];
+    let forbidden = [
+        "grpc",
+        "grpcio",
+        "json-rpc",
+        "jsonrpc",
+        "jsonrpsee",
+        "prost-grpc",
+        "prost_grpc",
+        "serde_json",
+        "tonic",
+    ];
+
+    for (crate_name, manifest) in manifests {
+        let violations = forbidden
+            .iter()
+            .filter(|term| manifest.contains(**term))
+            .copied()
+            .collect::<Vec<_>>();
+        assert!(
+            violations.is_empty(),
+            "{crate_name} manifest introduced forbidden JSON/gRPC runtime dependencies: {:?}",
+            violations
+        );
     }
 }

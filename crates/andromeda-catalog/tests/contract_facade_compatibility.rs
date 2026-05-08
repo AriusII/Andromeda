@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 use andromeda_catalog::{PolicyVersion, ProcedureContractRef, QualifiedName};
-use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
+use andromeda_types::{CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId};
 
 #[test]
 fn catalog_reexports_contract_crate_identities() {
@@ -92,4 +92,14 @@ fn catalog_facade_preserves_contract_and_object_type_identities() {
         Option::<andromeda_catalog::QualifiedName>::None;
     let _: Option<andromeda_catalog::QualifiedName> =
         Option::<andromeda_contract::QualifiedName>::None;
+
+    let _: fn(&[ColumnDescriptor], &[String]) -> andromeda_types::ContractHash =
+        andromeda_catalog::compute_structured_object_shape_hash;
+    let _: fn(&[ColumnDescriptor], &[String]) -> andromeda_types::ContractHash =
+        andromeda_contract::compute_structured_object_shape_hash;
+
+    let _: fn(andromeda_types::ContractHash, andromeda_types::ContractHash) -> bool =
+        andromeda_catalog::structured_object_shape_hash_compatible;
+    let _: fn(andromeda_types::ContractHash, andromeda_types::ContractHash) -> bool =
+        andromeda_contract::structured_object_shape_hash_compatible;
 }

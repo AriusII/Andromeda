@@ -9,7 +9,7 @@ recovery. Owner crates provide typed record validation through narrow wrapper
 functions.
 "#]
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 pub const WAL_FORMAT_VERSION_V1: u16 = 1;
 pub const WAL_FORMAT_VERSION: u16 = WAL_FORMAT_VERSION_V1;

@@ -12,8 +12,9 @@
 //! | WAL frame typed wrappers                     | `andromeda_wal::wal_codec` over `andromeda_wal_codec` |
 //! | `FileWal`, `FileWalHeader`, file scan types  | `andromeda_wal::file_wal`                   |
 //! | Storage startup recovery report              | `crate::file_wal`                           |
-//! | WAL GC: candidates, archive verification    | [`gc`]                                      |
+//! | WAL GC: candidates, archive verification    | `andromeda_wal::write_ahead_log::gc`        |
 //! | WAL Compaction: fragmentation, scheduling   | [`compaction`]                              |
+//! | Segment reclaimability policy               | `andromeda_wal::write_ahead_log::segment_reclaimability` |
 //! | CommitLogEntry and CommitLog persistence    | `andromeda_wal::write_ahead_log::commit_log_entry` |
 //!
 //! The pure WAL submodules below are thin re-export facades for `andromeda_wal`.

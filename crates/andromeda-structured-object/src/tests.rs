@@ -20,6 +20,10 @@ fn fields() -> Vec<ColumnDescriptor> {
     ]
 }
 
+fn unique_by() -> Vec<String> {
+    vec!["ProductId".to_string()]
+}
+
 fn header(name: &str) -> StructuredObjectHeader {
     let layout = StructuredObjectLayout::RowMajor;
     let fields = fields();
@@ -308,4 +312,41 @@ fn validate_rejects_payload_exceeding_max() {
 #[test]
 fn validate_accepts_well_formed_header() {
     assert!(header("Reservation").validate().is_ok());
+}
+
+#[test]
+fn validate_structured_object_shape_accepts_well_formed_shape() {
+    assert!(validate_structured_object_shape(&fields(), &unique_by()).is_ok());
+}
+
+#[test]
+fn validate_structured_object_shape_rejects_missing_unique_field_reference() {
+    let error = validate_structured_object_shape(&fields(), &["Missing".to_string()]).unwrap_err();
+    assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+    assert!(error.message().contains("unique key"));
+}
+
+#[test]
+fn encode_structured_object_shape_material_is_deterministic() {
+    let left = encode_structured_object_shape_material(&fields(), &unique_by());
+    let right = encode_structured_object_shape_material(&fields(), &unique_by());
+    assert_eq!(left, right);
+}
+
+#[test]
+fn compute_structured_object_shape_hash_tracks_shape_drift() {
+    let baseline = compute_structured_object_shape_hash(&fields(), &unique_by());
+    let mut drifted = fields();
+    drifted[1].name = "ReservedQuantity".to_string();
+    let changed = compute_structured_object_shape_hash(&drifted, &unique_by());
+    assert_ne!(baseline, changed);
+}
+
+#[test]
+fn structured_object_shape_hash_compatibility_is_exact_hash_only() {
+    let baseline = compute_structured_object_shape_hash(&fields(), &unique_by());
+    let drifted = ContractHash::test_vector(0xBC);
+
+    assert!(structured_object_shape_hash_compatible(baseline, baseline));
+    assert!(!structured_object_shape_hash_compatible(baseline, drifted));
 }

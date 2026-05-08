@@ -6,7 +6,7 @@ This ledger records the workspace dependency edges observed for Step 0 governanc
 
 ## Scope
 
-This document applies to the current Andromeda Rust workspace under the root `Cargo.toml`. `cargo metadata --no-deps --format-version 1` reports 32 workspace packages in the current worktree, and the root `Cargo.toml` explicit `members` list contains the same 32 paths in the final Step 0 snapshot.
+This document applies to the current Andromeda Rust workspace under the root `Cargo.toml`. The root `Cargo.toml` explicit `members` list currently declares 94 workspace crates in this local snapshot. Treat this as topology evidence only, not accepted ownership or release readiness.
 
 The ledger covers workspace edges declared in package manifests. It does not enumerate every external dependency, feature flag, transitive dependency, or source-level import.
 

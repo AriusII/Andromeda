@@ -8,13 +8,11 @@
 //! `AdvisoryEvidenceStatsVersionMismatch`, `advisory_can_drive_active`,
 //! `active_before`, `candidate`, `active_after`, and `selected_decision`.
 
-mod digest;
 mod error;
 mod evidence;
 mod model;
 mod switch;
 mod trace;
-mod validation;
 
 pub use error::StatsPublicationSwitchError;
 pub use evidence::{

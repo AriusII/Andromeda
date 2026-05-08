@@ -1,22 +1,4 @@
-use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+#[path = "../../andromeda-srpl-ir/src/identifier.rs"]
+mod ir_identifier;
 
-pub(crate) fn validate_srpl_identifier(value: &str, context: &str) -> AndromedaResult<()> {
-    let mut chars = value.chars();
-    let Some(first) = chars.next() else {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Srpl,
-            format!("{context} must not be empty"),
-        ));
-    };
-
-    if !(first.is_ascii_alphabetic() || first == '_')
-        || chars.any(|ch| !(ch.is_ascii_alphanumeric() || ch == '_'))
-    {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Srpl,
-            format!("{context} must be an ASCII identifier"),
-        ));
-    }
-
-    Ok(())
-}
+pub(crate) use ir_identifier::validate_srpl_identifier;

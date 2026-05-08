@@ -181,12 +181,10 @@ const FORBIDDEN_RUNTIME_CRITICAL_PROTO_SOURCE_TOKENS: &[&str] = &[
     "prost_types",
     "prost_derive",
 ];
-const ALLOWED_RUNTIME_CRITICAL_PROTO_DEPENDENCIES: &[(&str, &[&str])] = &[
-    ("andromeda-exec", &["andromeda-proto"]),
-];
-const ALLOWED_RUNTIME_CRITICAL_PROTO_SOURCE_IMPORTS: &[(&str, &[&str])] = &[
-    ("andromeda-exec", &["andromeda_proto::"]),
-];
+const ALLOWED_RUNTIME_CRITICAL_PROTO_DEPENDENCIES: &[(&str, &[&str])] =
+    &[("andromeda-exec", &["andromeda-proto"])];
+const ALLOWED_RUNTIME_CRITICAL_PROTO_SOURCE_IMPORTS: &[(&str, &[&str])] =
+    &[("andromeda-exec", &["andromeda_proto::"])];
 const TEMPORARY_DEV_DEPENDENCY_BACKEDGE_EXCEPTIONS: &[TemporaryDependencyException] = &[
     TemporaryDependencyException {
         source: "andromeda-observe",
@@ -226,19 +224,9 @@ const TEMPORARY_C5_CORE_FACADE_EXCEPTIONS: &[TemporaryDependencyException] = &[
         exit_criteria: "Exit criteria: extract segment identity and WAL-safe primitives from the temporary core facade.",
     },
     TemporaryDependencyException {
-        source: "andromeda-storage-page",
-        dependency: "andromeda-core",
-        exit_criteria: "Exit criteria: extract page identity and codec errors from the temporary core facade.",
-    },
-    TemporaryDependencyException {
         source: "andromeda-transaction-log",
         dependency: "andromeda-core",
         exit_criteria: "Exit criteria: extract transaction log identity and replay errors from the temporary core facade.",
-    },
-    TemporaryDependencyException {
-        source: "andromeda-wal-codec",
-        dependency: "andromeda-core",
-        exit_criteria: "Exit criteria: move WAL codec identifiers and errors to dedicated WAL foundation crates.",
     },
 ];
 #[test]
@@ -409,7 +397,9 @@ fn roadmap_runtime_critical_crates_do_not_import_sql_proto_gpu_domains() {
 
     for crate_name in RUNTIME_CRITICAL_CRATES_TO_AUDIT {
         let Some(manifest) = manifests.get(*crate_name) else {
-            violations.push(format!("roadmap runtime-critical crate `{crate_name}` is missing from workspace manifests"));
+            violations.push(format!(
+                "roadmap runtime-critical crate `{crate_name}` is missing from workspace manifests"
+            ));
             continue;
         };
 
@@ -498,10 +488,7 @@ fn roadmap_runtime_critical_crates_do_not_import_sql_proto_gpu_domains() {
     );
 }
 
-fn is_allowed_runtime_critical_proto_dependency(
-    crate_name: &str,
-    dependency: &str,
-) -> bool {
+fn is_allowed_runtime_critical_proto_dependency(crate_name: &str, dependency: &str) -> bool {
     ALLOWED_RUNTIME_CRITICAL_PROTO_DEPENDENCIES
         .iter()
         .any(|(allowed_crate, allowed_tokens)| {
@@ -509,10 +496,7 @@ fn is_allowed_runtime_critical_proto_dependency(
         })
 }
 
-fn is_allowed_runtime_critical_proto_source_token(
-    crate_name: &str,
-    token: &str,
-) -> bool {
+fn is_allowed_runtime_critical_proto_source_token(crate_name: &str, token: &str) -> bool {
     ALLOWED_RUNTIME_CRITICAL_PROTO_SOURCE_IMPORTS
         .iter()
         .any(|(allowed_crate, allowed_tokens)| {
@@ -521,11 +505,10 @@ fn is_allowed_runtime_critical_proto_source_token(
 }
 
 fn source_line_contains_token(line: &str, token: &str) -> bool {
-    line
-        .split(|character: char| {
-            !character.is_ascii_alphanumeric() && character != '_' && character != '-'
-        })
-        .any(|segment| segment == token)
+    line.split(|character: char| {
+        !character.is_ascii_alphanumeric() && character != '_' && character != '-'
+    })
+    .any(|segment| segment == token)
 }
 
 fn forbidden_generic_crate_name_bucket(package_name: &str) -> Option<&'static str> {

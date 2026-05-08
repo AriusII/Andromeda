@@ -20,14 +20,14 @@ async fn test_stress_rapid_procedures() -> AndromedaResult<()> {
         if let Ok(mut conn) = timeout(Duration::from_secs(30), server.accept_connection()).await {
             if let Ok(mut conn) = conn {
                 for _ in 0..1000 {
-                            if let Ok(mut stream) =
-                                timeout(Duration::from_secs(5), conn.accept_bidi_stream()).await
-                            {
-                                if let Ok(mut stream) = stream {
-                                    let mut buf = vec![0u8; 512];
-                                    if let Ok(n) = stream.read(&mut buf).await {
-                                        if n > 0 {
-                                            buf.truncate(n);
+                    if let Ok(mut stream) =
+                        timeout(Duration::from_secs(5), conn.accept_bidi_stream()).await
+                    {
+                        if let Ok(mut stream) = stream {
+                            let mut buf = vec![0u8; 512];
+                            if let Ok(n) = stream.read(&mut buf).await {
+                                if n > 0 {
+                                    buf.truncate(n);
                                     if let Ok(frame) = FrameCodec::decode(&buf) {
                                         let proc_name = String::from_utf8_lossy(&frame.payload);
                                         if let Ok(response_frames) = server_clone
@@ -93,9 +93,22 @@ async fn test_stress_rapid_procedures() -> AndromedaResult<()> {
             let _ = stream.write_all(&encoded).await;
             let _ = stream.finish().await;
 
-            // Drain response asynchronously
+            let mut response_frames = vec![];
             let mut buf = vec![0u8; 1024];
-            let _ = stream.read(&mut buf).await;
+            loop {
+                match stream.read(&mut buf).await {
+                    Ok(0) => break,
+                    Ok(n) => response_frames.extend_from_slice(&buf[..n]),
+                    Err(_) => break,
+                }
+            }
+            if let Ok(frames) = decode_response_frames(&response_frames) {
+                let _ = assert_standard_response_sequence(
+                    &frames,
+                    request_frame.header.request_id,
+                    request_frame.header.session_id,
+                );
+            }
         }
     }
 
@@ -134,14 +147,14 @@ async fn test_latency_measurements() -> AndromedaResult<()> {
         if let Ok(mut conn) = timeout(Duration::from_secs(30), server.accept_connection()).await {
             if let Ok(mut conn) = conn {
                 for _ in 0..100 {
-                            if let Ok(mut stream) =
-                                timeout(Duration::from_secs(5), conn.accept_bidi_stream()).await
-                            {
-                                if let Ok(mut stream) = stream {
-                                    let mut buf = vec![0u8; 512];
-                                    if let Ok(n) = stream.read(&mut buf).await {
-                                        if n > 0 {
-                                            buf.truncate(n);
+                    if let Ok(mut stream) =
+                        timeout(Duration::from_secs(5), conn.accept_bidi_stream()).await
+                    {
+                        if let Ok(mut stream) = stream {
+                            let mut buf = vec![0u8; 512];
+                            if let Ok(n) = stream.read(&mut buf).await {
+                                if n > 0 {
+                                    buf.truncate(n);
                                     if let Ok(frame) = FrameCodec::decode(&buf) {
                                         let proc_name = String::from_utf8_lossy(&frame.payload);
                                         if let Ok(response_frames) = registry_clone
@@ -203,8 +216,21 @@ async fn test_latency_measurements() -> AndromedaResult<()> {
         stream.write_all(&encoded).await?;
         stream.finish().await?;
 
+        let mut response_frames = vec![];
         let mut buf = vec![0u8; 512];
-        let _ = stream.read(&mut buf).await;
+        loop {
+            match stream.read(&mut buf).await {
+                Ok(0) => break,
+                Ok(n) => response_frames.extend_from_slice(&buf[..n]),
+                Err(_) => break,
+            }
+        }
+        let frames = decode_response_frames(&response_frames)?;
+        assert_standard_response_sequence(
+            &frames,
+            request_frame.header.request_id,
+            request_frame.header.session_id,
+        )?;
 
         let elapsed = start.elapsed();
         latencies.push(elapsed);

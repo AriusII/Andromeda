@@ -1,10 +1,11 @@
 use andromeda_catalog::{
-    CatalogDurabilityMarker, CatalogObjectRef, CatalogPlanInvalidationReport,
-    CatalogPublicationAudience, CatalogPublicationAuditTrace, CatalogPublicationReasonCode,
-    CatalogPublicationReceipt, CatalogPublicationReport, CatalogPublicationSemantics,
-    CatalogPublishedContract, CatalogPublishedObject, CatalogRecoveryReplayExpectation,
+    CatalogDurabilityMarker, CatalogObjectRef, CatalogPlanInvalidatedContract,
+    CatalogPlanInvalidationReport, CatalogPublicationAudience, CatalogPublicationAuditTrace,
+    CatalogPublicationReasonCode, CatalogPublicationReceipt, CatalogPublicationReport,
+    CatalogPublicationSemantics, CatalogPublishedObject, CatalogRecoveryReplayExpectation,
     CatalogSubscriberId, CatalogSubscriptionAcknowledgement, DefinitionBatchDependencyGraphHash,
     DefinitionBatchId, DefinitionBatchSourceHash, ObjectKind, QualifiedName,
+    validate_subscription_acknowledgement_for_publication,
 };
 use andromeda_error::AndromedaErrorKind;
 use andromeda_types::{
@@ -41,7 +42,7 @@ fn procedure_object() -> CatalogObjectRef {
 
 fn report() -> CatalogPublicationReport {
     let receipt = receipt();
-    let contract = CatalogPublishedContract {
+    let contract = CatalogPlanInvalidatedContract {
         procedure_id: ProcedureId::new(99),
         object: procedure_object(),
         contract_hash: ContractHash::test_vector(0xA5),
@@ -139,11 +140,12 @@ fn subscription_acknowledgement_must_match_publication_replay_boundary() {
         audit_trace_id: "catalog-pub-8".to_string(),
     };
 
-    ack.validate_for_publication(&report).unwrap();
+    validate_subscription_acknowledgement_for_publication(&ack, &report).unwrap();
 
     let mut stale_ack = ack;
     stale_ack.acknowledged_version = CatalogVersion::new(7);
-    let error = stale_ack.validate_for_publication(&report).unwrap_err();
+    let error =
+        validate_subscription_acknowledgement_for_publication(&stale_ack, &report).unwrap_err();
     assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
     assert!(error.message().contains("acknowledgement version"));
 }
@@ -166,6 +168,6 @@ fn subscription_acknowledgement_can_track_external_marker_publications() {
         audit_trace_id: report.audit_trace.trace_id.clone(),
     };
 
-    ack.validate_for_publication(&report).unwrap();
+    validate_subscription_acknowledgement_for_publication(&ack, &report).unwrap();
     assert_eq!(ack.subscriber_id.as_str(), "hadr-replica-b");
 }

@@ -1,7 +1,8 @@
 use super::*;
 use andromeda_error::AndromedaErrorKind;
 use andromeda_types::{
-    CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId, ScalarType, TypeDescriptor,
+    CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId, ScalarType, TextEncoding,
+    TextType, TypeDescriptor,
 };
 
 fn sample_column(name: &str, ordinal: u32) -> ColumnDescriptor {
@@ -77,6 +78,21 @@ fn manifest_hash_is_deterministic_and_field_sensitive() {
     let mut bumped_stats = manifest.clone();
     bumped_stats.stats_version += 1;
     assert_ne!(manifest.manifest_hash(), bumped_stats.manifest_hash());
+}
+
+#[test]
+fn manifest_hash_tracks_column_type_descriptor_semantics() {
+    let baseline = sample_manifest();
+
+    let mut changed = baseline.clone();
+    changed.result_streams[0].columns[0].data_type =
+        TypeDescriptor::optional(ScalarType::Text(TextType {
+            encoding: TextEncoding::Utf16,
+            max_length: Some(128),
+            collation: Some("fr_FR".to_string()),
+        }));
+
+    assert_ne!(baseline.manifest_hash(), changed.manifest_hash());
 }
 
 #[test]

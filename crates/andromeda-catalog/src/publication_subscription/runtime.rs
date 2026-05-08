@@ -9,6 +9,8 @@ use super::{
     CatalogSubscriberId, CatalogSubscriberKind, CatalogSubscriberRegistration,
     CatalogSubscriptionAcknowledgement, CatalogVisibleChangeAuditEvidence,
     catalog_publication_error, replay_publication_subscription_changes,
+    validate_subscription_acknowledgement_for_publication,
+    validate_visible_change_audit_for_publication,
 };
 use crate::CatalogDurabilityMarker;
 
@@ -58,7 +60,7 @@ impl CatalogSubscriberAckProgress {
         subscriber_kind: CatalogSubscriberKind,
         publication: &CatalogPublicationReport,
     ) -> AndromedaResult<Self> {
-        acknowledgement.validate_for_publication(publication)?;
+        validate_subscription_acknowledgement_for_publication(acknowledgement, publication)?;
         Ok(Self {
             subscriber_id: acknowledgement.subscriber_id.clone(),
             subscriber_kind,
@@ -224,7 +226,7 @@ impl CatalogPublicationSubscriberRegistry {
                     publication,
                     audit_evidence,
                 } => {
-                    audit_evidence.validate_for_publication(&publication)?;
+                    validate_visible_change_audit_for_publication(&audit_evidence, &publication)?;
                     let state = self.apply_publication(publication.clone())?;
                     self.records.push(
                         CatalogPublicationSubscriptionReplayRecord::VisiblePublication {
@@ -348,7 +350,7 @@ impl CatalogPublicationSubscriberRegistry {
             publication.receipt.database_id == acknowledgement.database_id
                 && publication.receipt.namespace_id == acknowledgement.namespace_id
         }) {
-            acknowledgement.validate_for_publication(publication)?;
+            validate_subscription_acknowledgement_for_publication(acknowledgement, publication)?;
         }
 
         catalog_publication_error(

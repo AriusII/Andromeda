@@ -5,7 +5,7 @@ use andromeda_error::AndromedaResult;
 use super::{
     CatalogPlanInvalidationReport, CatalogPublicationAudience, CatalogPublicationAuditTrace,
     CatalogPublishedObject, CatalogRecoveryReplayExpectation, catalog_publication_error,
-    validate_receipt,
+    validate_plan_invalidation_for_receipt, validate_receipt,
 };
 use crate::CatalogPublicationReceipt;
 
@@ -28,7 +28,7 @@ impl CatalogPublicationReport {
             );
         }
         validate_receipt(&self.receipt)?;
-        self.plan_invalidation.validate_for_receipt(&self.receipt)?;
+        validate_plan_invalidation_for_receipt(&self.plan_invalidation, &self.receipt)?;
         self.recovery_replay.validate_for_receipt(&self.receipt)?;
         self.audit_trace.validate()?;
 

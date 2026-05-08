@@ -173,19 +173,20 @@ FrameEnvelope::validate_rpc_stream_sequence_with_metadata_policy(
 "#]
 
 mod completion;
-mod envelope_frame;
-mod envelope_validation;
 mod errors;
 pub mod generated;
 mod generated_validation;
 mod manifest;
-mod payload;
 mod structured;
-mod version;
 
+pub use andromeda_proto_wire::{
+    AUTH_WIRE_CODE, CONTRACT_REQUEST_WIRE_CODE, CONTRACT_RESPONSE_WIRE_CODE, ERROR_WIRE_CODE,
+    FrameEnvelope, HELLO_WIRE_CODE, PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP, PayloadFrameFamily,
+    PayloadFrameMapping, PayloadKind, ProtocolVersion, RPC_BATCH_WIRE_CODE,
+    RPC_COMPLETION_WIRE_CODE, RPC_EXECUTE_REQUEST_WIRE_CODE, RPC_METADATA_WIRE_CODE,
+    RpcResultStreamMetadataPolicy,
+};
 pub use completion::*;
-pub use envelope_frame::FrameEnvelope;
-pub use envelope_validation::RpcResultStreamMetadataPolicy;
 pub use errors::*;
 pub use generated::{
     CONTRACT_PACKAGE, DESCRIPTOR_SET_HASH_ALGORITHM, PROTOCOL_FRAME_ENVELOPE_TYPE,
@@ -202,6 +203,4 @@ pub use generated_validation::{
     project_generated_structured_object_header, validate_generated_structured_object_header,
 };
 pub use manifest::*;
-pub use payload::*;
 pub use structured::*;
-pub use version::*;

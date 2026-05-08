@@ -3,6 +3,7 @@ use std::{
     sync::{Arc, RwLock, RwLockReadGuard},
 };
 
+use andromeda_catalog_store::CatalogManifestStoreBoundary;
 use andromeda_error::AndromedaResult;
 use andromeda_types::{CatalogVersion, ProcedureId};
 
@@ -16,18 +17,11 @@ use super::{
 };
 
 /// Store boundary consumed by `CatalogServerRuntime`.
-pub trait CatalogManifestStore: CatalogRuntimeStore {
-    fn current_catalog_version(&self) -> CatalogVersion;
+pub trait CatalogManifestStore: CatalogManifestStoreBoundary<CatalogManifestRecord> {}
 
-    fn resolve_manifest_by_id(
-        &self,
-        procedure_id: ProcedureId,
-    ) -> AndromedaResult<Option<CatalogManifestRecord>>;
-
-    fn resolve_manifest_by_name(
-        &self,
-        name: &QualifiedName,
-    ) -> AndromedaResult<Option<CatalogManifestRecord>>;
+impl<T> CatalogManifestStore for T where
+    T: CatalogManifestStoreBoundary<CatalogManifestRecord> + ?Sized
+{
 }
 
 /// Read adapter over the real catalog system store.
@@ -147,7 +141,7 @@ impl CatalogRuntimeStore for CatalogSnapshotManifestStore {
     }
 }
 
-impl CatalogManifestStore for CatalogSnapshotManifestStore {
+impl CatalogManifestStoreBoundary<CatalogManifestRecord> for CatalogSnapshotManifestStore {
     fn current_catalog_version(&self) -> CatalogVersion {
         let store = match self.store.read() {
             Ok(store) => store,

@@ -27,9 +27,9 @@ This ADR applies to:
 
 This ADR covers the current dirty local branch state on
 `codex/workspace-crate-restructure`. Existing Step 0 architecture ledgers still
-describe a 26-crate snapshot. The current root `Cargo.toml` and local
+describe an older pre-restructure snapshot. The current root `Cargo.toml` and local
 `cargo metadata --no-deps --format-version 1` output are ahead of those ledgers:
-the root manifest lists additional workspace crates, and metadata reports
+the root manifest currently declares 94 workspace crates, and metadata reports
 `andromeda-srpl-lexer` as a local workspace package through SRPL path
 dependencies. Treat those counts as dirty-branch evidence, not release
 readiness.

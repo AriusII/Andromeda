@@ -4,7 +4,7 @@
 
 This worker status cross-check filters the external Andromeda implementation roadmap against the current local branch progress in `C:/Users/Arius/RustroverProjects/Andromeda`.
 
-The external roadmap's initial 11-crate baseline is superseded by the current branch shape: the root `Cargo.toml` now declares a 26-crate Rust 2024 workspace. That branch shape is observable, but it is not validated. The worktree and index are dirty across many code and documentation paths, and this document must not be read as acceptance evidence for those changes.
+The external roadmap's initial 11-crate baseline is superseded by the current branch shape: the root `Cargo.toml` now declares a 94-crate Rust 2024 workspace. That branch shape is observable, but it is not validated. Many crates remain scaffolds, runtime-free vocabulary crates, or compatibility facades. The worktree and index are dirty across many code and documentation paths, and this document must not be read as acceptance evidence for those changes.
 
 ## Scope
 
@@ -34,7 +34,7 @@ Non-goals:
 | Item | Status | Evidence | Interpretation |
 |---|---|---|---|
 | Branch | Partial | `codex/workspace-crate-restructure` | The branch is dedicated to crate restructuring and integration work. |
-| Workspace size | Done as branch shape, unvalidated as accepted state | Root `Cargo.toml` lists 26 workspace members. | The 11-crate baseline in the older cross-check is obsolete for this branch. |
+| Workspace size | Done as branch shape, unvalidated as accepted state | Root `Cargo.toml` lists 94 workspace members. | The 11-crate baseline in the older cross-check is obsolete for this branch. |
 | Dirty worktree | Blocked | `git status --short --branch` reports many `M`, `MM`, `A`, `AD`, and deleted/added pairs. | Validation is blocked until the index and worktree are reconciled by owning workers. |
 | Staged changes | Blocked | `git diff --cached --name-status` reports many staged additions and modifications. | Some files have staged content that differs from the worktree. This worker must not unstage or rewrite them. |
 | Unstaged changes | Blocked | `git diff --name-status` reports many modifications and deletions. | Current local files are not a clean validation target. |
@@ -56,9 +56,11 @@ The older roadmap cross-check describes a workspace with these 11 crates:
 - `andromeda-storage`
 - `andromeda-tx`
 
-The current branch declares 26 workspace crates:
+The current branch declares 94 workspace crates.
 
-| Ring or role | Current crates |
+Representative grouping (non-exhaustive):
+
+| Ring or role | Current crates (examples) |
 |---|---|
 | Foundation and compatibility | `andromeda-core`, `andromeda-digest`, `andromeda-error`, `andromeda-hardware`, `andromeda-time`, `andromeda-types` |
 | Contracts, protocol, and language model | `andromeda-contract`, `andromeda-proto`, `andromeda-rpc-protocol`, `andromeda-security-contract`, `andromeda-srpl`, `andromeda-srpl-ast`, `andromeda-srpl-cardinality`, `andromeda-srpl-diagnostics`, `andromeda-srpl-ir`, `andromeda-srpl-parser`, `andromeda-structured-object` |
@@ -67,7 +69,7 @@ The current branch declares 26 workspace crates:
 | Observability, tools, and evidence | `andromeda-observe`, `andromeda-cli`, `andromeda-bench` |
 | Fuzz workspace member | `fuzz` |
 
-Status: the 26-crate shape supersedes the external 11-crate baseline for planning. It does not supersede validation gates. The branch still needs clean-index validation before any worker can state that the 26-crate restructure is accepted.
+Status: the 94-crate shape supersedes the external 11-crate baseline for planning. It does not supersede validation gates. Multiple crates remain scaffold-only, behavior-free, or facade-level. The branch still needs clean-index validation before any worker can state that the 94-crate restructure is accepted.
 
 ## Step 12 Documentation Trace
 
@@ -111,7 +113,7 @@ as governance evidence. Do not create duplicate product copies of those ADRs in
 
 | Roadmap area | Status | Current evidence | Required correction before acceptance |
 |---|---|---|---|
-| Workspace split from 11 to 26 crates | Partial | Root `Cargo.toml` lists the expanded workspace; ADR-0011 describes foundation, contract, SRPL, protocol, security, and WAL owner boundaries. | Reconcile staged and unstaged changes, then run topology and workspace gates. |
+| Workspace split from 11 to 94 crates | Partial | Root `Cargo.toml` lists the expanded workspace; ADR-0011 describes foundation, contract, SRPL, protocol, security, and WAL owner boundaries. | Reconcile staged and unstaged changes, then run topology and workspace gates. |
 | R0 foundation extraction | Partial | `andromeda-digest`, `andromeda-error`, `andromeda-types`, `andromeda-time`, and `andromeda-hardware` exist; `andromeda-core` remains a compatibility facade. | Prove `andromeda-core` stays thin and that R0 crates do not gain engine, runtime, benchmark, analytics, SQL, JSON, GPU execution, or native-layout persistence dependencies. |
 | Contract and StructuredObject ownership | Partial | `andromeda-contract` and `andromeda-structured-object` exist; ADR-0011 records facade reexports through catalog/proto. | Run contract owner tests, facade compatibility tests, and dependency allowlist tests from a clean worktree. |
 | Security vocabulary split | Partial | `andromeda-security-contract` exists and ADR-0011 defines it as runtime-free vocabulary, not IAM runtime. | Prove no durable IAM store, revocation store, policy store, audit ledger, QUIC/TLS runtime, async runtime, SQL, JSON, GPU, or storage dependency entered the crate. |
@@ -132,7 +134,7 @@ as governance evidence. Do not create duplicate product copies of those ADRs in
 
 The following work should not be accepted or promoted until owning workers reconcile the index and worktree:
 
-- Any claim that the 26-crate workspace compiles.
+- Any claim that the 94-crate workspace compiles.
 - Any claim that topology guards pass for the new crate rings.
 - Any claim that WAL owner extraction is complete.
 - Any claim that storage recovery integration is complete.
@@ -162,7 +164,7 @@ Exit criteria:
 
 ### Wave 1 - Topology And Foundation Guard
 
-Purpose: prove that the 26-crate shape respects the dependency rings.
+Purpose: prove that the 94-crate shape respects the dependency rings.
 
 Recommended focus:
 
@@ -269,6 +271,10 @@ cargo nextest run --workspace --all-features
 cargo test --doc --workspace
 ```
 
+`cargo check --workspace --all-targets --all-features` is a build-continuity
+signal only. It is not release approval and it is not C5 crash/recovery
+approval.
+
 ### Topology And Doctrine Gates
 
 ```powershell
@@ -296,6 +302,22 @@ python fuzz/generators/generate_seed_corpus.py --check
 cargo check --manifest-path fuzz/Cargo.toml --bin wal_record_roundtrip --locked
 ```
 
+Current observed posture for this status packet is fuzz preflight only.
+Sustained fuzzing was not executed.
+
+## Remaining Required Gates (Not Executed Here)
+
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo nextest run --workspace --all-features`
+- `cargo test --doc --workspace`
+- `cargo audit`
+- `cargo deny check`
+- Sustained fuzz campaigns with retained artifacts
+- Targeted Miri evidence
+- Targeted Loom evidence
+- Combined C5 crash/recovery matrix (WAL, storage, tx, execution, backup/restore, HA/DR)
+- Release gate chain with retained evidence artifacts
+
 ### P0 Vertical Recovery Gates
 
 Use the exact owning-crate tests once the owning workers finalize names. The minimum required coverage is:
@@ -312,7 +334,7 @@ Use the exact owning-crate tests once the owning workers finalize names. The min
 | Risk | Severity | Mitigation |
 |---|---|---|
 | Dirty index hides the actual candidate state. | High | Reconcile staged and unstaged changes by owner before validation. Do not accept broad claims while `MM` or `AD` entries remain. |
-| The 26-crate shape is mistaken for validated architecture. | High | Treat workspace members as branch intent until topology, compile, tests, and doctrine gates pass. |
+| The 94-crate shape is mistaken for validated architecture. | High | Treat workspace members as branch intent until topology, compile, tests, and doctrine gates pass. |
 | `andromeda-core` regains hidden ownership through facade growth. | High | Keep facade tests active and migrate callers to precise foundation crates. |
 | WAL owner evidence and storage recovery integration evidence get conflated. | High | Validate `andromeda-wal` owner tests separately from `andromeda-storage` compatibility and recovery tests. |
 | Security vocabulary is overstated as IAM runtime. | Medium | Keep `andromeda-security-contract` documented and tested as runtime-free vocabulary only. |

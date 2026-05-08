@@ -19,7 +19,8 @@ pub use admission::{
     BoundedPlanCache, PlanCacheEntry, PlanCacheError, PlanCacheInsertReport, PlanCacheLookupReport,
 };
 pub use advisory_evidence::{
-    AdvisoryEvidenceStatus, AdvisoryEvidenceSummary, AdvisoryEvidenceSummaryBuilder,
+    AdvisoryEvidenceIdentity, AdvisoryEvidenceStatus, AdvisoryEvidenceSummary,
+    AdvisoryEvidenceSummaryBuilder, classify_advisory_identity_for_key,
 };
 pub use decision::{PlanCacheMissReason, PlanDecisionEvidence, PlanDecisionOutcome};
 pub use error::{PlanCacheKeyError, PlanCachePolicyError};

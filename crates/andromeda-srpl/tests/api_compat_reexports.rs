@@ -40,6 +40,7 @@ fn srpl_facade_preserves_historical_public_imports() {
     assert_type::<SourceSpan>();
     assert_type::<SrplDiagnostic>();
     assert_type::<SrplSource<'static>>();
+    assert_type::<source_location::SrplSource<'static>>();
 
     assert_type::<SrplDefinitionBatchDiagnostic>();
     assert_type::<SrplDefinitionBatchDryRunReport>();
@@ -88,8 +89,15 @@ fn srpl_facade_reexports_owner_crate_types_without_wrapping() {
 
     let owner_source = andromeda_srpl_diagnostics::SrplSource::new("select *");
     let facade_source: SrplSource<'_> = owner_source;
+    let facade_module_source: source_location::SrplSource<'_> =
+        andromeda_srpl_diagnostics::SrplSource::new("select *");
     assert!(
         facade_source
+            .forbidden_constructs()
+            .contains(&ForbiddenConstruct::SelectStar)
+    );
+    assert!(
+        facade_module_source
             .forbidden_constructs()
             .contains(&ForbiddenConstruct::SelectStar)
     );

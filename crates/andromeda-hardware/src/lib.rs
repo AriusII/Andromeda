@@ -13,6 +13,16 @@ mod integration;
 mod pipeline;
 mod ram;
 
+/// Explicit policy namespace for consumers that prefer importing bounded
+/// hardware policy contracts via `andromeda_hardware::policy::*`.
+pub mod policy {
+    pub use crate::{
+        CpuCapabilityClass, CpuProfile, GpuExecutionPolicy, GpuProfile, HardwareArchitecture,
+        HardwareProfile, PipelineClass, RamProfile, RamSectionBudget, RamSectionRole,
+        ResourceBudget,
+    };
+}
+
 pub use cpu::{CpuCapabilityClass, CpuProfile, HardwareArchitecture};
 pub use gpu::{GpuExecutionPolicy, GpuProfile};
 pub use integration::{HardwareProfile, ResourceBudget};

@@ -5,8 +5,8 @@ use andromeda_time::EngineTimestamp;
 use andromeda_types::{InvocationId, ProcedureId};
 
 use crate::{
-    InMemoryProcedureFeedbackStore, ProcedureContractBinding, ProcedureFeedback,
-    ProcedureFeedbackStore, QualifiedName, RecordOutcome,
+    InMemoryProcedureFeedbackStore, ProcedureFeedback, ProcedureFeedbackStore, QualifiedName,
+    RecordOutcome,
 };
 
 use super::{
@@ -135,7 +135,7 @@ impl ProcedureStore {
             )
         })?;
 
-        validate_decision_binding(entry, record.binding())?;
+        entry.validate_decision_binding(record.binding())?;
 
         self.decisions
             .entry(record.procedure_id())
@@ -197,7 +197,7 @@ impl ProcedureStore {
             )
         })?;
 
-        validate_runtime_binding(entry, record.binding())?;
+        entry.validate_runtime_binding(record.binding())?;
 
         if let Some(existing_procedure_id) = self.runtime_by_invocation.get(&record.invocation_id) {
             let existing = self
@@ -291,12 +291,7 @@ impl ProcedureStore {
             )
         })?;
 
-        if entry.binding.stats_version != feedback.stats_version() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
-                "procedure store feedback stats version does not match registered binding",
-            ));
-        }
+        entry.validate_feedback_stats_version(feedback.stats_version())?;
 
         let bucket = self
             .feedback
@@ -337,78 +332,4 @@ impl ProcedureStore {
     pub fn total_procedure_feedback(&self) -> usize {
         self.feedback.values().map(|bucket| bucket.len()).sum()
     }
-}
-
-fn validate_runtime_binding(
-    entry: &ProcedureStoreEntry,
-    binding: ProcedureContractBinding,
-) -> AndromedaResult<()> {
-    if entry.binding.procedure_id != binding.procedure_id {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Contract,
-            "procedure store runtime evidence procedure id does not match registered binding",
-        ));
-    }
-    if entry.binding.contract_hash != binding.contract_hash {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Contract,
-            "procedure store runtime evidence contract hash does not match registered binding",
-        ));
-    }
-    if entry.binding.catalog_version != binding.catalog_version {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Contract,
-            "procedure store runtime evidence catalog version does not match registered binding",
-        ));
-    }
-    if entry.binding.stats_version != binding.stats_version {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Contract,
-            "procedure store runtime evidence stats version does not match registered binding",
-        ));
-    }
-    if entry.binding.policy_version != binding.policy_version {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Contract,
-            "procedure store runtime evidence policy version does not match registered binding",
-        ));
-    }
-    Ok(())
-}
-
-fn validate_decision_binding(
-    entry: &ProcedureStoreEntry,
-    binding: ProcedureContractBinding,
-) -> AndromedaResult<()> {
-    if entry.binding.procedure_id != binding.procedure_id {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Contract,
-            "procedure store decision evidence procedure id does not match registered binding",
-        ));
-    }
-    if entry.binding.contract_hash != binding.contract_hash {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Contract,
-            "procedure store decision evidence contract hash does not match registered binding",
-        ));
-    }
-    if entry.binding.catalog_version != binding.catalog_version {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Contract,
-            "procedure store decision evidence catalog version does not match registered binding",
-        ));
-    }
-    if entry.binding.stats_version != binding.stats_version {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Contract,
-            "procedure store decision evidence stats version does not match registered binding",
-        ));
-    }
-    if entry.binding.policy_version != binding.policy_version {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Contract,
-            "procedure store decision evidence policy version does not match registered binding",
-        ));
-    }
-    Ok(())
 }

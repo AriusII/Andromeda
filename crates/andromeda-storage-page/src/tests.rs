@@ -1,4 +1,4 @@
-use andromeda_core::AndromedaErrorKind;
+use andromeda_error::AndromedaErrorKind;
 
 use crate::Lsn;
 

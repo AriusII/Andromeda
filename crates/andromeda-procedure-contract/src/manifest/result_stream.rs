@@ -6,6 +6,7 @@ pub use andromeda_structured_object::RowCountRequirement;
 use andromeda_types::ColumnDescriptor;
 
 use super::procedure_manifest::write_tagged;
+use crate::type_encoding::canonical_type_descriptor_bytes;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResultStreamDescriptor {
@@ -162,12 +163,8 @@ impl ResultStreamDescriptor {
             write_tagged(hasher, b"column.name", column.name.as_bytes());
             hasher.update(b"column.ordinal:");
             hasher.update(&column.ordinal.to_be_bytes());
-            // Debug formatting on TypeDescriptor is exhaustive over the enum
-            // variants and stable for our purposes; any change to the
-            // descriptor shape is a deliberate wire break and is allowed to
-            // change the manifest digest.
-            let formatted = format!("{:?}", column.data_type);
-            write_tagged(hasher, b"column.type", formatted.as_bytes());
+            let type_bytes = canonical_type_descriptor_bytes(&column.data_type);
+            write_tagged(hasher, b"column.type", &type_bytes);
         }
         hasher.update(b"stream.cardinality:");
         hasher.update(&[self.cardinality as u8]);

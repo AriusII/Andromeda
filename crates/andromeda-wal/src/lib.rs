@@ -28,12 +28,15 @@ pub use wal_codec::{
 };
 pub use wal_segment::{WalSegment, WalSegmentDescriptor};
 pub use write_ahead_log::{
-    CommitLog, CommitLogEntry, CommitLogFacade, DurabilityFenceError,
-    DurableTransactionClassifications, DurableTransactionResume, DurableTransactionState,
-    InMemoryWal, IncompleteDurableTransaction, MemoryWal, Timestamp, WAL_BATCH_ROW_LIMIT,
-    WAL_RECORD_HEADER_OVERHEAD, WAL_RECORD_SIZE_LIMIT, WAL_SEGMENT_BOUNDARY, WalRecord,
-    WalRecordHeader, WalRecordKind, classify_durable_transactions,
-    incomplete_transactions_from_records, summarize_transaction,
+    ArchiveStatus, CommitLog, CommitLogEntry, CommitLogFacade, DefaultReclaimabilityPolicy,
+    DurabilityFenceError, DurableTransactionClassifications, DurableTransactionResume,
+    DurableTransactionState, EligibilityResult, GcEligibilityChecker, InMemoryWal,
+    IncompleteDurableTransaction, MemoryWal, ReclaimabilityDecision, ReclaimabilityEvidence,
+    RetentionBoundaryPolicy, Timestamp, WAL_BATCH_ROW_LIMIT, WAL_RECORD_HEADER_OVERHEAD,
+    WAL_RECORD_SIZE_LIMIT, WAL_SEGMENT_BOUNDARY, WalGarbageCollector, WalGcAuditEvent,
+    WalGcCandidate, WalGcContext, WalGcScheduler, WalGcSchedulerConfig, WalGcSummary, WalRecord,
+    WalRecordHeader, WalRecordKind, WalReplicaSafeLsnBoundaryProvider, WalSegmentReclaimability,
+    classify_durable_transactions, incomplete_transactions_from_records, summarize_transaction,
     summarize_transactions_from_records, validate_lsn_continuity, validate_lsn_ordered,
     validate_lsn_strictly_ordered, validate_manifest_atomic_switch, validate_record_size,
     validate_recovery_floor, validate_segment_boundary, validate_transaction_batch_cardinality,

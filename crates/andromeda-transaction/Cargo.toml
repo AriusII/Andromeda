@@ -6,3 +6,10 @@ rust-version = "1.95.0"
 publish = false
 
 [dependencies]
+andromeda-core.workspace = true
+andromeda-observe.workspace = true
+andromeda-transaction-log.workspace = true
+async-trait = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }

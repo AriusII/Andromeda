@@ -3,8 +3,8 @@
 //! Verifies correctness of WAL durability tracking, encoding/decoding, and lifecycle.
 
 use andromeda_core::TransactionId;
-use andromeda_storage::Lsn;
-use andromeda_storage::write_ahead_log::{CommitLog, CommitLogEntry, CommitLogFacade};
+use andromeda_wal::Lsn;
+use andromeda_wal::write_ahead_log::{CommitLog, CommitLogEntry, CommitLogFacade};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 struct TransactionIdGenerator;

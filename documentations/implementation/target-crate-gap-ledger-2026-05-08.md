@@ -14,7 +14,7 @@ runtime behavior.
 
 This document covers:
 
-- Current 32-crate workspace reality before any additional target-crate
+- Current 94-crate workspace reality before any additional target-crate
   scaffolds are created.
 - Target-named scaffold crates that exist locally but are not accepted as final
   canonical owners.
@@ -54,46 +54,10 @@ Before acting on any ledger row:
 
 ## Current Workspace
 
-The current root workspace declares 32 crates under `crates/`. Treat this as
-the branch shape before any additional target-crate scaffold packet:
+The current root workspace declares 94 crates under `crates/`. Treat this as
+the branch shape before any additional target-crate scaffold packet.
 
-```text
-andromeda-bench
-andromeda-catalog
-andromeda-cli
-andromeda-codec
-andromeda-contract
-andromeda-core
-andromeda-digest
-andromeda-error
-andromeda-exec
-andromeda-hardware
-andromeda-maps
-andromeda-observe
-andromeda-policy
-andromeda-procedure-store
-andromeda-proto
-andromeda-quic
-andromeda-resource
-andromeda-rpc-protocol
-andromeda-security-contract
-andromeda-srpl
-andromeda-srpl-ast
-andromeda-srpl-cardinality
-andromeda-srpl-diagnostics
-andromeda-srpl-ir
-andromeda-srpl-lexer
-andromeda-srpl-parser
-andromeda-storage
-andromeda-structured-object
-andromeda-time
-andromeda-tx
-andromeda-types
-andromeda-wal
-```
-
-The current branch includes 30 exact target names from the external roadmap.
-Six of those exact-name crates are local scaffolds or narrow extractions that
+Several declared crates are still local scaffolds or narrow extractions and
 must not be treated as accepted phase ownership:
 
 | Current target-named crate | Current posture | Acceptance caution |
@@ -117,10 +81,9 @@ the external extraction:
 
 | Category | Count | Interpretation |
 |---|---:|---|
-| Current workspace crates | 32 | Observed branch shape before additional scaffold packets, not acceptance evidence. |
-| External target names present exactly | 30 | Represented by exact crate names under `crates/`, including provisional scaffolds. |
-| Current-only branch names | 2 | `andromeda-rpc-protocol` and `andromeda-security-contract` are current partial splits. |
-| External target names missing exactly | 60 | Missing target names require owner review before creation, rename, or deferral. |
+| Current workspace crates | 94 | Observed branch shape before additional scaffold packets, not acceptance evidence. |
+| External target-name coverage | Recompute required | Recompute exact present/missing counts from current `Cargo.toml` before any rename or extraction packet. |
+| Current-only branch names | Recompute required | Maintain branch-specific partial splits, including runtime-free protocol and security-contract surfaces. |
 
 ## Procedure
 
@@ -259,7 +222,7 @@ owner-scoped packets:
 This ledger was validated by targeted repository inspection:
 
 - Root `Cargo.toml` and `crates/` were inspected to confirm the current
-  32-crate branch reality before any additional scaffold packet.
+  94-crate branch reality before any additional scaffold packet.
 - The external roadmap referenced by
   `documentations/architecture/WORKSPACE_RESTRUCTURE_BASELINE_2026.md` was
   inspected for target crate names and roadmap steps.
@@ -277,6 +240,26 @@ This ledger was validated by targeted repository inspection:
 
 No Rust build, Cargo test, clippy, audit, deny, or Codex tooling validation was
 run because this task changes only standalone implementation documentation.
+
+`cargo check --workspace --all-targets --all-features` remains a continuity
+signal only when observed in this wave. It is not release approval and not C5
+crash/recovery approval.
+
+Fuzz posture for this documentation pass is preflight-only; sustained fuzzing
+is still pending.
+
+Remaining required gates:
+
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo nextest run --workspace --all-features`
+- `cargo test --doc --workspace`
+- `cargo audit`
+- `cargo deny check`
+- Sustained fuzz campaigns with retained artifacts
+- Targeted Miri evidence
+- Targeted Loom evidence
+- Combined C5 crash/recovery matrix evidence
+- Release gate chain evidence package
 
 ## Troubleshooting
 

@@ -8,4 +8,5 @@ fingerprints.
 
 mod digest;
 
+#[doc(inline)]
 pub use digest::{Sha256, sha256};

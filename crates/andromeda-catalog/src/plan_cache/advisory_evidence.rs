@@ -1,43 +1,13 @@
 use andromeda_plan_cache::{
-    AdvisoryEvidenceStatus, AdvisoryEvidenceSummary, AdvisoryEvidenceSummaryBuilder, PlanCacheKey,
-    PlanSelectionError,
+    AdvisoryEvidenceIdentity, AdvisoryEvidenceStatus, AdvisoryEvidenceSummary,
+    AdvisoryEvidenceSummaryBuilder, PlanCacheKey, PlanSelectionError,
+    classify_advisory_identity_for_key,
 };
 use andromeda_time::EngineTimestamp;
 
 use crate::scenario_evidence::{
     ScenarioEvidence, ScenarioEvidenceAdvisoryUse, ScenarioEvidenceError,
 };
-
-fn classify_validated_advisory_evidence_for_key(
-    key: &PlanCacheKey,
-    evidence: &ScenarioEvidenceAdvisoryUse,
-) -> AdvisoryEvidenceStatus {
-    if evidence.is_authoritative() || evidence.can_select_plan_alone() {
-        return AdvisoryEvidenceStatus::AuthoritativeRejected;
-    }
-
-    let target = evidence.target();
-    if target.procedure_id != key.procedure_id {
-        return AdvisoryEvidenceStatus::ProcedureIdMismatch;
-    }
-    if target.catalog_version != key.catalog_version {
-        return AdvisoryEvidenceStatus::CatalogVersionMismatch;
-    }
-    if target.stats_version != key.stats_version {
-        return AdvisoryEvidenceStatus::StatsVersionMismatch;
-    }
-    match target.contract_hash {
-        Some(hash) if hash == key.contract_hash => {}
-        Some(_) => return AdvisoryEvidenceStatus::ContractHashMismatch,
-        None => return AdvisoryEvidenceStatus::ContractHashMissing,
-    }
-    match target.plan_class {
-        Some(plan_class) if plan_class == key.plan_class => {}
-        Some(_) => return AdvisoryEvidenceStatus::PlanClassMismatch,
-        None => return AdvisoryEvidenceStatus::PlanClassMissing,
-    }
-    AdvisoryEvidenceStatus::AcceptedAdvisory
-}
 
 fn classify_advisory_evidence_for_key_with_token(
     key: &PlanCacheKey,
@@ -55,7 +25,19 @@ fn classify_advisory_evidence_for_key_with_token(
         Err(ScenarioEvidenceError::Expired) => return (AdvisoryEvidenceStatus::Expired, None),
         Err(_) => return (AdvisoryEvidenceStatus::AuthoritativeRejected, None),
     };
-    let status = classify_validated_advisory_evidence_for_key(key, &advisory);
+    let target = advisory.target();
+    let status = classify_advisory_identity_for_key(
+        key,
+        AdvisoryEvidenceIdentity {
+            procedure_id: target.procedure_id,
+            catalog_version: target.catalog_version,
+            stats_version: target.stats_version,
+            contract_hash: target.contract_hash,
+            plan_class: target.plan_class,
+        },
+        advisory.is_authoritative(),
+        advisory.can_select_plan_alone(),
+    );
     let advisory = match status {
         AdvisoryEvidenceStatus::AcceptedAdvisory => Some(advisory),
         _ => None,

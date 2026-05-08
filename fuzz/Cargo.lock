@@ -12,16 +12,60 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-audit"
+version = "0.1.0"
+dependencies = [
+ "andromeda-core",
+ "andromeda-error",
+ "andromeda-observability",
+ "andromeda-security-contract",
+]
+
+[[package]]
+name = "andromeda-bench-workload"
+version = "0.1.0"
+dependencies = [
+ "andromeda-hardware",
+]
+
+[[package]]
+name = "andromeda-buffer-pool"
+version = "0.1.0"
+dependencies = [
+ "andromeda-wal",
+]
+
+[[package]]
 name = "andromeda-catalog"
 version = "0.1.0"
 dependencies = [
+ "andromeda-catalog-recovery",
+ "andromeda-catalog-store",
  "andromeda-contract",
+ "andromeda-decision-trace",
+ "andromeda-definition-batch",
  "andromeda-digest",
  "andromeda-error",
  "andromeda-observe",
+ "andromeda-plan-cache",
+ "andromeda-procedure-contract",
+ "andromeda-procedure-store",
  "andromeda-proto",
+ "andromeda-scenario-evidence",
+ "andromeda-statistics",
  "andromeda-time",
  "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-catalog-recovery"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-catalog-store"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
 ]
 
 [[package]]
@@ -30,6 +74,8 @@ version = "0.1.0"
 dependencies = [
  "andromeda-digest",
  "andromeda-error",
+ "andromeda-procedure-contract",
+ "andromeda-structured-object",
  "andromeda-types",
 ]
 
@@ -44,6 +90,18 @@ dependencies = [
  "andromeda-time",
  "andromeda-types",
 ]
+
+[[package]]
+name = "andromeda-decision-trace"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-definition-batch"
+version = "0.1.0"
 
 [[package]]
 name = "andromeda-digest"
@@ -79,15 +137,57 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-manifest"
+version = "0.1.0"
+dependencies = [
+ "andromeda-core",
+ "andromeda-wal",
+]
+
+[[package]]
+name = "andromeda-observability"
+version = "0.1.0"
+dependencies = [
+ "andromeda-types",
+]
+
+[[package]]
 name = "andromeda-observe"
 version = "0.1.0"
 dependencies = [
+ "andromeda-audit",
  "andromeda-core",
  "andromeda-digest",
  "andromeda-error",
  "andromeda-hardware",
+ "andromeda-observability",
  "andromeda-types",
 ]
+
+[[package]]
+name = "andromeda-plan-cache"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+ "andromeda-decision-trace",
+ "andromeda-digest",
+ "andromeda-observe",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-procedure-contract"
+version = "0.1.0"
+dependencies = [
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-structured-object",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-procedure-store"
+version = "0.1.0"
 
 [[package]]
 name = "andromeda-proto"
@@ -95,6 +195,8 @@ version = "0.1.0"
 dependencies = [
  "andromeda-digest",
  "andromeda-error",
+ "andromeda-procedure-contract",
+ "andromeda-proto-wire",
  "andromeda-structured-object",
  "andromeda-types",
  "prost",
@@ -103,14 +205,46 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-proto-wire"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+ "andromeda-types",
+ "prost",
+]
+
+[[package]]
 name = "andromeda-quic"
 version = "0.1.0"
 dependencies = [
  "andromeda-core",
- "andromeda-observe",
  "andromeda-proto",
+ "andromeda-rpc",
+ "andromeda-rpc-codec",
  "andromeda-rpc-protocol",
  "andromeda-security-contract",
+]
+
+[[package]]
+name = "andromeda-recovery"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-rpc"
+version = "0.1.0"
+dependencies = [
+ "andromeda-core",
+ "andromeda-rpc-codec",
+ "andromeda-rpc-protocol",
+]
+
+[[package]]
+name = "andromeda-rpc-codec"
+version = "0.1.0"
+dependencies = [
+ "andromeda-core",
+ "andromeda-proto-wire",
+ "andromeda-rpc-protocol",
 ]
 
 [[package]]
@@ -121,8 +255,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-scenario-evidence"
+version = "0.1.0"
+dependencies = [
+ "andromeda-bench-workload",
+ "andromeda-digest",
+ "andromeda-plan-cache",
+ "andromeda-procedure-contract",
+ "andromeda-time",
+ "andromeda-types",
+]
+
+[[package]]
 name = "andromeda-security-contract"
 version = "0.1.0"
+
+[[package]]
+name = "andromeda-segment"
+version = "0.1.0"
+dependencies = [
+ "andromeda-core",
+ "andromeda-wal",
+]
 
 [[package]]
 name = "andromeda-srpl"
@@ -132,10 +286,14 @@ dependencies = [
  "andromeda-digest",
  "andromeda-error",
  "andromeda-srpl-ast",
+ "andromeda-srpl-binder",
  "andromeda-srpl-cardinality",
  "andromeda-srpl-diagnostics",
+ "andromeda-srpl-execution-adapter",
+ "andromeda-srpl-interpreter",
  "andromeda-srpl-ir",
  "andromeda-srpl-lexer",
+ "andromeda-srpl-lowering",
  "andromeda-srpl-parser",
  "andromeda-types",
 ]
@@ -151,6 +309,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-srpl-binder"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+ "andromeda-srpl-ast",
+ "andromeda-srpl-ir",
+ "andromeda-types",
+]
+
+[[package]]
 name = "andromeda-srpl-cardinality"
 version = "0.1.0"
 dependencies = [
@@ -162,6 +330,25 @@ name = "andromeda-srpl-diagnostics"
 version = "0.1.0"
 dependencies = [
  "andromeda-error",
+]
+
+[[package]]
+name = "andromeda-srpl-execution-adapter"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+ "andromeda-error",
+ "andromeda-srpl-ir",
+]
+
+[[package]]
+name = "andromeda-srpl-interpreter"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+ "andromeda-error",
+ "andromeda-srpl-execution-adapter",
+ "andromeda-srpl-ir",
 ]
 
 [[package]]
@@ -182,6 +369,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-srpl-lowering"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+ "andromeda-srpl-ast",
+ "andromeda-srpl-ir",
+]
+
+[[package]]
 name = "andromeda-srpl-parser"
 version = "0.1.0"
 dependencies = [
@@ -194,14 +390,48 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-statistics"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+ "andromeda-decision-trace",
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-types",
+]
+
+[[package]]
 name = "andromeda-storage"
 version = "0.1.0"
 dependencies = [
+ "andromeda-buffer-pool",
  "andromeda-core",
+ "andromeda-manifest",
  "andromeda-observe",
+ "andromeda-recovery",
+ "andromeda-segment",
+ "andromeda-storage-heap",
+ "andromeda-storage-index",
+ "andromeda-storage-page",
  "andromeda-wal",
  "dashmap",
  "sha2",
+]
+
+[[package]]
+name = "andromeda-storage-heap"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-storage-index"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-storage-page"
+version = "0.1.0"
+dependencies = [
+ "andromeda-core",
+ "andromeda-wal",
 ]
 
 [[package]]
@@ -229,6 +459,15 @@ dependencies = [
 
 [[package]]
 name = "andromeda-wal"
+version = "0.1.0"
+dependencies = [
+ "andromeda-core",
+ "andromeda-wal-codec",
+ "dashmap",
+]
+
+[[package]]
+name = "andromeda-wal-codec"
 version = "0.1.0"
 dependencies = [
  "andromeda-core",

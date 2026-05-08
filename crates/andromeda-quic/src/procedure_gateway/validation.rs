@@ -2,8 +2,8 @@ use andromeda_core::{
     AndromedaResult, CatalogVersion, ContractHash, Permission, SurfaceScope as CoreSurfaceScope,
 };
 use andromeda_proto::{
-    decode_generated_message, generated, project_generated_frame_envelope, validate_generated_rpc_execute_request,
-    FrameEnvelope as ProtoFrameEnvelope, PayloadKind,
+    FrameEnvelope as ProtoFrameEnvelope, PayloadKind, decode_generated_message, generated,
+    project_generated_frame_envelope, validate_generated_rpc_execute_request,
 };
 use andromeda_security_contract::{FAMILY_ID_APPLICATION, PERMISSION_ID_EXECUTE_PROCEDURE};
 
@@ -66,8 +66,7 @@ pub(super) fn required_execute_permission(
 }
 
 fn decode_rpc_execute_envelope(frame: &FrameBytes) -> AndromedaResult<ProtoFrameEnvelope> {
-    let generated_envelope: GeneratedFrameEnvelope =
-        decode_generated_message(&frame.payload)?;
+    let generated_envelope: GeneratedFrameEnvelope = decode_generated_message(&frame.payload)?;
     let envelope = project_generated_frame_envelope(&generated_envelope)?;
 
     if envelope.payload_kind != PayloadKind::RpcExecuteRequest {

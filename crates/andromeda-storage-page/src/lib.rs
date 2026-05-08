@@ -16,6 +16,7 @@ C5 invariants:
 - RAM, temporary storage, GPU output, and benchmark output are advisory only; they are not truth.
 "#]
 
+mod btree_node_format_v1;
 mod error;
 mod identity;
 mod image;
@@ -26,6 +27,10 @@ mod store;
 mod tests;
 
 pub use andromeda_wal::Lsn;
+pub use btree_node_format_v1::{
+    BTREE_NODE_V1_FORMAT_VERSION, BTREE_NODE_V1_HEADER_LEN, BTREE_NODE_V1_MAGIC, BTreeNodeHeaderV1,
+    BTreeNodeKindV1, BTreeNodeV1,
+};
 pub use identity::{AllocationId, ObjectId, PageId};
 pub use image::PageImage;
 pub use layout::{PageFlags, PageHeader, PageLayoutContract, PageSize, PageTrailer, PageType};

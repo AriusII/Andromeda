@@ -1,13 +1,15 @@
 # Andromeda Worker Execution Matrix
 
-**Date:** 2026-05-07  
-**Scope:** Worker ownership, integration order, and validation status for the completed 20-worker phase plus the current consolidation work.
+**Date:** 2026-05-08
+**Scope:** Worker ownership, integration order, and validation status for the consolidated workspace state.
 
 ## Operating Rules
 
 - Workers keep changes scoped to their assigned ownership area.
 - Workers do not revert user changes or changes made by another worker.
 - Documentation workers do not touch code.
+- Read-only documentation workers are closed for this wave snapshot.
+- The root workspace declares 94 crates; several remain scaffolds, runtime-free vocabularies, or compatibility facades.
 - Every code change identifies focused tests and expected workspace gates.
 - Doctrine remains active: no gRPC, no ad hoc SQL application surface, no runtime JSON default, no unsafe drift, and no GPU on commit, WAL, rollback, recovery, MVCC visibility, or security-critical paths.
 - Lot 5 RPC work keeps `andromeda-rpc-protocol` runtime-free and keeps concrete QUIC runtime behavior in `andromeda-quic`.
@@ -45,13 +47,13 @@
 
 | Lot | Role focus | Write scope | Required skills | Output evidence |
 |---|---|---|---|---|
-| A | Build and API consolidation | Narrow code fixes needed to keep workspace compile green | Rust core review, test matrix generation | Workspace format, check, build, test, and clippy gates pass after consolidation. |
+| A | Build and API consolidation | Narrow code fixes needed to keep workspace compile green | Rust core review, test matrix generation | Build continuity is observed; full gate chain remains required. |
 | B | Durable vertical integration | Execution/storage tests and ProductStock wiring | Procedure contract design, WAL record design, recovery replay proof | `vertical-v0` uses durable ProductStock state and crash replay proves reconstruction. |
 | C | Catalog and planning evidence integration | Catalog, Procedure Store, statistics, PlanCache wiring | Catalog object modeling, statistics histogram design, optimizer PlanClass design | Runtime records include contract, catalog, statistics, policy, plan, and row evidence. |
 | D | Transaction and HA/DR consolidation | `crates/andromeda-tx/**`, `crates/andromeda-storage/src/hadr/**`, `crates/andromeda-storage/src/restore_orchestration.rs`, and related HADR/restore tests only | Transaction WAL recovery review, transaction state machine, HA/DR quorum review, backup PITR runbook, HA/DR backup forensic runbook | Commit and rollback terminal records require durable LSN evidence; promotion and restore gates validate quorum, fencing, and WAL coverage. |
 | E | QUIC, IAM, audit, and recovery integration edges | QUIC route binding, principal checks, audit emission, catalog/heap replay evidence | QUIC frame design, security mTLS/IAM review, audit trace specification, recovery replay proof | Wrong surface or denied identity fails before transaction creation, records audit evidence, and preserves recovery explainability. |
 | WR-5.DOC | Lot 5 docs and ADR acceptance alignment | `docs/adr/ADR-0012-quic-rpc-no-grpc.md`, `documentations/specs/FrameHeader_RPC_v0.md`, `documentations/specs/SecurityAdmission_v0.md`, `documentations/specs/AuditLedger_v0.md`, `documentations/governance/decisions/index.md`, `documentations/ROADMAP_IMPLEMENTATION_2026.md`, `documentations/WORKER_EXECUTION_MATRIX_2026.md`; optional concise normative links in `documentations/04_QUIC_RPC_SECURITY_HADR_OPERATIONS.md` only | Docs source grounding, Microsoft doc style edit, project invariant check | DEC-040/041 index, Lot 5 acceptance, `FrameHeader RPC v0`, `SecurityAdmission v0`, `AuditLedger v0`, RPC/QUIC/security-contract vocabulary, no gRPC/runtime JSON default, and audit CLI wording are aligned without touching Rust code or claiming implemented Admin RPC query. |
-| G/L | Doctrine and release scan | Doctrine scanners, focused policy gates, compile gate, and release gate reporting | Project invariant check, no gRPC enforcement, no SQL surface scan, no JSON runtime policy | Doctrine scans, Protobuf doctrine scanner, no-gRPC scanner, Codex tooling validation, and focused policy gate pass without false-positive release blockers. |
+| G/L | Doctrine and release scan | Doctrine scanners, focused policy gates, compile gate, and release gate reporting | Project invariant check, no gRPC enforcement, no SQL surface scan, no JSON runtime policy | Doctrine scans are useful but do not imply release readiness until full gate-chain evidence is retained. |
 | J | Test gap matrix | Tests in owning crates; production code only if a compile issue blocks a test | Test matrix generation, crash recovery test design, testing crash recovery matrix, formal invariant ledger | High-value missing tests are identified. Low-conflict deterministic tests are added for WAL-before-visible-commit, catalog/version binding, audit chain, and recovery replay where clear. |
 | H | Roadmap and current-state consolidation | `docs/CURRENT_STATE.md`, `docs/ROADMAP_IMPLEMENTATION_2026.md`, `docs/WORKER_EXECUTION_MATRIX_2026.md`; optional factual cross-reference correction in `docs/ANDROMEDA_ROADMAP_IMPLEMENTATION_CROSSCHECK_2026.md` | Microsoft doc style edit, terminology normalization, project invariant check, agent handoff contracting, test matrix generation | Documentation reflects completed, partially integrated, validated, and residual-risk work using Andromeda terminology. |
 | N | Documentation stale-blocker audit | `docs/CURRENT_STATE.md`, `docs/ROADMAP_IMPLEMENTATION_2026.md`, `docs/WORKER_EXECUTION_MATRIX_2026.md` only | Microsoft doc style edit, terminology normalization, agent output validation | Documentation marks the previous CLI benchmark error mapping issue as resolved in the latest compile report and keeps gate statements tied to the last recorded validation evidence. |
@@ -70,21 +72,31 @@
 ## Workspace Gates
 
 ```powershell
-cargo fmt --all -- --check
-cargo check --workspace --quiet
-cargo test --workspace --quiet
-cargo clippy --workspace --all-targets
+cargo check --workspace --all-targets --all-features
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo nextest run --workspace --all-features
+cargo test --doc --workspace
 ```
+
+`cargo check --workspace --all-targets --all-features` is tracked as build
+continuity only. It is not release or C5 crash/recovery approval.
 
 ## Known Gate State
 
-| Gate | Last recorded state | Owner |
+| Gate | Current consolidated state | Owner |
 |---|---|---|
-| `cargo fmt --all -- --check` | Passed on 2026-05-07 after consolidation cleanup. | Re-run after each packaging batch. |
-| `cargo check --workspace --quiet` | Passed on 2026-05-07 after consolidation cleanup. | Re-run after each packaging batch. |
-| `cargo build --workspace` | Passed on 2026-05-07 after consolidation cleanup. | Re-run before release packaging. |
-| `cargo test --workspace --quiet` | Passed on 2026-05-07 after consolidation cleanup. | Re-run after each packaging batch. |
-| `cargo clippy --workspace --all-targets` | Passed on 2026-05-07 with no warnings reported. | Re-run before release packaging. |
+| `cargo check --workspace --all-targets --all-features` | Continuity signal observed on dirty worktree only. | Re-run on clean candidate with retained evidence. |
+| Fuzz preflight (`generate_seed_corpus --check`, locked fuzz `cargo check`) | Observed as preflight only. | Not a substitute for sustained fuzz evidence. |
+| `cargo clippy --workspace --all-targets --all-features -- -D warnings` | Not executed in this consolidation packet. | Required before release packaging. |
+| `cargo nextest run --workspace --all-features` | Not executed in this consolidation packet. | Required before release packaging. |
+| `cargo test --doc --workspace` | Not executed in this consolidation packet. | Required before release packaging. |
+| `cargo audit` | Not executed in this consolidation packet. | Required before release packaging. |
+| `cargo deny check` | Not executed in this consolidation packet. | Required before release packaging. |
+| Sustained fuzz campaigns | Not executed in this consolidation packet. | Required before release packaging. |
+| Miri (targeted) | Not executed in this consolidation packet. | Required where applicable. |
+| Loom (targeted) | Not executed in this consolidation packet. | Required where applicable. |
+| Combined C5 crash/recovery matrix | Not executed in this consolidation packet. | Required for C5 claims. |
+| Release gate chain artifacts | Not executed in this consolidation packet. | Mandatory for any release-readiness claim. |
 
 ## Documentation Rules For Worker H
 

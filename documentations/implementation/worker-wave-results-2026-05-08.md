@@ -16,45 +16,12 @@ This document covers the local workspace observed on 2026-05-08 on branch
 `codex/workspace-crate-restructure` at commit
 `5f053fd7efcb8a81577dfc3c197d761487837609`.
 
-The current root `Cargo.toml` declares 32 workspace members:
+The current root `Cargo.toml` declares 94 workspace members.
 
-```text
-andromeda-bench
-andromeda-catalog
-andromeda-cli
-andromeda-codec
-andromeda-contract
-andromeda-core
-andromeda-digest
-andromeda-error
-andromeda-exec
-andromeda-hardware
-andromeda-maps
-andromeda-observe
-andromeda-policy
-andromeda-procedure-store
-andromeda-proto
-andromeda-quic
-andromeda-resource
-andromeda-rpc-protocol
-andromeda-security-contract
-andromeda-srpl
-andromeda-srpl-ast
-andromeda-srpl-cardinality
-andromeda-srpl-diagnostics
-andromeda-srpl-ir
-andromeda-srpl-lexer
-andromeda-srpl-parser
-andromeda-storage
-andromeda-structured-object
-andromeda-time
-andromeda-tx
-andromeda-types
-andromeda-wal
-```
-
-The 32-crate shape is observed worktree output before any additional
-target-crate scaffold packet. It is not acceptance evidence.
+The 94-crate shape is observed worktree output before any additional
+target-crate scaffold packet. It is not acceptance evidence. Several declared
+crates remain scaffolds, behavior-free contract surfaces, or compatibility
+facades.
 
 ## Non-goals
 
@@ -95,7 +62,7 @@ This document was built from source-grounded inspection:
 2. Inspected `git status --short --branch` to identify actual modified,
    added, deleted, mixed, and untracked wave output.
 3. Inspected the root `Cargo.toml` and current crate directories to identify
-   the 32-crate workspace shape and new local crates.
+   the 94-crate workspace shape and new local crates.
 4. Inspected implementation, architecture, governance, testing, specification,
    and operations ledgers created or modified by the worker wave.
 5. Inspected representative new crate entry points for scope statements,
@@ -109,10 +76,10 @@ The read-only group findings update how this wave output should be interpreted.
 
 | Finding | Resulting status |
 | --- | --- |
-| The workspace currently has 32 root members under `crates/` before any additional target-crate scaffolds. | The new crate count is branch output only. Future scaffolds still need owner statements, topology gates, and path-local validation. |
+| The workspace currently has 94 root members under `crates/` before any additional target-crate scaffolds. | The new crate count is branch output only. Future scaffolds still need owner statements, topology gates, and path-local validation. |
 | Many roadmap phases remain partial. | The step table records concrete output, not phase acceptance. Specs, tests, and crates are evidence targets until clean candidate runs exist. |
 | `andromeda-maps` and `andromeda-procedure-store` are provisional. | Do not treat either crate as accepted runtime ownership for Maps, analytics, durable Procedure Store records, catalog publication, or execution integration. |
-| Fuzz remains canonical under `fuzz/`. | Use `fuzz/targets.toml`, `fuzz/corpus/manifest.toml`, `fuzz/generators/generate_seed_corpus.py`, and `fuzz/VALIDATION_MATRIX.md` as the harness and corpus authority. `tests/fuzzing/` is an index. |
+| Fuzz execution remains canonical under `fuzz/`. | Use `fuzz/Cargo.toml`, `fuzz/fuzz_targets/*.rs`, `fuzz/generators/generate_seed_corpus.py`, and `fuzz/VALIDATION_MATRIX.md` as the execution authority. Use `tests/fuzzing/targets.toml` and `tests/fuzzing/corpus/manifest.toml` as the registry and deterministic corpus authority. |
 | Documentation path mapping is being clarified elsewhere. | This packet does not rewrite references between `docs/` and `documentations/`; it records only the owned roadmap-status consolidation. |
 | Release blockers remain. | Dirty worktree state, C5 crash/recovery gaps, sustained fuzz gaps, Miri/Loom gaps, supply-chain/MSRV risk, and missing retained release artifacts continue to block release claims. |
 
@@ -175,6 +142,42 @@ status column describes validation posture, not roadmap acceptance.
   sustained fuzz, Miri/Loom, and retained release evidence), so these lots can
   only claim completed scaffolding and evidence preparation at this stage.
 
+## Worker Closure Consolidation
+
+All known Codex workers from the current consolidation wave were closed before
+this update, including read-only documentation workers. Two workers ended with
+model quota errors and produced no usable patch. The remaining worker outputs
+were either integrated directly or converted into local validation evidence.
+
+Consolidated outcomes:
+
+- `andromeda-exec` now uses workspace dependencies for `andromeda-retry` and
+  `andromeda-execution-trace`; the compatibility facades `retry` and `traces`
+  remain available.
+- `andromeda-exec` no longer declares a direct dev-dependency on
+  `andromeda-quic-runtime-quinn`; `runtime-quinn` stays routed through the
+  `andromeda-quic/runtime-quinn` feature boundary.
+- `CertificateIdentity` drift in `andromeda-exec` tests was aligned on
+  `andromeda-core` identities where QUIC connection APIs require them.
+- `tests/fuzzing/INDEX.md` now acts as the documented fuzz index, while
+  `fuzz/` remains the execution authority.
+- The fuzz lockfile was regenerated and the locked fuzz build now passes.
+
+Validated commands after worker closure:
+
+```powershell
+cargo fmt --all -- --check
+cargo test -p andromeda-exec --tests --no-run
+cargo test -p andromeda-cli --test workspace_dependency_topology
+python tools/testing/fuzz_registry_check.py
+python fuzz/generators/generate_seed_corpus.py --check
+cargo check --manifest-path fuzz/Cargo.toml --all-targets --locked
+cargo check --workspace --all-targets --all-features --message-format=short
+```
+
+This proves build and topology continuity for the current dirty worktree. It is
+not release approval and it is not C5 crash/recovery evidence.
+
 ## New Crates
 
 The following crates are new untracked directories in the local worktree and
@@ -214,10 +217,12 @@ governance files, but they are not counted here as new untracked files.
 The wave added or modified tests across owner crates and added root-level test
 planning artifacts.
 
-Canonical fuzz ownership remains under `fuzz/`. Planning documents under
-`tests/fuzzing/` may index or explain fuzz evidence, but they do not replace
-`fuzz/targets.toml`, `fuzz/corpus/manifest.toml`,
+Canonical fuzz execution ownership remains under `fuzz/`. Planning documents
+under `tests/fuzzing/` may index or explain fuzz evidence, but they do not
+replace `fuzz/Cargo.toml`, `fuzz/fuzz_targets/*.rs`,
 `fuzz/generators/generate_seed_corpus.py`, or `fuzz/VALIDATION_MATRIX.md`.
+The target registry and deterministic corpus manifest remain owned by
+`tests/fuzzing/targets.toml` and `tests/fuzzing/corpus/manifest.toml`.
 
 | Test area | Concrete output observed |
 | --- | --- |
@@ -293,10 +298,12 @@ git diff --check -- documentations/implementation/worker-wave-results-2026-05-08
 git status --short -- documentations/implementation/worker-wave-results-2026-05-08.md
 ```
 
-No Rust build, Cargo test, clippy, nextest, audit, deny, fuzz, Miri, Loom, or
-crash/recovery gate was run for this documentation-only update. Those gates
-remain required for code, manifest, C4, C5, security, protocol, and release
-claims.
+After worker closure, targeted Rust build checks, workspace topology tests,
+fuzz registry checks, and the global workspace check were run and are listed in
+the Worker Closure Consolidation section. `cargo clippy`, `cargo nextest`,
+`cargo test --doc`, `cargo audit`, `cargo deny`, sustained fuzzing, Miri, Loom,
+and crash/recovery gates were not run and remain required for release, C4/C5,
+security, protocol, and production-readiness claims.
 
 ## Troubleshooting
 
@@ -339,6 +346,6 @@ claims.
 - `documentations/testing/step-11-validation-matrix.md`
 - `fuzz/README.md`
 - `fuzz/VALIDATION_MATRIX.md`
-- `fuzz/corpus/manifest.toml`
-- `fuzz/targets.toml`
+- `tests/fuzzing/corpus/manifest.toml`
+- `tests/fuzzing/targets.toml`
 - `tools/testing/`

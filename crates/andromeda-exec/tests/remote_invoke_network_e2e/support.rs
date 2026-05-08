@@ -1,15 +1,15 @@
 pub use std::collections::HashMap;
 pub use std::net::SocketAddr;
 pub use std::sync::Arc;
-pub use std::sync::atomic::{AtomicU64, Ordering};
 pub use std::sync::OnceLock;
+pub use std::sync::atomic::{AtomicU64, Ordering};
 pub use std::time::Instant;
 
-pub use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId, SessionId};
-pub use andromeda_quic::frame::FrameType;
-pub use andromeda_quic::{
-    FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader,
+pub use andromeda_core::{
+    AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId, SessionId,
 };
+pub use andromeda_quic::frame::FrameType;
+pub use andromeda_quic::{FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader};
 pub use andromeda_quic_runtime_quinn::{
     quinn_backend::{QuicClient, QuicServer},
     quinn_tls::MutualTlsTestConfig,
@@ -198,6 +198,74 @@ pub(crate) fn create_test_client_tls() -> AndromedaResult<&'static MutualTlsTest
 
 pub(crate) fn encode_frame(frame: &FrameBytes) -> AndromedaResult<Vec<u8>> {
     FrameCodec::encode(frame)
+}
+
+pub(crate) fn decode_response_frames(bytes: &[u8]) -> AndromedaResult<Vec<FrameBytes>> {
+    FrameCodec::scan_all(bytes)
+}
+
+pub(crate) fn assert_standard_response_sequence(
+    frames: &[FrameBytes],
+    request_id: RequestId,
+    session_id: SessionId,
+) -> AndromedaResult<()> {
+    if frames.len() < 3 {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Protocol,
+            format!(
+                "response must contain metadata, batch, and completion frames; got {} frame(s)",
+                frames.len()
+            ),
+        ));
+    }
+
+    let metadata = &frames[0];
+    if metadata.header.frame_type != FrameType::RpcMetadata {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Protocol,
+            format!(
+                "first response frame must be RpcMetadata, got {:?}",
+                metadata.header.frame_type
+            ),
+        ));
+    }
+
+    let completion = frames.last().ok_or_else(|| {
+        AndromedaError::new(
+            AndromedaErrorKind::Protocol,
+            "response completion frame is missing",
+        )
+    })?;
+    if completion.header.frame_type != FrameType::RpcCompletion {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Protocol,
+            format!(
+                "last response frame must be RpcCompletion, got {:?}",
+                completion.header.frame_type
+            ),
+        ));
+    }
+
+    for (index, frame) in frames.iter().enumerate() {
+        if frame.header.request_id != request_id || frame.header.session_id != session_id {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Protocol,
+                format!("response frame {index} lost request/session correlation"),
+            ));
+        }
+
+        if index > 0 && index + 1 < frames.len() && frame.header.frame_type != FrameType::RpcBatch {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Protocol,
+                format!(
+                    "intermediate response frame {index} must be RpcBatch, got {:?}",
+                    frame.header.frame_type
+                ),
+            ));
+        }
+    }
+
+    Ok(())
 }
 
 pub(crate) fn allocate_test_address() -> SocketAddr {

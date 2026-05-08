@@ -1,13 +1,14 @@
 use andromeda_catalog::{
-    CatalogObjectRef, CatalogPlanInvalidationReport, CatalogPublicationAudience,
-    CatalogPublicationAuditTrace, CatalogPublicationReasonCode, CatalogPublicationReceipt,
-    CatalogPublicationReplayTerminalOutcome, CatalogPublicationReplayTerminalRecord,
-    CatalogPublicationReport, CatalogPublicationSemantics, CatalogPublicationSubscriberRegistry,
-    CatalogPublishedContract, CatalogPublishedObject, CatalogRecoveryReplayExpectation,
+    CatalogObjectRef, CatalogPlanInvalidatedContract, CatalogPlanInvalidationReport,
+    CatalogPublicationAudience, CatalogPublicationAuditTrace, CatalogPublicationReasonCode,
+    CatalogPublicationReceipt, CatalogPublicationReplayTerminalOutcome,
+    CatalogPublicationReplayTerminalRecord, CatalogPublicationReport, CatalogPublicationSemantics,
+    CatalogPublicationSubscriberRegistry, CatalogPublishedObject, CatalogRecoveryReplayExpectation,
     CatalogSubscriberId, CatalogSubscriberKind, CatalogSubscriberRegistration,
     CatalogSubscriptionAcknowledgement, CatalogVisibleChangeAuditEvidence,
     DefinitionBatchDependencyGraphHash, DefinitionBatchId, DefinitionBatchSourceHash, ObjectKind,
-    QualifiedName, replay_publication_subscription_changes,
+    QualifiedName, catalog_visible_change_audit_evidence_for_publication,
+    replay_publication_subscription_changes,
 };
 use andromeda_error::AndromedaErrorKind;
 use andromeda_types::{
@@ -52,7 +53,7 @@ fn report_for_versions(
     receipt.previous_version = CatalogVersion::new(previous_version);
     receipt.next_version = CatalogVersion::new(next_version);
     let object = procedure_object_at(receipt.next_version);
-    let contract = CatalogPublishedContract {
+    let contract = CatalogPlanInvalidatedContract {
         procedure_id: ProcedureId::new(99),
         object: object.clone(),
         contract_hash: ContractHash::test_vector(0xA5),
@@ -100,7 +101,7 @@ fn visible_records(
 ) {
     (
         CatalogPublicationReplayTerminalRecord::committed_for_publication(publication),
-        CatalogVisibleChangeAuditEvidence::for_publication(publication, 1, 2),
+        catalog_visible_change_audit_evidence_for_publication(publication, 1, 2),
     )
 }
 
@@ -361,7 +362,7 @@ fn replay_fails_closed_on_conflicting_publication_terminal_record() {
 #[test]
 fn replay_rejects_visible_publication_when_audit_was_not_recorded_first() {
     let publication = report();
-    let audit_evidence = CatalogVisibleChangeAuditEvidence::for_publication(&publication, 3, 2);
+    let audit_evidence = catalog_visible_change_audit_evidence_for_publication(&publication, 3, 2);
 
     let error = replay_publication_subscription_changes([
         andromeda_catalog::CatalogPublicationSubscriptionReplayRecord::VisiblePublication {
@@ -378,7 +379,7 @@ fn replay_rejects_visible_publication_when_audit_was_not_recorded_first() {
 #[test]
 fn replay_rejects_visible_publication_without_prior_durable_terminal_record() {
     let publication = report();
-    let audit_evidence = CatalogVisibleChangeAuditEvidence::for_publication(&publication, 1, 2);
+    let audit_evidence = catalog_visible_change_audit_evidence_for_publication(&publication, 1, 2);
 
     let error = replay_publication_subscription_changes([
         andromeda_catalog::CatalogPublicationSubscriptionReplayRecord::VisiblePublication {

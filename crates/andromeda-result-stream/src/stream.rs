@@ -1,5 +1,8 @@
 //! Backpressured result stream with bounded queue and durable completion evidence.
 
+mod backpressure;
+mod frames;
+
 use crate::validation::completion_status_transaction_state;
 use crate::{CompletionStatus, ResultStreamMetadata};
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId};
@@ -7,116 +10,17 @@ use andromeda_proto::StructuredObjectHeader;
 use andromeda_rpc_protocol::{BackpressureReason, BackpressureSignal};
 use andromeda_storage::Lsn;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::{Mutex, RwLock, mpsc};
+
+use backpressure::ResultStreamMetricsInner;
+use frames::{ResultStreamFrame, ResultStreamMessage};
 
 pub const DEFAULT_RESULT_STREAM_CAPACITY: usize = 1024;
 pub const MAX_RESULT_STREAM_CAPACITY: usize = 1_000_000;
 pub const MIN_RESULT_STREAM_CAPACITY: usize = 1;
 
-#[derive(Debug, Clone)]
-pub struct ResultStreamMetrics {
-    pub queue_depth: usize,
-    pub total_rows_pushed: u64,
-    pub total_rows_consumed: u64,
-    pub backpressure_count: u64,
-    pub peak_queue_depth: usize,
-}
-
-struct ResultStreamMetricsInner {
-    queue_depth: AtomicUsize,
-    total_rows_pushed: AtomicU64,
-    total_rows_consumed: AtomicU64,
-    backpressure_count: AtomicU64,
-    peak_queue_depth: AtomicUsize,
-}
-
-impl ResultStreamMetricsInner {
-    fn new() -> Self {
-        Self {
-            queue_depth: AtomicUsize::new(0),
-            total_rows_pushed: AtomicU64::new(0),
-            total_rows_consumed: AtomicU64::new(0),
-            backpressure_count: AtomicU64::new(0),
-            peak_queue_depth: AtomicUsize::new(0),
-        }
-    }
-
-    fn record_row_pushed(&self) {
-        self.total_rows_pushed.fetch_add(1, Ordering::Relaxed);
-        self.update_queue_depth();
-    }
-
-    fn record_row_consumed(&self) {
-        self.total_rows_consumed.fetch_add(1, Ordering::Relaxed);
-        self.update_queue_depth();
-    }
-
-    fn record_backpressure(&self) {
-        self.backpressure_count.fetch_add(1, Ordering::Relaxed);
-    }
-
-    fn total_rows_pushed(&self) -> u64 {
-        self.total_rows_pushed.load(Ordering::Acquire)
-    }
-
-    fn queue_depth(&self) -> usize {
-        self.queue_depth.load(Ordering::Relaxed)
-    }
-
-    fn snapshot(&self) -> ResultStreamMetrics {
-        ResultStreamMetrics {
-            queue_depth: self.queue_depth.load(Ordering::Relaxed),
-            total_rows_pushed: self.total_rows_pushed.load(Ordering::Relaxed),
-            total_rows_consumed: self.total_rows_consumed.load(Ordering::Relaxed),
-            backpressure_count: self.backpressure_count.load(Ordering::Relaxed),
-            peak_queue_depth: self.peak_queue_depth.load(Ordering::Relaxed),
-        }
-    }
-
-    fn update_queue_depth(&self) {
-        let pushed = self.total_rows_pushed.load(Ordering::Relaxed) as usize;
-        let consumed = self.total_rows_consumed.load(Ordering::Relaxed) as usize;
-        let depth = pushed.saturating_sub(consumed);
-
-        self.queue_depth.store(depth, Ordering::Relaxed);
-
-        let mut peak = self.peak_queue_depth.load(Ordering::Relaxed);
-        while depth > peak {
-            match self.peak_queue_depth.compare_exchange(
-                peak,
-                depth,
-                Ordering::Relaxed,
-                Ordering::Relaxed,
-            ) {
-                Ok(_) => break,
-                Err(actual) => peak = actual,
-            }
-        }
-    }
-}
-
-#[derive(Debug)]
-enum ResultStreamMessage {
-    Row(StructuredObjectHeader),
-    Completion(StreamCompletion),
-}
-
-impl ResultStreamMessage {
-    fn row(row: StructuredObjectHeader) -> Self {
-        Self::Row(row)
-    }
-
-    const fn completion(completion: StreamCompletion) -> Self {
-        Self::Completion(completion)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum ResultStreamFrame {
-    Row(StructuredObjectHeader),
-    Completion(StreamCompletion),
-}
+pub use backpressure::ResultStreamMetrics;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StreamCompletion {
@@ -338,7 +242,7 @@ impl BackpressuredResultStream {
         *guard
     }
 
-    pub(crate) async fn next_frame(&self) -> Option<ResultStreamFrame> {
+    async fn next_frame(&self) -> Option<ResultStreamFrame> {
         let mut rx = self.rx.lock().await;
         match rx.recv().await {
             Some(ResultStreamMessage::Row(row)) => {

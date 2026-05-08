@@ -15,9 +15,50 @@ use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_types::{ColumnDescriptor, ContractHash};
 
 mod hash;
+mod shape;
 
 #[cfg(test)]
 mod tests;
+
+/// Validate the boundary shape for a catalog StructuredObject definition.
+///
+/// This validation is runtime-free and covers only shape evidence:
+/// field descriptors, ordinal/name constraints, and `unique_by` references.
+pub fn validate_structured_object_shape(
+    fields: &[ColumnDescriptor],
+    unique_by: &[String],
+) -> AndromedaResult<()> {
+    shape::validate_structured_object_shape(fields, unique_by)
+}
+
+/// Encode canonical hash material for a StructuredObject shape boundary.
+///
+/// The material format is deterministic and independent from Rust native
+/// struct layout so hash compatibility remains explicit and stable.
+pub fn encode_structured_object_shape_material(
+    fields: &[ColumnDescriptor],
+    unique_by: &[String],
+) -> Vec<u8> {
+    shape::encode_structured_object_shape_material(fields, unique_by)
+}
+
+/// Compute deterministic hash for a StructuredObject shape boundary.
+///
+/// The hash excludes catalog object identity so compatibility is explicit:
+/// equal shape hash means equal field + unique-key boundary material.
+pub fn compute_structured_object_shape_hash(
+    fields: &[ColumnDescriptor],
+    unique_by: &[String],
+) -> ContractHash {
+    shape::compute_structured_object_shape_hash(fields, unique_by)
+}
+
+/// Explicit StructuredObject shape-hash compatibility gate.
+///
+/// Compatibility is exact-hash only: drift is incompatible.
+pub fn structured_object_shape_hash_compatible(previous: ContractHash, next: ContractHash) -> bool {
+    previous == next
+}
 
 /// Physical layout kind of a StructuredObject payload.
 ///

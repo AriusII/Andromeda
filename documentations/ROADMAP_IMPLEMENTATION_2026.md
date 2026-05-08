@@ -1,11 +1,11 @@
 # Andromeda 2026 Implementation Roadmap
 
-**Date:** 2026-05-07  
-**Scope:** Versioned implementation roadmap for the local Rust workspace after the 20-worker phase and the 2026-05-07 consolidation wave.
+**Date:** 2026-05-08
+**Scope:** Versioned implementation roadmap for the local Rust workspace after consolidation status refresh.
 
 ## Operating Position
 
-Andromeda has moved beyond a paper design. The repository contains a structured Rust workspace, a recoverable `Inventory.ReserveStock` vertical slice, typed Procedure contracts, SRPL compiler components, transaction and WAL contracts, page and heap storage modules, QUIC and Protobuf protocol surfaces, IAM primitives, observability events, benchmark scaffolding, and HA/DR plus PITR contracts.
+Andromeda has moved beyond a paper design. The repository contains a structured Rust workspace (94 declared crates), a recoverable `Inventory.ReserveStock` vertical slice, typed Procedure contracts, SRPL compiler components, transaction and WAL contracts, page and heap storage modules, QUIC and Protobuf protocol surfaces, IAM primitives, observability events, benchmark scaffolding, and HA/DR plus PITR contracts. Several declared crates remain scaffolds, runtime-free vocabulary surfaces, or compatibility facades.
 
 The system is still not production SGBDRT. The next work must consolidate contracts into one durable execution path:
 
@@ -13,7 +13,7 @@ The system is still not production SGBDRT. The next work must consolidate contra
 Procedure -> Catalog -> SRPL IR -> Admission -> Transaction -> WAL -> Heap/Page -> Recovery -> ResultStream
 ```
 
-The main risk is not lack of features. The main risk is integration drift: contracts, versions, audit, WAL, storage, and recovery must remain tied together as the runtime becomes real. As of 2026-05-07, the dirty local worktree passes `cargo fmt --all -- --check`, `cargo check --workspace --quiet`, `cargo build --workspace`, `cargo test --workspace --quiet`, and `cargo clippy --workspace --all-targets`. These gates prove integration health for the current worktree; they do not make the partial runtime a production SGBDRT.
+The main risk is not lack of features. The main risk is integration drift: contracts, versions, audit, WAL, storage, and recovery must remain tied together as the runtime becomes real. In the current consolidation posture, `cargo check --workspace --all-targets --all-features` is treated as build continuity only. It is not release approval and not C5 crash/recovery approval. Remaining required gates are explicit: clippy, nextest, doctest, audit, deny, sustained fuzz, Miri, Loom, combined C5 crash/recovery, and full release gate chain evidence.
 
 ## Non-Negotiable Guardrails
 
@@ -64,17 +64,17 @@ The completed 20-worker phase produced a broad set of implementation changes. Th
 
 ## Current Consolidation Work
 
-The consolidation wave was intentionally narrower than the 20-worker fan-out. Its purpose was to make the work coherent, keep it compiling, close high-value test gaps, and keep the documentation factual.
+The consolidation wave was intentionally narrower than the 20-worker fan-out. Its purpose was to make the work coherent, preserve build continuity, close high-value test gaps, and keep the documentation factual. Read-only documentation workers are now closed.
 
 | Lot | Scope | Deliverable | Exit criteria |
 |---|---|---|---|
-| A | Workspace compile stabilization | Keep API fallout from worker changes resolved. | Workspace format, check, build, test, and clippy gates pass. |
+| A | Workspace compile stabilization | Keep API fallout from worker changes resolved. | Build continuity is observed; full workspace gate chain remains required. |
 | B | Durable vertical path | Connect `Inventory.ProductStock` execution to heap/page/WAL/recovery. | Crash/recovery tests reconstruct stock state. |
 | C | Catalog and planning evidence | Wire Procedure Store, statistics publication, and PlanCache identity into runtime paths. | Invocation and plan evidence include contract, catalog, statistics, and policy versions. |
 | D | Transaction, HA/DR, and PITR proof | Strengthen commit-log durable LSN evidence, promotion fencing, quorum, and PITR WAL coverage gates. | Commit/rollback terminal records prove durable LSN coverage; promotion and restore decisions are deterministic and explainable. |
 | E | QUIC, IAM, audit, and recovery integration edges | Connect route binding, principal checks, audit evidence, and catalog/heap replay decisions into runtime paths. | Wrong surface, disabled principal, or missing permission creates no transaction, emits audit evidence, and preserves recovery explainability. |
 | WR-5.DOC | Lot 5 docs and ADR acceptance alignment | Align DEC-040/041 index, Lot 5 acceptance, `SecurityAdmission v0`, `AuditLedger v0`, RPC/QUIC/security-contract vocabulary, and audit CLI wording. | Documentation only; no Rust code; no implemented Admin RPC query claim. |
-| G/L | Doctrine and release scan | Run doctrine scanners, focused policy gates, compile gate, and release gate checks. | Doctrine scans, policy gate, and workspace gates pass without false-positive release blockers. |
+| G/L | Doctrine and release scan | Run doctrine scanners, focused policy gates, compile gate, and release gate checks. | Doctrine and policy scans remain useful, but no release-readiness claim is valid until the full gate chain is rerun with retained evidence. |
 | J | Test gap matrix | Identify missing deterministic tests and add only low-conflict tests in owning crates. | Added tests prioritize WAL-before-visible-commit, catalog/version binding, audit chain, and recovery replay. |
 | H | Documentation consolidation | Update current state, roadmap, and worker matrix only. | Documents distinguish implemented, partially integrated, validated, and residual-risk work without touching production code. |
 | WR-GOV-TOPO-DOC | Lots 1-2-3 transversal topology and documentation governance | Strengthen topology guards for R0 foundation, Lot 2 protocol/catalog/security-contract boundaries, and Lot 3 SRPL dev-dependency drift without touching business crates. | `common`/`utils`/`misc`/`helpers`/`god_engine` crates are rejected; `andromeda-security-contract` is documented as runtime-free R1 vocabulary; `andromeda-quic` to `andromeda-rpc-protocol` and `andromeda-srpl` facade exit criteria are explicit; targeted CLI topology gates are the acceptance checks. |
@@ -278,6 +278,22 @@ P10 moves availability and recovery from contracts to drills.
 | Page size policy | 16 KiB, 32 KiB, or mixed | Keep current V1 format fixed; add policy later for cold/analytics paths. |
 | Serializable V0 | Strict 2PL, SSI scaffold, or deterministic scheduling | Use strict locking for critical writes first; add SSI later. |
 | Catalog version granularity | Database, instance, or hybrid | Use database-scoped catalog versions with global system-catalog versions for registries. |
+
+## Remaining Validation Gates
+
+The following gates are still required and are not treated as complete by this
+roadmap refresh:
+
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo nextest run --workspace --all-features`
+- `cargo test --doc --workspace`
+- `cargo audit`
+- `cargo deny check`
+- Sustained fuzz campaigns with retained artifacts
+- Targeted Miri runs where applicable
+- Targeted Loom runs where applicable
+- Combined C5 crash/recovery matrix evidence
+- Release gate chain evidence package
 
 ## Final Direction
 

@@ -16,6 +16,7 @@ mod hash;
 mod manifest;
 mod materialization;
 mod names;
+mod type_encoding;
 mod types;
 mod validation;
 

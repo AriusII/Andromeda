@@ -9,6 +9,8 @@ use andromeda_types::CatalogVersion;
 use super::{
     CatalogPublicationReport, CatalogSubscriptionAcknowledgement,
     CatalogVisibleChangeAuditEvidence, catalog_publication_error, require_equal,
+    validate_subscription_acknowledgement_for_publication,
+    validate_visible_change_audit_for_publication,
 };
 use crate::{CatalogDurabilityMarker, CatalogPublicationReceipt};
 
@@ -327,7 +329,7 @@ pub fn replay_publication_subscription_changes(
                 audit_evidence,
             } => {
                 publication.validate()?;
-                audit_evidence.validate_for_publication(&publication)?;
+                validate_visible_change_audit_for_publication(&audit_evidence, &publication)?;
                 let key = CatalogPublicationReplayKey::from_receipt(&publication.receipt);
 
                 let Some(terminal) = terminals.get(&key) else {
@@ -398,7 +400,10 @@ pub fn replay_publication_subscription_changes(
                             && publication.publication.receipt.namespace_id
                                 == acknowledgement.namespace_id
                     }) {
-                        acknowledgement.validate_for_publication(&publication.publication)?;
+                        validate_subscription_acknowledgement_for_publication(
+                            &acknowledgement,
+                            &publication.publication,
+                        )?;
                     }
                     return catalog_publication_error(
                         "catalog subscription acknowledgement replay requires a visible publication",
@@ -409,7 +414,10 @@ pub fn replay_publication_subscription_changes(
                         "catalog subscription acknowledgement replay publication index is inconsistent",
                     );
                 };
-                acknowledgement.validate_for_publication(&publication.publication)?;
+                validate_subscription_acknowledgement_for_publication(
+                    &acknowledgement,
+                    &publication.publication,
+                )?;
 
                 let acknowledgement_key =
                     CatalogSubscriptionReplayKey::from_acknowledgement(&acknowledgement);

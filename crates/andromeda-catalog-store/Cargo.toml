@@ -8,3 +8,5 @@ description = "Runtime-free catalog object and store boundary types for Andromed
 
 [dependencies]
 andromeda-contract.workspace = true
+andromeda-error.workspace = true
+andromeda-types.workspace = true

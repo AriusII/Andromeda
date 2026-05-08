@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This directory is an index only. Executable fuzzing assets remain in `fuzz/`, while this directory owns orchestration documentation and test-indexing references.
+This directory is an index-only and metadata-only surface. Executable fuzzing assets remain canonical under `fuzz/`, while this directory owns orchestration documentation and test-indexing references.
 
 Fuzzing evidence helps find parser, codec, persisted-byte, wire-format, and state-machine defects. It is not durable truth for C4/C5 behavior and does not replace deterministic tests, crash/recovery validation, Miri, Loom, or release gates.
 
@@ -23,9 +23,12 @@ Use this index to find the owning fuzz artifacts:
 | Fuzz CI workflow | `.github/workflows/07-fuzzing.yml` |
 | Release smoke workflow | `.github/workflows/release-gate-chain.yml` |
 
+Reference inventory (2026-05-08): `23` fuzz targets and `51` deterministic manifest seeds.
+
 ## Non-goals
 
 - Do not add executable fuzz harnesses under `tests/fuzzing/`.
+- Do not treat `tests/fuzzing/` as a `cargo-fuzz` or libFuzzer execution workspace.
 - Do not migrate, copy, or regenerate the corpus from this directory.
 - Do not duplicate `tests/fuzzing/targets.toml`, `fuzz/Cargo.toml`, or `tests/fuzzing/corpus/manifest.toml`.
 - Do not use fuzz success as a substitute for deterministic regression tests or crash/recovery evidence.
@@ -55,6 +58,8 @@ python fuzz/generators/generate_seed_corpus.py --check
 ```
 
 The registry checker is read-only. It verifies that `tests/fuzzing/targets.toml`, `fuzz/Cargo.toml`, `tests/fuzzing/corpus/manifest.toml`, `fuzz/fuzz_targets/*.rs`, tracked deterministic seeds, and `.github/workflows/07-fuzzing.yml` command shape remain aligned.
+
+Passing `--check` and smoke-duration fuzz runs confirms registry and harness wiring only. Sustained fuzz evidence remains required before any release/C5 promotion claim.
 
 ## References
 

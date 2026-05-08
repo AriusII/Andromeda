@@ -30,11 +30,7 @@ async fn test_single_invocation_e2e() -> AndromedaResult<()> {
         let proc_name = String::from_utf8_lossy(&frame.payload);
 
         let response_frames = registry
-            .execute(
-                &proc_name,
-                frame.header.request_id,
-                frame.header.session_id,
-            )
+            .execute(&proc_name, frame.header.request_id, frame.header.session_id)
             .await?;
 
         for resp_frame in response_frames {
@@ -90,24 +86,15 @@ async fn test_single_invocation_e2e() -> AndromedaResult<()> {
         }
     }
 
-    // Verify response contains metadata, batch, and completion frames
-    assert!(!response_frames.is_empty(), "Should have response frames");
-    assert!(
-        response_frames.len() >= 32,
-        "Should have at least header size bytes"
-    );
-
-    // Decode first frame (should be metadata)
-    let first_frame = FrameCodec::decode(&response_frames)?;
-    assert_eq!(
-        first_frame.header.frame_type,
-        FrameType::RpcMetadata,
-        "First response frame should be metadata"
-    );
+    let decoded_frames = decode_response_frames(&response_frames)?;
+    assert_standard_response_sequence(
+        &decoded_frames,
+        request_frame.header.request_id,
+        request_frame.header.session_id,
+    )?;
 
     // Wait for server.
     join_with_timeout(Duration::from_secs(10), server_handle).await?;
 
     Ok(())
 }
-

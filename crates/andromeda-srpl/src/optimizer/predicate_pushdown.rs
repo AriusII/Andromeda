@@ -16,9 +16,9 @@ fn apply_to_body(body: SrplProcedureBodyIr) -> AndromedaResult<SrplProcedureBody
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::SrplPredicateIr;
     use crate::{Cardinality, SrplBusinessOperationIr, SrplBusinessOperationKindIr};
     use andromeda_catalog::QualifiedName;
+    use andromeda_srpl_ir::SrplPredicateIr;
 
     fn qn(s: &str) -> QualifiedName {
         QualifiedName::parse(s).unwrap()

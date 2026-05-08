@@ -1,28 +1,12 @@
-//! WAL segment reclaimability facade.
+//! Compatibility reexports for WAL segment reclaimability ownership.
 //!
-//! This module keeps the public reclaimability contract stable while splitting
-//! the implementation into focused parts:
-//! - `decision`: observable decision and diagnostic helpers
-//! - `evidence`: immutable inputs used for one deterministic decision
-//! - `policy`: policy facade and default implementation
-//! - `validation`: boundary consistency checks
-//!
-//! Safety invariants:
-//! - a segment required for crash recovery is never reclaimed
-//! - active snapshot, replica, and PITR boundaries are evaluated from one
-//!   captured policy value
-//! - each decision exposes a specific blocking reason for audit traces
-//! - no unsafe code
+//! Canonical reclaimability policy/types now live in
+//! `andromeda_wal::write_ahead_log::segment_reclaimability`.
 
-mod boundary;
-mod decision;
-mod evidence;
-mod policy;
-
-pub use boundary::RetentionBoundaryPolicy;
-pub use decision::ReclaimabilityDecision;
-pub use evidence::ReclaimabilityEvidence;
-pub use policy::{DefaultReclaimabilityPolicy, WalSegmentReclaimability};
+pub use andromeda_wal::write_ahead_log::segment_reclaimability::{
+    DefaultReclaimabilityPolicy, ReclaimabilityDecision, ReclaimabilityEvidence,
+    RetentionBoundaryPolicy, WalReplicaSafeLsnBoundaryProvider, WalSegmentReclaimability,
+};
 
 #[cfg(test)]
 mod tests;

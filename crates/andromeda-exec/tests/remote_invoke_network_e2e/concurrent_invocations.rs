@@ -36,20 +36,23 @@ async fn test_concurrent_invocations() -> AndromedaResult<()> {
                                     if let Ok(n) = stream.read(&mut buf).await {
                                         if n > 0 {
                                             buf.truncate(n);
-                                                    if let Ok(frame) = FrameCodec::decode(&buf) {
+                                            if let Ok(frame) = FrameCodec::decode(&buf) {
                                                 let proc_name =
                                                     String::from_utf8_lossy(&frame.payload);
-                                            if let Ok(response_frames) = registry_inner
-                                                .execute(
-                                                    &proc_name,
-                                                    frame.header.request_id,
-                                                    frame.header.session_id,
+                                                if let Ok(response_frames) = registry_inner
+                                                    .execute(
+                                                        &proc_name,
+                                                        frame.header.request_id,
+                                                        frame.header.session_id,
                                                     )
                                                     .await
                                                 {
                                                     for resp_frame in response_frames {
-                                                        if let Ok(encoded) = encode_frame(&resp_frame) {
-                                                            let _ = stream.write_all(&encoded).await;
+                                                        if let Ok(encoded) =
+                                                            encode_frame(&resp_frame)
+                                                        {
+                                                            let _ =
+                                                                stream.write_all(&encoded).await;
                                                         }
                                                     }
                                                 }
@@ -73,7 +76,7 @@ async fn test_concurrent_invocations() -> AndromedaResult<()> {
     for client_id in 0..10 {
         let listen_addr_copy = listen_addr;
         let handle = tokio::spawn(async move {
-                                let client_tls = create_test_client_tls().expect(
+            let client_tls = create_test_client_tls().expect(
                 "test client TLS should be initialized from shared test certificate bundle",
             );
             if let Ok(client) = QuicClient::new(client_tls.client_config()) {
@@ -113,9 +116,22 @@ async fn test_concurrent_invocations() -> AndromedaResult<()> {
                                 }
                                 let _ = stream.finish().await;
 
-                                // Drain response (we don't verify it for this test)
+                                let mut response_frames = vec![];
                                 let mut buf = vec![0u8; 1024];
-                                let _ = stream.read(&mut buf).await;
+                                loop {
+                                    match stream.read(&mut buf).await {
+                                        Ok(0) => break,
+                                        Ok(n) => response_frames.extend_from_slice(&buf[..n]),
+                                        Err(_) => break,
+                                    }
+                                }
+                                if let Ok(frames) = decode_response_frames(&response_frames) {
+                                    let _ = assert_standard_response_sequence(
+                                        &frames,
+                                        request_frame.header.request_id,
+                                        request_frame.header.session_id,
+                                    );
+                                }
                             }
                         }
                     }

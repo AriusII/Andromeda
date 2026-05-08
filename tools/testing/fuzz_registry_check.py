@@ -22,6 +22,11 @@ CANONICAL_RUN_COMMAND = (
     'cargo +nightly fuzz run "$target" "$corpus_dir" -- '
     '-max_total_time="$fuzz_seconds"'
 )
+ALLOWED_RUNTIME_OUTPUT_PREFIXES = ("fuzz/target/",)
+RUNTIME_HYGIENE_EXEMPT_PATH_PREFIXES = ("fuzz/generators/",)
+FORBIDDEN_RUNTIME_DIR_NAMES = frozenset({"__pycache__", "artifacts", "coverage", "crashes"})
+FORBIDDEN_RUNTIME_FILE_PREFIXES = ("crash-", "leak-", "oom-", "slow-unit-", "timeout-")
+FORBIDDEN_RUNTIME_FILE_SUFFIXES = (".profraw", ".pyc", ".sancov")
 
 
 @dataclass(frozen=True)
@@ -333,6 +338,7 @@ def validate_registry(root: Path) -> tuple[Registry, list[str]]:
     validate_filesystem(root, registry, errors)
     validate_workflow(root, registry, errors)
     validate_git_tracked_corpus(root, registry, errors)
+    validate_runtime_artifact_hygiene(root, errors)
     return registry, errors
 
 
@@ -545,6 +551,58 @@ def validate_git_tracked_corpus(root: Path, registry: Registry, errors: list[str
         errors.append(f"manifest corpus seeds are not tracked by git: {missing}")
     if extra:
         errors.append(f"tracked tests/fuzzing/corpus files are not listed in manifest: {extra}")
+
+
+def is_allowed_runtime_output(path: Path, root: Path) -> bool:
+    relative = path.relative_to(root).as_posix()
+    if any(relative.startswith(prefix) for prefix in ALLOWED_RUNTIME_OUTPUT_PREFIXES):
+        return True
+    return any(relative.startswith(prefix) for prefix in RUNTIME_HYGIENE_EXEMPT_PATH_PREFIXES)
+
+
+def validate_runtime_artifact_hygiene(root: Path, errors: list[str]) -> None:
+    scan_roots = (
+        root / "fuzz",
+        root / "tests" / "fuzzing",
+        root / "tools" / "testing",
+    )
+    seen: set[str] = set()
+    for scan_root in scan_roots:
+        if not scan_root.is_dir():
+            continue
+        for path in scan_root.rglob("*"):
+            if is_allowed_runtime_output(path, root):
+                continue
+            relative = path.relative_to(root).as_posix()
+            if path.is_dir() and path.name in FORBIDDEN_RUNTIME_DIR_NAMES:
+                message = (
+                    f"runtime artifact directory is not allowed in source tree: {relative}; "
+                    "use fuzz/target or an explicit temporary directory"
+                )
+                if message not in seen:
+                    seen.add(message)
+                    errors.append(message)
+                continue
+            if not path.is_file():
+                continue
+            filename = path.name
+            if filename.endswith(FORBIDDEN_RUNTIME_FILE_SUFFIXES):
+                message = (
+                    f"runtime artifact file is not allowed in source tree: {relative}; "
+                    "use fuzz/target or an explicit temporary directory"
+                )
+                if message not in seen:
+                    seen.add(message)
+                    errors.append(message)
+                continue
+            if filename.startswith(FORBIDDEN_RUNTIME_FILE_PREFIXES):
+                message = (
+                    f"runtime fuzz artifact is not allowed in source tree: {relative}; "
+                    "use fuzz/target or an explicit temporary directory"
+                )
+                if message not in seen:
+                    seen.add(message)
+                    errors.append(message)
 
 
 def print_errors(errors: list[str]) -> None:

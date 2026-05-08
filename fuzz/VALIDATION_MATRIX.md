@@ -9,6 +9,7 @@ Document the current readiness matrix for persisted-byte fuzzing and golden/vect
 This matrix records a curated set of **high-signal storage-critical and protocol-critical** targets.
 It is not the full registry inventory of `tests/fuzzing/targets.toml`; other targets are
 listed in that canonical registry and validated by `fuzz_registry_check`.
+Executable harness ownership and `cargo-fuzz` execution remain canonical under `fuzz/`.
 
 The matrix is intentionally scoped to evidence-intensive targets where each row is
 owned directly by a canonical crate owner and has explicit golden/property/fuzz
@@ -50,6 +51,7 @@ Keep these evidence boundaries separate:
 - `andromeda-quic` owns typed envelope lockstep between decoded RPC frames and generated Protobuf envelopes, but the fuzz target does not enable the Quinn runtime.
 - `andromeda-security-contract` owns stable admission codes, surface boundaries, and permission-family matrices. It does not authorize requests or emit durable audit evidence.
 - Fuzz evidence is malformed-input and invariant evidence only. It does not prove admission durability, WAL persistence, replay, or visible commit.
+- Smoke fuzz runs and harness compile checks are preflight signals only; they do not prove release/C5 readiness.
 
 ## Validation Matrix
 
@@ -125,6 +127,7 @@ cargo check --manifest-path fuzz/Cargo.toml --bin wal_record_roundtrip --locked
 ```
 
 For FileWal physical ownership, continue to use `andromeda-wal` owner contract evidence and storage API/ownership/recovery integration evidence. For readiness promotion, add sustained fuzz run evidence for the specific owner surface being promoted. For recovery, page, manifest, segment, or visibility promotion, add targeted storage tests and crash/recovery evidence for the integration surface as well.
+Treat sustained fuzz evidence as still required unless an explicit release checkpoint records duration, arguments, crash/OOM/timeout counters, and artifact disposition.
 
 ## Troubleshooting
 

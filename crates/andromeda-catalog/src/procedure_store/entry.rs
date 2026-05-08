@@ -2,7 +2,7 @@ use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 use crate::{
-    ProcedureContract, ProcedureContractBinding, ProtocolLayoutRef, QualifiedName,
+    ProcedureContract, ProcedureContractBinding, ProtocolLayoutRef, QualifiedName, StatsVersion,
     TransactionPolicy,
 };
 
@@ -65,5 +65,78 @@ impl ProcedureStoreEntry {
 
     pub fn catalog_version(&self) -> CatalogVersion {
         self.binding.catalog_version
+    }
+
+    pub fn validate_decision_binding(
+        &self,
+        binding: ProcedureContractBinding,
+    ) -> AndromedaResult<()> {
+        self.validate_binding_for_context(binding, "decision evidence")
+    }
+
+    pub fn validate_runtime_binding(
+        &self,
+        binding: ProcedureContractBinding,
+    ) -> AndromedaResult<()> {
+        self.validate_binding_for_context(binding, "runtime evidence")
+    }
+
+    pub fn validate_feedback_stats_version(
+        &self,
+        stats_version: StatsVersion,
+    ) -> AndromedaResult<()> {
+        if self.binding.stats_version != stats_version {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "procedure store feedback stats version does not match registered binding",
+            ));
+        }
+        Ok(())
+    }
+
+    fn validate_binding_for_context(
+        &self,
+        binding: ProcedureContractBinding,
+        context: &'static str,
+    ) -> AndromedaResult<()> {
+        if self.binding.procedure_id != binding.procedure_id {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                format!("procedure store {context} procedure id does not match registered binding"),
+            ));
+        }
+        if self.binding.contract_hash != binding.contract_hash {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                format!(
+                    "procedure store {context} contract hash does not match registered binding"
+                ),
+            ));
+        }
+        if self.binding.catalog_version != binding.catalog_version {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                format!(
+                    "procedure store {context} catalog version does not match registered binding"
+                ),
+            ));
+        }
+        if self.binding.stats_version != binding.stats_version {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                format!(
+                    "procedure store {context} stats version does not match registered binding"
+                ),
+            ));
+        }
+        if self.binding.policy_version != binding.policy_version {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                format!(
+                    "procedure store {context} policy version does not match registered binding"
+                ),
+            ));
+        }
+        Ok(())
     }
 }

@@ -1,4 +1,7 @@
-use super::{PLAN_SELECTION_MAX_SCENARIO_EVIDENCE, PlanSelectionError};
+use andromeda_contract::StatsVersion;
+use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
+
+use super::{PLAN_SELECTION_MAX_SCENARIO_EVIDENCE, PlanCacheKey, PlanClass, PlanSelectionError};
 
 const ADVISORY_EVIDENCE_STATUS_COUNT: usize = 11;
 
@@ -29,6 +32,16 @@ pub enum AdvisoryEvidenceStatus {
     PlanClassMissing,
     /// Evidence binds a different PlanClass.
     PlanClassMismatch,
+}
+
+/// Identity carried by validated advisory evidence after local adapter checks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AdvisoryEvidenceIdentity {
+    pub procedure_id: ProcedureId,
+    pub catalog_version: CatalogVersion,
+    pub stats_version: StatsVersion,
+    pub contract_hash: Option<ContractHash>,
+    pub plan_class: Option<PlanClass>,
 }
 
 impl AdvisoryEvidenceStatus {
@@ -202,6 +215,41 @@ impl AdvisoryEvidenceSummaryBuilder {
     }
 }
 
+/// Classify validated advisory evidence identity against a full plan-cache key.
+///
+/// This function is runtime-free and intentionally requires every keyed identity
+/// field so catalog adapters cannot silently weaken matching.
+pub fn classify_advisory_identity_for_key(
+    key: &PlanCacheKey,
+    identity: AdvisoryEvidenceIdentity,
+    is_authoritative: bool,
+    can_select_plan_alone: bool,
+) -> AdvisoryEvidenceStatus {
+    if is_authoritative || can_select_plan_alone {
+        return AdvisoryEvidenceStatus::AuthoritativeRejected;
+    }
+    if identity.procedure_id != key.procedure_id {
+        return AdvisoryEvidenceStatus::ProcedureIdMismatch;
+    }
+    if identity.catalog_version != key.catalog_version {
+        return AdvisoryEvidenceStatus::CatalogVersionMismatch;
+    }
+    if identity.stats_version != key.stats_version {
+        return AdvisoryEvidenceStatus::StatsVersionMismatch;
+    }
+    match identity.contract_hash {
+        Some(hash) if hash == key.contract_hash => {}
+        Some(_) => return AdvisoryEvidenceStatus::ContractHashMismatch,
+        None => return AdvisoryEvidenceStatus::ContractHashMissing,
+    }
+    match identity.plan_class {
+        Some(plan_class) if plan_class == key.plan_class => {}
+        Some(_) => return AdvisoryEvidenceStatus::PlanClassMismatch,
+        None => return AdvisoryEvidenceStatus::PlanClassMissing,
+    }
+    AdvisoryEvidenceStatus::AcceptedAdvisory
+}
+
 pub(crate) fn advisory_status_counts_reason(summary: &AdvisoryEvidenceSummary) -> String {
     if summary.supplied_count == 0 {
         return "none".to_string();
@@ -221,4 +269,85 @@ pub(crate) fn advisory_status_counts_reason(summary: &AdvisoryEvidenceSummary) -
         out.push_str(&count.to_string());
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use andromeda_contract::{PolicyVersion, ProcedureContractBinding, StatsVersion};
+    use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
+
+    use super::{
+        AdvisoryEvidenceIdentity, AdvisoryEvidenceStatus, classify_advisory_identity_for_key,
+    };
+    use crate::{PlanCacheKey, PlanClass, PlanShapeFingerprint};
+
+    fn key() -> PlanCacheKey {
+        let binding = ProcedureContractBinding {
+            procedure_id: ProcedureId::new(7),
+            catalog_version: CatalogVersion::new(3),
+            contract_hash: ContractHash::new([0xAA; ContractHash::LEN]),
+            stats_version: StatsVersion::new(11),
+            policy_version: PolicyVersion::new([0xBB; PolicyVersion::LEN]),
+        };
+        PlanCacheKey::build(
+            &binding,
+            PlanClass::Singleton,
+            PlanShapeFingerprint::empty(),
+        )
+        .expect("singleton key with empty fingerprint is valid")
+    }
+
+    fn identity() -> AdvisoryEvidenceIdentity {
+        AdvisoryEvidenceIdentity {
+            procedure_id: ProcedureId::new(7),
+            catalog_version: CatalogVersion::new(3),
+            stats_version: StatsVersion::new(11),
+            contract_hash: Some(ContractHash::new([0xAA; ContractHash::LEN])),
+            plan_class: Some(PlanClass::Singleton),
+        }
+    }
+
+    #[test]
+    fn advisory_identity_accepts_exact_match() {
+        assert_eq!(
+            classify_advisory_identity_for_key(&key(), identity(), false, false),
+            AdvisoryEvidenceStatus::AcceptedAdvisory
+        );
+    }
+
+    #[test]
+    fn advisory_identity_rejects_authoritative_or_select_alone() {
+        assert_eq!(
+            classify_advisory_identity_for_key(&key(), identity(), true, false),
+            AdvisoryEvidenceStatus::AuthoritativeRejected
+        );
+        assert_eq!(
+            classify_advisory_identity_for_key(&key(), identity(), false, true),
+            AdvisoryEvidenceStatus::AuthoritativeRejected
+        );
+    }
+
+    #[test]
+    fn advisory_identity_rejects_missing_or_mismatched_key_fields() {
+        let mut mismatched = identity();
+        mismatched.procedure_id = ProcedureId::new(9);
+        assert_eq!(
+            classify_advisory_identity_for_key(&key(), mismatched, false, false),
+            AdvisoryEvidenceStatus::ProcedureIdMismatch
+        );
+
+        let mut missing = identity();
+        missing.contract_hash = None;
+        assert_eq!(
+            classify_advisory_identity_for_key(&key(), missing, false, false),
+            AdvisoryEvidenceStatus::ContractHashMissing
+        );
+
+        let mut plan_class_mismatch = identity();
+        plan_class_mismatch.plan_class = Some(PlanClass::Cardinality);
+        assert_eq!(
+            classify_advisory_identity_for_key(&key(), plan_class_mismatch, false, false),
+            AdvisoryEvidenceStatus::PlanClassMismatch
+        );
+    }
 }

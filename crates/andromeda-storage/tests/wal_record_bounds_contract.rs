@@ -11,7 +11,7 @@
 //! bounds enforcement correctly rejects or accepts records accordingly.
 
 use andromeda_core::TransactionId;
-use andromeda_storage::{
+use andromeda_wal::{
     InMemoryWal, Lsn, WAL_RECORD_HEADER_OVERHEAD, WAL_RECORD_SIZE_LIMIT, WAL_SEGMENT_BOUNDARY,
     WalRecord, WalRecordKind, validate_lsn_continuity, validate_record_size,
     validate_segment_boundary, validate_transaction_batch_cardinality, validate_wal_batch_bounds,

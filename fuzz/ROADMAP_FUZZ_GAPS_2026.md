@@ -16,6 +16,9 @@ This roadmap covers the following fuzz evidence surfaces:
 - No-panic scope for malformed input handling.
 - Evidence boundaries for what fuzzing does not prove.
 
+Registry baseline aligned with current metadata: `23` registered targets and `51` deterministic manifest seeds.
+Execution workspace boundary: executable harnesses and libFuzzer runtime flows remain under `fuzz/`; `tests/fuzzing/` remains registry/corpus/index documentation and metadata.
+
 Affected engines and planes:
 
 - Storage engine: page, heap, B+Tree, manifest, segment index, WAL-facing storage records, and backup manifest decode boundaries.
@@ -46,6 +49,7 @@ Before adding any Roadmap 11.07 target, confirm that:
 ## Current Lot 5 Harnesses
 
 Lot 5 already has registered harnesses for RPC, Protobuf, QUIC projection, ResultStream, durable audit, and security admission evidence. These targets should receive sustained-run evidence before any release claim relies on them.
+Smoke-duration fuzz runs and compile-only checks are useful preflight gates, but they are not sufficient release/C5 evidence.
 
 | Target | Surface | Current evidence role | Sustained-run requirement |
 | --- | --- | --- | --- |
@@ -137,6 +141,8 @@ python fuzz/generators/generate_seed_corpus.py --check
 cargo check --manifest-path fuzz/Cargo.toml --bin <target> --locked
 cargo fuzz run <target> -- -max_total_time=<seconds>
 ```
+
+`cargo check --manifest-path fuzz/Cargo.toml --bin <target> --locked` and short smoke runs confirm wiring and buildability only. Sustained-run evidence remains mandatory before release/C5 promotion claims.
 
 Record sustained-run evidence with at least:
 

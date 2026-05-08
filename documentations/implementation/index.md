@@ -53,13 +53,17 @@ Before using these ledgers for planning, confirm:
 | Packaging plan | Describes path-specific packaging in a dirty worktree; it is not a broad staging instruction. |
 | Release evidence template | Captures command evidence; empty or unrun commands are not pass results. |
 
+Current branch note: the root workspace declares 94 crates. This count reflects
+branch shape only; multiple crates remain scaffolds, behavior-free contract
+surfaces, or compatibility facades.
+
 ## Implementation register
 
 | Document | Status | Use this document for |
 | --- | --- | --- |
 | [Implementation Reality Matrix](implementation-reality-matrix.md) | Working audit. It classifies component behavior from interface-only through recovery-backed functional, and explicitly notes remaining blockers. | Current component maturity, mock/scaffold detection, durable versus in-memory behavior, and highest-risk implementation gaps. |
 | [V1 Gap Closure Tracker](v1-gap-closure-tracker.md) | Gap ledger. It summarizes partial coverage and residual risk; it states that build, test, fuzz, and benchmark commands were not run by that documentation pass. | Release-gate coverage, residual risk IDs, and next targeted gates before any V1 readiness claim. |
-| [Roadmap Execution Plan - 2026-05-08](roadmap-execution-plan-2026-05-08.md) | Execution plan. It maps the external roadmap to the current 26-crate branch shape and dirty-worktree constraints. | Future worker sequencing, phase gates, C5 containment, and acceptance-gate planning. |
+| [Roadmap Execution Plan - 2026-05-08](roadmap-execution-plan-2026-05-08.md) | Execution plan. It maps the external roadmap to the current 94-crate branch shape and dirty-worktree constraints. | Future worker sequencing, phase gates, C5 containment, and acceptance-gate planning. |
 | [Target Crate Gap Ledger - 2026-05-08](target-crate-gap-ledger-2026-05-08.md) | Gap ledger. It identifies target crate gaps and explicitly does not approve C5 extraction while the worktree is dirty. | Missing target crate names, current broad owners, and acceptance gates before crate extraction. |
 | [Worktree Packaging Plan - 2026-05-08](worktree-packaging-plan-2026-05-08.md) | Packaging plan. It describes pathspec-only packaging for a dirty worktree and warns against broad staging. | Packet order, staged-versus-working divergence handling, current `AD` risk register, and validation expectations by packet. |
 | [Roadmap PR Packaging Guide - 2026-05-08](roadmap-pr-packaging-2026-05-08.md) | Packaging guide. It splits the 2026-05-08 roadmap wave into review lots for PR and release triage, while explicitly forbidding automatic staging or commits on the dirty branch. | Review lot boundaries, owner handoff checks, package validation expectations, and release-evidence prerequisites. |
@@ -84,6 +88,13 @@ This index is documentation-only. It should be validated by targeted link and
 content checks. It does not replace Rust formatting, workspace build, clippy,
 nextest, crash/recovery, fuzz, Miri, Loom, security, policy, audit, or
 supply-chain gates.
+
+Gate posture for this consolidation index:
+
+- `cargo check --workspace --all-targets --all-features` is continuity only.
+- Remaining required gates include clippy, nextest, doctest, audit, deny,
+  sustained fuzz, Miri, Loom, combined C5 crash/recovery, and release gate
+  chain evidence.
 
 ## Troubleshooting
 

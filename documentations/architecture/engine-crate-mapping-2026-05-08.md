@@ -16,7 +16,7 @@ This mapping covers the local Andromeda workspace on 2026-05-08 on branch
 `codex/workspace-crate-restructure`.
 
 The worktree is dirty. Existing architecture ledgers describe an older
-26-crate Step 0 snapshot, while the current root `Cargo.toml` and
+Step 0 snapshot, while the current root `Cargo.toml` and
 `cargo metadata` output are ahead of that snapshot. The current local evidence
 observed for this document is:
 
@@ -29,9 +29,10 @@ observed for this document is:
   `andromeda-srpl-lexer` as a local workspace package through SRPL path
   dependencies.
 
-The 32-crate count covers root workspace members under `crates/` before any
-additional target-crate scaffolds. The canonical fuzz workspace remains under
-`fuzz/` and is not counted as an engine crate.
+The root `Cargo.toml` currently declares 94 workspace crates. Treat this count
+as local topology evidence only, not accepted ownership or release readiness.
+The fuzz execution workspace remains under `fuzz/`; registry, corpus, and index
+authority remain under `tests/fuzzing/` as applicable.
 
 Use this document as dirty-branch planning evidence only. Do not use it as
 release readiness evidence.
@@ -47,8 +48,9 @@ release readiness evidence.
 - Do not accept C5 extraction without behavior locks and crash/recovery or
   threat-model evidence.
 - Do not let compatibility facades hide canonical ownership.
-- Do not move or redefine canonical fuzz ownership; harnesses, target registry,
-  corpus manifest, and generator remain under `fuzz/`.
+- Do not move or redefine canonical fuzz ownership; execution harnesses and
+  generators remain under `fuzz/`, while registry, corpus, and index authority
+  remain under `tests/fuzzing/` as applicable.
 - Do not normalize `docs/` and `documentations/` path mapping in this mapping
   packet. That clarification is owned by a separate documentation packet.
 
@@ -109,10 +111,10 @@ Use these read-only findings when interpreting the map.
 
 | Finding | Mapping implication |
 | --- | --- |
-| The current workspace has 32 root members under `crates/` before any additional scaffold packets. | Treat new target-named crates as branch output, not accepted ownership. Future crate creation still needs an owner statement, topology gates, and path-local validation. |
+| The current root `Cargo.toml` declares 94 workspace crates. | Treat new target-named crates as branch output, not accepted ownership. Future crate creation still needs an owner statement, topology gates, and path-local validation. |
 | Most roadmap phases remain partial. | Do not promote a phase because one owner crate or specification exists; each phase still needs clean candidate tests and retained evidence. |
 | `andromeda-maps` and `andromeda-procedure-store` are provisional. | Keep current durable or runtime behavior attributed to `andromeda-catalog`, `andromeda-exec`, storage, or other existing owners until direct owner tests and integration gates move it. |
-| Fuzz remains canonical under `tests/fuzzing/`. | Use `tests/fuzzing/targets.toml`, `tests/fuzzing/corpus/manifest.toml`, and `fuzz/VALIDATION_MATRIX.md` for harness and corpus authority; use `tests/fuzzing/` as the planning surface. |
+| Fuzz execution remains canonical under `fuzz/`. | Use `fuzz/` for harness execution and generators. Use `tests/fuzzing/targets.toml`, `tests/fuzzing/corpus/manifest.toml`, and related `tests/fuzzing/` indexes for registry and corpus authority. |
 | Documentation path mapping is being clarified elsewhere. | Preserve existing `docs/` and `documentations/` references in this packet unless they are required for one of the owned files. |
 | Release blockers remain. | Dirty worktree state, missing C5 crash/recovery evidence, sustained fuzz gaps, Miri/Loom gaps, and release evidence gaps still block readiness claims. |
 
@@ -228,7 +230,7 @@ macro-engine row and in `docs/adr/ADR-0018-engine-crate-mapping-policy.md`.
 | `cargo metadata` shows more crates than this document. | Refresh the map in a documentation-owned packet and explain whether the new crate is owner, facade, tool, or provisional. |
 | A C5 split lacks crash/recovery evidence. | Block the split until durable behavior tests and recovery gates exist. |
 | A benchmark or GPU output is used as acceptance truth. | Reword as advisory evidence and require CPU-backed or durable owner evidence. |
-| A worker treats `tests/fuzzing/` as the canonical fuzz workspace. | Redirect to `tests/fuzzing/targets.toml`, `tests/fuzzing/corpus/manifest.toml`, `fuzz/generators/generate_seed_corpus.py`, and `fuzz/VALIDATION_MATRIX.md`. |
+| A worker treats `tests/fuzzing/` as the canonical fuzz execution workspace. | Redirect execution workspace ownership to `fuzz/`, and keep registry/corpus/index authority in `tests/fuzzing/targets.toml` and `tests/fuzzing/corpus/manifest.toml` as applicable. |
 | A worker asks this map to settle `docs/` versus `documentations/`. | Leave path normalization to the dedicated documentation mapping packet and keep this map focused on crate ownership. |
 
 ## References

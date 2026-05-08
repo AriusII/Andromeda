@@ -1,9 +1,9 @@
 use andromeda_error::AndromedaResult;
 
-use crate::ir::SrplPredicateIr;
 use crate::{
     SrplBusinessOperationIr, SrplBusinessOperationKindIr, SrplProcedureBodyIr, SrplProcedureIr,
 };
+use andromeda_srpl_ir::SrplPredicateIr;
 
 use super::predicate_fold::simplify_predicates;
 
@@ -84,7 +84,7 @@ fn normalize_operation(mut op: SrplBusinessOperationIr) -> Option<SrplBusinessOp
 mod tests {
     use super::*;
     use crate::SrplBusinessOperationKindIr;
-    use crate::ir::SrplPredicateIr;
+    use andromeda_srpl_ir::SrplPredicateIr;
 
     fn read_op(ordinal: u32, predicates: Vec<SrplPredicateIr>) -> SrplBusinessOperationIr {
         SrplBusinessOperationIr {

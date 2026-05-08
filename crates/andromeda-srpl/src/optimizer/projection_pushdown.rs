@@ -79,12 +79,12 @@ fn add_read_predicate_fields(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::{SrplEmitValueIr, SrplValueIr};
     use crate::{
         Cardinality, SrplBusinessOperationIr, SrplBusinessOperationKindIr, SrplProcedureBodyIr,
         SrplProcedureIr,
     };
     use andromeda_catalog::QualifiedName;
+    use andromeda_srpl_ir::{SrplEmitValueIr, SrplValueIr};
 
     fn qn(s: &str) -> QualifiedName {
         QualifiedName::parse(s).unwrap()

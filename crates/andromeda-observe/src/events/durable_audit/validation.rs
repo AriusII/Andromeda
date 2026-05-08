@@ -80,7 +80,7 @@ pub(crate) fn validate_permissioned_critical_policy_binding(
     Ok(())
 }
 
-pub(super) fn validation_failure(
+pub(crate) fn validation_failure(
     identity: DurableAuditRecordIdentity,
     message: impl Into<String>,
 ) -> DurableAuditSinkFailure {

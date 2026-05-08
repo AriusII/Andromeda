@@ -2,7 +2,7 @@ use crate::support::{
     assert_message_contains, assert_page_flush_allowed, assert_page_flush_blocked,
 };
 use andromeda_core::AndromedaErrorKind;
-use andromeda_storage::{Lsn, validate_wal_durability_before_page_flush};
+use andromeda_wal::{Lsn, validate_wal_durability_before_page_flush};
 
 #[test]
 fn page_can_flush_when_first_dirty_lsn_equals_wal_durable_lsn() {

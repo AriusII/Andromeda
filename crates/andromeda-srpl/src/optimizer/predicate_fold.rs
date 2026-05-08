@@ -1,4 +1,4 @@
-use crate::ir::SrplPredicateIr;
+use andromeda_srpl_ir::SrplPredicateIr;
 
 /// Result of simplifying a predicate list.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,7 +72,7 @@ pub fn simplify_predicates(predicates: Vec<SrplPredicateIr>) -> SimplifiedPredic
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::SrplPredicateIr;
+    use andromeda_srpl_ir::SrplPredicateIr;
 
     fn eq_pred(input: &str, binding: &str, field: &str) -> SrplPredicateIr {
         SrplPredicateIr::InputEqualsField {

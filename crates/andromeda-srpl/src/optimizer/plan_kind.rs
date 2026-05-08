@@ -1,7 +1,7 @@
 use andromeda_catalog::PlanClass;
 
-use crate::ir::SrplPredicateIr;
 use crate::{Cardinality, SrplBusinessOperationKindIr, SrplProcedureIr};
+use andromeda_srpl_ir::SrplPredicateIr;
 
 /// Internal plan choice taxonomy.
 ///

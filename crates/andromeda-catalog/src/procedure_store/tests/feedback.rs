@@ -115,3 +115,41 @@ fn procedure_feedback_prune_expired_drops_only_expired_records() {
     assert_eq!(removed, 1);
     assert_eq!(store.total_procedure_feedback(), 1);
 }
+
+#[test]
+fn procedure_feedback_visibility_respects_validity_window_bounds() {
+    let mut store = ProcedureStore::new();
+    store
+        .register(entry(1, "Inventory.ReserveStock", 42))
+        .unwrap();
+
+    let future = ProcedureFeedback::new(
+        crate::FeedbackId::new(3).unwrap(),
+        ProcedureId::new(1),
+        Some([0xAB; 32]),
+        StatsVersion::new(1),
+        crate::CompletionEvidence {
+            status: crate::CompletionStatus::Committed,
+            completion_code: Some(0),
+            row_count: Some(1),
+            durable_lsn: Some(9),
+        },
+        make_window(200, 400),
+    )
+    .unwrap();
+
+    store.attach_procedure_feedback(future).unwrap();
+
+    let before_issue = store.procedure_feedback_for_at(
+        ProcedureId::new(1),
+        andromeda_time::EngineTimestamp::from_unix_millis(199),
+    );
+    assert!(before_issue.is_empty());
+
+    let at_issue = store.procedure_feedback_for_at(
+        ProcedureId::new(1),
+        andromeda_time::EngineTimestamp::from_unix_millis(200),
+    );
+    assert_eq!(at_issue.len(), 1);
+    assert!(!at_issue[0].is_authoritative());
+}

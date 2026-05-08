@@ -22,11 +22,7 @@ pub mod digest {
 /// Compatibility exports for crates that still import hardware policy types via
 /// `andromeda_core::policy::*`.
 pub mod policy {
-    pub use crate::{
-        CpuCapabilityClass, CpuProfile, GpuExecutionPolicy, GpuProfile, HardwareArchitecture,
-        HardwareProfile, PipelineClass, RamProfile, RamSectionBudget, RamSectionRole,
-        ResourceBudget,
-    };
+    pub use andromeda_hardware::policy::*;
 }
 
 pub use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};

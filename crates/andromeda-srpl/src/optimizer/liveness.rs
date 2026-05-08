@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
-use crate::ir::{SrplPredicateIr, SrplValueIr};
 use crate::{SrplBusinessOperationKindIr, SrplProcedureIr};
+use andromeda_srpl_ir::{SrplPredicateIr, SrplValueIr};
 
 type ColRef = (String, String); // (binding, field)
 
@@ -131,12 +131,12 @@ fn compute_def(kind: &SrplBusinessOperationKindIr) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::{SrplEmitValueIr, SrplPredicateIr, SrplValueIr};
     use crate::{
         Cardinality, SrplBusinessOperationIr, SrplBusinessOperationKindIr, SrplProcedureBodyIr,
         SrplProcedureIr,
     };
     use andromeda_catalog::QualifiedName;
+    use andromeda_srpl_ir::{SrplEmitValueIr, SrplPredicateIr, SrplValueIr};
 
     fn qn(s: &str) -> QualifiedName {
         QualifiedName::parse(s).unwrap()
