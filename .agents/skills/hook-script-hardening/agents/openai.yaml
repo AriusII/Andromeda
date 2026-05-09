@@ -1,3 +1,0 @@
-display_name: "Hook Script Hardening"
-short_description: "Harden Python hook scripts for deterministic JSON input/output, safe failures, no secret leakage, and bounded execution. Use when writing or reviewing hook scripts."
-default_prompt: "Use the Hook Script Hardening skill to analyze the current Andromeda task and return a bounded, validated result."

@@ -1,3 +1,0 @@
-display_name: "Rust Test Strategy"
-short_description: "Design a layered Rust test strategy: unit, integration, property, fuzz, Miri, Loom, crash/recovery, HA/DR, E2E, and benchmarks. Use when working on rust tasks that require this workflow."
-default_prompt: "Use the Rust Test Strategy skill to analyze the current Andromeda task and return a bounded, validated result."

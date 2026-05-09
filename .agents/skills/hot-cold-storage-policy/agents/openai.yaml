@@ -1,3 +1,0 @@
-display_name: "Hot Cold Storage Policy"
-short_description: "Design RAM, NVMe HotStore, WAL, TempStore, HDD ColdStore, snapshots, and reconstruction truth. Use when working on storage architecture."
-default_prompt: "Use the Hot Cold Storage Policy skill to analyze the current Andromeda task and return a bounded, validated result."

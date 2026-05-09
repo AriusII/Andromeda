@@ -1,3 +1,0 @@
-display_name: "Rust Concurrency Loom Modeling"
-short_description: "Model small Rust concurrency primitives with Loom. Use when working on atomics, pin guards, latches, lock-free queues, and backpressure flags."
-default_prompt: "Use the Rust Concurrency Loom Modeling skill to analyze the current Andromeda task and return a bounded, validated result."

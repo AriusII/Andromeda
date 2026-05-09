@@ -1,3 +1,0 @@
-display_name: "Rust Feature Flag Governance"
-short_description: "Govern Cargo features: additive features, minimal defaults, feature matrix testing, mutually exclusive flags, and workspace consistency. Use when working on rust tasks that require this workflow."
-default_prompt: "Use the Rust Feature Flag Governance skill to analyze the current Andromeda task and return a bounded, validated result."

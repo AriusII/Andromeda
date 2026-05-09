@@ -1,3 +1,0 @@
-display_name: "IAM Security Policy"
-short_description: "Design mTLS to CertificateIdentity to UserPrincipal to roles/permissions/policies/audit. Use when working on security and authorization implementation."
-default_prompt: "Use the IAM Security Policy skill to analyze the current Andromeda task and return a bounded, validated result."

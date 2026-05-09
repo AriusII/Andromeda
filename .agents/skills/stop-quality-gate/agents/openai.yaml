@@ -1,3 +1,0 @@
-display_name: "Stop Quality Gate"
-short_description: "Run final response quality checks before completion. Use when you need to detect missing artifacts, missing validation, unsafe claims, and incomplete mission-critical deliverables."
-default_prompt: "Use the Stop Quality Gate skill to analyze the current Andromeda task and return a bounded, validated result."

@@ -1,3 +1,0 @@
-display_name: "Procedure Store Design"
-short_description: "Design Procedure Store fields, invocation traces, plan feedback, regressions, resource telemetry, and audit correlation. Use when implementing diagnostic history."
-default_prompt: "Use the Procedure Store Design skill to analyze the current Andromeda task and return a bounded, validated result."

@@ -1,3 +1,0 @@
-display_name: "Agents Md Authoring"
-short_description: "Author and maintain repository-level AGENTS.md instructions for Codex. Use when defining project doctrine, hierarchy, scope, precedence, and contribution rules."
-default_prompt: "Use the Agents Md Authoring skill to analyze the current Andromeda task and return a bounded, validated result."

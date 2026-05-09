@@ -1,3 +1,0 @@
-display_name: "Rust Module Splitting"
-short_description: "Split Rust modules by responsibility, not by arbitrary size. Use when files become large or mix parsing, validation, I/O, tests, and runtime logic."
-default_prompt: "Use the Rust Module Splitting skill to analyze the current Andromeda task and return a bounded, validated result."

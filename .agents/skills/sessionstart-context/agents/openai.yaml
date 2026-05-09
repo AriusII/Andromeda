@@ -1,3 +1,0 @@
-display_name: "Sessionstart Context"
-short_description: "Inject compact Andromeda mission context at session start. Use when you need to keep Codex aligned with strict boundaries, Rust baseline, and core invariants."
-default_prompt: "Use the Sessionstart Context skill to analyze the current Andromeda task and return a bounded, validated result."

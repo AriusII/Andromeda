@@ -1,3 +1,0 @@
-display_name: "Statistics Histogram Design"
-short_description: "Design StatsVersion, histograms, row counts, skew, density, validation state, and publication switch. Use when working on statistics engine implementation."
-default_prompt: "Use the Statistics Histogram Design skill to analyze the current Andromeda task and return a bounded, validated result."

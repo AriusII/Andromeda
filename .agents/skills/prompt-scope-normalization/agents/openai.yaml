@@ -1,3 +1,0 @@
-display_name: "Prompt Scope Normalization"
-short_description: "Normalize oversized or emotional prompts into a precise engineering work order. Use when Codex must turn broad ambition into a bounded, testable, mission-critical task."
-default_prompt: "Use the Prompt Scope Normalization skill to analyze the current Andromeda task and return a bounded, validated result."

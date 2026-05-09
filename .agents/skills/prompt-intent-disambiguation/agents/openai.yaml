@@ -1,3 +1,0 @@
-display_name: "Prompt Intent Disambiguation"
-short_description: "Clarify user intent without losing momentum. Use when a user prompt mixes roadmap, implementation, cleanup, research, and tooling requirements and Codex must infer a safe actionable scope."
-default_prompt: "Use the Prompt Intent Disambiguation skill to analyze the current Andromeda task and return a bounded, validated result."

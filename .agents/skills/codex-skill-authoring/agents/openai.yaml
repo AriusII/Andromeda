@@ -1,3 +1,0 @@
-display_name: "Codex Skill Authoring"
-short_description: "Create precise Codex skills with SKILL.md frontmatter, progressive disclosure, references, scripts, and validation. Use when adding or improving a skill."
-default_prompt: "Use the Codex Skill Authoring skill to analyze the current Andromeda task and return a bounded, validated result."

@@ -1,3 +1,0 @@
-display_name: "Decision Record Authoring"
-short_description: "Create ADR/DEC records with context, decision, alternatives, consequences, revision criteria, and test gates. Use when working on architecture, tooling, Rust, WAL, SRPL, hook, or agent policy decisions."
-default_prompt: "Use the Decision Record Authoring skill to analyze the current Andromeda task and return a bounded, validated result."

@@ -1,3 +1,0 @@
-display_name: "Type System Domain Modeling"
-short_description: "Design scalars, decimals, floats, text, binary, domain types, enums, flags, optional types, and collection cardinality. Use when working on TypeSystem v0."
-default_prompt: "Use the Type System Domain Modeling skill to analyze the current Andromeda task and return a bounded, validated result."

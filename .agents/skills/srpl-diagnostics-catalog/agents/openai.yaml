@@ -1,3 +1,0 @@
-display_name: "SRPL Diagnostics Catalog"
-short_description: "Create stable SRPL diagnostic codes for type, cardinality, map, resource, contract, and determinism errors. Use when working on compiler and CI outputs."
-default_prompt: "Use the SRPL Diagnostics Catalog skill to analyze the current Andromeda task and return a bounded, validated result."

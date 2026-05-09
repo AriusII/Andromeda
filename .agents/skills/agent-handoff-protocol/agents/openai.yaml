@@ -1,3 +1,0 @@
-display_name: "Agent Handoff Protocol"
-short_description: "Prepare handoffs between Codex agents with exact task boundaries, inputs, constraints, expected outputs, and validation. Use when a master agent delegates to specialized subagents."
-default_prompt: "Use the Agent Handoff Protocol skill to analyze the current Andromeda task and return a bounded, validated result."

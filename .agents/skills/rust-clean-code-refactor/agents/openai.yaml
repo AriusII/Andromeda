@@ -1,3 +1,0 @@
-display_name: "Rust Clean Code Refactor"
-short_description: "Refactor Rust code without behavior changes. Use when working on simplification, naming, extraction, deduplication, visibility reduction, and stronger invariants."
-default_prompt: "Use the Rust Clean Code Refactor skill to analyze the current Andromeda task and return a bounded, validated result."
