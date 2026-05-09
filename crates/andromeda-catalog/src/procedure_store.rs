@@ -23,18 +23,14 @@
 
 mod decision;
 mod entry;
-mod evidence_role;
-mod registration;
 mod runtime;
 mod store;
 
 pub use self::decision::InvocationDecisionRecord;
 pub use self::entry::ProcedureStoreEntry;
-pub use self::evidence_role::ProcedureStoreEvidenceRole;
-pub use self::registration::ProcedureRegistration;
 pub use self::runtime::{
-    InvocationRuntimeRecord, InvocationRuntimeRecordOutcome, ProcedureRuntimeCounters,
-    ProcedureRuntimePlanId, ProcedureRuntimeRecordId, ProcedureRuntimeStatus,
+    InvocationRuntimeRecord, InvocationRuntimeRecordOutcome, ProcedureRuntimePlanId,
+    ProcedureRuntimeRecordId,
 };
 pub use self::store::{PROCEDURE_FEEDBACK_CAPACITY_PER_PROCEDURE, ProcedureStore};
 pub use andromeda_procedure_store::{
@@ -44,7 +40,8 @@ pub use andromeda_procedure_store::{
     InvocationId as ProcedureStoreInvocationId,
     InvocationIdentity as ProcedureStoreInvocationIdentity, InvocationMetricKind,
     InvocationMetrics, InvocationStatus as ProcedureStoreInvocationStatus,
-    MAX_REGRESSION_THRESHOLD_BPS, ProcedureId as ProcedureStoreProcedureId,
+    MAX_REGRESSION_THRESHOLD_BPS, ProcedureId as ProcedureStoreProcedureId, ProcedureRegistration,
+    ProcedureRuntimeCounters, ProcedureRuntimeStatus, ProcedureStoreEvidenceRole,
     ProcedureStorePrimitiveError, ProcedureStorePrimitiveResult, RegressionSeverity,
     RegressionSignal, RegressionThresholdBps,
 };

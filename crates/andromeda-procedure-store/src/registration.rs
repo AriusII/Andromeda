@@ -1,5 +1,4 @@
-/// Outcome of a [`ProcedureStore::register`](super::ProcedureStore::register)
-/// call.
+/// Outcome of a Procedure Store registration call.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProcedureRegistration {
     Inserted,

@@ -4,8 +4,10 @@ fn procedure_store_production_sources_do_not_panic_or_unwrap() {
         include_str!("../../procedure_store.rs"),
         include_str!("../decision.rs"),
         include_str!("../entry.rs"),
-        include_str!("../evidence_role.rs"),
-        include_str!("../registration.rs"),
+        include_str!("../../../../andromeda-procedure-store/src/evidence_role.rs"),
+        include_str!("../../../../andromeda-procedure-store/src/registration.rs"),
+        include_str!("../../../../andromeda-procedure-store/src/runtime_counters.rs"),
+        include_str!("../../../../andromeda-procedure-store/src/runtime_status.rs"),
         include_str!("../runtime.rs"),
         include_str!("../store.rs"),
     ];
@@ -42,7 +44,7 @@ fn procedure_store_exposes_no_ad_hoc_sql_surface() {
         include_str!("../../procedure_store.rs"),
         include_str!("../decision.rs"),
         include_str!("../entry.rs"),
-        include_str!("../registration.rs"),
+        include_str!("../../../../andromeda-procedure-store/src/registration.rs"),
         include_str!("../store.rs"),
     ];
     let halves: &[(&str, &str)] = &[

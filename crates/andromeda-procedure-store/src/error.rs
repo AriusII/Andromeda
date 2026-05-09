@@ -18,10 +18,10 @@ impl fmt::Display for ProcedureStorePrimitiveError {
         match self {
             Self::NonTerminalFeedbackStatus => {
                 f.write_str("invocation feedback status must be terminal")
-            }
+            },
             Self::RegressionThresholdOutOfRange => {
                 f.write_str("regression threshold basis points must be between 0 and 10000")
-            }
+            },
             Self::ZeroAuditCorrelationId => f.write_str("audit correlation id must not be zero"),
             Self::ZeroInvocationId => f.write_str("procedure invocation id must not be zero"),
             Self::ZeroFeedbackId => f.write_str("procedure feedback id must not be zero"),

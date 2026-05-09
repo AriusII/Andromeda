@@ -219,6 +219,7 @@ dependencies = [
  "andromeda-contract",
  "andromeda-digest",
  "andromeda-error",
+ "andromeda-srpl-diagnostics",
  "andromeda-types",
 ]
 
@@ -418,6 +419,7 @@ dependencies = [
  "andromeda-contract",
  "andromeda-error",
  "andromeda-observe",
+ "andromeda-result-stream",
  "andromeda-srpl-ir",
  "andromeda-types",
 ]
@@ -632,6 +634,7 @@ version = "0.1.0"
 dependencies = [
  "andromeda-catalog",
  "andromeda-contract",
+ "andromeda-definition-batch",
  "andromeda-digest",
  "andromeda-error",
  "andromeda-optimizer",

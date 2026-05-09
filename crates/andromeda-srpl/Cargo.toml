@@ -7,6 +7,7 @@ publish = false
 
 [dependencies]
 andromeda-catalog.workspace = true
+andromeda-definition-batch.workspace = true
 andromeda-digest.workspace = true
 andromeda-error.workspace = true
 andromeda-optimizer.workspace = true

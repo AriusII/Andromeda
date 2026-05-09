@@ -10,5 +10,6 @@ andromeda-admission.workspace = true
 andromeda-contract.workspace = true
 andromeda-error.workspace = true
 andromeda-observe.workspace = true
+andromeda-result-stream.workspace = true
 andromeda-srpl-ir.workspace = true
 andromeda-types.workspace = true

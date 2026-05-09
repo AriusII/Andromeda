@@ -4,7 +4,7 @@ use andromeda_types::{InvocationId, ProcedureId};
 
 use crate::ProcedureContractBinding;
 
-use super::evidence_role::ProcedureStoreEvidenceRole;
+use andromeda_procedure_store::ProcedureStoreEvidenceRole;
 
 /// Decision evidence attached to a single invocation. Every invocation that
 /// reaches the store must carry a [`DecisionTrace`] explaining why it was
@@ -67,7 +67,7 @@ impl InvocationDecisionRecord {
     }
 
     pub const fn evidence_role(&self) -> ProcedureStoreEvidenceRole {
-        ProcedureStoreEvidenceRole::authoritative_decision()
+        ProcedureStoreEvidenceRole::AUTHORITATIVE_DECISION
     }
 
     pub const fn is_authoritative_decision(&self) -> bool {

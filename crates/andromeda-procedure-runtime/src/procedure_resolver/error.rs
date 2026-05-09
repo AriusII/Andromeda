@@ -46,7 +46,7 @@ impl ProcedureResolveError {
         match self {
             Self::InvalidRequest { message } | Self::InvalidResponse { message } => {
                 AndromedaError::new(AndromedaErrorKind::Contract, message)
-            }
+            },
             Self::UnknownProcedure { .. } => AndromedaError::new(
                 AndromedaErrorKind::Catalog,
                 "procedure resolver found no matching procedure",
@@ -61,7 +61,7 @@ impl ProcedureResolveError {
             ),
             Self::ResolverRejected { message } => {
                 AndromedaError::new(AndromedaErrorKind::Catalog, message)
-            }
+            },
         }
     }
 }

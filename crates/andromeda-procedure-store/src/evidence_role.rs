@@ -18,17 +18,13 @@ enum ProcedureStoreEvidenceRoleKind {
 impl ProcedureStoreEvidenceRole {
     pub const VARIANT_COUNT: usize = 2;
 
-    pub(crate) const fn authoritative_decision() -> Self {
-        Self {
-            kind: ProcedureStoreEvidenceRoleKind::AuthoritativeDecision,
-        }
-    }
+    pub const AUTHORITATIVE_DECISION: Self = Self {
+        kind: ProcedureStoreEvidenceRoleKind::AuthoritativeDecision,
+    };
 
-    pub(crate) const fn observed_feedback() -> Self {
-        Self {
-            kind: ProcedureStoreEvidenceRoleKind::ObservedFeedback,
-        }
-    }
+    pub const OBSERVED_FEEDBACK: Self = Self {
+        kind: ProcedureStoreEvidenceRoleKind::ObservedFeedback,
+    };
 
     pub const fn as_tag(self) -> u8 {
         match self.kind {
@@ -49,6 +45,6 @@ impl ProcedureStoreEvidenceRole {
     }
 
     pub const fn can_select_plan_alone(self) -> bool {
-        self.is_authoritative_decision()
+        false
     }
 }

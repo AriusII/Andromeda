@@ -1,12 +1,8 @@
-mod counters;
 mod identity;
 mod record;
-mod status;
 
-pub use self::counters::ProcedureRuntimeCounters;
 pub use self::identity::{ProcedureRuntimePlanId, ProcedureRuntimeRecordId};
 pub use self::record::{InvocationRuntimeRecord, InvocationRuntimeRecordOutcome};
-pub use self::status::ProcedureRuntimeStatus;
 
 use andromeda_error::{AndromedaError, AndromedaErrorKind};
 

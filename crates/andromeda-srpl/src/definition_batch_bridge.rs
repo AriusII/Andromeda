@@ -21,24 +21,17 @@
 //! - **Side Effects**: None for dry-run; durable apply delegates to catalog WAL
 //!   append/flush callbacks before catalog visibility.
 
-mod diagnostics;
 mod dry_run;
 mod procedure_definition;
-mod source_evidence;
 
-pub use diagnostics::{SrplDefinitionBatchDiagnostic, SrplDefinitionBatchDryRunError};
+pub use andromeda_definition_batch::{
+    MAX_SRPL_DEFINITION_BATCH_PROCEDURES, SrplDefinitionBatchDiagnostic,
+    SrplDefinitionBatchDryRunError, SrplDefinitionBatchSourceEvidence, SrplProcedureDryRunManifest,
+    SrplProcedureSourceDigest, SrplProcedureSourceDigestEvidence,
+};
 pub use dry_run::{
     SrplDefinitionBatchDryRunReport, SrplDefinitionBatchDryRunRequest,
     SrplDefinitionBatchDurableApplyReport, SrplDefinitionBatchProcedureSource,
-    SrplProcedureDryRunManifest, dry_run_srpl_definition_batch_sources,
+    dry_run_srpl_definition_batch_sources,
 };
 pub use procedure_definition::SrplProcedureDefinition;
-pub use source_evidence::{
-    SrplDefinitionBatchSourceEvidence, SrplProcedureSourceDigest, SrplProcedureSourceDigestEvidence,
-};
-
-/// Maximum SRPL Procedure sources accepted by one DefinitionBatch dry-run.
-///
-/// This keeps SRPL compilation and diagnostic aggregation bounded before the
-/// bridge materializes catalog operations.
-pub const MAX_SRPL_DEFINITION_BATCH_PROCEDURES: usize = 128;

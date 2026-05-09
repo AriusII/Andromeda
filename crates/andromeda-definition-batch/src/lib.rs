@@ -7,10 +7,10 @@ and taxonomy primitives.
 
 This crate exposes stable identity/hash primitives, import correlation
 identifiers, portable DefinitionBatch operations, dependency graph validation,
-materialized Procedure contract dry-runs, and taxonomy placeholders. It does
-not parse SRPL source, apply, roll back, or publish definition changes. It does
-not claim release readiness, serialize network or disk formats, or authorize
-any application-facing ad hoc SQL surface.
+materialized Procedure contract dry-runs, SRPL bridge source-evidence envelopes,
+and taxonomy placeholders. It does not parse SRPL source, apply, roll back, or
+publish definition changes. It does not claim release readiness, serialize
+network or disk formats, or authorize any application-facing ad hoc SQL surface.
 
 Catalog publication remains outside this crate and must not become visible
 without durable WAL.
@@ -21,6 +21,7 @@ mod dry_run;
 mod identity;
 mod operation;
 mod source;
+mod srpl_bridge;
 mod taxonomy;
 
 pub use dependencies::{
@@ -38,6 +39,11 @@ pub use operation::{
     PlannedLifecycleTransition,
 };
 pub use source::compute_definition_batch_source_hash;
+pub use srpl_bridge::{
+    MAX_SRPL_DEFINITION_BATCH_PROCEDURES, SrplDefinitionBatchDiagnostic,
+    SrplDefinitionBatchDryRunError, SrplDefinitionBatchSourceEvidence, SrplProcedureDryRunManifest,
+    SrplProcedureSourceDigest, SrplProcedureSourceDigestEvidence,
+};
 pub use taxonomy::{
     ALL_DEFINITION_BATCH_APPLY_BARRIERS, ALL_DEFINITION_BATCH_OPERATION_KINDS,
     ALL_DEFINITION_BATCH_PHASES, DEFINITION_BATCH_BARRIER_AUDIT_EVIDENCE_REQUIRED,

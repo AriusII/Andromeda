@@ -1,8 +1,9 @@
 use andromeda_core::AndromedaResult;
+use andromeda_manifest::{ManifestFormatHashInput, storage_format_manifest_hash};
 
 use crate::format_version::{FormatVersion, StorageFormatFingerprint, StorageFormatKind};
 
-use super::{DatabaseManifest, hash::storage_format_manifest_hash, storage_error};
+use super::{DatabaseManifest, storage_error};
 
 pub const DATABASE_MANIFEST_STORAGE_FORMAT_FINGERPRINTS: [StorageFormatFingerprint; 5] = [
     StorageFormatFingerprint::new(StorageFormatKind::Page, FormatVersion::V1_0),
@@ -28,8 +29,12 @@ impl StorageFormatManifest {
         snapshot_id: u64,
         fingerprints: Vec<StorageFormatFingerprint>,
     ) -> Self {
-        let fingerprint_hash =
-            storage_format_manifest_hash(database_id, manifest_version, snapshot_id, &fingerprints);
+        let fingerprint_hash = storage_format_manifest_hash(
+            database_id,
+            manifest_version,
+            snapshot_id,
+            fingerprints.iter().copied().map(manifest_hash_input),
+        );
         Self {
             database_id,
             manifest_version,
@@ -90,7 +95,7 @@ impl StorageFormatManifest {
             self.database_id,
             self.manifest_version,
             self.snapshot_id,
-            &self.fingerprints,
+            self.fingerprints.iter().copied().map(manifest_hash_input),
         );
         if self.fingerprint_hash != expected_hash {
             return Err(storage_error(
@@ -99,5 +104,27 @@ impl StorageFormatManifest {
         }
 
         Ok(())
+    }
+}
+
+fn manifest_hash_input(fingerprint: StorageFormatFingerprint) -> ManifestFormatHashInput {
+    ManifestFormatHashInput::new(
+        storage_format_kind_tag(fingerprint.kind),
+        fingerprint.version.major,
+        fingerprint.version.minor,
+    )
+}
+
+fn storage_format_kind_tag(kind: StorageFormatKind) -> u64 {
+    match kind {
+        StorageFormatKind::Page => 1,
+        StorageFormatKind::HeapPage => 2,
+        StorageFormatKind::BTreeKey => 3,
+        StorageFormatKind::BTreeNode => 4,
+        StorageFormatKind::WalRecord => 5,
+        StorageFormatKind::WalPayload => 6,
+        StorageFormatKind::Manifest => 7,
+        StorageFormatKind::Segment => 8,
+        StorageFormatKind::Checkpoint => 9,
     }
 }

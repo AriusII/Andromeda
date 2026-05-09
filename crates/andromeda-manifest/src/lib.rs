@@ -18,6 +18,10 @@ C5 invariants:
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_wal::Lsn;
 
+mod storage_format_hash;
+
+pub use storage_format_hash::{ManifestFormatHashInput, storage_format_manifest_hash};
+
 /// Durable recovery root fields carried by an accepted database manifest.
 ///
 /// This is a domain boundary, not a disk codec. Persistent manifest bytes still
@@ -76,7 +80,8 @@ pub fn validate_manifest_atomic_switch(
     wal_durable_lsn: Lsn,
     wal_checkpoint_lsn: Lsn,
 ) -> AndromedaResult<()> {
-    if manifest_checkpoint_lsn.is_zero() && (!wal_checkpoint_lsn.is_zero() || !wal_durable_lsn.is_zero())
+    if manifest_checkpoint_lsn.is_zero()
+        && (!wal_checkpoint_lsn.is_zero() || !wal_durable_lsn.is_zero())
     {
         return Err(manifest_error(
             "bootstrap manifest checkpoint conflicts with nonzero WAL evidence",
@@ -149,10 +154,14 @@ mod tests {
 
     #[test]
     fn manifest_switch_and_recovery_fences_validate() {
-        assert!(validate_manifest_atomic_switch(Lsn::new(500), Lsn::new(600), Lsn::new(500)).is_ok());
+        assert!(
+            validate_manifest_atomic_switch(Lsn::new(500), Lsn::new(600), Lsn::new(500)).is_ok()
+        );
         assert!(validate_recovery_floor(Lsn::new(300), Lsn::new(300)).is_ok());
 
-        assert!(validate_manifest_atomic_switch(Lsn::new(600), Lsn::new(600), Lsn::new(500)).is_err());
+        assert!(
+            validate_manifest_atomic_switch(Lsn::new(600), Lsn::new(600), Lsn::new(500)).is_err()
+        );
         assert!(validate_recovery_floor(Lsn::new(200), Lsn::new(300)).is_err());
     }
 }

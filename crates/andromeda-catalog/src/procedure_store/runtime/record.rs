@@ -8,14 +8,14 @@ use crate::{
     digest::Sha256,
     plan_cache::{PlanCacheKey, PlanClass},
 };
+use andromeda_procedure_store::{
+    ProcedureRuntimeCounters, ProcedureRuntimeStatus, ProcedureStoreEvidenceRole,
+};
 
 use super::{
-    counters::ProcedureRuntimeCounters,
     identity::{ProcedureRuntimePlanId, ProcedureRuntimeRecordId},
     runtime_contract_error,
-    status::ProcedureRuntimeStatus,
 };
-use crate::procedure_store::evidence_role::ProcedureStoreEvidenceRole;
 
 const PROCEDURE_RUNTIME_RECORD_DOMAIN: &[u8] = b"andromeda.procedure_store.runtime-record.v1";
 
@@ -144,7 +144,7 @@ impl InvocationRuntimeRecord {
             decision_trace_id,
             plan_key,
             plan_id,
-            evidence_role: ProcedureStoreEvidenceRole::observed_feedback(),
+            evidence_role: ProcedureStoreEvidenceRole::OBSERVED_FEEDBACK,
             counters,
             status,
             error_kind,
@@ -333,7 +333,7 @@ impl InvocationRuntimeRecord {
                     ));
                 }
                 Ok(())
-            }
+            },
         }
     }
 }
@@ -370,11 +370,11 @@ pub(super) fn compute_runtime_record_id(
         Some(trace_id) => {
             hasher.update(&[0x01]);
             hasher.update(&trace_id.get().to_le_bytes());
-        }
+        },
         None => {
             hasher.update(&[0x00]);
             hasher.update(&0u128.to_le_bytes());
-        }
+        },
     }
 
     hasher.update(&[0xAA]);
@@ -382,11 +382,11 @@ pub(super) fn compute_runtime_record_id(
         Some(plan_key) => {
             hasher.update(&[0x01]);
             hasher.update(&plan_key.digest());
-        }
+        },
         None => {
             hasher.update(&[0x00]);
             hasher.update(&[0u8; 32]);
-        }
+        },
     }
 
     hasher.update(&[0xAB]);
@@ -394,11 +394,11 @@ pub(super) fn compute_runtime_record_id(
         Some(plan_id) => {
             hasher.update(&[0x01]);
             hasher.update(&plan_id.as_bytes());
-        }
+        },
         None => {
             hasher.update(&[0x00]);
             hasher.update(&[0u8; 32]);
-        }
+        },
     }
 
     hasher.update(&[0xAF, record.evidence_role.as_tag()]);
@@ -420,7 +420,7 @@ pub(super) fn compute_runtime_record_id(
     match record.error_kind {
         Some(kind) => {
             hasher.update(&[0x01, error_kind_tag(kind)]);
-        }
+        },
         None => hasher.update(&[0x00, 0x00]),
     }
 

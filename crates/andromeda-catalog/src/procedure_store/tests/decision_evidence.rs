@@ -96,9 +96,9 @@ fn decision_evidence_requires_non_empty_reason() {
 }
 
 #[test]
-fn decision_evidence_role_is_authoritative_and_plan_selecting() {
+fn decision_evidence_role_is_authoritative_but_not_plan_selecting() {
     let record = decision(101, 1, 42);
     assert!(record.is_authoritative_decision());
     assert!(!record.is_observed_feedback());
-    assert!(record.can_select_plan_alone());
+    assert!(!record.can_select_plan_alone());
 }

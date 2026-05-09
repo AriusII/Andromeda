@@ -12,7 +12,6 @@ use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 #[cfg(test)]
 use andromeda_types::{CatalogObjectId, CatalogVersion, InvocationId, TransactionId};
 
-mod core_trace;
 mod decision;
 mod durability;
 mod durable_audit;
@@ -38,7 +37,7 @@ pub use andromeda_audit::{
 pub(crate) use andromeda_observability::{
     EventCorrelation, EventId, ProtocolCorrelation, ProtocolEventScope,
 };
-pub use core_trace::{InvocationTrace, MvccTrace, ResourceTrace};
+pub use andromeda_observability::{InvocationTrace, MvccTrace, ResourceTrace};
 pub use decision::{
     CriticalDecisionKind, DecisionTrace, GpuPolicyDecisionTrace, IoBudgetDecisionTrace,
     IoPipelineStage, IoPlacementDecisionTrace, IoStorageTier, PlacementAuditEvent,

@@ -1,15 +1,16 @@
 use andromeda_catalog::{
     CatalogDefinition, CatalogMutationRecordKind, CatalogSystemDurableApplyReport,
     CatalogSystemStore, DefinitionBatch, DefinitionBatchDependencyGraphHash, DefinitionBatchId,
-    DefinitionBatchPlan, DefinitionBatchSourceHash, DefinitionOperation, ProcedureContractBinding,
-    QualifiedName, ResultStreamCardinality,
+    DefinitionBatchPlan, DefinitionBatchSourceHash, DefinitionOperation,
+};
+use andromeda_definition_batch::{
+    MAX_SRPL_DEFINITION_BATCH_PROCEDURES, SrplDefinitionBatchDiagnostic,
+    SrplDefinitionBatchDryRunError, SrplDefinitionBatchSourceEvidence, SrplProcedureDryRunManifest,
+    SrplProcedureSourceDigest,
 };
 use andromeda_error::AndromedaResult;
-use andromeda_types::{CatalogObjectId, CatalogVersion, ContractHash};
+use andromeda_types::CatalogVersion;
 
-use super::MAX_SRPL_DEFINITION_BATCH_PROCEDURES;
-use super::diagnostics::{SrplDefinitionBatchDiagnostic, SrplDefinitionBatchDryRunError};
-use super::source_evidence::{SrplDefinitionBatchSourceEvidence, SrplProcedureSourceDigest};
 use crate::{
     DiagnosticPhase, SrplDiagnostic, SrplProcedureContractMetadata,
     compile_narrow_procedure_definition,
@@ -43,20 +44,6 @@ pub struct SrplDefinitionBatchDryRunRequest {
     pub namespace_id: andromeda_types::NamespaceId,
     pub base_version: CatalogVersion,
     pub procedures: Vec<SrplDefinitionBatchProcedureSource>,
-}
-
-/// Materialized Procedure manifest produced by the SRPL dry-run path.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SrplProcedureDryRunManifest {
-    pub source_index: usize,
-    pub source_digest: SrplProcedureSourceDigest,
-    pub procedure_name: QualifiedName,
-    pub object_id: CatalogObjectId,
-    pub binding: ProcedureContractBinding,
-    pub contract_hash: ContractHash,
-    pub input_count: usize,
-    pub result_stream_count: usize,
-    pub result_stream_cardinalities: Vec<ResultStreamCardinality>,
 }
 
 /// Successful all-or-nothing SRPL DefinitionBatch dry-run.
@@ -228,7 +215,7 @@ fn compile_source_for_dry_run(
                 manifests,
                 diagnostics,
             );
-        }
+        },
         Ok(other) => diagnostics.push(SrplDefinitionBatchDiagnostic::source(
             source_index,
             SrplDiagnostic::new(
@@ -245,7 +232,7 @@ fn compile_source_for_dry_run(
                 source_index,
                 diagnostic,
             ));
-        }
+        },
     }
 }
 

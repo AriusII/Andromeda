@@ -49,6 +49,16 @@ It also names target crates that already exist in the workspace and are intended
 - Converted `andromeda-catalog::plan_cache` into a compatibility facade over `andromeda-scenario-evidence`.
 - Moved `andromeda-quic/src/hadr_streams.rs` and `andromeda-quic/src/hadr_streams/*` into `andromeda-hadr`.
 - Converted `andromeda-quic::hadr_streams` into a compatibility facade over `andromeda-hadr`.
+- Moved SRPL result metadata extraction from `andromeda-exec/src/result_metadata_extractor.rs` into `andromeda-procedure-runtime/src/result_metadata_extractor.rs`.
+- Converted `andromeda-exec::result_metadata_extractor` into a compatibility facade over `andromeda-procedure-runtime`.
+- Moved `InvocationTrace`, `MvccTrace`, and `ResourceTrace` ownership from `andromeda-observe/src/events/core_trace.rs` into `andromeda-observability/src/core_trace.rs`.
+- Converted the `andromeda-observe` event path for core traces into a compatibility facade over `andromeda-observability`.
+- Moved Procedure Store evidence role, registration, runtime counters, and runtime status from `andromeda-catalog` into `andromeda-procedure-store`.
+- Converted the extracted Procedure Store paths in `andromeda-catalog` into owner-crate imports and compatibility reexports where needed.
+- Moved the deterministic `StorageFormatManifest` hash primitive from `andromeda-storage/src/manifest/hash.rs` into `andromeda-manifest/src/storage_format_hash.rs`.
+- Kept `andromeda-storage` responsible only for adapting storage-local fingerprints into the manifest hash primitive.
+- Moved runtime-free SRPL DefinitionBatch bridge diagnostics and source evidence from `andromeda-srpl` into `andromeda-definition-batch/src/srpl_bridge.rs`.
+- Converted the extracted SRPL DefinitionBatch bridge paths in `andromeda-srpl` into compatibility reexports while keeping SRPL compiler/catalog orchestration local.
 
 ## TODO / SUB TODO / DEPENDENCIES
 
@@ -59,7 +69,7 @@ TODO: Reduce `andromeda-storage` from broad C5 owner to storage integration faca
 SUB TODO:
 
 - Keep extents and segment descriptors owned by `andromeda-segment`; remove storage compatibility facades after downstream call sites migrate.
-- Move remaining pure manifest domain, codec, root-switch, and publication boundary code into `andromeda-manifest`.
+- Keep `StorageFormatManifest` hash primitives owned by `andromeda-manifest`; move remaining pure manifest domain, codec, root-switch, and publication boundary code into `andromeda-manifest`.
 - Move segment-index owner tests fully to `andromeda-segment`; leave storage tests as compatibility and recovery integration tests.
 - Move pure page I/O contracts into `andromeda-disk-page-store` only after WAL-before-page-flush tests are owner-level.
 - Move buffer pool manager and guards into `andromeda-buffer-pool` after page-store and WAL observer traits are stable.
@@ -79,7 +89,7 @@ TODO: Make `andromeda-catalog` a catalog runtime owner, not a holder for every c
 SUB TODO:
 
 - Move Procedure contract model and compatibility-only imports to `andromeda-procedure-contract` and `andromeda-contract` facade paths.
-- Move Procedure Store runtime records, feedback, and regression evidence into `andromeda-procedure-store` after catalog publication integration remains tested.
+- Keep Procedure Store evidence role, registration, runtime counters, and runtime status owned by `andromeda-procedure-store`; move remaining Procedure Store records, feedback, and regression evidence out of catalog after catalog publication integration remains tested.
 - Keep the ScenarioEvidence plan-cache bridge owned by `andromeda-scenario-evidence`; move any remaining plan-cache identity, selection, and bounded evidence to `andromeda-plan-cache`; leave catalog only with published plan invalidation integration.
 - Move statistics object contracts and publication-switch primitives to `andromeda-statistics`; keep catalog activation and version publication in catalog until owner gates pass.
 - Move catalog recovery replay orchestration into `andromeda-catalog-recovery` behind an application trait that avoids cycles.
@@ -114,7 +124,7 @@ TODO: Keep `andromeda-srpl` as a temporary compatibility facade while moving com
 
 SUB TODO:
 
-- Move `definition_batch_bridge/*` out of `andromeda-srpl` into `andromeda-definition-batch`, `andromeda-catalog`, or a narrow integration crate if dependency cycles require it.
+- Keep runtime-free SRPL DefinitionBatch bridge diagnostics and source evidence owned by `andromeda-definition-batch`; move remaining `definition_batch_bridge/*` orchestration out of `andromeda-srpl` only when dependency cycles can be avoided.
 - Split `andromeda-srpl-binder/src/catalog_plan.rs` into catalog view, operation binding, validation, and fixtures.
 - Move reusable fixture bodies into `andromeda-srpl-test-fixtures`.
 - Split `andromeda-srpl-execution-adapter/src/contracts.rs` into row bounds, operation context, request types, and validation.
@@ -133,6 +143,7 @@ TODO: Reduce `andromeda-exec` to Procedure orchestration and integration, not ow
 SUB TODO:
 
 - Move generic dispatch request validation and remote-unavailable contracts into `andromeda-procedure-runtime`.
+- Keep SRPL result metadata extraction owned by `andromeda-procedure-runtime`; remove the `andromeda-exec` compatibility facade after downstream call sites migrate.
 - Keep concrete SRPL adapters in `andromeda-exec` until a runtime integration crate is accepted.
 - Remove temporary direct `andromeda-exec` to `andromeda-quic` bridge after transport callers use `andromeda-rpc`/`andromeda-rpc-protocol` paths.
 - Keep WAL evidence handling aligned with transaction and storage owner crates.
@@ -169,6 +180,7 @@ TODO: Prevent observability and benchmark evidence from becoming database truth.
 SUB TODO:
 
 - Consolidate `andromeda_observe::DecisionTrace` projections with `andromeda-decision-trace` versioned contracts.
+- Keep core trace types owned by `andromeda-observability`; remove the `andromeda-observe` compatibility facade after downstream call sites migrate.
 - Move or strictly namespace durable audit journal internals in `andromeda-observe`; consider a future `andromeda-durable-audit` only if it has a single primary responsibility.
 - Rename or move audit tests that claim fsync/crash/replay without real durable I/O evidence.
 - Move duplicate flat JSON artifact parsing from `andromeda-scenario-evidence` and `andromeda-regression` into a bounded advisory artifact codec if the format becomes stable.
@@ -201,6 +213,7 @@ cargo check -p andromeda-storage -p andromeda-segment -p andromeda-storage-page 
 cargo check -p andromeda-transaction -p andromeda-tx -p andromeda-locking -p andromeda-mvcc --all-targets --all-features
 cargo check -p andromeda-scenario-evidence -p andromeda-plan-cache -p andromeda-catalog --all-targets --all-features
 cargo check -p andromeda-hadr -p andromeda-quic --all-targets --all-features
+cargo check -p andromeda-procedure-runtime -p andromeda-exec -p andromeda-observability -p andromeda-observe -p andromeda-procedure-store -p andromeda-catalog -p andromeda-manifest -p andromeda-storage -p andromeda-definition-batch -p andromeda-srpl --all-targets --all-features
 rustfmt --edition 2024 <modified-rust-files>
 ```
 

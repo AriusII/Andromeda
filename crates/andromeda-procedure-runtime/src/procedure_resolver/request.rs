@@ -17,7 +17,7 @@ impl ProcedureResolveTarget {
                 Err(ProcedureResolveError::InvalidRequest {
                     message: "procedure resolver target id must not be zero".to_string(),
                 })
-            }
+            },
             Self::ProcedureId(_) | Self::QualifiedName(_) => Ok(()),
         }
     }

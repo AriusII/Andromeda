@@ -6,7 +6,6 @@ use crate::Lsn;
 
 mod cold_publication;
 mod format;
-mod hash;
 mod snapshot;
 
 pub use cold_publication::{

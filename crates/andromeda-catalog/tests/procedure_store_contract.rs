@@ -404,7 +404,7 @@ fn evidence_boundary_taxonomies_are_bounded() {
 
 #[test]
 fn public_role_and_advisory_token_constructors_remain_closed() {
-    let role_source = include_str!("../src/procedure_store/evidence_role.rs");
+    let role_source = include_str!("../../andromeda-procedure-store/src/evidence_role.rs");
     assert!(role_source.contains("pub struct ProcedureStoreEvidenceRole"));
     assert!(role_source.contains("kind: ProcedureStoreEvidenceRoleKind"));
     assert!(role_source.contains("enum ProcedureStoreEvidenceRoleKind"));

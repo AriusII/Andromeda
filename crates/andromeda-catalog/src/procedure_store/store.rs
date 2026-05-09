@@ -8,11 +8,11 @@ use crate::{
     InMemoryProcedureFeedbackStore, ProcedureFeedback, ProcedureFeedbackStore, QualifiedName,
     RecordOutcome,
 };
+use andromeda_procedure_store::ProcedureRegistration;
 
 use super::{
     decision::InvocationDecisionRecord, entry::ProcedureStoreEntry,
-    registration::ProcedureRegistration, runtime::InvocationRuntimeRecord,
-    runtime::InvocationRuntimeRecordOutcome,
+    runtime::InvocationRuntimeRecord, runtime::InvocationRuntimeRecordOutcome,
 };
 
 /// Default per-procedure capacity for advisory feedback evidence.  The

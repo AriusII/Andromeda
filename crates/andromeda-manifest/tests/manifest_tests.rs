@@ -805,9 +805,9 @@ fn lsn_comparison_antisymmetric() {
     let b = Lsn::new(200);
 
     assert!(a < b);
-    assert!(!(a > b));
+    assert!(a <= b);
     assert!(b > a);
-    assert!(!(b < a));
+    assert!(b >= a);
 }
 
 #[test]
