@@ -1,8 +1,8 @@
-use andromeda_core::TransactionId;
 use andromeda_mvcc::{
     ActiveSnapshotRegistry, MvccGarbageCollector, SnapshotHandle, TransactionStatusTable,
 };
 use andromeda_transaction_log::Lsn;
+use andromeda_types::TransactionId;
 use std::sync::Arc;
 
 pub(crate) fn durable_status_lsn() -> Lsn {

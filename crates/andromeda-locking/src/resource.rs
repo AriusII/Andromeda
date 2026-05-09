@@ -1,4 +1,4 @@
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 use super::{LockMode, validate_non_zero};
 
@@ -155,21 +155,21 @@ pub(super) fn validate_lock_resource(resource: LockResource) -> AndromedaResult<
     match resource {
         LockResource::Schema { schema_id } => {
             validate_non_zero(schema_id, "lock schema resource id must not be zero")?;
-        }
+        },
         LockResource::Object {
             schema_id,
             object_id,
         } => {
             validate_non_zero(schema_id, "lock object schema id must not be zero")?;
             validate_non_zero(object_id, "lock object resource id must not be zero")?;
-        }
+        },
         LockResource::Table {
             schema_id,
             table_id,
         } => {
             validate_non_zero(schema_id, "lock table schema id must not be zero")?;
             validate_non_zero(table_id, "lock table resource id must not be zero")?;
-        }
+        },
         LockResource::Page {
             schema_id,
             table_id,
@@ -178,7 +178,7 @@ pub(super) fn validate_lock_resource(resource: LockResource) -> AndromedaResult<
             validate_non_zero(schema_id, "lock page schema id must not be zero")?;
             validate_non_zero(table_id, "lock page table id must not be zero")?;
             validate_non_zero(page_id, "lock page resource id must not be zero")?;
-        }
+        },
         LockResource::Row {
             schema_id,
             table_id,
@@ -187,7 +187,7 @@ pub(super) fn validate_lock_resource(resource: LockResource) -> AndromedaResult<
             validate_non_zero(schema_id, "lock row schema id must not be zero")?;
             validate_non_zero(table_id, "lock row table id must not be zero")?;
             validate_non_zero(row_id, "lock row resource id must not be zero")?;
-        }
+        },
     }
 
     Ok(())

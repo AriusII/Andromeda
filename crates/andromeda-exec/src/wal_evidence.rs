@@ -1,12 +1,12 @@
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, EngineTimestamp, TransactionId,
 };
-use andromeda_storage::{FileWal, InMemoryWal, Lsn, WalRecord, WalRecordKind};
-use andromeda_tx::{
+use andromeda_transaction::{TxWalAdapterReplayRecord, map_tx_wal_replay_records};
+use andromeda_transaction_log::{
     InvocationWal as TransactionInvocationWal, IsolationLevel as TxIsolationLevel, Lsn as TxLsn,
-    WalRecordKind as TxWalRecordKind,
+    TxWalReplayRecord, WalRecordKind as TxWalRecordKind,
 };
-use andromeda_tx::{TxWalAdapterReplayRecord, TxWalReplayRecord, map_tx_wal_replay_records};
+use andromeda_wal::{FileWal, InMemoryWal, Lsn, WalRecord, WalRecordKind};
 use std::borrow::Borrow;
 use std::collections::BTreeSet;
 use std::{

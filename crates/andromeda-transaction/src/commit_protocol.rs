@@ -20,7 +20,9 @@
 //! - **Transaction Isolation**: Multiple commit protocols can run concurrently
 //!   without interference (thanks to CommitLogManager's thread safety)
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+
+use andromeda_types::TransactionId;
 use std::sync::Arc;
 
 use crate::Lsn;
@@ -151,8 +153,8 @@ impl CommitProtocol {
 mod tests {
     use super::*;
     use crate::commit_log::{CommitLogManager, InvocationWal, WalRecordKind};
-    use andromeda_core::TransactionId;
     use andromeda_mvcc::TransactionStatusTable;
+    use andromeda_types::TransactionId;
 
     struct TestWal {
         records: std::sync::Mutex<Vec<Lsn>>,

@@ -62,7 +62,7 @@ pub use andromeda_rpc_codec::{
 
 pub use procedure_gateway::{
     ProcedureAuthorizedRouteBinding, ProcedureGateway, ProcedureRouteAdmissionError,
-    ProcedureRouteBinding, ProcedureRouteExecuteRequest,
+    ProcedureRouteBinding,
 };
 
 pub use reconnect::{
@@ -79,14 +79,8 @@ pub use andromeda_rpc_protocol::backpressure::{
 };
 
 pub use catalog_manifest_resolution::{
-    CatalogColumnDescriptor, CatalogManifestResolutionContext, CatalogManifestResolutionGateway,
-    CatalogManifestResolutionRequest, CatalogManifestResolutionResponse,
-    CatalogManifestResolutionRuntime, CatalogManifestResolutionStatus, CatalogManifestSelector,
-    CatalogProcedureManifest, CatalogProcedureManifestResolutionRequest,
-    CatalogProcedureManifestResolutionResponse, CatalogProcedureProtocolLayout,
-    CatalogRequiredPermission, CatalogResultStreamDescriptor,
-    catalog_manifest_resolution_request_frame, decode_catalog_manifest_resolution_request_frame,
-    decode_catalog_manifest_resolution_response_frame,
+    CatalogManifestResolutionContext, CatalogManifestResolutionGateway,
+    CatalogManifestResolutionRuntime,
 };
 
 pub use transport::{

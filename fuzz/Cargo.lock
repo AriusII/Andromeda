@@ -12,26 +12,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "andromeda-admission"
-version = "0.1.0"
-dependencies = [
- "andromeda-contract",
- "andromeda-core",
- "andromeda-observe",
- "andromeda-proto",
- "andromeda-resource",
- "andromeda-result-stream",
- "andromeda-storage",
-]
-
-[[package]]
 name = "andromeda-audit"
 version = "0.1.0"
 dependencies = [
  "andromeda-core",
+ "andromeda-digest",
  "andromeda-error",
  "andromeda-observability",
  "andromeda-security-contract",
+ "andromeda-types",
 ]
 
 [[package]]
@@ -40,7 +29,9 @@ version = "0.1.0"
 dependencies = [
  "andromeda-core",
  "andromeda-observe",
+ "andromeda-segment",
  "andromeda-wal",
+ "sha2",
 ]
 
 [[package]]
@@ -54,6 +45,8 @@ dependencies = [
 name = "andromeda-buffer-pool"
 version = "0.1.0"
 dependencies = [
+ "andromeda-core",
+ "andromeda-storage-page",
  "andromeda-wal",
 ]
 
@@ -88,6 +81,7 @@ dependencies = [
  "andromeda-error",
  "andromeda-procedure-contract",
  "andromeda-types",
+ "andromeda-wal",
 ]
 
 [[package]]
@@ -117,6 +111,7 @@ dependencies = [
  "andromeda-digest",
  "andromeda-error",
  "andromeda-hardware",
+ "andromeda-principal",
  "andromeda-security-contract",
  "andromeda-time",
  "andromeda-types",
@@ -127,6 +122,7 @@ name = "andromeda-decision-trace"
 version = "0.1.0"
 dependencies = [
  "andromeda-contract",
+ "andromeda-observability",
  "andromeda-types",
 ]
 
@@ -138,6 +134,7 @@ dependencies = [
  "andromeda-contract",
  "andromeda-digest",
  "andromeda-error",
+ "andromeda-srpl-diagnostics",
  "andromeda-types",
 ]
 
@@ -149,6 +146,9 @@ version = "0.1.0"
 name = "andromeda-disk-page-store"
 version = "0.1.0"
 dependencies = [
+ "andromeda-error",
+ "andromeda-segment",
+ "andromeda-storage-page",
  "andromeda-wal",
 ]
 
@@ -161,14 +161,18 @@ name = "andromeda-fuzz"
 version = "0.0.0"
 dependencies = [
  "andromeda-catalog",
+ "andromeda-catalog-store",
  "andromeda-core",
+ "andromeda-definition-batch",
  "andromeda-manifest",
  "andromeda-observe",
  "andromeda-proto",
  "andromeda-quic",
  "andromeda-recovery",
+ "andromeda-rpc-codec",
  "andromeda-rpc-protocol",
  "andromeda-security-contract",
+ "andromeda-segment",
  "andromeda-srpl",
  "andromeda-srpl-parser",
  "andromeda-storage",
@@ -199,6 +203,7 @@ name = "andromeda-manifest"
 version = "0.1.0"
 dependencies = [
  "andromeda-core",
+ "andromeda-segment",
  "andromeda-wal",
 ]
 
@@ -247,6 +252,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-principal"
+version = "0.1.0"
+dependencies = [
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-security-contract",
+ "andromeda-types",
+]
+
+[[package]]
 name = "andromeda-procedure-contract"
 version = "0.1.0"
 dependencies = [
@@ -257,20 +272,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "andromeda-procedure-runtime"
-version = "0.1.0"
-dependencies = [
- "andromeda-admission",
- "andromeda-contract",
- "andromeda-error",
- "andromeda-observe",
- "andromeda-srpl-ir",
- "andromeda-types",
-]
-
-[[package]]
 name = "andromeda-procedure-store"
 version = "0.1.0"
+dependencies = [
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-observe",
+ "andromeda-plan-cache",
+ "andromeda-procedure-contract",
+ "andromeda-scenario-evidence",
+ "andromeda-time",
+ "andromeda-types",
+]
 
 [[package]]
 name = "andromeda-proto"
@@ -280,7 +293,6 @@ dependencies = [
  "andromeda-error",
  "andromeda-procedure-contract",
  "andromeda-proto-wire",
- "andromeda-rpc-protocol",
  "andromeda-structured-object",
  "andromeda-types",
  "prost",
@@ -316,38 +328,19 @@ dependencies = [
 name = "andromeda-recovery"
 version = "0.1.0"
 dependencies = [
+ "andromeda-core",
  "andromeda-manifest",
  "andromeda-storage-page",
  "andromeda-wal",
 ]
 
 [[package]]
-name = "andromeda-resource"
-version = "0.1.0"
-dependencies = [
- "andromeda-hardware",
-]
-
-[[package]]
 name = "andromeda-restore"
 version = "0.1.0"
 dependencies = [
- "andromeda-wal",
-]
-
-[[package]]
-name = "andromeda-result-stream"
-version = "0.1.0"
-dependencies = [
- "andromeda-error",
+ "andromeda-backup",
  "andromeda-observe",
- "andromeda-rpc-protocol",
- "andromeda-srpl-cardinality",
- "andromeda-structured-object",
- "andromeda-transaction",
- "andromeda-types",
  "andromeda-wal",
- "tokio",
 ]
 
 [[package]]
@@ -364,8 +357,10 @@ name = "andromeda-rpc-codec"
 version = "0.1.0"
 dependencies = [
  "andromeda-core",
+ "andromeda-proto",
  "andromeda-proto-wire",
  "andromeda-rpc-protocol",
+ "andromeda-security-contract",
 ]
 
 [[package]]
@@ -382,6 +377,7 @@ version = "0.1.0"
 dependencies = [
  "andromeda-bench-workload",
  "andromeda-digest",
+ "andromeda-observe",
  "andromeda-plan-cache",
  "andromeda-procedure-contract",
  "andromeda-time",
@@ -391,6 +387,9 @@ dependencies = [
 [[package]]
 name = "andromeda-security-contract"
 version = "0.1.0"
+dependencies = [
+ "andromeda-types",
+]
 
 [[package]]
 name = "andromeda-segment"
@@ -399,6 +398,7 @@ dependencies = [
  "andromeda-core",
  "andromeda-storage-page",
  "andromeda-wal",
+ "sha2",
 ]
 
 [[package]]
@@ -406,18 +406,16 @@ name = "andromeda-srpl"
 version = "0.1.0"
 dependencies = [
  "andromeda-catalog",
+ "andromeda-catalog-store",
+ "andromeda-definition-batch",
  "andromeda-digest",
  "andromeda-error",
  "andromeda-optimizer",
- "andromeda-procedure-runtime",
+ "andromeda-procedure-contract",
  "andromeda-srpl-ast",
  "andromeda-srpl-binder",
- "andromeda-srpl-cardinality",
  "andromeda-srpl-diagnostics",
- "andromeda-srpl-execution-adapter",
- "andromeda-srpl-interpreter",
  "andromeda-srpl-ir",
- "andromeda-srpl-lexer",
  "andromeda-srpl-lowering",
  "andromeda-srpl-parser",
  "andromeda-types",
@@ -440,6 +438,7 @@ dependencies = [
  "andromeda-contract",
  "andromeda-error",
  "andromeda-srpl-ast",
+ "andromeda-srpl-diagnostics",
  "andromeda-srpl-ir",
  "andromeda-types",
 ]
@@ -456,25 +455,6 @@ name = "andromeda-srpl-diagnostics"
 version = "0.1.0"
 dependencies = [
  "andromeda-error",
-]
-
-[[package]]
-name = "andromeda-srpl-execution-adapter"
-version = "0.1.0"
-dependencies = [
- "andromeda-contract",
- "andromeda-error",
- "andromeda-srpl-ir",
-]
-
-[[package]]
-name = "andromeda-srpl-interpreter"
-version = "0.1.0"
-dependencies = [
- "andromeda-contract",
- "andromeda-error",
- "andromeda-srpl-execution-adapter",
- "andromeda-srpl-ir",
 ]
 
 [[package]]
@@ -524,6 +504,8 @@ dependencies = [
  "andromeda-decision-trace",
  "andromeda-digest",
  "andromeda-error",
+ "andromeda-observability",
+ "andromeda-scenario-evidence",
  "andromeda-types",
 ]
 
@@ -555,11 +537,16 @@ version = "0.1.0"
 dependencies = [
  "andromeda-core",
  "andromeda-storage-page",
+ "andromeda-wal",
 ]
 
 [[package]]
 name = "andromeda-storage-index"
 version = "0.1.0"
+dependencies = [
+ "andromeda-core",
+ "andromeda-storage-page",
+]
 
 [[package]]
 name = "andromeda-storage-page"
@@ -567,6 +554,7 @@ version = "0.1.0"
 dependencies = [
  "andromeda-error",
  "andromeda-wal",
+ "sha2",
 ]
 
 [[package]]
@@ -583,23 +571,6 @@ name = "andromeda-time"
 version = "0.1.0"
 dependencies = [
  "andromeda-error",
-]
-
-[[package]]
-name = "andromeda-transaction"
-version = "0.1.0"
-dependencies = [
- "andromeda-core",
- "andromeda-observe",
- "andromeda-transaction-log",
- "async-trait",
-]
-
-[[package]]
-name = "andromeda-transaction-log"
-version = "0.1.0"
-dependencies = [
- "andromeda-core",
 ]
 
 [[package]]
@@ -636,17 +607,6 @@ name = "arbitrary"
 version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d036a3c4ab069c7b410a2ce876bd74808d2d0888a82667669f8e783a898bf1"
-
-[[package]]
-name = "async-trait"
-version = "0.1.89"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9035ad2d096bed7955a320ee7e2230574d28fd3c3a0f186cbea1ff3c7eed5dbb"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
 
 [[package]]
 name = "bitflags"
@@ -942,17 +902,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 
 [[package]]
-name = "mio"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50b7e5b27aa02a74bac8c3f23f448f8d87ff11f92d3aac1a6ed369ee08cc56c1"
-dependencies = [
- "libc",
- "wasi",
- "windows-sys",
-]
-
-[[package]]
 name = "multimap"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -987,12 +936,6 @@ dependencies = [
  "hashbrown 0.15.5",
  "indexmap",
 ]
-
-[[package]]
-name = "pin-project-lite"
-version = "0.2.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 
 [[package]]
 name = "prettyplease"
@@ -1278,16 +1221,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 
 [[package]]
-name = "socket2"
-version = "0.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a766e1110788c36f4fa1c2b71b387a7815aa65f88ce0229841826633d93723e"
-dependencies = [
- "libc",
- "windows-sys",
-]
-
-[[package]]
 name = "syn"
 version = "2.0.117"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1312,19 +1245,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tokio"
-version = "1.52.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fc7f01b389ac15039e4dc9531aa973a135d7a4135281b12d7c1bc79fd57fffe"
-dependencies = [
- "libc",
- "mio",
- "pin-project-lite",
- "socket2",
- "windows-sys",
-]
-
-[[package]]
 name = "typenum"
 version = "1.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1341,12 +1261,6 @@ name = "unicode-xid"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
-
-[[package]]
-name = "wasi"
-version = "0.11.1+wasi-snapshot-preview1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
 
 [[package]]
 name = "wasip2"

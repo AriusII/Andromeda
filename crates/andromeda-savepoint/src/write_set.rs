@@ -5,7 +5,7 @@
 //! newer than the savepoint marker; lock ownership and durable storage remain
 //! outside this module.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{SavepointId, SavepointRollbackMarker};
 

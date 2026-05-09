@@ -15,14 +15,15 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
-use andromeda_core::AndromedaResult;
-use andromeda_core::SurfaceScope;
-use andromeda_quic::{
-    FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader, FrameType, SurfacePlane,
-};
+use andromeda_error::AndromedaResult;
+use andromeda_principal::SurfaceScope;
+use andromeda_quic::SurfacePlane;
 use andromeda_quic_runtime_quinn::{
     quinn_backend::{BidiStream, QuicClient, QuicServer, QuinnRuntimeSurface},
     quinn_tls::MutualTlsTestConfig,
+};
+use andromeda_rpc_protocol::{
+    FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader, FrameType,
 };
 use tokio::{sync::oneshot, task::JoinHandle, time::timeout};
 
@@ -39,9 +40,9 @@ fn allocate_test_address() -> SocketAddr {
     SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0)
 }
 
-fn transport_error(message: impl Into<String>) -> andromeda_core::AndromedaError {
-    andromeda_core::AndromedaError::new(
-        andromeda_core::AndromedaErrorKind::Transport,
+fn transport_error(message: impl Into<String>) -> andromeda_error::AndromedaError {
+    andromeda_error::AndromedaError::new(
+        andromeda_error::AndromedaErrorKind::Transport,
         message.into(),
     )
 }

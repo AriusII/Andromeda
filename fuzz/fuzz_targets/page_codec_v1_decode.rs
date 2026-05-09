@@ -1,6 +1,6 @@
 #![no_main]
 
-use andromeda_storage::PageCodecV1;
+use andromeda_storage_page::PageCodecV1;
 use libfuzzer_sys::fuzz_target;
 
 mod common;

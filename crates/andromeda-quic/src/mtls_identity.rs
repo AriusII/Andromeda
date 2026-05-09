@@ -5,8 +5,9 @@
 //! runtime-free; concrete Quinn extraction lives in
 //! `andromeda-quic-runtime-quinn`.
 
-use andromeda_core::SurfaceScope;
-use andromeda_core::{AndromedaResult, digest};
+use andromeda_digest::sha256;
+use andromeda_error::AndromedaResult;
+use andromeda_principal::SurfaceScope;
 
 /// Convert a QUIC `SurfacePlane` to its required [`SurfaceScope`].
 ///
@@ -64,17 +65,17 @@ impl RawCertificate {
     pub fn to_certificate_identity(
         &self,
         required_scope: SurfaceScope,
-    ) -> AndromedaResult<andromeda_core::CertificateIdentity> {
+    ) -> AndromedaResult<andromeda_principal::CertificateIdentity> {
         if self.is_empty() {
-            return Err(andromeda_core::AndromedaError::new(
-                andromeda_core::AndromedaErrorKind::Security,
+            return Err(andromeda_error::AndromedaError::new(
+                andromeda_error::AndromedaErrorKind::Security,
                 "peer certificate cannot be empty",
             ));
         }
 
         let fingerprint = self.fingerprint_sha256_hex();
         let subject = format!("sha256:{}", &fingerprint[..16]);
-        andromeda_core::CertificateIdentity::new(fingerprint, subject, required_scope)
+        andromeda_principal::CertificateIdentity::new(fingerprint, subject, required_scope)
     }
 }
 
@@ -105,21 +106,21 @@ impl ParsedCertificate {
         issuer_cn: Option<String>,
     ) -> AndromedaResult<Self> {
         if subject_cn.trim().is_empty() {
-            return Err(andromeda_core::AndromedaError::new(
-                andromeda_core::AndromedaErrorKind::Security,
+            return Err(andromeda_error::AndromedaError::new(
+                andromeda_error::AndromedaErrorKind::Security,
                 "certificate subject CN cannot be empty",
             ));
         }
         if fingerprint_sha256.len() != 64 {
-            return Err(andromeda_core::AndromedaError::new(
-                andromeda_core::AndromedaErrorKind::Security,
+            return Err(andromeda_error::AndromedaError::new(
+                andromeda_error::AndromedaErrorKind::Security,
                 "certificate fingerprint must be 64 hex characters (SHA256)",
             ));
         }
         // Validate hex encoding.
         if !fingerprint_sha256.chars().all(|c| c.is_ascii_hexdigit()) {
-            return Err(andromeda_core::AndromedaError::new(
-                andromeda_core::AndromedaErrorKind::Security,
+            return Err(andromeda_error::AndromedaError::new(
+                andromeda_error::AndromedaErrorKind::Security,
                 "certificate fingerprint must be valid hex",
             ));
         }
@@ -146,9 +147,13 @@ impl ParsedCertificate {
     pub fn to_certificate_identity(
         self,
         required_scope: SurfaceScope,
-    ) -> AndromedaResult<andromeda_core::CertificateIdentity> {
+    ) -> AndromedaResult<andromeda_principal::CertificateIdentity> {
         let subject = self.subject_cn.clone();
-        andromeda_core::CertificateIdentity::new(self.fingerprint_sha256, subject, required_scope)
+        andromeda_principal::CertificateIdentity::new(
+            self.fingerprint_sha256,
+            subject,
+            required_scope,
+        )
     }
 }
 
@@ -157,14 +162,14 @@ impl ParsedCertificate {
 /// Returns `Err` if the string is not exactly 64 hex characters.
 pub fn validate_fingerprint(fp: &str) -> AndromedaResult<()> {
     if fp.len() != 64 {
-        return Err(andromeda_core::AndromedaError::new(
-            andromeda_core::AndromedaErrorKind::Security,
+        return Err(andromeda_error::AndromedaError::new(
+            andromeda_error::AndromedaErrorKind::Security,
             "certificate fingerprint must be 64 hex characters",
         ));
     }
     if !fp.chars().all(|c| c.is_ascii_hexdigit()) {
-        return Err(andromeda_core::AndromedaError::new(
-            andromeda_core::AndromedaErrorKind::Security,
+        return Err(andromeda_error::AndromedaError::new(
+            andromeda_error::AndromedaErrorKind::Security,
             "certificate fingerprint must be valid hex",
         ));
     }
@@ -172,7 +177,7 @@ pub fn validate_fingerprint(fp: &str) -> AndromedaResult<()> {
 }
 
 fn hex_sha256(bytes: &[u8]) -> String {
-    let digest = digest::sha256(bytes);
+    let digest = sha256(bytes);
     let mut out = String::with_capacity(64);
     for byte in digest {
         out.push_str(&format!("{byte:02x}"));
@@ -223,7 +228,7 @@ mod tests {
             .to_certificate_identity(SurfaceScope::Application)
             .unwrap_err();
 
-        assert_eq!(error.kind(), andromeda_core::AndromedaErrorKind::Security);
+        assert_eq!(error.kind(), andromeda_error::AndromedaErrorKind::Security);
         assert!(error.message().contains("cannot be empty"));
     }
 

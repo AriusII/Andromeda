@@ -48,7 +48,7 @@ impl CatalogMutationDurability {
                         "catalog publication durable LSN must reach the commit LSN",
                     ));
                 }
-            }
+            },
             Self::ExternalMarker(marker) => {
                 if marker.get() == 0 {
                     return Err(AndromedaError::new(
@@ -56,7 +56,7 @@ impl CatalogMutationDurability {
                         "catalog publication durable evidence marker must not be zero",
                     ));
                 }
-            }
+            },
         }
 
         Ok(())

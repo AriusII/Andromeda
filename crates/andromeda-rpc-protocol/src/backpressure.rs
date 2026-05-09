@@ -8,7 +8,8 @@
 //! [`BackpressureSignal::validate_routing`] and
 //! [`BackpressureSignal::validate_for_transport`].
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::RequestId;
 
 use crate::StreamRole;
 
@@ -159,7 +160,7 @@ impl BackpressureSignal {
                     ));
                 }
                 Ok(())
-            }
+            },
         }
     }
 }

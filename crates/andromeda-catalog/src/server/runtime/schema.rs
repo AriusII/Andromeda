@@ -88,7 +88,7 @@ fn float_type_name(float: FloatType) -> String {
                 FloatMode::DeterministicAnalytics => "deterministic",
             };
             format!("float({bits},{mode})")
-        }
+        },
     }
 }
 

@@ -6,3 +6,4 @@ __pycache__/
 /.codex/runtime/*
 !/.codex/runtime/.gitignore
 /tests/loom/target
+/documentations/implementation

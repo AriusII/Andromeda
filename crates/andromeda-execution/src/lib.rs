@@ -10,6 +10,7 @@ application-facing SQL.
 "#]
 
 mod procedure_adapter;
+mod srpl_adapters;
 
 pub use andromeda_procedure_runtime::{
     PreTransactionDispatchEvidence, ProcedureDispatchRequest, ProcedureDispatchUnavailableReason,
@@ -17,4 +18,8 @@ pub use andromeda_procedure_runtime::{
 };
 pub use procedure_adapter::{
     ExecutionProcedureDispatcher, RemoteProcedureDispatcherUnavailable, SrplProcedureRuntimeAdapter,
+};
+pub use srpl_adapters::{
+    FieldValue, SrplExecutionAdapter, SrplStreamBackpressure, SrplTransactionContext,
+    SrplTypedEnvironment, StructuredObject,
 };

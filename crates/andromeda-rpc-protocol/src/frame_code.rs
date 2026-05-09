@@ -1,6 +1,6 @@
 //! Frame type codes and routing metadata.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind};
+use andromeda_error::{AndromedaError, AndromedaErrorKind};
 
 use super::{FrameFamily, StreamRole};
 
@@ -65,7 +65,7 @@ impl FrameType {
             Self::RpcExecuteRequest => FrameFamily::RpcCommand,
             Self::RpcMetadata | Self::RpcBatch | Self::RpcCompletion => {
                 FrameFamily::RpcResultStream
-            }
+            },
             Self::Error => FrameFamily::Diagnostic,
             Self::TelemetrySoftSignal => FrameFamily::Telemetry,
         }
@@ -76,10 +76,10 @@ impl FrameType {
             Self::Hello | Self::Auth => StreamRole::SessionControl,
             Self::ContractRequest | Self::ContractResponse | Self::RpcExecuteRequest => {
                 StreamRole::CommandBidirectional
-            }
+            },
             Self::RpcMetadata | Self::RpcBatch | Self::RpcCompletion => {
                 StreamRole::ResultUnidirectional
-            }
+            },
             Self::Error => StreamRole::Diagnostic,
             Self::TelemetrySoftSignal => StreamRole::TelemetryDatagram,
         }

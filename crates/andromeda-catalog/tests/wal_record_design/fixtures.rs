@@ -1,6 +1,5 @@
-use andromeda_catalog::{
-    AlterCompatibilityPolicy, CatalogWalRecord, DefinitionBatchId, DropFailureReason,
-};
+use andromeda_catalog_recovery::{AlterCompatibilityPolicy, CatalogWalRecord, DropFailureReason};
+use andromeda_definition_batch::DefinitionBatchId;
 use andromeda_types::{CatalogObjectId, CatalogVersion, ContractHash};
 
 pub(crate) fn test_hash(byte: u8) -> ContractHash {

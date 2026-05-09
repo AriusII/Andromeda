@@ -1,4 +1,5 @@
-use andromeda_catalog::{CatalogDefinition, DefinitionBatch, DefinitionBatchId};
+use andromeda_catalog_store::CatalogDefinition;
+use andromeda_definition_batch::{DefinitionBatch, DefinitionBatchId};
 use andromeda_srpl::definition_batch_bridge::{
     SrplDefinitionBatchDryRunRequest, SrplDefinitionBatchProcedureSource, SrplProcedureDefinition,
 };

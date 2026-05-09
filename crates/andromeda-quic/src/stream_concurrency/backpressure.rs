@@ -1,4 +1,4 @@
-use andromeda_core::RequestId;
+use andromeda_types::RequestId;
 
 use crate::BackpressureReason;
 

@@ -1,7 +1,7 @@
 //! Procedure manifest resolution DTOs for catalog-store consumers.
 //!
 //! This module intentionally avoids protobuf dependencies. Protocol adapters
-//! live in the catalog server boundary crate.
+//! live in proto and RPC owner crates.
 
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};

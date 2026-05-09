@@ -1,7 +1,9 @@
 //! Transaction status tracking for MVCC visibility.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+
 use andromeda_transaction_log::Lsn;
+use andromeda_types::TransactionId;
 use std::collections::BTreeMap;
 use std::sync::{Mutex, MutexGuard};
 
@@ -46,10 +48,10 @@ impl TransactionStatusTable {
         match statuses.get(&transaction_id).copied() {
             Some(existing) if existing.is_terminal() => {
                 return Err(terminal_status_conflict());
-            }
+            },
             _ => {
                 statuses.insert(transaction_id, status);
-            }
+            },
         }
         Ok(())
     }
@@ -210,7 +212,7 @@ impl TransactionStatusTable {
             Some(TransactionStatus::InFlight) | None => {
                 statuses.insert(transaction_id, status);
                 Ok(())
-            }
+            },
             Some(_) => Err(terminal_status_conflict()),
         }
     }

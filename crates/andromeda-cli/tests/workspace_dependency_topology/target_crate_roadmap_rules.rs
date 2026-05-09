@@ -182,7 +182,7 @@ const FORBIDDEN_RUNTIME_CRITICAL_PROTO_SOURCE_TOKENS: &[&str] = &[
     "prost_derive",
 ];
 const ALLOWED_RUNTIME_CRITICAL_PROTO_DEPENDENCIES: &[(&str, &[&str])] =
-    &[("andromeda-exec", &["andromeda-proto"])];
+    &[("andromeda-exec", &["andromeda-proto", "andromeda-rpc-protocol"])];
 const ALLOWED_RUNTIME_CRITICAL_PROTO_SOURCE_IMPORTS: &[(&str, &[&str])] =
     &[("andromeda-exec", &["andromeda_proto::"])];
 const TEMPORARY_DEV_DEPENDENCY_BACKEDGE_EXCEPTIONS: &[TemporaryDependencyException] = &[
@@ -190,6 +190,11 @@ const TEMPORARY_DEV_DEPENDENCY_BACKEDGE_EXCEPTIONS: &[TemporaryDependencyExcepti
         source: "andromeda-observe",
         dependency: "andromeda-storage",
         exit_criteria: "Exit criteria: move durable audit storage fixtures into an acyclic test-support crate or remove observe's dev-dependency on storage.",
+    },
+    TemporaryDependencyException {
+        source: "andromeda-exec",
+        dependency: "andromeda-inventory-demo",
+        exit_criteria: "Exit criteria: move remaining inventory vertical compatibility tests out of andromeda-exec or invert them into andromeda-inventory-demo.",
     },
 ];
 const TEMPORARY_C5_CORE_FACADE_EXCEPTIONS: &[TemporaryDependencyException] = &[
@@ -204,9 +209,14 @@ const TEMPORARY_C5_CORE_FACADE_EXCEPTIONS: &[TemporaryDependencyException] = &[
         exit_criteria: "Exit criteria: extract HA/DR replica identity and failover epoch primitives from the temporary core facade.",
     },
     TemporaryDependencyException {
-        source: "andromeda-locking",
+        source: "andromeda-buffer-pool",
         dependency: "andromeda-core",
-        exit_criteria: "Exit criteria: extract lock resource identifiers and conflict errors from the temporary core facade.",
+        exit_criteria: "Exit criteria: replace buffer-pool result and storage identity aliases with narrower durable-storage foundation crates.",
+    },
+    TemporaryDependencyException {
+        source: "andromeda-recovery",
+        dependency: "andromeda-core",
+        exit_criteria: "Exit criteria: replace recovery result and error aliases with narrower recovery foundation crates.",
     },
     TemporaryDependencyException {
         source: "andromeda-storage",
@@ -224,21 +234,6 @@ const TEMPORARY_C5_CORE_FACADE_EXCEPTIONS: &[TemporaryDependencyException] = &[
         exit_criteria: "Exit criteria: extract heap row/page identity and validation primitives from the temporary core facade.",
     },
     TemporaryDependencyException {
-        source: "andromeda-mvcc",
-        dependency: "andromeda-core",
-        exit_criteria: "Exit criteria: extract MVCC timestamp/version identity and visibility errors from the temporary core facade.",
-    },
-    TemporaryDependencyException {
-        source: "andromeda-tx",
-        dependency: "andromeda-core",
-        exit_criteria: "Exit criteria: replace the wide andromeda-core facade with extracted transaction foundation crates.",
-    },
-    TemporaryDependencyException {
-        source: "andromeda-transaction",
-        dependency: "andromeda-core",
-        exit_criteria: "Exit criteria: extract transaction identity/state primitives from the temporary core facade.",
-    },
-    TemporaryDependencyException {
         source: "andromeda-wal",
         dependency: "andromeda-core",
         exit_criteria: "Exit criteria: replace the wide andromeda-core facade with extracted WAL foundation crates.",
@@ -249,19 +244,9 @@ const TEMPORARY_C5_CORE_FACADE_EXCEPTIONS: &[TemporaryDependencyException] = &[
         exit_criteria: "Exit criteria: move manifest identity and digest foundations behind dedicated durable manifest contracts.",
     },
     TemporaryDependencyException {
-        source: "andromeda-savepoint",
-        dependency: "andromeda-core",
-        exit_criteria: "Exit criteria: extract savepoint identifiers and validation errors from the temporary core facade.",
-    },
-    TemporaryDependencyException {
         source: "andromeda-segment",
         dependency: "andromeda-core",
         exit_criteria: "Exit criteria: extract segment identity and WAL-safe primitives from the temporary core facade.",
-    },
-    TemporaryDependencyException {
-        source: "andromeda-transaction-log",
-        dependency: "andromeda-core",
-        exit_criteria: "Exit criteria: extract transaction log identity and replay errors from the temporary core facade.",
     },
 ];
 #[test]
@@ -277,7 +262,7 @@ fn core_facade_does_not_grow_new_local_modules_during_foundation_migration() {
                 .into_owned()
         })
         .collect::<BTreeSet<_>>();
-    let expected_entries = ["lib.rs", "principal"]
+    let expected_entries = ["lib.rs"]
         .into_iter()
         .map(str::to_owned)
         .collect::<BTreeSet<_>>();
@@ -322,7 +307,7 @@ fn temporary_dev_dependency_back_edges_are_named_and_bounded() {
     );
 }
 #[test]
-fn catalog_proto_watch_edge_is_direct_one_way_and_named() {
+fn catalog_runtime_stays_detached_from_generated_proto_and_transport_crates() {
     let manifests = load_crate_manifests(&workspace_root().join("crates"));
     let catalog = manifests
         .get("andromeda-catalog")
@@ -330,15 +315,27 @@ fn catalog_proto_watch_edge_is_direct_one_way_and_named() {
     let proto = manifests
         .get("andromeda-proto")
         .expect("workspace must include andromeda-proto");
+    let forbidden = [
+        "andromeda-proto",
+        "andromeda-proto-wire",
+        "andromeda-rpc-codec",
+        "andromeda-quic",
+    ];
+    let violations = forbidden
+        .iter()
+        .filter(|dependency| catalog.runtime_dependencies.contains(**dependency))
+        .copied()
+        .collect::<Vec<_>>();
 
     assert!(
-        catalog.runtime_dependencies.contains("andromeda-proto"),
-        "andromeda-catalog -> andromeda-proto is a named watch edge while catalog descriptors still publish protocol-facing schema manifests; remove this assertion when catalog/proto contracts split"
+        violations.is_empty(),
+        "andromeda-catalog runtime must stay detached from generated proto/RPC/QUIC crates: {}",
+        violations.join(", ")
     );
     assert!(
         !proto.runtime_dependencies.contains("andromeda-catalog")
             && !proto.dev_dependencies.contains("andromeda-catalog"),
-        "andromeda-proto must not depend back on andromeda-catalog; the catalog -> proto watch edge must stay one-way"
+        "andromeda-proto must not depend back on andromeda-catalog"
     );
 }
 #[test]

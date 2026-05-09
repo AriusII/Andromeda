@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use andromeda_core::TransactionId;
+use andromeda_types::TransactionId;
 
 use super::{DeadlockVictim, WaitForGraph};
 
@@ -173,6 +173,6 @@ pub(super) fn decision_from_detection_status(
         },
         DeadlockDetectionStatus::Deferred { reason } => {
             DeadlockDecision::Deferred { reason, evidence }
-        }
+        },
     }
 }

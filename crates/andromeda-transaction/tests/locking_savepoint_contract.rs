@@ -1,4 +1,4 @@
-use andromeda_core::{AndromedaResult, CatalogVersion, TransactionId};
+use andromeda_error::AndromedaResult;
 use andromeda_locking::{LockAcquireStatus, LockHolder, LockManager, LockMode, LockResource};
 use andromeda_mvcc::{
     MvccIsolationPolicy, MvccRowHeader, Snapshot, TransactionStatus, TransactionStatusTable,
@@ -7,6 +7,7 @@ use andromeda_savepoint::{
     SavepointStack, TxWriteSet, WriteSetImage, WriteSetOperationKind, WriteSetResourceId,
 };
 use andromeda_transaction_log::Lsn;
+use andromeda_types::{CatalogVersion, TransactionId};
 
 fn text_resource(value: &str) -> AndromedaResult<WriteSetResourceId> {
     WriteSetResourceId::try_from_text(value)

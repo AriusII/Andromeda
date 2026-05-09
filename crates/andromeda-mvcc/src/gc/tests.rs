@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use andromeda_core::TransactionId;
 use andromeda_transaction_log::Lsn;
+use andromeda_types::TransactionId;
 
 use crate::active_snapshot_registry::{ActiveSnapshotRegistry, SnapshotHandle};
 use crate::status::TransactionStatusTable;

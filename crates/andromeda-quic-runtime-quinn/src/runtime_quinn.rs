@@ -10,8 +10,8 @@
 
 use std::sync::Arc;
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use andromeda_core::{CertificateIdentity, SurfaceScope};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_principal::{CertificateIdentity, SurfaceScope};
 use rustls::pki_types::CertificateDer;
 #[cfg(test)]
 use rustls::{
@@ -83,7 +83,7 @@ impl TlsEarlyDataPolicy {
             EarlyDataPolicy::Disabled => {
                 config.max_early_data_size = 0;
                 config.send_half_rtt_data = false;
-            }
+            },
         }
     }
 
@@ -91,7 +91,7 @@ impl TlsEarlyDataPolicy {
         match self.early_data {
             EarlyDataPolicy::Disabled => {
                 config.enable_early_data = false;
-            }
+            },
         }
     }
 }
@@ -334,8 +334,8 @@ fn security_error(message: impl Into<String>) -> AndromedaError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_core::AndromedaErrorKind;
-    use andromeda_core::SurfaceScope;
+    use andromeda_error::AndromedaErrorKind;
+    use andromeda_principal::SurfaceScope;
     use rustls::pki_types::CertificateDer;
 
     use andromeda_quic::{EarlyDataPolicy, mtls_identity::ParsedCertificate};

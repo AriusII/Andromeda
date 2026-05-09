@@ -34,9 +34,9 @@ pub use andromeda_audit::{
     SecurityAuditDenialReason, SecurityAuditOutcome, SecurityAuditTrace,
     SecurityPolicyVersionEvidence, SurfaceScope, UserPrincipal, UserPrincipalKind,
 };
-pub(crate) use andromeda_observability::{
-    EventCorrelation, EventId, ProtocolCorrelation, ProtocolEventScope,
-};
+#[cfg(test)]
+use andromeda_observability::ProtocolCorrelation;
+pub(crate) use andromeda_observability::{EventCorrelation, EventId, ProtocolEventScope};
 pub use andromeda_observability::{InvocationTrace, MvccTrace, ResourceTrace};
 pub use decision::{
     CriticalDecisionKind, DecisionTrace, GpuPolicyDecisionTrace, IoBudgetDecisionTrace,
@@ -48,16 +48,16 @@ pub use durability::{
     ManifestTrace, RecoveryTrace, RollbackDurableTrace, WalEventTrace, WalOperation, WalTrace,
 };
 pub use durable_audit::{
-    DurableAuditCompactionReport, DurableAuditDecisionGate, DurableAuditEventFamily,
-    DurableAuditFailureKind, DurableAuditPolicyEvidenceRequirement, DurableAuditPrincipalBinding,
-    DurableAuditPruneBlockReason, DurableAuditPruneEvidence, DurableAuditRecordIdentity,
-    DurableAuditReplayBehavior, DurableAuditReplayEvidence, DurableAuditReplayLsnRange,
-    DurableAuditReplayQuery, DurableAuditReplayRecord, DurableAuditReplayResult,
-    DurableAuditReplayWindow, DurableAuditRetentionBoundary, DurableAuditRetentionManager,
-    DurableAuditRetentionPolicy, DurableAuditSinkFailure, DurableAuditSinkReport,
-    DurableAuditSinkResult, DurableAuditVisibleDecisionProof, DurableAuditWalEvidence,
-    DurableAuditWalSegmentArchiveProof, DurableAuditWalSink, FileDurableAuditWalSink,
-    PendingDurableAuditRecord, classify_policy_evidence_requirement,
+    DurableAuditAppendRecord, DurableAuditCompactionReport, DurableAuditDecisionGate,
+    DurableAuditEventFamily, DurableAuditFailureKind, DurableAuditPolicyEvidenceRequirement,
+    DurableAuditPrincipalBinding, DurableAuditPruneBlockReason, DurableAuditPruneEvidence,
+    DurableAuditRecordIdentity, DurableAuditReplayBehavior, DurableAuditReplayEvidence,
+    DurableAuditReplayLsnRange, DurableAuditReplayQuery, DurableAuditReplayRecord,
+    DurableAuditReplayResult, DurableAuditReplayWindow, DurableAuditRetentionBoundary,
+    DurableAuditRetentionManager, DurableAuditRetentionPolicy, DurableAuditSinkFailure,
+    DurableAuditSinkReport, DurableAuditSinkResult, DurableAuditVisibleDecisionProof,
+    DurableAuditWalEvidence, DurableAuditWalSegmentArchiveProof, DurableAuditWalSink,
+    FileDurableAuditWalSink, PendingDurableAuditRecord, classify_policy_evidence_requirement,
 };
 pub use envelope::EventEnvelope;
 pub use family::TraceEvent;

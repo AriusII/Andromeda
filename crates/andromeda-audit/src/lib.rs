@@ -1,7 +1,8 @@
 //! Audit trace contracts.
 //!
 //! This crate owns typed audit evidence for review and forensic correlation.
-//! It does not own durable journal storage, authorization truth, or recovery
+//! It owns durable audit journal storage, retention, compaction, and replay
+//! evidence. It does not own authorization truth, storage truth, or recovery
 //! truth.
 
 #![forbid(unsafe_code)]
@@ -11,6 +12,7 @@ mod admission;
 mod backup;
 mod core;
 mod durable_audit;
+mod durable_journal;
 mod hadr;
 mod helpers;
 mod identity;
@@ -27,14 +29,19 @@ pub use admission::{
 pub use backup::{BackupAuditEvent, BackupAuditTrace, BackupId, RecoveryStage, RestoreCompletion};
 pub use core::AuditTrace;
 pub use durable_audit::{
-    DurableAuditCompactionReport, DurableAuditEventFamily, DurableAuditFailureKind,
-    DurableAuditPolicyEvidenceRequirement, DurableAuditPrincipalBinding,
+    DurableAuditAppendRecord, DurableAuditCompactionReport, DurableAuditEventFamily,
+    DurableAuditFailureKind, DurableAuditPolicyEvidenceRequirement, DurableAuditPrincipalBinding,
     DurableAuditPruneBlockReason, DurableAuditPruneEvidence, DurableAuditRecordIdentity,
     DurableAuditReplayBehavior, DurableAuditReplayEvidence, DurableAuditReplayLsnRange,
     DurableAuditReplayQuery, DurableAuditReplayRecord, DurableAuditReplayResult,
     DurableAuditReplayWindow, DurableAuditRetentionBoundary, DurableAuditRetentionManager,
-    DurableAuditRetentionPolicy, DurableAuditSinkReport, DurableAuditWalEvidence,
-    DurableAuditWalSegmentArchiveProof, classify_policy_evidence_requirement,
+    DurableAuditRetentionPolicy, DurableAuditSinkFailure, DurableAuditSinkReport,
+    DurableAuditSinkResult, DurableAuditWalEvidence, DurableAuditWalSegmentArchiveProof,
+    classify_policy_evidence_requirement,
+};
+pub use durable_journal::{
+    DurableAuditDecisionGate, DurableAuditVisibleDecisionProof, DurableAuditWalSink,
+    FileDurableAuditWalSink,
 };
 pub use hadr::{
     FencingDecision, FencingEvent, FencingPolicy, HadrAuditEvent, HadrAuditTrace,

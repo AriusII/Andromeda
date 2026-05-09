@@ -1,11 +1,13 @@
-use andromeda_core::TransactionId;
-use andromeda_core::{AndromedaResult, CertificateIdentity, RequestId, SessionId, SurfaceScope};
+use andromeda_error::AndromedaResult;
+use andromeda_principal::{CertificateIdentity, SurfaceScope};
 use andromeda_rpc_codec::{
     CatalogManifestResolutionRequest, CatalogManifestResolutionResponse,
     decode_catalog_manifest_resolution_route_request,
     encode_catalog_manifest_resolution_response_frame,
     validate_catalog_manifest_resolution_response_context,
 };
+use andromeda_types::TransactionId;
+use andromeda_types::{RequestId, SessionId};
 
 use crate::{
     FrameBytes, FrameType, StreamRole, SurfacePlane, TransportEndpointMetadata, TransportMessage,

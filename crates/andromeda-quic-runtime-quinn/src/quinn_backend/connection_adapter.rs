@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
-use andromeda_core::CertificateIdentity;
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_principal::CertificateIdentity;
 
 use andromeda_quic::{ConnectionPoolKey, SurfacePlane, mtls_identity::RawCertificate};
 

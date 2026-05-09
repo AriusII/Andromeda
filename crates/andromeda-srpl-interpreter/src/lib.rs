@@ -155,13 +155,15 @@ mod tests {
     fn interpreter_fails_fast_on_assertion_without_later_side_effects() {
         let mut plan = happy_path_plan();
         plan.body.operations.remove(0);
-        for (ordinal, operation) in plan.body.operations.iter_mut().enumerate() {
+        for (expected_ordinal, operation) in plan.body.operations.iter_mut().enumerate() {
             match operation {
-                BoundSrplOperationPlan::Assert { ordinal: op, .. }
-                | BoundSrplOperationPlan::UpdateTable { ordinal: op, .. }
-                | BoundSrplOperationPlan::Emit { ordinal: op, .. }
-                | BoundSrplOperationPlan::ReadTable { ordinal: op, .. }
-                | BoundSrplOperationPlan::Raise { ordinal: op, .. } => *op = ordinal as u32,
+                BoundSrplOperationPlan::Assert { ordinal, .. }
+                | BoundSrplOperationPlan::UpdateTable { ordinal, .. }
+                | BoundSrplOperationPlan::Emit { ordinal, .. }
+                | BoundSrplOperationPlan::ReadTable { ordinal, .. }
+                | BoundSrplOperationPlan::Raise { ordinal, .. } => {
+                    *ordinal = expected_ordinal as u32;
+                },
             }
         }
         let mut adapter = FakeAdapter {

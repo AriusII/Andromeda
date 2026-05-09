@@ -14,30 +14,40 @@
 //!
 //! These tests are runtime-free and do not depend on quinn or rustls.
 
-use andromeda_core::{
-    AndromedaErrorKind, CatalogVersion, CertificateFingerprint,
-    CertificateIdentity as CoreCertificateIdentity, CertificateIdentityStatus, ContractHash,
-    InvocationId, Permission, PermissionSet, Principal, PrincipalAuthorizationDenialReason,
-    PrincipalAuthorizationEvaluationStage, PrincipalAuthorizationEvidence,
-    PrincipalAuthorizationOutcome, PrincipalBinding, PrincipalId, PrincipalRegistry, PrincipalRole,
-    PrincipalStatus, ProcedureId, RequestId, SessionId, SessionToken,
-    SurfaceScope as CoreSurfaceScope, TransactionId,
+use andromeda_error::AndromedaErrorKind;
+use andromeda_principal::{
+    CertificateFingerprint, CertificateIdentityStatus, Permission, PermissionSet, Principal,
+    PrincipalAuthorizationDenialReason, PrincipalAuthorizationEvaluationStage,
+    PrincipalAuthorizationEvidence, PrincipalAuthorizationOutcome, PrincipalBinding, PrincipalId,
+    PrincipalRegistry, PrincipalRole, PrincipalStatus, SessionToken,
 };
-use andromeda_core::{CertificateIdentity, SurfaceScope};
+use andromeda_principal::{
+    CertificateIdentity as CoreCertificateIdentity, SurfaceScope as CoreSurfaceScope,
+};
+use andromeda_principal::{CertificateIdentity, SurfaceScope};
+use andromeda_procedure_contract::{
+    ProcedureGatewayManifest as CatalogProcedureManifest,
+    ProcedureGatewayProtocolLayout as CatalogProcedureProtocolLayout,
+    ProcedureGatewayRequiredPermission as CatalogRequiredPermission,
+};
 use andromeda_proto::{PayloadKind, encode_generated_message, generated};
 use andromeda_quic::{
-    CatalogProcedureManifest, CatalogProcedureProtocolLayout, CatalogRequiredPermission,
-    Connection, FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader, FrameType, LifecycleState,
-    ProcedureGateway, ProcedureRouteAdmissionError, ResultStreamMetadataPolicy, SurfacePlane,
-    TypedResultStreamContext,
+    Connection, LifecycleState, ProcedureGateway, ProcedureRouteAdmissionError, SurfacePlane,
+};
+use andromeda_rpc_codec::TypedResultStreamContext;
+use andromeda_rpc_protocol::{
+    FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader, FrameType, ResultStreamMetadataPolicy,
+};
+use andromeda_types::{
+    CatalogVersion, ContractHash, InvocationId, ProcedureId, RequestId, SessionId, TransactionId,
 };
 
 fn hello_frame(session_id: u64) -> FrameBytes {
     FrameBytes {
         header: FrameHeader {
             frame_type: FrameType::Hello,
-            request_id: andromeda_core::RequestId::new(1),
-            session_id: andromeda_core::SessionId::new(session_id),
+            request_id: andromeda_types::RequestId::new(1),
+            session_id: andromeda_types::SessionId::new(session_id),
             tx_id: None,
             payload_length: 0,
             flags: 0,
@@ -51,8 +61,8 @@ fn auth_frame(session_id: u64) -> FrameBytes {
     FrameBytes {
         header: FrameHeader {
             frame_type: FrameType::Auth,
-            request_id: andromeda_core::RequestId::new(1),
-            session_id: andromeda_core::SessionId::new(session_id),
+            request_id: andromeda_types::RequestId::new(1),
+            session_id: andromeda_types::SessionId::new(session_id),
             tx_id: None,
             payload_length: 0,
             flags: 0,
@@ -368,7 +378,7 @@ fn assert_authorized_route_denial(
             assert!(!evidence.surface_policy_evaluated);
             assert!(!evidence.role_permission_evaluated);
             assert!(!evidence.direct_permission_evaluated);
-        }
+        },
         PrincipalAuthorizationDenialReason::CertificateRevoked => {
             assert_eq!(evidence.certificate_fingerprint, "a".repeat(64));
             assert_eq!(evidence.certificate_subject, "app-service");
@@ -384,7 +394,7 @@ fn assert_authorized_route_denial(
             assert!(!evidence.surface_policy_evaluated);
             assert!(!evidence.role_permission_evaluated);
             assert!(!evidence.direct_permission_evaluated);
-        }
+        },
         PrincipalAuthorizationDenialReason::CertificateDisabled => {
             assert_eq!(evidence.certificate_fingerprint, "a".repeat(64));
             assert_eq!(evidence.certificate_subject, "app-service");
@@ -400,7 +410,7 @@ fn assert_authorized_route_denial(
             assert!(!evidence.surface_policy_evaluated);
             assert!(!evidence.role_permission_evaluated);
             assert!(!evidence.direct_permission_evaluated);
-        }
+        },
         PrincipalAuthorizationDenialReason::SurfaceScopeMismatch => {
             assert_eq!(evidence.certificate_fingerprint, "a".repeat(64));
             assert_eq!(
@@ -415,7 +425,7 @@ fn assert_authorized_route_denial(
             assert!(!evidence.surface_policy_evaluated);
             assert!(!evidence.role_permission_evaluated);
             assert!(!evidence.direct_permission_evaluated);
-        }
+        },
         PrincipalAuthorizationDenialReason::PrincipalDisabled => {
             assert_eq!(evidence.certificate_fingerprint, "a".repeat(64));
             assert_eq!(
@@ -430,7 +440,7 @@ fn assert_authorized_route_denial(
             assert!(!evidence.surface_policy_evaluated);
             assert!(!evidence.role_permission_evaluated);
             assert!(!evidence.direct_permission_evaluated);
-        }
+        },
         PrincipalAuthorizationDenialReason::PrincipalMissingPermission => {
             assert_eq!(evidence.certificate_fingerprint, "a".repeat(64));
             assert_eq!(
@@ -448,10 +458,10 @@ fn assert_authorized_route_denial(
             assert!(!evidence.role_permission_granted);
             assert!(evidence.direct_permission_evaluated);
             assert!(!evidence.direct_permission_granted);
-        }
+        },
         PrincipalAuthorizationDenialReason::SurfaceDoesNotPermitPermission => {
             panic!("Application execute route should not produce a surface-policy denial");
-        }
+        },
     }
 }
 

@@ -1,13 +1,14 @@
-use andromeda_core::{EngineTimestamp, InvocationId, RequestId, SessionId, TransactionId};
-use andromeda_observe::{
+use andromeda_observability::{
     TraceId, TransactionPhaseCode, TransactionTransitionTrace, TransitionReasonCode,
 };
+use andromeda_time::EngineTimestamp;
 use andromeda_transaction_log::Lsn;
+use andromeda_types::{InvocationId, RequestId, SessionId, TransactionId};
 
 use crate::{TransactionState, TransactionStateMachine};
 
 /// Project an `andromeda-transaction` state into the wire-aligned
-/// `TransactionPhaseCode` shared by `andromeda-observe`.
+/// `TransactionPhaseCode` shared by `andromeda-observability`.
 pub const fn transaction_phase_code(state: TransactionState) -> TransactionPhaseCode {
     match state {
         TransactionState::Created => TransactionPhaseCode::CREATED,

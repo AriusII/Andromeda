@@ -1,5 +1,6 @@
-use andromeda_core::{AndromedaErrorKind, AndromedaResult, TransactionId};
+use andromeda_error::{AndromedaErrorKind, AndromedaResult};
 use andromeda_transaction::{CommitLogManager, Lsn, TransactionStatusTable, WalRecordKind};
+use andromeda_types::TransactionId;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -64,7 +65,7 @@ impl andromeda_transaction_log::InvocationWal for TestWal {
         if let Some(fail_after) = self.fail_flush_after
             && lsn.get() > fail_after
         {
-            return Err(andromeda_core::AndromedaError::new(
+            return Err(andromeda_error::AndromedaError::new(
                 AndromedaErrorKind::Storage,
                 "Simulated WAL flush failure",
             ));

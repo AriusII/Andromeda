@@ -1,9 +1,8 @@
-use andromeda_core::{
+use andromeda_principal::{
     PrincipalAuthorizationEvidence, PrincipalId, PrincipalRegistry, SurfaceScope,
 };
+use andromeda_procedure_contract::ProcedureGatewayManifest;
 use andromeda_rpc_codec::required_execute_permission;
-
-use crate::CatalogProcedureManifest;
 
 use super::errors::{ProcedureRouteAdmissionError, security_error};
 use super::route::ProcedureRouteBinding;
@@ -22,7 +21,7 @@ pub struct ProcedureAuthorizedRouteBinding {
 
 pub(super) fn authorize_application_route(
     route: ProcedureRouteBinding,
-    manifest: &CatalogProcedureManifest,
+    manifest: &ProcedureGatewayManifest,
     principal_registry: &PrincipalRegistry,
 ) -> Result<ProcedureAuthorizedRouteBinding, ProcedureRouteAdmissionError> {
     let required_permission =

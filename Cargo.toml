@@ -35,6 +35,7 @@ members = [
     "crates/andromeda-execution-trace",
     "crates/andromeda-hadr",
     "crates/andromeda-hardware",
+    "crates/andromeda-inventory-demo",
     "crates/andromeda-locking",
     "crates/andromeda-manifest",
     "crates/andromeda-maps",
@@ -43,6 +44,7 @@ members = [
     "crates/andromeda-optimizer",
     "crates/andromeda-plan-cache",
     "crates/andromeda-policy",
+    "crates/andromeda-principal",
     "crates/andromeda-procedure-runtime",
     "crates/andromeda-procedure-store",
     "crates/andromeda-procedure-contract",
@@ -135,6 +137,7 @@ andromeda-forensic = { path = "crates/andromeda-forensic", version = "0.1.0" }
 andromeda-gpu = { path = "crates/andromeda-gpu", version = "0.1.0" }
 andromeda-hadr = { path = "crates/andromeda-hadr", version = "0.1.0" }
 andromeda-hardware = { path = "crates/andromeda-hardware", version = "0.1.0" }
+andromeda-inventory-demo = { path = "crates/andromeda-inventory-demo", version = "0.1.0" }
 andromeda-iam = { path = "crates/andromeda-iam", version = "0.1.0" }
 andromeda-locking = { path = "crates/andromeda-locking", version = "0.1.0" }
 andromeda-manifest = { path = "crates/andromeda-manifest", version = "0.1.0" }
@@ -145,6 +148,7 @@ andromeda-observability = { path = "crates/andromeda-observability", version = "
 andromeda-optimizer = { path = "crates/andromeda-optimizer", version = "0.1.0" }
 andromeda-plan-cache = { path = "crates/andromeda-plan-cache", version = "0.1.0" }
 andromeda-policy = { path = "crates/andromeda-policy", version = "0.1.0" }
+andromeda-principal = { path = "crates/andromeda-principal", version = "0.1.0" }
 andromeda-procedure-runtime = { path = "crates/andromeda-procedure-runtime", version = "0.1.0" }
 andromeda-procedure-store = { path = "crates/andromeda-procedure-store", version = "0.1.0" }
 andromeda-procedure-contract = { path = "crates/andromeda-procedure-contract", version = "0.1.0" }

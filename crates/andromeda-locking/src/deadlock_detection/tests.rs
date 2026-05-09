@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 
 use crate::{LockAcquireStatus, LockManager, LockMode, LockResource};
-use andromeda_core::TransactionId;
+use andromeda_types::TransactionId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TransactionStatus {

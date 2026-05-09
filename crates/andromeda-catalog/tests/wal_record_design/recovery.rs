@@ -1,4 +1,5 @@
-use andromeda_catalog::{AlterCompatibilityPolicy, CatalogWalRecord, DefinitionBatchId};
+use andromeda_catalog_recovery::{AlterCompatibilityPolicy, CatalogWalRecord};
+use andromeda_definition_batch::DefinitionBatchId;
 use andromeda_types::CatalogVersion;
 
 use super::fixtures::{

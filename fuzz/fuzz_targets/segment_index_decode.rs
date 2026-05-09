@@ -1,6 +1,6 @@
 #![no_main]
 
-use andromeda_storage::SegmentIndexV0;
+use andromeda_segment::segment_index::SegmentIndexV0;
 use libfuzzer_sys::fuzz_target;
 
 mod common;

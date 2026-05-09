@@ -7,12 +7,13 @@ publish = false
 
 [dependencies]
 andromeda-audit.workspace = true
-andromeda-core.workspace = true
 andromeda-digest.workspace = true
 andromeda-error.workspace = true
 andromeda-hardware.workspace = true
 andromeda-observability.workspace = true
+andromeda-security.workspace = true
 andromeda-types.workspace = true
 
 [dev-dependencies]
 andromeda-storage.workspace = true
+andromeda-storage-page.workspace = true

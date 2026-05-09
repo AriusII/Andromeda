@@ -1,8 +1,8 @@
 //! Commit log edge-case gates.
 
 use super::fixtures::*;
-use andromeda_core::TransactionId;
 use andromeda_transaction::IsolationLevel;
+use andromeda_types::TransactionId;
 
 #[tokio::test]
 async fn test_edge_case_zero_transaction_id() {

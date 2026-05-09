@@ -5,14 +5,14 @@
 //! correlation, and that the resulting trace's own `validate()` rejects any
 //! attempt to claim a terminal commit/rollback without durable WAL evidence.
 
-use andromeda_core::{InvocationId, RequestId, SessionId, TransactionId};
-use andromeda_observe::{
+use andromeda_observability::{
     TraceId, TransactionPhaseCode, TransactionTransitionTrace, TransitionReasonCode,
 };
 use andromeda_transaction::{
     TransactionState, TransactionStateMachine, TransactionTransitionCorrelation,
     transaction_phase_code,
 };
+use andromeda_types::{InvocationId, RequestId, SessionId, TransactionId};
 
 #[test]
 fn commit_transition_carries_invocation_request_session_and_durable_lsn() {
@@ -111,7 +111,7 @@ fn forged_terminal_transition_without_durable_lsn_is_rejected_by_validate() {
 #[test]
 fn transition_phase_codes_cover_every_transaction_state() {
     // Drift guard between `andromeda_transaction::TransactionState` and the
-    // `andromeda_observe::TransactionPhaseCode` constants. Adding a new
+    // `andromeda_observability::TransactionPhaseCode` constants. Adding a new
     // state requires extending `transaction_phase_code` and the phase code
     // constants together; this test fails compilation when a new state is
     // introduced.

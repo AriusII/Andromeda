@@ -14,7 +14,11 @@ pub use andromeda_transaction_log::{
 pub use manager::CommitLogManager;
 
 #[cfg(test)]
-use andromeda_core::{AndromedaErrorKind, AndromedaResult, EngineTimestamp, TransactionId};
+use andromeda_error::{AndromedaErrorKind, AndromedaResult};
+#[cfg(test)]
+use andromeda_time::EngineTimestamp;
+#[cfg(test)]
+use andromeda_types::TransactionId;
 
 #[cfg(test)]
 mod tests;

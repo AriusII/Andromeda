@@ -34,7 +34,7 @@ use policy::MAX_RECONNECT_ATTEMPTS;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_core::{CertificateIdentity, SurfaceScope};
+    use andromeda_principal::{CertificateIdentity, SurfaceScope};
 
     use crate::SurfacePlane;
 

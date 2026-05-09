@@ -5,7 +5,7 @@ use andromeda_observe::{
     Permission, PrincipalBinding, PrincipalRegistry, SurfaceScope, TraceEvent, TraceId,
     UserPrincipal, UserPrincipalKind,
 };
-use andromeda_storage::InMemoryWal;
+use andromeda_wal::InMemoryWal;
 
 pub const APP_FINGERPRINT: &str = "sha256-fingerprint-abc123";
 pub const ADMIN_FINGERPRINT: &str = "sha256-fingerprint-admin";

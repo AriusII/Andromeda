@@ -26,7 +26,7 @@
 #[cfg(test)]
 use std::time::Duration;
 
-use andromeda_core::{AndromedaError, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaResult};
 
 mod api;
 mod cycle;

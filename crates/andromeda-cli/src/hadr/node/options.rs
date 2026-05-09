@@ -77,17 +77,17 @@ pub(in crate::hadr::node) fn parse_node_register_options(
             "--apply" => apply = true,
             "--membership-store" | "--state-dir" => {
                 parse_membership_store_option(args, &mut index, &mut membership_store)?;
-            }
+            },
             "--role" => {
                 role =
                     next_option_value_rejecting_flag(args, &mut index, "--role requires a value")?
                         .to_string();
-            }
+            },
             opt if opt.starts_with("--") => {
                 return Err(cli_error(
                     "unknown hadr node register option; supported options are --role, --apply, --dry-run, --membership-store, --state-dir, and --json",
                 ));
-            }
+            },
             value => {
                 if node_id.is_some() {
                     return Err(cli_error(
@@ -95,7 +95,7 @@ pub(in crate::hadr::node) fn parse_node_register_options(
                     ));
                 }
                 node_id = Some(parse_nonzero_node_id(value)?);
-            }
+            },
         }
         index += 1;
     }
@@ -191,7 +191,7 @@ fn parse_fenced_node_mutation_options(
             "--apply" => apply = true,
             "--membership-store" | "--state-dir" => {
                 parse_membership_store_option(args, &mut index, &mut membership_store)?;
-            }
+            },
             "--fencing-evidence" => {
                 next_option_value_rejecting_flag(
                     args,
@@ -199,16 +199,16 @@ fn parse_fenced_node_mutation_options(
                     "--fencing-evidence requires a value",
                 )?;
                 has_fencing_evidence = true;
-            }
+            },
             opt if opt.starts_with("--") => {
                 return Err(cli_error(command.unknown_option_message()));
-            }
+            },
             value => {
                 if node_id.is_some() {
                     return Err(cli_error(command.duplicate_node_message()));
                 }
                 node_id = Some(parse_nonzero_node_id(value)?);
-            }
+            },
         }
         index += 1;
     }
@@ -239,17 +239,17 @@ pub(in crate::hadr::node) fn parse_node_list_options(
             JSON_FLAG => json_output = true,
             "--membership-store" | "--state-dir" => {
                 parse_membership_store_option(args, &mut index, &mut membership_store)?;
-            }
+            },
             opt if opt.starts_with("--") => {
                 return Err(cli_error(
                     "unknown hadr node list option; supported options are --membership-store, --state-dir, and --json",
                 ));
-            }
+            },
             _ => {
                 return Err(cli_error(
                     "unexpected hadr node list argument; supported options are --membership-store, --state-dir, and --json",
                 ));
-            }
+            },
         }
         index += 1;
     }
@@ -273,18 +273,18 @@ pub(in crate::hadr::node) fn parse_node_status_options(
             JSON_FLAG => json_output = true,
             "--membership-store" | "--state-dir" => {
                 parse_membership_store_option(args, &mut index, &mut membership_store)?;
-            }
+            },
             opt if opt.starts_with("--") => {
                 return Err(cli_error(
                     "unknown hadr node status option; supported options are --membership-store, --state-dir, and --json",
                 ));
-            }
+            },
             value => {
                 if node_id.is_some() {
                     return Err(cli_error("hadr node status accepts exactly one <node-id>"));
                 }
                 node_id = Some(parse_nonzero_node_id(value)?);
-            }
+            },
         }
         index += 1;
     }

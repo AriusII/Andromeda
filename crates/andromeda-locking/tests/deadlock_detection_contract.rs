@@ -2,12 +2,12 @@
 
 use std::time::Duration;
 
-use andromeda_core::TransactionId;
 use andromeda_locking::deadlock_detection::{
     DeadlockClock, DeadlockDetectionDeadline, DeadlockDetectionStatus, DeadlockDetector,
     DeadlockPolicy, DeadlockTransactionMetadataTable, DeadlockVictimPolicy, ManualDeadlockClock,
     WaitForGraph,
 };
+use andromeda_types::TransactionId;
 
 fn tx(id: u64) -> TransactionId {
     TransactionId::new(id)

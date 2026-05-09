@@ -3,9 +3,9 @@ use andromeda_core::{
 };
 use andromeda_observe::TraceId;
 use andromeda_storage::{
-    CoreIoPlacementRequest, OperationalProfile, PageSize, StorageIoBudgetScope,
-    StorageWorkloadClass,
+    CoreIoPlacementRequest, OperationalProfile, StorageIoBudgetScope, StorageWorkloadClass,
 };
+use andromeda_storage_page::PageSize;
 
 use crate::{
     CompletionStatus, ExecutionIoAdmissionDecision, ExecutionIoAdmissionRequest, InvocationReject,

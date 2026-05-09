@@ -1,8 +1,5 @@
 //! Permission scope validation and registry enforcement contracts.
 
-use andromeda_catalog::{
-    PolicyVersion, ProcedureContractBinding, ProcedureContractRef, StatsVersion,
-};
 use andromeda_core::{AndromedaErrorKind, CatalogVersion, ContractHash, InvocationId, ProcedureId};
 use andromeda_exec::{
     InvocationContext, LocalProcedure, PermissionScopeValidation, PreTransactionDispatchEvidence,
@@ -10,7 +7,10 @@ use andromeda_exec::{
     ResultStreamMetadata, validate_dispatch_permissions, validate_dispatch_permissions_or_error,
 };
 use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
-use andromeda_srpl::Cardinality;
+use andromeda_procedure_contract::{
+    PolicyVersion, ProcedureContractBinding, ProcedureContractRef, StatsVersion,
+};
+use andromeda_srpl_ir::Cardinality;
 
 const RESERVE_PROCEDURE_ID: ProcedureId = ProcedureId::new(0x1000);
 const RESERVE_PERMISSION: &str = "Inventory.Reserve.Execute";

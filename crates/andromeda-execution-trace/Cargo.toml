@@ -8,7 +8,7 @@ publish = false
 [dependencies]
 andromeda-audit.workspace = true
 andromeda-core.workspace = true
-andromeda-observe.workspace = true
+andromeda-observability.workspace = true
 andromeda-result-stream.workspace = true
-andromeda-storage.workspace = true
 andromeda-transaction.workspace = true
+andromeda-wal.workspace = true

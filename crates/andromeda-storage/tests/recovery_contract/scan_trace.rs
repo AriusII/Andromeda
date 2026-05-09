@@ -1,6 +1,8 @@
 use crate::support::{encode_records, recovery_manifest};
 use andromeda_core::TransactionId;
-use andromeda_observe::{EventCorrelation, EventEnvelope, EventId, TraceEvent, TraceId};
+use andromeda_observe::{
+    EventCorrelation, EventEnvelope, EventId, RecoveryTrace, TraceEvent, TraceId,
+};
 use andromeda_storage::{
     DatabaseManifest, InMemoryWal, Lsn, RecoveryPlan, RedoRecordDecision, StartupMode, WalRecord,
     WalRecordKind, WalScanStopReason, scan_wal_records,
@@ -109,7 +111,12 @@ fn redo_plan_exports_recovery_trace_with_durable_lsn_correlation() {
     let plan =
         RecoveryPlan::from_manifest_and_wal(&manifest, StartupMode::SafeStart, &durable_records)
             .unwrap();
-    let trace = plan.observe_recovery_trace(TraceId::new(50));
+    let trace_projection = plan.trace_projection(TraceId::new(50));
+    let trace = RecoveryTrace {
+        trace_id: trace_projection.trace_id,
+        last_durable_lsn: trace_projection.last_durable_lsn,
+        corruption_boundary_lsn: trace_projection.corruption_boundary_lsn,
+    };
 
     let envelope = EventEnvelope::new(
         EventId::new(51),
@@ -158,7 +165,7 @@ fn redo_plan_distinguishes_snapshot_replay_range_and_corruption_boundary() {
     assert_eq!(clean_plan.replay_lsns().collect::<Vec<_>>(), vec![row_lsn]);
     assert!(clean_plan.wal_scan_stop().is_none());
 
-    let clean_trace = clean_plan.observe_recovery_trace(TraceId::new(901));
+    let clean_trace = clean_plan.trace_projection(TraceId::new(901));
     assert_eq!(clean_trace.last_durable_lsn, clean_plan.durable_lsn.get());
     assert_eq!(
         clean_trace.corruption_boundary_lsn, None,
@@ -219,7 +226,7 @@ fn redo_plan_distinguishes_snapshot_replay_range_and_corruption_boundary() {
         WalScanStopReason::TruncatedRecord
     );
 
-    let tail_trace = tail_plan.observe_recovery_trace(TraceId::new(902));
+    let tail_trace = tail_plan.trace_projection(TraceId::new(902));
     assert_eq!(tail_trace.last_durable_lsn, tail_plan.durable_lsn.get());
     assert_eq!(
         tail_trace.corruption_boundary_lsn,

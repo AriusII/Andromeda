@@ -1,8 +1,9 @@
-use andromeda_catalog::{
-    AccessMode, CatalogDefinition, CompatibilityPolicy, IsolationPolicy, MultiResultPolicy,
-    ProcedureErrorPolicy, ProtocolLayoutRef, ResultMetadataPolicy, StatsVersion, TransactionPolicy,
-};
+use andromeda_catalog_store::CatalogDefinition;
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_procedure_contract::{
+    AccessMode, CompatibilityPolicy, IsolationPolicy, MultiResultPolicy, ProcedureErrorPolicy,
+    ProtocolLayoutRef, ResultMetadataPolicy, StatsVersion, TransactionPolicy,
+};
 use andromeda_srpl_ast::ProcedureAst;
 use andromeda_srpl_binder::bind_procedure;
 use andromeda_srpl_diagnostics::{SrplDiagnostic, SrplSource};

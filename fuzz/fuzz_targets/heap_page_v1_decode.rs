@@ -1,6 +1,7 @@
 #![no_main]
 
-use andromeda_storage::{HeapPage, PageSize};
+use andromeda_storage::HeapPage;
+use andromeda_storage_page::PageSize;
 use libfuzzer_sys::fuzz_target;
 
 mod common;

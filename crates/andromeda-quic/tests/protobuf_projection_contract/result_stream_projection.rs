@@ -88,19 +88,19 @@ fn proto_result_stream_projection_rejects_envelope_context_drift_fields() {
         match field {
             "ContractHash" => {
                 drifted[1].contract_hash = ContractHash::from_slice(&hash(8)).unwrap();
-            }
+            },
             "CatalogVersion" => {
                 drifted[1].catalog_version = CatalogVersion::new(43);
-            }
+            },
             "RequestId" => {
                 drifted[1].request_id = RequestId::new(502);
-            }
+            },
             "SessionId" => {
                 drifted[1].session_id = SessionId::new(602);
-            }
+            },
             "tx_id" => {
                 drifted[1].tx_id = Some(TransactionId::new(702));
-            }
+            },
             _ => unreachable!(),
         }
 

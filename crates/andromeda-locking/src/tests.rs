@@ -1,5 +1,6 @@
 use super::*;
-use andromeda_core::{AndromedaErrorKind, TransactionId};
+use andromeda_error::AndromedaErrorKind;
+use andromeda_types::TransactionId;
 
 mod compatibility;
 mod fixtures;

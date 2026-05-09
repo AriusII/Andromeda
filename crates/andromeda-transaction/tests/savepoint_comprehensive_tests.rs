@@ -29,13 +29,15 @@
 
 #![allow(clippy::too_many_lines)]
 
-use andromeda_core::{AndromedaErrorKind, CatalogVersion, TransactionId};
+use andromeda_error::AndromedaErrorKind;
+
 use andromeda_mvcc::{
     MvccIsolationPolicy, MvccRowHeader, Snapshot, TransactionStatus, TransactionStatusTable,
 };
 use andromeda_savepoint::{SavepointId, SavepointRollbackMarker, SavepointStack};
 use andromeda_transaction::{CommitLogManager, TransactionManager, TransactionState};
 use andromeda_transaction_log::{IsolationLevel, Lsn, TxWalReplayRecord, WalRecordKind};
+use andromeda_types::{CatalogVersion, TransactionId};
 use std::sync::Arc;
 
 /// Minimal no-op WAL used by every durability test.
@@ -48,11 +50,11 @@ impl andromeda_transaction_log::InvocationWal for NoopWal {
         _kind: WalRecordKind,
         _transaction_id: Option<TransactionId>,
         _payload: &[u8],
-    ) -> andromeda_core::AndromedaResult<Lsn> {
+    ) -> andromeda_error::AndromedaResult<Lsn> {
         Ok(Lsn::new(1))
     }
 
-    async fn flush_through(&self, lsn: Lsn) -> andromeda_core::AndromedaResult<Lsn> {
+    async fn flush_through(&self, lsn: Lsn) -> andromeda_error::AndromedaResult<Lsn> {
         Ok(lsn)
     }
 }
@@ -63,8 +65,8 @@ fn make_commit_log() -> (CommitLogManager, Arc<TransactionStatusTable>) {
     (commit_log, status_table)
 }
 
-fn ts(v: u64) -> andromeda_core::EngineTimestamp {
-    andromeda_core::EngineTimestamp::from_unix_millis(v)
+fn ts(v: u64) -> andromeda_time::EngineTimestamp {
+    andromeda_time::EngineTimestamp::from_unix_millis(v)
 }
 
 /// Build a minimal RepeatableRead snapshot owned by `tx_id` at `timestamp`.

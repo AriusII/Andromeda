@@ -8,12 +8,12 @@ pub use std::time::Instant;
 pub use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId, SessionId,
 };
-pub use andromeda_quic::{
-    FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader, FrameType,
-};
 pub use andromeda_quic_runtime_quinn::{
     quinn_backend::{QuicClient, QuicServer},
     quinn_tls::MutualTlsTestConfig,
+};
+pub use andromeda_rpc_protocol::{
+    FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader, FrameType,
 };
 pub use tokio::sync::RwLock;
 use tokio::task::JoinHandle;

@@ -1,5 +1,6 @@
-use andromeda_catalog::{CatalogObjectRef, ObjectKind, ProcedureContractRef, QualifiedName};
+use andromeda_catalog_store::{CatalogObjectRef, ObjectKind, QualifiedName};
 use andromeda_error::{AndromedaError, AndromedaErrorKind};
+use andromeda_procedure_contract::ProcedureContractRef;
 use andromeda_srpl::definition_batch_bridge::{
     SrplDefinitionBatchProcedureSource, SrplProcedureDefinition,
     dry_run_srpl_definition_batch_sources,

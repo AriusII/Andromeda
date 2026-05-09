@@ -5,7 +5,7 @@ use std::{
 };
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use andromeda_storage::{
+use andromeda_hadr::{
     FileBackedHadrMembershipStore, HadrMembershipSnapshot, HadrMembershipStore, HadrNodeRole,
     HadrPromotionAuditLog, HadrPromotionAuditMarker, HadrPromotionAuditReceipt,
 };

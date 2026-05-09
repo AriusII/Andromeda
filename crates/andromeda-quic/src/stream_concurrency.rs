@@ -11,7 +11,8 @@ pub use backpressure::BackpressureRequest;
 pub use limits::StreamConcurrencyLimits;
 pub use state::{CancellationReason, CancellationToken, StreamState};
 
-use andromeda_core::{AndromedaResult, InvocationId};
+use andromeda_error::AndromedaResult;
+use andromeda_types::InvocationId;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -365,7 +366,7 @@ impl Default for StreamConcurrencyManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_core::AndromedaErrorKind;
+    use andromeda_error::AndromedaErrorKind;
 
     fn invocation_id(id: u64) -> InvocationId {
         InvocationId::new(id)

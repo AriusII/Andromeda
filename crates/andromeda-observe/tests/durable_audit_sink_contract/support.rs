@@ -1,13 +1,14 @@
 use andromeda_digest::sha256;
 pub(crate) use andromeda_observe::{
     AdminOperation, AdminOperationTrace, CatalogMutationTrace, CertificateIdentity,
-    DurableAuditDecisionGate, DurableAuditEventFamily, DurableAuditFailureKind,
-    DurableAuditPrincipalBinding, DurableAuditReplayBehavior, DurableAuditReplayLsnRange,
-    DurableAuditReplayQuery, DurableAuditReplayRecord, DurableAuditRetentionBoundary,
-    DurableAuditSinkFailure, DurableAuditSinkReport, DurableAuditWalEvidence, DurableAuditWalSink,
-    EventCorrelation, EventEnvelope, EventId, FileDurableAuditWalSink, PendingDurableAuditRecord,
-    Permission, SecurityAuditOutcome, SecurityAuditTrace, SecurityPolicyVersionEvidence,
-    SurfaceScope, TraceEvent, TraceId, UserPrincipal, UserPrincipalKind,
+    DurableAuditAppendRecord, DurableAuditDecisionGate, DurableAuditEventFamily,
+    DurableAuditFailureKind, DurableAuditPrincipalBinding, DurableAuditReplayBehavior,
+    DurableAuditReplayLsnRange, DurableAuditReplayQuery, DurableAuditReplayRecord,
+    DurableAuditRetentionBoundary, DurableAuditSinkFailure, DurableAuditSinkReport,
+    DurableAuditWalEvidence, DurableAuditWalSink, EventCorrelation, EventEnvelope, EventId,
+    FileDurableAuditWalSink, PendingDurableAuditRecord, Permission, SecurityAuditOutcome,
+    SecurityAuditTrace, SecurityPolicyVersionEvidence, SurfaceScope, TraceEvent, TraceId,
+    UserPrincipal, UserPrincipalKind,
 };
 pub(crate) use andromeda_types::{CatalogObjectId, CatalogVersion, RequestId, SessionId};
 pub(crate) use std::fs;
@@ -274,10 +275,14 @@ pub(crate) fn journal_chain_anchor_path(path: &Path) -> PathBuf {
 pub(crate) struct FailingDurableAuditWalSink;
 
 impl DurableAuditWalSink for FailingDurableAuditWalSink {
-    fn append_durable_audit_record(
+    fn append_durable_audit_record<R>(
         &mut self,
-        record: PendingDurableAuditRecord,
-    ) -> Result<DurableAuditSinkReport, DurableAuditSinkFailure> {
+        record: R,
+    ) -> Result<DurableAuditSinkReport, DurableAuditSinkFailure>
+    where
+        R: Into<DurableAuditAppendRecord>,
+    {
+        let record = record.into();
         Err(DurableAuditSinkFailure::new(
             DurableAuditFailureKind::WalFlushRejected,
             Some(record.identity),

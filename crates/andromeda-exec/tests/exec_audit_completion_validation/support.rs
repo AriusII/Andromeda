@@ -18,8 +18,8 @@ pub use andromeda_observe::{
     DurableAuditRetentionBoundary, DurableAuditSinkReport, DurableAuditWalEvidence, EventId,
     TraceId,
 };
-pub use andromeda_storage::Lsn;
-pub use andromeda_tx::TransactionState;
+pub use andromeda_transaction::TransactionState;
+pub use andromeda_wal::Lsn;
 
 use std::sync::Mutex;
 

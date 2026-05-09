@@ -13,16 +13,20 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 andromeda-catalog = { path = "../crates/andromeda-catalog" }
+andromeda-catalog-store = { path = "../crates/andromeda-catalog-store" }
+andromeda-definition-batch = { path = "../crates/andromeda-definition-batch" }
 andromeda-manifest = { path = "../crates/andromeda-manifest" }
 andromeda-recovery = { path = "../crates/andromeda-recovery" }
 andromeda-proto = { path = "../crates/andromeda-proto" }
 andromeda-core = { path = "../crates/andromeda-core" }
 andromeda-observe = { path = "../crates/andromeda-observe" }
 andromeda-quic = { path = "../crates/andromeda-quic" }
+andromeda-rpc-codec = { path = "../crates/andromeda-rpc-codec" }
 andromeda-rpc-protocol = { path = "../crates/andromeda-rpc-protocol" }
 andromeda-security-contract = { path = "../crates/andromeda-security-contract" }
 andromeda-srpl = { path = "../crates/andromeda-srpl" }
 andromeda-srpl-parser = { path = "../crates/andromeda-srpl-parser" }
+andromeda-segment = { path = "../crates/andromeda-segment" }
 andromeda-storage = { path = "../crates/andromeda-storage" }
 andromeda-storage-page = { path = "../crates/andromeda-storage-page" }
 andromeda-wal = { path = "../crates/andromeda-wal" }

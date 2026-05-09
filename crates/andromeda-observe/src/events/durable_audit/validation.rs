@@ -3,9 +3,8 @@ use andromeda_error::AndromedaResult;
 use crate::events::{TraceEvent, observe_error};
 
 use super::{
-    DurableAuditEventFamily, DurableAuditFailureKind, DurableAuditPrincipalBinding,
-    DurableAuditRecordIdentity, DurableAuditSinkFailure, PendingDurableAuditRecord,
-    classify_policy_evidence_requirement, durable_audit_family, error::sink_failure,
+    DurableAuditEventFamily, DurableAuditPrincipalBinding, PendingDurableAuditRecord,
+    classify_policy_evidence_requirement, durable_audit_family,
 };
 
 pub(crate) fn validate_record(record: &PendingDurableAuditRecord) -> AndromedaResult<()> {
@@ -78,17 +77,6 @@ pub(crate) fn validate_permissioned_critical_policy_binding(
     }
 
     Ok(())
-}
-
-pub(crate) fn validation_failure(
-    identity: DurableAuditRecordIdentity,
-    message: impl Into<String>,
-) -> DurableAuditSinkFailure {
-    sink_failure(
-        DurableAuditFailureKind::ValidationRejected,
-        Some(identity),
-        message,
-    )
 }
 
 fn validate_security_decision_binding(record: &PendingDurableAuditRecord) -> AndromedaResult<()> {

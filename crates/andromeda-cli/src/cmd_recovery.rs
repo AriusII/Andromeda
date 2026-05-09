@@ -2,9 +2,10 @@
 
 use crate::args::RecoveryInspectOptions;
 use andromeda_core::AndromedaResult;
-use andromeda_storage::{
-    DatabaseManifest, FileWalRecoveryReportV0, Lsn, StartupMode, report_file_wal_recovery_v0,
-};
+use andromeda_manifest::DatabaseManifest;
+use andromeda_recovery::{FileWalRecoveryReportV0, StartupMode};
+use andromeda_storage::report_file_wal_recovery_v0;
+use andromeda_wal::Lsn;
 use std::path::Path;
 
 /// Runs recovery inspection for a WAL file.

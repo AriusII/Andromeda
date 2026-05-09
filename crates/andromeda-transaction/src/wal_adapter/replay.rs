@@ -1,7 +1,11 @@
 use std::collections::BTreeMap;
 
-use andromeda_core::{AndromedaResult, EngineTimestamp, TransactionId};
+use andromeda_error::AndromedaResult;
+
+use andromeda_time::EngineTimestamp;
+
 use andromeda_transaction_log::{IsolationLevel, Lsn, TxWalReplayRecord};
+use andromeda_types::TransactionId;
 
 use super::error::{TxWalAdapterError, tx_adapter_error};
 

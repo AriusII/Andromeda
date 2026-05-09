@@ -1,4 +1,4 @@
-use andromeda_core::TransactionId;
+use andromeda_types::TransactionId;
 
 use super::entry::{LockHolder, LockWaiter};
 use super::mode::LockMode;

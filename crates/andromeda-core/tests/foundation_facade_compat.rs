@@ -31,6 +31,24 @@ use andromeda_hardware::{
     RamProfile as FoundationRamProfile, RamSectionBudget as FoundationRamSectionBudget,
     RamSectionRole as FoundationRamSectionRole, ResourceBudget as FoundationResourceBudget,
 };
+use andromeda_principal::{
+    CertificateFingerprint as PrincipalCertificateFingerprint,
+    CertificateIdentity as PrincipalCertificateIdentity,
+    CertificateIdentityStatus as PrincipalCertificateIdentityStatus,
+    Permission as PrincipalPermission, PermissionSet as PrincipalPermissionSet,
+    Principal as PrincipalPrincipal,
+    PrincipalAuthorizationDecision as PrincipalAuthorizationDecisionType,
+    PrincipalAuthorizationDenialReason as PrincipalAuthorizationDenialReasonType,
+    PrincipalAuthorizationEvaluationStage as PrincipalAuthorizationEvaluationStageType,
+    PrincipalAuthorizationEvidence as PrincipalAuthorizationEvidenceType,
+    PrincipalAuthorizationOutcome as PrincipalAuthorizationOutcomeType,
+    PrincipalBinding as PrincipalPrincipalBinding, PrincipalId as PrincipalPrincipalId,
+    PrincipalPolicyEvidenceBinding as PrincipalPolicyEvidenceBindingType,
+    PrincipalPolicyVersion as PrincipalPolicyVersionType,
+    PrincipalRegistry as PrincipalPrincipalRegistry, PrincipalRole as PrincipalPrincipalRole,
+    PrincipalStatus as PrincipalPrincipalStatus, SessionToken as PrincipalSessionToken,
+    SurfaceScope as PrincipalSurfaceScope, UserPrincipal as PrincipalUserPrincipal,
+};
 use andromeda_time::{
     Clock as FoundationClock, EngineTimestamp as FoundationEngineTimestamp,
     ManualClock as FoundationManualClock, SystemClock as FoundationSystemClock,
@@ -96,6 +114,45 @@ fn core_facade_preserves_direct_foundation_public_imports() {
     let _: Option<FoundationRamProfile> = Option::<CoreRamProfile>::None;
     let _: Option<FoundationRamSectionBudget> = Option::<CoreRamSectionBudget>::None;
     let _: Option<FoundationRamSectionRole> = Option::<CoreRamSectionRole>::None;
+}
+
+#[test]
+fn core_facade_preserves_principal_public_imports() {
+    let _: Option<PrincipalCertificateFingerprint> =
+        Option::<andromeda_core::CertificateFingerprint>::None;
+    let _: Option<PrincipalCertificateIdentity> =
+        Option::<andromeda_core::CertificateIdentity>::None;
+    let _: Option<PrincipalCertificateIdentityStatus> =
+        Option::<andromeda_core::CertificateIdentityStatus>::None;
+    let _: Option<PrincipalPermission> = Option::<andromeda_core::Permission>::None;
+    let _: Option<PrincipalPermissionSet> = Option::<andromeda_core::PermissionSet>::None;
+    let _: Option<PrincipalPrincipal> = Option::<andromeda_core::Principal>::None;
+    let _: Option<PrincipalAuthorizationDecisionType> =
+        Option::<andromeda_core::PrincipalAuthorizationDecision>::None;
+    let _: Option<PrincipalAuthorizationDenialReasonType> =
+        Option::<andromeda_core::PrincipalAuthorizationDenialReason>::None;
+    let _: Option<PrincipalAuthorizationEvaluationStageType> =
+        Option::<andromeda_core::PrincipalAuthorizationEvaluationStage>::None;
+    let _: Option<PrincipalAuthorizationEvidenceType> =
+        Option::<andromeda_core::PrincipalAuthorizationEvidence>::None;
+    let _: Option<PrincipalAuthorizationOutcomeType> =
+        Option::<andromeda_core::PrincipalAuthorizationOutcome>::None;
+    let _: Option<PrincipalPrincipalBinding> = Option::<andromeda_core::PrincipalBinding>::None;
+    let _: Option<PrincipalPrincipalId> = Option::<andromeda_core::PrincipalId>::None;
+    let _: Option<PrincipalPolicyEvidenceBindingType> =
+        Option::<andromeda_core::PrincipalPolicyEvidenceBinding>::None;
+    let _: Option<PrincipalPolicyVersionType> =
+        Option::<andromeda_core::PrincipalPolicyVersion>::None;
+    let _: Option<PrincipalPrincipalRegistry> = Option::<andromeda_core::PrincipalRegistry>::None;
+    let _: Option<PrincipalPrincipalRole> = Option::<andromeda_core::PrincipalRole>::None;
+    let _: Option<PrincipalPrincipalStatus> = Option::<andromeda_core::PrincipalStatus>::None;
+    let _: Option<PrincipalSessionToken> = Option::<andromeda_core::SessionToken>::None;
+    let _: Option<PrincipalSurfaceScope> = Option::<andromeda_core::SurfaceScope>::None;
+    let _: Option<PrincipalUserPrincipal> = Option::<andromeda_core::UserPrincipal>::None;
+    assert_eq!(
+        andromeda_core::PRINCIPAL_POLICY_EVIDENCE_VERSION,
+        andromeda_principal::PRINCIPAL_POLICY_EVIDENCE_VERSION
+    );
 }
 
 #[test]

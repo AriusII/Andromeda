@@ -1,10 +1,10 @@
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, InvocationId, TransactionId,
 };
-use andromeda_observe::TraceId;
+use andromeda_observability::TraceId;
 use andromeda_result_stream::{CompletionStatus, InvocationCompletion};
-use andromeda_storage::Lsn;
 use andromeda_transaction::TransactionState;
+use andromeda_wal::Lsn;
 use std::collections::{BTreeMap, btree_map::Entry};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -107,7 +107,7 @@ impl CompletionJournalRecord {
                     ));
                 }
                 self.validate_terminal_lsn("committed journal record")?;
-            }
+            },
             CompletionStatus::RolledBack => {
                 if self.transaction_id.is_none() {
                     return Err(completion_journal_error(
@@ -125,7 +125,7 @@ impl CompletionJournalRecord {
                     ));
                 }
                 self.validate_terminal_lsn("rolled-back journal record")?;
-            }
+            },
             CompletionStatus::FailedBeforeTransaction
             | CompletionStatus::Cancelled
             | CompletionStatus::Poisoned
@@ -143,7 +143,7 @@ impl CompletionJournalRecord {
                         "non-transactional journal record must not carry transaction or result evidence",
                     ));
                 }
-            }
+            },
         }
 
         Ok(())
@@ -220,7 +220,7 @@ impl InvocationCompletionJournal {
                         .insert(transaction_id, invocation_id);
                 }
                 Ok(entry.insert(record))
-            }
+            },
         }
     }
 

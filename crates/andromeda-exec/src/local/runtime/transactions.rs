@@ -1,6 +1,6 @@
 use andromeda_core::{AndromedaResult, TransactionId};
-use andromeda_storage::Lsn;
-use andromeda_tx::TransactionManager;
+use andromeda_transaction::TransactionManager;
+use andromeda_wal::Lsn;
 
 use crate::RollbackCause;
 

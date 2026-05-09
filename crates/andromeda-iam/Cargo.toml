@@ -8,6 +8,10 @@ publish = false
 [dependencies]
 andromeda-admission.workspace = true
 andromeda-audit.workspace = true
-andromeda-core.workspace = true
+andromeda-error.workspace = true
+andromeda-principal.workspace = true
 andromeda-security-contract.workspace = true
 dashmap = "6.0"
+
+[dev-dependencies]
+andromeda-types.workspace = true

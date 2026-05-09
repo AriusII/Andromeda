@@ -1,37 +1,45 @@
 #![allow(dead_code, unused_imports)]
 
 pub use andromeda_catalog::{
-    INVENTORY_RESERVE_STOCK_PERMISSION, ProcedureContract,
-    inventory_reserve_stock_catalog_bindings, inventory_reserve_stock_contract,
+    INVENTORY_RESERVE_STOCK_PERMISSION, inventory_reserve_stock_catalog_bindings,
+    inventory_reserve_stock_contract,
 };
 pub use andromeda_core::{
     AndromedaErrorKind, CatalogVersion, ContractHash, InvocationId, PipelineClass, RequestId,
     ResourceBudget, SessionId, TransactionId,
 };
 pub use andromeda_exec::{
-    CompletionStatus, ExecutionIoAdmissionRequest, HeapInventoryProductStockStore,
-    InventoryProductStockCommitEvidence, InventoryProductStockDurableRedoEvidence,
-    InventoryProductStockStore, InventoryReserveStockExecutor, InventoryStock, InvocationContext,
-    InvocationRequest, LocalHeapRowInsertRedoTemplate, LocalHeapRowRedoContractBinding,
-    LocalVerticalRuntime, ReserveStockCommand,
+    CompletionStatus, ExecutionIoAdmissionRequest, InvocationContext, InvocationRequest,
+    LocalHeapRowInsertRedoTemplate, LocalHeapRowRedoContractBinding, LocalVerticalRuntime,
+};
+pub use andromeda_inventory_demo::{
+    HeapInventoryProductStockStore, InventoryProductStockCommitEvidence,
+    InventoryProductStockDurableRedoEvidence, InventoryProductStockStore,
+    InventoryReserveStockExecutor, InventoryStock, ReserveStockCommand,
 };
 pub use andromeda_observe::{
     CommitVisibleTrace, CompletionEmittedTrace, CriticalDecisionKind, EventCorrelation,
     EventEnvelope, EventId, ProtocolCorrelation, RecoveryTrace, RollbackDurableTrace, TraceEvent,
     TraceId, WalEventTrace, WalOperation,
 };
-pub use andromeda_srpl::{
+pub use andromeda_procedure_contract::ProcedureContract;
+pub use andromeda_srpl::procedure_compiler::compile_narrow_procedure_signature;
+pub use andromeda_srpl_binder::inventory_reserve_stock_body_ir;
+pub use andromeda_srpl_ir::{
     Cardinality, SrplBusinessOperationKindIr, SrplPredicateIr, SrplValueIr,
-    inventory_reserve_stock_body_ir, procedure_compiler::compile_narrow_procedure_signature,
 };
 pub use andromeda_storage::publication::DatabaseManifest;
 pub use andromeda_storage::{
-    CoreIoPlacementPolicy, CoreIoPlacementRequest, DurableTransactionState, InMemoryWal, Lsn,
-    OperationalProfile, PageId, PageSize, ProductStockRow, RecoveryPlan, RedoRecordDecision,
-    StartupMode, StorageIoBudgetScope, StorageTier, StorageWorkloadClass, WalRecordKind,
-    classify_durable_transactions, write_ahead_log::HeapRowRedoPayloadV1,
+    CoreIoPlacementPolicy, CoreIoPlacementRequest, OperationalProfile, ProductStockRow,
+    RecoveryPlan, RedoRecordDecision, StartupMode, StorageIoBudgetScope, StorageTier,
+    StorageWorkloadClass,
 };
-pub use andromeda_tx::TransactionState;
+pub use andromeda_storage_heap::HeapRowRedoPayloadV1;
+pub use andromeda_storage_page::{PageId, PageSize};
+pub use andromeda_transaction::TransactionState;
+pub use andromeda_wal::{
+    DurableTransactionState, InMemoryWal, Lsn, WalRecordKind, classify_durable_transactions,
+};
 
 pub(crate) fn inventory_reserve_stock_srpl_source() -> &'static str {
     "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool) body { read Inventory.ProductStock Stock one; assert Quantity InsufficientStock; update Inventory.ProductStock AvailableQuantity; emit Reservation (Reserved); }"

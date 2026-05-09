@@ -1,7 +1,7 @@
 //! Metrics and summary generation gates for MVCC GC.
 
 use super::fixtures::*;
-use andromeda_core::TransactionId;
+use andromeda_types::TransactionId;
 
 #[test]
 fn test_metrics_gc_summary_complete() {

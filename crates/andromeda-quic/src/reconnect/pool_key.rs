@@ -1,5 +1,5 @@
-use andromeda_core::CertificateIdentity;
-use andromeda_core::{AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaErrorKind, AndromedaResult};
+use andromeda_principal::CertificateIdentity;
 
 use crate::{
     SurfacePlane,

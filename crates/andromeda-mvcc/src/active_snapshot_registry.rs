@@ -28,7 +28,9 @@ use std::sync::Arc;
 use std::sync::RwLock as StdRwLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+
+use andromeda_types::TransactionId;
 
 /// Immutable snapshot reference for GC queries.
 ///
@@ -82,10 +84,10 @@ impl std::fmt::Display for GcError {
         match self {
             GcError::SnapshotAlreadyRegistered => {
                 write!(f, "snapshot already registered in active registry")
-            }
+            },
             GcError::SnapshotNotFound => {
                 write!(f, "snapshot not found in active registry")
-            }
+            },
         }
     }
 }

@@ -8,13 +8,14 @@
 //! These are C4 pre-transaction invariants: all failures that occur before
 //! `TransactionManager` allocation must be observable and must leave no durability artifacts.
 
-use andromeda_catalog::{ProcedureContract, inventory_reserve_stock_contract};
+use andromeda_catalog::inventory_reserve_stock_contract;
 use andromeda_core::{CatalogVersion, ContractHash, InvocationId};
 use andromeda_exec::{
     AdmissionService, CompletionStatus, InvocationContext, InvocationRequest,
     PreTransactionValidationService,
 };
 use andromeda_observe::TraceId;
+use andromeda_procedure_contract::ProcedureContract;
 
 // Fixtures
 

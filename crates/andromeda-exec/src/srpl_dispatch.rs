@@ -5,8 +5,8 @@
 
 use std::sync::Arc;
 
-use andromeda_catalog::ResultStreamContract;
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_procedure_contract::ResultStreamContract;
 use andromeda_procedure_runtime::procedure_resolver::{
     ProcedureResolveError, ProcedureResolveRequest, ProcedureResolveResponse, ProcedureResolver,
 };

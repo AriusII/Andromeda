@@ -144,7 +144,7 @@ impl CatalogRuntimeEvidence {
                     "catalog runtime provided invalid durable reopen evidence",
                     "provide a non-zero reopen marker and non-empty source before accepting the runtime as durable",
                 )
-            }
+            },
             CatalogServerRuntimeKind::Durable => (
                 "catalog runtime has validated durable reopen evidence",
                 "no catalog runtime durability action required",

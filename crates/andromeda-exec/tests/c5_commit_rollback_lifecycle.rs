@@ -9,28 +9,30 @@ use andromeda_catalog::{
 };
 use andromeda_core::{InvocationId, PipelineClass, RequestId, ResourceBudget, TransactionId};
 use andromeda_exec::{
-    CompletionStatus, ExecutionIoAdmissionRequest, InventoryReserveStockExecutor, InventoryStock,
-    InvocationContext, InvocationRequest, LocalVerticalRuntime, ReserveStockCommand,
+    CompletionStatus, ExecutionIoAdmissionRequest, InvocationContext, InvocationRequest,
+    LocalVerticalRuntime,
+};
+use andromeda_inventory_demo::{
+    InventoryReserveStockExecutor, InventoryStock, ReserveStockCommand,
 };
 use andromeda_observe::{
     CommitVisibleTrace, EventCorrelation, EventEmitter, EventEnvelope, EventId, InMemoryEventSink,
     RollbackDurableTrace, TraceEvent, TraceId,
 };
+use andromeda_procedure_contract::ProcedureContract;
 use andromeda_srpl::procedure_compiler::compile_narrow_procedure_signature;
 use andromeda_storage::{
-    CoreIoPlacementRequest, InMemoryWal, Lsn, OperationalProfile, PageSize, StorageIoBudgetScope,
-    StorageWorkloadClass, WalRecordKind,
+    CoreIoPlacementRequest, OperationalProfile, StorageIoBudgetScope, StorageWorkloadClass,
 };
-use andromeda_tx::TransactionState;
+use andromeda_storage_page::PageSize;
+use andromeda_transaction::TransactionState;
+use andromeda_wal::{InMemoryWal, Lsn, WalRecordKind};
 
 fn inventory_reserve_stock_srpl_source() -> &'static str {
     "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool) body { read Inventory.ProductStock Stock one; assert Quantity InsufficientStock; update Inventory.ProductStock AvailableQuantity; emit Reservation (Reserved); }"
 }
 
-fn request_for(
-    contract: &andromeda_catalog::ProcedureContract,
-    invocation_id: u64,
-) -> InvocationRequest {
+fn request_for(contract: &ProcedureContract, invocation_id: u64) -> InvocationRequest {
     InvocationRequest {
         invocation_id: InvocationId::new(invocation_id),
         procedure: contract.as_ref(),
@@ -60,7 +62,7 @@ fn foreground_io_admission(
 }
 
 fn event_correlation(
-    contract: &andromeda_catalog::ProcedureContract,
+    contract: &ProcedureContract,
     transaction_id: Option<TransactionId>,
     durable_lsn: Option<Lsn>,
 ) -> EventCorrelation {

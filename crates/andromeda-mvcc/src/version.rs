@@ -27,7 +27,9 @@
 //! `begin_ts == LSN`; future versions may bind them, but no caller may
 //! rely on the equality today.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+
+use andromeda_types::TransactionId;
 
 use crate::{MvccIsolationPolicy, Snapshot, TransactionStatus, TransactionStatusTable};
 
@@ -193,7 +195,7 @@ pub fn creator_is_visible(
             MvccIsolationPolicy::RepeatableRead => {
                 snapshot.is_current_transaction(transaction_id)
                     || !snapshot.is_transaction_active(transaction_id)
-            }
+            },
         },
         // No durable evidence ⇒ only the writer itself sees its writes.
         TransactionStatus::InFlight => snapshot.is_current_transaction(transaction_id),
@@ -219,9 +221,9 @@ pub fn delete_is_visible(
                 MvccIsolationPolicy::RepeatableRead => {
                     snapshot.is_current_transaction(transaction_id)
                         || !snapshot.is_transaction_active(transaction_id)
-                }
+                },
             }
-        }
+        },
         TransactionStatus::InFlight => snapshot.is_current_transaction(transaction_id),
         TransactionStatus::RolledBack => false,
     }

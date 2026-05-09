@@ -214,6 +214,26 @@ fn cold_segment_publication_plan_requires_cold_publication_policy() {
 }
 
 #[test]
+fn cold_segment_publication_plan_does_not_publish_or_mutate_descriptor() {
+    let policy = CoreIoPlacementPolicy::new(
+        andromeda_core::HardwareProfile::conservative(),
+        HotColdIoThresholds::conservative(),
+    );
+    let sealed = sealed_segment_descriptor(7);
+
+    let plan = ColdSegmentPublicationPlan::new(sealed, &policy, cold_budget()).unwrap();
+
+    assert_eq!(plan.sealed_segment.state, SegmentState::Sealed);
+    assert_eq!(plan.sealed_segment.snapshot_id, Some(7));
+    assert_eq!(
+        plan.decision.placement.pipeline_stage,
+        PipelineStage::PublishColdStore
+    );
+    assert_eq!(plan.decision.placement.target_tier, StorageTier::ColdStore);
+    assert!(!plan.decision.placement.mutation_allowed);
+}
+
+#[test]
 fn cold_segment_publication_rejects_mutable_and_commit_critical_boundaries() {
     let policy = CoreIoPlacementPolicy::new(
         andromeda_core::HardwareProfile::conservative(),

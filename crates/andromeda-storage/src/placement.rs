@@ -1,3 +1,11 @@
+//! Storage placement policy and IO budget admission contracts.
+//!
+//! This module is the current owner for storage placement decisions, workload
+//! classes, and hot/cold IO budget guardrails. The decisions produced here are
+//! advisory admission evidence only: they must not become durable database
+//! truth and must not supersede WAL, manifest, page, or segment owner crates.
+//! `layout::placement` may re-export these types, but must remain a facade.
+
 mod budget;
 mod decision;
 mod io_budget;

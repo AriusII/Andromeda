@@ -2,7 +2,7 @@
 //! overlapping snapshots.
 
 use super::fixtures::*;
-use andromeda_core::TransactionId;
+use andromeda_types::TransactionId;
 
 #[test]
 fn test_gc_stress_1000_versions() {

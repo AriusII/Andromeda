@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`andromeda-exec` owns execution orchestration for typed, cataloged Procedures. It connects admission, procedure dispatch, SRPL adapters, local runtime transactions, result validation, result-stream completion, retry routing, audit traces, and completion recovery evidence.
+`andromeda-exec` owns execution orchestration for typed, cataloged Procedures. It connects admission, procedure dispatch, SRPL dispatch handoff, local runtime transactions, result validation, result-stream completion, retry routing, audit traces, and completion recovery evidence.
 
 This crate must never create an application-facing ad hoc SQL surface. Application work enters through typed Procedure contracts, catalog bindings, permission-checked dispatch, and durable transaction evidence.
 
@@ -12,7 +12,7 @@ This crate owns:
 
 - Procedure admission, pre-transaction validation, and contract-binding checks.
 - Surface gates that admit application Procedure execution and keep Administration and HA/DR capabilities off the Application Surface.
-- Local and remote Procedure dispatch boundaries, including SRPL dispatch adapters.
+- Local and remote Procedure dispatch boundaries, including SRPL dispatch handoff.
 - Runtime transaction orchestration over `andromeda-tx`, `andromeda-storage`, and cataloged Procedure metadata.
 - Result metadata extraction, bounded ResultStream behavior, completion mapping, and durable terminal evidence.
 - Retry classification, timeout and deadlock routing, durable rollback fences, and audit ledger events.
@@ -22,6 +22,7 @@ This crate owns:
 
 - `andromeda_exec::retry` is a stable re-export surface for retry types, backed by `andromeda-retry`.
 - `andromeda_exec::traces` is a stable re-export surface for audit trace types, backed by `andromeda-execution-trace`.
+- `andromeda_exec::{SrplExecutionAdapter, SrplTypedEnvironment, FieldValue, StructuredObject}` remains a compatibility re-export surface for concrete SRPL adapter behavior now owned by `andromeda-execution`.
 - Root re-exports currently include `ErrorRetryability`, `RetryAttempt`, `RetryDecision`, `RetryPolicy`, `AuditLedger`, `InMemoryAuditLedger`, and `InvocationTraceEvent`.
 
 ## Non-goals
@@ -61,7 +62,7 @@ Recommended execution gates:
 
 ```powershell
 cargo test -p andromeda-exec --test surface_gate_contract -- --nocapture
-cargo test -p andromeda-exec --test srpl_adapter_contract -- --nocapture
+cargo test -p andromeda-execution --test srpl_adapter_contract -- --nocapture
 cargo test -p andromeda-exec --test runtime_contract -- --nocapture
 cargo test -p andromeda-exec --test result_stream_backpressure -- --nocapture
 cargo test -p andromeda-exec --test timeout_deadlock_routing_contract -- --nocapture

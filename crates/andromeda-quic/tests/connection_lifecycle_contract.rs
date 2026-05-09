@@ -2,12 +2,13 @@
 //! plane gating. These tests exercise `andromeda_quic::Connection` through
 //! its exported API only, locking the V0 transport contract.
 
-use andromeda_core::{AndromedaErrorKind, RequestId, SessionId};
+use andromeda_error::AndromedaErrorKind;
 use andromeda_quic::{
     CancellationCause, CancellationOutcome, CancellationSignal, Connection, DatagramPolicy,
-    EarlyDataPolicy, FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader, FrameType,
-    LifecycleState, SurfaceListenerConfig, SurfaceListenerSet, SurfacePlane,
+    EarlyDataPolicy, LifecycleState, SurfaceListenerConfig, SurfaceListenerSet, SurfacePlane,
 };
+use andromeda_rpc_protocol::{FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader, FrameType};
+use andromeda_types::{RequestId, SessionId};
 
 fn frame(frame_type: FrameType, session: u64) -> FrameBytes {
     let payload = match frame_type {

@@ -1,7 +1,7 @@
 //! Runtime-free reconnect certificate continuity contract.
 
-use andromeda_core::AndromedaErrorKind;
-use andromeda_core::{CertificateIdentity, SurfaceScope};
+use andromeda_error::AndromedaErrorKind;
+use andromeda_principal::{CertificateIdentity, SurfaceScope};
 use andromeda_quic::{
     CertificateContinuityDecision, CertificateContinuityPolicy, CertificateRotationDeclaration,
     ConnectionPool, ConnectionPoolKey, ConnectionPoolPolicy, PoolAdmissionKind, SurfacePlane,

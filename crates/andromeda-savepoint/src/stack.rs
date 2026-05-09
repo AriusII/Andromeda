@@ -5,7 +5,7 @@
 //! Storage engines use the returned evidence to undo local, not-yet-visible
 //! writes while the transaction remains `Active` and `InFlight`.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 /// Monotonic, transaction-local savepoint identifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

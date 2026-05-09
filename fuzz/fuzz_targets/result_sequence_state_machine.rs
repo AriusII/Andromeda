@@ -1,7 +1,7 @@
 #![no_main]
 
 use andromeda_core::{RequestId, SessionId, TransactionId};
-use andromeda_quic::{
+use andromeda_rpc_protocol::{
     FrameBytes, FrameHeader, FrameType, ResultStreamMetadataPolicy, ResultStreamSequence,
 };
 use libfuzzer_sys::fuzz_target;

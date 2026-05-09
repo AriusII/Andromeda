@@ -4,10 +4,7 @@
 //! native Andromeda wire contract. This module validates their lockstep before
 //! a frame can be treated as typed RPC evidence.
 
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, ContractHash, RequestId,
-    SessionId, TransactionId,
-};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_proto_wire::{
     GeneratedFrameEnvelope, decode_protobuf_message, project_generated_frame_envelope,
 };
@@ -15,6 +12,7 @@ use andromeda_rpc_protocol::{
     FrameBytes, FrameEnvelope as ProtocolFrameEnvelope, ResultStreamMetadataPolicy,
     ResultStreamSequence,
 };
+use andromeda_types::{CatalogVersion, ContractHash, RequestId, SessionId, TransactionId};
 
 /// Default V0 upper bound for one typed ResultStream.
 ///

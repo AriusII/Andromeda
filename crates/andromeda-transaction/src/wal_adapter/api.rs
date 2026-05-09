@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
-use andromeda_core::{AndromedaResult, TransactionId};
+use andromeda_error::AndromedaResult;
+
 use andromeda_transaction_log::Lsn;
+use andromeda_types::TransactionId;
 
 use super::error::TxWalAdapterError;
 

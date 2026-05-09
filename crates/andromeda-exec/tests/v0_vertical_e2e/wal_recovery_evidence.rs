@@ -3,12 +3,13 @@ use crate::support::{
     stock,
 };
 use andromeda_catalog::inventory_reserve_stock_contract;
-use andromeda_exec::V0InventoryRecoverableRuntime;
+use andromeda_inventory_demo::V0InventoryRecoverableRuntime;
 use andromeda_storage::{
-    DatabaseManifest, FileWal, Lsn, ProductStockRow, RedoRecordDecision, ReplayContext,
-    StartupMode, execute_redo_plan_into_context, recover_from_file_wal,
-    write_ahead_log::HeapRowRedoPayloadV1,
+    DatabaseManifest, ProductStockRow, RedoRecordDecision, ReplayContext, StartupMode,
+    execute_redo_plan_into_context, recover_from_file_wal,
 };
+use andromeda_storage_heap::HeapRowRedoPayloadV1;
+use andromeda_wal::{FileWal, Lsn};
 
 #[test]
 fn v0_inventory_file_wal_recovers_only_committed_redo_after_sync() {

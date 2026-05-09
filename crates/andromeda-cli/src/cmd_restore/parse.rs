@@ -2,7 +2,7 @@ use crate::diagnostic_json::JSON_FLAG;
 use crate::error::cli_error;
 use crate::parse::{next_option_value_rejecting_flag, parse_u64};
 use andromeda_core::AndromedaResult;
-use andromeda_storage::RestoreValidationPolicy;
+use andromeda_restore::RestoreValidationPolicy;
 
 #[derive(Debug, Clone)]
 pub(super) struct RestoreStartOptions {
@@ -64,7 +64,7 @@ pub(super) fn parse_restore_start(args: &[String]) -> AndromedaResult<RestoreSta
                     value,
                     "--pitr-lsn expects an unsigned integer (LSN)",
                 )?);
-            }
+            },
             "--pitr-policy" => {
                 let value = next_option_value_rejecting_flag(
                     args,
@@ -72,7 +72,7 @@ pub(super) fn parse_restore_start(args: &[String]) -> AndromedaResult<RestoreSta
                     "--pitr-policy requires a policy value",
                 )?;
                 pitr_policy = Some(parse_restore_pitr_policy(value)?);
-            }
+            },
             "--validation-policy" => {
                 let value = next_option_value_rejecting_flag(
                     args,
@@ -80,7 +80,7 @@ pub(super) fn parse_restore_start(args: &[String]) -> AndromedaResult<RestoreSta
                     "--validation-policy requires full or minimal",
                 )?;
                 validation_policy = parse_restore_validation_policy(value)?;
-            }
+            },
             "--artifact" | "--artifact-path" => {
                 artifact_path = Some(
                     next_option_value_rejecting_flag(
@@ -90,19 +90,19 @@ pub(super) fn parse_restore_start(args: &[String]) -> AndromedaResult<RestoreSta
                     )?
                     .to_string(),
                 );
-            }
+            },
             "--dry-run" => dry_run = true,
             JSON_FLAG => json_output = true,
             opt if opt.starts_with("--") => {
                 return Err(cli_error(
                     "unknown restore option; supported options are --artifact, --pitr-lsn, --pitr-policy, --validation-policy, --dry-run, and --json",
                 ));
-            }
+            },
             _ => {
                 return Err(cli_error(
                     "unexpected restore argument; supported options are --artifact, --pitr-lsn, --pitr-policy, --validation-policy, --dry-run, and --json",
                 ));
-            }
+            },
         }
         i += 1;
     }
@@ -157,7 +157,7 @@ pub(super) fn parse_restore_verify(args: &[String]) -> AndromedaResult<RestoreVe
                     )?
                     .to_string(),
                 );
-            }
+            },
             "--pitr-lsn" => {
                 let value = next_option_value_rejecting_flag(
                     args,
@@ -168,7 +168,7 @@ pub(super) fn parse_restore_verify(args: &[String]) -> AndromedaResult<RestoreVe
                     value,
                     "--pitr-lsn expects an unsigned integer (LSN)",
                 )?);
-            }
+            },
             "--pitr-policy" => {
                 let value = next_option_value_rejecting_flag(
                     args,
@@ -176,7 +176,7 @@ pub(super) fn parse_restore_verify(args: &[String]) -> AndromedaResult<RestoreVe
                     "--pitr-policy requires a policy value",
                 )?;
                 pitr_policy = Some(parse_restore_pitr_policy(value)?);
-            }
+            },
             "--validation-policy" => {
                 let value = next_option_value_rejecting_flag(
                     args,
@@ -184,18 +184,18 @@ pub(super) fn parse_restore_verify(args: &[String]) -> AndromedaResult<RestoreVe
                     "--validation-policy requires full or minimal",
                 )?;
                 validation_policy = parse_restore_validation_policy(value)?;
-            }
+            },
             JSON_FLAG => json_output = true,
             opt if opt.starts_with("--") => {
                 return Err(cli_error(
                     "unknown restore verify option; supported options are --artifact, --pitr-lsn, --pitr-policy, --validation-policy, and --json",
                 ));
-            }
+            },
             _ => {
                 return Err(cli_error(
                     "unexpected restore verify argument; supported options are --artifact, --pitr-lsn, --pitr-policy, --validation-policy, and --json",
                 ));
-            }
+            },
         }
         i += 1;
     }
@@ -230,12 +230,12 @@ pub(super) fn parse_restore_status(args: &[String]) -> AndromedaResult<RestoreSt
                 return Err(cli_error(
                     "unknown restore status option; supported option is --json",
                 ));
-            }
+            },
             _ => {
                 return Err(cli_error(
                     "unexpected restore status argument; supported option is --json",
                 ));
-            }
+            },
         }
     }
 

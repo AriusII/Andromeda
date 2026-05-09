@@ -1,18 +1,20 @@
-use andromeda_core::{
-    AndromedaErrorKind, CatalogVersion, ContractHash, RequestId, SessionId, TransactionId,
-};
+use andromeda_error::AndromedaErrorKind;
 use andromeda_proto::{
     FrameEnvelope as ProtoFrameEnvelope, PayloadKind, ProtocolVersion,
     RPC_EXECUTE_REQUEST_WIRE_CODE, decode_generated_message, encode_generated_message, generated,
 };
-use andromeda_quic::{
-    DispatchPolicy, FRAME_CODEC_CRC_OFFSET, FRAME_CODEC_HEADER_LEN, FRAME_HEADER_CRC_UNCHECKED,
-    FrameBytes, FrameCodec, FrameHeader, FrameType, ResultStreamMetadataPolicy, StreamRole,
+use andromeda_rpc::DispatchPolicy;
+use andromeda_rpc_codec::{
     TypedResultStreamBounds, TypedResultStreamContext, decode_typed_frame_envelope,
-    validate_result_stream_sequence, validate_single_frame_on_stream,
     validate_typed_result_stream_sequence,
     validate_typed_result_stream_sequence_with_context_and_bounds,
 };
+use andromeda_rpc_protocol::{
+    FRAME_CODEC_CRC_OFFSET, FRAME_CODEC_HEADER_LEN, FRAME_HEADER_CRC_UNCHECKED, FrameBytes,
+    FrameCodec, FrameHeader, FrameType, ResultStreamMetadataPolicy, StreamRole,
+    validate_result_stream_sequence, validate_single_frame_on_stream,
+};
+use andromeda_types::{CatalogVersion, ContractHash, RequestId, SessionId, TransactionId};
 
 #[path = "protobuf_projection_contract/execute_projection.rs"]
 mod execute_projection;

@@ -2,7 +2,7 @@
 //! long-running reader blocking.
 
 use super::fixtures::*;
-use andromeda_core::TransactionId;
+use andromeda_types::TransactionId;
 
 #[test]
 fn test_integration_gc_preserves_scan_correctness() {

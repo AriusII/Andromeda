@@ -1,21 +1,17 @@
-pub use andromeda_catalog::CatalogObjectRef;
-pub use andromeda_catalog::ProcedureContractRef;
-pub use andromeda_catalog::QualifiedName;
-pub use andromeda_catalog::ResultStreamCardinality;
-pub use andromeda_catalog::ResultStreamContract;
+pub use andromeda_catalog_store::{CatalogObjectRef, ObjectKind, QualifiedName};
 pub use andromeda_core::{
     CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId, ScalarType,
     TypeDescriptor,
 };
 
 pub use andromeda_exec::{DefaultResultMetadataExtractor, ResultMetadataExtractor};
-pub use andromeda_srpl::{
-    Cardinality,
-    procedure_model::{
-        BoundSrplBodyPlan, BoundSrplOperationPlan, ConstantLiteral, ExecutableProcedurePlan,
-        SrplAssignmentIr, SrplCatalogBindingEvidence, SrplEmitValueIr, SrplPredicateIr,
-        SrplValueIr,
-    },
+pub use andromeda_procedure_contract::{
+    ProcedureContractRef, ResultStreamCardinality, ResultStreamContract,
+};
+pub use andromeda_srpl_ir::{
+    BoundSrplBodyPlan, BoundSrplOperationPlan, Cardinality, ConstantLiteral,
+    ExecutableProcedurePlan, SrplAssignmentIr, SrplCatalogBindingEvidence, SrplEmitValueIr,
+    SrplPredicateIr, SrplValueIr,
 };
 
 // Test Helpers
@@ -28,7 +24,7 @@ pub(crate) fn make_procedure_object() -> CatalogObjectRef {
     CatalogObjectRef {
         object_id: CatalogObjectId::new(1),
         name: QualifiedName::parse("test.proc").unwrap(),
-        kind: andromeda_catalog::ObjectKind::Procedure,
+        kind: ObjectKind::Procedure,
         catalog_version: make_catalog_version(),
     }
 }
@@ -70,7 +66,7 @@ pub(crate) fn make_table_ref() -> CatalogObjectRef {
     CatalogObjectRef {
         object_id: CatalogObjectId::new(2),
         name: QualifiedName::parse("test.table").unwrap(),
-        kind: andromeda_catalog::ObjectKind::Table,
+        kind: ObjectKind::Table,
         catalog_version: make_catalog_version(),
     }
 }

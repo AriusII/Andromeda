@@ -17,6 +17,7 @@ without durable WAL.
 mod change_subscription;
 mod manifest;
 mod manifest_resolution;
+mod manifest_runtime;
 mod mutation_record;
 mod names;
 mod objects;
@@ -34,6 +35,9 @@ pub use manifest::{ColumnSchema, ProcedureManifest};
 pub use manifest_resolution::{
     CatalogManifestResolution, CatalogManifestResolutionFailure, CatalogManifestResolutionRequest,
     CatalogManifestSelector,
+};
+pub use manifest_runtime::{
+    CatalogManifestRecord, CatalogManifestResolutionStatus, CatalogManifestRuntimeMetadata,
 };
 pub use mutation_record::{
     CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH, CatalogLifecycleMutationTarget, CatalogMutation,

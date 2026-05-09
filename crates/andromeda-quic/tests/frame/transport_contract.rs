@@ -1,5 +1,5 @@
-use andromeda_core::{AndromedaErrorKind, RequestId, SessionId, TransactionId};
-use andromeda_quic::{
+use andromeda_error::AndromedaErrorKind;
+use andromeda_rpc_protocol::{
     AUTH_FRAME_CODE, CONTRACT_REQUEST_FRAME_CODE, CONTRACT_RESPONSE_FRAME_CODE, ERROR_FRAME_CODE,
     FRAME_HEADER_CRC_UNCHECKED, FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP, FrameBytes, FrameFamily,
     FrameHeader, FrameType, HELLO_FRAME_CODE, MAX_FRAME_PAYLOAD_LENGTH, RPC_BATCH_FRAME_CODE,
@@ -8,6 +8,7 @@ use andromeda_quic::{
     validate_frame_sequence, validate_result_stream_sequence,
     validate_result_stream_sequence_with_metadata_policy, validate_single_frame_on_stream,
 };
+use andromeda_types::{RequestId, SessionId, TransactionId};
 
 fn header(frame_type: FrameType, payload_length: u64) -> FrameHeader {
     FrameHeader {

@@ -6,12 +6,16 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
-andromeda-core.workspace = true
+andromeda-digest.workspace = true
+andromeda-error.workspace = true
+andromeda-principal.workspace = true
+andromeda-procedure-contract.workspace = true
 andromeda-proto.workspace = true
 andromeda-rpc.workspace = true
 andromeda-rpc-codec.workspace = true
 andromeda-rpc-protocol.workspace = true
 andromeda-security-contract.workspace = true
+andromeda-types.workspace = true
 
 [features]
 default = []

@@ -1,19 +1,24 @@
-use andromeda_core::{
-    AndromedaErrorKind, AndromedaResult, CatalogVersion, ContractHash, ProcedureId, SessionId,
-    TransactionId,
+use andromeda_error::{AndromedaErrorKind, AndromedaResult};
+use andromeda_principal::{CertificateIdentity, SurfaceScope};
+use andromeda_procedure_contract::{
+    ProcedureGatewayManifest as CatalogProcedureManifest,
+    ProcedureGatewayProtocolLayout as CatalogProcedureProtocolLayout,
+    ProcedureGatewayRequiredPermission as CatalogRequiredPermission,
 };
-use andromeda_core::{CertificateIdentity, SurfaceScope};
 use andromeda_proto::generated::contract::v1::catalog_procedure_manifest_resolution_request;
 use andromeda_quic::{
     CatalogManifestResolutionContext, CatalogManifestResolutionGateway,
+    CatalogManifestResolutionRuntime, SurfacePlane, TransportEndpointMetadata, TransportMessage,
+};
+use andromeda_rpc_codec::{
     CatalogManifestResolutionRequest, CatalogManifestResolutionResponse,
-    CatalogManifestResolutionRuntime, CatalogManifestResolutionStatus, CatalogProcedureManifest,
-    CatalogProcedureManifestResolutionRequest, CatalogProcedureManifestResolutionResponse,
-    CatalogProcedureProtocolLayout, CatalogRequiredPermission, FrameCodec, StreamRole,
-    SurfacePlane, TransportEndpointMetadata, TransportMessage,
-    catalog_manifest_resolution_request_frame, decode_catalog_manifest_resolution_request_frame,
+    CatalogManifestResolutionStatus, CatalogProcedureManifestResolutionRequest,
+    CatalogProcedureManifestResolutionResponse, catalog_manifest_resolution_request_frame,
+    decode_catalog_manifest_resolution_request_frame,
     decode_catalog_manifest_resolution_response_frame,
 };
+use andromeda_rpc_protocol::{FrameCodec, StreamRole};
+use andromeda_types::{CatalogVersion, ContractHash, ProcedureId, SessionId, TransactionId};
 
 fn hash_vec(byte: u8) -> Vec<u8> {
     vec![byte; ContractHash::LEN]
@@ -135,7 +140,7 @@ fn request_message_with_metadata(
         request,
         SessionId::new(601),
         Some(TransactionId::new(701)),
-        ContractHash::zero(),
+        hash(0x11),
         CatalogVersion::new(9),
     )
     .unwrap();

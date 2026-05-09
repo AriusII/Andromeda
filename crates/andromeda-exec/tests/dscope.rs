@@ -3,9 +3,6 @@
 //! These tests verify the security contract that caller permissions must not exceed
 //! handler contract permissions, preventing privilege escalation attacks.
 
-use andromeda_catalog::{
-    PolicyVersion, ProcedureContractBinding, ProcedureContractRef, StatsVersion,
-};
 use andromeda_core::{AndromedaResult, ProcedureId};
 use andromeda_core::{CatalogVersion, ContractHash};
 use andromeda_exec::{
@@ -14,7 +11,10 @@ use andromeda_exec::{
     validate_dispatch_permissions_or_error,
 };
 use andromeda_observe::TraceId;
-use andromeda_srpl::Cardinality;
+use andromeda_procedure_contract::{
+    PolicyVersion, ProcedureContractBinding, ProcedureContractRef, StatsVersion,
+};
+use andromeda_srpl_ir::Cardinality;
 
 // Test constants
 const INVENTORY_RESERVE_PROCEDURE_ID: ProcedureId = ProcedureId::new(0x1000);

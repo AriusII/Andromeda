@@ -1,10 +1,10 @@
 //! Catalog contract materialization for lowered SRPL Procedure IR.
 
-use andromeda_catalog::{
-    CatalogDefinition, DefinitionBatch, DefinitionBatchId, DefinitionOperation,
-    ProcedureContractCandidate, inventory_reserve_stock_contract_candidate,
-};
+use andromeda_catalog::inventory_reserve_stock_contract_candidate;
+use andromeda_catalog_store::CatalogDefinition;
+use andromeda_definition_batch::{DefinitionBatch, DefinitionBatchId, DefinitionOperation};
 use andromeda_error::AndromedaResult;
+use andromeda_procedure_contract::{ProcedureContract, ProcedureContractCandidate};
 use andromeda_srpl_diagnostics::{DiagnosticPhase, SrplDiagnostic};
 use andromeda_srpl_ir::{SrplProcedureContractMetadata, SrplProcedureIr};
 use andromeda_srpl_lowering::lower_ir_to_contract_candidate;
@@ -101,10 +101,10 @@ pub fn compile_inventory_reserve_stock_contract_candidate(
 }
 
 /// Compiles the canonical `Inventory.ReserveStock` SRPL source to a
-/// materialized [`andromeda_catalog::ProcedureContract`].
+/// materialized [`ProcedureContract`].
 pub fn compile_inventory_reserve_stock_contract(
     catalog_version: CatalogVersion,
-) -> Result<andromeda_catalog::ProcedureContract, SrplDiagnostic> {
+) -> Result<ProcedureContract, SrplDiagnostic> {
     compile_inventory_reserve_stock_contract_candidate(catalog_version)?
         .materialize()
         .map_err(|error| SrplDiagnostic::new(DiagnosticPhase::IrLowering, None, error.to_string()))

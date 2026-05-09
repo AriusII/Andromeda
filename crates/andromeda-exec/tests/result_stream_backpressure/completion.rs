@@ -1,6 +1,6 @@
 use crate::support::{push_rows_and_complete, stream_with_metadata, test_row};
 use andromeda_exec::{BackpressuredResultStream, CompletionStatus, ResultStreamMetadata};
-use andromeda_srpl::Cardinality;
+use andromeda_srpl_ir::Cardinality;
 use std::sync::Arc;
 
 #[tokio::test]

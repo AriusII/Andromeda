@@ -8,9 +8,9 @@
 
 use andromeda_core::{InvocationId, RequestId, SessionId, TransactionId};
 use andromeda_exec::{CompletionMappingService, CompletionStatus, InvocationReject};
-use andromeda_observe::{TraceId, TransactionPhaseCode, TransitionReasonCode};
-use andromeda_storage::Lsn;
-use andromeda_tx::TransactionState;
+use andromeda_observability::{TraceId, TransactionPhaseCode, TransitionReasonCode};
+use andromeda_transaction::TransactionState;
+use andromeda_wal::Lsn;
 
 #[test]
 fn committed_invocation_projects_terminal_transition_with_durable_lsn() {

@@ -6,7 +6,6 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
-andromeda-core.workspace = true
 andromeda-locking.workspace = true
 andromeda-mvcc.workspace = true
 andromeda-savepoint.workspace = true

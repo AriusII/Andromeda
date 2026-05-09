@@ -1,3 +1,10 @@
+//! Storage-coupled cold segment publication planning.
+//!
+//! These contracts bridge storage placement policy with manifest publication
+//! boundaries. They validate that a sealed segment is eligible for immutable
+//! cold publication, but the plan is advisory admission evidence and does not
+//! publish, persist, or mutate segment or manifest truth by itself.
+
 use andromeda_core::{AndromedaResult, PipelineClass};
 
 use crate::{

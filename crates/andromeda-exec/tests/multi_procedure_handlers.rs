@@ -26,14 +26,14 @@ use andromeda_catalog::{
     inventory_release_stock_contract, inventory_reserve_stock_contract,
 };
 use andromeda_core::AndromedaErrorKind;
-use andromeda_exec::{
+use andromeda_exec::{InvocationContext, ProcedureHandler, ProcedureRegistry};
+use andromeda_inventory_demo::{
     InventoryQueryStockProcedureHandler, InventoryReleaseStockProcedureHandler,
-    InventoryReserveStockExecutor, InventoryStock, InvocationContext, ProcedureHandler,
-    ProcedureRegistry, QueryStockEffect, ReleaseStockEffect, ReserveStockCommand,
-    ReserveStockEffect, ReserveStockProcedureHandler,
+    InventoryReserveStockExecutor, InventoryStock, QueryStockEffect, ReleaseStockCommand,
+    ReleaseStockEffect, ReserveStockCommand, ReserveStockEffect, ReserveStockProcedureHandler,
 };
 use andromeda_observe::TraceId;
-use andromeda_srpl::Cardinality;
+use andromeda_srpl_ir::Cardinality;
 
 // Helper constructors
 
@@ -445,7 +445,7 @@ fn release_stock_effect_mutation_payload_is_deterministic() {
 
 #[test]
 fn release_stock_command_validates_positive_fields() {
-    use andromeda_exec::ReleaseStockCommand;
+    use andromeda_inventory_demo::ReleaseStockCommand;
 
     let zero_product = ReleaseStockCommand {
         product_id: 0,
@@ -468,7 +468,7 @@ fn release_stock_command_validates_positive_fields() {
 
 #[test]
 fn query_stock_command_validates_positive_product_id() {
-    use andromeda_exec::QueryStockCommand;
+    use andromeda_inventory_demo::QueryStockCommand;
 
     let zero = QueryStockCommand { product_id: 0 };
     assert!(zero.validate().is_err(), "product_id=0 must fail");

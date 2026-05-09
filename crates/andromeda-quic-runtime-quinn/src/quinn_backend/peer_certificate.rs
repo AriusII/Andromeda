@@ -1,5 +1,5 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use andromeda_core::{CertificateIdentity, SurfaceScope};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_principal::{CertificateIdentity, SurfaceScope};
 
 use andromeda_quic::mtls_identity::RawCertificate;
 

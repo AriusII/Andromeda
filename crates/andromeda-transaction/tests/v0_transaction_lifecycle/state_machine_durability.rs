@@ -1,7 +1,7 @@
 //! State-machine gates that prevent visible terminal status before durable WAL.
 
-use andromeda_core::TransactionId;
 use andromeda_transaction::{Lsn, TransactionState, TransactionStateMachine};
+use andromeda_types::TransactionId;
 
 #[test]
 fn v0_commit_visibility_requires_nonzero_durable_lsn() {

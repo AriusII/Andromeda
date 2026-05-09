@@ -155,6 +155,24 @@ fn hot_to_cold_pipeline_requires_sealed_snapshot_segment() {
 }
 
 #[test]
+fn placement_decisions_do_not_mutate_segment_state_or_durable_truth() {
+    let sealed = descriptor(SegmentState::Sealed);
+    let publication = PlacementDecision::publish_cold_segment(&sealed).unwrap();
+
+    assert_eq!(sealed.state, SegmentState::Sealed);
+    assert_eq!(publication.target_tier, StorageTier::ColdStore);
+    assert_eq!(publication.pipeline_stage, PipelineStage::PublishColdStore);
+    assert!(!publication.mutation_allowed);
+
+    let building = descriptor(SegmentState::BuildingHotSnapshot);
+    let seal = PlacementDecision::seal_hot_segment(&building).unwrap();
+
+    assert_eq!(building.state, SegmentState::BuildingHotSnapshot);
+    assert_eq!(seal.target_tier, StorageTier::HotStore);
+    assert_eq!(seal.pipeline_stage, PipelineStage::SealHotStoreSegment);
+}
+
+#[test]
 fn core_io_policy_maps_ram_hot_and_cold_workloads_to_storage_tiers() {
     let policy =
         CoreIoPlacementPolicy::new(hardware_with_gpu(), HotColdIoThresholds::conservative());

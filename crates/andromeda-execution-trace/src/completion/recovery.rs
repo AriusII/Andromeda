@@ -1,6 +1,6 @@
 use andromeda_core::{AndromedaResult, InvocationId, TransactionId};
 use andromeda_result_stream::CompletionStatus;
-use andromeda_storage::{
+use andromeda_wal::{
     DurableTransactionState, Lsn, WalRecord, WalRecordKind, summarize_transactions_from_records,
 };
 
@@ -191,7 +191,7 @@ pub fn reconcile_completion_recovery_from_wal(
                         terminal_lsn.latest().unwrap_or(summary.last_lsn),
                         CompletionRecoveryAmbiguity::ConflictingTerminalWalEvidence,
                     )
-                }
+                },
                 Some(summary) if summary.state == DurableTransactionState::Committed => {
                     completion_recovery_committed(
                         *expectation,
@@ -199,7 +199,7 @@ pub fn reconcile_completion_recovery_from_wal(
                         durable_lsn,
                         terminal_lsn.commit,
                     )
-                }
+                },
                 Some(summary) if summary.state == DurableTransactionState::RolledBack => {
                     completion_recovery_rolled_back(
                         *expectation,
@@ -207,7 +207,7 @@ pub fn reconcile_completion_recovery_from_wal(
                         durable_lsn,
                         terminal_lsn.rollback,
                     )
-                }
+                },
                 Some(summary) => {
                     if let Some(journal_record) = expectation.journal_record {
                         if matches!(
@@ -247,7 +247,7 @@ pub fn reconcile_completion_recovery_from_wal(
                             ambiguity: None,
                         }
                     }
-                }
+                },
                 None => completion_recovery_ambiguous(
                     *expectation,
                     durable_lsn,

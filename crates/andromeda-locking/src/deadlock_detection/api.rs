@@ -121,7 +121,7 @@ where
         None => {
             empty_metadata = DeadlockTransactionMetadataTable::new();
             &empty_metadata
-        }
+        },
     };
 
     let status = detector.detect_with_transaction_metadata_and_deadline(

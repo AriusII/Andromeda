@@ -1,18 +1,19 @@
-pub(crate) use super::super::{ProcedureHandler, ProcedureRegistry, ReserveStockProcedureHandler};
+pub(crate) use super::super::{ProcedureHandler, ProcedureRegistry};
 pub(crate) use crate::{
-    InventoryReserveStockExecutor, InventoryStock, InvocationContext, LocalProcedure,
-    PreTransactionDispatchEvidence, ProcedureDispatchRequest, ProcedureDispatcher,
-    RemoteProcedureDispatcherUnavailable, ReserveStockCommand, ResultStreamMetadata,
+    InvocationContext, LocalProcedure, PreTransactionDispatchEvidence, ProcedureDispatchRequest,
+    ProcedureDispatcher, RemoteProcedureDispatcherUnavailable, ResultStreamMetadata,
 };
 pub(crate) use andromeda_catalog::{
-    INVENTORY_RESERVE_STOCK_PERMISSION, PolicyVersion, ProcedureContractBinding,
-    ProcedureContractRef, StatsVersion, inventory_reserve_stock_contract,
+    INVENTORY_RESERVE_STOCK_PERMISSION, inventory_reserve_stock_contract,
 };
 pub(crate) use andromeda_core::{
     AndromedaErrorKind, AndromedaResult, CatalogVersion, ContractHash, InvocationId, ProcedureId,
 };
 pub(crate) use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
-pub(crate) use andromeda_srpl::Cardinality;
+pub(crate) use andromeda_procedure_contract::{
+    PolicyVersion, ProcedureContractBinding, ProcedureContractRef, StatsVersion,
+};
+pub(crate) use andromeda_srpl_ir::Cardinality;
 
 pub(crate) const TEST_INVENTORY_QUERY_STOCK_PROCEDURE_ID: ProcedureId = ProcedureId::new(0x5153);
 pub(crate) const TEST_INVENTORY_QUERY_STOCK_PERMISSION: &str = "Inventory.QueryStock.Execute";
@@ -22,6 +23,13 @@ pub(crate) const TEST_INVENTORY_RELEASE_STOCK_PROCEDURE_ID: ProcedureId = Proced
 pub(crate) const TEST_INVENTORY_RELEASE_STOCK_PERMISSION: &str = "Inventory.ReleaseStock.Execute";
 pub(crate) const TEST_INVENTORY_RELEASE_STOCK_STREAM_ID: u64 = 3;
 pub(crate) const TEST_INVENTORY_RELEASE_STOCK_COLUMN_COUNT: u32 = 4;
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct InventoryStock {
+    pub(crate) product_id: i64,
+    pub(crate) available_quantity: i64,
+    pub(crate) version: u64,
+}
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct FakeProcedureHandler {
@@ -286,13 +294,6 @@ pub(crate) fn stock(product_id: i64, available_quantity: i64, version: u64) -> I
         product_id,
         available_quantity,
         version,
-    }
-}
-
-pub(crate) fn reserve_command(product_id: i64, quantity: i64) -> ReserveStockCommand {
-    ReserveStockCommand {
-        product_id,
-        quantity,
     }
 }
 

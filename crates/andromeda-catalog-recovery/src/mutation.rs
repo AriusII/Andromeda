@@ -307,7 +307,7 @@ pub(crate) fn validate_delta(delta: &CatalogMutationDelta) -> AndromedaResult<()
     match &delta.operation {
         CatalogMutationOperation::CreateObject { object, definition } => {
             definition.validate()?;
-            if object != definition.object_ref() {
+            if *object != *definition.object_ref() {
                 return catalog_recovery_error(
                     "catalog WAL create delta object must match its definition object",
                 );

@@ -1,8 +1,7 @@
 //! Frame wire encoding and decoding.
 
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId, SessionId, TransactionId,
-};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::{RequestId, SessionId, TransactionId};
 
 use super::frame_struct::{FrameBytes, FrameHeader};
 
@@ -164,7 +163,7 @@ fn decode_header(bytes: &[u8]) -> AndromedaResult<FrameHeader> {
             return Err(protocol_error(
                 "frame header transaction-id marker is invalid",
             ));
-        }
+        },
     };
 
     let header = FrameHeader {

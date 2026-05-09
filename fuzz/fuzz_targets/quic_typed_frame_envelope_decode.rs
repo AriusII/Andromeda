@@ -1,10 +1,11 @@
 #![no_main]
 
-use andromeda_quic::{
-    FrameCodec, ResultStreamMetadataPolicy, TypedResultStreamBounds, TypedResultStreamContext,
-    decode_typed_frame_envelope, validate_typed_result_stream_sequence_with_context_and_bounds,
+use andromeda_rpc_codec::{
+    TypedResultStreamBounds, TypedResultStreamContext, decode_typed_frame_envelope,
+    validate_typed_result_stream_sequence_with_context_and_bounds,
     validate_typed_result_stream_sequence_with_metadata_policy,
 };
+use andromeda_rpc_protocol::{FrameCodec, ResultStreamMetadataPolicy};
 use libfuzzer_sys::fuzz_target;
 
 mod common;

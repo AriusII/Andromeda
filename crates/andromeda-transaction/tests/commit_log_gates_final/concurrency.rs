@@ -1,8 +1,8 @@
 //! Commit log concurrency gates.
 
 use super::fixtures::*;
-use andromeda_core::TransactionId;
 use andromeda_transaction::{IsolationLevel, Lsn};
+use andromeda_types::TransactionId;
 use futures::future::join_all;
 use std::collections::HashSet;
 use std::sync::Arc;

@@ -233,7 +233,7 @@ fn eh_fail_on_created_state_is_rejected() {
 /// TransactionTrace correctly captures terminal state after commit.
 #[test]
 fn eh_trace_captures_terminal_state_after_commit() {
-    use andromeda_observe::TraceId;
+    use andromeda_observability::TraceId;
     use andromeda_transaction::{TransactionStateMachine, TransactionTrace};
 
     let mut machine = TransactionStateMachine::new(TransactionId::new(1));
@@ -252,7 +252,7 @@ fn eh_trace_captures_terminal_state_after_commit() {
 /// project_transition produces non-terminal trace for Active → Committing.
 #[test]
 fn eh_trace_non_terminal_for_active_to_committing() {
-    use andromeda_observe::{TraceId, TransitionReasonCode};
+    use andromeda_observability::{TraceId, TransitionReasonCode};
     use andromeda_transaction::{TransactionStateMachine, TransactionTransitionCorrelation};
 
     let mut machine = TransactionStateMachine::new(TransactionId::new(2));
@@ -276,7 +276,7 @@ fn eh_trace_non_terminal_for_active_to_committing() {
 /// project_transition for RolledBack carries durable_lsn evidence.
 #[test]
 fn eh_trace_rolled_back_carries_durable_lsn() {
-    use andromeda_observe::{TraceId, TransitionReasonCode};
+    use andromeda_observability::{TraceId, TransitionReasonCode};
     use andromeda_transaction::{TransactionStateMachine, TransactionTransitionCorrelation};
 
     let mut machine = TransactionStateMachine::new(TransactionId::new(3));

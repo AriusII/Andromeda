@@ -6,9 +6,11 @@ rust-version = "1.95.0"
 publish = false
 
 [dependencies]
-andromeda-core.workspace = true
+andromeda-error.workspace = true
 andromeda-transaction-log.workspace = true
+andromeda-types.workspace = true
 tokio = { version = "1", features = ["full"] }
 
 [dev-dependencies]
+andromeda-time.workspace = true
 futures = "0.3"

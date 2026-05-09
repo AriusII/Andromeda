@@ -1,6 +1,7 @@
 //! RBAC permission evaluation for executor admission.
 
-use andromeda_core::{AndromedaResult, Principal};
+use andromeda_error::AndromedaResult;
+use andromeda_principal::Principal;
 use andromeda_security_contract::PrincipalPermission as Permission;
 use std::sync::Arc;
 
@@ -83,10 +84,9 @@ impl<R: PrincipalResolver + ?Sized> PermissionEvaluator for PermissionEvaluatorI
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_core::{
-        AndromedaError, AndromedaErrorKind, CertificateFingerprint, PrincipalId, PrincipalRole,
-        ProcedureId, SessionToken,
-    };
+    use andromeda_error::{AndromedaError, AndromedaErrorKind};
+    use andromeda_principal::{CertificateFingerprint, PrincipalId, PrincipalRole, SessionToken};
+    use andromeda_types::ProcedureId;
     use std::sync::Arc;
 
     struct MockResolver {

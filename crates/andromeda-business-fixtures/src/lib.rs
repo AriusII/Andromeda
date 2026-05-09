@@ -2,7 +2,7 @@
 
 //! Shared business-domain fixtures for tests and examples.
 
-use andromeda_storage::{PageId, PageSize};
+use andromeda_storage_page::{PageId, PageSize};
 
 pub mod product_stock {
     use super::*;

@@ -1,8 +1,11 @@
 use std::collections::{BTreeMap, HashMap};
 
-use andromeda_core::{AndromedaResult, TransactionId};
+use andromeda_core::AndromedaResult;
+use andromeda_recovery::{
+    IndexRebuildRequiredEvidence, ManifestSwitchRecoveryTrace, RecoveryReplayTarget,
+};
 
-use crate::{DatabaseManifest, Lsn, PageId, PageSize, WalRecordKind};
+use crate::{DatabaseManifest, Lsn, PageId, PageSize};
 
 use super::super::storage_error;
 use super::heap_redo::HeapRedoPageState;
@@ -158,39 +161,34 @@ impl ReplayContext {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IndexRebuildRequiredEvidence {
-    pub lsn: Lsn,
-    pub kind: WalRecordKind,
-    pub transaction_id: Option<TransactionId>,
-    pub index_id: u64,
-    pub key_format_major: u32,
-    pub key_format_minor: u32,
-    pub codec_version: u8,
-    pub max_key_size: u16,
-    pub payload_len: usize,
-    pub payload_checksum: u64,
-    pub reason: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ManifestSwitchRecoveryTrace {
-    ManifestSwitchApplied {
-        lsn: Lsn,
-        manifest_version: u64,
-        snapshot_id: u64,
-        base_checkpoint_lsn: Lsn,
-        required_wal_start_lsn: Lsn,
-    },
-    ManifestSwitchValidationFailed {
-        lsn: Lsn,
-        manifest_version: u64,
-        reason: &'static str,
-    },
-}
-
 impl Default for ReplayContext {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl RecoveryReplayTarget for ReplayContext {
+    fn applied_count(&self) -> usize {
+        self.applied_count
+    }
+
+    fn skipped_count(&self) -> usize {
+        self.skipped_count
+    }
+
+    fn error_records(&self) -> &[ReplayResult] {
+        &self.error_records
+    }
+
+    fn index_rebuild_required(&self) -> &[IndexRebuildRequiredEvidence] {
+        &self.index_rebuild_required
+    }
+
+    fn observe_checkpoint_end(&mut self, lsn: Lsn) {
+        Self::observe_checkpoint_end(self, lsn);
+    }
+
+    fn require_manifest_switch_checkpoint_evidence(&mut self) {
+        Self::require_manifest_switch_checkpoint_evidence(self);
     }
 }

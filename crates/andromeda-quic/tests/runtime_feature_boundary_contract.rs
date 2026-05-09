@@ -9,6 +9,29 @@ const RUNTIME_CRATE: &str = "andromeda-quic-runtime-quinn";
 const RUNTIME_DEPS: [&str; 4] = ["quinn", "rcgen", "rustls", "tokio"];
 const RUNTIME_QUINN_TEST_TARGETS: [&str; 2] =
     ["real_quinn_network", "reconnect_quinn_admission_contract"];
+const QUIC_ROOT_FORBIDDEN_PROJECTION_REEXPORTS: [&str; 12] = [
+    "CatalogColumnDescriptor",
+    "CatalogManifestResolutionRequest",
+    "CatalogManifestResolutionResponse",
+    "CatalogManifestResolutionStatus",
+    "CatalogManifestSelector",
+    "CatalogProcedureManifest",
+    "CatalogProcedureManifestResolutionRequest",
+    "CatalogProcedureManifestResolutionResponse",
+    "CatalogProcedureProtocolLayout",
+    "CatalogRequiredPermission",
+    "CatalogResultStreamDescriptor",
+    "ProcedureRouteExecuteRequest",
+];
+const RUNTIME_CRATE_FORBIDDEN_GATEWAY_PROJECTION_TOKENS: [&str; 7] = [
+    "andromeda_rpc_codec",
+    "CatalogProcedureManifest",
+    "CatalogManifestResolutionRequest",
+    "CatalogManifestResolutionResponse",
+    "CatalogProcedureManifestResolutionRequest",
+    "CatalogProcedureManifestResolutionResponse",
+    "ProcedureRouteExecuteRequest",
+];
 const RUNTIME_FREE_CONTRACT_TEST_FILES: [&str; 6] = [
     "tests/cancel_backpressure_contract.rs",
     "tests/connection_lifecycle_contract.rs",
@@ -112,6 +135,51 @@ fn runtime_crate_exposes_quinn_modules() {
     assert!(lib_rs.contains("mod runtime_quinn;"));
     assert!(lib_rs.contains("pub mod quinn_backend;"));
     assert!(lib_rs.contains("pub mod quinn_tls;"));
+}
+
+#[test]
+fn quic_root_does_not_reexport_gateway_projection_dtos() {
+    let lib_rs = read_crate_file("src/lib.rs");
+    let mut violations = Vec::new();
+
+    for token in QUIC_ROOT_FORBIDDEN_PROJECTION_REEXPORTS {
+        if lib_rs.contains(token) {
+            violations.push(token);
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "catalog/procedure projection DTOs must be imported from andromeda-procedure-contract or andromeda-rpc-codec, not reexported by andromeda-quic: {violations:?}"
+    );
+}
+
+#[test]
+fn concrete_quinn_runtime_stays_out_of_gateway_projection() {
+    let runtime_root = runtime_crate_root();
+    let mut violations = Vec::new();
+
+    for file in rust_source_files(&runtime_root.join("src")) {
+        let source = strip_rust_comments(&read_file(&file));
+        let relative = relative_slash_path(&runtime_root, &file);
+
+        for (line_index, line) in source.lines().enumerate() {
+            let compact_line = line
+                .chars()
+                .filter(|character| !character.is_whitespace())
+                .collect::<String>();
+            for token in RUNTIME_CRATE_FORBIDDEN_GATEWAY_PROJECTION_TOKENS {
+                if compact_line.contains(token) {
+                    violations.push(format!("{relative}:{} contains {token}", line_index + 1));
+                }
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "andromeda-quic-runtime-quinn must own concrete Quinn transport only; gateway projection belongs to procedure/rpc owner crates: {violations:?}"
+    );
 }
 
 #[test]
@@ -475,12 +543,12 @@ fn strip_rust_comments(source: &str) -> String {
                     chars.next();
                     block_depth += 1;
                     output.push_str("  ");
-                }
+                },
                 ('*', Some('/')) => {
                     chars.next();
                     block_depth -= 1;
                     output.push_str("  ");
-                }
+                },
                 ('\n', _) => output.push('\n'),
                 _ => output.push(' '),
             }
@@ -492,12 +560,12 @@ fn strip_rust_comments(source: &str) -> String {
                 chars.next();
                 in_line_comment = true;
                 output.push_str("  ");
-            }
+            },
             ('/', Some('*')) => {
                 chars.next();
                 block_depth = 1;
                 output.push_str("  ");
-            }
+            },
             _ => output.push(ch),
         }
     }

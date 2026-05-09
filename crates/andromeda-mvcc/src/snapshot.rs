@@ -1,8 +1,8 @@
 //! Snapshot-based consistency view for MVCC.
 
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, TransactionId,
-};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+
+use andromeda_types::{CatalogVersion, TransactionId};
 
 /// MVCC isolation policy for determining visibility rules.
 ///
@@ -112,31 +112,31 @@ impl Snapshot {
     ) -> AndromedaResult<()> {
         if let Some(tx_id) = self.transaction_id {
             match statuses.status(tx_id) {
-                Some(crate::TransactionStatus::InFlight) => {}
+                Some(crate::TransactionStatus::InFlight) => {},
                 Some(_) => {
                     return Err(AndromedaError::new(
                         AndromedaErrorKind::Transaction,
                         "snapshot owner transaction is not in flight",
                     ));
-                }
+                },
                 None => {
                     return Err(AndromedaError::new(
                         AndromedaErrorKind::Transaction,
                         "snapshot owner transaction is not registered with the manager",
                     ));
-                }
+                },
             }
         }
 
         for tx_id in &self.active_tx_ids {
             match statuses.status(*tx_id) {
-                None | Some(crate::TransactionStatus::InFlight) => {}
+                None | Some(crate::TransactionStatus::InFlight) => {},
                 Some(_) => {
                     return Err(AndromedaError::new(
                         AndromedaErrorKind::Transaction,
                         "snapshot active transaction list contains a terminal transaction",
                     ));
-                }
+                },
             }
         }
 

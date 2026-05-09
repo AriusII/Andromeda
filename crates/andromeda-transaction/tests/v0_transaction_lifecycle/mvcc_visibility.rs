@@ -2,10 +2,10 @@
 //! evidence plus the selected isolation policy.
 
 use super::fixtures::durable_status_lsn;
-use andromeda_core::{CatalogVersion, TransactionId};
 use andromeda_mvcc::{
     MvccIsolationPolicy, MvccRowHeader, Snapshot, TransactionStatus, TransactionStatusTable,
 };
+use andromeda_types::{CatalogVersion, TransactionId};
 
 #[test]
 fn mvcc_v0_hides_inflight_and_rolled_back_creators_until_durable_commit_is_visible() {

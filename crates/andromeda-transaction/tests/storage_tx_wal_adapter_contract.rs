@@ -1,13 +1,15 @@
 use std::sync::Arc;
 
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, EngineTimestamp, TransactionId,
-};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+
+use andromeda_time::EngineTimestamp;
+
 use andromeda_transaction::{
     CommitLogManager, IsolationLevel, Lsn, TransactionStatusTable, TxWalAdapterError,
     TxWalAdapterReplayKind, TxWalAdapterReplayRecord, TxWalReplayRecord, WalManager, WalRecordKind,
     append_commit_and_flush, map_tx_wal_replay_records,
 };
+use andromeda_types::TransactionId;
 
 fn ts(value: u64) -> EngineTimestamp {
     EngineTimestamp::from_unix_millis(value)

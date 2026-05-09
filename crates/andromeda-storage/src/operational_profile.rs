@@ -1,3 +1,11 @@
+//! Storage operational profiles.
+//!
+//! Operational profiles bind hardware descriptors to storage workflow budgets
+//! for admission checks. They are storage-local guardrail presets, not hardware
+//! ownership and not durable truth. Hardware primitives remain owned by
+//! `andromeda-hardware` through `andromeda-core`; durable state remains owned by
+//! WAL, manifest, page, and segment crates.
+
 mod budgets;
 mod constants;
 mod errors;

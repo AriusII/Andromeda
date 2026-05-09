@@ -154,15 +154,16 @@ fn require_authorization_context_for_permissioned_procedure(
 
 #[cfg(test)]
 mod tests {
-    use andromeda_catalog::{
-        PolicyVersion, ProcedureContract, ProcedureContractBinding, ProcedureContractRef,
-        StatsVersion, inventory_reserve_stock_contract,
-    };
+    use andromeda_catalog::inventory_reserve_stock_contract;
     use andromeda_core::{
         AndromedaErrorKind, CatalogVersion, ContractHash, InvocationId, ProcedureId,
     };
     use andromeda_observe::TraceId;
-    use andromeda_srpl::Cardinality;
+    use andromeda_procedure_contract::{
+        PolicyVersion, ProcedureContract, ProcedureContractBinding, ProcedureContractRef,
+        StatsVersion,
+    };
+    use andromeda_srpl_ir::Cardinality;
 
     use crate::local::types::LocalProcedure;
     use crate::{InvocationContext, InvocationRequest, ResultStreamMetadata};

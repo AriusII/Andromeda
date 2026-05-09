@@ -1,8 +1,9 @@
-pub(crate) use andromeda_core::{AndromedaErrorKind, TransactionId};
+pub(crate) use andromeda_error::AndromedaErrorKind;
 pub(crate) use andromeda_locking::{LockAcquireStatus, LockManager, LockMode, LockResource};
 pub(crate) use andromeda_transaction::{
     TransactionManager, TransactionState, TwoPhaseLocksValidator, TwoPhaseOperation,
 };
+pub(crate) use andromeda_types::TransactionId;
 
 pub(crate) fn row_resource(row_id: u64) -> LockResource {
     LockResource::row(1, 1, row_id).unwrap()

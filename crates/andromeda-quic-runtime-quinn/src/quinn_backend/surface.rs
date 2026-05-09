@@ -1,4 +1,4 @@
-use andromeda_core::SurfaceScope;
+use andromeda_principal::SurfaceScope;
 use andromeda_quic::{SurfacePlane, mtls_identity::plane_to_required_surface_scope};
 
 /// Explicit QUIC runtime surface selection for Quinn endpoint wiring.

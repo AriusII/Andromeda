@@ -22,7 +22,7 @@
 
 #[cfg(test)]
 mod iam_hardening_tests {
-    use andromeda_core::{AndromedaErrorKind, Permission, PrincipalId, PrincipalRole, ProcedureId};
+    use andromeda_error::AndromedaErrorKind;
     use andromeda_exec::services::permission_audit_emitter::{
         AuditEmissionEvidence, AuditEmissionKind, AuditEmissionOutcome, AuditEmissionPolicy,
         AuditSinkAvailability, audit_text_contains_sensitive_marker,
@@ -33,6 +33,8 @@ mod iam_hardening_tests {
         PermissionEvaluator, PrincipalResolver,
     };
     use andromeda_observe::TraceId;
+    use andromeda_principal::{Permission, PrincipalId, PrincipalRole};
+    use andromeda_types::ProcedureId;
     use std::sync::Arc;
 
     // Test 1: Principal WITHOUT Permission → DENIED

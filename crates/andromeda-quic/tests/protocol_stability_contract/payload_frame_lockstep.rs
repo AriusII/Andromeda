@@ -39,7 +39,7 @@ fn test_payload_to_frame_type_mapping_consistency() {
 /// Changes break transport surface separation.
 #[test]
 fn test_frame_family_mapping_preserved() {
-    use andromeda_quic::FrameFamily;
+    use andromeda_rpc_protocol::FrameFamily;
 
     assert_eq!(FrameType::Hello.frame_family(), FrameFamily::SessionControl);
     assert_eq!(FrameType::Auth.frame_family(), FrameFamily::SessionControl);

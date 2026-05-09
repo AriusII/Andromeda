@@ -1,8 +1,8 @@
 //! Scheduler and atomic statistics gates for MVCC GC.
 
 use super::fixtures::*;
-use andromeda_core::TransactionId;
 use andromeda_mvcc::GcSchedulerTask;
+use andromeda_types::TransactionId;
 use std::sync::Arc;
 use std::time::Duration;
 

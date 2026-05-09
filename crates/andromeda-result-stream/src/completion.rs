@@ -1,5 +1,5 @@
 use andromeda_error::AndromedaResult;
-use andromeda_observe::{ExecutionTransitionTrace, TraceId, TransitionReasonCode};
+use andromeda_observability::{ExecutionTransitionTrace, TraceId, TransitionReasonCode};
 use andromeda_transaction::{TransactionState, transaction_phase_code};
 use andromeda_types::{InvocationId, RequestId, SessionId, TransactionId};
 use andromeda_wal::Lsn;

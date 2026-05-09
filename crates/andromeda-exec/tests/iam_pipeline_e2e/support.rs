@@ -1,7 +1,7 @@
-use andromeda_core::PrincipalRole;
 use andromeda_exec::services::{
     ConcretePermissionEvaluator, LocalPrincipalResolver, PrincipalResolver,
 };
+use andromeda_principal::PrincipalRole;
 use std::sync::Arc;
 
 pub(crate) fn new_resolver() -> Arc<LocalPrincipalResolver> {

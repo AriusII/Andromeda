@@ -86,7 +86,7 @@ impl SecurityPolicyVersionEvidence {
     }
 
     pub fn try_bootstrap_v0() -> AndromedaResult<Self> {
-        let policy_evidence = andromeda_core::PrincipalPolicyVersion::current()
+        let policy_evidence = andromeda_principal::PrincipalPolicyVersion::current()
             .to_security_policy_evidence()
             .map_err(|error| observe_error(error.to_string()))?;
         Self::from_security_policy_evidence(&policy_evidence)

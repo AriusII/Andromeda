@@ -3,8 +3,8 @@
 use std::time::SystemTime;
 
 use andromeda_audit::{DenialAuditReason, PermissionAuditEvent};
-use andromeda_core::{Permission, PrincipalId};
 use andromeda_observability::TraceId;
+use andromeda_principal::{Permission, PrincipalId};
 
 /// Test: audit_crash_incomplete_entry_detected
 /// Verifies that incomplete entries are detected during recovery.

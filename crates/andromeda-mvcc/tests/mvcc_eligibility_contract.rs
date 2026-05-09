@@ -4,9 +4,9 @@
 //! reviewable: long readers, terminal status, durable WAL status, GC eligibility,
 //! and retention-frontier boundaries.
 
-use andromeda_core::TransactionId;
 use andromeda_mvcc::gc::mvcc_eligibility::{VersionEligibilityChecker, VersionRecord};
 use andromeda_mvcc::{ActiveSnapshotRegistry, SnapshotHandle, TransactionStatusTable};
+use andromeda_types::TransactionId;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 

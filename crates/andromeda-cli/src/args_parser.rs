@@ -1,6 +1,7 @@
 use crate::error::cli_error;
 use crate::parse;
 use andromeda_core::AndromedaResult;
+use andromeda_wal::Lsn;
 use std::path::PathBuf;
 
 pub fn parse_vertical_v0_wal_path(args: &[String]) -> AndromedaResult<PathBuf> {
@@ -15,12 +16,12 @@ pub fn parse_vertical_v0_wal_path(args: &[String]) -> AndromedaResult<PathBuf> {
                     return Err(cli_error("missing path after --wal"));
                 };
                 wal_path = Some(PathBuf::from(path));
-            }
+            },
             unknown => {
                 return Err(cli_error(format!(
                     "unknown vertical-v0 option `{unknown}`; expected `--wal <path>`"
                 )));
-            }
+            },
         }
         index += 1;
     }
@@ -30,12 +31,12 @@ pub fn parse_vertical_v0_wal_path(args: &[String]) -> AndromedaResult<PathBuf> {
 
 pub struct RecoveryInspectOptions {
     pub wal_path: PathBuf,
-    pub required_wal_start_lsn: andromeda_storage::Lsn,
+    pub required_wal_start_lsn: Lsn,
 }
 
 pub fn parse_recovery_inspect_options(args: &[String]) -> AndromedaResult<RecoveryInspectOptions> {
     let mut wal_path = None;
-    let mut required_wal_start_lsn = andromeda_storage::Lsn::new(1);
+    let mut required_wal_start_lsn = Lsn::new(1);
     let mut index = 0;
 
     while index < args.len() {
@@ -45,22 +46,20 @@ pub fn parse_recovery_inspect_options(args: &[String]) -> AndromedaResult<Recove
                 let Some(value) = args.get(index) else {
                     return Err(cli_error("missing value after --required-wal-start-lsn"));
                 };
-                required_wal_start_lsn = andromeda_storage::Lsn::new(parse_u64_option(
-                    value,
-                    "--required-wal-start-lsn",
-                )?);
-            }
+                required_wal_start_lsn =
+                    Lsn::new(parse_u64_option(value, "--required-wal-start-lsn")?);
+            },
             option if option.starts_with("--") => {
                 return Err(cli_error(format!(
                     "unknown recovery-inspect option `{option}`"
                 )));
-            }
+            },
             path => {
                 if wal_path.is_some() {
                     return Err(cli_error("recovery-inspect accepts exactly one WAL path"));
                 }
                 wal_path = Some(PathBuf::from(path));
-            }
+            },
         }
         index += 1;
     }
@@ -121,9 +120,6 @@ mod tests {
             options.wal_path,
             PathBuf::from("target/andromeda-cli-test.wal")
         );
-        assert_eq!(
-            options.required_wal_start_lsn,
-            andromeda_storage::Lsn::new(2)
-        );
+        assert_eq!(options.required_wal_start_lsn, Lsn::new(2));
     }
 }

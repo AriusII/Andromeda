@@ -114,7 +114,7 @@ where
                     && receipt.next_version() == self.last_durable_version =>
             {
                 Some(receipt)
-            }
+            },
             _ => None,
         }
     }

@@ -4,8 +4,9 @@ use super::evidence::{
     PermissionAuditEvidence,
 };
 use super::policy::AuditEmissionPolicy;
-use andromeda_core::{AndromedaResult, Permission, PrincipalId};
+use andromeda_error::AndromedaResult;
 use andromeda_observability::TraceId;
+use andromeda_principal::{Permission, PrincipalId};
 
 const UNKNOWN_PRINCIPAL_ID_VALUE: u64 = 0;
 

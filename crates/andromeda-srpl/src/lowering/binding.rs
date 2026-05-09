@@ -1,7 +1,9 @@
 //! Facade adapters for executable SRPL catalog binding.
 
-use andromeda_catalog::{CatalogDefinition, CatalogSnapshot, ProcedureContract, QualifiedName};
+use andromeda_catalog::CatalogSnapshot;
+use andromeda_catalog_store::{CatalogDefinition, QualifiedName};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_procedure_contract::ProcedureContract;
 use andromeda_srpl_binder::{
     SrplCatalogStructuredObjectBinding, SrplCatalogTableBinding, SrplExecutableCatalogView,
 };

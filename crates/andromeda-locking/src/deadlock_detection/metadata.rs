@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use andromeda_core::TransactionId;
+use andromeda_types::TransactionId;
 
 use super::{DeadlockResult, validate_start_order, validate_transaction_id};
 

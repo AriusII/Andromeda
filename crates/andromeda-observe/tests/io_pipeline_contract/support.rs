@@ -9,9 +9,10 @@ pub(crate) use andromeda_observe::{
 };
 pub(crate) use andromeda_storage::{
     CoreIoPlacementDecision, CoreIoPlacementPolicy, CoreIoPlacementRequest, HotColdIoThresholds,
-    IoLatencyBudget, IoPathBudget, IoPathClass, IoThroughputBudget, PageSize, PipelineStage,
+    IoLatencyBudget, IoPathBudget, IoPathClass, IoThroughputBudget, PipelineStage,
     PlacementDecision, StorageIoBudgetScope, StorageTier, StorageWorkloadClass,
 };
+pub(crate) use andromeda_storage_page::PageSize;
 pub(crate) use andromeda_types::{ContractHash, SessionId, TransactionId};
 
 pub(crate) fn workflow_policy() -> CoreIoPlacementPolicy {

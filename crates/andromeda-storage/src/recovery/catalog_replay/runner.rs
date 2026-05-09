@@ -3,7 +3,6 @@ use andromeda_core::{AndromedaResult, CatalogVersion};
 use crate::Lsn;
 use crate::wal_record_catalog::CatalogWalRecord;
 
-use super::selection::CatalogReplaySelection;
 use super::state::CatalogReplayState;
 use super::{CatalogReplayFromLsnReport, CatalogSnapshot, LsnBoundCatalogRecord};
 
@@ -75,7 +74,10 @@ pub fn replay_catalog_from_lsn(
     catalog_wal_start_lsn: Lsn,
     target_catalog_version: CatalogVersion,
 ) -> AndromedaResult<CatalogReplayFromLsnReport> {
-    let selection = CatalogReplaySelection::select(lsn_records, catalog_wal_start_lsn)?;
+    let selection = andromeda_catalog_recovery::CatalogLsnReplaySelection::select(
+        lsn_records,
+        catalog_wal_start_lsn,
+    )?;
     let snapshot =
         replay_catalog_wal_records(selection.eligible_records(), target_catalog_version)?;
 

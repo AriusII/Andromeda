@@ -1,13 +1,16 @@
-use andromeda_core::{
-    AndromedaErrorKind, CatalogVersion, ContractHash, RequestId, SessionId, TransactionId,
-};
+use andromeda_error::AndromedaErrorKind;
 use andromeda_proto::{encode_generated_message, generated};
-use andromeda_quic::{
-    BackpressureReason, BackpressureSignal, DispatchPolicy, FRAME_CODEC_CRC_OFFSET,
-    FRAME_CODEC_HEADER_LEN, FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader,
-    FrameType, ResultStreamMetadataPolicy, StreamRole, TransportSurface, TypedResultStreamBounds,
-    TypedResultStreamContext, dispatch_frame, expected_stream_role, validate_transport_surface,
+use andromeda_rpc::{
+    DispatchPolicy, TransportSurface, dispatch_frame, expected_stream_role,
+    validate_transport_surface,
 };
+use andromeda_rpc_codec::{TypedResultStreamBounds, TypedResultStreamContext};
+use andromeda_rpc_protocol::{
+    BackpressureReason, BackpressureSignal, FRAME_CODEC_CRC_OFFSET, FRAME_CODEC_HEADER_LEN,
+    FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader, FrameType,
+    ResultStreamMetadataPolicy, StreamRole,
+};
+use andromeda_types::{CatalogVersion, ContractHash, RequestId, SessionId, TransactionId};
 
 fn header(frame_type: FrameType, payload_length: u64) -> FrameHeader {
     FrameHeader {

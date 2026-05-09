@@ -11,8 +11,6 @@ exports here remain stable while downstream crates migrate to narrower
 dependencies.
 "#]
 
-mod principal;
-
 /// Compatibility digest module for crates that still use
 /// `andromeda_core::digest::*`.
 pub mod digest {
@@ -30,14 +28,7 @@ pub use andromeda_hardware::{
     CpuCapabilityClass, CpuProfile, GpuExecutionPolicy, GpuProfile, HardwareArchitecture,
     HardwareProfile, PipelineClass, RamProfile, RamSectionBudget, RamSectionRole, ResourceBudget,
 };
-pub use andromeda_time::{Clock, EngineTimestamp, ManualClock, SystemClock};
-pub use andromeda_types::{
-    AbsencePolicy, CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, DatabaseId,
-    DecimalType, FloatMode, FloatType, InvocationId, NamespaceId, ProcedureId, RequestId,
-    ScalarType, SessionId, TextEncoding, TextType, TimestampType, TransactionId, TypeDescriptor,
-};
-
-pub use principal::{
+pub use andromeda_principal::{
     CertificateFingerprint, CertificateIdentity, CertificateIdentityStatus,
     PRINCIPAL_POLICY_EVIDENCE_VERSION, Permission, PermissionSet, Principal,
     PrincipalAuthorizationDecision, PrincipalAuthorizationDenialReason,
@@ -45,6 +36,12 @@ pub use principal::{
     PrincipalAuthorizationOutcome, PrincipalBinding, PrincipalId, PrincipalPolicyEvidenceBinding,
     PrincipalPolicyVersion, PrincipalRegistry, PrincipalRole, PrincipalStatus, SessionToken,
     SurfaceScope, UserPrincipal,
+};
+pub use andromeda_time::{Clock, EngineTimestamp, ManualClock, SystemClock};
+pub use andromeda_types::{
+    AbsencePolicy, CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, DatabaseId,
+    DecimalType, FloatMode, FloatType, InvocationId, NamespaceId, ProcedureId, RequestId,
+    ScalarType, SessionId, TextEncoding, TextType, TimestampType, TransactionId, TypeDescriptor,
 };
 
 #[cfg(test)]

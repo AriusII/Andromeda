@@ -9,13 +9,22 @@ publish = false
 andromeda-admission.workspace = true
 andromeda-audit.workspace = true
 andromeda-catalog.workspace = true
+andromeda-catalog-store.workspace = true
 andromeda-core.workspace = true
+andromeda-definition-batch.workspace = true
+andromeda-error.workspace = true
+andromeda-execution.workspace = true
 andromeda-execution-trace.workspace = true
 andromeda-iam.workspace = true
 andromeda-observe.workspace = true
+andromeda-plan-cache.workspace = true
+andromeda-principal.workspace = true
+andromeda-procedure-contract.workspace = true
 andromeda-procedure-runtime.workspace = true
+andromeda-procedure-store.workspace = true
 andromeda-proto.workspace = true
 andromeda-quic.workspace = true
+andromeda-rpc-protocol.workspace = true
 andromeda-result-stream.workspace = true
 andromeda-retry.workspace = true
 andromeda-security.workspace = true
@@ -24,7 +33,13 @@ andromeda-srpl-execution-adapter.workspace = true
 andromeda-srpl-interpreter.workspace = true
 andromeda-srpl-ir.workspace = true
 andromeda-storage.workspace = true
-andromeda-tx.workspace = true
+andromeda-storage-heap.workspace = true
+andromeda-storage-page.workspace = true
+andromeda-transaction.workspace = true
+andromeda-transaction-log.workspace = true
+andromeda-mvcc.workspace = true
+andromeda-types.workspace = true
+andromeda-wal.workspace = true
 tokio.workspace = true
 
 [features]
@@ -33,6 +48,9 @@ runtime-quinn = ["andromeda-quic/runtime-quinn"]
 
 [dev-dependencies]
 andromeda-business-fixtures.workspace = true
+andromeda-inventory-demo.workspace = true
+andromeda-observability.workspace = true
+andromeda-srpl-binder.workspace = true
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(andromeda_remote_network_e2e)', 'cfg(feature, values("runtime-quinn"))'] }

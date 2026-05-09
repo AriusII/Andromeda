@@ -1,6 +1,6 @@
-use andromeda_core::TransactionId;
-use andromeda_transaction_log::Lsn;
 use andromeda_mvcc::{ReclamationMarkCandidate, TransactionStatusTable};
+use andromeda_transaction_log::Lsn;
+use andromeda_types::TransactionId;
 
 pub(crate) const DEFAULT_END_TS: u64 = 50;
 pub(crate) const DEFAULT_MARKED_AT: u64 = 20;

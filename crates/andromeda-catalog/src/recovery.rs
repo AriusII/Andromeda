@@ -15,7 +15,7 @@ use crate::{
     CatalogMutationRecord, CatalogSnapshot,
     recovery::{
         decode::boundary_batch_id,
-        replay::{IndexedCatalogMutationRecord, replay_indexed_catalog_mutation_records},
+        replay::{indexed_recovery_record, replay_indexed_catalog_mutation_records},
     },
 };
 
@@ -50,10 +50,7 @@ pub fn recover_catalog_snapshot_from_durable_payloads<'a>(
                     }
                 }
 
-                records.push(IndexedCatalogMutationRecord {
-                    record_index,
-                    record,
-                });
+                records.push(indexed_recovery_record(record_index, record));
             },
             Err(error) => {
                 anomalies.push(CatalogRecoveryAnomaly {
@@ -83,10 +80,7 @@ pub fn replay_catalog_mutation_records(
     let indexed = records
         .into_iter()
         .enumerate()
-        .map(|(record_index, record)| IndexedCatalogMutationRecord {
-            record_index,
-            record,
-        })
+        .map(|(record_index, record)| indexed_recovery_record(record_index, record))
         .collect();
     replay_indexed_catalog_mutation_records(snapshot, indexed, Vec::new())
 }

@@ -1,14 +1,17 @@
-use andromeda_core::CertificateIdentity;
-use andromeda_core::{
-    AndromedaResult, CatalogVersion, ContractHash, InvocationId, ProcedureId, RequestId, SessionId,
-    TransactionId,
+use andromeda_error::AndromedaResult;
+use andromeda_principal::CertificateIdentity;
+use andromeda_procedure_contract::ProcedureGatewayManifest;
+use andromeda_rpc_codec::{
+    ProcedureRouteExecuteRequest, TypedResultStreamBounds, TypedResultStreamContext,
+    decode_and_validate_rpc_execute_request,
 };
-use andromeda_rpc_codec::{ProcedureRouteExecuteRequest, decode_and_validate_rpc_execute_request};
+use andromeda_rpc_protocol::{FrameBytes, FrameType, ResultStreamMetadataPolicy, StreamRole};
+use andromeda_types::{
+    CatalogVersion, ContractHash, InvocationId, ProcedureId, RequestId, SessionId, TransactionId,
+};
 
 use crate::{
-    CatalogProcedureManifest, Connection, DispatchPolicy, FrameBytes, FrameType,
-    ResultStreamMetadataPolicy, StreamRole, SurfacePlane, TransportSurface,
-    TypedResultStreamBounds, TypedResultStreamContext, validate_transport_surface,
+    Connection, DispatchPolicy, SurfacePlane, TransportSurface, validate_transport_surface,
 };
 
 use super::errors::{protocol_error, security_error};
@@ -38,7 +41,7 @@ pub struct ProcedureRouteBinding {
     pub catalog_version: CatalogVersion,
     pub stats_version: u64,
     pub execute_request: ProcedureRouteExecuteRequest,
-    pub manifest: CatalogProcedureManifest,
+    pub manifest: ProcedureGatewayManifest,
 }
 
 pub(super) struct ProcedureRouteAdmission<'a> {
@@ -51,7 +54,7 @@ pub(super) fn bind_application_procedure_route(
     admission: ProcedureRouteAdmission<'_>,
     stream_id: u64,
     frame: &FrameBytes,
-    manifest: &CatalogProcedureManifest,
+    manifest: &ProcedureGatewayManifest,
 ) -> AndromedaResult<ProcedureRouteBinding> {
     state::validate_dispatch_preconditions(admission.connection)?;
 

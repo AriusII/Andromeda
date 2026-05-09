@@ -3,18 +3,16 @@ use std::{
     sync::{Arc, RwLock, RwLockReadGuard},
 };
 
-use andromeda_catalog_store::CatalogManifestStoreBoundary;
+use andromeda_catalog_store::{
+    CatalogManifestRecord, CatalogManifestRuntimeMetadata, CatalogManifestStoreBoundary,
+};
 use andromeda_error::AndromedaResult;
 use andromeda_types::{CatalogVersion, ProcedureId};
 
 use crate::{CatalogDefinition, CatalogSystemStore, ProcedureContract, QualifiedName};
 
 use super::super::{CatalogRuntimeEvidence, CatalogRuntimeReopenEvidence, CatalogRuntimeStore};
-use super::{
-    catalog_runtime_lock_error,
-    record::{CatalogManifestRecord, CatalogManifestRuntimeMetadata},
-    schema::manifest_from_contract,
-};
+use super::{catalog_runtime_lock_error, schema::manifest_from_contract};
 
 /// Store boundary consumed by `CatalogServerRuntime`.
 pub trait CatalogManifestStore: CatalogManifestStoreBoundary<CatalogManifestRecord> {}
@@ -135,7 +133,7 @@ impl CatalogRuntimeStore for CatalogSnapshotManifestStore {
         match self.reopen_evidence {
             Some(reopen_evidence) => {
                 CatalogRuntimeEvidence::durable(catalog_version, None, reopen_evidence)
-            }
+            },
             None => CatalogRuntimeEvidence::durable_without_reopen_evidence(catalog_version, None),
         }
     }

@@ -119,16 +119,16 @@ impl ResultStreamDescriptor {
 
         if let Some(row_count_exact) = self.row_count_exact {
             match self.cardinality {
-                ResultCardinality::ZeroOrMore => {}
-                ResultCardinality::ZeroOrOne if row_count_exact <= 1 => {}
-                ResultCardinality::OneOrMore if row_count_exact >= 1 => {}
-                ResultCardinality::ExactlyOne if row_count_exact == 1 => {}
+                ResultCardinality::ZeroOrMore => {},
+                ResultCardinality::ZeroOrOne if row_count_exact <= 1 => {},
+                ResultCardinality::OneOrMore if row_count_exact >= 1 => {},
+                ResultCardinality::ExactlyOne if row_count_exact == 1 => {},
                 _ => {
                     return Err(AndromedaError::new(
                         AndromedaErrorKind::Contract,
                         "exact row count violates result stream cardinality",
                     ));
-                }
+                },
             }
         }
 
@@ -175,7 +175,7 @@ impl ResultStreamDescriptor {
             Some(v) => {
                 hasher.update(&[1]);
                 hasher.update(&v.to_be_bytes());
-            }
+            },
             None => hasher.update(&[0]),
         }
         hasher.update(b"stream.row_count_max:");
@@ -183,7 +183,7 @@ impl ResultStreamDescriptor {
             Some(v) => {
                 hasher.update(&[1]);
                 hasher.update(&v.to_be_bytes());
-            }
+            },
             None => hasher.update(&[0]),
         }
     }

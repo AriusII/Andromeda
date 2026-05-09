@@ -1,6 +1,6 @@
 use andromeda_audit::{DenialAuditReason, PermissionAuditEvent};
-use andromeda_core::{Permission, PrincipalId};
 use andromeda_observability::TraceId;
+use andromeda_principal::{Permission, PrincipalId};
 /// Replay & Validation Tests (Category D)
 /// Tests verify that audit entries can be replayed, validated, and are deterministic.
 use std::time::SystemTime;

@@ -1,4 +1,5 @@
-use andromeda_core::{Permission, ProcedureId, SurfaceScope};
+use andromeda_principal::{Permission, SurfaceScope};
+use andromeda_types::ProcedureId;
 
 const SECURITY_PERMISSION_SOURCE: &str =
     include_str!("../../../crates/andromeda-security-contract/src/permission.rs");

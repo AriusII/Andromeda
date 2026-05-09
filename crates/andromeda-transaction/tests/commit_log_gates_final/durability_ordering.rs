@@ -1,8 +1,8 @@
 //! Durability and LSN ordering gates.
 
 use super::fixtures::*;
-use andromeda_core::TransactionId;
 use andromeda_transaction::{IsolationLevel, Lsn, WalRecordKind};
+use andromeda_types::TransactionId;
 
 #[tokio::test]
 async fn test_durability_crash_before_flush_invisible() {

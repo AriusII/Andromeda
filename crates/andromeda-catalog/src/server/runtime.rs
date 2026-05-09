@@ -11,11 +11,9 @@ use super::{
     CatalogSubscriptionRegistry, ProcedureManifest,
 };
 
-mod record;
 mod request;
 mod resolution;
 mod schema;
-mod status;
 mod store;
 
 use self::resolution::{
@@ -23,11 +21,12 @@ use self::resolution::{
     resolved as resolved_manifest_resolution,
 };
 pub use self::{
-    record::{CatalogManifestRecord, CatalogManifestRuntimeMetadata},
     request::{CatalogManifestResolutionRequest, CatalogManifestSelector},
     resolution::{CatalogManifestResolution, CatalogManifestResolutionFailure},
-    status::CatalogManifestResolutionStatus,
     store::{CatalogManifestStore, CatalogSnapshotManifestStore},
+};
+pub use andromeda_catalog_store::{
+    CatalogManifestRecord, CatalogManifestResolutionStatus, CatalogManifestRuntimeMetadata,
 };
 
 fn catalog_runtime_lock_error(resource: &str) -> AndromedaError {
@@ -126,7 +125,7 @@ impl CatalogServerRuntime {
                     ),
                     current_catalog_version,
                 );
-            }
+            },
         };
         if !ready {
             return failed_manifest_resolution(
@@ -138,10 +137,10 @@ impl CatalogServerRuntime {
         let record = match &request.selector {
             CatalogManifestSelector::ProcedureId(procedure_id) => {
                 self.store.resolve_manifest_by_id(*procedure_id)
-            }
+            },
             CatalogManifestSelector::QualifiedName(name) => {
                 self.store.resolve_manifest_by_name(name)
-            }
+            },
         };
 
         let Some(record) = (match record {
@@ -151,7 +150,7 @@ impl CatalogServerRuntime {
                     CatalogManifestResolutionFailure::Internal(error.message().to_string()),
                     current_catalog_version,
                 );
-            }
+            },
         }) else {
             return failed_manifest_resolution(
                 CatalogManifestResolutionFailure::NotFound,
@@ -167,7 +166,7 @@ impl CatalogServerRuntime {
                         CatalogManifestResolutionFailure::Internal(error.message().to_string()),
                         current_catalog_version,
                     );
-                }
+                },
             };
             if actual != expected {
                 return failed_manifest_resolution(

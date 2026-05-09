@@ -1,5 +1,6 @@
-use andromeda_core::{AndromedaError, PipelineClass};
-use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
+use andromeda_error::AndromedaError;
+use andromeda_hardware::PipelineClass;
+use andromeda_observability::{CriticalDecisionKind, DecisionTrace, TraceId};
 use andromeda_resource::{
     ExecutionResourceAdmissionDecision, ExecutionResourceAdmissionRequest,
     ResourceAdmissionRejection, ResourceBudget,
@@ -123,11 +124,11 @@ fn resource_reject(reason: impl Into<String>) -> InvocationReject {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_core::{GpuExecutionPolicy, GpuProfile};
+    use andromeda_hardware::{GpuExecutionPolicy, GpuProfile};
     use andromeda_storage::{
-        IoLatencyBudget, IoPathBudget, IoPathClass, IoThroughputBudget, PageSize,
-        StorageIoBudgetScope,
+        IoLatencyBudget, IoPathBudget, IoPathClass, IoThroughputBudget, StorageIoBudgetScope,
     };
+    use andromeda_storage_page::PageSize;
 
     fn hot_page_placement_request(
         workload: StorageWorkloadClass,

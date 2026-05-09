@@ -1,15 +1,16 @@
 use andromeda_catalog::{
-    CatalogDefinition, CatalogDefinitionBatchPlanning, CatalogMutationRecordKind,
-    CatalogSystemDurableApplyReport, CatalogSystemStore, DefinitionBatch,
-    DefinitionBatchDependencyGraphHash, DefinitionBatchId, DefinitionBatchPlan,
-    DefinitionBatchSourceHash, DefinitionOperation,
+    CatalogDefinitionBatchPlanning, CatalogMutationRecordKind, CatalogSystemDurableApplyReport,
+    CatalogSystemStore, DefinitionBatchPlan,
 };
+use andromeda_catalog_store::CatalogDefinition;
 use andromeda_definition_batch::{
-    MAX_SRPL_DEFINITION_BATCH_PROCEDURES, SrplDefinitionBatchDiagnostic,
-    SrplDefinitionBatchDryRunError, SrplDefinitionBatchSourceEvidence, SrplProcedureDryRunManifest,
-    SrplProcedureSourceDigest,
+    DefinitionBatch, DefinitionBatchDependencyGraphHash, DefinitionBatchId,
+    DefinitionBatchSourceHash, DefinitionOperation, MAX_SRPL_DEFINITION_BATCH_PROCEDURES,
+    SrplDefinitionBatchDiagnostic, SrplDefinitionBatchDryRunError,
+    SrplDefinitionBatchSourceEvidence, SrplProcedureDryRunManifest, SrplProcedureSourceDigest,
 };
 use andromeda_error::AndromedaResult;
+use andromeda_procedure_contract::ProcedureContract;
 use andromeda_srpl_diagnostics::{DiagnosticPhase, SrplDiagnostic};
 use andromeda_srpl_ir::SrplProcedureContractMetadata;
 use andromeda_types::CatalogVersion;
@@ -239,7 +240,7 @@ fn compile_source_for_dry_run(
 fn materialize_procedure_operation(
     source_index: usize,
     source_digest: SrplProcedureSourceDigest,
-    contract: andromeda_catalog::ProcedureContract,
+    contract: ProcedureContract,
     operations: &mut Vec<DefinitionOperation>,
     manifests: &mut Vec<SrplProcedureDryRunManifest>,
     diagnostics: &mut Vec<SrplDefinitionBatchDiagnostic>,

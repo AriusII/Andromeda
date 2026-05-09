@@ -1,6 +1,7 @@
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, PrincipalAuthorizationDecision,
-    PrincipalAuthorizationDenialReason, PrincipalAuthorizationEvidence,
+use andromeda_error::{AndromedaError, AndromedaErrorKind};
+use andromeda_principal::{
+    PrincipalAuthorizationDecision, PrincipalAuthorizationDenialReason,
+    PrincipalAuthorizationEvidence,
 };
 
 /// Route admission failure with optional authorization evidence.

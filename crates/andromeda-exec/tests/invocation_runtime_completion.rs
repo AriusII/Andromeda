@@ -7,8 +7,8 @@ use andromeda_exec::{
     CompletionEmission, CompletionMappingService, CompletionStatus, InvocationCompletionEmitter,
 };
 use andromeda_observe::TraceId;
-use andromeda_storage::{Lsn, WalRecord, WalRecordKind};
-use andromeda_tx::TransactionState;
+use andromeda_transaction::TransactionState;
+use andromeda_wal::{Lsn, WalRecord, WalRecordKind};
 
 fn wal_record(
     kind: WalRecordKind,

@@ -1,12 +1,12 @@
 //! End-to-end visibility gates for status transitions driven through
 //! TransactionManager durable commit and rollback paths.
 
-use andromeda_core::{CatalogVersion, TransactionId};
 use andromeda_mvcc::{
     MvccIsolationPolicy, MvccRowHeader, Snapshot, TransactionStatus, TransactionStatusTable,
 };
 use andromeda_transaction::TransactionManager;
 use andromeda_transaction_log::Lsn;
+use andromeda_types::{CatalogVersion, TransactionId};
 
 #[test]
 fn mvcc_v0_visibility_requires_manager_durable_commit() {

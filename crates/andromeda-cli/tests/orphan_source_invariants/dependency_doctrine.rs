@@ -152,6 +152,7 @@ const FORBIDDEN_APPLICATION_SURFACE_RUNTIME_DEPS: &[&str] = &[
 const SECURITY_CRITICAL_PATH_CRATES: &[&str] = &[
     "andromeda-core",
     "andromeda-observe",
+    "andromeda-principal",
     "andromeda-proto",
     "andromeda-rpc-protocol",
     "andromeda-security-contract",
@@ -181,7 +182,7 @@ const FORBIDDEN_SECURITY_CRITICAL_GPU_RUNTIME_DEPS: &[&str] = &[
 ];
 
 const SECURITY_CRITICAL_SOURCE_ROOTS: &[&str] = &[
-    "crates/andromeda-core/src/principal",
+    "crates/andromeda-principal/src",
     "crates/andromeda-observe/src/events/audit",
     "crates/andromeda-observe/src/query",
     "crates/andromeda-proto/src/manifest",
@@ -202,6 +203,7 @@ const SECURITY_CONTRACT_ALLOWED_RUNTIME_FREE_PRODUCTION_DEPS: &[&str] =
     &["andromeda-digest", "andromeda-error", "andromeda-types"];
 const FORBIDDEN_SECURITY_CONTRACT_RUNTIME_DEPS: &[&str] = &[
     "andromeda-core",
+    "andromeda-principal",
     "andromeda-contract",
     "andromeda-catalog",
     "andromeda-proto",
@@ -297,8 +299,18 @@ const STRICT_PRODUCTION_DEPENDENCY_ALLOWLISTS: &[(&str, &[&str])] = &[
             "andromeda-digest",
             "andromeda-error",
             "andromeda-hardware",
+            "andromeda-principal",
             "andromeda-security-contract",
             "andromeda-time",
+            "andromeda-types",
+        ],
+    ),
+    (
+        "andromeda-principal",
+        &[
+            "andromeda-digest",
+            "andromeda-error",
+            "andromeda-security-contract",
             "andromeda-types",
         ],
     ),
@@ -365,6 +377,7 @@ const STRICT_PRODUCTION_DEPENDENCY_ALLOWLISTS: &[(&str, &[&str])] = &[
             "andromeda-error",
             "andromeda-hardware",
             "andromeda-observability",
+            "andromeda-security",
             "andromeda-storage",
             "andromeda-types",
         ],
@@ -372,13 +385,17 @@ const STRICT_PRODUCTION_DEPENDENCY_ALLOWLISTS: &[(&str, &[&str])] = &[
     (
         "andromeda-quic",
         &[
-            "andromeda-core",
+            "andromeda-digest",
+            "andromeda-error",
             "andromeda-observe",
+            "andromeda-principal",
+            "andromeda-procedure-contract",
             "andromeda-proto",
             "andromeda-rpc",
             "andromeda-rpc-codec",
             "andromeda-rpc-protocol",
             "andromeda-security-contract",
+            "andromeda-types",
         ],
     ),
     (
@@ -387,13 +404,22 @@ const STRICT_PRODUCTION_DEPENDENCY_ALLOWLISTS: &[(&str, &[&str])] = &[
             "andromeda-admission",
             "andromeda-audit",
             "andromeda-catalog",
+            "andromeda-catalog-store",
             "andromeda-core",
+            "andromeda-definition-batch",
+            "andromeda-error",
+            "andromeda-execution",
             "andromeda-execution-trace",
             "andromeda-iam",
             "andromeda-observe",
+            "andromeda-plan-cache",
+            "andromeda-principal",
+            "andromeda-procedure-contract",
             "andromeda-procedure-runtime",
+            "andromeda-procedure-store",
             "andromeda-proto",
             "andromeda-quic",
+            "andromeda-rpc-protocol",
             "andromeda-result-stream",
             "andromeda-retry",
             "andromeda-security",
@@ -402,7 +428,13 @@ const STRICT_PRODUCTION_DEPENDENCY_ALLOWLISTS: &[(&str, &[&str])] = &[
             "andromeda-srpl-interpreter",
             "andromeda-srpl-ir",
             "andromeda-storage",
-            "andromeda-tx",
+            "andromeda-storage-heap",
+            "andromeda-storage-page",
+            "andromeda-mvcc",
+            "andromeda-transaction",
+            "andromeda-transaction-log",
+            "andromeda-types",
+            "andromeda-wal",
             "dashmap",
             "tokio",
         ],
@@ -415,6 +447,7 @@ const STRICT_DEV_DEPENDENCY_ALLOWLISTS: &[(&str, &[&str])] = &[
     ("andromeda-types", &[]),
     ("andromeda-time", &[]),
     ("andromeda-hardware", &[]),
+    ("andromeda-principal", &[]),
     ("andromeda-core", &[]),
     ("andromeda-admin", &[]),
     ("andromeda-client-sdk-gen", &[]),
@@ -422,11 +455,22 @@ const STRICT_DEV_DEPENDENCY_ALLOWLISTS: &[(&str, &[&str])] = &[
     ("andromeda-contract", &[]),
     ("andromeda-structured-object", &[]),
     ("andromeda-security-contract", &[]),
-    ("andromeda-proto", &["prost-types", "proptest"]),
-    ("andromeda-catalog", &["andromeda-storage"]),
-    ("andromeda-observe", &["andromeda-storage"]),
+    ("andromeda-proto", &["andromeda-rpc-protocol", "prost-types", "proptest"]),
+    ("andromeda-catalog", &["andromeda-storage", "andromeda-wal"]),
+    (
+        "andromeda-observe",
+        &["andromeda-storage", "andromeda-storage-page"],
+    ),
     ("andromeda-quic", &["proptest"]),
-    ("andromeda-exec", &["andromeda-business-fixtures"]),
+    (
+        "andromeda-exec",
+        &[
+            "andromeda-business-fixtures",
+            "andromeda-inventory-demo",
+            "andromeda-observability",
+            "andromeda-srpl-binder",
+        ],
+    ),
     ("andromeda-srpl-diagnostics", &[]),
     ("andromeda-srpl-cardinality", &[]),
     ("andromeda-srpl-ast", &[]),
@@ -434,7 +478,14 @@ const STRICT_DEV_DEPENDENCY_ALLOWLISTS: &[(&str, &[&str])] = &[
     ("andromeda-srpl-ir", &[]),
     (
         "andromeda-srpl",
-        &["andromeda-contract", "andromeda-plan-cache", "proptest"],
+        &[
+            "andromeda-contract",
+            "andromeda-plan-cache",
+            "andromeda-srpl-cardinality",
+            "andromeda-srpl-execution-adapter",
+            "andromeda-srpl-lexer",
+            "proptest",
+        ],
     ),
 ];
 
@@ -667,12 +718,12 @@ fn strip_rust_comments(source: &str) -> String {
                     chars.next();
                     block_depth += 1;
                     output.push_str("  ");
-                }
+                },
                 ('*', Some('/')) => {
                     chars.next();
                     block_depth -= 1;
                     output.push_str("  ");
-                }
+                },
                 ('\n', _) => output.push('\n'),
                 _ => output.push(' '),
             }
@@ -684,12 +735,12 @@ fn strip_rust_comments(source: &str) -> String {
                 chars.next();
                 in_line_comment = true;
                 output.push_str("  ");
-            }
+            },
             ('/', Some('*')) => {
                 chars.next();
                 block_depth = 1;
                 output.push_str("  ");
-            }
+            },
             _ => output.push(ch),
         }
     }

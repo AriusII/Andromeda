@@ -1,5 +1,5 @@
 use andromeda_contract::{ProcedureContractBinding, ProcedureContractRef};
-use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
+use andromeda_observability::{CriticalDecisionKind, DecisionTrace, TraceId};
 
 use crate::{CompletionStatus, InvocationReject, InvocationRequest};
 
@@ -128,13 +128,13 @@ fn require_full_executable_binding(
                 status: CompletionStatus::ContractRejected,
                 reason: "ProcedureContractBinding missing before transaction creation; ProcedureContractRef is insufficient".to_string(),
             });
-        }
+        },
         ProcedureBindingEvidence::Missing => {
             return Err(InvocationReject {
                 status: CompletionStatus::ContractRejected,
                 reason: "ProcedureContractBinding missing before transaction creation".to_string(),
             });
-        }
+        },
     };
 
     binding.validate().map_err(|error| InvocationReject {

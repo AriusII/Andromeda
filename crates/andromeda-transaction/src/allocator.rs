@@ -11,7 +11,9 @@
 //! that any newly minted id is strictly greater than every id that was ever
 //! made durable.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+
+use andromeda_types::TransactionId;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Monotonic, thread-safe transaction id source.

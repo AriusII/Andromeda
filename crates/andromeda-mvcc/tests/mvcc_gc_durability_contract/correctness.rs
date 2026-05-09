@@ -2,7 +2,7 @@
 //! empty-table behavior.
 
 use super::fixtures::*;
-use andromeda_core::TransactionId;
+use andromeda_types::TransactionId;
 
 #[test]
 fn test_gc_reclamation_count_accuracy() {

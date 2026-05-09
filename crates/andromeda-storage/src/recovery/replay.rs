@@ -89,8 +89,9 @@ mod heap_redo;
 mod manifest_switch;
 mod result;
 
+pub use andromeda_recovery::{IndexRebuildRequiredEvidence, ManifestSwitchRecoveryTrace};
 use boundary::*;
-pub use context::{IndexRebuildRequiredEvidence, ManifestSwitchRecoveryTrace, ReplayContext};
+pub use context::ReplayContext;
 use deferred::*;
 pub use heap_redo::{HeapRedoPageState, HeapRedoSlotState};
 use manifest_switch::replay_manifest_switch;

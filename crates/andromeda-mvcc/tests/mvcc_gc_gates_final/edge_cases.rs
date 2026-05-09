@@ -1,7 +1,7 @@
 //! Edge-case gates for transaction IDs, large timestamps, and status transitions.
 
 use super::fixtures::*;
-use andromeda_core::TransactionId;
+use andromeda_types::TransactionId;
 
 #[test]
 fn test_edge_case_zero_transaction_id() {

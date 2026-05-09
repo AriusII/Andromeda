@@ -1,7 +1,8 @@
+use andromeda_audit::DurableAuditSinkReport;
 use andromeda_core::{AndromedaResult, TransactionId};
-use andromeda_observe::{DurableAuditSinkReport, TraceId};
+use andromeda_observability::TraceId;
 use andromeda_result_stream::{CompletionStatus, InvocationCompletion};
-use andromeda_storage::Lsn;
+use andromeda_wal::Lsn;
 
 use super::journal::{
     CompletionJournalRecord, InvocationCompletionJournal, completion_journal_error,
@@ -28,17 +29,17 @@ impl CompletionAuditEvidence for andromeda_audit::AuditEmissionEvidence {
     fn validate_completion_audit(&self, expected_trace_id: TraceId) -> AndromedaResult<()> {
         self.validate()?;
         if self.kind != andromeda_audit::AuditEmissionKind::Completion {
-            return Err(completion_audit_error(
+            return Err(completion_journal_error(
                 "completion emission requires completion audit evidence",
             ));
         }
         if self.outcome != andromeda_audit::AuditEmissionOutcome::Emitted {
-            return Err(completion_audit_error(
+            return Err(completion_journal_error(
                 "completion audit evidence requires emitted outcome",
             ));
         }
         if self.trace_id != expected_trace_id {
-            return Err(completion_audit_error(
+            return Err(completion_journal_error(
                 "completion audit evidence trace id must match emitted completion",
             ));
         }

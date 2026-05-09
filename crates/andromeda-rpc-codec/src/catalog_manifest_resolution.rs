@@ -1,6 +1,11 @@
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, ContractHash, ProcedureId,
-    RequestId, SessionId, TransactionId,
+use andromeda_catalog_store::CatalogManifestResolutionStatus as StoreCatalogManifestResolutionStatus;
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+pub use andromeda_procedure_contract::{
+    ProcedureGatewayColumnDescriptor as CatalogColumnDescriptor,
+    ProcedureGatewayManifest as CatalogProcedureManifest,
+    ProcedureGatewayProtocolLayout as CatalogProcedureProtocolLayout,
+    ProcedureGatewayRequiredPermission as CatalogRequiredPermission,
+    ProcedureGatewayResultStreamDescriptor as CatalogResultStreamDescriptor,
 };
 use andromeda_proto::{
     FrameEnvelope as ProtoFrameEnvelope, PayloadKind, ProtocolVersion, decode_generated_message,
@@ -12,11 +17,141 @@ use andromeda_rpc_protocol::{
     FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader, FrameType, StreamRole,
     validate_single_frame_on_stream,
 };
+use andromeda_types::{
+    CatalogVersion, ContractHash, ProcedureId, RequestId, SessionId, TransactionId,
+};
 
 pub use generated::contract::v1::{
     CatalogProcedureManifestResolutionRequest, CatalogProcedureManifestResolutionResponse,
     catalog_procedure_manifest_resolution_response::Status as CatalogManifestResolutionStatus,
 };
+
+/// Projects a protocol-free catalog-store runtime status into the generated
+/// Protobuf status enum owned by the RPC/proto boundary.
+pub const fn catalog_manifest_resolution_status_to_protobuf(
+    status: StoreCatalogManifestResolutionStatus,
+) -> CatalogManifestResolutionStatus {
+    match status {
+        StoreCatalogManifestResolutionStatus::Resolved => CatalogManifestResolutionStatus::Resolved,
+        StoreCatalogManifestResolutionStatus::NotFound => CatalogManifestResolutionStatus::NotFound,
+        StoreCatalogManifestResolutionStatus::CatalogVersionMismatch => {
+            CatalogManifestResolutionStatus::CatalogVersionMismatch
+        },
+        StoreCatalogManifestResolutionStatus::ContractHashMismatch => {
+            CatalogManifestResolutionStatus::ContractHashMismatch
+        },
+        StoreCatalogManifestResolutionStatus::NotSourceGeneratorReady => {
+            CatalogManifestResolutionStatus::NotSourceGeneratorReady
+        },
+        StoreCatalogManifestResolutionStatus::PermissionDenied => {
+            CatalogManifestResolutionStatus::PermissionDenied
+        },
+        StoreCatalogManifestResolutionStatus::Unsupported => {
+            CatalogManifestResolutionStatus::Unsupported
+        },
+        StoreCatalogManifestResolutionStatus::Malformed => {
+            CatalogManifestResolutionStatus::Malformed
+        },
+        StoreCatalogManifestResolutionStatus::Internal => CatalogManifestResolutionStatus::Internal,
+        StoreCatalogManifestResolutionStatus::CatalogNotReady => {
+            CatalogManifestResolutionStatus::CatalogNotReady
+        },
+        StoreCatalogManifestResolutionStatus::AuthRequired => {
+            CatalogManifestResolutionStatus::AuthRequired
+        },
+    }
+}
+
+/// Projects a generated Protobuf status into the protocol-free catalog-store
+/// runtime status. `Unspecified` is rejected at the generated boundary.
+pub fn catalog_manifest_resolution_status_from_protobuf(
+    status: CatalogManifestResolutionStatus,
+) -> AndromedaResult<StoreCatalogManifestResolutionStatus> {
+    match status {
+        CatalogManifestResolutionStatus::Resolved => {
+            Ok(StoreCatalogManifestResolutionStatus::Resolved)
+        },
+        CatalogManifestResolutionStatus::NotFound => {
+            Ok(StoreCatalogManifestResolutionStatus::NotFound)
+        },
+        CatalogManifestResolutionStatus::CatalogVersionMismatch => {
+            Ok(StoreCatalogManifestResolutionStatus::CatalogVersionMismatch)
+        },
+        CatalogManifestResolutionStatus::ContractHashMismatch => {
+            Ok(StoreCatalogManifestResolutionStatus::ContractHashMismatch)
+        },
+        CatalogManifestResolutionStatus::NotSourceGeneratorReady => {
+            Ok(StoreCatalogManifestResolutionStatus::NotSourceGeneratorReady)
+        },
+        CatalogManifestResolutionStatus::PermissionDenied => {
+            Ok(StoreCatalogManifestResolutionStatus::PermissionDenied)
+        },
+        CatalogManifestResolutionStatus::Unsupported => {
+            Ok(StoreCatalogManifestResolutionStatus::Unsupported)
+        },
+        CatalogManifestResolutionStatus::Malformed => {
+            Ok(StoreCatalogManifestResolutionStatus::Malformed)
+        },
+        CatalogManifestResolutionStatus::Internal => {
+            Ok(StoreCatalogManifestResolutionStatus::Internal)
+        },
+        CatalogManifestResolutionStatus::CatalogNotReady => {
+            Ok(StoreCatalogManifestResolutionStatus::CatalogNotReady)
+        },
+        CatalogManifestResolutionStatus::AuthRequired => {
+            Ok(StoreCatalogManifestResolutionStatus::AuthRequired)
+        },
+        CatalogManifestResolutionStatus::Unspecified => Err(protocol_error(
+            "catalog manifest resolution status must be specified",
+        )),
+    }
+}
+
+/// Projects a generated Protobuf status code into the protocol-free
+/// catalog-store runtime status.
+pub fn catalog_manifest_resolution_status_from_protobuf_i32(
+    status: i32,
+) -> AndromedaResult<StoreCatalogManifestResolutionStatus> {
+    match status {
+        value if value == CatalogManifestResolutionStatus::Resolved as i32 => {
+            Ok(StoreCatalogManifestResolutionStatus::Resolved)
+        },
+        value if value == CatalogManifestResolutionStatus::NotFound as i32 => {
+            Ok(StoreCatalogManifestResolutionStatus::NotFound)
+        },
+        value if value == CatalogManifestResolutionStatus::CatalogVersionMismatch as i32 => {
+            Ok(StoreCatalogManifestResolutionStatus::CatalogVersionMismatch)
+        },
+        value if value == CatalogManifestResolutionStatus::ContractHashMismatch as i32 => {
+            Ok(StoreCatalogManifestResolutionStatus::ContractHashMismatch)
+        },
+        value if value == CatalogManifestResolutionStatus::NotSourceGeneratorReady as i32 => {
+            Ok(StoreCatalogManifestResolutionStatus::NotSourceGeneratorReady)
+        },
+        value if value == CatalogManifestResolutionStatus::PermissionDenied as i32 => {
+            Ok(StoreCatalogManifestResolutionStatus::PermissionDenied)
+        },
+        value if value == CatalogManifestResolutionStatus::Unsupported as i32 => {
+            Ok(StoreCatalogManifestResolutionStatus::Unsupported)
+        },
+        value if value == CatalogManifestResolutionStatus::Malformed as i32 => {
+            Ok(StoreCatalogManifestResolutionStatus::Malformed)
+        },
+        value if value == CatalogManifestResolutionStatus::Internal as i32 => {
+            Ok(StoreCatalogManifestResolutionStatus::Internal)
+        },
+        value if value == CatalogManifestResolutionStatus::CatalogNotReady as i32 => {
+            Ok(StoreCatalogManifestResolutionStatus::CatalogNotReady)
+        },
+        value if value == CatalogManifestResolutionStatus::AuthRequired as i32 => {
+            Ok(StoreCatalogManifestResolutionStatus::AuthRequired)
+        },
+        value if value == CatalogManifestResolutionStatus::Unspecified as i32 => Err(
+            protocol_error("catalog manifest resolution status must be specified"),
+        ),
+        _ => Err(protocol_error("unknown catalog manifest resolution status")),
+    }
+}
 
 type GeneratedCatalogManifestResolutionRequest =
     generated::contract::v1::CatalogProcedureManifestResolutionRequest;
@@ -389,7 +524,7 @@ impl CatalogManifestResolutionResponse {
         let manifest = self
             .manifest
             .as_ref()
-            .map(CatalogProcedureManifest::to_protobuf)
+            .map(catalog_procedure_manifest_to_protobuf)
             .transpose()?;
         let resolved = self.status == CatalogManifestResolutionStatus::Resolved;
         let resolved_contract_hash = if resolved {
@@ -456,235 +591,95 @@ impl CatalogManifestResolutionResponse {
     }
 }
 
-/// Domain Procedure manifest used by catalog resolution and Procedure admission.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogProcedureManifest {
-    pub procedure_id: ProcedureId,
-    pub procedure_name: String,
-    pub contract_hash: ContractHash,
-    pub catalog_version: CatalogVersion,
-    pub protocol_layout: CatalogProcedureProtocolLayout,
-    pub result_streams: Vec<CatalogResultStreamDescriptor>,
-    pub stats_version: u64,
-    pub policy_version: ContractHash,
-    pub required_permissions: Vec<CatalogRequiredPermission>,
+fn catalog_procedure_manifest_to_protobuf(
+    manifest: &CatalogProcedureManifest,
+) -> AndromedaResult<GeneratedProcedureManifest> {
+    let manifest = GeneratedProcedureManifest {
+        procedure_id: manifest.procedure_id.get(),
+        procedure_name: manifest.procedure_name.clone(),
+        contract_hash: manifest.contract_hash.as_bytes().to_vec(),
+        catalog_version: manifest.catalog_version.get(),
+        protocol_layout: Some(catalog_protocol_layout_to_protobuf(
+            &manifest.protocol_layout,
+        )),
+        result_streams: manifest
+            .result_streams
+            .iter()
+            .map(catalog_result_stream_to_protobuf)
+            .collect(),
+        policy_version: manifest.policy_version.as_bytes().to_vec(),
+        required_permissions: manifest
+            .required_permissions
+            .iter()
+            .map(catalog_required_permission_to_protobuf)
+            .collect(),
+        stats_version: Some(manifest.stats_version),
+    };
+    validate_catalog_procedure_manifest_resolution_response(
+        &GeneratedCatalogManifestResolutionResponse {
+            protocol_major: 1,
+            protocol_minor: 0,
+            request_id: 1,
+            trace_id: None,
+            status: CatalogManifestResolutionStatus::Resolved as i32,
+            manifest: Some(manifest.clone()),
+            resolved_contract_hash: Some(manifest.contract_hash.clone()),
+            resolved_catalog_version: Some(manifest.catalog_version),
+            current_catalog_version: Some(manifest.catalog_version),
+            diagnostic_code: None,
+        },
+    )?;
+    Ok(manifest)
 }
 
-impl CatalogProcedureManifest {
-    pub fn to_protobuf(&self) -> AndromedaResult<GeneratedProcedureManifest> {
-        let manifest = GeneratedProcedureManifest {
-            procedure_id: self.procedure_id.get(),
-            procedure_name: self.procedure_name.clone(),
-            contract_hash: self.contract_hash.as_bytes().to_vec(),
-            catalog_version: self.catalog_version.get(),
-            protocol_layout: Some(self.protocol_layout.to_protobuf()),
-            result_streams: self
-                .result_streams
-                .iter()
-                .map(CatalogResultStreamDescriptor::to_protobuf)
-                .collect(),
-            policy_version: self.policy_version.as_bytes().to_vec(),
-            required_permissions: self
-                .required_permissions
-                .iter()
-                .map(CatalogRequiredPermission::to_protobuf)
-                .collect(),
-            stats_version: Some(self.stats_version),
-        };
-        validate_catalog_procedure_manifest_resolution_response(
-            &GeneratedCatalogManifestResolutionResponse {
-                protocol_major: 1,
-                protocol_minor: 0,
-                request_id: 1,
-                trace_id: None,
-                status: CatalogManifestResolutionStatus::Resolved as i32,
-                manifest: Some(manifest.clone()),
-                resolved_contract_hash: Some(manifest.contract_hash.clone()),
-                resolved_catalog_version: Some(manifest.catalog_version),
-                current_catalog_version: Some(manifest.catalog_version),
-                diagnostic_code: None,
-            },
-        )?;
-        Ok(manifest)
+pub(crate) fn validate_catalog_procedure_manifest_projection(
+    manifest: &CatalogProcedureManifest,
+) -> AndromedaResult<()> {
+    catalog_procedure_manifest_to_protobuf(manifest).map(|_| ())
+}
+
+fn catalog_protocol_layout_to_protobuf(
+    layout: &CatalogProcedureProtocolLayout,
+) -> GeneratedProtocolLayout {
+    GeneratedProtocolLayout {
+        descriptor_set_hash: layout.descriptor_set_hash.as_bytes().to_vec(),
+        frame_envelope_hash: layout.frame_envelope_hash.as_bytes().to_vec(),
+        protocol_package: layout.protocol_package.clone(),
+        contract_package: layout.contract_package.clone(),
     }
 }
 
-impl TryFrom<GeneratedProcedureManifest> for CatalogProcedureManifest {
-    type Error = AndromedaError;
-
-    fn try_from(manifest: GeneratedProcedureManifest) -> AndromedaResult<Self> {
-        validate_catalog_procedure_manifest_resolution_response(
-            &GeneratedCatalogManifestResolutionResponse {
-                protocol_major: 1,
-                protocol_minor: 0,
-                request_id: 1,
-                trace_id: None,
-                status: CatalogManifestResolutionStatus::Resolved as i32,
-                manifest: Some(manifest.clone()),
-                resolved_contract_hash: Some(manifest.contract_hash.clone()),
-                resolved_catalog_version: Some(manifest.catalog_version),
-                current_catalog_version: Some(manifest.catalog_version),
-                diagnostic_code: None,
-            },
-        )?;
-
-        let Some(protocol_layout) = manifest.protocol_layout else {
-            return Err(protocol_error(
-                "resolved procedure manifest requires protocol layout",
-            ));
-        };
-        let Some(stats_version) = manifest.stats_version else {
-            return Err(protocol_error(
-                "resolved procedure manifest requires stats version",
-            ));
-        };
-
-        Ok(Self {
-            procedure_id: ProcedureId::new(manifest.procedure_id),
-            procedure_name: manifest.procedure_name,
-            contract_hash: ContractHash::from_slice(&manifest.contract_hash)?,
-            catalog_version: CatalogVersion::new(manifest.catalog_version),
-            protocol_layout: CatalogProcedureProtocolLayout::try_from(protocol_layout)?,
-            result_streams: manifest
-                .result_streams
-                .into_iter()
-                .map(CatalogResultStreamDescriptor::from)
-                .collect(),
-            stats_version,
-            policy_version: ContractHash::from_slice(&manifest.policy_version)?,
-            required_permissions: manifest
-                .required_permissions
-                .into_iter()
-                .map(CatalogRequiredPermission::from)
-                .collect(),
-        })
+fn catalog_required_permission_to_protobuf(
+    permission: &CatalogRequiredPermission,
+) -> GeneratedRequiredPermission {
+    GeneratedRequiredPermission {
+        id: permission.id.clone(),
+        family: permission.family.clone(),
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogProcedureProtocolLayout {
-    pub descriptor_set_hash: ContractHash,
-    pub frame_envelope_hash: ContractHash,
-    pub protocol_package: String,
-    pub contract_package: String,
-}
-
-impl CatalogProcedureProtocolLayout {
-    fn to_protobuf(&self) -> GeneratedProtocolLayout {
-        GeneratedProtocolLayout {
-            descriptor_set_hash: self.descriptor_set_hash.as_bytes().to_vec(),
-            frame_envelope_hash: self.frame_envelope_hash.as_bytes().to_vec(),
-            protocol_package: self.protocol_package.clone(),
-            contract_package: self.contract_package.clone(),
-        }
+fn catalog_result_stream_to_protobuf(
+    stream: &CatalogResultStreamDescriptor,
+) -> GeneratedResultStreamDescriptor {
+    GeneratedResultStreamDescriptor {
+        stream_name: stream.stream_name.clone(),
+        columns: stream
+            .columns
+            .iter()
+            .map(catalog_column_to_protobuf)
+            .collect(),
+        cardinality: stream.cardinality,
+        row_count_requirement: stream.row_count_requirement,
+        row_count_exact: stream.row_count_exact,
+        row_count_max: stream.row_count_max,
     }
 }
 
-impl TryFrom<GeneratedProtocolLayout> for CatalogProcedureProtocolLayout {
-    type Error = AndromedaError;
-
-    fn try_from(layout: GeneratedProtocolLayout) -> AndromedaResult<Self> {
-        Ok(Self {
-            descriptor_set_hash: ContractHash::from_slice(&layout.descriptor_set_hash)?,
-            frame_envelope_hash: ContractHash::from_slice(&layout.frame_envelope_hash)?,
-            protocol_package: layout.protocol_package,
-            contract_package: layout.contract_package,
-        })
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogRequiredPermission {
-    pub id: String,
-    pub family: String,
-}
-
-impl CatalogRequiredPermission {
-    fn to_protobuf(&self) -> GeneratedRequiredPermission {
-        GeneratedRequiredPermission {
-            id: self.id.clone(),
-            family: self.family.clone(),
-        }
-    }
-}
-
-impl From<GeneratedRequiredPermission> for CatalogRequiredPermission {
-    fn from(permission: GeneratedRequiredPermission) -> Self {
-        Self {
-            id: permission.id,
-            family: permission.family,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogResultStreamDescriptor {
-    pub stream_name: String,
-    pub columns: Vec<CatalogColumnDescriptor>,
-    pub cardinality: i32,
-    pub row_count_requirement: i32,
-    pub row_count_exact: Option<u64>,
-    pub row_count_max: Option<u64>,
-}
-
-impl CatalogResultStreamDescriptor {
-    fn to_protobuf(&self) -> GeneratedResultStreamDescriptor {
-        GeneratedResultStreamDescriptor {
-            stream_name: self.stream_name.clone(),
-            columns: self
-                .columns
-                .iter()
-                .map(CatalogColumnDescriptor::to_protobuf)
-                .collect(),
-            cardinality: self.cardinality,
-            row_count_requirement: self.row_count_requirement,
-            row_count_exact: self.row_count_exact,
-            row_count_max: self.row_count_max,
-        }
-    }
-}
-
-impl From<GeneratedResultStreamDescriptor> for CatalogResultStreamDescriptor {
-    fn from(stream: GeneratedResultStreamDescriptor) -> Self {
-        Self {
-            stream_name: stream.stream_name,
-            columns: stream
-                .columns
-                .into_iter()
-                .map(CatalogColumnDescriptor::from)
-                .collect(),
-            cardinality: stream.cardinality,
-            row_count_requirement: stream.row_count_requirement,
-            row_count_exact: stream.row_count_exact,
-            row_count_max: stream.row_count_max,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogColumnDescriptor {
-    pub name: String,
-    pub ordinal: u32,
-    pub type_name: String,
-}
-
-impl CatalogColumnDescriptor {
-    fn to_protobuf(&self) -> GeneratedColumnDescriptor {
-        GeneratedColumnDescriptor {
-            name: self.name.clone(),
-            ordinal: self.ordinal,
-            type_name: self.type_name.clone(),
-        }
-    }
-}
-
-impl From<GeneratedColumnDescriptor> for CatalogColumnDescriptor {
-    fn from(column: GeneratedColumnDescriptor) -> Self {
-        Self {
-            name: column.name,
-            ordinal: column.ordinal,
-            type_name: column.type_name,
-        }
+fn catalog_column_to_protobuf(column: &CatalogColumnDescriptor) -> GeneratedColumnDescriptor {
+    GeneratedColumnDescriptor {
+        name: column.name.clone(),
+        ordinal: column.ordinal,
+        type_name: column.type_name.clone(),
     }
 }
 
@@ -694,4 +689,61 @@ fn protocol_error(message: &'static str) -> AndromedaError {
 
 fn contract_error(message: &'static str) -> AndromedaError {
     AndromedaError::new(AndromedaErrorKind::Contract, message)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use andromeda_error::AndromedaErrorKind;
+
+    #[test]
+    fn store_status_projects_to_generated_protobuf_status() {
+        assert_eq!(
+            catalog_manifest_resolution_status_to_protobuf(
+                StoreCatalogManifestResolutionStatus::NotSourceGeneratorReady
+            ),
+            CatalogManifestResolutionStatus::NotSourceGeneratorReady
+        );
+        assert_eq!(
+            catalog_manifest_resolution_status_to_protobuf(
+                StoreCatalogManifestResolutionStatus::AuthRequired
+            ),
+            CatalogManifestResolutionStatus::AuthRequired
+        );
+    }
+
+    #[test]
+    fn generated_status_projects_to_store_status() {
+        assert_eq!(
+            catalog_manifest_resolution_status_from_protobuf(
+                CatalogManifestResolutionStatus::PermissionDenied
+            )
+            .unwrap(),
+            StoreCatalogManifestResolutionStatus::PermissionDenied
+        );
+        assert_eq!(
+            catalog_manifest_resolution_status_from_protobuf_i32(
+                CatalogManifestResolutionStatus::CatalogNotReady as i32
+            )
+            .unwrap(),
+            StoreCatalogManifestResolutionStatus::CatalogNotReady
+        );
+    }
+
+    #[test]
+    fn generated_status_projection_rejects_unspecified_and_unknown_codes() {
+        let unspecified = catalog_manifest_resolution_status_from_protobuf(
+            CatalogManifestResolutionStatus::Unspecified,
+        )
+        .unwrap_err();
+        assert_eq!(unspecified.kind(), AndromedaErrorKind::Protocol);
+        assert!(unspecified.message().contains("must be specified"));
+
+        let unspecified_i32 = catalog_manifest_resolution_status_from_protobuf_i32(0).unwrap_err();
+        assert_eq!(unspecified_i32.kind(), AndromedaErrorKind::Protocol);
+
+        let unknown_i32 = catalog_manifest_resolution_status_from_protobuf_i32(99).unwrap_err();
+        assert_eq!(unknown_i32.kind(), AndromedaErrorKind::Protocol);
+        assert!(unknown_i32.message().contains("unknown"));
+    }
 }

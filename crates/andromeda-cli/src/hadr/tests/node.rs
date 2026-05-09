@@ -1,4 +1,4 @@
-use andromeda_storage::{HadrMembershipRecord, HadrMembershipStore, HadrNodeId, HadrNodeRole};
+use andromeda_hadr::{HadrMembershipRecord, HadrMembershipStore, HadrNodeId, HadrNodeRole};
 
 use super::super::node;
 use super::support::{

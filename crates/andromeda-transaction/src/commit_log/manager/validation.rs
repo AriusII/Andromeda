@@ -1,6 +1,7 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_mvcc::{TransactionStatus, TransactionStatusTable};
 use andromeda_transaction_log::{Lsn, TxWalReplayRecord};
+use andromeda_types::TransactionId;
 
 pub(in crate::commit_log::manager) fn validate_transaction_id(
     tx_id: TransactionId,

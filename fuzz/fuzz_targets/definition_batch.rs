@@ -1,13 +1,16 @@
 #![no_main]
 
-use andromeda_catalog::{
-    CatalogDefinition, CatalogLifecycleTarget, CatalogMutationRecord, CatalogObjectRef,
-    DefinitionBatch, DefinitionBatchId, DefinitionOperation, EnumDefinition, EnumVariant,
-    ObjectKind, QualifiedName, StructuredObjectDefinition, TableDefinition,
+use andromeda_catalog::CatalogMutationRecord;
+use andromeda_catalog_store::{
+    CatalogDefinition, CatalogObjectRef, EnumDefinition, EnumVariant, ObjectKind, QualifiedName,
+    StructuredObjectDefinition, TableDefinition,
 };
 use andromeda_core::{
     CatalogObjectId, CatalogVersion, ColumnDescriptor, DatabaseId, NamespaceId, ScalarType,
     TypeDescriptor,
+};
+use andromeda_definition_batch::{
+    CatalogLifecycleTarget, DefinitionBatch, DefinitionBatchId, DefinitionOperation,
 };
 use libfuzzer_sys::fuzz_target;
 
@@ -38,12 +41,12 @@ fuzz_target!(|data: &[u8]| {
 
     match (batch.dependency_graph_hash(), batch.dependency_graph_hash()) {
         (Ok(first), Ok(second)) => assert_eq!(first, second),
-        (Err(_), Err(_)) => {}
+        (Err(_), Err(_)) => {},
         _ => {
             panic!(
                 "DefinitionBatch dependency_graph_hash must be deterministic for identical input"
             );
-        }
+        },
     }
 
     let first_plan = batch.dry_run();
@@ -64,11 +67,11 @@ fuzz_target!(|data: &[u8]| {
                 first.mutation_plan.record_count(),
                 batch.operations.len().saturating_add(2)
             );
-        }
-        (Err(_), Err(_)) => {}
+        },
+        (Err(_), Err(_)) => {},
         _ => {
             panic!("DefinitionBatch dry_run must be deterministic for identical input");
-        }
+        },
     }
 });
 
@@ -124,7 +127,7 @@ fn definition_operation(
                     catalog_version,
                 )?,
             })
-        }
+        },
     })
 }
 

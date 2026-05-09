@@ -1,19 +1,13 @@
-//! V0 principal binding and surface authorization contract.
+//! Compatibility reexports for the V0 principal binding and surface authorization contract.
 //!
-//! [`PrincipalBinding`] anchors a certificate fingerprint to one
-//! [`UserPrincipal`] and a normalized permission set. [`SurfaceAuthorizer`]
-//! evaluates that binding against the requested [`SurfaceScope`] and always
-//! returns a [`SecurityAuditTrace`] for both allow and deny decisions.
+//! Authority for these types now lives in `andromeda-security`. Observe keeps
+//! this module so existing envelope/query callers can migrate imports without
+//! coupling the security crate back to observe.
 
-mod authorizer;
-mod bridge;
-mod model;
-mod registry;
-
-pub use crate::events::SecurityAuditDenialReason as AuthorizationDenialReason;
-pub use authorizer::SurfaceAuthorizer;
-pub use model::{AuthorizationOutcome, PrincipalBinding, SurfaceAction};
-pub use registry::PrincipalRegistry;
+pub use andromeda_security::{
+    AuthorizationDenialReason, AuthorizationOutcome, PrincipalBinding, PrincipalRegistry,
+    SurfaceAction, SurfaceAuthorizer,
+};
 
 #[cfg(test)]
 mod tests;

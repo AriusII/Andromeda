@@ -1,7 +1,7 @@
 use andromeda_core::{ColumnDescriptor, ContractHash, ScalarType, TypeDescriptor};
 use andromeda_exec::{BackpressuredResultStream, CompletionStatus, ResultStreamMetadata};
 use andromeda_proto::{RowCountPolicy, StructuredObjectHeader, StructuredObjectLayout};
-use andromeda_srpl::Cardinality;
+use andromeda_srpl_ir::Cardinality;
 use std::sync::Arc;
 
 pub fn test_row() -> StructuredObjectHeader {

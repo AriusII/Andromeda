@@ -1,4 +1,4 @@
-use andromeda_catalog::{AlterCompatibilityPolicy, CatalogWalRecord};
+use andromeda_catalog_recovery::{AlterCompatibilityPolicy, CatalogWalRecord};
 use andromeda_error::AndromedaErrorKind;
 use andromeda_types::{CatalogVersion, ContractHash};
 

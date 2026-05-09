@@ -73,6 +73,7 @@ const RPC_PROTOCOL_FORBIDDEN_SOURCE_TOKENS: &[&str] = &[
 ];
 pub(crate) const SECURITY_CONTRACT_FORBIDDEN_RUNTIME_DEPS: &[&str] = &[
     "andromeda-core",
+    "andromeda-principal",
     "andromeda-contract",
     "andromeda-catalog",
     "andromeda-proto",
@@ -205,8 +206,10 @@ const SECURITY_CONTRACT_FORBIDDEN_SOURCE_TOKENS: &[&str] = &[
 pub(crate) const SECURITY_CRITICAL_PATH_CRATES: &[&str] = &[
     "andromeda-core",
     "andromeda-observe",
+    "andromeda-principal",
     "andromeda-proto",
     "andromeda-rpc-protocol",
+    "andromeda-security",
     "andromeda-security-contract",
 ];
 pub(crate) const FORBIDDEN_SECURITY_CRITICAL_GPU_RUNTIME_DEPS: &[&str] = &[
@@ -232,7 +235,8 @@ pub(crate) const FORBIDDEN_SECURITY_CRITICAL_GPU_RUNTIME_DEPS: &[&str] = &[
     "wgpu",
 ];
 const SECURITY_CRITICAL_SOURCE_ROOTS: &[&str] = &[
-    "crates/andromeda-core/src/principal",
+    "crates/andromeda-principal/src",
+    "crates/andromeda-security/src",
     "crates/andromeda-observe/src/events/audit",
     "crates/andromeda-observe/src/query",
     "crates/andromeda-proto/src/manifest",

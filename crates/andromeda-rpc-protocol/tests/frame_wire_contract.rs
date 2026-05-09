@@ -1,4 +1,4 @@
-use andromeda_core::{AndromedaErrorKind, RequestId, SessionId, TransactionId};
+use andromeda_error::AndromedaErrorKind;
 use andromeda_rpc_protocol::{
     ERROR_FRAME_CODE, FRAME_CODEC_CRC_OFFSET, FRAME_CODEC_HEADER_LEN, FRAME_CODEC_VERSION,
     FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP, FrameBytes, FrameCodec, FrameCodecEndian, FrameHeader,
@@ -7,6 +7,7 @@ use andromeda_rpc_protocol::{
     RPC_METADATA_FRAME_CODE, ResultStreamMetadataPolicy, StreamRole,
     validate_result_stream_sequence, validate_result_stream_sequence_with_metadata_policy,
 };
+use andromeda_types::{RequestId, SessionId, TransactionId};
 
 const REQUEST_ID: u64 = 0x0102_0304_0506_0708;
 const SESSION_ID: u64 = 0x1112_1314_1516_1718;

@@ -1,8 +1,8 @@
 /// Gap Detection Tests (Category E)
 /// Tests verify that gaps in audit sequences are detected.
 use andromeda_audit::PermissionAuditEvent;
-use andromeda_core::{Permission, PrincipalId};
 use andromeda_observability::TraceId;
+use andromeda_principal::{Permission, PrincipalId};
 
 /// Test: audit_gap_in_sequence_detected
 /// Verifies that gaps in trace ID sequence are detected.

@@ -1,8 +1,8 @@
 //! Snapshot validation gates for terminal and in-flight owner membership.
 
 use super::fixtures::durable_status_lsn;
-use andromeda_core::{CatalogVersion, TransactionId};
 use andromeda_mvcc::{MvccIsolationPolicy, Snapshot, TransactionStatus, TransactionStatusTable};
+use andromeda_types::{CatalogVersion, TransactionId};
 
 #[test]
 fn snapshot_validation_rejects_terminal_owner() {

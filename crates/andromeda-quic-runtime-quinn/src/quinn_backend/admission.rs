@@ -1,7 +1,6 @@
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CertificateIdentityStatus,
-};
-use andromeda_core::{CertificateIdentity, SurfaceScope};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_principal::CertificateIdentityStatus;
+use andromeda_principal::{CertificateIdentity, SurfaceScope};
 
 use andromeda_quic::{
     CertificateContinuityDecision, CertificateContinuityPolicy, CertificateRotationDeclaration,

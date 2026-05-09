@@ -18,7 +18,7 @@
 //! Violation of these rules breaks serializability and is rejected with a clear
 //! error message identifying the 2PL violation.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::TransactionState;
 

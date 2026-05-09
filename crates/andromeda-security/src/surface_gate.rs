@@ -5,10 +5,13 @@
 //! crates adapt their listener-specific plane type into an observed
 //! [`SurfaceScope`] before calling this gate.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use andromeda_observe::{
-    AuthorizationDenialReason, AuthorizationOutcome, PrincipalRegistry, SecurityAuditOutcome,
-    SecurityAuditTrace, SurfaceAction, SurfaceAuthorizer, SurfaceScope, TraceId,
+use andromeda_audit::{SecurityAuditOutcome, SecurityAuditTrace, SurfaceScope};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_observability::TraceId;
+
+use crate::{
+    AuthorizationDenialReason, AuthorizationOutcome, PrincipalRegistry, SurfaceAction,
+    SurfaceAuthorizer,
 };
 
 /// Dispatch-time security gate over observed surface scopes.
@@ -86,7 +89,7 @@ impl<'a> SurfacePlaneAuthorizer<'a> {
                     plane,
                     audit: audit.clone(),
                 }))
-            }
+            },
             denied @ AuthorizationOutcome::Denied { .. } => Ok(Err(denied)),
         }
     }
@@ -157,9 +160,9 @@ impl<P> AuthorizedProcedureDispatch<P> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_observe::{
-        AdminOperation, CertificateIdentity, Permission, PrincipalBinding, UserPrincipal,
-        UserPrincipalKind,
+    use crate::PrincipalBinding;
+    use andromeda_audit::{
+        AdminOperation, CertificateIdentity, Permission, UserPrincipal, UserPrincipalKind,
     };
 
     fn registry(bindings: Vec<PrincipalBinding>) -> PrincipalRegistry {

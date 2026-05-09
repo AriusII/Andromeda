@@ -15,8 +15,9 @@
 //! * Cancellation, backpressure, and shutdown are represented as typed trait
 //!   methods instead of hidden runtime side channels.
 
-use andromeda_core::CertificateIdentity;
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId, SessionId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_principal::CertificateIdentity;
+use andromeda_types::{RequestId, SessionId};
 
 use crate::{BackpressureSignal, CancellationSignal, FrameBytes, StreamRole, SurfacePlane};
 
@@ -241,7 +242,7 @@ fn transport_protocol_error(message: &'static str) -> AndromedaError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_core::{RequestId, SessionId};
+    use andromeda_types::{RequestId, SessionId};
 
     use crate::{CancellationCause, FRAME_HEADER_CRC_UNCHECKED, FrameHeader, FrameType};
 

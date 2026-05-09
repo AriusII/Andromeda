@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use andromeda_core::AndromedaResult;
-use andromeda_storage::{HadrMembershipStore, HadrNodeId, HadrNodeRole};
+use andromeda_hadr::{HadrMembershipStore, HadrNodeId, HadrNodeRole};
 
 use crate::error::cli_error;
 use crate::hadr::output::print_node_report;

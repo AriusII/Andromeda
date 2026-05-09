@@ -4,12 +4,14 @@
 //! commit-log metadata label in `andromeda-transaction-log`; it is not treated
 //! here as a proof of serializable execution.
 
-use andromeda_core::{CatalogVersion, EngineTimestamp, TransactionId};
+use andromeda_time::EngineTimestamp;
+
 use andromeda_mvcc::{
     ActiveSnapshotRegistry, MvccIsolationPolicy, MvccRowHeader, Snapshot, SnapshotHandle,
     TransactionStatus, TransactionStatusTable,
 };
 use andromeda_transaction_log::{CommitLogEntry, IsolationLevel, Lsn};
+use andromeda_types::{CatalogVersion, TransactionId};
 
 fn tx(id: u64) -> TransactionId {
     TransactionId::new(id)

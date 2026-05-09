@@ -1,10 +1,10 @@
 use andromeda_contract::{ProcedureContractBinding, ProcedureContractRef};
-use andromeda_core::{CatalogVersion, ContractHash, InvocationId, RequestId, SessionId};
-use andromeda_observe::{
+use andromeda_observability::{
     AuthorizationDeniedTrace, ContractRejectedTrace, DecisionTrace, ExecutionTransitionTrace,
     ProtocolCorrelation, TraceId, TransitionReasonCode,
 };
 use andromeda_proto::StructuredObjectHeader;
+use andromeda_types::{CatalogVersion, ContractHash, InvocationId, RequestId, SessionId};
 
 use crate::{
     AdmissionService, CompletionStatus, PreTransactionValidationService, ProcedureBindingEvidence,
@@ -94,13 +94,13 @@ impl InvocationReject {
             CompletionStatus::PermissionDenied => TransitionReasonCode::PERMISSION_DENIED,
             CompletionStatus::ContractRejected | CompletionStatus::FailedBeforeTransaction => {
                 TransitionReasonCode::PRE_TRANSACTION_REJECTION
-            }
+            },
             CompletionStatus::Cancelled => TransitionReasonCode::CANCELLED,
             CompletionStatus::SystemUnavailable => TransitionReasonCode::SYSTEM_UNAVAILABLE,
             CompletionStatus::Poisoned => TransitionReasonCode::POISON,
             CompletionStatus::Committed | CompletionStatus::RolledBack => {
                 TransitionReasonCode::EXECUTOR_FAILURE
-            }
+            },
         };
         ExecutionTransitionTrace {
             trace_id,
@@ -122,8 +122,8 @@ impl InvocationReject {
 mod tests {
     use super::*;
     use andromeda_contract::{PolicyVersion, StatsVersion};
-    use andromeda_core::{ProcedureId, RequestId, SessionId};
     use andromeda_observe::{EventCorrelation, EventEnvelope, EventId, TraceEvent};
+    use andromeda_types::{ProcedureId, RequestId, SessionId};
 
     fn request(expected_contract_hash: ContractHash) -> InvocationRequest {
         let procedure = ProcedureContractRef {

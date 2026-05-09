@@ -1,3 +1,11 @@
+//! Storage-local immutable cold segment wrapper.
+//!
+//! `PublishedColdSegment` is a convenience boundary over the segment owner
+//! descriptor. It validates that a descriptor is already published cold and
+//! rejects storage-level mutation attempts, but it does not own segment
+//! durability, publication truth, or archive IO. Those remain with segment,
+//! manifest/WAL, and any future concrete archive service boundary.
+
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{SegmentDescriptor, SegmentMutation, SegmentState};

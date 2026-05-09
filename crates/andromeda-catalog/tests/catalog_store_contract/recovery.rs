@@ -8,7 +8,7 @@ fn recovery_rejects_commit_with_definition_batch_hash_mismatch() {
     match records.last_mut().unwrap() {
         CatalogMutationRecord::Commit(boundary) => {
             boundary.source_hash = DefinitionBatchSourceHash::new([0x44; 32]);
-        }
+        },
         _ => unreachable!("definition batch WAL sequence must end with Commit"),
     }
 
@@ -242,7 +242,7 @@ fn recovery_rejects_apply_count_above_replay_limit_before_accumulating_batch() {
     match &mut records[0] {
         CatalogMutationRecord::Begin(boundary) => {
             boundary.expected_apply_count = CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH + 1;
-        }
+        },
         _ => unreachable!("definition batch WAL sequence must start with Begin"),
     }
 
@@ -309,7 +309,7 @@ fn recovery_rejects_begin_commit_boundary_mismatch_all_or_nothing() {
     match records.last_mut().unwrap() {
         CatalogMutationRecord::Commit(boundary) => {
             boundary.next_version = CatalogVersion::new(boundary.next_version.get() + 1);
-        }
+        },
         _ => unreachable!("definition batch WAL sequence must end with Commit"),
     }
 
@@ -406,8 +406,8 @@ fn recovery_reports_wrong_identity_version_gap_outer_kind_and_payload_corruption
         match record {
             CatalogMutationRecord::Begin(boundary) | CatalogMutationRecord::Commit(boundary) => {
                 boundary.database_id = DatabaseId::new(DATABASE_ID.get() + 100);
-            }
-            CatalogMutationRecord::Apply(_) => {}
+            },
+            CatalogMutationRecord::Apply(_) => {},
         }
     }
     let wrong_identity_outcome = replay_records_at(10, wrong_identity_records);
@@ -560,7 +560,7 @@ fn storage_wal_kind_tag_for_catalog_record(kind: CatalogMutationRecordKind) -> u
     let storage_kind = storage_wal_kind_for_catalog_record(kind);
     assert_eq!(
         kind.storage_wal_kind_tag() as u64,
-        andromeda_storage::wal_record_kind_tag(storage_kind)
+        andromeda_wal::wal_record_kind_tag(storage_kind)
     );
     kind.storage_wal_kind_tag()
 }

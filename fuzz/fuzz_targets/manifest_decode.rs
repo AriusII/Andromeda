@@ -1,6 +1,7 @@
 #![no_main]
 
-use andromeda_storage::{Lsn, ReplayContext, WalRecord, WalRecordKind, replay_wal_record};
+use andromeda_storage::{ReplayContext, replay_wal_record};
+use andromeda_wal::{Lsn, WalRecord, WalRecordKind};
 use libfuzzer_sys::fuzz_target;
 
 mod common;

@@ -1,6 +1,7 @@
 use crate::support::{evaluator_for, new_resolver, resolver_and_evaluator};
-use andromeda_core::{Permission, PrincipalRole, ProcedureId};
 use andromeda_exec::services::{DenialReason, PermissionDecision, PermissionEvaluator};
+use andromeda_principal::{Permission, PrincipalRole};
+use andromeda_types::ProcedureId;
 
 #[test]
 fn test_permission_evaluation_allowed() {

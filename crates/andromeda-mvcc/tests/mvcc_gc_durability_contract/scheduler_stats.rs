@@ -1,8 +1,8 @@
 //! Scheduler, statistics, and trace-observability contracts for MVCC GC.
 
 use super::fixtures::*;
-use andromeda_core::TransactionId;
 use andromeda_mvcc::GcSchedulerTask;
+use andromeda_types::TransactionId;
 use std::time::Duration;
 
 #[test]

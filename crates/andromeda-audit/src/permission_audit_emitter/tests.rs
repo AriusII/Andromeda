@@ -1,6 +1,7 @@
 use super::*;
-use andromeda_core::{AndromedaErrorKind, AndromedaResult, Permission, PrincipalId};
+use andromeda_error::{AndromedaErrorKind, AndromedaResult};
 use andromeda_observability::TraceId;
+use andromeda_principal::{Permission, PrincipalId};
 
 fn durable_report(
     trace_id: TraceId,
@@ -36,7 +37,7 @@ fn audit_event_allowed() {
     let event = PermissionAuditEvent::allowed(
         TraceId::new(1),
         PrincipalId::new(100),
-        Permission::ExecuteProcedure(andromeda_core::ProcedureId::new(1)),
+        Permission::ExecuteProcedure(andromeda_types::ProcedureId::new(1)),
     );
 
     assert!(event.is_allowed());

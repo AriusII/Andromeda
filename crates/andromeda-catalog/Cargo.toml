@@ -17,11 +17,10 @@ andromeda-observe.workspace = true
 andromeda-plan-cache.workspace = true
 andromeda-procedure-store.workspace = true
 andromeda-procedure-contract.workspace = true
-andromeda-proto.workspace = true
 andromeda-scenario-evidence.workspace = true
 andromeda-statistics.workspace = true
 andromeda-time.workspace = true
 andromeda-types.workspace = true
 
 [dev-dependencies]
-andromeda-storage.workspace = true
+andromeda-wal.workspace = true

@@ -7,12 +7,14 @@
 //! - Lock release-all (when a transaction cleans up all locks)
 //! - Correlation (same transaction across multiple trace events)
 
-use andromeda_core::{EngineTimestamp, TransactionId};
+use andromeda_time::EngineTimestamp;
+
 use andromeda_locking::{
     DeadlockAuditTrace, DeadlockDecisionKind, LockAcquireStatus, LockManager, LockMode,
     LockPromotionTrace, LockResource, LockWaitTrace,
 };
 use andromeda_transaction::{LockReleaseAllTrace, TransactionState};
+use andromeda_types::TransactionId;
 
 #[test]
 fn test_wait_trace_on_contention() {
@@ -50,7 +52,7 @@ fn test_wait_trace_on_contention() {
             assert_eq!(wait_trace.requested_mode, LockMode::Shared);
             assert_eq!(wait_trace.blocker_tx_ids, vec![tx1]);
             assert_eq!(wait_trace.timestamp, ts);
-        }
+        },
         other => panic!("Expected Waiting status, got {:?}", other),
     }
 }
@@ -181,7 +183,7 @@ fn test_audit_trail_correlation() {
     let wait_trace = match acquire_status {
         LockAcquireStatus::Waiting { blockers, .. } => {
             LockWaitTrace::new(tx_waiter, resource, LockMode::Shared, blockers, ts_wait)
-        }
+        },
         _ => panic!("Expected Waiting status"),
     };
 
@@ -244,7 +246,7 @@ fn test_no_wait_trace_on_granted_acquire() {
         LockAcquireStatus::Granted => {
             // No wait trace should be emitted for granted acquires
             // This is verified by the absence of wait evidence
-        }
+        },
         other => panic!("Expected Granted status, got {:?}", other),
     }
 }

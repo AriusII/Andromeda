@@ -6,4 +6,6 @@ rust-version = "1.95.0"
 publish = false
 
 [dependencies]
-andromeda-core.workspace = true
+andromeda-error.workspace = true
+andromeda-time.workspace = true
+andromeda-types.workspace = true

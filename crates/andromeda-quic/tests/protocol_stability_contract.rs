@@ -4,12 +4,12 @@
 //! These tests detect regressions in frame format, Protobuf schema,
 //! and RPC contract discriminators.
 
-use andromeda_core::{AndromedaErrorKind, RequestId, SessionId, TransactionId};
+use andromeda_error::AndromedaErrorKind;
 use andromeda_proto::{
     BackpressureMetadata, ErrorEnvelope, ErrorFamily, PayloadKind, ProtocolVersion,
     RetryDisposition, TransactionEffect,
 };
-use andromeda_quic::{
+use andromeda_rpc_protocol::{
     AUTH_FRAME_CODE, BackpressureReason, BackpressureSignal, CONTRACT_REQUEST_FRAME_CODE,
     CONTRACT_RESPONSE_FRAME_CODE, ERROR_FRAME_CODE, FRAME_CODEC_CRC_OFFSET, FRAME_CODEC_HEADER_LEN,
     FrameCodec, FrameHeader, FrameType, FrameTypeInvariants, HELLO_FRAME_CODE,
@@ -17,6 +17,7 @@ use andromeda_quic::{
     RPC_BATCH_FRAME_CODE, RPC_COMPLETION_FRAME_CODE, RPC_EXECUTE_REQUEST_FRAME_CODE,
     RPC_METADATA_FRAME_CODE, TELEMETRY_SOFT_SIGNAL_FRAME_CODE, validate_frame_header_layout,
 };
+use andromeda_types::{RequestId, SessionId, TransactionId};
 use std::mem;
 
 #[path = "protocol_stability_contract/diagnostic_backpressure_metadata.rs"]

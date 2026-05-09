@@ -1,5 +1,5 @@
 use andromeda_core::AndromedaResult;
-use andromeda_storage::{HadrNodeId, HadrQuorumMembership};
+use andromeda_hadr::{HadrNodeId, HadrQuorumMembership};
 
 use crate::hadr::types::{NodeManagementReport, NodeMembershipMemberReport};
 

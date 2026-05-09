@@ -5,8 +5,8 @@ use andromeda_audit::{
     SecurityAuditOutcome, SecurityAuditTrace, SecurityPolicyVersionEvidence, SurfaceScope,
     UserPrincipal, UserPrincipalKind,
 };
-use andromeda_core::{Permission, PrincipalId};
 use andromeda_observability::TraceId;
+use andromeda_principal::{Permission, PrincipalId};
 
 /// Test: audit_tamper_detection_signature_valid
 /// Verifies that signatures are valid for audit entries.

@@ -3,8 +3,8 @@
 use std::time::SystemTime;
 
 use andromeda_audit::{DenialAuditReason, PermissionAuditEvent};
-use andromeda_core::{Permission, PrincipalId};
 use andromeda_observability::TraceId;
+use andromeda_principal::{Permission, PrincipalId};
 
 /// Test: audit_fsync_before_visible_commit
 /// Verifies that fsync is called before audit entry becomes visible.

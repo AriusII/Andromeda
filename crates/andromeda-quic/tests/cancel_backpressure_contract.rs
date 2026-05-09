@@ -12,12 +12,15 @@
 //!   negotiated MTU is smaller than the encoded upper bound, or when the
 //!   reason is request-scoped without a [`RequestId`].
 
-use andromeda_core::{AndromedaErrorKind, RequestId, SessionId};
+use andromeda_error::AndromedaErrorKind;
 use andromeda_quic::{
-    BackpressureReason, BackpressureSignal, BackpressureTransport, CancellationCause,
-    CancellationOutcome, CancellationSignal, Connection, FRAME_HEADER_CRC_UNCHECKED, FrameBytes,
-    FrameHeader, FrameType, StreamRole, SurfacePlane,
+    CancellationCause, CancellationOutcome, CancellationSignal, Connection, SurfacePlane,
 };
+use andromeda_rpc_protocol::{
+    BackpressureReason, BackpressureSignal, BackpressureTransport, FRAME_HEADER_CRC_UNCHECKED,
+    FrameBytes, FrameHeader, FrameType, StreamRole,
+};
+use andromeda_types::{RequestId, SessionId};
 
 fn frame(frame_type: FrameType, session: u64) -> FrameBytes {
     let payload = match frame_type {

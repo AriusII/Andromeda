@@ -5,11 +5,11 @@
 
 #[cfg(test)]
 mod tests {
-    use andromeda_core::TransactionId;
     use andromeda_mvcc::{
         ActiveSnapshotRegistry, GcSchedulerTask, MvccGarbageCollector, SnapshotHandle,
         TransactionStatusTable,
     };
+    use andromeda_types::TransactionId;
     use std::sync::Arc;
     use std::time::Duration;
 

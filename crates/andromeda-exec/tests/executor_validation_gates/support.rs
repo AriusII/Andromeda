@@ -1,9 +1,4 @@
-pub(crate) use andromeda_catalog::{
-    AccessMode, CatalogObjectRef, IsolationPolicy, MultiResultPolicy, ObjectKind, PolicyVersion,
-    ProcedureContractBinding, ProcedureContractRef, ProcedureErrorPolicy, ProtocolLayoutRef,
-    QualifiedName, ResultMetadataPolicy, ResultStreamCardinality, ResultStreamContract,
-    StatsVersion, TransactionPolicy,
-};
+pub(crate) use andromeda_catalog_store::{CatalogObjectRef, ObjectKind, QualifiedName};
 pub(crate) use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogObjectId, CatalogVersion,
     ColumnDescriptor, ContractHash, InvocationId, ProcedureId, ScalarType, TypeDescriptor,
@@ -17,14 +12,20 @@ pub(crate) use andromeda_exec::{
     SrplProcedureDispatcher,
 };
 pub(crate) use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
-pub(crate) use andromeda_srpl::procedure_model::{
-    BoundSrplBodyPlan, BoundSrplOperationPlan, ExecutableProcedurePlan, SrplCatalogBindingEvidence,
+pub(crate) use andromeda_procedure_contract::{
+    AccessMode, IsolationPolicy, MultiResultPolicy, PolicyVersion, ProcedureContractBinding,
+    ProcedureContractRef, ProcedureErrorPolicy, ProtocolLayoutRef, ResultMetadataPolicy,
+    ResultStreamCardinality, ResultStreamContract, StatsVersion, TransactionPolicy,
 };
-pub(crate) use andromeda_srpl::procedure_resolver::{
+pub(crate) use andromeda_procedure_runtime::procedure_resolver::{
     ProcedureResolveError, ProcedureResolveRequest, ProcedureResolveResponse, ProcedureResolver,
     SrplProcedureManifest,
 };
-pub(crate) use andromeda_srpl::{Cardinality, interpreter::SrplIrInterpreter};
+pub(crate) use andromeda_srpl_interpreter::SrplIrInterpreter;
+pub(crate) use andromeda_srpl_ir::{
+    Cardinality,
+    BoundSrplBodyPlan, BoundSrplOperationPlan, ExecutableProcedurePlan, SrplCatalogBindingEvidence,
+};
 pub(crate) use std::sync::Arc;
 
 #[derive(Clone)]

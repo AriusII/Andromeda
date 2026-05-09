@@ -1,16 +1,19 @@
-use andromeda_core::{AndromedaErrorKind, CatalogVersion, ContractHash, RequestId, SessionId};
+use andromeda_error::AndromedaErrorKind;
 use andromeda_proto::{
     encode_generated_message,
     generated::contract::v1::catalog_procedure_manifest_resolution_request,
 };
-use andromeda_quic::{
+use andromeda_rpc::{TransportSurface, validate_transport_surface};
+use andromeda_rpc_codec::{
     CatalogProcedureManifestResolutionRequest, CatalogProcedureManifestResolutionResponse,
-    FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader, FrameType,
-    ResultStreamMetadataPolicy, StreamRole, TransportSurface,
     catalog_manifest_resolution_request_frame, decode_catalog_manifest_resolution_response_frame,
-    validate_result_stream_sequence, validate_result_stream_sequence_with_metadata_policy,
-    validate_transport_surface,
 };
+use andromeda_rpc_protocol::{
+    FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader, FrameType,
+    ResultStreamMetadataPolicy, StreamRole, validate_result_stream_sequence,
+    validate_result_stream_sequence_with_metadata_policy,
+};
+use andromeda_types::{CatalogVersion, ContractHash, RequestId, SessionId};
 
 fn request() -> CatalogProcedureManifestResolutionRequest {
     CatalogProcedureManifestResolutionRequest {
@@ -64,7 +67,7 @@ fn response_frame_with_status(status: i32) -> FrameBytes {
             major: 1,
             minor: 0,
         }),
-        contract_hash: vec![0; ContractHash::LEN],
+        contract_hash: vec![0x11; ContractHash::LEN],
         catalog_version: 9,
         request_id: 501,
         session_id: 601,

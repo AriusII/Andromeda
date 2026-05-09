@@ -3,7 +3,7 @@ use andromeda_exec::{
     BackpressuredResultStream, DEFAULT_RESULT_STREAM_CAPACITY, MAX_RESULT_STREAM_CAPACITY,
     MIN_RESULT_STREAM_CAPACITY, ResultStreamMetadata,
 };
-use andromeda_srpl::Cardinality;
+use andromeda_srpl_ir::Cardinality;
 
 #[tokio::test]
 async fn test_result_stream_metadata_before_payload_contract() {

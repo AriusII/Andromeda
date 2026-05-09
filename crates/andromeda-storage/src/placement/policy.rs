@@ -52,6 +52,10 @@ pub struct CoreIoPlacementPolicy {
     pub thresholds: HotColdIoThresholds,
 }
 
+/// Compatibility name for the canonical storage placement policy.
+///
+/// Keep this as an alias to avoid introducing a second facade-owned policy
+/// type. New storage-local code should prefer `CoreIoPlacementPolicy`.
 pub type StoragePlacementPolicy = CoreIoPlacementPolicy;
 
 impl CoreIoPlacementPolicy {

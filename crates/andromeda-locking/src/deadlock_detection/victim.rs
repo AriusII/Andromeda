@@ -1,4 +1,4 @@
-use andromeda_core::TransactionId;
+use andromeda_types::TransactionId;
 
 use super::{
     DeadlockResult, DeadlockTransactionMetadataTable, DeadlockVictimPolicy,
@@ -48,7 +48,7 @@ impl DeadlockVictim {
                 return Err(deadlock_error(
                     "deadlock youngest transaction policy requires ordering metadata",
                 ));
-            }
+            },
             DeadlockVictimPolicy::YoungestTransactionId => sorted_participants
                 .last()
                 .copied()
@@ -77,7 +77,7 @@ impl DeadlockVictim {
         let tx_id = match victim_policy {
             DeadlockVictimPolicy::YoungestTransactionStartOrder => {
                 select_youngest_by_start_order(&sorted_participants, transaction_metadata)?
-            }
+            },
             DeadlockVictimPolicy::YoungestTransactionId => sorted_participants
                 .last()
                 .copied()

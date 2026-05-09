@@ -1,6 +1,6 @@
 //! Public contract for runtime-free reconnect pool and retry admission.
 
-use andromeda_core::AndromedaErrorKind;
+use andromeda_error::AndromedaErrorKind;
 use andromeda_quic::{
     ConnectionPool, ConnectionPoolKey, ConnectionPoolPolicy, PoolAdmissionKind, ReconnectPolicy,
     ReconnectState, RetryAdmissionDecision, RetryAdmissionPolicy, RetryIdempotency,

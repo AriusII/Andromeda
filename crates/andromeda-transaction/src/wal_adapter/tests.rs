@@ -3,8 +3,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+
 use andromeda_transaction_log::Lsn;
+use andromeda_types::TransactionId;
 
 use super::*;
 

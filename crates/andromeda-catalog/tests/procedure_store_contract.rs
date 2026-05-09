@@ -6,21 +6,25 @@
 //!   can be attached to invocations and queried back.
 //! - The store rejects evidence that does not match the registered binding.
 
-use andromeda_catalog::{
-    AccessMode, CatalogObjectRef, CompatibilityPolicy, CompletionEvidence, CompletionStatus,
-    EvidenceConfidence, EvidenceScore, FeedbackId, InvocationDecisionRecord,
-    InvocationRuntimeRecordOutcome, IsolationPolicy, MultiResultPolicy, ObjectKind, PlanCacheKey,
-    PlanClass, PlanShapeFingerprint, PolicyVersion, ProcedureContract, ProcedureErrorPolicy,
-    ProcedureFeedback, ProcedureRegistration, ProcedureRuntimeCounters, ProcedureRuntimePlanId,
-    ProcedureRuntimeStatus, ProcedureStore, ProcedureStoreEntry, ProcedureStoreEvidenceRole,
-    ProtocolLayoutRef, QualifiedName, RecordOutcome, ResultMetadataPolicy, StatsVersion,
-    TransactionPolicy,
-};
+use andromeda_catalog::ProcedureStore;
+use andromeda_catalog_store::{CatalogObjectRef, ObjectKind, QualifiedName};
 use andromeda_error::AndromedaErrorKind;
 use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
+use andromeda_plan_cache::{PlanCacheKey, PlanClass, PlanShapeFingerprint};
+use andromeda_procedure_contract::{
+    AccessMode, CompatibilityPolicy, IsolationPolicy, MultiResultPolicy, PolicyVersion,
+    ProcedureContract, ProcedureErrorPolicy, ProtocolLayoutRef, ResultMetadataPolicy, StatsVersion,
+    TransactionPolicy,
+};
+use andromeda_procedure_store::{
+    CompletionEvidence, CompletionStatus, FeedbackId, InvocationDecisionRecord,
+    InvocationRuntimeRecord, InvocationRuntimeRecordOutcome, ProcedureFeedback,
+    ProcedureRegistration, ProcedureRuntimeCounters, ProcedureRuntimePlanId,
+    ProcedureRuntimeStatus, ProcedureStoreEntry, ProcedureStoreEvidenceRole, RecordOutcome,
+};
 use andromeda_scenario_evidence::{
-    ScenarioEvidence, ScenarioEvidenceOptimizerBoundary, ScenarioId, ScenarioKind, ScenarioTarget,
-    ValidityWindow,
+    EvidenceConfidence, EvidenceScore, ScenarioEvidence, ScenarioEvidenceOptimizerBoundary,
+    ScenarioId, ScenarioKind, ScenarioTarget, ValidityWindow,
 };
 use andromeda_time::EngineTimestamp;
 use andromeda_types::{CatalogObjectId, CatalogVersion, ContractHash, InvocationId, ProcedureId};
@@ -167,7 +171,7 @@ fn procedure_store_records_runtime_invocation_metrics_against_full_binding() {
     let mut store = ProcedureStore::new();
     store.register(entry).unwrap();
 
-    let runtime = andromeda_catalog::InvocationRuntimeRecord::new(
+    let runtime = InvocationRuntimeRecord::new(
         InvocationId::new(910),
         binding,
         EngineTimestamp::from_unix_millis(2_000),
@@ -235,7 +239,7 @@ fn procedure_store_invocation_history_sink_records_failed_and_pre_transaction_ab
     let mut store = ProcedureStore::new();
     store.register(entry).unwrap();
 
-    let failed = andromeda_catalog::InvocationRuntimeRecord::new_with_decision_trace(
+    let failed = InvocationRuntimeRecord::new_with_decision_trace(
         InvocationId::new(911),
         binding,
         EngineTimestamp::from_unix_millis(3_000),
@@ -248,7 +252,7 @@ fn procedure_store_invocation_history_sink_records_failed_and_pre_transaction_ab
         Some(AndromedaErrorKind::Execution),
     )
     .expect("failed terminal evidence is accepted by the public constructor");
-    let aborted = andromeda_catalog::InvocationRuntimeRecord::new(
+    let aborted = InvocationRuntimeRecord::new(
         InvocationId::new(912),
         binding,
         EngineTimestamp::from_unix_millis(3_050),
@@ -373,7 +377,7 @@ fn evidence_boundary_taxonomies_are_bounded() {
         },
     )
     .unwrap();
-    let runtime = andromeda_catalog::InvocationRuntimeRecord::new(
+    let runtime = InvocationRuntimeRecord::new(
         InvocationId::new(52),
         entry.binding,
         EngineTimestamp::from_unix_millis(2_000),
@@ -449,7 +453,7 @@ fn procedure_store_rejects_runtime_record_with_mismatched_expected_binding() {
     .into_iter()
     .enumerate()
     {
-        let runtime = andromeda_catalog::InvocationRuntimeRecord::new(
+        let runtime = InvocationRuntimeRecord::new(
             InvocationId::new(910 + offset as u64),
             drifted,
             EngineTimestamp::from_unix_millis(2_000),

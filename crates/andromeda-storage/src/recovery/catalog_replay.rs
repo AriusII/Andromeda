@@ -17,7 +17,6 @@
 
 mod lsn;
 mod runner;
-mod selection;
 mod snapshot;
 mod state;
 

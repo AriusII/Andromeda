@@ -8,3 +8,9 @@ publish = false
 [dependencies]
 andromeda-core.workspace = true
 andromeda-procedure-runtime.workspace = true
+andromeda-srpl-execution-adapter.workspace = true
+andromeda-srpl-ir.workspace = true
+
+[dev-dependencies]
+andromeda-contract.workspace = true
+andromeda-types.workspace = true

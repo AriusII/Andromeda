@@ -1,5 +1,5 @@
-use andromeda_catalog::ProcedureContractRef;
 use andromeda_core::{AndromedaResult, ProcedureId};
+use andromeda_procedure_contract::ProcedureContractRef;
 
 use crate::{InvocationContext, LocalProcedure, ResultStreamMetadata};
 

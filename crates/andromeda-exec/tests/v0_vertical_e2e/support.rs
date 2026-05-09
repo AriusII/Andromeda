@@ -1,18 +1,21 @@
 use andromeda_catalog::{
     CatalogDefinitionBatchPlanning, CatalogSnapshot, INVENTORY_DATABASE_ID, INVENTORY_NAMESPACE_ID,
-    ProcedureContract, inventory_domain_definition_batch,
+    inventory_domain_definition_batch,
 };
 use andromeda_core::{AndromedaResult, InvocationId, RequestId, SessionId, TransactionId};
-use andromeda_exec::{
+use andromeda_exec::{InvocationContext, InvocationRequest, LocalHeapRowInsertRedoTemplate};
+use andromeda_inventory_demo::{
     InventoryProductStockCommitEvidence, InventoryProductStockReservationIntent,
-    InventoryProductStockStore, InventoryStock, InvocationContext, InvocationRequest,
-    LocalHeapRowInsertRedoTemplate, V0InventoryReserveStockExecutableProcedure,
+    InventoryProductStockStore, InventoryStock, V0InventoryReserveStockExecutableProcedure,
     V0InventoryReserveStockRpcPayload, bind_inventory_reserve_stock_v0_pdf_executable_procedure,
     encode_inventory_reserve_stock_v0_execute_frame,
 };
 use andromeda_observe::TraceId;
-use andromeda_quic::{FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader, FrameType};
-use andromeda_storage::{PageId, PageSize};
+use andromeda_procedure_contract::ProcedureContract;
+use andromeda_rpc_protocol::{
+    FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader, FrameType,
+};
+use andromeda_storage_page::{PageId, PageSize};
 
 pub(crate) fn inventory_catalog_snapshot() -> CatalogSnapshot {
     let batch = inventory_domain_definition_batch().unwrap();
@@ -90,7 +93,7 @@ pub(crate) fn encoded_execute_frame_with_transaction_id() -> Vec<u8> {
 
 #[derive(Debug)]
 pub(crate) struct CountingProductStockStore {
-    pub(crate) inner: andromeda_exec::HeapInventoryProductStockStore,
+    pub(crate) inner: andromeda_inventory_demo::HeapInventoryProductStockStore,
     pub(crate) prepare_count: usize,
     pub(crate) publish_count: usize,
     pub(crate) abort_count: usize,
@@ -99,7 +102,7 @@ pub(crate) struct CountingProductStockStore {
 impl CountingProductStockStore {
     pub(crate) fn new(stock: InventoryStock) -> Self {
         Self {
-            inner: andromeda_exec::HeapInventoryProductStockStore::from_cold_snapshot(
+            inner: andromeda_inventory_demo::HeapInventoryProductStockStore::from_cold_snapshot(
                 PageId::new(42_900),
                 PageSize::KiB16,
                 stock,
@@ -115,7 +118,7 @@ impl CountingProductStockStore {
 impl InventoryProductStockStore for CountingProductStockStore {
     fn prepare_reserve_stock(
         &mut self,
-        command: andromeda_exec::ReserveStockCommand,
+        command: andromeda_inventory_demo::ReserveStockCommand,
     ) -> AndromedaResult<InventoryProductStockReservationIntent> {
         self.prepare_count += 1;
         self.inner.prepare_reserve_stock(command)
@@ -132,7 +135,7 @@ impl InventoryProductStockStore for CountingProductStockStore {
         &mut self,
         intent: &InventoryProductStockReservationIntent,
         commit: InventoryProductStockCommitEvidence,
-        redo: andromeda_exec::InventoryProductStockDurableRedoEvidence,
+        redo: andromeda_inventory_demo::InventoryProductStockDurableRedoEvidence,
     ) -> AndromedaResult<()> {
         self.publish_count += 1;
         self.inner

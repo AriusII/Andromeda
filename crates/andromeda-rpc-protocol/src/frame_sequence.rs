@@ -3,9 +3,8 @@
 //! This module enforces the strict ordering of frames in result streams:
 //! metadata -> batch* -> completion
 
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId, SessionId, TransactionId,
-};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::{RequestId, SessionId, TransactionId};
 
 use super::frame_code::FrameType;
 use super::frame_struct::{FrameBytes, FrameHeader};
@@ -63,7 +62,7 @@ impl ResultStreamSequence {
                 }
 
                 self.saw_metadata = true;
-            }
+            },
             FrameType::RpcBatch => {
                 if !self.saw_metadata {
                     return Err(AndromedaError::new(
@@ -80,7 +79,7 @@ impl ResultStreamSequence {
                 }
 
                 self.saw_batch = true;
-            }
+            },
             FrameType::RpcCompletion => {
                 if !self.saw_metadata {
                     return Err(AndromedaError::new(
@@ -104,13 +103,13 @@ impl ResultStreamSequence {
                 }
 
                 self.completed = true;
-            }
+            },
             _ => {
                 return Err(AndromedaError::new(
                     AndromedaErrorKind::Protocol,
                     "result-stream sequence accepts only RPC metadata, batch, and completion",
                 ));
-            }
+            },
         }
 
         Ok(())
@@ -131,11 +130,11 @@ impl ResultStreamSequence {
                     AndromedaErrorKind::Protocol,
                     "result-stream sequence changed request context",
                 ))
-            }
+            },
             None => {
                 self.request_context = Some(current_context);
                 Ok(())
-            }
+            },
             _ => Ok(()),
         }
     }
@@ -185,7 +184,7 @@ pub fn validate_frame_sequence(
                 frame.validate(stream_role)?;
             }
             Ok(())
-        }
+        },
     }
 }
 

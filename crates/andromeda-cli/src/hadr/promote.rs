@@ -3,15 +3,16 @@ use std::path::Path;
 use crate::error::cli_error;
 use crate::parse::parse_u64;
 use andromeda_core::AndromedaResult;
+use andromeda_hadr::{
+    HadrClusterOperation, HadrClusterSecurityEvidence, HadrFencingContext, HadrFencingToken,
+    HadrMembershipSnapshot, HadrMembershipStore, HadrNodeId, HadrPromotionAuditLog,
+    HadrPromotionVote, PromotionAttempt, PromotionBoundary, PromotionCommit, PromotionPlanner,
+};
 use andromeda_observe::{
     CertificateIdentity, Permission, SecurityAuditOutcome, SecurityAuditTrace,
     SecurityPolicyVersionEvidence, SurfaceScope, TraceId, UserPrincipal, UserPrincipalKind,
 };
-use andromeda_storage::{
-    HadrClusterOperation, HadrClusterSecurityEvidence, HadrFencingContext, HadrFencingToken,
-    HadrMembershipSnapshot, HadrMembershipStore, HadrNodeId, HadrPromotionAuditLog,
-    HadrPromotionVote, Lsn, PromotionAttempt, PromotionBoundary, PromotionCommit, PromotionPlanner,
-};
+use andromeda_wal::Lsn;
 
 use super::output::print_promotion_outcome;
 use super::parsing::parse_promote_options;

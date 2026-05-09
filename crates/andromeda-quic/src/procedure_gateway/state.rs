@@ -1,5 +1,6 @@
-use andromeda_core::CertificateIdentity;
-use andromeda_core::{AndromedaResult, InvocationId};
+use andromeda_error::AndromedaResult;
+use andromeda_principal::CertificateIdentity;
+use andromeda_types::InvocationId;
 
 use crate::{Connection, FrameBytes, LifecycleState, SurfacePlane};
 

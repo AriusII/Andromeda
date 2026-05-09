@@ -1,6 +1,3 @@
-use andromeda_catalog::{
-    PolicyVersion, ProcedureContractBinding, ProcedureContractRef, StatsVersion,
-};
 use andromeda_core::{
     AndromedaErrorKind, CatalogVersion, ContractHash, InvocationId, PipelineClass, ProcedureId,
     RequestId, ResourceBudget, SessionId,
@@ -11,10 +8,14 @@ use andromeda_observe::{
     IoPipelineStage, IoPlacementDecisionTrace, IoStorageTier, ProtocolCorrelation, TraceEvent,
     TraceId,
 };
-use andromeda_storage::{
-    CoreIoPlacementPolicy, CoreIoPlacementRequest, OperationalProfile, PageSize,
-    StorageIoBudgetScope, StorageTier, StorageWorkloadClass,
+use andromeda_procedure_contract::{
+    PolicyVersion, ProcedureContractBinding, ProcedureContractRef, StatsVersion,
 };
+use andromeda_storage::{
+    CoreIoPlacementPolicy, CoreIoPlacementRequest, OperationalProfile, StorageIoBudgetScope,
+    StorageTier, StorageWorkloadClass,
+};
+use andromeda_storage_page::PageSize;
 
 const EXEC_CRITICAL_PATH_SOURCES: &[(&str, &str)] = &[
     ("local_runtime", include_str!("../src/local.rs")),

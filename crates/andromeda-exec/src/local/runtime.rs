@@ -7,7 +7,7 @@ use andromeda_catalog::CatalogSnapshot;
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_observe::{EventCorrelation, EventEmitter, EventSink, TraceId};
 use andromeda_quic::SurfacePlane;
-use andromeda_tx::TransactionManager;
+use andromeda_transaction::TransactionManager;
 
 use crate::{
     AuthorizedProcedureDispatch, ExecutionIoAdmissionDecision, InvocationContext, InvocationReject,
@@ -492,7 +492,7 @@ where
         emitter: &mut EventEmitter<S>,
         trace_id: TraceId,
         transaction_id: andromeda_core::TransactionId,
-        durable_lsn: andromeda_storage::Lsn,
+        durable_lsn: andromeda_wal::Lsn,
         correlation: EventCorrelation,
     ) -> AndromedaResult<()> {
         events::emit_commit_visible_event(
@@ -513,7 +513,7 @@ where
         emitter: &mut EventEmitter<S>,
         trace_id: TraceId,
         transaction_id: andromeda_core::TransactionId,
-        durable_lsn: andromeda_storage::Lsn,
+        durable_lsn: andromeda_wal::Lsn,
         correlation: EventCorrelation,
     ) -> AndromedaResult<()> {
         events::emit_rollback_durable_event(

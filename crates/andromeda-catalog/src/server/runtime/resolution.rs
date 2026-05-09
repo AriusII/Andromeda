@@ -1,12 +1,10 @@
-use andromeda_catalog_store::ProcedureManifest;
+use andromeda_catalog_store::{CatalogManifestResolutionStatus, ProcedureManifest};
 use andromeda_error::{AndromedaError, AndromedaErrorKind};
 use andromeda_types::CatalogVersion;
 
-use super::status::CatalogManifestResolutionStatus;
-
 pub use andromeda_catalog_store::CatalogManifestResolutionFailure;
 
-/// Resolver outcome with catalog-owned proto status mapping.
+/// Resolver outcome with a protocol-free catalog-store status.
 pub type CatalogManifestResolution =
     andromeda_catalog_store::CatalogManifestResolution<CatalogManifestResolutionStatus>;
 
@@ -36,22 +34,22 @@ fn status_from_failure(
         CatalogManifestResolutionFailure::NotFound => CatalogManifestResolutionStatus::NotFound,
         CatalogManifestResolutionFailure::ContractHashMismatch { .. } => {
             CatalogManifestResolutionStatus::ContractHashMismatch
-        }
+        },
         CatalogManifestResolutionFailure::CatalogVersionMismatch { .. } => {
             CatalogManifestResolutionStatus::CatalogVersionMismatch
-        }
+        },
         CatalogManifestResolutionFailure::NotSourceGeneratorReady => {
             CatalogManifestResolutionStatus::NotSourceGeneratorReady
-        }
+        },
         CatalogManifestResolutionFailure::PermissionDenied => {
             CatalogManifestResolutionStatus::PermissionDenied
-        }
+        },
         CatalogManifestResolutionFailure::CatalogNotReady => {
             CatalogManifestResolutionStatus::CatalogNotReady
-        }
+        },
         CatalogManifestResolutionFailure::Malformed(_) => {
             CatalogManifestResolutionStatus::Malformed
-        }
+        },
         CatalogManifestResolutionFailure::Internal(_) => CatalogManifestResolutionStatus::Internal,
     }
 }

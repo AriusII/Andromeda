@@ -1,8 +1,8 @@
 //! Five-step commit sequence gates.
 
 use super::fixtures::*;
-use andromeda_core::TransactionId;
 use andromeda_transaction::{IsolationLevel, TransactionStatus, WalRecordKind};
+use andromeda_types::TransactionId;
 
 #[tokio::test]
 async fn test_five_step_sequence_complete() {

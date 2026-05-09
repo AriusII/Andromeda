@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use andromeda_core::TransactionId;
+use andromeda_types::TransactionId;
 
 use crate::{LockEntry, LockManager, LockResource};
 

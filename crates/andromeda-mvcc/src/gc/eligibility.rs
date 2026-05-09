@@ -85,7 +85,7 @@ impl Clone for GcEligibilityChecker {
 mod tests {
     use super::*;
     use crate::active_snapshot_registry::SnapshotHandle;
-    use andromeda_core::TransactionId;
+    use andromeda_types::TransactionId;
 
     #[test]
     fn test_gc_checker_single_snapshot() {

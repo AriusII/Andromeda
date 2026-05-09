@@ -1,8 +1,6 @@
 #![no_main]
 
-use andromeda_storage::{
-    Lsn, WalRecord, WalRecordKind, decode_wal_record_frame, encode_wal_record,
-};
+use andromeda_wal::{Lsn, WalRecord, WalRecordKind, decode_wal_record_frame, encode_wal_record};
 use libfuzzer_sys::fuzz_target;
 
 mod common;

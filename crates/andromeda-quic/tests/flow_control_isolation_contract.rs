@@ -1,8 +1,8 @@
-use andromeda_core::InvocationId;
-use andromeda_quic::{
-    BackpressureReason, BackpressureSignal, BackpressureTransport, StreamConcurrencyManager,
-    StreamRole,
+use andromeda_quic::StreamConcurrencyManager;
+use andromeda_rpc_protocol::{
+    BackpressureReason, BackpressureSignal, BackpressureTransport, StreamRole,
 };
+use andromeda_types::InvocationId;
 use std::time::Duration;
 
 fn invocation_id(id: u64) -> InvocationId {

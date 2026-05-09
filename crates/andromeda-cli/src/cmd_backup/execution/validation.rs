@@ -1,7 +1,7 @@
 use super::super::{BackupListEntry, BackupState};
 use crate::error::cli_error;
+use andromeda_backup::{BackupArtifactManifestRecord, BackupId, FileBackedBackupArtifactStore};
 use andromeda_core::AndromedaResult;
-use andromeda_storage::{BackupArtifactManifestRecord, BackupId, FileBackedBackupArtifactStore};
 use std::{
     fs,
     path::{Path, PathBuf},

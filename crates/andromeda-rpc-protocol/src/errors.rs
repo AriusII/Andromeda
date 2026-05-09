@@ -1,6 +1,7 @@
 //! Protocol error envelope taxonomy.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId, SessionId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::{RequestId, SessionId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorFamily {

@@ -1,4 +1,5 @@
-use andromeda_catalog::{CatalogDefinition, ResultStreamCardinality};
+use andromeda_catalog_store::CatalogDefinition;
+use andromeda_procedure_contract::ResultStreamCardinality;
 use andromeda_srpl::definition_batch_bridge::SrplProcedureDefinition;
 use andromeda_srpl::procedure_compiler::compile_narrow_procedure_definition;
 use andromeda_types::{CatalogObjectId, CatalogVersion, ProcedureId};

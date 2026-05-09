@@ -1,6 +1,6 @@
 //! Frame protocol layer: types, codes, encoding, and decoding.
 
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 pub use crate::frame_code::{
     AUTH_FRAME_CODE, CONTRACT_REQUEST_FRAME_CODE, CONTRACT_RESPONSE_FRAME_CODE, ERROR_FRAME_CODE,

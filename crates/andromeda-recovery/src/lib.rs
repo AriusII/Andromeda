@@ -15,8 +15,12 @@ C5 invariants:
 - RAM, temporary storage, GPU output, and benchmark output are advisory only; they are not truth.
 "#]
 
+mod coverage;
 mod crash_recovery_matrix;
 mod file_wal_report;
+mod planning;
+mod replay;
+mod startup;
 
 /// Startup mode requested for recovery against durable evidence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,10 +33,24 @@ pub enum StartupMode {
     ForensicStart,
 }
 
+pub use coverage::{WalCoverageEvidence, validate_wal_coverage};
 pub use file_wal_report::{
     FileWalRecoveryBoundaryKind, FileWalRecoveryIgnoredTransaction,
     FileWalRecoveryIgnoredTransactionReason, FileWalRecoveryReplayRecord, FileWalRecoveryReportV0,
-    file_wal_recovery_boundary_kind,
+    build_file_wal_recovery_report_v0, file_wal_recovery_boundary_kind,
+};
+pub use planning::{
+    ConceptualRedoPlan, RecoveryManifestView, RecoveryPlan, RecoveryTraceProjection,
+    RedoRecordDecision, RedoRecordPlan,
+};
+pub use replay::{
+    IndexRebuildRequiredEvidence, ManifestSwitchRecoveryTrace, RecoveryReplayTarget,
+    RecoveryWalReplayAdapter, ReplayOutcome, ReplayResult, WalReplayReport,
+    execute_redo_plan_with_adapter,
+};
+pub use startup::{
+    ObservedBoundary, StartupAcceptance, StartupAuditProjection, StartupDecision, StartupEvidence,
+    StartupOutcome, StartupRejectionReason, decide_startup,
 };
 
 impl StartupMode {

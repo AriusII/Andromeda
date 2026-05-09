@@ -7,7 +7,7 @@ publish = false
 
 [dependencies]
 andromeda-error.workspace = true
-andromeda-observe.workspace = true
+andromeda-observability.workspace = true
 andromeda-rpc-protocol.workspace = true
 andromeda-srpl-cardinality.workspace = true
 andromeda-structured-object.workspace = true

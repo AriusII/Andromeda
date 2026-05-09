@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use super::connection_adapter::QuinnConnectionAdapter;
 use super::peer_certificate::{extract_peer_certificates, require_certificate_identity};

@@ -1,4 +1,4 @@
-use andromeda_catalog::{
+use andromeda_statistics::{
     DEFAULT_HLL_PRECISION, Datum, EquiDepthHistogramBuilder, EquiWidthHistogramBuilder,
     ExactNdvCounter, FeedbackStatistics, HistogramBuilderTrait, HyperLogLog, NDV_EXACT_THRESHOLD,
     NdvEstimator, PlanFeedback, SkewMarker,

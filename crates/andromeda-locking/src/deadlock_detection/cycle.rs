@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use andromeda_core::TransactionId;
+use andromeda_types::TransactionId;
 
 use super::{DeadlockClock, DeadlockDetectionDeadline, DeadlockResult, WaitForGraph};
 
@@ -37,9 +37,9 @@ pub(super) fn find_first_cycle_until<C: DeadlockClock>(
         match dfs_cycle_from_until(tx_id, graph, &mut states, &mut stack, deadline, clock)? {
             CycleSearchOutcome::CycleFound(cycle_participants) => {
                 return Ok(CycleSearchOutcome::CycleFound(cycle_participants));
-            }
+            },
             CycleSearchOutcome::TimedOut => return Ok(CycleSearchOutcome::TimedOut),
-            CycleSearchOutcome::NoCycle => {}
+            CycleSearchOutcome::NoCycle => {},
         }
     }
 
@@ -80,17 +80,17 @@ fn dfs_cycle_from_until<C: DeadlockClock>(
                         stack[cycle_start..].to_vec(),
                     ));
                 }
-            }
-            Some(DfsVisitState::Visited) => {}
+            },
+            Some(DfsVisitState::Visited) => {},
             None => {
                 match dfs_cycle_from_until(blocking_tx, graph, states, stack, deadline, clock)? {
                     CycleSearchOutcome::CycleFound(cycle_participants) => {
                         return Ok(CycleSearchOutcome::CycleFound(cycle_participants));
-                    }
+                    },
                     CycleSearchOutcome::TimedOut => return Ok(CycleSearchOutcome::TimedOut),
-                    CycleSearchOutcome::NoCycle => {}
+                    CycleSearchOutcome::NoCycle => {},
                 }
-            }
+            },
         }
     }
 

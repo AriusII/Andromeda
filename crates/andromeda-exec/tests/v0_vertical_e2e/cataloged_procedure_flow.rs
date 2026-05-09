@@ -3,12 +3,13 @@ use crate::support::{
     stock,
 };
 use andromeda_catalog::inventory_reserve_stock_contract;
-use andromeda_exec::{CompletionStatus, V0InventoryRecoverableRuntime};
+use andromeda_exec::CompletionStatus;
+use andromeda_inventory_demo::V0InventoryRecoverableRuntime;
 use andromeda_observe::{CriticalDecisionKind, InMemoryEventSink, TraceEvent};
-use andromeda_quic::{
+use andromeda_rpc_protocol::{
     FrameType, StreamRole, validate_result_stream_sequence, validate_single_frame_on_stream,
 };
-use andromeda_storage::{InMemoryWal, Lsn};
+use andromeda_wal::{InMemoryWal, Lsn};
 
 #[test]
 fn v0_inventory_executes_from_bound_pdf_style_srpl_and_emits_ordered_result_frames() {

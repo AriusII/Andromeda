@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use andromeda_core::TransactionId;
+use andromeda_types::TransactionId;
 
 use super::*;
 use crate::active_snapshot_registry::{ActiveSnapshotRegistry, SnapshotHandle};

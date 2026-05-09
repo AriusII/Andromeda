@@ -3,8 +3,11 @@ use andromeda_core::{
     CertificateIdentity as CoreCertificateIdentity, InvocationId, SurfaceScope as CoreSurfaceScope,
 };
 use andromeda_exec::{
-    CompletionStatus, InventoryReserveStockExecutor, InventoryStock, InvocationContext,
-    InvocationRequest, LocalVerticalRuntime, ReserveStockCommand, SurfacePlaneAuthorizer,
+    CompletionStatus, InvocationContext, InvocationRequest, LocalVerticalRuntime,
+    SurfacePlaneAuthorizer,
+};
+use andromeda_inventory_demo::{
+    InventoryReserveStockExecutor, InventoryStock, ReserveStockCommand,
 };
 use andromeda_observe::{
     AdminOperation, AuthorizationDenialReason, AuthorizationOutcome, Permission, PrincipalBinding,
@@ -12,7 +15,7 @@ use andromeda_observe::{
     TraceId, UserPrincipal, UserPrincipalKind,
 };
 use andromeda_quic::SurfacePlane;
-use andromeda_storage::InMemoryWal;
+use andromeda_wal::InMemoryWal;
 
 struct ExpectedDenial<'a> {
     trace_id: TraceId,

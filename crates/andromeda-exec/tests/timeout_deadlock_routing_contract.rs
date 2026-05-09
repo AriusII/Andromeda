@@ -2,7 +2,7 @@ use andromeda_core::{InvocationId, TransactionId};
 use andromeda_exec::{
     ErrorKind, RetryRouting, TerminalTxJournal, TerminalTxState, route_transaction_error,
 };
-use andromeda_observe::{TraceId, TransitionReasonCode};
+use andromeda_observability::{TraceId, TransitionReasonCode};
 
 #[test]
 fn transaction_timeout_routes_to_non_retryable_rollback_with_audit_and_fence() {

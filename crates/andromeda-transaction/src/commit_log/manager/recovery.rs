@@ -3,12 +3,14 @@
 //! This module keeps WAL replay application separate from the live
 //! append-flush-publish path in `manager.rs`.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+
 use andromeda_mvcc::TransactionStatus;
 use andromeda_transaction_log::{
     CommitLogEntry, Lsn, RollbackLogEntry, TransactionStatusRebuild, TxWalReplayAction,
     TxWalReplayRecord, TxWalReplaySummary,
 };
+use andromeda_types::TransactionId;
 use std::collections::BTreeMap;
 
 use super::CommitLogManager;

@@ -1,8 +1,7 @@
 //! Frame header and payload validation.
 
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId, SessionId, TransactionId,
-};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::{RequestId, SessionId, TransactionId};
 
 use super::frame_code::{FrameType, MAX_FRAME_PAYLOAD_LENGTH, RESERVED_FRAME_FLAGS_MASK};
 use crate::StreamRole;

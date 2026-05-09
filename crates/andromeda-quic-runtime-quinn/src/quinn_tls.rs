@@ -6,7 +6,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 #[cfg(any(test, feature = "insecure-test-tls"))]
 use rustls::pki_types::PrivatePkcs8KeyDer;
 use rustls::{

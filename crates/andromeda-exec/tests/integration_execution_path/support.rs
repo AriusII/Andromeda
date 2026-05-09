@@ -1,19 +1,22 @@
-pub use andromeda_catalog::{
-    INVENTORY_RESERVE_STOCK_PERMISSION, ProcedureContract, inventory_reserve_stock_contract,
-};
+pub use andromeda_catalog::{INVENTORY_RESERVE_STOCK_PERMISSION, inventory_reserve_stock_contract};
 pub use andromeda_core::{
     ContractHash, InvocationId, PipelineClass, RequestId, ResourceBudget, TransactionId,
 };
 pub use andromeda_exec::{
-    CompletionStatus, ExecutionIoAdmissionRequest, InventoryReserveStockExecutor, InventoryStock,
-    InvocationContext, InvocationRequest, LocalVerticalRuntime, ReserveStockCommand,
+    CompletionStatus, ExecutionIoAdmissionRequest, InvocationContext, InvocationRequest,
+    LocalVerticalRuntime,
+};
+pub use andromeda_inventory_demo::{
+    InventoryReserveStockExecutor, InventoryStock, ReserveStockCommand,
 };
 pub use andromeda_observe::{EventCorrelation, EventEmitter, EventId, InMemoryEventSink, TraceId};
+pub use andromeda_procedure_contract::ProcedureContract;
 pub use andromeda_storage::{
-    CoreIoPlacementRequest, InMemoryWal, Lsn, OperationalProfile, PageSize, StorageIoBudgetScope,
-    StorageWorkloadClass, WalRecordKind,
+    CoreIoPlacementRequest, OperationalProfile, StorageIoBudgetScope, StorageWorkloadClass,
 };
-pub use andromeda_tx::TransactionState;
+pub use andromeda_storage_page::PageSize;
+pub use andromeda_transaction::TransactionState;
+pub use andromeda_wal::{InMemoryWal, Lsn, WalRecordKind};
 
 // SHARED FIXTURES
 

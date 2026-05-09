@@ -1,7 +1,5 @@
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, ContractHash,
-    Permission as CorePermission,
-};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_principal::Permission as CorePermission;
 use andromeda_proto::{
     PayloadKind, decode_generated_message, generated, validate_generated_rpc_execute_request,
 };
@@ -9,7 +7,9 @@ use andromeda_security_contract::{
     FAMILY_ID_APPLICATION, PERMISSION_ID_EXECUTE_PROCEDURE, Permission as SecurityPermission,
     PermissionFamily,
 };
+use andromeda_types::{CatalogVersion, ContractHash};
 
+use crate::catalog_manifest_resolution::validate_catalog_procedure_manifest_projection;
 use crate::{CatalogProcedureManifest, CatalogRequiredPermission, decode_typed_frame_envelope};
 use andromeda_rpc_protocol::FrameBytes;
 
@@ -32,7 +32,7 @@ pub fn decode_and_validate_rpc_execute_request(
     manifest: &CatalogProcedureManifest,
 ) -> AndromedaResult<ProcedureRouteExecuteRequest> {
     validate_route_manifest_permissions(manifest)?;
-    manifest.to_protobuf()?;
+    validate_catalog_procedure_manifest_projection(manifest)?;
 
     let envelope = decode_typed_frame_envelope(frame)?;
     if envelope.payload_kind != PayloadKind::RpcExecuteRequest {

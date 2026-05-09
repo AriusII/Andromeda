@@ -30,15 +30,17 @@ mod route;
 mod state;
 
 pub use admission::ProcedureAuthorizedRouteBinding;
-pub use andromeda_rpc_codec::ProcedureRouteExecuteRequest;
 pub use errors::ProcedureRouteAdmissionError;
 pub use route::ProcedureRouteBinding;
 
-use andromeda_core::CertificateIdentity;
-use andromeda_core::{AndromedaResult, InvocationId, PrincipalRegistry};
+use andromeda_error::AndromedaResult;
+use andromeda_principal::CertificateIdentity;
+use andromeda_principal::PrincipalRegistry;
+use andromeda_types::InvocationId;
 
-use crate::{CatalogProcedureManifest, FrameBytes};
 use crate::{Connection, SurfacePlane};
+use andromeda_procedure_contract::ProcedureGatewayManifest;
+use andromeda_rpc_protocol::FrameBytes;
 
 /// QUIC-side gateway for Procedure dispatch.
 ///
@@ -85,14 +87,14 @@ impl<'a> ProcedureGateway<'a> {
     ///
     /// ```no_run
     /// use andromeda_quic::{Connection, ProcedureGateway, SurfacePlane};
-    /// # use andromeda_core::CertificateIdentity;
-    /// # use andromeda_core::SurfaceScope;
+    /// # use andromeda_principal::CertificateIdentity;
+    /// # use andromeda_principal::SurfaceScope;
     ///
     /// # let mut conn = Connection::new(SurfacePlane::Application);
     /// # let identity = CertificateIdentity::new("abc123", "svc-001", SurfaceScope::Application)?;
     /// # conn.set_certificate_identity(identity.clone())?;
     /// let gateway = ProcedureGateway::new(&conn)?;
-    /// # Ok::<(), andromeda_core::AndromedaError>(())
+    /// # Ok::<(), andromeda_error::AndromedaError>(())
     /// ```
     pub fn new(connection: &'a Connection) -> AndromedaResult<Self> {
         let gateway_state = state::resolve_gateway_state(connection)?;
@@ -137,8 +139,8 @@ impl<'a> ProcedureGateway<'a> {
     ///
     /// ```no_run
     /// # use andromeda_quic::ProcedureGateway;
-    /// # use andromeda_core::InvocationId;
-    /// # use andromeda_core::{CertificateIdentity, SurfaceScope};
+    /// # use andromeda_types::InvocationId;
+    /// # use andromeda_principal::{CertificateIdentity, SurfaceScope};
     /// # let mut conn = andromeda_quic::Connection::new(andromeda_quic::SurfacePlane::Application);
     /// # let identity = CertificateIdentity::new("abc123", "svc-001", SurfaceScope::Application)?;
     /// # conn.set_certificate_identity(identity)?;
@@ -147,7 +149,7 @@ impl<'a> ProcedureGateway<'a> {
     /// let stream_id = 5u64;
     /// let invocation_id = gateway.map_stream_to_invocation_id(stream_id);
     /// assert_eq!(invocation_id, InvocationId::new(stream_id));
-    /// # Ok::<(), andromeda_core::AndromedaError>(())
+    /// # Ok::<(), andromeda_error::AndromedaError>(())
     /// ```
     pub fn map_stream_to_invocation_id(&self, stream_id: u64) -> InvocationId {
         state::invocation_id_for_stream(stream_id)
@@ -176,7 +178,7 @@ impl<'a> ProcedureGateway<'a> {
         &self,
         stream_id: u64,
         frame: &FrameBytes,
-        manifest: &CatalogProcedureManifest,
+        manifest: &ProcedureGatewayManifest,
     ) -> AndromedaResult<ProcedureRouteBinding> {
         route::bind_application_procedure_route(
             route::ProcedureRouteAdmission {
@@ -201,7 +203,7 @@ impl<'a> ProcedureGateway<'a> {
         &self,
         stream_id: u64,
         frame: &FrameBytes,
-        manifest: &CatalogProcedureManifest,
+        manifest: &ProcedureGatewayManifest,
         principal_registry: &PrincipalRegistry,
     ) -> Result<ProcedureAuthorizedRouteBinding, ProcedureRouteAdmissionError> {
         let route = self
@@ -215,7 +217,7 @@ impl<'a> ProcedureGateway<'a> {
 mod tests {
     use super::*;
     use crate::LifecycleState;
-    use andromeda_core::SurfaceScope;
+    use andromeda_principal::SurfaceScope;
 
     fn setup_application_connection() -> Connection {
         let mut conn = Connection::new(SurfacePlane::Application);

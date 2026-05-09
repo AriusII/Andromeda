@@ -1,3 +1,14 @@
+use andromeda_catalog_store::{
+    CatalogDefinition, CatalogObjectRef, ObjectKind, QualifiedName, TableDefinition,
+};
+use andromeda_definition_batch::{CatalogLifecycleTarget, DefinitionOperation};
+use andromeda_procedure_contract::StatsVersion;
+use andromeda_statistics::{
+    CorrelationEvidenceBounds, CorrelationStrengthPermille, StatsColumnTarget, StatsCorrelation,
+    StatsCorrelationId, StatsCorrelationKind, StatsCorrelationPublicationBuilder,
+};
+use andromeda_types::{CatalogObjectId, CatalogVersion};
+
 fn decision_path(file_name: &str) -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("..")
@@ -24,28 +35,20 @@ fn catalog_source_path(file_name: &str) -> std::path::PathBuf {
         .join(file_name)
 }
 
-fn map_stats_target(object_id: u64, column_index: u16) -> andromeda_catalog::StatsColumnTarget {
-    andromeda_catalog::StatsColumnTarget::new(
-        andromeda_types::CatalogObjectId::new(object_id),
-        column_index,
-    )
+fn map_stats_target(object_id: u64, column_index: u16) -> StatsColumnTarget {
+    StatsColumnTarget::new(CatalogObjectId::new(object_id), column_index)
 }
 
-fn map_stats_correlation(
-    id: u64,
-    catalog_version: u64,
-    stats_version: u64,
-) -> andromeda_catalog::StatsCorrelation {
-    andromeda_catalog::StatsCorrelation::new(
-        andromeda_catalog::StatsCorrelationId::new(id)
-            .expect("test correlation id must be non-zero"),
-        andromeda_types::CatalogVersion::new(catalog_version),
-        andromeda_catalog::StatsVersion::new(stats_version),
-        andromeda_catalog::StatsCorrelationKind::FunctionalDependency,
-        andromeda_catalog::CorrelationStrengthPermille::from_permille(900)
+fn map_stats_correlation(id: u64, catalog_version: u64, stats_version: u64) -> StatsCorrelation {
+    StatsCorrelation::new(
+        StatsCorrelationId::new(id).expect("test correlation id must be non-zero"),
+        CatalogVersion::new(catalog_version),
+        StatsVersion::new(stats_version),
+        StatsCorrelationKind::FunctionalDependency,
+        CorrelationStrengthPermille::from_permille(900)
             .expect("test correlation strength must be in range"),
         vec![map_stats_target(10, 1), map_stats_target(20, 2)],
-        andromeda_catalog::CorrelationEvidenceBounds {
+        CorrelationEvidenceBounds {
             sample_rows: 100,
             population_lower_bound: 100,
             population_upper_bound: 1_000,
@@ -114,37 +117,32 @@ fn decision_coverage_dec_023_covers_drop_procedure_lifecycle_before_operation_su
 
 #[test]
 fn drop_procedure_operation_surface_is_guarded_not_yet_implemented() {
-    use andromeda_catalog::DefinitionOperation;
-
-    let create_example = DefinitionOperation::Create(andromeda_catalog::CatalogDefinition::Table(
-        andromeda_catalog::TableDefinition {
-            object: andromeda_catalog::CatalogObjectRef {
-                object_id: andromeda_types::CatalogObjectId::new(1),
-                name: andromeda_catalog::QualifiedName::parse("test.Table").unwrap(),
-                kind: andromeda_catalog::ObjectKind::Table,
-                catalog_version: andromeda_types::CatalogVersion::new(1),
-            },
-            columns: vec![],
+    let create_example = DefinitionOperation::Create(CatalogDefinition::Table(TableDefinition {
+        object: CatalogObjectRef {
+            object_id: CatalogObjectId::new(1),
+            name: QualifiedName::parse("test.Table").unwrap(),
+            kind: ObjectKind::Table,
+            catalog_version: CatalogVersion::new(1),
         },
-    ));
+        columns: vec![],
+    }));
 
-    let deprecate_example =
-        DefinitionOperation::Deprecate(andromeda_catalog::CatalogLifecycleTarget {
-            object: andromeda_catalog::CatalogObjectRef {
-                object_id: andromeda_types::CatalogObjectId::new(1),
-                name: andromeda_catalog::QualifiedName::parse("test.Table").unwrap(),
-                kind: andromeda_catalog::ObjectKind::Table,
-                catalog_version: andromeda_types::CatalogVersion::new(1),
-            },
-        });
+    let deprecate_example = DefinitionOperation::Deprecate(CatalogLifecycleTarget {
+        object: CatalogObjectRef {
+            object_id: CatalogObjectId::new(1),
+            name: QualifiedName::parse("test.Table").unwrap(),
+            kind: ObjectKind::Table,
+            catalog_version: CatalogVersion::new(1),
+        },
+    });
 
     match (&create_example, &deprecate_example) {
-        (DefinitionOperation::Create(_), DefinitionOperation::Deprecate(_)) => {}
+        (DefinitionOperation::Create(_), DefinitionOperation::Deprecate(_)) => {},
         _ => {
             panic!(
                 "DefinitionOperation surface must remain limited to Create/Deprecate until Drop is explicitly designed and decided"
             );
-        }
+        },
     }
 }
 
@@ -340,32 +338,18 @@ fn stats_correlation_publication_surface_keeps_map_analytics_advisory_boundaries
 
 #[test]
 fn stats_correlation_publication_rejects_stale_map_analytics_scope() {
-    let publication = andromeda_catalog::StatsCorrelationPublicationBuilder::new(
-        andromeda_types::CatalogVersion::new(7),
-        andromeda_catalog::StatsVersion::new(3),
-    )
-    .expect("builder versions must be valid")
-    .push(map_stats_correlation(1, 7, 3))
-    .expect("correlation must match publication versions")
-    .finish();
+    let publication =
+        StatsCorrelationPublicationBuilder::new(CatalogVersion::new(7), StatsVersion::new(3))
+            .expect("builder versions must be valid")
+            .push(map_stats_correlation(1, 7, 3))
+            .expect("correlation must match publication versions")
+            .finish();
 
     assert!(!publication.is_authoritative());
     assert!(publication.requires_durable_publication_evidence());
-    assert!(publication.is_current_for(
-        andromeda_types::CatalogVersion::new(7),
-        andromeda_catalog::StatsVersion::new(3),
-    ));
-    assert!(!publication.is_stale_for(
-        andromeda_types::CatalogVersion::new(7),
-        andromeda_catalog::StatsVersion::new(3),
-    ));
+    assert!(publication.is_current_for(CatalogVersion::new(7), StatsVersion::new(3),));
+    assert!(!publication.is_stale_for(CatalogVersion::new(7), StatsVersion::new(3),));
 
-    assert!(!publication.is_current_for(
-        andromeda_types::CatalogVersion::new(8),
-        andromeda_catalog::StatsVersion::new(3),
-    ));
-    assert!(publication.is_stale_for(
-        andromeda_types::CatalogVersion::new(7),
-        andromeda_catalog::StatsVersion::new(4),
-    ));
+    assert!(!publication.is_current_for(CatalogVersion::new(8), StatsVersion::new(3),));
+    assert!(publication.is_stale_for(CatalogVersion::new(7), StatsVersion::new(4),));
 }

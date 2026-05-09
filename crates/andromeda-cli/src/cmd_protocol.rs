@@ -1,14 +1,16 @@
 //! Protocol smoke test command.
 
 use crate::error::protocol_error;
+use andromeda_admission::{InvocationContext, InvocationRequest};
 use andromeda_catalog::inventory_reserve_stock_contract;
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, InvocationId};
-use andromeda_exec::{
-    CompletionStatus, InventoryReserveStockExecutor, InventoryStock, InvocationContext,
-    InvocationRequest, LocalVerticalRuntime, ReserveStockCommand,
+use andromeda_exec::LocalVerticalRuntime;
+use andromeda_inventory_demo::{
+    InventoryReserveStockExecutor, InventoryStock, ReserveStockCommand,
 };
 use andromeda_observe::TraceId;
-use andromeda_storage::InMemoryWal;
+use andromeda_result_stream::CompletionStatus;
+use andromeda_wal::InMemoryWal;
 
 const PROTO_PAYLOAD_SOURCE: &str = include_str!("../../andromeda-proto-wire/src/envelope.rs");
 const QUIC_FRAME_SOURCE: &str = include_str!("../../andromeda-rpc-protocol/src/frame_code.rs");
@@ -227,9 +229,9 @@ fn validate_result_frame_sequence(frames: &[SmokeFrame]) -> AndromedaResult<()> 
                 return Err(protocol_error(
                     "ResultStream sequence changed request context",
                 ));
-            }
+            },
             None => context = Some(current_context),
-            _ => {}
+            _ => {},
         }
 
         match frame.kind {
@@ -240,7 +242,7 @@ fn validate_result_frame_sequence(frames: &[SmokeFrame]) -> AndromedaResult<()> 
                     ));
                 }
                 saw_metadata = true;
-            }
+            },
             SmokeFrameKind::Batch => {
                 if !saw_metadata {
                     return Err(protocol_error(
@@ -258,7 +260,7 @@ fn validate_result_frame_sequence(frames: &[SmokeFrame]) -> AndromedaResult<()> 
                     ));
                 }
                 saw_batch = true;
-            }
+            },
             SmokeFrameKind::Completion => {
                 if !saw_metadata || !saw_batch {
                     return Err(protocol_error(
@@ -269,7 +271,7 @@ fn validate_result_frame_sequence(frames: &[SmokeFrame]) -> AndromedaResult<()> 
                     return Err(protocol_error("ResultStream completion must appear once"));
                 }
                 completed = true;
-            }
+            },
         }
     }
 

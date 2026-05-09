@@ -35,99 +35,26 @@
 //! replay layer.
 
 use andromeda_core::AndromedaResult;
+pub use andromeda_recovery::WalReplayReport;
+use andromeda_recovery::{
+    RecoveryWalReplayAdapter, ReplayOutcome, ReplayResult, execute_redo_plan_with_adapter,
+};
 
-use crate::{DatabaseManifest, Lsn, WalRecord};
+use crate::{DatabaseManifest, WalRecord, WalRecordKind};
 
-mod driver;
 mod validation;
 
-use driver::{RedoPlanReplayDriver, ReplaySessionBaseline};
 use validation::{
     validate_bootstrap_redo_boundary, validate_conflicting_terminal_records,
     validate_durable_replay_chain,
 };
 
 use super::planning::{ConceptualRedoPlan, RecoveryPlan, StartupMode};
-use super::replay::{IndexRebuildRequiredEvidence, ReplayContext};
+use super::replay::{ManifestSwitchRecoveryTrace, ReplayContext, replay_wal_record_result};
+use super::storage_error;
 
-/// Summary report produced at the end of a single WAL replay session.
-///
-/// All counters are derived exclusively from the durable WAL prefix and the
-/// `ConceptualRedoPlan`. RAM-only state must not be reflected here.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WalReplayReport {
-    /// Recovery startup mode that governed this session.
-    pub startup_mode: StartupMode,
-    /// LSN from which redo started (manifest's `required_wal_start_lsn`).
-    pub replay_start_lsn: Lsn,
-    /// Highest LSN where a handler returned `Applied`.
-    /// `None` if no record was successfully applied.
-    pub replay_end_lsn: Option<Lsn>,
-    /// Total plan records evaluated (all decisions combined).
-    pub total_records: usize,
-    /// Records whose handler returned `Applied`.
-    pub applied_count: usize,
-    /// Records whose handler returned `Skipped` (informational boundary handlers,
-    /// e.g. `CheckpointBegin`, `SecurityAuditAppend`).
-    pub handler_skipped_count: usize,
-    /// Records whose redo decision was anything other than `Replay`
-    /// (`SkipIncompleteTransaction`, `SkipNonRedoRecord`, `SkipBeforeRedoStart`, etc.).
-    pub plan_skipped_count: usize,
-    /// Records whose handler returned `NotYetImplemented`.
-    pub not_yet_implemented_count: usize,
-    /// Index/B-Tree records whose payload was validated but whose inline redo
-    /// remains gated, requiring an explicit index rebuild before the access
-    /// path can be trusted.
-    pub index_rebuild_required_count: usize,
-    /// Structured access-path rebuild evidence emitted by this replay session.
-    ///
-    /// Each item binds the access-path object identity (`index_id`), WAL LSN,
-    /// transaction evidence, payload checksum, key format, and reason needed by
-    /// later catalog or optimizer quarantine/exclusion logic. Storage only
-    /// reports the boundary here; it does not update catalog state.
-    pub index_rebuild_required: Vec<IndexRebuildRequiredEvidence>,
-    /// Incomplete (crash-survivor) transactions identified and discarded by the plan.
-    pub incomplete_transaction_count: usize,
-    /// Transactions whose `TxCommit` record was found in the durable WAL.
-    pub committed_transaction_count: usize,
-    /// `true` if any handler returned `NotYetImplemented` or `Deprecated`.
-    /// Deferred handlers remain fail-stop at the handler layer and are
-    /// reported here rather than treated as fatal driver errors.
-    pub has_replay_errors: bool,
-}
-
-impl WalReplayReport {
-    /// Returns `true` when recovery can open without discarded transactions,
-    /// replay errors, or pending access-path rebuilds.
-    pub fn is_clean_recovery(&self) -> bool {
-        self.incomplete_transaction_count == 0
-            && !self.has_replay_errors
-            && !self.requires_access_path_rebuild()
-    }
-
-    /// Returns `true` when incomplete transactions were discarded.
-    pub fn has_discarded_transactions(&self) -> bool {
-        self.incomplete_transaction_count > 0
-    }
-
-    /// Returns `true` when one or more Index/B-Tree access paths must be
-    /// rebuilt or quarantined before the access path can be trusted.
-    pub const fn requires_access_path_rebuild(&self) -> bool {
-        self.index_rebuild_required_count > 0
-    }
-
-    /// Returns structured access-path rebuild evidence emitted by this replay.
-    pub fn access_path_rebuild_evidence(&self) -> &[IndexRebuildRequiredEvidence] {
-        &self.index_rebuild_required
-    }
-
-    /// Returns `true` when any redo records are queued for replay by the plan.
-    pub fn has_replay_work(&self) -> bool {
-        self.applied_count > 0
-            || self.not_yet_implemented_count > 0
-            || self.index_rebuild_required_count > 0
-    }
-}
+#[cfg(test)]
+use crate::Lsn;
 
 /// Replay all eligible WAL records starting from the manifest-required LSN.
 ///
@@ -208,36 +135,135 @@ pub fn execute_redo_plan_into_context(
     ctx: &mut ReplayContext,
 ) -> AndromedaResult<WalReplayReport> {
     validate_conflicting_terminal_records(durable_records)?;
+    let mut adapter = StorageWalReplayAdapter;
+    execute_redo_plan_with_adapter(plan, durable_records, ctx, &mut adapter)
+}
 
-    let baseline = ReplaySessionBaseline::capture(ctx);
-    let mut driver = RedoPlanReplayDriver::from_durable_records(durable_records, ctx)?;
-    ctx.require_manifest_switch_checkpoint_evidence();
-    driver.execute(plan, ctx)?;
+struct StorageWalReplayAdapter;
 
-    let committed_transaction_count = plan
-        .transaction_evidence
-        .iter()
-        .filter(|t| t.commit_lsn.is_some())
-        .count();
+impl RecoveryWalReplayAdapter<ReplayContext> for StorageWalReplayAdapter {
+    fn replay_record(
+        &mut self,
+        ctx: &mut ReplayContext,
+        record: &WalRecord,
+    ) -> AndromedaResult<()> {
+        let manifest_before = (record.header.kind == WalRecordKind::ManifestSwitch)
+            .then_some(ctx.active_manifest)
+            .flatten();
+        let manifest_trace_count_before = ctx.manifest_switch_traces.len();
 
-    let new_index_rebuild_required = baseline.new_index_rebuild_required(ctx);
-    let index_rebuild_required_count = new_index_rebuild_required.len();
+        replay_wal_record_result(ctx, record).map(|_| ())?;
 
-    Ok(WalReplayReport {
-        startup_mode: plan.startup_mode,
-        replay_start_lsn: plan.redo_from_lsn,
-        replay_end_lsn: driver.replay_end_lsn(),
-        total_records: plan.records.len(),
-        applied_count: baseline.applied_delta(ctx),
-        handler_skipped_count: baseline.skipped_delta(ctx),
-        plan_skipped_count: driver.plan_skipped_count(),
-        not_yet_implemented_count: baseline.error_delta(ctx),
-        index_rebuild_required_count,
-        index_rebuild_required: new_index_rebuild_required,
-        incomplete_transaction_count: plan.incomplete_transactions.len(),
-        committed_transaction_count,
-        has_replay_errors: baseline.has_new_errors(ctx),
-    })
+        if record.header.kind == WalRecordKind::ManifestSwitch {
+            validate_manifest_switch_replay_result(
+                ctx,
+                manifest_before,
+                manifest_trace_count_before,
+            )?;
+        }
+
+        Ok(())
+    }
+
+    fn is_explicit_deferred_replay_error(&self, ctx: &ReplayContext, record: &WalRecord) -> bool {
+        let Some(result) = ctx.error_records.last() else {
+            return false;
+        };
+        result.lsn == record.header.lsn
+            && result.kind == record.header.kind
+            && result.outcome == ReplayOutcome::NotYetImplemented
+            && is_explicit_deferred_kind(result)
+    }
+}
+
+fn validate_manifest_switch_replay_result(
+    ctx: &ReplayContext,
+    previous_manifest: Option<DatabaseManifest>,
+    trace_count_before: usize,
+) -> AndromedaResult<()> {
+    let Some(trace) = ctx.manifest_switch_traces.get(trace_count_before) else {
+        return Err(storage_error(
+            "ManifestSwitch replay produced no recovery trace; recovery cannot open without observable switch evidence",
+        ));
+    };
+
+    match *trace {
+        ManifestSwitchRecoveryTrace::ManifestSwitchValidationFailed {
+            lsn,
+            manifest_version,
+            reason,
+        } => Err(storage_error(format!(
+            "ManifestSwitch at LSN {} for manifest version {} failed validation: {}",
+            lsn.get(),
+            manifest_version,
+            reason
+        ))),
+        ManifestSwitchRecoveryTrace::ManifestSwitchApplied {
+            lsn,
+            manifest_version,
+            base_checkpoint_lsn,
+            required_wal_start_lsn,
+            ..
+        } => {
+            if let Some(previous) = previous_manifest {
+                if manifest_version <= previous.manifest_version {
+                    return Err(storage_error(format!(
+                        "ManifestSwitch at LSN {} regresses manifest version: previous={}, next={}",
+                        lsn.get(),
+                        previous.manifest_version,
+                        manifest_version
+                    )));
+                }
+                if base_checkpoint_lsn <= previous.base_checkpoint_lsn {
+                    return Err(storage_error(format!(
+                        "ManifestSwitch at LSN {} must strictly advance base checkpoint LSN: previous={}, next={}",
+                        lsn.get(),
+                        previous.base_checkpoint_lsn.get(),
+                        base_checkpoint_lsn.get()
+                    )));
+                }
+                if required_wal_start_lsn < previous.required_wal_start_lsn {
+                    return Err(storage_error(format!(
+                        "ManifestSwitch at LSN {} regresses required WAL start LSN: previous={}, next={}",
+                        lsn.get(),
+                        previous.required_wal_start_lsn.get(),
+                        required_wal_start_lsn.get()
+                    )));
+                }
+                if lsn <= previous.base_checkpoint_lsn {
+                    return Err(storage_error(format!(
+                        "ManifestSwitch record LSN {} must follow the previous base checkpoint LSN {}",
+                        lsn.get(),
+                        previous.base_checkpoint_lsn.get()
+                    )));
+                }
+            }
+            Ok(())
+        },
+    }
+}
+
+fn is_explicit_deferred_kind(result: &ReplayResult) -> bool {
+    match result.kind {
+        WalRecordKind::PageAllocate
+        | WalRecordKind::PageFormat
+        | WalRecordKind::IndexInsert
+        | WalRecordKind::IndexDelete
+        | WalRecordKind::MvccVersionCreate
+        | WalRecordKind::MvccVersionClose
+        | WalRecordKind::MapDeltaAppend
+        | WalRecordKind::CatalogChangeBegin
+        | WalRecordKind::CatalogChangeApply
+        | WalRecordKind::CatalogChangeCommit
+        | WalRecordKind::BTreeInsert
+        | WalRecordKind::BTreeDelete
+        | WalRecordKind::BTreeSplit
+        | WalRecordKind::BTreeMerge => result
+            .error
+            .as_deref()
+            .is_some_and(|message| message.contains("not promoted")),
+        _ => false,
+    }
 }
 
 #[cfg(test)]

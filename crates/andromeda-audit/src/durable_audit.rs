@@ -530,6 +530,122 @@ impl DurableAuditSinkReport {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DurableAuditAppendRecord {
+    pub identity: DurableAuditRecordIdentity,
+    pub principal_binding: DurableAuditPrincipalBinding,
+    pub retention: DurableAuditRetentionBoundary,
+    pub replay_behavior: DurableAuditReplayBehavior,
+    pub event_kind: String,
+}
+
+impl DurableAuditAppendRecord {
+    pub fn new(
+        identity: DurableAuditRecordIdentity,
+        principal_binding: DurableAuditPrincipalBinding,
+        retention: DurableAuditRetentionBoundary,
+        replay_behavior: DurableAuditReplayBehavior,
+        event_kind: impl Into<String>,
+    ) -> AndromedaResult<Self> {
+        let record = Self {
+            identity,
+            principal_binding,
+            retention,
+            replay_behavior,
+            event_kind: event_kind.into(),
+        };
+        record.validate()?;
+        Ok(record)
+    }
+
+    pub fn validate(&self) -> AndromedaResult<()> {
+        self.identity.validate()?;
+        self.principal_binding.validate()?;
+        if self.event_kind.trim().is_empty() {
+            return Err(audit_error(
+                "durable audit append record requires event kind evidence",
+            ));
+        }
+        if contains_sensitive_marker(&self.event_kind) {
+            return Err(audit_error(
+                "durable audit append event kind must not contain secret evidence",
+            ));
+        }
+        validate_permissioned_critical_policy_binding(
+            self.identity.family,
+            &self.principal_binding,
+            "durable audit append records",
+        )?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DurableAuditSinkFailure {
+    pub kind: DurableAuditFailureKind,
+    pub identity: Option<DurableAuditRecordIdentity>,
+    pub reason: String,
+}
+
+impl DurableAuditSinkFailure {
+    pub fn new(
+        kind: DurableAuditFailureKind,
+        identity: Option<DurableAuditRecordIdentity>,
+        reason: impl Into<String>,
+    ) -> AndromedaResult<Self> {
+        let failure = Self {
+            kind,
+            identity,
+            reason: reason.into(),
+        };
+        failure.validate()?;
+        Ok(failure)
+    }
+
+    pub fn validate(&self) -> AndromedaResult<()> {
+        if let Some(identity) = self.identity {
+            identity.validate()?;
+        }
+        if self.reason.trim().is_empty() {
+            return Err(audit_error(
+                "durable audit sink failure requires non-empty reason evidence",
+            ));
+        }
+        if contains_sensitive_marker(&self.reason) {
+            return Err(audit_error(
+                "durable audit sink failure reason must not contain secret evidence",
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn requires_fail_closed(&self) -> bool {
+        self.kind.requires_fail_closed()
+    }
+}
+
+pub type DurableAuditSinkResult<T> = Result<T, DurableAuditSinkFailure>;
+
+pub(crate) fn sink_failure(
+    kind: DurableAuditFailureKind,
+    identity: Option<DurableAuditRecordIdentity>,
+    reason: impl Into<String>,
+) -> DurableAuditSinkFailure {
+    let identity = identity.filter(|identity| identity.validate().is_ok());
+    let reason = reason.into();
+    let reason = if reason.trim().is_empty() || contains_sensitive_marker(&reason) {
+        "durable audit sink operation failed".to_string()
+    } else {
+        reason
+    };
+
+    DurableAuditSinkFailure::new(kind, identity, reason).unwrap_or(DurableAuditSinkFailure {
+        kind,
+        identity: None,
+        reason: "durable audit sink operation failed".to_string(),
+    })
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DurableAuditReplayLsnRange {
     pub start_lsn: u64,

@@ -56,10 +56,10 @@ impl CatalogStoreWalAppendSequenceError {
         match self {
             Self::MissingPlannedRecord => {
                 "catalog WAL append sequence must include every planned mutation record"
-            }
+            },
             Self::MissingCommitRecord => {
                 "catalog WAL append sequence must end with the commit record"
-            }
+            },
             Self::KindMismatch { .. } => "catalog WAL append kind must match the mutation plan",
             Self::ZeroLsn { .. } => "catalog WAL append LSN must not be zero",
             Self::NonIncreasingLsn { .. } => "catalog WAL append LSNs must be strictly increasing",

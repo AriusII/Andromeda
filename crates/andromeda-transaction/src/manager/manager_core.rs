@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard};
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+
 use andromeda_locking::{
     LockAcquireEvidence, LockAcquireStatus, LockManager, LockMode, LockReleaseAllEvidence,
     LockReleaseAllSummary, LockReleaseEvidence, LockResource,
@@ -10,6 +11,7 @@ use andromeda_mvcc::{TransactionStatus, TransactionStatusTable};
 use andromeda_savepoint::{
     Savepoint, SavepointReleaseEvidence, SavepointRollbackEvidence, SavepointStack,
 };
+use andromeda_types::TransactionId;
 
 use crate::Lsn;
 use crate::allocator::TransactionIdAllocator;

@@ -7,13 +7,13 @@ use andromeda_catalog::inventory_reserve_stock_contract;
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, ContractHash, InvocationId,
 };
-use andromeda_exec::V0InventoryRecoverableRuntime;
+use andromeda_inventory_demo::V0InventoryRecoverableRuntime;
 use andromeda_observe::{
     EventEmitter, EventEnvelope, EventSink, InMemoryEventSink, TraceEvent, TraceId,
     TransitionReasonCode,
 };
-use andromeda_quic::FrameCodec;
-use andromeda_storage::InMemoryWal;
+use andromeda_rpc_protocol::FrameCodec;
+use andromeda_wal::InMemoryWal;
 
 #[test]
 fn v0_inventory_rejects_malformed_execute_frame_before_product_stock_or_wal() {

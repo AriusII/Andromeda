@@ -1,10 +1,11 @@
-use andromeda_storage::{
+use andromeda_hadr::{
     FileBackedHadrMembershipStore, HadrEpoch, HadrFencingContext, HadrFencingToken,
     HadrMembershipRecord, HadrMembershipSnapshot, HadrMembershipStore, HadrNodeId, HadrNodeRole,
     HadrPromotionAuditLog, HadrPromotionAuditMarker, HadrPromotionAuditReceipt, HadrPromotionVote,
-    Lsn, PromotionAttempt,
+    PromotionAttempt,
 };
 use andromeda_test_support::workspace::unique_temp_dir_path;
+use andromeda_wal::Lsn;
 use std::{
     cell::RefCell,
     fs,

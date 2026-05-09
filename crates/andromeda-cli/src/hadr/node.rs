@@ -4,7 +4,7 @@ mod report;
 
 use crate::error::cli_error;
 use andromeda_core::AndromedaResult;
-use andromeda_storage::HadrNodeId;
+use andromeda_hadr::HadrNodeId;
 
 use super::output::{print_hadr_node_help, print_node_report};
 use super::runtime::{load_membership_snapshot, member_reports, membership_epoch, role_label};
@@ -26,7 +26,7 @@ pub(super) fn run_hadr_node(args: &[String]) -> AndromedaResult<()> {
         Some("-h" | "--help" | "help") | None => {
             print_hadr_node_help();
             Ok(())
-        }
+        },
         Some(_) => Err(cli_error(
             "unknown hadr node subcommand; run `andromeda-cli hadr node --help`",
         )),

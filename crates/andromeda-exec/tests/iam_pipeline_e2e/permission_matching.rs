@@ -1,4 +1,5 @@
-use andromeda_core::{Permission, PermissionSet, ProcedureId};
+use andromeda_principal::{Permission, PermissionSet};
+use andromeda_types::ProcedureId;
 
 #[test]
 fn test_permission_matching_exact_procedure() {

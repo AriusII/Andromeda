@@ -3,7 +3,7 @@ use andromeda_observe::{
     CommitVisibleTrace, EventCorrelation, EventEmitter, EventSink, RollbackDurableTrace,
     TraceEvent, TraceId,
 };
-use andromeda_storage::Lsn;
+use andromeda_wal::Lsn;
 
 pub(super) fn emit_commit_visible_event<S: EventSink>(
     emitter: &mut EventEmitter<S>,

@@ -1,4 +1,4 @@
-use andromeda_core::{RequestId, SessionId};
+use andromeda_types::{RequestId, SessionId};
 
 /// Origin of a cancellation signal.
 ///

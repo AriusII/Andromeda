@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, InvocationId, TransactionId,
 };
-use andromeda_observe::{
+use andromeda_observability::{
     ExecutionTransitionTrace, TraceId, TransactionPhaseCode, TransitionReasonCode,
 };
 
@@ -113,7 +113,7 @@ pub fn route_transaction_error(
             } else {
                 RetryRouting::NoRetry
             }
-        }
+        },
     };
 
     let terminal = TerminalTxEvidence {

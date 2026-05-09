@@ -1,6 +1,6 @@
 use crate::support::new_resolver;
-use andromeda_core::PrincipalRole;
 use andromeda_exec::services::PrincipalResolver;
+use andromeda_principal::PrincipalRole;
 
 #[test]
 fn test_principal_session_token_uniqueness() {

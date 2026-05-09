@@ -69,11 +69,11 @@
 //! - No gRPC: invocation is typed, not gRPC-mapped.
 
 use crate::surface_gate::{AuthorizedProcedureDispatch, SurfacePlaneAuthorizer};
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CertificateIdentity, InvocationId,
-};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_observe::{AuthorizationOutcome, TraceId};
+use andromeda_principal::CertificateIdentity;
 use andromeda_quic::{Connection, SurfacePlane};
+use andromeda_types::InvocationId;
 
 /// Bridges a QUIC connection and certificate identity to executor dispatch.
 ///
@@ -116,14 +116,14 @@ impl<'a> ExecutorDispatchBridge<'a> {
     /// ```no_run
     /// use andromeda_quic::{Connection, SurfacePlane};
     /// use andromeda_exec::ExecutorDispatchBridge;
-    /// # use andromeda_core::CertificateIdentity;
-    /// # use andromeda_core::SurfaceScope;
+    /// # use andromeda_principal::CertificateIdentity;
+    /// # use andromeda_principal::SurfaceScope;
     ///
     /// # let mut conn = Connection::new(SurfacePlane::Application);
     /// # let identity = CertificateIdentity::new("a".repeat(64), "svc-001", SurfaceScope::Application).unwrap();
     /// # conn.set_certificate_identity(identity.clone()).unwrap();
     /// let bridge = ExecutorDispatchBridge::new(&conn)?;
-    /// # Ok::<(), andromeda_core::AndromedaError>(())
+    /// # Ok::<(), andromeda_error::AndromedaError>(())
     /// ```
     pub fn new(connection: &'a Connection) -> AndromedaResult<Self> {
         let certificate_identity = connection.certificate_identity().ok_or_else(|| {
@@ -188,7 +188,7 @@ impl<'a> ExecutorDispatchBridge<'a> {
     /// # use andromeda_exec::ExecutorDispatchBridge;
     /// # use andromeda_observe::TraceId;
     /// # use andromeda_exec::SurfacePlaneAuthorizer;
-    /// # use andromeda_core::{CertificateIdentity, SurfaceScope};
+    /// # use andromeda_principal::{CertificateIdentity, SurfaceScope};
     /// # let mut conn = andromeda_quic::Connection::new(andromeda_quic::SurfacePlane::Application);
     /// # let identity = CertificateIdentity::new("a".repeat(64), "svc-001", SurfaceScope::Application).unwrap();
     /// # conn.set_certificate_identity(identity).unwrap();
@@ -215,7 +215,7 @@ impl<'a> ExecutorDispatchBridge<'a> {
     ///         println!("Authorization error: {}", e);
     ///     }
     /// }
-    /// # Ok::<(), andromeda_core::AndromedaError>(())
+    /// # Ok::<(), andromeda_error::AndromedaError>(())
     /// ```
     pub fn authorize_procedure_dispatch(
         &self,
@@ -248,8 +248,8 @@ impl<'a> ExecutorDispatchBridge<'a> {
     ///
     /// ```no_run
     /// # use andromeda_exec::ExecutorDispatchBridge;
-    /// # use andromeda_core::InvocationId;
-    /// # use andromeda_core::{CertificateIdentity, SurfaceScope};
+    /// # use andromeda_types::InvocationId;
+    /// # use andromeda_principal::{CertificateIdentity, SurfaceScope};
     /// # let mut conn = andromeda_quic::Connection::new(andromeda_quic::SurfacePlane::Application);
     /// # let identity = CertificateIdentity::new("a".repeat(64), "svc-001", SurfaceScope::Application).unwrap();
     /// # conn.set_certificate_identity(identity).unwrap();
@@ -258,7 +258,7 @@ impl<'a> ExecutorDispatchBridge<'a> {
     /// let stream_id = 5u64;
     /// let invocation_id = bridge.map_stream_to_invocation_id(stream_id);
     /// assert_eq!(invocation_id, InvocationId::new(stream_id));
-    /// # Ok::<(), andromeda_core::AndromedaError>(())
+    /// # Ok::<(), andromeda_error::AndromedaError>(())
     /// ```
     pub fn map_stream_to_invocation_id(&self, stream_id: u64) -> InvocationId {
         InvocationId::new(stream_id)
@@ -298,17 +298,16 @@ impl<'a> ExecutorDispatchBridge<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_core::SurfaceScope;
-    use andromeda_quic::{
-        FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader, FrameType, LifecycleState,
-    };
+    use andromeda_principal::SurfaceScope;
+    use andromeda_quic::LifecycleState;
+    use andromeda_rpc_protocol::{FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader, FrameType};
 
     fn hello_frame(session_id: u64) -> FrameBytes {
         FrameBytes {
             header: FrameHeader {
                 frame_type: FrameType::Hello,
-                request_id: andromeda_core::RequestId::new(1),
-                session_id: andromeda_core::SessionId::new(session_id),
+                request_id: andromeda_types::RequestId::new(1),
+                session_id: andromeda_types::SessionId::new(session_id),
                 tx_id: None,
                 payload_length: 0,
                 flags: 0,
@@ -322,8 +321,8 @@ mod tests {
         FrameBytes {
             header: FrameHeader {
                 frame_type: FrameType::Auth,
-                request_id: andromeda_core::RequestId::new(1),
-                session_id: andromeda_core::SessionId::new(session_id),
+                request_id: andromeda_types::RequestId::new(1),
+                session_id: andromeda_types::SessionId::new(session_id),
                 tx_id: None,
                 payload_length: 0,
                 flags: 0,

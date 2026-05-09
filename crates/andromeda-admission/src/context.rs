@@ -1,4 +1,4 @@
-use andromeda_observe::{DecisionTrace, TraceId};
+use andromeda_observability::{DecisionTrace, TraceId};
 
 use crate::{AdmissionService, InvocationReject};
 
@@ -34,10 +34,9 @@ impl InvocationContext {
 mod tests {
     use super::*;
     use crate::CompletionStatus;
-    use andromeda_core::{RequestId, SessionId};
-    use andromeda_observe::{
-        CriticalDecisionKind, EventCorrelation, EventEnvelope, EventId, TraceEvent,
-    };
+    use andromeda_observability::CriticalDecisionKind;
+    use andromeda_observe::{EventCorrelation, EventEnvelope, EventId, TraceEvent};
+    use andromeda_types::{RequestId, SessionId};
 
     #[test]
     fn admission_accepts_all_required_permissions() {

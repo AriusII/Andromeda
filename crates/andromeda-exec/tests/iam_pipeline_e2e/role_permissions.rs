@@ -1,4 +1,5 @@
-use andromeda_core::{Permission, PrincipalRole, ProcedureId};
+use andromeda_principal::{Permission, PrincipalRole};
+use andromeda_types::ProcedureId;
 
 #[test]
 fn test_super_admin_permission_set() {

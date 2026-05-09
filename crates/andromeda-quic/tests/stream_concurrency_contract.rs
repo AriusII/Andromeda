@@ -1,7 +1,8 @@
 //! Public-surface contract for stream concurrency, cancellation, and backpressure.
 
-use andromeda_core::{AndromedaErrorKind, InvocationId};
+use andromeda_error::AndromedaErrorKind;
 use andromeda_quic::{CancellationReason, StreamConcurrencyManager, StreamState};
+use andromeda_types::InvocationId;
 use std::thread;
 use std::time::Duration;
 

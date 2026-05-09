@@ -28,7 +28,7 @@
 //! enables forensic replay and recovery validation across restarts.
 
 use andromeda_core::{AndromedaResult, InvocationId};
-use andromeda_observe::TraceId;
+use andromeda_observability::TraceId;
 use std::sync::Arc;
 
 pub mod completion;
@@ -194,7 +194,7 @@ impl AuditLedger for InMemoryAuditLedger {
                 self.appended_count
                     .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 Ok(())
-            }
+            },
             Err(e) => {
                 self.rejected_count
                     .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -202,7 +202,7 @@ impl AuditLedger for InMemoryAuditLedger {
                     andromeda_core::AndromedaErrorKind::Internal,
                     format!("audit ledger lock poisoned: {}", e),
                 ))
-            }
+            },
         }
     }
 

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`andromeda-core` is a temporary compatibility facade over Andromeda foundation crates and principal identity primitives.
+`andromeda-core` is a temporary compatibility facade over Andromeda foundation crates and principal identity primitives now owned by `andromeda-principal`.
 
 Use this crate when existing code still depends on the historical `andromeda_core::*` public paths during the foundation split. New code should prefer narrower owner crates when an appropriate crate already exists.
 
@@ -12,9 +12,9 @@ This crate currently exposes:
 
 - Compatibility reexports for digest, error, hardware, time, and type descriptors.
 - Compatibility modules for historical `andromeda_core::digest::*` and `andromeda_core::policy::*` imports.
-- Principal identity, certificate identity, roles, and permission sets.
+- Compatibility reexports for principal identity, certificate identity, roles, and permission sets owned by `andromeda-principal`.
 - Compatibility reexports for principal permissions and surface scopes owned by `andromeda-security-contract`.
-- Principal registry authorization evidence, denial reasons, policy evidence binding, and decision metadata.
+- Compatibility reexports for principal registry authorization evidence, denial reasons, policy evidence binding, and decision metadata owned by `andromeda-principal`.
 
 The crate preserves public import compatibility while downstream crates migrate to smaller ownership boundaries.
 
@@ -28,7 +28,7 @@ The crate preserves public import compatibility while downstream crates migrate 
 
 ## Ownership
 
-`andromeda-core` owns compatibility reexports and the current principal model surface that has not yet been split into a narrower owner crate. Runtime-free principal permission and surface-scope vocabulary should be changed in `andromeda-security-contract`, then reexported here only for legacy import compatibility.
+`andromeda-core` owns compatibility reexports. Principal identity, session, permission-set, registry, and policy-evidence primitives should be changed in `andromeda-principal`. Runtime-free principal permission and surface-scope vocabulary should be changed in `andromeda-security-contract`, then reexported here only for legacy import compatibility.
 
 When changing this crate, keep `lib.rs` thin, keep public API additions intentional, and prefer migration toward narrower foundation or security crates over broadening the facade. Authorization evidence in this crate is policy evidence for evaluation and audit; it is not durable database truth or release-readiness evidence by itself.
 
@@ -48,7 +48,7 @@ Run workspace topology validation if dependencies, public reexports, or facade-b
 
 - `Cargo.toml`
 - `src/lib.rs`
-- `src/principal/mod.rs`
+- `../andromeda-principal/src/lib.rs`
 - `tests/foundation_facade_compat.rs`
 - `tests/principal_contract_projection.rs`
 - `../README.md`

@@ -1,7 +1,8 @@
 //! Runtime-free Quinn admission contract for reconnect/pool/0-RTT wiring.
 
-use andromeda_core::{AndromedaErrorKind, CertificateIdentityStatus};
-use andromeda_core::{CertificateIdentity, SurfaceScope};
+use andromeda_error::AndromedaErrorKind;
+use andromeda_principal::CertificateIdentityStatus;
+use andromeda_principal::{CertificateIdentity, SurfaceScope};
 use andromeda_quic::{
     ConnectionPoolKey, PoolAdmissionKind, ReconnectState, RetryAdmissionDecision, RetryIdempotency,
     RetryRejectionReason, SurfacePlane, ZeroRttAdmissionRejectionReason, ZeroRttReplayClass,

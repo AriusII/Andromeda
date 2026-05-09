@@ -45,7 +45,7 @@ fn catalog_mutation_records_fit_storage_wal_catalog_kinds() {
         };
         assert_eq!(
             catalog_record.kind().storage_wal_kind_tag() as u64,
-            andromeda_storage::wal_record_kind_tag(storage_kind)
+            andromeda_wal::wal_record_kind_tag(storage_kind)
         );
 
         let payload = catalog_record.encode_durable_payload().unwrap();
@@ -237,7 +237,7 @@ fn durable_catalog_wal_payload_rejects_planned_only_publication_boundary() {
     match &mut record {
         CatalogMutationRecord::Begin(boundary) => {
             boundary.publication_semantics = CatalogPublicationSemantics::PlannedVersionOnly;
-        }
+        },
         _ => unreachable!("definition batch WAL sequence must start with Begin"),
     }
 
@@ -271,7 +271,7 @@ fn durable_catalog_wal_boundaries_roundtrip_definition_batch_hashes() {
                 );
                 assert!(!boundary.source_hash.is_zero());
                 assert!(!boundary.dependency_graph_hash.is_zero());
-            }
+            },
             CatalogMutationRecord::Apply(_) => unreachable!("boundary test selected apply record"),
         }
     }
@@ -285,7 +285,7 @@ fn durable_catalog_wal_boundary_rejects_missing_definition_batch_hash() {
     match &mut record {
         CatalogMutationRecord::Begin(boundary) => {
             boundary.source_hash = DefinitionBatchSourceHash::default();
-        }
+        },
         _ => unreachable!("definition batch WAL sequence must start with Begin"),
     }
 

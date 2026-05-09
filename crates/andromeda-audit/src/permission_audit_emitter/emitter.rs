@@ -1,7 +1,7 @@
 use super::event::PermissionAuditEvent;
 use super::evidence::{AuditSinkAvailability, PermissionAuditEvidence, audit_emission_error};
 use super::policy::AuditEmissionPolicy;
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 pub trait PermissionAuditEmitter: Send + Sync {
     fn emit_permission_decision(&self, event: PermissionAuditEvent) -> AndromedaResult<()>;

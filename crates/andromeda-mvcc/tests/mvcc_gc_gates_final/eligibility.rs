@@ -1,7 +1,7 @@
 //! Eligibility gate coverage for MVCC GC.
 
 use super::fixtures::*;
-use andromeda_core::TransactionId;
+use andromeda_types::TransactionId;
 
 #[test]
 fn test_eligibility_criteria_creator_committed_and_end_ts_invisible() {

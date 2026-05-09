@@ -1,8 +1,8 @@
 //! Isolation metadata, affected-row metadata, and commit-log GC gates.
 
 use super::fixtures::*;
-use andromeda_core::TransactionId;
 use andromeda_transaction::{IsolationLevel, Lsn};
+use andromeda_types::TransactionId;
 
 #[tokio::test]
 async fn test_isolation_snapshot_level_recorded() {

@@ -1,6 +1,8 @@
 use std::collections::VecDeque;
 
-use andromeda_core::{AndromedaResult, TransactionId};
+use andromeda_error::AndromedaResult;
+
+use andromeda_types::TransactionId;
 
 use super::mode::held_mode_covers_requested;
 use super::{LockMode, validate_non_zero, validate_transaction_id};

@@ -1,8 +1,9 @@
-use andromeda_core::{AndromedaResult, TransactionId};
+use andromeda_error::AndromedaResult;
 use andromeda_locking::{
     LockAcquireEvidence, LockAcquireStatus, LockManager, LockMode, LockReleaseAllEvidence,
     LockReleaseAllSummary, LockReleaseEvidence, LockResource,
 };
+use andromeda_types::TransactionId;
 
 use super::manager_core::TransactionManager;
 

@@ -1,8 +1,8 @@
 //! Commit visibility gates.
 
 use super::fixtures::*;
-use andromeda_core::TransactionId;
 use andromeda_transaction::IsolationLevel;
+use andromeda_types::TransactionId;
 
 #[tokio::test]
 async fn test_visibility_immediate_after_commit() {

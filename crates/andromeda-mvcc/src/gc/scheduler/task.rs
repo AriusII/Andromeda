@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::gc::MvccGarbageCollector;
 
@@ -125,11 +125,11 @@ impl GcSchedulerTask {
                         .gc_runs_completed
                         .fetch_add(1, Ordering::Relaxed);
                     Ok(Some(summary))
-                }
+                },
                 Err(e) => {
                     self.counters.errors.fetch_add(1, Ordering::Relaxed);
                     Err(e)
-                }
+                },
             }
         } else {
             self.counters

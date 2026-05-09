@@ -10,11 +10,13 @@
 
 #[cfg(test)]
 mod tests {
-    use andromeda_core::{AndromedaResult, EngineTimestamp, ManualClock, TransactionId};
+    use andromeda_error::AndromedaResult;
+    use andromeda_time::{EngineTimestamp, ManualClock};
     use andromeda_transaction::{
         CommitLogManager, CommitProtocol, IsolationLevel, Lsn, TransactionState, TransactionStatus,
         TransactionStatusTable, WalRecordKind,
     };
+    use andromeda_types::TransactionId;
     use std::sync::Arc;
 
     type MockWalRecord = (WalRecordKind, Option<TransactionId>, Vec<u8>);

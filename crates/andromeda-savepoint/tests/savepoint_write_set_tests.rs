@@ -1,4 +1,4 @@
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 use andromeda_savepoint::{
     MAX_WRITE_SET_OPERATION_KIND_BYTES, MAX_WRITE_SET_RESOURCE_ID_BYTES, SavepointId,
     SavepointRollbackMarker, SavepointStack, TxWriteSet, WriteSetImage, WriteSetOperationKind,

@@ -1,4 +1,5 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::TransactionId;
 
 /// Unique identifier for a version within a row's version chain.
 pub type VersionId = u64;

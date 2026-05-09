@@ -1,15 +1,18 @@
 //! Vertical demo commands.
 
+use andromeda_admission::{InvocationContext, InvocationRequest};
 use andromeda_catalog::inventory_reserve_stock_contract;
 use andromeda_core::{AndromedaResult, HardwareProfile, InvocationId, RequestId, SessionId};
-use andromeda_exec::{
-    CompletionStatus, InventoryReserveStockExecutor, InventoryStock, InvocationContext,
-    InvocationRequest, LocalVerticalRuntime, ReserveStockCommand, V0InventoryRecoverableRuntime,
-    V0InventoryReserveStockRpcPayload, bind_inventory_reserve_stock_v0_pdf_executable_procedure,
+use andromeda_exec::LocalVerticalRuntime;
+use andromeda_inventory_demo::{
+    InventoryReserveStockExecutor, InventoryStock, ReserveStockCommand,
+    V0InventoryRecoverableRuntime, V0InventoryReserveStockRpcPayload,
+    bind_inventory_reserve_stock_v0_pdf_executable_procedure,
     encode_inventory_reserve_stock_v0_execute_frame,
 };
 use andromeda_observe::TraceId;
-use andromeda_storage::{FileWal, InMemoryWal, Lsn};
+use andromeda_result_stream::CompletionStatus;
+use andromeda_wal::{FileWal, InMemoryWal, Lsn};
 use std::path::PathBuf;
 
 /// Runs the Phase 1 vertical demo.

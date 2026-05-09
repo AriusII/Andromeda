@@ -1,4 +1,5 @@
-use andromeda_core::{AndromedaResult, Permission, Principal, PrincipalId};
+use andromeda_error::AndromedaResult;
+use andromeda_principal::{Permission, Principal, PrincipalId};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PermissionDecision {

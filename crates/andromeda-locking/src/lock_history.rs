@@ -8,7 +8,9 @@
 //! These traces integrate with the `andromeda-observe` history infrastructure and
 //! carry correlation evidence for forensic analysis.
 
-use andromeda_core::{EngineTimestamp, TransactionId};
+use andromeda_time::EngineTimestamp;
+
+use andromeda_types::TransactionId;
 
 use crate::{LockHolder, LockMode, LockResource};
 
@@ -173,7 +175,7 @@ impl DeadlockAuditTrace {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_core::TransactionId;
+    use andromeda_types::TransactionId;
 
     #[test]
     fn lock_wait_trace_captures_wait_evidence() {

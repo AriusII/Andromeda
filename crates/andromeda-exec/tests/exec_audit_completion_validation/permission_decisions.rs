@@ -269,7 +269,7 @@ fn visible_decision_rejects_non_durable_audit_report() {
     let error = AuditSinkAvailability::durable(report)
         .expect_err("sink availability must reject report before durable LSN catches up");
 
-    assert_eq!(error.kind(), AndromedaErrorKind::Internal);
+    assert_eq!(error.kind(), AndromedaErrorKind::Security);
 }
 
 #[test]

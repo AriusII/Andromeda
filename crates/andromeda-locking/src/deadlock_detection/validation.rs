@@ -1,4 +1,5 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, TransactionId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind};
+use andromeda_types::TransactionId;
 
 use super::{DeadlockError, DeadlockResult};
 

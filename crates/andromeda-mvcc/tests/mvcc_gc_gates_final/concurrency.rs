@@ -1,8 +1,8 @@
 //! Concurrency gates for MVCC GC scheduler and eligibility checks.
 
 use super::fixtures::*;
-use andromeda_core::TransactionId;
 use andromeda_mvcc::GcSchedulerTask;
+use andromeda_types::TransactionId;
 use futures::future::join_all;
 use std::sync::Arc;
 use std::time::Duration;

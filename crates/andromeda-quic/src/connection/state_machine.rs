@@ -1,6 +1,7 @@
-use andromeda_core::CertificateIdentity;
-use andromeda_core::{AndromedaResult, SessionId};
+use andromeda_error::AndromedaResult;
+use andromeda_principal::CertificateIdentity;
 use andromeda_rpc::{FrameDispatch, dispatch_frame};
+use andromeda_types::SessionId;
 
 use crate::{FrameBytes, FrameFamily, FrameType};
 

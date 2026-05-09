@@ -1,31 +1,38 @@
 pub(crate) use andromeda_catalog::{
-    CatalogBindingKind, INVENTORY_RESERVE_STOCK_PERMISSION, PolicyVersion,
-    ProcedureContractBinding, ProcedureContractRef, StatsVersion,
-    inventory_reserve_stock_catalog_bindings, inventory_reserve_stock_contract,
+    INVENTORY_RESERVE_STOCK_PERMISSION, inventory_reserve_stock_catalog_bindings,
+    inventory_reserve_stock_contract,
 };
+pub(crate) use andromeda_catalog_store::CatalogBindingKind;
 pub(crate) use andromeda_core::{
     AndromedaError, AndromedaResult, CatalogVersion, ContractHash, InvocationId, PipelineClass,
     ProcedureId, ResourceBudget, TransactionId,
 };
 pub(crate) use andromeda_exec::{
     AdmissionService, CompletionMappingService, CompletionStatus, ExecutionIoAdmissionDecision,
-    ExecutionIoAdmissionRequest, InventoryBusinessMvccStore, InventoryReserveStockExecutor,
-    InventoryStock, InvocationContext, InvocationReject, InvocationRequest, InvocationWal,
-    LocalDispatchPlan, LocalDispatcher, LocalProcedure, LocalRollbackPlan, LocalVerticalRuntime,
-    PreTransactionValidationService, ReserveStockCommand, ResultStreamMetadata,
+    ExecutionIoAdmissionRequest, InvocationContext, InvocationReject, InvocationRequest,
+    InvocationWal, LocalDispatchPlan, LocalDispatcher, LocalProcedure, LocalRollbackPlan,
+    LocalVerticalRuntime, PreTransactionValidationService, ResultStreamMetadata,
     ResultValidationService,
 };
+pub(crate) use andromeda_inventory_demo::{
+    InventoryBusinessMvccStore, InventoryReserveStockExecutor, InventoryStock, ReserveStockCommand,
+};
+pub(crate) use andromeda_mvcc::{MvccIsolationPolicy, Snapshot, TransactionStatus};
 pub(crate) use andromeda_observe::TraceId;
-pub(crate) use andromeda_srpl::{
+pub(crate) use andromeda_procedure_contract::{
+    PolicyVersion, ProcedureContractBinding, ProcedureContractRef, StatsVersion,
+};
+pub(crate) use andromeda_srpl::procedure_compiler::compile_narrow_procedure_signature;
+pub(crate) use andromeda_srpl_binder::inventory_reserve_stock_body_ir;
+pub(crate) use andromeda_srpl_ir::{
     Cardinality, SrplBusinessOperationKindIr, SrplPredicateIr, SrplValueIr,
-    inventory_reserve_stock_body_ir, procedure_compiler::compile_narrow_procedure_signature,
 };
 pub(crate) use andromeda_storage::{
-    CoreIoPlacementRequest, InMemoryWal, Lsn, OperationalProfile, PageSize, StorageIoBudgetScope,
-    StorageWorkloadClass, WalRecordKind,
+    CoreIoPlacementRequest, OperationalProfile, StorageIoBudgetScope, StorageWorkloadClass,
 };
-pub(crate) use andromeda_tx::TransactionState;
-pub(crate) use andromeda_tx::{MvccIsolationPolicy, Snapshot, TransactionStatus};
+pub(crate) use andromeda_storage_page::PageSize;
+pub(crate) use andromeda_transaction::TransactionState;
+pub(crate) use andromeda_wal::{InMemoryWal, Lsn, WalRecordKind};
 
 #[derive(Debug, Default)]
 pub(crate) struct RecordingWal {

@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-use andromeda_quic::{BackpressureReason, StreamConcurrencyManager, TypedResultStreamBounds};
+use andromeda_quic::StreamConcurrencyManager;
+use andromeda_rpc_codec::TypedResultStreamBounds;
+use andromeda_rpc_protocol::BackpressureReason;
 
 use super::*;
 

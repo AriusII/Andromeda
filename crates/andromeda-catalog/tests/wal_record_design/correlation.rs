@@ -1,8 +1,8 @@
-use andromeda_catalog::CatalogWalRecord;
+use andromeda_catalog_recovery::CatalogWalRecord;
+use andromeda_definition_batch::DefinitionBatchId;
 use andromeda_types::CatalogVersion;
 
 use super::fixtures::apply_catalog_version_record;
-use andromeda_catalog::DefinitionBatchId;
 
 #[test]
 fn batch_wal_correlation_preserves_identities() {

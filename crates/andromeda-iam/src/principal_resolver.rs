@@ -1,8 +1,8 @@
 //! Principal resolution from certificate fingerprint to executor identity.
 
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CertificateFingerprint, Principal,
-    PrincipalId, PrincipalRole, SessionToken,
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_principal::{
+    CertificateFingerprint, Principal, PrincipalId, PrincipalRole, SessionToken,
 };
 use dashmap::DashMap;
 use std::sync::Arc;
