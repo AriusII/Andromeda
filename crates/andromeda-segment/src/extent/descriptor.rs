@@ -2,7 +2,7 @@ use andromeda_error::AndromedaResult;
 
 use crate::{AllocationId, ObjectId, PageId, PageSize, SegmentId};
 
-use super::{ExtentId, error::storage_error};
+use super::{ExtentId, error::storage_error, page_range::checked_last_page_id};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExtentState {
@@ -45,14 +45,11 @@ impl ExtentDescriptor {
         if self.page_count == 0 {
             return Err(storage_error("extent page count must not be zero"));
         }
-        if self
-            .first_page_id
-            .get()
-            .checked_add(u64::from(self.page_count - 1))
-            .is_none()
-        {
-            return Err(storage_error("extent page range overflows u64"));
-        }
+        checked_last_page_id(
+            self.first_page_id,
+            self.page_count,
+            "extent page range overflows u64",
+        )?;
         if matches!(self.segment_id, Some(segment_id) if segment_id.is_zero()) {
             return Err(storage_error("extent segment id must not be zero"));
         }
@@ -66,8 +63,10 @@ impl ExtentDescriptor {
 
     pub fn last_page_id(&self) -> AndromedaResult<PageId> {
         self.validate()?;
-        Ok(PageId::new(
-            self.first_page_id.get() + u64::from(self.page_count - 1),
-        ))
+        checked_last_page_id(
+            self.first_page_id,
+            self.page_count,
+            "extent page range overflows u64",
+        )
     }
 }

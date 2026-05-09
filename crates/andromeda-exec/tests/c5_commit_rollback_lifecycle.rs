@@ -300,7 +300,7 @@ fn c5_event_emission_failure_propagates_to_caller() {
     let durable_lsn = Lsn::new(1);
 
     // Create a sink with capacity limit of 0 to force emission failure
-    let mut sink = andromeda_observe::InMemoryEventSink::with_capacity_limit(0);
+    let mut sink = InMemoryEventSink::with_capacity_limit(0);
     let mut emitter = EventEmitter::new(&mut sink);
 
     let correlation = event_correlation(&contract, Some(tx_id), Some(durable_lsn));

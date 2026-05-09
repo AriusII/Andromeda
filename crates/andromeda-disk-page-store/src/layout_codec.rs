@@ -169,9 +169,10 @@ impl PersistedPageLayoutV1 {
 }
 
 pub const fn optional_page_id_value(value: Option<u64>) -> u64 {
-    match value {
-        Some(value) => value,
-        None => NONE_PAGE_ID,
+    if let Some(value) = value {
+        value
+    } else {
+        NONE_PAGE_ID
     }
 }
 

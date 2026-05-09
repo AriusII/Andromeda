@@ -102,8 +102,8 @@ impl ProcedureContract {
     pub fn validate_canonical_hash(&self) -> AndromedaResult<()> {
         self.validate()?;
         if self.contract_hash != self.canonical_hash() {
-            return Err(andromeda_error::AndromedaError::new(
-                andromeda_error::AndromedaErrorKind::Contract,
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
                 "procedure contract hash must match canonical contract shape",
             ));
         }

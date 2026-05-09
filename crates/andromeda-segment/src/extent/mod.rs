@@ -2,6 +2,7 @@ mod descriptor;
 mod error;
 mod free_range;
 mod manager;
+mod page_range;
 mod reclaim;
 mod replay;
 mod segment_contiguity;

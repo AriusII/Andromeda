@@ -127,28 +127,26 @@ fn gpu_selection_accepts_only_advisory_pipelines_with_guards() {
 fn hardware_policy_namespace_preserves_flat_public_types() {
     use andromeda_hardware::policy::*;
 
-    let _: Option<andromeda_hardware::OptionalGpuRequest> = Option::<OptionalGpuRequest>::None;
-    let _: Option<andromeda_hardware::OptionalGpuDecision> = Option::<OptionalGpuDecision>::None;
-    let _: Option<andromeda_hardware::OptionalGpuSelection> = Option::<OptionalGpuSelection>::None;
-    let _: Option<andromeda_hardware::CpuCapabilityClass> = Option::<CpuCapabilityClass>::None;
-    let _: Option<andromeda_hardware::CpuProfile> = Option::<CpuProfile>::None;
-    let _: Option<andromeda_hardware::HardwareArchitecture> = Option::<HardwareArchitecture>::None;
-    let _: Option<andromeda_hardware::HardwareProfile> = Option::<HardwareProfile>::None;
-    let _: Option<andromeda_hardware::ResourceBudget> = Option::<ResourceBudget>::None;
-    let _: Option<andromeda_hardware::GpuExecutionPolicy> = Option::<GpuExecutionPolicy>::None;
-    let _: Option<andromeda_hardware::GpuProfile> = Option::<GpuProfile>::None;
-    let _: Option<andromeda_hardware::PipelineClass> = Option::<PipelineClass>::None;
-    let _: Option<andromeda_hardware::RamProfile> = Option::<RamProfile>::None;
-    let _: Option<andromeda_hardware::RamSectionBudget> = Option::<RamSectionBudget>::None;
-    let _: Option<andromeda_hardware::RamSectionRole> = Option::<RamSectionRole>::None;
-    let _: Option<andromeda_hardware::SimdDispatchRequest> = Option::<SimdDispatchRequest>::None;
-    let _: Option<andromeda_hardware::SimdDispatchDecision> = Option::<SimdDispatchDecision>::None;
-    let _: Option<andromeda_hardware::SimdExecutionMode> = Option::<SimdExecutionMode>::None;
-    let _: Option<andromeda_hardware::VectorAdvisoryRequest> =
-        Option::<VectorAdvisoryRequest>::None;
-    let _: Option<andromeda_hardware::VectorAdvisoryDecision> =
-        Option::<VectorAdvisoryDecision>::None;
-    let _: Option<andromeda_hardware::VectorAdvisoryKind> = Option::<VectorAdvisoryKind>::None;
+    let _: Option<OptionalGpuRequest> = Option::<OptionalGpuRequest>::None;
+    let _: Option<OptionalGpuDecision> = Option::<OptionalGpuDecision>::None;
+    let _: Option<OptionalGpuSelection> = Option::<OptionalGpuSelection>::None;
+    let _: Option<CpuCapabilityClass> = Option::<CpuCapabilityClass>::None;
+    let _: Option<CpuProfile> = Option::<CpuProfile>::None;
+    let _: Option<HardwareArchitecture> = Option::<HardwareArchitecture>::None;
+    let _: Option<HardwareProfile> = Option::<HardwareProfile>::None;
+    let _: Option<ResourceBudget> = Option::<ResourceBudget>::None;
+    let _: Option<GpuExecutionPolicy> = Option::<GpuExecutionPolicy>::None;
+    let _: Option<GpuProfile> = Option::<GpuProfile>::None;
+    let _: Option<PipelineClass> = Option::<PipelineClass>::None;
+    let _: Option<RamProfile> = Option::<RamProfile>::None;
+    let _: Option<RamSectionBudget> = Option::<RamSectionBudget>::None;
+    let _: Option<RamSectionRole> = Option::<RamSectionRole>::None;
+    let _: Option<SimdDispatchRequest> = Option::<SimdDispatchRequest>::None;
+    let _: Option<SimdDispatchDecision> = Option::<SimdDispatchDecision>::None;
+    let _: Option<SimdExecutionMode> = Option::<SimdExecutionMode>::None;
+    let _: Option<VectorAdvisoryRequest> = Option::<VectorAdvisoryRequest>::None;
+    let _: Option<VectorAdvisoryDecision> = Option::<VectorAdvisoryDecision>::None;
+    let _: Option<VectorAdvisoryKind> = Option::<VectorAdvisoryKind>::None;
 }
 
 #[test]

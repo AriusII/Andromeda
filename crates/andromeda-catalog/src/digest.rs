@@ -15,10 +15,10 @@ mod tests {
 
     #[test]
     fn catalog_digest_alias_is_workspace_digest_type() {
-        let mut catalog_hasher: Sha256 = andromeda_digest::Sha256::new();
+        let mut catalog_hasher: Sha256 = Sha256::new();
         catalog_hasher.update(b"catalog digest alias");
 
-        let mut core_hasher: andromeda_digest::Sha256 = Sha256::new();
+        let mut core_hasher: Sha256 = Sha256::new();
         core_hasher.update(b"catalog ");
         core_hasher.update(b"digest alias");
 
@@ -35,7 +35,7 @@ mod tests {
         ];
 
         for message in messages {
-            assert_eq!(sha256(message), andromeda_digest::sha256(message));
+            assert_eq!(sha256(message), sha256(message));
         }
     }
 

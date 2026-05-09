@@ -31,14 +31,14 @@ pub fn validate_no_sql_like_symbols(ir: &SrplProcedureIr) -> AndromedaResult<()>
                 for predicate in predicates {
                     validate_predicate_symbols(predicate)?;
                 }
-            }
+            },
             SrplBusinessOperationKindIr::Assert {
                 predicate,
                 failure_code,
             } => {
                 validate_predicate_symbols(predicate)?;
                 reject_sql_like_symbol(failure_code)?;
-            }
+            },
             SrplBusinessOperationKindIr::Update {
                 predicates,
                 assignments,
@@ -52,14 +52,14 @@ pub fn validate_no_sql_like_symbols(ir: &SrplProcedureIr) -> AndromedaResult<()>
                     reject_sql_like_symbol(&assignment.field)?;
                     validate_value_symbols(&assignment.value)?;
                 }
-            }
+            },
             SrplBusinessOperationKindIr::Emit { stream, values } => {
                 reject_sql_like_symbol(stream)?;
                 for value in values {
                     reject_sql_like_symbol(&value.column)?;
                     validate_value_symbols(&value.value)?;
                 }
-            }
+            },
             SrplBusinessOperationKindIr::Raise { code } => reject_sql_like_symbol(code)?,
         }
     }
@@ -67,22 +67,10 @@ pub fn validate_no_sql_like_symbols(ir: &SrplProcedureIr) -> AndromedaResult<()>
 }
 
 fn validate_predicate_symbols(predicate: &SrplPredicateIr) -> AndromedaResult<()> {
-    match predicate {
-        SrplPredicateIr::InputEqualsField {
-            input,
-            binding,
-            field,
-        }
-        | SrplPredicateIr::FieldGreaterThanOrEqualInput {
-            binding,
-            field,
-            input,
-        } => {
-            reject_sql_like_symbol(input)?;
-            reject_sql_like_symbol(binding)?;
-            reject_sql_like_symbol(field)?;
-        }
-    }
+    let (binding, field) = predicate.field_reference();
+    reject_sql_like_symbol(predicate.input())?;
+    reject_sql_like_symbol(binding)?;
+    reject_sql_like_symbol(field)?;
     Ok(())
 }
 
@@ -92,7 +80,7 @@ fn validate_value_symbols(value: &SrplValueIr) -> AndromedaResult<()> {
         SrplValueIr::Field { binding, field } => {
             reject_sql_like_symbol(binding)?;
             reject_sql_like_symbol(field)?;
-        }
+        },
         SrplValueIr::SubtractInput {
             binding,
             field,
@@ -101,12 +89,12 @@ fn validate_value_symbols(value: &SrplValueIr) -> AndromedaResult<()> {
             reject_sql_like_symbol(binding)?;
             reject_sql_like_symbol(field)?;
             reject_sql_like_symbol(input)?;
-        }
-        SrplValueIr::Constant(_) => {}
+        },
+        SrplValueIr::Constant(_) => {},
         SrplValueIr::BinaryArith { left, right, .. } => {
             validate_value_symbols(left)?;
             validate_value_symbols(right)?;
-        }
+        },
     }
     Ok(())
 }

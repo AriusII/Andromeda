@@ -155,8 +155,8 @@ fn test_regression_detect_field_reordering() {
     };
 
     assert_eq!(
-        mem::size_of_val(&h1),
-        mem::size_of_val(&h2),
+        size_of_val(&h1),
+        size_of_val(&h2),
         "Frame header size varies between instances"
     );
     assert!(validate_frame_header_layout().is_ok());

@@ -202,3 +202,60 @@ Workspace topology now tracks 89 crates. The new crate is
 - `cargo test -p andromeda-observe -p andromeda-observability -p andromeda-audit --tests --locked`
 - `cargo test -p andromeda-exec --tests --locked`
 - `cargo test -p andromeda-transaction -p andromeda-transaction-log -p andromeda-catalog -p andromeda-catalog-store -p andromeda-catalog-recovery -p andromeda-definition-batch --tests --locked`
+
+## IDE Cleanup Follow-Up
+
+### Cross-Check
+
+- The RustRover report mixed real warnings, one real const-stability compile
+  issue, stale compiler diagnostics, and broad duplicate-code signals.
+- `cargo check --workspace --all-targets --all-features` reproduced the real
+  compiler issue in `andromeda-disk-page-store::layout_codec` and reproduced
+  the unused-import warnings.
+- The reported `E0382`, `E0624`, and `E0603` diagnostics did not reproduce
+  with Cargo in the current workspace state. Treat them as stale IDE index
+  results unless they reappear after RustRover cache invalidation.
+
+### Applied Corrections
+
+- Replaced `Option::unwrap_or_else` in a `const fn` with an explicit `match`
+  in `andromeda-disk-page-store`.
+- Removed unused imports from `andromeda-rpc-protocol`,
+  `andromeda-optimizer`, `andromeda-srpl`, and the RPC protocol stability
+  tests.
+- Moved canonical column-descriptor shape material encoding into
+  `andromeda-structured-object` and made `andromeda-contract` reuse that
+  owner API. This removes the duplicated scalar/type descriptor encoder from
+  contract object hashing while keeping table hash input stable.
+- Reduced duplicated test pipeline lists in `andromeda-hardware::gpu` through
+  shared test constants.
+- Reduced repeated `HardwareProfile` construction in
+  `andromeda-storage-placement` through a local constructor helper.
+
+### Remaining Duplicate-Code Policy
+
+- Do not bulk-fix every RustRover duplicate fragment blindly. Many entries are
+  small test setup blocks, enum match witnesses, or independent contract gates
+  where a shared helper would reduce local clarity.
+- Prioritize duplicate cleanup only when one of these is true:
+  - duplicated code encodes a real wire/hash/storage contract;
+  - duplicated code repeats owner logic across crates;
+  - duplicated test setup hides the domain invariant being asserted;
+  - duplicated compatibility surface keeps a large crate coupled to an owner
+    crate after callers can import the owner directly.
+- Next high-value cleanup targets:
+  - storage/WAL byte-layout helpers in WAL and disk-page owners;
+  - repeated permission/admission decision builders in IAM/security/admission
+    tests;
+  - repeated CLI output formatting helpers;
+  - remaining catalog/table/StructuredObject hash fixtures after contract
+    hash golden tests confirm the shared encoder is stable.
+
+### Cleanup Validation
+
+- `git diff --check`
+- `cargo test -p andromeda-structured-object -p andromeda-contract -p andromeda-hardware -p andromeda-storage-placement --tests --locked`
+- `cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture`
+- `cargo test -p andromeda-cli --test orphan_source_invariants -- --nocapture`
+- `cargo check --workspace --all-targets --all-features`
+- `cargo test -p andromeda-disk-page-store -p andromeda-rpc-protocol -p andromeda-optimizer -p andromeda-srpl --tests --locked`

@@ -1,7 +1,9 @@
 use andromeda_audit::{
-    AdminOperation, CertificateIdentity, Permission, SecurityAuditTrace, UserPrincipal,
+    AdminOperation, CertificateIdentity, Permission, SecurityAuditOutcome, SecurityAuditTrace,
+    SurfaceScope, UserPrincipal,
 };
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_observability::TraceId;
 
 use super::AuthorizationDenialReason;
 
@@ -150,6 +152,53 @@ impl AuthorizationOutcome {
     pub const fn is_denied(&self) -> bool {
         matches!(self, Self::Denied { .. })
     }
+}
+
+pub(crate) fn allowed_security_outcome(
+    trace_id: TraceId,
+    requested_scope: SurfaceScope,
+    certificate: CertificateIdentity,
+    principal: UserPrincipal,
+    permission: Permission,
+    reason_evidence: impl Into<String>,
+) -> AndromedaResult<AuthorizationOutcome> {
+    let audit = SecurityAuditTrace::new(
+        trace_id,
+        requested_scope,
+        certificate,
+        principal.clone(),
+        permission,
+        SecurityAuditOutcome::Allowed,
+        format!("allowed:{}", reason_evidence.into()),
+    )?;
+
+    Ok(AuthorizationOutcome::Allowed {
+        principal,
+        permission,
+        audit,
+    })
+}
+
+pub(crate) fn denied_security_outcome(
+    trace_id: TraceId,
+    requested_scope: SurfaceScope,
+    certificate: CertificateIdentity,
+    principal: UserPrincipal,
+    permission: Permission,
+    reason: AuthorizationDenialReason,
+    reason_evidence: impl Into<String>,
+) -> AndromedaResult<AuthorizationOutcome> {
+    let audit = SecurityAuditTrace::new(
+        trace_id,
+        requested_scope,
+        certificate,
+        principal,
+        permission,
+        SecurityAuditOutcome::Denied,
+        format!("denied:{}:{}", reason.label(), reason_evidence.into()),
+    )?;
+
+    Ok(AuthorizationOutcome::Denied { reason, audit })
 }
 
 fn security_error(message: &'static str) -> AndromedaError {

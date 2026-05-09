@@ -35,7 +35,7 @@ fn ndv_estimators_are_reexported_and_observe_values() {
         exact.observe(value);
     }
     assert_eq!(exact.estimate(), 3);
-    assert!(exact.memory_bytes() >= 3 * std::mem::size_of::<u64>());
+    assert!(exact.memory_bytes() >= 3 * size_of::<u64>());
 
     let mut hll = HyperLogLog::new(10).unwrap();
     for value in 0..1_000 {

@@ -154,9 +154,9 @@ pub fn catalog_manifest_resolution_status_from_protobuf_i32(
 }
 
 type GeneratedCatalogManifestResolutionRequest =
-    generated::contract::v1::CatalogProcedureManifestResolutionRequest;
+    CatalogProcedureManifestResolutionRequest;
 type GeneratedCatalogManifestResolutionResponse =
-    generated::contract::v1::CatalogProcedureManifestResolutionResponse;
+    CatalogProcedureManifestResolutionResponse;
 type GeneratedCatalogManifestSelector =
     generated::contract::v1::catalog_procedure_manifest_resolution_request::Selector;
 type GeneratedProcedureManifest = generated::contract::v1::ProcedureManifest;

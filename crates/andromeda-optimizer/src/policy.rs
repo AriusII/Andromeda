@@ -11,15 +11,16 @@ pub struct OptimizerPolicy {
 
 impl OptimizerPolicy {
     pub const fn adaptive_enabled(policy_version: PolicyVersion) -> Self {
-        Self {
-            adaptive_enabled: true,
-            policy_version,
-        }
+        Self::new(true, policy_version)
     }
 
     pub const fn adaptive_disabled(policy_version: PolicyVersion) -> Self {
+        Self::new(false, policy_version)
+    }
+
+    const fn new(adaptive_enabled: bool, policy_version: PolicyVersion) -> Self {
         Self {
-            adaptive_enabled: false,
+            adaptive_enabled,
             policy_version,
         }
     }

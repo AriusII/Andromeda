@@ -186,7 +186,7 @@ fn principal_missing_permission_denies_with_typed_reason() {
             reason,
             AuthorizationDenialReason::PrincipalMissingPermission
         );
-        assert!(audit.permission == Permission::ManageSecurity);
+        assert_eq!(audit.permission, Permission::ManageSecurity);
     }
 }
 

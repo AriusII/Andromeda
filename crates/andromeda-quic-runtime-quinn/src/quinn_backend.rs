@@ -14,6 +14,7 @@
 mod admission;
 mod client;
 mod connection_adapter;
+mod endpoint;
 mod peer_certificate;
 mod server;
 mod surface;

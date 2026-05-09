@@ -52,36 +52,31 @@ pub struct ProcedureManifestBinding {
 impl ProcedureManifestBinding {
     pub fn validate(&self) -> AndromedaResult<()> {
         if self.procedure_id.get() == 0 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
+            return Err(contract_error(
                 "procedure manifest binding id must not be zero",
             ));
         }
 
         if self.catalog_version.get() == 0 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
+            return Err(contract_error(
                 "procedure manifest binding catalog version must not be zero",
             ));
         }
 
         if self.contract_hash.is_zero() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
+            return Err(contract_error(
                 "procedure manifest binding contract hash must not be zero",
             ));
         }
 
         if self.stats_version == 0 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
+            return Err(contract_error(
                 "procedure manifest binding stats version must not be zero",
             ));
         }
 
         if self.policy_version.is_zero() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
+            return Err(contract_error(
                 "procedure manifest binding policy version must not be zero",
             ));
         }
@@ -97,15 +92,11 @@ impl ProcedureManifest {
     /// [`Self::ensure_source_generator_ready`].
     pub fn validate(&self) -> AndromedaResult<()> {
         if self.procedure_name.trim().is_empty() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
-                "procedure manifest name must not be empty",
-            ));
+            return Err(contract_error("procedure manifest name must not be empty"));
         }
 
         if self.contract_hash.is_zero() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
+            return Err(contract_error(
                 "procedure manifest contract hash must not be zero",
             ));
         }
@@ -115,8 +106,7 @@ impl ProcedureManifest {
         if self.contract_hash == self.protocol_layout.descriptor_set_hash
             || self.contract_hash == self.protocol_layout.frame_envelope_hash
         {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
+            return Err(contract_error(
                 "procedure contract hash must be distinct from protocol layout descriptor hashes",
             ));
         }
@@ -125,8 +115,7 @@ impl ProcedureManifest {
         for stream in &self.result_streams {
             stream.validate()?;
             if !seen_streams.insert(stream.stream_name.clone()) {
-                return Err(AndromedaError::new(
-                    AndromedaErrorKind::Contract,
+                return Err(contract_error(
                     "procedure manifest result stream names must be unique",
                 ));
             }
@@ -136,8 +125,7 @@ impl ProcedureManifest {
         for perm in &self.required_permissions {
             perm.validate()?;
             if !seen_perms.insert(perm.id.clone()) {
-                return Err(AndromedaError::new(
-                    AndromedaErrorKind::Contract,
+                return Err(contract_error(
                     "procedure manifest required permissions must be unique",
                 ));
             }
@@ -163,29 +151,25 @@ impl ProcedureManifest {
         self.binding().validate()?;
 
         if self.procedure_id.get() == 0 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
+            return Err(contract_error(
                 "source-generator-ready manifest requires a non-zero procedure id",
             ));
         }
 
         if self.catalog_version.get() == 0 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
+            return Err(contract_error(
                 "source-generator-ready manifest requires a non-zero catalog version",
             ));
         }
 
         if self.policy_version.is_zero() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
+            return Err(contract_error(
                 "source-generator-ready manifest requires an explicit policy version",
             ));
         }
 
         if self.required_permissions.is_empty() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
+            return Err(contract_error(
                 "source-generator-ready manifest requires at least one required permission",
             ));
         }
@@ -275,4 +259,8 @@ pub(super) fn write_tagged(hasher: &mut Sha256, tag: &[u8], value: &[u8]) {
     hasher.update(b":");
     hasher.update(&(value.len() as u64).to_be_bytes());
     hasher.update(value);
+}
+
+fn contract_error(message: &'static str) -> AndromedaError {
+    AndromedaError::new(AndromedaErrorKind::Contract, message)
 }

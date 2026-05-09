@@ -12,12 +12,7 @@ impl Cardinality {
     }
 
     pub const fn permits_exact_row_count(self, row_count: u64) -> bool {
-        match self {
-            Self::One => row_count == 1,
-            Self::OptionalOne => row_count <= 1,
-            Self::Many => true,
-            Self::NonEmptyMany => row_count >= 1,
-        }
+        self.permits_row_count_bounds(row_count)
     }
 
     /// Lower bound on the number of rows a stream of this cardinality may
@@ -45,22 +40,11 @@ impl Cardinality {
     /// this cardinality (i.e. it neither contradicts the intrinsic max nor
     /// the minimum row count).
     pub const fn permits_row_count_max(self, row_count_max: u64) -> bool {
-        if row_count_max < self.min_row_count() {
-            return false;
-        }
-        match self.intrinsic_max_row_count() {
-            Some(intrinsic) => row_count_max <= intrinsic,
-            None => true,
-        }
+        self.permits_row_count_bounds(row_count_max)
     }
 
     pub const fn permits_emit_operation_count(self, emit_count: usize) -> bool {
-        match self {
-            Self::One => emit_count == 1,
-            Self::OptionalOne => emit_count <= 1,
-            Self::Many => true,
-            Self::NonEmptyMany => emit_count >= 1,
-        }
+        self.permits_row_count_bounds(emit_count as u64)
     }
 
     pub const fn emit_count_diagnostic(self) -> &'static str {
@@ -68,11 +52,21 @@ impl Cardinality {
             Self::One => "SRPL one result stream must have exactly one emit operation",
             Self::OptionalOne => {
                 "SRPL optional-one result stream may have zero or one emit operation"
-            }
+            },
             Self::Many => "SRPL many result stream accepts zero or more emit operations",
             Self::NonEmptyMany => {
                 "SRPL nonempty-many result stream must have at least one emit operation"
-            }
+            },
+        }
+    }
+
+    const fn permits_row_count_bounds(self, row_count: u64) -> bool {
+        if row_count < self.min_row_count() {
+            return false;
+        }
+        match self.intrinsic_max_row_count() {
+            Some(max) => row_count <= max,
+            None => true,
         }
     }
 }

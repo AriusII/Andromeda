@@ -17,24 +17,33 @@ pub enum SrplPredicateIr {
 }
 
 impl SrplPredicateIr {
-    pub(super) fn validate(&self) -> AndromedaResult<()> {
+    pub fn input(&self) -> &str {
         match self {
-            Self::InputEqualsField {
-                input,
-                binding,
-                field,
-            }
-            | Self::FieldGreaterThanOrEqualInput {
-                binding,
-                field,
-                input,
-            } => {
-                validate_symbol(input, "SRPL predicate input")?;
-                validate_symbol(binding, "SRPL predicate binding")?;
-                validate_symbol(field, "SRPL predicate field")?;
-            }
+            Self::InputEqualsField { input, .. }
+            | Self::FieldGreaterThanOrEqualInput { input, .. } => input,
         }
+    }
 
+    pub fn field_reference(&self) -> (&str, &str) {
+        match self {
+            Self::InputEqualsField { binding, field, .. }
+            | Self::FieldGreaterThanOrEqualInput { binding, field, .. } => (binding, field),
+        }
+    }
+
+    pub fn references_binding(&self, binding: &str) -> bool {
+        self.field_reference().0 == binding
+    }
+
+    pub const fn is_range_constraint(&self) -> bool {
+        matches!(self, Self::FieldGreaterThanOrEqualInput { .. })
+    }
+
+    pub(super) fn validate(&self) -> AndromedaResult<()> {
+        let (binding, field) = self.field_reference();
+        validate_symbol(self.input(), "SRPL predicate input")?;
+        validate_symbol(binding, "SRPL predicate binding")?;
+        validate_symbol(field, "SRPL predicate field")?;
         Ok(())
     }
 }
@@ -238,7 +247,7 @@ impl SrplValueIr {
             Self::Field { binding, field } => {
                 validate_symbol(binding, "SRPL value binding")?;
                 validate_symbol(field, "SRPL value field")?;
-            }
+            },
             Self::SubtractInput {
                 binding,
                 field,
@@ -247,13 +256,34 @@ impl SrplValueIr {
                 validate_symbol(binding, "SRPL subtract binding")?;
                 validate_symbol(field, "SRPL subtract field")?;
                 validate_symbol(input, "SRPL subtract input")?;
-            }
+            },
             Self::Constant(lit) => lit.validate()?,
             Self::BinaryArith { left, right, .. } => {
                 left.validate()?;
                 right.validate()?;
-            }
+            },
         }
         Ok(())
     }
+}
+
+pub(super) fn validate_predicates(predicates: &[SrplPredicateIr]) -> AndromedaResult<()> {
+    for predicate in predicates {
+        predicate.validate()?;
+    }
+    Ok(())
+}
+
+pub(super) fn validate_assignments(assignments: &[SrplAssignmentIr]) -> AndromedaResult<()> {
+    for assignment in assignments {
+        assignment.validate()?;
+    }
+    Ok(())
+}
+
+pub(super) fn validate_emit_values(values: &[SrplEmitValueIr]) -> AndromedaResult<()> {
+    for value in values {
+        value.validate()?;
+    }
+    Ok(())
 }

@@ -11,6 +11,8 @@ use common::{
 
 use super::{HistogramBucket, HistogramPlaceholder, SkewMarker};
 
+const DATUM_ESTIMATED_MEMORY_BYTES: u64 = 48;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Datum {
     Null,
@@ -42,12 +44,7 @@ pub struct EquiWidthHistogramBuilder {
 
 impl EquiWidthHistogramBuilder {
     pub fn new(bucket_count: u32) -> AndromedaResult<Self> {
-        if bucket_count == 0 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Catalog,
-                "EquiWidthHistogramBuilder: bucket_count must be > 0",
-            ));
-        }
+        validate_bucket_count("EquiWidthHistogramBuilder", bucket_count)?;
         Ok(Self {
             bucket_count,
             values: Vec::new(),
@@ -61,11 +58,7 @@ impl EquiWidthHistogramBuilder {
 
 impl HistogramBuilderTrait for EquiWidthHistogramBuilder {
     fn add_value(&mut self, value: &Datum) -> AndromedaResult<()> {
-        if matches!(value, Datum::Null) {
-            return Ok(());
-        }
-        self.values.push(value.clone());
-        Ok(())
+        push_non_null_value(&mut self.values, value)
     }
 
     fn finalize(mut self: Box<Self>) -> AndromedaResult<HistogramPlaceholder> {
@@ -79,13 +72,7 @@ impl HistogramBuilderTrait for EquiWidthHistogramBuilder {
         let mut keys = keyable_keys(&self.values);
 
         if keys.is_empty() {
-            return single_bucket_histogram(
-                0,
-                0,
-                self.values.len() as u64,
-                ndv,
-                SkewMarker::Unknown,
-            );
+            return unkeyable_values_histogram(self.values.len(), ndv);
         }
 
         keys.sort_unstable();
@@ -147,7 +134,7 @@ impl HistogramBuilderTrait for EquiWidthHistogramBuilder {
     }
 
     fn estimated_memory_bytes(&self) -> u64 {
-        (self.values.len() as u64) * 48
+        estimated_values_memory_bytes(&self.values)
     }
 }
 
@@ -158,12 +145,7 @@ pub struct EquiDepthHistogramBuilder {
 
 impl EquiDepthHistogramBuilder {
     pub fn new(bucket_count: u32) -> AndromedaResult<Self> {
-        if bucket_count == 0 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Catalog,
-                "EquiDepthHistogramBuilder: bucket_count must be > 0",
-            ));
-        }
+        validate_bucket_count("EquiDepthHistogramBuilder", bucket_count)?;
         Ok(Self {
             bucket_count,
             values: Vec::new(),
@@ -177,11 +159,7 @@ impl EquiDepthHistogramBuilder {
 
 impl HistogramBuilderTrait for EquiDepthHistogramBuilder {
     fn add_value(&mut self, value: &Datum) -> AndromedaResult<()> {
-        if matches!(value, Datum::Null) {
-            return Ok(());
-        }
-        self.values.push(value.clone());
-        Ok(())
+        push_non_null_value(&mut self.values, value)
     }
 
     fn finalize(mut self: Box<Self>) -> AndromedaResult<HistogramPlaceholder> {
@@ -196,13 +174,7 @@ impl HistogramBuilderTrait for EquiDepthHistogramBuilder {
         let bucket_count = (self.bucket_count as usize).min(self.values.len());
 
         if keyable_keys(&self.values).is_empty() {
-            return single_bucket_histogram(
-                0,
-                0,
-                self.values.len() as u64,
-                ndv,
-                SkewMarker::Unknown,
-            );
+            return unkeyable_values_histogram(self.values.len(), ndv);
         }
 
         let mut start_idx = 0usize;
@@ -265,6 +237,40 @@ impl HistogramBuilderTrait for EquiDepthHistogramBuilder {
     }
 
     fn estimated_memory_bytes(&self) -> u64 {
-        (self.values.len() as u64) * 48
+        estimated_values_memory_bytes(&self.values)
     }
+}
+
+fn validate_bucket_count(builder_name: &'static str, bucket_count: u32) -> AndromedaResult<()> {
+    if bucket_count == 0 {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Catalog,
+            format!("{builder_name}: bucket_count must be > 0"),
+        ));
+    }
+    Ok(())
+}
+
+fn push_non_null_value(values: &mut Vec<Datum>, value: &Datum) -> AndromedaResult<()> {
+    if !matches!(value, Datum::Null) {
+        values.push(value.clone());
+    }
+    Ok(())
+}
+
+fn estimated_values_memory_bytes(values: &[Datum]) -> u64 {
+    (values.len() as u64) * DATUM_ESTIMATED_MEMORY_BYTES
+}
+
+fn unkeyable_values_histogram(
+    row_count: usize,
+    distinct_estimate: u64,
+) -> AndromedaResult<HistogramPlaceholder> {
+    single_bucket_histogram(
+        0,
+        0,
+        row_count as u64,
+        distinct_estimate,
+        SkewMarker::Unknown,
+    )
 }

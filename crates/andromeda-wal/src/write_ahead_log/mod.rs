@@ -5,6 +5,7 @@
 //! backup, HA/DR runtime, and page types. The physical FileWal byte contract is
 //! re-exported here as a WAL owner surface.
 
+pub(crate) mod append_chain;
 pub mod codec;
 pub mod commit_log_entry;
 pub mod commit_log_facade;
@@ -16,6 +17,7 @@ pub mod gc_eligibility;
 pub mod manager;
 pub mod record;
 pub mod record_bounds;
+mod scheduler_config;
 pub mod segment;
 pub mod segment_reclaimability;
 pub mod transaction;

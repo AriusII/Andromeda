@@ -28,7 +28,6 @@ andromeda-rpc-protocol.workspace = true
 andromeda-result-stream.workspace = true
 andromeda-retry.workspace = true
 andromeda-security.workspace = true
-andromeda-srpl-execution-adapter.workspace = true
 andromeda-srpl-interpreter.workspace = true
 andromeda-srpl-ir.workspace = true
 andromeda-storage.workspace = true

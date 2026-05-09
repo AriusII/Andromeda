@@ -72,27 +72,28 @@ fn read_op(
     binding: &str,
     predicates: Vec<SrplPredicateIr>,
 ) -> SrplBusinessOperationIr {
+    read_op_with_cardinality(ordinal, binding, Cardinality::One, predicates)
+}
+
+fn read_op_with_cardinality(
+    ordinal: u32,
+    binding: &str,
+    cardinality: Cardinality,
+    predicates: Vec<SrplPredicateIr>,
+) -> SrplBusinessOperationIr {
     SrplBusinessOperationIr {
         ordinal,
         kind: SrplBusinessOperationKindIr::Read {
             source: qn("db.ns.T"),
             binding: binding.into(),
-            cardinality: Cardinality::One,
+            cardinality,
             predicates,
         },
     }
 }
 
 fn read_op_many(ordinal: u32, binding: &str) -> SrplBusinessOperationIr {
-    SrplBusinessOperationIr {
-        ordinal,
-        kind: SrplBusinessOperationKindIr::Read {
-            source: qn("db.ns.T"),
-            binding: binding.into(),
-            cardinality: Cardinality::Many,
-            predicates: vec![],
-        },
-    }
+    read_op_with_cardinality(ordinal, binding, Cardinality::Many, vec![])
 }
 
 fn assert_op(ordinal: u32, pred: SrplPredicateIr) -> SrplBusinessOperationIr {
@@ -123,17 +124,25 @@ fn update_op(
 }
 
 fn emit_op(ordinal: u32, binding: &str, field: &str) -> SrplBusinessOperationIr {
+    emit_values_op(ordinal, vec![emit_field_value("out", binding, field)])
+}
+
+fn emit_values_op(ordinal: u32, values: Vec<SrplEmitValueIr>) -> SrplBusinessOperationIr {
     SrplBusinessOperationIr {
         ordinal,
         kind: SrplBusinessOperationKindIr::Emit {
             stream: "S".into(),
-            values: vec![SrplEmitValueIr {
-                column: "out".into(),
-                value: SrplValueIr::Field {
-                    binding: binding.into(),
-                    field: field.into(),
-                },
-            }],
+            values,
+        },
+    }
+}
+
+fn emit_field_value(column: &str, binding: &str, field: &str) -> SrplEmitValueIr {
+    SrplEmitValueIr {
+        column: column.into(),
+        value: SrplValueIr::Field {
+            binding: binding.into(),
+            field: field.into(),
         },
     }
 }
@@ -169,6 +178,13 @@ fn cost(total: f64) -> CostEstimate {
         io_cost: total * 0.4,
         memory_cost: total * 0.1,
         total_cost: total,
+    }
+}
+
+fn simplified_predicates(predicates: Vec<SrplPredicateIr>) -> Vec<SrplPredicateIr> {
+    match simplify_predicates(predicates) {
+        SimplifiedPredicates::Predicates(predicates) => predicates,
+        SimplifiedPredicates::AlwaysFalse => panic!("unexpected AlwaysFalse"),
     }
 }
 

@@ -17,7 +17,7 @@ pub struct SrplCatalogBindingEvidence {
 impl SrplCatalogBindingEvidence {
     pub fn validate(&self) -> AndromedaResult<()> {
         self.procedure_object
-            .validate_for_definition(andromeda_contract::ObjectKind::Procedure)?;
+            .validate_for_definition(ObjectKind::Procedure)?;
         self.procedure_contract.validate()?;
 
         if self.procedure_object.catalog_version != self.catalog_version

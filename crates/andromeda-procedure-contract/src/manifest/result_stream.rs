@@ -63,20 +63,26 @@ impl ResultCardinality {
             None => true,
         }
     }
+
+    pub const fn permits_exact_row_count(self, row_count_exact: u64) -> bool {
+        row_count_exact >= self.min_row_count()
+            && match self.intrinsic_max_row_count() {
+                Some(intrinsic) => row_count_exact <= intrinsic,
+                None => true,
+            }
+    }
 }
 
 impl ResultStreamDescriptor {
     pub fn validate(&self) -> AndromedaResult<()> {
         if self.stream_name.trim().is_empty() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
+            return Err(contract_error(
                 "result stream descriptor name must not be empty",
             ));
         }
 
         if self.columns.is_empty() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
+            return Err(contract_error(
                 "result stream descriptor requires at least one typed column",
             ));
         }
@@ -86,14 +92,12 @@ impl ResultStreamDescriptor {
         for column in &self.columns {
             column.validate()?;
             if !seen_column_names.insert(column.name.clone()) {
-                return Err(AndromedaError::new(
-                    AndromedaErrorKind::Contract,
+                return Err(contract_error(
                     "result stream descriptor column names must be unique",
                 ));
             }
             if !seen_column_ordinals.insert(column.ordinal) {
-                return Err(AndromedaError::new(
-                    AndromedaErrorKind::Contract,
+                return Err(contract_error(
                     "result stream descriptor column ordinals must be unique",
                 ));
             }
@@ -101,8 +105,7 @@ impl ResultStreamDescriptor {
 
         for expected in 0..self.columns.len() as u32 {
             if !seen_column_ordinals.contains(&expected) {
-                return Err(AndromedaError::new(
-                    AndromedaErrorKind::Contract,
+                return Err(contract_error(
                     "result stream descriptor column ordinals must be dense and zero-based",
                 ));
             }
@@ -111,39 +114,27 @@ impl ResultStreamDescriptor {
         if self.row_count_requirement == RowCountRequirement::ExactRequired
             && self.row_count_exact.is_none()
         {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
-                "result stream requires an exact row count",
-            ));
+            return Err(contract_error("result stream requires an exact row count"));
         }
 
         if let Some(row_count_exact) = self.row_count_exact {
-            match self.cardinality {
-                ResultCardinality::ZeroOrMore => {},
-                ResultCardinality::ZeroOrOne if row_count_exact <= 1 => {},
-                ResultCardinality::OneOrMore if row_count_exact >= 1 => {},
-                ResultCardinality::ExactlyOne if row_count_exact == 1 => {},
-                _ => {
-                    return Err(AndromedaError::new(
-                        AndromedaErrorKind::Contract,
-                        "exact row count violates result stream cardinality",
-                    ));
-                },
+            if !self.cardinality.permits_exact_row_count(row_count_exact) {
+                return Err(contract_error(
+                    "exact row count violates result stream cardinality",
+                ));
             }
         }
 
         if let Some(row_count_max) = self.row_count_max {
             if !self.cardinality.permits_row_count_max(row_count_max) {
-                return Err(AndromedaError::new(
-                    AndromedaErrorKind::Contract,
+                return Err(contract_error(
                     "result stream row_count_max violates cardinality bounds",
                 ));
             }
             if let Some(row_count_exact) = self.row_count_exact
                 && row_count_exact > row_count_max
             {
-                return Err(AndromedaError::new(
-                    AndromedaErrorKind::Contract,
+                return Err(contract_error(
                     "result stream row_count_exact exceeds declared row_count_max",
                 ));
             }
@@ -187,4 +178,8 @@ impl ResultStreamDescriptor {
             None => hasher.update(&[0]),
         }
     }
+}
+
+fn contract_error(message: &'static str) -> AndromedaError {
+    AndromedaError::new(AndromedaErrorKind::Contract, message)
 }

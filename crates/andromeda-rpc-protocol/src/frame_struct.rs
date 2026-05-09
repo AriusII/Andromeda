@@ -27,10 +27,7 @@ impl FrameHeader {
             return Ok(());
         }
 
-        Err(AndromedaError::new(
-            AndromedaErrorKind::Protocol,
-            "frame header contains reserved flags",
-        ))
+        Err(protocol_error("frame header contains reserved flags"))
     }
 
     pub fn validate_max_payload_length(&self) -> AndromedaResult<()> {
@@ -38,10 +35,7 @@ impl FrameHeader {
             return Ok(());
         }
 
-        Err(AndromedaError::new(
-            AndromedaErrorKind::Protocol,
-            "frame payload length exceeds maximum",
-        ))
+        Err(protocol_error("frame payload length exceeds maximum"))
     }
 
     pub fn validate_header_crc(&self, expected_crc: u32) -> AndromedaResult<()> {
@@ -49,10 +43,7 @@ impl FrameHeader {
             return Ok(());
         }
 
-        Err(AndromedaError::new(
-            AndromedaErrorKind::Protocol,
-            "frame header CRC mismatch",
-        ))
+        Err(protocol_error("frame header CRC mismatch"))
     }
 
     pub fn validate_static_fields(&self) -> AndromedaResult<()> {
@@ -65,10 +56,7 @@ impl FrameHeader {
             return Ok(());
         }
 
-        Err(AndromedaError::new(
-            AndromedaErrorKind::Protocol,
-            "frame payload length mismatch",
-        ))
+        Err(protocol_error("frame payload length mismatch"))
     }
 
     pub fn validate_transport_policy(&self, stream_role: StreamRole) -> AndromedaResult<()> {
@@ -76,8 +64,7 @@ impl FrameHeader {
             return Ok(());
         }
 
-        Err(AndromedaError::new(
-            AndromedaErrorKind::Protocol,
+        Err(protocol_error(
             "frame type is not allowed on this stream role",
         ))
     }
@@ -96,34 +83,24 @@ impl FrameBytes {
         self.header.validate_transport_policy(stream_role)?;
 
         if self.header.frame_type.requires_non_empty_payload() && self.payload.is_empty() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Protocol,
-                "frame type requires a non-empty payload",
-            ));
+            return Err(protocol_error("frame type requires a non-empty payload"));
         }
 
         Ok(())
     }
 }
 
+fn protocol_error(message: &'static str) -> AndromedaError {
+    AndromedaError::new(AndromedaErrorKind::Protocol, message)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::{frame_bytes, frame_header};
 
     fn header(frame_type: FrameType) -> FrameHeader {
-        header_with_len(frame_type, 8)
-    }
-
-    fn header_with_len(frame_type: FrameType, payload_length: u64) -> FrameHeader {
-        FrameHeader {
-            frame_type,
-            request_id: RequestId::new(1),
-            session_id: SessionId::new(2),
-            tx_id: None,
-            payload_length,
-            flags: 0,
-            header_crc: 0,
-        }
+        frame_header(frame_type, 8)
     }
 
     #[test]
@@ -208,10 +185,7 @@ mod tests {
 
     #[test]
     fn frame_bytes_rejects_empty_required_payloads() {
-        let frame = FrameBytes {
-            header: header_with_len(FrameType::RpcBatch, 0),
-            payload: Vec::new(),
-        };
+        let frame = frame_bytes(FrameType::RpcBatch, Vec::new());
 
         assert_eq!(
             frame
@@ -221,10 +195,7 @@ mod tests {
             AndromedaErrorKind::Protocol
         );
 
-        let error_frame = FrameBytes {
-            header: header_with_len(FrameType::Error, 0),
-            payload: Vec::new(),
-        };
+        let error_frame = frame_bytes(FrameType::Error, Vec::new());
 
         assert_eq!(
             error_frame

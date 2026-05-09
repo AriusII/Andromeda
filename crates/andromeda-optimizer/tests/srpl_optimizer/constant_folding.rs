@@ -1,31 +1,38 @@
 use super::*;
 
+fn assert_folds(expr: SrplValueIr, expected: SrplValueIr) {
+    assert_eq!(fold_value(expr).unwrap(), expected);
+}
+
+fn assert_deferred(expr: SrplValueIr, message: &str) {
+    assert!(
+        matches!(fold_value(expr).unwrap(), SrplValueIr::BinaryArith { .. }),
+        "{message}"
+    );
+}
+
 /// T-CF-01  1 + 1 → 2
 #[test]
 fn t_cf_01_fold_add_one_plus_one() {
-    let result = fold_value(arith(ArithOp::Add, int(1), int(1))).unwrap();
-    assert_eq!(result, int(2));
+    assert_folds(arith(ArithOp::Add, int(1), int(1)), int(2));
 }
 
 /// T-CF-02  10 - 5 → 5
 #[test]
 fn t_cf_02_fold_subtract_ten_minus_five() {
-    let result = fold_value(arith(ArithOp::Subtract, int(10), int(5))).unwrap();
-    assert_eq!(result, int(5));
+    assert_folds(arith(ArithOp::Subtract, int(10), int(5)), int(5));
 }
 
 /// T-CF-03  2 * 3 → 6
 #[test]
 fn t_cf_03_fold_multiply_two_times_three() {
-    let result = fold_value(arith(ArithOp::Multiply, int(2), int(3))).unwrap();
-    assert_eq!(result, int(6));
+    assert_folds(arith(ArithOp::Multiply, int(2), int(3)), int(6));
 }
 
 /// T-CF-04  10 / 2 → 5
 #[test]
 fn t_cf_04_fold_divide_ten_by_two() {
-    let result = fold_value(arith(ArithOp::Divide, int(10), int(2))).unwrap();
-    assert_eq!(result, int(5));
+    assert_folds(arith(ArithOp::Divide, int(10), int(2)), int(5));
 }
 
 /// T-CF-05  -5 + 3 → -2
@@ -88,10 +95,9 @@ fn t_cf_12_fold_uint64_divide() {
 #[test]
 fn t_cf_13_int64_max_plus_one_deferred() {
     let expr = arith(ArithOp::Add, int(i64::MAX), int(1));
-    let result = fold_value(expr).unwrap();
-    assert!(
-        matches!(result, SrplValueIr::BinaryArith { .. }),
-        "INT64_MAX + 1 must be deferred to runtime, not produce a constant"
+    assert_deferred(
+        expr,
+        "INT64_MAX + 1 must be deferred to runtime, not produce a constant",
     );
 }
 
@@ -99,32 +105,23 @@ fn t_cf_13_int64_max_plus_one_deferred() {
 #[test]
 fn t_cf_14_int64_min_minus_one_deferred() {
     let expr = arith(ArithOp::Subtract, int(i64::MIN), int(1));
-    let result = fold_value(expr).unwrap();
-    assert!(
-        matches!(result, SrplValueIr::BinaryArith { .. }),
-        "INT64_MIN - 1 must be deferred to runtime"
-    );
+    assert_deferred(expr, "INT64_MIN - 1 must be deferred to runtime");
 }
 
 /// T-CF-15  INT64_MAX * 2 → deferred (Overflow).
 #[test]
 fn t_cf_15_int64_max_multiply_deferred() {
     let expr = arith(ArithOp::Multiply, int(i64::MAX), int(2));
-    let result = fold_value(expr).unwrap();
-    assert!(
-        matches!(result, SrplValueIr::BinaryArith { .. }),
-        "INT64_MAX * 2 must be deferred"
-    );
+    assert_deferred(expr, "INT64_MAX * 2 must be deferred");
 }
 
 /// T-CF-16  i64(10) / i64(0) → deferred (DivisionByZero), BinaryArith preserved.
 #[test]
 fn t_cf_16_int64_divide_by_zero_deferred() {
     let expr = arith(ArithOp::Divide, int(10), int(0));
-    let result = fold_value(expr).unwrap();
-    assert!(
-        matches!(result, SrplValueIr::BinaryArith { .. }),
-        "Division by zero must leave a BinaryArith node (INV-09)"
+    assert_deferred(
+        expr,
+        "Division by zero must leave a BinaryArith node (INV-09)",
     );
 }
 
@@ -132,27 +129,21 @@ fn t_cf_16_int64_divide_by_zero_deferred() {
 #[test]
 fn t_cf_17_uint64_divide_by_zero_deferred() {
     let expr = arith(ArithOp::Divide, uint(5), uint(0));
-    let result = fold_value(expr).unwrap();
-    assert!(matches!(result, SrplValueIr::BinaryArith { .. }));
+    assert_deferred(expr, "u64 division by zero must be deferred");
 }
 
 /// T-CF-18  u64(UINT64_MAX) + u64(1) → deferred (Overflow).
 #[test]
 fn t_cf_18_uint64_max_plus_one_deferred() {
     let expr = arith(ArithOp::Add, uint(u64::MAX), uint(1));
-    let result = fold_value(expr).unwrap();
-    assert!(matches!(result, SrplValueIr::BinaryArith { .. }));
+    assert_deferred(expr, "u64 overflow must be deferred");
 }
 
 /// T-CF-19  u64(0) - u64(1) → deferred (underflow wraps on unsigned → overflow branch).
 #[test]
 fn t_cf_19_uint64_underflow_deferred() {
     let expr = arith(ArithOp::Subtract, uint(0), uint(1));
-    let result = fold_value(expr).unwrap();
-    assert!(
-        matches!(result, SrplValueIr::BinaryArith { .. }),
-        "u64 subtraction underflow must be deferred"
-    );
+    assert_deferred(expr, "u64 subtraction underflow must be deferred");
 }
 
 /// T-CF-20  Bool(true) → Constant(Bool(true))  (deprecated variant migration).

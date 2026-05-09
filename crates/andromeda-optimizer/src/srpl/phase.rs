@@ -25,6 +25,26 @@ impl OptimizerPhase {
     /// Total number of phases. Asserted by tests to flag accidental growth.
     pub const PHASE_COUNT: usize = 9;
 
+    /// Canonical phase order. Must not be reordered without a pipeline doctrine update.
+    pub const ORDERED: [Self; Self::PHASE_COUNT] = [
+        Self::Parsing,
+        Self::Binding,
+        Self::IRLowering,
+        Self::ConstantFolding,
+        Self::PredicatePushdown,
+        Self::Normalize,
+        Self::ProjectionPushdown,
+        Self::CostAnalysis,
+        Self::PlanChoice,
+    ];
+
+    /// Rewrites controlled by `OptimizationLevel`.
+    pub const REWRITE_PHASES: [Self; 3] = [
+        Self::ConstantFolding,
+        Self::PredicatePushdown,
+        Self::Normalize,
+    ];
+
     /// Stable ordinal for ordering checks. Must not be reordered.
     pub const fn as_ordinal(self) -> u8 {
         match self {
@@ -57,19 +77,7 @@ mod tests {
 
     #[test]
     fn phases_are_strictly_ordered() {
-        use OptimizerPhase::*;
-        let all = [
-            Parsing,
-            Binding,
-            IRLowering,
-            ConstantFolding,
-            PredicatePushdown,
-            Normalize,
-            ProjectionPushdown,
-            CostAnalysis,
-            PlanChoice,
-        ];
-        for window in all.windows(2) {
+        for window in OptimizerPhase::ORDERED.windows(2) {
             assert!(
                 window[0].as_ordinal() < window[1].as_ordinal(),
                 "phase ordering violated: {:?} must precede {:?}",

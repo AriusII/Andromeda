@@ -1,9 +1,11 @@
 use std::net::SocketAddr;
 
-use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::AndromedaResult;
 use andromeda_principal::CertificateIdentity;
 
 use andromeda_quic::{ConnectionPoolKey, SurfacePlane, mtls_identity::RawCertificate};
+
+use super::endpoint::transport_error;
 
 /// Adapter wrapping `quinn::Connection` for Andromeda frame transport.
 ///
@@ -64,12 +66,7 @@ impl QuinnConnectionAdapter {
             .map(|s| UniStream {
                 inner: UniStreamInner::Send(s),
             })
-            .map_err(|e| {
-                AndromedaError::new(
-                    AndromedaErrorKind::Transport,
-                    format!("failed to open unidirectional stream: {}", e),
-                )
-            })
+            .map_err(|e| transport_error(format!("failed to open unidirectional stream: {e}")))
     }
 
     /// Opens a bidirectional stream.
@@ -81,12 +78,7 @@ impl QuinnConnectionAdapter {
             .open_bi()
             .await
             .map(|(s, r)| BidiStream { send: s, recv: r })
-            .map_err(|e| {
-                AndromedaError::new(
-                    AndromedaErrorKind::Transport,
-                    format!("failed to open bidirectional stream: {}", e),
-                )
-            })
+            .map_err(|e| transport_error(format!("failed to open bidirectional stream: {e}")))
     }
 
     /// Accepts the next incoming unidirectional stream.
@@ -98,10 +90,9 @@ impl QuinnConnectionAdapter {
             Ok(s) => Ok(UniStream {
                 inner: UniStreamInner::Recv(s),
             }),
-            Err(e) => Err(AndromedaError::new(
-                AndromedaErrorKind::Transport,
-                format!("failed to accept unidirectional stream: {}", e),
-            )),
+            Err(e) => Err(transport_error(format!(
+                "failed to accept unidirectional stream: {e}"
+            ))),
         }
     }
 
@@ -112,10 +103,9 @@ impl QuinnConnectionAdapter {
     pub async fn accept_bidi_stream(&mut self) -> AndromedaResult<BidiStream> {
         match self.inner.accept_bi().await {
             Ok((s, r)) => Ok(BidiStream { send: s, recv: r }),
-            Err(e) => Err(AndromedaError::new(
-                AndromedaErrorKind::Transport,
-                format!("failed to accept bidirectional stream: {}", e),
-            )),
+            Err(e) => Err(transport_error(format!(
+                "failed to accept bidirectional stream: {e}"
+            ))),
         }
     }
 
@@ -154,13 +144,9 @@ impl UniStream {
     pub async fn write_all(&mut self, buf: &[u8]) -> AndromedaResult<()> {
         match &mut self.inner {
             UniStreamInner::Send(stream) => stream.write_all(buf).await.map_err(|e| {
-                AndromedaError::new(
-                    AndromedaErrorKind::Transport,
-                    format!("failed to write to unidirectional stream: {}", e),
-                )
+                transport_error(format!("failed to write to unidirectional stream: {e}"))
             }),
-            UniStreamInner::Recv(_) => Err(AndromedaError::new(
-                AndromedaErrorKind::Transport,
+            UniStreamInner::Recv(_) => Err(transport_error(
                 "cannot write to incoming unidirectional receive stream",
             )),
         }
@@ -170,13 +156,9 @@ impl UniStream {
     pub async fn finish(&mut self) -> AndromedaResult<()> {
         match &mut self.inner {
             UniStreamInner::Send(stream) => stream.finish().map_err(|e| {
-                AndromedaError::new(
-                    AndromedaErrorKind::Transport,
-                    format!("failed to finish unidirectional stream: {}", e),
-                )
+                transport_error(format!("failed to finish unidirectional stream: {e}"))
             }),
-            UniStreamInner::Recv(_) => Err(AndromedaError::new(
-                AndromedaErrorKind::Transport,
+            UniStreamInner::Recv(_) => Err(transport_error(
                 "cannot finish incoming unidirectional receive stream",
             )),
         }
@@ -199,12 +181,7 @@ impl BidiStream {
             .read(buf)
             .await
             .map(|n| n.unwrap_or(0))
-            .map_err(|e| {
-                AndromedaError::new(
-                    AndromedaErrorKind::Transport,
-                    format!("failed to read from bidirectional stream: {}", e),
-                )
-            })
+            .map_err(|e| transport_error(format!("failed to read from bidirectional stream: {e}")))
     }
 
     /// Writes data to the stream.
@@ -212,21 +189,16 @@ impl BidiStream {
     /// # Errors
     /// - `WriteError` if the stream is closed or reset
     pub async fn write_all(&mut self, buf: &[u8]) -> AndromedaResult<()> {
-        self.send.write_all(buf).await.map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::Transport,
-                format!("failed to write to bidirectional stream: {}", e),
-            )
-        })
+        self.send
+            .write_all(buf)
+            .await
+            .map_err(|e| transport_error(format!("failed to write to bidirectional stream: {e}")))
     }
 
     /// Finishes writing to the stream.
     pub async fn finish(&mut self) -> AndromedaResult<()> {
-        self.send.finish().map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::Transport,
-                format!("failed to finish bidirectional stream: {}", e),
-            )
-        })
+        self.send
+            .finish()
+            .map_err(|e| transport_error(format!("failed to finish bidirectional stream: {e}")))
     }
 }

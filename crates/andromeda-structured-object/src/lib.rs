@@ -42,6 +42,14 @@ pub fn encode_structured_object_shape_material(
     shape::encode_structured_object_shape_material(fields, unique_by)
 }
 
+/// Encode canonical hash material for ordered column descriptors.
+///
+/// This keeps catalog/table and StructuredObject hash material aligned while
+/// avoiding a second scalar-type encoder in downstream crates.
+pub fn encode_column_descriptors_shape_material(columns: &[ColumnDescriptor]) -> Vec<u8> {
+    shape::encode_column_descriptors_shape_material(columns)
+}
+
 /// Compute deterministic hash for a StructuredObject shape boundary.
 ///
 /// The hash excludes catalog object identity so compatibility is explicit:

@@ -47,6 +47,13 @@ struct FencedNodeMutationOptions {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+struct NodeReadOptions {
+    node_id: Option<u64>,
+    json_output: bool,
+    membership_store: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(in crate::hadr::node) struct NodeListOptions {
     pub(in crate::hadr::node) json_output: bool,
     pub(in crate::hadr::node) membership_store: Option<PathBuf>,
@@ -230,39 +237,78 @@ fn parse_fenced_node_mutation_options(
 pub(in crate::hadr::node) fn parse_node_list_options(
     args: &[String],
 ) -> AndromedaResult<NodeListOptions> {
-    let mut json_output = false;
-    let mut membership_store = None;
-    let mut index = 0;
-
-    while index < args.len() {
-        match args[index].as_str() {
-            JSON_FLAG => json_output = true,
-            "--membership-store" | "--state-dir" => {
-                parse_membership_store_option(args, &mut index, &mut membership_store)?;
-            },
-            opt if opt.starts_with("--") => {
-                return Err(cli_error(
-                    "unknown hadr node list option; supported options are --membership-store, --state-dir, and --json",
-                ));
-            },
-            _ => {
-                return Err(cli_error(
-                    "unexpected hadr node list argument; supported options are --membership-store, --state-dir, and --json",
-                ));
-            },
-        }
-        index += 1;
-    }
+    let options = parse_node_read_options(args, NodeReadCommand::List)?;
 
     Ok(NodeListOptions {
-        json_output,
-        membership_store,
+        json_output: options.json_output,
+        membership_store: options.membership_store,
     })
 }
 
 pub(in crate::hadr::node) fn parse_node_status_options(
     args: &[String],
 ) -> AndromedaResult<NodeStatusOptions> {
+    let options = parse_node_read_options(args, NodeReadCommand::Status)?;
+    let node_id = options
+        .node_id
+        .ok_or_else(|| cli_error(NodeReadCommand::Status.missing_node_message()))?;
+
+    Ok(NodeStatusOptions {
+        node_id,
+        json_output: options.json_output,
+        membership_store: options.membership_store,
+    })
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NodeReadCommand {
+    List,
+    Status,
+}
+
+impl NodeReadCommand {
+    fn name(self) -> &'static str {
+        match self {
+            Self::List => "list",
+            Self::Status => "status",
+        }
+    }
+
+    fn accepts_node_id(self) -> bool {
+        matches!(self, Self::Status)
+    }
+
+    fn requires_node_id(self) -> bool {
+        matches!(self, Self::Status)
+    }
+
+    fn unknown_option_message(self) -> String {
+        format!(
+            "unknown hadr node {} option; supported options are --membership-store, --state-dir, and --json",
+            self.name()
+        )
+    }
+
+    fn unexpected_argument_message(self) -> String {
+        format!(
+            "unexpected hadr node {} argument; supported options are --membership-store, --state-dir, and --json",
+            self.name()
+        )
+    }
+
+    fn duplicate_node_message(self) -> String {
+        format!("hadr node {} accepts exactly one <node-id>", self.name())
+    }
+
+    fn missing_node_message(self) -> String {
+        format!("hadr node {} requires <node-id>", self.name())
+    }
+}
+
+fn parse_node_read_options(
+    args: &[String],
+    command: NodeReadCommand,
+) -> AndromedaResult<NodeReadOptions> {
     let mut node_id = None;
     let mut json_output = false;
     let mut membership_store = None;
@@ -275,25 +321,26 @@ pub(in crate::hadr::node) fn parse_node_status_options(
                 parse_membership_store_option(args, &mut index, &mut membership_store)?;
             },
             opt if opt.starts_with("--") => {
-                return Err(cli_error(
-                    "unknown hadr node status option; supported options are --membership-store, --state-dir, and --json",
-                ));
+                return Err(cli_error(command.unknown_option_message()));
             },
-            value => {
+            value if command.accepts_node_id() => {
                 if node_id.is_some() {
-                    return Err(cli_error("hadr node status accepts exactly one <node-id>"));
+                    return Err(cli_error(command.duplicate_node_message()));
                 }
                 node_id = Some(parse_nonzero_node_id(value)?);
+            },
+            _ => {
+                return Err(cli_error(command.unexpected_argument_message()));
             },
         }
         index += 1;
     }
 
-    let Some(node_id) = node_id else {
-        return Err(cli_error("hadr node status requires <node-id>"));
-    };
+    if command.requires_node_id() && node_id.is_none() {
+        return Err(cli_error(command.missing_node_message()));
+    }
 
-    Ok(NodeStatusOptions {
+    Ok(NodeReadOptions {
         node_id,
         json_output,
         membership_store,

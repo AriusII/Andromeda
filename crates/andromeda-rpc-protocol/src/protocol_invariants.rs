@@ -7,7 +7,7 @@ use crate::{
     RPC_METADATA_FRAME_CODE, TELEMETRY_SOFT_SIGNAL_FRAME_CODE,
 };
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use std::{mem, ops::RangeInclusive};
+use std::ops::RangeInclusive;
 
 const _: () = assert!(FRAME_CODEC_HEADER_LEN == 52);
 const _: () = assert!(FRAME_CODEC_CRC_OFFSET == 48);
@@ -193,7 +193,7 @@ impl ProtocolInvariants {
         report.push_str("Frame Header Layout:\n");
         report.push_str(&format!(
             "  Size: {} bytes (expected 52)\n",
-            mem::size_of::<FrameHeader>()
+            size_of::<FrameHeader>()
         ));
         report.push_str(&format!(
             "  Frame Type Code Invariants: {} items locked\n",

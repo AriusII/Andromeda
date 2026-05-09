@@ -80,46 +80,22 @@ pub fn evaluate_optimizer_plan_inputs(
     let reason = classify_reason(key, statistics, policy);
     let uses_statistics = matches!(reason, OptimizerPlanReason::StatisticsAccepted);
     let bounded_fallback = !uses_statistics;
-    let outcome = match reason {
-        OptimizerPlanReason::StatisticsAccepted => DecisionOutcome::Accepted,
-        OptimizerPlanReason::AdaptiveDisabled => DecisionOutcome::Disabled,
-        OptimizerPlanReason::StatisticsMissingFallback
-        | OptimizerPlanReason::StatisticsVersionMismatch
-        | OptimizerPlanReason::StatisticsNotPublished
-        | OptimizerPlanReason::StatisticsStaleFallback
-        | OptimizerPlanReason::PolicyVersionMismatch => DecisionOutcome::Fallback,
-    };
-    let control = if policy.is_adaptive_enabled() {
-        AdaptiveControl::enabled(AdaptiveFeature::Optimizer, policy.policy_version())
-    } else {
-        AdaptiveControl::disabled(AdaptiveFeature::Optimizer, policy.policy_version())
-    };
 
     let mut trace = DecisionTrace::new_with_control(
         trace_id,
         DecisionFamily::OptimizerPlan,
-        outcome,
+        outcome_for_reason(reason),
         DecisionReasonCode::new(reason.as_str()).map_err(map_trace_error)?,
         trace_explanation(key, statistics, policy, reason),
         key.version_binding(),
-        Some(control),
+        Some(adaptive_control(policy)),
     )
     .map_err(map_trace_error)?;
 
-    trace = trace
-        .with_evidence(TraceEvidence::new(
-            EvidenceLabel::new("plan-cache-key").map_err(map_trace_error)?,
-            EvidenceDigest::new(key.digest()).map_err(map_trace_error)?,
-        ))
-        .map_err(map_trace_error)?;
+    trace = append_digest_evidence(trace, "plan-cache-key", key.digest())?;
 
     if let Some(statistics) = statistics {
-        trace = trace
-            .with_evidence(TraceEvidence::new(
-                EvidenceLabel::new("stats-set").map_err(map_trace_error)?,
-                EvidenceDigest::new(statistics.digest().as_bytes()).map_err(map_trace_error)?,
-            ))
-            .map_err(map_trace_error)?;
+        trace = append_digest_evidence(trace, "stats-set", statistics.digest().as_bytes())?;
     }
 
     Ok(OptimizerPlanDecision {
@@ -130,6 +106,39 @@ pub fn evaluate_optimizer_plan_inputs(
         bounded_fallback,
         trace,
     })
+}
+
+fn outcome_for_reason(reason: OptimizerPlanReason) -> DecisionOutcome {
+    match reason {
+        OptimizerPlanReason::StatisticsAccepted => DecisionOutcome::Accepted,
+        OptimizerPlanReason::AdaptiveDisabled => DecisionOutcome::Disabled,
+        OptimizerPlanReason::StatisticsMissingFallback
+        | OptimizerPlanReason::StatisticsVersionMismatch
+        | OptimizerPlanReason::StatisticsNotPublished
+        | OptimizerPlanReason::StatisticsStaleFallback
+        | OptimizerPlanReason::PolicyVersionMismatch => DecisionOutcome::Fallback,
+    }
+}
+
+fn adaptive_control(policy: OptimizerPolicy) -> AdaptiveControl {
+    if policy.is_adaptive_enabled() {
+        AdaptiveControl::enabled(AdaptiveFeature::Optimizer, policy.policy_version())
+    } else {
+        AdaptiveControl::disabled(AdaptiveFeature::Optimizer, policy.policy_version())
+    }
+}
+
+fn append_digest_evidence(
+    trace: DecisionTrace,
+    label: &'static str,
+    digest: [u8; EvidenceDigest::LEN],
+) -> Result<DecisionTrace, OptimizerError> {
+    trace
+        .with_evidence(TraceEvidence::new(
+            EvidenceLabel::new(label).map_err(map_trace_error)?,
+            EvidenceDigest::new(digest).map_err(map_trace_error)?,
+        ))
+        .map_err(map_trace_error)
 }
 
 fn classify_reason(
@@ -238,16 +247,30 @@ mod tests {
         .unwrap()
     }
 
+    fn evaluate(
+        stats_version: u64,
+        statistics: Option<StatsObjectDescriptor>,
+        optimizer_policy: OptimizerPolicy,
+        policy_version: PolicyVersion,
+    ) -> OptimizerPlanDecision {
+        evaluate_optimizer_plan_inputs(
+            key(stats_version, policy_version),
+            statistics,
+            optimizer_policy,
+            DecisionTraceId::new(11).unwrap(),
+        )
+        .unwrap()
+    }
+
     #[test]
     fn published_matching_stats_are_accepted_and_traced() {
         let policy = policy(8);
-        let decision = evaluate_optimizer_plan_inputs(
-            key(4, policy),
+        let decision = evaluate(
+            4,
             Some(stats(4, StatsPublicationState::Published)),
             OptimizerPolicy::adaptive_enabled(policy),
-            DecisionTraceId::new(11).unwrap(),
-        )
-        .unwrap();
+            policy,
+        );
 
         assert!(decision.uses_statistics());
         assert!(!decision.bounded_fallback());
@@ -259,13 +282,12 @@ mod tests {
     #[test]
     fn disabled_adaptive_optimizer_uses_bounded_fallback() {
         let policy = policy(8);
-        let decision = evaluate_optimizer_plan_inputs(
-            key(4, policy),
+        let decision = evaluate(
+            4,
             Some(stats(4, StatsPublicationState::Published)),
             OptimizerPolicy::adaptive_disabled(policy),
-            DecisionTraceId::new(11).unwrap(),
-        )
-        .unwrap();
+            policy,
+        );
 
         assert!(!decision.uses_statistics());
         assert!(decision.bounded_fallback());
@@ -276,13 +298,12 @@ mod tests {
     #[test]
     fn mismatched_stats_version_falls_back() {
         let policy = policy(8);
-        let decision = evaluate_optimizer_plan_inputs(
-            key(4, policy),
+        let decision = evaluate(
+            4,
             Some(stats(5, StatsPublicationState::Published)),
             OptimizerPolicy::adaptive_enabled(policy),
-            DecisionTraceId::new(11).unwrap(),
-        )
-        .unwrap();
+            policy,
+        );
 
         assert!(!decision.uses_statistics());
         assert!(decision.bounded_fallback());

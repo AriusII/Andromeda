@@ -1,13 +1,16 @@
 //! In-memory WAL manager for record accumulation and flushing.
 
-use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+#[cfg(test)]
+use andromeda_error::AndromedaErrorKind;
+use andromeda_error::AndromedaResult;
 use andromeda_types::TransactionId;
 
+use super::append_chain;
 use super::transaction::{
     DurableTransactionClassifications, DurableTransactionResume, IncompleteDurableTransaction,
     classify_durable_transactions, incomplete_transactions_from_records, summarize_transaction,
 };
-use super::{WalRecord, WalRecordKind, validate_wal_record_bounds};
+use super::{WalRecord, WalRecordKind};
 use crate::Lsn;
 
 /// In-memory WAL accumulator with durable LSN tracking.
@@ -31,14 +34,11 @@ impl InMemoryWal {
     }
 
     pub fn next_lsn(&self) -> Lsn {
-        self.try_next_lsn().unwrap_or(Lsn::ZERO)
+        append_chain::next_lsn_or_zero(self.last_lsn())
     }
 
     pub fn try_next_lsn(&self) -> AndromedaResult<Lsn> {
-        match self.last_lsn() {
-            Some(last_lsn) => last_lsn.try_next(),
-            None => Ok(Lsn::new(1)),
-        }
+        append_chain::try_next_lsn(self.last_lsn())
     }
 
     pub fn len(&self) -> usize {
@@ -54,24 +54,12 @@ impl InMemoryWal {
     }
 
     pub fn append(&mut self, record: WalRecord) -> AndromedaResult<Lsn> {
-        record.validate()?;
-
-        // Enforce WAL record bounds (size limits, structure validation).
-        validate_wal_record_bounds(&record)?;
-
-        let expected_lsn = self.try_next_lsn()?;
-        if record.header.lsn != expected_lsn {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                "WAL record LSN must equal the next append LSN",
-            ));
-        }
-        if record.header.previous_lsn != self.last_lsn() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                "WAL record previous LSN must chain to the append tail",
-            ));
-        }
+        append_chain::validate_append_record(
+            &record,
+            self.last_lsn(),
+            "WAL record LSN must equal the next append LSN",
+            "WAL record previous LSN must chain to the append tail",
+        )?;
 
         let lsn = record.header.lsn;
         self.records.push(record);
@@ -84,13 +72,7 @@ impl InMemoryWal {
         transaction_id: Option<TransactionId>,
         payload: impl Into<Vec<u8>>,
     ) -> AndromedaResult<Lsn> {
-        let record = WalRecord::from_parts(
-            kind,
-            self.try_next_lsn()?,
-            self.last_lsn(),
-            transaction_id,
-            payload,
-        )?;
+        let record = append_chain::payload_record(kind, self.last_lsn(), transaction_id, payload)?;
         self.append(record)
     }
 
@@ -107,25 +89,13 @@ impl InMemoryWal {
     }
 
     pub fn flush_through(&mut self, lsn: Lsn) -> AndromedaResult<Lsn> {
-        if lsn == Lsn::default() {
-            return Ok(self.durable_lsn);
-        }
-
-        let Some(last_lsn) = self.last_lsn() else {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                "cannot flush WAL before records are appended",
-            ));
-        };
-
-        if lsn > last_lsn {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                "cannot flush WAL beyond the last appended LSN",
-            ));
-        }
-
-        if lsn > self.durable_lsn {
+        if let Some(lsn) = append_chain::validate_flush_target(
+            lsn,
+            self.durable_lsn,
+            self.last_lsn(),
+            "cannot flush WAL before records are appended",
+            "cannot flush WAL beyond the last appended LSN",
+        )? {
             self.durable_lsn = lsn;
         }
 
@@ -140,14 +110,11 @@ impl InMemoryWal {
     }
 
     pub fn durable_records(&self) -> impl Iterator<Item = &WalRecord> {
-        let durable_lsn = self.durable_lsn;
-        self.records
-            .iter()
-            .filter(move |record| record.header.lsn <= durable_lsn)
+        append_chain::durable_records(&self.records, self.durable_lsn)
     }
 
     pub fn replay_durable(&self) -> Vec<WalRecord> {
-        self.durable_records().cloned().collect()
+        append_chain::replay_durable(&self.records, self.durable_lsn)
     }
 
     pub fn durable_records_for_transaction(

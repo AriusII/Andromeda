@@ -11,7 +11,7 @@ use andromeda_observability::TraceId;
 
 use crate::{
     AuthorizationDenialReason, AuthorizationOutcome, PrincipalRegistry, SurfaceAction,
-    SurfaceAuthorizer,
+    SurfaceAuthorizer, principal_binding::denied_security_outcome,
 };
 
 /// Dispatch-time security gate over observed surface scopes.
@@ -107,26 +107,20 @@ impl<'a> SurfacePlaneAuthorizer<'a> {
             )
         })?;
         let permission = SurfaceAction::ExecuteProcedure.required_permission();
-        let audit = SecurityAuditTrace::new(
+        denied_security_outcome(
             trace_id,
             requested_scope,
             binding.certificate().clone(),
             binding.principal().clone(),
             permission,
-            SecurityAuditOutcome::Denied,
+            AuthorizationDenialReason::SurfaceDoesNotPermitPermission,
             format!(
-                "denied:{}:surface={:?}:permission={:?}:action={}:procedure_dispatch_requires_application_surface",
-                AuthorizationDenialReason::SurfaceDoesNotPermitPermission.label(),
+                "surface={:?}:permission={:?}:action={}:procedure_dispatch_requires_application_surface",
                 requested_scope,
                 permission,
                 SurfaceAction::ExecuteProcedure.evidence_label(),
             ),
-        )?;
-
-        Ok(AuthorizationOutcome::Denied {
-            reason: AuthorizationDenialReason::SurfaceDoesNotPermitPermission,
-            audit,
-        })
+        )
     }
 }
 

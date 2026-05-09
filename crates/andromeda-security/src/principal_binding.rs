@@ -11,6 +11,7 @@ mod registry;
 pub use andromeda_audit::SecurityAuditDenialReason as AuthorizationDenialReason;
 pub use authorizer::SurfaceAuthorizer;
 pub use model::{AuthorizationOutcome, PrincipalBinding, SurfaceAction};
+pub(crate) use model::{allowed_security_outcome, denied_security_outcome};
 pub use registry::PrincipalRegistry;
 
 #[cfg(test)]

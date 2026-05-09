@@ -7,3 +7,4 @@ __pycache__/
 !/.codex/runtime/.gitignore
 /tests/loom/target
 /documentations/implementation
+/.work

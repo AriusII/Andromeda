@@ -12,7 +12,7 @@ use super::{
     normalize,
     phase::OptimizerPhase,
     plan_choice::{self, AlternativePlanRecord},
-    plan_kind::{self, OptimizerPlanKind},
+    plan_kind::OptimizerPlanKind,
     predicate_pushdown,
     projection_pushdown::{self, EffectiveProjection},
     safety::ensure_effect_surface_preserved,
@@ -128,11 +128,11 @@ pub fn optimize_procedure_ir_with_config(
         normalized
     } else {
         if config.record_noop_decisions {
-            diagnostics.extend([
-                skipped_pass_diagnostic(OptimizerPhase::ConstantFolding, config.level),
-                skipped_pass_diagnostic(OptimizerPhase::PredicatePushdown, config.level),
-                skipped_pass_diagnostic(OptimizerPhase::Normalize, config.level),
-            ]);
+            diagnostics.extend(
+                OptimizerPhase::REWRITE_PHASES
+                    .into_iter()
+                    .map(|phase| skipped_pass_diagnostic(phase, config.level)),
+            );
         }
         ir
     };
@@ -149,7 +149,7 @@ pub fn optimize_procedure_ir_with_config(
     debug_assert!(cost.is_valid());
 
     phases.push(OptimizerPhase::PlanChoice);
-    let kind = plan_kind::OptimizerPlanKind::classify(&projection_result.ir);
+    let kind = OptimizerPlanKind::classify(&projection_result.ir);
     let choice = plan_choice::choose(vec![(projection_result.ir.clone(), cost, kind)])?;
     diagnostics.push(OptimizerDiagnostic::new(
         OptimizerPhase::PlanChoice,

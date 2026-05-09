@@ -177,21 +177,48 @@ impl fmt::Display for ResourceAdmissionRejection {
 
 impl Error for ResourceAdmissionRejection {}
 
+fn validate_non_zero_budget(
+    field: ResourceLimitField,
+    value: u64,
+) -> Result<(), ResourceAdmissionRejection> {
+    if value == 0 {
+        return Err(ResourceAdmissionRejection::ZeroBudget { field });
+    }
+    Ok(())
+}
+
+fn validate_ram_section_budget(
+    ram: &andromeda_hardware::RamProfile,
+    field: ResourceLimitField,
+    section: RamSectionRole,
+    budget: u64,
+) -> Result<(), ResourceAdmissionRejection> {
+    if let Some(limit) = ram.section_budget_bytes(section)
+        && budget > limit
+    {
+        return Err(ResourceAdmissionRejection::BudgetExceedsRamSection {
+            field,
+            section,
+            budget,
+            limit,
+        });
+    }
+    Ok(())
+}
+
 fn validate_budget(
     budget: ResourceBudget,
     ram: &andromeda_hardware::RamProfile,
     pipeline: PipelineClass,
 ) -> Result<u64, ResourceAdmissionRejection> {
-    if budget.max_memory_bytes.bytes() == 0 {
-        return Err(ResourceAdmissionRejection::ZeroBudget {
-            field: ResourceLimitField::MemoryBytes,
-        });
-    }
-    if budget.max_streams.streams() == 0 {
-        return Err(ResourceAdmissionRejection::ZeroBudget {
-            field: ResourceLimitField::StreamCount,
-        });
-    }
+    validate_non_zero_budget(
+        ResourceLimitField::MemoryBytes,
+        budget.max_memory_bytes.bytes(),
+    )?;
+    validate_non_zero_budget(
+        ResourceLimitField::StreamCount,
+        u64::from(budget.max_streams.streams()),
+    )?;
     if pipeline.is_critical_path() && budget.max_streams.streams() != 1 {
         return Err(ResourceAdmissionRejection::CriticalPathStreamCount {
             streams: budget.max_streams.streams(),
@@ -209,27 +236,18 @@ fn validate_budget(
         });
     }
 
-    if let Some(max_execution_bytes) = ram.section_budget_bytes(RamSectionRole::Execution)
-        && budget.max_memory_bytes.bytes() > max_execution_bytes
-    {
-        return Err(ResourceAdmissionRejection::BudgetExceedsRamSection {
-            field: ResourceLimitField::MemoryBytes,
-            section: RamSectionRole::Execution,
-            budget: budget.max_memory_bytes.bytes(),
-            limit: max_execution_bytes,
-        });
-    }
-
-    if let Some(max_temp_bytes) = ram.section_budget_bytes(RamSectionRole::Temp)
-        && budget.max_temp_bytes.bytes() > max_temp_bytes
-    {
-        return Err(ResourceAdmissionRejection::BudgetExceedsRamSection {
-            field: ResourceLimitField::TempBytes,
-            section: RamSectionRole::Temp,
-            budget: budget.max_temp_bytes.bytes(),
-            limit: max_temp_bytes,
-        });
-    }
+    validate_ram_section_budget(
+        ram,
+        ResourceLimitField::MemoryBytes,
+        RamSectionRole::Execution,
+        budget.max_memory_bytes.bytes(),
+    )?;
+    validate_ram_section_budget(
+        ram,
+        ResourceLimitField::TempBytes,
+        RamSectionRole::Temp,
+        budget.max_temp_bytes.bytes(),
+    )?;
 
     Ok(total_budget_bytes)
 }

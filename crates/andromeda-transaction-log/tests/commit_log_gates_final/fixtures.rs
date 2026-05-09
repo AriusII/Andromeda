@@ -17,22 +17,8 @@ pub(crate) struct TestWal {
 }
 
 impl TestWal {
-    pub(crate) fn new() -> Arc<Self> {
-        Arc::new(Self {
-            records: std::sync::Mutex::new(Vec::new()),
-            durable_lsn: std::sync::Mutex::new(Lsn::new(0)),
-            next_lsn: AtomicU64::new(1),
-            fail_flush_after: None,
-        })
-    }
-
     pub(crate) fn with_fail_flush_after(fail_after: u64) -> Arc<Self> {
-        Arc::new(Self {
-            records: std::sync::Mutex::new(Vec::new()),
-            durable_lsn: std::sync::Mutex::new(Lsn::new(0)),
-            next_lsn: AtomicU64::new(1),
-            fail_flush_after: Some(fail_after),
-        })
+        build_test_wal(Some(fail_after))
     }
 
     pub(crate) fn record_count(&self) -> usize {
@@ -46,6 +32,15 @@ impl TestWal {
     pub(crate) fn get_records(&self) -> Vec<TestWalRecord> {
         self.records.lock().unwrap().clone()
     }
+}
+
+fn build_test_wal(fail_flush_after: Option<u64>) -> Arc<TestWal> {
+    Arc::new(TestWal {
+        records: std::sync::Mutex::new(Vec::new()),
+        durable_lsn: std::sync::Mutex::new(Lsn::new(0)),
+        next_lsn: AtomicU64::new(1),
+        fail_flush_after,
+    })
 }
 
 #[async_trait::async_trait]
@@ -84,7 +79,7 @@ pub(crate) fn setup_commit_log() -> (
     Arc<TransactionStatusTable>,
     CommitLogManager<TransactionStatusTable>,
 ) {
-    let wal = TestWal::new();
+    let wal = build_test_wal(None);
     let status_table = Arc::new(TransactionStatusTable::new());
     let commit_log = CommitLogManager::new(wal.clone(), status_table.clone());
     (wal, status_table, commit_log)

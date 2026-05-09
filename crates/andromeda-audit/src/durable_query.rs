@@ -1,5 +1,8 @@
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use andromeda_observability::EventId;
+use andromeda_observability::{
+    EventId, TraceQueryLsnRange, TraceQueryValidation, TraceQueryValidationMessages,
+    trace_query_filter_is_unbounded, validate_trace_query_parts,
+};
 use andromeda_types::{CatalogVersion, ProcedureId, RequestId, SessionId};
 
 use crate::helpers::contains_sensitive_marker;
@@ -10,6 +13,17 @@ use crate::{
 
 pub const DURABLE_AUDIT_QUERY_MAX_LIMIT: usize = 1_000;
 pub const DURABLE_AUDIT_QUERY_DEFAULT_LIMIT: usize = 100;
+
+const DURABLE_AUDIT_QUERY_VALIDATION_MESSAGES: TraceQueryValidationMessages =
+    TraceQueryValidationMessages {
+        limit_zero: "durable audit trace query limit must be non-zero",
+        limit_exceeds_max: "durable audit trace query limit exceeds DURABLE_AUDIT_QUERY_MAX_LIMIT",
+        trace_id_zero: "durable audit trace query trace_id filter must be non-zero when present",
+        lsn_range_invalid: "durable audit trace query LSN range must be non-zero and start_lsn <= end_lsn",
+        catalog_version_zero: "durable audit trace query catalog_version filter must be non-zero when present",
+        procedure_id_zero: "durable audit trace query procedure_id filter must be non-zero when present",
+        principal_empty: "durable audit trace query principal filter must be non-empty when present",
+    };
 
 /// Event-family projection supported by durable audit replay inspection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -29,25 +43,7 @@ pub enum DurableAuditTraceFamily {
 }
 
 /// Inclusive LSN interval for durable audit replay inspection.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DurableAuditTraceQueryLsnRange {
-    pub start_lsn: u64,
-    pub end_lsn: u64,
-}
-
-impl DurableAuditTraceQueryLsnRange {
-    pub const fn new(start_lsn: u64, end_lsn: u64) -> Self {
-        Self { start_lsn, end_lsn }
-    }
-
-    pub const fn contains(self, lsn: u64) -> bool {
-        self.start_lsn <= lsn && lsn <= self.end_lsn
-    }
-
-    pub const fn is_valid(self) -> bool {
-        self.start_lsn != 0 && self.end_lsn != 0 && self.start_lsn <= self.end_lsn
-    }
-}
+pub type DurableAuditTraceQueryLsnRange = TraceQueryLsnRange;
 
 /// Durable audit replay inspection filters.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -62,15 +58,14 @@ pub struct DurableAuditTraceQueryFilter {
 
 impl DurableAuditTraceQueryFilter {
     pub fn is_unbounded(&self) -> bool {
-        self.trace_id.is_none()
-            && self.family.is_none()
-            && self.lsn_range.is_none()
-            && self.catalog_version.is_none()
-            && self.procedure_id.is_none()
-            && self
-                .principal
-                .as_ref()
-                .is_none_or(|principal| principal.trim().is_empty())
+        trace_query_filter_is_unbounded(
+            self.trace_id.is_some(),
+            self.family.is_some(),
+            self.lsn_range.is_some(),
+            self.catalog_version.is_some(),
+            self.procedure_id.is_some(),
+            self.principal.as_deref(),
+        )
     }
 }
 
@@ -94,57 +89,19 @@ impl DurableAuditTraceQuerySpec {
     }
 
     pub fn validate(&self) -> AndromedaResult<()> {
-        if self.limit == 0 {
-            return Err(durable_query_error(
-                "durable audit trace query limit must be non-zero",
-            ));
-        }
-        if self.limit > DURABLE_AUDIT_QUERY_MAX_LIMIT {
-            return Err(durable_query_error(
-                "durable audit trace query limit exceeds DURABLE_AUDIT_QUERY_MAX_LIMIT",
-            ));
-        }
-        match self.filter.trace_id {
-            Some(trace_id) if trace_id.is_zero() => {
-                return Err(durable_query_error(
-                    "durable audit trace query trace_id filter must be non-zero when present",
-                ));
-            },
-            _ => {},
-        }
-        match self.filter.lsn_range {
-            Some(range) if !range.is_valid() => {
-                return Err(durable_query_error(
-                    "durable audit trace query LSN range must be non-zero and start_lsn <= end_lsn",
-                ));
-            },
-            _ => {},
-        }
-        match self.filter.catalog_version {
-            Some(catalog_version) if catalog_version.get() == 0 => {
-                return Err(durable_query_error(
-                    "durable audit trace query catalog_version filter must be non-zero when present",
-                ));
-            },
-            _ => {},
-        }
-        match self.filter.procedure_id {
-            Some(procedure_id) if procedure_id.get() == 0 => {
-                return Err(durable_query_error(
-                    "durable audit trace query procedure_id filter must be non-zero when present",
-                ));
-            },
-            _ => {},
-        }
-        match &self.filter.principal {
-            Some(principal) if principal.trim().is_empty() => {
-                return Err(durable_query_error(
-                    "durable audit trace query principal filter must be non-empty when present",
-                ));
-            },
-            _ => {},
-        }
-        Ok(())
+        validate_trace_query_parts(TraceQueryValidation {
+            limit: self.limit,
+            max_limit: DURABLE_AUDIT_QUERY_MAX_LIMIT,
+            trace_id: self.filter.trace_id,
+            lsn_range_valid: self
+                .filter
+                .lsn_range
+                .map(DurableAuditTraceQueryLsnRange::is_valid),
+            catalog_version: self.filter.catalog_version,
+            procedure_id: self.filter.procedure_id,
+            principal: self.filter.principal.as_deref(),
+            messages: DURABLE_AUDIT_QUERY_VALIDATION_MESSAGES,
+        })
     }
 }
 
@@ -166,17 +123,11 @@ impl DurableAuditTraceQueryPermissionMatrix {
     };
 
     pub const fn permits(self, surface: SurfaceScope, permission: Permission) -> bool {
-        matches!(
-            (surface, self.surface),
-            (SurfaceScope::Application, SurfaceScope::Application)
-                | (SurfaceScope::Administration, SurfaceScope::Administration)
-                | (SurfaceScope::Cluster, SurfaceScope::Cluster)
-                | (SurfaceScope::BackupAgent, SurfaceScope::BackupAgent)
-                | (SurfaceScope::MonitoringAgent, SurfaceScope::MonitoringAgent)
-        ) && matches!(
-            permission,
-            Permission::InspectPlans | Permission::ManageSecurity
-        )
+        surface.same_surface(self.surface)
+            && matches!(
+                permission,
+                Permission::InspectPlans | Permission::ManageSecurity
+            )
     }
 }
 

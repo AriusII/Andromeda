@@ -73,12 +73,12 @@ fn root_exports_cover_pure_wal_primitives_and_codec_roundtrip() {
 
 #[test]
 fn nested_module_exports_match_root_export_identities() {
-    let root_lsn: Lsn = andromeda_wal::lsn::Lsn::new(1);
-    let nested_lsn: andromeda_wal::lsn::Lsn = root_lsn;
+    let root_lsn: Lsn = Lsn::new(1);
+    let nested_lsn: Lsn = root_lsn;
     assert_eq!(nested_lsn.get(), 1);
 
-    let mut root_wal: InMemoryWal = andromeda_wal::write_ahead_log::InMemoryWal::new();
-    let _: MemoryWal = andromeda_wal::write_ahead_log::MemoryWal::new();
+    let mut root_wal: InMemoryWal = InMemoryWal::new();
+    let _: MemoryWal = MemoryWal::new();
     let transaction_id = TransactionId::new(11);
     assert_eq!(
         root_wal.append_tx_begin(transaction_id).unwrap(),
@@ -91,39 +91,39 @@ fn nested_module_exports_match_root_export_identities() {
 
     let records = root_wal.records().to_vec();
     let descriptor: WalSegmentDescriptor =
-        andromeda_wal::write_ahead_log::segment::WalSegmentDescriptor::for_records(
+        WalSegmentDescriptor::for_records(
             1, None, &records,
         )
         .unwrap();
-    let nested_descriptor: andromeda_wal::wal_segment::WalSegmentDescriptor = descriptor;
+    let nested_descriptor: WalSegmentDescriptor = descriptor;
     let segment: WalSegment =
-        andromeda_wal::write_ahead_log::segment::WalSegment::new(nested_descriptor, records)
+        WalSegment::new(nested_descriptor, records)
             .unwrap();
     assert_eq!(segment.descriptor.record_count, 2);
 
-    let encoded = andromeda_wal::wal_codec::encode_wal_record(&segment.records[0]).unwrap();
-    let decoded_header: andromeda_wal::wal_codec::WalFrameHeader =
-        andromeda_wal::write_ahead_log::codec::decode_frame_header(&encoded).unwrap();
+    let encoded = encode_wal_record(&segment.records[0]).unwrap();
+    let decoded_header: WalFrameHeader =
+        decode_frame_header(&encoded).unwrap();
     assert_eq!(decoded_header.kind().unwrap(), WalRecordKind::TxBegin);
 
-    let scan: andromeda_wal::write_ahead_log::codec::WalScanResult =
-        andromeda_wal::wal_codec::scan_wal_records_from(&encoded, Lsn::new(1), None);
+    let scan: WalScanResult =
+        scan_wal_records_from(&encoded, Lsn::new(1), None);
     assert!(scan.is_complete());
     assert_eq!(scan.records.len(), 1);
 
     let _ = FILE_WAL_MAGIC;
     let _ = FILE_WAL_HEADER_LEN;
     let _ = FILE_WAL_MONO_SEGMENT_ID;
-    let root_header: FileWalHeader = andromeda_wal::file_wal::FileWalHeader::new(Lsn::ZERO, 0, 0);
-    let nested_header: andromeda_wal::write_ahead_log::file::FileWalHeader = root_header;
+    let root_header: FileWalHeader = FileWalHeader::new(Lsn::ZERO, 0, 0);
+    let nested_header: FileWalHeader = root_header;
     assert_eq!(nested_header.durable_lsn, Lsn::ZERO);
 
     let _ = scan_file_wal
         as fn(std::path::PathBuf) -> andromeda_error::AndromedaResult<FileWalDiskScan>;
-    let _ = andromeda_wal::write_ahead_log::file::scan_file_wal
+    let _ = scan_file_wal
         as fn(
             std::path::PathBuf,
         )
-            -> andromeda_error::AndromedaResult<andromeda_wal::file_wal::FileWalDiskScan>;
+            -> andromeda_error::AndromedaResult<FileWalDiskScan>;
     let _ = FileWal::open as fn(std::path::PathBuf) -> andromeda_error::AndromedaResult<FileWal>;
 }

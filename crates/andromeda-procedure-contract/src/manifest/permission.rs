@@ -25,26 +25,23 @@ impl RequiredPermission {
 
     pub fn validate(&self) -> AndromedaResult<()> {
         if self.id.trim().is_empty() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
-                "required permission id must not be empty",
-            ));
+            return Err(contract_error("required permission id must not be empty"));
         }
 
         if self.id != self.id.to_ascii_lowercase() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
-                "required permission id must be lower-case",
-            ));
+            return Err(contract_error("required permission id must be lower-case"));
         }
 
         if self.family.trim().is_empty() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
+            return Err(contract_error(
                 "required permission family must not be empty",
             ));
         }
 
         Ok(())
     }
+}
+
+fn contract_error(message: &'static str) -> AndromedaError {
+    AndromedaError::new(AndromedaErrorKind::Contract, message)
 }

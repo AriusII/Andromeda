@@ -55,8 +55,7 @@ impl ResultStreamSequence {
         match frame.header.frame_type {
             FrameType::RpcMetadata => {
                 if self.saw_metadata || self.saw_batch || self.completed {
-                    return Err(AndromedaError::new(
-                        AndromedaErrorKind::Protocol,
+                    return Err(protocol_error(
                         "RPC metadata must be the first result-stream frame",
                     ));
                 }
@@ -65,48 +64,34 @@ impl ResultStreamSequence {
             },
             FrameType::RpcBatch => {
                 if !self.saw_metadata {
-                    return Err(AndromedaError::new(
-                        AndromedaErrorKind::Protocol,
-                        "RPC metadata must precede RPC batch frames",
-                    ));
+                    return Err(protocol_error("RPC metadata must precede RPC batch frames"));
                 }
 
                 if self.completed {
-                    return Err(AndromedaError::new(
-                        AndromedaErrorKind::Protocol,
-                        "RPC batch must not follow completion",
-                    ));
+                    return Err(protocol_error("RPC batch must not follow completion"));
                 }
 
                 self.saw_batch = true;
             },
             FrameType::RpcCompletion => {
                 if !self.saw_metadata {
-                    return Err(AndromedaError::new(
-                        AndromedaErrorKind::Protocol,
-                        "RPC completion requires prior metadata",
-                    ));
+                    return Err(protocol_error("RPC completion requires prior metadata"));
                 }
 
                 if !self.saw_batch && !self.metadata_policy.allows_completion_without_batch() {
-                    return Err(AndromedaError::new(
-                        AndromedaErrorKind::Protocol,
+                    return Err(protocol_error(
                         "RPC completion without a batch requires explicit metadata policy",
                     ));
                 }
 
                 if self.completed {
-                    return Err(AndromedaError::new(
-                        AndromedaErrorKind::Protocol,
-                        "RPC completion must appear once",
-                    ));
+                    return Err(protocol_error("RPC completion must appear once"));
                 }
 
                 self.completed = true;
             },
             _ => {
-                return Err(AndromedaError::new(
-                    AndromedaErrorKind::Protocol,
+                return Err(protocol_error(
                     "result-stream sequence accepts only RPC metadata, batch, and completion",
                 ));
             },
@@ -125,12 +110,9 @@ impl ResultStreamSequence {
         let current_context = (header.request_id, header.session_id, header.tx_id);
 
         match self.request_context {
-            Some(expected_context) if expected_context != current_context => {
-                Err(AndromedaError::new(
-                    AndromedaErrorKind::Protocol,
-                    "result-stream sequence changed request context",
-                ))
-            },
+            Some(expected_context) if expected_context != current_context => Err(protocol_error(
+                "result-stream sequence changed request context",
+            )),
             None => {
                 self.request_context = Some(current_context);
                 Ok(())
@@ -164,10 +146,7 @@ pub fn validate_result_stream_sequence_with_metadata_policy(
     }
 
     if !sequence.is_complete() {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Protocol,
-            "result-stream sequence is incomplete",
-        ));
+        return Err(protocol_error("result-stream sequence is incomplete"));
     }
 
     Ok(())
@@ -188,36 +167,21 @@ pub fn validate_frame_sequence(
     }
 }
 
+fn protocol_error(message: &'static str) -> AndromedaError {
+    AndromedaError::new(AndromedaErrorKind::Protocol, message)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{FrameBytes, FrameHeader};
-
-    fn header_with_len(frame_type: FrameType, payload_length: u64) -> FrameHeader {
-        FrameHeader {
-            frame_type,
-            request_id: RequestId::new(1),
-            session_id: SessionId::new(2),
-            tx_id: None,
-            payload_length,
-            flags: 0,
-            header_crc: 0,
-        }
-    }
-
-    fn frame(frame_type: FrameType, payload: Vec<u8>) -> FrameBytes {
-        FrameBytes {
-            header: header_with_len(frame_type, payload.len() as u64),
-            payload,
-        }
-    }
+    use crate::test_support::frame_bytes;
 
     #[test]
     fn result_stream_sequence_accepts_metadata_batch_completion() {
         let frames = vec![
-            frame(FrameType::RpcMetadata, b"meta".to_vec()),
-            frame(FrameType::RpcBatch, b"row".to_vec()),
-            frame(FrameType::RpcCompletion, Vec::new()),
+            frame_bytes(FrameType::RpcMetadata, b"meta".to_vec()),
+            frame_bytes(FrameType::RpcBatch, b"row".to_vec()),
+            frame_bytes(FrameType::RpcCompletion, Vec::new()),
         ];
 
         assert!(validate_result_stream_sequence(&frames).is_ok());
@@ -226,8 +190,8 @@ mod tests {
     #[test]
     fn result_stream_sequence_requires_completion() {
         let frames = vec![
-            frame(FrameType::RpcMetadata, b"meta".to_vec()),
-            frame(FrameType::RpcBatch, b"row".to_vec()),
+            frame_bytes(FrameType::RpcMetadata, b"meta".to_vec()),
+            frame_bytes(FrameType::RpcBatch, b"row".to_vec()),
         ];
 
         assert_eq!(

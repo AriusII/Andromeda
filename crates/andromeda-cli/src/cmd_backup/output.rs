@@ -2,7 +2,7 @@ use super::{
     BackupCancelOutcome, BackupListEntry, BackupStartOutcome, BackupState, BackupStatusReport,
     BackupVerifyOutcome,
 };
-use crate::diagnostic_json::{json_option_string, json_string};
+use crate::diagnostic_json::{json_option_string, json_option_u64, json_string, json_string_array};
 
 pub(super) fn print_backup_help() {
     println!("Andromeda backup administration commands");
@@ -38,8 +38,7 @@ pub(super) fn print_backup_help() {
 }
 
 pub(super) fn print_backup_status_human(report: &BackupStatusReport) {
-    println!("Backup Status Report");
-    println!("====================");
+    print_heading("Backup Status Report");
     println!("Backup ID: {}", report.backup_id);
     println!(
         "Runtime Mode: {}",
@@ -83,11 +82,9 @@ pub(super) fn print_backup_list_human(
     requires_storage_scheduler: bool,
 ) {
     if contract_preview {
-        println!("Backup List Contract Preview");
-        println!("============================");
+        print_heading("Backup List Contract Preview");
     } else {
-        println!("Recent Backups");
-        println!("==============");
+        print_heading("Recent Backups");
     }
     println!(
         "Runtime Mode: {}",
@@ -117,11 +114,9 @@ pub(super) fn print_backup_list_human(
 
 pub(super) fn print_backup_start_human(outcome: &BackupStartOutcome) {
     if outcome.contract_preview {
-        println!("Backup Contract Preview");
-        println!("=======================");
+        print_heading("Backup Contract Preview");
     } else {
-        println!("Backup Execution Plan");
-        println!("=====================");
+        print_heading("Backup Execution Plan");
     }
     println!("{}", outcome.message);
     println!("Contract Preview: {}", outcome.contract_preview);
@@ -157,37 +152,22 @@ pub(super) fn print_backup_start_human(outcome: &BackupStartOutcome) {
 }
 
 pub(super) fn print_backup_start_json(outcome: &BackupStartOutcome) {
-    let wal_paths = outcome
-        .wal_segment_paths
-        .iter()
-        .map(|path| json_string(path))
-        .collect::<Vec<_>>()
-        .join(",");
     println!(
-        "{{\"schema\":\"andromeda.cli.backup.start.v1\",\"contract_preview\":{},\"durable_backend\":{},\"requires_storage_scheduler\":{},\"dry_run\":{},\"would_start\":{},\"backup_id\":{},\"backup_type\":{},\"destination\":{},\"artifact_dir\":{},\"manifest_path\":{},\"snapshot_path\":{},\"wal_segment_paths\":[{}],\"base_lsn\":{},\"end_lsn\":{},\"message\":{}}}",
+        "{{\"schema\":\"andromeda.cli.backup.start.v1\",\"contract_preview\":{},\"durable_backend\":{},\"requires_storage_scheduler\":{},\"dry_run\":{},\"would_start\":{},\"backup_id\":{},\"backup_type\":{},\"destination\":{},\"artifact_dir\":{},\"manifest_path\":{},\"snapshot_path\":{},\"wal_segment_paths\":{},\"base_lsn\":{},\"end_lsn\":{},\"message\":{}}}",
         outcome.contract_preview,
         outcome.durable_backend,
         outcome.requires_storage_scheduler,
         outcome.dry_run,
         outcome.would_start,
-        outcome
-            .backup_id
-            .map(|backup_id| backup_id.to_string())
-            .unwrap_or_else(|| "null".to_string()),
+        json_option_u64(outcome.backup_id),
         json_string(&outcome.backup_type),
         json_option_string(outcome.destination.as_deref()),
         json_option_string(outcome.artifact_dir.as_deref()),
         json_option_string(outcome.manifest_path.as_deref()),
         json_option_string(outcome.snapshot_path.as_deref()),
-        wal_paths,
-        outcome
-            .base_lsn
-            .map(|lsn| lsn.to_string())
-            .unwrap_or_else(|| "null".to_string()),
-        outcome
-            .end_lsn
-            .map(|lsn| lsn.to_string())
-            .unwrap_or_else(|| "null".to_string()),
+        json_string_array(&outcome.wal_segment_paths),
+        json_option_u64(outcome.base_lsn),
+        json_option_u64(outcome.end_lsn),
         json_string(&outcome.message),
     );
 }
@@ -225,30 +205,26 @@ pub(super) fn print_backup_list_json(
     durable_backend: bool,
     requires_storage_scheduler: bool,
 ) {
-    let entries = backups
-        .iter()
-        .map(|backup| {
-            format!(
-                "{{\"backup_id\":{},\"state\":{},\"size_bytes\":{},\"created_timestamp\":{},\"base_lsn\":{},\"end_lsn\":{},\"artifact_root\":{}}}",
-                backup.backup_id,
-                json_string(&backup.state.to_string()),
-                backup.size_bytes,
-                backup.created_timestamp,
-                backup.base_lsn,
-                backup.end_lsn,
-                json_option_string(backup.artifact_root.as_deref()),
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(",");
+    let backups_json = json_array(backups, |backup| {
+        format!(
+            "{{\"backup_id\":{},\"state\":{},\"size_bytes\":{},\"created_timestamp\":{},\"base_lsn\":{},\"end_lsn\":{},\"artifact_root\":{}}}",
+            backup.backup_id,
+            json_string(&backup.state.to_string()),
+            backup.size_bytes,
+            backup.created_timestamp,
+            backup.base_lsn,
+            backup.end_lsn,
+            json_option_string(backup.artifact_root.as_deref()),
+        )
+    });
     println!(
-        "{{\"schema\":\"andromeda.cli.backup.list.v1\",\"contract_preview\":{},\"durable_backend\":{},\"durable_state_loaded\":{},\"runtime_mode\":{},\"requires_storage_scheduler\":{},\"backups\":[{}],\"message\":{}}}",
+        "{{\"schema\":\"andromeda.cli.backup.list.v1\",\"contract_preview\":{},\"durable_backend\":{},\"durable_state_loaded\":{},\"runtime_mode\":{},\"requires_storage_scheduler\":{},\"backups\":{},\"message\":{}}}",
         contract_preview,
         durable_backend,
         durable_backend,
         json_string(output_runtime_mode(contract_preview, durable_backend)),
         requires_storage_scheduler,
-        entries,
+        backups_json,
         json_string(if durable_backend {
             "file-backed backup artifact listing completed"
         } else {
@@ -258,8 +234,7 @@ pub(super) fn print_backup_list_json(
 }
 
 pub(super) fn print_backup_verify_human(outcome: &BackupVerifyOutcome) {
-    println!("Backup Verify");
-    println!("=============");
+    print_heading("Backup Verify");
     println!("Backup ID: {}", outcome.backup_id);
     println!("Artifact Dir: {}", outcome.artifact_dir);
     println!("Manifest: {}", outcome.manifest_path);
@@ -288,8 +263,7 @@ pub(super) fn print_backup_verify_json(outcome: &BackupVerifyOutcome) {
 }
 
 pub(super) fn print_backup_cancel_human(outcome: &BackupCancelOutcome) {
-    println!("Backup Cancel");
-    println!("=============");
+    print_heading("Backup Cancel");
     println!("Backup ID: {}", outcome.backup_id);
     println!("Contract Preview: {}", outcome.contract_preview);
     println!("Durable Backend: {}", outcome.durable_backend);
@@ -333,4 +307,18 @@ fn output_runtime_mode(contract_preview: bool, durable_backend: bool) -> &'stati
         (true, true) => "dry_run_file_backed_preflight",
         _ => "scaffold",
     }
+}
+
+fn print_heading(title: &str) {
+    println!("{title}");
+    println!("{}", "=".repeat(title.len()));
+}
+
+fn json_array<T>(items: &[T], mut render: impl FnMut(&T) -> String) -> String {
+    let entries = items
+        .iter()
+        .map(|item| render(item))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("[{}]", entries)
 }

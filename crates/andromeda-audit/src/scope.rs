@@ -8,6 +8,17 @@ pub enum SurfaceScope {
 }
 
 impl SurfaceScope {
+    pub const fn same_surface(self, other: Self) -> bool {
+        matches!(
+            (self, other),
+            (Self::Application, Self::Application)
+                | (Self::Administration, Self::Administration)
+                | (Self::Cluster, Self::Cluster)
+                | (Self::BackupAgent, Self::BackupAgent)
+                | (Self::MonitoringAgent, Self::MonitoringAgent)
+        )
+    }
+
     pub const fn permits_admin_operation(self) -> bool {
         !matches!(self, Self::Application)
     }

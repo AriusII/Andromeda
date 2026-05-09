@@ -7,7 +7,7 @@ use super::*;
 #[test]
 fn test_frame_header_offset_stability() {
     assert!(
-        mem::size_of::<FrameHeader>() >= FRAME_CODEC_HEADER_LEN,
+        size_of::<FrameHeader>() >= FRAME_CODEC_HEADER_LEN,
         "FrameHeader memory layout must be large enough for the encoded header"
     );
 

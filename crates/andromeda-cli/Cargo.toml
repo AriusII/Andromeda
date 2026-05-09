@@ -9,7 +9,6 @@ publish = false
 andromeda-admission.workspace = true
 andromeda-bench.workspace = true
 andromeda-backup.workspace = true
-andromeda-catalog.workspace = true
 andromeda-error.workspace = true
 andromeda-exec.workspace = true
 andromeda-hadr.workspace = true
@@ -17,7 +16,6 @@ andromeda-hardware.workspace = true
 andromeda-inventory-demo = { package = "andromeda-inventory-demo-cli-adapter", path = "../andromeda-inventory-demo-cli-adapter", version = "0.1.0" }
 andromeda-manifest.workspace = true
 andromeda-observe.workspace = true
-andromeda-quic.workspace = true
 andromeda-recovery.workspace = true
 andromeda-result-stream.workspace = true
 andromeda-restore.workspace = true

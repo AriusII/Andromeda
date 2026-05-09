@@ -43,21 +43,12 @@ pub fn decode_invocation_response(
     row_count: u64,
 ) -> AndromedaResult<ExecutionResult> {
     if success {
-        let payload = output_payload.ok_or_else(|| {
-            AndromedaError::new(
-                AndromedaErrorKind::Protocol,
-                "success response missing output_payload",
-            )
-        })?;
-        let transaction_id = transaction_id.ok_or_else(|| {
-            AndromedaError::new(
-                AndromedaErrorKind::Protocol,
-                "success response missing transaction_id",
-            )
-        })?;
+        let payload = output_payload
+            .ok_or_else(|| protocol_error("success response missing output_payload"))?;
+        let transaction_id = transaction_id
+            .ok_or_else(|| protocol_error("success response missing transaction_id"))?;
         if transaction_id.get() == 0 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Protocol,
+            return Err(protocol_error(
                 "success response transaction_id must not be zero",
             ));
         }
@@ -103,21 +94,15 @@ fn validate_frame_sequence(frames: &[ResultFrame]) -> AndromedaResult<()> {
 
     for (i, frame) in frames.iter().enumerate() {
         if frame.sequence_number != i as u64 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Protocol,
-                format!(
-                    "frame sequence gap: expected {}, got {}",
-                    i, frame.sequence_number
-                ),
-            ));
+            return Err(protocol_error(format!(
+                "frame sequence gap: expected {}, got {}",
+                i, frame.sequence_number
+            )));
         }
     }
 
     if !matches!(frames.last(), Some(frame) if frame.is_final) {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Protocol,
-            "final frame not marked",
-        ));
+        return Err(protocol_error("final frame not marked"));
     }
 
     Ok(())
@@ -159,22 +144,19 @@ impl ResultStreamDecoder {
         let mut inner = self.lock_inner();
 
         if inner.frames.contains_key(&frame.sequence_number) {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Protocol,
-                format!("duplicate frame sequence number: {}", frame.sequence_number),
-            ));
+            return Err(protocol_error(format!(
+                "duplicate frame sequence number: {}",
+                frame.sequence_number
+            )));
         }
 
         if let Some(max_seq) = inner.frames.keys().max().copied()
             && frame.sequence_number > max_seq + 1
         {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Protocol,
-                format!(
-                    "frame sequence gap: max {} + 1, received {}",
-                    max_seq, frame.sequence_number
-                ),
-            ));
+            return Err(protocol_error(format!(
+                "frame sequence gap: max {} + 1, received {}",
+                max_seq, frame.sequence_number
+            )));
         }
 
         if frame.is_final {
@@ -194,17 +176,11 @@ impl ResultStreamDecoder {
         let inner = self.lock_inner();
 
         if !inner.received_final {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Protocol,
-                "stream not finalized: missing final frame",
-            ));
+            return Err(protocol_error("stream not finalized: missing final frame"));
         }
 
         if !inner.frames_are_contiguous() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Protocol,
-                "stream has gaps in sequence",
-            ));
+            return Err(protocol_error("stream has gaps in sequence"));
         }
 
         let mut result = Vec::new();
@@ -226,10 +202,9 @@ impl ResultStreamDecoder {
     }
 
     fn lock_inner(&self) -> MutexGuard<'_, ResultStreamDecoderInner> {
-        match self.inner.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        }
+        self.inner
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 
@@ -255,6 +230,10 @@ impl Default for ResultStreamDecoder {
     }
 }
 
+fn protocol_error(message: impl Into<String>) -> AndromedaError {
+    AndromedaError::new(AndromedaErrorKind::Protocol, message)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -272,6 +251,14 @@ mod tests {
             payload_length: 0,
             payload_checksum: None,
             max_payload_length: None,
+        }
+    }
+
+    fn result_frame(sequence_number: u64, data: Vec<u8>, is_final: bool) -> ResultFrame {
+        ResultFrame {
+            sequence_number,
+            data,
+            is_final,
         }
     }
 
@@ -296,10 +283,7 @@ mod tests {
             ..
         } = result
         else {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Protocol,
-                "expected success result",
-            ));
+            return Err(protocol_error("expected success result"));
         };
         assert_eq!(invocation_id, InvocationId::new(1));
         assert_eq!(transaction_id, TransactionId::new(42));
@@ -360,10 +344,7 @@ mod tests {
             transaction_id,
         } = result
         else {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Protocol,
-                "expected error result",
-            ));
+            return Err(protocol_error("expected error result"));
         };
         assert_eq!(invocation_id, InvocationId::new(1));
         assert_eq!(error_code, 500);
@@ -375,11 +356,7 @@ mod tests {
     #[test]
     fn test_result_stream_decoder_single_frame() -> AndromedaResult<()> {
         let decoder = ResultStreamDecoder::new();
-        let frame = ResultFrame {
-            sequence_number: 0,
-            data: vec![1, 2, 3, 4, 5],
-            is_final: true,
-        };
+        let frame = result_frame(0, vec![1, 2, 3, 4, 5], true);
 
         decoder.add_frame(frame)?;
         assert!(decoder.is_complete());
@@ -393,23 +370,9 @@ mod tests {
     fn test_result_stream_decoder_multiple_frames() -> AndromedaResult<()> {
         let decoder = ResultStreamDecoder::new();
 
-        let frame1 = ResultFrame {
-            sequence_number: 0,
-            data: vec![1, 2, 3],
-            is_final: false,
-        };
-
-        let frame2 = ResultFrame {
-            sequence_number: 1,
-            data: vec![4, 5, 6],
-            is_final: false,
-        };
-
-        let frame3 = ResultFrame {
-            sequence_number: 2,
-            data: vec![7, 8, 9],
-            is_final: true,
-        };
+        let frame1 = result_frame(0, vec![1, 2, 3], false);
+        let frame2 = result_frame(1, vec![4, 5, 6], false);
+        let frame3 = result_frame(2, vec![7, 8, 9], true);
 
         decoder.add_frame(frame1)?;
         decoder.add_frame(frame2)?;
@@ -426,17 +389,8 @@ mod tests {
     fn test_result_stream_decoder_gap_detection() -> AndromedaResult<()> {
         let decoder = ResultStreamDecoder::new();
 
-        let frame1 = ResultFrame {
-            sequence_number: 0,
-            data: vec![1, 2, 3],
-            is_final: false,
-        };
-
-        let frame2 = ResultFrame {
-            sequence_number: 2, // Gap at 1
-            data: vec![7, 8, 9],
-            is_final: true,
-        };
+        let frame1 = result_frame(0, vec![1, 2, 3], false);
+        let frame2 = result_frame(2, vec![7, 8, 9], true);
 
         decoder.add_frame(frame1)?;
         let result = decoder.add_frame(frame2);
@@ -449,17 +403,8 @@ mod tests {
     fn test_result_stream_decoder_duplicate_detection() -> AndromedaResult<()> {
         let decoder = ResultStreamDecoder::new();
 
-        let frame1 = ResultFrame {
-            sequence_number: 0,
-            data: vec![1, 2, 3],
-            is_final: false,
-        };
-
-        let frame2 = ResultFrame {
-            sequence_number: 0, // Duplicate
-            data: vec![4, 5, 6],
-            is_final: true,
-        };
+        let frame1 = result_frame(0, vec![1, 2, 3], false);
+        let frame2 = result_frame(0, vec![4, 5, 6], true);
 
         decoder.add_frame(frame1)?;
         let result = decoder.add_frame(frame2);
@@ -473,11 +418,7 @@ mod tests {
         let decoder = ResultStreamDecoder::new();
 
         for i in 0..5 {
-            let frame = ResultFrame {
-                sequence_number: i as u64,
-                data: vec![i as u8; 10],
-                is_final: i == 4,
-            };
+            let frame = result_frame(i as u64, vec![i as u8; 10], i == 4);
             decoder.add_frame(frame)?;
         }
 

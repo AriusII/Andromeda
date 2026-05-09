@@ -1,10 +1,10 @@
 use std::net::SocketAddr;
-use std::sync::Arc;
 
-use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::AndromedaResult;
 
 use super::connection_adapter::QuinnConnectionAdapter;
-use super::peer_certificate::{extract_peer_certificates, require_certificate_identity};
+use super::endpoint::{endpoint_from_socket, transport_error};
+use super::peer_certificate::authenticated_connection_adapter;
 use super::surface::QuinnRuntimeSurface;
 
 /// Quinn-based QUIC server.
@@ -46,25 +46,9 @@ impl QuicServer {
         server_config: quinn::ServerConfig,
         runtime_surface: QuinnRuntimeSurface,
     ) -> AndromedaResult<Self> {
-        let socket = std::net::UdpSocket::bind(addr).map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::Transport,
-                format!("failed to bind to {}: {}", addr, e),
-            )
-        })?;
-
-        let endpoint = quinn::Endpoint::new(
-            Default::default(),
-            Some(server_config),
-            socket,
-            Arc::new(quinn::TokioRuntime),
-        )
-        .map_err(|e| {
-            AndromedaError::new(
-                AndromedaErrorKind::Transport,
-                format!("failed to create Quinn endpoint: {}", e),
-            )
-        })?;
+        let socket = std::net::UdpSocket::bind(addr)
+            .map_err(|e| transport_error(format!("failed to bind to {addr}: {e}")))?;
+        let endpoint = endpoint_from_socket(Some(server_config), socket)?;
 
         Ok(Self {
             endpoint,
@@ -90,29 +74,13 @@ impl QuicServer {
     /// - `Transport` if endpoint is closed
     pub async fn accept_connection(&self) -> AndromedaResult<QuinnConnectionAdapter> {
         if let Some(connecting) = self.endpoint.accept().await {
-            let conn = connecting.await.map_err(|e| {
-                AndromedaError::new(
-                    AndromedaErrorKind::Transport,
-                    format!("connection handshake failed: {}", e),
-                )
-            })?;
+            let conn = connecting
+                .await
+                .map_err(|e| transport_error(format!("connection handshake failed: {e}")))?;
 
-            let peer_certificates = extract_peer_certificates(&conn);
-            let identity = require_certificate_identity(
-                &peer_certificates,
-                self.runtime_surface.required_scope(),
-            )?;
-
-            Ok(QuinnConnectionAdapter::with_peer_certificates(
-                conn,
-                identity,
-                peer_certificates,
-            ))
+            authenticated_connection_adapter(conn, self.runtime_surface.required_scope())
         } else {
-            Err(AndromedaError::new(
-                AndromedaErrorKind::Transport,
-                "endpoint closed".to_string(),
-            ))
+            Err(transport_error("endpoint closed"))
         }
     }
 

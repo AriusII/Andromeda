@@ -7,7 +7,6 @@ publish = false
 
 [dependencies]
 andromeda-audit.workspace = true
-andromeda-digest.workspace = true
 andromeda-error.workspace = true
 andromeda-hardware.workspace = true
 andromeda-observability.workspace = true

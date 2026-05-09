@@ -629,7 +629,7 @@ fn boundary_size_matches_declared() {
     };
 
     // Verify that the boundary is correctly sized
-    let encoded_size = std::mem::size_of::<ManifestDurabilityBoundary>();
+    let encoded_size = size_of::<ManifestDurabilityBoundary>();
     assert!(encoded_size > 0);
     assert!(encoded_size <= 256); // Reasonable upper bound
 

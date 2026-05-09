@@ -11,20 +11,15 @@ pub enum SimplifiedPredicates {
     Predicates(Vec<SrplPredicateIr>),
 }
 
-/// Canonical string key for deduplication.
-fn predicate_key(pred: &SrplPredicateIr) -> String {
-    match pred {
-        SrplPredicateIr::InputEqualsField {
-            input,
-            binding,
-            field,
-        } => format!("EQ:{}:{}:{}", input, binding, field),
-        SrplPredicateIr::FieldGreaterThanOrEqualInput {
-            binding,
-            field,
-            input,
-        } => format!("GTE:{}:{}:{}", binding, field, input),
-    }
+/// Canonical string key for predicate deduplication and normalization.
+pub(crate) fn predicate_key(pred: &SrplPredicateIr) -> String {
+    let (binding, field) = pred.field_reference();
+    let tag = if pred.is_range_constraint() {
+        "GTE"
+    } else {
+        "EQ"
+    };
+    format!("{tag}:{}:{}:{}", binding, field, pred.input())
 }
 
 /// A predicate is a tautology when both sides reference the same symbol.

@@ -15,11 +15,11 @@ fn column(name: &str, ordinal: u32) -> ColumnDescriptor {
     }
 }
 
-fn accepts_structured_object_header(_: andromeda_structured_object::StructuredObjectHeader) {}
+fn accepts_structured_object_header(_: StructuredObjectHeader) {}
 
-fn accepts_structured_object_layout(_: andromeda_structured_object::StructuredObjectLayout) {}
+fn accepts_structured_object_layout(_: StructuredObjectLayout) {}
 
-fn accepts_structured_row_count_requirement(_: andromeda_structured_object::RowCountRequirement) {}
+fn accepts_structured_row_count_requirement(_: RowCountRequirement) {}
 
 #[test]
 fn structured_object_owner_paths_keep_type_identity() {

@@ -135,10 +135,7 @@ fn application_route_rejects_privileged_request_surface_scopes_before_iam_or_dis
             AndromedaErrorKind::Security,
             "surface_scope",
         );
-        assert!(
-            surface_scope != "application",
-            "{label} surface scope must stay outside Application route admission"
-        );
+        assert_ne!(surface_scope, "application", "{label} surface scope must stay outside Application route admission");
     }
 }
 

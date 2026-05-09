@@ -76,74 +76,85 @@ fn test_gateway_authorized_route_rejects_unknown_certificate_before_dispatch() {
 
 #[test]
 fn test_gateway_authorized_route_rejects_revoked_certificate_before_dispatch() {
-    let (mut registry, _) = registry_for_application_user();
-    registry
-        .revoke_certificate(&"a".repeat(64))
-        .expect("registered certificate can be revoked");
-
-    assert_authorized_route_denial(
-        registry,
+    assert_application_user_certificate_denial(
+        |registry| {
+            registry
+                .revoke_certificate(&"a".repeat(64))
+                .expect("registered certificate can be revoked");
+        },
         PrincipalAuthorizationDenialReason::CertificateRevoked,
     );
 }
 
 #[test]
 fn test_gateway_authorized_route_rejects_disabled_certificate_before_dispatch() {
-    let (mut registry, _) = registry_for_application_user();
-    registry
-        .disable_certificate(&"a".repeat(64))
-        .expect("registered certificate can be disabled");
-
-    assert_authorized_route_denial(
-        registry,
+    assert_application_user_certificate_denial(
+        |registry| {
+            registry
+                .disable_certificate(&"a".repeat(64))
+                .expect("registered certificate can be disabled");
+        },
         PrincipalAuthorizationDenialReason::CertificateDisabled,
     );
 }
 
 #[test]
 fn test_gateway_authorized_route_rejects_disabled_principal_before_dispatch() {
-    let (registry, _) = registry_with_binding(
-        &"a".repeat(64),
+    assert_binding_denial(
         CoreSurfaceScope::Application,
         PrincipalRole::User,
         PrincipalStatus::Disabled,
         PermissionSet::new(),
-    );
-
-    assert_authorized_route_denial(
-        registry,
         PrincipalAuthorizationDenialReason::PrincipalDisabled,
     );
 }
 
 #[test]
 fn test_gateway_authorized_route_rejects_core_surface_scope_mismatch_before_dispatch() {
-    let (registry, _) = registry_with_binding(
-        &"a".repeat(64),
+    assert_binding_denial(
         CoreSurfaceScope::Administration,
         PrincipalRole::User,
         PrincipalStatus::Active,
         PermissionSet::new(),
-    );
-
-    assert_authorized_route_denial(
-        registry,
         PrincipalAuthorizationDenialReason::SurfaceScopeMismatch,
     );
 }
 
 #[test]
 fn test_gateway_authorized_route_rejects_missing_execute_permission_before_dispatch() {
-    let (registry, _) = registry_with_binding(
-        &"a".repeat(64),
+    assert_binding_denial(
         CoreSurfaceScope::Application,
         PrincipalRole::Guest,
         PrincipalStatus::Active,
         PermissionSet::new(),
-    );
-
-    assert_authorized_route_denial(
-        registry,
         PrincipalAuthorizationDenialReason::PrincipalMissingPermission,
     );
+}
+
+fn assert_application_user_certificate_denial(
+    mutate_registry: impl FnOnce(&mut PrincipalRegistry),
+    expected_reason: PrincipalAuthorizationDenialReason,
+) {
+    let (mut registry, _) = registry_for_application_user();
+    mutate_registry(&mut registry);
+
+    assert_authorized_route_denial(registry, expected_reason);
+}
+
+fn assert_binding_denial(
+    certificate_scope: CoreSurfaceScope,
+    role: PrincipalRole,
+    status: PrincipalStatus,
+    direct_permissions: PermissionSet,
+    expected_reason: PrincipalAuthorizationDenialReason,
+) {
+    let (registry, _) = registry_with_binding(
+        &"a".repeat(64),
+        certificate_scope,
+        role,
+        status,
+        direct_permissions,
+    );
+
+    assert_authorized_route_denial(registry, expected_reason);
 }

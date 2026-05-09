@@ -3,21 +3,19 @@ use andromeda_storage_page::{PageId, PageSize};
 use andromeda_wal::Lsn;
 
 use super::{
-    Datum, HEAP_PAGE_V1_PAYLOAD_OFFSET, HeapPage, HeapRowRedoPayloadV1, ProductStockRow,
-    RowEncoder, SlotEntry, heap_error, heap_page_v1_validate_format_guard,
-    product_stock_row_encoder,
+    Datum, HeapPage, HeapRowRedoPayloadV1, ProductStockRow, RowEncoder, SlotEntry, heap_error,
+    heap_page_v1_validate_format_guard, product_stock_row_encoder,
     slot_directory::{SlotDirectory, SlotId},
+    tuple_layout::{checked_tuple_len, read_tuple_bytes, tuple_insert_space, write_tuple_bytes},
 };
 
 impl HeapPage {
     pub fn insert_tuple(&mut self, tuple: &[u8]) -> AndromedaResult<u16> {
-        if tuple.len() > u16::MAX as usize {
-            return Err(heap_error("tuple too large: exceeds u16::MAX"));
-        }
-
-        let tuple_len = tuple.len() as u16;
+        let tuple_len = checked_tuple_len(tuple, None, |_| {
+            "tuple too large: exceeds u16::MAX".to_string()
+        })?;
         let free_space = self.compute_free_space_bytes();
-        let needed = tuple_len as usize + SlotEntry::SIZE;
+        let needed = tuple_insert_space(tuple_len)?;
 
         if free_space < needed {
             return Err(heap_error(format!(
@@ -26,17 +24,13 @@ impl HeapPage {
             )));
         }
 
-        let next_tuple_offset = self
-            .slot_directory
-            .iter()
-            .filter(|entry| !entry.is_deleted())
-            .map(|entry| entry.offset() as usize + entry.length() as usize)
-            .max()
-            .unwrap_or(HEAP_PAGE_V1_PAYLOAD_OFFSET);
-        let insert_offset = next_tuple_offset as u16;
-
-        let offset_usize = insert_offset as usize;
-        self.data[offset_usize..offset_usize + tuple_len as usize].copy_from_slice(tuple);
+        let insert_offset = self.next_tuple_offset() as u16;
+        write_tuple_bytes(
+            &mut self.data,
+            insert_offset,
+            tuple,
+            "page layout violation: tuple exceeds page bounds",
+        )?;
 
         let slot_id = self.slot_directory.len() as u16;
         self.slot_directory
@@ -93,21 +87,11 @@ impl HeapPageInsert {
     }
 
     pub fn insert_raw_tuple(&mut self, tuple_bytes: &[u8]) -> AndromedaResult<u16> {
-        if tuple_bytes.is_empty() {
-            return Err(heap_error("tuple must not be empty"));
-        }
-
-        if tuple_bytes.len() > u16::MAX as usize {
-            return Err(heap_error(format!(
-                "tuple too large: {} bytes (max {})",
-                tuple_bytes.len(),
-                u16::MAX
-            )));
-        }
-
-        let tuple_len = tuple_bytes.len() as u16;
+        let tuple_len = checked_tuple_len(tuple_bytes, Some("tuple must not be empty"), |len| {
+            format!("tuple too large: {} bytes (max {})", len, u16::MAX)
+        })?;
         let free_space = usize::from(self.slot_directory.free_space());
-        let needed = tuple_len as usize + SlotEntry::SIZE;
+        let needed = tuple_insert_space(tuple_len)?;
 
         if free_space < needed {
             return Err(heap_error(format!(
@@ -122,14 +106,12 @@ impl HeapPageInsert {
             .get_slot(slot_id)?
             .ok_or_else(|| heap_error("slot allocation inconsistency"))?;
 
-        let offset_usize = offset as usize;
-        if offset_usize + tuple_bytes.len() > self.data.len() {
-            return Err(heap_error(
-                "page layout violation: tuple exceeds page bounds",
-            ));
-        }
-
-        self.data[offset_usize..offset_usize + tuple_bytes.len()].copy_from_slice(tuple_bytes);
+        write_tuple_bytes(
+            &mut self.data,
+            offset,
+            tuple_bytes,
+            "page layout violation: tuple exceeds page bounds",
+        )?;
         Ok(slot_id.get())
     }
 
@@ -164,13 +146,13 @@ impl HeapPageInsert {
             .get_slot(slot)?
             .ok_or_else(|| heap_error("slot deleted or not found"))?;
 
-        let offset_usize = offset as usize;
-        let length_usize = length as usize;
-        if offset_usize + length_usize > self.data.len() {
-            return Err(heap_error("page corrupted: slot offset out of bounds"));
-        }
-
-        Ok(self.data[offset_usize..offset_usize + length_usize].to_vec())
+        read_tuple_bytes(
+            &self.data,
+            offset,
+            length,
+            "page corrupted: slot offset out of bounds",
+            "page corrupted: slot offset out of bounds",
+        )
     }
 
     pub fn read_product_stock(&self, slot_id: u16) -> AndromedaResult<ProductStockRow> {

@@ -98,10 +98,10 @@ where
 
     fn publication_semantics(&self) -> CatalogPublicationSemantics {
         match self.publication_semantics {
-            andromeda_catalog_store::CatalogPublicationSemantics::PlannedVersionOnly => {
+            CatalogPublicationSemantics::PlannedVersionOnly => {
                 CatalogPublicationSemantics::PlannedVersionOnly
             },
-            andromeda_catalog_store::CatalogPublicationSemantics::DurablePublicationExternal => {
+            CatalogPublicationSemantics::DurablePublicationExternal => {
                 CatalogPublicationSemantics::DurablePublicationExternal
             },
         }

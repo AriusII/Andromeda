@@ -164,18 +164,18 @@ fn mvcc_v0_ignores_inflight_and_rolled_back_delete_intents() {
 #[test]
 fn mvcc_compatibility_module_reexports_focused_types() {
     let tx_id = TransactionId::new(401);
-    let row = andromeda_mvcc::MvccRowHeader::open_version(10, tx_id, None).unwrap();
-    let snapshot = andromeda_mvcc::Snapshot::with_context(
+    let row = MvccRowHeader::open_version(10, tx_id, None).unwrap();
+    let snapshot = Snapshot::with_context(
         10,
         CatalogVersion::new(3),
-        andromeda_mvcc::MvccIsolationPolicy::ReadCommitted,
+        MvccIsolationPolicy::ReadCommitted,
         Some(tx_id),
         [tx_id],
     )
     .unwrap();
-    let statuses = andromeda_mvcc::TransactionStatusTable::new();
+    let statuses = TransactionStatusTable::new();
     statuses
-        .record(tx_id, andromeda_mvcc::TransactionStatus::InFlight)
+        .record(tx_id, TransactionStatus::InFlight)
         .unwrap();
 
     assert!(row.visible_in_snapshot(&snapshot, &statuses).unwrap());

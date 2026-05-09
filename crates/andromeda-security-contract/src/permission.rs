@@ -66,15 +66,9 @@ impl PermissionFamily {
     }
 
     pub fn from_id(id: &str) -> Option<Self> {
-        match id {
-            FAMILY_ID_APPLICATION => Some(Self::Application),
-            FAMILY_ID_DEFINITION => Some(Self::Definition),
-            FAMILY_ID_DIAGNOSTICS => Some(Self::Diagnostics),
-            FAMILY_ID_SECURITY => Some(Self::Security),
-            FAMILY_ID_RECOVERY => Some(Self::Recovery),
-            FAMILY_ID_CLUSTER => Some(Self::Cluster),
-            _ => None,
-        }
+        ALL_PERMISSION_FAMILIES
+            .into_iter()
+            .find(|family| family.as_str() == id)
     }
 }
 
@@ -211,29 +205,9 @@ pub const fn canonical_permission_id(permission: Permission) -> &'static str {
 }
 
 pub fn permission_from_canonical_id(id: &str) -> Option<Permission> {
-    match id {
-        PERMISSION_ID_EXECUTE_PROCEDURE => Some(Permission::ExecuteProcedure),
-        PERMISSION_ID_READ_CONTRACT => Some(Permission::ReadContract),
-        PERMISSION_ID_READ_CONTRACT_METADATA => Some(Permission::ReadContractMetadata),
-        PERMISSION_ID_CREATE_TABLE => Some(Permission::CreateTable),
-        PERMISSION_ID_CREATE_MAP => Some(Permission::CreateMap),
-        PERMISSION_ID_CREATE_PROCEDURE => Some(Permission::CreateProcedure),
-        PERMISSION_ID_IMPORT_DEFINITION_BATCH => Some(Permission::ImportDefinitionBatch),
-        PERMISSION_ID_DEBUG_PROCEDURE => Some(Permission::DebugProcedure),
-        PERMISSION_ID_READ_PROCEDURE_STORE => Some(Permission::ReadProcedureStore),
-        PERMISSION_ID_INSPECT_PLANS => Some(Permission::InspectPlans),
-        PERMISSION_ID_READ_AUDIT => Some(Permission::ReadAudit),
-        PERMISSION_ID_MANAGE_SECURITY => Some(Permission::ManageSecurity),
-        PERMISSION_ID_ROTATE_CERTIFICATE => Some(Permission::RotateCertificate),
-        PERMISSION_ID_REVOKE_CERTIFICATE_IDENTITY => Some(Permission::RevokeCertificateIdentity),
-        PERMISSION_ID_BACKUP => Some(Permission::Backup),
-        PERMISSION_ID_RESTORE => Some(Permission::Restore),
-        PERMISSION_ID_FORENSIC_START => Some(Permission::ForensicStart),
-        PERMISSION_ID_CLUSTER_PROMOTE => Some(Permission::ClusterPromote),
-        PERMISSION_ID_CLUSTER_FENCE_NODE => Some(Permission::ClusterFenceNode),
-        PERMISSION_ID_CLUSTER_UPDATE_MANIFEST => Some(Permission::ClusterUpdateManifest),
-        _ => None,
-    }
+    ALL_PERMISSIONS
+        .into_iter()
+        .find(|permission| permission.canonical_id() == id)
 }
 
 pub fn permission_family_for_id(id: &str) -> Option<PermissionFamily> {

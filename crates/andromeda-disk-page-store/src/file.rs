@@ -82,14 +82,21 @@ impl FileDiskManager {
 
     /// Register an extent with this disk manager.
     pub fn register_extent(&mut self, descriptor: ExtentDescriptor) -> AndromedaResult<()> {
+        self.validate_extent_registration(&descriptor)?;
+        self.register_validated_extent(descriptor)
+    }
+
+    fn validate_extent_registration(&self, descriptor: &ExtentDescriptor) -> AndromedaResult<()> {
         descriptor
             .validate()
             .map_err(|e| DiskManagerError::InvalidExtentDescriptor {
                 reason: e.message().to_string(),
             })?;
 
-        self.verify_extent_contiguity_impl(&descriptor)?;
+        self.verify_extent_contiguity_impl(descriptor)
+    }
 
+    fn register_validated_extent(&mut self, descriptor: ExtentDescriptor) -> AndromedaResult<()> {
         let extent_id = descriptor.extent_id;
         let first_page_id = descriptor.first_page_id.get();
 
@@ -178,13 +185,7 @@ impl DiskManager for FileDiskManager {
     }
 
     fn allocate_extent(&mut self, descriptor: ExtentDescriptor) -> AndromedaResult<()> {
-        descriptor
-            .validate()
-            .map_err(|e| DiskManagerError::InvalidExtentDescriptor {
-                reason: e.message().to_string(),
-            })?;
-
-        self.verify_extent_contiguity_impl(&descriptor)?;
+        self.validate_extent_registration(&descriptor)?;
 
         let mut descriptor_with_offset = descriptor;
         descriptor_with_offset.file_offset = self.current_file_size;
@@ -213,7 +214,7 @@ impl DiskManager for FileDiskManager {
                 reason: e.to_string(),
             })?;
 
-        self.register_extent(descriptor_with_offset)
+        self.register_validated_extent(descriptor_with_offset)
     }
 
     fn extent_for_page(&self, page_id: PageId) -> AndromedaResult<Option<ExtentDescriptor>> {
@@ -286,19 +287,29 @@ mod tests {
         Ok((manager, temp_dir))
     }
 
-    fn create_test_extent() -> ExtentDescriptor {
+    fn test_extent(
+        extent_id: u64,
+        object_id: u64,
+        allocation_id: u64,
+        first_page_id: u64,
+        page_count: u32,
+    ) -> ExtentDescriptor {
         ExtentDescriptor {
-            extent_id: ExtentId::new(1),
-            object_id: ObjectId::new(1),
-            allocation_id: AllocationId::new(1),
-            first_page_id: PageId::new(1),
-            page_count: 10,
+            extent_id: ExtentId::new(extent_id),
+            object_id: ObjectId::new(object_id),
+            allocation_id: AllocationId::new(allocation_id),
+            first_page_id: PageId::new(first_page_id),
+            page_count,
             page_size: PageSize::KiB16,
             state: ExtentState::AllocatingHot,
             segment_id: None,
             file_offset: 0,
             allocated_on_disk: false,
         }
+    }
+
+    fn create_test_extent() -> ExtentDescriptor {
+        test_extent(1, 1, 1, 1, 10)
     }
 
     fn valid_page(page_id: PageId, page_lsn: Lsn) -> PageImage {
@@ -368,33 +379,11 @@ mod tests {
     fn test_sequential_extents_append_contiguously() -> AndromedaResult<()> {
         let (mut manager, _temp) = create_temp_disk_manager()?;
 
-        let extent1 = ExtentDescriptor {
-            extent_id: ExtentId::new(1),
-            object_id: ObjectId::new(1),
-            allocation_id: AllocationId::new(1),
-            first_page_id: PageId::new(1),
-            page_count: 10,
-            page_size: PageSize::KiB16,
-            state: ExtentState::AllocatingHot,
-            segment_id: None,
-            file_offset: 0,
-            allocated_on_disk: false,
-        };
+        let extent1 = test_extent(1, 1, 1, 1, 10);
 
         manager.allocate_extent(extent1)?;
 
-        let extent2 = ExtentDescriptor {
-            extent_id: ExtentId::new(2),
-            object_id: ObjectId::new(2),
-            allocation_id: AllocationId::new(2),
-            first_page_id: PageId::new(11),
-            page_count: 5,
-            page_size: PageSize::KiB16,
-            state: ExtentState::AllocatingHot,
-            segment_id: None,
-            file_offset: 0,
-            allocated_on_disk: false,
-        };
+        let extent2 = test_extent(2, 2, 2, 11, 5);
 
         manager.allocate_extent(extent2)?;
 
@@ -446,33 +435,11 @@ mod tests {
     fn test_overlapping_extents_rejected() -> AndromedaResult<()> {
         let (mut manager, _temp) = create_temp_disk_manager()?;
 
-        let extent1 = ExtentDescriptor {
-            extent_id: ExtentId::new(1),
-            object_id: ObjectId::new(1),
-            allocation_id: AllocationId::new(1),
-            first_page_id: PageId::new(1),
-            page_count: 10,
-            page_size: PageSize::KiB16,
-            state: ExtentState::AllocatingHot,
-            segment_id: None,
-            file_offset: 0,
-            allocated_on_disk: false,
-        };
+        let extent1 = test_extent(1, 1, 1, 1, 10);
 
         manager.allocate_extent(extent1)?;
 
-        let extent2 = ExtentDescriptor {
-            extent_id: ExtentId::new(2),
-            object_id: ObjectId::new(2),
-            allocation_id: AllocationId::new(2),
-            first_page_id: PageId::new(5),
-            page_count: 10,
-            page_size: PageSize::KiB16,
-            state: ExtentState::AllocatingHot,
-            segment_id: None,
-            file_offset: 0,
-            allocated_on_disk: false,
-        };
+        let extent2 = test_extent(2, 2, 2, 5, 10);
 
         let result = manager.allocate_extent(extent2);
         assert!(result.is_err());

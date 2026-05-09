@@ -39,18 +39,10 @@ impl Datum {
             Self::Float32(_) => Ok(4),
             Self::Float64(_) => Ok(8),
             Self::Bool(_) => Ok(1),
-            Self::Bytes(b) => {
-                if b.len() > u32::MAX as usize {
-                    return Err(encoder_error("byte array too large"));
-                }
-                Ok(b.len())
-            },
+            Self::Bytes(b) => checked_variable_width_len(b.len(), "byte array too large"),
             Self::Text(s) => {
                 let bytes = s.as_bytes();
-                if bytes.len() > u32::MAX as usize {
-                    return Err(encoder_error("text too large"));
-                }
-                Ok(bytes.len())
+                checked_variable_width_len(bytes.len(), "text too large")
             },
         }
     }
@@ -94,21 +86,25 @@ impl Datum {
         }
     }
 
+    pub(crate) const fn scalar_type(&self) -> Option<ScalarType> {
+        match self {
+            Self::Int8(_) => Some(ScalarType::Int8),
+            Self::Int16(_) => Some(ScalarType::Int16),
+            Self::Int32(_) => Some(ScalarType::Int32),
+            Self::Int64(_) => Some(ScalarType::Int64),
+            Self::UInt8(_) => Some(ScalarType::UInt8),
+            Self::UInt16(_) => Some(ScalarType::UInt16),
+            Self::UInt32(_) => Some(ScalarType::UInt32),
+            Self::UInt64(_) => Some(ScalarType::UInt64),
+            Self::Float32(_) => Some(ScalarType::Float32),
+            Self::Float64(_) => Some(ScalarType::Float64),
+            Self::Bool(_) => Some(ScalarType::Bool),
+            Self::Null | Self::Bytes(_) | Self::Text(_) => None,
+        }
+    }
+
     pub(crate) fn matches_scalar_type(&self, scalar_type: ScalarType) -> bool {
-        matches!(
-            (self, scalar_type),
-            (Self::Int8(_), ScalarType::Int8)
-                | (Self::Int16(_), ScalarType::Int16)
-                | (Self::Int32(_), ScalarType::Int32)
-                | (Self::Int64(_), ScalarType::Int64)
-                | (Self::UInt8(_), ScalarType::UInt8)
-                | (Self::UInt16(_), ScalarType::UInt16)
-                | (Self::UInt32(_), ScalarType::UInt32)
-                | (Self::UInt64(_), ScalarType::UInt64)
-                | (Self::Float32(_), ScalarType::Float32)
-                | (Self::Float64(_), ScalarType::Float64)
-                | (Self::Bool(_), ScalarType::Bool)
-        )
+        self.scalar_type() == Some(scalar_type)
     }
 
     /// Decode from bytes given a scalar type.
@@ -146,4 +142,11 @@ impl Datum {
             ScalarType::Bool => Ok(Self::Bool(read_scalar_byte(bytes, "bool")? != 0)),
         }
     }
+}
+
+fn checked_variable_width_len(len: usize, too_large_msg: &'static str) -> AndromedaResult<usize> {
+    if len > u32::MAX as usize {
+        return Err(encoder_error(too_large_msg));
+    }
+    Ok(len)
 }

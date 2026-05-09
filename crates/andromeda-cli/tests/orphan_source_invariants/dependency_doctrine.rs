@@ -604,7 +604,7 @@ fn dependency_guard_enforces_workspace_doctrine() {
     for manifest in manifests.values() {
         violations.extend(manifest.forbidden_wire_deps.iter().cloned());
     }
-    let workspace_manifest = std::fs::read_to_string(workspace.join("Cargo.toml"))
+    let workspace_manifest = fs::read_to_string(workspace.join("Cargo.toml"))
         .expect("read workspace Cargo.toml for dependency guard");
     violations
         .extend(parse_dependency_manifest("workspace", &workspace_manifest).forbidden_wire_deps);

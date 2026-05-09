@@ -136,6 +136,13 @@ pub fn validate_recovery_floor(
 mod tests {
     use super::*;
 
+    fn assert_storage_error<T>(result: AndromedaResult<T>) {
+        match result {
+            Err(error) => assert_eq!(error.kind(), AndromedaErrorKind::Storage),
+            Ok(_) => panic!("expected storage error"),
+        }
+    }
+
     fn boundary() -> ManifestDurabilityBoundary {
         ManifestDurabilityBoundary {
             database_id: 1,
@@ -154,17 +161,11 @@ mod tests {
 
         let mut invalid = boundary();
         invalid.manifest_crc = 0;
-        assert_eq!(
-            invalid.validate().unwrap_err().kind(),
-            AndromedaErrorKind::Storage
-        );
+        assert_storage_error(invalid.validate());
 
         let mut invalid = boundary();
         invalid.required_wal_start_lsn = Lsn::new(9);
-        assert_eq!(
-            invalid.validate().unwrap_err().kind(),
-            AndromedaErrorKind::Storage
-        );
+        assert_storage_error(invalid.validate());
     }
 
     #[test]

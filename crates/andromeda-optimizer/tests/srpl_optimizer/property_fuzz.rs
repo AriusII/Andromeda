@@ -75,14 +75,8 @@ fn t_pr_04_simplify_predicates_idempotent() {
         let preds: Vec<SrplPredicateIr> = (0..count)
             .map(|i| eq_pred(&format!("p{}", i % 3), "T", &format!("f{}", i % 3)))
             .collect();
-        let once = match simplify_predicates(preds) {
-            SimplifiedPredicates::Predicates(v) => v,
-            SimplifiedPredicates::AlwaysFalse => vec![],
-        };
-        let twice = match simplify_predicates(once.clone()) {
-            SimplifiedPredicates::Predicates(v) => v,
-            SimplifiedPredicates::AlwaysFalse => vec![],
-        };
+        let once = simplified_predicates(preds);
+        let twice = simplified_predicates(once.clone());
         prop_assert_eq!(once, twice, "simplify_predicates must be idempotent");
     });
 }

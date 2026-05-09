@@ -45,8 +45,8 @@ fn hello_frame(session_id: u64) -> FrameBytes {
     FrameBytes {
         header: FrameHeader {
             frame_type: FrameType::Hello,
-            request_id: andromeda_types::RequestId::new(1),
-            session_id: andromeda_types::SessionId::new(session_id),
+            request_id: RequestId::new(1),
+            session_id: SessionId::new(session_id),
             tx_id: None,
             payload_length: 0,
             flags: 0,
@@ -60,8 +60,8 @@ fn auth_frame(session_id: u64) -> FrameBytes {
     FrameBytes {
         header: FrameHeader {
             frame_type: FrameType::Auth,
-            request_id: andromeda_types::RequestId::new(1),
-            session_id: andromeda_types::SessionId::new(session_id),
+            request_id: RequestId::new(1),
+            session_id: SessionId::new(session_id),
             tx_id: None,
             payload_length: 0,
             flags: 0,

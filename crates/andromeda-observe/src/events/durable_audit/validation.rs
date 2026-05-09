@@ -1,6 +1,9 @@
 use andromeda_error::AndromedaResult;
 
-use crate::events::{TraceEvent, observe_error};
+use crate::events::{
+    DurableAuditPrincipalBinding, Permission, SecurityPolicyVersionEvidence, SurfaceScope,
+    TraceEvent, observe_error,
+};
 
 use super::{
     DurableAuditAppendRecord, DurableAuditEventFamily, PendingDurableAuditRecord,
@@ -63,59 +66,120 @@ fn validate_append_projection(record: &PendingDurableAuditRecord) -> AndromedaRe
     .validate()
 }
 
-fn validate_security_decision_binding(record: &PendingDurableAuditRecord) -> AndromedaResult<()> {
+fn validate_request_session_correlation(
+    record: &PendingDurableAuditRecord,
+    subject: &str,
+) -> AndromedaResult<()> {
     if !record.envelope.correlation.has_request_session() {
-        return Err(observe_error(
-            "durable security audit records require request/session correlation",
-        ));
+        return Err(observe_error(format!(
+            "durable {subject} records require request/session correlation",
+        )));
     }
+    Ok(())
+}
 
-    let binding = &record.principal_binding;
+fn validate_required_binding_evidence(
+    binding: &DurableAuditPrincipalBinding,
+    subject: &str,
+    require_policy_version: bool,
+) -> AndromedaResult<()> {
     if binding.certificate_fingerprint.is_none()
         || binding.surface.is_none()
         || binding.permission.is_none()
-        || binding.policy_version.is_none()
+        || (require_policy_version && binding.policy_version.is_none())
     {
-        return Err(observe_error(
-            "durable security audit records require certificate, surface, permission, and policy version evidence",
-        ));
+        let required_evidence = if require_policy_version {
+            "certificate, surface, permission, and policy version evidence"
+        } else {
+            "certificate, surface, and permission evidence"
+        };
+        return Err(observe_error(format!(
+            "durable {subject} records require {required_evidence}",
+        )));
     }
+    Ok(())
+}
+
+fn validate_binding_correlation(
+    record: &PendingDurableAuditRecord,
+    subject: &str,
+) -> AndromedaResult<()> {
+    let binding = &record.principal_binding;
     if binding.request_id != record.envelope.correlation.request_id
         || binding.session_id != record.envelope.correlation.session_id
     {
-        return Err(observe_error(
-            "durable security audit principal binding request/session ids must match envelope correlation",
-        ));
+        return Err(observe_error(format!(
+            "durable {subject} principal binding request/session ids must match envelope correlation",
+        )));
     }
+    Ok(())
+}
+
+struct ExpectedAuditBinding<'a> {
+    principal_id: &'a str,
+    certificate_fingerprint: &'a str,
+    surface: SurfaceScope,
+    permission: Permission,
+    policy_version: Option<&'a SecurityPolicyVersionEvidence>,
+}
+
+fn validate_trace_binding(
+    binding: &DurableAuditPrincipalBinding,
+    subject: &str,
+    trace_label: &str,
+    expected: ExpectedAuditBinding<'_>,
+) -> AndromedaResult<()> {
+    if binding.principal_id != expected.principal_id {
+        return Err(observe_error(format!(
+            "durable {subject} principal_id must match {trace_label} trace",
+        )));
+    }
+    if binding.certificate_fingerprint.as_deref() != Some(expected.certificate_fingerprint) {
+        return Err(observe_error(format!(
+            "durable {subject} certificate fingerprint must match {trace_label} trace",
+        )));
+    }
+    if binding.surface != Some(expected.surface) {
+        return Err(observe_error(format!(
+            "durable {subject} surface must match {trace_label} trace",
+        )));
+    }
+    if binding.permission != Some(expected.permission) {
+        return Err(observe_error(format!(
+            "durable {subject} permission must match {trace_label} trace",
+        )));
+    }
+    if let Some(policy_version) = expected.policy_version
+        && binding.policy_version.as_ref() != Some(policy_version)
+    {
+        return Err(observe_error(format!(
+            "durable {subject} policy version evidence must match {trace_label} trace",
+        )));
+    }
+    Ok(())
+}
+
+fn validate_security_decision_binding(record: &PendingDurableAuditRecord) -> AndromedaResult<()> {
+    const SUBJECT: &str = "security audit";
+    validate_request_session_correlation(record, SUBJECT)?;
+
+    let binding = &record.principal_binding;
+    validate_required_binding_evidence(binding, SUBJECT, true)?;
+    validate_binding_correlation(record, SUBJECT)?;
 
     if let TraceEvent::SecurityAudit(trace) = &record.envelope.event {
-        if binding.principal_id != trace.principal.principal_id {
-            return Err(observe_error(
-                "durable security audit principal_id must match security audit trace",
-            ));
-        }
-        if binding.certificate_fingerprint.as_deref()
-            != Some(trace.certificate.fingerprint.as_str())
-        {
-            return Err(observe_error(
-                "durable security audit certificate fingerprint must match security audit trace",
-            ));
-        }
-        if binding.surface != Some(trace.surface) {
-            return Err(observe_error(
-                "durable security audit surface must match security audit trace",
-            ));
-        }
-        if binding.permission != Some(trace.permission) {
-            return Err(observe_error(
-                "durable security audit permission must match security audit trace",
-            ));
-        }
-        if binding.policy_version.as_ref() != Some(&trace.policy_version) {
-            return Err(observe_error(
-                "durable security audit policy version evidence must match security audit trace",
-            ));
-        }
+        validate_trace_binding(
+            binding,
+            SUBJECT,
+            "security audit",
+            ExpectedAuditBinding {
+                principal_id: &trace.principal.principal_id,
+                certificate_fingerprint: &trace.certificate.fingerprint,
+                surface: trace.surface,
+                permission: trace.permission,
+                policy_version: Some(&trace.policy_version),
+            },
+        )?;
     }
 
     Ok(())
@@ -130,50 +194,26 @@ fn validate_admin_operation_decision_binding(
             "durable {family:?} records require an admin operation trace",
         )));
     };
+    let subject = format!("{family:?}");
 
-    if !record.envelope.correlation.has_request_session() {
-        return Err(observe_error(format!(
-            "durable {family:?} records require request/session correlation",
-        )));
-    }
+    validate_request_session_correlation(record, &subject)?;
 
     let binding = &record.principal_binding;
-    if binding.certificate_fingerprint.is_none()
-        || binding.surface.is_none()
-        || binding.permission.is_none()
-    {
-        return Err(observe_error(format!(
-            "durable {family:?} records require certificate, surface, and permission evidence",
-        )));
-    }
-    if binding.request_id != record.envelope.correlation.request_id
-        || binding.session_id != record.envelope.correlation.session_id
-    {
-        return Err(observe_error(format!(
-            "durable {family:?} principal binding request/session ids must match envelope correlation",
-        )));
-    }
+    validate_required_binding_evidence(binding, &subject, false)?;
+    validate_binding_correlation(record, &subject)?;
 
-    if binding.principal_id != trace.principal.principal_id {
-        return Err(observe_error(format!(
-            "durable {family:?} principal_id must match admin operation trace",
-        )));
-    }
-    if binding.certificate_fingerprint.as_deref() != Some(trace.certificate.fingerprint.as_str()) {
-        return Err(observe_error(format!(
-            "durable {family:?} certificate fingerprint must match admin operation trace",
-        )));
-    }
-    if binding.surface != Some(trace.surface) {
-        return Err(observe_error(format!(
-            "durable {family:?} surface must match admin operation trace",
-        )));
-    }
-    if binding.permission != Some(trace.permission) {
-        return Err(observe_error(format!(
-            "durable {family:?} permission must match admin operation trace",
-        )));
-    }
+    validate_trace_binding(
+        binding,
+        &subject,
+        "admin operation",
+        ExpectedAuditBinding {
+            principal_id: &trace.principal.principal_id,
+            certificate_fingerprint: &trace.certificate.fingerprint,
+            surface: trace.surface,
+            permission: trace.permission,
+            policy_version: None,
+        },
+    )?;
 
     Ok(())
 }

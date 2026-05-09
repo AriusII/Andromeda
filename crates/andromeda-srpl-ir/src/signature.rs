@@ -19,10 +19,7 @@ impl ProcedureSignature {
         let mut result_names = BTreeSet::new();
         for result in &self.returns {
             if !result_names.insert(result.name.as_str()) {
-                return Err(AndromedaError::new(
-                    AndromedaErrorKind::Srpl,
-                    "SRPL result stream names must be unique",
-                ));
+                return Err(srpl_error("SRPL result stream names must be unique"));
             }
             result.validate()?;
         }
@@ -51,10 +48,7 @@ pub struct ResultContract {
 impl ResultContract {
     pub fn validate(&self) -> AndromedaResult<()> {
         if self.name.trim().is_empty() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Srpl,
-                "SRPL result contract name must not be empty",
-            ));
+            return Err(srpl_error("SRPL result contract name must not be empty"));
         }
 
         validate_dense_columns(&self.columns, true, "SRPL result column ordinals")?;
@@ -69,8 +63,7 @@ fn validate_dense_columns(
     context: &str,
 ) -> AndromedaResult<()> {
     if require_non_empty && columns.is_empty() {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Srpl,
+        return Err(srpl_error(
             "SRPL result contract must declare at least one column",
         ));
     }
@@ -79,20 +72,20 @@ fn validate_dense_columns(
     for (expected_ordinal, column) in columns.iter().enumerate() {
         column.validate()?;
         if !column_names.insert(column.name.as_str()) {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Srpl,
-                format!("{context} names must be unique"),
-            ));
+            return Err(srpl_error(format!("{context} names must be unique")));
         }
         if column.ordinal != expected_ordinal as u32 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Srpl,
-                format!("{context} must be dense and zero-based"),
-            ));
+            return Err(srpl_error(format!(
+                "{context} must be dense and zero-based"
+            )));
         }
     }
 
     Ok(())
+}
+
+fn srpl_error(message: impl Into<String>) -> AndromedaError {
+    AndromedaError::new(AndromedaErrorKind::Srpl, message)
 }
 
 #[cfg(test)]
@@ -102,50 +95,59 @@ mod tests {
         CatalogVersion, ContractHash, ProcedureId, ScalarType, TimestampType, TypeDescriptor,
     };
 
+    fn column(name: &str, scalar_type: ScalarType, ordinal: u32) -> ColumnDescriptor {
+        ColumnDescriptor {
+            name: name.to_string(),
+            data_type: TypeDescriptor::required(scalar_type),
+            ordinal,
+        }
+    }
+
+    fn result_contract(name: &str, columns: Vec<ColumnDescriptor>) -> ResultContract {
+        ResultContract {
+            name: name.to_string(),
+            cardinality: Cardinality::One,
+            columns,
+        }
+    }
+
+    fn signature(
+        accepts: Vec<ColumnDescriptor>,
+        returns: Vec<ResultContract>,
+    ) -> ProcedureSignature {
+        ProcedureSignature {
+            name: QualifiedName::parse("Inventory.ReserveStock").unwrap(),
+            accepts,
+            returns,
+        }
+    }
+
     #[test]
     fn procedure_signature_validates_contract_shapes() {
-        let signature = ProcedureSignature {
-            name: QualifiedName::parse("Inventory.ReserveStock").unwrap(),
-            accepts: vec![ColumnDescriptor {
-                name: "ProductId".to_string(),
-                data_type: TypeDescriptor::required(ScalarType::I64),
-                ordinal: 0,
-            }],
-            returns: vec![ResultContract {
-                name: "Reservation".to_string(),
-                cardinality: Cardinality::One,
-                columns: vec![ColumnDescriptor {
-                    name: "ReservedAt".to_string(),
-                    data_type: TypeDescriptor::required(ScalarType::Timestamp(
-                        TimestampType::Transaction,
-                    )),
-                    ordinal: 0,
-                }],
-            }],
-        };
+        let signature = signature(
+            vec![column("ProductId", ScalarType::I64, 0)],
+            vec![result_contract(
+                "Reservation",
+                vec![column(
+                    "ReservedAt",
+                    ScalarType::Timestamp(TimestampType::Transaction),
+                    0,
+                )],
+            )],
+        );
 
         assert!(signature.validate().is_ok());
     }
 
     #[test]
     fn procedure_signature_rejects_sparse_parameter_ordinals() {
-        let signature = ProcedureSignature {
-            name: QualifiedName::parse("Inventory.ReserveStock").unwrap(),
-            accepts: vec![ColumnDescriptor {
-                name: "ProductId".to_string(),
-                data_type: TypeDescriptor::required(ScalarType::I64),
-                ordinal: 1,
-            }],
-            returns: vec![ResultContract {
-                name: "Reservation".to_string(),
-                cardinality: Cardinality::One,
-                columns: vec![ColumnDescriptor {
-                    name: "Reserved".to_string(),
-                    data_type: TypeDescriptor::required(ScalarType::Bool),
-                    ordinal: 0,
-                }],
-            }],
-        };
+        let signature = signature(
+            vec![column("ProductId", ScalarType::I64, 1)],
+            vec![result_contract(
+                "Reservation",
+                vec![column("Reserved", ScalarType::Bool, 0)],
+            )],
+        );
 
         let error = signature.validate().unwrap_err();
 
@@ -155,26 +157,14 @@ mod tests {
 
     #[test]
     fn result_contract_rejects_empty_or_sparse_columns() {
-        let empty = ResultContract {
-            name: "Reservation".to_string(),
-            cardinality: Cardinality::One,
-            columns: Vec::new(),
-        };
+        let empty = result_contract("Reservation", Vec::new());
 
         assert_eq!(
             empty.validate().unwrap_err().kind(),
             AndromedaErrorKind::Srpl
         );
 
-        let sparse = ResultContract {
-            name: "Reservation".to_string(),
-            cardinality: Cardinality::One,
-            columns: vec![ColumnDescriptor {
-                name: "Reserved".to_string(),
-                data_type: TypeDescriptor::required(ScalarType::Bool),
-                ordinal: 2,
-            }],
-        };
+        let sparse = result_contract("Reservation", vec![column("Reserved", ScalarType::Bool, 2)]);
 
         let error = sparse.validate().unwrap_err();
 
@@ -184,30 +174,16 @@ mod tests {
 
     #[test]
     fn procedure_signature_rejects_duplicate_parameter_names() {
-        let signature = ProcedureSignature {
-            name: QualifiedName::parse("Inventory.ReserveStock").unwrap(),
-            accepts: vec![
-                ColumnDescriptor {
-                    name: "ProductId".to_string(),
-                    data_type: TypeDescriptor::required(ScalarType::I64),
-                    ordinal: 0,
-                },
-                ColumnDescriptor {
-                    name: "ProductId".to_string(),
-                    data_type: TypeDescriptor::required(ScalarType::I64),
-                    ordinal: 1,
-                },
+        let signature = signature(
+            vec![
+                column("ProductId", ScalarType::I64, 0),
+                column("ProductId", ScalarType::I64, 1),
             ],
-            returns: vec![ResultContract {
-                name: "Reservation".to_string(),
-                cardinality: Cardinality::One,
-                columns: vec![ColumnDescriptor {
-                    name: "Reserved".to_string(),
-                    data_type: TypeDescriptor::required(ScalarType::Bool),
-                    ordinal: 0,
-                }],
-            }],
-        };
+            vec![result_contract(
+                "Reservation",
+                vec![column("Reserved", ScalarType::Bool, 0)],
+            )],
+        );
 
         let error = signature.validate().unwrap_err();
 
@@ -217,19 +193,13 @@ mod tests {
 
     #[test]
     fn procedure_signature_validates_minimal_contract_ref_alignment() {
-        let signature = ProcedureSignature {
-            name: QualifiedName::parse("Inventory.ReserveStock").unwrap(),
-            accepts: Vec::new(),
-            returns: vec![ResultContract {
-                name: "Reservation".to_string(),
-                cardinality: Cardinality::One,
-                columns: vec![ColumnDescriptor {
-                    name: "Reserved".to_string(),
-                    data_type: TypeDescriptor::required(ScalarType::Bool),
-                    ordinal: 0,
-                }],
-            }],
-        };
+        let signature = signature(
+            Vec::new(),
+            vec![result_contract(
+                "Reservation",
+                vec![column("Reserved", ScalarType::Bool, 0)],
+            )],
+        );
         let contract_ref = ProcedureContractRef {
             procedure_id: ProcedureId::new(7),
             contract_hash: ContractHash::test_vector(0xAA),

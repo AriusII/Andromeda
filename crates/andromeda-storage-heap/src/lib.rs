@@ -27,6 +27,7 @@ mod page;
 mod row_encoder;
 mod scan;
 mod slot;
+mod tuple_layout;
 mod vacuum;
 mod validation;
 

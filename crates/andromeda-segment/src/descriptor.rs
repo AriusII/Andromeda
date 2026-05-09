@@ -45,21 +45,28 @@ impl SegmentDescriptor {
 
         self.header.validate()?;
         self.trailer.validate()?;
+        self.validate_header_matches_descriptor()?;
 
-        if self.header.segment_id != self.segment_id
-            || self.header.object_id != self.object_id
-            || self.header.allocation_id != self.allocation_id
-            || self.header.first_page_id != self.first_page_id
-            || self.header.page_count != self.page_count
-            || self.header.min_page_lsn != self.min_page_lsn
-            || self.header.max_page_lsn != self.max_page_lsn
-        {
+        Ok(())
+    }
+
+    fn validate_header_matches_descriptor(&self) -> AndromedaResult<()> {
+        if !self.header_matches_descriptor() {
             return Err(storage_error(
                 "segment header does not match segment descriptor",
             ));
         }
-
         Ok(())
+    }
+
+    fn header_matches_descriptor(&self) -> bool {
+        self.header.segment_id == self.segment_id
+            && self.header.object_id == self.object_id
+            && self.header.allocation_id == self.allocation_id
+            && self.header.first_page_id == self.first_page_id
+            && self.header.page_count == self.page_count
+            && self.header.min_page_lsn == self.min_page_lsn
+            && self.header.max_page_lsn == self.max_page_lsn
     }
 
     pub fn validate_mutation(&self, mutation: SegmentMutation) -> AndromedaResult<()> {

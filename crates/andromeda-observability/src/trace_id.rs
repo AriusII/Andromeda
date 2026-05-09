@@ -1,19 +1,4 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct TraceId(u128);
-
-impl TraceId {
-    pub const fn new(value: u128) -> Self {
-        Self(value)
-    }
-
-    pub const fn get(self) -> u128 {
-        self.0
-    }
-
-    pub const fn is_zero(self) -> bool {
-        self.0 == 0
-    }
-}
+crate::define_observability_u128_id!(TraceId);
 
 #[cfg(test)]
 mod tests {

@@ -238,7 +238,7 @@ fn parser_directly_enforces_bounded_body_operation_limit() {
 
 #[test]
 fn parser_owner_exports_source_location_boundary() {
-    let span = source_location::SourceSpan::new(2, 5);
+    let span = SourceSpan::new(2, 5);
     assert_eq!(span.len(), 3);
     assert!(span.is_valid());
 

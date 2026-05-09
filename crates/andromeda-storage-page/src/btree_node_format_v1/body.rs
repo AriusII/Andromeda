@@ -3,6 +3,7 @@ use andromeda_error::AndromedaResult;
 use crate::PageId;
 
 use super::{
+    binary::{read_u16, read_u64},
     header::BTREE_NODE_V1_HEADER_LEN,
     validation::{btree_node_format_error, checked_u16},
 };
@@ -145,15 +146,12 @@ pub(super) fn read_len_prefixed_bytes(
 }
 
 fn write_u16_at(target: &mut [u8], offset: &mut usize, value: u16) -> AndromedaResult<()> {
-    let end = offset
-        .checked_add(2)
-        .ok_or_else(|| btree_node_format_error("BTree node write offset overflow"))?;
-    target
-        .get_mut(*offset..end)
-        .ok_or_else(|| btree_node_format_error("BTree node u16 write exceeds page image"))?
-        .copy_from_slice(&value.to_le_bytes());
-    *offset = end;
-    Ok(())
+    write_bytes_at(
+        target,
+        offset,
+        &value.to_le_bytes(),
+        "BTree node u16 write exceeds page image",
+    )
 }
 
 pub(super) fn write_u64_at(
@@ -161,61 +159,56 @@ pub(super) fn write_u64_at(
     offset: &mut usize,
     value: u64,
 ) -> AndromedaResult<()> {
+    write_bytes_at(
+        target,
+        offset,
+        &value.to_le_bytes(),
+        "BTree node u64 write exceeds page image",
+    )
+}
+
+fn write_bytes_at(
+    target: &mut [u8],
+    offset: &mut usize,
+    bytes: &[u8],
+    bounds_msg: &'static str,
+) -> AndromedaResult<()> {
     let end = offset
-        .checked_add(8)
+        .checked_add(bytes.len())
         .ok_or_else(|| btree_node_format_error("BTree node write offset overflow"))?;
     target
         .get_mut(*offset..end)
-        .ok_or_else(|| btree_node_format_error("BTree node u64 write exceeds page image"))?
-        .copy_from_slice(&value.to_le_bytes());
+        .ok_or_else(|| btree_node_format_error(bounds_msg))?
+        .copy_from_slice(bytes);
     *offset = end;
     Ok(())
 }
 
 fn read_u16_at(source: &[u8], offset: &mut usize, limit: usize) -> AndromedaResult<u16> {
-    let end = (*offset)
-        .checked_add(2)
-        .ok_or_else(|| btree_node_format_error("BTree node read offset overflow"))?;
-    if end > limit {
-        return Err(btree_node_format_error(
-            "BTree node u16 field exceeds free_start",
-        ));
-    }
+    let end = checked_read_end(offset, 2, limit, "BTree node u16 field exceeds free_start")?;
     let value = read_u16(source, *offset)?;
     *offset = end;
     Ok(value)
 }
 
 pub(super) fn read_u64_at(source: &[u8], offset: &mut usize, limit: usize) -> AndromedaResult<u64> {
-    let end = (*offset)
-        .checked_add(8)
-        .ok_or_else(|| btree_node_format_error("BTree node read offset overflow"))?;
-    if end > limit {
-        return Err(btree_node_format_error(
-            "BTree node u64 field exceeds free_start",
-        ));
-    }
+    let end = checked_read_end(offset, 8, limit, "BTree node u64 field exceeds free_start")?;
     let value = read_u64(source, *offset)?;
     *offset = end;
     Ok(value)
 }
 
-fn read_u16(source: &[u8], offset: usize) -> AndromedaResult<u16> {
-    let mut bytes = [0u8; 2];
-    bytes.copy_from_slice(
-        source
-            .get(offset..offset + 2)
-            .ok_or_else(|| btree_node_format_error("BTree node u16 field is truncated"))?,
-    );
-    Ok(u16::from_le_bytes(bytes))
-}
-
-fn read_u64(source: &[u8], offset: usize) -> AndromedaResult<u64> {
-    let mut bytes = [0u8; 8];
-    bytes.copy_from_slice(
-        source
-            .get(offset..offset + 8)
-            .ok_or_else(|| btree_node_format_error("BTree node u64 field is truncated"))?,
-    );
-    Ok(u64::from_le_bytes(bytes))
+fn checked_read_end(
+    offset: &usize,
+    width: usize,
+    limit: usize,
+    bounds_msg: &'static str,
+) -> AndromedaResult<usize> {
+    let end = (*offset)
+        .checked_add(width)
+        .ok_or_else(|| btree_node_format_error("BTree node read offset overflow"))?;
+    if end > limit {
+        return Err(btree_node_format_error(bounds_msg));
+    }
+    Ok(end)
 }

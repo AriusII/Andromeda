@@ -1,4 +1,4 @@
-use andromeda_error::AndromedaErrorKind;
+use andromeda_error::{AndromedaErrorKind, AndromedaResult};
 use andromeda_segment::SegmentId;
 use andromeda_wal::Lsn;
 
@@ -17,6 +17,13 @@ fn valid_manifest() -> DatabaseManifest {
         required_wal_start_lsn: Lsn::new(11),
         previous_manifest_hash: [0; 32],
         manifest_crc: 99,
+    }
+}
+
+fn assert_storage_error<T>(result: AndromedaResult<T>) {
+    match result {
+        Err(error) => assert_eq!(error.kind(), AndromedaErrorKind::Storage),
+        Ok(_) => panic!("expected storage error"),
     }
 }
 
@@ -73,10 +80,7 @@ fn storage_format_manifest_rejects_hash_mismatch_and_duplicates() {
     let mut storage_manifest = manifest.storage_format_manifest().unwrap();
     storage_manifest.fingerprints[0].version = FormatVersion::V1_5;
 
-    assert_eq!(
-        storage_manifest.validate().unwrap_err().kind(),
-        AndromedaErrorKind::Storage
-    );
+    assert_storage_error(storage_manifest.validate());
 
     let duplicate = StorageFormatManifest::new(
         manifest.database_id,
@@ -87,10 +91,7 @@ fn storage_format_manifest_rejects_hash_mismatch_and_duplicates() {
             StorageFormatFingerprint::new(StorageFormatKind::Page, FormatVersion::V1_0),
         ],
     );
-    assert_eq!(
-        duplicate.validate().unwrap_err().kind(),
-        AndromedaErrorKind::Storage
-    );
+    assert_storage_error(duplicate.validate());
 }
 
 #[test]
@@ -109,17 +110,11 @@ fn snapshot_publication_requires_segments_and_matching_manifest() {
 
     let mut empty = publication.clone();
     empty.segments.clear();
-    assert_eq!(
-        empty.validate().unwrap_err().kind(),
-        AndromedaErrorKind::Storage
-    );
+    assert_storage_error(empty.validate());
 
     let mut mismatch = publication;
     mismatch.snapshot_id = 9;
-    assert_eq!(
-        mismatch.validate().unwrap_err().kind(),
-        AndromedaErrorKind::Storage
-    );
+    assert_storage_error(mismatch.validate());
 }
 
 #[test]
@@ -134,17 +129,11 @@ fn snapshot_availability_requires_one_valid_snapshot_remaining() {
         published_snapshot_id: 3,
         available_snapshot_ids: Vec::new(),
     };
-    assert_eq!(
-        empty.validate().unwrap_err().kind(),
-        AndromedaErrorKind::Storage
-    );
+    assert_storage_error(empty.validate());
 
     let missing_published = SnapshotAvailabilityContract {
         published_snapshot_id: 3,
         available_snapshot_ids: vec![4],
     };
-    assert_eq!(
-        missing_published.validate().unwrap_err().kind(),
-        AndromedaErrorKind::Storage
-    );
+    assert_storage_error(missing_published.validate());
 }

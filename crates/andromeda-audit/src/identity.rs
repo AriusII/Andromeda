@@ -65,6 +65,20 @@ impl UserPrincipal {
     }
 }
 
+pub(crate) fn has_identity_pair_evidence(
+    certificate: &CertificateIdentity,
+    principal: &UserPrincipal,
+) -> bool {
+    certificate.has_identity_evidence() && principal.has_identity_evidence()
+}
+
+pub(crate) fn identity_pair_contains_sensitive_evidence(
+    certificate: &CertificateIdentity,
+    principal: &UserPrincipal,
+) -> bool {
+    certificate.contains_sensitive_evidence() || principal.contains_sensitive_evidence()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SecurityPolicyVersionEvidence {
     pub policy_version: u64,
@@ -97,13 +111,10 @@ impl SecurityPolicyVersionEvidence {
     /// Request-handling audit paths must prefer [`Self::try_bootstrap_v0`] so
     /// policy-evidence regressions return typed observability errors.
     pub fn bootstrap_v0() -> Self {
-        match Self::try_bootstrap_v0() {
-            Ok(evidence) => evidence,
-            Err(_) => Self {
-                policy_version: SECURITY_POLICY_EVIDENCE_SCHEMA_VERSION,
-                policy_digest: policy_version_to_digest(SecurityPolicyVersion::default()),
-            },
-        }
+        Self::try_bootstrap_v0().unwrap_or_else(|_| Self {
+            policy_version: SECURITY_POLICY_EVIDENCE_SCHEMA_VERSION,
+            policy_digest: policy_version_to_digest(SecurityPolicyVersion::default()),
+        })
     }
 
     pub fn from_security_policy_evidence(

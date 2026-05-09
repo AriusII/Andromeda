@@ -90,7 +90,7 @@ mod tests {
     use std::sync::Arc;
 
     struct MockResolver {
-        principals: std::sync::Arc<std::sync::Mutex<Vec<Principal>>>,
+        principals: Arc<std::sync::Mutex<Vec<Principal>>>,
     }
 
     impl MockResolver {

@@ -1,8 +1,8 @@
 use std::time::Instant;
 
 use andromeda_storage_page::{
-    AllocationId, InMemoryPageStore, ObjectId, PageFlags, PageHeader, PageId, PageLayoutContract,
-    PageSize, PageStore, PageTrailer, PageType,
+    AllocationId, InMemoryPageStore, ObjectId, PageFlags, PageHeader, PageId, PageImage,
+    PageLayoutContract, PageSize, PageStore, PageTrailer, PageType,
 };
 use andromeda_wal::Lsn;
 
@@ -74,9 +74,7 @@ fn execute_storage_page_store_smoke(
         let image = store
             .allocate_page(storage_smoke_page_contract(page_id, page_lsn), durable_lsn)
             .map_err(harness_failed)?;
-        if image.page_id() != Some(page_id) || image.page_lsn() != Some(page_lsn) {
-            return Err(StorageHarnessFailure);
-        }
+        validate_smoke_page_image(&image, page_id, page_lsn)?;
 
         flushed_pages += 1;
         page_ids.push(page_id);
@@ -90,9 +88,7 @@ fn execute_storage_page_store_smoke(
             .read_page(page_id)
             .map_err(harness_failed)?
             .ok_or(StorageHarnessFailure)?;
-        if image.page_id() != Some(page_id) || image.page_lsn() != Some(expected_lsn) {
-            return Err(StorageHarnessFailure);
-        }
+        validate_smoke_page_image(&image, page_id, expected_lsn)?;
         readback_pages += 1;
     }
 
@@ -101,6 +97,17 @@ fn execute_storage_page_store_smoke(
         flushed_pages,
         readback_pages,
     })
+}
+
+fn validate_smoke_page_image(
+    image: &PageImage,
+    expected_page_id: PageId,
+    expected_lsn: Lsn,
+) -> Result<(), StorageHarnessFailure> {
+    if image.page_id() != Some(expected_page_id) || image.page_lsn() != Some(expected_lsn) {
+        return Err(StorageHarnessFailure);
+    }
+    Ok(())
 }
 
 fn storage_smoke_page_contract(page_id: PageId, page_lsn: Lsn) -> PageLayoutContract {

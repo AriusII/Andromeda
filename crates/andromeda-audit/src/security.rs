@@ -1,6 +1,7 @@
 use andromeda_error::AndromedaResult;
 
 use crate::TraceId;
+use crate::identity::{has_identity_pair_evidence, identity_pair_contains_sensitive_evidence};
 
 use super::EventSchemaVersion;
 use super::{
@@ -121,18 +122,11 @@ impl SecurityAuditTrace {
     }
 
     pub fn has_identity_evidence(&self) -> bool {
-        self.certificate.has_identity_evidence() && self.principal.has_identity_evidence()
+        has_identity_pair_evidence(&self.certificate, &self.principal)
     }
 
     pub const fn surface_matches_certificate(&self) -> bool {
-        matches!(
-            (self.surface, self.certificate.surface),
-            (SurfaceScope::Application, SurfaceScope::Application)
-                | (SurfaceScope::Administration, SurfaceScope::Administration)
-                | (SurfaceScope::Cluster, SurfaceScope::Cluster)
-                | (SurfaceScope::BackupAgent, SurfaceScope::BackupAgent)
-                | (SurfaceScope::MonitoringAgent, SurfaceScope::MonitoringAgent)
-        )
+        self.surface.same_surface(self.certificate.surface)
     }
 
     pub fn denial_reason(&self) -> Option<SecurityAuditDenialReason> {
@@ -155,8 +149,7 @@ impl SecurityAuditTrace {
     }
 
     pub fn contains_sensitive_evidence(&self) -> bool {
-        self.certificate.contains_sensitive_evidence()
-            || self.principal.contains_sensitive_evidence()
+        identity_pair_contains_sensitive_evidence(&self.certificate, &self.principal)
             || self.policy_version.contains_sensitive_evidence()
             || contains_sensitive_marker(&self.reason)
     }

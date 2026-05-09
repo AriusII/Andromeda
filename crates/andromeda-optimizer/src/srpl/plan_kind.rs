@@ -61,8 +61,8 @@ impl OptimizerPlanKind {
                     }
                     let assert_predicates =
                         downstream_assert_predicates_for_binding(ir, index, binding);
-                    for pred in predicates.iter().chain(assert_predicates) {
-                        if matches!(pred, SrplPredicateIr::FieldGreaterThanOrEqualInput { .. }) {
+                    for predicate in predicates.iter().chain(assert_predicates) {
+                        if predicate.is_range_constraint() {
                             has_range = true;
                         }
                     }
@@ -138,7 +138,7 @@ fn downstream_assert_predicates_for_binding<'a>(
         })
         .filter_map(|operation| match &operation.kind {
             SrplBusinessOperationKindIr::Assert { predicate, .. }
-                if predicate_references_binding(predicate, binding) =>
+                if predicate.references_binding(binding) =>
             {
                 Some(predicate)
             },
@@ -154,19 +154,6 @@ fn has_downstream_assert_predicate_for_binding(
     downstream_assert_predicates_for_binding(ir, read_index, binding)
         .next()
         .is_some()
-}
-
-fn predicate_references_binding(predicate: &SrplPredicateIr, binding: &str) -> bool {
-    match predicate {
-        SrplPredicateIr::InputEqualsField {
-            binding: predicate_binding,
-            ..
-        }
-        | SrplPredicateIr::FieldGreaterThanOrEqualInput {
-            binding: predicate_binding,
-            ..
-        } => predicate_binding == binding,
-    }
 }
 
 #[cfg(test)]

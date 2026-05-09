@@ -2,6 +2,7 @@ use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use std::sync::Arc;
 use std::time::Duration;
 
+use super::super::scheduler_config::{UNLIMITED_SEGMENTS_PER_RUN, validate_nonzero_interval};
 use super::{WalGarbageCollector, WalGcSummary};
 
 /// Configuration for the WAL GC scheduler.
@@ -20,7 +21,7 @@ impl WalGcSchedulerConfig {
         WalGcSchedulerConfig {
             interval,
             target_free_gib,
-            max_segments_per_run: 0,
+            max_segments_per_run: UNLIMITED_SEGMENTS_PER_RUN,
         }
     }
 
@@ -30,12 +31,7 @@ impl WalGcSchedulerConfig {
     }
 
     pub fn validate(&self) -> AndromedaResult<()> {
-        if self.interval.is_zero() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                "WAL GC scheduler interval must not be zero",
-            ));
-        }
+        validate_nonzero_interval(self.interval, "WAL GC scheduler interval must not be zero")?;
         if self.target_free_gib == 0 {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Storage,

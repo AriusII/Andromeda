@@ -271,7 +271,7 @@ mod tests {
     fn test_in_memory_audit_ledger_appends() {
         let ledger = InMemoryAuditLedger::new();
         let trace_id = TraceId::new(1);
-        let invocation_id = andromeda_types::InvocationId::new(42);
+        let invocation_id = InvocationId::new(42);
 
         let event = InvocationTraceEvent::AdmissionDecision {
             trace_id,
@@ -295,7 +295,7 @@ mod tests {
         let ledger = InMemoryAuditLedger::new();
         let trace_id1 = TraceId::new(1);
         let trace_id2 = TraceId::new(2);
-        let invocation_id = andromeda_types::InvocationId::new(42);
+        let invocation_id = InvocationId::new(42);
 
         let event1 = InvocationTraceEvent::AdmissionDecision {
             trace_id: trace_id1,
@@ -322,8 +322,8 @@ mod tests {
     fn test_in_memory_audit_ledger_query_by_invocation_id() {
         let ledger = InMemoryAuditLedger::new();
         let trace_id = TraceId::new(1);
-        let invocation_id1 = andromeda_types::InvocationId::new(42);
-        let invocation_id2 = andromeda_types::InvocationId::new(43);
+        let invocation_id1 = InvocationId::new(42);
+        let invocation_id2 = InvocationId::new(43);
 
         let event1 = InvocationTraceEvent::AdmissionDecision {
             trace_id,

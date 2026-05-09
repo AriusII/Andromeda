@@ -46,7 +46,7 @@ impl TransactionIdAllocator {
     pub fn allocate(&self) -> AndromedaResult<TransactionId> {
         let previous = self
             .last_issued
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
                 current.checked_add(1)
             })
             .map_err(|_| {

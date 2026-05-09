@@ -1,7 +1,11 @@
-use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::AndromedaResult;
 use std::sync::Arc;
 use std::time::Duration;
 
+use super::super::scheduler_config::{
+    UNLIMITED_SEGMENTS_PER_RUN, segments_per_run_limit, validate_nonzero_interval,
+    validate_ratio_inclusive,
+};
 use super::{
     CompactionContext, WalCompactionAuditEvent, WalCompactionSummary, compact_segment,
     identify_compaction_candidates,
@@ -21,23 +25,19 @@ pub struct WalCompactionSchedulerConfig {
 impl WalCompactionSchedulerConfig {
     /// Create a new compaction scheduler configuration.
     pub fn new(interval: Duration, fragmentation_threshold: f64) -> AndromedaResult<Self> {
-        if interval.is_zero() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                "WAL compaction: scheduler interval must not be zero",
-            ));
-        }
-        if !(0.0..=1.0).contains(&fragmentation_threshold) {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                "WAL compaction: fragmentation threshold must be in [0.0, 1.0]",
-            ));
-        }
+        validate_nonzero_interval(
+            interval,
+            "WAL compaction: scheduler interval must not be zero",
+        )?;
+        validate_ratio_inclusive(
+            fragmentation_threshold,
+            "WAL compaction: fragmentation threshold must be in [0.0, 1.0]",
+        )?;
 
         Ok(WalCompactionSchedulerConfig {
             interval,
             fragmentation_threshold,
-            max_segments_per_run: 0, // No limit by default
+            max_segments_per_run: UNLIMITED_SEGMENTS_PER_RUN,
         })
     }
 
@@ -92,11 +92,7 @@ impl WalCompactionScheduler {
         summary.candidates_identified = candidates.len() as u64;
 
         // Step 2: Compact up to max_segments_per_run
-        let limit = if self.config.max_segments_per_run == 0 {
-            candidates.len()
-        } else {
-            (self.config.max_segments_per_run as usize).min(candidates.len())
-        };
+        let limit = segments_per_run_limit(self.config.max_segments_per_run, candidates.len());
 
         for metrics in candidates.iter().take(limit) {
             match compact_segment(context, metrics.segment_id) {

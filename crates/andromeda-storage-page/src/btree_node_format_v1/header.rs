@@ -2,7 +2,10 @@ use andromeda_error::AndromedaResult;
 
 use crate::{Lsn, PageId};
 
-use super::validation::{btree_node_format_error, validate_header};
+use super::{
+    binary::{read_u16, read_u32, read_u64, write_u16, write_u32, write_u64},
+    validation::{btree_node_format_error, validate_header},
+};
 
 pub const BTREE_NODE_V1_MAGIC: u32 = 0x5442_4E41;
 pub const BTREE_NODE_V1_FORMAT_VERSION: u16 = 1;
@@ -184,48 +187,6 @@ pub(super) fn header_crc32(bytes: &[u8]) -> u32 {
         state = state.wrapping_mul(FNV_PRIME);
     }
     state
-}
-
-fn write_u16(target: &mut [u8], offset: usize, value: u16) {
-    target[offset..offset + 2].copy_from_slice(&value.to_le_bytes());
-}
-
-fn write_u32(target: &mut [u8], offset: usize, value: u32) {
-    target[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
-}
-
-fn write_u64(target: &mut [u8], offset: usize, value: u64) {
-    target[offset..offset + 8].copy_from_slice(&value.to_le_bytes());
-}
-
-fn read_u16(source: &[u8], offset: usize) -> AndromedaResult<u16> {
-    let mut bytes = [0u8; 2];
-    bytes.copy_from_slice(
-        source
-            .get(offset..offset + 2)
-            .ok_or_else(|| btree_node_format_error("BTree node u16 field is truncated"))?,
-    );
-    Ok(u16::from_le_bytes(bytes))
-}
-
-fn read_u32(source: &[u8], offset: usize) -> AndromedaResult<u32> {
-    let mut bytes = [0u8; 4];
-    bytes.copy_from_slice(
-        source
-            .get(offset..offset + 4)
-            .ok_or_else(|| btree_node_format_error("BTree node u32 field is truncated"))?,
-    );
-    Ok(u32::from_le_bytes(bytes))
-}
-
-fn read_u64(source: &[u8], offset: usize) -> AndromedaResult<u64> {
-    let mut bytes = [0u8; 8];
-    bytes.copy_from_slice(
-        source
-            .get(offset..offset + 8)
-            .ok_or_else(|| btree_node_format_error("BTree node u64 field is truncated"))?,
-    );
-    Ok(u64::from_le_bytes(bytes))
 }
 
 fn optional_page_id(value: u64) -> Option<PageId> {

@@ -4,14 +4,7 @@ use super::{HeapPage, heap_error};
 
 impl HeapPage {
     pub fn delete_tuple(&mut self, slot_id: u16) -> AndromedaResult<()> {
-        let slot_id_usize = slot_id as usize;
-        if slot_id_usize >= self.slot_directory.len() {
-            return Err(heap_error(format!(
-                "slot {} out of range: page has {} slots",
-                slot_id,
-                self.slot_directory.len()
-            )));
-        }
+        let slot_id_usize = self.checked_slot_index(slot_id)?;
 
         if self.slot_directory[slot_id_usize].is_deleted() {
             return Err(heap_error(format!("slot {} already deleted", slot_id)));
@@ -27,14 +20,7 @@ impl HeapPage {
         }
 
         for &slot_id in slot_ids {
-            let slot_id_usize = slot_id as usize;
-            if slot_id_usize >= self.slot_directory.len() {
-                return Err(heap_error(format!(
-                    "slot {} out of range: page has {} slots",
-                    slot_id,
-                    self.slot_directory.len()
-                )));
-            }
+            let slot_id_usize = self.checked_slot_index(slot_id)?;
             if self.slot_directory[slot_id_usize].is_deleted() {
                 return Err(heap_error(format!("slot {} already deleted", slot_id)));
             }

@@ -100,9 +100,9 @@ impl StructuredObjectHashSink {
                         self.u8(3);
                         self.u8(*precision);
                         self.u8(*scale);
-                    }
+                    },
                 }
-            }
+            },
             ScalarType::Float(float) => {
                 self.u8(11);
                 match float {
@@ -116,9 +116,9 @@ impl StructuredObjectHashSink {
                             FloatMode::Approximate => 0,
                             FloatMode::DeterministicAnalytics => 1,
                         });
-                    }
+                    },
                 }
-            }
+            },
             ScalarType::Bool => self.u8(12),
             ScalarType::Text(text) => {
                 self.u8(13);
@@ -133,10 +133,10 @@ impl StructuredObjectHashSink {
                     Some(collation) => {
                         self.bool(true);
                         self.bytes(collation.as_bytes());
-                    }
+                    },
                     None => self.bool(false),
                 }
-            }
+            },
             ScalarType::Timestamp(timestamp) => {
                 self.u8(14);
                 self.u8(match timestamp {
@@ -144,7 +144,7 @@ impl StructuredObjectHashSink {
                     TimestampType::Invocation => 1,
                     TimestampType::MonotonicEpoch => 2,
                 });
-            }
+            },
         }
     }
 }

@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::{
-    Lsn, WalRecord, WalRecordKind, WalScanStop, encode_wal_record, validate_wal_record_bounds,
+    Lsn, WalRecord, WalRecordKind, WalScanStop, encode_wal_record, write_ahead_log::append_chain,
 };
 
 use super::{
@@ -135,31 +135,20 @@ impl FileWal {
     }
 
     pub fn try_next_lsn(&self) -> AndromedaResult<Lsn> {
-        match self.last_lsn() {
-            Some(last_lsn) => last_lsn.try_next(),
-            None => Ok(Lsn::new(1)),
-        }
+        append_chain::try_next_lsn(self.last_lsn())
     }
 
     pub fn next_lsn(&self) -> Lsn {
-        self.try_next_lsn().unwrap_or(Lsn::ZERO)
+        append_chain::next_lsn_or_zero(self.last_lsn())
     }
 
     pub fn append(&mut self, record: WalRecord) -> AndromedaResult<Lsn> {
-        record.validate()?;
-        validate_wal_record_bounds(&record)?;
-
-        let expected_lsn = self.try_next_lsn()?;
-        if record.header.lsn != expected_lsn {
-            return Err(storage_error(
-                "file WAL record must equal the next append LSN",
-            ));
-        }
-        if record.header.previous_lsn != self.last_lsn() {
-            return Err(storage_error(
-                "file WAL record previous LSN must chain to the append tail",
-            ));
-        }
+        append_chain::validate_append_record(
+            &record,
+            self.last_lsn(),
+            "file WAL record must equal the next append LSN",
+            "file WAL record previous LSN must chain to the append tail",
+        )?;
 
         let encoded = encode_wal_record(&record)?;
         self.file
@@ -190,13 +179,7 @@ impl FileWal {
         transaction_id: Option<TransactionId>,
         payload: impl Into<Vec<u8>>,
     ) -> AndromedaResult<Lsn> {
-        let record = WalRecord::from_parts(
-            kind,
-            self.try_next_lsn()?,
-            self.last_lsn(),
-            transaction_id,
-            payload,
-        )?;
+        let record = append_chain::payload_record(kind, self.last_lsn(), transaction_id, payload)?;
         self.append(record)
     }
 
@@ -213,20 +196,16 @@ impl FileWal {
     }
 
     pub fn flush_through(&mut self, lsn: Lsn) -> AndromedaResult<Lsn> {
-        if lsn.is_zero() || lsn <= self.durable_lsn {
+        let Some(lsn) = append_chain::validate_flush_target(
+            lsn,
+            self.durable_lsn,
+            self.last_lsn(),
+            "cannot flush file WAL before records are appended",
+            "cannot flush file WAL beyond the last appended LSN",
+        )?
+        else {
             return Ok(self.durable_lsn);
-        }
-
-        let Some(last_lsn) = self.last_lsn() else {
-            return Err(storage_error(
-                "cannot flush file WAL before records are appended",
-            ));
         };
-        if lsn > last_lsn {
-            return Err(storage_error(
-                "cannot flush file WAL beyond the last appended LSN",
-            ));
-        }
 
         let durable_index = self
             .record_boundaries
@@ -259,14 +238,11 @@ impl FileWal {
     }
 
     pub fn durable_records(&self) -> impl Iterator<Item = &WalRecord> {
-        let durable_lsn = self.durable_lsn;
-        self.records
-            .iter()
-            .filter(move |record| record.header.lsn <= durable_lsn)
+        append_chain::durable_records(&self.records, self.durable_lsn)
     }
 
     pub fn replay_durable(&self) -> Vec<WalRecord> {
-        self.durable_records().cloned().collect()
+        append_chain::replay_durable(&self.records, self.durable_lsn)
     }
 
     pub fn scan_path(path: impl AsRef<Path>) -> AndromedaResult<FileWalDiskScan> {

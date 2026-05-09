@@ -6,17 +6,20 @@ pub struct PlanFeedback {
 
 impl PlanFeedback {
     pub fn new(estimated_rows: u64, actual_rows: u64) -> (Self, f64) {
-        (
-            Self {
-                estimated_rows,
-                actual_rows,
-            },
-            row_error_ratio(estimated_rows, actual_rows),
-        )
+        let feedback = Self {
+            estimated_rows,
+            actual_rows,
+        };
+        let error_ratio = feedback.error_ratio();
+        (feedback, error_ratio)
+    }
+
+    pub fn error_ratio(&self) -> f64 {
+        row_error_ratio(self.estimated_rows, self.actual_rows)
     }
 
     pub fn is_high_error(&self, threshold: f64) -> bool {
-        row_error_ratio(self.estimated_rows, self.actual_rows) > threshold
+        self.error_ratio() > threshold
     }
 }
 

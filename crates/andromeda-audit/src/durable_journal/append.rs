@@ -120,7 +120,7 @@ fn validation_failure(
     identity: DurableAuditRecordIdentity,
     message: impl Into<String>,
 ) -> super::DurableAuditSinkFailure {
-    super::sink_failure(
+    sink_failure(
         DurableAuditFailureKind::ValidationRejected,
         Some(identity),
         message,

@@ -96,21 +96,17 @@ fn compute_use(kind: &SrplBusinessOperationKindIr) -> BTreeSet<ColRef> {
 }
 
 fn add_predicate_use(set: &mut BTreeSet<ColRef>, pred: &SrplPredicateIr) {
-    match pred {
-        SrplPredicateIr::InputEqualsField { binding, field, .. }
-        | SrplPredicateIr::FieldGreaterThanOrEqualInput { binding, field, .. } => {
-            set.insert((binding.clone(), field.clone()));
-        },
-    }
+    let (binding, field) = pred.field_reference();
+    insert_column_ref(set, binding, field);
 }
 
 fn add_value_use(set: &mut BTreeSet<ColRef>, value: &SrplValueIr) {
     match value {
         SrplValueIr::Field { binding, field } => {
-            set.insert((binding.clone(), field.clone()));
+            insert_column_ref(set, binding, field);
         },
         SrplValueIr::SubtractInput { binding, field, .. } => {
-            set.insert((binding.clone(), field.clone()));
+            insert_column_ref(set, binding, field);
         },
         SrplValueIr::BinaryArith { left, right, .. } => {
             add_value_use(set, left);
@@ -118,6 +114,10 @@ fn add_value_use(set: &mut BTreeSet<ColRef>, value: &SrplValueIr) {
         },
         SrplValueIr::Input(_) | SrplValueIr::Constant(_) => {},
     }
+}
+
+fn insert_column_ref(set: &mut BTreeSet<ColRef>, binding: &str, field: &str) {
+    set.insert((binding.to_string(), field.to_string()));
 }
 
 /// DEF set for an operation — binding names it introduces (shadowing

@@ -26,44 +26,39 @@ pub(super) fn parse_benchmark_run_options(args: &[String]) -> AndromedaResult<Be
     while index < args.len() {
         match args[index].as_str() {
             "--duration-ms" => {
-                let value = next_option_value_rejecting_flag(
+                duration_ms = parse_benchmark_u64_option(
                     args,
                     &mut index,
                     "--duration-ms requires an unsigned integer",
+                    "--duration-ms",
                 )?;
-                duration_ms = parse_u64_option(value, "--duration-ms")?;
             },
             "--samples" => {
-                let value = next_option_value_rejecting_flag(
+                samples = parse_benchmark_u32_option(
                     args,
                     &mut index,
                     "--samples requires an unsigned integer",
+                    "--samples",
                 )?;
-                samples = parse_u32_option(value, "--samples")?;
             },
             "--warmups" => {
-                let value = next_option_value_rejecting_flag(
+                warmups = parse_benchmark_u32_option(
                     args,
                     &mut index,
                     "--warmups requires an unsigned integer",
+                    "--warmups",
                 )?;
-                warmups = parse_u32_option(value, "--warmups")?;
             },
             "--temp-budget-bytes" => {
-                let value = next_option_value_rejecting_flag(
+                temp_budget_bytes = parse_benchmark_u64_option(
                     args,
                     &mut index,
                     "--temp-budget-bytes requires an unsigned integer",
+                    "--temp-budget-bytes",
                 )?;
-                temp_budget_bytes = parse_u64_option(value, "--temp-budget-bytes")?;
             },
             "--hardware-profile" => {
-                let value = next_option_value_rejecting_flag(
-                    args,
-                    &mut index,
-                    "--hardware-profile requires a profile name",
-                )?;
-                hardware_profile = parse_hardware_profile(value)?;
+                hardware_profile = parse_hardware_profile_option(args, &mut index)?;
             },
             DIAGNOSTIC_JSON_FLAG => diagnostic_json = true,
             JSON_FLAG => {
@@ -131,6 +126,38 @@ pub(super) fn has_diagnostic_json_option(args: &[String]) -> AndromedaResult<boo
         }
     }
     Ok(diagnostic_json)
+}
+
+fn parse_benchmark_u64_option(
+    args: &[String],
+    index: &mut usize,
+    missing_message: &'static str,
+    option: &str,
+) -> AndromedaResult<u64> {
+    let value = next_option_value_rejecting_flag(args, index, missing_message)?;
+    parse_u64_option(value, option)
+}
+
+fn parse_benchmark_u32_option(
+    args: &[String],
+    index: &mut usize,
+    missing_message: &'static str,
+    option: &str,
+) -> AndromedaResult<u32> {
+    let value = next_option_value_rejecting_flag(args, index, missing_message)?;
+    parse_u32_option(value, option)
+}
+
+fn parse_hardware_profile_option(
+    args: &[String],
+    index: &mut usize,
+) -> AndromedaResult<BenchmarkHardwareProfile> {
+    let value = next_option_value_rejecting_flag(
+        args,
+        index,
+        "--hardware-profile requires a profile name",
+    )?;
+    parse_hardware_profile(value)
 }
 
 fn parse_hardware_profile(value: &str) -> AndromedaResult<BenchmarkHardwareProfile> {

@@ -3,6 +3,8 @@ use andromeda_principal::{CertificateIdentity, SurfaceScope};
 
 use andromeda_quic::mtls_identity::RawCertificate;
 
+use super::connection_adapter::QuinnConnectionAdapter;
+
 pub(super) fn extract_peer_certificates(conn: &quinn::Connection) -> Vec<RawCertificate> {
     let Some(peer_identity) = conn.peer_identity() else {
         return Vec::new();
@@ -32,6 +34,20 @@ pub(super) fn require_certificate_identity(
     };
 
     cert.to_certificate_identity(required_scope)
+}
+
+pub(super) fn authenticated_connection_adapter(
+    conn: quinn::Connection,
+    required_scope: SurfaceScope,
+) -> AndromedaResult<QuinnConnectionAdapter> {
+    let peer_certificates = extract_peer_certificates(&conn);
+    let identity = require_certificate_identity(&peer_certificates, required_scope)?;
+
+    Ok(QuinnConnectionAdapter::with_peer_certificates(
+        conn,
+        identity,
+        peer_certificates,
+    ))
 }
 
 #[cfg(test)]

@@ -16,7 +16,6 @@ use andromeda_rpc_protocol::{
 };
 use andromeda_rpc_protocol::{BackpressureMetadata, ErrorEnvelope, ErrorFamily};
 use andromeda_types::{RequestId, SessionId, TransactionId};
-use std::mem;
 
 #[path = "protocol_stability_contract/diagnostic_backpressure_metadata.rs"]
 mod diagnostic_backpressure_metadata;

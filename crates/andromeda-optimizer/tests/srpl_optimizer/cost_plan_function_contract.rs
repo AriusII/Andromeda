@@ -105,15 +105,12 @@ fn t_cm_08_extreme_actual_exceeds_alert_threshold() {
 #[test]
 fn t_cm_09_predicates_reduce_cost_via_selectivity() {
     let ir_no_pred = make_ir(vec![read_op_many(0, "T")]);
-    let ir_with_pred = make_ir(vec![SrplBusinessOperationIr {
-        ordinal: 0,
-        kind: SrplBusinessOperationKindIr::Read {
-            source: qn("db.ns.T"),
-            binding: "T".into(),
-            cardinality: Cardinality::Many,
-            predicates: vec![eq_pred("id", "T", "id")],
-        },
-    }]);
+    let ir_with_pred = make_ir(vec![read_op_with_cardinality(
+        0,
+        "T",
+        Cardinality::Many,
+        vec![eq_pred("id", "T", "id")],
+    )]);
     let cost_no = estimate_without_stats(&ir_no_pred);
     let cost_with = estimate_without_stats(&ir_with_pred);
     assert!(
@@ -171,15 +168,7 @@ fn t_pk_02_many_cardinality_is_bulk_insert() {
 /// T-PK-03  Body with GTE predicate → RangeScan.
 #[test]
 fn t_pk_03_gte_predicate_is_range_scan() {
-    let ir = make_ir(vec![SrplBusinessOperationIr {
-        ordinal: 0,
-        kind: SrplBusinessOperationKindIr::Read {
-            source: qn("db.ns.T"),
-            binding: "T".into(),
-            cardinality: Cardinality::One,
-            predicates: vec![gte_pred("T", "score", "min")],
-        },
-    }]);
+    let ir = make_ir(vec![read_op(0, "T", vec![gte_pred("T", "score", "min")])]);
     assert_eq!(
         OptimizerPlanKind::classify(&ir),
         OptimizerPlanKind::RangeScan
@@ -424,18 +413,7 @@ fn t_ph_01_phase_count_is_nine() {
 /// T-PH-02  All phases are strictly ordered by their ordinals.
 #[test]
 fn t_ph_02_phases_are_strictly_ordered() {
-    let all = [
-        OptimizerPhase::Parsing,
-        OptimizerPhase::Binding,
-        OptimizerPhase::IRLowering,
-        OptimizerPhase::ConstantFolding,
-        OptimizerPhase::PredicatePushdown,
-        OptimizerPhase::Normalize,
-        OptimizerPhase::ProjectionPushdown,
-        OptimizerPhase::CostAnalysis,
-        OptimizerPhase::PlanChoice,
-    ];
-    for window in all.windows(2) {
+    for window in OptimizerPhase::ORDERED.windows(2) {
         assert!(
             window[0].as_ordinal() < window[1].as_ordinal(),
             "{:?} must precede {:?}",

@@ -1,7 +1,7 @@
 //! Five-step commit sequence gates.
 
 use super::fixtures::*;
-use andromeda_transaction_log::{IsolationLevel, WalRecordKind};
+use andromeda_transaction_log::{IsolationLevel, TransactionStatusStore, WalRecordKind};
 use andromeda_types::TransactionId;
 
 use crate::support::TransactionStatus;
@@ -25,7 +25,7 @@ async fn test_five_step_sequence_complete() {
     assert_eq!(entry.tx_id, tx_id);
     assert_eq!(entry.row_count_affected, 10);
     assert_eq!(
-        status_table.status(tx_id),
+        TransactionStatusStore::status(status_table.as_ref(), tx_id),
         Some(TransactionStatus::Committed),
         "Status table marked as committed"
     );
@@ -61,7 +61,7 @@ async fn test_five_step_fail_at_wal_flush_blocks() {
 
     assert!(result.is_err(), "Commit failed due to WAL flush failure");
     assert_eq!(
-        status_table.status(tx_id),
+        TransactionStatusStore::status(status_table.as_ref(), tx_id),
         None,
         "Transaction remains uncommitted after WAL flush failure"
     );

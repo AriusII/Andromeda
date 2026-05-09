@@ -83,28 +83,13 @@ fn t_lv_06_column_live_across_multiple_uses() {
 /// T-LV-07  live_columns_after returns correct set for a multi-column emit.
 #[test]
 fn t_lv_07_live_columns_after_multi_emit() {
-    let multi_emit = SrplBusinessOperationIr {
-        ordinal: 1,
-        kind: SrplBusinessOperationKindIr::Emit {
-            stream: "S".into(),
-            values: vec![
-                SrplEmitValueIr {
-                    column: "out_id".into(),
-                    value: SrplValueIr::Field {
-                        binding: "T".into(),
-                        field: "id".into(),
-                    },
-                },
-                SrplEmitValueIr {
-                    column: "out_name".into(),
-                    value: SrplValueIr::Field {
-                        binding: "T".into(),
-                        field: "name".into(),
-                    },
-                },
-            ],
-        },
-    };
+    let multi_emit = emit_values_op(
+        1,
+        vec![
+            emit_field_value("out_id", "T", "id"),
+            emit_field_value("out_name", "T", "name"),
+        ],
+    );
     let ir = make_ir(vec![read_op(0, "T", vec![]), multi_emit]);
     let lv = ColumnLiveness::compute(&ir);
     let live = lv.live_columns_after(0);
@@ -239,35 +224,14 @@ fn t_pj_07_projection_binding_matches_read() {
 /// T-PJ-08  Multiple columns emitted: all appear in projection.
 #[test]
 fn t_pj_08_multiple_emitted_columns_all_in_projection() {
-    let emit = SrplBusinessOperationIr {
-        ordinal: 1,
-        kind: SrplBusinessOperationKindIr::Emit {
-            stream: "S".into(),
-            values: vec![
-                SrplEmitValueIr {
-                    column: "c1".into(),
-                    value: SrplValueIr::Field {
-                        binding: "T".into(),
-                        field: "col1".into(),
-                    },
-                },
-                SrplEmitValueIr {
-                    column: "c2".into(),
-                    value: SrplValueIr::Field {
-                        binding: "T".into(),
-                        field: "col2".into(),
-                    },
-                },
-                SrplEmitValueIr {
-                    column: "c3".into(),
-                    value: SrplValueIr::Field {
-                        binding: "T".into(),
-                        field: "col3".into(),
-                    },
-                },
-            ],
-        },
-    };
+    let emit = emit_values_op(
+        1,
+        vec![
+            emit_field_value("c1", "T", "col1"),
+            emit_field_value("c2", "T", "col2"),
+            emit_field_value("c3", "T", "col3"),
+        ],
+    );
     let ir = make_ir(vec![read_op(0, "T", vec![]), emit]);
     let res = proj_apply(ir);
     let live = res.projections[0].live_columns.as_ref().unwrap();

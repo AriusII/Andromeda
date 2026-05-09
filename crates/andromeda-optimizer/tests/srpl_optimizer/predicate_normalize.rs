@@ -84,10 +84,7 @@ fn t_pf_10_output_never_grows() {
     let p1 = eq_pred("a", "T", "a");
     let p2 = eq_pred("b", "T", "b");
     let input = vec![p1.clone(), p2.clone(), p1.clone()];
-    let result = match simplify_predicates(input.clone()) {
-        SimplifiedPredicates::Predicates(v) => v,
-        SimplifiedPredicates::AlwaysFalse => vec![],
-    };
+    let result = simplified_predicates(input.clone());
     assert!(
         result.len() <= input.len(),
         "predicate list must never grow"
@@ -99,14 +96,8 @@ fn t_pf_10_output_never_grows() {
 fn t_pf_11_simplify_is_idempotent() {
     let p = eq_pred("id", "T", "id");
     let input = vec![p.clone(), p.clone()];
-    let once = match simplify_predicates(input) {
-        SimplifiedPredicates::Predicates(v) => v,
-        SimplifiedPredicates::AlwaysFalse => vec![],
-    };
-    let twice = match simplify_predicates(once.clone()) {
-        SimplifiedPredicates::Predicates(v) => v,
-        SimplifiedPredicates::AlwaysFalse => vec![],
-    };
+    let once = simplified_predicates(input);
+    let twice = simplified_predicates(once.clone());
     assert_eq!(once, twice);
 }
 
@@ -135,10 +126,7 @@ fn t_pf_14_many_distinct_predicates_all_preserved() {
         .map(|i| eq_pred(&format!("p{}", i), "T", &format!("f{}", i)))
         .collect();
     let expected_len = preds.len();
-    let result = match simplify_predicates(preds) {
-        SimplifiedPredicates::Predicates(v) => v,
-        SimplifiedPredicates::AlwaysFalse => vec![],
-    };
+    let result = simplified_predicates(preds);
     assert_eq!(
         result.len(),
         expected_len,
@@ -150,11 +138,10 @@ fn t_pf_14_many_distinct_predicates_all_preserved() {
 #[test]
 fn t_pf_15_gte_all_fields_duplicate_removed() {
     let p = gte_pred("Orders", "order_date", "start_date");
-    let result = simplify_predicates(vec![p.clone(), p.clone(), p.clone()]);
-    match result {
-        SimplifiedPredicates::Predicates(v) => assert_eq!(v.len(), 1),
-        SimplifiedPredicates::AlwaysFalse => panic!("unexpected AlwaysFalse"),
-    }
+    assert_eq!(
+        simplified_predicates(vec![p.clone(), p.clone(), p]).len(),
+        1
+    );
 }
 
 /// T-PF-16  AlwaysFalse variant: current implementation does not produce it from
@@ -177,10 +164,7 @@ fn t_pf_17_order_of_unique_predicates_is_stable() {
     let p1 = eq_pred("z", "T", "z");
     let p2 = eq_pred("a", "T", "a");
     let p3 = eq_pred("m", "T", "m");
-    let result = match simplify_predicates(vec![p1.clone(), p2.clone(), p3.clone()]) {
-        SimplifiedPredicates::Predicates(v) => v,
-        SimplifiedPredicates::AlwaysFalse => panic!(),
-    };
+    let result = simplified_predicates(vec![p1.clone(), p2.clone(), p3.clone()]);
     // simplify_predicates does not re-sort; order must be insertion order for unique entries.
     assert_eq!(result, vec![p1, p2, p3]);
 }
@@ -190,29 +174,22 @@ fn t_pf_17_order_of_unique_predicates_is_stable() {
 fn t_pf_18_eq_and_gte_on_same_fields_are_distinct() {
     let eq = eq_pred("t", "T", "t");
     let gte = gte_pred("T", "t", "t");
-    let result = simplify_predicates(vec![eq.clone(), gte.clone()]);
-    match result {
-        SimplifiedPredicates::Predicates(v) => {
-            assert_eq!(
-                v.len(),
-                2,
-                "EQ and GTE are structurally different predicates"
-            );
-        },
-        SimplifiedPredicates::AlwaysFalse => panic!(),
-    }
+    assert_eq!(
+        simplified_predicates(vec![eq.clone(), gte.clone()]).len(),
+        2,
+        "EQ and GTE are structurally different predicates"
+    );
 }
 
 /// T-PF-19  Empty result from full deduplication has Predicates([]), not AlwaysFalse.
 #[test]
 fn t_pf_19_single_duplicate_leaves_one_entry() {
     let p = eq_pred("x", "T", "x");
-    match simplify_predicates(vec![p.clone(), p]) {
-        SimplifiedPredicates::Predicates(v) => {
-            assert_eq!(v.len(), 1, "one unique predicate must remain");
-        },
-        SimplifiedPredicates::AlwaysFalse => panic!("should not be AlwaysFalse"),
-    }
+    assert_eq!(
+        simplified_predicates(vec![p.clone(), p]).len(),
+        1,
+        "one unique predicate must remain"
+    );
 }
 
 /// T-PF-20  Simplify is safe with no-op on already-deduplicated input.
@@ -221,10 +198,7 @@ fn t_pf_20_already_unique_input_unchanged() {
     let p1 = eq_pred("a", "T", "a");
     let p2 = eq_pred("b", "T", "b");
     let original = vec![p1.clone(), p2.clone()];
-    let result = match simplify_predicates(original.clone()) {
-        SimplifiedPredicates::Predicates(v) => v,
-        SimplifiedPredicates::AlwaysFalse => panic!(),
-    };
+    let result = simplified_predicates(original.clone());
     assert_eq!(result, original);
 }
 
@@ -253,17 +227,15 @@ fn t_nr_02_normalize_sorts_read_predicates() {
         SrplBusinessOperationKindIr::Read { predicates, .. } => {
             let keys: Vec<String> = predicates
                 .iter()
-                .map(|p| match p {
-                    SrplPredicateIr::InputEqualsField {
+                .map(|p| {
+                    let (binding, field) = p.field_reference();
+                    format!(
+                        "{}:{}:{}:{}",
+                        if p.is_range_constraint() { "GTE" } else { "EQ" },
                         binding,
                         field,
-                        input,
-                    } => format!("EQ:{}:{}:{}", binding, field, input),
-                    SrplPredicateIr::FieldGreaterThanOrEqualInput {
-                        binding,
-                        field,
-                        input,
-                    } => format!("GTE:{}:{}:{}", binding, field, input),
+                        p.input()
+                    )
                 })
                 .collect();
             let mut sorted = keys.clone();

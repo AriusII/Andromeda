@@ -6,6 +6,10 @@ pub const SECURITY_ADMISSION_AUDIT_EVENT_V0_SCHEMA_ID: &str =
     "andromeda.audit.security_admission.v0";
 pub const SECURITY_ADMISSION_AUDIT_EVENT_V0_SCHEMA_VERSION: u16 = 0;
 
+fn find_code<T: Copy>(values: &[T], code: &str, as_str: impl Fn(T) -> &'static str) -> Option<T> {
+    values.iter().copied().find(|value| as_str(*value) == code)
+}
+
 /// Canonical pre-dispatch security admission steps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SecurityAdmissionStepV0 {
@@ -50,15 +54,7 @@ impl SecurityAdmissionStepV0 {
     }
 
     pub fn from_code(code: &str) -> Option<Self> {
-        match code {
-            "surface_boundary" => Some(Self::SurfaceBoundary),
-            "principal_binding" => Some(Self::PrincipalBinding),
-            "procedure_contract" => Some(Self::ProcedureContract),
-            "policy_evidence" => Some(Self::PolicyEvidence),
-            "permission_boundary" => Some(Self::PermissionBoundary),
-            "decision_evidence" => Some(Self::DecisionEvidence),
-            _ => None,
-        }
+        find_code(&ALL_SECURITY_ADMISSION_V0_STEPS, code, Self::as_str)
     }
 }
 
@@ -108,16 +104,11 @@ impl SecurityAdmissionEvidenceCodeV0 {
     }
 
     pub fn from_code(code: &str) -> Option<Self> {
-        match code {
-            "surface_boundary" => Some(Self::SurfaceBoundary),
-            "principal_binding" => Some(Self::PrincipalBinding),
-            "procedure_contract" => Some(Self::ProcedureContract),
-            "policy_version" => Some(Self::PolicyVersion),
-            "permission_family" => Some(Self::PermissionFamily),
-            "outcome_reason" => Some(Self::OutcomeReason),
-            "missing" => Some(Self::Missing),
-            _ => None,
-        }
+        find_code(
+            &ALL_SECURITY_ADMISSION_V0_EVIDENCE_CODES,
+            code,
+            Self::as_str,
+        )
     }
 }
 
@@ -148,11 +139,7 @@ impl SecurityAdmissionOutcomeV0 {
     }
 
     pub fn from_code(code: &str) -> Option<Self> {
-        match code {
-            "allowed" => Some(Self::Allowed),
-            "denied" => Some(Self::Denied),
-            _ => None,
-        }
+        find_code(&ALL_SECURITY_ADMISSION_V0_OUTCOMES, code, Self::as_str)
     }
 }
 
@@ -204,18 +191,7 @@ impl SecurityAdmissionReasonCodeV0 {
     }
 
     pub fn from_code(code: &str) -> Option<Self> {
-        match code {
-            "satisfied" => Some(Self::Satisfied),
-            "missing_evidence" => Some(Self::MissingEvidence),
-            "invalid_evidence_shape" => Some(Self::InvalidEvidenceShape),
-            "principal_binding_missing" => Some(Self::PrincipalBindingMissing),
-            "permission_not_granted" => Some(Self::PermissionNotGranted),
-            "surface_permission_boundary_mismatch" => Some(Self::SurfacePermissionBoundaryMismatch),
-            "procedure_contract_boundary_mismatch" => Some(Self::ProcedureContractBoundaryMismatch),
-            "policy_version_missing" => Some(Self::PolicyVersionMissing),
-            "boundary_plane_mismatch" => Some(Self::BoundaryPlaneMismatch),
-            _ => None,
-        }
+        find_code(&ALL_SECURITY_ADMISSION_V0_REASON_CODES, code, Self::as_str)
     }
 }
 
@@ -269,14 +245,7 @@ impl SecurityAdmissionBoundaryV0 {
     }
 
     pub fn from_code(code: &str) -> Option<Self> {
-        match code {
-            "application" => Some(Self::Application),
-            "administration" => Some(Self::Administration),
-            "cluster" => Some(Self::Cluster),
-            "backup" => Some(Self::Backup),
-            "monitoring" => Some(Self::Monitoring),
-            _ => None,
-        }
+        find_code(&ALL_SECURITY_ADMISSION_V0_BOUNDARIES, code, Self::as_str)
     }
 }
 
@@ -326,15 +295,7 @@ impl SurfaceClass {
     }
 
     pub fn from_code(code: &str) -> Option<Self> {
-        match code {
-            SURFACE_CLASS_ID_APPLICATION => Some(Self::Application),
-            SURFACE_CLASS_ID_ADMINISTRATION => Some(Self::Administration),
-            SURFACE_CLASS_ID_HADR => Some(Self::Hadr),
-            SURFACE_CLASS_ID_RECOVERY => Some(Self::Recovery),
-            SURFACE_CLASS_ID_FORENSIC => Some(Self::Forensic),
-            SURFACE_CLASS_ID_MONITORING => Some(Self::Monitoring),
-            _ => None,
-        }
+        find_code(&ALL_SURFACE_CLASSES, code, Self::as_str)
     }
 
     pub const fn is_application_work(self) -> bool {

@@ -448,7 +448,7 @@ pub struct ProcedureErrorPolicy {
 
 impl ProcedureErrorPolicy {
     pub fn validate(&self) -> AndromedaResult<()> {
-        let mut codes = std::collections::BTreeSet::new();
+        let mut codes = BTreeSet::new();
         for code in &self.allowed_error_codes {
             if code.trim().is_empty() {
                 return Err(AndromedaError::new(
@@ -521,7 +521,7 @@ impl ProcedureContract {
                 "procedure contract must declare required permissions",
             ));
         }
-        let mut permissions = std::collections::BTreeSet::new();
+        let mut permissions = BTreeSet::new();
         for permission in &self.required_permissions {
             if permission.trim().is_empty() {
                 return Err(AndromedaError::new(
@@ -537,7 +537,7 @@ impl ProcedureContract {
             }
         }
 
-        let mut structured_input_names = std::collections::BTreeSet::new();
+        let mut structured_input_names = BTreeSet::new();
         for structured_input in &self.structured_inputs {
             if !structured_input_names.insert(structured_input) {
                 return Err(AndromedaError::new(
@@ -547,8 +547,8 @@ impl ProcedureContract {
             }
         }
 
-        let mut result_stream_names = std::collections::BTreeSet::new();
-        let mut result_stream_ids = std::collections::BTreeSet::new();
+        let mut result_stream_names = BTreeSet::new();
+        let mut result_stream_ids = BTreeSet::new();
         for stream in &self.result_streams {
             stream.validate()?;
             if !result_stream_ids.insert(stream.stream_id) {

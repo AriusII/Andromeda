@@ -64,14 +64,8 @@ fn add_read_predicate_fields(
     predicates: &[SrplPredicateIr],
 ) {
     for predicate in predicates {
-        match predicate {
-            SrplPredicateIr::InputEqualsField { binding, field, .. }
-            | SrplPredicateIr::FieldGreaterThanOrEqualInput { binding, field, .. }
-                if binding == read_binding =>
-            {
-                fields.insert(field.clone());
-            },
-            _ => {},
+        if predicate.references_binding(read_binding) {
+            fields.insert(predicate.field_reference().1.to_string());
         }
     }
 }

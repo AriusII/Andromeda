@@ -4,7 +4,7 @@ use andromeda_storage_page::PageSize;
 use super::{
     HEAP_PAGE_V1_PAYLOAD_OFFSET, HEAP_PAGE_V1_TRAILER_SIZE, SlotEntry, heap_error,
     heap_page_v1_read_and_validate_slots, heap_page_v1_read_slot_metadata,
-    heap_page_v1_validate_format_guard,
+    heap_page_v1_validate_format_guard, tuple_layout::read_tuple_bytes,
 };
 
 /// A variadic-length heap page for tuple storage.
@@ -29,14 +29,7 @@ impl HeapPage {
     }
 
     pub fn from_image(page_size: PageSize, bytes: &[u8]) -> AndromedaResult<Self> {
-        let size = page_size.bytes_usize();
-        if bytes.len() != size {
-            return Err(heap_error(format!(
-                "page size mismatch: expected {} bytes, got {}",
-                size,
-                bytes.len()
-            )));
-        }
+        validate_page_image_size(page_size, bytes)?;
         if bytes.iter().all(|byte| *byte == 0) {
             return Err(heap_error(
                 "blank/unallocated heap page image requires explicit unallocated parser",
@@ -58,14 +51,7 @@ impl HeapPage {
         page_size: PageSize,
         bytes: &[u8],
     ) -> AndromedaResult<Self> {
-        let size = page_size.bytes_usize();
-        if bytes.len() != size {
-            return Err(heap_error(format!(
-                "page size mismatch: expected {} bytes, got {}",
-                size,
-                bytes.len()
-            )));
-        }
+        validate_page_image_size(page_size, bytes)?;
         if !bytes.iter().all(|byte| *byte == 0) {
             return Err(heap_error(
                 "explicit unallocated heap parser only accepts blank page images",
@@ -90,36 +76,24 @@ impl HeapPage {
     }
 
     pub fn read_tuple(&self, slot_id: u16) -> AndromedaResult<Vec<u8>> {
-        let slot_id_usize = slot_id as usize;
-        if slot_id_usize >= self.slot_directory.len() {
-            return Err(heap_error(format!(
-                "slot {} out of range: page has {} slots",
-                slot_id,
-                self.slot_directory.len()
-            )));
-        }
-
-        let entry = self.slot_directory[slot_id_usize];
+        let entry = self.slot_directory[self.checked_slot_index(slot_id)?];
         if entry.is_deleted() {
             return Err(heap_error(format!("slot {} has been deleted", slot_id)));
         }
 
-        let offset = entry.offset() as usize;
-        let length = entry.length() as usize;
-        let end = offset
-            .checked_add(length)
-            .ok_or_else(|| heap_error(format!("slot {} offset/length overflows", slot_id)))?;
-        if end > self.data.len() {
-            return Err(heap_error(format!(
+        read_tuple_bytes(
+            &self.data,
+            entry.offset(),
+            entry.length(),
+            format!("slot {} offset/length overflows", slot_id),
+            format!(
                 "slot {} has invalid offset/length: offset={}, len={}, page_size={}",
                 slot_id,
-                offset,
-                length,
+                entry.offset(),
+                entry.length(),
                 self.data.len()
-            )));
-        }
-
-        Ok(self.data[offset..end].to_vec())
+            ),
+        )
     }
 
     pub fn serialize_slot_directory(&self) -> Vec<u8> {
@@ -131,19 +105,45 @@ impl HeapPage {
     }
 
     pub(crate) fn compute_free_space_bytes(&self) -> usize {
-        let next_tuple_offset = self
-            .slot_directory
-            .iter()
-            .filter(|e| !e.is_deleted())
-            .map(|e| e.offset() as usize + e.length() as usize)
-            .max()
-            .unwrap_or(HEAP_PAGE_V1_PAYLOAD_OFFSET);
         let slot_directory_start = self.data.len()
             - HEAP_PAGE_V1_TRAILER_SIZE
             - (self.slot_directory.len() * SlotEntry::SIZE);
 
-        slot_directory_start.saturating_sub(next_tuple_offset)
+        slot_directory_start.saturating_sub(self.next_tuple_offset())
     }
+
+    pub(crate) fn checked_slot_index(&self, slot_id: u16) -> AndromedaResult<usize> {
+        let slot_id_usize = slot_id as usize;
+        if slot_id_usize >= self.slot_directory.len() {
+            return Err(heap_error(format!(
+                "slot {} out of range: page has {} slots",
+                slot_id,
+                self.slot_directory.len()
+            )));
+        }
+        Ok(slot_id_usize)
+    }
+
+    pub(crate) fn next_tuple_offset(&self) -> usize {
+        self.slot_directory
+            .iter()
+            .filter(|entry| !entry.is_deleted())
+            .map(|entry| entry.offset() as usize + entry.length() as usize)
+            .max()
+            .unwrap_or(HEAP_PAGE_V1_PAYLOAD_OFFSET)
+    }
+}
+
+fn validate_page_image_size(page_size: PageSize, bytes: &[u8]) -> AndromedaResult<()> {
+    let size = page_size.bytes_usize();
+    if bytes.len() != size {
+        return Err(heap_error(format!(
+            "page size mismatch: expected {} bytes, got {}",
+            size,
+            bytes.len()
+        )));
+    }
+    Ok(())
 }
 
 #[cfg(test)]

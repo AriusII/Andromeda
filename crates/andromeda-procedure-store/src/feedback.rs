@@ -259,54 +259,24 @@ impl ProcedureFeedback {
         hasher.update(&self.procedure_id.get().to_le_bytes());
 
         hasher.update(&[0xF2]);
-        match self.plan_cache_key_digest {
-            Some(d) => {
-                hasher.update(&[0x01]);
-                hasher.update(&d);
-            },
-            None => {
-                hasher.update(&[0x00]);
-                hasher.update(&[0u8; 32]);
-            },
-        }
+        absorb_optional_bytes(&mut hasher, self.plan_cache_key_digest);
 
         hasher.update(&[0xF3]);
         hasher.update(&self.stats_version.get().to_le_bytes());
 
         hasher.update(&[0xF4, self.completion.status.as_tag()]);
         hasher.update(&[0xF5]);
-        match self.completion.completion_code {
-            Some(c) => {
-                hasher.update(&[0x01]);
-                hasher.update(&c.to_le_bytes());
-            },
-            None => {
-                hasher.update(&[0x00]);
-                hasher.update(&[0u8; 4]);
-            },
-        }
+        absorb_optional_bytes(
+            &mut hasher,
+            self.completion.completion_code.map(u32::to_le_bytes),
+        );
         hasher.update(&[0xF6]);
-        match self.completion.row_count {
-            Some(r) => {
-                hasher.update(&[0x01]);
-                hasher.update(&r.to_le_bytes());
-            },
-            None => {
-                hasher.update(&[0x00]);
-                hasher.update(&[0u8; 8]);
-            },
-        }
+        absorb_optional_bytes(&mut hasher, self.completion.row_count.map(u64::to_le_bytes));
         hasher.update(&[0xF7]);
-        match self.completion.durable_lsn {
-            Some(l) => {
-                hasher.update(&[0x01]);
-                hasher.update(&l.to_le_bytes());
-            },
-            None => {
-                hasher.update(&[0x00]);
-                hasher.update(&[0u8; 8]);
-            },
-        }
+        absorb_optional_bytes(
+            &mut hasher,
+            self.completion.durable_lsn.map(u64::to_le_bytes),
+        );
 
         hasher.update(&[0xF8]);
         hasher.update(
@@ -327,6 +297,19 @@ impl ProcedureFeedback {
         hasher.update(&[0xFA, 0x00]);
 
         hasher.finalize()
+    }
+}
+
+fn absorb_optional_bytes<const N: usize>(hasher: &mut Sha256, value: Option<[u8; N]>) {
+    match value {
+        Some(bytes) => {
+            hasher.update(&[0x01]);
+            hasher.update(&bytes);
+        },
+        None => {
+            hasher.update(&[0x00]);
+            hasher.update(&[0u8; N]);
+        },
     }
 }
 

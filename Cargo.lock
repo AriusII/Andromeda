@@ -125,7 +125,6 @@ dependencies = [
  "andromeda-digest",
  "andromeda-error",
  "andromeda-procedure-contract",
- "andromeda-time",
  "andromeda-types",
  "andromeda-wal",
 ]
@@ -167,7 +166,6 @@ dependencies = [
  "andromeda-admission",
  "andromeda-backup",
  "andromeda-bench",
- "andromeda-catalog",
  "andromeda-error",
  "andromeda-exec",
  "andromeda-hadr",
@@ -175,7 +173,6 @@ dependencies = [
  "andromeda-inventory-demo-cli-adapter",
  "andromeda-manifest",
  "andromeda-observe",
- "andromeda-quic",
  "andromeda-recovery",
  "andromeda-restore",
  "andromeda-result-stream",
@@ -284,7 +281,6 @@ dependencies = [
  "andromeda-security",
  "andromeda-srpl",
  "andromeda-srpl-binder",
- "andromeda-srpl-execution-adapter",
  "andromeda-srpl-interpreter",
  "andromeda-srpl-ir",
  "andromeda-storage",
@@ -456,7 +452,6 @@ name = "andromeda-observe"
 version = "0.1.0"
 dependencies = [
  "andromeda-audit",
- "andromeda-digest",
  "andromeda-error",
  "andromeda-hardware",
  "andromeda-observability",
@@ -542,7 +537,6 @@ dependencies = [
 name = "andromeda-proto"
 version = "0.1.0"
 dependencies = [
- "andromeda-digest",
  "andromeda-error",
  "andromeda-procedure-contract",
  "andromeda-proto-wire",
@@ -946,7 +940,6 @@ dependencies = [
  "andromeda-disk-page-store",
  "andromeda-error",
  "andromeda-hadr",
- "andromeda-hardware",
  "andromeda-manifest",
  "andromeda-observe",
  "andromeda-recovery",
@@ -956,8 +949,6 @@ dependencies = [
  "andromeda-storage-page",
  "andromeda-types",
  "andromeda-wal",
- "dashmap",
- "sha2",
 ]
 
 [[package]]
@@ -1037,8 +1028,6 @@ dependencies = [
  "andromeda-transaction-log",
  "andromeda-types",
  "async-trait",
- "dashmap",
- "futures",
  "tokio",
 ]
 

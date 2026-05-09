@@ -83,57 +83,42 @@ fn fold_binary_constants(
     left: &ConstantLiteral,
     right: &ConstantLiteral,
 ) -> Result<ConstantLiteral, FoldDeferral> {
-    match (op, left, right) {
-        (ArithOp::Add, ConstantLiteral::Int64(a), ConstantLiteral::Int64(b)) => a
-            .checked_add(*b)
-            .map(ConstantLiteral::Int64)
-            .ok_or(FoldDeferral::Overflow),
-
-        (ArithOp::Subtract, ConstantLiteral::Int64(a), ConstantLiteral::Int64(b)) => a
-            .checked_sub(*b)
-            .map(ConstantLiteral::Int64)
-            .ok_or(FoldDeferral::Overflow),
-
-        (ArithOp::Multiply, ConstantLiteral::Int64(a), ConstantLiteral::Int64(b)) => a
-            .checked_mul(*b)
-            .map(ConstantLiteral::Int64)
-            .ok_or(FoldDeferral::Overflow),
-
-        (ArithOp::Divide, ConstantLiteral::Int64(_), ConstantLiteral::Int64(0)) => {
-            Err(FoldDeferral::DivisionByZero)
+    match (left, right) {
+        (ConstantLiteral::Int64(a), ConstantLiteral::Int64(b)) => {
+            fold_i64_constants(op, *a, *b).map(ConstantLiteral::Int64)
         },
-
-        (ArithOp::Divide, ConstantLiteral::Int64(a), ConstantLiteral::Int64(b)) => a
-            .checked_div(*b)
-            .map(ConstantLiteral::Int64)
-            .ok_or(FoldDeferral::Overflow),
-
-        (ArithOp::Add, ConstantLiteral::Uint64(a), ConstantLiteral::Uint64(b)) => a
-            .checked_add(*b)
-            .map(ConstantLiteral::Uint64)
-            .ok_or(FoldDeferral::Overflow),
-
-        (ArithOp::Subtract, ConstantLiteral::Uint64(a), ConstantLiteral::Uint64(b)) => a
-            .checked_sub(*b)
-            .map(ConstantLiteral::Uint64)
-            .ok_or(FoldDeferral::Overflow),
-
-        (ArithOp::Multiply, ConstantLiteral::Uint64(a), ConstantLiteral::Uint64(b)) => a
-            .checked_mul(*b)
-            .map(ConstantLiteral::Uint64)
-            .ok_or(FoldDeferral::Overflow),
-
-        (ArithOp::Divide, ConstantLiteral::Uint64(_), ConstantLiteral::Uint64(0)) => {
-            Err(FoldDeferral::DivisionByZero)
+        (ConstantLiteral::Uint64(a), ConstantLiteral::Uint64(b)) => {
+            fold_u64_constants(op, *a, *b).map(ConstantLiteral::Uint64)
         },
-
-        (ArithOp::Divide, ConstantLiteral::Uint64(a), ConstantLiteral::Uint64(b)) => a
-            .checked_div(*b)
-            .map(ConstantLiteral::Uint64)
-            .ok_or(FoldDeferral::Overflow),
-
         _ => Err(FoldDeferral::TypeMismatch),
     }
+}
+
+fn fold_i64_constants(op: ArithOp, left: i64, right: i64) -> Result<i64, FoldDeferral> {
+    let folded = match op {
+        ArithOp::Add => left.checked_add(right),
+        ArithOp::Subtract => left.checked_sub(right),
+        ArithOp::Multiply => left.checked_mul(right),
+        ArithOp::Divide if right == 0 => return Err(FoldDeferral::DivisionByZero),
+        ArithOp::Divide => left.checked_div(right),
+    };
+    folded.ok_or(FoldDeferral::Overflow)
+}
+
+fn fold_u64_constants(op: ArithOp, left: u64, right: u64) -> Result<u64, FoldDeferral> {
+    let folded = match op {
+        ArithOp::Add => left.checked_add(right),
+        ArithOp::Subtract => left.checked_sub(right),
+        ArithOp::Multiply => left.checked_mul(right),
+        ArithOp::Divide if right == 0 => return Err(FoldDeferral::DivisionByZero),
+        ArithOp::Divide => left.checked_div(right),
+    };
+    folded.ok_or(FoldDeferral::Overflow)
+}
+
+fn fold_value_in_place(value: &mut SrplValueIr) {
+    let original = value.clone();
+    *value = fold_value(original.clone()).unwrap_or(original);
 }
 
 /// Apply constant folding to all value nodes in an assignment list.
@@ -143,7 +128,7 @@ pub fn fold_assignments(
     assignments
         .into_iter()
         .map(|mut a| {
-            a.value = fold_value(a.value.clone()).unwrap_or(a.value);
+            fold_value_in_place(&mut a.value);
             a
         })
         .collect()
@@ -156,7 +141,7 @@ pub fn fold_emit_values(
     values
         .into_iter()
         .map(|mut ev| {
-            ev.value = fold_value(ev.value.clone()).unwrap_or(ev.value);
+            fold_value_in_place(&mut ev.value);
             ev
         })
         .collect()

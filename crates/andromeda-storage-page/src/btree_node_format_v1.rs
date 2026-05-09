@@ -2,6 +2,7 @@ use andromeda_error::AndromedaResult;
 
 use crate::{Lsn, PageId};
 
+mod binary;
 mod body;
 #[cfg(test)]
 mod golden;

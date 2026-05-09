@@ -44,7 +44,7 @@ impl NdvEstimator for ExactNdvCounter {
     }
 
     fn memory_bytes(&self) -> usize {
-        self.seen.capacity() * std::mem::size_of::<u64>()
+        self.seen.capacity() * size_of::<u64>()
     }
 }
 

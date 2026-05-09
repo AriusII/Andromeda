@@ -15,6 +15,8 @@ mod frame_sequence;
 mod frame_struct;
 mod protocol_invariants;
 mod stream_types;
+#[cfg(test)]
+mod test_support;
 
 pub mod backpressure;
 pub mod frame;

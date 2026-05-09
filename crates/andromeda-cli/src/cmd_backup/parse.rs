@@ -58,36 +58,17 @@ pub(super) fn parse_backup_start(args: &[String]) -> AndromedaResult<BackupStart
             "--incremental" => incremental = true,
             "--runtime" => runtime = true,
             "--backup-id" => {
-                let value = next_option_value_rejecting_flag(
-                    args,
-                    &mut i,
-                    "--backup-id requires a numeric argument",
-                )?;
-                let parsed = parse_u64(value, "--backup-id must be an unsigned integer")?;
-                if parsed == 0 {
-                    return Err(cli_error("--backup-id must be greater than zero"));
-                }
-                backup_id = Some(parsed);
+                backup_id = Some(parse_backup_id_option(args, &mut i)?);
             },
             "--artifact-dir" => {
-                artifact_dir = Some(
-                    next_option_value_rejecting_flag(
-                        args,
-                        &mut i,
-                        "--artifact-dir requires a directory path",
-                    )?
-                    .to_string(),
-                );
+                artifact_dir = Some(parse_artifact_dir_option(args, &mut i)?);
             },
             "--destination" => {
-                destination = Some(
-                    next_option_value_rejecting_flag(
-                        args,
-                        &mut i,
-                        "--destination requires a path argument",
-                    )?
-                    .to_string(),
-                );
+                destination = Some(parse_string_option(
+                    args,
+                    &mut i,
+                    "--destination requires a path argument",
+                )?);
             },
             "--dry-run" => dry_run = true,
             JSON_FLAG => json_output = true,
@@ -136,14 +117,7 @@ pub(super) fn parse_backup_status(args: &[String]) -> AndromedaResult<BackupStat
         match args[i].as_str() {
             "--runtime" => runtime = true,
             "--artifact-dir" => {
-                artifact_dir = Some(
-                    next_option_value_rejecting_flag(
-                        args,
-                        &mut i,
-                        "--artifact-dir requires a directory path",
-                    )?
-                    .to_string(),
-                );
+                artifact_dir = Some(parse_artifact_dir_option(args, &mut i)?);
             },
             JSON_FLAG => json_output = true,
             opt if opt.starts_with("--") => {
@@ -160,11 +134,11 @@ pub(super) fn parse_backup_status(args: &[String]) -> AndromedaResult<BackupStat
         i += 1;
     }
 
-    if runtime && artifact_dir.is_none() {
-        return Err(cli_error(
-            "backup status --runtime requires --artifact-dir <dir> for file-backed state",
-        ));
-    }
+    require_runtime_artifact_dir(
+        runtime,
+        &artifact_dir,
+        "backup status --runtime requires --artifact-dir <dir> for file-backed state",
+    )?;
 
     Ok(BackupStatusOptions {
         backup_id,
@@ -184,25 +158,10 @@ pub(super) fn parse_backup_list(args: &[String]) -> AndromedaResult<BackupListOp
         match args[i].as_str() {
             "--runtime" => runtime = true,
             "--artifact-dir" => {
-                artifact_dir = Some(
-                    next_option_value_rejecting_flag(
-                        args,
-                        &mut i,
-                        "--artifact-dir requires a directory path",
-                    )?
-                    .to_string(),
-                );
+                artifact_dir = Some(parse_artifact_dir_option(args, &mut i)?);
             },
             "--limit" => {
-                let value = next_option_value_rejecting_flag(
-                    args,
-                    &mut i,
-                    "--limit requires a numeric argument",
-                )?;
-                limit = parse_usize(value, "--limit expects an unsigned integer")?;
-                if limit == 0 {
-                    return Err(cli_error("--limit must be greater than zero"));
-                }
+                limit = parse_limit_option(args, &mut i)?;
             },
             JSON_FLAG => json_output = true,
             opt if opt.starts_with("--") => {
@@ -219,11 +178,11 @@ pub(super) fn parse_backup_list(args: &[String]) -> AndromedaResult<BackupListOp
         i += 1;
     }
 
-    if runtime && artifact_dir.is_none() {
-        return Err(cli_error(
-            "backup list --runtime requires --artifact-dir <dir> for file-backed state",
-        ));
-    }
+    require_runtime_artifact_dir(
+        runtime,
+        &artifact_dir,
+        "backup list --runtime requires --artifact-dir <dir> for file-backed state",
+    )?;
 
     Ok(BackupListOptions {
         limit,
@@ -248,14 +207,7 @@ pub(super) fn parse_backup_verify(args: &[String]) -> AndromedaResult<BackupVeri
         match args[i].as_str() {
             "--runtime" => runtime = true,
             "--artifact-dir" => {
-                artifact_dir = Some(
-                    next_option_value_rejecting_flag(
-                        args,
-                        &mut i,
-                        "--artifact-dir requires a directory path",
-                    )?
-                    .to_string(),
-                );
+                artifact_dir = Some(parse_artifact_dir_option(args, &mut i)?);
             },
             JSON_FLAG => json_output = true,
             opt if opt.starts_with("--") => {
@@ -304,14 +256,7 @@ pub(super) fn parse_backup_cancel(args: &[String]) -> AndromedaResult<BackupCanc
         match args[i].as_str() {
             "--runtime" => runtime = true,
             "--artifact-dir" => {
-                artifact_dir = Some(
-                    next_option_value_rejecting_flag(
-                        args,
-                        &mut i,
-                        "--artifact-dir requires a directory path",
-                    )?
-                    .to_string(),
-                );
+                artifact_dir = Some(parse_artifact_dir_option(args, &mut i)?);
             },
             "--dry-run" => dry_run = true,
             JSON_FLAG => json_output = true,
@@ -329,11 +274,11 @@ pub(super) fn parse_backup_cancel(args: &[String]) -> AndromedaResult<BackupCanc
         i += 1;
     }
 
-    if runtime && artifact_dir.is_none() {
-        return Err(cli_error(
-            "backup cancel --runtime requires --artifact-dir <dir> for file-backed state",
-        ));
-    }
+    require_runtime_artifact_dir(
+        runtime,
+        &artifact_dir,
+        "backup cancel --runtime requires --artifact-dir <dir> for file-backed state",
+    )?;
 
     Ok(BackupCancelOptions {
         backup_id,
@@ -344,9 +289,65 @@ pub(super) fn parse_backup_cancel(args: &[String]) -> AndromedaResult<BackupCanc
 }
 
 fn parse_backup_id(value: &str) -> AndromedaResult<u64> {
-    let backup_id = parse_u64(value, "backup-id must be an unsigned integer")?;
+    parse_nonzero_backup_id(
+        value,
+        "backup-id must be an unsigned integer",
+        "backup-id must be greater than zero",
+    )
+}
+
+fn parse_backup_id_option(args: &[String], index: &mut usize) -> AndromedaResult<u64> {
+    let value =
+        next_option_value_rejecting_flag(args, index, "--backup-id requires a numeric argument")?;
+    parse_nonzero_backup_id(
+        value,
+        "--backup-id must be an unsigned integer",
+        "--backup-id must be greater than zero",
+    )
+}
+
+fn parse_nonzero_backup_id(
+    value: &str,
+    parse_message: &'static str,
+    zero_message: &'static str,
+) -> AndromedaResult<u64> {
+    let backup_id = parse_u64(value, parse_message)?;
     if backup_id == 0 {
-        return Err(cli_error("backup-id must be greater than zero"));
+        return Err(cli_error(zero_message));
     }
     Ok(backup_id)
+}
+
+fn parse_artifact_dir_option(args: &[String], index: &mut usize) -> AndromedaResult<String> {
+    parse_string_option(args, index, "--artifact-dir requires a directory path")
+}
+
+fn parse_string_option(
+    args: &[String],
+    index: &mut usize,
+    missing_message: &'static str,
+) -> AndromedaResult<String> {
+    Ok(next_option_value_rejecting_flag(args, index, missing_message)?.to_string())
+}
+
+fn parse_limit_option(args: &[String], index: &mut usize) -> AndromedaResult<usize> {
+    let value =
+        next_option_value_rejecting_flag(args, index, "--limit requires a numeric argument")?;
+    let limit = parse_usize(value, "--limit expects an unsigned integer")?;
+    if limit == 0 {
+        return Err(cli_error("--limit must be greater than zero"));
+    }
+    Ok(limit)
+}
+
+fn require_runtime_artifact_dir(
+    runtime: bool,
+    artifact_dir: &Option<String>,
+    missing_message: &'static str,
+) -> AndromedaResult<()> {
+    if runtime && artifact_dir.is_none() {
+        Err(cli_error(missing_message))
+    } else {
+        Ok(())
+    }
 }

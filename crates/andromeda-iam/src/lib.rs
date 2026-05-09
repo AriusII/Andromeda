@@ -176,8 +176,8 @@ impl PreTransactionAdmissionDecision {
 pub struct IamAdmissionRuntime;
 
 impl IamAdmissionRuntime {
-    pub fn evaluate<'a>(
-        request: PreTransactionAdmissionRequest<'a>,
+    pub fn evaluate(
+        request: PreTransactionAdmissionRequest,
     ) -> PreTransactionAdmissionDecision {
         let boundary_decision =
             AdmissionDecision::evaluate(request.surface, request.class, request.permission);
@@ -228,8 +228,8 @@ impl IamAdmissionRuntime {
         }
     }
 
-    fn deny<'a>(
-        request: PreTransactionAdmissionRequest<'a>,
+    fn deny(
+        request: PreTransactionAdmissionRequest,
         admission: SecurityAdmissionV0,
     ) -> PreTransactionAdmissionDecision {
         PreTransactionAdmissionDecision {
@@ -239,8 +239,8 @@ impl IamAdmissionRuntime {
         }
     }
 
-    const fn audit_event<'a>(
-        request: PreTransactionAdmissionRequest<'a>,
+    const fn audit_event(
+        request: PreTransactionAdmissionRequest,
         admission: SecurityAdmissionV0,
     ) -> SecurityAdmissionAuditEventV0 {
         SecurityAdmissionAuditEventV0::new(

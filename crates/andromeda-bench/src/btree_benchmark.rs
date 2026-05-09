@@ -47,36 +47,12 @@ impl ReadOnlyBTreeIndexModel {
     }
 
     fn lookup(&self, key: &[u8]) -> usize {
-        let mut comparisons = 0;
-        let mut left = 0;
-        let mut right = self.keys.len();
-
-        while left < right {
-            comparisons += 1;
-            let mid = (left + right) / 2;
-            match key.cmp(&self.keys[mid]) {
-                std::cmp::Ordering::Less => right = mid,
-                std::cmp::Ordering::Greater => left = mid + 1,
-                std::cmp::Ordering::Equal => break,
-            }
-        }
+        let (_, comparisons) = self.lower_bound_with_comparisons(key);
         comparisons
     }
 
     fn range_scan(&self, start_key: &[u8], end_key: &[u8]) -> usize {
-        let mut comparisons = 0;
-
-        let mut left = 0;
-        let mut right = self.keys.len();
-        while left < right {
-            comparisons += 1;
-            let mid = (left + right) / 2;
-            match start_key.cmp(&self.keys[mid]) {
-                std::cmp::Ordering::Less => right = mid,
-                std::cmp::Ordering::Greater => left = mid + 1,
-                std::cmp::Ordering::Equal => break,
-            }
-        }
+        let (left, comparisons) = self.lower_bound_with_comparisons(start_key);
 
         let mut count = 0;
         for key in &self.keys[left..] {
@@ -88,6 +64,24 @@ impl ReadOnlyBTreeIndexModel {
         }
 
         comparisons + count
+    }
+
+    fn lower_bound_with_comparisons(&self, key: &[u8]) -> (usize, usize) {
+        let mut comparisons = 0;
+        let mut left = 0;
+        let mut right = self.keys.len();
+
+        while left < right {
+            comparisons += 1;
+            let mid = (left + right) / 2;
+            if self.keys[mid].as_slice() < key {
+                left = mid + 1;
+            } else {
+                right = mid;
+            }
+        }
+
+        (left, comparisons)
     }
 }
 
@@ -115,15 +109,16 @@ pub enum BTreeBenchmarkError {
 pub fn setup_btree_lookup_harness(
     config: BTreeBenchmarkConfig,
 ) -> Result<BTreeBenchmarkContext, BTreeBenchmarkError> {
-    if config.dataset_size == 0 {
-        return Err(BTreeBenchmarkError::InvalidConfig);
-    }
-
-    let tree = Arc::new(ReadOnlyBTreeIndexModel::new(config.dataset_size));
-    Ok(BTreeBenchmarkContext { tree, config })
+    setup_btree_harness(config)
 }
 
 pub fn setup_btree_range_scan_harness(
+    config: BTreeBenchmarkConfig,
+) -> Result<BTreeBenchmarkContext, BTreeBenchmarkError> {
+    setup_btree_harness(config)
+}
+
+fn setup_btree_harness(
     config: BTreeBenchmarkConfig,
 ) -> Result<BTreeBenchmarkContext, BTreeBenchmarkError> {
     if config.dataset_size == 0 {
@@ -138,14 +133,9 @@ pub fn benchmark_btree_lookup(
     ctx: &BTreeBenchmarkContext,
     key: &[u8],
 ) -> Result<u64, BTreeBenchmarkError> {
-    let start = Instant::now();
-    let _comparisons = ctx.tree.lookup(key);
-    let elapsed = start.elapsed();
-
-    let micros = elapsed.as_micros().max(1);
-    micros
-        .try_into()
-        .map_err(|_| BTreeBenchmarkError::LatencyOverflow)
+    benchmark_btree_operation(|| {
+        let _comparisons = ctx.tree.lookup(key);
+    })
 }
 
 pub fn benchmark_btree_range_scan(
@@ -153,8 +143,14 @@ pub fn benchmark_btree_range_scan(
     start_key: &[u8],
     end_key: &[u8],
 ) -> Result<u64, BTreeBenchmarkError> {
+    benchmark_btree_operation(|| {
+        let _key_count = ctx.tree.range_scan(start_key, end_key);
+    })
+}
+
+fn benchmark_btree_operation(operation: impl FnOnce()) -> Result<u64, BTreeBenchmarkError> {
     let start = Instant::now();
-    let _key_count = ctx.tree.range_scan(start_key, end_key);
+    operation();
     let elapsed = start.elapsed();
 
     let micros = elapsed.as_micros().max(1);

@@ -158,7 +158,7 @@ impl MutualTlsTestConfig {
 
 #[cfg(any(test, feature = "insecure-test-tls"))]
 struct RustlsMutualTlsPair {
-    server: rustls::ServerConfig,
+    server: ServerConfig,
     client: rustls::ClientConfig,
 }
 
@@ -240,7 +240,7 @@ fn quinn_client_config(cfg: rustls::ClientConfig) -> AndromedaResult<quinn::Clie
     Ok(quinn::ClientConfig::new(Arc::new(quic_config)))
 }
 
-fn zero_rtt_disabled_server_config(mut config: rustls::ServerConfig) -> rustls::ServerConfig {
+fn zero_rtt_disabled_server_config(mut config: ServerConfig) -> ServerConfig {
     config.max_early_data_size = 0;
     config.send_half_rtt_data = false;
     config

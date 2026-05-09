@@ -37,7 +37,7 @@ impl CatalogDependencyKind {
         match self {
             Self::ProcedureStructuredInput | Self::ProcedureEmitsStructuredObject => {
                 ObjectKind::StructuredObject
-            }
+            },
             Self::ProcedureReadsTable | Self::ProcedureWritesTable => ObjectKind::Table,
         }
     }
@@ -119,10 +119,10 @@ impl CatalogDependency {
             CatalogBindingKind::WritesTable => CatalogDependencyKind::ProcedureWritesTable,
             CatalogBindingKind::UsesStructuredInput => {
                 CatalogDependencyKind::ProcedureStructuredInput
-            }
+            },
             CatalogBindingKind::EmitsStructuredObject => {
                 CatalogDependencyKind::ProcedureEmitsStructuredObject
-            }
+            },
         };
         Self::with_kind(
             kind,

@@ -1,11 +1,11 @@
-use andromeda_audit::{
-    CertificateIdentity, SecurityAuditOutcome, SecurityAuditTrace, SurfaceScope, UserPrincipal,
-    UserPrincipalKind,
-};
+use andromeda_audit::{CertificateIdentity, SurfaceScope, UserPrincipal, UserPrincipalKind};
 use andromeda_error::AndromedaResult;
 use andromeda_observability::TraceId;
 
-use super::{AuthorizationDenialReason, AuthorizationOutcome, PrincipalRegistry, SurfaceAction};
+use super::{
+    AuthorizationDenialReason, AuthorizationOutcome, PrincipalRegistry, SurfaceAction,
+    allowed_security_outcome, denied_security_outcome,
+};
 
 /// The V0 enforcement boundary: maps an inbound certificate fingerprint to
 /// a principal, validates the surface scope and required permission, and
@@ -47,115 +47,85 @@ impl<'a> SurfaceAuthorizer<'a> {
             )?;
             let synth_principal =
                 UserPrincipal::new("principal:unknown", UserPrincipalKind::Service)?;
-            let audit = SecurityAuditTrace::new(
+            return denied_security_outcome(
                 trace_id,
                 requested_scope,
                 synth_cert,
                 synth_principal,
                 permission,
-                SecurityAuditOutcome::Denied,
-                format!(
-                    "denied:{}:action={}",
-                    AuthorizationDenialReason::UnknownCertificate.label(),
-                    action.evidence_label()
-                ),
-            )?;
-            return Ok(AuthorizationOutcome::Denied {
-                reason: AuthorizationDenialReason::UnknownCertificate,
-                audit,
-            });
+                AuthorizationDenialReason::UnknownCertificate,
+                format!("action={}", action.evidence_label()),
+            );
         };
 
         // Scope mismatch: the certificate was issued for one surface but
         // is being presented on another. This is a surface-isolation
         // violation regardless of permission grants.
         if binding.certificate.surface != requested_scope {
-            let audit = SecurityAuditTrace::new(
+            return denied_security_outcome(
                 trace_id,
                 requested_scope,
                 binding.certificate.clone(),
                 binding.principal.clone(),
                 permission,
-                SecurityAuditOutcome::Denied,
+                AuthorizationDenialReason::SurfaceScopeMismatch,
                 format!(
-                    "denied:{}:cert_surface={:?}:requested_surface={:?}:action={}",
-                    AuthorizationDenialReason::SurfaceScopeMismatch.label(),
+                    "cert_surface={:?}:requested_surface={:?}:action={}",
                     binding.certificate.surface,
                     requested_scope,
                     action.evidence_label(),
                 ),
-            )?;
-            return Ok(AuthorizationOutcome::Denied {
-                reason: AuthorizationDenialReason::SurfaceScopeMismatch,
-                audit,
-            });
+            );
         }
 
         // Surface-scope policy: even if the principal has the permission,
         // the surface itself must structurally allow the permission family.
         if !requested_scope.permits_permission(permission) {
-            let audit = SecurityAuditTrace::new(
+            return denied_security_outcome(
                 trace_id,
                 requested_scope,
                 binding.certificate.clone(),
                 binding.principal.clone(),
                 permission,
-                SecurityAuditOutcome::Denied,
+                AuthorizationDenialReason::SurfaceDoesNotPermitPermission,
                 format!(
-                    "denied:{}:surface={:?}:permission={:?}:action={}",
-                    AuthorizationDenialReason::SurfaceDoesNotPermitPermission.label(),
+                    "surface={:?}:permission={:?}:action={}",
                     requested_scope,
                     permission,
                     action.evidence_label(),
                 ),
-            )?;
-            return Ok(AuthorizationOutcome::Denied {
-                reason: AuthorizationDenialReason::SurfaceDoesNotPermitPermission,
-                audit,
-            });
+            );
         }
 
         // Principal grant check.
         if !binding.grants(permission) {
-            let audit = SecurityAuditTrace::new(
+            return denied_security_outcome(
                 trace_id,
                 requested_scope,
                 binding.certificate.clone(),
                 binding.principal.clone(),
                 permission,
-                SecurityAuditOutcome::Denied,
+                AuthorizationDenialReason::PrincipalMissingPermission,
                 format!(
-                    "denied:{}:permission={:?}:action={}",
-                    AuthorizationDenialReason::PrincipalMissingPermission.label(),
+                    "permission={:?}:action={}",
                     permission,
                     action.evidence_label(),
                 ),
-            )?;
-            return Ok(AuthorizationOutcome::Denied {
-                reason: AuthorizationDenialReason::PrincipalMissingPermission,
-                audit,
-            });
+            );
         }
 
-        let audit = SecurityAuditTrace::new(
+        allowed_security_outcome(
             trace_id,
             requested_scope,
             binding.certificate.clone(),
             binding.principal.clone(),
             permission,
-            SecurityAuditOutcome::Allowed,
             format!(
-                "allowed:permission={:?}:action={}",
+                "permission={:?}:action={}",
                 permission,
                 action.evidence_label()
             ),
-        )?;
-
-        Ok(AuthorizationOutcome::Allowed {
-            principal: binding.principal.clone(),
-            permission,
-            audit,
-        })
+        )
     }
 }
 

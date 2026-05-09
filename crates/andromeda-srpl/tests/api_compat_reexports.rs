@@ -6,7 +6,7 @@ use andromeda_srpl_ast::{ProcedureAst, Spanned};
 use andromeda_srpl_cardinality::Cardinality;
 use andromeda_srpl_diagnostics::{
     DiagnosticPhase, ForbiddenConstruct, ForbiddenConstructHit, SourceSpan, SrplDiagnostic,
-    SrplSource, source_location,
+    SrplSource,
 };
 use andromeda_srpl_execution_adapter::{
     SrplAssertResult, SrplBindingEnvironment, SrplEmitResult, SrplExecutionFailure, SrplReadResult,
@@ -32,7 +32,7 @@ fn srpl_tests_import_owner_crate_types_directly() {
     assert_type::<SourceSpan>();
     assert_type::<SrplDiagnostic>();
     assert_type::<SrplSource<'static>>();
-    assert_type::<source_location::SrplSource<'static>>();
+    assert_type::<SrplSource<'static>>();
 
     assert_type::<SrplAssertResult>();
     assert_type::<SrplEmitResult>();
@@ -54,18 +54,18 @@ fn srpl_tests_import_owner_crate_types_directly() {
     assert_type::<SrplPredicateIr>();
     assert_type::<SrplProcedureIr>();
     assert_type::<SrplValueIr>();
-    assert_type::<source_location::SourceSpan>();
+    assert_type::<SourceSpan>();
 }
 
 #[test]
 fn owner_crate_types_are_not_wrapped_by_srpl_orchestration() {
-    assert_same_type::<andromeda_srpl_cardinality::Cardinality>(Cardinality::One);
+    assert_same_type::<Cardinality>(Cardinality::One);
 
     let owner_span = SourceSpan::new(3, 9);
     assert_eq!(owner_span, SourceSpan::new(3, 9));
 
     let owner_source = SrplSource::new("select *");
-    let module_source: source_location::SrplSource<'_> = SrplSource::new("select *");
+    let module_source: SrplSource<'_> = SrplSource::new("select *");
     assert!(
         owner_source
             .forbidden_constructs()

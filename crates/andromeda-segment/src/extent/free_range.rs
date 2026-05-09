@@ -2,7 +2,7 @@ use andromeda_error::AndromedaResult;
 
 use crate::{Lsn, PageId, PageSize};
 
-use super::{ExtentDescriptor, error::storage_error};
+use super::{ExtentDescriptor, error::storage_error, page_range::checked_last_page_id};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ExtentFreeRange {
@@ -17,14 +17,11 @@ impl ExtentFreeRange {
         if self.first_page_id.is_zero() || self.page_count == 0 {
             return Err(storage_error("free extent range must not be empty"));
         }
-        if self
-            .first_page_id
-            .get()
-            .checked_add(u64::from(self.page_count - 1))
-            .is_none()
-        {
-            return Err(storage_error("free extent range overflows u64"));
-        }
+        checked_last_page_id(
+            self.first_page_id,
+            self.page_count,
+            "free extent range overflows u64",
+        )?;
         if matches!(self.recyclable_after_lsn, Some(lsn) if lsn.is_zero()) {
             return Err(storage_error(
                 "free extent recyclable-after LSN must not be zero",
@@ -35,9 +32,11 @@ impl ExtentFreeRange {
 
     pub fn last_page_id(&self) -> AndromedaResult<PageId> {
         self.validate()?;
-        Ok(PageId::new(
-            self.first_page_id.get() + u64::from(self.page_count - 1),
-        ))
+        checked_last_page_id(
+            self.first_page_id,
+            self.page_count,
+            "free extent range overflows u64",
+        )
     }
 
     pub(crate) fn contains_descriptor(

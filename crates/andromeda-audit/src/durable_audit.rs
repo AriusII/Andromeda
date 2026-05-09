@@ -663,25 +663,7 @@ pub(crate) fn sink_failure(
     })
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DurableAuditReplayLsnRange {
-    pub start_lsn: u64,
-    pub end_lsn: u64,
-}
-
-impl DurableAuditReplayLsnRange {
-    pub const fn new(start_lsn: u64, end_lsn: u64) -> Self {
-        Self { start_lsn, end_lsn }
-    }
-
-    pub const fn contains(self, lsn: u64) -> bool {
-        self.start_lsn <= lsn && lsn <= self.end_lsn
-    }
-
-    pub const fn is_valid(self) -> bool {
-        self.start_lsn != 0 && self.end_lsn != 0 && self.start_lsn <= self.end_lsn
-    }
-}
+pub type DurableAuditReplayLsnRange = andromeda_observability::TraceQueryLsnRange;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DurableAuditReplayQuery {

@@ -81,26 +81,8 @@ pub(super) fn print_contract_human(contract: &ProcedureContractInfo) {
     println!("ID: {}", contract.procedure_id);
     println!("Name: {}", contract.name);
     println!("Contract Hash: {}", contract.contract_hash);
-    println!();
-    println!("Input Columns:");
-    for column in &contract.input_columns {
-        let nullable = if column.nullable {
-            "optional"
-        } else {
-            "required"
-        };
-        println!("  - {}: {} ({})", column.name, column.column_type, nullable);
-    }
-    println!();
-    println!("Output Columns:");
-    for column in &contract.output_columns {
-        let nullable = if column.nullable {
-            "optional"
-        } else {
-            "required"
-        };
-        println!("  - {}: {} ({})", column.name, column.column_type, nullable);
-    }
+    print_column_section("Input Columns", &contract.input_columns);
+    print_column_section("Output Columns", &contract.output_columns);
     println!();
     println!("Isolation Level: {}", contract.isolation_level);
     println!("Access Mode: {}", contract.access_mode);
@@ -123,48 +105,26 @@ pub(super) fn print_manifest_human(manifest: &ProcedureManifestInfo) {
     );
     println!("Contract Hash: {}", manifest.contract_hash);
     println!("Mutable: {}", manifest.is_mutable);
-    println!();
-    println!("Input Columns:");
-    for column in &manifest.input_columns {
-        let nullable = if column.nullable {
-            "optional"
-        } else {
-            "required"
-        };
-        println!("  - {}: {} ({})", column.name, column.column_type, nullable);
-    }
-    println!();
-    println!("Output Columns:");
-    for column in &manifest.output_columns {
-        let nullable = if column.nullable {
-            "optional"
-        } else {
-            "required"
-        };
-        println!("  - {}: {} ({})", column.name, column.column_type, nullable);
-    }
+    print_column_section("Input Columns", &manifest.input_columns);
+    print_column_section("Output Columns", &manifest.output_columns);
 }
 
 pub(super) fn print_procedures_json(procedures: &[ProcedureMetadata]) {
-    let entries = procedures
-        .iter()
-        .map(|procedure| {
-            format!(
-                "{{\"procedure_id\":{},\"name\":{},\"namespace\":{},\"contract_hash\":{},\"catalog_version\":{}}}",
-                procedure.procedure_id,
-                json_string(&procedure.name),
-                json_option_string(procedure.namespace.as_deref()),
-                json_string(&procedure.contract_hash),
-                procedure.catalog_version,
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(",");
+    let procedures_json = json_array(procedures, |procedure| {
+        format!(
+            "{{\"procedure_id\":{},\"name\":{},\"namespace\":{},\"contract_hash\":{},\"catalog_version\":{}}}",
+            procedure.procedure_id,
+            json_string(&procedure.name),
+            json_option_string(procedure.namespace.as_deref()),
+            json_string(&procedure.contract_hash),
+            procedure.catalog_version,
+        )
+    });
     println!(
-        "{{\"schema\":\"andromeda.cli.catalog.list-procedures.v1\",\"contract_preview\":true,\"mode\":{},\"runtime\":{},\"durable_catalog_state\":false,\"catalog_runtime_queried\":false,\"procedures\":[{}],\"message\":{}}}",
+        "{{\"schema\":\"andromeda.cli.catalog.list-procedures.v1\",\"contract_preview\":true,\"mode\":{},\"runtime\":{},\"durable_catalog_state\":false,\"catalog_runtime_queried\":false,\"procedures\":{},\"message\":{}}}",
         json_string(CATALOG_PREVIEW_MODE),
         json_string(CATALOG_PREVIEW_RUNTIME),
-        entries,
+        procedures_json,
         json_string(CATALOG_PREVIEW_MESSAGE),
     );
 }
@@ -215,16 +175,41 @@ pub(super) fn print_manifest_json(manifest: &ProcedureManifestInfo) {
 }
 
 fn columns_json(columns: &[ColumnInfo]) -> String {
-    let entries = columns
+    json_array(columns, |column| {
+        format!(
+            "{{\"name\":{},\"column_type\":{},\"nullable\":{}}}",
+            json_string(&column.name),
+            json_string(&column.column_type),
+            column.nullable,
+        )
+    })
+}
+
+fn print_column_section(title: &str, columns: &[ColumnInfo]) {
+    println!();
+    println!("{title}:");
+    for column in columns {
+        println!(
+            "  - {}: {} ({})",
+            column.name,
+            column.column_type,
+            column_nullability(column)
+        );
+    }
+}
+
+fn column_nullability(column: &ColumnInfo) -> &'static str {
+    if column.nullable {
+        "optional"
+    } else {
+        "required"
+    }
+}
+
+fn json_array<T>(items: &[T], mut render: impl FnMut(&T) -> String) -> String {
+    let entries = items
         .iter()
-        .map(|column| {
-            format!(
-                "{{\"name\":{},\"column_type\":{},\"nullable\":{}}}",
-                json_string(&column.name),
-                json_string(&column.column_type),
-                column.nullable,
-            )
-        })
+        .map(|item| render(item))
         .collect::<Vec<_>>()
         .join(",");
     format!("[{}]", entries)

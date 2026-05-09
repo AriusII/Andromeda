@@ -59,6 +59,12 @@ pub(super) fn encode_structured_object_shape_material(
     sink.finish_material()
 }
 
+pub(super) fn encode_column_descriptors_shape_material(columns: &[ColumnDescriptor]) -> Vec<u8> {
+    let mut sink = StructuredObjectShapeMaterialSink::new();
+    sink.columns(columns);
+    sink.finish_material()
+}
+
 pub(super) fn compute_structured_object_shape_hash(
     fields: &[ColumnDescriptor],
     unique_by: &[String],
@@ -159,11 +165,11 @@ impl StructuredObjectShapeMaterialSink {
             ScalarType::Decimal(decimal) => {
                 self.u8(10);
                 self.decimal_type(*decimal);
-            }
+            },
             ScalarType::Float(float) => {
                 self.u8(11);
                 self.float_type(*float);
-            }
+            },
             ScalarType::Bool => self.u8(12),
             ScalarType::Text(text) => {
                 self.u8(13);
@@ -178,10 +184,10 @@ impl StructuredObjectShapeMaterialSink {
                     Some(collation) => {
                         self.bool(true);
                         self.str(collation);
-                    }
+                    },
                     None => self.bool(false),
                 }
-            }
+            },
             ScalarType::Timestamp(timestamp) => {
                 self.u8(14);
                 self.u8(match timestamp {
@@ -189,7 +195,7 @@ impl StructuredObjectShapeMaterialSink {
                     TimestampType::Invocation => 1,
                     TimestampType::MonotonicEpoch => 2,
                 });
-            }
+            },
         }
     }
 
@@ -202,7 +208,7 @@ impl StructuredObjectShapeMaterialSink {
                 self.u8(3);
                 self.u8(precision);
                 self.u8(scale);
-            }
+            },
         }
     }
 
@@ -218,7 +224,7 @@ impl StructuredObjectShapeMaterialSink {
                     FloatMode::Approximate => 0,
                     FloatMode::DeterministicAnalytics => 1,
                 });
-            }
+            },
         }
     }
 }

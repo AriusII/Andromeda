@@ -334,6 +334,14 @@ fn encode_structured_object_shape_material_is_deterministic() {
 }
 
 #[test]
+fn encode_column_descriptor_shape_material_is_shared_by_shape_hashers() {
+    let columns = encode_column_descriptors_shape_material(&fields());
+    let structured_object = encode_structured_object_shape_material(&fields(), &unique_by());
+
+    assert!(structured_object.starts_with(&columns));
+}
+
+#[test]
 fn compute_structured_object_shape_hash_tracks_shape_drift() {
     let baseline = compute_structured_object_shape_hash(&fields(), &unique_by());
     let mut drifted = fields();

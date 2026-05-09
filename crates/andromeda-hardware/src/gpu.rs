@@ -134,19 +134,30 @@ impl Default for GpuProfile {
 mod tests {
     use super::*;
 
+    const CRITICAL_PIPELINES: [PipelineClass; 7] = [
+        PipelineClass::Commit,
+        PipelineClass::WalAppend,
+        PipelineClass::Rollback,
+        PipelineClass::Recovery,
+        PipelineClass::MvccVisibility,
+        PipelineClass::CatalogPublication,
+        PipelineClass::SecurityCriticalPath,
+    ];
+    const ANALYTICS_PIPELINES: [PipelineClass; 3] = [
+        PipelineClass::StatisticsRefresh,
+        PipelineClass::MapRefresh,
+        PipelineClass::BatchAnalytics,
+    ];
+    const NON_ADVISORY_PIPELINES: [PipelineClass; 2] = [
+        PipelineClass::ForegroundExecution,
+        PipelineClass::BackgroundMaintenance,
+    ];
+
     #[test]
     fn gpu_policy_rejects_critical_engine_truth_paths() {
         let policy = GpuExecutionPolicy::OffCriticalPathOnly;
 
-        for pipeline in [
-            PipelineClass::Commit,
-            PipelineClass::WalAppend,
-            PipelineClass::Rollback,
-            PipelineClass::Recovery,
-            PipelineClass::MvccVisibility,
-            PipelineClass::CatalogPublication,
-            PipelineClass::SecurityCriticalPath,
-        ] {
+        for pipeline in CRITICAL_PIPELINES {
             let error = policy.validate_pipeline(pipeline).unwrap_err();
             assert_eq!(error.kind(), AndromedaErrorKind::Resource);
             assert!(!policy.permits_pipeline(pipeline));
@@ -157,20 +168,13 @@ mod tests {
     fn off_critical_policy_rejects_non_advisory_pipelines() {
         let policy = GpuExecutionPolicy::OffCriticalPathOnly;
 
-        for pipeline in [
-            PipelineClass::ForegroundExecution,
-            PipelineClass::BackgroundMaintenance,
-        ] {
+        for pipeline in NON_ADVISORY_PIPELINES {
             let error = policy.validate_pipeline(pipeline).unwrap_err();
             assert_eq!(error.kind(), AndromedaErrorKind::Resource);
             assert!(!policy.permits_pipeline(pipeline));
         }
 
-        for pipeline in [
-            PipelineClass::StatisticsRefresh,
-            PipelineClass::MapRefresh,
-            PipelineClass::BatchAnalytics,
-        ] {
+        for pipeline in ANALYTICS_PIPELINES {
             assert!(policy.validate_pipeline(pipeline).is_ok());
         }
     }
@@ -179,25 +183,11 @@ mod tests {
     fn batch_analytics_policy_only_allows_analytical_gpu_work() {
         let policy = GpuExecutionPolicy::BatchAnalyticsOnly;
 
-        for pipeline in [
-            PipelineClass::StatisticsRefresh,
-            PipelineClass::MapRefresh,
-            PipelineClass::BatchAnalytics,
-        ] {
+        for pipeline in ANALYTICS_PIPELINES {
             assert!(policy.validate_pipeline(pipeline).is_ok());
         }
 
-        for pipeline in [
-            PipelineClass::Commit,
-            PipelineClass::WalAppend,
-            PipelineClass::Rollback,
-            PipelineClass::Recovery,
-            PipelineClass::MvccVisibility,
-            PipelineClass::CatalogPublication,
-            PipelineClass::SecurityCriticalPath,
-            PipelineClass::ForegroundExecution,
-            PipelineClass::BackgroundMaintenance,
-        ] {
+        for pipeline in CRITICAL_PIPELINES.into_iter().chain(NON_ADVISORY_PIPELINES) {
             assert!(policy.validate_pipeline(pipeline).is_err());
         }
     }
@@ -218,17 +208,7 @@ mod tests {
                 .is_ok()
         );
 
-        for pipeline in [
-            PipelineClass::Commit,
-            PipelineClass::WalAppend,
-            PipelineClass::Rollback,
-            PipelineClass::Recovery,
-            PipelineClass::MvccVisibility,
-            PipelineClass::CatalogPublication,
-            PipelineClass::SecurityCriticalPath,
-            PipelineClass::ForegroundExecution,
-            PipelineClass::BackgroundMaintenance,
-        ] {
+        for pipeline in CRITICAL_PIPELINES.into_iter().chain(NON_ADVISORY_PIPELINES) {
             assert!(profile.validate_pipeline(pipeline).is_err());
         }
     }
@@ -272,15 +252,7 @@ mod tests {
     fn advisory_gpu_selection_rejects_critical_truth_paths() {
         let profile = GpuProfile::batch_analytics_only();
 
-        for pipeline in [
-            PipelineClass::Commit,
-            PipelineClass::WalAppend,
-            PipelineClass::Rollback,
-            PipelineClass::Recovery,
-            PipelineClass::MvccVisibility,
-            PipelineClass::CatalogPublication,
-            PipelineClass::SecurityCriticalPath,
-        ] {
+        for pipeline in CRITICAL_PIPELINES {
             let error = profile
                 .select_advisory_gpu(pipeline, true, true)
                 .unwrap_err();

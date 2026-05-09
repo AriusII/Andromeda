@@ -9,7 +9,10 @@ use crate::{Cardinality, identifier::validate_srpl_identifier as validate_symbol
 
 use super::{
     validation::validate_qualified_name,
-    values::{SrplAssignmentIr, SrplEmitValueIr, SrplPredicateIr},
+    values::{
+        SrplAssignmentIr, SrplEmitValueIr, SrplPredicateIr, validate_assignments,
+        validate_emit_values, validate_predicates,
+    },
 };
 
 pub const MAX_SRPL_BODY_OPERATIONS: usize = 16;
@@ -107,17 +110,15 @@ impl SrplBusinessOperationKindIr {
             } => {
                 validate_qualified_name(source, "SRPL read source")?;
                 validate_symbol(binding, "SRPL read binding")?;
-                for predicate in predicates {
-                    predicate.validate()?;
-                }
-            }
+                validate_predicates(predicates)?;
+            },
             Self::Assert {
                 predicate,
                 failure_code,
             } => {
                 predicate.validate()?;
                 validate_symbol(failure_code, "SRPL assertion failure code")?;
-            }
+            },
             Self::Update {
                 target,
                 predicates,
@@ -126,43 +127,38 @@ impl SrplBusinessOperationKindIr {
             } => {
                 validate_qualified_name(target, "SRPL update target")?;
                 if assignments.is_empty() {
-                    return Err(AndromedaError::new(
-                        AndromedaErrorKind::Srpl,
+                    return Err(srpl_error(
                         "SRPL update operation must declare at least one assignment",
                     ));
                 }
-                for predicate in predicates {
-                    predicate.validate()?;
-                }
-                for assignment in assignments {
-                    assignment.validate()?;
-                }
+                validate_predicates(predicates)?;
+                validate_assignments(assignments)?;
                 if matches!(affected_rows_exact, Some(0)) {
-                    return Err(AndromedaError::new(
-                        AndromedaErrorKind::Srpl,
+                    return Err(srpl_error(
                         "SRPL update affected rows must be greater than zero",
                     ));
                 }
-            }
+            },
             Self::Emit { stream, values } => {
                 validate_symbol(stream, "SRPL emit stream")?;
                 if values.is_empty() {
-                    return Err(AndromedaError::new(
-                        AndromedaErrorKind::Srpl,
+                    return Err(srpl_error(
                         "SRPL emit operation must declare at least one value",
                     ));
                 }
-                for value in values {
-                    value.validate()?;
-                }
-            }
+                validate_emit_values(values)?;
+            },
             Self::Raise { code } => {
                 validate_symbol(code, "SRPL raise code")?;
-            }
+            },
         }
 
         Ok(())
     }
+}
+
+fn srpl_error(message: &'static str) -> AndromedaError {
+    AndromedaError::new(AndromedaErrorKind::Srpl, message)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

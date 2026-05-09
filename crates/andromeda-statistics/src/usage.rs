@@ -35,6 +35,19 @@ impl StatisticsUseReason {
             Self::StaleRejected => "stale-rejected",
         }
     }
+
+    pub const fn is_accepted(self) -> bool {
+        matches!(self, Self::AcceptedPublished | Self::AcceptedStaleByPolicy)
+    }
+
+    pub const fn outcome(self) -> DecisionOutcome {
+        match self {
+            Self::AcceptedPublished | Self::AcceptedStaleByPolicy => DecisionOutcome::Accepted,
+            Self::DisabledByPolicy => DecisionOutcome::Disabled,
+            Self::MissingStatistics | Self::StaleRejected => DecisionOutcome::Fallback,
+            _ => DecisionOutcome::Rejected,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,20 +84,8 @@ pub fn evaluate_statistics_for_optimizer(
     policy.validate()?;
 
     let reason = classify_reason(descriptor, policy);
-    let accepted = matches!(
-        reason,
-        StatisticsUseReason::AcceptedPublished | StatisticsUseReason::AcceptedStaleByPolicy
-    );
-    let outcome = match reason {
-        StatisticsUseReason::AcceptedPublished | StatisticsUseReason::AcceptedStaleByPolicy => {
-            DecisionOutcome::Accepted
-        }
-        StatisticsUseReason::DisabledByPolicy => DecisionOutcome::Disabled,
-        StatisticsUseReason::MissingStatistics | StatisticsUseReason::StaleRejected => {
-            DecisionOutcome::Fallback
-        }
-        _ => DecisionOutcome::Rejected,
-    };
+    let accepted = reason.is_accepted();
+    let outcome = reason.outcome();
 
     let binding = descriptor
         .map(|descriptor| {
@@ -144,10 +145,10 @@ fn classify_reason(
         StatsPublicationState::Superseded => StatisticsUseReason::SupersededPublication,
         StatsPublicationState::Published if descriptor.is_stale() && policy.allow_stale() => {
             StatisticsUseReason::AcceptedStaleByPolicy
-        }
+        },
         StatsPublicationState::Published if descriptor.is_stale() => {
             StatisticsUseReason::StaleRejected
-        }
+        },
         StatsPublicationState::Published => StatisticsUseReason::AcceptedPublished,
     }
 }

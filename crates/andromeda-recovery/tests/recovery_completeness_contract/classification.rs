@@ -117,7 +117,7 @@ fn all_record_kinds_are_classified_exactly_once() {
 fn future_work_records_have_explicit_promotion_gates() {
     assert_eq!(FUTURE_WORK_PROMOTION_GATES.len(), FUTURE_WORK_KINDS.len());
 
-    for kind in FUTURE_WORK_KINDS {
+    for &kind in &FUTURE_WORK_KINDS {
         let matches: Vec<_> = FUTURE_WORK_PROMOTION_GATES
             .iter()
             .filter(|gate| gate.kind == kind)
@@ -209,7 +209,7 @@ fn marker_and_boundary_records_are_skipped_without_errors() {
 
 #[test]
 fn future_work_records_fail_stop_with_clear_error_and_context() {
-    for (idx, kind) in FUTURE_WORK_KINDS.into_iter().enumerate() {
+    for (idx, &kind) in FUTURE_WORK_KINDS.iter().enumerate() {
         let mut ctx = ReplayContext::new();
         let record = record_for_kind(kind, Lsn::new(idx as u64 + 10));
         let err =

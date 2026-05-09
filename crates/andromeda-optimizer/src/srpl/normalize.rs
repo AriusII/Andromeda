@@ -1,25 +1,9 @@
 use andromeda_error::AndromedaResult;
 use andromeda_srpl_ir::{
-    SrplBusinessOperationIr, SrplBusinessOperationKindIr, SrplPredicateIr, SrplProcedureBodyIr,
-    SrplProcedureIr,
+    SrplBusinessOperationIr, SrplBusinessOperationKindIr, SrplProcedureBodyIr, SrplProcedureIr,
 };
 
-use super::predicate_fold::simplify_predicates;
-
-fn predicate_sort_key(p: &SrplPredicateIr) -> String {
-    match p {
-        SrplPredicateIr::InputEqualsField {
-            input,
-            binding,
-            field,
-        } => format!("EQ:{}:{}:{}", binding, field, input),
-        SrplPredicateIr::FieldGreaterThanOrEqualInput {
-            binding,
-            field,
-            input,
-        } => format!("GTE:{}:{}:{}", binding, field, input),
-    }
-}
+use super::predicate_fold::{predicate_key, simplify_predicates};
 
 /// Normalize a `SrplProcedureIr` body into canonical form.
 ///
@@ -54,7 +38,7 @@ fn normalize_operation(mut op: SrplBusinessOperationIr) -> Option<SrplBusinessOp
     match &mut op.kind {
         SrplBusinessOperationKindIr::Read { predicates, .. } => {
             // N1 + N4.
-            predicates.sort_by_key(predicate_sort_key);
+            predicates.sort_by_key(predicate_key);
             if let super::predicate_fold::SimplifiedPredicates::Predicates(simplified) =
                 simplify_predicates(predicates.clone())
             {
@@ -68,7 +52,7 @@ fn normalize_operation(mut op: SrplBusinessOperationIr) -> Option<SrplBusinessOp
             ..
         } => {
             // N2.
-            predicates.sort_by_key(predicate_sort_key);
+            predicates.sort_by_key(predicate_key);
             Some(op)
         },
         // N5: Assert with an empty predicate slot — remove.
@@ -142,7 +126,7 @@ mod tests {
         let norm = normalize(ir).unwrap();
         match &norm.body.operations[0].kind {
             SrplBusinessOperationKindIr::Read { predicates, .. } => {
-                let keys: Vec<_> = predicates.iter().map(predicate_sort_key).collect();
+                let keys: Vec<_> = predicates.iter().map(predicate_key).collect();
                 let mut sorted = keys.clone();
                 sorted.sort();
                 assert_eq!(keys, sorted, "predicates must be in sorted order");
