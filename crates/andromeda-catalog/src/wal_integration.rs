@@ -11,8 +11,8 @@ use andromeda_error::AndromedaResult;
 use andromeda_types::CatalogVersion;
 
 use crate::{
-    CatalogMutationBoundary, CatalogMutationDelta, CatalogMutationOperation, CatalogMutationRecord,
-    CatalogPublicationSemantics, CatalogWalRecord,
+    CatalogMutationBoundary, CatalogMutationDelta, CatalogMutationOperation, CatalogMutationPlan,
+    CatalogMutationRecord, CatalogPublicationSemantics, CatalogSnapshot, CatalogWalRecord,
 };
 
 /// Recovery-compatible record types used by durable WAL payload codecs.
@@ -20,6 +20,46 @@ pub type RecoveryCatalogMutationRecord = andromeda_catalog_recovery::CatalogMuta
 pub type RecoveryCatalogMutationBoundary = andromeda_catalog_recovery::CatalogMutationBoundary;
 pub type RecoveryCatalogMutationDelta = andromeda_catalog_recovery::CatalogMutationDelta;
 pub type RecoveryCatalogMutationOperation = andromeda_catalog_recovery::CatalogMutationOperation;
+
+impl andromeda_catalog_recovery::CatalogRecoveryApplyTarget for CatalogSnapshot {
+    fn recovery_database_id(&self) -> andromeda_types::DatabaseId {
+        self.database_id
+    }
+
+    fn recovery_namespace_id(&self) -> andromeda_types::NamespaceId {
+        self.namespace_id
+    }
+
+    fn recovery_visible_catalog_version(&self) -> CatalogVersion {
+        self.visible_version()
+    }
+
+    fn apply_recovered_catalog_mutation(
+        &mut self,
+        boundary: &RecoveryCatalogMutationBoundary,
+        deltas: &[RecoveryCatalogMutationDelta],
+    ) -> AndromedaResult<()> {
+        andromeda_catalog_recovery::CatalogRecoveryApplyTarget::validate_recovery_boundary_identity(
+            self, boundary,
+        )?;
+
+        let mut plan = CatalogMutationPlan::new(
+            boundary.batch_id,
+            boundary.database_id,
+            boundary.namespace_id,
+            boundary.previous_version,
+            boundary.next_version,
+            boundary.source_hash,
+            boundary.dependency_graph_hash,
+            deltas.to_vec(),
+        )?;
+        plan.publication_semantics = boundary.publication_semantics;
+
+        self.apply_mutation_plan(&plan)?;
+        self.mark_durable_version_from_recovery(boundary.next_version);
+        Ok(())
+    }
+}
 
 /// Adapts a single catalog mutation boundary to a recovery boundary representation.
 pub fn adapt_catalog_mutation_boundary(
@@ -39,10 +79,10 @@ pub fn adapt_catalog_mutation_boundary(
         publication_semantics: match boundary.publication_semantics {
             CatalogPublicationSemantics::PlannedVersionOnly => {
                 andromeda_catalog_recovery::CatalogPublicationSemantics::PlannedVersionOnly
-            }
+            },
             CatalogPublicationSemantics::DurablePublicationExternal => {
                 andromeda_catalog_recovery::CatalogPublicationSemantics::DurablePublicationExternal
-            }
+            },
         },
     }
 }
@@ -63,14 +103,14 @@ pub fn adapt_catalog_mutation_operation(
     match operation {
         CatalogMutationOperation::CreateObject { object, definition } => {
             RecoveryCatalogMutationOperation::CreateObject { object, definition }
-        }
+        },
         CatalogMutationOperation::DeprecateObject { target } => {
             RecoveryCatalogMutationOperation::DeprecateObject {
                 target: andromeda_catalog_recovery::CatalogLifecycleTarget {
                     object: target.object,
                 },
             }
-        }
+        },
     }
 }
 
@@ -83,13 +123,13 @@ pub fn adapt_catalog_mutation_records(
         .map(|record| match record {
             CatalogMutationRecord::Begin(boundary) => {
                 RecoveryCatalogMutationRecord::Begin(adapt_catalog_mutation_boundary(&boundary))
-            }
+            },
             CatalogMutationRecord::Apply(delta) => {
                 RecoveryCatalogMutationRecord::Apply(Box::new(adapt_catalog_mutation_delta(*delta)))
-            }
+            },
             CatalogMutationRecord::Commit(boundary) => {
                 RecoveryCatalogMutationRecord::Commit(adapt_catalog_mutation_boundary(&boundary))
-            }
+            },
         })
         .collect()
 }
@@ -173,7 +213,7 @@ mod tests {
             .find_map(|record| match record {
                 andromeda_catalog_recovery::CatalogMutationRecord::Begin(boundary) => {
                     Some(boundary)
-                }
+                },
                 _ => None,
             })
             .expect("adapted sequence must contain a begin record");
@@ -193,7 +233,7 @@ mod tests {
             .find_map(|record| match record {
                 andromeda_catalog_recovery::CatalogMutationRecord::Commit(boundary) => {
                     Some(boundary)
-                }
+                },
                 _ => None,
             })
             .expect("adapted sequence must contain a commit record");

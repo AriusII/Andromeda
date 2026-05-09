@@ -1,6 +1,7 @@
 //! RBAC permission evaluation for executor admission.
 
-use andromeda_core::{AndromedaResult, Permission, Principal};
+use andromeda_core::{AndromedaResult, Principal};
+use andromeda_security_contract::PrincipalPermission as Permission;
 use std::sync::Arc;
 
 use crate::principal_resolver::PrincipalResolver;
@@ -33,7 +34,7 @@ impl<R: PrincipalResolver + ?Sized> PermissionEvaluator for PermissionEvaluatorI
                     required_permission: required_permission.clone(),
                     reason: DenialReason::PrincipalNotFound,
                 };
-            }
+            },
         };
 
         let permission_set = principal.permissions();

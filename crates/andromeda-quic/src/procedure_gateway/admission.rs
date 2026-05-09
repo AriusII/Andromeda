@@ -1,10 +1,12 @@
-use andromeda_core::{PrincipalAuthorizationEvidence, PrincipalId, PrincipalRegistry};
+use andromeda_core::{
+    PrincipalAuthorizationEvidence, PrincipalId, PrincipalRegistry, SurfaceScope,
+};
+use andromeda_rpc_codec::required_execute_permission;
 
 use crate::CatalogProcedureManifest;
 
 use super::errors::{ProcedureRouteAdmissionError, security_error};
 use super::route::ProcedureRouteBinding;
-use super::validation;
 
 /// Authorized pre-dispatch route evidence for a Procedure invocation.
 ///
@@ -23,10 +25,10 @@ pub(super) fn authorize_application_route(
     manifest: &CatalogProcedureManifest,
     principal_registry: &PrincipalRegistry,
 ) -> Result<ProcedureAuthorizedRouteBinding, ProcedureRouteAdmissionError> {
-    let required_permission = validation::required_execute_permission(manifest)
-        .map_err(ProcedureRouteAdmissionError::route)?;
+    let required_permission =
+        required_execute_permission(manifest).map_err(ProcedureRouteAdmissionError::route)?;
     let authorization = principal_registry.authorize(
-        validation::core_surface_scope_for_plane(route.surface_plane),
+        core_surface_scope_for_plane(route.surface_plane),
         route.certificate_identity.fingerprint().as_str(),
         &required_permission,
     );
@@ -56,4 +58,8 @@ pub(super) fn authorize_application_route(
         principal_id,
         authorization_evidence: authorization.evidence,
     })
+}
+
+fn core_surface_scope_for_plane(plane: crate::SurfacePlane) -> SurfaceScope {
+    crate::mtls_identity::plane_to_required_surface_scope(plane)
 }

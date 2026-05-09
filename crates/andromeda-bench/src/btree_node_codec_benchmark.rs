@@ -1,10 +1,9 @@
 use std::time::Instant;
 
 use andromeda_bench_harness::elapsed_micros;
+use andromeda_bench_workload::BenchmarkError;
 use andromeda_storage_page::PageId;
 use andromeda_wal::Lsn;
-
-use crate::BenchmarkError;
 
 pub const BTREE_NODE_CODEC_WORKLOAD_ID: &str = "btree-node-codec-smoke";
 pub const BTREE_NODE_CODEC_HARNESS_SOURCE: &str = "storage-btree-node-v1-codec";

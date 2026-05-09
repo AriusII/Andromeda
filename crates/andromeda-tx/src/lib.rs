@@ -1,84 +1,126 @@
 #![forbid(unsafe_code)]
+#![doc = r#"
+Compatibility facade for the extracted Andromeda transaction family.
 
-pub mod active_snapshot_registry;
-pub mod commit_log;
-pub mod deadlock_detection;
-pub mod gc;
-pub mod lock_history;
-pub mod lock_manager;
-pub mod lock_protocol;
-pub mod locking_protocol;
-mod lsn;
-pub mod mvcc;
-mod mvcc_snapshot;
-mod mvcc_status;
-mod mvcc_version;
-mod savepoint;
-mod savepoint_write_set;
-mod state;
-mod trace;
-pub mod wal_adapter;
+`andromeda-tx` intentionally remains as the topology-approved migration
+boundary for downstream crates that are not yet allowed to depend on the owner
+crates directly. It owns no transaction behavior; transaction state, WAL
+adapter coordination, MVCC, locking, savepoints, and transaction-log record
+shapes live in the focused owner crates re-exported here.
+"#]
+
+pub mod active_snapshot_registry {
+    pub use andromeda_mvcc::{ActiveSnapshotRegistry, GcError, SnapshotHandle};
+}
+
+pub mod commit_log {
+    pub use andromeda_transaction::commit_log::CommitLogManager;
+    pub use andromeda_transaction_log::{
+        CommitLogEntry, InvocationWal, IsolationLevel, RollbackLogEntry, TransactionStatusRebuild,
+        TxWalReplayAction, TxWalReplayRecord, TxWalReplaySummary, WalRecordKind,
+    };
+}
 
 pub mod commit_protocol {
     pub use andromeda_transaction::commit_protocol::*;
 }
 
-// Re-export MVCC types and functions
-pub use mvcc_snapshot::{MvccIsolationPolicy, Snapshot};
-pub use mvcc_status::{TransactionStatus, TransactionStatusTable};
-pub use mvcc_version::{MvccRowHeader, creator_is_visible, delete_is_visible};
+pub mod deadlock_detection {
+    pub use andromeda_locking::deadlock_detection::*;
+}
 
-pub use active_snapshot_registry::{ActiveSnapshotRegistry, GcError, SnapshotHandle};
-pub use andromeda_transaction::{
-    CommitProtocol, TransactionIdAllocator, TransactionLockCoordinator, TransactionManager,
-    TransactionRecord,
-};
-/// Transaction WAL record kinds exposed for `InvocationWal` implementations.
-///
-/// This is intentionally part of the transaction crate boundary: transaction tests
-/// and storage/adapter crates that implement the public commit-log WAL trait must
-/// be able to pattern-match the transaction-local record kind without depending on
-/// the storage WAL enum.
-pub use commit_log::WalRecordKind;
-pub use commit_log::{
-    CommitLogEntry, CommitLogManager, InvocationWal, IsolationLevel, RollbackLogEntry,
-    TransactionStatusRebuild, TxWalReplayAction, TxWalReplayRecord, TxWalReplaySummary,
-};
-pub use deadlock_detection::*;
-pub use gc::mvcc_eligibility::{
+pub mod gc {
+    pub mod eligibility {
+        pub use andromeda_mvcc::gc::eligibility::*;
+    }
+
+    pub mod mvcc_eligibility {
+        pub use andromeda_mvcc::gc::mvcc_eligibility::*;
+    }
+
+    pub mod reclamation {
+        pub use andromeda_mvcc::gc::reclamation::*;
+    }
+
+    pub mod scheduler {
+        pub use andromeda_mvcc::gc::scheduler::*;
+    }
+
+    pub use andromeda_mvcc::gc::mvcc_eligibility::{
+        VersionEligibility, VersionEligibilityChecker, VersionEligibilityStats, VersionRecord,
+    };
+    pub use andromeda_mvcc::gc::reclamation::{
+        ReclamationCommand, ReclamationEligibility, ReclamationMark, ReclamationMarkCandidate,
+        ReclamationStats,
+    };
+    pub use andromeda_mvcc::gc::{
+        GcEligibilityChecker, GcSchedulerExit, GcSchedulerExitReason, GcSchedulerHandle,
+        GcSchedulerStats, GcSchedulerTask, GcStatSnapshot, GcStats, GcSummary,
+        MIN_GC_SCHEDULER_INTERVAL, MvccGarbageCollector,
+    };
+}
+
+pub mod lock_history {
+    pub use andromeda_locking::lock_history::{
+        DeadlockAuditTrace, DeadlockDecisionKind, LockPromotionTrace, LockWaitTrace,
+    };
+    pub use andromeda_transaction::LockReleaseAllTrace;
+}
+
+pub mod lock_manager {
+    pub use andromeda_locking::*;
+}
+
+pub mod locking_protocol {
+    pub use andromeda_transaction::{TwoPhaseLocksValidator, TwoPhaseOperation};
+}
+
+pub mod mvcc {
+    pub use andromeda_mvcc::{
+        MvccIsolationPolicy, MvccRowHeader, Snapshot, TransactionStatus, TransactionStatusTable,
+        creator_is_visible, delete_is_visible,
+    };
+}
+
+pub mod wal_adapter {
+    pub use andromeda_transaction::{
+        TxWalAdapterError, TxWalAdapterReplayKind, TxWalAdapterReplayRecord, TxWalAdapterTrait,
+        WalManager, append_commit_and_flush, map_tx_wal_replay_records,
+    };
+}
+
+pub use andromeda_locking::*;
+pub use andromeda_mvcc::gc::mvcc_eligibility::{
     VersionEligibility, VersionEligibilityChecker, VersionEligibilityStats, VersionRecord,
 };
-pub use gc::reclamation::{
+pub use andromeda_mvcc::gc::reclamation::{
     ReclamationCommand, ReclamationEligibility, ReclamationMark, ReclamationMarkCandidate,
     ReclamationStats,
 };
-pub use gc::{
+pub use andromeda_mvcc::gc::{
     GcEligibilityChecker, GcSchedulerExit, GcSchedulerExitReason, GcSchedulerHandle,
     GcSchedulerStats, GcSchedulerTask, GcStatSnapshot, GcStats, GcSummary,
     MIN_GC_SCHEDULER_INTERVAL, MvccGarbageCollector,
 };
-pub use lock_history::*;
-pub use lock_manager::*;
-pub use locking_protocol::{TwoPhaseLocksValidator, TwoPhaseOperation};
-/// Transaction-local durable log sequence number used at WAL adapter boundaries.
-///
-/// The transaction-log crate owns this boundary value instead of importing the
-/// storage crate's `Lsn`; storage implementations convert at the adapter edge.
-/// `andromeda-tx` re-exports it because `CommitLogEntry`, `InvocationWal`,
-/// `WalManager`, and `TxWalAdapterTrait` expose LSNs in their public contracts.
-pub use lsn::Lsn;
-pub use savepoint::{
-    Savepoint, SavepointId, SavepointReleaseEvidence, SavepointRollbackEvidence,
-    SavepointRollbackMarker, SavepointStack,
+pub use andromeda_mvcc::{
+    ActiveSnapshotRegistry, GcError, MvccIsolationPolicy, MvccRowHeader, Snapshot, SnapshotHandle,
+    TransactionStatus, TransactionStatusTable, creator_is_visible, delete_is_visible,
 };
-pub use savepoint_write_set::{
+pub use andromeda_savepoint::{
     MAX_WRITE_SET_IMAGE_BYTES, MAX_WRITE_SET_OPERATION_KIND_BYTES, MAX_WRITE_SET_RESOURCE_ID_BYTES,
-    TxWriteSet, WriteSetEntry, WriteSetImage, WriteSetOperationKind, WriteSetOrdinal,
-    WriteSetResourceId,
+    Savepoint, SavepointId, SavepointReleaseEvidence, SavepointRollbackEvidence,
+    SavepointRollbackMarker, SavepointStack, TxWriteSet, WriteSetEntry, WriteSetImage,
+    WriteSetOperationKind, WriteSetOrdinal, WriteSetResourceId,
 };
-pub use state::*;
-pub use trace::*;
-pub use wal_adapter::{
-    TxWalAdapterError, TxWalAdapterReplayKind, TxWalAdapterReplayRecord, TxWalAdapterTrait,
-    WalManager, append_commit_and_flush, map_tx_wal_replay_records,
+pub use andromeda_transaction::{
+    CommitLogManager, CommitProtocol, LockReleaseAllTrace, TransactionEvent,
+    TransactionIdAllocator, TransactionLockCoordinator, TransactionManager, TransactionRecord,
+    TransactionState, TransactionStateMachine, TransactionTrace, TransactionTransitionCorrelation,
+    TwoPhaseLocksValidator, TwoPhaseOperation, TxWalAdapterError, TxWalAdapterReplayKind,
+    TxWalAdapterReplayRecord, TxWalAdapterTrait, WalManager, append_commit_and_flush,
+    map_tx_wal_replay_records, transaction_phase_code,
+};
+pub use andromeda_transaction_log::{
+    CommitLogEntry, InvocationWal, IsolationLevel, Lsn, RollbackLogEntry, TransactionStatusRebuild,
+    TxWalReplayAction, TxWalReplayRecord, TxWalReplaySummary, WalRecordKind,
 };

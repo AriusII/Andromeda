@@ -202,8 +202,8 @@ impl<L: BackupLsn> BackupWalSegmentArtifact<L> {
                 return Err(backup_error(
                     "backup WAL segment base previous LSN must chain to first LSN",
                 ));
-            }
-            Some(_) | None => {}
+            },
+            Some(_) | None => {},
         }
         self.artifact.validate("backup WAL segment artifact")
     }

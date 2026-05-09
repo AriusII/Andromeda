@@ -175,17 +175,14 @@ fn public_api_is_consumable_from_outside_the_crate() {
     let span = SourceSpan::new(0, source.text.len());
     assert!(span.is_valid());
 
-    let ir: SrplProcedureIr = andromeda_srpl::compile_narrow_procedure_signature(source.text)
-        .expect("root re-export remains public");
-    assert_eq!(
-        ir.result_streams[0].cardinality,
-        andromeda_srpl::Cardinality::Many
-    );
+    let ir: SrplProcedureIr =
+        compile_narrow_procedure_signature(source.text).expect("compiler entrypoint is public");
+    assert_eq!(ir.result_streams[0].cardinality, Cardinality::Many);
 }
 
 fn assert_diagnostic_span(
     source: &str,
-    diagnostic: &andromeda_srpl::SrplDiagnostic,
+    diagnostic: &andromeda_srpl_diagnostics::SrplDiagnostic,
     expected_span: &str,
 ) {
     let span = diagnostic

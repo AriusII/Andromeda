@@ -3,10 +3,9 @@ use crate::{
     BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY, BenchmarkEvidence, BenchmarkScenarioTarget,
 };
 use andromeda_scenario_evidence::flat_json::{
-    escape_json_string, optional_string, parse_flat_json_object, required_string, required_u64,
+    escape_json_string, json_optional_str, json_optional_u32, json_optional_u64, optional_string,
+    parse_flat_json_object, required_string, required_u64,
 };
-
-use crate::advisory_boundary::{json_optional_str, json_optional_u32, json_optional_u64};
 
 use super::advisory_json::verify_advisory_fields;
 use super::baseline_context::BenchmarkBaselineContext;

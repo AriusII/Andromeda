@@ -171,6 +171,7 @@ impl PrincipalResolver for LocalPrincipalResolver {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use andromeda_security_contract::PrincipalPermission;
 
     #[test]
     fn test_local_resolver_creation() {
@@ -354,7 +355,7 @@ mod tests {
             .resolve(fingerprint)
             .expect("resolve should succeed");
 
-        assert!(principal.has_permission(&andromeda_core::Permission::AuditRead));
+        assert!(principal.has_permission(&PrincipalPermission::AuditRead));
     }
 
     #[test]

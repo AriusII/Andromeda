@@ -12,7 +12,8 @@ This crate currently exposes:
 
 - Compatibility reexports for digest, error, hardware, time, and type descriptors.
 - Compatibility modules for historical `andromeda_core::digest::*` and `andromeda_core::policy::*` imports.
-- Principal identity, certificate identity, roles, permissions, permission sets, and surface scopes.
+- Principal identity, certificate identity, roles, and permission sets.
+- Compatibility reexports for principal permissions and surface scopes owned by `andromeda-security-contract`.
 - Principal registry authorization evidence, denial reasons, policy evidence binding, and decision metadata.
 
 The crate preserves public import compatibility while downstream crates migrate to smaller ownership boundaries.
@@ -27,7 +28,7 @@ The crate preserves public import compatibility while downstream crates migrate 
 
 ## Ownership
 
-`andromeda-core` owns compatibility reexports and the current principal model surface that has not yet been split into a narrower owner crate.
+`andromeda-core` owns compatibility reexports and the current principal model surface that has not yet been split into a narrower owner crate. Runtime-free principal permission and surface-scope vocabulary should be changed in `andromeda-security-contract`, then reexported here only for legacy import compatibility.
 
 When changing this crate, keep `lib.rs` thin, keep public API additions intentional, and prefer migration toward narrower foundation or security crates over broadening the facade. Authorization evidence in this crate is policy evidence for evaluation and audit; it is not durable database truth or release-readiness evidence by itself.
 

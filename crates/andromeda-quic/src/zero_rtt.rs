@@ -57,25 +57,25 @@ impl ZeroRttAdmissionPolicy {
         let reason = match class {
             ZeroRttReplayClass::MutatingProcedure => {
                 ZeroRttAdmissionRejectionReason::MutatingProcedure
-            }
+            },
             ZeroRttReplayClass::UnknownIdempotency => {
                 ZeroRttAdmissionRejectionReason::UnknownIdempotency
-            }
+            },
             ZeroRttReplayClass::AuthChangingOperation => {
                 ZeroRttAdmissionRejectionReason::AuthChangingOperation
-            }
+            },
             ZeroRttReplayClass::CatalogProcedure => {
                 ZeroRttAdmissionRejectionReason::CatalogProcedure
-            }
+            },
             ZeroRttReplayClass::HadrPromotion => ZeroRttAdmissionRejectionReason::HadrPromotion,
             ZeroRttReplayClass::HadrDemotion => ZeroRttAdmissionRejectionReason::HadrDemotion,
             ZeroRttReplayClass::ReadOnlyManifest | ZeroRttReplayClass::ReadOnlyTelemetry => {
                 match self.early_data {
                     EarlyDataPolicy::Disabled => {
                         ZeroRttAdmissionRejectionReason::DoctrineV1DisablesEarlyData
-                    }
+                    },
                 }
-            }
+            },
         };
 
         ZeroRttAdmissionDecision::Reject { class, reason }

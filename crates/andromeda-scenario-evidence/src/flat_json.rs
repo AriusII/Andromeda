@@ -32,6 +32,24 @@ pub fn escape_json_string(value: &str) -> String {
     escaped
 }
 
+pub fn json_optional_str(value: Option<&str>) -> String {
+    value
+        .map(|value| format!(r#""{}""#, escape_json_string(value)))
+        .unwrap_or_else(|| "null".to_string())
+}
+
+pub fn json_optional_u64(value: Option<u64>) -> String {
+    value
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "null".to_string())
+}
+
+pub fn json_optional_u32(value: Option<u32>) -> String {
+    value
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "null".to_string())
+}
+
 pub fn parse_flat_json_object(input: &str) -> Result<HashMap<String, JsonField>, String> {
     let mut parser = Parser::new(input);
     parser.parse_object()
@@ -55,10 +73,45 @@ pub fn optional_string(
     }
 }
 
+pub fn optional_string_with_default(
+    fields: &HashMap<String, JsonField>,
+    name: &str,
+    default: &str,
+) -> Result<String, String> {
+    match fields.get(name) {
+        Some(JsonField::String(value)) => Ok(value.clone()),
+        Some(JsonField::Null) | None => Ok(default.to_string()),
+        _ => Err(format!("invalid {name}")),
+    }
+}
+
+pub fn optional_bool_with_default(
+    fields: &HashMap<String, JsonField>,
+    name: &str,
+    default: bool,
+) -> Result<bool, String> {
+    match fields.get(name) {
+        Some(JsonField::Bool(value)) => Ok(*value),
+        Some(JsonField::Null) | None => Ok(default),
+        _ => Err(format!("invalid {name}")),
+    }
+}
+
 pub fn required_u64(fields: &HashMap<String, JsonField>, name: &str) -> Result<u64, String> {
     match fields.get(name) {
         Some(JsonField::Unsigned(value)) => Ok(*value),
         _ => Err(format!("missing {name}")),
+    }
+}
+
+pub fn optional_u64(
+    fields: &HashMap<String, JsonField>,
+    name: &str,
+) -> Result<Option<u64>, String> {
+    match fields.get(name) {
+        Some(JsonField::Unsigned(value)) => Ok(Some(*value)),
+        Some(JsonField::Null) | None => Ok(None),
+        _ => Err(format!("invalid {name}")),
     }
 }
 
@@ -71,6 +124,32 @@ pub fn optional_u32(
             .map(Some)
             .map_err(|_| format!("{name} exceeds u32")),
         Some(JsonField::Null) | None => Ok(None),
+        _ => Err(format!("invalid {name}")),
+    }
+}
+
+pub fn optional_u64_with_default(
+    fields: &HashMap<String, JsonField>,
+    name: &str,
+    default: u64,
+) -> Result<u64, String> {
+    match fields.get(name) {
+        Some(JsonField::Unsigned(value)) => Ok(*value),
+        Some(JsonField::Null) | None => Ok(default),
+        _ => Err(format!("invalid {name}")),
+    }
+}
+
+pub fn optional_u32_with_default(
+    fields: &HashMap<String, JsonField>,
+    name: &str,
+    default: u32,
+) -> Result<u32, String> {
+    match fields.get(name) {
+        Some(JsonField::Unsigned(value)) => {
+            u32::try_from(*value).map_err(|_| format!("{name} exceeds u32"))
+        },
+        Some(JsonField::Null) | None => Ok(default),
         _ => Err(format!("invalid {name}")),
     }
 }
@@ -96,6 +175,32 @@ mod tests {
         assert_eq!(required_u64(&fields, "samples").unwrap(), 5);
         assert_eq!(optional_string(&fields, "baseline").unwrap(), None);
         assert_eq!(fields.get("active"), Some(&JsonField::Bool(true)));
+    }
+
+    #[test]
+    fn flat_json_formats_and_defaults_optional_advisory_fields() {
+        let fields = parse_flat_json_object(
+            r#"{"branch":"main","sample_cap":7,"duration_cap_ms":null,"active":false}"#,
+        )
+        .unwrap();
+
+        assert_eq!(json_optional_str(Some("bench\"line")), "\"bench\\\"line\"");
+        assert_eq!(json_optional_str(None), "null");
+        assert_eq!(json_optional_u64(Some(10)), "10");
+        assert_eq!(json_optional_u32(None), "null");
+        assert_eq!(
+            optional_string_with_default(&fields, "branch", "unknown").unwrap(),
+            "main"
+        );
+        assert!(!optional_bool_with_default(&fields, "active", true).unwrap());
+        assert_eq!(
+            optional_u64_with_default(&fields, "duration_cap_ms", 100).unwrap(),
+            100
+        );
+        assert_eq!(
+            optional_u32_with_default(&fields, "sample_cap", 5).unwrap(),
+            7
+        );
     }
 }
 

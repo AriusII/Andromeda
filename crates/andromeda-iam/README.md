@@ -10,6 +10,7 @@
 - Fail closed when principal binding, policy evidence, surface boundaries, or permission grants are missing or mismatched.
 - Return a typed pre-transaction admission receipt only for admitted requests.
 - Attach `andromeda-audit` security admission event vocabulary to every decision.
+- Keep runtime-free permission, surface, admission, and policy-evidence vocabulary imported from `andromeda-security-contract`.
 
 ## Non-goals
 
@@ -22,6 +23,7 @@
 - The caller has already authenticated transport identity and selected a security surface.
 - The requested permission is a typed `andromeda-security-contract::Permission`.
 - Security policy evidence is available before transaction creation.
+- Legacy `LocalPrincipalResolver` and `PermissionEvaluatorImpl` still depend on `andromeda-core` principal identities until that identity model has a narrower owner.
 
 ## Procedure
 

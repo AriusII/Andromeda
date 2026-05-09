@@ -24,6 +24,6 @@ pub(super) fn admit_stream(
         Entry::Vacant(entry) => {
             entry.insert(metadata);
             Ok(cancellation_token)
-        }
+        },
     }
 }

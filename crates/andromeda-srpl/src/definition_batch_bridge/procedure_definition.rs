@@ -3,13 +3,14 @@ use andromeda_catalog::{
     ProcedureErrorPolicy, ProtocolLayoutRef, ResultMetadataPolicy, StatsVersion, TransactionPolicy,
 };
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_srpl_ast::ProcedureAst;
+use andromeda_srpl_binder::bind_procedure;
+use andromeda_srpl_diagnostics::{SrplDiagnostic, SrplSource};
+use andromeda_srpl_ir::{SrplProcedureContractMetadata, SrplProcedureIr};
+use andromeda_srpl_parser::parse_procedure_signature;
 use andromeda_types::{CatalogObjectId, CatalogVersion, ContractHash, ProcedureId};
 
-use crate::{
-    ProcedureAst, SrplDiagnostic, SrplProcedureContractMetadata, SrplProcedureIr, SrplSource,
-    lowering::{lower_bound_procedure, lower_ir_to_catalog_definition},
-    procedure_compiler::parse_procedure_signature,
-};
+use crate::lowering::{lower_bound_procedure, lower_ir_to_catalog_definition};
 
 /// A staged SRPL procedure definition during compilation.
 ///
@@ -75,7 +76,7 @@ impl SrplProcedureDefinition {
             )
         })?;
 
-        let bound = crate::binder::bind_procedure(ast).map_err(|e| {
+        let bound = bind_procedure(ast).map_err(|e| {
             AndromedaError::new(
                 AndromedaErrorKind::Srpl,
                 format!("SRPL binding error: {}", e),

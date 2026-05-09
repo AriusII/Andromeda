@@ -7,46 +7,155 @@ use crate::source_inventory::{
 };
 use crate::support::{path_set, virtual_files, workspace_relative_path, workspace_root};
 
-const ALLOWED_PRE_EXISTING_ORPHANS: &[&str] = &[
-    "crates/andromeda-catalog/src/plan_cache/admission.rs",
-    "crates/andromeda-catalog/src/plan_cache/decision.rs",
-    "crates/andromeda-catalog/src/plan_cache/identity.rs",
-    "crates/andromeda-catalog/src/plan_cache/limits.rs",
-    "crates/andromeda-proto/src/generated_validation/manifest.rs",
-    "crates/andromeda-storage/src/write_ahead_log/gc/collector.rs",
-    "crates/andromeda-storage/src/write_ahead_log/gc/context.rs",
-    "crates/andromeda-storage/src/write_ahead_log/gc/model.rs",
-    "crates/andromeda-storage/src/write_ahead_log/gc/scheduler.rs",
-    "crates/andromeda-storage/src/write_ahead_log/segment_reclaimability/boundary.rs",
-    "crates/andromeda-storage/src/write_ahead_log/segment_reclaimability/decision.rs",
-    "crates/andromeda-storage/src/write_ahead_log/segment_reclaimability/evidence.rs",
-    "crates/andromeda-storage/src/write_ahead_log/segment_reclaimability/policy.rs",
-    "crates/andromeda-tx/src/lock_manager/entry.rs",
-    "crates/andromeda-tx/src/lock_manager/evidence.rs",
-    "crates/andromeda-tx/src/lock_manager/manager_core.rs",
-    "crates/andromeda-tx/src/lock_manager/mode.rs",
-    "crates/andromeda-tx/src/lock_manager/resource.rs",
+const ALLOWED_PRE_EXISTING_ORPHANS: &[AllowedOrphanException] = &[
+    AllowedOrphanException {
+        path: "crates/andromeda-catalog/src/plan_cache/admission.rs",
+        owner: "andromeda-catalog plan-cache extraction",
+        exit_criteria: "Exit criteria: wire the plan-cache admission module through the catalog crate root or remove it.",
+    },
+    AllowedOrphanException {
+        path: "crates/andromeda-catalog/src/plan_cache/decision.rs",
+        owner: "andromeda-catalog plan-cache extraction",
+        exit_criteria: "Exit criteria: wire the plan-cache decision module through the catalog crate root or remove it.",
+    },
+    AllowedOrphanException {
+        path: "crates/andromeda-catalog/src/plan_cache/identity.rs",
+        owner: "andromeda-catalog plan-cache extraction",
+        exit_criteria: "Exit criteria: wire the plan-cache identity module through the catalog crate root or remove it.",
+    },
+    AllowedOrphanException {
+        path: "crates/andromeda-catalog/src/plan_cache/limits.rs",
+        owner: "andromeda-catalog plan-cache extraction",
+        exit_criteria: "Exit criteria: wire the plan-cache limits module through the catalog crate root or remove it.",
+    },
+    AllowedOrphanException {
+        path: "crates/andromeda-proto/src/generated_validation/manifest.rs",
+        owner: "andromeda-proto generated-validation extraction",
+        exit_criteria: "Exit criteria: regenerate or wire manifest validation through the proto crate root, then remove this orphan exception.",
+    },
+    AllowedOrphanException {
+        path: "crates/andromeda-storage/src/write_ahead_log/gc/collector.rs",
+        owner: "andromeda-storage WAL GC extraction",
+        exit_criteria: "Exit criteria: wire the WAL GC collector module through storage or move it into the extracted WAL owner crate.",
+    },
+    AllowedOrphanException {
+        path: "crates/andromeda-storage/src/write_ahead_log/gc/context.rs",
+        owner: "andromeda-storage WAL GC extraction",
+        exit_criteria: "Exit criteria: wire the WAL GC context module through storage or move it into the extracted WAL owner crate.",
+    },
+    AllowedOrphanException {
+        path: "crates/andromeda-storage/src/write_ahead_log/gc/model.rs",
+        owner: "andromeda-storage WAL GC extraction",
+        exit_criteria: "Exit criteria: wire the WAL GC model module through storage or move it into the extracted WAL owner crate.",
+    },
+    AllowedOrphanException {
+        path: "crates/andromeda-storage/src/write_ahead_log/gc/scheduler.rs",
+        owner: "andromeda-storage WAL GC extraction",
+        exit_criteria: "Exit criteria: wire the WAL GC scheduler module through storage or move it into the extracted WAL owner crate.",
+    },
+    AllowedOrphanException {
+        path: "crates/andromeda-storage/src/write_ahead_log/segment_reclaimability/boundary.rs",
+        owner: "andromeda-storage WAL segment-reclaimability extraction",
+        exit_criteria: "Exit criteria: wire the segment-reclaimability boundary module through storage or move it into the extracted WAL owner crate.",
+    },
+    AllowedOrphanException {
+        path: "crates/andromeda-storage/src/write_ahead_log/segment_reclaimability/decision.rs",
+        owner: "andromeda-storage WAL segment-reclaimability extraction",
+        exit_criteria: "Exit criteria: wire the segment-reclaimability decision module through storage or move it into the extracted WAL owner crate.",
+    },
+    AllowedOrphanException {
+        path: "crates/andromeda-storage/src/write_ahead_log/segment_reclaimability/evidence.rs",
+        owner: "andromeda-storage WAL segment-reclaimability extraction",
+        exit_criteria: "Exit criteria: wire the segment-reclaimability evidence module through storage or move it into the extracted WAL owner crate.",
+    },
+    AllowedOrphanException {
+        path: "crates/andromeda-storage/src/write_ahead_log/segment_reclaimability/policy.rs",
+        owner: "andromeda-storage WAL segment-reclaimability extraction",
+        exit_criteria: "Exit criteria: wire the segment-reclaimability policy module through storage or move it into the extracted WAL owner crate.",
+    },
+    AllowedOrphanException {
+        path: "crates/andromeda-wal/src/write_ahead_log/compaction/context.rs",
+        owner: "andromeda-wal compaction extraction",
+        exit_criteria: "Exit criteria: wire the WAL compaction context module through andromeda-wal or remove the extracted orphan file.",
+    },
+    AllowedOrphanException {
+        path: "crates/andromeda-wal/src/write_ahead_log/compaction/model.rs",
+        owner: "andromeda-wal compaction extraction",
+        exit_criteria: "Exit criteria: wire the WAL compaction model module through andromeda-wal or remove the extracted orphan file.",
+    },
+    AllowedOrphanException {
+        path: "crates/andromeda-wal/src/write_ahead_log/compaction/operations.rs",
+        owner: "andromeda-wal compaction extraction",
+        exit_criteria: "Exit criteria: wire the WAL compaction operations module through andromeda-wal or remove the extracted orphan file.",
+    },
+    AllowedOrphanException {
+        path: "crates/andromeda-wal/src/write_ahead_log/compaction/scheduler.rs",
+        owner: "andromeda-wal compaction extraction",
+        exit_criteria: "Exit criteria: wire the WAL compaction scheduler module through andromeda-wal or remove the extracted orphan file.",
+    },
+    AllowedOrphanException {
+        path: "crates/andromeda-wal/src/write_ahead_log/compaction/tests.rs",
+        owner: "andromeda-wal compaction extraction",
+        exit_criteria: "Exit criteria: wire the WAL compaction tests module through andromeda-wal or remove the extracted orphan file.",
+    },
+    AllowedOrphanException {
+        path: "crates/andromeda-tx/src/lock_manager/entry.rs",
+        owner: "andromeda-tx lock-manager extraction",
+        exit_criteria: "Exit criteria: wire the lock-manager entry module through tx or move it into an extracted locking owner crate.",
+    },
+    AllowedOrphanException {
+        path: "crates/andromeda-tx/src/lock_manager/evidence.rs",
+        owner: "andromeda-tx lock-manager extraction",
+        exit_criteria: "Exit criteria: wire the lock-manager evidence module through tx or move it into an extracted locking owner crate.",
+    },
+    AllowedOrphanException {
+        path: "crates/andromeda-tx/src/lock_manager/manager_core.rs",
+        owner: "andromeda-tx lock-manager extraction",
+        exit_criteria: "Exit criteria: wire the lock-manager core module through tx or move it into an extracted locking owner crate.",
+    },
+    AllowedOrphanException {
+        path: "crates/andromeda-tx/src/lock_manager/mode.rs",
+        owner: "andromeda-tx lock-manager extraction",
+        exit_criteria: "Exit criteria: wire the lock-manager mode module through tx or move it into an extracted locking owner crate.",
+    },
+    AllowedOrphanException {
+        path: "crates/andromeda-tx/src/lock_manager/resource.rs",
+        owner: "andromeda-tx lock-manager extraction",
+        exit_criteria: "Exit criteria: wire the lock-manager resource module through tx or move it into an extracted locking owner crate.",
+    },
 ];
+
+struct AllowedOrphanException {
+    path: &'static str,
+    owner: &'static str,
+    exit_criteria: &'static str,
+}
 
 #[test]
 fn orphan_guard_finds_no_new_active_rust_orphans_or_module_conflicts() {
     let workspace = workspace_root();
     let report = collect_active_rust_sources(&workspace);
     let observed = report.orphans(&workspace);
-    let allowed = ALLOWED_PRE_EXISTING_ORPHANS
-        .iter()
-        .map(|path| (*path).to_string())
-        .collect::<BTreeSet<_>>();
+    let allowed = allowed_pre_existing_orphan_paths();
     let new_orphans = observed.difference(&allowed).collect::<Vec<_>>();
+    let stale_allowed_orphans = allowed.difference(&observed).collect::<Vec<_>>();
 
     assert!(
-        new_orphans.is_empty() && report.module_conflicts.is_empty(),
+        new_orphans.is_empty()
+            && stale_allowed_orphans.is_empty()
+            && report.module_conflicts.is_empty(),
         "active Rust source inventory violations detected.\n\
          New orphan files must be wired through a Cargo root, mod/#[path], or include!, \
-         or justified in ALLOWED_PRE_EXISTING_ORPHANS. Module conflicts must remove either \
+         or justified in ALLOWED_PRE_EXISTING_ORPHANS. Stale orphan exceptions must be removed \
+         once their exit criteria are met. Module conflicts must remove either \
          foo.rs or foo/mod.rs for the same declared module.\n\
-         \nNew orphans:\n  - {}\n\nModule file conflicts:\n  - {}",
+         \nNew orphans:\n  - {}\n\nStale orphan exceptions:\n  - {}\n\nModule file conflicts:\n  - {}",
         new_orphans
+            .iter()
+            .map(|path| path.as_str())
+            .collect::<Vec<_>>()
+            .join("\n  - "),
+        stale_allowed_orphans
             .iter()
             .map(|path| path.as_str())
             .collect::<Vec<_>>()
@@ -58,6 +167,38 @@ fn orphan_guard_finds_no_new_active_rust_orphans_or_module_conflicts() {
             .collect::<Vec<_>>()
             .join("\n  - ")
     );
+}
+
+#[test]
+fn allowed_orphan_exceptions_are_named_and_bounded() {
+    let mut seen_paths = BTreeSet::new();
+
+    for exception in ALLOWED_PRE_EXISTING_ORPHANS {
+        assert!(
+            seen_paths.insert(exception.path),
+            "allowed orphan exception {} must be listed only once",
+            exception.path
+        );
+        assert!(
+            !exception.owner.trim().is_empty(),
+            "allowed orphan exception {} must name an owner",
+            exception.path
+        );
+        assert!(
+            exception.exit_criteria.starts_with("Exit criteria: ")
+                && exception.exit_criteria.len() > "Exit criteria: ".len(),
+            "allowed orphan exception {} owned by {} must name exit criteria",
+            exception.path,
+            exception.owner
+        );
+    }
+}
+
+fn allowed_pre_existing_orphan_paths() -> BTreeSet<String> {
+    ALLOWED_PRE_EXISTING_ORPHANS
+        .iter()
+        .map(|exception| exception.path.to_owned())
+        .collect()
 }
 
 #[test]

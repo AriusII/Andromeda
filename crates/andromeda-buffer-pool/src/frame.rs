@@ -92,8 +92,8 @@ impl BufferFrameCore {
         self.id.validate()?;
         match (self.is_dirty, self.first_dirty_lsn, self.last_dirty_lsn) {
             (true, Some(first), Some(last))
-                if !first.is_zero() && !last.is_zero() && first <= last => {}
-            (false, None, None) => {}
+                if !first.is_zero() && !last.is_zero() && first <= last => {},
+            (false, None, None) => {},
             _ => return Err(BufferPoolCoreError::InvalidDirtyLsn),
         }
 
@@ -111,7 +111,7 @@ impl BufferFrameCore {
                 if self.clock_usage {
                     return Err(BufferPoolCoreError::InvalidClockUsage);
                 }
-            }
+            },
             BufferFrameState::Resident
             | BufferFrameState::Flushing
             | BufferFrameState::Evicting => {
@@ -124,7 +124,7 @@ impl BufferFrameCore {
                 {
                     return Err(BufferPoolCoreError::InvalidFrameState);
                 }
-            }
+            },
         }
         Ok(())
     }

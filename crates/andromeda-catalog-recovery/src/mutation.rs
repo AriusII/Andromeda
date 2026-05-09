@@ -1,14 +1,25 @@
 use andromeda_catalog_store::CatalogStoreMutationKind;
-use andromeda_catalog_store::{CatalogDefinition, CatalogObjectRef};
+pub use andromeda_catalog_store::{
+    CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH, CatalogPublicationSemantics,
+};
+pub use andromeda_definition_batch::{CatalogLifecycleTarget, DefinitionBatchDependencyGraphHash};
 use andromeda_definition_batch::{DefinitionBatchId, DefinitionBatchSourceHash};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId};
 
-pub const CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH: usize = 1024;
-
 pub const CATALOG_CHANGE_BEGIN_WAL_KIND_TAG: u16 = 19;
 pub const CATALOG_CHANGE_APPLY_WAL_KIND_TAG: u16 = 20;
 pub const CATALOG_CHANGE_COMMIT_WAL_KIND_TAG: u16 = 21;
+
+pub type CatalogMutationBoundary = andromeda_catalog_store::CatalogMutationBoundary<
+    DefinitionBatchId,
+    DefinitionBatchSourceHash,
+    DefinitionBatchDependencyGraphHash,
+>;
+pub type CatalogMutationDelta =
+    andromeda_catalog_store::CatalogMutationDelta<CatalogLifecycleTarget>;
+pub type CatalogMutationOperation =
+    andromeda_catalog_store::CatalogMutationOperation<CatalogLifecycleTarget>;
 
 /// Durable catalog mutation payload plus optional outer storage-WAL kind tag.
 ///
@@ -35,31 +46,6 @@ impl<'a> CatalogDurableMutationPayload<'a> {
             storage_wal_kind_tag: Some(storage_wal_kind_tag),
         }
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct DefinitionBatchDependencyGraphHash([u8; Self::LEN]);
-
-impl DefinitionBatchDependencyGraphHash {
-    pub const LEN: usize = 32;
-
-    pub const fn new(bytes: [u8; Self::LEN]) -> Self {
-        Self(bytes)
-    }
-
-    pub const fn as_bytes(self) -> [u8; Self::LEN] {
-        self.0
-    }
-
-    pub fn is_zero(self) -> bool {
-        self.0.iter().all(|byte| *byte == 0)
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CatalogPublicationSemantics {
-    PlannedVersionOnly,
-    DurablePublicationExternal,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -162,91 +148,44 @@ impl From<CatalogWalPayloadDecodeError> for AndromedaError {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CatalogMutationBoundary {
-    pub batch_id: DefinitionBatchId,
-    pub database_id: DatabaseId,
-    pub namespace_id: NamespaceId,
-    pub previous_version: CatalogVersion,
-    pub next_version: CatalogVersion,
-    pub source_hash: DefinitionBatchSourceHash,
-    pub dependency_graph_hash: DefinitionBatchDependencyGraphHash,
-    pub expected_apply_count: usize,
-    pub publication_semantics: CatalogPublicationSemantics,
-}
+/// Runtime-free recovery boundary for applying a verified committed catalog
+/// mutation to a live catalog owner.
+///
+/// `andromeda-catalog-recovery` owns the WAL/replay DTOs, but it deliberately
+/// does not own `CatalogSnapshot` or any concrete runtime state. Catalog owners
+/// implement this trait locally to adapt committed recovery batches without
+/// moving snapshot storage into this crate.
+pub trait CatalogRecoveryApplyTarget {
+    fn recovery_database_id(&self) -> DatabaseId;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogLifecycleTarget {
-    pub object: CatalogObjectRef,
-}
+    fn recovery_namespace_id(&self) -> NamespaceId;
 
-impl CatalogLifecycleTarget {
-    pub fn validate(&self) -> AndromedaResult<()> {
-        self.object.validate_for_definition(self.object.kind)
-    }
-}
+    fn recovery_visible_catalog_version(&self) -> CatalogVersion;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogMutationDelta {
-    pub operation_index: usize,
-    pub planned_version: CatalogVersion,
-    pub operation: CatalogMutationOperation,
-}
+    fn apply_recovered_catalog_mutation(
+        &mut self,
+        boundary: &CatalogMutationBoundary,
+        deltas: &[CatalogMutationDelta],
+    ) -> AndromedaResult<()>;
 
-impl CatalogMutationDelta {
-    pub fn create(
-        operation_index: usize,
-        planned_version: CatalogVersion,
-        definition: CatalogDefinition,
-    ) -> Self {
-        let object = definition.object_ref().clone();
-        Self {
-            operation_index,
-            planned_version,
-            operation: CatalogMutationOperation::CreateObject { object, definition },
+    fn validate_recovery_boundary_identity(
+        &self,
+        boundary: &CatalogMutationBoundary,
+    ) -> AndromedaResult<()> {
+        if boundary.database_id != self.recovery_database_id()
+            || boundary.namespace_id != self.recovery_namespace_id()
+        {
+            return catalog_recovery_error(
+                "catalog recovery target identity must match mutation boundary",
+            );
         }
-    }
-
-    pub fn deprecate(
-        operation_index: usize,
-        planned_version: CatalogVersion,
-        target: CatalogLifecycleTarget,
-    ) -> Self {
-        Self {
-            operation_index,
-            planned_version,
-            operation: CatalogMutationOperation::DeprecateObject { target },
+        if boundary.previous_version != self.recovery_visible_catalog_version() {
+            return catalog_recovery_error(
+                "catalog recovery target version must match mutation previous version",
+            );
         }
+        Ok(())
     }
-
-    pub fn object(&self) -> &CatalogObjectRef {
-        match &self.operation {
-            CatalogMutationOperation::CreateObject { object, .. } => object,
-            CatalogMutationOperation::DeprecateObject { target } => &target.object,
-        }
-    }
-
-    pub fn definition(&self) -> Option<&CatalogDefinition> {
-        match &self.operation {
-            CatalogMutationOperation::CreateObject { definition, .. } => Some(definition),
-            CatalogMutationOperation::DeprecateObject { .. } => None,
-        }
-    }
-}
-
-#[allow(
-    clippy::large_enum_variant,
-    reason = "Catalog WAL mutation payloads stay inline to preserve deterministic value semantics."
-)]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CatalogMutationOperation {
-    CreateObject {
-        object: CatalogObjectRef,
-        definition: CatalogDefinition,
-    },
-    DeprecateObject {
-        target: CatalogLifecycleTarget,
-    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -452,5 +391,66 @@ mod tests {
             CatalogMutationRecordKind::from_storage_wal_kind_tag(999),
             None
         );
+    }
+
+    #[derive(Debug)]
+    struct DummyRecoveryTarget {
+        database_id: DatabaseId,
+        namespace_id: NamespaceId,
+        visible_version: CatalogVersion,
+    }
+
+    impl CatalogRecoveryApplyTarget for DummyRecoveryTarget {
+        fn recovery_database_id(&self) -> DatabaseId {
+            self.database_id
+        }
+
+        fn recovery_namespace_id(&self) -> NamespaceId {
+            self.namespace_id
+        }
+
+        fn recovery_visible_catalog_version(&self) -> CatalogVersion {
+            self.visible_version
+        }
+
+        fn apply_recovered_catalog_mutation(
+            &mut self,
+            _boundary: &CatalogMutationBoundary,
+            _deltas: &[CatalogMutationDelta],
+        ) -> AndromedaResult<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn recovery_apply_target_validates_boundary_identity_without_snapshot_ownership() {
+        let target = DummyRecoveryTarget {
+            database_id: DatabaseId::new(10),
+            namespace_id: NamespaceId::new(20),
+            visible_version: CatalogVersion::new(3),
+        };
+        let boundary = CatalogMutationBoundary {
+            batch_id: DefinitionBatchId::new(1),
+            database_id: target.database_id,
+            namespace_id: target.namespace_id,
+            previous_version: target.visible_version,
+            next_version: CatalogVersion::new(4),
+            source_hash: DefinitionBatchSourceHash::new([1; DefinitionBatchSourceHash::LEN]),
+            dependency_graph_hash: DefinitionBatchDependencyGraphHash::new([2; 32]),
+            expected_apply_count: 1,
+            publication_semantics: CatalogPublicationSemantics::DurablePublicationExternal,
+        };
+
+        target
+            .validate_recovery_boundary_identity(&boundary)
+            .expect("matching recovery target accepts boundary identity");
+
+        let mut stale_boundary = boundary;
+        stale_boundary.previous_version = CatalogVersion::new(2);
+        let err = target
+            .validate_recovery_boundary_identity(&stale_boundary)
+            .unwrap_err();
+        assert_eq!(err.kind(), AndromedaErrorKind::Catalog);
+        assert!(err.message().contains("previous version"));
     }
 }

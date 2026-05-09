@@ -1,4 +1,4 @@
-use andromeda_proto::{CONTRACT_PACKAGE, PROTOCOL_FRAME_ENVELOPE_TYPE, PROTOCOL_PACKAGE};
+use andromeda_proto_wire::{CONTRACT_PACKAGE, PROTOCOL_FRAME_ENVELOPE_TYPE, PROTOCOL_PACKAGE};
 
 use super::super::support::{
     CRATE_LOCAL_PROTO_SCHEMAS, PROTOCOL_SCHEMAS, package_declarations, schema_contains,

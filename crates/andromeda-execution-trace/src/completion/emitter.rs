@@ -24,6 +24,50 @@ pub trait CompletionAuditPolicy<Sink> {
     fn sink_from_durable_report(&self, report: DurableAuditSinkReport) -> AndromedaResult<Sink>;
 }
 
+impl CompletionAuditEvidence for andromeda_audit::AuditEmissionEvidence {
+    fn validate_completion_audit(&self, expected_trace_id: TraceId) -> AndromedaResult<()> {
+        self.validate()?;
+        if self.kind != andromeda_audit::AuditEmissionKind::Completion {
+            return Err(completion_audit_error(
+                "completion emission requires completion audit evidence",
+            ));
+        }
+        if self.outcome != andromeda_audit::AuditEmissionOutcome::Emitted {
+            return Err(completion_audit_error(
+                "completion audit evidence requires emitted outcome",
+            ));
+        }
+        if self.trace_id != expected_trace_id {
+            return Err(completion_audit_error(
+                "completion audit evidence trace id must match emitted completion",
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl CompletionAuditPolicy<andromeda_audit::AuditSinkAvailability>
+    for andromeda_audit::AuditEmissionPolicy
+{
+    type Evidence = andromeda_audit::AuditEmissionEvidence;
+
+    fn completion_emitted(
+        &self,
+        trace_id: TraceId,
+        reason: String,
+        sink: andromeda_audit::AuditSinkAvailability,
+    ) -> AndromedaResult<Self::Evidence> {
+        andromeda_audit::AuditEmissionEvidence::completion_emitted(*self, trace_id, reason, sink)
+    }
+
+    fn sink_from_durable_report(
+        &self,
+        report: DurableAuditSinkReport,
+    ) -> AndromedaResult<andromeda_audit::AuditSinkAvailability> {
+        andromeda_audit::AuditSinkAvailability::durable_for_policy(*self, report)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CompletionEmission {
     kind: CompletionEmissionKind,
@@ -225,7 +269,7 @@ fn completion_record_from_emission(
                 durable_lsn: completion.durable_lsn,
                 trace_id: completion.trace_id,
             }
-        }
+        },
         CompletionEmissionKind::RolledBack => {
             if completion.status != CompletionStatus::RolledBack {
                 return Err(completion_journal_error(
@@ -243,7 +287,7 @@ fn completion_record_from_emission(
                 durable_lsn: completion.durable_lsn,
                 trace_id: completion.trace_id,
             }
-        }
+        },
         CompletionEmissionKind::PreTransaction => {
             if completion.status.is_transactional_terminal() {
                 return Err(completion_journal_error(
@@ -272,7 +316,7 @@ fn completion_record_from_emission(
                 durable_lsn: None,
                 trace_id: completion.trace_id,
             }
-        }
+        },
     };
 
     record.validate()?;

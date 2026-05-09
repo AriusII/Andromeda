@@ -16,6 +16,7 @@ C5 invariants:
 "#]
 
 mod crash_recovery_matrix;
+mod file_wal_report;
 
 /// Startup mode requested for recovery against durable evidence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,6 +28,12 @@ pub enum StartupMode {
     /// Preserves evidence and prevents replay until a forensic report exists.
     ForensicStart,
 }
+
+pub use file_wal_report::{
+    FileWalRecoveryBoundaryKind, FileWalRecoveryIgnoredTransaction,
+    FileWalRecoveryIgnoredTransactionReason, FileWalRecoveryReplayRecord, FileWalRecoveryReportV0,
+    file_wal_recovery_boundary_kind,
+};
 
 impl StartupMode {
     /// Returns `true` when this mode is allowed to replay records after a clean

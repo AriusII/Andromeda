@@ -15,6 +15,7 @@
 - Do not own QUIC listeners, TLS, sockets, async runtime behavior, persistence, WAL, recovery, or catalog publication.
 - Do not introduce gRPC, ad hoc SQL, JSON runtime defaults, or untyped protocol behavior.
 - Do not duplicate byte-level frame ownership from `andromeda-rpc-protocol` or payload codec ownership from `andromeda-rpc-codec`.
+- Do not depend on the generated Protobuf wrapper crate; compatibility exports here must come from runtime-free owner crates such as `andromeda-proto-wire`.
 
 ## Prerequisites
 

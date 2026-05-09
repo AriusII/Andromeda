@@ -1,8 +1,8 @@
 use crate::{
     diagnostics::{relative_slash_path, rust_source_files, strip_rust_comments},
     graph_rules::{
-        TemporaryDependencyException, assert_temporary_exceptions_have_exit_criteria,
-        dev_dependency_back_edges, temporary_exception_edges,
+        TemporaryDependencyException, assert_temporary_exception_edges_match,
+        dev_dependency_back_edges,
     },
     manifest_loading::{load_crate_manifests, normalize_dependency_name},
     workspace_root,
@@ -313,15 +313,12 @@ fn workspace_crate_names_reject_generic_topology_buckets() {
 fn temporary_dev_dependency_back_edges_are_named_and_bounded() {
     let manifests = load_crate_manifests(&workspace_root().join("crates"));
     let actual = dev_dependency_back_edges(&manifests);
-    let expected = temporary_exception_edges(TEMPORARY_DEV_DEPENDENCY_BACKEDGE_EXCEPTIONS);
 
-    assert_temporary_exceptions_have_exit_criteria(
+    assert_temporary_exception_edges_match(
         "dev dependency back-edge",
+        actual,
         TEMPORARY_DEV_DEPENDENCY_BACKEDGE_EXCEPTIONS,
-    );
-    assert_eq!(
-        actual, expected,
-        "workspace dev-dependency back-edges must be explicit temporary read-only findings with exit criteria; update the named exception list only when the topology risk is intentionally accepted or removed"
+        "workspace dev-dependency back-edges must be explicit temporary read-only findings with exit criteria; update the named exception list only when the topology risk is intentionally accepted or removed",
     );
 }
 #[test]
@@ -353,15 +350,12 @@ fn c5_core_facade_imports_are_temporary_named_exceptions() {
         .filter(|manifest| manifest.runtime_dependencies.contains("andromeda-core"))
         .map(|manifest| (manifest.package_name.clone(), "andromeda-core".to_owned()))
         .collect::<BTreeSet<_>>();
-    let expected = temporary_exception_edges(TEMPORARY_C5_CORE_FACADE_EXCEPTIONS);
 
-    assert_temporary_exceptions_have_exit_criteria(
+    assert_temporary_exception_edges_match(
         "C5 core facade import",
+        actual,
         TEMPORARY_C5_CORE_FACADE_EXCEPTIONS,
-    );
-    assert_eq!(
-        actual, expected,
-        "C5 crates importing the wide andromeda-core facade must be explicit temporary exceptions with exit criteria; add durable-kernel foundation crates before widening this list"
+        "C5 crates importing the wide andromeda-core facade must be explicit temporary exceptions with exit criteria; add durable-kernel foundation crates before widening this list",
     );
 }
 #[test]

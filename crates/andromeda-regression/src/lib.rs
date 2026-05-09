@@ -6,7 +6,6 @@
 //! reports are diagnostic evidence only and cannot drive optimizer, storage,
 //! WAL, recovery, catalog, or security decisions by themselves.
 
-mod advisory_boundary;
 mod regression_detection;
 
 mod metric_math {

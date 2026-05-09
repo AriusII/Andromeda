@@ -1,11 +1,13 @@
 use andromeda_error::{AndromedaErrorKind, AndromedaResult};
-use andromeda_proto::{
-    RowCountRequirement, StructuredObjectHeader, StructuredObjectLayout, generated,
+use andromeda_procedure_contract::RowCountRequirement;
+use andromeda_proto::generated;
+use andromeda_proto_wire::{
     project_generated_structured_object_header, validate_generated_invocation_response_sequence,
     validate_generated_rpc_batch, validate_generated_rpc_completion,
     validate_generated_rpc_execute_request, validate_generated_rpc_metadata,
     validate_generated_structured_object_header,
 };
+use andromeda_structured_object::{StructuredObjectHeader, StructuredObjectLayout};
 use andromeda_types::{ColumnDescriptor, ContractHash, ScalarType, TypeDescriptor};
 use prost::Message;
 
@@ -17,7 +19,7 @@ use super::proto_wire_fixtures::{
 };
 
 #[test]
-fn crate_root_exports_quic_boundary_generated_validators() {
+fn proto_wire_exports_quic_boundary_generated_validators() {
     let execute_validator: fn(&generated::protocol::v1::RpcExecuteRequest) -> AndromedaResult<()> =
         validate_generated_rpc_execute_request;
     let metadata_validator: fn(&generated::protocol::v1::RpcMetadata) -> AndromedaResult<()> =
@@ -74,7 +76,7 @@ fn generated_rpc_execute_request_validation_rejects_default_runtime_bindings() {
         .budget
         .expect("valid ReserveStock execute fixture carries a request budget");
 
-    assert!(generated::validate_generated_rpc_execute_request(&valid).is_ok());
+    assert!(validate_generated_rpc_execute_request(&valid).is_ok());
 
     let invalid_cases = [
         (
@@ -139,7 +141,7 @@ fn generated_rpc_execute_request_validation_rejects_default_runtime_bindings() {
 
     for (field, request) in invalid_cases {
         assert!(
-            generated::validate_generated_rpc_execute_request(&request).is_err(),
+            validate_generated_rpc_execute_request(&request).is_err(),
             "{field} should be rejected by generated typed Procedure execute validation"
         );
     }
@@ -276,7 +278,7 @@ fn generated_rpc_execute_request_is_binary_projection() {
     let encoded_execute = execute.encode_to_vec();
     let decoded_execute =
         generated::protocol::v1::RpcExecuteRequest::decode(encoded_execute.as_slice()).unwrap();
-    generated::validate_generated_rpc_execute_request(&decoded_execute).unwrap();
+    validate_generated_rpc_execute_request(&decoded_execute).unwrap();
     assert_eq!(decoded_execute.procedure_name, RESERVE_STOCK_PROCEDURE);
     assert_eq!(
         decoded_execute.expected_contract_hash,
@@ -293,7 +295,7 @@ fn generated_rpc_batch_is_binary_projection() {
     let encoded_batch = batch.encode_to_vec();
     let decoded_batch =
         generated::protocol::v1::RpcBatch::decode(encoded_batch.as_slice()).unwrap();
-    generated::validate_generated_rpc_batch(&decoded_batch).unwrap();
+    validate_generated_rpc_batch(&decoded_batch).unwrap();
     assert_eq!(decoded_batch.result_name, RESERVATION_RESULT);
     assert_eq!(decoded_batch.structured_payload, b"\x01");
     assert_eq!(decoded_batch.row_count_exact, Some(1));

@@ -1,53 +1,17 @@
-//! B-Tree index contracts and the current in-memory engine.
+//! Compatibility facade for the storage-index owner crate.
 //!
-//! The promoted implementation in this module is `InMemoryBTreeIndexEngine`, a
-//! bounded `BTreeMap`-backed engine used for contract tests and non-durable
-//! execution paths. Page-backed durable B-Tree node mutation remains explicitly
-//! fail-stop until the on-page node format, WAL payloads, and recovery handlers
-//! are promoted together.
-//!
-//! ## Invariants
-//!
-//! 1. **Leaf Balance**: All leaves at same depth
-//! 2. **Key Ordering**: Keys strictly ordered within/across nodes
-//! 3. **Child Pointer Invariant**: Internal nodes guide search correctly
-//! 4. **Occupancy**: Nodes in [branching_factor/2, branching_factor-1]
-//! 5. **Leaf Sibling Chain**: Linked list in key order
-//! 6. **Key Completeness**: All keys reachable from root
-//! 7. **No Unsafe Code**: Enforced by crate forbid(unsafe_code)
+//! In-memory B-Tree scaffolding, format contracts, key/value metadata, and
+//! concurrency policy contracts now live in `andromeda-storage-index`. Durable
+//! page-backed B-Tree mutation remains fail-stop through that owner crate until
+//! WAL payloads and recovery promotion land together.
 
-use crate::page::PageId;
-use andromeda_core::AndromedaResult;
-
-mod concurrency;
-mod contract;
-mod cursor;
-mod engine;
-mod error;
-mod leaf;
-
-mod node;
-pub(crate) mod node_format_v1;
-
-pub use andromeda_storage_index::{
-    BTREE_DURABLE_FORMAT_PROMOTED, BTreeConfig, BTreeStatistics, ColumnId, IndexId, KeyValuePair,
-    RowId,
-};
-pub(crate) use concurrency::non_root_min_keys;
-pub use concurrency::{
-    BTreeConcurrencyPolicy, BTreeLatchLevel, BTreeLatchMode, BTreeLatchTarget,
-    BTreeMvccInteraction, BTreeOperationKind, BTreePanicPoisonBehavior, BTreeRestartReason,
-    BTreeScanConsistency,
-};
-pub use contract::{BTreeIndex, BTreeIndexMetadata, BTreeIndexNode, BTreeRangeCursor};
 #[allow(deprecated)]
-pub use engine::{BTreeIndexEngine, BTreeNodeImpl, InMemoryBTreeIndexEngine};
-pub use error::BTreeError;
-pub(crate) use error::deferred_btree_result;
-pub use node_format_v1::{
-    BTREE_NODE_V1_FORMAT_VERSION, BTREE_NODE_V1_HEADER_LEN, BTREE_NODE_V1_MAGIC, BTreeNodeHeaderV1,
-    BTreeNodeKindV1, BTreeNodeV1,
+pub use andromeda_storage_index::{
+    BTREE_DURABLE_FORMAT_PROMOTED, BTREE_NODE_V1_FORMAT_VERSION, BTREE_NODE_V1_HEADER_LEN,
+    BTREE_NODE_V1_MAGIC, BTreeConcurrencyPolicy, BTreeConfig, BTreeError, BTreeIndex,
+    BTreeIndexEngine, BTreeIndexMetadata, BTreeIndexNode, BTreeLatchLevel, BTreeLatchMode,
+    BTreeLatchTarget, BTreeMvccInteraction, BTreeNodeHeaderV1, BTreeNodeImpl, BTreeNodeKindV1,
+    BTreeNodeV1, BTreeOperationKind, BTreePanicPoisonBehavior, BTreeRangeCursor,
+    BTreeRestartReason, BTreeScanConsistency, BTreeStatistics, ColumnId, InMemoryBTreeIndexEngine,
+    IndexId, KeyValuePair, RowId,
 };
-
-#[cfg(test)]
-mod tests;

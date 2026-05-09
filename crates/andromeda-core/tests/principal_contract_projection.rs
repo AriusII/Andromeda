@@ -1,8 +1,9 @@
-use andromeda_core::{Permission, PrincipalPolicyVersion, ProcedureId, SurfaceScope};
+use andromeda_core::PrincipalPolicyVersion;
 use andromeda_security_contract::{
-    SECURITY_POLICY_EVIDENCE_SCHEMA_VERSION, SecurityPermission, SecurityPolicyVersion,
-    SecuritySurface,
+    PrincipalPermission as Permission, SECURITY_POLICY_EVIDENCE_SCHEMA_VERSION, SecurityPermission,
+    SecurityPolicyVersion, SecuritySurface, SurfaceScope,
 };
+use andromeda_types::ProcedureId;
 
 #[test]
 fn surface_scope_projects_to_security_contract_surface() {

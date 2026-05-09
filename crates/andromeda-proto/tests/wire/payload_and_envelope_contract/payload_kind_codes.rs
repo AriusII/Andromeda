@@ -1,11 +1,10 @@
 use andromeda_error::AndromedaErrorKind;
-use andromeda_proto::{
+use andromeda_proto_wire::{
     AUTH_WIRE_CODE, CONTRACT_REQUEST_WIRE_CODE, CONTRACT_RESPONSE_WIRE_CODE, ERROR_WIRE_CODE,
     HELLO_WIRE_CODE, PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP, PayloadFrameFamily, PayloadKind,
     RPC_BATCH_WIRE_CODE, RPC_COMPLETION_WIRE_CODE, RPC_EXECUTE_REQUEST_WIRE_CODE,
     RPC_METADATA_WIRE_CODE,
 };
-use andromeda_proto_wire::PayloadKind as WirePayloadKind;
 
 const PROTO_WIRE_MANIFEST: &str = include_str!("../../../../andromeda-proto-wire/Cargo.toml");
 const RPC_PROTOCOL_MANIFEST: &str = include_str!("../../../../andromeda-rpc-protocol/Cargo.toml");
@@ -122,46 +121,24 @@ fn generated_payload_kind_codes_match_custom_contract_codes() {
 }
 
 #[test]
-fn split_crates_keep_payload_kind_and_frame_code_lockstep() {
+fn proto_wire_keeps_payload_kind_and_frame_code_lockstep() {
     let expected = [
-        (PayloadKind::Hello, WirePayloadKind::Hello, HELLO_WIRE_CODE),
-        (PayloadKind::Auth, WirePayloadKind::Auth, AUTH_WIRE_CODE),
-        (
-            PayloadKind::ContractRequest,
-            WirePayloadKind::ContractRequest,
-            CONTRACT_REQUEST_WIRE_CODE,
-        ),
-        (
-            PayloadKind::ContractResponse,
-            WirePayloadKind::ContractResponse,
-            CONTRACT_RESPONSE_WIRE_CODE,
-        ),
+        (PayloadKind::Hello, HELLO_WIRE_CODE),
+        (PayloadKind::Auth, AUTH_WIRE_CODE),
+        (PayloadKind::ContractRequest, CONTRACT_REQUEST_WIRE_CODE),
+        (PayloadKind::ContractResponse, CONTRACT_RESPONSE_WIRE_CODE),
         (
             PayloadKind::RpcExecuteRequest,
-            WirePayloadKind::RpcExecuteRequest,
             RPC_EXECUTE_REQUEST_WIRE_CODE,
         ),
-        (
-            PayloadKind::RpcMetadata,
-            WirePayloadKind::RpcMetadata,
-            RPC_METADATA_WIRE_CODE,
-        ),
-        (
-            PayloadKind::RpcBatch,
-            WirePayloadKind::RpcBatch,
-            RPC_BATCH_WIRE_CODE,
-        ),
-        (
-            PayloadKind::RpcCompletion,
-            WirePayloadKind::RpcCompletion,
-            RPC_COMPLETION_WIRE_CODE,
-        ),
-        (PayloadKind::Error, WirePayloadKind::Error, ERROR_WIRE_CODE),
+        (PayloadKind::RpcMetadata, RPC_METADATA_WIRE_CODE),
+        (PayloadKind::RpcBatch, RPC_BATCH_WIRE_CODE),
+        (PayloadKind::RpcCompletion, RPC_COMPLETION_WIRE_CODE),
+        (PayloadKind::Error, ERROR_WIRE_CODE),
     ];
 
-    for (proto_kind, wire_kind, proto_code) in expected {
-        assert_eq!(proto_kind.wire_code(), proto_code);
-        assert_eq!(wire_kind.wire_code(), proto_code);
+    for (kind, code) in expected {
+        assert_eq!(kind.wire_code(), code);
     }
 }
 

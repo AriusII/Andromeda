@@ -3,33 +3,22 @@ use andromeda_core::{
     AndromedaResult, CatalogVersion, ContractHash, InvocationId, ProcedureId, RequestId, SessionId,
     TransactionId,
 };
+use andromeda_rpc_codec::{ProcedureRouteExecuteRequest, decode_and_validate_rpc_execute_request};
 
 use crate::{
     CatalogProcedureManifest, Connection, DispatchPolicy, FrameBytes, FrameType,
-    ResultStreamMetadataPolicy, StreamRole, SurfacePlane, TransportSurface, TypedResultStreamBounds,
-    TypedResultStreamContext, validate_transport_surface,
+    ResultStreamMetadataPolicy, StreamRole, SurfacePlane, TransportSurface,
+    TypedResultStreamBounds, TypedResultStreamContext, validate_transport_surface,
 };
 
 use super::errors::{protocol_error, security_error};
-use super::{state, validation};
+use super::state;
 
 const APPLICATION_STREAM_MIN: u64 = 0;
 const HADR_STREAM_MIN: u64 = 128;
 const HADR_STREAM_MAX: u64 = 255;
 const APPLICATION_STREAM_MAX: u64 = HADR_STREAM_MIN - 1;
 const FUTURE_RESERVED_STREAM_MIN: u64 = HADR_STREAM_MAX + 1;
-
-/// Domain projection of the protobuf `RpcExecuteRequest` admitted by the
-/// Procedure gateway.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProcedureRouteExecuteRequest {
-    pub procedure_name: String,
-    pub expected_contract_hash: ContractHash,
-    pub expected_catalog_version: CatalogVersion,
-    pub expected_stats_version: u64,
-    pub surface_scope: String,
-    pub argument_count: usize,
-}
 
 /// Pre-dispatch route evidence for an Application-surface Procedure invocation.
 ///
@@ -89,8 +78,7 @@ pub(super) fn bind_application_procedure_route(
         ));
     }
 
-    let execute_request =
-        validation::decode_and_validate_rpc_execute_request(frame, admission.plane, manifest)?;
+    let execute_request = decode_and_validate_rpc_execute_request(frame, manifest)?;
 
     Ok(ProcedureRouteBinding {
         invocation_id: state::invocation_id_for_stream(stream_id),

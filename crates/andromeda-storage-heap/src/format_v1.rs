@@ -151,7 +151,7 @@ fn validate_redundant_header_slot_count(
                 )));
             }
             Ok(())
-        }
+        },
         _ => Err(heap_error("heap page v1 persisted header magic is invalid")),
     }
 }

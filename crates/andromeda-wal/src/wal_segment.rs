@@ -69,14 +69,14 @@ impl WalSegmentDescriptor {
                         "WAL segment base previous LSN must chain to first LSN",
                     ));
                 }
-            }
+            },
             None => {
                 // First segment (no base_previous_lsn) can start at any LSN >= 1.
                 // This allows restore/PITR scenarios where segments begin at archive start, not global LSN 1.
                 if self.first_lsn.is_zero() {
                     return Err(storage_error("WAL segment first LSN must not be zero"));
                 }
-            }
+            },
         }
         Ok(())
     }

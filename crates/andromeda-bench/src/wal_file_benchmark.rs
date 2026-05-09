@@ -7,8 +7,7 @@ use andromeda_wal::{
 };
 
 use andromeda_bench_harness::{BenchmarkTempFile as BenchTempWalFile, elapsed_micros};
-
-use crate::BenchmarkError;
+use andromeda_bench_workload::BenchmarkError;
 
 pub const WAL_APPEND_FILE_WORKLOAD_ID: &str = "wal-append-file-smoke";
 pub const WAL_APPEND_FILE_HARNESS_SOURCE: &str = "file-wal-append-flush";

@@ -1,6 +1,7 @@
 use andromeda_proto::generated::{
-    self, contract::v1::result_stream_descriptor, protocol::v1::invocation_response,
+    contract::v1::result_stream_descriptor, protocol::v1::invocation_response,
 };
+use andromeda_proto_wire::validate_generated_invocation_response_sequence;
 
 use super::common::{response, valid_batch, valid_completion, valid_metadata};
 
@@ -20,7 +21,7 @@ fn generated_invocation_response_sequence_rejects_late_batch_row_count_exact() {
         ),
     ];
 
-    assert!(generated::validate_generated_invocation_response_sequence(&sequence).is_err());
+    assert!(validate_generated_invocation_response_sequence(&sequence).is_err());
 }
 
 #[test]
@@ -42,5 +43,5 @@ fn generated_invocation_response_sequence_rejects_late_completion_row_count_exac
         ),
     ];
 
-    assert!(generated::validate_generated_invocation_response_sequence(&sequence).is_err());
+    assert!(validate_generated_invocation_response_sequence(&sequence).is_err());
 }

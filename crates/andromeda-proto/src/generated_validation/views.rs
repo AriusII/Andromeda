@@ -181,7 +181,7 @@ impl wire::GeneratedCatalogManifestResolutionRequestView
         match self.selector.as_ref() {
             Some(Selector::ProcedureId(procedure_id)) => {
                 Some(wire::GeneratedCatalogManifestResolutionSelector::ProcedureId(*procedure_id))
-            }
+            },
             Some(Selector::ProcedureName(procedure_name)) => Some(
                 wire::GeneratedCatalogManifestResolutionSelector::ProcedureName(procedure_name),
             ),
@@ -538,16 +538,16 @@ impl wire::GeneratedInvocationResponseView for protocol::v1::InvocationResponse 
         match self.response.as_ref() {
             Some(Response::Metadata(metadata)) => {
                 Some(wire::GeneratedInvocationResponsePayload::Metadata(metadata))
-            }
+            },
             Some(Response::Batch(batch)) => {
                 Some(wire::GeneratedInvocationResponsePayload::Batch(batch))
-            }
+            },
             Some(Response::Completion(completion)) => Some(
                 wire::GeneratedInvocationResponsePayload::Completion(completion),
             ),
             Some(Response::Error(error)) => {
                 Some(wire::GeneratedInvocationResponsePayload::Error(error))
-            }
+            },
             None => None,
         }
     }

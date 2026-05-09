@@ -20,6 +20,7 @@ mod metric_math {
     pub(crate) use andromeda_bench_workload::percent_change;
 }
 
+pub use advisory_boundary::validate_benchmark_advisory_only_fields;
 pub use andromeda_bench_workload::{
     BenchmarkHardwareProfile, BenchmarkRunRequest, BenchmarkWorkloadClass, BudgetStatus,
     DEFAULT_TEMP_BYTES, MAX_DURATION_MS, MAX_EVIDENCE_TTL_MS, MAX_SAMPLES, MAX_TEMP_BYTES,

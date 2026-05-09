@@ -10,12 +10,11 @@ use andromeda_definition_batch::{
     SrplProcedureSourceDigest,
 };
 use andromeda_error::AndromedaResult;
+use andromeda_srpl_diagnostics::{DiagnosticPhase, SrplDiagnostic};
+use andromeda_srpl_ir::SrplProcedureContractMetadata;
 use andromeda_types::CatalogVersion;
 
-use crate::{
-    DiagnosticPhase, SrplDiagnostic, SrplProcedureContractMetadata,
-    compile_narrow_procedure_definition,
-};
+use crate::compile_narrow_procedure_definition;
 
 /// One SRPL Procedure source prepared for DefinitionBatch dry-run.
 #[derive(Debug, Clone, PartialEq, Eq)]

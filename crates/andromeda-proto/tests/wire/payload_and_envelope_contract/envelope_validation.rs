@@ -1,5 +1,6 @@
 use andromeda_error::AndromedaErrorKind;
-use andromeda_proto::{FrameEnvelope, PayloadKind, generated};
+use andromeda_proto::generated;
+use andromeda_proto_wire::{FrameEnvelope, PayloadKind, validate_generated_frame_envelope};
 use andromeda_types::{CatalogVersion, ContractHash, RequestId, SessionId};
 
 use super::fixtures::{envelope, hash};
@@ -141,14 +142,14 @@ fn generated_frame_envelope_rejects_unbound_or_unknown_payload_metadata() {
         payload: b"row-batch".to_vec(),
     };
 
-    generated::validate_generated_frame_envelope(&valid).unwrap();
+    validate_generated_frame_envelope(&valid).unwrap();
 
     let missing_version = generated::protocol::v1::FrameEnvelope {
         protocol_version: None,
         ..valid.clone()
     };
     assert_eq!(
-        generated::validate_generated_frame_envelope(&missing_version)
+        validate_generated_frame_envelope(&missing_version)
             .unwrap_err()
             .kind(),
         AndromedaErrorKind::Protocol
@@ -159,7 +160,7 @@ fn generated_frame_envelope_rejects_unbound_or_unknown_payload_metadata() {
         ..valid.clone()
     };
     assert_eq!(
-        generated::validate_generated_frame_envelope(&zero_catalog_version)
+        validate_generated_frame_envelope(&zero_catalog_version)
             .unwrap_err()
             .kind(),
         AndromedaErrorKind::Contract
@@ -170,7 +171,7 @@ fn generated_frame_envelope_rejects_unbound_or_unknown_payload_metadata() {
         ..valid
     };
     assert_eq!(
-        generated::validate_generated_frame_envelope(&unknown_payload_kind)
+        validate_generated_frame_envelope(&unknown_payload_kind)
             .unwrap_err()
             .kind(),
         AndromedaErrorKind::Protocol

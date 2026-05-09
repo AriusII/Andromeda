@@ -20,8 +20,10 @@ mod compact;
 mod delete;
 mod error;
 mod format_v1;
+mod heap_redo;
 mod insert;
 mod page;
+mod row_encoder;
 mod scan;
 mod slot;
 mod vacuum;
@@ -30,9 +32,19 @@ mod validation;
 pub mod slot_directory;
 
 pub use format_v1::HEAP_PAGE_V1_PAYLOAD_OFFSET;
-pub use insert::HeapPageInsert;
+pub use heap_redo::{
+    HEAP_ROW_REDO_HEADER_LEN, HEAP_ROW_REDO_NONE_SLOT_ID, HEAP_ROW_REDO_PAYLOAD_MAGIC,
+    HEAP_ROW_REDO_PAYLOAD_VERSION, HeapRowRedoOperation, HeapRowRedoPayloadError,
+    HeapRowRedoPayloadV1,
+};
+pub use insert::{HeapPageInsert, ProductStockHeapInsert};
 pub use page::HeapPage;
-pub use scan::HeapScanIter;
+pub use row_encoder::{
+    ColumnDef, Datum, INVENTORY_PRODUCT_STOCK_TABLE_NAME, PRODUCT_STOCK_PRODUCT_ID_COLUMN,
+    PRODUCT_STOCK_QUANTITY_ON_HAND_COLUMN, PRODUCT_STOCK_ROW_ENCODED_LEN, ProductStockRow,
+    RowEncoder, RowSchema, ScalarType, product_stock_row_encoder, product_stock_row_schema,
+};
+pub use scan::{HeapScanIter, ProductStockHeapScanIter};
 pub use slot::SlotEntry;
 pub use slot_directory::{SlotDirectory, SlotId};
 pub use vacuum::{HeapVacuumMode, HeapVacuumPlan, HeapVacuumReport};

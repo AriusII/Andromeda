@@ -7,6 +7,9 @@ publish = false
 
 [dependencies]
 andromeda-digest.workspace = true
+andromeda-error.workspace = true
+andromeda-observe.workspace = true
+andromeda-plan-cache.workspace = true
 andromeda-procedure-contract.workspace = true
 andromeda-scenario-evidence.workspace = true
 andromeda-time.workspace = true

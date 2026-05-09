@@ -1,7 +1,9 @@
 use andromeda_error::AndromedaErrorKind;
-use andromeda_proto::{
-    BackpressureMetadata, ErrorEnvelope, ErrorFamily, ResultRowCountSummary, RetryDisposition,
-    RpcCompletion, RpcCompletionStatus, TransactionEffect, TransactionOutcome,
+use andromeda_procedure_contract::{
+    ResultRowCountSummary, RpcCompletion, RpcCompletionStatus, TransactionOutcome,
+};
+use andromeda_rpc_protocol::{
+    BackpressureMetadata, ErrorEnvelope, ErrorFamily, RetryDisposition, TransactionEffect,
 };
 use andromeda_types::{RequestId, SessionId, TransactionId};
 

@@ -1,17 +1,17 @@
 #![forbid(unsafe_code)]
 
 use andromeda_contract::QualifiedName;
-use andromeda_srpl::{
-    Cardinality, SrplAssignmentIr, SrplBusinessOperationIr, SrplBusinessOperationKindIr,
-    SrplEmitValueIr, SrplPredicateIr, SrplProcedureBodyIr, SrplProcedureIr, SrplResultStreamIr,
-    SrplValueIr,
-    optimizer::{OptimizationLevel, optimize_procedure_ir, run_optimizer_pipeline},
-    procedure_compiler::{
-        INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, compile_narrow_procedure_signature,
-        inventory_reserve_stock_contract_metadata, lower_ir_to_contract_candidate,
-    },
-    procedure_model::{ArithOp, ConstantLiteral},
+use andromeda_optimizer::srpl::{OptimizationLevel, optimize_procedure_ir, run_optimizer_pipeline};
+use andromeda_srpl::procedure_compiler::{
+    INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, compile_narrow_procedure_signature,
+    inventory_reserve_stock_contract_metadata,
 };
+use andromeda_srpl_ir::{
+    ArithOp, Cardinality, ConstantLiteral, SrplAssignmentIr, SrplBusinessOperationIr,
+    SrplBusinessOperationKindIr, SrplEmitValueIr, SrplPredicateIr, SrplProcedureBodyIr,
+    SrplProcedureIr, SrplResultStreamIr, SrplValueIr,
+};
+use andromeda_srpl_lowering::lower_ir_to_contract_candidate;
 use andromeda_types::{CatalogVersion, ColumnDescriptor, ScalarType, TypeDescriptor};
 
 fn qn(path: &str) -> QualifiedName {

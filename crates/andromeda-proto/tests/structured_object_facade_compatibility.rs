@@ -1,10 +1,10 @@
 #![forbid(unsafe_code)]
 
-use andromeda_proto::generated::contract::v1::result_stream_descriptor;
-use andromeda_proto::{
-    ResultCardinality, ResultStreamDescriptor, RowCountPolicy, RowCountRequirement,
-    StructuredObjectHeader, StructuredObjectLayout,
+use andromeda_procedure_contract::{
+    ResultCardinality, ResultStreamDescriptor, RowCountRequirement,
 };
+use andromeda_proto::generated::contract::v1::result_stream_descriptor;
+use andromeda_structured_object::{RowCountPolicy, StructuredObjectHeader, StructuredObjectLayout};
 use andromeda_types::{ColumnDescriptor, ContractHash, ScalarType, TypeDescriptor};
 
 fn column(name: &str, ordinal: u32) -> ColumnDescriptor {
@@ -22,7 +22,7 @@ fn accepts_structured_object_layout(_: andromeda_structured_object::StructuredOb
 fn accepts_structured_row_count_requirement(_: andromeda_structured_object::RowCountRequirement) {}
 
 #[test]
-fn historical_structured_object_facade_paths_keep_reexported_type_identity() {
+fn structured_object_owner_paths_keep_type_identity() {
     let fields = vec![column("reservation_id", 0)];
     let layout = StructuredObjectLayout::RowMajor;
     let descriptor_hash = StructuredObjectHeader::compute_descriptor_hash(&fields, layout);
@@ -48,7 +48,7 @@ fn historical_structured_object_facade_paths_keep_reexported_type_identity() {
 }
 
 #[test]
-fn historical_result_stream_facade_paths_still_accept_structured_row_count_requirement() {
+fn result_stream_owner_paths_accept_structured_row_count_requirement() {
     let descriptor = ResultStreamDescriptor {
         stream_name: "Reservation".to_string(),
         columns: vec![column("reservation_id", 0)],

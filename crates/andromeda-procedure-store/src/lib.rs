@@ -9,6 +9,8 @@ durable truth, catalog publication, WAL replay, or plan-selection authority.
 "#]
 
 mod audit;
+mod contract_entry;
+mod decision_record;
 mod error;
 mod evidence;
 mod evidence_role;
@@ -20,11 +22,15 @@ mod metrics;
 mod registration;
 mod regression;
 mod runtime_counters;
+mod runtime_identity;
+mod runtime_record;
 mod runtime_status;
 mod sink;
 mod status;
 
 pub use audit::{AuditCorrelation, AuditCorrelationId};
+pub use contract_entry::ProcedureStoreEntry;
+pub use decision_record::InvocationDecisionRecord;
 pub use error::{ProcedureStorePrimitiveError, ProcedureStorePrimitiveResult};
 pub use evidence::{EvidenceDigest, InvocationEvidenceKind, InvocationEvidenceMarker};
 pub use evidence_role::ProcedureStoreEvidenceRole;
@@ -44,6 +50,8 @@ pub use regression::{
     MAX_REGRESSION_THRESHOLD_BPS, RegressionSeverity, RegressionSignal, RegressionThresholdBps,
 };
 pub use runtime_counters::ProcedureRuntimeCounters;
+pub use runtime_identity::{ProcedureRuntimePlanId, ProcedureRuntimeRecordId};
+pub use runtime_record::{InvocationRuntimeRecord, InvocationRuntimeRecordOutcome};
 pub use runtime_status::ProcedureRuntimeStatus;
 pub use sink::InvocationEvidenceSink;
 pub use status::InvocationStatus;

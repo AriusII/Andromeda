@@ -8,6 +8,7 @@
 pub mod codec;
 pub mod commit_log_entry;
 pub mod commit_log_facade;
+pub mod compaction;
 pub mod durability_fence;
 pub mod file;
 pub mod gc;
@@ -22,6 +23,7 @@ pub mod transaction;
 pub use codec::*;
 pub use commit_log_entry::*;
 pub use commit_log_facade::*;
+pub use compaction::*;
 pub use durability_fence::*;
 pub use file::*;
 pub use gc::*;

@@ -5,10 +5,10 @@ use andromeda_catalog::{
     ProcedureContractCandidate, inventory_reserve_stock_contract_candidate,
 };
 use andromeda_error::AndromedaResult;
-pub use andromeda_srpl_lowering::lower_ir_to_contract_candidate;
+use andromeda_srpl_diagnostics::{DiagnosticPhase, SrplDiagnostic};
+use andromeda_srpl_ir::{SrplProcedureContractMetadata, SrplProcedureIr};
+use andromeda_srpl_lowering::lower_ir_to_contract_candidate;
 use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId};
-
-use crate::{SrplProcedureContractMetadata, SrplProcedureIr};
 
 use super::{INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, compile_narrow_procedure_signature};
 
@@ -16,11 +16,10 @@ use super::{INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, compile_narrow_procedure_s
 pub fn compile_narrow_procedure_contract_candidate(
     source: &str,
     metadata: SrplProcedureContractMetadata,
-) -> Result<ProcedureContractCandidate, crate::SrplDiagnostic> {
+) -> Result<ProcedureContractCandidate, SrplDiagnostic> {
     let ir = compile_narrow_procedure_signature(source)?;
-    lower_ir_to_contract_candidate(ir, metadata).map_err(|error| {
-        crate::SrplDiagnostic::new(crate::DiagnosticPhase::IrLowering, None, error.to_string())
-    })
+    lower_ir_to_contract_candidate(ir, metadata)
+        .map_err(|error| SrplDiagnostic::new(DiagnosticPhase::IrLowering, None, error.to_string()))
 }
 
 /// Lowers a [`SrplProcedureIr`] to a [`CatalogDefinition`] ready for a
@@ -37,11 +36,10 @@ pub fn lower_ir_to_catalog_definition(
 pub fn compile_narrow_procedure_definition(
     source: &str,
     metadata: SrplProcedureContractMetadata,
-) -> Result<CatalogDefinition, crate::SrplDiagnostic> {
+) -> Result<CatalogDefinition, SrplDiagnostic> {
     let ir = compile_narrow_procedure_signature(source)?;
-    lower_ir_to_catalog_definition(ir, metadata).map_err(|error| {
-        crate::SrplDiagnostic::new(crate::DiagnosticPhase::IrLowering, None, error.to_string())
-    })
+    lower_ir_to_catalog_definition(ir, metadata)
+        .map_err(|error| SrplDiagnostic::new(DiagnosticPhase::IrLowering, None, error.to_string()))
 }
 
 /// Compiles a narrow SRPL source to a raw single-operation [`DefinitionBatch`].
@@ -58,7 +56,7 @@ pub fn compile_narrow_procedure_definition_batch(
     database_id: DatabaseId,
     namespace_id: NamespaceId,
     base_version: CatalogVersion,
-) -> Result<DefinitionBatch, crate::SrplDiagnostic> {
+) -> Result<DefinitionBatch, SrplDiagnostic> {
     let definition = compile_narrow_procedure_definition(source, metadata)?;
     Ok(DefinitionBatch {
         batch_id,
@@ -95,7 +93,7 @@ pub fn inventory_reserve_stock_contract_metadata(
 /// [`ProcedureContractCandidate`].
 pub fn compile_inventory_reserve_stock_contract_candidate(
     catalog_version: CatalogVersion,
-) -> Result<ProcedureContractCandidate, crate::SrplDiagnostic> {
+) -> Result<ProcedureContractCandidate, SrplDiagnostic> {
     compile_narrow_procedure_contract_candidate(
         INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE,
         inventory_reserve_stock_contract_metadata(catalog_version),
@@ -106,10 +104,8 @@ pub fn compile_inventory_reserve_stock_contract_candidate(
 /// materialized [`andromeda_catalog::ProcedureContract`].
 pub fn compile_inventory_reserve_stock_contract(
     catalog_version: CatalogVersion,
-) -> Result<andromeda_catalog::ProcedureContract, crate::SrplDiagnostic> {
+) -> Result<andromeda_catalog::ProcedureContract, SrplDiagnostic> {
     compile_inventory_reserve_stock_contract_candidate(catalog_version)?
         .materialize()
-        .map_err(|error| {
-            crate::SrplDiagnostic::new(crate::DiagnosticPhase::IrLowering, None, error.to_string())
-        })
+        .map_err(|error| SrplDiagnostic::new(DiagnosticPhase::IrLowering, None, error.to_string()))
 }

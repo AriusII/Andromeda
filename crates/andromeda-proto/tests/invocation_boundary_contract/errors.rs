@@ -1,10 +1,12 @@
 use andromeda_error::AndromedaErrorKind;
 use andromeda_proto::generated::{
-    self,
     contract::v1::result_stream_descriptor,
     protocol::v1::{
         InvocationResponse, RpcBatch, RpcCompletion, invocation_response, rpc_completion,
     },
+};
+use andromeda_proto_wire::{
+    validate_generated_invocation_response, validate_generated_invocation_response_sequence,
 };
 
 use super::common::{response, valid_batch, valid_completion, valid_correlation, valid_metadata};
@@ -23,7 +25,7 @@ fn generated_invocation_response_sequence_rejects_binding_identity_drift_between
         },
     ];
 
-    let error = generated::validate_generated_invocation_response_sequence(&sequence)
+    let error = validate_generated_invocation_response_sequence(&sequence)
         .expect_err("response sequence must keep ContractHash/CatalogVersion/StatsVersion stable");
 
     assert_eq!(error.kind(), AndromedaErrorKind::Contract);
@@ -73,7 +75,7 @@ fn generated_invocation_response_sequence_rejects_unbounded_frame_count() {
         }),
     ));
 
-    let error = generated::validate_generated_invocation_response_sequence(&sequence)
+    let error = validate_generated_invocation_response_sequence(&sequence)
         .expect_err("generated response sequence frame count must be bounded");
 
     assert_eq!(error.kind(), AndromedaErrorKind::Protocol);
@@ -96,5 +98,5 @@ fn generated_invocation_response_rejects_completion_correlation_drift() {
         response: Some(invocation_response::Response::Completion(completion)),
     };
 
-    assert!(generated::validate_generated_invocation_response(&response).is_err());
+    assert!(validate_generated_invocation_response(&response).is_err());
 }

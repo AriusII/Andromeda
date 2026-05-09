@@ -9,24 +9,22 @@ pub(crate) use andromeda_catalog::{
     inventory_reserve_stock_contract, inventory_reserve_stock_contract_candidate,
 };
 pub(crate) use andromeda_error::AndromedaErrorKind;
-pub(crate) use andromeda_srpl::{
-    DiagnosticPhase, SourceSpan,
-    procedure_compiler::{
-        INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, bind_executable_procedure_plan,
-        compile_inventory_reserve_stock_contract,
-        compile_inventory_reserve_stock_contract_candidate,
-        compile_narrow_procedure_contract_candidate, compile_narrow_procedure_definition,
-        compile_narrow_procedure_definition_batch, compile_narrow_procedure_signature,
-        inventory_reserve_stock_body_ir, inventory_reserve_stock_contract_metadata,
-        lower_ir_to_catalog_definition, lower_ir_to_contract_candidate, parse_procedure_signature,
-    },
-    procedure_model::{
-        Cardinality, ProcedureSignature, ResultContract, SrplBusinessOperationIr,
-        SrplBusinessOperationKindIr, SrplEmitValueIr, SrplProcedureBodyIr,
-        SrplProcedureContractMetadata, SrplProcedureIr, SrplResultStreamIr, SrplValueIr,
-    },
-    source_location::SrplSource,
+pub(crate) use andromeda_srpl::procedure_compiler::{
+    INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, bind_executable_procedure_plan,
+    compile_inventory_reserve_stock_contract, compile_inventory_reserve_stock_contract_candidate,
+    compile_narrow_procedure_contract_candidate, compile_narrow_procedure_definition,
+    compile_narrow_procedure_definition_batch, compile_narrow_procedure_signature,
+    inventory_reserve_stock_body_ir, inventory_reserve_stock_contract_metadata,
+    lower_ir_to_catalog_definition,
 };
+pub(crate) use andromeda_srpl_diagnostics::{DiagnosticPhase, SourceSpan, SrplSource};
+pub(crate) use andromeda_srpl_ir::{
+    Cardinality, ProcedureSignature, ResultContract, SrplBusinessOperationIr,
+    SrplBusinessOperationKindIr, SrplEmitValueIr, SrplProcedureBodyIr,
+    SrplProcedureContractMetadata, SrplProcedureIr, SrplResultStreamIr, SrplValueIr,
+};
+pub(crate) use andromeda_srpl_lowering::lower_ir_to_contract_candidate;
+pub(crate) use andromeda_srpl_parser::parse_procedure_signature;
 pub(crate) use andromeda_types::{
     CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId, ScalarType,
     TypeDescriptor,

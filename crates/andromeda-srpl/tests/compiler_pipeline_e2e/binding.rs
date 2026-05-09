@@ -60,7 +60,7 @@ fn executable_plan_validates_result_emit_counts_by_cardinality() {
         .expect("optional one may represent absence without an emit");
     assert!(matches!(
         optional_plan.body.operations[0],
-        andromeda_srpl::procedure_model::BoundSrplOperationPlan::Raise { .. }
+        andromeda_srpl_ir::BoundSrplOperationPlan::Raise { .. }
     ));
 
     let (optional_duplicate, optional_duplicate_snapshot) = cardinality_probe_snapshot(
@@ -200,7 +200,7 @@ fn pdf_style_inventory_source_binds_to_deterministic_executable_plan() {
     assert_eq!(plan.body.operations.len(), 4);
     assert!(matches!(
         &plan.body.operations[2],
-        andromeda_srpl::procedure_model::BoundSrplOperationPlan::UpdateTable {
+        andromeda_srpl_ir::BoundSrplOperationPlan::UpdateTable {
             affected_rows_exact: Some(1),
             ..
         }
@@ -268,7 +268,7 @@ fn binder_supports_a_distinct_read_only_procedure_shape() {
         ProcedureContractCandidate, ResultStreamContract, inventory_product_stock_table,
         inventory_protocol_layout_ref,
     };
-    use andromeda_srpl::procedure_model::{
+    use andromeda_srpl_ir::{
         SrplBusinessOperationIr, SrplEmitValueIr, SrplPredicateIr, SrplProcedureBodyIr,
         SrplResultStreamIr,
     };

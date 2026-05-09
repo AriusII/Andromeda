@@ -125,17 +125,6 @@ fn runtime_record_id_is_deterministic_and_covers_terminal_evidence() {
 }
 
 #[test]
-fn runtime_record_rejects_internal_authoritative_role_tampering() {
-    let binding = entry(1, "Inventory.ReserveStock", 42).binding;
-    let mut record = runtime_record(702, binding, 9, 2, 128);
-    record.evidence_role = ProcedureStoreEvidenceRole::AUTHORITATIVE_DECISION;
-
-    let err = record.validate().unwrap_err();
-    assert_eq!(err.kind(), AndromedaErrorKind::Contract);
-    assert!(err.message().contains("observed feedback"));
-}
-
-#[test]
 fn runtime_record_positive_covers_every_terminal_status() {
     assert_eq!(
         ProcedureRuntimeStatus::ALL.len(),

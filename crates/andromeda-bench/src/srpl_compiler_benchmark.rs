@@ -1,11 +1,10 @@
 use std::time::Instant;
 
 use andromeda_bench_harness::elapsed_micros;
+use andromeda_bench_workload::BenchmarkError;
 use andromeda_srpl::procedure_compiler::{
     INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, compile_narrow_procedure_signature_with_optimizer,
 };
-
-use crate::BenchmarkError;
 
 pub const SRPL_COMPILE_OPTIMIZE_WORKLOAD_ID: &str = "srpl-compile-optimize-smoke";
 pub const SRPL_COMPILE_OPTIMIZE_HARNESS_SOURCE: &str = "srpl-compiler-pipeline";

@@ -1,8 +1,9 @@
 use andromeda_error::AndromedaErrorKind;
 use andromeda_proto::generated::{
-    self,
+    contract::v1::result_stream_descriptor,
     protocol::v1::{invocation_response, result_completion_policy},
 };
+use andromeda_proto_wire::validate_generated_invocation_response_sequence;
 
 use super::common::{
     mutation_only_completion, mutation_only_metadata, response, valid_batch, valid_completion,
@@ -22,7 +23,7 @@ fn generated_invocation_response_sequence_accepts_metadata_batch_completion() {
         ),
     ];
 
-    generated::validate_generated_invocation_response_sequence(&sequence).unwrap();
+    validate_generated_invocation_response_sequence(&sequence).unwrap();
 }
 
 #[test]
@@ -32,7 +33,7 @@ fn generated_invocation_response_sequence_rejects_completion_before_metadata() {
         invocation_response::Response::Completion(valid_completion()),
     )];
 
-    assert!(generated::validate_generated_invocation_response_sequence(&sequence).is_err());
+    assert!(validate_generated_invocation_response_sequence(&sequence).is_err());
 }
 
 #[test]
@@ -45,7 +46,7 @@ fn generated_invocation_response_sequence_rejects_batch_before_metadata() {
         ),
     ];
 
-    assert!(generated::validate_generated_invocation_response_sequence(&sequence).is_err());
+    assert!(validate_generated_invocation_response_sequence(&sequence).is_err());
 }
 
 #[test]
@@ -58,7 +59,7 @@ fn generated_invocation_response_sequence_rejects_requires_row_batch_without_bat
         ),
     ];
 
-    assert!(generated::validate_generated_invocation_response_sequence(&sequence).is_err());
+    assert!(validate_generated_invocation_response_sequence(&sequence).is_err());
 }
 
 #[test]
@@ -74,7 +75,7 @@ fn generated_invocation_response_sequence_allows_zero_row_completion_with_metada
         ),
     ];
 
-    generated::validate_generated_invocation_response_sequence(&sequence).unwrap();
+    validate_generated_invocation_response_sequence(&sequence).unwrap();
 }
 
 #[test]
@@ -90,7 +91,7 @@ fn generated_invocation_response_sequence_allows_mutation_only_completion_withou
         ),
     ];
 
-    generated::validate_generated_invocation_response_sequence(&sequence).unwrap();
+    validate_generated_invocation_response_sequence(&sequence).unwrap();
 }
 
 #[test]
@@ -109,7 +110,7 @@ fn generated_invocation_response_sequence_rejects_mutation_only_with_row_streams
         ),
     ];
 
-    assert!(generated::validate_generated_invocation_response_sequence(&sequence).is_err());
+    assert!(validate_generated_invocation_response_sequence(&sequence).is_err());
 }
 
 #[test]
@@ -123,7 +124,7 @@ fn generated_invocation_response_sequence_rejects_response_index_gap() {
         ),
     ];
 
-    assert!(generated::validate_generated_invocation_response_sequence(&sequence).is_err());
+    assert!(validate_generated_invocation_response_sequence(&sequence).is_err());
 }
 
 #[test]
@@ -136,7 +137,7 @@ fn generated_invocation_response_sequence_rejects_undeclared_batch_result_name()
         response(1, invocation_response::Response::Batch(batch)),
     ];
 
-    let error = generated::validate_generated_invocation_response_sequence(&sequence)
+    let error = validate_generated_invocation_response_sequence(&sequence)
         .expect_err("batch result_name must be declared by metadata");
 
     assert_eq!(error.kind(), AndromedaErrorKind::Contract);
@@ -150,7 +151,7 @@ fn generated_invocation_response_sequence_rejects_undeclared_batch_result_name()
 fn generated_invocation_response_sequence_rejects_total_payload_budget_overflow() {
     let mut metadata = valid_metadata();
     metadata.result_streams[0].cardinality =
-        generated::contract::v1::result_stream_descriptor::Cardinality::ZeroOrMore as i32;
+        result_stream_descriptor::Cardinality::ZeroOrMore as i32;
     metadata.result_streams[0].row_count_exact = Some(2);
     metadata.result_streams[0].row_count_max = Some(2);
 
@@ -170,7 +171,7 @@ fn generated_invocation_response_sequence_rejects_total_payload_budget_overflow(
         response(2, invocation_response::Response::Batch(overflow_batch)),
     ];
 
-    let error = generated::validate_generated_invocation_response_sequence(&sequence)
+    let error = validate_generated_invocation_response_sequence(&sequence)
         .expect_err("total structured payload bytes must stay within the generated V0 budget");
 
     assert_eq!(error.kind(), AndromedaErrorKind::Protocol);
@@ -189,7 +190,7 @@ fn generated_invocation_response_sequence_rejects_repeated_metadata_before_termi
         response(1, invocation_response::Response::Metadata(valid_metadata())),
     ];
 
-    let error = generated::validate_generated_invocation_response_sequence(&sequence)
+    let error = validate_generated_invocation_response_sequence(&sequence)
         .expect_err("metadata must not drift or repeat inside one response sequence");
 
     assert_eq!(error.kind(), AndromedaErrorKind::Contract);
@@ -213,7 +214,7 @@ fn generated_invocation_response_sequence_rejects_metadata_after_terminal() {
         response(2, invocation_response::Response::Metadata(valid_metadata())),
     ];
 
-    let error = generated::validate_generated_invocation_response_sequence(&sequence)
+    let error = validate_generated_invocation_response_sequence(&sequence)
         .expect_err("metadata cannot appear after the terminal response");
 
     assert_eq!(error.kind(), AndromedaErrorKind::Contract);
@@ -233,7 +234,7 @@ fn generated_invocation_response_sequence_rejects_payload_after_terminal() {
         response(2, invocation_response::Response::Batch(valid_batch(0))),
     ];
 
-    assert!(generated::validate_generated_invocation_response_sequence(&sequence).is_err());
+    assert!(validate_generated_invocation_response_sequence(&sequence).is_err());
 }
 
 #[test]
@@ -247,7 +248,7 @@ fn generated_invocation_response_sequence_rejects_completion_count_drift() {
         response(2, invocation_response::Response::Completion(completion)),
     ];
 
-    assert!(generated::validate_generated_invocation_response_sequence(&sequence).is_err());
+    assert!(validate_generated_invocation_response_sequence(&sequence).is_err());
 }
 
 #[test]
@@ -261,7 +262,7 @@ fn generated_invocation_response_sequence_rejects_missing_completion_summary() {
         response(2, invocation_response::Response::Completion(completion)),
     ];
 
-    assert!(generated::validate_generated_invocation_response_sequence(&sequence).is_err());
+    assert!(validate_generated_invocation_response_sequence(&sequence).is_err());
 }
 
 #[test]
@@ -278,5 +279,5 @@ fn generated_invocation_response_sequence_rejects_completion_before_terminal_bat
         ),
     ];
 
-    assert!(generated::validate_generated_invocation_response_sequence(&sequence).is_err());
+    assert!(validate_generated_invocation_response_sequence(&sequence).is_err());
 }

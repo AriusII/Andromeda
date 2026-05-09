@@ -24,13 +24,13 @@ impl AuditEmissionPolicy {
         }
     }
 
-    pub const fn fail_closed_for_visible_decision(
-        expected_event_family: AuditEmissionEventFamily,
+    pub fn fail_closed_for_visible_decision(
+        expected_event_family: impl Into<AuditEmissionEventFamily>,
     ) -> Self {
         Self {
             fail_closed_when_sink_unavailable: true,
             require_durable_wal_evidence: true,
-            expected_event_family: Some(expected_event_family),
+            expected_event_family: Some(expected_event_family.into()),
         }
     }
 

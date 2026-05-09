@@ -1,16 +1,11 @@
 use std::collections::HashMap;
 
-use crate::advisory_boundary::{
-    json_optional_str, json_optional_u32 as advisory_json_optional_u32,
-};
-use crate::flat_json::{JsonField, required_u64};
+use crate::flat_json::{JsonField, json_optional_str, required_u64};
+
+pub(super) use crate::flat_json::json_optional_u32;
 
 pub(super) fn json_optional_string(value: Option<&str>) -> String {
     json_optional_str(value)
-}
-
-pub(super) fn json_optional_u32(value: Option<u32>) -> String {
-    advisory_json_optional_u32(value)
 }
 
 pub(super) fn required_u32_field(

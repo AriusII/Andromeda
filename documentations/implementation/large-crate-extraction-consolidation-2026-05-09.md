@@ -176,6 +176,30 @@ Observe, audit, decision trace, and bench:
 - Moved advisory flat JSON codec into `andromeda-scenario-evidence` and migrated `andromeda-regression` off its duplicate local copy.
 - Moved bounded benchmark evidence into `andromeda-bench-harness`; deleted obsolete bench CRUD and flat-json facade files.
 
+## Write Wave Implementation - 2026-05-09
+
+This section materializes the write-worker reports that feed the completed extraction wave above. The reports are append-friendly worker artifacts, not final architecture approval. They record the implementation surface, validation evidence already captured in this document, and the remaining cleanup TODOs that should drive the next extraction wave.
+
+Worker report inventory:
+
+| Worker report | Slice | Status |
+| --- | --- | --- |
+| `documentations/implementation/worker-storage-disk-page-store-2026-05-09.md` | Storage disk-manager ownership and disk-page-store tests | Implemented; storage keeps a compatibility boundary. |
+| `documentations/implementation/worker-catalog-definition-batch-2026-05-09.md` | Catalog WAL/recovery DTOs and DefinitionBatch ownership | Implemented; live catalog snapshot and mutation-plan adapters remain. |
+| `documentations/implementation/worker-transaction-downstream-tests-2026-05-09.md` | Transaction owner tests, MVCC/locking/savepoint split, downstream imports | Implemented; `andromeda-exec` still uses the approved `andromeda-tx` boundary. |
+| `documentations/implementation/worker-srpl-optimizer-2026-05-09.md` | SRPL diagnostics/parser facade reduction and optimizer diagnostic contract | Implemented; historical root reexports remain where callers still need them. |
+| `documentations/implementation/worker-proto-rpc-quic-2026-05-09.md` | Proto structured/wire contracts, RPC protocol ownership, QUIC facade cleanup | Implemented; frame/stream/typed-envelope caller migration remains. |
+| `documentations/implementation/worker-observe-audit-decision-trace-2026-05-09.md` | Durable audit DTOs, decision vocabulary, observe adapters | Implemented; event-envelope and principal-binding coupling remain. |
+| `documentations/implementation/worker-bench-evidence-cleanup-2026-05-09.md` | Benchmark workload/harness cleanup and advisory evidence movement | Implemented; benchmark compatibility imports and advisory-only gates remain. |
+| `documentations/implementation/worker-topology-gates-map-2026-05-09.md` | Topology and orphan-source gate map | Observed companion report; not modified by this consolidation pass. |
+
+Cross-worker implementation notes:
+
+- No compatibility facade should be treated as final. Each remaining facade needs direct caller migration evidence and a deletion TODO.
+- The current successful validation set is recorded in "Write Wave Validation"; these reports do not add fresh validation beyond that evidence.
+- The next write wave should prefer caller migration and facade deletion before moving deeper C5 behavior.
+- Documentation references that still point to read-only worker analysis should be updated after the worker reports settle and no concurrent worker is writing the same sections.
+
 ## Write Wave Validation
 
 Successful gates after the write wave:
@@ -658,6 +682,14 @@ If a proposed move creates a Cargo cycle, do not add a broad integration crate. 
 - `documentations/architecture/dependency-edge-matrix-2026-05-08.md`
 - `documentations/implementation/target-crate-gap-ledger-2026-05-08.md`
 - `documentations/implementation/roadmap-execution-plan-2026-05-08.md`
+- `documentations/implementation/worker-storage-disk-page-store-2026-05-09.md`
+- `documentations/implementation/worker-catalog-definition-batch-2026-05-09.md`
+- `documentations/implementation/worker-transaction-downstream-tests-2026-05-09.md`
+- `documentations/implementation/worker-srpl-optimizer-2026-05-09.md`
+- `documentations/implementation/worker-proto-rpc-quic-2026-05-09.md`
+- `documentations/implementation/worker-observe-audit-decision-trace-2026-05-09.md`
+- `documentations/implementation/worker-bench-evidence-cleanup-2026-05-09.md`
+- `documentations/implementation/worker-topology-gates-map-2026-05-09.md`
 - Worker analysis: storage read-only extraction map, 2026-05-09.
 - Worker analysis: catalog/procedure read-only extraction map, 2026-05-09.
 - Worker analysis: transaction read-only extraction map, 2026-05-09.

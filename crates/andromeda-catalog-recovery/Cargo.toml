@@ -11,3 +11,4 @@ andromeda-definition-batch.workspace = true
 andromeda-error.workspace = true
 andromeda-procedure-contract.workspace = true
 andromeda-types.workspace = true
+andromeda-wal.workspace = true

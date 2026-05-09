@@ -7,5 +7,7 @@ publish = false
 
 [dependencies]
 andromeda-core.workspace = true
+andromeda-proto.workspace = true
 andromeda-proto-wire.workspace = true
 andromeda-rpc-protocol.workspace = true
+andromeda-security-contract.workspace = true

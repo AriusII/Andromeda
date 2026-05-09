@@ -1,9 +1,9 @@
-mod emitter;
-mod journal;
-mod mapping;
-mod recovery;
+//! Compatibility facade for invocation completion ownership.
 
-pub use emitter::*;
-pub use journal::*;
-pub use mapping::*;
-pub use recovery::*;
+pub use andromeda_execution_trace::{
+    CompletionAuditEvidence, CompletionAuditPolicy, CompletionEmission, CompletionJournalRecord,
+    CompletionMappingService, CompletionRecoveryAmbiguity, CompletionRecoveryExpectation,
+    CompletionRecoveryRecord, CompletionRecoveryReport, CompletionRecoveryStatus,
+    InvocationCompletionEmitter, InvocationCompletionJournal,
+    reconcile_completion_recovery_from_wal,
+};

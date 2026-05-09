@@ -1,4 +1,4 @@
-use crate::flat_json::escape_json_string;
+use crate::flat_json::{escape_json_string, json_optional_str};
 
 use super::evidence::BenchmarkScenarioEvidence;
 
@@ -41,10 +41,4 @@ pub(super) fn scenario_evidence_to_json(evidence: &BenchmarkScenarioEvidence) ->
         evidence.can_select_plan_alone(),
         escape_json_string(evidence.optimizer_consumption_role())
     )
-}
-
-fn json_optional_str(value: Option<&str>) -> String {
-    value
-        .map(|value| format!(r#""{}""#, escape_json_string(value)))
-        .unwrap_or_else(|| "null".to_string())
 }

@@ -19,27 +19,6 @@ mod procedure_gateway;
 mod reconnect;
 mod zero_rtt;
 
-/// Compatibility facade for runtime-free RPC frame contracts.
-///
-/// Lot 5.2 moved the canonical frame protocol primitives to
-/// `andromeda-rpc-protocol`. `andromeda_quic::frame::*` remains available during
-/// migration so existing callers can move imports without behavior changes.
-#[deprecated(
-    note = "Use `andromeda_rpc_protocol::frame` directly; this is a migration compatibility module"
-)]
-pub mod frame {
-    pub use andromeda_rpc_protocol::frame::{
-        AUTH_FRAME_CODE, CONTRACT_REQUEST_FRAME_CODE, CONTRACT_RESPONSE_FRAME_CODE,
-        ERROR_FRAME_CODE, FRAME_CODEC_CRC_OFFSET, FRAME_CODEC_HEADER_LEN, FRAME_CODEC_VERSION,
-        FRAME_HEADER_CRC_UNCHECKED, FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP, FrameBytes, FrameCodec,
-        FrameCodecEndian, FrameFamily, FrameHeader, FrameType, HELLO_FRAME_CODE,
-        MAX_FRAME_PAYLOAD_LENGTH, RESERVED_FRAME_FLAGS_MASK, RPC_BATCH_FRAME_CODE,
-        RPC_COMPLETION_FRAME_CODE, RPC_EXECUTE_REQUEST_FRAME_CODE, RPC_METADATA_FRAME_CODE,
-        ResultStreamMetadataPolicy, ResultStreamSequence, StreamRole,
-        TELEMETRY_SOFT_SIGNAL_FRAME_CODE, validate_frame_sequence, validate_result_stream_sequence,
-        validate_result_stream_sequence_with_metadata_policy, validate_single_frame_on_stream,
-    };
-}
 mod stream_concurrency;
 mod transport;
 
@@ -61,14 +40,6 @@ pub use andromeda_rpc_protocol::frame::{
     validate_result_stream_sequence_with_metadata_policy, validate_single_frame_on_stream,
 };
 
-/// Compatibility facade for runtime-free stream role contracts.
-#[deprecated(
-    note = "Use `andromeda_rpc_protocol::stream` directly; this is a migration compatibility module"
-)]
-pub mod stream {
-    pub use andromeda_rpc_protocol::stream::{FrameFamily, StreamRole};
-}
-
 mod session;
 
 pub use session::{
@@ -80,19 +51,6 @@ pub use andromeda_rpc::{
     DispatchPolicy, FrameDispatch, TransportSurface, dispatch_frame, expected_stream_role,
     validate_transport_surface,
 };
-
-#[deprecated(
-    note = "Use `andromeda_rpc_codec::typed_envelope` directly; this is a migration compatibility module"
-)]
-pub mod typed_envelope {
-    pub use andromeda_rpc_codec::typed_envelope::{
-        DEFAULT_MAX_TYPED_RESULT_STREAM_ENVELOPE_BYTES, DEFAULT_MAX_TYPED_RESULT_STREAM_FRAMES,
-        TypedResultStreamBounds, TypedResultStreamContext, decode_typed_frame_envelope,
-        validate_typed_result_stream_sequence,
-        validate_typed_result_stream_sequence_with_context_and_bounds,
-        validate_typed_result_stream_sequence_with_metadata_policy,
-    };
-}
 
 pub use andromeda_rpc_codec::{
     DEFAULT_MAX_TYPED_RESULT_STREAM_ENVELOPE_BYTES, DEFAULT_MAX_TYPED_RESULT_STREAM_FRAMES,

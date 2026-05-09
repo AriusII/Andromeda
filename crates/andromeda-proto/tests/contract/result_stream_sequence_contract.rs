@@ -3,6 +3,7 @@ use andromeda_procedure_contract::{
     ResultCardinality, ResultStreamDescriptor, RowCountRequirement,
 };
 use andromeda_proto::generated;
+use andromeda_proto_wire::validate_generated_invocation_response_sequence;
 use andromeda_types::ContractHash;
 use generated::{
     contract::v1::{
@@ -248,7 +249,7 @@ fn generated_result_stream_sequence_accepts_metadata_batch_completion() {
         ),
     ];
 
-    generated::validate_generated_invocation_response_sequence(&sequence).unwrap();
+    validate_generated_invocation_response_sequence(&sequence).unwrap();
 }
 
 #[test]
@@ -272,7 +273,7 @@ fn generated_result_stream_sequence_accepts_bounded_many_batches_with_terminal_c
         ),
     ];
 
-    generated::validate_generated_invocation_response_sequence(&sequence).unwrap();
+    validate_generated_invocation_response_sequence(&sequence).unwrap();
 }
 
 #[test]
@@ -292,7 +293,7 @@ fn generated_result_stream_sequence_rejects_rows_beyond_metadata_max() {
         ),
     ];
 
-    let error = generated::validate_generated_invocation_response_sequence(&sequence)
+    let error = validate_generated_invocation_response_sequence(&sequence)
         .expect_err("bounded ResultStream metadata must cap emitted rows");
 
     assert_eq!(error.kind(), AndromedaErrorKind::Contract);
@@ -319,7 +320,7 @@ fn generated_result_stream_sequence_rejects_batch_after_terminal_batch() {
         ),
     ];
 
-    let error = generated::validate_generated_invocation_response_sequence(&sequence)
+    let error = validate_generated_invocation_response_sequence(&sequence)
         .expect_err("terminal batch must close payload emission for that result stream");
 
     assert_eq!(error.kind(), AndromedaErrorKind::Contract);
@@ -342,7 +343,7 @@ fn generated_result_stream_sequence_accepts_cancelled_completion_as_terminal_evi
         ),
     ];
 
-    generated::validate_generated_invocation_response_sequence(&sequence).unwrap();
+    validate_generated_invocation_response_sequence(&sequence).unwrap();
 }
 
 #[test]
@@ -355,7 +356,7 @@ fn generated_result_stream_sequence_rejects_payload_after_backpressure_error() {
         response(1, invocation_response::Response::Metadata(valid_metadata())),
     ];
 
-    let error = generated::validate_generated_invocation_response_sequence(&sequence)
+    let error = validate_generated_invocation_response_sequence(&sequence)
         .expect_err("backpressure error is terminal ResultStream evidence");
 
     assert_eq!(error.kind(), AndromedaErrorKind::Contract);
@@ -375,7 +376,7 @@ fn generated_result_stream_sequence_rejects_batch_before_metadata() {
         ),
     ];
 
-    assert!(generated::validate_generated_invocation_response_sequence(&sequence).is_err());
+    assert!(validate_generated_invocation_response_sequence(&sequence).is_err());
 }
 
 #[test]

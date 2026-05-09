@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
 use crate::{BenchmarkEvidence, BenchmarkScenarioTarget, find_workload};
-use andromeda_scenario_evidence::flat_json::{JsonField, optional_string};
+use andromeda_scenario_evidence::flat_json::{
+    JsonField, optional_string, optional_u32, optional_u64,
+};
 
-use super::advisory_json::{optional_u32, optional_u64};
 use super::errors::BenchmarkBaselineComparisonError;
 use super::mismatch_rejection::{compare_optional_str, compare_optional_u32, compare_optional_u64};
 

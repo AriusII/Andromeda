@@ -3,27 +3,27 @@
 #![forbid(unsafe_code)]
 
 use andromeda_contract::QualifiedName;
-use andromeda_plan_cache::PlanClass;
-use andromeda_srpl::{
-    Cardinality, SrplAssignmentIr, SrplBusinessOperationIr, SrplBusinessOperationKindIr,
-    SrplEmitValueIr, SrplPredicateIr, SrplProcedureBodyIr, SrplProcedureIr, SrplValueIr,
-    optimizer::{
-        constant_fold::{fold_assignments, fold_emit_values, fold_value},
-        cost_model::{
-            ActualCost, COST_ACCURACY_ALERT_THRESHOLD, COST_ACCURACY_WARN_THRESHOLD, CostEstimate,
-            cost_accuracy, estimate_without_stats,
-        },
-        function_fold::{FunctionDeterminism, classify_builtin},
-        liveness::ColumnLiveness,
-        normalize::normalize,
-        phase::OptimizerPhase,
-        plan_choice::{RejectionReason, choose},
-        plan_kind::OptimizerPlanKind,
-        predicate_fold::{SimplifiedPredicates, simplify_predicates},
-        predicate_pushdown::apply as pushdown_apply,
-        projection_pushdown::apply as proj_apply,
+use andromeda_optimizer::srpl::{
+    constant_fold::{fold_assignments, fold_emit_values, fold_value},
+    cost_model::{
+        ActualCost, COST_ACCURACY_ALERT_THRESHOLD, COST_ACCURACY_WARN_THRESHOLD, CostEstimate,
+        cost_accuracy, estimate_without_stats,
     },
-    procedure_model::{ArithOp, ConstantLiteral, MAX_EXPR_DEPTH, MAX_SRPL_BODY_OPERATIONS},
+    function_fold::{FunctionDeterminism, classify_builtin},
+    liveness::ColumnLiveness,
+    normalize::normalize,
+    phase::OptimizerPhase,
+    plan_choice::{RejectionReason, choose},
+    plan_kind::OptimizerPlanKind,
+    predicate_fold::{SimplifiedPredicates, simplify_predicates},
+    predicate_pushdown::apply as pushdown_apply,
+    projection_pushdown::apply as proj_apply,
+};
+use andromeda_plan_cache::PlanClass;
+use andromeda_srpl_ir::{
+    ArithOp, Cardinality, ConstantLiteral, MAX_EXPR_DEPTH, MAX_SRPL_BODY_OPERATIONS,
+    SrplAssignmentIr, SrplBusinessOperationIr, SrplBusinessOperationKindIr, SrplEmitValueIr,
+    SrplPredicateIr, SrplProcedureBodyIr, SrplProcedureIr, SrplValueIr,
 };
 use andromeda_types::ScalarType;
 

@@ -71,7 +71,7 @@ impl SegmentPlan {
                         "hot store scan extent range must have start < end",
                     ));
                 }
-            }
+            },
             Self::ColdStoreScan {
                 cold_segment_id,
                 page_count,
@@ -82,7 +82,7 @@ impl SegmentPlan {
                 if *page_count == 0 {
                     return Err(backup_error("cold store scan page count must not be zero"));
                 }
-            }
+            },
         }
         Ok(())
     }
@@ -168,10 +168,10 @@ impl<L: BackupLsn, T: BackupTraceId> BackupPhysicalPlan<L, T> {
                             "backup physical plan must schedule HotStore before ColdStore",
                         ));
                     }
-                }
+                },
                 SegmentPlan::ColdStoreScan { .. } => {
                     seen_cold = true;
-                }
+                },
             }
         }
 

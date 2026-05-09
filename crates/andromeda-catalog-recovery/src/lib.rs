@@ -26,6 +26,7 @@ classification and envelope contracts compile-safe here.
 mod durable_payload;
 mod mutation;
 mod publication;
+mod publication_replay;
 mod replay_report;
 mod wal_record;
 
@@ -38,8 +39,8 @@ pub use mutation::{
     CATALOG_CHANGE_COMMIT_WAL_KIND_TAG, CatalogDurableMutationPayload, CatalogLifecycleTarget,
     CatalogMutationBoundary, CatalogMutationDelta, CatalogMutationOperation, CatalogMutationRecord,
     CatalogMutationRecordKind, CatalogPublicationSemantics, CatalogRecoveryAnomalyKind,
-    CatalogSkippedBatchReason, CatalogWalPayloadDecodeError, CatalogWalPayloadDecodeErrorKind,
-    DefinitionBatchDependencyGraphHash,
+    CatalogRecoveryApplyTarget, CatalogSkippedBatchReason, CatalogWalPayloadDecodeError,
+    CatalogWalPayloadDecodeErrorKind, DefinitionBatchDependencyGraphHash,
 };
 pub use publication::{
     CatalogPlanInvalidatedContract, CatalogPlanInvalidationReport, CatalogPublicationAudience,
@@ -50,12 +51,17 @@ pub use publication::{
     CatalogPublicationReport, CatalogPublicationSubscriptionReplayEvidence,
     CatalogPublicationSubscriptionReplayRecord, CatalogPublicationSubscriptionReplayRecordKind,
     CatalogPublicationSubscriptionReplaySummary, CatalogPublishedContract, CatalogPublishedObject,
-    CatalogRecoveryReplayExpectation, CatalogSubscriberIdentity, CatalogSubscriberKind,
-    CatalogSubscriptionAcknowledgement, CatalogSubscriptionReplayKey,
-    CatalogVisibleChangeAuditEvidence, catalog_visible_change_audit_evidence_for_publication,
-    replay_publication_subscription_changes, validate_catalog_publication_receipt,
-    validate_subscription_acknowledgement_for_publication,
+    CatalogRecoveryReplayExpectation, CatalogSubscriberId, CatalogSubscriberIdentity,
+    CatalogSubscriberKind, CatalogSubscriberRegistration, CatalogSubscriptionAcknowledgement,
+    CatalogSubscriptionReplayKey, CatalogVisibleChangeAuditEvidence,
+    catalog_visible_change_audit_evidence_for_publication, replay_publication_subscription_changes,
+    validate_catalog_publication_receipt, validate_subscription_acknowledgement_for_publication,
     validate_visible_change_audit_for_publication,
+};
+pub use publication_replay::{
+    CatalogWalDurablePublication, CatalogWalObservedRecord, CatalogWalPublicationRecord,
+    CatalogWalPublicationRecordMetadata, CatalogWalPublicationReplayReport,
+    replay_catalog_publications_from_observed_wal,
 };
 pub use replay_report::{
     CatalogRecoveredBatch, CatalogRecoveryAnomaly, CatalogRecoveryReport, CatalogSkippedBatch,

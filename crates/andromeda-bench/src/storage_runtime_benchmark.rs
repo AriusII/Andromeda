@@ -7,8 +7,7 @@ use andromeda_storage_page::{
 use andromeda_wal::Lsn;
 
 use andromeda_bench_harness::{BenchmarkTempDir as BenchTempDir, elapsed_micros};
-
-use crate::BenchmarkError;
+use andromeda_bench_workload::BenchmarkError;
 
 pub const STORAGE_PAGE_STORE_WORKLOAD_ID: &str = "storage-page-store-smoke";
 pub const STORAGE_PAGE_STORE_HARNESS_SOURCE: &str = "storage-page-owner-store";

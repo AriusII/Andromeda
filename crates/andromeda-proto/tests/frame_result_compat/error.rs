@@ -80,7 +80,7 @@ fn test_malformed_protobuf_typed_error() {
                     error.message().contains("protobuf"),
                     "error message should mention protobuf for case: {name}"
                 );
-            }
+            },
             Ok(_) => panic!("decoding {name} should have failed but succeeded"),
         }
     }

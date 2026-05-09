@@ -3,13 +3,14 @@
 //! Property-based checks for generated `FrameEnvelope` decoding and validation.
 
 use andromeda_proto::{
-    PayloadKind, ProtocolVersion, decode_generated_message, encode_generated_message,
+    decode_generated_message, encode_generated_message,
     generated::protocol::v1::{
         FrameEnvelope as ProtoFrameEnvelope, PayloadKind as ProtoPayloadKind,
         ProtocolVersion as ProtoProtocolVersion,
     },
     project_generated_frame_envelope,
 };
+use andromeda_proto_wire::{PayloadKind, ProtocolVersion};
 use andromeda_types::ContractHash;
 use proptest::prelude::*;
 use std::panic;
@@ -64,7 +65,7 @@ fn assert_decision_invariants(decision: &EnvelopeDecision) {
         EnvelopeDecision::Accept(facts) => facts.assert_valid(),
         EnvelopeDecision::Reject(reason) => {
             assert!(!reason.trim().is_empty(), "reject decisions need a reason");
-        }
+        },
     }
 }
 

@@ -1,10 +1,8 @@
 use prost::Message;
 
-use andromeda_proto::{
-    RpcCompletionStatus,
-    generated::andromeda::protocol::v1::{RpcCompletion, rpc_completion::Status},
-    validate_generated_rpc_completion,
-};
+use andromeda_procedure_contract::RpcCompletionStatus;
+use andromeda_proto::generated::andromeda::protocol::v1::{RpcCompletion, rpc_completion::Status};
+use andromeda_proto_wire::validate_generated_rpc_completion;
 
 fn valid_generated_completion() -> RpcCompletion {
     RpcCompletion {

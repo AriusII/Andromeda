@@ -68,10 +68,6 @@ pub(super) fn protocol_error(message: impl Into<String>) -> AndromedaError {
     AndromedaError::new(AndromedaErrorKind::Protocol, message)
 }
 
-pub(super) fn contract_error(message: impl Into<String>) -> AndromedaError {
-    AndromedaError::new(AndromedaErrorKind::Contract, message)
-}
-
 pub(super) fn security_error(message: impl Into<String>) -> AndromedaError {
     AndromedaError::new(AndromedaErrorKind::Security, message)
 }

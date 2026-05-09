@@ -1,6 +1,6 @@
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use crate::error::{BackupResult, backup_error};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Immutability guard for backup artifacts.
 ///
@@ -35,7 +35,7 @@ impl BackupArtifactImmutabilityGuard {
     pub fn validate_write_allowed(&self) -> BackupResult<()> {
         if self.is_immutable() {
             return Err(backup_error(
-                "backup artifact write rejected: artifact is immutable after creation"
+                "backup artifact write rejected: artifact is immutable after creation",
             ));
         }
         Ok(())
@@ -60,7 +60,7 @@ impl ImmutableBackupArtifact {
     pub fn validate(&self) -> BackupResult<()> {
         if !self.guard.is_immutable() {
             return Err(backup_error(
-                "immutable backup artifact failed validation: guard reports mutable"
+                "immutable backup artifact failed validation: guard reports mutable",
             ));
         }
         Ok(())
@@ -113,13 +113,13 @@ mod tests {
     fn immutable_artifact_gate_proves_immutability() {
         let guard = BackupArtifactImmutabilityGuard::new_mutable();
         assert!(!guard.is_immutable());
-        
+
         let artifact = ImmutableBackupArtifact::create(guard.clone()).unwrap();
         assert!(guard.is_immutable());
-        
+
         // Prove immutability through the artifact
         artifact.validate().unwrap();
-        
+
         // Original guard also reflects immutability
         assert!(guard.is_immutable());
     }

@@ -1,5 +1,7 @@
 use std::{error::Error, fmt};
 
+use andromeda_core::AndromedaResult;
+
 pub type BackupResult<T> = Result<T, BackupValidationError>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,4 +31,12 @@ impl Error for BackupValidationError {}
 
 pub(crate) fn backup_error(message: impl Into<String>) -> BackupValidationError {
     BackupValidationError::new(message)
+}
+
+pub(crate) fn map_core_validation<T>(result: AndromedaResult<T>) -> BackupResult<T> {
+    result.map_err(|error| backup_error(error.message()))
+}
+
+pub(crate) fn map_backup_validation<T>(result: BackupResult<T>) -> BackupResult<T> {
+    result
 }

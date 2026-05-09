@@ -1,5 +1,9 @@
 use super::policy::AuditEmissionPolicy;
 use super::redaction::{audit_text_contains_sensitive_marker, redact_audit_reason};
+use crate::{
+    DurableAuditEventFamily, DurableAuditReplayBehavior, DurableAuditRetentionBoundary,
+    DurableAuditSinkReport,
+};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_observability::TraceId;
 
@@ -19,43 +23,47 @@ impl AuditSinkAvailability {
         }
     }
 
-    pub fn durable(report: AuditSinkDurabilityReport) -> AndromedaResult<Self> {
+    pub fn durable(report: impl Into<AuditSinkDurabilityReport>) -> AndromedaResult<Self> {
         Ok(Self::from_durability(
-            AuditSinkDurabilityEvidence::from_report(report)?,
+            AuditSinkDurabilityEvidence::from_report(report.into())?,
         ))
     }
 
     pub fn durable_for_policy(
         policy: AuditEmissionPolicy,
-        report: AuditSinkDurabilityReport,
+        report: impl Into<AuditSinkDurabilityReport>,
     ) -> AndromedaResult<Self> {
         match policy.expected_event_family() {
-            Some(expected_family) => Self::durable_for_visible_decision(expected_family, report),
-            None => Self::durable(report),
+            Some(expected_family) => {
+                Self::durable_for_visible_decision(expected_family, report.into())
+            },
+            None => Self::durable(report.into()),
         }
     }
 
     pub fn durable_for_visible_decision(
-        expected_family: AuditEmissionEventFamily,
-        report: AuditSinkDurabilityReport,
+        expected_family: impl Into<AuditEmissionEventFamily>,
+        report: impl Into<AuditSinkDurabilityReport>,
     ) -> AndromedaResult<Self> {
-        let durability = AuditSinkDurabilityEvidence::from_report(report)?;
-        durability.validate_visible_decision(expected_family)?;
+        let durability = AuditSinkDurabilityEvidence::from_report(report.into())?;
+        durability.validate_visible_decision(expected_family.into())?;
         Ok(Self::from_durability(durability))
     }
 
     pub fn durable_for_security_decision(
-        report: AuditSinkDurabilityReport,
+        report: impl Into<AuditSinkDurabilityReport>,
     ) -> AndromedaResult<Self> {
         Self::durable_for_visible_decision(AuditEmissionEventFamily::SecurityDecision, report)
     }
 
-    pub fn durable_for_admin_decision(report: AuditSinkDurabilityReport) -> AndromedaResult<Self> {
+    pub fn durable_for_admin_decision(
+        report: impl Into<AuditSinkDurabilityReport>,
+    ) -> AndromedaResult<Self> {
         Self::durable_for_visible_decision(AuditEmissionEventFamily::AdminDecision, report)
     }
 
     pub fn durable_for_catalog_decision(
-        report: AuditSinkDurabilityReport,
+        report: impl Into<AuditSinkDurabilityReport>,
     ) -> AndromedaResult<Self> {
         Self::durable_for_visible_decision(AuditEmissionEventFamily::CatalogDecision, report)
     }
@@ -118,6 +126,35 @@ impl AuditEmissionEventFamily {
     }
 }
 
+impl From<DurableAuditEventFamily> for AuditEmissionEventFamily {
+    fn from(family: DurableAuditEventFamily) -> Self {
+        match family {
+            DurableAuditEventFamily::SecurityDecision => Self::SecurityDecision,
+            DurableAuditEventFamily::AdminDecision => Self::AdminDecision,
+            DurableAuditEventFamily::AdmissionDecision => Self::AdmissionDecision,
+            DurableAuditEventFamily::CatalogDecision => Self::CatalogDecision,
+            DurableAuditEventFamily::HadrDecision => Self::HadrDecision,
+            DurableAuditEventFamily::BackupDecision => Self::BackupDecision,
+            DurableAuditEventFamily::RestoreDecision => Self::RestoreDecision,
+            DurableAuditEventFamily::ForensicDecision => Self::ForensicDecision,
+            DurableAuditEventFamily::RecoveryDecision => Self::RecoveryDecision,
+            DurableAuditEventFamily::GenericAudit => Self::GenericAudit,
+        }
+    }
+}
+
+impl PartialEq<DurableAuditEventFamily> for AuditEmissionEventFamily {
+    fn eq(&self, other: &DurableAuditEventFamily) -> bool {
+        *self == Self::from(*other)
+    }
+}
+
+impl PartialEq<AuditEmissionEventFamily> for DurableAuditEventFamily {
+    fn eq(&self, other: &AuditEmissionEventFamily) -> bool {
+        AuditEmissionEventFamily::from(*self) == *other
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AuditEmissionReplayBehavior {
     ForensicOnly,
@@ -131,12 +168,33 @@ impl AuditEmissionReplayBehavior {
     }
 }
 
+impl From<DurableAuditReplayBehavior> for AuditEmissionReplayBehavior {
+    fn from(replay: DurableAuditReplayBehavior) -> Self {
+        match replay {
+            DurableAuditReplayBehavior::ForensicOnly => Self::ForensicOnly,
+            DurableAuditReplayBehavior::RebuildDecisionIndex => Self::RebuildDecisionIndex,
+            DurableAuditReplayBehavior::CorruptionBoundary => Self::CorruptionBoundary,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AuditEmissionRetentionBoundary {
     WalSegment,
     CatalogVersion,
     SecurityPolicy,
     ForensicHold,
+}
+
+impl From<DurableAuditRetentionBoundary> for AuditEmissionRetentionBoundary {
+    fn from(retention: DurableAuditRetentionBoundary) -> Self {
+        match retention {
+            DurableAuditRetentionBoundary::WalSegment => Self::WalSegment,
+            DurableAuditRetentionBoundary::CatalogVersion => Self::CatalogVersion,
+            DurableAuditRetentionBoundary::SecurityPolicy => Self::SecurityPolicy,
+            DurableAuditRetentionBoundary::ForensicHold => Self::ForensicHold,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -149,6 +207,21 @@ pub struct AuditSinkDurabilityReport {
     pub checksum: u64,
     pub replay_behavior: AuditEmissionReplayBehavior,
     pub retention: AuditEmissionRetentionBoundary,
+}
+
+impl From<DurableAuditSinkReport> for AuditSinkDurabilityReport {
+    fn from(report: DurableAuditSinkReport) -> Self {
+        Self {
+            trace_id: report.identity.trace_id,
+            family: report.identity.family.into(),
+            sequence_number: report.identity.sequence_number,
+            record_lsn: report.evidence.record_lsn,
+            durable_lsn: report.evidence.durable_lsn,
+            checksum: report.evidence.checksum,
+            replay_behavior: report.replay_behavior.into(),
+            retention: report.retention.into(),
+        }
+    }
 }
 
 impl AuditSinkDurabilityReport {
@@ -218,8 +291,9 @@ impl AuditSinkDurabilityEvidence {
 
     pub fn validate_visible_decision(
         self,
-        expected_family: AuditEmissionEventFamily,
+        expected_family: impl Into<AuditEmissionEventFamily>,
     ) -> AndromedaResult<()> {
+        let expected_family = expected_family.into();
         if !expected_family.requires_wal_before_visible_decision() {
             return Err(audit_emission_error(format!(
                 "durable audit WAL evidence expected family is not a visible decision family: {:?}",

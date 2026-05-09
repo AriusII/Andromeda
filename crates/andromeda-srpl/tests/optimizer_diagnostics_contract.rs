@@ -1,16 +1,16 @@
 #![forbid(unsafe_code)]
 
 use andromeda_contract::QualifiedName;
-use andromeda_srpl::{
-    Cardinality, DiagnosticPhase, SrplAssignmentIr, SrplBusinessOperationIr,
+use andromeda_optimizer::srpl::{
+    OptimizationLevel, OptimizerDecisionKind, OptimizerPipelineConfig,
+    optimize_procedure_ir_with_config, phase::OptimizerPhase,
+};
+use andromeda_srpl::procedure_compiler::compile_narrow_procedure_signature_with_optimizer;
+use andromeda_srpl_diagnostics::DiagnosticPhase;
+use andromeda_srpl_ir::{
+    ArithOp, Cardinality, ConstantLiteral, SrplAssignmentIr, SrplBusinessOperationIr,
     SrplBusinessOperationKindIr, SrplEmitValueIr, SrplPredicateIr, SrplProcedureBodyIr,
     SrplProcedureIr, SrplResultStreamIr, SrplValueIr,
-    optimizer::{
-        OptimizationLevel, OptimizerDecisionKind, OptimizerPipelineConfig,
-        optimize_procedure_ir_with_config, phase::OptimizerPhase,
-    },
-    procedure_compiler::compile_narrow_procedure_signature_with_optimizer,
-    procedure_model::{ArithOp, ConstantLiteral},
 };
 use andromeda_types::{ColumnDescriptor, ScalarType, TypeDescriptor};
 

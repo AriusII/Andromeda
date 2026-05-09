@@ -12,6 +12,7 @@ mod promotion_decision_helpers;
 mod promotion_quorum_evidence;
 mod quorum;
 pub mod quorum_runtime;
+pub mod shipping_contract;
 pub mod shipping_runtime;
 mod types;
 
@@ -31,6 +32,10 @@ pub use quorum_runtime::{
     FencingDecision, FencingEvent, FencingPolicy, PromotionRank, QuorumConsensus, QuorumMembership,
     ReplicaHealthState, ReplicaMember, ReplicationMode, decide_fencing, rank_promotion_candidates,
     select_promotion_candidate,
+};
+pub use shipping_contract::{
+    WalNodeIdentity, WalNodeRole, WalReplicaExpectation, WalReplicaSafeLsnTracker,
+    WalShipmentAccepted, WalShipmentBatch, WalShipmentRange, WalShipmentRejection, WalShippingAck,
 };
 pub use shipping_runtime::{
     LsnCorrelationState, ShippingBackpressureRequest, ShippingCondition, ShippingSegmentDescriptor,

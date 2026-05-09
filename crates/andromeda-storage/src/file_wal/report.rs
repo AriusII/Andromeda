@@ -1,16 +1,16 @@
 use andromeda_core::AndromedaResult;
+use andromeda_recovery::{
+    FileWalRecoveryBoundaryKind, FileWalRecoveryIgnoredTransaction,
+    FileWalRecoveryIgnoredTransactionReason, FileWalRecoveryReplayRecord, FileWalRecoveryReportV0,
+    file_wal_recovery_boundary_kind,
+};
 use andromeda_wal::scan_file_wal;
 use std::path::Path;
 
 use crate::{
     ConceptualRedoPlan, DatabaseManifest, DurableTransactionResume, DurableTransactionState,
-    RecoveryPlan, RedoRecordDecision, RedoRecordPlan, StartupMode, WalRecord, WalScanStop,
-    WalScanStopReason, summarize_transactions_from_records,
-};
-
-use super::{
-    FileWalRecoveryBoundaryKind, FileWalRecoveryIgnoredTransaction,
-    FileWalRecoveryIgnoredTransactionReason, FileWalRecoveryReplayRecord, FileWalRecoveryReportV0,
+    RecoveryPlan, RedoRecordDecision, RedoRecordPlan, StartupMode, WalRecord,
+    summarize_transactions_from_records,
 };
 
 pub fn report_file_wal_recovery_v0(
@@ -20,7 +20,7 @@ pub fn report_file_wal_recovery_v0(
 ) -> AndromedaResult<FileWalRecoveryReportV0> {
     manifest.validate()?;
     let disk_scan = scan_file_wal(path)?;
-    let boundary_kind = recovery_boundary_kind(disk_scan.scan.stopped);
+    let boundary_kind = file_wal_recovery_boundary_kind(disk_scan.scan.stopped);
     let forensic_required = matches!(
         boundary_kind,
         FileWalRecoveryBoundaryKind::ForensicChainBreak
@@ -57,18 +57,6 @@ pub fn report_file_wal_recovery_v0(
         ignored_record_count,
         forensic_required,
     })
-}
-
-fn recovery_boundary_kind(stop: Option<WalScanStop>) -> FileWalRecoveryBoundaryKind {
-    match stop.map(|stop| stop.reason) {
-        Some(
-            WalScanStopReason::LsnGap
-            | WalScanStopReason::DuplicateOrReorderedLsn
-            | WalScanStopReason::PreviousLsnMismatch,
-        ) => FileWalRecoveryBoundaryKind::ForensicChainBreak,
-        Some(_) => FileWalRecoveryBoundaryKind::RecoverableTail,
-        None => FileWalRecoveryBoundaryKind::Clean,
-    }
 }
 
 fn recovery_report_replay_records(plan: &ConceptualRedoPlan) -> Vec<FileWalRecoveryReplayRecord> {

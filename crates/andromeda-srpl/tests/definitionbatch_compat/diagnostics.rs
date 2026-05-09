@@ -1,15 +1,16 @@
 use andromeda_catalog::{CatalogObjectRef, ObjectKind, ProcedureContractRef, QualifiedName};
 use andromeda_error::{AndromedaError, AndromedaErrorKind};
-use andromeda_srpl::{
-    Cardinality, DiagnosticPhase, SrplAssignmentIr, SrplEmitValueIr, SrplPredicateIr, SrplValueIr,
-    definition_batch_bridge::{
-        SrplDefinitionBatchProcedureSource, SrplProcedureDefinition,
-        dry_run_srpl_definition_batch_sources,
-    },
-    execution_adapter::{
-        SrplAssertRequest, SrplBoundValue, SrplEmitRequest, SrplOperationContext, SrplReadRequest,
-        SrplRowBound, SrplUpdateRequest,
-    },
+use andromeda_srpl::definition_batch_bridge::{
+    SrplDefinitionBatchProcedureSource, SrplProcedureDefinition,
+    dry_run_srpl_definition_batch_sources,
+};
+use andromeda_srpl_diagnostics::{DiagnosticPhase, SrplDiagnostic};
+use andromeda_srpl_execution_adapter::{
+    SrplAssertRequest, SrplBoundValue, SrplEmitRequest, SrplOperationContext, SrplReadRequest,
+    SrplRowBound, SrplUpdateRequest,
+};
+use andromeda_srpl_ir::{
+    Cardinality, SrplAssignmentIr, SrplEmitValueIr, SrplPredicateIr, SrplValueIr,
 };
 use andromeda_types::{CatalogObjectId, CatalogVersion, ContractHash, ProcedureId};
 
@@ -406,11 +407,7 @@ fn assert_sql_like_rejection(error: &AndromedaError) {
     );
 }
 
-fn assert_srpl_source_span(
-    source: &str,
-    diagnostic: &andromeda_srpl::SrplDiagnostic,
-    expected_span: &str,
-) {
+fn assert_srpl_source_span(source: &str, diagnostic: &SrplDiagnostic, expected_span: &str) {
     let span = diagnostic
         .location
         .expect("diagnostic must retain a source span");

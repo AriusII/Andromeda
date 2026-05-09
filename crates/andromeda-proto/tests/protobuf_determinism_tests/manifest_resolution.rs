@@ -1,7 +1,7 @@
 use prost::Message;
 
-use andromeda_proto::{
-    generated::andromeda::contract::v1::CatalogProcedureManifestResolutionResponse,
+use andromeda_proto::generated::andromeda::contract::v1::CatalogProcedureManifestResolutionResponse;
+use andromeda_proto_wire::{
     validate_catalog_procedure_manifest_resolution_request,
     validate_catalog_procedure_manifest_resolution_response,
 };

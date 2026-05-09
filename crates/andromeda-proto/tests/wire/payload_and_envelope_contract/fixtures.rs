@@ -1,4 +1,4 @@
-use andromeda_proto::{FrameEnvelope, PayloadKind, ProtocolVersion};
+use andromeda_proto_wire::{FrameEnvelope, PayloadKind, ProtocolVersion};
 use andromeda_types::{CatalogVersion, ContractHash, RequestId, SessionId, TransactionId};
 
 pub(crate) fn hash(byte: u8) -> ContractHash {

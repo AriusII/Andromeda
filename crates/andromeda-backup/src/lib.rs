@@ -15,15 +15,23 @@ C5 invariants:
 - RAM, temporary storage, GPU output, and benchmark output are advisory only; they are not truth.
 "#]
 
+pub mod artifact_store;
 pub mod artifacts;
 pub mod checkpoint_manager;
 pub mod error;
+pub mod execution_plan;
 pub mod immutability;
 pub mod physical_plan;
 pub mod plan;
 pub mod primitives;
+pub mod scheduler;
 pub mod types;
+pub mod wal_archive_integration;
 
+pub use artifact_store::{
+    BackupArtifactManifestRecord, BackupArtifactWriteReport, BackupWalArchiveEvidence,
+    FileBackedBackupArtifactStore,
+};
 pub use artifacts::{
     BackupArtifactCompatibilityEvidence, BackupArtifactDigest, BackupAuditTraceFields,
     BackupColdSnapshotArtifact, BackupCompatibility, BackupIncompleteTransactionBoundary,
@@ -34,6 +42,10 @@ pub use checkpoint_manager::{
     BackupCheckpoint, BackupCheckpointManager, BackupCheckpointMetadata, BackupRecoveryInfo,
 };
 pub use error::{BackupResult, BackupValidationError};
+pub use execution_plan::{
+    BackupExecutionPlan, BackupResourceLimits, BackupSourceTier, BackupStorageTier, ExtentCopyTask,
+    WalSegmentCopyTask,
+};
 pub use immutability::{BackupArtifactImmutabilityGuard, ImmutableBackupArtifact};
 pub use physical_plan::{BackupPhase, BackupPhysicalPlan, PhysicalPageScan, SegmentPlan};
 pub use plan::{BackupManifest, validate_wal_segment_chain};
@@ -41,9 +53,14 @@ pub use primitives::{
     BackupCatalogVersion, BackupLsn, BackupTraceId, CatalogVersion, Lsn, TraceId,
     WAL_FORMAT_VERSION,
 };
+pub use scheduler::{BackupIOSchedule, BackupIOScheduler, BackupIOTask};
 pub use types::{
     BACKUP_PHYSICAL_PLAN_VERSION_V0, BACKUP_SUPPORTED_STORAGE_FORMAT_VERSION_V0, BackupId,
     ColdSnapshotBoundary, WalArchiveRange,
+};
+pub use wal_archive_integration::{
+    BackupManifestFinalizedEvent, WalArchiveIntegration, WalArchiveRejection,
+    WalArchiveValidationResult,
 };
 
 #[cfg(test)]

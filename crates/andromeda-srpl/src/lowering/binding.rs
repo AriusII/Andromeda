@@ -5,9 +5,9 @@ use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_srpl_binder::{
     SrplCatalogStructuredObjectBinding, SrplCatalogTableBinding, SrplExecutableCatalogView,
 };
+use andromeda_srpl_diagnostics::{DiagnosticPhase, SrplDiagnostic};
+use andromeda_srpl_ir::{ExecutableProcedurePlan, SrplProcedureBodyIr, SrplProcedureIr};
 use andromeda_types::CatalogVersion;
-
-use crate::{ExecutableProcedurePlan, SrplDiagnostic, SrplProcedureBodyIr, SrplProcedureIr};
 
 pub fn bind_executable_procedure_plan(
     ir: &SrplProcedureIr,
@@ -20,9 +20,8 @@ pub fn bind_executable_procedure_plan(
 }
 
 pub fn inventory_reserve_stock_body_ir() -> Result<SrplProcedureBodyIr, SrplDiagnostic> {
-    andromeda_srpl_binder::inventory_reserve_stock_body_ir().map_err(|error| {
-        SrplDiagnostic::new(crate::DiagnosticPhase::IrLowering, None, error.to_string())
-    })
+    andromeda_srpl_binder::inventory_reserve_stock_body_ir()
+        .map_err(|error| SrplDiagnostic::new(DiagnosticPhase::IrLowering, None, error.to_string()))
 }
 
 struct CatalogSnapshotBindingView<'a> {

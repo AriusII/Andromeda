@@ -1,19 +1,10 @@
-mod binary;
-mod datum;
-mod encoder;
-mod error;
-mod format;
-mod product_stock;
-mod schema;
+//! Compatibility facade for heap row encoding.
+//!
+//! Row schemas, datum encoding, and the `Inventory.ProductStock` row shape now
+//! live in `andromeda-storage-heap`.
 
-#[cfg(test)]
-mod tests;
-
-pub use datum::Datum;
-pub use encoder::RowEncoder;
-pub use product_stock::{
-    INVENTORY_PRODUCT_STOCK_TABLE_NAME, PRODUCT_STOCK_PRODUCT_ID_COLUMN,
+pub use andromeda_storage_heap::{
+    ColumnDef, Datum, INVENTORY_PRODUCT_STOCK_TABLE_NAME, PRODUCT_STOCK_PRODUCT_ID_COLUMN,
     PRODUCT_STOCK_QUANTITY_ON_HAND_COLUMN, PRODUCT_STOCK_ROW_ENCODED_LEN, ProductStockRow,
-    product_stock_row_encoder, product_stock_row_schema,
+    RowEncoder, RowSchema, ScalarType, product_stock_row_encoder, product_stock_row_schema,
 };
-pub use schema::{ColumnDef, RowSchema, ScalarType};

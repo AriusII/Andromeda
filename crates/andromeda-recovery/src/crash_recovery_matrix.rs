@@ -58,7 +58,7 @@ mod crash_recovery_matrix_tests {
         // Test the relationship between checkpoint and floor
         // The checkpoint LSN is the end of the last fully-complete checkpoint
         // The floor LSN is where recovery must start from
-        
+
         // When checkpoint = 500 and floor = 1000, we need to replay from 1000
         let manifest = ManifestDurabilityBoundary {
             database_id: 1,
@@ -73,7 +73,7 @@ mod crash_recovery_matrix_tests {
         // This is actually valid in Andromeda: floor can be after checkpoint
         // if there's a checkpoint in progress
         assert!(manifest.validate().is_ok());
-        
+
         // Recovery floor is the required WAL start
         assert_eq!(manifest.recovery_floor_lsn().get(), 1000);
     }
@@ -109,11 +109,8 @@ mod crash_recovery_matrix_tests {
         let wal_checkpoint = Lsn::new(200);
         let wal_durable = Lsn::new(300);
 
-        let result = validate_manifest_atomic_switch(
-            manifest_checkpoint,
-            wal_durable,
-            wal_checkpoint,
-        );
+        let result =
+            validate_manifest_atomic_switch(manifest_checkpoint, wal_durable, wal_checkpoint);
         assert!(result.is_ok());
     }
 
@@ -126,11 +123,8 @@ mod crash_recovery_matrix_tests {
         let wal_checkpoint = Lsn::new(200);
         let wal_durable = Lsn::new(300);
 
-        let result = validate_manifest_atomic_switch(
-            manifest_checkpoint,
-            wal_durable,
-            wal_checkpoint,
-        );
+        let result =
+            validate_manifest_atomic_switch(manifest_checkpoint, wal_durable, wal_checkpoint);
         assert!(result.is_err());
     }
 
@@ -143,11 +137,8 @@ mod crash_recovery_matrix_tests {
         let wal_checkpoint = Lsn::new(300);
         let wal_durable = Lsn::new(200);
 
-        let result = validate_manifest_atomic_switch(
-            manifest_checkpoint,
-            wal_durable,
-            wal_checkpoint,
-        );
+        let result =
+            validate_manifest_atomic_switch(manifest_checkpoint, wal_durable, wal_checkpoint);
         assert!(result.is_err());
     }
 
@@ -156,10 +147,7 @@ mod crash_recovery_matrix_tests {
         use andromeda_storage_page::validate_wal_durability_before_page_flush;
 
         // Valid: page_lsn <= durable_lsn (WAL durable before page flush)
-        let result = validate_wal_durability_before_page_flush(
-            Lsn::new(100),
-            Lsn::new(200),
-        );
+        let result = validate_wal_durability_before_page_flush(Lsn::new(100), Lsn::new(200));
         assert!(result.is_ok());
     }
 
@@ -168,10 +156,7 @@ mod crash_recovery_matrix_tests {
         use andromeda_storage_page::validate_wal_durability_before_page_flush;
 
         // Invalid: page_lsn > durable_lsn (page would outrun WAL)
-        let result = validate_wal_durability_before_page_flush(
-            Lsn::new(300),
-            Lsn::new(200),
-        );
+        let result = validate_wal_durability_before_page_flush(Lsn::new(300), Lsn::new(200));
         assert!(result.is_err());
     }
 
@@ -180,10 +165,7 @@ mod crash_recovery_matrix_tests {
         use andromeda_storage_page::validate_wal_durability_before_page_flush;
 
         // Zero page LSN means uninitialized page (allowed even if WAL durable is zero)
-        let result = validate_wal_durability_before_page_flush(
-            Lsn::new(0),
-            Lsn::new(0),
-        );
+        let result = validate_wal_durability_before_page_flush(Lsn::new(0), Lsn::new(0));
         assert!(result.is_ok());
     }
 

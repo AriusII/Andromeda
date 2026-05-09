@@ -1,9 +1,10 @@
 use andromeda_error::AndromedaErrorKind;
-use andromeda_proto::generated::{
-    self,
-    protocol::v1::{
-        InvocationCorrelation, InvocationResponse, invocation_response, rpc_execute_request,
-    },
+use andromeda_proto::generated::protocol::v1::{
+    InvocationCorrelation, InvocationResponse, invocation_response, rpc_execute_request,
+};
+use andromeda_proto_wire::{
+    validate_generated_invocation_response, validate_generated_invocation_response_sequence,
+    validate_generated_rpc_execute_request,
 };
 
 use super::common::{
@@ -24,7 +25,7 @@ fn generated_rpc_execute_request_rejects_unbounded_argument_count() {
         })
         .collect();
 
-    let error = generated::validate_generated_rpc_execute_request(&request)
+    let error = validate_generated_rpc_execute_request(&request)
         .expect_err("execute request argument count must be bounded");
 
     assert_eq!(error.kind(), AndromedaErrorKind::Contract);
@@ -43,7 +44,7 @@ fn generated_rpc_execute_request_rejects_unbounded_binary_argument_value() {
         value: vec![0xAB; GENERATED_RPC_ARGUMENT_VALUE_BUDGET_BYTES + 1],
     }];
 
-    let error = generated::validate_generated_rpc_execute_request(&request)
+    let error = validate_generated_rpc_execute_request(&request)
         .expect_err("execute argument binary payload must stay within bounded projection limits");
 
     assert_eq!(error.kind(), AndromedaErrorKind::Contract);
@@ -62,19 +63,19 @@ fn generated_invocation_response_requires_typed_payload_and_correlation() {
         response_index: Some(0),
         response: Some(invocation_response::Response::Completion(valid_completion())),
     };
-    generated::validate_generated_invocation_response(&valid).unwrap();
+    validate_generated_invocation_response(&valid).unwrap();
 
     let missing_payload = InvocationResponse {
         response: None,
         ..valid.clone()
     };
-    assert!(generated::validate_generated_invocation_response(&missing_payload).is_err());
+    assert!(validate_generated_invocation_response(&missing_payload).is_err());
 
     let missing_correlation = InvocationResponse {
         correlation: None,
         ..valid.clone()
     };
-    assert!(generated::validate_generated_invocation_response(&missing_correlation).is_err());
+    assert!(validate_generated_invocation_response(&missing_correlation).is_err());
 
     let zero_request_id = InvocationResponse {
         correlation: Some(InvocationCorrelation {
@@ -83,7 +84,7 @@ fn generated_invocation_response_requires_typed_payload_and_correlation() {
         }),
         ..valid
     };
-    assert!(generated::validate_generated_invocation_response(&zero_request_id).is_err());
+    assert!(validate_generated_invocation_response(&zero_request_id).is_err());
 }
 
 #[test]
@@ -97,7 +98,7 @@ fn generated_invocation_response_sequence_requires_metadata_before_structured_pa
         ),
     ];
 
-    let error = generated::validate_generated_invocation_response_sequence(&sequence)
+    let error = validate_generated_invocation_response_sequence(&sequence)
         .expect_err("structured row payload must not be accepted before metadata");
 
     assert_eq!(error.kind(), AndromedaErrorKind::Contract);
@@ -121,7 +122,7 @@ fn generated_invocation_response_sequence_rejects_batch_row_count_shape_drift() 
         ),
     ];
 
-    let error = generated::validate_generated_invocation_response_sequence(&sequence)
+    let error = validate_generated_invocation_response_sequence(&sequence)
         .expect_err("batch row-count metadata must match the declared result stream shape");
 
     assert_eq!(error.kind(), AndromedaErrorKind::Contract);

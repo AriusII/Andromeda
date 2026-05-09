@@ -13,7 +13,9 @@
 //! | `FileWal`, `FileWalHeader`, file scan types  | `andromeda_wal::file_wal`                   |
 //! | Storage startup recovery report              | `crate::file_wal`                           |
 //! | WAL GC: candidates, archive verification    | `andromeda_wal::write_ahead_log::gc`        |
-//! | WAL Compaction: fragmentation, scheduling   | [`compaction`]                              |
+//! | WAL Compaction: fragmentation, scheduling   | `andromeda_wal::write_ahead_log::compaction` |
+//! | WAL shipping contract types                 | `andromeda_hadr::shipping_contract`        |
+//! | Heap row redo payload envelope              | `andromeda_storage_heap`                   |
 //! | Segment reclaimability policy               | `andromeda_wal::write_ahead_log::segment_reclaimability` |
 //! | CommitLogEntry and CommitLog persistence    | `andromeda_wal::write_ahead_log::commit_log_entry` |
 //!

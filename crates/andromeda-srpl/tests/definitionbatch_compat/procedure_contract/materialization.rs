@@ -1,5 +1,6 @@
 use andromeda_catalog::{CatalogDefinition, ResultStreamCardinality};
 use andromeda_srpl::definition_batch_bridge::SrplProcedureDefinition;
+use andromeda_srpl::procedure_compiler::compile_narrow_procedure_definition;
 use andromeda_types::{CatalogObjectId, CatalogVersion, ProcedureId};
 
 use crate::support::{bound_definition, signature_only_source, test_metadata};
@@ -66,7 +67,7 @@ fn a6_staged_catalog_definition_with_metadata_matches_compiler_pipeline() {
     let staged = def
         .to_catalog_procedure_def_with_metadata(metadata.clone())
         .expect("staged materialization should succeed");
-    let direct = andromeda_srpl::compile_narrow_procedure_definition(&source, metadata)
+    let direct = compile_narrow_procedure_definition(&source, metadata)
         .expect("direct pipeline materialization should succeed");
 
     assert_eq!(staged, direct);

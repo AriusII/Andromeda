@@ -1,12 +1,9 @@
 use andromeda_catalog::{CatalogDefinition, DefinitionBatch, DefinitionBatchId};
-use andromeda_srpl::{
-    SrplProcedureContractMetadata,
-    definition_batch_bridge::{
-        SrplDefinitionBatchDryRunRequest, SrplDefinitionBatchProcedureSource,
-        SrplProcedureDefinition,
-    },
-    inventory_reserve_stock_contract_metadata,
+use andromeda_srpl::definition_batch_bridge::{
+    SrplDefinitionBatchDryRunRequest, SrplDefinitionBatchProcedureSource, SrplProcedureDefinition,
 };
+use andromeda_srpl::procedure_compiler::inventory_reserve_stock_contract_metadata;
+use andromeda_srpl_ir::SrplProcedureContractMetadata;
 use andromeda_types::{CatalogObjectId, CatalogVersion, DatabaseId, NamespaceId, ProcedureId};
 
 pub(crate) const TEST_DB_ID: DatabaseId = DatabaseId::new(1);

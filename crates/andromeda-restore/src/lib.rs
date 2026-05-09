@@ -1,7 +1,16 @@
 #![forbid(unsafe_code)]
 
+pub mod restore_orchestration;
+
+pub use restore_orchestration::{
+    RecoveryStage, RestoreArtifactPreflight, RestoreAuditTrace, RestoreBackupManifest,
+    RestoreCompletion, RestoreOrchestration, RestoreValidationPolicy, WalSegmentToReplay,
+    compute_restore_checksum, plan_replay_segments, validate_restore_artifact_preflight,
+    validate_restore_prerequisites,
+};
+
 use andromeda_wal::Lsn as WalLsn;
-use std::{error::Error, fmt, path::PathBuf};
+use std::{error::Error, fmt};
 
 pub type RestoreResult<T> = Result<T, RestoreValidationError>;
 
@@ -120,14 +129,14 @@ impl PitrTargetRejection {
             Self::TargetLsnZero => "PITR target LSN must not be zero",
             Self::TargetBeforeSnapshot => {
                 "PITR target LSN is below the snapshot base checkpoint LSN"
-            }
+            },
             Self::TargetBeforeRequiredWalStart => {
                 "PITR target LSN is below the snapshot required WAL start LSN"
-            }
+            },
             Self::TargetBeyondWalRange => "PITR target LSN is above the WAL archive end LSN",
             Self::WalCoverageMissing => {
                 "WAL archive does not anchor into the snapshot required WAL start LSN"
-            }
+            },
         }
     }
 
@@ -258,13 +267,13 @@ where
         Ok(accepted) => {
             let audit = PitrAuditRecord::from_manifest_and_target(manifest, target, true, None);
             (Ok(accepted), audit)
-        }
+        },
         Err(err) => {
             let rejection = classify_rejection(err.message());
             let audit =
                 PitrAuditRecord::from_manifest_and_target(manifest, target, false, Some(rejection));
             (Err(err), audit)
-        }
+        },
     }
 }
 
@@ -284,27 +293,6 @@ fn classify_rejection(message: &str) -> PitrTargetRejection {
     } else {
         PitrTargetRejection::BackupManifestInvalid
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RestoreValidationPolicy {
-    Full,
-    Minimal,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RestoreArtifactPreflight<Id = u64, L = Lsn, Digest = (), WalArchiveEvidence = ()> {
-    pub backup_id: Id,
-    pub artifact_root: PathBuf,
-    pub manifest_format_version: u16,
-    pub validation_policy: RestoreValidationPolicy,
-    pub pitr_target_lsn: L,
-    pub source_checkpoint_lsn: L,
-    pub manifest_digest: Digest,
-    pub snapshot_digest: Digest,
-    pub wal_archive_evidence: WalArchiveEvidence,
-    pub restore_evidence_checksum: u64,
-    pub replay_segment_count: usize,
 }
 
 #[cfg(test)]

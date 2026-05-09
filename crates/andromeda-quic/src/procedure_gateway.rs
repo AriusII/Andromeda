@@ -28,11 +28,11 @@ mod admission;
 mod errors;
 mod route;
 mod state;
-mod validation;
 
 pub use admission::ProcedureAuthorizedRouteBinding;
+pub use andromeda_rpc_codec::ProcedureRouteExecuteRequest;
 pub use errors::ProcedureRouteAdmissionError;
-pub use route::{ProcedureRouteBinding, ProcedureRouteExecuteRequest};
+pub use route::ProcedureRouteBinding;
 
 use andromeda_core::CertificateIdentity;
 use andromeda_core::{AndromedaResult, InvocationId, PrincipalRegistry};

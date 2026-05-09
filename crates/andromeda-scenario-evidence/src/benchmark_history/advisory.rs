@@ -1,14 +1,12 @@
 use std::collections::HashMap;
 
-use crate::flat_json::JsonField;
+use crate::flat_json::{
+    JsonField, optional_bool_with_default, optional_string_with_default, optional_u32_with_default,
+    optional_u64_with_default,
+};
 use crate::{
     BENCHMARK_EVIDENCE_AUTHORITATIVE, BENCHMARK_EVIDENCE_CAN_SELECT_PLAN_ALONE,
     BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY, MAX_DURATION_MS, MAX_SAMPLES, MAX_TEMP_BYTES,
-};
-
-use crate::advisory_boundary::{
-    optional_bool_with_default, optional_string_with_default, optional_u32_with_default,
-    optional_u64_with_default,
 };
 
 /// Persisted advisory boundary metadata for history and regression records.

@@ -1,10 +1,8 @@
-use andromeda_proto::{
-    FrameEnvelope, PayloadKind, ProtocolVersion,
-    generated::{
-        decode_generated_message, encode_generated_message,
-        protocol::v1::{FrameEnvelope as ProtoFrameEnvelope, PayloadKind as ProtoPayloadKind},
-    },
+use andromeda_proto::generated::{
+    decode_generated_message, encode_generated_message,
+    protocol::v1::{FrameEnvelope as ProtoFrameEnvelope, PayloadKind as ProtoPayloadKind},
 };
+use andromeda_proto_wire::{FrameEnvelope, PayloadKind, ProtocolVersion};
 use andromeda_types::{CatalogVersion, ContractHash, RequestId, SessionId, TransactionId};
 
 use crate::proto_wire_fixtures::{

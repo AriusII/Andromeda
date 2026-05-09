@@ -1,7 +1,8 @@
 use andromeda_error::AndromedaErrorKind;
-use andromeda_proto::{
+use andromeda_proto::generated;
+use andromeda_proto_wire::validate_generated_error_envelope;
+use andromeda_rpc_protocol::{
     BackpressureMetadata, ErrorEnvelope, ErrorFamily, RetryDisposition, TransactionEffect,
-    generated, validate_generated_error_envelope,
 };
 use andromeda_types::{RequestId, SessionId};
 use generated::protocol::v1::{ErrorEnvelope as ProtoErrorEnvelope, error_envelope};

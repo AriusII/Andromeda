@@ -8,4 +8,6 @@ publish = false
 [dependencies]
 andromeda-core = { workspace = true }
 andromeda-observe = { workspace = true }
+andromeda-segment = { workspace = true }
 andromeda-wal = { workspace = true }
+sha2 = "0.11.0"

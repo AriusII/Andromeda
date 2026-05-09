@@ -109,6 +109,44 @@ impl KeyV1FormatGate {
     }
 }
 
+/// KeyV1 validation wrapper that stores storage-version parts beside the gate.
+#[derive(Debug, Clone)]
+pub struct KeyV1FormatValidator {
+    storage_version_major: u32,
+    storage_version_minor: u32,
+    gate: KeyV1FormatGate,
+}
+
+impl KeyV1FormatValidator {
+    pub const fn new(
+        storage_version_major: u32,
+        storage_version_minor: u32,
+        key_format: BTreeKeyFormatIdentity,
+    ) -> Self {
+        Self {
+            storage_version_major,
+            storage_version_minor,
+            gate: KeyV1FormatGate::new(storage_version_major, storage_version_minor, key_format),
+        }
+    }
+
+    pub fn validate_operation(&self, operation: BTreeOperationType) -> AndromedaResult<()> {
+        self.gate.validate_operation(operation)
+    }
+
+    pub const fn is_format_compatible(&self) -> bool {
+        self.gate.is_format_compatible()
+    }
+
+    pub const fn format_identity(&self) -> BTreeKeyFormatIdentity {
+        self.gate.format_identity()
+    }
+
+    pub const fn storage_version_parts(&self) -> (u32, u32) {
+        (self.storage_version_major, self.storage_version_minor)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::KeyV1FormatGate;
@@ -142,5 +180,14 @@ mod tests {
             .validate_operation(BTreeOperationType::Lookup)
             .expect_err("unsupported codec version must be rejected");
         assert!(error.message().contains("codec version 99 not supported"));
+    }
+
+    #[test]
+    fn validator_preserves_storage_version_parts() {
+        let validator = super::KeyV1FormatValidator::new(1, 0, BTreeKeyFormatIdentity::V1_0);
+
+        assert_eq!(validator.storage_version_parts(), (1, 0));
+        assert_eq!(validator.format_identity(), BTreeKeyFormatIdentity::V1_0);
+        assert!(validator.is_format_compatible());
     }
 }

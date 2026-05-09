@@ -895,7 +895,15 @@ pub(crate) fn assert_temporary_exceptions_have_exit_criteria(
     context: &str,
     exceptions: &[TemporaryDependencyException],
 ) {
+    let mut seen_edges = BTreeSet::new();
+
     for exception in exceptions {
+        assert!(
+            seen_edges.insert((exception.source, exception.dependency)),
+            "{context} exception {} -> {} must be listed only once",
+            exception.source,
+            exception.dependency
+        );
         assert!(
             exception.exit_criteria.starts_with("Exit criteria: ")
                 && exception.exit_criteria.len() > "Exit criteria: ".len(),
@@ -904,6 +912,15 @@ pub(crate) fn assert_temporary_exceptions_have_exit_criteria(
             exception.dependency
         );
     }
+}
+pub(crate) fn assert_temporary_exception_edges_match(
+    context: &str,
+    actual: BTreeSet<(String, String)>,
+    exceptions: &[TemporaryDependencyException],
+    message: &str,
+) {
+    assert_temporary_exceptions_have_exit_criteria(context, exceptions);
+    assert_eq!(actual, temporary_exception_edges(exceptions), "{message}");
 }
 pub(crate) fn dev_dependency_back_edges(
     manifests: &BTreeMap<String, CrateManifest>,

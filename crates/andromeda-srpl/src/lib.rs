@@ -1,57 +1,20 @@
 #![forbid(unsafe_code)]
 
-//! SRPL compiler facade.
+//! SRPL compiler orchestration.
 //!
-//! The crate keeps its historical root-level re-exports for compatibility,
-//! while also exposing professionalized module boundaries:
-//! - [`procedure_compiler`] owns source-to-AST binding and IR lowering entry points.
-//! - [`procedure_model`] is a compatibility module over AST, cardinality, and IR owners.
-//! - [`SrplDiagnostic`] and [`source_location`] re-export diagnostics-owner source spans.
+//! This crate keeps source-to-contract orchestration around the SRPL owner
+//! crates. Parser, binder, diagnostics, lowering, optimizer, execution-adapter,
+//! interpreter, AST, cardinality, and IR types are imported from their owner
+//! crates directly.
 
-pub mod binder;
 pub mod definition_batch_bridge;
-pub mod execution_adapter;
-pub mod interpreter;
 mod lowering;
-pub mod optimizer;
 pub mod procedure_compiler;
-pub mod procedure_model {
-    pub use andromeda_srpl_ast::{
-        BusinessOperationAst, BusinessOperationKindAst, FieldAst, ProcedureAst, ProcedureBodyAst,
-        ResultStreamAst, Spanned,
-    };
-    pub use andromeda_srpl_cardinality::Cardinality;
-    pub use andromeda_srpl_ir::{
-        ArithOp, BoundSrplBodyPlan, BoundSrplOperationPlan, ConstantLiteral,
-        ExecutableProcedurePlan, MAX_EXPR_DEPTH, MAX_SRPL_BODY_OPERATIONS, ProcedureSignature,
-        ResultContract, SrplAssignmentIr, SrplBusinessOperationIr, SrplBusinessOperationKindIr,
-        SrplCatalogBindingEvidence, SrplEmitValueIr, SrplObjectBindingEvidence, SrplPredicateIr,
-        SrplProcedureBodyIr, SrplProcedureContractMetadata, SrplProcedureIr, SrplResultStreamIr,
-        SrplValueIr,
-    };
-}
-pub mod procedure_resolver {
-    pub use andromeda_procedure_runtime::procedure_resolver::{
-        ProcedureResolveError, ProcedureResolveRequest, ProcedureResolveResponse,
-        ProcedureResolveTarget, ProcedureResolver, SrplProcedureManifest,
-    };
-}
 
-pub mod source_location {
-    pub use andromeda_srpl_diagnostics::{SourceSpan, SrplSource};
-}
-
-pub use andromeda_srpl_ast::{
-    BusinessOperationAst, BusinessOperationKindAst, FieldAst, ProcedureAst, ProcedureBodyAst,
-    ResultStreamAst, Spanned,
+pub use procedure_compiler::{
+    INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, compile_inventory_reserve_stock_contract,
+    compile_inventory_reserve_stock_contract_candidate,
+    compile_narrow_procedure_contract_candidate, compile_narrow_procedure_definition,
+    compile_narrow_procedure_definition_batch, compile_narrow_procedure_signature,
+    compile_narrow_procedure_signature_with_optimizer, inventory_reserve_stock_contract_metadata,
 };
-pub use andromeda_srpl_cardinality::Cardinality;
-pub use andromeda_srpl_diagnostics::{
-    DiagnosticPhase, ForbiddenConstruct, ForbiddenConstructHit, SourceSpan, SrplDiagnostic,
-    SrplSource,
-};
-pub use andromeda_srpl_lexer::{Token, TokenKind, lex};
-pub use andromeda_srpl_parser::parse_procedure_signature;
-pub use definition_batch_bridge::*;
-pub use procedure_compiler::*;
-pub use procedure_model::*;
