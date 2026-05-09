@@ -40,6 +40,7 @@ dependencies = [
  "andromeda-error",
  "andromeda-observability",
  "andromeda-security-contract",
+ "andromeda-types",
 ]
 
 [[package]]
@@ -212,6 +213,7 @@ name = "andromeda-decision-trace"
 version = "0.1.0"
 dependencies = [
  "andromeda-contract",
+ "andromeda-observability",
  "andromeda-types",
 ]
 
@@ -235,7 +237,11 @@ version = "0.1.0"
 name = "andromeda-disk-page-store"
 version = "0.1.0"
 dependencies = [
+ "andromeda-error",
+ "andromeda-segment",
+ "andromeda-storage-page",
  "andromeda-wal",
+ "tempfile",
 ]
 
 [[package]]
@@ -285,7 +291,7 @@ dependencies = [
  "andromeda-observe",
  "andromeda-result-stream",
  "andromeda-storage",
- "andromeda-tx",
+ "andromeda-transaction",
 ]
 
 [[package]]
@@ -354,6 +360,7 @@ version = "0.1.0"
 dependencies = [
  "andromeda-core",
  "andromeda-transaction-log",
+ "futures",
  "tokio",
 ]
 
@@ -685,6 +692,7 @@ dependencies = [
  "andromeda-contract",
  "andromeda-error",
  "andromeda-srpl-ast",
+ "andromeda-srpl-diagnostics",
  "andromeda-srpl-ir",
  "andromeda-types",
 ]
@@ -867,6 +875,7 @@ dependencies = [
  "andromeda-transaction-log",
  "async-trait",
  "dashmap",
+ "futures",
  "tokio",
 ]
 
@@ -884,14 +893,9 @@ dependencies = [
  "andromeda-core",
  "andromeda-locking",
  "andromeda-mvcc",
- "andromeda-observe",
  "andromeda-savepoint",
  "andromeda-transaction",
  "andromeda-transaction-log",
- "async-trait",
- "dashmap",
- "futures",
- "tokio",
 ]
 
 [[package]]

@@ -11,8 +11,8 @@
 //! 6. **IR Canonicalization**: Same AST → same IR (deterministic lowering)
 
 use andromeda_srpl::procedure_compiler::compile_narrow_procedure_signature;
-use andromeda_srpl_parser::parse_procedure_signature;
 use andromeda_srpl_lexer::lex;
+use andromeda_srpl_parser::parse_procedure_signature;
 
 // ============================================================================
 // GATE 1: Deterministic Parsing
@@ -59,12 +59,9 @@ fn gate_deterministic_parsing_same_tokens_produce_same_ast() {
         returns Reservation one (Reserved bool);";
 
     // Parse the same source three times
-    let ast_run1 = parse_procedure_signature(source)
-        .expect("parser must succeed for valid source");
-    let ast_run2 = parse_procedure_signature(source)
-        .expect("parser must succeed for valid source");
-    let ast_run3 = parse_procedure_signature(source)
-        .expect("parser must succeed for valid source");
+    let ast_run1 = parse_procedure_signature(source).expect("parser must succeed for valid source");
+    let ast_run2 = parse_procedure_signature(source).expect("parser must succeed for valid source");
+    let ast_run3 = parse_procedure_signature(source).expect("parser must succeed for valid source");
 
     // Verify all three runs produce identical AST (via structural equality)
     assert_eq!(
@@ -94,10 +91,17 @@ fn gate_deterministic_hashing_lexer_tokens_match_on_identical_sources() {
     let tokens2 = lex(source2).expect("lexer must succeed");
 
     // Both token sequences must be identical
-    assert_eq!(tokens1, tokens2, "identical sources must produce identical token sequences");
+    assert_eq!(
+        tokens1, tokens2,
+        "identical sources must produce identical token sequences"
+    );
 
     // Verify they have the same length
-    assert_eq!(tokens1.len(), tokens2.len(), "token count must be identical");
+    assert_eq!(
+        tokens1.len(),
+        tokens2.len(),
+        "token count must be identical"
+    );
 
     // Verify each token matches
     for (i, (t1, t2)) in tokens1.iter().zip(tokens2.iter()).enumerate() {
@@ -117,8 +121,7 @@ fn gate_type_completeness_procedure_parameters_are_typed() {
     let source = "procedure Inventory.Reserve accepts (ProductId i64, Quantity i64) \
         returns R one (C bool);";
 
-    let ast = parse_procedure_signature(source)
-        .expect("parser must succeed");
+    let ast = parse_procedure_signature(source).expect("parser must succeed");
 
     // Each parameter must have an explicit data_type
     assert!(!ast.parameters.is_empty(), "procedure must have parameters");
@@ -127,13 +130,14 @@ fn gate_type_completeness_procedure_parameters_are_typed() {
         let scalar_type = param.data_type.value.scalar.clone();
         // The data_type must be a valid scalar type (not undefined/empty)
         assert!(
-            matches!(scalar_type, 
-                andromeda_types::ScalarType::I64 | 
-                andromeda_types::ScalarType::Bool |
-                andromeda_types::ScalarType::Text(_) |
-                andromeda_types::ScalarType::I32 |
-                andromeda_types::ScalarType::I16 |
-                andromeda_types::ScalarType::I8
+            matches!(
+                scalar_type,
+                andromeda_types::ScalarType::I64
+                    | andromeda_types::ScalarType::Bool
+                    | andromeda_types::ScalarType::Text(_)
+                    | andromeda_types::ScalarType::I32
+                    | andromeda_types::ScalarType::I16
+                    | andromeda_types::ScalarType::I8
             ),
             "parameter {} must have explicit scalar type",
             param.name.value
@@ -148,8 +152,7 @@ fn gate_type_completeness_result_streams_have_column_types() {
     let source = "procedure Inventory.Lookup accepts () \
         returns Result one (Found bool, ProductName i64);";
 
-    let ast = parse_procedure_signature(source)
-        .expect("parser must succeed");
+    let ast = parse_procedure_signature(source).expect("parser must succeed");
 
     for result in &ast.results {
         // Each result stream must have columns with explicit types
@@ -162,13 +165,14 @@ fn gate_type_completeness_result_streams_have_column_types() {
         for column in &result.columns {
             let scalar_type = column.data_type.value.scalar.clone();
             assert!(
-                matches!(scalar_type, 
-                    andromeda_types::ScalarType::I64 | 
-                    andromeda_types::ScalarType::Bool |
-                    andromeda_types::ScalarType::Text(_) |
-                    andromeda_types::ScalarType::I32 |
-                    andromeda_types::ScalarType::I16 |
-                    andromeda_types::ScalarType::I8
+                matches!(
+                    scalar_type,
+                    andromeda_types::ScalarType::I64
+                        | andromeda_types::ScalarType::Bool
+                        | andromeda_types::ScalarType::Text(_)
+                        | andromeda_types::ScalarType::I32
+                        | andromeda_types::ScalarType::I16
+                        | andromeda_types::ScalarType::I8
                 ),
                 "column {} must have explicit scalar type",
                 column.name.value
@@ -259,9 +263,15 @@ fn gate_no_dynamic_sql_forbids_nullable_surface() {
 fn gate_cardinality_all_result_streams_are_explicitly_typed() {
     let sources = vec![
         ("procedure X accepts () returns R one (C bool);", "one"),
-        ("procedure X accepts () returns R optional_one (C bool);", "optional_one"),
+        (
+            "procedure X accepts () returns R optional_one (C bool);",
+            "optional_one",
+        ),
         ("procedure X accepts () returns R many (C bool);", "many"),
-        ("procedure X accepts () returns R non_empty_many (C bool);", "non_empty_many"),
+        (
+            "procedure X accepts () returns R non_empty_many (C bool);",
+            "non_empty_many",
+        ),
     ];
 
     for (source, expected_cardinality_name) in sources {
@@ -288,8 +298,7 @@ fn gate_cardinality_result_columns_preserve_types_through_stream() {
     let source = "procedure Inventory.ListProducts accepts (Category i64) \
         returns ProductList many (ProductId i64, ProductName i64, InStock bool);";
 
-    let ast = parse_procedure_signature(source)
-        .expect("parser must succeed");
+    let ast = parse_procedure_signature(source).expect("parser must succeed");
 
     let product_list = &ast.results[0];
 
@@ -298,13 +307,14 @@ fn gate_cardinality_result_columns_preserve_types_through_stream() {
     for column in &product_list.columns {
         let scalar_type = column.data_type.value.scalar.clone();
         assert!(
-            matches!(scalar_type, 
-                andromeda_types::ScalarType::I64 | 
-                andromeda_types::ScalarType::Bool |
-                andromeda_types::ScalarType::Text(_) |
-                andromeda_types::ScalarType::I32 |
-                andromeda_types::ScalarType::I16 |
-                andromeda_types::ScalarType::I8
+            matches!(
+                scalar_type,
+                andromeda_types::ScalarType::I64
+                    | andromeda_types::ScalarType::Bool
+                    | andromeda_types::ScalarType::Text(_)
+                    | andromeda_types::ScalarType::I32
+                    | andromeda_types::ScalarType::I16
+                    | andromeda_types::ScalarType::I8
             ),
             "column {} must have explicit type in result stream",
             column.name.value
@@ -328,8 +338,7 @@ fn gate_execution_isolation_ir_has_no_runtime_dependency() {
     // Parse a simple procedure to verify IR structures are independent
     let source = "procedure Inventory.LookupProduct accepts (X i64) returns R one (Y i64);";
 
-    let ast = parse_procedure_signature(source)
-        .expect("parser must succeed");
+    let ast = parse_procedure_signature(source).expect("parser must succeed");
 
     // The AST does not include execution context, result handlers, etc.
     // Those are introduced by the execution adapter.
@@ -344,8 +353,8 @@ fn gate_execution_isolation_adapter_is_not_called_by_parser_or_ir() {
     // Verify that we can parse and lower without touching the execution adapter
     let source = "procedure Test.Proc accepts (X i64) returns R one (Y i64);";
 
-    let ast = parse_procedure_signature(source)
-        .expect("parser must not depend on execution adapter");
+    let ast =
+        parse_procedure_signature(source).expect("parser must not depend on execution adapter");
 
     // Verify AST structure is independent of execution
     assert!(!ast.name.value.as_catalog_path().is_empty());
@@ -367,24 +376,17 @@ fn gate_ir_canonicalization_same_ast_produces_same_ir_structure() {
         returns Reservation one (Reserved bool);";
 
     // Parse to IR twice
-    let ast1 = parse_procedure_signature(source)
-        .expect("parser must succeed");
-    
-    let ast2 = parse_procedure_signature(source)
-        .expect("parser must succeed");
+    let ast1 = parse_procedure_signature(source).expect("parser must succeed");
+
+    let ast2 = parse_procedure_signature(source).expect("parser must succeed");
 
     // Both should produce the same AST structure
-    assert_eq!(
-        ast1, ast2,
-        "same source must produce same AST"
-    );
+    assert_eq!(ast1, ast2, "same source must produce same AST");
 
     // Now compile to IR
-    let ir1 = compile_narrow_procedure_signature(source)
-        .expect("compiler must succeed");
+    let ir1 = compile_narrow_procedure_signature(source).expect("compiler must succeed");
 
-    let ir2 = compile_narrow_procedure_signature(source)
-        .expect("compiler must succeed");
+    let ir2 = compile_narrow_procedure_signature(source).expect("compiler must succeed");
 
     // Verify IR names and structure match
     assert_eq!(
@@ -393,12 +395,14 @@ fn gate_ir_canonicalization_same_ast_produces_same_ir_structure() {
     );
 
     assert_eq!(
-        ir1.inputs.len(), ir2.inputs.len(),
+        ir1.inputs.len(),
+        ir2.inputs.len(),
         "same source must produce same IR parameter count"
     );
 
     assert_eq!(
-        ir1.result_streams.len(), ir2.result_streams.len(),
+        ir1.result_streams.len(),
+        ir2.result_streams.len(),
         "same source must produce same IR result stream count"
     );
 }
@@ -408,14 +412,11 @@ fn gate_ir_canonicalization_lowering_is_deterministic_across_runs() {
     let source = "procedure Test.Proc accepts (X i64) returns R one (Y i64);";
 
     // Compile to IR three times
-    let ir1 = compile_narrow_procedure_signature(source)
-        .expect("compile pass 1");
+    let ir1 = compile_narrow_procedure_signature(source).expect("compile pass 1");
 
-    let ir2 = compile_narrow_procedure_signature(source)
-        .expect("compile pass 2");
+    let ir2 = compile_narrow_procedure_signature(source).expect("compile pass 2");
 
-    let ir3 = compile_narrow_procedure_signature(source)
-        .expect("compile pass 3");
+    let ir3 = compile_narrow_procedure_signature(source).expect("compile pass 3");
 
     // All IRs must be identical
     assert_eq!(ir1, ir2, "lowering must be deterministic (run 1 vs run 2)");
@@ -432,18 +433,14 @@ fn gate_ir_canonicalization_cardinality_is_preserved_and_constant() {
     ];
 
     for source in sources {
-        let ir = compile_narrow_procedure_signature(source)
-            .expect("compiler must succeed");
+        let ir = compile_narrow_procedure_signature(source).expect("compiler must succeed");
 
         // Verify cardinality is preserved in IR
         assert_eq!(ir.result_streams.len(), 1);
 
         // Cardinality information must be available
         let result = &ir.result_streams[0];
-        assert!(
-            !result.name.is_empty(),
-            "result must have a name in IR"
-        );
+        assert!(!result.name.is_empty(), "result must have a name in IR");
     }
 }
 
@@ -461,8 +458,7 @@ fn integration_full_pipeline_is_deterministic() {
 
     // Run the full pipeline three times
     for run in 1..=3 {
-        let lex_result = lex(complex_source)
-            .unwrap_or_else(|_| panic!("run {} must lex", run));
+        let lex_result = lex(complex_source).unwrap_or_else(|_| panic!("run {} must lex", run));
         assert!(!lex_result.is_empty(), "run {} must produce tokens", run);
 
         let ast = parse_procedure_signature(complex_source)
@@ -484,12 +480,9 @@ fn integration_error_diagnostics_are_consistent() {
     let invalid_source = "procedure X accepts (P float) returns R one (C bool);";
 
     // Parse the same invalid source three times
-    let err1 = parse_procedure_signature(invalid_source)
-        .expect_err("must fail due to float");
-    let err2 = parse_procedure_signature(invalid_source)
-        .expect_err("must fail due to float");
-    let err3 = parse_procedure_signature(invalid_source)
-        .expect_err("must fail due to float");
+    let err1 = parse_procedure_signature(invalid_source).expect_err("must fail due to float");
+    let err2 = parse_procedure_signature(invalid_source).expect_err("must fail due to float");
+    let err3 = parse_procedure_signature(invalid_source).expect_err("must fail due to float");
 
     // Error messages must be consistent
     assert_eq!(err1.message, err2.message);

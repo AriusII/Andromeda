@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use crate::flat_json::{JsonField, escape_json_string};
 use crate::{
     BENCHMARK_EVIDENCE_AUTHORITATIVE, BENCHMARK_EVIDENCE_CAN_SELECT_PLAN_ALONE,
     BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY,
 };
+use andromeda_scenario_evidence::flat_json::{JsonField, escape_json_string};
 
 pub(crate) fn validate_advisory_only_fields(
     fields: &HashMap<String, JsonField>,

@@ -229,23 +229,23 @@ impl VersionBinding {
 
     pub fn validate_complete_plan_binding(&self) -> Result<(), DecisionTraceError> {
         match self.procedure_id {
-            Some(id) if id.get() != 0 => {}
+            Some(id) if id.get() != 0 => {},
             _ => return Err(DecisionTraceError::ProcedureIdZero),
         }
         match self.catalog_version {
-            Some(version) if version.get() != 0 => {}
+            Some(version) if version.get() != 0 => {},
             _ => return Err(DecisionTraceError::CatalogVersionZero),
         }
         match self.contract_hash {
-            Some(hash) if !hash.is_zero() => {}
+            Some(hash) if !hash.is_zero() => {},
             _ => return Err(DecisionTraceError::ContractHashZero),
         }
         match self.stats_version {
-            Some(version) if !version.is_zero() => {}
+            Some(version) if !version.is_zero() => {},
             _ => return Err(DecisionTraceError::StatsVersionZero),
         }
         match self.policy_version {
-            Some(version) if !version.is_zero() => {}
+            Some(version) if !version.is_zero() => {},
             _ => return Err(DecisionTraceError::PolicyVersionZero),
         }
         Ok(())

@@ -9,3 +9,6 @@ publish = false
 andromeda-core.workspace = true
 andromeda-transaction-log.workspace = true
 tokio = { version = "1", features = ["full"] }
+
+[dev-dependencies]
+futures = "0.3"

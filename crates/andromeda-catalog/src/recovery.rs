@@ -14,7 +14,7 @@ pub use types::*;
 use crate::{
     CatalogMutationRecord, CatalogSnapshot,
     recovery::{
-        decode::{boundary_batch_id, recovery_anomaly_kind_for_decode_error},
+        decode::boundary_batch_id,
         replay::{IndexedCatalogMutationRecord, replay_indexed_catalog_mutation_records},
     },
 };
@@ -54,15 +54,17 @@ pub fn recover_catalog_snapshot_from_durable_payloads<'a>(
                     record_index,
                     record,
                 });
-            }
+            },
             Err(error) => {
                 anomalies.push(CatalogRecoveryAnomaly {
                     record_index,
                     batch_id: None,
-                    kind: recovery_anomaly_kind_for_decode_error(error.kind()),
+                    kind: andromeda_catalog_recovery::recovery_anomaly_kind_for_decode_error(
+                        error.kind(),
+                    ),
                     detail: format!("{}: {}", error.kind().stable_code(), error.detail()),
                 });
-            }
+            },
         }
     }
 

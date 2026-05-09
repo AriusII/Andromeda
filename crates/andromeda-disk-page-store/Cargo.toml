@@ -6,4 +6,10 @@ rust-version = "1.95.0"
 publish = false
 
 [dependencies]
+andromeda-error.workspace = true
+andromeda-segment.workspace = true
+andromeda-storage-page.workspace = true
 andromeda-wal.workspace = true
+
+[dev-dependencies]
+tempfile = "3.8"

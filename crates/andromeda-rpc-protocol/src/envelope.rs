@@ -26,6 +26,13 @@ pub struct CompletionProtocolVersion {
     pub minor: u32,
 }
 
+/// Stable RPC completion envelope wire version.
+///
+/// The shape-level completion contract is owned by
+/// `andromeda-procedure-contract`; this value binds that contract to the
+/// negotiated RPC protocol version without involving protobuf generation.
+pub const COMPLETION_ENVELOPE_VERSION: ProtocolVersion = ProtocolVersion::V1;
+
 impl ProtocolVersion {
     pub const V1: Self = Self { major: 1, minor: 0 };
     pub const SUPPORTED_MAJOR: u32 = Self::V1.major;

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use crate::flat_json::{JsonField, optional_string};
 use crate::{BenchmarkEvidence, BenchmarkScenarioTarget, find_workload};
+use andromeda_scenario_evidence::flat_json::{JsonField, optional_string};
 
 use super::advisory_json::{optional_u32, optional_u64};
 use super::errors::BenchmarkBaselineComparisonError;

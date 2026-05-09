@@ -22,11 +22,11 @@ pub mod stream;
 
 pub use backpressure::{BackpressureReason, BackpressureSignal, BackpressureTransport};
 pub use envelope::{
-    AUTH_WIRE_CODE, CONTRACT_REQUEST_WIRE_CODE, CONTRACT_RESPONSE_WIRE_CODE,
-    CompletionProtocolVersion, ERROR_WIRE_CODE, FrameEnvelope, HELLO_WIRE_CODE,
-    PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP, PayloadFrameFamily, PayloadFrameMapping, PayloadKind,
-    ProtocolVersion, RPC_BATCH_WIRE_CODE, RPC_COMPLETION_WIRE_CODE, RPC_EXECUTE_REQUEST_WIRE_CODE,
-    RPC_METADATA_WIRE_CODE, RpcResultStreamMetadataPolicy,
+    AUTH_WIRE_CODE, COMPLETION_ENVELOPE_VERSION, CONTRACT_REQUEST_WIRE_CODE,
+    CONTRACT_RESPONSE_WIRE_CODE, CompletionProtocolVersion, ERROR_WIRE_CODE, FrameEnvelope,
+    HELLO_WIRE_CODE, PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP, PayloadFrameFamily, PayloadFrameMapping,
+    PayloadKind, ProtocolVersion, RPC_BATCH_WIRE_CODE, RPC_COMPLETION_WIRE_CODE,
+    RPC_EXECUTE_REQUEST_WIRE_CODE, RPC_METADATA_WIRE_CODE, RpcResultStreamMetadataPolicy,
 };
 pub use errors::{
     BackpressureMetadata, ErrorEnvelope, ErrorFamily, RetryDisposition, TransactionEffect,

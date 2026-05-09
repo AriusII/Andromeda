@@ -3,56 +3,9 @@ use andromeda_hardware::{GpuExecutionPolicy, GpuProfile, PipelineClass, Resource
 
 use crate::TraceId;
 
+pub use andromeda_observability::{CriticalDecisionKind, CriticalDecisionTrace as DecisionTrace};
+
 use super::{ProtocolEventScope, non_empty_reason};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CriticalDecisionKind {
-    ContractValidation,
-    AuthorizationDenial,
-    PlanSelection,
-    WalAppend,
-    TransactionCommit,
-    WalFlush,
-    CommitVisible,
-    RollbackDurable,
-    MvccVisibility,
-    RecoveryStartup,
-    ManifestValidation,
-    ManifestSwitch,
-    CatalogMutation,
-    FrameRejection,
-    StreamRoleRejection,
-    Backpressure,
-    CompletionEmitted,
-    ContractRejected,
-    UnsupportedVersion,
-    SchemaLayoutDecision,
-    CorruptionBoundary,
-    SecurityAuthorization,
-    SecurityAudit,
-    AdminOperation,
-    ResourceGovernance,
-    BusinessRuleDecision,
-    IoPlacementDecision,
-    PlacementAudit,
-    IoBudgetValidation,
-    GpuPolicyDecision,
-    TransactionTransition,
-    ExecutionTransition,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DecisionTrace {
-    pub trace_id: TraceId,
-    pub decision: CriticalDecisionKind,
-    pub reason: String,
-}
-
-impl DecisionTrace {
-    pub fn has_explanation(&self) -> bool {
-        !self.reason.trim().is_empty()
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SchemaLayoutDecisionTrace {
@@ -396,10 +349,10 @@ impl PlacementAuditEvent {
             | PlacementAuditTransition::SegmentPublishedCold
             | PlacementAuditTransition::ColdMutationRejected => {
                 self.segment_id.is_some() && self.extent_id.is_none()
-            }
+            },
             PlacementAuditTransition::ExtentReclaimed => {
                 self.segment_id.is_none() && self.extent_id.is_some()
-            }
+            },
         }
     }
 

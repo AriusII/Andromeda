@@ -150,7 +150,7 @@ pub(crate) fn assert_correlated_decision_pair(
             assert!(trace.accepted);
             assert!(trace.has_reason());
             assert!(trace.reason.contains("because"));
-        }
+        },
         _ => panic!("expected placement trace"),
     }
 
@@ -162,7 +162,7 @@ pub(crate) fn assert_correlated_decision_pair(
             assert!(trace.has_budget_evidence());
             assert!(trace.outcome_matches_budget());
             assert!(trace.reason.contains("because"));
-        }
+        },
         _ => panic!("expected budget trace"),
     }
 }
@@ -181,17 +181,17 @@ pub(crate) fn stage_from_placement(placement: PlacementDecision) -> IoPipelineSt
             if placement.target_tier == StorageTier::Ram =>
         {
             IoPipelineStage::Ram
-        }
+        },
         PipelineStage::AppendHotStore | PipelineStage::SealHotStoreSegment
             if placement.target_tier == StorageTier::HotStore =>
         {
             IoPipelineStage::Hot
-        }
+        },
         PipelineStage::PublishColdStore | PipelineStage::ServeRead
             if placement.target_tier == StorageTier::ColdStore =>
         {
             IoPipelineStage::Cold
-        }
+        },
         _ => tier_stage_fallback(placement.target_tier),
     }
 }

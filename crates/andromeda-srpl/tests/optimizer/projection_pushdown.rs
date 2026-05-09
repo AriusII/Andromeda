@@ -290,7 +290,7 @@ fn t_pp_01_basic_assert_retained_after_upstream_read() {
     match &result.body.operations[0].kind {
         SrplBusinessOperationKindIr::Read { predicates, .. } => {
             assert!(predicates.is_empty());
-        }
+        },
         _ => panic!("expected Read"),
     }
     assert!(matches!(
@@ -344,7 +344,7 @@ fn t_pp_05_gte_assert_retained() {
     match &result.body.operations[0].kind {
         SrplBusinessOperationKindIr::Read { predicates, .. } => {
             assert!(predicates.is_empty());
-        }
+        },
         _ => panic!("expected Read"),
     }
     assert!(matches!(

@@ -2,7 +2,7 @@ use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, Invoca
 use andromeda_observe::TraceId;
 use andromeda_result_stream::{CompletionStatus, InvocationCompletion};
 use andromeda_storage::Lsn;
-use andromeda_tx::TransactionState;
+use andromeda_transaction::TransactionState;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct CompletionMappingService;

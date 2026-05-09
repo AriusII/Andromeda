@@ -7,4 +7,5 @@ publish = false
 
 [dependencies]
 andromeda-contract.workspace = true
+andromeda-observability.workspace = true
 andromeda-types.workspace = true

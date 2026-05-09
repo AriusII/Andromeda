@@ -23,7 +23,7 @@ impl TraceEventFamily {
             TraceEvent::Decision(_) => Self::Decision,
             TraceEvent::Invocation(_) | TraceEvent::ExecutionTransition(_) => {
                 Self::ProcedureInvocation
-            }
+            },
             TraceEvent::Wal(_)
             | TraceEvent::WalEvent(_)
             | TraceEvent::CommitVisible(_)
@@ -40,7 +40,7 @@ impl TraceEventFamily {
             | TraceEvent::SchemaLayoutDecision(_) => Self::Protocol,
             TraceEvent::AuthorizationDenied(_) | TraceEvent::SecurityAudit(_) => {
                 Self::SecurityAudit
-            }
+            },
             TraceEvent::AdminOperation(_) | TraceEvent::Audit(_) => Self::AdminAudit,
             TraceEvent::Resource(_) => Self::Resource,
             TraceEvent::IoPlacementDecision(_)

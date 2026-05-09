@@ -198,7 +198,7 @@ fn t_pf_18_eq_and_gte_on_same_fields_are_distinct() {
                 2,
                 "EQ and GTE are structurally different predicates"
             );
-        }
+        },
         SimplifiedPredicates::AlwaysFalse => panic!(),
     }
 }
@@ -210,7 +210,7 @@ fn t_pf_19_single_duplicate_leaves_one_entry() {
     match simplify_predicates(vec![p.clone(), p]) {
         SimplifiedPredicates::Predicates(v) => {
             assert_eq!(v.len(), 1, "one unique predicate must remain");
-        }
+        },
         SimplifiedPredicates::AlwaysFalse => panic!("should not be AlwaysFalse"),
     }
 }
@@ -237,7 +237,7 @@ fn t_nr_01_normalize_deduplicates_read_predicates() {
     match &norm.body.operations[0].kind {
         SrplBusinessOperationKindIr::Read { predicates, .. } => {
             assert_eq!(predicates.len(), 1);
-        }
+        },
         _ => panic!("expected Read"),
     }
 }
@@ -272,7 +272,7 @@ fn t_nr_02_normalize_sorts_read_predicates() {
                 keys, sorted,
                 "predicates must be in sorted order after normalize"
             );
-        }
+        },
         _ => panic!(),
     }
 }
@@ -334,7 +334,7 @@ fn t_nr_06_normalize_preserves_update_assignment_order() {
         SrplBusinessOperationKindIr::Update { assignments, .. } => {
             assert_eq!(assignments[0].field, "z_field");
             assert_eq!(assignments[1].field, "a_field");
-        }
+        },
         _ => panic!(),
     }
 }

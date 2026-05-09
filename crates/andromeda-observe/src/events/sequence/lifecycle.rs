@@ -55,15 +55,15 @@ impl ProcedureLifecycleStep {
                 if trace.decision == CriticalDecisionKind::ContractValidation =>
             {
                 Ok(Self::AdmissionAccepted)
-            }
+            },
             TraceEvent::Decision(trace)
                 if trace.decision == CriticalDecisionKind::SecurityAuthorization =>
             {
                 Ok(Self::Authorized)
-            }
+            },
             TraceEvent::SecurityAudit(trace) if trace.outcome == SecurityAuditOutcome::Allowed => {
                 Ok(Self::Authorized)
-            }
+            },
             TraceEvent::Decision(trace)
                 if matches!(
                     trace.decision,
@@ -72,7 +72,7 @@ impl ProcedureLifecycleStep {
                 ) =>
             {
                 Ok(Self::IoAdmitted)
-            }
+            },
             TraceEvent::IoBudgetDecision(trace) if trace.accepted => Ok(Self::IoAdmitted),
             TraceEvent::IoPlacementDecision(trace) if trace.accepted => Ok(Self::IoAdmitted),
             TraceEvent::WalEvent(trace) if trace.operation == WalOperation::Flush => {
@@ -86,7 +86,7 @@ impl ProcedureLifecycleStep {
                     transaction_id,
                     durable_lsn,
                 })
-            }
+            },
             TraceEvent::CommitVisible(trace) => Ok(Self::CommitVisible {
                 transaction_id: trace.transaction_id,
                 durable_lsn: trace.durable_commit_lsn,

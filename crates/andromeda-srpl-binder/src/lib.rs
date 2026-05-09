@@ -13,6 +13,7 @@
 //!   analytics, GPU, and application-surface dependencies.
 
 mod catalog_plan;
+mod diagnostics;
 
 use std::collections::BTreeSet;
 
@@ -25,6 +26,7 @@ pub use catalog_plan::{
     SrplCatalogStructuredObjectBinding, SrplCatalogTableBinding, SrplExecutableCatalogView,
     bind_executable_procedure_plan, inventory_reserve_stock_body_ir,
 };
+pub use diagnostics::validate_ast_names_for_diagnostics;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BoundProcedure {
@@ -171,6 +173,35 @@ mod tests {
         .unwrap_err();
 
         assert_eq!(error.kind(), AndromedaErrorKind::Srpl);
+    }
+
+    #[test]
+    fn binder_owner_reports_source_span_for_duplicate_result_column_names() {
+        let source = "procedure Inventory.ReserveStock accepts () returns Reservation one (Reserved bool, Reserved bool);";
+        let mut ast = procedure_ast(
+            Vec::new(),
+            vec![result_stream(
+                "Reservation",
+                Cardinality::One,
+                vec![
+                    field("Reserved", ScalarType::Bool, 0),
+                    field("Reserved", ScalarType::Bool, 1),
+                ],
+            )],
+        );
+        ast.results[0].columns[0].name.span = SourceSpan::new(74, 82);
+        ast.results[0].columns[1].name.span = SourceSpan::new(89, 97);
+
+        let diagnostic = validate_ast_names_for_diagnostics(&ast, source)
+            .expect_err("duplicate result columns must produce source-rich diagnostics");
+
+        assert_eq!(
+            diagnostic.phase,
+            andromeda_srpl_diagnostics::DiagnosticPhase::Binding
+        );
+        assert_eq!(diagnostic.location, Some(SourceSpan::new(89, 97)));
+        assert!(diagnostic.message.contains("Reserved"));
+        assert!(diagnostic.message.contains("line 1, column 90"));
     }
 
     fn procedure_ast(parameters: Vec<FieldAst>, results: Vec<ResultStreamAst>) -> ProcedureAst {

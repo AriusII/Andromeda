@@ -25,9 +25,10 @@ use andromeda_storage::{
     DatabaseManifest, DurableTransactionResume, DurableTransactionState, Lsn, RedoRecordDecision,
     StartupMode, plan_file_wal_startup_recovery_v0,
 };
+use andromeda_tx::Lsn as TxLsn;
+use andromeda_tx::TransactionManager;
 use andromeda_tx::{
-    Lsn as TxLsn, MvccIsolationPolicy, MvccRowHeader, Snapshot, TransactionManager,
-    TransactionStatus, TransactionStatusTable,
+    MvccIsolationPolicy, MvccRowHeader, Snapshot, TransactionStatus, TransactionStatusTable,
 };
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};

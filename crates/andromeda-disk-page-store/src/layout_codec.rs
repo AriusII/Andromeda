@@ -30,13 +30,13 @@ impl Display for PageLayoutCodecError {
             Self::ImageTooSmall => f.write_str("page bytes too small for layout metadata"),
             Self::ImageLengthMismatch => {
                 f.write_str("persisted page size does not match image length")
-            }
+            },
             Self::PayloadOverlapsHeader => {
                 f.write_str("page payload offset overlaps persisted page header")
-            }
+            },
             Self::MissingLayoutMarker => {
                 f.write_str("persisted page layout marker is missing from non-empty page")
-            }
+            },
             Self::CorruptedLayoutMarker => f.write_str("persisted page layout marker is corrupted"),
             Self::UnknownPageSize => f.write_str("unknown persisted page size"),
             Self::UnknownPageType => f.write_str("unknown persisted page type"),

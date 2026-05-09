@@ -172,13 +172,15 @@ FrameEnvelope::validate_rpc_stream_sequence_with_metadata_policy(
 
 "#]
 
-mod completion;
-mod errors;
 pub mod generated;
 mod generated_validation;
-mod manifest;
-mod structured;
 
+pub use andromeda_procedure_contract::{
+    CompletionEnvelopeVersion, CompletionProtocolVersion, CompletionTerminalCode,
+    ManifestPolicyVersion, ProcedureManifest, ProcedureManifestBinding, ProtocolLayout,
+    RequiredPermission, ResultCardinality, ResultRowCountSummary, ResultStreamDescriptor,
+    RowCountRequirement, RpcCompletion, RpcCompletionStatus, TransactionOutcome,
+};
 pub use andromeda_proto_wire::{
     AUTH_WIRE_CODE, CONTRACT_REQUEST_WIRE_CODE, CONTRACT_RESPONSE_WIRE_CODE, ERROR_WIRE_CODE,
     FrameEnvelope, HELLO_WIRE_CODE, PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP, PayloadFrameFamily,
@@ -187,14 +189,18 @@ pub use andromeda_proto_wire::{
     RpcResultStreamMetadataPolicy,
 };
 pub use andromeda_proto_wire::{
-    CONTRACT_PACKAGE, DESCRIPTOR_SET_HASH_ALGORITHM, PROTOCOL_FRAME_ENVELOPE_TYPE,
-    PROTOCOL_PACKAGE,
+    BackpressureMetadata, COMPLETION_ENVELOPE_VERSION, ErrorEnvelope, ErrorFamily,
+    RetryDisposition, TransactionEffect,
 };
-pub use completion::*;
-pub use errors::*;
+pub use andromeda_proto_wire::{
+    CONTRACT_PACKAGE, DESCRIPTOR_SET_HASH_ALGORITHM, PROTOCOL_FRAME_ENVELOPE_TYPE, PROTOCOL_PACKAGE,
+};
+pub use andromeda_structured_object::{
+    RowCountPolicy, StructuredObjectHeader, StructuredObjectLayout,
+};
 pub use generated::{
-    decode_generated_message, descriptor_set_bytes, descriptor_set_hash,
-    encode_generated_message, frame_envelope_hash, project_generated_frame_envelope,
+    decode_generated_message, descriptor_set_bytes, descriptor_set_hash, encode_generated_message,
+    frame_envelope_hash, project_generated_frame_envelope,
     project_generated_structured_object_header, protocol_layout,
     validate_catalog_procedure_manifest_resolution_request,
     validate_catalog_procedure_manifest_resolution_response, validate_generated_error_envelope,
@@ -204,5 +210,3 @@ pub use generated::{
     validate_generated_rpc_execute_request, validate_generated_rpc_metadata,
     validate_generated_structured_object_header,
 };
-pub use manifest::*;
-pub use structured::*;

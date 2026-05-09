@@ -1,8 +1,9 @@
 pub(crate) use andromeda_catalog::{
-    AccessMode, CatalogDefinition, CatalogObjectRef, CompatibilityPolicy, DefinitionBatch,
-    DefinitionBatchId, DefinitionOperation, IsolationPolicy, MultiResultPolicy, ObjectKind,
-    ProcedureContract, ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef,
-    QualifiedName, ResultMetadataPolicy, StatsVersion, TransactionPolicy,
+    AccessMode, CatalogDefinition, CatalogDefinitionBatchPlanning, CatalogObjectRef,
+    CompatibilityPolicy, DefinitionBatch, DefinitionBatchId, DefinitionOperation, IsolationPolicy,
+    MultiResultPolicy, ObjectKind, ProcedureContract, ProcedureContractCandidate,
+    ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName, ResultMetadataPolicy, StatsVersion,
+    TransactionPolicy,
 };
 pub(crate) use andromeda_types::{
     CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, DatabaseId, NamespaceId,

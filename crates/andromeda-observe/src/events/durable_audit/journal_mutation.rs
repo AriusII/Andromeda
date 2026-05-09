@@ -79,7 +79,7 @@ pub(super) fn publish_compacted_journal(
                     format!("failed to publish durable audit compacted journal: {rename_error}"),
                 )
             })
-        }
+        },
         Err(error) => Err(sink_failure(
             DurableAuditFailureKind::RetentionRejected,
             None,

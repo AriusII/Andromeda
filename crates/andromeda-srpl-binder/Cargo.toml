@@ -9,5 +9,6 @@ publish = false
 andromeda-contract.workspace = true
 andromeda-error.workspace = true
 andromeda-srpl-ast.workspace = true
+andromeda-srpl-diagnostics.workspace = true
 andromeda-srpl-ir.workspace = true
 andromeda-types.workspace = true

@@ -188,7 +188,7 @@ fn optimizer_diagnostics_preserve_operation_provenance_through_fold_and_normaliz
                 stream: "Snapshot".to_string(),
                 values: vec![SrplEmitValueIr {
                     column: "AvailableQuantity".to_string(),
-                    value: SrplValueIr::bool(true),
+                    value: arith(ArithOp::Add, int(4), int(5)),
                 }],
             },
         },

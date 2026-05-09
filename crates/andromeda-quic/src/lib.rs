@@ -13,7 +13,6 @@
 //! - result streams are ordered as metadata, zero or more batches, completion;
 //! - lifecycle state gates handshake, active dispatch, drain, and close.
 
-mod backpressure;
 mod catalog_manifest_resolution;
 mod connection;
 mod procedure_gateway;
@@ -77,9 +76,7 @@ pub use session::{
     EarlyDataPolicy, LifecycleState, SurfaceListenerConfig, SurfaceListenerSet, SurfacePlane,
 };
 
-mod rpc;
-
-pub use rpc::{
+pub use andromeda_rpc::{
     DispatchPolicy, FrameDispatch, TransportSurface, dispatch_frame, expected_stream_role,
     validate_transport_surface,
 };
@@ -119,7 +116,9 @@ pub use reconnect::{
     RetryRejectionReason,
 };
 
-pub use backpressure::{BackpressureReason, BackpressureSignal, BackpressureTransport};
+pub use andromeda_rpc_protocol::backpressure::{
+    BackpressureReason, BackpressureSignal, BackpressureTransport,
+};
 
 pub use catalog_manifest_resolution::{
     CatalogColumnDescriptor, CatalogManifestResolutionContext, CatalogManifestResolutionGateway,
@@ -138,9 +137,7 @@ pub use transport::{
     TransportShutdownMode, TransportShutdownState,
 };
 
-mod protocol_invariants;
-
-pub use protocol_invariants::{
+pub use andromeda_rpc_protocol::{
     FrameTypeInvariants, PayloadKindInvariants, ProtocolInvariants, ProtocolVersionInvariants,
     validate_frame_header_layout,
 };

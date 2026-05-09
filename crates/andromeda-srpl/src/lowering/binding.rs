@@ -43,7 +43,7 @@ impl SrplExecutableCatalogView for CatalogSnapshotBindingView<'_> {
                 if self.catalog.is_active_object(contract.object.object_id) =>
             {
                 Ok(contract.clone())
-            }
+            },
             Some(CatalogDefinition::Procedure(_)) => Err(AndromedaError::new(
                 AndromedaErrorKind::Catalog,
                 "SRPL executable plan cannot bind a deprecated procedure contract",
@@ -69,7 +69,7 @@ impl SrplExecutableCatalogView for CatalogSnapshotBindingView<'_> {
                     columns: table.columns.clone(),
                     shape_hash: table.shape_hash(),
                 })
-            }
+            },
             Some(CatalogDefinition::Table(_)) => Err(AndromedaError::new(
                 AndromedaErrorKind::Catalog,
                 "SRPL executable plan cannot bind a deprecated table",
@@ -98,7 +98,7 @@ impl SrplExecutableCatalogView for CatalogSnapshotBindingView<'_> {
                     fields: object.fields.clone(),
                     shape_hash: object.shape_hash(),
                 }))
-            }
+            },
             Some(CatalogDefinition::StructuredObject(_)) => Err(AndromedaError::new(
                 AndromedaErrorKind::Catalog,
                 "SRPL executable plan cannot bind a deprecated structured object",

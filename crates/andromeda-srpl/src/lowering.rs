@@ -1,15 +1,15 @@
 //! Public lowering facade for the bounded SRPL compiler slice.
 //!
 //! `andromeda-srpl-lowering` owns bound AST to IR lowering. This module keeps
-//! facade-only orchestration: source diagnostics, binding adaptation, optimizer
-//! entry points, and catalog contract materialization.
+//! facade-only orchestration: binding adaptation, optimizer entry points, and
+//! catalog contract materialization.
 
 mod binding;
 mod contract;
-mod diagnostics;
-mod validation;
 
 use andromeda_error::AndromedaResult;
+use andromeda_srpl_binder::validate_ast_names_for_diagnostics;
+use andromeda_srpl_diagnostics::enrich_source_diagnostic;
 use andromeda_srpl_lowering::BoundProcedureLoweringInput;
 
 use crate::{
@@ -50,15 +50,13 @@ pub fn compile_narrow_procedure_signature(source: &str) -> Result<SrplProcedureI
         .into_iter()
         .next()
     {
-        return Err(diagnostics::enrich_source_diagnostic(
-            source, diagnostic, None,
-        ));
+        return Err(enrich_source_diagnostic(source, diagnostic, None));
     }
 
     let ast = crate::parse_procedure_signature(source)
-        .map_err(|diagnostic| diagnostics::enrich_source_diagnostic(source, diagnostic, None))?;
+        .map_err(|diagnostic| enrich_source_diagnostic(source, diagnostic, None))?;
     let procedure_name = ast.name.value.as_catalog_path();
-    validation::validate_ast_names_for_diagnostics(&ast, source)?;
+    validate_ast_names_for_diagnostics(&ast, source)?;
     let bound = crate::bind_procedure(ast).map_err(|error| {
         SrplDiagnostic::new(
             crate::DiagnosticPhase::Binding,

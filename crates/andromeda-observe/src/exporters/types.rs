@@ -176,7 +176,7 @@ impl RetryPolicy {
                     ));
                 }
                 Ok(())
-            }
+            },
             Self::ExponentialBackoff {
                 max_retries,
                 initial_delay_ms,
@@ -194,7 +194,7 @@ impl RetryPolicy {
                     ));
                 }
                 Ok(())
-            }
+            },
             Self::NoRetry => Ok(()),
         }
     }
@@ -237,7 +237,7 @@ impl ExporterConfig {
                         "endpoint_url must be a valid URL",
                     ));
                 }
-            }
+            },
             ExporterBackend::LocalFile => {
                 if self.endpoint_url.is_empty() {
                     return Err(exporter_error(
@@ -245,8 +245,8 @@ impl ExporterConfig {
                         "endpoint_url must be a file path for LocalFile backend",
                     ));
                 }
-            }
-            ExporterBackend::Null => {}
+            },
+            ExporterBackend::Null => {},
         }
 
         if self.batch_size == 0 {

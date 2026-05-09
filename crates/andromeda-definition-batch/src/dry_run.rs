@@ -201,7 +201,7 @@ pub fn dry_run_definition_batch(
                     kind: object.kind,
                     planned_version: next_version,
                 });
-            }
+            },
             DefinitionOperation::Deprecate(target) => {
                 target.validate()?;
 
@@ -231,7 +231,7 @@ pub fn dry_run_definition_batch(
                     action: CatalogLifecycleAction::Deprecate,
                     planned_version: next_version,
                 });
-            }
+            },
         }
     }
 

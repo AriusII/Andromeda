@@ -1,14 +1,20 @@
+//! Bounded flat JSON helpers for advisory benchmark artifacts.
+//!
+//! This is intentionally not a general JSON layer. It supports only the flat
+//! object shape used by benchmark history, regression, and scenario evidence
+//! artifacts.
+
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum JsonField {
+pub enum JsonField {
     Null,
     String(String),
     Unsigned(u64),
     Bool(bool),
 }
 
-pub(crate) fn escape_json_string(value: &str) -> String {
+pub fn escape_json_string(value: &str) -> String {
     let mut escaped = String::with_capacity(value.len());
     for ch in value.chars() {
         match ch {
@@ -26,22 +32,19 @@ pub(crate) fn escape_json_string(value: &str) -> String {
     escaped
 }
 
-pub(crate) fn parse_flat_json_object(input: &str) -> Result<HashMap<String, JsonField>, String> {
+pub fn parse_flat_json_object(input: &str) -> Result<HashMap<String, JsonField>, String> {
     let mut parser = Parser::new(input);
     parser.parse_object()
 }
 
-pub(crate) fn required_string(
-    fields: &HashMap<String, JsonField>,
-    name: &str,
-) -> Result<String, String> {
+pub fn required_string(fields: &HashMap<String, JsonField>, name: &str) -> Result<String, String> {
     match fields.get(name) {
         Some(JsonField::String(value)) => Ok(value.clone()),
         _ => Err(format!("missing {name}")),
     }
 }
 
-pub(crate) fn optional_string(
+pub fn optional_string(
     fields: &HashMap<String, JsonField>,
     name: &str,
 ) -> Result<Option<String>, String> {
@@ -52,14 +55,14 @@ pub(crate) fn optional_string(
     }
 }
 
-pub(crate) fn required_u64(fields: &HashMap<String, JsonField>, name: &str) -> Result<u64, String> {
+pub fn required_u64(fields: &HashMap<String, JsonField>, name: &str) -> Result<u64, String> {
     match fields.get(name) {
         Some(JsonField::Unsigned(value)) => Ok(*value),
         _ => Err(format!("missing {name}")),
     }
 }
 
-pub(crate) fn optional_u32(
+pub fn optional_u32(
     fields: &HashMap<String, JsonField>,
     name: &str,
 ) -> Result<Option<u32>, String> {
@@ -69,6 +72,30 @@ pub(crate) fn optional_u32(
             .map_err(|_| format!("{name} exceeds u32")),
         Some(JsonField::Null) | None => Ok(None),
         _ => Err(format!("invalid {name}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn flat_json_escapes_and_parses_advisory_fields() {
+        let escaped = escape_json_string("bench\"line\n");
+        assert_eq!(escaped, "bench\\\"line\\n");
+
+        let fields = parse_flat_json_object(
+            r#"{"workload_id":"crud-single-1","samples":5,"active":true,"baseline":null}"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            required_string(&fields, "workload_id").unwrap(),
+            "crud-single-1"
+        );
+        assert_eq!(required_u64(&fields, "samples").unwrap(), 5);
+        assert_eq!(optional_string(&fields, "baseline").unwrap(), None);
+        assert_eq!(fields.get("active"), Some(&JsonField::Bool(true)));
     }
 }
 

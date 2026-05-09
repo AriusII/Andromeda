@@ -1,3 +1,4 @@
+use andromeda_catalog_store::CatalogStoreMutationKind;
 use andromeda_catalog_store::{CatalogDefinition, CatalogObjectRef};
 use andromeda_definition_batch::{DefinitionBatchId, DefinitionBatchSourceHash};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
@@ -84,6 +85,12 @@ impl CatalogMutationRecordKind {
             CATALOG_CHANGE_COMMIT_WAL_KIND_TAG => Some(Self::CatalogChangeCommit),
             _ => None,
         }
+    }
+}
+
+impl CatalogStoreMutationKind for CatalogMutationRecordKind {
+    fn is_commit_record(self) -> bool {
+        self == Self::CatalogChangeCommit
     }
 }
 
@@ -310,7 +317,7 @@ pub(crate) fn validate_record(record: &CatalogMutationRecord) -> AndromedaResult
     match record {
         CatalogMutationRecord::Begin(boundary) | CatalogMutationRecord::Commit(boundary) => {
             validate_boundary(boundary)
-        }
+        },
         CatalogMutationRecord::Apply(delta) => validate_delta(delta),
     }
 }
@@ -371,10 +378,10 @@ pub(crate) fn validate_delta(delta: &CatalogMutationDelta) -> AndromedaResult<()
                     "catalog WAL create delta version must match its object version",
                 );
             }
-        }
+        },
         CatalogMutationOperation::DeprecateObject { target } => {
             target.validate()?;
-        }
+        },
     }
     Ok(())
 }

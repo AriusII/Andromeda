@@ -231,15 +231,15 @@ impl InMemoryEventSequence {
             } => {
                 self.transaction_id = Some(transaction_id);
                 self.durable_lsn = Some(durable_lsn);
-            }
+            },
             ProcedureLifecycleStep::RecoveryStarted { last_durable_lsn } => {
                 self.durable_lsn = Some(last_durable_lsn);
-            }
+            },
             ProcedureLifecycleStep::AdmissionAccepted
             | ProcedureLifecycleStep::Authorized
             | ProcedureLifecycleStep::IoAdmitted
             | ProcedureLifecycleStep::CompletionEmitted { .. }
-            | ProcedureLifecycleStep::PreTransactionRejected => {}
+            | ProcedureLifecycleStep::PreTransactionRejected => {},
         }
     }
 }

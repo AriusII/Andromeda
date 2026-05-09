@@ -25,7 +25,7 @@ fn security_audit_family_records_typed_identity_permission_schema_and_reason() {
             assert!(trace.has_identity_evidence());
             assert!(trace.has_policy_version_evidence());
             assert!(trace.has_reason());
-        }
+        },
         _ => panic!("expected security audit trace"),
     }
 }

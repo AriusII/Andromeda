@@ -20,8 +20,8 @@ pub fn validate_srpl_batch_dry_run(
 mod tests {
     use super::*;
     use crate::{
-        CatalogDefinition, DefinitionBatchId, DefinitionOperation, INVENTORY_DATABASE_ID,
-        INVENTORY_NAMESPACE_ID, inventory_domain_definition_batch,
+        CatalogDefinition, CatalogDefinitionBatchPlanning, DefinitionBatchId, DefinitionOperation,
+        INVENTORY_DATABASE_ID, INVENTORY_NAMESPACE_ID, inventory_domain_definition_batch,
         inventory_reserve_stock_contract,
     };
     use andromeda_error::AndromedaErrorKind;

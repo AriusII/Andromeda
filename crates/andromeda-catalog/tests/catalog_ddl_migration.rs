@@ -1,7 +1,8 @@
 use andromeda_catalog::{
     CatalogDdlMigrationAction, CatalogDdlMigrationClassification, CatalogDefinition,
-    CatalogLifecycleTarget, CatalogObjectRef, CatalogPublicationSemantics, DefinitionBatch,
-    DefinitionBatchId, DefinitionOperation, ObjectKind, QualifiedName, TableDefinition,
+    CatalogDefinitionBatchPlanning, CatalogLifecycleTarget, CatalogObjectRef,
+    CatalogPublicationSemantics, DefinitionBatch, DefinitionBatchId, DefinitionOperation,
+    ObjectKind, QualifiedName, TableDefinition,
 };
 use andromeda_types::{
     CatalogObjectId, CatalogVersion, ColumnDescriptor, DatabaseId, NamespaceId, ScalarType,

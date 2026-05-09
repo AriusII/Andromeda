@@ -27,7 +27,7 @@ fn admin_operation_family_rejects_application_surface_and_permission_drift() {
                 trace.operation.required_permission(),
                 Permission::DebugProcedure
             );
-        }
+        },
         _ => panic!("expected admin operation trace"),
     }
 

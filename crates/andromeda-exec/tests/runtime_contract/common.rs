@@ -24,7 +24,8 @@ pub(crate) use andromeda_storage::{
     CoreIoPlacementRequest, InMemoryWal, Lsn, OperationalProfile, PageSize, StorageIoBudgetScope,
     StorageWorkloadClass, WalRecordKind,
 };
-pub(crate) use andromeda_tx::{MvccIsolationPolicy, Snapshot, TransactionState, TransactionStatus};
+pub(crate) use andromeda_tx::TransactionState;
+pub(crate) use andromeda_tx::{MvccIsolationPolicy, Snapshot, TransactionStatus};
 
 #[derive(Debug, Default)]
 pub(crate) struct RecordingWal {

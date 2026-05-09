@@ -51,7 +51,7 @@ pub(super) fn parse_optional_policy_version(
             SecurityPolicyVersionEvidence::new(policy_version, policy_digest)
                 .map(Some)
                 .map_err(|error| error.message().to_string())
-        }
+        },
         _ => Err(
             "durable audit policy version evidence requires both policy_version and policy_digest"
                 .to_string(),

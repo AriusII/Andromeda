@@ -65,8 +65,9 @@ Before changing this crate, understand:
 ## Procedure
 
 1. Choose the narrowest module boundary that already owns the behavior:
-   `procedure_compiler`, `procedure_model`, `optimizer`, `execution_adapter`,
-   `procedure_resolver`, or `definition_batch_bridge`.
+   `procedure_compiler`, `optimizer`, `execution_adapter`, `procedure_resolver`,
+   or `definition_batch_bridge`. `procedure_model` is compatibility-only over
+   `andromeda-srpl-ast`, `andromeda-srpl-cardinality`, and `andromeda-srpl-ir`.
 2. Keep `lib.rs` limited to module declarations and intentional compatibility
    reexports.
 3. Validate source text through `SrplSource` and parser diagnostics before
@@ -124,7 +125,6 @@ WAL, crash/recovery, property, fuzz, or security validation.
 - `docs/adr/ADR-0011-workspace-crate-boundaries.md`
 - `crates/andromeda-srpl/src/lib.rs`
 - `crates/andromeda-srpl/src/procedure_compiler.rs`
-- `crates/andromeda-srpl/src/procedure_model.rs`
 - `crates/andromeda-srpl/src/definition_batch_bridge.rs`
-- `crates/andromeda-srpl/src/execution_adapter.rs`
-- `crates/andromeda-srpl/src/optimizer.rs`
+- `crates/andromeda-srpl/src/execution_adapter/mod.rs`
+- `crates/andromeda-srpl/src/optimizer/mod.rs`

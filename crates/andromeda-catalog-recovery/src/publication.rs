@@ -138,10 +138,10 @@ where
         match self.publication_semantics {
             andromeda_catalog_store::CatalogPublicationSemantics::PlannedVersionOnly => {
                 CatalogPublicationSemantics::PlannedVersionOnly
-            }
+            },
             andromeda_catalog_store::CatalogPublicationSemantics::DurablePublicationExternal => {
                 CatalogPublicationSemantics::DurablePublicationExternal
-            }
+            },
         }
     }
 }
@@ -967,7 +967,7 @@ where
                 );
                 publications.insert(key, applied);
                 audit_before_visible_change_count += 1;
-            }
+            },
             CatalogPublicationSubscriptionReplayRecord::SubscriptionAcknowledgement(
                 acknowledgement,
             ) => {
@@ -1023,7 +1023,7 @@ where
                     },
                 );
                 acknowledgements.insert(acknowledgement_key, acknowledgement);
-            }
+            },
             CatalogPublicationSubscriptionReplayRecord::Terminal(terminal) => {
                 terminal.validate()?;
                 if let Some(existing) = terminals.get(&terminal.key) {
@@ -1053,7 +1053,7 @@ where
                     },
                 );
                 terminals.insert(terminal.key, terminal);
-            }
+            },
         }
     }
 

@@ -123,8 +123,8 @@ fn validate_transaction(envelope: &EventEnvelope) -> AndromedaResult<()> {
                     return Err(observe_error(
                         "WAL event transaction_id correlation must match WAL trace payload",
                     ));
-                }
-                _ => {}
+                },
+                _ => {},
             }
 
             if trace.operation == WalOperation::Flush
@@ -134,7 +134,7 @@ fn validate_transaction(envelope: &EventEnvelope) -> AndromedaResult<()> {
                     "WAL flush durable_lsn correlation must match WAL trace payload",
                 ));
             }
-        }
+        },
         TraceEvent::CommitVisible(trace)
             if envelope.correlation.transaction_id != Some(trace.transaction_id)
                 || envelope.correlation.durable_lsn != Some(trace.durable_commit_lsn) =>
@@ -142,7 +142,7 @@ fn validate_transaction(envelope: &EventEnvelope) -> AndromedaResult<()> {
             return Err(observe_error(
                 "commit-visible traces require matching transaction_id and durable_lsn correlation",
             ));
-        }
+        },
         TraceEvent::RollbackDurable(trace)
             if envelope.correlation.transaction_id != Some(trace.transaction_id)
                 || envelope.correlation.durable_lsn != Some(trace.durable_rollback_lsn) =>
@@ -150,21 +150,21 @@ fn validate_transaction(envelope: &EventEnvelope) -> AndromedaResult<()> {
             return Err(observe_error(
                 "rollback-durable traces require matching transaction_id and durable_lsn correlation",
             ));
-        }
+        },
         TraceEvent::RecoveryStartup(trace)
             if envelope.correlation.durable_lsn != Some(trace.last_durable_lsn) =>
         {
             return Err(observe_error(
                 "recovery startup traces require matching durable_lsn correlation",
             ));
-        }
+        },
         TraceEvent::CompletionEmitted(trace)
             if trace.committed && envelope.correlation.durable_lsn != trace.durable_lsn =>
         {
             return Err(observe_error(
                 "committed completion traces require matching durable_lsn correlation",
             ));
-        }
+        },
         TraceEvent::TransactionTransition(trace) => {
             if envelope.correlation.transaction_id != Some(trace.transaction_id) {
                 return Err(observe_error(
@@ -183,15 +183,15 @@ fn validate_transaction(envelope: &EventEnvelope) -> AndromedaResult<()> {
                 trace.session_id,
                 "transaction transition traces",
             )?;
-        }
+        },
         TraceEvent::ExecutionTransition(trace) => {
             match trace.transaction_id {
                 Some(payload_tx) if envelope.correlation.transaction_id != Some(payload_tx) => {
                     return Err(observe_error(
                         "execution transition traces require matching transaction_id correlation when payload carries one",
                     ));
-                }
-                _ => {}
+                },
+                _ => {},
             }
             validate_payload_durable_lsn(
                 envelope,
@@ -217,8 +217,8 @@ fn validate_transaction(envelope: &EventEnvelope) -> AndromedaResult<()> {
                 trace.session_id,
                 "execution transition traces",
             )?;
-        }
-        _ => {}
+        },
+        _ => {},
     }
 
     Ok(())
@@ -256,16 +256,16 @@ fn validate_payload_request_session(
             return Err(observe_error(format!(
                 "{context} require matching request_id correlation when payload carries one",
             )));
-        }
-        _ => {}
+        },
+        _ => {},
     }
     match session_id {
         Some(session_id) if envelope.correlation.session_id != Some(session_id) => {
             return Err(observe_error(format!(
                 "{context} require matching session_id correlation when payload carries one",
             )));
-        }
-        _ => {}
+        },
+        _ => {},
     }
 
     Ok(())
@@ -279,8 +279,8 @@ fn validate_catalog(envelope: &EventEnvelope) -> AndromedaResult<()> {
             return Err(observe_error(
                 "manifest traces require matching catalog_version correlation",
             ));
-        }
-        _ => {}
+        },
+        _ => {},
     }
 
     Ok(())
@@ -305,7 +305,7 @@ fn validate_protocol_scope(envelope: &EventEnvelope) -> AndromedaResult<()> {
             }
 
             Ok(())
-        }
+        },
         Some(ProtocolEventScope::Session) => {
             let has_session_id = envelope
                 .correlation
@@ -319,7 +319,7 @@ fn validate_protocol_scope(envelope: &EventEnvelope) -> AndromedaResult<()> {
             }
 
             Ok(())
-        }
+        },
         Some(ProtocolEventScope::Connection) | None => Ok(()),
     }
 }

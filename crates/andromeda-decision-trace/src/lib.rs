@@ -15,11 +15,13 @@
 //! - Trace contracts must stay runtime-free and redaction-safe.
 
 mod control;
+mod critical;
 mod error;
 mod trace;
 mod version;
 
 pub use control::{AdaptiveControl, AdaptiveFeature};
+pub use critical::{CriticalDecisionKind, CriticalDecisionTrace};
 pub use error::DecisionTraceError;
 pub use trace::{
     DECISION_EXPLANATION_MAX_BYTES, DECISION_REASON_CODE_MAX_BYTES, DecisionFamily,

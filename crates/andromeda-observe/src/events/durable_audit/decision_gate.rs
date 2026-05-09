@@ -148,10 +148,10 @@ fn retention_boundary_is_compatible(
                 DurableAuditRetentionBoundary::WalSegment
                     | DurableAuditRetentionBoundary::ForensicHold
             )
-        }
+        },
         DurableAuditEventFamily::ForensicDecision => {
             boundary == DurableAuditRetentionBoundary::ForensicHold
-        }
+        },
         DurableAuditEventFamily::AdmissionDecision
         | DurableAuditEventFamily::RecoveryDecision
         | DurableAuditEventFamily::GenericAudit => false,

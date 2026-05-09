@@ -1,5 +1,6 @@
 use andromeda_error::AndromedaErrorKind;
-use andromeda_proto::{RowCountRequirement, StructuredObjectHeader, StructuredObjectLayout};
+use andromeda_procedure_contract::RowCountRequirement;
+use andromeda_structured_object::{StructuredObjectHeader, StructuredObjectLayout};
 use andromeda_types::{ColumnDescriptor, ContractHash, ScalarType, TypeDescriptor};
 
 use super::support::{

@@ -88,7 +88,7 @@ pub(super) fn replay_indexed_catalog_mutation_records(
                     boundary,
                     deltas: Vec::new(),
                 });
-            }
+            },
             CatalogMutationRecord::Apply(delta) => {
                 let exceeds_declared_apply_count = match pending.as_ref() {
                     Some(open) => open.deltas.len() >= open.boundary.expected_apply_count,
@@ -123,7 +123,7 @@ pub(super) fn replay_indexed_catalog_mutation_records(
                         detail: "catalog apply record has no preceding begin record".to_string(),
                     });
                 }
-            }
+            },
             CatalogMutationRecord::Commit(commit_boundary) => {
                 let Some(open) = pending.take() else {
                     anomalies.push(CatalogRecoveryAnomaly {
@@ -157,7 +157,7 @@ pub(super) fn replay_indexed_catalog_mutation_records(
                     &mut skipped_anomalous_batches,
                     &mut anomalies,
                 );
-            }
+            },
         }
     }
 
@@ -351,7 +351,7 @@ fn replay_committed_batch(
             skipped_anomalous_batches
                 .push(open.skipped(CatalogSkippedBatchReason::DefinitionBatchHashMismatch));
             return;
-        }
+        },
     };
     if recovered_dependency_graph_hash != open.boundary.dependency_graph_hash {
         anomalies.push(CatalogRecoveryAnomaly {
@@ -387,7 +387,7 @@ fn replay_committed_batch(
             });
             skipped_anomalous_batches.push(open.skipped(CatalogSkippedBatchReason::PlanRejected));
             return;
-        }
+        },
     };
     plan.publication_semantics = open.boundary.publication_semantics;
 
@@ -427,10 +427,10 @@ fn definition_batch_from_recovered_deltas(
         .map(|delta| match &delta.operation {
             CatalogMutationOperation::CreateObject { definition, .. } => {
                 DefinitionOperation::Create(definition.clone())
-            }
+            },
             CatalogMutationOperation::DeprecateObject { target } => {
                 DefinitionOperation::Deprecate(target.clone())
-            }
+            },
         })
         .collect();
 

@@ -1,5 +1,8 @@
 use andromeda_error::AndromedaErrorKind;
-use andromeda_proto::{ResultCardinality, ResultStreamDescriptor, RowCountRequirement, generated};
+use andromeda_procedure_contract::{
+    ResultCardinality, ResultStreamDescriptor, RowCountRequirement,
+};
+use andromeda_proto::generated;
 use andromeda_types::ContractHash;
 use generated::{
     contract::v1::{

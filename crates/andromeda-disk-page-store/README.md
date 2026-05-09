@@ -4,20 +4,25 @@
 
 `andromeda-disk-page-store` is the C5 boundary crate for durable page I/O against disk-backed storage.
 
-This crate now owns the implementation-neutral page flush durability boundary. The file-backed page store and disk manager remain in `andromeda-storage` during migration.
+This crate owns the implementation-neutral page flush durability boundary plus
+the file-backed `DiskManager`, `DiskPageStore`, `FileDiskManager`, atomic write,
+extent-map, and page-integrity contracts. `andromeda-storage` keeps only a
+temporary compatibility facade for historical imports.
 
 ## Scope
 
 This crate owns:
 
 - WAL-before-page-flush validation for page LSN and durable WAL LSN evidence.
+- File-backed page reads and writes through `FileDiskManager`.
+- `DiskPageStore` as the page-store adapter over raw disk I/O.
+- Atomic page-write protocol and page-integrity mode checks.
+- Extent-to-file offset mapping for disk-backed pages.
 
 Future work in this crate may own:
 
-- Disk page identifiers, file layout policy, read and write operations, and sync boundaries.
 - Durability evidence for page writes and error classification for short reads, short writes, and sync failures.
 - Coordination with page codecs, buffer-pool flush policy, manifests, and recovery.
-- Typed errors for I/O, format, durability, and allocation failures.
 
 ## Non-goals
 
@@ -46,7 +51,15 @@ Before behavior lands here:
 
 ## Validation
 
-Run `cargo check -p andromeda-disk-page-store`. Future I/O behavior requires `cargo fmt`, `cargo clippy`, disk page-store contract tests, fault-injection tests, and crash/recovery scenarios.
+Run:
+
+```powershell
+cargo check -p andromeda-disk-page-store --all-targets --all-features
+cargo test -p andromeda-disk-page-store --all-targets --all-features
+```
+
+Future I/O behavior requires `cargo fmt`, `cargo clippy`, disk page-store
+contract tests, fault-injection tests, and crash/recovery scenarios.
 
 ## Troubleshooting
 
@@ -55,4 +68,4 @@ If durable page state cannot be distinguished from a short write or unsynced wri
 ## References
 
 - `src/lib.rs`
-- Existing owner: `crates/andromeda-storage/`
+- Compatibility facade: `crates/andromeda-storage/src/disk_manager/mod.rs`

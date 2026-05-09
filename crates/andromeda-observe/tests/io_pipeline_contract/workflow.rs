@@ -59,7 +59,7 @@ fn core_io_workflow_correlates_placement_budget_and_gpu_policy_traces() {
             assert!(!trace.accepted);
             assert!(trace.reason.contains("critical path"));
             assert!(trace.reason.contains("commit"));
-        }
+        },
         _ => panic!("expected GPU policy decision trace"),
     }
 

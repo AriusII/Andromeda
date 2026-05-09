@@ -46,8 +46,8 @@ impl<'a> DurableAuditTraceQuerySource<'a> {
             match previous_matching_event_id {
                 Some(previous_event_id) if row.event_id < previous_event_id => {
                     ordered_by_event_id_ascending = false;
-                }
-                _ => {}
+                },
+                _ => {},
             }
             previous_matching_event_id = Some(row.event_id);
 
@@ -143,26 +143,26 @@ impl DurableAuditTraceQueryRow {
         match filter.trace_id {
             Some(trace_id) if self.trace_id != trace_id => {
                 return false;
-            }
-            _ => {}
+            },
+            _ => {},
         }
         match filter.family {
             Some(family) if self.family != family => {
                 return false;
-            }
-            _ => {}
+            },
+            _ => {},
         }
         match filter.lsn_range {
             Some(range) if !matches_lsn_range(self, range) => {
                 return false;
-            }
-            _ => {}
+            },
+            _ => {},
         }
         match &filter.principal {
             Some(principal) if self.principal_id != *principal => {
                 return false;
-            }
-            _ => {}
+            },
+            _ => {},
         }
         true
     }
@@ -174,8 +174,8 @@ fn validate_supported_filters(spec: &TraceQuerySpec) -> AndromedaResult<()> {
             return Err(durable_inspection_error(
                 "durable audit trace inspection principal filter must not contain secret evidence",
             ));
-        }
-        _ => {}
+        },
+        _ => {},
     }
     if spec.filter.catalog_version.is_some() {
         return Err(durable_inspection_error(
@@ -216,7 +216,7 @@ fn recovery_trace_family(event_kind: &str) -> AndromedaResult<TraceEventFamily> 
         "RecoveryStartup" => Ok(TraceEventFamily::Recovery),
         "WalAppend" | "WalFlush" | "CommitVisible" | "RollbackDurable" | "CorruptionBoundary" => {
             Ok(TraceEventFamily::Wal)
-        }
+        },
         _ => Err(durable_inspection_error(
             "durable audit recovery replay record carries unknown event_kind evidence",
         )),

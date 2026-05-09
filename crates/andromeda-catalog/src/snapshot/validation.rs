@@ -11,8 +11,8 @@ use std::collections::BTreeSet;
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{
-    CatalogDefinition, DefinitionBatch, DefinitionBatchPlan, DefinitionOperation,
-    PlannedDefinition, PlannedLifecycleTransition,
+    CatalogDefinition, CatalogDefinitionBatchPlanning, DefinitionBatch, DefinitionBatchPlan,
+    DefinitionOperation, PlannedDefinition, PlannedLifecycleTransition,
 };
 
 use super::core::CatalogSnapshot;
@@ -75,11 +75,11 @@ impl CatalogSnapshot {
                     }
 
                     self.validate_definition_dependencies(
-                        definition,
+                        &definition,
                         &plan.created_objects,
                         &plan.deprecated_objects,
                     )?;
-                }
+                },
                 DefinitionOperation::Deprecate(target) => {
                     let Some(existing) = self.get_by_id(target.object.object_id) else {
                         return Err(AndromedaError::new(
@@ -107,7 +107,7 @@ impl CatalogSnapshot {
                             "definition batch cannot deprecate an inactive catalog object",
                         ));
                     }
-                }
+                },
             }
         }
 

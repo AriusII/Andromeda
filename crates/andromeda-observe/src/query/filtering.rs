@@ -14,26 +14,26 @@ pub(super) fn matches_filter(envelope: &EventEnvelope, spec: &TraceQuerySpec) ->
     match filter.trace_id {
         Some(trace_id) if envelope.trace_id != trace_id => {
             return false;
-        }
-        _ => {}
+        },
+        _ => {},
     }
     match filter.family {
         Some(family) if TraceEventFamily::of(&envelope.event) != family => {
             return false;
-        }
-        _ => {}
+        },
+        _ => {},
     }
     match filter.lsn_range {
         Some(range) if !matches_lsn_range(envelope, range) => {
             return false;
-        }
-        _ => {}
+        },
+        _ => {},
     }
     match filter.catalog_version {
         Some(catalog_version) if envelope.correlation.catalog_version != Some(catalog_version) => {
             return false;
-        }
-        _ => {}
+        },
+        _ => {},
     }
     if let Some(procedure_id) = filter.procedure_id {
         let expected = CatalogObjectId::new(procedure_id.get());
@@ -44,8 +44,8 @@ pub(super) fn matches_filter(envelope: &EventEnvelope, spec: &TraceQuerySpec) ->
     match &filter.principal {
         Some(principal) if principal_of(&envelope.event) != Some(principal.as_str()) => {
             return false;
-        }
-        _ => {}
+        },
+        _ => {},
     }
     true
 }

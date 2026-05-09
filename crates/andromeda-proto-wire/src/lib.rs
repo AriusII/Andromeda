@@ -9,6 +9,10 @@ mod hash;
 mod protobuf;
 mod result_metadata;
 
+pub use andromeda_rpc_protocol::{
+    BackpressureMetadata, COMPLETION_ENVELOPE_VERSION, ErrorEnvelope, ErrorFamily,
+    RetryDisposition, TransactionEffect,
+};
 pub use envelope::{
     AUTH_WIRE_CODE, CONTRACT_REQUEST_WIRE_CODE, CONTRACT_RESPONSE_WIRE_CODE, ERROR_WIRE_CODE,
     FrameEnvelope, HELLO_WIRE_CODE, PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP, PayloadFrameFamily,
@@ -16,9 +20,6 @@ pub use envelope::{
     RPC_COMPLETION_WIRE_CODE, RPC_EXECUTE_REQUEST_WIRE_CODE, RPC_METADATA_WIRE_CODE,
     RpcResultStreamMetadataPolicy, project_generated_frame_envelope,
     project_generated_payload_kind, project_generated_protocol_version,
-};
-pub use andromeda_rpc_protocol::{
-    BackpressureMetadata, ErrorEnvelope, ErrorFamily, RetryDisposition, TransactionEffect,
 };
 pub use generated::{
     CONTRACT_PACKAGE, DESCRIPTOR_SET_HASH_ALGORITHM, GeneratedColumnDescriptor,

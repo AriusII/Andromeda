@@ -94,40 +94,40 @@ impl TraceQuerySpec {
                 return Err(trace_query_error(
                     "trace query trace_id filter must be non-zero when present",
                 ));
-            }
-            _ => {}
+            },
+            _ => {},
         }
         match self.filter.lsn_range {
             Some(range) if !range.is_valid() => {
                 return Err(trace_query_error(
                     "trace query LSN range must be non-zero and start_lsn <= end_lsn",
                 ));
-            }
-            _ => {}
+            },
+            _ => {},
         }
         match self.filter.catalog_version {
             Some(catalog_version) if catalog_version.get() == 0 => {
                 return Err(trace_query_error(
                     "trace query catalog_version filter must be non-zero when present",
                 ));
-            }
-            _ => {}
+            },
+            _ => {},
         }
         match self.filter.procedure_id {
             Some(procedure_id) if procedure_id.get() == 0 => {
                 return Err(trace_query_error(
                     "trace query procedure_id filter must be non-zero when present",
                 ));
-            }
-            _ => {}
+            },
+            _ => {},
         }
         match &self.filter.principal {
             Some(principal) if principal.trim().is_empty() => {
                 return Err(trace_query_error(
                     "trace query principal filter must be non-empty when present",
                 ));
-            }
-            _ => {}
+            },
+            _ => {},
         }
         Ok(())
     }

@@ -20,14 +20,30 @@ use std::fmt::{Display, Formatter};
 
 use andromeda_wal::Lsn;
 
+mod atomic_write;
+mod error;
+mod extent_map;
+mod file;
+mod integrity;
+mod interface;
 mod layout_codec;
+mod page_store;
 
+pub use andromeda_segment::{ExtentDescriptor, ExtentId};
+pub use andromeda_storage_page::{
+    AllocationId, ObjectId, PageFlags, PageHeader, PageId, PageImage, PageLayoutContract, PageSize,
+    PageStore, PageTrailer, PageType, integrity_trailer_for_payload, validate_payload_integrity,
+};
+pub use error::DiskManagerError;
+pub use file::FileDiskManager;
+pub use interface::DiskManager;
 pub use layout_codec::{
     NONE_PAGE_ID, PAGE_SIZE_16K, PAGE_SIZE_32K, PAGE_TRAILER_V0_LEN, PAGE_TYPE_FIXED_ROW,
     PAGE_TYPE_FREE, PAGE_TYPE_HYBRID_ROW, PAGE_TYPE_MANIFEST, PERSISTED_HEADER_LEN,
     PageLayoutCodecError, PersistedPageLayoutV1, decode_optional_page_id,
     encode_page_size_16k_or_32k, optional_page_id_value, page_size_bytes_const,
 };
+pub use page_store::DiskPageStore;
 
 /// Explicit integrity mode for durable pages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

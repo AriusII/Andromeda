@@ -8,8 +8,9 @@
 
 mod advisory_boundary;
 mod benchmark_history;
+mod crud_result;
 mod evidence;
-mod flat_json;
+pub mod flat_json;
 mod history_store;
 mod plan_cache_bridge;
 mod scenario_boundary;
@@ -28,6 +29,7 @@ pub use benchmark_history::{
     BenchmarkHistoryAdvisoryMetadata, BenchmarkHistoryRecord, HistoryQuery, HistoryQueryResult,
     TimeRange,
 };
+pub use crud_result::CrudWorkloadResult;
 pub use evidence::{
     BENCHMARK_EVIDENCE_AUTHORITATIVE, BENCHMARK_EVIDENCE_CAN_SELECT_PLAN_ALONE,
     BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY,

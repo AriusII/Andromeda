@@ -344,7 +344,10 @@ fn phase1_column(name: &str, scalar: ScalarType, ordinal: u32) -> ColumnDescript
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{compute_structured_object_shape_hash, structured_object_shape_hash_compatible};
+    use crate::{
+        CatalogDefinitionBatchPlanning, compute_structured_object_shape_hash,
+        structured_object_shape_hash_compatible,
+    };
     use andromeda_error::AndromedaErrorKind;
 
     #[test]

@@ -16,6 +16,7 @@ Catalog publication remains outside this crate and must not become visible
 without durable WAL.
 "#]
 
+mod batch;
 mod dependencies;
 mod dry_run;
 mod identity;
@@ -24,6 +25,7 @@ mod source;
 mod srpl_bridge;
 mod taxonomy;
 
+pub use batch::DefinitionBatch;
 pub use dependencies::{
     BatchDependencyGraph, CatalogDependency, CatalogDependencyKind,
     DefinitionBatchDependencyGraphHash, validate_in_batch_dependencies,

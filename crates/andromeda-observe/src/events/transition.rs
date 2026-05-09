@@ -249,16 +249,16 @@ impl ExecutionTransitionTrace {
                 return Err(observe_error(
                     "execution transition prev_phase must reference a known phase",
                 ));
-            }
-            _ => {}
+            },
+            _ => {},
         }
         match self.next_phase {
             Some(next) if !next.is_known() => {
                 return Err(observe_error(
                     "execution transition next_phase must reference a known phase",
                 ));
-            }
-            _ => {}
+            },
+            _ => {},
         }
         if !self.has_reason() {
             return Err(observe_error(
@@ -297,17 +297,17 @@ impl ExecutionTransitionTrace {
         let decision = match self.next_phase {
             Some(phase) if phase == TransactionPhaseCode::COMMITTED => {
                 CriticalDecisionKind::CommitVisible
-            }
+            },
             Some(phase) if phase == TransactionPhaseCode::ROLLED_BACK => {
                 CriticalDecisionKind::RollbackDurable
-            }
+            },
             _ => match self.reason_code {
                 TransitionReasonCode::PERMISSION_DENIED => {
                     CriticalDecisionKind::AuthorizationDenial
-                }
+                },
                 TransitionReasonCode::PRE_TRANSACTION_REJECTION => {
                     CriticalDecisionKind::ContractRejected
-                }
+                },
                 _ => CriticalDecisionKind::CompletionEmitted,
             },
         };

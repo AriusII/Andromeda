@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::advisory_boundary::validate_advisory_only_fields;
-use crate::flat_json::JsonField;
+use andromeda_scenario_evidence::flat_json::JsonField;
 
 pub(super) fn verify_advisory_fields(fields: &HashMap<String, JsonField>) -> Result<(), String> {
     validate_advisory_only_fields(fields, "baseline")

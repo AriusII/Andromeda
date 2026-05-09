@@ -33,11 +33,11 @@ pub fn compute_definition_batch_source_hash(
                 sink.u8(0);
                 sink.object_ref(definition.object_ref());
                 sink.raw_bytes(&definition.shape_hash().as_bytes());
-            }
+            },
             DefinitionOperation::Deprecate(target) => {
                 sink.u8(1);
                 sink.object_ref(&target.object);
-            }
+            },
         }
     }
     sink.finish()

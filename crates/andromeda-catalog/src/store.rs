@@ -6,9 +6,8 @@
 //! to publish the next visible snapshot with a catalog-local receipt.
 
 use andromeda_catalog_store::{
-    CatalogStoreApplyReport, CatalogStoreDurableApplyReport, CatalogStoreMutationKind,
-    CatalogStoreWalAppend, CatalogStoreWalAppendSequenceError,
-    validate_catalog_store_wal_append_sequence,
+    CatalogStoreApplyReport, CatalogStoreDurableApplyReport, CatalogStoreWalAppend,
+    CatalogStoreWalAppendSequenceError, validate_catalog_store_wal_append_sequence,
 };
 use andromeda_error::AndromedaResult;
 use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId};
@@ -30,12 +29,6 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CatalogSystemStore {
     snapshot: CatalogSnapshot,
-}
-
-impl CatalogStoreMutationKind for CatalogMutationRecordKind {
-    fn is_commit_record(self) -> bool {
-        self == CatalogMutationRecordKind::CatalogChangeCommit
-    }
 }
 
 impl CatalogSystemStore {

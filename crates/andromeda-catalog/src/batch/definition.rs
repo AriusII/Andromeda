@@ -1,53 +1,25 @@
 //! Catalog compatibility facade for DefinitionBatch.
 
-pub use andromeda_definition_batch::{CatalogLifecycleTarget, DefinitionOperation};
-use andromeda_definition_batch::{
-    DefinitionBatchId, DefinitionBatchSourceHash, compute_definition_batch_source_hash,
-    dry_run_definition_batch, validate_in_batch_dependencies,
+use andromeda_definition_batch::dry_run_definition_batch;
+pub use andromeda_definition_batch::{
+    CatalogLifecycleTarget, DefinitionBatch, DefinitionOperation,
 };
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId};
+use andromeda_types::CatalogVersion;
 
 use super::mutation::{CatalogMutation, CatalogMutationDelta, CatalogMutationPlan};
 use super::plan::DefinitionBatchPlan;
-use crate::DefinitionBatchDependencyGraphHash;
 
-/// An ordered, atomic set of catalog object definition operations.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DefinitionBatch {
-    pub batch_id: DefinitionBatchId,
-    pub database_id: DatabaseId,
-    pub namespace_id: NamespaceId,
-    pub base_version: CatalogVersion,
-    pub operations: Vec<DefinitionOperation>,
-}
-
-impl DefinitionBatch {
-    /// Computes a deterministic digest over the exact ordered batch source.
-    ///
-    /// This hash intentionally includes operation order and object shape
-    /// hashes. It complements [`DefinitionBatchDependencyGraphHash`], which
-    /// canonicalizes the dependency graph and therefore ignores source order
-    /// when the graph itself is equivalent.
-    pub fn source_hash(&self) -> DefinitionBatchSourceHash {
-        compute_definition_batch_source_hash(
-            self.batch_id,
-            self.database_id,
-            self.namespace_id,
-            self.base_version,
-            &self.operations,
-        )
-    }
-
-    /// Validates and computes the canonical dependency-graph digest for this
-    /// batch.
-    pub fn dependency_graph_hash(&self) -> AndromedaResult<DefinitionBatchDependencyGraphHash> {
-        validate_in_batch_dependencies(&self.operations).map(|graph| graph.dependency_graph_hash())
-    }
-
+/// Catalog-local extension that turns a portable DefinitionBatch into a
+/// runtime mutation/WAL plan.
+pub trait CatalogDefinitionBatchPlanning {
     /// Validates all operations and produces a [`DefinitionBatchPlan`] without
     /// applying any mutations.
-    pub fn dry_run(&self) -> AndromedaResult<DefinitionBatchPlan> {
+    fn dry_run(&self) -> AndromedaResult<DefinitionBatchPlan>;
+}
+
+impl CatalogDefinitionBatchPlanning for DefinitionBatch {
+    fn dry_run(&self) -> AndromedaResult<DefinitionBatchPlan> {
         let dry_run = dry_run_definition_batch(
             self.batch_id,
             self.database_id,
@@ -103,10 +75,10 @@ fn mutation_deltas(
         .map(|(operation_index, operation)| match operation {
             DefinitionOperation::Create(definition) => {
                 CatalogMutationDelta::create(operation_index, next_version, definition.clone())
-            }
+            },
             DefinitionOperation::Deprecate(target) => {
                 CatalogMutationDelta::deprecate(operation_index, next_version, target.clone())
-            }
+            },
         })
         .collect()
 }

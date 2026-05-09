@@ -2,7 +2,8 @@ use std::time::Instant;
 
 use andromeda_bench_harness::{
     BenchmarkTempDir, BenchmarkTempFile, LatencyEvidence, SYNTHETIC_LATENCY_SOURCE,
-    SYNTHETIC_MODEL_VERSION, elapsed_micros, requested_sample_counters, synthetic_latency_evidence,
+    SYNTHETIC_MODEL_VERSION, elapsed_micros, requested_sample_counters,
+    run_bounded_benchmark_with_latency_dispatch, synthetic_latency_evidence,
 };
 use andromeda_bench_workload::BenchmarkRunRequest;
 use andromeda_scenario_evidence::BenchmarkMeasurementMode;
@@ -38,5 +39,27 @@ fn crate_root_exports_synthetic_latency_helpers() {
     assert_eq!(
         evidence.synthetic_model_version,
         Some(SYNTHETIC_MODEL_VERSION)
+    );
+}
+
+#[test]
+fn bounded_runner_assembles_advisory_evidence_from_injected_latency() {
+    let mut request = BenchmarkRunRequest::new("protocol-smoke-contract");
+    request.samples = 5;
+    request.warmups = 1;
+    request.duration_ms = 1_000;
+
+    let evidence = run_bounded_benchmark_with_latency_dispatch(&request, |workload_id, request| {
+        synthetic_latency_evidence(workload_id, request)
+    })
+    .unwrap();
+
+    assert_eq!(evidence.workload_id, "protocol-smoke-contract");
+    assert!(evidence.diagnostic_only);
+    assert_eq!(evidence.started_at_unix_ms, 0);
+    assert_eq!(evidence.elapsed_ms, 6);
+    assert_eq!(
+        evidence.measurement_mode,
+        BenchmarkMeasurementMode::SyntheticDiagnostic
     );
 }

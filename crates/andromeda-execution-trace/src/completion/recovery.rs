@@ -20,7 +20,7 @@ impl CompletionRecoveryExpectation {
     /// `TransactionId`. This is the preferred constructor for production
     /// recovery code: the caller is expected to feed in the id observed in
     /// the durable WAL (or allocated through
-    /// [`andromeda_tx::TransactionManager`]) so the expectation matches the
+    /// [`andromeda_transaction::TransactionManager`]) so the expectation matches the
     /// id the dispatcher actually stamped on each record.
     pub fn for_invocation_with_transaction(
         invocation_id: InvocationId,
@@ -41,7 +41,7 @@ impl CompletionRecoveryExpectation {
     /// **Test/compatibility only.** Production recovery callers must use
     /// [`Self::for_invocation_with_transaction`]: direct value reuse from
     /// the invocation namespace breaks monotonicity across restarts and is
-    /// incompatible with [`andromeda_tx::TransactionManager`] allocation.
+    /// incompatible with [`andromeda_transaction::TransactionManager`] allocation.
     #[allow(deprecated)]
     pub fn for_invocation(invocation_id: InvocationId) -> Self {
         Self::for_invocation_with_transaction(
@@ -92,7 +92,7 @@ impl CompletionRecoveryExpectation {
 
 #[deprecated(
     since = "0.1.0",
-    note = "use andromeda_tx::TransactionManager::begin to allocate \
+    note = "use andromeda_transaction::TransactionManager::begin to allocate \
             recovery-safe TransactionIds"
 )]
 const fn legacy_transaction_id_for_invocation(invocation_id: InvocationId) -> TransactionId {

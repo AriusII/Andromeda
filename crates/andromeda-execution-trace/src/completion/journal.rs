@@ -4,7 +4,7 @@ use andromeda_core::{
 use andromeda_observe::TraceId;
 use andromeda_result_stream::{CompletionStatus, InvocationCompletion};
 use andromeda_storage::Lsn;
-use andromeda_tx::TransactionState;
+use andromeda_transaction::TransactionState;
 use std::collections::{BTreeMap, btree_map::Entry};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

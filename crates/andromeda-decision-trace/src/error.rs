@@ -24,27 +24,27 @@ impl core::fmt::Display for DecisionTraceError {
             Self::ReasonCodeEmpty => f.write_str("DecisionTrace reason code must not be empty"),
             Self::ReasonCodeTooLong => {
                 f.write_str("DecisionTrace reason code exceeds the bounded limit")
-            }
+            },
             Self::ExplanationEmpty => f.write_str("DecisionTrace explanation must not be empty"),
             Self::ExplanationTooLong => {
                 f.write_str("DecisionTrace explanation exceeds the bounded limit")
-            }
+            },
             Self::EvidenceLabelEmpty => {
                 f.write_str("DecisionTrace evidence label must not be empty")
-            }
+            },
             Self::EvidenceLabelTooLong => {
                 f.write_str("DecisionTrace evidence label exceeds the bounded limit")
-            }
+            },
             Self::EvidenceDigestZero => {
                 f.write_str("DecisionTrace evidence digest must not be all zero")
-            }
+            },
             Self::TooManyEvidenceReferences => {
                 f.write_str("DecisionTrace evidence reference count exceeds the bounded limit")
-            }
+            },
             Self::ProcedureIdZero => f.write_str("DecisionTrace procedure id must not be zero"),
             Self::CatalogVersionZero => {
                 f.write_str("DecisionTrace catalog version must not be zero")
-            }
+            },
             Self::ContractHashZero => f.write_str("DecisionTrace contract hash must not be zero"),
             Self::StatsVersionZero => f.write_str("DecisionTrace stats version must not be zero"),
             Self::PolicyVersionZero => f.write_str("DecisionTrace policy version must not be zero"),

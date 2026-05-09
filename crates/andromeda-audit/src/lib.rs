@@ -10,6 +10,7 @@ mod admin;
 mod admission;
 mod backup;
 mod core;
+mod durable_audit;
 mod hadr;
 mod helpers;
 mod identity;
@@ -25,6 +26,14 @@ pub use admission::{
 };
 pub use backup::{BackupAuditEvent, BackupAuditTrace, BackupId, RecoveryStage, RestoreCompletion};
 pub use core::AuditTrace;
+pub use durable_audit::{
+    DurableAuditEventFamily, DurableAuditFailureKind, DurableAuditPolicyEvidenceRequirement,
+    DurableAuditPrincipalBinding, DurableAuditRecordIdentity, DurableAuditReplayBehavior,
+    DurableAuditReplayEvidence, DurableAuditReplayLsnRange, DurableAuditReplayQuery,
+    DurableAuditReplayRecord, DurableAuditReplayResult, DurableAuditReplayWindow,
+    DurableAuditRetentionBoundary, DurableAuditSinkReport, DurableAuditWalEvidence,
+    classify_policy_evidence_requirement,
+};
 pub use hadr::{
     FencingDecision, FencingEvent, FencingPolicy, HadrAuditEvent, HadrAuditTrace,
     PromotionCompletion, PromotionEligibility, QuorumRole, ReplicaHealthState,

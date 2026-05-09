@@ -9,6 +9,9 @@ use crate::DefinitionBatchDependencyGraphHash;
 
 use super::definition::CatalogLifecycleTarget;
 
+pub use andromeda_catalog_recovery::{
+    CatalogMutationRecordKind, CatalogWalPayloadDecodeError, CatalogWalPayloadDecodeErrorKind,
+};
 pub use andromeda_catalog_store::{
     CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH, CatalogPublicationSemantics,
 };
@@ -26,84 +29,6 @@ pub type CatalogMutationDelta =
 
 pub type CatalogMutationOperation =
     andromeda_catalog_store::CatalogMutationOperation<CatalogLifecycleTarget>;
-
-/// Discriminant for a [`CatalogMutationRecord`] entry.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CatalogMutationRecordKind {
-    CatalogChangeBegin,
-    CatalogChangeApply,
-    CatalogChangeCommit,
-}
-
-/// Stable typed failure class for decoding durable catalog WAL payloads.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CatalogWalPayloadDecodeErrorKind {
-    TruncatedHeader,
-    MagicMismatch,
-    LegacyFormatVersion,
-    UnsupportedFormatVersion,
-    UnknownRecordKindTag,
-    BodyLengthOverflow,
-    BodyLengthMismatch,
-    ChecksumMismatch,
-    BodyInvalid,
-}
-
-impl CatalogWalPayloadDecodeErrorKind {
-    pub const fn stable_code(self) -> &'static str {
-        match self {
-            Self::TruncatedHeader => "catalog_wal_payload_truncated_header",
-            Self::MagicMismatch => "catalog_wal_payload_magic_mismatch",
-            Self::LegacyFormatVersion => "catalog_wal_payload_legacy_format_version",
-            Self::UnsupportedFormatVersion => "catalog_wal_payload_unsupported_format_version",
-            Self::UnknownRecordKindTag => "catalog_wal_payload_unknown_record_kind_tag",
-            Self::BodyLengthOverflow => "catalog_wal_payload_body_length_overflow",
-            Self::BodyLengthMismatch => "catalog_wal_payload_body_length_mismatch",
-            Self::ChecksumMismatch => "catalog_wal_payload_checksum_mismatch",
-            Self::BodyInvalid => "catalog_wal_payload_body_invalid",
-        }
-    }
-}
-
-/// Typed durable catalog WAL decode failure with a stable class and detail.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogWalPayloadDecodeError {
-    kind: CatalogWalPayloadDecodeErrorKind,
-    detail: String,
-}
-
-impl CatalogWalPayloadDecodeError {
-    pub(crate) fn new(kind: CatalogWalPayloadDecodeErrorKind, detail: impl Into<String>) -> Self {
-        Self {
-            kind,
-            detail: detail.into(),
-        }
-    }
-
-    pub(crate) fn from_body_error(error: AndromedaError) -> Self {
-        Self::new(
-            CatalogWalPayloadDecodeErrorKind::BodyInvalid,
-            error.message().to_string(),
-        )
-    }
-
-    pub const fn kind(&self) -> CatalogWalPayloadDecodeErrorKind {
-        self.kind
-    }
-
-    pub fn detail(&self) -> &str {
-        &self.detail
-    }
-}
-
-impl From<CatalogWalPayloadDecodeError> for AndromedaError {
-    fn from(error: CatalogWalPayloadDecodeError) -> Self {
-        AndromedaError::new(
-            AndromedaErrorKind::Catalog,
-            format!("{}: {}", error.kind.stable_code(), error.detail),
-        )
-    }
-}
 
 /// A WAL record emitted during catalog mutation replay.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -249,7 +174,7 @@ impl CatalogMutationPlan {
                             "catalog mutation plan must not change the same object name twice",
                         ));
                     }
-                }
+                },
                 CatalogMutationOperation::DeprecateObject { target } => {
                     target.validate()?;
                     if target.object.catalog_version > previous_version {
@@ -272,7 +197,7 @@ impl CatalogMutationPlan {
                             "catalog mutation plan must not change the same object name twice",
                         ));
                     }
-                }
+                },
             }
         }
 

@@ -7,7 +7,6 @@
 //! WAL, recovery, catalog, or security decisions by themselves.
 
 mod advisory_boundary;
-mod flat_json;
 mod regression_detection;
 
 mod metric_math {

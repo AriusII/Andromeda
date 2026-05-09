@@ -29,7 +29,7 @@ fn io_pipeline_decisions_preserve_tier_pipeline_budget_and_reason_evidence() {
             assert_eq!(trace.selected_tier, IoStorageTier::Hot);
             assert!(trace.accepted);
             assert!(trace.reason.contains("hot tier"));
-        }
+        },
         _ => panic!("expected IO placement decision trace"),
     }
 
@@ -65,7 +65,7 @@ fn io_pipeline_decisions_preserve_tier_pipeline_budget_and_reason_evidence() {
             assert_eq!(trace.budget.max_streams, 4);
             assert!(trace.accepted);
             assert!(trace.reason.contains("within declared limits"));
-        }
+        },
         _ => panic!("expected IO budget decision trace"),
     }
 

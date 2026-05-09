@@ -5,10 +5,11 @@ use andromeda_exec::{
     map_exec_wal_evidence_to_tx_replay,
 };
 use andromeda_storage::{FileWal, InMemoryWal, Lsn as StorageLsn, WalRecord, WalRecordKind};
+use andromeda_tx::CommitLogManager;
 use andromeda_tx::{
-    CommitLogManager, IsolationLevel, Lsn, TransactionStatus, TransactionStatusTable,
-    TxWalReplayRecord,
+    InvocationWal as TransactionInvocationWal, IsolationLevel, Lsn, TxWalReplayRecord,
 };
+use andromeda_tx::{TransactionStatus, TransactionStatusTable};
 use std::{
     fs,
     path::PathBuf,
@@ -56,7 +57,7 @@ fn record(
     .expect("test WAL record should be valid")
 }
 
-fn replay_wal() -> Arc<dyn andromeda_tx::commit_log::InvocationWal> {
+fn replay_wal() -> Arc<dyn TransactionInvocationWal> {
     Arc::new(CommitLogInvocationWal::new(InMemoryWal::new()))
 }
 
@@ -119,7 +120,7 @@ async fn commit_log_manager_uses_exec_file_wal_bridge_for_terminal_records() -> 
     let path = unique_wal_path("tx-commit-log-wal-bridge");
     let bridge = Arc::new(CommitLogInvocationWal::new(FileWal::open(&path)?));
     let status_table = Arc::new(TransactionStatusTable::new());
-    let wal_manager: Arc<dyn andromeda_tx::commit_log::InvocationWal> = bridge.clone();
+    let wal_manager: Arc<dyn TransactionInvocationWal> = bridge.clone();
     let commit_log = CommitLogManager::new(wal_manager.clone(), status_table.clone());
 
     let committed = TransactionId::new(101);

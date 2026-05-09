@@ -114,10 +114,10 @@ impl ProtocolRejectionTrace {
             ProtocolRejectionReason::SurfacePlaneMismatch => self.surface_plane.is_some(),
             ProtocolRejectionReason::FrameFamilyNotPermitted => {
                 self.surface_plane.is_some() && self.frame_type_code.is_some()
-            }
+            },
             ProtocolRejectionReason::ResultStreamSequenceViolation => {
                 self.frame_type_code.is_some()
-            }
+            },
             ProtocolRejectionReason::OversizedPayload => self.payload_length.is_some(),
             ProtocolRejectionReason::PreAuthCommandRejected => self.pre_auth,
             ProtocolRejectionReason::OtherFraming => true,
@@ -135,7 +135,7 @@ impl ProtocolRejectionTrace {
             ProtocolRejectionReason::FrameFamilyNotPermitted
             | ProtocolRejectionReason::SurfacePlaneMismatch => {
                 CriticalDecisionKind::StreamRoleRejection
-            }
+            },
             _ => CriticalDecisionKind::FrameRejection,
         };
         DecisionTrace {

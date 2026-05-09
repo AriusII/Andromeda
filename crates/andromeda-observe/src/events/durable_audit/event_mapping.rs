@@ -12,7 +12,7 @@ pub(crate) fn durable_audit_family(event: &TraceEvent) -> Option<DurableAuditEve
         | TraceEvent::SchemaLayoutDecision(_) => Some(DurableAuditEventFamily::AdmissionDecision),
         TraceEvent::CatalogMutation(_) | TraceEvent::Manifest(_) => {
             Some(DurableAuditEventFamily::CatalogDecision)
-        }
+        },
         TraceEvent::Wal(_)
         | TraceEvent::WalEvent(_)
         | TraceEvent::CommitVisible(_)

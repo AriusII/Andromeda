@@ -18,8 +18,6 @@ mod contract_validation;
 mod error_paths;
 #[path = "validation_gates/ir_lowering.rs"]
 mod ir_lowering;
-#[path = "validation_gates/lexer_parser.rs"]
-mod lexer_parser;
 #[path = "validation_gates/performance_concurrency.rs"]
 mod performance_concurrency;
 #[path = "validation_gates/summary.rs"]

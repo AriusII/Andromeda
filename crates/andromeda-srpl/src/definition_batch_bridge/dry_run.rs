@@ -1,7 +1,8 @@
 use andromeda_catalog::{
-    CatalogDefinition, CatalogMutationRecordKind, CatalogSystemDurableApplyReport,
-    CatalogSystemStore, DefinitionBatch, DefinitionBatchDependencyGraphHash, DefinitionBatchId,
-    DefinitionBatchPlan, DefinitionBatchSourceHash, DefinitionOperation,
+    CatalogDefinition, CatalogDefinitionBatchPlanning, CatalogMutationRecordKind,
+    CatalogSystemDurableApplyReport, CatalogSystemStore, DefinitionBatch,
+    DefinitionBatchDependencyGraphHash, DefinitionBatchId, DefinitionBatchPlan,
+    DefinitionBatchSourceHash, DefinitionOperation,
 };
 use andromeda_definition_batch::{
     MAX_SRPL_DEFINITION_BATCH_PROCEDURES, SrplDefinitionBatchDiagnostic,

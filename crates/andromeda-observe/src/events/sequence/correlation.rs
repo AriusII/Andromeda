@@ -63,8 +63,8 @@ impl InMemoryEventSequence {
                 return Err(observe_error(format!(
                     "procedure lifecycle {label} correlation must remain stable across the sequence",
                 )));
-            }
-            _ => {}
+            },
+            _ => {},
         }
 
         Ok(())

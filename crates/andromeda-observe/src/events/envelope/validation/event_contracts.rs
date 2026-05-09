@@ -65,7 +65,7 @@ pub(super) fn validate_event_contracts(envelope: &EventEnvelope) -> AndromedaRes
             Err(observe_error(
                 "contract rejected traces require contract kind and rejection code evidence",
             ))
-        }
+        },
         TraceEvent::AuthorizationDenied(trace) if !trace.has_reason() => Err(observe_error(
             "authorization denial traces require a non-empty reason",
         )),
@@ -85,7 +85,7 @@ pub(super) fn validate_event_contracts(envelope: &EventEnvelope) -> AndromedaRes
             Err(observe_error(
                 "security audit trace certificate surface mismatch requires a denied surface_scope_mismatch reason",
             ))
-        }
+        },
         TraceEvent::SecurityAudit(trace) if !trace.surface_permits_permission() => Err(
             observe_error("security audit traces require surface scope matching permission family"),
         ),
@@ -100,7 +100,7 @@ pub(super) fn validate_event_contracts(envelope: &EventEnvelope) -> AndromedaRes
         ),
         TraceEvent::AdminOperation(trace) if !trace.surface_permits_operation() => {
             Err(observe_error("surface cannot carry admin operation traces"))
-        }
+        },
         TraceEvent::AdminOperation(trace) if !trace.has_identity_evidence() => Err(observe_error(
             "admin operation traces require certificate and principal identity evidence",
         )),
@@ -111,7 +111,7 @@ pub(super) fn validate_event_contracts(envelope: &EventEnvelope) -> AndromedaRes
             Err(observe_error(
                 "admin operation traces require permission evidence matching the operation",
             ))
-        }
+        },
         TraceEvent::AdminOperation(trace) if !trace.has_reason() => Err(observe_error(
             "admin operation traces require a non-empty reason",
         )),
@@ -122,7 +122,7 @@ pub(super) fn validate_event_contracts(envelope: &EventEnvelope) -> AndromedaRes
             Err(observe_error(
                 "unsupported version traces require offered, minimum, and maximum version evidence",
             ))
-        }
+        },
         TraceEvent::SchemaLayoutDecision(trace) if !trace.has_reason() => Err(observe_error(
             "schema/layout decision traces require a non-empty reason",
         )),
@@ -130,7 +130,7 @@ pub(super) fn validate_event_contracts(envelope: &EventEnvelope) -> AndromedaRes
             Err(observe_error(
                 "schema/layout decision traces require schema and layout numeric evidence",
             ))
-        }
+        },
         TraceEvent::CorruptionBoundary(trace) if !trace.proves_boundary() => Err(observe_error(
             "corruption boundary traces require boundary LSN and reason",
         )),
@@ -147,7 +147,7 @@ pub(super) fn validate_event_contracts(envelope: &EventEnvelope) -> AndromedaRes
             Err(observe_error(
                 "placement audit events require transition-specific segment/extent evidence",
             ))
-        }
+        },
         TraceEvent::PlacementAudit(trace) if !trace.outcome_matches_transition() => Err(
             observe_error("placement audit event acceptance must match transition semantics"),
         ),
@@ -161,7 +161,7 @@ pub(super) fn validate_event_contracts(envelope: &EventEnvelope) -> AndromedaRes
             Err(observe_error(
                 "IO budget decision outcome must match requested usage and budget limits",
             ))
-        }
+        },
         TraceEvent::GpuPolicyDecision(trace) if !trace.has_reason() => Err(observe_error(
             "GPU policy decision traces require a non-empty reason",
         )),
@@ -169,7 +169,7 @@ pub(super) fn validate_event_contracts(envelope: &EventEnvelope) -> AndromedaRes
             Err(observe_error(
                 "GPU policy decision outcome must match availability, policy, and pipeline",
             ))
-        }
+        },
         _ => Ok(()),
     }
 }

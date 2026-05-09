@@ -26,6 +26,8 @@ classification and envelope contracts compile-safe here.
 mod durable_payload;
 mod mutation;
 mod publication;
+mod replay_report;
+mod wal_record;
 
 pub use durable_payload::{
     decode_catalog_durable_payload, encode_catalog_durable_payload,
@@ -54,4 +56,11 @@ pub use publication::{
     replay_publication_subscription_changes, validate_catalog_publication_receipt,
     validate_subscription_acknowledgement_for_publication,
     validate_visible_change_audit_for_publication,
+};
+pub use replay_report::{
+    CatalogRecoveredBatch, CatalogRecoveryAnomaly, CatalogRecoveryReport, CatalogSkippedBatch,
+    recovery_anomaly_kind_for_decode_error,
+};
+pub use wal_record::{
+    AlterCompatibilityPolicy, CatalogWalRecord, CatalogWalRecordDesign, DropFailureReason,
 };

@@ -130,7 +130,7 @@ impl<S: EventSink> EventEmitter<S> {
             Ok(()) => {
                 self.record_acceptance(event_id, raw_id);
                 Ok(event_id)
-            }
+            },
             Err(err) => self.reject(err),
         }
     }

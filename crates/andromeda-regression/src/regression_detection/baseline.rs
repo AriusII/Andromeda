@@ -1,9 +1,9 @@
-use crate::flat_json::{
-    escape_json_string, optional_string, parse_flat_json_object, required_string, required_u64,
-};
 use crate::{
     BENCHMARK_EVIDENCE_AUTHORITATIVE, BENCHMARK_EVIDENCE_CAN_SELECT_PLAN_ALONE,
     BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY, BenchmarkEvidence, BenchmarkScenarioTarget,
+};
+use andromeda_scenario_evidence::flat_json::{
+    escape_json_string, optional_string, parse_flat_json_object, required_string, required_u64,
 };
 
 use crate::advisory_boundary::{json_optional_str, json_optional_u32, json_optional_u64};

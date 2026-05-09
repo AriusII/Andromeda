@@ -2,15 +2,9 @@ use andromeda_error::AndromedaResult;
 
 use crate::events::{contains_sensitive_marker, observe_error};
 
-use super::{DurableAuditRecordIdentity, DurableAuditReplayRecord, DurableAuditWalEvidence};
+pub use andromeda_audit::DurableAuditRetentionBoundary;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum DurableAuditRetentionBoundary {
-    WalSegment,
-    CatalogVersion,
-    SecurityPolicy,
-    ForensicHold,
-}
+use super::{DurableAuditRecordIdentity, DurableAuditReplayRecord, DurableAuditWalEvidence};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DurableAuditRetentionPolicy {
@@ -226,26 +220,26 @@ impl DurableAuditRetentionManager {
         let block = match record.report.retention {
             DurableAuditRetentionBoundary::ForensicHold => {
                 Some(DurableAuditPruneBlockReason::ForensicHold)
-            }
+            },
             DurableAuditRetentionBoundary::SecurityPolicy => {
                 Some(DurableAuditPruneBlockReason::SecurityPolicy)
-            }
+            },
             _ if self.policy.retains(record) => {
                 Some(DurableAuditPruneBlockReason::PolicyRetainsRecord)
-            }
+            },
             DurableAuditRetentionBoundary::WalSegment => match &archive_proof {
                 Some(proof)
                     if proof.covers(record.report.evidence)
                         && proof.checksum == record.report.evidence.checksum =>
                 {
                     None
-                }
+                },
                 Some(_) => Some(DurableAuditPruneBlockReason::WalSegmentArchiveProofMismatch),
                 None => Some(DurableAuditPruneBlockReason::MissingWalSegmentArchiveProof),
             },
             DurableAuditRetentionBoundary::CatalogVersion => {
                 Some(DurableAuditPruneBlockReason::CatalogVersionRetentionBoundary)
-            }
+            },
         };
 
         Ok(DurableAuditPruneEvidence {

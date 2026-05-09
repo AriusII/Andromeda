@@ -1,6 +1,6 @@
 use andromeda_catalog::{
-    CatalogSnapshot, INVENTORY_DATABASE_ID, INVENTORY_NAMESPACE_ID, ProcedureContract,
-    inventory_domain_definition_batch,
+    CatalogDefinitionBatchPlanning, CatalogSnapshot, INVENTORY_DATABASE_ID, INVENTORY_NAMESPACE_ID,
+    ProcedureContract, inventory_domain_definition_batch,
 };
 use andromeda_core::{AndromedaResult, InvocationId, RequestId, SessionId, TransactionId};
 use andromeda_exec::{
@@ -11,9 +11,7 @@ use andromeda_exec::{
     encode_inventory_reserve_stock_v0_execute_frame,
 };
 use andromeda_observe::TraceId;
-use andromeda_quic::{
-    FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader, FrameType,
-};
+use andromeda_quic::{FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader, FrameType};
 use andromeda_storage::{PageId, PageSize};
 
 pub(crate) fn inventory_catalog_snapshot() -> CatalogSnapshot {

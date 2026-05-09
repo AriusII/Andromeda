@@ -39,7 +39,7 @@ pub fn encode_catalog_durable_payload(record: &CatalogMutationRecord) -> Androme
     match record {
         CatalogMutationRecord::Begin(boundary) | CatalogMutationRecord::Commit(boundary) => {
             encode_boundary(&mut body, boundary)
-        }
+        },
         CatalogMutationRecord::Apply(delta) => encode_delta(&mut body, delta),
     }
 
@@ -119,11 +119,11 @@ fn encode_delta(out: &mut Vec<u8>, delta: &CatalogMutationDelta) {
             push_u8(out, 0);
             encode_object_ref(out, object);
             encode_definition(out, definition);
-        }
+        },
         CatalogMutationOperation::DeprecateObject { target } => {
             push_u8(out, 1);
             encode_lifecycle_target(out, target);
-        }
+        },
     }
 }
 
@@ -136,19 +136,19 @@ fn encode_definition(out: &mut Vec<u8>, definition: &CatalogDefinition) {
         CatalogDefinition::Table(table) => {
             push_u8(out, 0);
             encode_table(out, table);
-        }
+        },
         CatalogDefinition::StructuredObject(object) => {
             push_u8(out, 1);
             encode_structured_object(out, object);
-        }
+        },
         CatalogDefinition::Enum(enum_definition) => {
             push_u8(out, 2);
             encode_enum(out, enum_definition);
-        }
+        },
         CatalogDefinition::Procedure(procedure) => {
             push_u8(out, 3);
             encode_procedure(out, procedure);
-        }
+        },
     }
 }
 
@@ -292,11 +292,11 @@ fn encode_scalar_type(out: &mut Vec<u8>, scalar: &ScalarType) {
         ScalarType::Decimal(decimal) => {
             push_u8(out, 10);
             encode_decimal_type(out, *decimal);
-        }
+        },
         ScalarType::Float(float) => {
             push_u8(out, 11);
             encode_float_type(out, *float);
-        }
+        },
         ScalarType::Bool => push_u8(out, 12),
         ScalarType::Text(text) => {
             push_u8(out, 13);
@@ -312,17 +312,17 @@ fn encode_scalar_type(out: &mut Vec<u8>, scalar: &ScalarType) {
                 Some(max_length) => {
                     push_bool(out, true);
                     push_u32(out, max_length);
-                }
+                },
                 None => push_bool(out, false),
             }
             match &text.collation {
                 Some(collation) => {
                     push_bool(out, true);
                     encode_string(out, collation);
-                }
+                },
                 None => push_bool(out, false),
             }
-        }
+        },
         ScalarType::Timestamp(timestamp) => {
             push_u8(out, 14);
             push_u8(
@@ -333,7 +333,7 @@ fn encode_scalar_type(out: &mut Vec<u8>, scalar: &ScalarType) {
                     TimestampType::MonotonicEpoch => 2,
                 },
             );
-        }
+        },
     }
 }
 
@@ -346,7 +346,7 @@ fn encode_decimal_type(out: &mut Vec<u8>, decimal: DecimalType) {
             push_u8(out, 3);
             push_u8(out, precision);
             push_u8(out, scale);
-        }
+        },
     }
 }
 
@@ -365,7 +365,7 @@ fn encode_float_type(out: &mut Vec<u8>, float: FloatType) {
                     FloatMode::DeterministicAnalytics => 1,
                 },
             );
-        }
+        },
     }
 }
 
@@ -811,7 +811,7 @@ fn decode_scalar_type(decoder: &mut Decoder<'_>) -> AndromedaResult<ScalarType> 
                 max_length,
                 collation,
             }))
-        }
+        },
         14 => {
             let timestamp = match decoder.u8()? {
                 0 => TimestampType::Transaction,
@@ -820,7 +820,7 @@ fn decode_scalar_type(decoder: &mut Decoder<'_>) -> AndromedaResult<ScalarType> 
                 _ => return Err(catalog_error("unknown timestamp type tag")),
             };
             Ok(ScalarType::Timestamp(timestamp))
-        }
+        },
         _ => Err(catalog_error("unknown scalar type tag")),
     }
 }
@@ -851,7 +851,7 @@ fn decode_float_type(decoder: &mut Decoder<'_>) -> AndromedaResult<FloatType> {
                 _ => return Err(catalog_error("unknown float mode tag")),
             };
             Ok(FloatType::Custom { bits, mode })
-        }
+        },
         _ => Err(catalog_error("unknown float type tag")),
     }
 }

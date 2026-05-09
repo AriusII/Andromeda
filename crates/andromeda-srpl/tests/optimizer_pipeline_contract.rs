@@ -135,7 +135,7 @@ fn safe_pipeline_orchestrates_existing_passes_and_returns_plan_evidence() {
     match &optimized.optimized_ir.body.operations[0].kind {
         SrplBusinessOperationKindIr::Read { predicates, .. } => {
             assert!(predicates.is_empty());
-        }
+        },
         other => panic!("expected Read, got {other:?}"),
     }
 
@@ -146,14 +146,14 @@ fn safe_pipeline_orchestrates_existing_passes_and_returns_plan_evidence() {
         } => {
             assert_eq!(predicate, &pushed_predicate);
             assert_eq!(failure_code, "InsufficientStock");
-        }
+        },
         other => panic!("expected Assert, got {other:?}"),
     }
 
     match &optimized.optimized_ir.body.operations[2].kind {
         SrplBusinessOperationKindIr::Update { assignments, .. } => {
             assert_eq!(assignments[0].value, int(7));
-        }
+        },
         other => panic!("expected Update, got {other:?}"),
     }
 
@@ -163,7 +163,7 @@ fn safe_pipeline_orchestrates_existing_passes_and_returns_plan_evidence() {
                 values[0].value,
                 SrplValueIr::Constant(ConstantLiteral::Bool(true))
             );
-        }
+        },
         other => panic!("expected Emit, got {other:?}"),
     }
 }

@@ -41,8 +41,8 @@ pub use andromeda_transaction::{
 /// the storage WAL enum.
 pub use commit_log::WalRecordKind;
 pub use commit_log::{
-    CommitLogEntry, CommitLogManager, IsolationLevel, RollbackLogEntry, TransactionStatusRebuild,
-    TxWalReplayAction, TxWalReplayRecord, TxWalReplaySummary,
+    CommitLogEntry, CommitLogManager, InvocationWal, IsolationLevel, RollbackLogEntry,
+    TransactionStatusRebuild, TxWalReplayAction, TxWalReplayRecord, TxWalReplaySummary,
 };
 pub use deadlock_detection::*;
 pub use gc::mvcc_eligibility::{

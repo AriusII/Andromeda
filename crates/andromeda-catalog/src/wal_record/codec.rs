@@ -1,10 +1,9 @@
-use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaResult};
 
 use crate::{
     CatalogLifecycleTarget, CatalogMutationBoundary, CatalogMutationDelta,
     CatalogMutationOperation, CatalogMutationRecord, CatalogMutationRecordKind,
-    CatalogPublicationSemantics, CatalogWalPayloadDecodeError, CatalogWalPayloadDecodeErrorKind,
-    DefinitionBatchDependencyGraphHash,
+    CatalogPublicationSemantics, CatalogWalPayloadDecodeError, DefinitionBatchDependencyGraphHash,
 };
 
 type RecoveryBoundary = andromeda_catalog_recovery::CatalogMutationBoundary;
@@ -53,13 +52,13 @@ fn recovery_record_from_catalog(record: &CatalogMutationRecord) -> RecoveryRecor
     match record {
         CatalogMutationRecord::Begin(boundary) => {
             RecoveryRecord::Begin(recovery_boundary_from_catalog(boundary))
-        }
+        },
         CatalogMutationRecord::Apply(delta) => {
             RecoveryRecord::Apply(Box::new(recovery_delta_from_catalog(delta)))
-        }
+        },
         CatalogMutationRecord::Commit(boundary) => {
             RecoveryRecord::Commit(recovery_boundary_from_catalog(boundary))
-        }
+        },
     }
 }
 
@@ -96,14 +95,14 @@ fn recovery_operation_from_catalog(
                 object: object.clone(),
                 definition: definition.clone(),
             }
-        }
+        },
         CatalogMutationOperation::DeprecateObject { target } => {
             andromeda_catalog_recovery::CatalogMutationOperation::DeprecateObject {
                 target: andromeda_catalog_recovery::CatalogLifecycleTarget {
                     object: target.object.clone(),
                 },
             }
-        }
+        },
     }
 }
 
@@ -113,10 +112,10 @@ fn recovery_publication_semantics(
     match semantics {
         CatalogPublicationSemantics::PlannedVersionOnly => {
             andromeda_catalog_recovery::CatalogPublicationSemantics::PlannedVersionOnly
-        }
+        },
         CatalogPublicationSemantics::DurablePublicationExternal => {
             andromeda_catalog_recovery::CatalogPublicationSemantics::DurablePublicationExternal
-        }
+        },
     }
 }
 
@@ -124,13 +123,13 @@ fn catalog_record_from_recovery(record: RecoveryRecord) -> CatalogMutationRecord
     match record {
         RecoveryRecord::Begin(boundary) => {
             CatalogMutationRecord::Begin(catalog_boundary_from_recovery(boundary))
-        }
+        },
         RecoveryRecord::Apply(delta) => {
             CatalogMutationRecord::Apply(Box::new(catalog_delta_from_recovery(*delta)))
-        }
+        },
         RecoveryRecord::Commit(boundary) => {
             CatalogMutationRecord::Commit(catalog_boundary_from_recovery(boundary))
-        }
+        },
     }
 }
 
@@ -172,7 +171,7 @@ fn catalog_operation_from_recovery(
                     object: target.object,
                 },
             }
-        }
+        },
     }
 }
 
@@ -182,84 +181,35 @@ fn catalog_publication_semantics(
     match semantics {
         andromeda_catalog_recovery::CatalogPublicationSemantics::PlannedVersionOnly => {
             CatalogPublicationSemantics::PlannedVersionOnly
-        }
+        },
         andromeda_catalog_recovery::CatalogPublicationSemantics::DurablePublicationExternal => {
             CatalogPublicationSemantics::DurablePublicationExternal
-        }
+        },
     }
 }
 
 fn catalog_decode_error(
     error: andromeda_catalog_recovery::CatalogWalPayloadDecodeError,
 ) -> CatalogWalPayloadDecodeError {
-    if error.kind() == andromeda_catalog_recovery::CatalogWalPayloadDecodeErrorKind::BodyInvalid {
-        return CatalogWalPayloadDecodeError::from_body_error(AndromedaError::new(
-            AndromedaErrorKind::Catalog,
-            error.detail(),
-        ));
-    }
-    CatalogWalPayloadDecodeError::new(catalog_decode_error_kind(error.kind()), error.detail())
-}
-
-fn catalog_decode_error_kind(
-    kind: andromeda_catalog_recovery::CatalogWalPayloadDecodeErrorKind,
-) -> CatalogWalPayloadDecodeErrorKind {
-    match kind {
-        andromeda_catalog_recovery::CatalogWalPayloadDecodeErrorKind::TruncatedHeader => {
-            CatalogWalPayloadDecodeErrorKind::TruncatedHeader
-        }
-        andromeda_catalog_recovery::CatalogWalPayloadDecodeErrorKind::MagicMismatch => {
-            CatalogWalPayloadDecodeErrorKind::MagicMismatch
-        }
-        andromeda_catalog_recovery::CatalogWalPayloadDecodeErrorKind::LegacyFormatVersion => {
-            CatalogWalPayloadDecodeErrorKind::LegacyFormatVersion
-        }
-        andromeda_catalog_recovery::CatalogWalPayloadDecodeErrorKind::UnsupportedFormatVersion => {
-            CatalogWalPayloadDecodeErrorKind::UnsupportedFormatVersion
-        }
-        andromeda_catalog_recovery::CatalogWalPayloadDecodeErrorKind::UnknownRecordKindTag => {
-            CatalogWalPayloadDecodeErrorKind::UnknownRecordKindTag
-        }
-        andromeda_catalog_recovery::CatalogWalPayloadDecodeErrorKind::BodyLengthOverflow => {
-            CatalogWalPayloadDecodeErrorKind::BodyLengthOverflow
-        }
-        andromeda_catalog_recovery::CatalogWalPayloadDecodeErrorKind::BodyLengthMismatch => {
-            CatalogWalPayloadDecodeErrorKind::BodyLengthMismatch
-        }
-        andromeda_catalog_recovery::CatalogWalPayloadDecodeErrorKind::ChecksumMismatch => {
-            CatalogWalPayloadDecodeErrorKind::ChecksumMismatch
-        }
-        andromeda_catalog_recovery::CatalogWalPayloadDecodeErrorKind::BodyInvalid => {
-            CatalogWalPayloadDecodeErrorKind::BodyInvalid
-        }
-    }
+    error
 }
 
 fn assert_payload_format_constant_alignment() {
-    let _ = (
-        super::constants::CATALOG_WAL_PAYLOAD_MAGIC,
-        super::constants::CATALOG_WAL_PAYLOAD_VERSION_V1,
-        super::constants::CATALOG_WAL_PAYLOAD_VERSION_V2,
-        super::constants::CATALOG_WAL_PAYLOAD_VERSION_V3,
-        super::constants::CATALOG_WAL_PAYLOAD_VERSION_V4,
-        super::constants::CATALOG_WAL_PAYLOAD_VERSION_CURRENT,
-        super::constants::CATALOG_WAL_PAYLOAD_HEADER_LEN,
-    );
     debug_assert_eq!(
         CatalogMutationRecordKind::from_storage_wal_kind_tag(
-            super::constants::CATALOG_CHANGE_BEGIN_WAL_KIND_TAG
+            andromeda_catalog_recovery::CATALOG_CHANGE_BEGIN_WAL_KIND_TAG
         ),
         Some(CatalogMutationRecordKind::CatalogChangeBegin)
     );
     debug_assert_eq!(
         CatalogMutationRecordKind::from_storage_wal_kind_tag(
-            super::constants::CATALOG_CHANGE_APPLY_WAL_KIND_TAG
+            andromeda_catalog_recovery::CATALOG_CHANGE_APPLY_WAL_KIND_TAG
         ),
         Some(CatalogMutationRecordKind::CatalogChangeApply)
     );
     debug_assert_eq!(
         CatalogMutationRecordKind::from_storage_wal_kind_tag(
-            super::constants::CATALOG_CHANGE_COMMIT_WAL_KIND_TAG
+            andromeda_catalog_recovery::CATALOG_CHANGE_COMMIT_WAL_KIND_TAG
         ),
         Some(CatalogMutationRecordKind::CatalogChangeCommit)
     );

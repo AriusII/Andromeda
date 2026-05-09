@@ -1,9 +1,9 @@
-use crate::flat_json::escape_json_string;
 use crate::metric_math::{error_rate_ppm, percent_change};
 use crate::{
     BENCHMARK_EVIDENCE_AUTHORITATIVE, BENCHMARK_EVIDENCE_CAN_SELECT_PLAN_ALONE,
     BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY, BenchmarkEvidence, BenchmarkScenarioTarget,
 };
+use andromeda_scenario_evidence::flat_json::escape_json_string;
 
 use super::baseline::BenchmarkBaseline;
 use super::errors::BenchmarkBaselineComparisonError;

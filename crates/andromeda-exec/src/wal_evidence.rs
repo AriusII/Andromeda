@@ -2,6 +2,11 @@ use andromeda_core::{
     AndromedaError, AndromedaErrorKind, AndromedaResult, EngineTimestamp, TransactionId,
 };
 use andromeda_storage::{FileWal, InMemoryWal, Lsn, WalRecord, WalRecordKind};
+use andromeda_tx::{
+    InvocationWal as TransactionInvocationWal, IsolationLevel as TxIsolationLevel, Lsn as TxLsn,
+    WalRecordKind as TxWalRecordKind,
+};
+use andromeda_tx::{TxWalAdapterReplayRecord, TxWalReplayRecord, map_tx_wal_replay_records};
 use std::borrow::Borrow;
 use std::collections::BTreeSet;
 use std::{
@@ -71,10 +76,7 @@ impl<W> CommitLogInvocationWal<W> {
         })
     }
 
-    pub fn append_tx_begin(
-        &self,
-        transaction_id: TransactionId,
-    ) -> AndromedaResult<andromeda_tx::Lsn>
+    pub fn append_tx_begin(&self, transaction_id: TransactionId) -> AndromedaResult<TxLsn>
     where
         W: InvocationWal,
     {
@@ -83,7 +85,7 @@ impl<W> CommitLogInvocationWal<W> {
         Ok(storage_lsn_to_tx_lsn(lsn))
     }
 
-    pub fn flush_through_tx_lsn(&self, lsn: andromeda_tx::Lsn) -> AndromedaResult<andromeda_tx::Lsn>
+    pub fn flush_through_tx_lsn(&self, lsn: TxLsn) -> AndromedaResult<TxLsn>
     where
         W: InvocationWal,
     {
@@ -102,16 +104,16 @@ impl<W> CommitLogInvocationWal<W> {
     }
 }
 
-impl<W> andromeda_tx::commit_log::InvocationWal for CommitLogInvocationWal<W>
+impl<W> TransactionInvocationWal for CommitLogInvocationWal<W>
 where
     W: InvocationWal + Send + 'static,
 {
     fn append<'life0, 'life1, 'async_trait>(
         &'life0 self,
-        kind: andromeda_tx::WalRecordKind,
+        kind: TxWalRecordKind,
         transaction_id: Option<TransactionId>,
         payload: &'life1 [u8],
-    ) -> Pin<Box<dyn Future<Output = AndromedaResult<andromeda_tx::Lsn>> + Send + 'async_trait>>
+    ) -> Pin<Box<dyn Future<Output = AndromedaResult<TxLsn>> + Send + 'async_trait>>
     where
         'life0: 'async_trait,
         'life1: 'async_trait,
@@ -120,8 +122,8 @@ where
         let payload = payload.to_vec();
         Box::pin(async move {
             let storage_kind = match kind {
-                andromeda_tx::WalRecordKind::TxCommit => WalRecordKind::TxCommit,
-                andromeda_tx::WalRecordKind::TxRollback => WalRecordKind::TxRollback,
+                TxWalRecordKind::TxCommit => WalRecordKind::TxCommit,
+                TxWalRecordKind::TxRollback => WalRecordKind::TxRollback,
             };
             let mut wal = self.lock_wal()?;
             let lsn = wal.append(storage_kind, transaction_id, &payload)?;
@@ -131,8 +133,8 @@ where
 
     fn flush_through<'life0, 'async_trait>(
         &'life0 self,
-        lsn: andromeda_tx::Lsn,
-    ) -> Pin<Box<dyn Future<Output = AndromedaResult<andromeda_tx::Lsn>> + Send + 'async_trait>>
+        lsn: TxLsn,
+    ) -> Pin<Box<dyn Future<Output = AndromedaResult<TxLsn>> + Send + 'async_trait>>
     where
         'life0: 'async_trait,
         Self: 'async_trait,
@@ -190,10 +192,10 @@ impl<'a> DurableExecWalPrefix<&'a WalRecord> {
 ///
 /// This bridge deliberately lives in `andromeda-exec`: storage WAL records are
 /// converted into the transaction crate's storage-agnostic replay adapter without
-/// introducing an `andromeda-tx -> andromeda-storage` dependency.
+/// introducing an `andromeda-transaction -> andromeda-storage` dependency.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TxReplayFromExecWalEvidence {
-    pub replay_records: Vec<andromeda_tx::TxWalReplayRecord>,
+    pub replay_records: Vec<TxWalReplayRecord>,
     pub evidence: TxReplayBridgeEvidence,
 }
 
@@ -239,7 +241,7 @@ where
         let tx_lsn = storage_lsn_to_tx_lsn(record.header.lsn);
         match record.header.kind {
             WalRecordKind::TxBegin => {
-                adapter_records.push(andromeda_tx::wal_adapter::TxWalAdapterReplayRecord::begin(
+                adapter_records.push(TxWalAdapterReplayRecord::begin(
                     required_tx_id(record)?,
                     tx_lsn,
                 ));
@@ -248,7 +250,7 @@ where
             WalRecordKind::TxCommit => {
                 let metadata = decode_commit_payload(record.payload())?;
                 adapter_records.push(
-                    andromeda_tx::wal_adapter::TxWalAdapterReplayRecord::commit(
+                    TxWalAdapterReplayRecord::commit(
                         required_tx_id(record)?,
                         tx_lsn,
                         EngineTimestamp::ZERO,
@@ -264,7 +266,7 @@ where
             WalRecordKind::TxRollback => {
                 let metadata = decode_rollback_payload(record.payload())?;
                 adapter_records.push(
-                    andromeda_tx::wal_adapter::TxWalAdapterReplayRecord::rollback(
+                    TxWalAdapterReplayRecord::rollback(
                         required_tx_id(record)?,
                         tx_lsn,
                         EngineTimestamp::ZERO,
@@ -275,12 +277,10 @@ where
             },
             _ => {
                 if record.header.transaction_id.is_some() {
-                    adapter_records.push(
-                        andromeda_tx::wal_adapter::TxWalAdapterReplayRecord::other(
-                            tx_lsn,
-                            record.header.transaction_id,
-                        ),
-                    );
+                    adapter_records.push(TxWalAdapterReplayRecord::other(
+                        tx_lsn,
+                        record.header.transaction_id,
+                    ));
                     evidence.adapter_records += 1;
                 }
             },
@@ -288,12 +288,12 @@ where
     }
 
     adapter_records.sort_by_key(|record| record.lsn);
-    let replay_records = andromeda_tx::wal_adapter::map_tx_wal_replay_records(adapter_records)?;
+    let replay_records = map_tx_wal_replay_records(adapter_records)?;
     for replay_record in &replay_records {
         match replay_record {
-            andromeda_tx::TxWalReplayRecord::Commit(_) => evidence.commits += 1,
-            andromeda_tx::TxWalReplayRecord::Rollback(_) => evidence.rollbacks += 1,
-            andromeda_tx::TxWalReplayRecord::Incomplete { .. } => {
+            TxWalReplayRecord::Commit(_) => evidence.commits += 1,
+            TxWalReplayRecord::Rollback(_) => evidence.rollbacks += 1,
+            TxWalReplayRecord::Incomplete { .. } => {
                 evidence.incomplete_transactions += 1;
             },
         }
@@ -305,17 +305,17 @@ where
     })
 }
 
-const fn storage_lsn_to_tx_lsn(lsn: Lsn) -> andromeda_tx::Lsn {
-    andromeda_tx::Lsn::new(lsn.get())
+const fn storage_lsn_to_tx_lsn(lsn: Lsn) -> TxLsn {
+    TxLsn::new(lsn.get())
 }
 
-const fn tx_lsn_to_storage_lsn(lsn: andromeda_tx::Lsn) -> Lsn {
+const fn tx_lsn_to_storage_lsn(lsn: TxLsn) -> Lsn {
     Lsn::new(lsn.get())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct CommitPayloadMetadata {
-    isolation_level: andromeda_tx::IsolationLevel,
+    isolation_level: TxIsolationLevel,
     row_count_affected: u64,
     parameter_hash: u64,
 }
@@ -329,14 +329,14 @@ pub const EXEC_TX_COMMIT_PAYLOAD_LEN: usize = 25;
 pub const EXEC_TX_ROLLBACK_PAYLOAD_LEN: usize = 16;
 
 pub fn encode_exec_tx_commit_payload(
-    isolation_level: andromeda_tx::IsolationLevel,
+    isolation_level: TxIsolationLevel,
     row_count_affected: u64,
     parameter_hash: u64,
 ) -> Vec<u8> {
     let mut payload = Vec::with_capacity(EXEC_TX_COMMIT_PAYLOAD_LEN);
     payload.push(match isolation_level {
-        andromeda_tx::IsolationLevel::Snapshot => 1,
-        andromeda_tx::IsolationLevel::Serializable => 2,
+        TxIsolationLevel::Snapshot => 1,
+        TxIsolationLevel::Serializable => 2,
     });
     payload.extend_from_slice(&row_count_affected.to_le_bytes());
     payload.extend_from_slice(&parameter_hash.to_le_bytes());
@@ -378,8 +378,8 @@ fn decode_commit_payload(payload: &[u8]) -> AndromedaResult<CommitPayloadMetadat
     }
 
     let isolation_level = match payload[0] {
-        1 => andromeda_tx::IsolationLevel::Snapshot,
-        2 => andromeda_tx::IsolationLevel::Serializable,
+        1 => TxIsolationLevel::Snapshot,
+        2 => TxIsolationLevel::Serializable,
         _ => {
             return Err(tx_bridge_error(format!(
                 "transaction commit WAL payload has unknown isolation level code {}",

@@ -11,8 +11,6 @@ pub mod btree_node_codec_benchmark;
 pub mod srpl_compiler_benchmark;
 pub mod wal_file_benchmark;
 
-mod crud;
-mod flat_json;
 mod runner;
 mod storage_runtime_benchmark;
 
@@ -35,8 +33,8 @@ pub use andromeda_scenario_evidence::{
     BenchmarkEvidenceValidity, BenchmarkHistoryAdvisoryMetadata, BenchmarkHistoryRecord,
     BenchmarkHistoryStore, BenchmarkMeasurementMode, BenchmarkPlanClass, BenchmarkScenarioEvidence,
     BenchmarkScenarioEvidenceError, BenchmarkScenarioTarget, BenchmarkStatsVersion,
-    BenchmarkWorkloadCounter, HistoryQuery, HistoryQueryResult, MAX_BENCHMARK_WORKLOAD_COUNTERS,
-    TimeRange,
+    BenchmarkWorkloadCounter, CrudWorkloadResult, HistoryQuery, HistoryQueryResult,
+    MAX_BENCHMARK_WORKLOAD_COUNTERS, TimeRange,
 };
 pub use audit_file_benchmark::{
     AUDIT_APPEND_FILE_SINK_HARNESS_NAME, AUDIT_APPEND_FILE_SINK_HARNESS_SOURCE,
@@ -53,10 +51,10 @@ pub use btree_node_codec_benchmark::{
     BTreeNodeCodecSmokeBenchmark, run_btree_node_codec_smoke_benchmark,
 };
 
-pub use crud::{
+pub use andromeda_bench_workload::{
     CRUD_SCENARIOS, CrudDataGenerator, CrudOperationMetrics, CrudRow, CrudScenarioDefinition,
-    CrudWorkloadResult, MAX_CRUD_BATCH_SIZE, MAX_CRUD_DURATION_MS, MAX_CRUD_ROWS, MAX_CRUD_THREADS,
-    compute_percentile, find_crud_scenario,
+    MAX_CRUD_BATCH_SIZE, MAX_CRUD_DURATION_MS, MAX_CRUD_ROWS, MAX_CRUD_THREADS, compute_percentile,
+    find_crud_scenario,
 };
 pub use runner::run_bounded_benchmark;
 pub use srpl_compiler_benchmark::{
