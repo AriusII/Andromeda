@@ -1,3 +1,0 @@
-display_name: "SRPL Anti Dynamic SQL"
-short_description: "Reject dynamic SQL/text construction, implicit names, SELECT *, shape-shifting returns, unbounded loops, and ambient NULLs in SRPL. Use during language review."
-default_prompt: "Use the SRPL Anti Dynamic SQL skill to analyze the current Andromeda task and return a bounded, validated result."

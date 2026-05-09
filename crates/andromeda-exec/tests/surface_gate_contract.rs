@@ -1,23 +1,33 @@
-use andromeda_catalog::inventory_reserve_stock_contract;
-use andromeda_core::InvocationId;
-use andromeda_exec::{
-    CompletionStatus, InventoryReserveStockExecutor, InventoryStock, InvocationContext,
-    InvocationRequest, LocalVerticalRuntime, ReserveStockCommand, SurfacePlaneAuthorizer,
+use andromeda_audit::{
+    AdminOperation, CertificateIdentity, Permission, SecurityAuditOutcome,
+    SurfaceScope as ObserveSurfaceScope, UserPrincipal, UserPrincipalKind,
 };
-use andromeda_observe::{
-    AuthorizationDenialReason, AuthorizationOutcome, CertificateIdentity, Permission,
-    PrincipalBinding, PrincipalRegistry, SecurityAuditOutcome, SurfaceScope, TraceId,
-    UserPrincipal, UserPrincipalKind,
+use andromeda_exec::{
+    CompletionStatus, InvocationContext, InvocationRequest, LocalVerticalRuntime,
+    SurfacePlaneAuthorizer,
+};
+use andromeda_inventory_demo::inventory_reserve_stock_contract;
+use andromeda_inventory_demo::{
+    InventoryReserveStockExecutor, InventoryStock, ReserveStockCommand,
+};
+use andromeda_observability::TraceId;
+use andromeda_principal::{
+    CertificateIdentity as CoreCertificateIdentity, SurfaceScope as CoreSurfaceScope,
 };
 use andromeda_quic::SurfacePlane;
-use andromeda_storage::InMemoryWal;
+use andromeda_security::{
+    AuthorizationDenialReason, AuthorizationOutcome, PrincipalBinding, PrincipalRegistry,
+    SurfaceAction,
+};
+use andromeda_types::InvocationId;
+use andromeda_wal::InMemoryWal;
 
-struct ExpectedDenial {
+struct ExpectedDenial<'a> {
     trace_id: TraceId,
     plane: SurfacePlane,
-    fingerprint: &'static str,
+    fingerprint: &'a str,
     reason: AuthorizationDenialReason,
-    audit_reason_fragment: &'static str,
+    audit_reason_fragment: &'a str,
 }
 
 fn registry(bindings: Vec<PrincipalBinding>) -> PrincipalRegistry {
@@ -30,21 +40,32 @@ fn registry(bindings: Vec<PrincipalBinding>) -> PrincipalRegistry {
 
 fn binding(
     fingerprint: &str,
-    surface: SurfaceScope,
+    surface: CoreSurfaceScope,
     principal_id: &str,
     permissions: Vec<Permission>,
 ) -> PrincipalBinding {
+    let observe_scope = observe_surface_scope(surface);
     PrincipalBinding::new(
-        CertificateIdentity::new(fingerprint, format!("CN={fingerprint}"), surface).unwrap(),
+        CertificateIdentity::new(fingerprint, format!("CN={fingerprint}"), observe_scope).unwrap(),
         UserPrincipal::new(principal_id, UserPrincipalKind::Service).unwrap(),
         permissions,
     )
     .unwrap()
 }
 
+fn observe_surface_scope(scope: CoreSurfaceScope) -> ObserveSurfaceScope {
+    match scope {
+        CoreSurfaceScope::Application => ObserveSurfaceScope::Application,
+        CoreSurfaceScope::Administration => ObserveSurfaceScope::Administration,
+        CoreSurfaceScope::Cluster => ObserveSurfaceScope::Cluster,
+        CoreSurfaceScope::BackupAgent => ObserveSurfaceScope::BackupAgent,
+        CoreSurfaceScope::MonitoringAgent => ObserveSurfaceScope::MonitoringAgent,
+    }
+}
+
 fn assert_procedure_dispatch_denied_without_local_runtime_entry(
     registry: PrincipalRegistry,
-    expected: ExpectedDenial,
+    expected: ExpectedDenial<'_>,
 ) {
     let gate = SurfacePlaneAuthorizer::new(&registry);
     let runtime = LocalVerticalRuntime::new(InMemoryWal::new());
@@ -88,6 +109,71 @@ fn assert_procedure_dispatch_denied_without_local_runtime_entry(
     );
 }
 
+fn assert_admin_dispatch_denied_without_local_runtime_entry(
+    registry: PrincipalRegistry,
+    expected: ExpectedDenial<'_>,
+    operation: AdminOperation,
+    expected_permission: Permission,
+) {
+    let gate = SurfacePlaneAuthorizer::new(&registry);
+    let runtime = LocalVerticalRuntime::new(InMemoryWal::new());
+    let action = SurfaceAction::Admin(operation);
+
+    assert!(expected_permission.is_admin_operation_permission());
+    assert_eq!(operation.required_permission(), expected_permission);
+    assert_eq!(action.required_permission(), expected_permission);
+
+    let denied = gate
+        .authorize_dispatch(
+            expected.trace_id,
+            expected.plane,
+            expected.fingerprint,
+            action,
+        )
+        .unwrap();
+
+    assert!(denied.is_denied());
+    if let AuthorizationOutcome::Denied { reason, audit } = denied {
+        assert_eq!(reason, expected.reason);
+        assert_eq!(audit.trace_id, expected.trace_id);
+        assert_eq!(audit.permission, expected_permission);
+        assert_eq!(audit.outcome, SecurityAuditOutcome::Denied);
+        assert!(audit.has_identity_evidence());
+        assert!(!audit.contains_sensitive_evidence());
+        assert_eq!(audit.denial_reason(), Some(expected.reason));
+        assert!(
+            audit.reason.contains(expected.reason.label()),
+            "audit reason `{}` should contain typed denial label `{}`",
+            audit.reason,
+            expected.reason.label()
+        );
+        assert!(
+            audit.reason.contains(expected.audit_reason_fragment),
+            "audit reason `{}` should contain expected fragment `{}`",
+            audit.reason,
+            expected.audit_reason_fragment
+        );
+        assert!(
+            audit.reason.contains(action.evidence_label()),
+            "audit reason `{}` should contain action evidence label `{}`",
+            audit.reason,
+            action.evidence_label()
+        );
+    } else {
+        panic!("admin dispatch should have been denied");
+    }
+
+    assert!(
+        runtime.wal().is_empty(),
+        "authorization denial must not create a WAL record"
+    );
+    assert_eq!(
+        runtime.transactions().live_count().unwrap(),
+        0,
+        "authorization denial must not create a local transaction"
+    );
+}
+
 #[test]
 fn denied_surface_dispatch_never_enters_local_transaction_runtime() {
     assert_procedure_dispatch_denied_without_local_runtime_entry(
@@ -102,12 +188,84 @@ fn denied_surface_dispatch_never_enters_local_transaction_runtime() {
     );
 }
 
+#[derive(Clone, Copy)]
+struct ForbiddenApplicationAdminCase {
+    operation: AdminOperation,
+    permission: Permission,
+    audit_reason_fragment: &'static str,
+}
+
+fn forbidden_application_admin_cases() -> [ForbiddenApplicationAdminCase; 12] {
+    [
+        ForbiddenApplicationAdminCase {
+            operation: AdminOperation::DebugProcedure,
+            permission: Permission::DebugProcedure,
+            audit_reason_fragment: "DebugProcedure",
+        },
+        ForbiddenApplicationAdminCase {
+            operation: AdminOperation::ReadProcedureStore,
+            permission: Permission::ReadProcedureStore,
+            audit_reason_fragment: "ReadProcedureStore",
+        },
+        ForbiddenApplicationAdminCase {
+            operation: AdminOperation::InspectPlans,
+            permission: Permission::InspectPlans,
+            audit_reason_fragment: "InspectPlans",
+        },
+        ForbiddenApplicationAdminCase {
+            operation: AdminOperation::ManageSecurity,
+            permission: Permission::ManageSecurity,
+            audit_reason_fragment: "ManageSecurity",
+        },
+        ForbiddenApplicationAdminCase {
+            operation: AdminOperation::RotateCertificate,
+            permission: Permission::RotateCertificate,
+            audit_reason_fragment: "RotateCertificate",
+        },
+        ForbiddenApplicationAdminCase {
+            operation: AdminOperation::RevokeCertificateIdentity,
+            permission: Permission::RevokeCertificateIdentity,
+            audit_reason_fragment: "RevokeCertificateIdentity",
+        },
+        ForbiddenApplicationAdminCase {
+            operation: AdminOperation::Backup,
+            permission: Permission::Backup,
+            audit_reason_fragment: "Backup",
+        },
+        ForbiddenApplicationAdminCase {
+            operation: AdminOperation::Restore,
+            permission: Permission::Restore,
+            audit_reason_fragment: "Restore",
+        },
+        ForbiddenApplicationAdminCase {
+            operation: AdminOperation::ForensicStart,
+            permission: Permission::ForensicStart,
+            audit_reason_fragment: "ForensicStart",
+        },
+        ForbiddenApplicationAdminCase {
+            operation: AdminOperation::ClusterPromote,
+            permission: Permission::ClusterPromote,
+            audit_reason_fragment: "ClusterPromote",
+        },
+        ForbiddenApplicationAdminCase {
+            operation: AdminOperation::FenceNode,
+            permission: Permission::FenceNode,
+            audit_reason_fragment: "FenceNode",
+        },
+        ForbiddenApplicationAdminCase {
+            operation: AdminOperation::UpdateClusterManifest,
+            permission: Permission::UpdateClusterManifest,
+            audit_reason_fragment: "UpdateClusterManifest",
+        },
+    ]
+}
+
 #[test]
 fn procedure_dispatch_requires_application_surface_before_execution() {
     assert_procedure_dispatch_denied_without_local_runtime_entry(
         registry(vec![binding(
             "fp-admin",
-            SurfaceScope::Administration,
+            CoreSurfaceScope::Administration,
             "ops-admin",
             vec![Permission::ExecuteProcedure],
         )]),
@@ -126,7 +284,7 @@ fn procedure_dispatch_rejects_certificate_scope_mismatch_before_transaction() {
     assert_procedure_dispatch_denied_without_local_runtime_entry(
         registry(vec![binding(
             "fp-admin-on-app",
-            SurfaceScope::Administration,
+            CoreSurfaceScope::Administration,
             "ops-admin",
             vec![Permission::ExecuteProcedure],
         )]),
@@ -145,7 +303,7 @@ fn procedure_dispatch_rejects_principal_missing_execute_permission_before_transa
     assert_procedure_dispatch_denied_without_local_runtime_entry(
         registry(vec![binding(
             "fp-app-readonly",
-            SurfaceScope::Application,
+            CoreSurfaceScope::Application,
             "svc-readonly",
             vec![Permission::ReadContract],
         )]),
@@ -164,7 +322,7 @@ fn procedure_dispatch_rejects_monitoring_surface_before_transaction() {
     assert_procedure_dispatch_denied_without_local_runtime_entry(
         registry(vec![binding(
             "fp-monitoring",
-            SurfaceScope::MonitoringAgent,
+            CoreSurfaceScope::MonitoringAgent,
             "obs-agent",
             vec![Permission::ExecuteProcedure],
         )]),
@@ -183,7 +341,7 @@ fn procedure_dispatch_rejects_hadr_surface_before_transaction() {
     assert_procedure_dispatch_denied_without_local_runtime_entry(
         registry(vec![binding(
             "fp-hadr",
-            SurfaceScope::Cluster,
+            CoreSurfaceScope::Cluster,
             "ha-agent",
             vec![Permission::ExecuteProcedure],
         )]),
@@ -195,6 +353,83 @@ fn procedure_dispatch_rejects_hadr_surface_before_transaction() {
             audit_reason_fragment: "requires_application_surface",
         },
     );
+}
+
+#[test]
+fn application_surface_cannot_carry_manage_security_before_transaction() {
+    assert_admin_dispatch_denied_without_local_runtime_entry(
+        registry(vec![binding(
+            "fp-app-manage-security",
+            CoreSurfaceScope::Application,
+            "svc-admin-abuse",
+            vec![Permission::ManageSecurity],
+        )]),
+        ExpectedDenial {
+            trace_id: TraceId::new(53),
+            plane: SurfacePlane::Application,
+            fingerprint: "fp-app-manage-security",
+            reason: AuthorizationDenialReason::SurfaceDoesNotPermitPermission,
+            audit_reason_fragment: "ManageSecurity",
+        },
+        AdminOperation::ManageSecurity,
+        Permission::ManageSecurity,
+    );
+}
+
+#[test]
+fn application_surface_cannot_carry_cluster_promote_before_transaction() {
+    assert_admin_dispatch_denied_without_local_runtime_entry(
+        registry(vec![binding(
+            "fp-app-cluster-promote",
+            CoreSurfaceScope::Application,
+            "svc-cluster-abuse",
+            vec![Permission::ClusterPromote],
+        )]),
+        ExpectedDenial {
+            trace_id: TraceId::new(54),
+            plane: SurfacePlane::Application,
+            fingerprint: "fp-app-cluster-promote",
+            reason: AuthorizationDenialReason::SurfaceDoesNotPermitPermission,
+            audit_reason_fragment: "ClusterPromote",
+        },
+        AdminOperation::ClusterPromote,
+        Permission::ClusterPromote,
+    );
+}
+
+#[test]
+fn application_surface_rejects_every_admin_operation_before_transaction() {
+    assert!(!observe_surface_scope(CoreSurfaceScope::Application).permits_admin_operation());
+
+    for (index, case) in forbidden_application_admin_cases().into_iter().enumerate() {
+        let fingerprint = format!("fp-app-admin-abuse-{index}");
+        let principal_id = format!("svc-admin-abuse-{index}");
+
+        assert!(
+            !observe_surface_scope(CoreSurfaceScope::Application)
+                .permits_permission(case.permission),
+            "Application surface must not permit {:?}",
+            case.permission
+        );
+
+        assert_admin_dispatch_denied_without_local_runtime_entry(
+            registry(vec![binding(
+                &fingerprint,
+                CoreSurfaceScope::Application,
+                &principal_id,
+                vec![case.permission],
+            )]),
+            ExpectedDenial {
+                trace_id: TraceId::new(60 + index as u128),
+                plane: SurfacePlane::Application,
+                fingerprint: &fingerprint,
+                reason: AuthorizationDenialReason::SurfaceDoesNotPermitPermission,
+                audit_reason_fragment: case.audit_reason_fragment,
+            },
+            case.operation,
+            case.permission,
+        );
+    }
 }
 
 #[test]
@@ -216,7 +451,7 @@ fn allowed_application_surface_dispatch_can_execute_with_token() {
     let context = InvocationContext::new(TraceId::new(46), contract.required_permissions.clone());
     let registry = registry(vec![binding(
         "fp-app",
-        SurfaceScope::Application,
+        CoreSurfaceScope::Application,
         "svc-app",
         vec![Permission::ExecuteProcedure],
     )]);
@@ -269,7 +504,7 @@ fn allowed_surface_dispatch_token_trace_must_match_invocation_context() {
     let context = InvocationContext::new(TraceId::new(52), contract.required_permissions.clone());
     let registry = registry(vec![binding(
         "fp-app-trace-mismatch",
-        SurfaceScope::Application,
+        CoreSurfaceScope::Application,
         "svc-app",
         vec![Permission::ExecuteProcedure],
     )]);
@@ -300,7 +535,7 @@ fn allowed_surface_dispatch_token_trace_must_match_invocation_context() {
         )
         .expect_err("surface authorization token must be bound to the invocation trace");
 
-    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Security);
+    assert_eq!(err.kind(), andromeda_error::AndromedaErrorKind::Security);
     assert!(err.to_string().contains("trace id"));
     assert!(
         runtime.wal().is_empty(),
@@ -325,10 +560,10 @@ fn d3_certificate_identity_binding_to_surface_gate() {
     let mut conn = Connection::new(SurfacePlane::Application);
 
     // Bind a certificate identity matching the plane scope.
-    let cert_identity = CertificateIdentity::new(
+    let cert_identity = CoreCertificateIdentity::new(
         "a".repeat(64), // SHA256 fingerprint
         "test-service",
-        SurfaceScope::Application,
+        CoreSurfaceScope::Application,
     )
     .unwrap();
 
@@ -338,7 +573,7 @@ fn d3_certificate_identity_binding_to_surface_gate() {
     // Create a registry with a binding for this fingerprint.
     let registry = registry(vec![binding(
         &"a".repeat(64),
-        SurfaceScope::Application,
+        CoreSurfaceScope::Application,
         "svc-app",
         vec![Permission::ExecuteProcedure],
     )]);
@@ -348,7 +583,7 @@ fn d3_certificate_identity_binding_to_surface_gate() {
     // Retrieve the fingerprint from the connection's certificate identity.
     let fp = conn
         .certificate_identity()
-        .map(|ci| ci.fingerprint.as_str())
+        .map(|ci| ci.fingerprint().as_str())
         .expect("connection should have certificate identity");
 
     // Authorize dispatch using the bound identity.
@@ -357,7 +592,7 @@ fn d3_certificate_identity_binding_to_surface_gate() {
             TraceId::new(100),
             SurfacePlane::Application,
             fp,
-            andromeda_observe::SurfaceAction::ExecuteProcedure,
+            SurfaceAction::ExecuteProcedure,
         )
         .unwrap();
 
@@ -374,10 +609,10 @@ fn d3_certificate_scope_mismatch_prevents_dispatch() {
     let mut conn = Connection::new(SurfacePlane::Application);
 
     // Try to bind an Administration certificate (wrong scope).
-    let admin_cert = CertificateIdentity::new(
+    let admin_cert = CoreCertificateIdentity::new(
         "b".repeat(64),
         "admin-service",
-        SurfaceScope::Administration, // Mismatch!
+        CoreSurfaceScope::Administration, // Mismatch!
     )
     .unwrap();
 
@@ -386,7 +621,7 @@ fn d3_certificate_scope_mismatch_prevents_dispatch() {
     assert!(err.is_err());
     assert_eq!(
         err.unwrap_err().kind(),
-        andromeda_core::AndromedaErrorKind::Protocol
+        andromeda_error::AndromedaErrorKind::Protocol
     );
 
     // Connection should have no identity bound.
@@ -402,14 +637,16 @@ fn d3_certificate_identity_immutability() {
     let mut conn = Connection::new(SurfacePlane::Administration);
 
     let cert1 =
-        CertificateIdentity::new("c".repeat(64), "admin-1", SurfaceScope::Administration).unwrap();
+        CoreCertificateIdentity::new("c".repeat(64), "admin-1", CoreSurfaceScope::Administration)
+            .unwrap();
     let cert2 =
-        CertificateIdentity::new("d".repeat(64), "admin-2", SurfaceScope::Administration).unwrap();
+        CoreCertificateIdentity::new("d".repeat(64), "admin-2", CoreSurfaceScope::Administration)
+            .unwrap();
 
     // First binding succeeds.
     conn.set_certificate_identity(cert1.clone()).unwrap();
     assert_eq!(
-        conn.certificate_identity().unwrap().fingerprint,
+        conn.certificate_identity().unwrap().fingerprint().as_str(),
         "c".repeat(64)
     );
 
@@ -419,7 +656,7 @@ fn d3_certificate_identity_immutability() {
 
     // First identity is preserved.
     assert_eq!(
-        conn.certificate_identity().unwrap().fingerprint,
+        conn.certificate_identity().unwrap().fingerprint().as_str(),
         "c".repeat(64)
     );
 }
@@ -433,41 +670,49 @@ fn d3_all_planes_enforce_certificate_scope_policy() {
     let test_cases = vec![
         (
             SurfacePlane::Application,
-            SurfaceScope::Application,
+            CoreSurfaceScope::Application,
             true, // should succeed
         ),
         (
             SurfacePlane::Application,
-            SurfaceScope::Administration,
+            CoreSurfaceScope::Administration,
             false, // should fail
         ),
         (
             SurfacePlane::Administration,
-            SurfaceScope::Administration,
+            CoreSurfaceScope::Administration,
             true,
         ),
         (
             SurfacePlane::Administration,
-            SurfaceScope::Application,
+            CoreSurfaceScope::Application,
             false,
         ),
-        (SurfacePlane::HighAvailability, SurfaceScope::Cluster, true),
         (
             SurfacePlane::HighAvailability,
-            SurfaceScope::Application,
+            CoreSurfaceScope::Cluster,
+            true,
+        ),
+        (
+            SurfacePlane::HighAvailability,
+            CoreSurfaceScope::Application,
             false,
         ),
         (
             SurfacePlane::Monitoring,
-            SurfaceScope::MonitoringAgent,
+            CoreSurfaceScope::MonitoringAgent,
             true,
         ),
-        (SurfacePlane::Monitoring, SurfaceScope::Application, false),
+        (
+            SurfacePlane::Monitoring,
+            CoreSurfaceScope::Application,
+            false,
+        ),
     ];
 
     for (plane, scope, should_succeed) in test_cases {
         let mut conn = Connection::new(plane);
-        let identity = CertificateIdentity::new("e".repeat(64), "test", scope).unwrap();
+        let identity = CoreCertificateIdentity::new("e".repeat(64), "test", scope).unwrap();
         let result = conn.set_certificate_identity(identity);
 
         if should_succeed {

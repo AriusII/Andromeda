@@ -1,0 +1,18 @@
+[package]
+name = "andromeda-storage-heap"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95.0"
+publish = false
+
+[dependencies]
+andromeda-error.workspace = true
+andromeda-procedure-contract.workspace = true
+andromeda-storage-page.workspace = true
+andromeda-types.workspace = true
+andromeda-wal.workspace = true
+
+[dev-dependencies]
+andromeda-disk-page-store.workspace = true
+andromeda-segment.workspace = true
+tempfile = "3.8"

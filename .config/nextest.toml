@@ -1,0 +1,147 @@
+# Andromeda test profiles configuration for nextest
+# Purpose: Organize tests by runtime behavior, enable selective test execution
+# Usage: cargo nextest run --profile <profile-name>
+
+# Default profile: fast development tests, suitable for pre-commit
+[profile.default]
+# Run tests in parallel with reasonable concurrency
+test-threads = "num-cpus"
+# Fail fast on first failure (development iteration)
+fail-fast = false
+# Retries: no retries by default (flaky tests should be fixed, not hidden)
+retries = 0
+# Failure output: immediate for quick feedback
+failure-output = "immediate"
+# Status level: brief for development
+status-level = "pass"
+
+# Slow timeout for default profile: flag tests taking >60s as potentially problematic
+[profile.default.slow-timeout]
+period = "60s"
+terminate-after = 4
+
+# CI profile: stricter settings for reproducible CI runs
+[profile.ci]
+# Run all tests (parallel but not more aggressive than default)
+fail-fast = false
+# No retries in CI (determinism required)
+retries = 0
+# Failure output: final verbose for debugging
+failure-output = "final"
+# Status level: verbose for tracking
+status-level = "all"
+
+# Slow timeout for CI: flag tests taking >120s
+[profile.ci.slow-timeout]
+period = "120s"
+terminate-after = 2
+
+# Slow profile: extended tests with longer timeouts
+[profile.slow]
+# Multi-threaded but deterministic
+fail-fast = false
+# No retries
+retries = 0
+# Show all output for debugging
+failure-output = "final"
+# Status level: verbose
+status-level = "all"
+
+# Slow timeout for extended tests: 300s
+[profile.slow.slow-timeout]
+period = "300s"
+terminate-after = 3
+
+# Recovery profile: crash/recovery simulation tests (longest runtime)
+[profile.recovery]
+# Single-threaded: recovery tests are sequential and must be isolated
+fail-fast = false
+# No retries: recovery tests must be deterministic, no flakiness allowed
+retries = 0
+# Show all output: recovery failures are critical
+failure-output = "final"
+# Status level: verbose for tracking critical tests
+status-level = "all"
+
+# Slow timeout for recovery tests: 600s (10 minutes for crash/recovery scenarios)
+[profile.recovery.slow-timeout]
+period = "600s"
+terminate-after = 2
+
+# WAL subsystem tests
+[profile.wal]
+fail-fast = false
+retries = 0
+failure-output = "immediate"
+status-level = "pass"
+
+[profile.wal.slow-timeout]
+period = "120s"
+terminate-after = 3
+
+# Storage subsystem tests
+[profile.storage]
+fail-fast = false
+retries = 0
+failure-output = "immediate"
+status-level = "pass"
+
+[profile.storage.slow-timeout]
+period = "120s"
+terminate-after = 3
+
+# Catalog subsystem tests
+[profile.catalog]
+fail-fast = false
+retries = 0
+failure-output = "immediate"
+status-level = "pass"
+
+[profile.catalog.slow-timeout]
+period = "90s"
+terminate-after = 3
+
+# SRPL subsystem tests
+[profile.srpl]
+fail-fast = false
+retries = 0
+failure-output = "immediate"
+status-level = "pass"
+
+[profile.srpl.slow-timeout]
+period = "90s"
+terminate-after = 3
+
+# RPC/QUIC subsystem tests
+[profile.rpc]
+fail-fast = false
+retries = 0
+failure-output = "immediate"
+status-level = "pass"
+
+[profile.rpc.slow-timeout]
+period = "120s"
+terminate-after = 3
+
+# MVCC/transaction tests
+[profile.mvcc]
+fail-fast = false
+retries = 0
+failure-output = "immediate"
+status-level = "pass"
+
+[profile.mvcc.slow-timeout]
+period = "120s"
+terminate-after = 3
+
+# Example usage:
+# cargo nextest run --profile default            # Fast dev tests
+# cargo nextest run --profile ci                 # Full CI run
+# cargo nextest run --profile slow               # Extended tests only
+# cargo nextest run --profile recovery           # Crash/recovery only
+# cargo nextest run --profile wal -p andromeda-wal  # WAL-specific tests
+# cargo nextest run --profile storage -p andromeda-storage  # Storage tests
+# cargo nextest run --profile catalog -p andromeda-catalog  # Catalog tests
+# cargo nextest run --profile srpl -p andromeda-srpl  # SRPL tests
+# cargo nextest run --profile rpc -p andromeda-rpc  # RPC tests
+# cargo nextest run --profile mvcc -p andromeda-mvcc  # MVCC tests

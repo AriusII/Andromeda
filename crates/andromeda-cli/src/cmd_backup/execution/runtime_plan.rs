@@ -1,11 +1,13 @@
 use crate::error::cli_error;
-use andromeda_core::AndromedaResult;
-use andromeda_storage::{
-    AllocationId, BackupExecutionPlan, BackupId, BackupManifest, BackupResourceLimits,
-    ColdSnapshotBoundary, ExtentCopyTask, ExtentDescriptor, ExtentId, ExtentState,
-    FileBackedBackupArtifactStore, Lsn, ObjectId, PageId, PageSize, SegmentId, StorageTier,
-    WAL_FORMAT_VERSION, WalArchiveRange, WalSegmentCopyTask, WalSegmentDescriptor,
+use andromeda_backup::{
+    BackupExecutionPlan, BackupId, BackupManifest, BackupResourceLimits, BackupStorageTier,
+    ColdSnapshotBoundary, ExtentCopyTask, FileBackedBackupArtifactStore, WAL_FORMAT_VERSION,
+    WalArchiveRange, WalSegmentCopyTask,
 };
+use andromeda_error::AndromedaResult;
+use andromeda_segment::{ExtentDescriptor, ExtentState, SegmentId};
+use andromeda_storage_page::{AllocationId, ExtentId, ObjectId, PageId, PageSize};
+use andromeda_wal::{Lsn, WalSegmentDescriptor};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const RUNTIME_SNAPSHOT_BYTES: &[u8] = b"andromeda-cli file-backed backup snapshot fixture v1";
@@ -112,7 +114,7 @@ fn build_runtime_backup_execution_plan(backup_id: u64) -> AndromedaResult<Backup
         manifest,
         extent_copy_plan: vec![ExtentCopyTask {
             extent_descriptor: extent,
-            source_tier: StorageTier::ColdStore,
+            source_tier: BackupStorageTier::ColdStore,
             byte_count: RUNTIME_SNAPSHOT_BYTES.len() as u64,
         }],
         wal_segment_copy_plan: vec![
@@ -137,7 +139,12 @@ fn build_runtime_backup_execution_plan(backup_id: u64) -> AndromedaResult<Backup
         total_extent_bytes: RUNTIME_SNAPSHOT_BYTES.len() as u64,
         total_wal_bytes,
     };
-    plan.validate()?;
+    plan.validate().map_err(|error| {
+        cli_error(format!(
+            "failed to validate generated backup execution plan: {}",
+            error.message()
+        ))
+    })?;
     Ok(plan)
 }
 

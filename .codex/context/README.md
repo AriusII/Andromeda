@@ -1,0 +1,25 @@
+# Andromeda Context Documents
+
+- `context/andromeda-docs/markdown/00_ANDROMEDA_INDEX_ET_MODE_DE_LECTURE.md`
+- `context/andromeda-docs/markdown/01_DOCTRINE_LEXIQUE_ARCHITECTURE_CATALOGUE_MODELIZATION.md`
+- `context/andromeda-docs/markdown/02_TYPE_SYSTEM_SRPL_PROCEDURES_MAPS.md`
+- `context/andromeda-docs/markdown/03_TRANSACTION_WAL_MVCC_STORAGE_RECOVERY.md`
+- `context/andromeda-docs/markdown/04_QUIC_RPC_SECURITY_HADR_OPERATIONS.md`
+- `context/andromeda-docs/markdown/05_OPTIMIZER_STATS_ANALYTICS_HARDWARE_ROADMAP_SOURCES.md`
+- `context/andromeda-docs/markdown/Moteur de stockage sécurisé.txt`
+- `context/andromeda-docs/markdown/Recherche GPU Rust 2026.txt`
+- `context/andromeda-docs/markdown/Recherche processeurs et Rust.txt`
+- `context/andromeda-docs/markdown/Rust 2026 Architecture Guide.txt`
+- `context/andromeda-docs/markdown/Usage RUST 2026.txt`
+- `context/andromeda-docs/markdown/andromeda_rust_engineering_doctrine_2026.md`
+- `context/andromeda-docs/markdown/charte_qualite_clean_code_refactorisation_rust_2026.md`
+- `context/andromeda-docs/markdown/charte_qualite_clean_code_refactorisation_rust_2026_v2.md`
+- `context/andromeda-docs/markdown/clean-guideline.md`
+- `context/andromeda-docs/pdf/Andromeda Rust 2026 Architecture and Engineering Guidance.pdf`
+- `context/andromeda-docs/pdf/Corpus de référence pour les SGBDR, ACID, l’algèbre relationnelle, la normalisation, les statistique.pdf`
+- `context/andromeda-docs/pdf/Fondation de SRPL pour un langage procédural relationnel strict.pdf`
+- `context/andromeda-docs/pdf/Rapport consolidé sur les SGBDR, ACID, les transactions, l’algèbre relationnelle, la normalisation, .pdf`
+- `context/andromeda-docs/pdf/andromeda_modern_cpu_rust.pdf`
+- `context/andromeda-docs/pdf/andromeda_modern_gpu_rust.pdf`
+- `context/andromeda-docs/pdf/andromeda_rust_2026_transverse_architecture_plan.pdf`
+- `context/andromeda-docs/pdf/andromeda_rust_engineering_doctrine_2026.pdf`

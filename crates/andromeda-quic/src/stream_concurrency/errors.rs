@@ -1,4 +1,4 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind};
+use andromeda_error::{AndromedaError, AndromedaErrorKind};
 
 pub(super) fn stream_limit_reached() -> AndromedaError {
     AndromedaError::new(

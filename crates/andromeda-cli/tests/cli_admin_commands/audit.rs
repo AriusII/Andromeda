@@ -1,4 +1,6 @@
-use super::support::{assert_contains_all, assert_success, run_cli, stdout};
+use super::support::{
+    assert_contains_all, assert_operator_boundary_json, assert_success, run_cli, stdout,
+};
 
 #[test]
 fn admin_json_output_is_opt_in_and_has_stable_backup_fields() {
@@ -11,7 +13,7 @@ fn admin_json_output_is_opt_in_and_has_stable_backup_fields() {
     let machine = run_cli(["backup", "status", "100", "--json"]);
     assert_success(&machine);
     let json = stdout(&machine);
-    assert!(json.trim_start().starts_with('{'));
+    assert_operator_boundary_json(&json, "andromeda.cli.backup.status.v1");
     assert_contains_all(
         &json,
         &[
@@ -32,6 +34,34 @@ fn admin_json_output_is_opt_in_and_has_stable_backup_fields() {
 }
 
 #[test]
+fn audit_inspect_json_is_operator_diagnostic_surface() {
+    let output = run_cli([
+        "audit",
+        "inspect",
+        "--trace-id",
+        "42",
+        "--principal",
+        "user:ops",
+        "--limit",
+        "5",
+        "--json",
+    ]);
+    assert_success(&output);
+    let json = stdout(&output);
+    assert_operator_boundary_json(&json, "andromeda.cli.audit.inspection.v1");
+    assert_contains_all(
+        &json,
+        &[
+            "\"diagnostic_only\":true",
+            "\"surface\":\"administration\"",
+            "\"required_permission\":\"inspect-plans\"",
+            "\"audit_operation\":\"inspect-plans\"",
+            "\"result\":null",
+        ],
+    );
+}
+
+#[test]
 fn admin_json_output_escapes_operator_supplied_strings() {
     let output = run_cli([
         "backup",
@@ -43,6 +73,6 @@ fn admin_json_output_escapes_operator_supplied_strings() {
     ]);
     assert_success(&output);
     let json = stdout(&output);
-    assert!(json.trim_start().starts_with('{'));
+    assert_operator_boundary_json(&json, "andromeda.cli.backup.start.v1");
     assert!(json.contains("\"destination\":\"C:\\\\Backup\\\\\\\"hot\\\"\""));
 }

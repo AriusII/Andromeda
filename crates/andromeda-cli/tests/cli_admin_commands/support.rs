@@ -1,9 +1,11 @@
 use andromeda_cli::dispatch_command;
+pub(crate) use andromeda_test_support::process::{
+    assert_contains_all, assert_success, owned_args, stdout_lossy as stdout,
+};
+use andromeda_test_support::{process::run_binary, workspace::TestTempDir};
 use std::{
-    fs,
     path::{Path, PathBuf},
-    process::{Command, Output},
-    time::{SystemTime, UNIX_EPOCH},
+    process::Output,
 };
 
 pub(crate) fn assert_dispatch_success<const N: usize>(args: [&str; N]) {
@@ -34,63 +36,68 @@ pub(crate) fn dispatch_error_message<const N: usize>(args: [&str; N]) -> String 
         .to_string()
 }
 
-fn owned_args<const N: usize>(args: [&str; N]) -> Vec<String> {
-    args.into_iter().map(str::to_string).collect()
-}
-
 pub(crate) fn run_cli<const N: usize>(args: [&str; N]) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_andromeda-cli"));
-    command.args(args).output().expect("run andromeda-cli")
+    run_binary(env!("CARGO_BIN_EXE_andromeda-cli"), args)
 }
 
 pub(crate) fn run_cli_vec(args: Vec<&str>) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_andromeda-cli"));
-    command.args(args).output().expect("run andromeda-cli")
+    run_binary(env!("CARGO_BIN_EXE_andromeda-cli"), args)
 }
 
 pub(crate) fn run_cli_owned(args: Vec<String>) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_andromeda-cli"));
-    command.args(args).output().expect("run andromeda-cli")
+    run_binary(env!("CARGO_BIN_EXE_andromeda-cli"), args)
 }
 
-pub(crate) fn assert_success(output: &Output) {
+pub(crate) fn assert_operator_boundary_json(text: &str, expected_schema: &str) {
     assert!(
-        output.status.success(),
-        "expected success\nstdout:\n{}\nstderr:\n{}",
-        stdout(output),
-        String::from_utf8_lossy(&output.stderr)
+        text.trim_start().starts_with('{'),
+        "expected JSON output: {text}"
     );
+    assert!(
+        text.contains(&format!("\"schema\":\"{expected_schema}\"")),
+        "expected schema `{expected_schema}` in `{text}`"
+    );
+    assert_no_application_procedure_surface(text);
+    assert_no_ad_hoc_sql_surface(text);
 }
 
-pub(crate) fn stdout(output: &Output) -> String {
-    String::from_utf8_lossy(&output.stdout).into_owned()
-}
-
-pub(crate) fn assert_contains_all(text: &str, expected: &[&str]) {
-    for item in expected {
-        assert!(text.contains(item), "expected `{item}` in `{text}`");
+pub(crate) fn assert_no_application_procedure_surface(text: &str) {
+    for forbidden in [
+        "\"surface\":\"application\"",
+        "\"required_permission\":\"execute-procedure\"",
+        "\"permission\":\"execute-procedure\"",
+        "\"family\":\"procedure-invocation\"",
+        "\"procedure_id\"",
+        "\"procedure\"",
+    ] {
+        assert!(
+            !text.contains(forbidden),
+            "operator command output exposed application procedure surface token `{forbidden}` in `{text}`"
+        );
     }
 }
 
-pub(crate) struct TestArtifactDir {
-    root: PathBuf,
+pub(crate) fn assert_no_ad_hoc_sql_surface(text: &str) {
+    let lower = text.to_ascii_lowercase();
+    for forbidden in [
+        "\"sql\"",
+        "\"query\"",
+        "--sql",
+        "select ",
+        "insert ",
+        "update ",
+        "delete ",
+        " from ",
+        " where ",
+    ] {
+        assert!(
+            !lower.contains(forbidden),
+            "operator command output exposed ad hoc SQL token `{forbidden}` in `{text}`"
+        );
+    }
 }
 
-impl TestArtifactDir {
-    pub(crate) fn path(&self) -> &Path {
-        &self.root
-    }
-
-    pub(crate) fn display(&self) -> std::path::Display<'_> {
-        self.root.display()
-    }
-}
-
-impl Drop for TestArtifactDir {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.root);
-    }
-}
+pub(crate) type TestArtifactDir = TestTempDir;
 
 pub(crate) fn create_cli_backup_artifact(test_name: &str, backup_id: u64) -> TestArtifactDir {
     let artifact_dir = temp_artifact_dir(test_name);
@@ -109,16 +116,7 @@ pub(crate) fn create_cli_backup_artifact(test_name: &str, backup_id: u64) -> Tes
 }
 
 pub(crate) fn temp_artifact_dir(test_name: &str) -> TestArtifactDir {
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system time is after UNIX epoch")
-        .as_nanos();
-    TestArtifactDir {
-        root: std::env::temp_dir().join(format!(
-            "andromeda-cli-{test_name}-{}-{nonce}",
-            std::process::id()
-        )),
-    }
+    TestTempDir::new(&format!("andromeda-cli-{test_name}"))
 }
 
 pub(crate) fn backup_manifest_path(root: &Path, backup_id: u64) -> PathBuf {

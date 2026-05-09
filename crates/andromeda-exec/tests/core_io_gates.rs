@@ -1,31 +1,43 @@
-use andromeda_catalog::{
-    PolicyVersion, ProcedureContractBinding, ProcedureContractRef, StatsVersion,
-};
-use andromeda_core::{
-    AndromedaErrorKind, CatalogVersion, ContractHash, InvocationId, PipelineClass, ProcedureId,
-    RequestId, ResourceBudget, SessionId,
-};
-use andromeda_exec::{CompletionStatus, InvocationRequest};
+use andromeda_admission::InvocationRequest;
+use andromeda_error::AndromedaErrorKind;
+use andromeda_hardware::{PipelineClass, ResourceBudget};
 use andromeda_observe::{
     CriticalDecisionKind, EventCorrelation, EventEnvelope, EventId, IoBudgetDecisionTrace,
     IoPipelineStage, IoPlacementDecisionTrace, IoStorageTier, ProtocolCorrelation, TraceEvent,
     TraceId,
 };
-use andromeda_storage::{
-    CoreIoPlacementPolicy, CoreIoPlacementRequest, OperationalProfile, PageSize,
-    StorageIoBudgetScope, StorageTier, StorageWorkloadClass,
+use andromeda_procedure_contract::{
+    PolicyVersion, ProcedureContractBinding, ProcedureContractRef, StatsVersion,
+};
+use andromeda_result_stream::CompletionStatus;
+use andromeda_storage_page::PageSize;
+use andromeda_storage_placement::{
+    CoreIoPlacementPolicy, CoreIoPlacementRequest, OperationalProfile, StorageIoBudgetScope,
+    StorageTier, StorageWorkloadClass,
+};
+use andromeda_types::{
+    CatalogVersion, ContractHash, InvocationId, ProcedureId, RequestId, SessionId,
 };
 
 const EXEC_CRITICAL_PATH_SOURCES: &[(&str, &str)] = &[
     ("local_runtime", include_str!("../src/local.rs")),
     ("local_dispatch", include_str!("../src/dispatch/local.rs")),
-    ("wal_evidence", include_str!("../src/wal_evidence.rs")),
-    ("admission", include_str!("../src/services/admission.rs")),
+    (
+        "invocation_wal",
+        include_str!("../../andromeda-wal/src/invocation_wal.rs"),
+    ),
+    (
+        "admission",
+        include_str!("../../andromeda-admission/src/service.rs"),
+    ),
     (
         "pre_transaction",
-        include_str!("../src/services/pre_transaction.rs"),
+        include_str!("../../andromeda-admission/src/pre_transaction.rs"),
     ),
-    ("completion", include_str!("../src/services/completion.rs")),
+    (
+        "completion",
+        include_str!("../../andromeda-execution-trace/src/completion.rs"),
+    ),
 ];
 
 #[test]

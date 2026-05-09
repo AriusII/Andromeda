@@ -1,34 +1,41 @@
-pub(crate) use andromeda_catalog::{
-    AccessMode, CatalogDefinition, CatalogObjectRef, CatalogSnapshot, CompatibilityPolicy,
-    DefinitionBatch, DefinitionBatchId, DefinitionOperation, INVENTORY_DATABASE_ID,
-    INVENTORY_DEFINITION_BATCH_ID, INVENTORY_NAMESPACE_ID, IsolationPolicy, MultiResultPolicy,
-    ObjectKind, ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName,
-    ResultMetadataPolicy, ResultStreamCardinality, ResultStreamContract, StatsVersion,
-    StructuredObjectDefinition, TransactionPolicy, inventory_domain_definition_batch,
-    inventory_protocol_layout_ref, inventory_reserve_stock_contract,
-    inventory_reserve_stock_contract_candidate,
+pub(crate) use andromeda_business_fixtures::{
+    INVENTORY_DATABASE_ID, INVENTORY_DEFINITION_BATCH_ID, INVENTORY_NAMESPACE_ID,
+    inventory_domain_definition_batch, inventory_protocol_layout_ref,
+    inventory_reserve_stock_contract, inventory_reserve_stock_contract_candidate,
 };
-pub(crate) use andromeda_core::{
-    AndromedaErrorKind, CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash,
-    ProcedureId, ScalarType, TypeDescriptor,
+pub(crate) use andromeda_catalog::{CatalogDefinitionBatchPlanning, CatalogSnapshot};
+pub(crate) use andromeda_catalog_store::{
+    CatalogDefinition, CatalogObjectRef, ObjectKind, QualifiedName, StructuredObjectDefinition,
 };
-pub(crate) use andromeda_srpl::{
-    DiagnosticPhase, SourceSpan,
-    procedure_compiler::{
-        INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, bind_executable_procedure_plan,
-        compile_inventory_reserve_stock_contract,
-        compile_inventory_reserve_stock_contract_candidate,
-        compile_narrow_procedure_contract_candidate, compile_narrow_procedure_definition,
-        compile_narrow_procedure_definition_batch, compile_narrow_procedure_signature,
-        inventory_reserve_stock_body_ir, inventory_reserve_stock_contract_metadata,
-        lower_ir_to_catalog_definition, lower_ir_to_contract_candidate, parse_procedure_signature,
-    },
-    procedure_model::{
-        Cardinality, ProcedureSignature, ResultContract, SrplBusinessOperationIr,
-        SrplBusinessOperationKindIr, SrplEmitValueIr, SrplProcedureBodyIr,
-        SrplProcedureContractMetadata, SrplProcedureIr, SrplResultStreamIr, SrplValueIr,
-    },
-    source_location::SrplSource,
+pub(crate) use andromeda_definition_batch::{
+    DefinitionBatch, DefinitionBatchId, DefinitionOperation,
+};
+pub(crate) use andromeda_error::AndromedaErrorKind;
+pub(crate) use andromeda_procedure_contract::{
+    AccessMode, CompatibilityPolicy, IsolationPolicy, MultiResultPolicy,
+    ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef, ResultMetadataPolicy,
+    ResultStreamCardinality, ResultStreamContract, StatsVersion, TransactionPolicy,
+};
+pub(crate) use andromeda_srpl_binder::inventory_reserve_stock_body_ir;
+pub(crate) use andromeda_srpl_catalog_binding::bind_executable_procedure_plan;
+pub(crate) use andromeda_srpl_definition_batch::{
+    INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, compile_inventory_reserve_stock_contract,
+    compile_inventory_reserve_stock_contract_candidate,
+    compile_narrow_procedure_contract_candidate, compile_narrow_procedure_definition,
+    compile_narrow_procedure_definition_batch, compile_narrow_procedure_signature,
+    inventory_reserve_stock_contract_metadata, lower_ir_to_catalog_definition,
+};
+pub(crate) use andromeda_srpl_diagnostics::{DiagnosticPhase, SourceSpan, SrplSource};
+pub(crate) use andromeda_srpl_ir::{
+    Cardinality, ProcedureSignature, ResultContract, SrplBusinessOperationIr,
+    SrplBusinessOperationKindIr, SrplEmitValueIr, SrplProcedureBodyIr,
+    SrplProcedureContractMetadata, SrplProcedureIr, SrplResultStreamIr, SrplValueIr,
+};
+pub(crate) use andromeda_srpl_lowering::lower_ir_to_contract_candidate;
+pub(crate) use andromeda_srpl_parser::parse_procedure_signature;
+pub(crate) use andromeda_types::{
+    CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId, ScalarType,
+    TypeDescriptor,
 };
 
 pub(crate) fn contract_metadata() -> SrplProcedureContractMetadata {
@@ -176,7 +183,7 @@ pub(crate) fn cardinality_probe_snapshot(
                     stream: result_name.to_string(),
                     values: vec![SrplEmitValueIr {
                         column: "Present".to_string(),
-                        value: SrplValueIr::Bool(true),
+                        value: SrplValueIr::bool(true),
                     }],
                 },
             })

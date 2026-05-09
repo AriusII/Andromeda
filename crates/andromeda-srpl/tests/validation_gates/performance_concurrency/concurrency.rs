@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use andromeda_srpl::procedure_compiler::{compile_narrow_procedure_signature, lex};
+use andromeda_srpl_definition_batch::compile_narrow_procedure_signature;
+use andromeda_srpl_lexer::lex;
 
 #[test]
 fn gate_07_concurrent_parsing() {

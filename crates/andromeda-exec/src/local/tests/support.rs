@@ -1,28 +1,45 @@
-pub(crate) use super::super::{LocalProcedure, LocalVerticalRuntime};
-pub(crate) use andromeda_catalog::{
-    CatalogLifecycleTarget, CatalogSnapshot, CatalogSystemStore, DefinitionBatch,
-    DefinitionBatchId, DefinitionOperation, InvocationRuntimeRecordOutcome, PolicyVersion,
-    ProcedureContract, ProcedureContractBinding, ProcedureContractRef, ProcedureRuntimePlanId,
-    ProcedureRuntimeStatus, ProcedureStore, ProcedureStoreEntry, StatsVersion,
+pub(crate) use super::super::LocalVerticalRuntime;
+pub(crate) use andromeda_audit::{
+    CertificateIdentity, Permission, SecurityAuditOutcome, SurfaceScope, UserPrincipal,
+    UserPrincipalKind,
+};
+pub(crate) use andromeda_execution::LocalProcedure;
+pub(crate) use andromeda_catalog::CatalogSystemStore;
+pub(crate) use andromeda_definition_batch::{
+    CatalogLifecycleTarget, DefinitionBatch, DefinitionBatchId, DefinitionOperation,
+};
+pub(crate) use andromeda_error::{AndromedaErrorKind, AndromedaResult};
+pub(crate) use andromeda_hardware::{PipelineClass, ResourceBudget};
+pub(crate) use andromeda_inventory_demo::{
     inventory_domain_definition_batch, inventory_reserve_stock_contract,
 };
-pub(crate) use andromeda_core::{
-    AndromedaErrorKind, AndromedaResult, CatalogVersion, ContractHash, DatabaseId, InvocationId,
-    NamespaceId, ProcedureId, TransactionId,
+pub(crate) use andromeda_observability::TraceId;
+pub(crate) use andromeda_procedure_contract::{
+    PolicyVersion, ProcedureContract, ProcedureContractBinding, ProcedureContractRef, StatsVersion,
 };
-pub(crate) use andromeda_observe::{
-    AuthorizationDenialReason, AuthorizationOutcome, CertificateIdentity, Permission,
-    PrincipalBinding, PrincipalRegistry, SecurityAuditOutcome, SurfaceScope, TraceId,
-    UserPrincipal, UserPrincipalKind,
+pub(crate) use andromeda_procedure_store::{
+    InvocationRuntimeRecordOutcome, ProcedureRuntimePlanId, ProcedureRuntimeStatus, ProcedureStore,
+    ProcedureStoreEntry,
 };
 pub(crate) use andromeda_quic::SurfacePlane;
-pub(crate) use andromeda_srpl::Cardinality;
-pub(crate) use andromeda_storage::{InMemoryWal, Lsn, WalRecordKind};
-pub(crate) use andromeda_tx::TransactionState;
+pub(crate) use andromeda_security::{
+    AuthorizationDenialReason, AuthorizationOutcome, PrincipalBinding, PrincipalRegistry,
+};
+pub(crate) use andromeda_srpl_ir::Cardinality;
+pub(crate) use andromeda_storage_page::PageSize;
+pub(crate) use andromeda_storage_placement::{
+    CoreIoPlacementRequest, OperationalProfile, StorageIoBudgetScope, StorageWorkloadClass,
+};
+pub(crate) use andromeda_transaction::TransactionState;
+pub(crate) use andromeda_types::{
+    CatalogVersion, ContractHash, DatabaseId, InvocationId, NamespaceId, ProcedureId, TransactionId,
+};
+pub(crate) use andromeda_wal::{InMemoryWal, InvocationWal, Lsn, WalRecordKind};
 
 pub(crate) use crate::{
-    CompletionStatus, InvocationContext, InvocationRequest, InvocationWal, LocalDispatcher,
-    LocalRollbackPlan, ResultStreamMetadata, RollbackCause, SurfacePlaneAuthorizer,
+    CompletionStatus, ExecutionIoAdmissionDecision, ExecutionIoAdmissionRequest, InvocationContext,
+    InvocationReject, InvocationRequest, LocalDispatcher, LocalRollbackPlan, ResultStreamMetadata,
+    RollbackCause, SurfacePlaneAuthorizer,
 };
 
 #[derive(Debug, Default)]
@@ -126,6 +143,42 @@ pub(crate) fn inventory_context(contract: &ProcedureContract, trace_id: u128) ->
     )
 }
 
+pub(crate) fn foreground_io_admission(
+    trace_id: TraceId,
+) -> Result<ExecutionIoAdmissionDecision, InvocationReject> {
+    let profile = OperationalProfile::hot_write();
+    ExecutionIoAdmissionRequest::new(
+        profile.clone(),
+        PipelineClass::ForegroundExecution,
+        ResourceBudget::new(8 * 1024 * 1024, 1024 * 1024, 2),
+        CoreIoPlacementRequest::new(
+            StorageWorkloadClass::HotAppend,
+            StorageIoBudgetScope::Page(PageSize::KiB16),
+            profile.workflow.page_budget.path_budget,
+            false,
+        ),
+    )
+    .validate_admission(trace_id)
+}
+
+pub(crate) fn rejected_resource_budget_io_admission(
+    trace_id: TraceId,
+) -> Result<ExecutionIoAdmissionDecision, InvocationReject> {
+    let profile = OperationalProfile::hot_write();
+    ExecutionIoAdmissionRequest::new(
+        profile.clone(),
+        PipelineClass::ForegroundExecution,
+        ResourceBudget::new(0, 1024 * 1024, 2),
+        CoreIoPlacementRequest::new(
+            StorageWorkloadClass::HotAppend,
+            StorageIoBudgetScope::Page(PageSize::KiB16),
+            profile.workflow.page_budget.path_budget,
+            false,
+        ),
+    )
+    .validate_admission(trace_id)
+}
+
 pub(crate) fn test_binding(procedure: ProcedureContractRef) -> ProcedureContractBinding {
     ProcedureContractBinding {
         procedure_id: procedure.procedure_id,
@@ -136,7 +189,7 @@ pub(crate) fn test_binding(procedure: ProcedureContractRef) -> ProcedureContract
     }
 }
 
-pub(crate) fn inventory_catalog_store() -> CatalogSystemStore {
+pub(crate) fn staged_inventory_catalog_store() -> CatalogSystemStore {
     let mut store = CatalogSystemStore::empty(
         DatabaseId::new(0x1000),
         NamespaceId::new(0x1001),
@@ -146,6 +199,40 @@ pub(crate) fn inventory_catalog_store() -> CatalogSystemStore {
         .apply_definition_batch(&inventory_domain_definition_batch().unwrap())
         .unwrap();
     store
+}
+
+pub(crate) fn inventory_catalog_store() -> CatalogSystemStore {
+    let mut store = CatalogSystemStore::empty(
+        DatabaseId::new(0x1000),
+        NamespaceId::new(0x1001),
+        CatalogVersion::new(0),
+    );
+    apply_definition_batch_durably_for_test(
+        &mut store,
+        &inventory_domain_definition_batch().unwrap(),
+    );
+    store
+}
+
+pub(crate) fn apply_definition_batch_durably_for_test(
+    store: &mut CatalogSystemStore,
+    batch: &DefinitionBatch,
+) {
+    let mut next_lsn = store
+        .snapshot()
+        .visible_publication_receipt()
+        .and_then(|receipt| receipt.durable_lsn)
+        .unwrap_or(0);
+    store
+        .apply_definition_batch_durably(
+            batch,
+            |_kind, _payload| {
+                next_lsn += 1;
+                Ok(next_lsn)
+            },
+            Ok,
+        )
+        .unwrap();
 }
 
 pub(crate) fn principal_registry(bindings: Vec<PrincipalBinding>) -> PrincipalRegistry {

@@ -1,3 +1,0 @@
-display_name: "Rust Miri UB Checks"
-short_description: "Use Miri for unsafe wrappers and pointer-sensitive Rust tests. Use when unsafe code, raw pointers, aliasing, or layout assumptions need validation."
-default_prompt: "Use the Rust Miri UB Checks skill to analyze the current Andromeda task and return a bounded, validated result."

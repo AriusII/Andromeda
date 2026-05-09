@@ -1,3 +1,0 @@
-display_name: "ContractHash Canonicalization"
-short_description: "Define stable ContractHash canonicalization across shapes, types, permissions, policies, compatibility, and semantic IR. Use when hashing procedures/contracts."
-default_prompt: "Use the ContractHash Canonicalization skill to analyze the current Andromeda task and return a bounded, validated result."

@@ -9,20 +9,23 @@ mod durable_audit;
 mod event_family;
 mod filtering;
 mod in_memory;
-mod permission;
 mod result;
-mod spec;
 
+pub use andromeda_audit::DurableAuditTraceQueryPermissionMatrix;
+pub use andromeda_observability::{
+    TRACE_QUERY_DEFAULT_LIMIT, TRACE_QUERY_MAX_LIMIT, TraceEventFamily, TraceQueryFilter,
+    TraceQueryLsnRange, TraceQuerySpec,
+};
 pub use durable_audit::{
     DurableAuditTraceQueryResult, DurableAuditTraceQueryRow, DurableAuditTraceQuerySource,
 };
-pub use event_family::TraceEventFamily;
-pub use permission::TraceQueryPermissionMatrix;
 pub use result::{TraceQueryMetadata, TraceQueryResult, TraceQueryRow};
-pub use spec::{
-    TRACE_QUERY_DEFAULT_LIMIT, TRACE_QUERY_MAX_LIMIT, TraceQueryFilter, TraceQueryLsnRange,
-    TraceQuerySpec,
-};
+
+/// Compatibility name for observe in-memory query metadata.
+///
+/// Durable audit replay permissions are audit-owned; new durable replay callers
+/// should use [`DurableAuditTraceQueryPermissionMatrix`] directly.
+pub type TraceQueryPermissionMatrix = DurableAuditTraceQueryPermissionMatrix;
 
 #[cfg(test)]
 mod tests;

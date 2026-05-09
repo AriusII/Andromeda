@@ -1,0 +1,15 @@
+[package]
+name = "andromeda-wal"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+andromeda-error.workspace = true
+andromeda-types.workspace = true
+andromeda-wal-codec.workspace = true
+dashmap = "6.0"
+
+[dev-dependencies]
+proptest.workspace = true

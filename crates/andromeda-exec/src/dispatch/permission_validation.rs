@@ -1,6 +1,6 @@
 //! Permission scope validation for Procedure dispatch.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_observe::{DurableAuditSinkReport, TraceId};
 use std::collections::HashSet;
 

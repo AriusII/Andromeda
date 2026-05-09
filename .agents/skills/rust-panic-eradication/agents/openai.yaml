@@ -1,3 +1,0 @@
-display_name: "Rust Panic Eradication"
-short_description: "Remove panic, unwrap, expect, todo, dbg, and uncontrolled aborts from mission-critical runtime paths. Use in WAL, recovery, RPC, security, and storage."
-default_prompt: "Use the Rust Panic Eradication skill to analyze the current Andromeda task and return a bounded, validated result."

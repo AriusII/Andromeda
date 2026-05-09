@@ -1,3 +1,4 @@
 pub mod transaction;
 
-pub use transaction::*;
+#[allow(deprecated)]
+pub use transaction::transaction_id_for_invocation;

@@ -1,25 +1,45 @@
-pub use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, InvocationId, Permission, PrincipalId,
-    TransactionId,
-};
+pub use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 pub use andromeda_exec::dispatch::permission_validation::{
     validate_dispatch_permissions_with_audit, validate_dispatch_permissions_with_durable_audit,
 };
 pub use andromeda_exec::services::permission_audit_emitter::{
-    AuditEmissionEvidence, AuditEmissionKind, AuditEmissionOutcome, AuditEmissionPolicy,
-    AuditSinkAvailability, DenialAuditReason, NoOpPermissionAuditEmitter, PermissionAuditEmitter,
-    PermissionAuditEvent, audit_text_contains_sensitive_marker,
-};
-pub use andromeda_exec::{
-    CompletionEmission, CompletionMappingService, CompletionStatus, InvocationCompletionEmitter,
+    AuditEmissionKind, AuditEmissionOutcome, AuditEmissionPolicy, AuditSinkAvailability,
+    DenialAuditReason, NoOpPermissionAuditEmitter, PermissionAuditEmitter, PermissionAuditEvent,
+    audit_text_contains_sensitive_marker,
 };
 pub use andromeda_observe::{
     DurableAuditEventFamily, DurableAuditRecordIdentity, DurableAuditReplayBehavior,
     DurableAuditRetentionBoundary, DurableAuditSinkReport, DurableAuditWalEvidence, EventId,
     TraceId,
 };
-pub use andromeda_storage::Lsn;
-pub use andromeda_tx::TransactionState;
+pub use andromeda_principal::{Permission, PrincipalId};
+
+use std::sync::Mutex;
+
+pub(crate) struct RecordingPermissionAuditEmitter {
+    events: Mutex<Vec<PermissionAuditEvent>>,
+}
+
+impl Default for RecordingPermissionAuditEmitter {
+    fn default() -> Self {
+        Self {
+            events: Mutex::new(Vec::new()),
+        }
+    }
+}
+
+impl PermissionAuditEmitter for RecordingPermissionAuditEmitter {
+    fn emit_permission_decision(&self, event: PermissionAuditEvent) -> AndromedaResult<()> {
+        let mut events = self.events.lock().map_err(|_| {
+            AndromedaError::new(
+                AndromedaErrorKind::Internal,
+                "recording permission audit emitter lock poisoned",
+            )
+        })?;
+        events.push(event);
+        Ok(())
+    }
+}
 
 pub(crate) fn durable_audit_report(
     trace_id: TraceId,
@@ -50,7 +70,7 @@ pub(crate) fn retention_boundary_for_family(
         DurableAuditEventFamily::CatalogDecision => DurableAuditRetentionBoundary::CatalogVersion,
         DurableAuditEventFamily::BackupDecision | DurableAuditEventFamily::RestoreDecision => {
             DurableAuditRetentionBoundary::WalSegment
-        }
+        },
         DurableAuditEventFamily::ForensicDecision => DurableAuditRetentionBoundary::ForensicHold,
         _ => DurableAuditRetentionBoundary::SecurityPolicy,
     }

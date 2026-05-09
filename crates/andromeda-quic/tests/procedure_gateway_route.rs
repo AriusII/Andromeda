@@ -14,27 +14,40 @@
 //!
 //! These tests are runtime-free and do not depend on quinn or rustls.
 
-use andromeda_core::{
-    AndromedaErrorKind, CatalogVersion, CertificateFingerprint,
-    CertificateIdentity as CoreCertificateIdentity, ContractHash, InvocationId, Permission,
-    PermissionSet, Principal, PrincipalAuthorizationDenialReason, PrincipalAuthorizationOutcome,
-    PrincipalBinding, PrincipalId, PrincipalRegistry, PrincipalRole, PrincipalStatus, ProcedureId,
-    RequestId, SessionId, SessionToken, SurfaceScope as CoreSurfaceScope, TransactionId,
+use andromeda_error::AndromedaErrorKind;
+use andromeda_principal::{
+    CertificateFingerprint, CertificateIdentityStatus, Permission, PermissionSet, Principal,
+    PrincipalAuthorizationDenialReason, PrincipalAuthorizationEvaluationStage,
+    PrincipalAuthorizationEvidence, PrincipalAuthorizationOutcome, PrincipalBinding, PrincipalId,
+    PrincipalRegistry, PrincipalRole, PrincipalStatus, SessionToken,
 };
-use andromeda_observe::{CertificateIdentity, SurfaceScope};
-use andromeda_proto::{PayloadKind, encode_generated_message, generated};
-use andromeda_quic::{
-    CatalogProcedureManifest, CatalogProcedureProtocolLayout, CatalogRequiredPermission,
-    Connection, FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader, FrameType, LifecycleState,
-    ProcedureGateway, ResultStreamMetadataPolicy, SurfacePlane, TypedResultStreamContext,
+use andromeda_principal::{
+    CertificateIdentity as CoreCertificateIdentity, SurfaceScope as CoreSurfaceScope,
+};
+use andromeda_principal::{CertificateIdentity, SurfaceScope};
+use andromeda_procedure_contract::{
+    ProcedureGatewayManifest as CatalogProcedureManifest,
+    ProcedureGatewayProtocolLayout as CatalogProcedureProtocolLayout,
+    ProcedureGatewayRequiredPermission as CatalogRequiredPermission,
+};
+use andromeda_proto::generated::{self, encode_generated_message};
+use andromeda_quic::procedure_gateway::ProcedureRouteAdmissionError;
+use andromeda_quic::{Connection, LifecycleState, ProcedureGateway, SurfacePlane};
+use andromeda_rpc_codec::TypedResultStreamContext;
+use andromeda_rpc_protocol::{
+    FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader, FrameType, PayloadKind,
+    ResultStreamMetadataPolicy,
+};
+use andromeda_types::{
+    CatalogVersion, ContractHash, InvocationId, ProcedureId, RequestId, SessionId, TransactionId,
 };
 
 fn hello_frame(session_id: u64) -> FrameBytes {
     FrameBytes {
         header: FrameHeader {
             frame_type: FrameType::Hello,
-            request_id: andromeda_core::RequestId::new(1),
-            session_id: andromeda_core::SessionId::new(session_id),
+            request_id: RequestId::new(1),
+            session_id: SessionId::new(session_id),
             tx_id: None,
             payload_length: 0,
             flags: 0,
@@ -48,8 +61,8 @@ fn auth_frame(session_id: u64) -> FrameBytes {
     FrameBytes {
         header: FrameHeader {
             frame_type: FrameType::Auth,
-            request_id: andromeda_core::RequestId::new(1),
-            session_id: andromeda_core::SessionId::new(session_id),
+            request_id: RequestId::new(1),
+            session_id: SessionId::new(session_id),
             tx_id: None,
             payload_length: 0,
             flags: 0,
@@ -186,20 +199,6 @@ fn execute_request_frame_from_generated(
     }
 }
 
-fn valid_generated_execute_request(
-    manifest: &CatalogProcedureManifest,
-) -> generated::protocol::v1::RpcExecuteRequest {
-    generated::protocol::v1::RpcExecuteRequest {
-        procedure_name: manifest.procedure_name.clone(),
-        expected_contract_hash: manifest.contract_hash.as_bytes().to_vec(),
-        expected_catalog_version: manifest.catalog_version.get(),
-        surface_scope: "application".to_string(),
-        arguments: Vec::new(),
-        budget: None,
-        expected_stats_version: Some(manifest.stats_version),
-    }
-}
-
 fn valid_execute_frame(manifest: &CatalogProcedureManifest) -> FrameBytes {
     execute_request_frame(
         &manifest.procedure_name,
@@ -257,6 +256,62 @@ fn registry_for_application_user() -> (PrincipalRegistry, PrincipalId) {
     )
 }
 
+fn assert_route_rejection_before_authorization(
+    err: ProcedureRouteAdmissionError,
+    expected_kind: AndromedaErrorKind,
+    expected_message: &str,
+) {
+    assert_eq!(err.kind(), expected_kind);
+    assert!(
+        err.message().contains(expected_message),
+        "pre-dispatch route rejection should contain {expected_message:?}: {}",
+        err.message()
+    );
+    assert_eq!(
+        err.authorization_denial_reason(),
+        None,
+        "route rejection should happen before IAM authorization is evaluated"
+    );
+    assert!(
+        err.authorization_evidence().is_none(),
+        "route rejection should not carry IAM evidence"
+    );
+}
+
+fn assert_common_authorization_evidence(
+    evidence: &PrincipalAuthorizationEvidence,
+    expected_outcome: PrincipalAuthorizationOutcome,
+    expected_reason: &str,
+    expected_stage: PrincipalAuthorizationEvaluationStage,
+    expected_policy_version_registry: &PrincipalRegistry,
+) {
+    assert_eq!(
+        evidence.outcome, expected_outcome,
+        "IAM evidence must be machine-classified"
+    );
+    assert_eq!(evidence.reason, expected_reason);
+    assert_eq!(evidence.reason_code(), expected_reason);
+    assert_eq!(evidence.evaluation_stage(), expected_stage);
+    assert_eq!(
+        evidence.policy_version,
+        expected_policy_version_registry.policy_version()
+    );
+    assert!(evidence.has_identity_evidence());
+    assert!(evidence.has_reason());
+    assert!(evidence.has_policy_version());
+    assert!(
+        evidence.is_audit_ready(),
+        "IAM evidence must be ready for durable audit binding"
+    );
+    let expected_policy_binding = expected_policy_version_registry
+        .policy_evidence_binding()
+        .expect("registry policy evidence binding should be canonical");
+    assert!(
+        evidence.matches_policy_version_and_digest(&expected_policy_binding),
+        "IAM evidence must bind the registry policy version and digest"
+    );
+}
+
 fn assert_authorized_route_denial(
     registry: PrincipalRegistry,
     expected_reason: PrincipalAuthorizationDenialReason,
@@ -283,32 +338,129 @@ fn assert_authorized_route_denial(
     let evidence = err
         .authorization_evidence()
         .expect("IAM denial should carry authorization evidence");
-    assert_eq!(
-        evidence.outcome,
+    assert_common_authorization_evidence(
+        evidence,
         PrincipalAuthorizationOutcome::Denied,
-        "denial evidence must be machine-classified"
+        expected_reason.as_str(),
+        expected_reason.evaluation_stage(),
+        &registry,
     );
-    assert_eq!(evidence.reason, expected_reason.as_str());
     assert_eq!(
         evidence.required_permission,
         Permission::ExecuteProcedure(ProcedureId::new(42))
     );
     assert_eq!(evidence.surface_scope, CoreSurfaceScope::Application);
-    assert!(
-        evidence.has_identity_evidence(),
-        "audit evidence must preserve certificate/principal identity context"
-    );
+    match expected_reason {
+        PrincipalAuthorizationDenialReason::UnknownCertificate => {
+            assert_eq!(
+                evidence.certificate_fingerprint,
+                format!("fingerprint:{}", "a".repeat(64))
+            );
+            assert_eq!(evidence.certificate_subject, "subject:unknown");
+            assert_eq!(evidence.certificate_surface_scope, None);
+            assert_eq!(evidence.certificate_status, None);
+            assert_eq!(evidence.principal_id, None);
+            assert_eq!(evidence.principal_status, None);
+            assert!(!evidence.surface_policy_evaluated);
+            assert!(!evidence.role_permission_evaluated);
+            assert!(!evidence.direct_permission_evaluated);
+        },
+        PrincipalAuthorizationDenialReason::CertificateRevoked => {
+            assert_eq!(evidence.certificate_fingerprint, "a".repeat(64));
+            assert_eq!(evidence.certificate_subject, "app-service");
+            assert_eq!(
+                evidence.certificate_surface_scope,
+                Some(CoreSurfaceScope::Application)
+            );
+            assert_eq!(
+                evidence.certificate_status,
+                Some(CertificateIdentityStatus::Revoked)
+            );
+            assert_eq!(evidence.principal_status, Some(PrincipalStatus::Active));
+            assert!(!evidence.surface_policy_evaluated);
+            assert!(!evidence.role_permission_evaluated);
+            assert!(!evidence.direct_permission_evaluated);
+        },
+        PrincipalAuthorizationDenialReason::CertificateDisabled => {
+            assert_eq!(evidence.certificate_fingerprint, "a".repeat(64));
+            assert_eq!(evidence.certificate_subject, "app-service");
+            assert_eq!(
+                evidence.certificate_surface_scope,
+                Some(CoreSurfaceScope::Application)
+            );
+            assert_eq!(
+                evidence.certificate_status,
+                Some(CertificateIdentityStatus::Disabled)
+            );
+            assert_eq!(evidence.principal_status, Some(PrincipalStatus::Active));
+            assert!(!evidence.surface_policy_evaluated);
+            assert!(!evidence.role_permission_evaluated);
+            assert!(!evidence.direct_permission_evaluated);
+        },
+        PrincipalAuthorizationDenialReason::SurfaceScopeMismatch => {
+            assert_eq!(evidence.certificate_fingerprint, "a".repeat(64));
+            assert_eq!(
+                evidence.certificate_surface_scope,
+                Some(CoreSurfaceScope::Administration)
+            );
+            assert_eq!(
+                evidence.certificate_status,
+                Some(CertificateIdentityStatus::Active)
+            );
+            assert_eq!(evidence.principal_status, Some(PrincipalStatus::Active));
+            assert!(!evidence.surface_policy_evaluated);
+            assert!(!evidence.role_permission_evaluated);
+            assert!(!evidence.direct_permission_evaluated);
+        },
+        PrincipalAuthorizationDenialReason::PrincipalDisabled => {
+            assert_eq!(evidence.certificate_fingerprint, "a".repeat(64));
+            assert_eq!(
+                evidence.certificate_surface_scope,
+                Some(CoreSurfaceScope::Application)
+            );
+            assert_eq!(
+                evidence.certificate_status,
+                Some(CertificateIdentityStatus::Active)
+            );
+            assert_eq!(evidence.principal_status, Some(PrincipalStatus::Disabled));
+            assert!(!evidence.surface_policy_evaluated);
+            assert!(!evidence.role_permission_evaluated);
+            assert!(!evidence.direct_permission_evaluated);
+        },
+        PrincipalAuthorizationDenialReason::PrincipalMissingPermission => {
+            assert_eq!(evidence.certificate_fingerprint, "a".repeat(64));
+            assert_eq!(
+                evidence.certificate_surface_scope,
+                Some(CoreSurfaceScope::Application)
+            );
+            assert_eq!(
+                evidence.certificate_status,
+                Some(CertificateIdentityStatus::Active)
+            );
+            assert_eq!(evidence.principal_status, Some(PrincipalStatus::Active));
+            assert!(evidence.surface_policy_evaluated);
+            assert!(evidence.surface_policy_allowed);
+            assert!(evidence.role_permission_evaluated);
+            assert!(!evidence.role_permission_granted);
+            assert!(evidence.direct_permission_evaluated);
+            assert!(!evidence.direct_permission_granted);
+        },
+        PrincipalAuthorizationDenialReason::SurfaceDoesNotPermitPermission => {
+            panic!("Application execute route should not produce a surface-policy denial");
+        },
+    }
 }
+
+#[path = "procedure_gateway_route/authorized_pre_dispatch.rs"]
+mod authorized_pre_dispatch;
 
 #[path = "procedure_gateway_route/invalid_frames.rs"]
 mod invalid_frames;
-#[path = "procedure_gateway_route/manifest_match.rs"]
-mod manifest_match;
-#[path = "procedure_gateway_route/no_sql_no_grpc.rs"]
-mod no_sql_no_grpc;
 #[path = "procedure_gateway_route/permission.rs"]
 mod permission;
 #[path = "procedure_gateway_route/route_admission.rs"]
 mod route_admission;
 #[path = "procedure_gateway_route/runtime_dispatch.rs"]
 mod runtime_dispatch;
+#[path = "procedure_gateway_route/surface_separation.rs"]
+mod surface_separation;

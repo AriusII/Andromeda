@@ -1,27 +1,46 @@
-#![forbid(unsafe_code)]
-
-//! B-Tree KeyV1 format validation gate for DEC-038.
+//! Compatibility surface for index-owned B-Tree KeyV1 format validation.
 //!
-//! This module implements format validation gates required by DEC-032 and
-//! DEC-038:
-//! - validates persisted B-Tree indexes have recognized key-format identity;
-//! - rejects mutations with explicit deferral messages;
-//! - allows read-only operations;
-//! - enforces fail-fast behavior on format mismatches;
-//! - provides deterministic validation results across repeated calls.
-//!
-//! Page-backed B-Tree mutations are not promoted yet. This gate preserves format
-//! safety by allowing read-only access and rejecting mutation attempts before any
-//! page or WAL state can be changed.
+//! The index crate owns the validation gate. Storage keeps only the historical
+//! constructor shape that accepts `FormatVersion` and returns it to callers.
 
-mod identity;
-mod operation;
-mod validation;
-mod validator;
+use andromeda_error::AndromedaResult;
+pub use andromeda_storage_index::{
+    BTreeFormatIdentityError, BTreeKeyFormatIdentity, BTreeOperationType,
+};
 
-pub use identity::BTreeKeyFormatIdentity;
-pub use operation::BTreeOperationType;
-pub use validator::KeyV1FormatValidator;
+use crate::format_version::FormatVersion;
 
-#[cfg(test)]
-mod tests;
+#[derive(Debug, Clone)]
+pub struct KeyV1FormatValidator {
+    storage_version: FormatVersion,
+    inner: andromeda_storage_index::KeyV1FormatValidator,
+}
+
+impl KeyV1FormatValidator {
+    pub fn new(storage_version: FormatVersion, key_format: BTreeKeyFormatIdentity) -> Self {
+        Self {
+            storage_version,
+            inner: andromeda_storage_index::KeyV1FormatValidator::new(
+                storage_version.major,
+                storage_version.minor,
+                key_format,
+            ),
+        }
+    }
+
+    pub fn validate_operation(&self, operation: BTreeOperationType) -> AndromedaResult<()> {
+        self.inner.validate_operation(operation)
+    }
+
+    pub fn is_format_compatible(&self) -> bool {
+        self.inner.is_format_compatible()
+    }
+
+    pub fn format_identity(&self) -> BTreeKeyFormatIdentity {
+        self.inner.format_identity()
+    }
+
+    pub fn storage_version(&self) -> FormatVersion {
+        self.storage_version
+    }
+}

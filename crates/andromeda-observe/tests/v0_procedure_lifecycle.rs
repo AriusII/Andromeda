@@ -1,13 +1,13 @@
-use andromeda_core::{
-    CatalogObjectId, CatalogVersion, ContractHash, RequestId, ResourceBudget, SessionId,
-    TransactionId,
-};
+use andromeda_hardware::{PipelineClass, ResourceBudget};
 use andromeda_observe::{
     AuthorizationDeniedTrace, CertificateIdentity, CompletionEmittedTrace, CriticalDecisionKind,
     DecisionTrace, EventCorrelation, EventEnvelope, EventId, InMemoryEventSequence,
     IoBudgetDecisionTrace, IoPipelineStage, Permission, ProtocolCorrelation, RecoveryTrace,
     SecurityAuditOutcome, SecurityAuditTrace, SecurityPolicyVersionEvidence, SurfaceScope,
     TraceEvent, TraceId, UserPrincipal, UserPrincipalKind, WalEventTrace, WalOperation,
+};
+use andromeda_types::{
+    CatalogObjectId, CatalogVersion, ContractHash, RequestId, SessionId, TransactionId,
 };
 
 fn base_correlation() -> EventCorrelation {
@@ -133,7 +133,7 @@ fn v0_procedure_lifecycle_records_audit_wal_commit_completion_and_recovery() {
                 TraceEvent::IoBudgetDecision(
                     IoBudgetDecisionTrace::from_budget_request(
                         TraceId::new(103),
-                        andromeda_core::PipelineClass::ForegroundExecution,
+                        PipelineClass::ForegroundExecution,
                         IoPipelineStage::Hot,
                         ResourceBudget::new(16 * 1024, 4 * 1024, 1),
                         4 * 1024,
@@ -343,4 +343,87 @@ fn security_audit_rejects_surface_permission_drift_and_secret_evidence() {
             .message()
             .contains("must not include secrets")
     );
+}
+
+#[test]
+fn v0_trace_hooks_reject_unbounded_unordered_drifted_and_secret_evidence() {
+    let secret_decision = EventEnvelope::new(
+        EventId::new(1),
+        base_correlation(),
+        TraceEvent::Decision(DecisionTrace {
+            trace_id: TraceId::new(401),
+            decision: CriticalDecisionKind::PlanSelection,
+            reason: "token=raw-plan-evidence must never enter a decision trace".to_string(),
+        }),
+    )
+    .unwrap_err();
+    assert!(
+        secret_decision
+            .message()
+            .contains("must not include secrets")
+    );
+
+    let recovery_mismatch = EventEnvelope::new(
+        EventId::new(2),
+        EventCorrelation {
+            durable_lsn: Some(901),
+            ..base_correlation()
+        },
+        TraceEvent::RecoveryStartup(RecoveryTrace {
+            trace_id: TraceId::new(402),
+            last_durable_lsn: 900,
+            corruption_boundary_lsn: None,
+        }),
+    )
+    .unwrap_err();
+    assert!(recovery_mismatch.message().contains("matching durable_lsn"));
+
+    let mut bounded = InMemoryEventSequence::with_capacity_limit(1);
+    bounded.append(admission(10, 410)).unwrap();
+    let capacity_err = bounded
+        .append(security_audit(
+            11,
+            411,
+            SecurityAuditOutcome::Allowed,
+            "bounded lifecycle sequence rejects events after its configured cap",
+        ))
+        .unwrap_err();
+    assert!(capacity_err.message().contains("capacity exhausted"));
+
+    let mut ordered = InMemoryEventSequence::new();
+    ordered.append(admission(20, 420)).unwrap();
+    let order_err = ordered
+        .append(security_audit(
+            20,
+            421,
+            SecurityAuditOutcome::Allowed,
+            "event identifiers must be strictly increasing for forensic review",
+        ))
+        .unwrap_err();
+    assert!(order_err.message().contains("strictly increasing"));
+
+    let mut drifted_correlation = base_correlation();
+    drifted_correlation.catalog_version = Some(CatalogVersion::new(99));
+    let drifted_audit = EventEnvelope::new(
+        EventId::new(31),
+        drifted_correlation,
+        TraceEvent::SecurityAudit(
+            SecurityAuditTrace::new(
+                TraceId::new(431),
+                SurfaceScope::Application,
+                certificate(SurfaceScope::Application),
+                principal(),
+                Permission::ExecuteProcedure,
+                SecurityAuditOutcome::Allowed,
+                "catalog correlation must stay stable during one procedure lifecycle",
+            )
+            .expect("trace construction succeeds before sequence correlation validation"),
+        ),
+    )
+    .expect("envelope-level correlation is valid before lifecycle anchoring");
+
+    let mut stable = InMemoryEventSequence::new();
+    stable.append(admission(30, 430)).unwrap();
+    let drift_err = stable.append(drifted_audit).unwrap_err();
+    assert!(drift_err.message().contains("catalog_version"));
 }

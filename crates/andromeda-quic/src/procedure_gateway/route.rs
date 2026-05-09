@@ -1,29 +1,25 @@
-use andromeda_core::{
-    AndromedaResult, CatalogVersion, ContractHash, InvocationId, ProcedureId, RequestId, SessionId,
-    TransactionId,
+use andromeda_error::AndromedaResult;
+use andromeda_principal::CertificateIdentity;
+use andromeda_procedure_contract::{ProcedureGatewayExecuteRequest, ProcedureGatewayManifest};
+use andromeda_rpc::{DispatchPolicy, TransportSurface, validate_transport_surface};
+use andromeda_rpc_codec::{
+    TypedResultStreamBounds, TypedResultStreamContext, decode_and_validate_rpc_execute_request,
 };
-use andromeda_observe::CertificateIdentity;
+use andromeda_rpc_protocol::{FrameBytes, FrameType, ResultStreamMetadataPolicy, StreamRole};
+use andromeda_types::{
+    CatalogVersion, ContractHash, InvocationId, ProcedureId, RequestId, SessionId, TransactionId,
+};
 
-use crate::{
-    CatalogProcedureManifest, Connection, DispatchPolicy, FrameBytes, FrameType,
-    ResultStreamMetadataPolicy, StreamRole, SurfacePlane, TransportSurface,
-    TypedResultStreamBounds, TypedResultStreamContext, validate_transport_surface,
-};
+use crate::{Connection, SurfacePlane};
 
 use super::errors::{protocol_error, security_error};
-use super::{state, validation};
+use super::state;
 
-/// Domain projection of the protobuf `RpcExecuteRequest` admitted by the
-/// Procedure gateway.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProcedureRouteExecuteRequest {
-    pub procedure_name: String,
-    pub expected_contract_hash: ContractHash,
-    pub expected_catalog_version: CatalogVersion,
-    pub expected_stats_version: u64,
-    pub surface_scope: String,
-    pub argument_count: usize,
-}
+const APPLICATION_STREAM_MIN: u64 = 0;
+const HADR_STREAM_MIN: u64 = 128;
+const HADR_STREAM_MAX: u64 = 255;
+const APPLICATION_STREAM_MAX: u64 = HADR_STREAM_MIN - 1;
+const FUTURE_RESERVED_STREAM_MIN: u64 = HADR_STREAM_MAX + 1;
 
 /// Pre-dispatch route evidence for an Application-surface Procedure invocation.
 ///
@@ -42,8 +38,8 @@ pub struct ProcedureRouteBinding {
     pub contract_hash: ContractHash,
     pub catalog_version: CatalogVersion,
     pub stats_version: u64,
-    pub execute_request: ProcedureRouteExecuteRequest,
-    pub manifest: CatalogProcedureManifest,
+    pub execute_request: ProcedureGatewayExecuteRequest,
+    pub manifest: ProcedureGatewayManifest,
 }
 
 pub(super) struct ProcedureRouteAdmission<'a> {
@@ -56,7 +52,7 @@ pub(super) fn bind_application_procedure_route(
     admission: ProcedureRouteAdmission<'_>,
     stream_id: u64,
     frame: &FrameBytes,
-    manifest: &CatalogProcedureManifest,
+    manifest: &ProcedureGatewayManifest,
 ) -> AndromedaResult<ProcedureRouteBinding> {
     state::validate_dispatch_preconditions(admission.connection)?;
 
@@ -65,6 +61,7 @@ pub(super) fn bind_application_procedure_route(
             "procedure invocation route requires Application surface",
         ));
     }
+    validate_application_stream_id(stream_id)?;
     state::validate_frame_session_binding(admission.connection, frame)?;
 
     validate_transport_surface(
@@ -82,8 +79,7 @@ pub(super) fn bind_application_procedure_route(
         ));
     }
 
-    let execute_request =
-        validation::decode_and_validate_rpc_execute_request(frame, admission.plane, manifest)?;
+    let execute_request = decode_and_validate_rpc_execute_request(frame, manifest)?;
 
     Ok(ProcedureRouteBinding {
         invocation_id: state::invocation_id_for_stream(stream_id),
@@ -99,6 +95,28 @@ pub(super) fn bind_application_procedure_route(
         execute_request,
         manifest: manifest.clone(),
     })
+}
+
+fn validate_application_stream_id(stream_id: u64) -> AndromedaResult<()> {
+    if (APPLICATION_STREAM_MIN..=APPLICATION_STREAM_MAX).contains(&stream_id) {
+        return Ok(());
+    }
+
+    if (HADR_STREAM_MIN..=HADR_STREAM_MAX).contains(&stream_id) {
+        return Err(security_error(format!(
+            "application Procedure route cannot use HA/DR reserved stream id {stream_id}; \
+             HA/DR stream range is [{HADR_STREAM_MIN}..={HADR_STREAM_MAX}] and must not enter \
+             Application dispatch"
+        )));
+    }
+
+    Err(security_error(format!(
+        "application Procedure route cannot use future/reserved stream id {stream_id}; \
+         Application stream range is [{APPLICATION_STREAM_MIN}..={APPLICATION_STREAM_MAX}], \
+         HA/DR stream range is [{HADR_STREAM_MIN}..={HADR_STREAM_MAX}], and future/reserved \
+         stream ids start at {FUTURE_RESERVED_STREAM_MIN}; reserved namespaces must not enter \
+         Application dispatch"
+    )))
 }
 
 impl ProcedureRouteBinding {

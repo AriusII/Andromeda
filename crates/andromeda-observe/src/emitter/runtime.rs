@@ -1,4 +1,4 @@
-use andromeda_core::{AndromedaError, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaResult};
 
 use crate::events::{
     EventCorrelation, EventEnvelope, EventId, EventSink, TraceEvent, observe_error,
@@ -130,7 +130,7 @@ impl<S: EventSink> EventEmitter<S> {
             Ok(()) => {
                 self.record_acceptance(event_id, raw_id);
                 Ok(event_id)
-            }
+            },
             Err(err) => self.reject(err),
         }
     }

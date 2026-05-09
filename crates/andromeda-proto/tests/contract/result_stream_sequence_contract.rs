@@ -1,96 +1,12 @@
-use andromeda_core::{AndromedaErrorKind, ContractHash};
-use andromeda_proto::{ResultCardinality, ResultStreamDescriptor, RowCountRequirement, generated};
-use generated::{
-    contract::v1::{
-        ColumnDescriptor as ProtoColumnDescriptor,
-        ResultStreamDescriptor as ProtoResultStreamDescriptor, result_stream_descriptor,
-    },
-    protocol::v1::{
-        InvocationCorrelation, InvocationResponse, ResultCompletionPolicy, RpcBatch, RpcCompletion,
-        RpcMetadata, invocation_response, result_completion_policy, rpc_completion,
-    },
+use andromeda_error::AndromedaErrorKind;
+use andromeda_procedure_contract::{
+    ResultCardinality, ResultStreamDescriptor, RowCountRequirement,
 };
 
 use super::support::{
     CONTRACT_SCHEMAS, PROTOCOL_SCHEMAS, declared_message_names,
     governance_result_stream_descriptor, schema_contains,
 };
-
-fn hash(byte: u8) -> Vec<u8> {
-    vec![byte; ContractHash::LEN]
-}
-
-fn valid_correlation() -> InvocationCorrelation {
-    InvocationCorrelation {
-        request_id: Some(101),
-        session_id: Some(202),
-        trace_id: Some("trace-proto-101".to_string()),
-        contract_hash: Some(hash(0x11)),
-        catalog_version: Some(7),
-        invocation_id: Some(303),
-        stats_version: Some(5),
-        expected_policy_version: Some(11),
-    }
-}
-
-fn valid_metadata() -> RpcMetadata {
-    RpcMetadata {
-        result_streams: vec![ProtoResultStreamDescriptor {
-            stream_name: "Inventory.ReserveStock.Reservation".to_string(),
-            columns: vec![ProtoColumnDescriptor {
-                name: "reservation_id".to_string(),
-                ordinal: 0,
-                type_name: "u64".to_string(),
-            }],
-            cardinality: result_stream_descriptor::Cardinality::ExactlyOne as i32,
-            row_count_requirement: result_stream_descriptor::RowCountRequirement::ExactRequired
-                as i32,
-            row_count_exact: Some(1),
-            row_count_max: Some(1),
-        }],
-        completion_policy: Some(ResultCompletionPolicy {
-            completion_shape: result_completion_policy::CompletionShape::RequiresRowBatch as i32,
-            reason: "reservation row required".to_string(),
-        }),
-    }
-}
-
-fn valid_batch(batch_index: u64) -> RpcBatch {
-    RpcBatch {
-        result_name: "Inventory.ReserveStock.Reservation".to_string(),
-        batch_index,
-        rows_emitted: 1,
-        structured_payload: vec![0xAA],
-        row_count_exact: Some(1),
-        terminal_batch: true,
-    }
-}
-
-fn valid_completion() -> RpcCompletion {
-    RpcCompletion {
-        status: rpc_completion::Status::Committed as i32,
-        rows_affected: Some(1),
-        tx_id: Some(404),
-        request_id: Some(101),
-        session_id: Some(202),
-        trace_id: Some("trace-proto-101".to_string()),
-        transaction_outcome: rpc_completion::TransactionOutcome::Committed as i32,
-        durable_lsn: Some(505),
-        result_row_counts: vec![rpc_completion::ResultRowCountSummary {
-            result_name: "Inventory.ReserveStock.Reservation".to_string(),
-            rows_emitted: 1,
-            row_count_exact: Some(1),
-        }],
-    }
-}
-
-fn response(response_index: u64, response: invocation_response::Response) -> InvocationResponse {
-    InvocationResponse {
-        correlation: Some(valid_correlation()),
-        response_index: Some(response_index),
-        response: Some(response),
-    }
-}
 
 #[test]
 fn result_stream_schema_declares_metadata_batch_completion_sequence_contracts() {
@@ -153,33 +69,6 @@ fn result_stream_descriptor_aligns_cardinality_and_exact_row_count_requirement()
         wrong_cardinality.validate().unwrap_err().kind(),
         AndromedaErrorKind::Contract
     );
-}
-
-#[test]
-fn generated_result_stream_sequence_accepts_metadata_batch_completion() {
-    let sequence = vec![
-        response(0, invocation_response::Response::Metadata(valid_metadata())),
-        response(1, invocation_response::Response::Batch(valid_batch(0))),
-        response(
-            2,
-            invocation_response::Response::Completion(valid_completion()),
-        ),
-    ];
-
-    generated::validate_generated_invocation_response_sequence(&sequence).unwrap();
-}
-
-#[test]
-fn generated_result_stream_sequence_rejects_batch_before_metadata() {
-    let sequence = vec![
-        response(0, invocation_response::Response::Batch(valid_batch(0))),
-        response(
-            1,
-            invocation_response::Response::Completion(valid_completion()),
-        ),
-    ];
-
-    assert!(generated::validate_generated_invocation_response_sequence(&sequence).is_err());
 }
 
 #[test]

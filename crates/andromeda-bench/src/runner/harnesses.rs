@@ -1,7 +1,6 @@
 use crate::{
     AUDIT_APPEND_FILE_SINK_HARNESS_NAME, AUDIT_APPEND_FILE_SINK_HARNESS_SOURCE,
     BTREE_NODE_CODEC_HARNESS_NAME, BTREE_NODE_CODEC_HARNESS_SOURCE, BTreeBenchmarkConfig,
-    BenchmarkError, BenchmarkRunRequest, BenchmarkWorkloadCounter,
     RECOVERY_REPLAY_WAL_HARNESS_NAME, RECOVERY_REPLAY_WAL_HARNESS_SOURCE,
     SRPL_COMPILE_OPTIMIZE_HARNESS_NAME, SRPL_COMPILE_OPTIMIZE_HARNESS_SOURCE,
     STORAGE_PAGE_STORE_HARNESS_NAME, STORAGE_PAGE_STORE_HARNESS_SOURCE,
@@ -12,12 +11,14 @@ use crate::{
     run_wal_append_file_smoke_benchmark, setup_btree_lookup_harness,
     setup_btree_range_scan_harness,
 };
-
-use super::counters::{counter_from_usize, counters_from_usize};
-use super::latency::{LatencyEvidence, harness_latency_evidence};
+use andromeda_bench_harness::{
+    LatencyEvidence, counter_from_usize, counters_from_usize, harness_latency_evidence,
+};
+use andromeda_bench_workload::{BenchmarkError, BenchmarkRunRequest};
+use andromeda_scenario_evidence::BenchmarkWorkloadCounter;
 
 pub(super) const BTREE_HARNESS_SOURCE: &str = "in-memory-btree-read-harness";
-pub(super) const BTREE_HARNESS_NAME: &str = "MockBTreeIndex";
+pub(super) const BTREE_HARNESS_NAME: &str = "ReadOnlyBTreeIndexModel";
 
 pub(super) fn run_btree_lookup_harness(
     request: &BenchmarkRunRequest,

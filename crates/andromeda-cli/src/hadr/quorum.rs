@@ -1,5 +1,5 @@
-use andromeda_core::AndromedaResult;
-use andromeda_storage::HadrMembershipSnapshot;
+use andromeda_error::AndromedaResult;
+use andromeda_hadr::HadrMembershipSnapshot;
 
 use super::output::print_quorum_status;
 use super::parsing::parse_quorum_options;
@@ -12,7 +12,7 @@ pub(super) fn run_hadr_quorum(args: &[String]) -> AndromedaResult<()> {
         Some(path) => {
             let snapshot = load_membership_snapshot(path)?;
             durable_quorum_report(snapshot.as_ref())
-        }
+        },
         None => contract_preview_quorum_report(),
     };
 

@@ -1,3 +1,0 @@
-display_name: "Rust CI Quality Gates"
-short_description: "Define CI gates for Rust format, check, clippy, nextest, docs, audit, deny, feature matrix, fuzz, Miri, coverage, and benchmarks."
-default_prompt: "Use the Rust CI Quality Gates skill to analyze the current Andromeda task and return a bounded, validated result."

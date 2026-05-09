@@ -1,13 +1,10 @@
 use std::time::Instant;
 
+use andromeda_bench_harness::elapsed_micros;
+use andromeda_bench_workload::BenchmarkError;
 use andromeda_srpl::{
-    optimizer::OptimizerPipelineConfig,
-    procedure_compiler::{
-        INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, compile_narrow_procedure_signature_with_optimizer,
-    },
+    INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, compile_narrow_procedure_signature_with_optimizer,
 };
-
-use crate::{BenchmarkError, harness::elapsed_micros};
 
 pub const SRPL_COMPILE_OPTIMIZE_WORKLOAD_ID: &str = "srpl-compile-optimize-smoke";
 pub const SRPL_COMPILE_OPTIMIZE_HARNESS_SOURCE: &str = "srpl-compiler-pipeline";
@@ -38,7 +35,7 @@ pub fn run_srpl_compile_optimize_smoke_benchmark(
         let started = Instant::now();
         let result = compile_narrow_procedure_signature_with_optimizer(
             INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE,
-            OptimizerPipelineConfig::default(),
+            Default::default(),
         )
         .map_err(|_| BenchmarkError::HarnessFailed)?;
         latencies_us.push(elapsed_micros(started));
@@ -52,6 +49,7 @@ pub fn run_srpl_compile_optimize_smoke_benchmark(
                 .filter(|plan| plan.chosen)
                 .count()
                 != 1
+            || result.optimized_ir.result_streams.is_empty()
             || !result.chosen_cost.is_valid()
         {
             return Err(BenchmarkError::HarnessFailed);

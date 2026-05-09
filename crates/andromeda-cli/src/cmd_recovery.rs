@@ -1,10 +1,10 @@
 //! Recovery inspection command.
 
 use crate::args::RecoveryInspectOptions;
-use andromeda_core::AndromedaResult;
-use andromeda_storage::{
-    DatabaseManifest, FileWalRecoveryReportV0, Lsn, StartupMode, report_file_wal_recovery_v0,
-};
+use andromeda_error::AndromedaResult;
+use andromeda_manifest::DatabaseManifest;
+use andromeda_recovery::{FileWalRecoveryReportV0, StartupMode, report_file_wal_recovery_v0};
+use andromeda_wal::Lsn;
 use std::path::Path;
 
 /// Runs recovery inspection for a WAL file.
@@ -39,7 +39,7 @@ pub fn recovery_inspect_report(wal_path: &Path, report: &FileWalRecoveryReportV0
         .unwrap_or_else(|| "none".to_string());
 
     let mut output = String::new();
-    output.push_str("Andromeda V0 WAL recovery inspect\n");
+    output.push_str("Andromeda WAL recovery inspect\n");
     output.push_str(&format!("WAL path: {}\n", wal_path.display()));
     output.push_str(&format!("startup mode: {:?}\n", report.startup_mode));
     output.push_str(&format!(

@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use andromeda_srpl::procedure_compiler::lex;
+use andromeda_srpl_lexer::lex;
 
 use crate::support::compile_gate_source;
 

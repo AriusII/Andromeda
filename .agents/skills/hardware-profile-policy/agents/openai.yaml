@@ -1,3 +1,0 @@
-display_name: "Hardware Profile Policy"
-short_description: "Define hardware profiles for x64/arm64, SIMD, GPU, NVMe, HDD, ZNS, and runtime detection with policy and fallback. Use for hardware-aware design."
-default_prompt: "Use the Hardware Profile Policy skill to analyze the current Andromeda task and return a bounded, validated result."

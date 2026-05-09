@@ -10,7 +10,7 @@ mod status;
 mod types;
 
 use crate::error::cli_error;
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 pub fn run_hadr_command(args: &[String]) -> AndromedaResult<()> {
     match args.first().map(String::as_str) {
@@ -23,14 +23,14 @@ pub fn run_hadr_command(args: &[String]) -> AndromedaResult<()> {
         Some("-h" | "--help" | "help") => {
             output::print_hadr_help();
             Ok(())
-        }
+        },
         Some(_) => Err(cli_error(
             "unknown hadr subcommand; run `andromeda-cli hadr --help`",
         )),
         None => {
             output::print_hadr_help();
             Ok(())
-        }
+        },
     }
 }
 

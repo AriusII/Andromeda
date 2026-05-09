@@ -1,5 +1,5 @@
-use andromeda_core::{AndromedaErrorKind, AndromedaResult};
-use andromeda_observe::CertificateIdentity;
+use andromeda_error::{AndromedaErrorKind, AndromedaResult};
+use andromeda_principal::CertificateIdentity;
 
 use crate::{
     SurfacePlane,
@@ -37,13 +37,13 @@ impl ConnectionPoolKey {
         plane: SurfacePlane,
     ) -> AndromedaResult<Self> {
         let required_scope = plane_to_required_surface_scope(plane);
-        if identity.surface != required_scope {
+        if identity.surface_scope() != required_scope {
             return Err(pool_error(
                 AndromedaErrorKind::Security,
                 "server identity surface scope does not match pool plane",
             ));
         }
-        Self::new(identity.fingerprint.clone(), plane)
+        Self::new(identity.fingerprint().as_str(), plane)
     }
 
     pub fn validate(&self) -> AndromedaResult<()> {

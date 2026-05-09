@@ -1,0 +1,11 @@
+[package]
+name = "andromeda-locking"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95.0"
+publish = false
+
+[dependencies]
+andromeda-error.workspace = true
+andromeda-time.workspace = true
+andromeda-types.workspace = true

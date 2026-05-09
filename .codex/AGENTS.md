@@ -1,22 +1,23 @@
-# Codex Tooling Instructions
+# Andromeda Codex Operating Rules
 
-This directory contains Codex configuration, agents, hooks, scripts, prompt templates, and routing metadata.
+This `.codex` package is designed for Andromeda: a Rust 1.95.0 / Edition 2024 mission-critical SGBDRT + SRPL project using QUIC + custom Protobuf RPC.
 
-## Rules
+## Native protocol constraints
 
-- Do not create unregistered agents.
-- Do not create hooks without explicit `timeout` and `statusMessage`.
-- Do not make hooks depend on secrets, network access, or non-standard system tools.
-- Do not create agents that duplicate skills. Agents decide and orchestrate. Skills provide reusable procedures and domain knowledge.
-- Keep read-only auditors in `sandbox_mode = "read-only"`.
-- Keep implementation agents in `sandbox_mode = "workspace-write"` unless the task is inherently read-only.
-- Validate the tree with `.codex/scripts/validate_codex_tooling.py`.
+- Use QUIC as transport.
+- Use custom Protobuf RPC contracts and frames.
+- Do not introduce gRPC as native application protocol.
+- Do not introduce JSON as native application payload/contract format.
 
-## Recommended change flow
+## Worker artifact policy
 
-1. Add or update skills first.
-2. Add or update agent primary skill lists.
-3. Register agents in `.codex/config.toml`.
-4. Update routing metadata.
-5. Validate hooks and scripts.
-6. Update documentation and prompts.
+All Codex worker plans, analysis reports, mission reports and final consolidations must be written under `.work/codex/<task-slug>/`.
+
+- Analysis workers: `.work/codex/<task-slug>/analysis/*.md`
+- Orchestrator plans: `.work/codex/<task-slug>/plans/*.md`
+- Write worker mission reports: `.work/codex/<task-slug>/missions/*.md`
+- Final consolidations: `.work/codex/<task-slug>/final/*.md`
+
+## Architecture rule
+
+Use a small number of strict agents and a large set of precise skills. Prefer loading a skill over creating or dispatching a new agent.

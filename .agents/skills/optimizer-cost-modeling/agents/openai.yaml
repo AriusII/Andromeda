@@ -1,3 +1,0 @@
-display_name: "Optimizer Cost Modeling"
-short_description: "Design cost model terms, physical operators, plan candidates, risk penalties, plan classes, and DecisionTrace for Andromeda procedures. Use for optimizer work."
-default_prompt: "Use the Optimizer Cost Modeling skill to analyze the current Andromeda task and return a bounded, validated result."

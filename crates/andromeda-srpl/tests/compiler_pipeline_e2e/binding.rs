@@ -60,7 +60,7 @@ fn executable_plan_validates_result_emit_counts_by_cardinality() {
         .expect("optional one may represent absence without an emit");
     assert!(matches!(
         optional_plan.body.operations[0],
-        andromeda_srpl::procedure_model::BoundSrplOperationPlan::Raise { .. }
+        andromeda_srpl_ir::BoundSrplOperationPlan::Raise { .. }
     ));
 
     let (optional_duplicate, optional_duplicate_snapshot) = cardinality_probe_snapshot(
@@ -103,6 +103,48 @@ fn executable_plan_validates_result_emit_counts_by_cardinality() {
         one_error
             .message()
             .contains("one result stream must have exactly one emit operation")
+    );
+}
+
+#[test]
+fn executable_plan_resolves_table_names_from_catalog_not_inputs() {
+    let ir = compile_narrow_procedure_signature(
+        "procedure Inventory.DynamicTableProbe accepts (TableName text(64)) returns R one (C bool) body { read TableName Row one; emit R (C); }",
+    )
+    .expect("source should compile with a literal read target");
+    let snapshot = catalog_snapshot_with_only_procedure_contract(&ir, 0x6500);
+
+    let error = bind_executable_procedure_plan(&ir, &snapshot)
+        .expect_err("read source must resolve as a catalog object, not a runtime input");
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+    assert!(
+        error
+            .message()
+            .contains("SRPL body references an unbound table/object name"),
+        "unexpected dynamic table-name rejection: {}",
+        error.message()
+    );
+}
+
+#[test]
+fn executable_plan_rejects_shape_shifting_return_values() {
+    let ir = compile_narrow_procedure_signature(
+        "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool) begin ensure Inventory.ProductStock Stock where ProductId = Stock.ProductId and Stock.AvailableQuantity >= Quantity else fail InsufficientStock; update Inventory.ProductStock set AvailableQuantity = Stock.AvailableQuantity - Quantity where ProductId = Stock.ProductId affected rows 1; return Reservation (Reserved, Extra); end;",
+    )
+    .expect("source should compile before executable result-shape binding");
+    let snapshot = inventory_catalog_snapshot();
+
+    let error = bind_executable_procedure_plan(&ir, &snapshot)
+        .expect_err("emit values must not change the declared ResultStream shape");
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Srpl);
+    assert!(
+        error
+            .message()
+            .contains("SRPL emit values must match result columns exactly and in order"),
+        "unexpected shape-shifting return rejection: {}",
+        error.message()
     );
 }
 
@@ -158,7 +200,7 @@ fn pdf_style_inventory_source_binds_to_deterministic_executable_plan() {
     assert_eq!(plan.body.operations.len(), 4);
     assert!(matches!(
         &plan.body.operations[2],
-        andromeda_srpl::procedure_model::BoundSrplOperationPlan::UpdateTable {
+        andromeda_srpl_ir::BoundSrplOperationPlan::UpdateTable {
             affected_rows_exact: Some(1),
             ..
         }
@@ -222,11 +264,11 @@ fn executable_plan_rejects_assert_referencing_unbound_read_binding() {
 
 #[test]
 fn binder_supports_a_distinct_read_only_procedure_shape() {
-    use andromeda_catalog::{
-        ProcedureContractCandidate, ResultStreamContract, inventory_product_stock_table,
-        inventory_protocol_layout_ref,
+    use andromeda_business_fixtures::{
+        inventory_product_stock_table, inventory_protocol_layout_ref,
     };
-    use andromeda_srpl::procedure_model::{
+    use andromeda_procedure_contract::{ProcedureContractCandidate, ResultStreamContract};
+    use andromeda_srpl_ir::{
         SrplBusinessOperationIr, SrplEmitValueIr, SrplPredicateIr, SrplProcedureBodyIr,
         SrplResultStreamIr,
     };
@@ -368,4 +410,38 @@ fn binder_supports_a_distinct_read_only_procedure_shape() {
     // Lowering and binding are deterministic across invocations.
     let again = bind_executable_procedure_plan(&ir, &snapshot).unwrap();
     assert_eq!(executable, again);
+}
+
+fn catalog_snapshot_with_only_procedure_contract(
+    ir: &SrplProcedureIr,
+    object_seed: u64,
+) -> CatalogSnapshot {
+    let catalog_version = CatalogVersion::new(1);
+    let mut metadata = contract_metadata();
+    metadata.object_id = CatalogObjectId::new(object_seed);
+    metadata.procedure_id = ProcedureId::new(object_seed);
+    metadata.catalog_version = catalog_version;
+    metadata.structured_inputs = Vec::new();
+
+    let definition = lower_ir_to_catalog_definition(ir.clone(), metadata)
+        .expect("test IR should materialize as a Procedure contract");
+    let batch = DefinitionBatch {
+        batch_id: DefinitionBatchId::new(object_seed),
+        database_id: INVENTORY_DATABASE_ID,
+        namespace_id: INVENTORY_NAMESPACE_ID,
+        base_version: CatalogVersion::new(0),
+        operations: vec![DefinitionOperation::Create(definition)],
+    };
+    let plan = batch
+        .dry_run()
+        .expect("test Procedure-only batch should dry-run");
+    let mut snapshot = CatalogSnapshot::empty(
+        INVENTORY_DATABASE_ID,
+        INVENTORY_NAMESPACE_ID,
+        batch.base_version,
+    );
+    snapshot
+        .apply_mutation_plan(&plan.mutation_plan)
+        .expect("test Procedure contract should apply to snapshot");
+    snapshot
 }

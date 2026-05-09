@@ -1,10 +1,11 @@
 use std::collections::BTreeSet;
 
-use andromeda_core::ContractHash;
+use andromeda_procedure_contract::{ManifestPolicyVersion, ProtocolLayout};
 use andromeda_proto::{
-    CONTRACT_PACKAGE, DESCRIPTOR_SET_HASH_ALGORITHM, PROTOCOL_PACKAGE, ProtocolLayout,
     descriptor_set_bytes, descriptor_set_hash, frame_envelope_hash, generated, protocol_layout,
 };
+use andromeda_proto_wire::{CONTRACT_PACKAGE, DESCRIPTOR_SET_HASH_ALGORITHM, PROTOCOL_PACKAGE};
+use andromeda_types::ContractHash;
 use prost::Message;
 use prost_types::FileDescriptorSet;
 
@@ -216,7 +217,7 @@ fn procedure_manifest_hash_is_deterministic_and_distinct_from_descriptor_hashes(
     assert!(!hash.is_zero());
 
     let mut bumped = governance_sample_manifest();
-    bumped.policy_version = andromeda_proto::ManifestPolicyVersion::test_vector(0x99);
+    bumped.policy_version = ManifestPolicyVersion::test_vector(0x99);
     assert_ne!(hash, bumped.manifest_hash());
 
     let mut bumped_stats = governance_sample_manifest();

@@ -5,7 +5,7 @@
 //! Command-line interface for Andromeda database engine.
 
 use andromeda_cli::dispatch_command;
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 fn main() -> AndromedaResult<()> {
     let args = std::env::args().skip(1).collect::<Vec<String>>();

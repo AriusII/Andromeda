@@ -1,3 +1,0 @@
-display_name: "BufferPool and I/O Scheduler"
-short_description: "Design BufferPool pinning, dirty tracking, eviction, checkpoint cooperation, P0 WAL flush priority, temp/spill quotas, and metrics. Use for storage runtime."
-default_prompt: "Use the BufferPool and I/O Scheduler skill to analyze the current Andromeda task and return a bounded, validated result."

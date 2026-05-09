@@ -1,9 +1,11 @@
 use super::*;
-use andromeda_core::{AndromedaErrorKind, RequestId, SessionId};
-use andromeda_observe::CertificateIdentity;
+use andromeda_error::AndromedaErrorKind;
+use andromeda_principal::CertificateIdentity;
+use andromeda_types::{RequestId, SessionId};
 
-use crate::frame::{FRAME_HEADER_CRC_UNCHECKED, FrameHeader};
-use crate::{FrameBytes, FrameFamily, FrameType};
+use andromeda_rpc_protocol::{
+    FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameFamily, FrameHeader, FrameType,
+};
 
 fn frame(frame_type: FrameType, session: u64) -> FrameBytes {
     let payload = match frame_type {
@@ -243,7 +245,7 @@ fn cancellation_on_closed_session_is_protocol_error() {
 
 #[test]
 fn certificate_identity_binding_succeeds_when_scope_matches() {
-    use andromeda_observe::SurfaceScope;
+    use andromeda_principal::SurfaceScope;
 
     let mut conn = Connection::new(SurfacePlane::Application);
     let identity =
@@ -256,7 +258,7 @@ fn certificate_identity_binding_succeeds_when_scope_matches() {
 
 #[test]
 fn certificate_identity_binding_rejects_scope_mismatch() {
-    use andromeda_observe::SurfaceScope;
+    use andromeda_principal::SurfaceScope;
 
     let mut conn = Connection::new(SurfacePlane::Application);
     let identity =
@@ -270,7 +272,7 @@ fn certificate_identity_binding_rejects_scope_mismatch() {
 
 #[test]
 fn certificate_identity_binding_is_immutable() {
-    use andromeda_observe::SurfaceScope;
+    use andromeda_principal::SurfaceScope;
 
     let mut conn = Connection::new(SurfacePlane::Application);
     let identity1 =
@@ -284,14 +286,14 @@ fn certificate_identity_binding_is_immutable() {
 
     // First identity remains.
     assert_eq!(
-        conn.certificate_identity().unwrap().fingerprint,
+        conn.certificate_identity().unwrap().fingerprint().as_str(),
         "a".repeat(64)
     );
 }
 
 #[test]
 fn certificate_identity_persists_across_lifecycle() {
-    use andromeda_observe::SurfaceScope;
+    use andromeda_principal::SurfaceScope;
 
     let mut conn = Connection::new(SurfacePlane::Administration);
     let identity = CertificateIdentity::new(
@@ -312,7 +314,7 @@ fn certificate_identity_persists_across_lifecycle() {
 
 #[test]
 fn ha_dr_plane_requires_cluster_scope() {
-    use andromeda_observe::SurfaceScope;
+    use andromeda_principal::SurfaceScope;
 
     let mut conn = Connection::new(SurfacePlane::HighAvailability);
     let identity =
@@ -329,7 +331,7 @@ fn ha_dr_plane_requires_cluster_scope() {
 
 #[test]
 fn monitoring_plane_requires_monitoring_agent_scope() {
-    use andromeda_observe::SurfaceScope;
+    use andromeda_principal::SurfaceScope;
 
     let mut conn = Connection::new(SurfacePlane::Monitoring);
     let identity = CertificateIdentity::new(

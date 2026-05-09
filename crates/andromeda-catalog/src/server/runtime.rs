@@ -1,10 +1,10 @@
 use std::sync::{Arc, RwLock};
 
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, ContractHash, ProcedureId,
-};
+use andromeda_catalog_store::QualifiedName;
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
-use crate::{CatalogSystemStore, QualifiedName};
+use crate::CatalogSystemStore;
 
 use super::{
     CatalogChangeNotification, CatalogChangeSubscription, CatalogRuntimeEvidence,
@@ -12,20 +12,22 @@ use super::{
     CatalogSubscriptionRegistry, ProcedureManifest,
 };
 
-mod record;
 mod request;
 mod resolution;
 mod schema;
-mod status;
 mod store;
 
-use self::resolution::andromeda_error_from_resolution;
+use self::resolution::{
+    andromeda_error_from_resolution, failed as failed_manifest_resolution,
+    resolved as resolved_manifest_resolution,
+};
 pub use self::{
-    record::{CatalogManifestRecord, CatalogManifestRuntimeMetadata},
     request::{CatalogManifestResolutionRequest, CatalogManifestSelector},
     resolution::{CatalogManifestResolution, CatalogManifestResolutionFailure},
-    status::CatalogManifestResolutionStatus,
     store::{CatalogManifestStore, CatalogSnapshotManifestStore},
+};
+pub use andromeda_catalog_store::{
+    CatalogManifestRecord, CatalogManifestResolutionStatus, CatalogManifestRuntimeMetadata,
 };
 
 fn catalog_runtime_lock_error(resource: &str) -> AndromedaError {
@@ -95,7 +97,7 @@ impl CatalogServerRuntime {
     pub fn resolve_manifest_by_name(&self, name: &str) -> CatalogManifestResolution {
         match CatalogManifestResolutionRequest::by_name(name) {
             Ok(request) => self.resolve_manifest(request),
-            Err(error) => CatalogManifestResolution::failed(
+            Err(error) => failed_manifest_resolution(
                 CatalogManifestResolutionFailure::Malformed(error.message().to_string()),
                 self.store.current_catalog_version(),
             ),
@@ -109,7 +111,7 @@ impl CatalogServerRuntime {
         let current_catalog_version = self.store.current_catalog_version();
 
         if let Err(error) = request.validate() {
-            return CatalogManifestResolution::failed(
+            return failed_manifest_resolution(
                 CatalogManifestResolutionFailure::Malformed(error.message().to_string()),
                 current_catalog_version,
             );
@@ -118,16 +120,16 @@ impl CatalogServerRuntime {
         let ready = match self.readiness.read() {
             Ok(ready) => *ready,
             Err(_) => {
-                return CatalogManifestResolution::failed(
+                return failed_manifest_resolution(
                     CatalogManifestResolutionFailure::Internal(
                         "catalog server runtime readiness lock is poisoned".to_string(),
                     ),
                     current_catalog_version,
                 );
-            }
+            },
         };
         if !ready {
-            return CatalogManifestResolution::failed(
+            return failed_manifest_resolution(
                 CatalogManifestResolutionFailure::CatalogNotReady,
                 current_catalog_version,
             );
@@ -136,22 +138,22 @@ impl CatalogServerRuntime {
         let record = match &request.selector {
             CatalogManifestSelector::ProcedureId(procedure_id) => {
                 self.store.resolve_manifest_by_id(*procedure_id)
-            }
+            },
             CatalogManifestSelector::QualifiedName(name) => {
                 self.store.resolve_manifest_by_name(name)
-            }
+            },
         };
 
         let Some(record) = (match record {
             Ok(record) => record,
             Err(error) => {
-                return CatalogManifestResolution::failed(
+                return failed_manifest_resolution(
                     CatalogManifestResolutionFailure::Internal(error.message().to_string()),
                     current_catalog_version,
                 );
-            }
+            },
         }) else {
-            return CatalogManifestResolution::failed(
+            return failed_manifest_resolution(
                 CatalogManifestResolutionFailure::NotFound,
                 current_catalog_version,
             );
@@ -161,14 +163,14 @@ impl CatalogServerRuntime {
             let actual = match ContractHash::from_slice(&record.manifest.contract_hash) {
                 Ok(actual) => actual,
                 Err(error) => {
-                    return CatalogManifestResolution::failed(
+                    return failed_manifest_resolution(
                         CatalogManifestResolutionFailure::Internal(error.message().to_string()),
                         current_catalog_version,
                     );
-                }
+                },
             };
             if actual != expected {
-                return CatalogManifestResolution::failed(
+                return failed_manifest_resolution(
                     CatalogManifestResolutionFailure::ContractHashMismatch { expected, actual },
                     current_catalog_version,
                 );
@@ -178,7 +180,7 @@ impl CatalogServerRuntime {
         if let Some(expected) = request.expected_catalog_version {
             let actual = record.manifest.catalog_version;
             if actual != expected {
-                return CatalogManifestResolution::failed(
+                return failed_manifest_resolution(
                     CatalogManifestResolutionFailure::CatalogVersionMismatch { expected, actual },
                     current_catalog_version,
                 );
@@ -186,20 +188,20 @@ impl CatalogServerRuntime {
         }
 
         if !record.metadata.permission_granted {
-            return CatalogManifestResolution::failed(
+            return failed_manifest_resolution(
                 CatalogManifestResolutionFailure::PermissionDenied,
                 current_catalog_version,
             );
         }
 
         if request.require_source_generator_ready && !record.metadata.source_generator_ready {
-            return CatalogManifestResolution::failed(
+            return failed_manifest_resolution(
                 CatalogManifestResolutionFailure::NotSourceGeneratorReady,
                 current_catalog_version,
             );
         }
 
-        CatalogManifestResolution::resolved(record.manifest, current_catalog_version)
+        resolved_manifest_resolution(record.manifest, current_catalog_version)
     }
 }
 

@@ -2,8 +2,8 @@ use std::path::Path;
 
 use super::support::{
     assert_contains_all, assert_dispatch_error, assert_dispatch_success,
-    assert_dispatch_success_owned, assert_success, create_cli_backup_artifact, run_cli,
-    run_cli_owned, stdout,
+    assert_dispatch_success_owned, assert_operator_boundary_json, assert_success,
+    create_cli_backup_artifact, run_cli, run_cli_owned, stdout,
 };
 
 #[test]
@@ -38,6 +38,24 @@ fn restore_status_requires_restore_id() {
 #[test]
 fn restore_status_accepts_restore_id() {
     assert_dispatch_success(["restore", "status", "200"]);
+}
+
+#[test]
+fn restore_status_json_is_operator_diagnostic_surface() {
+    let output = run_cli(["restore", "status", "200", "--json"]);
+    assert_success(&output);
+    let json = stdout(&output);
+    assert_operator_boundary_json(&json, "andromeda.cli.restore.status.v1");
+    assert_contains_all(
+        &json,
+        &[
+            "\"contract_preview\":true",
+            "\"durable_backend\":false",
+            "\"runtime_mode\":\"contract_preview/static_restore_orchestrator\"",
+            "\"requires_restore_orchestrator\":true",
+            "\"restore_id\":200",
+        ],
+    );
 }
 
 #[test]
@@ -82,6 +100,7 @@ fn restore_dry_run_json_requires_artifact_and_stays_preview_only() {
     ));
     assert_success(&output);
     let json = stdout(&output);
+    assert_operator_boundary_json(&json, "andromeda.cli.restore.start.v1");
     assert_contains_all(
         &json,
         &[
@@ -137,6 +156,35 @@ fn restore_rejects_lsn_out_of_range() {
 }
 
 #[test]
+fn restore_verify_json_is_operator_control_surface() {
+    let artifact_dir = create_cli_backup_artifact("restore-verify-boundary", 8208);
+    let output = run_cli_owned(vec![
+        "restore".to_string(),
+        "verify".to_string(),
+        "8208".to_string(),
+        "--artifact".to_string(),
+        artifact_dir.display().to_string(),
+        "--pitr-lsn".to_string(),
+        "1750".to_string(),
+        "--json".to_string(),
+    ]);
+    assert_success(&output);
+    let json = stdout(&output);
+    assert_operator_boundary_json(&json, "andromeda.cli.restore.verify.v1");
+    assert_contains_all(
+        &json,
+        &[
+            "\"durable_backend\":true",
+            "\"backup_id\":8208",
+            "\"pitr_target_lsn\":1750",
+            "\"validation_policy\":\"full\"",
+            "\"replay_segments\":[",
+            "restore artifact preflight verified; PITR replay plan is bounded",
+        ],
+    );
+}
+
+#[test]
 fn restore_dry_run_outputs_replay_segments() {
     let artifact_dir = create_cli_backup_artifact("restore-replay-segments", 8205);
     let output = run_cli_owned(restore_start_args(
@@ -148,6 +196,7 @@ fn restore_dry_run_outputs_replay_segments() {
     ));
     assert_success(&output);
     let json = stdout(&output);
+    assert_operator_boundary_json(&json, "andromeda.cli.restore.start.v1");
     assert_contains_all(
         &json,
         &[

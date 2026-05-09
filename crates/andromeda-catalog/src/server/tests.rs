@@ -1,7 +1,6 @@
 use super::*;
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, ContractHash, ProcedureId,
-};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 fn contract_hash(byte: u8) -> Vec<u8> {
     vec![byte; ContractHash::LEN]
@@ -61,82 +60,6 @@ impl CatalogServerTrait for DiagnosticOnlyCatalogServer {
             "diagnostic-only catalog server does not support subscriptions",
         ))
     }
-}
-
-#[test]
-fn test_procedure_manifest_validation() {
-    let valid = valid_manifest();
-    assert!(valid.validate().is_ok());
-
-    let invalid_id = ProcedureManifest {
-        procedure_id: ProcedureId::new(0),
-        ..valid.clone()
-    };
-    assert!(invalid_id.validate().is_err());
-
-    let invalid_name = ProcedureManifest {
-        qualified_name: " \t ".to_string(),
-        ..valid.clone()
-    };
-    assert!(invalid_name.validate().is_err());
-
-    let invalid_version = ProcedureManifest {
-        catalog_version: CatalogVersion::new(0),
-        ..valid.clone()
-    };
-    assert!(invalid_version.validate().is_err());
-
-    let invalid_hash_len = ProcedureManifest {
-        contract_hash: vec![],
-        ..valid.clone()
-    };
-    assert!(invalid_hash_len.validate().is_err());
-
-    let zero_hash = ProcedureManifest {
-        contract_hash: contract_hash(0),
-        ..valid.clone()
-    };
-    assert!(zero_hash.validate().is_err());
-
-    let incompatible_floor = ProcedureManifest {
-        min_compatible_version: CatalogVersion::new(3),
-        ..valid.clone()
-    };
-    assert!(incompatible_floor.validate().is_err());
-
-    let non_contiguous_input_schema = ProcedureManifest {
-        input_schema: vec![ColumnSchema {
-            name: "input_col".to_string(),
-            type_descriptor: "int64".to_string(),
-            ordinal: 1,
-            nullable: false,
-        }],
-        ..valid
-    };
-    assert!(non_contiguous_input_schema.validate().is_err());
-}
-
-#[test]
-fn test_column_schema_validation() {
-    let valid = ColumnSchema {
-        name: "id".to_string(),
-        type_descriptor: "int64".to_string(),
-        ordinal: 0,
-        nullable: false,
-    };
-    assert!(valid.validate().is_ok());
-
-    let invalid_name = ColumnSchema {
-        name: " ".to_string(),
-        ..valid.clone()
-    };
-    assert!(invalid_name.validate().is_err());
-
-    let invalid_type = ColumnSchema {
-        type_descriptor: "\n".to_string(),
-        ..valid.clone()
-    };
-    assert!(invalid_type.validate().is_err());
 }
 
 #[test]

@@ -1,14 +1,15 @@
-use andromeda_core::{AndromedaResult, ContractHash, RequestId, SessionId, TransactionId};
+use andromeda_error::AndromedaResult;
+use andromeda_types::{ContractHash, RequestId, SessionId, TransactionId};
 
 use super::*;
 use crate::{
     TraceId,
     events::{
         BackpressureTrace, CompletionEmittedTrace, EventCorrelation, EventEnvelope, EventId,
-        EventSink, InMemoryEventSink, ProtocolCorrelation, ProtocolEventScope, TraceEvent,
-        observe_error,
+        EventSink, InMemoryEventSink, ProtocolEventScope, TraceEvent, observe_error,
     },
 };
+use andromeda_observability::ProtocolCorrelation;
 
 fn backpressure_event(trace: u128) -> TraceEvent {
     TraceEvent::Backpressure(BackpressureTrace {
@@ -228,7 +229,7 @@ fn emitter_routes_transition_traces_into_sink_with_query_helpers() {
         ExecutionTransitionTrace, TransactionPhaseCode, TransactionTransitionTrace,
         TransitionReasonCode,
     };
-    use andromeda_core::InvocationId;
+    use andromeda_types::InvocationId;
 
     let mut emitter = EventEmitter::new(InMemoryEventSink::new());
 

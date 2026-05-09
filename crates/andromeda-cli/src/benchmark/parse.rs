@@ -5,7 +5,7 @@ use andromeda_bench::{
     BenchmarkHardwareProfile, BenchmarkRunRequest, DEFAULT_DURATION_MS, DEFAULT_SAMPLES,
     DEFAULT_TEMP_BYTES, DEFAULT_WARMUPS,
 };
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct BenchmarkRunOptions {
@@ -26,56 +26,51 @@ pub(super) fn parse_benchmark_run_options(args: &[String]) -> AndromedaResult<Be
     while index < args.len() {
         match args[index].as_str() {
             "--duration-ms" => {
-                let value = next_option_value_rejecting_flag(
+                duration_ms = parse_benchmark_u64_option(
                     args,
                     &mut index,
                     "--duration-ms requires an unsigned integer",
+                    "--duration-ms",
                 )?;
-                duration_ms = parse_u64_option(value, "--duration-ms")?;
-            }
+            },
             "--samples" => {
-                let value = next_option_value_rejecting_flag(
+                samples = parse_benchmark_u32_option(
                     args,
                     &mut index,
                     "--samples requires an unsigned integer",
+                    "--samples",
                 )?;
-                samples = parse_u32_option(value, "--samples")?;
-            }
+            },
             "--warmups" => {
-                let value = next_option_value_rejecting_flag(
+                warmups = parse_benchmark_u32_option(
                     args,
                     &mut index,
                     "--warmups requires an unsigned integer",
+                    "--warmups",
                 )?;
-                warmups = parse_u32_option(value, "--warmups")?;
-            }
+            },
             "--temp-budget-bytes" => {
-                let value = next_option_value_rejecting_flag(
+                temp_budget_bytes = parse_benchmark_u64_option(
                     args,
                     &mut index,
                     "--temp-budget-bytes requires an unsigned integer",
+                    "--temp-budget-bytes",
                 )?;
-                temp_budget_bytes = parse_u64_option(value, "--temp-budget-bytes")?;
-            }
+            },
             "--hardware-profile" => {
-                let value = next_option_value_rejecting_flag(
-                    args,
-                    &mut index,
-                    "--hardware-profile requires a profile name",
-                )?;
-                hardware_profile = parse_hardware_profile(value)?;
-            }
+                hardware_profile = parse_hardware_profile_option(args, &mut index)?;
+            },
             DIAGNOSTIC_JSON_FLAG => diagnostic_json = true,
             JSON_FLAG => {
                 return Err(cli_error(
                     "benchmark uses --diagnostic-json to make JSON diagnostic-only explicit",
                 ));
-            }
+            },
             opt if opt.starts_with("--") => {
                 return Err(cli_error(
                     "unknown benchmark run option; supported options are --duration-ms, --samples, --warmups, --temp-budget-bytes, --hardware-profile, and --diagnostic-json",
                 ));
-            }
+            },
             value => {
                 if workload_id.is_some() {
                     return Err(cli_error(
@@ -83,7 +78,7 @@ pub(super) fn parse_benchmark_run_options(args: &[String]) -> AndromedaResult<Be
                     ));
                 }
                 workload_id = Some(value.to_string());
-            }
+            },
         }
 
         index += 1;
@@ -117,20 +112,52 @@ pub(super) fn has_diagnostic_json_option(args: &[String]) -> AndromedaResult<boo
                 return Err(cli_error(
                     "benchmark uses --diagnostic-json to make JSON diagnostic-only explicit",
                 ));
-            }
+            },
             opt if opt.starts_with("--") => {
                 return Err(cli_error(
                     "unknown benchmark option; supported output option is --diagnostic-json",
                 ));
-            }
+            },
             _ => {
                 return Err(cli_error(
                     "unexpected benchmark argument; supported output option is --diagnostic-json",
                 ));
-            }
+            },
         }
     }
     Ok(diagnostic_json)
+}
+
+fn parse_benchmark_u64_option(
+    args: &[String],
+    index: &mut usize,
+    missing_message: &'static str,
+    option: &str,
+) -> AndromedaResult<u64> {
+    let value = next_option_value_rejecting_flag(args, index, missing_message)?;
+    parse_u64_option(value, option)
+}
+
+fn parse_benchmark_u32_option(
+    args: &[String],
+    index: &mut usize,
+    missing_message: &'static str,
+    option: &str,
+) -> AndromedaResult<u32> {
+    let value = next_option_value_rejecting_flag(args, index, missing_message)?;
+    parse_u32_option(value, option)
+}
+
+fn parse_hardware_profile_option(
+    args: &[String],
+    index: &mut usize,
+) -> AndromedaResult<BenchmarkHardwareProfile> {
+    let value = next_option_value_rejecting_flag(
+        args,
+        index,
+        "--hardware-profile requires a profile name",
+    )?;
+    parse_hardware_profile(value)
 }
 
 fn parse_hardware_profile(value: &str) -> AndromedaResult<BenchmarkHardwareProfile> {
@@ -165,9 +192,10 @@ mod tests {
 
     #[test]
     fn parses_default_run_options() {
-        let options = parse_benchmark_run_options(&strings(&["vertical-v0-smoke"])).unwrap();
+        let options =
+            parse_benchmark_run_options(&strings(&["inventory-recoverable-smoke"])).unwrap();
 
-        assert_eq!(options.request.workload_id, "vertical-v0-smoke");
+        assert_eq!(options.request.workload_id, "inventory-recoverable-smoke");
         assert_eq!(options.request.duration_ms, DEFAULT_DURATION_MS);
         assert_eq!(options.request.samples, DEFAULT_SAMPLES);
         assert_eq!(options.request.warmups, DEFAULT_WARMUPS);
@@ -210,7 +238,7 @@ mod tests {
     fn rejects_unbounded_duration() {
         let too_long = (MAX_DURATION_MS + 1).to_string();
         let options = parse_benchmark_run_options(&strings(&[
-            "vertical-v0-smoke",
+            "inventory-recoverable-smoke",
             "--duration-ms",
             too_long.as_str(),
         ]))
@@ -222,7 +250,7 @@ mod tests {
     #[test]
     fn rejects_invalid_temp_budget_with_user_facing_messages() {
         let options = parse_benchmark_run_options(&strings(&[
-            "vertical-v0-smoke",
+            "inventory-recoverable-smoke",
             "--temp-budget-bytes",
             "0",
         ]))
@@ -235,7 +263,7 @@ mod tests {
 
         let too_large = (MAX_TEMP_BYTES + 1).to_string();
         let options = parse_benchmark_run_options(&strings(&[
-            "vertical-v0-smoke",
+            "inventory-recoverable-smoke",
             "--temp-budget-bytes",
             too_large.as_str(),
         ]))
@@ -256,14 +284,17 @@ mod tests {
 
     #[test]
     fn rejects_plain_json_alias() {
-        assert!(parse_benchmark_run_options(&strings(&["vertical-v0-smoke", "--json"])).is_err());
+        assert!(
+            parse_benchmark_run_options(&strings(&["inventory-recoverable-smoke", "--json"]))
+                .is_err()
+        );
         assert!(has_diagnostic_json_option(&strings(&["--json"])).is_err());
     }
 
     #[test]
     fn rejects_flag_as_numeric_option_value() {
         let err = parse_benchmark_run_options(&strings(&[
-            "vertical-v0-smoke",
+            "inventory-recoverable-smoke",
             "--duration-ms",
             "--samples",
         ]))
@@ -274,9 +305,11 @@ mod tests {
 
     #[test]
     fn benchmark_option_errors_do_not_echo_values() {
-        let err =
-            parse_benchmark_run_options(&strings(&["vertical-v0-smoke", "--token=super-secret"]))
-                .unwrap_err();
+        let err = parse_benchmark_run_options(&strings(&[
+            "inventory-recoverable-smoke",
+            "--token=super-secret",
+        ]))
+        .unwrap_err();
         assert_eq!(
             err.message(),
             "unknown benchmark run option; supported options are --duration-ms, --samples, --warmups, --temp-budget-bytes, --hardware-profile, and --diagnostic-json"
@@ -284,7 +317,7 @@ mod tests {
         assert!(!err.message().contains("super-secret"));
 
         let err = parse_benchmark_run_options(&strings(&[
-            "vertical-v0-smoke",
+            "inventory-recoverable-smoke",
             "--hardware-profile",
             "super-secret",
         ]))

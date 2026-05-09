@@ -1,3 +1,0 @@
-display_name: "Set Theory Semantics"
-short_description: "Reason about set semantics, absence of duplicates, relations, tuples, projection, membership, and explicit multiset/sequence boundaries. Use in SRPL and optimiz"
-default_prompt: "Use the Set Theory Semantics skill to analyze the current Andromeda task and return a bounded, validated result."

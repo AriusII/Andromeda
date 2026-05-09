@@ -1,0 +1,7 @@
+Voici le rapport final en anglais américain suivant le style de documentation Microsoft : {{file:file-265vMQTsnr4w5Sq193DWEf}}.
+
+Ce rapport croise les innovations matérielles x64 et arm64 de 2018 à 2026 et explique comment les exploiter en Rust pour le projet Andromeda. Il détaille les extensions vectorielles (AVX‑512/AVX10/APX côté x64, SVE2/SME côté arm64), les nouvelles instructions de déplacement de données, les protections de flux de contrôle et les extensions de sécurité (MTE, pointer authentication). Le document fournit des exemples de code Rust illustrant l’utilisation des intrinsics, les options de compilation (`#[target_feature]`, `RUSTFLAGS`), la détection dynamique des fonctionnalités et la multiversion de fonctions. Des recommandations concrètes abordent la conception de noyaux haute performance, la sélection des profils de déploiement (x86‑64‑v3/v4, SVE2 vs NEON), l’activation des protections de sécurité (PAC/BTI, MTE) et l’équilibre entre performance et portabilité. L’ensemble guide la mise en œuvre d’une architecture véritablement moderne et optimisée pour 2026.
+
+Vous trouverez également une version PDF du rapport ici : {{file:file-NjHWHFMAnv79yF282Ct4hB}}.
+
+Si vous souhaitez d’autres ajustements ou compléments, n’hésitez pas à me le faire savoir.

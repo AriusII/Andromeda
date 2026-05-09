@@ -1,3 +1,0 @@
-display_name: "QUIC/RPC Frame Contracts"
-short_description: "Design QUIC surfaces, FrameHeader, RPC frame types, structured payloads, metadata-before-payload, and error taxonomy. Use for network/RPC work."
-default_prompt: "Use the QUIC/RPC Frame Contracts skill to analyze the current Andromeda task and return a bounded, validated result."

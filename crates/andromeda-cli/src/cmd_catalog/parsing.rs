@@ -1,7 +1,7 @@
 use crate::diagnostic_json::JSON_FLAG;
 use crate::error::cli_error;
 use crate::parse::{next_option_value_rejecting_flag, parse_u64};
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 pub(super) struct ListProceduresOptions {
     pub(super) namespace: Option<String>,
@@ -46,18 +46,18 @@ pub(super) fn parse_list_procedures_options(
                     )?
                     .to_string(),
                 );
-            }
+            },
             JSON_FLAG => json_output = true,
             opt if opt.starts_with("--") => {
                 return Err(cli_error(
                     "unknown list-procedures option; supported options are --namespace and --json",
                 ));
-            }
+            },
             _ => {
                 return Err(cli_error(
                     "unexpected list-procedures argument; supported options are --namespace and --json",
                 ));
-            }
+            },
         }
         i += 1;
     }
@@ -87,18 +87,18 @@ pub(super) fn parse_invalidate_cache_options(
                     value,
                     "procedure-id must be an unsigned integer",
                 )?);
-            }
+            },
             JSON_FLAG => json_output = true,
             opt if opt.starts_with("--") => {
                 return Err(cli_error(
                     "unknown invalidate-cache option; supported options are --procedure-id and --json",
                 ));
-            }
+            },
             _ => {
                 return Err(cli_error(
                     "unexpected invalidate-cache argument; supported options are --procedure-id and --json",
                 ));
-            }
+            },
         }
         i += 1;
     }
@@ -126,12 +126,12 @@ pub(super) fn parse_show_contract_options(args: &[String]) -> AndromedaResult<Sh
                 return Err(cli_error(
                     "unknown catalog show-contract option; supported option is --json",
                 ));
-            }
+            },
             _ => {
                 return Err(cli_error(
                     "unexpected catalog show-contract argument; supported option is --json",
                 ));
-            }
+            },
         }
     }
 
@@ -161,7 +161,7 @@ pub(super) fn parse_resolve_manifest_options(
                     value,
                     "procedure-id must be an unsigned integer",
                 )?);
-            }
+            },
             "--qualified-name" => {
                 qualified_name = Some(
                     next_option_value_rejecting_flag(
@@ -171,18 +171,18 @@ pub(super) fn parse_resolve_manifest_options(
                     )?
                     .to_string(),
                 );
-            }
+            },
             JSON_FLAG => json_output = true,
             opt if opt.starts_with("--") => {
                 return Err(cli_error(
                     "unknown resolve-manifest option; supported options are --procedure-id, --qualified-name, and --json",
                 ));
-            }
+            },
             _ => {
                 return Err(cli_error(
                     "unexpected resolve-manifest argument; supported options are --procedure-id, --qualified-name, and --json",
                 ));
-            }
+            },
         }
         i += 1;
     }
@@ -194,7 +194,7 @@ pub(super) fn parse_resolve_manifest_options(
             return Err(cli_error(
                 "resolve-manifest requires exactly one selector: --procedure-id <id> or --qualified-name <name>",
             ));
-        }
+        },
     };
 
     Ok(ResolveManifestOptions {

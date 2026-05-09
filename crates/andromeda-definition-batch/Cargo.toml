@@ -1,0 +1,15 @@
+[package]
+name = "andromeda-definition-batch"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Runtime-free DefinitionBatch identity, dry-run, and dependency primitives."
+
+[dependencies]
+andromeda-contract.workspace = true
+andromeda-catalog-store.workspace = true
+andromeda-digest.workspace = true
+andromeda-error.workspace = true
+andromeda-srpl-diagnostics.workspace = true
+andromeda-types.workspace = true

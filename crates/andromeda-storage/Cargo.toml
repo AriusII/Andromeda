@@ -6,11 +6,17 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
-andromeda-core.workspace = true
+andromeda-buffer-pool.workspace = true
+andromeda-catalog-recovery.workspace = true
+andromeda-disk-page-store.workspace = true
+andromeda-hadr.workspace = true
+andromeda-error.workspace = true
+andromeda-manifest.workspace = true
 andromeda-observe.workspace = true
-dashmap = "6.0"
-sha2 = "0.11.0"
-
-[dev-dependencies]
-proptest.workspace = true
-tempfile = "3.8"
+andromeda-recovery.workspace = true
+andromeda-segment.workspace = true
+andromeda-storage-heap.workspace = true
+andromeda-storage-index.workspace = true
+andromeda-storage-page.workspace = true
+andromeda-types.workspace = true
+andromeda-wal.workspace = true

@@ -7,7 +7,7 @@ use andromeda_bench::{
     CrudWorkloadResult, MAX_CRUD_BATCH_SIZE, MAX_CRUD_DURATION_MS, MAX_CRUD_ROWS, MAX_CRUD_THREADS,
     find_crud_scenario,
 };
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 #[derive(Debug, Clone)]
 pub(super) struct CrudRunOptions {
@@ -31,18 +31,18 @@ pub(super) fn parse_crud_run_options(args: &[String]) -> AndromedaResult<CrudRun
                     "--seed requires an unsigned integer",
                 )?;
                 seed = parse_u64_option(value, "--seed")?;
-            }
+            },
             DIAGNOSTIC_JSON_FLAG => diagnostic_json = true,
             JSON_FLAG => {
                 return Err(cli_error(
                     "crud uses --diagnostic-json to make JSON diagnostic-only explicit",
                 ));
-            }
+            },
             opt if opt.starts_with("--") => {
                 return Err(cli_error(
                     "unknown crud run option; supported options are --seed and --diagnostic-json",
                 ));
-            }
+            },
             value => {
                 if scenario_id.is_some() {
                     return Err(cli_error(
@@ -50,7 +50,7 @@ pub(super) fn parse_crud_run_options(args: &[String]) -> AndromedaResult<CrudRun
                     ));
                 }
                 scenario_id = Some(value.to_string());
-            }
+            },
         }
         index += 1;
     }

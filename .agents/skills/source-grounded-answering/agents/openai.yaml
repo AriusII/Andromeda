@@ -1,3 +1,0 @@
-display_name: "Source-Grounded Answering"
-short_description: "Answer using project and official sources with explicit citations, source hierarchy, uncertainty, and cross-checks. Use when claims must be traceable to uploade"
-default_prompt: "Use the Source-Grounded Answering skill to analyze the current Andromeda task and return a bounded, validated result."

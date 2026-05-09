@@ -1,31 +1,6 @@
-use andromeda_storage::format_version::{FormatVersion, StorageFormatKind};
-use andromeda_storage::{
-    DatabaseManifest, Lsn, RECOVERY_REQUIRED_STORAGE_FORMATS, StorageFormatFingerprint, WalRecord,
-    encode_wal_record,
-};
-
-pub(crate) fn recovery_manifest(
-    base_checkpoint_lsn: Lsn,
-    required_wal_start_lsn: Lsn,
-) -> DatabaseManifest {
-    DatabaseManifest {
-        database_id: 1,
-        manifest_version: 2,
-        snapshot_id: 3,
-        base_checkpoint_lsn,
-        required_wal_start_lsn,
-        previous_manifest_hash: [0; 32],
-        manifest_crc: 99,
-    }
-}
-
-pub(crate) fn encode_records(records: &[WalRecord]) -> Vec<u8> {
-    let mut encoded = Vec::new();
-    for record in records {
-        encoded.extend(encode_wal_record(record).unwrap());
-    }
-    encoded
-}
+use andromeda_manifest::StorageFormatFingerprint;
+use andromeda_manifest::format_version::{FormatVersion, StorageFormatKind};
+use andromeda_recovery::RECOVERY_REQUIRED_STORAGE_FORMATS;
 
 pub(crate) fn recovery_v1_format_fingerprints_with(
     override_kind: StorageFormatKind,

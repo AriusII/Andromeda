@@ -1,9 +1,9 @@
 use std::{fs, path::Path};
 
 use super::support::{
-    assert_contains_all, assert_dispatch_error, assert_dispatch_success, assert_success,
-    backup_manifest_path, create_cli_backup_artifact, run_cli, run_cli_owned, run_cli_vec, stdout,
-    temp_artifact_dir,
+    assert_contains_all, assert_dispatch_error, assert_dispatch_success,
+    assert_operator_boundary_json, assert_success, backup_manifest_path,
+    create_cli_backup_artifact, run_cli, run_cli_owned, run_cli_vec, stdout, temp_artifact_dir,
 };
 
 #[test]
@@ -75,6 +75,7 @@ fn backup_dry_run_json_is_contract_preview_only() {
     ]);
     assert_success(&output);
     let json = stdout(&output);
+    assert_operator_boundary_json(&json, "andromeda.cli.backup.start.v1");
     assert_contains_all(
         &json,
         &[
@@ -106,6 +107,7 @@ fn backup_start_creates_execution_plan() {
     ]);
     assert_success(&output);
     let json = stdout(&output);
+    assert_operator_boundary_json(&json, "andromeda.cli.backup.start.v1");
     assert_contains_all(
         &json,
         &[
@@ -126,18 +128,29 @@ fn backup_start_creates_execution_plan() {
 fn backup_runtime_commands_use_file_backed_artifacts() {
     let artifact_dir = create_cli_backup_artifact("backup-runtime-commands", 8206);
 
-    for args in [
-        backup_runtime_command("status", Some(8206), artifact_dir.path()),
-        backup_runtime_command("list", None, artifact_dir.path()),
-        backup_runtime_command("verify", Some(8206), artifact_dir.path()),
-        backup_runtime_command("cancel", Some(8206), artifact_dir.path()),
+    for (args, expected_schema) in [
+        (
+            backup_runtime_command("status", Some(8206), artifact_dir.path()),
+            "andromeda.cli.backup.status.v1",
+        ),
+        (
+            backup_runtime_command("list", None, artifact_dir.path()),
+            "andromeda.cli.backup.list.v1",
+        ),
+        (
+            backup_runtime_command("verify", Some(8206), artifact_dir.path()),
+            "andromeda.cli.backup.verify.v1",
+        ),
+        (
+            backup_runtime_command("cancel", Some(8206), artifact_dir.path()),
+            "andromeda.cli.backup.cancel.v1",
+        ),
     ] {
         let output = run_cli_owned(args);
         assert_success(&output);
-        assert_contains_all(
-            &stdout(&output),
-            &["\"durable_backend\":true", "\"backup_id\":8206"],
-        );
+        let json = stdout(&output);
+        assert_operator_boundary_json(&json, expected_schema);
+        assert_contains_all(&json, &["\"durable_backend\":true", "\"backup_id\":8206"]);
     }
 }
 

@@ -1,3 +1,0 @@
-display_name: "Rust Performance Benchmarking"
-short_description: "Design measured Rust performance work with hypotheses, benchmarks, profiles, baselines, and regression thresholds. Use before accepting optimizations."
-default_prompt: "Use the Rust Performance Benchmarking skill to analyze the current Andromeda task and return a bounded, validated result."

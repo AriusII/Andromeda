@@ -4,13 +4,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use andromeda_core::{
-    CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId, ScalarType, TypeDescriptor,
-};
-use andromeda_proto::{
+use andromeda_procedure_contract::{
     ManifestPolicyVersion, ProcedureManifest, ProtocolLayout, RequiredPermission,
-    ResultCardinality, ResultStreamDescriptor, RowCountRequirement, descriptor_set_hash,
-    frame_envelope_hash,
+    ResultCardinality, ResultStreamDescriptor, RowCountRequirement,
+};
+use andromeda_proto::{descriptor_set_hash, frame_envelope_hash};
+use andromeda_types::{
+    CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId, ScalarType, TypeDescriptor,
 };
 use prost_types::DescriptorProto;
 
@@ -139,40 +139,53 @@ pub(crate) const EXEC_MANIFEST: &str = include_str!("../../../andromeda-exec/Car
 pub(crate) const BUILD_SCRIPT: &str = include_str!("../../build.rs");
 pub(crate) const GENERATED_WRAPPER: &str = include_str!("../../src/generated.rs");
 pub(crate) const RUNTIME_PROJECTION_FACADE_SOURCE: &str =
-    include_str!("../../src/generated_validation/runtime_projection/mod.rs");
+    include_str!("../../src/generated_validation/mod.rs");
 pub(crate) const RUNTIME_PROJECTION_SOURCES: &[(&str, &str)] = &[
-    ("runtime_projection/mod", RUNTIME_PROJECTION_FACADE_SOURCE),
     (
-        "runtime_projection/error_helpers",
-        include_str!("../../src/generated_validation/runtime_projection/error_helpers.rs"),
+        "proto/generated_validation/mod",
+        RUNTIME_PROJECTION_FACADE_SOURCE,
     ),
     (
-        "runtime_projection/execute_args",
-        include_str!("../../src/generated_validation/runtime_projection/execute_args.rs"),
+        "wire/generated_validation/mod",
+        include_str!("../../../andromeda-proto-wire/src/generated_validation/mod.rs"),
     ),
     (
-        "runtime_projection/frame_result_metadata",
-        include_str!("../../src/generated_validation/runtime_projection/frame_result_metadata.rs"),
+        "wire/generated_validation/common",
+        include_str!("../../../andromeda-proto-wire/src/generated_validation/common.rs"),
     ),
     (
-        "runtime_projection/invocation_correlation",
-        include_str!("../../src/generated_validation/runtime_projection/invocation_correlation.rs"),
+        "wire/generated_validation/error",
+        include_str!("../../../andromeda-proto-wire/src/generated_validation/error.rs"),
     ),
     (
-        "runtime_projection/structured_payload_bounds",
+        "wire/generated_validation/frame_envelope",
+        include_str!("../../../andromeda-proto-wire/src/generated_validation/frame_envelope.rs"),
+    ),
+    (
+        "wire/generated_validation/invocation",
+        include_str!("../../../andromeda-proto-wire/src/generated_validation/invocation.rs"),
+    ),
+    (
+        "wire/generated_validation/result_stream",
+        include_str!("../../../andromeda-proto-wire/src/generated_validation/result_stream.rs"),
+    ),
+    (
+        "wire/generated_validation/rpc_result",
+        include_str!("../../../andromeda-proto-wire/src/generated_validation/rpc_result.rs"),
+    ),
+    (
+        "wire/generated_validation/structured_object",
+        include_str!("../../../andromeda-proto-wire/src/generated_validation/structured_object.rs"),
+    ),
+    (
+        "wire/generated_validation/catalog_manifest_resolution",
         include_str!(
-            "../../src/generated_validation/runtime_projection/structured_payload_bounds.rs"
-        ),
-    ),
-    (
-        "runtime_projection/invocation_response_sequence",
-        include_str!(
-            "../../src/generated_validation/runtime_projection/frame_result_metadata/invocation_response_sequence.rs"
+            "../../../andromeda-proto-wire/src/generated_validation/catalog_manifest_resolution.rs"
         ),
     ),
 ];
 pub(crate) const GENERATED_VALIDATION_MANIFEST_SOURCE: &str =
-    include_str!("../../src/generated_validation/manifest.rs");
+    include_str!("../../../andromeda-proto-wire/src/generated_validation/procedure_manifest.rs");
 
 pub(crate) fn schema_contains(schemas: &[(&str, &str)], needle: &str) -> bool {
     schemas.iter().any(|(_, schema)| schema.contains(needle))
@@ -500,8 +513,8 @@ pub(crate) fn assert_all_message_definitions_have_reserved_ranges() {
                             line_index + 1
                         );
                         message_path.pop();
-                    }
-                    Some(SchemaBlock::Other) => {}
+                    },
+                    Some(SchemaBlock::Other) => {},
                     None => panic!(
                         "{}:{} has an unmatched closing brace",
                         schema.relative_path,

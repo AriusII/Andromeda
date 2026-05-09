@@ -1,3 +1,0 @@
-display_name: "Prompt Library Maintenance"
-short_description: "Maintain reusable prompt templates for Codex agents, reviews, cleanup, crash tests, SRPL specs, and Rust implementation tasks."
-default_prompt: "Use the Prompt Library Maintenance skill to analyze the current Andromeda task and return a bounded, validated result."

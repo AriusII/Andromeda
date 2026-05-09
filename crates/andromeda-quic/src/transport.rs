@@ -15,10 +15,13 @@
 //! * Cancellation, backpressure, and shutdown are represented as typed trait
 //!   methods instead of hidden runtime side channels.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId, SessionId};
-use andromeda_observe::CertificateIdentity;
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_principal::CertificateIdentity;
+use andromeda_types::{RequestId, SessionId};
 
-use crate::{BackpressureSignal, CancellationSignal, FrameBytes, StreamRole, SurfacePlane};
+use andromeda_rpc_protocol::{BackpressureSignal, FrameBytes, StreamRole};
+
+use crate::{CancellationSignal, SurfacePlane};
 
 /// Peer/session metadata visible at the transport boundary.
 ///
@@ -60,6 +63,27 @@ impl TransportEndpointMetadata {
     pub const fn certificate_identity(&self) -> Option<&CertificateIdentity> {
         self.certificate_identity.as_ref()
     }
+
+    fn validate_frame_binding(&self, frame: &FrameBytes) -> AndromedaResult<()> {
+        if !self
+            .surface_plane
+            .permits_family(frame.header.frame_type.frame_family())
+        {
+            return Err(transport_protocol_error(
+                "frame family not permitted on endpoint surface plane",
+            ));
+        }
+
+        if let Some(session_id) = self.session_id
+            && session_id != frame.header.session_id
+        {
+            return Err(transport_protocol_error(
+                "frame session id does not match endpoint metadata",
+            ));
+        }
+
+        Ok(())
+    }
 }
 
 /// A custom QUIC RPC frame plus transport metadata.
@@ -86,23 +110,7 @@ impl TransportMessage {
         frame: FrameBytes,
     ) -> AndromedaResult<Self> {
         frame.validate(stream_role)?;
-
-        if !metadata
-            .surface_plane
-            .permits_family(frame.header.frame_type.frame_family())
-        {
-            return Err(transport_protocol_error(
-                "frame family not permitted on endpoint surface plane",
-            ));
-        }
-
-        if let Some(session_id) = metadata.session_id
-            && session_id != frame.header.session_id
-        {
-            return Err(transport_protocol_error(
-                "frame session id does not match endpoint metadata",
-            ));
-        }
+        metadata.validate_frame_binding(&frame)?;
 
         Ok(Self {
             metadata,
@@ -239,11 +247,21 @@ fn transport_protocol_error(message: &'static str) -> AndromedaError {
 }
 
 #[cfg(test)]
+const fn shutdown_state_for_mode(mode: TransportShutdownMode) -> TransportShutdownState {
+    match mode {
+        TransportShutdownMode::GracefulDrain => TransportShutdownState::Draining,
+        TransportShutdownMode::ImmediateClose => TransportShutdownState::Closed,
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_core::{RequestId, SessionId};
+    use andromeda_types::{RequestId, SessionId};
 
-    use crate::{CancellationCause, FRAME_HEADER_CRC_UNCHECKED, FrameHeader, FrameType};
+    use andromeda_rpc_protocol::{FRAME_HEADER_CRC_UNCHECKED, FrameHeader, FrameType};
+
+    use crate::CancellationCause;
 
     fn metadata() -> TransportEndpointMetadata {
         TransportEndpointMetadata::new(SurfacePlane::Application, Some(SessionId::new(7)), None)
@@ -321,10 +339,7 @@ mod tests {
             &mut self,
             mode: TransportShutdownMode,
         ) -> AndromedaResult<TransportShutdownState> {
-            self.shutdown_state = match mode {
-                TransportShutdownMode::GracefulDrain => TransportShutdownState::Draining,
-                TransportShutdownMode::ImmediateClose => TransportShutdownState::Closed,
-            };
+            self.shutdown_state = shutdown_state_for_mode(mode);
             Ok(self.shutdown_state)
         }
     }
@@ -377,10 +392,7 @@ mod tests {
             &mut self,
             mode: TransportShutdownMode,
         ) -> AndromedaResult<TransportShutdownState> {
-            self.shutdown_state = match mode {
-                TransportShutdownMode::GracefulDrain => TransportShutdownState::Draining,
-                TransportShutdownMode::ImmediateClose => TransportShutdownState::Closed,
-            };
+            self.shutdown_state = shutdown_state_for_mode(mode);
             Ok(self.shutdown_state)
         }
     }

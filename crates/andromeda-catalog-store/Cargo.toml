@@ -1,0 +1,12 @@
+[package]
+name = "andromeda-catalog-store"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Runtime-free catalog object and store boundary types for Andromeda."
+
+[dependencies]
+andromeda-contract.workspace = true
+andromeda-error.workspace = true
+andromeda-types.workspace = true

@@ -1,0 +1,38 @@
+[package]
+name = "andromeda-inventory-demo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+andromeda-admission.workspace = true
+andromeda-business-fixtures.workspace = true
+andromeda-catalog.workspace = true
+andromeda-digest.workspace = true
+andromeda-error.workspace = true
+andromeda-exec.workspace = true
+andromeda-observe.workspace = true
+andromeda-procedure-contract.workspace = true
+andromeda-result-stream.workspace = true
+andromeda-rpc-protocol.workspace = true
+andromeda-srpl.workspace = true
+andromeda-srpl-catalog-binding.workspace = true
+andromeda-srpl-ir.workspace = true
+andromeda-storage-heap.workspace = true
+andromeda-storage-page.workspace = true
+andromeda-mvcc.workspace = true
+andromeda-transaction-log.workspace = true
+andromeda-types.workspace = true
+andromeda-wal.workspace = true
+
+[dev-dependencies]
+andromeda-hardware.workspace = true
+andromeda-manifest.workspace = true
+andromeda-recovery.workspace = true
+andromeda-srpl-binder.workspace = true
+andromeda-storage-placement.workspace = true
+andromeda-transaction.workspace = true
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(andromeda_remote_network_e2e)', 'cfg(feature, values("runtime-quinn"))'] }

@@ -1,19 +1,25 @@
-use andromeda_core::{
-    AndromedaErrorKind, AndromedaResult, CatalogVersion, ContractHash, ProcedureId, SessionId,
-    TransactionId,
+use andromeda_error::{AndromedaErrorKind, AndromedaResult};
+use andromeda_principal::{CertificateIdentity, SurfaceScope};
+use andromeda_procedure_contract::{
+    ProcedureGatewayManifest as CatalogProcedureManifest,
+    ProcedureGatewayProtocolLayout as CatalogProcedureProtocolLayout,
+    ProcedureGatewayRequiredPermission as CatalogRequiredPermission,
 };
-use andromeda_observe::{CertificateIdentity, SurfaceScope};
 use andromeda_proto::generated::contract::v1::catalog_procedure_manifest_resolution_request;
+use andromeda_quic::catalog_manifest_resolution::CatalogManifestResolutionContext;
 use andromeda_quic::{
-    CatalogManifestResolutionContext, CatalogManifestResolutionGateway,
+    CatalogManifestResolutionGateway, CatalogManifestResolutionRuntime, SurfacePlane,
+    TransportEndpointMetadata, TransportMessage,
+};
+use andromeda_rpc_codec::{
     CatalogManifestResolutionRequest, CatalogManifestResolutionResponse,
-    CatalogManifestResolutionRuntime, CatalogManifestResolutionStatus, CatalogProcedureManifest,
-    CatalogProcedureManifestResolutionRequest, CatalogProcedureManifestResolutionResponse,
-    CatalogProcedureProtocolLayout, CatalogRequiredPermission, FrameCodec, StreamRole,
-    SurfacePlane, TransportEndpointMetadata, TransportMessage,
-    catalog_manifest_resolution_request_frame, decode_catalog_manifest_resolution_request_frame,
+    CatalogManifestResolutionStatus, CatalogProcedureManifestResolutionRequest,
+    CatalogProcedureManifestResolutionResponse, catalog_manifest_resolution_request_frame,
+    decode_catalog_manifest_resolution_request_frame,
     decode_catalog_manifest_resolution_response_frame,
 };
+use andromeda_rpc_protocol::{FrameCodec, StreamRole};
+use andromeda_types::{CatalogVersion, ContractHash, ProcedureId, SessionId, TransactionId};
 
 fn hash_vec(byte: u8) -> Vec<u8> {
     vec![byte; ContractHash::LEN]
@@ -135,7 +141,7 @@ fn request_message_with_metadata(
         request,
         SessionId::new(601),
         Some(TransactionId::new(701)),
-        ContractHash::zero(),
+        hash(0x11),
         CatalogVersion::new(9),
     )
     .unwrap();
@@ -176,71 +182,6 @@ impl CatalogManifestResolutionRuntime for ResolvingRuntime {
 }
 
 #[derive(Debug, Clone)]
-struct PermissionRuntime;
-
-impl CatalogManifestResolutionRuntime for PermissionRuntime {
-    fn resolve_catalog_manifest(
-        &mut self,
-        context: &CatalogManifestResolutionContext,
-        request: CatalogManifestResolutionRequest,
-    ) -> AndromedaResult<CatalogManifestResolutionResponse> {
-        if context
-            .certificate_identity()
-            .is_some_and(|identity| identity.subject == "catalog-reader")
-        {
-            return Ok(response(
-                &request,
-                CatalogManifestResolutionStatus::Resolved,
-                Some(manifest()),
-            ));
-        }
-
-        Ok(response(
-            &request,
-            CatalogManifestResolutionStatus::PermissionDenied,
-            None,
-        ))
-    }
-}
-
-#[derive(Debug, Clone)]
-struct NotReadyRuntime;
-
-impl CatalogManifestResolutionRuntime for NotReadyRuntime {
-    fn resolve_catalog_manifest(
-        &mut self,
-        _context: &CatalogManifestResolutionContext,
-        request: CatalogManifestResolutionRequest,
-    ) -> AndromedaResult<CatalogManifestResolutionResponse> {
-        Ok(response(
-            &request,
-            CatalogManifestResolutionStatus::CatalogNotReady,
-            None,
-        ))
-    }
-}
-
-#[derive(Debug, Clone)]
-struct MismatchedManifestRuntime;
-
-impl CatalogManifestResolutionRuntime for MismatchedManifestRuntime {
-    fn resolve_catalog_manifest(
-        &mut self,
-        _context: &CatalogManifestResolutionContext,
-        request: CatalogManifestResolutionRequest,
-    ) -> AndromedaResult<CatalogManifestResolutionResponse> {
-        let mut mismatched = manifest();
-        mismatched.contract_hash = hash(0x77);
-
-        Ok(response(
-            &request,
-            CatalogManifestResolutionStatus::Resolved,
-            Some(mismatched),
-        ))
-    }
-}
-
-#[derive(Debug, Clone)]
 struct PanicRuntime;
 
 impl CatalogManifestResolutionRuntime for PanicRuntime {
@@ -270,105 +211,12 @@ fn catalog_manifest_resolution_loopback_quic() {
     );
     assert_eq!(response.request_id, request.request_id);
     assert_eq!(response.trace_id, request.trace_id);
-    assert_eq!(response.resolved_contract_hash, Some(hash_vec(0x11)));
-    assert_eq!(response.resolved_catalog_version, Some(9));
     assert_eq!(
         response
             .manifest
             .expect("resolved response carries manifest")
             .procedure_name,
         "Inventory.ReserveStock"
-    );
-}
-
-#[test]
-fn catalog_manifest_resolution_permission_denied() {
-    let request = request();
-    let mut gateway = CatalogManifestResolutionGateway::new(PermissionRuntime);
-
-    let response = decode_response(
-        gateway
-            .route_transport_message(request_message(&request, "unauthorized-service"))
-            .unwrap(),
-    );
-
-    assert_eq!(
-        response.status,
-        CatalogManifestResolutionStatus::PermissionDenied as i32
-    );
-    assert!(response.manifest.is_none());
-    assert!(response.resolved_contract_hash.is_none());
-    assert!(response.resolved_catalog_version.is_none());
-    assert_eq!(response.current_catalog_version, Some(9));
-}
-
-#[test]
-fn catalog_manifest_resolution_not_ready() {
-    let request = request();
-    let mut gateway = CatalogManifestResolutionGateway::new(NotReadyRuntime);
-
-    let response = decode_response(
-        gateway
-            .route_transport_message(request_message(&request, "catalog-reader"))
-            .unwrap(),
-    );
-
-    assert_eq!(
-        response.status,
-        CatalogManifestResolutionStatus::CatalogNotReady as i32
-    );
-    assert!(response.manifest.is_none());
-    assert_eq!(response.current_catalog_version, Some(9));
-}
-
-#[test]
-fn catalog_manifest_resolution_rejects_runtime_resolved_contract_mismatch() {
-    let request = request();
-    let mut gateway = CatalogManifestResolutionGateway::new(MismatchedManifestRuntime);
-
-    let err = gateway
-        .route_transport_message(request_message(&request, "catalog-reader"))
-        .unwrap_err();
-
-    assert_eq!(err.kind(), AndromedaErrorKind::Contract);
-    assert!(
-        err.message().contains("request expectation"),
-        "route must reject resolved manifest data that contradicts request binding"
-    );
-}
-
-#[test]
-fn catalog_manifest_resolution_response_rejects_zero_manifest_binding_versions() {
-    let request = CatalogManifestResolutionRequest::from_protobuf(request()).unwrap();
-
-    let mut zero_stats = manifest();
-    zero_stats.stats_version = 0;
-    let err = response(
-        &request,
-        CatalogManifestResolutionStatus::Resolved,
-        Some(zero_stats),
-    )
-    .to_protobuf()
-    .unwrap_err();
-    assert_eq!(err.kind(), AndromedaErrorKind::Contract);
-    assert!(
-        err.message().contains("stats_version"),
-        "resolved manifest response must reject zero StatsVersion"
-    );
-
-    let mut zero_policy = manifest();
-    zero_policy.policy_version = ContractHash::zero();
-    let err = response(
-        &request,
-        CatalogManifestResolutionStatus::Resolved,
-        Some(zero_policy),
-    )
-    .to_protobuf()
-    .unwrap_err();
-    assert_eq!(err.kind(), AndromedaErrorKind::Contract);
-    assert!(
-        err.message().contains("policy_version"),
-        "resolved manifest response must reject zero PolicyVersion"
     );
 }
 

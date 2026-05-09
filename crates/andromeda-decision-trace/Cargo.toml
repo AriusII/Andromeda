@@ -1,0 +1,10 @@
+[package]
+name = "andromeda-decision-trace"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+andromeda-contract.workspace = true
+andromeda-types.workspace = true

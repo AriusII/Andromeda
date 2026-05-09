@@ -29,7 +29,7 @@ fn gpu_policy_decisions_record_acceptance_and_rejection_without_hardware_claims(
             assert!(trace.gpu_declared_available);
             assert!(!trace.accepted);
             assert!(trace.reason.contains("critical path"));
-        }
+        },
         _ => panic!("expected GPU policy decision trace"),
     }
 

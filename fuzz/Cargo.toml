@@ -2,7 +2,7 @@
 name = "andromeda-fuzz"
 version = "0.0.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.95.0"
 publish = false
 
 [package.metadata]
@@ -12,12 +12,23 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
+andromeda-catalog = { path = "../crates/andromeda-catalog" }
+andromeda-catalog-store = { path = "../crates/andromeda-catalog-store" }
+andromeda-definition-batch = { path = "../crates/andromeda-definition-batch" }
+andromeda-manifest = { path = "../crates/andromeda-manifest" }
+andromeda-recovery = { path = "../crates/andromeda-recovery" }
 andromeda-proto = { path = "../crates/andromeda-proto" }
-andromeda-core = { path = "../crates/andromeda-core" }
 andromeda-observe = { path = "../crates/andromeda-observe" }
 andromeda-quic = { path = "../crates/andromeda-quic" }
-andromeda-srpl = { path = "../crates/andromeda-srpl" }
+andromeda-rpc-codec = { path = "../crates/andromeda-rpc-codec" }
+andromeda-rpc-protocol = { path = "../crates/andromeda-rpc-protocol" }
+andromeda-security-contract = { path = "../crates/andromeda-security-contract" }
+andromeda-srpl-parser = { path = "../crates/andromeda-srpl-parser" }
+andromeda-segment = { path = "../crates/andromeda-segment" }
 andromeda-storage = { path = "../crates/andromeda-storage" }
+andromeda-storage-page = { path = "../crates/andromeda-storage-page" }
+andromeda-types = { path = "../crates/andromeda-types" }
+andromeda-wal = { path = "../crates/andromeda-wal" }
 
 [[bin]]
 name = "frame_codec_no_panic"
@@ -38,8 +49,20 @@ test = false
 doc = false
 
 [[bin]]
+name = "proto_rpc_execute_request_decode"
+path = "fuzz_targets/proto_rpc_execute_request_decode.rs"
+test = false
+doc = false
+
+[[bin]]
 name = "proto_rpc_completion_decode"
 path = "fuzz_targets/proto_rpc_completion_decode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "proto_invocation_response_sequence_decode"
+path = "fuzz_targets/proto_invocation_response_sequence_decode.rs"
 test = false
 doc = false
 
@@ -50,8 +73,20 @@ test = false
 doc = false
 
 [[bin]]
+name = "srpl_parser_owner_decode"
+path = "fuzz_targets/srpl_parser_owner_decode.rs"
+test = false
+doc = false
+
+[[bin]]
 name = "storage_wal_record_roundtrip"
 path = "fuzz_targets/storage_wal_record_roundtrip.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "wal_record_roundtrip"
+path = "fuzz_targets/wal_record_roundtrip.rs"
 test = false
 doc = false
 
@@ -80,7 +115,67 @@ test = false
 doc = false
 
 [[bin]]
+name = "quic_typed_frame_envelope_decode"
+path = "fuzz_targets/quic_typed_frame_envelope_decode.rs"
+test = false
+doc = false
+
+[[bin]]
 name = "durable_audit_journal_decode"
 path = "fuzz_targets/durable_audit_journal_decode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "rpc_protocol_frame_codec_decode"
+path = "fuzz_targets/rpc_protocol_frame_codec_decode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "security_contract_admission_matrix"
+path = "fuzz_targets/security_contract_admission_matrix.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "manifest_decode"
+path = "fuzz_targets/manifest_decode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "manifest_boundary"
+path = "fuzz_targets/manifest_boundary.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "segment_index_decode"
+path = "fuzz_targets/segment_index_decode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "contract_hash"
+path = "fuzz_targets/contract_hash.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "definition_batch"
+path = "fuzz_targets/definition_batch.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "structured_object_payload"
+path = "fuzz_targets/structured_object_payload.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "recovery_manifest_durability_boundary"
+path = "fuzz_targets/recovery_manifest_durability_boundary.rs"
 test = false
 doc = false

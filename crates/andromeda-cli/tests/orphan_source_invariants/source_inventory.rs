@@ -35,7 +35,12 @@ pub(crate) fn collect_active_rust_sources(workspace: &Path) -> RustSourceReport 
         let roots = collect_cargo_target_roots(&package_dir);
         report.roots.extend(roots.iter().cloned());
         for root in roots {
-            visit_module_file(&root, &mut report.reachable, &mut report.module_conflicts);
+            visit_module_file(
+                &root,
+                &mut report.reachable,
+                &mut report.module_conflicts,
+                true,
+            );
         }
     }
 
@@ -89,7 +94,7 @@ fn collect_cargo_target_roots(package_dir: &Path) -> BTreeSet<PathBuf> {
 
     match declared.build_script {
         Some(Some(path)) => add_if_file(&mut roots, package_dir.join(path)),
-        Some(None) => {}
+        Some(None) => {},
         None => add_if_file(&mut roots, package_dir.join("build.rs")),
     }
     for path in declared.explicit_source_paths {
@@ -202,6 +207,7 @@ fn visit_module_file(
     path: &Path,
     reachable: &mut BTreeSet<PathBuf>,
     module_conflicts: &mut BTreeSet<String>,
+    is_target_root: bool,
 ) {
     if !reachable.insert(path.to_path_buf()) {
         return;
@@ -215,16 +221,16 @@ fn visit_module_file(
     for include_path in extract_include_paths(&active_source) {
         let explicit_path = parent.join(include_path);
         if explicit_path.is_file() {
-            visit_module_file(&explicit_path, reachable, module_conflicts);
+            visit_module_file(&explicit_path, reachable, module_conflicts, false);
         }
     }
 
-    let child_dir = child_dir_for(path);
+    let child_dir = child_dir_for(path, is_target_root);
     for decl in extract_file_mod_decls(&active_source) {
         if let Some(path_override) = decl.path_override {
             let explicit_path = parent.join(path_override);
             if explicit_path.is_file() {
-                visit_module_file(&explicit_path, reachable, module_conflicts);
+                visit_module_file(&explicit_path, reachable, module_conflicts, false);
             }
         } else {
             let as_file = child_dir.join(format!("{}.rs", decl.name));
@@ -239,19 +245,19 @@ fn visit_module_file(
                 ));
             }
             if as_file.is_file() {
-                visit_module_file(&as_file, reachable, module_conflicts);
+                visit_module_file(&as_file, reachable, module_conflicts, false);
             }
             if as_mod.is_file() {
-                visit_module_file(&as_mod, reachable, module_conflicts);
+                visit_module_file(&as_mod, reachable, module_conflicts, false);
             }
         }
     }
 }
 
-fn child_dir_for(path: &Path) -> PathBuf {
+fn child_dir_for(path: &Path, is_target_root: bool) -> PathBuf {
     let parent = path.parent().expect("module file has parent");
     let stem = path.file_stem().and_then(OsStr::to_str).unwrap_or_default();
-    if matches!(stem, "lib" | "main" | "mod") {
+    if is_target_root || matches!(stem, "lib" | "main" | "mod") {
         parent.to_path_buf()
     } else {
         parent.join(stem)
@@ -421,8 +427,8 @@ fn compute_virtual_reachability(
 ) -> (BTreeSet<String>, BTreeSet<String>) {
     let mut reachable = BTreeSet::new();
     let mut module_conflicts = BTreeSet::new();
-    for root in ["src/lib.rs", "src/main.rs"] {
-        visit_virtual_module(root, files, &mut reachable, &mut module_conflicts);
+    for root in files.keys().filter(|path| is_virtual_target_root(path)) {
+        visit_virtual_module(root, files, &mut reachable, &mut module_conflicts, true);
     }
     (reachable, module_conflicts)
 }
@@ -432,6 +438,7 @@ fn visit_virtual_module(
     files: &std::collections::BTreeMap<String, String>,
     reachable: &mut BTreeSet<String>,
     module_conflicts: &mut BTreeSet<String>,
+    is_target_root: bool,
 ) {
     let Some(text) = files.get(path) else {
         return;
@@ -440,17 +447,17 @@ fn visit_virtual_module(
         return;
     }
 
-    let base = virtual_child_dir_for(path);
+    let base = virtual_child_dir_for(path, is_target_root);
     let parent = virtual_parent_dir_for(path);
     let active_source = strip_comments(text);
     for include_path in extract_include_paths(&active_source) {
         let explicit_path = virtual_join(&parent, &include_path);
-        visit_virtual_module(&explicit_path, files, reachable, module_conflicts);
+        visit_virtual_module(&explicit_path, files, reachable, module_conflicts, false);
     }
     for decl in extract_file_mod_decls(&active_source) {
         if let Some(path_override) = decl.path_override {
             let explicit_path = virtual_join(&parent, &path_override);
-            visit_virtual_module(&explicit_path, files, reachable, module_conflicts);
+            visit_virtual_module(&explicit_path, files, reachable, module_conflicts, false);
         } else {
             let as_file = virtual_join(&base, &format!("{}.rs", decl.name));
             let as_mod = virtual_join(&virtual_join(&base, &decl.name), "mod.rs");
@@ -460,8 +467,8 @@ fn visit_virtual_module(
                     decl.name
                 ));
             }
-            visit_virtual_module(&as_file, files, reachable, module_conflicts);
-            visit_virtual_module(&as_mod, files, reachable, module_conflicts);
+            visit_virtual_module(&as_file, files, reachable, module_conflicts, false);
+            visit_virtual_module(&as_mod, files, reachable, module_conflicts, false);
         }
     }
 }
@@ -472,14 +479,33 @@ fn virtual_parent_dir_for(path: &str) -> String {
         .unwrap_or_default()
 }
 
-fn virtual_child_dir_for(path: &str) -> String {
+fn virtual_child_dir_for(path: &str, is_target_root: bool) -> String {
     let (dir, file) = path.rsplit_once('/').unwrap_or(("", path));
     let stem = file.strip_suffix(".rs").unwrap_or(file);
-    if matches!(stem, "lib" | "main" | "mod") {
+    if is_target_root || matches!(stem, "lib" | "main" | "mod") {
         dir.to_string()
     } else {
         virtual_join(dir, stem)
     }
+}
+
+fn is_virtual_target_root(path: &str) -> bool {
+    path == "src/lib.rs"
+        || path == "src/main.rs"
+        || is_virtual_target_root_in_dir(path, "src/bin")
+        || is_virtual_target_root_in_dir(path, "tests")
+        || is_virtual_target_root_in_dir(path, "benches")
+        || is_virtual_target_root_in_dir(path, "examples")
+        || is_virtual_target_root_in_dir(path, "fuzz_targets")
+}
+
+fn is_virtual_target_root_in_dir(path: &str, dir: &str) -> bool {
+    if !path.starts_with(dir) || !path.ends_with(".rs") {
+        return false;
+    }
+
+    let remainder = &path[dir.len()..];
+    remainder.starts_with('/') && !remainder[1..].contains('/')
 }
 
 fn virtual_join(base: &str, leaf: &str) -> String {
@@ -498,7 +524,7 @@ fn strip_toml_comment(line: &str) -> &str {
             '\'' if !in_double_quote => in_single_quote = !in_single_quote,
             '"' if !in_single_quote => in_double_quote = !in_double_quote,
             '#' if !in_single_quote && !in_double_quote => return &line[..index],
-            _ => {}
+            _ => {},
         }
     }
     line

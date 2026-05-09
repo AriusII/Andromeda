@@ -1,0 +1,15 @@
+[package]
+name = "andromeda-savepoint"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95.0"
+publish = false
+
+[dependencies]
+andromeda-error.workspace = true
+
+[dev-dependencies]
+andromeda-locking.workspace = true
+andromeda-mvcc.workspace = true
+andromeda-transaction-log.workspace = true
+andromeda-types.workspace = true

@@ -1,0 +1,37 @@
+# Andromeda Cargo configuration
+# Purpose: Consistent build behavior, profiling support, portability
+
+[term]
+verbose = false
+
+[net]
+git-fetch-with-cli = true
+
+# Profiling support: enable frame pointers for all builds
+# Allows perf/flamegraph/profiling tools to work correctly
+# Zero performance penalty on modern CPUs due to register availability
+[build]
+rustflags = ["-C", "force-frame-pointers=yes"]
+
+# Environment: backtrace configuration for development
+# Set to "1" for full backtrace on panic in debug builds
+# Leave unset for production (use RUST_BACKTRACE env var)
+# Note: non-production development configuration
+# For CI: set RUST_BACKTRACE=1 in GitHub Actions workflow
+
+[target.x86_64-unknown-linux-gnu]
+# x64 Linux: no target-cpu override (preserve portability)
+
+[target.x86_64-pc-windows-gnu]
+# x64 Windows: no target-cpu override (preserve portability)
+
+[target.aarch64-unknown-linux-gnu]
+# ARM64 Linux: no target-cpu override (preserve portability)
+
+[target.aarch64-apple-darwin]
+# ARM64 Apple: no target-cpu override (preserve portability)
+
+# Portability note:
+# DO NOT use target-cpu=native or target-cpu=x86-64-v3
+# Compiled binaries must be deployable to baseline hardware
+# CPU optimizations applied only through runtime dispatch via SIMD gate

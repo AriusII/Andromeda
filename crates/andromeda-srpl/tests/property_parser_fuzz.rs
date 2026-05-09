@@ -5,7 +5,10 @@
 use proptest::prelude::*;
 use std::panic;
 
-use andromeda_srpl::{Cardinality, ProcedureAst, SrplDiagnostic};
+use andromeda_srpl_ast::ProcedureAst;
+use andromeda_srpl_diagnostics::SrplDiagnostic;
+use andromeda_srpl_ir::Cardinality;
+use andromeda_srpl_parser::parse_procedure_signature;
 
 fn arb_srpl_input() -> impl Strategy<Value = String> {
     prop_oneof![
@@ -67,7 +70,7 @@ fn parse_result_has_stable_shape(
 fn prop_parser_never_panics_on_utf8_strings() {
     proptest!(|(input in arb_srpl_input())| {
         let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-            andromeda_srpl::parse_procedure_signature(&input)
+            parse_procedure_signature(&input)
         }));
 
         match result {
@@ -91,7 +94,7 @@ fn prop_valid_srpl_parses_successfully() {
     ];
 
     for input in valid_cases {
-        let result = andromeda_srpl::parse_procedure_signature(input);
+        let result = parse_procedure_signature(input);
         let ast =
             result.unwrap_or_else(|err| panic!("valid SRPL should parse: {input} => {err:?}"));
 
@@ -119,7 +122,7 @@ fn prop_invalid_srpl_returns_error_with_message() {
     ];
 
     for input in invalid_cases {
-        let result = andromeda_srpl::parse_procedure_signature(input);
+        let result = parse_procedure_signature(input);
         let diag = result.unwrap_err();
 
         assert!(
@@ -132,8 +135,8 @@ fn prop_invalid_srpl_returns_error_with_message() {
 #[test]
 fn prop_parser_deterministic() {
     proptest!(|(input in ".*")| {
-        let result1 = andromeda_srpl::parse_procedure_signature(&input);
-        let result2 = andromeda_srpl::parse_procedure_signature(&input);
+        let result1 = parse_procedure_signature(&input);
+        let result2 = parse_procedure_signature(&input);
 
         prop_assert_eq!(
             &result1,
@@ -155,7 +158,7 @@ fn prop_parser_handles_large_inputs() {
         let large_input = "a".repeat(size);
 
         let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-            andromeda_srpl::parse_procedure_signature(&large_input)
+            parse_procedure_signature(&large_input)
         }));
 
         match result {
@@ -172,7 +175,7 @@ fn prop_parser_handles_large_inputs() {
 
 #[test]
 fn prop_parser_handles_empty_input() {
-    let result = andromeda_srpl::parse_procedure_signature("");
+    let result = parse_procedure_signature("");
     let diag = result.unwrap_err();
 
     assert!(

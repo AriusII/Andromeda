@@ -1,6 +1,6 @@
-use andromeda_core::RequestId;
+use andromeda_types::RequestId;
 
-use crate::BackpressureReason;
+use andromeda_rpc_protocol::BackpressureReason;
 
 /// Backpressure request from server to client.
 ///

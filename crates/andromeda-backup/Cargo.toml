@@ -1,0 +1,14 @@
+[package]
+name = "andromeda-backup"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95.0"
+publish = false
+
+[dependencies]
+andromeda-error = { workspace = true }
+andromeda-observe = { workspace = true }
+andromeda-segment = { workspace = true }
+andromeda-types = { workspace = true }
+andromeda-wal = { workspace = true }
+sha2 = "0.11.0"

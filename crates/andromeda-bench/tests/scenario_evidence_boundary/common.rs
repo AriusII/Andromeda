@@ -1,10 +1,11 @@
-use andromeda_bench::{
+use andromeda_bench_workload::DEFAULT_TEMP_BYTES;
+use andromeda_scenario_evidence::{
     BenchmarkEvidenceBudgets, BenchmarkEvidenceConfidence, BenchmarkEvidenceValidity,
     BenchmarkHistoryRecord, BenchmarkPlanClass, BenchmarkScenarioEvidence,
     BenchmarkScenarioEvidenceError, BenchmarkScenarioTarget, BenchmarkStatsVersion,
-    DEFAULT_TEMP_BYTES,
 };
-use andromeda_core::{CatalogVersion, ContractHash, EngineTimestamp, ProcedureId};
+use andromeda_time::EngineTimestamp;
+use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 pub(crate) fn ts(value: u64) -> EngineTimestamp {
     EngineTimestamp::from_unix_millis(value)
@@ -48,7 +49,13 @@ pub(crate) fn history_record_with_metrics(
 }
 
 pub(crate) fn vertical_history_record(sample_count: u32) -> BenchmarkHistoryRecord {
-    history_record_with_metrics("vertical-v0-smoke", 15_000, 50_000, 0, sample_count)
+    history_record_with_metrics(
+        "inventory-recoverable-smoke",
+        15_000,
+        50_000,
+        0,
+        sample_count,
+    )
 }
 
 pub(crate) fn default_budgets() -> BenchmarkEvidenceBudgets {

@@ -1,4 +1,4 @@
-use andromeda_core::{InvocationId, TransactionId};
+use andromeda_types::{InvocationId, TransactionId};
 
 /// Derive a `TransactionId` from an `InvocationId` by direct value reuse.
 ///
@@ -7,27 +7,27 @@ use andromeda_core::{InvocationId, TransactionId};
 /// cannot guarantee monotonicity if transaction ids are minted from the
 /// invocation namespace.
 ///
-/// Production code must use [`andromeda_tx::TransactionManager`] (which owns
-/// a recovery-safe [`andromeda_tx::TransactionIdAllocator`]) to begin
+/// Production code must use [`andromeda_transaction::TransactionManager`] (which owns
+/// a recovery-safe [`andromeda_transaction::TransactionIdAllocator`]) to begin
 /// transactions and obtain ids. As of the V0 exec migration the runtime
-/// (`LocalVerticalRuntime` and the `V0InventoryRecoverableRuntime` wrapper)
+/// (`LocalVerticalRuntime` and the inventory demo V0 wrapper)
 /// allocates ids exclusively via `TransactionManager::begin`, so the only
 /// remaining call sites for this shim are:
 ///
-/// * the legacy [`crate::services::CompletionRecoveryExpectation::for_invocation`]
+/// * the compatibility [`crate::services::CompletionRecoveryExpectation::for_invocation`]
 ///   convenience constructor, retained for compatibility with byte-stable
 ///   recovery test fixtures and gated behind `#[allow(deprecated)]`; and
-/// * `#[cfg(test)]` modules in `services::completion` that hand-craft WAL
+/// * `#[cfg(test)]` modules in completion tests that hand-craft WAL
 ///   records keyed by InvocationId-derived TransactionIds to exercise
 ///   reconciliation without spinning up a manager.
 ///
 /// New production code paths must not call this function and must instead
-/// use [`andromeda_tx::TransactionManager::begin`] (or
+/// use [`andromeda_transaction::TransactionManager::begin`] (or
 /// [`crate::services::CompletionRecoveryExpectation::for_invocation_with_transaction`]
 /// for explicit recovery expectations).
 #[deprecated(
     since = "0.1.0",
-    note = "use andromeda_tx::TransactionManager::begin to allocate \
+    note = "use andromeda_transaction::TransactionManager::begin to allocate \
             recovery-safe TransactionIds; deriving them from InvocationId \
             breaks monotonicity across restarts"
 )]

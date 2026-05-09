@@ -1,34 +1,19 @@
 #![forbid(unsafe_code)]
 
-//! SRPL compiler facade.
+//! SRPL compiler orchestration.
 //!
-//! The crate keeps its historical root-level re-exports for compatibility,
-//! while also exposing professionalized module boundaries:
-//! - [`procedure_compiler`] owns source-to-AST binding and IR lowering entry points.
-//! - [`procedure_model`] owns AST, contract, cardinality, and IR data shapes.
-//! - [`SrplDiagnostic`] and [`source_location`] own source spans and validation diagnostics.
+//! This crate keeps source-to-contract orchestration around the SRPL owner
+//! crates. Parser, binder, diagnostics, lowering, optimizer, execution-adapter,
+//! interpreter, AST, cardinality, and IR types are imported from their owner
+//! crates directly.
 
-mod ast;
-mod binder;
-mod cardinality;
-pub mod definition_batch_bridge;
-mod diagnostics;
-pub mod execution_adapter;
-mod identifier;
-pub mod interpreter;
-mod ir;
-mod lexer;
 mod lowering;
-pub mod optimizer;
-mod parser;
-pub mod procedure_compiler;
-pub mod procedure_model;
-pub mod procedure_resolver;
-mod signature;
-pub mod source_location;
 
-pub use definition_batch_bridge::*;
-pub use diagnostics::*;
-pub use procedure_compiler::*;
-pub use procedure_model::*;
-pub use source_location::*;
+pub use lowering::{
+    INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, compile_inventory_reserve_stock_contract,
+    compile_inventory_reserve_stock_contract_candidate,
+    compile_narrow_procedure_contract_candidate, compile_narrow_procedure_definition,
+    compile_narrow_procedure_definition_batch, compile_narrow_procedure_signature,
+    compile_narrow_procedure_signature_with_optimizer, inventory_reserve_stock_contract_metadata,
+    lower_ir_to_catalog_definition,
+};

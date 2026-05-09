@@ -2,9 +2,9 @@
 
 //! Cross-commit benchmark history integration tests.
 
-use andromeda_bench::{
-    BenchmarkHistoryRecord, BenchmarkHistoryStore, HistoryQuery, RegressionAnalysis,
-    RegressionReason, TimeRange,
+use andromeda_regression::{RegressionAnalysis, RegressionReason};
+use andromeda_scenario_evidence::{
+    BenchmarkHistoryRecord, BenchmarkHistoryStore, HistoryQuery, TimeRange,
 };
 
 #[test]

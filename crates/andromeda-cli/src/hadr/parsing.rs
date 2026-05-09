@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use crate::diagnostic_json::JSON_FLAG;
 use crate::error::cli_error;
 use crate::parse::{next_option_value_rejecting_flag, parse_u64, parse_usize};
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 const MEMBERSHIP_STORE_FLAG: &str = "--membership-store";
 const STATE_DIR_FLAG: &str = "--state-dir";
@@ -74,7 +74,7 @@ pub(super) fn parse_membership_store_option(
                 "--membership-store and --state-dir cannot be provided together",
             )?;
             Ok(true)
-        }
+        },
         STATE_DIR_FLAG => {
             let value =
                 next_option_value_rejecting_flag(args, index, "--state-dir requires a directory")?;
@@ -84,7 +84,7 @@ pub(super) fn parse_membership_store_option(
                 "--membership-store and --state-dir cannot be provided together",
             )?;
             Ok(true)
-        }
+        },
         _ => Ok(false),
     }
 }
@@ -103,17 +103,17 @@ fn parse_read_options(
             JSON_FLAG => json_output = true,
             MEMBERSHIP_STORE_FLAG | STATE_DIR_FLAG => {
                 parse_membership_store_option(args, &mut index, &mut membership_store)?;
-            }
+            },
             opt if opt.starts_with("--") => {
                 return Err(cli_error(format!(
                     "unknown {command} option; {supported_options}"
                 )));
-            }
+            },
             _ => {
                 return Err(cli_error(format!(
                     "unexpected {command} argument; {supported_options}"
                 )));
-            }
+            },
         }
         index += 1;
     }
@@ -154,7 +154,7 @@ pub(super) fn parse_promote_options(args: &[String]) -> AndromedaResult<PromoteO
             "--dry-run" => dry_run = true,
             MEMBERSHIP_STORE_FLAG | STATE_DIR_FLAG => {
                 parse_membership_store_option(args, &mut index, &mut membership_store)?;
-            }
+            },
             "--promotion-audit-log" => {
                 let value = next_option_value_rejecting_flag(
                     args,
@@ -166,7 +166,7 @@ pub(super) fn parse_promote_options(args: &[String]) -> AndromedaResult<PromoteO
                     PathBuf::from(value),
                     "--promotion-audit-log cannot be provided more than once",
                 )?;
-            }
+            },
             "--candidate-lsn" => {
                 let value = next_option_value_rejecting_flag(
                     args,
@@ -178,7 +178,7 @@ pub(super) fn parse_promote_options(args: &[String]) -> AndromedaResult<PromoteO
                     parse_u64(value, "--candidate-lsn expects an unsigned integer")?,
                     "--candidate-lsn cannot be provided more than once",
                 )?;
-            }
+            },
             "--audit-lsn" | "--primary-durable-lsn" => {
                 let option = args[index].as_str();
                 let missing_message = if option == "--audit-lsn" {
@@ -201,7 +201,7 @@ pub(super) fn parse_promote_options(args: &[String]) -> AndromedaResult<PromoteO
                         "--primary-durable-lsn cannot be combined with --audit-lsn"
                     },
                 )?;
-            }
+            },
             "--commit-quorum" => {
                 let value = next_option_value_rejecting_flag(
                     args,
@@ -213,17 +213,17 @@ pub(super) fn parse_promote_options(args: &[String]) -> AndromedaResult<PromoteO
                     parse_usize(value, "--commit-quorum expects an unsigned integer")?,
                     "--commit-quorum cannot be provided more than once",
                 )?;
-            }
+            },
             opt if opt.starts_with("--") => {
                 return Err(cli_error(
                     "unknown hadr promote option; supported options are --apply, --dry-run, --membership-store, --state-dir, --candidate-lsn, --audit-lsn, --primary-durable-lsn, --commit-quorum, --promotion-audit-log, and --json",
                 ));
-            }
+            },
             _ => {
                 return Err(cli_error(
                     "unexpected hadr promote argument; supported options are --apply, --dry-run, --membership-store, --state-dir, --candidate-lsn, --audit-lsn, --primary-durable-lsn, --commit-quorum, --promotion-audit-log, and --json",
                 ));
-            }
+            },
         }
         index += 1;
     }
@@ -281,12 +281,12 @@ pub(super) fn parse_demote_options(args: &[String]) -> AndromedaResult<DemoteOpt
                 return Err(cli_error(
                     "unknown hadr demote option; supported options are --force, --dry-run, and --json",
                 ));
-            }
+            },
             _ => {
                 return Err(cli_error(
                     "unexpected hadr demote argument; supported options are --force, --dry-run, and --json",
                 ));
-            }
+            },
         }
     }
     Ok(DemoteOptions {
@@ -309,12 +309,12 @@ pub(super) fn parse_failover_prepare_options(
                 return Err(cli_error(
                     "unknown hadr failover-prepare option; supported options are --witness-check and --json",
                 ));
-            }
+            },
             _ => {
                 return Err(cli_error(
                     "unexpected hadr failover-prepare argument; supported options are --witness-check and --json",
                 ));
-            }
+            },
         }
     }
 

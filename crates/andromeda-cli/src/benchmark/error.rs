@@ -6,31 +6,31 @@ use andromeda_bench::{
 pub(super) fn benchmark_error_to_cli_error(
     error: BenchmarkError,
     request: &BenchmarkRunRequest,
-) -> andromeda_core::AndromedaError {
+) -> andromeda_error::AndromedaError {
     let message = match error {
         BenchmarkError::EmptyWorkloadId => {
             "benchmark workload identifier must not be empty".to_string()
-        }
+        },
         BenchmarkError::UnknownWorkload => {
             "unknown benchmark workload; run `andromeda-cli benchmark workloads`".to_string()
-        }
+        },
         BenchmarkError::ZeroDuration => "--duration-ms must be greater than zero".to_string(),
         BenchmarkError::ZeroSamples => "--samples must be greater than zero".to_string(),
         BenchmarkError::DurationExceedsGlobalLimit => {
             format!("--duration-ms must be <= {MAX_DURATION_MS}")
-        }
+        },
         BenchmarkError::SamplesExceedsGlobalLimit => {
             format!("--samples must be <= {MAX_SAMPLES}")
-        }
+        },
         BenchmarkError::WarmupsExceedsGlobalLimit => {
             format!("--warmups must be <= {MAX_WARMUPS}")
-        }
+        },
         BenchmarkError::ZeroTempBudget => {
             "--temp-budget-bytes must be greater than zero".to_string()
-        }
+        },
         BenchmarkError::TempBudgetExceedsGlobalLimit => {
             format!("--temp-budget-bytes must be <= {MAX_TEMP_BYTES}")
-        }
+        },
         BenchmarkError::DurationExceedsWorkloadLimit => {
             match andromeda_bench::find_workload(&request.workload_id) {
                 Some(workload) => format!(
@@ -39,7 +39,7 @@ pub(super) fn benchmark_error_to_cli_error(
                 ),
                 None => "benchmark workload duration exceeds its bounded limit".to_string(),
             }
-        }
+        },
         BenchmarkError::SamplesExceedsWorkloadLimit => {
             match andromeda_bench::find_workload(&request.workload_id) {
                 Some(workload) => format!(
@@ -48,7 +48,7 @@ pub(super) fn benchmark_error_to_cli_error(
                 ),
                 None => "benchmark workload samples exceed its bounded limit".to_string(),
             }
-        }
+        },
         BenchmarkError::TempBudgetExceedsWorkloadLimit => {
             match andromeda_bench::find_workload(&request.workload_id) {
                 Some(workload) => format!(
@@ -57,13 +57,13 @@ pub(super) fn benchmark_error_to_cli_error(
                 ),
                 None => "benchmark workload temp budget exceeds its bounded limit".to_string(),
             }
-        }
+        },
         BenchmarkError::InsufficientSamplesForStatistics => {
             "benchmark runner produced no samples".to_string()
-        }
+        },
         BenchmarkError::ErrorCountExceedsSamples => {
             "benchmark runner produced more errors than samples".to_string()
-        }
+        },
         BenchmarkError::HarnessFailed => "benchmark workload harness failed".to_string(),
     };
     cli_error(message)

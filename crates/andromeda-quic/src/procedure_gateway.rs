@@ -8,6 +8,9 @@
 //!
 //! - **Certificate Identity Required**: The QUIC connection must have a bound
 //!   certificate identity before dispatch. If absent, returns `AuthorizationError`.
+//! - **Application Plane Only**: ProcedureGateway admits only the tenant-facing
+//!   Application surface. Administration, HA/DR, recovery, and monitoring work
+//!   must stay on their dedicated surfaces.
 //! - **Plane Scope Match**: The certificate's `surface_scope` is derived from
 //!   the connection's [`SurfacePlane`] via `plane_to_required_surface_scope()`.
 //! - **Stream Correlation**: QUIC stream ID is bound to [`InvocationId`] via
@@ -25,27 +28,30 @@ mod admission;
 mod errors;
 mod route;
 mod state;
-mod validation;
 
 pub use admission::ProcedureAuthorizedRouteBinding;
 pub use errors::ProcedureRouteAdmissionError;
-pub use route::{ProcedureRouteBinding, ProcedureRouteExecuteRequest};
+pub use route::ProcedureRouteBinding;
 
-use andromeda_core::{AndromedaResult, InvocationId, PrincipalRegistry};
-use andromeda_observe::CertificateIdentity;
+use andromeda_error::AndromedaResult;
+use andromeda_principal::CertificateIdentity;
+use andromeda_principal::PrincipalRegistry;
+use andromeda_types::InvocationId;
 
-use crate::{CatalogProcedureManifest, FrameBytes};
 use crate::{Connection, SurfacePlane};
+use andromeda_procedure_contract::ProcedureGatewayManifest;
+use andromeda_rpc_protocol::FrameBytes;
 
 /// QUIC-side gateway for Procedure dispatch.
 ///
-/// This type holds the connection state, certificate identity, and surface plane,
-/// and exposes the transport evidence needed by the executor-owned admission
-/// gate.
+/// This type holds the Application connection state, certificate identity, and
+/// surface plane, and exposes the transport evidence needed by the
+/// executor-owned admission gate.
 ///
 /// ## Type Invariants
 ///
 /// - The connection must be in `LifecycleState::Active` before dispatch.
+/// - The connection must be bound to [`SurfacePlane::Application`].
 /// - The certificate identity must be bound to the connection.
 /// - The certificate scope must match the connection plane.
 /// - Core IAM authorization can be enforced by
@@ -74,20 +80,21 @@ impl<'a> ProcedureGateway<'a> {
     ///
     /// Returns `Err` if:
     /// - The connection has no bound certificate identity.
+    /// - The connection is not bound to the Application surface.
     /// - The certificate scope does not match the connection plane.
     ///
     /// # Example
     ///
     /// ```no_run
     /// use andromeda_quic::{Connection, ProcedureGateway, SurfacePlane};
-    /// # use andromeda_observe::CertificateIdentity;
-    /// # use andromeda_observe::SurfaceScope;
+    /// # use andromeda_principal::CertificateIdentity;
+    /// # use andromeda_principal::SurfaceScope;
     ///
     /// # let mut conn = Connection::new(SurfacePlane::Application);
     /// # let identity = CertificateIdentity::new("abc123", "svc-001", SurfaceScope::Application)?;
     /// # conn.set_certificate_identity(identity.clone())?;
     /// let gateway = ProcedureGateway::new(&conn)?;
-    /// # Ok::<(), andromeda_core::AndromedaError>(())
+    /// # Ok::<(), andromeda_error::AndromedaError>(())
     /// ```
     pub fn new(connection: &'a Connection) -> AndromedaResult<Self> {
         let gateway_state = state::resolve_gateway_state(connection)?;
@@ -132,8 +139,8 @@ impl<'a> ProcedureGateway<'a> {
     ///
     /// ```no_run
     /// # use andromeda_quic::ProcedureGateway;
-    /// # use andromeda_core::InvocationId;
-    /// # use andromeda_observe::{CertificateIdentity, SurfaceScope};
+    /// # use andromeda_types::InvocationId;
+    /// # use andromeda_principal::{CertificateIdentity, SurfaceScope};
     /// # let mut conn = andromeda_quic::Connection::new(andromeda_quic::SurfacePlane::Application);
     /// # let identity = CertificateIdentity::new("abc123", "svc-001", SurfaceScope::Application)?;
     /// # conn.set_certificate_identity(identity)?;
@@ -142,7 +149,7 @@ impl<'a> ProcedureGateway<'a> {
     /// let stream_id = 5u64;
     /// let invocation_id = gateway.map_stream_to_invocation_id(stream_id);
     /// assert_eq!(invocation_id, InvocationId::new(stream_id));
-    /// # Ok::<(), andromeda_core::AndromedaError>(())
+    /// # Ok::<(), andromeda_error::AndromedaError>(())
     /// ```
     pub fn map_stream_to_invocation_id(&self, stream_id: u64) -> InvocationId {
         state::invocation_id_for_stream(stream_id)
@@ -171,7 +178,7 @@ impl<'a> ProcedureGateway<'a> {
         &self,
         stream_id: u64,
         frame: &FrameBytes,
-        manifest: &CatalogProcedureManifest,
+        manifest: &ProcedureGatewayManifest,
     ) -> AndromedaResult<ProcedureRouteBinding> {
         route::bind_application_procedure_route(
             route::ProcedureRouteAdmission {
@@ -196,7 +203,7 @@ impl<'a> ProcedureGateway<'a> {
         &self,
         stream_id: u64,
         frame: &FrameBytes,
-        manifest: &CatalogProcedureManifest,
+        manifest: &ProcedureGatewayManifest,
         principal_registry: &PrincipalRegistry,
     ) -> Result<ProcedureAuthorizedRouteBinding, ProcedureRouteAdmissionError> {
         let route = self
@@ -210,7 +217,7 @@ impl<'a> ProcedureGateway<'a> {
 mod tests {
     use super::*;
     use crate::LifecycleState;
-    use andromeda_observe::SurfaceScope;
+    use andromeda_principal::SurfaceScope;
 
     fn setup_application_connection() -> Connection {
         let mut conn = Connection::new(SurfacePlane::Application);
@@ -282,30 +289,39 @@ mod tests {
         let gateway = ProcedureGateway::new(&conn).unwrap();
 
         assert_eq!(gateway.surface_plane(), SurfacePlane::Application);
-        assert_eq!(gateway.certificate_identity().fingerprint, "a".repeat(64));
-        assert_eq!(gateway.certificate_identity().subject, "test-service");
         assert_eq!(
-            gateway.certificate_identity().surface,
+            gateway.certificate_identity().fingerprint().as_str(),
+            "a".repeat(64)
+        );
+        assert_eq!(gateway.certificate_identity().subject(), "test-service");
+        assert_eq!(
+            gateway.certificate_identity().surface_scope(),
             SurfaceScope::Application
         );
     }
 
     #[test]
-    fn gateway_accepts_valid_administration_connection() {
+    fn gateway_rejects_valid_administration_connection() {
         let conn = setup_administration_connection();
-        let gateway = ProcedureGateway::new(&conn).unwrap();
+        let result = ProcedureGateway::new(&conn);
 
-        assert_eq!(gateway.surface_plane(), SurfacePlane::Administration);
-        assert_eq!(gateway.certificate_identity().fingerprint, "b".repeat(64));
+        assert_eq!(
+            result.unwrap_err().message(),
+            "ProcedureGateway is Application-surface only; administration, HA/DR, recovery, and monitoring work must use their dedicated surfaces"
+        );
     }
 
     #[test]
-    fn gateway_accepts_valid_ha_connection() {
+    fn gateway_rejects_valid_ha_connection() {
         let conn = setup_ha_connection();
-        let gateway = ProcedureGateway::new(&conn).unwrap();
+        let result = ProcedureGateway::new(&conn);
 
-        assert_eq!(gateway.surface_plane(), SurfacePlane::HighAvailability);
-        assert_eq!(gateway.certificate_identity().fingerprint, "c".repeat(64));
+        assert!(
+            result
+                .unwrap_err()
+                .message()
+                .contains("Application-surface only")
+        );
     }
 
     #[test]
@@ -362,7 +378,7 @@ mod tests {
 
         // This test focuses on the happy path: gateway created successfully
         // from an authenticated connection means preconditions can be validated.
-        assert_eq!(gateway.certificate_identity().subject, "test-service");
+        assert_eq!(gateway.certificate_identity().subject(), "test-service");
         assert_eq!(gateway.surface_plane(), SurfacePlane::Application);
     }
 
@@ -386,6 +402,6 @@ mod tests {
         // (This is implicit in the type signature, but document it in the test.)
         let identity_ref_1 = gateway.certificate_identity();
         let identity_ref_2 = gateway.certificate_identity();
-        assert_eq!(identity_ref_1.fingerprint, identity_ref_2.fingerprint);
+        assert_eq!(identity_ref_1.fingerprint(), identity_ref_2.fingerprint());
     }
 }

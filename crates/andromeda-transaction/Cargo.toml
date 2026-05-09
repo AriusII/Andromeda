@@ -1,0 +1,20 @@
+[package]
+name = "andromeda-transaction"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95.0"
+publish = false
+
+[dependencies]
+andromeda-error.workspace = true
+andromeda-locking.workspace = true
+andromeda-mvcc.workspace = true
+andromeda-observability.workspace = true
+andromeda-savepoint.workspace = true
+andromeda-time.workspace = true
+andromeda-transaction-log.workspace = true
+andromeda-types.workspace = true
+async-trait = "0.1"
+tokio = { version = "1", features = ["full"] }
+
+[dev-dependencies]

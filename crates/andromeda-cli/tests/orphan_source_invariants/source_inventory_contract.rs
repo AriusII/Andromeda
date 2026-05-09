@@ -7,27 +7,39 @@ use crate::source_inventory::{
 };
 use crate::support::{path_set, virtual_files, workspace_relative_path, workspace_root};
 
-const ALLOWED_PRE_EXISTING_ORPHANS: &[&str] = &[];
+const ALLOWED_PRE_EXISTING_ORPHANS: &[AllowedOrphanException] = &[];
+
+struct AllowedOrphanException {
+    path: &'static str,
+    owner: &'static str,
+    exit_criteria: &'static str,
+}
 
 #[test]
 fn orphan_guard_finds_no_new_active_rust_orphans_or_module_conflicts() {
     let workspace = workspace_root();
     let report = collect_active_rust_sources(&workspace);
     let observed = report.orphans(&workspace);
-    let allowed = ALLOWED_PRE_EXISTING_ORPHANS
-        .iter()
-        .map(|path| (*path).to_string())
-        .collect::<BTreeSet<_>>();
+    let allowed = allowed_pre_existing_orphan_paths();
     let new_orphans = observed.difference(&allowed).collect::<Vec<_>>();
+    let stale_allowed_orphans = allowed.difference(&observed).collect::<Vec<_>>();
 
     assert!(
-        new_orphans.is_empty() && report.module_conflicts.is_empty(),
+        new_orphans.is_empty()
+            && stale_allowed_orphans.is_empty()
+            && report.module_conflicts.is_empty(),
         "active Rust source inventory violations detected.\n\
          New orphan files must be wired through a Cargo root, mod/#[path], or include!, \
-         or justified in ALLOWED_PRE_EXISTING_ORPHANS. Module conflicts must remove either \
+         or justified in ALLOWED_PRE_EXISTING_ORPHANS. Stale orphan exceptions must be removed \
+         once their exit criteria are met. Module conflicts must remove either \
          foo.rs or foo/mod.rs for the same declared module.\n\
-         \nNew orphans:\n  - {}\n\nModule file conflicts:\n  - {}",
+         \nNew orphans:\n  - {}\n\nStale orphan exceptions:\n  - {}\n\nModule file conflicts:\n  - {}",
         new_orphans
+            .iter()
+            .map(|path| path.as_str())
+            .collect::<Vec<_>>()
+            .join("\n  - "),
+        stale_allowed_orphans
             .iter()
             .map(|path| path.as_str())
             .collect::<Vec<_>>()
@@ -39,6 +51,38 @@ fn orphan_guard_finds_no_new_active_rust_orphans_or_module_conflicts() {
             .collect::<Vec<_>>()
             .join("\n  - ")
     );
+}
+
+#[test]
+fn allowed_orphan_exceptions_are_named_and_bounded() {
+    let mut seen_paths = BTreeSet::new();
+
+    for exception in ALLOWED_PRE_EXISTING_ORPHANS {
+        assert!(
+            seen_paths.insert(exception.path),
+            "allowed orphan exception {} must be listed only once",
+            exception.path
+        );
+        assert!(
+            !exception.owner.trim().is_empty(),
+            "allowed orphan exception {} must name an owner",
+            exception.path
+        );
+        assert!(
+            exception.exit_criteria.starts_with("Exit criteria: ")
+                && exception.exit_criteria.len() > "Exit criteria: ".len(),
+            "allowed orphan exception {} owned by {} must name exit criteria",
+            exception.path,
+            exception.owner
+        );
+    }
+}
+
+fn allowed_pre_existing_orphan_paths() -> BTreeSet<String> {
+    ALLOWED_PRE_EXISTING_ORPHANS
+        .iter()
+        .map(|exception| exception.path.to_owned())
+        .collect()
 }
 
 #[test]
@@ -120,6 +164,18 @@ fn orphan_guard_file_module_reaches_sibling_directory_modules() {
         ("src/file/orphan.rs", ""),
     ]);
     let expected = path_set(&["src/file/orphan.rs"]);
+
+    assert_eq!(compute_orphans_from_virtual_crate(&files), expected);
+}
+
+#[test]
+fn orphan_guard_target_root_reaches_sibling_support_module() {
+    let files = virtual_files(&[
+        ("tests/key_contract.rs", "mod support;\n"),
+        ("tests/support/mod.rs", ""),
+        ("tests/key_contract/orphan.rs", ""),
+    ]);
+    let expected = path_set(&["tests/key_contract/orphan.rs"]);
 
     assert_eq!(compute_orphans_from_virtual_crate(&files), expected);
 }

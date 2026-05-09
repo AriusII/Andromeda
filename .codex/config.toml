@@ -1,318 +1,115 @@
-# Andromeda Codex configuration
-# Generated package version: 2026.05.07-rust-codex-tooling-v2
-model = "gpt-5.5-pro"
-model_reasoning_effort = "high"
-model_verbosity = "high"
-sandbox_mode = "workspace-write"
+# Andromeda Codex configuration — clean agents/skills package
+# Generated: 2026-05-09T19:57:52.309591+00:00
+# Scope: Codex-only, Rust 1.95.0, QUIC + Protobuf, SGBDRT/SRPL Andromeda.
 include_environment_context = true
 include_permissions_instructions = true
-approval_policy = "on-request"
+
+
+sandbox_mode = "workspace-write"
+approval_policy = "never"
+commit_attribution = "Codex <noreply@openai.com>"
+skills_dir = "skills"
+agents_dir = "agents"
+write_artifact_root = ".work/codex"
+
+[project]
+name = "Andromeda"
+kind = "SGBDRT + SRPL"
+rust_version = "1.95.0"
+rust_edition = "2024"
+transport = "QUIC"
+wire_contract = "Protobuf"
+forbidden_native_protocols = ["gRPC", "JSON"]
+mission_critical = true
 
 [features]
-hooks = true
-codex_hooks = true
-child_agents_md = true
-plugins = true
-multi_agent = true
+child_agents = true
 skills = true
+work_reports = true
+multi_agent = true
+plugins = true
+
 
 [agents]
 max_threads = 60
 max_depth = 2
-job_max_runtime_seconds = 3600
 interrupt_message = true
+job_max_runtime_seconds = 3600
 
 [tui.model_availability_nux]
-"gpt-5.5" = 1
-
-[mcp_servers.rust-lsp-plugin]
-command = "rust-lsp-plugin"
+"gpt-5.5" = 2
+
+[worker_profiles.repository_readonly_report_only]
+meaning = "May read repository and write exactly one Markdown report under .work; must not mutate code or project assets."
+allowed_write_globs = [".work/codex/**/*.md"]
+forbidden_write_globs = ["crates/**", "src/**", "tests/**", "benches/**", "examples/**", "docs/**", "Cargo.toml", "Cargo.lock", ".codex/**"]
+
+[worker_profiles.write_worker]
+meaning = "May edit only the explicit paths assigned by the orchestrator and must write exactly one Markdown mission report under .work."
+required_report_glob = ".work/codex/**/missions/*.md"
+
+[agents.andromeda-architecture-orchestrator]
+config_file = "agents/andromeda-architecture-orchestrator.toml"
+description = "Rust architecture governor for crates, folders, tests, tooling, TDD structure, and mission-critical project shape."
+kind = "orchestrator"
+
+[agents.andromeda-codex-tooling-maintainer]
+config_file = "agents/andromeda-codex-tooling-maintainer.toml"
+description = "Maintains Andromeda Codex agents, skills, registries, validation scripts, prompts and .work output contracts."
+kind = "tooling-worker"
+
+[agents.andromeda-implementation-orchestrator]
+config_file = "agents/andromeda-implementation-orchestrator.toml"
+description = "Primary Codex orchestrator for targeted Rust implementation and improvement requests in Andromeda."
+kind = "orchestrator"
+
+[agents.andromeda-implementation-write-worker]
+config_file = "agents/andromeda-implementation-write-worker.toml"
+description = "Path-bounded implementation worker for direct Rust feature/improvement work. Produces one mission report under .work."
+kind = "write-worker"
+
+[agents.andromeda-protocol-contract-worker]
+config_file = "agents/andromeda-protocol-contract-worker.toml"
+description = "Specialist for QUIC + Protobuf RPC contracts, ResultStream, payload bounds, and no-gRPC/no-JSON enforcement."
+kind = "specialist-worker"
+
+[agents.andromeda-readonly-analysis-worker]
+config_file = "agents/andromeda-readonly-analysis-worker.toml"
+description = "Repository-read-only analysis worker. It scans and reasons over a scoped area and writes exactly one Markdown report under .work."
+kind = "readonly-worker-report-only"
+
+[agents.andromeda-refactor-orchestrator]
+config_file = "agents/andromeda-refactor-orchestrator.toml"
+description = "Primary Codex orchestrator for Rust cleanup, code review, refactor planning, worker delegation, dependency queues, and final consolidation."
+kind = "orchestrator"
+
+[agents.andromeda-refactor-write-worker]
+config_file = "agents/andromeda-refactor-write-worker.toml"
+description = "Path-bounded write worker for cleanup/refactor/code review corrections. Produces exactly one mission report under .work."
+kind = "write-worker"
+
+[agents.andromeda-release-mission-critical-reviewer]
+config_file = "agents/andromeda-release-mission-critical-reviewer.toml"
+description = "Repository-read-only report-only reviewer for mission-critical readiness, release gates, C4/C5 risks, and residual work."
+kind = "readonly-worker-report-only"
+
+[agents.andromeda-roadmap-orchestrator]
+config_file = "agents/andromeda-roadmap-orchestrator.toml"
+description = "Roadmap-aware Codex orchestrator that consumes global and stage-specific Markdown roadmaps and converts them into queued worker execution."
+kind = "orchestrator"
+
+[agents.andromeda-srpl-catalog-worker]
+config_file = "agents/andromeda-srpl-catalog-worker.toml"
+description = "Specialist for SRPL, Type System, ProcedureContract, CatalogVersion, DefinitionBatch, Modelization, Maps and compatibility."
+kind = "specialist-worker"
+
+[agents.andromeda-storage-wal-worker]
+config_file = "agents/andromeda-storage-wal-worker.toml"
+description = "Specialist for WAL, transaction state, MVCC, storage segments, manifests, binary codecs, recovery and crash-test behavior."
+kind = "specialist-worker"
+
+[agents.andromeda-test-verification-worker]
+config_file = "agents/andromeda-test-verification-worker.toml"
+description = "Specialized worker for test topology, property tests, fuzzing, Miri, Loom, crash/recovery, CI and validation gates."
+kind = "specialist-worker"
 
-# Agent registry
-[agents.roadmap-master-orchestrator]
-config_file = "agents/roadmap-master-orchestrator.toml"
-description = "Central roadmap-following agent for large Andromeda Codex work. Coordinates objectives, task graphs, sub-agent routing, checkpoints, and final integration."
-
-[agents.roadmap-task-decomposer]
-config_file = "agents/roadmap-task-decomposer.toml"
-description = "Breaks large roadmap prompts into executable units, ordered milestones, dependencies, and validation gates."
-
-[agents.roadmap-scope-controller]
-config_file = "agents/roadmap-scope-controller.toml"
-description = "Read-only scope controller that detects scope creep, missing acceptance criteria, and unsafe expansion beyond the requested roadmap."
-
-[agents.context-intake-analyst]
-config_file = "agents/context-intake-analyst.toml"
-description = "Builds a precise understanding of user intent, project context, available sources, and uncertainty before execution."
-
-[agents.context-pack-builder]
-config_file = "agents/context-pack-builder.toml"
-description = "Creates reusable context packs for handoffs, subagents, implementation plans, and prompt templates."
-
-[agents.prompt-refinement-specialist]
-config_file = "agents/prompt-refinement-specialist.toml"
-description = "Rewrites broad user requests into precise Codex work orders and prompt templates without losing intent."
-
-[agents.codex-routing-architect]
-config_file = "agents/codex-routing-architect.toml"
-description = "Defines agent and skill routing strategies for Codex based on request type, subsystem, risk, and deliverable."
-
-[agents.codex-skill-maintainer]
-config_file = "agents/codex-skill-maintainer.toml"
-description = "Creates, updates, validates, and forward-tests Codex skills with progressive disclosure and precise triggers."
-
-[agents.hooks-governance-auditor]
-config_file = "agents/hooks-governance-auditor.toml"
-description = "Read-only auditor for Codex hook policies, hook scripts, matcher usage, failure modes, and user friction."
-
-[agents.hook-policy-implementer]
-config_file = "agents/hook-policy-implementer.toml"
-description = "Implements and hardens Codex hooks and hook scripts for Andromeda workflows."
-
-[agents.agent-registry-maintainer]
-config_file = "agents/agent-registry-maintainer.toml"
-description = "Maintains .codex/config.toml agent entries and .codex/agents TOML coherence."
-
-[agents.source-grounding-researcher]
-config_file = "agents/source-grounding-researcher.toml"
-description = "Read-only researcher that cross-checks claims against official sources, repository evidence, and Andromeda documents."
-
-[agents.documentation-consistency-editor]
-config_file = "agents/documentation-consistency-editor.toml"
-description = "Read-only documentation consistency agent for Andromeda and Codex tooling documents."
-
-[agents.github-pr-reviewer]
-config_file = "agents/github-pr-reviewer.toml"
-description = "Read-only GitHub PR reviewer for Rust, Andromeda architecture, tests, and policy compliance."
-
-[agents.github-implementation-planner]
-config_file = "agents/github-implementation-planner.toml"
-description = "Plans repository changes from GitHub context into safe file edits, tests, and review packets."
-
-[agents.rust-architecture-splitter]
-config_file = "agents/rust-architecture-splitter.toml"
-description = "Splits Rust architecture by workspace, crates, modules, and responsibilities."
-
-[agents.rust-cleanup-refactor-architect]
-config_file = "agents/rust-cleanup-refactor-architect.toml"
-description = "Leads broad Rust cleanup and refactor efforts while preserving behavior and tests."
-
-[agents.rust-dead-code-excavator]
-config_file = "agents/rust-dead-code-excavator.toml"
-description = "Finds and removes dead Rust code, unused modules, stale examples, and obsolete paths."
-
-[agents.rust-module-boundary-surgeon]
-config_file = "agents/rust-module-boundary-surgeon.toml"
-description = "Refactors module boundaries, visibility, reexports, and tests around a single responsibility."
-
-[agents.rust-crate-graph-architect]
-config_file = "agents/rust-crate-graph-architect.toml"
-description = "Designs and audits the Cargo crate graph and dependency direction."
-
-[agents.rust-performance-optimizer]
-config_file = "agents/rust-performance-optimizer.toml"
-description = "Optimizes Rust code only with measurement, profiling, hypotheses, and regression gates."
-
-[agents.rust-allocation-optimizer]
-config_file = "agents/rust-allocation-optimizer.toml"
-description = "Reviews allocations, clone patterns, buffer growth, and memory pressure in Rust hot paths."
-
-[agents.rust-async-concurrency-engineer]
-config_file = "agents/rust-async-concurrency-engineer.toml"
-description = "Designs Rust async, cancellation, shutdown, backpressure, and concurrency-safe runtime boundaries."
-
-[agents.rust-memory-safety-auditor]
-config_file = "agents/rust-memory-safety-auditor.toml"
-description = "Read-only auditor for Rust memory safety, aliasing, lifetimes, unsafe boundaries, and panic risks."
-
-[agents.rust-unsafe-audit-agent]
-config_file = "agents/rust-unsafe-audit-agent.toml"
-description = "Read-only unsafe Rust audit agent for storage, WAL, SIMD, FFI, and lock-free code."
-
-[agents.rust-simd-kernel-engineer]
-config_file = "agents/rust-simd-kernel-engineer.toml"
-description = "Implements CPU SIMD kernels with feature detection, fallback, tests, and benchmarks."
-
-[agents.rust-gpu-batch-engineer]
-config_file = "agents/rust-gpu-batch-engineer.toml"
-description = "Implements GPU batch acceleration outside commit/recovery paths with cancellation and CPU fallback."
-
-[agents.rust-binary-codec-engineer]
-config_file = "agents/rust-binary-codec-engineer.toml"
-description = "Implements explicit binary codecs for WAL, pages, manifests, segments, RPC frames, and contracts."
-
-[agents.rust-error-model-engineer]
-config_file = "agents/rust-error-model-engineer.toml"
-description = "Designs typed error models for Rust crates and protocol boundaries."
-
-[agents.test-verification-architect]
-config_file = "agents/test-verification-architect.toml"
-description = "Designs layered verification strategy: unit, property, fuzz, Miri, Loom, crash/recovery, and CI gates."
-
-[agents.qa-crash-recovery-test-designer]
-config_file = "agents/qa-crash-recovery-test-designer.toml"
-description = "Designs deterministic crash/recovery tests for WAL, storage, catalog, maps, and manifest publication."
-
-[agents.transaction-wal-recovery-auditor]
-config_file = "agents/transaction-wal-recovery-auditor.toml"
-description = "Read-only auditor for transaction, WAL, MVCC, storage, and recovery invariants."
-
-[agents.wal-implementation-engineer]
-config_file = "agents/wal-implementation-engineer.toml"
-description = "Implements WAL record, segment, replay, checksum, chain hash, and durability behavior."
-
-[agents.storage-engine-page-layout-auditor]
-config_file = "agents/storage-engine-page-layout-auditor.toml"
-description = "Read-only auditor for page layouts, segment formats, manifests, and storage invariants."
-
-[agents.storage-segment-format-engineer]
-config_file = "agents/storage-segment-format-engineer.toml"
-description = "Implements segmented storage, manifests, root pointers, SegmentIndex, cold snapshots, and hot/cold merge policy."
-
-[agents.buffer-pool-engineer]
-config_file = "agents/buffer-pool-engineer.toml"
-description = "Designs BufferPool pinning, dirty tracking, eviction, checkpoint cooperation, read-ahead, and metrics."
-
-[agents.mvcc-isolation-engineer]
-config_file = "agents/mvcc-isolation-engineer.toml"
-description = "Designs MVCC visibility, isolation policies, long-reader handling, version GC, and anomaly documentation."
-
-[agents.srpl-language-specifier]
-config_file = "agents/srpl-language-specifier.toml"
-description = "Read-only SRPL language specification agent for syntax, semantics, restrictions, diagnostics, and IR."
-
-[agents.srpl-parser-binder-engineer]
-config_file = "agents/srpl-parser-binder-engineer.toml"
-description = "Implements SRPL parsing, binding, type checking, cardinality validation, and semantic IR preparation."
-
-[agents.srpl-diagnostics-engineer]
-config_file = "agents/srpl-diagnostics-engineer.toml"
-description = "Maintains SRPL diagnostic codes, compiler messages, and fix guidance."
-
-[agents.procedure-contract-reviewer]
-config_file = "agents/procedure-contract-reviewer.toml"
-description = "Read-only reviewer for ProcedureContract, ContractHash, compatibility, permissions, and RPC shapes."
-
-[agents.procedure-contract-implementer]
-config_file = "agents/procedure-contract-implementer.toml"
-description = "Implements ProcedureContract descriptors, canonicalization, compatibility, and contract validation."
-
-[agents.catalog-modelization-governor]
-config_file = "agents/catalog-modelization-governor.toml"
-description = "Governs catalog, modelization, DefinitionBatch, object lifecycles, and versioned policies."
-
-[agents.modelization-catalog-governor]
-config_file = "agents/modelization-catalog-governor.toml"
-description = "Read-only governor for Modelization artifacts, DefinitionBatch imports, catalog descriptors, and versioning."
-
-[agents.definitionbatch-implementer]
-config_file = "agents/definitionbatch-implementer.toml"
-description = "Implements DefinitionBatch parsing, dependency sorting, DryRun, validation, WAL coverage, and rollback."
-
-[agents.optimizer-statistics-critic]
-config_file = "agents/optimizer-statistics-critic.toml"
-description = "Read-only critic for optimizer, statistics, evidence, learned components, and plan stability."
-
-[agents.optimizer-plan-engineer]
-config_file = "agents/optimizer-plan-engineer.toml"
-description = "Implements optimizer plan candidates, physical operators, cost model, plan cache, plan classes, and DecisionTrace."
-
-[agents.statistics-engineer]
-config_file = "agents/statistics-engineer.toml"
-description = "Implements statistics collection, histograms, skew, StatsVersion, publication, validation, and CPU/GPU separation."
-
-[agents.procedure-store-engineer]
-config_file = "agents/procedure-store-engineer.toml"
-description = "Implements Procedure Store invocation history, feedback, metrics, regression detection, and audit correlation."
-
-[agents.map-analytics-summarizability-reviewer]
-config_file = "agents/map-analytics-summarizability-reviewer.toml"
-description = "Read-only reviewer for Maps, analytics grain, summarizability, refresh policy, and GPU boundaries."
-
-[agents.map-maintenance-engineer]
-config_file = "agents/map-maintenance-engineer.toml"
-description = "Implements Map refresh modes, delta logs, staleness policies, validation, and map/stat publication."
-
-[agents.quic-rpc-contract-auditor]
-config_file = "agents/quic-rpc-contract-auditor.toml"
-description = "Read-only auditor for QUIC/RPC frame contracts, surfaces, metadata-before-payload, errors, and backpressure."
-
-[agents.quic-rpc-implementation-engineer]
-config_file = "agents/quic-rpc-implementation-engineer.toml"
-description = "Implements QUIC/RPC frames, session state, typed payloads, ResultStream, errors, and backpressure."
-
-[agents.security-iam-auditor]
-config_file = "agents/security-iam-auditor.toml"
-description = "Read-only security/IAM auditor for identity, permissions, policies, audit, break-glass, and least privilege."
-
-[agents.security-iam-threat-modeler]
-config_file = "agents/security-iam-threat-modeler.toml"
-description = "Read-only threat-modeling agent for IAM, RPC, admin, backup, cluster, and storage tampering scenarios."
-
-[agents.security-implementation-engineer]
-config_file = "agents/security-implementation-engineer.toml"
-description = "Implements IAM, permission evaluation, policy checks, audit traces, certificate identity, and break-glass enforcement."
-
-[agents.hadr-failover-engineer]
-config_file = "agents/hadr-failover-engineer.toml"
-description = "Implements single-primary HA/DR, WAL shipping, quorum, fencing, promotion, epochs, and cluster manifests."
-
-[agents.backup-restore-forensic-engineer]
-config_file = "agents/backup-restore-forensic-engineer.toml"
-description = "Implements backup, restore, PITR, forensic startup, immutable retention, and restore testing."
-
-[agents.observability-forensic-engineer]
-config_file = "agents/observability-forensic-engineer.toml"
-description = "Implements trace schemas, metrics, RecoveryReport, DecisionTrace, audit ledgers, and forensic evidence."
-
-[agents.enterprise-readiness-agent]
-config_file = "agents/enterprise-readiness-agent.toml"
-description = "Read-only enterprise readiness reviewer for supportability, auditability, recoverability, operations, and release gates."
-
-[agents.formal-invariants-agent]
-config_file = "agents/formal-invariants-agent.toml"
-description = "Read-only formal invariants agent for set theory, relational algebra, transaction invariants, and safety proofs."
-
-[agents.hardware-rust-performance-engineer]
-config_file = "agents/hardware-rust-performance-engineer.toml"
-description = "Read-only hardware/Rust performance reviewer for x64/arm64/SIMD/GPU/NVMe/HDD policies."
-
-[agents.devex-rust-tooling-agent]
-config_file = "agents/devex-rust-tooling-agent.toml"
-description = "Implements developer experience tooling for Rust quality gates, scripts, xtask, reports, and Codex validation."
-
-[agents.dependency-supply-chain-auditor]
-config_file = "agents/dependency-supply-chain-auditor.toml"
-description = "Read-only auditor for Cargo dependencies, licenses, advisories, features, and dependency graph risk."
-
-[agents.ci-quality-gate-engineer]
-config_file = "agents/ci-quality-gate-engineer.toml"
-description = "Implements CI gates and local scripts for Rust and Codex tooling validation."
-
-[agents.mcp-awareness-integrator]
-config_file = "agents/mcp-awareness-integrator.toml"
-description = "Maintains Codex instructions for using rust-lsp and rust-rover-ide MCP tools when available, without hard dependency."
-
-[agents.prompt-library-curator]
-config_file = "agents/prompt-library-curator.toml"
-description = "Maintains .codex/prompts templates and aligns them with agents, skills, and Andromeda doctrine."
-
-[agents.release-readiness-coordinator]
-config_file = "agents/release-readiness-coordinator.toml"
-description = "Coordinates release readiness evidence across Rust, Codex tooling, C4/C5 components, docs, and validation."
-
-[agents.codebase-cleanup-commander]
-config_file = "agents/codebase-cleanup-commander.toml"
-description = "Coordinates broad code cleanup, dead code removal, orphan detection, refactor slices, and validation commands."
-
-[agents.mega-refactor-coordinator]
-config_file = "agents/mega-refactor-coordinator.toml"
-description = "Coordinates large refactors with behavior locks, strangler patterns, agent handoffs, and rollback plans."
-
-[agents.file-size-split-enforcer]
-config_file = "agents/file-size-split-enforcer.toml"
-description = "Finds large Rust files and proposes responsibility-based splits with tests and reexports."
-
-[agents.orphan-detection-specialist]
-config_file = "agents/orphan-detection-specialist.toml"
-description = "Finds orphan files, modules, dependencies, features, docs, examples, tests, and scripts."

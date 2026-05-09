@@ -1,0 +1,20 @@
+[package]
+name = "andromeda-procedure-runtime"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+andromeda-admission.workspace = true
+andromeda-contract.workspace = true
+andromeda-error.workspace = true
+andromeda-observe.workspace = true
+andromeda-result-stream.workspace = true
+andromeda-srpl-ir.workspace = true
+andromeda-types.workspace = true
+
+[dev-dependencies]
+andromeda-contract.workspace = true
+andromeda-srpl-ir.workspace = true
+andromeda-types.workspace = true

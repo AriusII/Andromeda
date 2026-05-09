@@ -1,0 +1,17 @@
+[package]
+name = "andromeda-transaction-log"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95.0"
+publish = false
+
+[dependencies]
+andromeda-error.workspace = true
+andromeda-time.workspace = true
+andromeda-types.workspace = true
+dashmap = "6.0"
+tokio = { version = "1", features = ["full"] }
+
+[dev-dependencies]
+async-trait = "0.1"
+futures = "0.3"

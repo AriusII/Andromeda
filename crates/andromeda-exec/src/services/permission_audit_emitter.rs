@@ -1,21 +1,10 @@
-//! Permission decision audit events for IAM admission.
+//! Compatibility surface for permission audit ownership.
 
-mod denial;
-mod emitter;
-mod event;
-mod evidence;
-mod policy;
-mod redaction;
-
-pub use denial::DenialAuditReason;
-pub use emitter::{NoOpPermissionAuditEmitter, PermissionAuditEmitter};
-pub use event::{PermissionAuditEvent, PermissionDecisionAudit};
-pub use evidence::{
-    AuditEmissionEvidence, AuditEmissionKind, AuditEmissionOutcome, AuditSinkAvailability,
-    AuditSinkDurabilityEvidence, PermissionAuditEvidence,
+pub use andromeda_audit::{
+    AuditEmissionEventFamily, AuditEmissionEvidence, AuditEmissionKind, AuditEmissionOutcome,
+    AuditEmissionPolicy, AuditEmissionReplayBehavior, AuditEmissionRetentionBoundary,
+    AuditSinkAvailability, AuditSinkDurabilityEvidence, AuditSinkDurabilityReport,
+    DenialAuditReason, NoOpPermissionAuditEmitter, PermissionAuditDecisionTrace,
+    PermissionAuditEmitter, PermissionAuditEvent, PermissionAuditEvidence, PermissionDecisionAudit,
+    audit_emission_error, audit_text_contains_sensitive_marker, redact_audit_reason,
 };
-pub use policy::AuditEmissionPolicy;
-pub use redaction::{audit_text_contains_sensitive_marker, redact_audit_reason};
-
-#[cfg(test)]
-mod tests;

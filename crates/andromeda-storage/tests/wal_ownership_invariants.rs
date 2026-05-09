@@ -3,15 +3,15 @@
 //! Regression guard for WAL/storage canonical ownership.
 //!
 //! Each load-bearing WAL struct/enum is defined in exactly one source file.
-//! This test walks every `.rs` file under
-//! `crates/andromeda-storage/src/`, counts top-level `pub struct` / `pub enum`
-//! declarations for the WAL ownership surface, and asserts:
+//! This test walks every `.rs` file under the WAL and storage crates, counts
+//! top-level `pub struct` / `pub enum` declarations for the WAL ownership
+//! surface, and asserts:
 //!
 //! 1. Each type is defined exactly once across the crate.
 //! 2. The single definition lives at the documented canonical path.
 //!
-//! Facade modules under `write_ahead_log/{codec,segment,file}.rs` and the
-//! crate-root `wal.rs` must remain `pub use`-only re-exports.
+//! Storage must not grow compatibility files for pure WAL owner types. FileWal
+//! recovery reports remain storage-owned.
 
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
@@ -23,63 +23,72 @@ use std::path::{Path, PathBuf};
 /// intentionally moves; do not duplicate definitions to silence the test.
 const CANONICAL_OWNERSHIP: &[(&str, &str, &str)] = &[
     // (kind, name, canonical workspace-relative path)
+    ("struct", "Lsn", "crates/andromeda-wal/src/lsn.rs"),
     (
         "enum",
         "WalRecordKind",
-        "crates/andromeda-storage/src/write_ahead_log/record.rs",
+        "crates/andromeda-wal/src/write_ahead_log/record.rs",
     ),
     (
         "struct",
         "WalRecord",
-        "crates/andromeda-storage/src/write_ahead_log/record.rs",
+        "crates/andromeda-wal/src/write_ahead_log/record.rs",
     ),
     (
         "struct",
         "WalRecordHeader",
-        "crates/andromeda-storage/src/write_ahead_log/record.rs",
+        "crates/andromeda-wal/src/write_ahead_log/record.rs",
     ),
     (
         "struct",
         "WalSegment",
-        "crates/andromeda-storage/src/wal_segment.rs",
+        "crates/andromeda-wal/src/wal_segment.rs",
     ),
     (
         "struct",
         "WalSegmentDescriptor",
-        "crates/andromeda-storage/src/wal_segment.rs",
+        "crates/andromeda-wal/src/wal_segment.rs",
     ),
     (
         "struct",
         "InMemoryWal",
-        "crates/andromeda-storage/src/write_ahead_log/manager.rs",
+        "crates/andromeda-wal/src/write_ahead_log/manager.rs",
     ),
     (
         "struct",
         "FileWal",
-        "crates/andromeda-storage/src/file_wal/wal.rs",
+        "crates/andromeda-wal/src/file_wal/wal.rs",
     ),
     (
         "struct",
         "FileWalHeader",
-        "crates/andromeda-storage/src/file_wal/header.rs",
+        "crates/andromeda-wal/src/file_wal/header.rs",
+    ),
+    (
+        "struct",
+        "FileWalDiskScan",
+        "crates/andromeda-wal/src/file_wal/scan.rs",
     ),
 ];
 
 #[test]
 fn wal_ownership_types_have_single_canonical_definition() {
     let storage_src = workspace_root().join("crates/andromeda-storage/src");
+    let wal_src = workspace_root().join("crates/andromeda-wal/src");
     let workspace = workspace_root();
     let mut occurrences: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
 
-    for source in collect_rs_files(&storage_src) {
-        let text = fs::read_to_string(&source).expect("read storage source file");
-        let stripped = strip_comments(&text);
-        for (kind, name) in extract_top_level_pub_type_decls(&stripped) {
-            let key = (kind, name);
-            occurrences
-                .entry(key)
-                .or_default()
-                .push(workspace_relative_path(&workspace, &source));
+    for src_dir in [&storage_src, &wal_src] {
+        for source in collect_rs_files(src_dir) {
+            let text = fs::read_to_string(&source).expect("read WAL/storage source file");
+            let stripped = strip_comments(&text);
+            for (kind, name) in extract_top_level_pub_type_decls(&stripped) {
+                let key = (kind, name);
+                occurrences
+                    .entry(key)
+                    .or_default()
+                    .push(workspace_relative_path(&workspace, &source));
+            }
         }
     }
 
@@ -113,31 +122,38 @@ fn wal_ownership_types_have_single_canonical_definition() {
 }
 
 #[test]
-fn wal_facade_files_remain_reexport_only() {
+fn pure_wal_facade_files_stay_demolished() {
     let workspace = workspace_root();
-    let facades = [
-        "crates/andromeda-storage/src/wal.rs",
+    let demolished_facades = [
         "crates/andromeda-storage/src/write_ahead_log/codec.rs",
+        "crates/andromeda-storage/src/write_ahead_log/commit_log_entry.rs",
+        "crates/andromeda-storage/src/write_ahead_log/commit_log_facade.rs",
+        "crates/andromeda-storage/src/write_ahead_log/compaction.rs",
+        "crates/andromeda-storage/src/write_ahead_log/gc.rs",
+        "crates/andromeda-storage/src/write_ahead_log/gc_eligibility.rs",
+        "crates/andromeda-storage/src/write_ahead_log/heap_redo.rs",
+        "crates/andromeda-storage/src/write_ahead_log/manager.rs",
+        "crates/andromeda-storage/src/write_ahead_log/record.rs",
+        "crates/andromeda-storage/src/write_ahead_log/record_bounds.rs",
         "crates/andromeda-storage/src/write_ahead_log/segment.rs",
+        "crates/andromeda-storage/src/write_ahead_log/segment_reclaimability.rs",
+        "crates/andromeda-storage/src/write_ahead_log/shipping.rs",
+        "crates/andromeda-storage/src/write_ahead_log/shipping/tests.rs",
+        "crates/andromeda-storage/src/write_ahead_log/transaction.rs",
     ];
 
     let mut failures: Vec<String> = Vec::new();
-    for relative in facades {
-        let path = workspace.join(relative);
-        let text = fs::read_to_string(&path)
-            .unwrap_or_else(|err| panic!("read facade file {relative}: {err}"));
-        let stripped = strip_comments(&text);
-        let decls = extract_top_level_pub_type_decls(&stripped);
-        if !decls.is_empty() {
+    for relative in demolished_facades {
+        if workspace.join(relative).exists() {
             failures.push(format!(
-                "{relative} declares {decls:?}; facade modules must be `pub use` re-exports only"
+                "{relative} reintroduced a storage WAL facade file; import from andromeda-wal/andromeda-hadr or use the narrow aliases in write_ahead_log/mod.rs"
             ));
         }
     }
 
     assert!(
         failures.is_empty(),
-        "WAL facade purity violations:\n  - {}",
+        "WAL facade demolition regressions:\n  - {}",
         failures.join("\n  - ")
     );
 }

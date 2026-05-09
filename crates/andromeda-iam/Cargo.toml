@@ -1,0 +1,16 @@
+[package]
+name = "andromeda-iam"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+andromeda-admission.workspace = true
+andromeda-error.workspace = true
+andromeda-principal.workspace = true
+andromeda-security-contract.workspace = true
+dashmap = "6.0"
+
+[dev-dependencies]
+andromeda-types.workspace = true

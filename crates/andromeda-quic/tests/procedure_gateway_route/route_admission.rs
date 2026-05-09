@@ -1,5 +1,8 @@
 use super::*;
 
+const HADR_STREAM_MIN: u64 = 128;
+const HADR_STREAM_MAX: u64 = 255;
+
 ///
 /// This test validates that:
 /// - Gateway construction succeeds when cert identity is bound and scope matches plane.
@@ -14,17 +17,17 @@ fn test_gateway_accepts_authorized_invocation() {
     // Verify gateway state.
     assert_eq!(gateway.surface_plane(), SurfacePlane::Application);
     assert_eq!(
-        gateway.certificate_identity().fingerprint,
+        gateway.certificate_identity().fingerprint().as_str(),
         "a".repeat(64),
         "certificate fingerprint mismatch"
     );
     assert_eq!(
-        gateway.certificate_identity().subject,
+        gateway.certificate_identity().subject(),
         "app-service",
         "certificate subject mismatch"
     );
     assert_eq!(
-        gateway.certificate_identity().surface,
+        gateway.certificate_identity().surface_scope(),
         SurfaceScope::Application,
         "certificate scope mismatch"
     );
@@ -59,7 +62,7 @@ fn test_gateway_rejects_cross_plane_invocation() {
     let mut conn = Connection::new(SurfacePlane::Application);
 
     let admin_identity = CertificateIdentity::new(
-        "wrong_scope".repeat(8),
+        "d".repeat(64),
         "admin-service".to_string(),
         SurfaceScope::Administration,
     )
@@ -180,10 +183,7 @@ fn test_gateway_validates_preconditions() {
 ///
 /// This test validates multi-plane scenarios:
 /// - Application gateway with Application identity -> preconditions pass.
-/// - Administration gateway with Administration identity -> preconditions pass.
-/// - HA gateway with Cluster identity -> preconditions pass.
-///
-/// Each plane must have its own authorization context and must not cross-dispatch.
+/// - Non-Application planes cannot construct a ProcedureGateway.
 #[test]
 fn test_gateway_enforces_plane_specific_boundaries() {
     // Application plane.
@@ -197,33 +197,27 @@ fn test_gateway_enforces_plane_specific_boundaries() {
 
     // Administration plane.
     let admin_conn = setup_active_administration_connection();
-    let admin_gateway =
-        ProcedureGateway::new(&admin_conn).expect("admin gateway construction failed");
-    assert_eq!(admin_gateway.surface_plane(), SurfacePlane::Administration);
     assert!(
-        admin_gateway.validate_dispatch_preconditions().is_ok(),
-        "admin gateway should validate preconditions"
+        ProcedureGateway::new(&admin_conn)
+            .unwrap_err()
+            .message()
+            .contains("Application-surface only"),
+        "admin plane must not construct the Application ProcedureGateway"
     );
 
     // HA plane.
     let ha_conn = setup_active_ha_connection();
-    let ha_gateway = ProcedureGateway::new(&ha_conn).expect("ha gateway construction failed");
-    assert_eq!(ha_gateway.surface_plane(), SurfacePlane::HighAvailability);
     assert!(
-        ha_gateway.validate_dispatch_preconditions().is_ok(),
-        "ha gateway should validate preconditions"
+        ProcedureGateway::new(&ha_conn)
+            .unwrap_err()
+            .message()
+            .contains("Application-surface only"),
+        "HA/DR plane must not construct the Application ProcedureGateway"
     );
 
-    // Each gateway should correlate stream IDs independently.
     let stream_id = 999u64;
     let app_inv = app_gateway.map_stream_to_invocation_id(stream_id);
-    let admin_inv = admin_gateway.map_stream_to_invocation_id(stream_id);
-    let ha_inv = ha_gateway.map_stream_to_invocation_id(stream_id);
 
-    // All should map to the same InvocationId despite different planes.
-    // (The mapping is stream_id-based, not plane-specific.)
-    assert_eq!(app_inv, admin_inv);
-    assert_eq!(admin_inv, ha_inv);
     assert_eq!(app_inv, InvocationId::new(stream_id));
 }
 
@@ -240,8 +234,8 @@ fn test_gateway_exposes_references() {
     // Verify that gateway references are consistent.
     let id_1 = gateway.certificate_identity();
     let id_2 = gateway.certificate_identity();
-    assert_eq!(id_1.fingerprint, id_2.fingerprint);
-    assert_eq!(id_1.subject, id_2.subject);
+    assert_eq!(id_1.fingerprint(), id_2.fingerprint());
+    assert_eq!(id_1.subject(), id_2.subject());
 
     // Verify that connection is accessible.
     let conn_ref = gateway.connection();
@@ -251,9 +245,9 @@ fn test_gateway_exposes_references() {
 
 ///
 /// The Monitoring plane is read-only for diagnostics. This test validates
-/// that the gateway correctly constructs and routes on the Monitoring plane.
+/// that the ProcedureGateway does not construct on the Monitoring plane.
 #[test]
-fn test_gateway_supports_monitoring_plane() {
+fn test_gateway_rejects_monitoring_plane() {
     let mut conn = Connection::new(SurfacePlane::Monitoring);
     let identity = CertificateIdentity::new(
         "e".repeat(64),
@@ -265,16 +259,12 @@ fn test_gateway_supports_monitoring_plane() {
     conn.accept_hello(&hello_frame(400)).unwrap();
     conn.accept_auth(&auth_frame(400)).unwrap();
 
-    let gateway = ProcedureGateway::new(&conn).expect("monitoring gateway construction failed");
+    let err = ProcedureGateway::new(&conn).unwrap_err();
 
-    assert_eq!(gateway.surface_plane(), SurfacePlane::Monitoring);
-    assert_eq!(
-        gateway.certificate_identity().surface,
-        SurfaceScope::MonitoringAgent
-    );
     assert!(
-        gateway.validate_dispatch_preconditions().is_ok(),
-        "monitoring gateway should validate preconditions"
+        err.message().contains("Application-surface only"),
+        "monitoring plane must not construct the Application ProcedureGateway: {}",
+        err.message()
     );
 }
 
@@ -338,8 +328,8 @@ fn test_gateway_allows_multiple_instances_from_same_connection() {
     // Both gateways should operate independently.
     assert_eq!(gateway_1.surface_plane(), gateway_2.surface_plane());
     assert_eq!(
-        gateway_1.certificate_identity().fingerprint,
-        gateway_2.certificate_identity().fingerprint
+        gateway_1.certificate_identity().fingerprint(),
+        gateway_2.certificate_identity().fingerprint()
     );
 
     // Stream mapping should be consistent across gateways.
@@ -352,25 +342,156 @@ fn test_gateway_allows_multiple_instances_from_same_connection() {
 #[test]
 fn test_gateway_rejects_non_application_surface_before_procedure_dispatch() {
     let conn = setup_active_administration_connection();
+    let err = ProcedureGateway::new(&conn).unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Security);
+    assert!(
+        err.message().contains("Application-surface only"),
+        "wrong-surface error should name the Application surface"
+    );
+}
+
+#[test]
+fn test_gateway_rejects_every_non_application_surface_before_procedure_dispatch() {
+    let cases = [
+        (
+            setup_active_administration_connection(),
+            SurfacePlane::Administration,
+        ),
+        (setup_active_ha_connection(), SurfacePlane::HighAvailability),
+        (
+            setup_active_monitoring_connection(),
+            SurfacePlane::Monitoring,
+        ),
+    ];
+
+    for (conn, plane) in cases {
+        let err = ProcedureGateway::new(&conn).unwrap_err();
+
+        assert_eq!(
+            err.kind(),
+            AndromedaErrorKind::Security,
+            "{plane:?} must be rejected before Procedure dispatch"
+        );
+        assert!(
+            err.message().contains("Application-surface only"),
+            "{plane:?} wrong-surface error should name the Application surface: {}",
+            err.message()
+        );
+    }
+}
+
+#[test]
+fn test_application_route_rejects_drain_before_payload_decode_or_authorization() {
+    let mut conn = setup_active_application_connection();
+    conn.begin_drain().expect("active connection should drain");
+    assert_eq!(conn.state(), LifecycleState::Draining);
+
     let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
     let manifest = route_manifest();
-    let frame = execute_request_frame(
-        "Inventory.ReserveStock",
-        manifest.contract_hash,
-        manifest.catalog_version,
-        Some(manifest.stats_version),
-        "application",
-        manifest.contract_hash,
-        manifest.catalog_version,
-    );
+    let mut frame = valid_execute_frame(&manifest);
+    frame.payload.clear();
+    frame.header.payload_length = 0;
 
     let err = gateway
         .bind_application_procedure_route(7, &frame, &manifest)
         .unwrap_err();
 
-    assert_eq!(err.kind(), AndromedaErrorKind::Security);
+    assert_eq!(err.kind(), AndromedaErrorKind::Protocol);
     assert!(
-        err.message().contains("Application surface"),
-        "wrong-surface error should name the Application surface"
+        err.message().contains("Draining"),
+        "drain rejection should happen before invalid payload is decoded: {}",
+        err.message()
     );
+    assert!(
+        err.message().contains("not Active"),
+        "drain rejection should name the dispatch precondition: {}",
+        err.message()
+    );
+
+    let (registry, _) = registry_for_application_user();
+    let err = gateway
+        .bind_authorized_application_procedure_route(7, &frame, &manifest, &registry)
+        .unwrap_err();
+    assert_route_rejection_before_authorization(err, AndromedaErrorKind::Protocol, "Draining");
+}
+
+#[test]
+fn application_route_accepts_only_v0_application_stream_namespace_before_dispatch() {
+    let conn = setup_active_application_connection();
+    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
+    let manifest = route_manifest();
+    let frame = valid_execute_frame(&manifest);
+    let expected_application_range = format!("[0..={}]", HADR_STREAM_MIN - 1);
+    let expected_hadr_range = format!("[{HADR_STREAM_MIN}..={HADR_STREAM_MAX}]");
+
+    for stream_id in [0, HADR_STREAM_MIN - 1] {
+        let binding = gateway
+            .bind_application_procedure_route(stream_id, &frame, &manifest)
+            .expect("V0 Application stream ID should be Application-routable");
+        assert_eq!(
+            binding.invocation_id,
+            InvocationId::new(stream_id),
+            "Application stream ID {stream_id} should preserve stream correlation"
+        );
+    }
+
+    for stream_id in HADR_STREAM_MIN..=HADR_STREAM_MAX {
+        let err = gateway
+            .bind_application_procedure_route(stream_id, &frame, &manifest)
+            .expect_err("HA/DR reserved stream ID must be rejected before Procedure dispatch");
+
+        assert_eq!(
+            err.kind(),
+            AndromedaErrorKind::Security,
+            "HA/DR reserved stream ID {stream_id} must be a surface-separation rejection"
+        );
+        assert!(
+            err.message().contains("HA/DR reserved stream id"),
+            "rejection should identify the HA/DR reserved stream namespace: {}",
+            err.message()
+        );
+        assert!(
+            err.message().contains(&expected_hadr_range),
+            "rejection should report the canonical reserved range: {}",
+            err.message()
+        );
+    }
+
+    for stream_id in [HADR_STREAM_MAX + 1, 512, u64::MAX] {
+        let err = gateway
+            .bind_application_procedure_route(stream_id, &frame, &manifest)
+            .expect_err("future/reserved stream ID must be rejected before Procedure dispatch");
+
+        assert_eq!(
+            err.kind(),
+            AndromedaErrorKind::Security,
+            "future/reserved stream ID {stream_id} must be a fail-closed rejection"
+        );
+        assert!(
+            err.message().contains("future/reserved stream id"),
+            "rejection should identify the future/reserved stream namespace: {}",
+            err.message()
+        );
+        assert!(
+            err.message().contains(&expected_application_range),
+            "rejection should report the V0 Application stream range: {}",
+            err.message()
+        );
+    }
+}
+
+fn setup_active_monitoring_connection() -> Connection {
+    let mut conn = Connection::new(SurfacePlane::Monitoring);
+    let identity = CertificateIdentity::new(
+        "f".repeat(64),
+        "monitoring-agent".to_string(),
+        SurfaceScope::MonitoringAgent,
+    )
+    .unwrap();
+    conn.set_certificate_identity(identity).unwrap();
+    conn.accept_hello(&hello_frame(900)).unwrap();
+    conn.accept_auth(&auth_frame(900)).unwrap();
+    assert_eq!(conn.state(), LifecycleState::Active);
+    conn
 }

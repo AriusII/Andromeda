@@ -1,21 +1,20 @@
-use andromeda_core::{AndromedaResult, RequestId, SessionId, TransactionId};
-use andromeda_observe::CertificateIdentity;
-use andromeda_proto::{
-    PayloadKind, decode_generated_message, validate_catalog_procedure_manifest_resolution_request,
+use andromeda_error::AndromedaResult;
+use andromeda_principal::{CertificateIdentity, SurfaceScope};
+use andromeda_rpc_codec::{
+    CatalogManifestResolutionRequest, CatalogManifestResolutionResponse,
+    decode_catalog_manifest_resolution_route_request,
+    encode_catalog_manifest_resolution_response_frame,
+    validate_catalog_manifest_resolution_response_context,
 };
+use andromeda_types::TransactionId;
+use andromeda_types::{RequestId, SessionId};
 
-use crate::{
-    FrameBytes, FrameType, StreamRole, SurfacePlane, TransportEndpointMetadata, TransportMessage,
-    TransportSurface, validate_transport_surface,
-};
+use andromeda_rpc::{TransportSurface, validate_transport_surface};
+use andromeda_rpc_protocol::{FrameBytes, FrameType, StreamRole};
 
-use super::GeneratedCatalogManifestResolutionRequest;
+use crate::{SurfacePlane, TransportEndpointMetadata, TransportMessage};
+
 use super::errors::{protocol_error, security_error};
-use super::frame::{decode_catalog_envelope, encode_catalog_response_frame};
-use super::manifest::{CatalogManifestResolutionRequest, CatalogManifestResolutionResponse};
-use super::validation::{
-    validate_catalog_route_admission, validate_request_context, validate_response_context,
-};
 
 /// Runtime context attached to one catalog manifest resolution route.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -135,12 +134,9 @@ impl<R: CatalogManifestResolutionRuntime> CatalogManifestResolutionGateway<R> {
     ) -> AndromedaResult<FrameBytes> {
         let admission = admit_catalog_manifest_route(frame, metadata, stream_role)?;
 
-        let request_envelope = decode_catalog_envelope(frame, PayloadKind::ContractRequest)?;
-        let generated_request: GeneratedCatalogManifestResolutionRequest =
-            decode_generated_message(request_envelope.payload.as_slice())?;
-        validate_catalog_procedure_manifest_resolution_request(&generated_request)?;
-        validate_request_context(frame, &request_envelope, generated_request.request_id)?;
-        let request = CatalogManifestResolutionRequest::from_protobuf(generated_request)?;
+        let decoded_request = decode_catalog_manifest_resolution_route_request(frame)?;
+        let request_envelope = decoded_request.envelope;
+        let request = decoded_request.request;
 
         let context = CatalogManifestResolutionContext::from_route(
             frame.header.request_id,
@@ -153,12 +149,14 @@ impl<R: CatalogManifestResolutionRuntime> CatalogManifestResolutionGateway<R> {
 
         let request_for_validation = request.clone();
         let response = self.runtime.resolve_catalog_manifest(&context, request)?;
-        validate_response_context(&context, &response)?;
+        validate_catalog_manifest_resolution_response_context(context.request_id(), &response)?;
         response.validate_against_request(&request_for_validation)?;
-        let generated_response = response.to_protobuf()?;
 
-        let response_frame =
-            encode_catalog_response_frame(&request_envelope, frame.header, &generated_response)?;
+        let response_frame = encode_catalog_manifest_resolution_response_frame(
+            &request_envelope,
+            frame.header,
+            &response,
+        )?;
         validate_transport_surface(
             &response_frame,
             TransportSurface::ReliableStream(StreamRole::CommandBidirectional),
@@ -216,4 +214,26 @@ fn admit_catalog_manifest_route(
         surface_plane,
         certificate_identity: metadata.certificate_identity().cloned(),
     })
+}
+
+fn validate_catalog_route_admission(metadata: &TransportEndpointMetadata) -> AndromedaResult<()> {
+    if metadata.surface_plane() != SurfacePlane::Administration {
+        return Err(security_error(
+            "catalog manifest resolution requires Administration surface",
+        ));
+    }
+
+    let Some(identity) = metadata.certificate_identity() else {
+        return Err(security_error(
+            "catalog manifest resolution requires bound certificate identity",
+        ));
+    };
+
+    if identity.surface_scope() != SurfaceScope::Administration {
+        return Err(security_error(
+            "catalog manifest resolution certificate scope must match Administration surface",
+        ));
+    }
+
+    Ok(())
 }

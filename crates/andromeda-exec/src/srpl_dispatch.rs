@@ -5,12 +5,13 @@
 
 use std::sync::Arc;
 
-use andromeda_catalog::ResultStreamContract;
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use andromeda_srpl::{
-    interpreter::SrplIrInterpreter,
-    procedure_resolver::{ProcedureResolveError, ProcedureResolver},
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_procedure_contract::ResultStreamContract;
+use andromeda_procedure_runtime::procedure_resolver::{
+    ProcedureResolveError, ProcedureResolveRequest, ProcedureResolveResponse, ProcedureResolver,
 };
+use andromeda_srpl_interpreter::SrplIrInterpreter;
+use andromeda_srpl_ir::ExecutableProcedurePlan;
 
 use crate::{
     DefaultResultMetadataExtractor, InvocationRequest, ResultMetadataExtractor,
@@ -54,12 +55,8 @@ impl SrplProcedureDispatcher {
     pub fn resolve_procedure(
         &self,
         req: &InvocationRequest,
-    ) -> Result<andromeda_srpl::procedure_resolver::ProcedureResolveResponse, ProcedureResolveError>
-    {
-        let resolve_request =
-            andromeda_srpl::procedure_resolver::ProcedureResolveRequest::from_contract_ref(
-                req.procedure,
-            )?;
+    ) -> Result<ProcedureResolveResponse, ProcedureResolveError> {
+        let resolve_request = ProcedureResolveRequest::from_contract_ref(req.procedure)?;
 
         let response = self.resolver.resolve_procedure(resolve_request.clone())?;
 
@@ -73,9 +70,7 @@ impl SrplProcedureDispatcher {
     /// Checks for unsupported operations, binding errors, cardinality violations,
     /// and other semantic issues that would prevent execution. This is distinct
     /// from plan execution and produces no side effects.
-    pub fn validate_plan(
-        plan: &andromeda_srpl::procedure_model::ExecutableProcedurePlan,
-    ) -> AndromedaResult<()> {
+    pub fn validate_plan(plan: &ExecutableProcedurePlan) -> AndromedaResult<()> {
         SrplIrInterpreter::validate_plan(plan).map_err(|e| {
             AndromedaError::new(
                 AndromedaErrorKind::Srpl,
@@ -97,7 +92,7 @@ impl SrplProcedureDispatcher {
     /// Valid `ResultStreamMetadata` ready for emission before payload, or an error
     /// if metadata cannot be deterministically extracted.
     pub fn result_metadata_for_plan(
-        plan: &andromeda_srpl::procedure_model::ExecutableProcedurePlan,
+        plan: &ExecutableProcedurePlan,
         result_streams: &[ResultStreamContract],
     ) -> AndromedaResult<ResultStreamMetadata> {
         DefaultResultMetadataExtractor::extract_metadata(plan, result_streams)

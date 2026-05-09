@@ -1,3 +1,0 @@
-display_name: "Rust Clone and Copy Audit"
-short_description: "Audit Clone, Copy, Arc, Bytes, Cow, borrowing, and ownership choices in hot paths. Use when performance, lifetime, or memory pressure matters."
-default_prompt: "Use the Rust Clone and Copy Audit skill to analyze the current Andromeda task and return a bounded, validated result."

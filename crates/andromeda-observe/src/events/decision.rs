@@ -1,84 +1,13 @@
-use andromeda_core::{
-    AndromedaResult, GpuExecutionPolicy, GpuProfile, PipelineClass, ResourceBudget,
-};
+use andromeda_error::AndromedaResult;
+use andromeda_hardware::{GpuExecutionPolicy, GpuProfile, PipelineClass, ResourceBudget};
 
 use crate::TraceId;
 
-use super::{ProtocolEventScope, non_empty_reason};
+pub use andromeda_observability::{
+    CriticalDecisionKind, CriticalDecisionTrace as DecisionTrace, SchemaLayoutDecisionTrace,
+};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CriticalDecisionKind {
-    ContractValidation,
-    AuthorizationDenial,
-    PlanSelection,
-    WalAppend,
-    TransactionCommit,
-    WalFlush,
-    CommitVisible,
-    RollbackDurable,
-    MvccVisibility,
-    RecoveryStartup,
-    ManifestValidation,
-    ManifestSwitch,
-    CatalogMutation,
-    FrameRejection,
-    StreamRoleRejection,
-    Backpressure,
-    CompletionEmitted,
-    ContractRejected,
-    UnsupportedVersion,
-    SchemaLayoutDecision,
-    CorruptionBoundary,
-    SecurityAuthorization,
-    SecurityAudit,
-    AdminOperation,
-    ResourceGovernance,
-    BusinessRuleDecision,
-    IoPlacementDecision,
-    PlacementAudit,
-    IoBudgetValidation,
-    GpuPolicyDecision,
-    TransactionTransition,
-    ExecutionTransition,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DecisionTrace {
-    pub trace_id: TraceId,
-    pub decision: CriticalDecisionKind,
-    pub reason: String,
-}
-
-impl DecisionTrace {
-    pub fn has_explanation(&self) -> bool {
-        !self.reason.trim().is_empty()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SchemaLayoutDecisionTrace {
-    pub trace_id: TraceId,
-    pub scope: ProtocolEventScope,
-    pub schema_id: Option<u64>,
-    pub schema_version: Option<u64>,
-    pub layout_id: Option<u64>,
-    pub layout_version: Option<u64>,
-    pub accepted: bool,
-    pub reason: String,
-}
-
-impl SchemaLayoutDecisionTrace {
-    pub fn has_reason(&self) -> bool {
-        !self.reason.trim().is_empty()
-    }
-
-    pub const fn has_schema_layout_evidence(&self) -> bool {
-        self.schema_id.is_some()
-            && self.schema_version.is_some()
-            && self.layout_id.is_some()
-            && self.layout_version.is_some()
-    }
-}
+use super::non_empty_reason;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IoStorageTier {
@@ -397,10 +326,10 @@ impl PlacementAuditEvent {
             | PlacementAuditTransition::SegmentPublishedCold
             | PlacementAuditTransition::ColdMutationRejected => {
                 self.segment_id.is_some() && self.extent_id.is_none()
-            }
+            },
             PlacementAuditTransition::ExtentReclaimed => {
                 self.segment_id.is_none() && self.extent_id.is_some()
-            }
+            },
         }
     }
 

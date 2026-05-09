@@ -1,3 +1,0 @@
-display_name: "Permission Request Policy"
-short_description: "Define PermissionRequest hook behavior for risky shell, network, git, filesystem, and destructive operations. Use when approval requests must be policy-aware."
-default_prompt: "Use the Permission Request Policy skill to analyze the current Andromeda task and return a bounded, validated result."

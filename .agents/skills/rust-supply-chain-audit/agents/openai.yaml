@@ -1,3 +1,0 @@
-display_name: "Rust Supply Chain Audit"
-short_description: "Audit Cargo dependencies, advisories, licenses, sources, transitive graph, and vet status. Use before adding dependencies or release gates."
-default_prompt: "Use the Rust Supply Chain Audit skill to analyze the current Andromeda task and return a bounded, validated result."

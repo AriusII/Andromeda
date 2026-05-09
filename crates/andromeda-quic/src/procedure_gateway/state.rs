@@ -1,7 +1,10 @@
-use andromeda_core::{AndromedaResult, InvocationId};
-use andromeda_observe::CertificateIdentity;
+use andromeda_error::AndromedaResult;
+use andromeda_principal::CertificateIdentity;
+use andromeda_types::InvocationId;
 
-use crate::{Connection, FrameBytes, LifecycleState, SurfacePlane};
+use andromeda_rpc_protocol::FrameBytes;
+
+use crate::{Connection, LifecycleState, SurfacePlane};
 
 use super::errors::{protocol_error, security_error};
 
@@ -16,6 +19,7 @@ pub(super) fn resolve_gateway_state(connection: &Connection) -> AndromedaResult<
         .ok_or_else(|| security_error("procedure gateway requires bound certificate identity"))?;
     let plane = connection.surface_plane();
     validate_certificate_scope(certificate_identity, plane)?;
+    validate_application_gateway_plane(plane)?;
 
     Ok(GatewayState {
         certificate_identity,
@@ -59,12 +63,22 @@ pub(super) fn validate_frame_session_binding(
     }
 }
 
+fn validate_application_gateway_plane(plane: SurfacePlane) -> AndromedaResult<()> {
+    if !plane.is_application() {
+        return Err(security_error(
+            "ProcedureGateway is Application-surface only; administration, HA/DR, recovery, and monitoring work must use their dedicated surfaces",
+        ));
+    }
+
+    Ok(())
+}
+
 fn validate_certificate_scope(
     certificate_identity: &CertificateIdentity,
     plane: SurfacePlane,
 ) -> AndromedaResult<()> {
     let required_scope = crate::mtls_identity::plane_to_required_surface_scope(plane);
-    if certificate_identity.surface as u8 != required_scope as u8 {
+    if certificate_identity.surface_scope() != required_scope {
         return Err(security_error(
             "certificate surface scope does not match connection plane",
         ));

@@ -1,4 +1,4 @@
-use andromeda_bench::{BenchmarkBaseline, RegressionAnalysis, RegressionReason};
+use andromeda_regression::{BenchmarkBaseline, RegressionAnalysis, RegressionReason};
 
 #[test]
 fn end_to_end_regression_detection_workflow() {
@@ -100,7 +100,7 @@ fn multi_workload_regression_tracking() {
     let workloads = [
         "btree-lookup-smoke",
         "btree-range-scan-smoke",
-        "vertical-v0-smoke",
+        "inventory-recoverable-smoke",
         "protocol-smoke-contract",
         "wal-append-smoke",
     ];

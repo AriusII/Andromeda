@@ -1,7 +1,9 @@
 use crate::support::{evaluator_for, resolver_and_evaluator, resolver_with_principal};
-use andromeda_core::{Permission, PrincipalRole, ProcedureId};
-use andromeda_exec::services::{AdmissionService, PermissionEvaluator, PrincipalResolver};
+use andromeda_admission::AdmissionService;
+use andromeda_iam::{PermissionEvaluator, PrincipalResolver};
 use andromeda_observe::TraceId;
+use andromeda_principal::{Permission, PrincipalRole};
+use andromeda_types::ProcedureId;
 use std::sync::Arc;
 
 #[test]

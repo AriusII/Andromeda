@@ -1,0 +1,10 @@
+[package]
+name = "andromeda-maps"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+andromeda-analytics.workspace = true
+andromeda-columnar.workspace = true

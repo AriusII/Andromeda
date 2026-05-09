@@ -1,8 +1,7 @@
 use crate::support::{evaluator_for, new_resolver, resolver_and_evaluator};
-use andromeda_core::{Permission, PrincipalRole, ProcedureId};
-use andromeda_exec::services::{
-    DenialReason, PermissionDecision, PermissionEvaluator, PrincipalResolver,
-};
+use andromeda_iam::{DenialReason, PermissionDecision, PermissionEvaluator, PrincipalResolver};
+use andromeda_principal::{Permission, PrincipalRole};
+use andromeda_types::ProcedureId;
 use std::{sync::Arc, thread};
 
 #[test]
@@ -19,7 +18,7 @@ fn test_edge_case_anonymous_principal() {
     match decision {
         PermissionDecision::Denied { reason, .. } => {
             assert_eq!(reason, DenialReason::PrincipalNotFound);
-        }
+        },
         _ => panic!("expected denied decision"),
     }
 }

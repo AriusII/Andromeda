@@ -1,3 +1,0 @@
-display_name: "Rust Public API Minimization"
-short_description: "Reduce public API surface using private, pub(super), pub(crate), sealed traits, and stable reexports. Use when crates expose too much."
-default_prompt: "Use the Rust Public API Minimization skill to analyze the current Andromeda task and return a bounded, validated result."

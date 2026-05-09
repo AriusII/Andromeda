@@ -1,23 +1,20 @@
 use std::time::Instant;
 
-use andromeda_storage::{
-    AllocationId, BufferPool, BufferPoolConfig, DiskPageStore, ExtentDescriptor, ExtentId,
-    ExtentState, Lsn, ObjectId, PageFlags, PageHeader, PageId, PageLayoutContract, PageSize,
-    PageTrailer, PageType, TestWalDurabilityObserver,
+use andromeda_storage_page::{
+    AllocationId, InMemoryPageStore, ObjectId, PageFlags, PageHeader, PageId, PageImage,
+    PageLayoutContract, PageSize, PageStore, PageTrailer, PageType,
 };
+use andromeda_wal::Lsn;
 
-use crate::{
-    BenchmarkError,
-    harness::{BenchmarkTempDir as BenchTempDir, elapsed_micros},
-};
+use andromeda_bench_harness::{BenchmarkTempDir as BenchTempDir, elapsed_micros};
+use andromeda_bench_workload::BenchmarkError;
 
 pub const STORAGE_PAGE_STORE_WORKLOAD_ID: &str = "storage-page-store-smoke";
-pub const STORAGE_PAGE_STORE_HARNESS_SOURCE: &str = "storage-disk-page-store";
-pub const STORAGE_PAGE_STORE_HARNESS_NAME: &str = "DiskPageStore+BufferPool";
+pub const STORAGE_PAGE_STORE_HARNESS_SOURCE: &str = "storage-page-owner-store";
+pub const STORAGE_PAGE_STORE_HARNESS_NAME: &str = "InMemoryPageStore::allocate_page+read_page";
 
 const FIRST_PAGE_ID: u64 = 1;
 const FIRST_PAGE_LSN: u64 = 10;
-const BUFFER_POOL_FRAMES: usize = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoragePageStoreSmokeBenchmark {
@@ -56,19 +53,14 @@ fn execute_storage_page_store_smoke(
 ) -> Result<StoragePageStoreSmokeBenchmark, StorageHarnessFailure> {
     let temp_dir =
         BenchTempDir::new("andromeda-bench-storage-page-store").map_err(harness_failed)?;
-    let data_file = temp_dir.path().join("pages.bin");
-    let scratch_dir = temp_dir.path().join("scratch");
+    let marker = temp_dir.path().join("page-store-smoke.marker");
+    std::fs::write(marker, b"andromeda-bench page store smoke").map_err(harness_failed)?;
 
-    let mut store = DiskPageStore::new(&data_file, &scratch_dir).map_err(harness_failed)?;
-    store
-        .allocate_extent(storage_smoke_extent(options.extent_page_count))
-        .map_err(harness_failed)?;
-
-    let config =
-        BufferPoolConfig::new(BUFFER_POOL_FRAMES, PageSize::KiB16).map_err(harness_failed)?;
-    let mut pool = BufferPool::new(config, store).map_err(harness_failed)?;
-    let observer =
-        TestWalDurabilityObserver::with_durable_lsn(FIRST_PAGE_LSN + u64::from(options.samples));
+    let mut store = InMemoryPageStore::new(PageSize::KiB16);
+    if options.extent_page_count < options.samples {
+        return Err(StorageHarnessFailure);
+    }
+    let durable_lsn = Lsn::new(FIRST_PAGE_LSN + u64::from(options.samples));
 
     let mut latencies_us = Vec::with_capacity(options.samples as usize);
     let mut page_ids = Vec::with_capacity(options.samples as usize);
@@ -79,24 +71,16 @@ fn execute_storage_page_store_smoke(
         let page_lsn = Lsn::new(FIRST_PAGE_LSN + u64::from(sample));
         let started = Instant::now();
 
-        {
-            let (_page_id, mut guard) = pool
-                .new_page(storage_smoke_page_contract(page_id, page_lsn))
-                .map_err(harness_failed)?;
-            guard.mark_dirty(page_lsn).map_err(harness_failed)?;
-        }
+        let image = store
+            .allocate_page(storage_smoke_page_contract(page_id, page_lsn), durable_lsn)
+            .map_err(harness_failed)?;
+        validate_smoke_page_image(&image, page_id, page_lsn)?;
 
-        let flushed = pool.flush_dirty_frames(&observer).map_err(harness_failed)?;
-        if flushed != 1 {
-            return Err(StorageHarnessFailure);
-        }
-
-        flushed_pages += flushed;
+        flushed_pages += 1;
         page_ids.push(page_id);
         latencies_us.push(elapsed_micros(started));
     }
 
-    let store = pool.into_page_store();
     let mut readback_pages = 0;
     for (index, page_id) in page_ids.into_iter().enumerate() {
         let expected_lsn = Lsn::new(FIRST_PAGE_LSN + index as u64);
@@ -104,9 +88,7 @@ fn execute_storage_page_store_smoke(
             .read_page(page_id)
             .map_err(harness_failed)?
             .ok_or(StorageHarnessFailure)?;
-        if image.page_id() != Some(page_id) || image.page_lsn() != Some(expected_lsn) {
-            return Err(StorageHarnessFailure);
-        }
+        validate_smoke_page_image(&image, page_id, expected_lsn)?;
         readback_pages += 1;
     }
 
@@ -117,19 +99,15 @@ fn execute_storage_page_store_smoke(
     })
 }
 
-fn storage_smoke_extent(page_count: u32) -> ExtentDescriptor {
-    ExtentDescriptor {
-        extent_id: ExtentId::new(1),
-        object_id: ObjectId::new(1),
-        allocation_id: AllocationId::new(1),
-        first_page_id: PageId::new(FIRST_PAGE_ID),
-        page_count,
-        page_size: PageSize::KiB16,
-        state: ExtentState::AllocatingHot,
-        segment_id: None,
-        file_offset: 0,
-        allocated_on_disk: false,
+fn validate_smoke_page_image(
+    image: &PageImage,
+    expected_page_id: PageId,
+    expected_lsn: Lsn,
+) -> Result<(), StorageHarnessFailure> {
+    if image.page_id() != Some(expected_page_id) || image.page_lsn() != Some(expected_lsn) {
+        return Err(StorageHarnessFailure);
     }
+    Ok(())
 }
 
 fn storage_smoke_page_contract(page_id: PageId, page_lsn: Lsn) -> PageLayoutContract {

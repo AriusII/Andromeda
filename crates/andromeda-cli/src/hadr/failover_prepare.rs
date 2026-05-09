@@ -1,4 +1,4 @@
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 use super::output::print_failover_prepare;
 use super::parsing::parse_failover_prepare_options;

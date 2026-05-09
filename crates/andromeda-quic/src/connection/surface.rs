@@ -1,4 +1,4 @@
-use crate::FrameFamily;
+use andromeda_rpc_protocol::FrameFamily;
 
 /// Surface plane bound to a QUIC session at handshake time.
 ///
@@ -18,6 +18,11 @@ pub enum SurfacePlane {
 }
 
 impl SurfacePlane {
+    /// Returns true when this plane is the tenant-facing Application surface.
+    pub const fn is_application(self) -> bool {
+        matches!(self, Self::Application)
+    }
+
     /// Returns true if this plane permits a frame family at the transport level.
     ///
     /// Session control and diagnostic frames are allowed on every plane so

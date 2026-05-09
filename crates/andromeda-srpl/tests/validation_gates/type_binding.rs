@@ -1,4 +1,4 @@
-use andromeda_srpl::procedure_model::Cardinality;
+use andromeda_srpl_ir::Cardinality;
 
 use crate::support::compile_gate_source;
 

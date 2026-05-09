@@ -1,6 +1,6 @@
 use std::fs;
 
-use andromeda_storage::{
+use andromeda_hadr::{
     HadrEpoch, HadrMembershipRecord, HadrMembershipStore, HadrNodeId, HadrNodeRole,
 };
 

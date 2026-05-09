@@ -1,3 +1,0 @@
-display_name: "Rust Property Testing"
-short_description: "Use property-based tests for deterministic invariants, codecs, canonicalization, state machines, and algebraic laws. Use with proptest-style generators."
-default_prompt: "Use the Rust Property Testing skill to analyze the current Andromeda task and return a bounded, validated result."

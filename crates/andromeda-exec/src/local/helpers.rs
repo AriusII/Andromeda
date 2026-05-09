@@ -1,10 +1,9 @@
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, PipelineClass, ResourceBudget,
-};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_hardware::{PipelineClass, ResourceBudget};
 use andromeda_observe::TraceId;
-use andromeda_storage::{
-    CoreIoPlacementRequest, OperationalProfile, PageSize, StorageIoBudgetScope,
-    StorageWorkloadClass,
+use andromeda_storage_page::PageSize;
+use andromeda_storage_placement::{
+    CoreIoPlacementRequest, OperationalProfile, StorageIoBudgetScope, StorageWorkloadClass,
 };
 
 use crate::{
@@ -108,7 +107,7 @@ pub(super) fn rollback_payload_for_cause(
             match cause {
                 RollbackCause::Direct | RollbackCause::BusinessFailure => {
                     "business validation rollback reason must not be empty"
-                }
+                },
                 RollbackCause::Poison => "poison rollback reason must not be empty",
             },
         ));
@@ -117,7 +116,7 @@ pub(super) fn rollback_payload_for_cause(
     let domain: &[u8] = match cause {
         RollbackCause::Direct | RollbackCause::BusinessFailure => {
             b"andromeda.exec.business-validation-failed.v1"
-        }
+        },
         RollbackCause::Poison => b"andromeda.exec.poisoned-rollback.v1",
     };
     let mut payload = Vec::with_capacity(domain.len() + 1 + trimmed_reason.len());

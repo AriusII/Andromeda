@@ -1,3 +1,0 @@
-display_name: "Normalization Dependency Analysis"
-short_description: "Analyze functional dependencies, multivalued dependencies, keys, 3NF, BCNF, 4NF, DKNF, lossless decomposition, and dependency preservation. Use for catalog/mode"
-default_prompt: "Use the Normalization Dependency Analysis skill to analyze the current Andromeda task and return a bounded, validated result."

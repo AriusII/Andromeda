@@ -1,3 +1,0 @@
-display_name: "Map Summarizability Review"
-short_description: "Review analytical Maps for grain, summarizability, aggregation correctness, staleness, layout, and GPU batch boundaries. Use for OLAP/analytics maps."
-default_prompt: "Use the Map Summarizability Review skill to analyze the current Andromeda task and return a bounded, validated result."

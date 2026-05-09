@@ -6,19 +6,61 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+andromeda-admission.workspace = true
+andromeda-audit.workspace = true
 andromeda-catalog.workspace = true
-andromeda-core.workspace = true
+andromeda-catalog-store.workspace = true
+andromeda-definition-batch.workspace = true
+andromeda-error.workspace = true
+andromeda-execution.workspace = true
+andromeda-execution-trace.workspace = true
+andromeda-hardware.workspace = true
+andromeda-iam.workspace = true
 andromeda-observe.workspace = true
-andromeda-proto.workspace = true
+andromeda-observability.workspace = true
+andromeda-plan-cache.workspace = true
+andromeda-principal.workspace = true
+andromeda-procedure-contract.workspace = true
+andromeda-procedure-runtime.workspace = true
+andromeda-procedure-store.workspace = true
 andromeda-quic.workspace = true
-andromeda-srpl.workspace = true
-andromeda-storage.workspace = true
-andromeda-tx.workspace = true
-dashmap = "6.0"
+andromeda-rpc-protocol.workspace = true
+andromeda-result-stream.workspace = true
+andromeda-retry.workspace = true
+andromeda-security.workspace = true
+andromeda-srpl-interpreter.workspace = true
+andromeda-srpl-ir.workspace = true
+andromeda-storage-heap.workspace = true
+andromeda-storage-page.workspace = true
+andromeda-storage-placement.workspace = true
+andromeda-time.workspace = true
+andromeda-transaction.workspace = true
+andromeda-transaction-log.workspace = true
+andromeda-mvcc.workspace = true
+andromeda-types.workspace = true
+andromeda-wal.workspace = true
 tokio.workspace = true
 
+[features]
+default = []
+runtime-quinn = ["andromeda-quic/runtime-quinn"]
+
+[dev-dependencies]
+andromeda-business-fixtures.workspace = true
+andromeda-inventory-demo.workspace = true
+andromeda-manifest.workspace = true
+andromeda-proto.workspace = true
+andromeda-recovery.workspace = true
+andromeda-srpl.workspace = true
+andromeda-srpl-binder.workspace = true
+
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("runtime-quinn"))'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(andromeda_remote_network_e2e)', 'cfg(feature, values("runtime-quinn"))'] }
+
+[[test]]
+name = "remote_invoke_network_e2e"
+path = "tests/remote_invoke_network_e2e.rs"
+required-features = ["runtime-quinn"]
 
 [[test]]
 name = "c4_admission_events"
@@ -43,7 +85,3 @@ path = "tests/executor_validation_gates.rs"
 [[test]]
 name = "runtime_contract"
 path = "tests/runtime_contract.rs"
-
-[[test]]
-name = "v0_vertical_e2e"
-path = "tests/v0_vertical_e2e.rs"

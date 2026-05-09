@@ -1,35 +1,191 @@
 [workspace]
 resolver = "3"
 members = [
+    "crates/andromeda-admission",
+    "crates/andromeda-audit",
+    "crates/andromeda-analytics",
+    "crates/andromeda-backup",
     "crates/andromeda-bench",
+    "crates/andromeda-bench-harness",
+    "crates/andromeda-bench-workload",
+    "crates/andromeda-buffer-pool",
+    "crates/andromeda-business-fixtures",
     "crates/andromeda-cli",
     "crates/andromeda-catalog",
+    "crates/andromeda-catalog-diff",
+    "crates/andromeda-catalog-recovery",
+    "crates/andromeda-catalog-store",
+    "crates/andromeda-columnar",
+    "crates/andromeda-contract",
+    "crates/andromeda-contract-compat",
+    "crates/andromeda-iam",
     "crates/andromeda-core",
+    "crates/andromeda-decision-trace",
+    "crates/andromeda-definition-batch",
+    "crates/andromeda-digest",
+    "crates/andromeda-disk-page-store",
+    "crates/andromeda-error",
     "crates/andromeda-exec",
+    "crates/andromeda-execution",
+    "crates/andromeda-execution-trace",
+    "crates/andromeda-hadr",
+    "crates/andromeda-hardware",
+    "crates/andromeda-inventory-demo",
+    "crates/andromeda-inventory-demo-cli-adapter",
+    "crates/andromeda-locking",
+    "crates/andromeda-manifest",
+    "crates/andromeda-maps",
+    "crates/andromeda-mvcc",
     "crates/andromeda-observe",
+    "crates/andromeda-optimizer",
+    "crates/andromeda-plan-cache",
+    "crates/andromeda-principal",
+    "crates/andromeda-procedure-runtime",
+    "crates/andromeda-procedure-store",
+    "crates/andromeda-procedure-contract",
     "crates/andromeda-proto",
+    "crates/andromeda-proto-wire",
+    "crates/andromeda-quic-runtime-quinn",
+    "crates/andromeda-rpc",
+    "crates/andromeda-rpc-codec",
     "crates/andromeda-quic",
+    "crates/andromeda-recovery",
+    "crates/andromeda-regression",
+    "crates/andromeda-resource",
+    "crates/andromeda-restore",
+    "crates/andromeda-result-stream",
+    "crates/andromeda-retry",
+    "crates/andromeda-rpc-protocol",
+    "crates/andromeda-savepoint",
+    "crates/andromeda-scenario-evidence",
+    "crates/andromeda-security",
+    "crates/andromeda-security-contract",
+    "crates/andromeda-observability",
+    "crates/andromeda-segment",
+    "crates/andromeda-srpl-interpreter",
     "crates/andromeda-srpl",
+    "crates/andromeda-srpl-ast",
+    "crates/andromeda-srpl-binder",
+    "crates/andromeda-srpl-catalog-binding",
+    "crates/andromeda-srpl-cardinality",
+    "crates/andromeda-srpl-definition-batch",
+    "crates/andromeda-srpl-diagnostics",
+    "crates/andromeda-srpl-execution-adapter",
+    "crates/andromeda-srpl-ir",
+    "crates/andromeda-srpl-lexer",
+    "crates/andromeda-srpl-lowering",
+    "crates/andromeda-srpl-parser",
+    "crates/andromeda-srpl-test-fixtures",
+    "crates/andromeda-statistics",
     "crates/andromeda-storage",
-    "crates/andromeda-tx",
+    "crates/andromeda-storage-placement",
+    "crates/andromeda-storage-heap",
+    "crates/andromeda-storage-page",
+    "crates/andromeda-storage-index",
+    "crates/andromeda-structured-object",
+    "crates/andromeda-time",
+    "crates/andromeda-test-support",
+    "crates/andromeda-transaction",
+    "crates/andromeda-transaction-log",
+    "crates/andromeda-types",
+    "crates/andromeda-wal-codec",
+    "crates/andromeda-wal",
 ]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.95.0"
 
 [workspace.dependencies]
-andromeda-catalog = { path = "crates/andromeda-catalog", version = "0.1.0" }
+andromeda-admission = { path = "crates/andromeda-admission", version = "0.1.0" }
+andromeda-audit = { path = "crates/andromeda-audit", version = "0.1.0" }
+andromeda-analytics = { path = "crates/andromeda-analytics", version = "0.1.0" }
+andromeda-backup = { path = "crates/andromeda-backup", version = "0.1.0" }
 andromeda-bench = { path = "crates/andromeda-bench", version = "0.1.0" }
+andromeda-bench-harness = { path = "crates/andromeda-bench-harness", version = "0.1.0" }
+andromeda-bench-workload = { path = "crates/andromeda-bench-workload", version = "0.1.0" }
+andromeda-buffer-pool = { path = "crates/andromeda-buffer-pool", version = "0.1.0" }
+andromeda-business-fixtures = { path = "crates/andromeda-business-fixtures", version = "0.1.0" }
+andromeda-catalog = { path = "crates/andromeda-catalog", version = "0.1.0" }
+andromeda-catalog-diff = { path = "crates/andromeda-catalog-diff", version = "0.1.0" }
+andromeda-catalog-recovery = { path = "crates/andromeda-catalog-recovery", version = "0.1.0" }
+andromeda-catalog-store = { path = "crates/andromeda-catalog-store", version = "0.1.0" }
+andromeda-columnar = { path = "crates/andromeda-columnar", version = "0.1.0" }
+andromeda-contract = { path = "crates/andromeda-contract", version = "0.1.0" }
+andromeda-contract-compat = { path = "crates/andromeda-contract-compat", version = "0.1.0" }
 andromeda-core = { path = "crates/andromeda-core", version = "0.1.0" }
+andromeda-decision-trace = { path = "crates/andromeda-decision-trace", version = "0.1.0" }
+andromeda-definition-batch = { path = "crates/andromeda-definition-batch", version = "0.1.0" }
+andromeda-digest = { path = "crates/andromeda-digest", version = "0.1.0" }
+andromeda-disk-page-store = { path = "crates/andromeda-disk-page-store", version = "0.1.0" }
+andromeda-error = { path = "crates/andromeda-error", version = "0.1.0" }
 andromeda-exec = { path = "crates/andromeda-exec", version = "0.1.0" }
+andromeda-execution = { path = "crates/andromeda-execution", version = "0.1.0" }
+andromeda-execution-trace = { path = "crates/andromeda-execution-trace", version = "0.1.0" }
+andromeda-hadr = { path = "crates/andromeda-hadr", version = "0.1.0" }
+andromeda-hardware = { path = "crates/andromeda-hardware", version = "0.1.0" }
+andromeda-inventory-demo = { path = "crates/andromeda-inventory-demo", version = "0.1.0" }
+andromeda-inventory-demo-cli-adapter = { path = "crates/andromeda-inventory-demo-cli-adapter", version = "0.1.0" }
+andromeda-iam = { path = "crates/andromeda-iam", version = "0.1.0" }
+andromeda-locking = { path = "crates/andromeda-locking", version = "0.1.0" }
+andromeda-manifest = { path = "crates/andromeda-manifest", version = "0.1.0" }
+andromeda-maps = { path = "crates/andromeda-maps", version = "0.1.0" }
+andromeda-mvcc = { path = "crates/andromeda-mvcc", version = "0.1.0" }
 andromeda-observe = { path = "crates/andromeda-observe", version = "0.1.0" }
+andromeda-observability = { path = "crates/andromeda-observability", version = "0.1.0" }
+andromeda-optimizer = { path = "crates/andromeda-optimizer", version = "0.1.0" }
+andromeda-plan-cache = { path = "crates/andromeda-plan-cache", version = "0.1.0" }
+andromeda-principal = { path = "crates/andromeda-principal", version = "0.1.0" }
+andromeda-procedure-runtime = { path = "crates/andromeda-procedure-runtime", version = "0.1.0" }
+andromeda-procedure-store = { path = "crates/andromeda-procedure-store", version = "0.1.0" }
+andromeda-procedure-contract = { path = "crates/andromeda-procedure-contract", version = "0.1.0" }
 andromeda-proto = { path = "crates/andromeda-proto", version = "0.1.0" }
+andromeda-proto-wire = { path = "crates/andromeda-proto-wire", version = "0.1.0" }
 andromeda-quic = { path = "crates/andromeda-quic", version = "0.1.0" }
+andromeda-quic-runtime-quinn = { path = "crates/andromeda-quic-runtime-quinn", version = "0.1.0" }
+andromeda-recovery = { path = "crates/andromeda-recovery", version = "0.1.0" }
+andromeda-regression = { path = "crates/andromeda-regression", version = "0.1.0" }
+andromeda-resource = { path = "crates/andromeda-resource", version = "0.1.0" }
+andromeda-restore = { path = "crates/andromeda-restore", version = "0.1.0" }
+andromeda-result-stream = { path = "crates/andromeda-result-stream", version = "0.1.0" }
+andromeda-retry = { path = "crates/andromeda-retry", version = "0.1.0" }
+andromeda-rpc = { path = "crates/andromeda-rpc", version = "0.1.0" }
+andromeda-rpc-codec = { path = "crates/andromeda-rpc-codec", version = "0.1.0" }
+andromeda-rpc-protocol = { path = "crates/andromeda-rpc-protocol", version = "0.1.0" }
+andromeda-savepoint = { path = "crates/andromeda-savepoint", version = "0.1.0" }
+andromeda-scenario-evidence = { path = "crates/andromeda-scenario-evidence", version = "0.1.0" }
+andromeda-security = { path = "crates/andromeda-security", version = "0.1.0" }
+andromeda-security-contract = { path = "crates/andromeda-security-contract", version = "0.1.0" }
+andromeda-segment = { path = "crates/andromeda-segment", version = "0.1.0" }
 andromeda-srpl = { path = "crates/andromeda-srpl", version = "0.1.0" }
+andromeda-srpl-ast = { path = "crates/andromeda-srpl-ast", version = "0.1.0" }
+andromeda-srpl-binder = { path = "crates/andromeda-srpl-binder", version = "0.1.0" }
+andromeda-srpl-catalog-binding = { path = "crates/andromeda-srpl-catalog-binding", version = "0.1.0" }
+andromeda-srpl-cardinality = { path = "crates/andromeda-srpl-cardinality", version = "0.1.0" }
+andromeda-srpl-definition-batch = { path = "crates/andromeda-srpl-definition-batch", version = "0.1.0" }
+andromeda-srpl-diagnostics = { path = "crates/andromeda-srpl-diagnostics", version = "0.1.0" }
+andromeda-srpl-execution-adapter = { path = "crates/andromeda-srpl-execution-adapter", version = "0.1.0" }
+andromeda-srpl-interpreter = { path = "crates/andromeda-srpl-interpreter", version = "0.1.0" }
+andromeda-srpl-ir = { path = "crates/andromeda-srpl-ir", version = "0.1.0" }
+andromeda-srpl-lexer = { path = "crates/andromeda-srpl-lexer", version = "0.1.0" }
+andromeda-srpl-lowering = { path = "crates/andromeda-srpl-lowering", version = "0.1.0" }
+andromeda-srpl-parser = { path = "crates/andromeda-srpl-parser", version = "0.1.0" }
+andromeda-srpl-test-fixtures = { path = "crates/andromeda-srpl-test-fixtures", version = "0.1.0" }
+andromeda-statistics = { path = "crates/andromeda-statistics", version = "0.1.0" }
 andromeda-storage = { path = "crates/andromeda-storage", version = "0.1.0" }
-andromeda-tx = { path = "crates/andromeda-tx", version = "0.1.0" }
+andromeda-storage-placement = { path = "crates/andromeda-storage-placement", version = "0.1.0" }
+andromeda-storage-heap = { path = "crates/andromeda-storage-heap", version = "0.1.0" }
+andromeda-storage-index = { path = "crates/andromeda-storage-index", version = "0.1.0" }
+andromeda-storage-page = { path = "crates/andromeda-storage-page", version = "0.1.0" }
+andromeda-structured-object = { path = "crates/andromeda-structured-object", version = "0.1.0" }
+andromeda-time = { path = "crates/andromeda-time", version = "0.1.0" }
+andromeda-test-support = { path = "crates/andromeda-test-support", version = "0.1.0" }
+andromeda-transaction = { path = "crates/andromeda-transaction", version = "0.1.0" }
+andromeda-transaction-log = { path = "crates/andromeda-transaction-log", version = "0.1.0" }
+andromeda-types = { path = "crates/andromeda-types", version = "0.1.0" }
+andromeda-wal = { path = "crates/andromeda-wal", version = "0.1.0" }
+andromeda-wal-codec = { path = "crates/andromeda-wal-codec", version = "0.1.0" }
 
 quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls-ring"] }
 rcgen = { version = "0.14.7" }
@@ -38,6 +194,38 @@ tokio = { version = "1", default-features = false, features = ["net", "rt", "tim
 
 # Fuzz and property testing
 proptest = "1.4"
+
+[workspace.lints.rust]
+# Safety: unsafe_op_in_unsafe_fn enforces that unsafe operations within unsafe blocks
+# are explicitly marked with inner unsafe. This catches logic errors and makes code intent clear.
+unsafe_op_in_unsafe_fn = "warn"
+
+# API clarity: unreachable_pub catches unintended public items in internal modules
+# Reduces API surface and makes intentions explicit
+unreachable_pub = "warn"
+
+# Documentation: require docs for public items (can be configured per crate)
+# C5 critical crates may use "deny", others use "warn"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+# Correctness: catch actual bugs
+correctness = { level = "deny", priority = -1 }
+
+# Suspicious patterns: likely mistakes
+suspicious = { level = "deny", priority = -1 }
+
+# Pedantic: useful warnings for code quality (allow-by-default, but good to catch)
+pedantic = { level = "warn", priority = -1 }
+
+# Perf: optimization suggestions (warn, not deny)
+perf = { level = "warn", priority = -1 }
+
+# Allow style lints: Clippy style is subjective, rustfmt handles formatting
+style = { level = "allow", priority = -1 }
+
+# Crate-level exceptions are set in individual crates.
+# - andromeda-proto: allow missing_docs for generated code.
 
 [profile.fuzz]
 inherits = "release"

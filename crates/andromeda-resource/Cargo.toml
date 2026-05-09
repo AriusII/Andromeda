@@ -1,0 +1,9 @@
+[package]
+name = "andromeda-resource"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+andromeda-hardware.workspace = true

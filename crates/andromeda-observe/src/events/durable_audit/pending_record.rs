@@ -1,9 +1,10 @@
 use crate::events::{EventEnvelope, observe_error};
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 use super::{
-    DurableAuditPrincipalBinding, DurableAuditRecordIdentity, DurableAuditReplayBehavior,
-    DurableAuditRetentionBoundary, durable_audit_family, validate_record,
+    DurableAuditAppendRecord, DurableAuditPrincipalBinding, DurableAuditRecordIdentity,
+    DurableAuditReplayBehavior, DurableAuditRetentionBoundary, durable_audit_family,
+    validate_record,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,5 +47,21 @@ impl PendingDurableAuditRecord {
     /// cannot be correlated to request/session evidence.
     pub fn validate(&self) -> AndromedaResult<()> {
         validate_record(self)
+    }
+
+    pub fn into_append_record(self) -> DurableAuditAppendRecord {
+        DurableAuditAppendRecord {
+            identity: self.identity,
+            principal_binding: self.principal_binding,
+            retention: self.retention,
+            replay_behavior: self.replay_behavior,
+            event_kind: format!("{:?}", self.envelope.event.kind()),
+        }
+    }
+}
+
+impl From<PendingDurableAuditRecord> for DurableAuditAppendRecord {
+    fn from(record: PendingDurableAuditRecord) -> Self {
+        record.into_append_record()
     }
 }

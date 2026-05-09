@@ -45,7 +45,7 @@ fn catalog_mutation_records_fit_storage_wal_catalog_kinds() {
         };
         assert_eq!(
             catalog_record.kind().storage_wal_kind_tag() as u64,
-            andromeda_storage::wal_record_kind_tag(storage_kind)
+            andromeda_wal::wal_record_kind_tag(storage_kind)
         );
 
         let payload = catalog_record.encode_durable_payload().unwrap();
@@ -227,72 +227,6 @@ fn durable_apply_rejects_zero_wal_append_lsn_before_flush() {
     assert_eq!(append_index, 3);
     assert!(!flush_called);
     assert_store_unpublished_at(&store, 10);
-}
-
-#[test]
-fn durable_catalog_wal_payload_rejects_planned_only_publication_boundary() {
-    let store = store_at(10);
-    let plan = plan_product_batch(&store, 10, 11);
-    let mut record = plan.mutation_plan.records().into_iter().next().unwrap();
-    match &mut record {
-        CatalogMutationRecord::Begin(boundary) => {
-            boundary.publication_semantics = CatalogPublicationSemantics::PlannedVersionOnly;
-        }
-        _ => unreachable!("definition batch WAL sequence must start with Begin"),
-    }
-
-    let error = record.encode_durable_payload().unwrap_err();
-
-    assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
-    assert!(error.message().contains("durable publication semantics"));
-}
-
-#[test]
-fn durable_catalog_wal_boundaries_roundtrip_definition_batch_hashes() {
-    let store = store_at(10);
-    let definition_batch = product_batch(10, 11);
-    let expected_source_hash = definition_batch.source_hash();
-    let expected_dependency_graph_hash = definition_batch.dependency_graph_hash().unwrap();
-    let plan = store.plan_definition_batch(&definition_batch).unwrap();
-
-    let records = plan.mutation_plan.records();
-    for record in [records.first().unwrap(), records.last().unwrap()] {
-        let decoded = CatalogMutationRecord::decode_durable_payload(
-            &record.encode_durable_payload().unwrap(),
-        )
-        .unwrap();
-
-        match decoded {
-            CatalogMutationRecord::Begin(boundary) | CatalogMutationRecord::Commit(boundary) => {
-                assert_eq!(boundary.source_hash, expected_source_hash);
-                assert_eq!(
-                    boundary.dependency_graph_hash,
-                    expected_dependency_graph_hash
-                );
-                assert!(!boundary.source_hash.is_zero());
-                assert!(!boundary.dependency_graph_hash.is_zero());
-            }
-            CatalogMutationRecord::Apply(_) => unreachable!("boundary test selected apply record"),
-        }
-    }
-}
-
-#[test]
-fn durable_catalog_wal_boundary_rejects_missing_definition_batch_hash() {
-    let store = store_at(10);
-    let plan = plan_product_batch(&store, 10, 11);
-    let mut record = plan.mutation_plan.records().into_iter().next().unwrap();
-    match &mut record {
-        CatalogMutationRecord::Begin(boundary) => {
-            boundary.source_hash = DefinitionBatchSourceHash::default();
-        }
-        _ => unreachable!("definition batch WAL sequence must start with Begin"),
-    }
-
-    let error = record.encode_durable_payload().unwrap_err();
-
-    assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
-    assert!(error.message().contains("source hash"));
 }
 
 #[test]

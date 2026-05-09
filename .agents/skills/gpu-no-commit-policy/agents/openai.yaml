@@ -1,3 +1,0 @@
-display_name: "GPU No Commit Policy"
-short_description: "Enforce that GPU jobs are analytics/statistics/vector/batch only and never participate in commit, WAL, rollback, recovery, security, or OLTP visibility. Use for"
-default_prompt: "Use the GPU No Commit Policy skill to analyze the current Andromeda task and return a bounded, validated result."

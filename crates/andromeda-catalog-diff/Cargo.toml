@@ -1,0 +1,11 @@
+[package]
+name = "andromeda-catalog-diff"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Runtime-free catalog object diff boundary types for Andromeda."
+
+[dependencies]
+andromeda-catalog-store.workspace = true
+andromeda-types.workspace = true

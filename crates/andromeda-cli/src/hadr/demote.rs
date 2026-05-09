@@ -1,4 +1,4 @@
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 use super::output::{print_demotion_force_warning, print_demotion_outcome};
 use super::parsing::parse_demote_options;

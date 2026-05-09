@@ -1,79 +1,62 @@
 # Andromeda
 
-Andromeda is a modern relational transactional database project built around a strict native surface:
+Andromeda is a modern relational transactional database project built around a
+strict native surface:
 
 ```text
 QUIC + custom typed RPC + cataloged Procedure + SRPL + typed ResultStream
 ```
 
-It is not a generic SQL server. Application execution must go through cataloged Procedures with typed, hashed, versioned contracts and explicit transaction scope.
+It is not a generic SQL server. Application execution must go through cataloged
+Procedures with typed, hashed, versioned contracts and explicit transaction
+scope.
+
+## Start Here
+
+`/docs` is the canonical documentation entrypoint.
+
+- [Documentation index](docs/README.md)
+- [Project status](docs/status.md)
+- [Architecture overview](docs/architecture/README.md)
+- [Domain specifications](docs/specs/README.md)
+- [Operations runbooks](docs/runbooks/README.md)
+- [Testing strategy](docs/testing/README.md)
 
 ## Repository Layout
 
 | Path | Purpose |
-|---|---|
-| `crates/` | Rust workspace crates. This task intentionally does not reorganize crate code. |
-| `fuzz/` | Fuzzing targets and seed tooling. This task intentionally does not reorganize fuzz assets. |
-| `documentations/` | Project doctrine, roadmap, governance records, implementation status, runbooks, and references. |
-| `.codex/` | Codex operating pack: agents, hooks, workflows, prompt templates, schemas, adapters, and validation scripts. |
-| `.agents/` | Reusable skills, agent-facing instructions, and governance registries. |
-| `.github/` | GitHub Actions, issue/PR templates, Code Owners, Copilot instructions, and CI scripts. |
+| --- | --- |
+| `crates/` | Rust workspace crates (88 crates total). |
+| `docs/` | Canonical architecture, specification, governance, implementation, runbook, and testing documentation. |
+| `tests/` | Repository-level test indexes and shared test documentation. |
+| `fuzz/` | Fuzzing targets and corpus organization. |
+| `tools/` | Repository tooling and validation helpers. |
+| `.cargo/` | Cargo configuration. |
+| `.config/` | Tool configuration, including nextest profiles. |
 
-Root-level source of truth is intentionally small. Generated outputs, runtime logs, local experiments, and one-off reports should stay outside the repository root.
+Root-level source of truth is intentionally small. Generated outputs, runtime
+logs, local experiments, and one-off reports should stay outside the repository
+root.
 
-## Documentation Entry Points
+## Documentation
 
-Start with the protected current-state and roadmap files:
+Use [docs/README.md](docs/README.md) for navigation. Use
+[docs/status.md](docs/status.md) before citing implementation readiness,
+documentation status, or current crate counts.
 
-- [Current state](documentations/CURRENT_STATE.md)
-- [Implementation roadmap 2026](documentations/ROADMAP_IMPLEMENTATION_2026.md)
-- [Worker execution matrix 2026](documentations/WORKER_EXECUTION_MATRIX_2026.md)
-- [Roadmap implementation cross-check](documentations/ANDROMEDA_ROADMAP_IMPLEMENTATION_CROSSCHECK_2026.md)
+New cross-links should target `/docs`.
 
-The consolidated doctrine set remains at the top of `documentations/` and must be treated as the canonical design reference:
+## Current Status
 
-- [Index and reading mode](documentations/00_ANDROMEDA_INDEX_ET_MODE_DE_LECTURE.md)
-- [Doctrine, lexicon, architecture, catalog, and Modelization](documentations/01_DOCTRINE_LEXIQUE_ARCHITECTURE_CATALOGUE_MODELIZATION.md)
-- [Type system, SRPL, Procedures, and Maps](documentations/02_TYPE_SYSTEM_SRPL_PROCEDURES_MAPS.md)
-- [Transaction, WAL, MVCC, storage, and recovery](documentations/03_TRANSACTION_WAL_MVCC_STORAGE_RECOVERY.md)
-- [QUIC, RPC, security, HA/DR, and operations](documentations/04_QUIC_RPC_SECURITY_HADR_OPERATIONS.md)
-- [Optimizer, statistics, analytics, hardware roadmap, and sources](documentations/05_OPTIMIZER_STATS_ANALYTICS_HARDWARE_ROADMAP_SOURCES.md)
-
-Supporting documentation is grouped by use:
-
-- [Agent operations](documentations/agent-operations/)
-- [Developer guides](documentations/developer-guides/)
-- [Governance decisions](documentations/governance/decisions/)
-- [Implementation tracking](documentations/implementation/)
-- [Operations runbooks](documentations/operations/)
-- [References and test vectors](documentations/reference/)
-
-## Operating Pack
-
-Andromeda's local agent tooling is split by responsibility:
-
-| Area | Canonical location |
-|---|---|
-| Codex agent definitions | `.codex/agents/` |
-| Codex hook configuration | `.codex/hooks.json` |
-| Codex hook scripts | `.codex/scripts/hooks/` |
-| Codex workflows | `.codex/workflows/` |
-| Prompt templates | `.codex/templates/prompts/` |
-| Tooling schemas | `.codex/schemas/` |
-| OpenAI adapter sketches | `.codex/adapters/openai-agents/` |
-| Reusable skills | `.agents/skills/` |
-| Agent-facing standards | `.agents/instructions/` |
-| Governance registries | `.agents/registries/` |
-
-Run this check after editing the operating pack:
-
-```powershell
-python .codex/scripts/validate_codex_tooling.py
-```
+- The workspace currently has 88 active crates.
+- `/docs` is the canonical documentation surface.
+- The local V0 vertical path remains a prototype, not a production database
+  runtime, complete network server, or complete durable storage engine.
+- Active documentation and tooling links use `/docs` and `tools/loom-models`.
 
 ## Local V0 Commands
 
-The Rust workspace includes a local V0 recoverable vertical prototype. It is not yet a production database runtime, complete network server, or complete durable storage engine.
+The Rust workspace includes a local V0 recoverable vertical prototype:
 
 ```powershell
 cargo run -p andromeda-cli -- vertical-v0 --wal "$env:TEMP\andromeda-v0-vertical.wal"
@@ -81,21 +64,28 @@ cargo run -p andromeda-cli -- recovery-inspect "$env:TEMP\andromeda-v0-vertical.
 cargo run -p andromeda-cli -- protocol-smoke --detail
 ```
 
-`vertical-v0` executes the current `Inventory.ReserveStock` path through the local V0 SRPL/FileWal flow and writes a mono-segment WAL file. `recovery-inspect` prints the durable prefix, replay LSNs, ignored transactions, and forensic boundary status for that WAL. `protocol-smoke --detail` checks local payload/frame lockstep and ResultStream ordering without opening network sockets.
+`vertical-v0` executes the current `Inventory.ReserveStock` path through the
+local V0 SRPL/FileWal flow and writes a mono-segment WAL file.
+`recovery-inspect` prints the durable prefix, replay LSNs, ignored
+transactions, and forensic boundary status for that WAL. `protocol-smoke
+--detail` checks local payload/frame lockstep and ResultStream ordering without
+opening network sockets.
 
-## Release And Governance Records
+## Release And Governance
 
-Current readiness must be judged from the active roadmap, current-state file, release-gate workflow, and current tracker output. Historical decision records remain useful governance context, but they do not by themselves prove current readiness.
+Current readiness must be judged from status docs, release-gate evidence, and
+current validation output. Historical decision records remain useful governance
+context, but they do not by themselves prove current readiness.
 
-- [DEC-035: Release gate chain](documentations/governance/decisions/DEC-035-release-gate-chain.md)
-- [DEC-036: Release readiness approval](documentations/governance/decisions/DEC-036-release-readiness-approval.md)
-- [DEC-037: Risk register updates](documentations/governance/decisions/DEC-037-risk-register-updates.md)
-- [DEC-038: B-Tree mutations deferred](documentations/governance/decisions/DEC-038-btree-mutations-deferred.md)
-- [DEC-039: Optimizer intermediate pass contract](documentations/governance/decisions/DEC-039-optimizer-intermediate-pass-contract.md)
+- [Architecture decision records](docs/adr/README.md)
+- [Governance documents](docs/governance/README.md)
+- [Implementation roadmap](docs/implementation/roadmap.md)
+- [Extraction status](docs/implementation/extraction-status.md)
 
 ## Core Validation
 
-Use the narrowest validation that matches the change. For broad Rust changes, start with:
+Use the narrowest validation that matches the change. For broad Rust changes,
+start with:
 
 ```powershell
 cargo fmt --all -- --check
@@ -104,13 +94,8 @@ cargo test --workspace --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
 ```
 
-For documentation and operating-pack changes, use:
-
-```powershell
-python .codex/scripts/validate_codex_tooling.py
-python .github/scripts/yaml_sanity.py
-python -m unittest discover -s .github/scripts/tests
-```
+For documentation-only edits, use targeted link, status, and terminology
+checks before broader Rust validation.
 
 ## Non-Negotiable Design Constraints
 
@@ -120,7 +105,8 @@ python -m unittest discover -s .github/scripts/tests
 - Every Procedure is transactionally scoped.
 - No visible commit without durable WAL.
 - RAM is never system truth.
-- GPU never participates in commit, rollback, WAL, recovery, MVCC visibility, or security-critical paths.
+- GPU never participates in commit, rollback, WAL, recovery, MVCC visibility,
+  or security-critical paths.
 - Predictive evidence never decides alone.
 - Active plans are tied to `CatalogVersion + StatsVersion + ContractHash`.
 - Every critical decision must be observable and explainable after the fact.

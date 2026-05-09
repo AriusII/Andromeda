@@ -2,7 +2,7 @@
 //!
 //! Provides user-friendly error creation and handling for CLI operations.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind};
+use andromeda_error::{AndromedaError, AndromedaErrorKind};
 
 /// Creates a CLI error with protocol error kind.
 pub fn cli_error(message: impl Into<String>) -> AndromedaError {

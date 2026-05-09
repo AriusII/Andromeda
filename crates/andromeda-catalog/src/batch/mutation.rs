@@ -1,199 +1,34 @@
 //! Catalog mutation records, plans, and WAL-boundary types.
 
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion, DatabaseId, NamespaceId,
+use andromeda_definition_batch::{
+    DefinitionBatchDependencyGraphHash, DefinitionBatchId, DefinitionBatchSourceHash,
 };
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId};
 use std::collections::BTreeSet;
 
-use crate::{
-    CatalogObjectRef, DefinitionBatchDependencyGraphHash, DefinitionBatchSourceHash,
-    objects::CatalogDefinition,
+use super::definition::CatalogLifecycleTarget;
+
+pub use andromeda_catalog_recovery::{
+    CatalogMutationRecordKind, CatalogWalPayloadDecodeError, CatalogWalPayloadDecodeErrorKind,
+};
+pub use andromeda_catalog_store::{
+    CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH, CatalogPublicationSemantics,
 };
 
-use super::definition::{CatalogLifecycleTarget, DefinitionBatchId};
+pub type CatalogMutation = andromeda_catalog_store::CatalogMutation<DefinitionBatchId>;
 
-/// Maximum number of Apply records that one durable DefinitionBatch replay may carry.
-pub const CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH: usize = 1024;
+pub type CatalogMutationBoundary = andromeda_catalog_store::CatalogMutationBoundary<
+    DefinitionBatchId,
+    DefinitionBatchSourceHash,
+    DefinitionBatchDependencyGraphHash,
+>;
 
-/// Version-advancement proof for a single catalog mutation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CatalogMutation {
-    pub definition_batch_id: DefinitionBatchId,
-    pub previous_version: CatalogVersion,
-    pub next_version: CatalogVersion,
-}
+pub type CatalogMutationDelta =
+    andromeda_catalog_store::CatalogMutationDelta<CatalogLifecycleTarget>;
 
-impl CatalogMutation {
-    /// Returns `true` when `next_version` strictly advances beyond `previous_version`.
-    pub fn is_monotonic(self) -> bool {
-        self.next_version.get() > self.previous_version.get()
-    }
-}
-
-/// Controls whether a mutation is acknowledged only within the engine or also
-/// confirmed to an external durable store.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CatalogPublicationSemantics {
-    PlannedVersionOnly,
-    DurablePublicationExternal,
-}
-
-/// Discriminant for a [`CatalogMutationRecord`] entry.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CatalogMutationRecordKind {
-    CatalogChangeBegin,
-    CatalogChangeApply,
-    CatalogChangeCommit,
-}
-
-/// Stable typed failure class for decoding durable catalog WAL payloads.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CatalogWalPayloadDecodeErrorKind {
-    TruncatedHeader,
-    MagicMismatch,
-    LegacyFormatVersion,
-    UnsupportedFormatVersion,
-    UnknownRecordKindTag,
-    BodyLengthOverflow,
-    BodyLengthMismatch,
-    ChecksumMismatch,
-    BodyInvalid,
-}
-
-impl CatalogWalPayloadDecodeErrorKind {
-    pub const fn stable_code(self) -> &'static str {
-        match self {
-            Self::TruncatedHeader => "catalog_wal_payload_truncated_header",
-            Self::MagicMismatch => "catalog_wal_payload_magic_mismatch",
-            Self::LegacyFormatVersion => "catalog_wal_payload_legacy_format_version",
-            Self::UnsupportedFormatVersion => "catalog_wal_payload_unsupported_format_version",
-            Self::UnknownRecordKindTag => "catalog_wal_payload_unknown_record_kind_tag",
-            Self::BodyLengthOverflow => "catalog_wal_payload_body_length_overflow",
-            Self::BodyLengthMismatch => "catalog_wal_payload_body_length_mismatch",
-            Self::ChecksumMismatch => "catalog_wal_payload_checksum_mismatch",
-            Self::BodyInvalid => "catalog_wal_payload_body_invalid",
-        }
-    }
-}
-
-/// Typed durable catalog WAL decode failure with a stable class and detail.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogWalPayloadDecodeError {
-    kind: CatalogWalPayloadDecodeErrorKind,
-    detail: String,
-}
-
-impl CatalogWalPayloadDecodeError {
-    pub(crate) fn new(kind: CatalogWalPayloadDecodeErrorKind, detail: impl Into<String>) -> Self {
-        Self {
-            kind,
-            detail: detail.into(),
-        }
-    }
-
-    pub(crate) fn from_body_error(error: AndromedaError) -> Self {
-        Self::new(
-            CatalogWalPayloadDecodeErrorKind::BodyInvalid,
-            error.message().to_string(),
-        )
-    }
-
-    pub const fn kind(&self) -> CatalogWalPayloadDecodeErrorKind {
-        self.kind
-    }
-
-    pub fn detail(&self) -> &str {
-        &self.detail
-    }
-}
-
-impl From<CatalogWalPayloadDecodeError> for AndromedaError {
-    fn from(error: CatalogWalPayloadDecodeError) -> Self {
-        AndromedaError::new(
-            AndromedaErrorKind::Catalog,
-            format!("{}: {}", error.kind.stable_code(), error.detail),
-        )
-    }
-}
-
-/// The boundary markers written at the start and end of a mutation's WAL span.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CatalogMutationBoundary {
-    pub batch_id: DefinitionBatchId,
-    pub database_id: DatabaseId,
-    pub namespace_id: NamespaceId,
-    pub previous_version: CatalogVersion,
-    pub next_version: CatalogVersion,
-    pub source_hash: DefinitionBatchSourceHash,
-    pub dependency_graph_hash: DefinitionBatchDependencyGraphHash,
-    pub expected_apply_count: usize,
-    pub publication_semantics: CatalogPublicationSemantics,
-}
-
-/// One atomic object-level change within a [`CatalogMutationPlan`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogMutationDelta {
-    pub operation_index: usize,
-    pub planned_version: CatalogVersion,
-    pub operation: CatalogMutationOperation,
-}
-
-impl CatalogMutationDelta {
-    pub fn create(
-        operation_index: usize,
-        planned_version: CatalogVersion,
-        definition: CatalogDefinition,
-    ) -> Self {
-        let object = definition.object_ref().clone();
-        Self {
-            operation_index,
-            planned_version,
-            operation: CatalogMutationOperation::CreateObject { object, definition },
-        }
-    }
-
-    pub fn deprecate(
-        operation_index: usize,
-        planned_version: CatalogVersion,
-        target: CatalogLifecycleTarget,
-    ) -> Self {
-        Self {
-            operation_index,
-            planned_version,
-            operation: CatalogMutationOperation::DeprecateObject { target },
-        }
-    }
-
-    pub fn object(&self) -> &CatalogObjectRef {
-        match &self.operation {
-            CatalogMutationOperation::CreateObject { object, .. } => object,
-            CatalogMutationOperation::DeprecateObject { target } => &target.object,
-        }
-    }
-
-    pub fn definition(&self) -> Option<&CatalogDefinition> {
-        match &self.operation {
-            CatalogMutationOperation::CreateObject { definition, .. } => Some(definition),
-            CatalogMutationOperation::DeprecateObject { .. } => None,
-        }
-    }
-}
-
-/// The specific operation carried by a [`CatalogMutationDelta`].
-#[allow(
-    clippy::large_enum_variant,
-    reason = "Catalog WAL mutation payloads stay inline to preserve deterministic value semantics."
-)]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CatalogMutationOperation {
-    CreateObject {
-        object: CatalogObjectRef,
-        definition: CatalogDefinition,
-    },
-    DeprecateObject {
-        target: CatalogLifecycleTarget,
-    },
-}
+pub type CatalogMutationOperation =
+    andromeda_catalog_store::CatalogMutationOperation<CatalogLifecycleTarget>;
 
 /// A WAL record emitted during catalog mutation replay.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -256,7 +91,7 @@ impl CatalogMutationPlan {
                 ),
             ));
         }
-        if batch_id.get() == 0 {
+        if batch_id.is_zero() {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Catalog,
                 "catalog mutation plan batch id must not be zero",
@@ -339,7 +174,7 @@ impl CatalogMutationPlan {
                             "catalog mutation plan must not change the same object name twice",
                         ));
                     }
-                }
+                },
                 CatalogMutationOperation::DeprecateObject { target } => {
                     target.validate()?;
                     if target.object.catalog_version > previous_version {
@@ -362,7 +197,7 @@ impl CatalogMutationPlan {
                             "catalog mutation plan must not change the same object name twice",
                         ));
                     }
-                }
+                },
             }
         }
 

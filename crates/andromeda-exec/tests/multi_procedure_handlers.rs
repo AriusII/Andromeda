@@ -20,20 +20,19 @@
 //! - Permission contract: required permissions are forwarded from the contract.
 //! - `ProcedureRegistry::dispatch` validates permissions (privilege escalation blocked).
 
-use andromeda_catalog::{
+use andromeda_admission::InvocationContext;
+use andromeda_error::AndromedaErrorKind;
+use andromeda_execution::{ProcedureHandler, ProcedureRegistry};
+use andromeda_inventory_demo::{
     INVENTORY_QUERY_STOCK_PROCEDURE_ID, INVENTORY_RELEASE_STOCK_PROCEDURE_ID,
-    INVENTORY_RESERVE_STOCK_PROCEDURE_ID, inventory_query_stock_contract,
-    inventory_release_stock_contract, inventory_reserve_stock_contract,
-};
-use andromeda_core::AndromedaErrorKind;
-use andromeda_exec::{
-    InventoryQueryStockProcedureHandler, InventoryReleaseStockProcedureHandler,
-    InventoryReserveStockExecutor, InventoryStock, InvocationContext, ProcedureHandler,
-    ProcedureRegistry, QueryStockEffect, ReleaseStockEffect, ReserveStockCommand,
-    ReserveStockEffect, ReserveStockProcedureHandler,
+    INVENTORY_RESERVE_STOCK_PROCEDURE_ID, InventoryQueryStockProcedureHandler,
+    InventoryReleaseStockProcedureHandler, InventoryReserveStockExecutor, InventoryStock,
+    QueryStockEffect, ReleaseStockEffect, ReserveStockCommand, ReserveStockEffect,
+    ReserveStockProcedureHandler, inventory_query_stock_contract, inventory_release_stock_contract,
+    inventory_reserve_stock_contract,
 };
 use andromeda_observe::TraceId;
-use andromeda_srpl::Cardinality;
+use andromeda_srpl_ir::Cardinality;
 
 // Helper constructors
 
@@ -445,7 +444,7 @@ fn release_stock_effect_mutation_payload_is_deterministic() {
 
 #[test]
 fn release_stock_command_validates_positive_fields() {
-    use andromeda_exec::ReleaseStockCommand;
+    use andromeda_inventory_demo::ReleaseStockCommand;
 
     let zero_product = ReleaseStockCommand {
         product_id: 0,
@@ -468,7 +467,7 @@ fn release_stock_command_validates_positive_fields() {
 
 #[test]
 fn query_stock_command_validates_positive_product_id() {
-    use andromeda_exec::QueryStockCommand;
+    use andromeda_inventory_demo::QueryStockCommand;
 
     let zero = QueryStockCommand { product_id: 0 };
     assert!(zero.validate().is_err(), "product_id=0 must fail");

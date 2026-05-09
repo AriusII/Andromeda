@@ -1,14 +1,15 @@
-use andromeda_storage::{
+use andromeda_hadr::{
     FileBackedHadrMembershipStore, HadrEpoch, HadrFencingContext, HadrFencingToken,
     HadrMembershipRecord, HadrMembershipSnapshot, HadrMembershipStore, HadrNodeId, HadrNodeRole,
     HadrPromotionAuditLog, HadrPromotionAuditMarker, HadrPromotionAuditReceipt, HadrPromotionVote,
-    Lsn, PromotionAttempt,
+    PromotionAttempt,
 };
+use andromeda_test_support::workspace::unique_temp_dir_path;
+use andromeda_wal::Lsn;
 use std::{
     cell::RefCell,
     fs,
     path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 pub(super) fn membership_store_json_args(path: &Path) -> Vec<String> {
@@ -206,7 +207,7 @@ impl HadrPromotionAuditLog for RecordingPromotionAudit<'_> {
     fn append_primary_promotion_marker(
         &self,
         marker: &HadrPromotionAuditMarker,
-    ) -> andromeda_core::AndromedaResult<()> {
+    ) -> andromeda_error::AndromedaResult<()> {
         let primary = self
             .store
             .load()?
@@ -219,21 +220,14 @@ impl HadrPromotionAuditLog for RecordingPromotionAudit<'_> {
     fn append_primary_promotion_marker_durably(
         &self,
         marker: &HadrPromotionAuditMarker,
-    ) -> andromeda_core::AndromedaResult<HadrPromotionAuditReceipt> {
+    ) -> andromeda_error::AndromedaResult<HadrPromotionAuditReceipt> {
         self.append_primary_promotion_marker(marker)?;
         HadrPromotionAuditReceipt::new(marker.primary_durable_lsn, [0x16; 32])
     }
 }
 
 pub(super) fn durable_store_path(name: &str) -> PathBuf {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system clock after unix epoch")
-        .as_nanos();
-    let dir = std::env::temp_dir().join(format!(
-        "andromeda-cli-hadr-{name}-{}-{nanos}",
-        std::process::id()
-    ));
+    let dir = unique_temp_dir_path(&format!("andromeda-cli-hadr-{name}"));
     fs::create_dir_all(&dir).expect("create temp HADR dir");
     dir.join("membership.bin")
 }

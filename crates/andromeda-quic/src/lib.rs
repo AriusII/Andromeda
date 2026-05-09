@@ -4,41 +4,22 @@
 //!
 //! The default API is runtime-free: frame encoding, stream role validation,
 //! lifecycle gating, backpressure, RPC dispatch, and HA/DR stream allocation are
-//! modelled without exposing a concrete QUIC backend. The optional
-//! `runtime-quinn` feature adds Quinn-backed TLS and network adapters.
+//! modelled without exposing a concrete QUIC backend. Quinn-backed TLS and
+//! network adapters live in the separate `andromeda-quic-runtime-quinn` crate.
 //!
 //! Critical invariants:
-//! - frame type codes stay locked to protobuf payload layer codes;
-//! - stream roles enforce surface separation;
-//! - result streams are ordered as metadata, zero or more batches, completion;
 //! - lifecycle state gates handshake, active dispatch, drain, and close.
+//! - QUIC surface-plane checks gate transport admission before RPC dispatch;
+//! - concrete Quinn/TLS behavior remains in `andromeda-quic-runtime-quinn`.
 
-mod backpressure;
-mod catalog_manifest_resolution;
+pub mod catalog_manifest_resolution;
 mod connection;
-mod frame_code;
-mod frame_codec;
-mod frame_sequence;
-mod frame_struct;
-mod procedure_gateway;
+pub mod procedure_gateway;
 mod reconnect;
-mod rpc_dispatch;
-mod stream_types;
-mod typed_envelope;
 mod zero_rtt;
 
-pub mod frame;
 mod stream_concurrency;
-mod transport;
-
-#[cfg(feature = "runtime-quinn")]
-mod runtime_quinn;
-
-#[cfg(feature = "runtime-quinn")]
-pub mod quinn_backend;
-
-#[cfg(feature = "runtime-quinn")]
-pub mod quinn_tls;
+pub mod transport;
 
 pub use stream_concurrency::{
     BackpressureRequest, CancellationReason, CancellationToken, StreamConcurrencyManager,
@@ -47,19 +28,6 @@ pub use stream_concurrency::{
 
 pub mod mtls_identity;
 
-pub use frame::{
-    AUTH_FRAME_CODE, CONTRACT_REQUEST_FRAME_CODE, CONTRACT_RESPONSE_FRAME_CODE, ERROR_FRAME_CODE,
-    FRAME_CODEC_CRC_OFFSET, FRAME_CODEC_HEADER_LEN, FRAME_HEADER_CRC_UNCHECKED,
-    FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP, FrameBytes, FrameCodec, FrameCodecEndian, FrameFamily,
-    FrameHeader, FrameType, HELLO_FRAME_CODE, MAX_FRAME_PAYLOAD_LENGTH, RESERVED_FRAME_FLAGS_MASK,
-    RPC_BATCH_FRAME_CODE, RPC_COMPLETION_FRAME_CODE, RPC_EXECUTE_REQUEST_FRAME_CODE,
-    RPC_METADATA_FRAME_CODE, ResultStreamMetadataPolicy, ResultStreamSequence, StreamRole,
-    TELEMETRY_SOFT_SIGNAL_FRAME_CODE, validate_frame_sequence, validate_result_stream_sequence,
-    validate_result_stream_sequence_with_metadata_policy, validate_single_frame_on_stream,
-};
-
-pub mod stream;
-
 mod session;
 
 pub use session::{
@@ -67,25 +35,7 @@ pub use session::{
     EarlyDataPolicy, LifecycleState, SurfaceListenerConfig, SurfaceListenerSet, SurfacePlane,
 };
 
-mod rpc;
-
-pub use rpc::{
-    DispatchPolicy, FrameDispatch, TransportSurface, dispatch_frame, expected_stream_role,
-    validate_transport_surface,
-};
-
-pub use typed_envelope::{
-    DEFAULT_MAX_TYPED_RESULT_STREAM_ENVELOPE_BYTES, DEFAULT_MAX_TYPED_RESULT_STREAM_FRAMES,
-    TypedResultStreamBounds, TypedResultStreamContext, decode_typed_frame_envelope,
-    validate_typed_result_stream_sequence,
-    validate_typed_result_stream_sequence_with_context_and_bounds,
-    validate_typed_result_stream_sequence_with_metadata_policy,
-};
-
-pub use procedure_gateway::{
-    ProcedureAuthorizedRouteBinding, ProcedureGateway, ProcedureRouteAdmissionError,
-    ProcedureRouteBinding, ProcedureRouteExecuteRequest,
-};
+pub use procedure_gateway::ProcedureGateway;
 
 pub use reconnect::{
     CertificateContinuityDecision, CertificateContinuityPolicy, CertificateRotationDeclaration,
@@ -96,39 +46,14 @@ pub use reconnect::{
     RetryRejectionReason,
 };
 
-pub use backpressure::{BackpressureReason, BackpressureSignal, BackpressureTransport};
-
 pub use catalog_manifest_resolution::{
-    CatalogColumnDescriptor, CatalogManifestResolutionContext, CatalogManifestResolutionGateway,
-    CatalogManifestResolutionRequest, CatalogManifestResolutionResponse,
-    CatalogManifestResolutionRuntime, CatalogManifestResolutionStatus, CatalogManifestSelector,
-    CatalogProcedureManifest, CatalogProcedureManifestResolutionRequest,
-    CatalogProcedureManifestResolutionResponse, CatalogProcedureProtocolLayout,
-    CatalogRequiredPermission, CatalogResultStreamDescriptor,
-    catalog_manifest_resolution_request_frame, decode_catalog_manifest_resolution_request_frame,
-    decode_catalog_manifest_resolution_response_frame,
+    CatalogManifestResolutionGateway, CatalogManifestResolutionRuntime,
 };
 
 pub use transport::{
     QuicClientTransport, QuicServerTransport, TransportBackpressureStatus,
     TransportCancellationStatus, TransportEndpointMetadata, TransportMessage,
     TransportShutdownMode, TransportShutdownState,
-};
-
-pub mod hadr_streams;
-
-pub use hadr_streams::{
-    HADR_STREAM_MAX, HADR_STREAM_MIN, HEARTBEAT_STREAM_MAX, HEARTBEAT_STREAM_MIN,
-    HadrStreamCleanup, HadrStreamKind, RESERVED_STREAM_MAX, RESERVED_STREAM_MIN, StreamAllocation,
-    StreamMultiplexer, VOTE_STREAM_MAX, VOTE_STREAM_MIN, WAL_SHIPPING_STREAM_MAX,
-    WAL_SHIPPING_STREAM_MIN,
-};
-
-mod protocol_invariants;
-
-pub use protocol_invariants::{
-    FrameTypeInvariants, PayloadKindInvariants, ProtocolInvariants, ProtocolVersionInvariants,
-    validate_frame_header_layout,
 };
 
 pub use zero_rtt::{

@@ -3,34 +3,37 @@
 //! Tests that the execution stack properly emits CommitVisible and RollbackDurable
 //! events with durable LSN correlation and proper event envelope validation.
 
-use andromeda_catalog::{
-    INVENTORY_RESERVE_STOCK_PERMISSION, inventory_reserve_stock_catalog_bindings,
-    inventory_reserve_stock_contract,
+use andromeda_admission::{
+    ExecutionIoAdmissionDecision, ExecutionIoAdmissionRequest, InvocationContext, InvocationReject,
+    InvocationRequest,
 };
-use andromeda_core::{InvocationId, PipelineClass, RequestId, ResourceBudget, TransactionId};
-use andromeda_exec::{
-    CompletionStatus, ExecutionIoAdmissionRequest, InventoryReserveStockExecutor, InventoryStock,
-    InvocationContext, InvocationRequest, LocalVerticalRuntime, ReserveStockCommand,
+use andromeda_exec::LocalVerticalRuntime;
+use andromeda_hardware::{PipelineClass, ResourceBudget};
+use andromeda_inventory_demo::{
+    INVENTORY_RESERVE_STOCK_PERMISSION, InventoryReserveStockExecutor, InventoryStock,
+    ReserveStockCommand, inventory_reserve_stock_catalog_bindings,
+    inventory_reserve_stock_contract,
 };
 use andromeda_observe::{
     CommitVisibleTrace, EventCorrelation, EventEmitter, EventEnvelope, EventId, InMemoryEventSink,
     RollbackDurableTrace, TraceEvent, TraceId,
 };
-use andromeda_srpl::procedure_compiler::compile_narrow_procedure_signature;
-use andromeda_storage::{
-    CoreIoPlacementRequest, InMemoryWal, Lsn, OperationalProfile, PageSize, StorageIoBudgetScope,
-    StorageWorkloadClass, WalRecordKind,
+use andromeda_procedure_contract::ProcedureContract;
+use andromeda_result_stream::CompletionStatus;
+use andromeda_srpl::compile_narrow_procedure_signature;
+use andromeda_storage_page::PageSize;
+use andromeda_storage_placement::{
+    CoreIoPlacementRequest, OperationalProfile, StorageIoBudgetScope, StorageWorkloadClass,
 };
-use andromeda_tx::TransactionState;
+use andromeda_transaction::TransactionState;
+use andromeda_types::{InvocationId, RequestId, TransactionId};
+use andromeda_wal::{InMemoryWal, Lsn, WalRecordKind};
 
 fn inventory_reserve_stock_srpl_source() -> &'static str {
     "procedure Inventory.ReserveStock accepts (ProductId i64, Quantity i64) returns Reservation one (Reserved bool) body { read Inventory.ProductStock Stock one; assert Quantity InsufficientStock; update Inventory.ProductStock AvailableQuantity; emit Reservation (Reserved); }"
 }
 
-fn request_for(
-    contract: &andromeda_catalog::ProcedureContract,
-    invocation_id: u64,
-) -> InvocationRequest {
+fn request_for(contract: &ProcedureContract, invocation_id: u64) -> InvocationRequest {
     InvocationRequest {
         invocation_id: InvocationId::new(invocation_id),
         procedure: contract.as_ref(),
@@ -43,7 +46,7 @@ fn request_for(
 
 fn foreground_io_admission(
     trace_id: TraceId,
-) -> Result<andromeda_exec::ExecutionIoAdmissionDecision, andromeda_exec::InvocationReject> {
+) -> Result<ExecutionIoAdmissionDecision, InvocationReject> {
     let profile = OperationalProfile::hot_write();
     ExecutionIoAdmissionRequest::new(
         profile.clone(),
@@ -60,7 +63,7 @@ fn foreground_io_admission(
 }
 
 fn event_correlation(
-    contract: &andromeda_catalog::ProcedureContract,
+    contract: &ProcedureContract,
     transaction_id: Option<TransactionId>,
     durable_lsn: Option<Lsn>,
 ) -> EventCorrelation {
@@ -159,7 +162,7 @@ fn c5_commit_lifecycle_emits_commit_visible_event_with_durable_lsn() {
             assert_eq!(trace.transaction_id, tx_id);
             assert_eq!(trace.durable_commit_lsn, durable_lsn.get());
             assert!(trace.proves_wal_before_visible_commit());
-        }
+        },
         _ => panic!(
             "expected CommitVisible event, got {:?}",
             envelope.event.kind()
@@ -264,7 +267,7 @@ fn c5_rollback_lifecycle_emits_rollback_durable_event_with_durable_lsn() {
             assert_eq!(trace.transaction_id, tx_id);
             assert_eq!(trace.durable_rollback_lsn, durable_lsn.get());
             assert!(trace.proves_durable_rollback());
-        }
+        },
         _ => panic!(
             "expected RollbackDurable event, got {:?}",
             envelope.event.kind()
@@ -299,7 +302,7 @@ fn c5_event_emission_failure_propagates_to_caller() {
     let durable_lsn = Lsn::new(1);
 
     // Create a sink with capacity limit of 0 to force emission failure
-    let mut sink = andromeda_observe::InMemoryEventSink::with_capacity_limit(0);
+    let mut sink = InMemoryEventSink::with_capacity_limit(0);
     let mut emitter = EventEmitter::new(&mut sink);
 
     let correlation = event_correlation(&contract, Some(tx_id), Some(durable_lsn));

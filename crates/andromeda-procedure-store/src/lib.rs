@@ -1,0 +1,61 @@
+#![forbid(unsafe_code)]
+#![doc = r#"
+# Andromeda Procedure Store
+
+Procedure registry and invocation evidence contracts.
+
+The crate exposes Procedure Store primitives plus the in-memory registry used to
+bind procedures, decisions, runtime records, and advisory feedback. It does not
+provide durable truth, catalog publication, WAL replay, or plan-selection
+authority.
+"#]
+
+mod audit;
+mod contract_entry;
+mod decision_record;
+mod error;
+mod evidence;
+mod evidence_role;
+mod feedback;
+mod feedback_store;
+mod history;
+mod identity;
+mod metrics;
+mod registration;
+mod regression;
+mod runtime_counters;
+mod runtime_identity;
+mod runtime_record;
+mod runtime_status;
+mod sink;
+mod status;
+mod store;
+
+pub use audit::{AuditCorrelation, AuditCorrelationId};
+pub use contract_entry::ProcedureStoreEntry;
+pub use decision_record::InvocationDecisionRecord;
+pub use error::{ProcedureStorePrimitiveError, ProcedureStorePrimitiveResult};
+pub use evidence::{EvidenceDigest, InvocationEvidenceKind, InvocationEvidenceMarker};
+pub use evidence_role::ProcedureStoreEvidenceRole;
+pub use feedback::{
+    CompletionEvidence, CompletionStatus, FeedbackId, InvocationFeedback, ProcedureFeedback,
+    ProcedureFeedbackError,
+};
+pub use feedback_store::{
+    InMemoryProcedureFeedbackStore, ProcedureFeedbackStore, ProcedureFeedbackStoreError,
+    RecordOutcome,
+};
+pub use history::InvocationHistoryRecord;
+pub use identity::{InvocationId, InvocationIdentity, ProcedureId};
+pub use metrics::{InvocationMetricKind, InvocationMetrics};
+pub use registration::ProcedureRegistration;
+pub use regression::{
+    MAX_REGRESSION_THRESHOLD_BPS, RegressionSeverity, RegressionSignal, RegressionThresholdBps,
+};
+pub use runtime_counters::ProcedureRuntimeCounters;
+pub use runtime_identity::{ProcedureRuntimePlanId, ProcedureRuntimeRecordId};
+pub use runtime_record::{InvocationRuntimeRecord, InvocationRuntimeRecordOutcome};
+pub use runtime_status::ProcedureRuntimeStatus;
+pub use sink::InvocationEvidenceSink;
+pub use status::InvocationStatus;
+pub use store::{PROCEDURE_FEEDBACK_CAPACITY_PER_PROCEDURE, ProcedureStore};

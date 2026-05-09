@@ -6,24 +6,25 @@ Accepted
 
 ## Context
 
-Andromeda uses Codex as an engineering accelerator for a mission-critical Rust database engine and SRPL language. The tooling must be discoverable, precise, safe, and maintainable.
+Andromeda is a Rust workspace with many domain crates. A single edition policy
+keeps crate boundaries, generated code, tooling, and release validation aligned.
 
 ## Decision
 
-Use Rust 2024 Edition and modern stable Rust policy for Andromeda guidance.
+All workspace crates use Rust 2024 edition. The workspace MSRV is governed by
+the dedicated toolchain policy ADR.
 
 ## Consequences
 
-Aligns Codex with current systems Rust practices and explicit unsafe boundaries.
+- New crates must declare `edition = "2024"`.
+- Tooling and CI must validate the workspace with the governed stable toolchain.
+- Edition changes require a new ADR and a workspace-wide migration plan.
 
 ## Validation
 
-Run:
+- `cargo metadata --no-deps --format-version 1`
+- `cargo check --workspace --all-targets --all-features`
 
-```bash
-python3 .codex/scripts/validate_codex_tooling.py
-```
+## References
 
-## Revision criteria
-
-Revise this ADR if official Codex configuration, agent, skill, or hook conventions change.
+- MSRV policy: `docs/adr/ADR-0017-rust-toolchain-msrv-policy.md`

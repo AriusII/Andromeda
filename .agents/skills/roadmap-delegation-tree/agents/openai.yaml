@@ -1,3 +1,0 @@
-display_name: "Roadmap Delegation Tree"
-short_description: "Build a master-to-student delegation model for Codex agents. Use when one central agent must route subtasks to specialized agents while preserving context, scop"
-default_prompt: "Use the Roadmap Delegation Tree skill to analyze the current Andromeda task and return a bounded, validated result."

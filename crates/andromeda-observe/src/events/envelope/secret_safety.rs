@@ -1,4 +1,4 @@
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 use crate::events::{EventEnvelope, TraceEvent, contains_sensitive_marker, observe_error};
 
@@ -24,7 +24,7 @@ fn event_has_sensitive_marker(event: &TraceEvent) -> bool {
         TraceEvent::AuthorizationDenied(trace) => {
             contains_sensitive_marker(&trace.reason)
                 || contains_sensitive_marker(&trace.denied_permission)
-        }
+        },
         TraceEvent::SecurityAudit(trace) => trace.contains_sensitive_evidence(),
         TraceEvent::AdminOperation(trace) => trace.contains_sensitive_evidence(),
         TraceEvent::UnsupportedVersion(trace) => contains_sensitive_marker(&trace.reason),
@@ -39,7 +39,7 @@ fn event_has_sensitive_marker(event: &TraceEvent) -> bool {
             contains_sensitive_marker(&trace.actor)
                 || contains_sensitive_marker(&trace.object)
                 || contains_sensitive_marker(&trace.action)
-        }
+        },
         TraceEvent::Invocation(_)
         | TraceEvent::Wal(_)
         | TraceEvent::WalEvent(_)

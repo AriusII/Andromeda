@@ -1,24 +1,35 @@
 use crate::error::cli_error;
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
+use std::str::FromStr;
 
 pub(crate) fn parse_u64(value: &str, error_message: &'static str) -> AndromedaResult<u64> {
-    value.parse::<u64>().map_err(|_| cli_error(error_message))
+    parse_integer(value, error_message)
 }
 
 pub(crate) fn parse_usize(value: &str, error_message: &'static str) -> AndromedaResult<usize> {
-    value.parse::<usize>().map_err(|_| cli_error(error_message))
+    parse_integer(value, error_message)
 }
 
 pub(crate) fn parse_u64_option(value: &str, option: &str) -> AndromedaResult<u64> {
-    value
-        .parse::<u64>()
-        .map_err(|_| cli_error(format!("{option} expects an unsigned integer")))
+    parse_named_unsigned_option(value, option)
 }
 
 pub(crate) fn parse_u32_option(value: &str, option: &str) -> AndromedaResult<u32> {
-    value
-        .parse::<u32>()
-        .map_err(|_| cli_error(format!("{option} expects an unsigned integer")))
+    parse_named_unsigned_option(value, option)
+}
+
+fn parse_named_unsigned_option<T>(value: &str, option: &str) -> AndromedaResult<T>
+where
+    T: FromStr,
+{
+    parse_integer(value, format!("{option} expects an unsigned integer"))
+}
+
+fn parse_integer<T>(value: &str, error_message: impl Into<String>) -> AndromedaResult<T>
+where
+    T: FromStr,
+{
+    value.parse::<T>().map_err(|_| cli_error(error_message))
 }
 
 pub(crate) fn next_option_value<'a>(

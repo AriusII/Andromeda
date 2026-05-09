@@ -1,127 +1,76 @@
 //! Integration between catalog mutations and WAL record emission.
 //!
-//! This module owns:
-//! - Integration point for emitting WAL records when catalog state changes
-//! - Conversion from CatalogMutation to CatalogWalRecord
-//! - Checkpoint emission with current catalog state
-//!
-//! ## Design
-//!
-//! When the catalog applies a mutation (DefinitionBatch apply, procedure alter/drop),
-//! this module provides the glue to emit corresponding WAL records. The WAL manager
-//! (F1/F4) handles physical durability; this module just assembles the semantic records.
-//!
-//! No additional file I/O is done here; the WAL manager owns the I/O contract.
+//! The catalog crate keeps live mutation planning and state ownership. Durable
+//! payload envelopes, mutation record shapes, and replay contracts are owned by
+//! `andromeda-catalog-recovery`; this module only keeps the live
+//! `CatalogSnapshot` recovery target implementation and compatibility enum
+//! conversions for catalog-local plans.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogVersion};
+use andromeda_error::AndromedaResult;
+use andromeda_types::CatalogVersion;
 
-use crate::{CatalogMutation, CatalogWalRecord};
+use crate::{CatalogMutationPlan, CatalogMutationRecord, CatalogSnapshot};
 
-/// Rejects legacy single-record catalog mutation publication.
-///
-/// # Invariants
-///
-/// - Catalog DefinitionBatch publication must be represented by the durable
-///   `Begin + Apply* + Commit` sequence emitted from `CatalogMutationPlan`.
-/// - This helper lacks the ordered operation records and storage-assigned LSN
-///   span required to prove all-or-nothing publication.
-///
-/// # Parameters
-///
-/// - `mutation`: The catalog version advancement proof
-/// - `operator_principal`: User/service identifier that initiated the mutation
-///
-/// # Note
-///
-/// This function remains only as a fail-closed compatibility stub. Use
-/// `CatalogSystemStore::apply_definition_batch_durably` or
-/// `CatalogMutationPlan::records()` for durable catalog publication.
-pub fn emit_catalog_mutation_record(
-    mutation: &CatalogMutation,
-    _operator_principal: String,
-) -> AndromedaResult<CatalogWalRecord> {
-    if !mutation.is_monotonic() {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Catalog,
-            "catalog mutation WAL emission requires monotonic catalog version advancement",
-        ));
+impl andromeda_catalog_recovery::CatalogRecoveryApplyTarget for CatalogSnapshot {
+    fn recovery_database_id(&self) -> andromeda_types::DatabaseId {
+        self.database_id
     }
 
-    Err(AndromedaError::new(
-        AndromedaErrorKind::Catalog,
-        "legacy catalog mutation WAL helper cannot prove durable DefinitionBatch publication; use the Begin/Apply/Commit mutation plan sequence",
-    ))
+    fn recovery_namespace_id(&self) -> andromeda_types::NamespaceId {
+        self.namespace_id
+    }
+
+    fn recovery_visible_catalog_version(&self) -> CatalogVersion {
+        self.visible_version()
+    }
+
+    fn apply_recovered_catalog_mutation(
+        &mut self,
+        boundary: &andromeda_catalog_recovery::CatalogMutationBoundary,
+        deltas: &[andromeda_catalog_recovery::CatalogMutationDelta],
+    ) -> AndromedaResult<()> {
+        andromeda_catalog_recovery::CatalogRecoveryApplyTarget::validate_recovery_boundary_identity(
+            self, boundary,
+        )?;
+
+        let mut plan = CatalogMutationPlan::new(
+            boundary.batch_id,
+            boundary.database_id,
+            boundary.namespace_id,
+            boundary.previous_version,
+            boundary.next_version,
+            boundary.source_hash,
+            boundary.dependency_graph_hash,
+            deltas.to_vec(),
+        )?;
+        plan.publication_semantics = boundary.publication_semantics;
+
+        self.apply_mutation_plan(&plan)?;
+        self.mark_durable_version_from_recovery(boundary.next_version);
+        Ok(())
+    }
 }
 
-/// Emits a CatalogCheckpoint record with the current catalog state.
-///
-/// # Invariants
-///
-/// - The checkpoint_lsn is the current WAL position.
-/// - The catalog_version matches the current visible version.
-/// - The visible_procedure_count reflects the current catalog state.
-/// - Checkpoints are used as recovery starting points.
-///
-/// # Parameters
-///
-/// - `current_lsn`: Current log sequence number (from WAL manager)
-/// - `catalog_version`: Current visible catalog version
-/// - `visible_procedure_count`: Count of visible procedures at this version
-pub fn emit_catalog_checkpoint_record(
-    current_lsn: u64,
-    catalog_version: CatalogVersion,
-    visible_procedure_count: usize,
-) -> AndromedaResult<CatalogWalRecord> {
-    let record = CatalogWalRecord::CatalogCheckpoint {
-        checkpoint_lsn: current_lsn,
-        catalog_version,
-        visible_procedure_count,
-    };
-
-    record.validate()?;
-    Ok(record)
+impl From<CatalogMutationRecord> for andromeda_catalog_recovery::CatalogMutationRecord {
+    fn from(record: CatalogMutationRecord) -> Self {
+        match record {
+            CatalogMutationRecord::Begin(boundary) => Self::Begin(boundary),
+            CatalogMutationRecord::Apply(delta) => Self::Apply(delta),
+            CatalogMutationRecord::Commit(boundary) => Self::Commit(boundary),
+        }
+    }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn emit_catalog_mutation_record_rejects_legacy_single_record_publication() {
-        let mutation = CatalogMutation {
-            definition_batch_id: crate::DefinitionBatchId::new(1),
-            previous_version: CatalogVersion::new(5),
-            next_version: CatalogVersion::new(6),
-        };
-
-        let error = emit_catalog_mutation_record(&mutation, "test".to_string()).unwrap_err();
-
-        assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
-        assert!(
-            error
-                .message()
-                .contains("durable DefinitionBatch publication")
-        );
-    }
-
-    #[test]
-    fn emit_catalog_checkpoint_record_produces_valid_record() {
-        let record =
-            emit_catalog_checkpoint_record(1000, CatalogVersion::new(42), 5).expect("emit failed");
-
-        assert_eq!(record.catalog_version(), Some(CatalogVersion::new(42)));
-        assert!(record.validate().is_ok());
-    }
-
-    #[test]
-    fn emit_catalog_checkpoint_record_rejects_zero_identity() {
-        let zero_lsn = emit_catalog_checkpoint_record(0, CatalogVersion::new(42), 5).unwrap_err();
-        assert_eq!(zero_lsn.kind(), AndromedaErrorKind::Catalog);
-        assert!(zero_lsn.message().contains("checkpoint_lsn"));
-
-        let zero_version =
-            emit_catalog_checkpoint_record(1000, CatalogVersion::new(0), 5).unwrap_err();
-        assert_eq!(zero_version.kind(), AndromedaErrorKind::Catalog);
-        assert!(zero_version.message().contains("catalog_version"));
+impl From<andromeda_catalog_recovery::CatalogMutationRecord> for CatalogMutationRecord {
+    fn from(record: andromeda_catalog_recovery::CatalogMutationRecord) -> Self {
+        match record {
+            andromeda_catalog_recovery::CatalogMutationRecord::Begin(boundary) => {
+                Self::Begin(boundary)
+            },
+            andromeda_catalog_recovery::CatalogMutationRecord::Apply(delta) => Self::Apply(delta),
+            andromeda_catalog_recovery::CatalogMutationRecord::Commit(boundary) => {
+                Self::Commit(boundary)
+            },
+        }
     }
 }

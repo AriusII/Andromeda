@@ -1,6 +1,7 @@
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, PrincipalAuthorizationDecision,
-    PrincipalAuthorizationDenialReason, PrincipalAuthorizationEvidence,
+use andromeda_error::{AndromedaError, AndromedaErrorKind};
+use andromeda_principal::{
+    PrincipalAuthorizationDecision, PrincipalAuthorizationDenialReason,
+    PrincipalAuthorizationEvidence,
 };
 
 /// Route admission failure with optional authorization evidence.
@@ -66,10 +67,6 @@ impl std::error::Error for ProcedureRouteAdmissionError {}
 
 pub(super) fn protocol_error(message: impl Into<String>) -> AndromedaError {
     AndromedaError::new(AndromedaErrorKind::Protocol, message)
-}
-
-pub(super) fn contract_error(message: impl Into<String>) -> AndromedaError {
-    AndromedaError::new(AndromedaErrorKind::Contract, message)
 }
 
 pub(super) fn security_error(message: impl Into<String>) -> AndromedaError {

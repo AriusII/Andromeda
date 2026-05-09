@@ -1,15 +1,13 @@
 use std::path::Path;
 use std::time::Instant;
 
-use andromeda_core::TransactionId;
-use andromeda_storage::{
-    DatabaseManifest, FileWal, Lsn, StartupMode, WalRecordKind, recover_from_file_wal,
+use andromeda_types::TransactionId;
+use andromeda_wal::{
+    DurableTransactionState, FileWal, Lsn, WalRecord, WalRecordKind, classify_durable_transactions,
 };
 
-use crate::{
-    BenchmarkError,
-    harness::{BenchmarkTempFile as BenchTempWalFile, elapsed_micros},
-};
+use andromeda_bench_harness::{BenchmarkTempFile as BenchTempWalFile, elapsed_micros};
+use andromeda_bench_workload::BenchmarkError;
 
 pub const WAL_APPEND_FILE_WORKLOAD_ID: &str = "wal-append-file-smoke";
 pub const WAL_APPEND_FILE_HARNESS_SOURCE: &str = "file-wal-append-flush";
@@ -17,7 +15,8 @@ pub const WAL_APPEND_FILE_HARNESS_NAME: &str = "FileWal::append_payload+flush_th
 
 pub const RECOVERY_REPLAY_WAL_WORKLOAD_ID: &str = "recovery-replay-wal-smoke";
 pub const RECOVERY_REPLAY_WAL_HARNESS_SOURCE: &str = "file-wal-recovery-scan";
-pub const RECOVERY_REPLAY_WAL_HARNESS_NAME: &str = "recover_from_file_wal";
+pub const RECOVERY_REPLAY_WAL_HARNESS_NAME: &str =
+    "FileWal::scan_path+classify_durable_transactions";
 
 const FIRST_TRANSACTION_ID: u64 = 50_000;
 const EXPECTED_RECORDS_PER_TRANSACTION: usize = 3;
@@ -104,18 +103,16 @@ fn execute_recovery_replay_wal_smoke(
         .map_err(harness_failed)?;
     build_recovery_wal_fixture(temp.path())?;
 
-    let manifest = recovery_manifest();
     let mut latencies_us = Vec::with_capacity(samples as usize);
     let mut replay_records = None;
     let mut recovered_transaction_id_floor = 0;
 
     for _ in 0..samples {
         let started = Instant::now();
-        let plan = recover_from_file_wal(&manifest, StartupMode::SafeStart, temp.path())
-            .map_err(harness_failed)?;
+        let scan = FileWal::scan_path(temp.path()).map_err(harness_failed)?;
         latencies_us.push(elapsed_micros(started));
 
-        let current_replay_records = plan.replay_lsns().count();
+        let current_replay_records = replayable_committed_records(&scan.scan.records);
         if current_replay_records == 0 {
             return Err(WalFileHarnessFailure);
         }
@@ -123,7 +120,7 @@ fn execute_recovery_replay_wal_smoke(
             return Err(WalFileHarnessFailure);
         }
         replay_records = Some(current_replay_records);
-        recovered_transaction_id_floor = plan.recovered_transaction_id_floor();
+        recovered_transaction_id_floor = compute_recovered_transaction_id_floor(&scan.scan.records);
     }
 
     Ok(RecoveryReplayWalSmokeBenchmark {
@@ -165,16 +162,31 @@ fn build_recovery_wal_fixture(path: &Path) -> Result<(), WalFileHarnessFailure> 
     Ok(())
 }
 
-fn recovery_manifest() -> DatabaseManifest {
-    DatabaseManifest {
-        database_id: 1,
-        manifest_version: 1,
-        snapshot_id: 1,
-        base_checkpoint_lsn: Lsn::new(1),
-        required_wal_start_lsn: Lsn::new(1),
-        previous_manifest_hash: [0; 32],
-        manifest_crc: 7,
-    }
+fn replayable_committed_records(records: &[WalRecord]) -> usize {
+    let committed = classify_durable_transactions(records)
+        .committed
+        .into_iter()
+        .filter(|summary| summary.state == DurableTransactionState::Committed)
+        .map(|summary| summary.transaction_id)
+        .collect::<Vec<_>>();
+    records
+        .iter()
+        .filter(|record| {
+            record.header.kind.is_redo_relevant()
+                && record
+                    .transaction_id()
+                    .is_some_and(|transaction_id| committed.contains(&transaction_id))
+        })
+        .count()
+}
+
+fn compute_recovered_transaction_id_floor(records: &[WalRecord]) -> u64 {
+    records
+        .iter()
+        .filter_map(WalRecord::transaction_id)
+        .map(TransactionId::get)
+        .max()
+        .unwrap_or(0)
 }
 
 fn transaction_id(sample: u32) -> TransactionId {

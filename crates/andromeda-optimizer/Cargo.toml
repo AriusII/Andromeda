@@ -1,0 +1,20 @@
+[package]
+name = "andromeda-optimizer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+andromeda-contract.workspace = true
+andromeda-decision-trace.workspace = true
+andromeda-error.workspace = true
+andromeda-plan-cache.workspace = true
+andromeda-srpl-ir.workspace = true
+andromeda-statistics.workspace = true
+andromeda-types.workspace = true
+
+[dev-dependencies]
+andromeda-srpl-definition-batch.workspace = true
+andromeda-srpl-lowering.workspace = true
+proptest.workspace = true

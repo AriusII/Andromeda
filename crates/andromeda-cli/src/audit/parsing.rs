@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 use andromeda_observe::{
-    TRACE_QUERY_MAX_LIMIT, TraceEventFamily, TraceId, TraceQueryFilter, TraceQueryLsnRange,
-    TraceQuerySpec,
+    DurableAuditEventFamily, TRACE_QUERY_MAX_LIMIT, TraceEventFamily, TraceId, TraceQueryFilter,
+    TraceQueryLsnRange, TraceQuerySpec,
 };
 
 use crate::diagnostic_json::{DIAGNOSTIC_JSON_FLAG, JSON_FLAG};
@@ -24,6 +24,7 @@ pub(super) fn parse_audit_inspection_options(
     let mut include_total_count = false;
     let mut lsn_start = None;
     let mut lsn_end = None;
+    let mut durable_family_filter = None;
 
     let mut index = 0usize;
     while index < args.len() {
@@ -31,12 +32,12 @@ pub(super) fn parse_audit_inspection_options(
             JSON_FLAG => {
                 json_output = true;
                 index += 1;
-            }
+            },
             DIAGNOSTIC_JSON_FLAG => {
                 json_output = true;
                 diagnostic_json = true;
                 index += 1;
-            }
+            },
             "--journal" => {
                 journal_path = Some(PathBuf::from(next_value(
                     args,
@@ -44,7 +45,7 @@ pub(super) fn parse_audit_inspection_options(
                     "inspect",
                     "--journal",
                 )?));
-            }
+            },
             "--trace-id" => {
                 let value = parse_u128(
                     next_value(args, &mut index, "inspect", "--trace-id")?,
@@ -52,7 +53,7 @@ pub(super) fn parse_audit_inspection_options(
                     "trace-id",
                 )?;
                 filter.trace_id = Some(TraceId::new(value));
-            }
+            },
             "--principal" => {
                 let principal = next_value(args, &mut index, "inspect", "--principal")?;
                 if contains_sensitive_cli_evidence(&principal) {
@@ -61,40 +62,42 @@ pub(super) fn parse_audit_inspection_options(
                     ));
                 }
                 filter.principal = Some(principal);
-            }
+            },
             "--family" => {
-                filter.family = Some(parse_trace_family(&next_value(
+                let family_filter = parse_audit_family_filter(&next_value(
                     args, &mut index, "inspect", "--family",
-                )?)?);
-            }
+                )?)?;
+                filter.family = Some(family_filter.trace_family);
+                durable_family_filter = family_filter.durable_family;
+            },
             "--limit" => {
                 limit = parse_usize(
                     next_value(args, &mut index, "inspect", "--limit")?,
                     "inspect",
                     "limit",
                 )?;
-            }
+            },
             "--offset" => {
                 offset = parse_usize(
                     next_value(args, &mut index, "inspect", "--offset")?,
                     "inspect",
                     "offset",
                 )?;
-            }
+            },
             "--lsn-start" => {
                 lsn_start = Some(parse_u64(
                     next_value(args, &mut index, "inspect", "--lsn-start")?,
                     "inspect",
                     "lsn-start",
                 )?);
-            }
+            },
             "--lsn-end" => {
                 lsn_end = Some(parse_u64(
                     next_value(args, &mut index, "inspect", "--lsn-end")?,
                     "inspect",
                     "lsn-end",
                 )?);
-            }
+            },
             "--lsn-range" => {
                 let value = next_value(args, &mut index, "inspect", "--lsn-range")?;
                 let (start, end) = parse_lsn_range(&value)?;
@@ -105,42 +108,39 @@ pub(super) fn parse_audit_inspection_options(
                 }
                 lsn_start = Some(start);
                 lsn_end = Some(end);
-            }
+            },
             "--include-total-count" => {
                 include_total_count = true;
                 index += 1;
-            }
+            },
             "-h" | "--help" => {
                 return Err(cli_error(
                     "usage: andromeda-cli audit inspect [--journal <path>] [--trace-id <u128>] [--principal <id>] [--family <family>] [--lsn-range <start..end>|--lsn-start <lsn> --lsn-end <lsn>] [--limit <n>] [--offset <n>] [--include-total-count] [--json|--diagnostic-json]",
                 ));
-            }
+            },
             opt if opt.starts_with("--") => {
                 return Err(cli_error(
                     "unknown audit inspect option; supported options are --journal, --trace-id, --principal, --family, --lsn-range, --lsn-start, --lsn-end, --limit, --offset, --include-total-count, --json, and --diagnostic-json",
                 ));
-            }
+            },
             _ => {
                 return Err(cli_error(
                     "unexpected audit inspect argument; filters must be passed with named options",
                 ));
-            }
+            },
         }
     }
 
     match (lsn_start, lsn_end) {
         (Some(start_lsn), Some(end_lsn)) => {
-            if start_lsn == end_lsn {
-                return Err(cli_error("audit inspect LSN range must not be zero-width"));
-            }
             filter.lsn_range = Some(TraceQueryLsnRange::new(start_lsn, end_lsn));
-        }
+        },
         (Some(_), None) | (None, Some(_)) => {
             return Err(cli_error(
                 "audit inspect LSN filter requires both --lsn-start and --lsn-end",
             ));
-        }
-        (None, None) => {}
+        },
+        (None, None) => {},
     }
 
     let spec = TraceQuerySpec {
@@ -153,6 +153,7 @@ pub(super) fn parse_audit_inspection_options(
 
     Ok(AuditInspectionOptions {
         spec,
+        durable_family_filter,
         json_output,
         diagnostic_json,
         journal_path,
@@ -174,31 +175,31 @@ pub(super) fn parse_audit_verify_options(args: &[String]) -> AndromedaResult<Aud
                     "verify",
                     "--journal",
                 )?));
-            }
+            },
             JSON_FLAG => {
                 json_output = true;
                 index += 1;
-            }
+            },
             DIAGNOSTIC_JSON_FLAG => {
                 json_output = true;
                 diagnostic_json = true;
                 index += 1;
-            }
+            },
             "-h" | "--help" => {
                 return Err(cli_error(
                     "usage: andromeda-cli audit verify --journal <path> [--json|--diagnostic-json]",
                 ));
-            }
+            },
             opt if opt.starts_with("--") => {
                 return Err(cli_error(
                     "unknown audit verify option; supported options are --journal, --json, and --diagnostic-json",
                 ));
-            }
+            },
             _ => {
                 return Err(cli_error(
                     "unexpected audit verify argument; verification inputs must be passed with named options",
                 ));
-            }
+            },
         }
     }
 
@@ -225,42 +226,42 @@ pub(super) fn parse_audit_compact_options(args: &[String]) -> AndromedaResult<Au
                     "compact",
                     "--journal",
                 )?));
-            }
+            },
             "--retain-from-lsn" => {
                 retain_from_lsn = Some(parse_u64(
                     next_value(args, &mut index, "compact", "--retain-from-lsn")?,
                     "compact",
                     "retain-from-lsn",
                 )?);
-            }
+            },
             "--preserve-forensic-hold" => {
                 preserve_forensic_hold = true;
                 index += 1;
-            }
+            },
             DIAGNOSTIC_JSON_FLAG => {
                 diagnostic_json = true;
                 index += 1;
-            }
+            },
             JSON_FLAG => {
                 return Err(cli_error(
                     "audit compact uses --diagnostic-json to make JSON diagnostic-only explicit",
                 ));
-            }
+            },
             "-h" | "--help" => {
                 return Err(cli_error(
                     "usage: andromeda-cli audit compact --retain-from-lsn <lsn> [--journal <path>] [--preserve-forensic-hold] [--diagnostic-json]",
                 ));
-            }
+            },
             opt if opt.starts_with("--") => {
                 return Err(cli_error(
                     "unknown audit compact option; supported options are --journal, --retain-from-lsn, --preserve-forensic-hold, and --diagnostic-json",
                 ));
-            }
+            },
             _ => {
                 return Err(cli_error(
                     "unexpected audit compact argument; compaction policy must be passed with named options",
                 ));
-            }
+            },
         }
     }
 
@@ -341,30 +342,64 @@ fn parse_lsn_range(value: &str) -> AndromedaResult<(u64, u64)> {
             "audit inspect --lsn-range endpoints must be non-zero",
         ));
     }
-    if start >= end {
+    if start > end {
         return Err(cli_error(
-            "audit inspect --lsn-range must have start less than end",
+            "audit inspect --lsn-range must have start_lsn <= end_lsn",
         ));
     }
     Ok((start, end))
 }
 
-fn parse_trace_family(value: &str) -> AndromedaResult<TraceEventFamily> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ParsedAuditFamilyFilter {
+    trace_family: TraceEventFamily,
+    durable_family: Option<DurableAuditEventFamily>,
+}
+
+fn parse_audit_family_filter(value: &str) -> AndromedaResult<ParsedAuditFamilyFilter> {
     match value {
-        "decision" => Ok(TraceEventFamily::Decision),
-        "procedure-invocation" => Ok(TraceEventFamily::ProcedureInvocation),
-        "wal" => Ok(TraceEventFamily::Wal),
-        "recovery" => Ok(TraceEventFamily::Recovery),
-        "manifest-catalog" => Ok(TraceEventFamily::ManifestCatalog),
-        "protocol" => Ok(TraceEventFamily::Protocol),
-        "security-audit" => Ok(TraceEventFamily::SecurityAudit),
-        "admin-audit" => Ok(TraceEventFamily::AdminAudit),
-        "resource" => Ok(TraceEventFamily::Resource),
-        "io" => Ok(TraceEventFamily::Io),
-        "gpu" => Ok(TraceEventFamily::Gpu),
-        "transaction" => Ok(TraceEventFamily::Transaction),
-        _ => Err(cli_error(
-            "unknown audit inspect family; expected decision, procedure-invocation, wal, recovery, manifest-catalog, protocol, security-audit, admin-audit, resource, io, gpu, or transaction",
+        "decision" => Ok(trace_family_filter(TraceEventFamily::Decision)),
+        "procedure-invocation" => Ok(trace_family_filter(TraceEventFamily::ProcedureInvocation)),
+        "wal" => Ok(trace_family_filter(TraceEventFamily::Wal)),
+        "recovery" => Ok(trace_family_filter(TraceEventFamily::Recovery)),
+        "manifest-catalog" => Ok(trace_family_filter(TraceEventFamily::ManifestCatalog)),
+        "protocol" => Ok(trace_family_filter(TraceEventFamily::Protocol)),
+        "security-audit" => Ok(trace_family_filter(TraceEventFamily::SecurityAudit)),
+        "admin-audit" => Ok(trace_family_filter(TraceEventFamily::AdminAudit)),
+        "resource" => Ok(trace_family_filter(TraceEventFamily::Resource)),
+        "io" => Ok(trace_family_filter(TraceEventFamily::Io)),
+        "gpu" => Ok(trace_family_filter(TraceEventFamily::Gpu)),
+        "transaction" => Ok(trace_family_filter(TraceEventFamily::Transaction)),
+        "admin" | "admin-decision" => Ok(exact_admin_audit_family_filter(
+            DurableAuditEventFamily::AdminDecision,
         )),
+        "hadr" | "hadr-decision" => Ok(exact_admin_audit_family_filter(
+            DurableAuditEventFamily::HadrDecision,
+        )),
+        "backup" | "backup-decision" => Ok(exact_admin_audit_family_filter(
+            DurableAuditEventFamily::BackupDecision,
+        )),
+        "restore" | "restore-decision" => Ok(exact_admin_audit_family_filter(
+            DurableAuditEventFamily::RestoreDecision,
+        )),
+        _ => Err(cli_error(
+            "unknown audit inspect family; expected decision, procedure-invocation, wal, recovery, manifest-catalog, protocol, security-audit, admin-audit, admin, hadr, backup, restore, resource, io, gpu, or transaction",
+        )),
+    }
+}
+
+const fn trace_family_filter(trace_family: TraceEventFamily) -> ParsedAuditFamilyFilter {
+    ParsedAuditFamilyFilter {
+        trace_family,
+        durable_family: None,
+    }
+}
+
+const fn exact_admin_audit_family_filter(
+    durable_family: DurableAuditEventFamily,
+) -> ParsedAuditFamilyFilter {
+    ParsedAuditFamilyFilter {
+        trace_family: TraceEventFamily::AdminAudit,
+        durable_family: Some(durable_family),
     }
 }

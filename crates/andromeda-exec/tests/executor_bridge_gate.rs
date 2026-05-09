@@ -14,20 +14,19 @@
 //!
 //! These tests are runtime-free and do not depend on quinn or rustls.
 
-use andromeda_core::{AndromedaErrorKind, InvocationId};
+use andromeda_error::AndromedaErrorKind;
 use andromeda_exec::ExecutorDispatchBridge;
-use andromeda_observe::{CertificateIdentity, SurfaceScope};
-use andromeda_quic::{
-    Connection, FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader, FrameType, LifecycleState,
-    SurfacePlane,
-};
+use andromeda_principal::{CertificateIdentity, SurfaceScope};
+use andromeda_quic::{Connection, LifecycleState, SurfacePlane};
+use andromeda_rpc_protocol::{FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader, FrameType};
+use andromeda_types::InvocationId;
 
 fn hello_frame(session_id: u64) -> FrameBytes {
     FrameBytes {
         header: FrameHeader {
             frame_type: FrameType::Hello,
-            request_id: andromeda_core::RequestId::new(1),
-            session_id: andromeda_core::SessionId::new(session_id),
+            request_id: andromeda_types::RequestId::new(1),
+            session_id: andromeda_types::SessionId::new(session_id),
             tx_id: None,
             payload_length: 0,
             flags: 0,
@@ -41,8 +40,8 @@ fn auth_frame(session_id: u64) -> FrameBytes {
     FrameBytes {
         header: FrameHeader {
             frame_type: FrameType::Auth,
-            request_id: andromeda_core::RequestId::new(1),
-            session_id: andromeda_core::SessionId::new(session_id),
+            request_id: andromeda_types::RequestId::new(1),
+            session_id: andromeda_types::SessionId::new(session_id),
             tx_id: None,
             payload_length: 0,
             flags: 0,
@@ -50,6 +49,17 @@ fn auth_frame(session_id: u64) -> FrameBytes {
         },
         payload: Vec::new(),
     }
+}
+
+fn assert_identity(
+    actual: &CertificateIdentity,
+    expected_fingerprint: &str,
+    expected_subject: &str,
+    expected_surface: SurfaceScope,
+) {
+    assert_eq!(actual.fingerprint().as_str(), expected_fingerprint);
+    assert_eq!(actual.subject(), expected_subject);
+    assert_eq!(actual.surface_scope(), expected_surface);
 }
 
 fn setup_active_application_connection() -> Connection {
@@ -111,20 +121,11 @@ fn test_bridge_accepts_authorized_invocation() {
 
     // Verify bridge state.
     assert_eq!(bridge.surface_plane(), SurfacePlane::Application);
-    assert_eq!(
-        bridge.certificate_identity().fingerprint,
-        "a".repeat(64),
-        "certificate fingerprint mismatch"
-    );
-    assert_eq!(
-        bridge.certificate_identity().subject,
+    assert_identity(
+        bridge.certificate_identity(),
+        "a".repeat(64).as_str(),
         "app-service",
-        "certificate subject mismatch"
-    );
-    assert_eq!(
-        bridge.certificate_identity().surface,
         SurfaceScope::Application,
-        "certificate scope mismatch"
     );
 
     // Verify stream mapping.
@@ -158,7 +159,7 @@ fn test_bridge_rejects_cross_plane_invocation() {
     let mut conn = Connection::new(SurfacePlane::Application);
 
     let admin_identity = CertificateIdentity::new(
-        "wrong_scope".repeat(8),
+        "b".repeat(64),
         "admin-service".to_string(),
         SurfaceScope::Administration,
     )
@@ -353,7 +354,7 @@ fn test_bridge_supports_monitoring_plane() {
 
     assert_eq!(bridge.surface_plane(), SurfacePlane::Monitoring);
     assert_eq!(
-        bridge.certificate_identity().surface,
+        bridge.certificate_identity().surface_scope(),
         SurfaceScope::MonitoringAgent
     );
     assert!(
@@ -402,8 +403,8 @@ fn test_bridge_allows_multiple_instances_from_same_connection() {
     // Both bridges should operate independently.
     assert_eq!(bridge_1.surface_plane(), bridge_2.surface_plane());
     assert_eq!(
-        bridge_1.certificate_identity().fingerprint,
-        bridge_2.certificate_identity().fingerprint
+        bridge_1.certificate_identity().fingerprint().as_str(),
+        bridge_2.certificate_identity().fingerprint().as_str()
     );
 
     // Stream mapping should be consistent across bridges.

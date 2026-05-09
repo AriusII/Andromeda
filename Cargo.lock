@@ -12,73 +12,533 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-admission"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+ "andromeda-error",
+ "andromeda-hardware",
+ "andromeda-observability",
+ "andromeda-observe",
+ "andromeda-principal",
+ "andromeda-proto",
+ "andromeda-resource",
+ "andromeda-result-stream",
+ "andromeda-storage-page",
+ "andromeda-storage-placement",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-analytics"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-audit"
+version = "0.1.0"
+dependencies = [
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-observability",
+ "andromeda-principal",
+ "andromeda-security-contract",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-backup"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+ "andromeda-observe",
+ "andromeda-segment",
+ "andromeda-types",
+ "andromeda-wal",
+ "sha2",
+]
+
+[[package]]
 name = "andromeda-bench"
 version = "0.1.0"
 dependencies = [
- "andromeda-core",
+ "andromeda-bench-harness",
+ "andromeda-bench-workload",
  "andromeda-observe",
+ "andromeda-regression",
+ "andromeda-scenario-evidence",
  "andromeda-srpl",
- "andromeda-storage",
+ "andromeda-storage-page",
+ "andromeda-time",
+ "andromeda-types",
+ "andromeda-wal",
+]
+
+[[package]]
+name = "andromeda-bench-harness"
+version = "0.1.0"
+dependencies = [
+ "andromeda-bench-workload",
+ "andromeda-scenario-evidence",
+]
+
+[[package]]
+name = "andromeda-bench-workload"
+version = "0.1.0"
+dependencies = [
+ "andromeda-hardware",
+]
+
+[[package]]
+name = "andromeda-buffer-pool"
+version = "0.1.0"
+dependencies = [
+ "andromeda-disk-page-store",
+ "andromeda-error",
+ "andromeda-segment",
+ "andromeda-storage-page",
+ "andromeda-wal",
+ "tempfile",
+]
+
+[[package]]
+name = "andromeda-business-fixtures"
+version = "0.1.0"
+dependencies = [
+ "andromeda-catalog-store",
+ "andromeda-definition-batch",
+ "andromeda-error",
+ "andromeda-procedure-contract",
+ "andromeda-storage-page",
+ "andromeda-types",
 ]
 
 [[package]]
 name = "andromeda-catalog"
 version = "0.1.0"
 dependencies = [
- "andromeda-core",
- "andromeda-observe",
- "andromeda-proto",
- "andromeda-storage",
+ "andromeda-business-fixtures",
+ "andromeda-catalog-recovery",
+ "andromeda-catalog-store",
+ "andromeda-contract",
+ "andromeda-decision-trace",
+ "andromeda-definition-batch",
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-procedure-contract",
+ "andromeda-types",
+ "andromeda-wal",
+]
+
+[[package]]
+name = "andromeda-catalog-diff"
+version = "0.1.0"
+dependencies = [
+ "andromeda-catalog-store",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-catalog-recovery"
+version = "0.1.0"
+dependencies = [
+ "andromeda-catalog-store",
+ "andromeda-definition-batch",
+ "andromeda-error",
+ "andromeda-procedure-contract",
+ "andromeda-types",
+ "andromeda-wal",
+ "sha2",
+]
+
+[[package]]
+name = "andromeda-catalog-store"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+ "andromeda-error",
+ "andromeda-types",
 ]
 
 [[package]]
 name = "andromeda-cli"
 version = "0.1.0"
 dependencies = [
+ "andromeda-admission",
+ "andromeda-backup",
  "andromeda-bench",
- "andromeda-catalog",
- "andromeda-core",
+ "andromeda-error",
  "andromeda-exec",
+ "andromeda-hadr",
+ "andromeda-hardware",
+ "andromeda-inventory-demo-cli-adapter",
+ "andromeda-manifest",
  "andromeda-observe",
- "andromeda-quic",
- "andromeda-srpl",
- "andromeda-storage",
+ "andromeda-recovery",
+ "andromeda-restore",
+ "andromeda-result-stream",
+ "andromeda-segment",
+ "andromeda-storage-page",
+ "andromeda-test-support",
+ "andromeda-types",
+ "andromeda-wal",
  "sha2",
 ]
+
+[[package]]
+name = "andromeda-columnar"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-contract"
+version = "0.1.0"
+dependencies = [
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-procedure-contract",
+ "andromeda-structured-object",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-contract-compat"
+version = "0.1.0"
 
 [[package]]
 name = "andromeda-core"
 version = "0.1.0"
 
 [[package]]
+name = "andromeda-decision-trace"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-definition-batch"
+version = "0.1.0"
+dependencies = [
+ "andromeda-catalog-store",
+ "andromeda-contract",
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-srpl-diagnostics",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-digest"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-disk-page-store"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+ "andromeda-segment",
+ "andromeda-storage-page",
+ "andromeda-wal",
+ "tempfile",
+]
+
+[[package]]
+name = "andromeda-error"
+version = "0.1.0"
+
+[[package]]
 name = "andromeda-exec"
 version = "0.1.0"
 dependencies = [
+ "andromeda-admission",
+ "andromeda-audit",
+ "andromeda-business-fixtures",
  "andromeda-catalog",
- "andromeda-core",
+ "andromeda-catalog-store",
+ "andromeda-definition-batch",
+ "andromeda-error",
+ "andromeda-execution",
+ "andromeda-execution-trace",
+ "andromeda-hardware",
+ "andromeda-iam",
+ "andromeda-inventory-demo",
+ "andromeda-manifest",
+ "andromeda-mvcc",
+ "andromeda-observability",
  "andromeda-observe",
+ "andromeda-plan-cache",
+ "andromeda-principal",
+ "andromeda-procedure-contract",
+ "andromeda-procedure-runtime",
+ "andromeda-procedure-store",
  "andromeda-proto",
  "andromeda-quic",
+ "andromeda-recovery",
+ "andromeda-result-stream",
+ "andromeda-retry",
+ "andromeda-rpc-protocol",
+ "andromeda-security",
  "andromeda-srpl",
- "andromeda-storage",
- "andromeda-tx",
- "dashmap",
+ "andromeda-srpl-binder",
+ "andromeda-srpl-interpreter",
+ "andromeda-srpl-ir",
+ "andromeda-storage-heap",
+ "andromeda-storage-page",
+ "andromeda-storage-placement",
+ "andromeda-time",
+ "andromeda-transaction",
+ "andromeda-transaction-log",
+ "andromeda-types",
+ "andromeda-wal",
  "tokio",
+]
+
+[[package]]
+name = "andromeda-execution"
+version = "0.1.0"
+dependencies = [
+ "andromeda-admission",
+ "andromeda-contract",
+ "andromeda-error",
+ "andromeda-observe",
+ "andromeda-procedure-contract",
+ "andromeda-procedure-runtime",
+ "andromeda-result-stream",
+ "andromeda-srpl-execution-adapter",
+ "andromeda-srpl-ir",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-execution-trace"
+version = "0.1.0"
+dependencies = [
+ "andromeda-audit",
+ "andromeda-error",
+ "andromeda-observability",
+ "andromeda-result-stream",
+ "andromeda-transaction",
+ "andromeda-types",
+ "andromeda-wal",
+]
+
+[[package]]
+name = "andromeda-hadr"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+ "andromeda-observe",
+ "andromeda-wal",
+ "sha2",
+]
+
+[[package]]
+name = "andromeda-hardware"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+]
+
+[[package]]
+name = "andromeda-iam"
+version = "0.1.0"
+dependencies = [
+ "andromeda-admission",
+ "andromeda-error",
+ "andromeda-principal",
+ "andromeda-security-contract",
+ "andromeda-types",
+ "dashmap",
+]
+
+[[package]]
+name = "andromeda-inventory-demo"
+version = "0.1.0"
+dependencies = [
+ "andromeda-admission",
+ "andromeda-business-fixtures",
+ "andromeda-catalog",
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-exec",
+ "andromeda-hardware",
+ "andromeda-manifest",
+ "andromeda-mvcc",
+ "andromeda-observe",
+ "andromeda-procedure-contract",
+ "andromeda-recovery",
+ "andromeda-result-stream",
+ "andromeda-rpc-protocol",
+ "andromeda-srpl",
+ "andromeda-srpl-binder",
+ "andromeda-srpl-catalog-binding",
+ "andromeda-srpl-ir",
+ "andromeda-storage-heap",
+ "andromeda-storage-page",
+ "andromeda-storage-placement",
+ "andromeda-transaction",
+ "andromeda-transaction-log",
+ "andromeda-types",
+ "andromeda-wal",
+]
+
+[[package]]
+name = "andromeda-inventory-demo-cli-adapter"
+version = "0.1.0"
+dependencies = [
+ "andromeda-admission",
+ "andromeda-business-fixtures",
+ "andromeda-catalog",
+ "andromeda-error",
+ "andromeda-exec",
+ "andromeda-inventory-demo",
+ "andromeda-observe",
+ "andromeda-result-stream",
+ "andromeda-types",
+ "andromeda-wal",
+]
+
+[[package]]
+name = "andromeda-locking"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+ "andromeda-time",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-manifest"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+ "andromeda-segment",
+ "andromeda-wal",
+]
+
+[[package]]
+name = "andromeda-maps"
+version = "0.1.0"
+dependencies = [
+ "andromeda-analytics",
+ "andromeda-columnar",
+]
+
+[[package]]
+name = "andromeda-mvcc"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+ "andromeda-time",
+ "andromeda-transaction-log",
+ "andromeda-types",
+ "futures",
+ "tokio",
+]
+
+[[package]]
+name = "andromeda-observability"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+ "andromeda-types",
 ]
 
 [[package]]
 name = "andromeda-observe"
 version = "0.1.0"
 dependencies = [
- "andromeda-core",
- "andromeda-storage",
+ "andromeda-audit",
+ "andromeda-error",
+ "andromeda-hardware",
+ "andromeda-observability",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-optimizer"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+ "andromeda-decision-trace",
+ "andromeda-error",
+ "andromeda-plan-cache",
+ "andromeda-srpl-definition-batch",
+ "andromeda-srpl-ir",
+ "andromeda-srpl-lowering",
+ "andromeda-statistics",
+ "andromeda-types",
+ "proptest",
+]
+
+[[package]]
+name = "andromeda-plan-cache"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+ "andromeda-decision-trace",
+ "andromeda-digest",
+ "andromeda-observe",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-principal"
+version = "0.1.0"
+dependencies = [
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-security-contract",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-procedure-contract"
+version = "0.1.0"
+dependencies = [
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-security-contract",
+ "andromeda-structured-object",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-procedure-runtime"
+version = "0.1.0"
+dependencies = [
+ "andromeda-admission",
+ "andromeda-contract",
+ "andromeda-error",
+ "andromeda-observe",
+ "andromeda-result-stream",
+ "andromeda-srpl-ir",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-procedure-store"
+version = "0.1.0"
+dependencies = [
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-observe",
+ "andromeda-plan-cache",
+ "andromeda-procedure-contract",
+ "andromeda-scenario-evidence",
+ "andromeda-time",
+ "andromeda-types",
 ]
 
 [[package]]
 name = "andromeda-proto"
 version = "0.1.0"
 dependencies = [
- "andromeda-core",
+ "andromeda-error",
+ "andromeda-procedure-contract",
+ "andromeda-proto-wire",
+ "andromeda-structured-object",
+ "andromeda-types",
  "proptest",
  "prost",
  "prost-build",
@@ -87,13 +547,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-proto-wire"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+ "andromeda-procedure-contract",
+ "andromeda-rpc-protocol",
+ "andromeda-structured-object",
+ "andromeda-types",
+ "proptest",
+ "prost",
+]
+
+[[package]]
 name = "andromeda-quic"
 version = "0.1.0"
 dependencies = [
- "andromeda-core",
- "andromeda-observe",
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-principal",
+ "andromeda-procedure-contract",
  "andromeda-proto",
+ "andromeda-rpc",
+ "andromeda-rpc-codec",
+ "andromeda-rpc-protocol",
+ "andromeda-security-contract",
+ "andromeda-types",
  "proptest",
+]
+
+[[package]]
+name = "andromeda-quic-runtime-quinn"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+ "andromeda-principal",
+ "andromeda-quic",
+ "andromeda-rpc-protocol",
  "quinn",
  "rcgen",
  "rustls",
@@ -101,36 +591,480 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-recovery"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+ "andromeda-manifest",
+ "andromeda-mvcc",
+ "andromeda-observe",
+ "andromeda-storage-heap",
+ "andromeda-storage-index",
+ "andromeda-storage-page",
+ "andromeda-time",
+ "andromeda-transaction",
+ "andromeda-transaction-log",
+ "andromeda-types",
+ "andromeda-wal",
+ "proptest",
+ "tokio",
+]
+
+[[package]]
+name = "andromeda-regression"
+version = "0.1.0"
+dependencies = [
+ "andromeda-bench-workload",
+ "andromeda-scenario-evidence",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-resource"
+version = "0.1.0"
+dependencies = [
+ "andromeda-hardware",
+]
+
+[[package]]
+name = "andromeda-restore"
+version = "0.1.0"
+dependencies = [
+ "andromeda-backup",
+ "andromeda-observe",
+ "andromeda-segment",
+ "andromeda-wal",
+ "sha2",
+ "tempfile",
+]
+
+[[package]]
+name = "andromeda-result-stream"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+ "andromeda-observability",
+ "andromeda-procedure-contract",
+ "andromeda-rpc-protocol",
+ "andromeda-srpl-cardinality",
+ "andromeda-structured-object",
+ "andromeda-transaction",
+ "andromeda-types",
+ "andromeda-wal",
+ "tokio",
+]
+
+[[package]]
+name = "andromeda-retry"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+ "andromeda-observe",
+]
+
+[[package]]
+name = "andromeda-rpc"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+ "andromeda-proto-wire",
+ "andromeda-rpc-codec",
+ "andromeda-rpc-protocol",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-rpc-codec"
+version = "0.1.0"
+dependencies = [
+ "andromeda-catalog-store",
+ "andromeda-error",
+ "andromeda-procedure-contract",
+ "andromeda-proto",
+ "andromeda-proto-wire",
+ "andromeda-rpc-protocol",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-rpc-protocol"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+ "andromeda-principal",
+ "andromeda-procedure-contract",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-savepoint"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+ "andromeda-locking",
+ "andromeda-mvcc",
+ "andromeda-transaction-log",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-scenario-evidence"
+version = "0.1.0"
+dependencies = [
+ "andromeda-bench-workload",
+ "andromeda-digest",
+ "andromeda-observe",
+ "andromeda-plan-cache",
+ "andromeda-procedure-contract",
+ "andromeda-time",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-security"
+version = "0.1.0"
+dependencies = [
+ "andromeda-audit",
+ "andromeda-error",
+ "andromeda-observability",
+ "andromeda-security-contract",
+]
+
+[[package]]
+name = "andromeda-security-contract"
+version = "0.1.0"
+dependencies = [
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-segment"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+ "andromeda-storage-page",
+ "andromeda-wal",
+ "sha2",
+]
+
+[[package]]
 name = "andromeda-srpl"
 version = "0.1.0"
 dependencies = [
+ "andromeda-business-fixtures",
  "andromeda-catalog",
- "andromeda-core",
+ "andromeda-catalog-store",
+ "andromeda-contract",
+ "andromeda-definition-batch",
+ "andromeda-error",
+ "andromeda-optimizer",
+ "andromeda-procedure-contract",
+ "andromeda-srpl-ast",
+ "andromeda-srpl-binder",
+ "andromeda-srpl-cardinality",
+ "andromeda-srpl-catalog-binding",
+ "andromeda-srpl-definition-batch",
+ "andromeda-srpl-diagnostics",
+ "andromeda-srpl-execution-adapter",
+ "andromeda-srpl-ir",
+ "andromeda-srpl-lexer",
+ "andromeda-srpl-lowering",
+ "andromeda-srpl-parser",
+ "andromeda-types",
  "proptest",
+]
+
+[[package]]
+name = "andromeda-srpl-ast"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+ "andromeda-srpl-cardinality",
+ "andromeda-srpl-diagnostics",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-srpl-binder"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+ "andromeda-error",
+ "andromeda-srpl-ast",
+ "andromeda-srpl-diagnostics",
+ "andromeda-srpl-ir",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-srpl-cardinality"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+]
+
+[[package]]
+name = "andromeda-srpl-catalog-binding"
+version = "0.1.0"
+dependencies = [
+ "andromeda-catalog",
+ "andromeda-catalog-store",
+ "andromeda-error",
+ "andromeda-procedure-contract",
+ "andromeda-srpl-binder",
+ "andromeda-srpl-ir",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-srpl-definition-batch"
+version = "0.1.0"
+dependencies = [
+ "andromeda-business-fixtures",
+ "andromeda-catalog",
+ "andromeda-catalog-store",
+ "andromeda-contract",
+ "andromeda-definition-batch",
+ "andromeda-error",
+ "andromeda-procedure-contract",
+ "andromeda-srpl-ast",
+ "andromeda-srpl-binder",
+ "andromeda-srpl-diagnostics",
+ "andromeda-srpl-execution-adapter",
+ "andromeda-srpl-ir",
+ "andromeda-srpl-lowering",
+ "andromeda-srpl-parser",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-srpl-diagnostics"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+]
+
+[[package]]
+name = "andromeda-srpl-execution-adapter"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+ "andromeda-error",
+ "andromeda-srpl-ir",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-srpl-interpreter"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+ "andromeda-error",
+ "andromeda-srpl-execution-adapter",
+ "andromeda-srpl-ir",
+ "andromeda-srpl-test-fixtures",
+]
+
+[[package]]
+name = "andromeda-srpl-ir"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+ "andromeda-error",
+ "andromeda-srpl-cardinality",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-srpl-lexer"
+version = "0.1.0"
+dependencies = [
+ "andromeda-srpl-diagnostics",
+]
+
+[[package]]
+name = "andromeda-srpl-lowering"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+ "andromeda-error",
+ "andromeda-srpl-ast",
+ "andromeda-srpl-ir",
+]
+
+[[package]]
+name = "andromeda-srpl-parser"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+ "andromeda-srpl-ast",
+ "andromeda-srpl-cardinality",
+ "andromeda-srpl-diagnostics",
+ "andromeda-srpl-lexer",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-srpl-test-fixtures"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+ "andromeda-srpl-cardinality",
+ "andromeda-srpl-execution-adapter",
+ "andromeda-srpl-ir",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-statistics"
+version = "0.1.0"
+dependencies = [
+ "andromeda-contract",
+ "andromeda-decision-trace",
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-observability",
+ "andromeda-scenario-evidence",
+ "andromeda-time",
+ "andromeda-types",
 ]
 
 [[package]]
 name = "andromeda-storage"
 version = "0.1.0"
 dependencies = [
- "andromeda-core",
+ "andromeda-buffer-pool",
+ "andromeda-catalog-recovery",
+ "andromeda-disk-page-store",
+ "andromeda-error",
+ "andromeda-hadr",
+ "andromeda-manifest",
  "andromeda-observe",
- "dashmap",
- "proptest",
- "sha2",
+ "andromeda-recovery",
+ "andromeda-segment",
+ "andromeda-storage-heap",
+ "andromeda-storage-index",
+ "andromeda-storage-page",
+ "andromeda-types",
+ "andromeda-wal",
+]
+
+[[package]]
+name = "andromeda-storage-heap"
+version = "0.1.0"
+dependencies = [
+ "andromeda-disk-page-store",
+ "andromeda-error",
+ "andromeda-procedure-contract",
+ "andromeda-segment",
+ "andromeda-storage-page",
+ "andromeda-types",
+ "andromeda-wal",
  "tempfile",
 ]
 
 [[package]]
-name = "andromeda-tx"
+name = "andromeda-storage-index"
 version = "0.1.0"
 dependencies = [
- "andromeda-core",
+ "andromeda-error",
+ "andromeda-storage-page",
+ "proptest",
+]
+
+[[package]]
+name = "andromeda-storage-page"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+ "andromeda-wal",
+ "proptest",
+ "sha2",
+]
+
+[[package]]
+name = "andromeda-storage-placement"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+ "andromeda-hardware",
  "andromeda-observe",
+ "andromeda-segment",
+ "andromeda-storage-page",
+]
+
+[[package]]
+name = "andromeda-structured-object"
+version = "0.1.0"
+dependencies = [
+ "andromeda-digest",
+ "andromeda-error",
+ "andromeda-types",
+]
+
+[[package]]
+name = "andromeda-test-support"
+version = "0.1.0"
+
+[[package]]
+name = "andromeda-time"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+]
+
+[[package]]
+name = "andromeda-transaction"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+ "andromeda-locking",
+ "andromeda-mvcc",
+ "andromeda-observability",
+ "andromeda-savepoint",
+ "andromeda-time",
+ "andromeda-transaction-log",
+ "andromeda-types",
+ "async-trait",
+ "tokio",
+]
+
+[[package]]
+name = "andromeda-transaction-log"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+ "andromeda-time",
+ "andromeda-types",
  "async-trait",
  "dashmap",
  "futures",
  "tokio",
+]
+
+[[package]]
+name = "andromeda-types"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+]
+
+[[package]]
+name = "andromeda-wal"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+ "andromeda-types",
+ "andromeda-wal-codec",
+ "dashmap",
+ "proptest",
+]
+
+[[package]]
+name = "andromeda-wal-codec"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
 ]
 
 [[package]]

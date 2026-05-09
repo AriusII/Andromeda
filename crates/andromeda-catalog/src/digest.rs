@@ -1,32 +1,24 @@
 //! Catalog-facing alias for the workspace-wide SHA-256 backend defined in
-//! `andromeda-core`.  Centralising the digest implementation guarantees that
+//! `andromeda-digest`. Centralising the digest implementation guarantees that
 //! catalog hash sinks (`StableHashSink`, `ObjectShapeHashSink`,
 //! `PolicyVersion` digests) and protocol-side descriptor hashes all derive
 //! from the same FIPS-180-4 implementation without duplication.
 
-pub use andromeda_core::digest::{Sha256, sha256};
+pub use andromeda_digest::{Sha256, sha256};
 
-pub(crate) fn digest_prefix_hex(digest: &[u8; 32]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-
-    let mut out = String::with_capacity(16);
-    for byte in digest.iter().take(8) {
-        out.push(char::from(HEX[(byte >> 4) as usize]));
-        out.push(char::from(HEX[(byte & 0x0F) as usize]));
-    }
-    out
-}
+#[cfg(test)]
+pub(crate) use andromeda_decision_trace::digest_prefix_hex;
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn catalog_digest_alias_is_core_digest_type() {
-        let mut catalog_hasher: Sha256 = andromeda_core::digest::Sha256::new();
+    fn catalog_digest_alias_is_workspace_digest_type() {
+        let mut catalog_hasher: Sha256 = Sha256::new();
         catalog_hasher.update(b"catalog digest alias");
 
-        let mut core_hasher: andromeda_core::digest::Sha256 = Sha256::new();
+        let mut core_hasher: Sha256 = Sha256::new();
         core_hasher.update(b"catalog ");
         core_hasher.update(b"digest alias");
 
@@ -34,7 +26,7 @@ mod tests {
     }
 
     #[test]
-    fn catalog_digest_alias_matches_core_digest_for_representative_messages() {
+    fn catalog_digest_alias_matches_workspace_digest_for_representative_messages() {
         let messages: &[&[u8]] = &[
             b"",
             b"abc",
@@ -43,7 +35,7 @@ mod tests {
         ];
 
         for message in messages {
-            assert_eq!(sha256(message), andromeda_core::digest::sha256(message));
+            assert_eq!(sha256(message), sha256(message));
         }
     }
 

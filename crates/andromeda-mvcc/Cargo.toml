@@ -1,0 +1,16 @@
+[package]
+name = "andromeda-mvcc"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95.0"
+publish = false
+
+[dependencies]
+andromeda-error.workspace = true
+andromeda-transaction-log.workspace = true
+andromeda-types.workspace = true
+tokio = { version = "1", features = ["full"] }
+
+[dev-dependencies]
+andromeda-time.workspace = true
+futures = "0.3"

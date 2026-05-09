@@ -1,0 +1,15 @@
+[package]
+name = "andromeda-execution-trace"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+andromeda-audit.workspace = true
+andromeda-error.workspace = true
+andromeda-observability.workspace = true
+andromeda-result-stream.workspace = true
+andromeda-transaction.workspace = true
+andromeda-types.workspace = true
+andromeda-wal.workspace = true

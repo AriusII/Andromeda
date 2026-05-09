@@ -1,3 +1,0 @@
-display_name: "WAL Record Design"
-short_description: "Design WalRecord, LSN, PrevLsn, Crc64, ChainHash, TxBegin/Commit/Rollback, page/index/map/catalog/security records. Use for WAL v0."
-default_prompt: "Use the WAL Record Design skill to analyze the current Andromeda task and return a bounded, validated result."

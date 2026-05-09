@@ -10,7 +10,7 @@
 //!
 //! Test Coverage Matrix:
 //! ┌─────────────────────────────────────────────────────────────────────────┐
-//! │ Test ID │ Phase        │ Component              │ Invariant             │
+//! │ Test ID │ Step         │ Component              │ Invariant             │
 //! ├─────────────────────────────────────────────────────────────────────────┤
 //! │ E2E.1   │ Admission    │ AdmissionService       │ Valid invocation OK   │
 //! │ E2E.2   │ Admission    │ PermissionEvaluator    │ Denied blocked + event│

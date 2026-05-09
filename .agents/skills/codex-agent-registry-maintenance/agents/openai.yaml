@@ -1,3 +1,0 @@
-display_name: "Codex Agent Registry Maintenance"
-short_description: "Maintain .codex/config.toml agent registry entries and ensure each agent file is registered and coherent. Use when adding, renaming, deleting, or reorganizing a"
-default_prompt: "Use the Codex Agent Registry Maintenance skill to analyze the current Andromeda task and return a bounded, validated result."

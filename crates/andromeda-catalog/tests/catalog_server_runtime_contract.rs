@@ -1,15 +1,19 @@
 use std::sync::Arc;
 
-use andromeda_catalog::{
-    CatalogDurabilityMarker, CatalogManifestResolutionRequest, CatalogManifestResolutionStatus,
-    CatalogManifestStore, CatalogMutationCommitEvidence, CatalogMutationDurability,
-    CatalogRuntimeReopenEvidence, CatalogServerRuntime, CatalogSnapshotManifestStore,
-    CatalogSystemStore, INVENTORY_DATABASE_ID, INVENTORY_NAMESPACE_ID,
-    INVENTORY_RESERVE_STOCK_PROCEDURE_ID, ProcedureContract, QualifiedName,
+use andromeda_business_fixtures::{
+    INVENTORY_DATABASE_ID, INVENTORY_NAMESPACE_ID, INVENTORY_RESERVE_STOCK_PROCEDURE_ID,
     inventory_domain_definition_batch, inventory_reserve_stock_contract_candidate,
 };
-use andromeda_core::{CatalogVersion, ContractHash, ProcedureId};
-use andromeda_proto::generated::contract::v1::catalog_procedure_manifest_resolution_response::Status as ProtoCatalogManifestResolutionStatus;
+use andromeda_catalog::{
+    CatalogManifestStore, CatalogMutationCommitEvidence, CatalogServerRuntime,
+    CatalogSnapshotManifestStore, CatalogSystemStore,
+};
+use andromeda_catalog_store::{
+    CatalogDurabilityMarker, CatalogManifestResolutionRequest, CatalogManifestResolutionStatus,
+    CatalogMutationDurability, CatalogRuntimeReopenEvidence, QualifiedName,
+};
+use andromeda_procedure_contract::ProcedureContract;
+use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 fn catalog_server_runtime_fixture() -> (
     CatalogServerRuntime,
@@ -136,7 +140,7 @@ fn catalog_server_rejects_catalog_version_mismatch_before_runtime_readiness_gate
 }
 
 #[test]
-fn catalog_server_maps_not_found_to_proto_status() {
+fn catalog_server_maps_not_found_to_runtime_status() {
     let (runtime, _store, _contract) = catalog_server_runtime_fixture();
 
     let resolution = runtime.resolve_manifest_by_id(ProcedureId::new(999_999));
@@ -145,10 +149,7 @@ fn catalog_server_maps_not_found_to_proto_status() {
     assert!(resolution.manifest.is_none());
     assert_eq!(resolution.diagnostic_code, Some("STATUS_NOT_FOUND"));
     assert_eq!(resolution.current_catalog_version, CatalogVersion::new(1));
-    assert_eq!(
-        resolution.status.to_proto(),
-        ProtoCatalogManifestResolutionStatus::NotFound
-    );
+    assert_eq!(resolution.status.diagnostic_code(), "STATUS_NOT_FOUND");
 }
 
 #[test]
@@ -173,8 +174,8 @@ fn catalog_server_rejects_not_ready_manifest() {
         Some("STATUS_NOT_SOURCE_GENERATOR_READY")
     );
     assert_eq!(
-        resolution.status.to_proto(),
-        ProtoCatalogManifestResolutionStatus::NotSourceGeneratorReady
+        resolution.status.diagnostic_code(),
+        "STATUS_NOT_SOURCE_GENERATOR_READY"
     );
 
     let resolution_without_gate =
@@ -182,35 +183,5 @@ fn catalog_server_rejects_not_ready_manifest() {
     assert_eq!(
         resolution_without_gate.status,
         CatalogManifestResolutionStatus::Resolved
-    );
-}
-
-#[test]
-fn catalog_server_rejects_unspecified_proto_status_at_boundary() {
-    let unspecified = CatalogManifestResolutionStatus::from_proto(
-        ProtoCatalogManifestResolutionStatus::Unspecified,
-    )
-    .unwrap_err();
-    assert_eq!(
-        unspecified.kind(),
-        andromeda_core::AndromedaErrorKind::Protocol
-    );
-    assert!(unspecified.message().contains("must be specified"));
-
-    let unspecified_i32 = CatalogManifestResolutionStatus::from_proto_i32(0).unwrap_err();
-    assert_eq!(
-        unspecified_i32.kind(),
-        andromeda_core::AndromedaErrorKind::Protocol
-    );
-
-    let unknown_i32 = CatalogManifestResolutionStatus::from_proto_i32(99).unwrap_err();
-    assert_eq!(
-        unknown_i32.kind(),
-        andromeda_core::AndromedaErrorKind::Protocol
-    );
-
-    assert_eq!(
-        CatalogManifestResolutionStatus::Resolved.to_proto(),
-        ProtoCatalogManifestResolutionStatus::Resolved
     );
 }

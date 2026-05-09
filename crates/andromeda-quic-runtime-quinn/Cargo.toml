@@ -1,0 +1,25 @@
+[package]
+name = "andromeda-quic-runtime-quinn"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+andromeda-error.workspace = true
+andromeda-principal.workspace = true
+andromeda-quic.workspace = true
+andromeda-rpc-protocol.workspace = true
+quinn.workspace = true
+rcgen.workspace = true
+rustls.workspace = true
+tokio = { workspace = true, features = [
+    "io-util",
+    "macros",
+    "rt-multi-thread",
+    "sync",
+] }
+
+[features]
+default = []
+insecure-test-tls = []

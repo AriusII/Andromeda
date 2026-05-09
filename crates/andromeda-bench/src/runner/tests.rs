@@ -1,8 +1,7 @@
 use crate::{
     AUDIT_APPEND_FILE_SINK_HARNESS_NAME, AUDIT_APPEND_FILE_SINK_HARNESS_SOURCE,
-    AUDIT_APPEND_FILE_SINK_WORKLOAD_ID, BENCHMARK_EVIDENCE_TIMING_SOURCE_DETERMINISTIC_PLACEHOLDER,
-    BTREE_NODE_CODEC_HARNESS_NAME, BTREE_NODE_CODEC_HARNESS_SOURCE, BTREE_NODE_CODEC_WORKLOAD_ID,
-    BenchmarkHardwareProfile, BenchmarkMeasurementMode, BenchmarkRunRequest, BudgetStatus,
+    AUDIT_APPEND_FILE_SINK_WORKLOAD_ID, BTREE_NODE_CODEC_HARNESS_NAME,
+    BTREE_NODE_CODEC_HARNESS_SOURCE, BTREE_NODE_CODEC_WORKLOAD_ID,
     RECOVERY_REPLAY_WAL_HARNESS_NAME, RECOVERY_REPLAY_WAL_HARNESS_SOURCE,
     RECOVERY_REPLAY_WAL_WORKLOAD_ID, SRPL_COMPILE_OPTIMIZE_HARNESS_NAME,
     SRPL_COMPILE_OPTIMIZE_HARNESS_SOURCE, SRPL_COMPILE_OPTIMIZE_WORKLOAD_ID,
@@ -10,9 +9,13 @@ use crate::{
     STORAGE_PAGE_STORE_WORKLOAD_ID, WAL_APPEND_FILE_HARNESS_NAME, WAL_APPEND_FILE_HARNESS_SOURCE,
     WAL_APPEND_FILE_WORKLOAD_ID,
 };
+use andromeda_bench_harness::{SYNTHETIC_LATENCY_SOURCE, SYNTHETIC_MODEL_VERSION};
+use andromeda_bench_workload::{BenchmarkHardwareProfile, BenchmarkRunRequest, BudgetStatus};
+use andromeda_scenario_evidence::{
+    BENCHMARK_EVIDENCE_TIMING_SOURCE_DETERMINISTIC_PLACEHOLDER, BenchmarkMeasurementMode,
+};
 
 use super::harnesses::{BTREE_HARNESS_NAME, BTREE_HARNESS_SOURCE};
-use super::synthetic::{SYNTHETIC_LATENCY_SOURCE, SYNTHETIC_MODEL_VERSION};
 use super::*;
 
 #[test]
@@ -250,6 +253,7 @@ fn srpl_compile_optimize_workload_uses_compiler_pipeline_metadata() {
     assert_eq!(evidence.workload_counters[1].name, "optimized_procedures");
     assert_eq!(evidence.workload_counters[1].value, 2);
     assert_eq!(evidence.workload_counters[2].name, "optimizer_diagnostics");
+    assert!(evidence.workload_counters[2].value >= 3);
     assert!(evidence.p50_latency_us >= 1);
     assert!(evidence.p95_latency_us >= evidence.p50_latency_us);
 }

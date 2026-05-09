@@ -1,10 +1,9 @@
-use andromeda_core::{AndromedaResult, SessionId};
-use andromeda_observe::CertificateIdentity;
+use andromeda_error::AndromedaResult;
+use andromeda_principal::CertificateIdentity;
+use andromeda_rpc::{FrameDispatch, dispatch_frame};
+use andromeda_types::SessionId;
 
-use crate::{
-    FrameBytes, FrameFamily, FrameType,
-    rpc_dispatch::{FrameDispatch, dispatch_frame},
-};
+use andromeda_rpc_protocol::{FrameBytes, FrameFamily, FrameType};
 
 use super::{
     cancellation::{CancellationCause, CancellationOutcome, CancellationSignal},
@@ -90,7 +89,7 @@ impl Connection {
 
         // Validate that the certificate's surface scope matches the connection plane.
         let required_scope = crate::mtls_identity::plane_to_required_surface_scope(self.plane);
-        if identity.surface as u8 != required_scope as u8 {
+        if identity.surface_scope() != required_scope {
             return Err(protocol_error(
                 "certificate surface scope does not match connection plane",
             ));
@@ -168,7 +167,7 @@ impl Connection {
             )),
             LifecycleState::Closed => {
                 Err(protocol_error("RPC dispatch attempted on a closed session"))
-            }
+            },
             LifecycleState::Draining => {
                 // While draining, new command/contract requests are refused;
                 // result-stream and diagnostic frames may still flow.
@@ -183,12 +182,12 @@ impl Connection {
                 self.validate_dispatch_session(frame)?;
                 let role = frame.header.frame_type.stream_role();
                 dispatch_frame(frame, role)
-            }
+            },
             LifecycleState::Active => {
                 self.validate_dispatch_session(frame)?;
                 let role = frame.header.frame_type.stream_role();
                 dispatch_frame(frame, role)
-            }
+            },
         }
     }
 
@@ -210,12 +209,12 @@ impl Connection {
             LifecycleState::Active => {
                 self.state = LifecycleState::Draining;
                 Ok(())
-            }
+            },
             LifecycleState::Draining => Ok(()),
             LifecycleState::Closed => Err(protocol_error("cannot drain a closed session")),
             LifecycleState::Hello | LifecycleState::Auth => {
                 Err(protocol_error("cannot drain a session before it is active"))
-            }
+            },
         }
     }
 
@@ -253,7 +252,7 @@ impl Connection {
             )),
             LifecycleState::Closed => {
                 Err(protocol_error("cancellation received on a closed session"))
-            }
+            },
             LifecycleState::Active | LifecycleState::Draining => {
                 if let Some(sid) = self.session_id
                     && sid != signal.session_id
@@ -272,9 +271,9 @@ impl Connection {
                         Err(protocol_error(
                             "cancellation routing observed an invalid lifecycle state",
                         ))
-                    }
+                    },
                 }
-            }
+            },
         }
     }
 }

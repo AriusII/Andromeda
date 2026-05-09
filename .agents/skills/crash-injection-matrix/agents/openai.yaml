@@ -1,3 +1,0 @@
-display_name: "Crash Injection Matrix"
-short_description: "Build and maintain crash injection matrices for WAL, manifest, page, map, catalog, backup, and recovery. Use when designing tests or validating C5 paths."
-default_prompt: "Use the Crash Injection Matrix skill to analyze the current Andromeda task and return a bounded, validated result."

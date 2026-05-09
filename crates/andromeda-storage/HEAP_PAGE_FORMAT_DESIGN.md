@@ -133,7 +133,7 @@ pub fn compact_deleted(&mut self) -> AndromedaResult<u16> {
 
 ## 3. Durability & Recovery
 
-### 3.1 Crash Semantics (Phase 1 + WAL)
+### 3.1 Crash Semantics (Initial Write + WAL)
 
 **Assumption:** WAL records (RowInsert, RowDelete, HeapCoalesceSlots) are LSN-ordered.
 
@@ -393,7 +393,7 @@ Offset  Size  Field                         Encoding
 
 When persisted page header bytes are present, the header `slot_count` is validated against the
 authoritative footer metadata. DiskPageStore uses slot count offset 86 in its persisted header.
-PageCodecV1 uses slot count offset 92 in its fixed 112-byte header. Legacy raw heap images may have
+PageCodecV1 uses slot count offset 92 in its fixed 112-byte header. Historical raw heap images may have
 no persisted page header; in that case, footer metadata remains authoritative.
 
 ### 9.2 Page Metadata (4 bytes, at page_end − 52)

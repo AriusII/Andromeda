@@ -130,7 +130,7 @@ mod tests {
             }) => {
                 assert_eq!(replayed_lsn, 1500);
                 assert_eq!(final_checkpoint_lsn, 1500);
-            }
+            },
             _ => panic!("Expected success"),
         }
     }

@@ -1,0 +1,13 @@
+[package]
+name = "andromeda-regression"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+andromeda-bench-workload.workspace = true
+andromeda-scenario-evidence.workspace = true
+
+[dev-dependencies]
+andromeda-types.workspace = true

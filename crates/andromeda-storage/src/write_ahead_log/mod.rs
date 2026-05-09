@@ -1,23 +1,4 @@
-//! Write-ahead log domain facade: records, transaction tracking, in-memory WAL,
-//! file-backed WAL, codec, segment value types, garbage collection, and compaction.
-//!
-//! Canonical ownership lives in single-source modules:
-//!
-//! | Type / item                                  | Canonical module                            |
-//! |----------------------------------------------|---------------------------------------------|
-//! | `WalRecord`, `WalRecordHeader`, `WalRecordKind`, checksum/tag helpers | [`record`] |
-//! | `InMemoryWal` and durable-LSN tracking       | [`manager`]                                 |
-//! | Transaction classification helpers           | [`transaction`]                             |
-//! | `WalSegment`, `WalSegmentDescriptor`         | `crate::wal_segment`                        |
-//! | WAL frame codec, scanner, byte constants     | `crate::wal_codec`                          |
-//! | `FileWal`, `FileWalHeader`, recovery report  | `crate::file_wal`                           |
-//! | WAL GC: candidates, archive verification    | [`gc`]                                      |
-//! | WAL Compaction: fragmentation, scheduling   | [`compaction`]                              |
-//! | CommitLogEntry and CommitLog persistence    | [`commit_log_entry`]                        |
-//!
-//! The submodules below are thin re-export facades for the cross-domain types
-//! (segment, codec, file). They MUST NOT define types of their own. The legacy
-//! `crate::wal` root facade is preserved for compatibility with older imports.
+//! Storage-owned WAL integration surface.
 //!
 //! Doctrine reminders enforced by the items re-exported here:
 //! * `visible commit == durable WAL` — frames are flushed before commit
@@ -26,47 +7,17 @@
 //! * No unsafe code, no ad-hoc SQL, no runtime JSON normative protocol, no
 //!   gRPC/tonic transport.
 
-pub mod codec;
-pub mod commit_log_entry;
-pub mod commit_log_facade;
-pub mod compaction;
 pub mod durability_fence;
 pub mod file {
-    //! Facade for the canonical `crate::file_wal` module.
-    //!
-    //! Do not define new types here; add them under `crate::file_wal` and
-    //! re-export.
+    //! Storage recovery projection for file-backed WAL scans.
+
     pub use crate::{
-        FILE_WAL_HEADER_LEN, FILE_WAL_MAGIC, FILE_WAL_MONO_SEGMENT_ID, FileWal, FileWalDiskScan,
-        FileWalHeader, FileWalRecoveryBoundaryKind, FileWalRecoveryIgnoredTransaction,
+        FileWalRecoveryBoundaryKind, FileWalRecoveryIgnoredTransaction,
         FileWalRecoveryIgnoredTransactionReason, FileWalRecoveryReplayRecord,
-        FileWalRecoveryReportV0, recover_from_file_wal, report_file_wal_recovery_v0, scan_file_wal,
+        FileWalRecoveryReportV0, FileWalStartupRecoveryV0, plan_file_wal_startup_recovery_v0,
+        recover_from_file_wal, report_file_wal_recovery_v0,
     };
 }
-pub mod gc;
-pub mod gc_eligibility;
-pub mod heap_redo;
-pub mod manager;
-pub mod record;
-pub mod record_bounds;
-pub mod segment;
-pub mod segment_reclaimability;
-pub mod shipping;
-pub mod transaction;
 
-pub use codec::*;
-pub use commit_log_entry::*;
-pub use commit_log_facade::*;
-pub use compaction::*;
 pub use durability_fence::*;
 pub use file::*;
-pub use gc::*;
-pub use gc_eligibility::*;
-pub use heap_redo::*;
-pub use manager::*;
-pub use record::*;
-pub use record_bounds::*;
-pub use segment::*;
-pub use segment_reclaimability::*;
-pub use shipping::*;
-pub use transaction::*;

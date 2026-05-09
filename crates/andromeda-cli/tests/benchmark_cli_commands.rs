@@ -2,11 +2,13 @@
 
 use andromeda_bench::{DEFAULT_TEMP_BYTES, MAX_TEMP_BYTES};
 use andromeda_cli::dispatch_command;
-use std::process::{Command, Output};
+use andromeda_test_support::process::{
+    assert_contains_all, assert_success, run_binary, stdout_lossy as stdout,
+};
 
 #[test]
 fn benchmark_help_uses_native_diagnostic_surface_wording() {
-    let output = run_cli(["benchmark", "--help"]);
+    let output = run_binary(cli_binary(), ["benchmark", "--help"]);
 
     assert_success(&output);
     let human = stdout(&output);
@@ -24,7 +26,10 @@ fn benchmark_help_uses_native_diagnostic_surface_wording() {
 
 #[test]
 fn benchmark_workloads_diagnostic_json_lists_btree_node_codec_smoke() {
-    let output = run_cli(["benchmark", "workloads", "--diagnostic-json"]);
+    let output = run_binary(
+        cli_binary(),
+        ["benchmark", "workloads", "--diagnostic-json"],
+    );
 
     assert_success(&output);
     let json = stdout(&output);
@@ -40,24 +45,57 @@ fn benchmark_workloads_diagnostic_json_lists_btree_node_codec_smoke() {
             "B-Tree durable node V1 encode/decode over deterministic page images",
         ],
     );
+    assert!(json.contains("\"id\":\"inventory-recoverable-smoke\""));
+    assert!(!json.contains("vertical-v0-smoke"));
+}
+
+#[test]
+fn benchmark_run_accepts_temporary_vertical_v0_smoke_alias() {
+    let output = run_binary(
+        cli_binary(),
+        [
+            "benchmark",
+            "run",
+            "vertical-v0-smoke",
+            "--duration-ms",
+            "1000",
+            "--samples",
+            "1",
+            "--diagnostic-json",
+        ],
+    );
+
+    assert_success(&output);
+    let json = stdout(&output);
+    assert_contains_all(
+        &json,
+        &[
+            "\"schema\":\"andromeda.cli.benchmark.run.v1\"",
+            "\"workload_id\":\"inventory-recoverable-smoke\"",
+            "\"budget_status\":\"passed\"",
+        ],
+    );
 }
 
 #[test]
 fn benchmark_run_btree_node_codec_json_exposes_runtime_harness_metadata() {
-    let output = run_cli([
-        "benchmark",
-        "run",
-        "btree-node-codec-smoke",
-        "--duration-ms",
-        "1000",
-        "--samples",
-        "2",
-        "--warmups",
-        "0",
-        "--temp-budget-bytes",
-        "1048576",
-        "--diagnostic-json",
-    ]);
+    let output = run_binary(
+        cli_binary(),
+        [
+            "benchmark",
+            "run",
+            "btree-node-codec-smoke",
+            "--duration-ms",
+            "1000",
+            "--samples",
+            "2",
+            "--warmups",
+            "0",
+            "--temp-budget-bytes",
+            "1048576",
+            "--diagnostic-json",
+        ],
+    );
 
     assert_success(&output);
     let json = stdout(&output);
@@ -82,19 +120,22 @@ fn benchmark_run_btree_node_codec_json_exposes_runtime_harness_metadata() {
 
 #[test]
 fn benchmark_run_btree_node_codec_human_output_exposes_runtime_harness_metadata() {
-    let output = run_cli([
-        "benchmark",
-        "run",
-        "btree-node-codec-smoke",
-        "--duration-ms",
-        "1000",
-        "--samples",
-        "2",
-        "--warmups",
-        "0",
-        "--temp-budget-bytes",
-        "1048576",
-    ]);
+    let output = run_binary(
+        cli_binary(),
+        [
+            "benchmark",
+            "run",
+            "btree-node-codec-smoke",
+            "--duration-ms",
+            "1000",
+            "--samples",
+            "2",
+            "--warmups",
+            "0",
+            "--temp-budget-bytes",
+            "1048576",
+        ],
+    );
 
     assert_success(&output);
     let human = stdout(&output);
@@ -118,7 +159,12 @@ fn benchmark_run_btree_node_codec_human_output_exposes_runtime_harness_metadata(
 
 #[test]
 fn benchmark_run_zero_temp_budget_message_is_bounded() {
-    let err = dispatch_benchmark_run(["run", "vertical-v0-smoke", "--temp-budget-bytes", "0"]);
+    let err = dispatch_benchmark_run([
+        "run",
+        "inventory-recoverable-smoke",
+        "--temp-budget-bytes",
+        "0",
+    ]);
 
     assert_eq!(
         err.message(),
@@ -131,7 +177,7 @@ fn benchmark_run_global_temp_budget_message_is_bounded() {
     let temp_budget = (MAX_TEMP_BYTES + 1).to_string();
     let err = dispatch_benchmark_run([
         "run",
-        "vertical-v0-smoke",
+        "inventory-recoverable-smoke",
         "--temp-budget-bytes",
         temp_budget.as_str(),
     ]);
@@ -164,7 +210,7 @@ fn benchmark_run_workload_temp_budget_message_is_bounded() {
 
 #[test]
 fn benchmark_contract_human_output_marks_json_as_diagnostic() {
-    let output = run_cli(["benchmark", "contract"]);
+    let output = run_binary(cli_binary(), ["benchmark", "contract"]);
 
     assert_success(&output);
     let human = stdout(&output);
@@ -182,7 +228,7 @@ fn benchmark_contract_human_output_marks_json_as_diagnostic() {
 
 #[test]
 fn benchmark_contract_json_exposes_advisory_policy() {
-    let output = run_cli(["benchmark", "contract", "--diagnostic-json"]);
+    let output = run_binary(cli_binary(), ["benchmark", "contract", "--diagnostic-json"]);
 
     assert_success(&output);
     let json = stdout(&output);
@@ -202,7 +248,10 @@ fn benchmark_contract_json_exposes_advisory_policy() {
 
 #[test]
 fn benchmark_crud_scenarios_json_exposes_limits_and_advisory_policy() {
-    let output = run_cli(["benchmark", "crud-scenarios", "--diagnostic-json"]);
+    let output = run_binary(
+        cli_binary(),
+        ["benchmark", "crud-scenarios", "--diagnostic-json"],
+    );
 
     assert_success(&output);
     let json = stdout(&output);
@@ -226,14 +275,17 @@ fn benchmark_crud_scenarios_json_exposes_limits_and_advisory_policy() {
 
 #[test]
 fn benchmark_crud_run_json_exposes_advisory_boundary() {
-    let output = run_cli([
-        "benchmark",
-        "crud",
-        "crud-single-1",
-        "--seed",
-        "42",
-        "--diagnostic-json",
-    ]);
+    let output = run_binary(
+        cli_binary(),
+        [
+            "benchmark",
+            "crud",
+            "crud-single-1",
+            "--seed",
+            "42",
+            "--diagnostic-json",
+        ],
+    );
 
     assert_success(&output);
     let json = stdout(&output);
@@ -254,7 +306,10 @@ fn benchmark_crud_run_json_exposes_advisory_boundary() {
 
 #[test]
 fn benchmark_crud_run_human_output_exposes_advisory_boundary() {
-    let output = run_cli(["benchmark", "crud", "crud-single-1", "--seed", "42"]);
+    let output = run_binary(
+        cli_binary(),
+        ["benchmark", "crud", "crud-single-1", "--seed", "42"],
+    );
 
     assert_success(&output);
     let human = stdout(&output);
@@ -273,35 +328,15 @@ fn benchmark_crud_run_human_output_exposes_advisory_boundary() {
     );
 }
 
-fn run_cli<const N: usize>(args: [&str; N]) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_andromeda-cli"));
-    command.args(args).output().expect("run andromeda-cli")
+fn cli_binary() -> &'static str {
+    env!("CARGO_BIN_EXE_andromeda-cli")
 }
 
-fn dispatch_benchmark_run<const N: usize>(args: [&str; N]) -> andromeda_core::AndromedaError {
+fn dispatch_benchmark_run<const N: usize>(args: [&str; N]) -> andromeda_error::AndromedaError {
     let mut command_args = Vec::with_capacity(N + 1);
     command_args.push("benchmark".to_string());
     command_args.extend(args.into_iter().map(str::to_string));
     dispatch_command(&command_args).expect_err("benchmark run should reject invalid request")
-}
-
-fn assert_success(output: &Output) {
-    assert!(
-        output.status.success(),
-        "expected success\nstdout:\n{}\nstderr:\n{}",
-        stdout(output),
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
-
-fn stdout(output: &Output) -> String {
-    String::from_utf8_lossy(&output.stdout).into_owned()
-}
-
-fn assert_contains_all(text: &str, expected: &[&str]) {
-    for item in expected {
-        assert!(text.contains(item), "expected `{item}` in `{text}`");
-    }
 }
 
 fn assert_diagnostic_json_not_runtime_protocol(text: &str) {

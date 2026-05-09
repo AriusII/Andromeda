@@ -1,3 +1,0 @@
-display_name: "Forensic Startup Runbook"
-short_description: "Design FastStart, SafeStart, ForensicStart, consistency reports, app blocking, corruption response, and RecoveryReport. Use for incident recovery."
-default_prompt: "Use the Forensic Startup Runbook skill to analyze the current Andromeda task and return a bounded, validated result."

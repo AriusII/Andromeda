@@ -1,3 +1,0 @@
-display_name: "Rust Dependency Pruning"
-short_description: "Prune unused, duplicated, risky, or over-featured Cargo dependencies. Use with cargo tree, cargo machete, udeps, deny, and audit."
-default_prompt: "Use the Rust Dependency Pruning skill to analyze the current Andromeda task and return a bounded, validated result."

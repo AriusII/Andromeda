@@ -1,0 +1,53 @@
+# Andromeda code formatting configuration
+# Purpose: Consistent formatting across all crates, reduce PR noise
+
+edition = "2024"
+newline_style = "Unix"
+
+# Import formatting
+reorder_imports = true
+group_imports = "StdExternalCrate"
+reorder_modules = true
+
+# Indentation and spacing
+indent_style = "Block"
+tab_spaces = 4
+hard_tabs = false
+
+# Line length: 100 chars (readable on terminals, GitHub review width)
+# Note: long lines are acceptable when breaking would reduce clarity
+comment_width = 100
+max_width = 100
+
+# Formatting rules
+format_strings = true
+format_code_in_doc_comments = true
+normalize_comments = true
+normalize_doc_attributes = true
+wrap_comments = true
+comment_style = "Double"
+
+# Naming and space conventions
+space_before_colon = false
+space_after_colon = true
+spaces_around_ranges = false
+remove_nested_parens = true
+edition_2024_parentheses = true
+
+# Performance
+format_generated_files = false
+
+# Trailing comma policy: conditional (makes diffs cleaner)
+trailing_comma = "Vertical"
+
+# Fn single line: allow short functions on one line
+fn_single_line = false
+
+# Match statement formatting
+match_block_trailing_comma = true
+
+# Use field init shorthand when possible
+use_field_init_shorthand = true
+
+# Use try shorthand
+use_try_2021 = true

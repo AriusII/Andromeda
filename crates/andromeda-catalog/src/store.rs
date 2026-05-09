@@ -1,20 +1,27 @@
 //! Catalog system store and mutation planning.
 //!
-//! This module provides the `CatalogSystemStore` facade which validates definition batches
+//! This module provides the `CatalogSystemStore` boundary which validates definition batches
 //! against the current catalog snapshot and plans mutations. Durable persistence is
 //! still delegated to callers, but callers can now provide committed durable evidence
 //! to publish the next visible snapshot with a catalog-local receipt.
 
-use andromeda_core::{AndromedaResult, CatalogVersion, DatabaseId, NamespaceId};
+use andromeda_catalog_store::{
+    CatalogSnapshotApplyReport, CatalogStoreApplyReport, CatalogStoreDurableApplyReport,
+    CatalogStoreWalAppend, CatalogStoreWalAppendSequenceError,
+    validate_catalog_store_wal_append_sequence,
+};
+use andromeda_definition_batch::{
+    DefinitionBatch, DefinitionBatchDependencyGraphHash, DefinitionBatchSourceHash,
+};
+use andromeda_error::AndromedaResult;
+use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId};
 
 use crate::{
     CatalogMutationCommitEvidence, CatalogMutationDurability, CatalogMutationPlan,
-    CatalogMutationRecordKind, CatalogPublicationReceipt, CatalogSnapshot,
-    CatalogSnapshotApplyReport, DefinitionBatch, DefinitionBatchDependencyGraphHash,
-    DefinitionBatchPlan, DefinitionBatchSourceHash,
+    CatalogMutationRecordKind, CatalogPublicationReceipt, CatalogSnapshot, DefinitionBatchPlan,
 };
 
-/// In-memory catalog system facade for definition planning and snapshot mutation.
+/// In-memory catalog system boundary for definition planning and snapshot mutation.
 ///
 /// This type intentionally owns no WAL or storage engine. It validates that a
 /// [`DefinitionBatch`] is planned against the currently visible snapshot, delegates
@@ -121,14 +128,14 @@ impl CatalogSystemStore {
             let payload = record.encode_durable_payload()?;
             let kind = record.kind();
             let lsn = append(kind, &payload)?;
-            appended_records.push(CatalogSystemWalAppend { kind, lsn });
+            appended_records.push(CatalogStoreWalAppend { kind, lsn });
         }
 
         validate_catalog_wal_append_sequence(&appended_records, &expected_kinds)?;
 
         let commit_record = records.last().ok_or_else(|| {
-            andromeda_core::AndromedaError::new(
-                andromeda_core::AndromedaErrorKind::Catalog,
+            andromeda_error::AndromedaError::new(
+                andromeda_error::AndromedaErrorKind::Catalog,
                 "catalog mutation plan must emit a commit record",
             )
         })?;
@@ -136,8 +143,8 @@ impl CatalogSystemStore {
             .last()
             .map(|record| record.lsn)
             .ok_or_else(|| {
-                andromeda_core::AndromedaError::new(
-                    andromeda_core::AndromedaErrorKind::Catalog,
+                andromeda_error::AndromedaError::new(
+                    andromeda_error::AndromedaErrorKind::Catalog,
                     "catalog mutation plan must append at least one record",
                 )
             })?;
@@ -152,7 +159,7 @@ impl CatalogSystemStore {
         )?;
         let receipt = self.publish_durable_mutation_plan(&plan.mutation_plan, evidence)?;
 
-        Ok(CatalogSystemDurableApplyReport {
+        Ok(CatalogStoreDurableApplyReport {
             plan,
             receipt,
             appended_records,
@@ -166,91 +173,56 @@ fn validate_catalog_wal_append_sequence(
     appended_records: &[CatalogSystemWalAppend],
     expected_kinds: &[CatalogMutationRecordKind],
 ) -> AndromedaResult<()> {
-    if appended_records.len() != expected_kinds.len() {
-        return Err(andromeda_core::AndromedaError::new(
-            andromeda_core::AndromedaErrorKind::Catalog,
-            "catalog WAL append sequence must include every planned mutation record",
-        ));
-    }
+    validate_catalog_store_wal_append_sequence(appended_records, expected_kinds).map_err(|error| {
+        let message = match error {
+            CatalogStoreWalAppendSequenceError::KindMismatch { index } => {
+                format!("catalog WAL append kind at index {index} must match the mutation plan")
+            }
+            CatalogStoreWalAppendSequenceError::ZeroLsn { index } => {
+                format!("catalog WAL append LSN at index {index} must not be zero (LSN must not be zero)")
+            }
+            CatalogStoreWalAppendSequenceError::NonIncreasingLsn { index } => {
+                format!(
+                    "catalog WAL append LSN at index {index} must be strictly increasing"
+                )
+            }
+            CatalogStoreWalAppendSequenceError::MissingPlannedRecord
+            | CatalogStoreWalAppendSequenceError::MissingCommitRecord => error.message().to_string(),
+        };
 
-    if !matches!(
-        appended_records.last(),
-        Some(record) if record.kind == CatalogMutationRecordKind::CatalogChangeCommit
-    ) {
-        return Err(andromeda_core::AndromedaError::new(
-            andromeda_core::AndromedaErrorKind::Catalog,
-            "catalog WAL append sequence must end with the commit record",
-        ));
-    }
-
-    let mut previous_lsn = None;
-    for (index, (append, expected_kind)) in appended_records
-        .iter()
-        .zip(expected_kinds.iter())
-        .enumerate()
-    {
-        if append.kind != *expected_kind {
-            return Err(andromeda_core::AndromedaError::new(
-                andromeda_core::AndromedaErrorKind::Catalog,
-                format!("catalog WAL append kind at index {index} must match the mutation plan"),
-            ));
-        }
-
-        if append.lsn == 0 {
-            return Err(andromeda_core::AndromedaError::new(
-                andromeda_core::AndromedaErrorKind::Catalog,
-                "catalog WAL append LSN must not be zero",
-            ));
-        }
-
-        if let Some(previous_lsn) = previous_lsn
-            && append.lsn <= previous_lsn
-        {
-            return Err(andromeda_core::AndromedaError::new(
-                andromeda_core::AndromedaErrorKind::Catalog,
-                "catalog WAL append LSNs must be strictly increasing",
-            ));
-        }
-
-        previous_lsn = Some(append.lsn);
-    }
-
-    Ok(())
+        andromeda_error::AndromedaError::new(
+            andromeda_error::AndromedaErrorKind::Catalog,
+            message,
+        )
+    })
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogSystemApplyReport {
-    pub plan: DefinitionBatchPlan,
-    pub snapshot_report: CatalogSnapshotApplyReport,
-    pub source_hash: DefinitionBatchSourceHash,
-    pub dependency_graph_hash: DefinitionBatchDependencyGraphHash,
-}
+pub type CatalogSystemApplyReport = CatalogStoreApplyReport<
+    DefinitionBatchPlan,
+    CatalogSnapshotApplyReport,
+    DefinitionBatchSourceHash,
+    DefinitionBatchDependencyGraphHash,
+>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CatalogSystemWalAppend {
-    pub kind: CatalogMutationRecordKind,
-    pub lsn: u64,
-}
+pub type CatalogSystemWalAppend = CatalogStoreWalAppend<CatalogMutationRecordKind>;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogSystemDurableApplyReport {
-    pub plan: DefinitionBatchPlan,
-    pub receipt: CatalogPublicationReceipt,
-    pub appended_records: Vec<CatalogSystemWalAppend>,
-    pub source_hash: DefinitionBatchSourceHash,
-    pub dependency_graph_hash: DefinitionBatchDependencyGraphHash,
-}
+pub type CatalogSystemDurableApplyReport = CatalogStoreDurableApplyReport<
+    DefinitionBatchPlan,
+    CatalogPublicationReceipt,
+    CatalogMutationRecordKind,
+    DefinitionBatchSourceHash,
+    DefinitionBatchDependencyGraphHash,
+>;
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        CatalogDefinition, CatalogObjectRef, DefinitionBatchId, DefinitionOperation, ObjectKind,
-        QualifiedName, TableDefinition,
+    use andromeda_catalog_store::{
+        CatalogDefinition, CatalogObjectRef, ObjectKind, QualifiedName, TableDefinition,
     };
-    use andromeda_core::{
-        AndromedaErrorKind, CatalogObjectId, ColumnDescriptor, ScalarType, TypeDescriptor,
-    };
+    use andromeda_definition_batch::{DefinitionBatchId, DefinitionOperation};
+    use andromeda_error::AndromedaErrorKind;
+    use andromeda_types::{CatalogObjectId, ColumnDescriptor, ScalarType, TypeDescriptor};
 
     fn column(name: &str, ordinal: u32) -> ColumnDescriptor {
         ColumnDescriptor {

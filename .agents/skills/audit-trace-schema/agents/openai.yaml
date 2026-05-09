@@ -1,3 +1,0 @@
-display_name: "Audit Trace Schema"
-short_description: "Design audit traces for security, catalog changes, admin operations, procedures, transactions, plans, recovery, cluster events, and DefinitionBatch. Use for obs"
-default_prompt: "Use the Audit Trace Schema skill to analyze the current Andromeda task and return a bounded, validated result."

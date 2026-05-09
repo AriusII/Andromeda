@@ -3,30 +3,25 @@ use std::{
     sync::{Arc, RwLock, RwLockReadGuard},
 };
 
-use andromeda_core::{AndromedaResult, CatalogVersion, ProcedureId};
+use andromeda_catalog_store::{
+    CatalogDefinition, CatalogManifestRecord, CatalogManifestRuntimeMetadata,
+    CatalogManifestStoreBoundary, QualifiedName,
+};
+use andromeda_error::AndromedaResult;
+use andromeda_procedure_contract::ProcedureContract;
+use andromeda_types::{CatalogVersion, ProcedureId};
 
-use crate::{CatalogDefinition, CatalogSystemStore, ProcedureContract, QualifiedName};
+use crate::CatalogSystemStore;
 
 use super::super::{CatalogRuntimeEvidence, CatalogRuntimeReopenEvidence, CatalogRuntimeStore};
-use super::{
-    catalog_runtime_lock_error,
-    record::{CatalogManifestRecord, CatalogManifestRuntimeMetadata},
-    schema::manifest_from_contract,
-};
+use super::{catalog_runtime_lock_error, schema::manifest_from_contract};
 
 /// Store boundary consumed by `CatalogServerRuntime`.
-pub trait CatalogManifestStore: CatalogRuntimeStore {
-    fn current_catalog_version(&self) -> CatalogVersion;
+pub trait CatalogManifestStore: CatalogManifestStoreBoundary<CatalogManifestRecord> {}
 
-    fn resolve_manifest_by_id(
-        &self,
-        procedure_id: ProcedureId,
-    ) -> AndromedaResult<Option<CatalogManifestRecord>>;
-
-    fn resolve_manifest_by_name(
-        &self,
-        name: &QualifiedName,
-    ) -> AndromedaResult<Option<CatalogManifestRecord>>;
+impl<T> CatalogManifestStore for T where
+    T: CatalogManifestStoreBoundary<CatalogManifestRecord> + ?Sized
+{
 }
 
 /// Read adapter over the real catalog system store.
@@ -132,26 +127,20 @@ impl CatalogSnapshotManifestStore {
 
 impl CatalogRuntimeStore for CatalogSnapshotManifestStore {
     fn catalog_runtime_evidence(&self) -> CatalogRuntimeEvidence {
-        let store = match self.store.read() {
-            Ok(store) => store,
-            Err(poisoned) => poisoned.into_inner(),
-        };
+        let store = self.store.read().unwrap_or_else(|poisoned| poisoned.into_inner());
         let catalog_version = Some(store.snapshot().visible_version());
         match self.reopen_evidence {
             Some(reopen_evidence) => {
                 CatalogRuntimeEvidence::durable(catalog_version, None, reopen_evidence)
-            }
+            },
             None => CatalogRuntimeEvidence::durable_without_reopen_evidence(catalog_version, None),
         }
     }
 }
 
-impl CatalogManifestStore for CatalogSnapshotManifestStore {
+impl CatalogManifestStoreBoundary<CatalogManifestRecord> for CatalogSnapshotManifestStore {
     fn current_catalog_version(&self) -> CatalogVersion {
-        let store = match self.store.read() {
-            Ok(store) => store,
-            Err(poisoned) => poisoned.into_inner(),
-        };
+        let store = self.store.read().unwrap_or_else(|poisoned| poisoned.into_inner());
         store.snapshot().visible_version()
     }
 

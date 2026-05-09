@@ -7,5 +7,3 @@ mod gpu_policy;
 mod placement_budget;
 #[path = "io_pipeline_contract/validation.rs"]
 mod validation;
-#[path = "io_pipeline_contract/workflow.rs"]
-mod workflow;

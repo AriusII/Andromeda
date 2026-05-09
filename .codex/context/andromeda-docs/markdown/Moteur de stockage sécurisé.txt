@@ -1,0 +1,1273 @@
+## Position nette
+
+Pour Andromeda, je recommande un **format de stockage segmenté, binaire, append-only, immuable côté froid, log-structured côté chaud, avec manifests signés et index de segments chargeables rapidement**.
+
+Il faut éviter deux extrêmes :
+
+| Mauvais choix | Pourquoi le rejeter |
+|---|---|
+| **Un seul fichier monolithique par base** | Chargement initial, maintenance, backup, scrub, corruption partielle et compaction deviennent trop lourds. |
+| **Un fichier par table/page/index** | Explosion du nombre de fichiers, metadata FS bruyante, lenteur au démarrage, difficulté de snapshot/backup. |
+
+Le bon compromis est :
+
+```text
+DatabaseRoot
+  -> Root pointer redondant
+  -> Manifest chain signée
+  -> WAL segments append-only
+  -> HotStore segments NVMe
+  -> ColdStore snapshot segments HDD
+  -> SegmentIndex compact
+  -> Audit/backup/archive séparés
+```
+
+Ce choix colle à la doctrine déjà posée : **commit visible = WAL durable**, et **vérité système = dernier Cold Snapshot valide + WAL durable depuis ce snapshot** fileciteturn1file12. Il respecte aussi l’invariant existant : le ColdStore doit être append-only, immutable, contigu, sans update-in-place, sans compression globale inter-blocs et sans fragmentation logique fileciteturn1file1.
+
+---
+
+# 1. Principe central : la vérité n’est jamais “un fichier”
+
+La vérité Andromeda doit être :
+
+```text
+CurrentRoot valide
++ Manifest signé valide
++ SegmentIndex vérifié
++ Cold Snapshot publié
++ WAL durable depuis RequiredWalStartLsn
++ HotStore reconstructible
+```
+
+Autrement dit, **un fichier n’est jamais cru seul**. Il est accepté seulement s’il est :
+
+```text
+référencé par un manifest valide
++ typé par son header
++ cohérent avec son hash
++ cohérent avec son CRC
++ cohérent avec sa signature ou chaîne cryptographique
++ cohérent avec le LSN attendu
++ cohérent avec le CatalogVersion attendu
+```
+
+C’est important : on ne peut pas empêcher absolument un administrateur root, un ransomware ou un disque défectueux de modifier des octets. En revanche, on peut rendre toute altération **détectable**, **localisable**, **non silencieuse**, et **récupérable** par snapshot précédent, WAL archive ou backup.
+
+Le fichier projet `03` va déjà dans ce sens : WAL checksummé/chaîné, manifest petit et vérifiable, pages avec trailer, torn-write guards, et scrub périodique du ColdStore fileciteturn1file0 fileciteturn1file3. Le design ci-dessous durcit cette ligne en format physique normatif.
+
+---
+
+# 2. Réponse directe : combien de fichiers ?
+
+## 2.1 Décision recommandée
+
+Pour une base Andromeda, il faut viser **peu de familles de fichiers**, mais **plusieurs segments par famille**.
+
+Je recommande **7 familles physiques** :
+
+| Famille | Extension indicative | Rôle | Vérité ? |
+|---|---:|---|---:|
+| Root pointer | `.androot` | Pointeur redondant vers le manifest courant. | Oui, mais seulement comme pointeur. |
+| Manifest | `.andmf` | Liste signée des segments, versions, snapshots, WAL requis. | Oui. |
+| WAL segment | `.andwal` | Journal durable append-only. | Oui pour transitions récentes. |
+| Hot segment | `.andhot` | Pages chaudes, versions MVCC, delta indexes, reconstructible. | Non seul ; oui avec WAL. |
+| Cold segment | `.andcold` | Snapshot froid immuable, contigu, HDD. | Oui si publié. |
+| Segment index | `.andidx` | Index compact des segments/pages/ranges pour chargement rapide. | Oui comme metadata vérifiée. |
+| Audit/archive | `.andaudit`, `.andarc` | Audit immuable, WAL archives, backup metadata. | Oui selon policy. |
+
+Ce n’est donc pas “1 fichier par table”, mais plutôt :
+
+```text
+1 base = N segments typés + 1 manifest actif + 1 index compact actif + WAL courant
+```
+
+## 2.2 Taille recommandée des segments
+
+| Type | Taille V0 recommandée | Justification |
+|---|---:|---|
+| WAL segment | **128 MiB** par défaut | Bon compromis entre rotation, archiving, fsync, réplication. |
+| Hot segment NVMe | **256 MiB** | Réduit file churn, reste facile à compacter. |
+| Cold segment HDD | **512 MiB** | Bon compromis séquentiel HDD / granularité restore / scrub. |
+| LOB segment | **1 GiB** | Les gros objets doivent être isolés. |
+| SegmentIndex | Variable, cible **< 256 MiB** | Doit être chargeable vite, idéalement mmap/read compact. |
+
+Pour une base froide de 1 TiB avec des cold segments de 512 MiB :
+
+```text
+1 TiB / 512 MiB ≈ 2048 cold segment files
+```
+
+C’est acceptable si les répertoires sont shardés, par exemple :
+
+```text
+cold/snap_<snapshot_id>/ab/cd/<segment_id>.andcold
+```
+
+Pour une base de 10 TiB, on peut passer à des segments froids de 1 GiB ou 2 GiB via StoragePolicy. La taille n’est pas une constante globale éternelle : elle doit être déclarée dans le `StoragePolicy`, mais la V0 devrait avoir un défaut clair.
+
+---
+
+# 3. Arborescence physique proposée
+
+```text
+andromeda_instance/
+  instance.androot
+
+  system/
+    manifests/
+      manifest_<epoch>_<hash>.andmf
+    wal/
+      wal_<timeline>_<start_lsn>.andwal
+    cold/
+      snap_<snapshot_id>/
+        idx_<snapshot_id>.andidx
+        seg/<shard>/<segment_id>.andcold
+    hot/
+      seg/<shard>/<segment_id>.andhot
+    audit/
+      audit_<epoch>.andaudit
+
+  databases/
+    <database_id>/
+      db.androot
+
+      manifests/
+        manifest_<epoch>_<hash>.andmf
+
+      wal/
+        wal_<timeline>_<start_lsn>.andwal
+
+      hot/
+        seg/<shard>/<segment_id>.andhot
+        temp/              -- jamais vérité
+
+      cold/
+        snap_<snapshot_id>/
+          idx_<snapshot_id>.andidx
+          seg/<shard>/<segment_id>.andcold
+
+      archive/
+        wal/
+        manifests/
+        restore_points/
+```
+
+## Règles de nommage
+
+Les noms humains de tables, namespaces et procedures ne doivent **pas** apparaître dans les noms de fichiers. Ils exposent trop d’information et créent des problèmes de renommage. Les fichiers doivent porter des identifiants opaques :
+
+```text
+DatabaseId
+SegmentId
+SnapshotId
+TimelineId
+StartLsn
+Epoch
+Hash prefix
+```
+
+Un nom de fichier n’est qu’un confort opérateur. Le moteur doit vérifier le vrai type dans le header :
+
+```text
+Magic
+FileKind
+DatabaseId
+SegmentId
+SnapshotId
+FormatVersion
+HeaderCrc
+```
+
+Si l’extension dit `.andcold` mais que le header dit autre chose : **rejet immédiat**.
+
+---
+
+# 4. Root pointer : ne pas dépendre d’un seul `CURRENT`
+
+RocksDB utilise une combinaison `CURRENT + MANIFEST-*`, où le manifest est un log transactionnel des changements d’état servant à restaurer le dernier état cohérent au démarrage ; cette logique existe précisément parce qu’on ne peut pas faire confiance aux seules métadonnées du système de fichiers après un crash ([github.com](https://github.com/facebook/rocksdb/wiki/MANIFEST)).
+
+Pour Andromeda, je propose une version plus verrouillée :
+
+```text
+db.androot
+  SlotA
+  SlotB
+  RootTrailer
+```
+
+Chaque slot contient :
+
+```text
+RootSlot {
+    Magic,
+    SlotVersion,
+    DatabaseId,
+    ManifestEpoch,
+    ManifestFileId,
+    ManifestHash,
+    RequiredWalStartLsn,
+    RootWrittenAtLogicalEpoch,
+    SlotCrc64,
+    SlotHash,
+    Signature
+}
+```
+
+Au démarrage :
+
+```text
+1. Lire SlotA et SlotB.
+2. Vérifier CRC, hash, signature.
+3. Choisir le slot valide avec ManifestEpoch le plus haut.
+4. Charger le manifest référencé.
+5. Refuser si manifest invalide ou rollback suspect.
+```
+
+## Publication atomique
+
+Sur Linux/POSIX, `rename()` remplace atomiquement un chemin existant, mais la durabilité de l’entrée de répertoire nécessite aussi un `fsync()` explicite sur le répertoire ; `fsync()` sur le fichier seul ne garantit pas nécessairement que l’entrée du répertoire a atteint le disque ([man7.org](https://man7.org/linux/man-pages/man2/rename.2.html)).
+
+Donc une publication Andromeda doit faire :
+
+```text
+write manifest.tmp
+fsync(manifest.tmp)
+rename(manifest.tmp -> manifest_<epoch>.andmf)
+fsync(manifests_directory)
+
+write root slot inactive
+fsync(db.androot)
+fsync(database_directory)
+```
+
+Et pas seulement :
+
+```text
+write file
+rename
+```
+
+Ce point est critique. Sans `fsync` fichier + répertoire, le “manifest switch atomique” peut être atomique en visibilité mais pas suffisamment durable après panne.
+
+---
+
+# 5. Format binaire canonique
+
+## 5.1 Endianness
+
+Je recommande :
+
+```text
+Canonical endianness = Little Endian
+```
+
+Raison : x64 et ARM64 sont pratiquement ciblés en little-endian dans les stacks serveur modernes, et le projet cible exclusivement x64/ARM64. Le point important n’est pas “LE ou BE” en soi ; c’est **ne jamais utiliser l’endianness native implicite**.
+
+Interdictions :
+
+```text
+pas de transmute Rust struct -> bytes disque
+pas de repr(Rust) sur disque
+pas de usize/isize dans le format
+pas de padding non défini
+pas de bool natif non spécifié
+pas de enum Rust brut non versionné
+```
+
+Le format doit être sérialisé explicitement :
+
+```text
+u8/u16/u32/u64/u128 LE
+i8/i16/i32/i64/i128 LE
+fixed bytes
+length-prefixed bytes
+varint seulement dans payload secondaire, pas dans headers critiques
+```
+
+SQLite montre l’intérêt d’un format stable avec magic header, page size, versions de lecture/écriture et champs réservés ; il stocke notamment la taille de page dans le header et utilise des versions de format pour décider si un fichier peut être lu ou écrit ([sqlite.org](https://sqlite.org/fileformat.html)). Andromeda doit reprendre cette discipline, pas le même layout.
+
+## 5.2 Versions de format
+
+Chaque fichier doit porter :
+
+```text
+FormatMajor
+FormatMinor
+MinReaderVersion
+WriterVersion
+FeatureFlags
+```
+
+Règle :
+
+| Cas | Décision |
+|---|---|
+| `FormatMajor` inconnu | Refus. |
+| `MinReaderVersion` > moteur courant | Refus ou ReadOnlyForensic. |
+| `WriterVersion` > moteur courant | ReadOnly possible si policy autorise. |
+| Feature critique inconnue | Refus. |
+| Feature opportuniste inconnue | Ignorer si déclarée désactivable. |
+
+---
+
+# 6. Structure d’un segment Andromeda
+
+## 6.1 Segment général
+
+```text
+[SegmentHeader]
+[Block 0]
+[Block 1]
+[Block 2]
+...
+[Block N]
+[SegmentDirectory]
+[SegmentTrailer]
+```
+
+Le segment est écrit en staging, validé, scellé, puis publié par manifest.
+
+```text
+construction RAM
+-> append staging
+-> flush
+-> validation CRC/hash
+-> seal
+-> manifest switch
+```
+
+Cette discipline correspond au pipeline déjà posé dans le fichier Storage : construction RAM, append en staging, flush, validation, seal, publication via manifest fileciteturn1file9.
+
+## 6.2 SegmentHeader
+
+```text
+SegmentHeader {
+    Magic                  [8]      // "ANDRSEG\0"
+    HeaderLength           u32
+    FormatMajor            u16
+    FormatMinor            u16
+
+    SegmentType            u16      // WAL, HOT, COLD_ROW, COLD_INDEX, MAP_COLUMN, LOB, STATS, AUDIT
+    Flags                  u64
+
+    InstanceId             u128
+    DatabaseId             u128
+    SegmentId              u128
+    SnapshotId             u128 optional
+    TimelineId             u128
+
+    BaseLsn                u64
+    MinLsn                 u64
+    MaxLsn                 u64
+
+    PageSize               u32
+    BlockSize              u32
+    ExtentPages            u32
+
+    CompressionProfileId   u32
+    CryptoProfileId        u32
+    HashProfileId          u32
+
+    CreatedEpoch           u64
+    CatalogVersion         u64
+    StoragePolicyVersion   u64
+
+    HeaderCrc32            u32
+    HeaderHash             bytes[32]
+}
+```
+
+## 6.3 BlockHeader / BlockTrailer
+
+```text
+BlockHeader {
+    Magic                  [8]      // "ANDRBLK\0"
+    BlockOrdinal           u64
+    BlockType              u16      // pages, column_chunk, dictionary, lobs, segment_index
+    HeaderLength           u32
+
+    PayloadOffset          u64
+    PayloadLength          u32
+    UncompressedLength     u32
+
+    FirstPageId            u64 optional
+    PageCount              u32 optional
+
+    MinKeyHash             u128 optional
+    MaxKeyHash             u128 optional
+    MinLsn                 u64
+    MaxLsn                 u64
+
+    PrevBlockHash          bytes[32]
+    HeaderCrc32            u32
+}
+
+BlockPayload {
+    compressed_or_plain_bytes
+}
+
+BlockTrailer {
+    PayloadCrc64           u64
+    PayloadHash            bytes[32]
+    AeadTag                bytes[16] optional
+    MerkleLeafHash         bytes[32]
+}
+```
+
+## 6.4 SegmentTrailer
+
+```text
+SegmentTrailer {
+    Magic                  [8]      // "ANDREND\0"
+    BlockCount             u64
+    SegmentDirectoryOffset u64
+    SegmentDirectoryLength u64
+
+    SegmentMinLsn          u64
+    SegmentMaxLsn          u64
+
+    MerkleRoot             bytes[32]
+    PreviousSegmentHash    bytes[32] optional
+
+    FileListHash           bytes[32] optional
+    SegmentCrc64           u64
+    SegmentHash            bytes[32]
+    Signature              bytes variable
+}
+```
+
+Le `SegmentDirectory` donne les offsets des blocs et leurs métadonnées minimales. Le `SegmentIndex` global reprend ces informations de manière compacte pour éviter d’ouvrir tous les segments au démarrage.
+
+---
+
+# 7. Compression : par bloc seulement
+
+La documentation projet interdit déjà la compression globale inter-blocs afin de préserver la lecture indépendante, la validation et le recovery partiel fileciteturn1file1.
+
+Je confirme cette décision :
+
+```text
+Compression globale du segment : interdite.
+Compression par bloc : autorisée.
+Compression par page : autorisée si budget CPU faible.
+Dictionnaire par bloc ou par row-group : autorisé.
+Dictionnaire global mutable : interdit en C5.
+```
+
+Raison :
+
+| Choix | Impact |
+|---|---|
+| Compression globale | Très bonne compression, mais recovery partiel difficile. |
+| Compression par bloc | Bonne compression, lecture ciblée, validation ciblée. |
+| Pas de compression WAL V0 | Simplicité et latence commit plus stable. |
+| Compression cold-only | Bon compromis sécurité/performance. |
+
+---
+
+# 8. Checksums, hashes, signatures et chiffrement
+
+Il faut séparer quatre objectifs :
+
+| Objectif | Mécanisme |
+|---|---|
+| Détecter corruption accidentelle rapide | CRC32/CRC64. |
+| Détecter altération volontaire | Hash cryptographique. |
+| Empêcher substitution/replay | Chaîne de hash + epoch + manifest signé. |
+| Protéger confidentialité/intégrité | Chiffrement authentifié AEAD. |
+
+## 8.1 CRC
+
+Usage recommandé :
+
+```text
+HeaderCrc32       -> headers courts.
+PayloadCrc64      -> payloads, pages, blocs.
+WalRecordCrc64    -> WAL.
+```
+
+Le CRC est rapide et utile contre bit rot, torn write et erreurs de média. Il ne doit jamais être présenté comme une protection contre un attaquant.
+
+## 8.2 Hash cryptographique
+
+Je recommande un profil de hash cryptographique versionné :
+
+```text
+HashProfile {
+    Algorithm = SHA3-256 ou SHA-256 ou BLAKE3 selon policy
+    OutputBytes = 32
+    Version = n
+}
+```
+
+SHA-3 est standardisé par NIST dans FIPS 202 ; le standard spécifie SHA3-224/256/384/512 et SHAKE128/SHAKE256, avec usages de sécurité comme signature, dérivation de clé et génération pseudo-aléatoire ([csrc.nist.gov](https://csrc.nist.gov/pubs/fips/202/final)).
+
+Pour Andromeda :
+
+```text
+BlockHash    = H(BlockHeader canonical + ciphertext_or_payload + trailer core)
+SegmentHash  = H(SegmentHeader + MerkleRoot + SegmentDirectory)
+ManifestHash = H(Manifest canonical)
+RootHash     = H(RootSlot canonical)
+```
+
+## 8.3 Chiffrement authentifié
+
+Pour le chiffrement au repos, il faut un `CryptoProfile` explicite. AES-GCM/GMAC est un mode d’authentification/chiffrement authentifié standardisé par NIST SP 800-38D, même si NIST a indiqué en 2024 que la publication est en révision ([csrc.nist.gov](https://csrc.nist.gov/pubs/sp/800/38/d/final)).
+
+Profil recommandé :
+
+```text
+CryptoProfile {
+    Algorithm,
+    KeyId,
+    KeyEpoch,
+    NonceDerivation,
+    AeadTagLength,
+    RekeyLimit,
+    AadSchemaVersion
+}
+```
+
+AAD obligatoire :
+
+```text
+AAD =
+    DatabaseId
+    SegmentId
+    BlockOrdinal
+    SegmentType
+    SnapshotId
+    BaseLsn
+    FormatVersion
+    CatalogVersion
+    StoragePolicyVersion
+```
+
+Objectif : empêcher qu’un bloc valide cryptographiquement soit déplacé dans un autre segment, une autre base ou un autre snapshot.
+
+Règles strictes :
+
+```text
+nonce unique par clé
+key rotation versionnée
+pas de crypto maison
+pas de désactivation silencieuse
+manifest et root signés
+```
+
+---
+
+# 9. Pages : décision V0
+
+Le fichier projet propose déjà une page de 16 KiB ou 32 KiB, avec extent de 64 pages fileciteturn1file5.
+
+Je recommande :
+
+```text
+PageSize V0 = 16 KiB
+Extent = 64 pages = 1 MiB
+Cold block row-store = 1 extent = 1 MiB
+Cold block columnar = 1 à 4 MiB selon Map/analytics
+```
+
+Pourquoi 16 KiB ?
+
+| Critère | 16 KiB | 32 KiB |
+|---|---:|---:|
+| OLTP point lookup | Meilleur | Plus de read amplification. |
+| B+Tree fanout | Bon | Très bon. |
+| BufferPool | Plus fin | Plus grossier. |
+| Compression cold | Correct | Meilleur. |
+| HDD séquentiel | Correct | Bon. |
+| V0 généraliste | **Oui** | Policy spécialisée. |
+
+Donc :
+
+```text
+V0 généraliste : 16 KiB
+Tables cold analytics : option 32 KiB
+Columnar Maps : blocs 1-4 MiB, pas page row-store classique
+```
+
+## Page format
+
+```text
+Page =
+    PageHeader
+    Payload
+    FreeSpace / SlotDirectory / OffsetDirectory
+    PageTrailer
+```
+
+Le projet a déjà une structure conceptuelle solide : `PageHeader` avec `Magic`, `FormatVersion`, `PageType`, `FileId`, `PageId`, `ObjectId`, `PageLsn`, offsets, compteurs et CRC ; puis `PageTrailer` avec `PayloadCrc64`, `PageHash` et torn-write guards fileciteturn1file5.
+
+Je garderais cette logique, avec une précision : **PageId logique ≠ offset physique**.
+
+```text
+PageId logique = stable dans l'objet ou l'allocation unit.
+Offset physique = résolu par SegmentIndex/Manifest/HotPageMap.
+```
+
+Cela permet :
+
+```text
+copy-on-write
+snapshot immutable
+hot/cold merge
+reconstruction WAL
+déplacement physique sans changer l'identité logique
+```
+
+---
+
+# 10. WAL : format et discipline
+
+PostgreSQL rappelle le principe classique : les changements de fichiers de données ne doivent être écrits qu’après journalisation et flush durable des records WAL ; après crash, les changements non appliqués aux pages peuvent être refaits par REDO ([postgresql.org](https://www.postgresql.org/docs/current/wal-intro.html)). C’est exactement aligné avec Andromeda : pas de commit visible sans WAL durable fileciteturn1file14.
+
+## 10.1 WAL segment
+
+```text
+[WalSegmentHeader]
+[WalRecord]
+[WalRecord]
+...
+[WalSegmentTrailer optional after seal]
+```
+
+`WalSegmentHeader` :
+
+```text
+WalSegmentHeader {
+    Magic                  [8]      // "ANDRWAL\0"
+    FormatVersion          u32
+    TimelineId             u128
+    SegmentId              u128
+    StartLsn               u64
+    PreviousSegmentHash    bytes[32]
+    CreatedEpoch           u64
+    HeaderCrc32            u32
+}
+```
+
+`WalRecord` :
+
+```text
+WalRecord {
+    Magic                  [4]
+    RecordLength           u32
+    RecordLengthInv        u32      // détection torn/mauvaise lecture
+    Lsn                    u64
+    PrevLsn                u64
+    TxId                   u128
+    InvocationId           u128
+    CatalogVersion         u64
+    RecordType             u16
+    ObjectId               u128 optional
+    PageId                 u64 optional
+    PayloadLength          u32
+    Payload                bytes
+    Crc64                  u64
+    ChainHash              bytes[32]
+}
+```
+
+Le `RecordLengthInv` est volontaire : il permet de détecter rapidement une écriture partielle ou une mauvaise interprétation.
+
+## 10.2 Commit record
+
+Un `TxCommit` devrait contenir :
+
+```text
+TxCommit {
+    TxId
+    CommitLsn
+    CommitTimestampLogical
+    InvocationId
+    ProcedureId
+    ContractHash
+    CatalogVersion
+    PolicyVersion
+    WriteSetHash
+    LastMutationLsn
+    TxChainHash
+}
+```
+
+Cette structure permet de relier :
+
+```text
+appel RPC
+-> Procedure
+-> ContractHash
+-> CatalogVersion
+-> transaction
+-> WAL
+-> résultat/audit
+```
+
+Ce lien est déjà demandé par la doctrine catalogue/recovery : une Procedure exécutée doit pouvoir être reliée au catalogue exact, aux permissions, au plan, au WAL et au résultat ou à l’erreur fileciteturn1file18.
+
+---
+
+# 11. HotStore : éviter l’update-in-place même sur NVMe
+
+Je recommande que le HotStore soit **log-structured / copy-on-write** en V0 :
+
+```text
+mutation page
+-> WAL durable
+-> nouvelle version de page dans hot segment
+-> HotPageMap pointe vers dernière version
+-> checkpoint
+-> merge vers cold snapshot
+```
+
+Pourquoi ?
+
+| Option | Avantage | Problème |
+|---|---|---|
+| Update-in-place hot pages | Simple, compact | Torn write, recovery plus subtil. |
+| Copy-on-write hot pages | Plus safe, très vérifiable | Write amplification plus élevée. |
+| LSM pur | Très bon write-heavy | Ranges et transactions relationnelles plus complexes. |
+
+Andromeda veut un noyau “ennuyeux, strict et testable”, pas expérimental fileciteturn1file14. Le COW HotStore est plus simple à prouver :
+
+```text
+ancienne page reste valide
+nouvelle page validée par WAL/PageLsn/hash
+mapping reconstructible
+dirty page RAM jamais vérité
+```
+
+Le BufferPool garde son rôle : pinning, dirty tracking, eviction observable, cooperation checkpoint, read-ahead et métriques, mais il ne ment jamais sur la durabilité d’une page dirty fileciteturn1file3.
+
+---
+
+# 12. ColdStore : snapshot immuable et segments contigus
+
+Le ColdStore doit être traité comme un **fichier de preuve**, pas comme un tas de pages mutables.
+
+## 12.1 Pipeline de publication
+
+```text
+1. Fence logique de snapshot.
+2. Lire état stable + hot deltas nécessaires.
+3. Construire segments cold en staging.
+4. Calculer block CRC/hash.
+5. Calculer SegmentDirectory.
+6. Calculer MerkleRoot.
+7. Sceller SegmentTrailer.
+8. fsync segments.
+9. Construire SegmentIndex.
+10. fsync SegmentIndex.
+11. Construire manifest.next.
+12. fsync manifest.
+13. Switch root slot.
+14. Cleanup différé.
+```
+
+Le projet impose déjà : pas d’update-in-place du snapshot froid, publication via snapshot tmp, validation, manifest.next, fsync, atomic switch, cleanup différé, et au moins un snapshot froid valide à tout moment fileciteturn1file1.
+
+## 12.2 Segment froid
+
+```text
+ColdSegment {
+    SegmentHeader
+    Block[]              // row pages, index pages, column chunks, LOB chunks
+    SegmentDirectory
+    SegmentTrailer
+}
+```
+
+Règles :
+
+```text
+aucune page fragmentée
+aucun trou logique
+aucune réécriture partielle
+aucune compression globale
+aucun bloc non référencé dans le manifest publié
+```
+
+---
+
+# 13. SegmentIndex : le secret du chargement rapide
+
+Le démarrage ne doit pas scanner tous les `.andcold`.
+
+Le démarrage doit lire :
+
+```text
+db.androot
+-> manifest actif
+-> SegmentIndex actif
+-> CatalogRoot
+-> B+Tree root pages
+-> HotPageMap checkpoint
+-> WAL depuis RequiredWalStartLsn
+```
+
+Objectif :
+
+```text
+StartupCost = O(metadata active + WAL tail)
+pas O(taille totale de la base)
+```
+
+## 13.1 Format du SegmentIndex
+
+```text
+SegmentIndex {
+    Magic
+    FormatVersion
+    DatabaseId
+    SnapshotId
+    ManifestHash
+
+    ObjectDirectory
+    AllocationUnitDirectory
+    PageLocatorTable
+    KeyRangeDirectory
+    IndexRootDirectory
+    ColumnChunkDirectory
+    BloomDirectory
+    StatsSummaryDirectory
+
+    SegmentIndexCrc64
+    SegmentIndexHash
+    Signature
+}
+```
+
+## 13.2 PageLocator
+
+```text
+PageLocator {
+    ObjectId
+    AllocationUnitId
+    PageId
+    SegmentId
+    BlockOrdinal
+    OffsetInBlock
+    PageLength
+    PageLsn
+    PageHash
+}
+```
+
+## 13.3 KeyRangeDirectory
+
+```text
+KeyRangeEntry {
+    IndexId
+    SegmentId
+    BlockOrdinal
+    MinKeyEncoded
+    MaxKeyEncoded
+    RowCount
+    DistinctEstimate
+    BloomRef optional
+}
+```
+
+Ce design permet :
+
+```text
+point lookup -> root B+Tree -> locator -> segment/block/page
+range scan -> KeyRangeDirectory -> blocs pertinents
+analytics -> ColumnChunkDirectory -> page skipping
+equality high-cardinality -> BloomDirectory
+```
+
+Parquet n’est pas le format à copier pour Andromeda, mais son Page Index illustre bien l’idée : stocker des métadonnées de pages pour éviter de lire toutes les pages d’une colonne, afin de rendre les point lookups et range scans plus efficaces ([parquet.apache.org](https://parquet.apache.org/docs/file-format/pageindex/)). Les Bloom filters sont aussi utiles pour du predicate pushdown sur colonnes à forte cardinalité, avec “definitely no” ou “probably yes”, sans faux négatifs si correctement construits ([parquet.apache.org](https://parquet.apache.org/docs/file-format/bloomfilter/)).
+
+---
+
+# 14. Access paths : B+Tree froid dense + HotIndex delta
+
+Le projet pose déjà :
+
+```text
+ColdIndex = B+Tree dense, stable, HDD
+HotIndex  = Delta Tree mutable, NVMe
+Lecture   = merge iterator hot + cold
+```
+
+Et il précise que le B+Tree reste le choix ordonné par défaut ; les hash indexes sont utiles pour l’égalité mais ne remplacent pas les ranges, et les learned indexes ne doivent pas entrer dans le noyau C5 sans preuve robuste fileciteturn1file5.
+
+Je confirme.
+
+## 14.1 Index recommandé
+
+| Usage | Structure recommandée |
+|---|---|
+| Primary key OLTP | B+Tree clusterisé logique. |
+| Secondary index | B+Tree non clusterisé avec RowId/PageLocator. |
+| Equality très fréquent | Hash index optionnel, jamais seul. |
+| Cold snapshot | B+Tree dense immuable. |
+| Hot writes | Delta B+Tree / append delta / Bw-tree-like à évaluer. |
+| Maps analytiques | Column chunks + min/max + page index + bloom optionnel. |
+| Learned index | C0/C1 expérimental, fallback B+Tree obligatoire. |
+
+## 14.2 Recherche interne rapide
+
+Pipeline point lookup :
+
+```text
+Procedure plan
+-> IndexRootDirectory
+-> root/internal B+Tree pinned
+-> HotIndex lookup
+-> ColdIndex lookup
+-> MVCC visibility
+-> merge hot/cold
+-> BufferPool page read
+```
+
+Pipeline range scan :
+
+```text
+Procedure plan
+-> KeyRangeDirectory prune
+-> B+Tree range seek
+-> sequential block reads
+-> MVCC filter
+-> ResultStream batches
+```
+
+Pipeline analytics Map :
+
+```text
+Map contract
+-> ColumnChunkDirectory
+-> min/max prune
+-> Bloom optional
+-> read only required column chunks
+-> CPU/SIMD/GPU batch hors commit path
+```
+
+Le GPU reste hors commit path selon les documents projet ; il peut accélérer les stats, scans analytiques, agrégations massives ou vectoriel, mais pas WAL, rollback, recovery ou logique OLTP critique fileciteturn1file16.
+
+---
+
+# 15. Manifest : structure normative
+
+```text
+DatabaseManifest {
+    Magic
+    ManifestVersion
+    DatabaseId
+    SnapshotId
+    ManifestEpoch
+
+    BaseCheckpointLsn
+    RequiredWalStartLsn
+    LastKnownDurableLsn
+
+    CatalogRoot
+    CatalogVersion
+    PolicyVersion
+    StatsVersion
+
+    ObjectCount
+    ObjectManifestsHash
+    SegmentIndexFile
+    SegmentIndexHash
+
+    FileList[]
+    FileListHash
+
+    PreviousManifestHash
+    CreatedAtLogicalEpoch
+
+    ManifestCrc64
+    ManifestHash
+    Signature
+}
+```
+
+`FileListEntry` :
+
+```text
+FileListEntry {
+    FileId
+    FileKind
+    RelativePath
+    SegmentId optional
+    SizeBytes
+    MinLsn
+    MaxLsn
+    Hash
+    Crc64
+    Required
+    EncryptionKeyId optional
+}
+```
+
+Règle :
+
+```text
+Tout fichier non listé par le manifest actif est ignoré.
+Tout fichier listé mais invalide bloque le mode Online.
+```
+
+Réponse selon cas :
+
+| Cas | Décision |
+|---|---|
+| Segment froid manquant | ForensicOnly ou restore. |
+| Segment froid hash mismatch | Snapshot précédent ou backup. |
+| WAL tronqué en fin | Stop replay au dernier record valide. |
+| WAL corrompu au milieu | ForensicStart ou restore. |
+| SegmentIndex invalide | Reconstruire depuis segments si possible, sinon ForensicOnly. |
+| Manifest courant invalide | Essayer previous manifest. |
+
+Ces réponses sont alignées avec le modèle de corruption du fichier `03` : WAL partiel, CRC/chain mismatch, page torn write, segment froid altéré, catalog incohérent, index divergence et Map divergence ont chacun une détection et une réponse déterministe fileciteturn1file10.
+
+---
+
+# 16. Sécurité contre altération : matrice claire
+
+| Menace | Détection | Réponse |
+|---|---|---|
+| Bit rot HDD | CRC64 bloc/page + scrub P6 | Relecture replica/backup, snapshot précédent. |
+| Torn write | PageTrailer guards + WAL replay | Recharger depuis WAL/snapshot. |
+| Troncature WAL | length/CRC/chain | Stop dernier LSN valide, recovery degraded. |
+| Modification d’un bloc cold | BlockHash + MerkleRoot + manifest signature | Rejet segment, snapshot précédent. |
+| Substitution de segment | SegmentId dans header + manifest hash + signature | Rejet. |
+| Rollback vers vieux manifest | ManifestEpoch + previous hash + audit anchor | Refus ou ForensicOnly. |
+| Ransomware logique | Backups immuables + PITR + audit | Restore/PITR. |
+| Admin malveillant | IAM, audit, séparation surfaces | Break-glass borné, forensic. |
+| Replica empoisonnée | WAL shipping signé, LSN validation, cluster manifest | Fencing/resync. |
+
+Les documents projet insistent déjà sur la séparation des surfaces QUIC, les permissions, l’audit, l’interdiction d’inspecter raw pages/WAL côté application, et la distinction backup ≠ HA/DR fileciteturn1file6 fileciteturn1file19.
+
+---
+
+# 17. Backup, restore et forensic
+
+Il faut absolument conserver :
+
+```text
+Cold snapshot
++ WAL archives
++ Catalog
++ Procedure Store si policy
++ Audit ledger
++ Manifests
++ Certificate metadata avec prudence clés
+```
+
+Le fichier HA/DR rappelle qu’une replica qui applique une suppression erronée n’est pas un backup, et que le backup protège contre erreur humaine, corruption logique, suppression accidentelle, ransomware, bug applicatif, mauvaise migration et compromission silencieuse fileciteturn1file19.
+
+## Restore PITR recommandé
+
+```text
+1. Choisir snapshot froid.
+2. Vérifier manifest/signature/hash.
+3. Vérifier SegmentIndex.
+4. Choisir LSN ou timestamp logique cible.
+5. Rejouer WAL jusqu’à cible.
+6. Rollback transactions incomplètes.
+7. Reconstruire HotIndex/Maps nécessaires.
+8. Valider catalog/security/storage invariants.
+9. Ouvrir ReadOnly test.
+10. Promouvoir si validation complète.
+```
+
+---
+
+# 18. Chargement rapide : algorithme de startup
+
+```text
+StartupFastPath(database):
+    root = read_root_slots()
+    root = choose_highest_valid_epoch(root.SlotA, root.SlotB)
+
+    manifest = read_manifest(root.ManifestFileId)
+    verify(manifest.crc, manifest.hash, manifest.signature)
+
+    seg_index = read_segment_index(manifest.SegmentIndexFile)
+    verify(seg_index.hash == manifest.SegmentIndexHash)
+
+    catalog_root = load_catalog_root(manifest.CatalogRoot)
+    load_policy_versions()
+    load_btree_roots(seg_index.IndexRootDirectory)
+    load_hot_page_map_checkpoint()
+
+    wal_iter = open_wal_from(manifest.RequiredWalStartLsn)
+    replay_redo_until_last_valid_record()
+    rollback_incomplete_transactions()
+
+    validate_core_invariants()
+    open Online or ReadOnly or ForensicOnly
+```
+
+Le recovery projet est très proche : lire le manifest actif, vérifier signature/hash/CRC, monter le snapshot froid, lire WAL depuis `RequiredWalStartLsn`, rejouer REDO, annuler transactions incomplètes, reconstruire hot maps/indexes, vérifier invariants puis ouvrir Online/ReadOnly/ForensicOnly fileciteturn1file4.
+
+## Cible de performance
+
+```text
+Temps de démarrage normal ≈ lecture root + manifest + segment index + WAL tail
+Temps de démarrage forensic ≈ normal + scrub ciblé + index/table consistency checks
+```
+
+Pas de scan complet du ColdStore au démarrage normal.
+
+---
+
+# 19. I/O scheduler : priorité stricte
+
+Le fichier `03` donne déjà la bonne hiérarchie :
+
+| Priorité | I/O |
+|---:|---|
+| P0 | WAL flush |
+| P1 | Transaction read miss |
+| P2 | Index root/internal read |
+| P3 | Hot page writeback |
+| P4 | Checkpoint |
+| P5 | Cold snapshot build |
+| P6 | Scrub/maintenance |
+
+Et il précise que WAL flush ne doit jamais être affamé par Map refresh, build statistiques ou tâche GPU fileciteturn1file9.
+
+Je renforcerais :
+
+```text
+P0 ne partage pas la même file logique que temp/spill.
+P0 a quota réservé NVMe.
+P0 peut déclencher backpressure globale.
+P6 scrub est annulable.
+P5 snapshot est throttlé.
+```
+
+---
+
+# 20. Décisions V0 recommandées
+
+| Sujet | Décision V0 |
+|---|---|
+| Endianness | Little-endian canonique. |
+| PageSize | 16 KiB. |
+| Extent | 64 pages = 1 MiB. |
+| WAL segment | 128 MiB. |
+| Hot segment | 256 MiB. |
+| Cold segment | 512 MiB. |
+| LOB segment | 1 GiB. |
+| Compression | Par bloc uniquement, cold/hot optionnel, WAL non compressé V0. |
+| CRC | Header CRC32, payload/page/WAL CRC64. |
+| Hash | Hash cryptographique 256 bits, profil versionné. |
+| Manifest | Signé, chaîné, previous hash obligatoire. |
+| Root pointer | A/B slots, epoch monotone, signature. |
+| HotStore | Copy-on-write/log-structured en V0. |
+| ColdStore | Append-only immutable. |
+| Index par défaut | B+Tree. |
+| Hash index | Optionnel égalité. |
+| Learned index | Interdit C5, expérimental avec fallback. |
+| Encryption | AEAD par bloc/segment via CryptoProfile. |
+| Startup | Manifest + SegmentIndex + WAL tail, pas scan complet. |
+| File names | IDs opaques, pas de noms métier. |
+| Raw file access | Interdit surface applicative. |
+
+---
+
+# 21. Ce qu’il faut explicitement refuser
+
+```text
+Un fichier par table.
+Un fichier par page.
+Un format dépendant de structs Rust natives.
+Un manifest non signé.
+Un manifest switch sans fsync fichier + fsync répertoire.
+Un ColdStore update-in-place.
+Une compression globale sur segment froid.
+Un WAL sans chain hash.
+Un segment accepté hors manifest.
+Un index appris sans fallback B+Tree.
+Un GPU dans le commit/recovery path.
+Un temp/spill dans la vérité système.
+Un startup qui scanne tous les fichiers de données.
+Un backup non testé.
+Une replica considérée comme backup.
+```
+
+Ces refus sont cohérents avec la grille générale du projet : une fonctionnalité doit être définissable, déterministe, typée, bornée, observable, récupérable après crash, versionnée, explicable et désactivable ; sinon elle est rejetée ou sandboxée fileciteturn1file11.
+
+---
+
+# 22. Tests d’acceptation obligatoires du format
+
+## 22.1 Tests corruption
+
+```text
+modifier 1 byte dans PagePayload -> CRC/hash détecte
+modifier 1 byte dans BlockTrailer -> hash mismatch
+modifier SegmentId dans header -> signature/hash mismatch
+échanger deux blocs entre segments -> AAD/hash mismatch
+supprimer un segment froid -> manifest check échoue
+remplacer manifest par ancien valide -> epoch/audit rollback détecte
+tronquer WAL en fin -> stop dernier record valide
+tronquer WAL au milieu -> recovery degraded / forensic
+```
+
+## 22.2 Tests crash
+
+```text
+crash avant WAL flush -> mutation invisible
+crash après WAL flush avant dirty page -> mutation visible après REDO
+crash pendant root slot write -> ancien slot valide utilisé
+crash pendant manifest.tmp -> manifest ignoré
+crash pendant rename manifest -> ancien ou nouveau manifest, jamais demi-état
+crash pendant cold snapshot staging -> snapshot non publié
+crash pendant SegmentIndex write -> précédent index ou reconstruction
+```
+
+Ces tests recoupent la crash-test matrix existante : avant TxBegin durable, après mutation WAL avant commit, après TxCommit durable avant ack, pendant manifest switch, pendant Map delta apply fileciteturn1file10.
+
+## 22.3 Tests de chargement
+
+```text
+démarrage avec 1 TiB cold -> ne lit pas tous les segments
+démarrage avec 10 000 segments -> lit root + manifest + index seulement
+point lookup cold -> lit root B+Tree + quelques pages
+range scan -> lit blocs contigus
+analytics Map -> lit seulement colonnes/blocs utiles
+```
+
+---
+
+# 23. Synthèse finale
+
+Le format physique le plus propre pour Andromeda est :
+
+```text
+Root A/B
++ Manifest signé chaîné
++ WAL append-only chaîné
++ HotStore COW/log-structured NVMe
++ ColdStore immutable contigu HDD
++ SegmentIndex compact chargeable
++ B+Tree dense pour recherche ordonnée
++ metadata min/max/bloom pour pruning
++ CRC/hash/signature/AEAD selon criticité
++ scrub + backup + PITR + forensic
+```
+
+La phrase à figer :
+
+> **Andromeda ne doit jamais chercher la vérité dans un fichier isolé. Il doit la reconstruire depuis un manifest signé, un snapshot froid vérifié et un WAL durable, avec des segments contigus dont chaque bloc est vérifiable indépendamment.**
+
+C’est le design qui donne le meilleur équilibre entre :
+
+```text
+sécurité contre altération
++ recovery déterministe
++ chargement rapide
++ lecture séquentielle HDD
++ performance NVMe
++ recherche interne rapide
++ maintenance professionnelle
++ audit Enterprise Grade
+```

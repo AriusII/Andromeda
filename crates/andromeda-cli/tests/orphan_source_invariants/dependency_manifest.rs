@@ -4,6 +4,8 @@ use std::path::Path;
 
 use crate::support::sorted_child_paths;
 
+const FORBIDDEN_GENERIC_CRATE_NAME_PARTS: &[&str] = &["common", "utils", "misc", "helpers"];
+
 #[derive(Debug, Default)]
 pub(crate) struct DependencyManifest {
     pub(crate) production_deps: BTreeSet<String>,
@@ -11,10 +13,83 @@ pub(crate) struct DependencyManifest {
     pub(crate) forbidden_wire_deps: Vec<String>,
 }
 
+#[derive(Debug, Default)]
+pub(crate) struct WorkspaceDependencyAliases {
+    packages_by_alias: BTreeMap<String, BTreeSet<String>>,
+}
+
+impl WorkspaceDependencyAliases {
+    pub(crate) fn from_manifest(text: &str) -> Self {
+        let mut aliases = Self::default();
+        let mut section = String::new();
+
+        for line in text.lines() {
+            let trimmed = strip_toml_comment(line).trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            if trimmed.starts_with('[') && trimmed.ends_with(']') {
+                section = trimmed.trim_matches(&['[', ']'][..]).to_string();
+                continue;
+            }
+            if section != "workspace.dependencies" {
+                continue;
+            }
+
+            let Some((raw_key, value)) = trimmed.split_once('=') else {
+                continue;
+            };
+            let alias = normalize_dependency_name(unquote(raw_key.trim()));
+            if alias.is_empty() {
+                continue;
+            }
+
+            let mut names = BTreeSet::new();
+            insert_dependency_name(&mut names, &alias);
+            if let Some(package) = inline_toml_string_value(value, "package") {
+                insert_dependency_name(&mut names, &package);
+            }
+            aliases.packages_by_alias.insert(alias, names);
+        }
+
+        aliases
+    }
+
+    fn resolve(&self, alias: &str) -> BTreeSet<String> {
+        self.packages_by_alias
+            .get(&normalize_dependency_name(alias))
+            .cloned()
+            .unwrap_or_default()
+    }
+}
+
+pub(crate) fn crate_name_uses_generic_topology_bucket(name: &str) -> Option<&'static str> {
+    let normalized = normalize_dependency_name(name);
+    let ownership_name = normalized
+        .strip_prefix("andromeda-")
+        .unwrap_or(normalized.as_str());
+
+    for &bucket in FORBIDDEN_GENERIC_CRATE_NAME_PARTS {
+        if ownership_name.split('-').any(|part| part == bucket) {
+            return Some(bucket);
+        }
+    }
+
+    if ownership_name.contains("god-engine") || ownership_name.contains("godengine") {
+        return Some("god_engine");
+    }
+
+    None
+}
+
 pub(crate) fn collect_dependency_manifests(
     workspace: &Path,
 ) -> BTreeMap<String, DependencyManifest> {
     let mut manifests = BTreeMap::new();
+    let workspace_manifest = fs::read_to_string(workspace.join("Cargo.toml"))
+        .expect("read workspace Cargo.toml for dependency aliases");
+    let workspace_aliases = WorkspaceDependencyAliases::from_manifest(&workspace_manifest);
+
     for crate_dir in sorted_child_paths(&workspace.join("crates")).expect("read crates directory") {
         let manifest_path = crate_dir.join("Cargo.toml");
         if !manifest_path.is_file() {
@@ -31,7 +106,7 @@ pub(crate) fn collect_dependency_manifests(
         });
         manifests.insert(
             crate_name.clone(),
-            parse_dependency_manifest(&crate_name, &text),
+            parse_dependency_manifest_with_aliases(&crate_name, &text, &workspace_aliases),
         );
     }
     manifests
@@ -59,6 +134,14 @@ fn package_name_from_manifest(text: &str) -> Option<String> {
 }
 
 pub(crate) fn parse_dependency_manifest(crate_name: &str, text: &str) -> DependencyManifest {
+    parse_dependency_manifest_with_aliases(crate_name, text, &WorkspaceDependencyAliases::default())
+}
+
+pub(crate) fn parse_dependency_manifest_with_aliases(
+    crate_name: &str,
+    text: &str,
+    workspace_aliases: &WorkspaceDependencyAliases,
+) -> DependencyManifest {
     let mut manifest = DependencyManifest::default();
     let mut dependency_section = None;
 
@@ -79,9 +162,9 @@ pub(crate) fn parse_dependency_manifest(crate_name: &str, text: &str) -> Depende
         };
 
         let dependency_names = if let Some(section_dependency_name) = &dependency_section.name {
-            dependency_names_from_table_line(trimmed, section_dependency_name)
+            dependency_names_from_table_line(trimmed, section_dependency_name, workspace_aliases)
         } else {
-            dependency_names_from_line(trimmed)
+            dependency_names_from_line(trimmed, workspace_aliases)
         };
         if dependency_names.is_empty() {
             continue;
@@ -92,9 +175,9 @@ pub(crate) fn parse_dependency_manifest(crate_name: &str, text: &str) -> Depende
                 .production_deps
                 .extend(dependency_names.iter().cloned());
             for dep in &dependency_names {
-                if is_suspicious_runtime_json_dependency(dep, trimmed) {
+                if let Some(reason) = forbidden_production_dependency_reason(dep, trimmed) {
                     manifest.forbidden_wire_deps.push(format!(
-                        "{crate_name}: production dependency `{dep}` at Cargo.toml:{} is suspicious for runtime JSON wire default",
+                        "{crate_name}: production dependency `{dep}` at Cargo.toml:{} is forbidden for {reason}",
                         line_index + 1
                     ));
                 }
@@ -103,10 +186,10 @@ pub(crate) fn parse_dependency_manifest(crate_name: &str, text: &str) -> Depende
             manifest.dev_deps.extend(dependency_names.iter().cloned());
         }
 
-        if is_forbidden_grpc_or_tonic_dependency(trimmed)
+        if is_forbidden_grpc_or_tonic_dependency_name(trimmed)
             || dependency_names
                 .iter()
-                .any(|dep| is_forbidden_grpc_or_tonic_dependency(dep))
+                .any(|dep| is_forbidden_grpc_or_tonic_dependency_name(dep))
         {
             let dependency_names = dependency_names
                 .iter()
@@ -141,6 +224,7 @@ fn parse_dependency_section(section: &str) -> Option<DependencySection> {
         ("dependencies", DependencySectionKind::Production),
         ("dev-dependencies", DependencySectionKind::Dev),
         ("build-dependencies", DependencySectionKind::Build),
+        ("workspace.dependencies", DependencySectionKind::Production),
     ]
     .into_iter()
     .find_map(|(section_name, kind)| {
@@ -175,7 +259,10 @@ fn dependency_name_for_section(section: &str, section_name: &str) -> Option<Opti
     (!name.is_empty()).then(|| Some(name.to_string()))
 }
 
-fn dependency_names_from_line(line: &str) -> BTreeSet<String> {
+fn dependency_names_from_line(
+    line: &str,
+    workspace_aliases: &WorkspaceDependencyAliases,
+) -> BTreeSet<String> {
     let Some((raw_key, value)) = line.split_once('=') else {
         return BTreeSet::new();
     };
@@ -185,26 +272,37 @@ fn dependency_names_from_line(line: &str) -> BTreeSet<String> {
     let key = key.split_once('.').map(|(prefix, _)| prefix).unwrap_or(key);
     let key = unquote(key).trim();
     if !key.is_empty() {
-        names.insert(key.to_string());
+        insert_dependency_name(&mut names, key);
+        if dependency_uses_workspace_alias(raw_key, value) {
+            names.extend(workspace_aliases.resolve(key));
+        }
     }
 
     if let Some(package) = inline_toml_string_value(value, "package") {
-        names.insert(package);
+        insert_dependency_name(&mut names, &package);
     }
 
     names
 }
 
-fn dependency_names_from_table_line(line: &str, section_dependency_name: &str) -> BTreeSet<String> {
-    let mut names = BTreeSet::from([section_dependency_name.to_string()]);
+fn dependency_names_from_table_line(
+    line: &str,
+    section_dependency_name: &str,
+    workspace_aliases: &WorkspaceDependencyAliases,
+) -> BTreeSet<String> {
+    let mut names = BTreeSet::new();
+    insert_dependency_name(&mut names, section_dependency_name);
+
     let Some((key, value)) = line.split_once('=') else {
         return names;
     };
     if key.trim() == "package" {
         let package = unquote(value.trim()).trim();
         if !package.is_empty() {
-            names.insert(package.to_string());
+            insert_dependency_name(&mut names, package);
         }
+    } else if key.trim() == "workspace" && value.trim() == "true" {
+        names.extend(workspace_aliases.resolve(section_dependency_name));
     }
     names
 }
@@ -229,15 +327,130 @@ fn inline_toml_string_value(value: &str, key: &str) -> Option<String> {
     None
 }
 
-fn is_forbidden_grpc_or_tonic_dependency(line: &str) -> bool {
-    let lower = line.to_ascii_lowercase();
-    lower.contains("tonic") || lower.contains("grpc")
+fn forbidden_production_dependency_reason(dep: &str, line: &str) -> Option<&'static str> {
+    if is_suspicious_runtime_json_dependency(dep, line) {
+        return Some("runtime JSON wire defaults");
+    }
+    if is_forbidden_sql_dependency(dep, line) {
+        return Some("ad hoc SQL surface drift");
+    }
+    if is_forbidden_native_layout_dependency(dep, line) {
+        return Some("implicit native-layout serialization");
+    }
+    None
+}
+
+fn is_forbidden_grpc_or_tonic_dependency_name(value: &str) -> bool {
+    let lower = normalize_dependency_name(value);
+    lower.contains("tonic")
+        || lower.contains("grpc")
+        || matches!(
+            lower.as_str(),
+            "grpcio"
+                | "grpcio-sys"
+                | "tonic-build"
+                | "tonic-prost"
+                | "tonic-prost-build"
+                | "tonic-web"
+                | "tonic-transport"
+        )
 }
 
 fn is_suspicious_runtime_json_dependency(dep: &str, line: &str) -> bool {
-    let dep = dep.to_ascii_lowercase().replace('-', "_");
-    let line = line.to_ascii_lowercase().replace('-', "_");
-    dep == "serde_json" || dep == "json" || line.contains("package = \"serde_json\"")
+    dependency_or_line_matches_alias(
+        dep,
+        line,
+        &[
+            "json",
+            "json-rpc",
+            "jsonrpc",
+            "jsonrpc-core",
+            "jsonrpsee",
+            "serde-json",
+            "serde-json-core",
+            "serde_json",
+            "simd-json",
+            "sonic-rs",
+        ],
+    )
+}
+
+fn is_forbidden_sql_dependency(dep: &str, line: &str) -> bool {
+    dependency_or_line_matches_alias(
+        dep,
+        line,
+        &[
+            "diesel",
+            "mysql",
+            "mysql-async",
+            "postgres",
+            "rusqlite",
+            "sea-orm",
+            "sea-query",
+            "sqlx",
+            "tokio-postgres",
+        ],
+    )
+}
+
+fn is_forbidden_native_layout_dependency(dep: &str, line: &str) -> bool {
+    dependency_or_line_matches_alias(
+        dep,
+        line,
+        &[
+            "abomonation",
+            "bincode",
+            "bitcode",
+            "borsh",
+            "bytemuck",
+            "postcard",
+            "rkyv",
+            "speedy",
+            "zerocopy",
+        ],
+    )
+}
+
+fn dependency_or_line_matches_alias(dep: &str, line: &str, aliases: &[&str]) -> bool {
+    let dep = normalize_dependency_name(dep);
+    let line = normalize_dependency_name(line);
+    aliases.iter().any(|alias| {
+        let alias = normalize_dependency_name(alias);
+        dep == alias
+            || line.contains(&format!("package=\"{alias}\""))
+            || line.contains(&format!("package='{alias}'"))
+    })
+}
+
+fn dependency_uses_workspace_alias(raw_key: &str, value: &str) -> bool {
+    raw_key.trim().ends_with(".workspace") || inline_toml_bool_value(value, "workspace")
+}
+
+fn inline_toml_bool_value(value: &str, key: &str) -> bool {
+    for field in value.split([',', '{', '}']) {
+        let Some((candidate_key, candidate_value)) = field.split_once('=') else {
+            continue;
+        };
+        if candidate_key.trim() == key && candidate_value.trim() == "true" {
+            return true;
+        }
+    }
+    false
+}
+
+fn insert_dependency_name(names: &mut BTreeSet<String>, name: &str) {
+    let name = normalize_dependency_name(name);
+    if !name.is_empty() {
+        names.insert(name);
+    }
+}
+
+fn normalize_dependency_name(name: &str) -> String {
+    let name = name.trim_matches(|character: char| {
+        character == '"' || character == '\'' || character.is_whitespace()
+    });
+    let name = name.split_once('.').map_or(name, |(key, _)| key);
+    name.replace('_', "-").to_ascii_lowercase()
 }
 
 fn strip_toml_comment(line: &str) -> &str {
@@ -248,10 +461,30 @@ fn strip_toml_comment(line: &str) -> &str {
             '\'' if !in_double_quote => in_single_quote = !in_single_quote,
             '"' if !in_single_quote => in_double_quote = !in_double_quote,
             '#' if !in_single_quote && !in_double_quote => return &line[..index],
-            _ => {}
+            _ => {},
         }
     }
     line
+}
+
+#[test]
+fn crate_name_topology_bucket_detection_rejects_generic_names() {
+    assert_eq!(
+        crate_name_uses_generic_topology_bucket("andromeda-common"),
+        Some("common")
+    );
+    assert_eq!(
+        crate_name_uses_generic_topology_bucket("andromeda-runtime-utils"),
+        Some("utils")
+    );
+    assert_eq!(
+        crate_name_uses_generic_topology_bucket("andromeda-god_engine"),
+        Some("god_engine")
+    );
+    assert_eq!(
+        crate_name_uses_generic_topology_bucket("andromeda-wal"),
+        None
+    );
 }
 
 fn unquote(value: &str) -> &str {

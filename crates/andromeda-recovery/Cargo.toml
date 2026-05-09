@@ -1,0 +1,24 @@
+[package]
+name = "andromeda-recovery"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95.0"
+publish = false
+
+[dependencies]
+andromeda-error = { path = "../andromeda-error" }
+andromeda-manifest = { path = "../andromeda-manifest" }
+andromeda-storage-heap = { path = "../andromeda-storage-heap" }
+andromeda-storage-index = { path = "../andromeda-storage-index" }
+andromeda-storage-page = { path = "../andromeda-storage-page" }
+andromeda-time = { path = "../andromeda-time" }
+andromeda-transaction = { path = "../andromeda-transaction" }
+andromeda-transaction-log = { path = "../andromeda-transaction-log" }
+andromeda-types = { path = "../andromeda-types" }
+andromeda-wal = { path = "../andromeda-wal" }
+
+[dev-dependencies]
+andromeda-observe.workspace = true
+proptest.workspace = true
+andromeda-mvcc.workspace = true
+tokio.workspace = true

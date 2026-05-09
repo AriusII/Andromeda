@@ -6,7 +6,8 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
-andromeda-core.workspace = true
-
-[dev-dependencies]
-andromeda-storage.workspace = true
+andromeda-audit.workspace = true
+andromeda-error.workspace = true
+andromeda-hardware.workspace = true
+andromeda-observability.workspace = true
+andromeda-types.workspace = true

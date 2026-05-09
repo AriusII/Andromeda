@@ -1,22 +1,31 @@
 pub(crate) use andromeda_catalog::{
-    AccessMode, CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH, CatalogDefinition,
-    CatalogDependencyKind, CatalogDurabilityMarker, CatalogDurableMutationPayload,
-    CatalogLifecycleTarget, CatalogMutationCommitEvidence, CatalogMutationDurability,
-    CatalogMutationOperation, CatalogMutationPlan, CatalogMutationRecord,
-    CatalogMutationRecordKind, CatalogObjectRef, CatalogPublicationSemantics,
-    CatalogRecoveryAnomalyKind, CatalogRecoveryOutcome, CatalogSkippedBatchReason,
-    CatalogSnapshotPublication, CatalogSystemStore, CompatibilityPolicy, DefinitionBatch,
-    DefinitionBatchId, DefinitionBatchPlan, DefinitionBatchSourceHash, DefinitionOperation,
-    IsolationPolicy, MultiResultPolicy, ObjectKind, ProcedureContract, ProcedureContractCandidate,
-    ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName, ResultMetadataPolicy, StatsVersion,
-    StructuredObjectDefinition, TableDefinition, TransactionPolicy,
-    recover_catalog_snapshot_from_durable_payloads, replay_catalog_mutation_records,
+    CatalogMutationCommitEvidence, CatalogMutationPlan, CatalogMutationRecord,
+    CatalogRecoveryOutcome, CatalogSystemStore, DefinitionBatchPlan,
+    recover_catalog_snapshot_from_durable_payloads,
 };
-pub(crate) use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, CatalogObjectId, CatalogVersion, ColumnDescriptor,
-    ContractHash, DatabaseId, NamespaceId, ProcedureId, ScalarType, TransactionId, TypeDescriptor,
+pub(crate) use andromeda_catalog_recovery::{
+    CatalogDurableMutationPayload, CatalogMutationRecordKind, CatalogSkippedBatchReason,
 };
-pub(crate) use andromeda_storage::{
+pub(crate) use andromeda_catalog_store::{
+    CatalogDefinition, CatalogDurabilityMarker, CatalogMutationDurability, CatalogObjectRef,
+    CatalogPublicationSemantics, CatalogSnapshotPublication, ObjectKind, QualifiedName,
+    StructuredObjectDefinition, TableDefinition,
+};
+pub(crate) use andromeda_definition_batch::{
+    CatalogDependencyKind, CatalogLifecycleTarget, DefinitionBatch, DefinitionBatchId,
+    DefinitionOperation,
+};
+pub(crate) use andromeda_error::{AndromedaError, AndromedaErrorKind};
+pub(crate) use andromeda_procedure_contract::{
+    AccessMode, CompatibilityPolicy, IsolationPolicy, MultiResultPolicy, ProcedureContract,
+    ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef, ResultMetadataPolicy,
+    StatsVersion, TransactionPolicy,
+};
+pub(crate) use andromeda_types::{
+    CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, DatabaseId, NamespaceId,
+    ProcedureId, ScalarType, TransactionId, TypeDescriptor,
+};
+pub(crate) use andromeda_wal::{
     Lsn, WalRecord, WalRecordKind, decode_wal_record_frame, encode_wal_record,
 };
 
@@ -149,13 +158,6 @@ pub(crate) fn plan_product_batch(
         .unwrap()
 }
 
-pub(crate) fn replay_records_at(
-    catalog_version: u64,
-    records: Vec<CatalogMutationRecord>,
-) -> CatalogRecoveryOutcome {
-    replay_catalog_mutation_records(store_at(catalog_version).into_snapshot(), records)
-}
-
 pub(crate) fn recover_payloads_at<'a>(
     catalog_version: u64,
     payloads: impl IntoIterator<Item = CatalogDurableMutationPayload<'a>>,
@@ -164,19 +166,6 @@ pub(crate) fn recover_payloads_at<'a>(
         store_at(catalog_version).into_snapshot(),
         payloads,
     )
-}
-
-pub(crate) fn assert_has_anomaly(
-    outcome: &CatalogRecoveryOutcome,
-    kind: CatalogRecoveryAnomalyKind,
-) {
-    assert!(
-        outcome
-            .report
-            .anomalies
-            .iter()
-            .any(|anomaly| anomaly.kind == kind)
-    );
 }
 
 pub(crate) fn assert_empty_snapshot_at(outcome: &CatalogRecoveryOutcome, catalog_version: u64) {

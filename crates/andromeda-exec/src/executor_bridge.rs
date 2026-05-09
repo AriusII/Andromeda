@@ -69,9 +69,12 @@
 //! - No gRPC: invocation is typed, not gRPC-mapped.
 
 use crate::surface_gate::{AuthorizedProcedureDispatch, SurfacePlaneAuthorizer};
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, InvocationId};
-use andromeda_observe::{AuthorizationOutcome, CertificateIdentity, TraceId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_observability::TraceId;
+use andromeda_principal::CertificateIdentity;
 use andromeda_quic::{Connection, SurfacePlane};
+use andromeda_security::AuthorizationOutcome;
+use andromeda_types::InvocationId;
 
 /// Bridges a QUIC connection and certificate identity to executor dispatch.
 ///
@@ -114,14 +117,14 @@ impl<'a> ExecutorDispatchBridge<'a> {
     /// ```no_run
     /// use andromeda_quic::{Connection, SurfacePlane};
     /// use andromeda_exec::ExecutorDispatchBridge;
-    /// # use andromeda_observe::CertificateIdentity;
-    /// # use andromeda_observe::SurfaceScope;
+    /// # use andromeda_principal::CertificateIdentity;
+    /// # use andromeda_principal::SurfaceScope;
     ///
     /// # let mut conn = Connection::new(SurfacePlane::Application);
-    /// # let identity = CertificateIdentity::new("abc123", "svc-001", SurfaceScope::Application).unwrap();
+    /// # let identity = CertificateIdentity::new("a".repeat(64), "svc-001", SurfaceScope::Application).unwrap();
     /// # conn.set_certificate_identity(identity.clone()).unwrap();
     /// let bridge = ExecutorDispatchBridge::new(&conn)?;
-    /// # Ok::<(), andromeda_core::AndromedaError>(())
+    /// # Ok::<(), andromeda_error::AndromedaError>(())
     /// ```
     pub fn new(connection: &'a Connection) -> AndromedaResult<Self> {
         let certificate_identity = connection.certificate_identity().ok_or_else(|| {
@@ -135,7 +138,7 @@ impl<'a> ExecutorDispatchBridge<'a> {
 
         // Validate scope match.
         let required_scope = andromeda_quic::mtls_identity::plane_to_required_surface_scope(plane);
-        if certificate_identity.surface as u8 != required_scope as u8 {
+        if certificate_identity.surface_scope() != required_scope {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Security,
                 "certificate surface scope does not match connection plane",
@@ -184,13 +187,13 @@ impl<'a> ExecutorDispatchBridge<'a> {
     ///
     /// ```no_run
     /// # use andromeda_exec::ExecutorDispatchBridge;
-    /// # use andromeda_observe::TraceId;
+    /// # use andromeda_observability::TraceId;
     /// # use andromeda_exec::SurfacePlaneAuthorizer;
-    /// # use andromeda_observe::{CertificateIdentity, SurfaceScope};
+    /// # use andromeda_principal::{CertificateIdentity, SurfaceScope};
     /// # let mut conn = andromeda_quic::Connection::new(andromeda_quic::SurfacePlane::Application);
-    /// # let identity = CertificateIdentity::new("abc123", "svc-001", SurfaceScope::Application).unwrap();
+    /// # let identity = CertificateIdentity::new("a".repeat(64), "svc-001", SurfaceScope::Application).unwrap();
     /// # conn.set_certificate_identity(identity).unwrap();
-    /// # let registry = andromeda_observe::PrincipalRegistry::new();
+    /// # let registry = andromeda_security::PrincipalRegistry::new();
     /// # let bridge = ExecutorDispatchBridge::new(&conn)?;
     ///
     /// let authorizer = SurfacePlaneAuthorizer::new(&registry);
@@ -213,7 +216,7 @@ impl<'a> ExecutorDispatchBridge<'a> {
     ///         println!("Authorization error: {}", e);
     ///     }
     /// }
-    /// # Ok::<(), andromeda_core::AndromedaError>(())
+    /// # Ok::<(), andromeda_error::AndromedaError>(())
     /// ```
     pub fn authorize_procedure_dispatch(
         &self,
@@ -224,7 +227,7 @@ impl<'a> ExecutorDispatchBridge<'a> {
         authorizer.authorize_procedure_dispatch(
             trace_id,
             self.plane,
-            &self.certificate_identity.fingerprint,
+            self.certificate_identity.fingerprint().as_str(),
         )
     }
 
@@ -246,17 +249,17 @@ impl<'a> ExecutorDispatchBridge<'a> {
     ///
     /// ```no_run
     /// # use andromeda_exec::ExecutorDispatchBridge;
-    /// # use andromeda_core::InvocationId;
-    /// # use andromeda_observe::{CertificateIdentity, SurfaceScope};
+    /// # use andromeda_types::InvocationId;
+    /// # use andromeda_principal::{CertificateIdentity, SurfaceScope};
     /// # let mut conn = andromeda_quic::Connection::new(andromeda_quic::SurfacePlane::Application);
-    /// # let identity = CertificateIdentity::new("abc123", "svc-001", SurfaceScope::Application).unwrap();
+    /// # let identity = CertificateIdentity::new("a".repeat(64), "svc-001", SurfaceScope::Application).unwrap();
     /// # conn.set_certificate_identity(identity).unwrap();
     /// # let bridge = ExecutorDispatchBridge::new(&conn)?;
     ///
     /// let stream_id = 5u64;
     /// let invocation_id = bridge.map_stream_to_invocation_id(stream_id);
     /// assert_eq!(invocation_id, InvocationId::new(stream_id));
-    /// # Ok::<(), andromeda_core::AndromedaError>(())
+    /// # Ok::<(), andromeda_error::AndromedaError>(())
     /// ```
     pub fn map_stream_to_invocation_id(&self, stream_id: u64) -> InvocationId {
         InvocationId::new(stream_id)
@@ -296,17 +299,16 @@ impl<'a> ExecutorDispatchBridge<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_observe::SurfaceScope;
-    use andromeda_quic::{
-        FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader, FrameType, LifecycleState,
-    };
+    use andromeda_principal::SurfaceScope;
+    use andromeda_quic::LifecycleState;
+    use andromeda_rpc_protocol::{FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader, FrameType};
 
     fn hello_frame(session_id: u64) -> FrameBytes {
         FrameBytes {
             header: FrameHeader {
                 frame_type: FrameType::Hello,
-                request_id: andromeda_core::RequestId::new(1),
-                session_id: andromeda_core::SessionId::new(session_id),
+                request_id: andromeda_types::RequestId::new(1),
+                session_id: andromeda_types::SessionId::new(session_id),
                 tx_id: None,
                 payload_length: 0,
                 flags: 0,
@@ -320,8 +322,8 @@ mod tests {
         FrameBytes {
             header: FrameHeader {
                 frame_type: FrameType::Auth,
-                request_id: andromeda_core::RequestId::new(1),
-                session_id: andromeda_core::SessionId::new(session_id),
+                request_id: andromeda_types::RequestId::new(1),
+                session_id: andromeda_types::SessionId::new(session_id),
                 tx_id: None,
                 payload_length: 0,
                 flags: 0,
@@ -353,17 +355,17 @@ mod tests {
 
         assert_eq!(bridge.surface_plane(), SurfacePlane::Application);
         assert_eq!(
-            bridge.certificate_identity().fingerprint,
+            bridge.certificate_identity().fingerprint().as_str(),
             "a".repeat(64),
             "certificate fingerprint mismatch"
         );
         assert_eq!(
-            bridge.certificate_identity().subject,
+            bridge.certificate_identity().subject(),
             "app-service",
             "certificate subject mismatch"
         );
         assert_eq!(
-            bridge.certificate_identity().surface,
+            bridge.certificate_identity().surface_scope(),
             SurfaceScope::Application,
             "certificate scope mismatch"
         );
@@ -385,7 +387,7 @@ mod tests {
     fn test_bridge_rejects_cross_plane_invocation() {
         let mut conn = Connection::new(SurfacePlane::Application);
         let admin_identity = CertificateIdentity::new(
-            "wrong_scope".repeat(8),
+            "f".repeat(64),
             "admin-service".to_string(),
             SurfaceScope::Administration,
         )
@@ -444,7 +446,7 @@ mod tests {
             precond_err.is_err(),
             "preconditions should fail for non-Active connection"
         );
-        let registry = andromeda_observe::PrincipalRegistry::new();
+        let registry = andromeda_security::PrincipalRegistry::new();
         let authorizer = SurfacePlaneAuthorizer::new(&registry);
         let authorization_err = bridge
             .authorize_procedure_dispatch(&authorizer, TraceId::new(44))

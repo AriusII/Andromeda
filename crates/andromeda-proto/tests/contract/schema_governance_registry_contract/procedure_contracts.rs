@@ -1,4 +1,5 @@
-use andromeda_core::AndromedaErrorKind;
+use andromeda_error::AndromedaErrorKind;
+use andromeda_procedure_contract::ManifestPolicyVersion;
 
 use super::super::support::{
     CONTRACT_SCHEMAS, PROTOCOL_SCHEMAS, assert_all_message_definitions_have_reserved_ranges,
@@ -101,7 +102,7 @@ fn procedure_manifest_enforces_generator_readiness_and_permission_policy_presenc
     assert!(manifest.ensure_source_generator_ready().is_ok());
 
     let mut zero_policy = governance_sample_manifest();
-    zero_policy.policy_version = andromeda_proto::ManifestPolicyVersion::zero();
+    zero_policy.policy_version = ManifestPolicyVersion::zero();
     assert!(zero_policy.validate().is_ok());
     assert_eq!(
         zero_policy

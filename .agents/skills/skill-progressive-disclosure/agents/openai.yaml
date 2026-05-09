@@ -1,3 +1,0 @@
-display_name: "Skill Progressive Disclosure"
-short_description: "Design skills that keep SKILL.md lean while moving details to references, scripts, or assets. Use when a skill risks becoming too long or duplicative."
-default_prompt: "Use the Skill Progressive Disclosure skill to analyze the current Andromeda task and return a bounded, validated result."

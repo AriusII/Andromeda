@@ -2,8 +2,8 @@ use crate::support::{
     emit_trace, incomplete_transaction_wal_event, recovery_correlation, recovery_startup,
     transaction_correlation, wal_replay,
 };
-use andromeda_core::TransactionId;
 use andromeda_observe::{EventEmitter, InMemoryEventSink, TraceEvent, TraceId};
+use andromeda_types::TransactionId;
 
 /// Verifies that recovery startup emits a complete audit trail covering
 /// manifest loading, WAL replay, and completion.

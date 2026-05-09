@@ -1,11 +1,9 @@
 /target
 .idea/
 /fuzz/target
-/fuzz/artifacts
-/.claude/worktrees
 __pycache__/
 *.py[cod]
-/.codex/runtime/*
-!/.codex/runtime/.gitignore
-/target-worker-24
-/CleanUp
+/.codex
+/tests/loom/target
+/documentations/implementation
+/.work

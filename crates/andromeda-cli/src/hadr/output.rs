@@ -82,16 +82,11 @@ pub(super) fn print_promotion_outcome(outcome: &PromotionOutcome, json_output: b
     if json_output {
         print_promotion_json(outcome);
     } else if outcome.success {
-        println!(
-            "Runtime Mode: {}",
-            runtime_mode(
-                outcome.contract_preview,
-                outcome.durable_backend,
-                outcome.dry_run
-            )
+        print_runtime_contract_header(
+            outcome.contract_preview,
+            outcome.durable_backend,
+            outcome.dry_run,
         );
-        println!("Contract Preview: {}", outcome.contract_preview);
-        println!("Durable Backend Wired: {}", outcome.durable_backend);
         println!("Dry Run: {}", outcome.dry_run);
         println!("Would Apply: {}", outcome.would_apply);
         if outcome.dry_run {
@@ -229,21 +224,16 @@ fn print_hadr_status_json(report: &HadrStatusReport) {
 }
 
 fn replicas_json(replicas: &[ReplicaStatus]) -> String {
-    let entries = replicas
-        .iter()
-        .map(|replica| {
-            format!(
-                "{{\"replica_id\":{},\"health_state\":{},\"received_lsn\":{},\"shipped_lsn\":{},\"lag_bytes\":{}}}",
-                replica.replica_id,
-                json_string(&replica.health_state),
-                replica.received_lsn,
-                replica.shipped_lsn,
-                replica.lag_bytes,
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(",");
-    format!("[{}]", entries)
+    json_array(replicas, |replica| {
+        format!(
+            "{{\"replica_id\":{},\"health_state\":{},\"received_lsn\":{},\"shipped_lsn\":{},\"lag_bytes\":{}}}",
+            replica.replica_id,
+            json_string(&replica.health_state),
+            replica.received_lsn,
+            replica.shipped_lsn,
+            replica.lag_bytes,
+        )
+    })
 }
 
 fn print_quorum_status_json(report: &QuorumStatusReport) {
@@ -263,16 +253,11 @@ fn print_quorum_status_json(report: &QuorumStatusReport) {
 fn print_node_report_human(report: &NodeManagementReport) {
     println!("HADR Node Management Contract");
     println!("=============================");
-    println!(
-        "Runtime Mode: {}",
-        runtime_mode(
-            report.contract_preview,
-            report.durable_backend,
-            report.dry_run
-        )
+    print_runtime_contract_header(
+        report.contract_preview,
+        report.durable_backend,
+        report.dry_run,
     );
-    println!("Contract Preview: {}", report.contract_preview);
-    println!("Durable Backend Wired: {}", report.durable_backend);
     println!("Action: {}", report.action);
     if let Some(node_id) = report.node_id {
         println!("Node ID: {}", node_id);
@@ -331,19 +316,14 @@ fn print_node_report_json(report: &NodeManagementReport) {
 }
 
 fn node_members_json(members: &[NodeMembershipMemberReport]) -> String {
-    let entries = members
-        .iter()
-        .map(|member| {
-            format!(
-                "{{\"node_id\":{},\"role\":{},\"role_epoch\":{}}}",
-                member.node_id,
-                json_string(&member.role),
-                member.role_epoch,
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(",");
-    format!("[{}]", entries)
+    json_array(members, |member| {
+        format!(
+            "{{\"node_id\":{},\"role\":{},\"role_epoch\":{}}}",
+            member.node_id,
+            json_string(&member.role),
+            member.role_epoch,
+        )
+    })
 }
 
 fn print_promotion_json(outcome: &PromotionOutcome) {
@@ -381,6 +361,24 @@ fn runtime_mode(contract_preview: bool, durable_backend: bool, dry_run: bool) ->
         (_, true, false) => "applied_durable_runtime",
         _ => "contract_scaffold",
     }
+}
+
+fn print_runtime_contract_header(contract_preview: bool, durable_backend: bool, dry_run: bool) {
+    println!(
+        "Runtime Mode: {}",
+        runtime_mode(contract_preview, durable_backend, dry_run)
+    );
+    println!("Contract Preview: {}", contract_preview);
+    println!("Durable Backend Wired: {}", durable_backend);
+}
+
+fn json_array<T>(items: &[T], mut render: impl FnMut(&T) -> String) -> String {
+    let entries = items
+        .iter()
+        .map(|item| render(item))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("[{}]", entries)
 }
 
 fn print_demotion_json(outcome: &DemotionOutcome) {

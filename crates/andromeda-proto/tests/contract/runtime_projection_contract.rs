@@ -1,7 +1,7 @@
-use andromeda_core::{
-    AndromedaErrorKind, ColumnDescriptor, ContractHash, ScalarType, TypeDescriptor,
-};
-use andromeda_proto::{RowCountRequirement, StructuredObjectHeader, StructuredObjectLayout};
+use andromeda_error::AndromedaErrorKind;
+use andromeda_procedure_contract::RowCountRequirement;
+use andromeda_structured_object::{StructuredObjectHeader, StructuredObjectLayout};
+use andromeda_types::{ColumnDescriptor, ContractHash, ScalarType, TypeDescriptor};
 
 use super::support::{
     BUILD_SCRIPT, CONTRACT_SCHEMAS, EXEC_MANIFEST, GENERATED_VALIDATION_MANIFEST_SOURCE,
@@ -132,6 +132,15 @@ fn structured_object_header_validates_shape_hash_and_payload_bounds() {
     };
     assert_eq!(
         zero_descriptor_hash.validate().unwrap_err().kind(),
+        AndromedaErrorKind::Contract
+    );
+
+    let descriptor_drift = StructuredObjectHeader {
+        descriptor_hash: ContractHash::test_vector(0xAA),
+        ..valid.clone()
+    };
+    assert_eq!(
+        descriptor_drift.validate().unwrap_err().kind(),
         AndromedaErrorKind::Contract
     );
 

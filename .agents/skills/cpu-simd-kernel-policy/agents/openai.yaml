@@ -1,3 +1,0 @@
-display_name: "CPU SIMD Kernel Policy"
-short_description: "Govern CPU acceleration for CRC, encryption, scans, bitmap/cardinality, compression, and atomics with scalar fallback and evidence. Use for CPU kernels."
-default_prompt: "Use the CPU SIMD Kernel Policy skill to analyze the current Andromeda task and return a bounded, validated result."

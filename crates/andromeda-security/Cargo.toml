@@ -1,0 +1,12 @@
+[package]
+name = "andromeda-security"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+andromeda-audit.workspace = true
+andromeda-error.workspace = true
+andromeda-observability.workspace = true
+andromeda-security-contract.workspace = true

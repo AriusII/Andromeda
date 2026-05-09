@@ -1,6 +1,6 @@
-use andromeda_core::{
-    CatalogObjectId, CatalogVersion, GpuExecutionPolicy, InvocationId, PipelineClass, ProcedureId,
-    RequestId, ResourceBudget, SessionId,
+use andromeda_hardware::{GpuExecutionPolicy, PipelineClass, ResourceBudget};
+use andromeda_types::{
+    CatalogObjectId, CatalogVersion, InvocationId, ProcedureId, RequestId, SessionId,
 };
 
 use super::*;

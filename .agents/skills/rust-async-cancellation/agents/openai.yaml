@@ -1,3 +1,0 @@
-display_name: "Rust Async Cancellation"
-short_description: "Design cancellation-safe async Rust around QUIC/RPC/admin jobs without corrupting transaction or storage state. Use for Tokio tasks, streams, shutdown, and back"
-default_prompt: "Use the Rust Async Cancellation skill to analyze the current Andromeda task and return a bounded, validated result."

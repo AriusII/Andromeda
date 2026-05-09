@@ -1,8 +1,11 @@
-use andromeda_bench::{
-    BenchmarkEvidence, BenchmarkEvidenceBudgets, BenchmarkEvidenceConfidence,
-    BenchmarkHardwareProfile, BenchmarkHistoryAdvisoryMetadata, BenchmarkMeasurementMode,
-    BenchmarkScenarioEvidence, BenchmarkScenarioEvidenceError, BenchmarkWorkloadCounter,
-    BudgetStatus, DEFAULT_TEMP_BYTES, MAX_TEMP_BYTES,
+use andromeda_bench_workload::{
+    BenchmarkHardwareProfile, BudgetStatus, DEFAULT_TEMP_BYTES, MAX_TEMP_BYTES,
+};
+use andromeda_scenario_evidence::{
+    BENCHMARK_EVIDENCE_TIMING_SOURCE_DETERMINISTIC_PLACEHOLDER, BenchmarkEvidence,
+    BenchmarkEvidenceBudgets, BenchmarkEvidenceConfidence, BenchmarkHistoryAdvisoryMetadata,
+    BenchmarkMeasurementMode, BenchmarkScenarioEvidence, BenchmarkScenarioEvidenceError,
+    BenchmarkWorkloadCounter,
 };
 
 use crate::common::{
@@ -99,7 +102,7 @@ fn boundary_rejects_budgets_that_exceed_history_advisory_caps() {
 #[test]
 fn boundary_rejects_incoherent_history_metrics() {
     let impossible_error_count =
-        history_record_with_metrics("vertical-v0-smoke", 15_000, 50_000, 21, 20);
+        history_record_with_metrics("inventory-recoverable-smoke", 15_000, 50_000, 21, 20);
     let error = boundary_from_history(&impossible_error_count, default_budgets()).unwrap_err();
     assert_eq!(
         error,
@@ -107,7 +110,7 @@ fn boundary_rejects_incoherent_history_metrics() {
     );
 
     let inverted_percentiles =
-        history_record_with_metrics("vertical-v0-smoke", 50_000, 15_000, 0, 20);
+        history_record_with_metrics("inventory-recoverable-smoke", 50_000, 15_000, 0, 20);
     let error = boundary_from_history(&inverted_percentiles, default_budgets()).unwrap_err();
     assert_eq!(
         error,
@@ -141,8 +144,8 @@ fn boundary_rejects_workload_measurement_mode_mismatch() {
         diagnostic_only: true,
         measurement_mode: BenchmarkMeasurementMode::HarnessDiagnostic,
         latency_source: "in-memory-btree-read-harness",
-        timing_source: andromeda_bench::BENCHMARK_EVIDENCE_TIMING_SOURCE_DETERMINISTIC_PLACEHOLDER,
-        engine_harness: Some("MockBTreeIndex"),
+        timing_source: BENCHMARK_EVIDENCE_TIMING_SOURCE_DETERMINISTIC_PLACEHOLDER,
+        engine_harness: Some("ReadOnlyBTreeIndexModel"),
         synthetic_model_version: None,
         workload_counters: vec![BenchmarkWorkloadCounter::new("lookup_operations", 5, "ops")],
     };

@@ -1,4 +1,4 @@
-use andromeda_bench::{BenchmarkBaseline, RegressionAnalysis};
+use andromeda_regression::{BenchmarkBaseline, RegressionAnalysis};
 
 #[test]
 fn regression_analysis_for_observability() {

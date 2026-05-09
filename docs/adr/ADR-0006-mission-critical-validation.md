@@ -6,24 +6,31 @@ Accepted
 
 ## Context
 
-Andromeda uses Codex as an engineering accelerator for a mission-critical Rust database engine and SRPL language. The tooling must be discoverable, precise, safe, and maintainable.
+Durability, recovery, security, and transport boundaries require stronger proof
+than compilation alone. Release claims need direct owner tests and retained
+evidence for the exact commands that were run.
 
 ## Decision
 
-C4/C5 work requires stronger validation than normal code changes.
+Critical paths require owner tests, topology checks, recovery or replay evidence
+when durability is involved, and release-gate summaries that include command,
+toolchain, commit, pass/fail status, skipped scope, and unresolved gaps.
 
 ## Consequences
 
-WAL, recovery, storage, security, catalog, and RPC changes need crash, fuzz, property, or audit evidence.
+- Runtime facades do not replace owner-crate tests.
+- Durable truth requires WAL, recovery, and crash-path evidence.
+- Security-sensitive paths require audit and permission boundary coverage.
+- Transport and protocol changes require wire-format and projection gates.
 
 ## Validation
 
-Run:
+- `cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture`
+- `cargo test -p andromeda-cli --test orphan_source_invariants -- --nocapture`
+- `cargo check --workspace --all-targets --all-features`
 
-```bash
-python3 .codex/scripts/validate_codex_tooling.py
-```
+## References
 
-## Revision criteria
-
-Revise this ADR if official Codex configuration, agent, skill, or hook conventions change.
+- Testing strategy: `docs/testing/testing-strategy.md`
+- Release gates: `docs/testing/release-gates.md`
+- Governance gates: `docs/governance/release-gates.md`

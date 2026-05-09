@@ -1,4 +1,6 @@
 use crate::support::*;
+use andromeda_srpl_lexer::lex;
+use andromeda_srpl_parser::parse_procedure_signature;
 
 #[test]
 fn parser_accepts_documented_cardinality_phrases_with_stable_spans() {
@@ -62,7 +64,7 @@ fn parser_rejects_ambiguous_cardinality_phrases_with_stable_diagnostics() {
 #[test]
 fn lexer_error_span_is_valid_utf8_boundary() {
     let source = "procedure X accepts () returns R one (C bool); 😊";
-    let diagnostic = andromeda_srpl::procedure_compiler::lex(source).unwrap_err();
+    let diagnostic = lex(source).unwrap_err();
 
     assert_eq!(diagnostic.phase, DiagnosticPhase::Lexing);
     let span = diagnostic

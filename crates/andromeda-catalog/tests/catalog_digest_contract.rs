@@ -1,42 +1,54 @@
-//! Tests for digest-backed `ContractHash`, `PolicyVersion`, and the extended
-//! catalog dependency graph (Procedure ↔ Table edges via bindings).
+//! Tests for digest aliases, catalog object hashing, and the extended catalog
+//! dependency graph (Procedure to Table edges via bindings).
 
-use andromeda_catalog::{
-    AccessMode, BatchDependencyGraph, CatalogBindingKind, CatalogDefinition, CatalogDependency,
-    CatalogDependencyKind, CatalogObjectBinding, CatalogObjectRef, CompatibilityPolicy,
-    DefinitionBatch, DefinitionOperation, IsolationPolicy, MultiResultPolicy, ObjectKind,
-    PolicyVersion, ProcedureContract, ProcedureContractBinding, ProcedureContractCandidate,
-    ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName, ResultMetadataPolicy, StatsVersion,
-    StructuredObjectDefinition, TableDefinition, TransactionPolicy,
+use andromeda_catalog_store::{
+    CatalogBindingKind, CatalogDefinition, CatalogObjectBinding, CatalogObjectRef, ObjectKind,
+    QualifiedName, StructuredObjectDefinition, TableDefinition,
 };
-use andromeda_core::{
-    AndromedaErrorKind, CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash,
-    ProcedureId, ScalarType, TypeDescriptor,
+use andromeda_contract::{
+    compute_structured_object_shape_hash, structured_object_shape_hash_compatible,
+};
+use andromeda_definition_batch::{
+    BatchDependencyGraph, CatalogDependency, CatalogDependencyKind, DefinitionBatch,
+    DefinitionBatchId, DefinitionOperation,
+};
+use andromeda_error::AndromedaErrorKind;
+use andromeda_procedure_contract::{
+    AccessMode, CompatibilityPolicy, IsolationPolicy, MultiResultPolicy, ProcedureContract,
+    ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef, ResultMetadataPolicy,
+    StatsVersion, TransactionPolicy,
+};
+use andromeda_types::{
+    CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId, ScalarType,
+    TypeDescriptor,
 };
 
 #[test]
 fn catalog_digest_is_core_digest_alias() {
     let message = b"catalog contract digest canonical backend";
 
-    let mut catalog_hasher: andromeda_catalog::digest::Sha256 =
-        andromeda_core::digest::Sha256::new();
+    let mut catalog_hasher: andromeda_catalog::digest::Sha256 = andromeda_digest::Sha256::new();
     catalog_hasher.update(&message[..8]);
     catalog_hasher.update(&message[8..]);
 
-    let mut core_hasher: andromeda_core::digest::Sha256 = andromeda_catalog::digest::Sha256::new();
+    let mut core_hasher: andromeda_digest::Sha256 = andromeda_catalog::digest::Sha256::new();
     core_hasher.update(message);
 
     assert_eq!(catalog_hasher.finalize(), core_hasher.finalize());
     assert_eq!(
         andromeda_catalog::digest::sha256(message),
-        andromeda_core::digest::sha256(message)
+        andromeda_digest::sha256(message)
     );
 }
 
 fn column(name: &str, ordinal: u32) -> ColumnDescriptor {
+    typed_column(name, ordinal, ScalarType::I64)
+}
+
+fn typed_column(name: &str, ordinal: u32, scalar: ScalarType) -> ColumnDescriptor {
     ColumnDescriptor {
         name: name.to_string(),
-        data_type: TypeDescriptor::required(ScalarType::I64),
+        data_type: TypeDescriptor::required(scalar),
         ordinal,
     }
 }
@@ -51,9 +63,18 @@ fn object(id: u64, name: &str, kind: ObjectKind, version: CatalogVersion) -> Cat
 }
 
 fn table(id: u64, name: &str, version: CatalogVersion) -> TableDefinition {
+    table_with_columns(id, name, version, vec![column("ProductId", 0)])
+}
+
+fn table_with_columns(
+    id: u64,
+    name: &str,
+    version: CatalogVersion,
+    columns: Vec<ColumnDescriptor>,
+) -> TableDefinition {
     TableDefinition {
         object: object(id, name, ObjectKind::Table, version),
-        columns: vec![column("ProductId", 0)],
+        columns,
     }
 }
 
@@ -63,6 +84,26 @@ fn structured(id: u64, name: &str, version: CatalogVersion) -> StructuredObjectD
         fields: vec![column("ProductId", 0)],
         unique_by: vec!["ProductId".to_string()],
     }
+}
+
+#[test]
+fn structured_object_boundary_hash_compatibility_is_exact() {
+    let baseline = structured(41, "Inventory.Reservation", CatalogVersion::new(1));
+    let mut drifted = baseline.clone();
+    drifted.fields.push(column("Quantity", 1));
+    drifted.unique_by.push("Quantity".to_string());
+
+    let baseline_hash = compute_structured_object_shape_hash(&baseline.fields, &baseline.unique_by);
+    let drifted_hash = compute_structured_object_shape_hash(&drifted.fields, &drifted.unique_by);
+
+    assert!(structured_object_shape_hash_compatible(
+        baseline_hash,
+        baseline_hash
+    ));
+    assert!(!structured_object_shape_hash_compatible(
+        baseline_hash,
+        drifted_hash
+    ));
 }
 
 fn procedure(
@@ -101,114 +142,44 @@ fn procedure(
 }
 
 #[test]
-fn contract_hash_is_digest_backed_and_deterministic() {
-    let proc_a = procedure(11, "Inventory.ReserveStock", CatalogVersion::new(1), vec![]);
-    let proc_b = procedure(11, "Inventory.ReserveStock", CatalogVersion::new(1), vec![]);
+fn catalog_definition_shape_hash_tracks_versioned_additive_and_breaking_table_changes() {
+    let baseline =
+        CatalogDefinition::Table(table(401, "Inventory.ProductStock", CatalogVersion::new(1)));
+    let same_shape_next_version =
+        CatalogDefinition::Table(table(401, "Inventory.ProductStock", CatalogVersion::new(2)));
+    let additive_next_version = CatalogDefinition::Table(table_with_columns(
+        401,
+        "Inventory.ProductStock",
+        CatalogVersion::new(2),
+        vec![column("ProductId", 0), column("OnHandQuantity", 1)],
+    ));
+    let breaking_next_version = CatalogDefinition::Table(table_with_columns(
+        401,
+        "Inventory.ProductStock",
+        CatalogVersion::new(2),
+        vec![typed_column("Sku", 0, ScalarType::Bool)],
+    ));
 
-    assert_eq!(proc_a.contract_hash, proc_b.contract_hash);
-    assert!(!proc_a.contract_hash.is_zero());
+    assert!(baseline.validate().is_ok());
+    assert!(same_shape_next_version.validate().is_ok());
+    assert!(additive_next_version.validate().is_ok());
+    assert!(breaking_next_version.validate().is_ok());
 
-    // SHA-256 must thoroughly mix every byte: a single bit change in the
-    // procedure name flips a high fraction of output bits.
-    let proc_renamed = procedure(11, "Inventory.ReserveAtock", CatalogVersion::new(1), vec![]);
-    let differing_bytes = proc_a
-        .contract_hash
-        .as_bytes()
-        .iter()
-        .zip(proc_renamed.contract_hash.as_bytes().iter())
-        .filter(|(left, right)| left != right)
-        .count();
-    assert!(
-        differing_bytes >= 16,
-        "digest-backed hash must avalanche: only {differing_bytes}/32 bytes differ"
-    );
-}
-
-#[test]
-fn policy_version_changes_with_policy_fields_only() {
-    let baseline = procedure(12, "Inventory.ReserveStock", CatalogVersion::new(1), vec![]);
-    let baseline_policy = baseline.policy_version();
-    assert!(!baseline_policy.is_zero());
-    assert_eq!(baseline_policy, baseline.policy_version());
-
-    // Changing structured inputs alters the contract shape but not the
-    // policy surface; PolicyVersion must be unaffected.
-    let mut shape_only = baseline.clone();
-    shape_only.structured_inputs = vec![QualifiedName::parse("Inventory.Stock").unwrap()];
-    assert_eq!(
-        baseline_policy,
-        shape_only.policy_version(),
-        "PolicyVersion must ignore non-policy shape changes"
-    );
-
-    // Changing a true policy field must change the PolicyVersion.
-    let mut policy_changed = baseline.clone();
-    policy_changed.transaction_policy.isolation = IsolationPolicy::Snapshot;
     assert_ne!(
-        baseline_policy,
-        policy_changed.policy_version(),
-        "PolicyVersion must reflect transaction-policy changes"
+        baseline.shape_hash(),
+        same_shape_next_version.shape_hash(),
+        "CatalogVersion participates in the object diff hash"
     );
-
-    let mut perms_changed = baseline.clone();
-    perms_changed
-        .required_permissions
-        .push("Inventory.Audit".to_string());
-    assert_ne!(baseline_policy, perms_changed.policy_version());
-}
-
-#[test]
-fn procedure_binding_carries_four_identities() {
-    let proc = procedure(13, "Inventory.ReserveStock", CatalogVersion::new(7), vec![]);
-    let binding = proc.binding();
-
-    assert_eq!(binding.procedure_id, proc.procedure_id);
-    assert_eq!(binding.contract_hash, proc.contract_hash);
-    assert_eq!(binding.catalog_version, proc.object.catalog_version);
-    assert_eq!(binding.stats_version, proc.stats_version);
-    assert_eq!(binding.policy_version, proc.policy_version());
-    assert!(binding.validate().is_ok());
-    assert_eq!(proc.validated_binding().unwrap(), binding);
-
-    let mut zero_stats = binding;
-    zero_stats.stats_version = StatsVersion::new(0);
-    assert_eq!(
-        zero_stats.validate().unwrap_err().kind(),
-        AndromedaErrorKind::Contract
+    assert_ne!(
+        same_shape_next_version.shape_hash(),
+        additive_next_version.shape_hash(),
+        "appending a table column must produce a distinct additive shape"
     );
-
-    let mut zero_policy = binding;
-    zero_policy.policy_version = PolicyVersion::zero();
-    assert_eq!(
-        zero_policy.validate().unwrap_err().kind(),
-        AndromedaErrorKind::Contract
+    assert_ne!(
+        additive_next_version.shape_hash(),
+        breaking_next_version.shape_hash(),
+        "breaking table-column replacement must not collide with additive shape"
     );
-}
-
-#[test]
-fn procedure_binding_constructor_rejects_incomplete_evidence() {
-    let proc = procedure(14, "Inventory.ReserveStock", CatalogVersion::new(7), vec![]);
-    let binding = proc.binding();
-
-    let zero_stats = ProcedureContractBinding::new(
-        binding.procedure_id,
-        binding.catalog_version,
-        binding.contract_hash,
-        StatsVersion::new(0),
-        binding.policy_version,
-    )
-    .unwrap_err();
-    assert_eq!(zero_stats.kind(), AndromedaErrorKind::Contract);
-
-    let default_policy = ProcedureContractBinding::new(
-        binding.procedure_id,
-        binding.catalog_version,
-        binding.contract_hash,
-        binding.stats_version,
-        PolicyVersion::zero(),
-    )
-    .unwrap_err();
-    assert_eq!(default_policy.kind(), AndromedaErrorKind::Contract);
 }
 
 #[test]
@@ -223,9 +194,9 @@ fn definition_batch_source_hash_binds_procedure_identity() {
     );
 
     let base_batch = DefinitionBatch {
-        batch_id: andromeda_catalog::DefinitionBatchId::new(1),
-        database_id: andromeda_core::DatabaseId::new(1),
-        namespace_id: andromeda_core::NamespaceId::new(1),
+        batch_id: DefinitionBatchId::new(1),
+        database_id: andromeda_types::DatabaseId::new(1),
+        namespace_id: andromeda_types::NamespaceId::new(1),
         base_version: CatalogVersion::new(0),
         operations: vec![DefinitionOperation::Create(CatalogDefinition::Procedure(
             base,
@@ -243,104 +214,6 @@ fn definition_batch_source_hash_binds_procedure_identity() {
         drifted_batch.source_hash(),
         "DefinitionBatch source hash must bind ProcedureId drift even when ContractHash is unchanged"
     );
-}
-
-#[test]
-fn procedure_compatibility_rejects_identity_or_non_advancing_version_drift() {
-    let previous = procedure(23, "Inventory.ReserveStock", CatalogVersion::new(1), vec![]);
-    let mut next = previous.clone();
-    next.object.catalog_version = CatalogVersion::new(2);
-    assert!(
-        next.compatibility_with(&previous).compatible,
-        "same Procedure identity with an advancing CatalogVersion and same hash remains compatible"
-    );
-
-    let mut procedure_id_drift = next.clone();
-    procedure_id_drift.procedure_id = ProcedureId::new(24);
-    let diagnostic = procedure_id_drift.compatibility_with(&previous);
-    assert!(!diagnostic.compatible);
-    assert!(
-        diagnostic
-            .messages
-            .iter()
-            .any(|message| message.contains("ProcedureId"))
-    );
-
-    let mut object_id_drift = next.clone();
-    object_id_drift.object.object_id = CatalogObjectId::new(24);
-    let diagnostic = object_id_drift.compatibility_with(&previous);
-    assert!(!diagnostic.compatible);
-    assert!(
-        diagnostic
-            .messages
-            .iter()
-            .any(|message| message.contains("object id"))
-    );
-
-    let non_advancing = previous.clone();
-    let diagnostic = non_advancing.compatibility_with(&previous);
-    assert!(!diagnostic.compatible);
-    assert!(
-        diagnostic
-            .messages
-            .iter()
-            .any(|message| message.contains("advancing CatalogVersion"))
-    );
-}
-
-#[test]
-fn procedure_validated_binding_rejects_stale_contract_hash() {
-    let mut stale = procedure(15, "Inventory.ReserveStock", CatalogVersion::new(7), vec![]);
-    stale.contract_hash = ContractHash::test_vector(0xE5);
-
-    let projected = stale.binding();
-    assert!(
-        projected.validate().is_ok(),
-        "non-zero binding evidence is not enough without canonical contract validation"
-    );
-
-    let error = stale
-        .validated_binding()
-        .expect_err("stale canonical hash must reject binding evidence");
-    assert_eq!(error.kind(), AndromedaErrorKind::Contract);
-}
-
-#[test]
-fn procedure_validate_binding_rejects_stats_or_policy_drift() {
-    let proc = procedure(16, "Inventory.ReserveStock", CatalogVersion::new(7), vec![]);
-
-    let mut drifted_stats = proc.binding();
-    drifted_stats.stats_version = StatsVersion::new(proc.stats_version.get() + 1);
-    let error = proc
-        .validate_binding(&drifted_stats)
-        .expect_err("drifted StatsVersion must be rejected");
-    assert_eq!(error.kind(), AndromedaErrorKind::Contract);
-
-    let mut drifted_policy = proc.binding();
-    drifted_policy.policy_version = PolicyVersion::new([0xDB; PolicyVersion::LEN]);
-    let error = proc
-        .validate_binding(&drifted_policy)
-        .expect_err("drifted PolicyVersion must be rejected");
-    assert_eq!(error.kind(), AndromedaErrorKind::Contract);
-}
-
-#[test]
-fn procedure_validate_binding_rejects_catalog_version_or_procedure_id_drift() {
-    let proc = procedure(17, "Inventory.ReserveStock", CatalogVersion::new(7), vec![]);
-
-    let mut drifted_catalog = proc.binding();
-    drifted_catalog.catalog_version = CatalogVersion::new(proc.object.catalog_version.get() + 1);
-    let error = proc
-        .validate_binding(&drifted_catalog)
-        .expect_err("drifted CatalogVersion must be rejected before invocation");
-    assert_eq!(error.kind(), AndromedaErrorKind::Contract);
-
-    let mut drifted_procedure = proc.binding();
-    drifted_procedure.procedure_id = ProcedureId::new(proc.procedure_id.get() + 1);
-    let error = proc
-        .validate_binding(&drifted_procedure)
-        .expect_err("drifted ProcedureId must be rejected before invocation");
-    assert_eq!(error.kind(), AndromedaErrorKind::Contract);
 }
 
 #[test]

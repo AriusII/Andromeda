@@ -1,0 +1,24 @@
+[package]
+name = "andromeda-result-stream"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+andromeda-error.workspace = true
+andromeda-observability.workspace = true
+andromeda-procedure-contract.workspace = true
+andromeda-rpc-protocol.workspace = true
+andromeda-srpl-cardinality.workspace = true
+andromeda-structured-object.workspace = true
+andromeda-transaction.workspace = true
+andromeda-types.workspace = true
+andromeda-wal.workspace = true
+tokio = { workspace = true, features = ["sync"] }
+
+[dev-dependencies]
+andromeda-srpl-cardinality.workspace = true
+andromeda-structured-object.workspace = true
+andromeda-types.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "time"] }

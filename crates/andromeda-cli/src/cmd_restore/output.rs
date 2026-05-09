@@ -70,8 +70,7 @@ pub(super) fn print_restore_status(report: &RestoreStatusReport, json_output: bo
 }
 
 fn print_restore_start_human(outcome: &RestoreStartOutcome) {
-    println!("Restore Contract Preview");
-    println!("========================");
+    print_heading("Restore Contract Preview");
     println!("{}", outcome.message);
     println!("Contract Preview: {}", outcome.contract_preview);
     println!("Durable Backend: {}", outcome.durable_backend);
@@ -91,19 +90,7 @@ fn print_restore_start_human(outcome: &RestoreStartOutcome) {
     }
     println!("Validation Policy: {}", outcome.validation_policy);
     println!("Preflight Validated: {}", outcome.preflight_validated);
-    if !outcome.replay_segments.is_empty() {
-        println!("Replay Segments:");
-        for segment in &outcome.replay_segments {
-            println!(
-                "  - #{} segment_id={} lsn={}..={} contains_pitr={}",
-                segment.sequence_index,
-                segment.segment_id,
-                segment.first_lsn,
-                segment.last_lsn,
-                segment.contains_pitr_target
-            );
-        }
-    }
+    print_restore_replay_segments(&outcome.replay_segments, false);
 }
 
 fn print_restore_status_human(report: &RestoreStatusReport) {
@@ -137,10 +124,7 @@ fn print_restore_start_json(outcome: &RestoreStartOutcome) {
         outcome.requires_restore_orchestrator,
         outcome.dry_run,
         outcome.would_restore,
-        outcome
-            .restore_id
-            .map(|restore_id| restore_id.to_string())
-            .unwrap_or_else(|| "null".to_string()),
+        json_option_u64(outcome.restore_id),
         outcome.backup_id,
         json_option_string(Some(outcome.artifact_path.as_str())),
         json_option_u64(outcome.pitr_target_lsn),
@@ -168,8 +152,7 @@ fn print_restore_status_json(report: &RestoreStatusReport) {
 }
 
 fn print_restore_verify_human(outcome: &RestoreVerifyOutcome) {
-    println!("Restore Verify");
-    println!("==============");
+    print_heading("Restore Verify");
     println!("Backup ID: {}", outcome.backup_id);
     println!("Artifact Path: {}", outcome.artifact_path);
     println!("PITR Target LSN: {}", outcome.pitr_target_lsn);
@@ -178,17 +161,7 @@ fn print_restore_verify_human(outcome: &RestoreVerifyOutcome) {
     }
     println!("Validation Policy: {}", outcome.validation_policy);
     println!("Source Checkpoint LSN: {}", outcome.source_checkpoint_lsn);
-    println!("Replay Segments:");
-    for segment in &outcome.replay_segments {
-        println!(
-            "  - #{} segment_id={} lsn={}..={} contains_pitr={}",
-            segment.sequence_index,
-            segment.segment_id,
-            segment.first_lsn,
-            segment.last_lsn,
-            segment.contains_pitr_target
-        );
-    }
+    print_restore_replay_segments(&outcome.replay_segments, true);
     println!("{}", outcome.message);
 }
 
@@ -207,18 +180,45 @@ fn print_restore_verify_json(outcome: &RestoreVerifyOutcome) {
 }
 
 fn restore_replay_segments_json(segments: &[RestoreReplaySegmentOutput]) -> String {
-    let entries = segments
+    json_array(segments, |segment| {
+        format!(
+            "{{\"sequence_index\":{},\"segment_id\":{},\"first_lsn\":{},\"last_lsn\":{},\"contains_pitr_target\":{}}}",
+            segment.sequence_index,
+            segment.segment_id,
+            segment.first_lsn,
+            segment.last_lsn,
+            segment.contains_pitr_target
+        )
+    })
+}
+
+fn print_restore_replay_segments(segments: &[RestoreReplaySegmentOutput], include_empty: bool) {
+    if segments.is_empty() && !include_empty {
+        return;
+    }
+
+    println!("Replay Segments:");
+    for segment in segments {
+        println!(
+            "  - #{} segment_id={} lsn={}..={} contains_pitr={}",
+            segment.sequence_index,
+            segment.segment_id,
+            segment.first_lsn,
+            segment.last_lsn,
+            segment.contains_pitr_target
+        );
+    }
+}
+
+fn print_heading(title: &str) {
+    println!("{title}");
+    println!("{}", "=".repeat(title.len()));
+}
+
+fn json_array<T>(items: &[T], mut render: impl FnMut(&T) -> String) -> String {
+    let entries = items
         .iter()
-        .map(|segment| {
-            format!(
-                "{{\"sequence_index\":{},\"segment_id\":{},\"first_lsn\":{},\"last_lsn\":{},\"contains_pitr_target\":{}}}",
-                segment.sequence_index,
-                segment.segment_id,
-                segment.first_lsn,
-                segment.last_lsn,
-                segment.contains_pitr_target
-            )
-        })
+        .map(|item| render(item))
         .collect::<Vec<_>>()
         .join(",");
     format!("[{}]", entries)

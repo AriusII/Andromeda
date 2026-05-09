@@ -4,7 +4,7 @@ mod sensitive;
 
 use std::path::PathBuf;
 
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 use andromeda_observe::{
     DurableAuditCompactionReport, DurableAuditEventFamily, DurableAuditReplayEvidence,
     DurableAuditReplayLsnRange, DurableAuditReplayQuery, DurableAuditReplayWindow,
@@ -26,6 +26,7 @@ use self::sensitive::redact_sensitive_cli_evidence;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct AuditInspectionOptions {
     pub(super) spec: TraceQuerySpec,
+    pub(super) durable_family_filter: Option<DurableAuditEventFamily>,
     pub(super) json_output: bool,
     pub(super) diagnostic_json: bool,
     pub(super) journal_path: Option<PathBuf>,
@@ -107,7 +108,7 @@ pub fn run_audit_command(args: &[String]) -> AndromedaResult<()> {
         Some("-h" | "--help" | "help") | None => {
             print_audit_help();
             Ok(())
-        }
+        },
         Some(_) => Err(cli_error(
             "unknown audit subcommand; run `andromeda-cli audit --help`",
         )),
@@ -170,7 +171,7 @@ fn build_audit_inspection_report(
     })?;
     let replay = sink
         .query_with_evidence(
-            &durable_replay_filter_from_trace_spec(&options.spec),
+            &durable_replay_filter_from_trace_spec(&options.spec, options.durable_family_filter),
             DurableAuditReplayWindow::ALL,
         )
         .map_err(|error| {
@@ -330,12 +331,16 @@ fn build_inspection_diagnostic_evidence(
     })
 }
 
-fn durable_replay_filter_from_trace_spec(spec: &TraceQuerySpec) -> DurableAuditReplayQuery {
+fn durable_replay_filter_from_trace_spec(
+    spec: &TraceQuerySpec,
+    durable_family_filter: Option<DurableAuditEventFamily>,
+) -> DurableAuditReplayQuery {
     DurableAuditReplayQuery {
-        family: spec
-            .filter
-            .family
-            .and_then(durable_family_for_exact_trace_family),
+        family: durable_family_filter.or_else(|| {
+            spec.filter
+                .family
+                .and_then(durable_family_for_exact_trace_family)
+        }),
         trace_id: spec.filter.trace_id,
         principal_id: spec.filter.principal.clone(),
         lsn_range: spec.filter.lsn_range.map(durable_lsn_range),

@@ -1,3 +1,0 @@
-display_name: "StructuredObject Contracts"
-short_description: "Design StructuredObject shapes, row counts, layouts, intrinsic invariants, RPC metadata, and contract compatibility. Use for batch parameters and result types."
-default_prompt: "Use the StructuredObject Contracts skill to analyze the current Andromeda task and return a bounded, validated result."

@@ -1,3 +1,0 @@
-display_name: "Storage Page Format"
-short_description: "Design PageHeader, PageTrailer, layout variants, fixed/hybrid rows, column segments, overflow, checksums, and page invariants. Use for storage pages."
-default_prompt: "Use the Storage Page Format skill to analyze the current Andromeda task and return a bounded, validated result."

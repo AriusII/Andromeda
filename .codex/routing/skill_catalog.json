@@ -1,644 +1,282 @@
 [
   {
-    "name": "roadmap-objective-tracing",
-    "title": "Roadmap Objective Tracing",
-    "category": "roadmap",
-    "description": "Track large Andromeda roadmap prompts, objectives, dependencies, status signals, constraints, and unresolved decisions. Use when Codex must preserve a long mission-critical roadmap, derive work items, or verify that a response stays aligned with the requested objectives."
+    "name": "codex-orchestration-protocol",
+    "description": "Use when a request requires Codex to coordinate analysis workers, write workers, dependency queues, and final consolidation.",
+    "category": "codex-orchestration"
   },
   {
-    "name": "roadmap-task-decomposition",
-    "title": "Roadmap Task Decomposition",
-    "category": "roadmap",
-    "description": "Break a large roadmap, prompt, or implementation request into ordered tasks, sub-agent work packets, dependencies, milestones, and acceptance gates. Use when a request is too broad to execute safely in one pass."
+    "name": "task-scope-bounding",
+    "description": "Use to transform broad user requests into precise bounded Codex work orders.",
+    "category": "codex-orchestration"
   },
   {
-    "name": "roadmap-delegation-tree",
-    "title": "Roadmap Delegation Tree",
-    "category": "roadmap",
-    "description": "Build a master-to-student delegation model for Codex agents. Use when one central agent must route subtasks to specialized agents while preserving context, scope, and output contracts."
+    "name": "readonly-worker-report-contract",
+    "description": "Use by repository-read-only workers that must inspect code and produce one detailed Markdown report under .work.",
+    "category": "codex-workers"
   },
   {
-    "name": "roadmap-progress-checkpointing",
-    "title": "Roadmap Progress Checkpointing",
-    "category": "roadmap",
-    "description": "Create checkpoints for long-running Codex work within a single response: completed items, partial results, blockers, risks, and next executable step. Use for major refactor, audit, design, or tooling work."
+    "name": "write-worker-mission-report-contract",
+    "description": "Use by write workers that must execute a bounded change and produce one mission report.",
+    "category": "codex-workers"
   },
   {
-    "name": "project-context-intake",
-    "title": "Project Context Intake",
-    "category": "context",
-    "description": "Extract the minimum sufficient Andromeda context from user prompts, repository files, uploaded documents, and local evidence. Use before major architecture, refactor, or implementation tasks."
+    "name": "work-directory-output-contract",
+    "description": "Use when workers or orchestrators need to write intermediate Codex task artifacts.",
+    "category": "codex-workers"
   },
   {
-    "name": "prompt-intent-disambiguation",
-    "title": "Prompt Intent Disambiguation",
-    "category": "context",
-    "description": "Clarify user intent without losing momentum. Use when a user prompt mixes roadmap, implementation, cleanup, research, and tooling requirements and Codex must infer a safe actionable scope."
-  },
-  {
-    "name": "prompt-scope-normalization",
-    "title": "Prompt Scope Normalization",
-    "category": "context",
-    "description": "Normalize oversized or emotional prompts into a precise engineering work order. Use when Codex must turn broad ambition into a bounded, testable, mission-critical task."
-  },
-  {
-    "name": "context-pack-construction",
-    "title": "Context Pack Construction",
-    "category": "context",
-    "description": "Build compact context packs for agents and skills. Use when preparing another agent, prompt template, or handoff with only the context needed to execute correctly."
-  },
-  {
-    "name": "source-grounded-answering",
-    "title": "Source-Grounded Answering",
-    "category": "context",
-    "description": "Answer using project and official sources with explicit citations, source hierarchy, uncertainty, and cross-checks. Use when claims must be traceable to uploaded documents, repository files, or official documentation."
-  },
-  {
-    "name": "decision-record-authoring",
-    "title": "Decision Record Authoring",
-    "category": "context",
-    "description": "Create ADR/DEC records with context, decision, alternatives, consequences, revision criteria, and test gates. Use for architecture, tooling, Rust, WAL, SRPL, hook, or agent policy decisions."
-  },
-  {
-    "name": "agent-handoff-protocol",
-    "title": "Agent Handoff Protocol",
-    "category": "context",
-    "description": "Prepare handoffs between Codex agents with exact task boundaries, inputs, constraints, expected outputs, and validation. Use when a master agent delegates to specialized subagents."
+    "name": "todo-dependency-queue-planning",
+    "description": "Use to represent TODO/SUB-TODO/dependencies and decide worker execution order.",
+    "category": "codex-orchestration"
   },
   {
     "name": "agent-skill-routing",
-    "title": "Agent Skill Routing",
-    "category": "context",
-    "description": "Select agents and skills for a user request based on task type, criticality, Rust area, Andromeda subsystem, and risk class. Use when Codex must dynamically load the right skills."
-  },
-  {
-    "name": "codex-prompt-template-design",
-    "title": "Codex Prompt Template Design",
-    "category": "context",
-    "description": "Design reusable prompts for Codex agent work: implementation, review, cleanup, tests, research, specification, and recovery plans. Use when creating prompt libraries or templates."
-  },
-  {
-    "name": "user-request-risk-classification",
-    "title": "User Request Risk Classification",
-    "category": "context",
-    "description": "Classify requests by risk, destructive potential, security impact, recovery impact, and required review posture. Use before edits, shell commands, refactors, deletion, or policy changes."
-  },
-  {
-    "name": "agents-md-authoring",
-    "title": "AGENTS.md Authoring",
-    "category": "codex",
-    "description": "Author and maintain repository-level AGENTS.md instructions for Codex. Use when defining project doctrine, hierarchy, scope, precedence, and contribution rules."
+    "description": "Use to choose between an agent, a skill, or direct work.",
+    "category": "codex-tooling"
   },
   {
     "name": "codex-agent-authoring",
-    "title": "Codex Agent Authoring",
-    "category": "codex",
-    "description": "Create or update Codex agent TOML definitions with clear agent role, non-overlapping behavior, sandbox posture, primary skills, and output contracts."
-  },
-  {
-    "name": "codex-agent-registry-maintenance",
-    "title": "Codex Agent Registry Maintenance",
-    "category": "codex",
-    "description": "Maintain .codex/config.toml agent registry entries and ensure each agent file is registered and coherent. Use when adding, renaming, deleting, or reorganizing agents."
+    "description": "Use to author or revise Codex agent TOML files for Andromeda.",
+    "category": "codex-tooling"
   },
   {
     "name": "codex-skill-authoring",
-    "title": "Codex Skill Authoring",
-    "category": "codex",
-    "description": "Create precise Codex skills with SKILL.md frontmatter, progressive disclosure, references, scripts, and validation. Use when adding or improving a skill."
-  },
-  {
-    "name": "skill-progressive-disclosure",
-    "title": "Skill Progressive Disclosure",
-    "category": "codex",
-    "description": "Design skills that keep SKILL.md lean while moving details to references, scripts, or assets. Use when a skill risks becoming too long or duplicative."
-  },
-  {
-    "name": "skill-forward-testing",
-    "title": "Skill Forward Testing",
-    "category": "codex",
-    "description": "Forward-test skills with realistic tasks and no leaked expected answer. Use when validating whether a skill works for future Codex agents."
-  },
-  {
-    "name": "hook-design-governance",
-    "title": "Hook Design Governance",
-    "category": "codex",
-    "description": "Design Codex hooks for SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PermissionRequest, and Stop with clear purpose and minimal friction."
-  },
-  {
-    "name": "hook-script-hardening",
-    "title": "Hook Script Hardening",
-    "category": "codex",
-    "description": "Harden Python hook scripts for deterministic JSON input/output, safe failures, no secret leakage, and bounded execution. Use when writing or reviewing hook scripts."
-  },
-  {
-    "name": "hook-json-validation",
-    "title": "Hook JSON Validation",
-    "category": "codex",
-    "description": "Validate .codex/hooks.json structure, event names, command paths, timeouts, matchers, and referenced scripts. Use before packaging or committing Codex hooks."
-  },
-  {
-    "name": "permission-request-policy",
-    "title": "Permission Request Policy",
-    "category": "codex",
-    "description": "Define PermissionRequest hook behavior for risky shell, network, git, filesystem, and destructive operations. Use when approval requests must be policy-aware."
-  },
-  {
-    "name": "pretooluse-guardrails",
-    "title": "PreToolUse Guardrails",
-    "category": "codex",
-    "description": "Apply PreToolUse safety checks before shell/tool execution. Use to prevent destructive commands, unsafe repo rewrites, secret leakage, and unbounded scans."
-  },
-  {
-    "name": "posttooluse-audit",
-    "title": "PostToolUse Audit",
-    "category": "codex",
-    "description": "Audit tool outputs after execution and inject follow-up context for validation, tests, or cleanup. Use after file edits, shell commands, searches, or validation scripts."
-  },
-  {
-    "name": "sessionstart-context",
-    "title": "SessionStart Context",
-    "category": "codex",
-    "description": "Inject compact Andromeda mission context at session start. Use to keep Codex aligned with strict boundaries, Rust baseline, and core invariants."
-  },
-  {
-    "name": "stop-quality-gate",
-    "title": "Stop Quality Gate",
-    "category": "codex",
-    "description": "Run final response quality checks before completion. Use to detect missing artifacts, missing validation, unsafe claims, and incomplete mission-critical deliverables."
+    "description": "Use to author precise Codex skills with strong triggers and guardrails.",
+    "category": "codex-tooling"
   },
   {
     "name": "codex-tooling-validation",
-    "title": "Codex Tooling Validation",
-    "category": "codex",
-    "description": "Validate the full Codex tooling tree: AGENTS.md, .codex/config.toml, .codex/agents, .agents/skills, hooks, scripts, and prompt templates."
+    "description": "Use to validate .codex agents, skills, registries and routing files.",
+    "category": "codex-tooling"
   },
   {
-    "name": "mcp-aware-tool-selection",
-    "title": "MCP-Aware Tool Selection",
-    "category": "codex",
-    "description": "Use MCP tools such as rust-lsp and rust-rover-ide when available without making Codex tooling depend on MCP. Use for repository analysis, Rust symbols, diagnostics, and IDE-aware tasks."
+    "name": "source-grounding-from-project-docs",
+    "description": "Use to ground decisions in Andromeda project Markdown/PDF context.",
+    "category": "codex-tooling"
   },
   {
-    "name": "prompt-library-maintenance",
-    "title": "Prompt Library Maintenance",
-    "category": "codex",
-    "description": "Maintain reusable prompt templates for Codex agents, reviews, cleanup, crash tests, SRPL specs, and Rust implementation tasks."
-  },
-  {
-    "name": "rust-workspace-architecture",
-    "title": "Rust Workspace Architecture",
-    "category": "rust",
-    "description": "Design and review a Rust 2024 Cargo workspace for a systems-grade database engine. Use when defining crates, members, profiles, lints, and dependency policy."
-  },
-  {
-    "name": "rust-crate-boundary-design",
-    "title": "Rust Crate Boundary Design",
-    "category": "rust",
-    "description": "Define crate boundaries by responsibility for Andromeda engine subsystems. Use when splitting or reviewing crates to avoid god crates and utility dumping grounds."
-  },
-  {
-    "name": "rust-module-splitting",
-    "title": "Rust Module Splitting",
-    "category": "rust",
-    "description": "Split Rust modules by responsibility, not by arbitrary size. Use when files become large or mix parsing, validation, I/O, tests, and runtime logic."
-  },
-  {
-    "name": "rust-file-size-governance",
-    "title": "Rust File Size Governance",
-    "category": "rust",
-    "description": "Detect oversized Rust files/functions/modules and propose clean splits with test preservation. Use when files exceed quality thresholds or cognitive load."
+    "name": "markdown-report-quality-standard",
+    "description": "Use for `.work` reports, plans, mission reports and final consolidations.",
+    "category": "codex-workers"
   },
   {
     "name": "rust-clean-code-refactor",
-    "title": "Rust Clean Code Refactor",
-    "category": "rust",
-    "description": "Refactor Rust code without behavior changes. Use for simplification, naming, extraction, deduplication, visibility reduction, and stronger invariants."
+    "description": "Use for professional Rust cleanup/refactor work without behavior drift.",
+    "category": "rust-refactor"
   },
   {
-    "name": "rust-dead-code-removal",
-    "title": "Rust Dead Code Removal",
-    "category": "rust",
-    "description": "Identify and remove dead code, unused imports, unused functions, stale tests, obsolete docs, and unreachable paths. Use during cleanup cycles."
+    "name": "rust-dead-code-detection",
+    "description": "Use to detect and remove unused Rust code paths.",
+    "category": "rust-refactor"
   },
   {
     "name": "rust-orphan-detection",
-    "title": "Rust Orphan Detection",
-    "category": "rust",
-    "description": "Find orphan files, modules, dependencies, features, examples, benches, scripts, fixtures, and docs. Use for repository cleanup and integrity checks."
+    "description": "Use to find orphan files, modules, crates, features, examples, benches, scripts, or docs.",
+    "category": "rust-refactor"
   },
   {
-    "name": "rust-dependency-pruning",
-    "title": "Rust Dependency Pruning",
-    "category": "rust",
-    "description": "Prune unused, duplicated, risky, or over-featured Cargo dependencies. Use with cargo tree, cargo machete, udeps, deny, and audit."
+    "name": "rust-duplicate-code-consolidation",
+    "description": "Use to consolidate duplicated Rust logic safely.",
+    "category": "rust-refactor"
   },
   {
-    "name": "rust-feature-flag-governance",
-    "title": "Rust Feature Flag Governance",
-    "category": "rust",
-    "description": "Govern Cargo features: additive features, minimal defaults, feature matrix testing, mutually exclusive flags, and workspace consistency."
+    "name": "rust-deprecated-obsolete-removal",
+    "description": "Use to remove obsolete, deprecated or transitional code.",
+    "category": "rust-refactor"
+  },
+  {
+    "name": "rust-naming-noise-cleanup",
+    "description": "Use to clean Rust naming across crates, modules, files, functions and tests.",
+    "category": "rust-refactor"
+  },
+  {
+    "name": "rust-file-splitting-placement",
+    "description": "Use to shrink or split large Rust files by responsibility.",
+    "category": "rust-refactor"
+  },
+  {
+    "name": "rust-crate-module-boundary",
+    "description": "Use to design or audit Cargo crate and module boundaries.",
+    "category": "rust-architecture"
   },
   {
     "name": "rust-public-api-minimization",
-    "title": "Rust Public API Minimization",
-    "category": "rust",
-    "description": "Reduce public API surface using private, pub(super), pub(crate), sealed traits, and stable reexports. Use when crates expose too much."
+    "description": "Use to reduce unnecessary `pub` surface and stabilize APIs.",
+    "category": "rust-refactor"
   },
   {
     "name": "rust-error-modeling",
-    "title": "Rust Error Modeling",
-    "category": "rust",
-    "description": "Design typed Rust errors for library, engine, RPC, transaction, storage, and business boundaries. Use to replace stringly errors or panic paths."
+    "description": "Use to design typed Rust errors and protocol error conversion.",
+    "category": "rust-implementation"
   },
   {
-    "name": "rust-newtype-invariants",
-    "title": "Rust Newtype Invariants",
-    "category": "rust",
-    "description": "Use Rust newtypes and checked constructors for IDs, hashes, LSNs, versions, domain primitives, and invariants. Use when primitive obsession risks bugs."
+    "name": "rust-unsafe-audit",
+    "description": "Use to audit unsafe Rust, FFI, SIMD, mmap, direct I/O, and raw pointer code.",
+    "category": "rust-safety"
   },
   {
-    "name": "rust-unsafe-boundary-audit",
-    "title": "Rust Unsafe Boundary Audit",
-    "category": "rust",
-    "description": "Audit unsafe Rust blocks, unsafe functions, target-feature code, raw pointers, and memory layout assumptions. Use in storage, WAL, FFI, SIMD, and lock-free code."
+    "name": "rust-performance-optimization",
+    "description": "Use for measured Rust performance improvement.",
+    "category": "rust-performance"
   },
   {
-    "name": "rust-ffi-boundary-audit",
-    "title": "Rust FFI Boundary Audit",
-    "category": "rust",
-    "description": "Review Rust FFI boundaries for unsafe extern, ABI, ownership, lifetimes, error propagation, and build-script behavior. Use for OS, GPU, crypto, storage, or C library integration."
+    "name": "rust-allocation-clone-review",
+    "description": "Use to review allocations, clones, buffer growth and ownership pressure.",
+    "category": "rust-performance"
   },
   {
-    "name": "rust-panic-eradication",
-    "title": "Rust Panic Eradication",
-    "category": "rust",
-    "description": "Remove panic, unwrap, expect, todo, dbg, and uncontrolled aborts from mission-critical runtime paths. Use in WAL, recovery, RPC, security, and storage."
+    "name": "rust-async-cancellation-backpressure",
+    "description": "Use for async runtime, cancellation, shutdown and backpressure design.",
+    "category": "rust-runtime"
   },
   {
-    "name": "rust-allocation-review",
-    "title": "Rust Allocation Review",
-    "category": "rust",
-    "description": "Review allocations, clones, String/Vec growth, buffer reuse, preallocation, and hot-path memory pressure. Use for performance-sensitive Rust code."
+    "name": "rust-test-strategy-tdd",
+    "description": "Use to design tests and TDD approach for Rust changes.",
+    "category": "rust-testing"
   },
   {
-    "name": "rust-clone-copy-audit",
-    "title": "Rust Clone and Copy Audit",
-    "category": "rust",
-    "description": "Audit Clone, Copy, Arc, Bytes, Cow, borrowing, and ownership choices in hot paths. Use when performance, lifetime, or memory pressure matters."
-  },
-  {
-    "name": "rust-async-cancellation",
-    "title": "Rust Async Cancellation",
-    "category": "rust",
-    "description": "Design cancellation-safe async Rust around QUIC/RPC/admin jobs without corrupting transaction or storage state. Use for Tokio tasks, streams, shutdown, and backpressure."
-  },
-  {
-    "name": "rust-concurrency-loom-modeling",
-    "title": "Rust Concurrency Loom Modeling",
-    "category": "rust",
-    "description": "Model small Rust concurrency primitives with Loom. Use for atomics, pin guards, latches, lock-free queues, and backpressure flags."
-  },
-  {
-    "name": "rust-performance-benchmarking",
-    "title": "Rust Performance Benchmarking",
-    "category": "rust",
-    "description": "Design measured Rust performance work with hypotheses, benchmarks, profiles, baselines, and regression thresholds. Use before accepting optimizations."
-  },
-  {
-    "name": "rust-simd-dispatch",
-    "title": "Rust SIMD Dispatch",
-    "category": "rust",
-    "description": "Implement runtime-dispatched x64/arm64 SIMD kernels with scalar fallback and target-feature guards. Use for CRC, scans, compression, histograms, or vector math."
-  },
-  {
-    "name": "rust-gpu-batch-integration",
-    "title": "Rust GPU Batch Integration",
-    "category": "rust",
-    "description": "Integrate GPU acceleration only for batch analytics/statistics/vector workloads outside commit path. Use when designing wgpu/CUDA/ROCm adapters or GPU policies."
-  },
-  {
-    "name": "rust-supply-chain-audit",
-    "title": "Rust Supply Chain Audit",
-    "category": "rust",
-    "description": "Audit Cargo dependencies, advisories, licenses, sources, transitive graph, and vet status. Use before adding dependencies or release gates."
+    "name": "rust-fuzz-property-miri-loom",
+    "description": "Use for advanced Rust verification of parsers, codecs, unsafe and concurrency.",
+    "category": "rust-testing"
   },
   {
     "name": "rust-ci-quality-gates",
-    "title": "Rust CI Quality Gates",
-    "category": "rust",
-    "description": "Define CI gates for Rust format, check, clippy, nextest, docs, audit, deny, feature matrix, fuzz, Miri, coverage, and benchmarks."
+    "description": "Use to define CI commands and release gates for Rust work.",
+    "category": "rust-testing"
   },
   {
-    "name": "rust-docs-api-guidelines",
-    "title": "Rust Docs API Guidelines",
-    "category": "rust",
-    "description": "Document Rust APIs with crate docs, examples, errors, safety, panics, versioning, and observability. Use for public crates or stable internal APIs."
+    "name": "rust-toolchain-1950-policy",
+    "description": "Use to enforce Rust 1.95.0 / Edition 2024 / resolver 3 baseline.",
+    "category": "rust-architecture"
   },
   {
-    "name": "rust-test-strategy",
-    "title": "Rust Test Strategy",
-    "category": "rust",
-    "description": "Design a layered Rust test strategy: unit, integration, property, fuzz, Miri, Loom, crash/recovery, HA/DR, E2E, and benchmarks."
-  },
-  {
-    "name": "rust-fuzzing-harness-design",
-    "title": "Rust Fuzzing Harness Design",
-    "category": "rust",
-    "description": "Create fuzz harnesses for parsers, binary codecs, RPC frames, WAL, pages, manifests, and SegmentIndex. Use for untrusted or persisted bytes."
-  },
-  {
-    "name": "rust-miri-ub-checks",
-    "title": "Rust Miri UB Checks",
-    "category": "rust",
-    "description": "Use Miri for unsafe wrappers and pointer-sensitive Rust tests. Use when unsafe code, raw pointers, aliasing, or layout assumptions need validation."
-  },
-  {
-    "name": "rust-property-testing",
-    "title": "Rust Property Testing",
-    "category": "rust",
-    "description": "Use property-based tests for deterministic invariants, codecs, canonicalization, state machines, and algebraic laws. Use with proptest-style generators."
+    "name": "dependency-supply-chain",
+    "description": "Use for Cargo dependency pruning and supply-chain governance.",
+    "category": "rust-security"
   },
   {
     "name": "andromeda-doctrine-invariants",
-    "title": "Andromeda Doctrine Invariants",
-    "category": "andromeda",
-    "description": "Apply Andromeda invariants: RPC-only procedures, typed contracts, durable WAL before visible commit, versioned stats/plans, no GPU commit path, and recoverability. Use for any design or code review."
+    "description": "Use to enforce Andromeda strict-boundary doctrine and C5 invariants.",
+    "category": "andromeda-core"
   },
   {
-    "name": "relational-algebra-law-check",
-    "title": "Relational Algebra Law Check",
-    "category": "andromeda",
-    "description": "Check relational algebra rewrites under set semantics, projection, selection, join, union, difference, aggregation, and bag-semantics caveats. Use for optimizer and SRPL reasoning."
+    "name": "srpl-procedure-contracts",
+    "description": "Use for SRPL procedure semantics, ProcedureContract, ContractHash and compatibility.",
+    "category": "andromeda-srpl"
   },
   {
-    "name": "set-theory-semantics",
-    "title": "Set Theory Semantics",
-    "category": "andromeda",
-    "description": "Reason about set semantics, absence of duplicates, relations, tuples, projection, membership, and explicit multiset/sequence boundaries. Use in SRPL and optimizer design."
+    "name": "srpl-parser-binder-ir",
+    "description": "Use for SRPL parser, binder, diagnostics, semantic IR/ALT and plan preparation.",
+    "category": "andromeda-srpl"
   },
   {
-    "name": "normalization-dependency-analysis",
-    "title": "Normalization Dependency Analysis",
-    "category": "andromeda",
-    "description": "Analyze functional dependencies, multivalued dependencies, keys, 3NF, BCNF, 4NF, DKNF, lossless decomposition, and dependency preservation. Use for catalog/modelization review."
+    "name": "catalog-definitionbatch",
+    "description": "Use for Catalog, Modelization, DefinitionBatch, DryRun and CatalogVersion work.",
+    "category": "andromeda-catalog"
   },
   {
-    "name": "cardinality-grain-analysis",
-    "title": "Cardinality and Grain Analysis",
-    "category": "andromeda",
-    "description": "Separate conceptual cardinality, optimizer cardinality, analytical grain, and summarizability. Use for type system, Maps, stats, analytics, and SRPL diagnostics."
+    "name": "quic-protobuf-rpc-contracts",
+    "description": "Use for QUIC + Protobuf custom RPC design and implementation.",
+    "category": "andromeda-protocol"
   },
   {
-    "name": "srpl-language-design",
-    "title": "SRPL Language Design",
-    "category": "andromeda",
-    "description": "Design SRPL as a strict relational procedure language with English-like canonical syntax, explicit absence, explicit cardinality, bounded loops, and IR compilation."
+    "name": "protobuf-no-grpc-no-json",
+    "description": "Use to enforce Protobuf without gRPC and no JSON native protocol.",
+    "category": "andromeda-protocol"
   },
   {
-    "name": "srpl-parser-design",
-    "title": "SRPL Parser Design",
-    "category": "andromeda",
-    "description": "Design lexer/parser behavior, grammar constraints, diagnostic codes, canonical forms, and ambiguity rejection for SRPL. Use for parser implementation planning."
+    "name": "resultstream-protobuf-layout",
+    "description": "Use for ResultStream metadata/payload order and Protobuf layout.",
+    "category": "andromeda-protocol"
   },
   {
-    "name": "srpl-binder-cardinality",
-    "title": "SRPL Binder Cardinality",
-    "category": "andromeda",
-    "description": "Bind SRPL names, types, scopes, cardinalities, effects, read/write sets, and permissions. Use when validating procedures before planning."
+    "name": "binary-codec-format",
+    "description": "Use for explicit binary codecs, persisted files, WAL, pages, manifests, frames and contracts.",
+    "category": "andromeda-storage"
   },
   {
-    "name": "srpl-diagnostics-catalog",
-    "title": "SRPL Diagnostics Catalog",
-    "category": "andromeda",
-    "description": "Create stable SRPL diagnostic codes for type, cardinality, map, resource, contract, and determinism errors. Use for compiler and CI outputs."
+    "name": "transaction-wal-recovery",
+    "description": "Use for transaction kernel, WAL, recovery, durability and crash behavior.",
+    "category": "andromeda-transaction"
   },
   {
-    "name": "srpl-procedure-contract",
-    "title": "SRPL Procedure Contract",
-    "category": "andromeda",
-    "description": "Specify ProcedureContract fields, ContractHash, input/output shapes, permissions, read/write sets, isolation, resource policy, and compatibility. Use for RPC and catalog work."
+    "name": "storage-manifest-segment",
+    "description": "Use for storage segments, manifests, snapshots, root pointers, HotStore/ColdStore and SegmentIndex.",
+    "category": "andromeda-storage"
   },
   {
-    "name": "srpl-anti-dynamic-sql",
-    "title": "SRPL Anti Dynamic SQL",
-    "category": "andromeda",
-    "description": "Reject dynamic SQL/text construction, implicit names, SELECT *, shape-shifting returns, unbounded loops, and ambient NULLs in SRPL. Use during language review."
+    "name": "mvcc-isolation-anomalies",
+    "description": "Use for MVCC visibility, isolation policies, anomalies and long readers.",
+    "category": "andromeda-transaction"
   },
   {
-    "name": "structuredobject-contracts",
-    "title": "StructuredObject Contracts",
-    "category": "andromeda",
-    "description": "Design StructuredObject shapes, row counts, layouts, intrinsic invariants, RPC metadata, and contract compatibility. Use for batch parameters and result types."
+    "name": "optimizer-statistics-plan-cache",
+    "description": "Use for optimizer, statistics, plan cache, PlanClass and DecisionTrace.",
+    "category": "andromeda-optimizer"
   },
   {
-    "name": "type-system-domain-modeling",
-    "title": "Type System Domain Modeling",
-    "category": "andromeda",
-    "description": "Design scalars, decimals, floats, text, binary, domain types, enums, flags, optional types, and collection cardinality. Use for TypeSystem v0."
+    "name": "procedure-store-evidence",
+    "description": "Use for Procedure Store, ScenarioEvidence and feedback loops.",
+    "category": "andromeda-optimizer"
   },
   {
-    "name": "catalog-object-model",
-    "title": "Catalog Object Model",
-    "category": "andromeda",
-    "description": "Design catalog descriptors for Database, Namespace, Table, Map, Enum, StructuredObject, Procedure, versions, policies, and state lifecycles. Use for catalog implementation."
+    "name": "maps-analytics-summarizability",
+    "description": "Use for Maps, analytical projections, grain, refresh policy and summarizability.",
+    "category": "andromeda-analytics"
   },
   {
-    "name": "definitionbatch-validation",
-    "title": "DefinitionBatch Validation",
-    "category": "andromeda",
-    "description": "Validate DefinitionBatch dependency graph, ordering, DryRun, breaking changes, security impact, storage impact, and transactionality. Use for import/modelization work."
+    "name": "security-iam-audit",
+    "description": "Use for mTLS, CertificateIdentity, UserPrincipal, permissions, policies, surfaces and audit.",
+    "category": "andromeda-security"
   },
   {
-    "name": "contracthash-canonicalization",
-    "title": "ContractHash Canonicalization",
-    "category": "andromeda",
-    "description": "Define stable ContractHash canonicalization across shapes, types, permissions, policies, compatibility, and semantic IR. Use when hashing procedures/contracts."
+    "name": "hadr-backup-forensic",
+    "description": "Use for HA/DR, quorum, fencing, backup, restore, PITR and forensic startup.",
+    "category": "andromeda-operations"
   },
   {
-    "name": "procedure-store-design",
-    "title": "Procedure Store Design",
-    "category": "andromeda",
-    "description": "Design Procedure Store fields, invocation traces, plan feedback, regressions, resource telemetry, and audit correlation. Use when implementing diagnostic history."
+    "name": "cpu-simd-dispatch",
+    "description": "Use for CPU SIMD, target features, runtime dispatch and scalar fallback.",
+    "category": "andromeda-hardware"
   },
   {
-    "name": "optimizer-cost-modeling",
-    "title": "Optimizer Cost Modeling",
-    "category": "andromeda",
-    "description": "Design cost model terms, physical operators, plan candidates, risk penalties, plan classes, and DecisionTrace for Andromeda procedures. Use for optimizer work."
+    "name": "gpu-batch-outside-commit",
+    "description": "Use for GPU analytics/statistics/vector batch work.",
+    "category": "andromeda-hardware"
   },
   {
-    "name": "statistics-histogram-design",
-    "title": "Statistics Histogram Design",
-    "category": "andromeda",
-    "description": "Design StatsVersion, histograms, row counts, skew, density, validation state, and publication switch. Use for statistics engine implementation."
+    "name": "architecture-workspace-governance",
+    "description": "Use for Rust workspace, crates, folders, tests, docs and tooling architecture.",
+    "category": "andromeda-architecture"
   },
   {
-    "name": "scenario-evidence-governance",
-    "title": "Scenario Evidence Governance",
-    "category": "andromeda",
-    "description": "Govern ScenarioEvidence, confidence/criticality/freshness/realism/stability scores, expiration, validation, and optimizer consumption. Use for predictive evidence."
+    "name": "roadmap-intake-and-stage-selection",
+    "description": "Use to read a global roadmap and select the current detailed stage.",
+    "category": "roadmap"
   },
   {
-    "name": "learned-component-skepticism",
-    "title": "Learned Component Skepticism",
-    "category": "andromeda",
-    "description": "Evaluate learned cardinality, learned indexes, learned optimizer, and workload prediction as evidence only with fallback and poisoning defenses. Use for modern ML-adjacent proposals."
+    "name": "roadmap-task-decomposition",
+    "description": "Use to decompose roadmap stages into executable work packets.",
+    "category": "roadmap"
   },
   {
-    "name": "map-materialization-policy",
-    "title": "Map Materialization Policy",
-    "category": "andromeda",
-    "description": "Select Map refresh modes: Immediate, Incremental, Deferred, SnapshotOnly with WAL, consistency, cost, and staleness policies. Use for Maps design."
+    "name": "implementation-direct-change-protocol",
+    "description": "Use for direct implementation requests with bounded code changes.",
+    "category": "implementation"
   },
   {
-    "name": "map-summarizability-review",
-    "title": "Map Summarizability Review",
-    "category": "andromeda",
-    "description": "Review analytical Maps for grain, summarizability, aggregation correctness, staleness, layout, and GPU batch boundaries. Use for OLAP/analytics maps."
+    "name": "repository-cleanup-campaign",
+    "description": "Use for broad cleanup campaigns across workspace.",
+    "category": "rust-refactor"
   },
   {
-    "name": "transaction-state-machine",
-    "title": "Transaction State Machine",
-    "category": "andromeda",
-    "description": "Design transaction lifecycle: Created, Active, Committing, Committed, Failed, Poisoned, RollingBack, RolledBack, Disposed. Use for transaction kernel work."
+    "name": "code-review-professional-grade",
+    "description": "Use for rigorous code review of Rust/Andromeda changes.",
+    "category": "rust-review"
   },
   {
-    "name": "wal-record-design",
-    "title": "WAL Record Design",
-    "category": "andromeda",
-    "description": "Design WalRecord, LSN, PrevLsn, Crc64, ChainHash, TxBegin/Commit/Rollback, page/index/map/catalog/security records. Use for WAL v0."
-  },
-  {
-    "name": "wal-crash-recovery-testing",
-    "title": "WAL Crash Recovery Testing",
-    "category": "andromeda",
-    "description": "Design crash tests for before/after WAL flush, TxCommit, dirty page flush, manifest switch, Map delta, WAL truncation, and recovery reports. Use for C5 validation."
-  },
-  {
-    "name": "mvcc-isolation-analysis",
-    "title": "MVCC Isolation Analysis",
-    "category": "andromeda",
-    "description": "Analyze MVCC visibility, snapshots, GC, anomalies, snapshot isolation, serializable behavior, and long-reader retention. Use for transaction/isolation design."
-  },
-  {
-    "name": "storage-page-format",
-    "title": "Storage Page Format",
-    "category": "andromeda",
-    "description": "Design PageHeader, PageTrailer, layout variants, fixed/hybrid rows, column segments, overflow, checksums, and page invariants. Use for storage pages."
-  },
-  {
-    "name": "storage-segment-manifest",
-    "title": "Storage Segment Manifest",
-    "category": "andromeda",
-    "description": "Design root pointer, manifests, WAL/hot/cold segments, SegmentIndex, hashes, signatures, AEAD, and startup path. Use for physical storage format."
-  },
-  {
-    "name": "bufferpool-io-scheduler",
-    "title": "BufferPool and I/O Scheduler",
-    "category": "andromeda",
-    "description": "Design BufferPool pinning, dirty tracking, eviction, checkpoint cooperation, P0 WAL flush priority, temp/spill quotas, and metrics. Use for storage runtime."
-  },
-  {
-    "name": "hot-cold-storage-policy",
-    "title": "Hot/Cold Storage Policy",
-    "category": "andromeda",
-    "description": "Design RAM, NVMe HotStore, WAL, TempStore, HDD ColdStore, snapshots, and reconstruction truth. Use for storage architecture."
-  },
-  {
-    "name": "quic-rpc-frame-contracts",
-    "title": "QUIC/RPC Frame Contracts",
-    "category": "andromeda",
-    "description": "Design QUIC surfaces, FrameHeader, RPC frame types, structured payloads, metadata-before-payload, and error taxonomy. Use for network/RPC work."
-  },
-  {
-    "name": "resultstream-protocol",
-    "title": "ResultStream Protocol",
-    "category": "andromeda",
-    "description": "Design ResultStream metadata, batch descriptors, ordering contracts, payload layout, backpressure, and completion semantics. Use for RPC result transport."
-  },
-  {
-    "name": "iam-security-policy",
-    "title": "IAM Security Policy",
-    "category": "andromeda",
-    "description": "Design mTLS to CertificateIdentity to UserPrincipal to roles/permissions/policies/audit. Use for security and authorization implementation."
-  },
-  {
-    "name": "security-threat-modeling",
-    "title": "Security Threat Modeling",
-    "category": "andromeda",
-    "description": "Threat-model certificate theft, replay, oversized payloads, contract probing, admin abuse, split-brain, ransomware, slow clients, and replica poisoning. Use for security reviews."
-  },
-  {
-    "name": "audit-trace-schema",
-    "title": "Audit Trace Schema",
-    "category": "andromeda",
-    "description": "Design audit traces for security, catalog changes, admin operations, procedures, transactions, plans, recovery, cluster events, and DefinitionBatch. Use for observability."
-  },
-  {
-    "name": "hadr-quorum-fencing",
-    "title": "HA/DR Quorum and Fencing",
-    "category": "andromeda",
-    "description": "Design single-primary HA/DR, replica metadata, quorum, fencing, promotion eligibility, epochs, and split-brain prevention. Use for HA/DR work."
-  },
-  {
-    "name": "backup-restore-pitr",
-    "title": "Backup Restore PITR",
-    "category": "andromeda",
-    "description": "Design backup, WAL archives, immutable retention, PITR restore, restore tests, and backup policies. Use for operations and DR work."
-  },
-  {
-    "name": "forensic-startup-runbook",
-    "title": "Forensic Startup Runbook",
-    "category": "andromeda",
-    "description": "Design FastStart, SafeStart, ForensicStart, consistency reports, app blocking, corruption response, and RecoveryReport. Use for incident recovery."
-  },
-  {
-    "name": "hardware-profile-policy",
-    "title": "Hardware Profile Policy",
-    "category": "andromeda",
-    "description": "Define hardware profiles for x64/arm64, SIMD, GPU, NVMe, HDD, ZNS, and runtime detection with policy and fallback. Use for hardware-aware design."
-  },
-  {
-    "name": "cpu-simd-kernel-policy",
-    "title": "CPU SIMD Kernel Policy",
-    "category": "andromeda",
-    "description": "Govern CPU acceleration for CRC, encryption, scans, bitmap/cardinality, compression, and atomics with scalar fallback and evidence. Use for CPU kernels."
-  },
-  {
-    "name": "gpu-no-commit-policy",
-    "title": "GPU No Commit Policy",
-    "category": "andromeda",
-    "description": "Enforce that GPU jobs are analytics/statistics/vector/batch only and never participate in commit, WAL, rollback, recovery, security, or OLTP visibility. Use for GPU proposals."
-  },
-  {
-    "name": "observability-decision-trace",
-    "title": "Observability Decision Trace",
-    "category": "andromeda",
-    "description": "Design DecisionTrace and operational metrics so optimizer, stats, security, storage, and recovery decisions are explainable after the fact. Use for traceability."
-  },
-  {
-    "name": "enterprise-readiness-review",
-    "title": "Enterprise Readiness Review",
-    "category": "andromeda",
-    "description": "Review Andromeda features for Enterprise Grade requirements: strict contracts, audit, recovery, security, testing, versioning, supportability, and operations."
-  },
-  {
-    "name": "release-gate-mission-critical",
-    "title": "Release Gate Mission Critical",
-    "category": "andromeda",
-    "description": "Define release gates for C4/C5 components: WAL, recovery, storage, security, QUIC/RPC, catalog, and Procedure contracts. Use before release or major merge."
-  },
-  {
-    "name": "crash-injection-matrix",
-    "title": "Crash Injection Matrix",
-    "category": "andromeda",
-    "description": "Build and maintain crash injection matrices for WAL, manifest, page, map, catalog, backup, and recovery. Use when designing tests or validating C5 paths."
-  },
-  {
-    "name": "rust-binary-codec-design",
-    "title": "Rust Binary Codec Design",
-    "category": "rust",
-    "description": "Design and implement explicit Rust binary codecs for persisted and network formats. Use for WAL, pages, manifests, SegmentIndex, RPC frames, and contract hashes."
+    "name": "mission-critical-release-gates",
+    "description": "Use for C4/C5 mission-critical readiness.",
+    "category": "release"
   }
 ]

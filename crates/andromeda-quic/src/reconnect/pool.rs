@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use andromeda_core::{AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaErrorKind, AndromedaResult};
 
 use super::{
     ConnectionPoolKey, ConnectionPoolPolicy, PoolAdmission, PoolAdmissionKind, PoolConnectionId,

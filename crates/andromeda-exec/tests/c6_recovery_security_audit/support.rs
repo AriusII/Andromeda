@@ -1,11 +1,14 @@
-use andromeda_core::TransactionId;
-use andromeda_exec::LocalVerticalRuntime;
-use andromeda_observe::{
-    CertificateIdentity, EventCorrelation, EventEmitter, EventEnvelope, EventId, EventSink,
-    Permission, PrincipalBinding, PrincipalRegistry, SurfaceScope, TraceEvent, TraceId,
-    UserPrincipal, UserPrincipalKind,
+use andromeda_audit::{
+    CertificateIdentity, Permission, SurfaceScope, UserPrincipal, UserPrincipalKind,
 };
-use andromeda_storage::InMemoryWal;
+use andromeda_exec::LocalVerticalRuntime;
+use andromeda_observability::TraceId;
+use andromeda_observe::{
+    EventCorrelation, EventEmitter, EventEnvelope, EventId, EventSink, TraceEvent,
+};
+use andromeda_security::{PrincipalBinding, PrincipalRegistry};
+use andromeda_types::TransactionId;
+use andromeda_wal::InMemoryWal;
 
 pub const APP_FINGERPRINT: &str = "sha256-fingerprint-abc123";
 pub const ADMIN_FINGERPRINT: &str = "sha256-fingerprint-admin";

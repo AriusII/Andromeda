@@ -7,6 +7,12 @@ use andromeda_bench::{
 };
 use std::fmt::Write as _;
 
+macro_rules! benchmark_line {
+    ($output:expr, $($arg:tt)*) => {
+        writeln!($output, $($arg)*).expect("format benchmark output")
+    };
+}
+
 pub(super) fn print_benchmark_run_evidence(evidence: &BenchmarkEvidence, diagnostic_json: bool) {
     print!(
         "{}",
@@ -23,91 +29,73 @@ pub(super) fn format_benchmark_run_evidence(
     }
 
     let mut output = String::new();
-    writeln!(output, "Andromeda benchmark diagnostic evidence").expect("format benchmark output");
-    writeln!(output, "=======================================").expect("format benchmark output");
-    writeln!(output, "runner: deterministic-smoke").expect("format benchmark output");
-    writeln!(output, "workload id: {}", evidence.workload_id).expect("format benchmark output");
-    writeln!(output, "hypothesis: {}", evidence.workload_hypothesis)
-        .expect("format benchmark output");
-    writeln!(
+    benchmark_line!(output, "Andromeda benchmark diagnostic evidence");
+    benchmark_line!(output, "=======================================");
+    benchmark_line!(output, "runner: deterministic-smoke");
+    benchmark_line!(output, "workload id: {}", evidence.workload_id);
+    benchmark_line!(output, "hypothesis: {}", evidence.workload_hypothesis);
+    benchmark_line!(
         output,
         "workload shape version: {}",
         evidence.workload_shape_version
-    )
-    .expect("format benchmark output");
-    writeln!(output, "workload size: {}", evidence.workload_size).expect("format benchmark output");
-    writeln!(output, "primary metric: {}", evidence.primary_metric)
-        .expect("format benchmark output");
-    writeln!(output, "baseline ref: {}", evidence.baseline_ref).expect("format benchmark output");
-    writeln!(output, "budget origin: {}", evidence.budget_origin).expect("format benchmark output");
-    writeln!(output, "decision linkage: {}", evidence.decision_linkage)
-        .expect("format benchmark output");
-    writeln!(
+    );
+    benchmark_line!(output, "workload size: {}", evidence.workload_size);
+    benchmark_line!(output, "primary metric: {}", evidence.primary_metric);
+    benchmark_line!(output, "baseline ref: {}", evidence.baseline_ref);
+    benchmark_line!(output, "budget origin: {}", evidence.budget_origin);
+    benchmark_line!(output, "decision linkage: {}", evidence.decision_linkage);
+    benchmark_line!(
         output,
         "hardware profile: {}",
         evidence.hardware_profile.as_str()
-    )
-    .expect("format benchmark output");
-    writeln!(output, "duration ms: {}", evidence.duration_ms).expect("format benchmark output");
-    writeln!(output, "samples: {}", evidence.samples).expect("format benchmark output");
-    writeln!(output, "warmups: {}", evidence.warmups).expect("format benchmark output");
-    writeln!(output, "temp budget bytes: {}", evidence.temp_budget_bytes)
-        .expect("format benchmark output");
-    writeln!(
+    );
+    benchmark_line!(output, "duration ms: {}", evidence.duration_ms);
+    benchmark_line!(output, "samples: {}", evidence.samples);
+    benchmark_line!(output, "warmups: {}", evidence.warmups);
+    benchmark_line!(output, "temp budget bytes: {}", evidence.temp_budget_bytes);
+    benchmark_line!(
         output,
         "started at unix ms: {}",
         evidence.started_at_unix_ms
-    )
-    .expect("format benchmark output");
-    writeln!(output, "elapsed ms: {}", evidence.elapsed_ms).expect("format benchmark output");
-    writeln!(output, "sample count: {}", evidence.sample_count).expect("format benchmark output");
-    writeln!(output, "p50 latency us: {}", evidence.p50_latency_us)
-        .expect("format benchmark output");
-    writeln!(output, "p95 latency us: {}", evidence.p95_latency_us)
-        .expect("format benchmark output");
-    writeln!(output, "error count: {}", evidence.error_count).expect("format benchmark output");
-    writeln!(
+    );
+    benchmark_line!(output, "elapsed ms: {}", evidence.elapsed_ms);
+    benchmark_line!(output, "sample count: {}", evidence.sample_count);
+    benchmark_line!(output, "p50 latency us: {}", evidence.p50_latency_us);
+    benchmark_line!(output, "p95 latency us: {}", evidence.p95_latency_us);
+    benchmark_line!(output, "error count: {}", evidence.error_count);
+    benchmark_line!(
         output,
         "budget status: {}",
         budget_status_str(evidence.budget_status)
-    )
-    .expect("format benchmark output");
-    writeln!(output, "diagnostic only: {}", evidence.diagnostic_only)
-        .expect("format benchmark output");
-    writeln!(
+    );
+    benchmark_line!(output, "diagnostic only: {}", evidence.diagnostic_only);
+    benchmark_line!(
         output,
         "measurement mode: {}",
         evidence.measurement_mode.as_str()
-    )
-    .expect("format benchmark output");
-    writeln!(output, "latency source: {}", evidence.latency_source)
-        .expect("format benchmark output");
-    writeln!(
+    );
+    benchmark_line!(output, "latency source: {}", evidence.latency_source);
+    benchmark_line!(
         output,
         "engine harness: {}",
         evidence.engine_harness.unwrap_or("none")
-    )
-    .expect("format benchmark output");
-    writeln!(
+    );
+    benchmark_line!(
         output,
         "synthetic model version: {}",
         evidence.synthetic_model_version.unwrap_or("none")
-    )
-    .expect("format benchmark output");
-    writeln!(output, "authoritative: {}", evidence.is_authoritative())
-        .expect("format benchmark output");
-    writeln!(
+    );
+    benchmark_line!(output, "authoritative: {}", evidence.is_authoritative());
+    benchmark_line!(
         output,
         "can select plan alone: {}",
         evidence.can_select_plan_alone()
-    )
-    .expect("format benchmark output");
-    writeln!(
+    );
+    benchmark_line!(
         output,
         "optimizer boundary: {}",
         evidence.optimizer_consumption_role()
-    )
-    .expect("format benchmark output");
+    );
     output
 }
 
@@ -195,57 +183,44 @@ pub(super) fn format_workloads(diagnostic_json: bool) -> String {
     }
 
     let mut output = String::new();
-    writeln!(output, "Andromeda benchmark workloads").expect("format benchmark output");
-    writeln!(output, "=============================").expect("format benchmark output");
+    benchmark_line!(output, "Andromeda benchmark workloads");
+    benchmark_line!(output, "=============================");
     for workload in WORKLOADS {
-        writeln!(output, "- {}", workload.id).expect("format benchmark output");
-        writeln!(
+        benchmark_line!(output, "- {}", workload.id);
+        benchmark_line!(
             output,
             "  description: {}",
             cli_workload_description(workload.id, workload.description)
-        )
-        .expect("format benchmark output");
-        writeln!(output, "  hypothesis: {}", workload.hypothesis).expect("format benchmark output");
-        writeln!(
+        );
+        benchmark_line!(output, "  hypothesis: {}", workload.hypothesis);
+        benchmark_line!(
             output,
             "  workload shape version: {}",
             workload.workload_shape_version
-        )
-        .expect("format benchmark output");
-        writeln!(output, "  workload size: {}", workload.workload_size)
-            .expect("format benchmark output");
-        writeln!(output, "  primary metric: {}", workload.primary_metric)
-            .expect("format benchmark output");
-        writeln!(output, "  baseline ref: {}", workload.baseline_ref)
-            .expect("format benchmark output");
-        writeln!(output, "  budget origin: {}", workload.budget_origin)
-            .expect("format benchmark output");
-        writeln!(output, "  decision linkage: {}", workload.decision_linkage)
-            .expect("format benchmark output");
-        writeln!(output, "  max duration ms: {}", workload.max_duration_ms)
-            .expect("format benchmark output");
-        writeln!(output, "  max samples: {}", workload.max_samples)
-            .expect("format benchmark output");
-        writeln!(output, "  max temp bytes: {}", workload.max_temp_bytes)
-            .expect("format benchmark output");
-        writeln!(
+        );
+        benchmark_line!(output, "  workload size: {}", workload.workload_size);
+        benchmark_line!(output, "  primary metric: {}", workload.primary_metric);
+        benchmark_line!(output, "  baseline ref: {}", workload.baseline_ref);
+        benchmark_line!(output, "  budget origin: {}", workload.budget_origin);
+        benchmark_line!(output, "  decision linkage: {}", workload.decision_linkage);
+        benchmark_line!(output, "  max duration ms: {}", workload.max_duration_ms);
+        benchmark_line!(output, "  max samples: {}", workload.max_samples);
+        benchmark_line!(output, "  max temp bytes: {}", workload.max_temp_bytes);
+        benchmark_line!(
             output,
             "  budget p50 us: {}",
             workload.budget.max_p50_latency_us
-        )
-        .expect("format benchmark output");
-        writeln!(
+        );
+        benchmark_line!(
             output,
             "  budget p95 us: {}",
             workload.budget.max_p95_latency_us
-        )
-        .expect("format benchmark output");
-        writeln!(
+        );
+        benchmark_line!(
             output,
             "  budget error ppm: {}",
             workload.budget.max_error_rate_ppm
-        )
-        .expect("format benchmark output");
+        );
     }
     output
 }

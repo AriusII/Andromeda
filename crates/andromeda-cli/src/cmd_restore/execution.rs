@@ -10,11 +10,12 @@ use super::{
     RestoreVerifyOutcome,
 };
 use crate::error::cli_error;
-use andromeda_core::AndromedaResult;
-use andromeda_storage::{
-    BackupId, FileBackedBackupArtifactStore, Lsn, RestoreValidationPolicy, plan_replay_segments,
-    validate_restore_artifact_preflight,
+use andromeda_backup::{BackupId, FileBackedBackupArtifactStore};
+use andromeda_error::AndromedaResult;
+use andromeda_restore::{
+    RestoreValidationPolicy, plan_replay_segments, validate_restore_artifact_preflight,
 };
+use andromeda_wal::Lsn;
 
 #[derive(Debug, Clone)]
 struct RestorePreflightOptions {
@@ -38,14 +39,14 @@ pub(crate) fn run_restore_command(args: &[String]) -> AndromedaResult<()> {
         Some("-h" | "--help" | "help") => {
             print_restore_help();
             Ok(())
-        }
+        },
         Some("status") => run_restore_status(&args[1..]),
         Some("verify") => run_restore_verify(&args[1..]),
         Some(_) => run_restore_start(args),
         None => {
             print_restore_help();
             Ok(())
-        }
+        },
     }
 }
 
@@ -223,7 +224,7 @@ fn resolve_restore_pitr_target(
                 ))
             })?;
             Ok(record.manifest.wal_archive.end_inclusive.get())
-        }
+        },
         None => Err(cli_error(
             "restore requires an explicit --pitr-lsn <lsn> or --pitr-policy latest",
         )),

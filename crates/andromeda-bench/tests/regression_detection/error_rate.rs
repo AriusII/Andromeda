@@ -1,4 +1,4 @@
-use andromeda_bench::{BenchmarkBaseline, RegressionAnalysis, RegressionReason};
+use andromeda_regression::{BenchmarkBaseline, RegressionAnalysis, RegressionReason};
 
 #[test]
 fn error_rate_regression_critical() {

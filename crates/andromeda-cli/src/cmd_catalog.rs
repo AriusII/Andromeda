@@ -4,7 +4,7 @@ mod preview;
 mod types;
 
 use crate::error::cli_error;
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 use output::{
     print_cache_invalidation_human, print_cache_invalidation_json, print_catalog_help,
     print_contract_human, print_contract_json, print_manifest_human, print_manifest_json,
@@ -27,14 +27,14 @@ pub fn run_catalog_command(args: &[String]) -> AndromedaResult<()> {
         Some("-h" | "--help" | "help") => {
             print_catalog_help();
             Ok(())
-        }
+        },
         Some(_) => Err(cli_error(
             "unknown catalog subcommand; run `andromeda-cli catalog --help`",
         )),
         None => {
             print_catalog_help();
             Ok(())
-        }
+        },
     }
 }
 
@@ -99,7 +99,7 @@ fn run_resolve_manifest(args: &[String]) -> AndromedaResult<()> {
         ManifestSelector::ProcedureId(procedure_id) => preview_manifest(Some(procedure_id), None),
         ManifestSelector::QualifiedName(qualified_name) => {
             preview_manifest(None, Some(qualified_name.as_str()))
-        }
+        },
     };
 
     if options.json_output {
