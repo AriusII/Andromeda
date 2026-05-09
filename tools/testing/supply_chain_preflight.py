@@ -57,7 +57,7 @@ WATCH_EDGE_PATTERNS = (
     ("crates/**/Cargo.toml", "member dependency and feature declarations"),
     ("deny.toml", "license, source, duplicate, advisory, and ban policy"),
     (
-        "documentations/governance/supply-chain-policy.md",
+        "docs/governance/supply-chain-policy.md",
         "human governance policy for supply-chain release gates",
     ),
     (

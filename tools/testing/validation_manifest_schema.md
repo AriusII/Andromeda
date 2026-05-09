@@ -104,7 +104,7 @@ The `inventory` object contains one object per validation category.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `documentations_markdown_files` | integer | Markdown files under `documentations`, excluding ignored build paths. |
+| `legacy_markdown_files` | integer | Legacy documentation file count; expected to remain `0` after the `/docs` migration. |
 | `docs_markdown_files` | integer | Markdown files under `docs`, excluding ignored build paths. |
 | `top_level_indices` | array of strings | Present documentation index paths from the `docs` category. |
 
@@ -112,7 +112,7 @@ The `inventory` object contains one object per validation category.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `specification_files` | integer | Specification Markdown files under `documentations/specs`, excluding `index.md`. |
+| `specification_files` | integer | Specification Markdown files under `docs/specs`, excluding `README.md`. |
 | `index` | string | Specification index path. |
 | `sample` | array of strings | Up to 12 specification paths for quick inspection. |
 
@@ -155,7 +155,7 @@ Each item in `inventory.fuzz.targets` has these fields.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `runbook_files` | integer | Markdown runbooks under `documentations/operations/runbooks`, excluding `index.md`. |
+| `runbook_files` | integer | Markdown runbooks under `docs/runbooks`, excluding `README.md`. |
 | `index` | string | Runbook index path. |
 | `runbooks` | array of strings | Repository-relative runbook paths. |
 
@@ -223,10 +223,10 @@ If `loom_model_paths` is empty, do not use the manifest to approve concurrency-s
 - `tools/testing/validation_manifest.py`
 - `tools/testing/README.md`
 - `tests/README.md`
-- `documentations/testing/index.md`
-- `documentations/testing/step-11-validation-matrix.md`
-- `documentations/testing/ci-release-gate-evidence.md`
-- `documentations/specs/index.md`
-- `documentations/operations/runbooks/index.md`
+- `docs/testing/README.md`
+- `docs/testing/release-gates.md`
+- `docs/testing/release-gates.md`
+- `docs/specs/README.md`
+- `docs/runbooks/README.md`
 - `tests/fuzzing/targets.toml`
 - `tests/fuzzing/corpus/manifest.toml`

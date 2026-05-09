@@ -23,7 +23,7 @@ Use this index to find the owning fuzz artifacts:
 | Fuzz CI workflow | `.github/workflows/07-fuzzing.yml` |
 | Release smoke workflow | `.github/workflows/release-gate-chain.yml` |
 
-Reference inventory (2026-05-08): `23` fuzz targets and `51` deterministic manifest seeds.
+Reference inventory (2026-05-09): `25` fuzz targets and `53` deterministic manifest seeds.
 
 ## Non-goals
 
@@ -66,5 +66,5 @@ Passing `--check` and smoke-duration fuzz runs confirms registry and harness wir
 - `tests/README.md`
 - `fuzz/README.md`
 - `fuzz/VALIDATION_MATRIX.md`
-- `docs/codex/rust-critical-quality-gates.md`
-- `documentations/testing/step-11-validation-matrix.md`
+- `docs/testing/fuzz-miri-loom.md`
+- `docs/testing/release-gates.md`

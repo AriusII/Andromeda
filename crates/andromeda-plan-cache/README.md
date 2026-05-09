@@ -44,7 +44,7 @@ Future behavior changes should use:
 
 ```powershell
 cargo test -p andromeda-plan-cache
-cargo test -p andromeda-catalog --test catalog_server_runtime_contract -- --nocapture
+cargo test -p andromeda-plan-cache --test plan_invalidation -- --nocapture
 cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture
 ```
 

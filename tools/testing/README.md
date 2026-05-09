@@ -88,7 +88,7 @@ python tools/testing/step11_inventory.py
 python .codex/scripts/validate_codex_tooling.py
 ```
 
-For Rust changes, use the applicable crate-owned gates from `tests/README.md` and `documentations/testing/step-11-validation-matrix.md`.
+For Rust changes, use the applicable crate-owned gates from `tests/README.md` and `docs/testing/release-gates.md`.
 
 ## Troubleshooting
 
@@ -106,10 +106,10 @@ If Loom evidence is reported missing, treat it as a planning gap for concurrency
 ## References
 
 - `tests/README.md`
-- `documentations/testing/step-11-validation-matrix.md`
-- `documentations/testing/ci-release-gate-evidence.md`
-- `documentations/governance/supply-chain-policy.md`
-- `docs/codex/rust-critical-quality-gates.md`
+- `docs/testing/release-gates.md`
+- `docs/testing/release-gates.md`
+- `docs/governance/supply-chain-policy.md`
+- `docs/testing/testing-strategy.md`
 - `fuzz/README.md`
 - `tests/fuzzing/targets.toml`
 - `fuzz/VALIDATION_MATRIX.md`

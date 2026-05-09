@@ -1,6 +1,6 @@
 # C5 CRITICAL TEST DEVELOPMENT SPECIFICATIONS
 **Status**: Week 1-3 Critical Path  
-**Coordinator**: Master Agent 1  
+**Coordinator**: Testing owner
 **Target**: 175+ tests (manifest 40, recovery 100, audit 30, crashes 15)  
 **Timeline**: Weeks 1-3 (May 1-21, 2026)
 
@@ -10,7 +10,7 @@
 
 **Module**: `andromeda-manifest`  
 **Status**: ❌ BLOCKER - 0 tests, need 40+  
-**Impact**: Blocks Wave 2 extraction (manifest + segment + audit)  
+**Impact**: Blocks second extraction group (manifest + segment + audit)
 **Effort**: 2 weeks (assign 2-3 engineers)  
 **Due**: End of Week 2 (May 14, 2026)
 
@@ -101,7 +101,7 @@
 
 **Module**: `andromeda-recovery`  
 **Status**: ❌ BLOCKER - 0 tests, need 100+  
-**Impact**: Blocks Wave 3 extraction + phases 8-11 (week 6, most critical)  
+**Impact**: Blocks third extraction group + phases 8-11 (week 6, most critical)
 **Effort**: 3 weeks (assign 3-4 engineers)  
 **Due**: End of Week 3 (May 21, 2026)
 
@@ -229,7 +229,7 @@ See "BLOCKER 4: Crash Scenarios" below for 18 crash-specific tests
 
 **Module**: `andromeda-audit`  
 **Status**: ❌ BLOCKER - 1 test, need 30+  
-**Impact**: Blocks Wave 2 extraction (audit in cluster)  
+**Impact**: Blocks second extraction group (audit in cluster)
 **Effort**: 2 weeks (assign 2 engineers)  
 **Due**: End of Week 2 (May 14, 2026)
 
@@ -430,19 +430,19 @@ Crashes        15/15      15       ✅ PASS
 ───────────────────────────────────────────────
 TOTAL          185/185    185      ✅ GATE 0 PASS
 
-🚀 EXTRACTION WAVES UNBLOCKED
+EXTRACTION GROUPS UNBLOCKED
 ```
 
 ---
 
 ## IMPLEMENTATION ASSIGNMENT
 
-| Blocker | Lead Team | Size | Timeline | Due |
+| Blocker | Owner | Size | Timeline | Due |
 |---------|-----------|------|----------|-----|
-| Manifest | Sub-Agent 1 | 40 tests | 2 weeks | May 14 |
-| Recovery | Sub-Agent 2 | 100 tests + 15 crashes | 3 weeks | May 21 |
-| Audit | Sub-Agent 3 | 30 tests | 2 weeks | May 14 |
-| Crashes | Sub-Agent 2 | 15 scenarios | 1 week | May 7 |
+| Manifest | Manifest implementation owner | 40 tests | 2 weeks | May 14 |
+| Recovery | Recovery implementation owner | 100 tests + 15 crashes | 3 weeks | May 21 |
+| Audit | Audit implementation owner | 30 tests | 2 weeks | May 14 |
+| Crashes | Recovery implementation owner | 15 scenarios | 1 week | May 7 |
 
 ---
 
@@ -465,8 +465,8 @@ TOTAL          185/185    185      ✅ GATE 0 PASS
 - Crash matrix: All 15 scenarios validated
 - Gate 0 PASS for Recovery + Crashes
 - **TOTAL: 185/185 tests + 15 crash scenarios**
-- **Wave 1 extraction ready (WAL - already passing)**
-- **Wave 2 extraction ready (Manifest + Audit)**
+- **First extraction group ready (WAL - already passing)**
+- **Second extraction group ready (Manifest + Audit)**
 
 ---
 
@@ -475,19 +475,19 @@ TOTAL          185/185    185      ✅ GATE 0 PASS
 ```
 Week 1-2: Parallel test development
 ├── Crashes (1 week) → blocks nothing (feeds into Recovery validation)
-├── Audit (2 weeks) → unblocks Wave 2 extraction
-├── Manifest (2 weeks) → unblocks Wave 2 extraction
-└── Recovery (3 weeks, includes crashes) → unblocks Wave 3 extraction
+├── Audit (2 weeks) -> unblocks second extraction group
+├── Manifest (2 weeks) -> unblocks second extraction group
+└── Recovery (3 weeks, includes crashes) -> unblocks third extraction group
 
 Week 3: Gate 0 validation
-├── Manifest Gate 0: PASS → Wave 2 ready
-├── Audit Gate 0: PASS → Wave 2 ready
-└── Recovery Gate 0: PASS → Wave 3 ready
+├── Manifest Gate 0: PASS -> second extraction group ready
+├── Audit Gate 0: PASS -> second extraction group ready
+└── Recovery Gate 0: PASS -> third extraction group ready
 
-Week 4+: Extraction waves
-├── Wave 1: WAL (ready now, no blocker)
-├── Wave 2: Manifest + Audit (blocked until Gate 0)
-└── Wave 3: Recovery (blocked until Gate 0)
+Week 4+: Extraction groups
+├── First group: WAL (ready now, no blocker)
+├── Second group: Manifest + Audit (blocked until Gate 0)
+└── Third group: Recovery (blocked until Gate 0)
 ```
 
 ---
@@ -503,5 +503,5 @@ Week 4+: Extraction waves
 ---
 
 **Last Updated**: 2026-05-07  
-**Status**: Ready for Sub-Agent Deployment  
-**Next Action**: Deploy 4 sub-agents in parallel (May 1)
+**Status**: Ready for owner assignment
+**Next Action**: Assign 4 implementation owners in parallel (May 1)

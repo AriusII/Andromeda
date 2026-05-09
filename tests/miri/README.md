@@ -36,7 +36,7 @@ The executable tests remain in the owning crate.
 
 ## Concrete Subsets
 
-The May 8, 2026 light subset is documented in `documentations/testing/miri-subset-2026-05-08.md`.
+The May 8, 2026 light subset is documented in `docs/testing/fuzz-miri-loom.md`.
 
 Use it for a bounded dry-run list of memory and codec-sensitive crates that currently avoid heavy build scripts:
 
@@ -83,5 +83,5 @@ If Miri reports undefined behavior in a C4/C5 path, treat the result as a releas
 ## References
 
 - `tests/README.md`
-- `docs/codex/rust-critical-quality-gates.md`
-- `documentations/testing/step-11-validation-matrix.md`
+- `docs/testing/fuzz-miri-loom.md`
+- `docs/testing/release-gates.md`

@@ -1,7 +1,7 @@
 #![no_main]
 
-use andromeda_core::{ColumnDescriptor, ContractHash, ScalarType, TypeDescriptor};
 use andromeda_proto::{StructuredObjectHeader, StructuredObjectLayout};
+use andromeda_types::{ColumnDescriptor, ContractHash, ScalarType, TypeDescriptor};
 use libfuzzer_sys::fuzz_target;
 
 mod common;

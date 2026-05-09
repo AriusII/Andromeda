@@ -166,5 +166,5 @@ Use this table when reviewing unsafe Rust proposals or drift.
 - `docs/AGENTS.md`
 - `docs/adr/ADR-0005-rust-2024-baseline.md`
 - `docs/adr/ADR-0006-mission-critical-validation.md`
-- `documentations/governance/adr-backlog-2026-05-08.md`
-- `documentations/governance/decisions/DEC-026-release-gates-and-deferral-policy.md`
+- `docs/adr/OPEN_DECISIONS.md`
+- `docs/adr/README.md`

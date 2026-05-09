@@ -69,6 +69,6 @@ If a scenario needs nondeterministic timing to pass, move the design back to the
 ## References
 
 - `tests/README.md`
-- `documentations/testing/step-11-validation-matrix.md`
-- `docs/codex/mission-critical-change-policy.md`
-- `docs/codex/rust-critical-quality-gates.md`
+- `docs/testing/release-gates.md`
+- `docs/testing/testing-strategy.md`
+- `docs/governance/release-gates.md`

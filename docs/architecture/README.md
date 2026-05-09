@@ -1,49 +1,35 @@
 # Architecture
 
-This directory contains high-level architectural documentation for Andromeda.
+This directory is the canonical `/docs` surface for Andromeda architecture.
+It consolidates the current workspace structure, crate ownership boundaries,
+dependency policy, and durable-system invariants.
 
-## Purpose
+## Canonical documents
 
-Architecture documents describe:
-- System design and module boundaries
-- Engine responsibilities and subsystem architecture
-- Anti-patterns and what NOT to do
-- Cross-document consistency and invariants
+| Document | Purpose |
+| --- | --- |
+| [Overview](overview.md) | System planes, criticality scale, global invariants, and architectural anti-patterns. |
+| [Workspace Topology](workspace-topology.md) | Current workspace package groups, owner surfaces, broad crates, and validation commands. |
+| [Dependency Policy](dependency-policy.md) | Ring direction, temporary facades, topology gates, and dependency review rules. |
 
-## Contents
+## Supporting material
 
-### System Design
+[Cargo Dependency Matrix](CARGO_DEPENDENCY_MATRIX.md) is retained as generated
+supporting evidence. The canonical policy is the dependency policy above.
 
-- **module-boundaries.md** - Crate ownership, dependencies, anti-patterns
-- **engine-responsibilities.md** - What each engine component owns
-- **subsystem-architecture.md** - Deep dives into specific subsystems (WAL, storage, catalog, SRPL, RPC, MVCC)
+## Cross-references
 
-### Core Invariants
+- ADRs under `docs/adr/` record decision history.
+- Domain specifications under `docs/specs/` define formal subsystem contracts.
+- Runbooks under `docs/runbooks/` cover operational procedure.
 
-- **invariants.md** - Non-negotiable project rules
-- **transaction-model.md** - MVCC, isolation levels, recovery semantics
-- **wal-contract.md** - Write-ahead log design and durability guarantees
-- **procedure-model.md** - Typed procedure contracts and execution
+## Non-negotiable boundaries
 
-### Integration Points
-
-- **rpc-surface.md** - QUIC-only RPC protocol, no gRPC
-- **catalog-contract.md** - Catalog descriptors, versioning, dependencies
-- **security-model.md** - Authentication, authorization, audit trails
-
-## Cross-References
-
-- ADRs (docs/adr/) for decision history
-- Specifications (docs/specifications/) for formal specs
-- Runbooks (docs/runbooks/) for operational guidance
-
-## Anti-Patterns
-
-DO NOT:
-1. Introduce ad hoc SQL (procedures only)
-2. Bypass typed procedure contracts
-3. Commit before durable WAL
-4. Place GPU work in commit/WAL/recovery paths
-5. Serialize Rust structs directly to disk
-6. Use dynamic table names/implicit null semantics in SRPL
-7. Expose Admin/HA capabilities through Application Surface
+1. No ad hoc SQL invocation surface; typed Procedures and SRPL-derived
+   contracts are the accepted path.
+2. No visible commit before durable WAL evidence.
+3. No dirty page flush beyond durable WAL coverage.
+4. No Rust native layout as durable or network format.
+5. No GPU, benchmark, statistics, or plan evidence as durable truth.
+6. No Administration, HA/DR, BackupAgent, or Forensic operation through the
+   Application surface.

@@ -221,8 +221,8 @@ python -B tools/testing/release_evidence.py --json
 Check ASCII and trailing whitespace on the release evidence files:
 
 ```powershell
-rg -n "[^\x00-\x7F]" tools/testing/release_evidence.py tools/testing/release_evidence_schema.md documentations/testing/release-evidence-template.md documentations/testing/index.md
-rg -n "[ \t]$" tools/testing/release_evidence.py tools/testing/release_evidence_schema.md documentations/testing/release-evidence-template.md documentations/testing/index.md
+rg -n "[^\x00-\x7F]" tools/testing/release_evidence.py tools/testing/release_evidence_schema.md docs/testing/release-evidence-template.md docs/testing/README.md
+rg -n "[ \t]$" tools/testing/release_evidence.py tools/testing/release_evidence_schema.md docs/testing/release-evidence-template.md docs/testing/README.md
 ```
 
 Validate documentation links after updates with a local Markdown link check that resolves repository-relative paths and same-directory links.
@@ -246,7 +246,7 @@ If `--strict` exits with status 1, inspect supplied `fail` and `gap` records. St
 - `tools/testing/README.md`
 - `tools/testing/validation_manifest.py`
 - `tools/testing/validation_manifest_schema.md`
-- `documentations/testing/index.md`
-- `documentations/testing/release-evidence-template.md`
-- `documentations/testing/ci-release-gate-evidence.md`
-- `documentations/testing/step-11-validation-matrix.md`
+- `docs/testing/README.md`
+- `docs/testing/release-evidence-template.md`
+- `docs/testing/release-gates.md`
+- `docs/testing/release-gates.md`

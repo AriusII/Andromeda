@@ -1,64 +1,26 @@
 # Runbooks
 
-This directory contains operational runbooks for Andromeda deployment, maintenance, and incident response.
+This directory is the `/docs` home for concise operational response guides.
+Runbooks describe containment and evidence expectations; they do not define new
+runtime behavior or stable CLI contracts.
 
-## Purpose
+## Runbook Index
 
-Runbooks provide:
-- Step-by-step operational procedures
-- Incident response playbooks
-- Troubleshooting guides
-- Recovery procedures
+| Situation | Runbook | Primary risk |
+| --- | --- | --- |
+| Backup validation, restore drill, PITR, retention hold | `backup-restore.md` | Untested backup, incomplete WAL replay, or unsafe opening. |
+| Planned or unplanned HA/DR failover | `hadr.md` | Split brain, stale promotion, missing quorum, or missing fencing. |
+| Corruption suspicion or unsafe startup evidence | `corruption.md` | Silent corruption or replay past a corruption boundary. |
+| Slow query, slow client, benchmark triage, resource pressure | `performance.md` | Misreading advisory diagnostics as durable truth. |
+| WAL queue growth, flush latency, retention pressure | `wal-pressure.md` | Visible commit before durable WAL or unsafe WAL truncation. |
+| Replica lag, RPO/RTO risk, promotion eligibility | `replica-lag.md` | Stale promotion, broken retention, or split brain. |
 
-## Contents
+## Operating Rules
 
-### Startup and Shutdown
-
-- **startup-modes.md** - FastStart, SafeStart, ForensicStart procedures
-- **shutdown-procedures.md** - Graceful shutdown, emergency shutdown
-- **bootstrap-new-instance.md** - Initial deployment and configuration
-
-### Backup and Recovery
-
-- **backup-and-restore.md** - Backup policies, restore procedures, PITR workflow
-- **disaster-recovery.md** - Full site recovery, failover, switchback
-- **point-in-time-recovery.md** - PITR restore to specific timestamp
-
-### High Availability and Disaster Recovery
-
-- **hadr-failover.md** - Primary failure detection, replica promotion, quorum recovery
-- **replication-procedures.md** - Replica startup, WAL shipping, catch-up synchronization
-- **split-brain-prevention.md** - Fencing, quorum, epoch handling
-
-### Maintenance
-
-- **index-maintenance.md** - Index rebuild, defragmentation, ANALYZE statistics
-- **wal-archival.md** - WAL rotation, archival retention, cleanup
-- **coldstore-management.md** - Segment migration, archive policies
-
-### Troubleshooting
-
-- **performance-diagnosis.md** - Slow queries, lock contention, buffer pool issues
-- **corruption-detection.md** - Corruption symptoms, forensic startup, remediation
-- **replication-lag.md** - Detecting and resolving replication lag
-- **consistency-checks.md** - Running consistency checks, repair procedures
-
-### Security
-
-- **user-and-privilege-management.md** - User creation, privilege grants, audit logging
-- **tls-certificate-management.md** - Certificate rotation, renewal, troubleshooting
-- **audit-trail-review.md** - Audit log queries, compliance reporting
-
-## Format
-
-Each runbook:
-- Has clear prerequisites
-- Lists estimated duration
-- Provides step-by-step instructions with checkpoints
-- Includes rollback procedures
-- Includes validation/verification steps
-
-## Cross-References
-
-- Architecture (docs/architecture/) for design context
-- Specifications (docs/specifications/) for detailed semantics
+- Preserve WAL, audit, manifest, backup, restore, and cluster evidence before
+  destructive remediation.
+- Keep Administration and HA/DR controls off the Application Surface.
+- Treat command examples as evidence shapes unless the runtime owner has proven
+  the command in source and tests.
+- Record residual risk when a step is a dry run, contract preview, or planned
+  gap.

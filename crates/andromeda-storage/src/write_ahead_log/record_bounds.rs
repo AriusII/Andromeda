@@ -9,6 +9,3 @@ pub use andromeda_wal::{
     validate_lsn_continuity, validate_record_size, validate_segment_boundary,
     validate_transaction_batch_cardinality, validate_wal_batch_bounds, validate_wal_record_bounds,
 };
-
-#[cfg(test)]
-mod tests;

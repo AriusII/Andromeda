@@ -294,4 +294,4 @@ jobs:
 
 - Test Matrix: `docs/TEST_COVERAGE_MATRIX.md`
 - Fuzz Targets: `fuzz/README.md`
-- Acceptance Criteria: `docs/PHASE_ACCEPTANCE_CRITERIA.md`
+- Release Gates: `docs/testing/release-gates.md`

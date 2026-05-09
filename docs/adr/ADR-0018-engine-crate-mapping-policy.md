@@ -60,11 +60,11 @@ Before using this ADR for an implementation packet, read:
 - `docs/adr/ADR-0015-wal-commit-visibility.md`
 - `docs/adr/ADR-0016-gpu-exclusion-critical-paths.md`
 - `crates/README.md`
-- `documentations/architecture/dependency-edge-matrix-2026-05-08.md`
-- `documentations/architecture/module-criticality-c0-c5-2026-05-08.md`
-- `documentations/architecture/module-inventory-2026-05-08.md`
-- `documentations/architecture/reexport-migration-ledger-2026-05-08.md`
-- `documentations/architecture/engine-crate-mapping-2026-05-08.md`
+- `docs/architecture/dependency-policy.md`
+- `docs/CRITICALITY_MATRIX.md`
+- `docs/MODULES_INVENTORY.md`
+- `docs/REEXPORT_MIGRATION_POLICY.md`
+- `docs/architecture/workspace-topology.md`
 
 If the worktree is dirty, capture a path-specific status and avoid release
 claims.
@@ -298,12 +298,12 @@ owning subsystem.
 - `docs/adr/ADR-0011-workspace-crate-boundaries.md`
 - `docs/adr/ADR-0015-wal-commit-visibility.md`
 - `docs/adr/ADR-0016-gpu-exclusion-critical-paths.md`
-- `documentations/01_DOCTRINE_LEXIQUE_ARCHITECTURE_CATALOGUE_MODELIZATION.md`
-- `documentations/architecture/WORKSPACE_RESTRUCTURE_BASELINE_2026.md`
-- `documentations/architecture/dependency-edge-matrix-2026-05-08.md`
-- `documentations/architecture/module-criticality-c0-c5-2026-05-08.md`
-- `documentations/architecture/module-inventory-2026-05-08.md`
-- `documentations/architecture/reexport-migration-ledger-2026-05-08.md`
-- `documentations/architecture/engine-crate-mapping-2026-05-08.md`
-- `documentations/governance/adr-backlog-2026-05-08.md`
-- `documentations/implementation/target-crate-gap-ledger-2026-05-08.md`
+- `docs/architecture/overview.md`
+- `docs/architecture/workspace-topology.md`
+- `docs/architecture/dependency-policy.md`
+- `docs/CRITICALITY_MATRIX.md`
+- `docs/MODULES_INVENTORY.md`
+- `docs/REEXPORT_MIGRATION_POLICY.md`
+- `docs/architecture/workspace-topology.md`
+- `docs/adr/OPEN_DECISIONS.md`
+- `docs/implementation/extraction-status.md`

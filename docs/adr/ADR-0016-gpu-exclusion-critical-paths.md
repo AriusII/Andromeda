@@ -66,13 +66,13 @@ active decisions and invariants:
   security, catalog, and RPC changes.
 - ADR-0011 keeps durable kernel crate boundaries explicit and prevents
   accidental dependency drift.
-- `ROADMAP_IMPLEMENTATION_2026.md` keeps GPU optional, future-facing, and off
+- `docs/implementation/roadmap.md` keeps GPU optional, future-facing, and off
   critical paths.
-- `WORKER_EXECUTION_MATRIX_2026.md` keeps no GPU on commit, WAL, rollback,
+- `docs/testing/release-gates.md` keeps no GPU on commit, WAL, rollback,
   recovery, MVCC visibility, or security-critical paths as active doctrine.
-- `wal-pressure.md` states that WAL pressure must suspend non-critical GPU and
+- `docs/runbooks/wal-pressure.md` states that WAL pressure must suspend non-critical GPU and
   analytics work before weakening durable WAL behavior.
-- `adr-backlog-2026-05-08.md` identifies GPU exclusion from critical paths as a
+- `docs/adr/OPEN_DECISIONS.md` identifies GPU exclusion from critical paths as a
   P0 ADR candidate.
 
 ## Decision
@@ -195,10 +195,10 @@ hardware documentation.
 - `docs/AGENTS.md`
 - `docs/adr/ADR-0006-mission-critical-validation.md`
 - `docs/adr/ADR-0011-workspace-crate-boundaries.md`
-- `documentations/ROADMAP_IMPLEMENTATION_2026.md`
-- `documentations/WORKER_EXECUTION_MATRIX_2026.md`
-- `documentations/governance/adr-backlog-2026-05-08.md`
-- `documentations/operations/runbooks/wal-pressure.md`
-- `documentations/operations/benchmarking.md`
-- `documentations/specs/DefinitionBatch_v0.md`
-- `documentations/specs/CatalogObjectModel_v0.md`
+- `docs/implementation/roadmap.md`
+- `docs/implementation/roadmap.md`
+- `docs/adr/OPEN_DECISIONS.md`
+- `docs/runbooks/wal-pressure.md`
+- `docs/runbooks/performance.md`
+- `docs/specs/catalog-srpl.md`
+- `docs/specs/catalog-srpl.md`

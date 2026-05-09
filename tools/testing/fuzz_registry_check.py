@@ -484,6 +484,10 @@ def validate_filesystem(root: Path, registry: Registry, errors: list[str]) -> No
 
 
 def validate_workflow(root: Path, registry: Registry, errors: list[str]) -> None:
+    github_dir = root / ".github"
+    if not github_dir.exists():
+        return
+
     workflow_path = root / WORKFLOW_PATH
     if not workflow_path.is_file():
         errors.append(f"missing workflow: {WORKFLOW_PATH}")

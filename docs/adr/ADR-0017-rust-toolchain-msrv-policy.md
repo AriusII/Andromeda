@@ -49,12 +49,12 @@ Use these sources when applying this policy:
   `rust-version = "1.95.0"`.
 - `rust-toolchain.toml` currently pins `channel = "1.95.0"` with `clippy` and
   `rustfmt` components.
-- `documentations/governance/msrv-dependency-risk-2026-05-08.md` records the
+- `docs/governance/supply-chain-policy.md` records the
   retired Rust 1.85 compatibility risk and the active Rust 1.95.0 dependency
   evidence requirement.
-- `documentations/governance/supply-chain-policy.md` defines dependency
+- `docs/governance/supply-chain-policy.md` defines dependency
   admission and supply-chain gates.
-- `documentations/governance/release-readiness-gates-2026-05-08.md` blocks
+- `docs/governance/release-gates.md` blocks
   release readiness until Rust 1.95.0 and dependency compatibility are validated
   with retained evidence.
 
@@ -213,10 +213,10 @@ inspection of:
 - `docs/adr/ADR-0005-rust-2024-baseline.md`;
 - `Cargo.toml`;
 - `rust-toolchain.toml`;
-- `documentations/governance/msrv-dependency-risk-2026-05-08.md`;
-- `documentations/governance/supply-chain-policy.md`;
-- `documentations/governance/release-readiness-gates-2026-05-08.md`;
-- `documentations/governance/adr-backlog-2026-05-08.md`.
+- `docs/governance/supply-chain-policy.md`;
+- `docs/governance/supply-chain-policy.md`;
+- `docs/governance/release-gates.md`;
+- `docs/adr/OPEN_DECISIONS.md`.
 
 No Rust build, Cargo test, lockfile update, dependency update, or tooling change
 is approved by this ADR alone.
@@ -264,7 +264,7 @@ Revise this ADR if:
 - `Cargo.toml`
 - `rust-toolchain.toml`
 - `Cargo.lock`
-- `documentations/governance/msrv-dependency-risk-2026-05-08.md`
-- `documentations/governance/supply-chain-policy.md`
-- `documentations/governance/release-readiness-gates-2026-05-08.md`
-- `documentations/governance/adr-backlog-2026-05-08.md`
+- `docs/governance/supply-chain-policy.md`
+- `docs/governance/supply-chain-policy.md`
+- `docs/governance/release-gates.md`
+- `docs/adr/OPEN_DECISIONS.md`

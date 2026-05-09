@@ -67,13 +67,13 @@ active decisions and invariants:
   security, catalog, and RPC changes.
 - ADR-0011 keeps visible commit tied to durable WAL and preserves cold snapshot
   plus durable WAL as recovery truth.
-- `ROADMAP_IMPLEMENTATION_2026.md` states that no visible mutation exists
+- `docs/implementation/roadmap.md` states that no visible mutation exists
   without durable WAL and that reconstructible truth is the last valid cold
   snapshot plus durable WAL.
-- `WORKER_EXECUTION_MATRIX_2026.md` treats visible commit without durable WAL
+- `docs/testing/release-gates.md` treats visible commit without durable WAL
   as a release blocker and records explicit durable LSN evidence as active
   transaction work.
-- `adr-backlog-2026-05-08.md` identifies WAL, commit visibility, and
+- `docs/adr/OPEN_DECISIONS.md` identifies WAL, commit visibility, and
   `DurableCommitEvidence` as a P0 ADR candidate.
 
 ## Decision
@@ -200,10 +200,10 @@ documentation.
 - `docs/AGENTS.md`
 - `docs/adr/ADR-0006-mission-critical-validation.md`
 - `docs/adr/ADR-0011-workspace-crate-boundaries.md`
-- `documentations/ROADMAP_IMPLEMENTATION_2026.md`
-- `documentations/WORKER_EXECUTION_MATRIX_2026.md`
-- `documentations/governance/adr-backlog-2026-05-08.md`
-- `documentations/operations/runbooks/wal-pressure.md`
-- `documentations/specs/WalRecord_v0.md`
-- `documentations/specs/RecoveryReport_v0.md`
-- `documentations/specs/CatalogObjectModel_v0.md`
+- `docs/implementation/roadmap.md`
+- `docs/implementation/roadmap.md`
+- `docs/adr/OPEN_DECISIONS.md`
+- `docs/runbooks/wal-pressure.md`
+- `docs/specs/storage-wal.md`
+- `docs/specs/transaction-recovery.md`
+- `docs/specs/catalog-srpl.md`

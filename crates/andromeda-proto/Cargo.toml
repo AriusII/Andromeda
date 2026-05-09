@@ -15,7 +15,6 @@ andromeda-types.workspace = true
 prost = "0.14.3"
 
 [dev-dependencies]
-andromeda-rpc-protocol.workspace = true
 prost-types = "0.14.3"
 proptest.workspace = true
 

@@ -18,12 +18,12 @@ implemented Admin RPC audit read endpoint, or audit records as database truth.
 
 This ADR applies to documentation and specification acceptance for:
 
-- `documentations/specs/FrameHeader_RPC_v0.md`
-- `documentations/specs/SecurityAdmission_v0.md`
-- `documentations/specs/AuditLedger_v0.md`
-- `documentations/governance/decisions/DEC-040-rpc-quic-security-boundary.md`
-- `documentations/governance/decisions/DEC-041-security-contract-boundary.md`
-- Lot 5 references in the implementation roadmap and worker execution matrix
+- `docs/specs/rpc-security-audit.md`
+- `docs/specs/rpc-security-audit.md`
+- `docs/specs/rpc-security-audit.md`
+- `docs/adr/README.md`
+- `docs/adr/README.md`
+- Lot 5 references in the implementation roadmap and planning matrix
 
 The accepted documentation boundary is additive. This ADR is documentation
 acceptance only; it does not approve or reject Rust, fuzz, CI, or test changes
@@ -145,11 +145,11 @@ Use this section when reviewing or updating Lot 5 documentation.
 - `AGENTS.md`
 - `docs/AGENTS.md`
 - `docs/adr/ADR-0011-workspace-crate-boundaries.md`
-- `documentations/governance/decisions/DEC-017-quic-runtime-dependency.md`
-- `documentations/governance/decisions/DEC-021-protobuf-schema-contract.md`
-- `documentations/governance/decisions/DEC-033-durable-audit-ledger.md`
-- `documentations/governance/decisions/DEC-040-rpc-quic-security-boundary.md`
-- `documentations/governance/decisions/DEC-041-security-contract-boundary.md`
-- `documentations/specs/FrameHeader_RPC_v0.md`
-- `documentations/specs/SecurityAdmission_v0.md`
-- `documentations/specs/AuditLedger_v0.md`
+- `docs/adr/README.md`
+- `docs/adr/README.md`
+- `docs/adr/README.md`
+- `docs/adr/README.md`
+- `docs/adr/README.md`
+- `docs/specs/rpc-security-audit.md`
+- `docs/specs/rpc-security-audit.md`
+- `docs/specs/rpc-security-audit.md`

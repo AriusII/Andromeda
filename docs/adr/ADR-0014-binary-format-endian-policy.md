@@ -187,8 +187,8 @@ Use this table when reviewing binary format changes.
 - `docs/AGENTS.md`
 - `docs/adr/ADR-0011-workspace-crate-boundaries.md`
 - `docs/adr/ADR-0012-quic-rpc-no-grpc.md`
-- `documentations/governance/adr-backlog-2026-05-08.md`
-- `documentations/governance/decisions/DEC-021-protobuf-schema-contract.md`
-- `documentations/governance/decisions/DEC-026-release-gates-and-deferral-policy.md`
-- `documentations/governance/decisions/DEC-032-storage-format-gate.md`
-- `documentations/specs/FrameHeader_RPC_v0.md`
+- `docs/adr/OPEN_DECISIONS.md`
+- `docs/adr/README.md`
+- `docs/adr/README.md`
+- `docs/adr/README.md`
+- `docs/specs/rpc-security-audit.md`

@@ -76,4 +76,4 @@ Runtime changes must include tests for contract-first invocation, handler lookup
 - `crates/README.md`
 - `crates/andromeda-exec/README.md`
 - `docs/adr/ADR-0018-engine-crate-mapping-policy.md`
-- `documentations/implementation/target-crate-gap-ledger-2026-05-08.md`
+- `docs/implementation/extraction-status.md`

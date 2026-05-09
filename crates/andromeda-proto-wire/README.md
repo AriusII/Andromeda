@@ -2,12 +2,12 @@
 
 ## Purpose
 
-`andromeda-proto-wire` owns wire-level protobuf integration helpers that can stay independent
-from the historical `andromeda-proto` compatibility surface.
+`andromeda-proto-wire` owns wire-level protobuf integration helpers, generated-like DTO adapters, and envelope/payload validation independent from the historical `andromeda-proto` compatibility surface.
 
 ## Scope
 
 - Owns generated or generated-like protobuf adapter boundaries for external interfaces.
+- Owns FrameEnvelope and payload-kind wire validation, including malformed byte classification and generated message projection.
 - Holds typed DTO mappings used by protocol-facing clients.
 - Defines deterministic protobuf codec shims, descriptor hashing helpers, and generated
   metadata bound checks used by protocol-facing projections.

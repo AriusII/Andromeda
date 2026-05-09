@@ -7,9 +7,7 @@ use andromeda_storage_page::{
     PageLayoutContract, PageSize, PageStore, PageTrailer, PageType,
 };
 
-const PAGE_LIFECYCLE_SPEC: &str = include_str!("../../../documentations/specs/PageLifecycle_v0.md");
-const BUFFER_POOL_POLICY_SPEC: &str =
-    include_str!("../../../documentations/specs/BufferPoolPolicy_v0.md");
+const STORAGE_WAL_SPEC: &str = include_str!("../../../docs/specs/storage-wal.md");
 
 fn valid_contract(page_id: PageId, page_lsn: Lsn) -> PageLayoutContract {
     PageLayoutContract {
@@ -133,16 +131,18 @@ fn dirty_page_is_not_flushed_or_cleaned_before_wal_durable() {
 }
 
 #[test]
-fn lifecycle_specs_mark_missing_runtime_owners_honestly() {
-    assert!(PAGE_LIFECYCLE_SPEC.contains("Missing implementation owner: read-ahead scheduler"));
-    assert!(PAGE_LIFECYCLE_SPEC.contains("Missing implementation owner: checkpoint scheduler"));
-    assert!(
-        PAGE_LIFECYCLE_SPEC.contains("Missing implementation owner: commit visibility coordinator")
-    );
-    assert!(PAGE_LIFECYCLE_SPEC.contains("No visible commit before durable WAL"));
-    assert!(BUFFER_POOL_POLICY_SPEC.contains("Read-ahead is advisory only"));
-    assert!(
-        BUFFER_POOL_POLICY_SPEC
-            .contains("The buffer pool is not the commit visibility coordinator")
-    );
+fn storage_spec_preserves_page_and_buffer_pool_gates() {
+    assert!(STORAGE_WAL_SPEC.contains(
+        "Dirty page flush requires durable WAL coverage for the page's latest dirty LSN."
+    ));
+    assert!(STORAGE_WAL_SPEC.contains(
+        "Read-ahead | Advisory clean prefetch only; it must not affect visibility"
+    ));
+    assert!(STORAGE_WAL_SPEC.contains(
+        "The buffer pool must report blocked dirty pages when WAL is behind and must keep them dirty."
+    ));
+    assert!(STORAGE_WAL_SPEC.contains(
+        "`flush_all_dirty` must not silently accept dirty pages when no WAL durability observer is available."
+    ));
+    assert!(STORAGE_WAL_SPEC.contains("Storage tests must prove WAL-before-page-flush."));
 }

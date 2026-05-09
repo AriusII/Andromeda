@@ -2,9 +2,9 @@
 
 ## Purpose
 
-`andromeda-proto` owns Andromeda's generated Protobuf message boundary and runtime-free validation helpers for protocol payloads, Procedure manifests, typed envelopes, result streams, completion metadata, and structured payload projection.
+`andromeda-proto` owns Andromeda's generated Protobuf schema boundary: crate-local `.proto` sources, prost output, descriptor bytes, schema hashes, and governance checks.
 
-This crate provides message schemas and generated-message validation. It does not define a gRPC service, a JSON runtime, or an application command surface. Andromeda RPC remains a custom typed protocol over explicit frames and QUIC transport.
+This crate provides message schemas and generated module access. Runtime validation and wire behavior are owned by `andromeda-proto-wire`, `andromeda-rpc-protocol`, and `andromeda-rpc-codec`. It does not define a gRPC service, a JSON runtime, or an application command surface. Andromeda RPC remains a custom typed protocol over explicit frames and QUIC transport.
 
 ## Scope
 
@@ -13,11 +13,10 @@ This crate is responsible for:
 | Area | Responsibility |
 | --- | --- |
 | Protobuf schemas | Message-only `.proto` files under `proto/andromeda/...`, compiled through `prost-build`. |
-| Generated projection | Generated message exports, descriptor set bytes, descriptor set hashing, and generated frame-envelope projection. |
-| Invocation payloads | Validation for `RpcExecuteRequest`, invocation response sequences, typed payload kinds, and frame envelope contents. |
-| Procedure manifests | Runtime-free Procedure manifest descriptors, required permissions, protocol layout, policy version, result stream descriptors, and manifest hashing. |
-| Completion and errors | Structured completion status, transaction outcome, row-count summaries, error envelopes, retry disposition, and backpressure metadata. |
-| Structured payloads | Compatibility projection for StructuredObject headers and payload bounds. |
+| Generated boundary | Generated message exports, descriptor set bytes, descriptor set hashing, and compatibility reexports while callers migrate to owner crates. |
+| Procedure manifests | Schema declarations for Procedure manifest descriptors, required permissions, protocol layout, policy version, result stream descriptors, and manifest hashing. |
+| Completion and errors | Schema declarations for structured completion status, transaction outcome, row-count summaries, error envelopes, retry disposition, and backpressure metadata. |
+| Structured payloads | Schema declarations for StructuredObject headers and payload bounds. |
 
 The crate sits at the protocol schema boundary. It can say which bytes are valid generated messages, but it does not open sockets, route QUIC streams, authorize principals, execute Procedures, write WAL, or decide storage truth.
 
@@ -45,7 +44,7 @@ Before changing this crate, understand:
 
 1. Add or update message schemas under the crate-local `proto/` tree.
 2. Keep new schemas message-only. Do not add service definitions or RPC method declarations.
-3. Run generated-message validation through explicit Rust validators. Reject malformed, truncated, or semantically invalid messages with typed protocol or contract errors.
+3. Keep generated-message validation in the owning protocol crates. `andromeda-proto-wire` owns envelope and payload validation; `andromeda-rpc-protocol` owns frame and stream invariants; `andromeda-rpc-codec` owns typed frame/envelope codec helpers.
 4. Keep Procedure invocation payloads bound to `procedure_name`, expected contract hash, expected catalog version, expected stats version, surface scope, and structured arguments.
 5. Keep manifest resolution explicit. A Procedure manifest must carry protocol layout, required permissions, result stream descriptors, policy version, contract hash, catalog version, and stats version.
 6. When adding a payload kind or frame envelope projection, update lockstep tests with `andromeda-rpc-protocol` and `andromeda-quic`.
@@ -64,7 +63,7 @@ cargo test -p andromeda-proto --test protocol_contract
 cargo check -p andromeda-proto --all-targets
 ```
 
-If schemas change, include compatibility evidence for generated descriptors, deterministic serialization, malformed input handling, and frame/result-stream projection.
+If schemas change, include compatibility evidence for generated descriptors and deterministic serialization. Malformed input handling and frame/result-stream projection evidence belongs with the protocol owner crates.
 
 ## Troubleshooting
 

@@ -2,9 +2,9 @@
 
 ## Purpose
 
-`andromeda-statistics` owns versioned statistics descriptors, histogram summaries, skew metadata, correlation evidence, and optimizer-use contracts.
+`andromeda-statistics` owns versioned statistics descriptors, histogram summaries, skew metadata, correlation evidence, publication switching, and optimizer-use contracts.
 
-The crate exposes statistics builders, publication digests, descriptors, stale-use policy, and DecisionTrace-backed optimizer-use decisions. Catalog remains responsible for active publication switching where catalog-local ScenarioEvidence is still required.
+The crate exposes statistics builders, publication digests, publication-switch traces, descriptors, stale-use policy, and DecisionTrace-backed optimizer-use decisions.
 
 ## Scope
 
@@ -26,7 +26,7 @@ This crate is expected to own:
 
 ## Prerequisites
 
-- Keep catalog publication switching and catalog-local ScenarioEvidence integrations outside this crate until a registered extraction work order moves them.
+- Keep catalog publication truth outside this crate; statistics publication switch evidence belongs here.
 - Bind every published statistics view to explicit catalog, contract, policy, and statistics versions.
 - Require CPU fallbacks for any future acceleration path.
 - Treat benchmark and ScenarioEvidence input as advisory only.
@@ -45,7 +45,7 @@ Future behavior changes should use:
 
 ```powershell
 cargo test -p andromeda-statistics
-cargo test -p andromeda-catalog --test catalog_publication_subscription -- --nocapture
+cargo test -p andromeda-statistics --test stats_publication_switch_tests -- --nocapture
 cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture
 ```
 

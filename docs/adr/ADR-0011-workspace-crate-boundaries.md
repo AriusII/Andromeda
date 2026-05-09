@@ -149,5 +149,5 @@ Another risk is that crate names may change before the topology test is updated.
 - `docs/AGENTS.md`
 - `Cargo.toml`
 - `crates/README.md`
-- `documentations/governance/decisions/DEC-011-rust-workspace-topology.md`
-- `documentations/governance/decisions/DEC-014-rust-crate-module-structure.md`
+- `docs/adr/README.md`
+- `docs/adr/README.md`

@@ -75,4 +75,4 @@ Runtime changes must include tests proving admission before transaction, no tran
 - `crates/README.md`
 - `crates/andromeda-exec/README.md`
 - `docs/adr/ADR-0018-engine-crate-mapping-policy.md`
-- `documentations/implementation/target-crate-gap-ledger-2026-05-08.md`
+- `docs/implementation/extraction-status.md`

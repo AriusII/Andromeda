@@ -25,6 +25,3 @@ pub fn validate_wal_durability_before_page_flush(
     page_validate_wal_durability_before_page_flush(page_lsn, wal_durable_lsn)
         .map_err(|error| storage_error(error.to_string()))
 }
-
-#[cfg(test)]
-mod tests;

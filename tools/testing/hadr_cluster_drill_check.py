@@ -15,22 +15,22 @@ from typing import Sequence
 DEFAULT_ROOT = Path(__file__).resolve().parents[2]
 
 EVIDENCE_DOCUMENTS = (
-    Path("documentations/operations/runbooks/hadr-failover.md"),
-    Path("documentations/operations/runbooks/index.md"),
-    Path("documentations/testing/step-11-validation-matrix.md"),
+    Path("docs/runbooks/hadr.md"),
+    Path("docs/runbooks/README.md"),
+    Path("docs/testing/release-gates.md"),
 )
 
 REQUIRED_PATHS = (
-    "documentations/operations/runbooks/hadr-failover.md",
-    "documentations/operations/runbooks/index.md",
-    "documentations/testing/step-11-validation-matrix.md",
+    "docs/runbooks/hadr.md",
+    "docs/runbooks/README.md",
+    "docs/testing/release-gates.md",
     "crates/andromeda-storage/tests/hadr_promotion_runtime_contract.rs",
     "crates/andromeda-storage/tests/hadr_membership_store_contract.rs",
     "crates/andromeda-storage/tests/quorum_membership_contract.rs",
     "crates/andromeda-storage/tests/wal_shipping_reclaimability_contract.rs",
     "crates/andromeda-storage/tests/promotion_boundary_contract.rs",
     "crates/andromeda-quic/tests/hadr_stream_mapping_contract.rs",
-    "crates/andromeda-observe/tests/hadr_backup_audit_contract.rs",
+    "crates/andromeda-audit/tests/hadr_backup_audit_contract.rs",
     "crates/andromeda-storage/src/hadr",
     "crates/andromeda-cli/src/hadr",
     "crates/andromeda-quic/src/hadr_streams.rs",
@@ -42,25 +42,25 @@ EXPECTED_COMMANDS = (
     "cargo test -p andromeda-storage --test quorum_membership_contract --locked -- --nocapture",
     "cargo test -p andromeda-storage --test wal_shipping_reclaimability_contract --locked -- --nocapture",
     "cargo test -p andromeda-quic --test hadr_stream_mapping_contract --locked -- --nocapture",
-    "cargo test -p andromeda-observe --test hadr_backup_audit_contract --locked -- --nocapture",
+    "cargo test -p andromeda-audit --test hadr_backup_audit_contract --locked -- --nocapture",
 )
 
 EXPECTED_DOC_TOKENS = (
     (
-        "documentations/operations/runbooks/hadr-failover.md",
-        "hadr_cluster_drill_check.py",
+        "docs/runbooks/hadr.md",
+        "HA/DR controls are available only through Administration or HA/DR surfaces.",
     ),
     (
-        "documentations/operations/runbooks/hadr-failover.md",
-        "does not start nodes, open sockets, publish cluster manifests, or fence a real primary",
+        "docs/runbooks/hadr.md",
+        "cargo test -p andromeda-audit --test hadr_backup_audit_contract",
     ),
     (
-        "documentations/operations/runbooks/index.md",
-        "hadr_cluster_drill_check.py",
+        "docs/runbooks/README.md",
+        "Planned or unplanned HA/DR failover",
     ),
     (
-        "documentations/testing/step-11-validation-matrix.md",
-        "Local cluster simulation, fencing proof under partition, and failover-with-recovery transcript remain release blockers",
+        "docs/testing/release-gates.md",
+        "Backup/PITR/HA/DR",
     ),
 )
 

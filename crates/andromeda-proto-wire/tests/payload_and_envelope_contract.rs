@@ -13,3 +13,5 @@ mod fixtures;
 mod generated_runtime_projection;
 #[path = "wire/payload_and_envelope_contract/payload_kind_codes.rs"]
 mod payload_kind_codes;
+#[path = "wire/payload_and_envelope_contract/property_envelope_validation.rs"]
+mod property_envelope_validation;

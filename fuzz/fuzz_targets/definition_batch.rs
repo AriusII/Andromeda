@@ -1,11 +1,11 @@
 #![no_main]
 
-use andromeda_catalog::CatalogMutationRecord;
+use andromeda_catalog::{CatalogDefinitionBatchPlanning, CatalogMutationRecord};
 use andromeda_catalog_store::{
     CatalogDefinition, CatalogObjectRef, EnumDefinition, EnumVariant, ObjectKind, QualifiedName,
     StructuredObjectDefinition, TableDefinition,
 };
-use andromeda_core::{
+use andromeda_types::{
     CatalogObjectId, CatalogVersion, ColumnDescriptor, DatabaseId, NamespaceId, ScalarType,
     TypeDescriptor,
 };

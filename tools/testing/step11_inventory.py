@@ -31,9 +31,9 @@ DOC_CHECKS = (
         (
             "tests/README.md",
             "tests/AGENTS.md",
-            "documentations/testing/step-11-validation-matrix.md",
-            "docs/codex/rust-critical-quality-gates.md",
-            "docs/codex/mission-critical-change-policy.md",
+            "docs/testing/release-gates.md",
+            "docs/testing/testing-strategy.md",
+            "docs/governance/release-gates.md",
             "fuzz/README.md",
             "fuzz/VALIDATION_MATRIX.md",
         ),
@@ -45,12 +45,12 @@ RUNBOOK_CHECKS = (
     PathCheck(
         "operations runbooks",
         (
-            "documentations/operations/runbooks/index.md",
-            "documentations/operations/runbooks/restore-pitr-drill.md",
-            "documentations/operations/runbooks/corruption-suspicion.md",
-            "documentations/operations/runbooks/replica-lag.md",
-            "documentations/operations/runbooks/slow-client.md",
-            "documentations/operations/runbooks/wal-pressure.md",
+            "docs/runbooks/README.md",
+            "docs/runbooks/backup-restore.md",
+            "docs/runbooks/corruption.md",
+            "docs/runbooks/replica-lag.md",
+            "docs/runbooks/performance.md",
+            "docs/runbooks/wal-pressure.md",
         ),
     ),
 )
@@ -92,19 +92,18 @@ EVIDENCE_CHECKS = (
         (
             ".github/workflows/06-nightly-deep-validation.yml",
             "tools/testing/miri_subset.py",
-            "documentations/testing/miri-subset-2026-05-08.md",
-            "docs/codex/rust-critical-quality-gates.md",
-            "documentations/testing/step-11-validation-matrix.md",
+            "docs/testing/fuzz-miri-loom.md",
+            "docs/testing/release-gates.md",
         ),
     ),
     PathCheck(
         "Loom evidence paths",
         (
             ".github/workflows/06-nightly-deep-validation.yml",
-            "tests/loom/README.md",
-            "tests/loom/Cargo.toml",
-            "tests/loom/tests/*.rs",
-            "documentations/testing/step-11-validation-matrix.md",
+            "tools/loom-models/README.md",
+            "tools/loom-models/Cargo.toml",
+            "tools/loom-models/tests/*.rs",
+            "docs/testing/release-gates.md",
         ),
     ),
     PathCheck(
@@ -117,7 +116,7 @@ EVIDENCE_CHECKS = (
             "crates/andromeda-storage/tests/wal_scan_recovery_contract.rs",
             "crates/andromeda-storage/tests/file_wal_recovery_contract.rs",
             "crates/andromeda-exec/tests/recovery_visibility_gates.rs",
-            "documentations/operations/runbooks/restore-pitr-drill.md",
+            "docs/runbooks/backup-restore.md",
         ),
     ),
     PathCheck(
@@ -125,8 +124,8 @@ EVIDENCE_CHECKS = (
         (
             "tools/testing/release_evidence.py",
             "tools/testing/release_evidence_schema.md",
-            "documentations/testing/release-evidence-template.md",
-            "documentations/testing/ci-release-gate-evidence.md",
+            "docs/testing/release-evidence-template.md",
+            "docs/testing/release-gates.md",
         ),
     ),
 )
@@ -268,8 +267,8 @@ EVIDENCE_COMMANDS = (
     ),
     (
         "standalone Loom smoke model",
-        "tests/loom/Cargo.toml",
-        "cargo test --manifest-path tests/loom/Cargo.toml",
+        "tools/loom-models/Cargo.toml",
+        "cargo test --manifest-path tools/loom-models/Cargo.toml --locked",
     ),
     (
         "Miri subset inventory",
@@ -402,12 +401,12 @@ def print_fuzz_targets() -> list[str]:
 
 
 def find_loom_index_paths() -> list[Path]:
-    paths = [ROOT / "tests" / "loom" / "README.md"]
+    paths = [ROOT / "tools" / "loom-models" / "README.md"]
     return [path for path in paths if path.exists()]
 
 
 def find_loom_command_paths() -> list[Path]:
-    paths = [ROOT / "tests" / "loom" / "Cargo.toml"]
+    paths = [ROOT / "tools" / "loom-models" / "Cargo.toml"]
     return [path for path in paths if path.exists()]
 
 
@@ -415,14 +414,14 @@ def find_loom_model_paths() -> list[Path]:
     candidates: list[Path] = []
     cargo_paths = [
         ROOT / "Cargo.toml",
-        ROOT / "tests" / "loom" / "Cargo.toml",
+        ROOT / "tools" / "loom-models" / "Cargo.toml",
         *sorted((ROOT / "crates").glob("*/Cargo.toml")),
     ]
     for cargo_toml in cargo_paths:
         if "loom" in read_text(cargo_toml).lower():
             candidates.append(cargo_toml)
 
-    for base in (ROOT / "crates", ROOT / "tests"):
+    for base in (ROOT / "crates", ROOT / "tests", ROOT / "tools" / "loom-models"):
         if not base.exists():
             continue
         for path in base.rglob("*.rs"):
@@ -471,7 +470,7 @@ def print_miri_loom_notes() -> list[str]:
         print(f"  Loom standalone command paths: {len(loom_command_paths)} found")
         for path in loom_command_paths:
             print(f"    found: {rel(path)}")
-        print("    command: cargo test --manifest-path tests/loom/Cargo.toml")
+        print("    command: cargo test --manifest-path tools/loom-models/Cargo.toml --locked")
     else:
         print("  Loom standalone command paths: none found")
         missing.append("standalone Loom command")

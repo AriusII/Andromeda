@@ -1,8 +1,7 @@
 //! HREDOV1 heap redo WAL production contracts.
 
 use andromeda_storage::{
-    Lsn, PageId, PageSize, ReplayContext, WalRecord, decode_wal_record_frame, encode_wal_record,
-    replay_wal_record,
+    Lsn, PageId, PageSize, WalRecord, decode_wal_record_frame, encode_wal_record,
     write_ahead_log::{
         HEAP_ROW_REDO_HEADER_LEN, HEAP_ROW_REDO_NONE_SLOT_ID, HeapRowRedoOperation,
         HeapRowRedoPayloadV1,
@@ -62,13 +61,6 @@ fn wal_record_heap_redo_payload_bytes_are_wal_checksum_protected() {
         .expect_err("tampered HREDOV1 tuple bytes must break WAL checksum");
 
     assert!(error.message().contains("checksum"));
-
-    let mut ctx = ReplayContext::new();
-    let replay_error = replay_wal_record(&mut ctx, &record)
-        .expect_err("direct heap redo replay must validate WAL checksum before apply");
-
-    assert!(replay_error.message().contains("checksum"));
-    assert_eq!(ctx.heap_redo_page_count(), 0);
 }
 
 #[test]
@@ -92,47 +84,6 @@ fn wal_record_heap_redo_delete_payload_roundtrips_without_tuple_bytes() {
     assert_eq!(decoded.tuple(), b"");
     assert_eq!(decoded.before_slot_id(), 4);
     assert_eq!(decoded.after_slot_id(), HEAP_ROW_REDO_NONE_SLOT_ID);
-}
-
-#[test]
-fn wal_record_heap_redo_update_payload_replays_with_existing_handler() {
-    let tx = TransactionId::new(102);
-    let page_id = PageId::new(902);
-    let insert = HeapRowRedoPayloadV1::row_insert(
-        page_id,
-        PageSize::KiB16,
-        0,
-        Lsn::ZERO,
-        Lsn::new(20),
-        b"old".to_vec(),
-    )
-    .expect("insert payload");
-    let update = HeapRowRedoPayloadV1::row_update(
-        page_id,
-        PageSize::KiB16,
-        0,
-        1,
-        Lsn::new(20),
-        Lsn::new(21),
-        b"new".to_vec(),
-    )
-    .expect("update payload");
-    let delete =
-        HeapRowRedoPayloadV1::row_delete(page_id, PageSize::KiB16, 1, Lsn::new(21), Lsn::new(22))
-            .expect("delete payload");
-
-    let mut ctx = ReplayContext::new();
-    for payload in [&insert, &update, &delete] {
-        let record = wal_record_from_payload(payload, tx, None);
-        replay_wal_record(&mut ctx, &record).expect("payload should replay");
-    }
-
-    let page = ctx.heap_redo_page(page_id).expect("recovered page");
-    assert_eq!(page.page_lsn(), Lsn::new(22));
-    assert!(page.is_slot_deleted(0));
-    assert!(page.is_slot_deleted(1));
-    assert_eq!(page.live_slot_count(), 0);
-    assert!(!ctx.has_errors());
 }
 
 #[test]

@@ -43,25 +43,25 @@ class Blocker:
 
 
 INDEX_SPECS = (
-    IndexSpec("docs", "documentation root index", "documentations/README.md"),
+    IndexSpec("docs", "documentation root index", "docs/README.md"),
     IndexSpec(
         "docs",
         "reader roadmap index",
-        "documentations/00_ANDROMEDA_INDEX_ET_MODE_DE_LECTURE.md",
+        "docs/README.md",
     ),
-    IndexSpec("docs", "Codex documentation index", "docs/codex/README.md"),
-    IndexSpec("docs", "architecture index", "documentations/architecture/index.md"),
+    IndexSpec("docs", "governance release gates", "docs/governance/release-gates.md"),
+    IndexSpec("docs", "architecture index", "docs/architecture/README.md"),
     IndexSpec(
         "docs",
         "implementation index",
-        "documentations/implementation/index.md",
+        "docs/implementation/roadmap.md",
     ),
     IndexSpec(
         "docs",
         "governance decision index",
-        "documentations/governance/decisions/index.md",
+        "docs/adr/README.md",
     ),
-    IndexSpec("specs", "specification index", "documentations/specs/index.md"),
+    IndexSpec("specs", "specification index", "docs/specs/README.md"),
     IndexSpec("crates", "crate index", "crates/README.md"),
     IndexSpec("crates", "workspace manifest", "Cargo.toml"),
     IndexSpec("fuzz", "fuzz index", "fuzz/README.md"),
@@ -71,19 +71,19 @@ INDEX_SPECS = (
     IndexSpec(
         "runbooks",
         "operations runbook index",
-        "documentations/operations/runbooks/index.md",
+        "docs/runbooks/README.md",
     ),
     IndexSpec("tests", "test roadmap index", "tests/README.md"),
-    IndexSpec("tests", "testing documentation index", "documentations/testing/index.md"),
+    IndexSpec("tests", "testing documentation index", "docs/testing/README.md"),
     IndexSpec(
         "tests",
         "Step 11 validation matrix",
-        "documentations/testing/step-11-validation-matrix.md",
+        "docs/testing/release-gates.md",
     ),
     IndexSpec("tests", "crash/recovery test index", "tests/crash-recovery/README.md"),
     IndexSpec("tests", "fuzzing test index", "tests/fuzzing/README.md"),
     IndexSpec("tests", "Miri test index", "tests/miri/README.md"),
-    IndexSpec("tests", "Loom test index", "tests/loom/README.md"),
+    IndexSpec("tests", "Loom test index", "tools/loom-models/README.md"),
 )
 
 
@@ -91,13 +91,13 @@ UNCONDITIONAL_STATIC_BLOCKERS = (
     Blocker(
         "tests",
         "high",
-        "documentations/testing/step-11-validation-matrix.md",
+        "docs/testing/release-gates.md",
         "Sustained fuzz evidence remains required before promoted byte, parser, protocol, or admission surfaces can be treated as release evidence.",
     ),
     Blocker(
         "runbooks",
         "critical",
-        "documentations/operations/runbooks/index.md",
+        "docs/runbooks/README.md",
         "Full backup/restore drills and cluster simulation remain planned gaps; helper scripts do not replace real retained drill evidence.",
     ),
 )
@@ -260,10 +260,9 @@ def index_blockers(indices: Sequence[IndexResult]) -> list[Blocker]:
 
 
 def build_docs_inventory(root: Path) -> dict[str, object]:
-    documentations = root / "documentations"
     docs = root / "docs"
     return {
-        "documentations_markdown_files": count_files(documentations, "*.md"),
+        "legacy_markdown_files": 0,
         "docs_markdown_files": count_files(docs, "*.md"),
         "top_level_indices": [
             result.path
@@ -274,15 +273,15 @@ def build_docs_inventory(root: Path) -> dict[str, object]:
 
 
 def build_specs_inventory(root: Path) -> dict[str, object]:
-    specs_dir = root / "documentations" / "specs"
+    specs_dir = root / "docs" / "specs"
     spec_files = [
         rel(root, path)
         for path in safe_rglob(specs_dir, "*.md")
-        if path.name != "index.md"
+        if path.name != "README.md"
     ]
     return {
         "specification_files": len(spec_files),
-        "index": "documentations/specs/index.md",
+        "index": "docs/specs/README.md",
         "sample": spec_files[:12],
     }
 
@@ -459,15 +458,15 @@ def build_fuzz_inventory(root: Path) -> tuple[dict[str, object], list[Blocker]]:
 
 
 def build_runbooks_inventory(root: Path) -> dict[str, object]:
-    runbook_dir = root / "documentations" / "operations" / "runbooks"
+    runbook_dir = root / "docs" / "runbooks"
     runbooks = [
         rel(root, path)
         for path in safe_rglob(runbook_dir, "*.md")
-        if path.name != "index.md"
+        if path.name != "README.md"
     ]
     return {
         "runbook_files": len(runbooks),
-        "index": "documentations/operations/runbooks/index.md",
+        "index": "docs/runbooks/README.md",
         "runbooks": runbooks,
     }
 
@@ -496,8 +495,8 @@ def command_inventory(root: Path) -> list[dict[str, object]]:
         ),
         (
             "standalone Loom smoke model",
-            "tests/loom/Cargo.toml",
-            "cargo test --manifest-path tests/loom/Cargo.toml",
+            "tools/loom-models/Cargo.toml",
+            "cargo test --manifest-path tools/loom-models/Cargo.toml --locked",
         ),
         (
             "Miri subset inventory",
@@ -523,12 +522,16 @@ def command_inventory(root: Path) -> list[dict[str, object]]:
 
 def find_loom_model_paths(root: Path) -> tuple[str, ...]:
     candidates: set[str] = set()
-    cargo_paths = [root / "Cargo.toml", *sorted((root / "crates").glob("*/Cargo.toml"))]
+    cargo_paths = [
+        root / "Cargo.toml",
+        root / "tools" / "loom-models" / "Cargo.toml",
+        *sorted((root / "crates").glob("*/Cargo.toml")),
+    ]
     for path in cargo_paths:
         if "loom" in read_text(path).lower():
             candidates.add(rel(root, path))
 
-    for base in (root / "crates", root / "tests"):
+    for base in (root / "crates", root / "tests", root / "tools" / "loom-models"):
         if not base.exists():
             continue
         for path in safe_rglob(base, "*.rs"):
@@ -557,7 +560,7 @@ def build_tests_inventory(root: Path) -> tuple[dict[str, object], list[Blocker]]
             Blocker(
                 "tests",
                 "high",
-                "tests/loom/README.md",
+                "tools/loom-models/README.md",
                 "No concrete Loom model path was detected; release claims that depend on concurrency interleavings need owner-crate Loom evidence or an explicit scope exclusion.",
             )
         )
@@ -623,17 +626,17 @@ def static_blockers(root: Path) -> list[Blocker]:
             Blocker(
                 "tests",
                 "high",
-                "documentations/testing/step-11-validation-matrix.md",
+                "docs/testing/release-gates.md",
                 "Blocking or release-recorded Miri evidence remains required for unsafe or memory-sensitive C5 release claims; the nightly workflow is advisory when it uses continue-on-error.",
             )
         )
 
-    if not (root / "tests" / "loom" / "Cargo.toml").exists():
+    if not (root / "tools" / "loom-models" / "Cargo.toml").exists():
         blockers.append(
             Blocker(
                 "tests",
                 "high",
-                "tests/loom/Cargo.toml",
+                "tools/loom-models/Cargo.toml",
                 "No standalone Loom command is visible; concurrency-sensitive C5 claims require owner-crate Loom evidence or an explicit scope exclusion.",
             )
         )
@@ -643,7 +646,7 @@ def static_blockers(root: Path) -> list[Blocker]:
             Blocker(
                 "tests",
                 "critical",
-                "documentations/testing/step-11-validation-matrix.md",
+                "docs/testing/release-gates.md",
                 "Map publication release approval remains blocked until a Map owner suite proves candidate validation, active switch, rollback, rebuild, and recovery behavior.",
             )
         )
@@ -662,7 +665,7 @@ def static_blockers(root: Path) -> list[Blocker]:
             Blocker(
                 "crates",
                 "high",
-                "documentations/implementation/v1-gap-closure-tracker.md",
+                "docs/implementation/roadmap.md",
                 "B-Tree durable promotion remains blocked until insert, delete, split, merge, WAL replay, and crash recovery tests pass together.",
             )
         )
@@ -681,7 +684,7 @@ def static_blockers(root: Path) -> list[Blocker]:
             Blocker(
                 "docs",
                 "high",
-                "documentations/implementation/v1-gap-closure-tracker.md",
+                "docs/implementation/roadmap.md",
                 "Release approval still requires exact gate commands, commit SHA, toolchain, pass/fail status, skipped tests, and unresolved gaps.",
             )
         )

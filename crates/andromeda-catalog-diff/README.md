@@ -43,7 +43,7 @@ and publication gates in their existing owner crates.
 cargo fmt --check -p andromeda-catalog-diff
 cargo check -p andromeda-catalog-diff --all-targets --all-features
 cargo test -p andromeda-catalog-diff --all-targets --all-features
-cargo test -p andromeda-catalog --test catalog_diff_contract -- --nocapture
+cargo test -p andromeda-catalog-diff --test catalog_diff_contract -- --nocapture
 ```
 
 ## Troubleshooting

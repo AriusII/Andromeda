@@ -2,6 +2,10 @@ use andromeda_error::AndromedaErrorKind;
 use andromeda_procedure_contract::{
     ResultRowCountSummary, RpcCompletion, RpcCompletionStatus, TransactionOutcome,
 };
+use andromeda_proto_wire::{
+    generated_validation::{GeneratedBackpressureMetadataView, GeneratedErrorEnvelopeView},
+    validate_generated_error_envelope,
+};
 use andromeda_rpc_protocol::{
     BackpressureMetadata, ErrorEnvelope, ErrorFamily, RetryDisposition, TransactionEffect,
 };
@@ -200,5 +204,154 @@ fn error_correlation_and_retry_metadata_are_validated() {
     assert_eq!(
         empty_trace.validate().unwrap_err().kind(),
         AndromedaErrorKind::Contract
+    );
+}
+
+#[derive(Clone)]
+struct GeneratedErrorEnvelopeCase {
+    request_id: Option<u64>,
+    session_id: Option<u64>,
+    trace_id: Option<String>,
+    family: i32,
+    code: String,
+    message: String,
+    transaction_effect: i32,
+    retry_disposition: i32,
+    retry_after_ms: Option<u64>,
+    backpressure: Option<GeneratedBackpressureCase>,
+}
+
+#[derive(Clone)]
+struct GeneratedBackpressureCase {
+    retry_after_ms: Option<u64>,
+    capacity_percent: Option<u32>,
+}
+
+impl GeneratedErrorEnvelopeCase {
+    fn valid_backpressure() -> Self {
+        Self {
+            request_id: Some(101),
+            session_id: Some(202),
+            trace_id: Some("trace-proto-101".to_string()),
+            family: 4,
+            code: "CONTRACT_HASH_MISMATCH".to_string(),
+            message: "ContractHash mismatch".to_string(),
+            transaction_effect: 1,
+            retry_disposition: 4,
+            retry_after_ms: None,
+            backpressure: Some(GeneratedBackpressureCase {
+                retry_after_ms: Some(50),
+                capacity_percent: Some(70),
+            }),
+        }
+    }
+}
+
+impl GeneratedErrorEnvelopeView for GeneratedErrorEnvelopeCase {
+    type Backpressure = GeneratedBackpressureCase;
+
+    fn request_id(&self) -> Option<u64> {
+        self.request_id
+    }
+
+    fn session_id(&self) -> Option<u64> {
+        self.session_id
+    }
+
+    fn trace_id(&self) -> Option<&str> {
+        self.trace_id.as_deref()
+    }
+
+    fn family(&self) -> i32 {
+        self.family
+    }
+
+    fn code(&self) -> &str {
+        &self.code
+    }
+
+    fn message(&self) -> &str {
+        &self.message
+    }
+
+    fn transaction_effect(&self) -> i32 {
+        self.transaction_effect
+    }
+
+    fn retry_disposition(&self) -> i32 {
+        self.retry_disposition
+    }
+
+    fn retry_after_ms(&self) -> Option<u64> {
+        self.retry_after_ms
+    }
+
+    fn backpressure(&self) -> Option<&Self::Backpressure> {
+        self.backpressure.as_ref()
+    }
+}
+
+impl GeneratedBackpressureMetadataView for GeneratedBackpressureCase {
+    fn retry_after_ms(&self) -> Option<u64> {
+        self.retry_after_ms
+    }
+
+    fn capacity_percent(&self) -> Option<u32> {
+        self.capacity_percent
+    }
+}
+
+#[test]
+fn generated_error_envelope_validation_stays_with_proto_wire() {
+    let valid = GeneratedErrorEnvelopeCase::valid_backpressure();
+    validate_generated_error_envelope(&valid).unwrap();
+
+    let empty_code = GeneratedErrorEnvelopeCase {
+        code: String::new(),
+        ..valid.clone()
+    };
+    assert_eq!(
+        validate_generated_error_envelope(&empty_code)
+            .unwrap_err()
+            .kind(),
+        AndromedaErrorKind::Contract
+    );
+
+    let over_capacity = GeneratedErrorEnvelopeCase {
+        backpressure: Some(GeneratedBackpressureCase {
+            capacity_percent: Some(101),
+            ..valid.backpressure.clone().unwrap()
+        }),
+        ..valid.clone()
+    };
+    assert_eq!(
+        validate_generated_error_envelope(&over_capacity)
+            .unwrap_err()
+            .kind(),
+        AndromedaErrorKind::Resource
+    );
+
+    let missing_backpressure = GeneratedErrorEnvelopeCase {
+        backpressure: None,
+        ..valid.clone()
+    };
+    assert_eq!(
+        validate_generated_error_envelope(&missing_backpressure)
+            .unwrap_err()
+            .kind(),
+        AndromedaErrorKind::Resource
+    );
+
+    let retry_after_without_delay = GeneratedErrorEnvelopeCase {
+        retry_disposition: 3,
+        retry_after_ms: None,
+        backpressure: None,
+        ..valid
+    };
+    assert_eq!(
+        validate_generated_error_envelope(&retry_after_without_delay)
+            .unwrap_err()
+            .kind(),
+        AndromedaErrorKind::Resource
     );
 }

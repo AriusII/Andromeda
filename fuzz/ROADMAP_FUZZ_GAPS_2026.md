@@ -16,7 +16,7 @@ This roadmap covers the following fuzz evidence surfaces:
 - No-panic scope for malformed input handling.
 - Evidence boundaries for what fuzzing does not prove.
 
-Registry baseline aligned with current metadata: `23` registered targets and `51` deterministic manifest seeds.
+Registry baseline aligned with current metadata: `25` registered targets and `53` deterministic manifest seeds.
 Execution workspace boundary: executable harnesses and libFuzzer runtime flows remain under `fuzz/`; `tests/fuzzing/` remains registry/corpus/index documentation and metadata.
 
 Affected engines and planes:

@@ -4,7 +4,9 @@
 
 This directory is a roadmap index for cross-crate validation. It does not own executable Rust test suites.
 
-Andromeda keeps executable tests in the crates that own the behavior being validated. The historical roadmap labels `tests/integration`, `tests/recovery`, `tests/rpc`, `tests/srpl`, `tests/storage`, and `tests/security` map to existing crate-owned suites instead of new root-level test directories.
+Andromeda keeps executable tests in the crates that own the behavior being validated. The historical roadmap labels `tests/integration`, `tests/recovery`, `tests/rpc`, `tests/srpl`, `tests/storage`, `tests/security`, and `tests/fixtures` map to existing crate-owned suites or evidence owners instead of new root-level test directories. Do not recreate README-only directories for these labels.
+
+The standalone Loom model is deliberately isolated under `tools/loom-models/` and is not a root workspace member.
 
 ## Scope
 
@@ -18,6 +20,7 @@ Use this index when a work order asks for roadmap test coverage by domain:
 | `tests/srpl` | `crates/andromeda-srpl/tests/validation_gates.rs`, `crates/andromeda-srpl/tests/compiler_pipeline_e2e.rs`, `crates/andromeda-srpl/tests/definitionbatch_compat.rs`, `crates/andromeda-srpl/tests/property_parser_fuzz.rs`, `crates/andromeda-srpl/tests/optimizer_*`, `crates/andromeda-srpl-parser/tests/owner_direct.rs`, `crates/andromeda-srpl-ast/tests/owner_direct.rs` |
 | `tests/storage` | `crates/andromeda-storage/tests/storage_hotcold_pipeline_e2e.rs`, `crates/andromeda-storage/tests/page_ownership_invariants.rs`, `crates/andromeda-storage/tests/heap_*`, `crates/andromeda-storage/tests/btree_*`, `crates/andromeda-storage/tests/property_*`, `crates/andromeda-storage/tests/wal_*`, `crates/andromeda-storage/tests/backup_*`, `crates/andromeda-storage/tests/hadr_*`, `crates/andromeda-storage/tests/quorum_*`, `crates/andromeda-wal/tests/*` |
 | `tests/security` | `crates/andromeda-security-contract/src/*` unit tests, `crates/andromeda-core/tests/principal_integration.rs`, `crates/andromeda-contract/tests/contract_hash_golden.rs`, `crates/andromeda-exec/tests/iam_pipeline_e2e.rs`, `crates/andromeda-exec/tests/iam_hardening.rs`, `crates/andromeda-exec/tests/permission_scope_contract.rs`, `crates/andromeda-exec/tests/exec_audit_completion_validation.rs`, `crates/andromeda-quic/tests/certificate_continuity_contract.rs`, `crates/andromeda-quic/tests/zero_rtt_admission_policy.rs`, `crates/andromeda-quic/tests/procedure_gateway_route.rs` |
+| `tests/fixtures` | Crate-specific fixtures, builders, mocks, and golden vectors stay with the owning crate; fuzz seeds and corpus metadata stay in `fuzz/` and `tests/fuzzing/`; shared deterministic helpers require a dedicated owner and validation command. |
 
 ## Root Layer Indices
 
@@ -27,8 +30,8 @@ These roadmap directories are documentation indices. They do not own executable 
 | --- | --- |
 | `tests/crash-recovery/` | Index deterministic crash, replay, durability, and visibility scenarios that remain owned by storage, WAL, transaction, catalog, map, or executor crates. |
 | `tests/fuzzing/` | Index fuzz and corpus work for untrusted input, persisted bytes, parsers, codecs, canonicalization, and state machines. |
-| `tests/loom/` | Index bounded concurrency model checks for async, cancellation, shutdown, lock ordering, and backpressure risks. |
 | `tests/miri/` | Index Miri and undefined-behavior checks for unsafe, aliasing, layout, and FFI-sensitive Rust code. |
+| `tools/loom-models/` | Standalone Loom model project for bounded concurrency checks that are not yet wired into an owning crate. |
 | `benches/` | Placeholder for benchmark governance. Benchmark evidence is advisory and cannot replace correctness, durability, recovery, or security gates. |
 | `benches/scenario-evidence/` | Placeholder for ScenarioEvidence benchmark records, workload metadata, and evidence review criteria. |
 
@@ -50,11 +53,11 @@ These roadmap directories are documentation indices. They do not own executable 
 1. Pick the roadmap label that matches the requested validation area.
 2. Run the owning crate tests listed for that label.
 3. Add property, fuzz, Miri, Loom, crash/recovery, or release evidence when the change touches C4/C5 behavior.
-4. Record gaps in `documentations/testing/step-11-validation-matrix.md` rather than moving tests.
+4. Record gaps in `docs/testing/release-gates.md` rather than moving tests.
 
 ## Acceptance Criteria
 
-- Root test directories are indexes or placeholders unless a future work order defines an owning crate, executable harness, and release gate.
+- Root test directories do not own executable Rust. The isolated Loom project remains under `tools/loom-models/` until an owning crate exposes a stable model adapter.
 - Each new test entry names the risk class, owning subsystem, target behavior, and command that validates it.
 - Crash/recovery entries state the crash point, durable evidence, replay expectation, and post-recovery visibility assertion.
 - Fuzzing entries state the input surface, corpus source, target invariant, and deterministic regression path.
@@ -74,6 +77,7 @@ cargo nextest run --workspace --all-features
 cargo test --doc --workspace
 cargo audit
 cargo deny check
+cargo test --manifest-path tools/loom-models/Cargo.toml --locked
 ```
 
 Recommended C5 smoke gate:
@@ -125,9 +129,8 @@ If a C5 suite passes in isolation but fails in the combined gate, treat the comb
 
 ## References
 
-- `documentations/testing/step-11-validation-matrix.md`
-- `docs/codex/rust-critical-quality-gates.md`
-- `docs/codex/mission-critical-change-policy.md`
+- `docs/testing/release-gates.md`
+- `docs/testing/testing-strategy.md`
+- `docs/governance/release-gates.md`
 - `fuzz/VALIDATION_MATRIX.md`
-- `documentations/governance/decisions/DEC-035-release-gate-chain.md`
-- `documentations/governance/decisions/DEC-036-release-readiness-approval.md`
+- `docs/adr/README.md`

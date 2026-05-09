@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`andromeda-observe` owns trace envelopes, runtime emission helpers, durable audit journal contracts, query models, exporters, and post-fact decision explainability for Andromeda.
+`andromeda-observe` owns trace envelopes, runtime emission helpers, durable audit sink/query adapters, exporters, and post-fact decision explainability for Andromeda.
 
 Observability records are bounded and audit-safe. They support review, replay, correlation, and forensic explanation, but they must not become storage truth or the transaction commit path. Shared identifiers live in `andromeda-observability`; typed audit trace contracts live in `andromeda-audit`.
 
@@ -12,7 +12,7 @@ This crate provides:
 
 - Event envelopes, lifecycle sequencing, validation, and in-memory sinks.
 - Decision, protocol, placement, durability, transition, and core trace event families.
-- Durable audit journal records, checksum chaining, replay evidence, retention policy, compaction reports, and file-backed audit sink contracts.
+- Durable audit projection, sink/query runtime adapters, and envelope-to-audit mapping tests.
 - Bounded trace query specifications, filters, result metadata, and in-memory query sources.
 - Exporter contracts and mock exporters for tests.
 - Principal binding evidence that supports audit review without expanding runtime authority.
@@ -24,7 +24,7 @@ This crate provides:
 - Do not log secrets, raw credentials, or unbounded payloads.
 - Do not turn diagnostic JSON or exporter output into the runtime protocol.
 - Do not let retention compaction erase the evidence required to explain retained audit chains.
-- Do not move durable audit journal truth into `andromeda-audit`; that crate owns trace contracts only.
+- Do not own audit DTO vocabulary here; stable audit event shapes belong in `andromeda-audit`.
 
 ## Prerequisites
 
@@ -56,10 +56,10 @@ For event-family and operator-surface contracts, use:
 
 ```powershell
 cargo test -p andromeda-observe --test audit_family_contract -- --nocapture
-cargo test -p andromeda-observe --test admission_audit_contract -- --nocapture
-cargo test -p andromeda-observe --test hadr_backup_audit_contract -- --nocapture
 cargo test -p andromeda-observe --test protocol_correlation_contract -- --nocapture
 ```
+
+Use `cargo test -p andromeda-audit --test admission_audit_contract --test hadr_backup_audit_contract -- --nocapture` for audit DTO vocabulary.
 
 Before accepting source changes, use the broader workspace gates listed in `crates/README.md`.
 

@@ -7,6 +7,3 @@ pub use andromeda_wal::{
     ArchiveStatus, WalGarbageCollector, WalGcAuditEvent, WalGcCandidate, WalGcContext,
     WalGcScheduler, WalGcSchedulerConfig, WalGcSummary,
 };
-
-#[cfg(test)]
-mod tests;

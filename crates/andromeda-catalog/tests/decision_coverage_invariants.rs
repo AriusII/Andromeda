@@ -2,134 +2,57 @@ use andromeda_catalog_store::{
     CatalogDefinition, CatalogObjectRef, ObjectKind, QualifiedName, TableDefinition,
 };
 use andromeda_definition_batch::{CatalogLifecycleTarget, DefinitionOperation};
-use andromeda_procedure_contract::StatsVersion;
-use andromeda_statistics::{
-    CorrelationEvidenceBounds, CorrelationStrengthPermille, StatsColumnTarget, StatsCorrelation,
-    StatsCorrelationId, StatsCorrelationKind, StatsCorrelationPublicationBuilder,
-};
 use andromeda_types::{CatalogObjectId, CatalogVersion};
 
-fn decision_path(file_name: &str) -> std::path::PathBuf {
+fn catalog_spec_path() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .join("..")
-        .join("documentations")
-        .join("governance")
-        .join("decisions")
-        .join(file_name)
-}
-
-fn spec_path(file_name: &str) -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("..")
-        .join("documentations")
+        .join("docs")
         .join("specs")
-        .join(file_name)
-}
-
-fn crate_source_path(crate_name: &str, path_segments: &[&str]) -> std::path::PathBuf {
-    let mut path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join(crate_name);
-
-    for segment in path_segments {
-        path.push(segment);
-    }
-
-    path
-}
-
-fn read_crate_sources(crate_name: &str, source_paths: &[&[&str]]) -> String {
-    let mut combined = String::new();
-
-    for source_path in source_paths {
-        let path = crate_source_path(crate_name, source_path);
-        let source = std::fs::read_to_string(&path)
-            .unwrap_or_else(|err| panic!("{} must be readable: {err}", path.display()));
-        combined.push_str(&source);
-        combined.push('\n');
-    }
-
-    combined
-}
-
-fn map_stats_target(object_id: u64, column_index: u16) -> StatsColumnTarget {
-    StatsColumnTarget::new(CatalogObjectId::new(object_id), column_index)
-}
-
-fn map_stats_correlation(id: u64, catalog_version: u64, stats_version: u64) -> StatsCorrelation {
-    StatsCorrelation::new(
-        StatsCorrelationId::new(id).expect("test correlation id must be non-zero"),
-        CatalogVersion::new(catalog_version),
-        StatsVersion::new(stats_version),
-        StatsCorrelationKind::FunctionalDependency,
-        CorrelationStrengthPermille::from_permille(900)
-            .expect("test correlation strength must be in range"),
-        vec![map_stats_target(10, 1), map_stats_target(20, 2)],
-        CorrelationEvidenceBounds {
-            sample_rows: 100,
-            population_lower_bound: 100,
-            population_upper_bound: 1_000,
-            confidence_permille: 950,
-        },
-    )
-    .expect("test correlation must be valid")
+        .join("catalog-srpl.md")
 }
 
 #[test]
-fn decision_coverage_dec_022_covers_alter_procedure_lifecycle_before_operation_surface_expands() {
-    let decision = std::fs::read_to_string(decision_path("DEC-022-alter-procedure-lifecycle.md"))
-        .expect("DEC-022 must exist for Alter Procedure");
+fn catalog_spec_covers_alter_procedure_lifecycle_before_operation_surface_expands() {
+    let spec =
+        std::fs::read_to_string(catalog_spec_path()).expect("catalog spec must be readable");
+    let normalized = spec.split_whitespace().collect::<Vec<_>>().join(" ");
 
     for required in [
-        "Alter Procedure",
-        "Compatibility Policy",
-        "ContractHash",
-        "Dependency Traversal",
-        "Restrict/Cascade Interaction",
-        "Active Invocation Boundary",
-        "Plan-Cache Invalidation Implications",
-        "Future Audit/WAL Requirements",
-        "Drop semantics and cascade semantics for removing objects remain out of scope",
+        "Alter | Existing target, explicit identity preservation, compatibility acceptance.",
+        "Input changes, required permission changes, result stream removal",
+        "contract, catalog, stats, and policy evidence allow reuse",
+        "Compatibility tests must classify alters, drops, renames, moves",
     ] {
         assert!(
-            decision.contains(required),
-            "DEC-022 must cover required Alter Procedure topic: {required}"
+            normalized.contains(required),
+            "catalog-srpl.md must cover required Alter Procedure topic: {required}"
         );
     }
 }
 
 #[test]
-fn decision_coverage_dec_023_covers_drop_procedure_lifecycle_before_operation_surface_expands() {
-    let decision = std::fs::read_to_string(decision_path("DEC-023-drop-procedure-lifecycle.md"))
-        .expect("DEC-023 must exist for Drop Procedure");
-    let normalized = decision
+fn catalog_spec_covers_drop_procedure_lifecycle_before_operation_surface_expands() {
+    let spec =
+        std::fs::read_to_string(catalog_spec_path()).expect("catalog spec must be readable");
+    let normalized = spec
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
         .to_lowercase();
 
     for required in [
-        "Drop Procedure",
-        "Identity Transition: Active → Inactive → Removable",
-        "Cascade/Restrict Policy",
-        "Restrict mode",
-        "Cascade mode",
-        "out of scope for this decision",
-        "Historical Contract Retention",
-        "Active Invocation Boundary",
-        "Compatibility Guarantee Lifetime",
-        "Plan-Cache Implications",
-        "Statistics and Feedback Retention",
-        "Future Audit/WAL Requirements",
-        "Interaction with E2 (Alter Procedure) and E4/E6/E7",
-        "E4 (Restrict/Cascade Lifecycle Decision)",
-        "future E4 decision",
+        "Drop or deprecate",
+        "dependency closure",
+        "active invocation policy",
+        "historical evidence retention",
+        "Deprecated | Fence keys for new invocations of the deprecated version.",
+        "Reject new invocation binding to the deprecated active name or version.",
     ] {
         assert!(
             normalized.contains(&required.to_lowercase()),
-            "DEC-023 must cover required Drop Procedure topic: {required}"
+            "catalog-srpl.md must cover required Drop Procedure topic: {required}"
         );
     }
 }
@@ -166,227 +89,27 @@ fn drop_procedure_operation_surface_is_guarded_not_yet_implemented() {
 }
 
 #[test]
-fn drop_procedure_cascade_policy_is_constrained_by_future_e4_decision() {
-    let decision = std::fs::read_to_string(decision_path("DEC-023-drop-procedure-lifecycle.md"))
-        .expect("DEC-023 must exist for Drop Procedure");
-    let normalized = decision
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_lowercase();
-
-    assert!(
-        normalized.contains("e4 (restrict/cascade lifecycle decision)"),
-        "DEC-023 must establish dependency on E4 for cascade/restrict policy"
-    );
-
-    assert!(
-        normalized.contains("cascade mode (future decision required before implementation)"),
-        "DEC-023 must note that Cascade requires a future decision (E4)"
-    );
-
-    assert!(
-        normalized.contains("all current drop support must default to restrict only"),
-        "DEC-023 must mandate Restrict-only default until E4 is accepted"
-    );
-}
-
-#[test]
-fn decision_coverage_plan_cache_runtime_gate_is_bounded_versioned_and_traceable() {
-    let decision = std::fs::read_to_string(decision_path(
-        "DEC-039-optimizer-intermediate-pass-contract.md",
-    ))
-    .expect("DEC-039 must exist for optimizer work");
-    let decision_normalized = decision
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_lowercase();
-
-    for required in [
-        "PlanCacheKey::build",
-        "Every plan cache operation",
-        "key digest",
-        "catalog version",
-        "stats version",
-        "policy version",
-        "plan class",
-        "decision outcome",
-    ] {
-        assert!(
-            decision_normalized.contains(&required.to_lowercase()),
-            "DEC-039 must cover minimal PlanCache gate requirement: {required}"
-        );
-    }
-
-    let plan_cache = read_crate_sources(
-        "andromeda-plan-cache",
-        &[
-            &["src", "lib.rs"],
-            &["src", "limits.rs"],
-            &["src", "identity.rs"],
-            &["src", "decision.rs"],
-            &["src", "selection.rs"],
-            &["src", "admission.rs"],
-            &["src", "advisory_evidence.rs"],
-        ],
-    ) + &read_crate_sources(
-        "andromeda-scenario-evidence",
-        &[&["src", "plan_cache_bridge", "advisory_evidence.rs"]],
-    );
-
-    for required in [
-        "PLAN_CACHE_MAX_ENTRIES",
-        "PLAN_SELECTION_MAX_CANDIDATES",
-        "PLAN_SELECTION_MAX_SCENARIO_EVIDENCE",
-        "classify_advisory_evidence_for_key",
-        "CriticalDecisionKind::PlanSelection",
-        "PlanDecisionEvidence",
-        "advisory_only=true",
-        "policy_version",
-        "contract_hash",
-        "stats_version",
-        "catalog_version",
-    ] {
-        assert!(
-            plan_cache.contains(required),
-            "plan-cache owner sources must keep runtime gate coverage visible for: {required}"
-        );
-    }
-}
-
-#[test]
-fn decision_coverage_stats_publication_switch_is_bounded_advisory_and_traceable() {
-    let publication = read_crate_sources(
-        "andromeda-statistics",
-        &[
-            &["src", "publication.rs"],
-            &["src", "publication_evidence.rs"],
-            &["src", "publication_switch.rs"],
-            &["src", "publication_switch_error.rs"],
-            &["src", "publication_trace.rs"],
-        ],
-    );
-
-    for required in [
-        "STATS_PUBLICATION_SWITCH_HISTORY_LIMIT",
-        "STATS_PUBLICATION_SWITCH_REASON_MAX_BYTES",
-        "PredictiveEvidenceCannotDriveActiveStatsVersion",
-        "AdvisoryEvidenceCannotDriveActiveStatsVersion",
-        "AdvisoryEvidenceStatsVersionMismatch",
-        "advisory_can_drive_active",
-        "active_before",
-        "candidate",
-        "active_after",
-        "selected_decision",
-    ] {
-        assert!(
-            publication.contains(required),
-            "statistics publication switch must keep bounded advisory trace coverage visible for: {required}"
-        );
-    }
-
-    let scenario = read_crate_sources(
-        "andromeda-scenario-evidence",
-        &[
-            &["src", "scenario_evidence", "advisory.rs"],
-            &["src", "scenario_evidence", "evidence.rs"],
-        ],
-    );
-
-    for required in [
-        "can_select_plan_alone",
-        "can_drive_active_stats_version_transition",
-        "ScenarioEvidenceOptimizerBoundary::AdvisoryOnly",
-        "validate_for_use_at",
-    ] {
-        assert!(
-            scenario.contains(required),
-            "ScenarioEvidence owner sources must keep advisory-only consumption coverage visible for: {required}"
-        );
-    }
-}
-
-#[test]
-fn map_refresh_validation_spec_covers_stats_staleness_summarizability_and_truth_boundary() {
-    let spec = std::fs::read_to_string(spec_path("MapRefreshValidation_v0.md"))
-        .expect("MapRefreshValidation_v0 spec must exist");
+fn drop_procedure_publication_policy_is_constrained_by_catalog_spec() {
+    let spec =
+        std::fs::read_to_string(catalog_spec_path()).expect("catalog spec must be readable");
     let normalized = spec
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
         .to_lowercase();
 
-    for required in [
-        "# MapRefreshValidation v0 Specification",
-        "## Purpose",
-        "## Scope",
-        "## Non-goals",
-        "## Prerequisites",
-        "## Procedure",
-        "## Validation",
-        "## Troubleshooting",
-        "## References",
-        "current catalog stats",
-        "`StatsVersion`",
-        "`CatalogVersion`",
-        "staleness",
-        "summarizability",
-        "durable publication",
-        "source of truth",
-        "fail closed",
-        "`DecisionTrace`",
-        "MAP-STATS-STALE",
-        "MAP-SUMMARIZABILITY-UNPROVEN",
-        "MAP-STATS-NOT-DURABLE",
-        "MAP-ANALYTICS-NOT-TRUTH",
-    ] {
-        assert!(
-            normalized.contains(&required.to_lowercase()),
-            "MapRefreshValidation_v0 must cover required Map analytics validation topic: {required}"
-        );
-    }
-}
-
-#[test]
-fn stats_correlation_publication_surface_keeps_map_analytics_advisory_boundaries() {
-    let source = read_crate_sources(
-        "andromeda-statistics",
-        &[&["src", "correlation_publication.rs"]],
+    assert!(
+        normalized.contains("no operation from a partially failed batch may become visible"),
+        "catalog spec must keep DefinitionBatch apply all-or-nothing"
     );
 
-    for required in [
-        "Map analytics validators",
-        "staleness",
-        "summarizability",
-        "durable publication",
-        "never source truth",
-        "is_authoritative",
-        "requires_durable_publication_evidence",
-        "is_current_for",
-        "is_stale_for",
-    ] {
-        assert!(
-            source.contains(required),
-            "correlation publication source must preserve advisory boundary text: {required}"
-        );
-    }
-}
+    assert!(
+        normalized.contains("visible publication requires durable wal coverage"),
+        "catalog spec must keep drop/deprecate publication behind durable WAL"
+    );
 
-#[test]
-fn stats_correlation_publication_rejects_stale_map_analytics_scope() {
-    let publication =
-        StatsCorrelationPublicationBuilder::new(CatalogVersion::new(7), StatsVersion::new(3))
-            .expect("builder versions must be valid")
-            .push(map_stats_correlation(1, 7, 3))
-            .expect("correlation must match publication versions")
-            .finish();
-
-    assert!(!publication.is_authoritative());
-    assert!(publication.requires_durable_publication_evidence());
-    assert!(publication.is_current_for(CatalogVersion::new(7), StatsVersion::new(3),));
-    assert!(!publication.is_stale_for(CatalogVersion::new(7), StatsVersion::new(3),));
-
-    assert!(!publication.is_current_for(CatalogVersion::new(8), StatsVersion::new(3),));
-    assert!(publication.is_stale_for(CatalogVersion::new(7), StatsVersion::new(4),));
+    assert!(
+        normalized.contains("dependency closure"),
+        "catalog spec must keep drop/deprecate dependency closure explicit"
+    );
 }

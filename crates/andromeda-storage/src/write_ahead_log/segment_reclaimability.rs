@@ -7,6 +7,3 @@ pub use andromeda_wal::{
     DefaultReclaimabilityPolicy, ReclaimabilityDecision, ReclaimabilityEvidence,
     RetentionBoundaryPolicy, WalReplicaSafeLsnBoundaryProvider, WalSegmentReclaimability,
 };
-
-#[cfg(test)]
-mod tests;

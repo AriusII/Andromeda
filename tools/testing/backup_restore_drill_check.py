@@ -15,17 +15,15 @@ from typing import Sequence
 DEFAULT_ROOT = Path(__file__).resolve().parents[2]
 
 EVIDENCE_DOCUMENTS = (
-    Path("documentations/operations/runbooks/restore-pitr-drill.md"),
-    Path("documentations/operations/runbooks/backup-retention.md"),
-    Path("documentations/operations/runbooks/index.md"),
-    Path("documentations/testing/step-11-validation-matrix.md"),
+    Path("docs/runbooks/backup-restore.md"),
+    Path("docs/runbooks/README.md"),
+    Path("docs/testing/release-gates.md"),
 )
 
 REQUIRED_PATHS = (
-    "documentations/operations/runbooks/restore-pitr-drill.md",
-    "documentations/operations/runbooks/backup-retention.md",
-    "documentations/operations/runbooks/index.md",
-    "documentations/testing/step-11-validation-matrix.md",
+    "docs/runbooks/backup-restore.md",
+    "docs/runbooks/README.md",
+    "docs/testing/release-gates.md",
     "crates/andromeda-storage/tests/backup_physical_plan_contract.rs",
     "crates/andromeda-storage/tests/backup_execution_plan.rs",
     "crates/andromeda-storage/tests/restore_contract.rs",
@@ -34,7 +32,7 @@ REQUIRED_PATHS = (
     "crates/andromeda-cli/src/cmd_restore.rs",
     "crates/andromeda-cli/tests/cli_admin_commands/backup.rs",
     "crates/andromeda-cli/tests/cli_admin_commands/restore.rs",
-    "crates/andromeda-observe/tests/hadr_backup_audit_contract.rs",
+    "crates/andromeda-audit/tests/hadr_backup_audit_contract.rs",
 )
 
 EXPECTED_COMMANDS = (
@@ -42,29 +40,29 @@ EXPECTED_COMMANDS = (
     "cargo test -p andromeda-storage --test backup_execution_plan --locked -- --nocapture",
     "cargo test -p andromeda-storage --test restore_contract --locked -- --nocapture",
     "cargo test -p andromeda-storage --test wal_gc_four_boundaries_integration --locked -- --nocapture",
-    "cargo test -p andromeda-observe --test hadr_backup_audit_contract --locked -- --nocapture",
+    "cargo test -p andromeda-audit --test hadr_backup_audit_contract --locked -- --nocapture",
 )
 
 EXPECTED_DOC_TOKENS = (
     (
-        "documentations/operations/runbooks/restore-pitr-drill.md",
-        "backup_restore_drill_check.py",
+        "docs/runbooks/backup-restore.md",
+        "Retained audit, `RestoreTrace`, and `RecoveryReport` evidence paths.",
     ),
     (
-        "documentations/operations/runbooks/restore-pitr-drill.md",
-        "does not restore data or replay WAL",
+        "docs/runbooks/backup-restore.md",
+        "cargo test -p andromeda-storage --test restore_contract",
     ),
     (
-        "documentations/operations/runbooks/backup-retention.md",
-        "backup_restore_drill_check.py",
+        "docs/runbooks/backup-restore.md",
+        "cargo test -p andromeda-audit --test hadr_backup_audit_contract",
     ),
     (
-        "documentations/operations/runbooks/index.md",
-        "backup_restore_drill_check.py",
+        "docs/runbooks/README.md",
+        "Backup validation, restore drill, PITR, retention hold",
     ),
     (
-        "documentations/testing/step-11-validation-matrix.md",
-        "Full backup/restore drills and exact LSN restore evidence remain required",
+        "docs/testing/release-gates.md",
+        "Backup/PITR/HA/DR",
     ),
 )
 

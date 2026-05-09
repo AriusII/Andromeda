@@ -34,6 +34,7 @@
 
 - Inspect `src/lib.rs` and event modules for vocabulary-only behavior.
 - When validating by command, use `cargo check -p andromeda-audit --all-targets`.
+- Use `cargo test -p andromeda-audit --test admission_audit_contract --test hadr_backup_audit_contract -- --nocapture` for admission, backup, and HA/DR audit vocabulary.
 
 ## Troubleshooting
 

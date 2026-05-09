@@ -58,6 +58,11 @@ Recommended WAL owner gates:
 ```powershell
 cargo test -p andromeda-wal --test wal_codec_contract -- --nocapture
 cargo test -p andromeda-wal --test property_wal_roundtrip -- --nocapture
+cargo test -p andromeda-wal --test wal_record_bounds_contract -- --nocapture
+cargo test -p andromeda-wal --test wal_durability_fence_contract -- --nocapture
+cargo test -p andromeda-wal --test wal_compaction_contract -- --nocapture
+cargo test -p andromeda-wal --test wal_gc_four_boundaries_integration -- --nocapture
+cargo test -p andromeda-wal --test wal_gc_snapshot_protection -- --nocapture
 cargo test -p andromeda-wal --test file_wal_contract -- --nocapture
 cargo test -p andromeda-wal --test api_compat -- --nocapture
 ```
@@ -93,8 +98,16 @@ For durable byte changes, add fuzz coverage for frame decoding and scan-prefix r
 - `src/write_ahead_log/commit_log_facade.rs`
 - `src/write_ahead_log/durability_fence.rs`
 - `src/write_ahead_log/record_bounds.rs`
+- `src/write_ahead_log/gc.rs`
+- `src/write_ahead_log/gc_eligibility.rs`
+- `src/write_ahead_log/compaction.rs`
 - `src/write_ahead_log/transaction.rs`
 - `tests/wal_codec_contract.rs`
 - `tests/property_wal_roundtrip.rs`
+- `tests/wal_record_bounds_contract.rs`
+- `tests/wal_durability_fence_contract.rs`
+- `tests/wal_compaction_contract.rs`
+- `tests/wal_gc_four_boundaries_integration.rs`
+- `tests/wal_gc_snapshot_protection.rs`
 - `tests/file_wal_contract.rs`
 - `tests/api_compat.rs`

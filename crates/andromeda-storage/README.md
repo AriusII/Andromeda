@@ -56,7 +56,7 @@ Use the narrowest command that proves the changed boundary, then run broader wor
 Recommended storage gates:
 
 ```powershell
-cargo test -p andromeda-storage --test wal_durability_fence_contract -- --nocapture
+cargo test -p andromeda-wal --test wal_durability_fence_contract -- --nocapture
 cargo test -p andromeda-storage --test file_wal_recovery_contract -- --nocapture
 cargo test -p andromeda-storage --test recovery_contract -- --nocapture
 cargo test -p andromeda-storage --test recovery_completeness_contract -- --nocapture
@@ -93,7 +93,7 @@ cargo test -p andromeda-storage --test api_compat_reexports -- --nocapture
 - `src/recovery/`
 - `src/backup/`
 - `src/restore_orchestration/`
-- `tests/wal_durability_fence_contract.rs`
+- `../andromeda-wal/tests/wal_durability_fence_contract.rs`
 - `tests/file_wal_recovery_contract.rs`
 - `tests/recovery_contract.rs`
 - `tests/recovery_completeness_contract.rs`

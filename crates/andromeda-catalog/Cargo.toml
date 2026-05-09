@@ -18,10 +18,6 @@ andromeda-types.workspace = true
 
 [dev-dependencies]
 andromeda-business-fixtures.workspace = true
-andromeda-catalog-diff.workspace = true
 andromeda-contract.workspace = true
 andromeda-observe.workspace = true
-andromeda-plan-cache.workspace = true
-andromeda-scenario-evidence.workspace = true
-andromeda-statistics.workspace = true
 andromeda-wal.workspace = true

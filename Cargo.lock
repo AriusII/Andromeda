@@ -117,7 +117,6 @@ name = "andromeda-catalog"
 version = "0.1.0"
 dependencies = [
  "andromeda-business-fixtures",
- "andromeda-catalog-diff",
  "andromeda-catalog-recovery",
  "andromeda-catalog-store",
  "andromeda-contract",
@@ -126,10 +125,7 @@ dependencies = [
  "andromeda-digest",
  "andromeda-error",
  "andromeda-observe",
- "andromeda-plan-cache",
  "andromeda-procedure-contract",
- "andromeda-scenario-evidence",
- "andromeda-statistics",
  "andromeda-time",
  "andromeda-types",
  "andromeda-wal",
@@ -549,7 +545,6 @@ dependencies = [
  "andromeda-error",
  "andromeda-procedure-contract",
  "andromeda-proto-wire",
- "andromeda-rpc-protocol",
  "andromeda-structured-object",
  "andromeda-types",
  "proptest",
@@ -568,6 +563,7 @@ dependencies = [
  "andromeda-rpc-protocol",
  "andromeda-structured-object",
  "andromeda-types",
+ "proptest",
  "prost",
 ]
 
@@ -936,6 +932,7 @@ dependencies = [
  "andromeda-error",
  "andromeda-observability",
  "andromeda-scenario-evidence",
+ "andromeda-time",
  "andromeda-types",
 ]
 

@@ -12,7 +12,7 @@ It is the test-side source of truth for:
 - target property policy (`invalid_input_policy`),
 - execution status.
 
-Reference inventory (2026-05-08): `23` registered targets and `51` manifest seeds.
+Reference inventory (2026-05-09): `25` registered targets and `53` manifest seeds.
 
 ## Scope
 
@@ -40,7 +40,7 @@ Canonical definitions are:
 
 ## Fuzz target index (detailed)
 
-Reference state as of 2026-05-08.
+Reference state as of 2026-05-09.
 
 | Target | Corpus | Seeds | Property (`invalid_input_policy`) | Status | validation_date | owner | next_action |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -55,7 +55,7 @@ Reference state as of 2026-05-08.
 | `storage_wal_record_roundtrip` | `tests/fuzzing/corpus/storage_wal_record_roundtrip` | `seed-basic.bin`, `seed-valid-security-audit-frame.bin`, `seed1` | `return-or-error-no-panic` | `OK` | `2026-05-08` | `@AriusII` | `No immediate action` |
 | `wal_record_roundtrip` | `tests/fuzzing/corpus/storage_wal_record_roundtrip` | `seed-basic.bin`, `seed-valid-security-audit-frame.bin`, `seed1` | `return-or-error-no-panic` | `OK` | `2026-05-08` | `@AriusII` | `No immediate action` |
 | `btree_node_v1_decode` | `tests/fuzzing/corpus/btree_node_v1_decode` | `seed-basic.bin`, `seed-internal.bin` | `return-or-error-no-panic` | `OK` | `2026-05-08` | `@AriusII` | `No immediate action` |
-| `heap_page_v1_decode` | `tests/fuzzing/corpus/heap_page_v1_decode` | `seed-deleted-compacted-parity.bin`, `seed-empty-16k.bin`, `seed-free-offset-crosses-slot-directory.bin`, `seed-header-footer-slot-count-mismatch.bin`, `seed-overlapping-live-tuples.bin`, `seed-single-32k.bin`, `seed-slot-entry-outside-payload-area.bin`, `seed-sparse-deleted-middle-higher.bin`, `seed-two-tuples-16k.bin` | `return-or-error-no-panic` | `OK` | `2026-05-08` | `@AriusII` | `No immediate action` |
+| `heap_page_v1_decode` | `tests/fuzzing/corpus/heap_page_v1_decode` | `seed-deleted-compacted-parity.bin`, `seed-empty-16k.bin`, `seed-free-offset-crosses-slot-directory.bin`, `seed-header-footer-slot-count-mismatch.bin`, `seed-overlapping-live-tuples.bin`, `seed-single-32k.bin`, `seed-slot-entry-outside-payload-area.bin`, `seed-sparse-deleted-middle-live-higher.bin`, `seed-two-tuples-16k.bin` | `return-or-error-no-panic` | `OK` | `2026-05-08` | `@AriusII` | `No immediate action` |
 | `page_codec_v1_decode` | `tests/fuzzing/corpus/page_codec_v1_decode` | `seed-fixed-row-16k.bin`, `seed-manifest-32k.bin` | `return-or-error-no-panic` | `OK` | `2026-05-08` | `@AriusII` | `No immediate action` |
 | `quic_zero_rtt_admission` | `tests/fuzzing/corpus/quic_zero_rtt_admission` | `seed-basic.bin` | `return-or-error-no-panic` | `OK` | `2026-05-08` | `@AriusII` | `No immediate action` |
 | `quic_typed_frame_envelope_decode` | `tests/fuzzing/corpus/quic_typed_frame_envelope_decode` | `seed-basic.bin`, `seed-valid-rpc-execute-envelope-frame.bin` | `return-or-error-no-panic` | `OK` | `2026-05-08` | `@AriusII` | `No immediate action` |
@@ -63,10 +63,12 @@ Reference state as of 2026-05-08.
 | `rpc_protocol_frame_codec_decode` | `tests/fuzzing/corpus/rpc_protocol_frame_codec_decode` | `seed-basic.bin`, `seed-valid-rpc-execute-frame.bin` | `return-or-error-no-panic` | `OK` | `2026-05-08` | `@AriusII` | `No immediate action` |
 | `security_contract_admission_matrix` | `tests/fuzzing/corpus/security_contract_admission_matrix` | `seed-surface-permission-matrix.bin` | `property-assertion-no-panic` | `OK` | `2026-05-08` | `@AriusII` | `No immediate action` |
 | `manifest_decode` | `tests/fuzzing/corpus/manifest_decode` | `seed-basic.bin` | `return-or-error-no-panic` | `OK` | `2026-05-08` | `@AriusII` | `No immediate action` |
+| `manifest_boundary` | `tests/fuzzing/corpus/manifest_boundary` | `seed-basic.bin` | `return-or-error-no-panic` | `OK` | `2026-05-08` | `@AriusII` | `No immediate action` |
 | `segment_index_decode` | `tests/fuzzing/corpus/segment_index_decode` | `seed-basic.bin` | `return-or-error-no-panic` | `OK` | `2026-05-08` | `@AriusII` | `No immediate action` |
 | `contract_hash` | `tests/fuzzing/corpus/contract_hash` | `seed-basic.bin` | `return-or-error-no-panic` | `OK` | `2026-05-08` | `@AriusII` | `No immediate action` |
 | `definition_batch` | `tests/fuzzing/corpus/definition_batch` | `seed-basic.bin` | `property-assertion-no-panic` | `OK` | `2026-05-08` | `@AriusII` | `No immediate action` |
 | `structured_object_payload` | `tests/fuzzing/corpus/structured_object_payload` | `seed-basic.bin` | `return-or-error-no-panic` | `OK` | `2026-05-08` | `@AriusII` | `No immediate action` |
+| `recovery_manifest_durability_boundary` | `tests/fuzzing/corpus/recovery_manifest_durability_boundary` | `seed-basic.bin` | `property-assertion-no-panic` | `OK` | `2026-05-08` | `@AriusII` | `No immediate action` |
 
 ## Support modules (non-targets)
 

@@ -18,11 +18,17 @@ mod acquisition_wait_fairness_contracts;
 mod cleanup_snapshot_contracts;
 #[path = "lock_manager_contract/compatibility_contracts.rs"]
 mod compatibility_contracts;
+#[path = "lock_manager_contract/coordinator_contracts.rs"]
+mod coordinator_contracts;
 #[path = "lock_manager_contract/deadlock_timeout_contracts.rs"]
 mod deadlock_timeout_contracts;
 #[path = "lock_manager_contract/evidence_contracts.rs"]
 mod evidence_contracts;
 #[path = "lock_manager_contract/fixtures.rs"]
 mod fixtures;
+#[path = "lock_manager_contract/strict_2pl_contracts.rs"]
+mod strict_2pl_contracts;
 #[path = "lock_manager_contract/trace_boundary_contracts.rs"]
 mod trace_boundary_contracts;
+#[path = "lock_manager_contract/transaction_coordinator_cleanup_contracts.rs"]
+mod transaction_coordinator_cleanup_contracts;
