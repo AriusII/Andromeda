@@ -25,10 +25,10 @@ pub(crate) use andromeda_security::{
     AuthorizationDenialReason, AuthorizationOutcome, PrincipalBinding, PrincipalRegistry,
 };
 pub(crate) use andromeda_srpl_ir::Cardinality;
-pub(crate) use andromeda_storage::{
+pub(crate) use andromeda_storage_page::PageSize;
+pub(crate) use andromeda_storage_placement::{
     CoreIoPlacementRequest, OperationalProfile, StorageIoBudgetScope, StorageWorkloadClass,
 };
-pub(crate) use andromeda_storage_page::PageSize;
 pub(crate) use andromeda_transaction::TransactionState;
 pub(crate) use andromeda_types::{
     CatalogVersion, ContractHash, DatabaseId, InvocationId, NamespaceId, ProcedureId, TransactionId,

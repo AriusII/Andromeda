@@ -5,5 +5,3 @@
 //! should import storage root reexports or owner crates directly.
 
 pub mod page;
-
-pub use page::*;

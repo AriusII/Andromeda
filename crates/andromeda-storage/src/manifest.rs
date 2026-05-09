@@ -1,4 +1,3 @@
-use andromeda_error::{AndromedaError, AndromedaErrorKind};
 pub use andromeda_manifest::{
     DATABASE_MANIFEST_STORAGE_FORMAT_FINGERPRINTS, DatabaseManifest, DatabaseSnapshotPublication,
     ManifestDurabilityBoundary, SnapshotAvailabilityContract, SnapshotSegmentReference,
@@ -6,12 +5,6 @@ pub use andromeda_manifest::{
 };
 use andromeda_observe::{ManifestEventKind, ManifestTrace, TraceId};
 use andromeda_types::CatalogVersion;
-
-mod cold_publication;
-
-pub use cold_publication::{
-    ColdSegmentPublicationPlan, validate_cold_segment_publication_boundary,
-};
 
 pub trait DatabaseManifestTraceExt {
     fn validation_trace(
@@ -40,10 +33,6 @@ impl DatabaseManifestTraceExt for DatabaseManifest {
             reason: "manifest validation checked identity, CRC, and WAL recovery floor".to_string(),
         }
     }
-}
-
-pub(super) fn storage_error(message: impl Into<String>) -> AndromedaError {
-    AndromedaError::new(AndromedaErrorKind::Storage, message)
 }
 
 #[cfg(test)]

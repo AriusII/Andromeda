@@ -24,8 +24,8 @@ dependencies = [
  "andromeda-proto",
  "andromeda-resource",
  "andromeda-result-stream",
- "andromeda-storage",
  "andromeda-storage-page",
+ "andromeda-storage-placement",
  "andromeda-types",
 ]
 
@@ -290,6 +290,7 @@ dependencies = [
  "andromeda-storage",
  "andromeda-storage-heap",
  "andromeda-storage-page",
+ "andromeda-storage-placement",
  "andromeda-time",
  "andromeda-transaction",
  "andromeda-transaction-log",
@@ -381,6 +382,7 @@ dependencies = [
  "andromeda-storage",
  "andromeda-storage-heap",
  "andromeda-storage-page",
+ "andromeda-storage-placement",
  "andromeda-transaction",
  "andromeda-transaction-log",
  "andromeda-types",
@@ -458,8 +460,8 @@ dependencies = [
  "andromeda-error",
  "andromeda-hardware",
  "andromeda-observability",
- "andromeda-storage",
  "andromeda-storage-page",
+ "andromeda-storage-placement",
  "andromeda-types",
 ]
 
@@ -992,6 +994,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-storage-placement"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+ "andromeda-hardware",
+ "andromeda-observe",
+ "andromeda-segment",
+ "andromeda-storage-page",
+]
+
+[[package]]
 name = "andromeda-structured-object"
 version = "0.1.0"
 dependencies = [
@@ -1036,6 +1049,10 @@ dependencies = [
  "andromeda-error",
  "andromeda-time",
  "andromeda-types",
+ "async-trait",
+ "dashmap",
+ "futures",
+ "tokio",
 ]
 
 [[package]]

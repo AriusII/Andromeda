@@ -96,7 +96,7 @@ fn g4_catalog_conflict_rejects_after_all_sources_materialize() {
         error.diagnostics[0]
             .diagnostic
             .message
-            .contains("materialized DefinitionBatch was rejected by catalog dry-run")
+            .contains("materialized DefinitionBatch was rejected by portable dry-run")
     );
 }
 

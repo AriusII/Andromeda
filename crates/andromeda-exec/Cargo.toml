@@ -34,6 +34,7 @@ andromeda-srpl-ir.workspace = true
 andromeda-storage.workspace = true
 andromeda-storage-heap.workspace = true
 andromeda-storage-page.workspace = true
+andromeda-storage-placement.workspace = true
 andromeda-time.workspace = true
 andromeda-transaction.workspace = true
 andromeda-transaction-log.workspace = true

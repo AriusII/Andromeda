@@ -1,10 +1,10 @@
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_hardware::{PipelineClass, ResourceBudget};
 use andromeda_observe::TraceId;
-use andromeda_storage::{
+use andromeda_storage_page::PageSize;
+use andromeda_storage_placement::{
     CoreIoPlacementRequest, OperationalProfile, StorageIoBudgetScope, StorageWorkloadClass,
 };
-use andromeda_storage_page::PageSize;
 
 use crate::{
     CompletionStatus, ExecutionIoAdmissionDecision, ExecutionIoAdmissionRequest, InvocationReject,

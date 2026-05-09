@@ -1,10 +1,7 @@
 use andromeda_audit as audit;
 use andromeda_error::AndromedaResult;
 
-use super::{
-    TraceEventFamily, TraceQueryLsnRange, TraceQueryMetadata, TraceQueryPermissionMatrix,
-    TraceQuerySpec,
-};
+use super::{TraceEventFamily, TraceQueryLsnRange, TraceQueryMetadata, TraceQuerySpec};
 use crate::{
     DurableAuditEventFamily, DurableAuditReplayBehavior, DurableAuditReplayRecord,
     DurableAuditRetentionBoundary, EventId, Permission, SurfaceScope, TraceId,
@@ -123,18 +120,7 @@ fn trace_query_metadata(metadata: audit::DurableAuditTraceQueryMetadata) -> Trac
         total_matching_rows: metadata.total_matching_rows,
         truncated: metadata.truncated,
         ordered_by_event_id_ascending: metadata.ordered_by_event_id_ascending,
-        permission_matrix: trace_query_permission_matrix(metadata.permission_matrix),
-    }
-}
-
-fn trace_query_permission_matrix(
-    matrix: audit::DurableAuditTraceQueryPermissionMatrix,
-) -> TraceQueryPermissionMatrix {
-    TraceQueryPermissionMatrix {
-        surface: matrix.surface,
-        required_permission: matrix.required_permission,
-        audit_operation: matrix.audit_operation,
-        audit_required: matrix.audit_required,
+        permission_matrix: metadata.permission_matrix,
     }
 }
 

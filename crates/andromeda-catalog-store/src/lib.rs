@@ -5,10 +5,10 @@
 Runtime-free catalog object and store boundary crate.
 
 This crate owns the narrow import boundary for catalog object descriptors,
-qualified names, store-facing report DTOs, append-sequence validation, and
-stable taxonomy placeholders. It does not implement catalog storage, WAL replay,
-recovery, publication, release readiness, network or disk serialization, or any
-application-facing ad hoc SQL surface.
+qualified names, store-facing report DTOs, append-sequence validation, snapshot
+state, dependency validation, durable publication gates, and stable taxonomy
+placeholders. It does not implement WAL replay, recovery, release readiness,
+network or disk serialization, or any application-facing ad hoc SQL surface.
 
 Catalog publication remains outside this crate and must not become visible
 without durable WAL.
@@ -59,8 +59,10 @@ pub use runtime_boundary::{
     DurableCatalogRuntimeHandle,
 };
 pub use snapshot::{
-    CatalogObjectLifecycle, CatalogObjectLifecycleStatus, CatalogSnapshotApplyReport,
-    CatalogSnapshotPublication, CatalogSnapshotPublicationGate, CatalogSnapshotReceipt,
+    CatalogObjectLifecycle, CatalogObjectLifecycleStatus, CatalogSnapshot,
+    CatalogSnapshotApplyReport, CatalogSnapshotDefinitionBatchOperation,
+    CatalogSnapshotMutationPlan, CatalogSnapshotPlannedObject, CatalogSnapshotPublication,
+    CatalogSnapshotPublicationGate, CatalogSnapshotReceipt, CatalogSnapshotReceiptFactory,
 };
 pub use store_boundary::{
     CatalogStoreApplyReport, CatalogStoreDurableApplyReport, CatalogStoreMutationKind,

@@ -8,8 +8,6 @@ pub mod format_version;
 mod heap;
 mod lsn;
 mod manifest;
-mod operational_profile;
-mod placement;
 mod recovery;
 mod wal_record_catalog;
 
@@ -86,8 +84,6 @@ pub use heap::{
 };
 pub use lsn::*;
 pub use manifest::*;
-pub use operational_profile::*;
-pub use placement::*;
 pub use recovery::{
     CatalogReplayFromLsnReport, CatalogSnapshot, ConceptualRedoPlan, FastStartAcceptance,
     FastStartRejection, ForensicAnomaly, ForensicAnomalyKind, ForensicAnomalyReport,

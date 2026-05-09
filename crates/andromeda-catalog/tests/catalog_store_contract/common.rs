@@ -13,7 +13,7 @@ pub(crate) use andromeda_catalog_store::{
 };
 pub(crate) use andromeda_definition_batch::{
     CatalogDependencyKind, CatalogLifecycleTarget, DefinitionBatch, DefinitionBatchId,
-    DefinitionBatchSourceHash, DefinitionOperation,
+    DefinitionOperation,
 };
 pub(crate) use andromeda_error::{AndromedaError, AndromedaErrorKind};
 pub(crate) use andromeda_procedure_contract::{

@@ -5,7 +5,7 @@ use andromeda_resource::{
     ExecutionResourceAdmissionDecision, ExecutionResourceAdmissionRequest,
     ResourceAdmissionRejection, ResourceBudget,
 };
-use andromeda_storage::{
+use andromeda_storage_placement::{
     CoreIoPlacementDecision, CoreIoPlacementPolicy, CoreIoPlacementRequest, OperationalProfile,
     OperationalProfileMode, StorageWorkloadClass,
 };
@@ -125,10 +125,10 @@ fn resource_reject(reason: impl Into<String>) -> InvocationReject {
 mod tests {
     use super::*;
     use andromeda_hardware::{GpuExecutionPolicy, GpuProfile};
-    use andromeda_storage::{
+    use andromeda_storage_page::PageSize;
+    use andromeda_storage_placement::{
         IoLatencyBudget, IoPathBudget, IoPathClass, IoThroughputBudget, StorageIoBudgetScope,
     };
-    use andromeda_storage_page::PageSize;
 
     fn hot_page_placement_request(
         workload: StorageWorkloadClass,

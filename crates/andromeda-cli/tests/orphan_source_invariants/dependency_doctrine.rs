@@ -396,6 +396,7 @@ const STRICT_PRODUCTION_DEPENDENCY_ALLOWLISTS: &[(&str, &[&str])] = &[
             "andromeda-storage",
             "andromeda-storage-heap",
             "andromeda-storage-page",
+            "andromeda-storage-placement",
             "andromeda-time",
             "andromeda-mvcc",
             "andromeda-transaction",
@@ -438,7 +439,7 @@ const STRICT_DEV_DEPENDENCY_ALLOWLISTS: &[(&str, &[&str])] = &[
     ),
     (
         "andromeda-observe",
-        &["andromeda-storage", "andromeda-storage-page"],
+        &["andromeda-storage-page", "andromeda-storage-placement"],
     ),
     (
         "andromeda-quic",

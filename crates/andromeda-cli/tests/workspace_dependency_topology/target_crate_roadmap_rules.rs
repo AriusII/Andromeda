@@ -24,6 +24,7 @@ const C5_DURABLE_KERNEL_CRATES: &[&str] = &[
     "andromeda-storage-heap",
     "andromeda-storage-index",
     "andromeda-storage-page",
+    "andromeda-storage-placement",
     "andromeda-transaction",
     "andromeda-transaction-log",
     "andromeda-wal",
@@ -187,8 +188,8 @@ const ALLOWED_RUNTIME_CRITICAL_PROTO_SOURCE_IMPORTS: &[(&str, &[&str])] =
 const TEMPORARY_DEV_DEPENDENCY_BACKEDGE_EXCEPTIONS: &[TemporaryDependencyException] = &[
     TemporaryDependencyException {
         source: "andromeda-observe",
-        dependency: "andromeda-storage",
-        exit_criteria: "Exit criteria: move durable audit storage fixtures into an acyclic test-support crate or remove observe's dev-dependency on storage.",
+        dependency: "andromeda-storage-placement",
+        exit_criteria: "Exit criteria: move IO pipeline placement fixtures into an acyclic test-support crate or remove observe's dev-dependency on storage placement.",
     },
     TemporaryDependencyException {
         source: "andromeda-exec",

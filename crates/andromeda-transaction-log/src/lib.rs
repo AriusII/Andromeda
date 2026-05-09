@@ -19,8 +19,10 @@ mod adapter_replay;
 mod entry;
 mod error;
 mod lsn;
+mod manager;
 mod replay;
 mod rollback;
+mod status;
 mod status_rebuild;
 mod wal;
 
@@ -30,8 +32,10 @@ pub use adapter_replay::{
 pub use entry::{CommitLogEntry, IsolationLevel, WalRecordKind};
 pub use error::TxWalAdapterError;
 pub use lsn::Lsn;
+pub use manager::CommitLogManager;
 pub use replay::{TxWalReplayAction, TxWalReplayRecord, TxWalReplaySummary};
 pub use rollback::RollbackLogEntry;
+pub use status::{TransactionLogStatus, TransactionStatusStore};
 pub use status_rebuild::TransactionStatusRebuild;
 pub use wal::{
     InvocationWal, InvocationWalFuture, TX_COMMIT_PAYLOAD_LEN, TX_ROLLBACK_PAYLOAD_LEN,

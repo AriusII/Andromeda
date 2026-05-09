@@ -18,13 +18,20 @@ C5 invariants:
 mod coverage;
 #[cfg(test)]
 mod crash_recovery_matrix;
+mod fast_start;
 mod file_wal_report;
 mod file_wal_startup;
+mod forensic_start;
 mod planning;
 mod replay;
+mod safe_start;
 mod startup;
+mod trace;
 mod transaction_wal_bridge;
 mod undo;
+mod wal_replay;
+
+use andromeda_error::{AndromedaError, AndromedaErrorKind};
 
 /// Startup mode requested for recovery against durable evidence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,6 +45,7 @@ pub enum StartupMode {
 }
 
 pub use coverage::{WalCoverageEvidence, validate_wal_coverage};
+pub use fast_start::{FastStartAcceptance, FastStartRejection, fast_start_from_manifest_and_scan};
 pub use file_wal_report::{
     FileWalRecoveryBoundaryKind, FileWalRecoveryIgnoredTransaction,
     FileWalRecoveryIgnoredTransactionReason, FileWalRecoveryReplayRecord, FileWalRecoveryReportV0,
@@ -49,9 +57,15 @@ pub use file_wal_startup::{
     plan_file_wal_startup_recovery_v0, recover_from_file_wal,
     recovered_transaction_id_floor_from_records,
 };
+pub use forensic_start::{
+    ForensicAnomaly, ForensicAnomalyKind, ForensicAnomalyReport, ForensicStartAcceptance,
+    forensic_start_from_manifest_and_scan,
+};
 pub use planning::{
-    ConceptualRedoPlan, RecoveryManifestView, RecoveryPlan, RecoveryTraceProjection,
-    RedoRecordDecision, RedoRecordPlan,
+    ConceptualRedoPlan, PreRedoStorageFormatDecision, PreRedoStorageFormatGate,
+    PreRedoStorageFormatRejection, RECOVERY_REQUIRED_STORAGE_FORMATS, RecoveryManifestView,
+    RecoveryPlan, RecoveryTraceProjection, RedoRecordDecision, RedoRecordPlan,
+    StorageFormatFingerprint,
 };
 pub use replay::{
     HeapRedoPageState, HeapRedoSlotState, IndexRebuildRequiredEvidence,
@@ -59,15 +73,24 @@ pub use replay::{
     ReplayOutcome, ReplayResult, WalReplayReport, execute_redo_plan_with_adapter,
     replay_wal_record, replay_wal_record_result,
 };
+pub use safe_start::{
+    SafeStartAcceptance, SafeStartInvariantReport, SafeStartTailDiscard,
+    safe_start_from_manifest_and_scan, verify_safe_start_invariants,
+};
 pub use startup::{
     ObservedBoundary, StartupAcceptance, StartupAuditProjection, StartupDecision, StartupEvidence,
     StartupOutcome, StartupRejectionReason, decide_startup,
 };
+pub use trace::RecoveryTrace;
 pub use transaction_wal_bridge::{
     CommitLogInvocationWal, DurableTransactionWalPrefix, TransactionReplayFromWalEvidence,
     TxReplayBridgeEvidence, map_durable_wal_prefix_to_tx_replay,
 };
 pub use undo::{UndoChain, UndoChainsBuilder, UndoOperation, UndoRecord};
+pub use wal_replay::{
+    execute_redo_plan, execute_redo_plan_into_context, replay_wal_from_lsn,
+    replay_wal_from_lsn_into_context,
+};
 
 impl StartupMode {
     /// Returns `true` when this mode is allowed to replay records after a clean
@@ -80,6 +103,10 @@ impl StartupMode {
     pub const fn requires_forensic_report(self) -> bool {
         matches!(self, Self::ForensicStart)
     }
+}
+
+fn recovery_error(message: impl Into<String>) -> AndromedaError {
+    AndromedaError::new(AndromedaErrorKind::Storage, message)
 }
 
 #[cfg(test)]

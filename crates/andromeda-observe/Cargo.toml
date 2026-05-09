@@ -14,5 +14,5 @@ andromeda-observability.workspace = true
 andromeda-types.workspace = true
 
 [dev-dependencies]
-andromeda-storage.workspace = true
 andromeda-storage-page.workspace = true
+andromeda-storage-placement.workspace = true

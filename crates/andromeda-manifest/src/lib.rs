@@ -18,12 +18,14 @@ C5 invariants:
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_wal::Lsn;
 
+mod cold_publication;
 mod database;
 mod format;
 pub mod format_version;
 mod snapshot;
 mod storage_format_hash;
 
+pub use cold_publication::PublishedColdSegment;
 pub use database::DatabaseManifest;
 pub use format::{DATABASE_MANIFEST_STORAGE_FORMAT_FINGERPRINTS, StorageFormatManifest};
 pub use format_version::{

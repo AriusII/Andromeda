@@ -14,8 +14,8 @@ andromeda-principal.workspace = true
 andromeda-proto.workspace = true
 andromeda-resource.workspace = true
 andromeda-result-stream.workspace = true
-andromeda-storage.workspace = true
 andromeda-storage-page.workspace = true
+andromeda-storage-placement.workspace = true
 andromeda-types.workspace = true
 
 [dev-dependencies]

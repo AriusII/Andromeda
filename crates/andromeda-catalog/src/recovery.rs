@@ -1,19 +1,19 @@
-//! Catalog mutation recovery replay.
-//!
-//! Recovery consumes the durable catalog mutation payloads produced by
-//! [`crate::CatalogMutationRecord::encode_durable_payload`], reconstructs only
-//! fully committed begin/apply/commit batches, and replays those batches into a
-//! [`crate::CatalogSnapshot`].  Incomplete or anomalous batches are not applied.
+//! Compatibility facade for catalog snapshot recovery.
 
-mod replay;
-mod types;
+use crate::{CatalogMutationRecord, CatalogSnapshot};
 
-pub use types::*;
-
-use crate::{
-    CatalogMutationRecord, CatalogSnapshot,
-    recovery::replay::{indexed_recovery_record, replay_indexed_catalog_mutation_records},
+pub use andromeda_catalog_recovery::{
+    CatalogDurableMutationPayload, CatalogRecoveredBatch, CatalogRecoveryAnomaly,
+    CatalogRecoveryAnomalyKind, CatalogRecoveryReport, CatalogSkippedBatch,
+    CatalogSkippedBatchReason,
 };
+
+/// Result of catalog snapshot recovery replay.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatalogRecoveryOutcome {
+    pub snapshot: CatalogSnapshot,
+    pub report: CatalogRecoveryReport,
+}
 
 /// Decode durable catalog payloads and replay committed catalog mutation batches.
 ///
@@ -43,10 +43,14 @@ pub fn replay_catalog_mutation_records(
     snapshot: CatalogSnapshot,
     records: impl IntoIterator<Item = CatalogMutationRecord>,
 ) -> CatalogRecoveryOutcome {
-    let indexed = records
-        .into_iter()
-        .enumerate()
-        .map(|(record_index, record)| indexed_recovery_record(record_index, record))
-        .collect();
-    replay_indexed_catalog_mutation_records(snapshot, indexed, Vec::new())
+    let outcome = andromeda_catalog_recovery::replay_catalog_mutation_records_into_target(
+        snapshot,
+        records
+            .into_iter()
+            .map(andromeda_catalog_recovery::CatalogMutationRecord::from),
+    );
+    CatalogRecoveryOutcome {
+        snapshot: outcome.target,
+        report: outcome.report,
+    }
 }

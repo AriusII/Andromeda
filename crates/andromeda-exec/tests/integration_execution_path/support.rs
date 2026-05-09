@@ -9,10 +9,10 @@ pub use andromeda_inventory_demo::{
 };
 pub use andromeda_observe::{EventCorrelation, EventEmitter, EventId, InMemoryEventSink, TraceId};
 pub use andromeda_procedure_contract::ProcedureContract;
-pub use andromeda_storage::{
+pub use andromeda_storage_page::PageSize;
+pub use andromeda_storage_placement::{
     CoreIoPlacementRequest, OperationalProfile, StorageIoBudgetScope, StorageWorkloadClass,
 };
-pub use andromeda_storage_page::PageSize;
 pub use andromeda_transaction::TransactionState;
 pub use andromeda_types::{ContractHash, InvocationId, RequestId, TransactionId};
 pub use andromeda_wal::{InMemoryWal, Lsn, WalRecordKind};

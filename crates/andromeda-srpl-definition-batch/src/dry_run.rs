@@ -1,13 +1,13 @@
 use andromeda_catalog::{
-    CatalogDefinitionBatchPlanning, CatalogMutationRecordKind, CatalogSystemDurableApplyReport,
-    CatalogSystemStore, DefinitionBatchPlan,
+    CatalogMutationRecordKind, CatalogSystemDurableApplyReport, CatalogSystemStore,
 };
 use andromeda_catalog_store::CatalogDefinition;
 use andromeda_definition_batch::{
-    DefinitionBatch, DefinitionBatchDependencyGraphHash, DefinitionBatchId,
+    DefinitionBatch, DefinitionBatchDependencyGraphHash, DefinitionBatchDryRun, DefinitionBatchId,
     DefinitionBatchSourceHash, DefinitionOperation, MAX_SRPL_DEFINITION_BATCH_PROCEDURES,
     SrplDefinitionBatchDiagnostic, SrplDefinitionBatchDryRunError,
     SrplDefinitionBatchSourceEvidence, SrplProcedureDryRunManifest, SrplProcedureSourceDigest,
+    dry_run_definition_batch,
 };
 use andromeda_error::AndromedaResult;
 use andromeda_procedure_contract::ProcedureContract;
@@ -51,7 +51,7 @@ pub struct SrplDefinitionBatchDryRunRequest {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SrplDefinitionBatchDryRunReport {
     pub definition_batch: DefinitionBatch,
-    pub plan: DefinitionBatchPlan,
+    pub plan: DefinitionBatchDryRun,
     pub definition_batch_source_hash: DefinitionBatchSourceHash,
     pub definition_batch_dependency_graph_hash: DefinitionBatchDependencyGraphHash,
     pub manifests: Vec<SrplProcedureDryRunManifest>,
@@ -306,9 +306,16 @@ fn build_dry_run_report(
         base_version,
         operations,
     };
-    let plan = definition_batch.dry_run().map_err(|error| {
+    let plan = dry_run_definition_batch(
+        definition_batch.batch_id,
+        definition_batch.database_id,
+        definition_batch.namespace_id,
+        definition_batch.base_version,
+        &definition_batch.operations,
+    )
+    .map_err(|error| {
         SrplDefinitionBatchDryRunError::new(vec![SrplDefinitionBatchDiagnostic::batch(format!(
-            "materialized DefinitionBatch was rejected by catalog dry-run: {error}"
+            "materialized DefinitionBatch was rejected by portable dry-run: {error}"
         ))])
     })?;
     let definition_batch_source_hash = definition_batch.source_hash();

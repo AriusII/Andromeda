@@ -4,8 +4,9 @@ use andromeda_catalog_recovery::{
     CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH, CatalogDurableMutationPayload,
     CatalogMutationBoundary, CatalogMutationDelta, CatalogMutationOperation, CatalogMutationRecord,
     CatalogPublicationSemantics, CatalogRecoveryAnomalyKind, CatalogRecoveryApplyTarget,
-    CatalogSkippedBatchReason, encode_catalog_durable_payload,
-    recover_catalog_target_from_durable_payloads, replay_catalog_mutation_records_into_target,
+    CatalogSkippedBatchReason, DefinitionBatchDependencyGraphHash, decode_catalog_durable_payload,
+    encode_catalog_durable_payload, recover_catalog_target_from_durable_payloads,
+    replay_catalog_mutation_records_into_target,
 };
 use andromeda_catalog_store::{
     CatalogDefinition, CatalogObjectRef, ObjectKind, QualifiedName, TableDefinition,
@@ -363,6 +364,75 @@ fn recovery_reports_wrong_identity_version_gap_outer_kind_and_payload_corruption
         assert_has_anomaly(&corrupt_outcome.report.anomalies, expected_kind);
         assert_eq!(corrupt_outcome.target.visible_version, version(10));
     }
+}
+
+#[test]
+fn durable_payload_rejects_planned_only_publication_boundary() {
+    let batch = table_batch(10, &[(1, "Inventory.Product")]);
+    let mut record = records_for_batch(&batch).into_iter().next().unwrap();
+    match &mut record {
+        CatalogMutationRecord::Begin(boundary) => {
+            boundary.publication_semantics = CatalogPublicationSemantics::PlannedVersionOnly;
+        },
+        _ => unreachable!("definition batch WAL sequence must start with Begin"),
+    }
+
+    let error = encode_catalog_durable_payload(&record).unwrap_err();
+
+    assert!(error.message().contains("durable publication semantics"));
+}
+
+#[test]
+fn durable_payload_boundaries_roundtrip_definition_batch_hashes() {
+    let batch = table_batch(10, &[(1, "Inventory.Product")]);
+    let expected_source_hash = batch.source_hash();
+    let expected_dependency_graph_hash = batch.dependency_graph_hash().unwrap();
+    let records = records_for_batch(&batch);
+
+    for record in [records.first().unwrap(), records.last().unwrap()] {
+        let decoded =
+            decode_catalog_durable_payload(&encode_catalog_durable_payload(record).unwrap())
+                .unwrap();
+
+        match decoded {
+            CatalogMutationRecord::Begin(boundary) | CatalogMutationRecord::Commit(boundary) => {
+                assert_eq!(boundary.source_hash, expected_source_hash);
+                assert_eq!(
+                    boundary.dependency_graph_hash,
+                    expected_dependency_graph_hash
+                );
+                assert!(!boundary.source_hash.is_zero());
+                assert!(!boundary.dependency_graph_hash.is_zero());
+            },
+            CatalogMutationRecord::Apply(_) => unreachable!("boundary test selected apply record"),
+        }
+    }
+}
+
+#[test]
+fn durable_payload_boundary_rejects_missing_definition_batch_hash() {
+    let batch = table_batch(10, &[(1, "Inventory.Product")]);
+    let mut record = records_for_batch(&batch).into_iter().next().unwrap();
+    match &mut record {
+        CatalogMutationRecord::Begin(boundary) => {
+            boundary.source_hash = DefinitionBatchSourceHash::default();
+        },
+        _ => unreachable!("definition batch WAL sequence must start with Begin"),
+    }
+
+    let source_error = encode_catalog_durable_payload(&record).unwrap_err();
+    assert!(source_error.message().contains("source hash"));
+
+    let mut record = records_for_batch(&batch).into_iter().next().unwrap();
+    match &mut record {
+        CatalogMutationRecord::Begin(boundary) => {
+            boundary.dependency_graph_hash = DefinitionBatchDependencyGraphHash::default();
+        },
+        _ => unreachable!("definition batch WAL sequence must start with Begin"),
+    }
+
+    let dependency_error = encode_catalog_durable_payload(&record).unwrap_err();
+    assert!(dependency_error.message().contains("dependency graph hash"));
 }
 
 fn records_for_batch(batch: &DefinitionBatch) -> Vec<CatalogMutationRecord> {

@@ -14,7 +14,7 @@
 #![cfg(test)]
 
 use andromeda_manifest::{
-    validate_manifest_atomic_switch, validate_recovery_floor, ManifestDurabilityBoundary,
+    ManifestDurabilityBoundary, validate_manifest_atomic_switch, validate_recovery_floor,
 };
 use andromeda_wal::Lsn;
 
@@ -34,12 +34,20 @@ fn bench_atomic_switch_validation_throughput() {
 
     let elapsed = start.elapsed();
     let per_op = elapsed.as_micros() as f64 / iterations as f64;
-    
+
     println!("Atomic switch validation: {:.3}µs per operation", per_op);
-    println!("Total: {} µs for {} operations", elapsed.as_micros(), iterations);
-    
+    println!(
+        "Total: {} µs for {} operations",
+        elapsed.as_micros(),
+        iterations
+    );
+
     // Assert performance SLA: < 10µs per operation
-    assert!(per_op < 10.0, "Atomic switch validation exceeded SLA: {:.3}µs", per_op);
+    assert!(
+        per_op < 10.0,
+        "Atomic switch validation exceeded SLA: {:.3}µs",
+        per_op
+    );
 }
 
 #[test]
@@ -57,12 +65,20 @@ fn bench_recovery_floor_validation_throughput() {
 
     let elapsed = start.elapsed();
     let per_op = elapsed.as_micros() as f64 / iterations as f64;
-    
+
     println!("Recovery floor validation: {:.3}µs per operation", per_op);
-    println!("Total: {} µs for {} operations", elapsed.as_micros(), iterations);
-    
+    println!(
+        "Total: {} µs for {} operations",
+        elapsed.as_micros(),
+        iterations
+    );
+
     // Assert performance SLA: < 1µs per operation
-    assert!(per_op < 1.0, "Recovery floor validation exceeded SLA: {:.3}µs", per_op);
+    assert!(
+        per_op < 1.0,
+        "Recovery floor validation exceeded SLA: {:.3}µs",
+        per_op
+    );
 }
 
 #[test]
@@ -87,12 +103,23 @@ fn bench_manifest_boundary_validation_throughput() {
 
     let elapsed = start.elapsed();
     let per_op = elapsed.as_micros() as f64 / iterations as f64;
-    
-    println!("Manifest boundary validation: {:.3}µs per operation", per_op);
-    println!("Total: {} µs for {} operations", elapsed.as_micros(), iterations);
-    
+
+    println!(
+        "Manifest boundary validation: {:.3}µs per operation",
+        per_op
+    );
+    println!(
+        "Total: {} µs for {} operations",
+        elapsed.as_micros(),
+        iterations
+    );
+
     // Assert performance SLA: < 5µs per operation
-    assert!(per_op < 5.0, "Manifest boundary validation exceeded SLA: {:.3}µs", per_op);
+    assert!(
+        per_op < 5.0,
+        "Manifest boundary validation exceeded SLA: {:.3}µs",
+        per_op
+    );
 }
 
 #[test]
@@ -118,10 +145,14 @@ fn bench_recovery_check_throughput() {
 
     let elapsed = start.elapsed();
     let per_op = elapsed.as_micros() as f64 / iterations as f64;
-    
+
     println!("Recovery check: {:.3}µs per operation", per_op);
-    println!("Total: {} µs for {} operations", elapsed.as_micros(), iterations);
-    
+    println!(
+        "Total: {} µs for {} operations",
+        elapsed.as_micros(),
+        iterations
+    );
+
     // Assert performance SLA: < 1µs per operation
     assert!(per_op < 1.0, "Recovery check exceeded SLA: {:.3}µs", per_op);
 }
@@ -145,12 +176,20 @@ fn bench_combined_validation_throughput() {
 
     let elapsed = start.elapsed();
     let per_op = elapsed.as_micros() as f64 / iterations as f64;
-    
+
     println!("Combined validation: {:.3}µs per operation", per_op);
-    println!("Total: {} µs for {} operations", elapsed.as_micros(), iterations);
-    
+    println!(
+        "Total: {} µs for {} operations",
+        elapsed.as_micros(),
+        iterations
+    );
+
     // Assert combined performance SLA: < 15µs per operation
-    assert!(per_op < 15.0, "Combined validation exceeded SLA: {:.3}µs", per_op);
+    assert!(
+        per_op < 15.0,
+        "Combined validation exceeded SLA: {:.3}µs",
+        per_op
+    );
 }
 
 #[test]

@@ -19,9 +19,10 @@
 //! | Segment reclaimability policy               | `andromeda_wal::write_ahead_log::segment_reclaimability` |
 //! | CommitLogEntry and CommitLog persistence    | `andromeda_wal::write_ahead_log::commit_log_entry` |
 //!
-//! The pure WAL submodules below are thin re-export facades for `andromeda_wal`.
-//! They MUST NOT define types of their own. The compatibility `crate::wal` root surface
-//! is preserved for compatibility with older imports.
+//! The pure WAL items below are compatibility aliases for owner crates. New
+//! callers should import pure WAL types from `andromeda_wal`, HADR shipping
+//! contracts from `andromeda_hadr`, and heap redo payloads from
+//! `andromeda_storage_heap`.
 //!
 //! Doctrine reminders enforced by the items re-exported here:
 //! * `visible commit == durable WAL` — frames are flushed before commit
@@ -30,10 +31,6 @@
 //! * No unsafe code, no ad-hoc SQL, no runtime JSON normative protocol, no
 //!   gRPC/tonic transport.
 
-pub mod codec;
-pub mod commit_log_entry;
-pub mod commit_log_facade;
-pub mod compaction;
 pub mod durability_fence;
 pub mod file {
     //! Re-export surface for file-backed WAL ownership and storage recovery.
@@ -51,35 +48,46 @@ pub mod file {
         FileWalHeader, scan_file_wal,
     };
 }
-pub mod gc;
-pub mod gc_eligibility;
-pub mod heap_redo;
-pub mod manager;
-pub mod record;
-pub mod record_bounds;
-pub mod segment;
-pub mod segment_reclaimability;
-pub mod shipping;
-mod transaction;
 
-pub use codec::*;
-pub use commit_log_entry::*;
-pub use commit_log_facade::*;
-pub use compaction::*;
+pub mod record {
+    //! Narrow compatibility alias for storage recovery tests that still import
+    //! WAL records through storage while recovery/file_wal ownership is split.
+
+    pub use andromeda_wal::{
+        WalRecord, WalRecordHeader, WalRecordKind, wal_record_checksum, wal_record_kind_from_tag,
+        wal_record_kind_tag,
+    };
+}
+
+pub use andromeda_hadr::shipping_contract::{
+    WalNodeIdentity, WalNodeRole, WalReplicaExpectation, WalReplicaSafeLsnTracker,
+    WalShipmentAccepted, WalShipmentBatch, WalShipmentRange, WalShipmentRejection, WalShippingAck,
+};
+pub use andromeda_storage_heap::{
+    HEAP_ROW_REDO_HEADER_LEN, HEAP_ROW_REDO_NONE_SLOT_ID, HEAP_ROW_REDO_PAYLOAD_MAGIC,
+    HEAP_ROW_REDO_PAYLOAD_VERSION, HeapRowRedoOperation, HeapRowRedoPayloadError,
+    HeapRowRedoPayloadV1,
+};
+pub use andromeda_wal::{
+    ArchiveStatus, CommitLog, CommitLogEntry, CommitLogFacade, CompactionContext, CompactionResult,
+    DefaultReclaimabilityPolicy, DurableTransactionClassifications, DurableTransactionResume,
+    DurableTransactionState, EligibilityResult, FragmentationMetrics, GcEligibilityChecker,
+    InMemoryWal, IncompleteDurableTransaction, MemoryWal, ReclaimabilityDecision,
+    ReclaimabilityEvidence, RetentionBoundaryPolicy, Timestamp, WAL_BATCH_ROW_LIMIT,
+    WAL_BYTE_ORDER_LITTLE_ENDIAN, WAL_FORMAT_VERSION, WAL_FORMAT_VERSION_V1, WAL_RECORD_HEADER_LEN,
+    WAL_RECORD_HEADER_OVERHEAD, WAL_RECORD_MAGIC, WAL_RECORD_SIZE_LIMIT, WAL_SEGMENT_BOUNDARY,
+    WalCompactionAuditEvent, WalCompactionScheduler, WalCompactionSchedulerConfig,
+    WalCompactionSummary, WalFrameHeader, WalGarbageCollector, WalGcAuditEvent, WalGcCandidate,
+    WalGcContext, WalGcScheduler, WalGcSchedulerConfig, WalGcSummary, WalRecord, WalRecordHeader,
+    WalRecordKind, WalReplicaSafeLsnBoundaryProvider, WalScanResult, WalScanStop,
+    WalScanStopReason, WalSegment, WalSegmentDescriptor, WalSegmentReclaimability,
+    classify_durable_transactions, compact_segment, decode_frame_header, decode_wal_record_frame,
+    encode_wal_record, encoded_wal_record_len, identify_compaction_candidates,
+    incomplete_transactions_from_records, scan_wal_records, scan_wal_records_from,
+    summarize_transaction, summarize_transactions_from_records, validate_lsn_continuity,
+    validate_record_size, validate_segment_boundary, validate_transaction_batch_cardinality,
+    validate_wal_batch_bounds, validate_wal_record_bounds, wal_record_checksum,
+    wal_record_kind_from_tag, wal_record_kind_tag,
+};
 pub use durability_fence::*;
 pub use file::*;
-pub use gc::*;
-pub use gc_eligibility::*;
-pub use heap_redo::*;
-pub use manager::*;
-pub use record::*;
-pub use record_bounds::*;
-pub use segment::*;
-pub use segment_reclaimability::*;
-pub use shipping::*;
-pub use transaction::{
-    DurableTransactionClassifications, DurableTransactionResume, DurableTransactionState,
-    IncompleteDurableTransaction, classify_durable_transactions,
-    incomplete_transactions_from_records, summarize_transaction,
-    summarize_transactions_from_records,
-};

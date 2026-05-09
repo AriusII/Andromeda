@@ -10,8 +10,8 @@
 //! 1. Each type is defined exactly once across the crate.
 //! 2. The single definition lives at the documented canonical path.
 //!
-//! Storage compatibility modules must remain `pub use`-only re-exports for WAL and
-//! physical FileWal owner types. FileWal recovery reports remain storage-owned.
+//! Storage must not grow compatibility files for pure WAL owner types. FileWal
+//! recovery reports remain storage-owned.
 
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
@@ -122,33 +122,38 @@ fn wal_ownership_types_have_single_canonical_definition() {
 }
 
 #[test]
-fn wal_facade_files_remain_reexport_only() {
+fn pure_wal_facade_files_stay_demolished() {
     let workspace = workspace_root();
-    let facades = [
-        "crates/andromeda-storage/src/lsn.rs",
+    let demolished_facades = [
         "crates/andromeda-storage/src/write_ahead_log/codec.rs",
+        "crates/andromeda-storage/src/write_ahead_log/commit_log_entry.rs",
+        "crates/andromeda-storage/src/write_ahead_log/commit_log_facade.rs",
+        "crates/andromeda-storage/src/write_ahead_log/compaction.rs",
+        "crates/andromeda-storage/src/write_ahead_log/gc.rs",
+        "crates/andromeda-storage/src/write_ahead_log/gc_eligibility.rs",
+        "crates/andromeda-storage/src/write_ahead_log/heap_redo.rs",
         "crates/andromeda-storage/src/write_ahead_log/manager.rs",
         "crates/andromeda-storage/src/write_ahead_log/record.rs",
+        "crates/andromeda-storage/src/write_ahead_log/record_bounds.rs",
         "crates/andromeda-storage/src/write_ahead_log/segment.rs",
+        "crates/andromeda-storage/src/write_ahead_log/segment_reclaimability.rs",
+        "crates/andromeda-storage/src/write_ahead_log/shipping.rs",
+        "crates/andromeda-storage/src/write_ahead_log/shipping/tests.rs",
+        "crates/andromeda-storage/src/write_ahead_log/transaction.rs",
     ];
 
     let mut failures: Vec<String> = Vec::new();
-    for relative in facades {
-        let path = workspace.join(relative);
-        let text = fs::read_to_string(&path)
-            .unwrap_or_else(|err| panic!("read compatibility file {relative}: {err}"));
-        let stripped = strip_comments(&text);
-        let decls = extract_top_level_pub_type_decls(&stripped);
-        if !decls.is_empty() {
+    for relative in demolished_facades {
+        if workspace.join(relative).exists() {
             failures.push(format!(
-                "{relative} declares {decls:?}; compatibility modules must be `pub use` re-exports only"
+                "{relative} reintroduced a storage WAL facade file; import from andromeda-wal/andromeda-hadr or use the narrow aliases in write_ahead_log/mod.rs"
             ));
         }
     }
 
     assert!(
         failures.is_empty(),
-        "WAL re-export purity violations:\n  - {}",
+        "WAL facade demolition regressions:\n  - {}",
         failures.join("\n  - ")
     );
 }

@@ -19,10 +19,10 @@ use andromeda_observe::{
 };
 use andromeda_procedure_contract::ProcedureContract;
 use andromeda_srpl::compile_narrow_procedure_signature;
-use andromeda_storage::{
+use andromeda_storage_page::PageSize;
+use andromeda_storage_placement::{
     CoreIoPlacementRequest, OperationalProfile, StorageIoBudgetScope, StorageWorkloadClass,
 };
-use andromeda_storage_page::PageSize;
 use andromeda_transaction::TransactionState;
 use andromeda_types::{InvocationId, RequestId, TransactionId};
 use andromeda_wal::{InMemoryWal, Lsn, WalRecordKind};

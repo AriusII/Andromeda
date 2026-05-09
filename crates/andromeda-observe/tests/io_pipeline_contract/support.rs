@@ -7,12 +7,12 @@ pub(crate) use andromeda_observe::{
     IoBudgetDecisionTrace, IoPipelineStage, IoPlacementDecisionTrace, IoStorageTier, TraceEvent,
     TraceId,
 };
-pub(crate) use andromeda_storage::{
+pub(crate) use andromeda_storage_page::PageSize;
+pub(crate) use andromeda_storage_placement::{
     CoreIoPlacementDecision, CoreIoPlacementPolicy, CoreIoPlacementRequest, HotColdIoThresholds,
     IoLatencyBudget, IoPathBudget, IoPathClass, IoThroughputBudget, PipelineStage,
     PlacementDecision, StorageIoBudgetScope, StorageTier, StorageWorkloadClass,
 };
-pub(crate) use andromeda_storage_page::PageSize;
 pub(crate) use andromeda_types::{ContractHash, SessionId, TransactionId};
 
 pub(crate) fn workflow_policy() -> CoreIoPlacementPolicy {

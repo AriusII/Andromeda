@@ -17,15 +17,22 @@ without durable WAL.
 "#]
 
 mod batch;
+mod ddl_migration;
 mod dependencies;
 mod dry_run;
 mod identity;
 mod operation;
+mod plan;
 mod source;
 mod srpl_bridge;
 mod taxonomy;
 
 pub use batch::DefinitionBatch;
+pub use ddl_migration::{
+    DefinitionBatchDdlMigrationAction, DefinitionBatchDdlMigrationBoundary,
+    DefinitionBatchDdlMigrationClassification, DefinitionBatchDdlMigrationOperation,
+    DefinitionBatchDdlMigrationPlan,
+};
 pub use dependencies::{
     BatchDependencyGraph, CatalogDependency, CatalogDependencyKind,
     DefinitionBatchDependencyGraphHash, validate_in_batch_dependencies,
@@ -40,6 +47,7 @@ pub use operation::{
     CatalogLifecycleAction, CatalogLifecycleTarget, DefinitionOperation, PlannedDefinition,
     PlannedLifecycleTransition,
 };
+pub use plan::DefinitionBatchPlan;
 pub use source::compute_definition_batch_source_hash;
 pub use srpl_bridge::{
     MAX_SRPL_DEFINITION_BATCH_PROCEDURES, SrplDefinitionBatchDiagnostic,

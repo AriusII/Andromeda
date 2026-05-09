@@ -25,15 +25,15 @@ pub use andromeda_srpl_binder::inventory_reserve_stock_body_ir;
 pub use andromeda_srpl_ir::{
     Cardinality, SrplBusinessOperationKindIr, SrplPredicateIr, SrplValueIr,
 };
-pub use andromeda_storage::{
-    CoreIoPlacementPolicy, CoreIoPlacementRequest, OperationalProfile, StorageIoBudgetScope,
-    StorageTier, StorageWorkloadClass,
-};
 pub use andromeda_storage_heap::{
     HeapRowRedoPayloadV1, LocalHeapRowInsertRedoTemplate, LocalHeapRowRedoContractBinding,
     ProductStockRow,
 };
 pub use andromeda_storage_page::{PageId, PageSize};
+pub use andromeda_storage_placement::{
+    CoreIoPlacementPolicy, CoreIoPlacementRequest, OperationalProfile, StorageIoBudgetScope,
+    StorageTier, StorageWorkloadClass,
+};
 pub use andromeda_transaction::TransactionState;
 pub use andromeda_types::{
     CatalogVersion, ContractHash, InvocationId, RequestId, SessionId, TransactionId,

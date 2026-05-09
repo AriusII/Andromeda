@@ -3,7 +3,7 @@
 
 use andromeda_error::AndromedaErrorKind;
 use andromeda_manifest::{
-    validate_manifest_atomic_switch, validate_recovery_floor, ManifestDurabilityBoundary,
+    ManifestDurabilityBoundary, validate_manifest_atomic_switch, validate_recovery_floor,
 };
 use andromeda_wal::Lsn;
 
@@ -19,7 +19,14 @@ fn atomic_switch_validates_successful_preconditions() {
     let wal_checkpoint_lsn = Lsn::new(500);
     let wal_durable_lsn = Lsn::new(600);
 
-    assert!(validate_manifest_atomic_switch(manifest_checkpoint_lsn, wal_durable_lsn, wal_checkpoint_lsn).is_ok());
+    assert!(
+        validate_manifest_atomic_switch(
+            manifest_checkpoint_lsn,
+            wal_durable_lsn,
+            wal_checkpoint_lsn
+        )
+        .is_ok()
+    );
 }
 
 #[test]
@@ -37,7 +44,11 @@ fn atomic_switch_rejects_wal_checkpoint_exceeding_durable() {
     let wal_checkpoint_lsn = Lsn::new(700);
     let wal_durable_lsn = Lsn::new(600);
 
-    let result = validate_manifest_atomic_switch(manifest_checkpoint_lsn, wal_durable_lsn, wal_checkpoint_lsn);
+    let result = validate_manifest_atomic_switch(
+        manifest_checkpoint_lsn,
+        wal_durable_lsn,
+        wal_checkpoint_lsn,
+    );
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().kind(), AndromedaErrorKind::Storage);
 }
@@ -50,7 +61,11 @@ fn atomic_switch_rejects_manifest_exceeding_wal_checkpoint() {
     let wal_checkpoint_lsn = Lsn::new(500);
     let wal_durable_lsn = Lsn::new(700);
 
-    let result = validate_manifest_atomic_switch(manifest_checkpoint_lsn, wal_durable_lsn, wal_checkpoint_lsn);
+    let result = validate_manifest_atomic_switch(
+        manifest_checkpoint_lsn,
+        wal_durable_lsn,
+        wal_checkpoint_lsn,
+    );
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().kind(), AndromedaErrorKind::Storage);
 }
@@ -63,7 +78,11 @@ fn atomic_switch_bootstrap_rejects_nonzero_wal() {
     let wal_checkpoint_lsn = Lsn::new(100);
     let wal_durable_lsn = Lsn::new(100);
 
-    let result = validate_manifest_atomic_switch(manifest_checkpoint_lsn, wal_durable_lsn, wal_checkpoint_lsn);
+    let result = validate_manifest_atomic_switch(
+        manifest_checkpoint_lsn,
+        wal_durable_lsn,
+        wal_checkpoint_lsn,
+    );
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().kind(), AndromedaErrorKind::Storage);
 }
@@ -75,7 +94,14 @@ fn atomic_switch_bootstrap_allows_zero_wal() {
     let wal_checkpoint_lsn = Lsn::new(0);
     let wal_durable_lsn = Lsn::new(0);
 
-    assert!(validate_manifest_atomic_switch(manifest_checkpoint_lsn, wal_durable_lsn, wal_checkpoint_lsn).is_ok());
+    assert!(
+        validate_manifest_atomic_switch(
+            manifest_checkpoint_lsn,
+            wal_durable_lsn,
+            wal_checkpoint_lsn
+        )
+        .is_ok()
+    );
 }
 
 #[test]
@@ -85,7 +111,11 @@ fn atomic_switch_rejects_partial_zero_wal() {
     let wal_checkpoint_lsn = Lsn::new(0);
     let wal_durable_lsn = Lsn::new(100);
 
-    let result = validate_manifest_atomic_switch(manifest_checkpoint_lsn, wal_durable_lsn, wal_checkpoint_lsn);
+    let result = validate_manifest_atomic_switch(
+        manifest_checkpoint_lsn,
+        wal_durable_lsn,
+        wal_checkpoint_lsn,
+    );
     assert!(result.is_err());
 }
 
@@ -97,7 +127,14 @@ fn atomic_switch_accepts_manifest_lagging_checkpoint() {
     let wal_checkpoint_lsn = Lsn::new(500);
     let wal_durable_lsn = Lsn::new(600);
 
-    assert!(validate_manifest_atomic_switch(manifest_checkpoint_lsn, wal_durable_lsn, wal_checkpoint_lsn).is_ok());
+    assert!(
+        validate_manifest_atomic_switch(
+            manifest_checkpoint_lsn,
+            wal_durable_lsn,
+            wal_checkpoint_lsn
+        )
+        .is_ok()
+    );
 }
 
 // ============================================================================
@@ -497,7 +534,14 @@ fn boundary_zero_manifest_valid_state() {
     let wal_checkpoint_lsn = Lsn::new(0);
     let wal_durable_lsn = Lsn::new(0);
 
-    assert!(validate_manifest_atomic_switch(manifest_checkpoint_lsn, wal_durable_lsn, wal_checkpoint_lsn).is_ok());
+    assert!(
+        validate_manifest_atomic_switch(
+            manifest_checkpoint_lsn,
+            wal_durable_lsn,
+            wal_checkpoint_lsn
+        )
+        .is_ok()
+    );
 }
 
 #[test]
@@ -740,7 +784,10 @@ fn recovery_floor_lsn_read_consistency() {
         manifest_crc: 0xDEAD,
     };
 
-    assert_eq!(boundary.recovery_floor_lsn(), boundary.required_wal_start_lsn);
+    assert_eq!(
+        boundary.recovery_floor_lsn(),
+        boundary.required_wal_start_lsn
+    );
 }
 
 #[test]
@@ -758,7 +805,7 @@ fn can_start_recovery_at_boundary_conditions() {
 
     // At recovery floor
     assert!(boundary.can_start_recovery_at(Lsn::new(500)));
-    
+
     // Before recovery floor
     assert!(!boundary.can_start_recovery_at(Lsn::new(499)));
     assert!(!boundary.can_start_recovery_at(Lsn::new(0)));
@@ -773,7 +820,7 @@ fn can_start_recovery_at_boundary_conditions() {
 fn corruption_rejection_summary() {
     // Test: Multiple corruption checks on same manifest
     let invalid = ManifestDurabilityBoundary {
-        database_id: 0, // Invalid
+        database_id: 0,      // Invalid
         manifest_version: 0, // Invalid
         snapshot_id: 1,
         base_checkpoint_lsn: Lsn::new(100),

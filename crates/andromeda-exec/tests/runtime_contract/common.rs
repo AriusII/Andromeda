@@ -23,10 +23,10 @@ pub(crate) use andromeda_srpl_binder::inventory_reserve_stock_body_ir;
 pub(crate) use andromeda_srpl_ir::{
     Cardinality, SrplBusinessOperationKindIr, SrplPredicateIr, SrplValueIr,
 };
-pub(crate) use andromeda_storage::{
+pub(crate) use andromeda_storage_page::PageSize;
+pub(crate) use andromeda_storage_placement::{
     CoreIoPlacementRequest, OperationalProfile, StorageIoBudgetScope, StorageWorkloadClass,
 };
-pub(crate) use andromeda_storage_page::PageSize;
 pub(crate) use andromeda_transaction::TransactionState;
 pub(crate) use andromeda_types::{
     CatalogVersion, ContractHash, InvocationId, ProcedureId, TransactionId,

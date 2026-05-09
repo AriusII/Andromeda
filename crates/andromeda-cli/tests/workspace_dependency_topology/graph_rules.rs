@@ -11,7 +11,7 @@ use std::{
     fs,
     path::PathBuf,
 };
-const WORKSPACE_CRATE_COUNT: usize = 88;
+const WORKSPACE_CRATE_COUNT: usize = 89;
 const C5_DURABLE_KERNEL_CRATES: &[&str] = &[
     "andromeda-backup",
     "andromeda-buffer-pool",
@@ -28,6 +28,7 @@ const C5_DURABLE_KERNEL_CRATES: &[&str] = &[
     "andromeda-storage-heap",
     "andromeda-storage-index",
     "andromeda-storage-page",
+    "andromeda-storage-placement",
     "andromeda-transaction",
     "andromeda-transaction-log",
     "andromeda-wal",
@@ -604,6 +605,7 @@ fn allowed_dependency_rules() -> Vec<AllowedDependencyRule> {
                 "andromeda-storage",
                 "andromeda-storage-heap",
                 "andromeda-storage-page",
+                "andromeda-storage-placement",
                 "andromeda-time",
                 "andromeda-mvcc",
                 "andromeda-transaction",
@@ -738,10 +740,10 @@ fn allowed_dev_dependency_rules() -> Vec<AllowedDependencyRule> {
             ],
         ),
         AllowedDependencyRule::new_for_scope(
-            "andromeda-observe may only dev-depend on the documented durable-audit storage harness",
+            "andromeda-observe may only dev-depend on the documented durable-audit placement harness",
             "andromeda-observe",
             DependencyScope::Dev,
-            &["andromeda-storage", "andromeda-storage-page"],
+            &["andromeda-storage-page", "andromeda-storage-placement"],
         ),
         AllowedDependencyRule::new_for_scope(
             "andromeda-quic may only dev-depend on property-test harness crates",

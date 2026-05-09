@@ -78,6 +78,7 @@ members = [
     "crates/andromeda-srpl-test-fixtures",
     "crates/andromeda-statistics",
     "crates/andromeda-storage",
+    "crates/andromeda-storage-placement",
     "crates/andromeda-storage-heap",
     "crates/andromeda-storage-page",
     "crates/andromeda-storage-index",
@@ -173,6 +174,7 @@ andromeda-srpl-parser = { path = "crates/andromeda-srpl-parser", version = "0.1.
 andromeda-srpl-test-fixtures = { path = "crates/andromeda-srpl-test-fixtures", version = "0.1.0" }
 andromeda-statistics = { path = "crates/andromeda-statistics", version = "0.1.0" }
 andromeda-storage = { path = "crates/andromeda-storage", version = "0.1.0" }
+andromeda-storage-placement = { path = "crates/andromeda-storage-placement", version = "0.1.0" }
 andromeda-storage-heap = { path = "crates/andromeda-storage-heap", version = "0.1.0" }
 andromeda-storage-index = { path = "crates/andromeda-storage-index", version = "0.1.0" }
 andromeda-storage-page = { path = "crates/andromeda-storage-page", version = "0.1.0" }

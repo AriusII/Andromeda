@@ -10,11 +10,11 @@ use andromeda_procedure_contract::{
     PolicyVersion, ProcedureContractBinding, ProcedureContractRef, StatsVersion,
 };
 use andromeda_result_stream::CompletionStatus;
-use andromeda_storage::{
+use andromeda_storage_page::PageSize;
+use andromeda_storage_placement::{
     CoreIoPlacementPolicy, CoreIoPlacementRequest, OperationalProfile, StorageIoBudgetScope,
     StorageTier, StorageWorkloadClass,
 };
-use andromeda_storage_page::PageSize;
 use andromeda_types::{
     CatalogVersion, ContractHash, InvocationId, ProcedureId, RequestId, SessionId,
 };

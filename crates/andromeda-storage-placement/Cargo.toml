@@ -1,0 +1,13 @@
+[package]
+name = "andromeda-storage-placement"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+andromeda-error.workspace = true
+andromeda-hardware.workspace = true
+andromeda-observe.workspace = true
+andromeda-segment.workspace = true
+andromeda-storage-page.workspace = true
