@@ -12,7 +12,7 @@ use crate::{
 
 use super::{
     FileWalHeader,
-    format::{FILE_WAL_DATA_OFFSET, file_offset_for_wal_bytes, write_file_wal_header},
+    format::{file_offset_for_wal_bytes, write_file_wal_header},
     scan::{
         FileWalDiskScan, FileWalRecordBoundary, is_forensic_scan_stop, record_boundaries_for,
         scan_file_wal, scan_open_file_wal,
@@ -67,9 +67,7 @@ impl FileWal {
         let durable_lsn = disk_scan.scan.last_valid_lsn.unwrap_or(Lsn::ZERO);
         let durable_record_count = disk_scan.scan.records.len() as u64;
         let header = FileWalHeader::new(durable_lsn, durable_bytes, durable_record_count);
-        let desired_len = FILE_WAL_DATA_OFFSET
-            .checked_add(durable_bytes)
-            .ok_or_else(|| storage_error("file WAL length would overflow u64"))?;
+        let desired_len = file_offset_for_wal_bytes(durable_bytes)?;
 
         if file
             .metadata()

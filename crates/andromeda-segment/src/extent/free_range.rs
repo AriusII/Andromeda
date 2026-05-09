@@ -17,11 +17,7 @@ impl ExtentFreeRange {
         if self.first_page_id.is_zero() || self.page_count == 0 {
             return Err(storage_error("free extent range must not be empty"));
         }
-        checked_last_page_id(
-            self.first_page_id,
-            self.page_count,
-            "free extent range overflows u64",
-        )?;
+        self.checked_last_page_id()?;
         if matches!(self.recyclable_after_lsn, Some(lsn) if lsn.is_zero()) {
             return Err(storage_error(
                 "free extent recyclable-after LSN must not be zero",
@@ -32,6 +28,10 @@ impl ExtentFreeRange {
 
     pub fn last_page_id(&self) -> AndromedaResult<PageId> {
         self.validate()?;
+        self.checked_last_page_id()
+    }
+
+    fn checked_last_page_id(&self) -> AndromedaResult<PageId> {
         checked_last_page_id(
             self.first_page_id,
             self.page_count,
@@ -45,8 +45,8 @@ impl ExtentFreeRange {
     ) -> AndromedaResult<bool> {
         self.validate()?;
         descriptor.validate()?;
-        let range_end = self.last_page_id()?.get();
-        let descriptor_end = descriptor.last_page_id()?.get();
+        let range_end = self.checked_last_page_id()?.get();
+        let descriptor_end = descriptor.checked_last_page_id()?.get();
         Ok(self.page_size == descriptor.page_size
             && self.first_page_id.get() <= descriptor.first_page_id.get()
             && descriptor_end <= range_end)
@@ -59,9 +59,9 @@ impl ExtentFreeRange {
         self.validate()?;
         descriptor.validate()?;
         let start = self.first_page_id.get();
-        let end = self.last_page_id()?.get();
+        let end = self.checked_last_page_id()?.get();
         let other_start = descriptor.first_page_id.get();
-        let other_end = descriptor.last_page_id()?.get();
+        let other_end = descriptor.checked_last_page_id()?.get();
         Ok(start <= other_end && other_start <= end)
     }
 }

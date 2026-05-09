@@ -3,8 +3,7 @@
 /fuzz/target
 __pycache__/
 *.py[cod]
-/.codex/runtime/*
-!/.codex/runtime/.gitignore
+/.codex
 /tests/loom/target
 /documentations/implementation
 /.work

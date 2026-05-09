@@ -310,30 +310,21 @@ def btree_node_v1_leaf_seed() -> bytes:
     page_size = 4096
     page = bytearray(page_size)
 
-    def put_u16(offset: int, value: int) -> None:
-        page[offset : offset + 2] = value.to_bytes(2, "little")
-
-    def put_u32(offset: int, value: int) -> None:
-        page[offset : offset + 4] = value.to_bytes(4, "little")
-
-    def put_u64(offset: int, value: int) -> None:
-        page[offset : offset + 8] = value.to_bytes(8, "little")
-
-    put_u32(0, 0x5442_4E41)
-    put_u16(4, 1)
+    put_u32(page, 0, 0x5442_4E41)
+    put_u16(page, 4, 1)
     page[6] = 1
-    put_u64(8, 42)
-    put_u64(16, 7)
-    put_u16(24, 0)
-    put_u16(26, 0)
-    put_u16(28, header_len)
-    put_u16(30, page_size)
-    put_u64(32, 41)
-    put_u64(40, 43)
-    put_u16(48, 0)
+    put_u64(page, 8, 42)
+    put_u64(page, 16, 7)
+    put_u16(page, 24, 0)
+    put_u16(page, 26, 0)
+    put_u16(page, 28, header_len)
+    put_u16(page, 30, page_size)
+    put_u64(page, 32, 41)
+    put_u64(page, 40, 43)
+    put_u16(page, 48, 0)
 
     crc = header_crc32(page[:header_len])
-    put_u32(52, crc if crc != 0 else 1)
+    put_u32(page, 52, crc if crc != 0 else 1)
     return bytes(page)
 
 
@@ -346,35 +337,26 @@ def btree_node_v1_internal_seed() -> bytes:
     free_start = header_len + len(children) * 8 + sum(2 + len(key) for key in keys)
     high_key_offset = header_len + len(children) * 8 + 2 + len(keys[0])
 
-    def put_u16(offset: int, value: int) -> None:
-        page[offset : offset + 2] = value.to_bytes(2, "little")
-
-    def put_u32(offset: int, value: int) -> None:
-        page[offset : offset + 4] = value.to_bytes(4, "little")
-
-    def put_u64(offset: int, value: int) -> None:
-        page[offset : offset + 8] = value.to_bytes(8, "little")
-
-    put_u32(0, 0x5442_4E41)
-    put_u16(4, 1)
+    put_u32(page, 0, 0x5442_4E41)
+    put_u16(page, 4, 1)
     page[6] = 2
-    put_u64(8, 84)
-    put_u64(16, 9)
-    put_u16(24, len(keys))
-    put_u16(26, len(children))
-    put_u16(28, free_start)
-    put_u16(30, page_size)
-    put_u16(48, high_key_offset)
+    put_u64(page, 8, 84)
+    put_u64(page, 16, 9)
+    put_u16(page, 24, len(keys))
+    put_u16(page, 26, len(children))
+    put_u16(page, 28, free_start)
+    put_u16(page, 30, page_size)
+    put_u16(page, 48, high_key_offset)
 
     crc = header_crc32(page[:header_len])
-    put_u32(52, crc if crc != 0 else 1)
+    put_u32(page, 52, crc if crc != 0 else 1)
 
     offset = header_len
     for child in children:
-        put_u64(offset, child)
+        put_u64(page, offset, child)
         offset += 8
     for key in keys:
-        put_u16(offset, len(key))
+        put_u16(page, offset, len(key))
         offset += 2
         page[offset : offset + len(key)] = key
         offset += len(key)
@@ -547,6 +529,10 @@ def put_u32(target: bytearray, offset: int, value: int) -> None:
     target[offset : offset + 4] = value.to_bytes(4, "little")
 
 
+def put_u64(target: bytearray, offset: int, value: int) -> None:
+    target[offset : offset + 8] = value.to_bytes(8, "little")
+
+
 def page_codec_v1_seed(
     page_type_tag: int, page_size_tag: int, page_size: int, payload: bytes
 ) -> bytes:
@@ -554,15 +540,6 @@ def page_codec_v1_seed(
     trailer_len = 48
     header = bytearray(header_len)
     trailer = bytearray(trailer_len)
-
-    def put_u16(target: bytearray, offset: int, value: int) -> None:
-        target[offset : offset + 2] = value.to_bytes(2, "little")
-
-    def put_u32(target: bytearray, offset: int, value: int) -> None:
-        target[offset : offset + 4] = value.to_bytes(4, "little")
-
-    def put_u64(target: bytearray, offset: int, value: int) -> None:
-        target[offset : offset + 8] = value.to_bytes(8, "little")
 
     put_u32(header, 0, 0x414E4452)
     put_u16(header, 4, 1)

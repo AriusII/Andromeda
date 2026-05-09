@@ -107,7 +107,6 @@ If Loom evidence is reported missing, treat it as a planning gap for concurrency
 
 - `tests/README.md`
 - `docs/testing/release-gates.md`
-- `docs/testing/release-gates.md`
 - `docs/governance/supply-chain-policy.md`
 - `docs/testing/testing-strategy.md`
 - `fuzz/README.md`
@@ -116,5 +115,4 @@ If Loom evidence is reported missing, treat it as a planning gap for concurrency
 - `.github/workflows/06-nightly-deep-validation.yml`
 - `.github/workflows/07-fuzzing.yml`
 - `.github/workflows/15-crash-recovery-placeholder.yml`
-
 

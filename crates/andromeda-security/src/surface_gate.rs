@@ -5,7 +5,7 @@
 //! crates adapt their listener-specific plane type into an observed
 //! [`SurfaceScope`] before calling this gate.
 
-use andromeda_audit::{SecurityAuditOutcome, SecurityAuditTrace, SurfaceScope};
+use andromeda_audit::{SecurityAuditTrace, SurfaceScope};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_observability::TraceId;
 
@@ -156,7 +156,8 @@ mod tests {
     use super::*;
     use crate::PrincipalBinding;
     use andromeda_audit::{
-        AdminOperation, CertificateIdentity, Permission, UserPrincipal, UserPrincipalKind,
+        AdminOperation, CertificateIdentity, Permission, SecurityAuditOutcome, UserPrincipal,
+        UserPrincipalKind,
     };
 
     fn registry(bindings: Vec<PrincipalBinding>) -> PrincipalRegistry {

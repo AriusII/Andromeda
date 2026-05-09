@@ -15,40 +15,46 @@ pub(crate) fn write_u64(target: &mut [u8], offset: usize, value: u64) {
 }
 
 pub(crate) fn read_u16(source: &[u8], offset: usize) -> AndromedaResult<u16> {
-    let end = offset
-        .checked_add(2)
-        .ok_or_else(|| storage_error("u16 field offset overflows"))?;
-    let mut bytes = [0u8; 2];
-    bytes.copy_from_slice(
-        source
-            .get(offset..end)
-            .ok_or_else(|| storage_error("truncated u16 field"))?,
-    );
-    Ok(u16::from_le_bytes(bytes))
+    Ok(u16::from_le_bytes(read_array_at(
+        source,
+        offset,
+        "u16 field offset overflows",
+        "truncated u16 field",
+    )?))
 }
 
 pub(crate) fn read_u32(source: &[u8], offset: usize) -> AndromedaResult<u32> {
-    let end = offset
-        .checked_add(4)
-        .ok_or_else(|| storage_error("u32 field offset overflows"))?;
-    let mut bytes = [0u8; 4];
-    bytes.copy_from_slice(
-        source
-            .get(offset..end)
-            .ok_or_else(|| storage_error("truncated u32 field"))?,
-    );
-    Ok(u32::from_le_bytes(bytes))
+    Ok(u32::from_le_bytes(read_array_at(
+        source,
+        offset,
+        "u32 field offset overflows",
+        "truncated u32 field",
+    )?))
 }
 
 pub(crate) fn read_u64(source: &[u8], offset: usize) -> AndromedaResult<u64> {
+    Ok(u64::from_le_bytes(read_array_at(
+        source,
+        offset,
+        "u64 field offset overflows",
+        "truncated u64 field",
+    )?))
+}
+
+fn read_array_at<const N: usize>(
+    source: &[u8],
+    offset: usize,
+    overflow_msg: &'static str,
+    truncated_msg: &'static str,
+) -> AndromedaResult<[u8; N]> {
     let end = offset
-        .checked_add(8)
-        .ok_or_else(|| storage_error("u64 field offset overflows"))?;
-    let mut bytes = [0u8; 8];
+        .checked_add(N)
+        .ok_or_else(|| storage_error(overflow_msg))?;
+    let mut bytes = [0u8; N];
     bytes.copy_from_slice(
         source
             .get(offset..end)
-            .ok_or_else(|| storage_error("truncated u64 field"))?,
+            .ok_or_else(|| storage_error(truncated_msg))?,
     );
-    Ok(u64::from_le_bytes(bytes))
+    Ok(bytes)
 }

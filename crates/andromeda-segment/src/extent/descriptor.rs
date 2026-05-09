@@ -45,11 +45,7 @@ impl ExtentDescriptor {
         if self.page_count == 0 {
             return Err(storage_error("extent page count must not be zero"));
         }
-        checked_last_page_id(
-            self.first_page_id,
-            self.page_count,
-            "extent page range overflows u64",
-        )?;
+        self.checked_last_page_id()?;
         if matches!(self.segment_id, Some(segment_id) if segment_id.is_zero()) {
             return Err(storage_error("extent segment id must not be zero"));
         }
@@ -63,6 +59,10 @@ impl ExtentDescriptor {
 
     pub fn last_page_id(&self) -> AndromedaResult<PageId> {
         self.validate()?;
+        self.checked_last_page_id()
+    }
+
+    pub(crate) fn checked_last_page_id(&self) -> AndromedaResult<PageId> {
         checked_last_page_id(
             self.first_page_id,
             self.page_count,
