@@ -1,0 +1,106 @@
+# Andromeda Codex configuration — clean agents/skills package
+# Generated: 2026-05-09T19:57:52.309591+00:00
+# Scope: Codex-only, Rust 1.95.0, QUIC + Protobuf, SGBDRT/SRPL Andromeda.
+
+sandbox_mode = "workspace-write"
+approval_policy = "never"
+commit_attribution = "Codex <noreply@openai.com>"
+skills_dir = "skills"
+write_artifact_root = ".work/codex"
+
+[project]
+name = "Andromeda"
+kind = "SGBDRT + SRPL"
+rust_version = "1.95.0"
+rust_edition = "2024"
+transport = "QUIC"
+wire_contract = "Protobuf"
+forbidden_native_protocols = ["gRPC", "JSON"]
+mission_critical = true
+
+[features]
+child_agents = true
+skills = true
+work_reports = true
+
+[agents]
+max_threads = 60
+max_depth = 2
+
+[tui.model_availability_nux]
+"gpt-5.5" = 2
+
+[worker_profiles.repository_readonly_report_only]
+meaning = "May read repository and write exactly one Markdown report under .work; must not mutate code or project assets."
+allowed_write_globs = [".work/codex/**/*.md"]
+forbidden_write_globs = ["crates/**", "src/**", "tests/**", "benches/**", "examples/**", "docs/**", "Cargo.toml", "Cargo.lock", ".codex/**"]
+
+[worker_profiles.write_worker]
+meaning = "May edit only the explicit paths assigned by the orchestrator and must write exactly one Markdown mission report under .work."
+required_report_glob = ".work/codex/**/missions/*.md"
+
+[agents.andromeda-architecture-orchestrator]
+config_file = "agents/andromeda-architecture-orchestrator.toml"
+description = "Rust architecture governor for crates, folders, tests, tooling, TDD structure, and mission-critical project shape."
+kind = "orchestrator"
+
+[agents.andromeda-codex-tooling-maintainer]
+config_file = "agents/andromeda-codex-tooling-maintainer.toml"
+description = "Maintains Andromeda Codex agents, skills, registries, validation scripts, prompts and .work output contracts."
+kind = "tooling-worker"
+
+[agents.andromeda-implementation-orchestrator]
+config_file = "agents/andromeda-implementation-orchestrator.toml"
+description = "Primary Codex orchestrator for targeted Rust implementation and improvement requests in Andromeda."
+kind = "orchestrator"
+
+[agents.andromeda-implementation-write-worker]
+config_file = "agents/andromeda-implementation-write-worker.toml"
+description = "Path-bounded implementation worker for direct Rust feature/improvement work. Produces one mission report under .work."
+kind = "write-worker"
+
+[agents.andromeda-protocol-contract-worker]
+config_file = "agents/andromeda-protocol-contract-worker.toml"
+description = "Specialist for QUIC + Protobuf RPC contracts, ResultStream, payload bounds, and no-gRPC/no-JSON enforcement."
+kind = "specialist-worker"
+
+[agents.andromeda-readonly-analysis-worker]
+config_file = "agents/andromeda-readonly-analysis-worker.toml"
+description = "Repository-read-only analysis worker. It scans and reasons over a scoped area and writes exactly one Markdown report under .work."
+kind = "readonly-worker-report-only"
+
+[agents.andromeda-refactor-orchestrator]
+config_file = "agents/andromeda-refactor-orchestrator.toml"
+description = "Primary Codex orchestrator for Rust cleanup, code review, refactor planning, worker delegation, dependency queues, and final consolidation."
+kind = "orchestrator"
+
+[agents.andromeda-refactor-write-worker]
+config_file = "agents/andromeda-refactor-write-worker.toml"
+description = "Path-bounded write worker for cleanup/refactor/code review corrections. Produces exactly one mission report under .work."
+kind = "write-worker"
+
+[agents.andromeda-release-mission-critical-reviewer]
+config_file = "agents/andromeda-release-mission-critical-reviewer.toml"
+description = "Repository-read-only report-only reviewer for mission-critical readiness, release gates, C4/C5 risks, and residual work."
+kind = "readonly-worker-report-only"
+
+[agents.andromeda-roadmap-orchestrator]
+config_file = "agents/andromeda-roadmap-orchestrator.toml"
+description = "Roadmap-aware Codex orchestrator that consumes global and stage-specific Markdown roadmaps and converts them into queued worker execution."
+kind = "orchestrator"
+
+[agents.andromeda-srpl-catalog-worker]
+config_file = "agents/andromeda-srpl-catalog-worker.toml"
+description = "Specialist for SRPL, Type System, ProcedureContract, CatalogVersion, DefinitionBatch, Modelization, Maps and compatibility."
+kind = "specialist-worker"
+
+[agents.andromeda-storage-wal-worker]
+config_file = "agents/andromeda-storage-wal-worker.toml"
+description = "Specialist for WAL, transaction state, MVCC, storage segments, manifests, binary codecs, recovery and crash-test behavior."
+kind = "specialist-worker"
+
+[agents.andromeda-test-verification-worker]
+config_file = "agents/andromeda-test-verification-worker.toml"
+description = "Specialized worker for test topology, property tests, fuzzing, Miri, Loom, crash/recovery, CI and validation gates."
+kind = "specialist-worker"
+

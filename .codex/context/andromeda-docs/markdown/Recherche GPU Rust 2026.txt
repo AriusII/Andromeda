@@ -1,0 +1,7 @@
+Voilà le rapport mis à jour en anglais américain, rédigé dans le style de documentation Microsoft et fourni au format Markdown et PDF.  
+
+**Version Markdown :** {{file:file-5Z5G1ccrJ5SUJMWr4DfL1i}}  
+
+**Version PDF :** {{file:file-6W4AeEWEMdRhxZnqPgM7Zc}}  
+
+Ce rapport détaille les architectures GPU NVIDIA et AMD pertinentes entre 2018 et 2026, l’écosystème Rust pour l’accélération GPU et des recommandations pratiques pour intégrer ces technologies dans le moteur SGBDR Andromeda. Il met l’accent sur la performance en double précision, la capacité mémoire, l’efficacité énergétique et propose des pistes concrètes pour exploiter les frameworks Rust tels que `wgpu`, `krnl`, `cuda_std` et `cudarc`.

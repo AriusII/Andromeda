@@ -1,0 +1,282 @@
+[
+  {
+    "name": "codex-orchestration-protocol",
+    "description": "Use when a request requires Codex to coordinate analysis workers, write workers, dependency queues, and final consolidation.",
+    "category": "codex-orchestration"
+  },
+  {
+    "name": "task-scope-bounding",
+    "description": "Use to transform broad user requests into precise bounded Codex work orders.",
+    "category": "codex-orchestration"
+  },
+  {
+    "name": "readonly-worker-report-contract",
+    "description": "Use by repository-read-only workers that must inspect code and produce one detailed Markdown report under .work.",
+    "category": "codex-workers"
+  },
+  {
+    "name": "write-worker-mission-report-contract",
+    "description": "Use by write workers that must execute a bounded change and produce one mission report.",
+    "category": "codex-workers"
+  },
+  {
+    "name": "work-directory-output-contract",
+    "description": "Use when workers or orchestrators need to write intermediate Codex task artifacts.",
+    "category": "codex-workers"
+  },
+  {
+    "name": "todo-dependency-queue-planning",
+    "description": "Use to represent TODO/SUB-TODO/dependencies and decide worker execution order.",
+    "category": "codex-orchestration"
+  },
+  {
+    "name": "agent-skill-routing",
+    "description": "Use to choose between an agent, a skill, or direct work.",
+    "category": "codex-tooling"
+  },
+  {
+    "name": "codex-agent-authoring",
+    "description": "Use to author or revise Codex agent TOML files for Andromeda.",
+    "category": "codex-tooling"
+  },
+  {
+    "name": "codex-skill-authoring",
+    "description": "Use to author precise Codex skills with strong triggers and guardrails.",
+    "category": "codex-tooling"
+  },
+  {
+    "name": "codex-tooling-validation",
+    "description": "Use to validate .codex agents, skills, registries and routing files.",
+    "category": "codex-tooling"
+  },
+  {
+    "name": "source-grounding-from-project-docs",
+    "description": "Use to ground decisions in Andromeda project Markdown/PDF context.",
+    "category": "codex-tooling"
+  },
+  {
+    "name": "markdown-report-quality-standard",
+    "description": "Use for `.work` reports, plans, mission reports and final consolidations.",
+    "category": "codex-workers"
+  },
+  {
+    "name": "rust-clean-code-refactor",
+    "description": "Use for professional Rust cleanup/refactor work without behavior drift.",
+    "category": "rust-refactor"
+  },
+  {
+    "name": "rust-dead-code-detection",
+    "description": "Use to detect and remove unused Rust code paths.",
+    "category": "rust-refactor"
+  },
+  {
+    "name": "rust-orphan-detection",
+    "description": "Use to find orphan files, modules, crates, features, examples, benches, scripts, or docs.",
+    "category": "rust-refactor"
+  },
+  {
+    "name": "rust-duplicate-code-consolidation",
+    "description": "Use to consolidate duplicated Rust logic safely.",
+    "category": "rust-refactor"
+  },
+  {
+    "name": "rust-deprecated-obsolete-removal",
+    "description": "Use to remove obsolete, deprecated or transitional code.",
+    "category": "rust-refactor"
+  },
+  {
+    "name": "rust-naming-noise-cleanup",
+    "description": "Use to clean Rust naming across crates, modules, files, functions and tests.",
+    "category": "rust-refactor"
+  },
+  {
+    "name": "rust-file-splitting-placement",
+    "description": "Use to shrink or split large Rust files by responsibility.",
+    "category": "rust-refactor"
+  },
+  {
+    "name": "rust-crate-module-boundary",
+    "description": "Use to design or audit Cargo crate and module boundaries.",
+    "category": "rust-architecture"
+  },
+  {
+    "name": "rust-public-api-minimization",
+    "description": "Use to reduce unnecessary `pub` surface and stabilize APIs.",
+    "category": "rust-refactor"
+  },
+  {
+    "name": "rust-error-modeling",
+    "description": "Use to design typed Rust errors and protocol error conversion.",
+    "category": "rust-implementation"
+  },
+  {
+    "name": "rust-unsafe-audit",
+    "description": "Use to audit unsafe Rust, FFI, SIMD, mmap, direct I/O, and raw pointer code.",
+    "category": "rust-safety"
+  },
+  {
+    "name": "rust-performance-optimization",
+    "description": "Use for measured Rust performance improvement.",
+    "category": "rust-performance"
+  },
+  {
+    "name": "rust-allocation-clone-review",
+    "description": "Use to review allocations, clones, buffer growth and ownership pressure.",
+    "category": "rust-performance"
+  },
+  {
+    "name": "rust-async-cancellation-backpressure",
+    "description": "Use for async runtime, cancellation, shutdown and backpressure design.",
+    "category": "rust-runtime"
+  },
+  {
+    "name": "rust-test-strategy-tdd",
+    "description": "Use to design tests and TDD approach for Rust changes.",
+    "category": "rust-testing"
+  },
+  {
+    "name": "rust-fuzz-property-miri-loom",
+    "description": "Use for advanced Rust verification of parsers, codecs, unsafe and concurrency.",
+    "category": "rust-testing"
+  },
+  {
+    "name": "rust-ci-quality-gates",
+    "description": "Use to define CI commands and release gates for Rust work.",
+    "category": "rust-testing"
+  },
+  {
+    "name": "rust-toolchain-1950-policy",
+    "description": "Use to enforce Rust 1.95.0 / Edition 2024 / resolver 3 baseline.",
+    "category": "rust-architecture"
+  },
+  {
+    "name": "dependency-supply-chain",
+    "description": "Use for Cargo dependency pruning and supply-chain governance.",
+    "category": "rust-security"
+  },
+  {
+    "name": "andromeda-doctrine-invariants",
+    "description": "Use to enforce Andromeda strict-boundary doctrine and C5 invariants.",
+    "category": "andromeda-core"
+  },
+  {
+    "name": "srpl-procedure-contracts",
+    "description": "Use for SRPL procedure semantics, ProcedureContract, ContractHash and compatibility.",
+    "category": "andromeda-srpl"
+  },
+  {
+    "name": "srpl-parser-binder-ir",
+    "description": "Use for SRPL parser, binder, diagnostics, semantic IR/ALT and plan preparation.",
+    "category": "andromeda-srpl"
+  },
+  {
+    "name": "catalog-definitionbatch",
+    "description": "Use for Catalog, Modelization, DefinitionBatch, DryRun and CatalogVersion work.",
+    "category": "andromeda-catalog"
+  },
+  {
+    "name": "quic-protobuf-rpc-contracts",
+    "description": "Use for QUIC + Protobuf custom RPC design and implementation.",
+    "category": "andromeda-protocol"
+  },
+  {
+    "name": "protobuf-no-grpc-no-json",
+    "description": "Use to enforce Protobuf without gRPC and no JSON native protocol.",
+    "category": "andromeda-protocol"
+  },
+  {
+    "name": "resultstream-protobuf-layout",
+    "description": "Use for ResultStream metadata/payload order and Protobuf layout.",
+    "category": "andromeda-protocol"
+  },
+  {
+    "name": "binary-codec-format",
+    "description": "Use for explicit binary codecs, persisted files, WAL, pages, manifests, frames and contracts.",
+    "category": "andromeda-storage"
+  },
+  {
+    "name": "transaction-wal-recovery",
+    "description": "Use for transaction kernel, WAL, recovery, durability and crash behavior.",
+    "category": "andromeda-transaction"
+  },
+  {
+    "name": "storage-manifest-segment",
+    "description": "Use for storage segments, manifests, snapshots, root pointers, HotStore/ColdStore and SegmentIndex.",
+    "category": "andromeda-storage"
+  },
+  {
+    "name": "mvcc-isolation-anomalies",
+    "description": "Use for MVCC visibility, isolation policies, anomalies and long readers.",
+    "category": "andromeda-transaction"
+  },
+  {
+    "name": "optimizer-statistics-plan-cache",
+    "description": "Use for optimizer, statistics, plan cache, PlanClass and DecisionTrace.",
+    "category": "andromeda-optimizer"
+  },
+  {
+    "name": "procedure-store-evidence",
+    "description": "Use for Procedure Store, ScenarioEvidence and feedback loops.",
+    "category": "andromeda-optimizer"
+  },
+  {
+    "name": "maps-analytics-summarizability",
+    "description": "Use for Maps, analytical projections, grain, refresh policy and summarizability.",
+    "category": "andromeda-analytics"
+  },
+  {
+    "name": "security-iam-audit",
+    "description": "Use for mTLS, CertificateIdentity, UserPrincipal, permissions, policies, surfaces and audit.",
+    "category": "andromeda-security"
+  },
+  {
+    "name": "hadr-backup-forensic",
+    "description": "Use for HA/DR, quorum, fencing, backup, restore, PITR and forensic startup.",
+    "category": "andromeda-operations"
+  },
+  {
+    "name": "cpu-simd-dispatch",
+    "description": "Use for CPU SIMD, target features, runtime dispatch and scalar fallback.",
+    "category": "andromeda-hardware"
+  },
+  {
+    "name": "gpu-batch-outside-commit",
+    "description": "Use for GPU analytics/statistics/vector batch work.",
+    "category": "andromeda-hardware"
+  },
+  {
+    "name": "architecture-workspace-governance",
+    "description": "Use for Rust workspace, crates, folders, tests, docs and tooling architecture.",
+    "category": "andromeda-architecture"
+  },
+  {
+    "name": "roadmap-intake-and-stage-selection",
+    "description": "Use to read a global roadmap and select the current detailed stage.",
+    "category": "roadmap"
+  },
+  {
+    "name": "roadmap-task-decomposition",
+    "description": "Use to decompose roadmap stages into executable work packets.",
+    "category": "roadmap"
+  },
+  {
+    "name": "implementation-direct-change-protocol",
+    "description": "Use for direct implementation requests with bounded code changes.",
+    "category": "implementation"
+  },
+  {
+    "name": "repository-cleanup-campaign",
+    "description": "Use for broad cleanup campaigns across workspace.",
+    "category": "rust-refactor"
+  },
+  {
+    "name": "code-review-professional-grade",
+    "description": "Use for rigorous code review of Rust/Andromeda changes.",
+    "category": "rust-review"
+  },
+  {
+    "name": "mission-critical-release-gates",
+    "description": "Use for C4/C5 mission-critical readiness.",
+    "category": "release"
+  }
+]
