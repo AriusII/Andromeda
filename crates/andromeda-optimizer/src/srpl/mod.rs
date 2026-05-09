@@ -2,7 +2,7 @@
 //!
 //! This module owns SRPL rewrite, projection, cost, plan choice, and pipeline
 //! logic. The `andromeda-srpl` crate re-exports this module as a compatibility
-//! facade for existing compiler callers.
+//! compatibility surface for existing compiler callers.
 
 pub mod constant_fold;
 pub mod cost_model;

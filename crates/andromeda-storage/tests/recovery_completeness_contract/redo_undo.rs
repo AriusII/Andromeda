@@ -1,9 +1,9 @@
 use super::support::manifest_for_replay_from;
-use andromeda_core::TransactionId;
 use andromeda_storage::{
     InMemoryWal, RecoveryPlan, RedoRecordDecision, StartupMode, UndoChainsBuilder, UndoOperation,
     WalRecordKind,
 };
+use andromeda_types::TransactionId;
 
 #[test]
 fn redo_plan_and_undo_builder_preserve_opposite_lsn_ordering() {

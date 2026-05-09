@@ -1,4 +1,4 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_wal::{
     DurableTransactionResume, DurableTransactionState, IncompleteDurableTransaction, Lsn,
     WalRecord, WalRecordKind, WalScanResult, WalScanStop, WalScanStopReason,
@@ -163,7 +163,7 @@ pub enum RedoRecordDecision {
 pub struct RedoRecordPlan {
     pub lsn: Lsn,
     pub kind: WalRecordKind,
-    pub transaction_id: Option<andromeda_core::TransactionId>,
+    pub transaction_id: Option<andromeda_types::TransactionId>,
     pub transaction_state: Option<DurableTransactionState>,
     pub decision: RedoRecordDecision,
 }
@@ -294,7 +294,7 @@ fn recovery_error(message: impl Into<String>) -> AndromedaError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_core::TransactionId;
+    use andromeda_types::TransactionId;
 
     #[derive(Debug)]
     struct TestManifest {

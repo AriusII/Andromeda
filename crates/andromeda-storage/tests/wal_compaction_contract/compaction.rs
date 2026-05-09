@@ -1,8 +1,9 @@
-use andromeda_core::{AndromedaErrorKind, TransactionId};
+use andromeda_error::AndromedaErrorKind;
 use andromeda_storage::write_ahead_log::compaction::{
     CompactionResult, FragmentationMetrics, WalCompactionAuditEvent, compact_segment,
 };
 use andromeda_storage::{Lsn, WalRecord, WalRecordKind};
+use andromeda_types::TransactionId;
 
 use crate::support::{MockCompactionContext, test_record};
 

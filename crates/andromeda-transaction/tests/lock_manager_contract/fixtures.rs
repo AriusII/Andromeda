@@ -16,18 +16,6 @@ pub(super) fn holder(tx_id: TransactionId, mode: LockMode) -> LockHolder {
     LockHolder { tx_id, mode }
 }
 
-pub(super) fn assert_granted(
-    manager: &LockManager,
-    tx_id: TransactionId,
-    resource: LockResource,
-    mode: LockMode,
-) {
-    assert_eq!(
-        manager.acquire(tx_id, resource, mode).unwrap(),
-        LockAcquireStatus::Granted
-    );
-}
-
 pub(super) fn assert_tx_lock_granted(
     transactions: &TransactionManager,
     locks: &LockManager,

@@ -5,10 +5,10 @@
 `andromeda-catalog-recovery` owns dependency-light contract types shared by
 catalog recovery and catalog publication replay.
 
-The catalog crate remains the owner for APIs that need live catalog state,
-including `CatalogSnapshot` storage and compatibility facades returning
-snapshot-owned outcomes. This crate owns the runtime-free replay and
-publication/subscriber state machines behind traits and generic DTOs.
+The catalog crate remains the owner for APIs that need live catalog state. This
+crate owns the storage-facing catalog WAL replay projection, runtime-free
+replay orchestration, and publication/subscriber state machines behind traits
+and generic DTOs.
 
 ## Owner Boundary
 
@@ -18,11 +18,13 @@ publication/subscriber state machines behind traits and generic DTOs.
 | Publication audience and replay classifications | `andromeda-catalog-recovery` |
 | Generic recovery replay orchestration | `andromeda-catalog-recovery` |
 | WAL payload decoding | `andromeda-catalog-recovery` |
+| Storage-facing catalog WAL snapshot replay | `andromeda-catalog-recovery` |
 | Publication report, receipt, and subscriber registry validation | `andromeda-catalog-recovery` |
-| Snapshot-owned recovery facades | `andromeda-catalog` |
+| Live catalog snapshot recovery facades | `andromeda-catalog` |
 
 "#]
 
+mod catalog_replay;
 mod durable_payload;
 mod lsn_replay;
 mod mutation;
@@ -34,6 +36,10 @@ mod storage_wal_bridge;
 mod storage_wal_record;
 mod wal_record;
 
+pub use catalog_replay::{
+    CatalogSnapshot, CatalogStorageReplayFromLsnReport, CatalogStorageReplayLsnRecord,
+    replay_catalog_from_lsn, replay_catalog_wal_records,
+};
 pub use durable_payload::{
     decode_catalog_durable_payload, encode_catalog_durable_payload,
     validate_catalog_mutation_record,

@@ -12,7 +12,7 @@ fn history_record_exports_non_authoritative_scenario_boundary() {
 
     assert!(!boundary.is_authoritative());
     assert!(!boundary.can_select_plan_alone());
-    assert_eq!(boundary.workload_id(), "vertical-v0-smoke");
+    assert_eq!(boundary.workload_id(), "inventory-recoverable-smoke");
     assert_eq!(boundary.commit_id(), "commit-20260506");
     assert_eq!(boundary.target().procedure_id, ProcedureId::new(0x5253));
     assert_eq!(boundary.target().catalog_version, CatalogVersion::new(9));

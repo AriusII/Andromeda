@@ -1,4 +1,5 @@
-use andromeda_core::{AndromedaErrorKind, CatalogVersion, PipelineClass};
+use andromeda_error::AndromedaErrorKind;
+use andromeda_hardware::PipelineClass;
 use andromeda_observe::{
     CriticalDecisionKind, EventCorrelation, EventEnvelope, EventId, IoPipelineStage,
     IoPlacementDecisionTrace, IoStorageTier, ManifestEventKind, TraceEvent, TraceId,
@@ -10,6 +11,7 @@ use andromeda_storage::{
     SegmentMutation, SegmentState, SegmentTrailer, SnapshotAvailabilityContract,
     SnapshotSegmentReference, StorageTier,
 };
+use andromeda_types::CatalogVersion;
 
 fn segment(state: SegmentState) -> SegmentDescriptor {
     let header = SegmentHeader {

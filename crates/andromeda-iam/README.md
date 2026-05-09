@@ -23,7 +23,7 @@
 - The caller has already authenticated transport identity and selected a security surface.
 - The requested permission is a typed `andromeda-security-contract::Permission`.
 - Security policy evidence is available before transaction creation.
-- Legacy `LocalPrincipalResolver` and `PermissionEvaluatorImpl` consume principal identities from `andromeda-principal`; `andromeda-core` remains only a compatibility facade for external callers.
+- Historical `LocalPrincipalResolver` and `PermissionEvaluatorImpl` consume principal identities from `andromeda-principal`; `andromeda-core` remains only a compatibility surface for external callers.
 
 ## Procedure
 

@@ -1,8 +1,8 @@
-use andromeda_core::TransactionId;
 use andromeda_storage::{
     ConceptualRedoPlan, DatabaseManifest, Lsn, RecoveryPlan, RedoRecordDecision, StartupMode,
     WalRecord, WalRecordKind,
 };
+use andromeda_types::TransactionId;
 
 const TEST_DATABASE_ID: u64 = 1;
 const TEST_MANIFEST_VERSION: u64 = 1;

@@ -284,7 +284,7 @@ impl TransactionManager {
         TransactionLockCoordinator::new(self, locks)
     }
 
-    /// Facade helper for [`TransactionLockCoordinator::acquire`].
+    /// Helper for [`TransactionLockCoordinator::acquire`].
     pub fn acquire_lock(
         &self,
         locks: &LockManager,
@@ -295,7 +295,7 @@ impl TransactionManager {
         self.lock_coordinator(locks).acquire(tx_id, resource, mode)
     }
 
-    /// Facade helper for [`TransactionLockCoordinator::acquire_with_evidence`].
+    /// Helper for [`TransactionLockCoordinator::acquire_with_evidence`].
     pub fn acquire_lock_with_evidence(
         &self,
         locks: &LockManager,
@@ -307,7 +307,7 @@ impl TransactionManager {
             .acquire_with_evidence(tx_id, resource, mode)
     }
 
-    /// Facade helper for [`TransactionLockCoordinator::release`].
+    /// Helper for [`TransactionLockCoordinator::release`].
     pub fn release_lock(
         &self,
         locks: &LockManager,
@@ -317,7 +317,7 @@ impl TransactionManager {
         self.lock_coordinator(locks).release(tx_id, resource)
     }
 
-    /// Facade helper for [`TransactionLockCoordinator::release_with_evidence`].
+    /// Helper for [`TransactionLockCoordinator::release_with_evidence`].
     pub fn release_lock_with_evidence(
         &self,
         locks: &LockManager,
@@ -328,7 +328,7 @@ impl TransactionManager {
             .release_with_evidence(tx_id, resource)
     }
 
-    /// Facade helper for [`TransactionLockCoordinator::release_all`].
+    /// Helper for [`TransactionLockCoordinator::release_all`].
     pub fn release_all_locks(
         &self,
         locks: &LockManager,
@@ -337,7 +337,7 @@ impl TransactionManager {
         self.lock_coordinator(locks).release_all(tx_id)
     }
 
-    /// Facade helper for
+    /// Helper for
     /// [`TransactionLockCoordinator::release_all_with_evidence`].
     pub fn release_all_locks_with_evidence(
         &self,

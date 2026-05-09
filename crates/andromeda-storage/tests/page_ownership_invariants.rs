@@ -4,7 +4,7 @@
 //!
 //! Future buffer-pool, heap, and index work must import the existing durable
 //! primitives from the storage crate root or the `layout::page` compatibility
-//! facade. They must not introduce mirror `PageId`, `PageSize`, `PageHeader`,
+//! compatibility surface. They must not introduce mirror `PageId`, `PageSize`, `PageHeader`,
 //! `PageTrailer`, `PageLayoutContract`, or `Lsn` definitions. `PageId`,
 //! `PageSize`, `PageHeader`, `PageTrailer`, and `PageLayoutContract` are
 //! canonical in `andromeda-storage-page`; `Lsn` is owned by the pure WAL crate

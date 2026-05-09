@@ -27,7 +27,7 @@ fn parser_facade_reexports_lexer_tokens_and_byte_spans() {
     let source = "procedure Inventory.ReserveStock accepts (ProductId i64) returns Reservation one (Reserved bool);";
 
     let tokens: Vec<Token> =
-        lex(source).expect("parser facade reexport must accept a narrow signature");
+        lex(source).expect("parser reexport must accept a narrow signature");
 
     assert_eq!(tokens[0].kind, TokenKind::Procedure);
     assert!(tokens.iter().any(|token| token.kind == TokenKind::Dot));

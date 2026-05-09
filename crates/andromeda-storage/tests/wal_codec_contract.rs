@@ -1,8 +1,8 @@
-use andromeda_core::TransactionId;
 use andromeda_storage::{
     Lsn, WalRecord, WalRecordKind, WalScanStopReason, decode_wal_record_frame, encode_wal_record,
     scan_wal_records,
 };
+use andromeda_types::TransactionId;
 
 fn tx_record(lsn: u64, previous_lsn: Option<u64>, payload: &[u8]) -> WalRecord {
     WalRecord::from_parts(

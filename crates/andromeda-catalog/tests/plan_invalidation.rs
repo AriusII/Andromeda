@@ -3,7 +3,7 @@
 //! The pure key, cache, and deterministic selection invariants live under
 //! `andromeda-plan-cache`. This catalog integration suite keeps coverage for
 //! the `ScenarioEvidence` bridge, advisory-only classification, and trace
-//! contract behavior that still belongs to the catalog facade.
+//! contract behavior that still belongs to the catalog compatibility surface.
 
 use andromeda_observe::{CriticalDecisionKind, TraceId};
 use andromeda_plan_cache::{

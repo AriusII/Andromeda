@@ -4,7 +4,7 @@
 //!
 //! This crate defines the narrow boundary between catalog-bound SRPL plans and
 //! concrete execution owners. It intentionally carries no storage, transport,
-//! transaction, WAL, parser, or facade dependency.
+//! transaction, WAL, parser, or compatibility-surface dependency.
 //!
 //! Dependency direction:
 //! - define runtime-free adapter contracts over typed SRPL IR and Procedure
@@ -36,9 +36,9 @@ pub use traits::{
 mod tests {
     use super::*;
     use andromeda_contract::{CatalogObjectRef, ObjectKind, ProcedureContractRef, QualifiedName};
-use andromeda_error::AndromedaErrorKind;
-use andromeda_srpl_ir::{Cardinality, SrplAssignmentIr, SrplEmitValueIr, SrplPredicateIr};
-use andromeda_types::{
+    use andromeda_error::AndromedaErrorKind;
+    use andromeda_srpl_ir::{Cardinality, SrplAssignmentIr, SrplEmitValueIr, SrplPredicateIr};
+    use andromeda_types::{
         CatalogObjectId, CatalogVersion, ContractHash, ProcedureId, ScalarType, TypeDescriptor,
     };
 

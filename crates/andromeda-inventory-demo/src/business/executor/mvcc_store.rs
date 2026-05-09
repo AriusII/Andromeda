@@ -1,8 +1,9 @@
 use std::collections::BTreeMap;
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_mvcc::{MvccRowHeader, Snapshot, TransactionStatus, TransactionStatusTable};
 use andromeda_transaction_log::Lsn;
+use andromeda_types::TransactionId;
 
 use super::super::helpers::{
     validate_business_mvcc_timestamp, validate_business_mvcc_transaction_id,

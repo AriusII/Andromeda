@@ -7,7 +7,7 @@ use andromeda_types::TransactionId;
 
 use super::manager_core::TransactionManager;
 
-/// Boundary-safe lock facade tied to a transaction manager.
+/// Boundary-safe lock coordinator tied to a transaction manager.
 ///
 /// The coordinator validates transaction ids against the transaction manager
 /// before delegating to [`LockManager`]. It does not mutate transaction state,

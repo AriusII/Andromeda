@@ -4,7 +4,7 @@
 //! classes, and hot/cold IO budget guardrails. The decisions produced here are
 //! advisory admission evidence only: they must not become durable database
 //! truth and must not supersede WAL, manifest, page, or segment owner crates.
-//! `layout::placement` may re-export these types, but must remain a facade.
+//! `layout::placement` may re-export these types, but must remain a thin surface.
 
 mod budget;
 mod decision;
@@ -25,7 +25,7 @@ pub use self::policy::{
 pub use self::types::{DataTemperature, PipelineStage, ReadFallbackPolicy, StorageTier};
 pub use self::workload::StorageWorkloadClass;
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind};
+use andromeda_error::{AndromedaError, AndromedaErrorKind};
 
 fn resource_error(message: impl Into<String>) -> AndromedaError {
     AndromedaError::new(AndromedaErrorKind::Resource, message)

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 use crate::{DatabaseManifest, Lsn, WalRecord};
 

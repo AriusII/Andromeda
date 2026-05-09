@@ -1,4 +1,4 @@
-//! Public parser facade for the bounded SRPL compiler slice.
+//! Public parser surface for the bounded SRPL compiler slice.
 
 mod core;
 mod helpers;

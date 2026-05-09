@@ -10,7 +10,7 @@
 //! 1. Each type is defined exactly once across the crate.
 //! 2. The single definition lives at the documented canonical path.
 //!
-//! Storage facade modules must remain `pub use`-only re-exports for WAL and
+//! Storage compatibility modules must remain `pub use`-only re-exports for WAL and
 //! physical FileWal owner types. FileWal recovery reports remain storage-owned.
 
 use std::collections::BTreeMap;
@@ -125,10 +125,7 @@ fn wal_ownership_types_have_single_canonical_definition() {
 fn wal_facade_files_remain_reexport_only() {
     let workspace = workspace_root();
     let facades = [
-        "crates/andromeda-storage/src/wal.rs",
         "crates/andromeda-storage/src/lsn.rs",
-        "crates/andromeda-storage/src/wal_codec.rs",
-        "crates/andromeda-storage/src/wal_segment.rs",
         "crates/andromeda-storage/src/write_ahead_log/codec.rs",
         "crates/andromeda-storage/src/write_ahead_log/manager.rs",
         "crates/andromeda-storage/src/write_ahead_log/record.rs",
@@ -139,19 +136,19 @@ fn wal_facade_files_remain_reexport_only() {
     for relative in facades {
         let path = workspace.join(relative);
         let text = fs::read_to_string(&path)
-            .unwrap_or_else(|err| panic!("read facade file {relative}: {err}"));
+            .unwrap_or_else(|err| panic!("read compatibility file {relative}: {err}"));
         let stripped = strip_comments(&text);
         let decls = extract_top_level_pub_type_decls(&stripped);
         if !decls.is_empty() {
             failures.push(format!(
-                "{relative} declares {decls:?}; facade modules must be `pub use` re-exports only"
+                "{relative} declares {decls:?}; compatibility modules must be `pub use` re-exports only"
             ));
         }
     }
 
     assert!(
         failures.is_empty(),
-        "WAL facade purity violations:\n  - {}",
+        "WAL re-export purity violations:\n  - {}",
         failures.join("\n  - ")
     );
 }

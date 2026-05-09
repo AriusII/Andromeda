@@ -41,7 +41,7 @@ Application behavior in Andromeda is exposed through typed, cataloged Procedures
 
 - If a contract hash changes unexpectedly, compare every canonicalized field in `src/hash.rs`.
 - If compatibility diagnostics reject an additive change, check whether the changed field is intentionally immutable under `CompatibilityPolicy::AdditiveOnly`.
-- If a downstream crate needs the legacy `andromeda_contract::*` or `andromeda_proto::*` surface, use the compatibility reexports from those crates.
+- If a downstream crate needs the historical `andromeda_contract::*` or `andromeda_proto::*` surface, use the compatibility reexports from those crates.
 
 ## References
 

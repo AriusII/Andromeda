@@ -3,7 +3,7 @@
 C5 owner crate for Andromeda heap storage boundaries.
 
 This crate owns heap page layout, slot directory validation, heap page mutation,
-raw heap scans, and vacuum planning. Storage remains the compatibility facade
+raw heap scans, and vacuum planning. Storage remains the compatibility surface
 for row-domain helpers and WAL redo envelope construction while those contracts
 are promoted.
 

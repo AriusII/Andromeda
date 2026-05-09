@@ -1,5 +1,6 @@
 use crate::support::{manifest, record, segment};
-use andromeda_core::{AndromedaErrorKind, PipelineClass, TransactionId};
+use andromeda_error::AndromedaErrorKind;
+use andromeda_hardware::PipelineClass;
 use andromeda_storage::write_ahead_log::record::WalRecordKind;
 use andromeda_storage::{
     CoreIoPlacementPolicy, CoreIoPlacementRequest, InMemoryWal, IoPathClass, IoUseClass, Lsn,
@@ -7,6 +8,7 @@ use andromeda_storage::{
     RecoveryPlan, SegmentMutation, SegmentState, StartupMode, StorageIoBudgetScope, StorageTier,
     StorageWorkloadClass,
 };
+use andromeda_types::TransactionId;
 
 #[test]
 fn wal_append_and_recovery_placement_stay_on_hotstore_critical_path() {

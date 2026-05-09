@@ -1,8 +1,8 @@
 use std::fmt::Debug;
 
 use super::error::{BackupResult, backup_error};
-use andromeda_core::CatalogVersion as CoreCatalogVersion;
 use andromeda_observe::TraceId as ObserveTraceId;
+use andromeda_types::CatalogVersion as CoreCatalogVersion;
 use andromeda_wal::Lsn as WalLsn;
 
 pub const WAL_FORMAT_VERSION: u16 = 1;

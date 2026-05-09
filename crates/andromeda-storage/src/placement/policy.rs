@@ -1,4 +1,5 @@
-use andromeda_core::{AndromedaResult, HardwareProfile, PipelineClass};
+use andromeda_error::AndromedaResult;
+use andromeda_hardware::{HardwareProfile, PipelineClass};
 use andromeda_observe::{PlacementAuditEvent, TraceId};
 
 use super::{
@@ -54,7 +55,7 @@ pub struct CoreIoPlacementPolicy {
 
 /// Compatibility name for the canonical storage placement policy.
 ///
-/// Keep this as an alias to avoid introducing a second facade-owned policy
+/// Keep this as an alias to avoid introducing a second surface-owned policy
 /// type. New storage-local code should prefer `CoreIoPlacementPolicy`.
 pub type StoragePlacementPolicy = CoreIoPlacementPolicy;
 

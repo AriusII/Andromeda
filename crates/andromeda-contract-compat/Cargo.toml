@@ -4,6 +4,6 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish = false
-description = "Runtime-free scaffold for Andromeda contract compatibility taxonomy placeholders."
+description = "Runtime-free owner for Andromeda contract compatibility taxonomy identifiers."
 
 [dependencies]

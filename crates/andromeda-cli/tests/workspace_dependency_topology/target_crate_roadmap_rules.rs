@@ -196,23 +196,7 @@ const TEMPORARY_DEV_DEPENDENCY_BACKEDGE_EXCEPTIONS: &[TemporaryDependencyExcepti
         exit_criteria: "Exit criteria: move remaining inventory vertical compatibility tests out of andromeda-exec or invert them into andromeda-inventory-demo.",
     },
 ];
-const TEMPORARY_C5_CORE_FACADE_EXCEPTIONS: &[TemporaryDependencyException] = &[
-    TemporaryDependencyException {
-        source: "andromeda-backup",
-        dependency: "andromeda-core",
-        exit_criteria: "Exit criteria: extract backup snapshot identifiers and restore error vocabulary from the temporary core facade.",
-    },
-    TemporaryDependencyException {
-        source: "andromeda-recovery",
-        dependency: "andromeda-core",
-        exit_criteria: "Exit criteria: replace recovery result and error aliases with narrower recovery foundation crates.",
-    },
-    TemporaryDependencyException {
-        source: "andromeda-storage",
-        dependency: "andromeda-core",
-        exit_criteria: "Exit criteria: replace the wide andromeda-core facade with extracted durable-storage foundation crates.",
-    },
-];
+const TEMPORARY_C5_CORE_FACADE_EXCEPTIONS: &[TemporaryDependencyException] = &[];
 #[test]
 fn core_facade_does_not_grow_new_local_modules_during_foundation_migration() {
     let core_src = workspace_root().join("crates/andromeda-core/src");
@@ -233,7 +217,7 @@ fn core_facade_does_not_grow_new_local_modules_during_foundation_migration() {
 
     assert_eq!(
         actual_entries, expected_entries,
-        "andromeda-core must stay a temporary facade in batch 1; add new foundation code to the extracted crates or document a later-batch migration exception"
+        "andromeda-core must stay a temporary re-export surface in batch 1; add new foundation code to the extracted crates or document a later-batch migration exception"
     );
 }
 #[test]
@@ -313,10 +297,10 @@ fn c5_core_facade_imports_are_temporary_named_exceptions() {
         .collect::<BTreeSet<_>>();
 
     assert_temporary_exception_edges_match(
-        "C5 core facade import",
+        "C5 core compatibility import",
         actual,
         TEMPORARY_C5_CORE_FACADE_EXCEPTIONS,
-        "C5 crates importing the wide andromeda-core facade must be explicit temporary exceptions with exit criteria; add durable-kernel foundation crates before widening this list",
+        "C5 crates importing the wide andromeda-core surface must be explicit temporary exceptions with exit criteria; add durable-kernel foundation crates before widening this list",
     );
 }
 #[test]

@@ -1,24 +1,15 @@
-use andromeda_core::PipelineClass;
+use andromeda_hardware::PipelineClass;
+use andromeda_manifest::{
+    DatabaseManifest, DatabaseSnapshotPublication, SnapshotAvailabilityContract,
+    SnapshotSegmentReference,
+};
 use andromeda_storage::Lsn;
-use andromeda_storage::layout::cold::PublishedColdSegment;
-use andromeda_storage::layout::extent::ExtentId;
-use andromeda_storage::layout::io_budget::{
-    HotColdIoThresholds, IoLatencyBudget, IoPathBudget, IoPathClass, IoThroughputBudget, IoUseClass,
-};
-use andromeda_storage::layout::page::{
-    AllocationId, ObjectId, PageFlags, PageHeader, PageId, PageLayoutContract, PageSize,
-    PageTrailer, PageType,
-};
-use andromeda_storage::layout::placement::{
-    CoreIoPlacementDecision, CoreIoPlacementPolicy, PipelineStage, StorageTier,
-    StorageWorkloadClass,
-};
-use andromeda_storage::layout::segment::{
-    SegmentDescriptor, SegmentHeader, SegmentId, SegmentMutation, SegmentState, SegmentTrailer,
-};
-use andromeda_storage::publication::{
-    ColdSegmentPublicationPlan, DatabaseManifest, DatabaseSnapshotPublication,
-    SnapshotAvailabilityContract, SnapshotSegmentReference,
+use andromeda_storage::{
+    AllocationId, ColdSegmentPublicationPlan, CoreIoPlacementDecision, CoreIoPlacementPolicy,
+    ExtentId, HotColdIoThresholds, IoLatencyBudget, IoPathBudget, IoPathClass, IoThroughputBudget,
+    IoUseClass, ObjectId, PageFlags, PageHeader, PageId, PageLayoutContract, PageSize, PageTrailer,
+    PageType, PipelineStage, PublishedColdSegment, SegmentDescriptor, SegmentHeader, SegmentId,
+    SegmentMutation, SegmentState, SegmentTrailer, StorageTier, StorageWorkloadClass,
     validate_cold_segment_publication_boundary,
 };
 
@@ -191,7 +182,7 @@ fn snapshot_publication_keeps_available_manifest_references() {
 #[test]
 fn cold_segment_publication_plan_requires_cold_publication_policy() {
     let policy = CoreIoPlacementPolicy::new(
-        andromeda_core::HardwareProfile::conservative(),
+        andromeda_hardware::HardwareProfile::conservative(),
         HotColdIoThresholds::conservative(),
     );
     let sealed = sealed_segment_descriptor(7);
@@ -216,7 +207,7 @@ fn cold_segment_publication_plan_requires_cold_publication_policy() {
 #[test]
 fn cold_segment_publication_plan_does_not_publish_or_mutate_descriptor() {
     let policy = CoreIoPlacementPolicy::new(
-        andromeda_core::HardwareProfile::conservative(),
+        andromeda_hardware::HardwareProfile::conservative(),
         HotColdIoThresholds::conservative(),
     );
     let sealed = sealed_segment_descriptor(7);
@@ -236,7 +227,7 @@ fn cold_segment_publication_plan_does_not_publish_or_mutate_descriptor() {
 #[test]
 fn cold_segment_publication_rejects_mutable_and_commit_critical_boundaries() {
     let policy = CoreIoPlacementPolicy::new(
-        andromeda_core::HardwareProfile::conservative(),
+        andromeda_hardware::HardwareProfile::conservative(),
         HotColdIoThresholds::conservative(),
     );
     let mutable = segment_descriptor(SegmentState::BuildingHotSnapshot, 7, 4_096);

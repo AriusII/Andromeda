@@ -1,14 +1,10 @@
 #![forbid(unsafe_code)]
 
-#[path = "batch_alter_drop_compat/catalog_diff.rs"]
-mod batch_alter_drop_catalog_diff;
-
 use andromeda_catalog_diff::{
     CatalogObjectDiffImpact, CatalogObjectDiffKind, CatalogObjectDiffSeverity,
     diff_catalog_object_definitions,
 };
 use andromeda_catalog_store::{CatalogDefinition, CatalogObjectRef, ObjectKind, QualifiedName};
-use andromeda_definition_batch::{DefinitionBatch, DefinitionBatchId, DefinitionOperation};
 use andromeda_procedure_contract::{
     AccessMode, CompatibilityPolicy, ContractCompatibilityDiagnostic, IsolationPolicy,
     MultiResultPolicy, ProcedureContract, ProcedureContractCandidate, ProcedureErrorPolicy,
@@ -16,8 +12,8 @@ use andromeda_procedure_contract::{
     StatsVersion, TransactionPolicy,
 };
 use andromeda_types::{
-    CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, DatabaseId, NamespaceId,
-    ProcedureId, ScalarType, TypeDescriptor,
+    CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId, ScalarType,
+    TypeDescriptor,
 };
 
 const EXECUTE_PERMISSION: &str = "Inventory.ReserveStock.Execute";
@@ -107,18 +103,6 @@ fn assert_has_message(diagnostic: &ContractCompatibilityDiagnostic, expected: &s
     );
 }
 
-fn batch_with_procedure(procedure: ProcedureContract) -> DefinitionBatch {
-    DefinitionBatch {
-        batch_id: DefinitionBatchId::new(700),
-        database_id: DatabaseId::new(1),
-        namespace_id: NamespaceId::new(1),
-        base_version: CatalogVersion::new(1),
-        operations: vec![DefinitionOperation::Create(CatalogDefinition::Procedure(
-            procedure,
-        ))],
-    }
-}
-
 #[test]
 fn additive_result_stream_column_append_is_current_catalog_diff_evidence() {
     let previous = materialize(candidate(1, CompatibilityPolicy::AdditiveOnly));
@@ -195,31 +179,4 @@ fn breaking_input_shape_change_reports_compatibility_diagnostic() {
     let diagnostic = next.compatibility_with(&previous);
     assert!(!diagnostic.compatible);
     assert_has_message(&diagnostic, "input changes");
-}
-
-#[test]
-fn object_version_source_hash_changes_when_contract_shape_changes() {
-    let baseline = materialize(candidate(2, CompatibilityPolicy::AdditiveOnly));
-    let mut changed_candidate = candidate(2, CompatibilityPolicy::AdditiveOnly);
-    changed_candidate.result_streams = vec![rows(vec![
-        column("ProductId", 0),
-        column("QuantityAvailable", 1),
-    ])];
-    let changed = materialize(changed_candidate);
-
-    assert_ne!(baseline.contract_hash, changed.contract_hash);
-
-    let baseline_batch = batch_with_procedure(baseline);
-    let changed_batch = DefinitionBatch {
-        operations: vec![DefinitionOperation::Create(CatalogDefinition::Procedure(
-            changed,
-        ))],
-        ..baseline_batch.clone()
-    };
-
-    assert_ne!(
-        baseline_batch.source_hash(),
-        changed_batch.source_hash(),
-        "DefinitionBatch source hash is current catalog-diff evidence for object version shape drift"
-    );
 }

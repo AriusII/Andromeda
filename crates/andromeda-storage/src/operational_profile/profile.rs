@@ -1,6 +1,5 @@
-use andromeda_core::{
-    AndromedaResult, GpuExecutionPolicy, GpuProfile, HardwareProfile, PipelineClass,
-};
+use andromeda_error::AndromedaResult;
+use andromeda_hardware::{GpuExecutionPolicy, GpuProfile, HardwareProfile, PipelineClass};
 
 use super::{
     constants::{COLD_ARCHIVE_RAM_BYTES, CONSERVATIVE_RAM_BYTES},

@@ -69,7 +69,7 @@ fn test_wal_recovery_reads_pages_written_by_disk_manager() {
     let temp_dir = TempDir::new().unwrap();
     let data_file = temp_dir.path().join("wal_integration.bin");
 
-    // Phase 1: Simulate buffer pool flushing pages to DiskManager
+    // Step 1: Simulate buffer pool flushing pages to DiskManager
     // (This would normally be done by the buffer pool during dirty page flush)
     {
         let mut manager = FileDiskManager::open(&data_file, temp_dir.path()).unwrap();
@@ -99,7 +99,7 @@ fn test_wal_recovery_reads_pages_written_by_disk_manager() {
         }
     }
 
-    // Phase 2: Recovery phase - Reopen DiskManager and verify pages are readable
+    // Step 2: Recovery step - Reopen DiskManager and verify pages are readable
     // (This simulates WAL recovery reading pages from cold storage)
     {
         let mut manager = FileDiskManager::open(&data_file, temp_dir.path()).unwrap();
@@ -145,7 +145,7 @@ fn test_wal_recovery_reads_multiple_extents_from_disk_manager() {
     let temp_dir = TempDir::new().unwrap();
     let data_file = temp_dir.path().join("multi_extent_recovery.bin");
 
-    // Phase 1: Write pages across multiple extents
+    // Step 1: Write pages across multiple extents
     {
         let mut manager = FileDiskManager::open(&data_file, temp_dir.path()).unwrap();
 
@@ -191,7 +191,7 @@ fn test_wal_recovery_reads_multiple_extents_from_disk_manager() {
         }
     }
 
-    // Phase 2: Recovery reads from both extents
+    // Step 2: Recovery reads from both extents
     {
         let mut manager = FileDiskManager::open(&data_file, temp_dir.path()).unwrap();
 

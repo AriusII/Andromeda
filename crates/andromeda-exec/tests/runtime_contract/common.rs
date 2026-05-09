@@ -6,7 +6,6 @@ pub(crate) use andromeda_exec::{
     InvocationRequest, LocalDispatchPlan, LocalDispatcher, LocalProcedure, LocalRollbackPlan,
     LocalVerticalRuntime,
 };
-pub(crate) use andromeda_execution_trace::CompletionMappingService;
 pub(crate) use andromeda_hardware::{PipelineClass, ResourceBudget};
 pub(crate) use andromeda_inventory_demo::{
     INVENTORY_RESERVE_STOCK_PERMISSION, InventoryBusinessMvccStore, InventoryReserveStockExecutor,
@@ -18,9 +17,7 @@ pub(crate) use andromeda_observe::TraceId;
 pub(crate) use andromeda_procedure_contract::{
     PolicyVersion, ProcedureContractBinding, ProcedureContractRef, StatsVersion,
 };
-pub(crate) use andromeda_result_stream::{
-    CompletionStatus, ResultStreamMetadata, ResultValidationService,
-};
+pub(crate) use andromeda_result_stream::{CompletionStatus, ResultStreamMetadata};
 pub(crate) use andromeda_srpl::compile_narrow_procedure_signature;
 pub(crate) use andromeda_srpl_binder::inventory_reserve_stock_body_ir;
 pub(crate) use andromeda_srpl_ir::{

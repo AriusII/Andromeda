@@ -16,7 +16,7 @@ This crate owns:
 - Durable-prefix scan behavior, recoverable-tail detection, and non-recoverable chain-break rejection.
 - `FileWal` open, append, flush-through, durable header, scan, and replay surfaces.
 - Durability fence helpers for page flushes, manifest switches, and recovery floors.
-- Commit log entries and the commit facade that enforce durable WAL before visibility publication.
+- Commit log entries and the commit boundary that enforce durable WAL before visibility publication.
 
 The crate uses typed errors and `AndromedaResult` failures to make short flushes, invalid bytes, broken chains, and unsafe durability states classifiable by callers.
 

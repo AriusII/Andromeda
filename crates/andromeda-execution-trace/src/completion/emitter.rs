@@ -1,7 +1,8 @@
 use andromeda_audit::DurableAuditSinkReport;
-use andromeda_core::{AndromedaResult, TransactionId};
+use andromeda_error::AndromedaResult;
 use andromeda_observability::TraceId;
 use andromeda_result_stream::{CompletionStatus, InvocationCompletion};
+use andromeda_types::TransactionId;
 use andromeda_wal::Lsn;
 
 use super::journal::{
@@ -233,7 +234,7 @@ impl InvocationCompletionEmitter {
 
     pub fn get(
         &self,
-        invocation_id: andromeda_core::InvocationId,
+        invocation_id: andromeda_types::InvocationId,
     ) -> Option<&CompletionJournalRecord> {
         self.journal.get(invocation_id)
     }

@@ -49,7 +49,13 @@ pub(crate) fn history_record_with_metrics(
 }
 
 pub(crate) fn vertical_history_record(sample_count: u32) -> BenchmarkHistoryRecord {
-    history_record_with_metrics("vertical-v0-smoke", 15_000, 50_000, 0, sample_count)
+    history_record_with_metrics(
+        "inventory-recoverable-smoke",
+        15_000,
+        50_000,
+        0,
+        sample_count,
+    )
 }
 
 pub(crate) fn default_budgets() -> BenchmarkEvidenceBudgets {

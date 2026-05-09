@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-//! Phase 4 SRPL Language Extraction: Validation Gates
+//! SRPL language extraction validation gates
 //!
 //! This module validates that the extracted SRPL crates maintain:
 //! 1. **Deterministic Parsing**: Same SRPL source → same AST (no randomness)

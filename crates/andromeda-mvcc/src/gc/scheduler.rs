@@ -22,7 +22,7 @@ pub use types::{GcSchedulerExit, GcSchedulerExitReason, GcSchedulerStats};
 
 /// Minimum allowed scheduler interval.
 ///
-/// This prevents zero-duration busy loops while preserving the legacy
+/// This prevents zero-duration busy loops while preserving the historical
 /// [`GcSchedulerTask::new`] constructor. Callers that need strict validation
 /// should use [`GcSchedulerTask::try_new`].
 pub const MIN_GC_SCHEDULER_INTERVAL: Duration = Duration::from_millis(1);

@@ -77,7 +77,7 @@ impl CommitProtocol {
         isolation_level: IsolationLevel,
         affected_rows: u64,
     ) -> AndromedaResult<()> {
-        // Phase 1: State Validation
+        // Step 1: State validation
         // Ensure transaction is ready to commit (must be in Committing state)
         if current_state != TransactionState::Committing {
             return Err(AndromedaError::new(
@@ -89,7 +89,7 @@ impl CommitProtocol {
             ));
         }
 
-        // Phase 2-4: Delegate to CommitLogManager
+        // Steps 2-4: Delegate to CommitLogManager
         // This performs:
         // - Write to WAL
         // - Flush to disk (durability boundary)
@@ -99,7 +99,7 @@ impl CommitProtocol {
             .record_commit(tx_id, isolation_level, affected_rows, 0)
             .await?;
 
-        // Phase 5: Emit commit trace for audit and forensics
+        // Step 5: Emit commit trace for audit and forensics
         // (Trace emission is internal to commit_log.record_commit)
 
         Ok(())

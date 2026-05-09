@@ -1,6 +1,5 @@
 //! HREDOV1 heap redo WAL production contracts.
 
-use andromeda_core::TransactionId;
 use andromeda_storage::{
     Lsn, PageId, PageSize, ReplayContext, WalRecord, decode_wal_record_frame, encode_wal_record,
     replay_wal_record,
@@ -9,6 +8,7 @@ use andromeda_storage::{
         HeapRowRedoPayloadV1,
     },
 };
+use andromeda_types::TransactionId;
 
 #[test]
 fn wal_record_heap_redo_insert_payload_roundtrips_through_frame_codec() {

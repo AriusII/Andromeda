@@ -1,4 +1,4 @@
-//! Storage WAL bridge for legacy catalog replay records.
+//! Storage WAL bridge for compatibility catalog replay records.
 //!
 //! This module owns the deterministic byte representation and publication
 //! replay adapter for the storage-facing catalog WAL record family. Storage

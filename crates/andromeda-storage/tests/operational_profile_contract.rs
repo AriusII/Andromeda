@@ -1,4 +1,4 @@
-use andromeda_core::{GpuProfile, PipelineClass};
+use andromeda_hardware::{GpuProfile, PipelineClass};
 use andromeda_storage::{
     IoPathClass, IoUseClass, OperationalProfile, OperationalProfileMode, PageSize,
 };

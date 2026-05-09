@@ -10,7 +10,7 @@ mod trace;
 mod undo;
 mod wal_replay;
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind};
+use andromeda_error::{AndromedaError, AndromedaErrorKind};
 
 pub use catalog_replay::{
     CatalogReplayFromLsnReport, CatalogSnapshot, LsnBoundCatalogRecord, replay_catalog_from_lsn,

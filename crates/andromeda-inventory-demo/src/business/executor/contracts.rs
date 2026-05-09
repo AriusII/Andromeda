@@ -3,7 +3,7 @@ use crate::{
     INVENTORY_RELEASE_STOCK_OBJECT_ID, INVENTORY_RELEASE_STOCK_PROCEDURE_ID,
     INVENTORY_RESERVE_STOCK_OBJECT_ID, INVENTORY_RESERVE_STOCK_PROCEDURE_ID,
 };
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_procedure_contract::ProcedureContract;
 
 pub(in crate::business) fn validate_inventory_reserve_stock_contract(

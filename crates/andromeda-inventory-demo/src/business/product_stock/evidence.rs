@@ -1,5 +1,6 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_storage_heap::{HeapRowRedoPayloadV1, LocalHeapRowRedoContractBinding};
+use andromeda_types::TransactionId;
 use andromeda_wal::{Lsn, WalRecordKind};
 
 use super::super::helpers::{

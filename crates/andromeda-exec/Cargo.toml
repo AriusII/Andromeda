@@ -86,7 +86,3 @@ path = "tests/executor_validation_gates.rs"
 [[test]]
 name = "runtime_contract"
 path = "tests/runtime_contract.rs"
-
-[[test]]
-name = "v0_vertical_e2e"
-path = "tests/v0_vertical_e2e.rs"

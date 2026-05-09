@@ -1,7 +1,7 @@
 use super::*;
 use crate::Lsn;
 use crate::write_ahead_log::record::{WalRecord, WalRecordKind};
-use andromeda_core::AndromedaErrorKind;
+use andromeda_error::AndromedaErrorKind;
 
 fn record(lsn: u64, prev: Option<u64>) -> WalRecord {
     WalRecord::from_parts(

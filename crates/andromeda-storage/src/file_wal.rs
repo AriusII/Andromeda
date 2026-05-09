@@ -1,4 +1,4 @@
-//! Storage recovery facade for the file-backed WAL.
+//! Storage recovery surface for the file-backed WAL.
 //!
 //! `FileWal`, `FileWalHeader`, `FileWalDiskScan`, and the `FILE_WAL_*`
 //! byte-format constants are owned by `andromeda_wal`. The v0 startup recovery
@@ -6,7 +6,6 @@
 //! only the manifest-aware orchestration adapters.
 
 mod recovery;
-mod report;
 
 pub use andromeda_recovery::{
     FileWalRecoveryBoundaryKind, FileWalRecoveryIgnoredTransaction,
@@ -28,7 +27,7 @@ mod tests {
         DatabaseManifest, Lsn, ObservedBoundary, RedoRecordDecision, StartupMode,
         StartupRejectionReason, WalRecord, WalRecordKind, WalScanStopReason, encode_wal_record,
     };
-    use andromeda_core::TransactionId;
+    use andromeda_types::TransactionId;
     use std::fs::{File, OpenOptions, metadata, remove_file};
     use std::io::Write;
     use std::path::{Path, PathBuf};

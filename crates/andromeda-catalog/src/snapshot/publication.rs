@@ -7,6 +7,9 @@
 
 use std::collections::BTreeSet;
 
+use andromeda_catalog_store::{
+    CatalogObjectLifecycle, CatalogObjectLifecycleStatus, CatalogSnapshotApplyReport,
+};
 use andromeda_definition_batch::validate_in_batch_dependencies;
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
@@ -16,10 +19,7 @@ use crate::{
 };
 
 use super::core::CatalogSnapshot;
-use super::types::{
-    CatalogObjectLifecycle, CatalogObjectLifecycleStatus, CatalogSnapshotApplyReport,
-    CatalogSnapshotPublication,
-};
+use super::types::CatalogSnapshotPublication;
 
 impl CatalogSnapshot {
     /// Applies `plan` to this snapshot in memory only.

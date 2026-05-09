@@ -32,7 +32,7 @@
 //! This module wraps [`super::startup::decide_startup`] with a SafeStart-specific
 //! typed proof and optional tail-discard report.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{DatabaseManifest, Lsn, WalScanResult, WalScanStop};
 

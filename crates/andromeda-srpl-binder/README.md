@@ -31,7 +31,7 @@ Dependencies must point only toward lower or contract-safe crates such as
 `andromeda-srpl-cardinality`, `andromeda-srpl-ast`, and
 `andromeda-srpl-ir`.
 
-Do not depend on `andromeda-srpl` as a facade from this crate after extraction.
+Do not depend on `andromeda-srpl` as a broad compatibility surface from this crate after extraction.
 Do not depend on execution, storage, transaction, WAL, QUIC transport,
 benchmark, analytics, GPU, or application-surface crates.
 
@@ -45,7 +45,7 @@ benchmark, analytics, GPU, or application-surface crates.
 - Do not allow dynamic table names, dynamic predicates, shape-shifting returns,
   or implicit null semantics.
 - Do not serialize Rust native structs directly to disk or network.
-- Do not depend on `andromeda-srpl` as a facade.
+- Do not depend on `andromeda-srpl` as a broad compatibility surface.
 
 ## Prerequisites
 

@@ -11,6 +11,7 @@ mod diagnostic;
 mod error;
 mod ownership;
 mod publication;
+mod refresh;
 mod summarizability;
 
 pub use dependency::{MapDependency, MapDependencyGraph};
@@ -23,6 +24,7 @@ pub use publication::{
     MapPublicationRecoveryEvidence, MapPublicationRollbackEvidence, MapPublicationState,
     MapPublicationSwitch, MapValidatedPublicationCandidate,
 };
+pub use refresh::MapRefreshPlan;
 pub use summarizability::{
     MapMeasurePolicy, MapMeasureRollupPolicy, MapSummarizabilityMode, MapSummarizabilityPolicy,
 };

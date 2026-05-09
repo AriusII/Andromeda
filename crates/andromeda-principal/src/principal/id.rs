@@ -25,7 +25,7 @@ impl PrincipalId {
     /// Derive a stable, non-zero principal id from certificate fingerprint.
     ///
     /// SHA-256 fingerprints follow the core derivation rule (first 8 hex chars).
-    /// Non-SHA fingerprints use legacy deterministic byte folding. If the
+    /// Non-SHA fingerprints use historical deterministic byte folding. If the
     /// deterministic derivation yields zero, the returned audit identifier is
     /// mapped to `1` so certificate-derived principal IDs are never zero.
     pub fn from_certificate_fingerprint(

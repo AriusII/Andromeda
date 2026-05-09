@@ -102,12 +102,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_request_is_valid_for_vertical_smoke() {
+    fn default_request_is_valid_for_inventory_recoverable_smoke() {
+        let request = BenchmarkRunRequest::new("inventory-recoverable-smoke");
+
+        let workload = request.validate().unwrap();
+
+        assert_eq!(workload.id, "inventory-recoverable-smoke");
+    }
+
+    #[test]
+    fn legacy_vertical_smoke_alias_resolves_to_inventory_recoverable_smoke() {
         let request = BenchmarkRunRequest::new("vertical-v0-smoke");
 
         let workload = request.validate().unwrap();
 
-        assert_eq!(workload.id, "vertical-v0-smoke");
+        assert_eq!(workload.id, "inventory-recoverable-smoke");
     }
 
     #[test]

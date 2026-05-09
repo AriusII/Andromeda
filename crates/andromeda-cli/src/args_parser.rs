@@ -4,7 +4,7 @@ use andromeda_error::AndromedaResult;
 use andromeda_wal::Lsn;
 use std::path::PathBuf;
 
-pub fn parse_vertical_v0_wal_path(args: &[String]) -> AndromedaResult<PathBuf> {
+pub fn parse_inventory_recoverable_wal_path(args: &[String]) -> AndromedaResult<PathBuf> {
     let mut wal_path = None;
     let mut index = 0;
 
@@ -19,14 +19,14 @@ pub fn parse_vertical_v0_wal_path(args: &[String]) -> AndromedaResult<PathBuf> {
             },
             unknown => {
                 return Err(cli_error(format!(
-                    "unknown vertical-v0 option `{unknown}`; expected `--wal <path>`"
+                    "unknown inventory-recoverable option `{unknown}`; expected `--wal <path>`"
                 )));
             },
         }
         index += 1;
     }
 
-    Ok(wal_path.unwrap_or_else(default_v0_wal_path))
+    Ok(wal_path.unwrap_or_else(default_inventory_recoverable_wal_path))
 }
 
 pub struct RecoveryInspectOptions {
@@ -80,10 +80,10 @@ pub fn parse_u64_option(value: &str, option: &str) -> AndromedaResult<u64> {
     parse::parse_u64_option(value, option)
 }
 
-const DEFAULT_V0_WAL_FILE: &str = "andromeda-v0-vertical.wal";
+const DEFAULT_INVENTORY_RECOVERABLE_WAL_FILE: &str = "andromeda-inventory-recoverable.wal";
 
-fn default_v0_wal_path() -> PathBuf {
-    std::env::temp_dir().join(DEFAULT_V0_WAL_FILE)
+fn default_inventory_recoverable_wal_path() -> PathBuf {
+    std::env::temp_dir().join(DEFAULT_INVENTORY_RECOVERABLE_WAL_FILE)
 }
 
 #[cfg(test)]
@@ -91,14 +91,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn vertical_v0_defaults_to_temp_wal() {
-        let path = parse_vertical_v0_wal_path(&[]).unwrap();
-        assert!(path.ends_with(DEFAULT_V0_WAL_FILE));
+    fn inventory_recoverable_defaults_to_temp_wal() {
+        let path = parse_inventory_recoverable_wal_path(&[]).unwrap();
+        assert!(path.ends_with(DEFAULT_INVENTORY_RECOVERABLE_WAL_FILE));
     }
 
     #[test]
-    fn vertical_v0_accepts_explicit_path() {
-        let explicit = parse_vertical_v0_wal_path(&[
+    fn inventory_recoverable_accepts_explicit_path() {
+        let explicit = parse_inventory_recoverable_wal_path(&[
             "--wal".to_string(),
             "target/andromeda-cli-test.wal".to_string(),
         ])

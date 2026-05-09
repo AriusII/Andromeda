@@ -34,9 +34,12 @@ pub use andromeda_definition_batch::{
     SrplProcedureSourceDigest, SrplProcedureSourceDigestEvidence,
 };
 pub use compiler::{
+    INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, compile_inventory_reserve_stock_contract,
+    compile_inventory_reserve_stock_contract_candidate,
     compile_narrow_procedure_contract_candidate, compile_narrow_procedure_definition,
     compile_narrow_procedure_definition_batch, compile_narrow_procedure_signature,
-    lower_bound_procedure, lower_ir_to_catalog_definition,
+    inventory_reserve_stock_contract_metadata, lower_bound_procedure,
+    lower_ir_to_catalog_definition,
 };
 pub use dry_run::{
     SrplDefinitionBatchDryRunReport, SrplDefinitionBatchDryRunRequest,

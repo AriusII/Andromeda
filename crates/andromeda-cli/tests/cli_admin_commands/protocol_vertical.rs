@@ -22,7 +22,7 @@ fn benchmark_run_executes_bounded_smoke_runner() {
     assert_dispatch_success([
         "benchmark",
         "run",
-        "vertical-v0-smoke",
+        "inventory-recoverable-smoke",
         "--duration-ms",
         "1000",
         "--samples",

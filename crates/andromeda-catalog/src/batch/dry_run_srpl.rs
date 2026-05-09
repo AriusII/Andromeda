@@ -1,4 +1,4 @@
-//! Compatibility facade for materialized Procedure validation during
+//! Compatibility surface for materialized Procedure validation during
 //! DefinitionBatch dry-run.
 //!
 //! Catalog does not parse SRPL source. The portable contract validation lives

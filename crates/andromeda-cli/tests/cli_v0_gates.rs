@@ -93,15 +93,16 @@ fn cli_human_surfaces_do_not_advertise_sql_grpc_or_default_json_runtime() {
 }
 
 #[test]
-fn vertical_v0_writes_file_wal_and_recovery_inspect_reports_replay() {
+fn inventory_recoverable_writes_file_wal_and_recovery_inspect_reports_replay() {
     let wal_path = unique_temp_path("andromeda-cli-v0", ".wal");
     fs::remove_file(&wal_path).ok();
 
-    let vertical = run_binary_with_path(cli_binary(), ["vertical-v0", "--wal"], &wal_path);
+    let vertical =
+        run_binary_with_path(cli_binary(), ["inventory-recoverable", "--wal"], &wal_path);
     assert_success(&vertical);
 
     let vertical_stdout = stdout(&vertical);
-    assert!(vertical_stdout.contains("Andromeda V0 recoverable vertical prototype"));
+    assert!(vertical_stdout.contains("Andromeda recoverable inventory procedure demo"));
     assert!(vertical_stdout.contains("status: Committed"));
     assert!(vertical_stdout.contains("rows affected: Some(2)"));
     assert!(vertical_stdout.contains("recovery replay LSNs: [2]"));
@@ -113,7 +114,7 @@ fn vertical_v0_writes_file_wal_and_recovery_inspect_reports_replay() {
     assert_success(&inspect);
 
     let inspect_stdout = stdout(&inspect);
-    assert!(inspect_stdout.contains("Andromeda V0 WAL recovery inspect"));
+    assert!(inspect_stdout.contains("Andromeda WAL recovery inspect"));
     assert!(inspect_stdout.contains("startup mode: SafeStart"));
     assert!(inspect_stdout.contains("byte order: little-endian"));
     assert!(inspect_stdout.contains("durable prefix records: 3"));
@@ -121,6 +122,20 @@ fn vertical_v0_writes_file_wal_and_recovery_inspect_reports_replay() {
     assert!(inspect_stdout.contains("scan stop: none"));
     assert!(inspect_stdout.contains("forensic required: false"));
     assert!(inspect_stdout.contains("replay LSNs: [2]"));
+
+    fs::remove_file(&wal_path).ok();
+}
+
+#[test]
+fn vertical_v0_alias_still_runs_recoverable_inventory_demo() {
+    let wal_path = unique_temp_path("andromeda-cli-v0-alias", ".wal");
+    fs::remove_file(&wal_path).ok();
+
+    let vertical = run_binary_with_path(cli_binary(), ["vertical-v0", "--wal"], &wal_path);
+    assert_success(&vertical);
+
+    let vertical_stdout = stdout(&vertical);
+    assert!(vertical_stdout.contains("Andromeda recoverable inventory procedure demo"));
 
     fs::remove_file(&wal_path).ok();
 }

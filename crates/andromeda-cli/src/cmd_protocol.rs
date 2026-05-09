@@ -13,7 +13,7 @@ use andromeda_result_stream::CompletionStatus;
 use andromeda_types::InvocationId;
 use andromeda_wal::InMemoryWal;
 
-const PROTO_PAYLOAD_SOURCE: &str = include_str!("../../andromeda-proto-wire/src/envelope.rs");
+const PROTO_PAYLOAD_SOURCE: &str = include_str!("../../andromeda-rpc-protocol/src/envelope.rs");
 const QUIC_FRAME_SOURCE: &str = include_str!("../../andromeda-rpc-protocol/src/frame_code.rs");
 
 const PROTOCOL_CODE_LOCKSTEP: &[ProtocolCode] = &[
@@ -340,20 +340,47 @@ fn validate_completion_error_structured_contract() -> AndromedaResult<String> {
 }
 
 fn source_const_u32(source: &str, name: &str) -> AndromedaResult<u32> {
+    source_const_u32_from_sources(&[source, QUIC_FRAME_SOURCE], name, 0)
+}
+
+fn source_const_u32_from_sources(
+    sources: &[&str],
+    name: &str,
+    depth: usize,
+) -> AndromedaResult<u32> {
+    if depth > 4 {
+        return Err(protocol_error(format!(
+            "constant alias chain is too deep for {name}"
+        )));
+    }
+
     let prefix = format!("pub const {name}: u32 = ");
 
-    for line in source.lines() {
-        let trimmed = line.trim();
-        if let Some(value) = trimmed.strip_prefix(&prefix) {
-            return value
-                .trim_end_matches(';')
-                .trim()
-                .parse::<u32>()
-                .map_err(|_| protocol_error(format!("could not parse u32 constant {name}")));
+    for source in sources {
+        for line in source.lines() {
+            let trimmed = line.trim();
+            if let Some(value) = trimmed.strip_prefix(&prefix) {
+                let value = value.trim_end_matches(';').trim();
+                if let Ok(parsed) = value.parse::<u32>() {
+                    return Ok(parsed);
+                }
+                if is_rust_const_ident(value) {
+                    return source_const_u32_from_sources(sources, value, depth + 1);
+                }
+                return Err(protocol_error(format!(
+                    "could not parse u32 constant {name}"
+                )));
+            }
         }
     }
 
     Err(protocol_error(format!("missing u32 constant {name}")))
+}
+
+fn is_rust_const_ident(value: &str) -> bool {
+    let mut chars = value.chars();
+    matches!(chars.next(), Some(first) if first == '_' || first.is_ascii_alphabetic())
+        && chars.all(|character| character == '_' || character.is_ascii_alphanumeric())
 }
 
 #[cfg(test)]

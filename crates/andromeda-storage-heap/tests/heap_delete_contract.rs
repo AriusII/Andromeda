@@ -302,7 +302,7 @@ fn test_heap_scan_skips_deleted() {
 fn test_heap_mixed_operations() {
     let mut page = HeapPage::new(PageSize::KiB16);
 
-    // Insert phase
+    // Insert step
     let ids: Vec<_> = (0..20)
         .map(|i| {
             page.insert_tuple(format!("tuple_{:02}", i).as_bytes())

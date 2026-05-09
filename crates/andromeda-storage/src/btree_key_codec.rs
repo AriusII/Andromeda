@@ -1,10 +1,10 @@
 //! B-Tree Key Codec - order-preserving key encoding and comparison.
 //!
-//! This module now acts as a compatibility facade over
+//! This module now acts as a compatibility surface over
 //! `andromeda-storage-index`, which owns the durable byte contract.
 
 use crate::{Datum, ScalarType};
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 use andromeda_storage_index::{
     Key as IndexKey, KeyCodec as IndexKeyCodec, KeyDatum, KeyScalarType,
 };

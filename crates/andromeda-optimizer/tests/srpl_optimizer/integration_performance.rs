@@ -41,15 +41,15 @@ fn t_it_01_full_optimizer_pipeline_reserve_stock_like() {
         },
     ]);
 
-    // Phase 1: normalize
+    // Pass 1: normalize
     let normalized = normalize(ir).unwrap();
     assert!(normalized.body.validate_bounded().is_ok());
 
-    // Phase 2: predicate pushdown
+    // Pass 2: predicate pushdown
     let pushed = pushdown_apply(normalized).unwrap();
     assert!(pushed.body.validate_bounded().is_ok());
 
-    // Phase 3: liveness
+    // Pass 3: liveness
     let lv = ColumnLiveness::compute(&pushed);
     // AvailableQuantity and ProductId are both live after ordinal 0 (used downstream).
     assert!(
@@ -57,14 +57,14 @@ fn t_it_01_full_optimizer_pipeline_reserve_stock_like() {
         "AvailableQuantity must be live"
     );
 
-    // Phase 4: projection pushdown
+    // Pass 4: projection pushdown
     let proj_result = proj_apply(pushed.clone());
     assert!(
         !proj_result.projections.is_empty(),
         "must have at least one projection"
     );
 
-    // Phase 5: cost estimate
+    // Pass 5: cost estimate
     let cost_est = estimate_without_stats(&pushed);
     assert!(
         cost_est.is_valid(),

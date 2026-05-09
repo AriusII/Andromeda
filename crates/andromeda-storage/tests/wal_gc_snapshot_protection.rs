@@ -5,7 +5,7 @@
 
 #[cfg(test)]
 mod wal_gc_snapshot_protection_tests {
-    use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+    use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
     use andromeda_storage::Lsn;
     use andromeda_storage::write_ahead_log::gc::*;
     use std::collections::HashMap;

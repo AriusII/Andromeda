@@ -1,22 +1,10 @@
-use andromeda_core::TransactionId;
 use andromeda_storage::publication::DatabaseManifest;
-use andromeda_storage::write_ahead_log::codec::encode_wal_record;
 use andromeda_storage::write_ahead_log::record::{WalRecord, WalRecordKind};
 use andromeda_storage::{
     AllocationId, ExtentId, Lsn, ObjectId, PageId, PageSize, SegmentDescriptor, SegmentHeader,
     SegmentId, SegmentState, SegmentTrailer,
 };
-
-pub(crate) fn tx_record(lsn: u64, previous_lsn: Option<u64>, payload: &[u8]) -> WalRecord {
-    WalRecord::from_parts(
-        WalRecordKind::RowInsert,
-        Lsn::new(lsn),
-        previous_lsn.map(Lsn::new),
-        Some(TransactionId::new(42)),
-        payload,
-    )
-    .unwrap()
-}
+use andromeda_types::TransactionId;
 
 pub(crate) fn record(
     kind: WalRecordKind,
@@ -33,14 +21,6 @@ pub(crate) fn record(
         payload,
     )
     .unwrap()
-}
-
-pub(crate) fn encode_records(records: &[WalRecord]) -> Vec<u8> {
-    let mut encoded = Vec::new();
-    for record in records {
-        encoded.extend(encode_wal_record(record).unwrap());
-    }
-    encoded
 }
 
 pub(crate) fn manifest(required_wal_start_lsn: Lsn) -> DatabaseManifest {

@@ -90,7 +90,7 @@ fn page_survives_disk_manager_close_and_reopen() {
     let temp_dir = TempDir::new().unwrap();
     let data_file = temp_dir.path().join("durable.bin");
 
-    // Phase 1: Write a page and close manager
+    // Step 1: Write a page and close manager
     {
         let mut manager = FileDiskManager::open(&data_file, temp_dir.path()).unwrap();
         allocate_test_extent(&mut manager, PageSize::KiB16);
@@ -103,7 +103,7 @@ fn page_survives_disk_manager_close_and_reopen() {
             .unwrap();
     }
 
-    // Phase 2: Reopen and verify page is intact
+    // Step 2: Reopen and verify page is intact
     {
         let manager = FileDiskManager::open(&data_file, temp_dir.path()).unwrap();
 
@@ -146,7 +146,7 @@ fn corrupted_page_read_behavior_matches_integrity_mode() {
         manager.write_page(page, Lsn::new(100)).unwrap();
     }
 
-    // Phase 2: Corrupt the page on disk (flip a bit)
+    // Step 2: Corrupt the page on disk (flip a bit)
     {
         let mut file = fs::OpenOptions::new()
             .read(true)
@@ -167,7 +167,7 @@ fn corrupted_page_read_behavior_matches_integrity_mode() {
         file.sync_all().unwrap();
     }
 
-    // Phase 3: Attempt to read corrupted page
+    // Step 3: Attempt to read corrupted page
     {
         let mut manager = FileDiskManager::open(&data_file, temp_dir.path()).unwrap();
 
@@ -219,7 +219,7 @@ fn multiple_pages_written_sequentially_survive_reopen() {
 
     let expected_pages = [0xAA, 0xBB, 0xCC, 0xDD, 0xEE];
 
-    // Phase 1: Write multiple pages
+    // Step 1: Write multiple pages
     {
         let mut manager = FileDiskManager::open(&data_file, temp_dir.path()).unwrap();
 
@@ -246,7 +246,7 @@ fn multiple_pages_written_sequentially_survive_reopen() {
         }
     }
 
-    // Phase 2: Reopen and verify all pages are intact
+    // Step 2: Reopen and verify all pages are intact
     {
         let mut manager = FileDiskManager::open(&data_file, temp_dir.path()).unwrap();
 
@@ -284,7 +284,7 @@ fn extent_boundary_pages_survive_reopen() {
     let temp_dir = TempDir::new().unwrap();
     let data_file = temp_dir.path().join("boundary.bin");
 
-    // Phase 1: Write pages at extent boundaries
+    // Step 1: Write pages at extent boundaries
     {
         let mut manager = FileDiskManager::open(&data_file, temp_dir.path()).unwrap();
 
@@ -326,7 +326,7 @@ fn extent_boundary_pages_survive_reopen() {
         manager.write_page(page11, Lsn::new(100)).unwrap();
     }
 
-    // Phase 2: Reopen and verify boundary pages
+    // Step 2: Reopen and verify boundary pages
     {
         let mut manager = FileDiskManager::open(&data_file, temp_dir.path()).unwrap();
 
@@ -405,7 +405,7 @@ fn large_32kib_page_survives_reopen() {
 
     let content_byte = 0xFF;
 
-    // Phase 1: Write 32 KiB page
+    // Step 1: Write 32 KiB page
     {
         let mut manager = FileDiskManager::open(&data_file, temp_dir.path()).unwrap();
 
@@ -427,7 +427,7 @@ fn large_32kib_page_survives_reopen() {
         manager.write_page(page, Lsn::new(100)).unwrap();
     }
 
-    // Phase 2: Verify on disk
+    // Step 2: Verify on disk
     {
         let mut manager = FileDiskManager::open(&data_file, temp_dir.path()).unwrap();
 

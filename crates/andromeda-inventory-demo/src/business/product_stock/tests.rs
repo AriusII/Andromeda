@@ -1,6 +1,7 @@
-use andromeda_core::{AndromedaErrorKind, TransactionId};
+use andromeda_error::AndromedaErrorKind;
 use andromeda_storage_heap::ProductStockRow;
 use andromeda_storage_page::{PageId, PageSize};
+use andromeda_types::TransactionId;
 use andromeda_wal::Lsn;
 
 use super::super::types::{InventoryStock, ReserveStockCommand};

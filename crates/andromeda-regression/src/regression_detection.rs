@@ -10,7 +10,7 @@
 //!
 //! Operational integration note: this module owns the comparison logic and
 //! baseline serialization. Artifact storage and CI entrypoints should call this
-//! crate directly instead of routing through benchmark facade crates.
+//! crate directly instead of routing through benchmark compatibility crates.
 
 mod advisory_json;
 mod baseline;

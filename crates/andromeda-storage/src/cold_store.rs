@@ -6,7 +6,7 @@
 //! durability, publication truth, or archive IO. Those remain with segment,
 //! manifest/WAL, and any future concrete archive service boundary.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{SegmentDescriptor, SegmentMutation, SegmentState};
 

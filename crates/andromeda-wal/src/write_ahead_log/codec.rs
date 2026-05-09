@@ -1,4 +1,4 @@
-//! Facade re-export of the canonical WAL frame codec defined in
+//! Re-export surface for the canonical WAL frame codec defined in
 //! `crate::wal_codec`. Do not define encode/decode/scan items here.
 
 pub use crate::{

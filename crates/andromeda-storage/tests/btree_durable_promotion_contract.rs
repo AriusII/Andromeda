@@ -8,7 +8,7 @@
 
 #![forbid(unsafe_code)]
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, TransactionId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind};
 use andromeda_storage::format_version::FormatVersion;
 use andromeda_storage::{
     BTREE_DURABLE_FORMAT_PROMOTED, BTreeConfig, BTreeIndexNode, BTreeKeyFormatIdentity,
@@ -17,6 +17,7 @@ use andromeda_storage::{
     ReplayOutcome, RowId, StartupMode, WalRecordKind, replay_wal_from_lsn,
     replay_wal_from_lsn_into_context,
 };
+use andromeda_types::TransactionId;
 
 const INDEX_REBUILD_PAYLOAD_MAGIC: &[u8; 8] = b"IDXRBV1\0";
 

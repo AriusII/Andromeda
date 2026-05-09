@@ -37,7 +37,7 @@ impl MapValidationDiagnostic {
             Self::DependencyCycle { .. } => "MAP_DEPENDENCY_CYCLE",
             Self::MissingSummarizabilityGroupingKey { .. } => {
                 "MAP_SUMMARIZABILITY_GROUPING_KEY_MISSING"
-            }
+            },
             Self::MissingSummarizableMeasure { .. } => "MAP_SUMMARIZABILITY_MEASURE_MISSING",
             Self::NonSummarizableMeasure { .. } => "MAP_SUMMARIZABILITY_MEASURE_NOT_ROLLUP_SAFE",
         }

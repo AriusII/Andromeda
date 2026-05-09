@@ -33,7 +33,7 @@ fn runtime_quinn_feature_discovers_remote_invoke_network_e2e_tests() {
     assert!(server_transport.contains("QuicServerTransport"));
 }
 
-// The legacy network scenarios below are kept as explicit opt-in coverage until
+// The raw network compatibility scenarios below are kept as explicit opt-in coverage until
 // their raw Quinn stream usage is refreshed to the current typed transport API.
 #[cfg(andromeda_remote_network_e2e)]
 #[path = "remote_invoke_network_e2e/concurrent_invocations.rs"]

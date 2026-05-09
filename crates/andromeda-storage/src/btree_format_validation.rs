@@ -1,9 +1,9 @@
-//! Compatibility facade for index-owned B-Tree KeyV1 format validation.
+//! Compatibility surface for index-owned B-Tree KeyV1 format validation.
 //!
 //! The index crate owns the validation gate. Storage keeps only the historical
 //! constructor shape that accepts `FormatVersion` and returns it to callers.
 
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 pub use andromeda_storage_index::{
     BTreeFormatIdentityError, BTreeKeyFormatIdentity, BTreeOperationType,
 };

@@ -1,13 +1,14 @@
 //! Catalog system store and mutation planning.
 //!
-//! This module provides the `CatalogSystemStore` facade which validates definition batches
+//! This module provides the `CatalogSystemStore` boundary which validates definition batches
 //! against the current catalog snapshot and plans mutations. Durable persistence is
 //! still delegated to callers, but callers can now provide committed durable evidence
 //! to publish the next visible snapshot with a catalog-local receipt.
 
 use andromeda_catalog_store::{
-    CatalogStoreApplyReport, CatalogStoreDurableApplyReport, CatalogStoreWalAppend,
-    CatalogStoreWalAppendSequenceError, validate_catalog_store_wal_append_sequence,
+    CatalogSnapshotApplyReport, CatalogStoreApplyReport, CatalogStoreDurableApplyReport,
+    CatalogStoreWalAppend, CatalogStoreWalAppendSequenceError,
+    validate_catalog_store_wal_append_sequence,
 };
 use andromeda_definition_batch::{
     DefinitionBatch, DefinitionBatchDependencyGraphHash, DefinitionBatchSourceHash,
@@ -17,11 +18,10 @@ use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId};
 
 use crate::{
     CatalogMutationCommitEvidence, CatalogMutationDurability, CatalogMutationPlan,
-    CatalogMutationRecordKind, CatalogPublicationReceipt, CatalogSnapshot,
-    CatalogSnapshotApplyReport, DefinitionBatchPlan,
+    CatalogMutationRecordKind, CatalogPublicationReceipt, CatalogSnapshot, DefinitionBatchPlan,
 };
 
-/// In-memory catalog system facade for definition planning and snapshot mutation.
+/// In-memory catalog system boundary for definition planning and snapshot mutation.
 ///
 /// This type intentionally owns no WAL or storage engine. It validates that a
 /// [`DefinitionBatch`] is planned against the currently visible snapshot, delegates

@@ -1,4 +1,4 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_storage_heap::{
     HeapPageInsert, HeapRowRedoPayloadV1, LocalHeapRowInsertRedoTemplate,
     LocalHeapRowRedoContractBinding, ProductStockHeapInsert, ProductStockRow,

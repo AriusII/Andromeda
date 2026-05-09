@@ -14,11 +14,12 @@
 //! - Verify non-B-Tree records are unaffected by B-Tree changes
 //! - Verify error messages include durable replay promotion context
 
-use andromeda_core::{AndromedaErrorKind, TransactionId};
+use andromeda_error::AndromedaErrorKind;
 use andromeda_storage::{
     Lsn, ReplayContext, ReplayOutcome, WalRecord, WalRecordKind, encode_wal_record,
     replay_wal_record, wal_record_kind_from_tag, wal_record_kind_tag,
 };
+use andromeda_types::TransactionId;
 
 const INDEX_REBUILD_PAYLOAD_MAGIC: &[u8; 8] = b"IDXRBV1\0";
 

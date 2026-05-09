@@ -34,7 +34,7 @@
 //! rolled-back transactions are discarded by the plan and never reach the
 //! replay layer.
 
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 pub use andromeda_recovery::WalReplayReport;
 use andromeda_recovery::{
     RecoveryWalReplayAdapter, ReplayOutcome, ReplayResult, execute_redo_plan_with_adapter,
@@ -270,7 +270,7 @@ fn is_explicit_deferred_kind(result: &ReplayResult) -> bool {
 mod tests {
     use super::super::planning::RedoRecordDecision;
     use super::*;
-    use andromeda_core::TransactionId;
+    use andromeda_types::TransactionId;
 
     use crate::{DatabaseManifest, InMemoryWal, WalRecordKind};
 

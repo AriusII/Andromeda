@@ -1,12 +1,12 @@
 #![forbid(unsafe_code)]
 
-use andromeda_core::TransactionId;
 use andromeda_storage::{
     DatabaseManifest, Datum, HeapPage, HeapPageInsert, InMemoryWal, Lsn,
     PRODUCT_STOCK_ROW_ENCODED_LEN, PageId, PageSize, ProductStockRow, RecoveryPlan, ReplayContext,
     StartupMode, WalRecord, WalRecordKind, execute_redo_plan_into_context, replay_wal_record,
     write_ahead_log::HeapRowRedoPayloadV1,
 };
+use andromeda_types::TransactionId;
 
 #[test]
 fn product_stock_row_encoding_has_stable_golden_bytes() {

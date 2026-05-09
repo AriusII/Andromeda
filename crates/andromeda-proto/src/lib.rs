@@ -17,10 +17,12 @@ Runtime-free protocol ownership is intentionally split:
 | Procedure contract and gateway manifest semantics | `andromeda-procedure-contract` |
 | Structured object layout and row-count descriptors | `andromeda-structured-object` |
 
-`andromeda-proto` may reexport selected runtime-free contract types while
-schema callers are being migrated, but generated access remains anchored at
-`andromeda_proto::generated`. New runtime code should import behavior from the
-owner crates above instead of treating this crate as a general protocol facade.
+`andromeda-proto` is kept as the schema and governance surface: generated prost
+access, descriptor bytes, and schema hashes remain anchored at
+`andromeda_proto::generated`. Compatibility adapters may remain while callers
+are migrated, but new runtime code should import validation and wire behavior
+from the owner crates above instead of treating this crate as a general
+protocol surface.
 
 Schema files must remain deterministic, service-free, and runtime-free. They do
 not define gRPC services, HTTP transports, JSON mapping policy, or executor

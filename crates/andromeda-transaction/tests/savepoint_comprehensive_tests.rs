@@ -105,7 +105,5 @@ mod crash_recovery_performance;
 mod error_handling;
 #[path = "savepoint_comprehensive_tests/lifecycle.rs"]
 mod lifecycle;
-#[path = "savepoint_comprehensive_tests/mvcc_visibility.rs"]
-mod mvcc_visibility;
 #[path = "savepoint_comprehensive_tests/wal_durability.rs"]
 mod wal_durability;

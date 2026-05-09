@@ -30,7 +30,7 @@ fn validity() -> BenchmarkEvidenceValidity {
 #[test]
 fn boundary_from_history_is_bounded_and_advisory() {
     let record = BenchmarkHistoryRecord::new(
-        "vertical-v0-smoke".to_string(),
+        "inventory-recoverable-smoke".to_string(),
         "abc123".to_string(),
         "2026-05-06T12:00:00Z".to_string(),
         100,
@@ -50,7 +50,7 @@ fn boundary_from_history_is_bounded_and_advisory() {
     assert!(!evidence.is_authoritative());
     assert!(!evidence.can_select_plan_alone());
     assert_eq!(evidence.optimizer_consumption_role(), "advisory-only");
-    assert_eq!(evidence.workload_id(), "vertical-v0-smoke");
+    assert_eq!(evidence.workload_id(), "inventory-recoverable-smoke");
     assert_eq!(evidence.target().procedure_id, ProcedureId::new(7));
     assert_eq!(evidence.target().catalog_version, CatalogVersion::new(11));
     assert_eq!(
@@ -234,7 +234,7 @@ fn boundary_rejects_unbounded_expiry() {
 #[test]
 fn boundary_rejects_stale_target_versions() {
     let record = BenchmarkHistoryRecord::new(
-        "vertical-v0-smoke".to_string(),
+        "inventory-recoverable-smoke".to_string(),
         "abc123".to_string(),
         "2026-05-06T12:00:00Z".to_string(),
         100,

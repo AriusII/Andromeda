@@ -1,4 +1,4 @@
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 pub use crate::format_version::StorageFormatFingerprint;
 use crate::format_version::{CompatibilityMatrix, FormatVersion, StorageFormatKind};

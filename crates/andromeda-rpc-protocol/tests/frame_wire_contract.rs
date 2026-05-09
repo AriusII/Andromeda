@@ -48,11 +48,11 @@ fn frame_header_wire_contract_is_fixed_width_and_network_big_endian() {
     assert_eq!(
         FrameCodec::ENDIAN,
         FrameCodecEndian::NetworkBigEndian,
-        "RPC frame wire stays network-byte-order by explicit exception until the ADR/docs worker resolves the repository little-endian default"
+        "RPC frame wire stays network-byte-order by explicit exception until the ADR/docs decision resolves the repository little-endian default"
     );
 
     // Deliberate RPC network-wire exception to repository little-endian
-    // persistent-format defaults, pending the ADR/docs worker.
+    // persistent-format defaults, pending the ADR/docs decision.
     assert_eq!(
         &encoded[0..2],
         &(FRAME_CODEC_HEADER_LEN as u16).to_be_bytes()

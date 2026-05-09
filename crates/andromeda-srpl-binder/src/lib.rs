@@ -4,7 +4,7 @@
 //!
 //! This crate turns parsed SRPL AST shapes into bound procedure signatures for
 //! lowering. It owns binder behavior without depending on the `andromeda-srpl`
-//! facade.
+//! compatibility surface.
 //!
 //! Dependency direction:
 //! - consume parser and AST output from lower SRPL language-model crates;

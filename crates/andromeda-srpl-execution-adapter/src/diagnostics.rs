@@ -23,23 +23,23 @@ impl SrplExecutionFailure {
         match self {
             Self::SemanticViolation(message) => {
                 AndromedaError::new(AndromedaErrorKind::Srpl, message)
-            }
+            },
             Self::CatalogBindingViolation(message) => {
                 AndromedaError::new(AndromedaErrorKind::Catalog, message)
-            }
+            },
             Self::ContractViolation(message) => {
                 AndromedaError::new(AndromedaErrorKind::Contract, message)
-            }
+            },
             Self::CardinalityViolation { .. } => AndromedaError::new(
                 AndromedaErrorKind::Execution,
                 "SRPL adapter operation violated its cardinality or row bound",
             ),
             Self::ResourceLimitExceeded(message) => {
                 AndromedaError::new(AndromedaErrorKind::Resource, message)
-            }
+            },
             Self::AdapterRejected(message) => {
                 AndromedaError::new(AndromedaErrorKind::Execution, message)
-            }
+            },
         }
     }
 }

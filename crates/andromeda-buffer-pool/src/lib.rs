@@ -5,7 +5,7 @@ Boundary crate for Andromeda buffer-pool coordination.
 This crate owns buffer-pool boundary contracts that are independent of page
 layout and disk I/O implementation. Storage keeps the resident frame machinery
 during the migration and imports these contracts through its compatibility
-facade.
+compatibility surface.
 
 C5 invariants:
 

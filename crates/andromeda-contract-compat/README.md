@@ -2,15 +2,14 @@
 
 ## Purpose
 
-`andromeda-contract-compat` is a runtime-free scaffold for future Procedure
-contract compatibility ownership. It defines stable taxonomy placeholders that
-other design work can reference before the final compatibility engine is
-implemented.
+`andromeda-contract-compat` is the runtime-free owner for Procedure contract
+compatibility taxonomy identifiers. It defines stable reserved names that design
+work can reference before any compatibility decision engine is implemented.
 
 ## Scope
 
 - Procedure contract compatibility taxonomy identifiers.
-- Compatibility outcome placeholders.
+- Reserved compatibility outcome classes.
 - Review and incompatibility category names.
 - Compile-ready Rust 2024 crate metadata.
 
@@ -31,10 +30,9 @@ implemented.
 
 ## Procedure
 
-Use the exported taxonomy entries as stable names only. A future owner can move
-the crate into the root workspace and replace placeholders with typed
-compatibility rules after the catalog, contract, WAL, and audit responsibilities
-are assigned.
+Use the exported taxonomy entries as stable names only. Typed compatibility
+rules can be added here only after catalog, contract, WAL, and audit
+responsibilities are assigned.
 
 ## Validation
 
@@ -46,10 +44,9 @@ cargo test --manifest-path crates/andromeda-contract-compat/Cargo.toml
 
 ## Troubleshooting
 
-If Cargo reports that the crate is not a root workspace member, verify that this
-manifest still contains its local `[workspace]` table. Do not add the crate to
-the repository root workspace until that ownership change is explicitly
-requested.
+If a caller needs an actual compatibility decision, keep that behavior in the
+contract, catalog, audit, or release owner until this crate receives typed rules
+and owner tests for that decision surface.
 
 ## References
 

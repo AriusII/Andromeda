@@ -70,7 +70,7 @@ pub struct BTreeNodeImpl {
     pub child_page_ids: Vec<PageId>,
 }
 
-/// In-memory B-Tree index prototype backed by [`BTreeMap`].
+/// In-memory B-Tree index implementation backed by [`BTreeMap`].
 ///
 /// This type is intentionally not a durable/page-backed B-Tree engine.
 pub struct InMemoryBTreeIndexEngine {

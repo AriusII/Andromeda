@@ -27,8 +27,9 @@
 //! All events share a `trace_id` (from `InvocationContext` or request). This
 //! enables forensic replay and recovery validation across restarts.
 
-use andromeda_core::{AndromedaResult, InvocationId};
+use andromeda_error::AndromedaResult;
 use andromeda_observability::TraceId;
+use andromeda_types::InvocationId;
 use std::sync::Arc;
 
 pub mod completion;
@@ -60,7 +61,7 @@ pub enum InvocationTraceEvent {
     ExecutionStart {
         trace_id: TraceId,
         invocation_id: InvocationId,
-        transaction_id: andromeda_core::TransactionId,
+        transaction_id: andromeda_types::TransactionId,
     },
 
     /// Procedure execution completed (success or rollback).
@@ -171,8 +172,8 @@ impl InMemoryAuditLedger {
     /// Snapshot of all recorded events (read-only).
     pub fn snapshot(&self) -> AndromedaResult<Vec<InvocationTraceEvent>> {
         let events = self.events.lock().map_err(|e| {
-            andromeda_core::AndromedaError::new(
-                andromeda_core::AndromedaErrorKind::Internal,
+            andromeda_error::AndromedaError::new(
+                andromeda_error::AndromedaErrorKind::Internal,
                 format!("audit ledger lock poisoned: {}", e),
             )
         })?;
@@ -198,8 +199,8 @@ impl AuditLedger for InMemoryAuditLedger {
             Err(e) => {
                 self.rejected_count
                     .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                Err(andromeda_core::AndromedaError::new(
-                    andromeda_core::AndromedaErrorKind::Internal,
+                Err(andromeda_error::AndromedaError::new(
+                    andromeda_error::AndromedaErrorKind::Internal,
                     format!("audit ledger lock poisoned: {}", e),
                 ))
             },
@@ -270,7 +271,7 @@ mod tests {
     fn test_in_memory_audit_ledger_appends() {
         let ledger = InMemoryAuditLedger::new();
         let trace_id = TraceId::new(1);
-        let invocation_id = andromeda_core::InvocationId::new(42);
+        let invocation_id = andromeda_types::InvocationId::new(42);
 
         let event = InvocationTraceEvent::AdmissionDecision {
             trace_id,
@@ -294,7 +295,7 @@ mod tests {
         let ledger = InMemoryAuditLedger::new();
         let trace_id1 = TraceId::new(1);
         let trace_id2 = TraceId::new(2);
-        let invocation_id = andromeda_core::InvocationId::new(42);
+        let invocation_id = andromeda_types::InvocationId::new(42);
 
         let event1 = InvocationTraceEvent::AdmissionDecision {
             trace_id: trace_id1,
@@ -321,8 +322,8 @@ mod tests {
     fn test_in_memory_audit_ledger_query_by_invocation_id() {
         let ledger = InMemoryAuditLedger::new();
         let trace_id = TraceId::new(1);
-        let invocation_id1 = andromeda_core::InvocationId::new(42);
-        let invocation_id2 = andromeda_core::InvocationId::new(43);
+        let invocation_id1 = andromeda_types::InvocationId::new(42);
+        let invocation_id2 = andromeda_types::InvocationId::new(43);
 
         let event1 = InvocationTraceEvent::AdmissionDecision {
             trace_id,

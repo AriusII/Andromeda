@@ -1,10 +1,11 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, CatalogVersion};
+use andromeda_error::{AndromedaError, AndromedaErrorKind};
 pub use andromeda_manifest::{
     DATABASE_MANIFEST_STORAGE_FORMAT_FINGERPRINTS, DatabaseManifest, DatabaseSnapshotPublication,
     ManifestDurabilityBoundary, SnapshotAvailabilityContract, SnapshotSegmentReference,
     StorageFormatManifest,
 };
 use andromeda_observe::{ManifestEventKind, ManifestTrace, TraceId};
+use andromeda_types::CatalogVersion;
 
 mod cold_publication;
 

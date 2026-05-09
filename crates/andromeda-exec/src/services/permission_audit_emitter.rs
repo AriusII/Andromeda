@@ -1,4 +1,4 @@
-//! Compatibility facade for permission audit ownership.
+//! Compatibility surface for permission audit ownership.
 
 pub use andromeda_audit::{
     AuditEmissionEventFamily, AuditEmissionEvidence, AuditEmissionKind, AuditEmissionOutcome,

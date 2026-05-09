@@ -1,6 +1,6 @@
-use andromeda_core::{
-    AndromedaErrorKind, GpuExecutionPolicy, GpuProfile, HardwareProfile, RamProfile,
-    RamSectionBudget, RamSectionRole,
+use andromeda_error::AndromedaErrorKind;
+use andromeda_hardware::{
+    GpuExecutionPolicy, GpuProfile, HardwareProfile, RamProfile, RamSectionBudget, RamSectionRole,
 };
 use andromeda_observe::{
     CriticalDecisionKind, EventCorrelation, EventEnvelope, EventId, PlacementAuditTransition,

@@ -1,8 +1,9 @@
 use andromeda_admission::InvocationContext;
-use andromeda_core::{AndromedaResult, ProcedureId};
+use andromeda_error::AndromedaResult;
 use andromeda_exec::{LocalProcedure, ProcedureHandler};
 use andromeda_procedure_contract::{ProcedureContract, ProcedureContractRef};
 use andromeda_result_stream::ResultStreamMetadata;
+use andromeda_types::ProcedureId;
 
 use crate::{QueryStockEffect, ReleaseStockEffect, ReserveStockEffect};
 

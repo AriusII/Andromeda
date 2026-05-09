@@ -7,20 +7,16 @@
 //! `andromeda-catalog-recovery`. This module converts local catalog mutation
 //! records to that boundary when callers need stable replay contracts.
 
-use andromeda_catalog_recovery::CatalogWalRecord;
 use andromeda_error::AndromedaResult;
 use andromeda_types::CatalogVersion;
 
 use crate::{
     CatalogMutationBoundary, CatalogMutationDelta, CatalogMutationOperation, CatalogMutationPlan,
-    CatalogMutationRecord, CatalogPublicationSemantics, CatalogSnapshot,
+    CatalogPublicationSemantics, CatalogSnapshot,
 };
 
-/// Recovery-compatible record types used by durable WAL payload codecs.
-pub type RecoveryCatalogMutationRecord = andromeda_catalog_recovery::CatalogMutationRecord;
-pub type RecoveryCatalogMutationBoundary = andromeda_catalog_recovery::CatalogMutationBoundary;
-pub type RecoveryCatalogMutationDelta = andromeda_catalog_recovery::CatalogMutationDelta;
-pub type RecoveryCatalogMutationOperation = andromeda_catalog_recovery::CatalogMutationOperation;
+#[cfg(test)]
+use crate::CatalogMutationRecord;
 
 impl andromeda_catalog_recovery::CatalogRecoveryApplyTarget for CatalogSnapshot {
     fn recovery_database_id(&self) -> andromeda_types::DatabaseId {
@@ -37,8 +33,8 @@ impl andromeda_catalog_recovery::CatalogRecoveryApplyTarget for CatalogSnapshot 
 
     fn apply_recovered_catalog_mutation(
         &mut self,
-        boundary: &RecoveryCatalogMutationBoundary,
-        deltas: &[RecoveryCatalogMutationDelta],
+        boundary: &andromeda_catalog_recovery::CatalogMutationBoundary,
+        deltas: &[andromeda_catalog_recovery::CatalogMutationDelta],
     ) -> AndromedaResult<()> {
         andromeda_catalog_recovery::CatalogRecoveryApplyTarget::validate_recovery_boundary_identity(
             self, boundary,
@@ -63,10 +59,10 @@ impl andromeda_catalog_recovery::CatalogRecoveryApplyTarget for CatalogSnapshot 
 }
 
 /// Adapts a single catalog mutation boundary to a recovery boundary representation.
-pub fn adapt_catalog_mutation_boundary(
+pub(crate) fn adapt_catalog_mutation_boundary(
     boundary: &CatalogMutationBoundary,
-) -> RecoveryCatalogMutationBoundary {
-    RecoveryCatalogMutationBoundary {
+) -> andromeda_catalog_recovery::CatalogMutationBoundary {
+    andromeda_catalog_recovery::CatalogMutationBoundary {
         batch_id: boundary.batch_id,
         database_id: boundary.database_id,
         namespace_id: boundary.namespace_id,
@@ -89,8 +85,10 @@ pub fn adapt_catalog_mutation_boundary(
 }
 
 /// Adapts a local mutation delta to a recovery delta.
-pub fn adapt_catalog_mutation_delta(delta: CatalogMutationDelta) -> RecoveryCatalogMutationDelta {
-    RecoveryCatalogMutationDelta {
+pub(crate) fn adapt_catalog_mutation_delta(
+    delta: CatalogMutationDelta,
+) -> andromeda_catalog_recovery::CatalogMutationDelta {
+    andromeda_catalog_recovery::CatalogMutationDelta {
         operation_index: delta.operation_index,
         planned_version: delta.planned_version,
         operation: adapt_catalog_mutation_operation(delta.operation),
@@ -98,15 +96,18 @@ pub fn adapt_catalog_mutation_delta(delta: CatalogMutationDelta) -> RecoveryCata
 }
 
 /// Adapts a local mutation operation to a recovery operation.
-pub fn adapt_catalog_mutation_operation(
+pub(crate) fn adapt_catalog_mutation_operation(
     operation: CatalogMutationOperation,
-) -> RecoveryCatalogMutationOperation {
+) -> andromeda_catalog_recovery::CatalogMutationOperation {
     match operation {
         CatalogMutationOperation::CreateObject { object, definition } => {
-            RecoveryCatalogMutationOperation::CreateObject { object, definition }
+            andromeda_catalog_recovery::CatalogMutationOperation::CreateObject {
+                object,
+                definition,
+            }
         },
         CatalogMutationOperation::DeprecateObject { target } => {
-            RecoveryCatalogMutationOperation::DeprecateObject {
+            andromeda_catalog_recovery::CatalogMutationOperation::DeprecateObject {
                 target: andromeda_catalog_recovery::CatalogLifecycleTarget {
                     object: target.object,
                 },
@@ -115,47 +116,30 @@ pub fn adapt_catalog_mutation_operation(
     }
 }
 
-/// Adapts a local mutation record sequence to recovery records.
-pub fn adapt_catalog_mutation_records(
+#[cfg(test)]
+fn adapt_catalog_mutation_records(
     records: impl IntoIterator<Item = CatalogMutationRecord>,
-) -> Vec<RecoveryCatalogMutationRecord> {
+) -> Vec<andromeda_catalog_recovery::CatalogMutationRecord> {
     records
         .into_iter()
         .map(|record| match record {
             CatalogMutationRecord::Begin(boundary) => {
-                RecoveryCatalogMutationRecord::Begin(adapt_catalog_mutation_boundary(&boundary))
+                andromeda_catalog_recovery::CatalogMutationRecord::Begin(
+                    adapt_catalog_mutation_boundary(&boundary),
+                )
             },
             CatalogMutationRecord::Apply(delta) => {
-                RecoveryCatalogMutationRecord::Apply(Box::new(adapt_catalog_mutation_delta(*delta)))
+                andromeda_catalog_recovery::CatalogMutationRecord::Apply(Box::new(
+                    adapt_catalog_mutation_delta(*delta),
+                ))
             },
             CatalogMutationRecord::Commit(boundary) => {
-                RecoveryCatalogMutationRecord::Commit(adapt_catalog_mutation_boundary(&boundary))
+                andromeda_catalog_recovery::CatalogMutationRecord::Commit(
+                    adapt_catalog_mutation_boundary(&boundary),
+                )
             },
         })
         .collect()
-}
-
-/// Emits a CatalogCheckpoint record with the current catalog state.
-///
-/// # Invariants
-///
-/// - The checkpoint_lsn is the current WAL position.
-/// - The catalog_version matches the current visible version.
-/// - The visible_procedure_count reflects the current catalog state.
-/// - Checkpoints are used as recovery starting points.
-pub fn emit_catalog_checkpoint_record(
-    current_lsn: u64,
-    catalog_version: CatalogVersion,
-    visible_procedure_count: usize,
-) -> AndromedaResult<CatalogWalRecord> {
-    let record = CatalogWalRecord::CatalogCheckpoint {
-        checkpoint_lsn: current_lsn,
-        catalog_version,
-        visible_procedure_count,
-    };
-
-    record.validate()?;
-    Ok(record)
 }
 
 #[cfg(test)]
@@ -165,7 +149,6 @@ mod tests {
     use andromeda_definition_batch::{
         DefinitionBatchDependencyGraphHash, DefinitionBatchId, DefinitionBatchSourceHash,
     };
-    use andromeda_error::AndromedaErrorKind;
     use andromeda_procedure_contract::{CatalogObjectRef, ObjectKind, QualifiedName};
     use andromeda_types::{CatalogObjectId, CatalogVersion, DatabaseId, NamespaceId};
 
@@ -241,26 +224,5 @@ mod tests {
 
         assert_eq!(commit.previous_version, boundary.previous_version);
         assert_eq!(commit.next_version, boundary.next_version);
-    }
-
-    #[test]
-    fn emit_catalog_checkpoint_record_produces_valid_record() {
-        let record =
-            emit_catalog_checkpoint_record(1000, CatalogVersion::new(42), 5).expect("emit failed");
-
-        assert_eq!(record.catalog_version(), Some(CatalogVersion::new(42)));
-        assert!(record.validate().is_ok());
-    }
-
-    #[test]
-    fn emit_catalog_checkpoint_record_rejects_zero_identity() {
-        let zero_lsn = emit_catalog_checkpoint_record(0, CatalogVersion::new(42), 5).unwrap_err();
-        assert_eq!(zero_lsn.kind(), AndromedaErrorKind::Catalog);
-        assert!(zero_lsn.message().contains("checkpoint_lsn"));
-
-        let zero_version =
-            emit_catalog_checkpoint_record(1000, CatalogVersion::new(0), 5).unwrap_err();
-        assert_eq!(zero_version.kind(), AndromedaErrorKind::Catalog);
-        assert!(zero_version.message().contains("catalog_version"));
     }
 }

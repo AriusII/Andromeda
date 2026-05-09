@@ -1,4 +1,4 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_storage_heap as heap_core;
 
 use crate::write_ahead_log::HeapRowRedoPayloadV1;

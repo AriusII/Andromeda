@@ -165,9 +165,10 @@ mod tests {
 
     #[test]
     fn parses_default_run_options() {
-        let options = parse_benchmark_run_options(&strings(&["vertical-v0-smoke"])).unwrap();
+        let options =
+            parse_benchmark_run_options(&strings(&["inventory-recoverable-smoke"])).unwrap();
 
-        assert_eq!(options.request.workload_id, "vertical-v0-smoke");
+        assert_eq!(options.request.workload_id, "inventory-recoverable-smoke");
         assert_eq!(options.request.duration_ms, DEFAULT_DURATION_MS);
         assert_eq!(options.request.samples, DEFAULT_SAMPLES);
         assert_eq!(options.request.warmups, DEFAULT_WARMUPS);
@@ -210,7 +211,7 @@ mod tests {
     fn rejects_unbounded_duration() {
         let too_long = (MAX_DURATION_MS + 1).to_string();
         let options = parse_benchmark_run_options(&strings(&[
-            "vertical-v0-smoke",
+            "inventory-recoverable-smoke",
             "--duration-ms",
             too_long.as_str(),
         ]))
@@ -222,7 +223,7 @@ mod tests {
     #[test]
     fn rejects_invalid_temp_budget_with_user_facing_messages() {
         let options = parse_benchmark_run_options(&strings(&[
-            "vertical-v0-smoke",
+            "inventory-recoverable-smoke",
             "--temp-budget-bytes",
             "0",
         ]))
@@ -235,7 +236,7 @@ mod tests {
 
         let too_large = (MAX_TEMP_BYTES + 1).to_string();
         let options = parse_benchmark_run_options(&strings(&[
-            "vertical-v0-smoke",
+            "inventory-recoverable-smoke",
             "--temp-budget-bytes",
             too_large.as_str(),
         ]))
@@ -256,14 +257,17 @@ mod tests {
 
     #[test]
     fn rejects_plain_json_alias() {
-        assert!(parse_benchmark_run_options(&strings(&["vertical-v0-smoke", "--json"])).is_err());
+        assert!(
+            parse_benchmark_run_options(&strings(&["inventory-recoverable-smoke", "--json"]))
+                .is_err()
+        );
         assert!(has_diagnostic_json_option(&strings(&["--json"])).is_err());
     }
 
     #[test]
     fn rejects_flag_as_numeric_option_value() {
         let err = parse_benchmark_run_options(&strings(&[
-            "vertical-v0-smoke",
+            "inventory-recoverable-smoke",
             "--duration-ms",
             "--samples",
         ]))
@@ -274,9 +278,11 @@ mod tests {
 
     #[test]
     fn benchmark_option_errors_do_not_echo_values() {
-        let err =
-            parse_benchmark_run_options(&strings(&["vertical-v0-smoke", "--token=super-secret"]))
-                .unwrap_err();
+        let err = parse_benchmark_run_options(&strings(&[
+            "inventory-recoverable-smoke",
+            "--token=super-secret",
+        ]))
+        .unwrap_err();
         assert_eq!(
             err.message(),
             "unknown benchmark run option; supported options are --duration-ms, --samples, --warmups, --temp-budget-bytes, --hardware-profile, and --diagnostic-json"
@@ -284,7 +290,7 @@ mod tests {
         assert!(!err.message().contains("super-secret"));
 
         let err = parse_benchmark_run_options(&strings(&[
-            "vertical-v0-smoke",
+            "inventory-recoverable-smoke",
             "--hardware-profile",
             "super-secret",
         ]))

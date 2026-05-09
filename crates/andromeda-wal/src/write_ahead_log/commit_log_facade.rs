@@ -1,4 +1,4 @@
-//! Commit log facade for WAL durability-before-visibility ordering.
+//! Commit log boundary for WAL durability-before-visibility ordering.
 
 use andromeda_error::AndromedaResult;
 use andromeda_types::TransactionId;
@@ -7,7 +7,7 @@ use crate::Lsn;
 
 use super::commit_log_entry::{CommitLog, CommitLogEntry, Timestamp, transaction_error};
 
-/// Facade coordinating the commit-log cache with WAL durability evidence.
+/// Boundary coordinating the commit-log cache with WAL durability evidence.
 pub struct CommitLogFacade {
     commit_log: CommitLog,
 }

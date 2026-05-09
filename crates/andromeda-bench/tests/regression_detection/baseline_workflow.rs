@@ -100,7 +100,7 @@ fn multi_workload_regression_tracking() {
     let workloads = [
         "btree-lookup-smoke",
         "btree-range-scan-smoke",
-        "vertical-v0-smoke",
+        "inventory-recoverable-smoke",
         "protocol-smoke-contract",
         "wal-append-smoke",
     ];

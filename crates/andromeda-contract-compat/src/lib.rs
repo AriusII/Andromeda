@@ -2,9 +2,9 @@
 #![doc = r#"
 # Andromeda Contract Compat
 
-Runtime-free scaffold for future Procedure contract compatibility ownership.
+Runtime-free owner for Procedure contract compatibility taxonomy identifiers.
 
-This crate exposes stable taxonomy placeholders only. It does not evaluate
+This crate exposes stable reserved taxonomy identifiers only. It does not evaluate
 compatibility, publish catalog changes, claim release readiness, serialize
 network or disk formats, or authorize any application-facing ad hoc SQL surface.
 

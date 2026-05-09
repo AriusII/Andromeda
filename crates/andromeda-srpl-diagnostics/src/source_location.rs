@@ -110,7 +110,7 @@ mod tests {
     #[test]
     fn identifier_starting_with_while_is_not_unbounded_loop() {
         // `whileCount` and `WhileLimit` are legitimate identifier names; the
-        // legacy substring "while " scanner could fire on `someWhile foo`
+        // Previous substring "while " scanner could fire on `someWhile foo`
         // which lower-cases to `somewhile foo` and contains "while ".
         let cases = [
             "procedure X accepts (whileCount i64) returns R one (V bool);",

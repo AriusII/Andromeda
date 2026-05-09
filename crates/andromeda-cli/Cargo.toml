@@ -14,7 +14,7 @@ andromeda-error.workspace = true
 andromeda-exec.workspace = true
 andromeda-hadr.workspace = true
 andromeda-hardware.workspace = true
-andromeda-inventory-demo.workspace = true
+andromeda-inventory-demo = { package = "andromeda-inventory-demo-cli-adapter", path = "../andromeda-inventory-demo-cli-adapter", version = "0.1.0" }
 andromeda-manifest.workspace = true
 andromeda-observe.workspace = true
 andromeda-quic.workspace = true

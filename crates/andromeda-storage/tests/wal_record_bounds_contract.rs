@@ -10,7 +10,7 @@
 //! Each test case focuses on a specific invariant and verifies that the
 //! bounds enforcement correctly rejects or accepts records accordingly.
 
-use andromeda_core::TransactionId;
+use andromeda_types::TransactionId;
 use andromeda_wal::{
     InMemoryWal, Lsn, WAL_RECORD_HEADER_OVERHEAD, WAL_RECORD_SIZE_LIMIT, WAL_SEGMENT_BOUNDARY,
     WalRecord, WalRecordKind, validate_lsn_continuity, validate_record_size,

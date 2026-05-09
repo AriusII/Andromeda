@@ -2,7 +2,7 @@
 #![doc = r#"
 # Andromeda Contract Model
 
-Canonical contract and catalog-object descriptor facade shared by catalog,
+Canonical contract and catalog-object descriptor surface shared by catalog,
 SRPL, execution, and protocol-facing crates.
 
 This crate owns catalog object descriptors and reexports the split Procedure

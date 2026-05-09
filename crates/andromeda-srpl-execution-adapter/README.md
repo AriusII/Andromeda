@@ -18,7 +18,7 @@ This crate is intended to own:
 | Adapter requests | Typed, bounded read, update, assert, emit, and failure requests derived from catalog-bound SRPL plans. |
 | Adapter results | Typed result shapes and cardinality failures returned to the SRPL interpreter or execution orchestration. |
 | Binding environment | Runtime-free bound value and row shapes needed by adapter traits. |
-| Adapter traits | Narrow interfaces that concrete execution owners can implement without pulling SRPL parser or facade code into runtime crates. |
+| Adapter traits | Narrow interfaces that concrete execution owners can implement without pulling SRPL parser or compatibility-surface code into runtime crates. |
 
 The execution adapter is a contract boundary. It defines what SRPL execution
 needs, but it must not own execution scheduling, transaction commit, storage
@@ -31,7 +31,7 @@ Dependencies must point only toward lower or contract-safe crates such as
 `andromeda-contract`, `andromeda-srpl-diagnostics`,
 `andromeda-srpl-cardinality`, and `andromeda-srpl-ir`.
 
-Do not depend on `andromeda-srpl` as a facade from this crate after extraction.
+Do not depend on `andromeda-srpl` as a broad compatibility surface from this crate after extraction.
 Do not depend on parser, binder, lowering, optimizer, storage, transaction,
 WAL, QUIC transport, benchmark, analytics, GPU, or application-surface crates.
 Concrete execution crates may depend on this adapter boundary, but this adapter
@@ -49,7 +49,7 @@ boundary must not depend back on concrete execution runtime crates.
 - Do not treat adapter results, traces, RAM, or benchmark output as durable
   truth.
 - Do not serialize Rust native structs directly to disk or network.
-- Do not depend on `andromeda-srpl` as a facade.
+- Do not depend on `andromeda-srpl` as a broad compatibility surface.
 
 ## Prerequisites
 
@@ -87,7 +87,7 @@ cargo test -p andromeda-srpl-execution-adapter
 | The adapter needs to commit, rollback, or flush WAL. | Move that behavior to the transaction, WAL, or storage owner; keep this crate as a typed request/result boundary. |
 | The adapter needs transport session state. | Keep transport behavior in RPC or QUIC runtime crates. |
 | Adapter results become durable truth. | Reject the design; durable truth comes from catalog, WAL, storage, and transaction evidence. |
-| Concrete execution code must import parser or facade internals. | Move the shared typed contract into this adapter boundary or a lower language-model crate. |
+| Concrete execution code must import parser or compatibility-surface internals. | Move the shared typed contract into this adapter boundary or a lower language-model crate. |
 
 ## References
 

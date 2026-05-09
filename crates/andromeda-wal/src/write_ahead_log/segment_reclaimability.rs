@@ -1,4 +1,4 @@
-//! WAL segment reclaimability policy facade.
+//! WAL segment reclaimability policy re-export surface.
 //!
 //! This module owns deterministic reclaimability decisions and retention
 //! boundary policy.

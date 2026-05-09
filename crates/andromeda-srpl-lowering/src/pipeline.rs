@@ -89,7 +89,7 @@ pub fn lower_body_ast(body: ProcedureBodyAst) -> AndromedaResult<SrplProcedureBo
             BusinessOperationKindAst::Emit { stream, values } => {
                 operations.push(SrplBusinessOperationIr {
                     ordinal: operations.len() as u32,
-                            kind: SrplBusinessOperationKindIr::Emit {
+                    kind: SrplBusinessOperationKindIr::Emit {
                         stream: stream.value,
                         values: values
                             .into_iter()
@@ -100,7 +100,7 @@ pub fn lower_body_ast(body: ProcedureBodyAst) -> AndromedaResult<SrplProcedureBo
                             .collect(),
                     },
                 })
-            }
+            },
             BusinessOperationKindAst::Raise { code } => operations.push(SrplBusinessOperationIr {
                 ordinal: operations.len() as u32,
                 kind: SrplBusinessOperationKindIr::Raise { code: code.value },
@@ -138,7 +138,7 @@ pub fn lower_body_ast(body: ProcedureBodyAst) -> AndromedaResult<SrplProcedureBo
                         failure_code: failure_code.value,
                     },
                 });
-            }
+            },
             BusinessOperationKindAst::UpdateSet {
                 target,
                 field,
@@ -172,7 +172,7 @@ pub fn lower_body_ast(body: ProcedureBodyAst) -> AndromedaResult<SrplProcedureBo
             BusinessOperationKindAst::Return { stream, values } => {
                 operations.push(SrplBusinessOperationIr {
                     ordinal: operations.len() as u32,
-                            kind: SrplBusinessOperationKindIr::Emit {
+                    kind: SrplBusinessOperationKindIr::Emit {
                         stream: stream.value,
                         values: values
                             .into_iter()
@@ -183,7 +183,7 @@ pub fn lower_body_ast(body: ProcedureBodyAst) -> AndromedaResult<SrplProcedureBo
                             .collect(),
                     },
                 })
-            }
+            },
         }
     }
     let ir = SrplProcedureBodyIr { operations };

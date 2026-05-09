@@ -4,7 +4,8 @@ mod result_frames;
 
 use andromeda_admission::{InvocationContext, InvocationRequest};
 use andromeda_catalog::CatalogSnapshot;
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, digest::sha256};
+use andromeda_digest::sha256;
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_exec::{LocalVerticalRuntime, VerticalInvocationOutcome};
 use andromeda_observe::{EventEmitter, EventSink};
 use andromeda_procedure_contract::{ProcedureContract, ProcedureContractBinding};

@@ -4,7 +4,7 @@ Boundary crate for Andromeda startup recovery and replay planning.
 
 This crate owns recovery boundary contracts that do not depend on storage page
 or WAL record internals. Storage keeps replay implementation during the
-migration and imports these contracts through its compatibility facade.
+migration and imports these contracts through its compatibility surface.
 
 C5 invariants:
 
@@ -41,16 +41,22 @@ pub use file_wal_report::{
     FileWalRecoveryBoundaryKind, FileWalRecoveryIgnoredTransaction,
     FileWalRecoveryIgnoredTransactionReason, FileWalRecoveryReplayRecord, FileWalRecoveryReportV0,
     build_file_wal_recovery_report_v0, file_wal_recovery_boundary_kind,
+    report_file_wal_recovery_from_scan_v0, report_file_wal_recovery_v0,
 };
-pub use file_wal_startup::{FileWalStartupRecoveryV0, recovered_transaction_id_floor_from_records};
+pub use file_wal_startup::{
+    FileWalStartupRecoveryV0, plan_file_wal_startup_recovery_from_scan_v0,
+    plan_file_wal_startup_recovery_v0, recover_from_file_wal,
+    recovered_transaction_id_floor_from_records,
+};
 pub use planning::{
     ConceptualRedoPlan, RecoveryManifestView, RecoveryPlan, RecoveryTraceProjection,
     RedoRecordDecision, RedoRecordPlan,
 };
 pub use replay::{
-    IndexRebuildRequiredEvidence, ManifestSwitchRecoveryTrace, RecoveryReplayTarget,
-    RecoveryWalReplayAdapter, ReplayOutcome, ReplayResult, WalReplayReport,
-    execute_redo_plan_with_adapter,
+    HeapRedoPageState, HeapRedoSlotState, IndexRebuildRequiredEvidence,
+    ManifestSwitchRecoveryTrace, RecoveryReplayTarget, RecoveryWalReplayAdapter, ReplayContext,
+    ReplayOutcome, ReplayResult, WalReplayReport, execute_redo_plan_with_adapter,
+    replay_wal_record, replay_wal_record_result,
 };
 pub use startup::{
     ObservedBoundary, StartupAcceptance, StartupAuditProjection, StartupDecision, StartupEvidence,

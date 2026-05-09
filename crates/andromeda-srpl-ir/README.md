@@ -89,7 +89,7 @@ cargo check -p andromeda-srpl-ir --all-targets
 ```
 
 If a change affects lowering, optimizer, contract materialization, or execution
-adapter contracts, also run the relevant `andromeda-srpl` facade tests.
+adapter contracts, also run the relevant `andromeda-srpl` compatibility tests.
 
 ## Troubleshooting
 

@@ -4,7 +4,7 @@
 //! boundary crates. Storage keeps this shim so existing durability validation
 //! import paths continue to resolve during migration.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 pub use andromeda_manifest::{validate_manifest_atomic_switch, validate_recovery_floor};
 use andromeda_storage_page::validate_wal_durability_before_page_flush as page_validate_wal_durability_before_page_flush;
 

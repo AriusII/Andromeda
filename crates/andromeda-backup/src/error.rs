@@ -1,6 +1,6 @@
 use std::{error::Error, fmt};
 
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 pub type BackupResult<T> = Result<T, BackupValidationError>;
 

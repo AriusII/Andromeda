@@ -4,7 +4,7 @@ use andromeda_wal::Lsn;
 /// A catalog recovery record paired with the outer storage-WAL LSN that
 /// carried it.
 ///
-/// The record type is generic so storage can keep its legacy semantic record
+/// The record type is generic so storage can keep its compatibility semantic record
 /// adapter while catalog-recovery owns the LSN filtering DTO boundary.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LsnBoundCatalogRecord<Record> {

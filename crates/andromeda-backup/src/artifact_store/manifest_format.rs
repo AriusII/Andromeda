@@ -265,7 +265,7 @@ fn decode_manifest_payload(
             recorded_in_manifest: true,
         },
         ARTIFACT_MANIFEST_FORMAT_VERSION_V1 | ARTIFACT_MANIFEST_FORMAT_VERSION_V2 => {
-            // Legacy manifests predate explicit compatibility persistence.
+            // Older manifests predate explicit compatibility persistence.
             // Restore still gets bounded evidence, but callers can distinguish
             // reconstructed evidence from v3's manifest-recorded evidence.
             BackupArtifactCompatibilityEvidence::reconstructed_legacy(format_version)

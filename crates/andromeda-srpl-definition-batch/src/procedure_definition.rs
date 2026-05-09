@@ -59,7 +59,7 @@ impl SrplProcedureDefinition {
     }
 
     /// Parse SRPL source to AST and map the structured staged diagnostic into
-    /// the crate-wide error type for legacy callers.
+    /// the crate-wide error type for compatibility callers.
     pub fn parse(&mut self) -> AndromedaResult<()> {
         self.parse_staged().map_err(staged_parse_error)
     }

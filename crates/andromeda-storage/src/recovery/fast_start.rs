@@ -27,7 +27,7 @@
 //! validation guard and performance tracking.  Any startup acceptance proof
 //! produced here carries `replay_allowed = true` and `observed_boundary = Clean`.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{DatabaseManifest, Lsn, WalScanResult};
 

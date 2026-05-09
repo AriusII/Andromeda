@@ -1,12 +1,17 @@
 //! Runtime-free file-WAL recovery report DTOs.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::TransactionId;
 use andromeda_wal::{
     DurableTransactionResume, DurableTransactionState, FileWalDiskScan, FileWalHeader, Lsn,
     WalRecord, WalRecordKind, WalScanStop, WalScanStopReason, summarize_transactions_from_records,
 };
+use std::path::Path;
 
-use crate::{ConceptualRedoPlan, RedoRecordDecision, RedoRecordPlan, StartupMode};
+use crate::{
+    ConceptualRedoPlan, RecoveryManifestView, RecoveryPlan, RedoRecordDecision, RedoRecordPlan,
+    StartupMode,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileWalRecoveryBoundaryKind {
@@ -137,6 +142,43 @@ pub fn build_file_wal_recovery_report_v0(
         ignored_record_count,
         forensic_required,
     })
+}
+
+/// Scan a file-WAL and build the portable V0 recovery report from durable
+/// evidence plus the manifest replay boundary.
+pub fn report_file_wal_recovery_v0(
+    manifest: &impl RecoveryManifestView,
+    startup_mode: StartupMode,
+    path: impl AsRef<Path>,
+) -> AndromedaResult<FileWalRecoveryReportV0> {
+    manifest.validate_recovery_manifest()?;
+    let disk_scan = andromeda_wal::scan_file_wal(path)?;
+    report_file_wal_recovery_from_scan_v0(manifest, startup_mode, &disk_scan)
+}
+
+/// Build the V0 recovery report from an already collected file-WAL scan.
+pub fn report_file_wal_recovery_from_scan_v0(
+    manifest: &impl RecoveryManifestView,
+    startup_mode: StartupMode,
+    disk_scan: &FileWalDiskScan,
+) -> AndromedaResult<FileWalRecoveryReportV0> {
+    let boundary_kind = file_wal_recovery_boundary_kind(disk_scan.scan.stopped);
+    let forensic_required = matches!(
+        boundary_kind,
+        FileWalRecoveryBoundaryKind::ForensicChainBreak
+    );
+
+    let redo_plan = if forensic_required {
+        None
+    } else {
+        Some(RecoveryPlan::from_manifest_and_wal_scan(
+            manifest,
+            startup_mode,
+            &disk_scan.scan,
+        )?)
+    };
+
+    build_file_wal_recovery_report_v0(startup_mode, disk_scan, redo_plan.as_ref())
 }
 
 fn recovery_report_replay_records(plan: &ConceptualRedoPlan) -> Vec<FileWalRecoveryReplayRecord> {

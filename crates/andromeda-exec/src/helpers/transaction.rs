@@ -14,7 +14,7 @@ use andromeda_types::{InvocationId, TransactionId};
 /// allocates ids exclusively via `TransactionManager::begin`, so the only
 /// remaining call sites for this shim are:
 ///
-/// * the legacy [`crate::services::CompletionRecoveryExpectation::for_invocation`]
+/// * the compatibility [`crate::services::CompletionRecoveryExpectation::for_invocation`]
 ///   convenience constructor, retained for compatibility with byte-stable
 ///   recovery test fixtures and gated behind `#[allow(deprecated)]`; and
 /// * `#[cfg(test)]` modules in completion tests that hand-craft WAL

@@ -1,4 +1,4 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_storage_heap::LocalHeapRowInsertRedoTemplate;
 
 use super::super::types::{InventoryStock, ReserveStockCommand};

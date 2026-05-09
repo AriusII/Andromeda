@@ -1,5 +1,6 @@
-use andromeda_core::{AndromedaResult, InvocationId, TransactionId};
+use andromeda_error::AndromedaResult;
 use andromeda_result_stream::CompletionStatus;
+use andromeda_types::{InvocationId, TransactionId};
 use andromeda_wal::{
     DurableTransactionState, Lsn, WalRecord, WalRecordKind, summarize_transactions_from_records,
 };
@@ -35,7 +36,7 @@ impl CompletionRecoveryExpectation {
         }
     }
 
-    /// Legacy constructor that derives the expected `TransactionId` from the
+    /// Compatibility constructor that derives the expected `TransactionId` from the
     /// `InvocationId` via deprecated direct value reuse.
     ///
     /// **Test/compatibility only.** Production recovery callers must use

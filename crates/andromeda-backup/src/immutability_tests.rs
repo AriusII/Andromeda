@@ -1,4 +1,4 @@
-/// Phase 7 Durability Gate Tests: Backup Immutability
+/// Durability gate tests: Backup immutability
 ///
 /// These tests validate C5 invariants for backup artifact immutability:
 /// - Backup artifacts are immutable after creation

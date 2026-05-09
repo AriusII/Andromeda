@@ -1,4 +1,4 @@
-//! Compatibility reexport for the WAL commit log facade.
+//! Compatibility reexport for the WAL commit log boundary.
 //!
 //! The canonical durability-before-visibility gate lives in
 //! `andromeda_wal::write_ahead_log::commit_log_facade`.

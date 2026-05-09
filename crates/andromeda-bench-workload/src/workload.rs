@@ -5,7 +5,8 @@ pub const BENCHMARK_BUDGET_ORIGIN: &str = "static-workload-registry-v1";
 pub const BENCHMARK_DECISION_LINKAGE: &str =
     "advisory-only; requires ProcedureId+CatalogVersion+ContractHash+StatsVersion+PlanClass";
 
-pub const VERTICAL_V0_SMOKE_WORKLOAD_ID: &str = "vertical-v0-smoke";
+pub const INVENTORY_RECOVERABLE_SMOKE_WORKLOAD_ID: &str = "inventory-recoverable-smoke";
+const VERTICAL_V0_SMOKE_WORKLOAD_ID: &str = "vertical-v0-smoke";
 pub const PROTOCOL_SMOKE_CONTRACT_WORKLOAD_ID: &str = "protocol-smoke-contract";
 pub const WAL_APPEND_SMOKE_WORKLOAD_ID: &str = "wal-append-smoke";
 pub const BTREE_LOOKUP_SMOKE_WORKLOAD_ID: &str = "btree-lookup-smoke";
@@ -62,13 +63,13 @@ pub struct BenchmarkWorkload {
 
 pub const WORKLOADS: &[BenchmarkWorkload] = &[
     BenchmarkWorkload {
-        id: VERTICAL_V0_SMOKE_WORKLOAD_ID,
-        description: "synthetic-diagnostic scenario for vertical V0 invocation plus WAL recovery accounting",
-        hypothesis: "bounded vertical invocation accounting should remain under diagnostic latency and error budgets",
-        workload_shape_version: "vertical-v0-smoke.synthetic.v1",
+        id: INVENTORY_RECOVERABLE_SMOKE_WORKLOAD_ID,
+        description: "synthetic-diagnostic scenario for recoverable inventory invocation plus WAL recovery accounting",
+        hypothesis: "bounded recoverable inventory invocation accounting should remain under diagnostic latency and error budgets",
+        workload_shape_version: "inventory-recoverable-smoke.synthetic.v1",
         workload_size: "single synthetic invocation path, samples<=30, duration_ms<=10000",
         primary_metric: BENCHMARK_PRIMARY_METRIC,
-        baseline_ref: "history.vertical-v0-smoke.synthetic.v1",
+        baseline_ref: "history.inventory-recoverable-smoke.synthetic.v1",
         budget_origin: BENCHMARK_BUDGET_ORIGIN,
         decision_linkage: BENCHMARK_DECISION_LINKAGE,
         workload_class: BenchmarkWorkloadClass::SyntheticDiagnostic,
@@ -284,7 +285,14 @@ pub const WORKLOADS: &[BenchmarkWorkload] = &[
 ];
 
 pub fn find_workload(id: &str) -> Option<&'static BenchmarkWorkload> {
-    WORKLOADS.iter().find(|workload| workload.id == id)
+    let canonical_id = match id {
+        VERTICAL_V0_SMOKE_WORKLOAD_ID => INVENTORY_RECOVERABLE_SMOKE_WORKLOAD_ID,
+        _ => id,
+    };
+
+    WORKLOADS
+        .iter()
+        .find(|workload| workload.id == canonical_id)
 }
 
 #[cfg(test)]

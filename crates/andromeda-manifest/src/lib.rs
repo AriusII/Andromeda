@@ -4,7 +4,7 @@ Boundary crate for Andromeda manifests and root pointers.
 
 This crate owns manifest durability boundary contracts that are independent of
 storage page and segment implementation. Storage keeps the current manifest
-facade during the migration and delegates boundary validation here.
+surface during the migration and delegates boundary validation here.
 
 C5 invariants:
 

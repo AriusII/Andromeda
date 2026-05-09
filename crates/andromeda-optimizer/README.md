@@ -59,5 +59,5 @@ Run package checks and focused tests when changing these contracts.
 ## References
 
 - [Workspace crate rules](../README.md)
-- [Current SRPL facade](../andromeda-srpl/README.md)
+- [Current SRPL compatibility surface](../andromeda-srpl/README.md)
 - [Current catalog owner](../andromeda-catalog/README.md)

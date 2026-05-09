@@ -84,7 +84,7 @@ cargo check -p andromeda-srpl-cardinality --all-targets
 ```
 
 If a change affects Procedure contract conversion, also run downstream SRPL IR,
-parser, and facade tests.
+parser, and compatibility tests.
 
 ## Troubleshooting
 

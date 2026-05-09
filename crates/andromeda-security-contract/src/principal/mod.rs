@@ -1,4 +1,4 @@
-//! Runtime-free principal security vocabulary shared with the core facade.
+//! Runtime-free principal security vocabulary shared with the core compatibility surface.
 
 mod contract;
 mod permission;

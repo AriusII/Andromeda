@@ -1,7 +1,8 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, InvocationId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_observability::TraceId;
 use andromeda_result_stream::{CompletionStatus, InvocationCompletion};
 use andromeda_transaction::TransactionState;
+use andromeda_types::InvocationId;
 use andromeda_wal::Lsn;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

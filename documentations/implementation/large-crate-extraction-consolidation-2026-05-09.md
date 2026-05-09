@@ -1392,3 +1392,51 @@ cargo check -p andromeda-bench -p andromeda-scenario-evidence -p andromeda-bench
 Tous ces contrôles sont passés. Les erreurs Cargo stale `E0463` rencontrées
 pendant la validation bench ont été corrigées par nettoyage ciblé des artefacts
 `andromeda-bench-harness` et `andromeda-regression`.
+
+## Cross-Check Final W01-W25 - 2026-05-09
+
+Le cross-check parent apres retour des 25 rapports WRITE supersede les
+validations declarees ci-dessus pour l'etat final du workspace. Les rapports
+workers existent bien, mais trois gates restent rouges dans l'etat local actuel:
+
+- `cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture`
+  echoue sur le nombre de crates `88` attendu contre `89` observe, et sur les
+  nouveaux dev back-edges transaction.
+- `cargo test -p andromeda-cli --test orphan_source_invariants -- --nocapture`
+  echoue uniquement sur des exceptions orphan devenues stale.
+- `cargo check --workspace --all-targets --all-features` echoue sur des tests
+  `restore_contract` et `backup_execution_plan` restes sous
+  `andromeda-storage` alors que les dev-dependencies `andromeda-backup` et
+  `andromeda-restore` ont ete retirees du crate storage.
+
+Le plan de stabilisation detaille, les TODO/SUB-TODO et le graphe de
+dependances workers sont consolides dans:
+
+`documentations/implementation/write-global-wave-crosscheck-2026-05-09.md`
+
+## Stabilisation Et Extraction Finale WA/WD - 2026-05-09
+
+Le cross-check intermediaire ci-dessus est maintenant resolu par la passe
+WRITE suivante. Les rapports WA1-WA5 et WD1-WD8 ont ete materialises sous
+`documentations/implementation`, puis controles contre l'etat Git et les gates
+Cargo.
+
+Etat final consolide:
+
+- `andromeda-policy` a ete retire; `cargo metadata` expose 88 packages et 88
+  workspace members.
+- Les exceptions orphan stale sont supprimees et la gate orphan passe.
+- Les back-edges dev transaction ont ete retires par repositionnement des tests.
+- `andromeda-storage` a perdu les tests backup/restore/HADR/recovery owner et
+  plusieurs facades pures, dont `catalog_wal_bridge`, `wal_segment`, `wal.rs`
+  et `wal_codec.rs`.
+- `andromeda-catalog`, `andromeda-exec`, `andromeda-observe`,
+  `andromeda-proto`, `andromeda-quic` et `andromeda-srpl` ont ete reduits par
+  deplacements de tests ou suppression de duplications vers les owner crates.
+- Les gates finales `workspace_dependency_topology`, `orphan_source_invariants`
+  et `cargo check --workspace --all-targets --all-features` passent.
+
+Le rapport detaille, les TODO restants et les dependances de prochaine vague
+sont consolides dans:
+
+`documentations/implementation/write-extraction-wave-final-consolidation-2026-05-09.md`

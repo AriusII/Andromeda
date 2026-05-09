@@ -1,11 +1,12 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_storage::write_ahead_log::compaction::{
     CompactionContext, FragmentationMetrics, WalCompactionAuditEvent,
 };
 use andromeda_storage::{Lsn, WalRecord, WalRecordKind};
+use andromeda_types::TransactionId;
 
 pub(crate) struct MockCompactionContext {
     fragmented_segments: Vec<FragmentationMetrics>,

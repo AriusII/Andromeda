@@ -32,7 +32,8 @@
 
 use std::collections::HashMap;
 
-use andromeda_core::{AndromedaResult, TransactionId};
+use andromeda_error::AndromedaResult;
+use andromeda_types::TransactionId;
 
 use crate::{Lsn, WalRecordKind};
 

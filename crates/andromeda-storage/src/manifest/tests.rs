@@ -1,5 +1,6 @@
-use andromeda_core::{AndromedaErrorKind, CatalogVersion};
+use andromeda_error::AndromedaErrorKind;
 use andromeda_observe::{EventCorrelation, EventEnvelope, EventId, TraceEvent, TraceId};
+use andromeda_types::CatalogVersion;
 
 use crate::{
     Lsn, SegmentId,

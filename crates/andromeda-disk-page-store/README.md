@@ -7,7 +7,7 @@
 This crate owns the implementation-neutral page flush durability boundary plus
 the file-backed `DiskManager`, `DiskPageStore`, `FileDiskManager`, atomic write,
 extent-map, and page-integrity contracts. `andromeda-storage` keeps only a
-temporary compatibility facade for historical imports.
+compatibility re-export surface for historical imports.
 
 ## Scope
 
@@ -68,4 +68,4 @@ If durable page state cannot be distinguished from a short write or unsynced wri
 ## References
 
 - `src/lib.rs`
-- Compatibility facade: `crates/andromeda-storage/src/disk_manager/mod.rs`
+- Compatibility surface: `crates/andromeda-storage/src/disk_manager/mod.rs`

@@ -7,3 +7,9 @@ publish = false
 
 [dependencies]
 andromeda-error.workspace = true
+
+[dev-dependencies]
+andromeda-locking.workspace = true
+andromeda-mvcc.workspace = true
+andromeda-transaction-log.workspace = true
+andromeda-types.workspace = true

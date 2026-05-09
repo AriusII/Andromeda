@@ -4,7 +4,7 @@ Boundary crate for Andromeda durable storage segments.
 
 This crate owns segment durability boundary contracts that are independent of
 storage page, extent, and manifest implementations. Storage keeps the current
-segment descriptor facade during the migration and delegates boundary
+segment descriptor surface during the migration and delegates boundary
 validation here.
 
 C5 invariants:

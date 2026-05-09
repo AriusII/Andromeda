@@ -1,4 +1,4 @@
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 use andromeda_observe::{PlacementAuditEvent, TraceId};
 
 use crate::{SegmentDescriptor, SegmentMutation, SegmentState};

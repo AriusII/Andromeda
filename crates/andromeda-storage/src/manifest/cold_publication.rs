@@ -5,7 +5,8 @@
 //! cold publication, but the plan is advisory admission evidence and does not
 //! publish, persist, or mutate segment or manifest truth by itself.
 
-use andromeda_core::{AndromedaResult, PipelineClass};
+use andromeda_error::AndromedaResult;
+use andromeda_hardware::PipelineClass;
 
 use crate::{
     CoreIoPlacementDecision, CoreIoPlacementPolicy, CoreIoPlacementRequest, IoPathBudget,

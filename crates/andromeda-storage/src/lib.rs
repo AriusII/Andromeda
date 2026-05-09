@@ -2,7 +2,6 @@
 
 mod btree_format_validation;
 mod btree_key_codec;
-mod catalog_wal_bridge;
 mod cold_store;
 mod file_wal;
 pub mod format_version;
@@ -12,10 +11,7 @@ mod manifest;
 mod operational_profile;
 mod placement;
 mod recovery;
-mod wal;
-mod wal_codec;
 mod wal_record_catalog;
-mod wal_segment;
 
 pub mod layout;
 pub mod publication;
@@ -26,6 +22,14 @@ pub use andromeda_buffer_pool::{
     BufferPoolManager, ClockEvictionCandidate, ClockEvictionPolicy, DirtyEntry,
     DirtyFlushCandidate, DirtyTracker, FlushAllDirtyResult, FlushBlockedFrame, FlushError,
     PageGuard, PageGuardMut, TestWalDurabilityObserver, WalDurabilityObserver,
+};
+pub use andromeda_catalog_recovery::{
+    CatalogStorageWalDurablePublication as CatalogWalDurablePublication,
+    CatalogStorageWalPublicationRecord as CatalogWalPublicationRecord,
+    CatalogStorageWalPublicationReplayReport as CatalogWalPublicationReplayReport,
+    decode_storage_catalog_record as decode_catalog_record,
+    encode_storage_catalog_record as encode_catalog_record,
+    replay_storage_catalog_publications_from_wal as replay_catalog_publications_from_wal,
 };
 pub use andromeda_disk_page_store::{
     DiskManager, DiskManagerError, DiskPageStore, FileDiskManager, PageIntegrityMode,
@@ -58,11 +62,21 @@ pub use andromeda_storage_page::{
     PageLayoutContract, PageSize, PageStore, PageTrailer, PageType, integrity_trailer_for_payload,
     payload_crc64, payload_hash, torn_write_guard, validate_payload_integrity,
 };
+pub use andromeda_wal::{
+    DurableTransactionClassifications, DurableTransactionResume, DurableTransactionState,
+    InMemoryWal, IncompleteDurableTransaction, MemoryWal, WAL_BYTE_ORDER_LITTLE_ENDIAN,
+    WAL_FORMAT_VERSION, WAL_FORMAT_VERSION_V1, WAL_RECORD_HEADER_LEN, WAL_RECORD_MAGIC,
+    WalFrameHeader, WalRecord, WalRecordHeader, WalRecordKind, WalScanResult, WalScanStop,
+    WalScanStopReason, WalSegment, WalSegmentDescriptor, classify_durable_transactions,
+    decode_frame_header, decode_wal_record_frame, encode_wal_record,
+    incomplete_transactions_from_records, scan_wal_records, scan_wal_records_from,
+    summarize_transaction, summarize_transactions_from_records, wal_record_checksum,
+    wal_record_kind_from_tag, wal_record_kind_tag,
+};
 pub use btree_format_validation::{
     BTreeFormatIdentityError, BTreeKeyFormatIdentity, BTreeOperationType, KeyV1FormatValidator,
 };
 pub use btree_key_codec::{Key, KeyCodec, KeyComparator};
-pub use catalog_wal_bridge::*;
 pub use cold_store::*;
 pub use file_wal::*;
 pub use heap::{
@@ -90,10 +104,7 @@ pub use recovery::{
     replay_wal_from_lsn, replay_wal_from_lsn_into_context, replay_wal_record,
     safe_start_from_manifest_and_scan, verify_safe_start_invariants,
 };
-pub use wal::*;
-pub use wal_codec::*;
 pub use wal_record_catalog::*;
-pub use wal_segment::*;
 pub use write_ahead_log::{
     DurabilityFenceError, WAL_BATCH_ROW_LIMIT, WAL_RECORD_HEADER_OVERHEAD, WAL_RECORD_SIZE_LIMIT,
     WAL_SEGMENT_BOUNDARY, validate_lsn_continuity, validate_lsn_ordered,

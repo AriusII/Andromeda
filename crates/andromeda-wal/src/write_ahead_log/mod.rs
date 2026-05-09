@@ -1,4 +1,4 @@
-//! Write-ahead log domain facade for pure WAL types.
+//! Write-ahead log domain re-export surface for pure WAL types.
 //!
 //! This crate intentionally excludes storage-owned recovery implementations:
 //! heap redo, catalog bridges, recovery reports, startup planning, commit log,

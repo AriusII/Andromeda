@@ -13,7 +13,6 @@ mod diagnostic_json;
 mod error_mod;
 mod hadr;
 mod parse;
-mod proto_helpers;
 
 mod error {
     pub(crate) use crate::error_mod::*;

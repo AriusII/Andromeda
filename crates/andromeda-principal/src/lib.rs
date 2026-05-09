@@ -3,8 +3,8 @@
 # Andromeda Principal
 
 Low-level principal identity, session, permission-set, policy-evidence, and
-registry primitives shared by IAM, admission, transport, audit, and the legacy
-core facade.
+registry primitives shared by IAM, admission, transport, audit, and the historical
+core compatibility surface.
 
 This crate owns principal runtime primitives only. Stable permission and surface
 vocabulary continues to come from `andromeda-security-contract`.

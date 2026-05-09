@@ -3,8 +3,8 @@
 //! SRPL bound-input lowering.
 //!
 //! This crate owns the bounded lowering behavior that can sit below the
-//! historical `andromeda-srpl` facade without depending on that facade. Source
-//! parsing, local facade binding wrappers, optimizer entry points, runtime
+//! historical `andromeda-srpl` compatibility surface without depending on that surface. Source
+//! parsing, local binding wrappers, optimizer entry points, runtime
 //! execution, and catalog publication remain outside this crate.
 //!
 //! Dependency direction:

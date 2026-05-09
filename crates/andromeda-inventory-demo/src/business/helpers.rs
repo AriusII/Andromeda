@@ -1,4 +1,5 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::TransactionId;
 
 pub(super) fn validate_business_product_id(product_id: i64) -> AndromedaResult<()> {
     if product_id <= 0 {

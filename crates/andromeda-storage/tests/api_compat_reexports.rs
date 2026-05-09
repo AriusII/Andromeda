@@ -1,17 +1,14 @@
 #![allow(dead_code, deprecated, unused_imports)]
 
-//! Compile-only guard for the C5 storage compatibility facade.
+//! Compile-only guard for the C5 storage compatibility surface.
 //!
-//! The storage facade keeps storage-owned compatibility paths only. Backup,
+//! The storage compatibility surface keeps storage-owned compatibility paths only. Backup,
 //! restore, and HADR contracts are imported directly from their owner crates.
 
 use std::any::TypeId;
 
 use andromeda_storage::format_version::{FormatVersion, StorageFormatKind};
-use andromeda_storage::layout::{
-    cold as layout_cold, extent as layout_extent, io_budget as layout_io_budget,
-    page as layout_page, placement as layout_placement, segment as layout_segment,
-};
+use andromeda_storage::layout::page as layout_page;
 use andromeda_storage::publication::DatabaseManifest as PublicationDatabaseManifest;
 use andromeda_storage::write_ahead_log::codec::{
     WalFrameHeader as ModuleWalFrameHeader, WalScanResult as ModuleWalScanResult,

@@ -1,6 +1,6 @@
 use andromeda_bench_workload::{
     BenchmarkError, BenchmarkHardwareProfile, BenchmarkRunRequest,
-    PROTOCOL_SMOKE_CONTRACT_WORKLOAD_ID, VERTICAL_V0_SMOKE_WORKLOAD_ID,
+    INVENTORY_RECOVERABLE_SMOKE_WORKLOAD_ID, PROTOCOL_SMOKE_CONTRACT_WORKLOAD_ID,
     WAL_APPEND_SMOKE_WORKLOAD_ID,
 };
 use andromeda_scenario_evidence::BenchmarkMeasurementMode;
@@ -20,7 +20,7 @@ pub fn synthetic_latency_evidence(
         BenchmarkHardwareProfile::DeclaredLocal => 1,
     };
     let workload_base_latency_us = match workload_id {
-        VERTICAL_V0_SMOKE_WORKLOAD_ID => 2_500,
+        INVENTORY_RECOVERABLE_SMOKE_WORKLOAD_ID => 2_500,
         PROTOCOL_SMOKE_CONTRACT_WORKLOAD_ID => 1_000,
         WAL_APPEND_SMOKE_WORKLOAD_ID => 1_500,
         _ => return Err(BenchmarkError::UnknownWorkload),

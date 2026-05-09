@@ -2,7 +2,7 @@
 
 **Date**: 2026-05-21  
 **Status**: ✅ **GATE 0 PASS - ALL REQUIREMENTS MET**  
-**Phase**: Wave 3 Extraction - Recovery Test Development
+**Scope**: Recovery extraction validation
 
 ## Executive Summary
 
@@ -432,7 +432,7 @@ TOTAL                       166     ✅ PASS
 
 **STATUS: ✅ GATE 0 PASS**
 
-The Andromeda recovery test suite is complete and verified. With 166 tests covering all critical recovery paths, 15 crash injection scenarios, comprehensive invariant validation, and proven performance, the recovery infrastructure is production-ready for Wave 3 extraction.
+The Andromeda recovery test suite is complete and verified. With 166 tests covering all critical recovery paths, 15 crash injection scenarios, comprehensive invariant validation, and proven performance, the recovery infrastructure is ready for the extraction milestone.
 
 All C5 critical invariants are enforced and validated:
 - No visible commit before durable WAL
@@ -446,4 +446,4 @@ The fuzz target infrastructure is integrated and buildable, enabling continuous 
 ---
 
 **Report Generated**: 2026-05-21  
-**Wave 3 Status**: **UNBLOCKED - Ready for deployment**
+**Extraction Status**: **UNBLOCKED - Ready for deployment**

@@ -81,17 +81,17 @@ impl StreamAllocation {
         self.promotion_vote_stream_id
     }
 
-    /// Returns the heartbeat stream ID facade value for this replica.
+    /// Returns the heartbeat stream ID value for this replica.
     pub const fn heartbeat_stream_id(&self) -> u64 {
         self.heartbeat_stream_id.get()
     }
 
-    /// Returns the WAL shipping stream ID facade value for this replica.
+    /// Returns the WAL shipping stream ID value for this replica.
     pub const fn wal_shipping_stream_id(&self) -> u64 {
         self.wal_shipping_stream_id.get()
     }
 
-    /// Returns the promotion vote stream ID facade value for this replica.
+    /// Returns the promotion vote stream ID value for this replica.
     pub const fn promotion_vote_stream_id(&self) -> u64 {
         self.promotion_vote_stream_id.get()
     }

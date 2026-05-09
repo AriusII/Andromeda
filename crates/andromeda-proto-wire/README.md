@@ -3,7 +3,7 @@
 ## Purpose
 
 `andromeda-proto-wire` owns wire-level protobuf integration helpers that can stay independent
-from the historical `andromeda-proto` compatibility facade.
+from the historical `andromeda-proto` compatibility surface.
 
 ## Scope
 

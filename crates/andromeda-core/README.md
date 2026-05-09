@@ -2,39 +2,46 @@
 
 ## Purpose
 
-`andromeda-core` is a temporary compatibility facade over Andromeda foundation crates and principal identity primitives now owned by `andromeda-principal`.
+`andromeda-core` is a drained compatibility crate. Its former foundation,
+hardware, digest, time, principal, security-contract, and error re-exports now
+live only in their owner crates.
 
-Use this crate when existing code still depends on the historical `andromeda_core::*` public paths during the foundation split. New code should prefer narrower owner crates when an appropriate crate already exists.
+Use direct owner crates for all new code and migrations.
 
 ## Scope
 
 This crate currently exposes:
 
-- Compatibility reexports for digest, error, hardware, time, and type descriptors.
-- Compatibility modules for historical `andromeda_core::digest::*` and `andromeda_core::policy::*` imports.
-- Compatibility reexports for principal identity, certificate identity, roles, and permission sets owned by `andromeda-principal`.
-- Compatibility reexports for principal permissions and surface scopes owned by `andromeda-security-contract`.
-- Compatibility reexports for principal registry authorization evidence, denial reasons, policy evidence binding, and decision metadata owned by `andromeda-principal`.
+- No public re-exports.
+- No storage, execution, recovery, transport, or catalog runtime behavior.
+- No runtime dependencies.
 
-The crate preserves public import compatibility while downstream crates migrate to smaller ownership boundaries.
+The crate remains as a workspace member while downstream migration history and
+topology documentation catch up to the drained compatibility surface.
 
 ## Non-goals
 
 - Do not move foundation ownership back into this crate when a narrower crate already owns the concept.
-- Do not treat this facade as a durable IAM store, certificate parser, mTLS runtime, audit ledger, Procedure dispatcher, catalog owner, WAL owner, storage owner, or recovery authority.
+- Do not treat this crate as a durable IAM store, certificate parser, mTLS runtime, audit ledger, Procedure dispatcher, catalog owner, WAL owner, storage owner, or recovery authority.
 - Do not expose Administration, security, recovery, backup, or cluster behavior through an Application Surface.
 - Do not add application-facing ad hoc SQL or bypass typed Procedure contracts.
 - Do not serialize Rust native structs directly to disk or network.
 
 ## Ownership
 
-`andromeda-core` owns compatibility reexports. Principal identity, session, permission-set, registry, and policy-evidence primitives should be changed in `andromeda-principal`. Runtime-free principal permission and surface-scope vocabulary should be changed in `andromeda-security-contract`, then reexported here only for legacy import compatibility.
+`andromeda-core` owns no active foundation vocabulary. Principal identity,
+session, permission-set, registry, and policy-evidence primitives should be
+changed in `andromeda-principal`. Runtime-free principal permission and
+surface-scope vocabulary should be changed in `andromeda-security-contract`.
 
-When changing this crate, keep `lib.rs` thin, keep public API additions intentional, and prefer migration toward narrower foundation or security crates over broadening the facade. Authorization evidence in this crate is policy evidence for evaluation and audit; it is not durable database truth or release-readiness evidence by itself.
+When changing this crate, keep `lib.rs` thin and prefer migration toward
+narrower foundation or security crates over reintroducing a broad compatibility
+surface.
 
 ## Validation
 
-For documentation-only changes, check that this README keeps the required headings and describes `andromeda-core` as a compatibility facade.
+For documentation-only changes, check that this README keeps the required
+headings and describes `andromeda-core` as drained.
 
 For source changes in this crate, prefer:
 
@@ -42,14 +49,17 @@ For source changes in this crate, prefer:
 cargo test -p andromeda-core
 ```
 
-Run workspace topology validation if dependencies, public reexports, or facade-boundary claims change.
+Run workspace topology validation if dependencies, public exports, or
+compatibility-boundary claims change.
 
 ## References
 
 - `Cargo.toml`
 - `src/lib.rs`
+- `../andromeda-error/src/lib.rs`
+- `../andromeda-types/src/lib.rs`
+- `../andromeda-hardware/src/lib.rs`
 - `../andromeda-principal/src/lib.rs`
-- `tests/foundation_facade_compat.rs`
-- `tests/principal_contract_projection.rs`
+- `../andromeda-security-contract/src/lib.rs`
 - `../README.md`
 - `../../AGENTS.md`

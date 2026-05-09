@@ -83,7 +83,7 @@ cargo check -p andromeda-srpl-diagnostics --all-targets
 ```
 
 If a forbidden construct changes accepted SRPL source, also run parser,
-compiler facade, and validation-gate tests.
+compiler compatibility surface, and validation-gate tests.
 
 ## Troubleshooting
 

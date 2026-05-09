@@ -8,19 +8,18 @@
 //! network adapters live in the separate `andromeda-quic-runtime-quinn` crate.
 //!
 //! Critical invariants:
-//! - frame type codes stay locked to protobuf payload layer codes;
-//! - stream roles enforce surface separation;
-//! - result streams are ordered as metadata, zero or more batches, completion;
 //! - lifecycle state gates handshake, active dispatch, drain, and close.
+//! - QUIC surface-plane checks gate transport admission before RPC dispatch;
+//! - concrete Quinn/TLS behavior remains in `andromeda-quic-runtime-quinn`.
 
-mod catalog_manifest_resolution;
+pub mod catalog_manifest_resolution;
 mod connection;
-mod procedure_gateway;
+pub mod procedure_gateway;
 mod reconnect;
 mod zero_rtt;
 
 mod stream_concurrency;
-mod transport;
+pub mod transport;
 
 pub use stream_concurrency::{
     BackpressureRequest, CancellationReason, CancellationToken, StreamConcurrencyManager,
@@ -36,10 +35,7 @@ pub use session::{
     EarlyDataPolicy, LifecycleState, SurfaceListenerConfig, SurfaceListenerSet, SurfacePlane,
 };
 
-pub use procedure_gateway::{
-    ProcedureAuthorizedRouteBinding, ProcedureGateway, ProcedureRouteAdmissionError,
-    ProcedureRouteBinding,
-};
+pub use procedure_gateway::ProcedureGateway;
 
 pub use reconnect::{
     CertificateContinuityDecision, CertificateContinuityPolicy, CertificateRotationDeclaration,
@@ -51,8 +47,7 @@ pub use reconnect::{
 };
 
 pub use catalog_manifest_resolution::{
-    CatalogManifestResolutionContext, CatalogManifestResolutionGateway,
-    CatalogManifestResolutionRuntime,
+    CatalogManifestResolutionGateway, CatalogManifestResolutionRuntime,
 };
 
 pub use transport::{

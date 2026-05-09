@@ -1,7 +1,7 @@
-//! WAL record cardinality and size bounds facade.
+//! WAL record cardinality and size bounds re-export surface.
 //!
 //! The public functions remain stable while the bounded validation logic lives
-//! in this facade:
+//! in this surface:
 //! - hard WAL limits
 //! - single-record payload and encoded-size bounds
 //! - cumulative segment-boundary checks

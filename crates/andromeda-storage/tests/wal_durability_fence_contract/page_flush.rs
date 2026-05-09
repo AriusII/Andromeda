@@ -1,7 +1,7 @@
 use crate::support::{
     assert_message_contains, assert_page_flush_allowed, assert_page_flush_blocked,
 };
-use andromeda_core::AndromedaErrorKind;
+use andromeda_error::AndromedaErrorKind;
 use andromeda_wal::{Lsn, validate_wal_durability_before_page_flush};
 
 #[test]

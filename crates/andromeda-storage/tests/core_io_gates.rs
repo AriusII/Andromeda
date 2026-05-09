@@ -1,4 +1,4 @@
-use andromeda_core::PipelineClass;
+use andromeda_hardware::PipelineClass;
 use andromeda_storage::{
     AllocationId, CoreIoPlacementPolicy, CoreIoPlacementRequest, ExtentId, Lsn, ObjectId,
     OperationalProfile, PageId, PageSize, PipelineStage, PublishedColdSegment, SegmentDescriptor,
@@ -7,8 +7,6 @@ use andromeda_storage::{
 };
 
 const STORAGE_CRITICAL_PATH_SOURCES: &[(&str, &str)] = &[
-    ("wal", include_str!("../src/wal.rs")),
-    ("wal_codec", include_str!("../src/wal_codec.rs")),
     ("recovery", include_str!("../src/recovery.rs")),
     (
         "segment_descriptor",

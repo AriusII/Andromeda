@@ -1,20 +1,21 @@
 pub(crate) use andromeda_catalog::{
-    CatalogLifecycleTarget, CatalogMutationCommitEvidence, CatalogMutationOperation,
-    CatalogMutationPlan, CatalogMutationRecord, CatalogMutationRecordKind, CatalogRecoveryOutcome,
-    CatalogSnapshotPublication, CatalogSystemStore, DefinitionBatchPlan,
+    CatalogMutationCommitEvidence, CatalogMutationPlan, CatalogMutationRecord,
+    CatalogRecoveryOutcome, CatalogSystemStore, DefinitionBatchPlan,
     recover_catalog_snapshot_from_durable_payloads, replay_catalog_mutation_records,
 };
 pub(crate) use andromeda_catalog_recovery::{
-    CatalogDurableMutationPayload, CatalogRecoveryAnomalyKind, CatalogSkippedBatchReason,
+    CatalogDurableMutationPayload, CatalogMutationRecordKind, CatalogRecoveryAnomalyKind,
+    CatalogSkippedBatchReason,
 };
 pub(crate) use andromeda_catalog_store::{
     CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH, CatalogDefinition, CatalogDurabilityMarker,
-    CatalogMutationDurability, CatalogObjectRef, CatalogPublicationSemantics, ObjectKind,
-    QualifiedName, StructuredObjectDefinition, TableDefinition,
+    CatalogMutationDurability, CatalogMutationOperation, CatalogObjectRef,
+    CatalogPublicationSemantics, CatalogSnapshotPublication, ObjectKind, QualifiedName,
+    StructuredObjectDefinition, TableDefinition,
 };
 pub(crate) use andromeda_definition_batch::{
-    CatalogDependencyKind, DefinitionBatch, DefinitionBatchId, DefinitionBatchSourceHash,
-    DefinitionOperation,
+    CatalogDependencyKind, CatalogLifecycleTarget, DefinitionBatch, DefinitionBatchId,
+    DefinitionBatchSourceHash, DefinitionOperation,
 };
 pub(crate) use andromeda_error::{AndromedaError, AndromedaErrorKind};
 pub(crate) use andromeda_procedure_contract::{

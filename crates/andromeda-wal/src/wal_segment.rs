@@ -2,7 +2,7 @@
 //!
 //! [`WalSegmentDescriptor`] and [`WalSegment`] are defined here and only here.
 //! The [`crate::write_ahead_log::segment`] module re-exports them as part of
-//! the WAL domain facade and must not redefine them.
+//! the WAL domain surface and must not redefine them.
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{Lsn, WAL_FORMAT_VERSION, WalRecord};

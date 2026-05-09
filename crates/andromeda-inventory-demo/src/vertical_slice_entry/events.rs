@@ -1,5 +1,5 @@
 use andromeda_admission::{InvocationContext, InvocationReject, InvocationRequest};
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId, SessionId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_observe::{
     CompletionEmittedTrace, EventCorrelation, EventEmitter, EventSink, ProtocolCorrelation,
     TraceEvent,
@@ -7,6 +7,7 @@ use andromeda_observe::{
 use andromeda_procedure_contract::ProcedureContract;
 use andromeda_result_stream::CompletionStatus;
 use andromeda_rpc_protocol::{FrameType, StreamRole};
+use andromeda_types::{RequestId, SessionId};
 
 use super::V0InventoryRecoverableOutcome;
 

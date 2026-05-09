@@ -55,7 +55,7 @@ mod tests {
     fn run_executes_bench_runner_after_validation() {
         let result = run_benchmark_command(&strings(&[
             "run",
-            "vertical-v0-smoke",
+            "inventory-recoverable-smoke",
             "--duration-ms",
             "1000",
             "--samples",

@@ -1,6 +1,6 @@
 use crate::TraceId;
 
-/// Legacy audit trace evidence.
+/// Compatibility audit trace evidence.
 ///
 /// This record is retained as review evidence only. It must not be used as the
 /// source of authorization, catalog, storage, transaction, or recovery truth.

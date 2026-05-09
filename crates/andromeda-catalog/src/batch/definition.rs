@@ -1,4 +1,4 @@
-//! Catalog compatibility facade for DefinitionBatch.
+//! Catalog compatibility surface for DefinitionBatch.
 
 use andromeda_definition_batch::dry_run_definition_batch;
 pub use andromeda_definition_batch::{

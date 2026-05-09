@@ -1,4 +1,4 @@
-//! Typed WAL frame codec facade.
+//! Typed WAL frame codec re-export surface.
 //!
 //! `andromeda-wal-codec` owns the raw byte format and scan loop. This module
 //! adapts that raw codec to `Lsn`, `TransactionId`, and `WalRecord` so existing

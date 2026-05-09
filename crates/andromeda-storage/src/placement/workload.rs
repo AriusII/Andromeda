@@ -1,4 +1,5 @@
-use andromeda_core::{AndromedaResult, PipelineClass, RamSectionRole};
+use andromeda_error::AndromedaResult;
+use andromeda_hardware::{PipelineClass, RamSectionRole};
 
 use super::{
     DataTemperature, IoUseClass, PipelineStage, PlacementDecision, ReadFallbackPolicy, StorageTier,

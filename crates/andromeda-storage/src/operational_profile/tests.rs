@@ -1,4 +1,5 @@
-use andromeda_core::{AndromedaErrorKind, CpuCapabilityClass, GpuProfile, PipelineClass};
+use andromeda_error::AndromedaErrorKind;
+use andromeda_hardware::{CpuCapabilityClass, GpuProfile, PipelineClass};
 
 use crate::{HotColdIoThresholds, IoPathClass, IoUseClass, PageSize};
 

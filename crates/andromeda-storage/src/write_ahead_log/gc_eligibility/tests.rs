@@ -1,6 +1,6 @@
 use super::*;
 use crate::Lsn;
-use andromeda_core::AndromedaErrorKind;
+use andromeda_error::AndromedaErrorKind;
 
 #[test]
 fn test_new_rejects_zero_start_lsn() {

@@ -69,7 +69,6 @@ This crate forbids unsafe code (`#![forbid(unsafe_code)]`).
 
 mod batch;
 pub mod digest;
-mod publication_subscription;
 mod recovery;
 mod server;
 mod snapshot;
@@ -78,14 +77,7 @@ mod wal_integration;
 mod wal_record;
 
 pub use batch::*;
-pub use publication_subscription::*;
-pub use publication_subscription::{
-    CatalogPublicationReplayTerminalOutcome, CatalogPublicationReplayTerminalRecord,
-    CatalogPublicationSubscriptionReplayRecord, CatalogVisibleChangeAuditEvidence,
-    replay_publication_subscription_changes,
-};
 pub use recovery::*;
 pub use server::*;
 pub use snapshot::*;
 pub use store::*;
-pub use wal_integration::*;

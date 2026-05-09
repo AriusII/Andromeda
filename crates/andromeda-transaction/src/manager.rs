@@ -8,7 +8,7 @@
 //!
 //! Higher-level concerns (WAL replay, MVCC snapshot construction) are
 //! deliberately out of scope. Lock management is exposed only through a narrow,
-//! boundary-safe coordinator/facade that validates transaction membership and
+//! boundary-safe coordinator that validates transaction membership and
 //! delegates to the lock manager without changing commit or rollback semantics.
 
 mod lock_coordinator;

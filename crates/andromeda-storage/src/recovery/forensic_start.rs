@@ -33,7 +33,7 @@
 //! This module wraps [`super::startup::decide_startup`] with a ForensicStart-
 //! specific proof type and an anomaly classification layer.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{DatabaseManifest, Lsn, WalScanResult, WalScanStop, WalScanStopReason};
 

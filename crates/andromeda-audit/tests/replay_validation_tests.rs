@@ -177,7 +177,7 @@ fn audit_replay_denied_entries() {
 fn audit_replay_full_cycle() {
     let base_id = 28000;
 
-    // Phase 1: Create entries
+    // Step 1: Create entries
     let original_entries: Vec<_> = (0..100)
         .map(|i| {
             PermissionAuditEvent::allowed(
@@ -190,10 +190,10 @@ fn audit_replay_full_cycle() {
 
     assert_eq!(original_entries.len(), 100);
 
-    // Phase 2: "Persist" (simulated)
+    // Step 2: "Persist" (simulated)
     let trace_ids: Vec<_> = original_entries.iter().map(|e| e.trace_id).collect();
 
-    // Phase 3: "Replay"
+    // Step 3: "Replay"
     let replayed_entries: Vec<_> = trace_ids
         .iter()
         .enumerate()

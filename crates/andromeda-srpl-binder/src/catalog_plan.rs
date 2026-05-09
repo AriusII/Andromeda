@@ -97,7 +97,7 @@ pub fn bind_executable_procedure_plan(
                     cardinality: *cardinality,
                     predicates: predicates.clone(),
                 });
-            }
+            },
             SrplBusinessOperationKindIr::Assert {
                 predicate,
                 failure_code,
@@ -108,7 +108,7 @@ pub fn bind_executable_procedure_plan(
                     predicate: predicate.clone(),
                     failure_code: failure_code.clone(),
                 });
-            }
+            },
             SrplBusinessOperationKindIr::Update {
                 target,
                 predicates,
@@ -136,7 +136,7 @@ pub fn bind_executable_procedure_plan(
                     assignments: assignments.clone(),
                     affected_rows_exact: *affected_rows_exact,
                 });
-            }
+            },
             SrplBusinessOperationKindIr::Emit { stream, values } => {
                 let result = ir
                     .result_streams
@@ -185,13 +185,13 @@ pub fn bind_executable_procedure_plan(
                     stream: stream.clone(),
                     values: values.clone(),
                 });
-            }
+            },
             SrplBusinessOperationKindIr::Raise { code } => {
                 bound_operations.push(BoundSrplOperationPlan::Raise {
                     ordinal: operation.ordinal,
                     code: code.clone(),
                 });
-            }
+            },
         }
     }
 
@@ -399,7 +399,7 @@ fn validate_predicate(
                 )
             })?;
             require_column(columns, field, "SRPL predicate field")?;
-        }
+        },
     }
     Ok(())
 }
@@ -423,12 +423,12 @@ fn validate_value(
             if let SrplValueIr::SubtractInput { input, .. } = value {
                 require_input(inputs, input)?;
             }
-        }
+        },
         SrplValueIr::Constant(literal) => literal.validate()?,
         SrplValueIr::BinaryArith { left, right, .. } => {
             validate_value(left, inputs, binding_sources)?;
             validate_value(right, inputs, binding_sources)?;
-        }
+        },
     }
     Ok(())
 }

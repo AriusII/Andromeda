@@ -124,8 +124,8 @@ fn visit(
                         cycle.push(dependency);
                         report.push(MapValidationDiagnostic::DependencyCycle { cycle });
                     }
-                }
-                Some(VisitState::Visited) => {}
+                },
+                Some(VisitState::Visited) => {},
             }
         }
     }

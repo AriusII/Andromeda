@@ -47,7 +47,13 @@ fn benchmark_rejects_plain_json_alias() {
 
 #[test]
 fn benchmark_run_rejects_unbounded_samples() {
-    assert_dispatch_error(["benchmark", "run", "vertical-v0-smoke", "--samples", "101"]);
+    assert_dispatch_error([
+        "benchmark",
+        "run",
+        "inventory-recoverable-smoke",
+        "--samples",
+        "101",
+    ]);
 }
 
 #[test]
@@ -55,7 +61,7 @@ fn benchmark_run_rejects_zero_temp_budget() {
     assert_dispatch_error([
         "benchmark",
         "run",
-        "vertical-v0-smoke",
+        "inventory-recoverable-smoke",
         "--temp-budget-bytes",
         "0",
     ]);

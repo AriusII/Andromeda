@@ -1,7 +1,8 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId, SessionId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_rpc_protocol::{
     FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader, FrameType, StreamRole,
 };
+use andromeda_types::{RequestId, SessionId};
 
 use crate::ReserveStockCommand;
 

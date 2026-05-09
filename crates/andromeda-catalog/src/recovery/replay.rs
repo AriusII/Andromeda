@@ -1,7 +1,7 @@
 use crate::{
-    CatalogMutationRecord, CatalogSnapshot, adapt_catalog_mutation_boundary,
-    adapt_catalog_mutation_delta,
+    CatalogMutationRecord, CatalogSnapshot,
     recovery::{CatalogRecoveryAnomaly, CatalogRecoveryOutcome},
+    wal_integration::{adapt_catalog_mutation_boundary, adapt_catalog_mutation_delta},
 };
 
 pub(super) type IndexedCatalogMutationRecord =

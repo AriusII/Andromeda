@@ -45,6 +45,36 @@ fn benchmark_workloads_diagnostic_json_lists_btree_node_codec_smoke() {
             "B-Tree durable node V1 encode/decode over deterministic page images",
         ],
     );
+    assert!(json.contains("\"id\":\"inventory-recoverable-smoke\""));
+    assert!(!json.contains("vertical-v0-smoke"));
+}
+
+#[test]
+fn benchmark_run_accepts_temporary_vertical_v0_smoke_alias() {
+    let output = run_binary(
+        cli_binary(),
+        [
+            "benchmark",
+            "run",
+            "vertical-v0-smoke",
+            "--duration-ms",
+            "1000",
+            "--samples",
+            "1",
+            "--diagnostic-json",
+        ],
+    );
+
+    assert_success(&output);
+    let json = stdout(&output);
+    assert_contains_all(
+        &json,
+        &[
+            "\"schema\":\"andromeda.cli.benchmark.run.v1\"",
+            "\"workload_id\":\"inventory-recoverable-smoke\"",
+            "\"budget_status\":\"passed\"",
+        ],
+    );
 }
 
 #[test]
@@ -129,7 +159,12 @@ fn benchmark_run_btree_node_codec_human_output_exposes_runtime_harness_metadata(
 
 #[test]
 fn benchmark_run_zero_temp_budget_message_is_bounded() {
-    let err = dispatch_benchmark_run(["run", "vertical-v0-smoke", "--temp-budget-bytes", "0"]);
+    let err = dispatch_benchmark_run([
+        "run",
+        "inventory-recoverable-smoke",
+        "--temp-budget-bytes",
+        "0",
+    ]);
 
     assert_eq!(
         err.message(),
@@ -142,7 +177,7 @@ fn benchmark_run_global_temp_budget_message_is_bounded() {
     let temp_budget = (MAX_TEMP_BYTES + 1).to_string();
     let err = dispatch_benchmark_run([
         "run",
-        "vertical-v0-smoke",
+        "inventory-recoverable-smoke",
         "--temp-budget-bytes",
         temp_budget.as_str(),
     ]);

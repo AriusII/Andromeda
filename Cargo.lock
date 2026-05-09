@@ -49,9 +49,10 @@ dependencies = [
 name = "andromeda-backup"
 version = "0.1.0"
 dependencies = [
- "andromeda-core",
+ "andromeda-error",
  "andromeda-observe",
  "andromeda-segment",
+ "andromeda-types",
  "andromeda-wal",
  "sha2",
 ]
@@ -176,7 +177,7 @@ dependencies = [
  "andromeda-exec",
  "andromeda-hadr",
  "andromeda-hardware",
- "andromeda-inventory-demo",
+ "andromeda-inventory-demo-cli-adapter",
  "andromeda-manifest",
  "andromeda-observe",
  "andromeda-quic",
@@ -214,15 +215,6 @@ version = "0.1.0"
 [[package]]
 name = "andromeda-core"
 version = "0.1.0"
-dependencies = [
- "andromeda-digest",
- "andromeda-error",
- "andromeda-hardware",
- "andromeda-principal",
- "andromeda-security-contract",
- "andromeda-time",
- "andromeda-types",
-]
 
 [[package]]
 name = "andromeda-decision-trace"
@@ -332,10 +324,11 @@ name = "andromeda-execution-trace"
 version = "0.1.0"
 dependencies = [
  "andromeda-audit",
- "andromeda-core",
+ "andromeda-error",
  "andromeda-observability",
  "andromeda-result-stream",
  "andromeda-transaction",
+ "andromeda-types",
  "andromeda-wal",
 ]
 
@@ -375,19 +368,43 @@ dependencies = [
  "andromeda-admission",
  "andromeda-business-fixtures",
  "andromeda-catalog",
- "andromeda-core",
+ "andromeda-digest",
+ "andromeda-error",
  "andromeda-exec",
+ "andromeda-hardware",
+ "andromeda-manifest",
  "andromeda-mvcc",
  "andromeda-observe",
  "andromeda-procedure-contract",
+ "andromeda-recovery",
  "andromeda-result-stream",
  "andromeda-rpc-protocol",
  "andromeda-srpl",
+ "andromeda-srpl-binder",
  "andromeda-srpl-catalog-binding",
  "andromeda-srpl-ir",
+ "andromeda-storage",
  "andromeda-storage-heap",
  "andromeda-storage-page",
+ "andromeda-transaction",
  "andromeda-transaction-log",
+ "andromeda-types",
+ "andromeda-wal",
+]
+
+[[package]]
+name = "andromeda-inventory-demo-cli-adapter"
+version = "0.1.0"
+dependencies = [
+ "andromeda-admission",
+ "andromeda-business-fixtures",
+ "andromeda-catalog",
+ "andromeda-error",
+ "andromeda-exec",
+ "andromeda-inventory-demo",
+ "andromeda-observe",
+ "andromeda-result-stream",
+ "andromeda-types",
  "andromeda-wal",
 ]
 
@@ -412,6 +429,10 @@ dependencies = [
 [[package]]
 name = "andromeda-maps"
 version = "0.1.0"
+dependencies = [
+ "andromeda-analytics",
+ "andromeda-columnar",
+]
 
 [[package]]
 name = "andromeda-mvcc"
@@ -471,10 +492,6 @@ dependencies = [
  "andromeda-observe",
  "andromeda-types",
 ]
-
-[[package]]
-name = "andromeda-policy"
-version = "0.1.0"
 
 [[package]]
 name = "andromeda-principal"
@@ -589,16 +606,19 @@ dependencies = [
 name = "andromeda-recovery"
 version = "0.1.0"
 dependencies = [
- "andromeda-core",
  "andromeda-error",
  "andromeda-manifest",
  "andromeda-mvcc",
+ "andromeda-observe",
+ "andromeda-storage-heap",
+ "andromeda-storage-index",
  "andromeda-storage-page",
  "andromeda-time",
  "andromeda-transaction",
  "andromeda-transaction-log",
  "andromeda-types",
  "andromeda-wal",
+ "proptest",
  "tokio",
 ]
 
@@ -624,7 +644,10 @@ version = "0.1.0"
 dependencies = [
  "andromeda-backup",
  "andromeda-observe",
+ "andromeda-segment",
  "andromeda-wal",
+ "sha2",
+ "tempfile",
 ]
 
 [[package]]
@@ -690,6 +713,10 @@ name = "andromeda-savepoint"
 version = "0.1.0"
 dependencies = [
  "andromeda-error",
+ "andromeda-locking",
+ "andromeda-mvcc",
+ "andromeda-transaction-log",
+ "andromeda-types",
 ]
 
 [[package]]
@@ -804,14 +831,17 @@ dependencies = [
 name = "andromeda-srpl-definition-batch"
 version = "0.1.0"
 dependencies = [
+ "andromeda-business-fixtures",
  "andromeda-catalog",
  "andromeda-catalog-store",
+ "andromeda-contract",
  "andromeda-definition-batch",
  "andromeda-error",
  "andromeda-procedure-contract",
  "andromeda-srpl-ast",
  "andromeda-srpl-binder",
  "andromeda-srpl-diagnostics",
+ "andromeda-srpl-execution-adapter",
  "andromeda-srpl-ir",
  "andromeda-srpl-lowering",
  "andromeda-srpl-parser",
@@ -913,20 +943,20 @@ dependencies = [
 name = "andromeda-storage"
 version = "0.1.0"
 dependencies = [
- "andromeda-backup",
  "andromeda-buffer-pool",
  "andromeda-catalog-recovery",
- "andromeda-core",
  "andromeda-disk-page-store",
+ "andromeda-error",
  "andromeda-hadr",
+ "andromeda-hardware",
  "andromeda-manifest",
  "andromeda-observe",
  "andromeda-recovery",
- "andromeda-restore",
  "andromeda-segment",
  "andromeda-storage-heap",
  "andromeda-storage-index",
  "andromeda-storage-page",
+ "andromeda-types",
  "andromeda-wal",
  "dashmap",
  "proptest",

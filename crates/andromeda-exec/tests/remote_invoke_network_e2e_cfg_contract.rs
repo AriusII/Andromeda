@@ -64,6 +64,6 @@ fn remote_invoke_network_e2e_contains_runtime_quinn_canary() {
     );
     assert!(
         source.contains("#[cfg(andromeda_remote_network_e2e)]"),
-        "legacy raw Quinn network scenarios must remain explicitly opt-in until they use the typed transport API"
+        "raw Quinn compatibility scenarios must remain explicitly opt-in until they use the typed transport API"
     );
 }

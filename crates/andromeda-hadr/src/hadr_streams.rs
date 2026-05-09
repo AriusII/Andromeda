@@ -42,7 +42,7 @@
 //!
 //! These values are not wire-level QUIC stream IDs. QUIC stream IDs encode
 //! initiator and directionality in low bits and are allocated by the transport.
-//! A transport facade binds each HADR logical stream ID to whatever QUIC stream
+//! A transport binding maps each HADR logical stream ID to whatever QUIC stream
 //! ID was actually opened.
 //!
 //! ## Backpressure Integration

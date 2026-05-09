@@ -18,7 +18,7 @@ This crate is responsible for:
 
 | Area | Responsibility |
 | --- | --- |
-| Lexer facade | Reexporting `lex`, `Token`, and `TokenKind` from the SRPL lexer crate for parser callers. |
+| Lexer reexports | Reexporting `lex`, `Token`, and `TokenKind` from the SRPL lexer crate for parser callers. |
 | Procedure parsing | Parsing one narrow Procedure declaration into `ProcedureAst`. |
 | Type syntax | Parsing the accepted scalar type names and rejecting forbidden or ambiguous type surfaces. |
 | Cardinality syntax | Parsing explicit `one`, `optional one`, `optional_one`, `many`, `nonempty many`, and `non_empty_many` result forms. |

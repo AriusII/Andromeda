@@ -8,7 +8,7 @@ This file records the patchable status for extracting the SRPL lexer into
 ## Scope
 
 The local crate files under `crates/andromeda-srpl-lexer/` contain the lexer
-implementation and unit tests. The parser and SRPL facade have been adjusted to
+implementation and unit tests. The parser and SRPL compatibility surface have been adjusted to
 import the lexer through the new crate boundary.
 
 ## Non-goals
@@ -24,7 +24,6 @@ workspace patch. At the time this status file was written, `Cargo.toml` already
 contained concurrent new workspace members such as:
 
 - `crates/andromeda-maps`
-- `crates/andromeda-policy`
 - `crates/andromeda-procedure-store`
 - `crates/andromeda-resource`
 

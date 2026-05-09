@@ -71,7 +71,7 @@ pub trait TxWalAdapterTrait: Send + Sync {
         wal_manager: Arc<dyn WalManager>,
     ) -> AndromedaResult<Lsn>;
 
-    /// Record a transaction rollback through the legacy best-effort adapter path.
+    /// Record a transaction rollback through the compatibility best-effort adapter path.
     ///
     /// Rollbacks are best-effort operations that mark a transaction as rolled back
     /// to prevent it from becoming visible to snapshots. This trait method cannot
@@ -91,7 +91,7 @@ pub trait TxWalAdapterTrait: Send + Sync {
     ///   - Transaction is already committed (cannot rollback committed tx)
     ///   - Status table update fails (AndromedaErrorKind::Internal)
     ///
-    /// # Legacy Asynchronicity Contract
+    /// # Compatibility Asynchronicity Contract
     ///
     /// Rollback is fire-and-forget in this adapter shape. After this method returns:
     /// - The transaction is marked rolled back

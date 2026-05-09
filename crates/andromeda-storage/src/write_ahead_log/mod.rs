@@ -1,4 +1,4 @@
-//! Write-ahead log domain facade: records, transaction tracking, in-memory WAL,
+//! Write-ahead log domain re-export surface: records, transaction tracking, in-memory WAL,
 //! file-backed WAL, codec, segment value types, garbage collection, and compaction.
 //!
 //! Canonical ownership lives in single-source modules:
@@ -20,7 +20,7 @@
 //! | CommitLogEntry and CommitLog persistence    | `andromeda_wal::write_ahead_log::commit_log_entry` |
 //!
 //! The pure WAL submodules below are thin re-export facades for `andromeda_wal`.
-//! They MUST NOT define types of their own. The legacy `crate::wal` root facade
+//! They MUST NOT define types of their own. The compatibility `crate::wal` root surface
 //! is preserved for compatibility with older imports.
 //!
 //! Doctrine reminders enforced by the items re-exported here:
@@ -36,7 +36,7 @@ pub mod commit_log_facade;
 pub mod compaction;
 pub mod durability_fence;
 pub mod file {
-    //! Facade for file-backed WAL ownership and storage recovery.
+    //! Re-export surface for file-backed WAL ownership and storage recovery.
     //!
     //! File WAL storage primitives are owned by `andromeda_wal`; storage keeps
     //! only the manifest-aware startup recovery and forensic report projection.

@@ -1,4 +1,4 @@
-use andromeda_core::{
+use andromeda_hardware::{
     CpuCapabilityClass, CpuProfile, GpuProfile, HardwareArchitecture, HardwareProfile, RamProfile,
     RamSectionBudget, RamSectionRole,
 };

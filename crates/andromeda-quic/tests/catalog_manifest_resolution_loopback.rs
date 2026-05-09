@@ -6,9 +6,10 @@ use andromeda_procedure_contract::{
     ProcedureGatewayRequiredPermission as CatalogRequiredPermission,
 };
 use andromeda_proto::generated::contract::v1::catalog_procedure_manifest_resolution_request;
+use andromeda_quic::catalog_manifest_resolution::CatalogManifestResolutionContext;
 use andromeda_quic::{
-    CatalogManifestResolutionContext, CatalogManifestResolutionGateway,
-    CatalogManifestResolutionRuntime, SurfacePlane, TransportEndpointMetadata, TransportMessage,
+    CatalogManifestResolutionGateway, CatalogManifestResolutionRuntime, SurfacePlane,
+    TransportEndpointMetadata, TransportMessage,
 };
 use andromeda_rpc_codec::{
     CatalogManifestResolutionRequest, CatalogManifestResolutionResponse,

@@ -1,7 +1,7 @@
 //! Compatibility reexports for the WAL frame codec.
 //!
 //! The typed codec moved to `andromeda_wal::write_ahead_log::codec`, backed by
-//! `andromeda_wal_codec`. Storage keeps this module as a stable facade for
+//! `andromeda_wal_codec`. Storage keeps this module as a stable re-export surface for
 //! existing callers.
 
 pub use andromeda_wal::{

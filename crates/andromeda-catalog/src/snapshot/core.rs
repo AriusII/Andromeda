@@ -5,15 +5,16 @@
 
 use std::collections::BTreeMap;
 
-use andromeda_catalog_store::{CatalogDefinition, CatalogSnapshotPublicationGate, QualifiedName};
+use andromeda_catalog_store::{
+    CatalogDefinition, CatalogObjectLifecycle, CatalogObjectLifecycleStatus,
+    CatalogSnapshotPublicationGate, QualifiedName,
+};
 use andromeda_procedure_contract::ProcedureContract;
 use andromeda_types::{CatalogObjectId, CatalogVersion, DatabaseId, NamespaceId, ProcedureId};
 
 use crate::CatalogPublicationReceipt;
 
-use super::types::{
-    CatalogObjectLifecycle, CatalogObjectLifecycleStatus, CatalogSnapshotPublication,
-};
+use super::types::CatalogSnapshotPublication;
 
 /// A consistent, point-in-time view of all catalog object definitions at a
 /// specific catalog version.

@@ -30,7 +30,7 @@
 //! - **Idempotency**: Calling twice with same tx_id returns same LSN (no double-write)
 //! - **Postcondition**: `is_durably_committed(tx_id)` returns true
 //!
-//! ## Legacy Rollback Contract (`record_rollback`)
+//! ## Compatibility Rollback Contract (`record_rollback`)
 //!
 //! This trait predates the durable rollback record used by
 //! [`crate::CommitLogManager::record_rollback`] and does not receive a
@@ -38,7 +38,7 @@
 //! TxRollback record by itself.
 //!
 //! - **Precondition**: Transaction is in Rolling Back state
-//! - **Asynchronicity**: Rollback is best-effort in this legacy adapter path
+//! - **Asynchronicity**: Rollback is best-effort in this compatibility adapter path
 //! - **Atomicity**: Rollback marks tx_id as rolled back to prevent visibility
 //! - **Visibility**: Transaction never becomes visible to snapshots
 //! - **Idempotency**: Multiple rollbacks for same tx_id are safe (no-op after first)

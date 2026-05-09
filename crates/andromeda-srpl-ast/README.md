@@ -82,7 +82,7 @@ cargo test -p andromeda-srpl-ast
 cargo check -p andromeda-srpl-ast --all-targets
 ```
 
-If a change adds a syntax variant, also run parser and facade tests that prove
+If a change adds a syntax variant, also run parser and compatibility tests that prove
 the new shape is constructed, rejected, or reexported intentionally.
 
 ## Troubleshooting

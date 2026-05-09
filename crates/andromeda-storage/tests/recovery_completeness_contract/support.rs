@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
-use andromeda_core::TransactionId;
 use andromeda_storage::{Lsn, WalRecord, WalRecordKind};
+use andromeda_types::TransactionId;
 
 pub const ALL_WAL_RECORD_KINDS: [WalRecordKind; 26] = [
     WalRecordKind::TxBegin,

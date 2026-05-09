@@ -5,8 +5,8 @@
 `andromeda-srpl-lowering` owns SRPL lowering from typed, bound semantic input
 into bounded SRPL IR.
 
-The historical `andromeda-srpl` crate remains the compatibility facade for
-source parsing, facade-local binding wrappers, optimizer entry points, catalog
+The historical `andromeda-srpl` crate remains the compatibility surface for
+source parsing, local binding wrappers, optimizer entry points, catalog
 binding, DefinitionBatch helpers, and existing public imports.
 
 ## Scope
@@ -28,7 +28,7 @@ Dependencies must point only toward lower or contract-safe crates. Current
 dependencies are limited to `andromeda-error`, `andromeda-srpl-ast`, and
 `andromeda-srpl-ir`.
 
-Do not depend on `andromeda-srpl` as a facade from this crate after extraction.
+Do not depend on `andromeda-srpl` as a broad compatibility surface from this crate after extraction.
 Do not depend on catalog storage, execution, storage, transaction, WAL, QUIC
 transport, benchmark, analytics, GPU, or application-surface crates.
 
@@ -44,23 +44,23 @@ transport, benchmark, analytics, GPU, or application-surface crates.
 - Do not represent dynamic table names, dynamic predicates, shape-shifting
   returns, or implicit null semantics in lowered output.
 - Do not serialize Rust native structs directly to disk or network.
-- Do not depend on `andromeda-srpl` for facade convenience.
+- Do not depend on `andromeda-srpl` for broad-surface convenience.
 
 ## Prerequisites
 
 Before changing this crate, understand:
 
-- Lowering consumes typed semantic input supplied by the facade or binder owner.
+- Lowering consumes typed semantic input supplied by the compatibility surface or binder owner.
 - `andromeda-srpl-ir` owns semantic IR data shapes and validation.
 - Lowering must preserve fixed Procedure contracts and bounded body operation
   semantics.
 - Catalog binding and DefinitionBatch helpers still live behind the
-  `andromeda-srpl` facade.
+  `andromeda-srpl` compatibility surface.
 
 ## Procedure
 
 1. Keep `src/lib.rs` limited to module declarations and intentional reexports.
-2. Preserve facade compatibility by routing `andromeda-srpl` entry points
+2. Preserve compatibility by routing `andromeda-srpl` entry points
    through this crate.
 3. Keep predicate, assignment, emit, and constant lowering closed and explicit.
 4. Reject any design that depends on hidden runtime state or dynamic result

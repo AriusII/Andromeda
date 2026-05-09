@@ -3,8 +3,8 @@ use std::num::NonZeroU64;
 use andromeda_contract::{CatalogObjectRef, ObjectKind, ProcedureContractRef};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_srpl_ir::{
-    validate_srpl_identifier as validate_symbol, Cardinality, MAX_EXPR_DEPTH,
-    MAX_SRPL_BODY_OPERATIONS, SrplAssignmentIr, SrplEmitValueIr, SrplPredicateIr, SrplValueIr,
+    Cardinality, MAX_EXPR_DEPTH, MAX_SRPL_BODY_OPERATIONS, SrplAssignmentIr, SrplEmitValueIr,
+    SrplPredicateIr, SrplValueIr, validate_srpl_identifier as validate_symbol,
 };
 
 use super::diagnostics::SrplExecutionFailure;
@@ -63,14 +63,14 @@ impl SrplRowBound {
                         "SRPL exact row bound conflicts with operation cardinality",
                     ));
                 }
-            }
+            },
             Self::AtMost(max_rows) => {
                 if !cardinality.permits_row_count_max(max_rows.get()) {
                     return Err(invalid_bound(
                         "SRPL upper row bound conflicts with operation cardinality",
                     ));
                 }
-            }
+            },
         }
 
         Ok(())
@@ -325,7 +325,7 @@ fn validate_predicate(predicate: &SrplPredicateIr) -> AndromedaResult<()> {
             validate_adapter_symbol(input, "SRPL adapter predicate input")?;
             validate_adapter_symbol(binding, "SRPL adapter predicate binding")?;
             validate_adapter_symbol(field, "SRPL adapter predicate field")?;
-        }
+        },
     }
     Ok(())
 }
@@ -353,7 +353,7 @@ fn validate_value(value: &SrplValueIr) -> AndromedaResult<()> {
         SrplValueIr::Field { binding, field } => {
             validate_adapter_symbol(binding, "SRPL adapter value binding")?;
             validate_adapter_symbol(field, "SRPL adapter value field")?;
-        }
+        },
         SrplValueIr::SubtractInput {
             binding,
             field,
@@ -362,12 +362,12 @@ fn validate_value(value: &SrplValueIr) -> AndromedaResult<()> {
             validate_adapter_symbol(binding, "SRPL adapter subtract binding")?;
             validate_adapter_symbol(field, "SRPL adapter subtract field")?;
             validate_adapter_symbol(input, "SRPL adapter subtract input")?;
-        }
+        },
         SrplValueIr::Constant(literal) => literal.validate()?,
         SrplValueIr::BinaryArith { left, right, .. } => {
             validate_value(left)?;
             validate_value(right)?;
-        }
+        },
     }
     Ok(())
 }

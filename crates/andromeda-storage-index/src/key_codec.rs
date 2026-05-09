@@ -1,6 +1,6 @@
 //! Index-owned order-preserving B-Tree key codec.
 //!
-//! The storage crate keeps a compatibility facade that converts its historical
+//! The storage crate keeps a compatibility surface that converts its historical
 //! `Datum` and `ScalarType` contracts into these index-owned types.
 
 mod codec;
@@ -46,7 +46,7 @@ pub enum KeyScalarType {
     Bool,
 }
 
-/// Public key type preserved by the storage compatibility facade.
+/// Public key type preserved by the storage compatibility surface.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Key {
     Null,

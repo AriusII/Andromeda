@@ -263,7 +263,7 @@ where
         }
     }
 
-    /// Legacy promotion entry point retained for compatibility with older
+    /// Compatibility promotion entry point retained for older
     /// callers. It never publishes a primary because HADR promotion requires
     /// cluster-scope security evidence and a durable audit receipt.
     pub fn promote(&self, _attempt: PromotionAttempt) -> AndromedaResult<PromotionCommit> {

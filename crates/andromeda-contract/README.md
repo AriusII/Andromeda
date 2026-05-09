@@ -2,9 +2,9 @@
 
 ## Purpose
 
-`andromeda-contract` is the compatibility facade and catalog-object descriptor crate for Andromeda contract surfaces.
+`andromeda-contract` is the compatibility surface and catalog-object descriptor crate for Andromeda contract surfaces.
 
-Use this crate when code needs the legacy unified contract surface: catalog object descriptors, structural dependencies, Procedure contract reexports from `andromeda-procedure-contract`, and StructuredObject metadata reexports from `andromeda-structured-object`.
+Use this crate when code needs the historical unified contract surface: catalog object descriptors, structural dependencies, Procedure contract reexports from `andromeda-procedure-contract`, and StructuredObject metadata reexports from `andromeda-structured-object`.
 
 Application behavior in Andromeda is exposed through typed, cataloged Procedures. This crate helps preserve that boundary by making contract identity, shape, dependencies, and compatibility explicit before execution, transport dispatch, or catalog publication.
 
