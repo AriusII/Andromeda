@@ -1,9 +1,9 @@
 use andromeda_catalog_store::CatalogDefinition;
 use andromeda_definition_batch::{DefinitionBatch, DefinitionBatchId};
-use andromeda_srpl::definition_batch_bridge::{
+use andromeda_srpl::inventory_reserve_stock_contract_metadata;
+use andromeda_srpl_definition_batch::{
     SrplDefinitionBatchDryRunRequest, SrplDefinitionBatchProcedureSource, SrplProcedureDefinition,
 };
-use andromeda_srpl::procedure_compiler::inventory_reserve_stock_contract_metadata;
 use andromeda_srpl_ir::SrplProcedureContractMetadata;
 use andromeda_types::{CatalogObjectId, CatalogVersion, DatabaseId, NamespaceId, ProcedureId};
 

@@ -19,7 +19,9 @@ use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_principal::CertificateIdentity;
 use andromeda_types::{RequestId, SessionId};
 
-use crate::{BackpressureSignal, CancellationSignal, FrameBytes, StreamRole, SurfacePlane};
+use andromeda_rpc_protocol::{BackpressureSignal, FrameBytes, StreamRole};
+
+use crate::{CancellationSignal, SurfacePlane};
 
 /// Peer/session metadata visible at the transport boundary.
 ///
@@ -244,7 +246,9 @@ mod tests {
     use super::*;
     use andromeda_types::{RequestId, SessionId};
 
-    use crate::{CancellationCause, FRAME_HEADER_CRC_UNCHECKED, FrameHeader, FrameType};
+    use andromeda_rpc_protocol::{FRAME_HEADER_CRC_UNCHECKED, FrameHeader, FrameType};
+
+    use crate::CancellationCause;
 
     fn metadata() -> TransportEndpointMetadata {
         TransportEndpointMetadata::new(SurfacePlane::Application, Some(SessionId::new(7)), None)

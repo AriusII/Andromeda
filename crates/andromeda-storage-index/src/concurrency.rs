@@ -1,5 +1,5 @@
 use super::{BTREE_DURABLE_FORMAT_PROMOTED, BTreeError, PageId};
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 /// Logical operation class for B-Tree latch-coupling decisions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -16,11 +16,14 @@ C5 invariants:
 "#]
 
 mod coverage;
+#[cfg(test)]
 mod crash_recovery_matrix;
 mod file_wal_report;
+mod file_wal_startup;
 mod planning;
 mod replay;
 mod startup;
+mod transaction_wal_bridge;
 
 /// Startup mode requested for recovery against durable evidence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,6 +42,7 @@ pub use file_wal_report::{
     FileWalRecoveryIgnoredTransactionReason, FileWalRecoveryReplayRecord, FileWalRecoveryReportV0,
     build_file_wal_recovery_report_v0, file_wal_recovery_boundary_kind,
 };
+pub use file_wal_startup::{FileWalStartupRecoveryV0, recovered_transaction_id_floor_from_records};
 pub use planning::{
     ConceptualRedoPlan, RecoveryManifestView, RecoveryPlan, RecoveryTraceProjection,
     RedoRecordDecision, RedoRecordPlan,
@@ -51,6 +55,10 @@ pub use replay::{
 pub use startup::{
     ObservedBoundary, StartupAcceptance, StartupAuditProjection, StartupDecision, StartupEvidence,
     StartupOutcome, StartupRejectionReason, decide_startup,
+};
+pub use transaction_wal_bridge::{
+    CommitLogInvocationWal, DurableTransactionWalPrefix, TransactionReplayFromWalEvidence,
+    TxReplayBridgeEvidence, map_durable_wal_prefix_to_tx_replay,
 };
 
 impl StartupMode {

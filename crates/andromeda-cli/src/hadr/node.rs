@@ -3,7 +3,7 @@ mod options;
 mod report;
 
 use crate::error::cli_error;
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 use andromeda_hadr::HadrNodeId;
 
 use super::output::{print_hadr_node_help, print_node_report};

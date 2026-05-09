@@ -4,7 +4,7 @@ use crate::diagnostic_json::JSON_FLAG;
 use crate::error::cli_error;
 use crate::hadr::parsing::parse_membership_store_option;
 use crate::parse::{next_option_value_rejecting_flag, parse_u64};
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(in crate::hadr::node) struct NodeRegisterOptions {

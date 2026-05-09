@@ -1,4 +1,4 @@
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 use std::{
     fs::File,
     io::{Read, Seek, SeekFrom},

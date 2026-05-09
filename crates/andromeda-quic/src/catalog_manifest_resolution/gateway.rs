@@ -9,10 +9,10 @@ use andromeda_rpc_codec::{
 use andromeda_types::TransactionId;
 use andromeda_types::{RequestId, SessionId};
 
-use crate::{
-    FrameBytes, FrameType, StreamRole, SurfacePlane, TransportEndpointMetadata, TransportMessage,
-    TransportSurface, validate_transport_surface,
-};
+use andromeda_rpc::{TransportSurface, validate_transport_surface};
+use andromeda_rpc_protocol::{FrameBytes, FrameType, StreamRole};
+
+use crate::{SurfacePlane, TransportEndpointMetadata, TransportMessage};
 
 use super::errors::{protocol_error, security_error};
 

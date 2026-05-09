@@ -1,4 +1,4 @@
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 use super::binary::{read_scalar_array, read_scalar_byte};
 use super::error::encoder_error;

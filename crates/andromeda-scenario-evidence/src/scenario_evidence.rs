@@ -1,8 +1,7 @@
 //! Catalog-facing ScenarioEvidence model.
 //!
 //! This module owns the canonical advisory evidence primitives. The catalog
-//! crate reexports these types as a compatibility facade so existing
-//! `andromeda_catalog::ScenarioEvidence` imports remain stable.
+//! Callers import these advisory evidence types from this crate directly.
 
 mod advisory;
 mod digest;

@@ -46,7 +46,7 @@ pub fn fold_value(value: SrplValueIr) -> Result<SrplValueIr, FoldDeferral> {
                             right: Box::new(right_folded),
                         }),
                     }
-                }
+                },
                 // One or both operands are not constant: reassemble with
                 // the best-effort-folded children.
                 _ => Ok(SrplValueIr::BinaryArith {
@@ -55,7 +55,7 @@ pub fn fold_value(value: SrplValueIr) -> Result<SrplValueIr, FoldDeferral> {
                     right: Box::new(right_folded),
                 }),
             }
-        }
+        },
 
         // All other variants are already in their canonical IR form.
         other => Ok(other),
@@ -101,7 +101,7 @@ fn fold_binary_constants(
 
         (ArithOp::Divide, ConstantLiteral::Int64(_), ConstantLiteral::Int64(0)) => {
             Err(FoldDeferral::DivisionByZero)
-        }
+        },
 
         (ArithOp::Divide, ConstantLiteral::Int64(a), ConstantLiteral::Int64(b)) => a
             .checked_div(*b)
@@ -125,7 +125,7 @@ fn fold_binary_constants(
 
         (ArithOp::Divide, ConstantLiteral::Uint64(_), ConstantLiteral::Uint64(0)) => {
             Err(FoldDeferral::DivisionByZero)
-        }
+        },
 
         (ArithOp::Divide, ConstantLiteral::Uint64(a), ConstantLiteral::Uint64(b)) => a
             .checked_div(*b)

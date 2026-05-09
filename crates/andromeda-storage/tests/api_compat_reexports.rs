@@ -2,19 +2,12 @@
 
 //! Compile-only guard for the C5 storage compatibility facade.
 //!
-//! Lot 4 splits must keep these root and nested import paths available until
-//! downstream crates migrate deliberately. This test must not execute WAL,
-//! recovery, codec, HADR, backup, or restore behavior.
+//! The storage facade keeps storage-owned compatibility paths only. Backup,
+//! restore, and HADR contracts are imported directly from their owner crates.
 
 use std::any::TypeId;
 
-use andromeda_storage::btree_format_validation::{
-    BTreeKeyFormatIdentity, BTreeOperationType, KeyV1FormatValidator,
-};
-use andromeda_storage::btree_key_codec::{Key as ModuleKey, KeyCodec as ModuleKeyCodec};
-use andromeda_storage::disk_manager::PageIntegrityMode;
 use andromeda_storage::format_version::{FormatVersion, StorageFormatKind};
-use andromeda_storage::hadr::{quorum_runtime, shipping_runtime};
 use andromeda_storage::layout::{
     cold as layout_cold, extent as layout_extent, io_budget as layout_io_budget,
     page as layout_page, placement as layout_placement, segment as layout_segment,
@@ -47,24 +40,21 @@ use andromeda_storage::write_ahead_log::{
 use andromeda_storage::{
     AllocationId, BTREE_DURABLE_FORMAT_PROMOTED, BTREE_NODE_V1_FORMAT_VERSION,
     BTREE_NODE_V1_HEADER_LEN, BTREE_NODE_V1_MAGIC, BTreeConfig, BTreeIndexEngine,
-    BTreeNodeHeaderV1, BTreeNodeImpl, BTreeNodeKindV1, BTreeNodeV1, BackupExecutionPlan, BackupId,
-    BackupManifest, BackupResourceLimits, BufferPoolConfig, BufferPoolError, ColdSnapshotBoundary,
-    ColumnDef, ColumnId, DatabaseManifest, Datum, DiskManager, DiskManagerError, DiskPageStore,
-    DurabilityFenceError, DurableTransactionState, FileBackedBackupArtifactStore,
-    FileBackedHadrMembershipStore, FileDiskManager, FileWal, FileWalDiskScan, FileWalHeader,
-    FileWalRecoveryReportV0, HadrMembershipRecord, HadrMembershipSnapshot, HadrMembershipStore,
-    HadrNodeId, HadrNodeRole, HeapPage, HeapPageInsert, HeapScanIter, HeapVacuumMode,
+    BTreeKeyFormatIdentity, BTreeNodeHeaderV1, BTreeNodeImpl, BTreeNodeKindV1, BTreeNodeV1,
+    BTreeOperationType, BufferPoolConfig, BufferPoolError, ColumnDef, ColumnId, DatabaseManifest,
+    Datum, DiskManager, DiskManagerError, DiskPageStore, DurabilityFenceError,
+    DurableTransactionState, FileDiskManager, FileWal, FileWalDiskScan, FileWalHeader,
+    FileWalRecoveryReportV0, HeapPage, HeapPageInsert, HeapScanIter, HeapVacuumMode,
     InMemoryBTreeIndexEngine, InMemoryPageStore, InMemoryWal, IndexId, Key, KeyCodec,
-    KeyComparator, KeyValuePair, Lsn, MemoryWal, ObjectId, PageHeader, PageId, PageImage, PageSize,
-    PageStore, PageTrailer, PageType, ProductStockHeapInsert, ProductStockRow, RecoveryPlan,
-    RecoveryStage, ReplayContext, RestoreValidationPolicy, RowEncoder, RowId, RowSchema,
-    ScalarType, SegmentDescriptor, SegmentId, StartupMode, WAL_FORMAT_VERSION, WalFrameHeader,
-    WalRecord, WalRecordHeader, WalRecordKind, WalScanResult, WalScanStop, WalScanStopReason,
-    WalSegment, WalSegmentDescriptor, compute_restore_checksum, decode_wal_record_frame,
-    encode_catalog_record, encode_wal_record, plan_replay_segments, product_stock_row_encoder,
-    product_stock_row_schema, replay_wal_record, report_file_wal_recovery_v0,
-    validate_manifest_atomic_switch, validate_recovery_floor,
-    validate_wal_durability_before_page_flush,
+    KeyComparator, KeyV1FormatValidator, KeyValuePair, Lsn, MemoryWal, ObjectId, PageHeader,
+    PageId, PageImage, PageIntegrityMode, PageSize, PageStore, PageTrailer, PageType,
+    ProductStockHeapInsert, ProductStockRow, RecoveryPlan, ReplayContext, RowEncoder, RowId,
+    RowSchema, ScalarType, SegmentDescriptor, SegmentId, StartupMode, WAL_FORMAT_VERSION,
+    WalFrameHeader, WalRecord, WalRecordHeader, WalRecordKind, WalScanResult, WalScanStop,
+    WalScanStopReason, WalSegment, WalSegmentDescriptor, decode_wal_record_frame,
+    encode_catalog_record, encode_wal_record, product_stock_row_encoder, product_stock_row_schema,
+    replay_wal_record, report_file_wal_recovery_v0, validate_manifest_atomic_switch,
+    validate_recovery_floor, validate_wal_durability_before_page_flush,
 };
 use andromeda_wal as wal;
 

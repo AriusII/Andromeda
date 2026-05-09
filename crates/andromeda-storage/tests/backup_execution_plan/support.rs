@@ -1,10 +1,18 @@
-use andromeda_storage::{
-    AllocationId, BackupExecutionPlan, BackupManifest, BackupResourceLimits, ColdSnapshotBoundary,
-    ExtentCopyTask, ExtentDescriptor, ExtentId, ExtentState, Lsn, ObjectId, PageId, PageSize,
-    SegmentId, StorageTier, WalArchiveRange, WalSegmentCopyTask, WalSegmentDescriptor,
+use andromeda_backup::{
+    BackupExecutionPlan as BackupExecutionPlanRaw, BackupId, BackupManifest as BackupManifestRaw,
+    BackupResourceLimits, BackupStorageTier, ColdSnapshotBoundary,
+    ExtentCopyTask as ExtentCopyTaskRaw, WalArchiveRange, WalSegmentCopyTask,
 };
+use andromeda_segment::{
+    AllocationId, ExtentDescriptor, ExtentId, ExtentState, ObjectId, PageId, PageSize, SegmentId,
+};
+use andromeda_wal::{Lsn, WalSegmentDescriptor};
 use sha2::{Digest, Sha256};
 use std::path::Path;
+
+pub(crate) type BackupManifest = BackupManifestRaw<Lsn>;
+pub(crate) type BackupExecutionPlan = BackupExecutionPlanRaw<BackupStorageTier>;
+pub(crate) type ExtentCopyTask = ExtentCopyTaskRaw<BackupStorageTier>;
 
 const ARTIFACT_MANIFEST_MAGIC: &[u8] = b"ANDROMEDA-BACKUP-ARTIFACT-V1\n";
 const ARTIFACT_MANIFEST_HEADER_LEN: usize = ARTIFACT_MANIFEST_MAGIC.len() + 2 + 8 + 32;
@@ -56,7 +64,7 @@ pub(crate) fn test_wal_segment(
 
 pub(crate) fn test_manifest(backup_id: u64, wal_start: u64, wal_end: u64) -> BackupManifest {
     BackupManifest {
-        backup_id: andromeda_storage::BackupId::new(backup_id),
+        backup_id: BackupId::new(backup_id),
         database_id: 42,
         created_epoch: 1000000,
         snapshot: ColdSnapshotBoundary {
@@ -85,7 +93,7 @@ pub(crate) fn cold_extent_copy_task(
 ) -> ExtentCopyTask {
     ExtentCopyTask {
         extent_descriptor,
-        source_tier: StorageTier::ColdStore,
+        source_tier: BackupStorageTier::ColdStore,
         byte_count,
     }
 }

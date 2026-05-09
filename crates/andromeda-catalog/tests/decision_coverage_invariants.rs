@@ -28,11 +28,30 @@ fn spec_path(file_name: &str) -> std::path::PathBuf {
         .join(file_name)
 }
 
-fn catalog_source_path(file_name: &str) -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("src")
-        .join("statistics")
-        .join(file_name)
+fn crate_source_path(crate_name: &str, path_segments: &[&str]) -> std::path::PathBuf {
+    let mut path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join(crate_name);
+
+    for segment in path_segments {
+        path.push(segment);
+    }
+
+    path
+}
+
+fn read_crate_sources(crate_name: &str, source_paths: &[&[&str]]) -> String {
+    let mut combined = String::new();
+
+    for source_path in source_paths {
+        let path = crate_source_path(crate_name, source_path);
+        let source = std::fs::read_to_string(&path)
+            .unwrap_or_else(|err| panic!("{} must be readable: {err}", path.display()));
+        combined.push_str(&source);
+        combined.push('\n');
+    }
+
+    combined
 }
 
 fn map_stats_target(object_id: u64, column_index: u16) -> StatsColumnTarget {
@@ -200,11 +219,21 @@ fn decision_coverage_plan_cache_runtime_gate_is_bounded_versioned_and_traceable(
         );
     }
 
-    let plan_cache_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("src")
-        .join("plan_cache.rs");
-    let plan_cache =
-        std::fs::read_to_string(plan_cache_path).expect("plan_cache.rs must be readable");
+    let plan_cache = read_crate_sources(
+        "andromeda-plan-cache",
+        &[
+            &["src", "lib.rs"],
+            &["src", "limits.rs"],
+            &["src", "identity.rs"],
+            &["src", "decision.rs"],
+            &["src", "selection.rs"],
+            &["src", "admission.rs"],
+            &["src", "advisory_evidence.rs"],
+        ],
+    ) + &read_crate_sources(
+        "andromeda-scenario-evidence",
+        &[&["src", "plan_cache_bridge", "advisory_evidence.rs"]],
+    );
 
     for required in [
         "PLAN_CACHE_MAX_ENTRIES",
@@ -221,19 +250,23 @@ fn decision_coverage_plan_cache_runtime_gate_is_bounded_versioned_and_traceable(
     ] {
         assert!(
             plan_cache.contains(required),
-            "plan_cache.rs must keep runtime gate coverage visible for: {required}"
+            "plan-cache owner sources must keep runtime gate coverage visible for: {required}"
         );
     }
 }
 
 #[test]
 fn decision_coverage_stats_publication_switch_is_bounded_advisory_and_traceable() {
-    let publication_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("src")
-        .join("statistics")
-        .join("publication.rs");
-    let publication =
-        std::fs::read_to_string(publication_path).expect("publication.rs must be readable");
+    let publication = read_crate_sources(
+        "andromeda-statistics",
+        &[
+            &["src", "publication.rs"],
+            &["src", "publication_evidence.rs"],
+            &["src", "publication_switch.rs"],
+            &["src", "publication_switch_error.rs"],
+            &["src", "publication_trace.rs"],
+        ],
+    );
 
     for required in [
         "STATS_PUBLICATION_SWITCH_HISTORY_LIMIT",
@@ -253,11 +286,13 @@ fn decision_coverage_stats_publication_switch_is_bounded_advisory_and_traceable(
         );
     }
 
-    let scenario_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("src")
-        .join("scenario_evidence.rs");
-    let scenario =
-        std::fs::read_to_string(scenario_path).expect("scenario_evidence.rs must be readable");
+    let scenario = read_crate_sources(
+        "andromeda-scenario-evidence",
+        &[
+            &["src", "scenario_evidence", "advisory.rs"],
+            &["src", "scenario_evidence", "evidence.rs"],
+        ],
+    );
 
     for required in [
         "can_select_plan_alone",
@@ -267,7 +302,7 @@ fn decision_coverage_stats_publication_switch_is_bounded_advisory_and_traceable(
     ] {
         assert!(
             scenario.contains(required),
-            "ScenarioEvidence must keep advisory-only consumption coverage visible for: {required}"
+            "ScenarioEvidence owner sources must keep advisory-only consumption coverage visible for: {required}"
         );
     }
 }
@@ -315,8 +350,10 @@ fn map_refresh_validation_spec_covers_stats_staleness_summarizability_and_truth_
 
 #[test]
 fn stats_correlation_publication_surface_keeps_map_analytics_advisory_boundaries() {
-    let source = std::fs::read_to_string(catalog_source_path("correlation_publication.rs"))
-        .expect("correlation_publication.rs must be readable");
+    let source = read_crate_sources(
+        "andromeda-statistics",
+        &[&["src", "correlation_publication.rs"]],
+    );
 
     for required in [
         "Map analytics validators",

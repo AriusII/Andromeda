@@ -207,7 +207,7 @@ impl HadrPromotionAuditLog for RecordingPromotionAudit<'_> {
     fn append_primary_promotion_marker(
         &self,
         marker: &HadrPromotionAuditMarker,
-    ) -> andromeda_core::AndromedaResult<()> {
+    ) -> andromeda_error::AndromedaResult<()> {
         let primary = self
             .store
             .load()?
@@ -220,7 +220,7 @@ impl HadrPromotionAuditLog for RecordingPromotionAudit<'_> {
     fn append_primary_promotion_marker_durably(
         &self,
         marker: &HadrPromotionAuditMarker,
-    ) -> andromeda_core::AndromedaResult<HadrPromotionAuditReceipt> {
+    ) -> andromeda_error::AndromedaResult<HadrPromotionAuditReceipt> {
         self.append_primary_promotion_marker(marker)?;
         HadrPromotionAuditReceipt::new(marker.primary_durable_lsn, [0x16; 32])
     }

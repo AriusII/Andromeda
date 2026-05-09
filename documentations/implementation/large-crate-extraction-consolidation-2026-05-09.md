@@ -12,7 +12,7 @@ This plan covers the ten large crates named by the owner: `andromeda-catalog`, `
 
 The read-only analysis also treats `andromeda-proto-wire` as the eleventh practical extraction surface, because the wire validation file is large and sits on the same RPC/proto/QUIC boundary.
 
-The current local workspace has 96 Cargo packages according to `cargo metadata --no-deps --format-version 1`.
+The current local workspace has 88 Cargo packages according to `cargo metadata --no-deps --format-version 1` after the active WRITE cleanup slices.
 
 ## Non-goals
 
@@ -41,11 +41,18 @@ Every temporary facade must have:
 
 ## Current Evidence
 
-- The topology gate reports 96 workspace packages after the current extraction wave.
+- The topology gate count is being reduced by the active WRITE wave; the current W23 observation is 88 workspace packages.
 - Rust analyzer is loaded for the workspace and reports one workspace rooted at `C:\Users\Arius\RustroverProjects\Andromeda`.
 - The workspace is heavily dirty because multiple write extraction waves moved files, deleted old facades, added owner crates, and updated dependency doctrine. Treat this document as a consolidation for the current branch state, not as an accepted clean baseline.
+- COMPLETED W12 exec facade cleanup: deleted pure `andromeda-exec` facade files for result-stream, metadata extractor, retry, traces, SRPL adapters, admission/services compatibility, moved ResultStream backpressure tests to `andromeda-result-stream`, moved metadata-extraction contract tests to `andromeda-procedure-runtime`, and migrated visible retry/trace/result imports to owner crates.
+- W12 validation: `cargo test -p andromeda-result-stream --test result_stream_backpressure -- --nocapture` and `cargo check -p andromeda-result-stream --all-targets` passed. `andromeda-procedure-runtime` and `andromeda-exec` checks are currently blocked before W12 code by active cross-worker errors in `andromeda-catalog-recovery` and `andromeda-recovery`.
+- COMPLETED W09 catalog pure facade cleanup: deleted the catalog root facades for catalog-store vocabulary, definition-batch vocabulary, procedure-contract/procedure-store vocabulary, plan-cache, scenario-evidence, and statistics; migrated direct callers to owner crates; kept `CatalogSnapshot` and live publication/recovery state in `andromeda-catalog`.
+- W09 validation: `cargo check -p andromeda-catalog --all-targets --all-features`, `cargo test -p andromeda-catalog --test catalog_store_contract -- --nocapture`, `cargo test -p andromeda-catalog --test wal_record_design -- --nocapture`, `cargo test -p andromeda-catalog --all-targets --all-features`, catalog owner-family `cargo check`, and owner tests for `andromeda-catalog-recovery`, `andromeda-procedure-store`, and `andromeda-statistics` passed.
+- COMPLETED W10 procedure-store and inventory fixture extraction: moved concrete `ProcedureStore` to `andromeda-procedure-store`, moved inventory catalog fixture definitions to `andromeda-business-fixtures`, reexported demo-facing fixture APIs from `andromeda-inventory-demo`, deleted catalog fixture/procedure-store sources, and migrated direct callers.
+- W10 validation passed for `andromeda-procedure-store`, `andromeda-business-fixtures`, `andromeda-inventory-demo`, catalog runtime/store/WAL tests, exec multi-procedure tests, SRPL compiler pipeline tests, and targeted checks. Global CLI topology/orphan gates are blocked before assertions by the non-W10 `andromeda-bench` `MockBTreeIndex` compile error.
 - The first write wave used seven execution slices covering disk page storage, catalog recovery, transaction downstream/tests, SRPL facade reduction, proto structured/wire contracts, observe/audit/decision trace, and bench cleanup.
 - The second write wave used 22 worker execution slices covering storage caller cleanup/recovery, catalog runtime/recovery/proto detachment, QUIC owner migration, exec inventory/SRPL/transaction cleanup, observe audit/security/transition movement, core principal extraction, and transaction owner imports.
+- The post-extraction read-only check used 10 logical workspace groups covering the then-current 96 crates. The generated `readonly-worker-01..10` reports are currently ignored by `.gitignore` under `documentations/implementation`, so this consolidation records them explicitly as the durable index for the next WRITE preparation.
 - Validation now writes into `target/`; successful gates are recorded in the "Write Wave Validation" and "Executed 22-Worker WRITE Wave" sections.
 
 ## Large Crate Size Baseline
@@ -78,8 +85,8 @@ Observed high-level Cargo edges for the analyzed surfaces:
 - `andromeda-observe` depends on `andromeda-audit`, `andromeda-observability`, `andromeda-core`, `andromeda-hardware`, and `andromeda-storage` as a dev/test harness. It is still a broad observability and durable audit hub.
 - `andromeda-exec` depends on procedure runtime, result stream, SRPL, storage, transaction, QUIC, catalog, admission, security, IAM, audit, retry, and trace crates. It is the main integration crate to reduce after owner crates stabilize.
 - `andromeda-bench` depends on bench harness/workload plus advisory evidence, regression, SRPL, WAL, observe, and storage-page crates. It must stay leaf/advisory.
-- `andromeda-proto` depends on `andromeda-proto-wire`, contract-safe model crates, and generated Protobuf tooling. Main incoming crates include `andromeda-admission`, `andromeda-catalog`, `andromeda-exec`, `andromeda-protocol`, `andromeda-quic`, and `andromeda-result-stream`.
-- `andromeda-proto-wire` depends on `andromeda-rpc-protocol`, `andromeda-procedure-contract`, `andromeda-structured-object`, and foundation types. Main incoming crates include `andromeda-proto`, `andromeda-protocol`, `andromeda-rpc`, and `andromeda-rpc-codec`.
+- `andromeda-proto` depends on `andromeda-proto-wire`, contract-safe model crates, and generated Protobuf tooling. Main incoming crates include `andromeda-admission`, `andromeda-catalog`, `andromeda-exec`, `andromeda-quic`, and `andromeda-result-stream`.
+- `andromeda-proto-wire` depends on `andromeda-rpc-protocol`, `andromeda-procedure-contract`, `andromeda-structured-object`, and foundation types. Main incoming crates include `andromeda-proto`, `andromeda-rpc`, and `andromeda-rpc-codec`.
 - `andromeda-quic` depends on abstract protocol/security crates, not `andromeda-hadr`. Main incoming crates include `andromeda-cli`, `andromeda-exec`, and `andromeda-quic-runtime-quinn`.
 
 ## Completed Stabilization Slice
@@ -166,7 +173,9 @@ Proto, RPC, and QUIC:
 - Deleted `andromeda-proto/src/{completion,errors,manifest,structured}.rs` and moved the public surface to owner crate reexports.
 - Reduced `andromeda-proto/src/generated_validation/mod.rs` to Prost adapters while runtime-free validation lives in `andromeda-proto-wire`.
 - Moved completion envelope version ownership to `andromeda-rpc-protocol` and exposed it through `andromeda-proto-wire`.
-- Deleted pure QUIC facades `backpressure.rs`, `protocol_invariants.rs`, and `rpc.rs`; `andromeda-quic` now reexports directly from `andromeda-rpc-protocol` and `andromeda-rpc`.
+- Deleted pure QUIC facades `backpressure.rs`, `protocol_invariants.rs`, and `rpc.rs`; a later W18 cleanup removed the remaining `andromeda-quic` root reexports for RPC protocol, dispatch, codec, backpressure, and invariant helpers, leaving callers to import owner crates directly.
+- Deleted the unused protocol marker/scaffold crates `andromeda-protocol`, `andromeda-client-sdk-gen`, and `andromeda-codec` after confirming they had no downstream Rust or Cargo consumers.
+- Removed their root workspace membership and workspace dependency entries, removed their package entries from `Cargo.lock`, and adjusted topology/orphan/Miri references that treated them as live crates.
 
 Observe, audit, decision trace, and bench:
 
@@ -185,6 +194,7 @@ Worker report inventory:
 
 | Worker report | Slice | Status |
 | --- | --- | --- |
+| `documentations/implementation/write-worker-09-catalog-pure-facade-deletion-2026-05-09.md` | Catalog pure facade deletion and owner-crate caller migration | Implemented; live catalog snapshot and publication/recovery state remain catalog-owned. |
 | `documentations/implementation/worker-storage-disk-page-store-2026-05-09.md` | Storage disk-manager ownership and disk-page-store tests | Implemented; storage keeps a compatibility boundary. |
 | `documentations/implementation/worker-catalog-definition-batch-2026-05-09.md` | Catalog WAL/recovery DTOs and DefinitionBatch ownership | Implemented; live catalog snapshot and mutation-plan adapters remain. |
 | `documentations/implementation/worker-transaction-downstream-tests-2026-05-09.md` | Transaction owner tests, MVCC/locking/savepoint split, downstream imports | Implemented; `andromeda-exec` still uses the approved `andromeda-tx` boundary. |
@@ -374,8 +384,8 @@ Candidate moves:
 | `andromeda-srpl/src/lowering/diagnostics.rs` | `andromeda-srpl-diagnostics` | Done for source enrichment diagnostics. |
 | `andromeda-srpl/src/lowering/validation.rs` | `andromeda-srpl-binder` | Done for catalog-free validation diagnostics. |
 | `andromeda-exec/src/srpl_adapters/*` | `andromeda-srpl-execution-adapter` | Requires replacing `andromeda_core` imports with narrower `andromeda_error`/foundation crates. |
-| `andromeda-exec/tests/metadata_extraction_contract/*` | `andromeda-procedure-runtime` tests | Metadata extractor is already runtime-owned. |
-| `andromeda-exec/tests/result_stream_backpressure/*` | `andromeda-result-stream` tests | Result stream owner tests should not import through exec. |
+| `andromeda-exec/tests/metadata_extraction_contract/*` | `andromeda-procedure-runtime` tests | Done by W12; the suite now lives under `andromeda-procedure-runtime/tests/metadata_extraction_contract*` and imports `andromeda_procedure_runtime` directly. |
+| `andromeda-exec/tests/result_stream_backpressure/*` | `andromeda-result-stream` tests | Done by W12; the suite now lives under `andromeda-result-stream/tests/result_stream_backpressure*` and imports `andromeda_result_stream` directly. |
 | Exec business test constants/fixtures | `andromeda-business-fixtures` | Move fixtures first; runtime business remains in exec until storage/tx/quic coupling is reduced. |
 
 SUB TODO:
@@ -471,7 +481,7 @@ SUB TODO:
 - Migrate callers off `andromeda_quic::frame`, `andromeda_quic::stream`, and `andromeda_quic::typed_envelope`; `andromeda_quic::hadr_streams`, `backpressure`, `protocol_invariants`, and `rpc` source facades have been deleted.
 - Replace local QUIC `CatalogProcedureManifest` model with a contract-owned or codec-owned projection.
 - Remove IAM/admission authorization from `andromeda-quic`; QUIC should produce transport evidence and leave application authorization to IAM/admission layers.
-- Decide the fate of `andromeda-protocol`: delete as a redundant facade or define a narrow runtime-free integration purpose.
+- `andromeda-protocol` has been deleted as a redundant facade; protocol contracts now stay with `andromeda-proto-wire`, `andromeda-rpc-protocol`, `andromeda-rpc-codec`, and concrete transport/runtime owners.
 
 DEPENDENCIES:
 
@@ -810,6 +820,307 @@ cargo test -p andromeda-observe --all-targets
 cargo test -p andromeda-exec --all-targets
 ```
 
+## Post-Extraction Full Workspace Read-Only Check - 2026-05-09
+
+This section consolidates the post-WRITE read-only check requested after the large crates were materially reduced. The scope changed from only the previously large crates to the full 96-package workspace, grouped into 10 logical worker areas instead of one worker per crate.
+
+The phase remains analysis-only. No Rust source, manifest, or test file should be changed from this section. The next WRITE work starts only after the owner explicitly orders execution.
+
+### Report Inventory
+
+| Report | Logical group | Consolidated outcome |
+| --- | --- | --- |
+| `documentations/implementation/readonly-worker-01-global-workspace-topology-2026-05-09.md` | Global workspace topology and hygiene | Confirms 96 packages, no normal dependency cycles, broad hubs around `andromeda-exec`, `andromeda-storage`, `andromeda-core`, `andromeda-observe`, and deletion candidates such as `andromeda-tx` and marker-only crates. |
+| `documentations/implementation/readonly-worker-02-storage-kernel-2026-05-09.md` | Storage kernel | Maps remaining `andromeda_storage::` callers, storage owner tests still in the root crate, recovery/catalog-WAL debt, placement/profile ownership, and 8 storage WRITE slices. |
+| `documentations/implementation/readonly-worker-03-recovery-backup-hadr-2026-05-09.md` | Backup, restore, recovery, HADR | Splits backup/restore facades, file-WAL startup/report ownership, replay drivers, catalog-WAL reconciliation, HADR boundaries, and recovery dependency cleanup. |
+| `documentations/implementation/readonly-worker-04-catalog-procedure-statistics-2026-05-09.md` | Catalog, procedure store, statistics | Identifies catalog pure facades, concrete `ProcedureStore` movement, inventory fixture extraction, publication wrappers, catalog-recovery split, statistics/plan-cache/scenario cleanup, and catalog-diff decision work. |
+| `documentations/implementation/readonly-worker-05-execution-runtime-2026-05-09.md` | Execution runtime | Reduces `andromeda-exec` toward orchestration, promotes `andromeda-execution` as the runtime owner, splits procedure registry, removes the `andromeda-tx` blocker from inventory demo, and moves exec-local bridges. |
+| `documentations/implementation/readonly-worker-06-srpl-compiler-optimizer-2026-05-09.md` | SRPL compiler and optimizer | Keeps SRPL owner crates but targets root facade deletion, DefinitionBatch bridge extraction, catalog binding extraction, optimizer test migration, reexport cleanup, and manifest/doc cleanup. |
+| `documentations/implementation/readonly-worker-07-proto-rpc-quic-protocol-2026-05-09.md` | Proto, RPC, QUIC, protocol | Targets marker/protocol crate deletion, codec adoption/deletion, proto facade thinning, RPC core dependency removal, QUIC root reexports, RPC codec policy leakage, proto schema owner audit, and Quinn runtime cleanup. |
+| `documentations/implementation/readonly-worker-08-observe-security-iam-principal-2026-05-09.md` | Observe, audit, security, IAM, principal | Maps `EventEnvelope` as the main blocker, drains `andromeda_observe::*` imports to owners, deletes principal-binding facade, aligns audit/security vocabulary, narrows IAM audit dependency, and decides `andromeda-policy`. |
+| `documentations/implementation/readonly-worker-09-transaction-foundation-2026-05-09.md` | Transaction, concurrency, foundation | Treats `andromeda-tx` as deletion-ready except for inventory/topology references, maps `andromeda-core` direct-import cleanup, resource consolidation, WAL adapter narrowing, and `andromeda-contract-compat` deletion. |
+| `documentations/implementation/readonly-worker-10-leaf-advisory-performance-2026-05-09.md` | Bench, analytics, advisory, performance, miscellaneous | Deletes marker-only crates, merges GPU/SIMD/vector policy into hardware or one acceleration owner, reduces bench/regression facades, fixes decision-trace ownership, and decides analytics/columnar/maps fate. |
+
+All 10 reports are currently reported as ignored files by `git status --ignored` because `documentations/implementation` is ignored. They exist locally and are referenced here to keep the next execution wave reproducible.
+
+### Refreshed Size Snapshot
+
+Counts below were taken during consolidation by recursively counting Rust files under each crate directory, including crate-local tests.
+
+| Crate | Rust files | Rust lines | Current interpretation |
+| --- | ---: | ---: | --- |
+| `andromeda-storage` | 278 | 32712 | Still the largest integration/facade surface; next work is caller/test migration and recovery/catalog-WAL cleanup, not blind movement. |
+| `andromeda-exec` | 147 | 19204 | Still the broadest dependency hub; should become orchestration over execution/procedure/result/transaction/storage/audit owners. |
+| `andromeda-cli` | 89 | 17051 | Not a god crate target, but many remaining facade imports are CLI-facing and must be migrated with topology tests. |
+| `andromeda-catalog` | 110 | 13507 | Still owns live `CatalogSnapshot`; pure DTO/facade/procedure/statistics surfaces remain movable. |
+| `andromeda-observe` | 89 | 11100 | Event envelope and query/export runtime remain central; DTOs and audit/security/principal payloads should continue moving out. |
+| `andromeda-quic` | 74 | 10384 | Transport crate still has protocol/gateway/projection cleanup and broad root reexports to delete. |
+| `andromeda-transaction` | 75 | 10263 | Real owner crate; cleanup is API/docs/narrowing, not extraction away from it. |
+| `andromeda-srpl` | 49 | 7338 | Root compiler facade still used by tests/bench/exec/inventory; owner crates exist and need caller migration. |
+| `andromeda-mvcc` | 53 | 6365 | Real transaction-family owner; keep direct, avoid reintroducing `andromeda-tx`. |
+| `andromeda-proto` | 47 | 6260 | Mostly generated/prost facade; should thin exports and keep wire/codec/protocol owners precise. |
+| `andromeda-audit` | 43 | 6259 | Growing real owner; should absorb durable audit query/journal boundaries without depending on observe. |
+| `andromeda-wal` | 50 | 5758 | Real owner; still imports `andromeda-core` and carries compatibility wording that should be cleaned. |
+
+Near-empty or marker-only crates requiring a decision:
+
+| Crate | Rust files | Rust lines | Recommended direction |
+| --- | ---: | ---: | --- |
+| `andromeda-admin` | 1 | 8 | Delete unless real typed admin contracts are imminent. |
+| `andromeda-runbooks` | 1 | 16 | Delete until real typed runbook contracts exist. |
+| `andromeda-forensic` | 1 | 16 | Delete until concrete forensic evidence behavior exists. |
+| `andromeda-contract-compat` | 2 | 98 | Delete unless a real compatibility contract is explicitly required. |
+| `andromeda-tx` | 2 | 175 | Delete after inventory demo and topology references are migrated. |
+
+### Consolidated Architecture Findings
+
+- There are no normal Cargo dependency cycles in the scanned workspace. The risk is centrality and facade inertia, not cycle repair.
+- `andromeda-exec` is still the main dependency hub. It should not continue absorbing procedure registry, inventory runtime, WAL/replay bridge, heap redo templates, invocation codec, retry/result facades, or CLI-facing reexports.
+- `andromeda-storage` remains too large because tests and public imports still exercise storage root paths. The next reduction should first migrate external callers and owner tests, then delete root facade modules.
+- `andromeda-core` is no longer a good permanent owner name. It should either disappear after direct owner imports, or be renamed into a deliberately narrow prelude. The preferred path remains direct owner imports.
+- `andromeda-tx` is the clearest deletion target. Its behavior lives in transaction-family owners; the remaining blockers are `andromeda-inventory-demo`, compatibility tests, root workspace metadata, and topology/doctrine references.
+- `CatalogSnapshot` remains correctly owned by catalog. Do not move it to `andromeda-catalog-store` or recovery before the live-state boundary is redesigned.
+- `EventEnvelope` remains correctly central to observe for now. Extract payload DTOs and query/journal boundaries first; do not force lower owners to depend on observe.
+- `andromeda-decision-trace` should own critical decision DTOs instead of depending on observability only to reexport them.
+- `andromeda-admin`, `andromeda-forensic`, and `andromeda-runbooks` add naming/workspace noise while they remain marker-only.
+- Comment cleanup is now architectural work, not cosmetics. Terms like "worker", "wave", "temporary", "compatibility facade", "future scaffold", and stale crate counts should be removed from code comments when they describe implementation history rather than stable invariants. Domain terms such as transaction phase, backup phase, compatibility matrix, or deprecated catalog object must stay when they are product concepts.
+
+### Mega TODO / SUB-TODO / DEPENDENCIES
+
+TODO 1: Delete `andromeda-tx` completely.
+
+- SUB-TODO: Replace `andromeda-inventory-demo` imports with direct `andromeda-transaction`, `andromeda-transaction-log`, `andromeda-mvcc`, `andromeda-locking`, and `andromeda-savepoint` imports as needed.
+- SUB-TODO: Delete `andromeda-tx` compatibility tests after equivalent owner tests prove the surface.
+- SUB-TODO: Remove `andromeda-tx` from root workspace members/dependencies and topology/orphan doctrine lists.
+- SUB-TODO: Rename stale comments mentioning `andromeda-tx` durable commit boundary to the exact owner crate.
+- DEPENDENCIES: Do not start final crate deletion until `rg "andromeda_tx::|use andromeda_tx|andromeda-tx" crates Cargo.toml` is clean except files being updated by the same worker.
+
+TODO 2: Drain `andromeda-core` imports to precise owner crates.
+
+- SUB-TODO: For WAL/transaction/storage-adjacent crates, import errors from `andromeda-error`, ids and typed primitives from `andromeda-types`, hashes from `andromeda-digest`, time from `andromeda-time`, hardware/resource vocabulary from `andromeda-hardware` or `andromeda-resource`.
+- SUB-TODO: Remove `andromeda-core` dependencies from `andromeda-wal`, `andromeda-segment`, `andromeda-storage-index`, `andromeda-storage-heap`, `andromeda-manifest`, `andromeda-buffer-pool`, `andromeda-hadr`, `andromeda-execution`, `andromeda-retry`, and `andromeda-rpc` where direct owners already exist.
+- SUB-TODO: Remove temporary C5 core topology exceptions after each direct-import migration.
+- DEPENDENCIES: Keep `andromeda-core` as a compatibility facade until all normal dependents are gone; do not add new code to it.
+
+TODO 3: Reduce `andromeda-storage` to a storage integration boundary.
+
+- SUB-TODO: Migrate external `andromeda_storage::` imports to `andromeda-wal`, `andromeda-storage-page`, `andromeda-segment`, `andromeda-disk-page-store`, `andromeda-buffer-pool`, `andromeda-storage-index`, `andromeda-storage-heap`, `andromeda-backup`, `andromeda-restore`, `andromeda-hadr`, `andromeda-manifest`, and `andromeda-recovery`.
+- SUB-TODO: Move owner tests out of `andromeda-storage` so facades are not tested as if they were owners.
+- SUB-TODO: Split storage recovery into generic recovery driver contracts plus concrete storage/page/heap/index/catalog handlers.
+- SUB-TODO: Reconcile catalog WAL record/codec ownership and delete storage catalog bridge wrappers.
+- SUB-TODO: Decide whether placement/profile/cold policy stays storage-local or becomes a precise owner crate; do not create a broad placement dumping ground.
+- DEPENDENCIES: `andromeda-recovery` must not depend on `andromeda-storage`, `andromeda-catalog`, `andromeda-storage-heap`, or `andromeda-storage-index`.
+
+TODO 4: Finish backup, restore, recovery, and HADR ownership cleanup.
+
+- DONE 2026-05-09 W08: Deleted storage backup/restore/HADR production facades after caller migration and moved storage backup/restore facade dependencies to dev-only.
+- DONE 2026-05-09 W08: Added the `andromeda-restore` owner PITR adapter for `andromeda_backup::BackupManifest`, replacing the deleted storage-only manifest adapter.
+- SUB-TODO: Remaining: move manifest-aware file-WAL startup/report orchestration to `andromeda-recovery` once storage-local format gates no longer own that runtime edge. W07/W08 already moved neutral startup DTO ownership and the storage reexport now resolves through `andromeda-recovery`.
+- SUB-TODO: Move heap redo and index rebuild owner-specific recovery handlers to storage owner crates or keep adapters in storage behind lower traits.
+- DONE 2026-05-09 W08: Gated `crash_recovery_matrix` as test-only recovery material and demoted `andromeda-recovery -> andromeda-storage-page` to dev-only.
+- DEPENDENCIES: Backup/restore/HADR must stay below storage integration where possible and must not pull catalog/storage root facades upward.
+
+TODO 5: Contract `andromeda-catalog` around live catalog state.
+
+- SUB-TODO: Delete pure catalog facades for contracts, names, objects, dependencies, WAL DTOs, statistics, plan-cache/scenario evidence, and procedure feedback after direct caller migration.
+- DONE 2026-05-09 W10: Moved concrete `ProcedureStore` into `andromeda-procedure-store` without importing catalog, and deleted the catalog procedure-store source/test tree.
+- DONE 2026-05-09 W10: Moved inventory catalog fixtures out of catalog into `andromeda-business-fixtures`, with `andromeda-inventory-demo` reexporting the demo-facing API.
+- SUB-TODO: Completed W11: publication subscription wrappers are collapsed to a single catalog adapter, and `andromeda-catalog-recovery::publication` is split into focused internal modules.
+- SUB-TODO: Completed W11: `andromeda-catalog-diff` is kept as the real owner for runtime-free object diff evidence and is covered by external catalog tests.
+- SUB-TODO: Remaining: split `andromeda-catalog-recovery/src/durable_payload.rs` into header/checksum, encode/decode, catalog-definition codec, procedure-contract codec, and type-codec modules.
+- DEPENDENCIES: Do not move `CatalogSnapshot` until a live-state owner replacement is explicitly designed and tested.
+
+TODO 6: Reduce `andromeda-exec` to orchestration only.
+
+- SUB-TODO: Delete pure exec reexport facades and migrate CLI/tests to owner crates.
+- SUB-TODO: Promote `andromeda-execution` to the real local runtime owner only after its added dependencies are intentional and topology-approved.
+- SUB-TODO: Split procedure registry ownership into `andromeda-procedure-runtime` or a narrow owner without dragging inventory-specific logic into generic runtime crates.
+- SUB-TODO: Move or delete exec invocation codec, WAL/transaction replay bridges, and heap redo template types.
+- SUB-TODO: Move owner tests out of `andromeda-exec` where they validate execution, result-stream, retry, inventory, transaction, or storage owner behavior.
+- DEPENDENCIES: Finish `andromeda-tx` blocker removal and direct transaction-owner imports before deleting transaction compatibility assumptions.
+
+TODO 7: Finish SRPL root facade cleanup.
+
+- DONE 2026-05-09 W15: Removed `andromeda_srpl::procedure_compiler` and `andromeda_srpl::definition_batch_bridge` root import surfaces; migrated tests/bench/exec/inventory/fuzz imports to direct owners where applicable.
+- DONE 2026-05-09 W15: Added `andromeda-srpl-catalog-binding` and `andromeda-srpl-definition-batch` owner crates to the workspace; moved catalog snapshot executable binding and DefinitionBatch bridge imports out of the SRPL root.
+- SUB-TODO: Move optimizer tests to `andromeda-optimizer` and delete root reexports after imports are direct.
+- DEPENDENCIES: Do not turn `andromeda-procedure-runtime`, `andromeda-definition-batch`, `andromeda-srpl`, `andromeda-srpl-catalog-binding`, or `andromeda-srpl-definition-batch` into catch-all crates.
+- BLOCKED VALIDATION: Full W15 target check is currently blocked by concurrent `andromeda-catalog`/`andromeda-catalog-recovery` and optimizer/statistics compile errors; see `documentations/implementation/write-worker-15-srpl-root-facade-deletion-2026-05-09.md`.
+
+TODO 8: Clean protocol, RPC, QUIC, and codec layering.
+
+- COMPLETED: Deleted `andromeda-protocol`; it was a redundant reexport facade over protocol wire owners with no downstream consumers.
+- COMPLETED: Deleted `andromeda-client-sdk-gen`; it was marker-only and had no generation implementation or callers.
+- COMPLETED: Deleted `andromeda-codec`; its little-endian helpers were unused, and existing WAL/protocol owners already keep their explicit codecs local.
+- SUB-TODO: Remove `andromeda-rpc` dependency on `andromeda-core`.
+- SUB-TODO: Cut broad QUIC root reexports and move procedure/catalog projection to RPC/procedure/catalog contract owners.
+- SUB-TODO: Move permission policy leakage out of `andromeda-rpc-codec` if it creates higher-layer coupling.
+- DEPENDENCIES: QUIC stays transport-local; wire/prost mapping stays in proto/proto-wire/codec owners.
+
+TODO 9: Continue observe, audit, security, IAM, and principal cleanup.
+
+- SUB-TODO: Drain `andromeda_observe::*` imports to `andromeda-observability`, `andromeda-audit`, `andromeda-security`, `andromeda-security-contract`, and `andromeda-principal` where payload ownership is already clear.
+- SUB-TODO: Delete observe principal-binding facade after security/principal authority is owned outside observe.
+- SUB-TODO: Align audit vocabulary with security-contract without creating `security-contract -> audit`.
+- SUB-TODO: Decouple IAM from audit if its current audit dependency is only for trace DTOs.
+- SUB-TODO: Move durable audit query/result ownership into audit if it can avoid observe envelope dependencies.
+- SUB-TODO: Decide `andromeda-policy` while it has no dependents.
+- DEPENDENCIES: Do not create observe/audit/security/principal cycles. `andromeda-principal` must remain low-level and not depend on audit or observe.
+
+TODO 10: Clean leaf/advisory/performance crates and naming noise.
+
+- COMPLETED W23: Deleted marker-only `andromeda-admin`, `andromeda-forensic`, and `andromeda-runbooks` workspace crates.
+- COMPLETED W23: Merged useful GPU/SIMD/vector advisory policy into `andromeda-hardware::acceleration`, reexported it through `andromeda_hardware` and `andromeda_hardware::policy::*`, then deleted standalone `andromeda-gpu`, `andromeda-simd`, and `andromeda-vector` crates.
+- SUB-TODO: Migrate CLI/bench imports away from broad `andromeda-bench` reexports, keeping bench only for concrete bounded benchmark execution.
+- SUB-TODO: Decide whether regression is a standalone CI owner or bench submodule.
+- SUB-TODO: Move critical decision DTO ownership into `andromeda-decision-trace` and make observability wrap/reexport rather than own those DTOs.
+- SUB-TODO: Decide analytics/columnar/maps as one real analytical contract owner or delete until real consumers exist.
+- SUB-TODO: Keep `andromeda-test-support` dependency-free and dev-only.
+- DEPENDENCIES: Advisory crates must not become durable truth owners.
+
+### Prepared WRITE Worker Set
+
+The next WRITE phase should be organized as 24 focused workers. This is a bounded set across the workspace, not one worker per crate.
+
+| Worker | Write scope | Depends on |
+| --- | --- | --- |
+| W01 | Completed: deleted `andromeda-tx`; inventory-demo now imports MVCC/transaction-log owners directly; workspace membership, topology/orphan doctrine, active test/tool references, and compatibility test surface were removed. | None. |
+| W02 | Remove `andromeda-core` from WAL and transaction-log adjacent users; direct error/type/time/digest imports. | W01 optional. |
+| W03 | Remove `andromeda-core` from storage-adjacent users: segment, storage-index, storage-heap, buffer-pool, manifest, HADR. | W02. |
+| W04 | Remove `andromeda-core` from exec/CLI/RPC/retry/execution users and delete temporary core topology exceptions. | W02, W03. |
+| W05 | Migrate final external storage facade callers to owner crates. | W03. |
+| W06 | Move storage owner tests out of storage root and delete page/disk/segment/buffer/heap/index wrappers proven unused. | W05. |
+| W07 | Completed: split storage recovery and catalog-WAL bridge into owner contracts/adapters; storage now keeps only compatibility/runtime adapters for this surface. Report: `documentations/implementation/write-worker-07-storage-recovery-catalog-wal-split-2026-05-09.md`. | W05, W06. |
+| W08 | Completed: deleted storage backup/restore/HADR facades, moved backup/restore storage deps to dev-only, added the restore owner PITR adapter for backup manifests, and demoted recovery crash-matrix storage-page usage to dev-only. Report: `documentations/implementation/write-worker-08-storage-backup-restore-hadr-cleanup-2026-05-09.md`. | W05, W07. |
+| W09 | Delete pure catalog facades and migrate direct callers to catalog-store, definition-batch, procedure-contract, statistics, scenario-evidence, plan-cache, and recovery owners. | W05 optional. |
+| W10 | Completed: moved concrete procedure-store and inventory catalog fixtures out of catalog. Report: `documentations/implementation/write-worker-10-procedure-store-inventory-fixtures-2026-05-09.md`. | W09. |
+| W11 | Completed: split catalog-recovery publication internals, collapsed catalog publication wrappers, documented lifecycle vocabulary, and kept/wired `andromeda-catalog-diff` as a real owner crate. Report: `documentations/implementation/write-worker-11-catalog-recovery-publication-lifecycle-diff-2026-05-09.md`. | W09, W10. |
+| W12 | Completed: deleted pure exec reexport facade files, moved result-stream and metadata-extraction owner tests to owner crates, and migrated retry/trace/result imports away from `andromeda_exec` compatibility paths. Report: `documentations/implementation/write-worker-12-exec-reexport-facade-deletion-2026-05-09.md`. | W01, W09. |
+| W13 | Promote `andromeda-execution` runtime ownership and split procedure registry without product-specific inventory logic. | W12. |
+| W14 | Completed: moved exec invocation response codec to `andromeda-rpc-codec`, sync invocation WAL contract to `andromeda-wal`, heap redo template to `andromeda-storage-heap`, and transaction WAL/replay bridge to `andromeda-recovery`; inventory-demo now imports the owner crates directly. Report: `documentations/implementation/write-worker-14-exec-codec-replay-heap-inventory-2026-05-09.md`. | W13. |
+| W15 | Completed: deleted SRPL root `procedure_compiler` and `definition_batch_bridge` facades, added `andromeda-srpl-catalog-binding` and `andromeda-srpl-definition-batch`, migrated callers to direct owner imports, and moved `andromeda-exec`'s SRPL compiler dependency to dev-only. Report: `documentations/implementation/write-worker-15-srpl-root-facade-deletion-2026-05-09.md`. | W12. |
+| W16 | Completed: moved SRPL DefinitionBatch bridge and catalog binding adapter into owner crates, moved optimizer regression tests to `andromeda-optimizer`, and removed stale SRPL manifest dependencies. Report: `documentations/implementation/write-worker-16-srpl-definitionbatch-catalog-optimizer-2026-05-09.md`. | W15, W10. |
+| W17 | Completed: deleted protocol marker/scaffold crates `andromeda-protocol`, `andromeda-client-sdk-gen`, and `andromeda-codec`, with topology/orphan/Miri cleanup. | None. |
+| W18 | Completed: removed `andromeda-rpc` core dependency and cut QUIC root reexports for RPC protocol, dispatch, codec, backpressure, and invariant helper surfaces. | W04, W17. |
+| W19 | Completed: moved Procedure gateway policy/projection semantics to `andromeda-procedure-contract`, removed `rpc-codec` principal/security policy deps, reduced `andromeda-quic` production proto/security deps, cleaned proto schema owner docs, removed Quinn/W22 wording, and passed protocol/QUIC all-target tests. Report: `documentations/implementation/write-worker-19-quic-proto-rpc-codec-quinn-cleanup-2026-05-09.md`. | W18, W11. |
+| W20 | Drain observe imports to audit/observability/security/principal owners and delete observe principal-binding facade. | W04. |
+| W21 | Align audit/security/IAM vocabulary, move durable audit query ownership, and keep EventEnvelope boundary stable. | W20. |
+| W22 | Fix decision-trace ownership direction and observability reexports. | W20, W21. |
+| W23 | Completed: deleted marker-only misc crates and merged acceleration policy into hardware. | W04. |
+| W24 | Bench/regression/analytics/columnar/maps/test-support and professional comment cleanup sweep. | W17, W22, W23. |
+
+### WRITE Wave Progress - 2026-05-09
+
+- W01 `documentations/implementation/write-worker-01-transaction-facade-deletion-2026-05-09.md`: Completed. Removed `crates/andromeda-tx/`, removed the workspace member/dependency alias, migrated `andromeda-inventory-demo` to `andromeda-mvcc` and `andromeda-transaction-log`, deleted the API compatibility facade test, and cleaned active `crates`, `tests`, `tools`, topology, orphan doctrine, and CLI/help references.
+- W01 validation passed for the transaction owner family:
+  `cargo check -p andromeda-transaction -p andromeda-transaction-log -p andromeda-mvcc -p andromeda-locking -p andromeda-savepoint --all-targets`
+  and
+  `cargo test -p andromeda-transaction -p andromeda-transaction-log -p andromeda-mvcc -p andromeda-locking -p andromeda-savepoint --all-targets`.
+- W01 active-reference scan is clean:
+  `rg "andromeda_tx::|use andromeda_tx|andromeda-tx|andromeda_tx" crates tests tools Cargo.toml -g '!target/**'`.
+- W01 global topology/orphan gates are blocked before their assertions by concurrent non-W01 compile errors in `andromeda-catalog-recovery` and `andromeda-audit`; `cargo check -p andromeda-inventory-demo --all-targets` is also blocked by concurrent non-W01 errors in `andromeda-storage-heap` and new SRPL split crates.
+- W03 `documentations/implementation/write-worker-03-core-storage-adjacent-drain-2026-05-09.md`: Completed. `andromeda-segment`, `andromeda-storage-index`, `andromeda-storage-heap`, `andromeda-buffer-pool`, `andromeda-manifest`, and `andromeda-hadr` now import error/result types directly from `andromeda-error` and no longer depend on `andromeda-core`.
+- W03 validation passed for targeted package checks/tests:
+  `cargo check -p andromeda-segment -p andromeda-storage-index -p andromeda-storage-heap -p andromeda-buffer-pool -p andromeda-manifest -p andromeda-hadr --all-targets`
+  and
+  `cargo test -p andromeda-segment -p andromeda-storage-index -p andromeda-storage-heap -p andromeda-buffer-pool -p andromeda-manifest -p andromeda-hadr --all-targets`.
+- W03 global topology gate was blocked outside W03 because `andromeda-storage` root referenced missing `catalog_wal_bridge/*` modules and `wal_record_catalog.rs`. W07 restored those storage adapters over owner crates; rerun `cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture` after the remaining non-storage compile blockers are cleared.
+- W07 `documentations/implementation/write-worker-07-storage-recovery-catalog-wal-split-2026-05-09.md`: Completed. Moved the storage-facing catalog WAL record family and bridge replay/codec helpers into `andromeda-catalog-recovery`, leaving `andromeda-storage` with thin compatibility adapters for legacy imports.
+- W07 moved neutral file-WAL startup recovery DTO ownership into `andromeda-recovery` with `FileWalStartupRecoveryV0` and the recovered transaction-id-floor scan helper. Storage keeps manifest-aware startup orchestration and runtime reporting because those still depend on storage-local format gates.
+- W07 intentionally did not move `CatalogSnapshot` or live catalog replay application. Those remain blocked on an explicit owner apply contract and passing replay tests.
+- W07 validation passed:
+  `cargo check -p andromeda-catalog-recovery --all-targets`,
+  `cargo check -p andromeda-recovery --all-targets`,
+  `cargo check -p andromeda-wal --lib`,
+  and `cargo check -p andromeda-storage --lib`.
+- W07 storage all-target validation is blocked outside W07 by active storage test drift: stale backup/restore test imports, `core_io_gates.rs` including moved/deleted `src/segment.rs`, `api_compat_reexports.rs` still expecting root `FormatVersion`, and backup physical-plan tests still targeting old storage backup facades.
+- W08 `documentations/implementation/write-worker-08-storage-backup-restore-hadr-cleanup-2026-05-09.md`: Completed. Deleted storage backup/restore/HADR production facades, moved backup/restore storage dependencies to dev-only, added the restore owner PITR adapter for backup manifests, migrated storage backup/restore/HADR tests to owner imports, and demoted recovery crash-matrix storage-page usage to dev-only.
+- W08 validation passed:
+  `cargo check -p andromeda-backup -p andromeda-restore -p andromeda-hadr -p andromeda-recovery --all-targets`,
+  `cargo check -p andromeda-storage --lib`,
+  `cargo check -p andromeda-storage --all-targets`,
+  targeted storage backup/restore/HADR test compilation,
+  targeted storage backup/restore/HADR tests,
+  and `cargo test -p andromeda-wal -p andromeda-recovery -p andromeda-backup -p andromeda-restore -p andromeda-hadr --all-targets`.
+- W08 global topology/orphan gates are blocked outside W08 before assertions by current `andromeda-exec` `andromeda_observability` import drift and `andromeda-bench` missing `MockBTreeIndex`.
+- W16 `documentations/implementation/write-worker-16-srpl-definitionbatch-catalog-optimizer-2026-05-09.md`: Completed. Added `andromeda-srpl-definition-batch` for SRPL source -> DefinitionBatch dry-run/materialization evidence and `andromeda-srpl-catalog-binding` for `CatalogSnapshot` executable SRPL binding. The `andromeda-srpl` root no longer owns those bridge modules; remaining SRPL-root tests import the owner crates directly.
+- W16 moved pure optimizer regression tests from `andromeda-srpl` to `andromeda-optimizer`, renamed the stale `cost_plan_function_phase` test module to `cost_plan_function_contract`, removed stale `andromeda-digest` and `andromeda-plan-cache` SRPL manifest edges, moved `andromeda-srpl-ast` plus the two new SRPL owner crates to SRPL dev-dependencies, removed the stale `andromeda-cli -> andromeda-srpl` dependency, and migrated `andromeda-inventory-demo` to import catalog binding from `andromeda-srpl-catalog-binding`.
+- W16 validation status: `cargo metadata --no-deps --format-version 1` passed; targeted `cargo fmt -p ...` passed with existing stable-rustfmt config warnings; `cargo check/test` passed for `andromeda-srpl-definition-batch` and `andromeda-srpl-catalog-binding`; `cargo check -p andromeda-srpl-definition-batch -p andromeda-srpl-catalog-binding -p andromeda-srpl -p andromeda-optimizer -p andromeda-inventory-demo --all-targets -j 1` passed. The topology gate is still blocked before assertions by `andromeda-bench` missing `MockBTreeIndex`.
+- W18 `documentations/implementation/write-worker-18-rpc-core-quic-reexports-2026-05-09.md`: Completed. `andromeda-rpc` now imports errors and semantic ids directly from `andromeda-error` and `andromeda-types`, and no longer depends on `andromeda-core`.
+- W18 removed the remaining QUIC root reexports for protocol frames, stream roles, RPC dispatch policy, typed result-stream codec helpers, backpressure DTOs, and protocol invariant helpers. QUIC internals now import those types from `andromeda-rpc-protocol`, `andromeda-rpc`, and `andromeda-rpc-codec` directly.
+- W18 validation passed:
+  `cargo check -p andromeda-rpc-protocol -p andromeda-rpc-codec -p andromeda-rpc -p andromeda-quic --all-targets`,
+  `cargo test -p andromeda-rpc-protocol -p andromeda-rpc-codec -p andromeda-rpc -p andromeda-quic --all-targets`,
+  and
+  `cargo test -p andromeda-quic-runtime-quinn --all-targets`.
+- W11 `documentations/implementation/write-worker-11-catalog-recovery-publication-lifecycle-diff-2026-05-09.md`: Completed. Split `andromeda-catalog-recovery::publication` into focused internal modules, collapsed catalog publication subscription alias-only wrappers into one adapter module, documented `Deprecate` as stable lifecycle vocabulary, and kept `andromeda-catalog-diff` as the owner for runtime-free object diff evidence.
+- W11 validation passed:
+  `cargo check -p andromeda-catalog-recovery --all-targets --all-features`,
+  `cargo test -p andromeda-catalog-recovery --all-targets --all-features`,
+  `cargo check -p andromeda-catalog-diff --all-targets --all-features`,
+  `cargo test -p andromeda-catalog-diff --all-targets --all-features`,
+  `cargo check -p andromeda-definition-batch -p andromeda-catalog-store --all-targets --all-features`,
+  `cargo test -p andromeda-catalog --test catalog_diff_contract -- --nocapture`,
+  `cargo test -p andromeda-catalog --test catalog_publication_subscription -- --nocapture`,
+  `cargo test -p andromeda-catalog --test catalog_publication_subscription_runtime_contract -- --nocapture`,
+  `cargo test -p andromeda-catalog --test publication_subscription_recovery_contract -- --nocapture`,
+  `cargo test -p andromeda-catalog --test wal_record_design -- --nocapture`,
+  and
+  `cargo test -p andromeda-catalog --test catalog_store_contract -- --nocapture`.
+- W11 global topology/orphan gates are blocked outside W11 by `crates/andromeda-bench/src/btree_benchmark.rs:133`, where `MockBTreeIndex` is missing and prevents `andromeda-cli` invariant test compilation.
+- W14 `documentations/implementation/write-worker-14-exec-codec-replay-heap-inventory-2026-05-09.md`: Completed. Moved invocation response/result-stream decoding from exec into `andromeda-rpc-codec`, moved `InvocationWal` into `andromeda-wal`, moved the heap-row redo template into `andromeda-storage-heap`, and moved the transaction WAL/replay bridge into `andromeda-recovery`.
+- W14 removed the old exec bridge/facade exports for `DurableExecWalPrefix`, `TxReplayFromExecWalEvidence`, `map_exec_wal_evidence_to_tx_replay`, exec-owned transaction payload helpers, `InvocationWal`, and the local heap redo template. Inventory-demo and exec tests now import owner crates directly.
+- W14 validation passed:
+  `cargo check -p andromeda-wal --all-targets`,
+  `cargo check -p andromeda-storage-heap --all-targets`,
+  `cargo check -p andromeda-rpc-codec --all-targets`,
+  `cargo check -p andromeda-recovery --all-targets`,
+  `cargo check -p andromeda-exec --lib`,
+  `cargo check -p andromeda-inventory-demo --lib`,
+  `cargo test -p andromeda-recovery --test transaction_wal_bridge -- --nocapture`,
+  `cargo test -p andromeda-rpc-codec --lib -- --nocapture`,
+  `cargo test -p andromeda-storage-heap --lib -- --nocapture`,
+  `cargo test -p andromeda-wal --lib invocation_wal -- --nocapture`,
+  `cargo test -p andromeda-exec --test core_io_gates -- --nocapture`,
+  `cargo test -p andromeda-exec --test runtime_contract -- --nocapture`,
+  `cargo test -p andromeda-exec --test v0_vertical_e2e -- --nocapture`,
+  and `cargo test -p andromeda-inventory-demo --all-targets -- --nocapture`.
+- W14 broad group check is blocked outside W14 by `andromeda-scenario-evidence` benchmark-history advisory imports that cannot resolve `andromeda_bench_workload`. The CLI topology/orphan gates are still blocked before assertions by `crates/andromeda-bench/src/btree_benchmark.rs:133`, where `MockBTreeIndex` is missing.
+- W23 `documentations/implementation/write-worker-23-marker-misc-hardware-policy-cleanup-2026-05-09.md`: Completed. `andromeda-admin`, `andromeda-forensic`, and `andromeda-runbooks` marker-only crates were removed from workspace membership; `andromeda-contract-compat` was preserved because it owns a real taxonomy API and unit tests.
+- W23 merged the standalone `andromeda-gpu`, `andromeda-simd`, and `andromeda-vector` advisory policy APIs into `andromeda-hardware::acceleration`, with root and `policy::*` reexports from `andromeda_hardware`.
+- W23 validation passed for `cargo test -p andromeda-hardware --all-targets`.
+- W23 topology and orphan-source gates are currently blocked outside W23 by `crates/andromeda-bench/src/btree_benchmark.rs:133`, where `MockBTreeIndex` is missing and prevents `andromeda-cli` test compilation.
+
+### Validation Gates For The Next WRITE Wave
+
+The read-only phase did not run `cargo check` or tests because those commands write into `target/`. Future WRITE workers should run targeted gates after each slice and the global gates after each batch:
+
+```powershell
+cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture
+cargo test -p andromeda-cli --test orphan_source_invariants -- --nocapture
+cargo check --workspace --all-targets --all-features
+```
+
+Cluster gates to attach to worker batches:
+
+```powershell
+cargo test -p andromeda-transaction -p andromeda-transaction-log -p andromeda-mvcc -p andromeda-locking -p andromeda-savepoint --all-targets
+cargo test -p andromeda-storage --test wal_ownership_invariants -- --nocapture
+cargo test -p andromeda-wal -p andromeda-recovery -p andromeda-backup -p andromeda-restore -p andromeda-hadr --all-targets
+cargo test -p andromeda-catalog --test catalog_store_contract -- --nocapture
+cargo test -p andromeda-catalog --test wal_record_design -- --nocapture
+cargo test -p andromeda-procedure-store -p andromeda-statistics -p andromeda-catalog-recovery --all-targets
+cargo test -p andromeda-exec -p andromeda-execution -p andromeda-procedure-runtime -p andromeda-result-stream --all-targets
+cargo test -p andromeda-srpl -p andromeda-srpl-parser -p andromeda-srpl-binder -p andromeda-srpl-lowering -p andromeda-optimizer --all-targets
+cargo test -p andromeda-rpc-protocol -p andromeda-rpc-codec -p andromeda-rpc -p andromeda-quic -p andromeda-quic-runtime-quinn --all-targets
+cargo test -p andromeda-observe -p andromeda-audit -p andromeda-observability -p andromeda-security -p andromeda-iam -p andromeda-principal --all-targets
+cargo test -p andromeda-bench -p andromeda-bench-harness -p andromeda-bench-workload -p andromeda-regression -p andromeda-hardware --all-targets
+```
+
+### Stop Condition
+
+This post-extraction read-only check stops here. The workspace is ready for the owner to order the next WRITE wave, but no WRITE worker should be started from this section until that order is given.
+
 ## Global Execution Order
 
 1. Freeze topology evidence: run dependency topology and orphan-source tests before code moves.
@@ -861,7 +1172,7 @@ cargo test -p andromeda-statistics --all-targets --all-features
 Transaction-family gates:
 
 ```powershell
-cargo check -p andromeda-transaction -p andromeda-tx -p andromeda-mvcc -p andromeda-locking -p andromeda-savepoint -p andromeda-transaction-log --all-targets --all-features
+cargo check -p andromeda-transaction -p andromeda-mvcc -p andromeda-locking -p andromeda-savepoint -p andromeda-transaction-log --all-targets --all-features
 cargo check -p andromeda-exec -p andromeda-execution-trace -p andromeda-result-stream --all-targets --all-features
 cargo test -p andromeda-transaction --all-targets
 cargo test -p andromeda-mvcc --all-targets
@@ -875,9 +1186,9 @@ SRPL/exec/result-stream gates:
 ```powershell
 cargo check -p andromeda-srpl -p andromeda-exec -p andromeda-procedure-runtime -p andromeda-result-stream -p andromeda-srpl-execution-adapter --all-targets --all-features --locked
 cargo test -p andromeda-procedure-runtime --lib --locked
+cargo test -p andromeda-procedure-runtime --test metadata_extraction_contract --locked
 cargo test -p andromeda-result-stream --lib --locked
-cargo test -p andromeda-exec --test metadata_extraction_contract --locked
-cargo test -p andromeda-exec --test result_stream_backpressure --locked
+cargo test -p andromeda-result-stream --test result_stream_backpressure --locked
 cargo test -p andromeda-exec --test srpl_adapter_contract --locked
 cargo test -p andromeda-srpl --test api_compat_reexports --locked
 cargo test -p andromeda-srpl --test compiler_pipeline_e2e --locked
@@ -962,6 +1273,9 @@ If a proposed move creates a Cargo cycle, do not add a broad integration crate. 
 - `documentations/implementation/worker-transaction-downstream-tests-2026-05-09.md`
 - `documentations/implementation/worker-srpl-optimizer-2026-05-09.md`
 - `documentations/implementation/worker-proto-rpc-quic-2026-05-09.md`
+- `documentations/implementation/write-worker-14-exec-codec-replay-heap-inventory-2026-05-09.md`
+- `documentations/implementation/write-worker-16-srpl-definitionbatch-catalog-optimizer-2026-05-09.md`
+- `documentations/implementation/write-worker-18-rpc-core-quic-reexports-2026-05-09.md`
 - `documentations/implementation/worker-observe-audit-decision-trace-2026-05-09.md`
 - `documentations/implementation/worker-bench-evidence-cleanup-2026-05-09.md`
 - `documentations/implementation/worker-topology-gates-map-2026-05-09.md`
@@ -980,9 +1294,101 @@ If a proposed move creates a Cargo cycle, do not add a broad integration crate. 
 - `documentations/implementation/readonly-worker-observe-envelope-audit-map-2026-05-09.md`
 - `documentations/implementation/readonly-worker-observe-principal-trace-map-2026-05-09.md`
 - `documentations/implementation/readonly-worker-transaction-core-trace-map-2026-05-09.md`
+- `documentations/implementation/readonly-worker-01-global-workspace-topology-2026-05-09.md`
+- `documentations/implementation/readonly-worker-02-storage-kernel-2026-05-09.md`
+- `documentations/implementation/readonly-worker-03-recovery-backup-hadr-2026-05-09.md`
+- `documentations/implementation/readonly-worker-04-catalog-procedure-statistics-2026-05-09.md`
+- `documentations/implementation/readonly-worker-05-execution-runtime-2026-05-09.md`
+- `documentations/implementation/readonly-worker-06-srpl-compiler-optimizer-2026-05-09.md`
+- `documentations/implementation/readonly-worker-07-proto-rpc-quic-protocol-2026-05-09.md`
+- `documentations/implementation/readonly-worker-08-observe-security-iam-principal-2026-05-09.md`
+- `documentations/implementation/readonly-worker-09-transaction-foundation-2026-05-09.md`
+- `documentations/implementation/readonly-worker-10-leaf-advisory-performance-2026-05-09.md`
 - Worker analysis: storage read-only extraction map, 2026-05-09.
 - Worker analysis: catalog/procedure read-only extraction map, 2026-05-09.
 - Worker analysis: transaction read-only extraction map, 2026-05-09.
 - Worker analysis: SRPL/exec read-only extraction map, 2026-05-09.
 - Worker analysis: RPC/proto/QUIC read-only extraction map, 2026-05-09.
 - Worker analysis: observability/core/bench read-only extraction map, 2026-05-09.
+
+## Consolidation WRITE Finale - 2026-05-09
+
+Cette passe consolide les rapports WRITE matérialisés sous
+`documentations/implementation/write-worker-*.md`. La vague a produit 46
+rapports cumulés, dont les 24 derniers couvrent la suppression des facades
+restantes, les extractions d'owner crates, la correction des règles de
+topologie et la validation finale.
+
+### Travaux Consolidés
+
+- `andromeda-tx` a été supprimé de la workspace; les usages actifs passent par
+  `andromeda-transaction`, `andromeda-transaction-log`, `andromeda-mvcc`,
+  `andromeda-locking` et `andromeda-savepoint`.
+- Les crates marqueurs ou vides `andromeda-admin`, `andromeda-forensic`,
+  `andromeda-runbooks`, `andromeda-gpu`, `andromeda-simd`,
+  `andromeda-vector`, `andromeda-protocol`, `andromeda-codec` et
+  `andromeda-client-sdk-gen` ont été retirés après migration ou absorption de
+  leur contenu utile.
+- `andromeda-storage` a été fortement réduit: B-tree, key codec, buffer pool,
+  heap, page/segment, backup, restore, HADR, catalog-WAL et tests owners ont
+  été déplacés vers les crates spécialisées.
+- `andromeda-catalog` a perdu les facades pures `contracts`, `objects`,
+  `dependencies`, `scenario_evidence`, `statistics`, `procedure_store` et les
+  wrappers de publication non owners; les morceaux recovery/publication vivent
+  maintenant dans `andromeda-catalog-recovery`.
+- `andromeda-exec` a été recentré sur l'orchestration runtime: result stream,
+  retry, registry, codecs, services purs, WAL/replay bridges et fixtures métier
+  ont été déplacés vers leurs owners.
+- `andromeda-srpl` a été réduit autour du langage; `andromeda-srpl-catalog-binding`
+  et `andromeda-srpl-definition-batch` portent désormais les surfaces sorties
+  du root crate, et les tests optimizer vivent dans `andromeda-optimizer`.
+- Les surfaces RPC/proto/QUIC ont été nettoyées: les imports quittent les
+  compat modules QUIC, les projections gateway/procedure vivent dans les crates
+  contract/codec, et les reexports root inutiles ont été retirés.
+- `andromeda-observe` ne dépend plus de `andromeda-security`; les DTO durable
+  audit et admission audit sont portés par `andromeda-audit` et
+  `andromeda-security-contract`.
+- Les liens `andromeda-core` ont été drainés sur les chemins WAL,
+  transaction-log, transaction, storage-adjacent, exec, CLI et RPC. Les seules
+  exceptions de facade encore documentées dans les gates sont `andromeda-backup`,
+  `andromeda-recovery` et `andromeda-storage`.
+- Bench/regression/scenario evidence ont été resserrés: les facades root
+  restantes sont privées ou advisory-only, et le modèle interne B-tree a été
+  renommé `ReadOnlyBTreeIndexModel`.
+
+### TODO Restants
+
+- Terminer le dernier drainage `core -> iam/security` uniquement après
+  neutralisation complète des dépendances inverses encore protégées par les
+  gates.
+- Réduire les exceptions `andromeda-backup`, `andromeda-recovery` et
+  `andromeda-storage` dans `TEMPORARY_C5_CORE_FACADE_EXCEPTIONS` quand les
+  chemins restants auront un owner inférieur stable.
+- Garder `CatalogSnapshot` et les chemins replay runtime dans leurs owners
+  actuels tant que les gates crash/recovery ne prouvent pas un déplacement plus
+  bas.
+- Continuer à supprimer les facades uniquement après migration des call-sites et
+  validation des crates owners, pour éviter de recréer des crates integration
+  larges.
+
+### Validations Exécutées
+
+```powershell
+cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture
+cargo test -p andromeda-cli --test orphan_source_invariants -- --nocapture
+cargo check --workspace --all-targets --all-features
+cargo test -p andromeda-storage --test wal_ownership_invariants -- --nocapture
+cargo test -p andromeda-backup -p andromeda-restore -p andromeda-buffer-pool -p andromeda-storage-index -p andromeda-storage-heap --all-targets
+cargo test -p andromeda-catalog --test catalog_store_contract -- --nocapture
+cargo test -p andromeda-catalog --test wal_record_design -- --nocapture
+cargo test -p andromeda-rpc-codec -p andromeda-rpc-protocol -p andromeda-quic --all-targets
+cargo test -p andromeda-observe --all-targets
+cargo test -p andromeda-exec --all-targets
+cargo test -p andromeda-transaction -p andromeda-transaction-log -p andromeda-mvcc -p andromeda-locking -p andromeda-savepoint --all-targets
+cargo test -p andromeda-srpl -p andromeda-srpl-parser -p andromeda-srpl-binder -p andromeda-srpl-lowering -p andromeda-optimizer -p andromeda-srpl-definition-batch -p andromeda-srpl-catalog-binding --all-targets
+cargo check -p andromeda-bench -p andromeda-scenario-evidence -p andromeda-bench-workload --all-targets
+```
+
+Tous ces contrôles sont passés. Les erreurs Cargo stale `E0463` rencontrées
+pendant la validation bench ont été corrigées par nettoyage ciblé des artefacts
+`andromeda-bench-harness` et `andromeda-regression`.

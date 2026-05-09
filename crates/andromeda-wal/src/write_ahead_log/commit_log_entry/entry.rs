@@ -1,4 +1,5 @@
-use andromeda_core::{AndromedaResult, TransactionId};
+use andromeda_error::AndromedaResult;
+use andromeda_types::TransactionId;
 
 use crate::Lsn;
 
@@ -106,7 +107,7 @@ impl CommitLogEntry {
                 return Err(transaction_error(format!(
                     "invalid WAL durability flag in encoded entry: {flag}"
                 )));
-            }
+            },
         };
 
         Ok(CommitLogEntry {

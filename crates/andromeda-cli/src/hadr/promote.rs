@@ -2,7 +2,7 @@ use std::path::Path;
 
 use crate::error::cli_error;
 use crate::parse::parse_u64;
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 use andromeda_hadr::{
     HadrClusterOperation, HadrClusterSecurityEvidence, HadrFencingContext, HadrFencingToken,
     HadrMembershipSnapshot, HadrMembershipStore, HadrNodeId, HadrPromotionAuditLog,

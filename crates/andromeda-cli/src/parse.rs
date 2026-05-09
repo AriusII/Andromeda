@@ -1,5 +1,5 @@
 use crate::error::cli_error;
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 pub(crate) fn parse_u64(value: &str, error_message: &'static str) -> AndromedaResult<u64> {
     value.parse::<u64>().map_err(|_| cli_error(error_message))

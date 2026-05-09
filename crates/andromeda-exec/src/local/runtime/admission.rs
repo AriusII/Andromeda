@@ -1,9 +1,9 @@
-use andromeda_catalog::CatalogSnapshot;
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use andromeda_observe::Permission as AuditPermission;
-use andromeda_observe::{
-    DecisionTrace, SecurityAuditOutcome, SurfaceScope as AuditSurfaceScope, TraceId,
+use andromeda_audit::{
+    Permission as AuditPermission, SecurityAuditOutcome, SurfaceScope as AuditSurfaceScope,
 };
+use andromeda_catalog::CatalogSnapshot;
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_observability::{CriticalDecisionTrace as DecisionTrace, TraceId};
 
 use crate::{
     AuthorizedProcedureDispatch, InvocationContext, InvocationRequest, local::types::LocalProcedure,
@@ -154,16 +154,15 @@ fn require_authorization_context_for_permissioned_procedure(
 
 #[cfg(test)]
 mod tests {
-    use andromeda_catalog::inventory_reserve_stock_contract;
-    use andromeda_core::{
-        AndromedaErrorKind, CatalogVersion, ContractHash, InvocationId, ProcedureId,
-    };
-    use andromeda_observe::TraceId;
+    use andromeda_error::AndromedaErrorKind;
+    use andromeda_inventory_demo::inventory_reserve_stock_contract;
+    use andromeda_observability::TraceId;
     use andromeda_procedure_contract::{
         PolicyVersion, ProcedureContract, ProcedureContractBinding, ProcedureContractRef,
         StatsVersion,
     };
     use andromeda_srpl_ir::Cardinality;
+    use andromeda_types::{CatalogVersion, ContractHash, InvocationId, ProcedureId};
 
     use crate::local::types::LocalProcedure;
     use crate::{InvocationContext, InvocationRequest, ResultStreamMetadata};

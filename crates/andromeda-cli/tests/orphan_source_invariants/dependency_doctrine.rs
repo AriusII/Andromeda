@@ -11,16 +11,6 @@ use crate::dependency_manifest::{
 use crate::support::workspace_root;
 
 const FORBIDDEN_PRODUCTION_EDGES: &[(&str, &str)] = &[
-    ("andromeda-tx", "andromeda-storage"),
-    ("andromeda-tx", "andromeda-quic"),
-    ("andromeda-tx", "andromeda-rpc-runtime"),
-    ("andromeda-tx", "andromeda-runtime-quinn"),
-    ("andromeda-tx", "quinn"),
-    ("andromeda-tx", "rustls"),
-    ("andromeda-tx", "tokio-rustls"),
-    ("andromeda-tx", "h2"),
-    ("andromeda-tx", "hyper"),
-    ("andromeda-tx", "tower"),
     ("andromeda-proto", "andromeda-quic"),
     ("andromeda-proto", "andromeda-rpc-runtime"),
     ("andromeda-proto", "andromeda-runtime-quinn"),
@@ -34,13 +24,11 @@ const FORBIDDEN_PRODUCTION_EDGES: &[(&str, &str)] = &[
     ("andromeda-rpc-protocol", "andromeda-exec"),
     ("andromeda-rpc-protocol", "andromeda-storage"),
     ("andromeda-rpc-protocol", "andromeda-wal"),
-    ("andromeda-rpc-protocol", "andromeda-tx"),
     ("andromeda-rpc-protocol", "quinn"),
     ("andromeda-rpc-protocol", "rcgen"),
     ("andromeda-rpc-protocol", "rustls"),
     ("andromeda-rpc-protocol", "tokio"),
     ("andromeda-wal", "andromeda-storage"),
-    ("andromeda-wal", "andromeda-tx"),
     ("andromeda-wal", "andromeda-exec"),
     ("andromeda-wal", "andromeda-execution"),
     ("andromeda-wal", "andromeda-srpl"),
@@ -225,7 +213,6 @@ const FORBIDDEN_SECURITY_CONTRACT_RUNTIME_DEPS: &[&str] = &[
     "andromeda-exec",
     "andromeda-storage",
     "andromeda-wal",
-    "andromeda-tx",
     "quinn",
     "rcgen",
     "rustls",
@@ -318,8 +305,6 @@ const STRICT_PRODUCTION_DEPENDENCY_ALLOWLISTS: &[(&str, &[&str])] = &[
         "andromeda-security-contract",
         &["andromeda-digest", "andromeda-error", "andromeda-types"],
     ),
-    ("andromeda-admin", &[]),
-    ("andromeda-client-sdk-gen", &[]),
     ("andromeda-test-support", &[]),
     (
         "andromeda-contract",
@@ -405,13 +390,14 @@ const STRICT_PRODUCTION_DEPENDENCY_ALLOWLISTS: &[(&str, &[&str])] = &[
             "andromeda-audit",
             "andromeda-catalog",
             "andromeda-catalog-store",
-            "andromeda-core",
             "andromeda-definition-batch",
             "andromeda-error",
             "andromeda-execution",
             "andromeda-execution-trace",
+            "andromeda-hardware",
             "andromeda-iam",
             "andromeda-observe",
+            "andromeda-observability",
             "andromeda-plan-cache",
             "andromeda-principal",
             "andromeda-procedure-contract",
@@ -430,6 +416,7 @@ const STRICT_PRODUCTION_DEPENDENCY_ALLOWLISTS: &[(&str, &[&str])] = &[
             "andromeda-storage",
             "andromeda-storage-heap",
             "andromeda-storage-page",
+            "andromeda-time",
             "andromeda-mvcc",
             "andromeda-transaction",
             "andromeda-transaction-log",
@@ -449,25 +436,46 @@ const STRICT_DEV_DEPENDENCY_ALLOWLISTS: &[(&str, &[&str])] = &[
     ("andromeda-hardware", &[]),
     ("andromeda-principal", &[]),
     ("andromeda-core", &[]),
-    ("andromeda-admin", &[]),
-    ("andromeda-client-sdk-gen", &[]),
     ("andromeda-test-support", &[]),
     ("andromeda-contract", &[]),
     ("andromeda-structured-object", &[]),
     ("andromeda-security-contract", &[]),
-    ("andromeda-proto", &["andromeda-rpc-protocol", "prost-types", "proptest"]),
-    ("andromeda-catalog", &["andromeda-storage", "andromeda-wal"]),
+    (
+        "andromeda-proto",
+        &["andromeda-rpc-protocol", "prost-types", "proptest"],
+    ),
+    (
+        "andromeda-catalog",
+        &[
+            "andromeda-business-fixtures",
+            "andromeda-catalog-diff",
+            "andromeda-contract",
+            "andromeda-observe",
+            "andromeda-plan-cache",
+            "andromeda-scenario-evidence",
+            "andromeda-statistics",
+            "andromeda-storage",
+            "andromeda-wal",
+        ],
+    ),
     (
         "andromeda-observe",
         &["andromeda-storage", "andromeda-storage-page"],
     ),
-    ("andromeda-quic", &["proptest"]),
+    (
+        "andromeda-quic",
+        &["andromeda-proto", "andromeda-security-contract", "proptest"],
+    ),
     (
         "andromeda-exec",
         &[
             "andromeda-business-fixtures",
             "andromeda-inventory-demo",
+            "andromeda-manifest",
             "andromeda-observability",
+            "andromeda-proto",
+            "andromeda-recovery",
+            "andromeda-srpl",
             "andromeda-srpl-binder",
         ],
     ),
@@ -480,7 +488,9 @@ const STRICT_DEV_DEPENDENCY_ALLOWLISTS: &[(&str, &[&str])] = &[
         "andromeda-srpl",
         &[
             "andromeda-contract",
-            "andromeda-plan-cache",
+            "andromeda-srpl-catalog-binding",
+            "andromeda-srpl-definition-batch",
+            "andromeda-srpl-ast",
             "andromeda-srpl-cardinality",
             "andromeda-srpl-execution-adapter",
             "andromeda-srpl-lexer",
@@ -751,7 +761,7 @@ fn strip_rust_comments(source: &str) -> String {
 #[test]
 fn dependency_guard_detects_synthetic_forbidden_edges_and_wire_deps() {
     let manifest = parse_dependency_manifest(
-        "andromeda-tx",
+        "andromeda-transaction",
         r#"
 [dependencies]
 andromeda-core.workspace = true
@@ -795,7 +805,7 @@ store_alias = { package = "andromeda-storage", path = "crates/andromeda-storage"
 "#,
     );
     let manifest = parse_dependency_manifest_with_aliases(
-        "andromeda-tx",
+        "andromeda-transaction",
         r#"
 [dependencies]
 transport.workspace = true
@@ -844,7 +854,7 @@ workspace = true
 #[test]
 fn dependency_guard_detects_synthetic_table_style_forbidden_dependencies() {
     let manifest = parse_dependency_manifest(
-        "andromeda-tx",
+        "andromeda-transaction",
         r#"
 [dependencies.store]
 package = "andromeda-storage"

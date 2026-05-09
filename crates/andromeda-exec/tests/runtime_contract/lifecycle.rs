@@ -56,7 +56,7 @@ fn local_vertical_runtime_rejects_io_admission_trace_mismatch_before_tx_begin() 
         )
         .unwrap_err();
 
-    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Contract);
+    assert_eq!(err.kind(), andromeda_error::AndromedaErrorKind::Contract);
     assert!(err.message().contains("trace id"));
     assert!(runtime.wal().records.is_empty());
 }
@@ -75,7 +75,7 @@ fn local_vertical_runtime_blocks_core_io_guarded_execution_when_io_admission_rej
         )
         .unwrap_err();
 
-    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Resource);
+    assert_eq!(err.kind(), andromeda_error::AndromedaErrorKind::Resource);
     assert!(err.message().contains("execution IO admission rejected"));
     assert!(err.message().contains("memory budget must not be zero"));
     assert!(runtime.wal().records.is_empty());
@@ -97,7 +97,7 @@ fn contract_or_procedure_mismatch_is_rejected_before_tx_begin() {
         )
         .unwrap_err();
 
-    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Contract);
+    assert_eq!(err.kind(), andromeda_error::AndromedaErrorKind::Contract);
     assert!(runtime.wal().records.is_empty());
 }
 
@@ -115,7 +115,7 @@ fn executable_binding_stats_drift_is_rejected_before_tx_begin() {
         )
         .unwrap_err();
 
-    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Contract);
+    assert_eq!(err.kind(), andromeda_error::AndromedaErrorKind::Contract);
     assert!(err.message().contains("StatsVersion"));
     assert!(runtime.wal().records.is_empty());
 }

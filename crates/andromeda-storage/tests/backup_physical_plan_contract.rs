@@ -14,8 +14,17 @@
 
 #[cfg(test)]
 mod tests {
+    use andromeda_backup::{
+        BackupCheckpoint, BackupCheckpointManager, BackupIOScheduler, BackupId,
+        BackupManifest as BackupManifestRaw, BackupPhase,
+        BackupPhysicalPlan as BackupPhysicalPlanRaw, ColdSnapshotBoundary, SegmentPlan,
+        WalArchiveIntegration, WalArchiveRange,
+    };
     use andromeda_observe::TraceId;
-    use andromeda_storage::backup::*;
+    use andromeda_wal::Lsn;
+
+    type BackupPhysicalPlan = BackupPhysicalPlanRaw<Lsn, TraceId>;
+    type BackupManifest = BackupManifestRaw<Lsn>;
 
     fn create_basic_physical_plan() -> BackupPhysicalPlan {
         BackupPhysicalPlan::new(

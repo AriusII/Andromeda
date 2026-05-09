@@ -1,7 +1,7 @@
 use crate::diagnostic_json::JSON_FLAG;
 use crate::error::cli_error;
 use crate::parse::{next_option_value_rejecting_flag, parse_u64, parse_usize};
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 #[derive(Debug, Clone)]
 pub(super) struct BackupStartOptions {
@@ -68,7 +68,7 @@ pub(super) fn parse_backup_start(args: &[String]) -> AndromedaResult<BackupStart
                     return Err(cli_error("--backup-id must be greater than zero"));
                 }
                 backup_id = Some(parsed);
-            }
+            },
             "--artifact-dir" => {
                 artifact_dir = Some(
                     next_option_value_rejecting_flag(
@@ -78,7 +78,7 @@ pub(super) fn parse_backup_start(args: &[String]) -> AndromedaResult<BackupStart
                     )?
                     .to_string(),
                 );
-            }
+            },
             "--destination" => {
                 destination = Some(
                     next_option_value_rejecting_flag(
@@ -88,19 +88,19 @@ pub(super) fn parse_backup_start(args: &[String]) -> AndromedaResult<BackupStart
                     )?
                     .to_string(),
                 );
-            }
+            },
             "--dry-run" => dry_run = true,
             JSON_FLAG => json_output = true,
             opt if opt.starts_with("--") => {
                 return Err(cli_error(
                     "unknown backup start option; supported options are --incremental, --destination, --artifact-dir, --backup-id, --runtime, --dry-run, and --json",
                 ));
-            }
+            },
             _ => {
                 return Err(cli_error(
                     "unexpected backup start argument; supported options are --incremental, --destination, --artifact-dir, --backup-id, --runtime, --dry-run, and --json",
                 ));
-            }
+            },
         }
         i += 1;
     }
@@ -144,18 +144,18 @@ pub(super) fn parse_backup_status(args: &[String]) -> AndromedaResult<BackupStat
                     )?
                     .to_string(),
                 );
-            }
+            },
             JSON_FLAG => json_output = true,
             opt if opt.starts_with("--") => {
                 return Err(cli_error(
                     "unknown backup status option; supported options are --runtime, --artifact-dir, and --json",
                 ));
-            }
+            },
             _ => {
                 return Err(cli_error(
                     "unexpected backup status argument; supported options are --runtime, --artifact-dir, and --json",
                 ));
-            }
+            },
         }
         i += 1;
     }
@@ -192,7 +192,7 @@ pub(super) fn parse_backup_list(args: &[String]) -> AndromedaResult<BackupListOp
                     )?
                     .to_string(),
                 );
-            }
+            },
             "--limit" => {
                 let value = next_option_value_rejecting_flag(
                     args,
@@ -203,18 +203,18 @@ pub(super) fn parse_backup_list(args: &[String]) -> AndromedaResult<BackupListOp
                 if limit == 0 {
                     return Err(cli_error("--limit must be greater than zero"));
                 }
-            }
+            },
             JSON_FLAG => json_output = true,
             opt if opt.starts_with("--") => {
                 return Err(cli_error(
                     "unknown backup list option; supported options are --runtime, --artifact-dir, --limit, and --json",
                 ));
-            }
+            },
             _ => {
                 return Err(cli_error(
                     "unexpected backup list argument; supported options are --runtime, --artifact-dir, --limit, and --json",
                 ));
-            }
+            },
         }
         i += 1;
     }
@@ -256,18 +256,18 @@ pub(super) fn parse_backup_verify(args: &[String]) -> AndromedaResult<BackupVeri
                     )?
                     .to_string(),
                 );
-            }
+            },
             JSON_FLAG => json_output = true,
             opt if opt.starts_with("--") => {
                 return Err(cli_error(
                     "unknown backup verify option; supported options are --runtime, --artifact-dir, and --json",
                 ));
-            }
+            },
             _ => {
                 return Err(cli_error(
                     "unexpected backup verify argument; supported options are --runtime, --artifact-dir, and --json",
                 ));
-            }
+            },
         }
         i += 1;
     }
@@ -312,19 +312,19 @@ pub(super) fn parse_backup_cancel(args: &[String]) -> AndromedaResult<BackupCanc
                     )?
                     .to_string(),
                 );
-            }
+            },
             "--dry-run" => dry_run = true,
             JSON_FLAG => json_output = true,
             opt if opt.starts_with("--") => {
                 return Err(cli_error(
                     "unknown backup cancel option; supported options are --runtime, --artifact-dir, --dry-run, and --json",
                 ));
-            }
+            },
             _ => {
                 return Err(cli_error(
                     "unexpected backup cancel argument; supported options are --runtime, --artifact-dir, --dry-run, and --json",
                 ));
-            }
+            },
         }
         i += 1;
     }

@@ -9,9 +9,9 @@
 //!
 //! **Invariant**: All procedure invocations produce durable traces (no silent omissions)
 
-use andromeda_core::InvocationId;
-use andromeda_exec::{AuditLedger, InMemoryAuditLedger, InvocationTraceEvent};
+use andromeda_execution_trace::{AuditLedger, InMemoryAuditLedger, InvocationTraceEvent};
 use andromeda_observe::TraceId;
+use andromeda_types::InvocationId;
 
 /// Test 1: Audit ledger accepts and records admission decision traces.
 #[test]
@@ -113,7 +113,7 @@ fn test_execution_start_trace_recorded() {
     let ledger = InMemoryAuditLedger::new();
     let trace_id = TraceId::new(4);
     let invocation_id = InvocationId::new(4);
-    let transaction_id = andromeda_core::TransactionId::new(100);
+    let transaction_id = andromeda_types::TransactionId::new(100);
 
     let event = InvocationTraceEvent::ExecutionStart {
         trace_id,
@@ -210,7 +210,7 @@ fn test_complete_invocation_trace_sequence() {
     let ledger = InMemoryAuditLedger::new();
     let trace_id = TraceId::new(7);
     let invocation_id = InvocationId::new(7);
-    let transaction_id = andromeda_core::TransactionId::new(200);
+    let transaction_id = andromeda_types::TransactionId::new(200);
 
     // Phase 1: Admission
     let admission = InvocationTraceEvent::AdmissionDecision {
@@ -349,7 +349,7 @@ fn test_query_by_invocation_id_filters_correctly() {
         .append_trace(InvocationTraceEvent::ExecutionStart {
             trace_id,
             invocation_id: invocation_id1,
-            transaction_id: andromeda_core::TransactionId::new(1),
+            transaction_id: andromeda_types::TransactionId::new(1),
         })
         .expect("append failed");
 

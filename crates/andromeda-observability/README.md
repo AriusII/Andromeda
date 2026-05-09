@@ -2,12 +2,13 @@
 
 ## Purpose
 
-`andromeda-observability` owns shared observability identifiers and correlation metadata used by trace, audit, query, and durable journal code.
+`andromeda-observability` owns shared observability identifiers, correlation metadata, and reusable critical-decision vocabulary used by trace, audit, query, and durable journal code.
 
 ## Scope
 
 - Own stable trace and event identifiers.
 - Own event schema version constants.
+- Own reusable critical-decision kinds and their runtime-free projection shape.
 - Own request, session, catalog, transaction, durable LSN, and protocol correlation metadata.
 - Provide small value objects that can be reused without depending on the `andromeda-observe` runtime.
 

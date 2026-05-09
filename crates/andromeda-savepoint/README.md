@@ -4,7 +4,7 @@
 
 `andromeda-savepoint` is the C5 owner crate for savepoint stacks and partial rollback metadata.
 
-This crate owns savepoint naming, nesting, write-set bounds, and partial rollback evidence. `andromeda-tx` reexports these types during the transaction extraction so existing callers keep their import paths.
+This crate owns savepoint naming, nesting, write-set bounds, and partial rollback evidence.
 
 ## Scope
 
@@ -50,4 +50,4 @@ If savepoint rollback makes later commit or recovery state ambiguous, reject the
 ## References
 
 - `src/lib.rs`
-- Compatibility facade: `crates/andromeda-tx/`
+- Transaction lifecycle owner: `crates/andromeda-transaction/`

@@ -58,7 +58,7 @@ pub enum LockTraceOutcome {
 
 /// Correlation-friendly lock decision evidence.
 ///
-/// The evidence is deliberately local to `andromeda-tx`: callers may later map
+/// The evidence is deliberately local to the locking owner: callers may later map
 /// it into `andromeda-observe`, but no global emitter is required here. It
 /// carries lock-table facts only and intentionally has no durable LSN field.
 #[derive(Debug, Clone, PartialEq, Eq)]

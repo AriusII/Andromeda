@@ -79,7 +79,7 @@ impl KeyDatum {
 #[cfg(test)]
 mod tests {
     use super::{Key, KeyCodec, KeyDatum, KeyScalarType};
-    use andromeda_core::AndromedaResult;
+    use andromeda_error::AndromedaResult;
 
     #[test]
     fn codec_round_trips_composite_keys() -> AndromedaResult<()> {

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 use super::datum::Datum;
 use super::encoder::RowEncoder;

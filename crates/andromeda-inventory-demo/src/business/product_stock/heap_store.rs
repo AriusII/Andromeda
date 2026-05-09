@@ -1,7 +1,8 @@
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use andromeda_exec::{LocalHeapRowInsertRedoTemplate, LocalHeapRowRedoContractBinding};
-use andromeda_storage::{HeapPageInsert, ProductStockHeapInsert, ProductStockRow};
-use andromeda_storage_heap::HeapRowRedoPayloadV1;
+use andromeda_storage_heap::{
+    HeapPageInsert, HeapRowRedoPayloadV1, LocalHeapRowInsertRedoTemplate,
+    LocalHeapRowRedoContractBinding, ProductStockHeapInsert, ProductStockRow,
+};
 use andromeda_storage_page::{PageId, PageSize};
 use andromeda_wal::Lsn;
 

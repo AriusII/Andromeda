@@ -1,7 +1,6 @@
 #![forbid(unsafe_code)]
 
 use andromeda_cli::dispatch_command;
-use andromeda_core::{RequestId, SessionId};
 use andromeda_observe::{
     AdminOperation, AdminOperationTrace, CertificateIdentity, DurableAuditPrincipalBinding,
     DurableAuditReplayBehavior, DurableAuditRetentionBoundary, DurableAuditSinkReport,
@@ -14,6 +13,7 @@ use andromeda_test_support::{
     process::{assert_contains_all, assert_success, run_binary, stdout_lossy as stdout},
     workspace::unique_temp_path,
 };
+use andromeda_types::{RequestId, SessionId};
 use std::fs;
 
 #[test]
@@ -645,7 +645,7 @@ fn surface_for_admin_operation(operation: AdminOperation) -> SurfaceScope {
         | AdminOperation::UpdateClusterManifest => SurfaceScope::Cluster,
         AdminOperation::Backup | AdminOperation::Restore | AdminOperation::ForensicStart => {
             SurfaceScope::BackupAgent
-        }
+        },
         AdminOperation::DebugProcedure
         | AdminOperation::ReadProcedureStore
         | AdminOperation::InspectPlans

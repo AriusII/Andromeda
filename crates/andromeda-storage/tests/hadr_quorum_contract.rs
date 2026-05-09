@@ -1,22 +1,20 @@
 use std::error::Error;
 
-use andromeda_storage::{
-    Lsn,
-    hadr::{
-        HadrEpoch, HadrFencingContext, HadrFencingToken, HadrNodeId, HadrNodeRole, HadrNodeState,
-        HadrPromotionOutcome, HadrPromotionRejection, HadrPromotionRequest, HadrPromotionVote,
-        HadrQuorumMembership, enforce_fencing_token, evaluate_promotion,
-        quorum_runtime::{
-            FencingDecision, FencingEvent, FencingPolicy, QuorumConsensus, QuorumMembership,
-            ReplicaMember, ReplicationMode, decide_fencing,
-        },
-        shipping_runtime::{ShippingBackpressureRequest, ShippingCondition},
+use andromeda_hadr::{
+    HadrEpoch, HadrFencingContext, HadrFencingToken, HadrNodeId, HadrNodeRole, HadrNodeState,
+    HadrPromotionOutcome, HadrPromotionRejection, HadrPromotionRequest, HadrPromotionVote,
+    HadrQuorumMembership, enforce_fencing_token, evaluate_promotion,
+    quorum_runtime::{
+        FencingDecision, FencingEvent, FencingPolicy, QuorumConsensus, QuorumMembership,
+        ReplicaMember, ReplicationMode, decide_fencing,
     },
-    write_ahead_log::{
-        WalNodeIdentity, WalNodeRole, WalRecord, WalRecordKind, WalReplicaExpectation,
-        WalReplicaSafeLsnTracker, WalShipmentBatch, WalShippingAck,
+    shipping_contract::{
+        WalNodeIdentity, WalNodeRole, WalReplicaExpectation, WalReplicaSafeLsnTracker,
+        WalShipmentBatch, WalShippingAck,
     },
+    shipping_runtime::{ShippingBackpressureRequest, ShippingCondition},
 };
+use andromeda_wal::{Lsn, WalRecord, WalRecordKind};
 
 type TestResult = Result<(), Box<dyn Error>>;
 

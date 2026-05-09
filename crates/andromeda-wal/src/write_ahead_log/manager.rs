@@ -1,6 +1,7 @@
 //! In-memory WAL manager for record accumulation and flushing.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::TransactionId;
 
 use super::transaction::{
     DurableTransactionClassifications, DurableTransactionResume, IncompleteDurableTransaction,

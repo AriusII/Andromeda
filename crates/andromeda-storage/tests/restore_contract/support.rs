@@ -2,13 +2,20 @@
 #[path = "../backup_execution_plan/support.rs"]
 mod backup_support;
 
-use andromeda_observe::TraceId;
-use andromeda_storage::{
-    BackupArtifactWriteReport, BackupId, BackupManifest, ColdSnapshotBoundary, ExtentState, Lsn,
-    RecoveryStage, RestoreAuditTrace, RestoreOrchestration, RestoreValidationPolicy,
-    WalArchiveRange, WalSegmentDescriptor, compute_restore_checksum,
+use andromeda_backup::{
+    BackupArtifactWriteReport, BackupId, BackupManifest as BackupManifestRaw, ColdSnapshotBoundary,
+    FileBackedBackupArtifactStore, WalArchiveRange,
 };
+use andromeda_observe::TraceId;
+use andromeda_restore::{
+    RecoveryStage, RestoreAuditTrace, RestoreOrchestration, RestoreValidationPolicy,
+    compute_restore_checksum,
+};
+use andromeda_segment::ExtentState;
+use andromeda_wal::{Lsn, WalSegmentDescriptor};
 use std::path::Path;
+
+pub(crate) type BackupManifest = BackupManifestRaw<Lsn>;
 
 pub(crate) const CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION: u16 =
     backup_support::CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION;
@@ -83,7 +90,7 @@ pub(crate) fn write_test_artifact(
     temp: &tempfile::TempDir,
     backup_id: BackupId,
 ) -> BackupArtifactWriteReport {
-    let store = andromeda_storage::FileBackedBackupArtifactStore::open(temp.path()).unwrap();
+    let store = FileBackedBackupArtifactStore::open(temp.path()).unwrap();
     let snapshot_bytes = b"restore preflight snapshot artifact";
     let wal_bytes = b"restore preflight wal segment";
     let mut manifest = make_test_manifest();

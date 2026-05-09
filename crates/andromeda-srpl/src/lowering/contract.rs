@@ -1,6 +1,6 @@
 //! Catalog contract materialization for lowered SRPL Procedure IR.
 
-use andromeda_catalog::inventory_reserve_stock_contract_candidate;
+use andromeda_business_fixtures::inventory_reserve_stock_contract_candidate;
 use andromeda_catalog_store::CatalogDefinition;
 use andromeda_definition_batch::{DefinitionBatch, DefinitionBatchId, DefinitionOperation};
 use andromeda_error::AndromedaResult;
@@ -44,9 +44,9 @@ pub fn compile_narrow_procedure_definition(
 
 /// Compiles a narrow SRPL source to a raw single-operation [`DefinitionBatch`].
 ///
-/// This helper preserves the historical compiler facade for tests and narrow
-/// internal callers. Production DefinitionBatch preparation should prefer
-/// [`crate::definition_batch_bridge::dry_run_srpl_definition_batch_sources`]
+/// This helper preserves the raw single-operation compiler path for tests and
+/// narrow internal callers. Production DefinitionBatch preparation should prefer
+/// `andromeda_srpl_definition_batch::dry_run_srpl_definition_batch_sources`
 /// so source evidence, manifest validation, and dry-run diagnostics remain
 /// attached before catalog visibility.
 pub fn compile_narrow_procedure_definition_batch(

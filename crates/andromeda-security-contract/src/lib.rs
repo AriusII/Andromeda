@@ -26,11 +26,13 @@ pub use admission::{
     ALL_SECURITY_ADMISSION_V0_BOUNDARIES, ALL_SECURITY_ADMISSION_V0_EVIDENCE_CODES,
     ALL_SECURITY_ADMISSION_V0_OUTCOMES, ALL_SECURITY_ADMISSION_V0_REASON_CODES,
     ALL_SECURITY_ADMISSION_V0_STEPS, ALL_SURFACE_CLASSES, AdmissionDecision, PermissionRequest,
+    SECURITY_ADMISSION_AUDIT_EVENT_V0_SCHEMA_ID, SECURITY_ADMISSION_AUDIT_EVENT_V0_SCHEMA_VERSION,
     SECURITY_ADMISSION_V0_CONTRACT_ID, SECURITY_ADMISSION_V0_SCHEMA_VERSION,
     SURFACE_CLASS_ID_ADMINISTRATION, SURFACE_CLASS_ID_APPLICATION, SURFACE_CLASS_ID_FORENSIC,
     SURFACE_CLASS_ID_HADR, SURFACE_CLASS_ID_MONITORING, SURFACE_CLASS_ID_RECOVERY,
-    SecurityAdmissionBoundaryV0, SecurityAdmissionEvidenceCodeV0, SecurityAdmissionOutcomeV0,
-    SecurityAdmissionReasonCodeV0, SecurityAdmissionStepV0, SecurityAdmissionV0, SurfaceClass,
+    SecurityAdmissionAuditEventV0, SecurityAdmissionBoundaryV0, SecurityAdmissionEvidenceCodeV0,
+    SecurityAdmissionOutcomeV0, SecurityAdmissionReasonCodeV0, SecurityAdmissionStepV0,
+    SecurityAdmissionV0, SurfaceClass,
 };
 pub use error::SecurityContractError;
 pub use permission::{

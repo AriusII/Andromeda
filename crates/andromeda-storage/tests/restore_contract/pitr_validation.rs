@@ -1,8 +1,10 @@
 use crate::support::*;
-use andromeda_storage::{
-    Lsn, PitrTarget, PitrTargetRejection, WalArchiveRange, plan_replay_segments,
-    validate_pitr_target, validate_pitr_target_with_audit, validate_restore_prerequisites,
+use andromeda_backup::WalArchiveRange;
+use andromeda_restore::{
+    PitrTarget, PitrTargetRejection, plan_replay_segments, validate_pitr_target,
+    validate_pitr_target_with_audit, validate_restore_prerequisites,
 };
+use andromeda_wal::Lsn;
 
 #[test]
 fn test_pitr_lsn_within_range() {

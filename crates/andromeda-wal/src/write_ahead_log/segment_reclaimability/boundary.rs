@@ -1,5 +1,5 @@
 use crate::Lsn;
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 /// All LSN retention boundaries for WAL segment GC policy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -23,14 +23,13 @@ Resolve the concurrent root workspace manifest edits before applying the root
 workspace patch. At the time this status file was written, `Cargo.toml` already
 contained concurrent new workspace members such as:
 
-- `crates/andromeda-codec`
 - `crates/andromeda-maps`
 - `crates/andromeda-policy`
 - `crates/andromeda-procedure-store`
 - `crates/andromeda-resource`
 
-`cargo metadata` failed because at least `crates/andromeda-codec/Cargo.toml`
-was missing.
+`cargo metadata` can now load after the marker and unused scaffold crates were
+removed from the workspace manifest.
 
 ## Procedure
 

@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 use andromeda_hadr::{HadrMembershipStore, HadrNodeId, HadrNodeRole};
 
 use crate::error::cli_error;

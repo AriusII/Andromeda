@@ -7,9 +7,7 @@ publish = false
 
 [dependencies]
 andromeda-buffer-pool.workspace = true
-andromeda-backup.workspace = true
 andromeda-catalog-recovery.workspace = true
-andromeda-restore.workspace = true
 andromeda-core.workspace = true
 andromeda-disk-page-store.workspace = true
 andromeda-hadr.workspace = true
@@ -25,5 +23,7 @@ dashmap = "6.0"
 sha2 = "0.11.0"
 
 [dev-dependencies]
+andromeda-backup.workspace = true
+andromeda-restore.workspace = true
 proptest.workspace = true
 tempfile = "3.8"

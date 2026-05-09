@@ -204,7 +204,7 @@ mod tests {
                 None => {
                     metadata.validate_before_payload()?;
                     metadata.validate_completed_stream(actual)?;
-                }
+                },
                 Some(kind) => {
                     let validation_error = match metadata.validate_before_payload() {
                         Err(error) => Some(error),
@@ -219,7 +219,7 @@ mod tests {
                         ));
                     };
                     assert_eq!(error.kind(), kind);
-                }
+                },
             }
         }
         Ok(())

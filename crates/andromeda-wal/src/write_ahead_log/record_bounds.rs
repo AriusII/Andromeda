@@ -12,7 +12,7 @@
 //! These checks preserve the WAL invariants that replay is deterministic,
 //! durable record order is explicit, and batch growth is bounded.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{Lsn, WalRecord, WalRecordKind};
 

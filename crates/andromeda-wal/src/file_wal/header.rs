@@ -1,4 +1,4 @@
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 use crate::{Lsn, WAL_BYTE_ORDER_LITTLE_ENDIAN, WAL_FORMAT_VERSION};
 

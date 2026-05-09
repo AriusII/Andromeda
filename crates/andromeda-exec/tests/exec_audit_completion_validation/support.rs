@@ -1,7 +1,4 @@
-pub use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, InvocationId, Permission, PrincipalId,
-    TransactionId,
-};
+pub use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 pub use andromeda_exec::dispatch::permission_validation::{
     validate_dispatch_permissions_with_audit, validate_dispatch_permissions_with_durable_audit,
 };
@@ -10,15 +7,18 @@ pub use andromeda_exec::services::permission_audit_emitter::{
     AuditSinkAvailability, DenialAuditReason, NoOpPermissionAuditEmitter, PermissionAuditEmitter,
     PermissionAuditEvent, audit_text_contains_sensitive_marker,
 };
-pub use andromeda_exec::{
-    CompletionEmission, CompletionMappingService, CompletionStatus, InvocationCompletionEmitter,
+pub use andromeda_execution_trace::{
+    CompletionEmission, CompletionMappingService, InvocationCompletionEmitter,
 };
 pub use andromeda_observe::{
     DurableAuditEventFamily, DurableAuditRecordIdentity, DurableAuditReplayBehavior,
     DurableAuditRetentionBoundary, DurableAuditSinkReport, DurableAuditWalEvidence, EventId,
     TraceId,
 };
+pub use andromeda_principal::{Permission, PrincipalId};
+pub use andromeda_result_stream::CompletionStatus;
 pub use andromeda_transaction::TransactionState;
+pub use andromeda_types::{InvocationId, TransactionId};
 pub use andromeda_wal::Lsn;
 
 use std::sync::Mutex;

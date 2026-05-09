@@ -57,7 +57,7 @@ impl OptimizerPlanKind {
                     has_read = true;
                     match cardinality {
                         Cardinality::Many | Cardinality::NonEmptyMany => has_many = true,
-                        _ => {}
+                        _ => {},
                     }
                     let assert_predicates =
                         downstream_assert_predicates_for_binding(ir, index, binding);
@@ -71,11 +71,11 @@ impl OptimizerPlanKind {
                     {
                         all_reads_have_equality = false;
                     }
-                }
+                },
                 SrplBusinessOperationKindIr::Update { .. } => {
                     has_update = true;
-                }
-                _ => {}
+                },
+                _ => {},
             }
         }
 
@@ -141,7 +141,7 @@ fn downstream_assert_predicates_for_binding<'a>(
                 if predicate_references_binding(predicate, binding) =>
             {
                 Some(predicate)
-            }
+            },
             _ => None,
         })
 }

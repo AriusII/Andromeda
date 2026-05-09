@@ -1,7 +1,6 @@
 use crate::support::*;
-use andromeda_storage::{
-    BackupExecutionPlan, BackupId, BackupManifest, ExtentState, FileBackedBackupArtifactStore,
-};
+use andromeda_backup::{BackupId, FileBackedBackupArtifactStore};
+use andromeda_segment::ExtentState;
 
 #[test]
 fn test_backup_plan_validates_manifest() {

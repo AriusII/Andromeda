@@ -1,28 +1,27 @@
-pub(crate) use andromeda_catalog::{
-    INVENTORY_RESERVE_STOCK_PERMISSION, inventory_reserve_stock_catalog_bindings,
-    inventory_reserve_stock_contract,
-};
+pub(crate) use andromeda_admission::{AdmissionService, PreTransactionValidationService};
 pub(crate) use andromeda_catalog_store::CatalogBindingKind;
-pub(crate) use andromeda_core::{
-    AndromedaError, AndromedaResult, CatalogVersion, ContractHash, InvocationId, PipelineClass,
-    ProcedureId, ResourceBudget, TransactionId,
-};
+pub(crate) use andromeda_error::{AndromedaError, AndromedaResult};
 pub(crate) use andromeda_exec::{
-    AdmissionService, CompletionMappingService, CompletionStatus, ExecutionIoAdmissionDecision,
-    ExecutionIoAdmissionRequest, InvocationContext, InvocationReject, InvocationRequest,
-    InvocationWal, LocalDispatchPlan, LocalDispatcher, LocalProcedure, LocalRollbackPlan,
-    LocalVerticalRuntime, PreTransactionValidationService, ResultStreamMetadata,
-    ResultValidationService,
+    ExecutionIoAdmissionDecision, ExecutionIoAdmissionRequest, InvocationContext, InvocationReject,
+    InvocationRequest, LocalDispatchPlan, LocalDispatcher, LocalProcedure, LocalRollbackPlan,
+    LocalVerticalRuntime,
 };
+pub(crate) use andromeda_execution_trace::CompletionMappingService;
+pub(crate) use andromeda_hardware::{PipelineClass, ResourceBudget};
 pub(crate) use andromeda_inventory_demo::{
-    InventoryBusinessMvccStore, InventoryReserveStockExecutor, InventoryStock, ReserveStockCommand,
+    INVENTORY_RESERVE_STOCK_PERMISSION, InventoryBusinessMvccStore, InventoryReserveStockExecutor,
+    InventoryStock, ReserveStockCommand, inventory_reserve_stock_catalog_bindings,
+    inventory_reserve_stock_contract,
 };
 pub(crate) use andromeda_mvcc::{MvccIsolationPolicy, Snapshot, TransactionStatus};
 pub(crate) use andromeda_observe::TraceId;
 pub(crate) use andromeda_procedure_contract::{
     PolicyVersion, ProcedureContractBinding, ProcedureContractRef, StatsVersion,
 };
-pub(crate) use andromeda_srpl::procedure_compiler::compile_narrow_procedure_signature;
+pub(crate) use andromeda_result_stream::{
+    CompletionStatus, ResultStreamMetadata, ResultValidationService,
+};
+pub(crate) use andromeda_srpl::compile_narrow_procedure_signature;
 pub(crate) use andromeda_srpl_binder::inventory_reserve_stock_body_ir;
 pub(crate) use andromeda_srpl_ir::{
     Cardinality, SrplBusinessOperationKindIr, SrplPredicateIr, SrplValueIr,
@@ -32,7 +31,10 @@ pub(crate) use andromeda_storage::{
 };
 pub(crate) use andromeda_storage_page::PageSize;
 pub(crate) use andromeda_transaction::TransactionState;
-pub(crate) use andromeda_wal::{InMemoryWal, Lsn, WalRecordKind};
+pub(crate) use andromeda_types::{
+    CatalogVersion, ContractHash, InvocationId, ProcedureId, TransactionId,
+};
+pub(crate) use andromeda_wal::{InMemoryWal, InvocationWal, Lsn, WalRecordKind};
 
 #[derive(Debug, Default)]
 pub(crate) struct RecordingWal {
@@ -98,7 +100,7 @@ impl InvocationWal for CommitAppendErrorWal {
     ) -> AndromedaResult<Lsn> {
         if kind == WalRecordKind::TxCommit {
             return Err(AndromedaError::new(
-                andromeda_core::AndromedaErrorKind::Storage,
+                andromeda_error::AndromedaErrorKind::Storage,
                 "injected commit append failure",
             ));
         }
@@ -134,7 +136,7 @@ impl InvocationWal for FlushErrorWal {
 
     fn flush_through(&mut self, _lsn: Lsn) -> AndromedaResult<Lsn> {
         Err(AndromedaError::new(
-            andromeda_core::AndromedaErrorKind::Storage,
+            andromeda_error::AndromedaErrorKind::Storage,
             "injected WAL flush failure",
         ))
     }

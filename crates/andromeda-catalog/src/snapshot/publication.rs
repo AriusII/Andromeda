@@ -7,6 +7,7 @@
 
 use std::collections::BTreeSet;
 
+use andromeda_definition_batch::validate_in_batch_dependencies;
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{
@@ -97,7 +98,7 @@ impl CatalogSnapshot {
                         planned_version: plan.next_version,
                     });
                     planned_operations.push(DefinitionOperation::Create(definition.clone()));
-                }
+                },
                 CatalogMutationOperation::DeprecateObject { target } => {
                     planned_deprecated.push(PlannedLifecycleTransition {
                         object_id: target.object.object_id,
@@ -107,10 +108,10 @@ impl CatalogSnapshot {
                         planned_version: plan.next_version,
                     });
                     planned_operations.push(DefinitionOperation::Deprecate(target.clone()));
-                }
+                },
             }
         }
-        crate::dependencies::validate_in_batch_dependencies(&planned_operations)?;
+        validate_in_batch_dependencies(&planned_operations)?;
 
         let mut pending_object_ids = BTreeSet::new();
         let mut pending_object_names = BTreeSet::new();
@@ -172,7 +173,7 @@ impl CatalogSnapshot {
                             "catalog mutation plan must not change the same object name twice",
                         ));
                     }
-                }
+                },
                 CatalogMutationOperation::DeprecateObject { target } => {
                     target.validate()?;
 
@@ -240,7 +241,7 @@ impl CatalogSnapshot {
                             "catalog snapshot object is already deprecated",
                         ));
                     }
-                }
+                },
             }
         }
 
@@ -257,7 +258,7 @@ impl CatalogSnapshot {
                         object.object_id,
                         CatalogObjectLifecycle::active(object.catalog_version),
                     );
-                }
+                },
                 CatalogMutationOperation::DeprecateObject { target } => {
                     let lifecycle = self
                         .lifecycle_by_id(target.object.object_id)
@@ -268,7 +269,7 @@ impl CatalogSnapshot {
                         target.object.object_id,
                         lifecycle.deprecated(plan.next_version),
                     );
-                }
+                },
             }
         }
 

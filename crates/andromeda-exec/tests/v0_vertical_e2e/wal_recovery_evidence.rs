@@ -2,13 +2,12 @@ use crate::support::{
     context, encoded_execute_frame, executable_procedure, inventory_catalog_snapshot, request,
     stock,
 };
-use andromeda_catalog::inventory_reserve_stock_contract;
 use andromeda_inventory_demo::V0InventoryRecoverableRuntime;
-use andromeda_storage::{
-    DatabaseManifest, ProductStockRow, RedoRecordDecision, ReplayContext, StartupMode,
-    execute_redo_plan_into_context, recover_from_file_wal,
-};
-use andromeda_storage_heap::HeapRowRedoPayloadV1;
+use andromeda_inventory_demo::inventory_reserve_stock_contract;
+use andromeda_manifest::DatabaseManifest;
+use andromeda_recovery::{RedoRecordDecision, StartupMode};
+use andromeda_storage::{ReplayContext, execute_redo_plan_into_context, recover_from_file_wal};
+use andromeda_storage_heap::{HeapRowRedoPayloadV1, ProductStockRow};
 use andromeda_wal::{FileWal, Lsn};
 
 #[test]

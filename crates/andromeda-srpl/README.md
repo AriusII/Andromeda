@@ -2,12 +2,13 @@
 
 ## Purpose
 
-`andromeda-srpl` is the temporary compatibility facade for the SRPL compiler
-surface.
+`andromeda-srpl` owns the narrow SRPL compiler orchestration surface.
 
-Use this crate when existing callers need the historical SRPL entry points for
-lexing, parsing, binding, lowering, optimization, interpretation, Procedure
-resolution, execution adapter contracts, or DefinitionBatch integration.
+Use this crate when callers need to compile SRPL source into typed IR or
+Procedure contract materialization. Use the dedicated owner crates directly for
+lexing, parsing, binding, catalog binding, DefinitionBatch dry-run,
+optimization internals, execution adapters, interpreter behavior, AST,
+diagnostics, cardinality, and IR data shapes.
 
 SRPL is not an ad hoc SQL surface. SRPL source must compile into typed,
 cataloged Procedure contracts with bounded shapes before it can participate in
@@ -19,17 +20,14 @@ This crate is responsible for:
 
 | Area | Responsibility |
 | --- | --- |
-| Compiler facade | Stable imports for source validation, lexing, parsing, binding, lowering, and Procedure contract materialization. |
-| Procedure model compatibility | Reexports for AST, cardinality, diagnostics, IR, and Procedure signature types during the crate split. |
-| DefinitionBatch bridge | Side-effect-free dry-run integration that materializes SRPL sources as catalog Procedure definitions and source evidence. |
-| Optimizer facade | Bounded, observable optimizer passes and diagnostics over typed SRPL IR. |
-| Execution adapter contracts | Typed adapter request and result shapes for future execution integration. |
-| Procedure resolution | Contract-aware Procedure resolution requests, responses, manifests, and errors. |
+| Compiler orchestration | Source validation, parser/binder/lowering coordination, optimizer entry points, and Procedure contract materialization. |
+| Inventory contract fixture | Canonical `Inventory.ReserveStock` source and metadata helpers used by tests and the inventory vertical slice. |
+| DefinitionBatch handoff | Raw single-operation helpers for tests; source-evidence dry-run lives in `andromeda-srpl-definition-batch`. |
 
-The crate may currently depend on catalog-facing code because it is the SRPL
-compatibility facade. Extracted language-model crates remain the preferred
-owner for parser-independent diagnostics, cardinality, AST, parser, and IR data
-shapes.
+The crate may currently depend on catalog-facing code for Procedure contract
+materialization. Extracted language-model crates remain the owner for
+parser-independent diagnostics, cardinality, AST, parser, binder, lowering, and
+IR data shapes.
 
 ## Non-goals
 
@@ -37,7 +35,8 @@ shapes.
 - Do not accept dynamic table names, dynamic predicates, shape-shifting returns,
   or implicit null semantics in SRPL core work.
 - Do not bypass typed, cataloged Procedure contracts.
-- Do not make catalog changes visible before durable WAL through this facade.
+- Do not make catalog changes visible before durable WAL through SRPL compiler
+  code.
 - Do not treat optimizer output, interpreter output, RAM, temp storage,
   benchmark output, or GPU output as durable truth.
 - Do not place GPU work in SRPL compile, commit, WAL, rollback, recovery, MVCC
@@ -59,17 +58,16 @@ Before changing this crate, understand:
   and disableable.
 - DefinitionBatch dry-run paths are side-effect free until catalog code owns a
   durable apply path with WAL callbacks.
-- This crate is a facade. Prefer moving new parser-independent language-model
-  behavior into `andromeda-srpl-*` owner crates.
+- Prefer moving parser-independent language-model behavior into
+  `andromeda-srpl-*` owner crates.
 
 ## Procedure
 
-1. Choose the narrowest module boundary that already owns the behavior:
-   `procedure_compiler`, `optimizer`, `execution_adapter`, `procedure_resolver`,
-   or `definition_batch_bridge`. `procedure_model` is compatibility-only over
-   `andromeda-srpl-ast`, `andromeda-srpl-cardinality`, and `andromeda-srpl-ir`.
-2. Keep `lib.rs` limited to module declarations and intentional compatibility
-   reexports.
+1. Choose the owner crate that already owns the behavior: lexer, parser, AST,
+   binder, lowering, diagnostics, IR, catalog binding, DefinitionBatch bridge,
+   optimizer, execution adapter, interpreter, or this compiler orchestration
+   crate.
+2. Keep `lib.rs` limited to intentional compiler entry points.
 3. Validate source text through `SrplSource` and parser diagnostics before
    binding or lowering.
 4. Lower only to typed IR and Procedure contracts. Keep Procedure names,
@@ -97,7 +95,8 @@ cargo fmt --package andromeda-srpl --check
 cargo test -p andromeda-srpl --test api_compat_reexports
 cargo test -p andromeda-srpl --test compiler_pipeline_e2e
 cargo test -p andromeda-srpl --test definitionbatch_compat
-cargo test -p andromeda-srpl --test optimizer_pipeline_contract
+cargo check -p andromeda-srpl-definition-batch -p andromeda-srpl-catalog-binding --all-targets
+cargo test -p andromeda-optimizer --test srpl_optimizer_pipeline_contract
 cargo test -p andromeda-srpl --test validation_gates
 cargo check -p andromeda-srpl --all-targets
 ```
@@ -114,7 +113,7 @@ WAL, crash/recovery, property, fuzz, or security validation.
 | A change needs dynamic table selection or dynamic predicate text. | Move the choice into cataloged Procedure definitions or typed parameters with fixed predicate forms. Do not add runtime text construction. |
 | A result shape depends on runtime data. | Declare a fixed result stream contract with explicit cardinality and columns. |
 | A nullable value is introduced implicitly. | Use the project type system and explicit absence policy. Do not add a hidden `Null` value path. |
-| A new feature belongs to an extracted language-model crate. | Implement it in the owner crate and reexport through this facade only when compatibility requires it. |
+| A new feature belongs to an extracted language-model crate. | Implement it in the owner crate and import that crate directly. |
 | Optimizer output changes a Procedure contract. | Treat that as a contract bug. Optimizer passes may change plan form, not the typed Procedure contract shape. |
 
 ## References
@@ -124,7 +123,7 @@ WAL, crash/recovery, property, fuzz, or security validation.
 - `crates/README.md`
 - `docs/adr/ADR-0011-workspace-crate-boundaries.md`
 - `crates/andromeda-srpl/src/lib.rs`
-- `crates/andromeda-srpl/src/procedure_compiler.rs`
-- `crates/andromeda-srpl/src/definition_batch_bridge.rs`
-- `crates/andromeda-srpl/src/execution_adapter/mod.rs`
-- `crates/andromeda-srpl/src/optimizer/mod.rs`
+- `crates/andromeda-srpl-definition-batch/src/lib.rs`
+- `crates/andromeda-srpl-catalog-binding/src/lib.rs`
+- `crates/andromeda-srpl-execution-adapter/src/lib.rs`
+- `crates/andromeda-optimizer/src/srpl/mod.rs`

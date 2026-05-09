@@ -1,7 +1,7 @@
 use andromeda_catalog_store::CatalogDefinition;
 use andromeda_procedure_contract::ResultStreamCardinality;
-use andromeda_srpl::definition_batch_bridge::SrplProcedureDefinition;
-use andromeda_srpl::procedure_compiler::compile_narrow_procedure_definition;
+use andromeda_srpl::compile_narrow_procedure_definition;
+use andromeda_srpl_definition_batch::SrplProcedureDefinition;
 use andromeda_types::{CatalogObjectId, CatalogVersion, ProcedureId};
 
 use crate::support::{bound_definition, signature_only_source, test_metadata};

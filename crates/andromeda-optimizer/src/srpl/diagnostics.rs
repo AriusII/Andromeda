@@ -208,7 +208,7 @@ pub(crate) fn projection_diagnostics(
                             if binding == &projection.binding =>
                         {
                             Some(operation.ordinal)
-                        }
+                        },
                         _ => None,
                     })?;
             Some(OptimizerDiagnostic::new(

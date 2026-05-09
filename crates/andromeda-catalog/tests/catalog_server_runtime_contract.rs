@@ -1,13 +1,17 @@
 use std::sync::Arc;
 
+use andromeda_business_fixtures::{
+    INVENTORY_DATABASE_ID, INVENTORY_NAMESPACE_ID, INVENTORY_RESERVE_STOCK_PROCEDURE_ID,
+    inventory_domain_definition_batch, inventory_reserve_stock_contract_candidate,
+};
 use andromeda_catalog::{
     CatalogDurabilityMarker, CatalogManifestResolutionRequest, CatalogManifestResolutionStatus,
     CatalogManifestStore, CatalogMutationCommitEvidence, CatalogMutationDurability,
     CatalogRuntimeReopenEvidence, CatalogServerRuntime, CatalogSnapshotManifestStore,
-    CatalogSystemStore, INVENTORY_DATABASE_ID, INVENTORY_NAMESPACE_ID,
-    INVENTORY_RESERVE_STOCK_PROCEDURE_ID, ProcedureContract, QualifiedName,
-    inventory_domain_definition_batch, inventory_reserve_stock_contract_candidate,
+    CatalogSystemStore,
 };
+use andromeda_catalog_store::QualifiedName;
+use andromeda_procedure_contract::ProcedureContract;
 use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 fn catalog_server_runtime_fixture() -> (

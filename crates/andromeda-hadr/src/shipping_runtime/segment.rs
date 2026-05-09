@@ -1,6 +1,6 @@
 use super::checksum;
 use crate::{Lsn, write_ahead_log::WalRecord};
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 /// Typed rejection reason for malformed WAL shipping envelopes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

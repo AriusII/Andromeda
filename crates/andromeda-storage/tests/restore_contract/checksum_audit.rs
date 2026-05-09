@@ -1,9 +1,10 @@
 use crate::support::*;
+use andromeda_backup::{BackupId, WalArchiveRange};
 use andromeda_observe::TraceId;
-use andromeda_storage::{
-    BackupId, Lsn, RecoveryStage, RestoreAuditTrace, RestoreCompletion, WalArchiveRange,
-    compute_restore_checksum,
+use andromeda_restore::{
+    RecoveryStage, RestoreAuditTrace, RestoreCompletion, compute_restore_checksum,
 };
+use andromeda_wal::Lsn;
 
 #[test]
 fn test_restore_checksum_deterministic() {

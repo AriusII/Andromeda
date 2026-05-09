@@ -178,13 +178,13 @@ fn fold_constants_in_ir(mut ir: SrplProcedureIr) -> AndromedaResult<SrplProcedur
         match &mut operation.kind {
             SrplBusinessOperationKindIr::Update { assignments, .. } => {
                 *assignments = fold_assignments(std::mem::take(assignments));
-            }
+            },
             SrplBusinessOperationKindIr::Emit { values, .. } => {
                 *values = fold_emit_values(std::mem::take(values));
-            }
+            },
             SrplBusinessOperationKindIr::Read { .. }
             | SrplBusinessOperationKindIr::Assert { .. }
-            | SrplBusinessOperationKindIr::Raise { .. } => {}
+            | SrplBusinessOperationKindIr::Raise { .. } => {},
         }
         operations.push(operation);
     }

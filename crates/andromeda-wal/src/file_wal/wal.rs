@@ -1,4 +1,5 @@
-use andromeda_core::{AndromedaResult, TransactionId};
+use andromeda_error::AndromedaResult;
+use andromeda_types::TransactionId;
 use std::{
     fs::{File, OpenOptions},
     io::{Seek, SeekFrom, Write},

@@ -4,7 +4,7 @@
 //! identities, roles, batch envelopes, ACK tracking, and validation results.
 //! Runtime dispatch and quorum coordination live in adjacent HADR modules.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_wal::{Lsn, WalRecord, WalReplicaSafeLsnBoundaryProvider};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -354,7 +354,7 @@ impl WalShipmentRejection {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_core::AndromedaErrorKind;
+    use andromeda_error::AndromedaErrorKind;
     use andromeda_wal::{WalRecord, WalRecordKind};
 
     fn record(lsn: u64, prev: Option<u64>) -> WalRecord {

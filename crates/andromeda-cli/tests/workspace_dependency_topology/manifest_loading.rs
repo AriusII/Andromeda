@@ -214,13 +214,13 @@ enum ParsedDependencySection {
 impl ParsedDependencySection {
     fn insert(self, dependencies: &mut ManifestDependencies, dependency: String) {
         match self {
-            ParsedDependencySection::None => {}
+            ParsedDependencySection::None => {},
             ParsedDependencySection::Runtime => {
                 dependencies.runtime.insert(dependency);
-            }
+            },
             ParsedDependencySection::Dev => {
                 dependencies.dev.insert(dependency);
-            }
+            },
         }
     }
 }

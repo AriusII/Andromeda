@@ -14,7 +14,7 @@
 //! * [`promotion_outcome_into_result`] — helpers to propagate outcomes as
 //!   typed errors.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::Lsn;
 

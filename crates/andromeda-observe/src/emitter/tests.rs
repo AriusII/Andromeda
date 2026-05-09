@@ -2,7 +2,6 @@ use andromeda_error::AndromedaResult;
 use andromeda_types::{ContractHash, RequestId, SessionId, TransactionId};
 
 use super::*;
-use andromeda_observability::ProtocolCorrelation;
 use crate::{
     TraceId,
     events::{
@@ -10,6 +9,7 @@ use crate::{
         EventSink, InMemoryEventSink, ProtocolEventScope, TraceEvent, observe_error,
     },
 };
+use andromeda_observability::ProtocolCorrelation;
 
 fn backpressure_event(trace: u128) -> TraceEvent {
     TraceEvent::Backpressure(BackpressureTrace {

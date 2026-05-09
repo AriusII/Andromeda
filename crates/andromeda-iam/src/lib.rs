@@ -6,16 +6,15 @@ Pre-transaction IAM runtime for security admission and local principal resolutio
 
 This crate evaluates authenticated principal permission evidence against the
 runtime-free security contract vocabulary. It owns local principal resolution
-and permission evaluation helpers. It emits typed admission and audit event
-vocabulary, but it does not own certificate parsing, audit sinks, transactions,
-WAL, storage, or recovery logic.
+and permission evaluation helpers. It returns typed admission evidence, but it
+does not own certificate parsing, audit sinks, transactions, WAL, storage, or
+recovery logic.
 "#]
 
-use andromeda_audit::SecurityAdmissionAuditEventV0;
 use andromeda_security_contract::{
-    AdmissionDecision, Permission, PermissionRequest, SecurityAdmissionEvidenceCodeV0,
-    SecurityAdmissionReasonCodeV0, SecurityAdmissionStepV0, SecurityAdmissionV0,
-    SecurityPolicyEvidence, SecuritySurface, SurfaceClass,
+    AdmissionDecision, Permission, PermissionRequest, SecurityAdmissionAuditEventV0,
+    SecurityAdmissionEvidenceCodeV0, SecurityAdmissionReasonCodeV0, SecurityAdmissionStepV0,
+    SecurityAdmissionV0, SecurityPolicyEvidence, SecuritySurface, SurfaceClass,
 };
 
 mod permission_evaluator;

@@ -1,11 +1,11 @@
 //! Catalog mutation records, plans, and WAL-boundary types.
 
-use andromeda_definition_batch::{DefinitionBatchId, DefinitionBatchSourceHash};
+use andromeda_definition_batch::{
+    DefinitionBatchDependencyGraphHash, DefinitionBatchId, DefinitionBatchSourceHash,
+};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId};
 use std::collections::BTreeSet;
-
-use crate::DefinitionBatchDependencyGraphHash;
 
 use super::definition::CatalogLifecycleTarget;
 

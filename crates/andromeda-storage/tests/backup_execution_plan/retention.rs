@@ -1,11 +1,10 @@
 use crate::support::*;
-use andromeda_storage::{
-    BackupId, ExtentState, FileBackedBackupArtifactStore, Lsn,
-    write_ahead_log::{
-        DefaultReclaimabilityPolicy, ReclaimabilityDecision, WalGcCandidate,
-        WalSegmentReclaimability,
-    },
+use andromeda_backup::{BackupId, FileBackedBackupArtifactStore};
+use andromeda_segment::ExtentState;
+use andromeda_storage::write_ahead_log::{
+    DefaultReclaimabilityPolicy, ReclaimabilityDecision, WalGcCandidate, WalSegmentReclaimability,
 };
+use andromeda_wal::Lsn;
 
 #[test]
 fn file_backed_artifact_store_refuses_to_overwrite_existing_backup_id() {

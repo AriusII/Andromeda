@@ -1,4 +1,5 @@
-use andromeda_core::{AndromedaErrorKind, TransactionId};
+use andromeda_error::AndromedaErrorKind;
+use andromeda_types::TransactionId;
 use andromeda_wal::{
     FILE_WAL_HEADER_LEN, FileWal, FileWalHeader, Lsn, WAL_RECORD_HEADER_LEN, WalRecord,
     WalRecordKind, WalScanStopReason, classify_durable_transactions, encode_wal_record,

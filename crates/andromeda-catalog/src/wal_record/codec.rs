@@ -1,9 +1,10 @@
+use andromeda_definition_batch::DefinitionBatchDependencyGraphHash;
 use andromeda_error::{AndromedaError, AndromedaResult};
 
 use crate::{
     CatalogLifecycleTarget, CatalogMutationBoundary, CatalogMutationDelta,
     CatalogMutationOperation, CatalogMutationRecord, CatalogMutationRecordKind,
-    CatalogPublicationSemantics, CatalogWalPayloadDecodeError, DefinitionBatchDependencyGraphHash,
+    CatalogPublicationSemantics, CatalogWalPayloadDecodeError,
 };
 
 type RecoveryBoundary = andromeda_catalog_recovery::CatalogMutationBoundary;

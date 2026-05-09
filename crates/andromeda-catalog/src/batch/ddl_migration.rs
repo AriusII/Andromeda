@@ -5,10 +5,9 @@
 //! [`DefinitionBatchPlan`], keeping catalog object migration planning distinct
 //! from SRPL procedure ALTER/DROP lifecycle helpers.
 
+use andromeda_catalog_store::{ObjectKind, QualifiedName};
 use andromeda_definition_batch::DefinitionBatchId;
 use andromeda_types::{CatalogObjectId, CatalogVersion, DatabaseId, NamespaceId};
-
-use crate::{ObjectKind, QualifiedName};
 
 use super::{CatalogMutationOperation, CatalogPublicationSemantics, DefinitionBatchPlan};
 
@@ -107,7 +106,7 @@ impl CatalogDdlMigrationPlan {
                         delta.planned_version,
                         CatalogDdlMigrationClassification::CatalogDdlMigration,
                     )
-                }
+                },
                 CatalogMutationOperation::DeprecateObject { target } => {
                     CatalogDdlMigrationOperation::new(
                         delta.operation_index,
@@ -122,15 +121,15 @@ impl CatalogDdlMigrationPlan {
                             CatalogDdlMigrationClassification::CatalogDdlMigration
                         },
                     )
-                }
+                },
             };
             match operation.classification {
                 CatalogDdlMigrationClassification::CatalogDdlMigration => {
                     catalog_operations.push(operation)
-                }
+                },
                 CatalogDdlMigrationClassification::SrplProcedureLifecycle => {
                     procedure_lifecycle_operations.push(operation)
-                }
+                },
             }
         }
 

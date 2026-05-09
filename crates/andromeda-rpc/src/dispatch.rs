@@ -2,7 +2,7 @@
 //!
 //! This module handles RPC dispatching and stream surface routing.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_rpc_codec::{TypedResultStreamBounds, TypedResultStreamContext};
 use andromeda_rpc_protocol::{
     FrameBytes, FrameType, ResultStreamMetadataPolicy, ResultStreamSequence, StreamRole,
@@ -231,7 +231,7 @@ pub fn validate_transport_surface(
             }
 
             dispatch_frame(frame, stream_role)
-        }
+        },
         TransportSurface::Datagram => {
             if !frame.header.frame_type.allows_datagram() {
                 return Err(protocol_error(
@@ -240,7 +240,7 @@ pub fn validate_transport_surface(
             }
 
             dispatch_frame(frame, StreamRole::TelemetryDatagram)
-        }
+        },
     }
 }
 
@@ -255,12 +255,12 @@ fn resource_error(message: &'static str) -> AndromedaError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_core::{CatalogVersion, ContractHash, RequestId, SessionId};
     use andromeda_proto_wire::{
         GeneratedFrameEnvelope, GeneratedPayloadKind, GeneratedProtocolVersion, GeneratedRpcBatch,
         GeneratedRpcCompletion, GeneratedRpcCompletionStatus, GeneratedRpcMetadata,
         GeneratedTransactionOutcome, encode_protobuf_message,
     };
+    use andromeda_types::{CatalogVersion, ContractHash, RequestId, SessionId};
 
     use andromeda_rpc_protocol::{FRAME_HEADER_CRC_UNCHECKED, FrameHeader};
 

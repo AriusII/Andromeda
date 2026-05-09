@@ -56,12 +56,12 @@ pub(crate) fn strip_rust_comments(source: &str) -> String {
                     chars.next();
                     block_depth += 1;
                     output.push_str("  ");
-                }
+                },
                 ('*', Some('/')) => {
                     chars.next();
                     block_depth -= 1;
                     output.push_str("  ");
-                }
+                },
                 ('\n', _) => output.push('\n'),
                 _ => output.push(' '),
             }
@@ -73,12 +73,12 @@ pub(crate) fn strip_rust_comments(source: &str) -> String {
                 chars.next();
                 in_line_comment = true;
                 output.push_str("  ");
-            }
+            },
             ('/', Some('*')) => {
                 chars.next();
                 block_depth = 1;
                 output.push_str("  ");
-            }
+            },
             _ => output.push(ch),
         }
     }

@@ -17,7 +17,7 @@ impl GpuExecutionPolicy {
             Self::Disabled => false,
             Self::OffCriticalPathOnly => {
                 !pipeline.is_critical_path() && pipeline.is_gpu_advisory_candidate()
-            }
+            },
             Self::BatchAnalyticsOnly => matches!(
                 pipeline,
                 PipelineClass::StatisticsRefresh

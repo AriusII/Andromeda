@@ -18,3 +18,7 @@ tokio = { workspace = true, features = ["sync"] }
 
 [dev-dependencies]
 andromeda-proto.workspace = true
+andromeda-srpl-cardinality.workspace = true
+andromeda-structured-object.workspace = true
+andromeda-types.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "time"] }

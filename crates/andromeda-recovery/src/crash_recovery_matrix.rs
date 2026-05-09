@@ -1,4 +1,4 @@
-/// Phase 7: Crash-Recovery Matrix Validation
+/// Crash-recovery matrix validation.
 ///
 /// This module validates C5 durability invariants for crash recovery:
 /// - Recovery after crash at every LSN point is consistent

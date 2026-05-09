@@ -1,15 +1,13 @@
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, Clock, EngineTimestamp, SystemClock,
-};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_plan_cache::{PlanCacheKey, PlanClass, PlanShapeFingerprint};
 use andromeda_procedure_store::{
     InvocationRuntimeRecord, ProcedureRuntimeCounters, ProcedureRuntimePlanId,
     ProcedureRuntimeStatus,
 };
+use andromeda_time::{Clock, EngineTimestamp, SystemClock};
+use andromeda_transaction_log::TX_COMMIT_PAYLOAD_LEN;
 
-use crate::{
-    EXEC_TX_COMMIT_PAYLOAD_LEN, InvocationRequest, RollbackCause, local::types::LocalProcedure,
-};
+use crate::{InvocationRequest, RollbackCause, local::types::LocalProcedure};
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct RuntimeRecordSpan {
@@ -111,7 +109,7 @@ fn committed_wal_payload_bytes(procedure: &LocalProcedure) -> u64 {
     } else {
         0
     };
-    b"tx-begin".len() as u64 + mutation_bytes + EXEC_TX_COMMIT_PAYLOAD_LEN as u64
+    b"tx-begin".len() as u64 + mutation_bytes + TX_COMMIT_PAYLOAD_LEN as u64
 }
 
 fn rolled_back_wal_payload_bytes(rollback_payload_len: usize) -> u64 {

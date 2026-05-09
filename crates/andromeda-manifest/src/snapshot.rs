@@ -1,4 +1,4 @@
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 use andromeda_segment::SegmentId;
 
 use crate::{DatabaseManifest, manifest_error};

@@ -1,6 +1,6 @@
 use super::*;
 use crate::Lsn;
-use andromeda_core::TransactionId;
+use andromeda_types::TransactionId;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 struct TransactionIdGenerator;
@@ -69,10 +69,10 @@ fn commit_log_rejects_duplicate_commit_atomically() {
                 match log.record_commit(entry) {
                     Ok(()) => {
                         successes.fetch_add(1, Ordering::Relaxed);
-                    }
+                    },
                     Err(_) => {
                         failures.fetch_add(1, Ordering::Relaxed);
-                    }
+                    },
                 }
             })
         })

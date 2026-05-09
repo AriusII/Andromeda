@@ -10,7 +10,7 @@
 //! 5. **Execution Adapter Isolation**: Execution adapter can be replaced
 //! 6. **IR Canonicalization**: Same AST → same IR (deterministic lowering)
 
-use andromeda_srpl::procedure_compiler::compile_narrow_procedure_signature;
+use andromeda_srpl::compile_narrow_procedure_signature;
 use andromeda_srpl_lexer::lex;
 use andromeda_srpl_parser::parse_procedure_signature;
 

@@ -1,9 +1,10 @@
 //! Vertical demo commands.
 
 use andromeda_admission::{InvocationContext, InvocationRequest};
-use andromeda_catalog::inventory_reserve_stock_contract;
-use andromeda_core::{AndromedaResult, HardwareProfile, InvocationId, RequestId, SessionId};
+use andromeda_error::AndromedaResult;
 use andromeda_exec::LocalVerticalRuntime;
+use andromeda_hardware::HardwareProfile;
+use andromeda_inventory_demo::inventory_reserve_stock_contract;
 use andromeda_inventory_demo::{
     InventoryReserveStockExecutor, InventoryStock, ReserveStockCommand,
     V0InventoryRecoverableRuntime, V0InventoryReserveStockRpcPayload,
@@ -12,6 +13,7 @@ use andromeda_inventory_demo::{
 };
 use andromeda_observe::TraceId;
 use andromeda_result_stream::CompletionStatus;
+use andromeda_types::{InvocationId, RequestId, SessionId};
 use andromeda_wal::{FileWal, InMemoryWal, Lsn};
 use std::path::PathBuf;
 
@@ -149,7 +151,8 @@ pub fn print_help() {
         "andromeda-quic",
         "andromeda-catalog",
         "andromeda-srpl",
-        "andromeda-tx",
+        "andromeda-transaction",
+        "andromeda-mvcc",
         "andromeda-storage",
         "andromeda-exec",
         "andromeda-observe",

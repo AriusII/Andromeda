@@ -19,9 +19,10 @@
 //! - DEC-022: Alter Procedure Lifecycle Semantics
 //! - DEC-023: Drop Procedure Lifecycle Semantics
 
+use andromeda_catalog_store::QualifiedName;
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
-use crate::{DefinitionBatch, QualifiedName};
+use crate::DefinitionBatch;
 
 /// Add a new SRPL procedure to the batch.
 ///
@@ -102,7 +103,7 @@ fn srpl_source_integration_error(operation: &str) -> AndromedaError {
     AndromedaError::new(
         AndromedaErrorKind::Catalog,
         format!(
-            "{operation} must be performed through andromeda-srpl compiler helpers; \
+            "{operation} must be performed through the SRPL DefinitionBatch bridge; \
              andromeda-catalog cannot parse SRPL source without creating a crate dependency cycle"
         ),
     )
@@ -111,7 +112,8 @@ fn srpl_source_integration_error(operation: &str) -> AndromedaError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{DefinitionBatchId, INVENTORY_DATABASE_ID, INVENTORY_NAMESPACE_ID};
+    use crate::DefinitionBatchId;
+    use andromeda_business_fixtures::{INVENTORY_DATABASE_ID, INVENTORY_NAMESPACE_ID};
     use andromeda_types::CatalogVersion;
 
     fn empty_batch() -> DefinitionBatch {
@@ -135,7 +137,7 @@ mod tests {
         .unwrap_err();
 
         assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
-        assert!(error.message().contains("andromeda-srpl compiler helpers"));
+        assert!(error.message().contains("SRPL DefinitionBatch bridge"));
         assert!(batch.operations.is_empty());
     }
 }

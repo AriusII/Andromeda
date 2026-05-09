@@ -1,8 +1,9 @@
 use crate::support::execution_failed;
-use andromeda_core::{AndromedaErrorKind, InvocationId};
-use andromeda_exec::retry::{ErrorRetryability, RetryPolicy};
-use andromeda_exec::traces::{AuditLedger, InMemoryAuditLedger};
+use andromeda_error::AndromedaErrorKind;
+use andromeda_execution_trace::{AuditLedger, InMemoryAuditLedger};
 use andromeda_observe::TraceId;
+use andromeda_retry::{ErrorRetryability, RetryPolicy};
+use andromeda_types::InvocationId;
 
 #[test]
 fn test_scenario_persistent_error_fails_immediately() {

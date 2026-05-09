@@ -6,11 +6,15 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
-andromeda-core.workspace = true
+andromeda-admission.workspace = true
+andromeda-error.workspace = true
+andromeda-procedure-contract.workspace = true
 andromeda-procedure-runtime.workspace = true
+andromeda-result-stream.workspace = true
 andromeda-srpl-execution-adapter.workspace = true
 andromeda-srpl-ir.workspace = true
+andromeda-types.workspace = true
 
 [dev-dependencies]
 andromeda-contract.workspace = true
-andromeda-types.workspace = true
+andromeda-observe.workspace = true

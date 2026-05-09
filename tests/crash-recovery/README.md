@@ -15,7 +15,7 @@ Use this index for work orders that ask for root-level crash/recovery coverage o
 | WAL scan, segment, checksum, and replay | `crates/andromeda-wal/tests/*` |
 | Storage crash replay and page records | `crates/andromeda-storage/tests/crash_recovery_impl.rs`, `crates/andromeda-storage/tests/recovery_completeness_contract.rs`, `crates/andromeda-storage/tests/property_recovery_replay.rs`, `crates/andromeda-storage/tests/recovery_replay_page_records_contract.rs` |
 | WAL durability fences and disk safety | `crates/andromeda-storage/tests/wal_durability_fence_contract.rs`, `crates/andromeda-storage/tests/disk_manager_durability_crash_safety.rs` |
-| Transaction commit and WAL replay | `crates/andromeda-tx/tests/commit_log_durability.rs`, `crates/andromeda-tx/tests/tx_wal_replay_recovery.rs`, `crates/andromeda-tx/tests/storage_tx_wal_adapter_contract.rs` |
+| Transaction commit and WAL replay | `crates/andromeda-transaction/tests/commit_log_durability.rs`, `crates/andromeda-transaction/tests/tx_wal_replay_recovery.rs`, `crates/andromeda-transaction/tests/storage_tx_wal_adapter_contract.rs` |
 | Executor recovery visibility | `crates/andromeda-exec/tests/recovery_visibility_gates.rs` |
 
 ## Non-goals
@@ -57,7 +57,7 @@ cargo test -p andromeda-storage --test recovery_completeness_contract --locked -
 cargo test -p andromeda-storage --test property_recovery_replay --locked -- --nocapture
 cargo test -p andromeda-storage --test wal_durability_fence_contract --locked -- --nocapture
 cargo test -p andromeda-exec --test recovery_visibility_gates --locked -- --nocapture
-cargo test -p andromeda-tx --test commit_log_durability --locked -- --nocapture
+cargo test -p andromeda-transaction --test commit_log_durability --locked -- --nocapture
 ```
 
 ## Troubleshooting

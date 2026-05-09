@@ -1,4 +1,4 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use std::collections::{HashMap, HashSet};
 
 use super::HADR_STREAMS_PER_REPLICA;

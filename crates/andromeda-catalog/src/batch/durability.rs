@@ -1,14 +1,15 @@
 //! Durability evidence and publication receipt types for catalog mutations.
 
 use andromeda_catalog_store::{CatalogPublicationCommitEvidence, CatalogPublicationPlan};
-use andromeda_definition_batch::{DefinitionBatchId, DefinitionBatchSourceHash};
+use andromeda_definition_batch::{
+    DefinitionBatchDependencyGraphHash, DefinitionBatchId, DefinitionBatchSourceHash,
+};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use super::mutation::{
     CatalogMutationBoundary, CatalogMutationPlan, CatalogMutationRecord,
     CatalogPublicationSemantics,
 };
-use crate::DefinitionBatchDependencyGraphHash;
 
 pub use andromeda_catalog_store::{CatalogDurabilityMarker, CatalogMutationDurability};
 
@@ -43,7 +44,7 @@ impl CatalogMutationCommitEvidence {
                     AndromedaErrorKind::Catalog,
                     "catalog publication requires committed mutation evidence",
                 ))
-            }
+            },
         }
     }
 

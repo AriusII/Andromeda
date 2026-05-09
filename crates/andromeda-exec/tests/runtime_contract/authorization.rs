@@ -14,7 +14,7 @@ fn authorization_denial_is_rejected_before_tx_begin() {
         )
         .unwrap_err();
 
-    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Security);
+    assert_eq!(err.kind(), andromeda_error::AndromedaErrorKind::Security);
     assert!(runtime.wal().records.is_empty());
 }
 
@@ -33,6 +33,6 @@ fn local_vertical_runtime_preserves_authorization_check_before_rollback_begin() 
         )
         .unwrap_err();
 
-    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Security);
+    assert_eq!(err.kind(), andromeda_error::AndromedaErrorKind::Security);
     assert!(runtime.wal().records.is_empty());
 }

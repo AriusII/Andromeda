@@ -1,8 +1,7 @@
-﻿//! Advanced Recovery Tests - Transaction, HA/DR, and Security scenarios
+//! Advanced Recovery Tests - Transaction, HA/DR, and Security scenarios
 
 mod common;
 use common::*;
-use andromeda_wal::Lsn;
 
 // ============================================================================
 // Advanced Transaction Recovery (20+ tests)

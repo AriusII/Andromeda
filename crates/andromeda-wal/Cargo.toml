@@ -6,7 +6,8 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
-andromeda-core.workspace = true
+andromeda-error.workspace = true
+andromeda-types.workspace = true
 andromeda-wal-codec.workspace = true
 dashmap = "6.0"
 

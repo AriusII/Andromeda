@@ -1,4 +1,4 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 /// Stream backpressure controller.
 #[derive(Debug, Clone)]

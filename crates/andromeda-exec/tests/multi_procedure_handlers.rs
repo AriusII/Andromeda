@@ -20,17 +20,15 @@
 //! - Permission contract: required permissions are forwarded from the contract.
 //! - `ProcedureRegistry::dispatch` validates permissions (privilege escalation blocked).
 
-use andromeda_catalog::{
-    INVENTORY_QUERY_STOCK_PROCEDURE_ID, INVENTORY_RELEASE_STOCK_PROCEDURE_ID,
-    INVENTORY_RESERVE_STOCK_PROCEDURE_ID, inventory_query_stock_contract,
-    inventory_release_stock_contract, inventory_reserve_stock_contract,
-};
-use andromeda_core::AndromedaErrorKind;
+use andromeda_error::AndromedaErrorKind;
 use andromeda_exec::{InvocationContext, ProcedureHandler, ProcedureRegistry};
 use andromeda_inventory_demo::{
-    InventoryQueryStockProcedureHandler, InventoryReleaseStockProcedureHandler,
-    InventoryReserveStockExecutor, InventoryStock, QueryStockEffect, ReleaseStockCommand,
-    ReleaseStockEffect, ReserveStockCommand, ReserveStockEffect, ReserveStockProcedureHandler,
+    INVENTORY_QUERY_STOCK_PROCEDURE_ID, INVENTORY_RELEASE_STOCK_PROCEDURE_ID,
+    INVENTORY_RESERVE_STOCK_PROCEDURE_ID, InventoryQueryStockProcedureHandler,
+    InventoryReleaseStockProcedureHandler, InventoryReserveStockExecutor, InventoryStock,
+    QueryStockEffect, ReleaseStockEffect, ReserveStockCommand, ReserveStockEffect,
+    ReserveStockProcedureHandler, inventory_query_stock_contract, inventory_release_stock_contract,
+    inventory_reserve_stock_contract,
 };
 use andromeda_observe::TraceId;
 use andromeda_srpl_ir::Cardinality;

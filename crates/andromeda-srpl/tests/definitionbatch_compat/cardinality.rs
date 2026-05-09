@@ -1,7 +1,7 @@
 use andromeda_catalog_store::CatalogDefinition;
 use andromeda_contract::ResultStreamCardinality;
 use andromeda_definition_batch::DefinitionOperation;
-use andromeda_srpl::definition_batch_bridge::{
+use andromeda_srpl_definition_batch::{
     SrplDefinitionBatchProcedureSource, dry_run_srpl_definition_batch_sources,
 };
 use andromeda_srpl_diagnostics::DiagnosticPhase;

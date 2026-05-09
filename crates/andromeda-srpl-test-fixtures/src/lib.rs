@@ -3,7 +3,7 @@
 //! Shared deterministic SRPL test fixtures.
 //!
 //! This crate owns reusable test-only fixture shapes for SRPL binder,
-//! interpreter, adapter, and facade compatibility tests. It does not execute
+//! interpreter, adapter, and public API compatibility tests. It does not execute
 //! production behavior or introduce storage, WAL, transaction, transport, SQL,
 //! benchmark, analytics, or GPU dependencies.
 

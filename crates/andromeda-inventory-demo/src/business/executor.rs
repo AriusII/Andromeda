@@ -14,7 +14,7 @@ pub(super) use contracts::{
 mod tests {
     use super::super::types::{InventoryStock, ReserveStockCommand};
     use super::*;
-    use andromeda_catalog::inventory_reserve_stock_contract;
+    use crate::inventory_reserve_stock_contract;
     use andromeda_core::AndromedaErrorKind;
     use andromeda_observe::{CriticalDecisionKind, TraceId};
 

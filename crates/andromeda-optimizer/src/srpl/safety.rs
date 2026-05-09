@@ -61,7 +61,7 @@ fn effect_surface_markers(ir: &SrplProcedureIr) -> Vec<EffectSurfaceMarker> {
             },
             SrplBusinessOperationKindIr::Raise { code } => {
                 EffectSurfaceMarker::Raise { code: code.clone() }
-            }
+            },
         })
         .collect()
 }

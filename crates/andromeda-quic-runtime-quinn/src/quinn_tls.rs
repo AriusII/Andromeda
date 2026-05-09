@@ -23,8 +23,9 @@ impl ServerTlsConfig {
     /// Creates a self-trusting mTLS server config from certificate and private key files.
     ///
     /// The server certificate file is also used as the client-auth trust root.
-    /// This is only available for test compatibility; production deployments
-    /// must use [`Self::from_files_with_client_ca`] and pass an explicit client CA.
+    /// This test-only helper trusts the server certificate as the client-auth
+    /// root. Production deployments must use [`Self::from_files_with_client_ca`]
+    /// and pass an explicit client CA.
     #[cfg(any(test, feature = "insecure-test-tls"))]
     pub fn from_files(cert_path: &Path, key_path: &Path) -> AndromedaResult<Self> {
         Self::from_files_with_client_ca(cert_path, key_path, cert_path)

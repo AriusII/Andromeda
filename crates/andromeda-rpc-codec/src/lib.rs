@@ -3,6 +3,7 @@
 //! Runtime-free RPC codec primitives.
 
 mod catalog_manifest_resolution;
+mod invocation_response;
 mod procedure_gateway;
 mod protobuf;
 mod result_metadata;
@@ -24,10 +25,11 @@ pub use catalog_manifest_resolution::{
     validate_catalog_manifest_resolution_request_context,
     validate_catalog_manifest_resolution_response_context,
 };
-pub use procedure_gateway::{
-    ProcedureRouteExecuteRequest, decode_and_validate_rpc_execute_request,
-    required_execute_permission,
+pub use invocation_response::{
+    ExecutionResult, ResultFrame, ResultStreamDecoder, decode_invocation_response,
+    decode_result_stream,
 };
+pub use procedure_gateway::decode_and_validate_rpc_execute_request;
 pub use protobuf::{decode_protobuf_message, encode_protobuf_message};
 pub use result_metadata::{
     StructuredPayloadByteTracker, validate_result_batch_payload_parts,

@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 use andromeda_storage_page::{Lsn, PageId, PageImage, PageLayoutContract, PageStore};
 
 use crate::pool_error::map_core_error;

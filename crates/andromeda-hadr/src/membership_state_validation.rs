@@ -1,4 +1,4 @@
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 use super::{
     membership_store::{HadrMembershipNode, HadrMembershipRecord, HadrMembershipSnapshot},
@@ -261,6 +261,6 @@ fn validate_action_epoch(
     Ok(())
 }
 
-fn storage_error(message: &'static str) -> andromeda_core::AndromedaError {
-    andromeda_core::AndromedaError::new(andromeda_core::AndromedaErrorKind::Storage, message)
+fn storage_error(message: &'static str) -> andromeda_error::AndromedaError {
+    andromeda_error::AndromedaError::new(andromeda_error::AndromedaErrorKind::Storage, message)
 }

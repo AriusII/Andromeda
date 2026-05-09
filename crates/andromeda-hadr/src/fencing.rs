@@ -11,7 +11,7 @@
 //! * [`HadrFencingRejection`] — categorical fence-off reasons.
 //! * [`enforce_fencing_token`] — the pure validation function.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use super::types::{HadrEpoch, HadrNodeId};
 

@@ -57,7 +57,7 @@
 //! // This is still not promotion! F6 must decide when and how to execute.
 //! ```
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::Lsn;
 

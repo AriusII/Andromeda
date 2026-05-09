@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 use crate::{PageId, SegmentId};
 

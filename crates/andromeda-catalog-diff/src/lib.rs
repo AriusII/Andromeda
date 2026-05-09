@@ -4,7 +4,7 @@
 
 Runtime-free catalog object diff boundary crate.
 
-This crate owns object-level diff evidence and stable taxonomy placeholders. It
+This crate owns object-level diff evidence and stable taxonomy identifiers. It
 does not evaluate Procedure compatibility, apply changes, publish catalog state,
 claim release readiness, serialize network or disk formats, or authorize any
 application-facing ad hoc SQL surface.

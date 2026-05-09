@@ -4,7 +4,7 @@ use andromeda_backup::{
     ColdSnapshotBoundary, ExtentCopyTask, FileBackedBackupArtifactStore, WAL_FORMAT_VERSION,
     WalArchiveRange, WalSegmentCopyTask,
 };
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 use andromeda_segment::{ExtentDescriptor, ExtentState, SegmentId};
 use andromeda_storage_page::{AllocationId, ExtentId, ObjectId, PageId, PageSize};
 use andromeda_wal::{Lsn, WalSegmentDescriptor};

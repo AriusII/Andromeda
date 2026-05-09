@@ -30,6 +30,8 @@ mod mutation_replay;
 mod publication;
 mod publication_replay;
 mod replay_report;
+mod storage_wal_bridge;
+mod storage_wal_record;
 mod wal_record;
 
 pub use durable_payload::{
@@ -79,6 +81,12 @@ pub use replay_report::{
     CatalogRecoveredBatch, CatalogRecoveryAnomaly, CatalogRecoveryReport, CatalogSkippedBatch,
     recovery_anomaly_kind_for_decode_error,
 };
+pub use storage_wal_bridge::{
+    CatalogStorageWalDurablePublication, CatalogStorageWalPublicationRecord,
+    CatalogStorageWalPublicationReplayReport, decode_storage_catalog_record,
+    encode_storage_catalog_record, replay_storage_catalog_publications_from_wal,
+};
+pub use storage_wal_record::{CatalogStorageWalRecord, CatalogStorageWalRecordVersion};
 pub use wal_record::{
     AlterCompatibilityPolicy, CatalogWalRecord, CatalogWalRecordDesign, DropFailureReason,
 };

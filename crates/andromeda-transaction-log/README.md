@@ -4,7 +4,7 @@
 
 `andromeda-transaction-log` is the C5 owner crate for logical transaction terminal evidence.
 
-This crate owns transaction log record shapes, terminal commit and rollback evidence, replay-facing classification, and transaction-local LSN evidence. `andromeda-tx` still owns append, flush, status publication, and the commit manager facade.
+This crate owns transaction log record shapes, terminal commit and rollback evidence, replay-facing classification, and transaction-local LSN evidence. Commit orchestration and status publication live in `andromeda-transaction`; physical WAL bytes live in `andromeda-wal`.
 
 ## Scope
 
@@ -51,5 +51,5 @@ If replay derives a terminal transaction state from bytes outside the durable WA
 ## References
 
 - `src/lib.rs`
-- Compatibility facade and commit manager: `crates/andromeda-tx/`
+- Commit manager: `crates/andromeda-transaction/`
 - Physical WAL owners: `crates/andromeda-wal/`, `crates/andromeda-storage/`

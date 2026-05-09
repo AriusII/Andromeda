@@ -1,3 +1,9 @@
+use andromeda_hadr::{
+    HadrClusterManifestUpdateEvidence, HadrClusterManifestUpdateRequest,
+    HadrClusterManifestVersion, HadrClusterOperation, HadrClusterSecurityEvidence, HadrEpoch,
+    membership_transitions::{MembershipState, MembershipStateTracker, TransitionEvent},
+    quorum_runtime::*,
+};
 /// F3 Quorum Membership Contract Tests
 ///
 /// This test suite validates the quorum consensus runtime against 12+ scenarios:
@@ -12,15 +18,7 @@ use andromeda_observe::{
     CertificateIdentity, Permission, SecurityAuditOutcome, SecurityAuditTrace,
     SecurityPolicyVersionEvidence, SurfaceScope, TraceId, UserPrincipal, UserPrincipalKind,
 };
-use andromeda_storage::{
-    Lsn,
-    hadr::{
-        HadrClusterManifestUpdateEvidence, HadrClusterManifestUpdateRequest,
-        HadrClusterManifestVersion, HadrClusterOperation, HadrClusterSecurityEvidence, HadrEpoch,
-        membership_transitions::{MembershipState, MembershipStateTracker, TransitionEvent},
-        quorum_runtime::*,
-    },
-};
+use andromeda_wal::Lsn;
 
 #[test]
 fn test_quorum_initialized_with_single_primary() {

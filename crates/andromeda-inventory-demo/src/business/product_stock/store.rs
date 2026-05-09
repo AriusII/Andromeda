@@ -1,5 +1,5 @@
 use andromeda_core::AndromedaResult;
-use andromeda_exec::LocalHeapRowInsertRedoTemplate;
+use andromeda_storage_heap::LocalHeapRowInsertRedoTemplate;
 
 use super::super::types::ReserveStockCommand;
 use super::{

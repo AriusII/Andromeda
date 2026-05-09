@@ -9,7 +9,7 @@ const RUNTIME_CRATE: &str = "andromeda-quic-runtime-quinn";
 const RUNTIME_DEPS: [&str; 4] = ["quinn", "rcgen", "rustls", "tokio"];
 const RUNTIME_QUINN_TEST_TARGETS: [&str; 2] =
     ["real_quinn_network", "reconnect_quinn_admission_contract"];
-const QUIC_ROOT_FORBIDDEN_PROJECTION_REEXPORTS: [&str; 12] = [
+const QUIC_ROOT_FORBIDDEN_PROJECTION_REEXPORTS: &[&str] = &[
     "CatalogColumnDescriptor",
     "CatalogManifestResolutionRequest",
     "CatalogManifestResolutionResponse",
@@ -21,15 +21,17 @@ const QUIC_ROOT_FORBIDDEN_PROJECTION_REEXPORTS: [&str; 12] = [
     "CatalogProcedureProtocolLayout",
     "CatalogRequiredPermission",
     "CatalogResultStreamDescriptor",
+    "ProcedureGatewayExecuteRequest",
     "ProcedureRouteExecuteRequest",
 ];
-const RUNTIME_CRATE_FORBIDDEN_GATEWAY_PROJECTION_TOKENS: [&str; 7] = [
+const RUNTIME_CRATE_FORBIDDEN_GATEWAY_PROJECTION_TOKENS: &[&str] = &[
     "andromeda_rpc_codec",
     "CatalogProcedureManifest",
     "CatalogManifestResolutionRequest",
     "CatalogManifestResolutionResponse",
     "CatalogProcedureManifestResolutionRequest",
     "CatalogProcedureManifestResolutionResponse",
+    "ProcedureGatewayExecuteRequest",
     "ProcedureRouteExecuteRequest",
 ];
 const RUNTIME_FREE_CONTRACT_TEST_FILES: [&str; 6] = [
@@ -68,7 +70,7 @@ fn quic_manifest_keeps_concrete_runtime_dependencies_out() {
     );
     assert!(
         feature_values(&features, RUNTIME_FEATURE).is_empty(),
-        "{RUNTIME_FEATURE} is only a compatibility selector after W22; concrete runtime deps live in {RUNTIME_CRATE}"
+        "{RUNTIME_FEATURE} is only a manifest marker; concrete runtime deps live in {RUNTIME_CRATE}"
     );
     assert!(
         feature_values_optional(&features, INSECURE_TEST_TLS_FEATURE).is_none(),
@@ -125,7 +127,7 @@ fn quic_lib_has_no_concrete_runtime_modules_or_crate_paths() {
 
     assert!(
         violations.is_empty(),
-        "andromeda-quic public surface must stay runtime-free after W22: {violations:?}"
+        "andromeda-quic public surface must stay runtime-free: {violations:?}"
     );
 }
 

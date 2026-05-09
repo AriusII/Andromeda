@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind};
+use andromeda_error::{AndromedaError, AndromedaErrorKind};
 
 pub type SegmentIndexResult<T> = Result<T, SegmentIndexError>;
 

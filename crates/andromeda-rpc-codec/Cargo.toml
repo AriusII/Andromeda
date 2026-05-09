@@ -8,10 +8,8 @@ publish = false
 [dependencies]
 andromeda-catalog-store.workspace = true
 andromeda-error.workspace = true
-andromeda-principal.workspace = true
 andromeda-procedure-contract.workspace = true
 andromeda-proto.workspace = true
 andromeda-proto-wire.workspace = true
 andromeda-rpc-protocol.workspace = true
-andromeda-security-contract.workspace = true
 andromeda-types.workspace = true

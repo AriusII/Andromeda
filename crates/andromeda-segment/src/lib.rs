@@ -16,7 +16,7 @@ C5 invariants:
 - RAM, temporary storage, GPU output, and benchmark output are advisory only; they are not truth.
 "#]
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 mod descriptor;
 pub mod extent;
 pub mod segment_index;

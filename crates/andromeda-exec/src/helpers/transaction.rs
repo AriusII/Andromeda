@@ -1,4 +1,4 @@
-use andromeda_core::{InvocationId, TransactionId};
+use andromeda_types::{InvocationId, TransactionId};
 
 /// Derive a `TransactionId` from an `InvocationId` by direct value reuse.
 ///
@@ -17,7 +17,7 @@ use andromeda_core::{InvocationId, TransactionId};
 /// * the legacy [`crate::services::CompletionRecoveryExpectation::for_invocation`]
 ///   convenience constructor, retained for compatibility with byte-stable
 ///   recovery test fixtures and gated behind `#[allow(deprecated)]`; and
-/// * `#[cfg(test)]` modules in `services::completion` that hand-craft WAL
+/// * `#[cfg(test)]` modules in completion tests that hand-craft WAL
 ///   records keyed by InvocationId-derived TransactionIds to exercise
 ///   reconciliation without spinning up a manager.
 ///

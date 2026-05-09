@@ -1,18 +1,16 @@
 use andromeda_error::AndromedaResult;
 use andromeda_principal::CertificateIdentity;
-use andromeda_procedure_contract::ProcedureGatewayManifest;
+use andromeda_procedure_contract::{ProcedureGatewayExecuteRequest, ProcedureGatewayManifest};
+use andromeda_rpc::{DispatchPolicy, TransportSurface, validate_transport_surface};
 use andromeda_rpc_codec::{
-    ProcedureRouteExecuteRequest, TypedResultStreamBounds, TypedResultStreamContext,
-    decode_and_validate_rpc_execute_request,
+    TypedResultStreamBounds, TypedResultStreamContext, decode_and_validate_rpc_execute_request,
 };
 use andromeda_rpc_protocol::{FrameBytes, FrameType, ResultStreamMetadataPolicy, StreamRole};
 use andromeda_types::{
     CatalogVersion, ContractHash, InvocationId, ProcedureId, RequestId, SessionId, TransactionId,
 };
 
-use crate::{
-    Connection, DispatchPolicy, SurfacePlane, TransportSurface, validate_transport_surface,
-};
+use crate::{Connection, SurfacePlane};
 
 use super::errors::{protocol_error, security_error};
 use super::state;
@@ -40,7 +38,7 @@ pub struct ProcedureRouteBinding {
     pub contract_hash: ContractHash,
     pub catalog_version: CatalogVersion,
     pub stats_version: u64,
-    pub execute_request: ProcedureRouteExecuteRequest,
+    pub execute_request: ProcedureGatewayExecuteRequest,
     pub manifest: ProcedureGatewayManifest,
 }
 

@@ -43,19 +43,19 @@ impl ReclaimabilityDecision {
         match self {
             Self::Reclaimable => {
                 "segment is outside all retention boundaries and can be safely garbage-collected"
-            }
+            },
             Self::BlockedByRecovery { .. } => {
                 "segment is required for crash recovery (at or before recovery boundary)"
-            }
+            },
             Self::BlockedByVisibility { .. } => {
                 "segment contains data visible to at least one active snapshot"
-            }
+            },
             Self::BlockedByReplication { .. } => {
                 "segment has not been durably received by all configured standbys"
-            }
+            },
             Self::BlockedByPitrRetention { .. } => {
                 "segment falls within the point-in-time recovery retention window"
-            }
+            },
         }
     }
 

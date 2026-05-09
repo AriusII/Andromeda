@@ -3,29 +3,28 @@
 //! Tests that the execution stack properly emits CommitVisible and RollbackDurable
 //! events with durable LSN correlation and proper event envelope validation.
 
-use andromeda_catalog::{
-    INVENTORY_RESERVE_STOCK_PERMISSION, inventory_reserve_stock_catalog_bindings,
-    inventory_reserve_stock_contract,
-};
-use andromeda_core::{InvocationId, PipelineClass, RequestId, ResourceBudget, TransactionId};
 use andromeda_exec::{
     CompletionStatus, ExecutionIoAdmissionRequest, InvocationContext, InvocationRequest,
     LocalVerticalRuntime,
 };
+use andromeda_hardware::{PipelineClass, ResourceBudget};
 use andromeda_inventory_demo::{
-    InventoryReserveStockExecutor, InventoryStock, ReserveStockCommand,
+    INVENTORY_RESERVE_STOCK_PERMISSION, InventoryReserveStockExecutor, InventoryStock,
+    ReserveStockCommand, inventory_reserve_stock_catalog_bindings,
+    inventory_reserve_stock_contract,
 };
 use andromeda_observe::{
     CommitVisibleTrace, EventCorrelation, EventEmitter, EventEnvelope, EventId, InMemoryEventSink,
     RollbackDurableTrace, TraceEvent, TraceId,
 };
 use andromeda_procedure_contract::ProcedureContract;
-use andromeda_srpl::procedure_compiler::compile_narrow_procedure_signature;
+use andromeda_srpl::compile_narrow_procedure_signature;
 use andromeda_storage::{
     CoreIoPlacementRequest, OperationalProfile, StorageIoBudgetScope, StorageWorkloadClass,
 };
 use andromeda_storage_page::PageSize;
 use andromeda_transaction::TransactionState;
+use andromeda_types::{InvocationId, RequestId, TransactionId};
 use andromeda_wal::{InMemoryWal, Lsn, WalRecordKind};
 
 fn inventory_reserve_stock_srpl_source() -> &'static str {

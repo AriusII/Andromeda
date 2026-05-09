@@ -1,4 +1,4 @@
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 use std::sync::Arc;
 
 use super::{ArchiveStatus, WalGcAuditEvent, WalGcCandidate, WalGcContext, WalGcSummary};
@@ -73,11 +73,11 @@ impl WalGarbageCollector {
                     summary.segments_removed += 1;
                     summary.bytes_freed += candidate.size_bytes;
                     summary.candidates_archived += 1;
-                }
+                },
                 false => {
                     blocked += 1;
                     summary.candidates_archived += 1;
-                }
+                },
             }
         }
         summary.candidates_blocked = blocked;

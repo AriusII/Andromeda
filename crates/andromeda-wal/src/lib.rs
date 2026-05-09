@@ -10,6 +10,7 @@ continues to use storage crate surfaces.
 "#]
 
 pub mod file_wal;
+mod invocation_wal;
 pub mod lsn;
 pub mod wal_codec;
 pub mod wal_segment;
@@ -19,6 +20,7 @@ pub use file_wal::{
     FILE_WAL_HEADER_LEN, FILE_WAL_MAGIC, FILE_WAL_MONO_SEGMENT_ID, FileWal, FileWalDiskScan,
     FileWalHeader, scan_file_wal,
 };
+pub use invocation_wal::InvocationWal;
 pub use lsn::Lsn;
 pub use wal_codec::{
     WAL_BYTE_ORDER_LITTLE_ENDIAN, WAL_FORMAT_VERSION, WAL_FORMAT_VERSION_V1, WAL_RECORD_HEADER_LEN,

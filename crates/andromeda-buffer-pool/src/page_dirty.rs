@@ -1,4 +1,4 @@
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 use andromeda_storage_page::PageId;
 
 use andromeda_wal::Lsn;
@@ -130,7 +130,7 @@ impl DirtyFlushCandidate {
 
 #[cfg(test)]
 mod tests {
-    use andromeda_core::AndromedaErrorKind;
+    use andromeda_error::AndromedaErrorKind;
 
     use super::*;
 

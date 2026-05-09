@@ -1,37 +1,24 @@
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use andromeda_principal::Permission as CorePermission;
+use andromeda_procedure_contract::{
+    ProcedureGatewayExecuteRequest, validate_procedure_gateway_manifest_permissions,
+};
 use andromeda_proto::{
     PayloadKind, decode_generated_message, generated, validate_generated_rpc_execute_request,
-};
-use andromeda_security_contract::{
-    FAMILY_ID_APPLICATION, PERMISSION_ID_EXECUTE_PROCEDURE, Permission as SecurityPermission,
-    PermissionFamily,
 };
 use andromeda_types::{CatalogVersion, ContractHash};
 
 use crate::catalog_manifest_resolution::validate_catalog_procedure_manifest_projection;
-use crate::{CatalogProcedureManifest, CatalogRequiredPermission, decode_typed_frame_envelope};
+use crate::{CatalogProcedureManifest, decode_typed_frame_envelope};
 use andromeda_rpc_protocol::FrameBytes;
 
 type GeneratedRpcExecuteRequest = generated::protocol::v1::RpcExecuteRequest;
-
-/// Domain projection of the protobuf `RpcExecuteRequest` admitted by a route.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProcedureRouteExecuteRequest {
-    pub procedure_name: String,
-    pub expected_contract_hash: ContractHash,
-    pub expected_catalog_version: CatalogVersion,
-    pub expected_stats_version: u64,
-    pub surface_scope: String,
-    pub argument_count: usize,
-}
 
 /// Decodes and validates an Application Procedure execute request against a manifest.
 pub fn decode_and_validate_rpc_execute_request(
     frame: &FrameBytes,
     manifest: &CatalogProcedureManifest,
-) -> AndromedaResult<ProcedureRouteExecuteRequest> {
-    validate_route_manifest_permissions(manifest)?;
+) -> AndromedaResult<ProcedureGatewayExecuteRequest> {
+    validate_procedure_gateway_manifest_permissions(manifest)?;
     validate_catalog_procedure_manifest_projection(manifest)?;
 
     let envelope = decode_typed_frame_envelope(frame)?;
@@ -56,17 +43,9 @@ pub fn decode_and_validate_rpc_execute_request(
     Ok(execute_request)
 }
 
-/// Returns the IAM permission required to execute the resolved Procedure.
-pub fn required_execute_permission(
-    manifest: &CatalogProcedureManifest,
-) -> AndromedaResult<CorePermission> {
-    validate_route_manifest_permissions(manifest)?;
-    Ok(CorePermission::ExecuteProcedure(manifest.procedure_id))
-}
-
 fn validate_rpc_execute_request(
     request: &GeneratedRpcExecuteRequest,
-) -> AndromedaResult<ProcedureRouteExecuteRequest> {
+) -> AndromedaResult<ProcedureGatewayExecuteRequest> {
     if request.procedure_name.trim().is_empty() {
         return Err(contract_error(
             "RpcExecuteRequest procedure_name must be non-empty",
@@ -103,7 +82,7 @@ fn validate_rpc_execute_request(
         ));
     }
 
-    Ok(ProcedureRouteExecuteRequest {
+    Ok(ProcedureGatewayExecuteRequest {
         procedure_name: request.procedure_name.clone(),
         expected_contract_hash,
         expected_catalog_version: CatalogVersion::new(request.expected_catalog_version),
@@ -115,7 +94,7 @@ fn validate_rpc_execute_request(
 
 fn validate_request_matches_manifest(
     envelope: &andromeda_rpc_protocol::FrameEnvelope,
-    request: &ProcedureRouteExecuteRequest,
+    request: &ProcedureGatewayExecuteRequest,
     manifest: &CatalogProcedureManifest,
 ) -> AndromedaResult<()> {
     validate_envelope_matches_request(envelope, request)?;
@@ -125,7 +104,7 @@ fn validate_request_matches_manifest(
 
 fn validate_envelope_matches_request(
     envelope: &andromeda_rpc_protocol::FrameEnvelope,
-    request: &ProcedureRouteExecuteRequest,
+    request: &ProcedureGatewayExecuteRequest,
 ) -> AndromedaResult<()> {
     if envelope.contract_hash != request.expected_contract_hash {
         return Err(contract_error(
@@ -143,7 +122,7 @@ fn validate_envelope_matches_request(
 }
 
 fn validate_request_matches_catalog_identity(
-    request: &ProcedureRouteExecuteRequest,
+    request: &ProcedureGatewayExecuteRequest,
     manifest: &CatalogProcedureManifest,
 ) -> AndromedaResult<()> {
     if request.procedure_name != manifest.procedure_name {
@@ -156,7 +135,7 @@ fn validate_request_matches_catalog_identity(
 }
 
 fn validate_request_matches_manifest_version(
-    request: &ProcedureRouteExecuteRequest,
+    request: &ProcedureGatewayExecuteRequest,
     manifest: &CatalogProcedureManifest,
 ) -> AndromedaResult<()> {
     if request.expected_contract_hash != manifest.contract_hash {
@@ -175,62 +154,6 @@ fn validate_request_matches_manifest_version(
         return Err(contract_error(
             "procedure invocation StatsVersion does not match resolved manifest",
         ));
-    }
-
-    Ok(())
-}
-
-fn validate_route_manifest_permissions(manifest: &CatalogProcedureManifest) -> AndromedaResult<()> {
-    let mut declares_execute_permission = false;
-
-    for permission in &manifest.required_permissions {
-        if permission.family == FAMILY_ID_APPLICATION
-            && permission.id == PERMISSION_ID_EXECUTE_PROCEDURE
-        {
-            declares_execute_permission = true;
-            continue;
-        }
-
-        validate_manifest_permission_is_application_only(permission)?;
-    }
-
-    if !declares_execute_permission {
-        return Err(contract_error(
-            "procedure manifest required_permissions must include andromeda.execute_procedure",
-        ));
-    }
-
-    Ok(())
-}
-
-fn validate_manifest_permission_is_application_only(
-    permission: &CatalogRequiredPermission,
-) -> AndromedaResult<()> {
-    let Some(security_permission) = SecurityPermission::from_canonical_id(&permission.id) else {
-        if permission.family == FAMILY_ID_APPLICATION {
-            return Ok(());
-        }
-
-        return Err(contract_error(format!(
-            "Application Procedure manifest required_permissions cannot include non-Application permission family {:?} for {:?}",
-            permission.family, permission.id
-        )));
-    };
-
-    let expected_family = security_permission.family();
-    if permission.family != expected_family.as_str() {
-        return Err(contract_error(format!(
-            "procedure manifest required_permissions permission {:?} must use canonical family {:?}",
-            permission.id,
-            expected_family.as_str()
-        )));
-    }
-
-    if !matches!(expected_family, PermissionFamily::Application) {
-        return Err(contract_error(format!(
-            "Application Procedure manifest required_permissions cannot include non-Application permission {:?} from family {:?}",
-            permission.id, permission.family
-        )));
     }
 
     Ok(())

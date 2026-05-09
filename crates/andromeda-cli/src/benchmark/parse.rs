@@ -5,7 +5,7 @@ use andromeda_bench::{
     BenchmarkHardwareProfile, BenchmarkRunRequest, DEFAULT_DURATION_MS, DEFAULT_SAMPLES,
     DEFAULT_TEMP_BYTES, DEFAULT_WARMUPS,
 };
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct BenchmarkRunOptions {
@@ -32,7 +32,7 @@ pub(super) fn parse_benchmark_run_options(args: &[String]) -> AndromedaResult<Be
                     "--duration-ms requires an unsigned integer",
                 )?;
                 duration_ms = parse_u64_option(value, "--duration-ms")?;
-            }
+            },
             "--samples" => {
                 let value = next_option_value_rejecting_flag(
                     args,
@@ -40,7 +40,7 @@ pub(super) fn parse_benchmark_run_options(args: &[String]) -> AndromedaResult<Be
                     "--samples requires an unsigned integer",
                 )?;
                 samples = parse_u32_option(value, "--samples")?;
-            }
+            },
             "--warmups" => {
                 let value = next_option_value_rejecting_flag(
                     args,
@@ -48,7 +48,7 @@ pub(super) fn parse_benchmark_run_options(args: &[String]) -> AndromedaResult<Be
                     "--warmups requires an unsigned integer",
                 )?;
                 warmups = parse_u32_option(value, "--warmups")?;
-            }
+            },
             "--temp-budget-bytes" => {
                 let value = next_option_value_rejecting_flag(
                     args,
@@ -56,7 +56,7 @@ pub(super) fn parse_benchmark_run_options(args: &[String]) -> AndromedaResult<Be
                     "--temp-budget-bytes requires an unsigned integer",
                 )?;
                 temp_budget_bytes = parse_u64_option(value, "--temp-budget-bytes")?;
-            }
+            },
             "--hardware-profile" => {
                 let value = next_option_value_rejecting_flag(
                     args,
@@ -64,18 +64,18 @@ pub(super) fn parse_benchmark_run_options(args: &[String]) -> AndromedaResult<Be
                     "--hardware-profile requires a profile name",
                 )?;
                 hardware_profile = parse_hardware_profile(value)?;
-            }
+            },
             DIAGNOSTIC_JSON_FLAG => diagnostic_json = true,
             JSON_FLAG => {
                 return Err(cli_error(
                     "benchmark uses --diagnostic-json to make JSON diagnostic-only explicit",
                 ));
-            }
+            },
             opt if opt.starts_with("--") => {
                 return Err(cli_error(
                     "unknown benchmark run option; supported options are --duration-ms, --samples, --warmups, --temp-budget-bytes, --hardware-profile, and --diagnostic-json",
                 ));
-            }
+            },
             value => {
                 if workload_id.is_some() {
                     return Err(cli_error(
@@ -83,7 +83,7 @@ pub(super) fn parse_benchmark_run_options(args: &[String]) -> AndromedaResult<Be
                     ));
                 }
                 workload_id = Some(value.to_string());
-            }
+            },
         }
 
         index += 1;
@@ -117,17 +117,17 @@ pub(super) fn has_diagnostic_json_option(args: &[String]) -> AndromedaResult<boo
                 return Err(cli_error(
                     "benchmark uses --diagnostic-json to make JSON diagnostic-only explicit",
                 ));
-            }
+            },
             opt if opt.starts_with("--") => {
                 return Err(cli_error(
                     "unknown benchmark option; supported output option is --diagnostic-json",
                 ));
-            }
+            },
             _ => {
                 return Err(cli_error(
                     "unexpected benchmark argument; supported output option is --diagnostic-json",
                 ));
-            }
+            },
         }
     }
     Ok(diagnostic_json)

@@ -13,3 +13,6 @@ andromeda-plan-cache.workspace = true
 andromeda-srpl-ir.workspace = true
 andromeda-statistics.workspace = true
 andromeda-types.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true

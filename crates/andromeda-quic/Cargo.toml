@@ -10,18 +10,18 @@ andromeda-digest.workspace = true
 andromeda-error.workspace = true
 andromeda-principal.workspace = true
 andromeda-procedure-contract.workspace = true
-andromeda-proto.workspace = true
 andromeda-rpc.workspace = true
 andromeda-rpc-codec.workspace = true
 andromeda-rpc-protocol.workspace = true
-andromeda-security-contract.workspace = true
 andromeda-types.workspace = true
 
 [features]
 default = []
-# Compatibility selector for downstream manifests during the W22 split.
-# Concrete Quinn/Rustls/Tokio ownership lives in andromeda-quic-runtime-quinn.
+# Feature marker retained for downstream manifests; the concrete Quinn/Rustls/Tokio
+# implementation lives in andromeda-quic-runtime-quinn.
 runtime-quinn = []
 
 [dev-dependencies]
+andromeda-proto.workspace = true
+andromeda-security-contract.workspace = true
 proptest.workspace = true

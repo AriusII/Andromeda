@@ -5,16 +5,15 @@ mod result_frames;
 use andromeda_admission::{InvocationContext, InvocationRequest};
 use andromeda_catalog::CatalogSnapshot;
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, digest::sha256};
-use andromeda_exec::{InvocationWal, LocalVerticalRuntime, VerticalInvocationOutcome};
+use andromeda_exec::{LocalVerticalRuntime, VerticalInvocationOutcome};
 use andromeda_observe::{EventEmitter, EventSink};
 use andromeda_procedure_contract::{ProcedureContract, ProcedureContractBinding};
 use andromeda_rpc_protocol::FrameBytes;
-use andromeda_srpl::procedure_compiler::{
-    bind_executable_procedure_plan, compile_narrow_procedure_signature,
-};
+use andromeda_srpl::compile_narrow_procedure_signature;
+use andromeda_srpl_catalog_binding::bind_executable_procedure_plan;
 use andromeda_srpl_ir::ExecutableProcedurePlan;
 use andromeda_storage_page::{PageId, PageSize};
-use andromeda_wal::Lsn;
+use andromeda_wal::{InvocationWal, Lsn};
 
 use crate::{
     InventoryProductStockCommitEvidence, InventoryProductStockDurableRedoEvidence,
@@ -140,8 +139,8 @@ where
     }
 
     /// Wrap an externally constructed [`LocalVerticalRuntime`] so callers can
-    /// inject a recovery-seeded [`andromeda_tx::TransactionManager`] before
-    /// the V0 path begins serving traffic.
+    /// inject a recovery-seeded local runtime before the V0 path begins
+    /// serving traffic.
     pub fn from_local_runtime(local: LocalVerticalRuntime<W>) -> Self {
         Self { local }
     }

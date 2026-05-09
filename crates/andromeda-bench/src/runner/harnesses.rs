@@ -18,7 +18,7 @@ use andromeda_bench_workload::{BenchmarkError, BenchmarkRunRequest};
 use andromeda_scenario_evidence::BenchmarkWorkloadCounter;
 
 pub(super) const BTREE_HARNESS_SOURCE: &str = "in-memory-btree-read-harness";
-pub(super) const BTREE_HARNESS_NAME: &str = "MockBTreeIndex";
+pub(super) const BTREE_HARNESS_NAME: &str = "ReadOnlyBTreeIndexModel";
 
 pub(super) fn run_btree_lookup_harness(
     request: &BenchmarkRunRequest,

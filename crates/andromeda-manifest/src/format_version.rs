@@ -5,7 +5,7 @@
 
 use std::cmp::Ordering;
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 /// Unified version representation for all storage formats.
 ///

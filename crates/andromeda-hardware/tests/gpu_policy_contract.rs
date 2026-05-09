@@ -127,6 +127,9 @@ fn gpu_selection_accepts_only_advisory_pipelines_with_guards() {
 fn hardware_policy_namespace_preserves_flat_public_types() {
     use andromeda_hardware::policy::*;
 
+    let _: Option<andromeda_hardware::OptionalGpuRequest> = Option::<OptionalGpuRequest>::None;
+    let _: Option<andromeda_hardware::OptionalGpuDecision> = Option::<OptionalGpuDecision>::None;
+    let _: Option<andromeda_hardware::OptionalGpuSelection> = Option::<OptionalGpuSelection>::None;
     let _: Option<andromeda_hardware::CpuCapabilityClass> = Option::<CpuCapabilityClass>::None;
     let _: Option<andromeda_hardware::CpuProfile> = Option::<CpuProfile>::None;
     let _: Option<andromeda_hardware::HardwareArchitecture> = Option::<HardwareArchitecture>::None;
@@ -138,4 +141,29 @@ fn hardware_policy_namespace_preserves_flat_public_types() {
     let _: Option<andromeda_hardware::RamProfile> = Option::<RamProfile>::None;
     let _: Option<andromeda_hardware::RamSectionBudget> = Option::<RamSectionBudget>::None;
     let _: Option<andromeda_hardware::RamSectionRole> = Option::<RamSectionRole>::None;
+    let _: Option<andromeda_hardware::SimdDispatchRequest> = Option::<SimdDispatchRequest>::None;
+    let _: Option<andromeda_hardware::SimdDispatchDecision> = Option::<SimdDispatchDecision>::None;
+    let _: Option<andromeda_hardware::SimdExecutionMode> = Option::<SimdExecutionMode>::None;
+    let _: Option<andromeda_hardware::VectorAdvisoryRequest> =
+        Option::<VectorAdvisoryRequest>::None;
+    let _: Option<andromeda_hardware::VectorAdvisoryDecision> =
+        Option::<VectorAdvisoryDecision>::None;
+    let _: Option<andromeda_hardware::VectorAdvisoryKind> = Option::<VectorAdvisoryKind>::None;
+}
+
+#[test]
+fn acceleration_policy_namespace_preserves_owner_path() {
+    let request =
+        andromeda_hardware::acceleration::OptionalGpuRequest::new(PipelineClass::BatchAnalytics)
+            .with_cpu_fallback()
+            .with_cancellation_boundary();
+    let decision =
+        andromeda_hardware::acceleration::select_optional_gpu(GpuProfile::disabled(), request)
+            .unwrap();
+
+    assert_eq!(
+        decision.selection,
+        andromeda_hardware::acceleration::OptionalGpuSelection::CpuFallback
+    );
+    assert!(decision.advisory_only);
 }

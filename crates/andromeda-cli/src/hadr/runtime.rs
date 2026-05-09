@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_hadr::{
     FileBackedHadrMembershipStore, HadrMembershipSnapshot, HadrMembershipStore, HadrNodeRole,
     HadrPromotionAuditLog, HadrPromotionAuditMarker, HadrPromotionAuditReceipt,

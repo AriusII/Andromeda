@@ -1,8 +1,9 @@
-use andromeda_core::{AndromedaResult, TransactionId};
+use andromeda_error::AndromedaResult;
 use andromeda_observe::{
     CommitVisibleTrace, EventCorrelation, EventEmitter, EventSink, RollbackDurableTrace,
     TraceEvent, TraceId,
 };
+use andromeda_types::TransactionId;
 use andromeda_wal::Lsn;
 
 pub(super) fn emit_commit_visible_event<S: EventSink>(

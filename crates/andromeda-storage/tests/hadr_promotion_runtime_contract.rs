@@ -1,20 +1,17 @@
 use std::cell::RefCell;
 
 use andromeda_core::{AndromedaError, AndromedaErrorKind};
+use andromeda_hadr::{
+    FileBackedHadrMembershipStore, HadrClusterOperation, HadrClusterSecurityEvidence, HadrEpoch,
+    HadrFencingContext, HadrFencingToken, HadrMembershipRecord, HadrMembershipStore, HadrNodeId,
+    HadrNodeRole, HadrPromotionAuditLog, HadrPromotionAuditMarker, HadrPromotionAuditReceipt,
+    HadrPromotionVote, NoopPromotionAuditLog, PromotionAttempt, PromotionBoundary,
+};
 use andromeda_observe::{
     CertificateIdentity, Permission, SecurityAuditOutcome, SecurityAuditTrace,
     SecurityPolicyVersionEvidence, SurfaceScope, TraceId, UserPrincipal, UserPrincipalKind,
 };
-use andromeda_storage::{
-    Lsn,
-    hadr::{
-        FileBackedHadrMembershipStore, HadrClusterOperation, HadrClusterSecurityEvidence,
-        HadrEpoch, HadrFencingContext, HadrFencingToken, HadrMembershipRecord, HadrMembershipStore,
-        HadrNodeId, HadrNodeRole, HadrPromotionAuditLog, HadrPromotionAuditMarker,
-        HadrPromotionAuditReceipt, HadrPromotionVote, NoopPromotionAuditLog, PromotionAttempt,
-        PromotionBoundary,
-    },
-};
+use andromeda_wal::Lsn;
 
 fn store_path(dir: &tempfile::TempDir) -> std::path::PathBuf {
     dir.path().join("hadr-membership.store")

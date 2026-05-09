@@ -9,8 +9,10 @@ mod result_stream;
 mod tests;
 
 pub use gateway_projection::{
-    ProcedureGatewayColumnDescriptor, ProcedureGatewayManifest, ProcedureGatewayProtocolLayout,
-    ProcedureGatewayRequiredPermission, ProcedureGatewayResultStreamDescriptor,
+    ProcedureGatewayColumnDescriptor, ProcedureGatewayExecuteRequest, ProcedureGatewayManifest,
+    ProcedureGatewayProtocolLayout, ProcedureGatewayRequiredPermission,
+    ProcedureGatewayResultStreamDescriptor, required_execute_permission,
+    validate_procedure_gateway_manifest_permissions,
 };
 pub use permission::RequiredPermission;
 pub use policy_version::ManifestPolicyVersion;

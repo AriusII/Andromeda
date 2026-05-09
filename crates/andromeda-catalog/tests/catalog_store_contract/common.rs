@@ -1,18 +1,27 @@
 pub(crate) use andromeda_catalog::{
-    AccessMode, CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH, CatalogDefinition,
-    CatalogDependencyKind, CatalogDurabilityMarker, CatalogDurableMutationPayload,
-    CatalogLifecycleTarget, CatalogMutationCommitEvidence, CatalogMutationDurability,
-    CatalogMutationOperation, CatalogMutationPlan, CatalogMutationRecord,
-    CatalogMutationRecordKind, CatalogObjectRef, CatalogPublicationSemantics,
-    CatalogRecoveryAnomalyKind, CatalogRecoveryOutcome, CatalogSkippedBatchReason,
-    CatalogSnapshotPublication, CatalogSystemStore, CompatibilityPolicy, DefinitionBatch,
-    DefinitionBatchId, DefinitionBatchPlan, DefinitionBatchSourceHash, DefinitionOperation,
-    IsolationPolicy, MultiResultPolicy, ObjectKind, ProcedureContract, ProcedureContractCandidate,
-    ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName, ResultMetadataPolicy, StatsVersion,
-    StructuredObjectDefinition, TableDefinition, TransactionPolicy,
+    CatalogLifecycleTarget, CatalogMutationCommitEvidence, CatalogMutationOperation,
+    CatalogMutationPlan, CatalogMutationRecord, CatalogMutationRecordKind, CatalogRecoveryOutcome,
+    CatalogSnapshotPublication, CatalogSystemStore, DefinitionBatchPlan,
     recover_catalog_snapshot_from_durable_payloads, replay_catalog_mutation_records,
 };
+pub(crate) use andromeda_catalog_recovery::{
+    CatalogDurableMutationPayload, CatalogRecoveryAnomalyKind, CatalogSkippedBatchReason,
+};
+pub(crate) use andromeda_catalog_store::{
+    CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH, CatalogDefinition, CatalogDurabilityMarker,
+    CatalogMutationDurability, CatalogObjectRef, CatalogPublicationSemantics, ObjectKind,
+    QualifiedName, StructuredObjectDefinition, TableDefinition,
+};
+pub(crate) use andromeda_definition_batch::{
+    CatalogDependencyKind, DefinitionBatch, DefinitionBatchId, DefinitionBatchSourceHash,
+    DefinitionOperation,
+};
 pub(crate) use andromeda_error::{AndromedaError, AndromedaErrorKind};
+pub(crate) use andromeda_procedure_contract::{
+    AccessMode, CompatibilityPolicy, IsolationPolicy, MultiResultPolicy, ProcedureContract,
+    ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef, ResultMetadataPolicy,
+    StatsVersion, TransactionPolicy,
+};
 pub(crate) use andromeda_types::{
     CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, DatabaseId, NamespaceId,
     ProcedureId, ScalarType, TransactionId, TypeDescriptor,

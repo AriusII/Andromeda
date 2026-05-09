@@ -1,6 +1,5 @@
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, PipelineClass, ResourceBudget,
-};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_hardware::{PipelineClass, ResourceBudget};
 use andromeda_observe::TraceId;
 use andromeda_storage::{
     CoreIoPlacementRequest, OperationalProfile, StorageIoBudgetScope, StorageWorkloadClass,

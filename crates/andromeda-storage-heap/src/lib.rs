@@ -22,6 +22,7 @@ mod error;
 mod format_v1;
 mod heap_redo;
 mod insert;
+mod local_redo_template;
 mod page;
 mod row_encoder;
 mod scan;
@@ -38,6 +39,7 @@ pub use heap_redo::{
     HeapRowRedoPayloadV1,
 };
 pub use insert::{HeapPageInsert, ProductStockHeapInsert};
+pub use local_redo_template::{LocalHeapRowInsertRedoTemplate, LocalHeapRowRedoContractBinding};
 pub use page::HeapPage;
 pub use row_encoder::{
     ColumnDef, Datum, INVENTORY_PRODUCT_STOCK_TABLE_NAME, PRODUCT_STOCK_PRODUCT_ID_COLUMN,

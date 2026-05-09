@@ -15,7 +15,7 @@
 //! - `manifest.checkpoint_lsn` ≤ `wal.checkpoint_lsn` ≤ `wal.durable_lsn` (required before manifest switch)
 //! - `recovery.recovery_floor_lsn` ≥ `manifest.required_wal_start_lsn` (required for recovery)
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::Lsn;
 

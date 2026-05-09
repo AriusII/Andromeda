@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 #![doc = "Comprehensive test suite for andromeda-manifest boundary validations"]
 
-use andromeda_core::AndromedaErrorKind;
+use andromeda_error::AndromedaErrorKind;
 use andromeda_manifest::{
     validate_manifest_atomic_switch, validate_recovery_floor, ManifestDurabilityBoundary,
 };

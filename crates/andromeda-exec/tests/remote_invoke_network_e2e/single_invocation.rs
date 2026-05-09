@@ -19,8 +19,8 @@ async fn test_single_invocation_e2e() -> AndromedaResult<()> {
         let mut buf = vec![0u8; 512];
         let n = stream.read(&mut buf).await?;
         if n == 0 {
-            return Err(andromeda_core::AndromedaError::new(
-                andromeda_core::AndromedaErrorKind::Transport,
+            return Err(andromeda_error::AndromedaError::new(
+                andromeda_error::AndromedaErrorKind::Transport,
                 "empty request frame",
             ));
         }
@@ -39,7 +39,7 @@ async fn test_single_invocation_e2e() -> AndromedaResult<()> {
         }
         stream.finish().await?;
 
-        Ok::<_, andromeda_core::AndromedaError>(())
+        Ok::<_, andromeda_error::AndromedaError>(())
     });
 
     // Client: connect and invoke procedure

@@ -7,9 +7,9 @@ use super::{CriticalDecisionKind, CriticalDecisionTrace};
 
 /// Stable wire-aligned numeric code for a transaction lifecycle phase.
 ///
-/// `andromeda-observe` must remain independent of `andromeda-tx`, so phases
+/// `andromeda-observe` must remain independent of transaction runtime crates, so phases
 /// are projected through this newtype rather than referencing
-/// `andromeda_tx::TransactionState` directly. The numeric encoding is part
+/// `TransactionState` directly. The numeric encoding is part
 /// of the durable observability contract: codes 1..=9 are stable and any
 /// change is a breaking change to the transition trace contract.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -78,8 +78,8 @@ impl TransitionReasonCode {
 
 /// Forensic record of a single transaction state-machine transition.
 ///
-/// Emitted by `andromeda-tx` (and any caller projecting a `TransactionStateMachine`
-/// snapshot) when a transaction crosses phase boundaries. Carries enough
+/// Emitted by transaction owners when a transaction crosses phase boundaries.
+/// Carries enough
 /// correlation to be cross-referenced with the request that initiated the
 /// transaction and the durable WAL evidence that backs any terminal claim.
 #[derive(Debug, Clone, PartialEq, Eq)]

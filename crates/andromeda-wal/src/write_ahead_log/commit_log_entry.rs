@@ -7,7 +7,7 @@
 mod entry;
 mod store;
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind};
+use andromeda_error::{AndromedaError, AndromedaErrorKind};
 
 pub use entry::{CommitLogEntry, Timestamp};
 pub use store::CommitLog;

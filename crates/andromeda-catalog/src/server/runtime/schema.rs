@@ -1,10 +1,11 @@
 use andromeda_error::AndromedaResult;
+use andromeda_procedure_contract::{AccessMode, ProcedureContract};
 use andromeda_types::{
     AbsencePolicy, CatalogVersion, ColumnDescriptor, DecimalType, FloatMode, FloatType, ScalarType,
     TextEncoding, TimestampType, TypeDescriptor,
 };
 
-use crate::{AccessMode, ColumnSchema, ProcedureContract, ProcedureManifest};
+use crate::{ColumnSchema, ProcedureManifest};
 
 pub(super) fn manifest_from_contract(
     contract: &ProcedureContract,

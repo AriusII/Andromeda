@@ -3,11 +3,11 @@
 //! Tests verify that promotion eligibility can be queried without I/O, that all
 //! requirements are enforced, and that eligibility rankings work correctly.
 
-use andromeda_storage::Lsn;
-use andromeda_storage::hadr::{
+use andromeda_hadr::{
     FailoverTrigger, PromotionCandidate, PromotionEligibility, PromotionRequirements,
     is_promotion_eligible, select_best_eligible_candidate,
 };
+use andromeda_wal::Lsn;
 
 /// Helper to construct promotion requirements for testing.
 fn make_requirements(

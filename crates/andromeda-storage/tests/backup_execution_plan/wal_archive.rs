@@ -1,5 +1,7 @@
 use crate::support::*;
-use andromeda_storage::{BackupId, ExtentState, FileBackedBackupArtifactStore, Lsn};
+use andromeda_backup::{BackupId, FileBackedBackupArtifactStore};
+use andromeda_segment::ExtentState;
+use andromeda_wal::Lsn;
 
 #[test]
 fn test_backup_plan_includes_wal_range() {

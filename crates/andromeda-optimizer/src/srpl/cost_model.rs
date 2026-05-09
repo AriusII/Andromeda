@@ -98,7 +98,7 @@ pub fn estimate_without_stats(ir: &SrplProcedureIr) -> CostEstimate {
                 total_tuples += tuples;
                 total_io += pages;
                 total_mem += pages;
-            }
+            },
             SrplBusinessOperationKindIr::Update {
                 affected_rows_exact,
                 ..
@@ -108,9 +108,9 @@ pub fn estimate_without_stats(ir: &SrplProcedureIr) -> CostEstimate {
                 total_tuples += rows;
                 total_io += pages * 2.0; // read + write-back
                 total_mem += pages;
-            }
+            },
             // Emit, Assert, Raise: no storage cost.
-            _ => {}
+            _ => {},
         }
     }
 

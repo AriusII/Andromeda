@@ -1,5 +1,5 @@
 //! B+ Tree range scan cursor — sequential iteration via linked leaves.
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 use super::*;
 

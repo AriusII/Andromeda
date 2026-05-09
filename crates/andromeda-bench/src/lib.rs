@@ -5,11 +5,11 @@
 //! This crate executes bounded benchmark smoke runs and reexports the
 //! workload, evidence, and regression contracts owned by dedicated crates.
 
-pub mod audit_file_benchmark;
-pub mod btree_benchmark;
-pub mod btree_node_codec_benchmark;
-pub mod srpl_compiler_benchmark;
-pub mod wal_file_benchmark;
+mod audit_file_benchmark;
+mod btree_benchmark;
+mod btree_node_codec_benchmark;
+mod srpl_compiler_benchmark;
+mod wal_file_benchmark;
 
 mod runner;
 mod storage_runtime_benchmark;
@@ -20,10 +20,6 @@ pub use andromeda_bench_workload::{
     DEFAULT_WARMUPS, MAX_DURATION_MS, MAX_EVIDENCE_TTL_MS, MAX_SAMPLES, MAX_TEMP_BYTES,
     MAX_WARMUPS, PerformanceBudget, WORKLOADS, evaluate_budget, find_workload,
     validate_run_request,
-};
-pub use andromeda_regression::{
-    BenchmarkBaseline, BenchmarkBaselineComparisonError, BenchmarkBaselineContext,
-    RegressionAnalysis, RegressionReason,
 };
 pub use andromeda_scenario_evidence::{
     BENCHMARK_EVIDENCE_AUTHORITATIVE, BENCHMARK_EVIDENCE_CAN_SELECT_PLAN_ALONE,

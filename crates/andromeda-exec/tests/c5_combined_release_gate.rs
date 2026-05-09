@@ -10,10 +10,11 @@
 #[path = "inventory_runtime_e2e_gates/support.rs"]
 mod support;
 
-use andromeda_exec::{AdmissionService, ResultValidationService};
+use andromeda_admission::AdmissionService;
 use andromeda_inventory_demo::InventoryBusinessMvccStore;
 use andromeda_mvcc::{MvccIsolationPolicy, Snapshot, TransactionStatus};
 use andromeda_observe::{EventEmitter, InMemoryEventSink};
+use andromeda_result_stream::ResultValidationService;
 use support::*;
 
 fn snapshot(

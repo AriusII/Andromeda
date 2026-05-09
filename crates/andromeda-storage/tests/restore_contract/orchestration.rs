@@ -1,5 +1,7 @@
 use crate::support::*;
-use andromeda_storage::{BackupId, Lsn, RecoveryStage, RestoreValidationPolicy};
+use andromeda_backup::BackupId;
+use andromeda_restore::{RecoveryStage, RestoreValidationPolicy};
+use andromeda_wal::Lsn;
 
 #[test]
 fn test_restore_orchestration_constructs_successfully() {
@@ -101,7 +103,7 @@ fn test_restore_orchestration_rejects_audit_checksum_mismatch() {
         BackupId::new(1),
         Lsn::new(1500),
         RecoveryStage::SafeStart,
-        andromeda_storage::compute_restore_checksum(&manifest).wrapping_add(1),
+        andromeda_restore::compute_restore_checksum(&manifest).wrapping_add(1),
     );
 
     let orch = restore_orchestration_for(

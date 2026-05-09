@@ -1,6 +1,6 @@
 use super::*;
 use crate::Lsn;
-use andromeda_core::AndromedaErrorKind;
+use andromeda_error::AndromedaErrorKind;
 
 #[test]
 fn page_flush_allowed_when_lsn_equals_durable() {

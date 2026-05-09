@@ -2,13 +2,13 @@
 
 ## Purpose
 
-`andromeda-mvcc` is a future C5 owner crate for snapshot visibility and version lifecycle policy.
+`andromeda-mvcc` is the C5 owner crate for snapshot visibility and version lifecycle policy.
 
-This scaffold reserves a boundary for MVCC snapshots, version visibility, active-reader tracking, and version garbage-collection eligibility. No behavior has moved from `andromeda-tx` or `andromeda-storage`.
+This crate owns MVCC snapshots, version visibility, active-reader tracking, and version garbage-collection eligibility.
 
 ## Scope
 
-Future work in this crate may own:
+This crate owns:
 
 - Snapshot identifiers, visibility decisions, and reader lifetime evidence.
 - Version creation, retirement, and garbage-collection eligibility rules.
@@ -22,7 +22,6 @@ Future work in this crate may own:
 - No ownership of WAL bytes, page formats, heap storage, lock scheduling, or savepoint stacks.
 - No catalog publication, backup, restore, or HA/DR implementation.
 - No GPU output, benchmark output, RAM state, or temporary storage as MVCC truth.
-- No behavior move in this scaffold.
 
 ## Prerequisites
 
@@ -43,7 +42,7 @@ Before behavior lands here:
 
 ## Validation
 
-This scaffold is documentation-only. Future behavior requires `cargo fmt`, `cargo check`, `cargo clippy`, MVCC visibility tests, anomaly-oriented tests, property checks where practical, and crash/recovery scenarios.
+Run `cargo fmt`, `cargo check`, `cargo clippy`, MVCC visibility tests, anomaly-oriented tests, property checks where practical, and crash/recovery scenarios.
 
 ## Troubleshooting
 
@@ -52,4 +51,5 @@ If a version is visible only because of RAM state or benchmark-derived timing, r
 ## References
 
 - `src/lib.rs`
-- Existing owners: `crates/andromeda-tx/`, `crates/andromeda-storage/`
+- Transaction status owner: `crates/andromeda-transaction/`
+- Storage integration owner: `crates/andromeda-storage/`

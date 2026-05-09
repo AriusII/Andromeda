@@ -461,7 +461,7 @@ fn strip_toml_comment(line: &str) -> &str {
             '\'' if !in_double_quote => in_single_quote = !in_single_quote,
             '"' if !in_single_quote => in_double_quote = !in_double_quote,
             '#' if !in_single_quote && !in_double_quote => return &line[..index],
-            _ => {}
+            _ => {},
         }
     }
     line

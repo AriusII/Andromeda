@@ -32,7 +32,7 @@
 //! - Max retries enforced (no infinite retry)
 //! - Retry is observable in audit trace
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 /// Error classification for retry eligibility.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

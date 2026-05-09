@@ -61,7 +61,7 @@ fn normalize_operation(mut op: SrplBusinessOperationIr) -> Option<SrplBusinessOp
                 *predicates = simplified;
             }
             Some(op)
-        }
+        },
         SrplBusinessOperationKindIr::Update {
             predicates,
             assignments: _,
@@ -70,7 +70,7 @@ fn normalize_operation(mut op: SrplBusinessOperationIr) -> Option<SrplBusinessOp
             // N2.
             predicates.sort_by_key(predicate_sort_key);
             Some(op)
-        }
+        },
         // N5: Assert with an empty predicate slot — remove.
         // (In practice the parser never emits empty asserts, but defensive.)
         SrplBusinessOperationKindIr::Assert { .. }
@@ -121,7 +121,7 @@ mod tests {
         match &norm.body.operations[0].kind {
             SrplBusinessOperationKindIr::Read { predicates, .. } => {
                 assert_eq!(predicates.len(), 1);
-            }
+            },
             _ => panic!("unexpected kind"),
         }
     }
@@ -146,7 +146,7 @@ mod tests {
                 let mut sorted = keys.clone();
                 sorted.sort();
                 assert_eq!(keys, sorted, "predicates must be in sorted order");
-            }
+            },
             _ => panic!("unexpected kind"),
         }
     }

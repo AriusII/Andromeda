@@ -33,16 +33,16 @@ pub fn classify_builtin(name: &str) -> FunctionDeterminism {
         | "LTRIM" | "RTRIM" | "CHAR_LENGTH" | "CONCAT" | "REPLACE" | "SUBSTRING" | "MOD"
         | "POWER" | "FLOOR" | "CEILING" | "ROUND" | "SIGN" | "GREATEST" | "LEAST" => {
             FunctionDeterminism::PureDeterministic
-        }
+        },
 
         "TRANSACTION_TIMESTAMP" | "LOCALTIMESTAMP" | "CURRENT_DATE" | "CURRENT_TIME" => {
             FunctionDeterminism::NonDeterministicPerTransaction
-        }
+        },
 
         "NOW" | "RAND" | "RANDOM" | "UUID" | "NEWID" | "GEN_RANDOM_UUID" | "CURRENT_TIMESTAMP"
         | "SYSDATE" | "GETDATE" | "GETUTCDATE" | "SYSDATETIME" => {
             FunctionDeterminism::NonDeterministicPerInvocation
-        }
+        },
         _ => FunctionDeterminism::NonDeterministicPerInvocation,
     }
 }

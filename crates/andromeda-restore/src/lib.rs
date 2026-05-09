@@ -9,6 +9,7 @@ pub use restore_orchestration::{
     validate_restore_prerequisites,
 };
 
+use andromeda_backup::{BackupId, BackupLsn, BackupManifest};
 use andromeda_wal::Lsn as WalLsn;
 use std::{error::Error, fmt};
 
@@ -99,6 +100,43 @@ pub trait PitrBackupManifest<L: RestoreLsn, Id: Copy> {
     fn required_wal_start_lsn(&self) -> L;
     fn wal_archive_start(&self) -> L;
     fn wal_archive_end_inclusive(&self) -> L;
+}
+
+impl<L> PitrBackupManifest<L, BackupId> for BackupManifest<L>
+where
+    L: RestoreLsn + BackupLsn,
+{
+    fn backup_manifest_valid(&self) -> bool {
+        self.validate().is_ok()
+    }
+
+    fn backup_id(&self) -> BackupId {
+        self.backup_id
+    }
+
+    fn database_id(&self) -> u64 {
+        self.database_id
+    }
+
+    fn snapshot_id(&self) -> u64 {
+        self.snapshot.snapshot_id
+    }
+
+    fn base_checkpoint_lsn(&self) -> L {
+        self.snapshot.base_checkpoint_lsn
+    }
+
+    fn required_wal_start_lsn(&self) -> L {
+        self.snapshot.required_wal_start_lsn
+    }
+
+    fn wal_archive_start(&self) -> L {
+        self.wal_archive.start
+    }
+
+    fn wal_archive_end_inclusive(&self) -> L {
+        self.wal_archive.end_inclusive
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

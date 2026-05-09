@@ -1,9 +1,11 @@
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 use andromeda_storage_page::{PageId, PageSize};
+use andromeda_wal::Lsn;
 
 use super::{
-    Datum, HEAP_PAGE_V1_PAYLOAD_OFFSET, HeapPage, ProductStockRow, RowEncoder, SlotEntry,
-    heap_error, heap_page_v1_validate_format_guard, product_stock_row_encoder,
+    Datum, HEAP_PAGE_V1_PAYLOAD_OFFSET, HeapPage, HeapRowRedoPayloadV1, ProductStockRow,
+    RowEncoder, SlotEntry, heap_error, heap_page_v1_validate_format_guard,
+    product_stock_row_encoder,
     slot_directory::{SlotDirectory, SlotId},
 };
 
@@ -235,6 +237,22 @@ impl ProductStockHeapInsert {
 
     pub fn tuple(&self) -> &[u8] {
         &self.tuple
+    }
+
+    pub fn row_insert_redo_payload(
+        &self,
+        expected_previous_page_lsn: Lsn,
+        resulting_page_lsn: Lsn,
+    ) -> AndromedaResult<HeapRowRedoPayloadV1> {
+        HeapRowRedoPayloadV1::row_insert(
+            self.page_id(),
+            self.page_size(),
+            self.slot_id(),
+            expected_previous_page_lsn,
+            resulting_page_lsn,
+            self.tuple().to_vec(),
+        )
+        .map_err(|error| heap_error(error.message().to_string()))
     }
 }
 

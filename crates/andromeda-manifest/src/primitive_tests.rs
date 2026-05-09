@@ -1,4 +1,4 @@
-use andromeda_core::AndromedaErrorKind;
+use andromeda_error::AndromedaErrorKind;
 use andromeda_segment::SegmentId;
 use andromeda_wal::Lsn;
 

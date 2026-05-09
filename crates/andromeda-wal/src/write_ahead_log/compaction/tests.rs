@@ -1,5 +1,5 @@
 use super::*;
-use andromeda_core::AndromedaErrorKind;
+use andromeda_error::AndromedaErrorKind;
 use std::time::Duration;
 
 #[test]

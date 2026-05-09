@@ -1,6 +1,6 @@
 use crate::support::{PERSISTENT_KINDS, TRANSIENT_KINDS};
-use andromeda_core::AndromedaErrorKind;
-use andromeda_exec::retry::ErrorRetryability;
+use andromeda_error::AndromedaErrorKind;
+use andromeda_retry::ErrorRetryability;
 
 #[test]
 fn test_error_classification_transient_types() {

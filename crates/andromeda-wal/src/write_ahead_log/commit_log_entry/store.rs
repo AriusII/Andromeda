@@ -1,4 +1,5 @@
-use andromeda_core::{AndromedaResult, TransactionId};
+use andromeda_error::AndromedaResult;
+use andromeda_types::TransactionId;
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
 
@@ -29,7 +30,7 @@ impl CommitLog {
             Entry::Vacant(vacant) => {
                 vacant.insert(entry);
                 Ok(())
-            }
+            },
         }
     }
 
@@ -38,7 +39,7 @@ impl CommitLog {
             Some(mut entry) => {
                 entry.mark_durable();
                 Ok(())
-            }
+            },
             None => Err(transaction_error(format!(
                 "commit log entry not found for transaction {}",
                 tx_id.get()

@@ -2,6 +2,9 @@ use crate::{Permission, PermissionFamily, SecurityContractError, SecuritySurface
 
 pub const SECURITY_ADMISSION_V0_CONTRACT_ID: &str = "andromeda.security.admission.v0";
 pub const SECURITY_ADMISSION_V0_SCHEMA_VERSION: u16 = 0;
+pub const SECURITY_ADMISSION_AUDIT_EVENT_V0_SCHEMA_ID: &str =
+    "andromeda.audit.security_admission.v0";
+pub const SECURITY_ADMISSION_AUDIT_EVENT_V0_SCHEMA_VERSION: u16 = 0;
 
 /// Canonical pre-dispatch security admission steps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -352,7 +355,7 @@ impl SurfaceClass {
                     surface,
                     SecuritySurface::Administration | SecuritySurface::BackupAgent
                 )
-            }
+            },
             Self::Monitoring => matches!(surface, SecuritySurface::MonitoringAgent),
         }
     }
@@ -547,7 +550,7 @@ impl AdmissionDecision {
                         SecurityAdmissionEvidenceCodeV0::SurfaceBoundary,
                         self.reason_code,
                     )
-                }
+                },
                 _ => SecurityAdmissionV0::denied(
                     SecurityAdmissionStepV0::PermissionBoundary,
                     SecurityAdmissionEvidenceCodeV0::PermissionFamily,
@@ -658,6 +661,94 @@ impl SecurityAdmissionV0 {
 
     pub const fn is_allowed(self) -> bool {
         matches!(self.outcome, SecurityAdmissionOutcomeV0::Allowed)
+    }
+}
+
+/// Runtime-free audit projection for a security admission decision.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SecurityAdmissionAuditEventV0 {
+    admission: SecurityAdmissionV0,
+    surface: SecuritySurface,
+    class: SurfaceClass,
+    permission: Permission,
+    policy_evidence_present: bool,
+}
+
+impl SecurityAdmissionAuditEventV0 {
+    pub const fn new(
+        admission: SecurityAdmissionV0,
+        surface: SecuritySurface,
+        class: SurfaceClass,
+        permission: Permission,
+        policy_evidence_present: bool,
+    ) -> Self {
+        Self {
+            admission,
+            surface,
+            class,
+            permission,
+            policy_evidence_present,
+        }
+    }
+
+    pub const fn schema_id(self) -> &'static str {
+        SECURITY_ADMISSION_AUDIT_EVENT_V0_SCHEMA_ID
+    }
+
+    pub const fn schema_version(self) -> u16 {
+        SECURITY_ADMISSION_AUDIT_EVENT_V0_SCHEMA_VERSION
+    }
+
+    pub const fn family(self) -> &'static str {
+        "security_admission"
+    }
+
+    pub const fn phase(self) -> &'static str {
+        "pre_transaction_admission"
+    }
+
+    pub const fn admission(self) -> SecurityAdmissionV0 {
+        self.admission
+    }
+
+    pub const fn step(self) -> SecurityAdmissionStepV0 {
+        self.admission.step()
+    }
+
+    pub const fn evidence(self) -> SecurityAdmissionEvidenceCodeV0 {
+        self.admission.evidence()
+    }
+
+    pub const fn outcome(self) -> SecurityAdmissionOutcomeV0 {
+        self.admission.outcome()
+    }
+
+    pub const fn reason_code(self) -> SecurityAdmissionReasonCodeV0 {
+        self.admission.reason_code()
+    }
+
+    pub const fn surface(self) -> SecuritySurface {
+        self.surface
+    }
+
+    pub const fn class(self) -> SurfaceClass {
+        self.class
+    }
+
+    pub const fn permission(self) -> Permission {
+        self.permission
+    }
+
+    pub const fn policy_evidence_present(self) -> bool {
+        self.policy_evidence_present
+    }
+
+    pub const fn is_allowed(self) -> bool {
+        self.admission.is_allowed()
+    }
+
+    pub const fn is_denied(self) -> bool {
+        !self.is_allowed()
     }
 }
 

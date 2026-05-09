@@ -2,13 +2,13 @@
 
 ## Purpose
 
-`andromeda-locking` is a future C5 owner crate for lock coordination and conflict management.
+`andromeda-locking` is the C5 owner crate for lock coordination and conflict management.
 
-This scaffold reserves a boundary for lock modes, lock ownership, wait queues, deadlock handling, and cleanup evidence. No behavior has moved from `andromeda-tx`.
+This crate owns lock modes, lock ownership, wait queues, deadlock handling, and cleanup evidence.
 
 ## Scope
 
-Future work in this crate may own:
+This crate owns:
 
 - Lock identifiers, modes, grants, waits, and ownership lifecycle.
 - Strict two-phase locking validation where required by the transaction protocol.
@@ -22,7 +22,6 @@ Future work in this crate may own:
 - No transaction commit publication, WAL byte ownership, MVCC row visibility, page storage, or recovery replay implementation.
 - No Administration or HA/DR exposure through the Application Surface.
 - No GPU output, benchmark output, RAM state, or temporary storage as locking truth.
-- No behavior move in this scaffold.
 
 ## Prerequisites
 
@@ -43,7 +42,7 @@ Before behavior lands here:
 
 ## Validation
 
-This scaffold is documentation-only. Future behavior requires `cargo fmt`, `cargo check`, `cargo clippy`, focused lock-manager tests, deadlock cleanup tests, and recovery-adjacent transaction tests.
+Run `cargo fmt`, `cargo check`, `cargo clippy`, focused lock-manager tests, deadlock cleanup tests, and recovery-adjacent transaction tests.
 
 ## Troubleshooting
 
@@ -52,4 +51,4 @@ If a lock cleanup path changes visible transaction state without durable termina
 ## References
 
 - `src/lib.rs`
-- Existing owner: `crates/andromeda-tx/`
+- Transaction lifecycle owner: `crates/andromeda-transaction/`

@@ -5,10 +5,11 @@
 
 use std::collections::BTreeMap;
 
-use andromeda_catalog_store::CatalogSnapshotPublicationGate;
+use andromeda_catalog_store::{CatalogDefinition, CatalogSnapshotPublicationGate, QualifiedName};
+use andromeda_procedure_contract::ProcedureContract;
 use andromeda_types::{CatalogObjectId, CatalogVersion, DatabaseId, NamespaceId, ProcedureId};
 
-use crate::{CatalogDefinition, CatalogPublicationReceipt, ProcedureContract, QualifiedName};
+use crate::CatalogPublicationReceipt;
 
 use super::types::{
     CatalogObjectLifecycle, CatalogObjectLifecycleStatus, CatalogSnapshotPublication,
@@ -167,7 +168,7 @@ impl CatalogSnapshot {
             .find_map(|definition| match definition {
                 CatalogDefinition::Procedure(contract) if contract.procedure_id == procedure_id => {
                     Some(contract)
-                }
+                },
                 _ => None,
             })
     }

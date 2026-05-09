@@ -4,7 +4,8 @@
 //! adapts that raw codec to `Lsn`, `TransactionId`, and `WalRecord` so existing
 //! WAL owner APIs remain typed and recovery-safe.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::TransactionId;
 use andromeda_wal_codec::{
     WalCodecFrameHeader, WalCodecRecordFrame, encode_wal_record_frame, encoded_wal_record_frame_len,
 };

@@ -13,6 +13,7 @@ mod backup;
 mod core;
 mod durable_audit;
 mod durable_journal;
+mod durable_query;
 mod hadr;
 mod helpers;
 mod identity;
@@ -43,6 +44,12 @@ pub use durable_journal::{
     DurableAuditDecisionGate, DurableAuditVisibleDecisionProof, DurableAuditWalSink,
     FileDurableAuditWalSink,
 };
+pub use durable_query::{
+    DURABLE_AUDIT_QUERY_DEFAULT_LIMIT, DURABLE_AUDIT_QUERY_MAX_LIMIT, DurableAuditTraceFamily,
+    DurableAuditTraceQueryFilter, DurableAuditTraceQueryLsnRange, DurableAuditTraceQueryMetadata,
+    DurableAuditTraceQueryPermissionMatrix, DurableAuditTraceQueryResult,
+    DurableAuditTraceQueryRow, DurableAuditTraceQuerySource, DurableAuditTraceQuerySpec,
+};
 pub use hadr::{
     FencingDecision, FencingEvent, FencingPolicy, HadrAuditEvent, HadrAuditTrace,
     PromotionCompletion, PromotionEligibility, QuorumRole, ReplicaHealthState,
@@ -61,7 +68,7 @@ pub use permission_audit_emitter::{
 pub use scope::{AdminOperation, Permission, PermissionFamily, SurfaceScope};
 pub use security::{SecurityAuditDenialReason, SecurityAuditOutcome, SecurityAuditTrace};
 
-pub use andromeda_observability::{EventSchemaVersion, TraceId};
+pub use andromeda_observability::{EventId, EventSchemaVersion, TraceId};
 
 use helpers::{
     audit_error as observe_error, contains_sensitive_marker, non_empty_evidence, non_empty_reason,

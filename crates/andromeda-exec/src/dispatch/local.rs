@@ -1,9 +1,9 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_storage_heap::LocalHeapRowInsertRedoTemplate;
 use andromeda_transaction::{TransactionEvent, TransactionState, TransactionStateMachine};
-use andromeda_transaction_log::IsolationLevel;
-use andromeda_wal::{Lsn, WalRecordKind};
-
-use crate::{InvocationWal, LocalHeapRowInsertRedoTemplate, encode_exec_tx_commit_payload};
+use andromeda_transaction_log::{IsolationLevel, encode_commit_payload};
+use andromeda_types::TransactionId;
+use andromeda_wal::{InvocationWal, Lsn, WalRecordKind};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalDispatchPlan {
@@ -253,7 +253,7 @@ where
 
         tx.apply(TransactionEvent::CommitRequested)?;
         let commit_payload =
-            encode_exec_tx_commit_payload(IsolationLevel::Serializable, plan.rows_affected, 0);
+            encode_commit_payload(IsolationLevel::Serializable, plan.rows_affected, 0);
         let commit_lsn = self.wal.append(
             WalRecordKind::TxCommit,
             Some(plan.transaction_id),

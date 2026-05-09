@@ -2,13 +2,13 @@
 
 ## Purpose
 
-`andromeda-transaction` is a future C5 owner crate for transaction lifecycle coordination.
+`andromeda-transaction` is the C5 owner crate for transaction lifecycle coordination.
 
-This scaffold reserves a boundary for transaction identifiers, lifecycle state transitions, terminal commit and rollback policy, and durable visibility evidence. No behavior has moved from `andromeda-tx`.
+This crate owns transaction identifiers, lifecycle state transitions, terminal commit and rollback policy, WAL adapter coordination, and durable visibility evidence.
 
 ## Scope
 
-Future work in this crate may own:
+This crate owns:
 
 - Transaction lifecycle state and transition validation.
 - Commit and rollback terminal-state publication gates.
@@ -22,7 +22,6 @@ Future work in this crate may own:
 - No physical WAL frame or file format ownership.
 - No page, heap, manifest, backup, restore, or HA/DR implementation.
 - No GPU output, benchmark output, RAM state, or temporary storage as transaction truth.
-- No behavior move in this scaffold.
 
 ## Prerequisites
 
@@ -43,7 +42,7 @@ Before behavior lands here:
 
 ## Validation
 
-This scaffold is documentation-only. Future behavior requires `cargo fmt`, `cargo check`, `cargo clippy`, focused transaction tests, and crash/recovery scenarios that reconstruct visible state only from durable WAL evidence.
+Run `cargo fmt`, `cargo check`, `cargo clippy`, focused transaction tests, and crash/recovery scenarios that reconstruct visible state only from durable WAL evidence.
 
 ## Troubleshooting
 
@@ -52,4 +51,4 @@ If a future transaction path publishes visibility without durable WAL coverage, 
 ## References
 
 - `src/lib.rs`
-- Existing owner: `crates/andromeda-tx/`
+- Transaction log owner: `crates/andromeda-transaction-log/`

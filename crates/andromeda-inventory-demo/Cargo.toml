@@ -7,6 +7,7 @@ publish = false
 
 [dependencies]
 andromeda-admission.workspace = true
+andromeda-business-fixtures.workspace = true
 andromeda-catalog.workspace = true
 andromeda-core.workspace = true
 andromeda-exec.workspace = true
@@ -15,15 +16,13 @@ andromeda-procedure-contract.workspace = true
 andromeda-result-stream.workspace = true
 andromeda-rpc-protocol.workspace = true
 andromeda-srpl.workspace = true
+andromeda-srpl-catalog-binding.workspace = true
 andromeda-srpl-ir.workspace = true
-andromeda-storage.workspace = true
 andromeda-storage-heap.workspace = true
 andromeda-storage-page.workspace = true
-andromeda-tx.workspace = true
+andromeda-mvcc.workspace = true
+andromeda-transaction-log.workspace = true
 andromeda-wal.workspace = true
-
-[dev-dependencies]
-andromeda-business-fixtures.workspace = true
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(andromeda_remote_network_e2e)', 'cfg(feature, values("runtime-quinn"))'] }

@@ -5,7 +5,7 @@
 //! not own storage recovery reports, startup policy, replay planning, manifests,
 //! page integration, or durable visibility decisions.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind};
+use andromeda_error::{AndromedaError, AndromedaErrorKind};
 
 mod format;
 mod header;

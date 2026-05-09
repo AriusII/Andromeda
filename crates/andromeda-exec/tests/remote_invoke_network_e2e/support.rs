@@ -5,9 +5,8 @@ pub use std::sync::OnceLock;
 pub use std::sync::atomic::{AtomicU64, Ordering};
 pub use std::time::Instant;
 
-pub use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, RequestId, SessionId,
-};
+pub use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+
 pub use andromeda_quic_runtime_quinn::{
     quinn_backend::{QuicClient, QuicServer},
     quinn_tls::MutualTlsTestConfig,
@@ -15,6 +14,7 @@ pub use andromeda_quic_runtime_quinn::{
 pub use andromeda_rpc_protocol::{
     FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader, FrameType,
 };
+pub use andromeda_types::{RequestId, SessionId};
 pub use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 pub use tokio::time::{Duration, timeout};
@@ -159,7 +159,7 @@ impl MockRegistry {
 
             Ok(frames)
         } else {
-            Err(andromeda_core::AndromedaError::new(
+            Err(andromeda_error::AndromedaError::new(
                 AndromedaErrorKind::Execution,
                 format!("procedure '{}' not found", procedure_name),
             ))

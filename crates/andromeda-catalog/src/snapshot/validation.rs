@@ -8,11 +8,12 @@
 
 use std::collections::BTreeSet;
 
+use andromeda_catalog_store::CatalogDefinition;
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{
-    CatalogDefinition, CatalogDefinitionBatchPlanning, DefinitionBatch, DefinitionBatchPlan,
-    DefinitionOperation, PlannedDefinition, PlannedLifecycleTransition,
+    CatalogDefinitionBatchPlanning, DefinitionBatch, DefinitionBatchPlan, DefinitionOperation,
+    PlannedDefinition, PlannedLifecycleTransition,
 };
 
 use super::core::CatalogSnapshot;

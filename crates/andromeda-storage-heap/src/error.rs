@@ -1,4 +1,4 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind};
+use andromeda_error::{AndromedaError, AndromedaErrorKind};
 
 pub(crate) fn heap_error(msg: impl Into<String>) -> AndromedaError {
     AndromedaError::new(AndromedaErrorKind::Storage, msg)

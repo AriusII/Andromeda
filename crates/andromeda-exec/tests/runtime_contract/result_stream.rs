@@ -13,7 +13,7 @@ fn result_cardinality_rules_are_enforced_by_result_service() {
         ResultValidationService::validate_before_payload(missing_exact_count)
             .unwrap_err()
             .kind(),
-        andromeda_core::AndromedaErrorKind::Contract
+        andromeda_error::AndromedaErrorKind::Contract
     );
 
     let wrong_exact_count = ResultStreamMetadata {
@@ -28,7 +28,7 @@ fn result_cardinality_rules_are_enforced_by_result_service() {
             .validate_before_payload()
             .unwrap_err()
             .kind(),
-        andromeda_core::AndromedaErrorKind::Contract
+        andromeda_error::AndromedaErrorKind::Contract
     );
 
     let unbounded_many = ResultStreamMetadata {
@@ -51,7 +51,7 @@ fn result_cardinality_rules_are_enforced_by_result_service() {
         ResultValidationService::validate_before_payload(zero_stream)
             .unwrap_err()
             .kind(),
-        andromeda_core::AndromedaErrorKind::Contract
+        andromeda_error::AndromedaErrorKind::Contract
     );
 
     let row_count_mismatch = ResultStreamMetadata {
@@ -66,7 +66,7 @@ fn result_cardinality_rules_are_enforced_by_result_service() {
             .validate_completed_stream(0)
             .unwrap_err()
             .kind(),
-        andromeda_core::AndromedaErrorKind::Contract
+        andromeda_error::AndromedaErrorKind::Contract
     );
 
     // Bounded Many: actual row count exceeding declared row_count_max must
@@ -77,7 +77,7 @@ fn result_cardinality_rules_are_enforced_by_result_service() {
         ResultValidationService::validate_completed_stream(bounded_many, 3)
             .unwrap_err()
             .kind(),
-        andromeda_core::AndromedaErrorKind::Contract
+        andromeda_error::AndromedaErrorKind::Contract
     );
 
     // Inconsistent metadata: declared row_count_max contradicts the
@@ -93,7 +93,7 @@ fn result_cardinality_rules_are_enforced_by_result_service() {
         ResultValidationService::validate_before_payload(inconsistent_one)
             .unwrap_err()
             .kind(),
-        andromeda_core::AndromedaErrorKind::Contract
+        andromeda_error::AndromedaErrorKind::Contract
     );
 }
 
@@ -109,7 +109,7 @@ fn completion_mapping_rejects_commit_or_rollback_outcome_mismatches() {
         )
         .unwrap_err()
         .kind(),
-        andromeda_core::AndromedaErrorKind::Transaction
+        andromeda_error::AndromedaErrorKind::Transaction
     );
 
     assert_eq!(
@@ -122,7 +122,7 @@ fn completion_mapping_rejects_commit_or_rollback_outcome_mismatches() {
         )
         .unwrap_err()
         .kind(),
-        andromeda_core::AndromedaErrorKind::Storage
+        andromeda_error::AndromedaErrorKind::Storage
     );
 
     assert_eq!(
@@ -134,7 +134,7 @@ fn completion_mapping_rejects_commit_or_rollback_outcome_mismatches() {
         )
         .unwrap_err()
         .kind(),
-        andromeda_core::AndromedaErrorKind::Transaction
+        andromeda_error::AndromedaErrorKind::Transaction
     );
 
     let rolled_back = CompletionMappingService::rolled_back(

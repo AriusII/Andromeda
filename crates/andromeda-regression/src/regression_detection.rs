@@ -7,12 +7,10 @@
 //! 1. If any metric exceeded its budget (absolute failure)
 //! 2. If any metric degraded vs. baseline (relative regression)
 //!
-//! TECH-DEBT:
-//! - Context: this module can serialize/deserialize baselines, but CI artifact
-//!   load/store and regression-gate wiring are not implemented in Rust yet.
-//! - Risk: regressions are detected only when this module is invoked manually.
-//! - Closure: wire baseline artifact I/O and call the analysis path from the
-//!   performance workflow entrypoint.
+//!
+//! Operational integration note: this module owns the comparison logic and
+//! baseline serialization. Artifact storage and CI entrypoints should call this
+//! crate directly instead of routing through benchmark facade crates.
 
 mod advisory_json;
 mod baseline;

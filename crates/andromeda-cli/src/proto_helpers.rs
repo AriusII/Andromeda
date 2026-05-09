@@ -1,10 +1,10 @@
 //! Protocol helpers and utilities.
 
-use andromeda_catalog::{
-    CatalogDefinitionBatchPlanning, CatalogSnapshot, INVENTORY_DATABASE_ID, INVENTORY_NAMESPACE_ID,
-    inventory_domain_definition_batch,
+use andromeda_catalog::{CatalogDefinitionBatchPlanning, CatalogSnapshot};
+use andromeda_error::AndromedaResult;
+use andromeda_inventory_demo::{
+    INVENTORY_DATABASE_ID, INVENTORY_NAMESPACE_ID, inventory_domain_definition_batch,
 };
-use andromeda_core::AndromedaResult;
 
 /// Creates a catalog snapshot for inventory domain.
 pub fn inventory_catalog_snapshot() -> AndromedaResult<CatalogSnapshot> {

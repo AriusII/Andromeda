@@ -32,6 +32,14 @@ impl BenchmarkWorkloadClass {
             Self::RealRuntime => "real-runtime",
         }
     }
+
+    pub const fn measurement_family(self) -> &'static str {
+        match self {
+            Self::SyntheticDiagnostic => "synthetic",
+            Self::HarnessDiagnostic => "harness",
+            Self::RealRuntime => "real",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -330,7 +338,7 @@ mod tests {
             assert!(
                 workload
                     .workload_shape_version
-                    .contains(workload.workload_class.as_str().split('-').next().unwrap()),
+                    .contains(workload.workload_class.measurement_family()),
                 "workload {} shape version must expose its measurement class family",
                 workload.id
             );

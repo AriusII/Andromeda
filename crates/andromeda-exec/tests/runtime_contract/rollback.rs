@@ -33,7 +33,7 @@ fn local_dispatcher_rejects_rolled_back_completion_when_flush_lags_rollback_lsn(
         })
         .unwrap_err();
 
-    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Storage);
+    assert_eq!(err.kind(), andromeda_error::AndromedaErrorKind::Storage);
     assert_eq!(wal.records.len(), 2);
     assert_eq!(wal.records[1].1, WalRecordKind::TxRollback);
     assert_eq!(wal.records[1].3.as_slice(), b"business-validation-failed");
@@ -99,7 +99,7 @@ fn inventory_reserve_stock_business_failure_rolls_back_after_authorized_begin_wi
     };
     let error =
         InventoryReserveStockExecutor::reserve(rejected_command, observed_stock).unwrap_err();
-    assert_eq!(error.kind(), andromeda_core::AndromedaErrorKind::Execution);
+    assert_eq!(error.kind(), andromeda_error::AndromedaErrorKind::Execution);
     assert!(error.message().contains("insufficient inventory stock"));
 
     let rejection_evidence = InventoryReserveStockExecutor::rejection_evidence(
@@ -184,7 +184,7 @@ fn local_vertical_runtime_preserves_contract_check_before_rollback_begin() {
         )
         .unwrap_err();
 
-    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Contract);
+    assert_eq!(err.kind(), andromeda_error::AndromedaErrorKind::Contract);
     assert!(runtime.wal().records.is_empty());
 }
 

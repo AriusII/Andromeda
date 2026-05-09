@@ -29,35 +29,11 @@ pub use stream_concurrency::{
 
 pub mod mtls_identity;
 
-pub use andromeda_rpc_protocol::frame::{
-    AUTH_FRAME_CODE, CONTRACT_REQUEST_FRAME_CODE, CONTRACT_RESPONSE_FRAME_CODE, ERROR_FRAME_CODE,
-    FRAME_CODEC_CRC_OFFSET, FRAME_CODEC_HEADER_LEN, FRAME_HEADER_CRC_UNCHECKED,
-    FRAME_TYPE_PAYLOAD_CODE_LOCKSTEP, FrameBytes, FrameCodec, FrameCodecEndian, FrameFamily,
-    FrameHeader, FrameType, HELLO_FRAME_CODE, MAX_FRAME_PAYLOAD_LENGTH, RESERVED_FRAME_FLAGS_MASK,
-    RPC_BATCH_FRAME_CODE, RPC_COMPLETION_FRAME_CODE, RPC_EXECUTE_REQUEST_FRAME_CODE,
-    RPC_METADATA_FRAME_CODE, ResultStreamMetadataPolicy, ResultStreamSequence, StreamRole,
-    TELEMETRY_SOFT_SIGNAL_FRAME_CODE, validate_frame_sequence, validate_result_stream_sequence,
-    validate_result_stream_sequence_with_metadata_policy, validate_single_frame_on_stream,
-};
-
 mod session;
 
 pub use session::{
     CancellationCause, CancellationOutcome, CancellationSignal, Connection, DatagramPolicy,
     EarlyDataPolicy, LifecycleState, SurfaceListenerConfig, SurfaceListenerSet, SurfacePlane,
-};
-
-pub use andromeda_rpc::{
-    DispatchPolicy, FrameDispatch, TransportSurface, dispatch_frame, expected_stream_role,
-    validate_transport_surface,
-};
-
-pub use andromeda_rpc_codec::{
-    DEFAULT_MAX_TYPED_RESULT_STREAM_ENVELOPE_BYTES, DEFAULT_MAX_TYPED_RESULT_STREAM_FRAMES,
-    TypedResultStreamBounds, TypedResultStreamContext, decode_typed_frame_envelope,
-    validate_typed_result_stream_sequence,
-    validate_typed_result_stream_sequence_with_context_and_bounds,
-    validate_typed_result_stream_sequence_with_metadata_policy,
 };
 
 pub use procedure_gateway::{
@@ -74,10 +50,6 @@ pub use reconnect::{
     RetryRejectionReason,
 };
 
-pub use andromeda_rpc_protocol::backpressure::{
-    BackpressureReason, BackpressureSignal, BackpressureTransport,
-};
-
 pub use catalog_manifest_resolution::{
     CatalogManifestResolutionContext, CatalogManifestResolutionGateway,
     CatalogManifestResolutionRuntime,
@@ -87,11 +59,6 @@ pub use transport::{
     QuicClientTransport, QuicServerTransport, TransportBackpressureStatus,
     TransportCancellationStatus, TransportEndpointMetadata, TransportMessage,
     TransportShutdownMode, TransportShutdownState,
-};
-
-pub use andromeda_rpc_protocol::{
-    FrameTypeInvariants, PayloadKindInvariants, ProtocolInvariants, ProtocolVersionInvariants,
-    validate_frame_header_layout,
 };
 
 pub use zero_rtt::{

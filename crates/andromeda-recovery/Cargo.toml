@@ -7,6 +7,15 @@ publish = false
 
 [dependencies]
 andromeda-core = { path = "../andromeda-core" }
+andromeda-error = { path = "../andromeda-error" }
 andromeda-manifest = { path = "../andromeda-manifest" }
-andromeda-storage-page = { path = "../andromeda-storage-page" }
+andromeda-time = { path = "../andromeda-time" }
+andromeda-transaction = { path = "../andromeda-transaction" }
+andromeda-transaction-log = { path = "../andromeda-transaction-log" }
+andromeda-types = { path = "../andromeda-types" }
 andromeda-wal = { path = "../andromeda-wal" }
+
+[dev-dependencies]
+andromeda-mvcc.workspace = true
+andromeda-storage-page = { path = "../andromeda-storage-page" }
+tokio.workspace = true

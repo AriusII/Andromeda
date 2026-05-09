@@ -1,40 +1,44 @@
 pub(crate) use super::super::{LocalProcedure, LocalVerticalRuntime};
-pub(crate) use andromeda_catalog::{
-    CatalogSystemStore, ProcedureStore, inventory_domain_definition_batch,
-    inventory_reserve_stock_contract,
+pub(crate) use andromeda_audit::{
+    CertificateIdentity, Permission, SecurityAuditOutcome, SurfaceScope, UserPrincipal,
+    UserPrincipalKind,
 };
-pub(crate) use andromeda_core::{
-    AndromedaErrorKind, AndromedaResult, CatalogVersion, ContractHash, DatabaseId, InvocationId,
-    NamespaceId, PipelineClass, ProcedureId, ResourceBudget, TransactionId,
-};
+pub(crate) use andromeda_catalog::CatalogSystemStore;
 pub(crate) use andromeda_definition_batch::{
     CatalogLifecycleTarget, DefinitionBatch, DefinitionBatchId, DefinitionOperation,
 };
-pub(crate) use andromeda_observe::{
-    AuthorizationDenialReason, AuthorizationOutcome, CertificateIdentity, Permission,
-    PrincipalBinding, PrincipalRegistry, SecurityAuditOutcome, SurfaceScope, TraceId,
-    UserPrincipal, UserPrincipalKind,
+pub(crate) use andromeda_error::{AndromedaErrorKind, AndromedaResult};
+pub(crate) use andromeda_hardware::{PipelineClass, ResourceBudget};
+pub(crate) use andromeda_inventory_demo::{
+    inventory_domain_definition_batch, inventory_reserve_stock_contract,
 };
+pub(crate) use andromeda_observability::TraceId;
 pub(crate) use andromeda_procedure_contract::{
     PolicyVersion, ProcedureContract, ProcedureContractBinding, ProcedureContractRef, StatsVersion,
 };
 pub(crate) use andromeda_procedure_store::{
-    InvocationRuntimeRecordOutcome, ProcedureRuntimePlanId, ProcedureRuntimeStatus,
+    InvocationRuntimeRecordOutcome, ProcedureRuntimePlanId, ProcedureRuntimeStatus, ProcedureStore,
     ProcedureStoreEntry,
 };
 pub(crate) use andromeda_quic::SurfacePlane;
+pub(crate) use andromeda_security::{
+    AuthorizationDenialReason, AuthorizationOutcome, PrincipalBinding, PrincipalRegistry,
+};
 pub(crate) use andromeda_srpl_ir::Cardinality;
 pub(crate) use andromeda_storage::{
     CoreIoPlacementRequest, OperationalProfile, StorageIoBudgetScope, StorageWorkloadClass,
 };
 pub(crate) use andromeda_storage_page::PageSize;
 pub(crate) use andromeda_transaction::TransactionState;
-pub(crate) use andromeda_wal::{InMemoryWal, Lsn, WalRecordKind};
+pub(crate) use andromeda_types::{
+    CatalogVersion, ContractHash, DatabaseId, InvocationId, NamespaceId, ProcedureId, TransactionId,
+};
+pub(crate) use andromeda_wal::{InMemoryWal, InvocationWal, Lsn, WalRecordKind};
 
 pub(crate) use crate::{
     CompletionStatus, ExecutionIoAdmissionDecision, ExecutionIoAdmissionRequest, InvocationContext,
-    InvocationReject, InvocationRequest, InvocationWal, LocalDispatcher, LocalRollbackPlan,
-    ResultStreamMetadata, RollbackCause, SurfacePlaneAuthorizer,
+    InvocationReject, InvocationRequest, LocalDispatcher, LocalRollbackPlan, ResultStreamMetadata,
+    RollbackCause, SurfacePlaneAuthorizer,
 };
 
 #[derive(Debug, Default)]

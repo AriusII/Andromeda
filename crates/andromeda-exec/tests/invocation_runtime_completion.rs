@@ -1,13 +1,13 @@
-use andromeda_core::{AndromedaResult, InvocationId, TransactionId};
-use andromeda_exec::services::{
-    CompletionJournalRecord, CompletionRecoveryExpectation, CompletionRecoveryStatus,
+use andromeda_error::AndromedaResult;
+use andromeda_execution_trace::{
+    CompletionEmission, CompletionJournalRecord, CompletionMappingService,
+    CompletionRecoveryExpectation, CompletionRecoveryStatus, InvocationCompletionEmitter,
     reconcile_completion_recovery_from_wal,
 };
-use andromeda_exec::{
-    CompletionEmission, CompletionMappingService, CompletionStatus, InvocationCompletionEmitter,
-};
 use andromeda_observe::TraceId;
+use andromeda_result_stream::CompletionStatus;
 use andromeda_transaction::TransactionState;
+use andromeda_types::{InvocationId, TransactionId};
 use andromeda_wal::{Lsn, WalRecord, WalRecordKind};
 
 fn wal_record(

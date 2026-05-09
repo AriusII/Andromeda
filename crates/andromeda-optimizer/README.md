@@ -44,7 +44,7 @@ Future behavior changes should use:
 
 ```powershell
 cargo test -p andromeda-optimizer
-cargo test -p andromeda-srpl --test optimizer_pipeline_contract -- --nocapture
+cargo test -p andromeda-optimizer --test srpl_optimizer_pipeline_contract -- --nocapture
 cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture
 ```
 

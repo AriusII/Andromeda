@@ -11,6 +11,12 @@ use andromeda_types::{CatalogObjectId, CatalogVersion};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DefinitionOperation {
     Create(CatalogDefinition),
+    /// Marks an existing catalog object as no longer active while preserving
+    /// historical identity for recovery, dependency checks, and audit evidence.
+    ///
+    /// `Deprecate` is domain vocabulary for catalog lifecycle state. It does
+    /// not mean this API is obsolete, and it is kept stable because mutation
+    /// records and replay tests use the same term.
     Deprecate(CatalogLifecycleTarget),
 }
 
@@ -48,6 +54,10 @@ pub struct PlannedDefinition {
 /// The lifecycle action applied to an existing catalog object.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CatalogLifecycleAction {
+    /// Retires an object from the active catalog while retaining its history.
+    ///
+    /// The name remains `Deprecate` to match existing catalog mutation and WAL
+    /// recovery terminology.
     Deprecate,
 }
 

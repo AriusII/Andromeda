@@ -1,5 +1,5 @@
 use super::PageId;
-use andromeda_core::{AndromedaError, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaResult};
 
 /// B-Tree index errors.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -70,13 +70,13 @@ impl std::error::Error for BTreeError {}
 
 impl From<BTreeError> for AndromedaError {
     fn from(err: BTreeError) -> Self {
-        use andromeda_core::AndromedaErrorKind;
+        use andromeda_error::AndromedaErrorKind;
         AndromedaError::new(AndromedaErrorKind::Storage, err.to_string())
     }
 }
 
 pub(crate) fn deferred_btree_result<T>(operation: &'static str) -> AndromedaResult<T> {
-    use andromeda_core::AndromedaErrorKind;
+    use andromeda_error::AndromedaErrorKind;
 
     Err(AndromedaError::new(
         AndromedaErrorKind::Storage,

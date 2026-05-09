@@ -3,7 +3,7 @@
 //!
 //! Catalog does not parse SRPL source. The portable contract validation lives
 //! in `andromeda-definition-batch`; source-level parse, bind, lower, and
-//! manifest materialization remain owned by `andromeda-srpl`.
+//! manifest materialization remain owned by `andromeda-srpl-definition-batch`.
 
 pub use andromeda_definition_batch::SrplBatchDryRunReport;
 use andromeda_error::AndromedaResult;
@@ -19,12 +19,14 @@ pub fn validate_srpl_batch_dry_run(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        CatalogDefinition, CatalogDefinitionBatchPlanning, DefinitionBatchId, DefinitionOperation,
+    use crate::{CatalogDefinitionBatchPlanning, DefinitionBatchId, DefinitionOperation};
+    use andromeda_business_fixtures::{
         INVENTORY_DATABASE_ID, INVENTORY_NAMESPACE_ID, inventory_domain_definition_batch,
         inventory_reserve_stock_contract,
     };
+    use andromeda_catalog_store::CatalogDefinition;
     use andromeda_error::AndromedaErrorKind;
+    use andromeda_procedure_contract::StatsVersion;
     use andromeda_types::CatalogVersion;
 
     #[test]
@@ -59,7 +61,7 @@ mod tests {
     #[test]
     fn srpl_batch_dry_run_rejects_stale_procedure_manifest_hash() {
         let mut contract = inventory_reserve_stock_contract().unwrap();
-        contract.stats_version = crate::StatsVersion::new(contract.stats_version.get() + 1);
+        contract.stats_version = StatsVersion::new(contract.stats_version.get() + 1);
         let batch = DefinitionBatch {
             batch_id: DefinitionBatchId::new(0xD7),
             database_id: INVENTORY_DATABASE_ID,

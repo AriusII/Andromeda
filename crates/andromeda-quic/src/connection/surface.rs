@@ -1,4 +1,4 @@
-use crate::FrameFamily;
+use andromeda_rpc_protocol::FrameFamily;
 
 /// Surface plane bound to a QUIC session at handshake time.
 ///

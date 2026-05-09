@@ -33,7 +33,11 @@ TOOL_PLANNED = "planned"
 C5_DURABLE_CRATES = (
     "andromeda-wal",
     "andromeda-storage",
-    "andromeda-tx",
+    "andromeda-transaction",
+    "andromeda-transaction-log",
+    "andromeda-mvcc",
+    "andromeda-locking",
+    "andromeda-savepoint",
 )
 
 DEPENDENCY_SECTIONS = (

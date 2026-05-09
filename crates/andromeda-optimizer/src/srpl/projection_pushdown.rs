@@ -70,8 +70,8 @@ fn add_read_predicate_fields(
                 if binding == read_binding =>
             {
                 fields.insert(field.clone());
-            }
-            _ => {}
+            },
+            _ => {},
         }
     }
 }

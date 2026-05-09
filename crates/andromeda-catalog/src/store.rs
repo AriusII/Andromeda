@@ -9,14 +9,16 @@ use andromeda_catalog_store::{
     CatalogStoreApplyReport, CatalogStoreDurableApplyReport, CatalogStoreWalAppend,
     CatalogStoreWalAppendSequenceError, validate_catalog_store_wal_append_sequence,
 };
+use andromeda_definition_batch::{
+    DefinitionBatch, DefinitionBatchDependencyGraphHash, DefinitionBatchSourceHash,
+};
 use andromeda_error::AndromedaResult;
 use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId};
 
 use crate::{
     CatalogMutationCommitEvidence, CatalogMutationDurability, CatalogMutationPlan,
     CatalogMutationRecordKind, CatalogPublicationReceipt, CatalogSnapshot,
-    CatalogSnapshotApplyReport, DefinitionBatch, DefinitionBatchDependencyGraphHash,
-    DefinitionBatchPlan, DefinitionBatchSourceHash,
+    CatalogSnapshotApplyReport, DefinitionBatchPlan,
 };
 
 /// In-memory catalog system facade for definition planning and snapshot mutation.
@@ -215,10 +217,10 @@ pub type CatalogSystemDurableApplyReport = CatalogStoreDurableApplyReport<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        CatalogDefinition, CatalogObjectRef, DefinitionBatchId, DefinitionOperation, ObjectKind,
-        QualifiedName, TableDefinition,
+    use andromeda_catalog_store::{
+        CatalogDefinition, CatalogObjectRef, ObjectKind, QualifiedName, TableDefinition,
     };
+    use andromeda_definition_batch::{DefinitionBatchId, DefinitionOperation};
     use andromeda_error::AndromedaErrorKind;
     use andromeda_types::{CatalogObjectId, ColumnDescriptor, ScalarType, TypeDescriptor};
 

@@ -1,34 +1,29 @@
 #![forbid(unsafe_code)]
 
-mod admission;
-pub mod compat;
 pub mod dispatch;
 mod executor_bridge;
 mod helpers;
 mod invocation;
 mod local;
-mod registry;
-pub mod result;
-mod result_metadata_extractor;
-mod result_stream;
-/// Compatibility facade for retry types.
-///
-/// Kept as a public module so callers can continue using
-/// `andromeda_exec::retry` after ownership moved to `andromeda-retry`.
-pub mod retry;
 pub mod services;
-mod srpl_adapters;
 mod srpl_dispatch;
 mod surface_gate;
-/// Compatibility facade for execution trace types.
-///
-/// Kept as a public module so callers can continue using
-/// `andromeda_exec::traces` after ownership moved to
-/// `andromeda-execution-trace`.
-pub mod traces;
-mod wal_evidence;
 
-pub use admission::{ExecutionIoAdmissionDecision, ExecutionIoAdmissionRequest, InvocationContext};
+pub use andromeda_admission::{
+    ExecutionIoAdmissionDecision, ExecutionIoAdmissionRequest, InvocationContext,
+};
+pub use andromeda_execution::{
+    FieldValue, LocalProcedure, ProcedureHandler, ProcedureRegistry, SrplExecutionAdapter,
+    SrplStreamBackpressure, SrplTransactionContext, SrplTypedEnvironment, StructuredObject,
+};
+pub use andromeda_execution_trace::{AuditLedger, InMemoryAuditLedger, InvocationTraceEvent};
+pub use andromeda_procedure_runtime::{DefaultResultMetadataExtractor, ResultMetadataExtractor};
+pub use andromeda_result_stream::{
+    BackpressuredResultStream, COMPLETION_ENVELOPE_VERSION, CompletionStatus,
+    DEFAULT_RESULT_STREAM_CAPACITY, InvocationCompletion, MAX_RESULT_STREAM_CAPACITY,
+    MIN_RESULT_STREAM_CAPACITY, ResultStreamMetadata, ResultStreamMetrics, StreamCompletion,
+};
+pub use andromeda_retry::{ErrorRetryability, RetryAttempt, RetryDecision, RetryPolicy};
 pub use dispatch::{
     LocalDispatchPlan, LocalDispatchReceipt, LocalDispatcher, LocalRollbackPlan,
     LocalRollbackReceipt, PermissionScopeValidation, PreTransactionDispatchEvidence,
@@ -41,40 +36,15 @@ pub use executor_bridge::ExecutorDispatchBridge;
 pub use helpers::transaction_id_for_invocation;
 pub use invocation::{InvocationReject, InvocationRequest, ProcedureInvoker};
 pub use local::{
-    LocalHeapRowInsertRedoTemplate, LocalHeapRowRedoContractBinding, LocalProcedure,
-    LocalVerticalRuntime, VerticalInvocationOutcome,
-    require_local_procedure_execution_io_admission,
+    LocalVerticalRuntime, VerticalInvocationOutcome, require_local_procedure_execution_io_admission,
 };
-pub use registry::{ProcedureHandler, ProcedureRegistry};
-pub use result::{
-    COMPLETION_ENVELOPE_VERSION, CompletionStatus, InvocationCompletion, ResultStreamMetadata,
-};
-pub use result_metadata_extractor::{DefaultResultMetadataExtractor, ResultMetadataExtractor};
-pub use result_stream::{
-    BackpressuredResultStream, DEFAULT_RESULT_STREAM_CAPACITY, MAX_RESULT_STREAM_CAPACITY,
-    MIN_RESULT_STREAM_CAPACITY, ResultStreamMetrics, StreamCompletion,
-};
-/// Re-export of stable retry types from `andromeda-retry`.
-pub use retry::{ErrorRetryability, RetryAttempt, RetryDecision, RetryPolicy};
 pub use services::{
     AdmissionService, CompletionEmission, CompletionMappingService, ErrorKind,
     InvocationCompletionEmitter, PreTransactionValidationService, ResultValidationService,
     RetryRouting, RoutedTransactionError, TerminalTxEvidence, TerminalTxJournal, TerminalTxState,
     route_transaction_error,
 };
-pub use srpl_adapters::{
-    FieldValue, SrplExecutionAdapter, SrplStreamBackpressure, SrplTransactionContext,
-    SrplTypedEnvironment, StructuredObject,
-};
 pub use srpl_dispatch::SrplProcedureDispatcher;
 pub use surface_gate::{
     AuthorizedProcedureDispatch, SurfacePlaneAuthorizer, surface_plane_to_scope,
-};
-/// Re-export of stable trace types from `andromeda-execution-trace`.
-pub use traces::{AuditLedger, InMemoryAuditLedger, InvocationTraceEvent};
-pub use wal_evidence::{
-    CommitLogInvocationWal, DurableExecWalPrefix, EXEC_TX_COMMIT_PAYLOAD_LEN,
-    EXEC_TX_ROLLBACK_PAYLOAD_LEN, InvocationWal, TxReplayBridgeEvidence,
-    TxReplayFromExecWalEvidence, encode_exec_tx_commit_payload, encode_exec_tx_rollback_payload,
-    map_exec_wal_evidence_to_tx_replay,
 };

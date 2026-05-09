@@ -3,8 +3,7 @@
 //! This module now acts as a compatibility facade over
 //! `andromeda-storage-index`, which owns the durable byte contract.
 
-use crate::heap_row_encoder::Datum;
-use crate::heap_row_encoder::ScalarType;
+use crate::{Datum, ScalarType};
 use andromeda_core::AndromedaResult;
 use andromeda_storage_index::{
     Key as IndexKey, KeyCodec as IndexKeyCodec, KeyDatum, KeyScalarType,

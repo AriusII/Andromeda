@@ -2,26 +2,26 @@
 
 ## Purpose
 
-`andromeda-audit` owns typed audit event vocabulary for security, IAM admission, administration, HA/DR, backup, and review evidence.
+`andromeda-audit` owns typed audit event vocabulary for security, IAM admission, administration, HA/DR, backup, durable audit journal replay, and review evidence.
 
 ## Scope
 
-- Own stable audit event shapes and labels.
+- Own stable audit event shapes, labels, durable replay query rows, and journal evidence.
 - Preserve security admission v0 evidence as typed codes from `andromeda-security-contract`.
 - Reuse shared observability identifiers without owning the observability runtime.
 - Keep audit events suitable for review and forensic correlation.
 
 ## Non-goals
 
-- Do not implement durable audit journal storage, retention, compaction, exporters, or query runtimes.
 - Do not make audit output authorization, catalog, storage, transaction, WAL, or recovery truth.
+- Do not make durable audit replay inspection depend on `andromeda-observe::EventEnvelope`.
 - Do not parse certificates, evaluate IAM policy, persist registries, or perform transport work.
 
 ## Prerequisites
 
 - Security admission vocabulary comes from `andromeda-security-contract`.
 - Runtime IAM admission belongs in `andromeda-iam`.
-- Durable audit sinks remain outside this crate.
+- Event-envelope adapters remain outside this crate.
 
 ## Procedure
 

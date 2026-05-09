@@ -2,11 +2,11 @@ use crate::support::{
     ADMIN_FINGERPRINT, APP_FINGERPRINT, UNKNOWN_FINGERPRINT, administration_registry,
     application_registry, empty_runtime,
 };
+use andromeda_audit::SecurityAuditOutcome;
 use andromeda_exec::SurfacePlaneAuthorizer;
-use andromeda_observe::{
-    AuthorizationDenialReason, AuthorizationOutcome, SecurityAuditOutcome, TraceId,
-};
+use andromeda_observability::TraceId;
 use andromeda_quic::SurfacePlane;
+use andromeda_security::{AuthorizationDenialReason, AuthorizationOutcome, PrincipalRegistry};
 
 /// Verifies that authorization checks produce `SecurityAuditTrace` events for
 /// both allowed and denied outcomes.
@@ -95,7 +95,7 @@ fn test_security_audit_trail_covers_mtls_and_permission() {
 /// allocation, or WAL append.
 #[test]
 fn test_admission_gate_rejection_leaves_no_silent_drop() {
-    let empty_registry = andromeda_observe::PrincipalRegistry::new();
+    let empty_registry = PrincipalRegistry::new();
     let gate = SurfacePlaneAuthorizer::new(&empty_registry);
     let runtime = empty_runtime();
     let trace_id = TraceId::new(400);

@@ -63,7 +63,7 @@ Before using these documents for a release packet:
 5. Use `unsafe-miri-inventory-2026-05-08.md` when a change or release claim touches unsafe Rust, atomics, lock-free behavior, sanitizer evidence, or Miri evidence.
 6. Record each command or manual decision with `release-evidence-template.md`.
 7. Use `tools/testing/miri_subset.py` to list or run the bounded Miri subset when memory-sensitive crates are in scope.
-8. Use `python -B tools/testing/supply_chain_preflight.py --json` to capture dependency topology preflight output, including `andromeda-protocol` workspace membership and C5 GPU/SIMD direct dependency exclusions.
+8. Use `python -B tools/testing/supply_chain_preflight.py --json` to capture dependency topology preflight output, including workspace membership and C5 GPU/SIMD direct dependency exclusions.
 9. Use `tools/testing/release_evidence.py` only to capture local metadata and declared check records; do not treat its output as release approval.
 10. Mark missing, failed, skipped, partial, smoke-only, or continue-on-error evidence as residual risk.
 11. Require release-owner review before changing any readiness disposition.

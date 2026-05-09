@@ -6,19 +6,14 @@
 use std::time::SystemTime;
 
 use andromeda_observability::TraceId;
-use andromeda_security_contract::{
-    Permission as SecurityContractPermission, SecurityAdmissionEvidenceCodeV0,
-    SecurityAdmissionOutcomeV0, SecurityAdmissionReasonCodeV0, SecurityAdmissionStepV0,
-    SecurityAdmissionV0, SecuritySurface, SurfaceClass,
+pub use andromeda_security_contract::{
+    SECURITY_ADMISSION_AUDIT_EVENT_V0_SCHEMA_ID, SECURITY_ADMISSION_AUDIT_EVENT_V0_SCHEMA_VERSION,
+    SecurityAdmissionAuditEventV0,
 };
 
 fn has_text(value: &str) -> bool {
     !value.trim().is_empty()
 }
-
-pub const SECURITY_ADMISSION_AUDIT_EVENT_V0_SCHEMA_ID: &str =
-    "andromeda.audit.security_admission.v0";
-pub const SECURITY_ADMISSION_AUDIT_EVENT_V0_SCHEMA_VERSION: u16 = 0;
 
 /// Admission procedure identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -85,94 +80,6 @@ impl AdmissionDecisionKind {
 
     pub const fn is_rejected(self) -> bool {
         !self.is_accepted()
-    }
-}
-
-/// Runtime-free audit projection for a security admission decision.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct SecurityAdmissionAuditEventV0 {
-    admission: SecurityAdmissionV0,
-    surface: SecuritySurface,
-    class: SurfaceClass,
-    permission: SecurityContractPermission,
-    policy_evidence_present: bool,
-}
-
-impl SecurityAdmissionAuditEventV0 {
-    pub const fn new(
-        admission: SecurityAdmissionV0,
-        surface: SecuritySurface,
-        class: SurfaceClass,
-        permission: SecurityContractPermission,
-        policy_evidence_present: bool,
-    ) -> Self {
-        Self {
-            admission,
-            surface,
-            class,
-            permission,
-            policy_evidence_present,
-        }
-    }
-
-    pub const fn schema_id(self) -> &'static str {
-        SECURITY_ADMISSION_AUDIT_EVENT_V0_SCHEMA_ID
-    }
-
-    pub const fn schema_version(self) -> u16 {
-        SECURITY_ADMISSION_AUDIT_EVENT_V0_SCHEMA_VERSION
-    }
-
-    pub const fn family(self) -> &'static str {
-        "security_admission"
-    }
-
-    pub const fn phase(self) -> &'static str {
-        "pre_transaction_admission"
-    }
-
-    pub const fn admission(self) -> SecurityAdmissionV0 {
-        self.admission
-    }
-
-    pub const fn step(self) -> SecurityAdmissionStepV0 {
-        self.admission.step()
-    }
-
-    pub const fn evidence(self) -> SecurityAdmissionEvidenceCodeV0 {
-        self.admission.evidence()
-    }
-
-    pub const fn outcome(self) -> SecurityAdmissionOutcomeV0 {
-        self.admission.outcome()
-    }
-
-    pub const fn reason_code(self) -> SecurityAdmissionReasonCodeV0 {
-        self.admission.reason_code()
-    }
-
-    pub const fn surface(self) -> SecuritySurface {
-        self.surface
-    }
-
-    pub const fn class(self) -> SurfaceClass {
-        self.class
-    }
-
-    pub const fn permission(self) -> SecurityContractPermission {
-        self.permission
-    }
-
-    pub const fn policy_evidence_present(self) -> bool {
-        self.policy_evidence_present
-    }
-
-    pub const fn is_allowed(self) -> bool {
-        self.admission.is_allowed()
-    }
-
-    pub const fn is_denied(self) -> bool {
-        !self.is_allowed()
     }
 }
 

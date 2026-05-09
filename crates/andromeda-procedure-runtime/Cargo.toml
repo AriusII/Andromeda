@@ -13,3 +13,8 @@ andromeda-observe.workspace = true
 andromeda-result-stream.workspace = true
 andromeda-srpl-ir.workspace = true
 andromeda-types.workspace = true
+
+[dev-dependencies]
+andromeda-contract.workspace = true
+andromeda-srpl-ir.workspace = true
+andromeda-types.workspace = true

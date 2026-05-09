@@ -1,4 +1,4 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind};
+use andromeda_error::{AndromedaError, AndromedaErrorKind};
 
 /// Typed validation failures for transient buffer-pool metadata.
 #[derive(Debug, Clone, PartialEq, Eq)]

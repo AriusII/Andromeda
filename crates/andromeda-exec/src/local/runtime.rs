@@ -4,15 +4,16 @@ mod records;
 mod transactions;
 
 use andromeda_catalog::CatalogSnapshot;
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_observe::{EventCorrelation, EventEmitter, EventSink, TraceId};
 use andromeda_quic::SurfacePlane;
 use andromeda_transaction::TransactionManager;
+use andromeda_wal::InvocationWal;
 
 use crate::{
     AuthorizedProcedureDispatch, ExecutionIoAdmissionDecision, InvocationContext, InvocationReject,
-    InvocationRequest, InvocationWal, LocalDispatchPlan, LocalDispatcher, LocalRollbackPlan,
-    RollbackCause, services::CompletionMappingService,
+    InvocationRequest, LocalDispatchPlan, LocalDispatcher, LocalRollbackPlan, RollbackCause,
+    services::CompletionMappingService,
 };
 
 use super::helpers::{
@@ -491,7 +492,7 @@ where
     pub fn emit_commit_visible_event<S: EventSink>(
         emitter: &mut EventEmitter<S>,
         trace_id: TraceId,
-        transaction_id: andromeda_core::TransactionId,
+        transaction_id: andromeda_types::TransactionId,
         durable_lsn: andromeda_wal::Lsn,
         correlation: EventCorrelation,
     ) -> AndromedaResult<()> {
@@ -512,7 +513,7 @@ where
     pub fn emit_rollback_durable_event<S: EventSink>(
         emitter: &mut EventEmitter<S>,
         trace_id: TraceId,
-        transaction_id: andromeda_core::TransactionId,
+        transaction_id: andromeda_types::TransactionId,
         durable_lsn: andromeda_wal::Lsn,
         correlation: EventCorrelation,
     ) -> AndromedaResult<()> {

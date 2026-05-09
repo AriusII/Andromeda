@@ -1,6 +1,7 @@
 //! WAL record types, structure, and validation.
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_types::TransactionId;
 
 use crate::Lsn;
 

@@ -1,6 +1,6 @@
 use crate::error::cli_error;
 use andromeda_bench::run_bounded_benchmark;
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 pub fn run_benchmark_command(args: &[String]) -> AndromedaResult<()> {
     match args.first().map(String::as_str) {
@@ -8,35 +8,35 @@ pub fn run_benchmark_command(args: &[String]) -> AndromedaResult<()> {
             let diagnostic_json = super::parse::has_diagnostic_json_option(&args[1..])?;
             super::output::print_workloads(diagnostic_json);
             Ok(())
-        }
+        },
         Some("contract") => {
             let diagnostic_json = super::parse::has_diagnostic_json_option(&args[1..])?;
             super::output::print_benchmark_contract(diagnostic_json);
             Ok(())
-        }
+        },
         Some("run") => {
             let options = super::parse::parse_benchmark_run_options(&args[1..])?;
             let evidence = run_bounded_benchmark(&options.request)
                 .map_err(|err| super::error::benchmark_error_to_cli_error(err, &options.request))?;
             super::output::print_benchmark_run_evidence(&evidence, options.diagnostic_json);
             Ok(())
-        }
+        },
         Some("crud-scenarios") => {
             let diagnostic_json = super::parse::has_diagnostic_json_option(&args[1..])?;
             super::crud::print_crud_scenarios(diagnostic_json);
             Ok(())
-        }
+        },
         Some("crud") => {
             let options = super::crud::parse_crud_run_options(&args[1..])?;
             let result =
                 super::crud::run_crud_workload_deterministic(&options.scenario_id, options.seed)?;
             super::crud::print_crud_result(&result, options.diagnostic_json);
             Ok(())
-        }
+        },
         Some("-h" | "--help" | "help") | None => {
             super::output::print_benchmark_help();
             Ok(())
-        }
+        },
         Some(_) => Err(cli_error(
             "unknown benchmark subcommand; run `andromeda-cli benchmark --help`",
         )),

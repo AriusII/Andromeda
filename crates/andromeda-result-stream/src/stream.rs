@@ -147,17 +147,17 @@ impl BackpressuredResultStream {
             Ok(_) => {
                 self.metrics.record_row_pushed();
                 return Ok(());
-            }
+            },
             Err(mpsc::error::TrySendError::Full(message)) => {
                 self.metrics.record_backpressure();
                 message
-            }
+            },
             Err(mpsc::error::TrySendError::Closed(_message)) => {
                 return Err(AndromedaError::new(
                     AndromedaErrorKind::Transport,
                     "result stream channel closed",
                 ));
-            }
+            },
         };
 
         self.tx.send(message).await.map_err(|_| {
@@ -249,10 +249,10 @@ impl BackpressuredResultStream {
             Some(ResultStreamMessage::Row(row)) => {
                 self.metrics.record_row_consumed();
                 Some(ResultStreamFrame::Row(row))
-            }
+            },
             Some(ResultStreamMessage::Completion(completion)) => {
                 Some(ResultStreamFrame::Completion(completion))
-            }
+            },
             None => None,
         }
     }

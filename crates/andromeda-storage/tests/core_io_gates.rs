@@ -10,7 +10,10 @@ const STORAGE_CRITICAL_PATH_SOURCES: &[(&str, &str)] = &[
     ("wal", include_str!("../src/wal.rs")),
     ("wal_codec", include_str!("../src/wal_codec.rs")),
     ("recovery", include_str!("../src/recovery.rs")),
-    ("segment", include_str!("../src/segment.rs")),
+    (
+        "segment_descriptor",
+        include_str!("../../andromeda-segment/src/descriptor.rs"),
+    ),
     ("cold_store", include_str!("../src/cold_store.rs")),
 ];
 

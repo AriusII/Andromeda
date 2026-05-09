@@ -162,9 +162,9 @@ ROADMAP_GATE_CHECKS = (
             "crates/andromeda-storage/tests/wal_durability_fence_contract.rs",
             "crates/andromeda-storage/tests/disk_manager_durability_crash_safety.rs",
             "crates/andromeda-exec/tests/recovery_visibility_gates.rs",
-            "crates/andromeda-tx/tests/commit_log_durability.rs",
-            "crates/andromeda-tx/tests/tx_wal_replay_recovery.rs",
-            "crates/andromeda-tx/tests/storage_tx_wal_adapter_contract.rs",
+            "crates/andromeda-transaction/tests/commit_log_durability.rs",
+            "crates/andromeda-transaction/tests/tx_wal_replay_recovery.rs",
+            "crates/andromeda-transaction/tests/storage_tx_wal_adapter_contract.rs",
         ),
     ),
     PathCheck(

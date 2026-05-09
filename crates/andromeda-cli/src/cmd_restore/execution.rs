@@ -11,7 +11,7 @@ use super::{
 };
 use crate::error::cli_error;
 use andromeda_backup::{BackupId, FileBackedBackupArtifactStore};
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 use andromeda_restore::{
     RestoreValidationPolicy, plan_replay_segments, validate_restore_artifact_preflight,
 };

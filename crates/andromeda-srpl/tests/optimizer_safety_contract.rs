@@ -2,7 +2,7 @@
 
 use andromeda_contract::QualifiedName;
 use andromeda_optimizer::srpl::{OptimizationLevel, optimize_procedure_ir, run_optimizer_pipeline};
-use andromeda_srpl::procedure_compiler::{
+use andromeda_srpl::{
     INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, compile_narrow_procedure_signature,
     inventory_reserve_stock_contract_metadata,
 };

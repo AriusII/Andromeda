@@ -6,10 +6,12 @@
 //! that pre-transaction rejection paths cannot fabricate transaction or
 //! durable LSN evidence.
 
-use andromeda_core::{InvocationId, RequestId, SessionId, TransactionId};
-use andromeda_exec::{CompletionMappingService, CompletionStatus, InvocationReject};
+use andromeda_admission::InvocationReject;
+use andromeda_execution_trace::CompletionMappingService;
 use andromeda_observability::{TraceId, TransactionPhaseCode, TransitionReasonCode};
+use andromeda_result_stream::CompletionStatus;
 use andromeda_transaction::TransactionState;
+use andromeda_types::{InvocationId, RequestId, SessionId, TransactionId};
 use andromeda_wal::Lsn;
 
 #[test]

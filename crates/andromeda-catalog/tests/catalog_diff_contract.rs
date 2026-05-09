@@ -3,11 +3,16 @@
 #[path = "batch_alter_drop_compat/catalog_diff.rs"]
 mod batch_alter_drop_catalog_diff;
 
-use andromeda_catalog::{
-    AccessMode, CatalogDefinition, CatalogObjectRef, CompatibilityPolicy, DefinitionBatch,
-    DefinitionBatchId, DefinitionOperation, IsolationPolicy, MultiResultPolicy, ObjectKind,
-    ProcedureContract, ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef,
-    QualifiedName, ResultMetadataPolicy, ResultStreamCardinality, ResultStreamContract,
+use andromeda_catalog_diff::{
+    CatalogObjectDiffImpact, CatalogObjectDiffKind, CatalogObjectDiffSeverity,
+    diff_catalog_object_definitions,
+};
+use andromeda_catalog_store::{CatalogDefinition, CatalogObjectRef, ObjectKind, QualifiedName};
+use andromeda_definition_batch::{DefinitionBatch, DefinitionBatchId, DefinitionOperation};
+use andromeda_procedure_contract::{
+    AccessMode, CompatibilityPolicy, ContractCompatibilityDiagnostic, IsolationPolicy,
+    MultiResultPolicy, ProcedureContract, ProcedureContractCandidate, ProcedureErrorPolicy,
+    ProtocolLayoutRef, ResultMetadataPolicy, ResultStreamCardinality, ResultStreamContract,
     StatsVersion, TransactionPolicy,
 };
 use andromeda_types::{
@@ -91,10 +96,7 @@ fn materialize(candidate: ProcedureContractCandidate) -> ProcedureContract {
         .expect("contract fixture must materialize")
 }
 
-fn assert_has_message(
-    diagnostic: &andromeda_catalog::ContractCompatibilityDiagnostic,
-    expected: &str,
-) {
+fn assert_has_message(diagnostic: &ContractCompatibilityDiagnostic, expected: &str) {
     assert!(
         diagnostic
             .messages
@@ -135,6 +137,22 @@ fn additive_result_stream_column_append_is_current_catalog_diff_evidence() {
         previous.contract_hash, next.contract_hash,
         "catalog diff evidence must notice an additive output-shape change"
     );
+    let previous_definition = CatalogDefinition::Procedure(previous.clone());
+    let next_definition = CatalogDefinition::Procedure(next.clone());
+    let diff = diff_catalog_object_definitions(Some(&previous_definition), Some(&next_definition))
+        .expect("procedure shape change must produce catalog diff evidence");
+
+    assert_eq!(diff.kind, CatalogObjectDiffKind::Replaced);
+    assert_eq!(diff.severity, CatalogObjectDiffSeverity::WalRequired);
+    assert!(diff.requires_durable_wal());
+    assert!(
+        diff.impacts
+            .contains(&CatalogObjectDiffImpact::CatalogVersionChanged)
+    );
+    assert!(
+        diff.impacts
+            .contains(&CatalogObjectDiffImpact::ContractHashChanged)
+    );
 
     let diagnostic = next.compatibility_with(&previous);
     assert!(
@@ -157,6 +175,21 @@ fn breaking_input_shape_change_reports_compatibility_diagnostic() {
     assert_ne!(
         previous.contract_hash, next.contract_hash,
         "input-shape changes must produce different contract evidence"
+    );
+    let previous_definition = CatalogDefinition::Procedure(previous.clone());
+    let next_definition = CatalogDefinition::Procedure(next.clone());
+    let diff = diff_catalog_object_definitions(Some(&previous_definition), Some(&next_definition))
+        .expect("breaking procedure shape change must produce catalog diff evidence");
+
+    assert_eq!(diff.kind, CatalogObjectDiffKind::Replaced);
+    assert_eq!(diff.severity, CatalogObjectDiffSeverity::WalRequired);
+    assert!(
+        diff.impacts
+            .contains(&CatalogObjectDiffImpact::CatalogVersionChanged)
+    );
+    assert!(
+        diff.impacts
+            .contains(&CatalogObjectDiffImpact::ContractHashChanged)
     );
 
     let diagnostic = next.compatibility_with(&previous);

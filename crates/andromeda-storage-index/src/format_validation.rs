@@ -1,4 +1,4 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{BTreeKeyFormatIdentity, BTreeOperationType, validate_btree_key_format_identity_parts};
 

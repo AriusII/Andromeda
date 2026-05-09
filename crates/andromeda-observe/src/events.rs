@@ -111,13 +111,5 @@ pub(super) fn contains_sensitive_marker(text: &str) -> bool {
     .any(|marker| lowered.contains(marker))
 }
 
-pub(super) fn redact_sensitive_evidence(text: &str) -> String {
-    if contains_sensitive_marker(text) {
-        "[redacted-sensitive-evidence]".to_string()
-    } else {
-        text.to_string()
-    }
-}
-
 #[cfg(test)]
 mod tests;

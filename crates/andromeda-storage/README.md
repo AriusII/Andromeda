@@ -11,7 +11,7 @@ The crate is part of the C5 durable kernel. A storage change must treat durable 
 This crate owns:
 
 - Page, heap, B+Tree, extent, segment, manifest, placement, and buffer-pool integration.
-- WAL-before-page-flush checks and durable visibility integration with `andromeda-wal` and `andromeda-tx`.
+- WAL-before-page-flush checks and durable visibility integration with `andromeda-wal`, `andromeda-transaction`, and `andromeda-transaction-log`.
 - Recovery planning, replay selection, startup mode evidence, catalog WAL replay integration, backup artifacts, restore orchestration, and PITR-oriented evidence.
 - Storage-facing typed errors such as `DiskManagerError`, `BufferPoolError`, and storage `AndromedaResult` failures that preserve error kind and recovery context.
 - Compatibility reexports that let older callers migrate toward the dedicated WAL owner crate without breaking API tests.
@@ -25,7 +25,7 @@ This crate does not own:
 - Procedure contracts, SRPL parsing, or application-facing execution.
 - Application-facing ad hoc SQL or dynamic table-name dispatch.
 - WAL byte-contract ownership that now belongs in `andromeda-wal`, except for storage integration and compatibility reexports.
-- Transaction status authority that belongs in `andromeda-tx`, except where storage validates durable replay and visibility evidence.
+- Transaction status authority that belongs in `andromeda-transaction`, except where storage validates durable replay and visibility evidence.
 - GPU, SIMD, benchmark, or learned-model output as commit, rollback, recovery, MVCC visibility, catalog publication, or security truth.
 
 ## Prerequisites

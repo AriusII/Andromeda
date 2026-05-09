@@ -3,16 +3,15 @@ use crate::support::{
     encoded_execute_frame_with_transaction_id, executable_procedure, inventory_catalog_snapshot,
     request, stock,
 };
-use andromeda_catalog::inventory_reserve_stock_contract;
-use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, ContractHash, InvocationId,
-};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_inventory_demo::V0InventoryRecoverableRuntime;
+use andromeda_inventory_demo::inventory_reserve_stock_contract;
 use andromeda_observe::{
     EventEmitter, EventEnvelope, EventSink, InMemoryEventSink, TraceEvent, TraceId,
     TransitionReasonCode,
 };
 use andromeda_rpc_protocol::FrameCodec;
+use andromeda_types::{ContractHash, InvocationId};
 use andromeda_wal::InMemoryWal;
 
 #[test]

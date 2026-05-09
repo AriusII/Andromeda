@@ -8,20 +8,14 @@
 
 #![forbid(unsafe_code)]
 
-#[path = "btree_engine/support.rs"]
-mod btree_support;
-
 use andromeda_core::{AndromedaError, AndromedaErrorKind, TransactionId};
 use andromeda_storage::format_version::FormatVersion;
 use andromeda_storage::{
     BTREE_DURABLE_FORMAT_PROMOTED, BTreeConfig, BTreeIndexNode, BTreeKeyFormatIdentity,
-    BTreeOperationType, DatabaseManifest, InMemoryWal, KeyV1FormatValidator, Lsn, PageId,
-    RecoveryPlan, RedoRecordDecision, ReplayContext, ReplayOutcome, RowId, StartupMode,
-    WalRecordKind, replay_wal_from_lsn, replay_wal_from_lsn_into_context,
-};
-
-use btree_support::{
-    assert_leaf_keys_strictly_ordered, default_engine, fill_leaf_to_capacity, leaf_node,
+    BTreeNodeImpl, BTreeOperationType, DatabaseManifest, InMemoryBTreeIndexEngine, InMemoryWal,
+    IndexId, KeyV1FormatValidator, Lsn, PageId, RecoveryPlan, RedoRecordDecision, ReplayContext,
+    ReplayOutcome, RowId, StartupMode, WalRecordKind, replay_wal_from_lsn,
+    replay_wal_from_lsn_into_context,
 };
 
 const INDEX_REBUILD_PAYLOAD_MAGIC: &[u8; 8] = b"IDXRBV1\0";
@@ -400,6 +394,33 @@ fn assert_durable_page_gate(error: &AndromedaError, operation: &'static str) {
         "page-backed durable gate should name the missing promotion work: {}",
         error.message()
     );
+}
+
+fn default_engine() -> InMemoryBTreeIndexEngine {
+    InMemoryBTreeIndexEngine::new(IndexId::new(1), PageId::new(10), BTreeConfig::default())
+}
+
+fn leaf_node(page_id: u64, parent_page_id: Option<u64>) -> BTreeNodeImpl {
+    BTreeNodeImpl::new_leaf(PageId::new(page_id), parent_page_id.map(PageId::new))
+}
+
+fn fill_leaf_to_capacity(node: &mut BTreeNodeImpl, config: &BTreeConfig) {
+    for key in 0..(config.branching_factor - 1) {
+        node.insert_into_leaf(vec![key as u8], RowId::new(key as u64))
+            .expect("capacity fixture inserts unique keys");
+    }
+}
+
+fn assert_leaf_keys_strictly_ordered(node: &BTreeNodeImpl) {
+    assert!(node.is_leaf, "expected a leaf node");
+    for pair in node.key_value_pairs.windows(2) {
+        assert!(
+            pair[0].key < pair[1].key,
+            "leaf keys must be strictly increasing: {:?} then {:?}",
+            pair[0].key,
+            pair[1].key
+        );
+    }
 }
 
 fn index_rebuild_payload(operation_tag: u8, index_id: u64) -> Vec<u8> {

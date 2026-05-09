@@ -26,7 +26,6 @@ const C5_DURABLE_KERNEL_CRATES: &[&str] = &[
     "andromeda-storage-page",
     "andromeda-transaction",
     "andromeda-transaction-log",
-    "andromeda-tx",
     "andromeda-wal",
     "andromeda-wal-codec",
 ];
@@ -57,11 +56,9 @@ const FORBIDDEN_C5_ANALYTICS_GPU_BENCH_SOURCE_TOKENS: &[&str] = &[
 ];
 const RUNTIME_CRITICAL_CRATES_TO_AUDIT: &[&str] = &[
     "andromeda-exec",
-    "andromeda-tx",
     "andromeda-storage",
     "andromeda-wal",
     "andromeda-recovery",
-    "andromeda-admin",
     "andromeda-security",
 ];
 const FORBIDDEN_RUNTIME_CRITICAL_SQL_DEPS: &[&str] = &[
@@ -181,8 +178,10 @@ const FORBIDDEN_RUNTIME_CRITICAL_PROTO_SOURCE_TOKENS: &[&str] = &[
     "prost_types",
     "prost_derive",
 ];
-const ALLOWED_RUNTIME_CRITICAL_PROTO_DEPENDENCIES: &[(&str, &[&str])] =
-    &[("andromeda-exec", &["andromeda-proto", "andromeda-rpc-protocol"])];
+const ALLOWED_RUNTIME_CRITICAL_PROTO_DEPENDENCIES: &[(&str, &[&str])] = &[(
+    "andromeda-exec",
+    &["andromeda-proto", "andromeda-rpc-protocol"],
+)];
 const ALLOWED_RUNTIME_CRITICAL_PROTO_SOURCE_IMPORTS: &[(&str, &[&str])] =
     &[("andromeda-exec", &["andromeda_proto::"])];
 const TEMPORARY_DEV_DEPENDENCY_BACKEDGE_EXCEPTIONS: &[TemporaryDependencyException] = &[
@@ -204,16 +203,6 @@ const TEMPORARY_C5_CORE_FACADE_EXCEPTIONS: &[TemporaryDependencyException] = &[
         exit_criteria: "Exit criteria: extract backup snapshot identifiers and restore error vocabulary from the temporary core facade.",
     },
     TemporaryDependencyException {
-        source: "andromeda-hadr",
-        dependency: "andromeda-core",
-        exit_criteria: "Exit criteria: extract HA/DR replica identity and failover epoch primitives from the temporary core facade.",
-    },
-    TemporaryDependencyException {
-        source: "andromeda-buffer-pool",
-        dependency: "andromeda-core",
-        exit_criteria: "Exit criteria: replace buffer-pool result and storage identity aliases with narrower durable-storage foundation crates.",
-    },
-    TemporaryDependencyException {
         source: "andromeda-recovery",
         dependency: "andromeda-core",
         exit_criteria: "Exit criteria: replace recovery result and error aliases with narrower recovery foundation crates.",
@@ -222,31 +211,6 @@ const TEMPORARY_C5_CORE_FACADE_EXCEPTIONS: &[TemporaryDependencyException] = &[
         source: "andromeda-storage",
         dependency: "andromeda-core",
         exit_criteria: "Exit criteria: replace the wide andromeda-core facade with extracted durable-storage foundation crates.",
-    },
-    TemporaryDependencyException {
-        source: "andromeda-storage-index",
-        dependency: "andromeda-core",
-        exit_criteria: "Exit criteria: replace index codec result and error aliases with narrower durable-storage foundation crates.",
-    },
-    TemporaryDependencyException {
-        source: "andromeda-storage-heap",
-        dependency: "andromeda-core",
-        exit_criteria: "Exit criteria: extract heap row/page identity and validation primitives from the temporary core facade.",
-    },
-    TemporaryDependencyException {
-        source: "andromeda-wal",
-        dependency: "andromeda-core",
-        exit_criteria: "Exit criteria: replace the wide andromeda-core facade with extracted WAL foundation crates.",
-    },
-    TemporaryDependencyException {
-        source: "andromeda-manifest",
-        dependency: "andromeda-core",
-        exit_criteria: "Exit criteria: move manifest identity and digest foundations behind dedicated durable manifest contracts.",
-    },
-    TemporaryDependencyException {
-        source: "andromeda-segment",
-        dependency: "andromeda-core",
-        exit_criteria: "Exit criteria: extract segment identity and WAL-safe primitives from the temporary core facade.",
     },
 ];
 #[test]

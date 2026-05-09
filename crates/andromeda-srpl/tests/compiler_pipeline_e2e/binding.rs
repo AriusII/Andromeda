@@ -264,7 +264,9 @@ fn executable_plan_rejects_assert_referencing_unbound_read_binding() {
 
 #[test]
 fn binder_supports_a_distinct_read_only_procedure_shape() {
-    use andromeda_catalog::{inventory_product_stock_table, inventory_protocol_layout_ref};
+    use andromeda_business_fixtures::{
+        inventory_product_stock_table, inventory_protocol_layout_ref,
+    };
     use andromeda_procedure_contract::{ProcedureContractCandidate, ResultStreamContract};
     use andromeda_srpl_ir::{
         SrplBusinessOperationIr, SrplEmitValueIr, SrplPredicateIr, SrplProcedureBodyIr,

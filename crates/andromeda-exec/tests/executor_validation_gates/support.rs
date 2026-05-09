@@ -1,8 +1,5 @@
 pub(crate) use andromeda_catalog_store::{CatalogObjectRef, ObjectKind, QualifiedName};
-pub(crate) use andromeda_core::{
-    AndromedaError, AndromedaErrorKind, AndromedaResult, CatalogObjectId, CatalogVersion,
-    ColumnDescriptor, ContractHash, InvocationId, ProcedureId, ScalarType, TypeDescriptor,
-};
+pub(crate) use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 pub(crate) use andromeda_exec::dispatch::{
     PreTransactionDispatchEvidence, ProcedureDispatchRequest, ProcedureDispatcher,
     SrplDispatcherAdapter,
@@ -23,8 +20,12 @@ pub(crate) use andromeda_procedure_runtime::procedure_resolver::{
 };
 pub(crate) use andromeda_srpl_interpreter::SrplIrInterpreter;
 pub(crate) use andromeda_srpl_ir::{
-    Cardinality,
-    BoundSrplBodyPlan, BoundSrplOperationPlan, ExecutableProcedurePlan, SrplCatalogBindingEvidence,
+    BoundSrplBodyPlan, BoundSrplOperationPlan, Cardinality, ExecutableProcedurePlan,
+    SrplCatalogBindingEvidence,
+};
+pub(crate) use andromeda_types::{
+    CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, InvocationId, ProcedureId,
+    ScalarType, TypeDescriptor,
 };
 pub(crate) use std::sync::Arc;
 

@@ -55,13 +55,11 @@ maintaining catalog consistency across related changes.
 
 | Module | Purpose |
 |--------|---------|
-| `objects` | Catalog object definitions and validation |
-| `contracts` | Procedure contracts and compatibility checking |
-| `names` | Qualified names and path resolution |
+| `andromeda-catalog-store` | Catalog object definitions and qualified names |
+| `andromeda-procedure-contract` | Procedure contracts and compatibility checking |
 | `batch` | Transactional batch operations |
 | `store` | Catalog storage interface |
 | `snapshot` | Point-in-time catalog snapshots |
-| `fixtures` | Test data and fixtures |
 
 ## Safety
 
@@ -70,34 +68,16 @@ This crate forbids unsafe code (`#![forbid(unsafe_code)]`).
 "#]
 
 mod batch;
-mod contracts;
-mod dependencies;
 pub mod digest;
-mod fixtures;
-mod names;
-mod objects;
-mod plan_cache;
-mod procedure_feedback;
-mod procedure_store;
 mod publication_subscription;
 mod recovery;
-mod scenario_evidence;
 mod server;
 mod snapshot;
-mod statistics;
 mod store;
 mod wal_integration;
 mod wal_record;
 
 pub use batch::*;
-pub use contracts::*;
-pub use dependencies::*;
-pub use fixtures::*;
-pub use names::*;
-pub use objects::*;
-pub use plan_cache::*;
-pub use procedure_feedback::*;
-pub use procedure_store::*;
 pub use publication_subscription::*;
 pub use publication_subscription::{
     CatalogPublicationReplayTerminalOutcome, CatalogPublicationReplayTerminalRecord,
@@ -105,10 +85,7 @@ pub use publication_subscription::{
     replay_publication_subscription_changes,
 };
 pub use recovery::*;
-pub use scenario_evidence::*;
 pub use server::*;
 pub use snapshot::*;
-pub use statistics::*;
 pub use store::*;
 pub use wal_integration::*;
-pub use wal_record::*;

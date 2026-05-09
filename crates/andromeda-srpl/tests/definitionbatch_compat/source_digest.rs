@@ -1,5 +1,5 @@
 use andromeda_catalog::CatalogSystemStore;
-use andromeda_srpl::definition_batch_bridge::{
+use andromeda_srpl_definition_batch::{
     SrplDefinitionBatchProcedureSource, dry_run_srpl_definition_batch_sources,
 };
 use andromeda_types::{CatalogVersion, ProcedureId};

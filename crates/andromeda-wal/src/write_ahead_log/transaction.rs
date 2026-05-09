@@ -1,6 +1,6 @@
 //! Durable transaction state classification and resumption.
 
-use andromeda_core::TransactionId;
+use andromeda_types::TransactionId;
 use std::collections::BTreeMap;
 
 use super::WalRecord;
@@ -109,7 +109,7 @@ pub fn summarize_transaction<'a>(
             WalRecordKind::TxBegin => begin_lsn = Some(lsn),
             WalRecordKind::TxCommit => commit_lsn = Some(lsn),
             WalRecordKind::TxRollback => rollback_lsn = Some(lsn),
-            _ => {}
+            _ => {},
         }
     }
 
@@ -169,7 +169,7 @@ pub fn classify_durable_transactions<'a>(
             DurableTransactionState::RolledBack => classifications.rolled_back.push(summary),
             DurableTransactionState::Open | DurableTransactionState::Incomplete => {
                 classifications.incomplete.push(summary);
-            }
+            },
         }
     }
 
@@ -196,7 +196,7 @@ pub fn incomplete_transactions_from_records<'a>(
 mod tests {
     use super::*;
     use crate::WalRecordKind;
-    use andromeda_core::TransactionId;
+    use andromeda_types::TransactionId;
 
     #[test]
     fn durable_resume_classifies_committed_and_incomplete() {

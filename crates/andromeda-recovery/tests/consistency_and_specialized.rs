@@ -1,10 +1,10 @@
-﻿//! Consistency Validation (Category D) and Specialized Paths (Category E) Tests
+//! Consistency Validation (Category D) and Specialized Paths (Category E) Tests
 //!
 //! Tests for verifying recovered database consistency and specialized recovery paths.
 
 mod common;
-use common::*;
 use andromeda_wal::Lsn;
+use common::*;
 
 // ============================================================================
 // Category D: Consistency Validation (15 tests)
@@ -15,7 +15,7 @@ fn recovery_consistent_recovery_no_orphaned_pages() {
     // After recovery, there should be no orphaned pages
     let manifest = build_test_manifest(100, 200);
     assert_valid_manifest(&manifest);
-    
+
     // All recovered pages should be accounted for in table segments
     assert_eq!(manifest.database_id, 1);
 }
@@ -32,7 +32,7 @@ fn recovery_consistent_recovery_no_orphaned_transactions() {
     // No transaction should be left in an inconsistent state
     let manifest = build_test_manifest(100, 200);
     assert_valid_manifest(&manifest);
-    
+
     // Recovery floor should be valid
     assert_eq!(manifest.recovery_floor_lsn(), Lsn::new(200));
 }
@@ -49,7 +49,7 @@ fn recovery_consistent_recovery_catalog_matches_tables() {
     // Catalog metadata must match actual table storage
     let manifest = build_test_manifest(100, 200);
     assert_valid_manifest(&manifest);
-    
+
     // Database ID should be consistent
     assert_eq!(manifest.database_id, 1);
 }
@@ -101,7 +101,7 @@ fn recovery_consistent_recovery_mvcc_snapshot_horizon_valid() {
     // MVCC snapshot horizon must be valid and safe
     let manifest = build_test_manifest(100, 200);
     assert_valid_manifest(&manifest);
-    
+
     // Snapshot ID should be valid
     assert_eq!(manifest.snapshot_id, 1);
 }
@@ -206,7 +206,7 @@ fn recovery_with_incremental_replay_resume() {
     // Recovery must support resuming from a saved replay checkpoint
     let manifest = build_test_manifest(100, 200);
     assert_valid_manifest(&manifest);
-    
+
     // Recovery floor allows restarting
     assert_can_recover_at(&manifest, 200);
 }
@@ -237,7 +237,7 @@ fn recovery_progress_monitoring() {
     // Recovery progress must be monitorable and reportable
     let manifest = build_test_manifest(100, 200);
     assert_valid_manifest(&manifest);
-    
+
     // Should be able to report recovery status
     assert_eq!(manifest.manifest_version, 1);
 }

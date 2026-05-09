@@ -1,9 +1,10 @@
 use std::sync::{Arc, RwLock};
 
+use andromeda_catalog_store::QualifiedName;
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
-use crate::{CatalogSystemStore, QualifiedName};
+use crate::CatalogSystemStore;
 
 use super::{
     CatalogChangeNotification, CatalogChangeSubscription, CatalogRuntimeEvidence,

@@ -1,10 +1,10 @@
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult, TransactionId};
 use andromeda_exec::LocalProcedure;
+use andromeda_mvcc::Snapshot;
 use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
 use andromeda_procedure_contract::ProcedureContract;
 use andromeda_result_stream::{CompletionStatus, InvocationCompletion, ResultStreamMetadata};
 use andromeda_srpl_ir::Cardinality;
-use andromeda_tx::Snapshot;
 
 use super::constants::{
     INVENTORY_QUERY_STOCK_COLUMN_COUNT, INVENTORY_QUERY_STOCK_RESULT_STREAM_ID,

@@ -1,6 +1,7 @@
 //! Commit log facade for WAL durability-before-visibility ordering.
 
-use andromeda_core::{AndromedaResult, TransactionId};
+use andromeda_error::AndromedaResult;
+use andromeda_types::TransactionId;
 
 use crate::Lsn;
 

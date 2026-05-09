@@ -94,7 +94,7 @@ fn collect_cargo_target_roots(package_dir: &Path) -> BTreeSet<PathBuf> {
 
     match declared.build_script {
         Some(Some(path)) => add_if_file(&mut roots, package_dir.join(path)),
-        Some(None) => {}
+        Some(None) => {},
         None => add_if_file(&mut roots, package_dir.join("build.rs")),
     }
     for path in declared.explicit_source_paths {
@@ -524,7 +524,7 @@ fn strip_toml_comment(line: &str) -> &str {
             '\'' if !in_double_quote => in_single_quote = !in_single_quote,
             '"' if !in_single_quote => in_double_quote = !in_double_quote,
             '#' if !in_single_quote && !in_double_quote => return &line[..index],
-            _ => {}
+            _ => {},
         }
     }
     line

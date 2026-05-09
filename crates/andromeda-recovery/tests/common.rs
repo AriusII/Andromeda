@@ -1,4 +1,4 @@
-﻿//! Common test utilities and fixtures for recovery tests.
+//! Common test utilities and fixtures for recovery tests.
 
 use andromeda_manifest::ManifestDurabilityBoundary;
 use andromeda_wal::Lsn;
@@ -45,6 +45,7 @@ pub fn assert_can_recover_at(manifest: &ManifestDurabilityBoundary, lsn: u64) {
 }
 
 /// Asserts recovery cannot start at LSN (before recovery floor).
+#[allow(dead_code)]
 pub fn assert_cannot_recover_at(manifest: &ManifestDurabilityBoundary, lsn: u64) {
     assert!(
         !manifest.can_start_recovery_at(Lsn::new(lsn)),
@@ -55,6 +56,7 @@ pub fn assert_cannot_recover_at(manifest: &ManifestDurabilityBoundary, lsn: u64)
 }
 
 /// Verifies LSN ordering is correct.
+#[allow(dead_code)]
 pub fn assert_lsn_monotonic(lsns: &[u64]) {
     for i in 0..lsns.len().saturating_sub(1) {
         assert!(

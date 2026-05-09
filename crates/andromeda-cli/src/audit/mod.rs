@@ -4,7 +4,7 @@ mod sensitive;
 
 use std::path::PathBuf;
 
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 use andromeda_observe::{
     DurableAuditCompactionReport, DurableAuditEventFamily, DurableAuditReplayEvidence,
     DurableAuditReplayLsnRange, DurableAuditReplayQuery, DurableAuditReplayWindow,
@@ -108,7 +108,7 @@ pub fn run_audit_command(args: &[String]) -> AndromedaResult<()> {
         Some("-h" | "--help" | "help") | None => {
             print_audit_help();
             Ok(())
-        }
+        },
         Some(_) => Err(cli_error(
             "unknown audit subcommand; run `andromeda-cli audit --help`",
         )),

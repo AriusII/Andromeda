@@ -3,7 +3,6 @@
 mod emitter;
 mod events;
 mod exporters;
-mod principal_binding;
 mod query;
 mod restore_trace;
 
@@ -46,10 +45,6 @@ pub use events::{
 pub use exporters::{
     ExportDecisionTrace, ExporterBackend, ExporterConfig, ExporterTrait, Metric, MockExporter,
     RetryPolicy,
-};
-pub use principal_binding::{
-    AuthorizationDenialReason, AuthorizationOutcome, PrincipalBinding, PrincipalRegistry,
-    SurfaceAction, SurfaceAuthorizer,
 };
 pub use query::{
     DurableAuditTraceQueryResult, DurableAuditTraceQueryRow, DurableAuditTraceQuerySource,

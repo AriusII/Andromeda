@@ -40,6 +40,8 @@ pub enum CatalogSnapshotPublication<Receipt> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CatalogObjectLifecycleStatus {
     Active,
+    /// The object is retained for history and dependency reasoning but is no
+    /// longer active for new catalog resolution.
     Deprecated,
 }
 
@@ -62,7 +64,11 @@ impl CatalogObjectLifecycle {
         }
     }
 
-    /// Returns a new lifecycle record reflecting deprecation at `changed_version`.
+    /// Returns a new lifecycle record reflecting domain deprecation at
+    /// `changed_version`.
+    ///
+    /// In this context "deprecated" means "retired from the active catalog",
+    /// not "obsolete Rust API".
     pub fn deprecated(self, changed_version: CatalogVersion) -> Self {
         Self {
             status: CatalogObjectLifecycleStatus::Deprecated,

@@ -107,7 +107,11 @@ RUNBOOK_CHECKS = (
 CRITICAL_CRATES = (
     "andromeda-wal",
     "andromeda-storage",
-    "andromeda-tx",
+    "andromeda-transaction",
+    "andromeda-transaction-log",
+    "andromeda-mvcc",
+    "andromeda-locking",
+    "andromeda-savepoint",
     "andromeda-exec",
     "andromeda-catalog",
     "andromeda-contract",

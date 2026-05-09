@@ -12,7 +12,7 @@ use super::{
     BackupVerifyOutcome,
 };
 use crate::error::cli_error;
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 use reporting::{print_cancel, print_list, print_start, print_status, print_verify};
 use runtime_plan::{execute_file_backed_backup, generate_backup_id};
 use validation::{
@@ -30,14 +30,14 @@ pub(crate) fn run_backup_command(args: &[String]) -> AndromedaResult<()> {
         Some("-h" | "--help" | "help") => {
             print_backup_help();
             Ok(())
-        }
+        },
         Some(_) => Err(cli_error(
             "unknown backup subcommand; run `andromeda-cli backup --help`",
         )),
         None => {
             print_backup_help();
             Ok(())
-        }
+        },
     }
 }
 

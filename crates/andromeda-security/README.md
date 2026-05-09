@@ -26,8 +26,8 @@ runtime-free security vocabulary and below observe sinks/envelopes.
 ## Prerequisites
 
 - Workspace conventions from `AGENTS.md` and `crates/AGENTS.md` are in force.
-- Security owns only the observe-independent principal-binding authority in this
-  crate; observe may keep compatibility reexports during caller migration.
+- Security owns the observe-independent principal-binding authority in this
+  crate.
 
 ## Procedure
 

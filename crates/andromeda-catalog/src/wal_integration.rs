@@ -7,12 +7,13 @@
 //! `andromeda-catalog-recovery`. This module converts local catalog mutation
 //! records to that boundary when callers need stable replay contracts.
 
+use andromeda_catalog_recovery::CatalogWalRecord;
 use andromeda_error::AndromedaResult;
 use andromeda_types::CatalogVersion;
 
 use crate::{
     CatalogMutationBoundary, CatalogMutationDelta, CatalogMutationOperation, CatalogMutationPlan,
-    CatalogMutationRecord, CatalogPublicationSemantics, CatalogSnapshot, CatalogWalRecord,
+    CatalogMutationRecord, CatalogPublicationSemantics, CatalogSnapshot,
 };
 
 /// Recovery-compatible record types used by durable WAL payload codecs.

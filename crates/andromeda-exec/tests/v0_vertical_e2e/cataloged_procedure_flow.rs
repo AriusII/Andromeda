@@ -2,10 +2,10 @@ use crate::support::{
     context, encoded_execute_frame, executable_procedure, inventory_catalog_snapshot, request,
     stock,
 };
-use andromeda_catalog::inventory_reserve_stock_contract;
-use andromeda_exec::CompletionStatus;
 use andromeda_inventory_demo::V0InventoryRecoverableRuntime;
+use andromeda_inventory_demo::inventory_reserve_stock_contract;
 use andromeda_observe::{CriticalDecisionKind, InMemoryEventSink, TraceEvent};
+use andromeda_result_stream::CompletionStatus;
 use andromeda_rpc_protocol::{
     FrameType, StreamRole, validate_result_stream_sequence, validate_single_frame_on_stream,
 };

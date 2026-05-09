@@ -1,6 +1,6 @@
 use std::{fs, path::Path};
 
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use sha2::{Digest, Sha256};
 
 use crate::Lsn;

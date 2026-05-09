@@ -47,10 +47,10 @@ python tools/testing/miri_subset.py
 When nightly Miri is installed, run one target first:
 
 ```powershell
-python tools/testing/miri_subset.py --only andromeda-codec --run
+python tools/testing/miri_subset.py --only andromeda-maps --run
 ```
 
-This subset currently covers `andromeda-codec`, `andromeda-maps`, `andromeda-policy`, `andromeda-resource`, `andromeda-procedure-store`, and `andromeda-contract`. It is advisory evidence only and does not imply release readiness.
+This subset currently covers `andromeda-maps`, `andromeda-policy`, `andromeda-resource`, `andromeda-procedure-store`, and `andromeda-contract`. It is advisory evidence only and does not imply release readiness.
 
 ## Acceptance Criteria
 

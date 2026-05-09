@@ -2,18 +2,17 @@ use crate::support::{
     context, encoded_execute_frame, executable_procedure, inventory_catalog_snapshot, request,
     stock,
 };
-use andromeda_catalog::inventory_reserve_stock_contract;
-use andromeda_core::{
-    AndromedaErrorKind, ColumnDescriptor, ContractHash, RequestId, ScalarType, TypeDescriptor,
-};
-use andromeda_exec::{BackpressuredResultStream, CompletionStatus, ResultStreamMetadata};
+use andromeda_error::AndromedaErrorKind;
+use andromeda_inventory_demo::inventory_reserve_stock_contract;
 use andromeda_inventory_demo::{V0InventoryRecoverableOutcome, V0InventoryRecoverableRuntime};
 use andromeda_proto::{RowCountPolicy, StructuredObjectHeader, StructuredObjectLayout};
+use andromeda_result_stream::{BackpressuredResultStream, CompletionStatus, ResultStreamMetadata};
 use andromeda_rpc_protocol::{
     BackpressureReason, FrameCodec, FrameType, StreamRole, validate_result_stream_sequence,
     validate_single_frame_on_stream,
 };
 use andromeda_srpl_ir::Cardinality;
+use andromeda_types::{ColumnDescriptor, ContractHash, RequestId, ScalarType, TypeDescriptor};
 use andromeda_wal::{InMemoryWal, Lsn};
 
 fn execute_v0_inventory_reserve_stock(

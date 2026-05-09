@@ -4,12 +4,14 @@ use std::{
 };
 
 use andromeda_catalog_store::{
-    CatalogManifestRecord, CatalogManifestRuntimeMetadata, CatalogManifestStoreBoundary,
+    CatalogDefinition, CatalogManifestRecord, CatalogManifestRuntimeMetadata,
+    CatalogManifestStoreBoundary, QualifiedName,
 };
 use andromeda_error::AndromedaResult;
+use andromeda_procedure_contract::ProcedureContract;
 use andromeda_types::{CatalogVersion, ProcedureId};
 
-use crate::{CatalogDefinition, CatalogSystemStore, ProcedureContract, QualifiedName};
+use crate::CatalogSystemStore;
 
 use super::super::{CatalogRuntimeEvidence, CatalogRuntimeReopenEvidence, CatalogRuntimeStore};
 use super::{catalog_runtime_lock_error, schema::manifest_from_contract};

@@ -1,8 +1,9 @@
-use andromeda_core::{InvocationId, TransactionId};
-use andromeda_exec::{
-    ErrorKind, RetryRouting, TerminalTxJournal, TerminalTxState, route_transaction_error,
+use andromeda_execution_trace::{
+    ErrorKind, RetryRouting, TerminalTxEvidence, TerminalTxJournal, TerminalTxState,
+    route_transaction_error,
 };
 use andromeda_observability::{TraceId, TransitionReasonCode};
+use andromeda_types::{InvocationId, TransactionId};
 
 #[test]
 fn transaction_timeout_routes_to_non_retryable_rollback_with_audit_and_fence() {
@@ -76,7 +77,7 @@ fn timeout_near_commit_recovery_keeps_exactly_one_terminal_state() {
     )
     .unwrap();
 
-    let conflicting_commit = journal.record(andromeda_exec::TerminalTxEvidence {
+    let conflicting_commit = journal.record(TerminalTxEvidence {
         transaction_id: tx_id,
         terminal_state: TerminalTxState::Committed,
         durable_wal_fence_lsn: 9202,

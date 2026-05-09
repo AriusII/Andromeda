@@ -6,7 +6,7 @@ rust-version = "1.95.0"
 publish = false
 
 [dependencies]
-andromeda-core.workspace = true
+andromeda-error.workspace = true
 andromeda-storage-page.workspace = true
 andromeda-wal.workspace = true
 sha2 = "0.11.0"

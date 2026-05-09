@@ -141,7 +141,7 @@ impl Permission {
         match self {
             Self::ExecuteProcedure | Self::ReadContract | Self::ReadContractMetadata => {
                 PermissionFamily::Application
-            }
+            },
             Self::CreateTable
             | Self::CreateMap
             | Self::CreateProcedure
@@ -152,11 +152,11 @@ impl Permission {
             | Self::ReadAudit => PermissionFamily::Diagnostics,
             Self::ManageSecurity | Self::RotateCertificate | Self::RevokeCertificateIdentity => {
                 PermissionFamily::Security
-            }
+            },
             Self::Backup | Self::Restore | Self::ForensicStart => PermissionFamily::Recovery,
             Self::ClusterPromote | Self::ClusterFenceNode | Self::ClusterUpdateManifest => {
                 PermissionFamily::Cluster
-            }
+            },
         }
     }
 

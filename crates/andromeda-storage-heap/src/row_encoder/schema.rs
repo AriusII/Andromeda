@@ -1,4 +1,4 @@
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 use super::error::encoder_error;
 use super::format::{VAR_OFFSET_WIDTH_BYTES, bitmap_byte_len};

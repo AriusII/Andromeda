@@ -3,7 +3,7 @@
 //! [`WalSegmentDescriptor`] and [`WalSegment`] are defined here and only here.
 //! The [`crate::write_ahead_log::segment`] module re-exports them as part of
 //! the WAL domain facade and must not redefine them.
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{Lsn, WAL_FORMAT_VERSION, WalRecord};
 
@@ -140,7 +140,7 @@ fn storage_error(message: impl Into<String>) -> AndromedaError {
 mod tests {
     use super::*;
     use crate::WalRecordKind;
-    use andromeda_core::TransactionId;
+    use andromeda_types::TransactionId;
 
     fn record(lsn: u64, previous_lsn: Option<u64>) -> WalRecord {
         WalRecord::from_parts(

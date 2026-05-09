@@ -2,22 +2,24 @@
 
 ## Purpose
 
-`andromeda-catalog-diff` is a runtime-free scaffold for future catalog diff
-ownership. It reserves stable taxonomy placeholders for catalog object changes,
-contract impact categories, and review severity names.
+`andromeda-catalog-diff` is the runtime-free owner for catalog object diff
+evidence. It classifies object additions, removals, replacements, shape-hash
+changes, and review severity without applying catalog state or publishing
+anything visible.
 
 ## Scope
 
+- Catalog object diff DTOs.
+- Runtime-free diff computation for optional catalog object definitions.
 - Catalog diff kind taxonomy identifiers.
-- Contract impact placeholders.
+- Contract impact categories.
 - Review severity names.
-- Compile-ready Rust 2024 crate metadata.
 
 ## Non-goals
 
 - No catalog publication without durable WAL.
 - No ad hoc SQL or dynamic application-facing query surface.
-- No diff engine, compatibility evaluator, apply engine, or rollback engine.
+- No Procedure compatibility evaluator, apply engine, or rollback engine.
 - No persistence, network serialization, or Rust native struct layout contract.
 - No runtime dependency ownership.
 - No release claim.
@@ -30,25 +32,24 @@ contract impact categories, and review severity names.
 
 ## Procedure
 
-Use the exported taxonomy entries as stable names only. A future owner can move
-the crate into the root workspace and replace placeholders with typed catalog
-diff logic after contract compatibility, catalog snapshots, WAL, and audit
-responsibilities are assigned.
+Use `diff_catalog_object_definitions` for object-level evidence when callers
+need to prove that catalog object shape or identity changed. Keep Procedure
+compatibility diagnostics, DefinitionBatch source hashes, durable WAL replay,
+and publication gates in their existing owner crates.
 
 ## Validation
 
 ```powershell
-cargo fmt --manifest-path crates/andromeda-catalog-diff/Cargo.toml --check
-cargo check --manifest-path crates/andromeda-catalog-diff/Cargo.toml
-cargo test --manifest-path crates/andromeda-catalog-diff/Cargo.toml
+cargo fmt --check -p andromeda-catalog-diff
+cargo check -p andromeda-catalog-diff --all-targets --all-features
+cargo test -p andromeda-catalog-diff --all-targets --all-features
+cargo test -p andromeda-catalog --test catalog_diff_contract -- --nocapture
 ```
 
 ## Troubleshooting
 
-If Cargo reports that the crate is not a root workspace member, verify that this
-manifest still contains its local `[workspace]` table. Do not add the crate to
-the repository root workspace until that ownership change is explicitly
-requested.
+If a caller needs Procedure compatibility diagnostics, use the procedure
+contract owner first and keep this crate limited to object-level diff evidence.
 
 ## References
 

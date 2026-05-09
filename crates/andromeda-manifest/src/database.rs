@@ -1,4 +1,4 @@
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 use andromeda_wal::Lsn;
 
 use crate::{ManifestDurabilityBoundary, StorageFormatManifest};

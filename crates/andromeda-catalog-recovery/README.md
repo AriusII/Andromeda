@@ -7,7 +7,7 @@ replay contract types that can be shared without depending on the live catalog o
 
 ## Scope
 
-- Durable catalog mutation payload envelopes.
+- Durable catalog mutation payload envelopes and codecs.
 - Recovery anomaly and skipped-batch classifications.
 - Administration/HA publication audience and reason classifications.
 - Publication replay terminal and replay-record classifications.
@@ -19,8 +19,7 @@ replay contract types that can be shared without depending on the live catalog o
 - No bypass of typed Procedure contracts.
 - No durable artifact replay orchestration.
 - No catalog snapshot mutation.
-- No WAL payload decoding.
-- No publication receipt or subscriber registry validation.
+- No live catalog snapshot mutation.
 - No WAL, page, or manifest protocol implementation in this scaffold.
 
 ## Prerequisites
@@ -31,9 +30,9 @@ replay contract types that can be shared without depending on the live catalog o
 ## Procedure
 
 Use this crate for contract types that do not require `andromeda-catalog` ownership.
-Keep APIs that require `CatalogSnapshot`, `CatalogMutationRecord`,
-`CatalogPublicationReceipt`, `CatalogPublicationReport`, or subscriber registry state in
-`andromeda-catalog` to avoid circular dependencies.
+Keep APIs that require concrete `CatalogSnapshot` storage in `andromeda-catalog`
+to avoid circular dependencies. Generic mutation replay, durable payload codecs,
+publication replay, receipt validation, and subscriber registry state belong here.
 
 Current owner boundary:
 
@@ -42,8 +41,8 @@ Current owner boundary:
 | Durable payload envelope and replay classifications | `andromeda-catalog-recovery` |
 | Publication audience and replay classifications | `andromeda-catalog-recovery` |
 | Snapshot recovery orchestration | `andromeda-catalog` |
-| WAL payload decoding | `andromeda-catalog` |
-| Publication report, receipt, and subscriber registry validation | `andromeda-catalog` |
+| WAL payload decoding | `andromeda-catalog-recovery` |
+| Publication report, receipt, and subscriber registry validation | `andromeda-catalog-recovery` |
 
 ## Validation
 

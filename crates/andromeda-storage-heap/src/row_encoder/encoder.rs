@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 use super::binary::read_array_at;
 use super::datum::Datum;

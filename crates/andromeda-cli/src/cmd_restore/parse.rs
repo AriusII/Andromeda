@@ -1,7 +1,7 @@
 use crate::diagnostic_json::JSON_FLAG;
 use crate::error::cli_error;
 use crate::parse::{next_option_value_rejecting_flag, parse_u64};
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 use andromeda_restore::RestoreValidationPolicy;
 
 #[derive(Debug, Clone)]

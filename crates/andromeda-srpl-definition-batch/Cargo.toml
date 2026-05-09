@@ -1,0 +1,21 @@
+[package]
+name = "andromeda-srpl-definition-batch"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+description = "SRPL source compilation bridge for DefinitionBatch dry-run and publication evidence."
+
+[dependencies]
+andromeda-catalog.workspace = true
+andromeda-catalog-store.workspace = true
+andromeda-definition-batch.workspace = true
+andromeda-error.workspace = true
+andromeda-procedure-contract.workspace = true
+andromeda-srpl-ast.workspace = true
+andromeda-srpl-binder.workspace = true
+andromeda-srpl-diagnostics.workspace = true
+andromeda-srpl-ir.workspace = true
+andromeda-srpl-lowering.workspace = true
+andromeda-srpl-parser.workspace = true
+andromeda-types.workspace = true

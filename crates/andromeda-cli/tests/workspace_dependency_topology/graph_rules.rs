@@ -11,7 +11,7 @@ use std::{
     fs,
     path::PathBuf,
 };
-const WORKSPACE_CRATE_COUNT: usize = 96;
+const WORKSPACE_CRATE_COUNT: usize = 88;
 const C5_DURABLE_KERNEL_CRATES: &[&str] = &[
     "andromeda-backup",
     "andromeda-buffer-pool",
@@ -30,7 +30,6 @@ const C5_DURABLE_KERNEL_CRATES: &[&str] = &[
     "andromeda-storage-page",
     "andromeda-transaction",
     "andromeda-transaction-log",
-    "andromeda-tx",
     "andromeda-wal",
     "andromeda-wal-codec",
 ];
@@ -77,7 +76,9 @@ const FORBIDDEN_C5_MODEL_AND_STORE_DEPS: &[&str] = &[
     "andromeda-srpl",
     "andromeda-srpl-ast",
     "andromeda-srpl-binder",
+    "andromeda-srpl-catalog-binding",
     "andromeda-srpl-cardinality",
+    "andromeda-srpl-definition-batch",
     "andromeda-srpl-diagnostics",
     "andromeda-srpl-execution-adapter",
     "andromeda-srpl-interpreter",
@@ -146,7 +147,7 @@ fn workspace_crate_dependency_topology_blocks_forbidden_runtime_edges() {
     );
 }
 #[test]
-fn workspace_dependency_topology_tracks_current_95_crate_surface() {
+fn workspace_dependency_topology_tracks_current_crate_surface() {
     let workspace = workspace_root();
     let manifests = load_crate_manifests(&workspace.join("crates"));
     let manifest_paths =
@@ -155,12 +156,12 @@ fn workspace_dependency_topology_tracks_current_95_crate_surface() {
     assert_eq!(
         manifests.len(),
         WORKSPACE_CRATE_COUNT,
-        "workspace topology tests must cover the current 96 root crates under crates/"
+        "workspace topology tests must cover the current crate manifests under crates/"
     );
     assert_eq!(
         manifest_paths.len(),
         WORKSPACE_CRATE_COUNT,
-        "workspace member manifest discovery must stay aligned with the 96-crate topology"
+        "workspace member manifest discovery must stay aligned with the current crate topology"
     );
 }
 fn forbidden_rules() -> Vec<ForbiddenRule> {
@@ -181,7 +182,6 @@ fn forbidden_rules() -> Vec<ForbiddenRule> {
                 "andromeda-srpl",
                 "andromeda-proto",
                 "andromeda-storage",
-                "andromeda-tx",
                 "andromeda-exec",
                 "andromeda-observe",
                 "andromeda-quic",
@@ -216,7 +216,6 @@ fn forbidden_rules() -> Vec<ForbiddenRule> {
                 &[
                     "andromeda-proto",
                     "andromeda-proto-wire",
-                    "andromeda-protocol",
                     "andromeda-rpc",
                     "andromeda-rpc-codec",
                     "andromeda-rpc-contract",
@@ -256,7 +255,6 @@ fn forbidden_rules() -> Vec<ForbiddenRule> {
                 "andromeda-srpl",
                 "andromeda-observe",
                 "andromeda-storage",
-                "andromeda-tx",
                 "andromeda-exec",
                 "andromeda-quic",
                 "andromeda-bench",
@@ -281,7 +279,6 @@ fn forbidden_rules() -> Vec<ForbiddenRule> {
                 "andromeda-srpl",
                 "andromeda-observe",
                 "andromeda-storage",
-                "andromeda-tx",
                 "andromeda-exec",
                 "andromeda-quic",
                 "andromeda-bench",
@@ -321,7 +318,6 @@ fn forbidden_rules() -> Vec<ForbiddenRule> {
             "Abstract RPC and protocol contract crates must not depend on concrete network runtime crates",
             &[
                 "andromeda-proto",
-                "andromeda-protocol",
                 "andromeda-protocol-contract",
                 "andromeda-rpc",
                 "andromeda-rpc-abstract",
@@ -442,16 +438,6 @@ fn allowed_dependency_rules() -> Vec<AllowedDependencyRule> {
                 "andromeda-error",
                 "andromeda-observability",
             ],
-        ),
-        AllowedDependencyRule::new(
-            "andromeda-admin must remain an administration facade with no runtime truth",
-            "andromeda-admin",
-            &[],
-        ),
-        AllowedDependencyRule::new(
-            "andromeda-client-sdk-gen must remain runtime-free generation scaffolding",
-            "andromeda-client-sdk-gen",
-            &[],
         ),
         AllowedDependencyRule::new(
             "andromeda-test-support must remain runtime-free mechanical test support",
@@ -609,13 +595,14 @@ fn allowed_dependency_rules() -> Vec<AllowedDependencyRule> {
                 "andromeda-audit",
                 "andromeda-catalog",
                 "andromeda-catalog-store",
-                "andromeda-core",
                 "andromeda-definition-batch",
                 "andromeda-error",
                 "andromeda-execution",
                 "andromeda-execution-trace",
+                "andromeda-hardware",
                 "andromeda-iam",
                 "andromeda-observe",
+                "andromeda-observability",
                 "andromeda-plan-cache",
                 "andromeda-principal",
                 "andromeda-procedure-contract",
@@ -634,6 +621,7 @@ fn allowed_dependency_rules() -> Vec<AllowedDependencyRule> {
                 "andromeda-storage",
                 "andromeda-storage-heap",
                 "andromeda-storage-page",
+                "andromeda-time",
                 "andromeda-mvcc",
                 "andromeda-transaction",
                 "andromeda-transaction-log",
@@ -669,21 +657,11 @@ fn allowed_dependency_rules() -> Vec<AllowedDependencyRule> {
         AllowedDependencyRule::new(
             "andromeda-wal may only depend on pure WAL foundation crates",
             "andromeda-wal",
-            &["andromeda-core", "andromeda-wal-codec", "dashmap"],
-        ),
-        AllowedDependencyRule::new(
-            "andromeda-tx may only depend on current Lot 4.0 transaction-kernel support crates",
-            "andromeda-tx",
             &[
-                "andromeda-locking",
-                "andromeda-mvcc",
-                "andromeda-savepoint",
-                "andromeda-transaction",
-                "andromeda-transaction-log",
-                "async-trait",
+                "andromeda-error",
+                "andromeda-types",
+                "andromeda-wal-codec",
                 "dashmap",
-                "futures",
-                "tokio",
             ],
         ),
     ]
@@ -733,18 +711,6 @@ fn allowed_dev_dependency_rules() -> Vec<AllowedDependencyRule> {
             &[],
         ),
         AllowedDependencyRule::new_for_scope(
-            "andromeda-admin must not gain dev-dependencies while it remains a facade",
-            "andromeda-admin",
-            DependencyScope::Dev,
-            &[],
-        ),
-        AllowedDependencyRule::new_for_scope(
-            "andromeda-client-sdk-gen must not gain dev-dependencies before SDK contracts exist",
-            "andromeda-client-sdk-gen",
-            DependencyScope::Dev,
-            &[],
-        ),
-        AllowedDependencyRule::new_for_scope(
             "andromeda-test-support must not gain dev-dependencies without a fixture-boundary review",
             "andromeda-test-support",
             DependencyScope::Dev,
@@ -778,7 +744,17 @@ fn allowed_dev_dependency_rules() -> Vec<AllowedDependencyRule> {
             "andromeda-catalog may only dev-depend on the documented Lot 2 catalog/storage integration harness",
             "andromeda-catalog",
             DependencyScope::Dev,
-            &["andromeda-storage", "andromeda-wal"],
+            &[
+                "andromeda-business-fixtures",
+                "andromeda-catalog-diff",
+                "andromeda-contract",
+                "andromeda-observe",
+                "andromeda-plan-cache",
+                "andromeda-scenario-evidence",
+                "andromeda-statistics",
+                "andromeda-storage",
+                "andromeda-wal",
+            ],
         ),
         AllowedDependencyRule::new_for_scope(
             "andromeda-observe may only dev-depend on the documented durable-audit storage harness",
@@ -790,7 +766,7 @@ fn allowed_dev_dependency_rules() -> Vec<AllowedDependencyRule> {
             "andromeda-quic may only dev-depend on property-test harness crates",
             "andromeda-quic",
             DependencyScope::Dev,
-            &["proptest"],
+            &["andromeda-proto", "andromeda-security-contract", "proptest"],
         ),
         AllowedDependencyRule::new_for_scope(
             "andromeda-exec may only dev-depend on the documented business-fixture harness",
@@ -799,7 +775,11 @@ fn allowed_dev_dependency_rules() -> Vec<AllowedDependencyRule> {
             &[
                 "andromeda-business-fixtures",
                 "andromeda-inventory-demo",
+                "andromeda-manifest",
                 "andromeda-observability",
+                "andromeda-proto",
+                "andromeda-recovery",
+                "andromeda-srpl",
                 "andromeda-srpl-binder",
             ],
         ),
@@ -839,7 +819,9 @@ fn allowed_dev_dependency_rules() -> Vec<AllowedDependencyRule> {
             DependencyScope::Dev,
             &[
                 "andromeda-contract",
-                "andromeda-plan-cache",
+                "andromeda-srpl-catalog-binding",
+                "andromeda-srpl-definition-batch",
+                "andromeda-srpl-ast",
                 "andromeda-srpl-cardinality",
                 "andromeda-srpl-execution-adapter",
                 "andromeda-srpl-lexer",
@@ -850,7 +832,12 @@ fn allowed_dev_dependency_rules() -> Vec<AllowedDependencyRule> {
             "andromeda-storage may only dev-depend on storage test harness crates",
             "andromeda-storage",
             DependencyScope::Dev,
-            &["proptest", "tempfile"],
+            &[
+                "andromeda-backup",
+                "andromeda-restore",
+                "proptest",
+                "tempfile",
+            ],
         ),
         AllowedDependencyRule::new_for_scope(
             "andromeda-wal may only dev-depend on pure WAL test harness crates",
@@ -1118,7 +1105,9 @@ fn allowed_temporary_transitive_forbidden_path(
     path: &[String],
 ) -> bool {
     source == "andromeda-storage"
-        && path.get(1).is_some_and(|first_hop| first_hop == "andromeda-catalog-recovery")
+        && path
+            .get(1)
+            .is_some_and(|first_hop| first_hop == "andromeda-catalog-recovery")
         && matches!(
             dependency,
             "andromeda-catalog-store" | "andromeda-srpl-diagnostics"

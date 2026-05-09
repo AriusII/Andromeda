@@ -1,6 +1,6 @@
 use crate::error::cli_error;
 use crate::parse;
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 use andromeda_wal::Lsn;
 use std::path::PathBuf;
 

@@ -1,7 +1,9 @@
 use crate::support::*;
-use andromeda_storage::{
-    BackupId, Lsn, RecoveryStage, RestoreValidationPolicy, validate_restore_artifact_preflight,
+use andromeda_backup::BackupId;
+use andromeda_restore::{
+    RecoveryStage, RestoreValidationPolicy, validate_restore_artifact_preflight,
 };
+use andromeda_wal::Lsn;
 
 #[test]
 fn restore_preflight_accepts_file_backed_artifact_directory() {

@@ -69,10 +69,10 @@ fn compute_use(kind: &SrplBusinessOperationKindIr) -> BTreeSet<ColRef> {
             for p in predicates {
                 add_predicate_use(&mut set, p);
             }
-        }
+        },
         SrplBusinessOperationKindIr::Assert { predicate, .. } => {
             add_predicate_use(&mut set, predicate);
-        }
+        },
         SrplBusinessOperationKindIr::Update {
             predicates,
             assignments,
@@ -84,13 +84,13 @@ fn compute_use(kind: &SrplBusinessOperationKindIr) -> BTreeSet<ColRef> {
             for a in assignments {
                 add_value_use(&mut set, &a.value);
             }
-        }
+        },
         SrplBusinessOperationKindIr::Emit { values, .. } => {
             for ev in values {
                 add_value_use(&mut set, &ev.value);
             }
-        }
-        SrplBusinessOperationKindIr::Raise { .. } => {}
+        },
+        SrplBusinessOperationKindIr::Raise { .. } => {},
     }
     set
 }
@@ -100,7 +100,7 @@ fn add_predicate_use(set: &mut BTreeSet<ColRef>, pred: &SrplPredicateIr) {
         SrplPredicateIr::InputEqualsField { binding, field, .. }
         | SrplPredicateIr::FieldGreaterThanOrEqualInput { binding, field, .. } => {
             set.insert((binding.clone(), field.clone()));
-        }
+        },
     }
 }
 
@@ -108,15 +108,15 @@ fn add_value_use(set: &mut BTreeSet<ColRef>, value: &SrplValueIr) {
     match value {
         SrplValueIr::Field { binding, field } => {
             set.insert((binding.clone(), field.clone()));
-        }
+        },
         SrplValueIr::SubtractInput { binding, field, .. } => {
             set.insert((binding.clone(), field.clone()));
-        }
+        },
         SrplValueIr::BinaryArith { left, right, .. } => {
             add_value_use(set, left);
             add_value_use(set, right);
-        }
-        SrplValueIr::Input(_) | SrplValueIr::Constant(_) => {}
+        },
+        SrplValueIr::Input(_) | SrplValueIr::Constant(_) => {},
     }
 }
 

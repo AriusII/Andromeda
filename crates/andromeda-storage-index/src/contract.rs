@@ -1,5 +1,5 @@
 use super::{BTreeStatistics, ColumnId, IndexId, PageId, RowId};
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 /// B-Tree index trait: key-value lookup, mutation, and range scan operations.
 pub trait BTreeIndex: Send + Sync {

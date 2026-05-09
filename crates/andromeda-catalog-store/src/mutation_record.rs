@@ -134,7 +134,8 @@ pub enum CatalogMutationOperation<LifecycleTarget> {
         object: CatalogObjectRef,
         definition: CatalogDefinition,
     },
-    DeprecateObject {
-        target: LifecycleTarget,
-    },
+    /// Marks an existing object inactive while retaining its historical
+    /// identity. `DeprecateObject` is stable catalog lifecycle terminology, not
+    /// a deprecation marker for this API.
+    DeprecateObject { target: LifecycleTarget },
 }

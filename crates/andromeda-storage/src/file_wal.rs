@@ -1,9 +1,9 @@
 //! Storage recovery facade for the file-backed WAL.
 //!
 //! `FileWal`, `FileWalHeader`, `FileWalDiskScan`, and the `FILE_WAL_*`
-//! byte-format constants are owned by `andromeda_wal`. Storage keeps the v0
-//! startup recovery and forensic report projection here because they combine
-//! WAL scans with storage manifests and startup policy.
+//! byte-format constants are owned by `andromeda_wal`. The v0 startup recovery
+//! DTO and report contracts are owned by `andromeda_recovery`; storage keeps
+//! only the manifest-aware orchestration adapters.
 
 mod recovery;
 mod report;
@@ -11,14 +11,14 @@ mod report;
 pub use andromeda_recovery::{
     FileWalRecoveryBoundaryKind, FileWalRecoveryIgnoredTransaction,
     FileWalRecoveryIgnoredTransactionReason, FileWalRecoveryReplayRecord, FileWalRecoveryReportV0,
+    FileWalStartupRecoveryV0,
 };
 pub use andromeda_wal::{
     FILE_WAL_HEADER_LEN, FILE_WAL_MAGIC, FILE_WAL_MONO_SEGMENT_ID, FileWal, FileWalDiskScan,
     FileWalHeader, scan_file_wal,
 };
 pub use recovery::{
-    FileWalStartupRecoveryV0, plan_file_wal_startup_recovery_v0, recover_from_file_wal,
-    report_file_wal_recovery_v0,
+    plan_file_wal_startup_recovery_v0, recover_from_file_wal, report_file_wal_recovery_v0,
 };
 
 #[cfg(test)]

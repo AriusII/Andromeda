@@ -1,6 +1,6 @@
 use super::*;
 use crate::{Lsn, WalRecord, WalRecordKind};
-use andromeda_core::TransactionId;
+use andromeda_types::TransactionId;
 
 fn sized_record(lsn: u64, previous: Option<u64>, payload_size: usize) -> WalRecord {
     WalRecord::from_parts(

@@ -16,10 +16,12 @@
 //! Full invocation deadline (admission → WAL commit), `LockManager` deadline
 //! support, and `TransactionManager` timeout are outside this contract.
 
-use andromeda_core::{AndromedaErrorKind, InvocationId};
+use andromeda_error::AndromedaErrorKind;
+
 use andromeda_execution_trace::{AuditLedger, InMemoryAuditLedger, InvocationTraceEvent};
 use andromeda_observe::TraceId;
 use andromeda_retry::{ErrorRetryability, RetryDecision, RetryPolicy};
+use andromeda_types::InvocationId;
 
 // Seed helpers so every test gets a distinct, deterministic TraceId.
 const T1: TraceId = TraceId::new(0x_0001_0000_0000_0001);

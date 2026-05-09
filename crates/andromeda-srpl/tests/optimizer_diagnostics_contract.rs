@@ -5,7 +5,7 @@ use andromeda_optimizer::srpl::{
     OptimizationLevel, OptimizerDecisionKind, OptimizerPipelineConfig,
     optimize_procedure_ir_with_config, phase::OptimizerPhase,
 };
-use andromeda_srpl::procedure_compiler::compile_narrow_procedure_signature_with_optimizer;
+use andromeda_srpl::compile_narrow_procedure_signature_with_optimizer;
 use andromeda_srpl_diagnostics::DiagnosticPhase;
 use andromeda_srpl_ir::{
     ArithOp, Cardinality, ConstantLiteral, SrplAssignmentIr, SrplBusinessOperationIr,

@@ -1,5 +1,6 @@
 use crate::support::*;
-use andromeda_storage::{BackupId, ExtentState, FileBackedBackupArtifactStore};
+use andromeda_backup::{BackupId, FileBackedBackupArtifactStore};
+use andromeda_segment::ExtentState;
 
 #[test]
 fn file_backed_artifact_store_rejects_incompatible_v3_wal_format_evidence() {

@@ -1,5 +1,5 @@
 use crate::support::*;
-use andromeda_storage::ExtentState;
+use andromeda_segment::ExtentState;
 
 #[test]
 fn test_backup_artifact_metadata_consistency() {
@@ -24,7 +24,7 @@ fn test_backup_artifact_metadata_consistency() {
         "backup plan with consistent metadata should pass validation"
     );
 
-    let corrupted_plan = andromeda_storage::BackupExecutionPlan {
+    let corrupted_plan = andromeda_backup::BackupExecutionPlan {
         total_extent_bytes: true_extent_bytes + 1000,
         ..plan.clone()
     };
@@ -34,7 +34,7 @@ fn test_backup_artifact_metadata_consistency() {
         "backup plan with corrupted extent bytes should fail validation"
     );
 
-    let corrupted_plan = andromeda_storage::BackupExecutionPlan {
+    let corrupted_plan = andromeda_backup::BackupExecutionPlan {
         total_wal_bytes: true_wal_bytes - 1000,
         ..plan.clone()
     };

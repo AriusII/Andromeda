@@ -1,5 +1,6 @@
 use crate::support::*;
-use andromeda_storage::{Lsn, plan_replay_segments};
+use andromeda_restore::plan_replay_segments;
+use andromeda_wal::Lsn;
 
 #[test]
 fn test_plan_replay_single_segment_containing_pitr() {

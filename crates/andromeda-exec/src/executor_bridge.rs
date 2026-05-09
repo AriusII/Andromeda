@@ -70,9 +70,10 @@
 
 use crate::surface_gate::{AuthorizedProcedureDispatch, SurfacePlaneAuthorizer};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use andromeda_observe::{AuthorizationOutcome, TraceId};
+use andromeda_observability::TraceId;
 use andromeda_principal::CertificateIdentity;
 use andromeda_quic::{Connection, SurfacePlane};
+use andromeda_security::AuthorizationOutcome;
 use andromeda_types::InvocationId;
 
 /// Bridges a QUIC connection and certificate identity to executor dispatch.
@@ -186,13 +187,13 @@ impl<'a> ExecutorDispatchBridge<'a> {
     ///
     /// ```no_run
     /// # use andromeda_exec::ExecutorDispatchBridge;
-    /// # use andromeda_observe::TraceId;
+    /// # use andromeda_observability::TraceId;
     /// # use andromeda_exec::SurfacePlaneAuthorizer;
     /// # use andromeda_principal::{CertificateIdentity, SurfaceScope};
     /// # let mut conn = andromeda_quic::Connection::new(andromeda_quic::SurfacePlane::Application);
     /// # let identity = CertificateIdentity::new("a".repeat(64), "svc-001", SurfaceScope::Application).unwrap();
     /// # conn.set_certificate_identity(identity).unwrap();
-    /// # let registry = andromeda_observe::PrincipalRegistry::new();
+    /// # let registry = andromeda_security::PrincipalRegistry::new();
     /// # let bridge = ExecutorDispatchBridge::new(&conn)?;
     ///
     /// let authorizer = SurfacePlaneAuthorizer::new(&registry);
@@ -445,7 +446,7 @@ mod tests {
             precond_err.is_err(),
             "preconditions should fail for non-Active connection"
         );
-        let registry = andromeda_observe::PrincipalRegistry::new();
+        let registry = andromeda_security::PrincipalRegistry::new();
         let authorizer = SurfacePlaneAuthorizer::new(&registry);
         let authorization_err = bridge
             .authorize_procedure_dispatch(&authorizer, TraceId::new(44))

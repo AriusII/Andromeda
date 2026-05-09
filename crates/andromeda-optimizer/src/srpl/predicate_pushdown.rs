@@ -78,7 +78,7 @@ mod tests {
         match &result.body.operations[0].kind {
             SrplBusinessOperationKindIr::Read { predicates, .. } => {
                 assert!(predicates.is_empty());
-            }
+            },
             _ => panic!("expected Read"),
         }
         assert!(matches!(

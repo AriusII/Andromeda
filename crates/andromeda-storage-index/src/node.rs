@@ -1,5 +1,5 @@
 //! B+ Tree node management — load, create, serialize, deserialize.
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 use super::*;
 
@@ -384,10 +384,10 @@ fn read_node_bytes<'a>(
         return invalid_node_format(page_id);
     }
     let end = offset.checked_add(len).ok_or_else(|| {
-        andromeda_core::AndromedaError::from(BTreeError::InvalidNodeFormat { page_id })
+        andromeda_error::AndromedaError::from(BTreeError::InvalidNodeFormat { page_id })
     })?;
     let bytes = data.get(*offset..end).ok_or_else(|| {
-        andromeda_core::AndromedaError::from(BTreeError::InvalidNodeFormat { page_id })
+        andromeda_error::AndromedaError::from(BTreeError::InvalidNodeFormat { page_id })
     })?;
     *offset = end;
     Ok(bytes)

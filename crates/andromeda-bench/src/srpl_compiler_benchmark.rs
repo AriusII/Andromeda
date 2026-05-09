@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use andromeda_bench_harness::elapsed_micros;
 use andromeda_bench_workload::BenchmarkError;
-use andromeda_srpl::procedure_compiler::{
+use andromeda_srpl::{
     INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, compile_narrow_procedure_signature_with_optimizer,
 };
 

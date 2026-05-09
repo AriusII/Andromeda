@@ -2,19 +2,19 @@
 
 ## Purpose
 
-`andromeda-decision-trace` owns runtime-free decision trace contracts used by optimizer, statistics, plan cache, benchmark evidence, analytics, and operator explanation paths.
+`andromeda-decision-trace` owns runtime-free post-fact decision trace contracts used by optimizer, statistics, plan cache, benchmark evidence, analytics, and operator explanation paths.
 
-The crate exposes bounded v0 trace identities, reason codes, evidence digests, version bindings, and adaptive-control disablement state. Runtime event sinks and durable audit export remain outside this crate.
+The crate exposes bounded v0 advisory trace identities, reason codes, evidence digests, version bindings, and adaptive-control disablement state. Runtime event sinks, reusable observability vocabulary, and durable audit export remain outside this crate.
 
 ## Scope
 
 This crate is expected to own:
 
-- Runtime-free decision trace identities and stable event payload contracts.
+- Runtime-free decision trace identities and bounded advisory payload contracts.
 - Trace fields for candidates considered, candidates rejected, evidence used, evidence ignored, fallback reasons, and disablement state.
 - Version bindings for statistics, plans, procedures, policies, and scenario evidence.
 - Redaction-safe trace vocabulary for operator explanation and post-fact review.
-- Compatibility boundaries with the observability crate that persists or exports traces.
+- Conversion-friendly contracts for higher-level observability and audit code.
 
 ## Non-goals
 
@@ -36,7 +36,7 @@ This crate is expected to own:
 2. Separate decision contracts from sinks, journals, and exporters.
 3. Bind adaptive decisions to complete statistics, plan, catalog, contract, and policy versions.
 4. Represent benchmark, ScenarioEvidence, GPU, and analytics inputs as advisory evidence only.
-5. Keep current observability compatibility imports until callers migrate.
+5. Keep this crate independent from runtime observability vocabulary; consumers that need reusable event vocabulary should depend on `andromeda-observability`.
 
 ## Validation
 

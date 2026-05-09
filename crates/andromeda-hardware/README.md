@@ -2,9 +2,9 @@
 
 ## Purpose
 
-`andromeda-hardware` defines conservative CPU, RAM, GPU, pipeline, and resource policy descriptors for Andromeda crates.
+`andromeda-hardware` defines conservative CPU, RAM, GPU, pipeline, resource, and optional acceleration policy descriptors for Andromeda crates.
 
-Use this crate when code needs to describe hardware capability classes, resource budgets, or GPU eligibility without depending on runtime execution, benchmarking, analytics, or device-specific crates.
+Use this crate when code needs to describe hardware capability classes, resource budgets, GPU eligibility, optional SIMD admission, or vector advisory validation without depending on runtime execution, benchmarking, analytics, or device-specific crates.
 
 ## Scope
 
@@ -13,6 +13,7 @@ This crate owns:
 - CPU architecture and capability descriptors.
 - RAM section budget descriptors and budget validation.
 - GPU availability and execution policy descriptors.
+- Optional GPU, SIMD, and vector advisory admission contracts.
 - `PipelineClass` values that separate critical engine truth paths from non-critical work.
 - `HardwareProfile` and `ResourceBudget` aggregation types.
 
@@ -21,7 +22,7 @@ The crate describes policy and capability inputs. It does not detect hardware, a
 ## Non-goals
 
 - Do not put GPU work in commit, WAL append, rollback, recovery, MVCC visibility, catalog publication, or security-critical paths.
-- Do not add GPU kernels, SIMD dispatch, hardware probing, async scheduling, direct I/O implementations, or benchmark execution.
+- Do not add GPU kernels, concrete SIMD dispatch implementations, hardware probing, async scheduling, direct I/O implementations, or benchmark execution.
 - Do not treat RAM, temp storage, GPU output, or benchmark output as durable truth.
 - Do not add dependencies on storage, WAL, transaction, catalog, SRPL, execution, RPC runtime, benchmark, analytics, or GPU crates.
 - Do not serialize Rust native profile structs directly to disk or network.
@@ -41,6 +42,7 @@ No other workspace or external dependency is allowed without an ADR and topology
 - Conservative profiles must disable GPU execution and assume no SIMD.
 - `PipelineClass::is_critical_path()` must include commit, WAL append, rollback, recovery, MVCC visibility, catalog publication, and security-critical paths.
 - GPU policy validation must reject every critical engine truth path.
+- Optional acceleration requests must require an advisory pipeline and an explicit CPU/scalar/source-truth fallback.
 - `GpuExecutionPolicy::BatchAnalyticsOnly` may allow only statistics refresh, map refresh, and batch analytics.
 - RAM section totals must not exceed a nonzero declared RAM total.
 - Saturating arithmetic is used when summing declared RAM sections to avoid overflow.
@@ -53,14 +55,14 @@ Before changing this crate:
 1. Read `../../AGENTS.md`.
 2. Read `../AGENTS.md`.
 3. Check `../README.md` and `../../docs/adr/ADR-0011-workspace-crate-boundaries.md` for R0 dependency rules.
-4. Review GPU exclusion, RAM budget, CPU profile, and pipeline tests in `src/`.
+4. Review GPU exclusion, optional acceleration, RAM budget, CPU profile, and pipeline tests in `src/`.
 
 ## Procedure
 
 To use this crate:
 
 1. Start from `HardwareProfile::conservative()` when capabilities are unknown.
-2. Validate GPU eligibility with `validate_gpu_pipeline` before allowing any GPU-backed path.
+2. Validate GPU eligibility with `GpuProfile::validate_pipeline` or `select_optional_gpu` before allowing any GPU-backed path.
 3. Validate RAM declarations with `validate_ram_budgets` before using section budgets as policy input.
 4. Keep actual resource allocation, device probing, and scheduling in the owning runtime crate.
 
@@ -97,6 +99,7 @@ cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture
 
 - `Cargo.toml`
 - `src/lib.rs`
+- `src/acceleration.rs`
 - `src/cpu.rs`
 - `src/gpu.rs`
 - `src/ram.rs`

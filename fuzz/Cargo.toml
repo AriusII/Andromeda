@@ -24,7 +24,6 @@ andromeda-quic = { path = "../crates/andromeda-quic" }
 andromeda-rpc-codec = { path = "../crates/andromeda-rpc-codec" }
 andromeda-rpc-protocol = { path = "../crates/andromeda-rpc-protocol" }
 andromeda-security-contract = { path = "../crates/andromeda-security-contract" }
-andromeda-srpl = { path = "../crates/andromeda-srpl" }
 andromeda-srpl-parser = { path = "../crates/andromeda-srpl-parser" }
 andromeda-segment = { path = "../crates/andromeda-segment" }
 andromeda-storage = { path = "../crates/andromeda-storage" }

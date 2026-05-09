@@ -60,7 +60,7 @@ mod tests {
         Lsn,
         write_ahead_log::record::{WalRecord, WalRecordKind},
     };
-    use andromeda_core::AndromedaResult;
+    use andromeda_error::AndromedaResult;
 
     fn sample_record(lsn: u64, prev: Option<u64>) -> AndromedaResult<WalRecord> {
         WalRecord::from_parts(

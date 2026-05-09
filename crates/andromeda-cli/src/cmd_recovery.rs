@@ -1,7 +1,7 @@
 //! Recovery inspection command.
 
 use crate::args::RecoveryInspectOptions;
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 use andromeda_manifest::DatabaseManifest;
 use andromeda_recovery::{FileWalRecoveryReportV0, StartupMode};
 use andromeda_storage::report_file_wal_recovery_v0;

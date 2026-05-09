@@ -1,5 +1,5 @@
 //! B+ Tree leaf node operations — key insertion, deletion, value lookup.
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 use super::*;
 

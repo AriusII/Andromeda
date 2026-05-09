@@ -4,11 +4,13 @@
 //! keeps the QUIC-specific [`SurfacePlane`] mapping local to `andromeda-exec`
 //! and preserves the execution-facing capability token type.
 
-use andromeda_observe::{
-    AuthorizationOutcome, PrincipalRegistry, SurfaceAction, SurfaceScope, TraceId,
-};
+use andromeda_audit::SurfaceScope;
+use andromeda_observability::TraceId;
 use andromeda_quic::SurfacePlane;
-use andromeda_security::SurfacePlaneAuthorizer as SecuritySurfacePlaneAuthorizer;
+use andromeda_security::{
+    AuthorizationOutcome, PrincipalRegistry, SurfaceAction,
+    SurfacePlaneAuthorizer as SecuritySurfacePlaneAuthorizer,
+};
 
 /// Procedure dispatch capability specialized to the QUIC transport plane.
 pub type AuthorizedProcedureDispatch =
@@ -53,7 +55,7 @@ impl<'a> SurfacePlaneAuthorizer<'a> {
         plane: SurfacePlane,
         presented_fingerprint: &str,
         action: SurfaceAction,
-    ) -> andromeda_core::AndromedaResult<AuthorizationOutcome> {
+    ) -> andromeda_error::AndromedaResult<AuthorizationOutcome> {
         self.inner.authorize_dispatch(
             trace_id,
             surface_plane_to_scope(plane),
@@ -69,7 +71,7 @@ impl<'a> SurfacePlaneAuthorizer<'a> {
         trace_id: TraceId,
         plane: SurfacePlane,
         presented_fingerprint: &str,
-    ) -> andromeda_core::AndromedaResult<Result<AuthorizedProcedureDispatch, AuthorizationOutcome>>
+    ) -> andromeda_error::AndromedaResult<Result<AuthorizedProcedureDispatch, AuthorizationOutcome>>
     {
         self.inner.authorize_procedure_dispatch(
             trace_id,
@@ -83,10 +85,11 @@ impl<'a> SurfacePlaneAuthorizer<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_observe::{
-        AdminOperation, AuthorizationDenialReason, CertificateIdentity, Permission,
-        PrincipalBinding, SecurityAuditOutcome, UserPrincipal, UserPrincipalKind,
+    use andromeda_audit::{
+        AdminOperation, CertificateIdentity, Permission, SecurityAuditOutcome, UserPrincipal,
+        UserPrincipalKind,
     };
+    use andromeda_security::{AuthorizationDenialReason, PrincipalBinding};
 
     fn registry(bindings: Vec<PrincipalBinding>) -> PrincipalRegistry {
         let mut r = PrincipalRegistry::new();

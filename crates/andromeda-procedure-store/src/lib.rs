@@ -2,10 +2,12 @@
 #![doc = r#"
 # Andromeda Procedure Store
 
-Runtime-free invocation identity, status, and evidence sink contracts.
+Procedure registry and invocation evidence contracts.
 
-The crate exposes evidence-only Procedure Store primitives. It does not provide
-durable truth, catalog publication, WAL replay, or plan-selection authority.
+The crate exposes Procedure Store primitives plus the in-memory registry used to
+bind procedures, decisions, runtime records, and advisory feedback. It does not
+provide durable truth, catalog publication, WAL replay, or plan-selection
+authority.
 "#]
 
 mod audit;
@@ -27,6 +29,7 @@ mod runtime_record;
 mod runtime_status;
 mod sink;
 mod status;
+mod store;
 
 pub use audit::{AuditCorrelation, AuditCorrelationId};
 pub use contract_entry::ProcedureStoreEntry;
@@ -55,3 +58,4 @@ pub use runtime_record::{InvocationRuntimeRecord, InvocationRuntimeRecordOutcome
 pub use runtime_status::ProcedureRuntimeStatus;
 pub use sink::InvocationEvidenceSink;
 pub use status::InvocationStatus;
+pub use store::{PROCEDURE_FEEDBACK_CAPACITY_PER_PROCEDURE, ProcedureStore};

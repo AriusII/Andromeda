@@ -12,7 +12,6 @@ This subset targets crates that are small, deterministic, and do not currently o
 
 | Crate | Command | Focus |
 | --- | --- | --- |
-| `andromeda-codec` | `cargo +nightly miri test -p andromeda-codec --lib --all-features --locked` | Little-endian codec helpers and bounded byte handling. |
 | `andromeda-maps` | `cargo +nightly miri test -p andromeda-maps --lib --all-features --locked` | Map descriptor and publication value invariants without GPU work. |
 | `andromeda-policy` | `cargo +nightly miri test -p andromeda-policy --lib --all-features --locked` | Admission policy value handling and fail-closed checks. |
 | `andromeda-resource` | `cargo +nightly miri test -p andromeda-resource --lib --all-features --locked` | Resource limits, checked arithmetic, and error construction. |
@@ -61,7 +60,7 @@ python tools/testing/miri_subset.py --check-env
 Run one target when Miri is installed and the crate status is `ready`:
 
 ```powershell
-python tools/testing/miri_subset.py --only andromeda-codec --run
+python tools/testing/miri_subset.py --only andromeda-maps --run
 ```
 
 Run the full subset only when a local target cache write is acceptable:
@@ -113,7 +112,7 @@ python tools/testing/miri_subset.py --check-env
 After installing Miri, collect the smallest first signal:
 
 ```powershell
-cargo +nightly miri test -p andromeda-codec --lib --all-features --locked
+cargo +nightly miri test -p andromeda-maps --lib --all-features --locked
 ```
 
 ## Troubleshooting

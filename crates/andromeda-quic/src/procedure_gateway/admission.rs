@@ -1,8 +1,7 @@
 use andromeda_principal::{
     PrincipalAuthorizationEvidence, PrincipalId, PrincipalRegistry, SurfaceScope,
 };
-use andromeda_procedure_contract::ProcedureGatewayManifest;
-use andromeda_rpc_codec::required_execute_permission;
+use andromeda_procedure_contract::{ProcedureGatewayManifest, required_execute_permission};
 
 use super::errors::{ProcedureRouteAdmissionError, security_error};
 use super::route::ProcedureRouteBinding;

@@ -9,7 +9,7 @@
 - Own stateless admission evaluation over authenticated principal permission evidence.
 - Fail closed when principal binding, policy evidence, surface boundaries, or permission grants are missing or mismatched.
 - Return a typed pre-transaction admission receipt only for admitted requests.
-- Attach `andromeda-audit` security admission event vocabulary to every decision.
+- Attach security admission event vocabulary from `andromeda-security-contract` to every decision.
 - Keep runtime-free permission, surface, admission, and policy-evidence vocabulary imported from `andromeda-security-contract`.
 
 ## Non-goals
@@ -50,4 +50,4 @@
 - `AGENTS.md`
 - `crates/AGENTS.md`
 - `crates/andromeda-security-contract`
-- `crates/andromeda-audit`
+- `crates/andromeda-principal`

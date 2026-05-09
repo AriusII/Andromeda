@@ -1,7 +1,7 @@
 use crate::support::execution_failed;
-use andromeda_core::InvocationId;
-use andromeda_exec::traces::{AuditLedger, InMemoryAuditLedger};
+use andromeda_execution_trace::{AuditLedger, InMemoryAuditLedger};
 use andromeda_observe::TraceId;
+use andromeda_types::InvocationId;
 
 #[test]
 fn test_audit_ledger_append_and_retrieve() {

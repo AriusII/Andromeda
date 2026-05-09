@@ -1,4 +1,4 @@
-use andromeda_core::TransactionId;
+use andromeda_types::TransactionId;
 use andromeda_wal::{
     Lsn, WAL_RECORD_HEADER_LEN, WalRecord, WalRecordKind, WalScanResult, WalScanStopReason,
     decode_frame_header, decode_wal_record_frame, encode_wal_record, encoded_wal_record_len,

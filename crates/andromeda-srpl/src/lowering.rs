@@ -1,10 +1,9 @@
-//! Public lowering facade for the bounded SRPL compiler slice.
+//! Public lowering orchestration for the bounded SRPL compiler slice.
 //!
 //! `andromeda-srpl-lowering` owns bound AST to IR lowering. This module keeps
-//! orchestration in this crate: binding adaptation, optimizer entry points,
-//! and catalog contract materialization.
+//! compiler orchestration, optimizer entry points, and catalog contract
+//! materialization.
 
-mod binding;
 mod contract;
 
 use andromeda_error::AndromedaResult;
@@ -20,7 +19,6 @@ use andromeda_srpl_ir::SrplProcedureIr;
 use andromeda_srpl_lowering::BoundProcedureLoweringInput;
 use andromeda_srpl_parser::parse_procedure_signature;
 
-pub use binding::{bind_executable_procedure_plan, inventory_reserve_stock_body_ir};
 pub use contract::{
     compile_inventory_reserve_stock_contract, compile_inventory_reserve_stock_contract_candidate,
     compile_narrow_procedure_contract_candidate, compile_narrow_procedure_definition,

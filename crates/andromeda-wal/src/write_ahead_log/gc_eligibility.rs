@@ -1,4 +1,4 @@
-use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::Lsn;
 
@@ -30,10 +30,10 @@ impl EligibilityResult {
         match self {
             Self::Eligible => {
                 "segment is older than the oldest active snapshot and is not needed for recovery"
-            }
+            },
             Self::BlockedByVisibility { .. } => {
                 "segment is not older than the oldest active snapshot visibility boundary"
-            }
+            },
             Self::BlockedByRecovery { .. } => "segment is required for crash recovery",
         }
     }

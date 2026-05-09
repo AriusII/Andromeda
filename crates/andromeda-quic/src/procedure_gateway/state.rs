@@ -2,7 +2,9 @@ use andromeda_error::AndromedaResult;
 use andromeda_principal::CertificateIdentity;
 use andromeda_types::InvocationId;
 
-use crate::{Connection, FrameBytes, LifecycleState, SurfacePlane};
+use andromeda_rpc_protocol::FrameBytes;
+
+use crate::{Connection, LifecycleState, SurfacePlane};
 
 use super::errors::{protocol_error, security_error};
 

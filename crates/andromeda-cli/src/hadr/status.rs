@@ -1,4 +1,4 @@
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 use andromeda_hadr::{HadrMembershipSnapshot, HadrNodeRole};
 
 use super::output::print_hadr_status;

@@ -3,7 +3,9 @@ use andromeda_error::AndromedaErrorKind;
 use andromeda_principal::CertificateIdentity;
 use andromeda_types::{RequestId, SessionId};
 
-use crate::{FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameFamily, FrameHeader, FrameType};
+use andromeda_rpc_protocol::{
+    FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameFamily, FrameHeader, FrameType,
+};
 
 fn frame(frame_type: FrameType, session: u64) -> FrameBytes {
     let payload = match frame_type {

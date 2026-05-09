@@ -1,17 +1,24 @@
 //! Tests for digest-backed `ContractHash`, `PolicyVersion`, and the extended
 //! catalog dependency graph (Procedure ↔ Table edges via bindings).
 
-use andromeda_catalog::{
-    AccessMode, BatchDependencyGraph, CatalogBindingKind, CatalogDefinition, CatalogDependency,
-    CatalogDependencyKind, CatalogObjectBinding, CatalogObjectRef, CompatibilityPolicy,
-    ContractCompatibilityDiagnostic, DefinitionBatch, DefinitionOperation, IsolationPolicy,
-    MultiResultPolicy, ObjectKind, PolicyVersion, ProcedureContract, ProcedureContractBinding,
-    ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName,
-    ResultMetadataPolicy, ResultStreamCardinality, ResultStreamContract, StatsVersion,
-    StructuredObjectDefinition, TableDefinition, TransactionPolicy,
+use andromeda_catalog_store::{
+    CatalogBindingKind, CatalogDefinition, CatalogObjectBinding, CatalogObjectRef, ObjectKind,
+    QualifiedName, StructuredObjectDefinition, TableDefinition,
+};
+use andromeda_contract::{
     compute_structured_object_shape_hash, structured_object_shape_hash_compatible,
 };
+use andromeda_definition_batch::{
+    BatchDependencyGraph, CatalogDependency, CatalogDependencyKind, DefinitionBatch,
+    DefinitionBatchId, DefinitionOperation,
+};
 use andromeda_error::AndromedaErrorKind;
+use andromeda_procedure_contract::{
+    AccessMode, CompatibilityPolicy, ContractCompatibilityDiagnostic, IsolationPolicy,
+    MultiResultPolicy, PolicyVersion, ProcedureContract, ProcedureContractBinding,
+    ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef, ResultMetadataPolicy,
+    ResultStreamCardinality, ResultStreamContract, StatsVersion, TransactionPolicy,
+};
 use andromeda_types::{
     CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId, ScalarType,
     TypeDescriptor,
@@ -515,7 +522,7 @@ fn definition_batch_source_hash_binds_procedure_identity() {
     );
 
     let base_batch = DefinitionBatch {
-        batch_id: andromeda_catalog::DefinitionBatchId::new(1),
+        batch_id: DefinitionBatchId::new(1),
         database_id: andromeda_types::DatabaseId::new(1),
         namespace_id: andromeda_types::NamespaceId::new(1),
         base_version: CatalogVersion::new(0),

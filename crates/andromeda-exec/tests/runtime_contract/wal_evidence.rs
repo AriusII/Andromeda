@@ -235,7 +235,7 @@ fn inventory_mvcc_store_rejects_stale_or_concurrent_reservations_with_evidence()
         .unwrap_err();
     assert_eq!(
         concurrent_err.kind(),
-        andromeda_core::AndromedaErrorKind::Transaction
+        andromeda_error::AndromedaErrorKind::Transaction
     );
     assert!(concurrent_err.message().contains("stale"));
 
@@ -255,7 +255,7 @@ fn inventory_mvcc_store_rejects_stale_or_concurrent_reservations_with_evidence()
         .unwrap_err();
     assert_eq!(
         stale_err.kind(),
-        andromeda_core::AndromedaErrorKind::Transaction
+        andromeda_error::AndromedaErrorKind::Transaction
     );
     assert!(stale_err.message().contains("stale"));
 
@@ -273,7 +273,7 @@ fn inventory_mvcc_store_rejects_stale_or_concurrent_reservations_with_evidence()
         .unwrap_err();
     assert_eq!(
         insufficient_err.kind(),
-        andromeda_core::AndromedaErrorKind::Execution
+        andromeda_error::AndromedaErrorKind::Execution
     );
     assert!(
         insufficient_err
@@ -295,7 +295,7 @@ fn local_vertical_rejects_visibility_when_flush_does_not_cover_commit_lsn() {
         )
         .unwrap_err();
 
-    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Storage);
+    assert_eq!(err.kind(), andromeda_error::AndromedaErrorKind::Storage);
     assert_eq!(runtime.wal().records.len(), 3);
     assert_eq!(runtime.wal().records[2].1, WalRecordKind::TxCommit);
     assert!(runtime.wal().durable_lsn < runtime.wal().records[2].0);
@@ -314,7 +314,7 @@ fn local_vertical_commit_append_failure_does_not_publish_terminal_status() {
         )
         .unwrap_err();
 
-    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Storage);
+    assert_eq!(err.kind(), andromeda_error::AndromedaErrorKind::Storage);
     assert_eq!(runtime.wal().records.len(), 2);
     assert_eq!(runtime.wal().records[0].1, WalRecordKind::TxBegin);
     assert_eq!(runtime.wal().records[1].1, WalRecordKind::RowUpdate);
@@ -351,7 +351,7 @@ fn local_vertical_flush_error_does_not_publish_terminal_status() {
         )
         .unwrap_err();
 
-    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Storage);
+    assert_eq!(err.kind(), andromeda_error::AndromedaErrorKind::Storage);
     assert_eq!(runtime.wal().records.len(), 3);
     assert_eq!(runtime.wal().records[2].1, WalRecordKind::TxCommit);
     assert_eq!(

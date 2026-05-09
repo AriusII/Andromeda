@@ -1,20 +1,25 @@
-use andromeda_catalog::inventory_reserve_stock_contract;
-use andromeda_core::{
-    CertificateIdentity as CoreCertificateIdentity, InvocationId, SurfaceScope as CoreSurfaceScope,
+use andromeda_audit::{
+    AdminOperation, CertificateIdentity, Permission, SecurityAuditOutcome,
+    SurfaceScope as ObserveSurfaceScope, UserPrincipal, UserPrincipalKind,
 };
 use andromeda_exec::{
     CompletionStatus, InvocationContext, InvocationRequest, LocalVerticalRuntime,
     SurfacePlaneAuthorizer,
 };
+use andromeda_inventory_demo::inventory_reserve_stock_contract;
 use andromeda_inventory_demo::{
     InventoryReserveStockExecutor, InventoryStock, ReserveStockCommand,
 };
-use andromeda_observe::{
-    AdminOperation, AuthorizationDenialReason, AuthorizationOutcome, Permission, PrincipalBinding,
-    PrincipalRegistry, SecurityAuditOutcome, SurfaceAction, SurfaceScope as ObserveSurfaceScope,
-    TraceId, UserPrincipal, UserPrincipalKind,
+use andromeda_observability::TraceId;
+use andromeda_principal::{
+    CertificateIdentity as CoreCertificateIdentity, SurfaceScope as CoreSurfaceScope,
 };
 use andromeda_quic::SurfacePlane;
+use andromeda_security::{
+    AuthorizationDenialReason, AuthorizationOutcome, PrincipalBinding, PrincipalRegistry,
+    SurfaceAction,
+};
+use andromeda_types::InvocationId;
 use andromeda_wal::InMemoryWal;
 
 struct ExpectedDenial<'a> {
@@ -41,12 +46,7 @@ fn binding(
 ) -> PrincipalBinding {
     let observe_scope = observe_surface_scope(surface);
     PrincipalBinding::new(
-        andromeda_observe::CertificateIdentity::new(
-            fingerprint,
-            format!("CN={fingerprint}"),
-            observe_scope,
-        )
-        .unwrap(),
+        CertificateIdentity::new(fingerprint, format!("CN={fingerprint}"), observe_scope).unwrap(),
         UserPrincipal::new(principal_id, UserPrincipalKind::Service).unwrap(),
         permissions,
     )
@@ -535,7 +535,7 @@ fn allowed_surface_dispatch_token_trace_must_match_invocation_context() {
         )
         .expect_err("surface authorization token must be bound to the invocation trace");
 
-    assert_eq!(err.kind(), andromeda_core::AndromedaErrorKind::Security);
+    assert_eq!(err.kind(), andromeda_error::AndromedaErrorKind::Security);
     assert!(err.to_string().contains("trace id"));
     assert!(
         runtime.wal().is_empty(),
@@ -592,7 +592,7 @@ fn d3_certificate_identity_binding_to_surface_gate() {
             TraceId::new(100),
             SurfacePlane::Application,
             fp,
-            andromeda_observe::SurfaceAction::ExecuteProcedure,
+            SurfaceAction::ExecuteProcedure,
         )
         .unwrap();
 
@@ -621,7 +621,7 @@ fn d3_certificate_scope_mismatch_prevents_dispatch() {
     assert!(err.is_err());
     assert_eq!(
         err.unwrap_err().kind(),
-        andromeda_core::AndromedaErrorKind::Protocol
+        andromeda_error::AndromedaErrorKind::Protocol
     );
 
     // Connection should have no identity bound.

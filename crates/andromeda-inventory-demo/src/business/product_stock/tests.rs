@@ -1,5 +1,5 @@
 use andromeda_core::{AndromedaErrorKind, TransactionId};
-use andromeda_storage::ProductStockRow;
+use andromeda_storage_heap::ProductStockRow;
 use andromeda_storage_page::{PageId, PageSize};
 use andromeda_wal::Lsn;
 

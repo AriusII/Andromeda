@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use andromeda_srpl::definition_batch_bridge::{
+use andromeda_srpl_definition_batch::{
     MAX_SRPL_DEFINITION_BATCH_PROCEDURES, SrplDefinitionBatchProcedureSource,
     dry_run_srpl_definition_batch_sources,
 };

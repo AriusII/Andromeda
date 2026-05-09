@@ -1,5 +1,5 @@
 use crate::support::{assert_retry_after, custom_policy};
-use andromeda_exec::retry::{RetryDecision, RetryPolicy};
+use andromeda_retry::{RetryDecision, RetryPolicy};
 
 #[test]
 fn test_retry_policy_defaults_are_valid() {

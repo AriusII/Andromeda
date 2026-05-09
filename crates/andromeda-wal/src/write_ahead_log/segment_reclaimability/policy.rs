@@ -1,5 +1,5 @@
 use crate::Lsn;
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 use super::{ReclaimabilityDecision, ReclaimabilityEvidence, RetentionBoundaryPolicy};
 use crate::write_ahead_log::gc::WalGcCandidate;

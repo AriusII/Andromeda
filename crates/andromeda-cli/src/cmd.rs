@@ -9,7 +9,7 @@ use crate::cmd_restore::run_restore_command;
 use crate::cmd_vertical::{print_help, run_vertical_demo, run_vertical_v0_demo};
 use crate::error::cli_error;
 use crate::hadr::run_hadr_command;
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 /// Dispatches a CLI command based on the first argument.
 pub fn dispatch_command(args: &[String]) -> AndromedaResult<()> {
@@ -21,11 +21,11 @@ pub fn dispatch_command(args: &[String]) -> AndromedaResult<()> {
             let report = run_protocol_smoke(detailed)?;
             print!("{}", report);
             Ok(())
-        }
+        },
         Some("recovery-inspect") => {
             let options = parse_recovery_inspect_options(&args[1..])?;
             run_recovery_inspect(options)
-        }
+        },
         Some("hadr") => run_hadr_command(&args[1..]),
         Some("audit") => run_audit_command(&args[1..]),
         Some("benchmark") => run_benchmark_command(&args[1..]),
@@ -35,7 +35,7 @@ pub fn dispatch_command(args: &[String]) -> AndromedaResult<()> {
         Some("-h" | "--help" | "help") | None => {
             print_help();
             Ok(())
-        }
+        },
         Some(_) => Err(cli_error("unknown command; run `andromeda-cli --help`")),
     }
 }

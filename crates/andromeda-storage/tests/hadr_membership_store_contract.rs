@@ -1,10 +1,10 @@
 use std::fs;
 
-use andromeda_storage::Lsn;
-use andromeda_storage::hadr::{
+use andromeda_hadr::{
     FileBackedHadrMembershipStore, HadrEpoch, HadrMembershipRecord, HadrMembershipStore,
     HadrNodeId, HadrNodeRole,
 };
+use andromeda_wal::Lsn;
 use sha2::{Digest, Sha256};
 
 fn store_path(dir: &tempfile::TempDir) -> std::path::PathBuf {

@@ -56,4 +56,4 @@ If recovery needs RAM state or benchmark output to decide truth, reject the star
 ## References
 
 - `src/lib.rs`
-- Existing owners: `crates/andromeda-storage/`, `crates/andromeda-tx/`, `crates/andromeda-wal/`
+- Existing owners: `crates/andromeda-storage/`, `crates/andromeda-transaction/`, `crates/andromeda-transaction-log/`, `crates/andromeda-wal/`

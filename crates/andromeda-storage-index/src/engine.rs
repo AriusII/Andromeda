@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-use andromeda_core::AndromedaResult;
+use andromeda_error::AndromedaResult;
 
 use crate::{BTreeConfig, BTreeError, IndexId, PageId, RowId};
 

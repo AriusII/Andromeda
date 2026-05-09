@@ -2,13 +2,13 @@
 
 //! B-Tree benchmark harness for read-only lookup and range scan operations.
 //!
-//! Uses an in-memory mock tree with deterministic keys.
+//! Uses an in-memory read model with deterministic keys.
 //!
 //! ## Invariants
 //!
 //! - The harness never calls insert, delete, split, or merge.
 //! - The same parameters produce the same P50/P95 within natural timer variance.
-//! - The mock tree is compile-time restricted to read operations.
+//! - The read model is compile-time restricted to read operations.
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -30,13 +30,13 @@ impl Default for BTreeBenchmarkConfig {
     }
 }
 
-/// In-memory B-Tree mock that models read-only performance of a sorted key set.
+/// In-memory B-Tree read model over a deterministic sorted key set.
 #[derive(Debug)]
-struct MockBTreeIndex {
+struct ReadOnlyBTreeIndexModel {
     keys: Vec<Vec<u8>>,
 }
 
-impl MockBTreeIndex {
+impl ReadOnlyBTreeIndexModel {
     fn new(dataset_size: usize) -> Self {
         let mut keys = Vec::with_capacity(dataset_size);
         for i in 0..dataset_size {
@@ -91,13 +91,11 @@ impl MockBTreeIndex {
     }
 }
 
-/// TECH-DEBT: Context: Replace `MockBTreeIndex` with `BTreeIndexEngine` once the real engine
-/// exists with buffer pool, WAL, and catalog wiring.
-/// Risk: Until replaced, benchmark latencies do not include page IO or WAL append cost.
-/// Closure: Supersede when `andromeda-storage` exposes a `BTreeIndexEngine` trait.
+/// Read-only benchmark context for deterministic B-Tree lookup and range-scan
+/// diagnostics. It intentionally excludes page IO and WAL append costs.
 #[derive(Debug)]
 pub struct BTreeBenchmarkContext {
-    tree: Arc<MockBTreeIndex>,
+    tree: Arc<ReadOnlyBTreeIndexModel>,
     config: BTreeBenchmarkConfig,
 }
 
@@ -121,7 +119,7 @@ pub fn setup_btree_lookup_harness(
         return Err(BTreeBenchmarkError::InvalidConfig);
     }
 
-    let tree = Arc::new(MockBTreeIndex::new(config.dataset_size));
+    let tree = Arc::new(ReadOnlyBTreeIndexModel::new(config.dataset_size));
     Ok(BTreeBenchmarkContext { tree, config })
 }
 
@@ -132,7 +130,7 @@ pub fn setup_btree_range_scan_harness(
         return Err(BTreeBenchmarkError::InvalidConfig);
     }
 
-    let tree = Arc::new(MockBTreeIndex::new(config.dataset_size));
+    let tree = Arc::new(ReadOnlyBTreeIndexModel::new(config.dataset_size));
     Ok(BTreeBenchmarkContext { tree, config })
 }
 
@@ -231,16 +229,16 @@ mod tests {
     }
 
     #[test]
-    fn test_mock_btree_lookup_deterministic() {
-        let tree = MockBTreeIndex::new(10_000);
+    fn test_read_only_btree_lookup_deterministic() {
+        let tree = ReadOnlyBTreeIndexModel::new(10_000);
         let key = 5000u64.to_le_bytes().to_vec();
 
         assert_eq!(tree.lookup(&key), tree.lookup(&key));
     }
 
     #[test]
-    fn test_mock_btree_range_scan_deterministic() {
-        let tree = MockBTreeIndex::new(10_000);
+    fn test_read_only_btree_range_scan_deterministic() {
+        let tree = ReadOnlyBTreeIndexModel::new(10_000);
         let start = 1000u64.to_le_bytes().to_vec();
         let end = 2000u64.to_le_bytes().to_vec();
 

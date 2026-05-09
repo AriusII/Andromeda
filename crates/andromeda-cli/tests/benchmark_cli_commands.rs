@@ -297,7 +297,7 @@ fn cli_binary() -> &'static str {
     env!("CARGO_BIN_EXE_andromeda-cli")
 }
 
-fn dispatch_benchmark_run<const N: usize>(args: [&str; N]) -> andromeda_core::AndromedaError {
+fn dispatch_benchmark_run<const N: usize>(args: [&str; N]) -> andromeda_error::AndromedaError {
     let mut command_args = Vec::with_capacity(N + 1);
     command_args.push("benchmark".to_string());
     command_args.extend(args.into_iter().map(str::to_string));

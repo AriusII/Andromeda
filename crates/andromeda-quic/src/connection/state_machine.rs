@@ -3,7 +3,7 @@ use andromeda_principal::CertificateIdentity;
 use andromeda_rpc::{FrameDispatch, dispatch_frame};
 use andromeda_types::SessionId;
 
-use crate::{FrameBytes, FrameFamily, FrameType};
+use andromeda_rpc_protocol::{FrameBytes, FrameFamily, FrameType};
 
 use super::{
     cancellation::{CancellationCause, CancellationOutcome, CancellationSignal},

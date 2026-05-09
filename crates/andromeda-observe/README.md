@@ -4,7 +4,7 @@
 
 `andromeda-observe` owns trace envelopes, runtime emission helpers, durable audit journal contracts, query models, exporters, and post-fact decision explainability for Andromeda.
 
-Observability records are bounded and audit-safe. They support review, replay, correlation, and forensic explanation, but they must not become storage truth or the transaction commit path. Shared identifiers live in `andromeda-observability`; typed audit trace contracts live in `andromeda-audit` and are reexported here for compatibility.
+Observability records are bounded and audit-safe. They support review, replay, correlation, and forensic explanation, but they must not become storage truth or the transaction commit path. Shared identifiers live in `andromeda-observability`; typed audit trace contracts live in `andromeda-audit`.
 
 ## Scope
 
@@ -12,7 +12,6 @@ This crate provides:
 
 - Event envelopes, lifecycle sequencing, validation, and in-memory sinks.
 - Decision, protocol, placement, durability, transition, and core trace event families.
-- Compatibility reexports for shared observability identifiers and typed audit traces.
 - Durable audit journal records, checksum chaining, replay evidence, retention policy, compaction reports, and file-backed audit sink contracts.
 - Bounded trace query specifications, filters, result metadata, and in-memory query sources.
 - Exporter contracts and mock exporters for tests.

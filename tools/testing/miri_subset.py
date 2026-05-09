@@ -25,22 +25,6 @@ class MiriTarget:
 
 MIRI_TARGETS: tuple[MiriTarget, ...] = (
     MiriTarget(
-        package="andromeda-codec",
-        path="crates/andromeda-codec",
-        focus="little-endian codec helpers and bounded byte handling",
-        command=(
-            "cargo",
-            f"+{NIGHTLY_TOOLCHAIN}",
-            "miri",
-            "test",
-            "-p",
-            "andromeda-codec",
-            "--lib",
-            "--all-features",
-            "--locked",
-        ),
-    ),
-    MiriTarget(
         package="andromeda-maps",
         path="crates/andromeda-maps",
         focus="map descriptor and publication value invariants without GPU work",

@@ -164,7 +164,7 @@ impl TransactionStatusTable {
     ///
     /// **V0 doctrine:** a transaction is *only* considered `Committed` when
     /// the manager has durably recorded that outcome (see
-    /// `andromeda-tx` durable commit boundary). If no entry exists,
+    /// the transaction-family durable commit boundary). If no entry exists,
     /// the writer is treated as `InFlight` — i.e. invisible to any other
     /// snapshot — even if its `version_ts` precedes `snapshot.timestamp`.
     ///

@@ -145,7 +145,7 @@ fn boundary_rejects_workload_measurement_mode_mismatch() {
         measurement_mode: BenchmarkMeasurementMode::HarnessDiagnostic,
         latency_source: "in-memory-btree-read-harness",
         timing_source: BENCHMARK_EVIDENCE_TIMING_SOURCE_DETERMINISTIC_PLACEHOLDER,
-        engine_harness: Some("MockBTreeIndex"),
+        engine_harness: Some("ReadOnlyBTreeIndexModel"),
         synthetic_model_version: None,
         workload_counters: vec![BenchmarkWorkloadCounter::new("lookup_operations", 5, "ops")],
     };
