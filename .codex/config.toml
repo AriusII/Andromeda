@@ -1,11 +1,15 @@
 # Andromeda Codex configuration — clean agents/skills package
 # Generated: 2026-05-09T19:57:52.309591+00:00
 # Scope: Codex-only, Rust 1.95.0, QUIC + Protobuf, SGBDRT/SRPL Andromeda.
+include_environment_context = true
+include_permissions_instructions = true
+
 
 sandbox_mode = "workspace-write"
 approval_policy = "never"
 commit_attribution = "Codex <noreply@openai.com>"
 skills_dir = "skills"
+agents_dir = "agents"
 write_artifact_root = ".work/codex"
 
 [project]
@@ -22,10 +26,15 @@ mission_critical = true
 child_agents = true
 skills = true
 work_reports = true
+multi_agent = true
+plugins = true
+
 
 [agents]
 max_threads = 60
 max_depth = 2
+interrupt_message = true
+job_max_runtime_seconds = 3600
 
 [tui.model_availability_nux]
 "gpt-5.5" = 2
