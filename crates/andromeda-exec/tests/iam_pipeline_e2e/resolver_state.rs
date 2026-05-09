@@ -1,5 +1,5 @@
 use crate::support::new_resolver;
-use andromeda_exec::services::PrincipalResolver;
+use andromeda_iam::PrincipalResolver;
 use andromeda_principal::PrincipalRole;
 
 #[test]

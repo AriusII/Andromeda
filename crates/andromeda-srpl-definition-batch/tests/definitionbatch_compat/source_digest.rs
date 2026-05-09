@@ -1,6 +1,7 @@
 use andromeda_catalog::CatalogSystemStore;
 use andromeda_srpl_definition_batch::{
-    SrplDefinitionBatchProcedureSource, dry_run_srpl_definition_batch_sources,
+    SrplDefinitionBatchDurableApplyReport, SrplDefinitionBatchProcedureSource,
+    SrplDefinitionBatchSourceEvidence, dry_run_srpl_definition_batch_sources,
 };
 use andromeda_types::{CatalogVersion, ProcedureId};
 
@@ -155,35 +156,8 @@ fn g9b_source_digest_is_stable_for_same_source_and_changes_for_semantic_text_cha
 
 #[test]
 fn g10_source_digest_evidence_survives_durable_catalog_apply_without_raw_source() {
-    let report = dry_run_srpl_definition_batch_sources(dry_run_request(
-        81,
-        CatalogVersion::new(0),
-        vec![SrplDefinitionBatchProcedureSource::new(
-            signature_only_source(),
-            test_metadata(810, 810, CatalogVersion::new(1)),
-        )],
-    ))
-    .expect("SRPL source should materialize before durable catalog apply");
-    let expected_evidence = report.source_evidence.clone();
-    let mut store = CatalogSystemStore::empty(TEST_DB_ID, TEST_NS_ID, CatalogVersion::new(0));
-    let mut next_lsn = 200;
-    let mut flushed_commit_lsn = None;
-
-    let apply_report = report
-        .apply_to_catalog_store_durably(
-            &mut store,
-            |_kind, payload| {
-                let _payload_len = payload.len();
-                let lsn = next_lsn;
-                next_lsn += 1;
-                Ok(lsn)
-            },
-            |commit_lsn| {
-                flushed_commit_lsn = Some(commit_lsn);
-                Ok(commit_lsn)
-            },
-        )
-        .expect("durable catalog apply should carry SRPL source evidence");
+    let (apply_report, expected_evidence, store, flushed_commit_lsn) =
+        apply_signature_source_durably(81, 810, 200);
 
     assert_eq!(apply_report.source_evidence, expected_evidence);
     assert_eq!(
@@ -219,35 +193,8 @@ fn g10_source_digest_evidence_survives_durable_catalog_apply_without_raw_source(
 
 #[test]
 fn g11_source_digest_evidence_survives_durable_catalog_apply() {
-    let report = dry_run_srpl_definition_batch_sources(dry_run_request(
-        82,
-        CatalogVersion::new(0),
-        vec![SrplDefinitionBatchProcedureSource::new(
-            signature_only_source(),
-            test_metadata(820, 820, CatalogVersion::new(1)),
-        )],
-    ))
-    .expect("SRPL source should materialize before durable catalog apply");
-    let expected_evidence = report.source_evidence.clone();
-    let mut store = CatalogSystemStore::empty(TEST_DB_ID, TEST_NS_ID, CatalogVersion::new(0));
-    let mut next_lsn = 100;
-    let mut flushed_commit_lsn = None;
-
-    let durable_report = report
-        .apply_to_catalog_store_durably(
-            &mut store,
-            |_kind, payload| {
-                let _payload_len = payload.len();
-                let lsn = next_lsn;
-                next_lsn += 1;
-                Ok(lsn)
-            },
-            |commit_lsn| {
-                flushed_commit_lsn = Some(commit_lsn);
-                Ok(commit_lsn)
-            },
-        )
-        .expect("durable catalog apply should carry SRPL source evidence");
+    let (durable_report, expected_evidence, store, flushed_commit_lsn) =
+        apply_signature_source_durably(82, 820, 100);
 
     assert_eq!(durable_report.source_evidence, expected_evidence);
     assert_eq!(
@@ -269,4 +216,47 @@ fn g11_source_digest_evidence_survives_durable_catalog_apply() {
             .is_zero()
     );
     assert_eq!(store.snapshot().version, CatalogVersion::new(1));
+}
+
+fn apply_signature_source_durably(
+    batch_id: u64,
+    metadata_id: u64,
+    first_lsn: u64,
+) -> (
+    SrplDefinitionBatchDurableApplyReport,
+    SrplDefinitionBatchSourceEvidence,
+    CatalogSystemStore,
+    Option<u64>,
+) {
+    let report = dry_run_srpl_definition_batch_sources(dry_run_request(
+        batch_id,
+        CatalogVersion::new(0),
+        vec![SrplDefinitionBatchProcedureSource::new(
+            signature_only_source(),
+            test_metadata(metadata_id, metadata_id, CatalogVersion::new(1)),
+        )],
+    ))
+    .expect("SRPL source should materialize before durable catalog apply");
+    let expected_evidence = report.source_evidence.clone();
+    let mut store = CatalogSystemStore::empty(TEST_DB_ID, TEST_NS_ID, CatalogVersion::new(0));
+    let mut next_lsn = first_lsn;
+    let mut flushed_commit_lsn = None;
+
+    let durable_report = report
+        .apply_to_catalog_store_durably(
+            &mut store,
+            |_kind, payload| {
+                let _payload_len = payload.len();
+                let lsn = next_lsn;
+                next_lsn += 1;
+                Ok(lsn)
+            },
+            |commit_lsn| {
+                flushed_commit_lsn = Some(commit_lsn);
+                Ok(commit_lsn)
+            },
+        )
+        .expect("durable catalog apply should carry SRPL source evidence");
+
+    (durable_report, expected_evidence, store, flushed_commit_lsn)
 }

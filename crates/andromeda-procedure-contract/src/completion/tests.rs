@@ -46,21 +46,24 @@ fn committed_template() -> RpcCompletion {
 
 #[test]
 fn rpc_completion_status_terminal_codes_are_stable() {
-    assert_eq!(RpcCompletionStatus::Committed.terminal_code(), 1);
-    assert_eq!(RpcCompletionStatus::RolledBack.terminal_code(), 2);
     assert_eq!(
-        RpcCompletionStatus::FailedBeforeTransaction.terminal_code(),
-        3
+        RPC_COMPLETION_STATUS_TERMINAL_CODES,
+        &[
+            (RpcCompletionStatus::Committed, 1),
+            (RpcCompletionStatus::RolledBack, 2),
+            (RpcCompletionStatus::FailedBeforeTransaction, 3),
+            (RpcCompletionStatus::Cancelled, 4),
+            (RpcCompletionStatus::Poisoned, 5),
+            (RpcCompletionStatus::PermissionDenied, 6),
+            (RpcCompletionStatus::ContractRejected, 7),
+            (RpcCompletionStatus::SystemUnavailable, 8),
+        ]
     );
-    assert_eq!(RpcCompletionStatus::Cancelled.terminal_code(), 4);
-    assert_eq!(RpcCompletionStatus::Poisoned.terminal_code(), 5);
-    assert_eq!(RpcCompletionStatus::PermissionDenied.terminal_code(), 6);
-    assert_eq!(RpcCompletionStatus::ContractRejected.terminal_code(), 7);
-    assert_eq!(RpcCompletionStatus::SystemUnavailable.terminal_code(), 8);
 
-    for code in 1u32..=8 {
-        let status = RpcCompletionStatus::from_terminal_code(code).unwrap();
-        assert_eq!(status.terminal_code(), code);
+    for (expected_status, code) in RPC_COMPLETION_STATUS_TERMINAL_CODES {
+        let status = RpcCompletionStatus::from_terminal_code(*code).unwrap();
+        assert_eq!(status, *expected_status);
+        assert_eq!(status.terminal_code(), *code);
     }
     assert!(RpcCompletionStatus::from_terminal_code(0).is_none());
     assert!(RpcCompletionStatus::from_terminal_code(9).is_none());
@@ -72,11 +75,25 @@ fn rpc_completion_status_terminal_codes_are_stable() {
 
 #[test]
 fn transaction_outcome_terminal_codes_are_stable() {
-    assert_eq!(TransactionOutcome::NotStarted.terminal_code(), 1);
-    assert_eq!(TransactionOutcome::Committed.terminal_code(), 2);
-    assert_eq!(TransactionOutcome::RolledBack.terminal_code(), 3);
-    assert_eq!(TransactionOutcome::Failed.terminal_code(), 4);
-    assert_eq!(TransactionOutcome::Cancelled.terminal_code(), 5);
+    assert_eq!(
+        TRANSACTION_OUTCOME_TERMINAL_CODES,
+        &[
+            (TransactionOutcome::NotStarted, 1),
+            (TransactionOutcome::Committed, 2),
+            (TransactionOutcome::RolledBack, 3),
+            (TransactionOutcome::Failed, 4),
+            (TransactionOutcome::Cancelled, 5),
+        ]
+    );
+
+    for (expected_outcome, code) in TRANSACTION_OUTCOME_TERMINAL_CODES {
+        let outcome = TransactionOutcome::from_terminal_code(*code).unwrap();
+        assert_eq!(outcome, *expected_outcome);
+        assert_eq!(outcome.terminal_code(), *code);
+    }
+
+    assert!(TransactionOutcome::from_terminal_code(0).is_none());
+    assert!(TransactionOutcome::from_terminal_code(6).is_none());
 }
 
 #[test]

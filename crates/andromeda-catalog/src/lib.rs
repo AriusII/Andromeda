@@ -76,8 +76,39 @@ mod store;
 mod wal_integration;
 mod wal_record;
 
-pub use batch::*;
-pub use recovery::*;
-pub use server::*;
-pub use snapshot::*;
-pub use store::*;
+pub use andromeda_catalog_store::{
+    CatalogBindingKind, CatalogDefinition, CatalogObjectBinding, CatalogObjectRef, EnumDefinition,
+    EnumVariant, ObjectKind, QualifiedName, StructuredObjectDefinition, TableDefinition,
+};
+pub use batch::{
+    CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH, CatalogDefinitionBatchPlanning,
+    CatalogDurabilityMarker, CatalogLifecycleAction, CatalogLifecycleTarget, CatalogMutation,
+    CatalogMutationBoundary, CatalogMutationCommitEvidence, CatalogMutationDelta,
+    CatalogMutationDurability, CatalogMutationOperation, CatalogMutationPlan,
+    CatalogMutationRecord, CatalogMutationRecordKind, CatalogPublicationReceipt,
+    CatalogPublicationSemantics, CatalogWalPayloadDecodeError, CatalogWalPayloadDecodeErrorKind,
+    DefinitionBatch, DefinitionBatchId, DefinitionBatchImportId, DefinitionBatchPlan,
+    DefinitionBatchSourceHash, DefinitionOperation, PlannedDefinition, PlannedLifecycleTransition,
+};
+pub use recovery::{
+    CatalogDurableMutationPayload, CatalogRecoveredBatch, CatalogRecoveryAnomaly,
+    CatalogRecoveryAnomalyKind, CatalogRecoveryOutcome, CatalogRecoveryReport, CatalogSkippedBatch,
+    CatalogSkippedBatchReason, recover_catalog_snapshot_from_durable_payloads,
+    replay_catalog_mutation_records,
+};
+pub use server::{
+    CatalogChangeNotification, CatalogChangeSubscription, CatalogChangeSubscriptionCursor,
+    CatalogManifestRecord, CatalogManifestResolution, CatalogManifestResolutionFailure,
+    CatalogManifestResolutionRequest, CatalogManifestResolutionStatus,
+    CatalogManifestRuntimeMetadata, CatalogManifestSelector, CatalogManifestStore,
+    CatalogManifestStoreBoundary, CatalogRuntimeEvidence, CatalogRuntimeReopenEvidence,
+    CatalogRuntimeStore, CatalogServerRuntime, CatalogServerRuntimeDiagnostic,
+    CatalogServerRuntimeKind, CatalogServerTrait, CatalogSnapshotManifestStore,
+    CatalogSubscriptionRegistry, ColumnSchema, DurableCatalogRuntimeHandle, ProcedureManifest,
+    require_durable_catalog_runtime,
+};
+pub use snapshot::{CatalogSnapshot, CatalogSnapshotPublication};
+pub use store::{
+    CatalogSystemApplyReport, CatalogSystemDurableApplyReport, CatalogSystemStore,
+    CatalogSystemWalAppend,
+};

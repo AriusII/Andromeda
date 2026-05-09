@@ -3,7 +3,10 @@
 mod backpressure;
 mod frames;
 
-use crate::validation::completion_status_transaction_state;
+use crate::validation::{
+    completion_status_transaction_state, ensure_nonzero_durable_lsn,
+    ensure_rollback_reports_zero_rows,
+};
 use crate::{CompletionStatus, ResultStreamMetadata};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_rpc_protocol::{BackpressureReason, BackpressureSignal};
@@ -32,29 +35,9 @@ pub struct StreamCompletion {
 
 impl StreamCompletion {
     pub fn new(status: CompletionStatus, lsn: u64, row_count: u64) -> AndromedaResult<Self> {
-        if !status.is_transactional_terminal() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Transaction,
-                format!(
-                    "result stream completion requires terminal status; got {:?}",
-                    status
-                ),
-            ));
-        }
-
-        if lsn == 0 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                "result stream completion requires nonzero durable LSN evidence",
-            ));
-        }
-
-        if status == CompletionStatus::RolledBack && row_count != 0 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Transaction,
-                "rolled-back result stream completion must report zero rows",
-            ));
-        }
+        let transaction_state = completion_status_transaction_state(status)?;
+        ensure_nonzero_durable_lsn(Lsn::new(lsn))?;
+        ensure_rollback_reports_zero_rows(transaction_state, row_count)?;
 
         Ok(Self {
             status,
@@ -174,23 +157,8 @@ impl BackpressuredResultStream {
     pub async fn complete(&self, status: CompletionStatus, lsn: u64) -> AndromedaResult<()> {
         let _terminal = self.emission_gate.write().await;
 
-        if !status.is_transactional_terminal() {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Transaction,
-                format!(
-                    "result stream completion requires terminal status; got {:?}",
-                    status
-                ),
-            ));
-        }
-
-        if lsn == 0 {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Storage,
-                "result stream completion requires nonzero durable LSN evidence",
-            ));
-        }
         let transaction_state = completion_status_transaction_state(status)?;
+        ensure_nonzero_durable_lsn(Lsn::new(lsn))?;
 
         let metadata = self.metadata.ok_or_else(|| {
             AndromedaError::new(

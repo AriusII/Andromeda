@@ -1,7 +1,8 @@
 use andromeda_error::AndromedaErrorKind;
-use andromeda_proto::{
+use andromeda_proto::generated;
+use andromeda_proto_wire::{
     FrameEnvelope as ProtoFrameEnvelope, PayloadKind, ProtocolVersion,
-    RPC_EXECUTE_REQUEST_WIRE_CODE, decode_generated_message, encode_generated_message, generated,
+    RPC_EXECUTE_REQUEST_WIRE_CODE, decode_protobuf_message, encode_protobuf_message,
 };
 use andromeda_rpc_codec::{
     TypedResultStreamBounds, TypedResultStreamContext, decode_typed_frame_envelope,
@@ -58,7 +59,7 @@ fn envelope_payload(kind: generated::protocol::v1::PayloadKind, payload: Vec<u8>
         payload_kind: kind as i32,
         payload,
     };
-    encode_generated_message(&envelope)
+    encode_protobuf_message(&envelope)
 }
 
 fn typed_result_stream_context() -> TypedResultStreamContext {
@@ -120,7 +121,7 @@ fn result_stream_frames_with_payloads(
 fn rpc_metadata_payload(
     result_streams: Vec<generated::contract::v1::ResultStreamDescriptor>,
 ) -> Vec<u8> {
-    encode_generated_message(&generated::protocol::v1::RpcMetadata {
+    encode_protobuf_message(&generated::protocol::v1::RpcMetadata {
         result_streams,
         completion_policy: Some(generated::protocol::v1::ResultCompletionPolicy {
             completion_shape:
@@ -132,7 +133,7 @@ fn rpc_metadata_payload(
 }
 
 fn rpc_batch_payload() -> Vec<u8> {
-    encode_generated_message(&generated::protocol::v1::RpcBatch {
+    encode_protobuf_message(&generated::protocol::v1::RpcBatch {
         result_name: "Inventory.ReserveStock.Reservation".to_string(),
         batch_index: 0,
         rows_emitted: 1,
@@ -145,7 +146,7 @@ fn rpc_batch_payload() -> Vec<u8> {
 fn rpc_completion_payload(
     result_row_counts: Vec<generated::protocol::v1::rpc_completion::ResultRowCountSummary>,
 ) -> Vec<u8> {
-    encode_generated_message(&generated::protocol::v1::RpcCompletion {
+    encode_protobuf_message(&generated::protocol::v1::RpcCompletion {
         status: generated::protocol::v1::rpc_completion::Status::Committed as i32,
         rows_affected: Some(2),
         tx_id: Some(701),
@@ -190,6 +191,6 @@ fn roundtrip_generated_envelope(
 
     let decoded_frame = FrameCodec::decode(&encoded).unwrap();
     let decoded_envelope: generated::protocol::v1::FrameEnvelope =
-        decode_generated_message(decoded_frame.payload.as_slice()).unwrap();
+        decode_protobuf_message(decoded_frame.payload.as_slice(), "generated protobuf").unwrap();
     (decoded_frame, decoded_envelope)
 }

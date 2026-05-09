@@ -58,9 +58,9 @@ fn execute_request_frame_from_generated(
         session_id: 601,
         tx_id: None,
         payload_kind: generated::protocol::v1::PayloadKind::RpcExecuteRequest as i32,
-        payload: encode_generated_message(&request),
+        payload: encode_protobuf_message(&request),
     };
-    let payload = encode_generated_message(&envelope);
+    let payload = encode_protobuf_message(&envelope);
 
     FrameBytes {
         header: FrameHeader {

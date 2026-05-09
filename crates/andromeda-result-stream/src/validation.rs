@@ -6,17 +6,54 @@ use andromeda_wal::Lsn;
 pub(crate) fn completion_status_transaction_state(
     status: CompletionStatus,
 ) -> AndromedaResult<TransactionState> {
-    match status {
-        CompletionStatus::Committed => Ok(TransactionState::Committed),
-        CompletionStatus::RolledBack => Ok(TransactionState::RolledBack),
-        _ => Err(AndromedaError::new(
-            AndromedaErrorKind::Transaction,
-            format!(
-                "result stream completion requires terminal status; got {:?}",
-                status
-            ),
-        )),
+    ensure_transactional_completion_status(status)?;
+
+    Ok(match status {
+        CompletionStatus::Committed => TransactionState::Committed,
+        CompletionStatus::RolledBack => TransactionState::RolledBack,
+        _ => unreachable!("terminal result stream status already checked"),
+    })
+}
+
+pub(crate) fn ensure_transactional_completion_status(
+    status: CompletionStatus,
+) -> AndromedaResult<()> {
+    if status.is_transactional_terminal() {
+        return Ok(());
     }
+
+    Err(AndromedaError::new(
+        AndromedaErrorKind::Transaction,
+        format!(
+            "result stream completion requires terminal status; got {:?}",
+            status
+        ),
+    ))
+}
+
+pub(crate) fn ensure_nonzero_durable_lsn(durable_lsn: Lsn) -> AndromedaResult<()> {
+    if durable_lsn.is_zero() {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Storage,
+            "result stream completion requires nonzero durable LSN evidence",
+        ));
+    }
+
+    Ok(())
+}
+
+pub(crate) fn ensure_rollback_reports_zero_rows(
+    transaction_state: TransactionState,
+    actual_row_count: u64,
+) -> AndromedaResult<()> {
+    if transaction_state == TransactionState::RolledBack && actual_row_count != 0 {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Transaction,
+            "rolled-back result stream completion must report zero rows",
+        ));
+    }
+
+    Ok(())
 }
 
 pub(crate) fn validate_terminal_completion(
@@ -35,19 +72,8 @@ pub(crate) fn validate_terminal_completion(
         ));
     }
 
-    if durable_lsn.is_zero() {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Storage,
-            "result stream completion requires nonzero durable LSN evidence",
-        ));
-    }
-
-    if transaction_state == TransactionState::RolledBack && actual_row_count != 0 {
-        return Err(AndromedaError::new(
-            AndromedaErrorKind::Transaction,
-            "rolled-back result stream completion must report zero rows",
-        ));
-    }
+    ensure_nonzero_durable_lsn(durable_lsn)?;
+    ensure_rollback_reports_zero_rows(transaction_state, actual_row_count)?;
 
     metadata.validate_completed_stream(actual_row_count)
 }

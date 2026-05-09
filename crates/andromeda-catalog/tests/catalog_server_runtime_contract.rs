@@ -5,12 +5,13 @@ use andromeda_business_fixtures::{
     inventory_domain_definition_batch, inventory_reserve_stock_contract_candidate,
 };
 use andromeda_catalog::{
-    CatalogDurabilityMarker, CatalogManifestResolutionRequest, CatalogManifestResolutionStatus,
-    CatalogManifestStore, CatalogMutationCommitEvidence, CatalogMutationDurability,
-    CatalogRuntimeReopenEvidence, CatalogServerRuntime, CatalogSnapshotManifestStore,
-    CatalogSystemStore,
+    CatalogManifestStore, CatalogMutationCommitEvidence, CatalogServerRuntime,
+    CatalogSnapshotManifestStore, CatalogSystemStore,
 };
-use andromeda_catalog_store::QualifiedName;
+use andromeda_catalog_store::{
+    CatalogDurabilityMarker, CatalogManifestResolutionRequest, CatalogManifestResolutionStatus,
+    CatalogMutationDurability, CatalogRuntimeReopenEvidence, QualifiedName,
+};
 use andromeda_procedure_contract::ProcedureContract;
 use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 

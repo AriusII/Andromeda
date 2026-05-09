@@ -25,7 +25,7 @@ fn metadata_frame_with_envelope_context(
 ) -> FrameBytes {
     frame(
         FrameType::RpcMetadata,
-        encode_generated_message(&generated::protocol::v1::FrameEnvelope {
+        encode_protobuf_message(&generated::protocol::v1::FrameEnvelope {
             protocol_version: Some(generated::protocol::v1::ProtocolVersion { major: 1, minor: 0 }),
             contract_hash: hash(contract_hash_byte),
             catalog_version,
@@ -264,7 +264,7 @@ fn rpc_proto_loopback_rejects_wrong_role_malformed_frame_and_bad_ordering() {
         FrameType::RpcExecuteRequest,
         envelope_payload(
             generated::protocol::v1::PayloadKind::RpcExecuteRequest,
-            encode_generated_message(&request),
+            encode_protobuf_message(&request),
         ),
     );
 
@@ -286,7 +286,7 @@ fn rpc_proto_loopback_rejects_wrong_role_malformed_frame_and_bad_ordering() {
         FrameType::RpcMetadata,
         envelope_payload(
             generated::protocol::v1::PayloadKind::RpcMetadata,
-            encode_generated_message(&generated::protocol::v1::RpcMetadata {
+            encode_protobuf_message(&generated::protocol::v1::RpcMetadata {
                 result_streams: Vec::new(),
                 completion_policy: None,
             }),
@@ -296,7 +296,7 @@ fn rpc_proto_loopback_rejects_wrong_role_malformed_frame_and_bad_ordering() {
         FrameType::RpcCompletion,
         envelope_payload(
             generated::protocol::v1::PayloadKind::RpcCompletion,
-            encode_generated_message(&generated::protocol::v1::RpcCompletion {
+            encode_protobuf_message(&generated::protocol::v1::RpcCompletion {
                 status: generated::protocol::v1::rpc_completion::Status::Committed as i32,
                 rows_affected: Some(0),
                 tx_id: Some(701),

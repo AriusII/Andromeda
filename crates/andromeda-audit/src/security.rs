@@ -1,4 +1,5 @@
 use andromeda_error::AndromedaResult;
+pub use andromeda_security_contract::AuthorizationDenialReason as SecurityAuditDenialReason;
 
 use crate::TraceId;
 use crate::identity::{has_identity_pair_evidence, identity_pair_contains_sensitive_evidence};
@@ -13,37 +14,6 @@ use super::{
 pub enum SecurityAuditOutcome {
     Allowed,
     Denied,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum SecurityAuditDenialReason {
-    UnknownCertificate,
-    SurfaceScopeMismatch,
-    SurfaceDoesNotPermitPermission,
-    PrincipalMissingPermission,
-}
-
-impl SecurityAuditDenialReason {
-    pub const fn label(self) -> &'static str {
-        match self {
-            Self::UnknownCertificate => "unknown_certificate",
-            Self::SurfaceScopeMismatch => "surface_scope_mismatch",
-            Self::SurfaceDoesNotPermitPermission => "surface_does_not_permit_permission",
-            Self::PrincipalMissingPermission => "principal_missing_permission",
-        }
-    }
-
-    pub fn from_audit_reason(reason: &str) -> Option<Self> {
-        let reason = reason.trim();
-        let label = reason.strip_prefix("denied:")?.split(':').next()?;
-        match label {
-            "unknown_certificate" => Some(Self::UnknownCertificate),
-            "surface_scope_mismatch" => Some(Self::SurfaceScopeMismatch),
-            "surface_does_not_permit_permission" => Some(Self::SurfaceDoesNotPermitPermission),
-            "principal_missing_permission" => Some(Self::PrincipalMissingPermission),
-            _ => None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

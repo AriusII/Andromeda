@@ -1,5 +1,6 @@
-use andromeda_storage::format_version::{FormatVersion, StorageFormatKind};
-use andromeda_storage::{RECOVERY_REQUIRED_STORAGE_FORMATS, StorageFormatFingerprint};
+use andromeda_manifest::StorageFormatFingerprint;
+use andromeda_manifest::format_version::{FormatVersion, StorageFormatKind};
+use andromeda_recovery::RECOVERY_REQUIRED_STORAGE_FORMATS;
 
 pub(crate) fn recovery_v1_format_fingerprints_with(
     override_kind: StorageFormatKind,

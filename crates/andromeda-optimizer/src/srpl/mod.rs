@@ -1,8 +1,8 @@
 //! SRPL optimizer passes and pipeline.
 //!
 //! This module owns SRPL rewrite, projection, cost, plan choice, and pipeline
-//! logic. The `andromeda-srpl` crate re-exports this module as a compatibility
-//! compatibility surface for existing compiler callers.
+//! logic. The `andromeda-srpl` crate keeps only the compiler orchestration
+//! wrapper for existing source-level callers.
 
 pub mod constant_fold;
 pub mod cost_model;

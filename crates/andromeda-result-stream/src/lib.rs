@@ -67,15 +67,53 @@ mod tests {
     }
 
     #[test]
-    fn completion_status_terminal_codes_are_stable_and_match_proto() {
-        assert_eq!(CompletionStatus::Committed.terminal_code(), 1);
-        assert_eq!(CompletionStatus::RolledBack.terminal_code(), 2);
-        assert_eq!(CompletionStatus::FailedBeforeTransaction.terminal_code(), 3);
-        assert_eq!(CompletionStatus::Cancelled.terminal_code(), 4);
-        assert_eq!(CompletionStatus::Poisoned.terminal_code(), 5);
-        assert_eq!(CompletionStatus::PermissionDenied.terminal_code(), 6);
-        assert_eq!(CompletionStatus::ContractRejected.terminal_code(), 7);
-        assert_eq!(CompletionStatus::SystemUnavailable.terminal_code(), 8);
+    fn completion_status_terminal_codes_adapt_to_procedure_contract() {
+        use andromeda_procedure_contract::{
+            RPC_COMPLETION_STATUS_TERMINAL_CODES, RpcCompletionStatus,
+        };
+
+        let pairs: &[(CompletionStatus, RpcCompletionStatus)] = &[
+            (CompletionStatus::Committed, RpcCompletionStatus::Committed),
+            (
+                CompletionStatus::RolledBack,
+                RpcCompletionStatus::RolledBack,
+            ),
+            (
+                CompletionStatus::FailedBeforeTransaction,
+                RpcCompletionStatus::FailedBeforeTransaction,
+            ),
+            (CompletionStatus::Cancelled, RpcCompletionStatus::Cancelled),
+            (CompletionStatus::Poisoned, RpcCompletionStatus::Poisoned),
+            (
+                CompletionStatus::PermissionDenied,
+                RpcCompletionStatus::PermissionDenied,
+            ),
+            (
+                CompletionStatus::ContractRejected,
+                RpcCompletionStatus::ContractRejected,
+            ),
+            (
+                CompletionStatus::SystemUnavailable,
+                RpcCompletionStatus::SystemUnavailable,
+            ),
+        ];
+
+        assert_eq!(pairs.len(), RPC_COMPLETION_STATUS_TERMINAL_CODES.len());
+        for (stream_status, contract_status) in pairs {
+            assert_eq!(stream_status.to_contract_status(), *contract_status);
+            assert_eq!(
+                CompletionStatus::from_contract_status(*contract_status),
+                *stream_status
+            );
+            assert_eq!(
+                stream_status.terminal_code(),
+                contract_status.terminal_code()
+            );
+            assert_eq!(
+                stream_status.is_transactional_terminal(),
+                contract_status.is_transactional_terminal()
+            );
+        }
 
         assert!(CompletionStatus::Committed.is_transactional_terminal());
         assert!(CompletionStatus::RolledBack.is_transactional_terminal());
@@ -326,45 +364,12 @@ mod tests {
     }
 
     #[test]
-    fn completion_envelope_version_major_matches_proto_contract() {
-        let proto_version = andromeda_proto::COMPLETION_ENVELOPE_VERSION;
-        assert_eq!(COMPLETION_ENVELOPE_VERSION.0, proto_version.major);
-        assert!(COMPLETION_ENVELOPE_VERSION.1 <= proto_version.minor);
-    }
-
-    #[test]
-    fn completion_status_terminal_codes_match_proto_status_codes() {
-        use andromeda_proto::RpcCompletionStatus as Proto;
-
-        let pairs: &[(CompletionStatus, Proto)] = &[
-            (CompletionStatus::Committed, Proto::Committed),
-            (CompletionStatus::RolledBack, Proto::RolledBack),
-            (
-                CompletionStatus::FailedBeforeTransaction,
-                Proto::FailedBeforeTransaction,
-            ),
-            (CompletionStatus::Cancelled, Proto::Cancelled),
-            (CompletionStatus::Poisoned, Proto::Poisoned),
-            (CompletionStatus::PermissionDenied, Proto::PermissionDenied),
-            (CompletionStatus::ContractRejected, Proto::ContractRejected),
-            (
-                CompletionStatus::SystemUnavailable,
-                Proto::SystemUnavailable,
-            ),
-        ];
-
-        for (exec, proto) in pairs {
-            assert_eq!(
-                exec.terminal_code(),
-                proto.terminal_code(),
-                "CompletionStatus::{:?} drifted from RpcCompletionStatus::{:?}",
-                exec,
-                proto
-            );
-            assert_eq!(
-                exec.is_transactional_terminal(),
-                proto.is_transactional_terminal()
-            );
-        }
+    fn completion_envelope_version_uses_procedure_contract() {
+        assert_eq!(
+            COMPLETION_ENVELOPE_VERSION,
+            andromeda_procedure_contract::COMPLETION_ENVELOPE_CONTRACT_VERSION
+        );
+        assert_eq!(COMPLETION_ENVELOPE_VERSION.major, 1);
+        assert_eq!(COMPLETION_ENVELOPE_VERSION.minor, 0);
     }
 }

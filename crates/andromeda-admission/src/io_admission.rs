@@ -10,7 +10,7 @@ use andromeda_storage_placement::{
     OperationalProfileMode, StorageWorkloadClass,
 };
 
-use crate::{CompletionStatus, InvocationReject};
+use crate::InvocationReject;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutionIoAdmissionDecision {
@@ -52,14 +52,11 @@ impl ExecutionIoAdmissionRequest {
     ) -> Result<ExecutionIoAdmissionDecision, InvocationReject> {
         let workload_pipeline = self.placement_request.workload.pipeline_class();
         if self.pipeline_class != workload_pipeline {
-            return Err(InvocationReject {
-                status: CompletionStatus::ContractRejected,
-                reason: format!(
-                    "execution IO admission pipeline class {} does not match workload pipeline {}",
-                    self.pipeline_class.name(),
-                    workload_pipeline.name()
-                ),
-            });
+            return Err(InvocationReject::contract_rejected(format!(
+                "execution IO admission pipeline class {} does not match workload pipeline {}",
+                self.pipeline_class.name(),
+                workload_pipeline.name()
+            )));
         }
 
         let resource_admission = ExecutionResourceAdmissionRequest::new(
@@ -115,15 +112,13 @@ fn resource_reject_from_admission(error: ResourceAdmissionRejection) -> Invocati
 }
 
 fn resource_reject(reason: impl Into<String>) -> InvocationReject {
-    InvocationReject {
-        status: CompletionStatus::SystemUnavailable,
-        reason: reason.into(),
-    }
+    InvocationReject::system_unavailable(reason)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::CompletionStatus;
     use andromeda_hardware::{GpuExecutionPolicy, GpuProfile};
     use andromeda_storage_page::PageSize;
     use andromeda_storage_placement::{

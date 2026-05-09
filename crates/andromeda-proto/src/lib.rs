@@ -32,12 +32,23 @@ behavior.
 pub mod generated;
 mod generated_validation;
 
+// Schema-owned stable surface: generated prost modules and schema-governance
+// helpers stay anchored in `andromeda-proto`.
+pub use generated::{
+    descriptor_set_bytes, descriptor_set_hash, frame_envelope_hash, protocol_layout,
+};
+
+// Compatibility facade: Procedure contract DTOs remain reexported for active
+// callers during migration. New callers should import `andromeda-procedure-contract`.
 pub use andromeda_procedure_contract::{
     CompletionEnvelopeVersion, CompletionProtocolVersion, CompletionTerminalCode,
     ManifestPolicyVersion, ProcedureManifest, ProcedureManifestBinding, ProtocolLayout,
     RequiredPermission, ResultCardinality, ResultRowCountSummary, ResultStreamDescriptor,
     RowCountRequirement, RpcCompletion, RpcCompletionStatus, TransactionOutcome,
 };
+
+// Compatibility facade: wire/protocol types and constants are owned by
+// `andromeda-proto-wire` / `andromeda-rpc-protocol`.
 pub use andromeda_proto_wire::{
     AUTH_WIRE_CODE, CONTRACT_REQUEST_WIRE_CODE, CONTRACT_RESPONSE_WIRE_CODE, ERROR_WIRE_CODE,
     FrameEnvelope, HELLO_WIRE_CODE, PAYLOAD_KIND_TRANSPORT_CODE_LOCKSTEP, PayloadFrameFamily,
@@ -52,13 +63,18 @@ pub use andromeda_proto_wire::{
 pub use andromeda_proto_wire::{
     CONTRACT_PACKAGE, DESCRIPTOR_SET_HASH_ALGORITHM, PROTOCOL_FRAME_ENVELOPE_TYPE, PROTOCOL_PACKAGE,
 };
+
+// Compatibility facade: structured object layout is owned by
+// `andromeda-structured-object`.
 pub use andromeda_structured_object::{
     RowCountPolicy, StructuredObjectHeader, StructuredObjectLayout,
 };
+
+// Compatibility facade: validation/projection and generic protobuf codecs are
+// owned by `andromeda-proto-wire`; generated modules remain schema-owned here.
 pub use generated::{
-    decode_generated_message, descriptor_set_bytes, descriptor_set_hash, encode_generated_message,
-    frame_envelope_hash, project_generated_frame_envelope,
-    project_generated_structured_object_header, protocol_layout,
+    decode_generated_message, encode_generated_message, project_generated_frame_envelope,
+    project_generated_structured_object_header,
     validate_catalog_procedure_manifest_resolution_request,
     validate_catalog_procedure_manifest_resolution_response, validate_generated_error_envelope,
     validate_generated_frame_envelope, validate_generated_invocation_request,

@@ -31,7 +31,6 @@ andromeda-hardware.workspace = true
 andromeda-manifest.workspace = true
 andromeda-recovery.workspace = true
 andromeda-srpl-binder.workspace = true
-andromeda-storage.workspace = true
 andromeda-storage-placement.workspace = true
 andromeda-transaction.workspace = true
 

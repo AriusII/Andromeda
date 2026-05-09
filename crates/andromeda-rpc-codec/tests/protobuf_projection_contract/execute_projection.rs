@@ -24,7 +24,7 @@ fn frame_codec_carries_generated_rpc_execute_request_without_translation() {
     };
     let payload = envelope_payload(
         generated::protocol::v1::PayloadKind::RpcExecuteRequest,
-        encode_generated_message(&request),
+        encode_protobuf_message(&request),
     );
     let encoded = FrameCodec::encode(&frame(FrameType::RpcExecuteRequest, payload)).unwrap();
 
@@ -34,11 +34,11 @@ fn frame_codec_carries_generated_rpc_execute_request_without_translation() {
     let decoded_frame = FrameCodec::decode(&encoded).unwrap();
     validate_single_frame_on_stream(&decoded_frame, StreamRole::CommandBidirectional).unwrap();
     let decoded_envelope: generated::protocol::v1::FrameEnvelope =
-        decode_generated_message(decoded_frame.payload.as_slice()).unwrap();
+        decode_protobuf_message(decoded_frame.payload.as_slice(), "generated protobuf").unwrap();
     let proto_envelope = proto_envelope_from_generated(decoded_envelope.clone());
     proto_envelope.validate().unwrap();
     let decoded_request: generated::protocol::v1::RpcExecuteRequest =
-        decode_generated_message(decoded_envelope.payload.as_slice()).unwrap();
+        decode_protobuf_message(decoded_envelope.payload.as_slice(), "generated protobuf").unwrap();
 
     assert_eq!(
         decoded_frame.header.frame_type,

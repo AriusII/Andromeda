@@ -15,4 +15,6 @@ andromeda-statistics.workspace = true
 andromeda-types.workspace = true
 
 [dev-dependencies]
+andromeda-srpl-definition-batch.workspace = true
+andromeda-srpl-lowering.workspace = true
 proptest.workspace = true

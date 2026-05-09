@@ -223,30 +223,18 @@ pub fn reconcile_completion_recovery_from_wal(
                                 CompletionRecoveryAmbiguity::JournalContradictsWal,
                             )
                         } else {
-                            CompletionRecoveryRecord {
-                                invocation_id: expectation.invocation_id,
-                                transaction_id: expectation.transaction_id,
-                                status: CompletionRecoveryStatus::Incomplete,
-                                transaction_state: Some(summary.state),
-                                terminal_lsn: None,
+                            completion_recovery_incomplete(
+                                *expectation,
                                 durable_lsn,
-                                rows_affected: None,
-                                result_row_count_exact: None,
-                                ambiguity: None,
-                            }
+                                Some(summary.state),
+                            )
                         }
                     } else {
-                        CompletionRecoveryRecord {
-                            invocation_id: expectation.invocation_id,
-                            transaction_id: expectation.transaction_id,
-                            status: CompletionRecoveryStatus::Incomplete,
-                            transaction_state: Some(summary.state),
-                            terminal_lsn: None,
+                        completion_recovery_incomplete(
+                            *expectation,
                             durable_lsn,
-                            rows_affected: None,
-                            result_row_count_exact: None,
-                            ambiguity: None,
-                        }
+                            Some(summary.state),
+                        )
                     }
                 },
                 None => completion_recovery_ambiguous(
@@ -414,6 +402,24 @@ fn completion_recovery_ambiguous(
         rows_affected: None,
         result_row_count_exact: None,
         ambiguity: Some(ambiguity),
+    }
+}
+
+fn completion_recovery_incomplete(
+    expectation: CompletionRecoveryExpectation,
+    durable_lsn: Lsn,
+    transaction_state: Option<DurableTransactionState>,
+) -> CompletionRecoveryRecord {
+    CompletionRecoveryRecord {
+        invocation_id: expectation.invocation_id,
+        transaction_id: expectation.transaction_id,
+        status: CompletionRecoveryStatus::Incomplete,
+        transaction_state,
+        terminal_lsn: None,
+        durable_lsn,
+        rows_affected: None,
+        result_row_count_exact: None,
+        ambiguity: None,
     }
 }
 

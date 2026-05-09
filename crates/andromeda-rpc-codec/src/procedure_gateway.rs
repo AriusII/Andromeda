@@ -2,8 +2,9 @@ use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_procedure_contract::{
     ProcedureGatewayExecuteRequest, validate_procedure_gateway_manifest_permissions,
 };
-use andromeda_proto::{
-    PayloadKind, decode_generated_message, generated, validate_generated_rpc_execute_request,
+use andromeda_proto::generated;
+use andromeda_proto_wire::{
+    PayloadKind, decode_protobuf_message, validate_generated_rpc_execute_request,
 };
 use andromeda_types::{CatalogVersion, ContractHash};
 
@@ -34,7 +35,7 @@ pub fn decode_and_validate_rpc_execute_request(
     }
 
     let generated_request: GeneratedRpcExecuteRequest =
-        decode_generated_message(envelope.payload.as_slice())?;
+        decode_protobuf_message(envelope.payload.as_slice(), "generated protobuf")?;
     validate_generated_rpc_execute_request(&generated_request)?;
     let execute_request = validate_rpc_execute_request(&generated_request)?;
 

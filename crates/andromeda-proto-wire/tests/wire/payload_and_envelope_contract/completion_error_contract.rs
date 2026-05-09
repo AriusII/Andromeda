@@ -1,8 +1,10 @@
 use andromeda_error::AndromedaErrorKind;
 use andromeda_procedure_contract::{
-    ResultRowCountSummary, RpcCompletion, RpcCompletionStatus, TransactionOutcome,
+    RPC_COMPLETION_STATUS_TERMINAL_CODES, ResultRowCountSummary, RpcCompletion,
+    RpcCompletionStatus, TRANSACTION_OUTCOME_TERMINAL_CODES, TransactionOutcome,
 };
 use andromeda_proto_wire::{
+    GeneratedRpcCompletionStatus, GeneratedTransactionOutcome,
     generated_validation::{GeneratedBackpressureMetadataView, GeneratedErrorEnvelopeView},
     validate_generated_error_envelope,
 };
@@ -68,6 +70,60 @@ fn completion_and_error_shapes_are_exposed_without_json_defaults() {
     assert_eq!(error.family, ErrorFamily::Contract);
     assert_eq!(error.code, "CONTRACT_HASH_MISMATCH");
     assert_eq!(error.transaction_effect, TransactionEffect::NoTransaction);
+}
+
+#[test]
+fn generated_completion_codes_lockstep_with_procedure_contract() {
+    let generated_statuses = [
+        GeneratedRpcCompletionStatus::Committed,
+        GeneratedRpcCompletionStatus::RolledBack,
+        GeneratedRpcCompletionStatus::FailedBeforeTransaction,
+        GeneratedRpcCompletionStatus::Cancelled,
+        GeneratedRpcCompletionStatus::Poisoned,
+        GeneratedRpcCompletionStatus::PermissionDenied,
+        GeneratedRpcCompletionStatus::ContractRejected,
+        GeneratedRpcCompletionStatus::SystemUnavailable,
+    ];
+    assert_eq!(
+        generated_statuses.len(),
+        RPC_COMPLETION_STATUS_TERMINAL_CODES.len()
+    );
+    for ((contract_status, contract_code), generated_status) in RPC_COMPLETION_STATUS_TERMINAL_CODES
+        .iter()
+        .zip(generated_statuses)
+    {
+        assert_eq!(*contract_code as i32, generated_status as i32);
+        assert_eq!(
+            RpcCompletionStatus::from_terminal_code(*contract_code),
+            Some(*contract_status)
+        );
+    }
+    assert_eq!(GeneratedRpcCompletionStatus::Unspecified as i32, 0);
+    assert!(RpcCompletionStatus::from_terminal_code(0).is_none());
+
+    let generated_outcomes = [
+        GeneratedTransactionOutcome::NotStarted,
+        GeneratedTransactionOutcome::Committed,
+        GeneratedTransactionOutcome::RolledBack,
+        GeneratedTransactionOutcome::Failed,
+        GeneratedTransactionOutcome::Cancelled,
+    ];
+    assert_eq!(
+        generated_outcomes.len(),
+        TRANSACTION_OUTCOME_TERMINAL_CODES.len()
+    );
+    for ((contract_outcome, contract_code), generated_outcome) in TRANSACTION_OUTCOME_TERMINAL_CODES
+        .iter()
+        .zip(generated_outcomes)
+    {
+        assert_eq!(*contract_code as i32, generated_outcome as i32);
+        assert_eq!(
+            TransactionOutcome::from_terminal_code(*contract_code),
+            Some(*contract_outcome)
+        );
+    }
+    assert_eq!(GeneratedTransactionOutcome::Unspecified as i32, 0);
+    assert!(TransactionOutcome::from_terminal_code(0).is_none());
 }
 
 #[test]

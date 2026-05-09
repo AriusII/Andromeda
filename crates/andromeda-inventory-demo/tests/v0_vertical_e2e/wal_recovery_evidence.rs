@@ -5,8 +5,10 @@ use crate::support::{
 use andromeda_inventory_demo::V0InventoryRecoverableRuntime;
 use andromeda_inventory_demo::inventory_reserve_stock_contract;
 use andromeda_manifest::DatabaseManifest;
-use andromeda_recovery::{RedoRecordDecision, StartupMode};
-use andromeda_storage::{ReplayContext, execute_redo_plan_into_context, recover_from_file_wal};
+use andromeda_recovery::{
+    RedoRecordDecision, ReplayContext, StartupMode, execute_redo_plan_into_context,
+    recover_from_file_wal,
+};
 use andromeda_storage_heap::{HeapRowRedoPayloadV1, ProductStockRow};
 use andromeda_wal::{FileWal, Lsn};
 

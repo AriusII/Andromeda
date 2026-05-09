@@ -1,12 +1,13 @@
-use andromeda_observe::{
+use andromeda_audit::{
     AdminOperation, AdminOperationTrace, CertificateIdentity, DurableAuditEventFamily,
     DurableAuditFailureKind, DurableAuditPrincipalBinding, DurableAuditReplayBehavior,
     DurableAuditRetentionBoundary, DurableAuditSinkFailure, DurableAuditSinkReport,
-    DurableAuditWalEvidence, DurableAuditWalSink, EventCorrelation, EventEnvelope, EventId,
-    PendingDurableAuditRecord, Permission, SecurityAuditOutcome, SecurityAuditTrace,
-    SecurityPolicyVersionEvidence, SurfaceScope, TraceEvent, TraceId, UserPrincipal,
+    DurableAuditWalEvidence, DurableAuditWalSink, Permission, SecurityAuditOutcome,
+    SecurityAuditTrace, SecurityPolicyVersionEvidence, SurfaceScope, UserPrincipal,
     UserPrincipalKind,
 };
+use andromeda_observability::{EventId, TraceId};
+use andromeda_observe::{EventCorrelation, EventEnvelope, PendingDurableAuditRecord, TraceEvent};
 use andromeda_types::{RequestId, SessionId};
 
 #[test]
@@ -226,7 +227,7 @@ impl DurableAuditWalSink for RecordingDurableAuditWalSink {
         record: R,
     ) -> Result<DurableAuditSinkReport, DurableAuditSinkFailure>
     where
-        R: Into<andromeda_observe::DurableAuditAppendRecord>,
+        R: Into<andromeda_audit::DurableAuditAppendRecord>,
     {
         let record = record.into();
         record.validate().map_err(|error| {

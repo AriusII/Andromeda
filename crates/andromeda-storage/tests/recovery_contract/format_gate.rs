@@ -1,12 +1,13 @@
 use crate::support::recovery_v1_format_fingerprints_with;
 use andromeda_error::AndromedaErrorKind;
-use andromeda_storage::format_version::{FormatVersion, StorageFormatKind};
-use andromeda_storage::{
-    DatabaseManifest, Lsn, PreRedoStorageFormatDecision, PreRedoStorageFormatGate,
-    PreRedoStorageFormatRejection, RECOVERY_REQUIRED_STORAGE_FORMATS, RecoveryPlan, StartupMode,
-    StorageFormatFingerprint, StorageFormatManifest, WalRecord, WalRecordKind,
+use andromeda_manifest::format_version::{FormatVersion, StorageFormatKind};
+use andromeda_manifest::{DatabaseManifest, StorageFormatFingerprint, StorageFormatManifest};
+use andromeda_recovery::{
+    PreRedoStorageFormatDecision, PreRedoStorageFormatGate, PreRedoStorageFormatRejection,
+    RECOVERY_REQUIRED_STORAGE_FORMATS, RecoveryPlan, StartupMode,
 };
 use andromeda_types::TransactionId;
+use andromeda_wal::{Lsn, WalRecord, WalRecordKind};
 
 #[test]
 fn pre_redo_format_gate_rejects_unknown_heap_layout_before_redo() {

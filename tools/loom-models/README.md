@@ -6,6 +6,8 @@ This directory owns a standalone Loom model crate for small bounded concurrency 
 
 The current model closes the concrete-path gap for Loom evidence by making the WAL durable-before-visible publication rule executable. It is intentionally narrow and does not claim release readiness.
 
+Cargo build output under `tools/loom-models/target/` is a local generated artifact covered by `tools/loom-models/.gitignore`. Do not commit it, move it into repository tooling, or treat it as release evidence.
+
 ## Scope
 
 Use this crate for minimal, deterministic Loom models that are not yet wired into an owning engine crate.
@@ -20,6 +22,7 @@ Current model:
 
 - Do not treat this standalone model as a replacement for owner-crate tests.
 - Do not use this model as proof of WAL append, fsync, crash/recovery, MVCC visibility, Procedure dispatch, audit, or global release readiness.
+- Do not commit or depend on `tools/loom-models/target/`; it is disposable local Cargo output.
 - Do not use sleeps, wall-clock timing, retries, or scheduler luck as validation.
 - Do not model GPU, benchmark, or temporary output as a critical source of truth.
 - Do not weaken WAL, MVCC visibility, typed Procedure, IAM, audit, or recovery invariants.

@@ -24,7 +24,7 @@ Use this index when a work order asks for roadmap test coverage by domain:
 
 ## Root Layer Indices
 
-These roadmap directories are documentation indices. They do not own executable harnesses until a later work order explicitly adds one with crate ownership, validation gates, and release policy.
+These roadmap entries are documentation indices. They do not own executable harnesses or require root directories until a later work order explicitly adds one with crate ownership, validation gates, and release policy.
 
 | Root path | Purpose |
 | --- | --- |
@@ -32,8 +32,8 @@ These roadmap directories are documentation indices. They do not own executable 
 | `tests/fuzzing/` | Index fuzz and corpus work for untrusted input, persisted bytes, parsers, codecs, canonicalization, and state machines. |
 | `tests/miri/` | Index Miri and undefined-behavior checks for unsafe, aliasing, layout, and FFI-sensitive Rust code. |
 | `tools/loom-models/` | Standalone Loom model project for bounded concurrency checks that are not yet wired into an owning crate. |
-| `benches/` | Placeholder for benchmark governance. Benchmark evidence is advisory and cannot replace correctness, durability, recovery, or security gates. |
-| `benches/scenario-evidence/` | Placeholder for ScenarioEvidence benchmark records, workload metadata, and evidence review criteria. |
+| Benchmark governance | Roadmap label only; do not create a root `benches/` directory from this index. Benchmark evidence is advisory and cannot replace correctness, durability, recovery, or security gates. |
+| ScenarioEvidence benchmark records | Roadmap label only; use the owning evidence and regression crates unless a later work order introduces a concrete root artifact path with validation. |
 
 ## Non-goals
 

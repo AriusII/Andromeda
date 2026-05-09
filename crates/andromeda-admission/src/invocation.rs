@@ -50,6 +50,27 @@ pub struct InvocationReject {
 }
 
 impl InvocationReject {
+    pub(crate) fn contract_rejected(reason: impl Into<String>) -> Self {
+        Self {
+            status: CompletionStatus::ContractRejected,
+            reason: reason.into(),
+        }
+    }
+
+    pub(crate) fn permission_denied(reason: impl Into<String>) -> Self {
+        Self {
+            status: CompletionStatus::PermissionDenied,
+            reason: reason.into(),
+        }
+    }
+
+    pub(crate) fn system_unavailable(reason: impl Into<String>) -> Self {
+        Self {
+            status: CompletionStatus::SystemUnavailable,
+            reason: reason.into(),
+        }
+    }
+
     pub fn authorization_denial_trace(
         &self,
         trace_id: TraceId,

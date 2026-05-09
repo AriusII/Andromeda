@@ -1,5 +1,9 @@
 use andromeda_error::AndromedaResult;
 use andromeda_observability::{ExecutionTransitionTrace, TraceId, TransitionReasonCode};
+use andromeda_procedure_contract::{
+    CompletionEnvelopeVersion, CompletionTerminalCode,
+    RpcCompletionStatus as ContractCompletionStatus,
+};
 use andromeda_transaction::{TransactionState, transaction_phase_code};
 use andromeda_types::{InvocationId, RequestId, SessionId, TransactionId};
 use andromeda_wal::Lsn;
@@ -17,31 +21,46 @@ pub enum CompletionStatus {
 }
 
 impl CompletionStatus {
-    /// Stable terminal completion code aligned with the wire-level
-    /// `andromeda_proto::RpcCompletionStatus::terminal_code` so executor
-    /// telemetry, journals, and recovery comparisons never depend on
-    /// `Debug`/`Display` projections.
-    ///
-    /// Codes match `protocol::v1::rpc_completion::Status` values 1..=8;
-    /// `0` (`STATUS_UNSPECIFIED`) is intentionally unreachable from this enum.
-    pub const fn terminal_code(self) -> u32 {
+    /// Explicit adapter from the execution-side status into the canonical
+    /// procedure completion contract.
+    pub const fn to_contract_status(self) -> ContractCompletionStatus {
         match self {
-            Self::Committed => 1,
-            Self::RolledBack => 2,
-            Self::FailedBeforeTransaction => 3,
-            Self::Cancelled => 4,
-            Self::Poisoned => 5,
-            Self::PermissionDenied => 6,
-            Self::ContractRejected => 7,
-            Self::SystemUnavailable => 8,
+            Self::Committed => ContractCompletionStatus::Committed,
+            Self::RolledBack => ContractCompletionStatus::RolledBack,
+            Self::FailedBeforeTransaction => ContractCompletionStatus::FailedBeforeTransaction,
+            Self::Cancelled => ContractCompletionStatus::Cancelled,
+            Self::Poisoned => ContractCompletionStatus::Poisoned,
+            Self::PermissionDenied => ContractCompletionStatus::PermissionDenied,
+            Self::ContractRejected => ContractCompletionStatus::ContractRejected,
+            Self::SystemUnavailable => ContractCompletionStatus::SystemUnavailable,
         }
     }
 
+    /// Explicit adapter from the canonical procedure completion contract into
+    /// the execution-side status.
+    pub const fn from_contract_status(status: ContractCompletionStatus) -> Self {
+        match status {
+            ContractCompletionStatus::Committed => Self::Committed,
+            ContractCompletionStatus::RolledBack => Self::RolledBack,
+            ContractCompletionStatus::FailedBeforeTransaction => Self::FailedBeforeTransaction,
+            ContractCompletionStatus::Cancelled => Self::Cancelled,
+            ContractCompletionStatus::Poisoned => Self::Poisoned,
+            ContractCompletionStatus::PermissionDenied => Self::PermissionDenied,
+            ContractCompletionStatus::ContractRejected => Self::ContractRejected,
+            ContractCompletionStatus::SystemUnavailable => Self::SystemUnavailable,
+        }
+    }
+
+    /// Stable terminal completion code owned by
+    /// `andromeda-procedure-contract`.
+    pub const fn terminal_code(self) -> CompletionTerminalCode {
+        self.to_contract_status().terminal_code()
+    }
+
     /// Returns true when the status reports a transaction that reached a
-    /// durable terminal state (committed or rolled back). Pre-transaction
-    /// rejections, cancellations, and resource failures return false.
+    /// durable terminal state (committed or rolled back).
     pub const fn is_transactional_terminal(self) -> bool {
-        matches!(self, Self::Committed | Self::RolledBack)
+        self.to_contract_status().is_transactional_terminal()
     }
 
     /// Maps the completion status onto the stable
@@ -60,12 +79,11 @@ impl CompletionStatus {
     }
 }
 
-/// Completion envelope contract version owned by the executor. Bumped only
-/// when the in-memory `InvocationCompletion` shape, terminal codes, or
-/// transactional binding rules change in a backwards-incompatible way.
-/// Major mirrors `andromeda_proto::COMPLETION_ENVELOPE_VERSION`; this is
-/// kept as a plain `(u32, u32)` to avoid a hard re-export dependency.
-pub const COMPLETION_ENVELOPE_VERSION: (u32, u32) = (1, 0);
+/// Completion envelope contract version adapted from the canonical procedure
+/// completion contract. ResultStream owns executor state, not terminal code
+/// integers or completion versioning.
+pub const COMPLETION_ENVELOPE_VERSION: CompletionEnvelopeVersion =
+    andromeda_procedure_contract::COMPLETION_ENVELOPE_CONTRACT_VERSION;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InvocationCompletion {

@@ -16,15 +16,15 @@ pub(crate) use andromeda_procedure_contract::{
     ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef, ResultMetadataPolicy,
     ResultStreamCardinality, ResultStreamContract, StatsVersion, TransactionPolicy,
 };
-pub(crate) use andromeda_srpl::{
+pub(crate) use andromeda_srpl_binder::inventory_reserve_stock_body_ir;
+pub(crate) use andromeda_srpl_catalog_binding::bind_executable_procedure_plan;
+pub(crate) use andromeda_srpl_definition_batch::{
     INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, compile_inventory_reserve_stock_contract,
     compile_inventory_reserve_stock_contract_candidate,
     compile_narrow_procedure_contract_candidate, compile_narrow_procedure_definition,
     compile_narrow_procedure_definition_batch, compile_narrow_procedure_signature,
     inventory_reserve_stock_contract_metadata, lower_ir_to_catalog_definition,
 };
-pub(crate) use andromeda_srpl_binder::inventory_reserve_stock_body_ir;
-pub(crate) use andromeda_srpl_catalog_binding::bind_executable_procedure_plan;
 pub(crate) use andromeda_srpl_diagnostics::{DiagnosticPhase, SourceSpan, SrplSource};
 pub(crate) use andromeda_srpl_ir::{
     Cardinality, ProcedureSignature, ResultContract, SrplBusinessOperationIr,

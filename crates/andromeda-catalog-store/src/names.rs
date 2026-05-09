@@ -1,7 +1,7 @@
-//! Catalog qualified-name ownership re-export surface.
+//! Catalog qualified-name import boundary.
 //!
 //! `andromeda-contract` still owns the canonical representation. This crate
-//! owns the catalog-store import boundary so `andromeda-catalog` can remain a
-//! compatibility surface while downstream crates migrate to narrower owners.
+//! exposes the catalog-store owner import boundary used by catalog and SRPL
+//! crates.
 
 pub use andromeda_contract::QualifiedName;

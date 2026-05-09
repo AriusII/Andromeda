@@ -1,8 +1,8 @@
 #![forbid(unsafe_code)]
 
 use andromeda_catalog_store::{
-    CatalogDefinition, CatalogObjectRef, ObjectKind, QualifiedName, StructuredObjectDefinition,
-    TableDefinition,
+    CatalogBindingKind, CatalogDefinition, CatalogObjectBinding, CatalogObjectRef, ObjectKind,
+    QualifiedName, StructuredObjectDefinition, TableDefinition,
 };
 use andromeda_contract::{
     AccessMode, CompatibilityPolicy, IsolationPolicy, MultiResultPolicy, ProcedureContract,
@@ -10,9 +10,11 @@ use andromeda_contract::{
     ResultStreamCardinality, ResultStreamContract, StatsVersion, TransactionPolicy,
 };
 use andromeda_definition_batch::{
-    CatalogDependencyKind, CatalogLifecycleAction, CatalogLifecycleTarget, DefinitionBatch,
-    DefinitionBatchId, DefinitionOperation, dry_run_definition_batch,
+    BatchDependencyGraph, CatalogDependency, CatalogDependencyKind, CatalogLifecycleAction,
+    CatalogLifecycleTarget, DefinitionBatch, DefinitionBatchId, DefinitionOperation,
+    dry_run_definition_batch,
 };
+use andromeda_error::AndromedaErrorKind;
 use andromeda_types::{
     CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, DatabaseId, NamespaceId,
     ProcedureId, ScalarType, TypeDescriptor,
@@ -408,6 +410,43 @@ fn source_hash_changes_when_procedure_contract_shape_changes() {
 }
 
 #[test]
+fn source_hash_binds_procedure_identity_even_when_contract_hash_matches() {
+    let base = procedure_contract(
+        21,
+        "Inventory.ReserveStock",
+        version(2),
+        Vec::new(),
+        Vec::new(),
+    );
+    let mut drifted = base.clone();
+    drifted.procedure_id = ProcedureId::new(22);
+
+    assert_eq!(
+        base.contract_hash, drifted.contract_hash,
+        "ContractHash remains a shape contract and does not carry ProcedureId"
+    );
+
+    let base_batch = batch(
+        version(1),
+        vec![DefinitionOperation::Create(CatalogDefinition::Procedure(
+            base,
+        ))],
+    );
+    let drifted_batch = DefinitionBatch {
+        operations: vec![DefinitionOperation::Create(CatalogDefinition::Procedure(
+            drifted,
+        ))],
+        ..base_batch.clone()
+    };
+
+    assert_ne!(
+        base_batch.source_hash(),
+        drifted_batch.source_hash(),
+        "DefinitionBatch source hash must bind ProcedureId drift"
+    );
+}
+
+#[test]
 fn procedure_structured_inputs_are_definition_batch_dependencies() {
     let contract = procedure_contract(
         2,
@@ -434,4 +473,108 @@ fn procedure_structured_inputs_are_definition_batch_dependencies() {
         dependencies[0].dependency_name,
         QualifiedName::parse("Inventory.StockRequest").unwrap()
     );
+}
+
+#[test]
+fn dependency_graph_includes_procedure_to_table_edges_from_bindings() {
+    let catalog_version = version(31);
+    let stock_table = table(101, "Inventory.ProductStock", catalog_version);
+    let request = structured_object(102, "Inventory.StockRequest", catalog_version);
+    let result = structured_object(103, "Inventory.Reservation", catalog_version);
+    let procedure = procedure_contract(
+        104,
+        "Inventory.ReserveStock",
+        catalog_version,
+        vec![QualifiedName::parse("Inventory.StockRequest").unwrap()],
+        Vec::new(),
+    );
+
+    let operations = vec![
+        DefinitionOperation::Create(CatalogDefinition::Table(stock_table.clone())),
+        DefinitionOperation::Create(CatalogDefinition::StructuredObject(request)),
+        DefinitionOperation::Create(CatalogDefinition::StructuredObject(result.clone())),
+        DefinitionOperation::Create(CatalogDefinition::Procedure(procedure.clone())),
+    ];
+    let bindings = vec![
+        CatalogObjectBinding {
+            dependent: procedure.object.clone(),
+            dependency: stock_table.object.clone(),
+            kind: CatalogBindingKind::WritesTable,
+        },
+        CatalogObjectBinding {
+            dependent: procedure.object.clone(),
+            dependency: result.object.clone(),
+            kind: CatalogBindingKind::EmitsStructuredObject,
+        },
+    ];
+
+    let without_bindings = BatchDependencyGraph::from_operations(&operations).unwrap();
+    let with_bindings =
+        BatchDependencyGraph::from_operations_with_bindings(&operations, &bindings).unwrap();
+    assert!(with_bindings.dependency_count() > without_bindings.dependency_count());
+
+    let writes_table = CatalogDependency::procedure_writes_table(
+        procedure.object.name.clone(),
+        stock_table.object.name.clone(),
+    );
+    assert_eq!(CatalogDependency::from_binding(&bindings[0]), writes_table);
+    assert_eq!(
+        writes_table.kind,
+        CatalogDependencyKind::ProcedureWritesTable
+    );
+    assert_eq!(writes_table.dependent_kind, ObjectKind::Procedure);
+    assert_eq!(writes_table.dependency_kind, ObjectKind::Table);
+}
+
+#[test]
+fn dependency_graph_rejects_kind_mismatch_and_forward_binding_references() {
+    let catalog_version = version(41);
+    let mistyped = structured_object(201, "Inventory.ProductStock", catalog_version);
+    let procedure = procedure_contract(
+        202,
+        "Inventory.ReserveStock",
+        catalog_version,
+        Vec::new(),
+        Vec::new(),
+    );
+    let operations = vec![
+        DefinitionOperation::Create(CatalogDefinition::StructuredObject(mistyped)),
+        DefinitionOperation::Create(CatalogDefinition::Procedure(procedure.clone())),
+    ];
+    let bindings = vec![CatalogObjectBinding {
+        dependent: procedure.object.clone(),
+        dependency: object_ref(
+            201,
+            "Inventory.ProductStock",
+            ObjectKind::Table,
+            catalog_version,
+        ),
+        kind: CatalogBindingKind::ReadsTable,
+    }];
+
+    let error = BatchDependencyGraph::from_operations_with_bindings(&operations, &bindings)
+        .expect_err("kind mismatch must be rejected");
+    assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+
+    let stock_table = table(302, "Inventory.ProductStock", catalog_version);
+    let procedure = procedure_contract(
+        301,
+        "Inventory.ForwardRead",
+        catalog_version,
+        Vec::new(),
+        Vec::new(),
+    );
+    let operations = vec![
+        DefinitionOperation::Create(CatalogDefinition::Procedure(procedure.clone())),
+        DefinitionOperation::Create(CatalogDefinition::Table(stock_table.clone())),
+    ];
+    let bindings = vec![CatalogObjectBinding {
+        dependent: procedure.object.clone(),
+        dependency: stock_table.object.clone(),
+        kind: CatalogBindingKind::ReadsTable,
+    }];
+
+    let error = BatchDependencyGraph::from_operations_with_bindings(&operations, &bindings)
+        .expect_err("forward intra-batch dependency must be rejected");
+    assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
 }

@@ -8,7 +8,7 @@ mod authorizer;
 mod model;
 mod registry;
 
-pub use andromeda_audit::SecurityAuditDenialReason as AuthorizationDenialReason;
+pub use andromeda_security_contract::AuthorizationDenialReason;
 pub use authorizer::SurfaceAuthorizer;
 pub use model::{AuthorizationOutcome, PrincipalBinding, SurfaceAction};
 pub(crate) use model::{allowed_security_outcome, denied_security_outcome};

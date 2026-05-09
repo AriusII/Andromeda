@@ -6,7 +6,6 @@ mod cold_store;
 mod file_wal;
 pub mod format_version;
 mod heap;
-mod lsn;
 mod manifest;
 mod recovery;
 mod wal_record_catalog;
@@ -60,17 +59,6 @@ pub use andromeda_storage_page::{
     PageLayoutContract, PageSize, PageStore, PageTrailer, PageType, integrity_trailer_for_payload,
     payload_crc64, payload_hash, torn_write_guard, validate_payload_integrity,
 };
-pub use andromeda_wal::{
-    DurableTransactionClassifications, DurableTransactionResume, DurableTransactionState,
-    InMemoryWal, IncompleteDurableTransaction, MemoryWal, WAL_BYTE_ORDER_LITTLE_ENDIAN,
-    WAL_FORMAT_VERSION, WAL_FORMAT_VERSION_V1, WAL_RECORD_HEADER_LEN, WAL_RECORD_MAGIC,
-    WalFrameHeader, WalRecord, WalRecordHeader, WalRecordKind, WalScanResult, WalScanStop,
-    WalScanStopReason, WalSegment, WalSegmentDescriptor, classify_durable_transactions,
-    decode_frame_header, decode_wal_record_frame, encode_wal_record,
-    incomplete_transactions_from_records, scan_wal_records, scan_wal_records_from,
-    summarize_transaction, summarize_transactions_from_records, wal_record_checksum,
-    wal_record_kind_from_tag, wal_record_kind_tag,
-};
 pub use btree_format_validation::{
     BTreeFormatIdentityError, BTreeKeyFormatIdentity, BTreeOperationType, KeyV1FormatValidator,
 };
@@ -82,7 +70,6 @@ pub use heap::{
     HeapVacuumPlan, HeapVacuumReport, ProductStockHeapInsert, ProductStockHeapScanIter, SlotEntry,
     slot_directory,
 };
-pub use lsn::*;
 pub use manifest::*;
 pub use recovery::{
     CatalogReplayFromLsnReport, CatalogSnapshot, ConceptualRedoPlan, FastStartAcceptance,
@@ -102,10 +89,6 @@ pub use recovery::{
 };
 pub use wal_record_catalog::*;
 pub use write_ahead_log::{
-    DurabilityFenceError, WAL_BATCH_ROW_LIMIT, WAL_RECORD_HEADER_OVERHEAD, WAL_RECORD_SIZE_LIMIT,
-    WAL_SEGMENT_BOUNDARY, validate_lsn_continuity, validate_lsn_ordered,
-    validate_lsn_strictly_ordered, validate_manifest_atomic_switch, validate_record_size,
-    validate_recovery_floor, validate_segment_boundary, validate_transaction_batch_cardinality,
-    validate_wal_batch_bounds, validate_wal_durability_before_page_flush,
-    validate_wal_record_bounds,
+    validate_manifest_atomic_switch, validate_recovery_floor,
+    validate_wal_durability_before_page_flush,
 };

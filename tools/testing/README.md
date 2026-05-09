@@ -114,5 +114,4 @@ If Loom evidence is reported missing, treat it as a planning gap for concurrency
 - `fuzz/VALIDATION_MATRIX.md`
 - `.github/workflows/06-nightly-deep-validation.yml`
 - `.github/workflows/07-fuzzing.yml`
-- `.github/workflows/15-crash-recovery-placeholder.yml`
-
+- `.github/workflows/release-gate-chain.yml`

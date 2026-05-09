@@ -1,6 +1,6 @@
 use crate::support::{new_resolver, resolver_with_principal};
 use andromeda_error::AndromedaErrorKind;
-use andromeda_exec::services::PrincipalResolver;
+use andromeda_iam::PrincipalResolver;
 use andromeda_principal::PrincipalRole;
 
 #[test]

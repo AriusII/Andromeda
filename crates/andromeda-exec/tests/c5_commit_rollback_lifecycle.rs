@@ -3,10 +3,11 @@
 //! Tests that the execution stack properly emits CommitVisible and RollbackDurable
 //! events with durable LSN correlation and proper event envelope validation.
 
-use andromeda_exec::{
-    CompletionStatus, ExecutionIoAdmissionRequest, InvocationContext, InvocationRequest,
-    LocalVerticalRuntime,
+use andromeda_admission::{
+    ExecutionIoAdmissionDecision, ExecutionIoAdmissionRequest, InvocationContext, InvocationReject,
+    InvocationRequest,
 };
+use andromeda_exec::LocalVerticalRuntime;
 use andromeda_hardware::{PipelineClass, ResourceBudget};
 use andromeda_inventory_demo::{
     INVENTORY_RESERVE_STOCK_PERMISSION, InventoryReserveStockExecutor, InventoryStock,
@@ -18,6 +19,7 @@ use andromeda_observe::{
     RollbackDurableTrace, TraceEvent, TraceId,
 };
 use andromeda_procedure_contract::ProcedureContract;
+use andromeda_result_stream::CompletionStatus;
 use andromeda_srpl::compile_narrow_procedure_signature;
 use andromeda_storage_page::PageSize;
 use andromeda_storage_placement::{
@@ -44,7 +46,7 @@ fn request_for(contract: &ProcedureContract, invocation_id: u64) -> InvocationRe
 
 fn foreground_io_admission(
     trace_id: TraceId,
-) -> Result<andromeda_exec::ExecutionIoAdmissionDecision, andromeda_exec::InvocationReject> {
+) -> Result<ExecutionIoAdmissionDecision, InvocationReject> {
     let profile = OperationalProfile::hot_write();
     ExecutionIoAdmissionRequest::new(
         profile.clone(),

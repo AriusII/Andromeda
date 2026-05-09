@@ -20,7 +20,6 @@ andromeda-recovery.workspace = true
 andromeda-result-stream.workspace = true
 andromeda-restore.workspace = true
 andromeda-segment.workspace = true
-andromeda-storage.workspace = true
 andromeda-storage-page.workspace = true
 andromeda-types.workspace = true
 andromeda-wal.workspace = true

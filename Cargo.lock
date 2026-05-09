@@ -177,7 +177,6 @@ dependencies = [
  "andromeda-restore",
  "andromeda-result-stream",
  "andromeda-segment",
- "andromeda-storage",
  "andromeda-storage-page",
  "andromeda-test-support",
  "andromeda-types",
@@ -283,7 +282,6 @@ dependencies = [
  "andromeda-srpl-binder",
  "andromeda-srpl-interpreter",
  "andromeda-srpl-ir",
- "andromeda-storage",
  "andromeda-storage-heap",
  "andromeda-storage-page",
  "andromeda-storage-placement",
@@ -375,7 +373,6 @@ dependencies = [
  "andromeda-srpl-binder",
  "andromeda-srpl-catalog-binding",
  "andromeda-srpl-ir",
- "andromeda-storage",
  "andromeda-storage-heap",
  "andromeda-storage-page",
  "andromeda-storage-placement",
@@ -455,8 +452,6 @@ dependencies = [
  "andromeda-error",
  "andromeda-hardware",
  "andromeda-observability",
- "andromeda-storage-page",
- "andromeda-storage-placement",
  "andromeda-types",
 ]
 
@@ -468,7 +463,9 @@ dependencies = [
  "andromeda-decision-trace",
  "andromeda-error",
  "andromeda-plan-cache",
+ "andromeda-srpl-definition-batch",
  "andromeda-srpl-ir",
+ "andromeda-srpl-lowering",
  "andromeda-statistics",
  "andromeda-types",
  "proptest",
@@ -647,7 +644,7 @@ version = "0.1.0"
 dependencies = [
  "andromeda-error",
  "andromeda-observability",
- "andromeda-proto",
+ "andromeda-procedure-contract",
  "andromeda-rpc-protocol",
  "andromeda-srpl-cardinality",
  "andromeda-structured-object",
@@ -730,6 +727,7 @@ dependencies = [
  "andromeda-audit",
  "andromeda-error",
  "andromeda-observability",
+ "andromeda-security-contract",
 ]
 
 [[package]]

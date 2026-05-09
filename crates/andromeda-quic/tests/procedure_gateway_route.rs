@@ -30,12 +30,13 @@ use andromeda_procedure_contract::{
     ProcedureGatewayProtocolLayout as CatalogProcedureProtocolLayout,
     ProcedureGatewayRequiredPermission as CatalogRequiredPermission,
 };
-use andromeda_proto::{PayloadKind, encode_generated_message, generated};
+use andromeda_proto::generated::{self, encode_generated_message};
 use andromeda_quic::procedure_gateway::ProcedureRouteAdmissionError;
 use andromeda_quic::{Connection, LifecycleState, ProcedureGateway, SurfacePlane};
 use andromeda_rpc_codec::TypedResultStreamContext;
 use andromeda_rpc_protocol::{
-    FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader, FrameType, ResultStreamMetadataPolicy,
+    FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader, FrameType, PayloadKind,
+    ResultStreamMetadataPolicy,
 };
 use andromeda_types::{
     CatalogVersion, ContractHash, InvocationId, ProcedureId, RequestId, SessionId, TransactionId,

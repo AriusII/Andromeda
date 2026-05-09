@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use andromeda_srpl::compile_narrow_procedure_signature;
+use andromeda_srpl_definition_batch::compile_narrow_procedure_signature;
 use andromeda_srpl_lexer::lex;
 
 #[test]

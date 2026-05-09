@@ -43,7 +43,6 @@ dependencies = [
  "andromeda-digest",
  "andromeda-error",
  "andromeda-procedure-contract",
- "andromeda-time",
  "andromeda-types",
 ]
 
@@ -200,7 +199,6 @@ name = "andromeda-observe"
 version = "0.1.0"
 dependencies = [
  "andromeda-audit",
- "andromeda-digest",
  "andromeda-error",
  "andromeda-hardware",
  "andromeda-observability",
@@ -232,7 +230,6 @@ dependencies = [
 name = "andromeda-proto"
 version = "0.1.0"
 dependencies = [
- "andromeda-digest",
  "andromeda-error",
  "andromeda-procedure-contract",
  "andromeda-proto-wire",
@@ -393,7 +390,6 @@ dependencies = [
  "andromeda-disk-page-store",
  "andromeda-error",
  "andromeda-hadr",
- "andromeda-hardware",
  "andromeda-manifest",
  "andromeda-observe",
  "andromeda-recovery",
@@ -403,8 +399,6 @@ dependencies = [
  "andromeda-storage-page",
  "andromeda-types",
  "andromeda-wal",
- "dashmap",
- "sha2",
 ]
 
 [[package]]
@@ -464,7 +458,6 @@ dependencies = [
  "andromeda-transaction-log",
  "andromeda-types",
  "async-trait",
- "dashmap",
  "tokio",
 ]
 
@@ -475,6 +468,8 @@ dependencies = [
  "andromeda-error",
  "andromeda-time",
  "andromeda-types",
+ "dashmap",
+ "tokio",
 ]
 
 [[package]]

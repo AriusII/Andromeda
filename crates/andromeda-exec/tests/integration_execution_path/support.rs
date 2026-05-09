@@ -1,7 +1,9 @@
-pub use andromeda_exec::{
-    CompletionStatus, ExecutionIoAdmissionRequest, InvocationContext, InvocationRequest,
-    LocalVerticalRuntime,
+pub use andromeda_admission::{
+    ExecutionIoAdmissionDecision, ExecutionIoAdmissionRequest, InvocationContext, InvocationReject,
+    InvocationRequest,
 };
+pub use andromeda_exec::LocalVerticalRuntime;
+pub use andromeda_execution::LocalProcedure;
 pub use andromeda_hardware::{PipelineClass, ResourceBudget};
 pub use andromeda_inventory_demo::{
     INVENTORY_RESERVE_STOCK_PERMISSION, InventoryReserveStockExecutor, InventoryStock,
@@ -9,6 +11,7 @@ pub use andromeda_inventory_demo::{
 };
 pub use andromeda_observe::{EventCorrelation, EventEmitter, EventId, InMemoryEventSink, TraceId};
 pub use andromeda_procedure_contract::ProcedureContract;
+pub use andromeda_result_stream::CompletionStatus;
 pub use andromeda_storage_page::PageSize;
 pub use andromeda_storage_placement::{
     CoreIoPlacementRequest, OperationalProfile, StorageIoBudgetScope, StorageWorkloadClass,
@@ -50,7 +53,7 @@ pub(crate) fn build_invocation_context(trace_id: u128) -> InvocationContext {
 /// Standard foreground IO admission decision
 pub(crate) fn foreground_io_admission(
     trace_id: TraceId,
-) -> Result<andromeda_exec::ExecutionIoAdmissionDecision, andromeda_exec::InvocationReject> {
+) -> Result<ExecutionIoAdmissionDecision, InvocationReject> {
     let profile = OperationalProfile::hot_write();
     ExecutionIoAdmissionRequest::new(
         profile.clone(),
@@ -70,7 +73,7 @@ pub(crate) fn foreground_io_admission(
 pub(crate) fn execute_reserve_stock(
     quantity_available: i64,
     quantity_reserved: i64,
-) -> andromeda_exec::LocalProcedure {
+) -> LocalProcedure {
     let contract = valid_contract();
     let effect = InventoryReserveStockExecutor::reserve(
         ReserveStockCommand {

@@ -1,8 +1,9 @@
-pub(crate) use super::super::{LocalProcedure, LocalVerticalRuntime};
+pub(crate) use super::super::LocalVerticalRuntime;
 pub(crate) use andromeda_audit::{
     CertificateIdentity, Permission, SecurityAuditOutcome, SurfaceScope, UserPrincipal,
     UserPrincipalKind,
 };
+pub(crate) use andromeda_execution::LocalProcedure;
 pub(crate) use andromeda_catalog::CatalogSystemStore;
 pub(crate) use andromeda_definition_batch::{
     CatalogLifecycleTarget, DefinitionBatch, DefinitionBatchId, DefinitionOperation,

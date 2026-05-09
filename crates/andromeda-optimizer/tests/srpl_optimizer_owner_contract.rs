@@ -1,8 +1,11 @@
 #![forbid(unsafe_code)]
 
 use andromeda_contract::QualifiedName;
-use andromeda_optimizer::srpl::{OptimizationLevel, optimize_procedure_ir, run_optimizer_pipeline};
-use andromeda_srpl::{
+use andromeda_optimizer::srpl::{
+    OptimizationLevel, OptimizerDecisionKind, OptimizerPipelineConfig, optimize_procedure_ir,
+    optimize_procedure_ir_with_config, phase::OptimizerPhase, run_optimizer_pipeline,
+};
+use andromeda_srpl_definition_batch::{
     INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, compile_narrow_procedure_signature,
     inventory_reserve_stock_contract_metadata,
 };
@@ -45,9 +48,9 @@ fn assignment(field: &str, value: SrplValueIr) -> SrplAssignmentIr {
     }
 }
 
-fn procedure(operations: Vec<SrplBusinessOperationIr>) -> SrplProcedureIr {
+fn procedure(name: &str, operations: Vec<SrplBusinessOperationIr>) -> SrplProcedureIr {
     SrplProcedureIr {
-        name: qn("Inventory.ReserveStock"),
+        name: qn(name),
         inputs: vec![ColumnDescriptor {
             name: "ProductId".to_string(),
             data_type: TypeDescriptor::required(ScalarType::I64),
@@ -152,7 +155,10 @@ fn update_assignment_fields(ir: &SrplProcedureIr, operation_index: usize) -> Vec
 
 #[test]
 fn optimizer_preserves_raise_when_predicate_pushdown_removes_neighboring_assert() {
-    let ir = procedure(vec![read_op(0), assert_op(1), raise_op(2)]);
+    let ir = procedure(
+        "Inventory.ReserveStock",
+        vec![read_op(0), assert_op(1), raise_op(2)],
+    );
 
     let result = run_optimizer_pipeline(ir).expect("optimizer should preserve terminal raise");
 
@@ -170,23 +176,26 @@ fn optimizer_preserves_raise_when_predicate_pushdown_removes_neighboring_assert(
 
 #[test]
 fn safe_optimizer_preserves_mutation_and_emit_order_without_sorting_assignments() {
-    let ir = procedure(vec![
-        read_op(0),
-        update_op(
-            1,
-            "Inventory.ProductStock",
-            vec![
-                assignment("ZQuantity", arith(ArithOp::Add, int(2), int(3))),
-                assignment("AQuantity", int(1)),
-            ],
-        ),
-        emit_op(2),
-        update_op(
-            3,
-            "Inventory.ReservationAudit",
-            vec![assignment("AuditFlag", SrplValueIr::bool(true))],
-        ),
-    ]);
+    let ir = procedure(
+        "Inventory.ReserveStock",
+        vec![
+            read_op(0),
+            update_op(
+                1,
+                "Inventory.ProductStock",
+                vec![
+                    assignment("ZQuantity", arith(ArithOp::Add, int(2), int(3))),
+                    assignment("AQuantity", int(1)),
+                ],
+            ),
+            emit_op(2),
+            update_op(
+                3,
+                "Inventory.ReservationAudit",
+                vec![assignment("AuditFlag", SrplValueIr::bool(true))],
+            ),
+        ],
+    );
 
     let result = optimize_procedure_ir(ir.clone(), OptimizationLevel::Safe)
         .expect("safe optimizer must not reorder mutation surfaces");
@@ -204,18 +213,21 @@ fn safe_optimizer_preserves_mutation_and_emit_order_without_sorting_assignments(
 
 #[test]
 fn aggressive_evidence_only_keeps_the_same_effect_surface_as_safe() {
-    let ir = procedure(vec![
-        read_op(0),
-        update_op(
-            1,
-            "Inventory.ProductStock",
-            vec![
-                assignment("ZQuantity", arith(ArithOp::Multiply, int(6), int(7))),
-                assignment("AQuantity", int(1)),
-            ],
-        ),
-        raise_op(2),
-    ]);
+    let ir = procedure(
+        "Inventory.ReserveStock",
+        vec![
+            read_op(0),
+            update_op(
+                1,
+                "Inventory.ProductStock",
+                vec![
+                    assignment("ZQuantity", arith(ArithOp::Multiply, int(6), int(7))),
+                    assignment("AQuantity", int(1)),
+                ],
+            ),
+            raise_op(2),
+        ],
+    );
 
     let safe = optimize_procedure_ir(ir.clone(), OptimizationLevel::Safe)
         .expect("safe optimizer should accept bounded IR");
@@ -248,4 +260,107 @@ fn optimized_ir_still_lowers_with_contract_permissions_and_transaction_policy() 
         metadata.required_permissions
     );
     assert_eq!(candidate.transaction_policy, metadata.transaction_policy);
+}
+
+#[test]
+fn optimizer_diagnostics_preserve_operation_provenance_through_fold_and_normalize() {
+    let duplicated = eq_pred("ProductId", "Stock", "ProductId");
+    let unsorted = eq_pred("Alpha", "Stock", "Alpha");
+    let ir = procedure(
+        "Inventory.QueryStock",
+        vec![
+            SrplBusinessOperationIr {
+                ordinal: 0,
+                kind: SrplBusinessOperationKindIr::Read {
+                    source: qn("Inventory.ProductStock"),
+                    binding: "Stock".to_string(),
+                    cardinality: Cardinality::One,
+                    predicates: vec![duplicated.clone(), unsorted, duplicated],
+                },
+            },
+            SrplBusinessOperationIr {
+                ordinal: 1,
+                kind: SrplBusinessOperationKindIr::Update {
+                    target: qn("Inventory.ProductStock"),
+                    predicates: vec![],
+                    assignments: vec![SrplAssignmentIr {
+                        field: "AvailableQuantity".to_string(),
+                        value: arith(ArithOp::Subtract, int(10), int(3)),
+                    }],
+                    affected_rows_exact: Some(1),
+                },
+            },
+            SrplBusinessOperationIr {
+                ordinal: 2,
+                kind: SrplBusinessOperationKindIr::Emit {
+                    stream: "Reservation".to_string(),
+                    values: vec![SrplEmitValueIr {
+                        column: "Reserved".to_string(),
+                        value: arith(ArithOp::Add, int(4), int(5)),
+                    }],
+                },
+            },
+        ],
+    );
+
+    let result = optimize_procedure_ir_with_config(ir, OptimizerPipelineConfig::default())
+        .expect("safe optimizer should preserve provenance");
+
+    assert!(result.phases.contains(&OptimizerPhase::Normalize));
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.phase == OptimizerPhase::ConstantFolding
+            && diagnostic.decision == OptimizerDecisionKind::ConstantValueFolded
+            && diagnostic.source_operation_ordinal == Some(1)
+            && diagnostic.resulting_operation_ordinal == Some(1)
+    }));
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.phase == OptimizerPhase::ConstantFolding
+            && diagnostic.decision == OptimizerDecisionKind::ConstantValueFolded
+            && diagnostic.source_operation_ordinal == Some(2)
+            && diagnostic.resulting_operation_ordinal == Some(2)
+    }));
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.phase == OptimizerPhase::Normalize
+            && diagnostic.decision == OptimizerDecisionKind::PredicateNormalized
+            && diagnostic.source_operation_ordinal == Some(0)
+            && diagnostic.resulting_operation_ordinal == Some(0)
+    }));
+}
+
+#[test]
+fn no_optimization_config_records_explicit_skipped_rewrite_passes() {
+    let ir = procedure(
+        "Inventory.QueryStock",
+        vec![SrplBusinessOperationIr {
+            ordinal: 0,
+            kind: SrplBusinessOperationKindIr::Read {
+                source: qn("Inventory.ProductStock"),
+                binding: "Stock".to_string(),
+                cardinality: Cardinality::One,
+                predicates: vec![eq_pred("ProductId", "Stock", "ProductId")],
+            },
+        }],
+    );
+
+    let result = optimize_procedure_ir_with_config(
+        ir,
+        OptimizerPipelineConfig::new(OptimizationLevel::None).with_noop_decisions(true),
+    )
+    .expect("optimizer none mode should still emit evidence");
+
+    let skipped: Vec<_> = result
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.decision == OptimizerDecisionKind::PassSkipped)
+        .map(|diagnostic| diagnostic.phase)
+        .collect();
+
+    assert_eq!(
+        skipped,
+        vec![
+            OptimizerPhase::ConstantFolding,
+            OptimizerPhase::PredicatePushdown,
+            OptimizerPhase::Normalize,
+        ]
+    );
 }

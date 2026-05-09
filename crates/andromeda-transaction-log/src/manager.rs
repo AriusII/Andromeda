@@ -127,10 +127,7 @@ impl<S: TransactionStatusStore> CommitLogManager<S> {
         if self.valid_commit_entry(tx_id).is_none() {
             return false;
         }
-        matches!(
-            self.status_table.status(tx_id),
-            Some(TransactionLogStatus::Committed)
-        )
+        self.terminal_status_is(tx_id, TransactionLogStatus::Committed)
     }
 
     pub fn is_rolled_back(&self, tx_id: TransactionId) -> bool {
@@ -138,10 +135,7 @@ impl<S: TransactionStatusStore> CommitLogManager<S> {
         if self.valid_rollback_entry(tx_id).is_none() {
             return false;
         }
-        matches!(
-            self.status_table.status(tx_id),
-            Some(TransactionLogStatus::RolledBack)
-        )
+        self.terminal_status_is(tx_id, TransactionLogStatus::RolledBack)
     }
 
     pub fn get_commit_lsn(&self, tx_id: TransactionId) -> Option<Lsn> {
@@ -279,10 +273,7 @@ impl<S: TransactionStatusStore> CommitLogManager<S> {
 
     fn reject_commit_after_rollback(&self, tx_id: TransactionId) -> AndromedaResult<()> {
         if self.rollback_entries.contains_key(&tx_id)
-            || matches!(
-                self.status_table.status(tx_id),
-                Some(TransactionLogStatus::RolledBack)
-            )
+            || self.terminal_status_is(tx_id, TransactionLogStatus::RolledBack)
         {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Transaction,
@@ -294,10 +285,7 @@ impl<S: TransactionStatusStore> CommitLogManager<S> {
 
     fn reject_rollback_after_commit(&self, tx_id: TransactionId) -> AndromedaResult<()> {
         if self.commit_entries.contains_key(&tx_id)
-            || matches!(
-                self.status_table.status(tx_id),
-                Some(TransactionLogStatus::Committed)
-            )
+            || self.terminal_status_is(tx_id, TransactionLogStatus::Committed)
         {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Transaction,
@@ -346,15 +334,22 @@ impl<S: TransactionStatusStore> CommitLogManager<S> {
             return;
         }
 
-        if self.valid_commit_entry(tx_id).is_some() && !self.rollback_entries.contains_key(&tx_id) {
-            if let Some(entry) = self.valid_commit_entry(tx_id) {
+        if let Some(entry) = self.valid_commit_entry(tx_id) {
+            if !self.rollback_entries.contains_key(&tx_id) {
                 let _ = self.restore_commit_status_from_entry(&entry);
             }
-        } else if !self.commit_entries.contains_key(&tx_id)
+            return;
+        }
+
+        if !self.commit_entries.contains_key(&tx_id)
             && let Some(entry) = self.valid_rollback_entry(tx_id)
         {
             let _ = self.restore_rollback_status_from_entry(&entry);
         }
+    }
+
+    fn terminal_status_is(&self, tx_id: TransactionId, status: TransactionLogStatus) -> bool {
+        self.status_table.status(tx_id) == Some(status)
     }
 
     fn valid_commit_entry(&self, tx_id: TransactionId) -> Option<CommitLogEntry> {

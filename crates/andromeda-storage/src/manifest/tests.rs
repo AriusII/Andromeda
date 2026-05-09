@@ -1,9 +1,10 @@
 use andromeda_error::AndromedaErrorKind;
 use andromeda_observe::{EventCorrelation, EventEnvelope, EventId, TraceEvent, TraceId};
 use andromeda_types::CatalogVersion;
+use andromeda_wal::Lsn;
 
 use crate::{
-    Lsn, SegmentId,
+    SegmentId,
     format_version::{FormatVersion, StorageFormatFingerprint, StorageFormatKind},
 };
 

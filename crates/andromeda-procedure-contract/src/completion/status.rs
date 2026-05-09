@@ -22,6 +22,22 @@ pub enum RpcCompletionStatus {
     SystemUnavailable,
 }
 
+/// Canonical lockstep matrix for procedure completion terminal statuses.
+///
+/// Protocol and executor crates should adapt to this matrix instead of
+/// duplicating integer ownership locally.
+pub const RPC_COMPLETION_STATUS_TERMINAL_CODES: &[(RpcCompletionStatus, CompletionTerminalCode)] =
+    &[
+        (RpcCompletionStatus::Committed, 1),
+        (RpcCompletionStatus::RolledBack, 2),
+        (RpcCompletionStatus::FailedBeforeTransaction, 3),
+        (RpcCompletionStatus::Cancelled, 4),
+        (RpcCompletionStatus::Poisoned, 5),
+        (RpcCompletionStatus::PermissionDenied, 6),
+        (RpcCompletionStatus::ContractRejected, 7),
+        (RpcCompletionStatus::SystemUnavailable, 8),
+    ];
+
 impl RpcCompletionStatus {
     /// Stable terminal completion code aligned with the generated
     /// `protocol::v1::rpc_completion::Status` integer values.

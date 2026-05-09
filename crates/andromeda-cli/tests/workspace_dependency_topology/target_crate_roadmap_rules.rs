@@ -187,11 +187,6 @@ const ALLOWED_RUNTIME_CRITICAL_PROTO_SOURCE_IMPORTS: &[(&str, &[&str])] =
     &[("andromeda-exec", &["andromeda_proto::"])];
 const TEMPORARY_DEV_DEPENDENCY_BACKEDGE_EXCEPTIONS: &[TemporaryDependencyException] = &[
     TemporaryDependencyException {
-        source: "andromeda-observe",
-        dependency: "andromeda-storage-placement",
-        exit_criteria: "Exit criteria: move IO pipeline placement fixtures into an acyclic test-support crate or remove observe's dev-dependency on storage placement.",
-    },
-    TemporaryDependencyException {
         source: "andromeda-exec",
         dependency: "andromeda-inventory-demo",
         exit_criteria: "Exit criteria: move remaining inventory vertical compatibility tests out of andromeda-exec or invert them into andromeda-inventory-demo.",

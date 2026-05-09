@@ -1,6 +1,4 @@
-use andromeda_exec::services::{
-    ConcretePermissionEvaluator, LocalPrincipalResolver, PrincipalResolver,
-};
+use andromeda_iam::{ConcretePermissionEvaluator, LocalPrincipalResolver, PrincipalResolver};
 use andromeda_principal::PrincipalRole;
 use std::sync::Arc;
 

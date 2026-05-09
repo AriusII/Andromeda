@@ -47,11 +47,14 @@ fn result_stream_frames_carry_generated_metadata_batch_completion_payloads() {
     validate_typed_result_stream_sequence(&frames).unwrap();
 
     let decoded_metadata: generated::protocol::v1::RpcMetadata =
-        decode_generated_message(proto_envelopes[0].payload.as_slice()).unwrap();
+        decode_protobuf_message(proto_envelopes[0].payload.as_slice(), "generated protobuf")
+            .unwrap();
     let decoded_batch: generated::protocol::v1::RpcBatch =
-        decode_generated_message(proto_envelopes[1].payload.as_slice()).unwrap();
+        decode_protobuf_message(proto_envelopes[1].payload.as_slice(), "generated protobuf")
+            .unwrap();
     let decoded_completion: generated::protocol::v1::RpcCompletion =
-        decode_generated_message(proto_envelopes[2].payload.as_slice()).unwrap();
+        decode_protobuf_message(proto_envelopes[2].payload.as_slice(), "generated protobuf")
+            .unwrap();
 
     assert_eq!(
         decoded_metadata.result_streams[0].row_count_exact,

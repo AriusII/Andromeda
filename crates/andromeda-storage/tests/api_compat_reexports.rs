@@ -13,7 +13,7 @@ use andromeda_storage::write_ahead_log::file::{
     report_file_wal_recovery_v0 as module_report_file_wal_recovery_v0,
 };
 use andromeda_storage::write_ahead_log::{
-    HeapRowRedoPayloadV1, validate_manifest_atomic_switch, validate_recovery_floor,
+    validate_manifest_atomic_switch, validate_recovery_floor,
     validate_wal_durability_before_page_flush,
 };
 use andromeda_storage::{
@@ -21,15 +21,16 @@ use andromeda_storage::{
     BTREE_NODE_V1_HEADER_LEN, BTREE_NODE_V1_MAGIC, BTreeConfig, BTreeIndexEngine,
     BTreeKeyFormatIdentity, BTreeNodeHeaderV1, BTreeNodeImpl, BTreeNodeKindV1, BTreeNodeV1,
     BTreeOperationType, BufferPoolConfig, BufferPoolError, ColumnDef, ColumnId, DatabaseManifest,
-    Datum, DiskManager, DiskManagerError, DiskPageStore, DurabilityFenceError, FileDiskManager,
-    FileWalRecoveryReportV0, HeapPage, HeapPageInsert, HeapScanIter, HeapVacuumMode,
-    InMemoryBTreeIndexEngine, InMemoryPageStore, IndexId, Key, KeyCodec, KeyComparator,
-    KeyV1FormatValidator, KeyValuePair, ObjectId, PageHeader, PageId, PageImage, PageIntegrityMode,
-    PageSize, PageStore, PageTrailer, PageType, ProductStockHeapInsert, ProductStockRow,
-    RecoveryPlan, ReplayContext, RowEncoder, RowId, RowSchema, ScalarType, SegmentDescriptor,
-    SegmentId, StartupMode, encode_catalog_record, product_stock_row_encoder,
-    product_stock_row_schema, replay_wal_record, report_file_wal_recovery_v0,
+    Datum, DiskManager, DiskManagerError, DiskPageStore, FileDiskManager, FileWalRecoveryReportV0,
+    HeapPage, HeapPageInsert, HeapScanIter, HeapVacuumMode, InMemoryBTreeIndexEngine,
+    InMemoryPageStore, IndexId, Key, KeyCodec, KeyComparator, KeyV1FormatValidator, KeyValuePair,
+    ObjectId, PageHeader, PageId, PageImage, PageIntegrityMode, PageSize, PageStore, PageTrailer,
+    PageType, ProductStockHeapInsert, ProductStockRow, RecoveryPlan, ReplayContext, RowEncoder,
+    RowId, RowSchema, ScalarType, SegmentDescriptor, SegmentId, StartupMode, encode_catalog_record,
+    product_stock_row_encoder, product_stock_row_schema, replay_wal_record,
+    report_file_wal_recovery_v0,
 };
+use andromeda_storage_heap::HeapRowRedoPayloadV1;
 use andromeda_wal::{Lsn, WalRecord, WalRecordKind};
 
 type RootManifest = DatabaseManifest;

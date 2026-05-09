@@ -4,11 +4,10 @@
 //!
 //! Future buffer-pool, heap, and index work must import the existing durable
 //! primitives from the storage crate root or the `layout::page` compatibility
-//! compatibility surface. They must not introduce mirror `PageId`, `PageSize`, `PageHeader`,
+//! surface. They must not introduce mirror `PageId`, `PageSize`, `PageHeader`,
 //! `PageTrailer`, `PageLayoutContract`, or `Lsn` definitions. `PageId`,
 //! `PageSize`, `PageHeader`, `PageTrailer`, and `PageLayoutContract` are
-//! canonical in `andromeda-storage-page`; `Lsn` is owned by the pure WAL crate
-//! and re-exported by storage.
+//! canonical in `andromeda-storage-page`; `Lsn` is owned by the pure WAL crate.
 
 use std::any::TypeId;
 use std::collections::BTreeMap;
@@ -114,7 +113,7 @@ fn buffer_heap_and_index_style_imports_resolve_to_existing_primitives() {
     fn accept_header(_header: storage::PageHeader) {}
     fn accept_trailer(_trailer: storage::PageTrailer) {}
     fn accept_contract(_contract: storage::PageLayoutContract) {}
-    fn accept_lsn(_lsn: storage::Lsn) {}
+    fn accept_lsn(_lsn: wal::Lsn) {}
 
     assert_eq!(
         assert_type::<storage::PageId>(),
@@ -136,8 +135,6 @@ fn buffer_heap_and_index_style_imports_resolve_to_existing_primitives() {
         assert_type::<storage::PageLayoutContract>(),
         assert_type::<layout::page::PageLayoutContract>()
     );
-    assert_eq!(assert_type::<storage::Lsn>(), assert_type::<wal::Lsn>());
-
     let header = storage::PageHeader {
         magic: storage::PageHeader::MAGIC,
         format_version: storage::PageHeader::FORMAT_VERSION_V0,
@@ -146,7 +143,7 @@ fn buffer_heap_and_index_style_imports_resolve_to_existing_primitives() {
         page_id: layout::page::PageId::new(1),
         object_id: layout::page::ObjectId::new(2),
         allocation_id: layout::page::AllocationId::new(3),
-        page_lsn: storage::Lsn::new(4),
+        page_lsn: wal::Lsn::new(4),
         page_epoch: 1,
         previous_page_id: None,
         next_page_id: None,
@@ -174,7 +171,7 @@ fn buffer_heap_and_index_style_imports_resolve_to_existing_primitives() {
     accept_header(contract.header);
     accept_trailer(contract.trailer);
     accept_contract(contract);
-    accept_lsn(storage::Lsn::new(10));
+    accept_lsn(wal::Lsn::new(10));
 }
 
 fn workspace_root() -> PathBuf {

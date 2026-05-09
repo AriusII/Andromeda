@@ -1,8 +1,9 @@
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_storage_heap as heap_core;
+use andromeda_wal::Lsn;
 
-use crate::write_ahead_log::HeapRowRedoPayloadV1;
-use crate::{Datum, Lsn, PageId, PageSize, ProductStockRow, RowEncoder};
+use crate::{Datum, PageId, PageSize, ProductStockRow, RowEncoder};
+use heap_core::HeapRowRedoPayloadV1;
 
 pub use heap_core::{
     HEAP_PAGE_V1_PAYLOAD_OFFSET, HeapPage, HeapScanIter, HeapVacuumMode, HeapVacuumPlan,

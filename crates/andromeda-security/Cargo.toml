@@ -9,3 +9,4 @@ publish = false
 andromeda-audit.workspace = true
 andromeda-error.workspace = true
 andromeda-observability.workspace = true
+andromeda-security-contract.workspace = true

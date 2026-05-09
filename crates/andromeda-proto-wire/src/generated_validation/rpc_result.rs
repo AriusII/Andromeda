@@ -86,14 +86,16 @@ fn validate_completion_status(status: i32) -> AndromedaResult<RpcCompletionStatu
 }
 
 fn validate_transaction_outcome(outcome: i32) -> AndromedaResult<TransactionOutcome> {
-    match outcome {
-        1 => Ok(TransactionOutcome::NotStarted),
-        2 => Ok(TransactionOutcome::Committed),
-        3 => Ok(TransactionOutcome::RolledBack),
-        4 => Ok(TransactionOutcome::Failed),
-        5 => Ok(TransactionOutcome::Cancelled),
-        0 => protocol_error("RPC completion transaction outcome must be specified"),
-        _ => protocol_error("unknown RPC completion transaction outcome"),
+    let Ok(code) = u32::try_from(outcome) else {
+        return protocol_error("unknown RPC completion transaction outcome");
+    };
+
+    match TransactionOutcome::from_terminal_code(code) {
+        Some(outcome) => Ok(outcome),
+        None if outcome == 0 => {
+            protocol_error("RPC completion transaction outcome must be specified")
+        },
+        None => protocol_error("unknown RPC completion transaction outcome"),
     }
 }
 

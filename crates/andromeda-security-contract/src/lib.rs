@@ -16,6 +16,7 @@ codecs or generated protocol contracts.
 "#]
 
 mod admission;
+mod authorization;
 mod error;
 mod permission;
 mod policy;
@@ -34,6 +35,7 @@ pub use admission::{
     SecurityAdmissionOutcomeV0, SecurityAdmissionReasonCodeV0, SecurityAdmissionStepV0,
     SecurityAdmissionV0, SurfaceClass,
 };
+pub use authorization::{ALL_AUTHORIZATION_DENIAL_REASONS, AuthorizationDenialReason};
 pub use error::SecurityContractError;
 pub use permission::{
     ALL_PERMISSION_FAMILIES, ALL_PERMISSIONS, FAMILY_ID_APPLICATION, FAMILY_ID_CLUSTER,

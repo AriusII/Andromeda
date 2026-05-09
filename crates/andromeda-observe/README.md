@@ -2,9 +2,9 @@
 
 ## Purpose
 
-`andromeda-observe` owns trace envelopes, runtime emission helpers, durable audit sink/query adapters, exporters, and post-fact decision explainability for Andromeda.
+`andromeda-observe` owns trace envelopes, runtime emission helpers, bounded trace queries, exporters, and post-fact decision explainability for Andromeda.
 
-Observability records are bounded and audit-safe. They support review, replay, correlation, and forensic explanation, but they must not become storage truth or the transaction commit path. Shared identifiers live in `andromeda-observability`; typed audit trace contracts live in `andromeda-audit`.
+Observability records are bounded and audit-safe. They support review, replay, correlation, and forensic explanation, but they must not become storage truth or the transaction commit path. Shared identifiers live in `andromeda-observability`; typed audit trace contracts, durable audit DTOs, and durable audit replay contracts live in `andromeda-audit`.
 
 ## Scope
 
@@ -12,7 +12,7 @@ This crate provides:
 
 - Event envelopes, lifecycle sequencing, validation, and in-memory sinks.
 - Decision, protocol, placement, durability, transition, and core trace event families.
-- Durable audit projection, sink/query runtime adapters, and envelope-to-audit mapping tests.
+- Runtime envelope-to-audit projection adapters for events emitted through observe sinks.
 - Bounded trace query specifications, filters, result metadata, and in-memory query sources.
 - Exporter contracts and mock exporters for tests.
 - Principal binding evidence that supports audit review without expanding runtime authority.
@@ -24,7 +24,7 @@ This crate provides:
 - Do not log secrets, raw credentials, or unbounded payloads.
 - Do not turn diagnostic JSON or exporter output into the runtime protocol.
 - Do not let retention compaction erase the evidence required to explain retained audit chains.
-- Do not own audit DTO vocabulary here; stable audit event shapes belong in `andromeda-audit`.
+- Do not own audit DTO vocabulary or durable replay DTOs here; stable audit event shapes belong in `andromeda-audit`.
 
 ## Prerequisites
 
@@ -38,18 +38,16 @@ This crate provides:
 1. Create typed trace or audit records at the owning subsystem boundary.
 2. Attach correlation and principal binding evidence needed for post-fact review.
 3. Validate envelopes before emission.
-4. Use bounded query specifications when reading traces or durable audit records.
-5. Preserve replay and compaction evidence when rewriting retained audit records.
+4. Use bounded query specifications when reading traces.
+5. Preserve audit-owned replay and compaction evidence when adapting durable audit records.
 6. Keep exporter output diagnostic and downstream-facing, not authoritative runtime state.
 
 ## Validation
 
-For durable audit and query changes, prefer:
+For observe-side durable audit projection changes, prefer:
 
 ```powershell
 cargo test -p andromeda-observe --test durable_audit_sink_contract -- --nocapture
-cargo test -p andromeda-observe --test durable_audit_query_contract -- --nocapture
-cargo test -p andromeda-observe --test durable_audit_retention_contract -- --nocapture
 ```
 
 For event-family and operator-surface contracts, use:
@@ -59,7 +57,7 @@ cargo test -p andromeda-observe --test audit_family_contract -- --nocapture
 cargo test -p andromeda-observe --test protocol_correlation_contract -- --nocapture
 ```
 
-Use `cargo test -p andromeda-audit --test admission_audit_contract --test hadr_backup_audit_contract -- --nocapture` for audit DTO vocabulary.
+Use `cargo test -p andromeda-audit --test admission_audit_contract --test hadr_backup_audit_contract --test durable_audit_journal_contract -- --nocapture` for audit DTO and durable audit vocabulary.
 
 Before accepting source changes, use the broader workspace gates listed in `crates/README.md`.
 

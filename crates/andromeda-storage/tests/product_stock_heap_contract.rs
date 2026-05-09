@@ -1,11 +1,13 @@
 #![forbid(unsafe_code)]
 
-use andromeda_storage::{
-    DatabaseManifest, InMemoryWal, Lsn, PageId, PageSize, ProductStockRow, RecoveryPlan,
-    ReplayContext, StartupMode, WalRecord, WalRecordKind, execute_redo_plan_into_context,
-    replay_wal_record, write_ahead_log::HeapRowRedoPayloadV1,
+use andromeda_manifest::DatabaseManifest;
+use andromeda_recovery::{
+    RecoveryPlan, ReplayContext, StartupMode, execute_redo_plan_into_context, replay_wal_record,
 };
+use andromeda_storage_heap::{HeapRowRedoPayloadV1, ProductStockRow};
+use andromeda_storage_page::{PageId, PageSize};
 use andromeda_types::TransactionId;
+use andromeda_wal::{InMemoryWal, Lsn, WalRecord, WalRecordKind};
 
 #[test]
 fn product_stock_hredov1_replay_reconstructs_typed_row() {

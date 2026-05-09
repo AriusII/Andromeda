@@ -432,12 +432,13 @@ fn allowed_dependency_rules() -> Vec<AllowedDependencyRule> {
             ],
         ),
         AllowedDependencyRule::new(
-            "andromeda-security may only depend on audit payloads, observability IDs, and foundation errors",
+            "andromeda-security may only depend on security contracts, audit payloads, observability IDs, and foundation errors",
             "andromeda-security",
             &[
                 "andromeda-audit",
                 "andromeda-error",
                 "andromeda-observability",
+                "andromeda-security-contract",
             ],
         ),
         AllowedDependencyRule::new(
@@ -740,10 +741,10 @@ fn allowed_dev_dependency_rules() -> Vec<AllowedDependencyRule> {
             ],
         ),
         AllowedDependencyRule::new_for_scope(
-            "andromeda-observe may only dev-depend on the documented durable-audit placement harness",
+            "andromeda-observe should not dev-depend on storage placement harnesses",
             "andromeda-observe",
             DependencyScope::Dev,
-            &["andromeda-storage-page", "andromeda-storage-placement"],
+            &[],
         ),
         AllowedDependencyRule::new_for_scope(
             "andromeda-quic may only dev-depend on property-test harness crates",

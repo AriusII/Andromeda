@@ -1,4 +1,4 @@
-use andromeda_srpl::compile_narrow_procedure_signature;
+use andromeda_srpl_definition_batch::compile_narrow_procedure_signature;
 use andromeda_srpl_ir::SrplProcedureIr;
 
 pub(crate) fn compile_gate_source(srpl: &str, expectation: &str) -> SrplProcedureIr {

@@ -13,9 +13,11 @@ mod tests;
 
 use andromeda_types::{RequestId, SessionId, TransactionId};
 
-pub use outcome::TransactionOutcome;
+pub use outcome::{TRANSACTION_OUTCOME_TERMINAL_CODES, TransactionOutcome};
 pub use row_count::ResultRowCountSummary;
-pub use status::{CompletionTerminalCode, RpcCompletionStatus};
+pub use status::{
+    CompletionTerminalCode, RPC_COMPLETION_STATUS_TERMINAL_CODES, RpcCompletionStatus,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RpcCompletion {

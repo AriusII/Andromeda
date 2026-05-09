@@ -20,8 +20,9 @@
 //! - Permission contract: required permissions are forwarded from the contract.
 //! - `ProcedureRegistry::dispatch` validates permissions (privilege escalation blocked).
 
+use andromeda_admission::InvocationContext;
 use andromeda_error::AndromedaErrorKind;
-use andromeda_exec::{InvocationContext, ProcedureHandler, ProcedureRegistry};
+use andromeda_execution::{ProcedureHandler, ProcedureRegistry};
 use andromeda_inventory_demo::{
     INVENTORY_QUERY_STOCK_PROCEDURE_ID, INVENTORY_RELEASE_STOCK_PROCEDURE_ID,
     INVENTORY_RESERVE_STOCK_PROCEDURE_ID, InventoryQueryStockProcedureHandler,

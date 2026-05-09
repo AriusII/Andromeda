@@ -4,8 +4,7 @@ use andromeda_types::ProcedureId;
 use std::sync::Arc;
 
 use crate::{
-    CompletionStatus, InvocationContext, InvocationReject, InvocationRequest, PermissionDecision,
-    PermissionEvaluator,
+    InvocationContext, InvocationReject, InvocationRequest, PermissionDecision, PermissionEvaluator,
 };
 
 #[derive(Clone, Default)]
@@ -25,72 +24,54 @@ impl AdmissionService {
         trace_id: TraceId,
     ) -> Result<DecisionTrace, InvocationReject> {
         if request.invocation_id.get() == 0 {
-            return Err(InvocationReject {
-                status: CompletionStatus::ContractRejected,
-                reason: "InvocationId must not be zero before transaction creation".to_string(),
-            });
+            return Err(InvocationReject::contract_rejected(
+                "InvocationId must not be zero before transaction creation",
+            ));
         }
 
         request
             .procedure
             .validate()
-            .map_err(|error| InvocationReject {
-                status: CompletionStatus::ContractRejected,
-                reason: error.to_string(),
-            })?;
+            .map_err(|error| InvocationReject::contract_rejected(error.to_string()))?;
 
-        let expected_binding = request.expected_binding.ok_or_else(|| InvocationReject {
-            status: CompletionStatus::ContractRejected,
-            reason: "ProcedureContractBinding missing before transaction creation".to_string(),
+        let expected_binding = request.expected_binding.ok_or_else(|| {
+            InvocationReject::contract_rejected(
+                "ProcedureContractBinding missing before transaction creation",
+            )
         })?;
 
         expected_binding
             .validate()
-            .map_err(|error| InvocationReject {
-                status: CompletionStatus::ContractRejected,
-                reason: error.to_string(),
-            })?;
+            .map_err(|error| InvocationReject::contract_rejected(error.to_string()))?;
 
         if expected_binding.as_legacy_ref() != request.procedure {
-            return Err(InvocationReject {
-                status: CompletionStatus::ContractRejected,
-                reason:
-                    "ProcedureContractBinding does not match declared Procedure contract before transaction creation"
-                        .to_string(),
-            });
+            return Err(InvocationReject::contract_rejected(
+                "ProcedureContractBinding does not match declared Procedure contract before transaction creation",
+            ));
         }
 
         if request.expected_contract_hash.is_zero() {
-            return Err(InvocationReject {
-                status: CompletionStatus::ContractRejected,
-                reason: "expected ContractHash must not be zero before transaction creation"
-                    .to_string(),
-            });
+            return Err(InvocationReject::contract_rejected(
+                "expected ContractHash must not be zero before transaction creation",
+            ));
         }
 
         if request.expected_contract_hash != expected_binding.contract_hash {
-            return Err(InvocationReject {
-                status: CompletionStatus::ContractRejected,
-                reason:
-                    "expected ContractHash mismatch against ProcedureContractBinding before transaction creation"
-                        .to_string(),
-            });
+            return Err(InvocationReject::contract_rejected(
+                "expected ContractHash mismatch against ProcedureContractBinding before transaction creation",
+            ));
         }
 
         if request.catalog_version.get() == 0 {
-            return Err(InvocationReject {
-                status: CompletionStatus::ContractRejected,
-                reason: "CatalogVersion must not be zero before transaction creation".to_string(),
-            });
+            return Err(InvocationReject::contract_rejected(
+                "CatalogVersion must not be zero before transaction creation",
+            ));
         }
 
         if request.catalog_version != expected_binding.catalog_version {
-            return Err(InvocationReject {
-                status: CompletionStatus::ContractRejected,
-                reason:
-                    "CatalogVersion mismatch against ProcedureContractBinding before transaction creation"
-                        .to_string(),
-            });
+            return Err(InvocationReject::contract_rejected(
+                "CatalogVersion mismatch against ProcedureContractBinding before transaction creation",
+            ));
         }
 
         Ok(DecisionTrace {
@@ -108,10 +89,9 @@ impl AdmissionService {
     ) -> Result<DecisionTrace, InvocationReject> {
         for permission in required_permissions {
             if !context.grants(permission) {
-                return Err(InvocationReject {
-                    status: CompletionStatus::PermissionDenied,
-                    reason: format!("missing required permission: {permission}"),
-                });
+                return Err(InvocationReject::permission_denied(format!(
+                    "missing required permission: {permission}"
+                )));
             }
         }
 
@@ -135,11 +115,9 @@ impl AdmissionService {
         let evaluator = match &self.permission_evaluator {
             Some(e) => e,
             None => {
-                return Err(InvocationReject {
-                    status: CompletionStatus::PermissionDenied,
-                    reason: "permission evaluator unavailable before Procedure admission"
-                        .to_string(),
-                });
+                return Err(InvocationReject::permission_denied(
+                    "permission evaluator unavailable before Procedure admission",
+                ));
             },
         };
 
@@ -153,15 +131,12 @@ impl AdmissionService {
                 principal_id,
                 reason,
                 ..
-            } => Err(InvocationReject {
-                status: CompletionStatus::PermissionDenied,
-                reason: format!(
-                    "access denied: {} [principal: {:?}, reason: {}]",
-                    required_permission,
-                    principal_id.map(|id| id.get()),
-                    reason
-                ),
-            }),
+            } => Err(InvocationReject::permission_denied(format!(
+                "access denied: {} [principal: {:?}, reason: {}]",
+                required_permission,
+                principal_id.map(|id| id.get()),
+                reason
+            ))),
         }
     }
 }
@@ -169,6 +144,7 @@ impl AdmissionService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::CompletionStatus;
 
     #[test]
     fn admission_service_default_fails_closed_for_permission_evaluation() {

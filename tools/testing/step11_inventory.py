@@ -65,7 +65,6 @@ WORKFLOW_CHECKS = (
             ".github/workflows/05-supply-chain.yml",
             ".github/workflows/06-nightly-deep-validation.yml",
             ".github/workflows/07-fuzzing.yml",
-            ".github/workflows/15-crash-recovery-placeholder.yml",
             ".github/workflows/16-protocol-doctrine-scan.yml",
             ".github/workflows/release-gate-chain.yml",
             ".github/workflows/perf-regression.yml",
@@ -109,7 +108,6 @@ EVIDENCE_CHECKS = (
     PathCheck(
         "crash and recovery evidence paths",
         (
-            ".github/workflows/15-crash-recovery-placeholder.yml",
             "crates/andromeda-storage/tests/crash_recovery_impl.rs",
             "crates/andromeda-storage/tests/recovery_completeness_contract.rs",
             "crates/andromeda-storage/tests/property_recovery_replay.rs",

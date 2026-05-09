@@ -35,8 +35,17 @@ use std::sync::Arc;
 pub mod completion;
 pub mod transaction_error_routing;
 
-pub use completion::*;
-pub use transaction_error_routing::*;
+pub use completion::{
+    CompletionAuditEvidence, CompletionAuditPolicy, CompletionEmission, CompletionJournalRecord,
+    CompletionMappingService, CompletionRecoveryAmbiguity, CompletionRecoveryExpectation,
+    CompletionRecoveryRecord, CompletionRecoveryReport, CompletionRecoveryStatus,
+    InvocationCompletionEmitter, InvocationCompletionJournal,
+    reconcile_completion_recovery_from_wal,
+};
+pub use transaction_error_routing::{
+    ErrorKind, RetryRouting, RoutedTransactionError, TerminalTxEvidence, TerminalTxJournal,
+    TerminalTxState, route_transaction_error,
+};
 
 /// Minimal trace event type for invocation lifecycle.
 #[derive(Debug, Clone, PartialEq, Eq)]

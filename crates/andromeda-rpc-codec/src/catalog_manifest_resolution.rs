@@ -7,10 +7,11 @@ pub use andromeda_procedure_contract::{
     ProcedureGatewayRequiredPermission as CatalogRequiredPermission,
     ProcedureGatewayResultStreamDescriptor as CatalogResultStreamDescriptor,
 };
-use andromeda_proto::{
-    FrameEnvelope as ProtoFrameEnvelope, PayloadKind, ProtocolVersion, decode_generated_message,
-    encode_generated_message, generated, project_generated_frame_envelope,
-    validate_catalog_procedure_manifest_resolution_request,
+use andromeda_proto::generated;
+use andromeda_proto_wire::generated_validation::project_generated_frame_envelope;
+use andromeda_proto_wire::{
+    FrameEnvelope as ProtoFrameEnvelope, PayloadKind, ProtocolVersion, decode_protobuf_message,
+    encode_protobuf_message, validate_catalog_procedure_manifest_resolution_request,
     validate_catalog_procedure_manifest_resolution_response,
 };
 use andromeda_rpc_protocol::{
@@ -153,10 +154,8 @@ pub fn catalog_manifest_resolution_status_from_protobuf_i32(
     }
 }
 
-type GeneratedCatalogManifestResolutionRequest =
-    CatalogProcedureManifestResolutionRequest;
-type GeneratedCatalogManifestResolutionResponse =
-    CatalogProcedureManifestResolutionResponse;
+type GeneratedCatalogManifestResolutionRequest = CatalogProcedureManifestResolutionRequest;
+type GeneratedCatalogManifestResolutionResponse = CatalogProcedureManifestResolutionResponse;
 type GeneratedCatalogManifestSelector =
     generated::contract::v1::catalog_procedure_manifest_resolution_request::Selector;
 type GeneratedProcedureManifest = generated::contract::v1::ProcedureManifest;
@@ -185,7 +184,7 @@ pub fn catalog_manifest_resolution_request_frame(
     validate_catalog_procedure_manifest_resolution_request(request)?;
 
     let request_id = RequestId::new(request.request_id);
-    let request_payload = encode_generated_message(request);
+    let request_payload = encode_protobuf_message(request);
     let envelope = ProtoFrameEnvelope {
         protocol_version: ProtocolVersion {
             major: request.protocol_major,
@@ -218,7 +217,7 @@ pub fn decode_catalog_manifest_resolution_request_frame(
 
     let envelope = decode_catalog_envelope(frame, PayloadKind::ContractRequest)?;
     let request: CatalogProcedureManifestResolutionRequest =
-        decode_generated_message(envelope.payload.as_slice())?;
+        decode_protobuf_message(envelope.payload.as_slice(), "generated protobuf")?;
     validate_catalog_procedure_manifest_resolution_request(&request)?;
     validate_catalog_manifest_resolution_request_context(frame, &envelope, request.request_id)?;
 
@@ -233,7 +232,7 @@ pub fn decode_catalog_manifest_resolution_route_request(
 
     let envelope = decode_catalog_envelope(frame, PayloadKind::ContractRequest)?;
     let generated_request: GeneratedCatalogManifestResolutionRequest =
-        decode_generated_message(envelope.payload.as_slice())?;
+        decode_protobuf_message(envelope.payload.as_slice(), "generated protobuf")?;
     validate_catalog_procedure_manifest_resolution_request(&generated_request)?;
     validate_catalog_manifest_resolution_request_context(
         frame,
@@ -255,7 +254,7 @@ pub fn decode_catalog_manifest_resolution_response_frame(
 
     let envelope = decode_catalog_envelope(frame, PayloadKind::ContractResponse)?;
     let response: CatalogProcedureManifestResolutionResponse =
-        decode_generated_message(envelope.payload.as_slice())?;
+        decode_protobuf_message(envelope.payload.as_slice(), "generated protobuf")?;
     validate_catalog_procedure_manifest_resolution_response(&response)?;
     validate_catalog_manifest_resolution_request_context(frame, &envelope, response.request_id)?;
 
@@ -327,7 +326,7 @@ fn encode_catalog_response_frame(
     request_header: FrameHeader,
     response: &CatalogProcedureManifestResolutionResponse,
 ) -> AndromedaResult<FrameBytes> {
-    let response_payload = encode_generated_message(response);
+    let response_payload = encode_protobuf_message(response);
     let response_catalog_version = response
         .current_catalog_version
         .or(response.resolved_catalog_version)
@@ -357,7 +356,8 @@ fn decode_catalog_envelope(
     frame: &FrameBytes,
     expected_payload_kind: PayloadKind,
 ) -> AndromedaResult<ProtoFrameEnvelope> {
-    let generated_envelope: GeneratedFrameEnvelope = decode_generated_message(&frame.payload)?;
+    let generated_envelope: GeneratedFrameEnvelope =
+        decode_protobuf_message(&frame.payload, "generated protobuf")?;
     let envelope = project_generated_frame_envelope(&generated_envelope)?;
 
     if envelope.payload_kind != expected_payload_kind {
@@ -379,7 +379,7 @@ fn decode_catalog_envelope(
 }
 
 fn encode_generated_envelope(envelope: &ProtoFrameEnvelope) -> Vec<u8> {
-    encode_generated_message(&GeneratedFrameEnvelope {
+    encode_protobuf_message(&GeneratedFrameEnvelope {
         protocol_version: Some(GeneratedProtocolVersion {
             major: envelope.protocol_version.major,
             minor: envelope.protocol_version.minor,
