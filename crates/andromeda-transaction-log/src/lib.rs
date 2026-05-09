@@ -15,14 +15,20 @@ C5 invariants:
 - RAM, temporary storage, GPU output, and benchmark output are advisory only; they are not truth.
 "#]
 
+mod adapter_replay;
 mod entry;
+mod error;
 mod lsn;
 mod replay;
 mod rollback;
 mod status_rebuild;
 mod wal;
 
+pub use adapter_replay::{
+    TxWalAdapterReplayKind, TxWalAdapterReplayRecord, map_tx_wal_replay_records,
+};
 pub use entry::{CommitLogEntry, IsolationLevel, WalRecordKind};
+pub use error::TxWalAdapterError;
 pub use lsn::Lsn;
 pub use replay::{TxWalReplayAction, TxWalReplayRecord, TxWalReplaySummary};
 pub use rollback::RollbackLogEntry;

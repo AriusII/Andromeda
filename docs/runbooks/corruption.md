@@ -35,9 +35,9 @@ backup, or replica evidence suggests corruption.
 ## Validation Commands
 
 ```powershell
-cargo test -p andromeda-storage --test file_wal_recovery_contract --locked -- --nocapture
+cargo test -p andromeda-recovery --test file_wal_recovery_contract --locked -- --nocapture
 cargo test -p andromeda-storage --test wal_scan_recovery_contract --locked -- --nocapture
-cargo test -p andromeda-storage --test recovery_completeness_contract --locked -- --nocapture
+cargo test -p andromeda-recovery --test recovery_completeness_contract --locked -- --nocapture
 cargo test -p andromeda-storage --locked forensic_start -- --nocapture
 ```
 

@@ -142,6 +142,60 @@ mod tests {
     }
 
     #[test]
+    fn append_sequence_requires_all_planned_records() {
+        let appended = [CatalogStoreWalAppend {
+            kind: TestRecordKind::Begin,
+            lsn: 10,
+        }];
+        let expected = [TestRecordKind::Begin, TestRecordKind::Commit];
+
+        assert_eq!(
+            validate_catalog_store_wal_append_sequence(&appended, &expected),
+            Err(CatalogStoreWalAppendSequenceError::MissingPlannedRecord)
+        );
+    }
+
+    #[test]
+    fn append_sequence_rejects_kind_mismatch() {
+        let appended = [
+            CatalogStoreWalAppend {
+                kind: TestRecordKind::Commit,
+                lsn: 10,
+            },
+            CatalogStoreWalAppend {
+                kind: TestRecordKind::Commit,
+                lsn: 11,
+            },
+        ];
+        let expected = [TestRecordKind::Begin, TestRecordKind::Commit];
+
+        assert_eq!(
+            validate_catalog_store_wal_append_sequence(&appended, &expected),
+            Err(CatalogStoreWalAppendSequenceError::KindMismatch { index: 0 })
+        );
+    }
+
+    #[test]
+    fn append_sequence_rejects_zero_lsn() {
+        let appended = [
+            CatalogStoreWalAppend {
+                kind: TestRecordKind::Begin,
+                lsn: 0,
+            },
+            CatalogStoreWalAppend {
+                kind: TestRecordKind::Commit,
+                lsn: 11,
+            },
+        ];
+        let expected = [TestRecordKind::Begin, TestRecordKind::Commit];
+
+        assert_eq!(
+            validate_catalog_store_wal_append_sequence(&appended, &expected),
+            Err(CatalogStoreWalAppendSequenceError::ZeroLsn { index: 0 })
+        );
+    }
+
+    #[test]
     fn append_sequence_rejects_non_increasing_lsn() {
         let appended = [
             CatalogStoreWalAppend {

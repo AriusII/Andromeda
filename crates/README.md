@@ -102,7 +102,7 @@ For Lot 4.5 FileWal ownership documentation and implementation gates, keep owner
 cargo test -p andromeda-wal --test file_wal_contract -- --nocapture
 cargo test -p andromeda-storage --test api_compat_reexports -- --nocapture
 cargo test -p andromeda-storage --test wal_ownership_invariants -- --nocapture
-cargo test -p andromeda-storage --test file_wal_recovery_contract -- --nocapture
+cargo test -p andromeda-recovery --test file_wal_recovery_contract -- --nocapture
 cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture
 ```
 

@@ -5,11 +5,12 @@
 
 mod contract;
 mod mock;
-mod types;
 
+pub use andromeda_observability::{
+    ExportDecisionTrace, ExporterBackend, ExporterConfig, Metric, RetryPolicy,
+};
 pub use contract::ExporterTrait;
 pub use mock::MockExporter;
-pub use types::{ExportDecisionTrace, ExporterBackend, ExporterConfig, Metric, RetryPolicy};
 
 #[cfg(test)]
 mod tests;

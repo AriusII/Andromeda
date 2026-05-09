@@ -149,3 +149,91 @@ fn required_permission_validation_rejects_blank_or_uppercase_ids() {
             .is_err()
     );
 }
+
+fn sample_gateway_manifest() -> ProcedureGatewayManifest {
+    ProcedureGatewayManifest {
+        procedure_id: ProcedureId::new(42),
+        procedure_name: "Inventory.ReserveStock".to_string(),
+        contract_hash: ContractHash::test_vector(0x11),
+        catalog_version: CatalogVersion::new(7),
+        protocol_layout: ProcedureGatewayProtocolLayout {
+            descriptor_set_hash: ContractHash::test_vector(0x22),
+            frame_envelope_hash: ContractHash::test_vector(0x33),
+            protocol_package: "andromeda.protocol.v1".to_string(),
+            contract_package: "andromeda.contract.v1".to_string(),
+        },
+        result_streams: Vec::new(),
+        stats_version: 3,
+        policy_version: ContractHash::test_vector(0x44),
+        required_permissions: vec![ProcedureGatewayRequiredPermission {
+            id: "andromeda.execute_procedure".to_string(),
+            family: "application".to_string(),
+        }],
+    }
+}
+
+#[test]
+fn gateway_manifest_requires_canonical_execute_permission() {
+    let manifest = sample_gateway_manifest();
+    assert!(validate_procedure_gateway_manifest_permissions(&manifest).is_ok());
+    assert_eq!(
+        required_execute_permission(&manifest).unwrap(),
+        andromeda_security_contract::PrincipalPermission::ExecuteProcedure(ProcedureId::new(42))
+    );
+
+    let mut missing_execute = sample_gateway_manifest();
+    missing_execute.required_permissions.clear();
+    let err = validate_procedure_gateway_manifest_permissions(&missing_execute).unwrap_err();
+    assert_eq!(err.kind(), AndromedaErrorKind::Contract);
+    assert!(err.message().contains("andromeda.execute_procedure"));
+}
+
+#[test]
+fn gateway_manifest_rejects_non_canonical_execute_permissions() {
+    for (id, family) in [
+        ("execute_procedure", "application"),
+        (" andromeda.execute_procedure ", "application"),
+        ("andromeda.execute_procedure", " security "),
+        ("andromeda.execute_procedure", "security"),
+    ] {
+        let mut manifest = sample_gateway_manifest();
+        manifest.required_permissions = vec![ProcedureGatewayRequiredPermission {
+            id: id.to_string(),
+            family: family.to_string(),
+        }];
+
+        let err = validate_procedure_gateway_manifest_permissions(&manifest).unwrap_err();
+
+        assert_eq!(
+            err.kind(),
+            AndromedaErrorKind::Contract,
+            "non-canonical execute permission {id:?}/{family:?} must be rejected"
+        );
+        assert!(err.message().contains("andromeda.execute_procedure"));
+    }
+}
+
+#[test]
+fn gateway_manifest_rejects_privileged_permissions() {
+    for (family, id) in [
+        ("security", "andromeda.security.manage_security"),
+        ("definition", "andromeda.definition.create_procedure"),
+        ("cluster", "andromeda.cluster.promote"),
+        ("recovery", "andromeda.recovery.restore"),
+        ("recovery", "andromeda.recovery.forensic_start"),
+    ] {
+        let mut manifest = sample_gateway_manifest();
+        manifest
+            .required_permissions
+            .push(ProcedureGatewayRequiredPermission {
+                id: id.to_string(),
+                family: family.to_string(),
+            });
+
+        let err = validate_procedure_gateway_manifest_permissions(&manifest).unwrap_err();
+
+        assert_eq!(err.kind(), AndromedaErrorKind::Contract);
+        assert!(err.message().contains("non-Application permission"));
+        assert!(err.message().contains(id));
+    }
+}

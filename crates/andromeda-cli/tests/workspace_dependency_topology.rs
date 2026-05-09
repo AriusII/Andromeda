@@ -8,6 +8,8 @@ mod forbidden_dependencies;
 mod graph_rules;
 #[path = "workspace_dependency_topology/manifest_loading.rs"]
 mod manifest_loading;
+#[path = "workspace_dependency_topology/quic_runtime_boundary.rs"]
+mod quic_runtime_boundary;
 #[path = "workspace_dependency_topology/target_crate_roadmap_rules.rs"]
 mod target_crate_roadmap_rules;
 

@@ -19,5 +19,4 @@ andromeda-types.workspace = true
 [dev-dependencies]
 andromeda-business-fixtures.workspace = true
 andromeda-contract.workspace = true
-andromeda-observe.workspace = true
 andromeda-wal.workspace = true

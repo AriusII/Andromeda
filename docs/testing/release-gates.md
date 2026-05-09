@@ -29,12 +29,12 @@ C5 storage readiness.
 ```powershell
 cargo test -p andromeda-wal --tests --locked
 cargo test -p andromeda-exec --test c5_combined_release_gate --locked -- --nocapture
-cargo test -p andromeda-storage --test crash_recovery_impl --locked -- --nocapture
-cargo test -p andromeda-storage --test recovery_completeness_contract --locked -- --nocapture
-cargo test -p andromeda-storage --test property_recovery_replay --locked -- --nocapture
+cargo test -p andromeda-recovery --test crash_recovery_contract --locked -- --nocapture
+cargo test -p andromeda-recovery --test recovery_completeness_contract --locked -- --nocapture
+cargo test -p andromeda-recovery --test property_recovery_replay --locked -- --nocapture
 cargo test -p andromeda-storage --test wal_scan_recovery_contract --locked -- --nocapture
-cargo test -p andromeda-storage --test file_wal_recovery_contract --locked -- --nocapture
-cargo test -p andromeda-storage --test wal_durability_fence_contract --locked -- --nocapture
+cargo test -p andromeda-recovery --test file_wal_recovery_contract --locked -- --nocapture
+cargo test -p andromeda-wal --test wal_durability_fence_contract --locked -- --nocapture
 cargo test -p andromeda-exec --test recovery_visibility_gates --locked -- --nocapture
 cargo test -p andromeda-transaction --test commit_log_durability --locked -- --nocapture
 cargo test -p andromeda-transaction --test tx_wal_replay_recovery --locked -- --nocapture

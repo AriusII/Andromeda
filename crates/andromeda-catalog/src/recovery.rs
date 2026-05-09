@@ -5,7 +5,6 @@
 //! fully committed begin/apply/commit batches, and replays those batches into a
 //! [`crate::CatalogSnapshot`].  Incomplete or anomalous batches are not applied.
 
-mod decode;
 mod replay;
 mod types;
 
@@ -13,10 +12,7 @@ pub use types::*;
 
 use crate::{
     CatalogMutationRecord, CatalogSnapshot,
-    recovery::{
-        decode::boundary_batch_id,
-        replay::{indexed_recovery_record, replay_indexed_catalog_mutation_records},
-    },
+    recovery::replay::{indexed_recovery_record, replay_indexed_catalog_mutation_records},
 };
 
 /// Decode durable catalog payloads and replay committed catalog mutation batches.
@@ -29,43 +25,13 @@ pub fn recover_catalog_snapshot_from_durable_payloads<'a>(
     snapshot: CatalogSnapshot,
     payloads: impl IntoIterator<Item = CatalogDurableMutationPayload<'a>>,
 ) -> CatalogRecoveryOutcome {
-    let mut records = Vec::new();
-    let mut anomalies = Vec::new();
-
-    for (record_index, input) in payloads.into_iter().enumerate() {
-        match CatalogMutationRecord::decode_durable_payload_typed(input.payload) {
-            Ok(record) => {
-                if let Some(outer_tag) = input.storage_wal_kind_tag {
-                    let inner_tag = record.kind().storage_wal_kind_tag();
-                    if outer_tag != inner_tag {
-                        anomalies.push(CatalogRecoveryAnomaly {
-                            record_index,
-                            batch_id: boundary_batch_id(&record),
-                            kind: CatalogRecoveryAnomalyKind::OuterStorageKindMismatch,
-                            detail: format!(
-                                "outer storage WAL kind tag {outer_tag} does not match inner catalog payload kind tag {inner_tag}",
-                            ),
-                        });
-                        continue;
-                    }
-                }
-
-                records.push(indexed_recovery_record(record_index, record));
-            },
-            Err(error) => {
-                anomalies.push(CatalogRecoveryAnomaly {
-                    record_index,
-                    batch_id: None,
-                    kind: andromeda_catalog_recovery::recovery_anomaly_kind_for_decode_error(
-                        error.kind(),
-                    ),
-                    detail: format!("{}: {}", error.kind().stable_code(), error.detail()),
-                });
-            },
-        }
+    let outcome = andromeda_catalog_recovery::recover_catalog_target_from_durable_payloads(
+        snapshot, payloads,
+    );
+    CatalogRecoveryOutcome {
+        snapshot: outcome.target,
+        report: outcome.report,
     }
-
-    replay_indexed_catalog_mutation_records(snapshot, records, anomalies)
 }
 
 /// Replay already decoded catalog mutation records.

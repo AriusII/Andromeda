@@ -44,10 +44,10 @@ make retention decisions without weakening recovery truth.
 Use applicable owner tests when backup or restore code changes exist:
 
 ```powershell
-cargo test -p andromeda-storage --test backup_physical_plan_contract --locked -- --nocapture
-cargo test -p andromeda-storage --test backup_execution_plan --locked -- --nocapture
-cargo test -p andromeda-storage --test restore_contract --locked -- --nocapture
-cargo test -p andromeda-storage --test wal_gc_four_boundaries_integration --locked -- --nocapture
+cargo test -p andromeda-backup --test backup_physical_plan_contract --locked -- --nocapture
+cargo test -p andromeda-backup --test backup_execution_plan --locked -- --nocapture
+cargo test -p andromeda-restore --test restore_contract --locked -- --nocapture
+cargo test -p andromeda-wal --test wal_gc_four_boundaries_integration --locked -- --nocapture
 cargo test -p andromeda-audit --test hadr_backup_audit_contract --locked -- --nocapture
 ```
 

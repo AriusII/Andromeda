@@ -15,6 +15,20 @@ fn fresh_stack_after_recovery_contains_no_live_savepoints() -> AndromedaResult<(
 }
 
 #[test]
+fn default_stack_matches_new_stack() {
+    assert_eq!(SavepointStack::default(), SavepointStack::new());
+}
+
+#[test]
+fn fresh_stack_has_empty_active_slice() {
+    let stack = SavepointStack::new();
+
+    assert!(stack.active().is_empty());
+    assert_eq!(stack.depth(), 0);
+    assert!(stack.is_empty());
+}
+
+#[test]
 fn discarding_incomplete_transaction_state_drops_savepoints_and_write_set() -> AndromedaResult<()> {
     let mut stack = SavepointStack::new();
     let mut write_set = TxWriteSet::new();
@@ -32,6 +46,29 @@ fn discarding_incomplete_transaction_state_drops_savepoints_and_write_set() -> A
 
     assert!(stack.is_empty());
     assert!(write_set.is_empty());
+    Ok(())
+}
+
+#[test]
+fn full_release_from_root_empties_stack() -> AndromedaResult<()> {
+    let mut stack = SavepointStack::new();
+    stack.create("root")?;
+    stack.create("a")?;
+    stack.create("b")?;
+
+    let release = stack.release("root")?;
+
+    assert_eq!(release.released.len(), 3);
+    assert!(stack.is_empty());
+    Ok(())
+}
+
+#[test]
+fn savepoint_is_clone_and_eq() -> AndromedaResult<()> {
+    let mut stack = SavepointStack::new();
+    let original = stack.create("cloneable")?;
+
+    assert_eq!(original, original.clone());
     Ok(())
 }
 

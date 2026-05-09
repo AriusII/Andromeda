@@ -63,8 +63,8 @@ For code changes in this crate, choose the narrowest applicable gate:
 cargo fmt --all --check
 cargo test -p andromeda-quic --tests
 cargo test -p andromeda-quic --test procedure_gateway_route
-cargo test -p andromeda-quic --test protocol_stability_contract
-cargo test -p andromeda-quic --test transport_contract
+cargo test -p andromeda-quic --test catalog_manifest_resolution_loopback
+cargo test -p andromeda-quic --test connection_lifecycle_contract
 cargo check -p andromeda-quic --all-targets
 ```
 
@@ -95,7 +95,7 @@ Security, RPC, HA/DR, or recovery-adjacent behavior changes require targeted adm
 - `docs/adr/ADR-0012-quic-rpc-no-grpc.md`
 - `crates/andromeda-quic/src/lib.rs`
 - `crates/andromeda-quic/src/procedure_gateway/route.rs`
-- `crates/andromeda-quic/src/procedure_gateway/validation.rs`
-- `crates/andromeda-quic/src/catalog_manifest_resolution/validation.rs`
+- `crates/andromeda-quic/src/procedure_gateway/admission.rs`
+- `crates/andromeda-quic/src/catalog_manifest_resolution/gateway.rs`
 - `crates/andromeda-quic/tests/procedure_gateway_route.rs`
-- `crates/andromeda-quic/tests/protocol_stability_contract.rs`
+- `crates/andromeda-quic/tests/catalog_manifest_resolution_loopback.rs`

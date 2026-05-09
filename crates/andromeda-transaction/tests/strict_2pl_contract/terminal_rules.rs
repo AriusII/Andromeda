@@ -22,21 +22,39 @@ fn test_poisoned_transaction_rejects_locks() {
 }
 
 #[test]
-fn test_disposed_transaction_no_operations() {
+fn test_disposed_transaction_rejects_acquire_and_single_release() {
     let tx_mgr = TransactionManager::new();
+    let lock_mgr = LockManager::new();
 
     let tx_id = tx_mgr.begin().unwrap();
+    let coordinator = tx_mgr.lock_coordinator(&lock_mgr);
+    coordinator
+        .acquire(tx_id, row_resource(1), LockMode::Shared)
+        .unwrap();
     tx_mgr.request_commit(tx_id).unwrap();
     tx_mgr.commit_durable(tx_id, 1).unwrap();
+    coordinator.release_all(tx_id).unwrap();
     tx_mgr.dispose(tx_id).unwrap();
 
-    let disposed_state = TransactionState::Disposed;
-    assert_acquire_rejected(disposed_state);
-    assert_release_rejected(disposed_state);
-    assert_release_all_rejected(disposed_state);
-}
-
-#[test]
-fn test_2pl_validator_noop_operation() {
-    assert_operation_allowed(TransactionState::Disposed, TwoPhaseOperation::NoOp);
+    assert_eq!(
+        coordinator
+            .acquire(tx_id, row_resource(2), LockMode::Shared)
+            .unwrap_err()
+            .kind(),
+        AndromedaErrorKind::Transaction
+    );
+    assert_eq!(
+        coordinator
+            .release(tx_id, row_resource(1))
+            .unwrap_err()
+            .kind(),
+        AndromedaErrorKind::Transaction
+    );
+    assert_eq!(
+        coordinator
+            .release_all(tx_id)
+            .unwrap()
+            .affected_resource_count,
+        0
+    );
 }

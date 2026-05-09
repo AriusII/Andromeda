@@ -176,3 +176,211 @@ where
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const DATABASE_ID: DatabaseId = DatabaseId::new(1);
+    const NAMESPACE_ID: NamespaceId = NamespaceId::new(2);
+    const SOURCE_HASH: [u8; 32] = [0xA5; 32];
+    const DEPENDENCY_GRAPH_HASH: [u8; 32] = [0xC3; 32];
+
+    #[derive(Debug, Clone, Copy)]
+    struct TestPublicationPlan {
+        record_count: usize,
+        publication_semantics: CatalogPublicationSemantics,
+        monotonic: bool,
+    }
+
+    impl CatalogPublicationPlan<u64, [u8; 32], [u8; 32]> for TestPublicationPlan {
+        fn batch_id(&self) -> u64 {
+            101
+        }
+
+        fn database_id(&self) -> DatabaseId {
+            DATABASE_ID
+        }
+
+        fn namespace_id(&self) -> NamespaceId {
+            NAMESPACE_ID
+        }
+
+        fn previous_version(&self) -> CatalogVersion {
+            CatalogVersion::new(10)
+        }
+
+        fn next_version(&self) -> CatalogVersion {
+            CatalogVersion::new(11)
+        }
+
+        fn source_hash(&self) -> [u8; 32] {
+            SOURCE_HASH
+        }
+
+        fn dependency_graph_hash(&self) -> [u8; 32] {
+            DEPENDENCY_GRAPH_HASH
+        }
+
+        fn record_count(&self) -> usize {
+            self.record_count
+        }
+
+        fn publication_semantics(&self) -> CatalogPublicationSemantics {
+            self.publication_semantics
+        }
+
+        fn is_monotonic(&self) -> bool {
+            self.monotonic
+        }
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    struct TestCommitEvidence {
+        durability: CatalogMutationDurability,
+        record_count: usize,
+    }
+
+    impl CatalogPublicationCommitEvidence<TestPublicationPlan> for TestCommitEvidence {
+        fn validate_for_publication_plan(&self, plan: &TestPublicationPlan) -> AndromedaResult<()> {
+            if !plan.is_monotonic() {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Catalog,
+                    "test publication plan must be monotonic",
+                ));
+            }
+
+            if self.record_count != plan.record_count() {
+                return Err(AndromedaError::new(
+                    AndromedaErrorKind::Catalog,
+                    "test publication evidence record count mismatch",
+                ));
+            }
+
+            self.durability.validate()
+        }
+
+        fn durable_lsn(&self) -> Option<u64> {
+            self.durability.durable_lsn()
+        }
+
+        fn durable_evidence_marker(&self) -> Option<CatalogDurabilityMarker> {
+            self.durability.durable_marker()
+        }
+
+        fn record_count(&self) -> usize {
+            self.record_count
+        }
+    }
+
+    fn plan() -> TestPublicationPlan {
+        TestPublicationPlan {
+            record_count: 3,
+            publication_semantics: CatalogPublicationSemantics::DurablePublicationExternal,
+            monotonic: true,
+        }
+    }
+
+    #[test]
+    fn mutation_durability_rejects_missing_or_non_durable_evidence() {
+        let zero_commit = CatalogMutationDurability::StorageWal {
+            commit_lsn: 0,
+            durable_lsn: 10,
+        };
+        assert_eq!(
+            zero_commit.validate().unwrap_err().kind(),
+            AndromedaErrorKind::Catalog
+        );
+
+        let stale_durable_lsn = CatalogMutationDurability::StorageWal {
+            commit_lsn: 10,
+            durable_lsn: 9,
+        };
+        assert_eq!(
+            stale_durable_lsn.validate().unwrap_err().kind(),
+            AndromedaErrorKind::Catalog
+        );
+
+        let zero_marker =
+            CatalogMutationDurability::ExternalMarker(CatalogDurabilityMarker::new(0));
+        assert_eq!(
+            zero_marker.validate().unwrap_err().kind(),
+            AndromedaErrorKind::Catalog
+        );
+
+        assert!(
+            CatalogMutationDurability::StorageWal {
+                commit_lsn: 10,
+                durable_lsn: 10
+            }
+            .validate()
+            .is_ok()
+        );
+        assert!(
+            CatalogMutationDurability::ExternalMarker(CatalogDurabilityMarker::new(44))
+                .validate()
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn publication_receipt_copies_plan_fields_after_evidence_validation() {
+        let receipt = CatalogPublicationReceipt::from_plan_and_evidence(
+            &plan(),
+            TestCommitEvidence {
+                durability: CatalogMutationDurability::StorageWal {
+                    commit_lsn: 77,
+                    durable_lsn: 80,
+                },
+                record_count: 3,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(receipt.batch_id, 101);
+        assert_eq!(receipt.database_id, DATABASE_ID);
+        assert_eq!(receipt.namespace_id, NAMESPACE_ID);
+        assert_eq!(receipt.previous_version, CatalogVersion::new(10));
+        assert_eq!(receipt.next_version, CatalogVersion::new(11));
+        assert_eq!(receipt.source_hash, SOURCE_HASH);
+        assert_eq!(receipt.dependency_graph_hash, DEPENDENCY_GRAPH_HASH);
+        assert_eq!(receipt.durable_lsn, Some(80));
+        assert_eq!(receipt.durable_evidence_marker, None);
+        assert_eq!(receipt.record_count, 3);
+        assert_eq!(
+            receipt.publication_semantics,
+            CatalogPublicationSemantics::DurablePublicationExternal
+        );
+    }
+
+    #[test]
+    fn publication_receipt_rejects_invalid_evidence_before_publication() {
+        let error = CatalogPublicationReceipt::from_plan_and_evidence(
+            &plan(),
+            TestCommitEvidence {
+                durability: CatalogMutationDurability::StorageWal {
+                    commit_lsn: 77,
+                    durable_lsn: 76,
+                },
+                record_count: 3,
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+
+        let count_error = CatalogPublicationReceipt::from_plan_and_evidence(
+            &plan(),
+            TestCommitEvidence {
+                durability: CatalogMutationDurability::ExternalMarker(
+                    CatalogDurabilityMarker::new(44),
+                ),
+                record_count: 2,
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(count_error.kind(), AndromedaErrorKind::Catalog);
+        assert!(count_error.message().contains("record count"));
+    }
+}

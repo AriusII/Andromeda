@@ -168,6 +168,18 @@ mod tests {
         };
         assert!(invalid_id.validate().is_err());
 
+        let invalid_name = ProcedureManifest {
+            qualified_name: " \t ".to_string(),
+            ..valid.clone()
+        };
+        assert!(invalid_name.validate().is_err());
+
+        let invalid_version = ProcedureManifest {
+            catalog_version: CatalogVersion::new(0),
+            ..valid.clone()
+        };
+        assert!(invalid_version.validate().is_err());
+
         let invalid_hash_len = ProcedureManifest {
             contract_hash: vec![],
             ..valid.clone()

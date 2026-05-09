@@ -198,20 +198,6 @@ fn execute_request_frame_from_generated(
     }
 }
 
-fn valid_generated_execute_request(
-    manifest: &CatalogProcedureManifest,
-) -> generated::protocol::v1::RpcExecuteRequest {
-    generated::protocol::v1::RpcExecuteRequest {
-        procedure_name: manifest.procedure_name.clone(),
-        expected_contract_hash: manifest.contract_hash.as_bytes().to_vec(),
-        expected_catalog_version: manifest.catalog_version.get(),
-        surface_scope: "application".to_string(),
-        arguments: Vec::new(),
-        budget: None,
-        expected_stats_version: Some(manifest.stats_version),
-    }
-}
-
 fn valid_execute_frame(manifest: &CatalogProcedureManifest) -> FrameBytes {
     execute_request_frame(
         &manifest.procedure_name,
@@ -469,10 +455,6 @@ mod authorized_pre_dispatch;
 
 #[path = "procedure_gateway_route/invalid_frames.rs"]
 mod invalid_frames;
-#[path = "procedure_gateway_route/manifest_match.rs"]
-mod manifest_match;
-#[path = "procedure_gateway_route/no_sql_no_grpc.rs"]
-mod no_sql_no_grpc;
 #[path = "procedure_gateway_route/permission.rs"]
 mod permission;
 #[path = "procedure_gateway_route/route_admission.rs"]

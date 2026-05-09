@@ -1,7 +1,5 @@
-use andromeda_storage::{
-    Lsn,
-    write_ahead_log::{WalReplicaSafeLsnTracker, WalShippingAck},
-};
+use andromeda_hadr::shipping_contract::{WalReplicaSafeLsnTracker, WalShippingAck};
+use andromeda_wal::Lsn;
 
 #[test]
 fn shipped_catalog_publication_marks_storage_lsn_boundary_replica_safe() {

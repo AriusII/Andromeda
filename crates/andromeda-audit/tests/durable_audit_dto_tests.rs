@@ -46,6 +46,71 @@ fn append_record_validation_rejects_secret_event_kind() {
 }
 
 #[test]
+fn append_record_validation_requires_audit_owned_critical_binding_evidence() {
+    assert!(DurableAuditEventFamily::SecurityDecision.requires_complete_permission_binding());
+    assert!(!DurableAuditEventFamily::AdmissionDecision.requires_complete_permission_binding());
+
+    for (index, family) in [
+        DurableAuditEventFamily::SecurityDecision,
+        DurableAuditEventFamily::AdminDecision,
+        DurableAuditEventFamily::HadrDecision,
+        DurableAuditEventFamily::BackupDecision,
+        DurableAuditEventFamily::RestoreDecision,
+        DurableAuditEventFamily::ForensicDecision,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut record = sample_append_record(10 + index as u64);
+        record.identity.family = family;
+        record.event_kind = format!("{family:?}");
+        record.principal_binding.certificate_fingerprint = None;
+
+        let err = record
+            .validate()
+            .expect_err("critical durable audit DTOs require certificate evidence");
+        assert!(
+            err.message()
+                .contains("certificate, surface, and permission evidence")
+        );
+    }
+}
+
+#[test]
+fn append_record_validation_requires_policy_evidence_for_permissioned_critical_records() {
+    let mut record = sample_append_record(30);
+    record.principal_binding.policy_version = None;
+
+    let err = record
+        .validate()
+        .expect_err("permissioned critical durable audit DTOs require policy evidence");
+    assert!(err.message().contains("policy version evidence"));
+}
+
+#[test]
+fn replay_record_validation_uses_audit_owned_binding_invariants() {
+    let append_record = sample_append_record(40);
+    let replay_record = andromeda_audit::DurableAuditReplayRecord {
+        report: andromeda_audit::DurableAuditSinkReport {
+            identity: append_record.identity,
+            evidence: DurableAuditWalEvidence {
+                record_lsn: 40,
+                durable_lsn: 40,
+                checksum: 0xA11D_1700,
+            },
+            replay_behavior: append_record.replay_behavior,
+            retention: append_record.retention,
+        },
+        principal_binding: append_record.principal_binding,
+        event_kind: append_record.event_kind,
+    };
+
+    replay_record
+        .validate()
+        .expect("complete permission and policy evidence is audit-owned replay DTO evidence");
+}
+
+#[test]
 fn file_sink_appends_and_replays_audit_owned_record() {
     let path = temp_journal_path("file-sink-owned-record");
     let mut sink = FileDurableAuditWalSink::open(&path).expect("journal opens");

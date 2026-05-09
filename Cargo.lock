@@ -124,7 +124,6 @@ dependencies = [
  "andromeda-definition-batch",
  "andromeda-digest",
  "andromeda-error",
- "andromeda-observe",
  "andromeda-procedure-contract",
  "andromeda-time",
  "andromeda-types",
@@ -956,9 +955,7 @@ dependencies = [
  "andromeda-types",
  "andromeda-wal",
  "dashmap",
- "proptest",
  "sha2",
- "tempfile",
 ]
 
 [[package]]

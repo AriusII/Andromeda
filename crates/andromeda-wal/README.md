@@ -71,7 +71,7 @@ For cross-crate WAL integration, add storage and topology evidence:
 
 ```powershell
 cargo test -p andromeda-storage --test wal_ownership_invariants -- --nocapture
-cargo test -p andromeda-storage --test file_wal_recovery_contract -- --nocapture
+cargo test -p andromeda-recovery --test file_wal_recovery_contract -- --nocapture
 cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture
 ```
 

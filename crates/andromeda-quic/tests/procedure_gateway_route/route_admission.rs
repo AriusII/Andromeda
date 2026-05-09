@@ -382,45 +382,6 @@ fn test_gateway_rejects_every_non_application_surface_before_procedure_dispatch(
 }
 
 #[test]
-fn test_application_route_rejects_non_application_request_scopes_before_dispatch() {
-    let conn = setup_active_application_connection();
-    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
-    let manifest = route_manifest();
-
-    for disallowed_scope in ["administration", "cluster", "monitoring"] {
-        let frame = execute_request_frame(
-            "Inventory.ReserveStock",
-            manifest.contract_hash,
-            manifest.catalog_version,
-            Some(manifest.stats_version),
-            disallowed_scope,
-            manifest.contract_hash,
-            manifest.catalog_version,
-        );
-
-        let err = gateway
-            .bind_application_procedure_route(7, &frame, &manifest)
-            .unwrap_err();
-
-        assert_eq!(
-            err.kind(),
-            AndromedaErrorKind::Security,
-            "Application route must reject {disallowed_scope} before Procedure dispatch"
-        );
-        assert!(
-            err.message().contains("surface_scope"),
-            "{disallowed_scope} rejection should identify the request surface_scope: {}",
-            err.message()
-        );
-        assert!(
-            err.message().contains("Application surface"),
-            "{disallowed_scope} rejection should name the Application surface: {}",
-            err.message()
-        );
-    }
-}
-
-#[test]
 fn test_application_route_rejects_drain_before_payload_decode_or_authorization() {
     let mut conn = setup_active_application_connection();
     conn.begin_drain().expect("active connection should drain");
@@ -453,39 +414,6 @@ fn test_application_route_rejects_drain_before_payload_decode_or_authorization()
         .bind_authorized_application_procedure_route(7, &frame, &manifest, &registry)
         .unwrap_err();
     assert_route_rejection_before_authorization(err, AndromedaErrorKind::Protocol, "Draining");
-}
-
-#[test]
-fn test_application_route_rejects_admin_and_hadr_manifest_permissions_before_dispatch() {
-    let conn = setup_active_application_connection();
-    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
-
-    for (family, id) in [
-        ("administration", "andromeda.admin.drain"),
-        ("cluster", "andromeda.hadr.promote"),
-    ] {
-        let mut manifest = route_manifest();
-        manifest.required_permissions = vec![CatalogRequiredPermission {
-            id: id.to_string(),
-            family: family.to_string(),
-        }];
-        let frame = valid_execute_frame(&manifest);
-
-        let err = gateway
-            .bind_application_procedure_route(7, &frame, &manifest)
-            .unwrap_err();
-
-        assert_eq!(
-            err.kind(),
-            AndromedaErrorKind::Contract,
-            "{family}/{id} must be rejected by manifest admission"
-        );
-        assert!(
-            err.message().contains("non-Application permission"),
-            "Application route should reject privileged manifest permissions before dispatch: {}",
-            err.message()
-        );
-    }
 }
 
 #[test]

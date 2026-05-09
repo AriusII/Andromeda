@@ -46,6 +46,18 @@ impl DurableAuditEventFamily {
                 | Self::ForensicDecision
         )
     }
+
+    pub const fn requires_complete_permission_binding(self) -> bool {
+        matches!(
+            self,
+            Self::SecurityDecision
+                | Self::AdminDecision
+                | Self::HadrDecision
+                | Self::BackupDecision
+                | Self::RestoreDecision
+                | Self::ForensicDecision
+        )
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -571,6 +583,11 @@ impl DurableAuditAppendRecord {
                 "durable audit append event kind must not contain secret evidence",
             ));
         }
+        validate_complete_permission_binding(
+            self.identity.family,
+            &self.principal_binding,
+            "durable audit append records",
+        )?;
         validate_permissioned_critical_policy_binding(
             self.identity.family,
             &self.principal_binding,
@@ -807,6 +824,11 @@ impl DurableAuditReplayRecord {
                 "durable audit replay event kind must not contain secret evidence",
             ));
         }
+        validate_complete_permission_binding(
+            self.report.identity.family,
+            &self.principal_binding,
+            "durable audit replay records",
+        )?;
         if self.report.identity.family == DurableAuditEventFamily::SecurityDecision
             && self.principal_binding.policy_version.is_none()
         {
@@ -852,6 +874,27 @@ impl DurableAuditReplayRecord {
 pub struct DurableAuditReplayResult {
     pub evidence: DurableAuditReplayEvidence,
     pub records: Vec<DurableAuditReplayRecord>,
+}
+
+fn validate_complete_permission_binding(
+    family: DurableAuditEventFamily,
+    binding: &DurableAuditPrincipalBinding,
+    context: &str,
+) -> AndromedaResult<()> {
+    if !family.requires_complete_permission_binding() {
+        return Ok(());
+    }
+
+    if binding.certificate_fingerprint.is_none()
+        || binding.surface.is_none()
+        || binding.permission.is_none()
+    {
+        return Err(audit_error(format!(
+            "{context} require certificate, surface, and permission evidence for permissioned critical {family:?} records",
+        )));
+    }
+
+    Ok(())
 }
 
 fn validate_permissioned_critical_policy_binding(

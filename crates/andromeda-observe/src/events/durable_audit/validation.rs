@@ -3,8 +3,8 @@ use andromeda_error::AndromedaResult;
 use crate::events::{TraceEvent, observe_error};
 
 use super::{
-    DurableAuditEventFamily, DurableAuditPrincipalBinding, PendingDurableAuditRecord,
-    classify_policy_evidence_requirement, durable_audit_family,
+    DurableAuditAppendRecord, DurableAuditEventFamily, PendingDurableAuditRecord,
+    durable_audit_family,
 };
 
 pub(crate) fn validate_record(record: &PendingDurableAuditRecord) -> AndromedaResult<()> {
@@ -34,11 +34,7 @@ pub(crate) fn validate_record(record: &PendingDurableAuditRecord) -> AndromedaRe
         ));
     }
 
-    validate_permissioned_critical_policy_binding(
-        family,
-        &record.principal_binding,
-        "durable audit records",
-    )?;
+    validate_append_projection(record)?;
     if matches!(family, DurableAuditEventFamily::SecurityDecision) {
         validate_security_decision_binding(record)?;
     }
@@ -56,27 +52,15 @@ pub(crate) fn validate_record(record: &PendingDurableAuditRecord) -> AndromedaRe
     Ok(())
 }
 
-pub(crate) fn validate_permissioned_critical_policy_binding(
-    family: DurableAuditEventFamily,
-    binding: &DurableAuditPrincipalBinding,
-    context: &str,
-) -> AndromedaResult<()> {
-    if !classify_policy_evidence_requirement(family, binding).requires_policy_evidence() {
-        return Ok(());
+fn validate_append_projection(record: &PendingDurableAuditRecord) -> AndromedaResult<()> {
+    DurableAuditAppendRecord {
+        identity: record.identity,
+        principal_binding: record.principal_binding.clone(),
+        retention: record.retention,
+        replay_behavior: record.replay_behavior,
+        event_kind: format!("{:?}", record.envelope.event.kind()),
     }
-
-    let Some(policy_version) = binding.policy_version.as_ref() else {
-        return Err(observe_error(format!(
-            "{context} require policy version evidence for permissioned critical {family:?} records",
-        )));
-    };
-    if !policy_version.has_version_evidence() {
-        return Err(observe_error(format!(
-            "{context} require non-zero canonical policy version and digest evidence for permissioned critical {family:?} records",
-        )));
-    }
-
-    Ok(())
+    .validate()
 }
 
 fn validate_security_decision_binding(record: &PendingDurableAuditRecord) -> AndromedaResult<()> {

@@ -1,15 +1,13 @@
 pub(crate) use andromeda_catalog::{
     CatalogMutationCommitEvidence, CatalogMutationPlan, CatalogMutationRecord,
     CatalogRecoveryOutcome, CatalogSystemStore, DefinitionBatchPlan,
-    recover_catalog_snapshot_from_durable_payloads, replay_catalog_mutation_records,
+    recover_catalog_snapshot_from_durable_payloads,
 };
 pub(crate) use andromeda_catalog_recovery::{
-    CatalogDurableMutationPayload, CatalogMutationRecordKind, CatalogRecoveryAnomalyKind,
-    CatalogSkippedBatchReason,
+    CatalogDurableMutationPayload, CatalogMutationRecordKind, CatalogSkippedBatchReason,
 };
 pub(crate) use andromeda_catalog_store::{
-    CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH, CatalogDefinition, CatalogDurabilityMarker,
-    CatalogMutationDurability, CatalogMutationOperation, CatalogObjectRef,
+    CatalogDefinition, CatalogDurabilityMarker, CatalogMutationDurability, CatalogObjectRef,
     CatalogPublicationSemantics, CatalogSnapshotPublication, ObjectKind, QualifiedName,
     StructuredObjectDefinition, TableDefinition,
 };
@@ -160,13 +158,6 @@ pub(crate) fn plan_product_batch(
         .unwrap()
 }
 
-pub(crate) fn replay_records_at(
-    catalog_version: u64,
-    records: Vec<CatalogMutationRecord>,
-) -> CatalogRecoveryOutcome {
-    replay_catalog_mutation_records(store_at(catalog_version).into_snapshot(), records)
-}
-
 pub(crate) fn recover_payloads_at<'a>(
     catalog_version: u64,
     payloads: impl IntoIterator<Item = CatalogDurableMutationPayload<'a>>,
@@ -175,19 +166,6 @@ pub(crate) fn recover_payloads_at<'a>(
         store_at(catalog_version).into_snapshot(),
         payloads,
     )
-}
-
-pub(crate) fn assert_has_anomaly(
-    outcome: &CatalogRecoveryOutcome,
-    kind: CatalogRecoveryAnomalyKind,
-) {
-    assert!(
-        outcome
-            .report
-            .anomalies
-            .iter()
-            .any(|anomaly| anomaly.kind == kind)
-    );
 }
 
 pub(crate) fn assert_empty_snapshot_at(outcome: &CatalogRecoveryOutcome, catalog_version: u64) {

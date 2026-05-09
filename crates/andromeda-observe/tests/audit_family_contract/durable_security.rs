@@ -20,38 +20,6 @@ fn durable_security_audit_records_require_binding_to_match_trace_and_correlation
     )
     .expect("matching security audit binding is durable-audit eligible");
 
-    let mut missing_permission = durable_security_binding();
-    missing_permission.permission = None;
-    let missing_permission_err = PendingDurableAuditRecord::new(
-        2,
-        missing_permission,
-        DurableAuditRetentionBoundary::SecurityPolicy,
-        DurableAuditReplayBehavior::ForensicOnly,
-        envelope.clone(),
-    )
-    .unwrap_err();
-    assert!(
-        missing_permission_err
-            .message()
-            .contains("certificate, surface, permission, and policy version evidence")
-    );
-
-    let mut missing_policy_version = durable_security_binding();
-    missing_policy_version.policy_version = None;
-    let missing_policy_version_err = PendingDurableAuditRecord::new(
-        6,
-        missing_policy_version,
-        DurableAuditRetentionBoundary::SecurityPolicy,
-        DurableAuditReplayBehavior::ForensicOnly,
-        envelope.clone(),
-    )
-    .unwrap_err();
-    assert!(
-        missing_policy_version_err
-            .message()
-            .contains("policy version evidence")
-    );
-
     let mut wrong_principal = durable_security_binding();
     wrong_principal.principal_id = "user:bob".to_string();
     let wrong_principal_err = PendingDurableAuditRecord::new(

@@ -49,15 +49,16 @@ pub use lsn_replay::{
 };
 pub use mutation::{
     CATALOG_CHANGE_APPLY_WAL_KIND_TAG, CATALOG_CHANGE_BEGIN_WAL_KIND_TAG,
-    CATALOG_CHANGE_COMMIT_WAL_KIND_TAG, CatalogDurableMutationPayload, CatalogLifecycleTarget,
-    CatalogMutationBoundary, CatalogMutationDelta, CatalogMutationOperation, CatalogMutationRecord,
+    CATALOG_CHANGE_COMMIT_WAL_KIND_TAG, CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH,
+    CatalogDurableMutationPayload, CatalogLifecycleTarget, CatalogMutationBoundary,
+    CatalogMutationDelta, CatalogMutationOperation, CatalogMutationRecord,
     CatalogMutationRecordKind, CatalogPublicationSemantics, CatalogRecoveryAnomalyKind,
     CatalogRecoveryApplyTarget, CatalogSkippedBatchReason, CatalogWalPayloadDecodeError,
     CatalogWalPayloadDecodeErrorKind, DefinitionBatchDependencyGraphHash,
 };
 pub use mutation_replay::{
     CatalogRecoveryTargetOutcome, IndexedCatalogMutationRecord,
-    replay_catalog_mutation_records_into_target,
+    recover_catalog_target_from_durable_payloads, replay_catalog_mutation_records_into_target,
     replay_indexed_catalog_mutation_records_into_target,
 };
 pub use publication::{

@@ -152,3 +152,28 @@ impl UnsupportedVersionTrace {
         }
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SchemaLayoutDecisionTrace {
+    pub trace_id: TraceId,
+    pub scope: ProtocolEventScope,
+    pub schema_id: Option<u64>,
+    pub schema_version: Option<u64>,
+    pub layout_id: Option<u64>,
+    pub layout_version: Option<u64>,
+    pub accepted: bool,
+    pub reason: String,
+}
+
+impl SchemaLayoutDecisionTrace {
+    pub fn has_reason(&self) -> bool {
+        !self.reason.trim().is_empty()
+    }
+
+    pub const fn has_schema_layout_evidence(&self) -> bool {
+        self.schema_id.is_some()
+            && self.schema_version.is_some()
+            && self.layout_id.is_some()
+            && self.layout_version.is_some()
+    }
+}

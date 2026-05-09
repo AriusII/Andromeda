@@ -12,5 +12,7 @@ mod classification;
 mod manifest_switch;
 #[path = "recovery_completeness_contract/redo_boundary.rs"]
 mod redo_boundary;
+#[path = "recovery_completeness_contract/redo_undo.rs"]
+mod redo_undo;
 #[path = "recovery_completeness_contract/wal_chain_validation.rs"]
 mod wal_chain_validation;

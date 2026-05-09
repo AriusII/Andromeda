@@ -7,11 +7,11 @@ mod replay;
 mod safe_start;
 mod startup;
 mod trace;
-mod undo;
 mod wal_replay;
 
 use andromeda_error::{AndromedaError, AndromedaErrorKind};
 
+pub use andromeda_recovery::{UndoChain, UndoChainsBuilder, UndoOperation, UndoRecord};
 pub use catalog_replay::{
     CatalogReplayFromLsnReport, CatalogSnapshot, LsnBoundCatalogRecord, replay_catalog_from_lsn,
     replay_catalog_wal_records,
@@ -40,7 +40,6 @@ pub use startup::{
     StartupOutcome, StartupRejectionReason, decide_startup,
 };
 pub use trace::RecoveryTrace;
-pub use undo::{UndoChain, UndoChainsBuilder, UndoOperation, UndoRecord};
 pub use wal_replay::{
     WalReplayReport, execute_redo_plan, execute_redo_plan_into_context, replay_wal_from_lsn,
     replay_wal_from_lsn_into_context,

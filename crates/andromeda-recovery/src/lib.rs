@@ -24,6 +24,7 @@ mod planning;
 mod replay;
 mod startup;
 mod transaction_wal_bridge;
+mod undo;
 
 /// Startup mode requested for recovery against durable evidence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,6 +67,7 @@ pub use transaction_wal_bridge::{
     CommitLogInvocationWal, DurableTransactionWalPrefix, TransactionReplayFromWalEvidence,
     TxReplayBridgeEvidence, map_durable_wal_prefix_to_tx_replay,
 };
+pub use undo::{UndoChain, UndoChainsBuilder, UndoOperation, UndoRecord};
 
 impl StartupMode {
     /// Returns `true` when this mode is allowed to replay records after a clean

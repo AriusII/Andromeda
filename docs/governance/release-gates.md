@@ -51,13 +51,13 @@ Use the applicable subset and record gaps explicitly.
 
 ```powershell
 cargo test -p andromeda-wal --tests --locked
-cargo test -p andromeda-storage --test crash_recovery_impl --locked -- --nocapture
-cargo test -p andromeda-storage --test recovery_completeness_contract --locked -- --nocapture
-cargo test -p andromeda-storage --test property_recovery_replay --locked -- --nocapture
+cargo test -p andromeda-recovery --test crash_recovery_contract --locked -- --nocapture
+cargo test -p andromeda-recovery --test recovery_completeness_contract --locked -- --nocapture
+cargo test -p andromeda-recovery --test property_recovery_replay --locked -- --nocapture
 cargo test -p andromeda-storage --test wal_scan_recovery_contract --locked -- --nocapture
-cargo test -p andromeda-storage --test file_wal_recovery_contract --locked -- --nocapture
-cargo test -p andromeda-storage --test wal_durability_fence_contract --locked -- --nocapture
-cargo test -p andromeda-storage --test disk_manager_durability_crash_safety --locked -- --nocapture
+cargo test -p andromeda-recovery --test file_wal_recovery_contract --locked -- --nocapture
+cargo test -p andromeda-wal --test wal_durability_fence_contract --locked -- --nocapture
+cargo test -p andromeda-storage --test recovery_contract --locked -- --nocapture
 cargo test -p andromeda-exec --test recovery_visibility_gates --locked -- --nocapture
 cargo test -p andromeda-exec --test c5_commit_rollback_lifecycle --locked -- --nocapture
 cargo test -p andromeda-transaction --test commit_log_durability --locked -- --nocapture
@@ -68,21 +68,21 @@ cargo test -p andromeda-transaction --test tx_wal_replay_recovery --locked -- --
 
 ```powershell
 cargo test -p andromeda-rpc-protocol --tests --locked
-cargo test -p andromeda-quic --test protocol_stability_contract --locked -- --nocapture
-cargo test -p andromeda-quic --test protobuf_projection_contract --locked -- --nocapture
+cargo test -p andromeda-rpc-protocol --test protocol_stability_contract --locked -- --nocapture
+cargo test -p andromeda-rpc-codec --test protobuf_projection_contract --locked -- --nocapture
 cargo test -p andromeda-quic --test procedure_gateway_route --locked -- --nocapture
 cargo test -p andromeda-quic --test zero_rtt_admission_policy --locked -- --nocapture
 cargo test -p andromeda-security-contract --lib --locked -- --nocapture
 cargo test -p andromeda-exec --test iam_pipeline_e2e --locked -- --nocapture
 cargo test -p andromeda-exec --test exec_audit_completion_validation --locked -- --nocapture
-cargo test -p andromeda-storage --test backup_physical_plan_contract --locked -- --nocapture
-cargo test -p andromeda-storage --test backup_execution_plan --locked -- --nocapture
-cargo test -p andromeda-storage --test restore_contract --locked -- --nocapture
-cargo test -p andromeda-storage --test hadr_promotion_runtime_contract --locked -- --nocapture
-cargo test -p andromeda-storage --test hadr_membership_store_contract --locked -- --nocapture
-cargo test -p andromeda-storage --test quorum_membership_contract --locked -- --nocapture
-cargo test -p andromeda-storage --test wal_shipping_reclaimability_contract --locked -- --nocapture
-cargo test -p andromeda-quic --test hadr_stream_mapping_contract --locked -- --nocapture
+cargo test -p andromeda-backup --test backup_physical_plan_contract --locked -- --nocapture
+cargo test -p andromeda-backup --test backup_execution_plan --locked -- --nocapture
+cargo test -p andromeda-restore --test restore_contract --locked -- --nocapture
+cargo test -p andromeda-hadr --test hadr_promotion_runtime_contract --locked -- --nocapture
+cargo test -p andromeda-hadr --test hadr_membership_store_contract --locked -- --nocapture
+cargo test -p andromeda-hadr --test quorum_membership_contract --locked -- --nocapture
+cargo test -p andromeda-hadr --test wal_shipping_reclaimability_contract --locked -- --nocapture
+cargo test -p andromeda-rpc-protocol --test surface_separation_contract --locked -- --nocapture
 ```
 
 ## Deep Validation

@@ -5,10 +5,11 @@ use andromeda_definition_batch::{DefinitionBatch, DefinitionOperation};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use crate::{
-    CatalogMutationBoundary, CatalogMutationDelta, CatalogMutationOperation, CatalogMutationRecord,
-    CatalogRecoveredBatch, CatalogRecoveryAnomaly, CatalogRecoveryAnomalyKind,
-    CatalogRecoveryApplyTarget, CatalogRecoveryReport, CatalogSkippedBatch,
-    CatalogSkippedBatchReason,
+    CatalogDurableMutationPayload, CatalogMutationBoundary, CatalogMutationDelta,
+    CatalogMutationOperation, CatalogMutationRecord, CatalogRecoveredBatch, CatalogRecoveryAnomaly,
+    CatalogRecoveryAnomalyKind, CatalogRecoveryApplyTarget, CatalogRecoveryReport,
+    CatalogSkippedBatch, CatalogSkippedBatchReason, decode_catalog_durable_payload,
+    recovery_anomaly_kind_for_decode_error,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -60,6 +61,59 @@ where
             }),
         Vec::new(),
     )
+}
+
+/// Decode durable catalog payloads and replay committed mutation batches into a
+/// recovery target.
+///
+/// Decode failures, optional outer storage-WAL kind mismatches, incomplete
+/// batches, and replay anomalies are accumulated in the returned report. Only
+/// complete, boundary-consistent batches are applied to the target.
+pub fn recover_catalog_target_from_durable_payloads<'a, Target>(
+    target: Target,
+    payloads: impl IntoIterator<Item = CatalogDurableMutationPayload<'a>>,
+) -> CatalogRecoveryTargetOutcome<Target>
+where
+    Target: CatalogRecoveryApplyTarget,
+{
+    let mut records = Vec::new();
+    let mut anomalies = Vec::new();
+
+    for (record_index, input) in payloads.into_iter().enumerate() {
+        match decode_catalog_durable_payload(input.payload) {
+            Ok(record) => {
+                if let Some(outer_tag) = input.storage_wal_kind_tag {
+                    let inner_tag = record.kind().storage_wal_kind_tag();
+                    if outer_tag != inner_tag {
+                        anomalies.push(CatalogRecoveryAnomaly {
+                            record_index,
+                            batch_id: boundary_batch_id(&record),
+                            kind: CatalogRecoveryAnomalyKind::OuterStorageKindMismatch,
+                            detail: format!(
+                                "outer storage WAL kind tag {outer_tag} does not match inner catalog payload kind tag {inner_tag}",
+                            ),
+                        });
+                        continue;
+                    }
+                }
+
+                records.push(IndexedCatalogMutationRecord {
+                    record_index,
+                    record,
+                });
+            },
+            Err(error) => {
+                anomalies.push(CatalogRecoveryAnomaly {
+                    record_index,
+                    batch_id: None,
+                    kind: recovery_anomaly_kind_for_decode_error(error.kind()),
+                    detail: format!("{}: {}", error.kind().stable_code(), error.detail()),
+                });
+            },
+        }
+    }
+
+    replay_indexed_catalog_mutation_records_into_target(target, records, anomalies)
 }
 
 pub fn replay_indexed_catalog_mutation_records_into_target<Target>(
@@ -211,6 +265,17 @@ where
             anomalies,
             final_visible_catalog_version,
         },
+    }
+}
+
+fn boundary_batch_id(
+    record: &CatalogMutationRecord,
+) -> Option<andromeda_definition_batch::DefinitionBatchId> {
+    match record {
+        CatalogMutationRecord::Begin(boundary) | CatalogMutationRecord::Commit(boundary) => {
+            Some(boundary.batch_id)
+        },
+        CatalogMutationRecord::Apply(_) => None,
     }
 }
 

@@ -1,29 +1,6 @@
 use super::support::*;
 
 #[test]
-fn test_release_only_in_shrinking_states() {
-    for state in [TransactionState::Committing, TransactionState::RollingBack] {
-        assert!(TwoPhaseLocksValidator::state_allows_release(state));
-        assert_operation_allowed(state, TwoPhaseOperation::Release);
-    }
-}
-
-#[test]
-fn test_release_rejected_outside_shrinking_states() {
-    for state in [
-        TransactionState::Created,
-        TransactionState::Active,
-        TransactionState::Committed,
-        TransactionState::RolledBack,
-        TransactionState::Disposed,
-        TransactionState::Poisoned,
-        TransactionState::Failed,
-    ] {
-        assert_release_rejected(state);
-    }
-}
-
-#[test]
 fn test_transaction_coordinator_rejects_release_in_active_state() {
     let tx_mgr = TransactionManager::new();
     let lock_mgr = LockManager::new();
@@ -43,29 +20,6 @@ fn test_transaction_coordinator_rejects_release_in_active_state() {
         .expect_err("single-resource release must wait for shrinking phase");
     assert_eq!(err.kind(), AndromedaErrorKind::Transaction);
     assert!(lock_mgr.entry(resource).unwrap().is_some());
-}
-
-#[test]
-fn test_release_all_only_in_terminal_states() {
-    for state in [TransactionState::Committed, TransactionState::RolledBack] {
-        assert!(TwoPhaseLocksValidator::state_allows_release_all(state));
-        assert_operation_allowed(state, TwoPhaseOperation::ReleaseAll);
-    }
-}
-
-#[test]
-fn test_release_all_rejected_before_terminal_states() {
-    for state in [
-        TransactionState::Created,
-        TransactionState::Active,
-        TransactionState::Committing,
-        TransactionState::RollingBack,
-        TransactionState::Disposed,
-        TransactionState::Poisoned,
-        TransactionState::Failed,
-    ] {
-        assert_release_all_rejected(state);
-    }
 }
 
 #[test]

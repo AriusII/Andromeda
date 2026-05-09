@@ -35,9 +35,9 @@ or retention pressure threatens commit latency or recovery safety.
 
 ```powershell
 cargo test -p andromeda-wal --tests --locked
-cargo test -p andromeda-storage --test wal_durability_fence_contract --locked -- --nocapture
-cargo test -p andromeda-storage --test wal_gc_four_boundaries_integration --locked -- --nocapture
-cargo test -p andromeda-storage --test wal_shipping_reclaimability_contract --locked -- --nocapture
+cargo test -p andromeda-wal --test wal_durability_fence_contract --locked -- --nocapture
+cargo test -p andromeda-wal --test wal_gc_four_boundaries_integration --locked -- --nocapture
+cargo test -p andromeda-hadr --test wal_shipping_reclaimability_contract --locked -- --nocapture
 ```
 
 ## Escalate When

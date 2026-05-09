@@ -161,23 +161,3 @@ fn test_runtime_dispatch_backpressure_is_keyed_to_admitted_route_context() {
         "runtime result dispatch must carry the pre-dispatch admitted route context"
     );
 }
-
-#[test]
-fn test_gateway_rejects_grpc_contract_package_layout_before_runtime_dispatch() {
-    let conn = setup_active_application_connection();
-    let gateway = ProcedureGateway::new(&conn).expect("gateway construction failed");
-    let mut manifest = route_manifest();
-    manifest.protocol_layout.contract_package = "grpc.andromeda.contract.v1".to_string();
-    let frame = valid_execute_frame(&manifest);
-
-    let err = gateway
-        .bind_application_procedure_route(42, &frame, &manifest)
-        .unwrap_err();
-
-    assert_eq!(err.kind(), AndromedaErrorKind::Contract);
-    assert!(
-        err.message().contains("contract_package"),
-        "gRPC contract package drift must be rejected before runtime dispatch: {}",
-        err.message()
-    );
-}

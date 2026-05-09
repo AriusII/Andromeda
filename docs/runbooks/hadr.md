@@ -41,11 +41,11 @@ promotion, quorum validation, fencing, and replica repointing.
 ## Validation Commands
 
 ```powershell
-cargo test -p andromeda-storage --test hadr_promotion_runtime_contract --locked -- --nocapture
-cargo test -p andromeda-storage --test hadr_membership_store_contract --locked -- --nocapture
-cargo test -p andromeda-storage --test quorum_membership_contract --locked -- --nocapture
-cargo test -p andromeda-storage --test wal_shipping_reclaimability_contract --locked -- --nocapture
-cargo test -p andromeda-quic --test hadr_stream_mapping_contract --locked -- --nocapture
+cargo test -p andromeda-hadr --test hadr_promotion_runtime_contract --locked -- --nocapture
+cargo test -p andromeda-hadr --test hadr_membership_store_contract --locked -- --nocapture
+cargo test -p andromeda-hadr --test quorum_membership_contract --locked -- --nocapture
+cargo test -p andromeda-hadr --test wal_shipping_reclaimability_contract --locked -- --nocapture
+cargo test -p andromeda-rpc-protocol --test surface_separation_contract --locked -- --nocapture
 cargo test -p andromeda-audit --test hadr_backup_audit_contract --locked -- --nocapture
 ```
 

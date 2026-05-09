@@ -1,13 +1,12 @@
 //! HREDOV1 heap redo WAL production contracts.
 
-use andromeda_storage::{
-    Lsn, PageId, PageSize, WalRecord, decode_wal_record_frame, encode_wal_record,
-    write_ahead_log::{
-        HEAP_ROW_REDO_HEADER_LEN, HEAP_ROW_REDO_NONE_SLOT_ID, HeapRowRedoOperation,
-        HeapRowRedoPayloadV1,
-    },
+use andromeda_storage_heap::{
+    HEAP_ROW_REDO_HEADER_LEN, HEAP_ROW_REDO_NONE_SLOT_ID, HeapRowRedoOperation,
+    HeapRowRedoPayloadV1,
 };
+use andromeda_storage_page::{PageId, PageSize};
 use andromeda_types::TransactionId;
+use andromeda_wal::{Lsn, WalRecord, WalRecordKind, decode_wal_record_frame, encode_wal_record};
 
 #[test]
 fn wal_record_heap_redo_insert_payload_roundtrips_through_frame_codec() {
@@ -23,7 +22,7 @@ fn wal_record_heap_redo_insert_payload_roundtrips_through_frame_codec() {
     assert_eq!(
         payload.encode().len(),
         HEAP_ROW_REDO_HEADER_LEN + b"alpha".len(),
-        "HREDOV1 remains a storage-local v1 payload; catalog/procedure binding is adjacent exec evidence"
+        "HREDOV1 remains a heap-owned v1 payload; catalog/procedure binding is adjacent exec evidence"
     );
     let record = wal_record_from_payload(&payload, TransactionId::new(101), None);
 
@@ -98,16 +97,13 @@ fn wal_record_heap_redo_decode_rejects_conflicting_record_kind() {
     )
     .expect("insert payload");
 
-    let error = HeapRowRedoPayloadV1::decode(
-        &payload.encode(),
-        andromeda_storage::WalRecordKind::RowUpdate,
-    )
-    .expect_err("conflicting kind must be rejected");
+    let error = HeapRowRedoPayloadV1::decode(&payload.encode(), WalRecordKind::RowUpdate)
+        .expect_err("conflicting kind must be rejected");
 
     assert!(error.message().contains("does not match record kind"));
     assert!(
         payload
-            .encode_for_wal_kind(andromeda_storage::WalRecordKind::RowDelete)
+            .encode_for_wal_kind(WalRecordKind::RowDelete)
             .is_err()
     );
 }
@@ -126,22 +122,19 @@ fn wal_record_heap_redo_decode_rejects_truncated_and_malformed_payloads() {
     .encode();
 
     let truncated = &payload[..payload.len() - 1];
-    let error =
-        HeapRowRedoPayloadV1::decode(truncated, andromeda_storage::WalRecordKind::RowInsert)
-            .expect_err("tuple length mismatch must be rejected");
+    let error = HeapRowRedoPayloadV1::decode(truncated, WalRecordKind::RowInsert)
+        .expect_err("tuple length mismatch must be rejected");
     assert!(error.message().contains("tuple length"));
 
     let mut bad_magic = payload.clone();
     bad_magic[0] ^= 0x7f;
-    let error =
-        HeapRowRedoPayloadV1::decode(&bad_magic, andromeda_storage::WalRecordKind::RowInsert)
-            .expect_err("bad magic must be rejected");
+    let error = HeapRowRedoPayloadV1::decode(&bad_magic, WalRecordKind::RowInsert)
+        .expect_err("bad magic must be rejected");
     assert!(error.message().contains("HREDOV1"));
 
     let short_header = &payload[..8];
-    let error =
-        HeapRowRedoPayloadV1::decode(short_header, andromeda_storage::WalRecordKind::RowInsert)
-            .expect_err("short header must be rejected");
+    let error = HeapRowRedoPayloadV1::decode(short_header, WalRecordKind::RowInsert)
+        .expect_err("short header must be rejected");
     assert!(error.message().contains("expected at least"));
 }
 
@@ -159,11 +152,8 @@ fn wal_record_heap_redo_decode_rejects_all_header_prefixes_without_panic() {
     .encode();
 
     for prefix_len in 0..HEAP_ROW_REDO_HEADER_LEN {
-        let error = HeapRowRedoPayloadV1::decode(
-            &payload[..prefix_len],
-            andromeda_storage::WalRecordKind::RowInsert,
-        )
-        .expect_err("truncated prefix must be a typed decode error");
+        let error = HeapRowRedoPayloadV1::decode(&payload[..prefix_len], WalRecordKind::RowInsert)
+            .expect_err("truncated prefix must be a typed decode error");
         assert!(!error.message().is_empty());
     }
 }
@@ -183,19 +173,17 @@ fn wal_record_heap_redo_decode_rejects_version_page_size_and_unsupported_kind() 
 
     let mut bad_version = payload.clone();
     bad_version[8..10].copy_from_slice(&2u16.to_le_bytes());
-    let error =
-        HeapRowRedoPayloadV1::decode(&bad_version, andromeda_storage::WalRecordKind::RowInsert)
-            .expect_err("unsupported version must be rejected");
+    let error = HeapRowRedoPayloadV1::decode(&bad_version, WalRecordKind::RowInsert)
+        .expect_err("unsupported version must be rejected");
     assert!(error.message().contains("version"));
 
     let mut bad_page_size = payload.clone();
     bad_page_size[11] = 9;
-    let error =
-        HeapRowRedoPayloadV1::decode(&bad_page_size, andromeda_storage::WalRecordKind::RowInsert)
-            .expect_err("bad page size tag must be rejected");
+    let error = HeapRowRedoPayloadV1::decode(&bad_page_size, WalRecordKind::RowInsert)
+        .expect_err("bad page size tag must be rejected");
     assert!(error.message().contains("page size"));
 
-    let error = HeapRowRedoPayloadV1::decode(&payload, andromeda_storage::WalRecordKind::TxBegin)
+    let error = HeapRowRedoPayloadV1::decode(&payload, WalRecordKind::TxBegin)
         .expect_err("non-row WAL kind must be rejected before decode promotion");
     assert!(error.message().contains("cannot decode WAL record kind"));
 }

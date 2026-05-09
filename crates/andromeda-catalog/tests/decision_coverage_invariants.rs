@@ -15,8 +15,7 @@ fn catalog_spec_path() -> std::path::PathBuf {
 
 #[test]
 fn catalog_spec_covers_alter_procedure_lifecycle_before_operation_surface_expands() {
-    let spec =
-        std::fs::read_to_string(catalog_spec_path()).expect("catalog spec must be readable");
+    let spec = std::fs::read_to_string(catalog_spec_path()).expect("catalog spec must be readable");
     let normalized = spec.split_whitespace().collect::<Vec<_>>().join(" ");
 
     for required in [
@@ -34,8 +33,7 @@ fn catalog_spec_covers_alter_procedure_lifecycle_before_operation_surface_expand
 
 #[test]
 fn catalog_spec_covers_drop_procedure_lifecycle_before_operation_surface_expands() {
-    let spec =
-        std::fs::read_to_string(catalog_spec_path()).expect("catalog spec must be readable");
+    let spec = std::fs::read_to_string(catalog_spec_path()).expect("catalog spec must be readable");
     let normalized = spec
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -90,8 +88,7 @@ fn drop_procedure_operation_surface_is_guarded_not_yet_implemented() {
 
 #[test]
 fn drop_procedure_publication_policy_is_constrained_by_catalog_spec() {
-    let spec =
-        std::fs::read_to_string(catalog_spec_path()).expect("catalog spec must be readable");
+    let spec = std::fs::read_to_string(catalog_spec_path()).expect("catalog spec must be readable");
     let normalized = spec
         .split_whitespace()
         .collect::<Vec<_>>()

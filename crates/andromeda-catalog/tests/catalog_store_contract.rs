@@ -2,8 +2,6 @@
 mod api_boundary;
 #[path = "catalog_store_contract/common.rs"]
 mod common;
-#[path = "catalog_store_contract/definition_batch.rs"]
-mod definition_batch;
 #[path = "catalog_store_contract/mutation_wal.rs"]
 mod mutation_wal;
 #[path = "catalog_store_contract/recovery.rs"]

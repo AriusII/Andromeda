@@ -35,9 +35,7 @@ use std::collections::HashMap;
 use andromeda_error::AndromedaResult;
 use andromeda_types::TransactionId;
 
-use crate::{Lsn, WalRecordKind};
-
-use super::storage_error;
+use andromeda_wal::{Lsn, WalRecordKind};
 
 /// Represents an undo operation to be applied during rollback.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,14 +110,14 @@ impl UndoChain {
         if let Some(last) = self.records.last()
             && record.original_redo_lsn > last.original_redo_lsn
         {
-            return Err(storage_error(
+            return Err(recovery_error(
                 "undo chain LSN ordering violated: undo records must be in descending LSN order",
             ));
         }
 
         // Verify transaction consistency.
         if record.transaction_id != self.transaction_id {
-            return Err(storage_error(
+            return Err(recovery_error(
                 "undo chain transaction mismatch: undo record belongs to different transaction",
             ));
         }
@@ -138,7 +136,7 @@ impl UndoChain {
         // Verify LSN descending order.
         for window in self.records.windows(2) {
             if window[0].original_redo_lsn < window[1].original_redo_lsn {
-                return Err(storage_error(
+                return Err(recovery_error(
                     "undo chain LSN ordering violated: records not in descending order",
                 ));
             }
@@ -147,7 +145,7 @@ impl UndoChain {
         // Verify transaction consistency.
         for record in &self.records {
             if record.transaction_id != self.transaction_id {
-                return Err(storage_error(
+                return Err(recovery_error(
                     "undo chain transaction mismatch: found record for different transaction",
                 ));
             }
@@ -226,7 +224,7 @@ impl UndoChainsBuilder {
             for record in records.into_iter().rev() {
                 // Verify transaction consistency
                 if record.transaction_id != transaction_id {
-                    return Err(storage_error(
+                    return Err(recovery_error(
                         "undo chain transaction mismatch: record belongs to different transaction",
                     ));
                 }
@@ -245,6 +243,10 @@ impl Default for UndoChainsBuilder {
     fn default() -> Self {
         Self::new()
     }
+}
+
+fn recovery_error(message: impl Into<String>) -> andromeda_error::AndromedaError {
+    andromeda_error::AndromedaError::new(andromeda_error::AndromedaErrorKind::Storage, message)
 }
 
 #[cfg(test)]

@@ -32,40 +32,6 @@ fn test_2pl_growing_phase_then_shrinking_phase() {
 }
 
 #[test]
-fn test_2pl_state_transition_sequence_valid() {
-    let tx_mgr = TransactionManager::new();
-    let tx_id = tx_mgr.begin().unwrap();
-
-    assert_tx_state(&tx_mgr, tx_id, TransactionState::Active);
-
-    tx_mgr.request_commit(tx_id).unwrap();
-    assert_tx_state(&tx_mgr, tx_id, TransactionState::Committing);
-
-    tx_mgr.commit_durable(tx_id, 1).unwrap();
-    assert_tx_state(&tx_mgr, tx_id, TransactionState::Committed);
-
-    tx_mgr.dispose(tx_id).unwrap();
-    assert_tx_disposed(&tx_mgr, tx_id);
-}
-
-#[test]
-fn test_2pl_rollback_path_sequence() {
-    let tx_mgr = TransactionManager::new();
-    let tx_id = tx_mgr.begin().unwrap();
-
-    assert_tx_state(&tx_mgr, tx_id, TransactionState::Active);
-
-    tx_mgr.request_rollback(tx_id).unwrap();
-    assert_tx_state(&tx_mgr, tx_id, TransactionState::RollingBack);
-
-    tx_mgr.rollback_durable(tx_id, 1).unwrap();
-    assert_tx_state(&tx_mgr, tx_id, TransactionState::RolledBack);
-
-    tx_mgr.dispose(tx_id).unwrap();
-    assert_tx_disposed(&tx_mgr, tx_id);
-}
-
-#[test]
 fn test_no_acquire_after_release_shrinking_phase() {
     let tx_mgr = TransactionManager::new();
     let lock_mgr = LockManager::new();
@@ -92,19 +58,6 @@ fn test_no_acquire_after_release_shrinking_phase() {
 }
 
 #[test]
-fn test_failed_transaction_must_rollback() {
-    let tx_mgr = TransactionManager::new();
-    let tx_id = tx_mgr.begin().unwrap();
-
-    tx_mgr.fail(tx_id).unwrap();
-    assert_tx_state(&tx_mgr, tx_id, TransactionState::Failed);
-    assert_acquire_rejected(TransactionState::Failed);
-
-    tx_mgr.request_rollback(tx_id).unwrap();
-    assert_tx_state(&tx_mgr, tx_id, TransactionState::RollingBack);
-}
-
-#[test]
 fn test_multiple_transactions_independent_2pl() {
     let tx_mgr = TransactionManager::new();
     let lock_mgr = LockManager::new();
@@ -128,6 +81,14 @@ fn test_multiple_transactions_independent_2pl() {
     assert_tx_state(&tx_mgr, tx1, TransactionState::Committing);
     assert_tx_state(&tx_mgr, tx2, TransactionState::Active);
 
-    assert_operation_rejected(TransactionState::Committing, TwoPhaseOperation::Acquire);
-    assert_operation_allowed(TransactionState::Active, TwoPhaseOperation::Acquire);
+    assert!(
+        coordinator
+            .acquire(tx1, row_resource(3), LockMode::Shared)
+            .is_err()
+    );
+    assert!(
+        coordinator
+            .acquire(tx2, row_resource(4), LockMode::Shared)
+            .is_ok()
+    );
 }

@@ -135,3 +135,64 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    struct TestReceipt {
+        next_version: CatalogVersion,
+    }
+
+    impl CatalogSnapshotReceipt for TestReceipt {
+        fn next_version(&self) -> CatalogVersion {
+            self.next_version
+        }
+    }
+
+    #[test]
+    fn durable_publication_gate_exposes_only_current_durable_receipt() {
+        let receipt = TestReceipt {
+            next_version: CatalogVersion::new(11),
+        };
+        let gate = CatalogSnapshotPublicationGate {
+            version: CatalogVersion::new(11),
+            publication: CatalogSnapshotPublication::Durable(receipt),
+            last_durable_version: CatalogVersion::new(11),
+        };
+
+        assert_eq!(gate.visible_version(), CatalogVersion::new(11));
+        assert!(gate.is_durably_published());
+        assert_eq!(gate.visible_publication_receipt(), Some(receipt));
+        assert_eq!(gate.staged_in_memory_version(), None);
+    }
+
+    #[test]
+    fn durable_publication_gate_hides_staged_in_memory_state() {
+        let receipt = TestReceipt {
+            next_version: CatalogVersion::new(11),
+        };
+        let gate: CatalogSnapshotPublicationGate<TestReceipt> = CatalogSnapshotPublicationGate {
+            version: CatalogVersion::new(12),
+            publication: CatalogSnapshotPublication::InMemoryOnly,
+            last_durable_version: CatalogVersion::new(11),
+        };
+
+        assert_eq!(gate.visible_version(), CatalogVersion::new(11));
+        assert!(!gate.is_durably_published());
+        assert_eq!(gate.visible_publication_receipt(), None);
+        assert_eq!(
+            gate.staged_in_memory_version(),
+            Some(CatalogVersion::new(12))
+        );
+
+        let stale_receipt_gate = CatalogSnapshotPublicationGate {
+            version: CatalogVersion::new(12),
+            publication: CatalogSnapshotPublication::Durable(receipt),
+            last_durable_version: CatalogVersion::new(12),
+        };
+
+        assert_eq!(stale_receipt_gate.visible_publication_receipt(), None);
+    }
+}

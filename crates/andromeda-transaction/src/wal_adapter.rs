@@ -124,11 +124,12 @@
 
 mod api;
 mod error;
-mod replay;
 
 #[cfg(test)]
 mod tests;
 
+pub use andromeda_transaction_log::{
+    TxWalAdapterReplayKind, TxWalAdapterReplayRecord, map_tx_wal_replay_records,
+};
 pub use api::{TxWalAdapterTrait, WalManager, append_commit_and_flush};
 pub use error::TxWalAdapterError;
-pub use replay::{TxWalAdapterReplayKind, TxWalAdapterReplayRecord, map_tx_wal_replay_records};

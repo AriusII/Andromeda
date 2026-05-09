@@ -56,6 +56,34 @@ fn rollback_to_keeps_target_and_discards_descendants_in_stack_order() -> Androme
 }
 
 #[test]
+fn rollback_to_top_discards_no_descendants() -> AndromedaResult<()> {
+    let mut stack = SavepointStack::new();
+    stack.create("base")?;
+    stack.create("top")?;
+
+    let rollback = stack.rollback_to("top")?;
+
+    assert!(rollback.discarded_descendants.is_empty());
+    assert_eq!(names(&stack), vec!["base", "top"]);
+    Ok(())
+}
+
+#[test]
+fn rollback_to_root_discards_all_nested_savepoints() -> AndromedaResult<()> {
+    let mut stack = SavepointStack::new();
+    stack.create("root")?;
+    for index in 1..=10 {
+        stack.create(format!("s{index}"))?;
+    }
+
+    let rollback = stack.rollback_to("root")?;
+
+    assert_eq!(rollback.discarded_descendants.len(), 10);
+    assert_eq!(names(&stack), vec!["root"]);
+    Ok(())
+}
+
+#[test]
 fn repeated_rollback_to_same_target_is_idempotent_after_descendants_are_gone() -> AndromedaResult<()>
 {
     let mut stack = SavepointStack::new();
@@ -73,6 +101,29 @@ fn repeated_rollback_to_same_target_is_idempotent_after_descendants_are_gone() -
 }
 
 #[test]
+fn nested_release_after_inner_rollback_drains_remaining_outer_savepoint() -> AndromedaResult<()> {
+    let mut stack = SavepointStack::new();
+    stack.create("outer")?;
+    stack.create("inner")?;
+
+    let rollback = stack.rollback_to("outer")?;
+    assert_eq!(
+        rollback
+            .discarded_descendants
+            .iter()
+            .map(|savepoint| savepoint.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["inner"]
+    );
+
+    let release = stack.release("outer")?;
+
+    assert_eq!(release.released.len(), 1);
+    assert!(stack.is_empty());
+    Ok(())
+}
+
+#[test]
 fn release_removes_target_and_all_nested_savepoints() -> AndromedaResult<()> {
     let mut stack = SavepointStack::new();
     stack.create("root")?;
@@ -83,6 +134,24 @@ fn release_removes_target_and_all_nested_savepoints() -> AndromedaResult<()> {
 
     assert_eq!(release.released, vec![child, grandchild]);
     assert_eq!(names(&stack), vec!["root"]);
+    Ok(())
+}
+
+#[test]
+fn deep_nesting_preserves_stack_order_after_rollback() -> AndromedaResult<()> {
+    let mut stack = SavepointStack::new();
+    for index in 0..20 {
+        stack.create(format!("level{index}"))?;
+    }
+
+    let rollback = stack.rollback_to("level5")?;
+
+    assert_eq!(rollback.discarded_descendants.len(), 14);
+    assert_eq!(stack.depth(), 6);
+    assert_eq!(
+        names(&stack),
+        vec!["level0", "level1", "level2", "level3", "level4", "level5"]
+    );
     Ok(())
 }
 
@@ -123,4 +192,22 @@ fn savepoint_id_conversion_validates_zero_without_changing_new_roundtrip() -> An
     assert_eq!(u64::from(id), 42);
     assert_transaction_error(SavepointId::try_from(0));
     Ok(())
+}
+
+#[test]
+fn savepoint_id_ordering_is_numeric() {
+    assert!(SavepointId::new(1) < SavepointId::new(2));
+    assert!(SavepointId::new(2) < SavepointId::new(100));
+    assert_eq!(SavepointId::new(1), SavepointId::new(1));
+}
+
+#[test]
+fn rollback_marker_fields_are_public_evidence() {
+    let marker = SavepointRollbackMarker {
+        savepoint_id: SavepointId::new(7),
+        rollback_ordinal: 7,
+    };
+
+    assert_eq!(marker.savepoint_id.get(), 7);
+    assert_eq!(marker.rollback_ordinal, 7);
 }

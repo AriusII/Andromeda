@@ -57,11 +57,10 @@ Recommended catalog gates:
 
 ```powershell
 cargo test -p andromeda-catalog --test catalog_digest_contract -- --nocapture
-cargo test -p andromeda-catalog --test batch_alter_drop_compat -- --nocapture
-cargo test -p andromeda-catalog --test wal_record_design -- --nocapture
-cargo test -p andromeda-catalog --test publication_subscription_recovery_contract -- --nocapture
-cargo test -p andromeda-catalog --test catalog_publication_subscription -- --nocapture
-cargo test -p andromeda-catalog --test procedure_store_contract -- --nocapture
+cargo test -p andromeda-definition-batch --test alter_drop_compat -- --nocapture
+cargo test -p andromeda-catalog --test catalog_store_contract -- --nocapture
+cargo test -p andromeda-catalog --test catalog_server_runtime_contract -- --nocapture
+cargo test -p andromeda-catalog --test catalog_ddl_migration -- --nocapture
 ```
 
 For durable payload changes, add byte roundtrip, corruption rejection, property tests, fuzz coverage for malformed catalog payload bytes, and crash/recovery replay tests. For catalog-store or publication changes that cross into storage, also run the storage catalog WAL bridge and recovery integration tests.
@@ -78,15 +77,13 @@ For durable payload changes, add byte roundtrip, corruption rejection, property 
 ## References
 
 - `src/lib.rs`
-- `src/objects.rs`
-- `src/contracts.rs`
+- `src/store.rs`
 - `src/batch/`
+- `../andromeda-catalog-store/src/lib.rs`
+- `../andromeda-procedure-contract/src/lib.rs`
 - `src/recovery.rs`
 - `src/wal_record.rs`
-- `src/publication_subscription/`
-- `src/procedure_store/`
 - `tests/catalog_digest_contract.rs`
-- `tests/batch_alter_drop_compat.rs`
-- `tests/wal_record_design.rs`
-- `tests/publication_subscription_recovery_contract.rs`
-- `tests/procedure_store_contract.rs`
+- `../andromeda-definition-batch/tests/alter_drop_compat.rs`
+- `tests/catalog_store_contract.rs`
+- `tests/catalog_server_runtime_contract.rs`

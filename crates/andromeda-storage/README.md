@@ -57,12 +57,12 @@ Recommended storage gates:
 
 ```powershell
 cargo test -p andromeda-wal --test wal_durability_fence_contract -- --nocapture
-cargo test -p andromeda-storage --test file_wal_recovery_contract -- --nocapture
+cargo test -p andromeda-recovery --test file_wal_recovery_contract -- --nocapture
 cargo test -p andromeda-storage --test recovery_contract -- --nocapture
-cargo test -p andromeda-storage --test recovery_completeness_contract -- --nocapture
-cargo test -p andromeda-storage --test property_page_codec_v1 -- --nocapture
-cargo test -p andromeda-storage --test property_page_parsing -- --nocapture
-cargo test -p andromeda-storage --test property_recovery_replay -- --nocapture
+cargo test -p andromeda-recovery --test recovery_completeness_contract -- --nocapture
+cargo test -p andromeda-storage-page --test page_codec_v1_contract -- --nocapture
+cargo test -p andromeda-storage-page --test property_page_codec_v1 -- --nocapture
+cargo test -p andromeda-recovery --test property_recovery_replay -- --nocapture
 cargo test -p andromeda-storage --test wal_ownership_invariants -- --nocapture
 ```
 
@@ -86,16 +86,17 @@ cargo test -p andromeda-storage --test api_compat_reexports -- --nocapture
 ## References
 
 - `src/lib.rs`
-- `src/page/store.rs`
-- `src/buffer_pool/wal_durability.rs`
+- `../andromeda-storage-page/src/store.rs`
+- `../andromeda-buffer-pool/src/wal_durability.rs`
 - `src/manifest.rs`
 - `src/recovery.rs`
 - `src/recovery/`
-- `src/backup/`
-- `src/restore_orchestration/`
+- `../andromeda-backup/`
+- `../andromeda-restore/src/restore_orchestration/`
 - `../andromeda-wal/tests/wal_durability_fence_contract.rs`
-- `tests/file_wal_recovery_contract.rs`
+- `../andromeda-recovery/tests/file_wal_recovery_contract.rs`
 - `tests/recovery_contract.rs`
-- `tests/recovery_completeness_contract.rs`
-- `tests/property_page_codec_v1.rs`
-- `tests/property_recovery_replay.rs`
+- `../andromeda-recovery/tests/recovery_completeness_contract.rs`
+- `../andromeda-storage-page/tests/page_codec_v1_contract.rs`
+- `../andromeda-storage-page/tests/property_page_codec_v1.rs`
+- `../andromeda-recovery/tests/property_recovery_replay.rs`

@@ -17,6 +17,8 @@ use andromeda_types::{CatalogVersion, ContractHash, RequestId, SessionId, Transa
 
 #[path = "protobuf_projection_contract/execute_projection.rs"]
 mod execute_projection;
+#[path = "protobuf_projection_contract/procedure_gateway_decode.rs"]
+mod procedure_gateway_decode;
 #[path = "protobuf_projection_contract/result_stream_projection.rs"]
 mod result_stream_projection;
 #[path = "protobuf_projection_contract/typed_envelope_context.rs"]

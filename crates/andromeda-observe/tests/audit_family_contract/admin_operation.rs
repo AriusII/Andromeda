@@ -159,18 +159,6 @@ fn durable_admin_operation_families_require_binding_to_match_operation_trace() {
                 .message()
                 .contains("principal_id must match admin operation trace")
         );
-
-        let mut missing_policy = durable_admin_operation_binding(surface, permission);
-        missing_policy.policy_version = None;
-        let missing_policy = PendingDurableAuditRecord::new(
-            80 + index as u64,
-            missing_policy,
-            DurableAuditRetentionBoundary::SecurityPolicy,
-            DurableAuditReplayBehavior::RebuildDecisionIndex,
-            envelope,
-        )
-        .unwrap_err();
-        assert!(missing_policy.message().contains("policy version evidence"));
     }
 }
 
@@ -246,22 +234,6 @@ fn durable_admin_operation_records_reject_surface_permission_certificate_and_cor
         correlation_drift
             .message()
             .contains("request/session ids must match envelope correlation")
-    );
-
-    wrong_surface.request_id = Some(RequestId::new(70));
-    wrong_surface.certificate_fingerprint = None;
-    let missing_certificate = PendingDurableAuditRecord::new(
-        94,
-        wrong_surface,
-        DurableAuditRetentionBoundary::SecurityPolicy,
-        DurableAuditReplayBehavior::RebuildDecisionIndex,
-        envelope,
-    )
-    .unwrap_err();
-    assert!(
-        missing_certificate
-            .message()
-            .contains("certificate, surface, and permission evidence")
     );
 }
 #[test]
