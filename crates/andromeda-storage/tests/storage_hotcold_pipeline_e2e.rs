@@ -4,10 +4,11 @@ use andromeda_observe::{
     IoPlacementDecisionTrace, IoStorageTier, ManifestEventKind, TraceEvent, TraceId,
 };
 use andromeda_storage::{
-    AllocationId, DataTemperature, DatabaseManifest, DatabaseSnapshotPublication, ExtentId, Lsn,
-    ObjectId, PageId, PageSize, PipelineStage, PlacementDecision, ReadFallbackPolicy,
-    SegmentDescriptor, SegmentHeader, SegmentId, SegmentMutation, SegmentState, SegmentTrailer,
-    SnapshotAvailabilityContract, SnapshotSegmentReference, StorageTier,
+    AllocationId, DataTemperature, DatabaseManifest, DatabaseManifestTraceExt,
+    DatabaseSnapshotPublication, ExtentId, Lsn, ObjectId, PageId, PageSize, PipelineStage,
+    PlacementDecision, ReadFallbackPolicy, SegmentDescriptor, SegmentHeader, SegmentId,
+    SegmentMutation, SegmentState, SegmentTrailer, SnapshotAvailabilityContract,
+    SnapshotSegmentReference, StorageTier,
 };
 
 fn segment(state: SegmentState) -> SegmentDescriptor {

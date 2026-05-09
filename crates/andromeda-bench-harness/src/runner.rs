@@ -1,0 +1,13 @@
+//! Shared benchmark runner evidence helpers.
+
+mod counters;
+mod latency;
+mod synthetic;
+
+pub use counters::{
+    counter_from_usize, counters_from_usize, requested_sample_counters, validate_workload_counters,
+};
+pub use latency::{LatencyEvidence, harness_latency_evidence};
+pub use synthetic::{
+    SYNTHETIC_LATENCY_SOURCE, SYNTHETIC_MODEL_VERSION, synthetic_latency_evidence,
+};

@@ -16,6 +16,7 @@ C5 invariants:
 "#]
 
 pub mod artifacts;
+pub mod checkpoint_manager;
 pub mod error;
 pub mod immutability;
 pub mod physical_plan;
@@ -28,6 +29,9 @@ pub use artifacts::{
     BackupColdSnapshotArtifact, BackupCompatibility, BackupIncompleteTransactionBoundary,
     BackupIncompleteTransactionPolicy, BackupPhysicalArtifactSet, BackupResourceBounds,
     BackupWalSegmentArtifact,
+};
+pub use checkpoint_manager::{
+    BackupCheckpoint, BackupCheckpointManager, BackupCheckpointMetadata, BackupRecoveryInfo,
 };
 pub use error::{BackupResult, BackupValidationError};
 pub use immutability::{BackupArtifactImmutabilityGuard, ImmutableBackupArtifact};

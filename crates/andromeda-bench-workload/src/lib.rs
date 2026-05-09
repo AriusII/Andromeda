@@ -7,6 +7,7 @@
 //! output remains advisory only.
 
 mod budget;
+mod crud;
 mod error;
 mod limits;
 mod metric_math;
@@ -14,6 +15,12 @@ mod request;
 mod workload;
 
 pub use budget::{BudgetStatus, PerformanceBudget, evaluate_budget};
+pub use crud::{
+    CRUD_BENCHMARK_BUDGET_ORIGIN, CRUD_BENCHMARK_DECISION_LINKAGE, CRUD_BENCHMARK_PRIMARY_METRIC,
+    CRUD_SCENARIOS, CrudDataGenerator, CrudOperationMetrics, CrudRow, CrudScenarioDefinition,
+    MAX_CRUD_BATCH_SIZE, MAX_CRUD_DURATION_MS, MAX_CRUD_ROWS, MAX_CRUD_THREADS, compute_percentile,
+    find_crud_scenario,
+};
 pub use error::BenchmarkError;
 pub use limits::{
     DEFAULT_DURATION_MS, DEFAULT_SAMPLES, DEFAULT_TEMP_BYTES, DEFAULT_WARMUPS, MAX_DURATION_MS,

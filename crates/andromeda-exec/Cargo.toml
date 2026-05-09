@@ -69,4 +69,3 @@ path = "tests/runtime_contract.rs"
 [[test]]
 name = "v0_vertical_e2e"
 path = "tests/v0_vertical_e2e.rs"
-

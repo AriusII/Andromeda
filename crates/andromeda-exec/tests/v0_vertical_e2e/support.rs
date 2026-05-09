@@ -11,7 +11,9 @@ use andromeda_exec::{
     encode_inventory_reserve_stock_v0_execute_frame,
 };
 use andromeda_observe::TraceId;
-use andromeda_quic::{FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader, FrameType};
+use andromeda_quic::{
+    FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader, FrameType,
+};
 use andromeda_storage::{PageId, PageSize};
 
 pub(crate) fn inventory_catalog_snapshot() -> CatalogSnapshot {

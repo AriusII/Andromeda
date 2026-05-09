@@ -1,7 +1,7 @@
-//! V0 evidence-only Procedure feedback scaffold.
+//! Compatibility facade for Procedure feedback ownership.
 
-mod record;
-mod store;
-
-pub use record::*;
-pub use store::*;
+pub use andromeda_procedure_store::{
+    CompletionEvidence, CompletionStatus, FeedbackId, InMemoryProcedureFeedbackStore,
+    ProcedureFeedback, ProcedureFeedbackError, ProcedureFeedbackStore, ProcedureFeedbackStoreError,
+    RecordOutcome,
+};

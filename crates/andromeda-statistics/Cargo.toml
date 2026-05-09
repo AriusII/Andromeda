@@ -10,4 +10,6 @@ andromeda-contract.workspace = true
 andromeda-decision-trace.workspace = true
 andromeda-digest.workspace = true
 andromeda-error.workspace = true
+andromeda-observability.workspace = true
+andromeda-scenario-evidence.workspace = true
 andromeda-types.workspace = true

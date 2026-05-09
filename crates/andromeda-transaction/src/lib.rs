@@ -14,18 +14,24 @@ C5 invariants:
 - RAM, temporary storage, GPU output, and benchmark output are advisory only; they are not truth.
 "#]
 
+mod allocator;
 pub mod commit_log;
+pub mod commit_protocol;
 mod locking_protocol;
+mod manager;
 mod state;
 mod trace;
 mod wal_adapter;
 
+pub use allocator::TransactionIdAllocator;
 pub use commit_log::{
-    CommitLogEntry, CommitLogManager, IsolationLevel, Lsn, RollbackLogEntry,
-    TransactionStatusRebuild, TxWalReplayAction, TxWalReplayRecord, TxWalReplaySummary,
-    WalRecordKind,
+    CommitLogEntry, CommitLogManager, IsolationLevel, Lsn, RollbackLogEntry, TransactionStatus,
+    TransactionStatusRebuild, TransactionStatusTable, TxWalReplayAction, TxWalReplayRecord,
+    TxWalReplaySummary, WalRecordKind,
 };
+pub use commit_protocol::CommitProtocol;
 pub use locking_protocol::{TwoPhaseLocksValidator, TwoPhaseOperation};
+pub use manager::{TransactionLockCoordinator, TransactionManager, TransactionRecord};
 pub use state::{TransactionEvent, TransactionState, TransactionStateMachine};
 pub use trace::{
     LockReleaseAllTrace, TransactionTrace, TransactionTransitionCorrelation, transaction_phase_code,

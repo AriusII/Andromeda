@@ -12,9 +12,9 @@ use crate::{
     run_wal_append_file_smoke_benchmark, setup_btree_lookup_harness,
     setup_btree_range_scan_harness,
 };
-
-use super::counters::{counter_from_usize, counters_from_usize};
-use super::latency::{LatencyEvidence, harness_latency_evidence};
+use andromeda_bench_harness::{
+    LatencyEvidence, counter_from_usize, counters_from_usize, harness_latency_evidence,
+};
 
 pub(super) const BTREE_HARNESS_SOURCE: &str = "in-memory-btree-read-harness";
 pub(super) const BTREE_HARNESS_NAME: &str = "MockBTreeIndex";

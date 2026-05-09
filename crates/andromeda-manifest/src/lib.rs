@@ -18,8 +18,21 @@ C5 invariants:
 use andromeda_core::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_wal::Lsn;
 
+mod database;
+mod format;
+pub mod format_version;
+mod snapshot;
 mod storage_format_hash;
 
+pub use database::DatabaseManifest;
+pub use format::{DATABASE_MANIFEST_STORAGE_FORMAT_FINGERPRINTS, StorageFormatManifest};
+pub use format_version::{
+    CompatibilityMatrix, CompatibilityResult, FormatVersion, StorageFormatFingerprint,
+    StorageFormatKind,
+};
+pub use snapshot::{
+    DatabaseSnapshotPublication, SnapshotAvailabilityContract, SnapshotSegmentReference,
+};
 pub use storage_format_hash::{ManifestFormatHashInput, storage_format_manifest_hash};
 
 /// Durable recovery root fields carried by an accepted database manifest.
@@ -165,3 +178,6 @@ mod tests {
         assert!(validate_recovery_floor(Lsn::new(200), Lsn::new(300)).is_err());
     }
 }
+
+#[cfg(test)]
+mod primitive_tests;

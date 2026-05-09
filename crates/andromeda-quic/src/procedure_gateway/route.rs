@@ -5,15 +5,17 @@ use andromeda_core::{
 };
 
 use crate::{
-    CatalogProcedureManifest, Connection, DispatchPolicy, FrameBytes, FrameType, HADR_STREAM_MAX,
-    HADR_STREAM_MIN, ResultStreamMetadataPolicy, StreamRole, SurfacePlane, TransportSurface,
-    TypedResultStreamBounds, TypedResultStreamContext, validate_transport_surface,
+    CatalogProcedureManifest, Connection, DispatchPolicy, FrameBytes, FrameType,
+    ResultStreamMetadataPolicy, StreamRole, SurfacePlane, TransportSurface, TypedResultStreamBounds,
+    TypedResultStreamContext, validate_transport_surface,
 };
 
 use super::errors::{protocol_error, security_error};
 use super::{state, validation};
 
 const APPLICATION_STREAM_MIN: u64 = 0;
+const HADR_STREAM_MIN: u64 = 128;
+const HADR_STREAM_MAX: u64 = 255;
 const APPLICATION_STREAM_MAX: u64 = HADR_STREAM_MIN - 1;
 const FUTURE_RESERVED_STREAM_MIN: u64 = HADR_STREAM_MAX + 1;
 

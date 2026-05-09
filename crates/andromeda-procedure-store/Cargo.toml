@@ -6,3 +6,8 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+andromeda-digest.workspace = true
+andromeda-procedure-contract.workspace = true
+andromeda-scenario-evidence.workspace = true
+andromeda-time.workspace = true
+andromeda-types.workspace = true

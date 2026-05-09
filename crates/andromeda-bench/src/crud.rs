@@ -6,21 +6,17 @@
 //! - Latency/throughput metrics collection
 //! - 6 pre-defined diagnostic scenarios (single/multi-threaded, varying batch sizes)
 
-mod data;
-mod metrics;
 mod result;
-mod scenario;
 
-pub use data::{CrudDataGenerator, CrudRow};
-pub use metrics::{CrudOperationMetrics, compute_percentile};
-pub use result::CrudWorkloadResult;
-pub use scenario::{
-    CRUD_SCENARIOS, CrudScenarioDefinition, MAX_CRUD_BATCH_SIZE, MAX_CRUD_DURATION_MS,
-    MAX_CRUD_ROWS, MAX_CRUD_THREADS, find_crud_scenario,
+pub use andromeda_bench_workload::{
+    CRUD_SCENARIOS, CrudDataGenerator, CrudOperationMetrics, CrudRow, CrudScenarioDefinition,
+    MAX_CRUD_BATCH_SIZE, MAX_CRUD_DURATION_MS, MAX_CRUD_ROWS, MAX_CRUD_THREADS, compute_percentile,
+    find_crud_scenario,
 };
+pub use result::CrudWorkloadResult;
 
 #[cfg(test)]
-use scenario::{
+use andromeda_bench_workload::{
     CRUD_BENCHMARK_BUDGET_ORIGIN, CRUD_BENCHMARK_DECISION_LINKAGE, CRUD_BENCHMARK_PRIMARY_METRIC,
 };
 

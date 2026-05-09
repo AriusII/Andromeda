@@ -75,6 +75,10 @@ dependencies = [
 [[package]]
 name = "andromeda-bench-harness"
 version = "0.1.0"
+dependencies = [
+ "andromeda-bench-workload",
+ "andromeda-scenario-evidence",
+]
 
 [[package]]
 name = "andromeda-bench-workload"
@@ -336,6 +340,7 @@ name = "andromeda-manifest"
 version = "0.1.0"
 dependencies = [
  "andromeda-core",
+ "andromeda-segment",
  "andromeda-wal",
 ]
 
@@ -427,6 +432,13 @@ dependencies = [
 [[package]]
 name = "andromeda-procedure-store"
 version = "0.1.0"
+dependencies = [
+ "andromeda-digest",
+ "andromeda-procedure-contract",
+ "andromeda-scenario-evidence",
+ "andromeda-time",
+ "andromeda-types",
+]
 
 [[package]]
 name = "andromeda-proto"
@@ -470,7 +482,6 @@ name = "andromeda-quic"
 version = "0.1.0"
 dependencies = [
  "andromeda-core",
- "andromeda-hadr",
  "andromeda-proto",
  "andromeda-rpc",
  "andromeda-rpc-codec",
@@ -609,6 +620,9 @@ dependencies = [
 [[package]]
 name = "andromeda-security-contract"
 version = "0.1.0"
+dependencies = [
+ "andromeda-types",
+]
 
 [[package]]
 name = "andromeda-segment"
@@ -768,6 +782,8 @@ dependencies = [
  "andromeda-decision-trace",
  "andromeda-digest",
  "andromeda-error",
+ "andromeda-observability",
+ "andromeda-scenario-evidence",
  "andromeda-types",
 ]
 
@@ -844,8 +860,10 @@ name = "andromeda-transaction"
 version = "0.1.0"
 dependencies = [
  "andromeda-core",
+ "andromeda-locking",
  "andromeda-mvcc",
  "andromeda-observe",
+ "andromeda-savepoint",
  "andromeda-transaction-log",
  "async-trait",
  "dashmap",

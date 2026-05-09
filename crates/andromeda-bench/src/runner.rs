@@ -3,11 +3,8 @@ use crate::{
     BenchmarkRunRequest, evaluate_budget,
 };
 
-mod counters;
 mod dispatch;
 mod harnesses;
-mod latency;
-mod synthetic;
 
 use dispatch::dispatch_latency_evidence;
 

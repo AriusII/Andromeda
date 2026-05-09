@@ -1,5 +1,7 @@
 use super::*;
-use andromeda_quic::{HADR_STREAM_MAX, HADR_STREAM_MIN};
+
+const HADR_STREAM_MIN: u64 = 128;
+const HADR_STREAM_MAX: u64 = 255;
 use andromeda_security_contract::{
     AdmissionDecision, Permission as SecurityPermission, SecurityAdmissionOutcomeV0,
     SecurityAdmissionReasonCodeV0, SecuritySurface, SurfaceClass,

@@ -19,6 +19,7 @@ mod admission;
 mod error;
 mod permission;
 mod policy;
+pub mod principal;
 mod surface;
 
 pub use admission::{
@@ -50,6 +51,7 @@ pub use policy::{
     SECURITY_POLICY_EVIDENCE_SCHEMA_VERSION, SECURITY_POLICY_VERSION_LEN, SecurityPolicyEvidence,
     SecurityPolicyVersion,
 };
+pub use principal::{Permission as PrincipalPermission, SurfaceScope};
 pub use surface::{
     ALL_SECURITY_SURFACES, SURFACE_ID_ADMINISTRATION, SURFACE_ID_APPLICATION,
     SURFACE_ID_BACKUP_AGENT, SURFACE_ID_CLUSTER, SURFACE_ID_MONITORING_AGENT, SecuritySurface,

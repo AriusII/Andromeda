@@ -1,13 +1,11 @@
 use crate::flat_json::escape_json_string;
+use andromeda_bench_workload::{
+    CrudOperationMetrics, MAX_CRUD_BATCH_SIZE, MAX_CRUD_DURATION_MS, MAX_CRUD_ROWS,
+    MAX_CRUD_THREADS, find_crud_scenario,
+};
 use andromeda_scenario_evidence::{
     BENCHMARK_EVIDENCE_AUTHORITATIVE, BENCHMARK_EVIDENCE_CAN_SELECT_PLAN_ALONE,
     BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY,
-};
-
-use super::metrics::{CrudOperationMetrics, operation_metrics_json};
-use super::scenario::{
-    MAX_CRUD_BATCH_SIZE, MAX_CRUD_DURATION_MS, MAX_CRUD_ROWS, MAX_CRUD_THREADS,
-    scenario_metadata_json,
 };
 
 /// Complete results from a CRUD workload run.
@@ -73,4 +71,34 @@ impl CrudWorkloadResult {
             self.seed
         )
     }
+}
+
+fn operation_metrics_json(op: &CrudOperationMetrics) -> String {
+    format!(
+        "{{\"operation\":\"{}\",\"count\":{},\"total_us\":{},\"p50_us\":{},\"p95_us\":{},\"p99_us\":{},\"throughput_ops_sec\":{:.2},\"error_count\":{}}}",
+        escape_json_string(&op.operation),
+        op.count,
+        op.total_us,
+        op.p50_us,
+        op.p95_us,
+        op.p99_us,
+        op.throughput_ops_sec,
+        op.error_count
+    )
+}
+
+fn scenario_metadata_json(scenario_id: &str) -> String {
+    let Some(scenario) = find_crud_scenario(scenario_id) else {
+        return "null".to_string();
+    };
+
+    format!(
+        r#"{{"hypothesis":"{}","workload_shape_version":"{}","workload_size":"{}","primary_metric":"{}","budget_origin":"{}","decision_linkage":"{}"}}"#,
+        escape_json_string(scenario.hypothesis),
+        escape_json_string(scenario.workload_shape_version),
+        escape_json_string(scenario.workload_size),
+        escape_json_string(scenario.primary_metric),
+        escape_json_string(scenario.budget_origin),
+        escape_json_string(scenario.decision_linkage)
+    )
 }

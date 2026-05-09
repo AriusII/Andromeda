@@ -1,9 +1,7 @@
 #![forbid(unsafe_code)]
 
 pub mod active_snapshot_registry;
-mod allocator;
 pub mod commit_log;
-pub mod commit_protocol;
 pub mod deadlock_detection;
 pub mod gc;
 pub mod lock_history;
@@ -11,7 +9,6 @@ pub mod lock_manager;
 pub mod lock_protocol;
 pub mod locking_protocol;
 mod lsn;
-mod manager;
 pub mod mvcc;
 mod mvcc_snapshot;
 mod mvcc_status;
@@ -22,13 +19,20 @@ mod state;
 mod trace;
 pub mod wal_adapter;
 
+pub mod commit_protocol {
+    pub use andromeda_transaction::commit_protocol::*;
+}
+
 // Re-export MVCC types and functions
 pub use mvcc_snapshot::{MvccIsolationPolicy, Snapshot};
 pub use mvcc_status::{TransactionStatus, TransactionStatusTable};
 pub use mvcc_version::{MvccRowHeader, creator_is_visible, delete_is_visible};
 
 pub use active_snapshot_registry::{ActiveSnapshotRegistry, GcError, SnapshotHandle};
-pub use allocator::TransactionIdAllocator;
+pub use andromeda_transaction::{
+    CommitProtocol, TransactionIdAllocator, TransactionLockCoordinator, TransactionManager,
+    TransactionRecord,
+};
 /// Transaction WAL record kinds exposed for `InvocationWal` implementations.
 ///
 /// This is intentionally part of the transaction crate boundary: transaction tests
@@ -40,7 +44,6 @@ pub use commit_log::{
     CommitLogEntry, CommitLogManager, IsolationLevel, RollbackLogEntry, TransactionStatusRebuild,
     TxWalReplayAction, TxWalReplayRecord, TxWalReplaySummary,
 };
-pub use commit_protocol::CommitProtocol;
 pub use deadlock_detection::*;
 pub use gc::mvcc_eligibility::{
     VersionEligibility, VersionEligibilityChecker, VersionEligibilityStats, VersionRecord,
@@ -64,7 +67,6 @@ pub use locking_protocol::{TwoPhaseLocksValidator, TwoPhaseOperation};
 /// `andromeda-tx` re-exports it because `CommitLogEntry`, `InvocationWal`,
 /// `WalManager`, and `TxWalAdapterTrait` expose LSNs in their public contracts.
 pub use lsn::Lsn;
-pub use manager::{TransactionLockCoordinator, TransactionManager, TransactionRecord};
 pub use savepoint::{
     Savepoint, SavepointId, SavepointReleaseEvidence, SavepointRollbackEvidence,
     SavepointRollbackMarker, SavepointStack,

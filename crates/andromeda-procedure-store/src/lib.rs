@@ -13,6 +13,7 @@ mod error;
 mod evidence;
 mod evidence_role;
 mod feedback;
+mod feedback_store;
 mod history;
 mod identity;
 mod metrics;
@@ -27,7 +28,14 @@ pub use audit::{AuditCorrelation, AuditCorrelationId};
 pub use error::{ProcedureStorePrimitiveError, ProcedureStorePrimitiveResult};
 pub use evidence::{EvidenceDigest, InvocationEvidenceKind, InvocationEvidenceMarker};
 pub use evidence_role::ProcedureStoreEvidenceRole;
-pub use feedback::{FeedbackId, InvocationFeedback};
+pub use feedback::{
+    CompletionEvidence, CompletionStatus, FeedbackId, InvocationFeedback, ProcedureFeedback,
+    ProcedureFeedbackError,
+};
+pub use feedback_store::{
+    InMemoryProcedureFeedbackStore, ProcedureFeedbackStore, ProcedureFeedbackStoreError,
+    RecordOutcome,
+};
 pub use history::InvocationHistoryRecord;
 pub use identity::{InvocationId, InvocationIdentity, ProcedureId};
 pub use metrics::{InvocationMetricKind, InvocationMetrics};

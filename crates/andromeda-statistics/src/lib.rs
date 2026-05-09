@@ -28,6 +28,10 @@ mod histogram;
 mod ndv;
 mod policy;
 mod publication;
+mod publication_evidence;
+mod publication_switch;
+mod publication_switch_error;
+mod publication_trace;
 mod usage;
 mod validation;
 
@@ -64,5 +68,17 @@ pub use ndv::{
 };
 pub use policy::StatisticsUsePolicy;
 pub use publication::{StatsPublication, StatsPublicationBuilder, StatsPublicationSummary};
+pub use publication_evidence::{
+    StatsPublicationAdvisoryEvidenceReference, StatsPublicationDecisionEvidence,
+    StatsPublicationDecisionEvidenceKind,
+};
+pub use publication_switch::{
+    STATS_PUBLICATION_SWITCH_HISTORY_LIMIT, StatsPublicationCandidateState, StatsPublicationSwitch,
+};
+pub use publication_switch_error::StatsPublicationSwitchError;
+pub use publication_trace::{
+    STATS_PUBLICATION_SWITCH_REASON_MAX_BYTES, StatsPublicationDecisionStage,
+    StatsPublicationDecisionTrace, StatsPublicationSwitchDecision,
+};
 pub use usage::{StatisticsUseDecision, StatisticsUseReason, evaluate_statistics_for_optimizer};
 pub use validation::StatsValidationError;

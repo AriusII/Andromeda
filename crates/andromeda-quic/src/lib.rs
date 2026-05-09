@@ -138,15 +138,6 @@ pub use transport::{
     TransportShutdownMode, TransportShutdownState,
 };
 
-pub mod hadr_streams;
-
-pub use hadr_streams::{
-    HADR_STREAM_MAX, HADR_STREAM_MIN, HEARTBEAT_STREAM_MAX, HEARTBEAT_STREAM_MIN,
-    HadrStreamCleanup, HadrStreamKind, RESERVED_STREAM_MAX, RESERVED_STREAM_MIN, StreamAllocation,
-    StreamMultiplexer, VOTE_STREAM_MAX, VOTE_STREAM_MIN, WAL_SHIPPING_STREAM_MAX,
-    WAL_SHIPPING_STREAM_MIN,
-};
-
 mod protocol_invariants;
 
 pub use protocol_invariants::{

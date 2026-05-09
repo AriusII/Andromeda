@@ -300,7 +300,8 @@ mod tests {
     use super::*;
     use andromeda_core::SurfaceScope;
     use andromeda_quic::{
-        FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader, FrameType, LifecycleState,
+        FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameHeader, FrameType,
+        LifecycleState,
     };
 
     fn hello_frame(session_id: u64) -> FrameBytes {
