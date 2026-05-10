@@ -1,43 +1,74 @@
-# Andromeda Docs
+# Andromeda documentation
 
-`/docs` is the canonical documentation entrypoint for Andromeda. Start here for
-architecture, specifications, governance, implementation status, runbooks, and
-testing guidance.
+> **Status:** Replacement documentation package  
+> **Scope:** `docs/` only  
+> **Language:** American English  
+> **Baseline:** Rust 1.95.0, Rust 2024 Edition
 
-## Start Here
+## In this article
 
-| Document | Use |
-| --- | --- |
-| [Project status](status.md) | Current documentation status, crate count, readiness boundaries, and migration notes. |
-| [Architecture](architecture/README.md) | System planes, workspace topology, dependency policy, and durable-system invariants. |
-| [Domain specifications](specs/README.md) | Canonical domain contracts for core, catalog, storage, transactions, RPC, security, HA/DR, and advisory systems. |
-| [Implementation roadmap](implementation/roadmap.md) | Current implementation priorities and boundaries. |
-| [Extraction status](implementation/extraction-status.md) | Current crate extraction and ownership status. |
-| [Runbooks](runbooks/README.md) | Operational procedures and incident guidance. |
-| [Testing](testing/README.md) | Test strategy, validation scope, fuzzing, recovery, and benchmark guidance. |
-| [Governance](governance/README.md) | Human-readable repository governance policies. |
-| [ADRs](adr/README.md) | Architecture decision records and open decision tracking. |
+- Understand the purpose of this documentation package.
+- Navigate architecture, specifications, ADRs, runbooks, testing, and roadmap files.
+- Apply the replacement instructions safely.
+- Preserve Andromeda's strict, procedure-only, WAL-first doctrine.
 
-## Directory Map
+## Purpose
 
-| Path | Status |
-| --- | --- |
-| `architecture/` | Canonical architecture surface. |
-| `specs/` | Canonical domain specification surface. |
-| `implementation/` | Current implementation roadmap and status summaries. |
-| `runbooks/` | Operational procedure surface. |
-| `testing/` | Testing and validation guidance. |
-| `governance/` | Repository governance policies. |
-| `adr/` | Architecture decision records. |
-| Top-level policy files | Legacy matrices retained only when they still describe current repository contracts. |
+This `docs/` folder is a clean replacement documentation set for Andromeda.
+It is designed for a modern relational transactional database engine that exposes a strict native surface:
 
-## Status Rules
+```text
+QUIC + custom typed RPC + cataloged Procedure + SRPL + typed ResultStream
+```
 
-- Treat `/docs` as the current entrypoint.
-- Treat status pages and validation output as readiness evidence.
-- Do not infer implemented behavior from a file name alone.
-- Keep active documentation links inside `/docs`.
+Andromeda is not documented here as a generic SQL server. The application surface is procedure-only, contract-first, typed, observable, and transaction-scoped.
 
-## Out Of Scope
+## Read first
 
-This index does not approve release readiness or replace decision records.
+| File | Purpose |
+|---|---|
+| `INDEX.md` | Main reading map and documentation structure. |
+| `DOCS_MANIFEST.md` | Inventory of all generated files and their role. |
+| `project/ANDROMEDA_DOCTRINE.md` | Non-negotiable doctrine and invariants. |
+| `architecture/ENGINE_OVERVIEW.md` | High-level architecture and engine boundaries. |
+| `roadmap/ROADMAP.md` | Sequenced roadmap without calendar promises. |
+| `specifications/` | Normative technical specifications. |
+| `adr/` | Architecture Decision Records. |
+| `runbooks/` | Operational response procedures. |
+| `testing/` | Test strategy, crash matrix, fuzzing, and release gates. |
+
+## Replacement instruction
+
+Delete your local `docs/` folder, then copy this new `docs/` folder at the repository root.
+
+```text
+repo-root/
+  docs/              <- replace with this folder
+  crates/
+  Cargo.toml
+```
+
+Do not merge old files manually unless a specific old file contains unique implementation evidence that is not represented in this package.
+
+## Documentation principles
+
+- Use American English.
+- Prefer short, precise sentences.
+- Use stable headings.
+- Avoid hidden assumptions.
+- Do not include calendar promises in roadmap files.
+- Describe sequencing with entry criteria, exit criteria, dependencies, and acceptance checks.
+- Keep each document responsible for one topic.
+
+## Core invariant summary
+
+```text
+No ad hoc SQL application surface.
+Every application execution goes through a cataloged Procedure.
+Every Procedure has a typed, hashed, versioned contract.
+Every Procedure is transaction-scoped.
+No visible commit without durable WAL.
+RAM is not system truth.
+GPU is never part of commit, rollback, WAL, recovery, MVCC visibility, or security-critical authorization.
+Every critical decision must be observable and explainable.
+```
