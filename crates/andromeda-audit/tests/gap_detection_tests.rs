@@ -8,7 +8,7 @@ use andromeda_principal::{Permission, PrincipalId};
 /// Verifies that gaps in trace ID sequence are detected.
 #[test]
 fn audit_gap_in_sequence_detected() {
-    let trace_ids = vec![
+    let trace_ids = [
         TraceId::new(30001),
         TraceId::new(30002),
         TraceId::new(30003),
@@ -42,7 +42,7 @@ fn audit_gap_in_sequence_detected() {
 /// Verifies that gaps indicate partial writes.
 #[test]
 fn audit_gap_with_partial_write_suspected() {
-    let trace_ids = vec![
+    let trace_ids = [
         TraceId::new(31001),
         TraceId::new(31002),
         TraceId::new(31003),
@@ -78,7 +78,7 @@ fn audit_gap_with_partial_write_suspected() {
 /// Verifies detection of large gaps in sequences.
 #[test]
 fn audit_gap_large_sequence_missing() {
-    let trace_ids = vec![
+    let trace_ids = [
         TraceId::new(32001),
         TraceId::new(32100), // Large gap: 32002-32099 missing
         TraceId::new(32101),
@@ -105,7 +105,7 @@ fn audit_gap_large_sequence_missing() {
 #[test]
 fn audit_gap_at_sequence_start() {
     // Sequence doesn't start at 0, indicating missing entries
-    let trace_ids = vec![
+    let trace_ids = [
         TraceId::new(33050), // Starts at 50, not 0
         TraceId::new(33051),
         TraceId::new(33052),
@@ -131,7 +131,7 @@ fn audit_gap_at_sequence_start() {
 /// Verifies detection of potential missing entries at sequence end.
 #[test]
 fn audit_gap_at_sequence_end() {
-    let trace_ids = vec![
+    let trace_ids = [
         TraceId::new(34001),
         TraceId::new(34002),
         TraceId::new(34003),
@@ -157,7 +157,7 @@ fn audit_gap_at_sequence_end() {
 /// Verifies detection of multiple gaps in a sequence.
 #[test]
 fn audit_gap_multiple_gaps_detected() {
-    let trace_ids = vec![
+    let trace_ids = [
         TraceId::new(35001),
         TraceId::new(35002),
         // Gap 1: missing 35003-35004
@@ -192,7 +192,7 @@ fn audit_gap_multiple_gaps_detected() {
 /// Verifies that consecutive entries (no gaps) are correctly identified.
 #[test]
 fn audit_gap_zero_entries_missing_detected() {
-    let trace_ids = vec![
+    let trace_ids = [
         TraceId::new(36001),
         TraceId::new(36002),
         TraceId::new(36003),

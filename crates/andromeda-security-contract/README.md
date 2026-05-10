@@ -51,7 +51,7 @@ Before changing this crate, understand:
 
 ## Validation
 
-For documentation-only changes, validate this README against `AGENTS.md`, `docs/adr/ADR-0011-workspace-crate-boundaries.md`, and `docs/adr/ADR-0012-quic-rpc-no-grpc.md`.
+For documentation-only changes, validate this README against `AGENTS.md`, `docs/adr/ADR-0002-WORKSPACE_AND_CRATE_BOUNDARIES.md`, and `docs/adr/ADR-0007-QUIC_RPC_BOUNDARY_NO_GRPC.md`.
 
 For code changes in this crate, prefer:
 
@@ -77,8 +77,8 @@ If a change affects surface separation or permission mapping, include targeted t
 
 - `AGENTS.md`
 - `crates/AGENTS.md`
-- `docs/adr/ADR-0011-workspace-crate-boundaries.md`
-- `docs/adr/ADR-0012-quic-rpc-no-grpc.md`
+- `docs/adr/ADR-0002-WORKSPACE_AND_CRATE_BOUNDARIES.md`
+- `docs/adr/ADR-0007-QUIC_RPC_BOUNDARY_NO_GRPC.md`
 - `crates/andromeda-security-contract/src/lib.rs`
 - `crates/andromeda-security-contract/src/surface.rs`
 - `crates/andromeda-security-contract/src/permission.rs`

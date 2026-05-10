@@ -172,7 +172,7 @@ fn audit_tamper_detection_multi_entry_signature() {
             AuditPermission::ReadContract,
             SecurityAuditOutcome::Allowed,
             policy_evidence.clone(),
-            &format!("multi-entry trace {}", i),
+            format!("multi-entry trace {}", i),
         ) {
             traces.push(trace);
         }

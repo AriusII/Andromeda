@@ -73,7 +73,7 @@ For documentation-only changes, validate this README against:
 - `AGENTS.md`
 - `crates/AGENTS.md`
 - `crates/README.md`
-- `docs/adr/ADR-0011-workspace-crate-boundaries.md`
+- `docs/adr/ADR-0002-WORKSPACE_AND_CRATE_BOUNDARIES.md`
 
 For code changes in this crate, prefer:
 
@@ -101,6 +101,6 @@ parser, and compatibility tests.
 - `AGENTS.md`
 - `crates/AGENTS.md`
 - `crates/README.md`
-- `docs/adr/ADR-0011-workspace-crate-boundaries.md`
+- `docs/adr/ADR-0002-WORKSPACE_AND_CRATE_BOUNDARIES.md`
 - `crates/andromeda-srpl-cardinality/src/lib.rs`
 - `crates/andromeda-srpl-cardinality/src/cardinality.rs`

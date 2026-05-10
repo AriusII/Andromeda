@@ -2,15 +2,15 @@
 
 ## Purpose
 
-`andromeda-backup` is a future C5 owner crate for backup planning, backup artifacts, retention evidence, and backup validation.
+`andromeda-backup` is the C5 owner crate for backup planning, backup artifacts, retention evidence, and backup validation.
 
-This scaffold reserves a boundary for backup manifests, snapshot checkpoints, WAL archive requirements, artifact verification, and immutable retention policy. No behavior has moved from `andromeda-storage`.
+This crate owns backup manifest, checkpoint, WAL archive coverage, file-backed artifact, immutability, retention, and validation contracts. It is no longer a documentation-only scaffold.
 
-Current status: ownership-boundary scaffold only. This crate does not claim production readiness, backup recoverability, or operational completeness.
+Current status: partially implemented contract and local artifact boundary. This crate does not claim production readiness, backup recoverability, or operational completeness.
 
 ## Scope
 
-Future work in this crate may own:
+This crate owns or is expected to own:
 
 - Backup plan descriptors, checkpoint evidence, artifact inventories, and validation reports.
 - WAL archive coverage requirements for consistent backups and point-in-time recovery inputs.
@@ -23,11 +23,11 @@ Future work in this crate may own:
 - No bypass of typed Procedure contracts.
 - No restore execution, recovery replay, transaction status authority, page format ownership, physical WAL byte ownership, or HA/DR quorum policy.
 - No GPU output, benchmark output, RAM state, or temporary storage as backup truth.
-- No behavior move in this scaffold.
+- No claim that local file-backed or fixture artifacts prove production backup recoverability.
 
 ## Prerequisites
 
-Before behavior lands here:
+Before production backup readiness can be claimed:
 
 - Backup consistency must be tied to durable checkpoint and WAL archive evidence.
 - Backup metadata bytes must use explicit codecs, not Rust native struct layout.
@@ -37,14 +37,14 @@ Before behavior lands here:
 ## Procedure
 
 1. Define the backup responsibility being split.
-2. Keep `src/lib.rs` limited to module declarations and intentional reexports.
+2. Keep `src/lib.rs` focused on backup ownership and intentional reexports.
 3. Specify backup metadata bytes, hashes, retention state, and WAL archive coverage before implementation.
 4. Keep backup evidence separate from restore execution.
 5. Add artifact, retention, PITR-input, and recovery-validation tests before moving behavior.
 
 ## Validation
 
-This scaffold is documentation-only. Future behavior requires `cargo fmt`, `cargo check`, `cargo clippy`, backup artifact tests, retention tests, WAL archive coverage tests, and restore validation scenarios.
+Local backup contracts require `cargo fmt`, `cargo check`, `cargo clippy`, backup artifact tests, retention tests, WAL archive coverage tests, and restore validation scenarios. Production backup readiness additionally requires retained restore/PITR drill evidence.
 
 ## Troubleshooting
 
@@ -53,4 +53,4 @@ If a backup is marked recoverable without durable checkpoint and WAL archive evi
 ## References
 
 - `src/lib.rs`
-- Existing owner: `crates/andromeda-storage/`
+- Related durable owners: `crates/andromeda-storage/`, `crates/andromeda-wal/`, `crates/andromeda-restore/`

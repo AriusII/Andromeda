@@ -36,10 +36,13 @@ This specification applies to V0 documentation and implementation planning. It d
 | `IndexRootDirectory` | Must be represented as an explicit typed structure or canonical descriptor. |
 | `ColumnChunkDirectory` | Must be represented as an explicit typed structure or canonical descriptor. |
 | `BloomDirectory` | Must be represented as an explicit typed structure or canonical descriptor. |
+| `SegmentIndexMagic` | Fixed magic value that identifies the SegmentIndex before decode. |
+| `SegmentIndexVersion` | Explicit index format version tied to the manifest. |
 
 ## Invariants
 
 - Startup does not scan all cold segments.
+- SegmentIndex magic and version are validated before locator use.
 - PageLocator verifies PageHash.
 - KeyRange entries are policy-bound.
 - SegmentIndex matches manifest hash.
@@ -52,6 +55,40 @@ This specification applies to V0 documentation and implementation planning. It d
 - Variable payloads declare length before payload.
 - Critical persisted structures use version fields.
 - Rust native struct layout must not be persisted or sent over the wire.
+
+### SegmentIndexV0 file layout
+
+SegmentIndex files use a 256-byte little-endian header, `entry_count` fixed 160-byte entries, optional extension bytes, and a 96-byte trailer.
+
+| Header offset | Size | Field | Validation |
+|---:|---:|---|---|
+| 0 | 8 | Magic | Must be `ANDSGIX0`. |
+| 8 | 2 | FormatMajor | Must be `1`. |
+| 10 | 2 | FormatMinor | Must be `0`. |
+| 12 | 2 | ByteOrder | Must be `0x0102`. |
+| 14 | 2 | HeaderLength | Must be `256`. |
+| 16 | 8 | TotalLength | Must equal header + entries + extension + trailer. |
+| 24 | 4 | HeaderCrc32 | CRC32/ISO-HDLC with this field zeroed. |
+| 28 | 4 | Flags | Only published-cold, contiguous-ranges, and forensic-hold bits are valid. |
+| 32 | 8 | DatabaseId | Must be non-zero. |
+| 40 | 8 | SnapshotId | Must be non-zero. |
+| 48 | 8 | SegmentIndexId | Must be non-zero. |
+| 56 | 8 | ManifestVersion | Must be non-zero. |
+| 64 | 8 | BaseCheckpointLsn | Must be non-zero. |
+| 72 | 8 | RequiredWalStartLsn | Must be non-zero. |
+| 80 | 8 | EntryOffset | Must be `256`. |
+| 88 | 8 | EntryCount | Must be between `1` and `16,777,216`. |
+| 96 | 4 | EntryLength | Must be `160`. |
+| 100 | 4 | PageSizePolicyTag | Must match entry page-size policy. |
+| 104 | 8 | ExtensionOffset | Must follow entry table. |
+| 112 | 8 | ExtensionLength | Must be <= 1 MiB. |
+| 120..176 | fixed | Segment/page/LSN summaries | Must match the entry table. |
+| 176 | 32 | ParentManifestHash | Must be non-zero. |
+| 208 | 32 | EntryTableSha256 | Must match encoded entries. |
+| 240 | 8 | EntryTableCrc64 | Must match encoded entries. |
+| 248 | 8 | Reserved | Must be zero. |
+
+Each entry is 160 bytes and ends with `EntryCrc32` at offset 156. The trailer mirrors the entry-table CRC64 at offset 0, stores the file SHA256 at offset 8, root hash at offset 40, trailer CRC32 at offset 72, flags at offset 76, and 16 zero reserved bytes at offset 80.
 
 ## State transitions
 
@@ -104,13 +141,18 @@ Changes are classified as:
 ## Tests
 
 - startup no-full-scan test.
+- bad magic and unsupported version tests.
 - locator hash tests.
 - range prune tests.
 - invalid index fallback tests.
+- 256-byte header, 160-byte entry, and 96-byte trailer golden vector tests.
+- stale manifest hash fallback tests.
 
 ## Rejection criteria
 
 - Reject `full cold scan required for normal startup`.
+- Reject `bad SegmentIndex magic`.
+- Reject `unsupported SegmentIndex version`.
 - Reject `locator without hash`.
 - Reject `index not tied to manifest`.
 

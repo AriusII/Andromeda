@@ -54,7 +54,7 @@ Before changing this crate:
 
 1. Read `../../AGENTS.md`.
 2. Read `../AGENTS.md`.
-3. Check `../README.md` and `../../docs/adr/ADR-0011-workspace-crate-boundaries.md` for R0 dependency rules.
+3. Check `../README.md` and `../../docs/adr/ADR-0002-WORKSPACE_AND_CRATE_BOUNDARIES.md` for R0 dependency rules.
 4. Review GPU exclusion, optional acceleration, RAM budget, CPU profile, and pipeline tests in `src/`.
 
 ## Procedure
@@ -106,4 +106,4 @@ cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture
 - `src/pipeline.rs`
 - `src/integration.rs`
 - `../README.md`
-- `../../docs/adr/ADR-0011-workspace-crate-boundaries.md`
+- `../../docs/adr/ADR-0002-WORKSPACE_AND_CRATE_BOUNDARIES.md`

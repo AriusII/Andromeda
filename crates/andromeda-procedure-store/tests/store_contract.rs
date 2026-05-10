@@ -130,12 +130,9 @@ fn procedure_store_rejects_evidence_with_mismatched_binding() {
 fn procedure_store_records_runtime_invocation_once_per_invocation() {
     let (mut store, entry) = registered_store().unwrap();
     let binding = entry.binding;
-    let plan_key = PlanCacheKey::build(
-        &binding,
-        PlanClass::Singleton,
-        PlanShapeFingerprint::empty(),
-    )
-    .expect("singleton plan key is valid");
+    let plan_key =
+        PlanCacheKey::build(binding, PlanClass::Singleton, PlanShapeFingerprint::empty())
+            .expect("singleton plan key is valid");
     let plan_id = ProcedureRuntimePlanId::from_plan_cache_key(&plan_key);
     let runtime = InvocationRuntimeRecord::new(
         InvocationId::new(910),

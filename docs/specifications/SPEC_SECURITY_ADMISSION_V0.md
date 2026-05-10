@@ -37,13 +37,20 @@ This specification applies to V0 documentation and implementation planning. It d
 | `Policy` | Must be represented as an explicit typed structure or canonical descriptor. |
 | `AdmissionDecision` | Must be represented as an explicit typed structure or canonical descriptor. |
 | `SecurityAuditTrace` | Must be represented as an explicit typed structure or canonical descriptor. |
+| `SurfaceScope` | Application, Administration, HA/DR, or internal surface boundary. |
+| `PolicyVersion` | Explicit policy version used for admission and audit evidence. |
+| `BreakGlassPolicy` | Explicit emergency policy requiring reason, principal, expiry, and audit evidence. |
+| `AdmissionRejectionCode` | Stable typed rejection code for denied or malformed admission. |
 
 ## Invariants
 
 - Admission happens before transaction creation.
 - Deny wins unless break-glass policy applies.
+- Break-glass is deny-by-default unless a valid `BreakGlassPolicy` is present.
 - SurfaceScope is enforced.
 - Every decision emits audit evidence.
+- CertificateIdentity proves cryptographic identity only; it is not a permission grant.
+- Admission failures are fail-closed and typed.
 
 
 ## Serialization
@@ -57,6 +64,20 @@ This specification applies to V0 documentation and implementation planning. It d
 ## State transitions
 
 State transitions must be explicit. Invalid transitions return typed errors and emit trace evidence when they affect execution, storage, security, or recovery.
+
+### Fail-closed decision matrix
+
+| Condition | Decision | Required evidence |
+|---|---|---|
+| Missing certificate identity | Deny before transaction creation | Protocol/security trace; no principal assumed. |
+| Certificate not bound to principal | Deny before transaction creation | SecurityAuditTrace with identity failure. |
+| Disabled principal | Deny before transaction creation | Principal id, PolicyVersion when available, denial reason. |
+| Permission evaluator unavailable | Deny before transaction creation | Fail-closed reason and audit attempt. |
+| Unknown permission | Deny before transaction creation | Permission identifier and policy evidence when available. |
+| SurfaceScope mismatch | Deny before transaction creation | Surface, requested permission, principal, and reason. |
+| Stale PolicyVersion | Deny before transaction creation | Expected and observed PolicyVersion. |
+| Valid break-glass policy | Allow only on authorized administration surface | Reason, expiry, principal, policy digest, audit evidence. |
+| Break-glass missing reason or expiry | Deny before transaction creation | Break-glass rejection reason. |
 
 ## Error model
 
@@ -108,12 +129,18 @@ Changes are classified as:
 - surface mismatch tests.
 - permission denied tests.
 - break-glass audit tests.
+- fail-closed policy store unavailable tests.
+- stable AdmissionRejectionCode tests.
+- matrix row coverage tests.
 
 ## Rejection criteria
 
 - Reject `transaction before admission`.
 - Reject `certificate as permission bypass`.
 - Reject `unaudited allow`.
+- Reject `break-glass without expiry`.
+- Reject `break-glass without reason`.
+- Reject `string-only admission denial`.
 
 ## Acceptance summary
 

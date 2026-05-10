@@ -28,10 +28,12 @@ Andromeda is not documented here as a generic SQL server. The application surfac
 | File | Purpose |
 |---|---|
 | `INDEX.md` | Main reading map and documentation structure. |
+| `status.md` | Current repository status, readiness boundary, and P00 evidence links. |
 | `DOCS_MANIFEST.md` | Inventory of all generated files and their role. |
 | `project/ANDROMEDA_DOCTRINE.md` | Non-negotiable doctrine and invariants. |
+| `project/CRATE_CLUSTER_CRITICALITY_MATRIX.md` | Crate-to-cluster-to-criticality governance matrix. |
 | `architecture/ENGINE_OVERVIEW.md` | High-level architecture and engine boundaries. |
-| `roadmap/ROADMAP.md` | Sequenced roadmap without calendar promises. |
+| `roadmap/ROADMAP_MASTER.md` | Sequenced roadmap without calendar promises. |
 | `specifications/` | Normative technical specifications. |
 | `adr/` | Architecture Decision Records. |
 | `runbooks/` | Operational response procedures. |

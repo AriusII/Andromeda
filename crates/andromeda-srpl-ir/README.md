@@ -78,7 +78,7 @@ For documentation-only changes, validate this README against:
 - `AGENTS.md`
 - `crates/AGENTS.md`
 - `crates/README.md`
-- `docs/adr/ADR-0011-workspace-crate-boundaries.md`
+- `docs/adr/ADR-0002-WORKSPACE_AND_CRATE_BOUNDARIES.md`
 
 For code changes in this crate, prefer:
 
@@ -107,7 +107,7 @@ adapter contracts, also run the relevant `andromeda-srpl` compatibility tests.
 - `AGENTS.md`
 - `crates/AGENTS.md`
 - `crates/README.md`
-- `docs/adr/ADR-0011-workspace-crate-boundaries.md`
+- `docs/adr/ADR-0002-WORKSPACE_AND_CRATE_BOUNDARIES.md`
 - `crates/andromeda-srpl-ir/src/lib.rs`
 - `crates/andromeda-srpl-ir/src/signature.rs`
 - `crates/andromeda-srpl-ir/src/ir.rs`

@@ -53,6 +53,26 @@ This specification applies to V0 documentation and implementation planning. It d
 - Critical persisted structures use version fields.
 - Rust native struct layout must not be persisted or sent over the wire.
 
+### RecoveryReportV0 schema
+
+| Field | Required rule |
+|---|---|
+| StartupMode | Requested startup mode, for example fast, safe, or forensic. |
+| OpenMode | Accepted open decision: Online, ReadOnly, ForensicOnly, or Reject. |
+| ManifestRef | Manifest version, snapshot id, base checkpoint LSN, and required WAL start LSN. |
+| PhysicalWalBytes | Physical WAL file bytes inspected. |
+| ScannedBytes | Bytes scanned by the WAL reader. |
+| DurablePrefixBytes | Bytes accepted as durable prefix. |
+| DurablePrefixRecordCount | Number of records in the durable prefix. |
+| LastValidWalLsn | Last valid durable WAL LSN; code may expose this as `durable_lsn`. |
+| ScanStop | Optional typed scan stop reason. |
+| BoundaryKind | Clean, recoverable tail, or forensic chain break. |
+| ReplayRecords | Ordered replayable records with LSN, kind, and optional transaction id. |
+| IgnoredTransactions | Incomplete or rolled-back transactions skipped during replay. |
+| ForensicRequired | True when normal recovery must not continue. |
+
+The report must exist before Online, ReadOnly, or ForensicOnly is accepted. A missing report rejects startup.
+
 ## State transitions
 
 State transitions must be explicit. Invalid transitions return typed errors and emit trace evidence when they affect execution, storage, security, or recovery.
@@ -107,6 +127,9 @@ Changes are classified as:
 - report after truncated WAL.
 - ForensicOnly report tests.
 - typed warning tests.
+- durable prefix and LastValidWalLsn tests.
+- ignored transaction partition tests.
+- scan stop to open-mode decision tests.
 
 ## Rejection criteria
 

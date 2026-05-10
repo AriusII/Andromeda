@@ -16,6 +16,7 @@
 ```text
 docs/
   README.md
+  status.md
   INDEX.md
   DOCS_MANIFEST.md
   STYLE_GUIDE.md
@@ -50,6 +51,8 @@ docs/
 4. `specifications/SPEC_SRPL_GRAMMAR_V0.md`
 5. `specifications/SPEC_SRPL_BINDER_V0.md`
 6. `specifications/SPEC_SEMANTIC_IR_V0.md`
+7. `specifications/SPEC_CATALOG_OBJECT_MODEL_V0.md`
+8. `specifications/SPEC_DEFINITION_BATCH_V0.md`
 
 ### Transaction and storage path
 
@@ -61,30 +64,34 @@ docs/
 6. `specifications/SPEC_PAGE_FORMAT_V0.md`
 7. `specifications/SPEC_DATABASE_MANIFEST_V0.md`
 8. `specifications/SPEC_SEGMENT_INDEX_V0.md`
-9. `testing/CRASH_RECOVERY_TEST_PLAN.md`
+9. `specifications/SPEC_RECOVERY_REPORT_V0.md`
+10. `specifications/SPEC_CRASH_RECOVERY_TEST_PLAN_V0.md`
+11. `testing/CRASH_RECOVERY_TEST_PLAN.md`
 
 ### Security and operations path
 
 1. `architecture/QUIC_RPC_SECURITY_ARCHITECTURE.md`
 2. `specifications/SPEC_RPC_FRAME_V0.md`
-3. `specifications/SPEC_SECURITY_ADMISSION_V0.md`
-4. `specifications/SPEC_AUDIT_LEDGER_V0.md`
-5. `operations/BACKUP_RESTORE_PITR.md`
-6. `operations/HADR_AND_CLUSTER_OPERATIONS.md`
-7. `runbooks/RUNBOOK_FORENSIC_START.md`
+3. `specifications/SPEC_RESULT_STREAM_V0.md`
+4. `specifications/SPEC_SECURITY_ADMISSION_V0.md`
+5. `specifications/SPEC_AUDIT_LEDGER_V0.md`
+6. `specifications/SPEC_DECISION_TRACE_V0.md`
+7. `operations/BACKUP_RESTORE_PITR.md`
+8. `operations/HADR_AND_CLUSTER_OPERATIONS.md`
+9. `runbooks/RUNBOOK_FORENSIC_START.md`
 
 ### Roadmap path
 
-1. `roadmap/ROADMAP.md`
-2. `roadmap/P0_SPECIFICATION_BASELINE.md`
-3. `roadmap/P1_DURABLE_VERTICAL_PATH.md`
+1. `roadmap/ROADMAP_MASTER.md`
+2. `roadmap/phases/P00_REPOSITORY_STATE_AND_GOVERNANCE.md`
+3. `roadmap/phases/P01_NORMATIVE_SPECIFICATION_BASELINE.md`
 4. Continue phase files in order.
 
 ## Main folders
 
 | Folder | Role |
 |---|---|
-| `project/` | Doctrine, glossary, criticality, feature acceptance, Rust baseline, source cross-check. |
+| `project/` | Doctrine, glossary, criticality, crate matrix, feature acceptance, Rust baseline, source cross-check. |
 | `architecture/` | System structure, engine clusters, storage, transaction, SRPL, RPC, observability, repository architecture. |
 | `specifications/` | Normative V0 specs. Each spec includes invariants, structures, error model, recovery behavior, tests, and rejection criteria. |
 | `adr/` | Explicit decisions that constrain implementation and future changes. |
@@ -104,5 +111,5 @@ project/ANDROMEDA_DOCTRINE.md
 project/FEATURE_ACCEPTANCE_GATE.md
 adr/ADR-*.md
 specifications/SPEC_*.md
-roadmap/ROADMAP.md
+roadmap/ROADMAP_MASTER.md
 ```

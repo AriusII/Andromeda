@@ -11,7 +11,7 @@ use support::{binding, candidate, shaped_fingerprint};
 #[test]
 fn selection_prefers_lowest_rank_within_requested_plan_class() {
     let key = andromeda_plan_cache::PlanCacheKey::build(
-        &binding(1_100, 90, 0xAA, 21, 0xBB),
+        binding(1_100, 90, 0xAA, 21, 0xBB),
         PlanClass::StatsAdaptive,
         shaped_fingerprint(),
     )
@@ -41,7 +41,7 @@ fn selection_prefers_lowest_rank_within_requested_plan_class() {
 #[test]
 fn selection_breaks_equal_rank_ties_by_candidate_id() {
     let key = andromeda_plan_cache::PlanCacheKey::build(
-        &binding(1_101, 90, 0xAA, 21, 0xBB),
+        binding(1_101, 90, 0xAA, 21, 0xBB),
         PlanClass::ParameterShape,
         shaped_fingerprint(),
     )
@@ -68,7 +68,7 @@ fn selection_breaks_equal_rank_ties_by_candidate_id() {
 #[test]
 fn selection_rejects_when_no_candidate_matches_plan_class() {
     let key = andromeda_plan_cache::PlanCacheKey::build(
-        &binding(1_102, 90, 0xAA, 21, 0xBB),
+        binding(1_102, 90, 0xAA, 21, 0xBB),
         PlanClass::Cardinality,
         shaped_fingerprint(),
     )
@@ -89,7 +89,7 @@ fn selection_rejects_when_no_candidate_matches_plan_class() {
 #[test]
 fn selection_trace_preserves_advisory_summary_without_granting_authority() {
     let key = andromeda_plan_cache::PlanCacheKey::build(
-        &binding(1_103, 90, 0xAA, 21, 0xBB),
+        binding(1_103, 90, 0xAA, 21, 0xBB),
         PlanClass::StatsAdaptive,
         shaped_fingerprint(),
     )

@@ -13,16 +13,17 @@
 
 | Folder | File count | Responsibility |
 |---|---:|---|
-| Root | 4 | Entry points and style. |
-| `project/` | 6 | Doctrine and governance. |
-| `architecture/` | 10 | High-level system design. |
-| `specifications/` | 22 | Normative technical specifications. |
-| `adr/` | 18 | Architecture decisions. |
-| `runbooks/` | 10 | Operational incident response. |
-| `testing/` | 7 | Quality, test, fuzz, crash, and release gates. |
-| `roadmap/` | 13 | Sequenced work with sequence-only language. |
+| Root | 5 | Entry points, status, and style. |
+| `project/` | 7 | Doctrine and governance. |
+| `architecture/` | 12 | High-level system design. |
+| `specifications/` | 26 | Normative technical specifications. |
+| `adr/` | 19 | Architecture decisions. |
+| `runbooks/` | 11 | Operational incident response. |
+| `testing/` | 8 | Quality, test, fuzz, crash, and release gates. |
+| `roadmap/` | 44 | Sequenced work with sequence-only language. |
 | `operations/` | 5 | Backup, restore, HA/DR, deployment, metrics. |
-| `reference/` | 4 | Source basis, terminology, style references. |
+| `reference/` | 5 | Source basis, terminology, style references. |
+| `specs/` | 0 | Empty compatibility folder; use `specifications/`. |
 | `templates/` | 4 | Authoring skeletons. |
 
 ## Generated package constraints

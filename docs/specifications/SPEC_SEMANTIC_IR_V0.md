@@ -37,13 +37,19 @@ This specification applies to V0 documentation and implementation planning. It d
 | `IrAggregate` | Must be represented as an explicit typed structure or canonical descriptor. |
 | `IrEffect` | Must be represented as an explicit typed structure or canonical descriptor. |
 | `IrContractBinding` | Must be represented as an explicit typed structure or canonical descriptor. |
+| `IrCardinality` | Cardinality carried after binding and before execution planning. |
+| `IrAbsence` | Explicit absence branch or rejection marker. |
+| `IrDiagnosticRef` | Stable diagnostic reference retained for rejected lowering decisions. |
 
 ## Invariants
 
 - IR is independent from formatting.
 - IR hash is deterministic.
 - IR represents set semantics explicitly.
+- IR carries cardinality explicitly.
+- IR carries absence explicitly.
 - IR records effect boundaries.
+- IR is not a persisted storage format unless separately versioned and encoded.
 
 
 ## Serialization
@@ -53,6 +59,7 @@ This specification applies to V0 documentation and implementation planning. It d
 - Variable payloads declare length before payload.
 - Critical persisted structures use version fields.
 - Rust native struct layout must not be persisted or sent over the wire.
+- Native Rust layout must not be used as Semantic IR identity or exported evidence.
 
 ## State transitions
 
@@ -108,12 +115,16 @@ Changes are classified as:
 - IR hash golden tests.
 - aggregate empty-case tests.
 - effect serialization tests.
+- absence/cardinality preservation tests.
+- set semantics rejection tests for implicit bag behavior.
 
 ## Rejection criteria
 
 - Reject `raw source hash as semantic identity`.
 - Reject `implicit bag semantics`.
 - Reject `missing effect annotation`.
+- Reject `cardinality dropped during lowering`.
+- Reject `absence dropped during lowering`.
 
 ## Acceptance summary
 

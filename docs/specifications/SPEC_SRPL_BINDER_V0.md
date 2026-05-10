@@ -36,13 +36,17 @@ This specification applies to V0 documentation and implementation planning. It d
 | `CardinalityBinding` | Must be represented as an explicit typed structure or canonical descriptor. |
 | `EffectBinding` | Must be represented as an explicit typed structure or canonical descriptor. |
 | `ReadWriteSet` | Must be represented as an explicit typed structure or canonical descriptor. |
+| `AbsenceBinding` | Explicit optional/absence handling required before lowering. |
+| `StableDiagnostic` | Binder diagnostic with stable code, span, and referenced symbol when applicable. |
 
 ## Invariants
 
 - Every name resolves to one catalog object.
-- optional one requires branch handling.
-- one requires uniqueness proof or runtime cardinality check.
+- Absence is explicit; optional one requires branch handling.
+- Cardinality `one` requires uniqueness proof or runtime cardinality check.
 - Mutation requires WAL-covered object.
+- Read/write sets are contract inputs and cannot be inferred later by execution helpers.
+- Binder diagnostics are stable across formatting-only source changes.
 
 
 ## Serialization
@@ -107,13 +111,16 @@ Changes are classified as:
 - cardinality mismatch tests.
 - read/write inference tests.
 - optional branch tests.
+- stable binder diagnostic tests.
 
 ## Rejection criteria
 
 - Reject `ambiguous name`.
 - Reject `unchecked optional`.
+- Reject `absence erased before IR`.
 - Reject `mutation without write permission`.
 - Reject `unbounded read/write set`.
+- Reject `unstable binder diagnostic code`.
 
 ## Acceptance summary
 

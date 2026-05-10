@@ -1,10 +1,10 @@
-/// Crash-recovery matrix validation.
-///
-/// This module validates C5 durability invariants for crash recovery:
-/// - Recovery after crash at every LSN point is consistent
-/// - WAL replay is idempotent (replaying N times = same state)
-/// - Recovery floor is never violated (recovery starts after durable manifest)
-/// - No partial states survive recovery (all-or-nothing guarantee)
+//! Crash-recovery matrix validation.
+//!
+//! This module validates C5 durability invariants for crash recovery:
+//! - Recovery after crash at every LSN point is consistent
+//! - WAL replay is idempotent (replaying N times = same state)
+//! - Recovery floor is never violated (recovery starts after durable manifest)
+//! - No partial states survive recovery (all-or-nothing guarantee)
 
 #[cfg(test)]
 mod crash_recovery_matrix_tests {

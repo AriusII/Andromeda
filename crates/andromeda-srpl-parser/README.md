@@ -75,7 +75,7 @@ For documentation-only changes, validate this README against:
 - `AGENTS.md`
 - `crates/AGENTS.md`
 - `crates/README.md`
-- `docs/adr/ADR-0011-workspace-crate-boundaries.md`
+- `docs/adr/ADR-0002-WORKSPACE_AND_CRATE_BOUNDARIES.md`
 
 For code changes in this crate, prefer:
 
@@ -104,7 +104,7 @@ If parser behavior changes the compiler surface, also run downstream
 - `AGENTS.md`
 - `crates/AGENTS.md`
 - `crates/README.md`
-- `docs/adr/ADR-0011-workspace-crate-boundaries.md`
+- `docs/adr/ADR-0002-WORKSPACE_AND_CRATE_BOUNDARIES.md`
 - `crates/andromeda-srpl-parser/src/lib.rs`
 - `crates/andromeda-srpl-parser/src/parser.rs`
 - `crates/andromeda-srpl-parser/src/parser/statements.rs`

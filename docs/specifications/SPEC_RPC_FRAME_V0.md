@@ -38,13 +38,21 @@ This specification applies to V0 documentation and implementation planning. It d
 | `Flags` | Must be represented as an explicit typed structure or canonical descriptor. |
 | `HeaderCrc` | Must be represented as an explicit typed structure or canonical descriptor. |
 | `RpcError` | Must be represented as an explicit typed structure or canonical descriptor. |
+| `ProtocolMagic` | Fixed magic value for custom Andromeda RPC frames. |
+| `ProtocolVersion` | Explicit wire version for compatibility and rejection. |
+| `SurfaceScope` | Application, Administration, HA/DR, or internal surface scope. |
+| `ProtobufEnvelope` | Custom typed Protobuf payload envelope; never gRPC service framing. |
 
 ## Invariants
 
 - Frames are typed and bounded.
+- ProtocolMagic and ProtocolVersion are validated before payload decode.
 - PayloadLength is validated before allocation.
+- PayloadLength must not exceed the admitted resource budget.
 - Metadata precedes payload.
 - Application Surface cannot invoke admin operations.
+- RPC semantics are custom typed Protobuf over QUIC; gRPC is not the native application surface.
+- JSON-native payloads are not a V0 protocol format.
 
 
 ## Serialization
@@ -54,6 +62,26 @@ This specification applies to V0 documentation and implementation planning. It d
 - Variable payloads declare length before payload.
 - Critical persisted structures use version fields.
 - Rust native struct layout must not be persisted or sent over the wire.
+
+### FrameHeader v0 wire layout
+
+Frame headers are 52 bytes, network big-endian, followed by exactly `PayloadLength` bytes.
+
+| Offset | Size | Field | Validation |
+|---:|---:|---|---|
+| 0 | 2 | Header length | Must be `52`. |
+| 2 | 2 | ProtocolVersion | Must be `1`. |
+| 4 | 4 | FrameType | Must be a known `FrameType` code. |
+| 8 | 8 | RequestId | Must be non-zero when required by the frame type. |
+| 16 | 8 | SessionId | Must be non-zero when required by the frame type. |
+| 24 | 8 | TransactionId value | Must be zero when TransactionId marker is `0`. |
+| 32 | 1 | TransactionId marker | Must be `0` or `1`. |
+| 33 | 3 | Reserved | Must be all zero. |
+| 36 | 8 | PayloadLength | Must fit `usize`, not exceed the admitted frame budget, and match available bytes. |
+| 44 | 4 | Flags | Must contain only known bits for the frame type. |
+| 48 | 4 | HeaderCrc | CRC32/ISO-HDLC over the 52-byte header with this field zeroed. |
+
+The bounded batch scanner must reject more than 4,096 frames in one buffer.
 
 ## State transitions
 
@@ -106,15 +134,24 @@ Changes are classified as:
 ## Tests
 
 - invalid frame tests.
+- bad magic and unsupported version tests.
 - oversized payload tests.
 - metadata-before-payload tests.
 - surface scope tests.
+- gRPC and JSON-native protocol rejection tests.
+- 52-byte header golden vector tests.
+- CRC field-zeroing tests.
+- bounded frame batch tests.
 
 ## Rejection criteria
 
 - Reject `dynamic string command frame`.
+- Reject `bad RPC protocol magic`.
+- Reject `unsupported RPC protocol version`.
 - Reject `allocation before length check`.
 - Reject `admin frame on application surface`.
+- Reject `gRPC service frame on native application surface`.
+- Reject `JSON-native RPC payload`.
 
 ## Acceptance summary
 

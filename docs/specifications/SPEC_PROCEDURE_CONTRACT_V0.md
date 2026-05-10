@@ -41,14 +41,18 @@ This specification applies to V0 documentation and implementation planning. It d
 | `ResourcePolicy` | Must be represented as an explicit typed structure or canonical descriptor. |
 | `ProtocolLayout` | Must be represented as an explicit typed structure or canonical descriptor. |
 | `CompatibilityPolicy` | Must be represented as an explicit typed structure or canonical descriptor. |
+| `CanonicalContractShape` | Ordered canonical descriptor hashed into `ContractHash`. |
+| `ContractRejectionCode` | Stable typed rejection code for failed admission or publication. |
 
 ## Invariants
 
 - ContractHash is deterministic.
 - ContractHash is based on canonical shape, not raw source text.
+- Canonical shape includes InputShape, OutputShape, ReadSet, WriteSet, RequiredPermissions, IsolationPolicy, ResourcePolicy, ProtocolLayout, and CompatibilityPolicy.
 - Required permissions are part of the contract.
 - Contract compatibility is explicit.
 - Metadata precedes ResultStream payload.
+- Contract rejection codes are stable enough for tests and audit evidence.
 
 
 ## Serialization
@@ -58,6 +62,23 @@ This specification applies to V0 documentation and implementation planning. It d
 - Variable payloads declare length before payload.
 - Critical persisted structures use version fields.
 - Rust native struct layout must not be persisted or sent over the wire.
+
+### Canonical contract hash form
+
+`ContractHash` is a hash of canonical typed contract shape, not source text and not native layout.
+
+| Canonical input group | Required content |
+|---|---|
+| Domain separator | Stable `ProcedureContractV0` domain and format version. |
+| Identity shape | Qualified procedure name and object kind; `ProcedureId` is binding evidence, not a semantic hash substitute. |
+| Inputs | Ordered `InputShape` descriptors with type, absence policy, cardinality, and stable names. |
+| Outputs | Ordered `OutputShape` and ResultStream descriptors with metadata policy and column shapes. |
+| Permissions | Sorted `RequiredPermissions` and surface constraints. |
+| Effects | `ReadSet`, `WriteSet`, `IsolationPolicy`, and `ResourcePolicy`. |
+| Protocol | `ProtocolLayout`, result metadata policy, error policy, and multi-result policy. |
+| Compatibility | `CompatibilityPolicy` and explicit default values. |
+
+Invocation binding must carry `ProcedureId`, `CatalogVersion`, `ContractHash`, `StatsVersion`, and `PolicyVersion`. A `ProcedureContractRef` alone is insufficient for pre-transaction admission.
 
 ## State transitions
 
@@ -107,19 +128,33 @@ Changes are classified as:
 | Change security requirement | Security-impact |
 | Change recovery behavior | Breaking unless explicitly versioned |
 
+| Compatibility case | V0 decision |
+|---|---|
+| Add optional output field with explicit default | Additive. |
+| Add required input | Breaking. |
+| Remove result stream or existing output column | Breaking. |
+| Change existing output cardinality | Breaking. |
+| Change required permission | Security-impact and denied by default. |
+| Change isolation, resource, protocol, or error policy | Review-required; denied unless explicitly versioned. |
+| Change only source formatting with same canonical shape | Compatible. |
+
 ## Tests
 
 - contract hash golden tests.
+- canonical shape field-order tests.
 - additive change compatibility tests.
 - breaking change rejection tests.
 - payload shape mismatch tests.
+- stable ContractRejectionCode tests.
 
 ## Rejection criteria
 
 - Reject `missing ContractHash`.
+- Reject `ContractHash derived from raw source text`.
 - Reject `unknown required permission`.
 - Reject `shape depends on runtime branch`.
 - Reject `output columns are positional only`.
+- Reject `unstable contract rejection code`.
 
 ## Acceptance summary
 

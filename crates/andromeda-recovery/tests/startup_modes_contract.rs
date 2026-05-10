@@ -96,5 +96,5 @@ fn forensic_start_requires_report_and_classifies_chain_breaks() {
         proof.inner.observed_boundary,
         ObservedBoundary::ForensicChainBreak
     );
-    assert_eq!(proof.inner.replay_allowed, false);
+    assert!(!proof.inner.replay_allowed);
 }

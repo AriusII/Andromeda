@@ -86,7 +86,7 @@ For documentation-only changes, validate this README against:
 - `AGENTS.md`
 - `crates/AGENTS.md`
 - `crates/README.md`
-- `docs/adr/ADR-0011-workspace-crate-boundaries.md`
+- `docs/adr/ADR-0002-WORKSPACE_AND_CRATE_BOUNDARIES.md`
 
 For code changes in this crate, prefer:
 
@@ -121,7 +121,7 @@ WAL, crash/recovery, property, fuzz, or security validation.
 - `AGENTS.md`
 - `crates/AGENTS.md`
 - `crates/README.md`
-- `docs/adr/ADR-0011-workspace-crate-boundaries.md`
+- `docs/adr/ADR-0002-WORKSPACE_AND_CRATE_BOUNDARIES.md`
 - `crates/andromeda-srpl/src/lib.rs`
 - `crates/andromeda-srpl-definition-batch/src/lib.rs`
 - `crates/andromeda-srpl-catalog-binding/src/lib.rs`

@@ -9,9 +9,9 @@ fn test_cache_key_stability_with_no_changes() {
     let bind = binding(42, 10, 0xAA, 5, 0xBB);
     let fp = shaped_fingerprint();
 
-    let key1 = PlanCacheKey::build(&bind, PlanClass::ParameterShape, fp)
+    let key1 = PlanCacheKey::build(bind, PlanClass::ParameterShape, fp)
         .expect("valid binding + non-singleton class + shaped fingerprint");
-    let key2 = PlanCacheKey::build(&bind, PlanClass::ParameterShape, fp)
+    let key2 = PlanCacheKey::build(bind, PlanClass::ParameterShape, fp)
         .expect("valid binding + non-singleton class + shaped fingerprint");
 
     assert_eq!(key1, key2, "identical inputs must produce identical keys");
@@ -33,9 +33,9 @@ fn test_cache_invalidated_on_catalog_version_bump() {
     let fp = shaped_fingerprint();
 
     let key_v1 =
-        PlanCacheKey::build(&bind_v1, PlanClass::Cardinality, fp).expect("v1 cardinality key");
+        PlanCacheKey::build(bind_v1, PlanClass::Cardinality, fp).expect("v1 cardinality key");
     let key_v2 =
-        PlanCacheKey::build(&bind_v2, PlanClass::Cardinality, fp).expect("v2 cardinality key");
+        PlanCacheKey::build(bind_v2, PlanClass::Cardinality, fp).expect("v2 cardinality key");
 
     assert_ne!(
         key_v1, key_v2,
@@ -59,9 +59,9 @@ fn test_cache_invalidated_on_contract_hash_change() {
     let fp = shaped_fingerprint();
 
     let key_old =
-        PlanCacheKey::build(&bind_old, PlanClass::StatsAdaptive, fp).expect("old contract key");
+        PlanCacheKey::build(bind_old, PlanClass::StatsAdaptive, fp).expect("old contract key");
     let key_new =
-        PlanCacheKey::build(&bind_new, PlanClass::StatsAdaptive, fp).expect("new contract key");
+        PlanCacheKey::build(bind_new, PlanClass::StatsAdaptive, fp).expect("new contract key");
 
     assert_ne!(
         key_old, key_new,
@@ -85,9 +85,9 @@ fn test_cache_invalidated_on_stats_version_bump() {
     let fp = shaped_fingerprint();
 
     let key_old =
-        PlanCacheKey::build(&bind_old_stats, PlanClass::Cardinality, fp).expect("old stats key");
+        PlanCacheKey::build(bind_old_stats, PlanClass::Cardinality, fp).expect("old stats key");
     let key_new =
-        PlanCacheKey::build(&bind_new_stats, PlanClass::Cardinality, fp).expect("new stats key");
+        PlanCacheKey::build(bind_new_stats, PlanClass::Cardinality, fp).expect("new stats key");
 
     assert_ne!(
         key_old, key_new,

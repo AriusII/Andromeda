@@ -372,12 +372,8 @@ fn print_runtime_contract_header(contract_preview: bool, durable_backend: bool, 
     println!("Durable Backend Wired: {}", durable_backend);
 }
 
-fn json_array<T>(items: &[T], mut render: impl FnMut(&T) -> String) -> String {
-    let entries = items
-        .iter()
-        .map(|item| render(item))
-        .collect::<Vec<_>>()
-        .join(",");
+fn json_array<T>(items: &[T], render: impl FnMut(&T) -> String) -> String {
+    let entries = items.iter().map(render).collect::<Vec<_>>().join(",");
     format!("[{}]", entries)
 }
 

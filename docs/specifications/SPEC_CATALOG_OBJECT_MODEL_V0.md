@@ -37,6 +37,10 @@ This specification applies to V0 documentation and implementation planning. It d
 | `EnumDescriptor` | Must be represented as an explicit typed structure or canonical descriptor. |
 | `StructuredObjectDescriptor` | Must be represented as an explicit typed structure or canonical descriptor. |
 | `ProcedureDescriptor` | Must be represented as an explicit typed structure or canonical descriptor. |
+| `CatalogVersion` | Monotonic published version identifier. |
+| `CatalogObjectId` | Stable object identity independent from display name. |
+| `ContractHashBinding` | Procedure descriptor binding to canonical contract hash. |
+| `PublicationEvidence` | WAL-backed evidence for a visible catalog publication. |
 
 ## Invariants
 
@@ -44,6 +48,9 @@ This specification applies to V0 documentation and implementation planning. It d
 - Published descriptors are immutable.
 - System Database is C5.
 - Object dependencies are explicit.
+- Procedure descriptors bind `ProcedureId`, `ContractHash`, `CatalogVersion`, and compatibility policy.
+- A visible CatalogVersion requires durable publication evidence.
+- Display names are not object identity.
 
 
 ## Serialization
@@ -108,12 +115,17 @@ Changes are classified as:
 - dependency graph tests.
 - catalog rollback tests.
 - object lifecycle transition tests.
+- publication evidence tests.
+- descriptor identity rename tests.
 
 ## Rejection criteria
 
 - Reject `half-published catalog`.
 - Reject `object without version`.
+- Reject `ProcedureDescriptor without ContractHash`.
+- Reject `CatalogVersion without durable publication evidence`.
 - Reject `object dependency cycle without policy`.
+- Reject `display name used as durable identity`.
 
 ## Acceptance summary
 

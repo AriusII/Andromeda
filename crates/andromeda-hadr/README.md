@@ -2,15 +2,15 @@
 
 ## Purpose
 
-`andromeda-hadr` is a future C5 owner crate for high availability and disaster recovery evidence.
+`andromeda-hadr` is the C5 owner crate for high availability and disaster recovery evidence.
 
-This scaffold reserves a boundary for single-primary replication, quorum evidence, fencing, promotion epochs, WAL shipping state, and cluster recovery reports. No behavior has moved from `andromeda-storage`.
+This crate owns single-primary quorum, fencing, promotion decision, membership, WAL shipping contract, and cluster evidence models. It is no longer a documentation-only scaffold.
 
-Current status: ownership-boundary scaffold only. This crate does not claim production readiness, failover safety, or operational completeness.
+Current status: partially implemented control-plane and local persistence boundary. This crate does not claim production readiness, failover safety, or operational completeness.
 
 ## Scope
 
-Future work in this crate may own:
+This crate owns or is expected to own:
 
 - Replication role descriptors, primary epochs, quorum evidence, fencing state, and promotion records.
 - WAL shipping coverage, replica catch-up evidence, and failover validation reports.
@@ -24,11 +24,11 @@ Future work in this crate may own:
 - No Administration or HA/DR capability exposure through the Application Surface.
 - No physical WAL byte ownership, page format ownership, backup creation, restore execution, or transaction visibility authority.
 - No GPU output, benchmark output, RAM state, or temporary storage as HA/DR truth.
-- No behavior move in this scaffold.
+- No claim that a pure promotion decision alone proves operational failover safety.
 
 ## Prerequisites
 
-Before behavior lands here:
+Before production HA/DR readiness can be claimed:
 
 - Promotion and failover decisions must be backed by quorum, fencing, epoch, and durable WAL shipping evidence.
 - HA/DR metadata bytes must use explicit codecs, not Rust native struct layout.
@@ -38,14 +38,14 @@ Before behavior lands here:
 ## Procedure
 
 1. Define the HA/DR responsibility being split.
-2. Keep `src/lib.rs` limited to module declarations and intentional reexports.
+2. Keep `src/lib.rs` focused on HA/DR ownership and intentional reexports.
 3. Specify quorum, fencing, epoch, and WAL shipping evidence before implementation.
 4. Keep HA/DR controls off the Application Surface.
 5. Add failover, fencing, WAL shipping, and crash/recovery tests before moving behavior.
 
 ## Validation
 
-This scaffold is documentation-only. Future behavior requires `cargo fmt`, `cargo check`, `cargo clippy`, HA/DR quorum tests, fencing tests, WAL shipping tests, failover tests, and crash/recovery scenarios.
+Local HA/DR contracts require `cargo fmt`, `cargo check`, `cargo clippy`, HA/DR quorum tests, fencing tests, WAL shipping tests, failover tests, and crash/recovery scenarios. Production HA/DR readiness additionally requires retained cluster drill evidence for primary suspect, quorum, fencing, recovery, promotion, manifest update, replica repointing, and old-primary rejection.
 
 ## Troubleshooting
 
@@ -54,4 +54,4 @@ If a node can promote without quorum, fencing, epoch, and durable WAL evidence, 
 ## References
 
 - `src/lib.rs`
-- Existing owner: `crates/andromeda-storage/`
+- Related durable owners: `crates/andromeda-storage/`, `crates/andromeda-wal/`, `crates/andromeda-restore/`

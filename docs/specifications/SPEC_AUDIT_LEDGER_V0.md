@@ -35,13 +35,20 @@ This specification applies to V0 documentation and implementation planning. It d
 | `AuditPolicy` | Must be represented as an explicit typed structure or canonical descriptor. |
 | `RetentionPolicy` | Must be represented as an explicit typed structure or canonical descriptor. |
 | `ExportEvidence` | Must be represented as an explicit typed structure or canonical descriptor. |
+| `AuditRecordHeader` | Fixed-width header with magic, version, sequence, length, and CRC. |
+| `AuditRecordPayload` | Typed redacted payload for security, admin, catalog, recovery, or HA/DR event families. |
+| `AuditLedgerVersion` | Explicit durable audit format version. |
+| `AuditRejectionCode` | Stable typed rejection code for invalid append, replay, or export. |
 
 ## Invariants
 
 - Audit is append-only.
+- Audit record magic and version are validated before replay.
 - Critical audit cannot be globally disabled.
 - Records contain principal, certificate, surface, operation, result, and policy version.
 - Deletion is detectable.
+- ChainHash binds record order and detects gaps, deletion, reorder, and duplicate sequence numbers.
+- Secret values are redacted before persistence.
 
 
 ## Serialization
@@ -51,6 +58,33 @@ This specification applies to V0 documentation and implementation planning. It d
 - Variable payloads declare length before payload.
 - Critical persisted structures use version fields.
 - Rust native struct layout must not be persisted or sent over the wire.
+
+### Durable audit record format
+
+V0 durable audit records are ASCII field records with explicit version prefix, key/value fields, and checksum suffixes. Binary replacement remains a future version and must keep the same validation semantics.
+
+| Field | Required rule |
+|---|---|
+| Format prefix | Must be a supported audit journal version. |
+| RecordLsn | Strictly increasing durable audit record LSN. |
+| DurableLsn | WAL or sink durability evidence for the record. |
+| EventId | Non-zero event identity. |
+| TraceId | Non-zero trace identity. |
+| Family | Known audit family. |
+| Sequence | Strict per-family sequence evidence when applicable. |
+| Retention | Retain, compactable, or export-retained policy. |
+| Replay | Replay behavior classification. |
+| PrincipalId | Redacted stable principal binding. |
+| CertificateFingerprint | Optional redacted certificate evidence. |
+| Surface and Permission | Optional but required for permissioned security events. |
+| PolicyVersion and PolicyDigest | Required for policy-backed security decisions. |
+| RequestId and SessionId | Required when tied to an RPC request. |
+| EventKind | Stable event vocabulary. |
+| PreviousChainChecksum | Must equal the prior chain checksum. |
+| ChainChecksum | Checksum of previous chain, record checksum, and payload. |
+| Checksum | Non-zero checksum of the record payload. |
+
+Replay rejects missing checksum fields, non-ASCII payloads, wrong field counts, checksum mismatch, chain mismatch, duplicate/non-monotonic LSN, and broken retention compaction proof.
 
 ## State transitions
 
@@ -106,12 +140,20 @@ Changes are classified as:
 - tamper detection tests.
 - retention policy tests.
 - export tests.
+- bad magic and unsupported version tests.
+- redaction and secret-leak rejection tests.
+- stable AuditRejectionCode tests.
+- replay chain mismatch tests.
+- duplicate and reordered record tests.
 
 ## Rejection criteria
 
 - Reject `audit disable switch`.
 - Reject `string-only audit`.
 - Reject `record without policy version`.
+- Reject `audit record with secret payload`.
+- Reject `audit record without chain hash`.
+- Reject `unstable audit rejection code`.
 
 ## Acceptance summary
 

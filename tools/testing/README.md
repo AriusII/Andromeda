@@ -14,6 +14,7 @@ This tooling covers:
 - Windows/MSVC linker visibility for Rust gates that target `*-windows-msvc`.
 - Local supply-chain tooling visibility for `cargo-nextest`, `cargo-audit`, `cargo-deny`, `cargo-vet`, and `cargo tree`.
 - Step 11 roadmap inventory across crate-owned test suites, fuzz targets, test documentation, runbooks, GitHub workflows, Miri evidence, Loom evidence, and fuzz evidence.
+- P01 normative specification baseline checks across required `SPEC_*_V0.md` files, sections, rejection criteria, and key tokens.
 - Missing-gate reporting for release-readiness planning.
 
 ## Non-goals
@@ -53,6 +54,13 @@ Run the Step 11 roadmap inventory:
 python tools/testing/step11_inventory.py
 ```
 
+Run the P01 normative specification baseline:
+
+```powershell
+python -B tools/testing/p01_spec_baseline_check.py
+python -B tools/testing/p01_spec_baseline_check.py --strict
+```
+
 Run the supply-chain tooling preflight:
 
 ```powershell
@@ -72,6 +80,7 @@ python tools/testing/preflight.py --strict
 python tools/testing/windows_msvc_preflight.py --strict
 python tools/testing/supply_chain_preflight.py --strict
 python tools/testing/step11_inventory.py --strict
+python -B tools/testing/p01_spec_baseline_check.py --strict
 ```
 
 ## Validation
@@ -85,10 +94,11 @@ python -B tools/testing/windows_msvc_preflight.py --json
 python tools/testing/windows_msvc_preflight.py --strict
 python tools/testing/supply_chain_preflight.py
 python tools/testing/step11_inventory.py
+python -B tools/testing/p01_spec_baseline_check.py
 python .codex/scripts/validate_codex_tooling.py
 ```
 
-For Rust changes, use the applicable crate-owned gates from `tests/README.md` and `docs/testing/release-gates.md`.
+For Rust changes, use the applicable crate-owned gates from `tests/README.md` and `docs/testing/RELEASE_GATES.md`.
 
 ## Troubleshooting
 
@@ -106,9 +116,9 @@ If Loom evidence is reported missing, treat it as a planning gap for concurrency
 ## References
 
 - `tests/README.md`
-- `docs/testing/release-gates.md`
-- `docs/governance/supply-chain-policy.md`
-- `docs/testing/testing-strategy.md`
+- `docs/testing/RELEASE_GATES.md`
+- `docs/adr/ADR-0010-SUPPLY_CHAIN_POLICY.md`
+- `docs/testing/TEST_STRATEGY.md`
 - `fuzz/README.md`
 - `tests/fuzzing/targets.toml`
 - `fuzz/VALIDATION_MATRIX.md`

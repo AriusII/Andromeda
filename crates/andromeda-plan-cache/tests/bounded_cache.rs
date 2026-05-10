@@ -12,7 +12,7 @@ use support::{binding, candidate, select_minimal_plan, shaped_fingerprint};
 fn bounded_plan_cache_requires_exact_versioned_key_for_hit() {
     let base_bind = binding(900, 70, 0xAA, 14, 0xBB);
     let base_key = PlanCacheKey::build(
-        &base_bind,
+        base_bind,
         PlanClass::Singleton,
         PlanShapeFingerprint::empty(),
     )
@@ -47,31 +47,31 @@ fn bounded_plan_cache_requires_exact_versioned_key_for_hit() {
     assert!(hit_reason.contains("cache_miss_reason=none"));
 
     let changed_catalog = PlanCacheKey::build(
-        &binding(900, 71, 0xAA, 14, 0xBB),
+        binding(900, 71, 0xAA, 14, 0xBB),
         PlanClass::Singleton,
         PlanShapeFingerprint::empty(),
     )
     .unwrap();
     let changed_stats = PlanCacheKey::build(
-        &binding(900, 70, 0xAA, 15, 0xBB),
+        binding(900, 70, 0xAA, 15, 0xBB),
         PlanClass::Singleton,
         PlanShapeFingerprint::empty(),
     )
     .unwrap();
     let changed_contract = PlanCacheKey::build(
-        &binding(900, 70, 0xCC, 14, 0xBB),
+        binding(900, 70, 0xCC, 14, 0xBB),
         PlanClass::Singleton,
         PlanShapeFingerprint::empty(),
     )
     .unwrap();
     let changed_policy = PlanCacheKey::build(
-        &binding(900, 70, 0xAA, 14, 0xDD),
+        binding(900, 70, 0xAA, 14, 0xDD),
         PlanClass::Singleton,
         PlanShapeFingerprint::empty(),
     )
     .unwrap();
     let changed_plan_class =
-        PlanCacheKey::build(&base_bind, PlanClass::ParameterShape, shaped_fingerprint()).unwrap();
+        PlanCacheKey::build(base_bind, PlanClass::ParameterShape, shaped_fingerprint()).unwrap();
 
     for (key, expected_reason) in [
         (changed_catalog, PlanCacheMissReason::CatalogVersionMismatch),
@@ -98,9 +98,9 @@ fn bounded_plan_cache_evicts_oldest_entry_with_trace() {
     let bind_a = binding(901, 80, 0xAA, 16, 0xBB);
     let bind_b = binding(902, 80, 0xAA, 16, 0xBB);
     let key_a =
-        PlanCacheKey::build(&bind_a, PlanClass::Singleton, PlanShapeFingerprint::empty()).unwrap();
+        PlanCacheKey::build(bind_a, PlanClass::Singleton, PlanShapeFingerprint::empty()).unwrap();
     let key_b =
-        PlanCacheKey::build(&bind_b, PlanClass::Singleton, PlanShapeFingerprint::empty()).unwrap();
+        PlanCacheKey::build(bind_b, PlanClass::Singleton, PlanShapeFingerprint::empty()).unwrap();
     let selected_a = select_minimal_plan(
         key_a,
         &[candidate(1, PlanClass::Singleton, 0, 0x51)],
@@ -146,7 +146,7 @@ fn bounded_plan_cache_evicts_oldest_entry_with_trace() {
 fn bounded_plan_cache_rejects_zero_trace_id_for_trace_producing_operations() {
     let bind = binding(911, 81, 0xAA, 17, 0xBB);
     let key =
-        PlanCacheKey::build(&bind, PlanClass::Singleton, PlanShapeFingerprint::empty()).unwrap();
+        PlanCacheKey::build(bind, PlanClass::Singleton, PlanShapeFingerprint::empty()).unwrap();
     let selected = select_minimal_plan(
         key,
         &[candidate(4, PlanClass::Singleton, 0, 0x62)],
@@ -178,7 +178,7 @@ fn bounded_plan_cache_rejects_zero_trace_id_for_trace_producing_operations() {
 fn minimal_plan_selection_rejects_zero_trace_id_before_emitting_trace() {
     let bind = binding(910, 81, 0xAA, 17, 0xBB);
     let key =
-        PlanCacheKey::build(&bind, PlanClass::Singleton, PlanShapeFingerprint::empty()).unwrap();
+        PlanCacheKey::build(bind, PlanClass::Singleton, PlanShapeFingerprint::empty()).unwrap();
     let candidates = [candidate(3, PlanClass::Singleton, 0, 0x61)];
 
     let error = select_minimal_plan(key, &candidates, TraceId::new(0)).unwrap_err();

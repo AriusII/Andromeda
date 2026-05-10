@@ -37,14 +37,23 @@ This specification applies to V0 documentation and implementation planning. It d
 | `CollectionType` | Must be represented as an explicit typed structure or canonical descriptor. |
 | `StructuredObjectType` | Must be represented as an explicit typed structure or canonical descriptor. |
 | `RelationType` | Must be represented as an explicit typed structure or canonical descriptor. |
+| `DecimalExact` | Exact decimal type with explicit precision, scale, rounding, and overflow policy. |
+| `FloatPolicy` | Controlled floating-point policy for non-key, non-durable-exact use. |
+| `TextPolicy` | Encoding, collation, normalization, maximum length, and truncation rejection policy. |
+| `OptionalPolicy` | Explicit absence policy; absence is not ambient NULL. |
+| `Cardinality` | Zero, one, optional-one, many, bounded-many, or exact bounded relation cardinality. |
 
 ## Invariants
 
 - No ambient NULL.
+- Absence is represented explicitly through `OptionalPolicy`; ambient NULL is not a type-system state.
+- `DecimalExact` is required for money, counters, inventory, identity, and durable exact invariants.
 - Boolean is two-state unless an Enum defines more states.
-- Float cannot be used for exact invariants.
-- Text declares encoding and length policy.
+- `FloatPolicy` is controlled and cannot be used for keys, equality identity, WAL-visible exact values, or permission decisions.
+- Text declares encoding, collation, normalization, length, and rejection policy through `TextPolicy`.
+- Text without an explicit maximum is runtime-local only and must not appear in ProcedureContract, persisted, or network-visible V0 shapes.
 - Cardinality is part of expression type.
+- Cardinality must be preserved into ProcedureContract shapes and Semantic IR.
 
 
 ## Serialization
@@ -106,16 +115,24 @@ Changes are classified as:
 ## Tests
 
 - type constructor tests.
+- decimal exact precision, scale, rounding, and overflow tests.
 - float-as-key rejection tests.
 - optional branch requirement tests.
+- text encoding, normalization, and maximum-length rejection tests.
 - enum flags unknown-bit rejection tests.
 
 ## Rejection criteria
 
 - Reject `implicit nullable field`.
+- Reject `ambient NULL semantics`.
+- Reject `decimal without precision and scale`.
 - Reject `silent numeric conversion`.
 - Reject `float key`.
+- Reject `float permission decision`.
 - Reject `unbounded text`.
+- Reject `unbounded text in ProcedureContract`.
+- Reject `unbounded text in persisted or network-visible shape`.
+- Reject `cardinality erased before contract hashing`.
 
 ## Acceptance summary
 

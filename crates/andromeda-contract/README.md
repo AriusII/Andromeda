@@ -52,7 +52,7 @@ Before changing this crate, understand:
 
 ## Validation
 
-For documentation-only changes, validate the README against the doctrine in `AGENTS.md`, `crates/AGENTS.md`, and `docs/adr/ADR-0011-workspace-crate-boundaries.md`.
+For documentation-only changes, validate the README against the doctrine in `AGENTS.md`, `crates/AGENTS.md`, and `docs/adr/ADR-0002-WORKSPACE_AND_CRATE_BOUNDARIES.md`.
 
 For code changes in this crate, prefer:
 
@@ -80,7 +80,7 @@ If a change affects contract hash materialization, add or update golden vectors 
 
 - `AGENTS.md`
 - `crates/AGENTS.md`
-- `docs/adr/ADR-0011-workspace-crate-boundaries.md`
+- `docs/adr/ADR-0002-WORKSPACE_AND_CRATE_BOUNDARIES.md`
 - `crates/andromeda-contract/src/lib.rs`
 - `crates/andromeda-procedure-contract/src/lib.rs`
 - `crates/andromeda-contract/src/objects.rs`

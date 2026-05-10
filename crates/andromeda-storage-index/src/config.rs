@@ -40,6 +40,8 @@ mod tests {
 
     #[test]
     fn durable_btree_format_remains_fail_stop_until_promotion() {
-        assert!(!BTREE_DURABLE_FORMAT_PROMOTED);
+        const {
+            assert!(!BTREE_DURABLE_FORMAT_PROMOTED);
+        }
     }
 }

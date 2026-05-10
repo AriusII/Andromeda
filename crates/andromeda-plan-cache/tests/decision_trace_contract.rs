@@ -72,13 +72,13 @@ fn advisory_summary(
 fn versioned_plan_key_decision_trace_and_staleness_contract() {
     let fingerprint = shaped_fingerprint();
     let base_key = PlanCacheKey::build(
-        &binding(4_001, 12, 0xA1, 7, 0xB1),
+        binding(4_001, 12, 0xA1, 7, 0xB1),
         PlanClass::StatsAdaptive,
         fingerprint,
     )
     .expect("base PlanCacheKey must bind non-zero contract, catalog, stats, and policy versions");
     let rebuilt_base_key = PlanCacheKey::build(
-        &binding(4_001, 12, 0xA1, 7, 0xB1),
+        binding(4_001, 12, 0xA1, 7, 0xB1),
         PlanClass::StatsAdaptive,
         fingerprint,
     )
@@ -87,7 +87,7 @@ fn versioned_plan_key_decision_trace_and_staleness_contract() {
     assert_eq!(base_key.digest(), rebuilt_base_key.digest());
 
     let bumped_stats_key = PlanCacheKey::build(
-        &binding(4_001, 12, 0xA1, 8, 0xB1),
+        binding(4_001, 12, 0xA1, 8, 0xB1),
         PlanClass::StatsAdaptive,
         fingerprint,
     )

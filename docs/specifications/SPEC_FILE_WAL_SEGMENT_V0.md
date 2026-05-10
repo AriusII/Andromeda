@@ -36,6 +36,8 @@ This specification applies to V0 documentation and implementation planning. It d
 | `StartLsn` | Must be represented as an explicit typed structure or canonical descriptor. |
 | `PreviousSegmentHash` | Must be represented as an explicit typed structure or canonical descriptor. |
 | `SegmentCrc` | Must be represented as an explicit typed structure or canonical descriptor. |
+| `DurablePrefix` | Highest contiguous LSN range proven readable and checksummed. |
+| `FlushThroughLsn` | Explicit fence proving bytes are durable through a target LSN. |
 
 ## Invariants
 
@@ -43,6 +45,8 @@ This specification applies to V0 documentation and implementation planning. It d
 - PreviousSegmentHash links segments.
 - Rotation preserves replay order.
 - Segment header is verified before replay.
+- Recovery only trusts the durable prefix.
+- `flush_through` evidence is required before a visible commit can be acknowledged.
 
 
 ## Serialization
@@ -107,12 +111,16 @@ Changes are classified as:
 - rotation tests.
 - previous hash tests.
 - partial segment tests.
+- durable prefix truncation tests.
+- flush_through visibility fence tests.
 
 ## Rejection criteria
 
 - Reject `segment rewrite`.
 - Reject `missing timeline`.
 - Reject `unverified segment header`.
+- Reject `visible commit beyond durable prefix`.
+- Reject `flush_through without fsync evidence`.
 
 ## Acceptance summary
 

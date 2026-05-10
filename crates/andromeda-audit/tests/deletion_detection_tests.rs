@@ -16,7 +16,7 @@ fn audit_deletion_detected_in_journal() {
     let trace_id2 = TraceId::new(16002);
     let trace_id3 = TraceId::new(16003);
 
-    let _events = vec![
+    let _events = [
         PermissionAuditEvent::allowed(
             trace_id1,
             PrincipalId::new(42),
@@ -43,7 +43,7 @@ fn audit_deletion_detected_in_journal() {
 /// Verifies that deletion of entries prevents proper recovery.
 #[test]
 fn audit_deletion_prevents_recovery() {
-    let trace_ids = vec![
+    let trace_ids = [
         TraceId::new(17001),
         TraceId::new(17002),
         TraceId::new(17003),
@@ -123,7 +123,7 @@ fn audit_deletion_forensic_trail_maintained() {
 
     for i in 0..5 {
         let trace_id = TraceId::new(19000 + i as u128);
-        let policy_evidence = SecurityPolicyVersionEvidence::new(1, &format!("sha256:{:064x}", i))
+        let policy_evidence = SecurityPolicyVersionEvidence::new(1, format!("sha256:{:064x}", i))
             .expect("policy evidence");
 
         if let Ok(trace) = SecurityAuditTrace::new_with_policy_version(
@@ -134,14 +134,14 @@ fn audit_deletion_forensic_trail_maintained() {
             AuditPermission::ReadContract,
             SecurityAuditOutcome::Allowed,
             policy_evidence,
-            &format!("forensic entry {}", i),
+            format!("forensic entry {}", i),
         ) {
             audit_events.push(trace);
         }
     }
 
     // Verify that the forensic trail is maintained (all entries are complete)
-    assert!(audit_events.len() > 0);
+    assert!(!audit_events.is_empty());
     for (i, event) in audit_events.iter().enumerate() {
         assert_eq!(event.trace_id.get(), 19000 + i as u128);
     }

@@ -92,7 +92,7 @@ fn plan_shape_fingerprint_separates_on_each_input() {
 #[test]
 fn plan_cache_key_singleton_rejects_shape_fingerprint() {
     let bind = binding(1, 1, 0xAA, 1, 0xBB);
-    let err = PlanCacheKey::build(&bind, PlanClass::Singleton, shaped_fingerprint()).unwrap_err();
+    let err = PlanCacheKey::build(bind, PlanClass::Singleton, shaped_fingerprint()).unwrap_err();
     assert_eq!(err, PlanCacheKeyError::SingletonRejectsShapeFingerprint);
 }
 
@@ -100,7 +100,7 @@ fn plan_cache_key_singleton_rejects_shape_fingerprint() {
 fn plan_cache_key_shaped_class_requires_fingerprint() {
     let bind = binding(1, 1, 0xAA, 1, 0xBB);
     let err = PlanCacheKey::build(
-        &bind,
+        bind,
         PlanClass::ParameterShape,
         PlanShapeFingerprint::empty(),
     )
@@ -134,7 +134,7 @@ fn plan_cache_key_rejects_unbound_identity_inputs() {
     ];
 
     for (bind, expected) in cases {
-        let err = PlanCacheKey::build(&bind, PlanClass::Singleton, PlanShapeFingerprint::empty())
+        let err = PlanCacheKey::build(bind, PlanClass::Singleton, PlanShapeFingerprint::empty())
             .unwrap_err();
         assert_eq!(err, expected);
     }
@@ -143,9 +143,9 @@ fn plan_cache_key_rejects_unbound_identity_inputs() {
 #[test]
 fn plan_cache_key_is_deterministic() {
     let bind = binding(7, 3, 0xAA, 2, 0xBB);
-    let lhs = PlanCacheKey::build(&bind, PlanClass::Singleton, PlanShapeFingerprint::empty())
+    let lhs = PlanCacheKey::build(bind, PlanClass::Singleton, PlanShapeFingerprint::empty())
         .expect("singleton + empty fingerprint is valid");
-    let rhs = PlanCacheKey::build(&bind, PlanClass::Singleton, PlanShapeFingerprint::empty())
+    let rhs = PlanCacheKey::build(bind, PlanClass::Singleton, PlanShapeFingerprint::empty())
         .expect("singleton + empty fingerprint is valid");
     assert_eq!(lhs, rhs);
     assert_eq!(lhs.digest(), rhs.digest());
@@ -155,23 +155,14 @@ fn plan_cache_key_is_deterministic() {
 fn plan_cache_key_separates_on_every_version_field() {
     let base_bind = binding(7, 3, 0xAA, 2, 0xBB);
     let base = PlanCacheKey::build(
-        &base_bind,
+        base_bind,
         PlanClass::Singleton,
         PlanShapeFingerprint::empty(),
     )
     .unwrap();
 
     let other = PlanCacheKey::build(
-        &binding(7, 3, 0xCC, 2, 0xBB),
-        PlanClass::Singleton,
-        PlanShapeFingerprint::empty(),
-    )
-    .unwrap();
-    assert_ne!(base, other);
-    assert_ne!(base.digest(), other.digest());
-
-    let other = PlanCacheKey::build(
-        &binding(7, 4, 0xAA, 2, 0xBB),
+        binding(7, 3, 0xCC, 2, 0xBB),
         PlanClass::Singleton,
         PlanShapeFingerprint::empty(),
     )
@@ -180,7 +171,7 @@ fn plan_cache_key_separates_on_every_version_field() {
     assert_ne!(base.digest(), other.digest());
 
     let other = PlanCacheKey::build(
-        &binding(7, 3, 0xAA, 9, 0xBB),
+        binding(7, 4, 0xAA, 2, 0xBB),
         PlanClass::Singleton,
         PlanShapeFingerprint::empty(),
     )
@@ -189,7 +180,7 @@ fn plan_cache_key_separates_on_every_version_field() {
     assert_ne!(base.digest(), other.digest());
 
     let other = PlanCacheKey::build(
-        &binding(7, 3, 0xAA, 2, 0xEE),
+        binding(7, 3, 0xAA, 9, 0xBB),
         PlanClass::Singleton,
         PlanShapeFingerprint::empty(),
     )
@@ -198,7 +189,16 @@ fn plan_cache_key_separates_on_every_version_field() {
     assert_ne!(base.digest(), other.digest());
 
     let other = PlanCacheKey::build(
-        &binding(8, 3, 0xAA, 2, 0xBB),
+        binding(7, 3, 0xAA, 2, 0xEE),
+        PlanClass::Singleton,
+        PlanShapeFingerprint::empty(),
+    )
+    .unwrap();
+    assert_ne!(base, other);
+    assert_ne!(base.digest(), other.digest());
+
+    let other = PlanCacheKey::build(
+        binding(8, 3, 0xAA, 2, 0xBB),
         PlanClass::Singleton,
         PlanShapeFingerprint::empty(),
     )
@@ -212,9 +212,9 @@ fn plan_cache_key_separates_on_plan_class_and_shape() {
     let bind = binding(7, 3, 0xAA, 2, 0xBB);
     let fp = shaped_fingerprint();
 
-    let shape_key = PlanCacheKey::build(&bind, PlanClass::ParameterShape, fp).unwrap();
-    let card_key = PlanCacheKey::build(&bind, PlanClass::Cardinality, fp).unwrap();
-    let adaptive_key = PlanCacheKey::build(&bind, PlanClass::StatsAdaptive, fp).unwrap();
+    let shape_key = PlanCacheKey::build(bind, PlanClass::ParameterShape, fp).unwrap();
+    let card_key = PlanCacheKey::build(bind, PlanClass::Cardinality, fp).unwrap();
+    let adaptive_key = PlanCacheKey::build(bind, PlanClass::StatsAdaptive, fp).unwrap();
 
     assert_ne!(shape_key, card_key);
     assert_ne!(shape_key, adaptive_key);
@@ -226,7 +226,7 @@ fn plan_cache_key_separates_on_plan_class_and_shape() {
         .push_parameter(0x01, false, 0)
         .push_cardinality(0, CardinalityBucket::Bulk)
         .finish();
-    let other_shape_key = PlanCacheKey::build(&bind, PlanClass::ParameterShape, other_fp).unwrap();
+    let other_shape_key = PlanCacheKey::build(bind, PlanClass::ParameterShape, other_fp).unwrap();
     assert_ne!(shape_key, other_shape_key);
     assert_ne!(shape_key.digest(), other_shape_key.digest());
 }

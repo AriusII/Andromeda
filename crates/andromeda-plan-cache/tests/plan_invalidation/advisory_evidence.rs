@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn minimal_plan_selection_keeps_scenario_evidence_advisory_only() {
     let bind = binding(800, 60, 0xAA, 12, 0xBB);
-    let key = PlanCacheKey::build(&bind, PlanClass::StatsAdaptive, shaped_fingerprint())
+    let key = PlanCacheKey::build(bind, PlanClass::StatsAdaptive, shaped_fingerprint())
         .expect("valid stats-adaptive key");
     let candidates = [
         candidate(20, PlanClass::StatsAdaptive, 400, 0x20),
@@ -56,7 +56,7 @@ fn minimal_plan_selection_keeps_scenario_evidence_advisory_only() {
 #[test]
 fn minimal_plan_selection_traces_rejected_stale_scenario_evidence_without_changing_selection() {
     let bind = binding(801, 61, 0xAA, 13, 0xBB);
-    let key = PlanCacheKey::build(&bind, PlanClass::ParameterShape, shaped_fingerprint())
+    let key = PlanCacheKey::build(bind, PlanClass::ParameterShape, shaped_fingerprint())
         .expect("valid parameter-shape key");
     let candidates = [
         candidate(11, PlanClass::ParameterShape, 200, 0x11),
@@ -105,7 +105,7 @@ fn minimal_plan_selection_traces_rejected_stale_scenario_evidence_without_changi
 #[test]
 fn minimal_plan_selection_rejects_stale_catalog_scenario_evidence_without_changing_selection() {
     let bind = binding(802, 62, 0xAA, 14, 0xBB);
-    let key = PlanCacheKey::build(&bind, PlanClass::ParameterShape, shaped_fingerprint())
+    let key = PlanCacheKey::build(bind, PlanClass::ParameterShape, shaped_fingerprint())
         .expect("valid parameter-shape key");
     let candidates = [
         candidate(21, PlanClass::ParameterShape, 200, 0x21),
@@ -154,7 +154,7 @@ fn minimal_plan_selection_rejects_stale_catalog_scenario_evidence_without_changi
 #[test]
 fn scenario_evidence_key_mismatches_are_rejected_and_traced_without_selecting() {
     let bind = binding(950, 82, 0xAA, 18, 0xBB);
-    let key = PlanCacheKey::build(&bind, PlanClass::StatsAdaptive, shaped_fingerprint())
+    let key = PlanCacheKey::build(bind, PlanClass::StatsAdaptive, shaped_fingerprint())
         .expect("valid stats-adaptive key");
     let candidates = [
         candidate(30, PlanClass::StatsAdaptive, 100, 0x30),
@@ -275,7 +275,7 @@ fn scenario_evidence_key_mismatches_are_rejected_and_traced_without_selecting() 
 #[test]
 fn scenario_evidence_batch_size_is_bounded_before_plan_selection() {
     let bind = binding(951, 83, 0xAA, 19, 0xBB);
-    let _key = PlanCacheKey::build(&bind, PlanClass::StatsAdaptive, shaped_fingerprint())
+    let _key = PlanCacheKey::build(bind, PlanClass::StatsAdaptive, shaped_fingerprint())
         .expect("valid stats-adaptive key");
     let candidates = [candidate(40, PlanClass::StatsAdaptive, 100, 0x40)];
 

@@ -88,9 +88,9 @@ fn advisory_summary(
 fn stats_version_bump_invalidates_cache_entry_and_decision_trace_explains_miss() {
     let base_binding = binding(1_200, 90, 0xA5, 45, 0xB5);
     let base_fingerprint = shaped_fingerprint();
-    let base_key = PlanCacheKey::build(&base_binding, PlanClass::Cardinality, base_fingerprint)
+    let base_key = PlanCacheKey::build(base_binding, PlanClass::Cardinality, base_fingerprint)
         .expect("base cardinality key must be valid");
-    let same_key = PlanCacheKey::build(&base_binding, PlanClass::Cardinality, base_fingerprint)
+    let same_key = PlanCacheKey::build(base_binding, PlanClass::Cardinality, base_fingerprint)
         .expect("same binding must rebuild the same key");
     assert_eq!(base_key, same_key);
     assert_eq!(base_key.digest(), same_key.digest());
@@ -115,7 +115,7 @@ fn stats_version_bump_invalidates_cache_entry_and_decision_trace_explains_miss()
     assert_eq!(hit.trace().cache_miss_reason(), None);
 
     let bumped_stats_key = PlanCacheKey::build(
-        &binding(1_200, 90, 0xA5, 46, 0xB5),
+        binding(1_200, 90, 0xA5, 46, 0xB5),
         PlanClass::Cardinality,
         base_fingerprint,
     )
@@ -153,7 +153,7 @@ fn stats_version_bump_invalidates_cache_entry_and_decision_trace_explains_miss()
 #[test]
 fn plan_selection_decision_trace_records_advisory_evidence_counts_and_best_digest() {
     let binding = binding(1_201, 91, 0xA6, 47, 0xB6);
-    let key = PlanCacheKey::build(&binding, PlanClass::StatsAdaptive, shaped_fingerprint())
+    let key = PlanCacheKey::build(binding, PlanClass::StatsAdaptive, shaped_fingerprint())
         .expect("stats-adaptive key must be valid");
     let candidates = [
         candidate(81, PlanClass::StatsAdaptive, 100, 0x81),

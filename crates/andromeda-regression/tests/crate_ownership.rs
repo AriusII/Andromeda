@@ -279,17 +279,17 @@ fn crate_ownership_storage_facade_does_not_reintroduce_pure_compat_wrappers() {
 
     let mut violations = forbidden
         .iter()
-        .filter_map(|(bad, good)| {
-            code.contains(bad)
-                .then(|| format!("andromeda-storage lib.rs exposes `{bad}`; use `{good}`"))
-        })
+        .filter(|(bad, _)| code.contains(*bad))
+        .map(|(bad, good)| format!("andromeda-storage lib.rs exposes `{bad}`; use `{good}`"))
         .collect::<Vec<_>>();
-    violations.extend(demolished_files.iter().filter_map(|(relative, owner)| {
-        workspace
-            .join(relative)
-            .exists()
-            .then(|| format!("{relative} reintroduced a storage facade file; use `{owner}`"))
-    }));
+    violations.extend(
+        demolished_files
+            .iter()
+            .filter(|(relative, _)| workspace.join(relative).exists())
+            .map(|(relative, owner)| {
+                format!("{relative} reintroduced a storage facade file; use `{owner}`")
+            }),
+    );
 
     assert!(
         violations.is_empty(),
@@ -1002,7 +1002,7 @@ fn crate_ownership_major_facades_do_not_grow_reexport_surfaces() {
 
     assert!(
         violations.is_empty(),
-        "major facade crates must not grow broad `pub use` surfaces; migrate callers to owner crates or update docs/specs/crate-ownership.md with a deliberate integrator exception:\n{}",
+        "major facade crates must not grow broad `pub use` surfaces; migrate callers to owner crates or update docs/project/CRATE_CLUSTER_CRITICALITY_MATRIX.md with a deliberate integrator exception:\n{}",
         violations.join("\n")
     );
 }

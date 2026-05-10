@@ -34,18 +34,26 @@ This specification applies to V0 documentation and implementation planning. It d
 | `parameter_decl` | Must be represented as an explicit typed structure or canonical descriptor. |
 | `result_decl` | Must be represented as an explicit typed structure or canonical descriptor. |
 | `ensure_stmt` | Must be represented as an explicit typed structure or canonical descriptor. |
-| `let_stmt` | Must be represented as an explicit typed structure or canonical descriptor. |
-| `mutation_stmt` | Must be represented as an explicit typed structure or canonical descriptor. |
+| `read_stmt` | Bounded read statement over catalog-resolved objects. |
+| `assert_stmt` | Typed assertion that can reject before mutation. |
+| `update_stmt` | Mutation statement requiring write permission and WAL-covered target. |
+| `emit_stmt` | ResultStream emission statement bound to declared output. |
+| `raise_stmt` | Typed rejection statement. |
 | `return_stmt` | Must be represented as an explicit typed structure or canonical descriptor. |
-| `for_each_stmt` | Must be represented as an explicit typed structure or canonical descriptor. |
+| `let_stmt` | Reserved in V0 unless later specified with exact type/effect rules. |
+| `for_each_stmt` | Reserved in V0; no positive loop construct is active until a bounded loop spec exists. |
+| `diagnostic_code` | Stable parser diagnostic code with source span and severity. |
+| `bounded_loop_policy` | Grammar-level loop bound declaration or statically provable bound. |
 
 ## Invariants
 
 - No dynamic SQL text.
 - No SELECT star.
 - No implicit names.
-- Loops are bounded.
+- V0 has no positive loop construct; the operation list is bounded and unbounded loops are rejected.
 - SRPL source has a deterministic parse tree.
+- Parser diagnostics are stable and source-span based.
+- Grammar productions must not create shape-changing result branches.
 
 
 ## Serialization
@@ -109,11 +117,15 @@ Changes are classified as:
 - parse canonical examples.
 - reject ambiguous grammar.
 - reject unbounded while.
+- reject reserved `for_each` until a bounded loop spec exists.
 - reject dynamic text construction.
+- stable diagnostic code golden tests.
 
 ## Rejection criteria
 
 - Reject `unbounded loop`.
+- Reject `reserved for_each loop`.
+- Reject `unstable diagnostic code`.
 - Reject `shape-changing branch`.
 - Reject `external network call`.
 - Reject `external filesystem call`.

@@ -56,7 +56,7 @@ fn audit_fsync_concurrent_writes_all_durable() {
 /// Verifies that gaps in audit sequence are detected on recovery.
 #[test]
 fn audit_fsync_gap_detection_on_recovery() {
-    let trace_ids = vec![
+    let trace_ids = [
         TraceId::new(3000),
         TraceId::new(3001),
         TraceId::new(3002),
@@ -85,8 +85,8 @@ fn audit_fsync_ordering_preserved() {
     }
 
     // Verify ordering is maintained
-    for i in 0..5 {
-        assert_eq!(events[i].trace_id, TraceId::new(4000 + i as u128));
+    for (i, event) in events.iter().enumerate().take(5) {
+        assert_eq!(event.trace_id, TraceId::new(4000 + i as u128));
     }
 }
 

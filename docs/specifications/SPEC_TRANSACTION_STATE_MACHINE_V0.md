@@ -35,13 +35,17 @@ This specification applies to V0 documentation and implementation planning. It d
 | `PoisonReason` | Must be represented as an explicit typed structure or canonical descriptor. |
 | `DurableCommitEvidence` | Must be represented as an explicit typed structure or canonical descriptor. |
 | `RollbackEvidence` | Must be represented as an explicit typed structure or canonical descriptor. |
+| `VisibleCommitFence` | WAL durability fence that must precede visible commit. |
+| `TransactionRejectionCode` | Stable typed rejection code for invalid transitions. |
 
 ## Invariants
 
 - Committed is visible only after durable WAL.
+- `VisibleCommitFence` references the commit LSN and `flush_through` evidence.
 - Poisoned cannot continue normal execution.
 - Disposed is terminal.
 - Rollback is typed and observable.
+- Invalid transitions emit `TransactionRejectionCode`.
 
 
 ## Serialization
@@ -105,13 +109,17 @@ Changes are classified as:
 - state transition tests.
 - poison continuation rejection tests.
 - commit visibility tests.
+- visible commit fence tests.
 - rollback evidence tests.
+- stable transaction rejection code tests.
 
 ## Rejection criteria
 
 - Reject `commit without durable evidence`.
+- Reject `commit without VisibleCommitFence`.
 - Reject `transition from Disposed`.
 - Reject `normal execution after Poisoned`.
+- Reject `string-only transaction rejection`.
 
 ## Acceptance summary
 

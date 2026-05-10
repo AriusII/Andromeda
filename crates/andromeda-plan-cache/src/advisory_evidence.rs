@@ -289,12 +289,8 @@ mod tests {
             stats_version: StatsVersion::new(11),
             policy_version: PolicyVersion::new([0xBB; PolicyVersion::LEN]),
         };
-        PlanCacheKey::build(
-            &binding,
-            PlanClass::Singleton,
-            PlanShapeFingerprint::empty(),
-        )
-        .expect("singleton key with empty fingerprint is valid")
+        PlanCacheKey::build(binding, PlanClass::Singleton, PlanShapeFingerprint::empty())
+            .expect("singleton key with empty fingerprint is valid")
     }
 
     fn identity() -> AdvisoryEvidenceIdentity {

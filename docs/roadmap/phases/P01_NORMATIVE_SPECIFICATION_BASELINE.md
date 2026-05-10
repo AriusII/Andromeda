@@ -32,15 +32,26 @@ Les documents projet disent déjà que la prochaine étape utile est de produire
 
 ## Livrables attendus
 
-- specifications/ProcedureContract_v0.md
-- specifications/TypeSystem_v0.md
-- specifications/WalRecord_v0.md
-- specifications/PageHeader_PageTrailer_v0.md
-- specifications/DatabaseManifest_v0.md
-- specifications/FrameHeader_RPC_v0.md
-- specifications/TransactionStateMachine_v0.md
-- specifications/CatalogObjectModel_v0.md
-- specifications/CrashRecoveryTestPlan_v0.md
+- `docs/specifications/SPEC_PROCEDURE_CONTRACT_V0.md`
+- `docs/specifications/SPEC_TYPE_SYSTEM_V0.md`
+- `docs/specifications/SPEC_SRPL_GRAMMAR_V0.md`
+- `docs/specifications/SPEC_SRPL_BINDER_V0.md`
+- `docs/specifications/SPEC_SEMANTIC_IR_V0.md`
+- `docs/specifications/SPEC_CATALOG_OBJECT_MODEL_V0.md`
+- `docs/specifications/SPEC_DEFINITION_BATCH_V0.md`
+- `docs/specifications/SPEC_WAL_RECORD_V0.md`
+- `docs/specifications/SPEC_FILE_WAL_SEGMENT_V0.md`
+- `docs/specifications/SPEC_PAGE_FORMAT_V0.md`
+- `docs/specifications/SPEC_DATABASE_MANIFEST_V0.md`
+- `docs/specifications/SPEC_SEGMENT_INDEX_V0.md`
+- `docs/specifications/SPEC_TRANSACTION_STATE_MACHINE_V0.md`
+- `docs/specifications/SPEC_RECOVERY_REPORT_V0.md`
+- `docs/specifications/SPEC_CRASH_RECOVERY_TEST_PLAN_V0.md`
+- `docs/specifications/SPEC_RPC_FRAME_V0.md`
+- `docs/specifications/SPEC_RESULT_STREAM_V0.md`
+- `docs/specifications/SPEC_SECURITY_ADMISSION_V0.md`
+- `docs/specifications/SPEC_AUDIT_LEDGER_V0.md`
+- `docs/specifications/SPEC_DECISION_TRACE_V0.md`
 
 ## Personnes mobilisées
 
@@ -73,12 +84,14 @@ Les documents projet disent déjà que la prochaine étape utile est de produire
 - Spec review checklist
 - Golden vectors planned for codec specs
 - No ambiguous terms : query, view, null ambient, dynamic SQL, native-layout serialization
+- `python -B tools/testing/p01_spec_baseline_check.py --strict`
 
 ## Critères de sortie
 
 - Chaque spec a invariants, erreurs, serialization, tests, rejection criteria.
 - Toute structure durable ou réseau critique a un format explicite.
 - Les personnes 3 à 14 peuvent démarrer leurs implémentations sans inventer la sémantique.
+- `tools/testing/p01_spec_baseline_check.py --strict` passe sans gap.
 
 ## Risques principaux
 
