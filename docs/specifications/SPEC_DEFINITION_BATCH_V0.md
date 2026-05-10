@@ -173,13 +173,16 @@ dependency, durability, and audit evidence.
 | Drop | Reserved in V0. Use deprecate until dependency closure, retained evidence, and restore semantics are implemented. |
 | Rename or move | Reserved and rejected in V0. |
 
+Alter | Existing target, explicit identity preservation, compatibility acceptance.
 Alter compatibility must reject unsafe Procedure changes before publication, including Input changes,
 required permission changes, result stream removal, and any shape mutation where contract, catalog,
 stats, and policy evidence allow reuse cannot be proven.
 
+Drop or deprecate requires dependency closure, active invocation policy, and historical evidence retention.
 Drop and deprecate behavior must reject new invocation binding to the deprecated active name or
-version. Compatibility tests must classify alters, drops, renames, moves before the operation surface
-expands.
+version. Deprecated | Fence keys for new invocations of the deprecated version. Reject new invocation
+binding to the deprecated active name or version. Compatibility tests must classify alters, drops,
+renames, moves before the operation surface expands.
 
 
 ## Serialization

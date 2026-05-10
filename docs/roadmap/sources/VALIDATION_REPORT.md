@@ -1,5 +1,42 @@
 # Roadmap Validation Report
 
+## P03 Result
+
+P03 catalog, `ContractHash`, and durable `DefinitionBatch` mutation are closed under the local strict P03 checker and focused Rust gates. Release readiness remains blocked by non-P03 release evidence and CI workflow gaps.
+
+| Gate | Result | Notes |
+|---|---:|---|
+| `python -B tools/testing/p03_catalog_definition_batch_check.py --strict` | PASS | Required P03 tests and four retained P03 evidence reports are present; catalog durability, recovery, ContractHash, PlanCache, and publication invariants are found. |
+| `python -m py_compile tools/testing/p03_catalog_definition_batch_check.py` | PASS | P03 checker compiles. |
+| `cargo test -p andromeda-catalog --test catalog_store_contract --locked -- --nocapture` | PASS | 33 tests pass, covering no half-catalog visibility, durable Begin/Apply/Commit evidence, apply index density, flush failure, and recovery tails. |
+| `cargo test -p andromeda-definition-batch --test alter_drop_compat --locked -- --nocapture` | PASS | 11 tests pass, covering additive, breaking, deprecated, rejected, stale base, duplicate apply, and recreate rejection behavior. |
+| `cargo test -p andromeda-catalog --test catalog_digest_contract --locked -- --nocapture` | PASS | 8 tests pass, covering catalog digest, dependency graph, and CatalogVersion evidence separate from ContractHash. |
+| `cargo test -p andromeda-procedure-contract --test procedure_contract_digest --locked -- --nocapture` | PASS | 13 tests pass, covering canonical ContractHash, SRPL formatting independence, observable shape drift, and binding version evidence. |
+| `cargo test -p andromeda-catalog-recovery --test mutation_replay_anomalies --locked -- --nocapture` | PASS | 15 tests pass, covering incomplete, duplicate, sparse, out-of-order, stale/version-gap, and hash-tampered replay. |
+| `cargo test -p andromeda-catalog-recovery --test catalog_publication_subscription_runtime_contract --locked -- --nocapture` | PASS | 10 tests pass, covering Administration/HA-only publication reports, durable LSN/marker evidence, replay/invalidation mismatch, duplicate publication rejection, and HADR replay evidence. |
+| `cargo test -p andromeda-plan-cache --test plan_invalidation --locked -- --nocapture` | PASS | 10 tests pass, covering CatalogVersion, ContractHash, StatsVersion, PolicyVersion, and advisory evidence trace behavior. |
+| `cargo test -p andromeda-catalog -p andromeda-definition-batch -p andromeda-catalog-recovery -p andromeda-procedure-contract -p andromeda-plan-cache --locked` | PASS | Full touched-crate test suites pass, including DefinitionBatch Alter/Drop spec coverage invariants. |
+| `cargo check --workspace --locked` | PASS | Workspace type-checks after the P03 runtime publication duplicate-rejection change. |
+| `cargo clippy -p andromeda-catalog -p andromeda-definition-batch -p andromeda-catalog-recovery -p andromeda-procedure-contract -p andromeda-plan-cache --tests --locked -- -D warnings` | PASS | Touched crates are clippy-clean for tests and library targets. |
+| Targeted `cargo fmt -p ... -- --check` on touched crates | PASS | Rustfmt exits successfully for touched crates while emitting existing config warnings for nightly-only or unknown options. |
+| `cargo fmt --all -- --check` | BLOCKED | Windows path length failure: `os error 206`. |
+| `python -B tools/testing/p02_durable_vertical_path_check.py --strict` | PASS | P02 remains closed after P03. |
+| `python -B tools/testing/p01_spec_baseline_check.py --strict` | PASS | P01 remains closed after P03. |
+| `python -B tools/testing/p00_repository_state_check.py --strict` | PASS | P00 remains closed after P03. |
+| `git diff --check` | PASS | No whitespace errors in the P03 diff. |
+
+## P03 Decision
+
+P03 closure is complete for the local catalog durability scope. The accepted evidence proves:
+
+- catalog mutation publication uses ordered `CatalogMutationRecord` Begin/Apply/Commit evidence and does not expose a half-catalog on append or flush failure;
+- recovery reconstructs only the last valid `CatalogVersion` and reports incomplete/anomalous batches through `CatalogRecoveryReport`;
+- canonical `ContractHash` is independent from SRPL source formatting and changes only when observable procedure contract shape changes;
+- plan cache identity is tied to `CatalogVersion`, `ContractHash`, `StatsVersion`, `PolicyVersion`, and `PlanClass`;
+- publication reports require Administration/HA audience plus durable LSN or marker evidence, and duplicate visible publication evidence is rejected before registry mutation.
+
+The release gate remains closed. Do not claim production readiness until retained release evidence exists for fuzzing, Miri, backup/PITR restore drills, HA/DR cluster drills, B-Tree durable promotion crash/recovery, CI workflows, and final release evidence packets.
+
 ## P02 Result
 
 P02 durable `Inventory.ReserveStock` / `Inventory.ProductStock` vertical path is closed under the local strict P02 checker and focused Cargo gates. Release readiness remains blocked by non-P02 evidence and CI workflow gaps.

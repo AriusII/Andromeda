@@ -213,6 +213,52 @@ fn definition_batch_source_hash_binds_procedure_identity() {
 }
 
 #[test]
+fn procedure_catalog_version_advances_definition_evidence_without_contract_hash_drift() {
+    let v1 = procedure(31, "Inventory.ReserveStock", CatalogVersion::new(1), vec![]);
+    let v2 = procedure(31, "Inventory.ReserveStock", CatalogVersion::new(2), vec![]);
+
+    assert_eq!(
+        v1.contract_hash, v2.contract_hash,
+        "ContractHash must remain canonical procedure shape, independent from publication version"
+    );
+    assert_eq!(
+        v1.validated_binding().unwrap().contract_hash,
+        v1.contract_hash
+    );
+    assert_eq!(
+        v2.validated_binding().unwrap().catalog_version,
+        CatalogVersion::new(2),
+        "validated binding evidence carries the concrete published CatalogVersion"
+    );
+
+    let v1_definition = CatalogDefinition::Procedure(v1.clone());
+    let v2_definition = CatalogDefinition::Procedure(v2.clone());
+    assert_ne!(
+        v1_definition.shape_hash(),
+        v2_definition.shape_hash(),
+        "catalog definition evidence must change when a procedure is republished at a new CatalogVersion"
+    );
+
+    let v1_batch = DefinitionBatch {
+        batch_id: DefinitionBatchId::new(2),
+        database_id: andromeda_types::DatabaseId::new(1),
+        namespace_id: andromeda_types::NamespaceId::new(1),
+        base_version: CatalogVersion::new(0),
+        operations: vec![DefinitionOperation::Create(v1_definition)],
+    };
+    let v2_batch = DefinitionBatch {
+        operations: vec![DefinitionOperation::Create(v2_definition)],
+        ..v1_batch.clone()
+    };
+
+    assert_ne!(
+        v1_batch.source_hash(),
+        v2_batch.source_hash(),
+        "DefinitionBatch source hash must bind CatalogVersion drift even when ContractHash is stable"
+    );
+}
+
+#[test]
 fn dependency_graph_includes_procedure_to_table_edges_from_bindings() {
     let version = CatalogVersion::new(1);
     let stock_table = table(101, "Inventory.ProductStock", version);

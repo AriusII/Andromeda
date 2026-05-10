@@ -4,9 +4,9 @@ use andromeda_catalog_recovery::{
     CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH, CatalogDurableMutationPayload,
     CatalogMutationBoundary, CatalogMutationDelta, CatalogMutationOperation, CatalogMutationRecord,
     CatalogPublicationSemantics, CatalogRecoveryAnomalyKind, CatalogRecoveryApplyTarget,
-    CatalogSkippedBatchReason, DefinitionBatchDependencyGraphHash, decode_catalog_durable_payload,
-    encode_catalog_durable_payload, recover_catalog_target_from_durable_payloads,
-    replay_catalog_mutation_records_into_target,
+    CatalogRecoveryReport, CatalogSkippedBatchReason, DefinitionBatchDependencyGraphHash,
+    decode_catalog_durable_payload, encode_catalog_durable_payload,
+    recover_catalog_target_from_durable_payloads, replay_catalog_mutation_records_into_target,
 };
 use andromeda_catalog_store::{
     CatalogDefinition, CatalogObjectRef, ObjectKind, QualifiedName, TableDefinition,
@@ -70,7 +70,13 @@ fn recovery_replays_committed_batches_into_generic_target() {
     assert_eq!(outcome.report.anomaly_count(), 0);
     assert_eq!(outcome.report.replayed_batches.len(), 2);
     assert_eq!(outcome.report.final_visible_catalog_version, version(12));
+    assert!(outcome.report.skipped_incomplete_batches.is_empty());
+    assert!(outcome.report.skipped_anomalous_batches.is_empty());
     assert_eq!(outcome.target.visible_version, version(12));
+    assert_eq!(
+        outcome.target.applied_batches,
+        vec![batch_one.batch_id, batch_two.batch_id]
+    );
 }
 
 #[test]
@@ -84,12 +90,64 @@ fn recovery_ignores_incomplete_batch_without_commit() {
     let outcome = replay_catalog_mutation_records_into_target(target_at(10), records);
 
     assert!(outcome.report.replayed_batches.is_empty());
-    assert_eq!(outcome.report.skipped_incomplete_batches.len(), 1);
-    assert_eq!(
-        outcome.report.skipped_incomplete_batches[0].reason,
-        CatalogSkippedBatchReason::EndOfLogBeforeCommit
+    assert_skipped_incomplete(
+        &outcome.report,
+        batch.batch_id,
+        10,
+        11,
+        1,
+        CatalogSkippedBatchReason::EndOfLogBeforeCommit,
     );
+    assert!(outcome.report.skipped_anomalous_batches.is_empty());
+    assert_has_anomaly_for_batch(
+        &outcome.report,
+        CatalogRecoveryAnomalyKind::MissingApplyRecords,
+        batch.batch_id,
+    );
+    assert_eq!(outcome.report.final_visible_catalog_version, version(10));
     assert_eq!(outcome.target.visible_version, version(10));
+}
+
+#[test]
+fn recovery_reconstructs_only_last_valid_catalog_version_before_incomplete_tail() {
+    let batch_one = table_batch(10, &[(1, "Inventory.Product")]);
+    let batch_two = table_batch(11, &[(2, "Inventory.Stock")]);
+    let records = records_for_batch(&batch_one)
+        .into_iter()
+        .chain(records_for_batch(&batch_two).into_iter().take(2))
+        .collect::<Vec<_>>();
+
+    let outcome = replay_catalog_mutation_records_into_target(target_at(10), records);
+
+    assert_eq!(outcome.report.anomaly_count(), 1);
+    assert_eq!(outcome.report.replayed_batches.len(), 1);
+    assert_eq!(
+        outcome.report.replayed_batches[0].batch_id,
+        batch_one.batch_id
+    );
+    assert_eq!(
+        outcome.report.replayed_batches[0].previous_version,
+        version(10)
+    );
+    assert_eq!(outcome.report.replayed_batches[0].next_version, version(11));
+    assert_eq!(outcome.report.replayed_batches[0].applied_delta_count, 1);
+    assert_skipped_incomplete(
+        &outcome.report,
+        batch_two.batch_id,
+        11,
+        12,
+        1,
+        CatalogSkippedBatchReason::EndOfLogBeforeCommit,
+    );
+    assert!(outcome.report.skipped_anomalous_batches.is_empty());
+    assert_has_anomaly_for_batch(
+        &outcome.report,
+        CatalogRecoveryAnomalyKind::MissingApplyRecords,
+        batch_two.batch_id,
+    );
+    assert_eq!(outcome.report.final_visible_catalog_version, version(11));
+    assert_eq!(outcome.target.visible_version, version(11));
+    assert_eq!(outcome.target.applied_batches, vec![batch_one.batch_id]);
 }
 
 #[test]
@@ -108,14 +166,21 @@ fn recovery_rejects_committed_batch_missing_tail_apply_record() {
     let outcome = replay_catalog_mutation_records_into_target(target_at(10), records);
 
     assert!(outcome.report.replayed_batches.is_empty());
-    assert_has_anomaly(
-        &outcome.report.anomalies,
+    assert_has_anomaly_for_batch(
+        &outcome.report,
         CatalogRecoveryAnomalyKind::ApplyRecordCountMismatch,
+        batch.batch_id,
     );
-    assert_eq!(
-        outcome.report.skipped_incomplete_batches[0].reason,
-        CatalogSkippedBatchReason::ApplyRecordCountMismatch
+    assert_skipped_incomplete(
+        &outcome.report,
+        batch.batch_id,
+        10,
+        11,
+        2,
+        CatalogSkippedBatchReason::ApplyRecordCountMismatch,
     );
+    assert!(outcome.report.skipped_anomalous_batches.is_empty());
+    assert_eq!(outcome.report.final_visible_catalog_version, version(10));
     assert_eq!(outcome.target.visible_version, version(10));
 }
 
@@ -133,14 +198,21 @@ fn recovery_rejects_apply_count_above_replay_limit_before_accumulating_batch() {
     let outcome = replay_catalog_mutation_records_into_target(target_at(10), records);
 
     assert!(outcome.report.replayed_batches.is_empty());
-    assert_has_anomaly(
-        &outcome.report.anomalies,
+    assert_has_anomaly_for_batch(
+        &outcome.report,
         CatalogRecoveryAnomalyKind::ApplyRecordLimitExceeded,
+        batch.batch_id,
     );
-    assert_eq!(
-        outcome.report.skipped_anomalous_batches[0].reason,
-        CatalogSkippedBatchReason::ApplyRecordLimitExceeded
+    assert_skipped_anomalous(
+        &outcome.report,
+        batch.batch_id,
+        10,
+        11,
+        0,
+        CatalogSkippedBatchReason::ApplyRecordLimitExceeded,
     );
+    assert!(outcome.report.skipped_incomplete_batches.is_empty());
+    assert_eq!(outcome.report.final_visible_catalog_version, version(10));
 }
 
 #[test]
@@ -174,14 +246,21 @@ fn recovery_rejects_physically_reordered_apply_records() {
     let outcome = replay_catalog_mutation_records_into_target(target_at(10), records);
 
     assert!(outcome.report.replayed_batches.is_empty());
-    assert_has_anomaly(
-        &outcome.report.anomalies,
+    assert_has_anomaly_for_batch(
+        &outcome.report,
         CatalogRecoveryAnomalyKind::ApplyRecordOrderMismatch,
+        batch.batch_id,
     );
-    assert_eq!(
-        outcome.report.skipped_anomalous_batches[0].reason,
-        CatalogSkippedBatchReason::ApplyRecordOrderMismatch
+    assert_skipped_anomalous(
+        &outcome.report,
+        batch.batch_id,
+        10,
+        11,
+        2,
+        CatalogSkippedBatchReason::ApplyRecordOrderMismatch,
     );
+    assert!(outcome.report.skipped_incomplete_batches.is_empty());
+    assert_eq!(outcome.report.final_visible_catalog_version, version(10));
 }
 
 #[test]
@@ -198,14 +277,20 @@ fn recovery_rejects_begin_commit_boundary_mismatch_all_or_nothing() {
     let outcome = replay_catalog_mutation_records_into_target(target_at(10), records);
 
     assert!(outcome.report.replayed_batches.is_empty());
-    assert_has_anomaly(
-        &outcome.report.anomalies,
+    assert_has_anomaly_for_batch(
+        &outcome.report,
         CatalogRecoveryAnomalyKind::CommitBoundaryMismatch,
+        batch.batch_id,
     );
-    assert_eq!(
-        outcome.report.skipped_anomalous_batches[0].reason,
-        CatalogSkippedBatchReason::CommitBoundaryMismatch
+    assert_skipped_anomalous(
+        &outcome.report,
+        batch.batch_id,
+        10,
+        11,
+        1,
+        CatalogSkippedBatchReason::CommitBoundaryMismatch,
     );
+    assert_eq!(outcome.report.final_visible_catalog_version, version(10));
 }
 
 #[test]
@@ -226,6 +311,15 @@ fn recovery_rejects_definition_batch_hash_mismatch() {
         &outcome.report.anomalies,
         CatalogRecoveryAnomalyKind::CommitBoundaryMismatch,
     );
+    assert_skipped_anomalous(
+        &outcome.report,
+        batch.batch_id,
+        10,
+        11,
+        1,
+        CatalogSkippedBatchReason::CommitBoundaryMismatch,
+    );
+    assert_eq!(outcome.report.final_visible_catalog_version, version(10));
 }
 
 #[test]
@@ -246,14 +340,20 @@ fn recovery_rejects_tampered_apply_with_stale_definition_batch_hashes() {
     let outcome = replay_catalog_mutation_records_into_target(target_at(10), records);
 
     assert!(outcome.report.replayed_batches.is_empty());
-    assert_has_anomaly(
-        &outcome.report.anomalies,
+    assert_has_anomaly_for_batch(
+        &outcome.report,
         CatalogRecoveryAnomalyKind::DefinitionBatchHashMismatch,
+        batch.batch_id,
     );
-    assert_eq!(
-        outcome.report.skipped_anomalous_batches[0].reason,
-        CatalogSkippedBatchReason::DefinitionBatchHashMismatch
+    assert_skipped_anomalous(
+        &outcome.report,
+        batch.batch_id,
+        10,
+        11,
+        1,
+        CatalogSkippedBatchReason::DefinitionBatchHashMismatch,
     );
+    assert_eq!(outcome.report.final_visible_catalog_version, version(10));
 }
 
 #[test]
@@ -270,9 +370,17 @@ fn recovery_reports_duplicate_and_sparse_apply_indexes() {
         &duplicate_outcome.report.anomalies,
         CatalogRecoveryAnomalyKind::DuplicateApplyIndex,
     );
+    assert_skipped_anomalous(
+        &duplicate_outcome.report,
+        batch.batch_id,
+        10,
+        11,
+        2,
+        CatalogSkippedBatchReason::DuplicateApplyIndex,
+    );
     assert_eq!(
-        duplicate_outcome.report.skipped_anomalous_batches[0].reason,
-        CatalogSkippedBatchReason::DuplicateApplyIndex
+        duplicate_outcome.report.final_visible_catalog_version,
+        version(10)
     );
 
     let mut sparse_records = records_for_batch(&batch);
@@ -284,9 +392,17 @@ fn recovery_reports_duplicate_and_sparse_apply_indexes() {
         &sparse_outcome.report.anomalies,
         CatalogRecoveryAnomalyKind::SparseApplyIndexes,
     );
+    assert_skipped_incomplete(
+        &sparse_outcome.report,
+        batch.batch_id,
+        10,
+        11,
+        2,
+        CatalogSkippedBatchReason::SparseApplyIndexes,
+    );
     assert_eq!(
-        sparse_outcome.report.skipped_incomplete_batches[0].reason,
-        CatalogSkippedBatchReason::SparseApplyIndexes
+        sparse_outcome.report.final_visible_catalog_version,
+        version(10)
     );
 }
 
@@ -310,11 +426,35 @@ fn recovery_reports_wrong_identity_version_gap_outer_kind_and_payload_corruption
         &wrong_identity_outcome.report.anomalies,
         CatalogRecoveryAnomalyKind::WrongCatalogIdentity,
     );
+    assert_skipped_anomalous(
+        &wrong_identity_outcome.report,
+        batch.batch_id,
+        10,
+        11,
+        1,
+        CatalogSkippedBatchReason::WrongCatalogIdentity,
+    );
+    assert_eq!(
+        wrong_identity_outcome.report.final_visible_catalog_version,
+        version(10)
+    );
 
     let version_gap_outcome = replay_catalog_mutation_records_into_target(target_at(9), records);
     assert_has_anomaly(
         &version_gap_outcome.report.anomalies,
         CatalogRecoveryAnomalyKind::VersionGap,
+    );
+    assert_skipped_anomalous(
+        &version_gap_outcome.report,
+        batch.batch_id,
+        10,
+        11,
+        1,
+        CatalogSkippedBatchReason::VersionGap,
+    );
+    assert_eq!(
+        version_gap_outcome.report.final_visible_catalog_version,
+        version(9)
     );
 
     let encoded_begin = encode_catalog_durable_payload(&records_for_batch(&batch)[0]).unwrap();
@@ -520,6 +660,71 @@ fn assert_has_anomaly(
     kind: CatalogRecoveryAnomalyKind,
 ) {
     assert!(anomalies.iter().any(|anomaly| anomaly.kind == kind));
+}
+
+fn assert_has_anomaly_for_batch(
+    report: &CatalogRecoveryReport,
+    kind: CatalogRecoveryAnomalyKind,
+    batch_id: DefinitionBatchId,
+) {
+    assert!(
+        report
+            .anomalies
+            .iter()
+            .any(|anomaly| anomaly.kind == kind && anomaly.batch_id == Some(batch_id)),
+        "missing anomaly {kind:?} for batch {batch_id:?}: {:?}",
+        report.anomalies
+    );
+}
+
+fn assert_skipped_incomplete(
+    report: &CatalogRecoveryReport,
+    batch_id: DefinitionBatchId,
+    previous_version: u64,
+    next_version: u64,
+    observed_apply_count: usize,
+    reason: CatalogSkippedBatchReason,
+) {
+    assert_eq!(report.skipped_incomplete_batches.len(), 1);
+    assert_eq!(report.skipped_incomplete_batches[0].batch_id, batch_id);
+    assert_eq!(
+        report.skipped_incomplete_batches[0].previous_version,
+        version(previous_version)
+    );
+    assert_eq!(
+        report.skipped_incomplete_batches[0].next_version,
+        version(next_version)
+    );
+    assert_eq!(
+        report.skipped_incomplete_batches[0].observed_apply_count,
+        observed_apply_count
+    );
+    assert_eq!(report.skipped_incomplete_batches[0].reason, reason);
+}
+
+fn assert_skipped_anomalous(
+    report: &CatalogRecoveryReport,
+    batch_id: DefinitionBatchId,
+    previous_version: u64,
+    next_version: u64,
+    observed_apply_count: usize,
+    reason: CatalogSkippedBatchReason,
+) {
+    assert_eq!(report.skipped_anomalous_batches.len(), 1);
+    assert_eq!(report.skipped_anomalous_batches[0].batch_id, batch_id);
+    assert_eq!(
+        report.skipped_anomalous_batches[0].previous_version,
+        version(previous_version)
+    );
+    assert_eq!(
+        report.skipped_anomalous_batches[0].next_version,
+        version(next_version)
+    );
+    assert_eq!(
+        report.skipped_anomalous_batches[0].observed_apply_count,
+        observed_apply_count
+    );
+    assert_eq!(report.skipped_anomalous_batches[0].reason, reason);
 }
 
 fn column(name: &str, ordinal: u32) -> ColumnDescriptor {

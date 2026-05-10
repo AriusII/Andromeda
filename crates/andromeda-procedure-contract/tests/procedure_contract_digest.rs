@@ -87,6 +87,42 @@ fn procedure_contract(
     .unwrap()
 }
 
+fn procedure_contract_with_input_columns(
+    id: u64,
+    name: &str,
+    version: CatalogVersion,
+    inputs: Vec<ColumnDescriptor>,
+    result_streams: Vec<ResultStreamContract>,
+) -> ProcedureContract {
+    ProcedureContractCandidate {
+        object: object(id, name, ObjectKind::Procedure, version),
+        procedure_id: ProcedureId::new(id),
+        stats_version: StatsVersion::new(1),
+        protocol_layout: ProtocolLayoutRef {
+            descriptor_set_hash: ContractHash::test_vector(0xA1),
+            frame_envelope_hash: ContractHash::test_vector(0xA2),
+        },
+        inputs,
+        structured_inputs: Vec::new(),
+        result_streams,
+        required_permissions: vec!["Inventory.ReserveStock.Execute".to_string()],
+        transaction_policy: TransactionPolicy {
+            access_mode: AccessMode::ReadWrite,
+            isolation: IsolationPolicy::Serializable,
+            retryable: false,
+        },
+        compatibility_policy: CompatibilityPolicy::ExactHash,
+        result_metadata_policy: ResultMetadataPolicy::RequireBeforePayload,
+        error_policy: ProcedureErrorPolicy {
+            rollback_on_error: true,
+            allowed_error_codes: vec!["InsufficientStock".to_string()],
+        },
+        multi_result_policy: MultiResultPolicy::SingleResultOnly,
+    }
+    .materialize()
+    .unwrap()
+}
+
 fn result_stream(
     stream_id: u64,
     name: &str,
@@ -135,6 +171,112 @@ fn contract_hash_is_digest_backed_and_deterministic() {
         differing_bytes >= 16,
         "digest-backed hash must avalanche: only {differing_bytes}/32 bytes differ"
     );
+}
+
+#[test]
+fn contract_hash_ignores_srpl_source_formatting_but_tracks_observable_shape() {
+    let compact_source = br#"procedure Inventory.ReserveStock(ProductId: I64) returns Reservations(ProductId: I64);"#;
+    let formatted_source = br#"
+        procedure   Inventory.ReserveStock
+        (
+            ProductId : I64
+        )
+        returns
+            Reservations ( ProductId : I64 ) ;
+    "#;
+    assert_ne!(
+        andromeda_digest::sha256(compact_source),
+        andromeda_digest::sha256(formatted_source),
+        "raw SRPL source evidence must distinguish formatting-only byte drift"
+    );
+
+    let compact_lowering = procedure_contract(
+        18,
+        "Inventory.ReserveStock",
+        CatalogVersion::new(1),
+        vec![],
+        vec![result_stream(
+            1,
+            "Reservations",
+            ResultStreamCardinality::One,
+            vec![column("ProductId", 0)],
+        )],
+        CompatibilityPolicy::ExactHash,
+        MultiResultPolicy::SingleResultOnly,
+    );
+    let formatted_lowering = procedure_contract(
+        18,
+        "Inventory.ReserveStock",
+        CatalogVersion::new(1),
+        vec![],
+        vec![result_stream(
+            1,
+            "Reservations",
+            ResultStreamCardinality::One,
+            vec![column("ProductId", 0)],
+        )],
+        CompatibilityPolicy::ExactHash,
+        MultiResultPolicy::SingleResultOnly,
+    );
+
+    assert_eq!(
+        compact_lowering.contract_hash, formatted_lowering.contract_hash,
+        "canonical ContractHash must be independent from SRPL source formatting"
+    );
+
+    let changed_result_shape = procedure_contract(
+        18,
+        "Inventory.ReserveStock",
+        CatalogVersion::new(1),
+        vec![],
+        vec![result_stream(
+            1,
+            "Reservations",
+            ResultStreamCardinality::One,
+            vec![column("ProductId", 0), column("ReservedQuantity", 1)],
+        )],
+        CompatibilityPolicy::ExactHash,
+        MultiResultPolicy::SingleResultOnly,
+    );
+    assert_ne!(
+        compact_lowering.contract_hash, changed_result_shape.contract_hash,
+        "observable result contract growth must change ContractHash"
+    );
+
+    let changed_input_shape = procedure_contract_with_input_columns(
+        18,
+        "Inventory.ReserveStock",
+        CatalogVersion::new(1),
+        vec![typed_column("ProductId", 0, ScalarType::Bool)],
+        vec![result_stream(
+            1,
+            "Reservations",
+            ResultStreamCardinality::One,
+            vec![column("ProductId", 0)],
+        )],
+    );
+
+    assert_ne!(
+        compact_lowering.contract_hash, changed_input_shape.contract_hash,
+        "observable input type drift must change ContractHash"
+    );
+}
+
+#[test]
+fn contract_hash_ignores_catalog_version_while_binding_tracks_catalog_version() {
+    let v1 = procedure(19, "Inventory.ReserveStock", CatalogVersion::new(1), vec![]);
+    let v2 = procedure(19, "Inventory.ReserveStock", CatalogVersion::new(2), vec![]);
+
+    assert_eq!(
+        v1.contract_hash, v2.contract_hash,
+        "CatalogVersion is publication evidence, not part of canonical procedure shape"
+    );
+    assert_ne!(
+        v1.binding().catalog_version,
+        v2.binding().catalog_version,
+        "binding evidence must still carry the concrete CatalogVersion accepted at invocation"
+    );
+    assert_eq!(v1.binding().contract_hash, v2.binding().contract_hash);
 }
 
 #[test]

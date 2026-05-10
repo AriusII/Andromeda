@@ -274,6 +274,7 @@ where
                 "catalog publication subscriber registry requires replay records",
             );
         }
+        self.reject_duplicate_visible_publications(&records)?;
 
         let mut candidate = self.records.clone();
         candidate.extend(records.clone());
@@ -316,6 +317,46 @@ where
                 "catalog publication subscriber registry requires a visible publication record",
             ),
         }
+    }
+
+    fn reject_duplicate_visible_publications(
+        &self,
+        records: &[CatalogPublicationSubscriptionReplayRecord<TReceipt, TSubscriberId>],
+    ) -> AndromedaResult<()> {
+        let mut visible_publications = Vec::new();
+        for record in records {
+            if let CatalogPublicationSubscriptionReplayRecord::VisiblePublication {
+                publication,
+                audit_evidence,
+            } = record
+            {
+                let key = CatalogPublicationReplayKey::from_receipt(&publication.receipt);
+                if self.publications.contains_key(&key) {
+                    return catalog_recovery_publication_error(
+                        "catalog duplicate publication evidence is rejected by runtime registry",
+                    );
+                }
+                for (existing_key, existing_publication, existing_audit_evidence) in
+                    &visible_publications
+                {
+                    if existing_key != &key {
+                        continue;
+                    }
+                    if existing_publication == &publication
+                        && existing_audit_evidence == &audit_evidence
+                    {
+                        return catalog_recovery_publication_error(
+                            "catalog duplicate publication evidence is rejected by runtime registry",
+                        );
+                    }
+                    return catalog_recovery_publication_error(
+                        "catalog publication subscriber registry saw conflicting publication identity",
+                    );
+                }
+                visible_publications.push((key, publication, audit_evidence));
+            }
+        }
+        Ok(())
     }
 
     fn apply_publication(

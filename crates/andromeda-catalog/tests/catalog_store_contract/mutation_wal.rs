@@ -1,4 +1,8 @@
 use super::common::*;
+use andromeda_catalog_store::{
+    CatalogStoreWalAppend, CatalogStoreWalAppendSequenceError,
+    validate_catalog_store_wal_append_sequence,
+};
 
 #[test]
 fn mutation_records_are_ordered_begin_apply_commit() {
@@ -29,6 +33,100 @@ fn mutation_records_are_ordered_begin_apply_commit() {
             CatalogMutationRecordKind::CatalogChangeCommit,
         ]
     );
+}
+
+#[test]
+fn mutation_records_carry_dense_apply_indexes_and_integrity_hashes() {
+    let store = store_at(10);
+    let definition_batch = batch(
+        version(10),
+        vec![
+            create_table(1, "Inventory.Product", 11),
+            create_table(2, "Inventory.Stock", 11),
+            create_table(3, "Inventory.Reservation", 11),
+        ],
+    );
+    let expected_source_hash = definition_batch.source_hash();
+    let expected_dependency_graph_hash = definition_batch.dependency_graph_hash().unwrap();
+    let plan = store.plan_definition_batch(&definition_batch).unwrap();
+    let records = plan.mutation_plan.records();
+
+    assert_eq!(plan.mutation_plan.source_hash, expected_source_hash);
+    assert_eq!(
+        plan.mutation_plan.dependency_graph_hash,
+        expected_dependency_graph_hash
+    );
+    assert_eq!(records.len(), 5);
+
+    let CatalogMutationRecord::Begin(begin) = &records[0] else {
+        panic!("first mutation record must be Begin");
+    };
+    let CatalogMutationRecord::Commit(commit) = records.last().unwrap() else {
+        panic!("last mutation record must be Commit");
+    };
+
+    assert_eq!(begin, commit);
+    assert_eq!(begin.expected_apply_count, 3);
+    assert_eq!(begin.source_hash, expected_source_hash);
+    assert_eq!(begin.dependency_graph_hash, expected_dependency_graph_hash);
+
+    let apply_indexes = records
+        .iter()
+        .filter_map(|record| match record {
+            CatalogMutationRecord::Apply(delta) => Some(delta.operation_index),
+            CatalogMutationRecord::Begin(_) | CatalogMutationRecord::Commit(_) => None,
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(apply_indexes, vec![0, 1, 2]);
+}
+
+#[test]
+fn catalog_mutation_plan_rejects_sparse_or_duplicate_apply_indexes() {
+    let store = store_at(10);
+    let plan = store
+        .plan_definition_batch(&batch(
+            version(10),
+            vec![
+                create_table(1, "Inventory.Product", 11),
+                create_table(2, "Inventory.Stock", 11),
+                create_table(3, "Inventory.Reservation", 11),
+            ],
+        ))
+        .unwrap()
+        .mutation_plan;
+
+    let mut sparse_deltas = plan.deltas.clone();
+    sparse_deltas[1].operation_index = 3;
+    let sparse_error = CatalogMutationPlan::new(
+        plan.batch_id,
+        plan.database_id,
+        plan.namespace_id,
+        plan.previous_version,
+        plan.next_version,
+        plan.source_hash,
+        plan.dependency_graph_hash,
+        sparse_deltas,
+    )
+    .unwrap_err();
+    assert_eq!(sparse_error.kind(), AndromedaErrorKind::Catalog);
+    assert!(sparse_error.message().contains("dense"));
+
+    let mut duplicate_deltas = plan.deltas.clone();
+    duplicate_deltas[2].operation_index = 1;
+    let duplicate_error = CatalogMutationPlan::new(
+        plan.batch_id,
+        plan.database_id,
+        plan.namespace_id,
+        plan.previous_version,
+        plan.next_version,
+        plan.source_hash,
+        plan.dependency_graph_hash,
+        duplicate_deltas,
+    )
+    .unwrap_err();
+    assert_eq!(duplicate_error.kind(), AndromedaErrorKind::Catalog);
+    assert!(duplicate_error.message().contains("dense"));
 }
 
 #[test]
@@ -68,6 +166,53 @@ fn catalog_mutation_records_fit_storage_wal_catalog_kinds() {
         );
         previous_lsn = Some(wal_record.header.lsn);
     }
+}
+
+#[test]
+fn catalog_wal_append_sequence_rejects_wrong_kind_or_decreasing_lsn() {
+    let expected = [
+        CatalogMutationRecordKind::CatalogChangeBegin,
+        CatalogMutationRecordKind::CatalogChangeApply,
+        CatalogMutationRecordKind::CatalogChangeCommit,
+    ];
+
+    let wrong_kind = [
+        CatalogStoreWalAppend {
+            kind: CatalogMutationRecordKind::CatalogChangeBegin,
+            lsn: 70,
+        },
+        CatalogStoreWalAppend {
+            kind: CatalogMutationRecordKind::CatalogChangeCommit,
+            lsn: 71,
+        },
+        CatalogStoreWalAppend {
+            kind: CatalogMutationRecordKind::CatalogChangeCommit,
+            lsn: 72,
+        },
+    ];
+    assert_eq!(
+        validate_catalog_store_wal_append_sequence(&wrong_kind, &expected),
+        Err(CatalogStoreWalAppendSequenceError::KindMismatch { index: 1 })
+    );
+
+    let decreasing_lsn = [
+        CatalogStoreWalAppend {
+            kind: CatalogMutationRecordKind::CatalogChangeBegin,
+            lsn: 70,
+        },
+        CatalogStoreWalAppend {
+            kind: CatalogMutationRecordKind::CatalogChangeApply,
+            lsn: 69,
+        },
+        CatalogStoreWalAppend {
+            kind: CatalogMutationRecordKind::CatalogChangeCommit,
+            lsn: 72,
+        },
+    ];
+    assert_eq!(
+        validate_catalog_store_wal_append_sequence(&decreasing_lsn, &expected),
+        Err(CatalogStoreWalAppendSequenceError::NonIncreasingLsn { index: 1 })
+    );
 }
 
 #[test]
@@ -169,6 +314,97 @@ fn durable_apply_writes_catalog_wal_before_visible_publication() {
         store.snapshot().publication,
         CatalogSnapshotPublication::Durable(receipt) if receipt == report.receipt
     ));
+}
+
+#[test]
+fn durable_apply_append_failure_leaves_snapshot_unpublished_before_flush() {
+    let mut store = store_at(10);
+    let mut appended_kinds = Vec::new();
+    let mut next_lsn = 70;
+    let mut flush_called = false;
+
+    let error = store
+        .apply_definition_batch_durably(
+            &product_batch(10, 11),
+            |kind, _payload| {
+                appended_kinds.push(kind);
+                if kind == CatalogMutationRecordKind::CatalogChangeCommit {
+                    return Err(AndromedaError::new(
+                        AndromedaErrorKind::Storage,
+                        "simulated catalog WAL append failure at commit",
+                    ));
+                }
+
+                let lsn = next_lsn;
+                next_lsn += 1;
+                Ok(lsn)
+            },
+            |_commit_lsn| {
+                flush_called = true;
+                Ok(72)
+            },
+        )
+        .unwrap_err();
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Storage);
+    assert_eq!(
+        appended_kinds,
+        vec![
+            CatalogMutationRecordKind::CatalogChangeBegin,
+            CatalogMutationRecordKind::CatalogChangeApply,
+            CatalogMutationRecordKind::CatalogChangeCommit,
+        ]
+    );
+    assert!(!flush_called);
+    assert_store_unpublished_at(&store, 10);
+    assert_eq!(store.snapshot().object_count(), 0);
+}
+
+#[test]
+fn durable_apply_rejects_flush_evidence_below_commit_lsn_without_publication() {
+    let mut store = store_at(10);
+    let mut appended = Vec::new();
+    let mut next_lsn = 70;
+    let mut flush_target = None;
+
+    let error = store
+        .apply_definition_batch_durably(
+            &product_batch(10, 11),
+            |kind, _payload| {
+                let lsn = next_lsn;
+                next_lsn += 1;
+                appended.push(CatalogStoreWalAppend { kind, lsn });
+                Ok(lsn)
+            },
+            |commit_lsn| {
+                flush_target = Some(commit_lsn);
+                Ok(commit_lsn - 1)
+            },
+        )
+        .unwrap_err();
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+    assert!(error.message().contains("durable LSN"));
+    assert_eq!(flush_target, Some(72));
+    assert_eq!(
+        appended,
+        vec![
+            CatalogStoreWalAppend {
+                kind: CatalogMutationRecordKind::CatalogChangeBegin,
+                lsn: 70,
+            },
+            CatalogStoreWalAppend {
+                kind: CatalogMutationRecordKind::CatalogChangeApply,
+                lsn: 71,
+            },
+            CatalogStoreWalAppend {
+                kind: CatalogMutationRecordKind::CatalogChangeCommit,
+                lsn: 72,
+            },
+        ]
+    );
+    assert_store_unpublished_at(&store, 10);
+    assert_eq!(store.snapshot().object_count(), 0);
 }
 
 #[test]

@@ -180,6 +180,69 @@ fn catalog_publication_requires_durable_lsn_or_marker() {
 }
 
 #[test]
+fn catalog_publication_report_requires_administration_hadr_audience() {
+    let mut publication = report();
+    publication.audience = CatalogPublicationAudience::RuntimeSubscribers;
+    let (terminal, audit_evidence) = visible_records(publication.clone());
+
+    let mut registry = CatalogPublicationSubscriberRegistry::new();
+    let error = registry
+        .record_visible_publication(publication, audit_evidence, terminal)
+        .unwrap_err();
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+    assert!(error.message().contains("Administration/HA"));
+}
+
+#[test]
+fn catalog_publication_report_rejects_replay_and_invalidation_mismatch() {
+    let mut stale_invalidation = report();
+    stale_invalidation.plan_invalidation.catalog_version = CatalogVersion::new(7);
+    let (terminal, audit_evidence) = visible_records(stale_invalidation.clone());
+
+    let mut registry = CatalogPublicationSubscriberRegistry::new();
+    let error = registry
+        .record_visible_publication(stale_invalidation, audit_evidence, terminal)
+        .unwrap_err();
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+    assert!(error.message().contains("plan invalidation"));
+
+    let mut mismatched_replay = report();
+    mismatched_replay.recovery_replay.target_version = CatalogVersion::new(9);
+    let (terminal, audit_evidence) = visible_records(mismatched_replay.clone());
+
+    let error = registry
+        .record_visible_publication(mismatched_replay, audit_evidence, terminal)
+        .unwrap_err();
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+    assert!(
+        error
+            .message()
+            .contains("recovery replay expectation target version")
+    );
+}
+
+#[test]
+fn runtime_registry_rejects_duplicate_visible_publication_evidence() {
+    let publication = report();
+    let (terminal, audit_evidence) = visible_records(publication.clone());
+    let mut registry = CatalogPublicationSubscriberRegistry::new();
+    registry
+        .record_visible_publication(publication.clone(), audit_evidence, terminal)
+        .unwrap();
+
+    let (duplicate_terminal, duplicate_audit_evidence) = visible_records(publication.clone());
+    let error = registry
+        .record_visible_publication(publication, duplicate_audit_evidence, duplicate_terminal)
+        .unwrap_err();
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+    assert!(error.message().contains("duplicate publication evidence"));
+}
+
+#[test]
 fn subscriber_ack_must_match_version_and_record_count() {
     let publication = report();
     let subscriber_id = CatalogSubscriberId::new("hadr-replica-a").unwrap();

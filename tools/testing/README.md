@@ -16,6 +16,7 @@ This tooling covers:
 - Step 11 roadmap inventory across crate-owned test suites, fuzz targets, test documentation, runbooks, GitHub workflows, Miri evidence, Loom evidence, and fuzz evidence.
 - P00 repository-state checks for Rust 1.95.0, Edition 2024, resolver 3, 89 workspace crates, required governance deliverables, stale roadmap references, and unbounded production-readiness claims.
 - P01 normative specification baseline checks across required `SPEC_*_V0.md` files, sections, rejection criteria, and key tokens.
+- P03 catalog/DefinitionBatch durability checks across required tests, source evidence, and retained P03 roadmap reports.
 - Missing-gate reporting for release-readiness planning.
 
 ## Non-goals
@@ -69,6 +70,13 @@ python -B tools/testing/p01_spec_baseline_check.py
 python -B tools/testing/p01_spec_baseline_check.py --strict
 ```
 
+Run the P03 catalog and DefinitionBatch durability check:
+
+```powershell
+python -B tools/testing/p03_catalog_definition_batch_check.py
+python -B tools/testing/p03_catalog_definition_batch_check.py --strict
+```
+
 Run the supply-chain tooling preflight:
 
 ```powershell
@@ -105,6 +113,7 @@ python tools/testing/supply_chain_preflight.py
 python tools/testing/step11_inventory.py
 python -B tools/testing/p00_repository_state_check.py --strict
 python -B tools/testing/p01_spec_baseline_check.py
+python -B tools/testing/p03_catalog_definition_batch_check.py --strict
 python .codex/scripts/validate_codex_tooling.py
 ```
 

@@ -1,14 +1,19 @@
 #![forbid(unsafe_code)]
 
-use andromeda_catalog_store::{CatalogDefinition, CatalogObjectRef, ObjectKind, QualifiedName};
-use andromeda_definition_batch::{
-    DefinitionBatch, DefinitionBatchDryRun, DefinitionBatchId, DefinitionOperation,
-    dry_run_definition_batch,
+use andromeda_catalog_store::{
+    CatalogDefinition, CatalogMutationDelta, CatalogObjectRef, CatalogPublicationSemantics,
+    CatalogSnapshot, CatalogSnapshotMutationPlan, CatalogSnapshotReceipt, ObjectKind,
+    QualifiedName,
 };
+use andromeda_definition_batch::{
+    CatalogLifecycleAction, CatalogLifecycleTarget, DefinitionBatch, DefinitionBatchDryRun,
+    DefinitionBatchId, DefinitionOperation, dry_run_definition_batch,
+};
+use andromeda_error::AndromedaErrorKind;
 use andromeda_procedure_contract::{
     AccessMode, CompatibilityPolicy, IsolationPolicy, MultiResultPolicy, ProcedureContract,
     ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef, ResultMetadataPolicy,
-    StatsVersion, TransactionPolicy,
+    ResultStreamCardinality, ResultStreamContract, StatsVersion, TransactionPolicy,
 };
 use andromeda_types::{
     CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, DatabaseId, NamespaceId,
@@ -20,10 +25,29 @@ const TEST_NS_ID: NamespaceId = NamespaceId::new(1);
 const TEST_BATCH_ID_BASE: u64 = 1000;
 
 fn column(name: &str, ordinal: u32) -> ColumnDescriptor {
+    typed_column(name, ordinal, ScalarType::I64)
+}
+
+fn typed_column(name: &str, ordinal: u32, scalar_type: ScalarType) -> ColumnDescriptor {
     ColumnDescriptor {
         name: name.to_string(),
-        data_type: TypeDescriptor::required(ScalarType::I64),
+        data_type: TypeDescriptor::required(scalar_type),
         ordinal,
+    }
+}
+
+fn result_stream(
+    stream_id: u64,
+    name: &str,
+    cardinality: ResultStreamCardinality,
+    columns: Vec<ColumnDescriptor>,
+) -> ResultStreamContract {
+    ResultStreamContract {
+        stream_id,
+        name: name.to_string(),
+        columns,
+        cardinality,
+        row_count_exact_required: cardinality.legacy_row_count_exact_required(),
     }
 }
 
@@ -46,6 +70,26 @@ fn procedure_contract_with_structured_inputs(
     version: CatalogVersion,
     structured_inputs: Vec<QualifiedName>,
 ) -> ProcedureContract {
+    procedure_contract_with_shape(
+        id,
+        name,
+        version,
+        structured_inputs,
+        Vec::new(),
+        CompatibilityPolicy::ExactHash,
+        MultiResultPolicy::SingleResultOnly,
+    )
+}
+
+fn procedure_contract_with_shape(
+    id: u64,
+    name: &str,
+    version: CatalogVersion,
+    structured_inputs: Vec<QualifiedName>,
+    result_streams: Vec<ResultStreamContract>,
+    compatibility_policy: CompatibilityPolicy,
+    multi_result_policy: MultiResultPolicy,
+) -> ProcedureContract {
     ProcedureContractCandidate {
         object: object_ref(id, name, ObjectKind::Procedure, version),
         procedure_id: ProcedureId::new(id),
@@ -56,20 +100,20 @@ fn procedure_contract_with_structured_inputs(
         },
         inputs: vec![column("input_param", 0)],
         structured_inputs,
-        result_streams: vec![],
+        result_streams,
         required_permissions: vec!["test.Execute".to_string()],
         transaction_policy: TransactionPolicy {
             access_mode: AccessMode::ReadWrite,
             isolation: IsolationPolicy::Serializable,
             retryable: false,
         },
-        compatibility_policy: CompatibilityPolicy::ExactHash,
+        compatibility_policy,
         result_metadata_policy: ResultMetadataPolicy::RequireBeforePayload,
         error_policy: ProcedureErrorPolicy {
             rollback_on_error: true,
             allowed_error_codes: vec![],
         },
-        multi_result_policy: MultiResultPolicy::SingleResultOnly,
+        multi_result_policy,
     }
     .materialize()
     .expect("valid contract")
@@ -121,6 +165,99 @@ fn dry_run(batch: &DefinitionBatch) -> DefinitionBatchDryRun {
         &batch.operations,
     )
     .expect("valid definition batch dry-run")
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct TestReceipt {
+    next_version: CatalogVersion,
+}
+
+impl CatalogSnapshotReceipt for TestReceipt {
+    fn next_version(&self) -> CatalogVersion {
+        self.next_version
+    }
+}
+
+#[derive(Debug)]
+struct TestApplyPlan {
+    database_id: DatabaseId,
+    namespace_id: NamespaceId,
+    previous_version: CatalogVersion,
+    next_version: CatalogVersion,
+    deltas: Vec<CatalogMutationDelta<CatalogLifecycleTarget>>,
+}
+
+impl CatalogSnapshotMutationPlan for TestApplyPlan {
+    type LifecycleTarget = CatalogLifecycleTarget;
+
+    fn database_id(&self) -> DatabaseId {
+        self.database_id
+    }
+
+    fn namespace_id(&self) -> NamespaceId {
+        self.namespace_id
+    }
+
+    fn previous_version(&self) -> CatalogVersion {
+        self.previous_version
+    }
+
+    fn next_version(&self) -> CatalogVersion {
+        self.next_version
+    }
+
+    fn publication_semantics(&self) -> CatalogPublicationSemantics {
+        CatalogPublicationSemantics::DurablePublicationExternal
+    }
+
+    fn is_monotonic(&self) -> bool {
+        self.next_version.get() > self.previous_version.get()
+    }
+
+    fn deltas(&self) -> &[CatalogMutationDelta<Self::LifecycleTarget>] {
+        &self.deltas
+    }
+}
+
+fn apply_plan_from_batch(batch: &DefinitionBatch) -> TestApplyPlan {
+    let plan = dry_run(batch);
+    let deltas = batch
+        .operations
+        .iter()
+        .enumerate()
+        .map(|(operation_index, operation)| match operation {
+            DefinitionOperation::Create(definition) => {
+                CatalogMutationDelta::create(operation_index, plan.next_version, definition.clone())
+            },
+            DefinitionOperation::Deprecate(target) => {
+                CatalogMutationDelta::deprecate(operation_index, plan.next_version, target.clone())
+            },
+        })
+        .collect();
+
+    TestApplyPlan {
+        database_id: batch.database_id,
+        namespace_id: batch.namespace_id,
+        previous_version: plan.previous_version,
+        next_version: plan.next_version,
+        deltas,
+    }
+}
+
+fn assert_has_compat_message(
+    contract: &ProcedureContract,
+    previous: &ProcedureContract,
+    text: &str,
+) {
+    let diagnostic = contract.compatibility_with(previous);
+    assert!(
+        diagnostic
+            .messages
+            .iter()
+            .any(|message| message.contains(text)),
+        "expected diagnostic to contain {text:?}; got {:?}",
+        diagnostic.messages
+    );
 }
 
 #[test]
@@ -216,6 +353,261 @@ fn drop_compatibility_uses_dependency_bearing_procedure_shape() {
         plan2.dependency_graph_hash
     );
     assert!(!plan2.dependency_graph_hash.is_zero());
+}
+
+#[test]
+fn additive_policy_accepts_append_only_result_growth_in_definition_batch() {
+    let previous = procedure_contract_with_shape(
+        120,
+        "test.Additive",
+        CatalogVersion::new(2),
+        Vec::new(),
+        vec![result_stream(
+            1,
+            "Rows",
+            ResultStreamCardinality::Many,
+            vec![column("id", 0)],
+        )],
+        CompatibilityPolicy::ExactHash,
+        MultiResultPolicy::MultipleResultStreamsAllowed,
+    );
+    let additive = procedure_contract_with_shape(
+        120,
+        "test.Additive",
+        CatalogVersion::new(3),
+        Vec::new(),
+        vec![
+            result_stream(
+                1,
+                "Rows",
+                ResultStreamCardinality::Many,
+                vec![column("id", 0), column("quantity", 1)],
+            ),
+            result_stream(
+                2,
+                "Audit",
+                ResultStreamCardinality::Many,
+                vec![column("audit_id", 0)],
+            ),
+        ],
+        CompatibilityPolicy::AdditiveOnly,
+        MultiResultPolicy::MultipleResultStreamsAllowed,
+    );
+    let batch = definition_batch(
+        CatalogVersion::new(2),
+        vec![DefinitionOperation::Create(CatalogDefinition::Procedure(
+            additive.clone(),
+        ))],
+    );
+
+    let plan = dry_run(&batch);
+    let diagnostic = additive.compatibility_with(&previous);
+
+    assert!(diagnostic.compatible, "{:?}", diagnostic.messages);
+    assert_eq!(plan.previous_version, CatalogVersion::new(2));
+    assert_eq!(plan.next_version, CatalogVersion::new(3));
+    assert_eq!(plan.created_objects.len(), 1);
+    assert_ne!(
+        previous.contract_hash, additive.contract_hash,
+        "append-only result growth is compatible but still changes ContractHash"
+    );
+}
+
+#[test]
+fn breaking_policy_rejects_shape_shift_even_when_dry_run_can_plan_current_contract() {
+    let previous = procedure_contract_with_shape(
+        121,
+        "test.Breaking",
+        CatalogVersion::new(2),
+        Vec::new(),
+        vec![result_stream(
+            1,
+            "Rows",
+            ResultStreamCardinality::Many,
+            vec![column("id", 0), column("quantity", 1)],
+        )],
+        CompatibilityPolicy::ExactHash,
+        MultiResultPolicy::MultipleResultStreamsAllowed,
+    );
+    let breaking = procedure_contract_with_shape(
+        121,
+        "test.Breaking",
+        CatalogVersion::new(3),
+        Vec::new(),
+        vec![result_stream(
+            1,
+            "Rows",
+            ResultStreamCardinality::One,
+            vec![
+                typed_column("id", 0, ScalarType::Bool),
+                column("quantity", 1),
+            ],
+        )],
+        CompatibilityPolicy::AdditiveOnly,
+        MultiResultPolicy::MultipleResultStreamsAllowed,
+    );
+    let batch = definition_batch(
+        CatalogVersion::new(2),
+        vec![DefinitionOperation::Create(CatalogDefinition::Procedure(
+            breaking.clone(),
+        ))],
+    );
+
+    let plan = dry_run(&batch);
+    let diagnostic = breaking.compatibility_with(&previous);
+
+    assert_eq!(plan.next_version, CatalogVersion::new(3));
+    assert!(
+        !diagnostic.compatible,
+        "contract-breaking changes must be rejected by compatibility policy"
+    );
+    assert_has_compat_message(&breaking, &previous, "changing cardinality contract");
+    assert_has_compat_message(
+        &breaking,
+        &previous,
+        "existing columns to remain an unchanged prefix",
+    );
+}
+
+#[test]
+fn deprecate_operation_records_ordered_deprecated_lifecycle_evidence() {
+    let base_version = CatalogVersion::new(7);
+    let target = object_ref(122, "test.Deprecated", ObjectKind::Procedure, base_version);
+    let batch = definition_batch(
+        base_version,
+        vec![DefinitionOperation::Deprecate(CatalogLifecycleTarget {
+            object: target.clone(),
+        })],
+    );
+
+    let plan = dry_run(&batch);
+
+    assert!(plan.created_objects.is_empty());
+    assert_eq!(plan.deprecated_objects.len(), 1);
+    let deprecated = &plan.deprecated_objects[0];
+    assert_eq!(deprecated.object_id, target.object_id);
+    assert_eq!(deprecated.name, target.name);
+    assert_eq!(deprecated.kind, ObjectKind::Procedure);
+    assert_eq!(deprecated.action, CatalogLifecycleAction::Deprecate);
+    assert_eq!(deprecated.planned_version, CatalogVersion::new(8));
+}
+
+#[test]
+fn dry_run_rejects_stale_canonical_contract_hash() {
+    let mut stale = procedure_contract(123, "test.Rejected", CatalogVersion::new(2));
+    stale.contract_hash = ContractHash::test_vector(0xCC);
+    let batch = definition_batch(
+        CatalogVersion::new(1),
+        vec![DefinitionOperation::Create(CatalogDefinition::Procedure(
+            stale,
+        ))],
+    );
+
+    let error = dry_run_definition_batch(
+        batch.batch_id,
+        batch.database_id,
+        batch.namespace_id,
+        batch.base_version,
+        &batch.operations,
+    )
+    .expect_err("stale canonical contract hash must reject dry-run");
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Contract);
+    assert!(
+        error
+            .message()
+            .contains("procedure contract hash must match canonical contract shape"),
+        "{}",
+        error.message()
+    );
+}
+
+#[test]
+fn apply_rejects_stale_base_catalog_without_advancing_snapshot() {
+    let mut snapshot: CatalogSnapshot<TestReceipt> =
+        CatalogSnapshot::empty(TEST_DB_ID, TEST_NS_ID, CatalogVersion::new(2));
+    let stale_batch = batch_with_create(
+        CatalogVersion::new(1),
+        124,
+        "test.StaleBase",
+        CatalogVersion::new(2),
+    );
+    let plan = apply_plan_from_batch(&stale_batch);
+
+    let error = snapshot
+        .apply_mutation_plan(&plan)
+        .expect_err("stale base catalog version must be rejected");
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+    assert!(
+        error
+            .message()
+            .contains("previous version must match snapshot version"),
+        "{}",
+        error.message()
+    );
+    assert_eq!(snapshot.version, CatalogVersion::new(2));
+    assert_eq!(snapshot.object_count(), 0);
+}
+
+#[test]
+fn apply_rejects_duplicate_and_conflicting_recreate_attempts() {
+    let mut snapshot: CatalogSnapshot<TestReceipt> =
+        CatalogSnapshot::empty(TEST_DB_ID, TEST_NS_ID, CatalogVersion::new(1));
+    let create_batch = batch_with_create(
+        CatalogVersion::new(1),
+        125,
+        "test.ApplyOnce",
+        CatalogVersion::new(2),
+    );
+    let create_plan = apply_plan_from_batch(&create_batch);
+    snapshot.apply_mutation_plan(&create_plan).unwrap();
+
+    let duplicate_apply = snapshot
+        .apply_mutation_plan(&create_plan)
+        .expect_err("same apply plan cannot be replayed against an advanced snapshot");
+    assert_eq!(duplicate_apply.kind(), AndromedaErrorKind::Catalog);
+    assert!(
+        duplicate_apply
+            .message()
+            .contains("previous version must match snapshot version"),
+        "{}",
+        duplicate_apply.message()
+    );
+
+    let conflicting_recreate = procedure_contract_with_shape(
+        125,
+        "test.ApplyOnce",
+        CatalogVersion::new(3),
+        Vec::new(),
+        vec![result_stream(
+            1,
+            "Rows",
+            ResultStreamCardinality::One,
+            vec![column("id", 0)],
+        )],
+        CompatibilityPolicy::ExactHash,
+        MultiResultPolicy::SingleResultOnly,
+    );
+    let conflicting_batch = definition_batch(
+        CatalogVersion::new(2),
+        vec![DefinitionOperation::Create(CatalogDefinition::Procedure(
+            conflicting_recreate,
+        ))],
+    );
+    let conflicting_plan = apply_plan_from_batch(&conflicting_batch);
+    let conflict = snapshot
+        .apply_mutation_plan(&conflicting_plan)
+        .expect_err("create cannot be used as an implicit alter over an existing object");
+
+    assert_eq!(conflict.kind(), AndromedaErrorKind::Catalog);
+    assert!(
+        conflict.message().contains("already contains object id"),
+        "{}",
+        conflict.message()
+    );
+    assert_eq!(snapshot.version, CatalogVersion::new(2));
+    assert_eq!(snapshot.object_count(), 1);
 }
 
 #[test]

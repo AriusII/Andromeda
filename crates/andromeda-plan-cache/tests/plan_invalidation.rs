@@ -84,6 +84,27 @@ fn advisory_summary(
     builder.finish()
 }
 
+fn select_and_cache(key: PlanCacheKey, candidate_id: u64, trace_id: u128) -> BoundedPlanCache {
+    let selected = select_minimal_plan_with_advisory_evidence(
+        key,
+        &[candidate(
+            candidate_id,
+            key.plan_class(),
+            100,
+            candidate_id as u8,
+        )],
+        AdvisoryEvidenceSummary::empty(),
+        TraceId::new(trace_id),
+    )
+    .expect("matching candidate should select");
+
+    let mut cache = BoundedPlanCache::new(2).expect("bounded cache capacity should be valid");
+    cache
+        .insert_selection(&selected, TraceId::new(trace_id + 1))
+        .expect("selected plan can be cached");
+    cache
+}
+
 #[test]
 fn stats_version_bump_invalidates_cache_entry_and_decision_trace_explains_miss() {
     let base_binding = binding(1_200, 90, 0xA5, 45, 0xB5);
@@ -147,6 +168,153 @@ fn stats_version_bump_invalidates_cache_entry_and_decision_trace_explains_miss()
         decision_trace
             .reason
             .contains("cache_miss_reason=stats-version-mismatch")
+    );
+}
+
+#[test]
+fn catalog_version_bump_invalidates_cache_entry_and_decision_trace_explains_miss() {
+    let base_binding = binding(1_202, 92, 0xA7, 48, 0xB7);
+    let base_fingerprint = shaped_fingerprint();
+    let base_key = PlanCacheKey::build(base_binding, PlanClass::ParameterShape, base_fingerprint)
+        .expect("base parameter-shape key must be valid");
+    let cache = select_and_cache(base_key, 91, 17_006);
+
+    let hit = cache
+        .lookup(base_key, TraceId::new(17_008))
+        .expect("same full key lookup should produce hit trace");
+    assert!(hit.is_hit());
+
+    let bumped_catalog_key = PlanCacheKey::build(
+        binding(1_202, 93, 0xA7, 48, 0xB7),
+        PlanClass::ParameterShape,
+        base_fingerprint,
+    )
+    .expect("bumped CatalogVersion key must be valid");
+    assert_ne!(base_key, bumped_catalog_key);
+    assert_ne!(base_key.digest(), bumped_catalog_key.digest());
+
+    let miss = cache
+        .lookup(bumped_catalog_key, TraceId::new(17_009))
+        .expect("CatalogVersion miss should produce trace evidence");
+    assert!(!miss.is_hit());
+    assert_eq!(
+        miss.trace().cache_miss_reason(),
+        Some(PlanCacheMissReason::CatalogVersionMismatch)
+    );
+
+    let decision_trace = miss.trace().as_decision_trace();
+    assert_eq!(decision_trace.decision, CriticalDecisionKind::PlanSelection);
+    assert!(decision_trace.has_explanation());
+    assert!(
+        decision_trace
+            .reason
+            .contains("version_binding=ContractHash+CatalogVersion+StatsVersion")
+    );
+    assert!(decision_trace.reason.contains("outcome=cache-miss"));
+    assert!(decision_trace.reason.contains("catalog_version=93"));
+    assert!(decision_trace.reason.contains("stats_version=48"));
+    assert!(decision_trace.reason.contains("policy_version="));
+    assert!(decision_trace.reason.contains("plan_class=ParameterShape"));
+    assert!(
+        decision_trace
+            .reason
+            .contains("cache_miss_reason=catalog-version-mismatch")
+    );
+}
+
+#[test]
+fn contract_hash_change_invalidates_cache_entry_and_decision_trace_explains_miss() {
+    let base_binding = binding(1_203, 94, 0xA8, 49, 0xB8);
+    let base_fingerprint = shaped_fingerprint();
+    let base_key = PlanCacheKey::build(base_binding, PlanClass::StatsAdaptive, base_fingerprint)
+        .expect("base stats-adaptive key must be valid");
+    let cache = select_and_cache(base_key, 92, 17_010);
+
+    let hit = cache
+        .lookup(base_key, TraceId::new(17_012))
+        .expect("same full key lookup should produce hit trace");
+    assert!(hit.is_hit());
+
+    let changed_contract_key = PlanCacheKey::build(
+        binding(1_203, 94, 0xA9, 49, 0xB8),
+        PlanClass::StatsAdaptive,
+        base_fingerprint,
+    )
+    .expect("changed ContractHash key must be valid");
+    assert_ne!(base_key, changed_contract_key);
+    assert_ne!(base_key.digest(), changed_contract_key.digest());
+    assert_ne!(
+        base_key.contract_hash(),
+        changed_contract_key.contract_hash()
+    );
+
+    let miss = cache
+        .lookup(changed_contract_key, TraceId::new(17_013))
+        .expect("ContractHash miss should produce trace evidence");
+    assert!(!miss.is_hit());
+    assert_eq!(
+        miss.trace().cache_miss_reason(),
+        Some(PlanCacheMissReason::ContractHashMismatch)
+    );
+
+    let decision_trace = miss.trace().as_decision_trace();
+    assert_eq!(decision_trace.decision, CriticalDecisionKind::PlanSelection);
+    assert!(decision_trace.has_explanation());
+    assert!(decision_trace.reason.contains("outcome=cache-miss"));
+    assert!(decision_trace.reason.contains("contract_hash="));
+    assert!(decision_trace.reason.contains("catalog_version=94"));
+    assert!(decision_trace.reason.contains("stats_version=49"));
+    assert!(decision_trace.reason.contains("policy_version="));
+    assert!(decision_trace.reason.contains("plan_class=StatsAdaptive"));
+    assert!(
+        decision_trace
+            .reason
+            .contains("cache_miss_reason=contract-hash-mismatch")
+    );
+}
+
+#[test]
+fn policy_version_change_invalidates_cache_entry_and_security_trace_explains_miss() {
+    let base_binding = binding(1_204, 95, 0xAA, 50, 0xB9);
+    let base_fingerprint = shaped_fingerprint();
+    let base_key = PlanCacheKey::build(base_binding, PlanClass::Cardinality, base_fingerprint)
+        .expect("base cardinality key must be valid");
+    let cache = select_and_cache(base_key, 93, 17_014);
+
+    let changed_policy_key = PlanCacheKey::build(
+        binding(1_204, 95, 0xAA, 50, 0xBA),
+        PlanClass::Cardinality,
+        base_fingerprint,
+    )
+    .expect("changed PolicyVersion key must be valid");
+    assert_ne!(base_key, changed_policy_key);
+    assert_ne!(base_key.digest(), changed_policy_key.digest());
+    assert_ne!(
+        base_key.policy_version(),
+        changed_policy_key.policy_version()
+    );
+
+    let miss = cache
+        .lookup(changed_policy_key, TraceId::new(17_016))
+        .expect("PolicyVersion miss should produce trace evidence");
+    assert!(!miss.is_hit());
+    assert_eq!(
+        miss.trace().cache_miss_reason(),
+        Some(PlanCacheMissReason::PolicyVersionMismatch)
+    );
+
+    let decision_trace = miss.trace().as_decision_trace();
+    assert_eq!(decision_trace.decision, CriticalDecisionKind::PlanSelection);
+    assert!(decision_trace.has_explanation());
+    assert!(decision_trace.reason.contains("outcome=cache-miss"));
+    assert!(decision_trace.reason.contains("catalog_version=95"));
+    assert!(decision_trace.reason.contains("stats_version=50"));
+    assert!(decision_trace.reason.contains("policy_version="));
+    assert!(decision_trace.reason.contains("plan_class=Cardinality"));
+    assert!(
+        decision_trace
+            .reason
+            .contains("cache_miss_reason=policy-version-mismatch")
     );
 }
 
